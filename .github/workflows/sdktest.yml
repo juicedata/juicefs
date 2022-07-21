@@ -1,0 +1,76 @@
+name: "sdktest"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-*'
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'main'
+      - 'release-*'
+    paths-ignore:
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  sdktest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17.x'
+
+      - name: Set up Docker
+        uses: docker-practice/actions-setup-docker@master
+
+
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: |
+          make juicefs
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'adopt'
+          java-version: '8'
+
+
+      - name: Run Redis
+        run: |
+          sudo docker run -d --name redis -v redis-data:/data  \
+          -p 6379:6379  redis redis-server --appendonly yes
+
+      - name: Juicefs Format
+        run: |
+          sudo ./juicefs format  localhost dev
+
+
+      - name: Sdk Test
+        run: |
+          make -C sdk/java/libjfs
+          cd sdk/java
+          sudo mvn test -B
+          sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
+
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1

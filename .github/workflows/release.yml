@@ -19,6 +19,11 @@ jobs:
         with:
           distribution: 'adopt'
           java-version: '8'
+          server-id: ossrh
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
       - name: Checkout
         uses: actions/checkout@v2
@@ -45,19 +50,21 @@ jobs:
         run: sudo chown -R $USER $HOME/go/pkg/mod
 
       - name: Build SDK
-        run: make -C sdk/java package-all && sudo chown -R $USER sdk/java/target
-
-      - name: Canonicalize SDK name
         run: |
-          sdk1=$(ls sdk/java/target/juicefs-hadoop-*.jar)
-          sdk2=$(echo $sdk1 | sed 's@^\(.*\)\.jar$@\1-amd64.jar@')
-          mv $sdk1 $sdk2
-        shell: bash
+          make -C sdk/java package-all && sudo chown -R $USER sdk/java/target
+          echo "JUICEFS_VERSION=$(mvn -f sdk/java/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
 
       - name: Upload SDK
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            sdk/java/target/juicefs-hadoop-*.jar
+            sdk/java/target/juicefs-hadoop-${{ env.JUICEFS_VERSION }}.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish package
+        run: mvn -f sdk/java/pom.xml deploy -DskipTests
+        env:
+          MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}

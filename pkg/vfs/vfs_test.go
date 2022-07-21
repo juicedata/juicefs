@@ -69,7 +69,7 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 			CacheDir:   "memory",
 		},
 	}
-	blob, _ := object.CreateStorage("mem", "", "", "")
+	blob, _ := object.CreateStorage("mem", "", "", "", "")
 	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
 		prometheus.WrapRegistererWith(prometheus.Labels{"mp": mp, "vol_name": format.Name}, registry))
@@ -590,7 +590,7 @@ func TestInternalFile(t *testing.T) {
 	ctx := NewLogContext(meta.Background)
 	// list internal files
 	fh, _ := v.Opendir(ctx, 1)
-	entries, e := v.Readdir(ctx, 1, 1024, 0, fh, true)
+	entries, _, e := v.Readdir(ctx, 1, 1024, 0, fh, true)
 	if e != 0 {
 		t.Fatalf("readdir 1: %s", e)
 	}
@@ -685,7 +685,7 @@ func TestInternalFile(t *testing.T) {
 	}
 	if n, e = v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
 		t.Fatalf("read .accesslog: %s", e)
-	} else if !strings.Contains(string(buf[:n]), "#\n") {
+	} else if !strings.Contains(string(buf[:n]), "open (9223372032559808513)") {
 		t.Fatalf("invalid access log: %q", string(buf[:n]))
 	}
 	_ = v.Flush(ctx, fe.Inode, fh, 0)
@@ -700,10 +700,17 @@ func TestInternalFile(t *testing.T) {
 	if e != 0 {
 		t.Fatalf("open .stats: %s", e)
 	}
-	readControl := func(resp []byte, off uint64) (int, syscall.Errno) {
+	readControl := func(resp []byte, off *uint64) (int, syscall.Errno) {
 		for {
-			if n, errno := v.Read(ctx, fe.Inode, resp, off, fh); n == 0 {
+			if n, errno := v.Read(ctx, fe.Inode, resp, *off, fh); n == 0 {
 				time.Sleep(time.Millisecond * 300)
+			} else if n%17 == 0 {
+				*off += uint64(n)
+				continue
+			} else if n%17 == 1 {
+				*off += uint64(n / 17 * 17)
+				resp[0] = resp[n-1]
+				return 1, errno
 			} else {
 				return n, errno
 			}
@@ -723,7 +730,7 @@ func TestInternalFile(t *testing.T) {
 	}
 	var off uint64 = uint64(len(buf))
 	resp := make([]byte, 1024*10)
-	if n, e := readControl(resp, off); e != 0 || n != 1 {
+	if n, e := readControl(resp, &off); e != 0 || n != 1 {
 		t.Fatalf("read result: %s %d", e, n)
 	} else if resp[0] != byte(syscall.ENOENT) {
 		t.Fatalf("rmr result: %s", string(buf[:n]))
@@ -741,8 +748,8 @@ func TestInternalFile(t *testing.T) {
 	}
 	off += uint64(len(buf))
 	buf = make([]byte, 1024*10)
-	if n, e = readControl(buf, off); e != 0 {
-		t.Fatalf("read result: %s", e)
+	if n, e = readControl(buf, &off); e != 0 {
+		t.Fatalf("read result: %s %d", e, n)
 	} else if !strings.Contains(string(buf[:n]), "dirs:") {
 		t.Fatalf("info result: %s", string(buf[:n]))
 	} else {
@@ -766,8 +773,8 @@ func TestInternalFile(t *testing.T) {
 	}
 	off += uint64(len(buf))
 	resp = make([]byte, 1024*10)
-	if n, e = readControl(resp, off); e != 0 || n != 1 {
-		t.Fatalf("read result: %s", e)
+	if n, e = readControl(resp, &off); e != 0 || n != 1 {
+		t.Fatalf("read result: %s %d", e, n)
 	} else if resp[0] != 0 {
 		t.Fatalf("fill result: %s", string(buf[:n]))
 	}

@@ -1,19 +1,19 @@
 name: "list-test"
 
 on:
-  push:
-    branches:
-      - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-  pull_request:
-    #The branches below must be a subset of the branches above
-    branches:
-      - 'release-**'
-    paths-ignore:
-      - 'docs/**'
+#  push:
+#    branches:
+#      - 'release-**'
+#    paths-ignore:
+#      - 'docs/**'
+#  pull_request:
+#    #The branches below must be a subset of the branches above
+#    branches:
+#      - 'release-**'
+#    paths-ignore:
+#      - 'docs/**'
   schedule:
-    - cron:  '0 3 * * *'
+    - cron:  '0 20 * * *'
   workflow_dispatch:
 
 jobs:
@@ -51,11 +51,11 @@ jobs:
       - name: Load
         uses: ./.github/actions/load
         with:
-          meta_url: "postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable" 
+          meta_url: "postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable"
           load_file: "META_7M_EMPTY_FILE.json"
       - name: List
         run: |
-          cd /tmp/juicefs-sync-test/createfile/
+          cd /tmp/juicefs-load-test/createfile/
           ls -lh |wc -l >/tmp/count.log
           cat /tmp/count.log | grep 7000001
           if [ $? != 0 ];then echo "file num is error";exit 1; fi
@@ -93,11 +93,11 @@ jobs:
       - name: Load
         uses: ./.github/actions/load
         with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/sync_test" 
+          meta_url: "mysql://root:root@\\(127.0.0.1\\)/sync_test"
           load_file: "META_7M_EMPTY_FILE.json"
       - name: List
         run: |
-          cd /tmp/juicefs-sync-test/createfile/
+          cd /tmp/juicefs-load-test/createfile/
           ls -lh |wc -l >/tmp/count.log
           cat /tmp/count.log | grep 7000001
           if [ $? != 0 ];then echo "file num is error";exit 1; fi
@@ -110,6 +110,7 @@ jobs:
       - name: Setup upterm session
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
+
 
   redis-list:
     runs-on: ubuntu-latest
@@ -146,11 +147,11 @@ jobs:
       - name: Load
         uses: ./.github/actions/load
         with:
-          meta_url: redis://127.0.0.1:6379/1 
+          meta_url: redis://127.0.0.1:6379/1
           load_file: "META_7M_EMPTY_FILE.json"
       - name: List
         run: |
-          cd /tmp/juicefs-sync-test/createfile/
+          cd /tmp/juicefs-load-test/createfile/
           ls -lh |wc -l >/tmp/count.log
           cat /tmp/count.log | grep 7000001
           if [ $? != 0 ];then echo "file num is error";exit 1; fi
@@ -166,7 +167,7 @@ jobs:
 
 
   sqlite3-list:
-    runs-on: ubuntu-latest   
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Checkout
@@ -191,7 +192,7 @@ jobs:
           load_file: "META_7M_EMPTY_FILE.json"
       - name: List
         run: |
-          cd /tmp/juicefs-sync-test/createfile/
+          cd /tmp/juicefs-load-test/createfile/
           ls -lh |wc -l >/tmp/count.log
           cat /tmp/count.log | grep 7000001
           if [ $? != 0 ];then echo "file num is error";exit 1; fi

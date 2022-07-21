@@ -140,6 +140,10 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 				Usage: "secret key for object storage (env SECRET_KEY)",
 			},
 			&cli.StringFlag{
+				Name:  "session-token",
+				Usage: "session token for object storage",
+			},
+			&cli.StringFlag{
 				Name:  "encrypt-rsa-key",
 				Usage: "a path to RSA private key (PEM)",
 			},
@@ -173,8 +177,10 @@ func fixObjectSize(s int) int {
 	}
 	s = s << bits
 	if s < min {
+		logger.Warnf("block size is too small: %d, use %d instead", s, min)
 		s = min
 	} else if s > max {
+		logger.Warnf("block size is too large: %d, use %d instead", s, max)
 		s = max
 	}
 	return s
@@ -187,27 +193,25 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	object.UserAgent = "JuiceFS-" + version.Version()
 	var blob object.ObjectStorage
 	var err error
-	var query string
-	if p := strings.Index(format.Bucket, "?"); p > 0 && p+1 < len(format.Bucket) {
-		query = format.Bucket[p+1:]
-		format.Bucket = format.Bucket[:p]
-		logger.Debugf("query string: %s", query)
-	}
-	if query != "" {
-		values, err := url.ParseQuery(query)
-		if err != nil {
-			return nil, err
+
+	if u, err := url.Parse(format.Bucket); err == nil {
+		values := u.Query()
+		if values.Get("tls-insecure-skip-verify") != "" {
+			var tlsSkipVerify bool
+			if tlsSkipVerify, err = strconv.ParseBool(values.Get("tls-insecure-skip-verify")); err != nil {
+				return nil, err
+			}
+			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: tlsSkipVerify}
+			values.Del("tls-insecure-skip-verify")
+			u.RawQuery = values.Encode()
+			format.Bucket = u.String()
 		}
-		var tlsSkipVerify bool
-		if tlsSkipVerify, err = strconv.ParseBool(values.Get("tls-insecure-skip-verify")); err != nil {
-			return nil, err
-		}
-		object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: tlsSkipVerify}
 	}
+
 	if format.Shards > 1 {
-		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.Shards)
+		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.Shards)
 	} else {
-		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey)
+		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken)
 	}
 	if err != nil {
 		return nil, err
@@ -319,7 +323,9 @@ func format(c *cli.Context) error {
 	if v := c.Int("trash-days"); v < 0 {
 		logger.Fatalf("Invalid trash days: %d", v)
 	}
-
+	if v := c.Int("shards"); v > 256 {
+		logger.Fatalf("too many shards: %d", v)
+	}
 	loadEncrypt := func(keyPath string) string {
 		if keyPath == "" {
 			return ""
@@ -349,8 +355,16 @@ func format(c *cli.Context) error {
 				format.AccessKey = c.String(flag)
 			case "secret-key":
 				encrypted = format.KeyEncrypted
+				if err := format.Decrypt(); err != nil && strings.Contains(err.Error(), "secret was removed") {
+					logger.Warnf("decrypt secrets: %s", err)
+				}
 				format.SecretKey = c.String(flag)
-				format.KeyEncrypted = false
+			case "session-key":
+				encrypted = format.KeyEncrypted
+				if err := format.Decrypt(); err != nil && strings.Contains(err.Error(), "secret was removed") {
+					logger.Warnf("decrypt secrets: %s", err)
+				}
+				format.SessionToken = c.String(flag)
 			case "trash-days":
 				format.TrashDays = c.Int(flag)
 			case "block-size":
@@ -367,24 +381,25 @@ func format(c *cli.Context) error {
 				logger.Warnf("Flag %s is ignored since it cannot be updated", flag)
 			}
 		}
-	} else if err.Error() == "database is not formatted" {
+	} else if strings.HasPrefix(err.Error(), "database is not formatted") {
 		create = true
 		format = &meta.Format{
-			Name:        name,
-			UUID:        uuid.New().String(),
-			Storage:     c.String("storage"),
-			Bucket:      c.String("bucket"),
-			AccessKey:   c.String("access-key"),
-			SecretKey:   c.String("secret-key"),
-			EncryptKey:  loadEncrypt(c.String("encrypt-rsa-key")),
-			Shards:      c.Int("shards"),
-			HashPrefix:  c.Bool("hash-prefix"),
-			Capacity:    c.Uint64("capacity") << 30,
-			Inodes:      c.Uint64("inodes"),
-			BlockSize:   fixObjectSize(c.Int("block-size")),
-			Compression: c.String("compress"),
-			TrashDays:   c.Int("trash-days"),
-			MetaVersion: 1,
+			Name:         name,
+			UUID:         uuid.New().String(),
+			Storage:      c.String("storage"),
+			Bucket:       c.String("bucket"),
+			AccessKey:    c.String("access-key"),
+			SecretKey:    c.String("secret-key"),
+			SessionToken: c.String("session-token"),
+			EncryptKey:   loadEncrypt(c.String("encrypt-rsa-key")),
+			Shards:       c.Int("shards"),
+			HashPrefix:   c.Bool("hash-prefix"),
+			Capacity:     c.Uint64("capacity") << 30,
+			Inodes:       c.Uint64("inodes"),
+			BlockSize:    fixObjectSize(c.Int("block-size")),
+			Compression:  c.String("compress"),
+			TrashDays:    c.Int("trash-days"),
+			MetaVersion:  1,
 		}
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
@@ -394,14 +409,22 @@ func format(c *cli.Context) error {
 			format.SecretKey = os.Getenv("SECRET_KEY")
 			_ = os.Unsetenv("SECRET_KEY")
 		}
+		if format.SessionToken == "" && os.Getenv("SESSION_TOKEN") != "" {
+			format.SessionToken = os.Getenv("SESSION_TOKEN")
+			_ = os.Unsetenv("SESSION_TOKEN")
+		}
 	} else {
 		logger.Fatalf("Load metadata: %s", err)
 	}
-	if format.Storage == "file" {
-		if p, err := filepath.Abs(format.Bucket); err == nil {
-			format.Bucket = p + "/"
+	if format.Storage == "file" || format.Storage == "sqlite3" {
+		p, err := filepath.Abs(format.Bucket)
+		if err == nil {
+			format.Bucket = p
 		} else {
 			logger.Fatalf("Failed to get absolute path of %s: %s", format.Bucket, err)
+		}
+		if format.Storage == "file" {
+			format.Bucket += "/"
 		}
 	}
 
@@ -446,7 +469,6 @@ func format(c *cli.Context) error {
 		}
 		logger.Fatalf("format: %s", err)
 	}
-	format.RemoveSecret()
-	logger.Infof("Volume is formatted as %+v", *format)
+	logger.Infof("Volume is formatted as %s", format)
 	return nil
 }

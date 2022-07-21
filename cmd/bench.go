@@ -38,18 +38,18 @@ func cmdBench() *cli.Command {
 		Name:      "bench",
 		Action:    bench,
 		Category:  "TOOL",
-		Usage:     "Run benchmark on a path",
+		Usage:     "Run benchmarks on a path",
 		ArgsUsage: "PATH",
 		Description: `
-Run basic benchmark on the target PATH to test if it works as expected. Results are colored with
+Run basic benchmarks on the target PATH to test if it works as expected. Results are colored with
 green/yellow/red to indicate whether they are in a normal range. If you see any red value, please
 double check relevant configuration before further test.
 
 Examples:
-# Run benchmark with 4 threads
+# Run benchmarks with 4 threads
 $ juicefs bench /mnt/jfs -p 4
 
-# Run benchmark of only small files
+# Run benchmarks of only small files
 $ juicefs bench /mnt/jfs --big-file-size 0
 
 Details: https://juicefs.com/docs/community/performance_evaluation_guide#juicefs-bench`,
@@ -248,7 +248,7 @@ func (bm *benchmark) colorize(item string, value, cost float64, prec int) (strin
 	return svalue, scost
 }
 
-func printResult(result [][]string, isatty bool) {
+func printResult(result [][]string, leftAlign int, isatty bool) {
 	if len(result) < 2 {
 		logger.Fatalf("result must not be empty")
 	}
@@ -291,10 +291,15 @@ func printResult(result [][]string, isatty bool) {
 		b.Reset()
 		for i := 0; i < colNum; i++ {
 			b.WriteString(" | ")
+			if i == leftAlign {
+				b.WriteString(l[i])
+			}
 			if spaces := rawmax[i] - len(l[i]); spaces > 0 {
 				b.WriteString(strings.Repeat(" ", spaces))
 			}
-			b.WriteString(l[i])
+			if i != leftAlign {
+				b.WriteString(l[i])
+			}
 		}
 		b.WriteString(" |")
 		fmt.Println(b.String()[1:])
@@ -389,6 +394,7 @@ func bench(ctx *cli.Context) error {
 		dropCaches()
 
 		cost = b.run("read")
+		line = make([]string, 3)
 		line[0] = "Read big file"
 		line[1], line[2] = bm.colorize("bigrd", float64((b.fsize>>20)*b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
 		line[1] += " MiB/s"
@@ -406,6 +412,7 @@ func bench(ctx *cli.Context) error {
 		dropCaches()
 
 		cost = s.run("read")
+		line = make([]string, 3)
 		line[0] = "Read small file"
 		line[1], line[2] = bm.colorize("smallrd", float64(s.fcount*bm.threads)/cost, cost*1000/float64(s.fcount), 1)
 		line[1] += " files/s"
@@ -414,6 +421,7 @@ func bench(ctx *cli.Context) error {
 		dropCaches()
 
 		cost = s.run("stat")
+		line = make([]string, 3)
 		line[0] = "Stat file"
 		line[1], line[2] = bm.colorize("stat", float64(s.fcount*bm.threads)/cost, cost*1000/float64(s.fcount), 1)
 		line[1] += " files/s"
@@ -466,6 +474,6 @@ func bench(ctx *cli.Context) error {
 		}
 		fmt.Printf(fmtString, diff("uptime"), diff("cpu_usage")*100/diff("uptime"), stats2["juicefs_memory"]/1024/1024)
 	}
-	printResult(result, bm.tty)
+	printResult(result, -1, bm.tty)
 	return nil
 }

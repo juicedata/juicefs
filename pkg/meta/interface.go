@@ -21,12 +21,14 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -74,7 +76,8 @@ const (
 )
 
 const MaxName = 255
-const TrashInode = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
+const RootInode Ino = 1
+const TrashInode Ino = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
 const TrashName = ".trash"
 
 func isTrash(ino Ino) bool {
@@ -85,6 +88,9 @@ type internalNode struct {
 	inode Ino
 	name  string
 }
+
+// Type of control messages
+const CPROGRESS = 0xFE // 16 bytes: progress increment
 
 // MsgCallback is a callback for messages from meta service.
 type MsgCallback func(...interface{}) error
@@ -106,7 +112,7 @@ type Attr struct {
 	Nlink     uint32 // number of links (sub-directories or hardlinks)
 	Length    uint64 // length of regular file
 
-	Parent    Ino  // inode of parent, only for Directory
+	Parent    Ino  // inode of parent; 0 means tracked by parentKey (for hardlinks)
 	Full      bool // the attributes are completed or not
 	KeepCache bool // whether to keep the cached page or not
 }
@@ -311,6 +317,8 @@ type Meta interface {
 	InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno
 	// CopyFileRange copies part of a file to another one.
 	CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno
+	// GetParents returns a map of node parents (> 1 parents if hardlinked)
+	GetParents(ctx Context, inode Ino) map[Ino]int
 
 	// GetXattr returns the value of extended attribute for given name.
 	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
@@ -331,6 +339,8 @@ type Meta interface {
 	CompactAll(ctx Context, bar *utils.Bar) syscall.Errno
 	// ListSlices returns all slices used by all files.
 	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
+	// Remove all files and directories recursively.
+	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
@@ -338,6 +348,10 @@ type Meta interface {
 	// Dump the tree under root, which may be modified by checkRoot
 	DumpMeta(w io.Writer, root Ino) error
 	LoadMeta(r io.Reader) error
+
+	// getBase return the base engine.
+	getBase() *baseMeta
+	InitMetrics(registerer prometheus.Registerer)
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)
@@ -404,40 +418,88 @@ func newSessionInfo() *SessionInfo {
 	return &SessionInfo{Version: version.Version(), HostName: host, ProcessID: os.Getpid()}
 }
 
-func timeit(start time.Time) {
-	opDist.Observe(time.Since(start).Seconds())
-}
+// Get all paths of an inode
+func GetPaths(m Meta, ctx Context, inode Ino) []string {
+	if inode == RootInode {
+		return []string{"/"}
+	}
 
-// Get full path of an inode; a random one is picked if it has multiple hard links
-func GetPath(m Meta, ctx Context, inode Ino) (string, syscall.Errno) {
-	var names []string
-	var attr Attr
-	for inode != 1 {
-		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
-			logger.Debugf("getattr inode %d: %s", inode, st)
-			return "", st
+	if inode == TrashInode {
+		return []string{"/.trash"}
+	}
+
+	base := m.getBase()
+	outside := "path not shown because it's outside of the mounted root"
+	getDirPath := func(ino Ino) (string, error) {
+		var names []string
+		var attr Attr
+		for ino != RootInode && ino != base.root {
+			if st := base.en.doGetAttr(ctx, ino, &attr); st != 0 {
+				return "", fmt.Errorf("getattr inode %d: %s", ino, st)
+			}
+			if attr.Typ != TypeDirectory {
+				return "", fmt.Errorf("inode %d is not a directory", ino)
+			}
+			var entries []*Entry
+			if st := base.en.doReaddir(ctx, attr.Parent, 0, &entries, -1); st != 0 {
+				return "", fmt.Errorf("readdir inode %d: %s", ino, st)
+			}
+			var name string
+			for _, e := range entries {
+				if e.Inode == ino {
+					name = string(e.Name)
+					break
+				}
+			}
+			if attr.Parent == RootInode && ino == TrashInode {
+				name = TrashName
+			}
+			if name == "" {
+				return "", fmt.Errorf("entry %d/%d not found", attr.Parent, ino)
+			}
+			names = append(names, name)
+			ino = attr.Parent
 		}
+		if base.root != RootInode && ino == RootInode {
+			return outside, nil
+		}
+		names = append(names, "/") // add root
 
+		for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
+			names[i], names[j] = names[j], names[i]
+		}
+		return path.Join(names...), nil
+	}
+
+	var paths []string
+	// inode != RootInode, parent is the real parent inode
+	for parent, count := range m.GetParents(ctx, inode) {
+		if count <= 0 {
+			continue
+		}
+		dir, err := getDirPath(parent)
+		if err != nil {
+			logger.Warnf("Get directory path of %d: %s", parent, err)
+			continue
+		} else if dir == outside {
+			paths = append(paths, outside)
+			continue
+		}
 		var entries []*Entry
-		if st := m.Readdir(ctx, attr.Parent, 0, &entries); st != 0 {
-			return "", st
+		if st := base.en.doReaddir(ctx, parent, 0, &entries, -1); st != 0 {
+			logger.Warnf("Readdir inode %d: %s", parent, st)
+			continue
 		}
-		var name string
+		var c int
 		for _, e := range entries {
 			if e.Inode == inode {
-				name = string(e.Name)
-				break
+				c++
+				paths = append(paths, path.Join(dir, string(e.Name)))
 			}
 		}
-		if name == "" {
-			return "", syscall.ENOENT
+		if c != count {
+			logger.Warnf("Expect to find %d entries under parent %d, but got %d", count, parent, c)
 		}
-		names = append(names, name)
-		inode = attr.Parent
 	}
-
-	for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
-		names[i], names[j] = names[j], names[i]
-	}
-	return "/" + strings.Join(names, "/"), 0
+	return paths
 }

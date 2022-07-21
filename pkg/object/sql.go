@@ -26,9 +26,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
 	"xorm.io/xorm/log"
@@ -61,7 +65,7 @@ func (s *sqlStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, errors.New("not found")
+		return nil, os.ErrNotExist
 	}
 	if off > int64(len(b.Data)) {
 		off = int64(len(b.Data))
@@ -79,11 +83,12 @@ func (s *sqlStore) Put(key string, in io.Reader) error {
 		return err
 	}
 	var n int64
-	b := blob{Key: key, Data: d, Size: int64(len(d)), Modified: time.Now()}
+	now := time.Now()
+	b := blob{Key: key, Data: d, Size: int64(len(d)), Modified: now}
 	if s.db.DriverName() == "postgres" {
 		var r sql.Result
-		r, err = s.db.Exec("INSERT INTO jfs_blob(key, size, data) VALUES(?, ?, ?) "+
-			"ON CONFLICT (key) DO UPDATE SET size=?,data=?", key, b.Size, d, b.Size, d)
+		r, err = s.db.Exec("INSERT INTO jfs_blob(key, size,modified, data) VALUES(?, ?, ?,? ) "+
+			"ON CONFLICT (key) DO UPDATE SET size=?,data=?", key, b.Size, now, d, b.Size, d)
 		if err == nil {
 			n, err = r.RowsAffected()
 		}
@@ -106,14 +111,14 @@ func (s *sqlStore) Head(key string) (Object, error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, errors.New("not found")
+		return nil, os.ErrNotExist
 	}
 	return &obj{
 		key,
 		b.Size,
 		b.Modified,
 		strings.HasSuffix(key, "/"),
-	}, err
+	}, nil
 }
 
 func (s *sqlStore) Delete(key string) error {
@@ -126,7 +131,7 @@ func (s *sqlStore) List(prefix, marker string, limit int64) ([]Object, error) {
 		marker = prefix
 	}
 	var bs []blob
-	err := s.db.Where("key >= ?", marker).Limit(int(limit)).Cols("key", "size", "modified").OrderBy("key").Find(&bs)
+	err := s.db.Where("`key` >= ?", marker).Limit(int(limit)).Cols("`key`", "size", "modified").OrderBy("`key`").Find(&bs)
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +157,8 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	if user != "" {
 		uri = user + ":" + password + "@" + addr
 	}
-	if driver == "posgres" {
-		uri = "posgres://" + uri
+	if driver == "postgres" {
+		uri = "postgres://" + uri
 	}
 	engine, err := xorm.NewEngine(driver, uri)
 	if err != nil {
@@ -179,21 +184,21 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 }
 
 func init() {
-	Register("sqlite3", func(addr, user, pass string) (ObjectStorage, error) {
+	Register("sqlite3", func(addr, user, pass, token string) (ObjectStorage, error) {
 		p := strings.Index(addr, "://")
 		if p > 0 {
 			addr = addr[p+3:]
 		}
 		return newSQLStore("sqlite3", addr, user, pass)
 	})
-	Register("mysql", func(addr, user, pass string) (ObjectStorage, error) {
+	Register("mysql", func(addr, user, pass, token string) (ObjectStorage, error) {
 		p := strings.Index(addr, "://")
 		if p > 0 {
 			addr = addr[p+3:]
 		}
 		return newSQLStore("mysql", addr, user, pass)
 	})
-	Register("posgres", func(addr, user, pass string) (ObjectStorage, error) {
-		return newSQLStore("posgres", addr, user, pass)
+	Register("postgres", func(addr, user, pass, token string) (ObjectStorage, error) {
+		return newSQLStore("postgres", addr, user, pass)
 	})
 }

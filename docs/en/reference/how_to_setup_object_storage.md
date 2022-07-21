@@ -48,6 +48,29 @@ $ juicefs format --storage s3 \
 
 Public clouds typically allow users to create IAM (Identity and Access Management) roles, such as [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) or [Alibaba Cloud RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm), which can be assigned to VM instances. If the cloud server instance already has read and write access to the object storage, there is no need to specify `--access-key` and `--secret-key`.
 
+## Use temporary access credentials
+
+Permanent access credentials generally have two parts, accessKey, secretKey, while temporary access credentials generally include three parts, accessKey, secretKey and token, and temporary access credentials have an expiration time, usually between a few minutes and a few hours.
+
+### How to get temporary credentials
+
+Different cloud vendors have different access methods. Generally, the accessKey, secretKey and the ARN representing the permission boundary of the temporary access credential are used as parameters to request to the STS server of the cloud service vendor to obtain the temporary access credential. This process can be simplified by the SDK provided by the cloud vendor. For example, AWS S3 can refer to this [link](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html) to obtain temporary credentials, and Alibaba Cloud OSS can refer to this [link](https://help.aliyun.com/document_detail/100624.html).
+
+### How to setup object storage with temporary access credentials
+
+The way temporary credentials are used is not much different than permanent credentials. In the `format` filesystem step, set the accessKey, secretKey, and token of the temporary credential through the --access-key, --secret-key, --session-token parameters, respectively. For example:
+
+```bash
+$ juicefs format --storage oss --access-key xxxx --secret-key xxxx --session-token xxxx --bucket https://bucketName.oss-cn-hangzhou.aliyuncs.com redis://localhost:6379 /1 test1
+````
+
+Since temporary credentials expire quickly, the key is how to update the temporary credentials that juicefs uses after `format` the filesystem before the temporary credentials expire. The credential update process is divided into two steps:
+
+1. Before the temporary certificate expires, apply for a new temporary certificate
+2. Without stopping the running juicefs, use the `juicefs config Meta-URL --access-key xxxx --secret-key xxxx --session-token xxxx` command to hot update the access credentials
+
+Newly mounted clients will use the new credentials directly, and all clients already running will also update their credentials within a minute. The entire update process will not affect the running business. Due to the short expiration time of the temporary credentials, the above steps need to **be executed in a long-term loop** to ensure that the juicefs service can access the object storage normally.
+
 ## Internal and Public Endpoint
 
 Typically, object storage services provide a unified URL for access, but the cloud platform usually provides both internal and external endpoints. For example, the platform cloud services that meet the criteria will automatically resolve requests to the internal endpoint of the object storage. This offers you a lower latency, and internal network traffic is free.
@@ -217,7 +240,7 @@ As you can see, there is no need to include authentication information in the co
 
 To use Azure Blob Storage as data storage of JuiceFS, please [check the documentation](https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage) to learn how to view the storage account name and access key, which correspond to the values ​​of the `--access-key` and `--secret-key` options, respectively.
 
-The `--bucket` option is set in the format `https://<container>.<endpoint>`, please replace `<container>` with the name of the actual blob container and `<endpoint>` with `blob.core.windows.net` (Azure Global) or `blob.core.chinacloudapi.cn` (Azure China). For example:
+The `--bucket` option is set in the format `https://<container>.<endpoint>`, please replace `<container>` with the name of the actual blob container and `<endpoint>` with `core.windows.net` (Azure Global) or `core.chinacloudapi.cn` (Azure China). For example:
 
 ```bash
 juicefs format \
@@ -509,20 +532,6 @@ $ juicefs format \
     myjfs
 ```
 
-## Mtyun Storage Service
-
-Please follow [this document](https://www.mtyun.com/doc/api/mss/mss/fang-wen-kong-zhi) to learn how to get access key and secret key.
-
-The `--bucket` option format is `https://<bucket>.<endpoint>`, and please replace `<endpoint>` with specific value, e.g. `mtmss.com`. You could find all available endpoints [here](https://www.mtyun.com/doc/products/storage/mss/index#%E5%8F%AF%E7%94%A8%E5%8C%BA%E5%9F%9F). For example:
-
-```bash
-$ juicefs format \
-    --storage mss \
-    --bucket https://<bucket>.<endpoint> \
-    ... \
-    myjfs
-```
-
 ## NetEase Object Storage
 
 Please follow [this document](https://www.163yun.com/help/documents/55485278220111872) to learn how to get access key and secret key.
@@ -587,12 +596,12 @@ $ juicefs format \
 
 Please follow [this document](https://www.ctyun.cn/help2/10000101/10473683) to learn how to get access key and secret key.
 
-The `--bucket` option format is `https://<bucket>.oss-<region>.ctyunapi.cn`, replace `<region>` with specific region code. E.g. the region code of Chengdu is `sccd`. You could find all available region codes [here](https://www.ctyun.cn/help2/10000101/10474062). For example:
+The `--bucket` option format is `https://<bucket>.<endpoint>`,  For example:
 
 ```bash
 $ juicefs format \
     --storage oos \
-    --bucket https://<bucket>.oss-<region>.ctyunapi.cn \
+    --bucket https://<bucket>.<endpoint> \
     ... \
     myjfs
 ```
@@ -810,12 +819,39 @@ $ juicefs format \
 
 [Redis](https://redis.io) can be used as both metadata storage for JuiceFS and as data storage, but when using Redis as a data storage, it is recommended not to store large-scale data.
 
+### Standalone
 The `--bucket` option format is `redis://<host>:<port>/<db>`. The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
 
 ```bash
 $ juicefs format \
     --storage redis \
     --bucket redis://<host>:<port>/<db> \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+### Redis sentinel
+In Redis Sentinel mode, the format of '--bucket' option is `redis[s]://MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`. The sentinel password is declared using the 'SENTINEL_PASSWORD_FOR_OBJ' environment variable. For example:
+
+```bash
+$ export SENTINEL_PASSWORD_FOR_OBJ=sentinel_password
+$ juicefs format \
+    --storage redis \
+    --bucket redis://masterName,1.2.3.4,1.2.5.6:26379/2  \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+### Redis cluster
+In Redis cluster mode, the format of `--bucket` option is `redis[s]://ADDR:PORT,[ADDR:PORT],[ADDR:PORT]`. For example:
+
+```bash
+$ juicefs format \
+    --storage redis \
+    --bucket redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002  \
     --access-key <username> \
     --secret-key <password> \
     ... \
@@ -837,6 +873,12 @@ $ juicefs format \
     ... \
     myjfs
 ```
+
+:::note
+Don't use the same TiKV cluster for both metadata and data, because JuiceFS uses non-transactional protocol (RawKV) for objects
+and transactional protocol (TnxKV) for metadata. The TxnKV protocol has special encoding for keys, so they may overlap with keys
+even they has different prefixes. Btw, it's recommmended to enable [Titan](https://tikv.org/docs/5.1/deploy/configure/titan/) in TiKV for data cluster.
+:::
 
 ### Set up TLS
 If you need to enable TLS, you can set the TLS configuration item by adding the query parameter after the Bucket-URL. Currently supported configuration items:

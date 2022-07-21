@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/upyun/go-sdk/v3/upyun"
@@ -48,6 +49,9 @@ func (u *up) Create() error {
 func (u *up) Head(key string) (Object, error) {
 	info, err := u.c.GetInfo("/" + key)
 	if err != nil {
+		if upyun.IsNotExist(err) {
+			err = os.ErrNotExist
+		}
 		return nil, err
 	}
 	return &obj{
@@ -125,7 +129,7 @@ func (u *up) List(prefix, marker string, limit int64) ([]Object, error) {
 	return nil, u.err
 }
 
-func newUpyun(endpoint, user, passwd string) (ObjectStorage, error) {
+func newUpyun(endpoint, user, passwd, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}

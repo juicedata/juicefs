@@ -24,7 +24,7 @@ import (
 )
 
 func TestNewCacheStore(t *testing.T) {
-	s := newCacheStore(defaultConf.CacheDir, 1<<30, 1, &defaultConf, nil)
+	s := newCacheStore(nil, defaultConf.CacheDir, 1<<30, 1, &defaultConf, nil)
 	if s == nil {
 		t.Fatalf("Create new cache store failed")
 	}
@@ -53,7 +53,7 @@ func TestExpand(t *testing.T) {
 
 func BenchmarkLoadCached(b *testing.B) {
 	dir := b.TempDir()
-	s := newCacheStore(filepath.Join(dir, "diskCache"), 1<<30, 1, &defaultConf, nil)
+	s := newCacheStore(nil, filepath.Join(dir, "diskCache"), 1<<30, 1, &defaultConf, nil)
 	p := NewPage(make([]byte, 1024))
 	key := "/chunks/1_1024"
 	s.cache(key, p, false)
@@ -70,8 +70,8 @@ func BenchmarkLoadCached(b *testing.B) {
 
 func BenchmarkLoadUncached(b *testing.B) {
 	dir := b.TempDir()
-	s := newCacheStore(filepath.Join(dir, "diskCache"), 1<<30, 1, &defaultConf, nil)
-	key := "/chunks/222_1024"
+	s := newCacheStore(nil, filepath.Join(dir, "diskCache"), 1<<30, 1, &defaultConf, nil)
+	key := "chunks/222_1024"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if f, e := s.load(key); e != nil {

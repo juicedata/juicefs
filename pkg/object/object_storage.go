@@ -140,7 +140,7 @@ func (s DefaultObjectStorage) ListAll(prefix, marker string) (<-chan Object, err
 	return nil, notSupported
 }
 
-type Creator func(bucket, accessKey, secretKey string) (ObjectStorage, error)
+type Creator func(bucket, accessKey, secretKey, token string) (ObjectStorage, error)
 
 var storages = make(map[string]Creator)
 
@@ -148,11 +148,11 @@ func Register(name string, register Creator) {
 	storages[name] = register
 }
 
-func CreateStorage(name, endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func CreateStorage(name, endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	f, ok := storages[name]
 	if ok {
 		logger.Debugf("Creating %s storage at endpoint %s", name, endpoint)
-		return f(endpoint, accessKey, secretKey)
+		return f(endpoint, accessKey, secretKey, token)
 	}
 	return nil, fmt.Errorf("invalid storage: %s", name)
 }

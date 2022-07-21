@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -54,18 +55,10 @@ func testMeta(t *testing.T, m Meta) {
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)
 	}
-	var base *baseMeta
-	switch m := m.(type) {
-	case *redisMeta:
-		base = &m.baseMeta
-	case *dbMeta:
-		base = &m.baseMeta
-	case *kvMeta:
-		base = &m.baseMeta
-	}
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
 	testTrash(t, m)
+	testParents(t, m)
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
@@ -75,11 +68,13 @@ func testMeta(t *testing.T, m Meta) {
 	testCompaction(t, m, true)
 	testCopyFileRange(t, m)
 	testCloseSession(t, m)
-	base.conf.CaseInsensi = true
-	testCaseIncensi(t, m)
+	testConcurrentDir(t, m)
+	base := m.getBase()
 	base.conf.OpenCache = time.Second
 	base.of.expire = time.Second
 	testOpenCache(t, m)
+	base.conf.CaseInsensi = true
+	testCaseIncensi(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
 }
@@ -113,19 +108,9 @@ func testMetaClient(t *testing.T, m Meta) {
 	if err != nil || len(ses) != 1 {
 		t.Fatalf("list sessions %+v: %s", ses, err)
 	}
-	switch r := m.(type) {
-	case *redisMeta:
-		if r.sid != ses[0].Sid {
-			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
-		}
-	case *dbMeta:
-		if r.sid != ses[0].Sid {
-			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
-		}
-	case *kvMeta:
-		if r.sid != ses[0].Sid {
-			t.Fatalf("my sid %d != registered sid %d", r.sid, ses[0].Sid)
-		}
+	base := m.getBase()
+	if base.sid != ses[0].Sid {
+		t.Fatalf("my sid %d != registered sid %d", base.sid, ses[0].Sid)
 	}
 	go m.CleanStaleSessions()
 
@@ -169,7 +154,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	_ = m.Close(ctx, inode)
 	var tino Ino
-	if st := m.Lookup(ctx, inode, ".", &tino, attr); st != syscall.ENOTDIR {
+	if st := m.Lookup(ctx, inode, ".", &tino, attr); st != 0 {
 		t.Fatalf("lookup /d/f/.: %s", st)
 	}
 	if st := m.Lookup(ctx, inode, "..", &tino, attr); st != syscall.ENOTDIR {
@@ -481,7 +466,9 @@ func testMetaClient(t *testing.T, m Meta) {
 	if totalspace != 1<<50 || iavail != 10<<20 {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
-	if err = m.Init(Format{Name: "test", Capacity: 1 << 20, Inodes: 100}, false); err != nil {
+	format.Capacity = 1 << 20
+	format.Inodes = 100
+	if err = m.Init(*format, false); err != nil {
 		t.Fatalf("set quota failed: %s", err)
 	}
 	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail); st != 0 {
@@ -648,6 +635,9 @@ func testLocks(t *testing.T, m Meta) {
 	}
 
 	// POSIX locks
+	if st := m.Setlk(ctx, inode, o1, false, syscall.F_UNLCK, 0, 0xFFFF, 1); st != 0 {
+		t.Fatalf("plock unlock: %s", st)
+	}
 	if st := m.Setlk(ctx, inode, o1, false, syscall.F_RDLCK, 0, 0xFFFF, 1); st != 0 {
 		t.Fatalf("plock rlock: %s", st)
 	}
@@ -701,10 +691,10 @@ func testLocks(t *testing.T, m Meta) {
 			time.Sleep(time.Millisecond)
 			count--
 			if count > 0 {
-				t.Fatalf("count should be be zero but got %d", count)
+				panic(fmt.Errorf("count should be be zero but got %d", count))
 			}
 			if st := m.Setlk(ctx, inode, uint64(i), false, syscall.F_UNLCK, 0, 0xFFFF, uint32(i)); st != 0 {
-				t.Fatalf("plock unlock: %s", st)
+				panic(fmt.Errorf("plock unlock: %s", st))
 			}
 		}(i)
 	}
@@ -732,7 +722,7 @@ func testRemove(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
-	if st := Remove(m, ctx, 1, "f"); st != 0 {
+	if st := m.Remove(ctx, 1, "f", nil); st != 0 {
 		t.Fatalf("rmr f: %s", st)
 	}
 	if st := m.Mkdir(ctx, 1, "d", 0755, 0, 0, &parent, attr); st != 0 {
@@ -744,11 +734,11 @@ func testRemove(t *testing.T, m Meta) {
 	if st := m.Create(ctx, parent, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create d/f: %s", st)
 	}
-	if p, st := GetPath(m, ctx, parent); st != 0 || p != "/d" {
-		t.Fatalf("get path /d: %s, %s", st, p)
+	if ps := GetPaths(m, ctx, parent); len(ps) == 0 || ps[0] != "/d" {
+		t.Fatalf("get path /d: %v", ps)
 	}
-	if p, st := GetPath(m, ctx, inode); st != 0 || p != "/d/f" {
-		t.Fatalf("get path /d/f: %s, %s", st, p)
+	if ps := GetPaths(m, ctx, inode); len(ps) == 0 || ps[0] != "/d/f" {
+		t.Fatalf("get path /d/f: %v", ps)
 	}
 	for i := 0; i < 4096; i++ {
 		if st := m.Create(ctx, 1, "f"+strconv.Itoa(i), 0644, 0, 0, &inode, attr); st != 0 {
@@ -761,7 +751,7 @@ func testRemove(t *testing.T, m Meta) {
 	} else if len(entries) != 4099 {
 		t.Fatalf("entries: %d", len(entries))
 	}
-	if st := Remove(m, ctx, 1, "d"); st != 0 {
+	if st := m.Remove(ctx, 1, "d", nil); st != 0 {
 		t.Fatalf("rmr d: %s", st)
 	}
 }
@@ -970,7 +960,10 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(Format{Name: "test"}, false)
+	// remove quota
+	format, _ := m.Load(false)
+	format.Capacity = 0
+	_ = m.Init(*format, false)
 
 	ctx := Background
 	var inode Ino
@@ -1104,15 +1097,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink f: %s", st)
 	}
-	var sid uint64
-	switch m := m.(type) {
-	case *redisMeta:
-		sid = m.sid
-	case *dbMeta:
-		sid = m.sid
-	case *kvMeta:
-		sid = m.sid
-	}
+	sid := m.getBase().sid
 	s, err := m.GetSession(sid, true)
 	if err != nil {
 		t.Fatalf("get session: %s", err)
@@ -1237,16 +1222,82 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx2, TrashInode+1, "d", 1, "f", 0, &inode, attr); st != syscall.EPERM {
 		t.Fatalf("rename d -> f: %s", st)
 	}
-	switch bm := m.(type) {
-	case *redisMeta:
-		bm.doCleanupTrash(true)
-	case *dbMeta:
-		bm.doCleanupTrash(true)
-	case *kvMeta:
-		bm.doCleanupTrash(true)
-	}
+	m.getBase().doCleanupTrash(true)
 	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
+	}
+}
+
+func testParents(t *testing.T, m Meta) {
+	if err := m.Init(Format{Name: "test"}, false); err != nil {
+		t.Fatalf("init: %s", err)
+	}
+	ctx := Background
+	var inode, parent Ino
+	var attr = &Attr{}
+	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	if attr.Parent != 1 {
+		t.Fatalf("expect parent 1, but got %d", attr.Parent)
+	}
+	checkParents := func(inode Ino, expect map[Ino]int) {
+		if ps := m.GetParents(ctx, inode); ps == nil {
+			t.Fatalf("get parents of inode %d returns nil", inode)
+		} else if !reflect.DeepEqual(ps, expect) {
+			t.Fatalf("expect parents %v, but got %v", expect, ps)
+		}
+	}
+	checkParents(inode, map[Ino]int{1: 1})
+
+	if st := m.Link(ctx, inode, 1, "l1", attr); st != 0 {
+		t.Fatalf("link l1 -> f: %s", st)
+	}
+	if attr.Parent != 0 {
+		t.Fatalf("expect parent 0, but got %d", attr.Parent)
+	}
+	checkParents(inode, map[Ino]int{1: 2})
+
+	if st := m.Mkdir(ctx, 1, "d", 0755, 022, 0, &parent, attr); st != 0 {
+		t.Fatalf("mkdir d: %s", st)
+	}
+	if st := m.Link(ctx, inode, parent, "l2", attr); st != 0 {
+		t.Fatalf("link l2 -> f: %s", st)
+	}
+	if st := m.Link(ctx, inode, parent, "l3", attr); st != 0 {
+		t.Fatalf("link l3 -> f: %s", st)
+	}
+	checkParents(inode, map[Ino]int{1: 2, parent: 2})
+
+	if st := m.Unlink(ctx, 1, "f"); st != 0 {
+		t.Fatalf("unlink f: %s", st)
+	}
+	if st := m.Create(ctx, 1, "f2", 0644, 022, 0, &inode, attr); st != 0 {
+		t.Fatalf("create f2: %s", st)
+	}
+	if st := m.Rename(ctx, 1, "f2", 1, "l1", 0, &inode, attr); st != 0 {
+		t.Fatalf("rename f2 -> l1: %s", st)
+	}
+	if st := m.Lookup(ctx, parent, "l2", &inode, attr); st != 0 {
+		t.Fatalf("lookup d/l2: %s", st)
+	}
+	if attr.Parent != 0 {
+		t.Fatalf("expect parent 0, but got %d", attr.Parent)
+	}
+	if st := m.Unlink(ctx, parent, "l2"); st != 0 {
+		t.Fatalf("unlink d/l2: %s", st)
+	}
+	checkParents(inode, map[Ino]int{parent: 1})
+
+	// clean up
+	if st := m.Unlink(ctx, 1, "l1"); st != 0 {
+		t.Fatalf("unlink l1: %s", st)
+	}
+	if st := m.Unlink(ctx, parent, "l3"); st != 0 {
+		t.Fatalf("unlink d/l3: %s", st)
+	}
+	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
+		t.Fatalf("rmdir d: %s", st)
 	}
 }
 
@@ -1291,6 +1342,9 @@ func testReadOnly(t *testing.T, m Meta) {
 
 	var inode Ino
 	var attr = &Attr{}
+	if st := m.GetAttr(ctx, 1, attr); st != 0 {
+		t.Fatalf("getattr 1: %s", st)
+	}
 	if st := m.Mkdir(ctx, 1, "d", 0640, 022, 0, &inode, attr); st != syscall.EROFS {
 		t.Fatalf("mkdir d: %s", st)
 	}
@@ -1300,4 +1354,75 @@ func testReadOnly(t *testing.T, m Meta) {
 	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != syscall.EROFS {
 		t.Fatalf("open f: %s", st)
 	}
+}
+
+func testConcurrentDir(t *testing.T, m Meta) {
+	ctx := Background
+	var g sync.WaitGroup
+	var err error
+	format, err := m.Load(false)
+	format.Capacity = 0
+	format.Inodes = 0
+	if err = m.Init(*format, false); err != nil {
+		t.Fatalf("set quota failed: %s", err)
+	}
+	for i := 0; i < 100; i++ {
+		g.Add(1)
+		go func(i int) {
+			defer g.Done()
+			var d1, d2 Ino
+			var attr = new(Attr)
+			if st := m.Mkdir(ctx, 1, "d1", 0640, 022, 0, &d1, attr); st != 0 && st != syscall.EEXIST {
+				panic(fmt.Errorf("mkdir d1: %s", st))
+			} else if st == syscall.EEXIST {
+				st = m.Lookup(ctx, 1, "d1", &d1, attr)
+				if st != 0 {
+					panic(fmt.Errorf("lookup d1: %s", st))
+				}
+			}
+			if st := m.Mkdir(ctx, 1, "d2", 0640, 022, 0, &d2, attr); st != 0 && st != syscall.EEXIST {
+				panic(fmt.Errorf("mkdir d2: %s", st))
+			} else if st == syscall.EEXIST {
+				st = m.Lookup(ctx, 1, "d2", &d2, attr)
+				if st != 0 {
+					panic(fmt.Errorf("lookup d2: %s", st))
+				}
+			}
+			name := fmt.Sprintf("file%d", i)
+			var f Ino
+			if st := m.Create(ctx, d1, name, 0664, 0, 0, &f, attr); st != 0 {
+				panic(fmt.Errorf("create d1/%s: %s", name, st))
+			}
+			if st := m.Rename(ctx, d1, name, d2, name, 0, &f, attr); st != 0 {
+				panic(fmt.Errorf("rename d1/%s -> d2/%s: %s", name, name, st))
+			}
+		}(i)
+	}
+	g.Wait()
+	if err != nil {
+		t.Fatalf("concurrent dir: %s", err)
+	}
+	for i := 0; i < 100; i++ {
+		g.Add(1)
+		go func(i int) {
+			defer g.Done()
+			var d2 Ino
+			var attr = new(Attr)
+			st := m.Lookup(ctx, 1, "d2", &d2, attr)
+			if st != 0 {
+				panic(fmt.Errorf("lookup d2: %s", st))
+			}
+			name := fmt.Sprintf("file%d", i)
+			if st := m.Unlink(ctx, d2, name); st != 0 {
+				panic(fmt.Errorf("unlink d2/%s: %s", name, st))
+			}
+			if st := m.Rmdir(ctx, 1, "d1"); st != 0 && st != syscall.ENOTEMPTY && st != syscall.ENOENT {
+				panic(fmt.Errorf("rmdir d1: %s", st))
+			}
+			if st := m.Rmdir(ctx, 1, "d2"); st != 0 && st != syscall.ENOTEMPTY && st != syscall.ENOENT {
+				panic(fmt.Errorf("rmdir d2: %s", st))
+			}
+		}(i)
+	}
+	g.Wait()
 }

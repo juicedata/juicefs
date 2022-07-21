@@ -16,9 +16,9 @@ on:
     branches: [ main ]
     paths-ignore:
       - 'docs/**'
-  #pull_request:
-    #The branches below must be a subset of the branches above
-    #branches: [ main ]
+#  pull_request:
+#    The branches below must be a subset of the branches above
+#    branches: [ main ]
   schedule:
     - cron: '28 20 * * 0'
     
@@ -44,6 +44,12 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
+
+    - name: Set up Java
+      uses: actions/setup-java@v2
+      with:
+        distribution: 'adopt'
+        java-version: '8'
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -72,7 +78,7 @@ jobs:
 
     - if: matrix.language == 'java'
       name: build-java
-      run: mvn clean install -Dmaven.test.skip=true
+      run: mvn clean package -Dmaven.test.skip=true
       working-directory: sdk/java/
     #- run: |
     #   make bootstrap

@@ -16,7 +16,6 @@
 
 package io.juicefs;
 
-import io.juicefs.utils.PatchUtil;
 import junit.framework.TestCase;
 import org.apache.commons.io.IOUtils;
 import org.apache.flink.runtime.fs.hdfs.HadoopRecoverableWriter;
@@ -47,9 +46,7 @@ public class JuiceFileSystemTest extends TestCase {
   public void setUp() throws Exception {
     cfg = new Configuration();
     cfg.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
-    Thread.currentThread().interrupt();
     fs = FileSystem.get(cfg);
-    Thread.interrupted();
     fs.delete(new Path("/hello"));
     FSDataOutputStream out = fs.create(new Path("/hello"), true);
     out.writeBytes("hello\n");
@@ -145,12 +142,6 @@ public class JuiceFileSystemTest extends TestCase {
     byte[] bytes = new byte[content.length() - (int)skip];
     in.readFully(bytes);
     assertEquals("345", new String(bytes));
-  }
-
-  public void testInitStubLoaderFailed() throws Exception {
-    PatchUtil.patchBefore(JuiceFileSystemImpl.class.getName(), "initStubLoader", null, "Thread.currentThread().interrupt();");
-    FileSystem newFs = createNewFs(cfg, null, null);
-    newFs.close();
   }
 
   public void testReadAfterClose() throws Exception {
@@ -430,6 +421,16 @@ public class JuiceFileSystemTest extends TestCase {
             sum);
     sum = fs.getFileChecksum(f, 5);
     assertEquals(new MD5MD5CRC32CastagnoliFileChecksum(512, 0, new MD5Hash("05a157db1cc7549c82ec6f31f63fdb46")),
+            sum);
+
+    f = new Path("/medium");
+    out = fs.create(f, true);
+    byte[] bytes = new byte[(128 << 20) - 1];
+    out.write(bytes);
+    out.close();
+    sum = fs.getFileChecksum(f);
+    assertEquals(
+            new MD5MD5CRC32CastagnoliFileChecksum(512, 0, new MD5Hash("1cf326bae8274fd824ec69ece3e4082f")),
             sum);
 
     f = new Path("/big");

@@ -145,6 +145,10 @@ func gc(ctx *cli.Context) error {
 
 	// Delete pending chunks while listing slices
 	delete := ctx.Bool("delete")
+	threads := ctx.Int("threads")
+	if delete && threads <= 0 {
+		logger.Fatal("threads should be greater than 0 to delete objects")
+	}
 	var delSpin *utils.Bar
 	var chunkChan chan *dChunk // pending delete chunks
 	var wg sync.WaitGroup
@@ -156,7 +160,7 @@ func gc(ctx *cli.Context) error {
 			chunkChan <- &dChunk{args[0].(uint64), args[1].(uint32)}
 			return nil
 		})
-		for i := 0; i < ctx.Int("threads"); i++ {
+		for i := 0; i < threads; i++ {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -222,7 +226,7 @@ func gc(ctx *cli.Context) error {
 	}
 
 	var leakedObj = make(chan string, 10240)
-	for i := 0; i < ctx.Int("threads"); i++ {
+	for i := 0; i < threads; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

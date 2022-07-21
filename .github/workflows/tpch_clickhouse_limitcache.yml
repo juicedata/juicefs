@@ -1,4 +1,4 @@
-name: "tpch_clickhouse_mode_local"
+name: "tpch_clickhouse_limitcache"
 
 on:
   push:
@@ -13,12 +13,12 @@ on:
     paths-ignore:
       - 'docs/**'
   schedule:
-    - cron:  '30 * * * *'
+    - cron:  '30 20 * * *'
 
   workflow_dispatch:
 
 jobs:
-  tpchchmode_local:
+  tpchchlimitcache:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -44,13 +44,11 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
-
+          sudo ./juicefs format --trash-days 0 redis://127.0.0.1:6379/1 pics
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs --no-usage-report &
-
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs  --cache-size 3072 --no-usage-report &
 
       - name: Install ClickHouse
         run: |
@@ -73,16 +71,17 @@ jobs:
 
       - name: Generate Data
         run: |
-          cd /home/runner/work/
-          git clone https://github.com/sanwan/ssb-dbgen.git
-          cd ssb-dbgen
-          make
-          ./dbgen -s 10 -T l -q
+          cd /data/jfs/
+          git clone https://github.com/sanwan/chdata.git
+          cd chdata
+          cat lineorder.tbl.gz* >lineorder.tbl.gz
+          gzip -dk lineorder.tbl.gz
           git clone https://github.com/sanwan/actionfile.git
           mv actionfile/*.tbl .
+          rm lineorder.tbl.gz*
           ls -lrth
-          sudo du -sh /home/runner/work/ssb-dbgen/
-
+          sudo du -sh /data/jfs/
+          df -lh
 
       - name: Create Table
         run: |
@@ -143,13 +142,17 @@ jobs:
                                              S_PHONE         String
                                      )
                                      ENGINE = MergeTree ORDER BY S_SUPPKEY;"
+
+
       - name: Import Data
         run: |
-          cd /home/runner/work/ssb-dbgen/
+          df -lh
+          cd /data/jfs/chdata/
           clickhouse-client --query "INSERT INTO customer FORMAT CSV" < customer.tbl
           clickhouse-client --query "INSERT INTO part FORMAT CSV" < part.tbl
           clickhouse-client --query "INSERT INTO supplier FORMAT CSV" < supplier.tbl
           time clickhouse-client --query "INSERT INTO lineorder FORMAT CSV" < lineorder.tbl
+          df -lh
 
       - name: ClickHouse Test
         run: |
@@ -250,13 +253,15 @@ jobs:
                                      ORDER BY
                                          year ASC,
                                          C_NATION ASC;"
+          df -lh
+
 
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
       - name: Setup upterm session
         if: ${{ failure() }}

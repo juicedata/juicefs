@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
+	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/vfs"
 
@@ -161,18 +162,18 @@ func (g *GateWay) Production() bool {
 func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	c := g.ctx
 	addr := c.Args().Get(0)
-	removePassword(addr)
-	m, store, conf := initForSvc(c, "s3gateway", addr)
+	conf, jfs := initForSvc(c, "s3gateway", addr)
 
 	umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
 	if err != nil {
 		logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
 	}
 
-	return jfsgateway.NewJFSGateway(conf, m, store, &jfsgateway.Config{MultiBucket: c.Bool("multi-buckets"), KeepEtag: c.Bool("keep-etag"), Mode: uint16(0777 &^ umask)})
+	return jfsgateway.NewJFSGateway(jfs, conf, &jfsgateway.Config{MultiBucket: c.Bool("multi-buckets"), KeepEtag: c.Bool("keep-etag"), Mode: uint16(0777 &^ umask)})
 }
 
-func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.ChunkStore, *vfs.Config) {
+func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.FileSystem) {
+	removePassword(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
 	format, err := metaCli.Load(true)
@@ -208,6 +209,11 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (meta.Meta, chunk.Chu
 	vfsConf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
 
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
+	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store)
+	if err != nil {
+		logger.Fatalf("Initialize failed: %s", err)
+	}
+	jfs.InitMetrics(registerer)
 
-	return metaCli, store, vfsConf
+	return vfsConf, jfs
 }

@@ -21,7 +21,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -159,6 +158,9 @@ func (s *RestfulStorage) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, os.ErrNotExist
+	}
 	defer cleanup(resp)
 	if resp.StatusCode != 200 {
 		return nil, parseError(resp)
@@ -234,7 +236,7 @@ func (s *RestfulStorage) Delete(key string) error {
 }
 
 func (s *RestfulStorage) List(prefix, marker string, limit int64) ([]Object, error) {
-	return nil, errors.New("Not implemented")
+	return nil, notSupported
 }
 
 var _ ObjectStorage = &RestfulStorage{}

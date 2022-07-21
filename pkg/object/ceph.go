@@ -167,6 +167,22 @@ func (c *ceph) Delete(key string) error {
 	})
 }
 
+func (c *ceph) Head(key string) (Object, error) {
+	var o *obj
+	err := c.do(func(ctx *rados.IOContext) error {
+		stat, err := ctx.Stat(key)
+		if err != nil {
+			return err
+		}
+		o = &obj{key, int64(stat.Size), stat.ModTime, strings.HasSuffix(key, "/")}
+		return nil
+	})
+	if err == rados.ErrNotFound {
+		err = os.ErrNotExist
+	}
+	return o, err
+}
+
 func (c *ceph) ListAll(prefix, marker string) (<-chan Object, error) {
 	var objs = make(chan Object, 1000)
 	err := c.do(func(ctx *rados.IOContext) error {
@@ -210,7 +226,7 @@ func (c *ceph) ListAll(prefix, marker string) (<-chan Object, error) {
 	return objs, err
 }
 
-func newCeph(endpoint, cluster, user string) (ObjectStorage, error) {
+func newCeph(endpoint, cluster, user, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("ceph://%s", endpoint)
 	}

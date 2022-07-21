@@ -4,11 +4,13 @@ on:
   push:
     branches:
     - main
+    - 'release-**'
     paths:
     - '**.go'
   pull_request:
     branches:
-    - main
+    - 'main'
+    - 'release-**'
     paths:
     - '**.yml'
     - '**.go'
@@ -55,3 +57,9 @@ jobs:
 
     - name: build libjfs.dll
       run: GOPATH=$HOME/go make -C sdk/java/libjfs libjfs.dll
+
+    - name: build ceph
+      run: |
+        sudo apt-get update
+        sudo apt-get install librados-dev
+        GOPATH=$HOME/go make juicefs.ceph

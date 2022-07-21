@@ -341,7 +341,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 	} else {
 		in, err = src.Get(key, 0, -1)
 		if err != nil {
-			if _, e := src.Head(key); e != nil {
+			if _, e := src.Head(key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
 				copied.IncrInt64(-1)
 				copiedBytes.IncrInt64(size * (-1))
@@ -603,7 +603,7 @@ func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, config *Con
 		logger.Debug("Ignore deleting dst directory ", dstobj.Key())
 		return false
 	}
-	if config.Limit != -1 {
+	if config.Limit >= 0 {
 		if config.Limit == 0 {
 			return true
 		}
@@ -660,7 +660,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
-		if config.Limit != -1 {
+		if config.Limit >= 0 {
 			if config.Limit == 0 {
 				return
 			}
@@ -823,8 +823,10 @@ func matchKey(rules []rule, key string) bool {
 func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if strings.HasPrefix(src.String(), "file://") && strings.HasPrefix(dst.String(), "file://") {
 		major, minor := utils.GetKernelVersion()
-		// copy_file_range() system call first appeared in Linux 4.5
-		if major > 4 || major == 4 && minor > 4 {
+		// copy_file_range() system call first appeared in Linux 4.5, and reworked in 5.3
+		// Go requires kernel >= 5.3 to use copy_file_range(), see:
+		// https://github.com/golang/go/blob/go1.17.11/src/internal/poll/copy_file_range_linux.go#L58-L66
+		if major > 5 || (major == 5 && minor >= 3) {
 			d1 := utils.GetDev(src.String()[7:]) // remove prefix "file://"
 			d2 := utils.GetDev(dst.String()[7:])
 			if d1 != -1 && d1 == d2 {

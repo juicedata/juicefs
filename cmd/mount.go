@@ -111,7 +111,7 @@ func exposeMetrics(c *cli.Context, m meta.Meta, registerer prometheus.Registerer
 		logger.Fatalf("metrics format error: %v", err)
 	}
 
-	meta.InitMetrics(registerer)
+	m.InitMetrics(registerer)
 	vfs.InitMetrics(registerer)
 	go metric.UpdateMetrics(m, registerer)
 	http.Handle("/metrics", promhttp.HandlerFor(
@@ -212,14 +212,16 @@ func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
 			}
 		}
 	}
-	sqliteScheme := "sqlite3://"
-	if strings.HasPrefix(addr, sqliteScheme) {
-		path := addr[len(sqliteScheme):]
-		path2, err := filepath.Abs(path)
-		if err == nil && path2 != path {
-			for i, a := range os.Args {
-				if a == addr {
-					os.Args[i] = sqliteScheme + path2
+	embeddedSchemes := []string{"sqlite3://", "badger://"}
+	for _, es := range embeddedSchemes {
+		if strings.HasPrefix(addr, es) {
+			path := addr[len(es):]
+			path2, err := filepath.Abs(path)
+			if err == nil && path2 != path {
+				for i, a := range os.Args {
+					if a == addr {
+						os.Args[i] = es + path2
+					}
 				}
 			}
 		}
@@ -233,13 +235,17 @@ func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
 }
 
 func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
-	return &vfs.Config{
+	cfg := &vfs.Config{
 		Meta:       metaConf,
 		Format:     format,
 		Version:    version.Version(),
 		Chunk:      chunkConf,
 		BackupMeta: duration(c.String("backup-meta")),
 	}
+	if cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
+		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)
+	}
+	return cfg
 }
 
 func registerMetaMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Config) {
@@ -264,15 +270,17 @@ func prepareMp(mp string) {
 		}
 	} else if err == nil {
 		ino, _ := utils.GetFileInode(mp)
-		if ino <= 1 && fi.Size() == 0 {
+		if ino <= uint64(meta.RootInode) && fi.Size() == 0 {
 			// a broken mount point, umount it
 			_ = doUmount(mp, true)
+		} else if ino == uint64(meta.RootInode) {
+			logger.Warnf("%s is already mounted by juicefs, maybe you should umount it first.", mp)
 		}
 	}
 }
 
 func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
-	return &meta.Config{
+	cfg := &meta.Config{
 		Retries:    c.Int("io-retries"),
 		Strict:     true,
 		ReadOnly:   readOnly,
@@ -282,6 +290,15 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
 	}
+	if cfg.Heartbeat < time.Second {
+		logger.Warnf("heartbeat should not be less than 1 second")
+		cfg.Heartbeat = time.Second
+	}
+	if cfg.Heartbeat > time.Minute*10 {
+		logger.Warnf("heartbeat shouldd not be greater than 10 minutes")
+		cfg.Heartbeat = time.Minute * 10
+	}
+	return cfg
 }
 
 func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
@@ -308,6 +325,14 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheMode:      os.FileMode(0600),
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
+	}
+	if chunkConf.MaxUpload <= 0 {
+		logger.Warnf("max-uploads should be greater than 0, set it to 1")
+		chunkConf.MaxUpload = 1
+	}
+	if chunkConf.BufferSize <= 32<<20 {
+		logger.Warnf("buffer-size should be more than 32 MiB")
+		chunkConf.BufferSize = 32 << 20
 	}
 
 	if chunkConf.CacheDir != "memory" {
@@ -352,7 +377,7 @@ func NewReloadableStorage(format *meta.Format, reload func() (*meta.Format, erro
 				logger.Warnf("reload config: %s", err)
 				continue
 			}
-			if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey {
+			if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken {
 				logger.Infof("found new configuration: storage=%s bucket=%s ak=%s", new.Storage, new.Bucket, new.AccessKey)
 				newBlob, err := createStorage(*new)
 				if err != nil {
@@ -405,7 +430,7 @@ func mount(c *cli.Context) error {
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
 		daemonRun(c, addr, vfsConf, metaCli)
 	} else {
-		go checkMountpoint(vfsConf.Format.Name, mp, c.String("log"))
+		go checkMountpoint(vfsConf.Format.Name, mp, c.String("log"), false)
 	}
 
 	removePassword(addr)

@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  version-compatible-test:
+  version-compatible-test-redis:
     runs-on: ubuntu-latest
     services:
       redis:
@@ -36,7 +36,7 @@ jobs:
           - 6379:6379
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
@@ -51,144 +51,97 @@ jobs:
           wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
           chmod +x mc
 
-      - name: Set Variable
-        id: vars
-        run: |
-          echo ::set-output name=META_URL::redis://127.0.0.1/1
-          echo ::set-output name=MINIO_URL::http://127.0.0.1:9000/juicefs-version-compatible
-          echo ::set-output name=MOUNT_POINT::/tmp/juicefs-version-compatible
-          echo ::set-output name=BACKWARD_VERSIONS::5
+      - name: Test
+        uses: ./.github/actions/version-compatible
+        with:
+          meta_url: "redis://127.0.0.1/1"
 
-      - name: Build linux target
-        run: |
-          make juicefs
-          mv juicefs jfs_new
-          echo juicefs new version: $(./jfs_new -V)
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+          
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
 
-      - name: Version Compatible Test
+  version-compatible-test-mysql:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: start mysql
         run: |
-          ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
-          tests=(
-              "format:jfs_new, format:jfs_old, destroy:jfs_new"
-              "format:jfs_new, format:jfs_old, destroy:jfs_old"
-              "format:jfs_new, config:jfs_old, destroy:jfs_new"
-              "format:jfs_new, config:jfs_old, destroy:jfs_old"
-              "format:jfs_old, format:jfs_new, destroy:jfs_old"
-              "format:jfs_old, format:jfs_new, destroy:jfs_new"
-              "format:jfs_old, config:jfs_new, destroy:jfs_old"
-              "format:jfs_old, config:jfs_new, destroy:jfs_new"
-              "format:jfs_old, config:jfs_new, status:jfs_new"
-              "format:jfs_new, config_encrypt:jfs_new, destroy:jfs_new"
-              "format:jfs_old, config_encrypt:jfs_new, destroy:jfs_new"
-              "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new"
-              "format:jfs_old, mount:jfs_old, write_file1_10K:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new"
-              "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, dump_backup1:jfs_old, destroy:jfs_old, load_backup1:jfs_new, config:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, destroy:jfs_new "
-              "format:jfs_old, mount:jfs_old, write_file1_10K:jfs_old, write_file2_10K:jfs_old, umount:jfs_old, dump_backup1:jfs_old, destroy:jfs_old, load_backup1:jfs_new, config:jfs_new, mount:jfs_new, read_file1:jfs_new, read_file2:jfs_new, umount:jfs_new, destroy:jfs_new "
-          )    
-          urls=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}' | head -${{ steps.vars.outputs.BACKWARD_VERSIONS }}))
-          for url in "${urls[@]}"; do 
-              echo download url is: $url
-              wget -q $url
-              tar -zxf $(basename $url)
-              rm $(basename $url)
-              mv juicefs jfs_old
-              echo juicefs new version: $(./jfs_new -V)
-              echo juicefs old version: $(./jfs_old -V)
-              old_rev=$(./jfs_old -V | awk -F- '{print $1}' | awk -F ' ' '{print $3}')
-              if [[ "$old_rev" < "1.0.0" ]]; then
-                echo "Warning: we don't test compatibily for version under 1.0.0"
-                break
-              fi
-              for test in "${tests[@]}"; do
-                  echo 'test is ' $test
-                  echo 'new version is:' $(./jfs_new -V) 
-                  echo 'old version is:' $(./jfs_old -V) 
-                  IFS=',' read -a command_arr <<< "$test"
-                  for command in "${command_arr[@]}"; do
-                      jfs_bin=$(echo $command | awk -F: '{print $2}'| xargs)
-                      jfs_cmd=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $1}')
-                      echo 'jfs_bin is ' $jfs_bin, "cmd is "  $jfs_cmd
-                      case "$jfs_cmd" in
-                        "format") 
-                            ./mc admin user remove minio juicedata || true
-                            ./mc admin user add minio juicedata juicedata
-                            ./mc admin policy set minio consoleAdmin user=juicedata  
-                            sudo ./$jfs_bin format --trash-days 0 --storage minio --bucket  ${{ steps.vars.outputs.MINIO_URL }} --access-key juicedata --secret-key juicedata  ${{ steps.vars.outputs.META_URL }} juicefs-version-compatible
-                            echo "format finished" 
-                            ;;
-                        "mount") 
-                            sudo ./$jfs_bin mount --no-usage-report -d ${{ steps.vars.outputs.META_URL }}  ${{ steps.vars.outputs.MOUNT_POINT }} 
-                            echo "mount finished" 
-                            ;;
-                        "umount") 
-                            sudo ./$jfs_bin umount ${{ steps.vars.outputs.MOUNT_POINT }} 
-                            echo "umount finished" 
-                            ;;
-                        "destroy") 
-                            UUID=$(./$jfs_bin status ${{ steps.vars.outputs.META_URL }} | grep UUID | cut -d '"' -f 4)
-                            if [ -n "$UUID" ];then
-                              echo UUID is $UUID
-                              sudo ./$jfs_bin destroy --force ${{ steps.vars.outputs.META_URL }} $UUID
-                            fi
-                            echo "destroy finished" 
-                            ;;
-                        "write") 
-                            filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                            size=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $3}')
-                            dd if=/dev/urandom of=${{ steps.vars.outputs.MOUNT_POINT }}/tempfile iflag=fullblock,count_bytes bs=4k count=$size
-                            md5_write="$filename:$(cat ${{ steps.vars.outputs.MOUNT_POINT }}/tempfile | md5sum)"
-                            echo "write: filename is: " $filename "md5_write is: " $md5_write
-                            cp ${{steps.vars.outputs.MOUNT_POINT}}/tempfile $filename
-                            echo "write finished" 
-                            ;;
-                        "read") 
-                            filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                            read_md5=$(cat $filename | md5sum)
-                            written_filename=$(echo $md5_write | awk -F: '{print $1}')
-                            written_md5=$(echo $md5_write | awk -F: '{print $2}')
-                            echo "read: filename is: " $filename "read_md5 is: " $read_md5, "written_filename is:", $written_filename, "written_md5 is:", $written_md5, 
-                            if [ "$filename" == "$wrtten_filename" ] && [ "$read_md5" != "$written_md5" ];then
-                              echo "FATAL: the md5 does not match for: ", $filename, "read_md5:", $read_md5, "written_md5:", $written_md5
-                              exit 1
-                            fi
-                            echo "read finished"
-                            ;;
-                        "dump")
-                            filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                            sudo ./$jfs_bin dump ${{ steps.vars.outputs.META_URL }} $filename
-                            echo "dump finished"
-                            ;;
-                        "load")
-                            filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                            echo filename is : $filename
-                            sudo ./$jfs_bin load ${{steps.vars.outputs.META_URL}} $filename
-                            echo "load finished"
-                            ;;
-                        "config")
-                            encrypt=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                            ./mc admin user remove minio juicedata || true
-                            ./mc admin user add minio juicedata juicedata1
-                            ./mc admin policy set minio consoleAdmin user=juicedata  
-                            if [ -n "$encrypt" ]; then
-                              sudo ./$jfs_bin config ${{steps.vars.outputs.META_URL}} --secret-key juicedata1 --encrypt-secret
-                            else
-                              sudo ./$jfs_bin config ${{steps.vars.outputs.META_URL}} --secret-key juicedata1
-                            fi
-                            echo "config finished"
-                            ;;
-                        "load")
-                            filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                            sudo ./$jfs_bin load ${{ steps.vars.outputs.META_URL }} $filename
-                            echo "load finished"
-                            ;;
-                        "status")
-                            sudo ./$jfs_bin status ${{ steps.vars.outputs.META_URL }} 
-                            echo "status finished"
-                            ;;
-                      esac
-                  done
-              done
-          done
+          sudo /etc/init.d/mysql start
+
+      - name: Setup minio
+        run: |
+          docker run -d -p 9000:9000 --name minio \
+                     -e "MINIO_ACCESS_KEY=minioadmin" \
+                     -e "MINIO_SECRET_KEY=minioadmin" \
+                     -v /tmp/data:/data \
+                     -v /tmp/config:/root/.minio \
+                     minio/minio server /data
+          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
+          chmod +x mc
+
+      - name: Test
+        uses: ./.github/actions/version-compatible
+        with:
+          meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+          
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  version-compatible-test-pg:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps tcp port 5432 on service container to the host
+          - 5432:5432
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Setup minio
+        run: |
+          docker run -d -p 9000:9000 --name minio \
+                     -e "MINIO_ACCESS_KEY=minioadmin" \
+                     -e "MINIO_SECRET_KEY=minioadmin" \
+                     -v /tmp/data:/data \
+                     -v /tmp/config:/root/.minio \
+                     minio/minio server /data
+          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
+          chmod +x mc
+
+      - name: Test
+        uses: ./.github/actions/version-compatible
+        with:
+          meta_url: "postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
 
       - name: Send Slack Notification
         if: ${{ failure() }}

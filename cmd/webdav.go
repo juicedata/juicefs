@@ -64,11 +64,7 @@ func webdav(c *cli.Context) error {
 	setup(c, 2)
 	metaUrl := c.Args().Get(0)
 	listenAddr := c.Args().Get(1)
-	m, store, conf := initForSvc(c, "webdav", metaUrl)
-	jfs, err := fs.NewFileSystem(conf, m, store)
-	if err != nil {
-		logger.Fatalf("initialize failed: %s", err)
-	}
+	_, jfs := initForSvc(c, "webdav", metaUrl)
 	fs.StartHTTPServer(jfs, listenAddr, c.Bool("gzip"), c.Bool("disallowList"))
-	return m.CloseSession()
+	return jfs.Meta().CloseSession()
 }

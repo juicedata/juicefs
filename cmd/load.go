@@ -17,10 +17,12 @@
 package cmd
 
 import (
+	"fmt"
 	"io"
 	"os"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
 
@@ -38,7 +40,7 @@ WARNING: Do NOT use new engine and the old one at the same time, otherwise it wi
 consistency of the volume.
 
 Examples:
-$ juicefs load meta-dump redis://localhost/1
+$ juicefs load redis://localhost/1 meta-dump
 
 Details: https://juicefs.com/docs/community/metadata_dump_load`,
 	}
@@ -46,6 +48,7 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 
 func load(ctx *cli.Context) error {
 	setup(ctx, 1)
+	removePassword(ctx.Args().Get(0))
 	var fp io.ReadCloser
 	if ctx.Args().Len() == 1 {
 		fp = os.Stdin
@@ -57,8 +60,10 @@ func load(ctx *cli.Context) error {
 		}
 		defer fp.Close()
 	}
-	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
+	if format, err := m.Load(false); err == nil {
+		return fmt.Errorf("Database %s is used by volume %s", utils.RemovePassword(ctx.Args().Get(0)), format.Name)
+	}
 	if err := m.LoadMeta(fp); err != nil {
 		return err
 	}

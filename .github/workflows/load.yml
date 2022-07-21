@@ -1,17 +1,5 @@
 name: "load-test"
-
 on:
-  push:
-    branches:
-      - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-  pull_request:
-    #The branches below must be a subset of the branches above
-    branches:
-      - 'release-**'
-    paths-ignore:
-      - 'docs/**'
   schedule:
     - cron:  '0 3 * * *'
   workflow_dispatch:
@@ -37,36 +25,33 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
-      - name: Init
+      - name: download data
         run: |
-          sudo chmod 777 /var
-          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-          gzip -dk  meta_with_4M_Empty_files.json.gz
+          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
+          gzip -dk  2M_emtpy_files.dump.gz
       - name: Load
         uses: ./.github/actions/load
         with:
           meta_url: "postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable" 
-          load_file: "meta_with_4M_Empty_files.json"            
+          load_file: "2M_emtpy_files.dump"            
           
   load-to-mysql:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 1
-      - name: Init
+      - name: download data
         run: |
-          sudo chmod 777 /var
+          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
+          gzip -dk  2M_emtpy_files.dump.gz
+      - name: start mysql
+        run: |
+          # sudo chmod 777 /var
           sudo /etc/init.d/mysql start
-          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-          gzip -dk  meta_with_4M_Empty_files.json.gz
       - name: Load
         uses: ./.github/actions/load
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/sync_test" 
-          load_file: "meta_with_4M_Empty_files.json"      
+          load_file: "2M_emtpy_files.dump"      
             
   load-to-redis:
     runs-on: ubuntu-latest
@@ -85,37 +70,112 @@ jobs:
           - 6379:6379
     steps:
       - uses: actions/checkout@v3
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 1
-      - name: Init
+      - name: download data
         run: |
-          sudo chmod 777 /var
-          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-          gzip -dk  meta_with_4M_Empty_files.json.gz
+          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
+          gzip -dk  2M_emtpy_files.dump.gz
       - name: Load
         uses: ./.github/actions/load
         with:
           meta_url: redis://127.0.0.1:6379/1 
-          load_file: "meta_with_4M_Empty_files.json"      
+          load_file: "2M_emtpy_files.dump"      
 
   load-to-sqlite3:
     runs-on: ubuntu-latest   
     steps:
       - uses: actions/checkout@v3
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 1
-      - name: Init
+      - name: download data
         run: |
-          sudo chmod 777 /var
-          wget -q https://s.juicefs.com/static/meta_with_4M_Empty_files.json.gz
-          gzip -dk  meta_with_4M_Empty_files.json.gz
+          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
+          gzip -dk  2M_emtpy_files.dump.gz
       - name: Load
         uses: ./.github/actions/load
         with:
           meta_url: sqlite3://sync-test.db
-          load_file: "meta_with_4M_Empty_files.json"      
+          load_file: "2M_emtpy_files.dump"      
     
+  load-to-tikv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: download data
+        run: |
+          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
+          gzip -dk  2M_emtpy_files.dump.gz
+      - name: Install TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.bash_profile
+          source /home/runner/.profile
+          tiup playground --mode tikv-slim &
+          sleep 5
+      - name: Test
+        uses: ./.github/actions/load
+        with:
+          meta_url: "tikv://127.0.0.1:2379/load_test"
+          load_file: "2M_emtpy_files.dump"
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  load-to-badgerdb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: download data
+        run: |
+          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
+          gzip -dk  2M_emtpy_files.dump.gz
+      - run: sudo go get github.com/dgraph-io/badger/v3
+      - name: Test
+        uses: ./.github/actions/load
+        with:
+          meta_url: "badger://load_test"
+          load_file: "2M_emtpy_files.dump"    
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  load-to-mariadb:
+    runs-on: ubuntu-latest          
+    steps:
+      - uses: actions/checkout@v3
+      - name: download data
+        run: |
+          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
+          gzip -dk  2M_emtpy_files.dump.gz
+      - name: install 
+        run: | 
+          docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
+      - name: Test
+        uses: ./.github/actions/load
+        with:
+          meta_url: "mysql://root:root@\\(127.0.0.1\\)/load_test"
+          load_file: "2M_emtpy_files.dump"   
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  load-to-tidb:
+    runs-on: ubuntu-latest          
+    steps:
+      - uses: actions/checkout@v3
+      - name: download data
+        run: |
+          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
+          gzip -dk  2M_emtpy_files.dump.gz
+      - name: install 
+        run: | 
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.profile
+          tiup playground 5.4.0 &
+          sleep 120
+          mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
+      - name: Test
+        uses: ./.github/actions/load
+        with:
+          meta_url: "mysql://root:@\\(127.0.0.1:4000\\)/load_test"
+          load_file: "2M_emtpy_files.dump"   
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1

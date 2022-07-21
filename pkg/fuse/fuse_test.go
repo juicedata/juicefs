@@ -84,7 +84,7 @@ func mount(url, mp string) {
 		CacheDir:   "memory",
 	}
 
-	blob, err := object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey)
+	blob, err := object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken)
 	if err != nil {
 		log.Fatalf("object storage: %s", err)
 	}

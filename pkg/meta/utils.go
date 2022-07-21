@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -60,20 +61,31 @@ type freeID struct {
 var logger = utils.GetLogger("juicefs")
 
 type queryMap struct {
-	url.Values
+	*url.Values
 }
 
-func (qm *queryMap) duration(key string, d time.Duration) time.Duration {
+func (qm *queryMap) duration(key, originalKey string, d time.Duration) time.Duration {
 	val := qm.Get(key)
 	if val == "" {
-		return d
+		oVal := qm.Get(originalKey)
+		if oVal == "" {
+			return d
+		}
+		val = oVal
 	}
+
+	qm.Del(key)
 	if dur, err := time.ParseDuration(val); err == nil {
 		return dur
 	} else {
 		logger.Warnf("Parse duration %s for key %s: %s", val, key, err)
 		return d
 	}
+}
+
+func (qm *queryMap) pop(key string) string {
+	defer qm.Del(key)
+	return qm.Get(key)
 }
 
 func errno(err error) syscall.Errno {
@@ -221,72 +233,97 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 	return ls
 }
 
-func emptyDir(r Meta, ctx Context, inode Ino, concurrent chan int) syscall.Errno {
-	if st := r.Access(ctx, inode, 3, nil); st != 0 {
+func (m *baseMeta) emptyDir(ctx Context, inode Ino, count *uint64, concurrent chan int) syscall.Errno {
+	if st := m.Access(ctx, inode, 3, nil); st != 0 {
 		return st
 	}
-	var entries []*Entry
-	if st := r.Readdir(ctx, inode, 0, &entries); st != 0 {
-		return st
-	}
-	var wg sync.WaitGroup
-	var status syscall.Errno
-	for _, e := range entries {
-		if e.Inode == inode || len(e.Name) == 2 && string(e.Name) == ".." {
-			continue
+	for {
+		var entries []*Entry
+		if st := m.en.doReaddir(ctx, inode, 0, &entries, 10000); st != 0 && st != syscall.ENOENT {
+			return st
 		}
-		if e.Attr.Typ == TypeDirectory {
-			select {
-			case concurrent <- 1:
-				wg.Add(1)
-				go func(child Ino, name string) {
-					defer wg.Done()
-					e := emptyEntry(r, ctx, inode, name, child, concurrent)
-					if e != 0 {
-						status = e
+		if len(entries) == 0 {
+			return 0
+		}
+		var wg sync.WaitGroup
+		var status syscall.Errno
+		// try directories first to increase parallel
+		var dirs int
+		for i, e := range entries {
+			if e.Attr.Typ == TypeDirectory {
+				entries[dirs], entries[i] = entries[i], entries[dirs]
+				dirs++
+			}
+		}
+		for i, e := range entries {
+			if e.Attr.Typ == TypeDirectory {
+				select {
+				case concurrent <- 1:
+					wg.Add(1)
+					go func(child Ino, name string) {
+						defer wg.Done()
+						e := m.emptyEntry(ctx, inode, name, child, count, concurrent)
+						if e != 0 && e != syscall.ENOENT {
+							status = e
+						}
+						<-concurrent
+					}(e.Inode, string(e.Name))
+				default:
+					if st := m.emptyEntry(ctx, inode, string(e.Name), e.Inode, count, concurrent); st != 0 && st != syscall.ENOENT {
+						return st
 					}
-					<-concurrent
-				}(e.Inode, string(e.Name))
-			default:
-				if st := emptyEntry(r, ctx, inode, string(e.Name), e.Inode, concurrent); st != 0 {
+				}
+			} else {
+				if count != nil {
+					atomic.AddUint64(count, 1)
+				}
+				if st := m.Unlink(ctx, inode, string(e.Name)); st != 0 && st != syscall.ENOENT {
 					return st
 				}
 			}
-		} else {
-			if st := r.Unlink(ctx, inode, string(e.Name)); st != 0 {
-				return st
+			if ctx.Canceled() {
+				return syscall.EINTR
 			}
+			entries[i] = nil // release memory
+		}
+		wg.Wait()
+		if status != 0 {
+			return status
 		}
 	}
-	wg.Wait()
-	return status
 }
 
-func emptyEntry(r Meta, ctx Context, parent Ino, name string, inode Ino, concurrent chan int) syscall.Errno {
-	st := emptyDir(r, ctx, inode, concurrent)
+func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, count *uint64, concurrent chan int) syscall.Errno {
+	st := m.emptyDir(ctx, inode, count, concurrent)
 	if st == 0 {
-		st = r.Rmdir(ctx, parent, name)
+		st = m.Rmdir(ctx, parent, name)
 		if st == syscall.ENOTEMPTY {
-			st = emptyEntry(r, ctx, parent, name, inode, concurrent)
+			st = m.emptyEntry(ctx, parent, name, inode, count, concurrent)
+		} else if count != nil {
+			atomic.AddUint64(count, 1)
 		}
 	}
 	return st
 }
 
-func Remove(r Meta, ctx Context, parent Ino, name string) syscall.Errno {
-	if st := r.Access(ctx, parent, 3, nil); st != 0 {
+func (m *baseMeta) Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno {
+	parent = m.checkRoot(parent)
+	if st := m.Access(ctx, parent, 3, nil); st != 0 {
 		return st
 	}
 	var inode Ino
 	var attr Attr
-	if st := r.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
+	if st := m.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
 		return st
 	}
 	if attr.Typ != TypeDirectory {
-		return r.Unlink(ctx, parent, name)
+		if count != nil {
+			atomic.AddUint64(count, 1)
+		}
+		return m.Unlink(ctx, parent, name)
 	}
 	concurrent := make(chan int, 50)
-	return emptyEntry(r, ctx, parent, name, inode, concurrent)
+	return m.emptyEntry(ctx, parent, name, inode, count, concurrent)
 }
 
 func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {

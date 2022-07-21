@@ -28,7 +28,7 @@ libjfs-all: libjfs.so
 		-w /go/src/github.com/juicedata/juicefs/sdk/java/libjfs \
 		--entrypoint=/bin/bash \
 		juicedata/golang-cross:latest \
-		-c 'make mac win'
+		-c 'make mac win linux-arm64 mac-arm64'
 
 libjfs.so:
 	docker run --rm \

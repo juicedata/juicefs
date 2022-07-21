@@ -35,6 +35,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -137,6 +138,10 @@ type FileSystem struct {
 	attrs   map[Ino]*attrCache
 
 	logBuffer chan string
+
+	readSizeHistogram     prometheus.Histogram
+	writtenSizeHistogram  prometheus.Histogram
+	opsDurationsHistogram prometheus.Histogram
 }
 
 type File struct {
@@ -163,7 +168,24 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSyst
 		writer:  vfs.NewDataWriter(conf, m, d, reader),
 		entries: make(map[meta.Ino]map[string]*entryCache),
 		attrs:   make(map[meta.Ino]*attrCache),
+
+		readSizeHistogram: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "sdk_read_size_bytes",
+			Help:    "size of read distributions.",
+			Buckets: prometheus.LinearBuckets(4096, 4096, 32),
+		}),
+		writtenSizeHistogram: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "sdk_written_size_bytes",
+			Help:    "size of write distributions.",
+			Buckets: prometheus.LinearBuckets(4096, 4096, 32),
+		}),
+		opsDurationsHistogram: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "sdk_ops_durations_histogram_seconds",
+			Help:    "Operations latency distributions.",
+			Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
+		}),
 	}
+
 	go fs.cleanupCache()
 	if conf.AccessLog != "" {
 		f, err := os.OpenFile(conf.AccessLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -176,6 +198,14 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSyst
 		}
 	}
 	return fs, nil
+}
+
+func (fs *FileSystem) InitMetrics(reg prometheus.Registerer) {
+	if reg != nil {
+		reg.MustRegister(fs.readSizeHistogram)
+		reg.MustRegister(fs.writtenSizeHistogram)
+		reg.MustRegister(fs.opsDurationsHistogram)
+	}
 }
 
 func (fs *FileSystem) cleanupCache() {
@@ -233,7 +263,7 @@ func (fs *FileSystem) invalidateAttr(ino Ino) {
 
 func (fs *FileSystem) log(ctx LogContext, format string, args ...interface{}) {
 	used := ctx.Duration()
-	opsDurationsHistogram.Observe(used.Seconds())
+	fs.opsDurationsHistogram.Observe(used.Seconds())
 	if fs.logBuffer == nil {
 		return
 	}
@@ -438,7 +468,7 @@ func (fs *FileSystem) Rmr(ctx meta.Context, p string) (err syscall.Errno) {
 	if err != 0 {
 		return
 	}
-	err = meta.Remove(fs.m, ctx, parent.inode, path.Base(p))
+	err = fs.m.Remove(ctx, parent.inode, path.Base(p), nil)
 	fs.invalidateEntry(parent.inode, path.Base(p))
 	return
 }
@@ -700,13 +730,16 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 		if len(name) == 0 {
 			continue
 		}
-		if parent == 1 && i == len(ss)-1 && vfs.IsSpecialName(name) {
+		if parent == meta.RootInode && i == len(ss)-1 && vfs.IsSpecialName(name) {
 			inode, attr := vfs.GetInternalNodeByName(name)
 			fi = AttrToFileInfo(inode, attr)
 			parent = inode
 			break
 		}
 		if i > 0 {
+			if (name == "." || name == "..") && attr.Typ != meta.TypeDirectory {
+				return nil, syscall.ENOTDIR
+			}
 			if err := fs.m.Access(ctx, parent, mMaskX, attr); err != 0 {
 				return nil, err
 			}
@@ -744,7 +777,7 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 		}
 		parent = inode
 	}
-	if parent == 1 {
+	if parent == meta.RootInode {
 		err = fs.m.GetAttr(ctx, parent, attr)
 		if err != 0 {
 			return
@@ -967,7 +1000,7 @@ func (f *File) pread(ctx meta.Context, b []byte, offset int64) (n int, err error
 	if got == 0 {
 		return 0, io.EOF
 	}
-	readSizeHistogram.Observe(float64(got))
+	f.fs.readSizeHistogram.Observe(float64(got))
 	return got, nil
 }
 
@@ -1005,7 +1038,7 @@ func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 	if offset+int64(len(b)) > int64(f.info.attr.Length) {
 		f.info.attr.Length = uint64(offset + int64(len(b)))
 	}
-	writtenSizeHistogram.Observe(float64(len(b)))
+	f.fs.writtenSizeHistogram.Observe(float64(len(b)))
 	return len(b), 0
 }
 

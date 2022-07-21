@@ -190,7 +190,7 @@ func (s *sharded) CompleteUpload(key string, uploadID string, parts []*Part) err
 	return s.pick(key).CompleteUpload(key, uploadID, parts)
 }
 
-func NewSharded(name, endpoint, ak, sk string, shards int) (ObjectStorage, error) {
+func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {
 	stores := make([]ObjectStorage, shards)
 	var err error
 	for i := range stores {
@@ -198,7 +198,7 @@ func NewSharded(name, endpoint, ak, sk string, shards int) (ObjectStorage, error
 		if strings.HasSuffix(ep, "%!(EXTRA int=0)") {
 			return nil, fmt.Errorf("can not generate different endpoint using %s", endpoint)
 		}
-		stores[i], err = CreateStorage(name, ep, ak, sk)
+		stores[i], err = CreateStorage(name, ep, ak, sk, token)
 		if err != nil {
 			return nil, err
 		}

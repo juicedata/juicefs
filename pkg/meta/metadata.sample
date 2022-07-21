@@ -4,20 +4,13 @@
     "UUID": "faa27c8f-edab-4791-a4e0-1620b732b343",
     "Storage": "file",
     "Bucket": "/Users/juicefs/.juicefs/local/",
-    "AccessKey": "",
     "SecretKey": "removed",
     "BlockSize": 4096,
     "Compression": "none",
-    "Shards": 0,
-    "HashPrefix": false,
-    "Capacity": 0,
-    "Inodes": 0,
     "EncryptKey": "AQSttslKOSE/hQT/gmaMniCsdPF8JdPRfoYK6zFkdUOnifYwBA==",
     "KeyEncrypted": true,
     "TrashDays": 1,
-    "MetaVersion": 1,
-    "MinClientVersion": "",
-    "MaxClientVersion": ""
+    "MetaVersion": 1
   },
   "Counters": {
     "usedSpace": 115392512,
@@ -75,7 +68,7 @@
       "f1": {
         "attr": {"inode":2,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746580,"mtime":1623746661,"ctime":1623746661,"atimensec":219686000,"mtimensec":219686000,"ctimensec":219686000,"nlink":1,"length":24},
         "xattrs": [{"name":"k","value":"v"}],
-        "chunks": [{"index":0,"slices":[{"chunkid":1,"size":6,"len":6},{"chunkid":3,"size":12,"len":12},{"chunkid":4,"size":24,"len":24}]}]
+        "chunks": [{"index":0,"slices":[{"chunkid":1,"size":6,"len":6},{"chunkid":2,"size":12,"len":12},{"chunkid":4,"size":24,"len":24}]}]
       },
       "l1": {
         "attr": {"inode":4,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746610,"mtime":1623746610,"ctime":1623746639,"atimensec":591590000,"mtimensec":591590000,"ctimensec":591590000,"nlink":2,"length":12},

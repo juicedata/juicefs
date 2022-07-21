@@ -41,72 +41,6 @@ const SlowRequest = time.Second * time.Duration(10)
 
 var (
 	logger = utils.GetLogger("juicefs")
-
-	cacheHits = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "blockcache_hits",
-		Help: "read from cached block",
-	})
-	cacheMiss = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "blockcache_miss",
-		Help: "missed read from cached block",
-	})
-	cacheWrites = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "blockcache_writes",
-		Help: "written cached block",
-	})
-	cacheDrops = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "blockcache_drops",
-		Help: "dropped block",
-	})
-	cacheEvicts = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "blockcache_evicts",
-		Help: "evicted cache blocks",
-	})
-	cacheHitBytes = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "blockcache_hit_bytes",
-		Help: "read bytes from cached block",
-	})
-	cacheMissBytes = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "blockcache_miss_bytes",
-		Help: "missed bytes from cached block",
-	})
-	cacheWriteBytes = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "blockcache_write_bytes",
-		Help: "write bytes of cached block",
-	})
-	cacheReadHist = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "blockcache_read_hist_seconds",
-		Help:    "read cached block latency distribution",
-		Buckets: prometheus.ExponentialBuckets(0.00001, 2, 20),
-	})
-	cacheWriteHist = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "blockcache_write_hist_seconds",
-		Help:    "write cached block latency distribution",
-		Buckets: prometheus.ExponentialBuckets(0.00001, 2, 20),
-	})
-
-	objectReqsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "object_request_durations_histogram_seconds",
-		Help:    "Object requests latency distributions.",
-		Buckets: prometheus.ExponentialBuckets(0.01, 1.5, 25),
-	}, []string{"method"})
-	objectReqErrors = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "object_request_errors",
-		Help: "failed requests to object store",
-	})
-	objectDataBytes = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "object_request_data_bytes",
-		Help: "Object requests size in bytes.",
-	}, []string{"method"})
-
-	stageBlocks = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "staging_blocks",
-		Help: "Number of blocks in the staging path.",
-	})
-	stageBlockBytes = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "staging_block_bytes",
-		Help: "Total bytes of blocks in the staging path.",
-	})
 )
 
 type pendingItem struct {
@@ -197,9 +131,9 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 			n, err = r.ReadAt(p, int64(boff))
 			_ = r.Close()
 			if err == nil {
-				cacheHits.Add(1)
-				cacheHitBytes.Add(float64(n))
-				cacheReadHist.Observe(time.Since(start).Seconds())
+				c.store.cacheHits.Add(1)
+				c.store.cacheHitBytes.Add(float64(n))
+				c.store.cacheReadHist.Observe(time.Since(start).Seconds())
 				return n, nil
 			}
 			if f, ok := r.(*os.File); ok {
@@ -209,8 +143,8 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		}
 	}
 
-	cacheMiss.Add(1)
-	cacheMissBytes.Add(float64(len(p)))
+	c.store.cacheMiss.Add(1)
+	c.store.cacheMissBytes.Add(float64(len(p)))
 
 	if c.store.seekable && boff > 0 && len(p) <= blockSize/4 {
 		if c.store.downLimit != nil {
@@ -228,13 +162,13 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		if used > SlowRequest {
 			logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
 		}
-		objectDataBytes.WithLabelValues("GET").Add(float64(n))
-		objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
+		c.store.objectDataBytes.WithLabelValues("GET").Add(float64(n))
+		c.store.objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
 		c.store.fetcher.fetch(key)
 		if err == nil {
 			return n, nil
 		} else {
-			objectReqErrors.Add(1)
+			c.store.objectReqErrors.Add(1)
 		}
 	}
 
@@ -271,9 +205,9 @@ func (c *rChunk) delete(indx int) error {
 	if used > SlowRequest {
 		logger.Infof("slow request: DELETE %v (%v, %.3fs)", key, err, used.Seconds())
 	}
-	objectReqsHistogram.WithLabelValues("DELETE").Observe(used.Seconds())
+	c.store.objectReqsHistogram.WithLabelValues("DELETE").Observe(used.Seconds())
 	if err != nil {
-		objectReqErrors.Add(1)
+		c.store.objectReqErrors.Add(1)
 	}
 	return err
 }
@@ -289,7 +223,8 @@ func (c *rChunk) Remove() error {
 		// there could be multiple clients try to remove the same chunk in the same time,
 		// any of them should succeed if any blocks is removed
 		key := c.key(i)
-		c.store.removeStaging(key)
+		c.store.removePending(key)
+		c.store.bcache.remove(key)
 	}
 
 	if c.store.conf.MaxDeletes == 0 {
@@ -413,10 +348,10 @@ func (store *cachedStore) put(key string, p *Page) error {
 		if used > SlowRequest {
 			logger.Infof("slow request: PUT %v (%v, %.3fs)", key, err, used.Seconds())
 		}
-		objectDataBytes.WithLabelValues("PUT").Add(float64(len(p.Data)))
-		objectReqsHistogram.WithLabelValues("PUT").Observe(used.Seconds())
+		store.objectDataBytes.WithLabelValues("PUT").Add(float64(len(p.Data)))
+		store.objectReqsHistogram.WithLabelValues("PUT").Observe(used.Seconds())
 		if err != nil {
-			objectReqErrors.Add(1)
+			store.objectReqErrors.Add(1)
 		}
 		return err
 	}, store.conf.PutTimeout)
@@ -502,8 +437,10 @@ func (c *wChunk) upload(indx int) {
 						if err = c.store.upload(key, block, nil); err == nil {
 							c.store.bcache.uploaded(key, blen)
 							if os.Remove(stagingPath) == nil {
-								stageBlocks.Sub(1)
-								stageBlockBytes.Sub(float64(blen))
+								if m, ok := c.store.bcache.(*cacheManager); ok {
+									m.stageBlocks.Sub(1)
+									m.stageBlockBytes.Sub(float64(blen))
+								}
 							}
 						} else { // add to delay list and wait for later scanning
 							c.store.addDelayedStaging(key, stagingPath, time.Now().Add(time.Second*30), false)
@@ -619,6 +556,15 @@ type cachedStore struct {
 	seekable      bool
 	upLimit       *ratelimit.Bucket
 	downLimit     *ratelimit.Bucket
+
+	cacheHits           prometheus.Counter
+	cacheMiss           prometheus.Counter
+	cacheHitBytes       prometheus.Counter
+	cacheMissBytes      prometheus.Counter
+	cacheReadHist       prometheus.Histogram
+	objectReqsHistogram *prometheus.HistogramVec
+	objectReqErrors     prometheus.Counter
+	objectDataBytes     *prometheus.CounterVec
 }
 
 func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bool) (err error) {
@@ -643,7 +589,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		time.Sleep(time.Second * time.Duration(tried*tried))
 		if tried > 0 {
 			logger.Warnf("GET %s: %s; retrying", key, err)
-			objectReqErrors.Add(1)
+			store.objectReqErrors.Add(1)
 			start = time.Now()
 		}
 		in, err = store.storage.Get(key, 0, -1)
@@ -673,10 +619,10 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	if store.downLimit != nil && compressed {
 		store.downLimit.Wait(int64(n))
 	}
-	objectDataBytes.WithLabelValues("GET").Add(float64(n))
-	objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
+	store.objectDataBytes.WithLabelValues("GET").Add(float64(n))
+	store.objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
 	if err != nil {
-		objectReqErrors.Add(1)
+		store.objectReqErrors.Add(1)
 		return fmt.Errorf("get %s: %s", key, err)
 	}
 	if compressed {
@@ -693,7 +639,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 }
 
 // NewCachedStore create a cached store.
-func NewCachedStore(storage object.ObjectStorage, config Config, registerer prometheus.Registerer) ChunkStore {
+func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.Registerer) ChunkStore {
 	compressor := compress.NewCompressor(config.Compress)
 	if compressor == nil {
 		logger.Fatalf("unknown compress algorithm: %s", config.Compress)
@@ -725,7 +671,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, registerer prom
 	if config.DownloadLimit > 0 {
 		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit)
 	}
-	store.bcache = newCacheManager(&config, func(key, fpath string, force bool) bool {
+	store.bcache = newCacheManager(&config, reg, func(key, fpath string, force bool) bool {
 		if force {
 			return store.addDelayedStaging(key, fpath, time.Time{}, true)
 		} else if fi, err := os.Stat(fpath); err == nil {
@@ -746,7 +692,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, registerer prom
 		defer p.Release()
 		_ = store.load(key, p, true, true)
 	})
-	initMetrics(store, registerer)
+
 	if store.conf.CacheDir != "memory" && store.conf.Writeback {
 		for i := 0; i < store.conf.MaxUpload; i++ {
 			go store.uploader()
@@ -765,24 +711,59 @@ func NewCachedStore(storage object.ObjectStorage, config Config, registerer prom
 			}
 		}()
 	}
+
+	store.cacheHits = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "blockcache_hits",
+		Help: "read from cached block",
+	})
+	store.cacheMiss = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "blockcache_miss",
+		Help: "missed read from cached block",
+	})
+	store.cacheHitBytes = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "blockcache_hit_bytes",
+		Help: "read bytes from cached block",
+	})
+	store.cacheMissBytes = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "blockcache_miss_bytes",
+		Help: "missed bytes from cached block",
+	})
+	store.cacheReadHist = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "blockcache_read_hist_seconds",
+		Help:    "read cached block latency distribution",
+		Buckets: prometheus.ExponentialBuckets(0.00001, 2, 20),
+	})
+	store.objectReqsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "object_request_durations_histogram_seconds",
+		Help:    "Object requests latency distributions.",
+		Buckets: prometheus.ExponentialBuckets(0.01, 1.5, 25),
+	}, []string{"method"})
+	store.objectReqErrors = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "object_request_errors",
+		Help: "failed requests to object store",
+	})
+	store.objectDataBytes = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "object_request_data_bytes",
+		Help: "Object requests size in bytes.",
+	}, []string{"method"})
+	store.initMetrics(reg)
+
 	return store
 }
 
-func initMetrics(store *cachedStore, registerer prometheus.Registerer) {
-	if registerer == nil {
+func (store *cachedStore) initMetrics(reg prometheus.Registerer) {
+	if reg == nil {
 		return
 	}
-	_ = registerer.Register(cacheHits)
-	_ = registerer.Register(cacheHitBytes)
-	_ = registerer.Register(cacheMiss)
-	_ = registerer.Register(cacheMissBytes)
-	_ = registerer.Register(cacheWrites)
-	_ = registerer.Register(cacheWriteBytes)
-	_ = registerer.Register(cacheDrops)
-	_ = registerer.Register(cacheEvicts)
-	_ = registerer.Register(cacheReadHist)
-	_ = registerer.Register(cacheWriteHist)
-	_ = registerer.Register(prometheus.NewGaugeFunc(
+	reg.MustRegister(store.cacheHits)
+	reg.MustRegister(store.cacheHitBytes)
+	reg.MustRegister(store.cacheMiss)
+	reg.MustRegister(store.cacheMissBytes)
+	reg.MustRegister(store.cacheReadHist)
+	reg.MustRegister(store.objectReqsHistogram)
+	reg.MustRegister(store.objectReqErrors)
+	reg.MustRegister(store.objectDataBytes)
+	reg.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "blockcache_blocks",
 			Help: "number of cached blocks",
@@ -791,7 +772,7 @@ func initMetrics(store *cachedStore, registerer prometheus.Registerer) {
 			cnt, _ := store.bcache.stats()
 			return float64(cnt)
 		}))
-	_ = registerer.Register(prometheus.NewGaugeFunc(
+	reg.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "blockcache_bytes",
 			Help: "number of cached bytes",
@@ -800,11 +781,6 @@ func initMetrics(store *cachedStore, registerer prometheus.Registerer) {
 			_, used := store.bcache.stats()
 			return float64(used)
 		}))
-	_ = registerer.Register(objectReqsHistogram)
-	_ = registerer.Register(objectReqErrors)
-	_ = registerer.Register(objectDataBytes)
-	_ = registerer.Register(stageBlocks)
-	_ = registerer.Register(stageBlockBytes)
 }
 
 func (store *cachedStore) shouldCache(size int) bool {
@@ -854,10 +830,12 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 
 	if err = store.upload(key, block, nil); err == nil {
 		store.bcache.uploaded(key, blen)
-		store.removeStaging(key)
+		store.removePending(key)
 		if os.Remove(stagingPath) == nil {
-			stageBlocks.Sub(1)
-			stageBlockBytes.Sub(float64(blen))
+			if m, ok := store.bcache.(*cacheManager); ok {
+				m.stageBlocks.Sub(1)
+				m.stageBlockBytes.Sub(float64(blen))
+			}
 		}
 	}
 }
@@ -876,11 +854,10 @@ func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.
 	return false
 }
 
-func (store *cachedStore) removeStaging(key string) {
+func (store *cachedStore) removePending(key string) {
 	store.pendingMutex.Lock()
 	delete(store.pendingKeys, key)
 	store.pendingMutex.Unlock()
-	store.bcache.remove(key)
 }
 
 func (store *cachedStore) scanDelayedStaging() {

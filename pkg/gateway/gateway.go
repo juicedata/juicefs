@@ -30,10 +30,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/minio/minio-go/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 
-	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -54,13 +54,11 @@ type Config struct {
 	Mode        uint16
 }
 
-func NewJFSGateway(conf *vfs.Config, m meta.Meta, store chunk.ChunkStore, gConf *Config) (minio.ObjectLayer, error) {
-	jfs, err := fs.NewFileSystem(conf, m, store)
-	if err != nil {
-		return nil, fmt.Errorf("Initialize failed: %s", err)
-	}
+func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	return &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), gConf: gConf}, nil
+	jfsObj := &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), gConf: gConf}
+	go jfsObj.cleanup()
+	return jfsObj, nil
 }
 
 type jfsObjects struct {
@@ -913,4 +911,42 @@ func (n *jfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 	}
 	eno := n.fs.Rmr(mctx, n.upath(bucket, uploadID))
 	return jfsToObjectErr(ctx, eno, bucket, object, uploadID)
+}
+
+func (n *jfsObjects) cleanup() {
+	for t := range time.Tick(24 * time.Hour) {
+		// default bucket tmp dirs
+		tmpDirs := []string{".sys/tmp/", ".sys/uploads/"}
+		if n.gConf.MultiBucket {
+			buckets, err := n.ListBuckets(context.Background())
+			if err != nil {
+				logger.Errorf("list buckets error: %v", err)
+				continue
+			}
+			for _, bucket := range buckets {
+				tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/tmp", bucket.Name))
+				tmpDirs = append(tmpDirs, fmt.Sprintf(".sys/%s/uploads", bucket.Name))
+			}
+		}
+		for _, dir := range tmpDirs {
+			f, errno := n.fs.Open(mctx, dir, 0)
+			if errno != 0 {
+				continue
+			}
+			entries, _ := f.ReaddirPlus(mctx, 0)
+			for _, entry := range entries {
+				if _, err := uuid.Parse(string(entry.Name)); err != nil {
+					continue
+				}
+				if t.Sub(time.Unix(entry.Attr.Mtime, 0)) > 7*24*time.Hour {
+					p := n.path(dir, string(entry.Name))
+					if errno := n.fs.Rmr(mctx, p); errno != 0 {
+						logger.Errorf("failed to delete expired temporary files path: %s,", p)
+					} else {
+						logger.Infof("delete expired temporary files path: %s, mtime: %s", p, time.Unix(entry.Attr.Mtime, 0).Format(time.RFC3339))
+					}
+				}
+			}
+		}
+	}
 }

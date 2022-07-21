@@ -59,9 +59,9 @@ import (
 )
 
 var (
-	filesLock     sync.Mutex
-	openFiles     = make(map[int]*fwrapper)
-	minFreeHandle = 1
+	filesLock  sync.Mutex
+	openFiles  = make(map[int]*fwrapper)
+	nextHandle = 1
 
 	fslock   sync.Mutex
 	handlers = make(map[uintptr]*wrapper)
@@ -208,10 +208,10 @@ type fwrapper struct {
 func nextFileHandle(f *fs.File, w *wrapper) int {
 	filesLock.Lock()
 	defer filesLock.Unlock()
-	for i := minFreeHandle; ; i++ {
+	for i := nextHandle; ; i++ {
 		if _, ok := openFiles[i]; !ok {
 			openFiles[i] = &fwrapper{f, w}
-			minFreeHandle = i + 1
+			nextHandle = i + 1
 			return i
 		}
 	}
@@ -223,9 +223,6 @@ func freeHandle(fd int) {
 	f := openFiles[fd]
 	if f != nil {
 		delete(openFiles, fd)
-		if fd < minFreeHandle {
-			minFreeHandle = fd
-		}
 	}
 }
 
@@ -418,7 +415,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			if jConf.PushGateway != "" {
 				push2Gateway(jConf.PushGateway, jConf.PushAuth, interval, registry, commonLabels)
 			}
-			meta.InitMetrics(registerer)
+			m.InitMetrics(registerer)
 			vfs.InitMetrics(registerer)
 			go metric.UpdateMetrics(m, registerer)
 		}
@@ -513,6 +510,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			logger.Errorf("Initialize failed: %s", err)
 			return nil
 		}
+		jfs.InitMetrics(registerer)
 		return jfs
 	})
 }

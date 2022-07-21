@@ -24,12 +24,15 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/ks3sdklib/aws-sdk-go/aws"
+	"github.com/ks3sdklib/aws-sdk-go/aws/awserr"
 	"github.com/ks3sdklib/aws-sdk-go/aws/credentials"
 	"github.com/ks3sdklib/aws-sdk-go/service/s3"
 )
@@ -43,6 +46,7 @@ type ks3 struct {
 func (s *ks3) String() string {
 	return fmt.Sprintf("ks3://%s/", s.bucket)
 }
+
 func (s *ks3) Create() error {
 	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
 	if err != nil && isExists(err) {
@@ -59,6 +63,9 @@ func (s *ks3) Head(key string) (Object, error) {
 
 	r, err := s.s3.HeadObject(&param)
 	if err != nil {
+		if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
+			err = os.ErrNotExist
+		}
 		return nil, err
 	}
 
@@ -126,6 +133,9 @@ func (s *ks3) Delete(key string) error {
 		Key:    &key,
 	}
 	_, err := s.s3.DeleteObject(&param)
+	if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
+		return nil
+	}
 	return err
 }
 
@@ -241,7 +251,7 @@ var ks3Regions = map[string]string{
 	"sgp":          "SINGAPORE",
 }
 
-func newKS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -270,8 +280,8 @@ func newKS3(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
 		Endpoint:         strings.SplitN(uri.Host, ".", 2)[1],
 		DisableSSL:       !ssl,
 		HTTPClient:       httpClient,
-		S3ForcePathStyle: true,
-		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, ""),
+		S3ForcePathStyle: false,
+		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}
 
 	return &ks3{bucket, s3.New(awsConfig), nil}, nil

@@ -22,6 +22,7 @@ package object
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -55,6 +56,9 @@ func (q *bosclient) Create() error {
 func (q *bosclient) Head(key string) (Object, error) {
 	r, err := q.c.GetObjectMeta(q.bucket, key)
 	if err != nil {
+		if e, ok := err.(*bce.BceServiceError); ok && e.StatusCode == http.StatusNotFound {
+			err = os.ErrNotExist
+		}
 		return nil, err
 	}
 	mtime, _ := time.Parse(time.RFC1123, r.LastModified)
@@ -195,7 +199,7 @@ func autoBOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 	}
 }
 
-func newBOS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newBOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}

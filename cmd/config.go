@@ -43,10 +43,10 @@ Examples:
 $ juicefs config redis://localhost
 
 # Change volume "quota"
-$ juicefs conifg redis://localhost --inode 10000000 --capacity 1048576
+$ juicefs config redis://localhost --inode 10000000 --capacity 1048576
 
 # Change maximum days before files in trash are deleted
-$ juicefs conifg redis://localhost --trash-days 7
+$ juicefs config redis://localhost --trash-days 7
 
 # Limit client version that is allowed to connect
 $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version 1.1.0`,
@@ -70,6 +70,10 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 			&cli.StringFlag{
 				Name:  "secret-key",
 				Usage: "secret key for object storage",
+			},
+			&cli.StringFlag{
+				Name:  "session-token",
+				Usage: "session token for object storage",
 			},
 			&cli.BoolFlag{
 				Name:  "encrypt-secret",
@@ -124,14 +128,13 @@ func config(ctx *cli.Context) error {
 		return err
 	}
 	if len(ctx.LocalFlagNames()) == 0 {
-		format.RemoveSecret()
-		printJson(format)
+		fmt.Println(format)
 		return nil
 	}
 
 	var quota, storage, trash, clientVer bool
-	var encrypted bool
 	var msg strings.Builder
+	encrypted := format.KeyEncrypted
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
 		case "capacity":
@@ -167,9 +170,17 @@ func config(ctx *cli.Context) error {
 			}
 		case "secret-key": // always update
 			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
-			encrypted = format.KeyEncrypted
+			if err := format.Decrypt(); err != nil && strings.Contains(err.Error(), "secret was removed") {
+				logger.Warnf("decrypt secrets: %s", err)
+			}
 			format.SecretKey = ctx.String(flag)
-			format.KeyEncrypted = false
+			storage = true
+		case "session-token": // always update
+			msg.WriteString(fmt.Sprintf("%10s: updated\n", flag))
+			if err := format.Decrypt(); err != nil && strings.Contains(err.Error(), "secret was removed") {
+				logger.Warnf("decrypt secrets: %s", err)
+			}
+			format.SessionToken = ctx.String(flag)
 			storage = true
 		case "trash-days":
 			if new := ctx.Int(flag); new != format.TrashDays {

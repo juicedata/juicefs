@@ -44,7 +44,7 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
+          sudo ./juicefs format --trash-days 0 redis://127.0.0.1:6379/1 pics
 
       - name: Juicefs Mount
         run: |
@@ -72,14 +72,17 @@ jobs:
       - name: Generate Data
         run: |
           cd /data/jfs/
-          git clone https://github.com/sanwan/ssb-dbgen.git
-          cd ssb-dbgen
-          make
-          ./dbgen -s 10 -T l -q
+          git clone https://github.com/sanwan/chdata.git
+          cd chdata
+          cat lineorder.tbl.gz* >lineorder.tbl.gz
+          gzip -dk lineorder.tbl.gz
           git clone https://github.com/sanwan/actionfile.git
           mv actionfile/*.tbl .
+          rm lineorder.tbl.gz*
           ls -lrth
           sudo du -sh /data/jfs/
+          df -lh
+
 
       - name: Create Table
         run: |
@@ -144,11 +147,12 @@ jobs:
 
       - name: Import Data
         run: |
-          cd /data/jfs/ssb-dbgen/
+          cd /data/jfs/chdata/
           clickhouse-client --query "INSERT INTO customer FORMAT CSV" < customer.tbl
           clickhouse-client --query "INSERT INTO part FORMAT CSV" < part.tbl
           clickhouse-client --query "INSERT INTO supplier FORMAT CSV" < supplier.tbl
           time clickhouse-client --query "INSERT INTO lineorder FORMAT CSV" < lineorder.tbl
+          df -lh
 
 
       - name: ClickHouse Test
@@ -250,7 +254,12 @@ jobs:
                                      ORDER BY
                                          year ASC,
                                          C_NATION ASC;"
+          df -lh
 
+      - name: Log
+        if: ${{ always() }}
+        run: |
+          sudo tail -n 100 /var/log/juicefs.log
 
 
       - name: Send Slack Notification

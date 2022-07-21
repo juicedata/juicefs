@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -33,7 +34,7 @@ type _file struct {
 	size uint64
 }
 
-func (v *VFS) fillCache(paths []string, concurrent int) {
+func (v *VFS) fillCache(ctx meta.Context, paths []string, concurrent int, count, bytes *uint64) {
 	logger.Infof("start to warmup %d paths with %d workers", len(paths), concurrent)
 	start := time.Now()
 	todo := make(chan _file, 10240)
@@ -46,9 +47,14 @@ func (v *VFS) fillCache(paths []string, concurrent int) {
 				if f.ino == 0 {
 					break
 				}
-				err := v.fillInode(f.ino, f.size)
-				if err != nil { // TODO: print path instead of inode
+				if err := v.fillInode(ctx, f.ino, f.size, bytes); err != nil {
 					logger.Errorf("Inode %d could be corrupted: %s", f.ino, err)
+				}
+				if count != nil {
+					atomic.AddUint64(count, 1)
+				}
+				if ctx.Canceled() {
+					break
 				}
 			}
 			wg.Done()
@@ -58,24 +64,29 @@ func (v *VFS) fillCache(paths []string, concurrent int) {
 	var inode Ino
 	var attr = &Attr{}
 	for _, p := range paths {
-		if st := v.resolve(p, &inode, attr); st != 0 {
+		if st := v.resolve(ctx, p, &inode, attr); st != 0 {
 			logger.Warnf("Failed to resolve path %s: %s", p, st)
 			continue
 		}
 		logger.Debugf("Warming up path %s", p)
 		if attr.Typ == meta.TypeDirectory {
-			v.walkDir(inode, todo)
+			v.walkDir(ctx, inode, todo)
 		} else if attr.Typ == meta.TypeFile {
 			todo <- _file{inode, attr.Length}
+		}
+		if ctx.Canceled() {
+			break
 		}
 	}
 	close(todo)
 	wg.Wait()
+	if ctx.Canceled() {
+		logger.Infof("warmup cancelled")
+	}
 	logger.Infof("Warmup %d paths in %s", len(paths), time.Since(start))
 }
 
-func (v *VFS) resolve(p string, inode *Ino, attr *Attr) syscall.Errno {
-	ctx := meta.Background
+func (v *VFS) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscall.Errno {
 	var inodePrefix = "inode:"
 	if strings.HasPrefix(p, inodePrefix) {
 		i, err := strconv.ParseUint(p[len(inodePrefix):], 10, 64)
@@ -98,7 +109,7 @@ func (v *VFS) resolve(p string, inode *Ino, attr *Attr) syscall.Errno {
 		if len(name) == 0 {
 			continue
 		}
-		if parent == 1 && i == len(ss)-1 && IsSpecialName(name) {
+		if parent == meta.RootInode && i == len(ss)-1 && IsSpecialName(name) {
 			*inode, attr = GetInternalNodeByName(name)
 			parent = *inode
 			break
@@ -121,13 +132,13 @@ func (v *VFS) resolve(p string, inode *Ino, attr *Attr) syscall.Errno {
 				return syscall.ENOTSUP
 			}
 			target = path.Join(strings.Join(ss[:i], "/"), target)
-			if err = v.resolve(target, inode, attr); err != 0 {
+			if err = v.resolve(ctx, target, inode, attr); err != 0 {
 				return err
 			}
 		}
 		parent = *inode
 	}
-	if parent == 1 {
+	if parent == meta.RootInode {
 		*inode = parent
 		if err = v.Meta.GetAttr(ctx, *inode, attr); err != 0 {
 			return err
@@ -136,7 +147,7 @@ func (v *VFS) resolve(p string, inode *Ino, attr *Attr) syscall.Errno {
 	return 0
 }
 
-func (v *VFS) walkDir(inode Ino, todo chan _file) {
+func (v *VFS) walkDir(ctx meta.Context, inode Ino, todo chan _file) {
 	pending := make([]Ino, 1)
 	pending[0] = inode
 	for len(pending) > 0 {
@@ -145,7 +156,7 @@ func (v *VFS) walkDir(inode Ino, todo chan _file) {
 		inode = pending[l]
 		pending = pending[:l]
 		var entries []*meta.Entry
-		r := v.Meta.Readdir(meta.Background, inode, 1, &entries)
+		r := v.Meta.Readdir(ctx, inode, 1, &entries)
 		if r == 0 {
 			for _, f := range entries {
 				name := string(f.Name)
@@ -157,6 +168,9 @@ func (v *VFS) walkDir(inode Ino, todo chan _file) {
 				} else if f.Attr.Typ != meta.TypeSymlink {
 					todo <- _file{f.Inode, f.Attr.Length}
 				}
+				if ctx.Canceled() {
+					return
+				}
 			}
 		} else {
 			logger.Warnf("readdir %d: %s", inode, r)
@@ -164,15 +178,21 @@ func (v *VFS) walkDir(inode Ino, todo chan _file) {
 	}
 }
 
-func (v *VFS) fillInode(inode Ino, size uint64) error {
+func (v *VFS) fillInode(ctx meta.Context, inode Ino, size uint64, bytes *uint64) error {
 	var slices []meta.Slice
 	for indx := uint64(0); indx*meta.ChunkSize < size; indx++ {
-		if st := v.Meta.Read(meta.Background, inode, uint32(indx), &slices); st != 0 {
+		if st := v.Meta.Read(ctx, inode, uint32(indx), &slices); st != 0 {
 			return fmt.Errorf("Failed to get slices of inode %d index %d: %d", inode, indx, st)
 		}
 		for _, s := range slices {
+			if bytes != nil {
+				atomic.AddUint64(bytes, uint64(s.Size))
+			}
 			if err := v.Store.FillCache(s.Chunkid, s.Size); err != nil {
 				return fmt.Errorf("Failed to cache inode %d slice %d: %s", inode, s.Chunkid, err)
+			}
+			if ctx.Canceled() {
+				return syscall.EINTR
 			}
 		}
 	}

@@ -44,7 +44,7 @@ func testKeysEqual(objs []Object, expectedKeys []string) error {
 }
 
 func TestDisk2(t *testing.T) {
-	s, _ := newDisk("/tmp/abc/", "", "")
+	s, _ := newDisk("/tmp/abc/", "", "", "")
 	testFileSystem(t, s)
 }
 
@@ -52,7 +52,7 @@ func TestSftp2(t *testing.T) {
 	if os.Getenv("SFTP_HOST") == "" {
 		t.SkipNow()
 	}
-	sftp, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"))
+	sftp, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"), "")
 	testFileSystem(t, sftp)
 }
 
@@ -60,7 +60,7 @@ func TestHDFS2(t *testing.T) {
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.Skip()
 	}
-	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "")
+	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "", "")
 	testFileSystem(t, dfs)
 }
 
@@ -77,6 +77,13 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		if err := s.Put(key, bytes.NewReader([]byte{})); err != nil {
 			t.Fatalf("PUT object `%s` failed: %q", key, err)
 		}
+	}
+	if o, err := s.Head("x/"); err != nil {
+		t.Fatalf("Head x/: %s", err)
+	} else if f, ok := o.(File); !ok {
+		t.Fatalf("Head should return File")
+	} else if !f.IsDir() {
+		t.Fatalf("x/ should be a dir")
 	}
 	// cleanup
 	defer func() {
@@ -136,7 +143,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		if err != nil {
 			t.Fatalf("listall failed: %s", err)
 		}
-		expectedKeys = []string{"", "a-", "a", "a/p.txt", "a0", "b", "b-", "b0", "x/", "x/x.txt", "xy.txt", "xyz/", "xyz/ol1/", "xyz/ol1/p.txt", "xyz/xyz.txt"}
+		expectedKeys = []string{"", "a-", "a/", "a/p.txt", "a0", "b", "b-", "b0", "x/", "x/x.txt", "xy.txt", "xyz/", "xyz/ol1/", "xyz/ol1/p.txt", "xyz/xyz.txt"}
 		if err = testKeysEqual(objs, expectedKeys); err != nil {
 			t.Fatalf("testKeysEqual fail: %s", err)
 		}

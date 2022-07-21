@@ -38,7 +38,11 @@ JuiceFS requires Redis 4.0+
 When using Redis as the metadata storage engine, the following format is usually used to access the database:
 
 ```shell
+# use tcp
 redis[s]://[<username>:<password>@]<host>[:<port>]/<db>
+
+# use unix socket 
+unix://[<username>:<password>@]<socket-file-path>?db=<db>
 ```
 
 Where `[]` enclosed are optional and the rest are mandatory.
@@ -119,7 +123,11 @@ Other PostgreSQL-compatible databases (such as CockroachDB) can also be used as 
 When using PostgreSQL as the metadata storage engine, you need to create a database manually before creating the file system by following the format below:
 
 ```shell
+# use tcp
 postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
+
+# use unix socket
+postgres:///<database-name>?host=<socket-directories-path>[&user=<user>&password=<password>]
 ```
 
 Where `[]` enclosed are optional and the rest are mandatory.
@@ -178,7 +186,11 @@ Additional parameters can be appended to the metadata URL. More details can be s
 When using MySQL as the metadata storage engine, you need to create a database manually before create the file system. The command with the following format is usually used to access the database:
 
 ```shell
+# use tcp
 mysql://<username>[:<password>]@(<host>:3306)/<database-name>
+
+# use unix socket 
+mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 ```
 
 :::note
@@ -204,6 +216,15 @@ $ juicefs format --storage s3 \
     pics
 ```
 
+To connect to a TLS enabled MySQL server, pass the `tls=true` parameter (or `tls=skip-verify` if using a self-signed certificate).
+
+```shell
+$ juicefs format --storage s3 \
+    ...
+    "mysql://user:mypassword@(192.168.1.6:3306)/juicefs?tls=true" \
+    pics
+```
+
 ### Mount a file system
 
 ```shell
@@ -217,7 +238,13 @@ $ export META_PASSWORD="mypassword"
 $ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
-For more examples of MySQL database address format, please refer to [here](https://github.com/Go-SQL-Driver/MySQL/#examples).
+To connect to a TLS enabled MySQL server, pass the `tls=true` parameter (or `tls=skip-verify` if using a self-signed certificate).
+
+```shell
+sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs?tls=true" /mnt/jfs
+```
+
+For more examples of MySQL database address format, please refer to [Go-MySQL-Driver](https://github.com/Go-SQL-Driver/MySQL/#examples).
 
 ## MariaDB
 
@@ -247,6 +274,20 @@ $ juicefs format --storage s3 \
 
 $ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
+
+To connect to a TLS enabled MariaDB server, pass the `tls=true` parameter (or `tls=skip-verify` if using a self-signed certificate).
+
+```shell
+$ export META_PASSWORD="mypassword"
+$ juicefs format --storage s3 \
+    ...
+    "mysql://user@(192.168.1.6:3306)/juicefs?tls=true" \
+    pics
+
+$ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs?tls=true" /mnt/jfs
+```
+
+For more examples of MariaDB database address format, please refer to [Go-MySQL-Driver](https://github.com/Go-SQL-Driver/MySQL/#examples).
 
 ## SQLite
 

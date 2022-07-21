@@ -84,12 +84,15 @@ func RemovePassword(uri string) string {
 	if p < 0 {
 		return uri
 	}
-	sp := strings.Index(uri, "://")
-	cp := strings.Index(uri[sp+3:], ":")
-	if cp < 0 || sp+3+cp > p {
+	sp := strings.Index(uri, "://") + 3
+	if sp == 2 {
+		sp = 0
+	}
+	cp := strings.Index(uri[sp:], ":")
+	if cp < 0 || sp+cp > p {
 		return uri
 	}
-	return uri[:sp+3+cp] + ":****" + uri[p:]
+	return uri[:sp+cp] + ":****" + uri[p:]
 }
 
 func GuessMimeType(key string) string {
@@ -107,4 +110,17 @@ func StringContains(s []string, e string) bool {
 		}
 	}
 	return false
+}
+
+func FormatBytes(n uint64) string {
+	if n < 1024 {
+		return fmt.Sprintf("%d Bytes", n)
+	}
+	units := []string{"K", "M", "G", "T", "P", "E"}
+	m := n
+	i := 0
+	for ; i < len(units)-1 && m >= 1<<20; i++ {
+		m = m >> 10
+	}
+	return fmt.Sprintf("%.2f %siB (%d Bytes)", float64(m)/1024.0, units[i], n)
 }

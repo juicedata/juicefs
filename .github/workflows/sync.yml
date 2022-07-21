@@ -3,21 +3,19 @@ name: "sync-test"
 on:
   push:
     branches:
-      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
   workflow_dispatch:
 
 jobs:
-  sync-test:
+  compare-with-rsync:
     runs-on: ubuntu-latest
     services:
       redis:
@@ -33,11 +31,6 @@ jobs:
           # Maps port 6379 on service container to the host
           - 6379:6379
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.17.x'
-
       - name: Checkout
         uses: actions/checkout@v2
         with:
@@ -45,12 +38,6 @@ jobs:
 
       - name: Build linux target
         run: make juicefs
-
-      - name: Checkout source code for sync test
-        uses: actions/checkout@v2
-        with:
-          repository: juicedata/juicefs
-          path: juicefs-source
 
       - name: Checkout source code for test
         uses: actions/checkout@v2
@@ -91,6 +78,51 @@ jobs:
             done < .github/workflows/resources/sync-options.txt
 
           done
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  file-head-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build linux target
+        run: |
+          make juicefs
+          # wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
+          # tar -zxf juicefs-1.0.0-beta3-linux-amd64.tar.gz
+
+      - name: Checkout source code for test
+        uses: actions/checkout@v2
+        with:
+          repository: juicedata/juicefs
+          path: jfs_source
+
+      - name: Test
+        run: |
+          # issue link: https://github.com/juicedata/juicefs/issues/2125
+          meta_url=sqlite3://test.db
+          mount_point=/tmp/sync-test/
+          ./juicefs format --trash-days 0 $meta_url sync-test
+          ./juicefs mount --no-usage-report $meta_url $mount_point -d
+          mkdir $mount_point/jfs_source/
+          ./juicefs sync jfs_source/ $mount_point/jfs_source/  -u=true --perms=true --check-all=true --bwlimit=81920 --dirs=true --threads=30 --debug  
+          echo "test" > jfs_source/test_file
+          mkdir jfs_source/test_dir
+          ./juicefs sync jfs_source/ $mount_point/jfs_source/  -u=true --perms=true --check-all=true --bwlimit=81920 --dirs=true --threads=30 --debug  
+          diff -ur jfs_source/ $mount_point/jfs_source
 
       - name: Send Slack Notification
         if: ${{ failure() }}

@@ -1,0 +1,119 @@
+name: "rmr-test"
+
+on:
+  schedule:
+    - cron:  '0 20 * * *'
+  workflow_dispatch:
+
+jobs:
+  rmr-with-pg:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Rmr
+        uses: ./.github/actions/rmr
+        with:
+          meta_url: "postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable"
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  rmr-with-mysql:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: start mysql
+        run: |
+          sudo /etc/init.d/mysql start
+
+      - name: Rmr
+        uses: ./.github/actions/rmr
+        with:
+          meta_url: "mysql://root:root@\\(127.0.0.1\\)/sync_test"
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  rmr-with-redis:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: start redis
+        run: |
+          docker run --name my-redis -p 6379:6379 -d redis
+
+      - name: Rmr
+        uses: ./.github/actions/rmr
+        with:
+          meta_url: "redis://localhost/1"
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  rmr-with-sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Rmr
+        uses: ./.github/actions/rmr
+        with:
+          meta_url: "sqlite3://test.db"
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+  rmr-with-tikv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          
+      - name: Install TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.bash_profile
+          source /home/runner/.profile
+          tiup playground --mode tikv-slim &
+          sleep 5
+
+      - name: Rmr
+        uses: ./.github/actions/rmr
+        with:
+          meta_url: "tikv://127.0.0.1:2379"
+          
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1

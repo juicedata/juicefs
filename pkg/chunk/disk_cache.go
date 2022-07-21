@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (
@@ -57,6 +58,7 @@ type cacheStore struct {
 	freeRatio float32
 	pending   chan pendingFile
 	pages     map[string]*Page
+	m         *cacheManager
 
 	used     int64
 	keys     map[string]cacheItem
@@ -65,7 +67,7 @@ type cacheStore struct {
 	uploader func(key, path string, force bool) bool
 }
 
-func newCacheStore(dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
+func newCacheStore(m *cacheManager, dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
 	if config.CacheMode == 0 {
 		config.CacheMode = 0600 // only owner can read/write cache
 	}
@@ -73,6 +75,7 @@ func newCacheStore(dir string, cacheSize int64, pendingPages int, config *Config
 		config.FreeSpace = 0.1 // 10%
 	}
 	c := &cacheStore{
+		m:         m,
 		dir:       dir,
 		mode:      config.CacheMode,
 		capacity:  cacheSize,
@@ -153,7 +156,7 @@ func (cache *cacheStore) cache(key string, p *Page, force bool) {
 		} else {
 			// does not have enough bandwidth to write it into disk, discard it
 			logger.Debugf("Caching queue is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
-			cacheDrops.Add(1)
+			cache.m.cacheDrops.Add(1)
 			delete(cache.pages, key)
 			atomic.AddInt64(&cache.totalPages, -int64(cap(p.Data)))
 			p.Release()
@@ -168,10 +171,10 @@ func (cache *cacheStore) curFreeRatio() (float32, float32) {
 
 func (cache *cacheStore) flushPage(path string, data []byte) (err error) {
 	start := time.Now()
-	cacheWrites.Add(1)
-	cacheWriteBytes.Add(float64(len(data)))
+	cache.m.cacheWrites.Add(1)
+	cache.m.cacheWriteBytes.Add(float64(len(data)))
 	defer func() {
-		cacheWriteHist.Observe(time.Since(start).Seconds())
+		cache.m.cacheWriteHist.Observe(time.Since(start).Seconds())
 	}()
 	cache.createDir(filepath.Dir(path))
 	tmp := path + ".tmp"
@@ -220,8 +223,10 @@ func (cache *cacheStore) createDir(dir string) {
 func (cache *cacheStore) remove(key string) {
 	cache.Lock()
 	path := cache.cachePath(key)
-	if cache.keys[key].atime > 0 {
-		cache.used -= int64(cache.keys[key].size + 4096)
+	if it, ok := cache.keys[key]; ok {
+		if it.size > 0 {
+			cache.used -= int64(it.size + 4096)
+		}
 		delete(cache.keys, key)
 	} else if cache.scanned {
 		path = "" // not existed
@@ -233,8 +238,8 @@ func (cache *cacheStore) remove(key string) {
 		if fi, err := os.Stat(stagingPath); err == nil {
 			size := fi.Size()
 			if err = os.Remove(stagingPath); err == nil {
-				stageBlocks.Sub(1)
-				stageBlockBytes.Sub(float64(size))
+				cache.m.stageBlocks.Sub(1)
+				cache.m.stageBlockBytes.Sub(float64(size))
 			}
 		}
 	}
@@ -257,8 +262,10 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 			// update atime
 			cache.keys[key] = cacheItem{it.size, uint32(time.Now().Unix())}
 		}
-	} else if cache.keys[key].atime > 0 {
-		cache.used -= int64(cache.keys[key].size + 4096)
+	} else if it, ok := cache.keys[key]; ok {
+		if it.size > 0 {
+			cache.used -= int64(it.size + 4096)
+		}
 		delete(cache.keys, key)
 	}
 	return f, err
@@ -318,8 +325,8 @@ func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string,
 	}
 	err := cache.flushPage(stagingPath, data)
 	if err == nil {
-		stageBlocks.Add(1)
-		stageBlockBytes.Add(float64(len(data)))
+		cache.m.stageBlocks.Add(1)
+		cache.m.stageBlockBytes.Add(float64(len(data)))
 		if cache.capacity > 0 && keepCache {
 			path := cache.cachePath(key)
 			cache.createDir(filepath.Dir(path))
@@ -387,7 +394,7 @@ func (cache *cacheStore) cleanup() {
 			cache.used -= int64(lastValue.size + 4096)
 			todel = append(todel, lastKey)
 			logger.Debugf("remove %s from cache, age: %d", lastKey, now-lastValue.atime)
-			cacheEvicts.Add(1)
+			cache.m.cacheEvicts.Add(1)
 			cnt = 0
 			if len(cache.keys) < num && cache.used < goal {
 				break
@@ -524,8 +531,8 @@ func (cache *cacheStore) scanStaging() {
 				}
 			} else {
 				logger.Debugf("Found staging block: %s", path)
-				stageBlocks.Add(1)
-				stageBlockBytes.Add(float64(fi.Size()))
+				cache.m.stageBlocks.Add(1)
+				cache.m.stageBlockBytes.Add(float64(fi.Size()))
 				key := path[len(stagingPrefix)+1:]
 				if runtime.GOOS == "windows" {
 					key = strings.ReplaceAll(key, "\\", "/")
@@ -543,6 +550,14 @@ func (cache *cacheStore) scanStaging() {
 
 type cacheManager struct {
 	stores []*cacheStore
+
+	cacheDrops      prometheus.Counter
+	cacheWrites     prometheus.Counter
+	cacheEvicts     prometheus.Counter
+	cacheWriteBytes prometheus.Counter
+	cacheWriteHist  prometheus.Histogram
+	stageBlocks     prometheus.Gauge
+	stageBlockBytes prometheus.Gauge
 }
 
 func keyHash(s string) uint32 {
@@ -601,9 +616,9 @@ type CacheManager interface {
 	usedMemory() int64
 }
 
-func newCacheManager(config *Config, uploader func(key, path string, force bool) bool) CacheManager {
+func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(key, path string, force bool) bool) CacheManager {
 	if config.CacheDir == "memory" || config.CacheSize == 0 {
-		return newMemStore(config)
+		return newMemStore(config, reg)
 	}
 	var dirs []string
 	for _, d := range utils.SplitDir(config.CacheDir) {
@@ -620,18 +635,58 @@ func newCacheManager(config *Config, uploader func(key, path string, force bool)
 	}
 	if len(dirs) == 0 {
 		logger.Warnf("No cache dir existed")
-		return newMemStore(config)
+		return newMemStore(config, reg)
 	}
 	sort.Strings(dirs)
 	dirCacheSize := config.CacheSize << 20
 	dirCacheSize /= int64(len(dirs))
 	m := &cacheManager{
 		stores: make([]*cacheStore, len(dirs)),
+
+		cacheDrops: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "blockcache_drops",
+			Help: "dropped block",
+		}),
+		cacheWrites: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "blockcache_writes",
+			Help: "written cached block",
+		}),
+		cacheEvicts: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "blockcache_evicts",
+			Help: "evicted cache blocks",
+		}),
+		cacheWriteBytes: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "blockcache_write_bytes",
+			Help: "write bytes of cached block",
+		}),
+		cacheWriteHist: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "blockcache_write_hist_seconds",
+			Help:    "write cached block latency distribution",
+			Buckets: prometheus.ExponentialBuckets(0.00001, 2, 20),
+		}),
+		stageBlocks: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "staging_blocks",
+			Help: "Number of blocks in the staging path.",
+		}),
+		stageBlockBytes: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "staging_block_bytes",
+			Help: "Total bytes of blocks in the staging path.",
+		}),
 	}
+	if reg != nil {
+		reg.MustRegister(m.cacheWrites)
+		reg.MustRegister(m.cacheWriteBytes)
+		reg.MustRegister(m.cacheDrops)
+		reg.MustRegister(m.cacheEvicts)
+		reg.MustRegister(m.cacheWriteHist)
+		reg.MustRegister(m.stageBlocks)
+		reg.MustRegister(m.stageBlockBytes)
+	}
+
 	// 20% of buffer could be used for pending pages
 	pendingPages := config.BufferSize * 2 / 10 / config.BlockSize / len(dirs)
 	for i, d := range dirs {
-		m.stores[i] = newCacheStore(strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, pendingPages, config, uploader)
+		m.stores[i] = newCacheStore(m, strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, pendingPages, config, uploader)
 	}
 	return m
 }

@@ -31,6 +31,23 @@ type speedy struct {
 	RestfulStorage
 }
 
+type Contents struct {
+	Key          string
+	Size         int64
+	LastModified time.Time
+}
+
+// ListObjectsOutput presents output for ListObjects.
+type ListBucketResult struct {
+	Contents       []*Contents
+	IsTruncated    bool
+	Prefix         string
+	Marker         string
+	MaxKeys        string
+	NextMarker     string
+	CommonPrefixes string
+}
+
 func (s *speedy) String() string {
 	uri, _ := url.ParseRequestURI(s.endpoint)
 	return fmt.Sprintf("speedy://%s/", uri.Host)
@@ -85,7 +102,7 @@ func (s *speedy) List(prefix, marker string, limit int64) ([]Object, error) {
 	return objs, nil
 }
 
-func newSpeedy(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newSpeedy(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}

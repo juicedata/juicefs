@@ -12,7 +12,6 @@ There are many commands to help you manage your file system. This page provides 
 If you run `juicefs` by itself, it will print all available commands. In addition, you can add `-h/--help` flag after each command to get more information of it, e.g., `juicefs format -h`.
 
 ```bash
-$ juicefs -h
 NAME:
    juicefs - A POSIX file system built on Redis and object storage.
 
@@ -20,36 +19,44 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.0-dev (2021-12-27 3462bdbf)
+   1.0.0-rc2+2022-06-24.fc6b1206
 
 COMMANDS:
-   format   format a volume
-   mount    mount a volume
-   umount   unmount a volume
-   gateway  S3-compatible gateway
-   sync     sync between two storage
-   rmr      remove directories recursively
-   info     show internal information for paths or inodes
-   bench    run benchmark to read/write/stat big/small files
-   gc       collect any leaked objects
-   fsck     Check consistency of file system
-   profile  analyze access log
-   stats    show runtime statistics
-   status   show status of JuiceFS
-   warmup   build cache for target directories/files
-   dump     dump metadata into a JSON file
-   load     load metadata from a previously dumped JSON file
-   config   change config of a volume
-   destroy  destroy an existing volume
-   help, h  Shows a list of commands or help for one command
+   ADMIN:
+     format   Format a volume
+     config   Change configuration of a volume
+     destroy  Destroy an existing volume
+     gc       Garbage collector of objects in data storage
+     fsck     Check consistency of a volume
+     dump     Dump metadata into a JSON file
+     load     Load metadata from a previously dumped JSON file
+     version  Show version
+   INSPECTOR:
+     status   Show status of a volume
+     stats    Show real time performance statistics of JuiceFS
+     profile  Show profiling of operations completed in JuiceFS
+     info     Show internal information of a path or inode
+   SERVICE:
+     mount    Mount a volume
+     umount   Unmount a volume
+     gateway  Start an S3-compatible gateway
+     webdav   Start a WebDAV server
+   TOOL:
+     bench     Run benchmarks on a path
+     objbench  Run benchmarks on an object storage
+     warmup    Build cache for target directories/files
+     rmr       Remove directories recursively
+     sync      Sync between two storages
 
 GLOBAL OPTIONS:
    --verbose, --debug, -v  enable debug log (default: false)
-   --quiet, -q             only warning and errors (default: false)
+   --quiet, -q             show warning and errors only (default: false)
    --trace                 enable trace log (default: false)
-   --no-agent              Disable pprof (:6060) and gops (:6070) agent (default: false)
+   --no-agent              disable pprof (:6060) and gops (:6070) agent (default: false)
+   --pyroscope value       pyroscope address
+   --no-color              disable colors (default: false)
    --help, -h              show help (default: false)
-   --version, -V           print only the version (default: false)
+   --version, -V           print version only (default: false)
 
 COPYRIGHT:
    Apache License 2.0
@@ -140,16 +147,19 @@ compression algorithm (lz4, zstd, none) (default: "none")
 store the blocks into N buckets by hash of key (default: 0)
 
 `--storage value`<br />
-Object storage type (e.g. s3, gcs, oss, cos) (default: "file")
+Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](how_to_setup_object_storage.md#supported-object-storage) for all supported object storage types)
 
 `--bucket value`<br />
 A bucket URL to store data (default: `"$HOME/.juicefs/local"` or `"/var/jfs"`)
 
 `--access-key value`<br />
-Access key for object storage (env `ACCESS_KEY`)
+Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`)
 
 `--secret-key value`<br />
-Secret key for object storage (env `SECRET_KEY`)
+Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`)
+
+`--session-token value`<br />
+session token for object storage
 
 `--encrypt-rsa-key value`<br />
 A path to RSA private key (PEM)
@@ -247,7 +257,7 @@ prefetch N blocks in parallel (default: 1)
 upload objects in background (default: false)
 
 `--cache-dir value`<br />
-directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `"/var/jfsCache"`)
+directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `"/var/jfsCache"`)
 
 `--cache-size value`<br />
 size of cached objects in MiB (default: 102400)
@@ -335,7 +345,7 @@ prefetch N blocks in parallel (default: 1)
 upload objects in background (default: false)
 
 `--cache-dir value`<br />
-directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
+directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
 
 `--cache-size value`<br />
 size of cached objects in MiB (default: 102400)
@@ -437,7 +447,7 @@ upload objects in background (default: false)
 delayed duration for uploading objects ("s", "m", "h") (default: 0s)
 
 `--cache-dir value`<br />
-directory paths of local cache, use colon to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
+directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `/var/jfsCache`)
 
 `--cache-size value`<br />
 size of cached objects in MiB (default: 102400)
@@ -611,6 +621,9 @@ use inode instead of path (current dir should be inside JuiceFS) (default: false
 `--recursive, -r`<br />
 get summary of directories recursively (NOTE: it may take a long time for huge trees) (default: false)
 
+`--raw (default: false)`<br />
+show internal raw information
+
 ### juicefs bench
 
 #### Description
@@ -622,6 +635,8 @@ Run benchmark, including read/write/stat for big and small files.
 ```
 juicefs bench [command options] PATH
 ```
+
+For a detailed introduction to the `bench` subcommand, please refer to the [documentation](../benchmark/performance_evaluation_guide.md#juicefs-bench).
 
 #### Options
 
@@ -639,6 +654,46 @@ number of small files (default: 100)
 
 `--threads value, -p value`<br />
 number of concurrent threads (default: 1)
+
+### juicefs objbench
+
+#### Description
+
+Run basic benchmarks on the target object storage to test if it works as expected.
+
+#### Synopsis
+
+```shell
+juicefs objbench [command options] BUCKET
+```
+
+For a detailed introduction to the `objbench` subcommand, please refer to the [documentation](../benchmark/performance_evaluation_guide.md#juicefs-objbench).
+
+#### Options
+
+`--storage value`<br />
+Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](how_to_setup_object_storage.md#supported-object-storage) for all supported object storage types)
+
+`--access-key value`<br />
+Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`)
+
+`--secret-key value`<br />
+Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`)
+
+`--block-size value`<br />
+size of each IO block in KiB (default: 4096)
+
+`--big-object-size value`<br />
+size of each big object in MiB (default: 1024)
+
+`--small-object-size value`<br />
+size of each small object in KiB (default: 128)
+
+`--skip-functional-tests`<br />
+skip functional tests (default: false)
+
+`--threads value, -p value`<br />
+number of concurrent threads (default: 4)
 
 ### juicefs gc
 
@@ -828,6 +883,9 @@ access key for object storage
 
 `--secret-key value`<br />
 secret key for object storage
+
+`--session-token value`<br />
+session token for object storage
 
 `--trash-days value`<br />
 number of days after which removed files will be permanently deleted

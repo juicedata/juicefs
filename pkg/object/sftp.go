@@ -431,7 +431,7 @@ func SshInteractive(user, instruction string, questions []string, echos []bool) 
 	return answers, nil
 }
 
-func newSftp(endpoint, username, pass string) (ObjectStorage, error) {
+func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 	idx := strings.LastIndex(endpoint, ":")
 	host, port, err := net.SplitHostPort(endpoint[:idx])
 	if err != nil && strings.Contains(err.Error(), "missing port") {
@@ -462,6 +462,7 @@ func newSftp(endpoint, username, pass string) (ObjectStorage, error) {
 		auth = append(auth, ssh.KeyboardInteractive(SshInteractive))
 	}
 
+	var signers []ssh.Signer
 	if privateKeyPath := os.Getenv("SSH_PRIVATE_KEY_PATH"); privateKeyPath != "" {
 		key, err := ioutil.ReadFile(privateKeyPath)
 		if err != nil {
@@ -471,7 +472,7 @@ func newSftp(endpoint, username, pass string) (ObjectStorage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse private key, error: %v", err)
 		}
-		auth = append(auth, ssh.PublicKeys(signer))
+		signers = append(signers, signer)
 	} else {
 		home := filepath.Join(os.Getenv("HOME"), ".ssh")
 		var algo = []string{"rsa", "dsa", "ecdsa", "ecdsa_sk", "ed25519", "xmss"}
@@ -483,14 +484,13 @@ func newSftp(endpoint, username, pass string) (ObjectStorage, error) {
 			if err == nil {
 				signer, err := ssh.ParsePrivateKey(key)
 				if err == nil {
-					auth = append(auth, ssh.PublicKeys(signer))
+					signers = append(signers, signer)
 				} else {
 					logger.Debugf("load private key %s: %s", filepath.Join(home, "id_"+a), err)
 				}
 			}
 		}
 	}
-
 	socket := os.Getenv("SSH_AUTH_SOCK")
 	if socket != "" {
 		conn, err := net.Dial("unix", socket)
@@ -498,8 +498,16 @@ func newSftp(endpoint, username, pass string) (ObjectStorage, error) {
 			logger.Errorf("Failed to open SSH_AUTH_SOCK: %v", err)
 		} else {
 			agent := agent.NewClient(conn)
-			auth = append(auth, ssh.PublicKeysCallback(agent.Signers))
+			signer, err := agent.Signers()
+			if err != nil {
+				logger.Warnf("load signer from agent: %s", err)
+			} else {
+				signers = append(signers, signer...)
+			}
 		}
+	}
+	if len(signers) > 0 {
+		auth = append(auth, ssh.PublicKeys(signers...))
 	}
 
 	config := &ssh.ClientConfig{

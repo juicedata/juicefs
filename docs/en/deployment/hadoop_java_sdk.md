@@ -3,6 +3,10 @@ sidebar_label: Use JuiceFS on Hadoop Ecosystem
 sidebar_position: 3
 slug: /hadoop_java_sdk
 ---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Use JuiceFS on Hadoop Ecosystem
 
 JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK. Various applications in the Hadoop ecosystem can smoothly use JuiceFS to store data without changing the code.
@@ -262,18 +266,18 @@ Please refer to ["Hudi Official Documentation"](https://hudi.apache.org/docs/jfs
 
 It is possible to use Kafka Connect and HDFS Sink Connector（[HDFS 2](https://docs.confluent.io/kafka-connect-hdfs/current/overview.html) and [HDFS 3](https://docs.confluent.io/kafka-connect-hdfs3-sink/current/overview.html)）to store data on JuiceFS.
 
-First you need to add JuiceFS SDK to `classpath` in Kafka Connect, e.g., `/usr/share/java/confluentinc-kafka-connect-hdfs/lib`. 
+First you need to add JuiceFS SDK to `classpath` in Kafka Connect, e.g., `/usr/share/java/confluentinc-kafka-connect-hdfs/lib`.
 
 While creating a Connect Sink task, configuration needs to be set up as follows:
 
 - Specify `hadoop.conf.dir` as the directory that contains the configuration file `core-site.xml`. If it is not running in Hadoop environment, you can create a seperate directory such as `/usr/local/juicefs/hadoop`, and then add the Juicefs-related configurations to `core-site.xml`.
 
-- Specific `store.url` as the path `jfs://` 
+- Specific `store.url` as the path `jfs://`
 
 For example,
 
 ```ini
-# Other configuration items are omitted. 
+# Other configuration items are omitted.
 hadoop.conf.dir=/path/to/hadoop-conf
 store.url=jfs://path/to/store
 ```
@@ -302,10 +306,10 @@ When `Class io.juicefs.JuiceFileSystem not found` or `No FilesSystem for scheme:
 
 After the deployment of the JuiceFS Java SDK, the following methods can be used to verify the success of the deployment.
 
-### Hadoop
+### Hadoop CLI
 
 ```bash
-$ hadoop fs -ls jfs://{JFS_NAME}/
+hadoop fs -ls jfs://{JFS_NAME}/
 ```
 
 :::info
@@ -322,6 +326,73 @@ CREATE TABLE IF NOT EXISTS person
 ) LOCATION 'jfs://{JFS_NAME}/tmp/person';
 ```
 
+### Java/Scala project
+
+1. Add Maven or Gradle dependencies:
+
+   <Tabs>
+     <TabItem value="maven" label="Maven">
+
+   ```xml
+   <dependency>
+       <groupId>org.apache.hadoop</groupId>
+       <artifactId>hadoop-common</artifactId>
+       <version>{HADOOP_VERSION}</version>
+       <scope>provided</scope>
+   </dependency>
+   <dependency>
+       <groupId>io.juicefs</groupId>
+       <artifactId>juicefs-hadoop</artifactId>
+       <version>{JUICEFS_HADOOP_VERSION}</version>
+       <scope>provided</scope>
+   </dependency>
+   ```
+
+     </TabItem>
+     <TabItem value="gradle" label="Gradle">
+
+   ```groovy
+   dependencies {
+     implementation 'org.apache.hadoop:hadoop-common:${hadoopVersion}'
+     implementation 'io.juicefs:juicefs-hadoop:${juicefsHadoopVersion}'
+   }
+   ```
+
+     </TabItem>
+   </Tabs>
+
+2. Use the following sample code to verify:
+
+   <Tabs>
+     <TabItem value="java" label="Java">
+
+   ```java
+   package demo;
+
+   import org.apache.hadoop.conf.Configuration;
+   import org.apache.hadoop.fs.FileStatus;
+   import org.apache.hadoop.fs.FileSystem;
+   import org.apache.hadoop.fs.Path;
+
+   public class JuiceFSDemo {
+       public static void main(String[] args) throws Exception {
+           Configuration conf = new Configuration();
+           conf.set("fs.jfs.impl", "io.juicefs.JuiceFileSystem");
+           conf.set("juicefs.meta", "redis://127.0.0.1:6379/0");  // JuiceFS metadata engine URL
+           Path p = new Path("jfs://{JFS_NAME}/");  // Please replace "{JFS_NAME}" with the correct value
+           FileSystem jfs = p.getFileSystem(conf);
+           FileStatus[] fileStatuses = jfs.listStatus(p);
+           // Traverse JuiceFS file system and print file paths
+           for (FileStatus status : fileStatuses) {
+               System.out.println(status.getPath());
+           }
+       }
+   }
+   ```
+
+     </TabItem>
+   </Tabs>
+
 ## Monitoring metrics collection
 
 Please see the ["Monitoring"](../administration/monitoring.md) documentation to learn how to collect and display JuiceFS monitoring metrics.
@@ -329,7 +400,6 @@ Please see the ["Monitoring"](../administration/monitoring.md) documentation to 
 ## Benchmark
 
 Here are a series of methods to use the built-in stress testing tool of the JuiceFS client to test the performance of the client environment that has been successfully deployed.
-
 
 ### 1. Local Benchmark
 
@@ -599,7 +669,6 @@ JuiceFS can use local disk as a cache to accelerate data access, the following d
 | q10     | 24              | 28             | 38   |
 
 ![parquet](../images/spark_sql_parquet.png)
-
 
 ## FAQ
 

@@ -3,14 +3,12 @@ name: "gc-test"
 on:
   push:
     branches:
-      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
@@ -59,7 +57,7 @@ jobs:
           juicefs=./juicefs
           $juicefs format $meta $name --trash-days 1
           $juicefs mount -d $meta $mp
-          fio --name=abc --rw=randwrite --refill_buffers --size=4G --bs=256k --directory=$mp
+          fio --name=abc --rw=randwrite --refill_buffers --size=2G --bs=256k --directory=$mp
           redis-cli save
           # don't skip files when gc compact
           export JFS_SKIPPED_TIME=1

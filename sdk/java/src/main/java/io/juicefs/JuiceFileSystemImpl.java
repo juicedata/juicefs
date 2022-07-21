@@ -52,7 +52,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.*;
 import java.nio.ByteBuffer;
-import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
@@ -505,22 +504,38 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     LibraryLoader<Libjfs> libjfsLibraryLoader = LibraryLoader.create(Libjfs.class);
     libjfsLibraryLoader.failImmediately();
-    String resource = "libjfs.so.gz";
-    String name = "libjfs.5.so";
+
+    int soVer = 6;
+    String osId = "so";
+    String archId = "amd64";
+    String resourceFormat = "libjfs-%s.%s.gz";
+    String nameFormat = "libjfs-%s.%d.%s";
+
     File dir = new File("/tmp");
     String os = System.getProperty("os.name");
+    String arch = System.getProperty("os.arch");
+    if (arch.contains("aarch64")) {
+      archId = "arm64";
+    }
     if (os.toLowerCase().contains("windows")) {
-      resource = "libjfs.dll.gz";
-      name = "libjfs5.dll";
+      osId = "dll";
       dir = new File(System.getProperty("java.io.tmpdir"));
     } else if (os.toLowerCase().contains("mac")) {
-      resource = "libjfs.dylib.gz";
-      name = "libjfs5.dylib";
+      osId = "dylib";
     }
+
+    String resource = String.format(resourceFormat, archId, osId);
+    String name = String.format(nameFormat, archId, soVer, osId);
+
     File libFile = new File(dir, name);
 
     URL res = null;
-    String jarPath = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+    String jarPath;
+    try {
+      jarPath = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
+    } catch (URISyntaxException e) {
+      throw new IOException("get jar path failed", e);
+    }
     Enumeration<URL> resources = JuiceFileSystemImpl.class.getClassLoader().getResources(resource);
     while (resources.hasMoreElements()) {
       res = resources.nextElement();
@@ -569,7 +584,7 @@ public class JuiceFileSystemImpl extends FileSystem {
             File org = new File(dir, name);
             Files.move(tmp.toPath(), org.toPath(), StandardCopyOption.ATOMIC_MOVE);
             libFile = org;
-          } catch (AccessDeniedException ade) {
+          } catch (Exception ade) {
             Files.move(tmp.toPath(), libFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
           }
         }
@@ -1011,6 +1026,8 @@ public class JuiceFileSystemImpl extends FileSystem {
       Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 1);
       buf.putByte(0, (byte) b);
       int done = lib.jfs_write(Thread.currentThread().getId(), fd, buf, 1);
+      if (done == EINVAL)
+        throw new IOException("stream was closed");
       if (done < 0)
         throw error(done, path);
       if (done < 1)
@@ -1168,13 +1185,14 @@ public class JuiceFileSystemImpl extends FileSystem {
     int bytesPerCrc = getConf().getInt("io.bytes.per.checksum", 512);
     DataChecksum summer = DataChecksum.newDataChecksum(ctype, bytesPerCrc);
 
-    long crcPerBlock = 0;
     DataOutputBuffer checksumBuf = new DataOutputBuffer();
     DataOutputBuffer crcBuf = new DataOutputBuffer();
     byte[] buf = new byte[bytesPerCrc];
     FSDataInputStream in = open(f, 1 << 20);
-    while (length > 0) {
-      for (int i = 0; i < blocksize / bytesPerCrc && length > 0; i++) {
+    boolean eof = false;
+    long got = 0;
+    while (got < length && !eof) {
+      for (int i = 0; i < blocksize / bytesPerCrc && got < length; i++) {
         int n;
         if (length < bytesPerCrc) {
           n = in.read(buf, 0, (int) length);
@@ -1182,20 +1200,18 @@ public class JuiceFileSystemImpl extends FileSystem {
           n = in.read(buf);
         }
         if (n <= 0) {
-          length = 0; // EOF
+          eof = true;
+          break;
         } else {
           summer.update(buf, 0, n);
           summer.writeValue(crcBuf, true);
-          length -= n;
+          got += n;
         }
       }
       if (crcBuf.getLength() > 0) {
         MD5Hash blockMd5 = MD5Hash.digest(crcBuf.getData(), 0, crcBuf.getLength());
         blockMd5.write(checksumBuf);
         crcBuf.reset();
-        if (length > 0) { // more than one block
-          crcPerBlock = blocksize / bytesPerCrc;
-        }
       }
     }
     in.close();
@@ -1203,6 +1219,10 @@ public class JuiceFileSystemImpl extends FileSystem {
       return new MD5MD5CRC32GzipFileChecksum(0, 0, MD5Hash.digest(new byte[32]));
     }
     MD5Hash md5 = MD5Hash.digest(checksumBuf.getData());
+    long crcPerBlock = 0;
+    if (got > blocksize) { // more than one block
+      crcPerBlock = blocksize / bytesPerCrc;
+    }
     if (ctype == DataChecksum.Type.CRC32C) {
       return new MD5MD5CRC32CastagnoliFileChecksum(bytesPerCrc, crcPerBlock, md5);
     } else {

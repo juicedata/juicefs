@@ -69,6 +69,11 @@ func (s *DoubleSpinner) Current() (int64, int64) {
 	return s.count.Current(), s.bytes.Current()
 }
 
+func (s *DoubleSpinner) SetCurrent(count, bytes int64) {
+	s.count.SetCurrent(count)
+	s.bytes.SetCurrent(bytes)
+}
+
 func NewProgress(quiet, showSpeed bool) *Progress {
 	var p *Progress
 	if quiet || os.Getenv("DISPLAY_PROGRESSBAR") == "false" || !isatty.IsTerminal(os.Stdout.Fd()) {
@@ -107,15 +112,15 @@ func newSpinner() mpb.BarFiller {
 }
 
 func (p *Progress) AddCountSpinner(name string) *Bar {
-	placeholders := []decor.WC{decor.WCSyncSpaceR}
-	if p.showSpeed { // no real speed; just add an empty placeholder for now
-		placeholders = append(placeholders, decor.WCSyncSpaceR)
+	decors := []decor.Decorator{
+		decor.Name(name+" count: ", decor.WCSyncWidth),
+		decor.Merge(decor.CurrentNoUnit("%d", decor.WCSyncSpaceR), decor.WCSyncSpaceR),
+	}
+	if p.showSpeed {
+		decors = append(decors, decor.AverageSpeed(0, "  %.2f/s", decor.WCSyncSpaceR))
 	}
 	b := p.Progress.Add(0, newSpinner(),
-		mpb.PrependDecorators(
-			decor.Name(name+" count: ", decor.WCSyncWidth),
-			decor.Merge(decor.CurrentNoUnit("%d", decor.WCSyncSpaceR), placeholders...),
-		),
+		mpb.PrependDecorators(decors...),
 		mpb.BarFillerClearOnComplete(),
 	)
 	p.bars = append(p.bars, b)

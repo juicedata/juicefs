@@ -1,5 +1,5 @@
 /*
- * JuiceFS, Copyright 2021 Juicedata, Inc.
+ * JuiceFS, Copyright 2022 Juicedata, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,22 @@
  * limitations under the License.
  */
 
-package meta
+package cmd
 
 import (
-	"testing"
+	"fmt"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/urfave/cli/v2"
 )
 
-func TestInitMetrics(t *testing.T) {
-	registry := prometheus.NewRegistry()
-	InitMetrics(registry)
-	for _, collector := range []prometheus.Collector{txDist, txRestart, opDist} {
-		if _, ok := registry.Register(collector).(prometheus.AlreadyRegisteredError); !ok {
-			t.Fatalf("TestInitMetrics Failed")
-		}
+func cmdVersion() *cli.Command {
+	return &cli.Command{
+		Name:     "version",
+		Category: "ADMIN",
+		Action: func(c *cli.Context) error {
+			fmt.Printf("%s version %s\n", c.App.Name, c.App.Version)
+			return nil
+		},
+		Usage: "Show version",
 	}
 }

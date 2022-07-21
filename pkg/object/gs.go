@@ -27,13 +27,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pkg/errors"
-
-	"google.golang.org/api/iterator"
-
 	"cloud.google.com/go/compute/metadata"
 	"cloud.google.com/go/storage"
+	"github.com/pkg/errors"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/iterator"
 )
 
 type gs struct {
@@ -92,6 +90,9 @@ func (g *gs) Create() error {
 func (g *gs) Head(key string) (Object, error) {
 	attrs, err := g.client.Bucket(g.bucket).Object(key).Attrs(ctx)
 	if err != nil {
+		if err == storage.ErrObjectNotExist {
+			err = os.ErrNotExist
+		}
 		return nil, err
 	}
 
@@ -156,7 +157,7 @@ func (g *gs) List(prefix, marker string, limit int64) ([]Object, error) {
 	return objs, nil
 }
 
-func newGS(endpoint, accessKey, secretKey string) (ObjectStorage, error) {
+func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("gs://%s", endpoint)
 	}

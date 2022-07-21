@@ -129,16 +129,21 @@ func fsck(ctx *cli.Context) error {
 				}
 				key := fmt.Sprintf("%d_%d_%d", s.Chunkid, i, sz)
 				if _, ok := blocks[key]; !ok {
-					if _, err := blob.Head(key); err != nil {
+					var objKey string
+					if format.HashPrefix {
+						objKey = fmt.Sprintf("%02X/%v/%s", s.Chunkid%256, s.Chunkid/1000/1000, key)
+					} else {
+						objKey = fmt.Sprintf("%v/%v/%s", s.Chunkid/1000/1000, s.Chunkid/1000, key)
+					}
+					if _, err := blob.Head(objKey); err != nil {
 						if _, ok := brokens[inode]; !ok {
-							if p, st := meta.GetPath(m, meta.Background, inode); st == 0 {
-								brokens[inode] = p
+							if ps := meta.GetPaths(m, meta.Background, inode); len(ps) > 0 {
+								brokens[inode] = ps[0]
 							} else {
-								logger.Warnf("getpath of inode %d: %s", inode, st)
-								brokens[inode] = st.Error()
+								brokens[inode] = fmt.Sprintf("inode:%d", inode)
 							}
 						}
-						logger.Errorf("can't find block %s for file %s: %s", key, brokens[inode], err)
+						logger.Errorf("can't find block %s for file %s: %s", objKey, brokens[inode], err)
 						lostDSpin.IncrInt64(int64(sz))
 					}
 				}

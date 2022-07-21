@@ -13,11 +13,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: '1.17.x'
-
     - name: Build linux target
       run: |
         make juicefs 
@@ -25,27 +20,30 @@ runs:
 
     - name: Test
       run: |
-        mount_point=/tmp/juicefs-sync-test
+        mount_point=/tmp/juicefs-load-test
         meta_url=${{inputs.meta_url}}
         load_file=${{inputs.load_file}}
         echo meta_url is: $meta_url
         db_name=$(basename $meta_url | awk -F? '{print $1}')
         if [[ "$meta_url" == mysql* ]]; then
-          mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
+          user=$(echo $meta_url |  awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $1}')
+          password=$(echo $meta_url |  awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $2}')
+          test -n "$password" && password="-p$password" || password=""
+          host=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $1}')
+          port=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $2}')
+          test -z "$port" && port="3306" 
+          mysql -u$user $password -h $host -P $port -e "drop database if exists $db_name; create database $db_name;" 
         elif [[ "$meta_url" == postgres* ]]; then
           export PGPASSWORD="postgres"
           printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
+          printf "\set AUTOCOMMIT on\nALTER DATABASE $db_name SET DEFAULT_TRANSACTION_ISOLATION TO '$isolation_level';" |  psql -U postgres -h localhost
         fi
-        echo "start load..."
-        ./juicefs load $meta_url $load_file
-        echo "finish load..."
-        ./juicefs mount $meta_url $mount_point -d 
-        if [ -d data/ ]; then
-          rm data/{*,.*} -rf || true
-        else
-          mkdir data
-        fi
-        echo "start sync..."
-        ./juicefs sync $mount_point/t1 data/t1 --exclude '.accesslog'
-        echo "finish sync..." 
+        echo `date`, start load
+        sudo ./juicefs load $meta_url $load_file
+        echo `date`, finish load
+        echo `date`, start dump
+        sudo ./juicefs dump $meta_url dump.json
+        echo `date`, finish dump
+        sudo ./juicefs mount $meta_url $mount_point -d
+
       shell: bash

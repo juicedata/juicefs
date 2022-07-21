@@ -137,7 +137,7 @@ func TestAESGCM(t *testing.T) {
 }
 
 func TestEncryptedStore(t *testing.T) {
-	s, _ := CreateStorage("mem", "", "", "")
+	s, _ := CreateStorage("mem", "", "", "", "")
 	kc := NewRSAEncryptor(testkey)
 	dc := NewAESEncryptor(kc)
 	es := NewEncrypted(s, dc)
