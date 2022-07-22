@@ -131,7 +131,7 @@ kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
 其中：
 
 - `name`：JuiceFS 文件系统名称
-- `metaurl`：元数据服务的访问 URL（比如 Redis）。更多信息参考[这篇文档](../reference/how_to_setup_metadata_engine.md)。
+- `metaurl`：元数据服务的访问 URL（比如 Redis）。更多信息参考[这篇文档](../guide/how_to_setup_metadata_engine.md)。
 - `storage`：对象存储类型，比如 `s3`、`gs`、`oss`。更多信息参考[这篇文档](../guide/how_to_setup_object_storage.md)。
 - `bucket`：Bucket URL。更多信息参考[这篇文档](../guide/how_to_setup_object_storage.md)。
 - `access-key`：对象存储的 access key。更多信息参考[这篇文档](../guide/how_to_setup_object_storage.md)。

@@ -54,7 +54,7 @@ JuiceFS 目前支持的基于网络的数据库有：
 
 ### 3. 准备数据库
 
-以下是以阿里云数据库 Redis 版为例的伪样本，你可以改用其他类型的数据库，详情参考 [JuiceFS 支持的数据库](../reference/how_to_setup_metadata_engine.md)。
+以下是以阿里云数据库 Redis 版为例的伪样本，你可以改用其他类型的数据库，详情参考 [JuiceFS 支持的数据库](../guide/how_to_setup_metadata_engine.md)。
 
 - **数据库地址**：`myjfs-sh-abc.redis.rds.aliyuncs.com:6379`
 - **数据库用户名**：`tom`

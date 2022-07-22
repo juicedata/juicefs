@@ -24,7 +24,7 @@
 
 JuiceFS 主要实现一个 libjfs 库和 FUSE 客户端程序、Java SDK 等，支持对接多种元数据引擎和对象存储，适合在公有云、私有云或混合云环境下部署；
 
-- 元数据：支持多种已有的[数据库实现](../../reference/how_to_setup_metadata_engine.md)，包括：
+- 元数据：支持多种已有的[数据库实现](../../guide/how_to_setup_metadata_engine.md)，包括：
   - Redis 及各种兼容 Redis 协议的变种（需要支持事务）；
   - SQL 系列：MySQL，PostgreSQL，SQLite 等；
   - 分布式 K/V 存储：已支持 TiKV，计划支持 Apple FoundationDB；

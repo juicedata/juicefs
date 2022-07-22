@@ -94,7 +94,7 @@ View "[JuiceFS Supported Object Storage](../guide/how_to_setup_object_storage.md
 
 #### Database
 
-View "[JuiceFS Supported Metadata Engines](../reference/how_to_setup_metadata_engine.md)"
+View "[JuiceFS Supported Metadata Engines](../guide/how_to_setup_metadata_engine.md)"
 
 - **Database URL**: `myjfs-sh-abc.redis.rds.aliyuncs.com:6379`
 - **Database Password**: `mypassword`

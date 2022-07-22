@@ -54,7 +54,7 @@ Here is a pseudo sample with Amazon S3 as an example. You can also switch to oth
 
 ### 3. Preparing Database
 
-Here is a pseudo sample with Amazon ElastiCache for Redis as an example. You can also switch to other types of databases (refer to [JuiceFS Supported Databases](../reference/how_to_setup_metadata_engine.md) for details).
+Here is a pseudo sample with Amazon ElastiCache for Redis as an example. You can also switch to other types of databases (refer to [JuiceFS Supported Databases](../guide/how_to_setup_metadata_engine.md) for details).
 
 - **Database Address**: `myjfs-sh-abc.apse1.cache.amazonaws.com:6379`
 - **Database Username**: `tom`

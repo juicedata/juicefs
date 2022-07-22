@@ -24,7 +24,7 @@ CephFS is a complete and independent system used mainly for private cloud deploy
 
 JuiceFS provides a libjfs library, a FUSE client application, Java SDK, etc. It supports various metadata engines and object storages, and can be deployed in public, private or hybrid cloud environments.
 
-- Metadata: See [supported databases](../../reference/how_to_setup_metadata_engine.md) for details, including:
+- Metadata: See [supported databases](../../guide/how_to_setup_metadata_engine.md) for details, including:
   - Redis and various variants of the Redis-compatible protocol (transaction supports are required)
   - SQL family: MySQL, PostgreSQL, SQLite, etc.
   - Distributed K/V storage: TiKV (Apple FoundationDB will be supported in the future)
