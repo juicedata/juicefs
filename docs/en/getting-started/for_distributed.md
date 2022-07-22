@@ -5,7 +5,7 @@ sidebar_position: 3
 
 # Quick Start Guide for Distributed Mode
 
-The previous document ["JuiceFS Quick Start Guide for Standalone Mode "](for_local.md) introduces how to create a file system that can be mounted on any host by using an "object storage" and a "SQLite" database. Thanks to the feature that the object storage is accessible by any computer with privileges on the network, we can also access the same JuiceFS file system on different computers by simply copying the SQLite database file to any computer that needs to access the storage.
+The previous document ["JuiceFS Quick Start Guide for Standalone Mode "](README.md) introduces how to create a file system that can be mounted on any host by using an "object storage" and a "SQLite" database. Thanks to the feature that the object storage is accessible by any computer with privileges on the network, we can also access the same JuiceFS file system on different computers by simply copying the SQLite database file to any computer that needs to access the storage.
 
 However, the real-time availability of the files is not guaranteed if the file system is shared by the above approach. Since SQLite is a single file database that cannot be accessed by multiple computers at the same time, a database that supports network access is needed, such as Redis, PostgreSQL, MySQL, etc., which allows a file system to be mounted and read by multiple computers in a distributed environment.
 

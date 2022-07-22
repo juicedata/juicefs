@@ -147,7 +147,7 @@ compression algorithm (lz4, zstd, none) (default: "none")
 store the blocks into N buckets by hash of key (default: 0)
 
 `--storage value`<br />
-Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](how_to_setup_object_storage.md#supported-object-storage) for all supported object storage types)
+Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_setup_object_storage.md#supported-object-storage) for all supported object storage types)
 
 `--bucket value`<br />
 A bucket URL to store data (default: `"$HOME/.juicefs/local"` or `"/var/jfs"`)
@@ -517,12 +517,12 @@ juicefs sync [command options] SRC DST
 
 The format of both source and destination paths is `[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`, in which:
 
-- `NAME`: JuiceFS supported data storage types (e.g. `s3`, `oss`) (please refer to [this document](how_to_setup_object_storage.md#supported-object-storage)).
-- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage (please refer to [this document](how_to_setup_object_storage.md#access-key-and-secret-key)).
-- `BUCKET[.ENDPOINT]`: The access address of the data storage service. The format may be different for different storage types, and please refer to [the document](how_to_setup_object_storage.md#supported-object-storage).
+- `NAME`: JuiceFS supported data storage types (e.g. `s3`, `oss`) (please refer to [this document](../guide/how_to_setup_object_storage.md#supported-object-storage)).
+- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage (please refer to [this document](../guide/how_to_setup_object_storage.md#access-key-and-secret-key)).
+- `BUCKET[.ENDPOINT]`: The access address of the data storage service. The format may be different for different storage types, and please refer to [the document](../guide/how_to_setup_object_storage.md#supported-object-storage).
 - `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit synchronization of data only in certain paths.
 
-For a detailed introduction to the `sync` subcommand, please refer to the [documentation](../administration/sync.md).
+For a detailed introduction to the `sync` subcommand, please refer to the [documentation](../guide/sync.md).
 
 #### Options
 
@@ -672,7 +672,7 @@ For a detailed introduction to the `objbench` subcommand, please refer to the [d
 #### Options
 
 `--storage value`<br />
-Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](how_to_setup_object_storage.md#supported-object-storage) for all supported object storage types)
+Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_setup_object_storage.md#supported-object-storage) for all supported object storage types)
 
 `--access-key value`<br />
 Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`)
