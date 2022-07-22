@@ -87,7 +87,7 @@ JuiceFS 是数据与元数据分离的分布式文件系统，通常用对象存
 
 #### 对象存储
 
-查看「[JuiceFS 支持的数据存储](../reference/how_to_setup_object_storage.md)」
+查看「[JuiceFS 支持的数据存储](../guide/how_to_setup_object_storage.md)」
 
 - **Bucket Endpoint**：`https://myjfs.oss-cn-shanghai.aliyuncs.com`
 - **Access Key ID**：`ABCDEFGHIJKLMNopqXYZ`

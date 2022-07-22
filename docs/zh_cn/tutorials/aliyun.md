@@ -172,7 +172,7 @@ $ juicefs format \
 
 **选项说明：**
 
-- `--storage`：指定对象存储类型，[点此查看](../reference/how_to_setup_object_storage.md#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1) JuiceFS 支持的对象存储。
+- `--storage`：指定对象存储类型，[点此查看](../guide/how_to_setup_object_storage.md#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1) JuiceFS 支持的对象存储。
 - `--bucket`：对象存储的 Bucket 域名。当使用阿里云 OSS 时，只需填写 bucket 名称即可，无需填写完整的域名，JuiceFS 会自动识别并补全地址。
 - `--access-key` 和 `--secret-key`：访问对象存储 API 的秘钥对，[点此查看](https://help.aliyun.com/document_detail/38738.html)获取方式。
 

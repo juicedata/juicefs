@@ -2,7 +2,7 @@
 
 ## Why doesn't JuiceFS support XXX object storage?
 
-JuiceFS already supported many object storage, please check [the list](reference/how_to_setup_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
+JuiceFS already supported many object storage, please check [the list](guide/how_to_setup_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
 
 ## Can I use Redis Cluster as metadata engine?
 
