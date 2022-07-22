@@ -12,7 +12,7 @@ See ["Redis Best Practices"](administration/metadata/redis_best_practices.md) fo
 
 ## What's the difference between JuiceFS and XXX?
 
-See ["Comparison with Others"](comparison/juicefs_vs_alluxio.md) for more information.
+See ["Comparison with Others"](introduction/comparison/juicefs_vs_alluxio.md) for more information.
 
 ## How is the performance of JuiceFS?
 

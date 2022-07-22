@@ -12,7 +12,7 @@
 
 ## JuiceFS 与 XXX 的区别是什么？
 
-请查看[「同类技术对比」](comparison/juicefs_vs_alluxio.md)文档了解更多信息。
+请查看[「同类技术对比」](introduction/comparison/juicefs_vs_alluxio.md)文档了解更多信息。
 
 ## JuiceFS 的性能如何？
 
