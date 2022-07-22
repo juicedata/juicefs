@@ -344,7 +344,7 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 		case "DelFiles":
 			err = dec.Decode(&dm.DelFiles)
 		case "FSTree":
-			_, err = decodeEntry(dec, 1, counters, parents, refs, bar, load, addChunk)
+			_, err = decodeEntry(dec, 0, counters, parents, refs, bar, load, addChunk)
 		case "Trash":
 			_, err = decodeEntry(dec, 1, counters, parents, refs, bar, load, addChunk)
 		}
@@ -375,6 +375,10 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 		case "attr":
 			err = dec.Decode(&e.Attr)
 			if err == nil {
+				if parent == 0 {
+					parent = 1
+					e.Attr.Inode = 1 // fix loading from subdir
+				}
 				inode := e.Attr.Inode
 				if typeFromString(e.Attr.Type) == TypeDirectory {
 					e.Attr.Nlink = 2
