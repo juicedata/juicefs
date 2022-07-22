@@ -13,7 +13,7 @@ JuiceFS 从 v0.11 开始引入了 S3 网关，这是一个通过 [MinIO S3 网�
 
 ## 先决条件
 
-S3 网关是建立在 JuiceFS 文件系统之上的功能，如果你还没有 JuiceFS 文件系统，请先参考 [快速上手指南](../getting-started/for_local.md) 创建一个。
+S3 网关是建立在 JuiceFS 文件系统之上的功能，如果你还没有 JuiceFS 文件系统，请先参考 [快速上手指南](../getting-started/README.md) 创建一个。
 
 JuiceFS S3 网关是 v0.11 中引入的功能，请确保您拥有最新版本的 JuiceFS。
 
@@ -199,7 +199,7 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
 
 1. 准备配置文件
 
-   创建一个配置文件，例如：`values.yaml`，复制并完善下列配置信息。其中，`secret` 部分是 JuiceFS 文件系统相关的信息，你可以参照 [JuiceFS 快速上手指南](../getting-started/for_local.md) 了解相关内容。
+   创建一个配置文件，例如：`values.yaml`，复制并完善下列配置信息。其中，`secret` 部分是 JuiceFS 文件系统相关的信息，你可以参照 [JuiceFS 快速上手指南](../getting-started/README.md) 了解相关内容。
 
    ```yaml
    secret:

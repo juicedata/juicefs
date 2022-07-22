@@ -13,7 +13,7 @@ Since JuiceFS stores files in chunks, the files cannot be accessed directly thro
 
 ## Prerequisites
 
-The S3 gateway is a feature built on top of the JuiceFS file system. If you do not have a JuiceFS file system, please refer to the [quick start guide](../getting-started/for_local.md) to create one first.
+The S3 gateway is a feature built on top of the JuiceFS file system. If you do not have a JuiceFS file system, please refer to the [quick start guide](../getting-started/README.md) to create one first.
 
 JuiceFS S3 gateway is a feature introduced since v0.11. Please make sure you have the latest version of JuiceFS.
 
@@ -199,7 +199,7 @@ There are some differences between the various versions of Ingress. For more usa
 
 1. Prepare a YAML file
 
-   Create a configuration file, for example: `values.yaml`. Copy and fill in the following configuration information. Among them, the `secret` part is the information related to the JuiceFS file system, and you can refer to [JuiceFS Quick Start Guide](../getting-started/for_local.md) for more information.
+   Create a configuration file, for example: `values.yaml`. Copy and fill in the following configuration information. Among them, the `secret` part is the information related to the JuiceFS file system, and you can refer to [JuiceFS Quick Start Guide](../getting-started/README.md) for more information.
 
    ```yaml
    secret:
