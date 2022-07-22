@@ -1,3 +1,7 @@
+---
+slug: /comparison/juicefs_vs_alluxio
+---
+
 # JuiceFS 对比 Alluxio
 
 [Alluxio](https://www.alluxio.io)（/əˈlʌksio/）是大数据和机器学习生态系统中的数据访问层。最初作为研究项目「Tachyon」，它是在加州大学伯克利分校的 [AMPLab](https://en.wikipedia.org/wiki/AMPLab) 作为创建者 2013 年的博士论文创建的。Alluxio 于 2014 年开源。
