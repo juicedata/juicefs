@@ -25,6 +25,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -818,22 +819,27 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, tty bool) 
 			} else if len(objs) != 0 {
 				return fmt.Errorf("list should not return anything, but got %d", len(objs))
 			}
-			for i := 0; i < 4; i++ {
+			keyTotal := 100
+			var sortedKeys []string
+			for i := 0; i < keyTotal; i++ {
+				k := fmt.Sprintf("hashKey%d", i)
+				sortedKeys = append(sortedKeys, k)
 				if err := blob.Put(fmt.Sprintf("hashKey%d", i), bytes.NewReader(br)); err != nil {
 					return fmt.Errorf("put object failed: %s", err.Error())
 				}
 			}
+			sort.Strings(sortedKeys)
 			defer func() {
-				for i := 0; i < 4; i++ {
+				for i := 0; i < keyTotal; i++ {
 					_ = blob.Delete(fmt.Sprintf("hashKey%d", i))
 				}
 			}()
 
-			if objs, err := listAll(blob, "hashKey", "", 4); err != nil {
+			if objs, err := listAll(blob, "hashKey", "", int64(keyTotal)); err != nil {
 				return fmt.Errorf("list failed: %s", err)
 			} else {
-				for i := 0; i < 4; i++ {
-					if objs[i].Key() != fmt.Sprintf("hashKey%d", i) {
+				for i := 0; i < keyTotal; i++ {
+					if objs[i].Key() != sortedKeys[i] {
 						return fmt.Errorf("the result for list is incorrect")
 					}
 				}
