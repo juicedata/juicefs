@@ -1,3 +1,7 @@
+---
+slug: /comparison/juicefs_vs_s3ql
+---
+
 # JuiceFS vs. S3QL
 
 Similar to JuiceFS, [S3QL](https://github.com/s3ql/s3ql) is also an open source network file system driven by object storage and database. All data will be split into blocks and stored in object storage services such as, Amazon S3, Backblaze B2, or OpenStack Swift, the corresponding metadata will be stored in the database.
