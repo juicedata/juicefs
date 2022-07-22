@@ -59,14 +59,16 @@ juicefs load redis://192.168.1.6:6379/1 meta.dump
 得益于 JSON 格式的通用性，JuiceFS 支持的所有元数据存储引擎都能识别，因此可以将元数据信息从一种引擎中导出为 JSON 备份，然后再导入到另外一种引擎，从而实现元数据在不同类型引擎间的迁移。例如：
 
 ```bash
-$ juicefs dump redis://192.168.1.6:6379/1 meta.dump
-$ juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs meta.dump
+juicefs dump redis://192.168.1.6:6379/1 meta.dump
+```
+```bash
+juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs meta.dump
 ```
 
 也可以通过系统的 Pipe 直接迁移：
 
 ```bash
-$ juicefs dump redis://192.168.1.6:6379/1 | juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs
+juicefs dump redis://192.168.1.6:6379/1 | juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs
 ```
 
 :::caution 风险提示
@@ -78,7 +80,7 @@ $ juicefs dump redis://192.168.1.6:6379/1 | juicefs load mysql://user:password@(
 除了可以导出完整的元数据信息，`dump` 命令还支持导出特定子目录中的元数据。因为导出的 JSON 内容可以让用户非常直观地查看到指定目录树下所有文件的内部信息，因此常被用来辅助排查问题。例如：
 
 ```bash
-$ juicefs dump redis://192.168.1.6:6379/1 meta.dump --subdir /path/in/juicefs
+juicefs dump redis://192.168.1.6:6379/1 meta.dump --subdir /path/in/juicefs
 ```
 
 另外，也可以使用 `jq` 等工具对导出文件进行分析。
@@ -98,7 +100,7 @@ $ juicefs dump redis://192.168.1.6:6379/1 meta.dump --subdir /path/in/juicefs
 默认情况下，JuiceFS 客户端每小时备份一次元数据，自动备份的频率可以在挂载文件系统时通过 `--backup-meta` 选项进行调整，例如，要设置为每 8 个小时执行一次自动备份：
 
 ```
-$ sudo juicefs mount -d --backup-meta 8h redis://127.0.0.1:6379/1 /mnt
+sudo juicefs mount -d --backup-meta 8h redis://127.0.0.1:6379/1 /mnt
 ```
 
 备份频率可以精确到秒，支持的单位如下：

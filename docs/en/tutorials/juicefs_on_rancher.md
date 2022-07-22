@@ -24,7 +24,7 @@ Here we choose to install Rancher on Docker, with the following requirements:
 Run the following command to install Rancher:
 
 ```shell
-$ sudo docker run --privileged -d --restart=unless-stopped -p 80:80 -p 443:443 rancher/rancher
+sudo docker run --privileged -d --restart=unless-stopped -p 80:80 -p 443:443 rancher/rancher
 ```
 
 After the container is created, Rancher's management interface can be opened by accessing the IP address of the host.

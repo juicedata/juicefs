@@ -20,7 +20,7 @@ JuiceFS 文件系统挂载以后，在文件系统的根目录中有一个名为
 通过执行以下命令，您可以观察挂载点上的实时操作：
 
 ```bash
-$ juicefs profile MOUNTPOINT
+juicefs profile MOUNTPOINT
 ```
 
 > **提示**：输出结果按总时间降序排列。
@@ -30,15 +30,17 @@ $ juicefs profile MOUNTPOINT
 在现有的日志文件上运行 `profile` 命令将启用「回放模式」：
 
 ```bash
-$ juicefs profile LOGFILE
+juicefs profile LOGFILE
 ```
 
 在调试或分析性能问题时，更实用的做法通常是先记录访问日志，然后重放（多次）。例如：
 
 ```bash
-$ cat /jfs/.accesslog > /tmp/jfs-oplog
-# later
-$ juicefs profile /tmp/jfs-oplog
+cat /jfs/.accesslog > /tmp/jfs-oplog
+```
+later
+```bash
+juicefs profile /tmp/jfs-oplog
 ```
 
 > **提示 1**：可以随时按键盘上的 <kbd>Enter/Return</kbd> 暂停/继续回放。
@@ -50,7 +52,7 @@ $ juicefs profile /tmp/jfs-oplog
 有时我们只对某个用户或进程感兴趣，可以通过指定其 ID 来过滤掉其他用户或进程。例如：
 
 ```bash
-$ juicefs profile /tmp/jfs-oplog --uid 12345
+juicefs profile /tmp/jfs-oplog --uid 12345
 ```
 
 更多信息，请运行 `juicefs profile -h` 命令查看。

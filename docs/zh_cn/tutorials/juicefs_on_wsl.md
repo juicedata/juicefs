@@ -103,9 +103,9 @@ JuiceFS 是数据与元数据分离的分布式文件系统，通常用对象存
 将私密信息写入环境变量：
 
 ```shell
-$ export ACCESS_KEY=ABCDEFGHIJKLMNopqXYZ
-$ export SECRET_KEY=ZYXwvutsrqpoNMLkJiHgfeDCBA
-$ export REDIS_PASSWORD=mypassword
+export ACCESS_KEY=ABCDEFGHIJKLMNopqXYZ
+export SECRET_KEY=ZYXwvutsrqpoNMLkJiHgfeDCBA
+export REDIS_PASSWORD=mypassword
 ```
 
 创建名为 `myjfs` 的文件系统：

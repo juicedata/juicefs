@@ -61,7 +61,7 @@ Compilation depends on the following tools:
 Clone the repository:
 
 ```shell
-$ git clone https://github.com/juicedata/juicefs.git
+git clone https://github.com/juicedata/juicefs.git
 ```
 
 Enter the directory and compile:
@@ -71,8 +71,11 @@ If Ceph RADOS is used to store data, you need to install `librados-dev` first an
 :::
 
 ```shell
-$ cd juicefs/sdk/java
-$ make
+cd juicefs/sdk/java
+```
+
+```shell
+make
 ```
 
 After the compilation, you can find the compiled `JAR` file in the `sdk/java/target` directory, including two versions:
@@ -89,14 +92,17 @@ The client used in the Windows environment needs to be obtained through cross-co
 The steps are the same as compiling on Linux or macOS. For example, on the Ubuntu system, install the `mingw-w64` package first to solve the dependency problem:
 
 ```shell
-$ sudo apt install mingw-w64
+sudo apt install mingw-w64
 ```
 
 Clone and enter the JuiceFS source code directory, execute the following code to compile:
 
 ```shell
-$ cd juicefs/sdk/java
-$ make win
+cd juicefs/sdk/java
+```
+
+```shell
+make win
 ```
 
 ## Deploy the client

@@ -24,7 +24,7 @@ Rancher 提供了基于浏览器的管理界面，即便是 Kubernetes 经验并
 执行以下命令安装 Rancher：
 
 ```shell
-$ sudo docker run --privileged -d --restart=unless-stopped -p 80:80 -p 443:443 rancher/rancher
+sudo docker run --privileged -d --restart=unless-stopped -p 80:80 -p 443:443 rancher/rancher
 ```
 
 容器创建完成以后，通过浏览器访问主机的 IP 地址就能打开 Rancher 的管理界面。

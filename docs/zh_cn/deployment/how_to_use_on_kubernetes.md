@@ -90,7 +90,11 @@ Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把
 
    ```sh
    helm repo add juicefs-csi-driver https://juicedata.github.io/charts/
+   ```
+   ```sh
    helm repo update
+   ```
+   ```sh
    helm install juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver -n kube-system -f ./values.yaml
    ```
 
@@ -99,7 +103,9 @@ Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把
    - **检查 Pods**：部署过程会启动一个名为 `juicefs-csi-controller` 的 `StatefulSet` 及一个 replica，以及一个名为 `juicefs-csi-node` 的 `DaemonSet`。执行命令 `kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver` 会看到有 `n+1` 个（`n` 指 Kubernetes 的 Node 数量）pod 在运行，例如：
 
      ```sh
-     $ kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver
+     kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver
+     ```
+     ```output
      NAME                       READY   STATUS    RESTARTS   AGE
      juicefs-csi-controller-0   3/3     Running   0          22m
      juicefs-csi-node-v9tzb     3/3     Running   0          14m
@@ -309,7 +315,9 @@ kubectl apply -f ./development.yaml
 部署成功以后，查看 pods 状态：
 
 ```shell
-$ kubectl get pods
+kubectl get pods
+```
+```output
 NAME                         READY   STATUS    RESTARTS   AGE
 nginx-run-7d6fb7d6df-cfsvp   1/1     Running   0          21m
 ```
@@ -317,7 +325,9 @@ nginx-run-7d6fb7d6df-cfsvp   1/1     Running   0          21m
 可以简单地通过 `kubectl exec` 命令查看容器中的文件系统挂载情况：
 
 ```shell
-$ kubectl exec nginx-run-7d6fb7d6df-cfsvp -- df -Th
+kubectl exec nginx-run-7d6fb7d6df-cfsvp -- df -Th
+```
+```output
 Filesystem     Type          Size  Used Avail Use% Mounted on
 overlay        overlay        40G  7.0G   34G  18% /
 tmpfs          tmpfs          64M     0   64M   0% /dev
@@ -331,7 +341,9 @@ JuiceFS:jfs    fuse.juicefs  1.0P  180M  1.0P   1% /config
 像上面这样通过 PVC 动态创建 PV 时，JuiceFS 会在文件系统根目录创建与 PV 同名的目录并挂载到容器中。执行下列命令，可以查看集群中所有 PV：
 
 ```shell
-$ kubectl get pv -A
+kubectl get pv -A
+```
+```output
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM             STORAGECLASS   REASON   AGE
 pvc-b670c8a1-2962-497c-afa2-33bc8b8bb05d   10Pi       RWX            Retain           Bound    default/web-pvc   juicefs-sc              34m
 ```
@@ -369,7 +381,9 @@ helm upgrade juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver --install 
 查看集群中存储类的情况：
 
 ```shell
-$ kubectl get sc
+kubectl get sc
+```
+```shell
 NAME                 PROVISIONER                RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
 juicefs-sc           csi.juicefs.com            Retain          Immediate           false                  88m
 juicefs-sc2          csi.juicefs.com            Retain          Immediate           false                  13m

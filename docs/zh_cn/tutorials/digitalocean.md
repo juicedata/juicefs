@@ -66,25 +66,25 @@ Redis 的访问地址可以从控制台的 `Connection Details` 中找到，如�
 检测当前系统信息并设置临时的环境变量：
 
 ```shell
-$ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
 ```
 
 下载适配当前系统的最新版客户端软件包：
 
 ```shell
-$ wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
+wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 ```
 
 解压安装包：
 
 ```shell
-$ mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
+mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
 ```
 
 将客户端安装到 `/usr/local/bin` ：
 
 ```shell
-$ sudo install juice/juicefs /usr/local/bin
+sudo install juice/juicefs /usr/local/bin
 ```
 
 执行命令，看到返回 `juicefs` 的命令帮助信息，代表客户端安装成功。
@@ -139,7 +139,7 @@ COPYRIGHT:
 创建文件系统使用 `format` 子命令，格式为：
 
 ```shell
-$ juicefs format [command options] META-URL NAME
+juicefs format [command options] META-URL NAME
 ```
 
 以下命令创建了一个名为 `mystor` 的文件系统：
@@ -260,7 +260,7 @@ $ juicefs status rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-d
 使用 `umount` 子命令卸载文件系统，比如：
 
 ```shell
-$ sudo juicefs umount ~/mnt
+sudo juicefs umount ~/mnt
 ```
 
 > **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。
@@ -272,7 +272,7 @@ $ sudo juicefs umount ~/mnt
 首先，需要将  `juicefs` 客户端重命名为 `mount.juicefs` 并复制到 `/sbin/` 目录：
 
 ```shell
-$ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
+sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 ```
 
 编辑 `/etc/fstab` 配置文件，新增一条记录：

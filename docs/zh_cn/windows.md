@@ -19,9 +19,13 @@ We can cross compile JuiceFS for Windows platform on Linux or macOS.
 2. Build JuiceFS for Windows:
 
 ```bash
-$ git clone https://github.com/juicedata/juicefs.git
-$ cd juicefs
-$ make juicefs.exe
+git clone https://github.com/juicedata/juicefs.git
+```
+```bash
+cd juicefs
+```
+```bash
+make juicefs.exe
 ```
 
 

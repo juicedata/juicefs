@@ -63,23 +63,23 @@ Amazon RDS 和 ElastiCache 是 AWS 提供的两种云数据库服务，都能直
 这里我们使用的是 x64 位架构的 Linux 系统，依次执行以下命令，会下载最新版 JuiceFS 客户端。
 
 ```shell
-$ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
 ```
 
 ```shell
-$ wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
+wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 ```
 
 下载完成以后，解压程序到 `juice` 文件夹：
 
 ```shell
-$ mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
+mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
 ```
 
 将 JuiceFS 客户端安装系统的 $PATH 路径，例如：`/usr/local/bin` ：
 
 ```shell
-$ sudo install juice/juicefs /usr/local/bin
+sudo install juice/juicefs /usr/local/bin
 ```
 
 执行命令，看到返回 `juicefs` 的命令帮助信息，代表客户端安装成功。
@@ -178,7 +178,7 @@ $ juicefs format \
 使用 JuiceFS 客户端的 `mount` 子命令，将文件系统挂载到 `/mnt/jfs` 目录：
 
 ```shell
-$ sudo juicefs mount -d redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1  /mnt/jfs
+sudo juicefs mount -d redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1  /mnt/jfs
 ```
 
 > **注意**：挂载文件系统时，只需填写数据库地址，不需要文件系统名称。默认的缓存路径为 `/var/jfsCache`，请确保当前用户有足够的读写权限。
@@ -186,7 +186,7 @@ $ sudo juicefs mount -d redis://[<redis-username>]:<redis-password>@<redis-url>:
 你可以通过调整[挂载参数](../reference/command_reference.md#juicefs-mount)，对 JuiceFS 进行优化，比如可以通过 `--cache-size` 将缓存修改为 20GB：
 
 ```shell
-$ sudo juicefs mount --cache-size 20480 -d redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1  /mnt/jfs
+sudo juicefs mount --cache-size 20480 -d redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1  /mnt/jfs
 ```
 
 看到类似下面的输出，代表文件系统挂载成功。
@@ -216,7 +216,7 @@ JuiceFS:mystor   fuse.juicefs  1.0P   64K  1.0P    1% /mnt/jfs
 使用 JuiceFS 客户端提供的 `umount` 命令可卸载文件系统，比如：
 
 ```shell
-$ sudo juicefs umount /mnt/jfs
+sudo juicefs umount /mnt/jfs
 ```
 
 > **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。
@@ -228,7 +228,7 @@ $ sudo juicefs umount /mnt/jfs
 首先，需要将  `juicefs` 客户端重命名为 `mount.juicefs` 并复制到 `/sbin/` 目录：
 
 ```shell
-$ sudo cp juice/juicefs /sbin/mount.juicefs
+sudo cp juice/juicefs /sbin/mount.juicefs
 ```
 
 编辑 `/etc/fstab` 配置文件，新增一条记录：

@@ -98,7 +98,7 @@ The backup files are stored in the `meta` directory of the object storage, which
 By default, the JuiceFS client backs up metadata once an hour. The frequency of automatic backups can be adjusted with the `--backup-meta` option when mounting the filesystem, for example, to set the auto-backup to be performed every 8 hours.
 
 ```shell
-$ sudo juicefs mount -d --backup-meta 8h redis://127.0.0.1:6379/1 /mnt
+sudo juicefs mount -d --backup-meta 8h redis://127.0.0.1:6379/1 /mnt
 ```
 
 The backup frequency can be accurate to the second and the units supported are as follows.

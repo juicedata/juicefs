@@ -102,9 +102,9 @@ View "[JuiceFS Supported Metadata Engines](../reference/how_to_setup_metadata_en
 Write private information to environment variables:
 
 ```shell
-$ export ACCESS_KEY=ABCDEFGHIJKLMNopqXYZ
-$ export SECRET_KEY=ZYXwvutsrqpoNMLkJiHgfeDCBA
-$ export REDIS_PASSWORD=mypassword
+export ACCESS_KEY=ABCDEFGHIJKLMNopqXYZ
+export SECRET_KEY=ZYXwvutsrqpoNMLkJiHgfeDCBA
+export REDIS_PASSWORD=mypassword
 ```
 
 Create a filesystem named `myjfs`:

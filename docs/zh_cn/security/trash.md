@@ -20,7 +20,7 @@ sidebar_position: 2
 如果是已完成初始化的文件系统，可以继续通过 `config` 命令更新回收站保留时间，例如：
 
 ```bash
-$ juicefs config META-URL --trash-days 7
+juicefs config META-URL --trash-days 7
 ```
 
 然后通过 `status` 命令验证配置更新成功：

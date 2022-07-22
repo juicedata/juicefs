@@ -20,13 +20,13 @@ When using `juicefs format` command to initialize JuiceFS volume, users may spec
 After initializing a volume, you can still update `trash-days` with the `config` command, e.g:
 
 ```bash
-$ juicefs config META-URL --trash-days 7
+juicefs config META-URL --trash-days 7
 ```
 
 Then you can check new configurations through `status` command:
 
 ```bash
-$ juicefs status META-URL
+juicefs status META-URL
 
 {
   "Setting": {

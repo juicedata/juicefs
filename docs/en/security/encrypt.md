@@ -155,15 +155,18 @@ Usage:
 1. Generate RSA key
 
 ```shell
-$ openssl genrsa -out my-priv-key.pem -aes256 2048
+openssl genrsa -out my-priv-key.pem -aes256 2048
+```
 or
-$ openssl genpkey -algorithm RSA -out my-priv-key.pem -pkeyopt rsa_keygen_bits:2048 -aes-256-cbc
+
+```shell
+openssl genpkey -algorithm RSA -out my-priv-key.pem -pkeyopt rsa_keygen_bits:2048 -aes-256-cbc
 ```
 
 2. Provide the key when formatting
 
 ```shell
-$ juicefs format --encrypt-rsa-key my-priv-key.pem META-URL NAME
+juicefs format --encrypt-rsa-key my-priv-key.pem META-URL NAME
 ```
 
 > **NOTE**: If the private key is password-protected, an environment variable `JFS_RSA_PASSPHRASE` should be exported first before executing `juicefs mount`.
