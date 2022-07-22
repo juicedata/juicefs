@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
@@ -31,6 +32,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-redis/redis/v8"
 )
 
 func get(s ObjectStorage, k string, off, limit int64) (string, error) {
@@ -167,30 +170,31 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		} else if len(objs) != 0 {
 			t.Fatalf("list3 should not return anything, but got %d", len(objs))
 		}
-		// test redis cluster list all api
-		keyTotal := 100
-		var sortedKeys []string
-		for i := 0; i < keyTotal; i++ {
-			k := fmt.Sprintf("hashKey%d", i)
-			sortedKeys = append(sortedKeys, k)
-			if err := s.Put(k, bytes.NewReader(br)); err != nil {
-				t.Fatalf("PUT failed: %s", err.Error())
-			}
+	}
+
+	// test redis cluster list all api
+	keyTotal := 100
+	var sortedKeys []string
+	for i := 0; i < keyTotal; i++ {
+		k := fmt.Sprintf("hashKey%d", i)
+		sortedKeys = append(sortedKeys, k)
+		if err := s.Put(k, bytes.NewReader(br)); err != nil {
+			t.Fatalf("PUT failed: %s", err.Error())
 		}
-		sort.Strings(sortedKeys)
-		defer func() {
-			for i := 0; i < keyTotal; i++ {
-				_ = s.Delete(fmt.Sprintf("hashKey%d", i))
-			}
-		}()
-		objs, err = listAll(s, "hashKey", "", int64(keyTotal))
-		if err != nil {
-			t.Fatalf("list4 failed: %s", err.Error())
-		} else {
-			for i := 0; i < keyTotal; i++ {
-				if objs[i].Key() != sortedKeys[i] {
-					t.Fatal("The result for list4 is incorrect")
-				}
+	}
+	sort.Strings(sortedKeys)
+	defer func() {
+		for i := 0; i < keyTotal; i++ {
+			_ = s.Delete(fmt.Sprintf("hashKey%d", i))
+		}
+	}()
+	objs, err := listAll(s, "hashKey", "", int64(keyTotal))
+	if err != nil {
+		t.Fatalf("list4 failed: %s", err.Error())
+	} else {
+		for i := 0; i < keyTotal; i++ {
+			if objs[i].Key() != sortedKeys[i] {
+				t.Fatal("The result for list4 is incorrect")
 			}
 		}
 	}
@@ -514,15 +518,15 @@ func TestTiKV(t *testing.T) {
 	testStorage(t, s)
 }
 func TestRedis(t *testing.T) {
-	//if os.Getenv("REDIS_ADDR") == "" {
-	//	t.SkipNow()
-	//}
-	//
-	//opt, _ := redis.ParseURL(os.Getenv("REDIS_ADDR"))
-	//rdb := redis.NewClient(opt)
-	//_ = rdb.FlushDB(context.Background())
+	if os.Getenv("REDIS_ADDR") == "" {
+		t.SkipNow()
+	}
 
-	s, err := newRedis("redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005", "", "", "")
+	opt, _ := redis.ParseURL(os.Getenv("REDIS_ADDR"))
+	rdb := redis.NewClient(opt)
+	_ = rdb.FlushDB(context.Background())
+
+	s, err := newRedis(os.Getenv("REDIS_ADDR"), "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
