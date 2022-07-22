@@ -1,3 +1,7 @@
+---
+slug: /comparison/juicefs_vs_s3fs
+---
+
 # JuiceFS vs. S3FS
 
 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) is an open source tool developed in C++ that mounts S3 object storage locally via FUSE for read and write access as if it were a local disk. In addition to Amazon S3, it supports all S3 API-compatible object stores.

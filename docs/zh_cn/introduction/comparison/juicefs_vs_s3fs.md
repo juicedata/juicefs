@@ -1,3 +1,7 @@
+---
+slug: /comparison/juicefs_vs_s3fs
+---
+
 # JuiceFS 对比 S3FS
 
 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 是一个 C++ 开发的开源工具，可以将 S3 对象存储通过 FUSE 挂载到本地，像本地磁盘一样进行读写访问。除了 Amazon S3，它还支持所有兼容 S3 API 的对象存储。
