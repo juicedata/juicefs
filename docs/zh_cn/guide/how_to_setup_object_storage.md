@@ -19,7 +19,7 @@ slug: /how_to_setup_object_storage
 例如，以下命令使用 Amazon S3 对象存储创建文件系统：
 
 ```shell
-$ juicefs format --storage s3 \
+juicefs format --storage s3 \
     --bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
     --access-key abcdefghijklmn \
     --secret-key nmlkjihgfedAcBdEfg \
@@ -38,9 +38,9 @@ $ juicefs format --storage s3 \
 创建文件系统时除了使用 `--access-key` 和 `--secret-key` 两个选项显式指定，更安全的做法是通过 `ACCESS_KEY` 和 `SECRET_KEY` 环境变量传递密钥信息，例如：
 
 ```shell
-$ export ACCESS_KEY=abcdefghijklmn
-$ export SECRET_KEY=nmlkjihgfedAcBdEfg
-$ juicefs format --storage s3 \
+export ACCESS_KEY=abcdefghijklmn
+export SECRET_KEY=nmlkjihgfedAcBdEfg
+juicefs format --storage s3 \
     --bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
     redis://192.168.1.6/1 \
     myjfs
@@ -61,7 +61,7 @@ $ juicefs format --storage s3 \
 使用临时凭证的方式与使用永久凭证差异不大，在文件系统 `format` 时，将临时凭证的 accessKey， secretKey， token 分别通过 --access-key，--secret-key，--session-token 设置值即可。 例如：
 
 ```bash
-$ juicefs format --storage oss --access-key xxxx --secret-key xxxx --session-token xxxx --bucket https://bucketName.oss-cn-hangzhou.aliyuncs.com redis://localhost:6379/1 test1
+juicefs format --storage oss --access-key xxxx --secret-key xxxx --session-token xxxx --bucket https://bucketName.oss-cn-hangzhou.aliyuncs.com redis://localhost:6379/1 test1
 ```
 
 由于临时凭证很快就会过期，所以关键在于在 `format` 文件系统后，如何在临时凭证过期前更新 juicefs 正在使用的临时凭证。一次凭证更新过程分为两步:
@@ -659,16 +659,16 @@ JuiceFS 支持使用基于 `librados` 的本地 Ceph API。您需要分别安装
 
 ```bash
 # Debian based system
-$ sudo apt-get install librados-dev
+sudo apt-get install librados-dev
 
 # RPM based system
-$ sudo yum install librados2-devel
+sudo yum install librados2-devel
 ```
 
 然后为 Ceph 编译 JuiceFS（要求 Go 1.17+ 和 GCC 5.4+）：
 
 ```bash
-$ make juicefs.ceph
+make juicefs.ceph
 ```
 
 [存储池](https://docs.ceph.com/zh_CN/latest/rados/operations/pools) 是用于存储对象的逻辑分区，您可能需要首先创建一个存储池。 `--access-key` 选项的值是 Ceph 集群名称，默认集群名称是 `ceph`。` --secret-key` 选项的值是 [Ceph 客户端用户名](https://docs.ceph.com/en/latest/rados/operations/user-management)，默认用户名是 `client.admin`。
@@ -1011,7 +1011,7 @@ JuiceFS 客户端默认采用 SSL 加密连接 PostgreSQL，如果连接时报�
 例如，以下命令使用本地的 Redis 数据库和本地磁盘创建了一个名为 `myfs` 的文件系统：
 
 ```shell
-$ juicefs format redis://localhost:6379/1 myjfs
+juicefs format redis://localhost:6379/1 myjfs
 ```
 
 本地存储通常仅用于了解和体验 JuiceFS 的基本功能，创建的 JuiceFS 存储无法被网络内的其他客户端挂载，只能单机使用。

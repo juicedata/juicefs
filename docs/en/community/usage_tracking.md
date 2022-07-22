@@ -10,5 +10,5 @@ JuiceFS by default collects and reports **anonymous** usage data. It only collec
 These data help us understand how the community is using this project. You could disable reporting easily by command line option `--no-usage-report`:
 
 ```
-$ juicefs mount --no-usage-report
+juicefs mount --no-usage-report
 ```

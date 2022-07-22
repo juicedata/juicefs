@@ -90,8 +90,8 @@ sudo juicefs mount -d "redis://:mypassword@192.168.1.6:6379/1" /mnt/jfs
 Passing passwords with the `META_PASSWORD` or `REDIS_PASSWORD` environment variables is also supported when mounting file systems.
 
 ```shell
-$ export META_PASSWORD=mypassword
-$ sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
+export META_PASSWORD=mypassword
+sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
 
 :::tip
@@ -160,8 +160,8 @@ sudo juicefs mount -d "postgres://user:mypassword@192.168.1.6:5432/juicefs" /mnt
 Passing password with the `META_PASSWORD` environment variable is also supported when mounting a file system.
 
 ```shell
-$ export META_PASSWORD="mypassword"
-$ sudo juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
+export META_PASSWORD="mypassword"
+sudo juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
 ### Troubleshooting
@@ -234,8 +234,8 @@ sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/
 Passing password with the `META_PASSWORD` environment variable is also supported when mounting a file system.
 
 ```shell
-$ export META_PASSWORD="mypassword"
-$ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
+export META_PASSWORD="mypassword"
+sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
 To connect to a TLS enabled MySQL server, pass the `tls=true` parameter (or `tls=skip-verify` if using a self-signed certificate).

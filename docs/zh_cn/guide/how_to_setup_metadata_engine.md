@@ -88,8 +88,8 @@ sudo juicefs mount -d "redis://:mypassword@192.168.1.6:6379/1" /mnt/jfs
 挂载文件系统也支持用 `META_PASSWORD` 或 `REDIS_PASSWORD` 环境变量传递密码：
 
 ```shell
-$ export META_PASSWORD=mypassword
-$ sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
+export META_PASSWORD=mypassword
+sudo juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
 
 :::tip 提示
@@ -158,8 +158,8 @@ sudo juicefs mount -d "postgres://user:mypassword@192.168.1.6:5432/juicefs" /mnt
 挂载文件系统也支持用 `META_PASSWORD` 环境变量传递密码：
 
 ```shell
-$ export META_PASSWORD="mypassword"
-$ sudo juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
+export META_PASSWORD="mypassword"
+sudo juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 ```
 
 ### 故障排除
@@ -223,8 +223,8 @@ sudo juicefs mount -d "mysql://user:mypassword@(192.168.1.6:3306)/juicefs" /mnt/
 挂载文件系统也支持用 `META_PASSWORD` 环境变量传递密码：
 
 ```shell
-$ export META_PASSWORD="mypassword"
-$ sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
+export META_PASSWORD="mypassword"
+sudo juicefs mount -d "mysql://user@(192.168.1.6:3306)/juicefs" /mnt/jfs
 ```
 
 更多 MySQL 数据库的地址格式示例，[点此查看](https://github.com/Go-SQL-Driver/MySQL/#examples)。
@@ -379,7 +379,7 @@ etcd://[user:password@]<addr>[,<addr>...]/<prefix>
 其中 `user` 和 `password` 是当 `etcd` 开启了用户认证时需要的。 `prefix` 是一个用户自定义的字符串，当多个文件系统或者应用共用一个 etcd 集群时，设置前缀可以避免混淆和冲突。示例如下：
 
 ```bash
-$ juicefs format etcd://user:password@192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs pics
+juicefs format etcd://user:password@192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs pics
 ```
 
 ### 设置 TLS

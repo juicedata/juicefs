@@ -19,7 +19,7 @@ redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeb
 **Note: By default, CentOS 6 will NOT mount network file system after boot, run following command to enable it:**
 
 ```bash
-$ sudo chkconfig --add netfs
+sudo chkconfig --add netfs
 ```
 
 ## macOS

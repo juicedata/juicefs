@@ -5,7 +5,7 @@ position: 4
 
 # Migrate and Synchronize Data across Clouds with JuiceFS Sync
 
-The subcommand `sync` of JuiceFS is a full-featured data synchronization utility that can synchronize or migrate data concurrently with multiple threads between all [object storages JuiceFS supports](../reference/how_to_setup_object_storage.md). It can be used to migrate data not only between _object storage_ and _JuiceFS_, but also between _object storages_ in different clouds or regions. In addition, similar to `rsync`, the JuiceFS subcommand `sync` can also be used to synchronize local directories and access remote directories through SSH, HDFS, WebDAV, etc.. It also provides advanced features such as full synchronization, incremental synchronization, and conditional pattern matching.
+The subcommand `sync` of JuiceFS is a full-featured data synchronization utility that can synchronize or migrate data concurrently with multiple threads between all [object storages JuiceFS supports](../guide/how_to_setup_object_storage.md). It can be used to migrate data not only between _object storage_ and _JuiceFS_, but also between _object storages_ in different clouds or regions. In addition, similar to `rsync`, the JuiceFS subcommand `sync` can also be used to synchronize local directories and access remote directories through SSH, HDFS, WebDAV, etc.. It also provides advanced features such as full synchronization, incremental synchronization, and conditional pattern matching.
 
 ## Basic Usage
 
@@ -31,7 +31,7 @@ Minio only supports path style, and the address format is `minio://[ACCESS_KEY:S
 
 Explanation:
 
-- `NAME` is the storage type like `s3` or `oss`. See [available storage services](../reference/how_to_setup_object_storage.md#supported-object-storage) for more details;
+- `NAME` is the storage type like `s3` or `oss`. See [available storage services](../guide/how_to_setup_object_storage.md#supported-object-storage) for more details;
 - `ACCESS_KEY` and `SECRET_KEY` are the credentials for accessing object storage APIs; If special characters are included, it needs to be escaped and replaced manually. For example, `/` needs to be replaced with its escape character `%2F`.
 - `BUCKET[.ENDPOINT]` is the address of the object storage;
 - `PREFIX` is the common prefix of the directories to synchronize, optional.

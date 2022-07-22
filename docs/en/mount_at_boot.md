@@ -19,7 +19,7 @@ redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeb
 **Note: By default, CentOS 6 will NOT mount network file system after boot, run following command to enable it:**
 
 ```bash
-$ sudo chkconfig --add netfs
+sudo chkconfig --add netfs
 ```
 
 ## macOS
@@ -75,7 +75,7 @@ $ cat /tmp/juicefs.err
 If you install Redis server by Homebrew, you could use following command to start it at boot:
 
 ```bash
-$ brew services start redis
+brew services start redis
 ```
 
 Then add following configuration to `io.juicefs.<NAME>.plist` file for ensure Redis server is loaded:

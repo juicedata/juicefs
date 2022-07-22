@@ -2,7 +2,7 @@
 
 ## Why doesn't JuiceFS support XXX object storage?
 
-JuiceFS already supported many object storage, please check [the list](reference/how_to_setup_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
+JuiceFS already supported many object storage, please check [the list](guide/how_to_setup_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
 
 ## Can I use Redis Cluster as metadata engine?
 
@@ -12,7 +12,7 @@ See ["Redis Best Practices"](administration/metadata/redis_best_practices.md) fo
 
 ## What's the difference between JuiceFS and XXX?
 
-See ["Comparison with Others"](comparison/juicefs_vs_alluxio.md) for more information.
+See ["Comparison with Others"](introduction/comparison/juicefs_vs_alluxio.md) for more information.
 
 ## How is the performance of JuiceFS?
 
@@ -26,25 +26,25 @@ Yes, including those issued using mmap. Currently JuiceFS is optimized for seque
 
 ## When my update will be visible to other clients?
 
-All the metadata updates are immediately visible to all others. JuiceFS guarantees close-to-open consistency, see ["Consistency"](administration/cache_management.md#consistency) for more information.
+All the metadata updates are immediately visible to all others. JuiceFS guarantees close-to-open consistency, see ["Consistency"](guide/cache_management.md#consistency) for more information.
 
 The new data written by `write()` will be buffered in kernel or client, visible to other processes on the same machine, not visible to other machines.
 
 Either call `fsync()`, `fdatasync()` or `close()` to force upload the data to the object storage and update the metadata, or after several seconds of automatic refresh, other clients can visit the updates. It is also the strategy adopted by the vast majority of distributed file systems.
 
-See ["Write Cache in Client"](administration/cache_management.md#write-cache-in-client) for more information.
+See ["Write Cache in Client"](guide/cache_management.md#write-cache-in-client) for more information.
 
 ## How to copy a large number of small files into JuiceFS quickly?
 
 You could mount JuiceFS with [`--writeback` option](reference/command_reference.md#juicefs-mount), which will write the small files into local disks first, then upload them to object storage in background, this could speedup coping many small files into JuiceFS.
 
-See ["Write Cache in Client"](administration/cache_management.md#write-cache-in-client) for more information.
+See ["Write Cache in Client"](guide/cache_management.md#write-cache-in-client) for more information.
 
 ## Can I mount JuiceFS without `root`?
 
 Yes, JuiceFS could be mounted using `juicefs` without root. The default directory for caching is `$HOME/.juicefs/cache` (macOS) or `/var/jfsCache` (Linux), you should change that to a directory which you have write permission.
 
-See ["Read Cache in Client"](administration/cache_management.md#read-cache-in-client) for more information.
+See ["Read Cache in Client"](guide/cache_management.md#read-cache-in-client) for more information.
 
 ## How to unmount JuiceFS?
 

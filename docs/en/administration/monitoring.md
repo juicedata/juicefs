@@ -79,19 +79,19 @@ There are different ways to collect monitoring metrics depending on how JuiceFS 
 When the JuiceFS file system is mounted via the [`juicefs mount`](../reference/command_reference.md#juicefs-mount) command, you can collect monitoring metrics via the address `http://localhost:9567/metrics`, or you can customize it via the `--metrics` option. For example:
 
 ```shell
-$ juicefs mount --metrics localhost:9567 ...
+juicefs mount --metrics localhost:9567 ...
 ```
 
 You can view these monitoring metrics using the command line tool:
 
 ```shell
-$ curl http://localhost:9567/metrics
+curl http://localhost:9567/metrics
 ```
 
 In addition, the root directory of each JuiceFS file system has a hidden file called `.stats`, through which you can also view monitoring metrics. For example (assuming here that the path to the mount point is `/jfs`):
 
 ```shell
-$ cat /jfs/.stats
+cat /jfs/.stats
 ```
 
 ### Kubernetes
@@ -158,7 +158,7 @@ This feature needs to run JuiceFS client version 0.17.1 and above.
 The [JuiceFS S3 Gateway](../deployment/s3_gateway.md) will provide monitoring metrics at the address `http://localhost:9567/metrics` by default, or you can customize it with the `-metrics` option. For example:
 
 ```shell
-$ juicefs gateway --metrics localhost:9567 ...
+juicefs gateway --metrics localhost:9567 ...
 ```
 
 If you are deploying JuiceFS S3 Gateway in Kubernetes, you can refer to the Prometheus configuration in the [Kubernetes](#kubernetes) section to collect monitoring metrics (the difference is mainly in the regular expression for the label `__meta_kubernetes_pod_label_app_kubernetes_io_name`), e.g.:
@@ -235,7 +235,7 @@ Each process using JuiceFS Hadoop Java SDK will have a unique metric, and Pushga
 Regularly use the following command to clean up the metrics of Pushgateway. Clearing the metrics will not affect the running JuiceFS Hadoop Java SDK to continuously report data. **Note that the `--web.enable-admin-api` option must be specified when Pushgateway is started, and the following command will clear all monitoring metrics in Pushgateway.**
 
 ```bash
-$ curl -X PUT http://host:9091/api/v1/admin/wipe
+curl -X PUT http://host:9091/api/v1/admin/wipe
 ```
 :::
 
@@ -265,7 +265,7 @@ This feature needs to run JuiceFS client version 1.0.0 and above.
 JuiceFS support use Consul as registration center for metrics API. The default Consul address is `127.0.0.1:8500`. You could custom the address through `--consul` option, e.g.:
 
 ```shell
-$ juicefs mount --consul 1.2.3.4:8500 ...
+juicefs mount --consul 1.2.3.4:8500 ...
 ```
 
 When the Consul address is configured, the `--metrics` option does not need to be configured. JuiceFS will automatically configure metrics URL according to its own network and port conditions. If `--metrics` is set at the same time, it will first try to listen on the configured metrics URL.

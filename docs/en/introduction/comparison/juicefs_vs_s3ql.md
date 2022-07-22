@@ -78,13 +78,13 @@ Here we use Minio object storage created locally and use them to create a file s
 S3QL uses `mkfs.s3ql` to create a file system:
 
 ```shell
-$ mkfs.s3ql --plain --backend-options no-ssl -L s3ql s3c://127.0.0.1:9000/s3ql/
+mkfs.s3ql --plain --backend-options no-ssl -L s3ql s3c://127.0.0.1:9000/s3ql/
 ```
 
 Mount a file system using `mount.s3ql`:
 
 ```shell
-$ mount.s3ql --compress none --backend-options no-ssl s3c://127.0.0.1:9000/s3ql/ mnt-s3ql
+mount.s3ql --compress none --backend-options no-ssl s3c://127.0.0.1:9000/s3ql/ mnt-s3ql
 ```
 
 S3QL needs to interactively provide the access key of the object storage API through the command line when creating and mounting a file system.
@@ -94,7 +94,7 @@ S3QL needs to interactively provide the access key of the object storage API thr
 JuiceFS uses the `format` subcommand to create a file system:
 
 ```shell
-$ juicefs format --storage minio \
+juicefs format --storage minio \
     --bucket http://127.0.0.1:9000/myjfs \
     --access-key minioadmin \
     --secret-key minioadmin \
@@ -105,7 +105,7 @@ $ juicefs format --storage minio \
 Mount a file system using `mount` subcommand:
 
 ```shell
-$ sudo juicefs mount -d sqlite3://myjfs.db mnt-juicefs
+sudo juicefs mount -d sqlite3://myjfs.db mnt-juicefs
 ```
 
 JuiceFS only sets the object storage API access key when creating a file system, and the relevant information will be written into the metadata engine. After created, there is no need to repeatedly provide the object storage url, access key and other information.

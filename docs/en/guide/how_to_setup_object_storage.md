@@ -38,9 +38,9 @@ In general, object storages are authenticated with `Access Key ID` and `Access K
 It is more secure to pass credentials via environment variables `ACCESS_KEY` and `SECRET_KEY` instead of explicitly specifying the options `--access-key` and `--secret-key` in the command line when creating a filesystem, e.g.,
 
 ```shell
-$ export ACCESS_KEY=abcdefghijklmn
-$ export SECRET_KEY=nmlkjihgfedAcBdEfg
-$ juicefs format --storage s3 \
+export ACCESS_KEY=abcdefghijklmn
+export SECRET_KEY=nmlkjihgfedAcBdEfg
+juicefs format --storage s3 \
 	--bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
 	redis://192.168.1.6/1 \
 	myjfs
@@ -61,7 +61,7 @@ Different cloud vendors have different access methods. Generally, the accessKey,
 The way temporary credentials are used is not much different than permanent credentials. In the `format` filesystem step, set the accessKey, secretKey, and token of the temporary credential through the --access-key, --secret-key, --session-token parameters, respectively. For example:
 
 ```bash
-$ juicefs format --storage oss --access-key xxxx --secret-key xxxx --session-token xxxx --bucket https://bucketName.oss-cn-hangzhou.aliyuncs.com redis://localhost:6379 /1 test1
+juicefs format --storage oss --access-key xxxx --secret-key xxxx --session-token xxxx --bucket https://bucketName.oss-cn-hangzhou.aliyuncs.com redis://localhost:6379 /1 test1
 ````
 
 Since temporary credentials expire quickly, the key is how to update the temporary credentials that juicefs uses after `format` the filesystem before the temporary credentials expire. The credential update process is divided into two steps:
@@ -655,16 +655,18 @@ It is recommended to use `librados` that matches your Ceph version. For example,
 
 ```bash
 # Debian based system
-$ sudo apt-get install librados-dev
+sudo apt-get install librados-dev
+```
 
+```bash
 # RPM based system
-$ sudo yum install librados2-devel
+sudo yum install librados2-devel
 ```
 
 Then compile JuiceFS for Ceph (make sure you have Go 1.17+ and GCC 5.4+ installed):
 
 ```bash
-$ make juicefs.ceph
+make juicefs.ceph
 ```
 
 The `--bucket` option format is `ceph://<pool-name>`. A [pool](https://docs.ceph.com/en/latest/rados/operations/pools) is logical partition for storing objects. You may need first creating a pool. The value of `--access-key` option is Ceph cluster name, the default cluster name is `ceph`. The value of `--secret-key` option is [Ceph client user name](https://docs.ceph.com/en/latest/rados/operations/user-management), the default user name is `client.admin`.
@@ -729,7 +731,7 @@ $ juicefs format \
 It is easy to run a MinIO object storage instance locally using Docker. For example, the following command sets and maps port `9900` for the console with `-console-address ":9900"` and also maps the data path for the MinIO object storage to the `minio-data` folder in the current directory, which can be modified if needed.
 
 ```shell
-$ sudo docker run -d --name minio \
+sudo docker run -d --name minio \
     -p 9000:9000 \
     -p 9900:9900 \
     -e "MINIO_ROOT_USER=minioadmin" \
@@ -906,7 +908,7 @@ When creating JuiceFS storage, if no storage type is specified, the local disk w
 For example, using the local Redis database and local disk to create a JuiceFS storage named `test`:
 
 ```shell
-$ juicefs format redis://localhost:6379/1 test
+juicefs format redis://localhost:6379/1 test
 ```
 
 Local storage is usually only used to help users understand how JuiceFS works and to give users an experience on the basic features of JuiceFS. The created JuiceFS storage cannot be mounted by other clients within the network and can only be used on a single machine.

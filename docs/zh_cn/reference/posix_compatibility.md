@@ -50,23 +50,31 @@ Result: PASS
 2. 解压后编译安装：
 
 ```bash
-$ tar -jvxf ltp-full-20210524.tar.bz2
-$ cd ltp-full-20210524
-$ ./configure
-$ make all
-$ make install
+tar -jvxf ltp-full-20210524.tar.bz2
+```
+```bash
+cd ltp-full-20210524
+```
+```bash
+./configure
+```
+```bash
+make all
+```
+```bash
+make install
 ```
 
 3. 测试工具安装在 `/opt/ltp`，需先切换到此目录：
 
 ```bash
-$ cd /opt/ltp
+cd /opt/ltp
 ```
 
 测试配置文件在 `runtest` 目录下；为方便测试，删去了 `fs` 和 `syscalls` 中部分压力测试和与文件系统不想关的条目（参见[附录](#附录)，修改后保存到文件 `fs-jfs` 和 `syscalls-jfs`），然后执行命令：
 
 ```bash
-$ ./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
+./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
 ```
 
 ### 测试结果

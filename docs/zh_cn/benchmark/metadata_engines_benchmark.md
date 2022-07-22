@@ -81,7 +81,7 @@ Amazon S3
 JuiceFS 提供了一个基础的性能测试命令：
 
 ```bash
-./juicefs bench /mnt/jfs -p 4
+juicefs bench /mnt/jfs -p 4
 ```
 
 ### mdtest
@@ -99,12 +99,13 @@ client3 slots=4
 
 测试命令:
 
-```bash
-# meta only
-$ mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-by slot /root/mdtest -b 3 -z 1 -I 100 -u -d /mnt/jfs
-
-# 12000 * 100KiB files
-$ mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-by slot /root/mdtest -F -w 102400 -I 1000 -z 0 -u -d /mnt/jfs
+meta only
+```shell
+mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-by slot /root/mdtest -b 3 -z 1 -I 100 -u -d /mnt/jfs
+```
+12000 * 100KiB files
+```shell
+mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-by slot /root/mdtest -F -w 102400 -I 1000 -z 0 -u -d /mnt/jfs
 ```
 
 ### fio

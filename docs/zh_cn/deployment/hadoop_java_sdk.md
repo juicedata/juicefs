@@ -25,7 +25,7 @@ JuiceFS 默认使用本地的 `用户` 和 `UID` 映射，在分布式环境下�
 
 通过 JuiceFS Java 客户端为 Hadoop 生态提供存储，需要提前创建 JuiceFS 文件系统。部署 Java 客户端时，在配置文件中指定已创建文件系统的元数据引擎地址。
 
-创建文件系统可以参考 [JuiceFS 快速上手指南](../getting-started/for_local.md)。
+创建文件系统可以参考 [JuiceFS 快速上手指南](../getting-started/README.md)。
 
 :::note 注意
 如果要在分布式环境中使用 JuiceFS，创建文件系统时，请合理规划要使用的对象存储和数据库，确保它们可以被每个集群节点正常访问。
@@ -61,7 +61,7 @@ JuiceFS Hadoop Java SDK 最多需要额外使用 4 * [`juicefs.memory-size`](#io
 克隆仓库：
 
 ```shell
-$ git clone https://github.com/juicedata/juicefs.git
+git clone https://github.com/juicedata/juicefs.git
 ```
 
 进入目录，执行编译：
@@ -71,8 +71,11 @@ $ git clone https://github.com/juicedata/juicefs.git
 :::
 
 ```shell
-$ cd juicefs/sdk/java
-$ make
+cd juicefs/sdk/java
+```
+
+```shell
+make
 ```
 
 编译完成后，可以在 `sdk/java/target` 目录中找到编译好的 `JAR` 文件，包括两个版本：
@@ -89,14 +92,16 @@ $ make
 与编译面向 Linux 和 macOS 客户端的步骤相同，比如在 Ubuntu 系统上，先安装 `mingw-w64` 包，解决依赖问题：
 
 ```shell
-$ sudo apt install mingw-w64
+sudo apt install mingw-w64
 ```
 
 克隆并进入 JuiceFS 源代码目录，执行以下代码进行编译：
 
 ```shell
-$ cd juicefs/sdk/java
-$ make win
+cd juicefs/sdk/java
+```
+```shell
+make win
 ```
 
 ## 部署客户端

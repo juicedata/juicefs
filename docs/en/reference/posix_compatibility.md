@@ -56,23 +56,23 @@ JuiceFS passed most of the file system related tests.
 2. Unarchive, compile and install:
 
 ```bash
-$ tar -jvxf ltp-full-20210524.tar.bz2
-$ cd ltp-full-20210524
-$ ./configure
-$ make all
-$ make install
+tar -jvxf ltp-full-20210524.tar.bz2
+cd ltp-full-20210524
+./configure
+make all
+make install
 ```
 
 3. Change directory to `/opt/ltp` since test tools are installed here:
 
 ```bash
-$ cd /opt/ltp
+cd /opt/ltp
 ```
 
 The test definition files are located under `runtest`. To speed up testing, we delete some pressure cases and unrelated cases in `fs` and `syscalls` (refer to [Appendix](#Appendix), modified files are saved as `fs-jfs` and `syscalls-jfs`), then execute:
 
 ```bash
-$ ./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
+./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
 ```
 
 ### Test Result
