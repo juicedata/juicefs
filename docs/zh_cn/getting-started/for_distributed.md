@@ -5,7 +5,7 @@ sidebar_position: 3
 
 # 分布式模式快速上手指南
 
-上一篇文档[「JuiceFS 单机模式快速上手指南」](for_local.md)通过采用「对象存储」和「SQLite」数据库的组合，实现了一个可以在任意主机上挂载的文件系统。得益于对象存储是可以被网络上任何有权限的计算机访问的特点，我们只需要把 SQLite 数据库文件复制到任何想要访问该存储的计算机，就可以实现在不同计算机上访问同一个 JuiceFS 文件系统。
+上一篇文档[「JuiceFS 单机模式快速上手指南」](./README.md)通过采用「对象存储」和「SQLite」数据库的组合，实现了一个可以在任意主机上挂载的文件系统。得益于对象存储是可以被网络上任何有权限的计算机访问的特点，我们只需要把 SQLite 数据库文件复制到任何想要访问该存储的计算机，就可以实现在不同计算机上访问同一个 JuiceFS 文件系统。
 
 很显然，想要依靠在计算机之间复制 SQLite 数据库的方式进行文件系统共享，虽然可行，但文件的实时性是得不到保证的。受限于 SQLite 这种单文件数据库无法被多个计算机同时读写访问的情况，为了能够让一个文件系统可以在分布式环境中被多个计算机同时挂载读写，我们需要采用支持通过网络访问的数据库，比如 Redis、PostgreSQL、MySQL 等。
 
@@ -46,7 +46,7 @@ JuiceFS 目前支持的基于网络的数据库有：
 
 ### 2. 准备对象存储
 
-以下是以阿里云 OSS 为例的伪样本，你可以改用其他对象存储，详情参考 [JuiceFS 支持的存储](../reference/how_to_setup_object_storage.md#支持的存储服务)。
+以下是以阿里云 OSS 为例的伪样本，你可以改用其他对象存储，详情参考 [JuiceFS 支持的存储](../guide/how_to_setup_object_storage.md#支持的存储服务)。
 
 - **Bucket Endpoint**：`https://myjfs.oss-cn-shanghai.aliyuncs.com`
 - **Access Key ID**：`ABCDEFGHIJKLMNopqXYZ`
@@ -54,7 +54,7 @@ JuiceFS 目前支持的基于网络的数据库有：
 
 ### 3. 准备数据库
 
-以下是以阿里云数据库 Redis 版为例的伪样本，你可以改用其他类型的数据库，详情参考 [JuiceFS 支持的数据库](../reference/how_to_setup_metadata_engine.md)。
+以下是以阿里云数据库 Redis 版为例的伪样本，你可以改用其他类型的数据库，详情参考 [JuiceFS 支持的数据库](../guide/how_to_setup_metadata_engine.md)。
 
 - **数据库地址**：`myjfs-sh-abc.redis.rds.aliyuncs.com:6379`
 - **数据库用户名**：`tom`
@@ -112,7 +112,7 @@ juicefs mount redis://tom:mypassword@myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1 
 
 #### 调大缓存提升性能
 
-由于「对象存储」是基于网络的存储服务，不可避免会产生访问延时。为了解决这个问题，JuiceFS 提供并默认启用了缓存机制，即划拨一部分本地存储作为数据与对象存储之间的一个缓冲层，读取文件时会异步地将数据缓存到本地存储，详情请查阅[「缓存」](../administration/cache_management.md)。
+由于「对象存储」是基于网络的存储服务，不可避免会产生访问延时。为了解决这个问题，JuiceFS 提供并默认启用了缓存机制，即划拨一部分本地存储作为数据与对象存储之间的一个缓冲层，读取文件时会异步地将数据缓存到本地存储，详情请查阅[「缓存」](../guide/cache_management.md)。
 
 缓存机制让 JuiceFS 可以高效处理海量数据的读写任务，默认情况下，JuiceFS 会在 `$HOME/.juicefs/cache` 或 `/var/jfsCache` 目录设置 100GiB 的缓存。在速度更快的 SSD 上设置更大的缓存空间可以有效提升 JuiceFS 的读写性能。
 

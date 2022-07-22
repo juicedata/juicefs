@@ -19,9 +19,13 @@ We can cross compile JuiceFS for Windows platform on Linux or macOS.
 2. Build JuiceFS for Windows:
 
 ```bash
-$ git clone https://github.com/juicedata/juicefs.git
-$ cd juicefs
-$ make juicefs.exe
+git clone https://github.com/juicedata/juicefs.git
+```
+```bash
+cd juicefs
+```
+```bash
+make juicefs.exe
 ```
 
 
@@ -44,7 +48,7 @@ PS C:\> .\juicefs.exe format localhost test
 2021/03/22 15:16:18.024710 juicefs[7064] <INFO>: Data use file:///C:/jfs/local/test/
 ```
 
-For other supported object storage, please check out ["How to Setup Object Storage"](reference/how_to_setup_object_storage.md).
+For other supported object storage, please check out ["How to Setup Object Storage"](guide/how_to_setup_object_storage.md).
 
 ### Mount JuiceFS
 

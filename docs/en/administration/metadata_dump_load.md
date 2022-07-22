@@ -12,7 +12,7 @@ slug: /metadata_dump_load
 
 ## Manual Backup
 
-JuiceFS supports [multiple metadata storage engines](../reference/how_to_setup_metadata_engine.md), and each engine has a different data management format internally. To facilitate management, JuiceFS provides `dump` command to allow writing all metadata in a uniform format to [JSON](https://www.json.org/json-en.html) file for backup. Also, JuiceFS provides `load` command to allow restoring or migrating backups to any metadata storage engine. For more information on the command, please refer to [here](../reference/command_reference.md#juicefs-dump).
+JuiceFS supports [multiple metadata storage engines](../guide/how_to_setup_metadata_engine.md), and each engine has a different data management format internally. To facilitate management, JuiceFS provides `dump` command to allow writing all metadata in a uniform format to [JSON](https://www.json.org/json-en.html) file for backup. Also, JuiceFS provides `load` command to allow restoring or migrating backups to any metadata storage engine. For more information on the command, please refer to [here](../reference/command_reference.md#juicefs-dump).
 
 ### Metadata Backup
 
@@ -98,7 +98,7 @@ The backup files are stored in the `meta` directory of the object storage, which
 By default, the JuiceFS client backs up metadata once an hour. The frequency of automatic backups can be adjusted with the `--backup-meta` option when mounting the filesystem, for example, to set the auto-backup to be performed every 8 hours.
 
 ```shell
-$ sudo juicefs mount -d --backup-meta 8h redis://127.0.0.1:6379/1 /mnt
+sudo juicefs mount -d --backup-meta 8h redis://127.0.0.1:6379/1 /mnt
 ```
 
 The backup frequency can be accurate to the second and the units supported are as follows.

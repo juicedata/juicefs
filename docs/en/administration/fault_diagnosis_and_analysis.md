@@ -18,25 +18,25 @@ When the JuiceFS file system is mounted with the [`-d` option](../reference/comm
 
 ```bash
 # macOS
-$ syslog | grep 'juicefs'
+syslog | grep 'juicefs'
 
 # Debian based system
-$ cat /var/log/syslog | grep 'juicefs'
+cat /var/log/syslog | grep 'juicefs'
 
 # CentOS based system
-$ cat /var/log/messages | grep 'juicefs'
+cat /var/log/messages | grep 'juicefs'
 
 # All system (require v0.15+ JuiceFS)
-$ tail -n 100 /var/log/juicefs.log
+tail -n 100 /var/log/juicefs.log
 ```
 
 You can use the `grep` command to filter different levels of logs for performance analysis or troubleshooting:
 
 ```
-$ cat /var/log/syslog | grep 'juicefs' | grep '<INFO>'
-$ cat /var/log/syslog | grep 'juicefs' | grep '<WARNING>'
-$ cat /var/log/syslog | grep 'juicefs' | grep '<ERROR>'
-$ cat /var/log/syslog | grep 'juicefs' | grep '<FATAL>'
+cat /var/log/syslog | grep 'juicefs' | grep '<INFO>'
+cat /var/log/syslog | grep 'juicefs' | grep '<WARNING>'
+cat /var/log/syslog | grep 'juicefs' | grep '<ERROR>'
+cat /var/log/syslog | grep 'juicefs' | grep '<FATAL>'
 ```
 
 ### Kubernetes CSI Driver
@@ -168,7 +168,7 @@ The export to visual chart function relies on [Graphviz](https://graphviz.org), 
 :::
 
 ```bash
-$ go tool pprof -pdf 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pdf
+go tool pprof -pdf 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pdf
 ```
 
 For more information about pprof, please see the [official documentation](https://github.com/google/pprof/blob/master/doc/README.md).
@@ -187,7 +187,7 @@ For more information about pprof, please see the [official documentation](https:
 JuiceFS supports using the `--pyroscope` option to pass in the pyroscope server address, and metrics are pushed to the server every 10 seconds. If permission verification is enabled on the server, the verification information API Key can be passed in through the environment variable `PYROSCOPE_AUTH_TOKEN`:
 
 ```bash
-$ export PYROSCOPE_AUTH_TOKEN=xxxxxxxxxxxxxxxx
-$ juicefs mount --pyroscope http://localhost:4040 redis://localhost /mnt/jfs
-$ juicefs dump --pyroscope http://localhost:4040 redis://localhost dump.json
+export PYROSCOPE_AUTH_TOKEN=xxxxxxxxxxxxxxxx
+juicefs mount --pyroscope http://localhost:4040 redis://localhost /mnt/jfs
+juicefs dump --pyroscope http://localhost:4040 redis://localhost dump.json
 ```

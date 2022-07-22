@@ -78,13 +78,13 @@ S3QL 和 JuiceFS 都使用数据库保存元数据，S3QL 仅支持 SQLite 数�
 S3QL 使用 `mkfs.s3ql` 工具创建文件系统：
 
 ```shell
-$ mkfs.s3ql --plain --backend-options no-ssl -L s3ql s3c://127.0.0.1:9000/s3ql/
+mkfs.s3ql --plain --backend-options no-ssl -L s3ql s3c://127.0.0.1:9000/s3ql/
 ```
 
 挂载文件系统使用 `mount.s3ql`：
 
 ```shell
-$ mount.s3ql --compress none --backend-options no-ssl s3c://127.0.0.1:9000/s3ql/ mnt-s3ql
+mount.s3ql --compress none --backend-options no-ssl s3c://127.0.0.1:9000/s3ql/ mnt-s3ql
 ```
 
 S3QL 在创建和挂载文件系统时都需要通过命令行交互式的提供对象存储 API 的访问密钥。
@@ -94,7 +94,7 @@ S3QL 在创建和挂载文件系统时都需要通过命令行交互式的提供
 JuiceFS 使用 `format` 子命令创建文件系统：
 
 ```shell
-$ juicefs format --storage minio \
+juicefs format --storage minio \
     --bucket http://127.0.0.1:9000/myjfs \
     --access-key minioadmin \
     --secret-key minioadmin \
@@ -105,7 +105,7 @@ $ juicefs format --storage minio \
 挂载文件系统使用 `mount` 子命令：
 
 ```shell
-$ sudo juicefs mount -d sqlite3://myjfs.db mnt-juicefs
+sudo juicefs mount -d sqlite3://myjfs.db mnt-juicefs
 ```
 
 JuiceFS 只在创建文件系统时设置对象存储 API 访问密钥，相关信息会写入元数据引擎，之后挂载使用无需重复提供对象存储地址、密钥等信息。
