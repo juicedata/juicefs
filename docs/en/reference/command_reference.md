@@ -126,7 +126,7 @@ Format a volume. It's the first step for initializing a new file system volume.
 juicefs format [command options] META-URL NAME
 ```
 
-- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](how_to_setup_metadata_engine.md)" for details.
+- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](../guide/how_to_setup_metadata_engine.md)" for details.
 - **NAME**: the name of the file system
 
 #### Options
@@ -185,7 +185,7 @@ Mount a volume. The volume shoud be formatted first.
 juicefs mount [command options] META-URL MOUNTPOINT
 ```
 
-- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](how_to_setup_metadata_engine.md)" for details.
+- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](../guide/how_to_setup_metadata_engine.md)" for details.
 - **MOUNTPOINT**: file system mount point, e.g. `/mnt/jfs`, `Z:`.
 
 #### Options
@@ -306,7 +306,7 @@ Start an S3-compatible gateway.
 juicefs gateway [command options] META-URL ADDRESS
 ```
 
-- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](how_to_setup_metadata_engine.md)" for details.
+- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](../guide/how_to_setup_metadata_engine.md)" for details.
 - **ADDRESS**: S3 gateway address and listening port, for example: `localhost:9000`
 
 #### Options
@@ -405,7 +405,7 @@ Start a WebDAV server.
 juicefs webdav [command options] META-URL ADDRESS
 ```
 
-- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](how_to_setup_metadata_engine.md)" for details.
+- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](../guide/how_to_setup_metadata_engine.md)" for details.
 - **ADDRESS**: WebDAV address and listening port, for example: `localhost:9007`
 
 #### Options
