@@ -1,3 +1,7 @@
+---
+slug: /comparison/juicefs_vs_cephfs
+---
+
 # JuiceFS 对比 CephFS
 
 ## 共同点

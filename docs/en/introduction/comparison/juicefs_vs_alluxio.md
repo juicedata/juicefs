@@ -1,3 +1,7 @@
+---
+slug: /comparison/juicefs_vs_alluxio
+---
+
 # JuiceFS vs. Alluxio
 
 [Alluxio](https://www.alluxio.io) (/əˈlʌksio/) is a data access layer in the big data and machine learning ecosystem. Initially as research project "Tachyon", it was created at the University of California, Berkeley's [AMPLab](https://en.wikipedia.org/wiki/AMPLab) as creator's Ph.D. thesis in 2013. Alluxio was open sourced in 2014.
