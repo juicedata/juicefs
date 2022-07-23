@@ -29,7 +29,7 @@ juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 
 ## Authentication methods
 
-The "md5" method is currently available for authentication with PostgreSQL. The following section can be adapted in the pg_hba.conf of your PostgreSQL instance.
+PostgreSQL supports the md5 authentication method. The following section can be adapted in the pg_hba.conf of your PostgreSQL instance.
 
 ```
 # TYPE  DATABASE        USER            ADDRESS                 METHOD
