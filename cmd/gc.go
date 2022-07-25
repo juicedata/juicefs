@@ -113,7 +113,7 @@ func gc(ctx *cli.Context) error {
 	if ctx.Bool("compact") {
 		bar := progress.AddCountBar("Scanned chunks", 0)
 		spin := progress.AddDoubleSpinner("Compacted slices")
-		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
+		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
 			return store.Remove(args[0].(uint64), int(args[1].(uint32)))
 		})
 		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
@@ -155,7 +155,7 @@ func gc(ctx *cli.Context) error {
 	if delete {
 		delSpin = progress.AddCountSpinner("Deleted pending")
 		chunkChan = make(chan *dChunk, 10240)
-		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
+		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
 			delSpin.Increment()
 			chunkChan <- &dChunk{args[0].(uint64), args[1].(uint32)}
 			return nil

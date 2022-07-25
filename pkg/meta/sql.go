@@ -2329,18 +2329,18 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	ss := readSliceBuf(c.Slices)
 	skipped := skipSome(ss)
 	ss = ss[skipped:]
-	pos, size, chunks := compactChunk(ss)
+	pos, size, slices := compactChunk(ss)
 	if len(ss) < 2 || size == 0 {
 		return
 	}
 
-	var chunkid uint64
-	st := m.NewChunk(Background, &chunkid)
+	var sliceID uint64
+	st := m.NewChunk(Background, &sliceID)
 	if st != 0 {
 		return
 	}
 	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
-	err = m.newMsg(CompactChunk, chunks, chunkid)
+	err = m.newMsg(CompactChunk, slices, sliceID)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
 			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
@@ -2367,17 +2367,17 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			return syscall.EINVAL
 		}
 
-		c2.Slices = append(append(c2.Slices[:skipped*sliceBytes], marshalSlice(pos, chunkid, size, 0, size)...), c2.Slices[len(c.Slices):]...)
+		c2.Slices = append(append(c2.Slices[:skipped*sliceBytes], marshalSlice(pos, sliceID, size, 0, size)...), c2.Slices[len(c.Slices):]...)
 		if _, err := s.Where("Inode = ? AND indx = ?", inode, indx).Update(c2); err != nil {
 			return err
 		}
 		// create the key to tracking it
-		if err = mustInsert(s, chunkRef{chunkid, size, 1}); err != nil {
+		if err = mustInsert(s, chunkRef{sliceID, size, 1}); err != nil {
 			return err
 		}
 		if trash {
 			if len(buf) > 0 {
-				if err = mustInsert(s, &delslices{chunkid, time.Now().Unix(), buf}); err != nil {
+				if err = mustInsert(s, &delslices{sliceID, time.Now().Unix(), buf}); err != nil {
 					return err
 				}
 			}
@@ -2395,7 +2395,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	})
 	// there could be false-negative that the compaction is successful, double-check
 	if err != nil {
-		var c = chunkRef{Chunkid: chunkid}
+		var c = chunkRef{Chunkid: sliceID}
 		var ok bool
 		e := m.roTxn(func(s *xorm.Session) error {
 			var e error
@@ -2406,15 +2406,15 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			if ok {
 				err = nil
 			} else {
-				logger.Infof("compacted chunk %d was not used", chunkid)
+				logger.Infof("compacted chunk %d was not used", sliceID)
 				err = syscall.EINVAL
 			}
 		}
 	}
 
 	if errno, ok := err.(syscall.Errno); ok && errno == syscall.EINVAL {
-		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, chunkid, size)
-		m.deleteSlice(chunkid, size)
+		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, sliceID, size)
+		m.deleteSlice(sliceID, size)
 	} else if err == nil {
 		m.of.InvalidateChunk(inode, indx)
 		if !trash {

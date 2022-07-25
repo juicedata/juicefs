@@ -80,7 +80,7 @@ func testMeta(t *testing.T, m Meta) {
 }
 
 func testMetaClient(t *testing.T, m Meta) {
-	m.OnMsg(DeleteChunk, func(args ...interface{}) error { return nil })
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error { return nil })
 	ctx := Background
 	var attr = &Attr{}
 	if st := m.GetAttr(ctx, 1, attr); st != 0 || attr.Mode != 0777 { // getattr of root always succeed
@@ -812,10 +812,10 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	}
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
-	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		l.Lock()
-		chunkid := args[0].(uint64)
-		deleted[chunkid] = 1
+		sliceID := args[0].(uint64)
+		deleted[sliceID] = 1
 		l.Unlock()
 		return nil
 	})
@@ -915,7 +915,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 }
 
 func testConcurrentWrite(t *testing.T, m Meta) {
-	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		return nil
 	})
 	m.OnMsg(CompactChunk, func(args ...interface{}) error {
@@ -957,7 +957,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 }
 
 func testTruncateAndDelete(t *testing.T, m Meta) {
-	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		return nil
 	})
 	// remove quota
@@ -1021,7 +1021,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 }
 
 func testCopyFileRange(t *testing.T, m Meta) {
-	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		return nil
 	})
 	_ = m.Init(Format{Name: "test"}, false)

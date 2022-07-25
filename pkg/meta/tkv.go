@@ -1996,18 +1996,18 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	ss := readSliceBuf(buf)
 	skipped := skipSome(ss)
 	ss = ss[skipped:]
-	pos, size, chunks := compactChunk(ss)
+	pos, size, slices := compactChunk(ss)
 	if len(ss) < 2 || size == 0 {
 		return
 	}
 
-	var chunkid uint64
-	st := m.NewChunk(Background, &chunkid)
+	var sliceID uint64
+	st := m.NewChunk(Background, &sliceID)
 	if st != 0 {
 		return
 	}
 	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
-	err = m.newMsg(CompactChunk, chunks, chunkid)
+	err = m.newMsg(CompactChunk, slices, sliceID)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
 			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
@@ -2030,13 +2030,13 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			return syscall.EINVAL
 		}
 
-		buf2 = append(append(buf2[:skipped*sliceBytes], marshalSlice(pos, chunkid, size, 0, size)...), buf2[len(buf):]...)
+		buf2 = append(append(buf2[:skipped*sliceBytes], marshalSlice(pos, sliceID, size, 0, size)...), buf2[len(buf):]...)
 		tx.set(m.chunkKey(inode, indx), buf2)
 		// create the key to tracking it
-		tx.set(m.sliceKey(chunkid, size), make([]byte, 8))
+		tx.set(m.sliceKey(sliceID, size), make([]byte, 8))
 		if trash {
 			if len(dsbuf) > 0 {
-				tx.set(m.delSliceKey(time.Now().Unix(), chunkid), dsbuf)
+				tx.set(m.delSliceKey(time.Now().Unix(), sliceID), dsbuf)
 			}
 		} else {
 			for _, s := range ss {
@@ -2050,23 +2050,23 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	// there could be false-negative that the compaction is successful, double-check
 	if err != nil {
 		logger.Warnf("compact %d:%d failed: %s", inode, indx, err)
-		refs, e := m.get(m.sliceKey(chunkid, size))
+		refs, e := m.get(m.sliceKey(sliceID, size))
 		if e == nil {
 			if len(refs) > 0 {
 				err = nil
 			} else {
-				logger.Infof("compacted chunk %d was not used", chunkid)
+				logger.Infof("compacted chunk %d was not used", sliceID)
 				err = syscall.EINVAL
 			}
 		}
 	}
 
 	if errno, ok := err.(syscall.Errno); ok && errno == syscall.EINVAL {
-		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, chunkid, size)
-		m.deleteSlice(chunkid, size)
+		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, sliceID, size)
+		m.deleteSlice(sliceID, size)
 	} else if err == nil {
 		m.of.InvalidateChunk(inode, indx)
-		m.cleanupZeroRef(chunkid, size)
+		m.cleanupZeroRef(sliceID, size)
 		if !trash {
 			var refs int64
 			for _, s := range ss {

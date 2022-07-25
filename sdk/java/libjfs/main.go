@@ -472,15 +472,15 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 		}
 		store := chunk.NewCachedStore(blob, chunkConf, registerer)
-		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
-			chunkid := args[0].(uint64)
+		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
+			sliceID := args[0].(uint64)
 			length := args[1].(uint32)
-			return store.Remove(chunkid, int(length))
+			return store.Remove(sliceID, int(length))
 		})
 		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 			slices := args[0].([]meta.Slice)
-			chunkid := args[1].(uint64)
-			return vfs.Compact(chunkConf, store, slices, chunkid)
+			sliceID := args[1].(uint64)
+			return vfs.Compact(chunkConf, store, slices, sliceID)
 		})
 		err = m.NewSession()
 		if err != nil {

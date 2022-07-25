@@ -955,16 +955,16 @@ func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64) {
 	}
 }
 
-func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
-	if chunkid == 0 {
+func (m *baseMeta) deleteSlice(sliceID uint64, size uint32) {
+	if sliceID == 0 {
 		return
 	}
-	if err := m.newMsg(DeleteChunk, chunkid, size); err == nil || strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "not found") {
-		if err = m.en.doDeleteSlice(chunkid, size); err != nil {
-			logger.Errorf("delete slice %d: %s", chunkid, err)
+	if err := m.newMsg(DeleteSlice, sliceID, size); err == nil || strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "not found") {
+		if err = m.en.doDeleteSlice(sliceID, size); err != nil {
+			logger.Errorf("delete slice %d: %s", sliceID, err)
 		}
 	} else if !strings.Contains(err.Error(), "skip deleting") {
-		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
+		logger.Warnf("delete slice %d (%d bytes): %s", sliceID, size, err)
 	}
 }
 

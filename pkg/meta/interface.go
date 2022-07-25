@@ -34,8 +34,8 @@ import (
 const (
 	// ChunkSize is size of a chunk
 	ChunkSize = 1 << 26 // 64M
-	// DeleteChunk is a message to delete a chunk from object store.
-	DeleteChunk = 1000
+	// DeleteSlice is a message to delete a slice from object store.
+	DeleteSlice = 1000
 	// CompactChunk is a message to compact a chunk in object store.
 	CompactChunk = 1001
 	// Rmr is a message to remove a directory recursively.

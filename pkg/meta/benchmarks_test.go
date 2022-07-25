@@ -612,7 +612,7 @@ func benchmarkLink(b *testing.B, m Meta) {
 }
 
 func benchmarkData(b *testing.B, m Meta) {
-	m.OnMsg(DeleteChunk, func(args ...interface{}) error { return nil })
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error { return nil })
 	m.OnMsg(CompactChunk, func(args ...interface{}) error { return nil })
 	b.Run("newchunk", func(b *testing.B) { benchNewChunk(b, m) })
 	b.Run("write", func(b *testing.B) { benchWrite(b, m) })

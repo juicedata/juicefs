@@ -2483,18 +2483,18 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	ss := readSlices(vals)
 	skipped := skipSome(ss)
 	ss = ss[skipped:]
-	pos, size, chunks := compactChunk(ss)
+	pos, size, slices := compactChunk(ss)
 	if len(ss) < 2 || size == 0 {
 		return
 	}
 
-	var chunkid uint64
-	st := m.NewChunk(ctx, &chunkid)
+	var sliceID uint64
+	st := m.NewChunk(ctx, &sliceID)
 	if st != 0 {
 		return
 	}
 	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
-	err = m.newMsg(CompactChunk, chunks, chunkid)
+	err = m.newMsg(CompactChunk, slices, sliceID)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
 			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
@@ -2530,14 +2530,14 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 
 		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.LTrim(ctx, key, int64(len(vals)), -1)
-			pipe.LPush(ctx, key, marshalSlice(pos, chunkid, size, 0, size))
+			pipe.LPush(ctx, key, marshalSlice(pos, sliceID, size, 0, size))
 			for i := skipped; i > 0; i-- {
 				pipe.LPush(ctx, key, vals[i-1])
 			}
-			pipe.HSet(ctx, m.sliceRefs(), m.sliceKey(chunkid, size), "0") // create the key to tracking it
+			pipe.HSet(ctx, m.sliceRefs(), m.sliceKey(sliceID, size), "0") // create the key to tracking it
 			if trash {
 				if len(buf) > 0 {
-					pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", chunkid, time.Now().Unix()), buf)
+					pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", sliceID, time.Now().Unix()), buf)
 				}
 			} else {
 				for i, s := range ss {
@@ -2552,7 +2552,7 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}, key))
 	// there could be false-negative that the compaction is successful, double-check
 	if errno != 0 && errno != syscall.EINVAL {
-		if e := m.rdb.HGet(ctx, m.sliceRefs(), m.sliceKey(chunkid, size)).Err(); e == redis.Nil {
+		if e := m.rdb.HGet(ctx, m.sliceRefs(), m.sliceKey(sliceID, size)).Err(); e == redis.Nil {
 			errno = syscall.EINVAL // failed
 		} else if e == nil {
 			errno = 0 // successful
@@ -2560,12 +2560,12 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	if errno == syscall.EINVAL {
-		m.rdb.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(chunkid, size), -1)
-		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, chunkid, size)
-		m.deleteSlice(chunkid, size)
+		m.rdb.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(sliceID, size), -1)
+		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, sliceID, size)
+		m.deleteSlice(sliceID, size)
 	} else if errno == 0 {
 		m.of.InvalidateChunk(inode, indx)
-		m.cleanupZeroRef(m.sliceKey(chunkid, size))
+		m.cleanupZeroRef(m.sliceKey(sliceID, size))
 		if !trash {
 			for i, s := range ss {
 				if s.chunkid > 0 && rs[i].Err() == nil && rs[i].Val() < 0 {
