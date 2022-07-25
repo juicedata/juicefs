@@ -23,10 +23,12 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -167,6 +169,33 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("list3 failed: %s", err2.Error())
 		} else if len(objs) != 0 {
 			t.Fatalf("list3 should not return anything, but got %d", len(objs))
+		}
+	}
+
+	// test redis cluster list all api
+	keyTotal := 100
+	var sortedKeys []string
+	for i := 0; i < keyTotal; i++ {
+		k := fmt.Sprintf("hashKey%d", i)
+		sortedKeys = append(sortedKeys, k)
+		if err := s.Put(k, bytes.NewReader(br)); err != nil {
+			t.Fatalf("PUT failed: %s", err.Error())
+		}
+	}
+	sort.Strings(sortedKeys)
+	defer func() {
+		for i := 0; i < keyTotal; i++ {
+			_ = s.Delete(fmt.Sprintf("hashKey%d", i))
+		}
+	}()
+	objs, err := listAll(s, "hashKey", "", int64(keyTotal))
+	if err != nil {
+		t.Fatalf("list4 failed: %s", err.Error())
+	} else {
+		for i := 0; i < keyTotal; i++ {
+			if objs[i].Key() != sortedKeys[i] {
+				t.Fatal("The result for list4 is incorrect")
+			}
 		}
 	}
 
