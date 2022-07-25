@@ -4,11 +4,9 @@
 
 已经支持了绝大部分对象存储，参考这个[列表](guide/how_to_setup_object_storage.md#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
-## 是否可以使用 Redis 集群版作为元数据引擎？
+## Redis 的 sentinel 或者 cluster 模式支持作为 JuiceFS 元数据引擎吗？
 
-可以。自 [v1.0.0 Beta3](https://github.com/juicedata/juicefs/releases/tag/v1.0.0-beta3) 版本开始 JuiceFS 支持使用 [Redis 集群版](https://redis.io/docs/manual/scaling)作为元数据引擎，不过需要注意的是 Redis 集群版要求一个事务中所有操作的 key 必须在同一个 hash slot 中，因此一个 JuiceFS 文件系统只能使用一个 hash slot。
-
-请查看[「Redis 最佳实践」](administration/metadata/redis_best_practices.md)了解更多信息。
+支持，另外这里还有一篇 [Redis 作为 JuiceFS 元数据引擎的最佳实践](https://juicefs.com/docs/zh/community/redis_best_practices)文章可供参考。
 
 ## JuiceFS 与 XXX 的区别是什么？
 
@@ -20,9 +18,26 @@ JuiceFS 是一个分布式文件系统，元数据访问的延时取决于挂载
 
 JuiceFS 内置多级缓存（主动失效），一旦缓存预热好，访问的延时和吞吐量非常接近单机文件系统的性能（FUSE 会带来少量的开销）。
 
+## 为什么在对象存储中看不到存入 JuiceFS 的原文件？
+使用 JuiceFS，文件最终会被拆分成 Chunks、Slices 和 Blocks 存储在对象存储。因此，你会发现在对象存储平台的文件浏览器中找不到存入 JuiceFS 的源文件，存储桶中只有一个 chunks 目录和一堆数字编号的目录和文件。不要惊慌，这正是 JuiceFS 文件系统高性能运作的秘诀！详情参考 [JuiceFS 如何存储文件](https://juicefs.com/docs/zh/community/how_juicefs_store_files)。
+
 ## JuiceFS 支持随机读写吗？
 
 支持，包括通过 mmap 等进行的随机读写。目前 JuiceFS 主要是对顺序读写进行了大量优化，对随机读写的优化也在进行中。如果想要更好的随机读性能，建议关闭压缩（[`--compress none`](reference/command_reference.md#juicefs-format)）。
+
+## JuiceFS 随机写的基本原理是什么？
+
+JuiceFS 不将原始对象传入对象存储，而是将其按照 4M 的大小拆分为 N 块后编号上传到对象存储，然后将编号存入元数据引擎。随机写的时候，逻辑上是要覆盖原本的内容，实际上是把覆盖的那段标记为旧数据，上传随机写部分的到对象存储，当该要读到旧数据部分的时候，从刚刚上传的随机写的部分读新数据即可。这样就将随机写的复杂度转移到读的复杂度上。这个只是很宏观的实现逻辑，具体的读写流程非常复杂，可以研读 [JuiceFS内部实现](https://juicefs.com/docs/zh/community/internals/)与[读写流程](https://juicefs.com/docs/zh/community/internals/io_processing)两篇文章并配合代码梳理。
+
+## 为什么我在挂载点删除了文件，但是对象存储占用空间没有变化或者变化很小？
+
+第一个原因是你可能开起了回收站，为了保证数据安全回收站默认开启，删除的文件其实被放到了回收站，实际并没有被删除，所以对象存储大小不会变化。回收站可以通过 `juicefs format` 指定或者通过 `juicefs config` 修改。关于回收站功能请参考[回收站使用文档](https://juicefs.com/docs/zh/community/security/trash/)。
+
+第二个原因是 JuiceFS 删除对象存储是异步删除。所以对象存储的变化会慢一点。
+
+## 为什么挂载点显示的大小与对象存储占用空间存在差异？
+
+通过 [JuiceFS 随机写的基本原理是什么](##JuiceFS 随机写的基本原理是什么) 这个问题的答案可以推断出，对象存储的占用空间大部分情况下是大于等于实际大小的，尤其是短时间内进行大量的覆盖写产生许多文件碎片后。这些碎片在未触发合并与回收前其仍旧占用着对象存储的空间。不过也不必担心这些碎片一直占用空间，因为在每次读文件的时候都会触发该文件相关碎片的整理工作。另外你可以通过 `juicefs gc —-compact -—delete` 命令手动触发合并与回收。
 
 ## 数据更新什么时候会对其它客户端可见？
 
@@ -49,6 +64,10 @@ JuiceFS 内置多级缓存（主动失效），一旦缓存预热好，访问的
 ## 怎么卸载 JuiceFS 文件系统？
 
 请使用 [`juicefs umount`](reference/command_reference.md#juicefs-umount) 命令卸载。
+
+## 卸载挂载点报 `Resource busy -- try 'diskutil unmount'` 错误
+
+这代表有挂载点下的某个文件或者目录正在被使用，无法直接 `umount`，可以检查下是否有终端在挂载点或者挂载点下的目录，如果有退出或者关闭终端后再使用 `juicefs umount` 即可。
 
 ## 怎么升级 JuiceFS 客户端？
 
@@ -108,3 +127,45 @@ uid=1201(alice) gid=500(staff) groups=500(staff)
 ```
 
 阅读文档[「多主机间同步账户」](administration/sync_accounts_between_multiple_hosts.md)解决这个问题。
+
+## JuiceFS 除了普通挂载外还支持哪些方式访问数据？
+
+除了普通挂载外，还支持以下几种方式：
+
+- S3 Gateway 方式: 通过 S3 协议访问 JuiceFS，详情参考 [JuiceFS S3 gateway 使用指南](https://juicefs.com/docs/zh/community/s3_gateway)
+- Webdav 方式：通过 webdav 协议访问 JuiceFS
+- Docker Volume Plugin：在 Docker 中方便使用 JuiceFS 的方式，关于如何再 Docker 中使用使用 JuiceFS 请参考 [Docker 使用 JuiceFS 指南](https://juicefs.com/docs/zh/community/juicefs_on_docker/)
+- CSI Driver：通过 Kubernetes CSI Driver 方式将 JuiceFS 用为 Kubernetes 集群的存储层，详情参考 [Kubernetes 使用 JuiceFS 指南](https://juicefs.com/docs/zh/community/how_to_use_on_kubernetes)
+- Hadoop SDK： 方便在 Hadoop 体系中使用的 HDFS 接口[高度兼容](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html)的 Java 客户端。详情参考[在 Hadoop 中使用 JuiceFS](https://juicefs.com/docs/zh/community/hadoop_java_sdk)
+
+## JuiceFS 的日志在哪里？
+
+JuiceFS 后台挂载的时候日志才会写入日志文件，前台挂载或者其他前台的命令都会将日志直接打印到终端
+
+Mac 系统上日志文件默认是`/Users/$User/.juicefs/juicefs.log`
+
+Linux 系统上日志文件默认是`/var/log/juicefs.log`
+
+## 如何销毁一个文件系统？
+
+使用 `juicefs destroy` 销毁一个文件系统，该命令将会清空元数据引擎与对象存储中的相关数据。关于该命令的使用详情请参考这个[帮助文档](https://juicefs.com/docs/zh/community/administration/destroy)
+
+## JuiceFS gateway 支持多用户管理等高级功能吗？
+
+JuiceFS 内置的 gateway 子命令不支持多用户管理等功能，只提供基本的 S3 Gateway 功能。如果需要使用这些高级功能，可以参考我们的这个[仓库](https://github.com/juicedata/minio/tree/gateway)，其将 JuiceFS 作为 MinIO gateway 的一种实现，支持 MinIO gateway 的完整功能。
+
+## JuiceFS 支持使用对象存储中的某个目录作为 `—-bucket` 参数吗？
+
+到 JuiceFS 1.0.0-rc3 为止，还不支持该功能。
+
+## JuiceFS 支持读取对象存储中已经存在的数据吗？
+
+到 JuiceFS 1.0.0-rc3 为止，还不支持该功能。
+
+## JuiceFS 目前支持分布式缓存吗？
+
+到 JuiceFS 1.0.0-rc3 为止，还不支持该功能。
+
+## JuiceFS 目前有 SDK 可以使用吗？
+
+到 JuiceFS 1.0.0-rc3 为止，还不支持该功能。

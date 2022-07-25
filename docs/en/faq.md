@@ -4,11 +4,9 @@
 
 JuiceFS already supported many object storage, please check [the list](guide/how_to_setup_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
 
-## Can I use Redis Cluster as metadata engine?
+## Does Redis support sentinel or Cluster mode as JuiceFS metadata engine?
 
-Yes. Since [v1.0.0 Beta3](https://github.com/juicedata/juicefs/releases/tag/v1.0.0-beta3) JuiceFS supports the use of [Redis Cluster](https://redis.io/docs/manual/scaling) as the metadata engine, but it should be noted that Redis Cluster requires that the keys of all operations in a transaction must be in the same hash slot, so a JuiceFS file system can only use one hash slot.
-
-See ["Redis Best Practices"](administration/metadata/redis_best_practices.md) for more information.
+Yes，There is a [best practices article](https://juicefs.com/docs/community/faq/) on Redis as a JuiceFS metadata engine.
 
 ## What's the difference between JuiceFS and XXX?
 
@@ -20,9 +18,25 @@ JuiceFS is a distributed file system, the latency of metedata is determined by 1
 
 JuiceFS is built with multiple layers of caching (invalidated automatically), once the caching is warmed up, the latency and throughput of JuiceFS could be close to local filesystem (having the overhead of FUSE).
 
+## Why don't you see the original file to JuiceFS in the object store?
+While using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and stored in object storage. Therefore, you may notice that the source files stored in JuiceFS cannot be found in the file browser of the object storage platform; instead, there are only a directory of chunks and a bunch of directories and files named by numbers in the bucket. Don't panic! That's exactly what makes JuiceFS a high-performance file system. For details, please refer to [How to store files in JuiceFS](https://juicefs.com/docs/community/how_juicefs_store_files).
+
 ## Does JuiceFS support random read/write?
 
 Yes, including those issued using mmap. Currently JuiceFS is optimized for sequential reading/writing, and optimized for random reading/writing is work in progress. If you want better random reading performance, it's recommended to turn off compression ([`--compress none`](reference/command_reference.md#juicefs-format)).
+
+## What is the rationale for JuiceFS random writes?
+
+Instead of passing the raw object into the object store, JuiceFS splits it into N blocks of 4M size, numbers it and uploads it to the object store, and stores the numbers into the metadata engine. When a random write is performed, it logically overwrites the original content, but actually marks the overwrite as old data and uploads the random write content to the object store.  When it's time to read the old data, just read the new data from the random part that you just uploaded. When a random write is performed, it logically overwrites the original content, but actually marks the overwrite as old data and uploads the random write content to the object store. This shifts the complexity of random writes to the complexity of reads. This is only a macro implementation logic, and the specific read and write process is very complex. You can read [JuiceFS internal implementation](https://juicefs.com/docs/community/internals) and [read and write process](https://juicefs.com/docs/community/internals/io_processing/) for details of logic and coordinate with code combing.
+
+## Why do I delete files at the mount point, but there is no change or very little change in object storage footprint?
+
+The first reason is that you might enable trash bin, and for data security, the trash bin is open by default, so the deleted files are actually put in the trash bin, but they're not actually deleted, so the size of the object store doesn't change. Trash bin can be specified by `juicefs format` or modified by `juicefs config`.Please refer to the [trash bin usage documentation](https://juicefs.com/docs/community/security/trash) for more information about the trash bin function.
+The second reason is that JuiceFS deletes object stores asynchronously. Therefore, the object storage footprint changes slowly.
+
+## Why is the size displayed at the mount point different from the object storage footprint?
+
+It can be inferred from the answer to the question [ What is the rationale for JuiceFS random writes ](#What is the rationale for JuiceFS random writes?) that the size of the object store is in most cases greater than or equal to the actual size, especially if a large number of write overwrites in a short period of time result in many file fragments. These fragments still occupy space in the object store until merge and reclaim are triggered. However, you don't have to worry about these fragments taking up space all the time, because every time you read a file, you're triggered to defragment the file. Alternatively, you can manually trigger merge and reclaim with the `juicefs gc  --compact --delete` command.
 
 ## When my update will be visible to other clients?
 
@@ -108,3 +122,41 @@ uid=1201(alice) gid=500(staff) groups=500(staff)
 ```
 
 Read ["Sync Accounts between Multiple Hosts"](administration/sync_accounts_between_multiple_hosts.md) to resolve this problem.
+
+## What other ways JuiceFS supports access to data besides normal mount?
+
+In addition to ordinary mounting, the following modes are supported:
+- S3 Gateway way: Access JuiceFS through the S3 protocol, details refer to [JuiceFS S3 Gateway using guide] (https://juicefs.com/docs/community/s3_gateway)
+- Webdav mode: Access JuiceFS through Webdav protocol
+  Docker Volume Plugin: Easy way to use JuiceFS in Docker, for details on how to use JuiceFS in Docker, please refer to [Docker JuiceFS Guide](https://juicefs.com/docs/community/juicefs_on_docker)
+- CSI Driver: Using JuiceFS as the storage layer of the Kubernetes cluster by means of the Kubernetes CSI Driver, Details refer to [use JuiceFS guide Kubernetes](https://juicefs.com/docs/community/how_to_use_on_kubernetes)
+- Hadoop SDK: Java client that is highly compatible with HDFS interfaces for use in Hadoop systems. See [using JuiceFS in Hadoop](https://juicefs.com/docs/community/hadoop_java_sdk) for details.
+
+## Where is the JuiceFS log?
+
+Logs are written to the log file only when JuiceFS is mounted in the background, and logs are directly printed to the terminal by foreground mount or other foreground commands
+Log file on Mac system default is ` / Users / $User /. Juicefs/juicefs log `
+Log file on linux system default is `/var/log/juicefs.log`
+
+## How to destroy a file system?
+Destroy a file system with 'juicefs Destroy', which empties the metadata engine and object store of related data. Please refer to this [documentation](https://juicefs.com/docs/community/administration/destroy) for details on how to use this command.
+
+## Does JuiceFS Gateway support advanced features such as multi-user management?
+
+The built-in `gateway` subcommand of JuiceFS does not support functions such as multi-user management and only provides basic S3 Gateway functions. If you need to use these advanced features, you can refer to [this repository](https://github.com/juicedata/minio/tree/gateway), which uses JuiceFS as an implementation of MinIO Gateway and supports the full functionality of MinIO Gateway.
+
+## Does JuiceFS support using a directory in the object store as a '--bucket' parameter?
+
+As of the release of JuiceFS 1.0.0-RC3, this feature is not supported.
+
+## Does JuiceFS support reading data that already exists in the object store?
+
+As of the release of JuiceFS 1.0.0-RC3, this feature is not supported.
+
+## Does JuiceFS currently support distributed caching?
+
+As of the release of JuiceFS 1.0.0-RC3, this feature is not supported.
+
+## Is there currently an SDK available for JuiceFS?
+
+As of the release of JuiceFS 1.0.0-RC3, this feature is not supported.
