@@ -2002,7 +2002,7 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	var sliceID uint64
-	st := m.NewChunk(Background, &sliceID)
+	st := m.NewSliceID(Background, &sliceID)
 	if st != 0 {
 		return
 	}

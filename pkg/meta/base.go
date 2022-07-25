@@ -34,7 +34,7 @@ import (
 
 const (
 	inodeBatch    = 100
-	chunkIDBatch  = 1000
+	sliceIDBatch  = 1000
 	minUpdateTime = time.Millisecond * 10
 	nlocks        = 1024
 )
@@ -101,7 +101,7 @@ type baseMeta struct {
 
 	freeMu     sync.Mutex
 	freeInodes freeID
-	freeChunks freeID
+	freeSlices freeID
 
 	usedSpaceG  prometheus.Gauge
 	usedInodesG prometheus.Gauge
@@ -840,19 +840,19 @@ func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sys
 	return 0
 }
 
-func (m *baseMeta) NewChunk(ctx Context, chunkid *uint64) syscall.Errno {
+func (m *baseMeta) NewSliceID(ctx Context, sliceID *uint64) syscall.Errno {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
-	if m.freeChunks.next >= m.freeChunks.maxid {
-		v, err := m.en.incrCounter("nextChunk", chunkIDBatch)
+	if m.freeSlices.next >= m.freeSlices.maxid {
+		v, err := m.en.incrCounter("nextChunk", sliceIDBatch)
 		if err != nil {
 			return errno(err)
 		}
-		m.freeChunks.next = uint64(v) - chunkIDBatch
-		m.freeChunks.maxid = uint64(v)
+		m.freeSlices.next = uint64(v) - sliceIDBatch
+		m.freeSlices.maxid = uint64(v)
 	}
-	*chunkid = m.freeChunks.next
-	m.freeChunks.next++
+	*sliceID = m.freeSlices.next
+	m.freeSlices.next++
 	return 0
 }
 
