@@ -782,7 +782,7 @@ func (r *dataReader) Invalidate(inode Ino, off, length uint64) {
 func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.Page, off int) error {
 	buf := page.Data
 	read := 0
-	if s.Chunkid == 0 {
+	if s.ID == 0 {
 		for read < len(buf) {
 			buf[read] = 0
 			read++
@@ -790,14 +790,14 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 		return nil
 	}
 
-	reader := r.store.NewReader(s.Chunkid, int(s.Size))
+	reader := r.store.NewReader(s.ID, int(s.Size))
 	for read < len(buf) {
 		p := page.Slice(read, len(buf)-read)
 		n, err := reader.ReadAt(ctx, p, off+int(s.Off))
 		p.Release()
 		if n == 0 && err != nil {
-			logger.Warningf("fail to read chunkid %d (off:%d, size:%d, clen: %d): %s",
-				s.Chunkid, off+int(s.Off), len(buf)-read, s.Size, err)
+			logger.Warningf("fail to read sliceID %d (off:%d, size:%d, clen: %d): %s",
+				s.ID, off+int(s.Off), len(buf)-read, s.Size, err)
 			return err
 		}
 		read += n

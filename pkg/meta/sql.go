@@ -1989,7 +1989,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if err != nil {
 			return err
 		}
-		buf := marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len)
+		buf := marshalSlice(off, slice.ID, slice.Size, slice.Off, slice.Len)
 		if ok {
 			if err := m.appendSlice(s, inode, indx, buf); err != nil {
 				return err
@@ -1999,7 +1999,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 				return err
 			}
 		}
-		if err = mustInsert(s, chunkRef{slice.Chunkid, slice.Size, 1}); err != nil {
+		if err = mustInsert(s, chunkRef{slice.ID, slice.Size, 1}); err != nil {
 			return err
 		}
 		_, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode})
@@ -2107,15 +2107,15 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 					indx := uint32(doff / ChunkSize)
 					dpos := uint32(doff % ChunkSize)
 					if dpos+s.Len > ChunkSize {
-						if err := updateSlices(indx, marshalSlice(dpos, s.Chunkid, s.Size, s.Off, ChunkSize-dpos), s.Chunkid, s.Size); err != nil {
+						if err := updateSlices(indx, marshalSlice(dpos, s.ID, s.Size, s.Off, ChunkSize-dpos), s.ID, s.Size); err != nil {
 							return err
 						}
 						skip := ChunkSize - dpos
-						if err := updateSlices(indx+1, marshalSlice(0, s.Chunkid, s.Size, s.Off+skip, s.Len-skip), s.Chunkid, s.Size); err != nil {
+						if err := updateSlices(indx+1, marshalSlice(0, s.ID, s.Size, s.Off+skip, s.Len-skip), s.ID, s.Size); err != nil {
 							return err
 						}
 					} else {
-						if err := updateSlices(indx, marshalSlice(dpos, s.Chunkid, s.Size, s.Off, s.Len), s.Chunkid, s.Size); err != nil {
+						if err := updateSlices(indx, marshalSlice(dpos, s.ID, s.Size, s.Off, s.Len), s.ID, s.Size); err != nil {
 							return err
 						}
 					}
@@ -2269,7 +2269,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 				return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Chunkid, ds.Slices)
 			}
 			for _, s := range ss {
-				if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.Chunkid, s.Size); e != nil {
+				if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.ID, s.Size); e != nil {
 					return e
 				}
 			}
@@ -2280,7 +2280,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 			continue
 		}
 		for _, s := range ss {
-			var ref = chunkRef{Chunkid: s.Chunkid}
+			var ref = chunkRef{Chunkid: s.ID}
 			err := m.roTxn(func(s *xorm.Session) error {
 				ok, err := s.Get(&ref)
 				if err == nil && !ok {
@@ -2289,7 +2289,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 				return err
 			})
 			if err == nil && ref.Refs <= 0 {
-				m.deleteSlice(s.Chunkid, s.Size)
+				m.deleteSlice(s.ID, s.Size)
 				count++
 			}
 		}
@@ -2489,7 +2489,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 			ss := readSliceBuf(c.Slices)
 			for _, s := range ss {
 				if s.id > 0 {
-					slices[c.Inode] = append(slices[c.Inode], Slice{Chunkid: s.id, Size: s.size})
+					slices[c.Inode] = append(slices[c.Inode], Slice{ID: s.id, Size: s.size})
 					if showProgress != nil {
 						showProgress()
 					}
@@ -2526,7 +2526,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 				}
 			}
 			for _, s := range ss {
-				if s.Chunkid > 0 {
+				if s.ID > 0 {
 					slices[1] = append(slices[1], s)
 				}
 			}
@@ -2657,7 +2657,7 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 			ss := readSliceBuf(c.Slices)
 			slices := make([]*DumpedSlice, 0, len(ss))
 			for _, s := range ss {
-				slices = append(slices, &DumpedSlice{Chunkid: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+				slices = append(slices, &DumpedSlice{ID: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 			}
 			e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 		}
@@ -2709,7 +2709,7 @@ func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEnt
 			ss := readSliceBuf(c.Slices)
 			slices := make([]*DumpedSlice, 0, len(ss))
 			for _, s := range ss {
-				slices = append(slices, &DumpedSlice{Chunkid: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+				slices = append(slices, &DumpedSlice{ID: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 			}
 			e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 		}
@@ -3006,7 +3006,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}) {
 			}
 			slices := make([]byte, 0, sliceBytes*len(c.Slices))
 			for _, s := range c.Slices {
-				slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
+				slices = append(slices, marshalSlice(s.Pos, s.ID, s.Size, s.Off, s.Len)...)
 			}
 			chs[2] <- &chunk{Inode: inode, Indx: c.Index, Slices: slices}
 		}

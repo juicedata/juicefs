@@ -313,9 +313,9 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 				_ = v.Meta.Read(ctx, inode, uint32(indx), &cs)
 				for _, c := range cs {
 					if raw {
-						fmt.Fprintf(w, "\t%d:\t%d\t%d\t%d\t%d\n", indx, c.Chunkid, c.Size, c.Off, c.Len)
+						fmt.Fprintf(w, "\t%d:\t%d\t%d\t%d\t%d\n", indx, c.ID, c.Size, c.Off, c.Len)
 					} else {
-						for _, o := range v.caclObjects(c.Chunkid, c.Size, c.Off, c.Len) {
+						for _, o := range v.caclObjects(c.ID, c.Size, c.Off, c.Len) {
 							fmt.Fprintf(w, "\t%d:\t%s\t%d\t%d\t%d\n", indx, o.key, o.size, o.off, o.len)
 						}
 					}

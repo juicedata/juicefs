@@ -536,7 +536,7 @@ func benchWrite(b *testing.B, m Meta) {
 		if err := m.NewSliceID(ctx, &sliceID); err != 0 {
 			b.Fatalf("newchunk: %s", err)
 		}
-		if err := m.Write(ctx, inode, 0, offset, Slice{Chunkid: sliceID, Size: step, Len: step}); err != 0 {
+		if err := m.Write(ctx, inode, 0, offset, Slice{ID: sliceID, Size: step, Len: step}); err != 0 {
 			b.Fatalf("write: %s", err)
 		}
 		offset += step
@@ -562,7 +562,7 @@ func benchRead(b *testing.B, m Meta, n int) {
 		if err := m.NewSliceID(ctx, &sliceID); err != 0 {
 			b.Fatalf("newchunk: %s", err)
 		}
-		if err := m.Write(ctx, inode, 0, uint32(j)*step, Slice{Chunkid: sliceID, Size: step, Len: step}); err != 0 {
+		if err := m.Write(ctx, inode, 0, uint32(j)*step, Slice{ID: sliceID, Size: step, Len: step}); err != 0 {
 			b.Fatalf("write: %s", err)
 		}
 	}

@@ -61,7 +61,7 @@ import (
 	locked: locked$sid -> { lockf$inode or lockp$inode }
 
 	Removed files: delfiles -> [$inode:$length -> seconds]
-	Slices refs: k$chunkid_$size -> refcount
+	Slices refs: k$sliceID_$size -> refcount
 
 	Redis features:
 	  Sorted Set: 1.2+
@@ -1992,9 +1992,9 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 
 		var rpush *redis.IntCmd
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			rpush = pipe.RPush(ctx, m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
+			rpush = pipe.RPush(ctx, m.chunkKey(inode, indx), marshalSlice(off, slice.ID, slice.Size, slice.Off, slice.Len))
 			// most of chunk are used by single inode, so use that as the default (1 == not exists)
-			// pipe.Incr(ctx, r.sliceKey(slice.Chunkid, slice.Size))
+			// pipe.Incr(ctx, r.sliceKey(slice.ID, slice.Size))
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
 			if newSpace > 0 {
 				pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
@@ -2099,20 +2099,20 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 						indx := uint32(doff / ChunkSize)
 						dpos := uint32(doff % ChunkSize)
 						if dpos+s.Len > ChunkSize {
-							pipe.RPush(ctx, m.chunkKey(fout, indx), marshalSlice(dpos, s.Chunkid, s.Size, s.Off, ChunkSize-dpos))
-							if s.Chunkid > 0 {
-								pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.Chunkid, s.Size), 1)
+							pipe.RPush(ctx, m.chunkKey(fout, indx), marshalSlice(dpos, s.ID, s.Size, s.Off, ChunkSize-dpos))
+							if s.ID > 0 {
+								pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.ID, s.Size), 1)
 							}
 
 							skip := ChunkSize - dpos
-							pipe.RPush(ctx, m.chunkKey(fout, indx+1), marshalSlice(0, s.Chunkid, s.Size, s.Off+skip, s.Len-skip))
-							if s.Chunkid > 0 {
-								pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.Chunkid, s.Size), 1)
+							pipe.RPush(ctx, m.chunkKey(fout, indx+1), marshalSlice(0, s.ID, s.Size, s.Off+skip, s.Len-skip))
+							if s.ID > 0 {
+								pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.ID, s.Size), 1)
 							}
 						} else {
-							pipe.RPush(ctx, m.chunkKey(fout, indx), marshalSlice(dpos, s.Chunkid, s.Size, s.Off, s.Len))
-							if s.Chunkid > 0 {
-								pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.Chunkid, s.Size), 1)
+							pipe.RPush(ctx, m.chunkKey(fout, indx), marshalSlice(dpos, s.ID, s.Size, s.Off, s.Len))
+							if s.ID > 0 {
+								pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.ID, s.Size), 1)
 							}
 						}
 					}
@@ -2428,7 +2428,7 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 				}
 				_, e = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 					for _, s := range ss {
-						rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.Chunkid, s.Size), -1))
+						rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.ID, s.Size), -1))
 					}
 					pipe.HDel(ctx, r.delSlices(), key)
 					return nil
@@ -2440,7 +2440,7 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 			}
 			for i, s := range ss {
 				if rs[i].Err() == nil && rs[i].Val() < 0 {
-					r.deleteSlice(s.Chunkid, s.Size)
+					r.deleteSlice(s.ID, s.Size)
 					count++
 				}
 			}
@@ -2745,7 +2745,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 			ss := readSlices(vals)
 			for _, s := range ss {
 				if s.id > 0 {
-					slices[Ino(inode)] = append(slices[Ino(inode)], Slice{Chunkid: s.id, Size: s.size})
+					slices[Ino(inode)] = append(slices[Ino(inode)], Slice{ID: s.id, Size: s.size})
 					if showProgress != nil {
 						showProgress()
 					}
@@ -2769,7 +2769,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 				}
 			}
 			for _, s := range ss {
-				if s.Chunkid > 0 {
+				if s.ID > 0 {
 					slices[1] = append(slices[1], s)
 				}
 			}
@@ -2959,7 +2959,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 						ss := readSlices(vals)
 						slices := make([]*DumpedSlice, 0, len(ss))
 						for _, s := range ss {
-							slices = append(slices, &DumpedSlice{Chunkid: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+							slices = append(slices, &DumpedSlice{ID: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 						}
 						e.Chunks = append(e.Chunks, &DumpedChunk{0, slices})
 					}
@@ -3013,7 +3013,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					ss := readSlices(vals)
 					slices := make([]*DumpedSlice, 0, len(ss))
 					for _, s := range ss {
-						slices = append(slices, &DumpedSlice{Chunkid: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+						slices = append(slices, &DumpedSlice{ID: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 					}
 					e := es[lcs[i].i]
 					e.Chunks = append(e.Chunks, &DumpedChunk{lcs[i].indx, slices})
@@ -3259,7 +3259,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func())
 			}
 			slices := make([]string, 0, len(c.Slices))
 			for _, s := range c.Slices {
-				slices = append(slices, string(marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)))
+				slices = append(slices, string(marshalSlice(s.Pos, s.ID, s.Size, s.Off, s.Len)))
 				if len(slices) > batch {
 					p.RPush(ctx, m.chunkKey(inode, c.Index), slices)
 					tryExec()

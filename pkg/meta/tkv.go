@@ -1690,7 +1690,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
-		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Chunkid, slice.Size, slice.Off, slice.Len))
+		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.ID, slice.Size, slice.Off, slice.Len))
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
 		needCompact = (len(val)/sliceBytes)%100 == 99
 		return nil
@@ -1784,19 +1784,19 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 					indx := uint32(doff / ChunkSize)
 					dpos := uint32(doff % ChunkSize)
 					if dpos+s.Len > ChunkSize {
-						tx.append(m.chunkKey(fout, indx), marshalSlice(dpos, s.Chunkid, s.Size, s.Off, ChunkSize-dpos))
-						if s.Chunkid > 0 {
-							tx.incrBy(m.sliceKey(s.Chunkid, s.Size), 1)
+						tx.append(m.chunkKey(fout, indx), marshalSlice(dpos, s.ID, s.Size, s.Off, ChunkSize-dpos))
+						if s.ID > 0 {
+							tx.incrBy(m.sliceKey(s.ID, s.Size), 1)
 						}
 						skip := ChunkSize - dpos
-						tx.append(m.chunkKey(fout, indx+1), marshalSlice(0, s.Chunkid, s.Size, s.Off+skip, s.Len-skip))
-						if s.Chunkid > 0 {
-							tx.incrBy(m.sliceKey(s.Chunkid, s.Size), 1)
+						tx.append(m.chunkKey(fout, indx+1), marshalSlice(0, s.ID, s.Size, s.Off+skip, s.Len-skip))
+						if s.ID > 0 {
+							tx.incrBy(m.sliceKey(s.ID, s.Size), 1)
 						}
 					} else {
-						tx.append(m.chunkKey(fout, indx), marshalSlice(dpos, s.Chunkid, s.Size, s.Off, s.Len))
-						if s.Chunkid > 0 {
-							tx.incrBy(m.sliceKey(s.Chunkid, s.Size), 1)
+						tx.append(m.chunkKey(fout, indx), marshalSlice(dpos, s.ID, s.Size, s.Off, s.Len))
+						if s.ID > 0 {
+							tx.incrBy(m.sliceKey(s.ID, s.Size), 1)
 						}
 					}
 				}
@@ -1946,7 +1946,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 				return fmt.Errorf("invalid value for delayed slices %s: %v", key, buf)
 			}
 			for _, s := range ss {
-				rs = append(rs, tx.incrBy(m.sliceKey(s.Chunkid, s.Size), -1))
+				rs = append(rs, tx.incrBy(m.sliceKey(s.ID, s.Size), -1))
 			}
 			tx.dels(key)
 			return nil
@@ -1956,7 +1956,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 		}
 		for i, s := range ss {
 			if rs[i] < 0 {
-				m.deleteSlice(s.Chunkid, s.Size)
+				m.deleteSlice(s.ID, s.Size)
 				count++
 			}
 		}
@@ -2134,7 +2134,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		ss := readSliceBuf(value)
 		for _, s := range ss {
 			if s.id > 0 {
-				slices[inode] = append(slices[inode], Slice{Chunkid: s.id, Size: s.size})
+				slices[inode] = append(slices[inode], Slice{ID: s.id, Size: s.size})
 				if showProgress != nil {
 					showProgress()
 				}
@@ -2164,7 +2164,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 			}
 		}
 		for _, s := range ss {
-			if s.Chunkid > 0 {
+			if s.ID > 0 {
 				slices[1] = append(slices[1], s)
 			}
 		}
@@ -2272,7 +2272,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 				ss := readSliceBuf(v)
 				slices := make([]*DumpedSlice, 0, len(ss))
 				for _, s := range ss {
-					slices = append(slices, &DumpedSlice{Chunkid: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+					slices = append(slices, &DumpedSlice{ID: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 				}
 				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 			}
@@ -2419,7 +2419,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 					ss := readSliceBuf(value)
 					slices := make([]*DumpedSlice, 0, len(ss))
 					for _, s := range ss {
-						slices = append(slices, &DumpedSlice{Chunkid: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+						slices = append(slices, &DumpedSlice{ID: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 					}
 					e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 				case 'D':
@@ -2583,7 +2583,7 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) {
 			}
 			slices := make([]byte, 0, sliceBytes*len(c.Slices))
 			for _, s := range c.Slices {
-				slices = append(slices, marshalSlice(s.Pos, s.Chunkid, s.Size, s.Off, s.Len)...)
+				slices = append(slices, marshalSlice(s.Pos, s.ID, s.Size, s.Off, s.Len)...)
 			}
 			kv <- &pair{m.chunkKey(inode, c.Index), slices}
 		}

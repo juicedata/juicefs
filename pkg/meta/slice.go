@@ -144,7 +144,7 @@ func buildSlice(ss []*slice) []Slice {
 			chunk = append(chunk, Slice{Size: s.pos - pos, Len: s.pos - pos})
 			pos = s.pos
 		}
-		chunk = append(chunk, Slice{Chunkid: s.id, Size: s.size, Off: s.off, Len: s.len})
+		chunk = append(chunk, Slice{ID: s.id, Size: s.size, Off: s.off, Len: s.len})
 		pos += s.len
 	})
 	return chunk
@@ -153,7 +153,7 @@ func buildSlice(ss []*slice) []Slice {
 func compactChunk(ss []*slice) (uint32, uint32, []Slice) {
 	var chunk = buildSlice(ss)
 	var pos uint32
-	if len(chunk) > 0 && chunk[0].Chunkid == 0 {
+	if len(chunk) > 0 && chunk[0].ID == 0 {
 		pos = chunk[0].Len
 		chunk = chunk[1:]
 	}
@@ -176,7 +176,7 @@ func skipSome(chunk []*slice) int {
 			break
 		}
 		isFirst := func(pos uint32, s Slice) bool {
-			return pos == first.pos && s.Chunkid == first.id && s.Off == first.off && s.Len == first.len
+			return pos == first.pos && s.ID == first.id && s.Off == first.off && s.Len == first.len
 		}
 		if !isFirst(pos, c[0]) {
 			// it's not the first slice, compact it

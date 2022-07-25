@@ -580,7 +580,7 @@ func (m *baseMeta) decodeDelayedSlices(buf []byte, ss *[]Slice) {
 		return
 	}
 	for rb := utils.FromBuffer(buf); rb.HasMore(); {
-		*ss = append(*ss, Slice{Chunkid: rb.Get64(), Size: rb.Get32()})
+		*ss = append(*ss, Slice{ID: rb.Get64(), Size: rb.Get32()})
 	}
 }
 

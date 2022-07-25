@@ -378,7 +378,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.NewSliceID(ctx, &sliceID); st != 0 {
 		t.Fatalf("write chunk: %s", st)
 	}
-	var s = Slice{Chunkid: sliceID, Size: 100, Len: 100}
+	var s = Slice{ID: sliceID, Size: 100, Len: 100}
 	if st := m.Write(ctx, inode, 0, 100, s); st != 0 {
 		t.Fatalf("write end: %s", st)
 	}
@@ -386,7 +386,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
 		t.Fatalf("read chunk: %s", st)
 	}
-	if len(chunks) != 2 || chunks[0].Chunkid != 0 || chunks[0].Size != 100 || chunks[1].Chunkid != sliceID || chunks[1].Size != 100 {
+	if len(chunks) != 2 || chunks[0].ID != 0 || chunks[0].Size != 100 || chunks[1].ID != sliceID || chunks[1].Size != 100 {
 		t.Fatalf("chunks: %v", chunks)
 	}
 	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocKeepSize, 100, 50); st != 0 {
@@ -413,7 +413,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
 		t.Fatalf("read chunk: %s", st)
 	}
-	if len(chunks) != 3 || chunks[1].Chunkid != 0 || chunks[1].Len != 50 || chunks[2].Chunkid != sliceID || chunks[2].Len != 50 {
+	if len(chunks) != 3 || chunks[1].ID != 0 || chunks[1].Len != 50 || chunks[2].ID != sliceID || chunks[2].Len != 50 {
 		t.Fatalf("chunks: %v", chunks)
 	}
 
@@ -836,11 +836,11 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	// random write
 	var sliceID uint64
 	m.NewSliceID(ctx, &sliceID)
-	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Chunkid: sliceID, Size: 64 << 20, Len: 64 << 20})
+	_ = m.Write(ctx, inode, 1, uint32(0), Slice{ID: sliceID, Size: 64 << 20, Len: 64 << 20})
 	m.NewSliceID(ctx, &sliceID)
-	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{Chunkid: sliceID, Size: 8, Len: 8})
+	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{ID: sliceID, Size: 8, Len: 8})
 	m.NewSliceID(ctx, &sliceID)
-	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{Chunkid: sliceID, Size: 8, Len: 8})
+	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{ID: sliceID, Size: 8, Len: 8})
 	var cs1 []Slice
 	_ = m.Read(ctx, inode, 1, &cs1)
 	if len(cs1) != 5 {
@@ -860,7 +860,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	for i := 0; i < 200; i++ {
 		var sliceID uint64
 		m.NewSliceID(ctx, &sliceID)
-		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Chunkid: sliceID, Size: size, Len: size}); st != 0 {
+		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{ID: sliceID, Size: size, Len: size}); st != 0 {
 			t.Fatalf("write %d: %s", i, st)
 		}
 		time.Sleep(time.Millisecond)
@@ -941,7 +941,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 			for j := 0; j < 100; j++ {
 				var sliceID uint64
 				m.NewSliceID(ctx, &sliceID)
-				var slice = Slice{Chunkid: sliceID, Size: 100, Len: 100}
+				var slice = Slice{ID: sliceID, Size: 100, Len: 100}
 				st := m.Write(ctx, inode, indx, 0, slice)
 				if st != 0 {
 					errno = st

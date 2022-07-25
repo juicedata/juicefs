@@ -127,13 +127,13 @@ func fsck(ctx *cli.Context) error {
 				if i == n {
 					sz = int(s.Size) - int(i)*chunkConf.BlockSize
 				}
-				key := fmt.Sprintf("%d_%d_%d", s.Chunkid, i, sz)
+				key := fmt.Sprintf("%d_%d_%d", s.ID, i, sz)
 				if _, ok := blocks[key]; !ok {
 					var objKey string
 					if format.HashPrefix {
-						objKey = fmt.Sprintf("%02X/%v/%s", s.Chunkid%256, s.Chunkid/1000/1000, key)
+						objKey = fmt.Sprintf("%02X/%v/%s", s.ID%256, s.ID/1000/1000, key)
 					} else {
-						objKey = fmt.Sprintf("%v/%v/%s", s.Chunkid/1000/1000, s.Chunkid/1000, key)
+						objKey = fmt.Sprintf("%v/%v/%s", s.ID/1000/1000, s.ID/1000, key)
 					}
 					if _, err := blob.Head(objKey); err != nil {
 						if _, ok := brokens[inode]; !ok {

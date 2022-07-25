@@ -195,10 +195,10 @@ type Entry struct {
 // Slice is a slice of a chunk.
 // Multiple slices could be combined together as a chunk.
 type Slice struct {
-	Chunkid uint64
-	Size    uint32
-	Off     uint32
-	Len     uint32
+	ID   uint64
+	Size uint32
+	Off  uint32
+	Len  uint32
 }
 
 // Summary represents the total number of files/directories and
