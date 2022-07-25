@@ -59,7 +59,7 @@ type engine interface {
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices()
 	doCleanupDelayedSlices(edge int64, limit int) (int, error)
-	doDeleteSlice(chunkid uint64, size uint32) error
+	doDeleteSlice(sliceID uint64, size uint32) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
@@ -568,9 +568,9 @@ func (m *baseMeta) marshal(attr *Attr) []byte {
 	return w.Bytes()
 }
 
-func (m *baseMeta) encodeDelayedSlice(chunkid uint64, size uint32) []byte {
+func (m *baseMeta) encodeDelayedSlice(sliceID uint64, size uint32) []byte {
 	w := utils.NewBuffer(8 + 4)
-	w.Put64(chunkid)
+	w.Put64(sliceID)
 	w.Put32(size)
 	return w.Bytes()
 }

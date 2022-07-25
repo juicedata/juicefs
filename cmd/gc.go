@@ -73,8 +73,8 @@ $ juicefs gc redis://localhost --delete`,
 	}
 }
 
-type dChunk struct {
-	chunkid uint64
+type dSlice struct {
+	sliceID uint64
 	length  uint32
 }
 
@@ -143,30 +143,30 @@ func gc(ctx *cli.Context) error {
 	// put it above delete count spinner
 	sliceCSpin := progress.AddCountSpinner("Listed slices")
 
-	// Delete pending chunks while listing slices
+	// Delete pending slices while listing all slices
 	delete := ctx.Bool("delete")
 	threads := ctx.Int("threads")
 	if delete && threads <= 0 {
 		logger.Fatal("threads should be greater than 0 to delete objects")
 	}
 	var delSpin *utils.Bar
-	var chunkChan chan *dChunk // pending delete chunks
+	var sliceChan chan *dSlice // pending delete slices
 	var wg sync.WaitGroup
 	if delete {
 		delSpin = progress.AddCountSpinner("Deleted pending")
-		chunkChan = make(chan *dChunk, 10240)
+		sliceChan = make(chan *dSlice, 10240)
 		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
 			delSpin.Increment()
-			chunkChan <- &dChunk{args[0].(uint64), args[1].(uint32)}
+			sliceChan <- &dSlice{args[0].(uint64), args[1].(uint32)}
 			return nil
 		})
 		for i := 0; i < threads; i++ {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				for c := range chunkChan {
-					if err := store.Remove(c.chunkid, int(c.length)); err != nil {
-						logger.Warnf("remove %d_%d: %s", c.chunkid, c.length, err)
+				for s := range sliceChan {
+					if err := store.Remove(s.sliceID, int(s.length)); err != nil {
+						logger.Warnf("remove %d_%d: %s", s.sliceID, s.length, err)
 					}
 				}
 			}()
@@ -181,11 +181,11 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("list all slices: %s", r)
 	}
 	if delete {
-		close(chunkChan)
+		close(sliceChan)
 		wg.Wait()
 		delSpin.Done()
 		if progress.Quiet {
-			logger.Infof("Deleted %d pending chunks", delSpin.Current())
+			logger.Infof("Deleted %d pending slices", delSpin.Current())
 		}
 	}
 	sliceCSpin.Done()

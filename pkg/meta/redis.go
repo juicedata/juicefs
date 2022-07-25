@@ -210,8 +210,8 @@ func (m *redisMeta) Shutdown() error {
 	return m.rdb.Close()
 }
 
-func (m *redisMeta) doDeleteSlice(chunkid uint64, size uint32) error {
-	return m.rdb.HDel(Background, m.sliceRefs(), m.sliceKey(chunkid, size)).Err()
+func (m *redisMeta) doDeleteSlice(sliceID uint64, size uint32) error {
+	return m.rdb.HDel(Background, m.sliceRefs(), m.sliceKey(sliceID, size)).Err()
 }
 
 func (m *redisMeta) Name() string {
@@ -495,9 +495,9 @@ func (m *redisMeta) chunkKey(inode Ino, indx uint32) string {
 	return m.prefix + "c" + inode.String() + "_" + strconv.FormatInt(int64(indx), 10)
 }
 
-func (m *redisMeta) sliceKey(chunkid uint64, size uint32) string {
+func (m *redisMeta) sliceKey(sliceID uint64, size uint32) string {
 	// inside hashset
-	return "k" + strconv.FormatUint(chunkid, 10) + "_" + strconv.FormatUint(uint64(size), 10)
+	return "k" + strconv.FormatUint(sliceID, 10) + "_" + strconv.FormatUint(uint64(size), 10)
 }
 
 func (m *redisMeta) xattrKey(inode Ino) string {
@@ -2206,10 +2206,10 @@ func (m *redisMeta) doCleanupSlices() {
 			if strings.HasPrefix(val, "-") { // < 0
 				ps := strings.Split(key, "_")
 				if len(ps) == 2 {
-					chunkid, _ := strconv.ParseUint(ps[0][1:], 10, 64)
+					sliceID, _ := strconv.ParseUint(ps[0][1:], 10, 64)
 					size, _ := strconv.ParseUint(ps[1], 10, 32)
-					if chunkid > 0 && size > 0 {
-						m.deleteSlice(chunkid, uint32(size))
+					if sliceID > 0 && size > 0 {
+						m.deleteSlice(sliceID, uint32(size))
 					}
 				}
 			} else if val == "0" {
@@ -2325,13 +2325,13 @@ func (m *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 					pipe.LPop(ctx, key)
 					rb := utils.ReadBuffer([]byte(v))
 					_ = rb.Get32() // pos
-					chunkid := rb.Get64()
-					if chunkid == 0 {
+					sliceID := rb.Get64()
+					if sliceID == 0 {
 						continue
 					}
 					size := rb.Get32()
-					slices = append(slices, &slice{chunkid: chunkid, size: size})
-					rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(chunkid, size), -1))
+					slices = append(slices, &slice{id: sliceID, size: size})
+					rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(sliceID, size), -1))
 				}
 				return nil
 			})
@@ -2342,7 +2342,7 @@ func (m *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 		}
 		for i, s := range slices {
 			if rs[i].Val() < 0 {
-				m.deleteSlice(s.chunkid, s.size)
+				m.deleteSlice(s.id, s.size)
 			}
 		}
 		if len(slices) < 100 {
@@ -2506,8 +2506,8 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	trash := m.toTrash(0)
 	if trash {
 		for _, s := range ss {
-			if s.chunkid > 0 {
-				buf = append(buf, m.encodeDelayedSlice(s.chunkid, s.size)...)
+			if s.id > 0 {
+				buf = append(buf, m.encodeDelayedSlice(s.id, s.size)...)
 			}
 		}
 	} else {
@@ -2541,8 +2541,8 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 				}
 			} else {
 				for i, s := range ss {
-					if s.chunkid > 0 {
-						rs[i] = pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.chunkid, s.size), -1)
+					if s.id > 0 {
+						rs[i] = pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.id, s.size), -1)
 					}
 				}
 			}
@@ -2568,8 +2568,8 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		m.cleanupZeroRef(m.sliceKey(sliceID, size))
 		if !trash {
 			for i, s := range ss {
-				if s.chunkid > 0 && rs[i].Err() == nil && rs[i].Val() < 0 {
-					m.deleteSlice(s.chunkid, s.size)
+				if s.id > 0 && rs[i].Err() == nil && rs[i].Val() < 0 {
+					m.deleteSlice(s.id, s.size)
 				}
 			}
 		}
@@ -2744,8 +2744,8 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 			vals := cmd.(*redis.StringSliceCmd).Val()
 			ss := readSlices(vals)
 			for _, s := range ss {
-				if s.chunkid > 0 {
-					slices[Ino(inode)] = append(slices[Ino(inode)], Slice{Chunkid: s.chunkid, Size: s.size})
+				if s.id > 0 {
+					slices[Ino(inode)] = append(slices[Ino(inode)], Slice{Chunkid: s.id, Size: s.size})
 					if showProgress != nil {
 						showProgress()
 					}
@@ -2959,7 +2959,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 						ss := readSlices(vals)
 						slices := make([]*DumpedSlice, 0, len(ss))
 						for _, s := range ss {
-							slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+							slices = append(slices, &DumpedSlice{Chunkid: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 						}
 						e.Chunks = append(e.Chunks, &DumpedChunk{0, slices})
 					}
@@ -3013,7 +3013,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					ss := readSlices(vals)
 					slices := make([]*DumpedSlice, 0, len(ss))
 					for _, s := range ss {
-						slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+						slices = append(slices, &DumpedSlice{Chunkid: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 					}
 					e := es[lcs[i].i]
 					e.Chunks = append(e.Chunks, &DumpedChunk{lcs[i].indx, slices})

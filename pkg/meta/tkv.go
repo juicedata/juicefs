@@ -100,8 +100,8 @@ func (m *kvMeta) Name() string {
 	return m.client.name()
 }
 
-func (m *kvMeta) doDeleteSlice(chunkid uint64, size uint32) error {
-	return m.deleteKeys(m.sliceKey(chunkid, size))
+func (m *kvMeta) doDeleteSlice(sliceID uint64, size uint32) error {
+	return m.deleteKeys(m.sliceKey(sliceID, size))
 }
 
 func (m *kvMeta) keyLen(args ...interface{}) int {
@@ -147,12 +147,12 @@ func (m *kvMeta) fmtKey(args ...interface{}) []byte {
 }
 
 /**
-  Ino iiiiiiii
-  Length llllllll
-  Indx nnnn
-  name ...
-  chunkid cccccccc
-  session  ssssssss
+  Ino     iiiiiiii
+  Length  llllllll
+  Indx    nnnn
+  name    ...
+  sliceID cccccccc
+  session ssssssss
 
 All keys:
   setting            format
@@ -190,12 +190,12 @@ func (m *kvMeta) chunkKey(inode Ino, indx uint32) []byte {
 	return m.fmtKey("A", inode, "C", indx)
 }
 
-func (m *kvMeta) sliceKey(chunkid uint64, size uint32) []byte {
-	return m.fmtKey("K", chunkid, size)
+func (m *kvMeta) sliceKey(sliceID uint64, size uint32) []byte {
+	return m.fmtKey("K", sliceID, size)
 }
 
-func (m *kvMeta) delSliceKey(ts int64, chunkid uint64) []byte {
-	return m.fmtKey("L", uint64(ts), chunkid)
+func (m *kvMeta) delSliceKey(ts int64, sliceID uint64) []byte {
+	return m.fmtKey("L", uint64(ts), sliceID)
 }
 
 func (m *kvMeta) symKey(inode Ino) []byte {
@@ -1853,13 +1853,13 @@ func (m *kvMeta) doCleanupSlices() {
 	})
 	for k, v := range vals {
 		rb := utils.FromBuffer([]byte(k)[1:])
-		chunkid := rb.Get64()
+		sliceID := rb.Get64()
 		size := rb.Get32()
 		refs := parseCounter(v)
 		if refs < 0 {
-			m.deleteSlice(chunkid, size)
+			m.deleteSlice(sliceID, size)
 		} else {
-			m.cleanupZeroRef(chunkid, size)
+			m.cleanupZeroRef(sliceID, size)
 		}
 	}
 }
@@ -1872,7 +1872,7 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 		slices := readSliceBuf(buf)
 		tx.dels(key)
 		for _, s := range slices {
-			if s.chunkid > 0 && tx.incrBy(m.sliceKey(s.chunkid, s.size), -1) < 0 {
+			if s.id > 0 && tx.incrBy(m.sliceKey(s.id, s.size), -1) < 0 {
 				todel = append(todel, s)
 			}
 		}
@@ -1882,18 +1882,18 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 		return err
 	}
 	for _, s := range todel {
-		m.deleteSlice(s.chunkid, s.size)
+		m.deleteSlice(s.id, s.size)
 	}
 	return nil
 }
 
-func (r *kvMeta) cleanupZeroRef(chunkid uint64, size uint32) {
+func (r *kvMeta) cleanupZeroRef(sliceID uint64, size uint32) {
 	_ = r.txn(func(tx kvTxn) error {
-		v := tx.incrBy(r.sliceKey(chunkid, size), 0)
+		v := tx.incrBy(r.sliceKey(sliceID, size), 0)
 		if v != 0 {
 			return syscall.EINVAL
 		}
-		tx.dels(r.sliceKey(chunkid, size))
+		tx.dels(r.sliceKey(sliceID, size))
 		return nil
 	})
 }
@@ -2018,8 +2018,8 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	trash := m.toTrash(0)
 	if trash {
 		for _, s := range ss {
-			if s.chunkid > 0 {
-				dsbuf = append(dsbuf, m.encodeDelayedSlice(s.chunkid, s.size)...)
+			if s.id > 0 {
+				dsbuf = append(dsbuf, m.encodeDelayedSlice(s.id, s.size)...)
 			}
 		}
 	}
@@ -2040,8 +2040,8 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 		} else {
 			for _, s := range ss {
-				if s.chunkid > 0 {
-					tx.incrBy(m.sliceKey(s.chunkid, s.size), -1)
+				if s.id > 0 {
+					tx.incrBy(m.sliceKey(s.id, s.size), -1)
 				}
 			}
 		}
@@ -2070,11 +2070,11 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		if !trash {
 			var refs int64
 			for _, s := range ss {
-				if s.chunkid > 0 && m.client.txn(func(tx kvTxn) error {
-					refs = tx.incrBy(m.sliceKey(s.chunkid, s.size), 0)
+				if s.id > 0 && m.client.txn(func(tx kvTxn) error {
+					refs = tx.incrBy(m.sliceKey(s.id, s.size), 0)
 					return nil
 				}) == nil && refs < 0 {
-					m.deleteSlice(s.chunkid, s.size)
+					m.deleteSlice(s.id, s.size)
 				}
 			}
 		}
@@ -2133,8 +2133,8 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		inode := m.decodeInode([]byte(key)[1:9])
 		ss := readSliceBuf(value)
 		for _, s := range ss {
-			if s.chunkid > 0 {
-				slices[inode] = append(slices[inode], Slice{Chunkid: s.chunkid, Size: s.size})
+			if s.id > 0 {
+				slices[inode] = append(slices[inode], Slice{Chunkid: s.id, Size: s.size})
 				if showProgress != nil {
 					showProgress()
 				}
@@ -2272,7 +2272,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 				ss := readSliceBuf(v)
 				slices := make([]*DumpedSlice, 0, len(ss))
 				for _, s := range ss {
-					slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+					slices = append(slices, &DumpedSlice{Chunkid: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 				}
 				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 			}
@@ -2419,7 +2419,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 					ss := readSliceBuf(value)
 					slices := make([]*DumpedSlice, 0, len(ss))
 					for _, s := range ss {
-						slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+						slices = append(slices, &DumpedSlice{Chunkid: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 					}
 					e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 				case 'D':

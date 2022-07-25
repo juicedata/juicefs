@@ -90,6 +90,7 @@ type chunk struct {
 	Slices []byte `xorm:"blob notnull"`
 }
 
+// it actually means `sliceRef` with `sliceID`
 type chunkRef struct {
 	Chunkid uint64 `xorm:"pk"`
 	Size    uint32 `xorm:"notnull"`
@@ -220,9 +221,9 @@ func (m *dbMeta) Name() string {
 	return m.db.DriverName()
 }
 
-func (m *dbMeta) doDeleteSlice(chunkid uint64, size uint32) error {
+func (m *dbMeta) doDeleteSlice(sliceID uint64, size uint32) error {
 	return m.txn(func(s *xorm.Session) error {
-		_, err := s.Exec("delete from jfs_chunk_ref where chunkid=?", chunkid)
+		_, err := s.Exec("delete from jfs_chunk_ref where chunkid=?", sliceID)
 		return err
 	})
 }
@@ -2069,12 +2070,12 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		}
 
 		ses := s
-		updateSlices := func(indx uint32, buf []byte, chunkid uint64, size uint32) error {
+		updateSlices := func(indx uint32, buf []byte, sliceID uint64, size uint32) error {
 			if err := m.appendSlice(ses, fout, indx, buf); err != nil {
 				return err
 			}
-			if chunkid > 0 {
-				if _, err := ses.Exec("update jfs_chunk_ref set refs=refs+1 where chunkid = ? AND size = ?", chunkid, size); err != nil {
+			if sliceID > 0 {
+				if _, err := ses.Exec("update jfs_chunk_ref set refs=refs+1 where chunkid = ? AND size = ?", sliceID, size); err != nil {
 					return err
 				}
 			}
@@ -2189,10 +2190,10 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		}
 		ss = readSliceBuf(c.Slices)
 		for _, sc := range ss {
-			if sc.chunkid == 0 {
+			if sc.id == 0 {
 				continue
 			}
-			_, err = s.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? AND size=?", sc.chunkid, sc.size)
+			_, err = s.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? AND size=?", sc.id, sc.size)
 			if err != nil {
 				return err
 			}
@@ -2208,10 +2209,10 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		return fmt.Errorf("delete slice from chunk %s fail: %s, retry later", inode, err)
 	}
 	for _, s := range ss {
-		if s.chunkid == 0 {
+		if s.id == 0 {
 			continue
 		}
-		var ref = chunkRef{Chunkid: s.chunkid}
+		var ref = chunkRef{Chunkid: s.id}
 		err := m.roTxn(func(s *xorm.Session) error {
 			ok, err := s.Get(&ref)
 			if err == nil && !ok {
@@ -2220,7 +2221,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 			return err
 		})
 		if err == nil && ref.Refs <= 0 {
-			m.deleteSlice(s.chunkid, s.size)
+			m.deleteSlice(s.id, s.size)
 		}
 	}
 	return nil
@@ -2351,8 +2352,8 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	trash := m.toTrash(0)
 	if trash {
 		for _, s := range ss {
-			if s.chunkid > 0 {
-				buf = append(buf, m.encodeDelayedSlice(s.chunkid, s.size)...)
+			if s.id > 0 {
+				buf = append(buf, m.encodeDelayedSlice(s.id, s.size)...)
 			}
 		}
 	}
@@ -2383,10 +2384,10 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 		} else {
 			for _, s_ := range ss {
-				if s_.chunkid == 0 {
+				if s_.id == 0 {
 					continue
 				}
-				if _, err := s.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s_.chunkid, s_.size); err != nil {
+				if _, err := s.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s_.id, s_.size); err != nil {
 					return err
 				}
 			}
@@ -2419,10 +2420,10 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		m.of.InvalidateChunk(inode, indx)
 		if !trash {
 			for _, s := range ss {
-				if s.chunkid == 0 {
+				if s.id == 0 {
 					continue
 				}
-				var ref = chunkRef{Chunkid: s.chunkid}
+				var ref = chunkRef{Chunkid: s.id}
 				var ok bool
 				err := m.roTxn(func(s *xorm.Session) error {
 					var e error
@@ -2430,7 +2431,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 					return e
 				})
 				if err == nil && ok && ref.Refs <= 0 {
-					m.deleteSlice(s.chunkid, s.size)
+					m.deleteSlice(s.id, s.size)
 				}
 			}
 		}
@@ -2487,8 +2488,8 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		for _, c := range cs {
 			ss := readSliceBuf(c.Slices)
 			for _, s := range ss {
-				if s.chunkid > 0 {
-					slices[c.Inode] = append(slices[c.Inode], Slice{Chunkid: s.chunkid, Size: s.size})
+				if s.id > 0 {
+					slices[c.Inode] = append(slices[c.Inode], Slice{Chunkid: s.id, Size: s.size})
 					if showProgress != nil {
 						showProgress()
 					}
@@ -2656,7 +2657,7 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 			ss := readSliceBuf(c.Slices)
 			slices := make([]*DumpedSlice, 0, len(ss))
 			for _, s := range ss {
-				slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+				slices = append(slices, &DumpedSlice{Chunkid: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 			}
 			e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 		}
@@ -2708,7 +2709,7 @@ func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEnt
 			ss := readSliceBuf(c.Slices)
 			slices := make([]*DumpedSlice, 0, len(ss))
 			for _, s := range ss {
-				slices = append(slices, &DumpedSlice{Chunkid: s.chunkid, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+				slices = append(slices, &DumpedSlice{Chunkid: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 			}
 			e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 		}
