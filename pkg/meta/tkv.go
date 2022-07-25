@@ -1630,14 +1630,14 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	return err
 }
 
-func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno {
+func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) syscall.Errno {
 	f := m.of.find(inode)
 	if f != nil {
 		f.RLock()
 		defer f.RUnlock()
 	}
-	if cs, ok := m.of.ReadChunk(inode, indx); ok {
-		*chunks = cs
+	if ss, ok := m.of.ReadChunk(inode, indx); ok {
+		*slices = ss
 		return 0
 	}
 	defer m.timeit(time.Now())
@@ -1649,9 +1649,9 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) sysc
 	if ss == nil {
 		return syscall.EIO
 	}
-	*chunks = buildSlice(ss)
-	m.of.CacheChunk(inode, indx, *chunks)
-	if !m.conf.ReadOnly && (len(val)/sliceBytes >= 5 || len(*chunks) >= 5) {
+	*slices = buildSlice(ss)
+	m.of.CacheChunk(inode, indx, *slices)
+	if !m.conf.ReadOnly && (len(val)/sliceBytes >= 5 || len(*slices) >= 5) {
 		go m.compactChunk(inode, indx, false)
 	}
 	return 0

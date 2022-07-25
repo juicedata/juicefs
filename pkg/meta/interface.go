@@ -308,7 +308,7 @@ type Meta interface {
 	// Close a file.
 	Close(ctx Context, inode Ino) syscall.Errno
 	// Read returns the list of slices on the given chunk.
-	Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno
+	Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) syscall.Errno
 	// NewSliceID returns an ID for new slice.
 	NewSliceID(ctx Context, sliceID *uint64) syscall.Errno
 	// Write put a slice of data on top of the given chunk.
