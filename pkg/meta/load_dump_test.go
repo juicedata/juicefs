@@ -160,6 +160,34 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	return m
 }
 
+func testLoadSub(t *testing.T, uri, fname string) {
+	m := NewClient(uri, &Config{Retries: 10, Strict: true})
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	fp, err := os.Open(fname)
+	if err != nil {
+		t.Fatalf("open file: %s", fname)
+	}
+	defer fp.Close()
+	if err = m.LoadMeta(fp); err != nil {
+		t.Fatalf("load meta: %s", err)
+	}
+
+	var entries []*Entry
+	if st := m.Readdir(Background, 1, 0, &entries); st != 0 {
+		t.Fatalf("readdir: %s", st)
+	} else if len(entries) != 4 {
+		t.Fatalf("entries: %d", len(entries))
+	}
+	for _, entry := range entries {
+		fname := string(entry.Name)
+		if fname != "." && fname != ".." && fname != "big" && fname != "f11" {
+			t.Fatalf("invalid entry name: %s", fname)
+		}
+	}
+}
+
 func testDump(t *testing.T, m Meta, root Ino, expect, result string) {
 	fp, err := os.OpenFile(result, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
@@ -186,6 +214,8 @@ func testLoadDump(t *testing.T, name, addr string) {
 		m = NewClient(addr, &Config{Retries: 10, Strict: true, Subdir: "d1"})
 		testDump(t, m, 1, subSampleFile, "test_subdir.dump")
 		testDump(t, m, 0, sampleFile, "test.dump")
+		_ = m.Shutdown()
+		testLoadSub(t, addr, subSampleFile)
 	})
 }
 
@@ -217,5 +247,7 @@ func TestLoadDump_MemKV(t *testing.T) {
 		}
 		testDump(t, m, 1, subSampleFile, "test_subdir.dump")
 		testDump(t, m, 0, sampleFile, "test.dump")
+		_ = os.Remove(settingPath)
+		testLoadSub(t, "memkv://user:pass@test/jfs", subSampleFile)
 	})
 }
