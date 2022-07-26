@@ -401,9 +401,7 @@ func profile(ctx *cli.Context) error {
 	go prof.flusher()
 	var input string
 	for {
-		if _, err = fmt.Scanln(&input); err != nil {
-			logger.Fatalf("Failed to scan input: %s", err)
-		}
+		_, _ = fmt.Scanln(&input)
 		if prof.tty {
 			fmt.Print("\033[1A\033[K") // move cursor back
 		}
