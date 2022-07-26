@@ -51,7 +51,7 @@ func readSlice(store chunk.ChunkStore, s *meta.Slice, page *chunk.Page, off int)
 	return nil
 }
 
-func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, sliceID uint64) error {
+func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id uint64) error {
 	for utils.AllocMemory()-store.UsedMemory() > int64(conf.BufferSize)*3/2 {
 		time.Sleep(time.Millisecond * 100)
 	}
@@ -60,9 +60,9 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, sli
 		size += s.Len
 	}
 	compactSizeHistogram.Observe(float64(size))
-	logger.Debugf("compact %d slices (%d bytes) to new slice %d", len(slices), size, sliceID)
+	logger.Debugf("compact %d slices (%d bytes) to new slice %d", len(slices), size, id)
 
-	writer := store.NewWriter(sliceID)
+	writer := store.NewWriter(id)
 
 	var pos int
 	for i, s := range slices {
@@ -80,7 +80,7 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, sli
 			l := utils.Min(conf.BlockSize, int(s.Len)-read)
 			p := chunk.NewOffPage(l)
 			if err := readSlice(store, &slices[i], p, read); err != nil {
-				logger.Debugf("can't compact to slice %d, retry later, read %d: %s", sliceID, i, err)
+				logger.Debugf("can't compact to slice %d, retry later, read %d: %s", id, i, err)
 				p.Release()
 				writer.Abort()
 				return err
@@ -88,7 +88,7 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, sli
 			_, err := writer.WriteAt(p.Data, int64(pos+read))
 			p.Release()
 			if err != nil {
-				logger.Errorf("can't compact to slice %d, retry later, write: %s", sliceID, err)
+				logger.Errorf("can't compact to slice %d, retry later, write: %s", id, err)
 				writer.Abort()
 				return err
 			}

@@ -100,8 +100,8 @@ func (m *kvMeta) Name() string {
 	return m.client.name()
 }
 
-func (m *kvMeta) doDeleteSlice(sliceID uint64, size uint32) error {
-	return m.deleteKeys(m.sliceKey(sliceID, size))
+func (m *kvMeta) doDeleteSlice(id uint64, size uint32) error {
+	return m.deleteKeys(m.sliceKey(id, size))
 }
 
 func (m *kvMeta) keyLen(args ...interface{}) int {
@@ -190,12 +190,12 @@ func (m *kvMeta) chunkKey(inode Ino, indx uint32) []byte {
 	return m.fmtKey("A", inode, "C", indx)
 }
 
-func (m *kvMeta) sliceKey(sliceID uint64, size uint32) []byte {
-	return m.fmtKey("K", sliceID, size)
+func (m *kvMeta) sliceKey(id uint64, size uint32) []byte {
+	return m.fmtKey("K", id, size)
 }
 
-func (m *kvMeta) delSliceKey(ts int64, sliceID uint64) []byte {
-	return m.fmtKey("L", uint64(ts), sliceID)
+func (m *kvMeta) delSliceKey(ts int64, id uint64) []byte {
+	return m.fmtKey("L", uint64(ts), id)
 }
 
 func (m *kvMeta) symKey(inode Ino) []byte {
@@ -1853,13 +1853,13 @@ func (m *kvMeta) doCleanupSlices() {
 	})
 	for k, v := range vals {
 		rb := utils.FromBuffer([]byte(k)[1:])
-		sliceID := rb.Get64()
+		id := rb.Get64()
 		size := rb.Get32()
 		refs := parseCounter(v)
 		if refs < 0 {
-			m.deleteSlice(sliceID, size)
+			m.deleteSlice(id, size)
 		} else {
-			m.cleanupZeroRef(sliceID, size)
+			m.cleanupZeroRef(id, size)
 		}
 	}
 }
@@ -1887,13 +1887,13 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 	return nil
 }
 
-func (r *kvMeta) cleanupZeroRef(sliceID uint64, size uint32) {
+func (r *kvMeta) cleanupZeroRef(id uint64, size uint32) {
 	_ = r.txn(func(tx kvTxn) error {
-		v := tx.incrBy(r.sliceKey(sliceID, size), 0)
+		v := tx.incrBy(r.sliceKey(id, size), 0)
 		if v != 0 {
 			return syscall.EINVAL
 		}
-		tx.dels(r.sliceKey(sliceID, size))
+		tx.dels(r.sliceKey(id, size))
 		return nil
 	})
 }
@@ -2001,13 +2001,13 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return
 	}
 
-	var sliceID uint64
-	st := m.NewSliceID(Background, &sliceID)
+	var id uint64
+	st := m.NewSliceID(Background, &id)
 	if st != 0 {
 		return
 	}
 	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
-	err = m.newMsg(CompactChunk, slices, sliceID)
+	err = m.newMsg(CompactChunk, slices, id)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
 			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
@@ -2030,13 +2030,13 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			return syscall.EINVAL
 		}
 
-		buf2 = append(append(buf2[:skipped*sliceBytes], marshalSlice(pos, sliceID, size, 0, size)...), buf2[len(buf):]...)
+		buf2 = append(append(buf2[:skipped*sliceBytes], marshalSlice(pos, id, size, 0, size)...), buf2[len(buf):]...)
 		tx.set(m.chunkKey(inode, indx), buf2)
 		// create the key to tracking it
-		tx.set(m.sliceKey(sliceID, size), make([]byte, 8))
+		tx.set(m.sliceKey(id, size), make([]byte, 8))
 		if trash {
 			if len(dsbuf) > 0 {
-				tx.set(m.delSliceKey(time.Now().Unix(), sliceID), dsbuf)
+				tx.set(m.delSliceKey(time.Now().Unix(), id), dsbuf)
 			}
 		} else {
 			for _, s := range ss {
@@ -2050,23 +2050,23 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	// there could be false-negative that the compaction is successful, double-check
 	if err != nil {
 		logger.Warnf("compact %d:%d failed: %s", inode, indx, err)
-		refs, e := m.get(m.sliceKey(sliceID, size))
+		refs, e := m.get(m.sliceKey(id, size))
 		if e == nil {
 			if len(refs) > 0 {
 				err = nil
 			} else {
-				logger.Infof("compacted chunk %d was not used", sliceID)
+				logger.Infof("compacted chunk %d was not used", id)
 				err = syscall.EINVAL
 			}
 		}
 	}
 
 	if errno, ok := err.(syscall.Errno); ok && errno == syscall.EINVAL {
-		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, sliceID, size)
-		m.deleteSlice(sliceID, size)
+		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, id, size)
+		m.deleteSlice(id, size)
 	} else if err == nil {
 		m.of.InvalidateChunk(inode, indx)
-		m.cleanupZeroRef(sliceID, size)
+		m.cleanupZeroRef(id, size)
 		if !trash {
 			var refs int64
 			for _, s := range ss {

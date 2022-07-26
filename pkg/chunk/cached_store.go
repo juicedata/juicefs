@@ -55,8 +55,8 @@ type rSlice struct {
 	store  *cachedStore
 }
 
-func sliceForRead(sliceID uint64, length int, store *cachedStore) *rSlice {
-	return &rSlice{sliceID, length, store}
+func sliceForRead(id uint64, length int, store *cachedStore) *rSlice {
+	return &rSlice{id, length, store}
 }
 
 func (s *rSlice) blockSize(indx int) int {
@@ -277,16 +277,16 @@ type wSlice struct {
 	pendings    int
 }
 
-func sliceForWrite(sliceID uint64, store *cachedStore) *wSlice {
+func sliceForWrite(id uint64, store *cachedStore) *wSlice {
 	return &wSlice{
-		rSlice: rSlice{sliceID, 0, store},
+		rSlice: rSlice{id, 0, store},
 		pages:  make([][]*Page, chunkSize/store.conf.BlockSize),
 		errors: make(chan error, chunkSize/store.conf.BlockSize),
 	}
 }
 
-func (s *wSlice) SetID(sliceID uint64) {
-	s.id = sliceID
+func (s *wSlice) SetID(id uint64) {
+	s.id = id
 }
 
 func (s *wSlice) WriteAt(p []byte, off int64) (n int, err error) {
@@ -879,21 +879,21 @@ func (store *cachedStore) uploader() {
 	}
 }
 
-func (store *cachedStore) NewReader(sliceID uint64, length int) Reader {
-	return sliceForRead(sliceID, length, store)
+func (store *cachedStore) NewReader(id uint64, length int) Reader {
+	return sliceForRead(id, length, store)
 }
 
-func (store *cachedStore) NewWriter(sliceID uint64) Writer {
-	return sliceForWrite(sliceID, store)
+func (store *cachedStore) NewWriter(id uint64) Writer {
+	return sliceForWrite(id, store)
 }
 
-func (store *cachedStore) Remove(sliceID uint64, length int) error {
-	r := sliceForRead(sliceID, length, store)
+func (store *cachedStore) Remove(id uint64, length int) error {
+	r := sliceForRead(id, length, store)
 	return r.Remove()
 }
 
-func (store *cachedStore) FillCache(sliceID uint64, length uint32) error {
-	r := sliceForRead(sliceID, int(length), store)
+func (store *cachedStore) FillCache(id uint64, length uint32) error {
+	r := sliceForRead(id, int(length), store)
 	keys := r.keys()
 	var err error
 	for _, k := range keys {

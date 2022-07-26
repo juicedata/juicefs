@@ -46,15 +46,15 @@ func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, 
 		}
 		if bytes > 0 {
 			for indx := 0; indx*meta.ChunkSize < bytes; indx++ {
-				var sliceID uint64
-				if st := m.NewSliceID(ctx, &sliceID); st != 0 {
+				var id uint64
+				if st := m.NewSliceID(ctx, &id); st != 0 {
 					return fmt.Errorf("writechunk %s: %s", fn, st)
 				}
 				size := meta.ChunkSize
 				if bytes < (indx+1)*meta.ChunkSize {
 					size = bytes - indx*meta.ChunkSize
 				}
-				if st := m.Write(ctx, f.Inode(), uint32(indx), 0, meta.Slice{ID: sliceID, Size: uint32(size), Len: uint32(size)}); st != 0 {
+				if st := m.Write(ctx, f.Inode(), uint32(indx), 0, meta.Slice{ID: id, Size: uint32(size), Len: uint32(size)}); st != 0 {
 					return fmt.Errorf("writeend %s: %s", fn, st)
 				}
 			}

@@ -210,8 +210,8 @@ func (m *redisMeta) Shutdown() error {
 	return m.rdb.Close()
 }
 
-func (m *redisMeta) doDeleteSlice(sliceID uint64, size uint32) error {
-	return m.rdb.HDel(Background, m.sliceRefs(), m.sliceKey(sliceID, size)).Err()
+func (m *redisMeta) doDeleteSlice(id uint64, size uint32) error {
+	return m.rdb.HDel(Background, m.sliceRefs(), m.sliceKey(id, size)).Err()
 }
 
 func (m *redisMeta) Name() string {
@@ -495,9 +495,9 @@ func (m *redisMeta) chunkKey(inode Ino, indx uint32) string {
 	return m.prefix + "c" + inode.String() + "_" + strconv.FormatInt(int64(indx), 10)
 }
 
-func (m *redisMeta) sliceKey(sliceID uint64, size uint32) string {
+func (m *redisMeta) sliceKey(id uint64, size uint32) string {
 	// inside hashset
-	return "k" + strconv.FormatUint(sliceID, 10) + "_" + strconv.FormatUint(uint64(size), 10)
+	return "k" + strconv.FormatUint(id, 10) + "_" + strconv.FormatUint(uint64(size), 10)
 }
 
 func (m *redisMeta) xattrKey(inode Ino) string {
@@ -2206,10 +2206,10 @@ func (m *redisMeta) doCleanupSlices() {
 			if strings.HasPrefix(val, "-") { // < 0
 				ps := strings.Split(key, "_")
 				if len(ps) == 2 {
-					sliceID, _ := strconv.ParseUint(ps[0][1:], 10, 64)
+					id, _ := strconv.ParseUint(ps[0][1:], 10, 64)
 					size, _ := strconv.ParseUint(ps[1], 10, 32)
-					if sliceID > 0 && size > 0 {
-						m.deleteSlice(sliceID, uint32(size))
+					if id > 0 && size > 0 {
+						m.deleteSlice(id, uint32(size))
 					}
 				}
 			} else if val == "0" {
@@ -2325,13 +2325,13 @@ func (m *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 					pipe.LPop(ctx, key)
 					rb := utils.ReadBuffer([]byte(v))
 					_ = rb.Get32() // pos
-					sliceID := rb.Get64()
-					if sliceID == 0 {
+					id := rb.Get64()
+					if id == 0 {
 						continue
 					}
 					size := rb.Get32()
-					slices = append(slices, &slice{id: sliceID, size: size})
-					rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(sliceID, size), -1))
+					slices = append(slices, &slice{id: id, size: size})
+					rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(id, size), -1))
 				}
 				return nil
 			})
@@ -2488,13 +2488,13 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return
 	}
 
-	var sliceID uint64
-	st := m.NewSliceID(ctx, &sliceID)
+	var id uint64
+	st := m.NewSliceID(ctx, &id)
 	if st != 0 {
 		return
 	}
 	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
-	err = m.newMsg(CompactChunk, slices, sliceID)
+	err = m.newMsg(CompactChunk, slices, id)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
 			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
@@ -2530,14 +2530,14 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 
 		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.LTrim(ctx, key, int64(len(vals)), -1)
-			pipe.LPush(ctx, key, marshalSlice(pos, sliceID, size, 0, size))
+			pipe.LPush(ctx, key, marshalSlice(pos, id, size, 0, size))
 			for i := skipped; i > 0; i-- {
 				pipe.LPush(ctx, key, vals[i-1])
 			}
-			pipe.HSet(ctx, m.sliceRefs(), m.sliceKey(sliceID, size), "0") // create the key to tracking it
+			pipe.HSet(ctx, m.sliceRefs(), m.sliceKey(id, size), "0") // create the key to tracking it
 			if trash {
 				if len(buf) > 0 {
-					pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", sliceID, time.Now().Unix()), buf)
+					pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", id, time.Now().Unix()), buf)
 				}
 			} else {
 				for i, s := range ss {
@@ -2552,7 +2552,7 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}, key))
 	// there could be false-negative that the compaction is successful, double-check
 	if errno != 0 && errno != syscall.EINVAL {
-		if e := m.rdb.HGet(ctx, m.sliceRefs(), m.sliceKey(sliceID, size)).Err(); e == redis.Nil {
+		if e := m.rdb.HGet(ctx, m.sliceRefs(), m.sliceKey(id, size)).Err(); e == redis.Nil {
 			errno = syscall.EINVAL // failed
 		} else if e == nil {
 			errno = 0 // successful
@@ -2560,12 +2560,12 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	if errno == syscall.EINVAL {
-		m.rdb.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(sliceID, size), -1)
-		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, sliceID, size)
-		m.deleteSlice(sliceID, size)
+		m.rdb.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(id, size), -1)
+		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, id, size)
+		m.deleteSlice(id, size)
 	} else if errno == 0 {
 		m.of.InvalidateChunk(inode, indx)
-		m.cleanupZeroRef(m.sliceKey(sliceID, size))
+		m.cleanupZeroRef(m.sliceKey(id, size))
 		if !trash {
 			for i, s := range ss {
 				if s.id > 0 && rs[i].Err() == nil && rs[i].Val() < 0 {

@@ -90,15 +90,14 @@ type chunk struct {
 	Slices []byte `xorm:"blob notnull"`
 }
 
-// it actually means `sliceRef` with `sliceID`
-type chunkRef struct {
-	Chunkid uint64 `xorm:"pk"`
-	Size    uint32 `xorm:"notnull"`
-	Refs    int    `xorm:"notnull"`
+type sliceRef struct {
+	ID   uint64 `xorm:"pk chunkid"`
+	Size uint32 `xorm:"notnull"`
+	Refs int    `xorm:"notnull"`
 }
 
 type delslices struct {
-	Chunkid uint64 `xorm:"pk"`
+	ID      uint64 `xorm:"pk chunkid"`
 	Deleted int64  `xorm:"notnull"` // timestamp
 	Slices  []byte `xorm:"blob notnull"`
 }
@@ -221,9 +220,9 @@ func (m *dbMeta) Name() string {
 	return m.db.DriverName()
 }
 
-func (m *dbMeta) doDeleteSlice(sliceID uint64, size uint32) error {
+func (m *dbMeta) doDeleteSlice(id uint64, size uint32) error {
 	return m.txn(func(s *xorm.Session) error {
-		_, err := s.Exec("delete from jfs_chunk_ref where chunkid=?", sliceID)
+		_, err := s.Exec("delete from jfs_chunk_ref where chunkid=?", id)
 		return err
 	})
 }
@@ -246,7 +245,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 	if err := m.syncTable(new(node), new(symlink), new(xattr)); err != nil {
 		return fmt.Errorf("create table node, symlink, xattr: %s", err)
 	}
-	if err := m.syncTable(new(chunk), new(chunkRef), new(delslices)); err != nil {
+	if err := m.syncTable(new(chunk), new(sliceRef), new(delslices)); err != nil {
 		return fmt.Errorf("create table chunk, chunk_ref, delslices: %s", err)
 	}
 	if err := m.syncTable(new(session2), new(sustained), new(delfile)); err != nil {
@@ -336,7 +335,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 func (m *dbMeta) Reset() error {
 	return m.db.DropTables(&setting{}, &counter{},
 		&node{}, &edge{}, &symlink{}, &xattr{},
-		&chunk{}, &chunkRef{}, &delslices{},
+		&chunk{}, &sliceRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
 		&flock{}, &plock{})
 }
@@ -1999,7 +1998,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 				return err
 			}
 		}
-		if err = mustInsert(s, chunkRef{slice.ID, slice.Size, 1}); err != nil {
+		if err = mustInsert(s, sliceRef{slice.ID, slice.Size, 1}); err != nil {
 			return err
 		}
 		_, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode})
@@ -2070,12 +2069,12 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		}
 
 		ses := s
-		updateSlices := func(indx uint32, buf []byte, sliceID uint64, size uint32) error {
+		updateSlices := func(indx uint32, buf []byte, id uint64, size uint32) error {
 			if err := m.appendSlice(ses, fout, indx, buf); err != nil {
 				return err
 			}
-			if sliceID > 0 {
-				if _, err := ses.Exec("update jfs_chunk_ref set refs=refs+1 where chunkid = ? AND size = ?", sliceID, size); err != nil {
+			if id > 0 {
+				if _, err := ses.Exec("update jfs_chunk_ref set refs=refs+1 where chunkid = ? AND size = ?", id, size); err != nil {
 					return err
 				}
 			}
@@ -2167,13 +2166,13 @@ func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 }
 
 func (m *dbMeta) doCleanupSlices() {
-	var cks []chunkRef
+	var cks []sliceRef
 	_ = m.roTxn(func(s *xorm.Session) error {
 		cks = nil
 		return s.Where("refs <= 0").Find(&cks)
 	})
 	for _, ck := range cks {
-		m.deleteSlice(ck.Chunkid, ck.Size)
+		m.deleteSlice(ck.ID, ck.Size)
 	}
 }
 
@@ -2212,7 +2211,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		if s.id == 0 {
 			continue
 		}
-		var ref = chunkRef{Chunkid: s.id}
+		var ref = sliceRef{ID: s.id}
 		err := m.roTxn(func(s *xorm.Session) error {
 			ok, err := s.Get(&ref)
 			if err == nil && !ok {
@@ -2257,7 +2256,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	var ss []Slice
 	for _, ds := range result {
 		if err := m.txn(func(ses *xorm.Session) error {
-			ds := delslices{Chunkid: ds.Chunkid}
+			ds := delslices{ID: ds.ID}
 			if ok, e := ses.ForUpdate().Get(&ds); e != nil {
 				return e
 			} else if !ok {
@@ -2266,21 +2265,21 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 			ss = ss[:0]
 			m.decodeDelayedSlices(ds.Slices, &ss)
 			if len(ss) == 0 {
-				return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Chunkid, ds.Slices)
+				return fmt.Errorf("invalid value for delayed slices %d: %v", ds.ID, ds.Slices)
 			}
 			for _, s := range ss {
 				if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.ID, s.Size); e != nil {
 					return e
 				}
 			}
-			_, e := ses.Delete(&delslices{Chunkid: ds.Chunkid})
+			_, e := ses.Delete(&delslices{ID: ds.ID})
 			return e
 		}); err != nil {
-			logger.Warnf("Cleanup delayed slices %d: %s", ds.Chunkid, err)
+			logger.Warnf("Cleanup delayed slices %d: %s", ds.ID, err)
 			continue
 		}
 		for _, s := range ss {
-			var ref = chunkRef{Chunkid: s.ID}
+			var ref = sliceRef{ID: s.ID}
 			err := m.roTxn(func(s *xorm.Session) error {
 				ok, err := s.Get(&ref)
 				if err == nil && !ok {
@@ -2335,13 +2334,13 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return
 	}
 
-	var sliceID uint64
-	st := m.NewSliceID(Background, &sliceID)
+	var id uint64
+	st := m.NewSliceID(Background, &id)
 	if st != 0 {
 		return
 	}
 	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
-	err = m.newMsg(CompactChunk, slices, sliceID)
+	err = m.newMsg(CompactChunk, slices, id)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
 			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
@@ -2368,17 +2367,17 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			return syscall.EINVAL
 		}
 
-		c2.Slices = append(append(c2.Slices[:skipped*sliceBytes], marshalSlice(pos, sliceID, size, 0, size)...), c2.Slices[len(c.Slices):]...)
+		c2.Slices = append(append(c2.Slices[:skipped*sliceBytes], marshalSlice(pos, id, size, 0, size)...), c2.Slices[len(c.Slices):]...)
 		if _, err := s.Where("Inode = ? AND indx = ?", inode, indx).Update(c2); err != nil {
 			return err
 		}
 		// create the key to tracking it
-		if err = mustInsert(s, chunkRef{sliceID, size, 1}); err != nil {
+		if err = mustInsert(s, sliceRef{id, size, 1}); err != nil {
 			return err
 		}
 		if trash {
 			if len(buf) > 0 {
-				if err = mustInsert(s, &delslices{sliceID, time.Now().Unix(), buf}); err != nil {
+				if err = mustInsert(s, &delslices{id, time.Now().Unix(), buf}); err != nil {
 					return err
 				}
 			}
@@ -2396,7 +2395,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	})
 	// there could be false-negative that the compaction is successful, double-check
 	if err != nil {
-		var c = chunkRef{Chunkid: sliceID}
+		var c = sliceRef{ID: id}
 		var ok bool
 		e := m.roTxn(func(s *xorm.Session) error {
 			var e error
@@ -2407,15 +2406,15 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			if ok {
 				err = nil
 			} else {
-				logger.Infof("compacted chunk %d was not used", sliceID)
+				logger.Infof("compacted chunk %d was not used", id)
 				err = syscall.EINVAL
 			}
 		}
 	}
 
 	if errno, ok := err.(syscall.Errno); ok && errno == syscall.EINVAL {
-		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, sliceID, size)
-		m.deleteSlice(sliceID, size)
+		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, id, size)
+		m.deleteSlice(id, size)
 	} else if err == nil {
 		m.of.InvalidateChunk(inode, indx)
 		if !trash {
@@ -2423,7 +2422,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 				if s.id == 0 {
 					continue
 				}
-				var ref = chunkRef{Chunkid: s.id}
+				var ref = sliceRef{ID: s.id}
 				var ok bool
 				err := m.roTxn(func(s *xorm.Session) error {
 					var e error
@@ -3049,7 +3048,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err = m.syncTable(new(node), new(edge), new(symlink), new(xattr)); err != nil {
 		return fmt.Errorf("create table node, edge, symlink, xattr: %s", err)
 	}
-	if err = m.syncTable(new(chunk), new(chunkRef), new(delslices)); err != nil {
+	if err = m.syncTable(new(chunk), new(sliceRef), new(delslices)); err != nil {
 		return fmt.Errorf("create table chunk, chunk_ref, delslices: %s", err)
 	}
 	if err = m.syncTable(new(session2), new(sustained), new(delfile)); err != nil {
@@ -3110,7 +3109,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 
 	dm, counters, parents, refs, err := loadEntries(r,
 		func(e *DumpedEntry) { m.loadEntry(e, chs) },
-		func(ck *chunkKey) { chs[3] <- &chunkRef{ck.id, ck.size, 1} })
+		func(ck *chunkKey) { chs[3] <- &sliceRef{ck.id, ck.size, 1} })
 	if err != nil {
 		return err
 	}
@@ -3134,7 +3133,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err = m.txn(func(s *xorm.Session) error {
 		for k, v := range refs {
 			if v > 1 {
-				if _, e := s.Cols("refs").Update(&chunkRef{Refs: int(v)}, &chunkRef{Chunkid: k.id}); e != nil {
+				if _, e := s.Cols("refs").Update(&sliceRef{Refs: int(v)}, &sliceRef{ID: k.id}); e != nil {
 					return e
 				}
 			}

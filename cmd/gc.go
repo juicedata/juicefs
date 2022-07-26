@@ -74,8 +74,8 @@ $ juicefs gc redis://localhost --delete`,
 }
 
 type dSlice struct {
-	sliceID uint64
-	length  uint32
+	id     uint64
+	length uint32
 }
 
 func gc(ctx *cli.Context) error {
@@ -165,8 +165,8 @@ func gc(ctx *cli.Context) error {
 			go func() {
 				defer wg.Done()
 				for s := range sliceChan {
-					if err := store.Remove(s.sliceID, int(s.length)); err != nil {
-						logger.Warnf("remove %d_%d: %s", s.sliceID, s.length, err)
+					if err := store.Remove(s.id, int(s.length)); err != nil {
+						logger.Warnf("remove %d_%d: %s", s.id, s.length, err)
 					}
 				}
 			}()

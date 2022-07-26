@@ -59,7 +59,7 @@ type engine interface {
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices()
 	doCleanupDelayedSlices(edge int64, limit int) (int, error)
-	doDeleteSlice(sliceID uint64, size uint32) error
+	doDeleteSlice(id uint64, size uint32) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
@@ -568,9 +568,9 @@ func (m *baseMeta) marshal(attr *Attr) []byte {
 	return w.Bytes()
 }
 
-func (m *baseMeta) encodeDelayedSlice(sliceID uint64, size uint32) []byte {
+func (m *baseMeta) encodeDelayedSlice(id uint64, size uint32) []byte {
 	w := utils.NewBuffer(8 + 4)
-	w.Put64(sliceID)
+	w.Put64(id)
 	w.Put32(size)
 	return w.Bytes()
 }
@@ -840,7 +840,7 @@ func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sys
 	return 0
 }
 
-func (m *baseMeta) NewSliceID(ctx Context, sliceID *uint64) syscall.Errno {
+func (m *baseMeta) NewSliceID(ctx Context, id *uint64) syscall.Errno {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeSlices.next >= m.freeSlices.maxid {
@@ -851,7 +851,7 @@ func (m *baseMeta) NewSliceID(ctx Context, sliceID *uint64) syscall.Errno {
 		m.freeSlices.next = uint64(v) - sliceIDBatch
 		m.freeSlices.maxid = uint64(v)
 	}
-	*sliceID = m.freeSlices.next
+	*id = m.freeSlices.next
 	m.freeSlices.next++
 	return 0
 }
@@ -955,16 +955,16 @@ func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64) {
 	}
 }
 
-func (m *baseMeta) deleteSlice(sliceID uint64, size uint32) {
-	if sliceID == 0 {
+func (m *baseMeta) deleteSlice(id uint64, size uint32) {
+	if id == 0 {
 		return
 	}
-	if err := m.newMsg(DeleteSlice, sliceID, size); err == nil || strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "not found") {
-		if err = m.en.doDeleteSlice(sliceID, size); err != nil {
-			logger.Errorf("delete slice %d: %s", sliceID, err)
+	if err := m.newMsg(DeleteSlice, id, size); err == nil || strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "not found") {
+		if err = m.en.doDeleteSlice(id, size); err != nil {
+			logger.Errorf("delete slice %d: %s", id, err)
 		}
 	} else if !strings.Contains(err.Error(), "skip deleting") {
-		logger.Warnf("delete slice %d (%d bytes): %s", sliceID, size, err)
+		logger.Warnf("delete slice %d (%d bytes): %s", id, size, err)
 	}
 }
 
