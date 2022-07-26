@@ -75,9 +75,7 @@ func (fs *fileSystem) replyEntry(ctx *fuseContext, out *fuse.EntryOut, e *meta.E
 	} else {
 		out.SetEntryTimeout(fs.conf.EntryTimeout)
 	}
-	fs.replyAttr(ctx, e, &out.Attr, func(d time.Duration) {
-		out.SetAttrTimeout(d)
-	})
+	fs.replyAttr(ctx, e, &out.Attr, out.SetAttrTimeout)
 	return 0
 }
 
@@ -102,9 +100,7 @@ func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *f
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	fs.replyAttr(ctx, entry, &out.Attr, func(d time.Duration) {
-		out.SetTimeout(d)
-	})
+	fs.replyAttr(ctx, entry, &out.Attr, out.SetTimeout)
 	return 0
 }
 
@@ -119,9 +115,7 @@ func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *f
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	fs.replyAttr(ctx, entry, &out.Attr, func(d time.Duration) {
-		out.SetTimeout(d)
-	})
+	fs.replyAttr(ctx, entry, &out.Attr, out.SetTimeout)
 	return 0
 }
 
