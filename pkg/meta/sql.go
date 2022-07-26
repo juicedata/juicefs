@@ -96,6 +96,10 @@ type sliceRef struct {
 	Refs int    `xorm:"notnull"`
 }
 
+func (c *sliceRef) TableName() string {
+	return "jfs_chunk_ref"
+}
+
 type delslices struct {
 	Id      uint64 `xorm:"pk chunkid"`
 	Deleted int64  `xorm:"notnull"` // timestamp
