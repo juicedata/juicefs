@@ -91,13 +91,13 @@ type chunk struct {
 }
 
 type sliceRef struct {
-	ID   uint64 `xorm:"pk chunkid"`
+	Id   uint64 `xorm:"pk chunkid"`
 	Size uint32 `xorm:"notnull"`
 	Refs int    `xorm:"notnull"`
 }
 
 type delslices struct {
-	ID      uint64 `xorm:"pk chunkid"`
+	Id      uint64 `xorm:"pk chunkid"`
 	Deleted int64  `xorm:"notnull"` // timestamp
 	Slices  []byte `xorm:"blob notnull"`
 }
@@ -2172,7 +2172,7 @@ func (m *dbMeta) doCleanupSlices() {
 		return s.Where("refs <= 0").Find(&cks)
 	})
 	for _, ck := range cks {
-		m.deleteSlice(ck.ID, ck.Size)
+		m.deleteSlice(ck.Id, ck.Size)
 	}
 }
 
@@ -2211,7 +2211,7 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 		if s.id == 0 {
 			continue
 		}
-		var ref = sliceRef{ID: s.id}
+		var ref = sliceRef{Id: s.id}
 		err := m.roTxn(func(s *xorm.Session) error {
 			ok, err := s.Get(&ref)
 			if err == nil && !ok {
@@ -2256,7 +2256,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	var ss []Slice
 	for _, ds := range result {
 		if err := m.txn(func(ses *xorm.Session) error {
-			ds := delslices{ID: ds.ID}
+			ds := delslices{Id: ds.Id}
 			if ok, e := ses.ForUpdate().Get(&ds); e != nil {
 				return e
 			} else if !ok {
@@ -2265,21 +2265,21 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 			ss = ss[:0]
 			m.decodeDelayedSlices(ds.Slices, &ss)
 			if len(ss) == 0 {
-				return fmt.Errorf("invalid value for delayed slices %d: %v", ds.ID, ds.Slices)
+				return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Id, ds.Slices)
 			}
 			for _, s := range ss {
 				if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.ID, s.Size); e != nil {
 					return e
 				}
 			}
-			_, e := ses.Delete(&delslices{ID: ds.ID})
+			_, e := ses.Delete(&delslices{Id: ds.Id})
 			return e
 		}); err != nil {
-			logger.Warnf("Cleanup delayed slices %d: %s", ds.ID, err)
+			logger.Warnf("Cleanup delayed slices %d: %s", ds.Id, err)
 			continue
 		}
 		for _, s := range ss {
-			var ref = sliceRef{ID: s.ID}
+			var ref = sliceRef{Id: s.ID}
 			err := m.roTxn(func(s *xorm.Session) error {
 				ok, err := s.Get(&ref)
 				if err == nil && !ok {
@@ -2395,7 +2395,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	})
 	// there could be false-negative that the compaction is successful, double-check
 	if err != nil {
-		var c = sliceRef{ID: id}
+		var c = sliceRef{Id: id}
 		var ok bool
 		e := m.roTxn(func(s *xorm.Session) error {
 			var e error
@@ -2422,7 +2422,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 				if s.id == 0 {
 					continue
 				}
-				var ref = sliceRef{ID: s.id}
+				var ref = sliceRef{Id: s.id}
 				var ok bool
 				err := m.roTxn(func(s *xorm.Session) error {
 					var e error
@@ -2907,7 +2907,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			case "nextInode":
 				counters.NextInode = row.Value
 			case "nextChunk":
-				counters.NextChunk = row.Value
+				counters.NextSlice = row.Value
 			case "nextSession":
 				counters.NextSession = row.Value
 			case "nextTrash":
@@ -3118,7 +3118,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	chs[5] <- &counter{usedSpace, counters.UsedSpace}
 	chs[5] <- &counter{totalInodes, counters.UsedInodes}
 	chs[5] <- &counter{"nextInode", counters.NextInode}
-	chs[5] <- &counter{"nextChunk", counters.NextChunk}
+	chs[5] <- &counter{"nextChunk", counters.NextSlice}
 	chs[5] <- &counter{"nextSession", counters.NextSession}
 	chs[5] <- &counter{"nextTrash", counters.NextTrash}
 	for _, d := range dm.DelFiles {
@@ -3133,7 +3133,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err = m.txn(func(s *xorm.Session) error {
 		for k, v := range refs {
 			if v > 1 {
-				if _, e := s.Cols("refs").Update(&sliceRef{Refs: int(v)}, &sliceRef{ID: k.id}); e != nil {
+				if _, e := s.Cols("refs").Update(&sliceRef{Refs: int(v)}, &sliceRef{Id: k.id}); e != nil {
 					return e
 				}
 			}

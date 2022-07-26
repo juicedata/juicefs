@@ -3182,7 +3182,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
 			NextInode:   cs[2] + 1, // Redis nextInode/nextChunk is 1 smaller than sql/tkv
-			NextChunk:   cs[3] + 1,
+			NextSlice:   cs[3] + 1,
 			NextSession: cs[4],
 			NextTrash:   cs[5],
 		},
@@ -3354,7 +3354,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	cs[m.prefix+usedSpace] = counters.UsedSpace
 	cs[m.prefix+totalInodes] = counters.UsedInodes
 	cs[m.prefix+"nextinode"] = counters.NextInode - 1
-	cs[m.prefix+"nextchunk"] = counters.NextChunk - 1
+	cs[m.prefix+"nextchunk"] = counters.NextSlice - 1
 	cs[m.prefix+"nextsession"] = counters.NextSession
 	cs[m.prefix+"nextTrash"] = counters.NextTrash
 	p.MSet(ctx, cs)

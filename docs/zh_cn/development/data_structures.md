@@ -84,7 +84,7 @@ type Format struct {
 - totalInodes：文件系统的已使用文件数
 
 - nextInode：下一个可用的 inode 号（Redis 中为当前已用的最大 inode 号）
-- nextChunk：下一个可用的 sliceID（Redis 中为当前已用的最大 sliceID）
+- nextSlice：下一个可用的 sliceID（Redis 中为当前已用的最大 sliceID）
 - nextSession：当前已用的最大 sid（sessionID）
 - nextTrash：当前已用的最大 trash inode 号
 - nextCleanupSlices：上一次检查清理残留 slices 的时间点
@@ -514,14 +514,14 @@ Slices 是一段字节数组，每 24 字节对应一个 [Slice](#3.1.8-Chunk)�
 #### 3.3.9 SliceRef
 
 ```go
-type chunkRef struct {
-	Chunkid uint64 `xorm:"pk"`
+type sliceRef struct {
+	ID uint64 `xorm:"pk"`
 	Size    uint32 `xorm:"notnull"`
 	Refs    int    `xorm:"notnull"`
 }
 ```
 
-Chunkid 实际等同 [3.1.9](#3.1.9-SliceRef) 里的 sliceID。
+ID 实际等同 [3.1.9](#3.1.9-SliceRef) 里的 sliceID。
 
 #### 3.3.10 Symlink
 
@@ -583,13 +583,13 @@ type delfile struct {
 
 ```go
 type delslices struct {
-	Chunkid uint64 `xorm:"pk"`
+	Id      uint64 `xorm:"pk"`
 	Deleted int64  `xorm:"notnull"`
 	Slices  []byte `xorm:"blob notnull"`
 }
 ```
 
-Chunkid 实际等同 [3.1.15](#3.1.15-DelSlices) 里的 sliceID。Slices 是一段字节数组，每 12 字节对应一个 [slice](#3.1.15-DelSlices)。
+Id 实际等同 [3.1.15](#3.1.15-DelSlices) 里的 sliceID。Slices 是一段字节数组，每 12 字节对应一个 [slice](#3.1.15-DelSlices)。
 
 #### 3.3.16 Sustained
 

@@ -2515,7 +2515,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
 			NextInode:   cs[2],
-			NextChunk:   cs[3],
+			NextSlice:   cs[3],
 			NextSession: cs[4],
 			NextTrash:   cs[5],
 		},
@@ -2665,7 +2665,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	kv <- &pair{m.counterKey(usedSpace), packCounter(counters.UsedSpace)}
 	kv <- &pair{m.counterKey(totalInodes), packCounter(counters.UsedInodes)}
 	kv <- &pair{m.counterKey("nextInode"), packCounter(counters.NextInode)}
-	kv <- &pair{m.counterKey("nextChunk"), packCounter(counters.NextChunk)}
+	kv <- &pair{m.counterKey("nextChunk"), packCounter(counters.NextSlice)}
 	kv <- &pair{m.counterKey("nextSession"), packCounter(counters.NextSession)}
 	kv <- &pair{m.counterKey("nextTrash"), packCounter(counters.NextTrash)}
 	for _, d := range dm.DelFiles {
