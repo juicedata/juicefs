@@ -82,15 +82,14 @@ juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2 ~/jfs
 :::
 
 ### Cluster 模式
-Juicefs 同样支持 cluster 模式的 redis 作为元数据引擎，redis cluster 模式的 `META-URL` 为 `redis[s]://[[USER]:PASSWORD@]ADDR:PORT,[ADDR:PORT],[ADDR:PORT][/DB]`，例如：
+Juicefs 同样支持 cluster 模式的 redis 作为元数据引擎，redis cluster 模式的 `META-URL` 为 `redis[s]://[[USER]:PASSWORD@]ADDR:PORT[,ADDR:PORT,ADDR:PORT][/prefix]`，例如：
 
 ```shell
-juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002 ~/jfs
+juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002/jfs1 myjfs
 ```
 
 :::tip 提示
-Redis cluster 虽然不支持 db 隔离机制，但是在其作为元数据引擎的时候，Juicefs 利用 redis cluster [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags) 的特性，通过将 `{db}` 作为 key 的前缀实现了 cluster 模式下的隔离与事务保证，因此 cluster 模式下的 db 仍旧有隔离的效果。可以通过设置不同的 `db` 让一个 redis cluster 同时作为多个文件系统的元数据库。
-另外需要注意的是 Redis cluster 要求一个事务中所有操作的 key 必须在同一个 hash slot 中，因此一个 JuiceFS 文件系统只能使用一个 hash slot。
+Redis cluster 不再支持多数据库，而是将所有 keys 分散到 16384 个 hash slots 中，再将这些 hash slots 打散到多个 Redis master 节点来存储。JuiceFS 利用了 Redis cluster 的 [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags) 特性，通过将 `{prefix}` 作为 key 的前缀来将一个文件系统中的所有 keys 都存放在同一个 hash slot，以保证 cluster 模式下操作的事务性。另外，通过设置不同的 `prefix` 可以让一个 Redis cluster 同时作为多个 JuiceFS 的元数据库。
 :::
 
 

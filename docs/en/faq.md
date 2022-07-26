@@ -19,6 +19,7 @@ JuiceFS is a distributed file system, the latency of metedata is determined by 1
 JuiceFS is built with multiple layers of caching (invalidated automatically), once the caching is warmed up, the latency and throughput of JuiceFS could be close to local filesystem (having the overhead of FUSE).
 
 ## Why don't you see the original file to JuiceFS in the object store?
+
 While using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and stored in object storage. Therefore, you may notice that the source files stored in JuiceFS cannot be found in the file browser of the object storage platform; instead, there are only a directory of chunks and a bunch of directories and files named by numbers in the bucket. Don't panic! That's exactly what makes JuiceFS a high-performance file system. For details, please refer to [How to store files in JuiceFS](https://juicefs.com/docs/community/how_juicefs_store_files).
 
 ## Does JuiceFS support random read/write?
@@ -27,7 +28,7 @@ Yes, including those issued using mmap. Currently JuiceFS is optimized for seque
 
 ## What is the rationale for JuiceFS random writes?
 
-Instead of passing the raw object into the object store, JuiceFS splits it into N blocks of 4M size, numbers it and uploads it to the object store, and stores the numbers into the metadata engine. When a random write is performed, it logically overwrites the original content, but actually marks the overwrite as old data and uploads the random write content to the object store.  When it's time to read the old data, just read the new data from the random part that you just uploaded. When a random write is performed, it logically overwrites the original content, but actually marks the overwrite as old data and uploads the random write content to the object store. This shifts the complexity of random writes to the complexity of reads. This is only a macro implementation logic, and the specific read and write process is very complex. You can read [JuiceFS internal implementation](https://juicefs.com/docs/community/internals) and [read and write process](https://juicefs.com/docs/community/internals/io_processing/) for details of logic and coordinate with code combing.
+Instead of passing the raw object into the object store, JuiceFS splits it into N blocks of 4M size, numbers it and uploads it to the object store, and stores the numbers into the metadata engine. When a random write is performed, it logically overwrites the original content, but actually marks the overwrite as old data and uploads the random write content to the object store.  When it's time to read the old data, just read the new data from the random part that you just uploaded. When a random write is performed, it logically overwrites the original content, but actually marks the overwrite as old data and uploads the random write content to the object store. This shifts the complexity of random writes to the complexity of reads. This is only a macro implementation logic, you can read [JuiceFS internal implementation](https://juicefs.com/docs/community/internals) and [read and write process](https://juicefs.com/docs/community/internals/io_processing/) for details of logic and coordinate with code combing.
 
 ## Why do I delete files at the mount point, but there is no change or very little change in object storage footprint?
 
@@ -134,9 +135,9 @@ In addition to ordinary mounting, the following modes are supported:
 
 ## Where is the JuiceFS log?
 
-Logs are written to the log file only when JuiceFS is mounted in the background, and logs are directly printed to the terminal by foreground mount or other foreground commands
-Log file on Mac system default is `/Users/$User/.juicefs/juicefs.log`
-On Linux, the default log file for root user startup is `/var/log/juicefs.log`, and that for non-root users is `~/.juicefs.log`.
+Logs are written to the log file only when JuiceFS is mounted in the background, and logs are directly printed to the terminal by foreground mount or other foreground commands.
+- Log file on Mac system default is `/Users/$User/.juicefs/juicefs.log`
+- On Linux, the default log file for root user startup is `/var/log/juicefs.log`, and that for non-root users is `~/.juicefs.log`.
 
 ## How to destroy a file system?
 Destroy a file system with 'juicefs Destroy', which empties the metadata engine and object store of related data. Please refer to this [documentation](https://juicefs.com/docs/community/administration/destroy) for details on how to use this command.

@@ -83,15 +83,14 @@ It should be noted that since the data of the Redis master node is asynchronousl
 
 
 ### Cluster mode
-Juicefs also supports redis of cluster mode as meta engine, the `META-URL` format is `redis[s]://[[USER]:PASSWORD@]ADDR:PORT,[ADDR:PORT],[ADDR:PORT][/DB]`. For example:
+Juicefs also supports redis of cluster mode as meta engine, the `META-URL` format is `redis[s]://[[USER]:PASSWORD@]ADDR:PORT[,ADDR:PORT,ADDR:PORT][/prefix]`. For example:
 
 ```shell
-juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002/1 ~/jfs
+juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002/jfs1 myjfs
 ```
 
-:::tip 
-Although Redis cluster does not support db isolation mechanism, when it is a metadata engine, Juicefs uses the function of redis cluster [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags) to implement isolation and transaction assurance in cluster mode by using `{db}` as the prefix of key, so db in cluster mode still has an isolation effect.
-It is also important to note that Redis Cluster requires that the keys of all operations in a transaction must be in the same Hash slot, so only one Hash slot can be used by a JuiceFS file system.
+:::tip
+Redis cluster does not support multiple databases like the standalone mode, instead it splits the key space into 16384 hash slots, and distributes the slots to several Redis master nodes. Based on Redis cluster [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags), JuiceFS adds `{prefix}` before all filesystem keys to ensure they will be hashed to the same slot, assuring that transactions can still work. Besides, one Redis cluster can serve for multiple JuiceFS as long as they use different prefixes.
 :::
 
 ## Data Durability
