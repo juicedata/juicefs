@@ -2272,7 +2272,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 				ss := readSliceBuf(v)
 				slices := make([]*DumpedSlice, 0, len(ss))
 				for _, s := range ss {
-					slices = append(slices, &DumpedSlice{ID: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+					slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 				}
 				e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 			}
@@ -2419,7 +2419,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 					ss := readSliceBuf(value)
 					slices := make([]*DumpedSlice, 0, len(ss))
 					for _, s := range ss {
-						slices = append(slices, &DumpedSlice{ID: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+						slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 					}
 					e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 				case 'D':
@@ -2583,7 +2583,7 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) {
 			}
 			slices := make([]byte, 0, sliceBytes*len(c.Slices))
 			for _, s := range c.Slices {
-				slices = append(slices, marshalSlice(s.Pos, s.ID, s.Size, s.Off, s.Len)...)
+				slices = append(slices, marshalSlice(s.Pos, s.Id, s.Size, s.Off, s.Len)...)
 			}
 			kv <- &pair{m.chunkKey(inode, c.Index), slices}
 		}

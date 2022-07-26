@@ -2959,7 +2959,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 						ss := readSlices(vals)
 						slices := make([]*DumpedSlice, 0, len(ss))
 						for _, s := range ss {
-							slices = append(slices, &DumpedSlice{ID: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+							slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 						}
 						e.Chunks = append(e.Chunks, &DumpedChunk{0, slices})
 					}
@@ -3013,7 +3013,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					ss := readSlices(vals)
 					slices := make([]*DumpedSlice, 0, len(ss))
 					for _, s := range ss {
-						slices = append(slices, &DumpedSlice{ID: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+						slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 					}
 					e := es[lcs[i].i]
 					e.Chunks = append(e.Chunks, &DumpedChunk{lcs[i].indx, slices})
@@ -3259,7 +3259,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func())
 			}
 			slices := make([]string, 0, len(c.Slices))
 			for _, s := range c.Slices {
-				slices = append(slices, string(marshalSlice(s.Pos, s.ID, s.Size, s.Off, s.Len)))
+				slices = append(slices, string(marshalSlice(s.Pos, s.Id, s.Size, s.Off, s.Len)))
 				if len(slices) > batch {
 					p.RPush(ctx, m.chunkKey(inode, c.Index), slices)
 					tryExec()

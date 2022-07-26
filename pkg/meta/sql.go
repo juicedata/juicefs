@@ -2660,7 +2660,7 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 			ss := readSliceBuf(c.Slices)
 			slices := make([]*DumpedSlice, 0, len(ss))
 			for _, s := range ss {
-				slices = append(slices, &DumpedSlice{ID: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+				slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 			}
 			e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 		}
@@ -2712,7 +2712,7 @@ func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEnt
 			ss := readSliceBuf(c.Slices)
 			slices := make([]*DumpedSlice, 0, len(ss))
 			for _, s := range ss {
-				slices = append(slices, &DumpedSlice{ID: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+				slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 			}
 			e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 		}
@@ -3009,7 +3009,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}) {
 			}
 			slices := make([]byte, 0, sliceBytes*len(c.Slices))
 			for _, s := range c.Slices {
-				slices = append(slices, marshalSlice(s.Pos, s.ID, s.Size, s.Off, s.Len)...)
+				slices = append(slices, marshalSlice(s.Pos, s.Id, s.Size, s.Off, s.Len)...)
 			}
 			chs[2] <- &chunk{Inode: inode, Indx: c.Index, Slices: slices}
 		}
