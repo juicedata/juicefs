@@ -2911,7 +2911,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			case "nextInode":
 				counters.NextInode = row.Value
 			case "nextChunk":
-				counters.NextSlice = row.Value
+				counters.NextChunk = row.Value
 			case "nextSession":
 				counters.NextSession = row.Value
 			case "nextTrash":
@@ -3122,7 +3122,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	chs[5] <- &counter{usedSpace, counters.UsedSpace}
 	chs[5] <- &counter{totalInodes, counters.UsedInodes}
 	chs[5] <- &counter{"nextInode", counters.NextInode}
-	chs[5] <- &counter{"nextChunk", counters.NextSlice}
+	chs[5] <- &counter{"nextChunk", counters.NextChunk}
 	chs[5] <- &counter{"nextSession", counters.NextSession}
 	chs[5] <- &counter{"nextTrash", counters.NextTrash}
 	for _, d := range dm.DelFiles {
