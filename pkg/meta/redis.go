@@ -948,7 +948,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		t.Ctimensec = uint32(now.Nanosecond())
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&t), 0)
-			if mode&(fallocZeroRange|fallocPunchHole) != 0 {
+			if mode&(fallocZeroRange|fallocPunchHole) != 0 && off < old {
 				if off+size > old {
 					size = old - off
 				}
