@@ -2489,7 +2489,7 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	var id uint64
-	st := m.NewSliceID(ctx, &id)
+	st := m.NewSlice(ctx, &id)
 	if st != 0 {
 		return
 	}

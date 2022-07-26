@@ -69,7 +69,7 @@ func (s *sliceWriter) prepareID(ctx meta.Context, retry bool) {
 	for s.id == 0 {
 		var id uint64
 		f.Unlock()
-		st := f.w.m.NewSliceID(ctx, &id)
+		st := f.w.m.NewSlice(ctx, &id)
 		f.Lock()
 		if st != 0 && st != syscall.EIO {
 			s.err = st

@@ -840,7 +840,7 @@ func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sys
 	return 0
 }
 
-func (m *baseMeta) NewSliceID(ctx Context, id *uint64) syscall.Errno {
+func (m *baseMeta) NewSlice(ctx Context, id *uint64) syscall.Errno {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeSlices.next >= m.freeSlices.maxid {

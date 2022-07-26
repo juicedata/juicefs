@@ -2339,7 +2339,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	var id uint64
-	st := m.NewSliceID(Background, &id)
+	st := m.NewSlice(Background, &id)
 	if st != 0 {
 		return
 	}
