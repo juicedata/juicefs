@@ -28,16 +28,16 @@ type Reader interface {
 type Writer interface {
 	io.WriterAt
 	ID() uint64
-	SetID(chunkid uint64)
+	SetID(id uint64)
 	FlushTo(offset int) error
 	Finish(length int) error
 	Abort()
 }
 
 type ChunkStore interface {
-	NewReader(chunkid uint64, length int) Reader
-	NewWriter(chunkid uint64) Writer
-	Remove(chunkid uint64, length int) error
-	FillCache(chunkid uint64, length uint32) error
+	NewReader(id uint64, length int) Reader
+	NewWriter(id uint64) Writer
+	Remove(id uint64, length int) error
+	FillCache(id uint64, length uint32) error
 	UsedMemory() int64
 }

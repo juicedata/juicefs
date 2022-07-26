@@ -34,8 +34,8 @@ import (
 const (
 	// ChunkSize is size of a chunk
 	ChunkSize = 1 << 26 // 64M
-	// DeleteChunk is a message to delete a chunk from object store.
-	DeleteChunk = 1000
+	// DeleteSlice is a message to delete a slice from object store.
+	DeleteSlice = 1000
 	// CompactChunk is a message to compact a chunk in object store.
 	CompactChunk = 1001
 	// Rmr is a message to remove a directory recursively.
@@ -195,10 +195,10 @@ type Entry struct {
 // Slice is a slice of a chunk.
 // Multiple slices could be combined together as a chunk.
 type Slice struct {
-	Chunkid uint64
-	Size    uint32
-	Off     uint32
-	Len     uint32
+	Id   uint64
+	Size uint32
+	Off  uint32
+	Len  uint32
 }
 
 // Summary represents the total number of files/directories and
@@ -308,9 +308,9 @@ type Meta interface {
 	// Close a file.
 	Close(ctx Context, inode Ino) syscall.Errno
 	// Read returns the list of slices on the given chunk.
-	Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno
-	// NewChunk returns a new id for new data.
-	NewChunk(ctx Context, chunkid *uint64) syscall.Errno
+	Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) syscall.Errno
+	// NewSlice returns an id for new slice.
+	NewSlice(ctx Context, id *uint64) syscall.Errno
 	// Write put a slice of data on top of the given chunk.
 	Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno
 	// InvalidateChunkCache invalidate chunk cache

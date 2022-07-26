@@ -55,24 +55,24 @@
           "big": {
             "attr": {"inode":6,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1637150857,"mtime":1637150858,"ctime":1637150878,"atimensec":961503000,"mtimensec":961503000,"ctimensec":961503000,"nlink":1,"length":104857600},
             "chunks": [
-              {"index":0,"slices":[{"chunkid":5,"size":67108864,"len":67108864}]},
-              {"index":1,"slices":[{"chunkid":6,"size":37748736,"len":37748736}]}
+              {"index":0,"slices":[{"id":5,"size":67108864,"len":67108864}]},
+              {"index":1,"slices":[{"id":6,"size":37748736,"len":37748736}]}
             ]
           },
           "f11": {
             "attr": {"inode":4,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746610,"mtime":1623746610,"ctime":1623746639,"atimensec":591590000,"mtimensec":591590000,"ctimensec":591590000,"nlink":2,"length":12},
-            "chunks": [{"index":0,"slices":[{"chunkid":2,"size":12,"len":12}]}]
+            "chunks": [{"index":0,"slices":[{"id":2,"size":12,"len":12}]}]
           }
         }
       },
       "f1": {
         "attr": {"inode":2,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746580,"mtime":1623746661,"ctime":1623746661,"atimensec":219686000,"mtimensec":219686000,"ctimensec":219686000,"nlink":1,"length":24},
         "xattrs": [{"name":"k","value":"v"}],
-        "chunks": [{"index":0,"slices":[{"chunkid":1,"size":6,"len":6},{"chunkid":2,"size":12,"len":12},{"chunkid":4,"size":24,"len":24}]}]
+        "chunks": [{"index":0,"slices":[{"id":1,"size":6,"len":6},{"id":2,"size":12,"len":12},{"id":4,"size":24,"len":24}]}]
       },
       "l1": {
         "attr": {"inode":4,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746610,"mtime":1623746610,"ctime":1623746639,"atimensec":591590000,"mtimensec":591590000,"ctimensec":591590000,"nlink":2,"length":12},
-        "chunks": [{"index":0,"slices":[{"chunkid":2,"size":12,"len":12}]}]
+        "chunks": [{"index":0,"slices":[{"id":2,"size":12,"len":12}]}]
       },
       "s1": {
         "attr": {"inode":5,"type":"symlink","mode":420,"uid":501,"gid":20,"atime":1623746645,"mtime":1623746645,"ctime":1623746645,"atimensec":984144000,"mtimensec":984144000,"ctimensec":984144000,"nlink":1,"length":0},
@@ -92,7 +92,7 @@
         "entries": {
           "1-27-tf1": {
             "attr": {"inode":27,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1638437852,"mtime":1638437852,"ctime":1638437877,"atimensec":28186000,"mtimensec":28186000,"ctimensec":28186000,"nlink":1,"length":11},
-            "chunks": [{"index":0,"slices":[{"chunkid":7,"size":11,"len":11}]}]
+            "chunks": [{"index":0,"slices":[{"id":7,"size":11,"len":11}]}]
           },
           "1-28-td1": {
             "attr": {"inode":28,"type":"directory","mode":493,"uid":501,"gid":0,"atime":1638437856,"mtime":1638437879,"ctime":1638437879,"atimensec":59246000,"mtimensec":59246000,"ctimensec":59246000,"nlink":2,"length":0},
@@ -101,7 +101,7 @@
           },
           "28-29-tdf1": {
             "attr": {"inode":29,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1638437873,"mtime":1638437873,"ctime":1638437879,"atimensec":449880000,"mtimensec":449880000,"ctimensec":449880000,"nlink":1,"length":10485760},
-            "chunks": [{"index":0,"slices":[{"chunkid":8,"size":10485760,"len":10485760}]}]
+            "chunks": [{"index":0,"slices":[{"id":8,"size":10485760,"len":10485760}]}]
           }
         }
       }

@@ -80,7 +80,7 @@ func testMeta(t *testing.T, m Meta) {
 }
 
 func testMetaClient(t *testing.T, m Meta) {
-	m.OnMsg(DeleteChunk, func(args ...interface{}) error { return nil })
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error { return nil })
 	ctx := Background
 	var attr = &Attr{}
 	if st := m.GetAttr(ctx, 1, attr); st != 0 || attr.Mode != 0777 { // getattr of root always succeed
@@ -366,7 +366,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 
 	// data
-	var chunkid uint64
+	var sliceId uint64
 	// try to open a file that does not exist
 	if st := m.Open(ctx, 99999, syscall.O_RDWR, &Attr{}); st != syscall.ENOENT {
 		t.Fatalf("open not exist inode got %d, expected %d", st, syscall.ENOENT)
@@ -375,19 +375,19 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("open f: %s", st)
 	}
 	_ = m.Close(ctx, inode)
-	if st := m.NewChunk(ctx, &chunkid); st != 0 {
+	if st := m.NewSlice(ctx, &sliceId); st != 0 {
 		t.Fatalf("write chunk: %s", st)
 	}
-	var s = Slice{Chunkid: chunkid, Size: 100, Len: 100}
+	var s = Slice{Id: sliceId, Size: 100, Len: 100}
 	if st := m.Write(ctx, inode, 0, 100, s); st != 0 {
 		t.Fatalf("write end: %s", st)
 	}
-	var chunks []Slice
-	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
+	var slices []Slice
+	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read chunk: %s", st)
 	}
-	if len(chunks) != 2 || chunks[0].Chunkid != 0 || chunks[0].Size != 100 || chunks[1].Chunkid != chunkid || chunks[1].Size != 100 {
-		t.Fatalf("chunks: %v", chunks)
+	if len(slices) != 2 || slices[0].Id != 0 || slices[0].Size != 100 || slices[1].Id != sliceId || slices[1].Size != 100 {
+		t.Fatalf("slices: %v", slices)
 	}
 	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocKeepSize, 100, 50); st != 0 {
 		t.Fatalf("fallocate: %s", st)
@@ -410,11 +410,11 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Fallocate(ctx, parent, fallocPunchHole|fallocKeepSize, 100, 50); st != syscall.EPERM {
 		t.Fatalf("fallocate dir: %s", st)
 	}
-	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
+	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read chunk: %s", st)
 	}
-	if len(chunks) != 3 || chunks[1].Chunkid != 0 || chunks[1].Len != 50 || chunks[2].Chunkid != chunkid || chunks[2].Len != 50 {
-		t.Fatalf("chunks: %v", chunks)
+	if len(slices) != 3 || slices[1].Id != 0 || slices[1].Len != 50 || slices[2].Id != sliceId || slices[2].Len != 50 {
+		t.Fatalf("slices: %v", slices)
 	}
 
 	// xattr
@@ -511,11 +511,11 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("unlink f3: %s", st)
 	}
 	time.Sleep(time.Millisecond * 100) // wait for delete
-	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
+	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read chunk: %s", st)
 	}
-	if len(chunks) != 0 {
-		t.Fatalf("chunks: %v", chunks)
+	if len(slices) != 0 {
+		t.Fatalf("slices: %v", slices)
 	}
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmdir d: %s", st)
@@ -812,10 +812,10 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	}
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
-	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		l.Lock()
-		chunkid := args[0].(uint64)
-		deleted[chunkid] = 1
+		sliceId := args[0].(uint64)
+		deleted[sliceId] = 1
 		l.Unlock()
 		return nil
 	})
@@ -834,13 +834,13 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	}()
 
 	// random write
-	var chunkid uint64
-	m.NewChunk(ctx, &chunkid)
-	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Chunkid: chunkid, Size: 64 << 20, Len: 64 << 20})
-	m.NewChunk(ctx, &chunkid)
-	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{Chunkid: chunkid, Size: 8, Len: 8})
-	m.NewChunk(ctx, &chunkid)
-	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{Chunkid: chunkid, Size: 8, Len: 8})
+	var sliceId uint64
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Id: sliceId, Size: 64 << 20, Len: 64 << 20})
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{Id: sliceId, Size: 8, Len: 8})
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{Id: sliceId, Size: 8, Len: 8})
 	var cs1 []Slice
 	_ = m.Read(ctx, inode, 1, &cs1)
 	if len(cs1) != 5 {
@@ -858,9 +858,9 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	// append
 	var size uint32 = 100000
 	for i := 0; i < 200; i++ {
-		var chunkid uint64
-		m.NewChunk(ctx, &chunkid)
-		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Chunkid: chunkid, Size: size, Len: size}); st != 0 {
+		var sliceId uint64
+		m.NewSlice(ctx, &sliceId)
+		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Id: sliceId, Size: size, Len: size}); st != 0 {
 			t.Fatalf("write %d: %s", i, st)
 		}
 		time.Sleep(time.Millisecond)
@@ -868,15 +868,15 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	if c, ok := m.(compactor); ok {
 		c.compactChunk(inode, 0, true)
 	}
-	var chunks []Slice
-	if st := m.Read(ctx, inode, 0, &chunks); st != 0 {
+	var slices []Slice
+	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
 	}
-	if len(chunks) >= 10 {
-		t.Fatalf("inode %d should be compacted, but have %d slices", inode, len(chunks))
+	if len(slices) >= 10 {
+		t.Fatalf("inode %d should be compacted, but have %d slices", inode, len(slices))
 	}
 	var total uint32
-	for _, s := range chunks {
+	for _, s := range slices {
 		total += s.Len
 	}
 	if total != size*200 {
@@ -889,8 +889,8 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		t.Fatalf("compactall: %s", st)
 	}
 	p.Done()
-	slices := make(map[Ino][]Slice)
-	if st := m.ListSlices(ctx, slices, false, nil); st != 0 {
+	sliceMap := make(map[Ino][]Slice)
+	if st := m.ListSlices(ctx, sliceMap, false, nil); st != 0 {
 		t.Fatalf("list all slices: %s", st)
 	}
 
@@ -899,10 +899,10 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	l.Unlock()
 	if trash {
 		if deletes > 10 {
-			t.Fatalf("deleted chunks %d is greater than 10", deletes)
+			t.Fatalf("deleted slices %d is greater than 10", deletes)
 		}
-		if len(slices[1]) < 200 {
-			t.Fatalf("list delayed slices %d is less than 200", len(slices[1]))
+		if len(sliceMap[1]) < 200 {
+			t.Fatalf("list delayed slices %d is less than 200", len(sliceMap[1]))
 		}
 		m.(engine).doCleanupDelayedSlices(time.Now().Unix()+1, 1000)
 		l.Lock()
@@ -910,12 +910,12 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		l.Unlock()
 	}
 	if deletes < 200 {
-		t.Fatalf("deleted chunks %d is less than 200", deletes)
+		t.Fatalf("deleted slices %d is less than 200", deletes)
 	}
 }
 
 func testConcurrentWrite(t *testing.T, m Meta) {
-	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		return nil
 	})
 	m.OnMsg(CompactChunk, func(args ...interface{}) error {
@@ -939,9 +939,9 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 		go func(indx uint32) {
 			defer g.Done()
 			for j := 0; j < 100; j++ {
-				var chunkid uint64
-				m.NewChunk(ctx, &chunkid)
-				var slice = Slice{Chunkid: chunkid, Size: 100, Len: 100}
+				var sliceId uint64
+				m.NewSlice(ctx, &sliceId)
+				var slice = Slice{Id: sliceId, Size: 100, Len: 100}
 				st := m.Write(ctx, inode, indx, 0, slice)
 				if st != 0 {
 					errno = st
@@ -957,7 +957,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 }
 
 func testTruncateAndDelete(t *testing.T, m Meta) {
-	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		return nil
 	})
 	// remove quota
@@ -976,11 +976,11 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 		t.Fatalf("create file %s", st)
 	}
 	defer m.Unlink(ctx, 1, "f")
-	var cid uint64
-	if st := m.NewChunk(ctx, &cid); st != 0 {
+	var sliceId uint64
+	if st := m.NewSlice(ctx, &sliceId); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(ctx, inode, 0, 100, Slice{cid, 100, 0, 100}); st != 0 {
+	if st := m.Write(ctx, inode, 0, 100, Slice{sliceId, 100, 0, 100}); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	if st := m.Truncate(ctx, inode, 0, 200<<20, attr); st != 0 {
@@ -1000,7 +1000,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 		totalSlices += len(ss)
 	}
 	if totalSlices != 1 {
-		t.Fatalf("number of chunks: %d != 1, %+v", totalSlices, slices)
+		t.Fatalf("number of slices: %d != 1, %+v", totalSlices, slices)
 	}
 	_ = m.Close(ctx, inode)
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
@@ -1016,12 +1016,12 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	}
 	// the last chunk could be found and deleted
 	if totalSlices > 1 {
-		t.Fatalf("number of chunks: %d > 1, %+v", totalSlices, slices)
+		t.Fatalf("number of slices: %d > 1, %+v", totalSlices, slices)
 	}
 }
 
 func testCopyFileRange(t *testing.T, m Meta) {
-	m.OnMsg(DeleteChunk, func(args ...interface{}) error {
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		return nil
 	})
 	_ = m.Init(Format{Name: "test"}, false)
@@ -1051,23 +1051,23 @@ func testCopyFileRange(t *testing.T, m Meta) {
 	if copied != expected {
 		t.Fatalf("expect copy %d bytes, but got %d", expected, copied)
 	}
-	var expectedChunks = [][]Slice{
+	var expectedSlices = [][]Slice{
 		{{0, 30 << 20, 0, 30 << 20}, {10, 200, 50, 50}, {0, 0, 200, ChunkSize - 30<<20 - 50}},
 		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {0, 0, 0, 100 << 10}, {11, 40 << 20, 0, (34 << 20) + 150 - (100 << 10)}},
 		{{11, 40 << 20, (34 << 20) + 150 - (100 << 10), 6<<20 - 150 + 100<<10}, {0, 0, 40<<20 + 100<<10, ChunkSize - 40<<20 - 100<<10}, {0, 0, 0, 150 + (ChunkSize - 30<<20)}},
 		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {12, 63 << 20, 10 << 20, (8 << 20) + 150}},
 	}
 	for i := uint32(0); i < 4; i++ {
-		var chunks []Slice
-		if st := m.Read(ctx, iout, i, &chunks); st != 0 {
+		var slices []Slice
+		if st := m.Read(ctx, iout, i, &slices); st != 0 {
 			t.Fatalf("read chunk %d: %s", i, st)
 		}
-		if len(chunks) != len(expectedChunks[i]) {
-			t.Fatalf("expect chunk %d: %+v, but got %+v", i, expectedChunks[i], chunks)
+		if len(slices) != len(expectedSlices[i]) {
+			t.Fatalf("expect chunk %d: %+v, but got %+v", i, expectedSlices[i], slices)
 		}
-		for j, s := range chunks {
-			if s != expectedChunks[i][j] {
-				t.Fatalf("expect slice %d,%d: %+v, but got %+v", i, j, expectedChunks[i][j], s)
+		for j, s := range slices {
+			if s != expectedSlices[i][j] {
+				t.Fatalf("expect slice %d,%d: %+v, but got %+v", i, j, expectedSlices[i][j], s)
 			}
 		}
 	}

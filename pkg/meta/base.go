@@ -34,7 +34,7 @@ import (
 
 const (
 	inodeBatch    = 100
-	chunkIDBatch  = 1000
+	sliceIdBatch  = 1000
 	minUpdateTime = time.Millisecond * 10
 	nlocks        = 1024
 )
@@ -59,7 +59,7 @@ type engine interface {
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices()
 	doCleanupDelayedSlices(edge int64, limit int) (int, error)
-	doDeleteSlice(chunkid uint64, size uint32) error
+	doDeleteSlice(id uint64, size uint32) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
@@ -101,7 +101,7 @@ type baseMeta struct {
 
 	freeMu     sync.Mutex
 	freeInodes freeID
-	freeChunks freeID
+	freeSlices freeID
 
 	usedSpaceG  prometheus.Gauge
 	usedInodesG prometheus.Gauge
@@ -568,9 +568,9 @@ func (m *baseMeta) marshal(attr *Attr) []byte {
 	return w.Bytes()
 }
 
-func (m *baseMeta) encodeDelayedSlice(chunkid uint64, size uint32) []byte {
+func (m *baseMeta) encodeDelayedSlice(id uint64, size uint32) []byte {
 	w := utils.NewBuffer(8 + 4)
-	w.Put64(chunkid)
+	w.Put64(id)
 	w.Put32(size)
 	return w.Bytes()
 }
@@ -580,7 +580,7 @@ func (m *baseMeta) decodeDelayedSlices(buf []byte, ss *[]Slice) {
 		return
 	}
 	for rb := utils.FromBuffer(buf); rb.HasMore(); {
-		*ss = append(*ss, Slice{Chunkid: rb.Get64(), Size: rb.Get32()})
+		*ss = append(*ss, Slice{Id: rb.Get64(), Size: rb.Get32()})
 	}
 }
 
@@ -840,19 +840,19 @@ func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sys
 	return 0
 }
 
-func (m *baseMeta) NewChunk(ctx Context, chunkid *uint64) syscall.Errno {
+func (m *baseMeta) NewSlice(ctx Context, id *uint64) syscall.Errno {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
-	if m.freeChunks.next >= m.freeChunks.maxid {
-		v, err := m.en.incrCounter("nextChunk", chunkIDBatch)
+	if m.freeSlices.next >= m.freeSlices.maxid {
+		v, err := m.en.incrCounter("nextChunk", sliceIdBatch)
 		if err != nil {
 			return errno(err)
 		}
-		m.freeChunks.next = uint64(v) - chunkIDBatch
-		m.freeChunks.maxid = uint64(v)
+		m.freeSlices.next = uint64(v) - sliceIdBatch
+		m.freeSlices.maxid = uint64(v)
 	}
-	*chunkid = m.freeChunks.next
-	m.freeChunks.next++
+	*id = m.freeSlices.next
+	m.freeSlices.next++
 	return 0
 }
 
@@ -955,16 +955,16 @@ func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64) {
 	}
 }
 
-func (m *baseMeta) deleteSlice(chunkid uint64, size uint32) {
-	if chunkid == 0 {
+func (m *baseMeta) deleteSlice(id uint64, size uint32) {
+	if id == 0 {
 		return
 	}
-	if err := m.newMsg(DeleteChunk, chunkid, size); err == nil || strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "not found") {
-		if err = m.en.doDeleteSlice(chunkid, size); err != nil {
-			logger.Errorf("delete slice %d: %s", chunkid, err)
+	if err := m.newMsg(DeleteSlice, id, size); err == nil || strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "not found") {
+		if err = m.en.doDeleteSlice(id, size); err != nil {
+			logger.Errorf("delete slice %d: %s", id, err)
 		}
 	} else if !strings.Contains(err.Error(), "skip deleting") {
-		logger.Warnf("delete chunk %d (%d bytes): %s", chunkid, size, err)
+		logger.Warnf("delete slice %d (%d bytes): %s", id, size, err)
 	}
 }
 
