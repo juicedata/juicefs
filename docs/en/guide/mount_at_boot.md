@@ -1,3 +1,9 @@
+---
+sidebar_label: How to mount JuiceFS automatically at boot
+sidebar_position: 2
+slug: /how_to_mount_at_boot
+---
+
 # Mount JuiceFS at Boot
 
 This is a guide about how to mount JuiceFS automatically at boot.
@@ -10,7 +16,7 @@ Copy `juicefs` as `/sbin/mount.juicefs`, then edit `/etc/fstab` with following l
 <META-URL>    <MOUNTPOINT>       juicefs     _netdev[,<MOUNT-OPTIONS>]     0  0
 ```
 
-The format of `<META-URL>` is `redis://<user>:<password>@<host>:<port>/<db>`, e.g. `redis://localhost:6379/1`. And replace `<MOUNTPOINT>` with specific path you wanna mount JuiceFS to, e.g. `/jfs`. If you need set [mount options](reference/command_reference.md#juicefs-mount), replace `[,<MOUNT-OPTIONS>]` with comma separated options list. The following line is an example:
+The format of `<META-URL>` is `redis://<user>:<password>@<host>:<port>/<db>`, e.g. `redis://localhost:6379/1`. And replace `<MOUNTPOINT>` with specific path you wanna mount JuiceFS to, e.g. `/jfs`. If you need set [mount options](https://juicefs.com/docs/community/fuse_mount_options/), replace `[,<MOUNT-OPTIONS>]` with comma separated options list. The following line is an example:
 
 ```
 redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=2048     0  0
