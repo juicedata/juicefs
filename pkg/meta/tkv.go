@@ -928,7 +928,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		t.Ctime = now.Unix()
 		t.Ctimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(inode), m.marshal(&t))
-		if mode&(fallocZeroRange|fallocPunchHole) != 0 {
+		if mode&(fallocZeroRange|fallocPunchHole) != 0 && off < old {
 			if off+size > old {
 				size = old - off
 			}

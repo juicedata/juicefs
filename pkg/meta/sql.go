@@ -1026,7 +1026,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		if _, err := s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode}); err != nil {
 			return err
 		}
-		if mode&(fallocZeroRange|fallocPunchHole) != 0 {
+		if mode&(fallocZeroRange|fallocPunchHole) != 0 && off < old {
 			if off+size > old {
 				size = old - off
 			}
