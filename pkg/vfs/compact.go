@@ -37,7 +37,7 @@ var (
 func readSlice(store chunk.ChunkStore, s *meta.Slice, page *chunk.Page, off int) error {
 	buf := page.Data
 	read := 0
-	reader := store.NewReader(s.Chunkid, int(s.Size))
+	reader := store.NewReader(s.Id, int(s.Size))
 	for read < len(buf) {
 		p := page.Slice(read, len(buf)-read)
 		n, err := reader.ReadAt(context.Background(), p, off+int(s.Off))
@@ -51,7 +51,7 @@ func readSlice(store chunk.ChunkStore, s *meta.Slice, page *chunk.Page, off int)
 	return nil
 }
 
-func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, chunkid uint64) error {
+func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id uint64) error {
 	for utils.AllocMemory()-store.UsedMemory() > int64(conf.BufferSize)*3/2 {
 		time.Sleep(time.Millisecond * 100)
 	}
@@ -60,13 +60,13 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, chu
 		size += s.Len
 	}
 	compactSizeHistogram.Observe(float64(size))
-	logger.Debugf("compact %d slices (%d bytes) to chunk %d", len(slices), size, chunkid)
+	logger.Debugf("compact %d slices (%d bytes) to new slice %d", len(slices), size, id)
 
-	writer := store.NewWriter(chunkid)
+	writer := store.NewWriter(id)
 
 	var pos int
 	for i, s := range slices {
-		if s.Chunkid == 0 {
+		if s.Id == 0 {
 			_, err := writer.WriteAt(make([]byte, int(s.Len)), int64(pos))
 			if err != nil {
 				writer.Abort()
@@ -80,7 +80,7 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, chu
 			l := utils.Min(conf.BlockSize, int(s.Len)-read)
 			p := chunk.NewOffPage(l)
 			if err := readSlice(store, &slices[i], p, read); err != nil {
-				logger.Debugf("can't compact chunk %d, retry later, read %d: %s", chunkid, i, err)
+				logger.Debugf("can't compact to slice %d, retry later, read %d: %s", id, i, err)
 				p.Release()
 				writer.Abort()
 				return err
@@ -88,7 +88,7 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, chu
 			_, err := writer.WriteAt(p.Data, int64(pos+read))
 			p.Release()
 			if err != nil {
-				logger.Errorf("can't compact chunk %d, retry later, write: %s", chunkid, err)
+				logger.Errorf("can't compact to slice %d, retry later, write: %s", id, err)
 				writer.Abort()
 				return err
 			}
