@@ -366,7 +366,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 
 	// data
-	var sliceID uint64
+	var sliceId uint64
 	// try to open a file that does not exist
 	if st := m.Open(ctx, 99999, syscall.O_RDWR, &Attr{}); st != syscall.ENOENT {
 		t.Fatalf("open not exist inode got %d, expected %d", st, syscall.ENOENT)
@@ -375,10 +375,10 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("open f: %s", st)
 	}
 	_ = m.Close(ctx, inode)
-	if st := m.NewSliceID(ctx, &sliceID); st != 0 {
+	if st := m.NewSliceID(ctx, &sliceId); st != 0 {
 		t.Fatalf("write chunk: %s", st)
 	}
-	var s = Slice{ID: sliceID, Size: 100, Len: 100}
+	var s = Slice{Id: sliceId, Size: 100, Len: 100}
 	if st := m.Write(ctx, inode, 0, 100, s); st != 0 {
 		t.Fatalf("write end: %s", st)
 	}
@@ -386,7 +386,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read chunk: %s", st)
 	}
-	if len(slices) != 2 || slices[0].ID != 0 || slices[0].Size != 100 || slices[1].ID != sliceID || slices[1].Size != 100 {
+	if len(slices) != 2 || slices[0].Id != 0 || slices[0].Size != 100 || slices[1].Id != sliceId || slices[1].Size != 100 {
 		t.Fatalf("slices: %v", slices)
 	}
 	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocKeepSize, 100, 50); st != 0 {
@@ -413,7 +413,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read chunk: %s", st)
 	}
-	if len(slices) != 3 || slices[1].ID != 0 || slices[1].Len != 50 || slices[2].ID != sliceID || slices[2].Len != 50 {
+	if len(slices) != 3 || slices[1].Id != 0 || slices[1].Len != 50 || slices[2].Id != sliceId || slices[2].Len != 50 {
 		t.Fatalf("slices: %v", slices)
 	}
 
@@ -814,8 +814,8 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	deleted := make(map[uint64]int)
 	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		l.Lock()
-		sliceID := args[0].(uint64)
-		deleted[sliceID] = 1
+		sliceId := args[0].(uint64)
+		deleted[sliceId] = 1
 		l.Unlock()
 		return nil
 	})
@@ -834,13 +834,13 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	}()
 
 	// random write
-	var sliceID uint64
-	m.NewSliceID(ctx, &sliceID)
-	_ = m.Write(ctx, inode, 1, uint32(0), Slice{ID: sliceID, Size: 64 << 20, Len: 64 << 20})
-	m.NewSliceID(ctx, &sliceID)
-	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{ID: sliceID, Size: 8, Len: 8})
-	m.NewSliceID(ctx, &sliceID)
-	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{ID: sliceID, Size: 8, Len: 8})
+	var sliceId uint64
+	m.NewSliceID(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Id: sliceId, Size: 64 << 20, Len: 64 << 20})
+	m.NewSliceID(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{Id: sliceId, Size: 8, Len: 8})
+	m.NewSliceID(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{Id: sliceId, Size: 8, Len: 8})
 	var cs1 []Slice
 	_ = m.Read(ctx, inode, 1, &cs1)
 	if len(cs1) != 5 {
@@ -858,9 +858,9 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	// append
 	var size uint32 = 100000
 	for i := 0; i < 200; i++ {
-		var sliceID uint64
-		m.NewSliceID(ctx, &sliceID)
-		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{ID: sliceID, Size: size, Len: size}); st != 0 {
+		var sliceId uint64
+		m.NewSliceID(ctx, &sliceId)
+		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Id: sliceId, Size: size, Len: size}); st != 0 {
 			t.Fatalf("write %d: %s", i, st)
 		}
 		time.Sleep(time.Millisecond)
@@ -939,9 +939,9 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 		go func(indx uint32) {
 			defer g.Done()
 			for j := 0; j < 100; j++ {
-				var sliceID uint64
-				m.NewSliceID(ctx, &sliceID)
-				var slice = Slice{ID: sliceID, Size: 100, Len: 100}
+				var sliceId uint64
+				m.NewSliceID(ctx, &sliceId)
+				var slice = Slice{Id: sliceId, Size: 100, Len: 100}
 				st := m.Write(ctx, inode, indx, 0, slice)
 				if st != 0 {
 					errno = st
@@ -976,11 +976,11 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 		t.Fatalf("create file %s", st)
 	}
 	defer m.Unlink(ctx, 1, "f")
-	var sliceID uint64
-	if st := m.NewSliceID(ctx, &sliceID); st != 0 {
+	var sliceId uint64
+	if st := m.NewSliceID(ctx, &sliceId); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(ctx, inode, 0, 100, Slice{sliceID, 100, 0, 100}); st != 0 {
+	if st := m.Write(ctx, inode, 0, 100, Slice{sliceId, 100, 0, 100}); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	if st := m.Truncate(ctx, inode, 0, 200<<20, attr); st != 0 {

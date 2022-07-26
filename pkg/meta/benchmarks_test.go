@@ -508,9 +508,9 @@ func benchReadlink(b *testing.B, m Meta) {
 
 func benchNewChunk(b *testing.B, m Meta) {
 	ctx := Background
-	var sliceID uint64
+	var sliceId uint64
 	for i := 0; i < b.N; i++ {
-		if err := m.NewSliceID(ctx, &sliceID); err != 0 {
+		if err := m.NewSliceID(ctx, &sliceId); err != 0 {
 			b.Fatalf("newchunk: %s", err)
 		}
 	}
@@ -527,16 +527,16 @@ func benchWrite(b *testing.B, m Meta) {
 		b.Fatalf("create: %s", err)
 	}
 	var (
-		sliceID uint64
+		sliceId uint64
 		offset  uint32
 		step    uint32 = 1024
 	)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := m.NewSliceID(ctx, &sliceID); err != 0 {
+		if err := m.NewSliceID(ctx, &sliceId); err != 0 {
 			b.Fatalf("newchunk: %s", err)
 		}
-		if err := m.Write(ctx, inode, 0, offset, Slice{ID: sliceID, Size: step, Len: step}); err != 0 {
+		if err := m.Write(ctx, inode, 0, offset, Slice{Id: sliceId, Size: step, Len: step}); err != 0 {
 			b.Fatalf("write: %s", err)
 		}
 		offset += step
@@ -556,13 +556,13 @@ func benchRead(b *testing.B, m Meta, n int) {
 	if err := m.Create(ctx, parent, "file", 0644, 022, 0, &inode, nil); err != 0 {
 		b.Fatalf("create: %s", err)
 	}
-	var sliceID uint64
+	var sliceId uint64
 	var step uint32 = 1024
 	for j := 0; j < n; j++ {
-		if err := m.NewSliceID(ctx, &sliceID); err != 0 {
+		if err := m.NewSliceID(ctx, &sliceId); err != 0 {
 			b.Fatalf("newchunk: %s", err)
 		}
-		if err := m.Write(ctx, inode, 0, uint32(j)*step, Slice{ID: sliceID, Size: step, Len: step}); err != 0 {
+		if err := m.Write(ctx, inode, 0, uint32(j)*step, Slice{Id: sliceId, Size: step, Len: step}); err != 0 {
 			b.Fatalf("write: %s", err)
 		}
 	}

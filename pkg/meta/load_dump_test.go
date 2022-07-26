@@ -130,7 +130,7 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	if st := m.Read(ctx, 2, 0, &slices); st != 0 {
 		t.Fatalf("read chunk: %s", st)
 	}
-	if len(slices) != 1 || slices[0].ID != 4 || slices[0].Size != 24 {
+	if len(slices) != 1 || slices[0].Id != 4 || slices[0].Size != 24 {
 		t.Fatalf("slices: %v", slices)
 	}
 	if st := m.GetAttr(ctx, 4, attr); st != 0 || attr.Nlink != 2 { // hard link

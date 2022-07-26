@@ -201,7 +201,7 @@ func gc(ctx *cli.Context) error {
 	var totalBytes uint64
 	for _, ss := range slices {
 		for _, s := range ss {
-			keys[s.ID] = s.Size
+			keys[s.Id] = s.Size
 			total += int64(int(s.Size-1)/chunkConf.BlockSize) + 1 // s.Size should be > 0
 			totalBytes += uint64(s.Size)
 		}

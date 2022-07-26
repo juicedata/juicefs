@@ -197,7 +197,7 @@ func (c *chunkWriter) commitThread() {
 		f.Unlock()
 
 		if err == 0 {
-			var ss = meta.Slice{ID: s.id, Size: s.length, Off: s.soff, Len: s.slen}
+			var ss = meta.Slice{Id: s.id, Size: s.length, Off: s.soff, Len: s.slen}
 			err = f.w.m.Write(meta.Background, f.inode, c.indx, s.off, ss)
 			f.w.reader.Invalidate(f.inode, uint64(c.indx)*meta.ChunkSize+uint64(s.off), uint64(ss.Len))
 		}

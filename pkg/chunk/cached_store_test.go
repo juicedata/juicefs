@@ -29,8 +29,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 )
 
-func forgetSlice(store ChunkStore, sliceID uint64, size int) error {
-	w := store.NewWriter(sliceID)
+func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
+	w := store.NewWriter(sliceId)
 	buf := bytes.Repeat([]byte{0x41}, size)
 	if _, err := w.WriteAt(buf, 0); err != nil {
 		return err
@@ -74,13 +74,13 @@ func testStore(t *testing.T, store ChunkStore) {
 	bsize := defaultConf.BlockSize / 2
 	errs := make(chan error, 3)
 	for i := 2; i < 5; i++ {
-		go func(sliceID uint64) {
-			if err := forgetSlice(store, sliceID, bsize); err != nil {
+		go func(sliceId uint64) {
+			if err := forgetSlice(store, sliceId, bsize); err != nil {
 				errs <- err
 				return
 			}
 			time.Sleep(time.Millisecond * 100) // waiting for flush
-			errs <- store.Remove(sliceID, bsize)
+			errs <- store.Remove(sliceId, bsize)
 		}(uint64(i))
 	}
 	for i := 0; i < 3; i++ {

@@ -1992,7 +1992,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if err != nil {
 			return err
 		}
-		buf := marshalSlice(off, slice.ID, slice.Size, slice.Off, slice.Len)
+		buf := marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len)
 		if ok {
 			if err := m.appendSlice(s, inode, indx, buf); err != nil {
 				return err
@@ -2002,7 +2002,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 				return err
 			}
 		}
-		if err = mustInsert(s, sliceRef{slice.ID, slice.Size, 1}); err != nil {
+		if err = mustInsert(s, sliceRef{slice.Id, slice.Size, 1}); err != nil {
 			return err
 		}
 		_, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode})
@@ -2110,15 +2110,15 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 					indx := uint32(doff / ChunkSize)
 					dpos := uint32(doff % ChunkSize)
 					if dpos+s.Len > ChunkSize {
-						if err := updateSlices(indx, marshalSlice(dpos, s.ID, s.Size, s.Off, ChunkSize-dpos), s.ID, s.Size); err != nil {
+						if err := updateSlices(indx, marshalSlice(dpos, s.Id, s.Size, s.Off, ChunkSize-dpos), s.Id, s.Size); err != nil {
 							return err
 						}
 						skip := ChunkSize - dpos
-						if err := updateSlices(indx+1, marshalSlice(0, s.ID, s.Size, s.Off+skip, s.Len-skip), s.ID, s.Size); err != nil {
+						if err := updateSlices(indx+1, marshalSlice(0, s.Id, s.Size, s.Off+skip, s.Len-skip), s.Id, s.Size); err != nil {
 							return err
 						}
 					} else {
-						if err := updateSlices(indx, marshalSlice(dpos, s.ID, s.Size, s.Off, s.Len), s.ID, s.Size); err != nil {
+						if err := updateSlices(indx, marshalSlice(dpos, s.Id, s.Size, s.Off, s.Len), s.Id, s.Size); err != nil {
 							return err
 						}
 					}
@@ -2272,7 +2272,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 				return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Id, ds.Slices)
 			}
 			for _, s := range ss {
-				if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.ID, s.Size); e != nil {
+				if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.Id, s.Size); e != nil {
 					return e
 				}
 			}
@@ -2283,7 +2283,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 			continue
 		}
 		for _, s := range ss {
-			var ref = sliceRef{Id: s.ID}
+			var ref = sliceRef{Id: s.Id}
 			err := m.roTxn(func(s *xorm.Session) error {
 				ok, err := s.Get(&ref)
 				if err == nil && !ok {
@@ -2292,7 +2292,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 				return err
 			})
 			if err == nil && ref.Refs <= 0 {
-				m.deleteSlice(s.ID, s.Size)
+				m.deleteSlice(s.Id, s.Size)
 				count++
 			}
 		}
@@ -2492,7 +2492,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 			ss := readSliceBuf(c.Slices)
 			for _, s := range ss {
 				if s.id > 0 {
-					slices[c.Inode] = append(slices[c.Inode], Slice{ID: s.id, Size: s.size})
+					slices[c.Inode] = append(slices[c.Inode], Slice{Id: s.id, Size: s.size})
 					if showProgress != nil {
 						showProgress()
 					}
@@ -2529,7 +2529,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 				}
 			}
 			for _, s := range ss {
-				if s.ID > 0 {
+				if s.Id > 0 {
 					slices[1] = append(slices[1], s)
 				}
 			}

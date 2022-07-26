@@ -151,7 +151,7 @@ func (m *kvMeta) fmtKey(args ...interface{}) []byte {
   Length  llllllll
   Indx    nnnn
   name    ...
-  sliceID cccccccc
+  sliceId cccccccc
   session ssssssss
 
 All keys:
@@ -1690,7 +1690,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
-		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.ID, slice.Size, slice.Off, slice.Len))
+		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len))
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
 		needCompact = (len(val)/sliceBytes)%100 == 99
 		return nil
@@ -1784,19 +1784,19 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 					indx := uint32(doff / ChunkSize)
 					dpos := uint32(doff % ChunkSize)
 					if dpos+s.Len > ChunkSize {
-						tx.append(m.chunkKey(fout, indx), marshalSlice(dpos, s.ID, s.Size, s.Off, ChunkSize-dpos))
-						if s.ID > 0 {
-							tx.incrBy(m.sliceKey(s.ID, s.Size), 1)
+						tx.append(m.chunkKey(fout, indx), marshalSlice(dpos, s.Id, s.Size, s.Off, ChunkSize-dpos))
+						if s.Id > 0 {
+							tx.incrBy(m.sliceKey(s.Id, s.Size), 1)
 						}
 						skip := ChunkSize - dpos
-						tx.append(m.chunkKey(fout, indx+1), marshalSlice(0, s.ID, s.Size, s.Off+skip, s.Len-skip))
-						if s.ID > 0 {
-							tx.incrBy(m.sliceKey(s.ID, s.Size), 1)
+						tx.append(m.chunkKey(fout, indx+1), marshalSlice(0, s.Id, s.Size, s.Off+skip, s.Len-skip))
+						if s.Id > 0 {
+							tx.incrBy(m.sliceKey(s.Id, s.Size), 1)
 						}
 					} else {
-						tx.append(m.chunkKey(fout, indx), marshalSlice(dpos, s.ID, s.Size, s.Off, s.Len))
-						if s.ID > 0 {
-							tx.incrBy(m.sliceKey(s.ID, s.Size), 1)
+						tx.append(m.chunkKey(fout, indx), marshalSlice(dpos, s.Id, s.Size, s.Off, s.Len))
+						if s.Id > 0 {
+							tx.incrBy(m.sliceKey(s.Id, s.Size), 1)
 						}
 					}
 				}
@@ -1946,7 +1946,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 				return fmt.Errorf("invalid value for delayed slices %s: %v", key, buf)
 			}
 			for _, s := range ss {
-				rs = append(rs, tx.incrBy(m.sliceKey(s.ID, s.Size), -1))
+				rs = append(rs, tx.incrBy(m.sliceKey(s.Id, s.Size), -1))
 			}
 			tx.dels(key)
 			return nil
@@ -1956,7 +1956,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 		}
 		for i, s := range ss {
 			if rs[i] < 0 {
-				m.deleteSlice(s.ID, s.Size)
+				m.deleteSlice(s.Id, s.Size)
 				count++
 			}
 		}
@@ -2134,7 +2134,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		ss := readSliceBuf(value)
 		for _, s := range ss {
 			if s.id > 0 {
-				slices[inode] = append(slices[inode], Slice{ID: s.id, Size: s.size})
+				slices[inode] = append(slices[inode], Slice{Id: s.id, Size: s.size})
 				if showProgress != nil {
 					showProgress()
 				}
@@ -2164,7 +2164,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 			}
 		}
 		for _, s := range ss {
-			if s.ID > 0 {
+			if s.Id > 0 {
 				slices[1] = append(slices[1], s)
 			}
 		}

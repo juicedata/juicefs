@@ -34,7 +34,7 @@ import (
 
 const (
 	inodeBatch    = 100
-	sliceIDBatch  = 1000
+	sliceIdBatch  = 1000
 	minUpdateTime = time.Millisecond * 10
 	nlocks        = 1024
 )
@@ -580,7 +580,7 @@ func (m *baseMeta) decodeDelayedSlices(buf []byte, ss *[]Slice) {
 		return
 	}
 	for rb := utils.FromBuffer(buf); rb.HasMore(); {
-		*ss = append(*ss, Slice{ID: rb.Get64(), Size: rb.Get32()})
+		*ss = append(*ss, Slice{Id: rb.Get64(), Size: rb.Get32()})
 	}
 }
 
@@ -844,11 +844,11 @@ func (m *baseMeta) NewSliceID(ctx Context, id *uint64) syscall.Errno {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeSlices.next >= m.freeSlices.maxid {
-		v, err := m.en.incrCounter("nextChunk", sliceIDBatch)
+		v, err := m.en.incrCounter("nextChunk", sliceIdBatch)
 		if err != nil {
 			return errno(err)
 		}
-		m.freeSlices.next = uint64(v) - sliceIDBatch
+		m.freeSlices.next = uint64(v) - sliceIdBatch
 		m.freeSlices.maxid = uint64(v)
 	}
 	*id = m.freeSlices.next
