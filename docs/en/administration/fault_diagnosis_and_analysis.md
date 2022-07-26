@@ -4,6 +4,9 @@ sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Fault Diagnosis and Analysis
 
 ## Client log
@@ -14,29 +17,45 @@ Different JuiceFS clients obtain logs in different ways, which are described bel
 
 ### Mount point
 
-When the JuiceFS file system is mounted with the [`-d` option](../reference/command_reference.md#juicefs-mount) (indicating running in the background), the log will be output to the syslog and `/var/log/juicefs.log` (requires v0.15 and above client, see [`--log` option](../reference/command_reference.md#juicefs-mount)). Depending on the operating system you are using, you can get the logs with different commands:
+When the JuiceFS file system is mounted with the [`-d` option](../reference/command_reference.md#juicefs-mount) (indicating running in the background), the log will be output to the system log and local log file at the same time, depending on the running user when the file system is mounted, the path of the local log file is slightly different. The log file path corresponding to root user is `/var/log/juicefs.log`, and the log file path of non-root user is `$HOME/.juicefs/juicefs.log`. For details, see [`--log` option](../reference/command_reference.md#juicefs-mount).
+
+Depending on the operating system you are using, you can get the logs with different commands:
+
+<Tabs>
+  <TabItem value="local-log-file" label="Local log file">
 
 ```bash
-# macOS
-syslog | grep 'juicefs'
-
-# Debian based system
-cat /var/log/syslog | grep 'juicefs'
-
-# CentOS based system
-cat /var/log/messages | grep 'juicefs'
-
-# All system (require v0.15+ JuiceFS)
 tail -n 100 /var/log/juicefs.log
 ```
 
+  </TabItem>
+  <TabItem value="macos-syslog" label="macOS system log">
+
+```bash
+syslog | grep 'juicefs'
+```
+
+  </TabItem>
+  <TabItem value="debian-syslog" label="Debian system log">
+
+```bash
+cat /var/log/syslog | grep 'juicefs'
+```
+
+  </TabItem>
+  <TabItem value="centos-syslog" label="CentOS system log">
+
+```bash
+cat /var/log/messages | grep 'juicefs'
+```
+
+  </TabItem>
+</Tabs>
+
 You can use the `grep` command to filter different levels of logs for performance analysis or troubleshooting:
 
-```
-cat /var/log/syslog | grep 'juicefs' | grep '<INFO>'
-cat /var/log/syslog | grep 'juicefs' | grep '<WARNING>'
+```shell
 cat /var/log/syslog | grep 'juicefs' | grep '<ERROR>'
-cat /var/log/syslog | grep 'juicefs' | grep '<FATAL>'
 ```
 
 ### Kubernetes CSI Driver
