@@ -1,10 +1,10 @@
 ---
-sidebar_label: How to mount JuiceFS automatically at boot
+sidebar_label: Mount JuiceFS at Boot Time
 sidebar_position: 2
-slug: /how_to_mount_at_boot
+slug: /mount_juicefs_at_boot_time
 ---
 
-# Mount JuiceFS at Boot
+# Mount JuiceFS at Boot Time
 
 This is a guide about how to mount JuiceFS automatically at boot.
 
@@ -16,23 +16,25 @@ Copy `juicefs` as `/sbin/mount.juicefs`, then edit `/etc/fstab` with following l
 <META-URL>    <MOUNTPOINT>       juicefs     _netdev[,<MOUNT-OPTIONS>]     0  0
 ```
 
-The format of `<META-URL>` is `redis://<user>:<password>@<host>:<port>/<db>`, e.g. `redis://localhost:6379/1`. And replace `<MOUNTPOINT>` with specific path you wanna mount JuiceFS to, e.g. `/jfs`. If you need set [mount options](https://juicefs.com/docs/community/fuse_mount_options/), replace `[,<MOUNT-OPTIONS>]` with comma separated options list. The following line is an example:
+For the format of `<META-URL>`, please refer to the ["How to Setup Metadata Engine"](how_to_setup_metadata_engine.md) document, such as `redis://localhost:6379/1`. Then replace `<MOUNTPOINT>` with the path you want JuiceFS to mount, e.g. `/jfs`. If you want to set [mount options](../reference/command_reference.md#juicefs-mount), separate the options list with commas and replace `[,<MOUNT-OPTIONS>]`. Here is an example:
 
 ```
-redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=2048     0  0
+redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=204800     0  0
 ```
 
-**Note: By default, CentOS 6 will NOT mount network file system after boot, run following command to enable it:**
+:::tip
+By default, CentOS 6 will NOT mount network file system after boot, run following command to enable it:
 
 ```bash
 sudo chkconfig --add netfs
 ```
+:::
 
 ## macOS
 
-Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS volume name. Add following contents to the file (again, replace `NAME`, `PATH-TO-JUICEFS`, `META-URL` and `MOUNTPOINT` with appropriate value):
+Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS file system name. Add following contents to the file (again, replace `NAME`, `PATH-TO-JUICEFS`, `META-URL`, `MOUNTPOINT` and `MOUNT-OPTIONS` with appropriate value):
 
-```xml
+```xml title="io.juicefs.<NAME>.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -45,6 +47,7 @@ Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Re
                 <string>mount</string>
                 <string>META-URL</string>
                 <string>MOUNTPOINT</string>
+                <string>MOUNT-OPTIONS</string>
         </array>
         <key>RunAtLoad</key>
         <true/>
@@ -52,7 +55,18 @@ Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Re
 </plist>
 ```
 
-Use following commands to load the file created in the previous step and test whether the loading is successful. **Please ensure Redis server is already running.**
+:::tip
+If there are multiple mount options, they can be set in multiple lines, for example:
+
+```xml
+                <string>--max-uploads</string>
+                <string>50</string>
+                <string>--cache-size</string>
+                <string>204800</string>
+```
+:::
+
+Use following commands to load the file created in the previous step and test whether the loading is successful. **Please make sure the metadata engine is running properly.**
 
 ```bash
 $ launchctl load ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
@@ -62,7 +76,7 @@ $ ls <MOUNTPOINT>
 
 If mount failed, you can add following configuration to `io.juicefs.<NAME>.plist` file for debug purpose:
 
-```xml
+```xml title="io.juicefs.<NAME>.plist"
         <key>StandardOutPath</key>
         <string>/tmp/juicefs.out</string>
         <key>StandardErrorPath</key>
@@ -86,11 +100,10 @@ brew services start redis
 
 Then add following configuration to `io.juicefs.<NAME>.plist` file for ensure Redis server is loaded:
 
-```xml
+```xml title="io.juicefs.<NAME>.plist"
         <key>KeepAlive</key>
         <dict>
                 <key>OtherJobEnabled</key>
                 <string>homebrew.mxcl.redis</string>
         </dict>
 ```
-
