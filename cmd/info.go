@@ -158,7 +158,7 @@ func printChunks(resp string, raw bool) {
 	result[0] = []string{"chunkIndex", "objectName", "size", "offset", "length"}
 	leftAlign := 1
 	if raw {
-		result[0][1] = "sliceID"
+		result[0][1] = "sliceId"
 		leftAlign = -1
 	}
 	for i := 1; i < len(result); i++ {

@@ -71,7 +71,8 @@ type DumpedAttr struct {
 }
 
 type DumpedSlice struct {
-	Chunkid uint64 `json:"chunkid"`
+	Chunkid uint64 `json:"chunkid,omitempty"`
+	Id      uint64 `json:"id"`
 	Pos     uint32 `json:"pos,omitempty"`
 	Size    uint32 `json:"size"`
 	Off     uint32 `json:"off,omitempty"`
@@ -408,13 +409,17 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 			if err == nil && len(e.Parents) == 1 {
 				for _, c := range e.Chunks {
 					for _, s := range c.Slices {
-						ck := chunkKey{s.Chunkid, s.Size}
+						if s.Chunkid != 0 && s.Id == 0 {
+							s.Id = s.Chunkid
+							s.Chunkid = 0
+						}
+						ck := chunkKey{s.Id, s.Size}
 						refs[ck]++
 						if addChunk != nil && refs[ck] == 1 {
 							addChunk(&ck)
 						}
-						if cs.NextChunk <= int64(s.Chunkid) {
-							cs.NextChunk = int64(s.Chunkid) + 1
+						if cs.NextChunk <= int64(s.Id) {
+							cs.NextChunk = int64(s.Id) + 1
 						}
 					}
 				}

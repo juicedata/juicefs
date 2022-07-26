@@ -126,12 +126,12 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	if attr.Nlink != 1 || attr.Length != 24 {
 		t.Fatalf("nlink: %d, length: %d", attr.Nlink, attr.Length)
 	}
-	var chunks []Slice
-	if st := m.Read(ctx, 2, 0, &chunks); st != 0 {
+	var slices []Slice
+	if st := m.Read(ctx, 2, 0, &slices); st != 0 {
 		t.Fatalf("read chunk: %s", st)
 	}
-	if len(chunks) != 1 || chunks[0].Chunkid != 4 || chunks[0].Size != 24 {
-		t.Fatalf("chunks: %v", chunks)
+	if len(slices) != 1 || slices[0].Id != 4 || slices[0].Size != 24 {
+		t.Fatalf("slices: %v", slices)
 	}
 	if st := m.GetAttr(ctx, 4, attr); st != 0 || attr.Nlink != 2 { // hard link
 		t.Fatalf("getattr: %s, %d", st, attr.Nlink)

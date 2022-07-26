@@ -56,7 +56,7 @@ func TestCompact(t *testing.T) {
 		if e := w.Finish(len(buf)); e != nil {
 			t.Fatalf("flush chunk %d: %s", cid, e)
 		}
-		slices = append(slices, meta.Slice{Chunkid: cid, Size: uint32(len(buf)), Len: uint32(len(buf))})
+		slices = append(slices, meta.Slice{Id: cid, Size: uint32(len(buf)), Len: uint32(len(buf))})
 	}
 
 	// compact
