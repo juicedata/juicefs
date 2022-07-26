@@ -1027,6 +1027,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 			return err
 		}
 		if mode&(fallocZeroRange|fallocPunchHole) != 0 {
+			off, size := off, size
 			if off+size > old {
 				size = old - off
 			}
@@ -2039,6 +2040,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			*copied = 0
 			return nil
 		}
+		size := size
 		if offIn+size > nin.Length {
 			size = nin.Length - offIn
 		}

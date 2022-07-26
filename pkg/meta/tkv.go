@@ -929,6 +929,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		t.Ctimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(inode), m.marshal(&t))
 		if mode&(fallocZeroRange|fallocPunchHole) != 0 {
+			off, size := off, size
 			if off+size > old {
 				size = old - off
 			}
@@ -1727,6 +1728,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			*copied = 0
 			return nil
 		}
+		size := size
 		if offIn+size > sattr.Length {
 			size = sattr.Length - offIn
 		}

@@ -949,6 +949,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&t), 0)
 			if mode&(fallocZeroRange|fallocPunchHole) != 0 {
+				off, size := off, size
 				if off+size > old {
 					size = old - off
 				}
@@ -2041,6 +2042,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			*copied = 0
 			return nil
 		}
+		size := size
 		if offIn+size > sattr.Length {
 			size = sattr.Length - offIn
 		}
