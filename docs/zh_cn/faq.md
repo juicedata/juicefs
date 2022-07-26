@@ -37,7 +37,7 @@ JuiceFS 不将原始对象传入对象存储，而是将其按照 4M 的大小�
 
 ## 为什么挂载点显示的大小与对象存储占用空间存在差异？
 
-通过 [JuiceFS 随机写的基本原理是什么](##JuiceFS 随机写的基本原理是什么) 这个问题的答案可以推断出，对象存储的占用空间大部分情况下是大于等于实际大小的，尤其是短时间内进行大量的覆盖写产生许多文件碎片后。这些碎片在未触发合并与回收前其仍旧占用着对象存储的空间。不过也不必担心这些碎片一直占用空间，因为在每次读文件的时候都会触发该文件相关碎片的整理工作。另外你可以通过 `juicefs gc —-compact -—delete` 命令手动触发合并与回收。
+通过 [JuiceFS 随机写的基本原理是什么](##JuiceFS 随机写的基本原理是什么) 这个问题的答案可以推断出，对象存储的占用空间大部分情况下是大于等于实际大小的，尤其是短时间内进行大量的覆盖写产生许多文件碎片后。这些碎片在未触发合并与回收前其仍旧占用着对象存储的空间。不过也不必担心这些碎片一直占用空间，因为在每次读文件的时候都会检查并在必要的时候才触发该文件相关碎片的整理工作。另外你可以通过 `juicefs gc —-compact -—delete` 命令手动触发合并与回收。
 
 ## 数据更新什么时候会对其它客户端可见？
 
@@ -142,9 +142,9 @@ uid=1201(alice) gid=500(staff) groups=500(staff)
 
 JuiceFS 后台挂载的时候日志才会写入日志文件，前台挂载或者其他前台的命令都会将日志直接打印到终端
 
-Mac 系统上日志文件默认是`/Users/$User/.juicefs/juicefs.log`
+Mac 系统上日志文件默认是 `/Users/$User/.juicefs/juicefs.log`
 
-Linux 系统上日志文件默认是`/var/log/juicefs.log`
+Linux 系统上 root 用户启动时日志文件默认是 `/var/log/juicefs.log`，非 root 用户启动日志文件默认是 `~/.juicefs/juicefs.log`
 
 ## 如何销毁一个文件系统？
 
@@ -156,16 +156,16 @@ JuiceFS 内置的 gateway 子命令不支持多用户管理等功能，只提供
 
 ## JuiceFS 支持使用对象存储中的某个目录作为 `—-bucket` 参数吗？
 
-到 JuiceFS 1.0.0-rc3 为止，还不支持该功能。
+到 JuiceFS 1.0 为止，还不支持该功能。
 
-## JuiceFS 支持读取对象存储中已经存在的数据吗？
+## JuiceFS 支持对接对象存储中已经存在的数据吗？
 
-到 JuiceFS 1.0.0-rc3 为止，还不支持该功能。
+到 JuiceFS 1.0 为止，还不支持该功能。
 
 ## JuiceFS 目前支持分布式缓存吗？
 
-到 JuiceFS 1.0.0-rc3 为止，还不支持该功能。
+到 JuiceFS 1.0 为止，还不支持该功能。
 
 ## JuiceFS 目前有 SDK 可以使用吗？
 
-到 JuiceFS 1.0.0-rc3 为止，还不支持该功能。
+截止到 JuiceFS 1.0 发布，社区有两个 SDK，一个是 JuiceFS 官方维护的 HDFS 接口高度兼容的 [Java SDK](https://juicefs.com/docs/zh/community/hadoop_java_sdk)，另一个是由社区用户维护的 [Python SDK](https://github.com/megvii-research/juicefs-python)。

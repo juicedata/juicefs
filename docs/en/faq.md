@@ -36,7 +36,7 @@ The second reason is that JuiceFS deletes object stores asynchronously. Therefor
 
 ## Why is the size displayed at the mount point different from the object storage footprint?
 
-It can be inferred from the answer to the question [ What is the rationale for JuiceFS random writes ](#What is the rationale for JuiceFS random writes?) that the size of the object store is in most cases greater than or equal to the actual size, especially if a large number of write overwrites in a short period of time result in many file fragments. These fragments still occupy space in the object store until merge and reclaim are triggered. However, you don't have to worry about these fragments taking up space all the time, because every time you read a file, you're triggered to defragment the file. Alternatively, you can manually trigger merge and reclaim with the `juicefs gc  --compact --delete` command.
+It can be inferred from the answer to the question [ What is the rationale for JuiceFS random writes ](#What is the rationale for JuiceFS random writes?) that the size of the object store is in most cases greater than or equal to the actual size, especially if a large number of write overwrites in a short period of time result in many file fragments. These fragments still occupy space in the object store until merge and reclaim are triggered. However, you don't have to worry about these fragments taking up space all the time, because every time the file is read, it will be checked and triggered when necessary. Alternatively, you can manually trigger merge and reclaim with the `juicefs gc  --compact --delete` command.
 
 ## When my update will be visible to other clients?
 
@@ -135,8 +135,8 @@ In addition to ordinary mounting, the following modes are supported:
 ## Where is the JuiceFS log?
 
 Logs are written to the log file only when JuiceFS is mounted in the background, and logs are directly printed to the terminal by foreground mount or other foreground commands
-Log file on Mac system default is ` / Users / $User /. Juicefs/juicefs log `
-Log file on linux system default is `/var/log/juicefs.log`
+Log file on Mac system default is `/Users/$User/.juicefs/juicefs.log`
+On Linux, the default log file for root user startup is `/var/log/juicefs.log`, and that for non-root users is `~/.juicefs.log`.
 
 ## How to destroy a file system?
 Destroy a file system with 'juicefs Destroy', which empties the metadata engine and object store of related data. Please refer to this [documentation](https://juicefs.com/docs/community/administration/destroy) for details on how to use this command.
@@ -147,16 +147,16 @@ The built-in `gateway` subcommand of JuiceFS does not support functions such as 
 
 ## Does JuiceFS support using a directory in the object store as a '--bucket' parameter?
 
-As of the release of JuiceFS 1.0.0-RC3, this feature is not supported.
+As of the release of JuiceFS 1.0.0, this feature is not supported.
 
-## Does JuiceFS support reading data that already exists in the object store?
+## Does JuiceFS support docking data that already exists in the object store?
 
-As of the release of JuiceFS 1.0.0-RC3, this feature is not supported.
+As of the release of JuiceFS 1.0, this feature is not supported.
 
 ## Does JuiceFS currently support distributed caching?
 
-As of the release of JuiceFS 1.0.0-RC3, this feature is not supported.
+As of the release of JuiceFS 1.0, this feature is not supported.
 
 ## Is there currently an SDK available for JuiceFS?
 
-As of the release of JuiceFS 1.0.0-RC3, this feature is not supported.
+As of the JuiceFS 1.0 release, the community had two SDKS, one is the [Java SDK](https://juicefs.com/docs/community/hadoop_java_sdk/), which is highly compatible with HDFS interface maintained by JuiceFS official, and the other is the [Python SDK](https://github.com/megvii-research/juicefs-python) maintained by community users.

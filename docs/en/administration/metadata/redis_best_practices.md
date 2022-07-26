@@ -91,6 +91,7 @@ juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002/1 ~/jfs
 
 :::tip 
 Although Redis cluster does not support db isolation mechanism, when it is a metadata engine, Juicefs uses the function of redis cluster [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags) to implement isolation and transaction assurance in cluster mode by using `{db}` as the prefix of key, so db in cluster mode still has an isolation effect.
+It is also important to note that Redis Cluster requires that the keys of all operations in a transaction must be in the same Hash slot, so only one Hash slot can be used by a JuiceFS file system.
 :::
 
 ## Data Durability

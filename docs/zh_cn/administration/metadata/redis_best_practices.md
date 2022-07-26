@@ -90,6 +90,7 @@ juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002 ~/jfs
 
 :::tip 提示
 Redis cluster 虽然不支持 db 隔离机制，但是在其作为元数据引擎的时候，Juicefs 利用 redis cluster [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags) 的特性，通过将 `{db}` 作为 key 的前缀实现了 cluster 模式下的隔离与事务保证，因此 cluster 模式下的 db 仍旧有隔离的效果。可以通过设置不同的 `db` 让一个 redis cluster 同时作为多个文件系统的元数据库。
+另外需要注意的是 Redis cluster 要求一个事务中所有操作的 key 必须在同一个 hash slot 中，因此一个 JuiceFS 文件系统只能使用一个 hash slot。
 :::
 
 
