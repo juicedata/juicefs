@@ -21,6 +21,9 @@ ARCHNAME := amd64
 ifeq ($(uname_m), aarch64)
     ARCHNAME = arm64
 endif
+ifeq ($(uname_m), arm64)
+    ARCHNAME = arm64
+endif
 
 LIBFILE := libjfs-$(ARCHNAME).so
 ifeq ($(uname_S), Windows)
