@@ -816,6 +816,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	var newSpace int64
 	err := m.txn(func(tx kvTxn) error {
+		newSpace = 0
 		var t Attr
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
@@ -897,6 +898,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	var newSpace int64
 	err := m.txn(func(tx kvTxn) error {
+		newSpace = 0
 		var t Attr
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
@@ -1086,6 +1088,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var opened bool
 	var newSpace, newInode int64
 	err := m.txn(func(tx kvTxn) error {
+		opened = false
+		attr = Attr{}
+		newSpace, newInode = 0, 0
 		buf := tx.get(m.entryKey(parent, name))
 		if buf == nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parent, name); e != nil {
@@ -1109,8 +1114,6 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		attr = Attr{}
-		opened = false
 		now := time.Now()
 		if rs[1] != nil {
 			m.parseAttr(rs[1], &attr)
@@ -1276,6 +1279,10 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var tattr Attr
 	var newSpace, newInode int64
 	err := m.txn(func(tx kvTxn) error {
+		opened = false
+		dino, dtyp = 0, 0
+		tattr = Attr{}
+		newSpace, newInode = 0, 0
 		buf := tx.get(m.entryKey(parentSrc, nameSrc))
 		if buf == nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentSrc, nameSrc); e != nil {
@@ -1317,8 +1324,6 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		var supdate, dupdate bool
 		now := time.Now()
-		tattr = Attr{}
-		opened = false
 		if dbuf != nil {
 			if flags == RenameNoReplace {
 				return syscall.EEXIST
@@ -1372,7 +1377,6 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if exchange {
 				return syscall.ENOENT
 			}
-			dino, dtyp = 0, 0
 		}
 		if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
 			return syscall.EACCES
@@ -1613,6 +1617,7 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var attr Attr
 	var newSpace int64
 	err := m.txn(func(tx kvTxn) error {
+		newSpace = 0
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return nil
@@ -1669,6 +1674,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	var newSpace int64
 	var needCompact bool
 	err := m.txn(func(tx kvTxn) error {
+		newSpace = 0
 		var attr Attr
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
@@ -1715,6 +1721,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	}
 	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	err := m.txn(func(tx kvTxn) error {
+		newSpace = 0
 		rs := tx.gets(m.inodeKey(fin), m.inodeKey(fout))
 		if rs[0] == nil || rs[1] == nil {
 			return syscall.ENOENT
@@ -1870,6 +1877,7 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 	key := m.chunkKey(inode, indx)
 	var todel []*slice
 	err := m.txn(func(tx kvTxn) error {
+		todel = todel[:0]
 		buf := tx.get(key)
 		slices := readSliceBuf(buf)
 		tx.dels(key)
@@ -1938,11 +1946,11 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	var rs []int64
 	for _, key := range keys {
 		if err := m.txn(func(tx kvTxn) error {
+			ss, rs = ss[:0], rs[:0]
 			buf := tx.get(key)
 			if len(buf) == 0 {
 				return nil
 			}
-			ss, rs = ss[:0], rs[:0]
 			m.decodeDelayedSlices(buf, &ss)
 			if len(ss) == 0 {
 				return fmt.Errorf("invalid value for delayed slices %s: %v", key, buf)
@@ -2265,6 +2273,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 		}
 
 		if attr.Typ == TypeFile {
+			e.Chunks = e.Chunks[:0]
 			vals := tx.scanRange(m.chunkKey(inode, 0), m.chunkKey(inode, uint32(attr.Length/ChunkSize)+1))
 			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
 				v, ok := vals[string(m.chunkKey(inode, indx))]
