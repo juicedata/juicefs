@@ -571,8 +571,12 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 
 	if w.isSuperuser(w.user, groups) {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
-	} else if len(groups) > 0 {
-		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), w.lookupGids(strings.Join(groups, ",")))
+	} else {
+		gids := w.ctx.Gids()
+		if len(groups) > 0 {
+			gids = w.lookupGids(strings.Join(groups, ","))
+		}
+		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), gids)
 	}
 }
 
