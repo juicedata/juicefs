@@ -2808,12 +2808,11 @@ func (m *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Err
 }
 
 func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
-	c := Background
 	key := m.xattrKey(inode)
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		switch flags {
 		case XattrCreate:
-			ok, err := tx.HSetNX(c, key, name, value).Result()
+			ok, err := tx.HSetNX(ctx, key, name, value).Result()
 			if err != nil {
 				return err
 			}
@@ -2822,7 +2821,7 @@ func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte
 			}
 			return nil
 		case XattrReplace:
-			if ok, err := tx.HExists(c, key, name).Result(); err != nil {
+			if ok, err := tx.HExists(ctx, key, name).Result(); err != nil {
 				return err
 			} else if !ok {
 				return ENOATTR
