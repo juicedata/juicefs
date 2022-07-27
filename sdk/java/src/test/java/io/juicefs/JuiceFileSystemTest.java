@@ -622,4 +622,26 @@ public class JuiceFileSystemTest extends TestCase {
     assertEquals(FsPermission.createImmutable((short) 0666), newFs.getFileStatus(new Path("/test_umask/dir/f")).getPermission());
     newFs.close();
   }
+
+  public void testGuidMapping() throws Exception {
+    Configuration newConf = new Configuration(cfg);
+
+    FSDataOutputStream ou = fs.create(new Path("/etc/users"));
+    ou.write("foo:10000\n".getBytes());
+    ou.close();
+    newConf.set("juicefs.users", "/etc/users");
+
+    FileSystem fooFs = createNewFs(newConf, "foo", new String[]{"nogrp"});
+    Path f = new Path("/test_foo");
+    fooFs.create(f).close();
+    assertEquals("foo", fooFs.getFileStatus(f).getOwner());
+
+    ou = fs.create(new Path("/etc/users"));
+    ou.write("foo:10001\n".getBytes());
+    ou.close();
+    FileSystem newFS = FileSystem.newInstance(newConf);
+    assertEquals("10000", fooFs.getFileStatus(f).getOwner());
+
+    fooFs.delete(f, false);
+  }
 }
