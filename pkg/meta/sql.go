@@ -907,6 +907,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
+		newSpace = 0
 		var n = node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&n)
 		if err != nil {
@@ -997,6 +998,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
+		newSpace = 0
 		var n = node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&n)
 		if err != nil {
@@ -1200,10 +1202,12 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
 	}
-	var newSpace, newInode int64
 	var n node
 	var opened bool
+	var newSpace, newInode int64
 	err := m.txn(func(s *xorm.Session) error {
+		opened = false
+		newSpace, newInode = 0, 0
 		var pn = node{Inode: parent}
 		ok, err := s.ForUpdate().Get(&pn)
 		if err != nil {
@@ -1241,7 +1245,6 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			return err
 		}
 		now := time.Now().UnixNano() / 1e3
-		opened = false
 		if ok {
 			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
 				return syscall.EACCES
@@ -1450,6 +1453,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dn node
 	var newSpace, newInode int64
 	err := m.txn(func(s *xorm.Session) error {
+		opened = false
+		dino = 0
+		newSpace, newInode = 0, 0
 		var spn = node{Inode: parentSrc}
 		var dpn = node{Inode: parentDst}
 		err := m.getNodesForUpdate(s, &spn, &dpn)
@@ -1505,7 +1511,6 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		var supdate, dupdate bool
 		now := time.Now().UnixNano() / 1e3
-		opened = false
 		dn = node{Inode: de.Inode}
 		if ok {
 			if flags == RenameNoReplace {
@@ -1565,7 +1570,6 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if exchange {
 				return syscall.ENOENT
 			}
-			dino = 0
 		}
 		if ctx.Uid() != 0 && spn.Mode&01000 != 0 && ctx.Uid() != spn.Uid && ctx.Uid() != sn.Uid {
 			return syscall.EACCES
@@ -1898,6 +1902,8 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var n = node{Inode: inode}
 	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
+		newSpace = 0
+		n = node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&n)
 		if err != nil {
 			return err
@@ -1965,6 +1971,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	var newSpace int64
 	var needCompact bool
 	err := m.txn(func(s *xorm.Session) error {
+		newSpace = 0
 		var n = node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&n)
 		if err != nil {
@@ -2031,6 +2038,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	var newSpace int64
 	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
 	err := m.txn(func(s *xorm.Session) error {
+		newSpace = 0
 		var nin = node{Inode: fin}
 		var nout = node{Inode: fout}
 		err := m.getNodesForUpdate(s, &nin, &nout)
@@ -2185,6 +2193,7 @@ func (m *dbMeta) doCleanupSlices() {
 func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 	var ss []*slice
 	err := m.txn(func(s *xorm.Session) error {
+		ss = ss[:0]
 		var c = chunk{Inode: inode, Indx: indx}
 		ok, err := s.ForUpdate().MustCols("indx").Get(&c)
 		if err != nil {
@@ -2262,13 +2271,13 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	var ss []Slice
 	for _, ds := range result {
 		if err := m.txn(func(ses *xorm.Session) error {
+			ss = ss[:0]
 			ds := delslices{Id: ds.Id}
 			if ok, e := ses.ForUpdate().Get(&ds); e != nil {
 				return e
 			} else if !ok {
 				return nil
 			}
-			ss = ss[:0]
 			m.decodeDelayedSlices(ds.Slices, &ss)
 			if len(ss) == 0 {
 				return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Id, ds.Slices)
