@@ -137,10 +137,18 @@ func (m *mapping) update(uids []pwent, gids []pwent) {
 	m.Lock()
 	defer m.Unlock()
 	for _, u := range uids {
+		oldId := m.usernames[u.name]
+		oldName := m.userIDs[u.id]
+		delete(m.userIDs, oldId)
+		delete(m.usernames, oldName)
 		m.usernames[u.name] = u.id
 		m.userIDs[u.id] = u.name
 	}
 	for _, g := range gids {
+		oldId := m.groups[g.name]
+		oldName := m.groupIDs[g.id]
+		delete(m.groupIDs, oldId)
+		delete(m.groups, oldName)
 		m.groups[g.name] = g.id
 		m.groupIDs[g.id] = g.name
 	}
