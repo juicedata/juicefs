@@ -10,13 +10,13 @@ In terms of basic functionality, S3FS and JuiceFS can both mount object storage 
 
 ## Product positioning
 
-S3FS is a utility that makes it easy to mount object storage bucket locally, and read and write in a way that is familiar to users, for general use scenarios that are not sensitive to performance and network latency.
+S3FS is a utility that allows users to mount object storage buckets locally and read and write in a way that the users used to. It targets the general use scenarios that are not sensitive to performance and network latency.
 
 JuiceFS is a distributed file system with a unique approach to data management and a series of technical optimizations for high performance, reliability and security, which primarily addresses the storage needs of large volumes of data.
 
 ## Architecture
 
-S3FS does not do special optimization for files. It acts like an access channel between local and object storage, making the local mount point see the same content as on the object storage browser, which makes it easy to use cloud storage locally. However, from another aspect, this simple architecture makes S3FS' retrieving, reading and writing of files require direct interaction with the object store, and network latency can impact strongly on performance and user experience.
+S3FS does not do special optimization for files. It acts like an access channel between local and object storage, allowing the same content to be seen on the local mount point and the object storage browser, which makes it easy to use cloud storage locally. On the other hand, with this simple architecture, retrieving, reading and writing of files with S3FS require direct interaction with the object store, and network latency can impact strongly on performance and user experience.
 
 JuiceFS uses a technical architecture that separates data and metadata, where any file is first split into data blocks according to specific rules before being uploaded to the object storage, and the corresponding metadata is stored in a separated database. The advantage of this is that retrieval of files and modification of metadata such as file names can directly interact with the more responsive database, bypassing the network latency impact of interacting with the object store.
 
@@ -28,11 +28,11 @@ For a detailed description of the architecture of JuiceFS, please refer to [docu
 
 ## Caching
 
-S3FS supports disk caching, but it is not enabled by default. Local caching can be enabled by specifying a cache path with `-o use_cache`. When caching is enabled, any file reads or writes will be written to the cache before the operation is actually performed. S3FS detects data changes by checking its MD5 to ensure data correctness and reduce duplicate file downloads. Since all operations involved with S3FS require interactions with S3, cache being enabled or not impacts significantly on its application experience.
+S3FS supports disk caching, but it is disabled by default. Local caching can be enabled by specifying a cache path with `-o use_cache`. When caching is enabled, any file reads or writes will be written to the cache before the operation is actually performed. S3FS detects data changes via MD5 to ensure data correctness and reduce duplicate file downloads. Since all operations involved with S3FS require interactions with S3, whether the cache is enabled or not impacts significantly on its application experience.
 
-S3FS does not limit the cache capacity by default, which may cause the cache to fill up the disk when works with large buckets. You need to define the reserved disk space by `-o ensure_diskfree`. In addition, S3FS does not have a cache expiration and cleanup mechanism, so users need to manually clean the cache periodically. Once the cache space is full, uncached file operations need to interact directly with the object storage, which will impacts handling large files.
+S3FS does not limit the cache capacity by default, which may cause the cache to fill up the disk when working with large buckets. You need to define the reserved disk space by `-o ensure_diskfree`. In addition, S3FS does not have a cache expiration and cleanup mechanism, so users need to manually clean up the cache periodically. Once the cache space is full, uncached file operations need to interact directly with the object storage, which will impact large file handling.
 
-JuiceFS uses a completely different caching approach than S3FS. First, JuiceFS guarantees data consistency. Secondly, JuiceFS defines a default disk cache usage limit of 100GiB, which can be freely adjusted by users as needed, and by default ensures that no more space is used when disk free space falls below 10%. When the cache usage limit is reached, JuiceFS will automatically do cleanup using an LRU-like algorithm to ensure that cache is always available for subsequent read and write operations.
+JuiceFS uses a completely different caching approach than S3FS. First, JuiceFS guarantees data consistency. Secondly, JuiceFS defines a default disk cache usage limit of 100GiB, which can be freely adjusted by users as needed, and by default ensures that no more space is used when disk free space falls below 10%. When the cache usage limit reaches the upper limit, JuiceFS will automatically do cleanup using an LRU-like algorithm to ensure that cache is always available for subsequent read and write operations.
 
 For more on JuiceFS caching, see [documentation](../../guide/cache_management.md).
 
