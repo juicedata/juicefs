@@ -4,7 +4,7 @@ slug: /comparison/juicefs_vs_alluxio
 
 # JuiceFS vs. Alluxio
 
-[Alluxio](https://www.alluxio.io) (/əˈlʌksio/) is a data access layer in the big data and machine learning ecosystem. It was a research project "Tachyon" initially created in 2013 as the Ph.D. thesis of the creator of the [AMPLab](https://en.wikipedia.org/wiki/AMPLab) in the University of California Berkeley. Alluxio was open sourced in 2014.
+[Alluxio](https://www.alluxio.io) (/əˈlʌksio/) is a data access layer in the big data and machine learning ecosystem. Initially as research project "Tachyon", it was created at the University of California, Berkeley's [AMPLab](https://en.wikipedia.org/wiki/AMPLab) as creator's Ph.D. thesis in 2013. Alluxio was open sourced in 2014.
 
 The following table shows the differences of main features between Alluxio and JuiceFS.
 
@@ -35,7 +35,7 @@ Alluxio stores files as _objects_ into UFS. It doesn't split files info blocks l
 
 ### Cache granularity
 
-The [default block size](../../reference/how_juicefs_store_files.md) of JuiceFS is 4MiB, compare to 64MiB of Alluxio, the granularity is smaller. Smaller block size is better for random read (e.g. Parquet and ORC) workload, i.e. cache management will be more efficiency.
+The [default block size](../../reference/how_juicefs_store_files.md) of JuiceFS is 4MiB, and thus its granularity is smaller compared to 64MiB of Alluxio. Smaller block size is better for random read (e.g. Parquet and ORC) workload, i.e. cache management will be more efficiency.
 
 ### Hadoop-compatible
 
@@ -43,7 +43,7 @@ JuiceFS is [HDFS-compatible](../../deployment/hadoop_java_sdk.md). Not only comp
 
 ### Kubernetes CSI Driver
 
-JuiceFS provides [Kubernetes CSI Driver](https://github.com/juicedata/juicefs-csi-driver) to help people who want to use JuiceFS in Kubernetes. Alluxio provides [Kubernetes CSI Driver](https://github.com/Alluxio/alluxio-csi) too, but this project seems like not being active maintained and not being official supported by Alluxio.
+JuiceFS provides [Kubernetes CSI Driver](https://github.com/juicedata/juicefs-csi-driver) to help people who want to use JuiceFS in Kubernetes. Alluxio provides [Kubernetes CSI Driver](https://github.com/Alluxio/alluxio-csi) too, but this project seems not active and is not officially supported by Alluxio.
 
 ### Fully POSIX-compatible
 
@@ -51,15 +51,15 @@ JuiceFS is [fully POSIX-compatible](../../reference/posix_compatibility.md). A p
 
 ### Atomic metadata operation
 
-A metadata operation in Alluxio consists two steps: the first step is to modify the state of Alluxio master, the second step is to send request to UFS. From which we can see that the metadata operation isn't atomic. The state is unpredictable when the operation is executing or falls into any failures. Alluxio requires UFS to implement metadata operations, for example rename file operation will become copy and delete operations.
+A metadata operation in Alluxio consists of two steps: the first step is to modify the state of Alluxio master, and the second step is to send request to UFS. Thus, we can see that the metadata operation isn't atomic. The state is unpredictable when the operation is being executed or any failures happen. Alluxio requires UFS to implement metadata operations, for example, rename file operation will become copy and delete operations.
 
 Thanks to [Redis transaction](https://redis.io/topics/transactions), **most of the metadata operations of JuiceFS are atomic**, e.g. rename file, delete file, rename directory. You don't have to worry about the consistency and performance.
 
 ### Consistency
 
-Alluxio loads metadata from the UFS as needed. It doesn't have information about UFS at startup. By default, Alluxio expects that all modifications on UFS are done through Alluxio. If changes on UFS are made directly, you'll need to sync metadata between Alluxio and UFS either manually or periodically. As ["Atomic metadata operation"](#atomic-metadata-operation) section says, the two steps of metadata operation may result in inconsistency.
+Alluxio loads metadata from the UFS as needed. It doesn't have information about UFS at startup. By default, Alluxio expects that all modifications on UFS are completed through Alluxio. If changes are made directly on UFS, you'll need to sync metadata between Alluxio and UFS either manually or periodically. As we have mentioned in ["Atomic metadata operation"](#atomic-metadata-operation) section, the two-step metadata operation may result in inconsistency.
 
-JuiceFS provides strong consistency for both metadata and data. **The metadata service of JuiceFS is the single source of truth, not a mirror of UFS.** The metadata service doesn't rely on object storage to obtain metadata. Object storage just be treated as an unlimited block storage. There isn't any inconsistency between JuiceFS and object storage.
+JuiceFS provides strong consistency for both metadata and data. **The metadata service of JuiceFS is the single source of truth, not a mirror of UFS.** The metadata service doesn't rely on object storage to obtain metadata, and object storage is just treated as unlimited block storage. Thus, there will not be any inconsistency between JuiceFS and object storage.
 
 ### Data compression
 
@@ -71,6 +71,6 @@ JuiceFS supports data encryption in transit and at rest. Alluxio community editi
 
 ### Zero-effort operation
 
-Alluxio's architecture can be divided into 3 components: master, worker and client. A typical cluster consists of a single leading master, standby masters, a job master, standby job masters, workers, and job workers. You need to maintain these masters and workers by yourself.
+Alluxio's architecture can be divided into 3 components: master, worker and client. A typical cluster consists of a single leading master, standby masters, a job master, standby job masters, workers, and job workers. You need to maintain all these masters and workers by yourself.
 
-JuiceFS uses Redis or [others](../../guide/how_to_setup_metadata_engine.md) as the metadata engine. You could easily use service managed by public cloud provider as the JuiceFS's metadata engine. There isn't any operation needed.
+JuiceFS uses Redis or [others](../../guide/how_to_setup_metadata_engine.md) as the metadata engine. You could easily use the service managed by public cloud provider as JuiceFS's metadata engine without the need for operation.
