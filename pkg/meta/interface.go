@@ -32,6 +32,7 @@ import (
 )
 
 const (
+        // Version is the max of supported versions.
 	Version = 1
 	// ChunkSize is size of a chunk
 	ChunkSize = 1 << 26 // 64M
