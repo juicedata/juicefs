@@ -222,6 +222,7 @@ func (cache *cacheStore) createDir(dir string) {
 
 func (cache *cacheStore) remove(key string) {
 	cache.Lock()
+	delete(cache.pages, key)
 	path := cache.cachePath(key)
 	if it, ok := cache.keys[key]; ok {
 		if it.size > 0 {
@@ -288,10 +289,14 @@ func (cache *cacheStore) flush() {
 			cache.add(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix()))
 		}
 		cache.Lock()
+		_, ok := cache.pages[w.key]
 		delete(cache.pages, w.key)
 		atomic.AddInt64(&cache.totalPages, -int64(cap(w.page.Data)))
 		cache.Unlock()
 		w.page.Release()
+		if !ok {
+			cache.remove(w.key)
+		}
 	}
 }
 
