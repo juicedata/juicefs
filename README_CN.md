@@ -79,11 +79,11 @@ JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/deployment/hadoop_java_sdk.md) 与 H
 ## 进阶主题
 
 - [Redis 最佳实践](docs/zh_cn/administration/metadata/redis_best_practices.md)
-- [如何设置对象存储](docs/zh_cn/reference/how_to_setup_object_storage.md)
-- [缓存管理](docs/zh_cn/administration/cache_management.md)
+- [如何设置对象存储](docs/zh_cn/guide/how_to_setup_object_storage.md)
+- [缓存管理](docs/zh_cn/guide/cache_management.md)
 - [故障诊断和分析](docs/zh_cn/administration/fault_diagnosis_and_analysis.md)
 - [FUSE 挂载选项](docs/zh_cn/reference/fuse_mount_options.md)
-- [在 Windows 中使用 JuiceFS](docs/zh_cn/juicefs_on_windows.md)
+- [在 Windows 中使用 JuiceFS](docs/zh_cn/windows.md)
 - [S3 网关](docs/zh_cn/deployment/s3_gateway.md)
 
 请查阅 [JuiceFS 文档中心](https://juicefs.com/docs/zh/community/introduction) 了解更多信息。
@@ -164,7 +164,7 @@ $ cat /jfs/.accesslog
 - 本地目录
 - Redis
 
-JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](docs/zh_cn/reference/how_to_setup_object_storage.md)。
+JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](docs/zh_cn/guide/how_to_setup_object_storage.md)。
 
 ## 谁在使用
 
@@ -215,7 +215,7 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 
 ### 为什么不支持某个对象存储？
 
-已经支持了绝大部分对象存储，参考这个[列表](docs/zh_cn/reference/how_to_setup_object_storage.md#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
+已经支持了绝大部分对象存储，参考这个[列表](docs/zh_cn/guide/how_to_setup_object_storage.md#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
 ### 是否可以使用 Redis 集群版作为元数据引擎？
 
@@ -225,7 +225,7 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 
 ### JuiceFS 与 XXX 的区别是什么？
 
-请查看[「同类技术对比」](docs/zh_cn/comparison)文档了解更多信息。
+请查看[「同类技术对比」](docs/zh_cn/introduction/comparison)文档了解更多信息。
 
 更多 FAQ 请查看[完整列表](docs/zh_cn/faq.md)。
 
