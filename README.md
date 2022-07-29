@@ -79,11 +79,11 @@ If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/deployment/h
 ## Advanced Topics
 
 - [Redis Best Practices](docs/en/administration/metadata/redis_best_practices.md)
-- [How to Setup Object Storage](docs/en/reference/how_to_setup_object_storage.md)
-- [Cache Management](docs/en/administration/cache_management.md)
+- [How to Setup Object Storage](docs/en/guide/how_to_setup_object_storage.md)
+- [Cache Management](docs/en/guide/cache_management.md)
 - [Fault Diagnosis and Analysis](docs/en/administration/fault_diagnosis_and_analysis.md)
 - [FUSE Mount Options](docs/en/reference/fuse_mount_options.md)
-- [Using JuiceFS on Windows](docs/en/juicefs_on_windows.md)
+- [Using JuiceFS on Windows](docs/en/windows.md)
 - [S3 Gateway](docs/en/deployment/s3_gateway.md)
 
 Please refer to [JuiceFS Document Center](https://juicefs.com/docs/community/introduction) for more information.
@@ -164,7 +164,7 @@ The last number on each line is the time (in seconds) that the current operation
 - Local disk
 - Redis
 
-JuiceFS supports almost all object storage services. [Learn more](docs/en/reference/how_to_setup_object_storage.md#supported-object-storage).
+JuiceFS supports almost all object storage services. [Learn more](docs/en/guide/how_to_setup_object_storage.md#supported-object-storage).
 
 ## Who is using
 
@@ -215,7 +215,7 @@ The design of JuiceFS was inspired by [Google File System](https://research.goog
 
 ### Why doesn't JuiceFS support XXX object storage?
 
-JuiceFS supports many object storage. Please check out [this list](docs/en/reference/how_to_setup_object_storage.md#supported-object-storage) first. If the object storage you want to use is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
+JuiceFS supports many object storage. Please check out [this list](docs/en/guide/how_to_setup_object_storage.md#supported-object-storage) first. If the object storage you want to use is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
 
 ### Can I use Redis Cluster as metadata engine?
 
@@ -225,7 +225,7 @@ See ["Redis Best Practices"](docs/en/administration/metadata/redis_best_practice
 
 ### What's the difference between JuiceFS and XXX?
 
-See ["Comparison with Others"](docs/en/comparison) for more information.
+See ["Comparison with Others"](docs/en/introduction/comparison) for more information.
 
 For more FAQs, please see the [full list](docs/en/faq.md).
 
