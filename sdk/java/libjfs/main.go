@@ -472,15 +472,15 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 		}
 		store := chunk.NewCachedStore(blob, chunkConf, registerer)
-		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
-			chunkid := args[0].(uint64)
+		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
+			id := args[0].(uint64)
 			length := args[1].(uint32)
-			return store.Remove(chunkid, int(length))
+			return store.Remove(id, int(length))
 		})
 		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 			slices := args[0].([]meta.Slice)
-			chunkid := args[1].(uint64)
-			return vfs.Compact(chunkConf, store, slices, chunkid)
+			id := args[1].(uint64)
+			return vfs.Compact(chunkConf, store, slices, id)
 		})
 		err = m.NewSession()
 		if err != nil {
@@ -571,8 +571,12 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 
 	if w.isSuperuser(w.user, groups) {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
-	} else if len(groups) > 0 {
-		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), w.lookupGids(strings.Join(groups, ",")))
+	} else {
+		gids := w.ctx.Gids()
+		if len(groups) > 0 {
+			gids = w.lookupGids(strings.Join(groups, ","))
+		}
+		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), gids)
 	}
 }
 

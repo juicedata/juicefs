@@ -11,8 +11,6 @@ slug: /redis_best_practices
 It's highly recommended to use Redis service managed by public cloud provider if possible. See ["Recommended Managed Redis Service"](#recommended-managed-redis-service) for more information.
 :::
 
-### Sentinel mode
-
 If you insist to operate Redis yourself in production environment, please keep in mind that JuiceFS requires Redis version 4.0+. Moreover, it's recommended to pick an [official stable version](https://redis.io/download). Please read the following contents before deploying Redis.
 
 :::note
@@ -40,11 +38,9 @@ used_memory_dataset_perc: 70.12%
 
 Among them, `used_memory_rss` is the total memory size actually used by Redis, which includes not only the size of data stored in Redis (that is, `used_memory_dataset` above) but also some Redis [system overhead](https://redis.io/commands/memory-stats) (that is, `used_memory_overhead` above). As mentioned earlier that the metadata of each file occupies about 300 bytes, this is actually calculated by `used_memory_dataset`. If you find that the metadata of a single file in your JuiceFS file system occupies much more than 300 bytes, you can try to run [`juicefs gc`](../../reference/command_reference.md#juicefs-gc) command to clean up possible redundant data.
 
-## High Availability
+## High availability
 
-:::caution
-JuiceFS uses "[Redis transactions](https://redis.io/docs/manual/transactions)" to guarantee the atomicity of metadata operations. However, since Redis Cluster does not support transaction, it cannot be used as a JuiceFS metadata store. If there is a need on high availability, please use Redis Sentinel.
-:::
+### Sentinel mode
 
 [Redis Sentinel](https://redis.io/docs/manual/sentinel) is the official solution to high availability for Redis. It provides following capabilities:
 
@@ -81,19 +77,23 @@ Since JuiceFS v1.0.0, it is supported to only connect Redis replica nodes when m
 It should be noted that since the data of the Redis master node is asynchronously replicated to the replica nodes, the read metadata may not be the latest.
 :::
 
-
 ### Cluster mode
-Juicefs also supports Redis Cluster as a metadata engine, the `META-URL` format is `redis[s]://[[USER]:PASSWORD@]ADDR:PORT,[ADDR:PORT],[ADDR:PORT][/DB]`. For example:
 
-```shell
-juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002/1 ~/jfs
-```
-
-:::tip 
-Redis Cluster does not support database isolation mechanism. However, it is still possible to achive database isolation in Redis Cluster with JuiceFS. When Redis Cluster work as a metadata engine, Juicefs uses its function [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags) to implement isolation and transaction assurance in cluster mode by using `{db}` as the prefix of key.
+:::note
+This feature requires JuiceFS v1.0.0 or higher
 :::
 
-## Data Durability
+JuiceFS also supports Redis Cluster as a metadata engine, the `META-URL` format is `redis[s]://[[USER]:PASSWORD@]ADDR:PORT,[ADDR:PORT],[ADDR:PORT][/PREFIX]`. For example:
+
+```shell
+juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002/jfs1 myjfs
+```
+
+:::tip
+Redis Cluster does not support multiple databases. However, it splits the key space into 16384 hash slots, and distributes the slots to several nodes. Based on Redis Cluster's [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags) feature, JuiceFS adds `{prefix}` before all file system keys to ensure they will be hashed to the same hash slot, assuring that transactions can still work. Besides, one Redis Cluster can serve for multiple JuiceFS file systems as long as they use different prefixes.
+:::
+
+## Data durability
 
 Redis provides various options for [persistence](https://redis.io/docs/manual/persistence) in different ranges:
 
@@ -115,7 +115,7 @@ Redis is very data backup friendly since you can copy RDB files while the databa
 
 Please read the [official documentation](https://redis.io/docs/manual/persistence) for more information.
 
-## Backing up Redis Data
+## Backing up Redis data
 
 **Make Sure to Back up Your Database.** as Disks break, instances in the cloud disappear, and so forth.
 
@@ -129,7 +129,7 @@ As we mentioned above, Redis is very data backup friendly. This means that copyi
 
 Please read the [official documentation](https://redis.io/docs/manual/persistence) for more information.
 
-## Restore Redis Data
+## Restore Redis data
 
 After generating the AOF or RDB backup file, you can restore the data by copying the backup file to the path corresponding to the `dir` configuration of the new Redis instance. The instance configuration information can be obtained by the [`CONFIG GET dir`](https://redis.io/commands/config-get) command.
 
@@ -141,13 +141,14 @@ After recovering Redis data, you can continue to use the JuiceFS file system via
 
 ## Recommended Managed Redis Service
 
+### Amazon MemoryDB for Redis
+
+[Amazon MemoryDB for Redis](https://aws.amazon.com/memorydb) is a durable, in-memory database service that delivers ultra-fast performance. MemoryDB is compatible with Redis, with MemoryDB, all of your data is stored in memory, which enables you to achieve microsecond read and single-digit millisecond write latency and high throughput. MemoryDB also stores data durably across multiple Availability Zones (AZs) using a Multi-AZ transactional log to enable fast failover, database recovery, and node restarts.
+
 ### Amazon ElastiCache for Redis
 
 [Amazon ElastiCache for Redis](https://aws.amazon.com/elasticache/redis) is a fully managed, Redis-compatible in-memory data store built for the cloud. It provides [automatic failover](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html) and [automatic backup](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/backups-automatic.html) features to ensure availability and durability.
 
-:::info
-Amazon ElastiCache for Redis has two type: cluster mode disabled and cluster mode enabled. As JuiceFS uses [transaction](https://redis.io/docs/manual/transactions) to guarantee the atomicity of metadata operations, the "cluster mode enabled" type cannot be used.
-:::
 
 ### Google Cloud Memorystore for Redis
 
@@ -161,14 +162,7 @@ Amazon ElastiCache for Redis has two type: cluster mode disabled and cluster mod
 
 [Alibaba Cloud ApsaraDB for Redis](https://www.alibabacloud.com/product/apsaradb-for-redis) is a database service compatible with native Redis protocols. It supports hybrid of memory and hard disks for data persistence. ApsaraDB for Redis provides a highly available hot standby architecture and are scalable to meet requirements for high-performance and low-latency read/write operations.
 
-:::info
-ApsaraDB for Redis supports 3 [architecture types](https://www.alibabacloud.com/help/doc-detail/86132.htm): standard, cluster and read/write splitting. As JuiceFS uses [transaction](https://redis.io/docs/manual/transactions) to guarantee the atomicity of metadata operations, so the cluster architecture type cannot be used.
-:::
-
+=======
 ### Tencent Cloud TencentDB for Redis
 
 [Tencent Cloud TencentDB for Redis](https://intl.cloud.tencent.com/product/crs) is a caching and storage service compatible with the Redis protocol. It features a rich variety of data structure options to help you develop different types of business scenarios, and offers a complete set of database services such as primary-secondary hot backup, automatic switchover for disaster recovery, data backup, failover, instance monitoring, online scaling and data rollback.
-
-:::info
-TencentDB for Redis supports 2 [architecture types](https://intl.cloud.tencent.com/document/product/239/3205): standard and cluster. As JuiceFS uses [transaction](https://redis.io/docs/manual/transactions) to guarantee the atomicity of metadata operations, so the cluster architecture cannot be used.
-:::

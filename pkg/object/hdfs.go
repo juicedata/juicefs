@@ -244,14 +244,6 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 				}
 				return err
 			}
-
-			if !strings.HasSuffix(prefix, "/") && !strings.HasPrefix(info.Name(), prefix) {
-				if info.IsDir() && root != path {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
 			key := path[1:]
 			if !strings.HasPrefix(key, prefix) || key < marker {
 				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {

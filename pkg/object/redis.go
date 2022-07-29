@@ -30,6 +30,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -80,28 +81,44 @@ func (r *redisStore) Delete(key string) error {
 }
 
 func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
+	var scanCli []redis.UniversalClient
+	var m sync.Mutex
+	if c, ok := t.rdb.(*redis.ClusterClient); ok {
+		err := c.ForEachMaster(context.TODO(), func(ctx context.Context, client *redis.Client) error {
+			m.Lock()
+			defer m.Unlock()
+			scanCli = append(scanCli, client)
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		scanCli = append(scanCli, t.rdb)
+	}
 	batch := 1000
 	var objs = make(chan Object, batch)
 	var keyList []string
 	var cursor uint64
-	for {
-		// FIXME: this will be really slow for many objects
-		keys, c, err := t.rdb.Scan(context.TODO(), cursor, prefix+"*", int64(batch)).Result()
-		if err != nil {
-			logger.Warnf("redis scan error, coursor %d: %s", cursor, err)
-			return nil, err
-		}
-		for _, key := range keys {
-			if key > marker {
-				keyList = append(keyList, key)
+	for _, mCli := range scanCli {
+		for {
+			// FIXME: this will be really slow for many objects
+			keys, c, err := mCli.Scan(context.TODO(), cursor, prefix+"*", int64(batch)).Result()
+			if err != nil {
+				logger.Warnf("redis scan error, coursor %d: %s", cursor, err)
+				return nil, err
 			}
+			for _, key := range keys {
+				if key > marker {
+					keyList = append(keyList, key)
+				}
+			}
+			if c == 0 {
+				break
+			}
+			cursor = c
 		}
-		if c == 0 {
-			break
-		}
-		cursor = c
 	}
-
 	sort.Strings(keyList)
 
 	go func() {

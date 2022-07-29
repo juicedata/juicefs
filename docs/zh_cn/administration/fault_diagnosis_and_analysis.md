@@ -4,6 +4,9 @@ sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # 故障诊断和分析
 
 ## 客户端日志
@@ -14,41 +17,45 @@ JuiceFS 客户端在运行过程中会输出日志用于故障诊断，日志等
 
 ### 挂载点
 
-当挂载 JuiceFS 文件系统时加上了 [`-d` 选项](../reference/command_reference.md#juicefs-mount)（表示后台运行），日志会输出到系统日志和 `/var/log/juicefs.log`（需要 v0.15 及以上版本客户端，参见 [`--log` 选项](../reference/command_reference.md#juicefs-mount)）。取决于你使用的操作系统，你可以通过不同的命令获取日志：
+当挂载 JuiceFS 文件系统时加上了 [`-d` 选项](../reference/command_reference.md#juicefs-mount)（表示后台运行），日志会同时输出到系统日志和本地日志文件，取决于挂载文件系统时的运行用户，本地日志文件的路径稍有区别。root 用户对应的日志文件路径是 `/var/log/juicefs.log`，非 root 用户的日志文件路径是 `$HOME/.juicefs/juicefs.log`，具体请参见 [`--log` 选项](../reference/command_reference.md#juicefs-mount)。
 
-macOS
-```bash
-syslog | grep 'juicefs'
-```
+取决于你使用的操作系统，你可以通过不同的命令获取系统日志或直接读取本地日志文件：
 
-Debian based system
-```bash
-cat /var/log/syslog | grep 'juicefs'
-```
+<Tabs>
+  <TabItem value="local-log-file" label="本地日志文件">
 
-CentOS based system
-```bash
-cat /var/log/messages | grep 'juicefs'
-```
-
-All system (require v0.15+ JuiceFS)
 ```bash
 tail -n 100 /var/log/juicefs.log
 ```
 
-你可以使用 `grep` 命令过滤显示不同等级的日志信息，从而进行性能统计和故障追踪，例如：
+  </TabItem>
+  <TabItem value="macos-syslog" label="macOS 系统日志">
 
 ```bash
-cat /var/log/syslog | grep 'juicefs' | grep '<INFO>'
+syslog | grep 'juicefs'
 ```
+
+  </TabItem>
+  <TabItem value="debian-syslog" label="Debian 系统日志">
+
 ```bash
-cat /var/log/syslog | grep 'juicefs' | grep '<WARNING>'
+cat /var/log/syslog | grep 'juicefs'
 ```
+
+  </TabItem>
+  <TabItem value="centos-syslog" label="CentOS 系统日志">
+
 ```bash
+cat /var/log/messages | grep 'juicefs'
+```
+
+  </TabItem>
+</Tabs>
+
+你可以使用 `grep` 命令过滤显示不同等级的日志信息，从而进行性能统计和故障追踪，例如：
+
+```shell
 cat /var/log/syslog | grep 'juicefs' | grep '<ERROR>'
-```
-```bash
-cat /var/log/syslog | grep 'juicefs' | grep '<FATAL>'
 ```
 
 ### Kubernetes CSI 驱动

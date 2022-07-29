@@ -84,7 +84,7 @@ type Format struct {
 - totalInodes：文件系统的已使用文件数
 
 - nextInode：下一个可用的 inode 号（Redis 中为当前已用的最大 inode 号）
-- nextChunk：下一个可用的 sliceID（Redis 中为当前已用的最大 sliceID）
+- nextChunk：下一个可用的 sliceId（Redis 中为当前已用的最大 sliceId）
 - nextSession：当前已用的最大 sid（sessionID）
 - nextTrash：当前已用的最大 trash inode 号
 - nextCleanupSlices：上一次检查清理残留 slices 的时间点
@@ -202,7 +202,7 @@ type Slice struct {
 记录 Slice 的引用计数，具体为：
 
 ```
-sliceID, size -> refs
+sliceId, size -> refs
 ```
 
 由于绝大部分 Slice 的引用计数均为 1，为减少数据库中相关 entry 数量，在 Redis 和 TKV 中以实际值减 1 作为存储的计数值。这样，大部分的 Slice 对应 refs 值为 0，则不必在数据库中创建相关 entry。
@@ -269,10 +269,10 @@ inode, length -> expire
 记录延迟删除的 Slices。当回收站功能开启时，因 Slice Compaction 功能删除的旧 Slices 会被保留与回收站配置相同的时间，以被在必要时可用来恢复数据。其内容为：
 
 ```
-sliceID, deleted -> []slice
+sliceId, deleted -> []slice
 ```
 
-其中 sliceID 为 compact 后新 Slice 的 ID，deleted 为 compact 完成的时间戳，映射值为被 compacted 的所有旧 slice 列表，每个 slice 仅编码了 ID 和 size 信息：
+其中 sliceId 为 compact 后新 Slice 的 ID，deleted 为 compact 完成的时间戳，映射值为被 compacted 的所有旧 slice 列表，每个 slice 仅编码了 ID 和 size 信息：
 
 ```go
 type slice struct {
@@ -366,7 +366,7 @@ Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
 - Key：`sliceRef`
 - Value Type：Hash
 - Value：所有需记录的 Slices 的计数值。在 Hash 中：
-  - Key：`k${sliceID}_${size}`
+  - Key：`k${sliceId}_${size}`
   - Value：此 Slice 的引用计数值减 1（若引用计数为 1，则一般不创建对应 entry）
 
 #### 3.2.10 Symlink
@@ -412,7 +412,7 @@ Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
 - Key：`delSlices`
 - Value Type：Hash
 - Value：所有待清理的 Slices。在 Hash 中：
-  - Key：`${sliceID}_${deleted}`
+  - Key：`${sliceId}_${deleted}`
   - Value：字节数组，其中每 12 字节对应一个 [slice](#3.1.15-DelSlices)
 
 #### 3.2.16 Sustained
@@ -514,14 +514,12 @@ Slices 是一段字节数组，每 24 字节对应一个 [Slice](#3.1.8-Chunk)�
 #### 3.3.9 SliceRef
 
 ```go
-type chunkRef struct {
-	Chunkid uint64 `xorm:"pk"`
-	Size    uint32 `xorm:"notnull"`
-	Refs    int    `xorm:"notnull"`
+type sliceRef struct {
+	Id   uint64 `xorm:"pk chunkid"`
+	Size uint32 `xorm:"notnull"`
+	Refs int    `xorm:"notnull"`
 }
 ```
-
-Chunkid 实际等同 [3.1.9](#3.1.9-SliceRef) 里的 sliceID。
 
 #### 3.3.10 Symlink
 
@@ -583,13 +581,13 @@ type delfile struct {
 
 ```go
 type delslices struct {
-	Chunkid uint64 `xorm:"pk"`
+	Id      uint64 `xorm:"pk chunkid"`
 	Deleted int64  `xorm:"notnull"`
 	Slices  []byte `xorm:"blob notnull"`
 }
 ```
 
-Chunkid 实际等同 [3.1.15](#3.1.15-DelSlices) 里的 sliceID。Slices 是一段字节数组，每 12 字节对应一个 [slice](#3.1.15-DelSlices)。
+Slices 是一段字节数组，每 12 字节对应一个 [slice](#3.1.15-DelSlices)。
 
 #### 3.3.16 Sustained
 
@@ -611,7 +609,7 @@ TKV（Transactional Key-Value Database）中 Key 的通用格式为 `${prefix}${
 在 TKV 的 Keys 中，所有整数都以编码后的二进制形式存储：
 
 - inode 和 counter value 占 8 个字节，使用**小端**编码
-- sid、sliceID 和 timestamp 占 8 个字节，使用**大端**编码
+- sid、sliceId 和 timestamp 占 8 个字节，使用**大端**编码
 
 #### 3.4.1 Setting
 
@@ -666,7 +664,7 @@ A${inode}C${index} -> Slices
 #### 3.4.9 SliceRef
 
 ```
-K${sliceID}${size} -> counter value
+K${sliceId}${size} -> counter value
 ```
 
 其中 size 占 4 个字节，使用**大端**编码。
@@ -729,7 +727,7 @@ D${inode}${length} -> timestamp
 #### 3.4.15 DelSlices
 
 ```
-L${timestamp}${sliceID} -> slices
+L${timestamp}${sliceId} -> slices
 ```
 
 其中 slices 是一段字节数组，每 12 字节对应一个 [slice](#3.1.15-DelSlices)。
@@ -767,7 +765,7 @@ Chunk: |<---        Chunk 0        --->|<---        Chunk 1        --->|<-- Chun
 在单机 Redis 中，这意味着有 3 个 [Chunk Keys](#3.1.8-Chunk)，分别为 `c100_0`， `c100_1` 和 `c100_2`，每个 Key 对应一个 Slices 列表。这些 Slices 主要在数据写入时生成，可能互相之间有覆盖，也可能未完全填充满 Chunk。因此，在使用前需要顺序遍历这个 Slices 列表，并重新构建出最新版的数据分布，做到：
 
 1. 有多个 Slice 覆盖的部分以最后加入的 Slice 为准
-2. 没有被 Slice 覆盖的部分自动补零，用 sliceID = 0 来表示
+2. 没有被 Slice 覆盖的部分自动补零，用 sliceId = 0 来表示
 3. 根据文件 size 截断 Chunk
 
 现假设 Chunk 0 中有 3 个 Slices，分别为：
@@ -809,19 +807,19 @@ Block 是 JuiceFS 管理数据的基本单元，其大小默认为 4 MiB，且�
 - fsname 是文件系统名称
 - “chunks” 为固定字符串，代表 JuiceFS 的数据对象
 - hash 是根据 basename 算出来的哈希值，起到一定的隔离管理的作用
-- basename 是对象的有效名称，格式为 `${sliceID}_${index}_${size}`，其中：
-  - sliceID 为该对象所属 Slice 的 ID，JuiceFS 中每个 Slice 都有一个全局唯一的 ID
+- basename 是对象的有效名称，格式为 `${sliceId}_${index}_${size}`，其中：
+  - sliceId 为该对象所属 Slice 的 ID，JuiceFS 中每个 Slice 都有一个全局唯一的 ID
   - index 是该对象在所属 Slice 中的序号，默认一个 Slice 最多能拆成 16 个 Blocks，因此其取值范围为 [0, 16)
   - size 是该 Block 的大小，默认情况下其取值范围为 (0, 4 MiB]
 
-目前使用的 hash 算法有两种，以 basename 中的 sliceID 为参数，根据文件系统格式化时的 [HashPrefix](#3.1.1-Setting) 配置选择：
+目前使用的 hash 算法有两种，以 basename 中的 sliceId 为参数，根据文件系统格式化时的 [HashPrefix](#3.1.1-Setting) 配置选择：
 
 ```go
-func hash(sliceID int) string {
+func hash(sliceId int) string {
 	if HashPrefix {
-		return fmt.Sprintf("%02X/%d", sliceID%256, sliceID/1000/1000)
+		return fmt.Sprintf("%02X/%d", sliceId%256, sliceId/1000/1000)
 	}
-	return fmt.Sprintf("%d/%d", sliceID/1000/1000, sliceID/1000)
+	return fmt.Sprintf("%d/%d", sliceId/1000/1000, sliceId/1000)
 }
 ```
 
