@@ -291,6 +291,8 @@ func (m *baseMeta) refreshSession() {
 		old := m.fmt.UUID
 		if _, err := m.Load(false); err != nil {
 			logger.Warnf("reload setting: %s", err)
+		} else if m.fmt.MetaVersion > Version {
+			logger.Fatalf("incompatible metadata version %d > my version %d", m.fmt.MetaVersion, Version)
 		} else if m.fmt.UUID != old {
 			logger.Fatalf("UUID changed from %s to %s", old, m.fmt.UUID)
 		}

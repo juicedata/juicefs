@@ -32,6 +32,7 @@ import (
 )
 
 const (
+	Version = 1
 	// ChunkSize is size of a chunk
 	ChunkSize = 1 << 26 // 64M
 	// DeleteSlice is a message to delete a slice from object store.
