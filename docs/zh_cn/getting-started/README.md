@@ -10,7 +10,7 @@ JuiceFS 文件系统由[「对象存储」](../guide/how_to_setup_object_storage
 
 ## 安装客户端
 
-详情请参照[安装 & 升级](installation.md)。
+详情请参照[「安装」](installation.md)。
 
 不论你使用什么操作系统，当在终端输入并执行 `juicefs` 并返回了程序的帮助信息，就说明你成功安装了 JuiceFS 客户端。
 
