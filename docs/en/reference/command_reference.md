@@ -306,7 +306,7 @@ Start an S3-compatible gateway.
 juicefs gateway [command options] META-URL ADDRESS
 ```
 
-- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](../guide/how_to_setup_metadata_engine.md)" for details.
+- **META-URL**: Database URL for metadata storage, see ["JuiceFS supported metadata engines"](../guide/how_to_setup_metadata_engine.md) for details.
 - **ADDRESS**: S3 gateway address and listening port, for example: `localhost:9000`
 
 #### Options

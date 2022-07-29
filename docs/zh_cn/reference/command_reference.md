@@ -306,7 +306,7 @@ juicefs umount [command options] MOUNTPOINT
 juicefs gateway [command options] META-URL ADDRESS
 ```
 
-- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_setup_metadata_engine.md)」。
+- **META-URL**：用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_setup_metadata_engine.md)。
 - **ADDRESS**：S3 网关地址和监听的端口，例如：`localhost:9000`
 
 #### 选项
