@@ -293,10 +293,10 @@ func (cache *cacheStore) flush() {
 		delete(cache.pages, w.key)
 		atomic.AddInt64(&cache.totalPages, -int64(cap(w.page.Data)))
 		cache.Unlock()
+		w.page.Release()
 		if !ok {
 			cache.remove(w.key)
 		}
-		w.page.Release()
 	}
 }
 
