@@ -39,7 +39,7 @@ JuiceFS Hadoop Java SDK need extra 4 * [`juicefs.memory-size`](#io-configuration
 
 ### Install the pre-compiled client
 
-Please refer to the ["Installation & Upgrade"](../getting-started/installation.md#install-the-pre-compiled-client) document to learn how to download the precompiled JuiceFS Hadoop Java SDK.
+Please refer to the ["Installation"](../getting-started/installation.md#install-the-pre-compiled-client) document to learn how to download the precompiled JuiceFS Hadoop Java SDK.
 
 ### Compile the client manually
 

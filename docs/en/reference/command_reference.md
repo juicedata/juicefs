@@ -63,7 +63,7 @@ COPYRIGHT:
 ```
 
 :::note
-If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience. You can refer to [Installation & Upgrade](../getting-started/installation.md) for more information.
+If `juicefs` is not placed in your `$PATH`, you should run the script with the path to the script. For example, if `juicefs` is in current directory, you should use `./juicefs`. It is recommended to place `juicefs` in your `$PATH` for convenience. You can refer to ["Installation"](../getting-started/installation.md) for more information.
 :::
 
 :::note
