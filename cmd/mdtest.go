@@ -81,7 +81,7 @@ func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, 
 }
 
 func runTest(jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes int) {
-	dirs := 0
+	dirs := 1
 	w := width
 	z := depth
 	for z > 0 {
