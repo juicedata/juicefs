@@ -39,7 +39,7 @@ JuiceFS Hadoop Java SDK 最多需要额外使用 4 * [`juicefs.memory-size`](#io
 
 ### 安装预编译客户端
 
-请参考[「安装与升级」](../getting-started/installation.md#安装预编译客户端)文档了解如何下载预编译的 JuiceFS Hadoop Java SDK。
+请参考[「安装」](../getting-started/installation.md#安装预编译客户端)文档了解如何下载预编译的 JuiceFS Hadoop Java SDK。
 
 ### 手动编译客户端
 

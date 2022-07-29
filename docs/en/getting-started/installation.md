@@ -1,10 +1,10 @@
 ---
-sidebar_label: Installation & Upgrade
+sidebar_label: Installation
 sidebar_position: 1
 slug: /installation
 ---
 
-# Installation & Upgrade
+# Installation
 
 JuiceFS has good cross-platform capability and supports running on all kinds of operating systems of almost all major architectures, including and not limited to Linux, macOS, Windows, etc.
 
@@ -273,17 +273,6 @@ The compiled client is a binary file named `juicefs.exe`, located in the current
    ```shell
    make juicefs.linux
    ```
-
-## Upgrade
-
-The JuiceFS client only has one binary file, so to upgrade the new version, you only need to replace the old one with the new one.
-
-- **Use pre-compiled client**: You can refer to the installation method of the corresponding system in this document, download the latest client, and overwrite the old one.
-- **Manually compile client**: You can pull the latest source code and recompile it to overwrite the old version of the client.
-
-:::caution
-For the file system that has been mounted using the old version of JuiceFS client, you need to [unmount file system](for_distributed.md#6-unmounting-the-file-system), and then re-mount it with the new version of JuiceFS client.
-:::
 
 ## Uninstall
 

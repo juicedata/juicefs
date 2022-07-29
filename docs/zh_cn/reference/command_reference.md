@@ -62,8 +62,8 @@ COPYRIGHT:
    Apache License 2.0
 ```
 
-:::tip 提示
-如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考 [安装&升级](../getting-started/installation.md) 了解安装相关内容。
+:::note 注意
+如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考[「安装」](../getting-started/installation.md)了解安装相关内容。
 :::
 
 :::note 注意
@@ -159,7 +159,7 @@ juicefs format [command options] META-URL NAME
 对象存储的 Secret Key (也可通过环境变量 `SECRET_KEY` 设置)
 
 `--session-token value`<br />
-对象存储的 session token 
+对象存储的 session token
 
 `--encrypt-rsa-key value`<br />
 RSA 私钥的路径 (PEM)

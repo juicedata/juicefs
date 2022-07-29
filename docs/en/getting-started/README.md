@@ -10,7 +10,7 @@ The JuiceFS file system is driven by both ["Object Storage"](../guide/how_to_set
 
 ## Install Client
 
-For details, please refer to [Installation & Upgrade](installation.md).
+For details, please refer to ["Installation"](installation.md).
 
 A help message will return after executing `juicefs` in terminal once the JuiceFS client is successfully installed regardless of operating system.
 
