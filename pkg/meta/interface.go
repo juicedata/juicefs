@@ -32,8 +32,8 @@ import (
 )
 
 const (
-        // Version is the max of supported versions.
-	Version = 1
+	// MaxVersion is the max of supported versions.
+	MaxVersion = 1
 	// ChunkSize is size of a chunk
 	ChunkSize = 1 << 26 // 64M
 	// DeleteSlice is a message to delete a slice from object store.

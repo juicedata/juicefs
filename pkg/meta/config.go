@@ -115,7 +115,7 @@ func (f *Format) String() string {
 }
 
 func (f *Format) CheckVersion() error {
-	if f.MetaVersion > Version {
+	if f.MetaVersion > MaxVersion {
 		return fmt.Errorf("incompatible metadata version: %d; please upgrade the client", f.MetaVersion)
 	}
 
