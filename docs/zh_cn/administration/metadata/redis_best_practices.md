@@ -83,7 +83,7 @@ juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2 ~/jfs
 此特性需要使用 1.0.0 及以上版本的 JuiceFS
 :::
 
-Juicefs 同样支持集群模式的 Redis 作为元数据引擎，Redis 集群模式的 `META-URL` 为 `redis[s]://[[USER]:PASSWORD@]ADDR:PORT,[ADDR:PORT],[ADDR:PORT][/PREFIX]`，例如：
+JuiceFS 同样支持集群模式的 Redis 作为元数据引擎，Redis 集群模式的 `META-URL` 为 `redis[s]://[[USER]:PASSWORD@]ADDR:PORT,[ADDR:PORT],[ADDR:PORT][/PREFIX]`，例如：
 
 ```shell
 juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002/jfs1 myjfs
