@@ -2926,7 +2926,9 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				if err != redis.Nil {
 					return err
 				}
-				logger.Warnf("The entry of the inode was not found. inode: %v", inode)
+				if inode != TrashInode {
+					logger.Warnf("The entry of the inode was not found. inode: %d", inode)
+				}
 			}
 
 			var attr Attr

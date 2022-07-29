@@ -2638,7 +2638,7 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 	}
 	attr := &Attr{Typ: typ, Nlink: 1}
 	if !ok {
-		logger.Warnf("The entry of the inode was not found. inode: %v", inode)
+		logger.Warnf("The entry of the inode was not found. inode: %d", inode)
 	} else {
 		m.parseAttr(n, attr)
 	}
@@ -2692,10 +2692,8 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEntry {
 	e := &DumpedEntry{}
 	n, ok := m.snap.node[inode]
-	if !ok {
-		if inode != TrashInode {
-			logger.Warnf("The entry of the inode was not found. inode: %v", inode)
-		}
+	if !ok && inode != TrashInode {
+		logger.Warnf("The entry of the inode was not found. inode: %d", inode)
 	}
 
 	attr := &Attr{Typ: typ, Nlink: 1}
