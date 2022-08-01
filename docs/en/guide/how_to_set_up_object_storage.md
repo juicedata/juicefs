@@ -4,7 +4,7 @@ sidebar_position: 2
 slug: /how_to_setup_object_storage
 ---
 
-# How to Setup Object Storage
+# How to Set up Object Storage
 
 As you can learn from [JuiceFS Technical Architecture](../introduction/architecture.md), JuiceFS is a distributed file system with data and metadata stored separately. JuiceFS uses object storage as the main data storage and uses databases such as Redis, PostgreSQL and MySQL as metadata storage.
 
