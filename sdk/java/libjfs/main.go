@@ -187,7 +187,7 @@ func (w *wrapper) lookupGids(groups string) []uint32 {
 func (w *wrapper) uid2name(uid uint32) string {
 	name := w.superuser
 	if uid > 0 {
-		name = w.m.lookupUserID(uid, false)
+		name = w.m.lookupUserID(uid)
 	}
 	return name
 }
@@ -195,7 +195,7 @@ func (w *wrapper) uid2name(uid uint32) string {
 func (w *wrapper) gid2name(gid uint32) string {
 	group := w.supergroup
 	if gid > 0 {
-		group = w.m.lookupGroupID(gid, false)
+		group = w.m.lookupGroupID(gid)
 	}
 	return group
 }
@@ -567,7 +567,7 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 		}
 		logger.Debugf("Update groups of %s to %s", w.user, strings.Join(groups, ","))
 	}
-	w.m.update(uids, gids)
+	w.m.update(uids, gids, false)
 
 	if w.isSuperuser(w.user, groups) {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
