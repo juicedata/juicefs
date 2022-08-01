@@ -3,6 +3,10 @@ sidebar_label: 命令参考
 sidebar_position: 1
 slug: /command_reference
 ---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # JuiceFS 命令参考
 
 有许多命令可帮助您管理文件系统，该页面提供了有关这些命令的详细参考。
@@ -76,33 +80,48 @@ COPYRIGHT:
 此特性需要使用 0.15.2 及以上版本的 JuiceFS。它基于 `github.com/urfave/cli/v2` 实现，更多信息请参见[这里](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling)。
 :::
 
-通过加载 `hack/autocomplete` 下的对应脚本可以启用命令的自动补全，例如：
+通过加载 [`hack/autocomplete`](https://github.com/juicedata/juicefs/tree/main/hack/autocomplete) 目录下的对应脚本可以启用命令的自动补全，例如：
 
-### Bash
+<Tabs groupId="juicefs-cli-autocomplete">
+  <TabItem value="bash" label="Bash">
 
 ```shell
 source hack/autocomplete/bash_autocomplete
 ```
 
-### Zsh
+  </TabItem>
+  <TabItem value="zsh" label="Zsh">
 
 ```shell
 source hack/autocomplete/zsh_autocomplete
 ```
 
+  </TabItem>
+</Tabs>
+
 请注意自动补全功能仅对当前会话有效。如果你希望对所有新会话都启用此功能，请将 `source` 命令添加到 `.bashrc` 或 `.zshrc` 中：
+
+<Tabs groupId="juicefs-cli-autocomplete">
+  <TabItem value="bash" label="Bash">
 
 ```shell
 echo "source path/to/bash_autocomplete" >> ~/.bashrc
 ```
 
-或
+  </TabItem>
+  <TabItem value="zsh" label="Zsh">
 
 ```shell
 echo "source path/to/zsh_autocomplete" >> ~/.zshrc
 ```
 
+  </TabItem>
+</Tabs>
+
 另外，如果你是在 Linux 系统上使用 bash，也可以直接将脚本拷贝到 `/etc/bash_completion.d` 目录并将其重命名为 `juicefs`：
+
+<Tabs>
+  <TabItem value="bash" label="Bash">
 
 ```shell
 sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
@@ -111,6 +130,9 @@ sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
 ```shell
 source /etc/bash_completion.d/juicefs
 ```
+
+  </TabItem>
+</Tabs>
 
 ## 命令列表
 
