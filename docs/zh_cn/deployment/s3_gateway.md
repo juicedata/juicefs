@@ -1,6 +1,6 @@
 ---
 sidebar_label: 配置 JuiceFS S3 网关
-sidebar_position: 4
+sidebar_position: 5
 slug: /s3_gateway
 ---
 
