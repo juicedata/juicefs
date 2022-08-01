@@ -170,7 +170,7 @@ JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](docs/zh_c
 
 JuiceFS 目前是 beta 状态，核心的存储格式还没有完全确定，如果要使用在生产环境中，请先进行细致认真的评估。如果你对它有兴趣，请尽早测试，并给我们[反馈](https://github.com/juicedata/juicefs/discussions)。
 
-欢迎你在使用 JuiceFS 后告诉我们，向大家分享你的使用经验。我们也收集汇总了一份名单在 [ADOPTERS_CN.md](ADOPTERS_CN.md) 中，也包括了其他开源项目与 JuiceFS 搭配使用的情况。
+欢迎你在使用 JuiceFS 后告诉我们，向大家分享你的使用经验，我们也收集汇总了一份使用者名单在[这里](https://juicefs.com/docs/zh/community/adopters)。同时 JuiceFS 也已经与很多开源项目进行集成，请访问[这里](https://juicefs.com/docs/zh/community/integrations)了解更多信息。
 
 ## 产品路线图
 

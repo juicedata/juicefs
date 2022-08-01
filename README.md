@@ -170,7 +170,7 @@ JuiceFS supports almost all object storage services. [Learn more](docs/en/guide/
 
 JuiceFS is still in beta quality, and the core storage format is not stabilized yet. Thus, please do a careful and thorough evaluation before using JuiceFS in a production environment. If you are interested, feel free to do tests and give us [feedback](https://github.com/juicedata/juicefs/discussions).
 
-You are also welcome to share your experience of using JuiceFS with us and others. Additionally, we have collected a summary list in [ADOPTERS.md](ADOPTERS.md), which includes other open source projects used with JuiceFS.
+You are welcome to tell us after using JuiceFS and share your experience with everyone. We have also collected a list of adopters [here](https://juicefs.com/docs/community/adopters). At the same time, JuiceFS has also been integrated with many open source projects, please visit [here](https://juicefs.com/docs/community/integrations) for more information.
 
 ## Roadmap
 
