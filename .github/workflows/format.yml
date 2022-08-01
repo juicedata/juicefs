@@ -60,7 +60,7 @@ jobs:
             ./juicefs format $meta $name 
             ./juicefs mount -d $meta $mp
             cd $mp
-            bash -c "for i in {1..10000}; do echo abc>$i; sleep 0.2; echo $i; done" & 
+            bash -c 'for i in {1..10000}; do echo abc>$i; sleep 0.2; echo $i; done' & 
             cd -
             sleep 3
             uuid=$(./juicefs status $meta | grep UUID | cut -d '"' -f 4) 
@@ -72,7 +72,7 @@ jobs:
             uuid=$(./juicefs status $meta | grep UUID | cut -d '"' -f 4) 
             ./juicefs destroy --force $meta $uuid
           done
-          
+
       - name: log
         if: ${{ always() }}
         run: | 
