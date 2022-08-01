@@ -95,11 +95,14 @@ func (m *mapping) lookupGroup(name string) uint32 {
 	return 0
 }
 
-func (m *mapping) lookupUserID(id uint32) string {
+func (m *mapping) lookupUserID(id uint32, lookupLocal bool) string {
 	m.Lock()
 	defer m.Unlock()
 	if name, ok := m.userIDs[id]; ok {
 		return name
+	}
+	if !lookupLocal {
+		return strconv.Itoa(int(id))
 	}
 	u, _ := user.LookupId(strconv.Itoa(int(id)))
 	if u == nil {
@@ -114,11 +117,14 @@ func (m *mapping) lookupUserID(id uint32) string {
 	return name
 }
 
-func (m *mapping) lookupGroupID(id uint32) string {
+func (m *mapping) lookupGroupID(id uint32, lookupLocal bool) string {
 	m.Lock()
 	defer m.Unlock()
 	if name, ok := m.groupIDs[id]; ok {
 		return name
+	}
+	if !lookupLocal {
+		return strconv.Itoa(int(id))
 	}
 	g, _ := user.LookupGroupId(strconv.Itoa(int(id)))
 	if g == nil {

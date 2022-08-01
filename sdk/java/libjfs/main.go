@@ -187,7 +187,7 @@ func (w *wrapper) lookupGids(groups string) []uint32 {
 func (w *wrapper) uid2name(uid uint32) string {
 	name := w.superuser
 	if uid > 0 {
-		name = w.m.lookupUserID(uid)
+		name = w.m.lookupUserID(uid, false)
 	}
 	return name
 }
@@ -195,7 +195,7 @@ func (w *wrapper) uid2name(uid uint32) string {
 func (w *wrapper) gid2name(gid uint32) string {
 	group := w.supergroup
 	if gid > 0 {
-		group = w.m.lookupGroupID(gid)
+		group = w.m.lookupGroupID(gid, false)
 	}
 	return group
 }
