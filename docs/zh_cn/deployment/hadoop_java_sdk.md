@@ -1,6 +1,6 @@
 ---
 sidebar_label: Hadoop 使用 JuiceFS
-sidebar_position: 3
+sidebar_position: 4
 slug: /hadoop_java_sdk
 ---
 

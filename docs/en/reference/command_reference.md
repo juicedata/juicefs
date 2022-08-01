@@ -3,6 +3,10 @@ sidebar_label: Command Reference
 sidebar_position: 1
 slug: /command_reference
 ---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Command Reference
 
 There are many commands to help you manage your file system. This page provides a detailed reference for these commands.
@@ -76,41 +80,59 @@ If the command option is of boolean type, such as `--debug`, there is no need to
 This feature requires JuiceFS >= 0.15.2. It is implemented based on `github.com/urfave/cli/v2`. You can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
 :::
 
-To enable commands completion, simply source the script provided within `hack/autocomplete`. For example:
+To enable commands completion, simply source the script provided within [`hack/autocomplete`](https://github.com/juicedata/juicefs/tree/main/hack/autocomplete) directory. For example:
 
-Bash:
+<Tabs groupId="juicefs-cli-autocomplete">
+  <TabItem value="bash" label="Bash">
 
-```bash
+```shell
 source hack/autocomplete/bash_autocomplete
 ```
 
-Zsh:
+  </TabItem>
+  <TabItem value="zsh" label="Zsh">
 
-```bash
+```shell
 source hack/autocomplete/zsh_autocomplete
 ```
 
+  </TabItem>
+</Tabs>
+
 Please note the auto-completion is only enabled for the current session. If you want to apply it for all new sessions, add the `source` command to `.bashrc` or `.zshrc`:
 
-```bash
+<Tabs groupId="juicefs-cli-autocomplete">
+  <TabItem value="bash" label="Bash">
+
+```shell
 echo "source path/to/bash_autocomplete" >> ~/.bashrc
 ```
 
-or
+  </TabItem>
+  <TabItem value="zsh" label="Zsh">
 
-```bash
+```shell
 echo "source path/to/zsh_autocomplete" >> ~/.zshrc
 ```
 
+  </TabItem>
+</Tabs>
+
 Alternatively, if you are using bash on a Linux system, you may just copy the script to `/etc/bash_completion.d` and rename it to `juicefs`:
 
-```bash
+<Tabs>
+  <TabItem value="bash" label="Bash">
+
+```shell
 sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
 ```
 
 ```shell
 source /etc/bash_completion.d/juicefs
 ```
+
+  </TabItem>
+</Tabs>
 
 ## Commands
 
