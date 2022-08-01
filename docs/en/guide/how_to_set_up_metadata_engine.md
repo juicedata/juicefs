@@ -3,7 +3,7 @@ sidebar_label: How to Setup Metadata Engine
 sidebar_position: 1
 slug: /databases_for_metadata
 ---
-# How to Setup Metadata Engine
+# How to Set up Metadata Engine
 
 :::tip Version Tips
 The environment variable `META_PASSWORD` used in this document is a new feature in JuiceFS v1.0, and not applied to old clients. Please [upgrade the clients](https://github.com/juicedata/juicefs/releases) before using it if you are using the old ones.
