@@ -19,7 +19,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.0.0-rc2+2022-06-24.fc6b1206
+   1.0.0+2022-08-01.0e7afe2d
 
 COMMANDS:
    ADMIN:
@@ -173,6 +173,27 @@ overwrite existing format (default: false)
 `--no-update`<br />
 don't update existing volume (default: false)
 
+#### Examples
+
+```bash
+# Create a simple test volume (data will be stored in a local directory)
+$ juicefs format sqlite3://myjfs.db myjfs
+
+# Create a volume with Redis and S3
+$ juicefs format redis://localhost myjfs --storage s3 --bucket https://mybucket.s3.us-east-2.amazonaws.com
+
+# Create a volume with password protected MySQL
+$ juicefs format mysql://jfs:mypassword@(127.0.0.1:3306)/juicefs myjfs
+# A safer alternative
+$ META_PASSWORD=mypassword juicefs format mysql://jfs:@(127.0.0.1:3306)/juicefs myjfs
+
+# Create a volume with "quota" enabled
+$ juicefs format sqlite3://myjfs.db myjfs --inode 1000000 --capacity 102400
+
+# Create a volume with "trash" disabled
+$ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
+```
+
 ### juicefs mount
 
 #### Description
@@ -277,6 +298,39 @@ open file cache timeout in seconds (0 means disable this feature) (default: 0)
 `--subdir value`<br />
 mount a sub-directory as root (default: "")
 
+`--backup-meta value`<br />       
+interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup) (default: "3600")
+
+`--heartbeat value`<br />
+interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value (default: "12")
+
+`--upload-delay value`<br />
+delayed duration for uploading objects ("s", "m", "h") (default: 0s)
+
+#### Examples
+
+```bash
+# Mount in foreground
+$ juicefs mount redis://localhost /mnt/jfs
+
+# Mount in background with password protected Redis
+$ juicefs mount redis://:mypassword@localhost /mnt/jfs -d
+# A safer alternative
+$ META_PASSWORD=mypassword juicefs mount redis://localhost /mnt/jfs -d
+
+# Mount with a sub-directory as root
+$ juicefs mount redis://localhost /mnt/jfs --subdir /dir/in/jfs
+
+# Enable "writeback" mode, which improves performance at the risk of losing objects
+$ juicefs mount redis://localhost /mnt/jfs -d --writeback
+
+# Enable "read-only" mode
+$ juicefs mount redis://localhost /mnt/jfs -d --read-only
+
+# Disable metadata backup
+$ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
+```
+
 ### juicefs umount
 
 #### Description
@@ -293,6 +347,12 @@ juicefs umount [command options] MOUNTPOINT
 
 `-f, --force`<br />
 force unmount a busy mount point (default: false)
+
+#### Examples
+
+```bash
+$ juicefs umount /mnt/jfs
+```
 
 ### juicefs gateway
 
@@ -392,6 +452,34 @@ use top level of directories as buckets (default: false)
 `--keep-etag`<br />
 save the ETag for uploaded objects (default: false)
 
+`--storage value`<br />           
+Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_setup_object_storage.md#supported-object-storage) for all supported object storage types)
+
+`--upload-delay value`<br />      
+delayed duration (in seconds) for uploading objects (default: "0")
+
+`--backup-meta value`<br />       
+interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup) (default: "3600")
+
+`--heartbeat value`<br />         
+interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value (default: "12")
+
+`--no-bgjob`<br />                
+disable background jobs (clean-up, backup, etc.) (default: false)
+
+`--umask value`<br />             
+umask for new file in octal (default: "022")
+
+`--consul value`<br />            
+consul address to register (default: "127.0.0.1:8500")
+
+#### Examples
+
+```bash
+$ export MINIO_ROOT_USER=admin
+$ export MINIO_ROOT_PASSWORD=12345678
+$ juicefs gateway redis://localhost localhost:9000
+```
 
 ### juicefs webdav
 
@@ -443,7 +531,7 @@ prefetch N blocks in parallel (default: 1)
 `--writeback`<br />
 upload objects in background (default: false)
 
-`--upload-delay`<br />
+`--upload-delay value`<br />
 delayed duration for uploading objects ("s", "m", "h") (default: 0s)
 
 `--cache-dir value`<br />
@@ -499,6 +587,18 @@ consul address to register (default: "127.0.0.1:8500")
 
 `--no-usage-report`<br />
 do not send usage report (default: false)
+
+`--storage value`<br />           
+Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_setup_object_storage.md#supported-object-storage) for all supported object storage types)
+
+`--heartbeat value`<br />         
+interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value (default: "12")
+
+#### Examples
+
+```bash
+$ juicefs webdav redis://localhost localhost:9007
+```
 
 ### juicefs sync
 
@@ -589,6 +689,26 @@ verify integrity of all files in source and destination (default: false)
 `--check-new`<br />
 verify integrity of newly copied files (default: false)
 
+#### Examples
+
+```bash
+# Sync object from OSS to S3
+$ juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-east-2.amazonaws.com
+
+# Sync objects from S3 to JuiceFS
+$ juicefs mount -d redis://localhost /mnt/jfs
+$ juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+
+# SRC: a1/b1,a2/b2,aaa/b1   DST: empty   sync result: aaa/b1
+$ juicefs sync --exclude='a?/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+
+# SRC: a1/b1,a2/b2,aaa/b1   DST: empty   sync result: a1/b1,aaa/b1
+$ juicefs sync --include='a1/b1' --exclude='a[1-9]/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+
+# SRC: a1/b1,a2/b2,aaa/b1,b1,b2  DST: empty   sync result: a1/b1,b2
+$ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+```
+
 ### juicefs rmr
 
 #### Description
@@ -599,6 +719,12 @@ Remove all files in directories recursively.
 
 ```
 juicefs rmr PATH ...
+```
+
+#### Examples
+
+```bash
+$ juicefs rmr /mnt/jfs/foo
 ```
 
 ### juicefs info
@@ -621,8 +747,19 @@ use inode instead of path (current dir should be inside JuiceFS) (default: false
 `--recursive, -r`<br />
 get summary of directories recursively (NOTE: it may take a long time for huge trees) (default: false)
 
-`--raw (default: false)`<br />
-show internal raw information
+`--raw`<br />
+show internal raw information (default: false)
+
+#### Examples
+
+```bash
+$ Check a path
+$ juicefs info /mnt/jfs/foo
+
+# Check an inode
+$ cd /mnt/jfs
+$ juicefs info -i 100
+```
 
 ### juicefs bench
 
@@ -654,6 +791,16 @@ number of small files (default: 100)
 
 `--threads value, -p value`<br />
 number of concurrent threads (default: 1)
+
+#### Examples
+
+```bash
+# Run benchmarks with 4 threads
+$ juicefs bench /mnt/jfs -p 4
+
+# Run benchmarks of only small files
+$ juicefs bench /mnt/jfs --big-file-size 0
+```
 
 ### juicefs objbench
 
@@ -695,6 +842,13 @@ skip functional tests (default: false)
 `--threads value, -p value`<br />
 number of concurrent threads (default: 4)
 
+#### Examples
+
+```bash
+# Run benchmarks on S3
+$ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
+```
+
 ### juicefs gc
 
 #### Description
@@ -718,6 +872,19 @@ compact all chunks with more than 1 slices (default: false).
 `--threads value`<br />
 number of threads to delete leaked objects (default: 10)
 
+#### Examples
+
+```bash
+# Check only, no writable change
+$ juicefs gc redis://localhost
+
+# Trigger compaction of all slices
+$ juicefs gc redis://localhost --compact
+
+# Delete leaked objects
+$ juicefs gc redis://localhost --delete
+```
+
 ### juicefs fsck
 
 #### Description
@@ -728,6 +895,12 @@ Check consistency of file system.
 
 ```
 juicefs fsck [command options] META-URL
+```
+
+#### Examples
+
+```bash
+$ juicefs fsck redis://localhost
 ```
 
 ### juicefs profile
@@ -756,6 +929,22 @@ only track specified PIDs(separated by comma ,)
 `--interval value`<br />
 flush interval in seconds; set it to 0 when replaying a log file to get an immediate result (default: 2)
 
+
+#### Examples
+
+```bash
+# Monitor real time operations
+$ juicefs profile /mnt/jfs
+
+# Replay an access log
+$ cat /mnt/jfs/.accesslog > /tmp/jfs.alog
+# Press Ctrl-C to stop the "cat" command after some time
+$ juicefs profile /tmp/jfs.alog
+
+# Analyze an access log and print the total statistics immediately
+$ juicefs profile /tmp/jfs.alog --interval 0
+```
+
 ### juicefs stats
 
 #### Description
@@ -779,8 +968,14 @@ interval in seconds between each update (default: 1)
 `--verbosity value`<br />
 verbosity level, 0 or 1 is enough for most cases (default: 0)
 
-`--nocolor`<br />
-disable colors (default: false)
+#### Examples
+
+```bash
+$ juicefs stats /mnt/jfs
+
+# More metrics
+$ juicefs stats /mnt/jfs -l 1
+```
 
 ### juicefs status
 
@@ -798,6 +993,12 @@ juicefs status [command options] META-URL
 
 `--session value, -s value`<br />
 show detailed information (sustained inodes, locks) of the specified session (sid) (default: 0)
+
+#### Examples
+
+```bash
+$ juicefs status redis://localhost
+```
 
 ### juicefs warmup
 
@@ -822,6 +1023,20 @@ number of concurrent workers (default: 50)
 `--background, -b`<br />
 run in background (default: false)
 
+#### Examples
+
+```bash
+# Warm all files in datadir
+$ juicefs warmup /mnt/jfs/datadir
+
+# Warm only three files in datadir
+$ cat /tmp/filelist
+/mnt/jfs/datadir/f1
+/mnt/jfs/datadir/f2
+/mnt/jfs/datadir/f3
+$ juicefs warmup -f /tmp/filelist
+```
+
 ### juicefs dump
 
 #### Description
@@ -841,6 +1056,15 @@ When the FILE is not provided, STDOUT will be used instead.
 `--subdir value`<br />
 only dump a sub-directory.
 
+#### Examples
+
+```bash
+$ juicefs dump redis://localhost meta-dump
+
+# Dump only a subtree of the volume
+$ juicefs dump redis://localhost sub-meta-dump --subdir /dir/in/jfs
+```
+
 ### juicefs load
 
 #### Description
@@ -854,6 +1078,12 @@ juicefs load [command options] META-URL [FILE]
 ```
 
 When the FILE is not provided, STDIN will be used instead.
+
+#### Examples
+
+```bash
+$ juicefs load redis://localhost/1 meta-dump
+```
 
 ### juicefs config
 
@@ -893,6 +1123,31 @@ number of days after which removed files will be permanently deleted
 `--force`<br />
 skip sanity check and force update the configurations (default: false)
 
+`--encrypt-secret`<br />            
+encrypt the secret key if it was previously stored in plain format (default: false)
+
+`--min-client-version value`<br />  
+minimum client version allowed to connect
+
+`--max-client-version value`<br />  
+maximum client version allowed to connect
+
+#### Examples
+
+```bash
+# Show the current configurations
+$ juicefs config redis://localhost
+
+# Change volume "quota"
+$ juicefs config redis://localhost --inode 10000000 --capacity 1048576
+
+# Change maximum days before files in trash are deleted
+$ juicefs config redis://localhost --trash-days 7
+
+# Limit client version that is allowed to connect
+$ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version 1.1.0
+```
+
 ### juicefs destroy
 
 #### Description
@@ -909,3 +1164,9 @@ juicefs destroy [command options] META-URL UUID
 
 `--force`<br />
 skip sanity check and force destroy the volume (default: false)
+
+#### Examples
+
+```bash
+$ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
+```
