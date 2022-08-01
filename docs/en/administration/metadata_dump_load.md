@@ -26,7 +26,6 @@ By default, this command starts from the root directory `/` and iterates deeply 
 
 :::note
 `juicefs dump` only guarantees the integrity of individual files and does not provide a global point-in-time snapshot. If transactions are being written during the dump process, the final exported files will contain information from different points in time.
-In addition, to ensure the security of object storage secretKey, the secretKey in the backup file obtained by `juicefs dump` is changed to "removed". Therefore, after the 'juicefs load' is executed to restore it to the metadata engine, you need to use 'juicefs config --secret-key xxxx META-URL' to reset secretKey.
 :::
 
 Redis, MySQL and other databases have their own backup tools, such as [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data) and [mysqldump](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html), etc. Still, you need to back up metadata regularly with the corresponding backup tool.
@@ -48,6 +47,10 @@ Metadata from a backed up JSON file can be imported into a new **empty database*
 ```bash
 juicefs load redis://192.168.1.6:6379 meta.dump
 ```
+
+:::tip
+To ensure the security of object storage secretKey and sessionToken, the secretKey and sessionToken in the backup file obtained by `juicefs dump` is changed to "removed". Therefore, after the 'juicefs load' is executed to restore it to the metadata engine, you need to use `juicefs config --secret-key xxxx META-URL` to reset secretKey.
+:::
 
 This command automatically handles conflicts due to the inclusion of files from different points in time, recalculates the file system statistics (space usage, inode counters, etc.), and finally generates a globally consistent metadata in the database. Alternatively, if you want to customize some of the metadata (be careful), you can try to manually modify the JSON file before loading.
 

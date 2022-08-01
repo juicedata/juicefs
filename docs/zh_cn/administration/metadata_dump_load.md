@@ -26,7 +26,6 @@ juicefs dump redis://192.168.1.6:6379/1 meta.dump
 
 :::note 注意
 `juicefs dump` 仅保证单个文件自身的完整性，不提供全局时间点快照的功能，如在 dump 过程中业务仍在写入，最终结果会包含不同时间点的信息。
-另外为了保证对象存储 SecretKey 的安全性，`juicefs dump` 得到的备份文件中的 SecretKey 会被改写为“removed”，所以在对其执行 `juicefs load` 恢复到元数据引擎后，需要使用 `juicefs config --secret-key xxxxx  META-URL` 来重新设置 SecretKey 。
 :::
 
 Redis、MySQL 等数据库都有其自带的备份工具，如 [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data) 和 [mysqldump](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html) 等，使用它们作为 JuiceFS 元数据存储，你仍然有必要用各个数据库自身的备份工具定期备份元数据。
@@ -48,6 +47,10 @@ JSON 备份只能恢复到 `新创建的数据库` 或 `空数据库` 中。
 ```bash
 juicefs load redis://192.168.1.6:6379/1 meta.dump
 ```
+
+:::note 注意
+为了保证对象存储 SecretKey 与 SessionToken 的安全性，`juicefs dump` 得到的备份文件中的 SecretKey 与 SessionToken 会被改写为 “removed”，所以在对其执行 `juicefs load` 恢复到元数据引擎后，需要使用 `juicefs config --secret-key xxxxx META-URL` 来重新设置 SecretKey。
+:::
 
 该命令会自动处理因包含不同时间点文件而产生的冲突问题，并重新计算文件系统的统计信息（空间使用量，inode 计数器等），最后在数据库中生成一份全局一致的元数据。另外，如果你想自定义某些元数据（请务必小心），可以尝试在 load 前手动修改 JSON 文件。
 
