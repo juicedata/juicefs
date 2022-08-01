@@ -26,6 +26,7 @@ juicefs dump redis://192.168.1.6:6379/1 meta.dump
 
 :::note 注意
 `juicefs dump` 仅保证单个文件自身的完整性，不提供全局时间点快照的功能，如在 dump 过程中业务仍在写入，最终结果会包含不同时间点的信息。
+另外为了保证对象存储 SecretKey 的安全性，`juicefs dump` 得到的备份文件中的 SecretKey 会被改写为“removed”，所以在对其执行 `juicefs load` 恢复到元数据引擎后，需要使用 `juicefs config --secret-key xxxxx  META-URL` 来重新设置 SecretKey 。
 :::
 
 Redis、MySQL 等数据库都有其自带的备份工具，如 [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data) 和 [mysqldump](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html) 等，使用它们作为 JuiceFS 元数据存储，你仍然有必要用各个数据库自身的备份工具定期备份元数据。

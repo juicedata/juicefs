@@ -26,6 +26,7 @@ By default, this command starts from the root directory `/` and iterates deeply 
 
 :::note
 `juicefs dump` only guarantees the integrity of individual files and does not provide a global point-in-time snapshot. If transactions are being written during the dump process, the final exported files will contain information from different points in time.
+In addition, to ensure the security of object storage secretKey, the secretKey in the backup file obtained by `juicefs dump` is changed to "removed". Therefore, after the 'juicefs load' is executed to restore it to the metadata engine, you need to use 'juicefs config --secret-key xxxx META-URL' to reset secretKey.
 :::
 
 Redis, MySQL and other databases have their own backup tools, such as [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data) and [mysqldump](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html), etc. Still, you need to back up metadata regularly with the corresponding backup tool.
