@@ -4,6 +4,9 @@ sidebar_label: JuiceFS 简介
 sidebar_position: 1
 slug: .
 ---
+
+import BilibiliEmbedRenderer from 'react-bilibili-embed-renderer';
+
 # 简介
 
 **JuiceFS** 是一款面向云原生设计的高性能共享文件系统，在 Apache 2.0 开源协议下发布。提供完备的 [POSIX](https://en.wikipedia.org/wiki/POSIX) 兼容性，可将几乎所有对象存储接入本地作为海量本地磁盘使用，亦可同时在跨平台、跨地区的不同主机上挂载读写。
@@ -12,16 +15,12 @@ JuiceFS 采用「数据」与「元数据」分离存储的架构，从而实现
 
 JuiceFS 提供了丰富的 API，适用于各种形式数据的管理、分析、归档、备份，可以在不修改代码的前提下无缝对接大数据、机器学习、人工智能等应用平台，为其提供海量、弹性、低价的高性能存储。运维人员不用再为可用性、灾难恢复、监控、扩容等工作烦恼，专注于业务开发，提升研发效率。同时运维细节的简化，也让运维团队更容易向 DevOps 团队转型。
 
-```mdx-code-block
-import BilibiliEmbedRenderer from 'react-bilibili-embed-renderer';
-
 <div className="video-container">
   <BilibiliEmbedRenderer
     aid="931107196"
     width="100%"
   />
 </div>
-```
 
 ## 核心特性
 
