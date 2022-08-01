@@ -65,7 +65,7 @@ jobs:
             sleep 3
             uuid=$(./juicefs status $meta | grep UUID | cut -d '"' -f 4) 
             ./juicefs destroy --force $meta $uuid
-            ./juicefs format $meta new_volume 
+            ./juicefs format $meta new-volume 
             sleep 10   
             ps -ef | grep juicefs
             pidof juicefs && exit 1
