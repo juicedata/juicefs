@@ -50,7 +50,7 @@ jobs:
         run: | 
           sudo apt install redis-tools
           
-      - name: Test 
+      - name: Test mount process exit on reformat
         run: |
           for i in {1..60}; do 
             echo "round $i"
@@ -60,7 +60,7 @@ jobs:
             ./juicefs format $meta $name 
             ./juicefs mount -d $meta $mp
             cd $mp
-            bash -c 'for i in {1..10000}; do echo abc>$i; sleep 0.2; echo $i; done' & 
+            bash -c 'for i in {1..10000}; do echo abc>$i; sleep 0.2; echo $i; done' || true & 
             cd -
             sleep 3
             uuid=$(./juicefs status $meta | grep UUID | cut -d '"' -f 4) 
