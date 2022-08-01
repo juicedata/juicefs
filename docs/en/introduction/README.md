@@ -12,18 +12,6 @@ JuiceFS implements a distributed file system by adopting the architecture that s
 
 JuiceFS provides rich APIs for various forms of data management, analysis, archiving, and backup. It can seamlessly interface with big data, machine learning, artificial intelligence and other application platforms without modifying code, and provide massive, elastic and high-performance storage at low cost. With JuiceFS, you do not need to worry about availability, disaster recovery, monitoring and expansion, and thus operation and maintaince work can be remarkably simplified, which helps companies focus more on business development and R&D efficiency improvement.
 
-```mdx-code-block
-import LiteYouTubeEmbed from 'react-lite-youtube-embed';
-
-<div className="video-container">
-  <LiteYouTubeEmbed
-    id="8RdZoBG-D6Y"
-    title="What is JuiceFS?"
-    poster="maxresdefault"
-  />
-</div>
-```
-
 ## Features
 
 1. **POSIX Compatible** JuiceFS can be used like a local file system as it seamlessly interfaces with existing applications.
