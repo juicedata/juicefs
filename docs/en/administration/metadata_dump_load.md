@@ -50,6 +50,10 @@ juicefs load redis://192.168.1.6:6379 meta.dump
 
 This command automatically handles conflicts due to the inclusion of files from different points in time, recalculates the file system statistics (space usage, inode counters, etc.), and finally generates a globally consistent metadata in the database. Alternatively, if you want to customize some of the metadata (be careful), you can try to manually modify the JSON file before loading.
 
+:::tip
+To ensure the security of object storage secretKey and sessionToken, the secretKey and sessionToken in the backup file obtained by `juicefs dump` is changed to "removed". Therefore, after the 'juicefs load' is executed to restore it to the metadata engine, you need to use `juicefs config --secret-key xxxx META-URL` to reset secretKey.
+:::
+
 ### Metadata Migration Between Engines
 
 :::tip
