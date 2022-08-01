@@ -135,10 +135,10 @@ juicefs format [command options] META-URL NAME
 size of block in KiB (default: 4096)
 
 `--capacity value`<br />
-the limit for space in GiB (default: unlimited)
+the limit for space in GiB (0 means unlimited) (default: 0)
 
 `--inodes value`<br />
-the limit for number of inodes (default: unlimited)
+the limit for number of inodes (0 means unlimited) (default: 0)
 
 `--compress value`<br />
 compression algorithm (lz4, zstd, none) (default: "none")
