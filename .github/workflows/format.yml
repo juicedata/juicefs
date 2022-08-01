@@ -52,7 +52,7 @@ jobs:
           
       - name: Test mount process exit on reformat
         run: |
-          for i in {1..60}; do 
+          for i in {1..1000}; do 
             echo "round $i"
             meta=redis://localhost/1
             mp=myjfs/
