@@ -320,7 +320,7 @@ open file cache timeout in seconds (0 means disable this feature) (default: 0)
 `--subdir value`<br />
 mount a sub-directory as root (default: "")
 
-`--backup-meta value`<br />       
+`--backup-meta value`<br />
 interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup) (default: "3600")
 
 `--heartbeat value`<br />
@@ -474,25 +474,25 @@ use top level of directories as buckets (default: false)
 `--keep-etag`<br />
 save the ETag for uploaded objects (default: false)
 
-`--storage value`<br />           
-Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_setup_object_storage.md#supported-object-storage) for all supported object storage types)
+`--storage value`<br />
+Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)
 
-`--upload-delay value`<br />      
+`--upload-delay value`<br />
 delayed duration (in seconds) for uploading objects (default: "0")
 
-`--backup-meta value`<br />       
+`--backup-meta value`<br />
 interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup) (default: "3600")
 
-`--heartbeat value`<br />         
+`--heartbeat value`<br />
 interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value (default: "12")
 
-`--no-bgjob`<br />                
+`--no-bgjob`<br />
 disable background jobs (clean-up, backup, etc.) (default: false)
 
-`--umask value`<br />             
+`--umask value`<br />
 umask for new file in octal (default: "022")
 
-`--consul value`<br />            
+`--consul value`<br />
 consul address to register (default: "127.0.0.1:8500")
 
 #### Examples
@@ -610,10 +610,10 @@ consul address to register (default: "127.0.0.1:8500")
 `--no-usage-report`<br />
 do not send usage report (default: false)
 
-`--storage value`<br />           
-Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_setup_object_storage.md#supported-object-storage) for all supported object storage types)
+`--storage value`<br />
+Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)
 
-`--heartbeat value`<br />         
+`--heartbeat value`<br />
 interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value (default: "12")
 
 #### Examples
@@ -1145,13 +1145,13 @@ number of days after which removed files will be permanently deleted
 `--force`<br />
 skip sanity check and force update the configurations (default: false)
 
-`--encrypt-secret`<br />            
+`--encrypt-secret`<br />
 encrypt the secret key if it was previously stored in plain format (default: false)
 
-`--min-client-version value`<br />  
+`--min-client-version value`<br />
 minimum client version allowed to connect
 
-`--max-client-version value`<br />  
+`--max-client-version value`<br />
 maximum client version allowed to connect
 
 #### Examples
