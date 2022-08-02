@@ -567,7 +567,7 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 		}
 		logger.Debugf("Update groups of %s to %s", w.user, strings.Join(groups, ","))
 	}
-	w.m.update(uids, gids)
+	w.m.update(uids, gids, false)
 
 	if w.isSuperuser(w.user, groups) {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
