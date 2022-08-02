@@ -59,7 +59,12 @@ func cmdGateway() *cli.Command {
 		&cli.StringFlag{
 			Name:  "umask",
 			Value: "022",
-			Usage: "umask for new file in octal",
+			Usage: "umask for new files in octal",
+		},
+		&cli.StringFlag{
+			Name:  "umask-dir",
+			Value: "022",
+			Usage: "umask for new directories in octal",
 		},
 	}
 
@@ -169,7 +174,21 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
 	}
 
-	return jfsgateway.NewJFSGateway(jfs, conf, &jfsgateway.Config{MultiBucket: c.Bool("multi-buckets"), KeepEtag: c.Bool("keep-etag"), Mode: uint16(0777 &^ umask)})
+	umaskDir, err := strconv.ParseUint(c.String("umask-dir"), 8, 16)
+	if err != nil {
+		logger.Fatalf("invalid umask-dir %s: %s", c.String("umask-dir"), err)
+	}
+	
+	return jfsgateway.NewJFSGateway(
+		jfs,
+		conf,
+		&jfsgateway.Config{
+			MultiBucket: c.Bool("multi-buckets"),
+			KeepEtag: c.Bool("keep-etag"),
+			Mode: uint16(0777 &^ umask),
+			DirMode: uint16(0777 &^ umaskDir),
+		},
+	)
 }
 
 func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.FileSystem) {
