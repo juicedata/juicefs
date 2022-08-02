@@ -320,7 +320,7 @@ consul注册中心地址(默认: "127.0.0.1:8500")
 `--subdir value`<br />
 将某个子目录挂载为根 (默认: "")
 
-`--backup-meta value`<br />       
+`--backup-meta value`<br />
 自动备份元数据到对象存储的间隔时间；单位秒 (0表示不备份) (默认: 3600)
 
 `--heartbeat value`<br />
@@ -475,12 +475,12 @@ juicefs gateway [command options] META-URL ADDRESS
 保留对象上传时的 ETag (默认: false)
 
 `--storage value`<br />
-对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_setup_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
 
 `--upload-delay value`<br />
 数据上传到对象存储的延迟时间,支持秒分时精度，对应格式分别为("s", "m", "h")，默认为 0 秒
 
-`--backup-meta value`<br />       
+`--backup-meta value`<br />
 自动备份元数据到对象存储的间隔时间；单位秒 (0表示不备份) (默认: 3600)
 
 `--heartbeat value`<br />
@@ -489,7 +489,7 @@ juicefs gateway [command options] META-URL ADDRESS
 `--no-bgjob`<br />
 禁用后台作业（清理、备份等）（默认值：false）
 
-`--umask value`             
+`--umask value`
 新文件的 umask 的八进制格式 (默认值:“022”)
 
 `--consul value`<br />
@@ -610,7 +610,7 @@ consul注册中心地址(默认: "127.0.0.1:8500")
 不发送使用量信息 (默认: false)
 
 `--storage value`<br />
-对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_setup_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
 
 `--heartbeat value`<br />
 发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认: 12)。
@@ -1148,13 +1148,13 @@ juicefs config [command options] META-URL
 `--force`<br />
 跳过合理性检查并强制更新指定配置项 (默认: false)
 
-`--encrypt-secret`<br />            
+`--encrypt-secret`<br />
 如果密钥之前以原格式存储，则加密密钥 (默认值: false)
 
-`--min-client-version value`<br />  
+`--min-client-version value`<br />
 允许连接的最小客户端版本
 
-`--max-client-version value`<br />  
+`--max-client-version value`<br />
 允许连接的最大客户端版本
 
 #### 示例
