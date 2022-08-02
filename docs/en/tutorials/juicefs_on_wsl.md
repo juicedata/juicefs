@@ -86,7 +86,7 @@ JuiceFS is a distributed file system with data and metadata separated, usually u
 
 #### Object Storage
 
-View "[JuiceFS Supported Object Storage](../guide/how_to_setup_object_storage.md)"
+View "[JuiceFS Supported Object Storage](../guide/how_to_set_up_object_storage.md)"
 
 - **Bucket Endpoint**: `https://myjfs.oss-cn-shanghai.aliyuncs.com`
 - **Access Key ID**: `ABCDEFGHIJKLMNopqXYZ`
@@ -94,7 +94,7 @@ View "[JuiceFS Supported Object Storage](../guide/how_to_setup_object_storage.md
 
 #### Database
 
-View "[JuiceFS Supported Metadata Engines](../guide/how_to_setup_metadata_engine.md)"
+View "[JuiceFS Supported Metadata Engines](../guide/how_to_set_up_metadata_engine.md)"
 
 - **Database URL**: `myjfs-sh-abc.redis.rds.aliyuncs.com:6379`
 - **Database Password**: `mypassword`

@@ -1,10 +1,10 @@
 ---
-sidebar_label: How to Setup Object Storage
+sidebar_label: How to Set Up Object Storage
 sidebar_position: 2
 slug: /how_to_setup_object_storage
 ---
 
-# How to Set up Object Storage
+# How to Set Up Object Storage
 
 As you can learn from [JuiceFS Technical Architecture](../introduction/architecture.md), JuiceFS is a distributed file system with data and metadata stored separately. JuiceFS uses object storage as the main data storage and uses databases such as Redis, PostgreSQL and MySQL as metadata storage.
 
@@ -54,9 +54,9 @@ Permanent access credentials generally have two parts, accessKey, secretKey, whi
 
 ### How to get temporary credentials
 
-Different cloud vendors have different access methods. Generally, the accessKey, secretKey and the ARN representing the permission boundary of the temporary access credential are used as parameters to request to the STS server of the cloud service vendor to obtain the temporary access credential. This process can be simplified by the SDK provided by the cloud vendor. For example, AWS S3 can refer to this [link](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html) to obtain temporary credentials, and Alibaba Cloud OSS can refer to this [link](https://help.aliyun.com/document_detail/100624.html).
+Different cloud vendors have different access methods. Generally, the accessKey, secretKey and the ARN representing the permission boundary of the temporary access credential are used as parameters to request to the STS server of the cloud service vendor to obtain the temporary access credential. This process can be simplified by the SDK provided by the cloud vendor. For example, Amazon S3 can refer to this [link](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html) to obtain temporary credentials, and Alibaba Cloud OSS can refer to this [link](https://help.aliyun.com/document_detail/100624.html).
 
-### How to setup object storage with temporary access credentials
+### How to set up object storage with temporary access credentials
 
 The way temporary credentials are used is not much different than permanent credentials. In the `format` filesystem step, set the accessKey, secretKey, and token of the temporary credential through the --access-key, --secret-key, --session-token parameters, respectively. For example:
 

@@ -62,7 +62,7 @@ If the terminal prompts `command not found`, it is probably because `/usr/local/
 There are two ways to use JuiceFS on Windows systems.
 
 1. [Using pre-compiled Windows client](#pre-compiled-windows-client)
-2. [Using Linux client in WSL](#using-the-linux-client-in-wsl)
+2. [Using Linux client in WSL](#using-linux-client-in-wsl)
 
 #### Pre-compiled Windows client
 
