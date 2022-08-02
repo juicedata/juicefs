@@ -12,7 +12,7 @@ slug: /metadata_dump_load
 
 ## 手动备份
 
-JuiceFS 支持[多种元数据存储引擎](../guide/how_to_setup_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 `dump` 命令允许将所有元数据以统一格式写入到 [JSON](https://www.json.org/json-en.html) 文件进行备份。同时，JuiceFS 也提供了 `load` 命令，允许将备份恢复或迁移到任意元数据存储引擎。命令的详细信息请参考[这里](../reference/command_reference.md#juicefs-dump)。
+JuiceFS 支持[多种元数据存储引擎](../guide/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 `dump` 命令允许将所有元数据以统一格式写入到 [JSON](https://www.json.org/json-en.html) 文件进行备份。同时，JuiceFS 也提供了 `load` 命令，允许将备份恢复或迁移到任意元数据存储引擎。命令的详细信息请参考[这里](../reference/command_reference.md#juicefs-dump)。
 
 ### 元数据备份
 

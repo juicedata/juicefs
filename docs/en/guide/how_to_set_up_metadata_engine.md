@@ -1,12 +1,12 @@
 ---
-sidebar_label: How to Setup Metadata Engine
+sidebar_label: How to Set Up Metadata Engine
 sidebar_position: 1
 slug: /databases_for_metadata
 ---
-# How to Set up Metadata Engine
+# How to Set Up Metadata Engine
 
 :::tip Version Tips
-The environment variable `META_PASSWORD` used in this document is a new feature in JuiceFS v1.0, and not applied to old clients. Please [upgrade the clients](https://github.com/juicedata/juicefs/releases) before using it if you are using the old ones.
+The environment variable `META_PASSWORD` used in this document is a new feature in JuiceFS v1.0, and not applied to old clients. Please [upgrade the clients](../administration/upgrade.md) before using it if you are using the old ones.
 :::
 
 As mentioned in [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md), JuiceFS is designed to store data and metadata seperately. Generally, data is stored in the cloud storage based on object storage, and metadata corresponding to the data is stored in an independent database. The database that supports storing metadata is referred to "Metadata Storage Engine".
@@ -41,7 +41,7 @@ When using Redis as the metadata storage engine, the following format is usually
 # use tcp
 redis[s]://[<username>:<password>@]<host>[:<port>]/<db>
 
-# use unix socket 
+# use unix socket
 unix://[<username>:<password>@]<socket-file-path>?db=<db>
 ```
 
@@ -189,7 +189,7 @@ When using MySQL as the metadata storage engine, you need to create a database m
 # use tcp
 mysql://<username>[:<password>]@(<host>:3306)/<database-name>
 
-# use unix socket 
+# use unix socket
 mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 ```
 

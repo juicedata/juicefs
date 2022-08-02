@@ -12,7 +12,7 @@ slug: /metadata_dump_load
 
 ## Manual Backup
 
-JuiceFS supports [multiple metadata storage engines](../guide/how_to_setup_metadata_engine.md), and each engine has a different data management format internally. To facilitate management, JuiceFS provides `dump` command which allows to write all metadata in a uniform format to [JSON](https://www.json.org/json-en.html) file for backup. Also, JuiceFS provides `load` command which allows to restore or migrate backups to any metadata storage engine. For more information on the command, please refer to [here](../reference/command_reference.md#juicefs-dump).
+JuiceFS supports [multiple metadata storage engines](../guide/how_to_set_up_metadata_engine.md), and each engine has a different data management format internally. To facilitate management, JuiceFS provides `dump` command which allows to write all metadata in a uniform format to [JSON](https://www.json.org/json-en.html) file for backup. Also, JuiceFS provides `load` command which allows to restore or migrate backups to any metadata storage engine. For more information on the command, please refer to [here](../reference/command_reference.md#juicefs-dump).
 
 ### Metadata Backup
 

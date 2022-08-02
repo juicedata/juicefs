@@ -28,7 +28,7 @@ JuiceFS 客户端默认会占用 1GB 的磁盘作为缓存，在处理大量文�
 
 Amazon S3 是公有云对象存储服务的事实标准，其他主流云平台所提供的对象存储服务通常都兼容 S3 API，这使得面向 S3 开发的程序可以自由切换其他平台的对象存储服务。
 
-JuiceFS 完全支持 Amazon S3 以及所有兼容 S3 API 对象存储服务，你可以查看文档了解 [JuiceFS 支持的所有存储类型](../guide/how_to_setup_object_storage.md)。
+JuiceFS 完全支持 Amazon S3 以及所有兼容 S3 API 对象存储服务，你可以查看文档了解 [JuiceFS 支持的所有存储类型](../guide/how_to_set_up_object_storage.md)。
 
 Amazon S3 提供一系列适合不同使用案例的存储类，主要有：
 
@@ -146,7 +146,7 @@ $ juicefs format \
 
 **选项说明：**
 
-- `--storage`：指定对象存储类型，这里我们使用 S3。如需使用其他对象存储，请参考[《JuiceFS 支持的对象存储和设置指南》](../guide/how_to_setup_object_storage.md)。
+- `--storage`：指定对象存储类型，这里我们使用 S3。如需使用其他对象存储，请参考[《JuiceFS 支持的对象存储和设置指南》](../guide/how_to_set_up_object_storage.md)。
 - `--bucket`：对象存储的 Bucket 域名。
 - `--access-key` 和 `--secret-key`：访问 S3 API 的秘钥对。
 
