@@ -74,7 +74,7 @@ func startWebdav(t *testing.T) {
 }
 
 func TestIntegration(t *testing.T) {
-	mountTemp(t, nil, true)
+	mountTemp(t, nil, nil, nil)
 	defer umountTemp(t)
 	startGateway(t)
 	startWebdav(t)

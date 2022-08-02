@@ -136,6 +136,10 @@ func mount_flags() []cli.Flag {
 			Name:  "enable-xattr",
 			Usage: "enable extended attributes (xattr)",
 		},
+		&cli.BoolFlag{
+			Name:  "update-fstab",
+			Usage: "add / update entry in /etc/fstab",
+		},
 	}
 	return append(selfFlags, cacheFlags(1.0)...)
 }
