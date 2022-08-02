@@ -296,7 +296,7 @@ where sid is the session ID and the mapped value is the list of temporarily unde
 
 The common format of keys in Redis is `${prefix}${JFSKey}`, where
 
-- In standalone mode the prefix is an empty string, while in cluster mode it is a user defined prefix enclosed in curly braces, e.g. "{10}"
+- In standalone mode the prefix is an empty string, while in cluster mode it is a database number enclosed in curly braces, e.g. "{10}"
 - JFSKey is the Key of different data structures in JuiceFS, which are listed in the subsequent subsections
 
 In Redis Keys, integers (including inode numbers) are represented as decimal strings if not otherwise specified.

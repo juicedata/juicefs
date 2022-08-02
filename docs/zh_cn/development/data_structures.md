@@ -296,7 +296,7 @@ sid -> []inode
 
 Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
 
-- 在 Redis 非集群模式下 prefix 为空字符串，在集群模式中是一个大括号括起来的用户定义前缀，如 "{10}"
+- 在 Redis 非集群模式下 prefix 为空字符串，在集群模式中是一个大括号括起来的数据库编号，如 "{10}"
 - JFSKey 是指 JuiceFS 不同数据结构的 Key，具体列举在后续小节中
 
 在 Redis 的 Keys 中，如无特殊说明整数（包括 inode 号）都以十进制字符串表示。
