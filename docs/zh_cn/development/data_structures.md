@@ -296,7 +296,7 @@ sid -> []inode
 
 Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
 
-- prefix 在 Redis 非集群模式下为空字符串，在集群模式中是一个大括号括起来的数据库 ID，如 "{10}"
+- 在 Redis 非集群模式下 prefix 为空字符串，在集群模式中是一个大括号括起来的用户定义前缀，如 "{10}"
 - JFSKey 是指 JuiceFS 不同数据结构的 Key，具体列举在后续小节中
 
 在 Redis 的 Keys 中，如无特殊说明整数（包括 inode 号）都以十进制字符串表示。
@@ -416,7 +416,7 @@ Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
 - Key：`session${sid}`
 - Value Type：List
 - Value：此会话中临时保留的文件列表。在 List 中：
-  - Member：文件的 inode 号，以十进制字符串表示
+  - Member：文件的 inode 号
 
 ### 3.3 SQL
 
@@ -819,7 +819,7 @@ func hash(sliceId int) string {
 }
 ```
 
-假设现在一个名为 `jfstest` 的文件系统中写入了一段连续的 10 MiB 数据，内部赋予的 SliceID 为 1，且未开启 HashPrefix，那么在对象存储中则会产生以下三个对象：
+假设一个名为 `jfstest` 的文件系统中写入了一段连续的 10 MiB 数据，内部赋予的 SliceID 为 1，且未开启 HashPrefix，那么在对象存储中则会产生以下三个对象：
 
 ```
 jfstest/chunks/0/0/1_0_4194304
@@ -827,7 +827,7 @@ jfstest/chunks/0/0/1_1_4194304
 jfstest/chunks/0/0/1_2_2097152
 ```
 
-以上一节的 64 MiB 的 Chunk 为例，它的实际数据分布如下：
+类似地，现在以上一节的 64 MiB 的 Chunk 为例，它的实际数据分布如下：
 
 ```
  0 ~ 10M: 补零
