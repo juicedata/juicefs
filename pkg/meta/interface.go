@@ -44,6 +44,12 @@ const (
 	Info = 1003
 	// FillCache is a message to build cache for target directories/files
 	FillCache = 1004
+	// SetQuota is a message to set quota for target directorie
+	SetQuota = 1005
+	// DelQuota is a message to del quota for target directories/files
+	DelQuota = 1006
+	// GetQuota is a message to get quota for target directories/files
+	GetQuota = 1007
 )
 
 const (
@@ -116,6 +122,21 @@ type Attr struct {
 	Full      bool // the attributes are completed or not
 	KeepCache bool // whether to keep the cached page or not
 }
+
+//quota attr
+//quota for direction
+type quota struct {
+	capacity   uint64
+	inodes     uint64
+	usedSpace  uint64
+	usedInodes uint64
+}
+
+//quota for direction
+/*type Quota struct {
+	Inode Ino
+	QAttr *QuotaAttr
+}*/
 
 func typeToStatType(_type uint8) uint32 {
 	switch _type & 0x7F {
@@ -352,6 +373,8 @@ type Meta interface {
 	// getBase return the base engine.
 	getBase() *baseMeta
 	InitMetrics(registerer prometheus.Registerer)
+	//SetQuota set quota for directory
+	SetQuota(ctx Context, inode Ino, capacity, inodes uint64) syscall.Errno
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)

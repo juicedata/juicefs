@@ -402,6 +402,7 @@ func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
 }
 
 func (s *wSlice) upload(indx int) {
+	fmt.Printf("====== hello start from cache store  7----:\n")
 	blen := s.blockSize(indx)
 	key := s.key(indx)
 	pages := s.pages[indx]
@@ -469,6 +470,7 @@ func (s *wSlice) Len() int {
 }
 
 func (s *wSlice) FlushTo(offset int) error {
+	fmt.Printf("====== hello start from chunk stre  6 ----:    %d\n", offset)
 	if offset < s.uploaded {
 		panic(fmt.Sprintf("Invalid offset: %d < %d", offset, s.uploaded))
 	}

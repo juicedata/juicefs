@@ -2223,6 +2223,9 @@ func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 		return nil
 	}))
 }
+func (m *kvMeta) doSetQuota(ctx Context, inode Ino, capacity, inodes uint64) syscall.Errno {
+	return errno(nil)
+}
 
 func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	key := m.xattrKey(inode, name)

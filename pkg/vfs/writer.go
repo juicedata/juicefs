@@ -17,6 +17,7 @@
 package vfs
 
 import (
+	"fmt"
 	"math/rand"
 	"runtime"
 	"sync"
@@ -124,6 +125,7 @@ func (s *sliceWriter) flushData() {
 // protected by s.chunk.file
 func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.Errno {
 	f := s.chunk.file
+	fmt.Printf("====== hello start from vfs writer 5 ----:    %s\n", data)
 	_, err := s.writer.WriteAt(data, int64(off))
 	if err != nil {
 		logger.Warnf("write: chunk: %d off: %d %s", s.id, off, err)
@@ -253,6 +255,7 @@ func (f *fileWriter) freeChunk(c *chunkWriter) {
 // protected by file
 func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data []byte) syscall.Errno {
 	c := f.findChunk(indx)
+	fmt.Printf("====== hello start fromvfs writer 4----:    %s\n", data)
 	s := c.findWritableSlice(off, uint32(len(data)))
 	if s == nil {
 		s = &sliceWriter{
@@ -288,6 +291,7 @@ func (w *dataWriter) usedBufferSize() int64 {
 }
 
 func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Errno {
+	fmt.Printf("====== hello start from vfs  writer 3----:    %s\n", data)
 	for {
 		if f.totalSlices() < 1000 {
 			break

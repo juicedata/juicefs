@@ -479,6 +479,10 @@ func (m *redisMeta) symKey(inode Ino) string {
 	return m.prefix + "s" + inode.String()
 }
 
+func (m *redisMeta) quotaKey(inode Ino) string {
+	return m.prefix + "q" + inode.String()
+}
+
 func (m *redisMeta) inodeKey(inode Ino) string {
 	return m.prefix + "i" + inode.String()
 }
@@ -2834,6 +2838,22 @@ func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte
 			return err
 		}
 	}, key))
+}
+
+func (m *redisMeta) doSetQuota(ctx Context, inode Ino, cap, inodes uint64) syscall.Errno {
+	key := m.quotaKey(inode)
+
+	if _, err := m.rdb.HSet(ctx, key, "capacity", cap).Result(); err != nil {
+		return errno(err)
+	}
+	if _, err := m.rdb.HSet(ctx, key, "inodes", inodes).Result(); err != nil {
+		return errno(err)
+	}
+	m.baseMeta.quotas[inode] = quota{
+		capacity: cap,
+		inodes:   inodes,
+	}
+	return 0
 }
 
 func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {

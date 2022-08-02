@@ -75,6 +75,7 @@ type engine interface {
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 
 	GetSession(sid uint64, detail bool) (*Session, error)
+	doSetQuota(ctx Context, inode Ino, capacity, inodes uint64) syscall.Errno
 }
 
 type baseMeta struct {
@@ -110,6 +111,10 @@ type baseMeta struct {
 	opDist      prometheus.Histogram
 
 	en engine
+	// All user configured quotas: dir inode -> quota
+	quotas map[Ino]quota
+	// Cache a list related to a directory, containing quotas configured on itself and its ancestors
+	dirQuotas map[Ino][]*quota
 }
 
 func newBaseMeta(addr string, conf *Config) *baseMeta {
@@ -154,6 +159,8 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			Help:    "Operation latency distributions.",
 			Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
 		}),
+		quotas:    make(map[Ino]quota),
+		dirQuotas: make(map[Ino][]*quota),
 	}
 }
 
@@ -343,6 +350,25 @@ func (m *baseMeta) refreshUsage() {
 		}
 		utils.SleepWithJitter(time.Second * 10)
 	}
+}
+
+func (m *baseMeta) refreshQuota() {
+
+}
+
+func (m *baseMeta) checkDirQuota(ctx Context, size, inodes uint64, inode Ino) bool {
+	for k, _ := range m.GetParents(ctx, inode) {
+		if _, ok := m.dirQuotas[k]; !ok {
+			m.dirQuotas[k] = m.getQuotas(ctx, k)
+		}
+		for _, q := range m.dirQuotas[k] {
+			if size > 0 && q.capacity > 0 && atomic.LoadUint64(&q.usedSpace)+size > uint64(q.capacity) {
+				return true
+			}
+			return inodes > 0 && q.inodes > 0 && atomic.LoadUint64(&q.usedInodes)+inodes > uint64(q.inodes)
+		}
+	}
+
 }
 
 func (m *baseMeta) checkQuota(size, inodes int64) bool {
@@ -681,6 +707,24 @@ func (m *baseMeta) nextInode() (Ino, error) {
 	return Ino(n), nil
 }
 
+func (m *baseMeta) getQuotas(ctx Context, inode Ino) (quotaslice []*quota) {
+	for k, _ := range m.GetParents(ctx, inode) {
+		if k != RootInode {
+			if _, ok := m.dirQuotas[k]; !ok {
+				if k != RootInode {
+					m.getQuotas(ctx, k)
+
+				}
+			} else {
+				quotaslice = append(quotaslice, m.dirQuotas[k]...)
+				m.getQuotas(ctx, k)
+			}
+		}
+	}
+	return
+
+}
+
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
 	if isTrash(parent) {
 		return syscall.EPERM
@@ -903,6 +947,18 @@ func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, f
 
 	defer m.timeit(time.Now())
 	return m.en.doSetXattr(ctx, m.checkRoot(inode), name, value, flags)
+}
+
+func (m *baseMeta) SetQuota(ctx Context, inode Ino, capacity, inodes uint64) syscall.Errno {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	if inode == 0 {
+		return syscall.EINVAL
+	}
+
+	defer m.timeit(time.Now())
+	return m.en.doSetQuota(ctx, m.checkRoot(inode), capacity, inodes)
 }
 
 func (m *baseMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
