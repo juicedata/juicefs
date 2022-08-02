@@ -90,7 +90,7 @@ juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002/1 myjfs
 ```
 
 :::tip
-Redis Cluster does not support multiple databases. However, it splits the key space into 16384 hash slots, and distributes the slots to several nodes. Based on Redis Cluster's [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags) feature, JuiceFS adds `{DB}` before all file system keys to ensure they will be hashed to the same hash slot, assuring that transactions can still work. Besides, one Redis Cluster can serve for multiple JuiceFS file systems as long as they use different db.
+Redis Cluster does not support multiple databases. However, it splits the key space into 16384 hash slots, and distributes the slots to several nodes. Based on Redis Cluster's [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags) feature, JuiceFS adds `{DB}` before all file system keys to ensure they will be hashed to the same hash slot, assuring that transactions can still work. Besides, one Redis Cluster can serve for multiple JuiceFS file systems as long as they use different db numbers.
 :::
 
 ## Data durability
