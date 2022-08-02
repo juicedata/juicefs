@@ -23,7 +23,7 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.0.0-rc2+2022-06-24.fc6b1206
+   1.0.0+2022-08-01.0e7afe2d
 
 COMMANDS:
    ADMIN:
@@ -195,6 +195,27 @@ RSA 私钥的路径 (PEM)
 `--no-update`<br />
 不要修改已有的格式化配置 (默认: false)
 
+#### 示例
+
+```bash
+# 创建一个简单的测试卷（数据将存储在本地目录中）
+$ juicefs format sqlite3://myjfs.db myjfs
+
+# 使用 Redis 和 S3 创建卷
+$ juicefs format redis://localhost myjfs --storage s3 --bucket https://mybucket.s3.us-east-2.amazonaws.com
+
+# 使用带有密码的 MySQL 创建卷
+$ juicefs format mysql://jfs:mypassword@(127.0.0.1:3306)/juicefs myjfs
+# 更安全的方法
+$ META_PASSWORD=mypassword juicefs format mysql://jfs:@(127.0.0.1:3306)/juicefs myjfs
+
+# 创建一个开启配额设置的卷
+$ juicefs format sqlite3://myjfs.db myjfs --inode 1000000 --capacity 102400
+
+# 创建一个关闭了回收站的卷
+$ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
+```
+
 ### juicefs mount
 
 #### 描述
@@ -299,6 +320,39 @@ consul注册中心地址(默认: "127.0.0.1:8500")
 `--subdir value`<br />
 将某个子目录挂载为根 (默认: "")
 
+`--backup-meta value`<br />       
+自动备份元数据到对象存储的间隔时间；单位秒 (0表示不备份) (默认: 3600)
+
+`--heartbeat value`<br />
+发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认: 12)。
+
+`--upload-delay value`<br />
+数据上传到对象存储的延迟时间,支持秒分时精度，对应格式分别为("s", "m", "h")，默认为 0 秒
+
+#### 示例
+
+```bash
+# 前台挂载
+$ juicefs mount redis://localhost /mnt/jfs
+
+# 使用带密码的 redis 后台挂载
+$ juicefs mount redis://:mypassword@localhost /mnt/jfs -d
+# 更安全的方式
+$ META_PASSWORD=mypassword juicefs mount redis://localhost /mnt/jfs -d
+
+# 将一个子目录挂载为根目录
+$ juicefs mount redis://localhost /mnt/jfs --subdir /dir/in/jfs
+
+# 启用 “writeback” 模式，这可以提高性能，但有丢失对象的风险
+$ juicefs mount redis://localhost /mnt/jfs -d --writeback
+
+# 开启只读模式
+$ juicefs mount redis://localhost /mnt/jfs -d --read-only
+
+# 关闭元数据自动备份
+$ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
+```
+
 ### juicefs umount
 
 #### 描述
@@ -315,6 +369,12 @@ juicefs umount [command options] MOUNTPOINT
 
 `-f, --force`<br />
 强制卸载一个忙碌的文件系统 (默认: false)
+
+#### 示例
+
+```bash
+$ juicefs umount /mnt/jfs
+```
 
 ### juicefs gateway
 
@@ -414,6 +474,35 @@ juicefs gateway [command options] META-URL ADDRESS
 `--keep-etag`<br />
 保留对象上传时的 ETag (默认: false)
 
+`--storage value`<br />
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_setup_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
+
+`--upload-delay value`<br />
+数据上传到对象存储的延迟时间,支持秒分时精度，对应格式分别为("s", "m", "h")，默认为 0 秒
+
+`--backup-meta value`<br />       
+自动备份元数据到对象存储的间隔时间；单位秒 (0表示不备份) (默认: 3600)
+
+`--heartbeat value`<br />
+发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认: 12)。
+
+`--no-bgjob`<br />
+禁用后台作业（清理、备份等）（默认值：false）
+
+`--umask value`             
+新文件的 umask 的八进制格式 (默认值:“022”)
+
+`--consul value`<br />
+consul注册中心地址(默认: "127.0.0.1:8500")
+
+#### 示例
+
+```bash
+$ export MINIO_ROOT_USER=admin
+$ export MINIO_ROOT_PASSWORD=12345678
+$ juicefs gateway redis://localhost localhost:9000
+```
+
 ### juicefs webdav
 
 #### 描述
@@ -481,7 +570,7 @@ juicefs webdav [command options] META-URL ADDRESS
 `--read-only`<br />
 只读模式 (默认: false)
 
-`--backup-meta`<br />
+`--backup-meta value`<br />
 在对象存储中自动备份元数据的时间间隔（0 表示禁用备份）（默认值：1h0m0s）
 
 `--no-bgjob`<br />
@@ -519,6 +608,18 @@ consul注册中心地址(默认: "127.0.0.1:8500")
 
 `--no-usage-report`<br />
 不发送使用量信息 (默认: false)
+
+`--storage value`<br />
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_setup_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
+
+`--heartbeat value`<br />
+发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认: 12)。
+
+#### 示例
+
+```bash
+$ juicefs webdav redis://localhost localhost:9007
+```
 
 ### juicefs sync
 
@@ -609,6 +710,25 @@ juicefs sync [command options] SRC DST
 `--check-new`<br />
 验证新拷贝文件的数据完整性 (默认: false)
 
+#### 示例
+```bash
+# 从 OSS 同步到 S3
+$ juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-east-2.amazonaws.com
+
+# 从 S3 同步到 JuiceFS
+$ juicefs mount -d redis://localhost /mnt/jfs
+$ juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+
+# 源端: a1/b1,a2/b2,aaa/b1   目标端: empty   同步结果: aaa/b1
+$ juicefs sync --exclude='a?/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+
+# 源端: a1/b1,a2/b2,aaa/b1   目标端: empty   同步结果: a1/b1,aaa/b1
+$ juicefs sync --include='a1/b1' --exclude='a[1-9]/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+
+# 源端: a1/b1,a2/b2,aaa/b1,b1,b2  目标端: empty   同步结果: a1/b1,b2
+$ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+```
+
 ### juicefs rmr
 
 #### 描述
@@ -619,6 +739,12 @@ juicefs sync [command options] SRC DST
 
 ```
 juicefs rmr PATH ...
+```
+
+#### 示例
+
+```bash
+$ juicefs rmr /mnt/jfs/foo
 ```
 
 ### juicefs info
@@ -641,8 +767,19 @@ juicefs info [command options] PATH or INODE
 `--recursive, -r`<br />
 递归获取所有子目录的概要信息（注意：当指定一个目录结构很复杂的路径时可能会耗时很长） (默认: false)
 
-`--raw (默认: false)`<br />
-打印内部的原始信息
+`--raw`<br />
+显示内部原始信息 (默认: false)
+
+#### 示例
+
+```bash
+$ 检查路径
+$ juicefs info /mnt/jfs/foo
+
+# 检查 inode
+$ cd /mnt/jfs
+$ juicefs info -i 100
+```
 
 ### juicefs bench
 
@@ -674,6 +811,16 @@ juicefs bench [command options] PATH
 
 `--threads value, -p value`<br />
 并发线程数 (默认: 1)
+
+#### 示例
+
+```bash
+# 使用4个线程运行基准测试
+$ juicefs bench /mnt/jfs -p 4
+
+# 只运行小文件的基准测试
+$ juicefs bench /mnt/jfs --big-file-size 0
+```
 
 ### juicefs objbench
 
@@ -718,6 +865,13 @@ juicefs objbench [command options] BUCKET
 `--threads value, -p value`<br />
 上传下载等操作的并发数（默认值：4）
 
+#### 示例:
+
+```bash
+# 测试 S3 对象存储的基准性能
+$ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
+```
+
 ### juicefs gc
 
 #### 描述
@@ -741,6 +895,19 @@ juicefs gc [command options] META-URL
 `--threads value`<br />
 用于删除泄漏对象的线程数 (默认: 10)
 
+#### 示例
+
+```bash
+# 只检查，没有更改的能力
+$ juicefs gc redis://localhost
+
+# 触发所有 slices 的压缩
+$ juicefs gc redis://localhost --compact
+
+# 删除泄露的对象
+$ juicefs gc redis://localhost --delete
+```
+
 ### juicefs fsck
 
 #### 描述
@@ -751,6 +918,12 @@ juicefs gc [command options] META-URL
 
 ```
 juicefs fsck [command options] META-URL
+```
+
+#### 示例
+
+```bash
+$ juicefs fsck redis://localhost
 ```
 
 ### juicefs profile
@@ -779,6 +952,21 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 `--interval value`<br />
 显示间隔；在回放模式中将其设置为 0 可以立即得到整体的统计结果；单位为秒 (默认: 2)
 
+#### 示例
+
+```bash
+# 监控实时操作
+$ juicefs profile /mnt/jfs
+
+# 重放访问日志
+$ cat /mnt/jfs/.accesslog > /tmp/jfs.alog
+# 一段时间后按 Ctrl-C 停止 “cat” 命令
+$ juicefs profile /tmp/jfs.alog
+
+# 分析访问日志并立即打印总统计数据
+$ juicefs profile /tmp/jfs.alog --interval 0
+```
+
 ### juicefs stats
 
 #### 描述
@@ -805,9 +993,14 @@ juicefs stats [command options] MOUNTPOINT
 
 详细级别；通常 0 或 1 已足够 (默认: 0)
 
-`--nocolor`<br />
+#### 示例
 
-禁用颜色显示 (默认: false)
+```bash
+$ juicefs stats /mnt/jfs
+
+# 更多的指标
+$ juicefs stats /mnt/jfs -l 1
+```
 
 ### juicefs status
 
@@ -825,6 +1018,12 @@ juicefs status [command options] META-URL
 
 `--session value, -s value`<br />
 展示指定会话 (sid) 的具体信息 (默认: 0)
+
+#### 示例
+
+```bash
+$ juicefs status redis://localhost
+```
 
 ### juicefs warmup
 
@@ -849,6 +1048,20 @@ juicefs warmup [command options] [PATH ...]
 `--background, -b`<br />
 后台运行 (默认: false)
 
+#### 示例
+
+```bash
+# 预热目录中的所有文件
+$ juicefs warmup /mnt/jfs/datadir
+
+# 只预热目录中 3 个文件
+$ cat /tmp/filelist
+/mnt/jfs/datadir/f1
+/mnt/jfs/datadir/f2
+/mnt/jfs/datadir/f3
+$ juicefs warmup -f /tmp/filelist
+```
+
 ### juicefs dump
 
 #### 描述
@@ -868,6 +1081,15 @@ juicefs dump [command options] META-URL [FILE]
 `--subdir value`<br />
 只导出一个子目录。
 
+#### 示例
+
+```bash
+$ juicefs dump redis://localhost meta-dump
+
+# 只导出卷的一个子树
+$ juicefs dump redis://localhost sub-meta-dump --subdir /dir/in/jfs
+```
+
 ### juicefs load
 
 #### 描述
@@ -881,6 +1103,12 @@ juicefs load [command options] META-URL [FILE]
 ```
 
 如果没有指定导入文件路径，会从标准输入导入。
+
+#### 示例
+
+```bash
+$ juicefs load redis://localhost/1 meta-dump
+```
 
 ### juicefs config
 
@@ -920,6 +1148,31 @@ juicefs config [command options] META-URL
 `--force`<br />
 跳过合理性检查并强制更新指定配置项 (默认: false)
 
+`--encrypt-secret`<br />            
+如果密钥之前以原格式存储，则加密密钥 (默认值: false)
+
+`--min-client-version value`<br />  
+允许连接的最小客户端版本
+
+`--max-client-version value`<br />  
+允许连接的最大客户端版本
+
+#### 示例
+
+```bash
+# 显示当前配置
+$ juicefs config redis://localhost
+
+# 改变目录的配额
+$ juicefs config redis://localhost --inode 10000000 --capacity 1048576
+
+# 更改回收站中文件可被保留的最长天数
+$ juicefs config redis://localhost --trash-days 7
+
+# 限制允许连接的客户端版本
+$ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version 1.1.0
+```
+
 ### juicefs destroy
 
 #### 描述
@@ -936,3 +1189,9 @@ juicefs destroy [command options] META-URL UUID
 
 `--force`<br />
 跳过合理性检查并强制销毁文件系统 (默认: false)
+
+#### 示例
+
+```bash
+$ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
+```
