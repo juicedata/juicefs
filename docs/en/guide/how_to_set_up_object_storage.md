@@ -64,12 +64,12 @@ The way temporary credentials are used is not much different than permanent cred
 juicefs format --storage oss --access-key xxxx --secret-key xxxx --session-token xxxx --bucket https://bucketName.oss-cn-hangzhou.aliyuncs.com redis://localhost:6379 /1 test1
 ````
 
-Since temporary credentials expire quickly, the key is how to update the temporary credentials that juicefs uses after `format` the filesystem before the temporary credentials expire. The credential update process is divided into two steps:
+Since temporary credentials expire quickly, the key is how to update the temporary credentials that JuiceFS uses after `format` the filesystem before the temporary credentials expire. The credential update process is divided into two steps:
 
 1. Before the temporary certificate expires, apply for a new temporary certificate
-2. Without stopping the running juicefs, use the `juicefs config Meta-URL --access-key xxxx --secret-key xxxx --session-token xxxx` command to hot update the access credentials
+2. Without stopping the running JuiceFS, use the `juicefs config Meta-URL --access-key xxxx --secret-key xxxx --session-token xxxx` command to hot update the access credentials
 
-Newly mounted clients will use the new credentials directly, and all clients already running will also update their credentials within a minute. The entire update process will not affect the running business. Due to the short expiration time of the temporary credentials, the above steps need to **be executed in a long-term loop** to ensure that the juicefs service can access the object storage normally.
+Newly mounted clients will use the new credentials directly, and all clients already running will also update their credentials within a minute. The entire update process will not affect the running business. Due to the short expiration time of the temporary credentials, the above steps need to **be executed in a long-term loop** to ensure that the JuiceFS service can access the object storage normally.
 
 ## Internal and Public Endpoint
 
