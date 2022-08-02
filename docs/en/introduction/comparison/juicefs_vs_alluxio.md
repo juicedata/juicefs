@@ -73,4 +73,4 @@ JuiceFS supports data encryption in transit and at rest. Alluxio community editi
 
 Alluxio's architecture can be divided into 3 components: master, worker and client. A typical cluster consists of a single leading master, standby masters, a job master, standby job masters, workers, and job workers. You need to maintain all these masters and workers by yourself.
 
-JuiceFS uses Redis or [others](../../guide/how_to_setup_metadata_engine.md) as the metadata engine. You could easily use the service managed by public cloud provider as JuiceFS's metadata engine without the need for operation.
+JuiceFS uses Redis or [others](../../guide/how_to_set_up_metadata_engine.md) as the metadata engine. You could easily use the service managed by public cloud provider as JuiceFS's metadata engine without the need for operation.

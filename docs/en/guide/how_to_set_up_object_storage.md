@@ -1,10 +1,10 @@
 ---
-sidebar_label: How to Setup Object Storage
+sidebar_label: How to Set Up Object Storage
 sidebar_position: 2
 slug: /how_to_setup_object_storage
 ---
 
-# How to Set up Object Storage
+# How to Set Up Object Storage
 
 As you can learn from [JuiceFS Technical Architecture](../introduction/architecture.md), JuiceFS is a distributed file system with data and metadata stored separately. JuiceFS uses object storage as the main data storage and uses databases such as Redis, PostgreSQL and MySQL as metadata storage.
 
@@ -54,9 +54,9 @@ Permanent access credentials generally have two parts, accessKey, secretKey, whi
 
 ### How to get temporary credentials
 
-Different cloud vendors have different access methods. Generally, the accessKey, secretKey and the ARN representing the permission boundary of the temporary access credential are used as parameters to request to the STS server of the cloud service vendor to obtain the temporary access credential. This process can be simplified by the SDK provided by the cloud vendor. For example, AWS S3 can refer to this [link](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html) to obtain temporary credentials, and Alibaba Cloud OSS can refer to this [link](https://help.aliyun.com/document_detail/100624.html).
+Different cloud vendors have different access methods. Generally, the accessKey, secretKey and the ARN representing the permission boundary of the temporary access credential are used as parameters to request to the STS server of the cloud service vendor to obtain the temporary access credential. This process can be simplified by the SDK provided by the cloud vendor. For example, Amazon S3 can refer to this [link](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html) to obtain temporary credentials, and Alibaba Cloud OSS can refer to this [link](https://help.aliyun.com/document_detail/100624.html).
 
-### How to setup object storage with temporary access credentials
+### How to set up object storage with temporary access credentials
 
 The way temporary credentials are used is not much different than permanent credentials. In the `format` filesystem step, set the accessKey, secretKey, and token of the temporary credential through the --access-key, --secret-key, --session-token parameters, respectively. For example:
 
@@ -64,12 +64,12 @@ The way temporary credentials are used is not much different than permanent cred
 juicefs format --storage oss --access-key xxxx --secret-key xxxx --session-token xxxx --bucket https://bucketName.oss-cn-hangzhou.aliyuncs.com redis://localhost:6379 /1 test1
 ````
 
-Since temporary credentials expire quickly, the key is how to update the temporary credentials that juicefs uses after `format` the filesystem before the temporary credentials expire. The credential update process is divided into two steps:
+Since temporary credentials expire quickly, the key is how to update the temporary credentials that JuiceFS uses after `format` the filesystem before the temporary credentials expire. The credential update process is divided into two steps:
 
 1. Before the temporary certificate expires, apply for a new temporary certificate
-2. Without stopping the running juicefs, use the `juicefs config Meta-URL --access-key xxxx --secret-key xxxx --session-token xxxx` command to hot update the access credentials
+2. Without stopping the running JuiceFS, use the `juicefs config Meta-URL --access-key xxxx --secret-key xxxx --session-token xxxx` command to hot update the access credentials
 
-Newly mounted clients will use the new credentials directly, and all clients already running will also update their credentials within a minute. The entire update process will not affect the running business. Due to the short expiration time of the temporary credentials, the above steps need to **be executed in a long-term loop** to ensure that the juicefs service can access the object storage normally.
+Newly mounted clients will use the new credentials directly, and all clients already running will also update their credentials within a minute. The entire update process will not affect the running business. Due to the short expiration time of the temporary credentials, the above steps need to **be executed in a long-term loop** to ensure that the JuiceFS service can access the object storage normally.
 
 ## Internal and Public Endpoint
 

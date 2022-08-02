@@ -148,7 +148,7 @@ source /etc/bash_completion.d/juicefs
 juicefs format [command options] META-URL NAME
 ```
 
-- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_setup_metadata_engine.md)」。
+- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。
 - **NAME**：文件系统名称
 
 #### 选项
@@ -169,7 +169,7 @@ juicefs format [command options] META-URL NAME
 将数据块根据名字哈希存入 N 个桶中 (默认: 0)
 
 `--storage value`<br />
-对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_setup_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
 
 `--bucket value`<br />
 存储数据的桶路径 (默认: `"$HOME/.juicefs/local"` 或 `"/var/jfs"`)
@@ -207,7 +207,7 @@ RSA 私钥的路径 (PEM)
 juicefs mount [command options] META-URL MOUNTPOINT
 ```
 
-- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_setup_metadata_engine.md)」。
+- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。
 - **MOUNTPOINT**：文件系统挂载点，例如：`/mnt/jfs`、`Z:`。
 
 #### 选项
@@ -328,7 +328,7 @@ juicefs umount [command options] MOUNTPOINT
 juicefs gateway [command options] META-URL ADDRESS
 ```
 
-- **META-URL**：用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_setup_metadata_engine.md)。
+- **META-URL**：用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。
 - **ADDRESS**：S3 网关地址和监听的端口，例如：`localhost:9000`
 
 #### 选项
@@ -425,7 +425,7 @@ juicefs gateway [command options] META-URL ADDRESS
 ```
 juicefs webdav [command options] META-URL ADDRESS
 ```
-- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_setup_metadata_engine.md)」。
+- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。
 - **ADDRESS**：webdav 服务监听的地址与端口，例如：`localhost:9007`
 
 #### 选项
@@ -537,9 +537,9 @@ juicefs sync [command options] SRC DST
 
 源路径和目标路径的格式均为 `[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`，其中：
 
-- `NAME`：JuiceFS 支持的数据存储类型（如 `s3`、`oss`），请参考[文档](../guide/how_to_setup_object_storage.md#支持的存储服务)。
-- `ACCESS_KEY` 和 `SECRET_KEY`：访问数据存储所需的密钥信息，请参考[文档](../guide/how_to_setup_object_storage.md#access-key-和-secret-key)。
-- `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同，具体请参考[文档](../guide/how_to_setup_object_storage.md#支持的存储服务)。
+- `NAME`：JuiceFS 支持的数据存储类型（如 `s3`、`oss`），请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)。
+- `ACCESS_KEY` 和 `SECRET_KEY`：访问数据存储所需的密钥信息，请参考[文档](../guide/how_to_set_up_object_storage.md#access-key-和-secret-key)。
+- `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同，具体请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)。
 - `[/PREFIX]`：可选，源路径和目标路径的前缀，可用于限定只同步某些路径中的数据。
 
 有关 `sync` 子命令的详细介绍，请参考[文档](../guide/sync.md)。
@@ -692,7 +692,7 @@ juicefs objbench [command options] BUCKET
 #### 选项
 
 `--storage value`<br />
-对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_setup_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
 
 `--access-key value`<br />
 对象存储的 Access Key (也可通过环境变量 `ACCESS_KEY` 设置)

@@ -135,11 +135,11 @@ kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
 其中：
 
 - `name`：JuiceFS 文件系统名称
-- `metaurl`：元数据服务的访问 URL（比如 Redis）。更多信息参考[这篇文档](../guide/how_to_setup_metadata_engine.md)。
-- `storage`：对象存储类型，比如 `s3`、`gs`、`oss`。更多信息参考[这篇文档](../guide/how_to_setup_object_storage.md)。
-- `bucket`：Bucket URL。更多信息参考[这篇文档](../guide/how_to_setup_object_storage.md)。
-- `access-key`：对象存储的 access key。更多信息参考[这篇文档](../guide/how_to_setup_object_storage.md)。
-- `secret-key`：对象存储的 secret key。更多信息参考[这篇文档](../guide/how_to_setup_object_storage.md)。
+- `metaurl`：元数据服务的访问 URL（比如 Redis）。更多信息参考[这篇文档](../guide/how_to_set_up_metadata_engine.md)。
+- `storage`：对象存储类型，比如 `s3`、`gs`、`oss`。更多信息参考[这篇文档](../guide/how_to_set_up_object_storage.md)。
+- `bucket`：Bucket URL。更多信息参考[这篇文档](../guide/how_to_set_up_object_storage.md)。
+- `access-key`：对象存储的 access key。更多信息参考[这篇文档](../guide/how_to_set_up_object_storage.md)。
+- `secret-key`：对象存储的 secret key。更多信息参考[这篇文档](../guide/how_to_set_up_object_storage.md)。
 
 然后下载 S3 网关[部署 YAML](https://github.com/juicedata/juicefs/blob/main/deploy/juicefs-s3-gateway.yaml) 并通过 `kubectl` 创建 `Deployment` 和 `Service` 资源。以下几点需要特别注意：
 
