@@ -288,6 +288,39 @@ hadoop.conf.dir=/path/to/hadoop-conf
 store.url=jfs://path/to/store
 ```
 
+### Hbase
+
+在 HBase 应用场景下， JuiceFS 暂时还没法完全替换 HDFS。
+HBase 为了在故障恢复时保证数据不丢失，需要将写 WAL 持久化到文件系统上，会频繁调用文件系统的 hflush 接口。
+为了保证数据不丢失，JuiceFS 的 hflush 需要保证将数据写入底层对象存储，性能上会比 HDFS 慢很多（默认情况下 HDFS 只需要写入 DataNode 内存即可）。
+所以建议将 WAL 文件仍然写入 HDFS，HFile 文件可以放在 JuiceFS 上。
+
+通过修改 ``hbase-site.xml`` 以下配置实现：
+
+```xml
+<property>
+  <name>hbase.rootdir</name>
+  <value>jfs://{vol_name}/hbase</value>
+</property>
+<property>
+  <name>hbase.wal.dir</name>
+  <value>hdfs://{ns}/hbase-wal</value>
+</property>
+```
+通过 ZooKeeper 客户端删除 zookeeper.znode.parent 配置的 znode（默认 /hbase）
+
+:::note 注意
+此操作将会删除原有 HBase 上面的所有数据
+:::
+
+也可以使用新的 znode
+```xml
+<property>
+  <name>zookeeper.znode.parent</name>
+  <value>/hbase-jfs</value>
+</property>
+```
+
 ### 重启服务
 
 当需要使用以下组件访问 JuiceFS 数据时，需要重启相关服务。
