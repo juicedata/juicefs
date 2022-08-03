@@ -59,8 +59,6 @@ On the other hand, if you cannot successfully connect to the cloud database thro
 | **Reliability** |                           Low                           |                            Medium                            |                             Low                              |
 |  **Scenario**   | Massive data, distributed high-frequency read and write | Massive data, distributed low and medium frequency read and write | Low frequency read and write in single machine for small amount of data |
 
-> **Note**: If you use [JuiceFS Hosted Service](https://juicefs.com/docs/en/hosted_service.html), you do not need to prepare a database.
-
 **This article uses the [ApsaraDB for Redis](https://www.alibabacloud.com/product/apsaradb-for-redis), and the following is pseudo address compiled for demonstration purposes only:**
 
 | Redis Version               | 5.0 Community Edition                  |
