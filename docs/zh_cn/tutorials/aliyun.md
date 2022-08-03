@@ -59,8 +59,6 @@ JuiceFS 会将数据对应的元数据全部存储在独立的数据库中，目
 |  **可靠性**  |            低            |            适中            |           低           |
 | **应用场景** | 海量数据、分布式高频读写 | 海量数据、分布式中低频读写 | 少量数据单机中低频读写 |
 
-> **注意**：如果使用 JuiceFS 的[托管服务](https://juicefs.com/docs/zh/hosted_service.html)，则无需单独准备数据库。
-
 **本文使用了[云数据 Redis 版](https://www.aliyun.com/product/kvstore)，以下连接地址只是为了演示目的编制的伪地址：**
 
 | Redis 版本   | 5.0 社区版                           |
