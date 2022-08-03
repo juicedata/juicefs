@@ -52,15 +52,16 @@ jobs:
           
       - name: Test mount process exit on reformat
         run: |
-          for i in {1..1000}; do 
+          for i in {1..100}; do 
             echo "round $i"
             meta=redis://localhost/1
-            mp=myjfs/
             ./juicefs format $meta volume-$i
-            ./juicefs mount -d $meta $mp
-            cd $mp
-            bash -c 'for i in {1..10000}; do echo abc>$i; sleep 0.2; echo $i; done' || true & 
-            cd -
+            for j in {1..30}; do
+              ./juicefs mount -d $meta /myjfs$i
+              cd /myjfs$i
+              bash -c 'for k in {1..10000}; do echo abc>$k; sleep 0.2; echo $k; done' || true & 
+              cd -
+            done
             sleep 3
             uuid=$(./juicefs status $meta | grep UUID | cut -d '"' -f 4) 
             ./juicefs destroy --force $meta $uuid
