@@ -76,7 +76,7 @@ jobs:
         run: |
           sudo tail -n 100 /opt/ltp/output/result.log.failed
           tail -300 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
       - name: Send Slack Notification
         if: ${{ failure() }}

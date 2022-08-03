@@ -261,7 +261,7 @@ jobs:
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
       - name: Send Slack Notification
         if: ${{ failure() }}
