@@ -49,6 +49,7 @@ jobs:
       - name: Install Tools
         run: | 
           sudo apt install redis-tools
+          exit 1
           
       - name: Test mount process exit on reformat
         run: |
