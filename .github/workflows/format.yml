@@ -3,14 +3,12 @@ name: "format-test"
 on:
   push:
     branches:
-      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
@@ -49,7 +47,6 @@ jobs:
       - name: Install Tools
         run: | 
           sudo apt install redis-tools
-          exit 1
           
       - name: Test mount process exit on reformat
         run: |
@@ -60,7 +57,7 @@ jobs:
             for j in {1..10}; do
               ./juicefs mount -d $meta /tmp/myjfs$i
               cd /tmp/myjfs$i
-              bash -c 'for k in {1..10000}; do echo abc>$k; sleep 0.2; done' || true & 
+              bash -c 'for k in {1..300}; do echo abc>$k; sleep 0.2; done' || true & 
               cd -
             done
             sleep 3
