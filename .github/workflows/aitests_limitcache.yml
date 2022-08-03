@@ -113,6 +113,11 @@ jobs:
           cd /var/jfsCache/
           df -lh
 
+      - name: log
+        if: ${{ always() }}
+        run: | 
+          tail -300 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
       - name: Send Slack Notification
         if: ${{ failure() }}

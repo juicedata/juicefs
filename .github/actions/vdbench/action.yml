@@ -100,3 +100,10 @@ runs:
       with:
         name: output-small
         path: output
+
+    - name: log
+      if: ${{ always() }}
+      shell: bash
+      run: | 
+        tail -300 ~/.juicefs/juicefs.log
+        grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true

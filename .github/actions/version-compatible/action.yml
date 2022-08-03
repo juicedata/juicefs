@@ -185,4 +185,10 @@ runs:
                 done
             done
         done
-      
+
+    - name: log
+      if: ${{ always() }}
+      shell: bash
+      run: | 
+        tail -300 /var/log/juicefs.log
+        grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true

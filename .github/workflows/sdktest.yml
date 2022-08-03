@@ -28,8 +28,6 @@ jobs:
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
 
-
-
       - name: Checkout
         uses: actions/checkout@v2
         with:
@@ -45,7 +43,6 @@ jobs:
           distribution: 'adopt'
           java-version: '8'
 
-
       - name: Run Redis
         run: |
           sudo docker run -d --name redis -v redis-data:/data  \
@@ -55,14 +52,12 @@ jobs:
         run: |
           sudo ./juicefs format  localhost dev
 
-
       - name: Sdk Test
         run: |
           make -C sdk/java/libjfs
           cd sdk/java
           sudo mvn test -B
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
-
 
       - name: Send Slack Notification
         if: ${{ failure() }}

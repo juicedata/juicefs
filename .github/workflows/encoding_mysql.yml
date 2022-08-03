@@ -288,6 +288,12 @@ jobs:
           ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
           ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
           
+      - name: log
+        if: ${{ always() }}
+        run: | 
+          tail -300 ~/.juicefs/juicefs.log
+          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main

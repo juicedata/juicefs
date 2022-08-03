@@ -74,6 +74,15 @@ jobs:
           sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=64 --time=600 --table-size=100000 run
           sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
 
+      - name: Log
+        if: ${{ always() }}
+        run: |
+          echo "mysql log"
+          tail -n 1000 /var/log/mysql/error.log
+          echo "juicefs log"
+          tail -n 1000 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
