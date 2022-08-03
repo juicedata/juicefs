@@ -33,7 +33,7 @@ While using the JuiceFS file system - no matter which database you choose to sto
 
 :::note
 JuiceFS requires Redis 4.0+
-To ensure metadata security, juicefs requires that redis's `maxmemory_Policy` be set to `noeviction`, otherwise it will be attempted to be set to `noeviction` when starting juicefs. If the setting fails, an alarm log is print.
+To ensure metadata security, juicefs requires Redis' `maxmemory_policy` to be set to `noeviction`, otherwise it will try to set it to `noeviction` when starting juicefs, and will print a warning log if it fails to do so.
 :::
 
 ### Create a file system
