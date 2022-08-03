@@ -55,8 +55,8 @@ jobs:
             meta=redis://localhost/1
             ./juicefs format $meta volume-$i
             for j in {1..10}; do
-              ./juicefs mount -d $meta /tmp/myjfs$i
-              cd /tmp/myjfs$i
+              ./juicefs mount -d $meta /tmp/myjfs$i_$j
+              cd /tmp/myjfs$i_$j
               bash -c 'for k in {1..300}; do echo abc>$k; sleep 0.2; done' || true & 
               cd -
             done
@@ -64,7 +64,7 @@ jobs:
             uuid=$(./juicefs status $meta | grep UUID | cut -d '"' -f 4) 
             ./juicefs destroy --force $meta $uuid
             ./juicefs format $meta new-volume-$i 
-            sleep 10   
+            sleep 15   
             ps -ef | grep juicefs
             pidof juicefs && exit 1
             uuid=$(./juicefs status $meta | grep UUID | cut -d '"' -f 4) 
@@ -75,6 +75,7 @@ jobs:
         if: ${{ always() }}
         run: | 
           cat ~/.juicefs/juicefs.log
+          grep "<FATAL>: fuse: fuse: fusermount exited with code 256 " ~/.juicefs/juicefs.log && exit 1 || true
 
       - name: Send Slack Notification
         if: ${{ failure() }}
