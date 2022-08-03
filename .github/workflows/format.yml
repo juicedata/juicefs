@@ -77,7 +77,7 @@ jobs:
         if: ${{ always() }}
         run: | 
           cat ~/.juicefs/juicefs.log
-          grep "<FATAL>: fuse: fuse: fusermount exited with code 256 " ~/.juicefs/juicefs.log && exit 1 || true
+          grep -v "UUID changed"  ~/.juicefs/juicefs.log | grep "<FATAL>:"  ~/.juicefs/juicefs.log && exit 1 || true
 
       - name: Send Slack Notification
         if: ${{ failure() }}
