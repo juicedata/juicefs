@@ -47,3 +47,10 @@ runs:
         sudo ./juicefs mount $meta_url $mount_point -d
 
       shell: bash
+
+    - name: log
+      if: ${{ always() }}
+      shell: bash
+      run: | 
+        tail -300 ~/.juicefs/juicefs.log
+        grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1

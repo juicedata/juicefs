@@ -79,6 +79,13 @@ jobs:
 
           done
 
+      - name: Log
+        if: ${{ always() }}
+        run: |
+          echo "juicefs log"
+          sudo tail -n 1000 ~/.juicefs/juicefs.log
+          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -123,6 +130,13 @@ jobs:
           mkdir jfs_source/test_dir
           ./juicefs sync jfs_source/ $mount_point/jfs_source/  -u=true --perms=true --check-all=true --bwlimit=81920 --dirs=true --threads=30 --debug  
           diff -ur jfs_source/ $mount_point/jfs_source
+
+      - name: Log
+        if: ${{ always() }}
+        run: |
+          echo "juicefs log"
+          sudo tail -n 1000 ~/.juicefs/juicefs.log
+          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1
 
       - name: Send Slack Notification
         if: ${{ failure() }}

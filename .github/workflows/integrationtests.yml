@@ -79,6 +79,11 @@ jobs:
           sudo make -C fstests xattrs
           sudo make -C fstests flock
 
+      - name: log
+        if: ${{ always() }}
+        run: | 
+          tail -300 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1
 
       - name: Send Slack Notification
         if: ${{ failure() }}

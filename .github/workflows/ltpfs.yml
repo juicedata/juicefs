@@ -76,7 +76,9 @@ jobs:
         if: ${{ always() }}
         run: |
           sudo tail -n 100 /opt/ltp/output/result.log.failed
-
+          tail -300 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1
+      
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main

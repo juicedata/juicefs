@@ -99,8 +99,8 @@ runs:
         wait "${pidlist[@]}"
         ls -l $mp/test && exit 1 || true
 
-    - name: Log
-      if: ${{ failure() }}
-      run: |
-        sudo tail -n 100 ~/.juicefs/juicefs.log
+    - name: log
       shell: bash
+      run: | 
+        tail -300 ~/.juicefs/juicefs.log
+        grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1

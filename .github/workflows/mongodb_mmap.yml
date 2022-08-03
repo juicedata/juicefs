@@ -93,13 +93,12 @@ jobs:
           time ./bin/ycsb run mongodb -s -P workloads/workloadf -threads 10 > outputRun.txt
           df -lh
 
-
-
       - name: Log
-        if: ${{ failure() }}
+        if: ${{ always() }}
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1
 
       - name: Send Slack Notification
         if: ${{ failure() }}
