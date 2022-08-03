@@ -57,8 +57,8 @@ jobs:
             meta=redis://localhost/1
             ./juicefs format $meta volume-$i
             for j in {1..30}; do
-              ./juicefs mount -d $meta /myjfs$i
-              cd /myjfs$i
+              ./juicefs mount -d $meta /tmp/myjfs$i
+              cd /tmp/myjfs$i
               bash -c 'for k in {1..10000}; do echo abc>$k; sleep 0.2; echo $k; done' || true & 
               cd -
             done
