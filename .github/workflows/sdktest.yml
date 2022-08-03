@@ -59,13 +59,6 @@ jobs:
           sudo mvn test -B
           sudo mvn package -B -Dmaven.test.skip=true --quiet -Dmaven.javadoc.skip=true
 
-      - name: Log
-        if: ${{ always() }}
-        run: |
-          echo "juicefs log"
-          sudo tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
-
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
