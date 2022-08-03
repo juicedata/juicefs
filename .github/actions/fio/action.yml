@@ -138,3 +138,10 @@ runs:
         done
         # mysql -h 8.210.231.144 -u juicedata -p${{inputs.mysql_password}} -e "use  test_result; LOAD DATA INFILE '/var/lib/mysql-files/result.csv' INTO TABLE fio_test FIELDS TERMINATED BY ',' (name, bandwidth,  juicefs_version, size, nrfiles, ref_name, created_date, github_revision, workflow_url, meta_engine, storage, runner); " 
       shell: bash
+
+    - name: log
+      if: ${{ always() }}
+      shell: bash
+      run: | 
+        tail -300 ~/.juicefs/juicefs.log
+        grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
