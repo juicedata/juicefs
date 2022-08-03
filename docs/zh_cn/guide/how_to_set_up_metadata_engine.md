@@ -33,6 +33,7 @@ JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性
 
 :::note 注意
 JuiceFS 要求 Redis 4.0+ 版本
+为了保证元数据安全，JuiceFS 要求 Redis 的淘汰策略（maxmemory_policy）设置为不淘汰（noeviction），否则在启动 JuiceFS 的时候将会尝试将其设置为（noeviction），如果设置失败将会打印告警日志。
 :::
 
 ### 创建文件系统
