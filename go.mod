@@ -16,7 +16,7 @@ require (
 	github.com/baidubce/bce-sdk-go v0.9.111
 	github.com/billziss-gh/cgofuse v1.5.0
 	github.com/ceph/go-ceph v0.4.0
-	github.com/colinmarc/hdfs/v2 v2.2.0
+	github.com/colinmarc/hdfs/v2 v2.3.0
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/erikdubbelboer/gspt v0.0.0-20210805194459-ce36a5128377
 	github.com/go-redis/redis/v8 v8.11.5
