@@ -168,7 +168,9 @@ JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](docs/zh_c
 
 ## 谁在使用
 
-JuiceFS v1.0 目前已是 GA（General Availability）状态，核心的存储格式已经确定，可用于部署在生产环境。同时，这是一个 LTS（Long-Term Support）版本，能得到至少两年的后续支持。我们收集汇总了一份使用者名单，记录在[这里](https://juicefs.com/docs/zh/community/adopters)。另外 JuiceFS 还有不少与其他开源项目进行集成的合作项目，我们将其记录在[这里](https://juicefs.com/docs/zh/community/integrations)。如果你也在使用 JuiceFS，请随时告知我们，也欢迎你向大家分享具体的使用经验。
+JuiceFS 已经可以用于生产环境，目前有几千个节点在生产环境中使用它。我们收集汇总了一份使用者名单，记录在[这里](https://juicefs.com/docs/zh/community/adopters)。另外 JuiceFS 还有不少与其他开源项目进行集成的合作项目，我们将其记录在[这里](https://juicefs.com/docs/zh/community/integrations)。如果你也在使用 JuiceFS，请随时告知我们，也欢迎你向大家分享具体的使用经验。
+
+JuiceFS 的存储格式已经稳定，会被后续发布的所有版本支持。
 
 ## 产品路线图
 

@@ -168,7 +168,9 @@ JuiceFS supports almost all object storage services. [Learn more](docs/en/guide/
 
 ## Who is using
 
-JuiceFS v1.0 is now in GA (General Availability) status, meaning the core storage format has been defined and it is ready to be deployed in production environments. Also, this is an LTS (Long-Term Support) release, which will be maintained for at least two years. A list of users has been assembled and documented [here](https://juicefs.com/docs/community/adopters). In addition JuiceFS has several collaborative projects that integrate with other open source projects, which we have documented [here](https://juicefs.com/docs/community/integrations). If you are also using JuiceFS, please feel free to let us know, and you are welcome to share your specific experience with everyone.
+JuiceFS is production ready and used by thousands of machines in production. A list of users has been assembled and documented [here](https://juicefs.com/docs/community/adopters). In addition JuiceFS has several collaborative projects that integrate with other open source projects, which we have documented [here](https://juicefs.com/docs/community/integrations). If you are also using JuiceFS, please feel free to let us know, and you are welcome to share your specific experience with everyone.
+
+The storage format is stable, will be supported by all future releases.
 
 ## Roadmap
 
