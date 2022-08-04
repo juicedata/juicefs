@@ -20,10 +20,6 @@ jobs:
   mysqltestsmalltablelocal:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.17.x'
 
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master

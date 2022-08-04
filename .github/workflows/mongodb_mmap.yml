@@ -18,10 +18,6 @@ jobs:
   mongodb_mmap:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.17.x'
 
       - name: Set up Python
         uses: actions/setup-python@v4
