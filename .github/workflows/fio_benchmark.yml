@@ -206,6 +206,9 @@ jobs:
           fio_job: "small-file-seq-read-4k:      --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=10000 :--cache-size=0"
           mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
           PYROSCOPE_AUTH_TOKEN: ${{secrets.PYROSCOPE_AUTH_TOKEN}}
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
 
   small-file-seq-read-256k:
     if: github.repository == 'juicedata/juicefs'
@@ -221,7 +224,10 @@ jobs:
           fio_job: "small-file-seq-read-256k:      --rw=read --file_service_type=sequential --bs=256k --filesize=256k --nrfiles=10000 :--cache-size=0"
           mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
           PYROSCOPE_AUTH_TOKEN: ${{secrets.PYROSCOPE_AUTH_TOKEN}}
-
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+        
   small-file-seq-write-4k:
     if: github.repository == 'juicedata/juicefs'
     runs-on: [ubuntu-latest]
