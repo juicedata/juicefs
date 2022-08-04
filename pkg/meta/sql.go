@@ -2624,6 +2624,16 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
+func (m *dbMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
+	//Todo
+	return nil, nil
+}
+
+func (m *dbMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
+	//Todo
+	return nil, nil
+}
+
 func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry, error) {
 	e := &DumpedEntry{}
 	n := &node{Inode: inode}

@@ -76,6 +76,8 @@ type engine interface {
 
 	GetSession(sid uint64, detail bool) (*Session, error)
 	doSetQuota(ctx Context, inode Ino, capacity, inodes uint64) syscall.Errno
+	dogetQuotas(ctx Context, inode Ino) (*quota, error)
+	doGetQuotaList(name string) (map[Ino]quota, error)
 }
 
 type baseMeta struct {
@@ -115,6 +117,7 @@ type baseMeta struct {
 	quotas map[Ino]quota
 	// Cache a list related to a directory, containing quotas configured on itself and its ancestors
 	dirQuotas map[Ino][]*quota
+	quotalist DirQuotaList
 }
 
 func newBaseMeta(addr string, conf *Config) *baseMeta {
@@ -353,21 +356,35 @@ func (m *baseMeta) refreshUsage() {
 }
 
 func (m *baseMeta) refreshQuota() {
+	for {
+		if quotaMap, err := m.en.doGetQuotaList("dirquotalist"); err == nil {
+			//get quota form engine and cache to m.quota
+			for key, val := range quotaMap {
+				//Add lock
+				m.Lock()
+				m.quotas[key] = val
+				m.Unlock()
+			}
+		}
+
+	}
+	// get m.quotas from meta engine
 
 }
 
-func (m *baseMeta) checkDirQuota(ctx Context, size, inodes uint64, inode Ino) bool {
-	for k, _ := range m.GetParents(ctx, inode) {
-		if _, ok := m.dirQuotas[k]; !ok {
-			m.dirQuotas[k] = m.getQuotas(ctx, k)
+func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, size, inodes uint64) bool {
+	if _, ok := m.dirQuotas[inode]; !ok {
+		m.dirQuotas[inode] = m.getQuotas(ctx, inode)
+	}
+	for _, q := range m.dirQuotas[inode] {
+		if size > 0 && q.capacity > 0 && atomic.LoadUint64(&q.usedSpace)+size > uint64(q.capacity) {
+			return true
 		}
-		for _, q := range m.dirQuotas[k] {
-			if size > 0 && q.capacity > 0 && atomic.LoadUint64(&q.usedSpace)+size > uint64(q.capacity) {
-				return true
-			}
-			return inodes > 0 && q.inodes > 0 && atomic.LoadUint64(&q.usedInodes)+inodes > uint64(q.inodes)
+		if inodes > 0 && q.inodes > 0 && atomic.LoadUint64(&q.usedInodes)+inodes > uint64(q.inodes) {
+			return true
 		}
 	}
+	return false
 
 }
 
@@ -376,6 +393,13 @@ func (m *baseMeta) checkQuota(size, inodes int64) bool {
 		return true
 	}
 	return inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes)
+}
+
+func (m *redisMeta) updateQuotaStats(inode Ino, space uint64, inodes uint64) {
+	for _, val := range m.dirQuotas[inode] {
+		atomic.AddUint64(&val.usedSpace, space)
+		atomic.AddUint64(&val.usedInodes, inodes)
+	}
 }
 
 func (m *baseMeta) updateStats(space int64, inodes int64) {
@@ -707,21 +731,33 @@ func (m *baseMeta) nextInode() (Ino, error) {
 	return Ino(n), nil
 }
 
-func (m *baseMeta) getQuotas(ctx Context, inode Ino) (quotaslice []*quota) {
-	for k, _ := range m.GetParents(ctx, inode) {
-		if k != RootInode {
-			if _, ok := m.dirQuotas[k]; !ok {
-				if k != RootInode {
-					m.getQuotas(ctx, k)
-
-				}
-			} else {
-				quotaslice = append(quotaslice, m.dirQuotas[k]...)
-				m.getQuotas(ctx, k)
-			}
+func (m *baseMeta) createDirQuotas(ctx Context, inode Ino) []*quota {
+	//if inode has own quota
+	m.freeMu.Lock()
+	defer m.freeMu.Unlock()
+	if s, err := m.en.dogetQuotas(ctx, inode); err == nil {
+		m.dirQuotas[inode] = append(m.dirQuotas[inode], s)
+	}
+	for parentInode, _ := range m.GetParents(ctx, inode) {
+		parentQuota := m.getQuotas(ctx, parentInode)
+		if len(parentQuota) > 0 {
+			m.dirQuotas[inode] = append(m.dirQuotas[inode], parentQuota...)
 		}
 	}
-	return
+	return m.dirQuotas[inode]
+
+}
+
+func (m *baseMeta) getQuotas(ctx Context, parent Ino) []*quota {
+	// if inode == RootInode return
+	if parent == RootInode {
+		return nil
+	}
+	//if Quotas in dirQuotas cache,if no,we have to make a cache
+	if _, ok := m.dirQuotas[parent]; !ok {
+		m.dirQuotas[parent] = m.createDirQuotas(ctx, parent)
+	}
+	return m.dirQuotas[parent]
 
 }
 
@@ -741,6 +777,10 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 
 	defer m.timeit(time.Now())
 	if m.checkQuota(4<<10, 1) {
+		return syscall.ENOSPC
+	}
+	//Todo:should we use a flag to determine whether to run checkDirQuota
+	if m.checkDirQuota(ctx, parent, 4<<10, 1) {
 		return syscall.ENOSPC
 	}
 	return m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)

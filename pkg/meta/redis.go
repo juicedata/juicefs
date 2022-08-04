@@ -1178,12 +1178,17 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
 			pipe.Incr(ctx, m.totalInodesKey())
+			//refresh dir usedSpace and usedinode in redis
+			//key
+			//pipe.HSet(ctx, key, "capacity", cap).Result()
 			return nil
 		})
 		return err
 	}, m.inodeKey(parent), m.entryKey(parent))
 	if err == nil {
 		m.updateStats(align4K(0), 1)
+		//refresh dirQuotas
+		m.updateQuotaStats(parent, uint64(align4K(0)), 1)
 	}
 	return errno(err)
 }
@@ -2854,6 +2859,107 @@ func (m *redisMeta) doSetQuota(ctx Context, inode Ino, cap, inodes uint64) sysca
 		inodes:   inodes,
 	}
 	return 0
+}
+
+func (m *redisMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
+	key := m.quotaKey(inode)
+	capacity_quota, err := m.rdb.HGet(ctx, key, "capacity").Bytes()
+	if err == redis.Nil {
+		err = ENOATTR
+		return nil, err
+	}
+	capacity, err := strconv.ParseUint(string(capacity_quota), 10, 64)
+	if err != nil {
+		logger.Fatalf("invalid capacity %s", err)
+	}
+	inodes_quota, err := m.rdb.HGet(ctx, key, "inodes").Bytes()
+	if err == redis.Nil {
+		err = ENOATTR
+		return nil, err
+	}
+	inodes, err := strconv.ParseUint(string(inodes_quota), 10, 64)
+	if err != nil {
+		logger.Fatalf("invalid capacity %s", err)
+	}
+	return &quota{
+		capacity: capacity,
+		inodes:   inodes,
+	}, nil
+
+}
+
+func (m *redisMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
+	vals, err := m.rdb.LRange(Background, name, 0, 1000000).Result()
+	if err != nil {
+		return nil, errno(err)
+	}
+	for i := 0; i < len(vals); i++ {
+		inode, err := strconv.ParseUint(vals[i], 10, 64)
+		if err != nil {
+			logger.Fatalf("invalid capacity %s", err)
+			return nil, err
+		}
+		key := m.quotaKey(Ino(inode))
+		quotasttr, err := m.rdb.HGetAll(Background, key).Result()
+		if err != nil {
+			logger.Fatalf("invalid capacity %s", err)
+			return nil, err
+		}
+		if _, ok := quotasttr["capacity"]; !ok {
+			logger.Fatalf("invalid capacity %s", err)
+			return nil, err
+		}
+
+		capacity, err := strconv.ParseUint(quotasttr["capacity"], 10, 64)
+		if err != nil {
+			logger.Fatalf("invalid capacity %s", err)
+			return nil, err
+		}
+
+		if _, ok := quotasttr["inodes"]; !ok {
+			logger.Fatalf("invalid inodes %s", err)
+			return nil, err
+		}
+
+		inodes, err := strconv.ParseUint(quotasttr["inodes"], 10, 64)
+		if err != nil {
+			logger.Fatalf("invalid inodes %s", err)
+			return nil, err
+		}
+
+		if _, ok := quotasttr["usedSpace"]; !ok {
+			logger.Fatalf("invalid usedSpace %s", err)
+			return nil, err
+		}
+
+		usedSpace, err := strconv.ParseUint(quotasttr["usedSpace"], 10, 64)
+		if err != nil {
+			logger.Fatalf("invalid usedSpace %s", err)
+			return nil, err
+		}
+
+		if _, ok := quotasttr["usedInodes"]; !ok {
+			logger.Fatalf("invalid usedInodes %s", err)
+			return nil, err
+		}
+
+		usedInodes, err := strconv.ParseUint(quotasttr["usedInodes"], 10, 64)
+		if err != nil {
+			logger.Fatalf("invalid usedSpace %s", err)
+			return nil, err
+		}
+
+		q1 := make(map[Ino]quota)
+		q1[Ino(inode)] = quota{
+			capacity:   capacity,
+			inodes:     inodes,
+			usedSpace:  usedSpace,
+			usedInodes: usedInodes,
+		}
+
+	}
+	return nil, nil
+
 }
 
 func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {

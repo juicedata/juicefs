@@ -132,11 +132,10 @@ type quota struct {
 	usedInodes uint64
 }
 
-//quota for direction
-/*type Quota struct {
-	Inode Ino
-	QAttr *QuotaAttr
-}*/
+// DirQuotaList
+type DirQuotaList struct {
+	quotalist []int
+}
 
 func typeToStatType(_type uint8) uint32 {
 	switch _type & 0x7F {

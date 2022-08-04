@@ -2227,6 +2227,16 @@ func (m *kvMeta) doSetQuota(ctx Context, inode Ino, capacity, inodes uint64) sys
 	return errno(nil)
 }
 
+func (m *kvMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
+	//Todo
+	return nil, nil
+}
+
+func (m *kvMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
+	//Todo
+	return nil, nil
+}
+
 func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	key := m.xattrKey(inode, name)
 	return errno(m.txn(func(tx kvTxn) error {
