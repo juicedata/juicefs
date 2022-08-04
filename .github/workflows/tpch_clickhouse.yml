@@ -20,6 +20,10 @@ jobs:
   tpchch-noraml:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
       - name: Test 
         uses: ./.github/actions/clickhouse
         with:
@@ -27,7 +31,12 @@ jobs:
 
   tpchch-limitcache:
     runs-on: ubuntu-latest
+    
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
       - name: Test 
         uses: ./.github/actions/clickhouse
         with:
@@ -36,6 +45,10 @@ jobs:
   tpchch-local:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
       - name: Test 
         uses: ./.github/actions/clickhouse
         with:

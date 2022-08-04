@@ -17,11 +17,6 @@ runs:
     - name: Set up Docker
       uses: docker-practice/actions-setup-docker@master
 
-    - name: Checkout
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 1
-
     - name: Build linux target
       shell: bash
       run: make juicefs
