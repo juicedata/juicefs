@@ -63,6 +63,12 @@ runs:
                      -v /tmp/config:/root/.minio \
                      minio/minio server /data
       shell: bash
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.18.x'
+
     - name: Build linux target
       run: |
         make juicefs

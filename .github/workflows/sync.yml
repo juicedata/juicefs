@@ -36,6 +36,11 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.18.x'
+
       - name: Build linux target
         run: make juicefs
 
@@ -105,6 +110,11 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.18.x'
+          
       - name: Build linux target
         run: |
           make juicefs
