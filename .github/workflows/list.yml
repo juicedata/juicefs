@@ -60,12 +60,6 @@ jobs:
           cat /tmp/count.log | grep 7000001
           if [ $? != 0 ];then echo "file num is error";exit 1; fi
 
-      - name: log
-        if: ${{ always() }}
-        run: | 
-          tail -300 ~/.juicefs/juicefs.log
-          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1
-
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -108,11 +102,7 @@ jobs:
           ls -lh |wc -l >/tmp/count.log
           cat /tmp/count.log | grep 7000001
           if [ $? != 0 ];then echo "file num is error";exit 1; fi
-      - name: log
-        if: ${{ always() }}
-        run: | 
-          tail -300 ~/.juicefs/juicefs.log
-          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -167,11 +157,7 @@ jobs:
           ls -lh |wc -l >/tmp/count.log
           cat /tmp/count.log | grep 7000001
           if [ $? != 0 ];then echo "file num is error";exit 1; fi
-      - name: log
-        if: ${{ always() }}
-        run: | 
-          tail -300 ~/.juicefs/juicefs.log
-          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
@@ -213,12 +199,6 @@ jobs:
           ls -lh |wc -l >/tmp/count.log
           cat /tmp/count.log | grep 7000001
           if [ $? != 0 ];then echo "file num is error";exit 1; fi
-
-      - name: log
-        if: ${{ always() }}
-        run: | 
-          tail -300 ~/.juicefs/juicefs.log
-          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
 
       - name: Send Slack Notification
         if: ${{ failure() }}
