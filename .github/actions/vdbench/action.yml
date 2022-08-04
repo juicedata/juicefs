@@ -60,6 +60,11 @@ runs:
                      -v /tmp/config:/root/.minio \
                      minio/minio server /data
       
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.18.x'
+
     - name: Build linux target
       shell: bash
       run: |
