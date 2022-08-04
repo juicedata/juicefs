@@ -19,9 +19,8 @@ ifdef STATIC
 	export CC
 endif
 
-go version 
-
 juicefs: Makefile cmd/*.go pkg/*/*.go go.*
+	go version
 	go build -ldflags="$(LDFLAGS)"  -o juicefs .
 
 juicefs.lite: Makefile cmd/*.go pkg/*/*.go
