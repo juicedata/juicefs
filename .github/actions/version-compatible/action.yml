@@ -65,7 +65,7 @@ runs:
       run: | 
         ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
         tests=(
-            "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, dump_backup1:jfs_old, destroy:jfs_old, load_backup1:jfs_new, config:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, fsck:jfs_new, destroy:jfs_new "
+            "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, dump_backup1:jfs_old, destroy:jfs_old, load_backup1:jfs_new, fsck:jfs_new, config:jfs_new, fsck:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, fsck:jfs_new, destroy:jfs_new "
             "format:jfs_new, format:jfs_old, destroy:jfs_new"
             "format:jfs_new, format:jfs_old, destroy:jfs_old"
             "format:jfs_new, config:jfs_old, destroy:jfs_new"
@@ -134,12 +134,12 @@ runs:
                           dd if=/dev/urandom of=${{ inputs.mount_point }}/tempfile iflag=fullblock,count_bytes bs=4k count=$size
                           md5_write="$filename:$(cat ${{ inputs.mount_point }}/tempfile | md5sum)"
                           echo "write: filename is: " $filename "md5_write is: " $md5_write
-                          cp ${{inputs.mount_point}}/tempfile $filename
+                          cp ${{inputs.mount_point}}/tempfile ${{ inputs.mount_point }}/$filename
                           echo "write finished" 
                           ;;
                       "read") 
                           filename=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                          read_md5=$(cat $filename | md5sum)
+                          read_md5=$(cat ${{ inputs.mount_point }}/$filename | md5sum)
                           written_filename=$(echo $md5_write | awk -F: '{print $1}')
                           written_md5=$(echo $md5_write | awk -F: '{print $2}')
                           echo "read: filename is: " $filename "read_md5 is: " $read_md5, "written_filename is:", $written_filename, "written_md5 is:", $written_md5, 
