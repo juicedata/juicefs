@@ -154,9 +154,11 @@ jobs:
       - name: Log
         if: ${{ always() }}
         run: |
-          echo "juicefs log"
-          sudo tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          if [ -f /var/log/juicefs.log ]; then
+            echo "juicefs log"
+            sudo tail -n 1000 /var/log/juicefs.log
+            grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          fi
 
       - name: Send Slack Notification
         if: ${{ failure() }}
