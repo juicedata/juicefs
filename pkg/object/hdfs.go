@@ -156,10 +156,15 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 		return err
 	}
 	err = f.Close()
-	if err != nil {
+	if err != nil && !IsErrReplicating(err) {
 		return err
 	}
 	return h.c.Rename(tmp, path)
+}
+
+func IsErrReplicating(err error) bool {
+	pe, ok := err.(*os.PathError)
+	return ok && pe.Err == hdfs.ErrReplicating
 }
 
 func (h *hdfsclient) Delete(key string) error {
