@@ -168,16 +168,13 @@ JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](docs/zh_c
 
 ## 谁在使用
 
-JuiceFS 目前是 beta 状态，核心的存储格式还没有完全确定，如果要使用在生产环境中，请先进行细致认真的评估。如果你对它有兴趣，请尽早测试，并给我们[反馈](https://github.com/juicedata/juicefs/discussions)。
-
-欢迎你在使用 JuiceFS 后告诉我们，向大家分享你的使用经验，我们也收集汇总了一份使用者名单在[这里](https://juicefs.com/docs/zh/community/adopters)。同时 JuiceFS 也已经与很多开源项目进行集成，请访问[这里](https://juicefs.com/docs/zh/community/integrations)了解更多信息。
+JuiceFS v1.0 目前已是 GA（General Availability）状态，核心的存储格式已经确定，可用于部署在生产环境。同时，这是一个 LTS（Long-Term Support）版本，能得到至少两年的后续支持。我们收集汇总了一份使用者名单，记录在[这里](https://juicefs.com/docs/zh/community/adopters)。另外 JuiceFS 还有不少与其他开源项目进行集成的合作项目，我们将其记录在[这里](https://juicefs.com/docs/zh/community/integrations)。如果你也在使用 JuiceFS，请随时告知我们，也欢迎你向大家分享具体的使用经验。
 
 ## 产品路线图
 
-- 稳定存储格式
 - 支持使用 FoundationDB 做元数据引擎
-- 基于用户和组的配额
 - 基于目录的配额
+- 基于用户和组的配额
 - 快照
 - 一次写入多次读取（WORM）
 

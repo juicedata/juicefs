@@ -168,16 +168,13 @@ JuiceFS supports almost all object storage services. [Learn more](docs/en/guide/
 
 ## Who is using
 
-JuiceFS is still in beta quality, and the core storage format is not stabilized yet. Thus, please do a careful and thorough evaluation before using JuiceFS in a production environment. If you are interested, feel free to do tests and give us [feedback](https://github.com/juicedata/juicefs/discussions).
-
-You are welcome to tell us after using JuiceFS and share your experience with everyone. We have also collected a list of adopters [here](https://juicefs.com/docs/community/adopters). At the same time, JuiceFS has also been integrated with many open source projects, please visit [here](https://juicefs.com/docs/community/integrations) for more information.
+JuiceFS v1.0 is now in GA (General Availability) status, meaning the core storage format has been defined and it is ready to be deployed in production environments. Also, this is an LTS (Long-Term Support) release, which will be maintained for at least two years. A list of users has been assembled and documented [here](https://juicefs.com/docs/community/adopters). In addition JuiceFS has several collaborative projects that integrate with other open source projects, which we have documented [here](https://juicefs.com/docs/community/integrations). If you are also using JuiceFS, please feel free to let us know, and you are welcome to share your specific experience with everyone.
 
 ## Roadmap
 
-- Stabilize storage format
 - Support FoundationDB as metadata engine
-- User and group quotas
 - Directory quotas
+- User and group quotas
 - Snapshot
 - Write once read many (WORM)
 
