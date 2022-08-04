@@ -1,6 +1,6 @@
 module github.com/juicedata/juicefs
 
-go 1.18
+go 1.17
 
 require (
 	cloud.google.com/go/compute v1.5.0
