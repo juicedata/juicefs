@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"net/http"
@@ -25,6 +26,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -212,26 +214,33 @@ func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
 			}
 		}
 	}
-	embeddedSchemes := []string{"sqlite3://", "badger://"}
-	for _, es := range embeddedSchemes {
-		if strings.HasPrefix(addr, es) {
-			path := addr[len(es):]
-			path2, err := filepath.Abs(path)
-			if err == nil && path2 != path {
-				for i, a := range os.Args {
-					if a == addr {
-						os.Args[i] = es + path2
-					}
-				}
-			}
-		}
-	}
+	_ = expandPathForEmbedded(addr)
 	// The default log to syslog is only in daemon mode.
 	utils.InitLoggers(!c.Bool("no-syslog"))
 	err := makeDaemon(c, vfsConf.Format.Name, vfsConf.Meta.MountPoint, m)
 	if err != nil {
 		logger.Fatalf("Failed to make daemon: %s", err)
 	}
+}
+
+func expandPathForEmbedded(addr string) string {
+	embeddedSchemes := []string{"sqlite3://", "badger://"}
+	for _, es := range embeddedSchemes {
+		if strings.HasPrefix(addr, es) {
+			path := addr[len(es):]
+			absPath, err := filepath.Abs(path)
+			if err == nil && absPath != path {
+				for i, a := range os.Args {
+					if a == addr {
+						expanded := es + absPath
+						os.Args[i] = expanded
+						return expanded
+					}
+				}
+			}
+		}
+	}
+	return addr
 }
 
 func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
@@ -392,6 +401,110 @@ func NewReloadableStorage(format *meta.Format, reload func() (*meta.Format, erro
 	return holder, nil
 }
 
+func tellFstabOptions(c *cli.Context) string {
+	opts := []string{""}
+	seen := make(map[string]bool)
+	for _, s := range os.Args[2:] {
+		s = strings.Split(s, "=")[0]
+		s = strings.TrimLeft(s, "-")
+		if !c.IsSet(s) {
+			continue
+		}
+		if seen[s] {
+			continue
+		} else {
+			seen[s] = true
+		}
+		if s == "o" {
+			opts = append(opts, c.String(s))
+		} else if v := c.Bool(s); v {
+			opts = append(opts, s)
+		} else {
+			v := c.Generic(s)
+			formatted := fmt.Sprintf("%s", v)
+			if strings.HasPrefix(formatted, "[") && strings.HasSuffix(formatted, "]") {
+				trimmed := strings.TrimPrefix(formatted, "[")
+				trimmed = strings.TrimSuffix(trimmed, "]")
+				vals := strings.Fields(trimmed)
+				for _, val := range vals {
+					opts = append(opts, fmt.Sprintf("%s=%s", s, val))
+				}
+			} else {
+				opts = append(opts, fmt.Sprintf("%s=%s", s, v))
+			}
+		}
+	}
+	sort.Strings(opts)
+	return strings.Join(opts, ",")
+
+}
+
+var fstab = "/etc/fstab"
+
+func updateFstab(c *cli.Context) error {
+	if runtime.GOOS != "linux" {
+		logger.Infof("--update-fstab is ignored in %s", runtime.GOOS)
+		return nil
+	}
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		logger.Infoln("--update-fstab is ignored in container")
+		return nil
+	}
+	addr := expandPathForEmbedded(c.Args().Get(0))
+	mp := c.Args().Get(1)
+	f, err := os.Open(fstab)
+	if err != nil {
+		return err
+	}
+	index, entryIndex := -1, -1
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		lines = append(lines, line)
+		index += 1
+		fields := strings.Fields(line)
+		if len(fields) < 6 {
+			continue
+		}
+		if fields[0] == addr && fields[1] == mp {
+			entryIndex = index
+		}
+	}
+	if err = scanner.Err(); err != nil {
+		return err
+	}
+	f.Close()
+	opts := tellFstabOptions(c)
+	entry := fmt.Sprintf("%s %s juicefs _netdev%s 0 0", addr, mp, opts)
+	if entryIndex >= 0 {
+		if entry == lines[entryIndex] {
+			return nil
+		}
+		lines[entryIndex] = entry
+	} else {
+		lines = append(lines, entry)
+	}
+	tempFstab := fstab + ".tmp"
+	tmpf, err := os.OpenFile(tempFstab, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	datawriter := bufio.NewWriter(tmpf)
+	for _, line := range lines {
+		if _, err := datawriter.WriteString(line + "\n"); err != nil {
+			return err
+		}
+	}
+	datawriter.Flush()
+	tmpf.Close()
+	err = os.Rename(tempFstab, fstab)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func mount(c *cli.Context) error {
 	setup(c, 2)
 	addr := c.Args().Get(0)
@@ -420,6 +533,13 @@ func mount(c *cli.Context) error {
 		return fmt.Errorf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
+
+	if c.Bool("update-fstab") {
+		err = updateFstab(c)
+		if err != nil {
+			logger.Fatalf("failed to update fstab: %s", err)
+		}
+	}
 
 	chunkConf := getChunkConf(c, format)
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
