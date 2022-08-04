@@ -329,6 +329,9 @@ interval (in seconds) to send heartbeat; it's recommended that all clients use t
 `--upload-delay value`<br />
 delayed duration for uploading objects ("s", "m", "h") (default: 0s)
 
+`--no-bgjob`<br />
+disable background jobs (clean-up, backup, etc.) (default: false)
+
 #### Examples
 
 ```bash
