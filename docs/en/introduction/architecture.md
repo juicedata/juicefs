@@ -26,6 +26,7 @@ In terms of **File System Interface** implementation:
 - With **Hadoop Java SDK**, JuiceFS file system can replace HDFS directly and provide massive storage for Hadoop at a low cost.
 - With the **Kubernetes CSI Driver**, JuiceFS file system provides mass storage for Kubernetes.
 - With **S3 Gateway**, applications using S3 as the storage layer can directly access JuiceFS file system, and tools such as AWS CLI, s3cmd, and MinIO client are also allowed to be used to access to the JuiceFS file system at the same time.
+- With **WebDAV Server**, files in JuiceFS can be operated directly using HTTP protocol.
 
 
 ## How JuiceFS Stores Files
