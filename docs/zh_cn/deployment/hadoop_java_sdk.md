@@ -288,6 +288,49 @@ hadoop.conf.dir=/path/to/hadoop-conf
 store.url=jfs://path/to/store
 ```
 
+### Hbase
+
+JuiceFS 适合存储 HBase 的 HFile，但不适合用来保存它的事务日志（WAL），因为将日志持久化到对象存储的时间会远高于持久化到HDFS 的 DataNode 的内存中。
+建议部署一个小的 HDFS 集群来存放 WAL，HFile 文件放在 JuiceFS 上。
+
+- 新建 HBase 集群：
+
+    修改 ``hbase-site.xml`` 配置：
+
+    ```xml
+    <property>
+        <name>hbase.rootdir</name>
+        <value>jfs://{vol_name}/hbase</value>
+    </property>
+    <property>
+        <name>hbase.wal.dir</name>
+        <value>hdfs://{ns}/hbase-wal</value>
+    </property>
+    ```
+
+- 修改原有 HBase 集群：
+
+    除了修改上述配置项外，由于 HBase 集群已经在 Zookeeper 里面存储了部分数据。为了避免冲突，有以下两种方式解决：
+
+    - 删除原集群 
+
+    通过 ZooKeeper 客户端删除 zookeeper.znode.parent 配置的 znode（默认 /hbase）
+
+    :::note 注意
+    此操作将会删除原有 HBase 上面的所有数据
+    :::
+
+    - 使用新的 znode
+
+    保留原集群 znode，以便后续可以恢复
+
+   ```xml
+    <property>
+    <name>zookeeper.znode.parent</name>
+    <value>/hbase-jfs</value>
+    </property>
+    ```
+
 ### 重启服务
 
 当需要使用以下组件访问 JuiceFS 数据时，需要重启相关服务。
