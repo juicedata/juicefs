@@ -66,8 +66,6 @@ runs:
         tests=(
             "format:jfs_new, format:jfs_old, destroy:jfs_new"
             "format:jfs_new, format:jfs_old, destroy:jfs_old"
-            "format:jfs_new, config:jfs_old, destroy:jfs_new"
-            "format:jfs_new, config:jfs_old, destroy:jfs_old"
             "format:jfs_old, format:jfs_new, destroy:jfs_old"
             "format:jfs_old, format:jfs_new, destroy:jfs_new"
             "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, dump_backup1:jfs_old, flushmeta:-, load_backup1:jfs_new,  config:jfs_new, fsck:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, fsck:jfs_new, destroy:jfs_new "
