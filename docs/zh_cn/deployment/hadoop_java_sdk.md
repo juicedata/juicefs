@@ -295,31 +295,44 @@ HBase 为了在故障恢复时保证数据不丢失，需要将写 WAL 持久化
 为了保证数据不丢失，JuiceFS 的 hflush 需要保证将数据写入底层对象存储，性能上会比 HDFS 慢很多（默认情况下 HDFS 只需要写入 DataNode 内存即可）。
 所以建议将 WAL 文件仍然写入 HDFS，HFile 文件可以放在 JuiceFS 上。
 
-通过修改 ``hbase-site.xml`` 以下配置实现：
 
-```xml
-<property>
-  <name>hbase.rootdir</name>
-  <value>jfs://{vol_name}/hbase</value>
-</property>
-<property>
-  <name>hbase.wal.dir</name>
-  <value>hdfs://{ns}/hbase-wal</value>
-</property>
-```
-通过 ZooKeeper 客户端删除 zookeeper.znode.parent 配置的 znode（默认 /hbase）
+- 新建 HBase 集群：
 
-:::note 注意
-此操作将会删除原有 HBase 上面的所有数据
-:::
+    修改 ``hbase-site.xml`` 配置：
 
-也可以使用新的 znode
-```xml
-<property>
-  <name>zookeeper.znode.parent</name>
-  <value>/hbase-jfs</value>
-</property>
-```
+    ```xml
+    <property>
+        <name>hbase.rootdir</name>
+        <value>jfs://{vol_name}/hbase</value>
+    </property>
+    <property>
+        <name>hbase.wal.dir</name>
+        <value>hdfs://{ns}/hbase-wal</value>
+    </property>
+    ```
+
+- 修改原有 HBase 集群：
+
+    除了修改上述配置项外，由于 HBase 集群已经在 Zookeeper 里面存储了部分数据。为了避免冲突，有以下两种方式解决：
+
+    - 删除原集群 
+
+    通过 ZooKeeper 客户端删除 zookeeper.znode.parent 配置的 znode（默认 /hbase）
+
+    :::note 注意
+    此操作将会删除原有 HBase 上面的所有数据
+    :::
+
+    - 使用新的 znode
+
+    保留原集群 znode，以便后续可以恢复
+
+   ```xml
+    <property>
+    <name>zookeeper.znode.parent</name>
+    <value>/hbase-jfs</value>
+    </property>
+    ```
 
 ### 重启服务
 

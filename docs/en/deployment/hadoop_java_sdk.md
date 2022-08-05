@@ -297,32 +297,43 @@ JuiceFS have to write the data to the underlying object storage to persist data,
 
 So, it's better to write WAL to HDFS.
 
-Modify ``hbase-site.xml``:
+- Create a new HBase cluster：
 
-```xml
-<property>
-  <name>hbase.rootdir</name>
-  <value>jfs://{vol_name}/hbase</value>
-</property>
-<property>
-  <name>hbase.wal.dir</name>
-  <value>hdfs://{ns}/hbase-wal</value>
-</property>
-```
+  Modify ``hbase-site.xml`` :
 
-Delete the HBase znode(default: /hbase)
+    ```xml
+    <property>
+        <name>hbase.rootdir</name>
+        <value>jfs://{vol_name}/hbase</value>
+    </property>
+    <property>
+        <name>hbase.wal.dir</name>
+        <value>hdfs://{ns}/hbase-wal</value>
+    </property>
+    ```
 
-:::note 
-This operation will delete all the data for this HBase cluster.
-:::
+- Modify existing HBase cluster：
 
-Or a new znode can be used to avoid delete the origin cluster:
-```xml
-<property>
-  <name>zookeeper.znode.parent</name>
-  <value>/hbase-jfs</value>
-</property>
-```
+    Besides, the above configuration. The old HBase cluster also store some metadata in Zookeeper. To avoid the potential consistency issue, there are two ways:
+
+    - Delete the old cluster
+
+    Delete the HBase znode(default: /hbase)
+
+    :::note
+    This operation will delete all the data for this HBase cluster.
+    :::
+
+    - Use a new znode
+
+    This operation keep the old hbase znode, you can restore it later.  
+
+   ```xml
+    <property>
+    <name>zookeeper.znode.parent</name>
+    <value>/hbase-jfs</value>
+    </property>
+    ```
 
 ### Restart Services
 
