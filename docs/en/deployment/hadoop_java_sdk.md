@@ -288,6 +288,48 @@ hadoop.conf.dir=/path/to/hadoop-conf
 store.url=jfs://path/to/store
 ```
 
+### Hbase
+
+JuiceFS can be used by HBase for HFile, but is not fast (low latency) enough for write-ahead-log (WAL), because it take much longer time to persist data into object storage than memory of DataNode. It's recommended to have a small HDFS cluster only for WAL.
+
+- Create a new HBase cluster：
+
+  Modify ``hbase-site.xml`` :
+
+    ```xml
+    <property>
+        <name>hbase.rootdir</name>
+        <value>jfs://{vol_name}/hbase</value>
+    </property>
+    <property>
+        <name>hbase.wal.dir</name>
+        <value>hdfs://{ns}/hbase-wal</value>
+    </property>
+    ```
+
+- Modify existing HBase cluster：
+
+    Besides, the above configuration. The old HBase cluster also store some metadata in Zookeeper. To avoid the potential consistency issue, there are two ways:
+
+    - Delete the old cluster
+
+    Delete the HBase znode(default: /hbase)
+
+    :::note
+    This operation will delete all the data for this HBase cluster.
+    :::
+
+    - Use a new znode
+
+    This operation keep the old hbase znode, you can restore it later.  
+
+   ```xml
+    <property>
+    <name>zookeeper.znode.parent</name>
+    <value>/hbase-jfs</value>
+    </property>
+    ```
+
 ### Restart Services
 
 When the following components need to access JuiceFS, they should be restarted.
