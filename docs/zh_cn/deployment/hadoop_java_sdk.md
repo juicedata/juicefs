@@ -271,14 +271,14 @@ Hudi 自 v0.10.0 版本开始支持 JuiceFS，请确保使用正确的版本。
 
 ### Kafka Connect
 
-可以使用 Kafka Connect 和 HDFS Sink Connector（[HDFS 2](https://docs.confluent.io/kafka-connect-hdfs/current/overview.html), [HDFS 3](https://docs.confluent.io/kafka-connect-hdfs3-sink/current/overview.html)）将数据落盘存储到 JuiceFS。
+可以使用 Kafka Connect 和 HDFS Sink Connector（[HDFS 2](https://docs.confluent.io/kafka-connect-hdfs/current/overview.html)、[HDFS 3](https://docs.confluent.io/kafka-connect-hdfs3-sink/current/overview.html)）将数据落盘存储到 JuiceFS。
 
-首先需要将 JuiceFS 的 SDK 添加到 Kafka Connect 的 `classpath` 内，如 `/usr/share/java/confluentinc-kafka-connect-hdfs/lib`.
+首先需要将 JuiceFS 的 SDK 添加到 Kafka Connect 的 `classpath` 内，如 `/usr/share/java/confluentinc-kafka-connect-hdfs/lib`。
 
 在新建 Connect Sink 任务时，做如下配置：
 
-- 指定 `hadoop.conf.dir` 为包含 `core-site.xml` 配置文件的目录，若没有运行在 Hadoop 环境，可创建一个单独目录，如 `/usr/local/juicefs/hadoop`，然后将与 JuiceFS 相关的配置添加到 `core-site.xml`
-- 指定 `store.url` 为 `jfs://` 的路径
+- 指定 `hadoop.conf.dir` 为包含 `core-site.xml` 配置文件的目录，若没有运行在 Hadoop 环境，可创建一个单独目录，如 `/usr/local/juicefs/hadoop`，然后将与 JuiceFS 相关的配置添加到 `core-site.xml`。
+- 指定 `store.url` 为以 `jfs://` 开头的路径
 
 举例：
 
@@ -288,48 +288,49 @@ hadoop.conf.dir=/path/to/hadoop-conf
 store.url=jfs://path/to/store
 ```
 
-### Hbase
+### HBase
 
-JuiceFS 适合存储 HBase 的 HFile，但不适合用来保存它的事务日志（WAL），因为将日志持久化到对象存储的时间会远高于持久化到HDFS 的 DataNode 的内存中。
-建议部署一个小的 HDFS 集群来存放 WAL，HFile 文件放在 JuiceFS 上。
+JuiceFS 适合存储 HBase 的 HFile，但不适合用来保存它的事务日志（WAL），因为将日志持久化到对象存储的时间会远高于持久化到 HDFS 的 DataNode 的内存中。
 
-- 新建 HBase 集群：
+建议部署一个小的 HDFS 集群来存放 WAL，HFile 文件则存储在 JuiceFS 上。
 
-    修改 ``hbase-site.xml`` 配置：
+#### 新建 HBase 集群
 
-    ```xml
-    <property>
-        <name>hbase.rootdir</name>
-        <value>jfs://{vol_name}/hbase</value>
-    </property>
-    <property>
-        <name>hbase.wal.dir</name>
-        <value>hdfs://{ns}/hbase-wal</value>
-    </property>
-    ```
+修改 `hbase-site.xml` 配置：
 
-- 修改原有 HBase 集群：
+```xml title="hbase-site.xml"
+<property>
+  <name>hbase.rootdir</name>
+  <value>jfs://{vol_name}/hbase</value>
+</property>
+<property>
+  <name>hbase.wal.dir</name>
+  <value>hdfs://{ns}/hbase-wal</value>
+</property>
+```
 
-    除了修改上述配置项外，由于 HBase 集群已经在 Zookeeper 里面存储了部分数据。为了避免冲突，有以下两种方式解决：
+#### 修改原有 HBase 集群
 
-    - 删除原集群 
+除了修改上述配置项外，由于 HBase 集群已经在 ZooKeeper 里存储了部分数据，为了避免冲突，有以下两种方式解决：
 
-    通过 ZooKeeper 客户端删除 zookeeper.znode.parent 配置的 znode（默认 /hbase）
+1. 删除原集群
 
-    :::note 注意
-    此操作将会删除原有 HBase 上面的所有数据
-    :::
+   通过 ZooKeeper 客户端删除 `zookeeper.znode.parent` 配置的 znode（默认 `/hbase`）。
 
-    - 使用新的 znode
+   :::note 注意
+   此操作将会删除原有 HBase 上面的所有数据
+   :::
 
-    保留原集群 znode，以便后续可以恢复
+2. 使用新的 znode
 
-   ```xml
-    <property>
-    <name>zookeeper.znode.parent</name>
-    <value>/hbase-jfs</value>
-    </property>
-    ```
+   保留原 HBase 集群的 znode，以便后续可以恢复。然后为 `zookeeper.znode.parent` 配置一个新的值：
+
+   ```xml title="hbase-site.xml"
+   <property>
+     <name>zookeeper.znode.parent</name>
+     <value>/hbase-jfs</value>
+   </property>
+   ```
 
 ### 重启服务
 
