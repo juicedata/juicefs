@@ -64,7 +64,6 @@ runs:
       run: | 
         ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
         tests=(
-            "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, dump_backup1:jfs_old, flushmeta:-, load_backup1:jfs_new,  config:jfs_new, fsck:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, fsck:jfs_new, destroy:jfs_new "
             "format:jfs_new, format:jfs_old, destroy:jfs_new"
             "format:jfs_new, format:jfs_old, destroy:jfs_old"
             "format:jfs_new, config:jfs_old, destroy:jfs_new"
@@ -76,6 +75,7 @@ runs:
             "format:jfs_old, config:jfs_new, status:jfs_new"
             "format:jfs_new, config_encrypt:jfs_new, destroy:jfs_new"
             "format:jfs_old, config_encrypt:jfs_new, destroy:jfs_new"
+            "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, dump_backup1:jfs_old, flushmeta:-, load_backup1:jfs_new,  config:jfs_new, fsck:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, fsck:jfs_new, destroy:jfs_new "
             "format:jfs_old, mount:jfs_old, write_file1_100M:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, fsck:jfs_new, destroy:jfs_new"
             "format:jfs_old, mount:jfs_old, write_file1_10K:jfs_old, umount:jfs_old, format:jfs_new, mount:jfs_new, read_file1:jfs_new, umount:jfs_new, fsck:jfs_new,  destroy:jfs_new"
             "format:jfs_old, mount:jfs_old, write_file1_10K:jfs_old, write_file2_10K:jfs_old, umount:jfs_old, dump_backup1:jfs_old, flushmeta:-, load_backup1:jfs_new, config:jfs_new, mount:jfs_new, read_file1:jfs_new, read_file2:jfs_new, umount:jfs_new, fsck:jfs_new, destroy:jfs_new "
@@ -159,18 +159,17 @@ runs:
                           sudo ./$jfs_bin load ${{inputs.meta_url}} $filename
                           echo "load finished"
                           ;;
-                      "config")
-                          sudo ./$jfs_bin config ${{inputs.meta_url}} --access-key juicedata --secret-key juicedata
+                      "config")                         
+                          encrypt=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
+                          ./mc admin user remove minio juicedata || true
+                          ./mc admin user add minio juicedata juicedata1
+                          ./mc admin policy set minio consoleAdmin user=juicedata  
+                          if [ -n "$encrypt" ]; then
+                            sudo ./$jfs_bin config ${{inputs.meta_url}} --secret-key juicedata1 --encrypt-secret
+                          else
+                            sudo ./$jfs_bin config ${{inputs.meta_url}} --secret-key juicedata1
+                          fi
                           sleep 60
-                          # encrypt=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                          # ./mc admin user remove minio juicedata || true
-                          # ./mc admin user add minio juicedata juicedata1
-                          # ./mc admin policy set minio consoleAdmin user=juicedata  
-                          # if [ -n "$encrypt" ]; then
-                          #   sudo ./$jfs_bin config ${{inputs.meta_url}} --secret-key juicedata1 --encrypt-secret
-                          # else
-                          #   sudo ./$jfs_bin config ${{inputs.meta_url}} --secret-key juicedata1
-                          # fi
                           echo "config finished"
                           ;;
                       "load")
