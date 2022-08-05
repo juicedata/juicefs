@@ -19,11 +19,11 @@ This article introduces the main implementation details of JuiceFS, which is use
 - Datastore: is a component used to store and manage file system data, usually served by object storage, such as Amazon S3, Aliyun OSS, etc. It can also be served by other storage systems that are compatible with object storage semantics, such as local file systems, Ceph Rados, TiKV, etc.
 - Client: can be in various forms, such as mount process, S3 gateway, WebDAV server, Java SDK, etc.
 - File: refers to all types of files in general in this documentation, including regular files, directory files, link files, device files, etc.
-- Directory: A special kind of file used to organize a file tree structure whose contents are an index to a set of other files.
+- Directory: is a special kind of file used to organize the tree structure, and its contents are an index to a set of other files.
 
 ## 3. Metadata Structure
 
-File systems are usually organized into a tree structure, where nodes represent files and edges represent directory containment relationships. There are more than ten metadata structures in JuiceFS, most of which are used to maintain the file tree organization and properties of individual nodes, while the rest are used to manage system configuration, client sessions, asynchronous tasks, etc. All metadata structures are described below.
+File systems are usually organized in a tree structure, where nodes represent files and edges represent directory containment relationships. There are more than ten metadata structures in JuiceFS. Most of them are used to maintain the organization of file tree and properties of individual nodes, while the rest are used to manage system configuration, client sessions, asynchronous tasks, etc. All metadata structures are described below.
 
 ### 3.1 General Structure
 
@@ -143,7 +143,7 @@ type Attr struct {
 
 There are a few fields that need clarification.
 
-- Atime/Atimensec: set only when the file is created and when `SetAttr` is actively called, while accessing and modifying the file normally does not affect the Atime value
+- Atime/Atimensec: set only when the file is created and when `SetAttr` is actively called, while accessing and modifying the file usually does not affect the Atime value
 - Nlink
   - Directory file: initial value is 2 ('.' and '..'), add 1 for each subdirectory
   - Other files: initial value is 1, add 1 for each hard link created
