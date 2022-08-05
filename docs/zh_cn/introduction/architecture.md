@@ -29,6 +29,7 @@ JuiceFS 文件系统由三个部分组成：
 - 通过 **Hadoop Java SDK**，JuiceFS 文件系统能够直接替代 HDFS，为 Hadoop 提供低成本的海量存储。
 - 通过 **Kubernetes CSI Driver**，JuiceFS 文件系统能够直接为 Kubernetes 提供海量存储。
 - 通过 **S3 Gateway**，使用 S3 作为存储层的应用可直接接入，同时可使用 AWS CLI、s3cmd、MinIO client 等工具访问 JuiceFS 文件系统。
+- 通过 **WebDAV Server**，使用 HTTP 协议接入 JuiceFS 并直接操作其中的文件。
 
 ## 如何存储文件
 
