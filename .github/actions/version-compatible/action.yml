@@ -161,15 +161,16 @@ runs:
                           echo "load finished"
                           ;;
                       "config")
-                          encrypt=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
-                          ./mc admin user remove minio juicedata || true
-                          ./mc admin user add minio juicedata juicedata1
-                          ./mc admin policy set minio consoleAdmin user=juicedata  
-                          if [ -n "$encrypt" ]; then
-                            sudo ./$jfs_bin config ${{inputs.meta_url}} --secret-key juicedata1 --encrypt-secret
-                          else
-                            sudo ./$jfs_bin config ${{inputs.meta_url}} --secret-key juicedata1
-                          fi
+                          sudo ./$jfs_bin config ${{inputs.meta_url}} --access-key minioadmin --secret-key minioadmin
+                          # encrypt=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
+                          # ./mc admin user remove minio juicedata || true
+                          # ./mc admin user add minio juicedata juicedata1
+                          # ./mc admin policy set minio consoleAdmin user=juicedata  
+                          # if [ -n "$encrypt" ]; then
+                          #   sudo ./$jfs_bin config ${{inputs.meta_url}} --secret-key juicedata1 --encrypt-secret
+                          # else
+                          #   sudo ./$jfs_bin config ${{inputs.meta_url}} --secret-key juicedata1
+                          # fi
                           echo "config finished"
                           ;;
                       "load")
