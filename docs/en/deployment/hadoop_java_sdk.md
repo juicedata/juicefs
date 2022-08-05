@@ -290,12 +290,7 @@ store.url=jfs://path/to/store
 
 ### Hbase
 
-JuiceFS can not fully replace HDFS in HBase use case.
-
-WAL is used for data recovery in case of a server crash. So it must be persisted to the underlying FileSystem, the ``hflush`` method will be invoked frequently for this purpose. 
-JuiceFS have to write the data to the underlying object storage to persist data, it will cost more time than HDFS for HDFS only write the data to the DataNode memory.
-
-So, it's better to write WAL to HDFS.
+JuiceFS can be used by HBase for HFile, but is not fast (low latency) enough for write-ahead-log (WAL), because it take much longer time to persist data into object storage than memory of DataNode. It's recommended to have a small HDFS cluster only for WAL.
 
 - Create a new HBase cluster：
 
