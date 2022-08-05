@@ -198,7 +198,7 @@ runs:
                             port=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $2}')
                             test -z "$port" && port="3306"
                             mysql -u$user $password -h $host -P $port -e "drop database if exists $db_name; create database $db_name;" 
-                          elif [[ "$meta_url" == mysql* ]]; then
+                          elif [[ "$meta_url" == postgres* ]]; then
                             db_name=$(basename $meta_url | awk -F? '{print $1}')
                             export PGPASSWORD="postgres"
                             printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
