@@ -66,14 +66,13 @@ JuiceFS client will check the trash every hour and purge old entries. At least o
 
 ## Cautions
 
-With the trash enabled, if the application needs to frequently delete files or overwrite them, the usage of object storage will be much larger than that of the file system. There are two main reasons for this.
+With the trash enabled, if the application needs to frequently delete files or overwrite them, the usage of object storage will be much larger than that of the file system. There are two main reasons for this:
 
-1. deleted files remain in the trash
-2. blocks of data that need to be garbage collected during frequent overwrites are kept in the trash
+1. Deleted files remain in the trash
+2. Blocks of data that need to be garbage collected during frequent overwrites are kept in the trash
 
-The first part can be cleaned up manually by the root user, while the second part is not directly visible to users, and by default cannot be force deleted. If you do want to actively clean them up, you need to disable the trash (setting `--trash-days 0`) and then mark these blocks as leaked and delete them with the `juicefs gc` command.
+The first part can be cleaned up manually by the root user, while the second part is not directly visible to users, and by default cannot be force deleted. If you do want to actively clean them up, you need to disable the trash (setting `--trash-days 0`) and then mark these blocks as leaked and delete them with the `juicefs gc` command. **Please note that after clearing the data fragments, remember to reopen the trash.**
 
 :::tip
-
 For the specific reasons for these data fragments, please refer to the [FAQ](../faq.md#what-is-the-implementation-principle-of-juicefs-supporting-random-write) document.
 :::
