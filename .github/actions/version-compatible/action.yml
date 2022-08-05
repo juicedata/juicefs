@@ -187,6 +187,7 @@ runs:
                           echo "fsck finished"
                           ;;
                       "flushmeta")
+                          meta_url=${{inputs.meta_url}}
                           if [[ "$meta_url" == redis* ]]; then
                             redis-cli flushall
                           elif [[ "$meta_url" == mysql* ]]; then
