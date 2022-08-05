@@ -290,11 +290,8 @@ store.url=jfs://path/to/store
 
 ### Hbase
 
-在 HBase 应用场景下， JuiceFS 暂时还没法完全替换 HDFS。
-HBase 为了在故障恢复时保证数据不丢失，需要将写 WAL 持久化到文件系统上，会频繁调用文件系统的 hflush 接口。
-为了保证数据不丢失，JuiceFS 的 hflush 需要保证将数据写入底层对象存储，性能上会比 HDFS 慢很多（默认情况下 HDFS 只需要写入 DataNode 内存即可）。
-所以建议将 WAL 文件仍然写入 HDFS，HFile 文件可以放在 JuiceFS 上。
-
+JuiceFS 适合存储 HBase 的 HFile，但不适合用来保存它的事务日志（WAL），因为将日志持久化到对象存储的时间会远高于持久化到HDFS 的 DataNode 的内存中。
+建议部署一个小的 HDFS 集群来存放 WAL，HFile 文件放在 JuiceFS 上。
 
 - 新建 HBase 集群：
 
