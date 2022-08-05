@@ -288,6 +288,42 @@ hadoop.conf.dir=/path/to/hadoop-conf
 store.url=jfs://path/to/store
 ```
 
+### Hbase
+
+JuiceFS can not fully replace HDFS in HBase use case.
+
+WAL is used for data recovery in case of a server crash. So it must be persisted to the underlying FileSystem, the ``hflush`` method will be invoked frequently for this purpose. 
+JuiceFS have to write the data to the underlying object storage to persist data, it will cost more time than HDFS for HDFS only write the data to the DataNode memory.
+
+So, it's better to write WAL to HDFS.
+
+Modify ``hbase-site.xml``:
+
+```xml
+<property>
+  <name>hbase.rootdir</name>
+  <value>jfs://{vol_name}/hbase</value>
+</property>
+<property>
+  <name>hbase.wal.dir</name>
+  <value>hdfs://{ns}/hbase-wal</value>
+</property>
+```
+
+Delete the HBase znode(default: /hbase)
+
+:::note 
+This operation will delete all the data for this HBase cluster.
+:::
+
+Or a new znode can be used to avoid delete the origin cluster:
+```xml
+<property>
+  <name>zookeeper.znode.parent</name>
+  <value>/hbase-jfs</value>
+</property>
+```
+
 ### Restart Services
 
 When the following components need to access JuiceFS, they should be restarted.
