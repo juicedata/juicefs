@@ -174,10 +174,10 @@ CMD [ "juicefs" ]
 
 3. 切换分支
 
-   源代码默认使用 `main` 分支，你可以切换到任何正式发布的版本，比如切换到 `v1.0.0-beta2` 版本：
+   源代码默认使用 `main` 分支，你可以切换到任何正式发布的版本，比如切换到 `v1.0.0` 版本：
 
    ```shell
-   git checkout v1.0.0-beta2
+   git checkout v1.0.0
    ```
 
    :::caution 注意
