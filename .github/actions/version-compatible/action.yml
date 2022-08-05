@@ -162,6 +162,7 @@ runs:
                           ;;
                       "config")
                           sudo ./$jfs_bin config ${{inputs.meta_url}} --access-key juicedata --secret-key juicedata
+                          sleep 60
                           # encrypt=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
                           # ./mc admin user remove minio juicedata || true
                           # ./mc admin user add minio juicedata juicedata1
