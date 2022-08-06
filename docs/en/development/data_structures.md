@@ -420,7 +420,7 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
 
 ### 3.3 SQL
 
-Metadata is stored in different tables by type, and each table is named with `jfs_` followed by its specific structure name to form the table name, e.g. `jfs_node`. Some tables include `Id` columns of type `bigserial` as primary keys, which are only used to ensure that each table has a primary key and do not contain actual information.
+Metadata is stored in different tables by type, and each table is named with `jfs_` followed by its specific structure name to form the table name, e.g. `jfs_node`. Some tables use `Id` of the `bigserial` type as primary keys to ensure that each table has a primary key, and the `Id` columns do not contain actual information.
 
 #### 3.3.1 Setting
 
@@ -431,7 +431,7 @@ type setting struct {
 }
 ```
 
-There is only one entry in this table with Name "format" and Value as file system formatting information in JSON.
+There is only one entry in this table with "format" as Name and file system formatting information in JSON as Value.
 
 #### 3.3.2 Counter
 
@@ -454,7 +454,7 @@ type session2 struct {
 
 #### 3.3.4 SessionInfo
 
-There is no separate table for this, but is recorded in the `Info` column of `session2`.
+There is no separate table for this, but it is recorded in the `Info` column of `session2`.
 
 #### 3.3.5 Node
 
@@ -476,7 +476,7 @@ type node struct {
 }
 ```
 
-Most of the fields are the same as [Attr](#3.1.5-Node), but the timestamps use a lower precision, where Atime/Mtime/Ctime are in microseconds.
+Most of the fields are the same as [Attr](#3.1.5-Node), but the timestamp precision is lower, i.e., Atime/Mtime/Ctime are in microseconds.
 
 #### 3.3.6 Edge
 
@@ -505,7 +505,7 @@ type chunk struct {
 }
 ```
 
-Slices are an array of bytes, corresponding to one [Slice](#3.1.8-chunk) per 24 bytes.
+Slices are an array of bytes, and each [Slice](#3.1.8-chunk) corresponds to 24 bytes.
 
 #### 3.3.9 SliceRef
 
@@ -561,7 +561,7 @@ type plock struct {
 }
 ```
 
-Records is an array of bytes, corresponding to one [plockRecord](#3.1.13-Plock) per 24 bytes.
+Records is an array of bytes, and each [plockRecord](#3.1.13-Plock) corresponds to 24 bytes.
 
 #### 3.3.14 DelFiles
 
@@ -583,7 +583,7 @@ type delslices struct {
 }
 ```
 
-Slices is an array of bytes, corresponding to one [slice](#3.1.15-DelSlices) per 12 bytes.
+Slices is an array of bytes, and each [slice](#3.1.15-DelSlices) corresponds to 12 bytes.
 
 #### 3.3.16 Sustained
 
@@ -599,8 +599,8 @@ type sustained struct {
 
 The common format of keys in TKV (Transactional Key-Value Database) is `${prefix}${JFSKey}`, where
 
-- prefix is used to distinguish between different file systems, usually `${VolumeName}0xFD`, where `0xFD` is used as a special byte to handle cases when there is an inclusion relationship between different file system names. In addition, for databases that are not shareable (e.g. BadgerDB), the empty string is used as prefix
-- JFSKey is the JuiceFS Key for different data types, which is listed in the following subsections
+- prefix is used to distinguish between different file systems, usually `${VolumeName}0xFD`, where `0xFD` is used as a special byte to handle cases when there is an inclusion relationship between different file system names. In addition, for databases that are not shareable (e.g. BadgerDB), the empty string is used as prefix.
+- JFSKey is the JuiceFS Key for different data types, which is listed in the following subsections.
 
 In TKV's Keys, all integers are stored in encoded binary form.
 
@@ -710,7 +710,7 @@ type plock struct {
 }
 ```
 
-where size is the length of the records array and every 24 bytes in records corresponds to a [plockRecord](#3.1.13-Plock).
+where size is the length of the records array and every 24 bytes in records corresponds to one [plockRecord](#3.1.13-Plock).
 
 #### 3.4.14 DelFiles
 
@@ -726,7 +726,7 @@ where length takes up 8 bytes and is encoded with **big endian**.
 L${timestamp}${sliceId} -> slices
 ```
 
-where slices is an array of bytes corresponding to one [slice](#3.1.15-DelSlices) per 12 bytes.
+where slices is an array of bytes, and one [slice](#3.1.15-DelSlices) corresponds to 12 bytes.
 
 #### 3.4.16 Sustained
 
@@ -740,10 +740,10 @@ Here the Value value is only used as a placeholder.
 
 ### 4.1 Finding files by path
 
-According to the design of [Edge](# 3.1.6-Edge), only the direct children of each directory are recorded in the metadata engine. When an application provides a path to access a file, JuiceFS needs to look it up level by level. Now suppose the application wants to open the file `/dir1/dir2/testfile`, then it needs to
+According to the design of [Edge](# 3.1.6-Edge), only the direct children of each directory is recorded in the metadata engine. When an application provides a path to access a file, JuiceFS needs to look it up level by level. Now suppose the application wants to open the file `/dir1/dir2/testfile`, then it needs to
 
 1. search for the entry with name "dir1" in the Edge structure of the root directory (inode number is fixed to 1) and get its inode number N1
-2. search the Edge structure of N1 for the entry with the name "dir2" and get its inode number N2
+2. search for the entry with the name "dir2" in the Edge structure of N1 and get its inode number N2
 3. search for the entry with the name "testfile" in the Edge structure of N2, and get its inode number N3
 4. search for the [Node](#3.1.5-Node) structure corresponding to N3 to get the attributes of the file
 
@@ -751,14 +751,14 @@ Failure in any of the above steps will result in the file pointed to by that pat
 
 ### 4.2 File data splitting
 
-In the previous section, we found the file based on its path and get its attributes. The metadata related to the contents of the file can be found based on the inode and size fields in the file properties. Now suppose a file has an inode of 100 and a size of 160 MiB, then the file has `(size-1) / 64 MiB + 1 = 3` Chunks, as follows.
+From the previous section, we know how to find the file based on its path and get its attributes. The metadata related to the contents of the file can be found based on the inode and size fields in the file properties. Now suppose a file has an inode of 100 and a size of 160 MiB, then the file has `(size-1) / 64 MiB + 1 = 3` Chunks, as follows.
 
 ```
  File: |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|_ _ _ _ _ _ _ _|
 Chunk: |<---        Chunk 0        --->|<---        Chunk 1        --->|<-- Chunk 2 -->|
 ```
 
-In standalone Redis, this means that there are 3 [Chunk Keys](#3.1.8-Chunk), `c100_0`, `c100_1` and `c100_2`, each corresponding to a list of Slices. These Slices are mainly generated when the data is written and may overwrite each other or may not fill the Chunk completely, so you need to traverse this list of Slices sequentially and reconstruct the latest version of the data distribution before using it, so that
+In standalone Redis, this means that there are 3 [Chunk Keys](#3.1.8-Chunk), i.e.,`c100_0`, `c100_1` and `c100_2`, each corresponding to a list of Slices. These Slices are mainly generated when the data is written and may overwrite each other or may not fill the Chunk completely, so you need to traverse this list of Slices sequentially and reconstruct the latest version of the data distribution before using it, so that
 
 1. the part covered by more than one Slice is based on the last added Slice
 2. the part that is not covered by Slice is automatically zeroed, and is represented by sliceId = 0
@@ -798,17 +798,17 @@ Slice{pos: 40M, id:  0, size: 24M, off:   0, len: 24M} // can be ommited
 
 #### 4.3.1 Object naming
 
-Block is the basic unit for JuiceFS to manage data. Its size is 4 MiB by default, and can be changed only when formatting a file system, adjustable within the interval [64 KiB, 16 MiB]. Each Block is an object in the object store after upload, and is named in the format `${fsname}/chunks/${hash}/${basename}`, where
+Block is the basic unit for JuiceFS to manage data. Its size is 4 MiB by default, and can be changed only when formatting a file system, within the interval [64 KiB, 16 MiB]. Each Block is an object in the object storage after upload, and is named in the format `${fsname}/chunks/${hash}/${basename}`, where
 
 - fsname is the file system name
 - "chunks" is a fixed string representing the data object of JuiceFS
-- hash is the hash value calculated from basename, which plays a certain role of isolation management
+- hash is the hash value calculated from basename, which plays a role in isolation management
 - basename is the valid name of the object in the format of `${sliceId}_${index}_${size}`, where
   - sliceId is the ID of the Slice to which the object belongs, and each Slice in JuiceFS has a globally unique ID
   - index is the index of the object in the Slice it belongs to, by default a Slice can be split into at most 16 Blocks, so its value range is [0, 16)
-  - size is the size of the Block, by default it takes the value of (0, 4 MiB]
+  - size is the size of the Block, and by default it takes the value of (0, 4 MiB]
 
-There are two hash algorithms currently in use, with the sliceId in basename as the parameter, chosen according to the [HashPrefix](#3.1.1-Setting) of the file system.
+There are two hash algorithms currently in use: with the sliceId in basename as the parameter, or chosen according to the [HashPrefix](#3.1.1-Setting) of the file system.
 
 ```go
 func hash(sliceId int) string {
@@ -819,7 +819,7 @@ func hash(sliceId int) string {
 }
 ```
 
-Suppose a file system named `jfstest` is written with a contiguous 10 MiB of data, internally given a SliceID of 1, and HashPrefix is not enabled, then the following three objects are generated in the object store.
+Suppose a file system named `jfstest` is written with a continuous 10 MiB of data and internally given a SliceID of 1 with HashPrefix disabled, then the following three objects will be generated in the object storage.
 
 ```
 jfstest/chunks/0/0/1_0_4194304
@@ -838,7 +838,7 @@ Similarly, now taking the 64 MiB chunk in the previous section as an example, it
 40 ~ 64M: Zero
 ```
 
-According to this, the client can quickly find the data needed for the application. For example, reading 8MiB data at offset 10MiB location will involve 3 objects, as follows
+According to this, the client can quickly find the data needed for the application. For example, reading 8 MiB data at offset 10 MiB location will involve 3 objects, as follows
 
 - Read the entire object from `10_0_4194304`, corresponding to 0 to 4 MiB of the read data
 - Read 0 to 2 MiB from `10_1_4194304`, corresponding to 4 to 6 MiB of the read data
@@ -868,15 +868,15 @@ objects:
 
 The empty objectName in the table means a file hole and is read as 0. As you can see, the output is consistent with the previous analysis.
 
-It is worth mentioning that the 'size' here is size of the original data in the Block, not that of the actual object in object storage. The original data is default written directly to object storage, so the 'size' is equal to object size. However, when data compression or data encryption is enabled, size of the actual object will change and may no longer be the same as the 'size'.
+It is worth mentioning that the 'size' here is size of the original data in the Block, rather than that of the actual object in object storage. The original data is written directly to object storage by default, so the 'size' is equal to object size. However, when data compression or data encryption is enabled, the size of the actual object will change and may no longer be the same as the 'size'.
 
 #### 4.3.2 Data compression
 
-You can configure the compression algorithm (supporting lz4 and zstd) with the `--compress <value>` parameter when formatting a file system, so that all data blocks of this file system will be compressed before uploading to object storage. The object name remains the same as default, and the content is the result of compression algorithm, without any other meta information. Therefore, the compression algorithm in the [file system formatting Information](#3.1.1-Setting) is not allowed to be modified, otherwise it will fail the reading of existing data.
+You can configure the compression algorithm (supporting lz4 and zstd) with the `--compress <value>` parameter when formatting a file system, so that all data blocks of this file system will be compressed before uploading to object storage. The object name remains the same as default, and the content is the result of the compression algorithm, without any other meta information. Therefore, the compression algorithm in the [file system formatting Information](#3.1.1-Setting) is not allowed to be modified, otherwise it will cause the failure of reading existing data.
 
 #### 4.3.3 Data encryption
 
-The RSA private key can be configured to enable [static data encryption](https://juicefs.com/docs/community/security/encrypt/) when formatting a file system with the `--encrypt-rsa-key <value>` parameter, so that all data blocks of this file system will be encrypted before uploading to the object storage. The object name is still the same as default, while its content becomes a header plus the result of the data encryption algorithm. The header contains a random seed and the symmetric key used for decryption, which is itself encrypted with the RSA private key. Therefore, the RSA private key in the [file system formatting Information](#3.1.1-Setting) is not allowed to be modified, otherwise it will fail the reading of existing data.
+The RSA private key can be configured to enable [static data encryption](https://juicefs.com/docs/community/security/encrypt/) when formatting a file system with the `--encrypt-rsa-key <value>` parameter, which allows all data blocks of this file system to be encrypted before uploading to the object storage. The object name is still the same as default, while its content becomes a header plus the result of the data encryption algorithm. The header contains a random seed and the symmetric key used for decryption, and the symmetric key itself is encrypted with the RSA private key. Therefore, it is not allowed to modify the RSA private key in the [file system formatting Information](#3.1.1-Setting), otherwise reading existing data will fail.
 
 :::note
 If both compression and encryption are enabled, the original data will be compressed and then encrypted before uploading to the object storage.
