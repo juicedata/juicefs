@@ -11,7 +11,7 @@ For storage system, data safety is always one of the key elements to concern. Th
 
 ## Configure
 
-When using `juicefs format` command to initialize JuiceFS volume, users are allowed to specify `--trash-days <val>` to set the number of days which files are kept in the `.trash` directory. Within this period, user-removed files are not actually purged, so the file system usage shown in the output of `df` command will not decrease, and the blocks in the object storage will still exist in this period.
+When using `juicefs format` command to initialize JuiceFS volume, users are allowed to specify `--trash-days <val>` to set the number of days which files are kept in the `.trash` directory. Within this period, user-removed files are not actually purged, so the file system usage shown in the output of `df` command will not decrease, and the blocks in the object storage will still exist.
 
 - the value of `trash-days` defaults to 1, which means files in trash will be automatically purged after ONE day.
 - use `--trash-days 0` to disable this feature; the trash will be emptied in a short time, and all files removed afterwards will be purged immediately.
