@@ -15,7 +15,7 @@ When using `juicefs format` command to initialize JuiceFS volume, users are allo
 
 - the value of `trash-days` defaults to 1, which means files in trash will be automatically purged after ONE day.
 - use `--trash-days 0` to disable this feature; the trash will be emptied in a short time, and all files removed afterwards will be purged immediately.
-- - For older versions of JuiceFS to use the recycle bin, you need to manually set `--trash-days` to the desired positive integer value via the `config` command after upgrading all mount points.
+- - For older versions of JuiceFS to use the trash, you need to manually set `--trash-days` to the desired positive integer value via the `config` command after upgrading all mount points.
 
 For volumes already been initialized, you can still update `trash-days` with the `config` command, e.g:
 
