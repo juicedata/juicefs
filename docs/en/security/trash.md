@@ -62,7 +62,7 @@ It is not permitted to create files inside the trash. Deleting or purging a file
 
 It is suggested to recover files as root, since root is allowed to move them out of trash with a single `mv` command without any extra data copy. Other users, however, can only recover a file by reading its content and write it to another new file.
 
-Since it is JuiceFS client which is in charge of checking the trash every hour and purging old entries, you need at least 1 active client to perform checking and purging. Like recovering, only root user is allowed to manually purge entries by `rm` command.
+Since it is JuiceFS client which is in charge of checking the trash every hour and purging old entries, you need at least ONE active client. Like recovering, only the root user is allowed to manually purge entries by the `rm` command.
 
 ## Cautions
 
