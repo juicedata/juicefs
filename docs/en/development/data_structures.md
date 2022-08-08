@@ -740,7 +740,7 @@ Here the Value value is only used as a placeholder.
 
 ### 4.1 Finding files by path
 
-According to the design of [Edge](# 3.1.6-Edge), only the direct children of each directory is recorded in the metadata engine. When an application provides a path to access a file, JuiceFS needs to look it up level by level. Now suppose the application wants to open the file `/dir1/dir2/testfile`, then it needs to
+According to the design of [Edge](# 3.1.6-Edge), only the direct children of each directory are recorded in the metadata engine. When an application provides a path to access a file, JuiceFS needs to look it up level by level. Now suppose the application wants to open the file `/dir1/dir2/testfile`, then it needs to
 
 1. search for the entry with name "dir1" in the Edge structure of the root directory (inode number is fixed to 1) and get its inode number N1
 2. search for the entry with the name "dir2" in the Edge structure of N1 and get its inode number N2
