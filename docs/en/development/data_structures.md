@@ -808,7 +808,7 @@ Block is the basic unit for JuiceFS to manage data. Its size is 4 MiB by default
   - index is the index of the object in the Slice it belongs to, by default a Slice can be split into at most 16 Blocks, so its value range is [0, 16)
   - size is the size of the Block, and by default it takes the value of (0, 4 MiB]
 
-There are two hash algorithms currently in use: with the sliceId in basename as the parameter, or chosen according to the [HashPrefix](#3.1.1-Setting) of the file system.
+Currently there are two hash algorithms, and both use the sliceId in basename as the parameter. Which algorithm will be chosen to use follows the [HashPrefix](#3.1.1-Setting) of the file system.
 
 ```go
 func hash(sliceId int) string {
