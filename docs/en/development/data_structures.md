@@ -420,7 +420,7 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
 
 ### 3.3 SQL
 
-Metadata is stored in different tables by type, and each table is named with `jfs_` followed by its specific structure name to form the table name, e.g. `jfs_node`. Some tables use `Id` of the `bigserial` type as primary keys to ensure that each table has a primary key, and the `Id` columns do not contain actual information.
+Metadata is stored in different tables by type, and each table is named with `jfs_` followed by its specific structure name to form the table name, e.g. `jfs_node`. Some tables use `Id` with the `bigserial` type as primary keys to ensure that each table has a primary key, and the `Id` columns do not contain actual information.
 
 #### 3.3.1 Setting
 
