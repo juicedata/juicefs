@@ -1181,6 +1181,17 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			//refresh dir usedSpace and usedinode in redis
 			//key
 			//pipe.HSet(ctx, key, "capacity", cap).Result()
+			if _, ok := m.dirQuotas[parent]; !ok {
+				m.dirQuotas[parent] = m.getQuotas(ctx, parent, parent)
+			}
+			for key, val := range m.dirQuotas[parent] {
+				quota_key := m.quotaKey(key)
+				fmt.Printf("-----44 %d \n", val.usedInodes)
+				//pipe.HSet(ctx, quota_key, "capacity", val.capacity)
+				//pipe.HSet(ctx, quota_key, "inodes", val.inodes)
+				pipe.HSet(ctx, quota_key, "usedSpace", val.usedSpace+uint64(align4K(0)))
+				pipe.HSet(ctx, quota_key, "usedInodes", val.usedInodes+1)
+			}
 			return nil
 		})
 		return err
@@ -2862,7 +2873,17 @@ func (m *redisMeta) doSetQuota(ctx Context, inode Ino, cap, inodes uint64) sysca
 }
 
 func (m *redisMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
+	fmt.Printf("--- hi i am here 33 \n")
 	key := m.quotaKey(inode)
+	out, err := m.rdb.HGetAll(ctx, key).Result()
+	fmt.Printf("----- dogetQuotas 11 %+v \n", out)
+	fmt.Printf("----- dogetQuotas 22 %+v \n", err)
+	if err != nil {
+		fmt.Printf("----- dogetQuotas 221 %s \n", err)
+		return nil, fmt.Errorf("HGetAll %s: %s", out, err)
+	} else if out == nil && err == nil {
+		return nil, fmt.Errorf("HGetAll %s ", "none")
+	}
 	capacity_quota, err := m.rdb.HGet(ctx, key, "capacity").Bytes()
 	if err == redis.Nil {
 		err = ENOATTR
@@ -2881,18 +2902,46 @@ func (m *redisMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
 	if err != nil {
 		logger.Fatalf("invalid capacity %s", err)
 	}
+	usedSpace_real, err := m.rdb.HGet(ctx, key, "usedSpace").Bytes()
+	if err == redis.Nil {
+		return &quota{
+			capacity: capacity,
+			inodes:   inodes,
+		}, nil
+	}
+	usedSpace, err := strconv.ParseUint(string(usedSpace_real), 10, 64)
+	if err != nil {
+		logger.Fatalf("invalid capacity %s", err)
+	}
+	usedInodes_real, err := m.rdb.HGet(ctx, key, "usedInodes").Bytes()
+	if err == redis.Nil {
+		err = ENOATTR
+		return nil, err
+	}
+	usedInodes, err := strconv.ParseUint(string(usedInodes_real), 10, 64)
+	if err != nil {
+		logger.Fatalf("invalid capacity %s", err)
+	}
+
 	return &quota{
-		capacity: capacity,
-		inodes:   inodes,
+		capacity:   capacity,
+		inodes:     inodes,
+		usedSpace:  usedSpace,
+		usedInodes: usedInodes,
 	}, nil
 
 }
-
+func (m *redisMeta) doSetQuotaList(name string) error {
+	m.rdb.SAdd(Background, "dirQuotaList", name)
+	return nil
+}
 func (m *redisMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
-	vals, err := m.rdb.LRange(Background, name, 0, 1000000).Result()
+	//vals, err := m.rdb.ZRange(Background, name, 0, 1000000).Result()
+	vals, err := m.rdb.SMembers(Background, name).Result()
 	if err != nil {
 		return nil, errno(err)
 	}
+	q1 := make(map[Ino]quota)
 	for i := 0; i < len(vals); i++ {
 		inode, err := strconv.ParseUint(vals[i], 10, 64)
 		if err != nil {
@@ -2902,7 +2951,7 @@ func (m *redisMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
 		key := m.quotaKey(Ino(inode))
 		quotasttr, err := m.rdb.HGetAll(Background, key).Result()
 		if err != nil {
-			logger.Fatalf("invalid capacity %s", err)
+			logger.Fatalf("invalid quotaattr  %s", err)
 			return nil, err
 		}
 		if _, ok := quotasttr["capacity"]; !ok {
@@ -2928,8 +2977,13 @@ func (m *redisMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
 		}
 
 		if _, ok := quotasttr["usedSpace"]; !ok {
-			logger.Fatalf("invalid usedSpace %s", err)
-			return nil, err
+			//logger.Fatalf("invalid usedSpace %s", err)
+			//return nil, err
+			q1[Ino(inode)] = quota{
+				capacity: capacity,
+				inodes:   inodes,
+			}
+			return q1, nil
 		}
 
 		usedSpace, err := strconv.ParseUint(quotasttr["usedSpace"], 10, 64)
@@ -2949,7 +3003,6 @@ func (m *redisMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
 			return nil, err
 		}
 
-		q1 := make(map[Ino]quota)
 		q1[Ino(inode)] = quota{
 			capacity:   capacity,
 			inodes:     inodes,
@@ -2958,7 +3011,7 @@ func (m *redisMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
 		}
 
 	}
-	return nil, nil
+	return q1, nil
 
 }
 

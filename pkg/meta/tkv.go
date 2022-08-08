@@ -2232,6 +2232,11 @@ func (m *kvMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
 	return nil, nil
 }
 
+func (m *kvMeta) doSetQuotaList(name string) error {
+	//Todo
+	return nil
+}
+
 func (m *kvMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
 	//Todo
 	return nil, nil

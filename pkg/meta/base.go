@@ -77,6 +77,7 @@ type engine interface {
 	GetSession(sid uint64, detail bool) (*Session, error)
 	doSetQuota(ctx Context, inode Ino, capacity, inodes uint64) syscall.Errno
 	dogetQuotas(ctx Context, inode Ino) (*quota, error)
+	doSetQuotaList(name string) error
 	doGetQuotaList(name string) (map[Ino]quota, error)
 }
 
@@ -116,7 +117,7 @@ type baseMeta struct {
 	// All user configured quotas: dir inode -> quota
 	quotas map[Ino]quota
 	// Cache a list related to a directory, containing quotas configured on itself and its ancestors
-	dirQuotas map[Ino][]*quota
+	dirQuotas map[Ino]map[Ino]*quota
 	quotalist DirQuotaList
 }
 
@@ -163,7 +164,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
 		}),
 		quotas:    make(map[Ino]quota),
-		dirQuotas: make(map[Ino][]*quota),
+		dirQuotas: make(map[Ino]map[Ino]*quota),
 	}
 }
 
@@ -254,6 +255,7 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 
 func (m *baseMeta) NewSession() error {
 	go m.refreshUsage()
+	go m.refreshQuota()
 	if m.conf.ReadOnly {
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
 		return nil
@@ -357,7 +359,8 @@ func (m *baseMeta) refreshUsage() {
 
 func (m *baseMeta) refreshQuota() {
 	for {
-		if quotaMap, err := m.en.doGetQuotaList("dirquotalist"); err == nil {
+		if quotaMap, err := m.en.doGetQuotaList("dirQuotaList"); err == nil {
+			//fmt.Printf("---222 %v", quotaMap)
 			//get quota form engine and cache to m.quota
 			for key, val := range quotaMap {
 				//Add lock
@@ -374,14 +377,20 @@ func (m *baseMeta) refreshQuota() {
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, size, inodes uint64) bool {
 	if _, ok := m.dirQuotas[inode]; !ok {
-		m.dirQuotas[inode] = m.getQuotas(ctx, inode)
+		fmt.Printf("---33 go to getQuotas \n")
+		m.dirQuotas[inode] = make(map[Ino]*quota)
+		m.dirQuotas[inode] = m.getQuotas(ctx, inode, inode)
 	}
-	for _, q := range m.dirQuotas[inode] {
-		if size > 0 && q.capacity > 0 && atomic.LoadUint64(&q.usedSpace)+size > uint64(q.capacity) {
-			return true
-		}
-		if inodes > 0 && q.inodes > 0 && atomic.LoadUint64(&q.usedInodes)+inodes > uint64(q.inodes) {
-			return true
+	fmt.Printf("---33 go to checkDirQuota \n")
+	fmt.Printf("------3311 %+v \n", m.dirQuotas[inode])
+	if _, ok := m.dirQuotas[inode]; ok {
+		for _, q := range m.dirQuotas[inode] {
+			if size > 0 && q.capacity > 0 && atomic.LoadUint64(&q.usedSpace)+size > uint64(q.capacity) {
+				return true
+			}
+			if inodes > 0 && q.inodes > 0 && atomic.LoadUint64(&q.usedInodes)+inodes > uint64(q.inodes) {
+				return true
+			}
 		}
 	}
 	return false
@@ -397,8 +406,14 @@ func (m *baseMeta) checkQuota(size, inodes int64) bool {
 
 func (m *redisMeta) updateQuotaStats(inode Ino, space uint64, inodes uint64) {
 	for _, val := range m.dirQuotas[inode] {
-		atomic.AddUint64(&val.usedSpace, space)
-		atomic.AddUint64(&val.usedInodes, inodes)
+		fmt.Printf("----------5 %d \n", inodes)
+		m.Lock()
+		val.usedInodes = val.usedInodes + inodes
+		val.usedSpace = val.usedSpace + space
+		fmt.Printf("----------6 %d \n", val.usedSpace)
+		m.Unlock()
+		//atomic.AddUint64(val.usedSpace, space)
+		//atomic.AddUint64(val.usedInodes, inodes)
 	}
 }
 
@@ -731,32 +746,63 @@ func (m *baseMeta) nextInode() (Ino, error) {
 	return Ino(n), nil
 }
 
-func (m *baseMeta) createDirQuotas(ctx Context, inode Ino) []*quota {
-	//if inode has own quota
-	m.freeMu.Lock()
-	defer m.freeMu.Unlock()
+/*func (m *baseMeta) createDirQuotas(ctx Context, inode Ino, q map[Ino]*quota) map[Ino]*quota {
 	if s, err := m.en.dogetQuotas(ctx, inode); err == nil {
-		m.dirQuotas[inode] = append(m.dirQuotas[inode], s)
+		fmt.Printf("---- i am here dogetQuotas %+v \n ", s)
+		q[inode] = s
 	}
 	for parentInode, _ := range m.GetParents(ctx, inode) {
-		parentQuota := m.getQuotas(ctx, parentInode)
-		if len(parentQuota) > 0 {
-			m.dirQuotas[inode] = append(m.dirQuotas[inode], parentQuota...)
+		fmt.Printf("---- i am here GetParents %d \n ", parentInode)
+		if parentInode == RootInode {
+			return q
 		}
+		q = m.getQuotas(ctx, parentInode)
 	}
-	return m.dirQuotas[inode]
+	fmt.Printf("----- 888 print q %+v \n", q)
+	return q
 
 }
 
-func (m *baseMeta) getQuotas(ctx Context, parent Ino) []*quota {
-	// if inode == RootInode return
+func (m *baseMeta) getQuotas(ctx Context, parent Ino) map[Ino]*quota {
+	fmt.Printf("------ getQuotas input inode %d \n", parent)
 	if parent == RootInode {
-		return nil
+		return m.dirQuotas[parent]
 	}
+	q := make(map[Ino]*quota)
 	//if Quotas in dirQuotas cache,if no,we have to make a cache
 	if _, ok := m.dirQuotas[parent]; !ok {
-		m.dirQuotas[parent] = m.createDirQuotas(ctx, parent)
+		fmt.Printf("---- start to build dirQuotas cache \n")
+		m.dirQuotas[parent] = m.createDirQuotas(ctx, parent, q)
 	}
+	fmt.Printf("---- 9999 %+v \n", m.dirQuotas[parent])
+	return m.dirQuotas[parent]
+
+}*/
+
+func (m *baseMeta) createDirQuotas(ctx Context, parent, inode Ino) map[Ino]*quota {
+	if s, err := m.en.dogetQuotas(ctx, inode); err == nil {
+		fmt.Printf("---- i am here dogetQuotas %+v \n ", s)
+		m.dirQuotas[parent][inode] = s
+	}
+	for parentInode, _ := range m.GetParents(ctx, inode) {
+		fmt.Printf("---- i am here GetParents %d \n ", parentInode)
+		if parentInode == RootInode {
+			return m.dirQuotas[parent]
+		}
+		m.dirQuotas[parent] = m.getQuotas(ctx, parent, parentInode)
+	}
+	fmt.Printf("----- 888 print q %+v \n", m.dirQuotas[parent])
+	return m.dirQuotas[parent]
+
+}
+
+func (m *baseMeta) getQuotas(ctx Context, parent, inode Ino) map[Ino]*quota {
+	fmt.Printf("------ getQuotas input inode %d \n", parent)
+	if parent == RootInode {
+		return m.dirQuotas[parent]
+	}
+	m.dirQuotas[parent] = m.createDirQuotas(ctx, parent, inode)
+	fmt.Printf("---- 9999 %+v \n", m.dirQuotas[parent])
 	return m.dirQuotas[parent]
 
 }
@@ -996,7 +1042,10 @@ func (m *baseMeta) SetQuota(ctx Context, inode Ino, capacity, inodes uint64) sys
 	if inode == 0 {
 		return syscall.EINVAL
 	}
-
+	if m.en.doSetQuotaList(inode.String()) != nil {
+		//Todo change err type
+		return syscall.EROFS
+	}
 	defer m.timeit(time.Now())
 	return m.en.doSetQuota(ctx, m.checkRoot(inode), capacity, inodes)
 }

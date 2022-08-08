@@ -2629,6 +2629,11 @@ func (m *dbMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
 	return nil, nil
 }
 
+func (m *dbMeta) doSetQuotaList(name string) error {
+	//Todo
+	return nil
+}
+
 func (m *dbMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
 	//Todo
 	return nil, nil
