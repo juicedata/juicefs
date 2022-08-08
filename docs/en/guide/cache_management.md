@@ -17,7 +17,7 @@ JuiceFS provides a "close-to-open" consistency guarantee, which means that when 
 
 ## Cache read mechanism
 
-JuiceFS provides a multi-level cache to improve the performance of accessing frequently used files. Read requests will try the kernel page cache, the pre-read buffer of the JuiceFS process, and the local disk cache in turn. If the data requesting is not found in any level of the cache, it will be read from the object storage, and also be written into every level of the cache asynchronously to improve the performance of the next access.
+JuiceFS provides a multi-level cache to improve the performance of frequently accessed data. Read requests will try the kernel page cache, the pre-read buffer of the JuiceFS process, and the local disk cache in turn. If the data requested is not found in any level of the cache, it will be read from the object storage, and also be written into every level of the cache asynchronously to improve the performance of the next access. 
 
 ![](../images/juicefs-cache.png)
 
@@ -51,11 +51,11 @@ When dong `read()` on a file, the chunk and slice information of the file is aut
 You can check ["How JuiceFS Stores Files"](../reference/how_juicefs_store_files.md) to know what chunk and slice are.
 :::
 
-By default, for a file whose metadata has been cached in memory and not being accessed by any process for more than 1 hour, all its metadata cache will be automatically deleted.
+By default, if there is a file whose metadata has been cached in memory and not been accessed by any process for more than 1 hour, all its metadata cache will be automatically deleted.
 
 ## Data cache
 
-JuiceFS also provides kinds of data cache, including page cache in the kernel and local cache on the client host, to improve performance.
+JuiceFS also provides various kinds of data cache, including page cache in the kernel and local cache on the client host, to improve performance.
 
 ### Kernel data cache
 
@@ -86,9 +86,9 @@ The local cache can be adjusted at [mounting file system](../reference/command_r
 --cache-partial-only      cache only random/small read (default: false)
 ```
 
-Specifically, there are two ways to store the local cache of JuiceFS in memory -- setting `--cache-dir` to `memory` or `/dev/shm/<cache-dir>`. The difference between these two approaches is that, the former deletes the cache data after remounting the JuiceFS file system, while the latter retains it. There is not much difference in performance between them.
+Specifically, there are two ways to store the local cache of JuiceFS in memory, i.e., setting `--cache-dir` to `memory` or `/dev/shm/<cache-dir>`. The difference between these two approaches is that the former deletes the cache data after remounting the JuiceFS file system, while the latter retains the cache data. Still, there is not much difference in performance between them.
 
-The JuiceFS client writes data downloaded from the object store (including new uploaded data containing less than 1 block) to the cache directory as fast as possible, without compression or encryption. **Because JuiceFS generates unique names for all block objects written to the object store, and all block objects are not modified, there is no need to worry about the cached data invalidation when the file content is updated.**
+The JuiceFS client writes data downloaded from the object storage (including new uploaded data containing less than 1 block) to the cache directory as fast as possible, without compression or encryption. **Because JuiceFS generates unique names for all block objects written to the object storage, and all block objects are not modified, there is no need to worry about the invalidation of the cached data when the file content is updated.**
 
 Data caching can effectively improve the performance of random reads. For applications like Elasticsearch, ClickHouse, etc. that require higher random read performance, it is recommended to point the cache path to a faster storage medium and allocate more cache space.
 
@@ -106,7 +106,7 @@ When the cache is full, the JuiceFS client cleans the cache using LRU-like algor
 
 When writing data, the JuiceFS client caches the data in memory until it is uploaded to the object storage when a chunk is written or when the operation is forced by `close()` or `fsync()`. When `fsync()` or `close()` is called, the client waits for data to be written to the object storage and notifies the metadata service before returning, thus ensuring data integrity.
 
-In some cases where local storage is reliable and its write performance is significantly better than network writes (e.g. SSD disks), write performance can be improved by enabling asynchronous upload of data so that the `close()` operation does not wait for data to be written into the object storage, but returns as soon as the data is written to the local cache directory.
+When local storage is reliable and its write performance is significantly better than network writes (e.g. SSD disks), write performance can be improved by enabling asynchronous upload of data. In this way, the `close()` operation does not have to wait for data to be written into the object storage, but returns as soon as the data is written to the local cache directory.
 
 The asynchronous upload feature is disabled by default and can be enabled with the following option.
 
@@ -122,7 +122,7 @@ When asynchronous upload is enabled, i.e. `--writeback` is specified when mounti
 
 When the cache disk is almost full, it will pause writing data and change to uploading data directly to the object storage (i.e., the client write cache feature is turned off).
 
-When the asynchronous upload function is enabled, the reliability of the cache itself is directly related to the reliability of data writing, and should be used with caution for scenarios requiring high data reliability.
+When the asynchronous upload function is enabled, the reliability of the cache itself is directly related to the reliability of data writing. Thus, this function should be used with caution for scenarios requiring high data reliability.
 
 ## Cache warm-up
 
@@ -194,7 +194,7 @@ Setting up the cache on a faster SSD disk can improve performance.
 
 ### RAM disk
 
-If you require higher file read performance, you can set up the cache into the RAM disk. For Linux systems, check the `tmpfs` file system with `df` command.
+If a higher file read performance is required, you can set up the cache into the RAM disk. For Linux systems, check the `tmpfs` file system with the `df` command.
 
 ```shell
 $ df -Th | grep tmpfs
@@ -251,6 +251,6 @@ For example, `--cache-dir` is `/data1:/data2`, where `/data1` has a free space o
 
 ### Why 60 GiB disk spaces are occupied while I set cache size to 50 GiB?
 
-JuiceFS currently estimates the size of cached objects by adding up the size of all cached objects and adding a fixed overhead (4KiB), which is not exactly the same as the value obtained by the `du` command.
+JuiceFS currently estimates the size of cached objects by adding up the size of all cached objects plus a fixed overhead (4KiB), which is not exactly the same as the value obtained by the `du` command.
 
 To prevent the cache disk from being written to full, the client will try to reduce the cache usage when the file system the cache directory is located on is running out of space.
