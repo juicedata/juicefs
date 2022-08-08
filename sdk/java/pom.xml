@@ -6,7 +6,7 @@
 	<url>https://github.com/juicedata/juicefs</url>
 	<description>Hadoop FileSystem implementation for JuiceFS</description>
 	<artifactId>juicefs-hadoop</artifactId>
-	<version>1.0-dev</version>
+	<version>1.1-dev</version>
 	<packaging>jar</packaging>
 	<properties>
 		<hadoop.version>3.1.4</hadoop.version>
