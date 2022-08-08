@@ -2242,7 +2242,7 @@ func (m *redisMeta) cleanupZeroRef(key string) {
 	}, m.sliceRefs())
 }
 
-func (m *redisMeta) cleanupLeakedChunks() {
+func (m *redisMeta) cleanupLeakedChunks(delete bool) {
 	var ctx = Background
 	prefix := len(m.prefix)
 	_ = m.scan(ctx, "c*", func(ckeys []string) error {
@@ -2268,10 +2268,12 @@ func (m *redisMeta) cleanupLeakedChunks() {
 				if rr.Val() == 0 {
 					key := ikeys[i]
 					logger.Infof("found leaked chunk %s", key)
-					ps := strings.Split(key, "_")
-					ino, _ := strconv.ParseInt(ps[0][prefix+1:], 10, 0)
-					indx, _ := strconv.Atoi(ps[1])
-					_ = m.deleteChunk(Ino(ino), uint32(indx))
+					if delete {
+						ps := strings.Split(key, "_")
+						ino, _ := strconv.ParseInt(ps[0][prefix+1:], 10, 0)
+						indx, _ := strconv.Atoi(ps[1])
+						_ = m.deleteChunk(Ino(ino), uint32(indx))
+					}
 				}
 			}
 		}
@@ -2279,7 +2281,7 @@ func (m *redisMeta) cleanupLeakedChunks() {
 	})
 }
 
-func (m *redisMeta) cleanupOldSliceRefs() {
+func (m *redisMeta) cleanupOldSliceRefs(delete bool) {
 	var ctx = Background
 	_ = m.scan(ctx, "k*", func(ckeys []string) error {
 		values, err := m.rdb.MGet(ctx, ckeys...).Result()
@@ -2302,7 +2304,9 @@ func (m *redisMeta) cleanupOldSliceRefs() {
 				logger.Infof("move refs %d for slice %s", vv, ckeys[i])
 			}
 		}
-		m.rdb.Del(ctx, todel...)
+		if delete && len(todel) > 0 {
+			m.rdb.Del(ctx, todel...)
+		}
 		return nil
 	})
 }
@@ -2726,8 +2730,8 @@ func (m *redisMeta) hscan(ctx context.Context, key string, f func([]string) erro
 
 func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
 	m.cleanupLeakedInodes(delete)
-	m.cleanupLeakedChunks()
-	m.cleanupOldSliceRefs()
+	m.cleanupLeakedChunks(delete)
+	m.cleanupOldSliceRefs(delete)
 	if delete {
 		m.doCleanupSlices()
 	}
