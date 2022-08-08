@@ -23,7 +23,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. Juic
 ## Data sharing
 
 - [Building a Milvus Cluster Based on JuiceFS](https://juicefs.com/blog/en/posts/build-milvus-distributed-cluster-based-on-juicefs/)
- 
+
 
 ## Contribution
 
@@ -35,5 +35,4 @@ You can create a branch of this repository through GitHub, add the titile and UR
 
 ### 2. Social media
 
-You can join JuiceFS official [Slack channel](https://join.slack.com/t/juicefs/shared_invite/zt-n9h5qdxh-YD7e0JxWdesSEa9vY_f_DA), any staff member can contact contribution matters.
-
+You can join JuiceFS official [Slack channel](https://go.juicefs.com/slack), any staff member can contact contribution matters.
