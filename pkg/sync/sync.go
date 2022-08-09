@@ -326,193 +326,45 @@ func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, erro
 	return equal, err
 }
 
-type token struct{}
-
-type preRead struct {
-	key        string
-	src        object.ObjectStorage
-	blockSize  int64
-	concurrent int
-	cache      [][]byte
-	fidx       int64
-	fsize      int64
-	sync.Mutex
-	err            error
-	once           sync.Once
-	preCh, readyCh []chan token
-}
-
-func (r *preRead) hasErr() bool {
-	r.Lock()
-	defer r.Unlock()
-	return r.err != nil
-}
-
-func (r *preRead) setErr(err error) {
-	r.Lock()
-	defer r.Unlock()
-	r.err = err
-}
-
-func (r *preRead) WriteTo(w io.Writer) (int64, error) {
-	concurrent := r.concurrent
-	blockSize := r.blockSize
-	if concurrent < 1 || blockSize < 1 {
-		return 0, fmt.Errorf("concurrent and blockSize must be positive integer")
-	}
-	fsize := r.fsize
-	r.cache = make([][]byte, concurrent)
-
-	for i := 0; i < concurrent; i++ {
-		r.preCh = append(r.preCh, make(chan token))
-		r.readyCh = append(r.readyCh, make(chan token))
-		r.cache[i] = make([]byte, blockSize)
-	}
-	var lastIdx int64
-	if fsize%blockSize != 0 {
-		lastIdx = fsize - fsize%blockSize
-	} else {
-		lastIdx = fsize - blockSize
-	}
-	for c := 0; c < concurrent; c++ {
-		go func(c int) {
-			var i int64
-			for i = int64(c) * blockSize; i < fsize; i += int64(concurrent) * blockSize {
-				readClose, e := r.src.Get(r.key, i, blockSize)
-				if e != nil {
-					r.err = e
-					if e != nil {
-						r.setErr(e)
-					}
-				} else {
-					var e2 error
-					if i <= lastIdx {
-						_, e2 = readClose.Read(r.cache[i/blockSize%int64(concurrent)])
-					} else {
-						r.cache[i/blockSize%int64(concurrent)], e2 = io.ReadAll(readClose)
-					}
-					if e2 != nil {
-						r.setErr(e2)
-					}
-					_ = readClose.Close()
-				}
-				r.readyCh[c] <- token{}
-				r.preCh[c] <- token{}
-			}
-		}(c)
-	}
-	var counter int64
-	for i := 0; i < int(fsize/blockSize); i++ {
-		c := i % r.concurrent
-		<-r.readyCh[c]
-		if r.hasErr() {
-			return counter, r.err
-		}
-		n, err := w.Write(r.cache[c])
-		if err != nil {
-			return counter, err
-		}
-		counter += int64(n)
-		<-r.preCh[c]
-	}
-
-	if fsize%blockSize != 0 {
-		c := int(fsize/blockSize) % r.concurrent
-		<-r.readyCh[c]
-		if r.hasErr() {
-			return counter, r.err
-		}
-		n, err := w.Write(r.cache[c][:fsize%blockSize])
-		if err != nil {
-			return counter, err
-		}
-		counter += int64(n)
-	}
-	return counter, nil
-}
-
-func (r *preRead) Read(b []byte) (int, error) {
-	if r.fidx >= r.fsize {
-		return 0, io.EOF
-	}
-	concurrent := r.concurrent
-	blockSize := r.blockSize
-	if concurrent < 1 || blockSize < 1 {
-		return 0, fmt.Errorf("concurrent and blockSize must be positive integer")
-	}
-	fsize := r.fsize
-	r.once.Do(func() {
-		r.cache = make([][]byte, concurrent)
-		for i := 0; i < concurrent; i++ {
-			r.preCh = append(r.preCh, make(chan token))
-			r.readyCh = append(r.readyCh, make(chan token))
-			r.cache[i] = make([]byte, blockSize)
-		}
-		var lastIdx int64
-		if fsize%blockSize != 0 {
-			lastIdx = fsize - fsize%blockSize
-		} else {
-			lastIdx = fsize - blockSize
-		}
-		for c := 0; c < concurrent; c++ {
-			go func(c int) {
-				var i int64
-				for i = int64(c) * blockSize; i < fsize; i += int64(concurrent) * blockSize {
-					readClose, e := r.src.Get(r.key, i, blockSize)
-					if e != nil {
-						r.setErr(e)
-					} else {
-						var e2 error
-						if i <= lastIdx {
-							_, e2 = readClose.Read(r.cache[i/blockSize%int64(concurrent)])
-						} else {
-							r.cache[i/blockSize%int64(concurrent)], e2 = io.ReadAll(readClose)
-						}
-						if e2 != nil {
-							r.setErr(e2)
-						}
-						_ = readClose.Close()
-					}
-					r.readyCh[c] <- token{}
-					r.preCh[c] <- token{}
-				}
-			}(c)
-		}
-
-	})
-	total := int64(len(b))
-	if total > fsize-r.fidx {
-		total = fsize - r.fidx
-	}
-	var bidx int64
-	for {
-		if r.fidx < fsize && bidx < total {
-			c := r.fidx / r.blockSize % int64(r.concurrent)
-			blockIdx := r.fidx % r.blockSize
-			length := r.blockSize - blockIdx
-			if blockIdx == 0 {
-				<-r.readyCh[c]
-				if r.hasErr() {
-					copy(b, make([]byte, len(b)))
-					return 0, r.err
-				}
-			}
-			var n int
-			if total-bidx >= length {
-				n = copy(b[bidx:], r.cache[c][blockIdx:])
-				<-r.preCh[c]
-			} else {
-				n = copy(b[bidx:], r.cache[c][blockIdx:blockIdx+total-bidx])
-			}
-			bidx += int64(n)
-			r.fidx += int64(n)
-		} else {
-			return int(bidx), nil
-		}
-	}
-}
-
 func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
+	if size > maxBlock && !strings.HasPrefix(src.String(), "file://") && !strings.HasPrefix(src.String(), "hdfs://") {
+		var err error
+		var in io.Reader
+		downer := newParallelDownloader(src, key, size, 10<<20, concurrent)
+		defer downer.Close()
+		if strings.HasPrefix(dst.String(), "file://") || strings.HasPrefix(dst.String(), "hdfs://") {
+			in = downer
+		} else {
+			// download the object into disk
+			f, err := ioutil.TempFile("", "rep")
+			if err != nil {
+				logger.Warnf("create temp file: %s", err)
+				goto SINGLE
+			}
+			_ = os.Remove(f.Name()) // will be deleted after Close()
+			defer f.Close()
+			buf := bufPool.Get().(*[]byte)
+			defer bufPool.Put(buf)
+			_, err = io.CopyBuffer(f, downer, *buf)
+			if err == nil {
+				_, err = f.Seek(0, 0)
+				in = f
+			}
+		}
+		if err == nil {
+			err = dst.Put(key, in)
+		}
+		if err != nil {
+			if _, e := src.Head(key); os.IsNotExist(e) {
+				logger.Debugf("Head src %s: %s", key, err)
+				copied.IncrInt64(-1)
+				copiedBytes.IncrInt64(size * -1)
+				err = nil
+			}
+		}
+		return err
+	}
+SINGLE:
 	if limiter != nil {
 		limiter.Wait(size)
 	}
@@ -520,18 +372,6 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 	defer func() {
 		<-concurrent
 	}()
-	if size > maxBlock && strings.HasPrefix(dst.String(), "file://") {
-		if err := dst.Put(key, &preRead{key: key, src: src, fsize: size, blockSize: 10 << 20, concurrent: 10}); err != nil {
-			if _, e := src.Head(key); os.IsNotExist(e) {
-				logger.Debugf("Head src %s: %s", key, err)
-				copied.IncrInt64(-1)
-				copiedBytes.IncrInt64(size * (-1))
-				err = nil
-			}
-			return err
-		}
-		return nil
-	}
 	var in io.ReadCloser
 	var err error
 	if size == 0 {
@@ -543,35 +383,15 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 				logger.Debugf("Head src %s: %s", key, err)
 				copied.IncrInt64(-1)
 				copiedBytes.IncrInt64(size * (-1))
-				return nil
+				err = nil
 			}
 			return err
 		}
 	}
 
 	defer in.Close()
+	return dst.Put(key, in)
 
-	if size <= maxBlock ||
-		strings.HasPrefix(src.String(), "file://") ||
-		strings.HasPrefix(dst.String(), "file://") {
-		return dst.Put(key, in)
-	} else { // obj.Size > maxBlock, download the object into disk first
-		f, err := ioutil.TempFile("", "rep")
-		if err != nil {
-			return err
-		}
-		_ = os.Remove(f.Name()) // will be deleted after Close()
-		defer f.Close()
-
-		if _, err := (&preRead{key: key, src: src, fsize: size, blockSize: 10 << 20, concurrent: 10}).WriteTo(f); err != nil {
-			return err
-		}
-		// upload
-		if _, err = f.Seek(0, 0); err != nil {
-			return err
-		}
-		return dst.Put(key, f)
-	}
 }
 
 func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
