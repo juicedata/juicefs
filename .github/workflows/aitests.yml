@@ -6,12 +6,13 @@ on:
 #      - 'release-*'
 #    paths-ignore:
 #      - 'docs/**'
-#  pull_request:
-#    #The branches below must be a subset of the branches above
-#    branches:
-#      - 'release-*'
-#    paths-ignore:
-#      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'main'
+      - 'release-*'
+    paths-ignore:
+      - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
   workflow_dispatch:
@@ -19,7 +20,7 @@ on:
 
 jobs:
   aitests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
@@ -68,6 +69,7 @@ jobs:
           sudo apt-get install libhdf5-dev
           pip install h5py
           pip install pillow
+          fusermount -V
 
 
       - name: Prepare Data

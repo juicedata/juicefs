@@ -58,7 +58,7 @@ jobs:
           sudo service mysql start
           sudo service postgresql start
           sudo mysql -e "create database dev;"
-          psql -c 'create database test;' -U postgres
+          #psql -c 'create database test;' -U postgres
           pwd
           echo "hello"
           wget -O install.sh https://tiup-mirrors.pingcap.com/install.sh
