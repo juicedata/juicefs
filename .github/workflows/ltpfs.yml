@@ -79,7 +79,7 @@ jobs:
 
 
       - name: Log
-        if: ${{ failure() }}
+        if: ${{ always() }}
         run: |
           sudo tail -n 100 /opt/ltp/output/result.log.failed
           tail -300 /var/log/juicefs.log
