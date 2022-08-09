@@ -375,7 +375,7 @@ func (m *baseMeta) refreshQuota() {
 
 }
 
-func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, size, inodes uint64) bool {
+func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, size, inodes int64) bool {
 	if _, ok := m.dirQuotas[inode]; !ok {
 		fmt.Printf("---33 go to getQuotas \n")
 		m.dirQuotas[inode] = make(map[Ino]*quota)
@@ -385,10 +385,10 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, size, inodes uint64) bo
 	fmt.Printf("------3311 %+v \n", m.dirQuotas[inode])
 	if _, ok := m.dirQuotas[inode]; ok {
 		for _, q := range m.dirQuotas[inode] {
-			if size > 0 && q.capacity > 0 && atomic.LoadUint64(&q.usedSpace)+size > uint64(q.capacity) {
+			if size > 0 && q.capacity > 0 && atomic.LoadInt64(&q.usedSpace)+size > int64(q.capacity) {
 				return true
 			}
-			if inodes > 0 && q.inodes > 0 && atomic.LoadUint64(&q.usedInodes)+inodes > uint64(q.inodes) {
+			if inodes > 0 && q.inodes > 0 && atomic.LoadInt64(&q.usedInodes)+inodes > int64(q.inodes) {
 				return true
 			}
 		}
@@ -404,7 +404,7 @@ func (m *baseMeta) checkQuota(size, inodes int64) bool {
 	return inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes)
 }
 
-func (m *redisMeta) updateQuotaStats(inode Ino, space uint64, inodes uint64) {
+func (m *redisMeta) updateQuotaStats(inode Ino, space int64, inodes int64) {
 	for _, val := range m.dirQuotas[inode] {
 		fmt.Printf("----------5 %d \n", inodes)
 		m.Lock()
@@ -836,6 +836,7 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 	if attr == nil {
 		attr = &Attr{}
 	}
+	fmt.Printf("--- am here baseMeta Create inode: %d  attr %+v \n", *inode, *attr)
 	eno := m.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
 	if eno == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
 		eno = 0

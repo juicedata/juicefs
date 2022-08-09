@@ -128,8 +128,8 @@ type Attr struct {
 type quota struct {
 	capacity   uint64
 	inodes     uint64
-	usedSpace  uint64
-	usedInodes uint64
+	usedSpace  int64
+	usedInodes int64
 }
 
 // DirQuotaList
