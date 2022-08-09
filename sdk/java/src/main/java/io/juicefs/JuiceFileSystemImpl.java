@@ -1233,8 +1233,8 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public void concat(final Path dst, final Path[] srcs) throws IOException {
     statistics.incrementWriteOps(1);
-    if (getFileStatus(dst).getLen() == 0) {
-      throw new IOException(dst + "is empty");
+    if (srcs.length == 0) {
+      throw new IllegalArgumentException("No sources given");
     }
     Path dp = dst.getParent();
     for (Path src : srcs) {
@@ -1244,7 +1244,6 @@ public class JuiceFileSystemImpl extends FileSystem {
                 + dst);
       }
     }
-    if (srcs.length == 0) { return; }
     byte[][] srcbytes = new byte[srcs.length][];
     int bufsize = 0;
     for (int i = 0; i < srcs.length; i++) {
@@ -1260,7 +1259,13 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
     int r = lib.jfs_concat(Thread.currentThread().getId(), handle, normalizePath(dst), buf, bufsize);
     if (r < 0) {
-      // TODO: show correct path (one of srcs)
+      if (r == ENOENT) {
+        if (!exists(dst)) {
+          throw error(r, dst);
+        } else {
+          throw new FileNotFoundException("one of srcs is missing");
+        }
+      }
       throw error(r, dst);
     }
   }
