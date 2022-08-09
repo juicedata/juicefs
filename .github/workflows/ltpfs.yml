@@ -73,6 +73,7 @@ jobs:
           cat /tmp/rm_smoketest
           sudo /tmp/rm_list.sh /tmp/rm_smoketest /opt/ltp/runtest/smoketest
           sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fcntl-locktests &
+          wait $!
           sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log  &
           wait $!
 
