@@ -53,12 +53,21 @@ jobs:
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
 
 
-      - name: Fslock Test
+      - name: Prepare Database
         run: |
-          cd /jfs/
-
-
-
+          sudo mysql -e "create database dev;"
+          psql -c 'create database test;' -U postgres
+          pwd
+          echo "hello"
+          wget -O install.sh https://tiup-mirrors.pingcap.com/install.sh
+          wget -O rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
+          unzip rclone-v1.57.0-linux-amd64.zip -d .
+          wget -O litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz && tar -zxvf litmus-0.13.tar.gz -C .
+          cd litmus-0.13 && ./configure && make && cd -
+          pwd
+          wget -O etcd-v3.5.2-linux-amd64.tar.gz  https://github.com/etcd-io/etcd/releases/download/v3.5.2/etcd-v3.5.2-linux-amd64.tar.gz
+          tar -zxf etcd-v3.5.2-linux-amd64.tar.gz -C .
+          sh install.sh && source ~/.bash_profile && nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
 
 
       - name: log
