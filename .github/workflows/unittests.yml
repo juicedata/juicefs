@@ -56,9 +56,10 @@ jobs:
       - name: Prepare Database
         run: |
           sudo service mysql start
+          sudo service postgresql start
           sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
           sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
-          sudo service postgresql start
+          sudo service postgresql restart
           sudo mysql -uroot -proot -e "create database dev;"
           psql -c 'create database test;' -U postgres
           pwd

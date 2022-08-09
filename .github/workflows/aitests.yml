@@ -6,13 +6,12 @@ on:
 #      - 'release-*'
 #    paths-ignore:
 #      - 'docs/**'
-  pull_request:
-    #The branches below must be a subset of the branches above
-    branches:
-      - 'main'
-      - 'release-*'
-    paths-ignore:
-      - 'docs/**'
+#  pull_request:
+#    #The branches below must be a subset of the branches above
+#    branches:
+#      - 'release-*'
+#    paths-ignore:
+#      - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
   workflow_dispatch:
@@ -69,7 +68,6 @@ jobs:
           sudo apt-get install libhdf5-dev
           pip install h5py
           pip install pillow
-          fusermount -V
 
 
       - name: Prepare Data
