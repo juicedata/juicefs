@@ -1259,7 +1259,13 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
     int r = lib.jfs_concat(Thread.currentThread().getId(), handle, normalizePath(dst), buf, bufsize);
     if (r < 0) {
-      // TODO: show correct path (one of srcs)
+      if (r == ENOENT) {
+        if (!exists(dst)) {
+          throw error(r, dst);
+        } else {
+          throw new FileNotFoundException("one of srcs is missing");
+        }
+      }
       throw error(r, dst);
     }
   }
