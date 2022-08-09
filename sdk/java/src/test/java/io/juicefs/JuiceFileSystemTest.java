@@ -511,6 +511,17 @@ public class JuiceFileSystemTest extends TestCase {
     // src should be deleted after concat
     assertFalse(fs.exists(src1));
     assertFalse(fs.exists(src2));
+
+    Path emptyFile = new Path("/tmp/concat_empty_file");
+    Path src = new Path("/tmp/concat_empty_file_src");
+    FSDataOutputStream srcOu = fs.create(src);
+    srcOu.write("hello".getBytes());
+    srcOu.close();
+    fs.create(emptyFile).close();
+    fs.concat(emptyFile, new Path[]{src});
+    in = fs.open(emptyFile);
+    assertEquals("hello", IOUtils.toString(in));
+    in.close();
   }
 
   public void testList() throws Exception {
