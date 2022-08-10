@@ -158,6 +158,7 @@ The last number on each line is the time (in seconds) that the current operation
 - Azure Blob Storage
 - Alibaba Cloud Object Storage Service (OSS)
 - Tencent Cloud Object Storage (COS)
+- Qiniu Cloud Object Storage (Kodo)
 - QingStor Object Storage
 - Ceph RGW
 - MinIO
