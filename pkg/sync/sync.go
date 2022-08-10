@@ -335,9 +335,9 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 		if strings.HasPrefix(dst.String(), "file://") || strings.HasPrefix(dst.String(), "hdfs://") {
 			in = downer
 		} else {
+			var f *os.File
 			// download the object into disk
-			f, err := ioutil.TempFile("", "rep")
-			if err != nil {
+			if f, err = ioutil.TempFile("", "rep"); err != nil {
 				logger.Warnf("create temp file: %s", err)
 				goto SINGLE
 			}
@@ -345,8 +345,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 			defer f.Close()
 			buf := bufPool.Get().(*[]byte)
 			defer bufPool.Put(buf)
-			_, err = io.CopyBuffer(f, downer, *buf)
-			if err == nil {
+			if _, err = io.CopyBuffer(f, downer, *buf); err == nil {
 				_, err = f.Seek(0, 0)
 				in = f
 			}
