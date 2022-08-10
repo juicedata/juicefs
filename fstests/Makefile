@@ -16,8 +16,8 @@ fsx: healthcheck secfs.test/tools/bin/fsx
 	make healthcheck
 
 setup:
-	redis-server &
-	cd node1 && redis-server redis.conf &
+	`which redis-server` &
+	cd node1 && `which redis-server` redis.conf &
 	cd node2 && redis-server redis.conf &
 	cd node3 && redis-server redis.conf &
 	sleep 1
