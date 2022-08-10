@@ -441,6 +441,24 @@ func tellFstabOptions(c *cli.Context) string {
 
 var fstab = "/etc/fstab"
 
+func tryToInstallMountExec() error {
+	src, err := filepath.Abs(os.Args[0])
+	if err != nil {
+		return err
+	}
+	err = os.Symlink(src, "/sbin/mount.juicefs")
+	if err != nil {
+		if strings.Contains(fmt.Sprint(err), "file exists") {
+			// safely continue if link already exists
+			return nil
+		}
+		if strings.Contains(fmt.Sprint(err), "permission denied") {
+			return err
+		}
+	}
+	return nil
+}
+
 func updateFstab(c *cli.Context) error {
 	if runtime.GOOS != "linux" {
 		logger.Infof("--update-fstab is ignored in %s", runtime.GOOS)
@@ -448,6 +466,9 @@ func updateFstab(c *cli.Context) error {
 	}
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		logger.Infoln("--update-fstab is ignored in container")
+		return nil
+	}
+	if calledViaMount(os.Args) {
 		return nil
 	}
 	addr := expandPathForEmbedded(c.Args().Get(0))
@@ -535,6 +556,11 @@ func mount(c *cli.Context) error {
 	logger.Infof("Data use %s", blob)
 
 	if c.Bool("update-fstab") {
+		if !calledViaMount(os.Args) {
+			if err = tryToInstallMountExec(); err != nil {
+				return fmt.Errorf("error creating /sbin/mount.juicefs: %s", err)
+			}
+		}
 		err = updateFstab(c)
 		if err != nil {
 			logger.Fatalf("failed to update fstab: %s", err)

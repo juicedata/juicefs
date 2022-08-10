@@ -76,14 +76,17 @@ func Main(args []string) error {
 		},
 	}
 
-	// Called via mount or fstab.
-	if strings.HasSuffix(args[0], "/mount.juicefs") {
+	if calledViaMount(args) {
 		args = handleSysMountArgs(args)
 		if len(args) < 1 {
 			args = []string{"--help"}
 		}
 	}
 	return app.Run(reorderOptions(app, args))
+}
+
+func calledViaMount(args []string) bool {
+	return strings.HasSuffix(args[0], "/mount.juicefs")
 }
 
 func handleSysMountArgs(args []string) []string {
