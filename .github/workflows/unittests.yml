@@ -36,7 +36,7 @@ jobs:
 
       - name: Install Redis
         run: |
-          sudo apt install redis-server
+          sudo apt install -y redis-server
 
       - name: Juicefs Format
         run: |
