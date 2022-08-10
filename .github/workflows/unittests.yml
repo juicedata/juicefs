@@ -34,15 +34,9 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Build linux target
+      - name: Install Redis
         run: |
-          #make juicefs
-
-
-      - name: Run Redis
-        run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
+          sudo apt install redis-server
 
       - name: Juicefs Format
         run: |
@@ -57,12 +51,6 @@ jobs:
       #  with:
       #    redis-version: 6.0
       #    auto-start: "false"
-
-      - name: Setup redis
-        uses: mihai-dinculescu/redis-action@v1.2.0
-        with:
-          redis version: "6.0"
-
 
       - name: Prepare Database
         run: |
