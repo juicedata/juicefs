@@ -50,7 +50,8 @@ jobs:
                      minio/minio server /data
           wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
           chmod +x mc
-
+          sudo apt install redis-tools
+          
       - name: Test
         uses: ./.github/actions/version-compatible
         with:
