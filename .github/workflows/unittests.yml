@@ -34,9 +34,12 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install Redis
+      - name: Install Packages
         run: |
+          sudo apt install -y g++-multilib
           sudo apt install -y redis-server
+          sudo apt install -y libacl1-dev
+          sudo apt install -y attr
 
       - name: Juicefs Format
         run: |
@@ -46,11 +49,6 @@ jobs:
         run: |
           #sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
 
-      #- name: Setup redis
-      #  uses: shogo82148/actions-setup-redis@v1
-      #  with:
-      #    redis-version: 6.0
-      #    auto-start: "false"
 
       - name: Prepare Database
         run: |
