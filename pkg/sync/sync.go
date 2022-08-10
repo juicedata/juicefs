@@ -386,6 +386,7 @@ SINGLE:
 			}
 			return err
 		}
+		copiedBytes.IncrInt64(size)
 	}
 
 	defer in.Close()
@@ -469,23 +470,18 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 
 func copyData(src, dst object.ObjectStorage, key string, size int64) error {
 	start := time.Now()
-	var multiple bool
 	var err error
 	if size < maxBlock {
 		err = try(3, func() error { return doCopySingle(src, dst, key, size) })
 	} else {
 		var upload *object.MultipartUpload
 		if upload, err = dst.CreateMultipartUpload(key); err == nil {
-			multiple = true
 			err = doCopyMultiple(src, dst, key, size, upload)
 		} else { // fallback
 			err = try(3, func() error { return doCopySingle(src, dst, key, size) })
 		}
 	}
 	if err == nil {
-		if !multiple {
-			copiedBytes.IncrInt64(size)
-		}
 		logger.Debugf("Copied data of %s (%d bytes) in %s", key, size, time.Since(start))
 	} else {
 		logger.Errorf("Failed to copy data of %s in %s: %s", key, time.Since(start), err)

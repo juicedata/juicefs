@@ -63,14 +63,18 @@ func (r *parallelDownloader) download() {
 				if limiter != nil {
 					limiter.Wait(size)
 				}
-				in, e := r.src.Get(r.key, off, size)
+				var in io.ReadCloser
+				e := try(3, func() error {
+					var err error
+					in, err = r.src.Get(r.key, off, size)
+					return err
+				})
 				if e != nil {
 					r.setErr(e)
-				} else {
+				} else { //nolint:typecheck
 					defer in.Close()
 					p := chunk.NewOffPage(int(size))
 					_, e = io.ReadFull(in, p.Data)
-					logger.Infof("down %d+%d: %s", off, size, e)
 					if e != nil {
 						r.setErr(e)
 						p.Release()
@@ -83,6 +87,9 @@ func (r *parallelDownloader) download() {
 							p.Release()
 						}
 						r.Unlock()
+						if copiedBytes != nil {
+							copiedBytes.IncrInt64(size)
+						}
 					}
 				}
 			}
