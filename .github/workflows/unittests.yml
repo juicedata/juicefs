@@ -52,6 +52,12 @@ jobs:
         run: |
           #sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
 
+      - name: Setup redis
+        uses: shogo82148/actions-setup-redis@v1
+        with:
+          redis-version: 6.0
+          auto-start: "false"
+
 
       - name: Prepare Database
         run: |
@@ -86,7 +92,7 @@ jobs:
           echo "hello5"
           pwd
           make
-          sudo apt install -y redis
+          echo "hello6"
           redis-server -v
           sudo make -C fstests setup
           chmod +x travis-setup-hdfs.sh
