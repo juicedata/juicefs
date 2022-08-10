@@ -36,7 +36,7 @@ jobs:
 
       - name: Build linux target
         run: |
-          make juicefs
+          #make juicefs
 
 
       - name: Run Redis
@@ -46,11 +46,11 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format  redis://127.0.0.1:6379/1 pics
+          #sudo ./juicefs format  redis://127.0.0.1:6379/1 pics
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
+          #sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
 
 
       - name: Prepare Database
@@ -82,9 +82,16 @@ jobs:
           #sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/share/apache*/conf/settings.xml
           docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
           echo "hello3"
-          ls
+          ls -lah
           echo "hello5"
           pwd
+          make
+          sudo make -C fstests setup
+          chmod +x travis-setup-hdfs.sh
+          ./travis-setup-hdfs.sh
+          for i in {2222,3306,5432,8020,9000,9007,2379} ; do echo "lsof port:"i;sudolsof−i:i;if [ ?!=0];thensleep5;elsecontinue;fi;sudolsof−i:i; if [ ?!=0];thenecho"servicenotready,port:"i; exit 1;fi; done
+          sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
+
 
 
       - name: log
