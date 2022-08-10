@@ -60,8 +60,8 @@ jobs:
 
       - name: Setup redis
         uses: mihai-dinculescu/redis-action@v1.2.0
-          with:
-            redis version: "6.0"
+        with:
+          redis version: "6.0"
 
 
       - name: Prepare Database
