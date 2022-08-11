@@ -69,6 +69,7 @@ jobs:
       - name: Prepare Database
         run: |
           sudo service mysql start
+          sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
           sudo service postgresql start
           sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
           sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
@@ -77,7 +78,7 @@ jobs:
           psql -c "ALTER USER postgres PASSWORD 'postgres';" -U postgres
           sudo service postgresql restart
           echo "hello110"
-          sudo mysql -uroot -proot -e "create database dev;"
+          sudo mysql -e "create database dev;"
           psql -c 'create database test;' -U postgres
           pwd
           echo "hello"

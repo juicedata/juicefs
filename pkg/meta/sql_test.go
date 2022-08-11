@@ -31,7 +31,7 @@ func TestSQLiteClient(t *testing.T) {
 }
 
 func TestMySQLClient(t *testing.T) {
-	m, err := newSQLMeta("mysql", "root:root@/dev", &Config{})
+	m, err := newSQLMeta("mysql", "root:@/dev", &Config{})
 	if err != nil || m.Name() != "mysql" {
 		t.Fatalf("create meta: %s", err)
 	}
