@@ -65,8 +65,7 @@ jobs:
           tar -zxf etcd-v3.5.2-linux-amd64.tar.gz -C .
           sh install.sh
           echo "hello9"
-          cat ~/.bash_profile
-          source ~/.bash_profile
+          source /home/runner/.profile
           echo "hello99"
           tiup -v
           nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
