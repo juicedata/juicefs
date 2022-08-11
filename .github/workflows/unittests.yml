@@ -114,7 +114,7 @@ jobs:
           sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
           sudo ./juicefs gc localhost
           sudo ./juicefs fsck localhost
-
+          bash <(curl -s https://codecov.io/bash)
 
 
       - name: Send Slack Notification
