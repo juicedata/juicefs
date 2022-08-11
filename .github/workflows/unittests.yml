@@ -20,6 +20,18 @@ on:
 jobs:
   unittests:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     env:
       MINIO_TEST_BUCKET: 127:0:0:1:9000/testbucket
       MINIO_ACCESS_KEY: testUser
