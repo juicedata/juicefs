@@ -149,6 +149,7 @@ func TestUpdateFstab(t *testing.T) {
 	}
 	defer os.Remove(mockFstab.Name())
 
+	var fstab = "/etc/fstab"
 	patches := gomonkey.ApplyGlobalVar(&fstab, mockFstab.Name())
 	defer patches.Reset()
 	mountArgs := []string{"juicefs", "mount", "--enable-xattr", testMeta, testMountPoint, "--no-usage-report"}

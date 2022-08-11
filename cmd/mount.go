@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -403,130 +402,88 @@ func NewReloadableStorage(format *meta.Format, reload func() (*meta.Format, erro
 }
 
 func tellFstabOptions(c *cli.Context) string {
-	opts := []string{""}
-	seen := make(map[string]bool)
+	opts := []string{"_netdev"}
 	for _, s := range os.Args[2:] {
-		s = strings.Split(s, "=")[0]
-		s = strings.TrimLeft(s, "-")
-		if !c.IsSet(s) {
+		if !strings.HasPrefix(s, "-") {
 			continue
 		}
-		if seen[s] {
+		s = strings.TrimLeft(s, "-")
+		s = strings.Split(s, "=")[0]
+		if !c.IsSet(s) {
 			continue
-		} else {
-			seen[s] = true
 		}
 		if s == "o" {
 			opts = append(opts, c.String(s))
 		} else if v := c.Bool(s); v {
 			opts = append(opts, s)
 		} else {
-			v := c.Generic(s)
-			formatted := fmt.Sprintf("%s", v)
-			if strings.HasPrefix(formatted, "[") && strings.HasSuffix(formatted, "]") {
-				trimmed := strings.TrimPrefix(formatted, "[")
-				trimmed = strings.TrimSuffix(trimmed, "]")
-				vals := strings.Fields(trimmed)
-				for _, val := range vals {
-					opts = append(opts, fmt.Sprintf("%s=%s", s, val))
-				}
-			} else {
-				opts = append(opts, fmt.Sprintf("%s=%s", s, v))
-			}
+			opts = append(opts, fmt.Sprintf("%s=%s", s, c.Generic(s)))
 		}
 	}
 	sort.Strings(opts)
 	return strings.Join(opts, ",")
-
 }
 
-var fstab = "/etc/fstab"
-
 func tryToInstallMountExec() error {
+	if _, err := os.Stat("/sbin/mount.juicefs"); err == nil {
+		return nil
+	}
 	src, err := filepath.Abs(os.Args[0])
 	if err != nil {
 		return err
 	}
-	err = os.Symlink(src, "/sbin/mount.juicefs")
-	if err != nil {
-		if strings.Contains(fmt.Sprint(err), "file exists") {
-			// safely continue if link already exists
-			return nil
-		}
-		if strings.Contains(fmt.Sprint(err), "permission denied") {
-			return err
-		}
-	}
-	return nil
+	return os.Symlink(src, "/sbin/mount.juicefs")
 }
 
-func insideContainer() (bool, error) {
+func insideContainer() bool {
 	if _, err := os.Stat("/.dockerenv"); err == nil {
-		return true, nil
+		return true
 	}
 	mountinfo, err := os.Open("/proc/1/mountinfo")
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
+	if os.IsNotExist(err) {
+		return false
 	}
 	scanner := bufio.NewScanner(mountinfo)
 	for scanner.Scan() {
 		line := scanner.Text()
 		fields := strings.Fields(line)
-		if fields[4] == "/" {
+		if len(fields) > 8 && fields[4] == "/" {
 			fstype := fields[8]
-			if strings.Contains(fstype, "overlay") || strings.Contains(fstype, "aufs") {
-				return true, nil
-			} else {
-				return false, nil
-			}
+			return strings.Contains(fstype, "overlay") || strings.Contains(fstype, "aufs")
 		}
 	}
 	if err = scanner.Err(); err != nil {
-		return false, err
+		logger.Warnf("scan /proc/1/mountinfo: %s", err)
 	}
-	return false, nil
+	return false
 }
 
 func updateFstab(c *cli.Context) error {
-	if runtime.GOOS != "linux" {
-		logger.Infof("--update-fstab is ignored in %s", runtime.GOOS)
-		return nil
-	}
-	inside, err := insideContainer()
-	if err != nil {
-		logger.Warnf("error checking if inside container: %s", err)
-	}
-	if inside {
-		logger.Infoln("--update-fstab is ignored in container")
-		return nil
-	}
 	addr := expandPathForEmbedded(c.Args().Get(0))
 	mp := c.Args().Get(1)
+	var fstab = "/etc/fstab"
+
 	f, err := os.Open(fstab)
 	if err != nil {
 		return err
 	}
-	index, entryIndex := -1, -1
+	defer f.Close()
+	entryIndex := -1
 	var lines []string
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
-		lines = append(lines, line)
-		index += 1
 		fields := strings.Fields(line)
-		if len(fields) < 6 {
-			continue
+		if len(fields) >= 6 && fields[2] == "juicefs" && fields[0] == addr && fields[1] == mp {
+			entryIndex = len(lines)
 		}
-		if fields[0] == addr && fields[1] == mp {
-			entryIndex = index
-		}
+		lines = append(lines, line)
 	}
 	if err = scanner.Err(); err != nil {
 		return err
 	}
-	f.Close()
 	opts := tellFstabOptions(c)
-	entry := fmt.Sprintf("%s %s juicefs _netdev%s 0 0", addr, mp, opts)
+	entry := fmt.Sprintf("%s  %s  juicefs  %s  0 0", addr, mp, opts)
 	if entryIndex >= 0 {
 		if entry == lines[entryIndex] {
 			return nil
@@ -536,23 +493,16 @@ func updateFstab(c *cli.Context) error {
 		lines = append(lines, entry)
 	}
 	tempFstab := fstab + ".tmp"
-	tmpf, err := os.OpenFile(tempFstab, os.O_CREATE|os.O_WRONLY, 0644)
+	tmpf, err := os.OpenFile(tempFstab, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
-	datawriter := bufio.NewWriter(tmpf)
-	for _, line := range lines {
-		if _, err := datawriter.WriteString(line + "\n"); err != nil {
-			return err
-		}
-	}
-	datawriter.Flush()
-	tmpf.Close()
-	err = os.Rename(tempFstab, fstab)
-	if err != nil {
+	defer tmpf.Close()
+	if _, err := tmpf.WriteString(strings.Join(lines, "\n") + "\n"); err != nil {
+		_ = os.Remove(tempFstab)
 		return err
 	}
-	return nil
+	return os.Rename(tempFstab, fstab)
 }
 
 func mount(c *cli.Context) error {
@@ -584,22 +534,16 @@ func mount(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 
-	if c.Bool("update-fstab") {
-		uid:= os.Getuid()
-		if uid != 0 {
+	if c.Bool("update-fstab") && runtime.GOOS == "linux" && !calledViaMount(os.Args) && !insideContainer() {
+		if os.Getuid() != 0 {
 			logger.Warnf("--update-fstab should be used with root")
-		}
-		if !calledViaMount(os.Args) {
-			if err = tryToInstallMountExec(); err != nil {
-				logger.Warnf("error creating /sbin/mount.juicefs: %s", err)
+		} else {
+			if err := tryToInstallMountExec(); err != nil {
+				logger.Warnf("failed to create /sbin/mount.juicefs: %s", err)
 			}
-		}
-		if calledViaMount(os.Args) {
-			return nil
-		}
-		err = updateFstab(c)
-		if err != nil {
-			logger.Warnf("failed to update fstab: %s", err)
+			if err := updateFstab(c); err != nil {
+				logger.Warnf("failed to update fstab: %s", err)
+			}
 		}
 	}
 
