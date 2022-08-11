@@ -326,6 +326,99 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, count *uint64) s
 	return m.emptyEntry(ctx, parent, name, inode, count, concurrent)
 }
 
+//
+func (m *baseMeta) FindDir(ctx Context, inode Ino, count, dirUsedSpace *uint64, concurrent chan int) syscall.Errno {
+	if st := m.Access(ctx, inode, 3, nil); st != 0 {
+		return st
+	}
+	for i := 0; i < 1; i++ {
+		var entries []*Entry
+		if st := m.en.doReaddir(ctx, inode, 0, &entries, -1); st != 0 && st != syscall.ENOENT {
+			return st
+		}
+		if len(entries) == 0 {
+			return 0
+		}
+		var wg sync.WaitGroup
+		var status syscall.Errno
+		// try directories first to increase parallel
+		var dirs int
+		for i, e := range entries {
+			if e.Attr.Typ == TypeDirectory {
+				entries[dirs], entries[i] = entries[i], entries[dirs]
+				dirs++
+			}
+		}
+		for i, e := range entries {
+			if e.Attr.Typ == TypeDirectory {
+				select {
+				case concurrent <- 1:
+					wg.Add(1)
+					go func(child Ino, name string) {
+						defer wg.Done()
+						e := m.FindEntry(ctx, inode, name, child, count, dirUsedSpace, concurrent)
+						if e != 0 && e != syscall.ENOENT {
+							status = e
+						}
+						<-concurrent
+					}(e.Inode, string(e.Name))
+				default:
+					if st := m.FindEntry(ctx, inode, string(e.Name), e.Inode, count, dirUsedSpace, concurrent); st != 0 && st != syscall.ENOENT {
+						return st
+					}
+				}
+			} else {
+				if count != nil {
+					atomic.AddUint64(count, 1)
+					atomic.AddUint64(dirUsedSpace, e.Attr.Length)
+				}
+			}
+			if ctx.Canceled() {
+				return syscall.EINTR
+			}
+			entries[i] = nil // release memory
+		}
+		wg.Wait()
+		if status != 0 {
+			return status
+		}
+	}
+	return 0
+}
+
+//FindEntry finds the entries in dir
+func (m *baseMeta) FindEntry(ctx Context, parent Ino, name string, inode Ino, count *uint64, dirUsedSpace *uint64, concurrent chan int) syscall.Errno {
+	st := m.FindDir(ctx, inode, count, dirUsedSpace, concurrent)
+	if st == 0 {
+		atomic.AddUint64(count, 1)
+		atomic.AddUint64(dirUsedSpace, uint64(align4K(0)))
+		return 0
+	}
+	return st
+}
+
+//Count the number of files in a directory
+func (m *baseMeta) CaculateDirFiles(ctx Context, parent Ino, name string, count, dirUsedSpace *uint64) syscall.Errno {
+	parent = m.checkRoot(parent)
+	if st := m.Access(ctx, parent, 3, nil); st != 0 {
+		return st
+	}
+	var inode Ino
+	var attr Attr
+	if st := m.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
+		return st
+	}
+	if attr.Typ != TypeDirectory {
+		if count != nil {
+			atomic.AddUint64(count, 1)
+			atomic.AddUint64(dirUsedSpace, attr.Length)
+		}
+		return 0
+	}
+	concurrent := make(chan int, 1)
+	return m.FindEntry(ctx, parent, name, inode, count, dirUsedSpace, concurrent)
+}
+
 func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
 	var attr Attr
 	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
