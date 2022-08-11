@@ -26,6 +26,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -162,9 +163,9 @@ func TestUpdateFstab(t *testing.T) {
 		t.Fatalf("error reading mocked fstab: %s", err)
 	}
 	rv := "redis://127.0.0.1:6379/11 /tmp/jfs-unit-test juicefs _netdev,enable-xattr,entry-cache=2,max-uploads=3,max_read=99,no-usage-report,update-fstab,writeback 0 0"
-	lv := string(content)
+	lv := strings.TrimSpace(string(content))
 	if lv != rv {
-		t.Logf("incorrect fstab entry: %s", lv)
+		t.Fatalf("incorrect fstab entry: %s", lv)
 	}
 }
 

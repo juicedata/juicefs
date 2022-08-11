@@ -25,7 +25,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"os/user"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -586,12 +585,9 @@ func mount(c *cli.Context) error {
 	logger.Infof("Data use %s", blob)
 
 	if c.Bool("update-fstab") {
-		user, err := user.Current()
-		if err != nil {
-			return err
-		}
-		if user.Uid != "0" {
-			logger.Warnf("--update-fstab should be used with root, not %s", user.Name)
+		uid:= os.Getuid()
+		if uid != 0 {
+			logger.Warnf("--update-fstab should be used with root")
 		}
 		if !calledViaMount(os.Args) {
 			if err = tryToInstallMountExec(); err != nil {
