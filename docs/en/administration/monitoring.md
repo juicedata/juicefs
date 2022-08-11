@@ -16,7 +16,7 @@ It is assumed here that Prometheus Server, Grafana and JuiceFS clients are all r
 
 ### Ⅰ. Access to real-time data
 
-JuiceFS outputs metrics data via a [Prometheus](https://prometheus.io)-type API. After the file system is mounted, the real-time monitoring data output from the client can be obtained by default address `http://localhost:9567/metrics`.
+JuiceFS outputs metrics data via a [Prometheus](https://prometheus.io)-oriented API. After the file system is mounted, the real-time monitoring data output from the client can be obtained from the default address `http://localhost:9567/metrics`.
 
 ![](../images/prometheus-client-data.jpg)
 
