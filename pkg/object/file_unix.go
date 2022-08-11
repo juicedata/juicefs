@@ -38,10 +38,13 @@ var mutex sync.Mutex
 func userName(uid int) string {
 	name, ok := uids[uid]
 	if !ok {
-		if u, err := user.LookupId(strconv.Itoa(uid)); err == nil {
+		name = strconv.Itoa(uid)
+		if u, err := user.LookupId(name); err == nil {
 			name = u.Username
-			uids[uid] = name
+		} else {
+			logger.Warnf("lookup uid %d: %s", uid, err)
 		}
+		uids[uid] = name
 	}
 	return name
 }
@@ -49,10 +52,13 @@ func userName(uid int) string {
 func groupName(gid int) string {
 	name, ok := gids[gid]
 	if !ok {
+		name = strconv.Itoa(gid)
 		if g, err := user.LookupGroupId(strconv.Itoa(gid)); err == nil {
 			name = g.Name
-			gids[gid] = name
+		} else {
+			logger.Warnf("lookup gid %d: %s", gid, err)
 		}
+		gids[gid] = name
 	}
 	return name
 }
@@ -81,6 +87,12 @@ func lookupUser(name string) int {
 	var uid = -1
 	if u, err := user.Lookup(name); err == nil {
 		uid, _ = strconv.Atoi(u.Uid)
+	} else {
+		if g, e := strconv.Atoi(name); e == nil {
+			uid = g
+		} else {
+			logger.Warnf("lookup group %s: %s", name, err)
+		}
 	}
 	users[name] = uid
 	return uid
@@ -95,6 +107,12 @@ func lookupGroup(name string) int {
 	var gid = -1
 	if u, err := user.LookupGroup(name); err == nil {
 		gid, _ = strconv.Atoi(u.Gid)
+	} else {
+		if g, e := strconv.Atoi(name); e == nil {
+			gid = g
+		} else {
+			logger.Warnf("lookup group %s: %s", name, err)
+		}
 	}
 	groups[name] = gid
 	return gid
