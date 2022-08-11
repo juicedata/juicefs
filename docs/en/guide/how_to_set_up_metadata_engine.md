@@ -92,7 +92,8 @@ juicefs format \
 ```
 
 :::note
-You can also use the standard URL syntax when passing database passwords using environment variables, e.g., `"redis://:@192.168.1.6:6379/1"` which preserves the `:` and `@` separators between the username and password.
+1. When a Redis username or password contains special characters, you need to replace them with `%xx` by [URL encode](https://www.w3schools.com/tags/ref_urlencode.ASP), for example `@` with `%40`, or pass the password using an environment variable.
+2. You can also use the standard URL syntax when passing database passwords using environment variables, e.g., `"redis://:@192.168.1.6:6379/1"` which preserves the `:` and `@` separators between the username and password.
 :::
 
 ### Mount a file system
