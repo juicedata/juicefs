@@ -671,6 +671,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 	if config.DownloadLimit > 0 {
 		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit)
 	}
+	store.initMetrics()
 	store.bcache = newCacheManager(&config, reg, func(key, fpath string, force bool) bool {
 		if force {
 			return store.addDelayedStaging(key, fpath, time.Time{}, true)
@@ -711,7 +712,11 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 			}
 		}()
 	}
+	store.regMetrics(reg)
+	return store
+}
 
+func (store *cachedStore) initMetrics() {
 	store.cacheHits = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "blockcache_hits",
 		Help: "read from cached block",
@@ -746,12 +751,9 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		Name: "object_request_data_bytes",
 		Help: "Object requests size in bytes.",
 	}, []string{"method"})
-	store.initMetrics(reg)
-
-	return store
 }
 
-func (store *cachedStore) initMetrics(reg prometheus.Registerer) {
+func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 	if reg == nil {
 		return
 	}
