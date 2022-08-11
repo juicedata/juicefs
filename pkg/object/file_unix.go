@@ -38,10 +38,14 @@ var mutex sync.Mutex
 func userName(uid int) string {
 	name, ok := uids[uid]
 	if !ok {
-		if u, err := user.LookupId(strconv.Itoa(uid)); err == nil {
+		u, err := user.LookupId(strconv.Itoa(uid))
+		if err != nil {
+			// get UnixUid err set sFile uid
+			name = strconv.Itoa(uid)
+		} else {
 			name = u.Username
-			uids[uid] = name
 		}
+		uids[uid] = name
 	}
 	return name
 }
@@ -49,10 +53,14 @@ func userName(uid int) string {
 func groupName(gid int) string {
 	name, ok := gids[gid]
 	if !ok {
-		if g, err := user.LookupGroupId(strconv.Itoa(gid)); err == nil {
+		g, err := user.LookupGroupId(strconv.Itoa(gid))
+		if err != nil {
+			// get UnixGid err, set sFile gid
+			name = strconv.Itoa(gid)
+		} else {
 			name = g.Name
-			gids[gid] = name
 		}
+		gids[gid] = name
 	}
 	return name
 }

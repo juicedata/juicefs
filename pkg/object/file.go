@@ -403,6 +403,12 @@ func (d *filestore) Chown(path string, owner, group string) error {
 	p := d.path(path)
 	uid := lookupUser(owner)
 	gid := lookupGroup(group)
+	// when uid && gid is -1, set sFile uid and gid
+	if uid == -1 && gid == -1 {
+		u, _ := strconv.Atoi(owner)
+		g, _ := strconv.Atoi(group)
+		return os.Chown(p, u, g)
+	}
 	return os.Chown(p, uid, gid)
 }
 
