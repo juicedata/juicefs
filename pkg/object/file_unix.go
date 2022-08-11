@@ -40,7 +40,7 @@ func userName(uid int) string {
 	if !ok {
 		u, err := user.LookupId(strconv.Itoa(uid))
 		if err != nil {
-			// when get UnixUid err set sFile uid
+			// get UnixUid err set sFile uid
 			name = strconv.Itoa(uid)
 		} else {
 			name = u.Username
@@ -55,7 +55,7 @@ func groupName(gid int) string {
 	if !ok {
 		g, err := user.LookupGroupId(strconv.Itoa(gid))
 		if err != nil {
-			// when get UnixGid err, set sFile gid
+			// get UnixGid err, set sFile gid
 			name = strconv.Itoa(gid)
 		} else {
 			name = g.Name
