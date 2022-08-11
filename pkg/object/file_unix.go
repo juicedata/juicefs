@@ -40,8 +40,11 @@ func userName(uid int) string {
 	if !ok {
 		if u, err := user.LookupId(strconv.Itoa(uid)); err == nil {
 			name = u.Username
-			uids[uid] = name
+		} else {
+			logger.Warnf("lookup uid %d: %s", uid, err)
+			name = strconv.Itoa(uid)
 		}
+		uids[uid] = name
 	}
 	return name
 }
@@ -51,8 +54,11 @@ func groupName(gid int) string {
 	if !ok {
 		if g, err := user.LookupGroupId(strconv.Itoa(gid)); err == nil {
 			name = g.Name
-			gids[gid] = name
+		} else {
+			logger.Warnf("lookup gid %d: %s", gid, err)
+			name = strconv.Itoa(gid)
 		}
+		gids[gid] = name
 	}
 	return name
 }
@@ -81,6 +87,12 @@ func lookupUser(name string) int {
 	var uid = -1
 	if u, err := user.Lookup(name); err == nil {
 		uid, _ = strconv.Atoi(u.Uid)
+	} else {
+		if g, e := strconv.Atoi(name); e == nil {
+			uid = g
+		} else {
+			logger.Warnf("lookup user %s: %s", name, err)
+		}
 	}
 	users[name] = uid
 	return uid
@@ -95,6 +107,12 @@ func lookupGroup(name string) int {
 	var gid = -1
 	if u, err := user.LookupGroup(name); err == nil {
 		gid, _ = strconv.Atoi(u.Gid)
+	} else {
+		if g, e := strconv.Atoi(name); e == nil {
+			gid = g
+		} else {
+			logger.Warnf("lookup group %s: %s", name, err)
+		}
 	}
 	groups[name] = gid
 	return gid
