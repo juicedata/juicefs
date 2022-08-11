@@ -87,9 +87,6 @@ func (r *parallelDownloader) download() {
 							p.Release()
 						}
 						r.Unlock()
-						if copiedBytes != nil {
-							copiedBytes.IncrInt64(size)
-						}
 					}
 				}
 			}
@@ -128,6 +125,9 @@ func (r *parallelDownloader) Read(b []byte) (int, error) {
 		p.Release()
 		delete(r.buffers, off)
 		<-r.concurrent
+	}
+	if copiedBytes != nil {
+		copiedBytes.IncrInt64(int64(n))
 	}
 	return n, nil
 }

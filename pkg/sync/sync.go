@@ -356,6 +356,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 		if err != nil {
 			if _, e := src.Head(key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
+				copied.IncrInt64(-1)
 				err = nil
 			}
 		}
@@ -378,16 +379,18 @@ SINGLE:
 		if err != nil {
 			if _, e := src.Head(key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
+				copied.IncrInt64(-1)
 				err = nil
 			}
 			return err
 		}
+	}
+	defer in.Close()
+
+	if err = dst.Put(key, in); err == nil {
 		copiedBytes.IncrInt64(size)
 	}
-
-	defer in.Close()
-	return dst.Put(key, in)
-
+	return err
 }
 
 func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
