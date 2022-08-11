@@ -221,22 +221,14 @@ sudo juicefs umount /mnt/jfs
 
 ### 6. 开机自动挂载
 
-如果你不想每次重启系统都要重新手动挂载 JuiceFS 存储，可以设置自动挂载。
+可以用 `juiefs mount --update-fstab` 直接设置出自动挂载，例如：
 
-首先，需要将  `juicefs` 客户端重命名为 `mount.juicefs` 并复制到 `/sbin/` 目录：
-
-```shell
-sudo cp juice/juicefs /sbin/mount.juicefs
+```bash
+$ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1 <MOUNTPOINT>
+$ grep <MOUNTPOINT> /etc/fstab
+redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1 <MOUNTPOINT> juicefs _netdev,max-uploads=50,writeback,cache-size=204800 0 0
+$ ls -l /sbin/mount.juicefs
+lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/juicefs
 ```
 
-编辑 `/etc/fstab` 配置文件，新增一条记录：
-
-```shell
-redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1    /mnt/jfs       juicefs     _netdev,cache-size=20480     0  0
-```
-
-挂载选项中 `cache-size=20480` 代表分配 20GB 本地磁盘空间作为 JuiceFS 的缓存使用，请根据你实际的 EBS 磁盘容量去决定分配的缓存大小。
-
-你可以根据需要调整上述配置中的 FUSE 挂载选项，更多内容请[查阅文档](../reference/fuse_mount_options.md)。
-
-> **注意**：请将上述配置文件中的 Redis 地址、挂载点以及挂载选项，替换成你实际的信息。
+更多请参考[启动时自动挂载 JuiceFS](../guide/mount_at_boot.md)

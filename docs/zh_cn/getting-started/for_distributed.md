@@ -136,21 +136,17 @@ JuiceFS 进程需要具有读写 `--cache-dir` 目录的权限。
 
 #### 开机自动挂载
 
-以 Linux 系统为例，假设客户端位于 `/usr/local/bin` 目录。将 JuiceFS 客户端重命名为 `mount.juicefs` 并复制到 `/sbin` 目录：
+可以用 `juiefs mount --update-fstab` 直接设置出自动挂载，例如：
 
-```shell
-sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
+```bash
+$ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1 <MOUNTPOINT>
+$ grep <MOUNTPOINT> /etc/fstab
+redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1 <MOUNTPOINT> juicefs _netdev,max-uploads=50,writeback,cache-size=204800 0 0
+$ ls -l /sbin/mount.juicefs
+lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/juicefs
 ```
 
-编辑 `/etc/fstab` 配置文件，遵照 fstab 的规则添加一条新记录：
-
-```
-redis://tom:mypassword@myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1    /mnt/myjfs    juicefs    _netdev,max-uploads=50,writeback,cache-size=512000     0  0
-```
-
-:::note 注意
-默认情况下，CentOS 6 在系统启动时不会挂载网络文件系统，你需要执行命令开启网络文件系统的自动挂载支持：`sudo chkconfig --add netfs`
-:::
+更多请参考[启动时自动挂载 JuiceFS](../guide/mount_at_boot.md)
 
 ### 6. 验证文件系统
 

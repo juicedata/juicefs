@@ -264,23 +264,19 @@ sudo juicefs umount ~/mnt
 
 > **Note**: Force unmount the file system in use may cause data damage or loss, please be careful to operate.
 
-### 6. Auto mount at boot
+### 6. Auto-mount on boot
 
-If you don't want to manually remount JuiceFS every time you restart the system, you can set up automatic mounting.
+Use `juicefs mount --update-fstab` to setup auto-mount at boot, for example:
 
-First, you need to rename the `juicefs` client to `mount.juicefs` and copy it to the `/sbin/` directory:
-
-```shell
-sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
+```bash
+$ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 <MOUNTPOINT>
+$ grep <MOUNTPOINT> /etc/fstab
+rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 <MOUNTPOINT> juicefs _netdev,max-uploads=50,writeback,cache-size=204800 0 0
+$ ls -l /sbin/mount.juicefs
+lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/juicefs
 ```
 
-Edit the `/etc/fstab` configuration file and add a new record:
-
-```shell
-rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1    /home/herald/mnt       juicefs     _netdev,cache-size=20480     0  0
-```
-
-In the mount option, `cache-size=20480` means to allocate 20GiB of local disk space as the local cache of JuiceFS. Please decide the allocated cache size according to the actual hardware. You can adjust the [FUSE mount options](../reference/fuse_mount_options.md) in the above configuration according to your needs.
+Refer to [Mount JuiceFS at Boot Time](../guide/mount_at_boot.md) for more details.
 
 ### 7. Multi-host shared
 
