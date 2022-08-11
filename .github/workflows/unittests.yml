@@ -20,18 +20,18 @@ on:
 jobs:
   unittests:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
+#    services:
+#      postgres:
+#        image: postgres
+#        env:
+#          POSTGRES_PASSWORD: postgres
+#        options: >-
+#          --health-cmd pg_isready
+#          --health-interval 10s
+#          --health-timeout 5s
+#          --health-retries 5
+#        ports:
+#          - 5432:5432
     env:
       MINIO_TEST_BUCKET: 127:0:0:1:9000/testbucket
       MINIO_ACCESS_KEY: testUser
@@ -66,15 +66,17 @@ jobs:
           sudo apt install -y attr
 
 
-
       - name: Prepare Database
         run: |
           sudo service mysql start
-          #sudo service postgresql start
-          #sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
-          #sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
-          #cat /etc/postgresql/*/main/pg_hba.conf
-          #sudo service postgresql restart
+          sudo service postgresql start
+          sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
+          cat /etc/postgresql/*/main/pg_hba.conf
+          sudo service postgresql restart
+          psql -c "ALTER USER postgres PASSWORD 'postgres';" -U postgres
+          sudo service postgresql restart
+          echo "hello110"
           sudo mysql -uroot -proot -e "create database dev;"
           psql -c 'create database test;' -U postgres
           pwd
