@@ -87,6 +87,7 @@ runs:
       shell: bash
     - name: Fio Benchmark 
       run: |
+        set -o pipefail
         PYROSCOPE_URL=http://172.27.0.1:4040
         export PYROSCOPE_AUTH_TOKEN=${{inputs.PYROSCOPE_AUTH_TOKEN}}
         urls=("juicefs")

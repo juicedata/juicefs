@@ -63,6 +63,9 @@ jobs:
           
       - name: Test
         run: |
+          # # Consider command as failed when any component of the pipe fails:
+          # https://stackoverflow.com/questions/1221833/pipe-output-and-capture-exit-status-in-bash
+          set -o pipefail
           meta_url=redis://127.0.0.1/1
           mount_point=/tmp/sync-test/
           ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
