@@ -63,8 +63,11 @@ jobs:
           pwd
           wget -O etcd-v3.5.2-linux-amd64.tar.gz  https://github.com/etcd-io/etcd/releases/download/v3.5.2/etcd-v3.5.2-linux-amd64.tar.gz
           tar -zxf etcd-v3.5.2-linux-amd64.tar.gz -C .
-          sh install.sh && source ~/.bash_profile
+          sh install.sh
           echo "hello9"
+          cat ~/.bash_profile
+          source ~/.bash_profile
+          echo "hello99"
           tiup -v
           nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
           docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
@@ -85,8 +88,8 @@ jobs:
           chmod +x travis-setup-hdfs.sh
           ./travis-setup-hdfs.sh
           echo "hello8"
-          #for i in {2222,3306,5432,8020,9000,9007} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
-          #sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
+          for i in {2222,3306,5432,8020,9000,9007} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+          sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
 
 
       - name: Unit Test
