@@ -345,7 +345,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 			defer f.Close()
 			buf := bufPool.Get().(*[]byte)
 			defer bufPool.Put(buf)
-			if _, err = io.CopyBuffer(f, downer, *buf); err == nil {
+			if _, err = io.CopyBuffer(struct{ io.Writer }{f}, downer, *buf); err == nil {
 				_, err = f.Seek(0, 0)
 				in = f
 			}
@@ -356,8 +356,6 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 		if err != nil {
 			if _, e := src.Head(key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
-				copied.IncrInt64(-1)
-				copiedBytes.IncrInt64(size * -1)
 				err = nil
 			}
 		}
@@ -380,8 +378,6 @@ SINGLE:
 		if err != nil {
 			if _, e := src.Head(key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
-				copied.IncrInt64(-1)
-				copiedBytes.IncrInt64(size * (-1))
 				err = nil
 			}
 			return err
