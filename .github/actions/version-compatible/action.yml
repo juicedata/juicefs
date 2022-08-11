@@ -68,6 +68,9 @@ runs:
     - name: Test
       shell: bash
       run: | 
+        # # Consider command as failed when any component of the pipe fails:
+        # https://stackoverflow.com/questions/1221833/pipe-output-and-capture-exit-status-in-bash
+        set -o pipefail
         ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
         tests=(
             "format:jfs_new, format:jfs_old, destroy:jfs_new"
