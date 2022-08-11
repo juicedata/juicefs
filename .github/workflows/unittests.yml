@@ -33,7 +33,7 @@ jobs:
 #        ports:
 #          - 5432:5432
     env:
-      MINIO_TEST_BUCKET: 127:0:0:1:9000/testbucket
+      MINIO_TEST_BUCKET: 127.0.0.1:9000/testbucket
       MINIO_ACCESS_KEY: testUser
       MINIO_SECRET_KEY: testUserPassword
       DISPLAY_PROGRESSBAR: false
@@ -41,7 +41,7 @@ jobs:
       SFTP_HOST: localhost:2222:/upload/
       SFTP_USER: root
       SFTP_PASS: password
-      WEBDAV_TEST_BUCKET: 127:0:0:1:9007
+      WEBDAV_TEST_BUCKET: 127.0.0.1:9007
       TIKV_ADDR: 127.0.0.1
       REDIS_ADDR: redis://127.0.0.1:6379/13
     steps:
