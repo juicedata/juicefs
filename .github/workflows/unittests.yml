@@ -41,13 +41,6 @@ jobs:
           sudo apt install -y libacl1-dev
           sudo apt install -y attr
 
-      - name: Juicefs Format
-        run: |
-          #sudo ./juicefs format  redis://127.0.0.1:6379/1 pics
-
-      - name: Juicefs Mount
-        run: |
-          #sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
 
 
       - name: Prepare Database
