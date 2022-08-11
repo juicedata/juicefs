@@ -24,26 +24,42 @@ import (
 
 func testCompress(t *testing.T, c Compressor) {
 	src := []byte(c.Name())
-	_, err := c.Compress(make([]byte, 1), src)
-	if err == nil {
-		t.Fatal("expect short buffer error, but got nil ")
+	testIt := func(src []byte) {
+		if len(src) > 1 {
+			_, err := c.Compress(make([]byte, 1), src)
+			if err == nil {
+				t.Fatal("expect short buffer error, but got nil ")
+			}
+		}
+		dst := make([]byte, c.CompressBound(len(src)))
+		n, err := c.Compress(dst, src)
+		if err != nil {
+			t.Fatalf("compress: %s", err)
+		}
+		if len(src) > 1 {
+			_, err = c.Decompress(make([]byte, 1), dst[:n])
+			if err == nil {
+				t.Fatalf("expect short buffer error, but got nil")
+			}
+		}
+		src2 := make([]byte, len(src))
+		n, err = c.Decompress(src2, dst[:n])
+		if err != nil {
+			t.Fatalf("decompress: %s", err)
+		}
+		if string(src2[:n]) != string(src) {
+			t.Fatalf("expect %s but got %s", string(src), string(src2))
+		}
 	}
-	dst := make([]byte, c.CompressBound(len(src)))
-	n, err := c.Compress(dst, src)
-	if err != nil {
-		t.Fatalf("compress: %s", err)
-	}
-	_, err = c.Decompress(make([]byte, 1), dst[:n])
-	if err == nil {
-		t.Fatalf("expect short buffer error, but got nil")
-	}
-	src2 := make([]byte, len(src))
-	n, err = c.Decompress(src2, dst[:n])
-	if err != nil {
-		t.Fatalf("decompress: %s", err)
-	}
-	if string(src2[:n]) != string(src) {
-		t.Fatalf("expect %s but got %s", string(src), string(src2))
+
+	testIt(src)
+	testIt(nil)
+
+	if c.CompressBound(0) > 0 {
+		n, err := c.Decompress(make([]byte, 100), src[:0])
+		if err == nil || n > 0 {
+			t.Fatalf("decompress should fail, but got %d", n)
+		}
 	}
 }
 
