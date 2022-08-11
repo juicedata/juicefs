@@ -18,12 +18,14 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -459,16 +461,44 @@ func tryToInstallMountExec() error {
 	return nil
 }
 
+func insideContainer() (bool, error) {
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true, nil
+	}
+	mountinfo, err := os.Open("/proc/1/mountinfo")
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	scanner := bufio.NewScanner(mountinfo)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+		if fields[4] == "/" {
+			fstype := fields[8]
+			if strings.Contains(fstype, "overlay") || strings.Contains(fstype, "aufs") {
+				return true, nil
+			} else {
+				return false, nil
+			}
+		}
+	}
+	if err = scanner.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
 func updateFstab(c *cli.Context) error {
 	if runtime.GOOS != "linux" {
 		logger.Infof("--update-fstab is ignored in %s", runtime.GOOS)
 		return nil
 	}
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		logger.Infoln("--update-fstab is ignored in container")
-		return nil
+	inside, err := insideContainer()
+	if err != nil {
+		logger.Warnf("error checking if inside container: %s", err)
 	}
-	if calledViaMount(os.Args) {
+	if inside {
+		logger.Infoln("--update-fstab is ignored in container")
 		return nil
 	}
 	addr := expandPathForEmbedded(c.Args().Get(0))
@@ -556,14 +586,24 @@ func mount(c *cli.Context) error {
 	logger.Infof("Data use %s", blob)
 
 	if c.Bool("update-fstab") {
+		user, err := user.Current()
+		if err != nil {
+			return err
+		}
+		if user.Uid != "0" {
+			logger.Warnf("--update-fstab should be used with root, not %s", user.Name)
+		}
 		if !calledViaMount(os.Args) {
 			if err = tryToInstallMountExec(); err != nil {
-				return fmt.Errorf("error creating /sbin/mount.juicefs: %s", err)
+				logger.Warnf("error creating /sbin/mount.juicefs: %s", err)
 			}
+		}
+		if calledViaMount(os.Args) {
+			return nil
 		}
 		err = updateFstab(c)
 		if err != nil {
-			logger.Fatalf("failed to update fstab: %s", err)
+			logger.Warnf("failed to update fstab: %s", err)
 		}
 	}
 
