@@ -88,8 +88,9 @@ jobs:
           pwd
           wget -O etcd-v3.5.2-linux-amd64.tar.gz  https://github.com/etcd-io/etcd/releases/download/v3.5.2/etcd-v3.5.2-linux-amd64.tar.gz
           tar -zxf etcd-v3.5.2-linux-amd64.tar.gz -C .
-          sh install.sh
-          source /home/runner/.profile
+          bash install.sh
+          echo "hello333"
+          source /home/runner/.bash_profile
           tiup -v
           nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
           docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
