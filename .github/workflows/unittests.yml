@@ -34,10 +34,8 @@ jobs:
 #          - 5432:5432
     env:
       MINIO_TEST_BUCKET: 127.0.0.1:9000/testbucket
-      MINIO_ACCESS_KEY: testUser
-      MINIO_SECRET_KEY: testUserPassword
-      MINIO_ROOT_USER: testUser
-      MINIO_ROOT_PASSWORD: testUserPassword
+      #MINIO_ACCESS_KEY: testUser
+      #MINIO_SECRET_KEY: testUserPassword
       DISPLAY_PROGRESSBAR: false
       HDFS_ADDR: localhost:8020
       SFTP_HOST: localhost:2222:/upload/
