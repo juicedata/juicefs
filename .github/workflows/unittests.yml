@@ -123,6 +123,9 @@ jobs:
       - name: Unit Test
         run: |
           pwd
+          echo "hello123"
+          echo $MINIO_ROOT_USER
+          echo "hello123123"
           sudo chmod 777 /var/jfsCache
           make test
           cat cov1.out >> coverage.txt
