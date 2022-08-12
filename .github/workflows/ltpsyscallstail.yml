@@ -54,6 +54,7 @@ jobs:
           sudo ./juicefs mount --enable-xattr -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
 
       - name: LTP Syscalls
+        timeout-minutes: 50
         run: |
           wget -O ltp.tar.gz https://github.com/linux-test-project/ltp/archive/refs/tags/20210927.tar.gz
           mkdir ltp
@@ -66,10 +67,17 @@ jobs:
           cd /opt/ltp
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/syscalls
+          echo "chdir01 chdir01" >>/tmp/rm_syscalls
+          echo "setxattr01 setxattr01" >>/tmp/rm_syscalls
+          cat /tmp/rm_syscalls
           sudo /tmp/rm_list.sh /tmp/rm_syscalls /opt/ltp/runtest/syscalls
           sudo tail -n 500 runtest/syscalls > runtest/syscallstail
           sudo chmod 777 runtest/syscallstail
-          sudo ./runltp -d /tmp/jfs -f syscallstail -C result.log.failed -T result.log.tconf -l result.log
+          df -lh
+          pwd
+          sudo ./runltp -d /tmp/jfs -f syscallstail -C result.log.failed -T result.log.tconf -l result.log  &
+          wait $!
+
 
       - name: Log
         if: ${{ always() }}

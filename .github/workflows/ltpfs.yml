@@ -68,8 +68,14 @@ jobs:
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/fs
           sudo /tmp/rm_list.sh /tmp/rm_fs /opt/ltp/runtest/fs
-          sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fcntl-locktests
-          sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log
+          echo "chdir01 chdir01" >/tmp/rm_smoketest
+          cat /tmp/rm_smoketest
+          sudo /tmp/rm_list.sh /tmp/rm_smoketest /opt/ltp/runtest/smoketest
+          sudo ./runltp -d /tmp/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fcntl-locktests &
+          wait $!
+          sudo ./runltp -d /tmp/jfs -f fs -C result.log.failed -T result.log.tconf -l result.log  &
+          wait $!
+
 
       - name: Log
         if: ${{ always() }}
@@ -77,7 +83,7 @@ jobs:
           sudo tail -n 100 /opt/ltp/output/result.log.failed
           tail -300 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
-      
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
