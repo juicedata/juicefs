@@ -80,8 +80,6 @@ jobs:
           echo "hello110"
           sudo mysql -e "create database dev;"
           psql -c 'create database test;' -U postgres
-          pwd
-          echo "hello"
           wget -O install.sh https://tiup-mirrors.pingcap.com/install.sh
           wget -O rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
           unzip rclone-v1.57.0-linux-amd64.zip -d .
@@ -91,9 +89,7 @@ jobs:
           wget -O etcd-v3.5.2-linux-amd64.tar.gz  https://github.com/etcd-io/etcd/releases/download/v3.5.2/etcd-v3.5.2-linux-amd64.tar.gz
           tar -zxf etcd-v3.5.2-linux-amd64.tar.gz -C .
           sh install.sh
-          echo "hello9"
           source /home/runner/.profile
-          echo "hello99"
           tiup -v
           nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
           docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
