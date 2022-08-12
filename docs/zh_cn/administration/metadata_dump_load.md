@@ -51,7 +51,7 @@ juicefs load redis://192.168.1.6:6379/1 meta.dump
 该命令会自动处理因包含不同时间点文件而产生的冲突问题，并重新计算文件系统的统计信息（空间使用量，inode 计数器等），最后在数据库中生成一份全局一致的元数据。另外，如果你想自定义某些元数据（请务必小心），可以尝试在 load 前手动修改 JSON 文件。
 
 :::note 注意
-为了保证对象存储 SecretKey 与 SessionToken 的安全性，`juicefs dump` 得到的备份文件中的 SecretKey 与 SessionToken 会被改写为 “removed”，所以在对其执行 `juicefs load` 恢复到元数据引擎后，需要使用 `juicefs config --secret-key xxxxx META-URL` 来重新设置 SecretKey。
+为了保证对象存储 SecretKey 与 SessionToken 的安全性，`juicefs dump` 得到的备份文件中的 SecretKey 与 SessionToken 会被改写为“removed”，所以在对其执行 `juicefs load` 恢复到元数据引擎后，需要使用 `juicefs config --secret-key xxxxx META-URL` 来重新设置 SecretKey。
 :::
 
 ### 元数据迁移

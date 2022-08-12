@@ -16,7 +16,7 @@ sidebar_position: 1
 
 - 我们遵循 ["Effective Go"](https://go.dev/doc/effective_go) 和 ["Go Code Review Comments"](https://github.com/golang/go/wiki/CodeReviewComments)。
 - 在提交前使用 `go fmt` 格式化你的代码。你可以在 [Go 的编辑器和 IDE](https://github.com/golang/go/wiki/IDEsAndTextEditorPlugins) 中找到支持 Go 的相关工具的信息。
-- 如果你看到任何明显违反风格指南的代码，请修复它并提交一个 PR 。
+- 如果你看到任何明显违反风格指南的代码，请修复它并提交一个 PR。
 - 每个新的源文件都必须以许可证头开始。
 - 安装 [pre-commit](https://pre-commit.com) 并使用它来设置一个预提交钩子来进行静态分析。只需在仓库根目录下运行 `pre-commit install` 即可。
 
@@ -39,7 +39,7 @@ sidebar_position: 1
 1. 提交代码；
 1. 确保提交消息的格式正确；
 1. 将主题分支中的更改推到个人 fork 的仓库；
-1. 提交一个 PR 到 [juicedata/juicefs](https://github.com/juicedata/juicefs/compare) 仓库。 这个 PR 应该链接到你或其他人创建的一个 issue；
+1. 提交一个 PR 到 [juicedata/juicefs](https://github.com/juicedata/juicefs/compare) 仓库。这个 PR 应该链接到你或其他人创建的一个 issue；
 1. PR 在合并之前必须得到至少一个维护者的批准。
 
 尽情享受极客的快乐吧！

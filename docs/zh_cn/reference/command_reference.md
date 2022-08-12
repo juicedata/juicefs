@@ -154,25 +154,25 @@ juicefs format [command options] META-URL NAME
 #### 选项
 
 `--block-size value`<br />
-块大小；单位为 KiB (默认: 4096)
+块大小；单位为 KiB (默认：4096)
 
 `--capacity value`<br />
-容量配额；单位为 GiB (默认: 不限制)
+容量配额；单位为 GiB (默认：不限制)
 
 `--inodes value`<br />
-文件数配额 (默认: 不限制)
+文件数配额 (默认：不限制)
 
 `--compress value`<br />
-压缩算法 (lz4, zstd, none) (默认: "none")
+压缩算法 (lz4, zstd, none) (默认："none")
 
 `--shards value`<br />
-将数据块根据名字哈希存入 N 个桶中 (默认: 0)
+将数据块根据名字哈希存入 N 个桶中 (默认：0)
 
 `--storage value`<br />
-对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
 
 `--bucket value`<br />
-存储数据的桶路径 (默认: `"$HOME/.juicefs/local"` 或 `"/var/jfs"`)
+存储数据的桶路径 (默认：`"$HOME/.juicefs/local"` 或 `"/var/jfs"`)
 
 `--access-key value`<br />
 对象存储的 Access Key (也可通过环境变量 `ACCESS_KEY` 设置)
@@ -187,13 +187,13 @@ juicefs format [command options] META-URL NAME
 RSA 私钥的路径 (PEM)
 
 `--trash-days value`<br />
-文件被自动清理前在回收站内保留的天数 (默认: 1)
+文件被自动清理前在回收站内保留的天数 (默认：1)
 
 `--force`<br />
-强制覆盖当前的格式化配置 (默认: false)
+强制覆盖当前的格式化配置 (默认：false)
 
 `--no-update`<br />
-不要修改已有的格式化配置 (默认: false)
+不要修改已有的格式化配置 (默认：false)
 
 #### 示例
 
@@ -234,100 +234,100 @@ juicefs mount [command options] META-URL MOUNTPOINT
 #### 选项
 
 `--metrics value`<br />
-监控数据导出地址 (默认: "127.0.0.1:9567")
+监控数据导出地址 (默认："127.0.0.1:9567")
 
 `--consul value`<br />
-consul注册中心地址(默认: "127.0.0.1:8500")
+consul 注册中心地址 (默认："127.0.0.1:8500")
 
 `--no-usage-report`<br />
-不发送使用量信息 (默认: false)
+不发送使用量信息 (默认：false)
 
 `-d, --background`<br />
-后台运行 (默认: false)
+后台运行 (默认：false)
 
 `--no-syslog`<br />
-禁用系统日志 (默认: false)
+禁用系统日志 (默认：false)
 
 `--log value`<br />
-后台运行时日志文件的位置 (默认: `$HOME/.juicefs/juicefs.log` 或 `/var/log/juicefs.log`)
+后台运行时日志文件的位置 (默认：`$HOME/.juicefs/juicefs.log` 或 `/var/log/juicefs.log`)
 
 `-o value`<br />
 其他 FUSE 选项 (参见[此文档](../reference/fuse_mount_options.md)来了解更多信息)
 
 `--attr-cache value`<br />
-属性缓存过期时间；单位为秒 (默认: 1)
+属性缓存过期时间；单位为秒 (默认：1)
 
 `--entry-cache value`<br />
-文件项缓存过期时间；单位为秒 (默认: 1)
+文件项缓存过期时间；单位为秒 (默认：1)
 
 `--dir-entry-cache value`<br />
-目录项缓存过期时间；单位为秒 (默认: 1)
+目录项缓存过期时间；单位为秒 (默认：1)
 
 `--enable-xattr`<br />
-启用扩展属性 (xattr) 功能 (默认: false)
+启用扩展属性 (xattr) 功能 (默认：false)
 
 `--bucket value`<br />
 为当前挂载点指定访问访对象存储的 endpoint
 
 `--get-timeout value`<br />
-下载一个对象的超时时间；单位为秒 (默认: 60)
+下载一个对象的超时时间；单位为秒 (默认：60)
 
 `--put-timeout value`<br />
-上传一个对象的超时时间；单位为秒 (默认: 60)
+上传一个对象的超时时间；单位为秒 (默认：60)
 
 `--io-retries value`<br />
-网络异常时的重试次数 (默认: 10)
+网络异常时的重试次数 (默认：10)
 
 `--max-uploads value`<br />
-上传对象的连接数 (默认: 20)
+上传对象的连接数 (默认：20)
 
 `--max-deletes value`<br />
-删除对象的连接数 (默认: 2)
+删除对象的连接数 (默认：2)
 
 `--buffer-size value`<br />
-读写缓存的总大小；单位为 MiB (默认: 300)
+读写缓存的总大小；单位为 MiB (默认：300)
 
 `--upload-limit value`<br />
-上传带宽限制，单位为 Mbps (默认: 0)
+上传带宽限制，单位为 Mbps (默认：0)
 
 `--download-limit value`<br />
-下载带宽限制，单位为 Mbps (默认: 0)
+下载带宽限制，单位为 Mbps (默认：0)
 
 `--prefetch value`<br />
-并发预读 N 个块 (默认: 1)
+并发预读 N 个块 (默认：1)
 
 `--writeback`<br />
-后台异步上传对象 (默认: false)
+后台异步上传对象 (默认：false)
 
 `--cache-dir value`<br />
-本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `"/var/jfsCache"`)
+本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`"$HOME/.juicefs/cache"` 或 `"/var/jfsCache"`)
 
 `--cache-size value`<br />
-缓存对象的总大小；单位为 MiB (默认: 102400)
+缓存对象的总大小；单位为 MiB (默认：102400)
 
 `--free-space-ratio value`<br />
-最小剩余空间比例 (默认: 0.1)
+最小剩余空间比例 (默认：0.1)
 
 `--cache-partial-only`<br />
-仅缓存随机小块读 (默认: false)
+仅缓存随机小块读 (默认：false)
 
 `--read-only`<br />
-只读模式 (默认: false)
+只读模式 (默认：false)
 
 `--open-cache value`<br />
-打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认: 0)
+打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)
 
 `--subdir value`<br />
-将某个子目录挂载为根 (默认: "")
+将某个子目录挂载为根 (默认："")
 
 `--backup-meta value`<br />
-自动备份元数据到对象存储的间隔时间；单位秒 (0表示不备份) (默认: 3600)
+自动备份元数据到对象存储的间隔时间；单位秒 (0 表示不备份) (默认：3600)
 
 `--heartbeat value`<br />
-发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认: 12)。
+发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认：12)。
 
 `--upload-delay value`<br />
-数据上传到对象存储的延迟时间,支持秒分时精度，对应格式分别为("s", "m", "h")，默认为 0 秒
+数据上传到对象存储的延迟时间，支持秒分时精度，对应格式分别为 ("s", "m", "h")，默认为 0 秒
 
 `--no-bgjob`<br />
 禁用后台作业（清理、备份等）（默认：false）
@@ -371,7 +371,7 @@ juicefs umount [command options] MOUNTPOINT
 #### 选项
 
 `-f, --force`<br />
-强制卸载一个忙碌的文件系统 (默认: false)
+强制卸载一个忙碌的文件系统 (默认：false)
 
 #### 示例
 
@@ -400,94 +400,94 @@ juicefs gateway [command options] META-URL ADDRESS
 为当前网关指定访问访对象存储的 endpoint
 
 `--get-timeout value`<br />
-下载一个对象的超时时间；单位为秒 (默认: 60)
+下载一个对象的超时时间；单位为秒 (默认：60)
 
 `--put-timeout value`<br />
-上传一个对象的超时时间；单位为秒 (默认: 60)
+上传一个对象的超时时间；单位为秒 (默认：60)
 
 `--io-retries value`<br />
-网络异常时的重试次数 (默认: 10)
+网络异常时的重试次数 (默认：10)
 
 `--max-uploads value`<br />
-上传对象的连接数 (默认: 20)
+上传对象的连接数 (默认：20)
 
 `--max-deletes value`<br />
-删除对象的连接数 (默认: 2)
+删除对象的连接数 (默认：2)
 
 `--buffer-size value`<br />
-读写缓存的总大小；单位为 MiB (默认: 300)
+读写缓存的总大小；单位为 MiB (默认：300)
 
 `--upload-limit value`<br />
-上传带宽限制，单位为 Mbps (默认: 0)
+上传带宽限制，单位为 Mbps (默认：0)
 
 `--download-limit value`<br />
-下载带宽限制，单位为 Mbps (默认: 0)
+下载带宽限制，单位为 Mbps (默认：0)
 
 `--prefetch value`<br />
-并发预读 N 个块 (默认: 1)
+并发预读 N 个块 (默认：1)
 
 `--writeback`<br />
-后台异步上传对象 (默认: false)
+后台异步上传对象 (默认：false)
 
 `--cache-dir value`<br />
-本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
+本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
 
 `--cache-size value`<br />
-缓存对象的总大小；单位为 MiB (默认: 102400)
+缓存对象的总大小；单位为 MiB (默认：102400)
 
 `--free-space-ratio value`<br />
-最小剩余空间比例 (默认: 0.1)
+最小剩余空间比例 (默认：0.1)
 
 `--cache-partial-only`<br />
-仅缓存随机小块读 (默认: false)
+仅缓存随机小块读 (默认：false)
 
 `--read-only`<br />
-只读模式 (默认: false)
+只读模式 (默认：false)
 
 `--open-cache value`<br />
-打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认: 0)
+打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)
 
 `--subdir value`<br />
-将某个子目录挂载为根 (默认: "")
+将某个子目录挂载为根 (默认："")
 
 `--attr-cache value`<br />
-属性缓存过期时间；单位为秒 (默认: 1)
+属性缓存过期时间；单位为秒 (默认：1)
 
 `--entry-cache value`<br />
-文件项缓存过期时间；单位为秒 (默认: 0)
+文件项缓存过期时间；单位为秒 (默认：0)
 
 `--dir-entry-cache value`<br />
-目录项缓存过期时间；单位为秒 (默认: 1)
+目录项缓存过期时间；单位为秒 (默认：1)
 
 `--access-log value`<br />
 访问日志的路径
 
 `--metrics value`<br />
-监控数据导出地址 (默认: "127.0.0.1:9567")
+监控数据导出地址 (默认："127.0.0.1:9567")
 
 `--no-usage-report`<br />
-不发送使用量信息 (默认: false)
+不发送使用量信息 (默认：false)
 
 `--no-banner`<br />
-禁用 MinIO 的启动信息 (默认: false)
+禁用 MinIO 的启动信息 (默认：false)
 
 `--multi-buckets`<br />
-使用第一级目录作为存储桶 (默认: false)
+使用第一级目录作为存储桶 (默认：false)
 
 `--keep-etag`<br />
-保留对象上传时的 ETag (默认: false)
+保留对象上传时的 ETag (默认：false)
 
 `--storage value`<br />
-对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
 
 `--upload-delay value`<br />
-数据上传到对象存储的延迟时间,支持秒分时精度，对应格式分别为("s", "m", "h")，默认为 0 秒
+数据上传到对象存储的延迟时间，支持秒分时精度，对应格式分别为 ("s", "m", "h")，默认为 0 秒
 
 `--backup-meta value`<br />
-自动备份元数据到对象存储的间隔时间；单位秒 (0表示不备份) (默认: 3600)
+自动备份元数据到对象存储的间隔时间；单位秒 (0 表示不备份) (默认：3600)
 
 `--heartbeat value`<br />
-发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认: 12)。
+发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认：12)。
 
 `--no-bgjob`<br />
 禁用后台作业（清理、备份等）（默认值：false）
@@ -496,7 +496,7 @@ juicefs gateway [command options] META-URL ADDRESS
 新文件的 umask 的八进制格式 (默认值:“022”)
 
 `--consul value`<br />
-consul注册中心地址(默认: "127.0.0.1:8500")
+consul 注册中心地址 (默认："127.0.0.1:8500")
 
 #### 示例
 
@@ -526,52 +526,52 @@ juicefs webdav [command options] META-URL ADDRESS
 为当前网关指定访问访对象存储的 endpoint
 
 `--get-timeout value`<br />
-下载一个对象的超时时间；单位为秒 (默认: 60)
+下载一个对象的超时时间；单位为秒 (默认：60)
 
 `--put-timeout value`<br />
-上传一个对象的超时时间；单位为秒 (默认: 60)
+上传一个对象的超时时间；单位为秒 (默认：60)
 
 `--io-retries value`<br />
-网络异常时的重试次数 (默认: 10)
+网络异常时的重试次数 (默认：10)
 
 `--max-uploads value`<br />
-上传对象的连接数 (默认: 20)
+上传对象的连接数 (默认：20)
 
 `--max-deletes value`<br />
-删除对象的连接数 (默认: 2)
+删除对象的连接数 (默认：2)
 
 `--buffer-size value`<br />
-读写缓存的总大小；单位为 MiB (默认: 300)
+读写缓存的总大小；单位为 MiB (默认：300)
 
 `--upload-limit value`<br />
-上传带宽限制，单位为 Mbps (默认: 0)
+上传带宽限制，单位为 Mbps (默认：0)
 
 `--download-limit value`<br />
-下载带宽限制，单位为 Mbps (默认: 0)
+下载带宽限制，单位为 Mbps (默认：0)
 
 `--prefetch value`<br />
-并发预读 N 个块 (默认: 1)
+并发预读 N 个块 (默认：1)
 
 `--writeback`<br />
-后台异步上传对象 (默认: false)
+后台异步上传对象 (默认：false)
 
 `--upload-delay`<br />
-数据上传到对象存储的延迟时间,支持秒分时精度，对应格式分别为("s", "m", "h")，默认为 0 秒
+数据上传到对象存储的延迟时间，支持秒分时精度，对应格式分别为 ("s", "m", "h")，默认为 0 秒
 
 `--cache-dir value`<br />
-本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认: `"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
+本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
 
 `--cache-size value`<br />
-缓存对象的总大小；单位为 MiB (默认: 102400)
+缓存对象的总大小；单位为 MiB (默认：102400)
 
 `--free-space-ratio value`<br />
-最小剩余空间比例 (默认: 0.1)
+最小剩余空间比例 (默认：0.1)
 
 `--cache-partial-only`<br />
-仅缓存随机小块读 (默认: false)
+仅缓存随机小块读 (默认：false)
 
 `--read-only`<br />
-只读模式 (默认: false)
+只读模式 (默认：false)
 
 `--backup-meta value`<br />
 在对象存储中自动备份元数据的时间间隔（0 表示禁用备份）（默认值：1h0m0s）
@@ -580,19 +580,19 @@ juicefs webdav [command options] META-URL ADDRESS
 禁用后台作业（清理、备份等）（默认值：false）
 
 `--open-cache value`<br />
-打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认: 0)
+打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)
 
 `--subdir value`<br />
-将某个子目录挂载为根 (默认: "")
+将某个子目录挂载为根 (默认："")
 
 `--attr-cache value`<br />
-属性缓存过期时间；单位为秒 (默认: 1)
+属性缓存过期时间；单位为秒 (默认：1)
 
 `--entry-cache value`<br />
-文件项缓存过期时间；单位为秒 (默认: 0)
+文件项缓存过期时间；单位为秒 (默认：0)
 
 `--dir-entry-cache value`<br />
-目录项缓存过期时间；单位为秒 (默认: 1)
+目录项缓存过期时间；单位为秒 (默认：1)
 
 `--gzip`<br />
 通过 gzip 压缩提供的文件（默认值：false）
@@ -604,19 +604,19 @@ juicefs webdav [command options] META-URL ADDRESS
 访问日志的路径
 
 `--metrics value`<br />
-监控数据导出地址 (默认: "127.0.0.1:9567")
+监控数据导出地址 (默认："127.0.0.1:9567")
 
 `--consul value`<br />
-consul注册中心地址(默认: "127.0.0.1:8500")
+consul 注册中心地址 (默认："127.0.0.1:8500")
 
 `--no-usage-report`<br />
-不发送使用量信息 (默认: false)
+不发送使用量信息 (默认：false)
 
 `--storage value`<br />
-对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
 
 `--heartbeat value`<br />
-发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认: 12)。
+发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认：12)。
 
 #### 示例
 
@@ -657,31 +657,31 @@ juicefs sync [command options] SRC DST
 同步的最后一个对象名
 
 `--threads value, -p value`<br />
-并发线程数 (默认: 10)
+并发线程数 (默认：10)
 
 `--http-port PORT`<br />
-监听的 HTTP 端口 (默认: 6070)
+监听的 HTTP 端口 (默认：6070)
 
 `--update, -u`<br />
-当源文件更新时修改已存在的文件 (默认: false)
+当源文件更新时修改已存在的文件 (默认：false)
 
 `--force-update, -f`<br />
-强制修改已存在的文件 (默认: false)
+强制修改已存在的文件 (默认：false)
 
 `--perms`<br />
-保留权限设置 (默认: false)
+保留权限设置 (默认：false)
 
 `--dirs`<br />
-同步目录 (默认: false)
+同步目录 (默认：false)
 
 `--dry`<br />
-不拷贝文件 (默认: false)
+不拷贝文件 (默认：false)
 
 `--delete-src, --deleteSrc`<br />
-同步后删除源存储的对象 (默认: false)
+同步后删除源存储的对象 (默认：false)
 
 `--delete-dst, --deleteDst`<br />
-删除目标存储下的不相关对象 (默认: false)
+删除目标存储下的不相关对象 (默认：false)
 
 `--exclude PATTERN`<br />
 排除匹配 PATTERN 的 Key
@@ -690,10 +690,10 @@ juicefs sync [command options] SRC DST
 不排除匹配 PATTERN 的 Key，需要与 `--exclude` 选项配合使用。
 
 `--links, -l`<br />
-将符号链接复制为符号链接 (默认: false)
+将符号链接复制为符号链接 (默认：false)
 
 ` --limit value`<br />
-限制将要处理的对象的数量 (默认: -1)
+限制将要处理的对象的数量 (默认：-1)
 
 `--manager value`<br />
 管理者地址
@@ -702,16 +702,16 @@ juicefs sync [command options] SRC DST
 工作节点列表 (使用逗号分隔)
 
 `--bwlimit value`<br />
-限制最大带宽；单位为 Mbps (0 表示不限制) (默认: 0)
+限制最大带宽；单位为 Mbps (0 表示不限制) (默认：0)
 
 `--no-https`<br />
-不要使用 HTTPS (默认: false)
+不要使用 HTTPS (默认：false)
 
 `--check-all`<br />
-验证源路径和目标路径中所有文件的数据完整性 (默认: false)
+验证源路径和目标路径中所有文件的数据完整性 (默认：false)
 
 `--check-new`<br />
-验证新拷贝文件的数据完整性 (默认: false)
+验证新拷贝文件的数据完整性 (默认：false)
 
 #### 示例
 ```bash
@@ -765,13 +765,13 @@ juicefs info [command options] PATH or INODE
 #### 选项
 
 `--inode, -i`<br />
-使用 inode 号而不是路径 (当前目录必须在 JuiceFS 挂载点内) (默认: false)
+使用 inode 号而不是路径 (当前目录必须在 JuiceFS 挂载点内) (默认：false)
 
 `--recursive, -r`<br />
-递归获取所有子目录的概要信息（注意：当指定一个目录结构很复杂的路径时可能会耗时很长） (默认: false)
+递归获取所有子目录的概要信息（注意：当指定一个目录结构很复杂的路径时可能会耗时很长） (默认：false)
 
 `--raw`<br />
-显示内部原始信息 (默认: false)
+显示内部原始信息 (默认：false)
 
 #### 示例
 
@@ -801,19 +801,19 @@ juicefs bench [command options] PATH
 #### 选项
 
 `--block-size value`<br />
-块大小；单位为 MiB (默认: 1)
+块大小；单位为 MiB (默认：1)
 
 `--big-file-size value`<br />
-大文件大小；单位为 MiB (默认: 1024)
+大文件大小；单位为 MiB (默认：1024)
 
 `--small-file-size value`<br />
-小文件大小；单位为 MiB (默认: 0.1)
+小文件大小；单位为 MiB (默认：0.1)
 
 `--small-file-count value`<br />
-小文件数量 (默认: 100)
+小文件数量 (默认：100)
 
 `--threads value, -p value`<br />
-并发线程数 (默认: 1)
+并发线程数 (默认：1)
 
 #### 示例
 
@@ -842,7 +842,7 @@ juicefs objbench [command options] BUCKET
 #### 选项
 
 `--storage value`<br />
-对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认: `"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
+对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)
 
 `--access-key value`<br />
 对象存储的 Access Key (也可通过环境变量 `ACCESS_KEY` 设置)
@@ -868,7 +868,7 @@ juicefs objbench [command options] BUCKET
 `--threads value, -p value`<br />
 上传下载等操作的并发数（默认值：4）
 
-#### 示例:
+#### 示例：
 
 ```bash
 # 测试 S3 对象存储的基准性能
@@ -890,13 +890,13 @@ juicefs gc [command options] META-URL
 #### 选项
 
 `--delete`<br />
-删除泄漏的对象 (默认: false)
+删除泄漏的对象 (默认：false)
 
 `--compact`<br />
-整理所有文件的碎片 (默认: false).
+整理所有文件的碎片 (默认：false).
 
 `--threads value`<br />
-用于删除泄漏对象的线程数 (默认: 10)
+用于删除泄漏对象的线程数 (默认：10)
 
 #### 示例
 
@@ -953,7 +953,7 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 仅跟踪指定 PIDs (用逗号分隔)
 
 `--interval value`<br />
-显示间隔；在回放模式中将其设置为 0 可以立即得到整体的统计结果；单位为秒 (默认: 2)
+显示间隔；在回放模式中将其设置为 0 可以立即得到整体的统计结果；单位为秒 (默认：2)
 
 #### 示例
 
@@ -974,7 +974,7 @@ $ juicefs profile /tmp/jfs.alog --interval 0
 
 #### 描述
 
-展示实时的性能统计信息.
+展示实时的性能统计信息。
 
 #### 使用
 
@@ -986,15 +986,15 @@ juicefs stats [command options] MOUNTPOINT
 
 `--schema value`<br />
 
-控制输出内容的标题字符串 (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go) (默认: "ufmco")
+控制输出内容的标题字符串 (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go) (默认："ufmco")
 
 `--interval value`<br />
 
-更新间隔；单位为秒 (默认: 1)
+更新间隔；单位为秒 (默认：1)
 
 `--verbosity value`<br />
 
-详细级别；通常 0 或 1 已足够 (默认: 0)
+详细级别；通常 0 或 1 已足够 (默认：0)
 
 #### 示例
 
@@ -1020,7 +1020,7 @@ juicefs status [command options] META-URL
 #### 选项
 
 `--session value, -s value`<br />
-展示指定会话 (sid) 的具体信息 (默认: 0)
+展示指定会话 (sid) 的具体信息 (默认：0)
 
 #### 示例
 
@@ -1046,10 +1046,10 @@ juicefs warmup [command options] [PATH ...]
 指定一个包含一组路径的文件
 
 `--threads value, -p value`<br />
-并发的工作线程数 (默认: 50)
+并发的工作线程数 (默认：50)
 
 `--background, -b`<br />
-后台运行 (默认: false)
+后台运行 (默认：false)
 
 #### 示例
 
@@ -1149,10 +1149,10 @@ juicefs config [command options] META-URL
 文件被自动清理前在回收站内保留的天数
 
 `--force`<br />
-跳过合理性检查并强制更新指定配置项 (默认: false)
+跳过合理性检查并强制更新指定配置项 (默认：false)
 
 `--encrypt-secret`<br />
-如果密钥之前以原格式存储，则加密密钥 (默认值: false)
+如果密钥之前以原格式存储，则加密密钥 (默认值：false)
 
 `--min-client-version value`<br />
 允许连接的最小客户端版本
@@ -1191,7 +1191,7 @@ juicefs destroy [command options] META-URL UUID
 #### 选项
 
 `--force`<br />
-跳过合理性检查并强制销毁文件系统 (默认: false)
+跳过合理性检查并强制销毁文件系统 (默认：false)
 
 #### 示例
 

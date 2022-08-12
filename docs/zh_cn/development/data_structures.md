@@ -801,7 +801,7 @@ Slice{pos: 40M, id:  0, size: 24M, off:   0, len: 24M} // 实际这一段也会�
 Block 是 JuiceFS 管理数据的基本单元，其大小默认为 4 MiB，且可在文件系统格式化时配置，允许调整的区间范围为 [64 KiB, 16 MiB]。每个 Block 上传后即为对象存储中的一个对象，其命名格式为 `${fsname}/chunks/${hash}/${basename}`，其中：
 
 - fsname 是文件系统名称
-- “chunks” 为固定字符串，代表 JuiceFS 的数据对象
+- “chunks”为固定字符串，代表 JuiceFS 的数据对象
 - hash 是根据 basename 算出来的哈希值，起到一定的隔离管理的作用
 - basename 是对象的有效名称，格式为 `${sliceId}_${index}_${size}`，其中：
   - sliceId 为该对象所属 Slice 的 ID，JuiceFS 中每个 Slice 都有一个全局唯一的 ID

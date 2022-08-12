@@ -43,7 +43,7 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 在数据库的选择方面请不要有顾虑，JuiceFS 客户端提供了元数据迁移功能，你可以将元数据从一种数据库中轻松的导出并迁移到其他的数据库中。
 
-本文我们使用 DigitalOcean 的 Redis 6 数据库托管服务，区域选择 `新加坡`，选择与已存在的 Droplet 相同的 VPC 私有网络。创建 Redis 大概需要 5 分钟左右的时间， 我们跟随设置向导对数据库进行初始化设置。
+本文我们使用 DigitalOcean 的 Redis 6 数据库托管服务，区域选择 `新加坡`，选择与已存在的 Droplet 相同的 VPC 私有网络。创建 Redis 大概需要 5 分钟左右的时间，我们跟随设置向导对数据库进行初始化设置。
 
 ![](../images/digitalocean-redis-guide.png)
 

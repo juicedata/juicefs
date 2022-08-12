@@ -9,7 +9,7 @@ slug: /juicefs_on_docker
 
 ## 1. 卷映射
 
-这种方法是将 JuiceFS 挂载点中的目录映射给 Docker 容器。比如， JuiceFS 文件系统挂载在 `/mnt/jfs` 目录，在创建容器时可以这样将 JuiceFS 存储映射到 Docker 容器：
+这种方法是将 JuiceFS 挂载点中的目录映射给 Docker 容器。比如，JuiceFS 文件系统挂载在 `/mnt/jfs` 目录，在创建容器时可以这样将 JuiceFS 存储映射到 Docker 容器：
 
 ```sh
 sudo docker run -d --name nginx \

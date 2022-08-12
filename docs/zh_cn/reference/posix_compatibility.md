@@ -39,10 +39,10 @@ Result: PASS
 
 ### 测试环境
 
-- 测试主机: Amazon EC2: c5d.xlarge (4C 8G)
-- 操作系统: Ubuntu 20.04.1 LTS (Kernel 5.4.0-1029-aws)
-- 对象存储: Amazon S3
-- JuiceFS 版本: 0.17-dev (2021-09-16 292f2b65)
+- 测试主机：Amazon EC2: c5d.xlarge (4C 8G)
+- 操作系统：Ubuntu 20.04.1 LTS (Kernel 5.4.0-1029-aws)
+- 对象存储：Amazon S3
+- JuiceFS 版本：0.17-dev (2021-09-16 292f2b65)
 
 ### 测试步骤
 
