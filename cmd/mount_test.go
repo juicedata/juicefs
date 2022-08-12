@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -143,14 +142,24 @@ func TestUpdateFstab(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.SkipNow()
 	}
-	mockFstab, err := ioutil.TempFile("/tmp", "fstab")
+	mockFstab, err := os.CreateTemp("/tmp", "fstab")
 	if err != nil {
 		t.Fatalf("cannot make temp file: %s", err)
 	}
 	defer os.Remove(mockFstab.Name())
 
-	var fstab = "/etc/fstab"
-	patches := gomonkey.ApplyGlobalVar(&fstab, mockFstab.Name())
+	patches := gomonkey.ApplyFunc(os.Rename, func(src, dest string) error {
+		content, err := os.ReadFile(mockFstab.Name())
+		if err != nil {
+			t.Fatalf("error reading mocked fstab: %s", err)
+		}
+		rv := "redis://127.0.0.1:6379/11 /tmp/jfs-unit-test juicefs _netdev,enable-xattr,entry-cache=2,max-uploads=3,max_read=99,no-usage-report,writeback 0 0"
+		lv := strings.TrimSpace(string(content))
+		if lv != rv {
+			t.Fatalf("incorrect fstab entry: %s", content)
+		}
+		return os.Rename(src, dest)
+	})
 	defer patches.Reset()
 	mountArgs := []string{"juicefs", "mount", "--enable-xattr", testMeta, testMountPoint, "--no-usage-report"}
 	mountOpts := []string{"--update-fstab", "--writeback", "--entry-cache=2", "--max-uploads", "3", "-o", "max_read=99"}
@@ -158,16 +167,6 @@ func TestUpdateFstab(t *testing.T) {
 	defer patches.Reset()
 	mountTemp(t, nil, nil, mountOpts)
 	defer umountTemp(t)
-
-	content, err := ioutil.ReadFile(mockFstab.Name())
-	if err != nil {
-		t.Fatalf("error reading mocked fstab: %s", err)
-	}
-	rv := "redis://127.0.0.1:6379/11 /tmp/jfs-unit-test juicefs _netdev,enable-xattr,entry-cache=2,max-uploads=3,max_read=99,no-usage-report,update-fstab,writeback 0 0"
-	lv := strings.TrimSpace(string(content))
-	if lv != rv {
-		t.Fatalf("incorrect fstab entry: %s", lv)
-	}
 }
 
 func TestUmount(t *testing.T) {

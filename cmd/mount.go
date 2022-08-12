@@ -409,7 +409,7 @@ func tellFstabOptions(c *cli.Context) string {
 		}
 		s = strings.TrimLeft(s, "-")
 		s = strings.Split(s, "=")[0]
-		if !c.IsSet(s) {
+		if !c.IsSet(s) || s == "update-fstab" || s == "background" || s == "d" {
 			continue
 		}
 		if s == "o" {

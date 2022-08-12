@@ -122,7 +122,7 @@ func handleSysMountArgs(args []string) []string {
 		opts := strings.Split(option, ",")
 		for _, opt := range opts {
 			opt = strings.TrimSpace(opt)
-			if opt == "" || utils.StringContains(sysOptions, opt) {
+			if opt == "" || opt == "background" || utils.StringContains(sysOptions, opt) {
 				continue
 			}
 			// Lower case option name is preferred, but if it's the same as flag name, we also accept it
