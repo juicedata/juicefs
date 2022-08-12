@@ -455,6 +455,7 @@ func (m *baseMeta) cleanupDeletedFiles() {
 			}
 			for inode, length := range files {
 				logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
+				fmt.Printf("-- i am here 112 %d\n", inode)
 				m.en.doDeleteFileData(inode, length)
 			}
 		}
@@ -745,39 +746,6 @@ func (m *baseMeta) nextInode() (Ino, error) {
 	}
 	return Ino(n), nil
 }
-
-/*func (m *baseMeta) createDirQuotas(ctx Context, inode Ino, q map[Ino]*quota) map[Ino]*quota {
-	if s, err := m.en.dogetQuotas(ctx, inode); err == nil {
-		fmt.Printf("---- i am here dogetQuotas %+v \n ", s)
-		q[inode] = s
-	}
-	for parentInode, _ := range m.GetParents(ctx, inode) {
-		fmt.Printf("---- i am here GetParents %d \n ", parentInode)
-		if parentInode == RootInode {
-			return q
-		}
-		q = m.getQuotas(ctx, parentInode)
-	}
-	fmt.Printf("----- 888 print q %+v \n", q)
-	return q
-
-}
-
-func (m *baseMeta) getQuotas(ctx Context, parent Ino) map[Ino]*quota {
-	fmt.Printf("------ getQuotas input inode %d \n", parent)
-	if parent == RootInode {
-		return m.dirQuotas[parent]
-	}
-	q := make(map[Ino]*quota)
-	//if Quotas in dirQuotas cache,if no,we have to make a cache
-	if _, ok := m.dirQuotas[parent]; !ok {
-		fmt.Printf("---- start to build dirQuotas cache \n")
-		m.dirQuotas[parent] = m.createDirQuotas(ctx, parent, q)
-	}
-	fmt.Printf("---- 9999 %+v \n", m.dirQuotas[parent])
-	return m.dirQuotas[parent]
-
-}*/
 
 func (m *baseMeta) createDirQuotas(ctx Context, parent, inode Ino) map[Ino]*quota {
 	if s, err := m.en.dogetQuotas(ctx, inode); err == nil {
@@ -1093,6 +1061,7 @@ func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64) {
 	select {
 	case m.maxDeleting <- struct{}{}:
 		go func() {
+			fmt.Printf("-- i am here 11 %d\n", inode)
 			m.en.doDeleteFileData(inode, length)
 			<-m.maxDeleting
 		}()

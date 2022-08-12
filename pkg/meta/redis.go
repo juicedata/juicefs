@@ -1210,6 +1210,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var _type uint8
 	var trash, inode Ino
+	fmt.Printf("-- doUnlink name %s\n", name)
 	keys := []string{m.entryKey(parent), m.inodeKey(parent)}
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -1307,6 +1308,20 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 						newSpace, newInode = -align4K(attr.Length), -1
 						pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 						pipe.Decr(ctx, m.totalInodesKey())
+						if _, ok := m.dirQuotas[parent]; !ok {
+							m.dirQuotas[parent] = make(map[Ino]*quota)
+							m.dirQuotas[parent] = m.getQuotas(ctx, parent, inode)
+						}
+						if m.dirQuotas[parent] != nil {
+							for key, val := range m.dirQuotas[parent] {
+								quota_key := m.quotaKey(key)
+								fmt.Printf("-----44 %d \n", val.usedInodes)
+								//pipe.HSet(ctx, quota_key, "capacity", val.capacity)
+								//pipe.HSet(ctx, quota_key, "inodes", val.inodes)
+								pipe.HSet(ctx, quota_key, "usedSpace", val.usedSpace+newSpace)
+								pipe.HSet(ctx, quota_key, "usedInodes", val.usedInodes-1)
+							}
+						}
 					}
 				case TypeSymlink:
 					pipe.Del(ctx, m.symKey(inode))
@@ -1316,6 +1331,20 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 					newSpace, newInode = -align4K(0), -1
 					pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 					pipe.Decr(ctx, m.totalInodesKey())
+					if _, ok := m.dirQuotas[parent]; !ok {
+						m.dirQuotas[parent] = make(map[Ino]*quota)
+						m.dirQuotas[parent] = m.getQuotas(ctx, parent, inode)
+					}
+					if m.dirQuotas[parent] != nil {
+						for key, val := range m.dirQuotas[parent] {
+							quota_key := m.quotaKey(key)
+							fmt.Printf("-----44 %d \n", val.usedInodes)
+							//pipe.HSet(ctx, quota_key, "capacity", val.capacity)
+							//pipe.HSet(ctx, quota_key, "inodes", val.inodes)
+							pipe.HSet(ctx, quota_key, "usedSpace", val.usedSpace+newSpace)
+							pipe.HSet(ctx, quota_key, "usedInodes", val.usedInodes-1)
+						}
+					}
 				}
 				pipe.Del(ctx, m.xattrKey(inode))
 				if attr.Parent == 0 {
@@ -1332,6 +1361,8 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 			m.fileDeleted(opened, inode, attr.Length)
 		}
 		m.updateStats(newSpace, newInode)
+		//refresh dirQuotas
+		m.updateQuotaStats(parent, newSpace, newInode)
 	}
 	return errno(err)
 }
@@ -1827,65 +1858,6 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 								}
 							}
 						}
-
-						/*if st := m.CaculateDirFiles(ctx, parentSrc, nameSrc, &count, &dirUsedSpace); st == 0 {
-							newSpaceDst, newInodeDst = int64(dirUsedSpace), int64(count)
-							newSpaceSrc, newInodeSrc = -int64(dirUsedSpace), -int64(count)
-							if _, ok := m.dirQuotas[parentDst]; !ok {
-								m.dirQuotas[parentDst] = make(map[Ino]*quota)
-								m.dirQuotas[parentDst] = m.getQuotas(ctx, parentDst, parentDst)
-							}
-							if m.dirQuotas[parentDst] != nil {
-								for key, val := range m.dirQuotas[parentDst] {
-									quota_key := m.quotaKey(key)
-									fmt.Printf("-----44441  %d \n", val.usedInodes)
-									pipe.HSet(ctx, quota_key, "usedSpace", val.usedSpace+newSpaceDst)
-									pipe.HSet(ctx, quota_key, "usedInodes", val.usedInodes+newInodeDst)
-								}
-							}
-							//update dirQuotas[parentSrc]
-							if _, ok := m.dirQuotas[parentSrc]; !ok {
-								m.dirQuotas[parentSrc] = make(map[Ino]*quota)
-								m.dirQuotas[parentSrc] = m.getQuotas(ctx, parentSrc, ino)
-							}
-							if m.dirQuotas[parentSrc] != nil {
-
-								for key, val := range m.dirQuotas[parentSrc] {
-									quota_key := m.quotaKey(key)
-									fmt.Printf("-----44452  %d \n", val.usedInodes)
-									pipe.HSet(ctx, quota_key, "usedSpace", val.usedSpace+newSpaceSrc)
-									pipe.HSet(ctx, quota_key, "usedInodes", val.usedInodes+newInodeSrc)
-								}
-							}
-						}
-						//newSpaceDst, newInodeDst = align4K(sattr.Length), 1
-						//newSpaceSrc, newInodeSrc = -align4K(sattr.Length), -1
-						/*if _, ok := m.dirQuotas[parentDst]; !ok {
-							m.dirQuotas[parentDst] = make(map[Ino]*quota)
-							m.dirQuotas[parentDst] = m.getQuotas(ctx, parentDst, parentDst)
-						}
-						if m.dirQuotas[parentDst] != nil {
-							for key, val := range m.dirQuotas[parentDst] {
-								quota_key := m.quotaKey(key)
-								fmt.Printf("-----44441  %d \n", val.usedInodes)
-								pipe.HSet(ctx, quota_key, "usedSpace", val.usedSpace+newSpaceDst)
-								pipe.HSet(ctx, quota_key, "usedInodes", val.usedInodes+newInodeDst)
-							}
-						}
-						//update dirQuotas[parentSrc]
-						if _, ok := m.dirQuotas[parentSrc]; !ok {
-							m.dirQuotas[parentSrc] = make(map[Ino]*quota)
-							m.dirQuotas[parentSrc] = m.getQuotas(ctx, parentSrc, ino)
-						}
-						if m.dirQuotas[parentSrc] != nil {
-
-							for key, val := range m.dirQuotas[parentSrc] {
-								quota_key := m.quotaKey(key)
-								fmt.Printf("-----44452  %d \n", val.usedInodes)
-								pipe.HSet(ctx, quota_key, "usedSpace", val.usedSpace+newSpaceSrc)
-								pipe.HSet(ctx, quota_key, "usedInodes", val.usedInodes+newInodeSrc)
-							}
-						}*/
 					}
 				}
 			}
@@ -2175,6 +2147,7 @@ func (m *redisMeta) doRefreshSession() {
 func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var attr Attr
 	var ctx = Background
+	fmt.Printf("=== doDeleteSustainedInode %d \n", inode)
 	a, err := m.rdb.Get(ctx, m.inodeKey(inode)).Bytes()
 	if err == redis.Nil {
 		return nil
@@ -2191,11 +2164,29 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 		pipe.Decr(ctx, m.totalInodesKey())
 		pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
+		//update dirQuotas[parentDst]
+		for parentInode, _ := range m.GetParents(ctx, inode) {
+			if _, ok := m.dirQuotas[inode]; !ok {
+				m.dirQuotas[parentInode] = make(map[Ino]*quota)
+				m.dirQuotas[parentInode] = m.getQuotas(ctx, parentInode, inode)
+			}
+			if m.dirQuotas[parentInode] != nil {
+				for key, val := range m.dirQuotas[parentInode] {
+					quota_key := m.quotaKey(key)
+					fmt.Printf("-----del 890  %d \n", val.usedInodes)
+					pipe.HSet(ctx, quota_key, "usedSpace", val.usedSpace+newSpace)
+					pipe.HSet(ctx, quota_key, "usedInodes", val.usedInodes-1)
+				}
+			}
+		}
 		return nil
 	})
 	if err == nil {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length)
+		for parentInode, _ := range m.GetParents(ctx, inode) {
+			m.updateQuotaStats(parentInode, newSpace, -1)
+		}
 	}
 	return err
 }
@@ -2271,6 +2262,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 				//update quota
 				for parentInode, _ := range m.GetParents(ctx, inode) {
 					if _, ok := m.dirQuotas[parentInode]; !ok {
+						m.dirQuotas[parentInode] = make(map[Ino]*quota)
 						m.dirQuotas[parentInode] = m.getQuotas(ctx, parentInode, inode)
 					}
 					if m.dirQuotas[parentInode] != nil {
@@ -2284,7 +2276,6 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 						}
 					}
 				}
-
 			}
 			return nil
 		})
@@ -2309,6 +2300,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 
 func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
 	defer m.timeit(time.Now())
+	fmt.Printf("-- CopyFileRange fin %d  fout %d \n", fin, fout)
 	f := m.of.find(fout)
 	if f != nil {
 		f.Lock()
@@ -2476,6 +2468,7 @@ func (m *redisMeta) cleanupLegacies() {
 
 func (m *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
 	rng := &redis.ZRangeBy{Max: strconv.FormatInt(ts, 10), Count: int64(limit)}
+	fmt.Printf("-- doFindDeletedFiles  m.delfiles() %s \n ", m.delfiles())
 	vals, err := m.rdb.ZRangeByScore(Background, m.delfiles(), rng).Result()
 	if err != nil {
 		return nil, err
@@ -2489,6 +2482,7 @@ func (m *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, err
 		inode, _ := strconv.ParseUint(ps[0], 10, 64)
 		files[Ino(inode)], _ = strconv.ParseUint(ps[1], 10, 64)
 	}
+	fmt.Printf("-- doFindDeletedFiles  files %+v \n ", files)
 	return files, nil
 }
 
@@ -2653,6 +2647,7 @@ func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 	var ctx = Background
 	var indx uint32
 	p := m.rdb.Pipeline()
+	fmt.Printf("---oooooooooooooooo  %d \n", inode)
 	for uint64(indx)*ChunkSize < length {
 		var keys []string
 		for i := 0; uint64(indx)*ChunkSize < length && i < 1000; i++ {

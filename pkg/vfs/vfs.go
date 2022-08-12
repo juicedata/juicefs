@@ -141,6 +141,7 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 		err = syscall.EEXIST
 		return
 	}
+	fmt.Printf("---- vfs MKnod inode %d  name %s  \n", parent, name)
 	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
 		return

@@ -1,6 +1,7 @@
 package meta
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -65,6 +66,7 @@ func (o *openfiles) OpenCheck(ino Ino, attr *Attr) bool {
 func (o *openfiles) Open(ino Ino, attr *Attr) {
 	o.Lock()
 	defer o.Unlock()
+	fmt.Printf("==== test file open inode %d  attr  %+v \n", ino, attr)
 	of, ok := o.files[ino]
 	if !ok {
 		of = &openFile{}
@@ -80,6 +82,7 @@ func (o *openfiles) Open(ino Ino, attr *Attr) {
 	}
 	// next open can keep cache if not modified
 	of.attr.KeepCache = true
+	fmt.Printf("==== test file refs %d \n", of.refs)
 	of.refs++
 	of.lastCheck = time.Now()
 }
@@ -88,6 +91,7 @@ func (o *openfiles) Close(ino Ino) bool {
 	o.Lock()
 	defer o.Unlock()
 	of, ok := o.files[ino]
+	fmt.Printf("==== test file close inode %d  ref  %d \n", ino, of.refs)
 	if ok {
 		of.refs--
 		return of.refs <= 0
