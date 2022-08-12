@@ -128,6 +128,8 @@ jobs:
           make test
           cat cov1.out >> coverage.txt
           cat cov2.out >> coverage.txt
+          echo "hello222"
+          pwd
           sudo DURATION=10 make -C fstests fsracer
           sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
           sudo ./juicefs gc localhost
