@@ -29,6 +29,8 @@ func TestClock(t *testing.T) {
 	c1 := Clock()
 	c2 := Clock()
 	if c2-c1 > time.Microsecond || c2-c1 == 0 {
+		t.Fatalf("clock1 is %s",c1)
+		t.Fatalf("clock2 is %s",c2)
 		t.Fatalf("clock is not accurate: %s", c2-c1)
 	}
 }
