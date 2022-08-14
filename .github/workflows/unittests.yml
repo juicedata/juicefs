@@ -66,6 +66,11 @@ jobs:
           sudo apt install -y attr
           sudo mkdir -p /home/travis/.m2/
 
+      - name: Install FoundationDB
+        run: |
+          wget https://github.com/apple/foundationdb/releases/download/6.3.24/foundationdb-clients_6.3.24-1_amd64.deb
+          wget https://github.com/apple/foundationdb/releases/download/6.3.24/foundationdb-server_6.3.24-1_amd64.deb
+          sudo dpkg -i foundationdb-clients_6.3.24-1_amd64.deb foundationdb-server_6.3.24-1_amd64.deb
 
       - name: Download Zip
         run: |

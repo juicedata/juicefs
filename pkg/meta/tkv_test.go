@@ -56,6 +56,14 @@ func TestEtcdClient(t *testing.T) {
 	testMeta(t, m)
 }
 
+func TestFdbClient(t *testing.T) {
+	m, err := newKVMeta("fdb", "/etc/foundationdb/fdb.cluster:fdb_test", &Config{})
+	if err != nil {
+		t.Fatalf("create meta: %s", err)
+	}
+	testMeta(t, m)
+}
+
 func testTKV(t *testing.T, c tkvClient) {
 	txn := func(f func(kt kvTxn)) {
 		if err := c.txn(func(kt kvTxn) error {

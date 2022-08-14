@@ -74,6 +74,12 @@ runs:
         restore-keys: |
           ${{ runner.os }}-go-
 
+    - name: Install Fdb C Lib
+      shell: bash
+      run: |
+        wget https://github.com/apple/foundationdb/releases/download/6.3.24/foundationdb-clients_6.3.24-1_amd64.deb
+        sudo dpkg -i foundationdb-clients_6.3.24-1_amd64.deb
+
     - name: Build linux target
       shell: bash
       run: |
