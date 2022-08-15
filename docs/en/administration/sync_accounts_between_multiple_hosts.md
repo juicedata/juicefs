@@ -18,13 +18,13 @@ If you are using JuiceFS in Hadoop environment, besides sync accounts between mu
 
 ## Install Ansible
 
-Select a host as a [control node](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#managed-node-requirements) which can access all hosts using `ssh` with the same privileged account like `root` or other sudo account. Then, install Ansible on this host. Read [Installing Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible) for more installation details.
+Select a host as a [control node](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#managed-node-requirements) which can access all hosts using `ssh` with the same privileged account like `root` or other sudo account. Then, install Ansible on this host. Refer to [Installing Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible) for details.
 
 
 
 ## Ensure the same account on all hosts
 
-Create an empty directory `account-sync`, and save the following content in `play.yaml` under this directory.
+Create `account-sync/play.yaml` as follows:
 
 ```yaml
 ---
@@ -46,7 +46,7 @@ Create an empty directory `account-sync`, and save the following content in `pla
 
 
 
-Create a file named `hosts` in this directory. Place IP addresses of all the hosts that need to create account in this file with one host's IP per line.
+Create the Ansible inventory `hosts`, which contains IP addresses of all hosts that need to create account.
 
 Here we ensure an account `alice` with UID 1200 and group `staff` with GID 500 on 2 hosts:
 
@@ -106,7 +106,7 @@ PLAY RECAP *********************************************************************
 In the above example, the group ID 1000 has been allocated to another group on host `172.16.255.180`. So we should **change the GID**  or **delete the group with GID 1000** on host `172.16.255.180`, and then run the playbook again.
 
 :::caution
-If a user account has already existed on the host and we change it to another UID or GID value, the user may lose permissions to the files and directories which they previously had. For example:
+If the UID / GID of an existing user is changed, the user may lose permissions to previously accessible files. For example:
 
 ```shell
 $ ls -l /tmp/hello.txt

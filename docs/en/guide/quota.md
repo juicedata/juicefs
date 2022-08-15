@@ -15,7 +15,7 @@ The storage quota settings are stored in the metadata engine for all mount point
 
 ## View file system information
 
-In a Linux environment, for example, the default capacity of a JuiceFS type file system is identified as `1.0P` by using the `df` command that comes with the system.
+For Linux, the default capacity of a JuiceFS type file system is identified as `1.0P` by using the `df` command.
 
 ```shell
 $ df -Th | grep juicefs
@@ -23,7 +23,7 @@ JuiceFS:ujfs   fuse.juicefs  1.0P  682M  1.0P    1% /mnt
 ```
 
 :::note
-JuiceFS implements support for the POSIX interface through FUSE, because the underlying object storage is usually of infinitely scalable capacity. Therefore, the identification capacity is just an estimate (which also means unlimited) and not the actual capacity, which changes dynamically with the actual usage.
+The capacity of underlying object storage is usually unlimited; namely, JuiceFS storage is unlimited. Therefore, the displayed capacity is just an estimate rather than the actual capacity.
 :::
 
 The `config` command that comes with the client allows you to view the details of a file system.
