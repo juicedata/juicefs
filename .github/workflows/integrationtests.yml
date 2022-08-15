@@ -83,7 +83,9 @@ jobs:
 
 
       - name: Fsracer
+        shell: 'script -q -e -c "bash {0}"'
         run: |
+          pwd
           tty
           echo "hello"
           sudo DURATION=10 make -C fstests fsracer
