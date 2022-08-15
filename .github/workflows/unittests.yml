@@ -15,23 +15,12 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - '.github/workflows/**.yml'
   workflow_dispatch:
 
 jobs:
   unittests:
     runs-on: ubuntu-latest
-#    services:
-#      postgres:
-#        image: postgres
-#        env:
-#          POSTGRES_PASSWORD: postgres
-#        options: >-
-#          --health-cmd pg_isready
-#          --health-interval 10s
-#          --health-timeout 5s
-#          --health-retries 5
-#        ports:
-#          - 5432:5432
     env:
       MINIO_TEST_BUCKET: 127.0.0.1:9000/testbucket
       MINIO_ACCESS_KEY: testUser
@@ -64,7 +53,7 @@ jobs:
           sudo apt install -y redis-server
           sudo apt install -y libacl1-dev
           sudo apt install -y attr
-
+          sudo mkdir -p /home/travis/.m2/
 
 
       - name: Cache Zip
@@ -79,7 +68,6 @@ jobs:
       - name: Download Zip
         if: steps.Cache-Zip.outputs.cache-hit != 'true'
         run: |
-          sudo mkdir -p /home/travis/.m2/
           wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
           wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
           wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
