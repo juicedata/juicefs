@@ -27,6 +27,7 @@ import (
 
 type parallelDownloader struct {
 	sync.Mutex
+	once       sync.Once
 	notify     *sync.Cond
 	src        object.ObjectStorage
 	key        string
@@ -105,10 +106,7 @@ func (r *parallelDownloader) Read(b []byte) (int, error) {
 	if r.off >= r.fsize {
 		return 0, io.EOF
 	}
-	if r.buffers == nil {
-		r.buffers = make(map[int64]*chunk.Page)
-		go r.download()
-	}
+	r.once.Do(func() { go r.download() })
 	off := r.off / r.blockSize * r.blockSize
 	r.Lock()
 	for r.err == nil && r.buffers[off] == nil {
@@ -123,7 +121,9 @@ func (r *parallelDownloader) Read(b []byte) (int, error) {
 	r.off += int64(n)
 	if r.off == off+int64(len(p.Data)) {
 		p.Release()
+		r.Lock()
 		delete(r.buffers, off)
+		r.Unlock()
 		<-r.concurrent
 	}
 	if copiedBytes != nil {
@@ -154,6 +154,7 @@ func newParallelDownloader(store object.ObjectStorage, key string, size int64, b
 		fsize:      size,
 		blockSize:  bSize,
 		concurrent: concurrent,
+		buffers:    make(map[int64]*chunk.Page),
 	}
 	down.notify = sync.NewCond(down)
 	return down
