@@ -102,6 +102,7 @@ jobs:
           echo "hello3"
           ls -lah
           echo "hello5"
+          hello
           sudo make -C fstests setup
           echo "hello111"
           chmod +x travis-setup-hdfs.sh
