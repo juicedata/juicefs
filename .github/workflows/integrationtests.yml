@@ -84,6 +84,8 @@ jobs:
 
       - name: Fsracer
         run: |
+          tty
+          echo "hello"
           sudo DURATION=10 make -C fstests fsracer
 
 
