@@ -98,7 +98,12 @@ jobs:
           #sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/share/apache*/conf/settings.xml
           docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
           make
+          pwd
+          echo "hello3"
+          ls -lah
+          echo "hello5"
           sudo make -C fstests setup
+          echo "hello111"
           chmod +x travis-setup-hdfs.sh
           sudo lsof -i :8020
           ./travis-setup-hdfs.sh
