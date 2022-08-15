@@ -33,11 +33,11 @@ JuiceFS 默认使用本地的 `用户` 和 `UID` 映射，在分布式环境下�
 
 ### 4. 内存资源
 
-JuiceFS Hadoop Java SDK 最多需要额外使用 4 * [`juicefs.memory-size`](#io-配置) 的 off-heap 内存用来加速读写性能，默认情况下，最多需要额外 1.2GB 内存（取决于写入负载）。
+根据计算任务（如 Spark executor）的读写负载，JuiceFS Hadoop Java SDK 可能需要额外使用 4 * [`juicefs.memory-size`](#io-配置) 的堆外内存用来加速读写性能。默认情况下，建议为计算任务至少配置 1.2GB 的堆外内存。
 
 ### 5. 回收站
 
-JuiceFS Hadoop Java SDK 同样也有和 HDFS 一样的回收站，需要通过设置 ``fs.trash.interval`` 和 ``fs.trash.checkpoint.interval`` 打开。
+JuiceFS Hadoop Java SDK 同样也有和 HDFS 一样的回收站功能，需要通过设置 `fs.trash.interval` 和 `fs.trash.checkpoint.interval` 开启，请参考 [HDFS 文档](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html#File_Deletes_and_Undeletes)了解更多信息。
 
 ## 安装与编译客户端
 
