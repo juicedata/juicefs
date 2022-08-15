@@ -82,8 +82,9 @@ jobs:
           wget -O install.sh https://tiup-mirrors.pingcap.com/install.sh
           wget -O rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
           unzip rclone-v1.57.0-linux-amd64.zip -d .
-          wget -O litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz && tar -zxvf litmus-0.13.tar.gz -C .
-          cd litmus-0.13 && ./configure && make && cd -
+          mkdir -p /home/travis/.m2/
+          wget -O litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz && tar -zxvf litmus-0.13.tar.gz -C /home/travis/.m2/
+          cd cd /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
           wget -O etcd-v3.5.2-linux-amd64.tar.gz  https://github.com/etcd-io/etcd/releases/download/v3.5.2/etcd-v3.5.2-linux-amd64.tar.gz
           tar -zxf etcd-v3.5.2-linux-amd64.tar.gz -C .
           bash install.sh
@@ -115,7 +116,6 @@ jobs:
           sudo ./juicefs gc localhost
           sudo ./juicefs fsck localhost
           bash <(curl -s https://codecov.io/bash)
-
 
 
       - name: Send Slack Notification
