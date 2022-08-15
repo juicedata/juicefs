@@ -105,7 +105,9 @@ jobs:
           sudo make -C fstests setup
           echo "hello111"
           chmod +x travis-setup-hdfs.sh
+          echo "hello222"
           sudo lsof -i :8020
+          echo "hello333"
           ./travis-setup-hdfs.sh
           for i in {2222,3306,5432,8020,9000,9007} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
           sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
