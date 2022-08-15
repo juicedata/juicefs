@@ -86,6 +86,7 @@ jobs:
           wget -O /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz  https://github.com/etcd-io/etcd/releases/download/v3.5.2/etcd-v3.5.2-linux-amd64.tar.gz
           unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2/
           tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2/
+          cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
           tar -zxf /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz -C /home/travis/.m2/
 
 
@@ -102,7 +103,6 @@ jobs:
           sudo service postgresql restart
           sudo mysql -e "create database dev;"
           psql -c 'create database test;' -U postgres
-          cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
           bash /home/travis/.m2/install.sh
           source /home/runner/.bash_profile
           tiup -v
