@@ -35,6 +35,10 @@ If you want to use JuiceFS in a distributed environment, when creating a file sy
 
 JuiceFS Hadoop Java SDK need extra 4 * [`juicefs.memory-size`](#io-configurations) off-heap memory at most. By default, up to 1.2 GB of additional memory is required (depends on write load).
 
+### 5. Trash
+
+JuiceFS Hadoop Java SDK also has the trash location like HDFS. It will be enabled by setting ``fs.trash.interval`` and ``fs.trash.checkpoint.interval``.
+
 ## Install and compile the client
 
 ### Install the pre-compiled client
