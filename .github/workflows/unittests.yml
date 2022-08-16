@@ -87,7 +87,7 @@ jobs:
           sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
           cat /etc/postgresql/*/main/pg_hba.conf
           sudo service postgresql restart
-          psql -c "ALTER USER postgres PASSWORD 'postgres';" -U postgres
+          psql -c "ALTER USER postgres PASSWORD '';" -U postgres
           sudo service postgresql restart
           sudo mysql -e "create database dev;"
           psql -c 'create database test;' -U postgres

@@ -39,7 +39,7 @@ func TestMySQLClient(t *testing.T) {
 }
 
 func TestPostgreSQLClient(t *testing.T) {
-	m, err := newSQLMeta("postgres", "postgres:postgres@localhost:5432/test?sslmode=disable", &Config{})
+	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", &Config{})
 	if err != nil || m.Name() != "postgres" {
 		t.Fatalf("create meta: %s", err)
 	}
