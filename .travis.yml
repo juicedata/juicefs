@@ -31,6 +31,7 @@ addons:
       - gcc-mingw-w64 # for windows
 before_install:
   - source ./check-changed.sh
+  - exit 0;
   - if [ $SKIP_TEST == true ]; then exit 0; fi
 install: true
 before_script:
