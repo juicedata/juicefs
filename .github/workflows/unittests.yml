@@ -15,7 +15,6 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
-      - '.github/workflows/**.yml'
   workflow_dispatch:
 
 jobs:
@@ -45,7 +44,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          fetch-depth: 1
+          fetch-depth: 500
 
       - name: Install Packages
         run: |
@@ -55,15 +54,6 @@ jobs:
           sudo apt install -y attr
           sudo mkdir -p /home/travis/.m2/
 
-
-#      - name: Cache Zip
-#        id: Cache-Zip
-#        uses: actions/cache@v2
-#        with:
-#          path: '/home/travis/.m2/'
-#          key: ${{ runner.os }}-zip-key
-#          restore-keys: |
-#            ${{ runner.os }}-zip
 
       - name: Download Zip
         run: |
@@ -120,15 +110,12 @@ jobs:
           sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
           sudo ./juicefs gc localhost
           sudo ./juicefs fsck localhost
-          #bash <(curl -s https://codecov.io/bash)
-          echo "hello333"
-          pwd
+
 
       - name: Code Coverage
         uses: codecov/codecov-action@v3
         with:
           files: ./coverage.txt
-
 
 
 
