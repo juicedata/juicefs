@@ -84,8 +84,8 @@ jobs:
           sudo service postgresql start
           sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
           sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
-          sudo sed  -i "s?host.*all.*all.*32.*scram-sha-256?host    all             all             127.0.0.1/32            scram-sha-256?" /etc/postgresql/*/main/pg_hba.conf
-          sudo sed  -i "s?host.*all.*all.*128.*scram-sha-256?host    all             all             ::1/128                 scram-sha-256?" /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?host.*all.*all.*32.*scram-sha-256?host    all             all             127.0.0.1/32            trust?" /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?host.*all.*all.*128.*scram-sha-256?host    all             all             ::1/128                 trust?" /etc/postgresql/*/main/pg_hba.conf
           cat /etc/postgresql/*/main/pg_hba.conf
           sudo service postgresql restart
           psql -c "create user runner superuser;" -U postgres
