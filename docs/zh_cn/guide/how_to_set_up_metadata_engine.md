@@ -29,11 +29,12 @@ JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性
 
 ## Redis
 
-[Redis](https://redis.io/) 是基于内存的键值存储系统，在 BSD 协议下开源，可用于数据库、缓存和消息代理。
+[Redis](https://redis.io) 是基于内存的键值存储系统，在 BSD 协议下开源，可用于数据库、缓存和消息代理。
 
 :::note 注意
-JuiceFS 要求 Redis 4.0+ 版本
-为了保证元数据安全，JuiceFS 要求 Redis 的淘汰策略（maxmemory_policy）设置为不淘汰（noeviction），否则在启动 JuiceFS 的时候将会尝试将其设置为（noeviction），如果设置失败将会打印告警日志。
+JuiceFS 要求使用 4.0 及以上版本的 Redis，使用低版本的 Redis 将会报错。
+
+为了保证元数据安全，JuiceFS 要求 Redis 的淘汰策略（`maxmemory_policy`）设置为不淘汰（`noeviction`），否则在启动 JuiceFS 的时候将会尝试将其设置为 `noeviction`，如果设置失败将会打印告警日志。
 :::
 
 ### 创建文件系统
@@ -402,6 +403,10 @@ juicefs mount -d badger://$HOME/badger-data /mnt/jfs
 [TiKV](https://github.com/tikv/tikv) 是一个分布式事务型的键值数据库，最初作为 [PingCAP](https://pingcap.com) 旗舰产品 [TiDB](https://github.com/pingcap/tidb) 的存储层而研发，现已独立开源并从 [CNCF](https://www.cncf.io/projects) 毕业。
 
 TiKV 的测试环境搭建非常简单，使用官方提供的 TiUP 工具即可实现一键部署，具体可参见[这里](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/)。生产环境一般需要至少三个节点来存储三份数据副本，部署步骤可以参考[官方文档](https://tikv.org/docs/5.1/deploy/install/install/)。
+
+:::note 注意
+JuiceFS 建议使用 5.0 及以上版本的 TiKV
+:::
 
 ### 创建文件系统
 
