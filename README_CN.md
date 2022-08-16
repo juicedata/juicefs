@@ -83,7 +83,7 @@ JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/deployment/hadoop_java_sdk.md) 与 H
 - [缓存管理](docs/zh_cn/guide/cache_management.md)
 - [故障诊断和分析](docs/zh_cn/administration/fault_diagnosis_and_analysis.md)
 - [FUSE 挂载选项](docs/zh_cn/reference/fuse_mount_options.md)
-- [在 Windows 中使用 JuiceFS](docs/zh_cn/windows.md)
+- [在 Windows 中使用 JuiceFS](docs/zh_cn/getting-started/installation.md#windows-系统)
 - [S3 网关](docs/zh_cn/deployment/s3_gateway.md)
 
 请查阅 [JuiceFS 文档中心](https://juicefs.com/docs/zh/community/introduction) 了解更多信息。
