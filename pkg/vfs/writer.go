@@ -17,7 +17,6 @@
 package vfs
 
 import (
-	"fmt"
 	"math/rand"
 	"runtime"
 	"sync"
@@ -125,8 +124,8 @@ func (s *sliceWriter) flushData() {
 // protected by s.chunk.file
 func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.Errno {
 	f := s.chunk.file
-	fmt.Printf("====== hello start from vfs writer 5  off  ----:    %d \n", off)
-	fmt.Printf("====== hello start from vfs writer 5 ----:    %s\n", data)
+	//fmt.Printf("====== hello start from vfs writer 5  off  ----:    %d \n", off)
+	//fmt.Printf("====== hello start from vfs writer 5 ----:    %s\n", data)
 	_, err := s.writer.WriteAt(data, int64(off))
 	if err != nil {
 		logger.Warnf("write: chunk: %d off: %d %s", s.id, off, err)
@@ -256,7 +255,7 @@ func (f *fileWriter) freeChunk(c *chunkWriter) {
 // protected by file
 func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data []byte) syscall.Errno {
 	c := f.findChunk(indx)
-	fmt.Printf("====== hello start fromvfs writer 4----:    %s\n", data)
+	//fmt.Printf("====== hello start fromvfs writer 4----:    %s\n", data)
 	s := c.findWritableSlice(off, uint32(len(data)))
 	if s == nil {
 		s = &sliceWriter{
@@ -292,8 +291,8 @@ func (w *dataWriter) usedBufferSize() int64 {
 }
 
 func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Errno {
-	fmt.Printf("====== hello start from vfs  writer 3----:    %s\n", data)
-	fmt.Printf("====== hello start from vfs  writer 3  off----:    %d\n", off)
+	//fmt.Printf("====== hello start from vfs  writer 3----:    %s\n", data)
+	//fmt.Printf("====== hello start from vfs  writer 3  off----:    %d\n", off)
 	for {
 		if f.totalSlices() < 1000 {
 			break
@@ -324,22 +323,22 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 
 	indx := uint32(off / meta.ChunkSize)
 	pos := uint32(off % meta.ChunkSize)
-	fmt.Printf("====== hello start from vfs  writer 3  indx----:    %d\n", indx)
-	fmt.Printf("====== hello start from vfs  writer 3  pos----:    %d\n", pos)
+	//fmt.Printf("====== hello start from vfs  writer 3  indx----:    %d\n", indx)
+	//fmt.Printf("====== hello start from vfs  writer 3  pos----:    %d\n", pos)
 	for len(data) > 0 {
 		n := uint32(len(data))
 		if pos+n > meta.ChunkSize {
 			n = meta.ChunkSize - pos
-			fmt.Printf("====== hello start from vfs  writer 3  n----:    %d\n", n)
+			//fmt.Printf("====== hello start from vfs  writer 3  n----:    %d\n", n)
 		}
 		if st := f.writeChunk(ctx, indx, pos, data[:n]); st != 0 {
 			return st
 		}
 		data = data[n:]
-		fmt.Printf("====== hello start from vfs  writer 3  data----:    %s \n", data)
+		//fmt.Printf("====== hello start from vfs  writer 3  data----:    %s \n", data)
 		indx++
 		pos = (pos + n) % meta.ChunkSize
-		fmt.Printf("====== hello start from vfs  writer 3  pos //2 ----:    %d \n", pos)
+		//fmt.Printf("====== hello start from vfs  writer 3  pos //2 ----:    %d \n", pos)
 	}
 	if off+size > f.length {
 		f.length = off + size

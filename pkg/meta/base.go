@@ -360,7 +360,6 @@ func (m *baseMeta) refreshUsage() {
 func (m *baseMeta) refreshQuota() {
 	for {
 		if quotaMap, err := m.en.doGetQuotaList("dirQuotaList"); err == nil {
-			//fmt.Printf("---222 %v", quotaMap)
 			//get quota form engine and cache to m.quota
 			for key, val := range quotaMap {
 				//Add lock
@@ -377,12 +376,9 @@ func (m *baseMeta) refreshQuota() {
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, size, inodes int64) bool {
 	if _, ok := m.dirQuotas[inode]; !ok {
-		fmt.Printf("---33 go to getQuotas \n")
 		m.dirQuotas[inode] = make(map[Ino]*quota)
 		m.dirQuotas[inode] = m.getQuotas(ctx, inode, inode)
 	}
-	fmt.Printf("---33 go to checkDirQuota \n")
-	fmt.Printf("------3311 %+v \n", m.dirQuotas[inode])
 	if _, ok := m.dirQuotas[inode]; ok {
 		for _, q := range m.dirQuotas[inode] {
 			if size > 0 && q.capacity > 0 && atomic.LoadInt64(&q.usedSpace)+size > int64(q.capacity) {
@@ -406,11 +402,9 @@ func (m *baseMeta) checkQuota(size, inodes int64) bool {
 
 func (m *redisMeta) updateQuotaStats(inode Ino, space int64, inodes int64) {
 	for _, val := range m.dirQuotas[inode] {
-		fmt.Printf("----------5 %d \n", inodes)
 		m.Lock()
 		val.usedInodes = val.usedInodes + inodes
 		val.usedSpace = val.usedSpace + space
-		fmt.Printf("----------6 %d \n", val.usedSpace)
 		m.Unlock()
 		//atomic.AddUint64(val.usedSpace, space)
 		//atomic.AddUint64(val.usedInodes, inodes)
@@ -455,7 +449,6 @@ func (m *baseMeta) cleanupDeletedFiles() {
 			}
 			for inode, length := range files {
 				logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
-				fmt.Printf("-- i am here 112 %d\n", inode)
 				m.en.doDeleteFileData(inode, length)
 			}
 		}
@@ -749,28 +742,23 @@ func (m *baseMeta) nextInode() (Ino, error) {
 
 func (m *baseMeta) createDirQuotas(ctx Context, parent, inode Ino) map[Ino]*quota {
 	if s, err := m.en.dogetQuotas(ctx, inode); err == nil {
-		fmt.Printf("---- i am here dogetQuotas %+v \n ", s)
 		m.dirQuotas[parent][inode] = s
 	}
 	for parentInode, _ := range m.GetParents(ctx, inode) {
-		fmt.Printf("---- i am here GetParents %d \n ", parentInode)
 		if parentInode == RootInode {
 			return m.dirQuotas[parent]
 		}
 		m.dirQuotas[parent] = m.getQuotas(ctx, parent, parentInode)
 	}
-	fmt.Printf("----- 888 print q %+v \n", m.dirQuotas[parent])
 	return m.dirQuotas[parent]
 
 }
 
 func (m *baseMeta) getQuotas(ctx Context, parent, inode Ino) map[Ino]*quota {
-	fmt.Printf("------ getQuotas input inode %d \n", parent)
 	if parent == RootInode {
 		return m.dirQuotas[parent]
 	}
 	m.dirQuotas[parent] = m.createDirQuotas(ctx, parent, inode)
-	fmt.Printf("---- 9999 %+v \n", m.dirQuotas[parent])
 	return m.dirQuotas[parent]
 
 }

@@ -567,7 +567,7 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 	if ino == controlInode && runtime.GOOS == "darwin" {
 		fh = v.getControlHandle(ctx.Pid())
 	}
-	fmt.Printf("====== hello start from vfs write  2----:    %s\n", buf)
+	//fmt.Printf("====== hello start from vfs write  2----:    %s\n", buf)
 	defer func() { logit(ctx, "write (%d,%d,%d,%d): %s", ino, size, off, fh, strerr(err)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {
