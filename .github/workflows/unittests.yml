@@ -113,7 +113,7 @@ jobs:
 
 
       - name: Code Coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v1
         with:
           files: ./coverage.txt
 
