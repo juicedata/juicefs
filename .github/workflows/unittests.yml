@@ -56,17 +56,16 @@ jobs:
           sudo mkdir -p /home/travis/.m2/
 
 
-      - name: Cache Zip
-        id: Cache-Zip
-        uses: actions/cache@v2
-        with:
-          path: '/home/travis/.m2/'
-          key: ${{ runner.os }}-zip-key
-          restore-keys: |
-            ${{ runner.os }}-zip
+#      - name: Cache Zip
+#        id: Cache-Zip
+#        uses: actions/cache@v2
+#        with:
+#          path: '/home/travis/.m2/'
+#          key: ${{ runner.os }}-zip-key
+#          restore-keys: |
+#            ${{ runner.os }}-zip
 
       - name: Download Zip
-        if: steps.Cache-Zip.outputs.cache-hit != 'true'
         run: |
           wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
           wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
