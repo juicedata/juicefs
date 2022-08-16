@@ -83,7 +83,7 @@ If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](docs/en/deployment/h
 - [Cache Management](docs/en/guide/cache_management.md)
 - [Fault Diagnosis and Analysis](docs/en/administration/fault_diagnosis_and_analysis.md)
 - [FUSE Mount Options](docs/en/reference/fuse_mount_options.md)
-- [Using JuiceFS on Windows](docs/en/windows.md)
+- [Using JuiceFS on Windows](docs/en/getting-started/installation.md#Windows)
 - [S3 Gateway](docs/en/deployment/s3_gateway.md)
 
 Please refer to [JuiceFS Document Center](https://juicefs.com/docs/community/introduction) for more information.
