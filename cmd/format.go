@@ -147,6 +147,11 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 				Name:  "encrypt-rsa-key",
 				Usage: "a path to RSA private key (PEM)",
 			},
+			&cli.StringFlag{
+				Name:  "encrypt-algo",
+				Usage: "encrypt algorithm (aes256gcm-rsa, chacha20-rsa)",
+				Value: object.AES256GCM_RSA,
+			},
 			&cli.IntFlag{
 				Name:  "trash-days",
 				Value: 1,
@@ -237,7 +242,10 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("incorrect passphrase: %s", err)
 		}
-		encryptor := object.NewAESEncryptor(object.NewRSAEncryptor(privKey))
+		encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), format.EncryptAlgo)
+		if err != nil {
+			return nil, err
+		}
 		blob = object.NewEncrypted(blob, encryptor)
 	}
 	return blob, nil
@@ -377,7 +385,7 @@ func format(c *cli.Context) error {
 				format.HashPrefix = c.Bool(flag)
 			case "storage":
 				format.Storage = c.String(flag)
-			case "encrypt-rsa-key":
+			case "encrypt-rsa-key", "encrypt-algo":
 				logger.Warnf("Flag %s is ignored since it cannot be updated", flag)
 			}
 		}
@@ -392,6 +400,7 @@ func format(c *cli.Context) error {
 			SecretKey:    c.String("secret-key"),
 			SessionToken: c.String("session-token"),
 			EncryptKey:   loadEncrypt(c.String("encrypt-rsa-key")),
+			EncryptAlgo:  c.String("encrypt-algo"),
 			Shards:       c.Int("shards"),
 			HashPrefix:   c.Bool("hash-prefix"),
 			Capacity:     c.Uint64("capacity") << 30,
