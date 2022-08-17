@@ -23,7 +23,7 @@ JuiceFS:ujfs   fuse.juicefs  1.0P  682M  1.0P    1% /mnt
 ```
 
 :::note
-The capacity of underlying object storage is usually unlimited; namely, JuiceFS storage is unlimited. Therefore, the displayed capacity is just an estimate rather than the actual capacity.
+The capacity of underlying object storage is usually unlimited, i.e., JuiceFS storage is unlimited. Therefore, the displayed capacity is just an estimate rather than the actual storage limit.
 :::
 
 The `config` command that comes with the client allows you to view the details of a file system.
