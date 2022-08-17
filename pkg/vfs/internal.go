@@ -346,6 +346,10 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		inodes := r.Get64()
 		v.setQuota(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), ino, capacity, inodes)
 		*data = append(*data, uint8(0))
+	case meta.FsckQuota:
+		ino := Ino(r.Get64())
+		v.fsckQuota(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), ino)
+		*data = append(*data, uint8(0))
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
 		*data = append(*data, uint8(syscall.EINVAL&0xff))

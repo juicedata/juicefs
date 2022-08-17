@@ -76,6 +76,7 @@ type engine interface {
 
 	GetSession(sid uint64, detail bool) (*Session, error)
 	doSetQuota(ctx Context, inode Ino, capacity, inodes uint64) syscall.Errno
+	doFsckQuota(ctx Context, inode Ino) syscall.Errno
 	dogetQuotas(ctx Context, inode Ino) (*quota, error)
 	doSetQuotaList(name string) error
 	doGetQuotaList(name string) (map[Ino]quota, error)
@@ -118,7 +119,7 @@ type baseMeta struct {
 	quotas map[Ino]quota
 	// Cache a list related to a directory, containing quotas configured on itself and its ancestors
 	dirQuotas map[Ino]map[Ino]*quota
-	quotalist DirQuotaList
+	//quotalist DirQuotaList
 }
 
 func newBaseMeta(addr string, conf *Config) *baseMeta {
@@ -366,7 +367,12 @@ func (m *baseMeta) refreshQuota() {
 				m.Lock()
 				m.quotas[key] = val
 				m.Unlock()
+				/*if s, err := m.en.dogetQuotas(Background, key); err == nil {
+					m.dirQuotas[key] = make(map[Ino]*quota)
+					m.dirQuotas[key][key] = s
+				}*/
 			}
+
 		}
 
 	}
@@ -1005,6 +1011,18 @@ func (m *baseMeta) SetQuota(ctx Context, inode Ino, capacity, inodes uint64) sys
 	}
 	defer m.timeit(time.Now())
 	return m.en.doSetQuota(ctx, m.checkRoot(inode), capacity, inodes)
+}
+
+func (m *baseMeta) FsckQuota(ctx Context, inode Ino) syscall.Errno {
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	if inode == 0 {
+		return syscall.EINVAL
+	}
+	defer m.timeit(time.Now())
+	//return 0
+	return m.en.doFsckQuota(ctx, m.checkRoot(inode))
 }
 
 func (m *baseMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {

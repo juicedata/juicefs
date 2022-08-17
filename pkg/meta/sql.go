@@ -2611,6 +2611,10 @@ func (m *dbMeta) doSetQuota(ctx Context, inode Ino, capacity, inodes uint64) sys
 	return errno(nil)
 }
 
+func (m *dbMeta) doFsckQuota(ctx Context, inode Ino) syscall.Errno {
+	return errno(nil)
+}
+
 func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		n, err := s.Delete(&xattr{Inode: inode, Name: name})

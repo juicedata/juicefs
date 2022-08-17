@@ -50,6 +50,8 @@ const (
 	DelQuota = 1006
 	// GetQuota is a message to get quota for target directories/files
 	GetQuota = 1007
+	// FsckQuota is a message to check consistency quota for target directories/files
+	FsckQuota = 1008
 )
 
 const (
@@ -374,6 +376,8 @@ type Meta interface {
 	InitMetrics(registerer prometheus.Registerer)
 	//SetQuota set quota for directory
 	SetQuota(ctx Context, inode Ino, capacity, inodes uint64) syscall.Errno
+	//FsckQuota set quota for directory
+	FsckQuota(ctx Context, inode Ino) syscall.Errno
 }
 
 type Creator func(driver, addr string, conf *Config) (Meta, error)

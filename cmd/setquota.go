@@ -38,18 +38,23 @@ func cmdSetquota() *cli.Command {
 		Subcommands: []*cli.Command{
 			{
 				Name:   "set",
-				Usage:  "set quota for dir",
+				Usage:  "Set quota for dir",
 				Action: setquota,
 			},
 			{
 				Name:   "del",
-				Usage:  "del quota for dir ",
+				Usage:  "Del quota for dir",
 				Action: delquota,
 			},
 			{
 				Name:   "ls",
-				Usage:  "get quota for dir ",
+				Usage:  "Get quota for dir",
 				Action: getquota,
+			},
+			{
+				Name:   "fsck",
+				Usage:  "Check consistency of directory quota",
+				Action: fsckquota,
 			},
 		},
 		Description: `
@@ -158,6 +163,59 @@ func delquota(ctx *cli.Context) error {
 func getquota(ctx *cli.Context) error {
 	setup(ctx, 0)
 	fmt.Printf("get -----\n")
+
+	return nil
+}
+
+func fsckquota(ctx *cli.Context) error {
+	setup(ctx, 1)
+	if runtime.GOOS == "windows" {
+		logger.Infof("Windows is not supported")
+		return nil
+	}
+	for i := 0; i < ctx.Args().Len(); i++ {
+		path := ctx.Args().Get(i)
+		var d string
+		var inode uint64
+		var err error
+		if ctx.Bool("inode") {
+			inode, err = strconv.ParseUint(path, 10, 64)
+			d, _ = os.Getwd()
+		} else {
+			d, err = filepath.Abs(path)
+			if err != nil {
+				logger.Fatalf("abs of %s: %s", path, err)
+			}
+			inode, err = utils.GetFileInode(d)
+		}
+		if err != nil {
+			logger.Errorf("lookup inode for %s: %s", path, err)
+			continue
+		}
+		if inode < uint64(meta.RootInode) {
+			logger.Fatalf("inode number shouldn't be less than %d", meta.RootInode)
+		}
+		f := openController(d)
+		if f == nil {
+			logger.Errorf("%s is not inside JuiceFS", path)
+			continue
+		}
+
+		wb := utils.NewBuffer(4 + 4 + 8)
+		wb.Put32(meta.FsckQuota)
+		wb.Put32(8)
+		wb.Put64(inode)
+		_, err = f.Write(wb.Bytes())
+		if err != nil {
+			logger.Fatalf("write message: %s", err)
+		}
+		data := make([]byte, 4)
+		n := readControl(f, data)
+		if n == 1 && data[0] == byte(syscall.EINVAL&0xff) {
+			logger.Fatalf("info is not supported, please upgrade and mount again")
+		}
+		_ = f.Close()
+	}
 
 	return nil
 }

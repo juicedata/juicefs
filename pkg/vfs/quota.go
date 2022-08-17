@@ -29,7 +29,13 @@ import (
 func (v *VFS) setQuota(ctx meta.Context, ino Ino, capacity, inodes uint64) (err syscall.Errno) {
 	//todo
 	fmt.Printf("just for test ----ino: %d  capacity:%d, inodes: %d \n", ino, capacity, inodes)
-	//err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
 	err = v.Meta.SetQuota(ctx, ino, capacity, inodes)
+	return
+}
+
+func (v *VFS) fsckQuota(ctx meta.Context, ino Ino) (err syscall.Errno) {
+	//todo
+	fmt.Printf("just for test ----ino: %d \n", ino)
+	err = v.Meta.FsckQuota(ctx, ino)
 	return
 }

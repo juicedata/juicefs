@@ -1221,7 +1221,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			//refresh dir usedSpace and usedinode in redis
 			if _, ok := m.dirQuotas[parent]; !ok {
 				m.dirQuotas[parent] = make(map[Ino]*quota)
-				m.dirQuotas[parent] = m.getQuotas(ctx, parent, parent)
+				m.dirQuotas[parent] = m.getQuotas(ctx, parent, ino)
 			}
 			if m.dirQuotas[parent] != nil {
 				for key, val := range m.dirQuotas[parent] {
@@ -3180,6 +3180,41 @@ func (m *redisMeta) doSetQuota(ctx Context, inode Ino, cap, inodes uint64) sysca
 	return 0
 }
 
+func (m *redisMeta) doFsckQuota(ctx Context, inode Ino) syscall.Errno {
+	if quotaMap, err := m.en.doGetQuotaList("dirQuotaList"); err == nil {
+		//get quota form engine and cache to m.quota
+		var wg sync.WaitGroup
+		for key, val := range quotaMap {
+			wg.Add(1)
+			go func(iterm Ino, limit quota) {
+				defer wg.Done()
+				var summary Summary
+				if st := GetSummary(m, ctx, iterm, &summary, true); st != 0 {
+					panic(fmt.Errorf("fsck error : %s", st))
+				}
+				m.dirQuotas[iterm] = make(map[Ino]*quota)
+				m.dirQuotas[iterm] = m.getQuotas(ctx, iterm, iterm)
+				q := &quota{
+					capacity:   limit.capacity,
+					inodes:     limit.inodes,
+					usedInodes: int64(summary.Files) + int64(summary.Dirs),
+					usedSpace:  int64(summary.Size),
+				}
+				m.dirQuotas[iterm][iterm] = q
+				quota_key := m.quotaKey(iterm)
+				if err = m.rdb.HSet(ctx, quota_key, "usedSpace", int64(summary.Size)).Err(); err != nil {
+					panic(fmt.Errorf("fsck set usedSpace to engine error: %s", err))
+				}
+				if err = m.rdb.HSet(ctx, quota_key, "usedInodes", int64(summary.Files)+int64(summary.Dirs)).Err(); err != nil {
+					panic(fmt.Errorf("fsck set usedInodes to engine error: %s", err))
+				}
+			}(key, val)
+		}
+		wg.Wait()
+	}
+	return 0
+}
+
 func (m *redisMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
 	key := m.quotaKey(inode)
 	out, err := m.rdb.HGetAll(ctx, key).Result()
@@ -3239,6 +3274,7 @@ func (m *redisMeta) doSetQuotaList(name string) error {
 	m.rdb.SAdd(Background, "dirQuotaList", name)
 	return nil
 }
+
 func (m *redisMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
 	//vals, err := m.rdb.ZRange(Background, name, 0, 1000000).Result()
 	vals, err := m.rdb.SMembers(Background, name).Result()

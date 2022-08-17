@@ -2227,6 +2227,10 @@ func (m *kvMeta) doSetQuota(ctx Context, inode Ino, capacity, inodes uint64) sys
 	return errno(nil)
 }
 
+func (m *kvMeta) doFsckQuota(ctx Context, inode Ino) syscall.Errno {
+	return errno(nil)
+}
+
 func (m *kvMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
 	//Todo
 	return nil, nil
