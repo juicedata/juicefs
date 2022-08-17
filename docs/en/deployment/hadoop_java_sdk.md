@@ -189,6 +189,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.push-interval`   | 10            | Metric push interval (in seconds)                                                                                                                                           |
 | `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                                |
 | `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.                         |
+| `juicefs.backup-meta`     | `3600`        | Interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup)                                                                       |
 
 #### Multiple file systems configuration
 
