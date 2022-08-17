@@ -4,12 +4,12 @@ position: 7
 ---
 # How to destroy a file system
 
-JuiceFS client provides the `destroy` command to completely destroy a file system, which will result in the following.
+JuiceFS client provides the `destroy` command to completely destroy a file system, which will result in
 
-- Delete all metadata entries of this file system
-- Deletes all data blocks of the file system
+- Deletion of all metadata entries of this file system
+- Deletion of all data blocks of this file system
 
-The command to destroy a file system is as follows.
+Use this command in the following format.
 
 ```shell
 juicefs destroy <METADATA URL> <UUID>
@@ -20,7 +20,7 @@ juicefs destroy <METADATA URL> <UUID>
 
 ## Find the UUID of the file system
 
-The `status` command on the JuiceFS client can view detailed information about a file system by simply specifying the file system's metadata engine URL, e.g.
+JuiceFS client provides a `status` command to view detailed information about a file system by simply specifying the file system's metadata engine URL, e.g.
 
 ```shell {8}
 $ juicefs status redis://127.0.0.1:6379/1
@@ -49,7 +49,7 @@ $ juicefs status redis://127.0.0.1:6379/1
 ## Destroy a file system
 
 :::danger
-The destroy operation will cause all the data in the database records and object storage associated with the file system to be deleted, please make sure to backup the important data first before operation!
+The destroy operation will cause all the data in the database and the object storage associated with the file system to be deleted. Please make sure to back up the important data before operating!
 :::
 
 ```shell {1}
