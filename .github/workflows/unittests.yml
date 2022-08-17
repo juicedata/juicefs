@@ -3,6 +3,7 @@ name: "unittests"
 on:
   push:
     branches:
+      - 'main'
       - 'release-*'
     paths-ignore:
       - 'docs/**'
