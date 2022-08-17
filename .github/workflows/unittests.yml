@@ -44,7 +44,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          fetch-depth: 500
+          fetch-depth: 1
 
       - name: Install Packages
         run: |
