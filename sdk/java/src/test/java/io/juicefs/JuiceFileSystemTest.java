@@ -662,4 +662,11 @@ public class JuiceFileSystemTest extends TestCase {
     trash.expungeImmediately();
     assertEquals(0, fs.listStatus(fs.getTrashRoot(trashFile)).length);
   }
+
+  public void testBlockSize() throws Exception {
+    Configuration newConf = new Configuration(cfg);
+    newConf.set("dfs.blocksize", "256m");
+    FileSystem newFs = FileSystem.newInstance(newConf);
+    assertEquals(256 << 20, newFs.getDefaultBlockSize(new Path("/")));
+  }
 }

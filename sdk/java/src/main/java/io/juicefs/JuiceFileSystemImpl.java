@@ -271,7 +271,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       throw new IOException("name is required");
     }
 
-    blocksize = conf.getLong("juicefs.block.size", conf.getLong("dfs.blocksize", 128 << 20));
+    blocksize = conf.getLongBytes("juicefs.block.size", conf.getLongBytes("dfs.blocksize", 128 << 20));
     minBufferSize = conf.getInt("juicefs.min-buffer-size", 128 << 10);
     cacheReplica = Integer.parseInt(getConf(conf, "cache-replica", "1"));
     fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
