@@ -60,7 +60,6 @@ runs:
         sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
         sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
         cat $fileName
-        #curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
     - name: Smallfile Test 100K
       shell: bash
@@ -72,7 +71,7 @@ runs:
         sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
         sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
         cat $fileName
-        #curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+
 
     - name: Log
       shell: bash
