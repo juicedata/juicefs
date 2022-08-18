@@ -51,14 +51,14 @@ def generate_nested_dir(root_dir):
     return result
 
 def change_entry(entries):
-    li = []
+    options = []
     for entry in entries:
         type = random.choice(['--include', '--exclude'])
         # print(entry)
         value = entry.replace(random.choice(entry), random.choice(['*', '?']), random.randint(0,2))
         # print(value)
-        li.append( (type, "'%s'"%value) )
-    return li
+        options.append( (type, "'%s'"%value) )
+    return options
 
 all_entry = generate_all_entries(jfs_source_dir)
 st_all_entry = st.lists(st.sampled_from(list(all_entry))).map(lambda x: change_entry(x))
@@ -82,9 +82,22 @@ def test_sync_with_path_entry(sync_options):
 def test_sync_with_nested_dir(sync_options):
     compare_rsync_and_juicesync(sync_options)
 
-@given(options=st_random_text)
-@settings(max_examples=100, deadline=None)
-def test_idempotent_for_juicesync(sync_options):
+@given(sync_options=st_random_text)
+@settings(max_examples=10000, deadline=None)
+def test_idempotent_with_random_text(sync_options):
+    compare_juicesync_twice(sync_options)
+
+@given(sync_options=st_all_entry)
+@settings(max_examples=10000, deadline=None)
+def test_idempotent_with_all_entry(sync_options):
+    compare_juicesync_twice(sync_options)
+
+@given(sync_options=st_nested_dir)
+@settings(max_examples=10000, deadline=None)
+def test_idempotent_with_nested_dir(sync_options):
+    compare_juicesync_twice(sync_options)
+
+def compare_juicesync_twice(sync_options):    
     assert len(sync_options) != 0
     sync_options = [item for sublist in sync_options for item in sublist]
     do_juicesync(jfs_source_dir, 'juicesync_dir1/', sync_options)
@@ -125,6 +138,8 @@ def do_rsync(source_dir, dest_dir, sync_options):
 if __name__ == "__main__":
     setup()
     test_sync_with_nested_dir()
-    test_idempotent_for_juicesync()
     test_sync_with_path_entry()
     # test_sync_with_random_text()
+    test_idempotent_with_all_entry()
+    test_idempotent_with_nested_dir()
+    # test_idempotent_with_random_text()
