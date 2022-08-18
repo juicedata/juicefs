@@ -5,7 +5,6 @@ from hypothesis import given, strategies as st, settings, example, assume
 from hypothesis.strategies import composite, tuples
 import os
 
-entries = set()
 jfs_source_dir=os.path.expanduser('~/Documents/juicefs2/pkg/')
 jfs_source_dir='jfs_source/pkg/'
 
@@ -26,18 +25,18 @@ def setup():
     os.system('./juicefs mount --no-usage-report %s %s -d'%(meta_url, mount_point))
     os.system('./juicefs sync %s %s'%(jfs_source_dir, mount_point) )
 
-    for root, dirs, files in os.walk(jfs_source_dir):
+def generate_all_entries(root_dir):
+    entries = set()
+    for root, dirs, files in os.walk(root_dir):
         # print(root)
         for d in dirs:
-            print(d+'/')
             entries.add(d+'/')
         for file in files:
-            print(file)
             entries.add(file)
-            file_path = os.path.join(root, file)[len(jfs_source_dir):]
-            print(file_path)
+            file_path = os.path.join(root, file)[len(root_dir):]
             entries.add(file_path)
     print(len(entries))
+    return entries
 
 def change_entry(entries):
     li = []
@@ -49,24 +48,43 @@ def change_entry(entries):
         li.append( (type, "'%s'"%value) )
     return li
 
-setup()
-path_entry = st.lists(st.sampled_from(list(entries))).map(lambda x: change_entry(x))
-valid_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
-random_text = st.lists(valid_name).map(lambda x: change_entry(x))
+def generate_nested_dir(root_dir):
+    result = []
+    for root, dirs, files in os.walk(root_dir):
+        for d in dirs:
+            dir = os.path.join(root, d)
+            li = dir.split('/')
+            s = set()
+            for i in range(0, len(li)):
+                s.add('/'.join(li[i:]))
+            result.append(list(s))
+    return result
 
-@given(sync_options=random_text)
+all_entry = generate_all_entries(jfs_source_dir)
+st_all_entry = st.lists(st.sampled_from(list(all_entry))).map(lambda x: change_entry(x))
+nested_dir = generate_nested_dir(jfs_source_dir)
+st_nested_dir = st.sampled_from(nested_dir).map(lambda x: change_entry(x))
+valid_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
+st_random_text = st.lists(valid_name).map(lambda x: change_entry(x))
+
+@given(sync_options=st_random_text)
 @settings(max_examples=10000, deadline=None)
 def test_sync_with_random_text(sync_options):
     compare_rsync_and_juicesync(sync_options)
 
-@given(sync_options=path_entry)
+@given(sync_options=st_all_entry)
 @settings(max_examples=10000, deadline=None)
 def test_sync_with_path_entry(sync_options):
     compare_rsync_and_juicesync(sync_options)
 
-@given(options=random_text)
+@given(sync_options=st_nested_dir)
+@settings(max_examples=10000, deadline=None)
+def test_sync_with_nested_dir(sync_options):
+    compare_rsync_and_juicesync(sync_options)
+
+@given(options=st_random_text)
 @settings(max_examples=100, deadline=None)
-def test_idempotent(sync_options):
+def test_idempotent_for_juicesync(sync_options):
     assert len(sync_options) != 0
     sync_options = [item for sublist in sync_options for item in sublist]
     if os.path.exists('juicesync_dir1/'):
@@ -91,7 +109,6 @@ def test_idempotent(sync_options):
 
     diff_result = os.system('diff -ur juicesync_dir1 juicesync_dir2')
     assert diff_result==0
-
 
 def compare_rsync_and_juicesync(sync_options):
     assert len(sync_options) != 0
@@ -119,6 +136,8 @@ def compare_rsync_and_juicesync(sync_options):
     assert diff_result==0
 
 if __name__ == "__main__":
-    test_idempotent()
+    setup()
+    test_sync_with_nested_dir()
+    test_idempotent_for_juicesync()
     test_sync_with_path_entry()
-    test_sync_with_random_text()
+    # test_sync_with_random_text()
