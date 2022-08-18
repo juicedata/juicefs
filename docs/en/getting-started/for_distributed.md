@@ -136,7 +136,7 @@ The above command sets the cache directory in the `/mycache` directory and speci
 
 #### Auto-mount on boot
 
-Use `juicefs mount --update-fstab` to setup auto-mount at boot, for example:
+Use `juicefs mount --update-fstab` to set up auto-mount at boot, for example:
 
 ```bash
 $ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1 <MOUNTPOINT>
