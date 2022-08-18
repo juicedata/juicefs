@@ -47,7 +47,8 @@ def generate_nested_dir(root_dir):
             s = set()
             for i in range(0, len(li)):
                 s.add('/'.join(li[i:]))
-            result.append(list(s))
+            if len(s) != 0:
+                result.append(list(s))
     return result
 
 def change_entry(entries):
