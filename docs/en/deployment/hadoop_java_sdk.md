@@ -35,10 +35,6 @@ If you want to use JuiceFS in a distributed environment, when creating a file sy
 
 Depending on the read and write load of computing tasks (such as Spark executor), JuiceFS Hadoop Java SDK may require an additional 4 * [`juicefs.memory-size`](#io-configurations) off-heap memory to speed up read and write performance. By default, it is recommended to configure at least 1.2GB of off-heap memory for compute tasks.
 
-### 5. Trash
-
-JuiceFS Hadoop Java SDK also has the same trash function as HDFS, which needs to be enabled by setting `fs.trash.interval` and `fs.trash.checkpoint.interval`, please refer to [HDFS documentation](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html#File_Deletes_and_Undeletes) for more information.
-
 ## Install and compile the client
 
 ### Install the pre-compiled client
@@ -354,6 +350,10 @@ Before restart, you need to confirm JuiceFS related configuration has been writt
 HDFS, Hue, ZooKeeper and other services don't need to be restarted.
 
 When `Class io.juicefs.JuiceFileSystem not found` or `No FilesSystem for scheme: jfs` exceptions was occurred after restart, reference [FAQ](#faq).
+
+### Trash
+
+JuiceFS Hadoop Java SDK also has the same trash function as HDFS, which needs to be enabled by setting `fs.trash.interval` and `fs.trash.checkpoint.interval`, please refer to [HDFS documentation](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html#File_Deletes_and_Undeletes) for more information.
 
 ## Environmental Verification
 
