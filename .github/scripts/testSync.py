@@ -38,16 +38,6 @@ def generate_all_entries(root_dir):
     print(len(entries))
     return entries
 
-def change_entry(entries):
-    li = []
-    for entry in entries:
-        type = random.choice(['--include', '--exclude'])
-        # print(entry)
-        value = entry.replace(random.choice(entry), random.choice(['*', '?']), 1)
-        # print(value)
-        li.append( (type, "'%s'"%value) )
-    return li
-
 def generate_nested_dir(root_dir):
     result = []
     for root, dirs, files in os.walk(root_dir):
@@ -59,6 +49,16 @@ def generate_nested_dir(root_dir):
                 s.add('/'.join(li[i:]))
             result.append(list(s))
     return result
+
+def change_entry(entries):
+    li = []
+    for entry in entries:
+        type = random.choice(['--include', '--exclude'])
+        # print(entry)
+        value = entry.replace(random.choice(entry), random.choice(['*', '?']), random.randint(0,2))
+        # print(value)
+        li.append( (type, "'%s'"%value) )
+    return li
 
 all_entry = generate_all_entries(jfs_source_dir)
 st_all_entry = st.lists(st.sampled_from(list(all_entry))).map(lambda x: change_entry(x))
@@ -87,53 +87,40 @@ def test_sync_with_nested_dir(sync_options):
 def test_idempotent_for_juicesync(sync_options):
     assert len(sync_options) != 0
     sync_options = [item for sublist in sync_options for item in sublist]
-    if os.path.exists('juicesync_dir1/'):
-        shutil.rmtree('juicesync_dir1/')
-    os.makedirs('juicesync_dir1')
-    if os.path.exists('juicesync_dir2/'):
-        shutil.rmtree('juicesync_dir2/')
-    os.makedirs('juicesync_dir2')
-    juicesync_cmd = ['./juicefs' , 'sync', '--dirs', jfs_source_dir,  'juicesync_dir1/']+sync_options
-    print('juicesync_cmd: '+' '.join(juicesync_cmd))
-    try:
-        subprocess.check_call(juicesync_cmd)
-    except Exception as e:
-        assert False
-    
-    juicesync_cmd = ['./juicefs' , 'sync', '--dirs',  'juicesync_dir1/', 'juicesync_dir2/']+sync_options
-    print('juicesync_cmd: '+' '.join(juicesync_cmd))
-    try:
-        subprocess.check_call(juicesync_cmd)
-    except Exception as e:
-        assert False
-
+    do_juicesync(jfs_source_dir, 'juicesync_dir1/', sync_options)
+    do_juicesync('juicesync_dir1/', 'juicesync_dir2/', sync_options)
     diff_result = os.system('diff -ur juicesync_dir1 juicesync_dir2')
     assert diff_result==0
 
 def compare_rsync_and_juicesync(sync_options):
     assert len(sync_options) != 0
     sync_options = [item for sublist in sync_options for item in sublist]
-    if os.path.exists('rsync_dir/'):
-        shutil.rmtree('rsync_dir/')
-    os.makedirs('rsync_dir')
-    rsync_cmd = ['rsync', '-a', '-r' , jfs_source_dir,  'rsync_dir/']+sync_options
-    print('rsync_cmd: '+ ' '.join(rsync_cmd))
-    try:
-        subprocess.check_call(rsync_cmd)
-    except Exception as e:
-        assert False
+    do_rsync(jfs_source_dir, 'rsync_dir/', sync_options)
+    do_juicesync(jfs_source_dir, 'juicesync_dir/', sync_options)
+    diff_result = os.system('diff -ur juicesync_dir rsync_dir')
+    assert diff_result==0
 
-    if os.path.exists('juicesync_dir/'):
-        shutil.rmtree('juicesync_dir/')
-    os.makedirs('juicesync_dir')
-    juicesync_cmd = ['./juicefs' , 'sync', '--dirs', jfs_source_dir,  'juicesync_dir/']+sync_options
+def do_juicesync(source_dir, dest_dir, sync_options):
+    if os.path.exists(dest_dir):
+        shutil.rmtree(dest_dir)
+    os.makedirs(dest_dir)
+    juicesync_cmd = ['./juicefs' , 'sync', '--dirs', source_dir, dest_dir]+sync_options
     print('juicesync_cmd: '+' '.join(juicesync_cmd))
     try:
         subprocess.check_call(juicesync_cmd)
     except Exception as e:
         assert False
-    diff_result = os.system('diff -ur juicesync_dir rsync_dir')
-    assert diff_result==0
+
+def do_rsync(source_dir, dest_dir, sync_options):
+    if os.path.exists(dest_dir):
+        shutil.rmtree(dest_dir)
+    os.makedirs(dest_dir)
+    rsync_cmd = ['rsync', '-a', '-r' , source_dir,  dest_dir]+sync_options
+    print('rsync_cmd: '+ ' '.join(rsync_cmd))
+    try:
+        subprocess.check_call(rsync_cmd)
+    except Exception as e:
+        assert False
 
 if __name__ == "__main__":
     setup()
