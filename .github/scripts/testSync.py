@@ -119,5 +119,6 @@ def compare_rsync_and_juicesync(sync_options):
     assert diff_result==0
 
 if __name__ == "__main__":
+    test_idempotent()
     test_sync_with_path_entry()
     test_sync_with_random_text()
