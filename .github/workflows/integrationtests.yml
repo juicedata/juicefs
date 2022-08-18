@@ -3,7 +3,6 @@ name: "integrationtests"
 on:
   push:
     branches:
-      - 'main'
       - 'release-*'
     paths-ignore:
       - 'docs/**'
@@ -80,6 +79,14 @@ jobs:
           sudo DURATION=60 make -C fstests fsx
           sudo make -C fstests xattrs
           sudo make -C fstests flock
+
+
+      - name: Fsracer
+        #https://github.com/gfx/example-github-actions-with-tty
+        shell: 'script -q -e -c "bash {0}"'
+        run: |
+          sudo DURATION=60 make -C fstests fsracer
+
 
       - name: log
         if: ${{ always() }}

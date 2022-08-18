@@ -814,7 +814,7 @@ func matchKey(rules []rule, key string) bool {
 			suffix := suffixForPattern(prefix+s, rule.pattern)
 			ok, err := path.Match(rule.pattern, suffix)
 			if err != nil {
-				panic(fmt.Sprintf("match %s with %s: %v", rule.pattern, suffix, err))
+				logger.Fatalf("match %s with %s: %v", rule.pattern, suffix, err)
 			}
 			if ok {
 				if rule.include {
