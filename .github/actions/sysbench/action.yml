@@ -1,0 +1,89 @@
+name: 'JuiceFS Sysbench Action'
+description: 'JuiceFS Sysbench action'
+inputs:
+  type:
+    description: 'type of the test, include compress method with none lz4 and zstd'
+    required: true
+    default: 'none'
+  
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.18.x'
+
+    - name: Set up Docker
+      uses: docker-practice/actions-setup-docker@master
+
+    - name: Build linux target
+      shell: bash
+      run: make juicefs
+
+    - name: Run Redis
+      shell: bash
+      run: |
+        sudo docker run -d --name redis -v redis-data:/data  \
+        -p 6379:6379  redis redis-server --appendonly yes
+
+
+    - name: Juicefs Format
+      shell: bash
+      run: |
+        if [ "${{inputs.type}}" = "none" ]; then
+          echo "compress: type is none"
+          sudo ./juicefs format --compress none redis://127.0.0.1:6379/1 pics
+        elif [ "${{inputs.type}}" = "lz4" ]; then
+          echo "compress: type is none"
+          sudo ./juicefs format --compress lz4 redis://127.0.0.1:6379/1 pics
+        elif [ "${{inputs.type}}" = "zstd" ]; then
+          echo "compress: type is none"
+          sudo ./juicefs format --compress zstd redis://127.0.0.1:6379/1 pics
+        else
+          echo "<FATAL>: invalid compress type"
+          exit 1
+        fi
+
+
+    - name: Juicefs Mount
+      run: |
+        sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs --no-usage-report &
+
+
+    - name: Install Sysbench
+      run: |
+        curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
+        sudo apt -y install sysbench
+
+
+    - name: Smallfile Test 1M
+      run: |
+        date +%Y_%m_%d_%H_%M_%S > /tmp/datetime
+        DATE_TIME=$(cat /tmp/datetime)
+        cd /jfs
+        sudo stat /jfs
+        sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
+        fileName=result_rndrw_1M_6000_$DATE_TIME
+        sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
+        sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
+        cat $fileName
+        curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+
+    - name: Smallfile Test 100K
+      run: |
+        DATE_TIME=$(cat /tmp/datetime)
+        cd /jfs
+        sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
+        fileName=result_rndrw_100K_60000_$DATE_TIME
+        sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
+        sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
+        cat $fileName
+        curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+
+    - name: Log
+      if: ${{ always() }}
+      run: |
+        echo "juicefs log"
+        sudo tail -n 1000 /var/log/juicefs.log
+        grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
