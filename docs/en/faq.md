@@ -126,6 +126,9 @@ $ ls -l /usr/bin/fusermount
 
 Above example means all users have executable permission.
 
+## `cannot update volume XXX from XXX to XXX`
+The meta database has already been formatted and previous configuration cannot be updated by this `format`. You can execute the `juicefs format` command after manually cleaning up the meta database.
+
 ## Why the same user on host X has permission to access a file in JuiceFS while has no permission to it on host Y?
 
 The same user has different UID or GID on host X and host Y. Use `id` command to show the UID and GID:

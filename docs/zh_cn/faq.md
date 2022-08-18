@@ -126,6 +126,9 @@ $ ls -l /usr/bin/fusermount
 
 上面的例子表示所有用户都有权限执行。
 
+## `cannot update volume XXX from XXX to XXX`
+使用的元数据库已经被 format 过了并且本次 format 无法更新之前的某些配置。需要在手动清理元数据库后再执行 `juicefs format` 命令。
+
 ## 为什么同一个用户在主机 X 上有权限访问 JuiceFS 的文件，在主机 Y 上访问该文件却没有权限？
 
 该用户在主机 X 和主机 Y 上的 UID 或者 GID 不一样。使用 `id` 命令可以显示用户的 UID 和 GID：
