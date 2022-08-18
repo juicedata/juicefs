@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  sysbenchsmallfilerandrw:
+  smallfilerndrw:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -42,7 +42,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
 
-  sysbenchsmallfilerandrw_lz4:
+  smallfilerndrw_lz4:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -65,7 +65,7 @@ jobs:
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1
 
-  sysbenchsmallfilerandrw_zstd:
+  smallfilerndrw_zstd:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

@@ -31,33 +31,25 @@ runs:
     - name: Juicefs Format
       shell: bash
       run: |
-        if [ "${{inputs.type}}" = "none" ]; then
-          echo "compress: type is none"
-          sudo ./juicefs format --compress none redis://127.0.0.1:6379/1 pics
-        elif [ "${{inputs.type}}" = "lz4" ]; then
-          echo "compress: type is none"
-          sudo ./juicefs format --compress lz4 redis://127.0.0.1:6379/1 pics
-        elif [ "${{inputs.type}}" = "zstd" ]; then
-          echo "compress: type is none"
-          sudo ./juicefs format --compress zstd redis://127.0.0.1:6379/1 pics
-        else
-          echo "<FATAL>: invalid compress type"
-          exit 1
-        fi
+        echo ${{inputs.meta_url}}
+        sudo ./juicefs format --compress ${{inputs.meta_url}} redis://127.0.0.1:6379/1 pics
 
 
     - name: Juicefs Mount
+      shell: bash
       run: |
         sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs --no-usage-report &
 
 
     - name: Install Sysbench
+      shell: bash
       run: |
         curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
         sudo apt -y install sysbench
 
 
     - name: Smallfile Test 1M
+      shell: bash
       run: |
         date +%Y_%m_%d_%H_%M_%S > /tmp/datetime
         DATE_TIME=$(cat /tmp/datetime)
@@ -71,6 +63,7 @@ runs:
         curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
     - name: Smallfile Test 100K
+      shell: bash
       run: |
         DATE_TIME=$(cat /tmp/datetime)
         cd /jfs
@@ -82,6 +75,7 @@ runs:
         curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
     - name: Log
+      shell: bash
       if: ${{ always() }}
       run: |
         echo "juicefs log"
