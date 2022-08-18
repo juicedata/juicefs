@@ -24,6 +24,8 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -92,25 +94,29 @@ func resetTestMeta() *redis.Client { // using Redis
 	return rdb
 }
 
-func mountTemp(t *testing.T, bucket *string, trash bool) {
+func mountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraMountOpts []string) {
 	_ = resetTestMeta()
 	testDir := t.TempDir()
 	if bucket != nil {
 		*bucket = testDir
 	}
-	args := []string{"", "format", "--bucket", testDir, testMeta, testVolume}
-	if !trash {
-		args = append(args, "--trash-days=0")
+	formatArgs := []string{"", "format", "--bucket", testDir, testMeta, testVolume}
+	if extraFormatOpts != nil {
+		formatArgs = append(formatArgs, extraFormatOpts...)
 	}
-	if err := Main(args); err != nil {
+	if err := Main(formatArgs); err != nil {
 		t.Fatalf("format failed: %s", err)
 	}
 
 	// must do reset, otherwise will panic
 	ResetHttp()
 
+	mountArgs := []string{"", "mount", "--enable-xattr", testMeta, testMountPoint, "--no-usage-report"}
+	if extraMountOpts != nil {
+		mountArgs = append(mountArgs, extraMountOpts...)
+	}
 	go func() {
-		if err := Main([]string{"", "mount", "--enable-xattr", testMeta, testMountPoint, "--no-usage-report"}); err != nil {
+		if err := Main(mountArgs); err != nil {
 			t.Errorf("mount failed: %s", err)
 		}
 	}()
@@ -124,7 +130,7 @@ func umountTemp(t *testing.T) {
 }
 
 func TestMount(t *testing.T) {
-	mountTemp(t, nil, true)
+	mountTemp(t, nil, nil, nil)
 	defer umountTemp(t)
 
 	if err := os.WriteFile(fmt.Sprintf("%s/f1.txt", testMountPoint), []byte("test"), 0644); err != nil {
@@ -132,8 +138,39 @@ func TestMount(t *testing.T) {
 	}
 }
 
+func TestUpdateFstab(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.SkipNow()
+	}
+	mockFstab, err := os.CreateTemp("/tmp", "fstab")
+	if err != nil {
+		t.Fatalf("cannot make temp file: %s", err)
+	}
+	defer os.Remove(mockFstab.Name())
+
+	patches := gomonkey.ApplyFunc(os.Rename, func(src, dest string) error {
+		content, err := os.ReadFile(mockFstab.Name())
+		if err != nil {
+			t.Fatalf("error reading mocked fstab: %s", err)
+		}
+		rv := "redis://127.0.0.1:6379/11 /tmp/jfs-unit-test juicefs _netdev,enable-xattr,entry-cache=2,max-uploads=3,max_read=99,no-usage-report,writeback 0 0"
+		lv := strings.TrimSpace(string(content))
+		if lv != rv {
+			t.Fatalf("incorrect fstab entry: %s", content)
+		}
+		return os.Rename(src, dest)
+	})
+	defer patches.Reset()
+	mountArgs := []string{"juicefs", "mount", "--enable-xattr", testMeta, testMountPoint, "--no-usage-report"}
+	mountOpts := []string{"--update-fstab", "--writeback", "--entry-cache=2", "--max-uploads", "3", "-o", "max_read=99"}
+	patches = gomonkey.ApplyGlobalVar(&os.Args, append(mountArgs, mountOpts...))
+	defer patches.Reset()
+	mountTemp(t, nil, nil, mountOpts)
+	defer umountTemp(t)
+}
+
 func TestUmount(t *testing.T) {
-	mountTemp(t, nil, true)
+	mountTemp(t, nil, nil, nil)
 	umountTemp(t)
 
 	inode, err := utils.GetFileInode(testMountPoint)
