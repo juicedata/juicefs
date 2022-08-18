@@ -5,15 +5,17 @@ from hypothesis import given, strategies as st, settings, example, assume
 from hypothesis.strategies import composite, tuples
 import os
 
-jfs_source_dir=os.path.expanduser('~/Documents/juicefs2/pkg/')
-jfs_source_dir='jfs_source/pkg/'
+JFS_SOURCE_DIR=os.path.expanduser('~/Documents/juicefs2/pkg/')
+# JFS_SOURCE_DIR='jfs_source/pkg/'
 
 def setup():
-    meta_url = "sqlite3://abc.db"
+    meta_url = 'sqlite3://abc.db'
     mount_point='/tmp/sync-test/'
     volume_name='sync-test'
     if os.path.isfile('abc.db'):
         os.remove('abc.db')
+    if os.path.exists(mount_point):
+        os.system('umount %s'%mount_point)
     cache_dir = os.path.expanduser('~/.juicefs/local/%s/'%volume_name)
     if os.path.exists(cache_dir):
         try:
@@ -23,7 +25,7 @@ def setup():
     
     os.system('./juicefs format %s %s'%(meta_url, volume_name))
     os.system('./juicefs mount --no-usage-report %s %s -d'%(meta_url, mount_point))
-    os.system('./juicefs sync %s %s'%(jfs_source_dir, mount_point) )
+    os.system('./juicefs sync %s %s'%(JFS_SOURCE_DIR, mount_point) )
 
 def generate_all_entries(root_dir):
     entries = set()
@@ -42,77 +44,79 @@ def generate_nested_dir(root_dir):
     result = []
     for root, dirs, files in os.walk(root_dir):
         for d in dirs:
-            dir = os.path.join(root, d)
+            dir = os.path.join(root, d)[len(root_dir):]
             li = dir.split('/')
             s = set()
             for i in range(0, len(li)):
-                s.add('/'.join(li[i:]))
+                s.add('/'.join(li[i:])+'/')
             if len(s) != 0:
                 result.append(list(s))
+    print(result)
     return result
 
 def change_entry(entries):
+    entries = random.sample( entries, random.randint(0, min(len(entries), 5)) )
     options = []
     for entry in entries:
         type = random.choice(['--include', '--exclude'])
-        # print(entry)
         value = entry.replace(random.choice(entry), random.choice(['*', '?']), random.randint(0,2))
-        # print(value)
+        # print(type+' '+value)
         options.append( (type, "'%s'"%value) )
+    # print(options)
     return options
 
-all_entry = generate_all_entries(jfs_source_dir)
-st_all_entry = st.lists(st.sampled_from(list(all_entry))).map(lambda x: change_entry(x))
-nested_dir = generate_nested_dir(jfs_source_dir)
-st_nested_dir = st.sampled_from(nested_dir).map(lambda x: change_entry(x))
+all_entry = generate_all_entries(JFS_SOURCE_DIR)
+print(len(all_entry))
+st_all_entry = st.lists(st.sampled_from(list(all_entry))).map(lambda x: change_entry(x)).filter(lambda x: len(x) != 0)
+nested_dir = generate_nested_dir(JFS_SOURCE_DIR)
+st_nested_dir = st.sampled_from(nested_dir).map(lambda x: change_entry(x)).filter(lambda x: len(x) != 0)
 valid_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
-st_random_text = st.lists(valid_name).map(lambda x: change_entry(x))
+st_random_text = st.lists(valid_name).map(lambda x: change_entry(x)).filter(lambda x: len(x) != 0)
 
 @given(sync_options=st_random_text)
-@settings(max_examples=10000, deadline=None)
+@settings(max_examples=100, deadline=None)
 def test_sync_with_random_text(sync_options):
+    print(sync_options)
     compare_rsync_and_juicesync(sync_options)
 
 @given(sync_options=st_all_entry)
-@settings(max_examples=10000, deadline=None)
+@settings(max_examples=100, deadline=None)
 def test_sync_with_path_entry(sync_options):
     compare_rsync_and_juicesync(sync_options)
 
 @given(sync_options=st_nested_dir)
-@settings(max_examples=10000, deadline=None)
+@settings(max_examples=1000, deadline=None)
 def test_sync_with_nested_dir(sync_options):
     compare_rsync_and_juicesync(sync_options)
 
 @given(sync_options=st_random_text)
-@settings(max_examples=10000, deadline=None)
+@settings(max_examples=100, deadline=None)
 def test_idempotent_with_random_text(sync_options):
     compare_juicesync_twice(sync_options)
 
 @given(sync_options=st_all_entry)
-@settings(max_examples=10000, deadline=None)
+@settings(max_examples=100, deadline=None)
 def test_idempotent_with_all_entry(sync_options):
     compare_juicesync_twice(sync_options)
 
 @given(sync_options=st_nested_dir)
-@settings(max_examples=10000, deadline=None)
+@settings(max_examples=100, deadline=None)
 def test_idempotent_with_nested_dir(sync_options):
     compare_juicesync_twice(sync_options)
 
 def compare_juicesync_twice(sync_options):    
-    if len(sync_options) != 0:
-        return 
+    assert sync_options != 0
     sync_options = [item for sublist in sync_options for item in sublist]
-    do_juicesync(jfs_source_dir, 'juicesync_dir1/', sync_options)
+    do_juicesync(JFS_SOURCE_DIR, 'juicesync_dir1/', sync_options)
     do_juicesync('juicesync_dir1/', 'juicesync_dir2/', sync_options)
     diff_result = os.system('diff -ur juicesync_dir1 juicesync_dir2')
     assert diff_result==0
 
 def compare_rsync_and_juicesync(sync_options):
-    if len(sync_options) != 0:
-        return 
+    assert sync_options != 0
     sync_options = [item for sublist in sync_options for item in sublist]
-    do_rsync(jfs_source_dir, 'rsync_dir/', sync_options)
-    do_juicesync(jfs_source_dir, 'juicesync_dir/', sync_options)
+    do_rsync(JFS_SOURCE_DIR, 'rsync_dir/', sync_options)
+    do_juicesync(JFS_SOURCE_DIR, 'juicesync_dir/', sync_options)
     diff_result = os.system('diff -ur juicesync_dir rsync_dir')
     assert diff_result==0
 
