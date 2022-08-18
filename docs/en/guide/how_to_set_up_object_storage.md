@@ -892,7 +892,7 @@ juicefs format \
 TiKV can be used as both metadata storage and data storage for JuiceFS.
 
 :::note
-JuiceFS recommends using a TiKV cluster of version 5.0 and above as the data storage. TiKV cluster is recommended to be deployed independently and not mixed with TiDB.
+It's recommended to use dedicated TiKV 5.0+ cluster as the data storage for JuiceFS.
 :::
 
 The `--bucket` option format is `<host>:<port>,<host>:<port>,<host>:<port>`, and `<host>` is the address of Placement Driver (PD). The options `--access-key` and `--secret-key` have no effect and can be omitted. For example:

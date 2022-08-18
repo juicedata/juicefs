@@ -890,7 +890,7 @@ juicefs format \
 TiKV 既可以用作 JuiceFS 的元数据存储，也可以用于 JuiceFS 的数据存储。
 
 :::note 注意
-JuiceFS 建议使用 5.0 及以上版本的 TiKV 集群作为数据存储，TiKV 集群建议独立部署，不要和 TiDB 混用。
+建议使用独立部署的 TiKV 5.0+ 集群作为 JuiceFS 的数据存储
 :::
 
 `--bucket` 选项格式类似 `<host>:<port>,<host>:<port>,<host>:<port>`，其中 `<host>` 是 Placement Driver（PD）的地址。`--access-key` 和 `--secret-key` 选项没有作用，可以省略。例如：

@@ -405,7 +405,7 @@ juicefs mount -d badger://$HOME/badger-data /mnt/jfs
 TiKV 的测试环境搭建非常简单，使用官方提供的 TiUP 工具即可实现一键部署，具体可参见[这里](https://tikv.org/docs/latest/concepts/tikv-in-5-minutes)。生产环境一般需要至少三个节点来存储三份数据副本，部署步骤可以参考[官方文档](https://tikv.org/docs/latest/deploy/install/install)。
 
 :::note 注意
-JuiceFS 建议使用 5.0 及以上版本的 TiKV 集群作为元数据引擎，TiKV 集群建议独立部署，不要和 TiDB 混用。
+建议使用独立部署的 TiKV 5.0+ 集群作为 JuiceFS 的元数据引擎
 :::
 
 ### 创建文件系统

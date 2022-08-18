@@ -405,7 +405,7 @@ Since BadgerDB is a standalone database, it can only be used locally and does no
 By using the official tool TiUP, you can easily build a local playground for testing (refer [here](https://tikv.org/docs/latest/concepts/tikv-in-5-minutes) for details). Production environment generally requires at least three hosts to store three data replicas (refer to the [official document](https://tikv.org/docs/latest/deploy/install/install) for all deployment steps).
 
 :::note
-JuiceFS recommends using a TiKV cluster of version 5.0 and above as the metadata engine. TiKV cluster is recommended to be deployed independently and not mixed with TiDB.
+It's recommended to use dedicated TiKV 5.0+ cluster as the metadata engine for JuiceFS.
 :::
 
 ### Create a file system
