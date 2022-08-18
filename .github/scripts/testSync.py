@@ -25,9 +25,9 @@ def setup():
         except OSError as e:
             print("Error: %s : %s" % (cache_dir, e.strerror))
     
-    os.system('sudo ./juicefs format %s %s'%(meta_url, volume_name))
-    os.system('sudo ./juicefs mount --no-usage-report %s %s -d'%(meta_url, mount_point))
-    os.system('sudo ./juicefs sync %s %s'%(jfs_source_dir, mount_point) )
+    os.system('./juicefs format %s %s'%(meta_url, volume_name))
+    os.system('./juicefs mount --no-usage-report %s %s -d'%(meta_url, mount_point))
+    os.system('./juicefs sync %s %s'%(jfs_source_dir, mount_point) )
 
     for root, dirs, files in os.walk(jfs_source_dir):
         # print(root)
