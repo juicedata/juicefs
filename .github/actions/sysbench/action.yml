@@ -31,8 +31,8 @@ runs:
     - name: Juicefs Format
       shell: bash
       run: |
-        echo ${{inputs.meta_url}}
-        sudo ./juicefs format --compress ${{inputs.meta_url}} redis://127.0.0.1:6379/1 pics
+        echo ${{inputs.type}}
+        sudo ./juicefs format --compress ${{inputs.type}} redis://127.0.0.1:6379/1 pics
 
 
     - name: Juicefs Mount
