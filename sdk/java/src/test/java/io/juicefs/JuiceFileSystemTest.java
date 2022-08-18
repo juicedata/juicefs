@@ -36,6 +36,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_CHECKPOINT_INTERVAL_KEY;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_KEY;
 import static org.junit.Assert.assertArrayEquals;
 
 public class JuiceFileSystemTest extends TestCase {
@@ -46,7 +48,9 @@ public class JuiceFileSystemTest extends TestCase {
   public void setUp() throws Exception {
     cfg = new Configuration();
     cfg.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
-    fs = FileSystem.get(cfg);
+    cfg.set(FS_TRASH_INTERVAL_KEY, "6");
+    cfg.set(FS_TRASH_CHECKPOINT_INTERVAL_KEY, "2");
+    fs = FileSystem.newInstance(cfg);
     fs.delete(new Path("/hello"));
     FSDataOutputStream out = fs.create(new Path("/hello"), true);
     out.writeBytes("hello\n");
@@ -643,5 +647,19 @@ public class JuiceFileSystemTest extends TestCase {
     assertEquals("10000", fooFs.getFileStatus(f).getOwner());
 
     fooFs.delete(f, false);
+  }
+
+  public void testTrash() throws Exception {
+    Trash trash = new Trash(fs, cfg);
+    Path trashFile = new Path("/tmp/trashfile");
+    trash.expungeImmediately();
+    fs.create(trashFile).close();
+    Trash.moveToAppropriateTrash(fs, trashFile, cfg);
+    trash.checkpoint();
+    fs.create(trashFile).close();
+    Trash.moveToAppropriateTrash(fs, trashFile, cfg);
+    assertEquals(2, fs.listStatus(fs.getTrashRoot(trashFile)).length);
+    trash.expungeImmediately();
+    assertEquals(0, fs.listStatus(fs.getTrashRoot(trashFile)).length);
   }
 }
