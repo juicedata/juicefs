@@ -5,8 +5,8 @@ from hypothesis import given, strategies as st, settings, example, assume
 from hypothesis.strategies import composite, tuples
 import os
 
-JFS_SOURCE_DIR=os.path.expanduser('~/Documents/juicefs2/pkg/')
-# JFS_SOURCE_DIR='jfs_source/pkg/'
+# JFS_SOURCE_DIR=os.path.expanduser('~/Documents/juicefs2/')
+JFS_SOURCE_DIR='jfs_source/'
 
 def setup():
     meta_url = 'sqlite3://abc.db'
@@ -85,7 +85,7 @@ def test_sync_with_path_entry(sync_options):
     compare_rsync_and_juicesync(sync_options)
 
 @given(sync_options=st_nested_dir)
-@settings(max_examples=1000, deadline=None)
+@settings(max_examples=100, deadline=None)
 def test_sync_with_nested_dir(sync_options):
     compare_rsync_and_juicesync(sync_options)
 
