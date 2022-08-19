@@ -51,6 +51,9 @@ runs:
     - name: Smallfile Test Read 1M
       shell: bash
       run: |
+        echo "hello111"
+        echo ${{inputs.uploadtoken}}
+        echo "hello222"
         date +%Y_%m_%d_%H_%M_%S > /tmp/datetime
         DATE_TIME=$(cat /tmp/datetime)
         cd /jfs
