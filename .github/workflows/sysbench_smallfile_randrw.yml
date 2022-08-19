@@ -26,7 +26,7 @@ jobs:
         with:
           fetch-depth: 1
       - name: NotCompress
-        uses: ./.github/actions/sysbench/action_rndrw.yml
+        uses: ./.github/actions/sysbench/action_rndrw
         with:
           type: none
 
@@ -50,7 +50,7 @@ jobs:
         with:
           fetch-depth: 1
       - name: LZ4
-        uses: ./.github/actions/sysbench/action_rndrw.yml
+        uses: ./.github/actions/sysbench/action_rndrw
         with:
           type: lz4
 
@@ -73,7 +73,7 @@ jobs:
         with:
           fetch-depth: 1
       - name: ZSTD
-        uses: ./.github/actions/sysbench/action_rndrw.yml
+        uses: ./.github/actions/sysbench/action_rndrw
         with:
           type: zstd
 
