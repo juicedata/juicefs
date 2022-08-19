@@ -61,7 +61,7 @@ $ juicefs gc redis://localhost --delete`,
 			},
 			&cli.BoolFlag{
 				Name:  "delete",
-				Usage: "deleted leaked objects",
+				Usage: "delete leaked objects",
 			},
 			&cli.IntFlag{
 				Name:    "threads",
