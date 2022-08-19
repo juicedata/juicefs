@@ -5,8 +5,13 @@ from hypothesis import given, strategies as st, settings, example, assume
 from hypothesis.strategies import composite, tuples
 import os
 
-# JFS_SOURCE_DIR=os.path.expanduser('~/Documents/juicefs2/')
+JFS_SOURCE_DIR='/Users/chengzhou/Documents/juicefs/'
 JFS_SOURCE_DIR='jfs_source/'
+JFS_BIN='./juicefs-1.0.0-beta1'
+JFS_BIN='./juicefs-1.0.0-beta2'
+JFS_BIN='./juicefs-1.0.0-beta3'
+JFS_BIN='./juicefs'
+MAX_EXAMPLE=10000
 
 def setup():
     meta_url = 'sqlite3://abc.db'
@@ -22,10 +27,9 @@ def setup():
             shutil.rmtree(cache_dir)
         except OSError as e:
             print("Error: %s : %s" % (cache_dir, e.strerror))
-    
-    os.system('./juicefs format %s %s'%(meta_url, volume_name))
-    os.system('./juicefs mount --no-usage-report %s %s -d'%(meta_url, mount_point))
-    os.system('./juicefs sync %s %s'%(JFS_SOURCE_DIR, mount_point) )
+    subprocess.check_call([JFS_BIN, 'format', meta_url, volume_name])
+    subprocess.check_call([JFS_BIN, 'mount', '-d', meta_url, mount_point])
+    subprocess.check_call([JFS_BIN, 'sync', JFS_SOURCE_DIR, mount_point])
 
 def generate_all_entries(root_dir):
     entries = set()
@@ -46,16 +50,16 @@ def generate_nested_dir(root_dir):
         for d in dirs:
             dir = os.path.join(root, d)[len(root_dir):]
             li = dir.split('/')
-            s = set()
+            entries = []
             for i in range(0, len(li)):
-                s.add('/'.join(li[i:])+'/')
-            if len(s) != 0:
-                result.append(list(s))
+                entries.append('/'.join(li[i:])+'/')
+            for i in range(0, len(entries)):
+                result.append(random.sample(entries, random.randint(0, min(len(entries), 5)) ))
     print(result)
     return result
 
 def change_entry(entries):
-    entries = random.sample( entries, random.randint(0, min(len(entries), 5)) )
+    # entries = random.sample( entries, random.randint(0, min(len(entries), 5)) )
     options = []
     for entry in entries:
         type = random.choice(['--include', '--exclude'])
@@ -66,7 +70,6 @@ def change_entry(entries):
     return options
 
 all_entry = generate_all_entries(JFS_SOURCE_DIR)
-print(len(all_entry))
 st_all_entry = st.lists(st.sampled_from(list(all_entry))).map(lambda x: change_entry(x)).filter(lambda x: len(x) != 0)
 nested_dir = generate_nested_dir(JFS_SOURCE_DIR)
 st_nested_dir = st.sampled_from(nested_dir).map(lambda x: change_entry(x)).filter(lambda x: len(x) != 0)
@@ -74,33 +77,34 @@ valid_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc
 st_random_text = st.lists(valid_name).map(lambda x: change_entry(x)).filter(lambda x: len(x) != 0)
 
 @given(sync_options=st_random_text)
-@settings(max_examples=100, deadline=None)
+@settings(max_examples=MAX_EXAMPLE, deadline=None)
 def test_sync_with_random_text(sync_options):
     print(sync_options)
     compare_rsync_and_juicesync(sync_options)
 
 @given(sync_options=st_all_entry)
-@settings(max_examples=100, deadline=None)
+@settings(max_examples=MAX_EXAMPLE, deadline=None)
 def test_sync_with_path_entry(sync_options):
     compare_rsync_and_juicesync(sync_options)
 
 @given(sync_options=st_nested_dir)
-@settings(max_examples=100, deadline=None)
+@example([ ['--include', 'chu*/'],  ['--exclude', 'pk*/'],  ['--exclude', '*.go'] ])
+@settings(max_examples=MAX_EXAMPLE, deadline=None)
 def test_sync_with_nested_dir(sync_options):
     compare_rsync_and_juicesync(sync_options)
 
 @given(sync_options=st_random_text)
-@settings(max_examples=100, deadline=None)
+@settings(max_examples=MAX_EXAMPLE, deadline=None)
 def test_idempotent_with_random_text(sync_options):
     compare_juicesync_twice(sync_options)
 
 @given(sync_options=st_all_entry)
-@settings(max_examples=100, deadline=None)
+@settings(max_examples=MAX_EXAMPLE, deadline=None)
 def test_idempotent_with_all_entry(sync_options):
     compare_juicesync_twice(sync_options)
 
 @given(sync_options=st_nested_dir)
-@settings(max_examples=100, deadline=None)
+@settings(max_examples=MAX_EXAMPLE, deadline=None)
 def test_idempotent_with_nested_dir(sync_options):
     compare_juicesync_twice(sync_options)
 
@@ -124,7 +128,7 @@ def do_juicesync(source_dir, dest_dir, sync_options):
     if os.path.exists(dest_dir):
         shutil.rmtree(dest_dir)
     os.makedirs(dest_dir)
-    juicesync_cmd = ['./juicefs' , 'sync', '--dirs', source_dir, dest_dir]+sync_options
+    juicesync_cmd = [JFS_BIN , 'sync', '--dirs', source_dir, dest_dir]+sync_options
     print('juicesync_cmd: '+' '.join(juicesync_cmd))
     try:
         subprocess.check_call(juicesync_cmd)
@@ -145,8 +149,8 @@ def do_rsync(source_dir, dest_dir, sync_options):
 if __name__ == "__main__":
     setup()
     test_sync_with_nested_dir()
-    test_sync_with_path_entry()
+    # test_sync_with_path_entry()
     # test_sync_with_random_text()
-    test_idempotent_with_all_entry()
-    test_idempotent_with_nested_dir()
+    # test_idempotent_with_all_entry()
+    # test_idempotent_with_nested_dir()
     # test_idempotent_with_random_text()
