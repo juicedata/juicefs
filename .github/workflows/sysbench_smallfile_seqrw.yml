@@ -29,6 +29,7 @@ jobs:
         uses: ./.github/actions/sysbenchseqrw/
         with:
           type: none
+          uploadtoken: ${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -53,6 +54,8 @@ jobs:
         uses: ./.github/actions/sysbenchseqrw/
         with:
           type: lz4
+          uploadtoken: ${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+
 
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -76,6 +79,8 @@ jobs:
         uses: ./.github/actions/sysbenchseqrw/
         with:
           type: zstd
+          uploadtoken: ${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+
 
       - name: Send Slack Notification
         if: ${{ failure() }}
