@@ -6,7 +6,7 @@ slug: /sync_accounts_between_multiple_hosts
 
 # Sync Accounts between Multiple Hosts
 
-JuiceFS supports POSIX compatible ACL to manage permissions by the granularity of directory or file. The behavior is the same as a local file system.
+JuiceFS supports Unix file permission (but not POSIX extended ACL), you can manage permissions by directory or file granularity, just like a local file system.
 
 To provide users with an intuitive and consistent permission management experience (e.g. the files accessible by user A on host X should be accessible by the same user on host Y), the same user who wants to access JuiceFS should have the same UID and GID on all hosts.
 
