@@ -374,6 +374,7 @@ func (m *baseMeta) refreshQuota() {
 			}
 
 		}
+		utils.SleepWithJitter(time.Second * 10)
 
 	}
 	// get m.quotas from meta engine

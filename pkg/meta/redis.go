@@ -3317,8 +3317,6 @@ func (m *redisMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
 		}
 
 		if _, ok := quotasttr["usedSpace"]; !ok {
-			//logger.Fatalf("invalid usedSpace %s", err)
-			//return nil, err
 			q1[Ino(inode)] = quota{
 				capacity: capacity,
 				inodes:   inodes,
