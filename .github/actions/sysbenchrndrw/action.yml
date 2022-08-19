@@ -1,4 +1,4 @@
-name: 'JuiceFS Sysbench Random Read Write Action'
+name: 'JuiceFS Sysbench Random Action'
 description: 'JuiceFS Sysbench action'
 inputs:
   type:

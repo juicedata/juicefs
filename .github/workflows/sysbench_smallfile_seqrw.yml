@@ -9,10 +9,9 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
-      - 'main'
       - 'release-**'
     paths-ignore:
-     - 'docs/**'
+      - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
   workflow_dispatch:
