@@ -10,6 +10,7 @@ on:
 #    #The branches below must be a subset of the branches above
 #    branches:
 #      - 'release-**'
+#      - 'main'
 #    paths-ignore:
 #      - 'docs/**'
   schedule:
@@ -64,9 +65,9 @@ jobs:
       - name: Set up Spark
         working-directory: /tmp
         run: |
-          wget --quiet https://dlcdn.apache.org/spark/spark-3.0.3/spark-3.0.3-bin-hadoop2.7.tgz
-          tar -zxf spark-3.0.3-bin-hadoop2.7.tgz
-          ln -s spark-3.0.3-bin-hadoop2.7 spark
+          wget --quiet https://dlcdn.apache.org/spark/spark-3.3.0/spark-3.3.0-bin-hadoop3.tgz
+          tar -zxf spark-3.3.0-bin-hadoop3.tgz
+          ln -s spark-3.3.0-bin-hadoop3 spark
           cp ~/work/juicefs/juicefs/sdk/java/target/juicefs-hadoop*jar /tmp/spark/jars
           cp ~/work/juicefs/juicefs/.github/workflows/resources/core-site.xml /tmp/spark/conf
           export PATH=$PATH:/tmp/spark/bin:/tmp/spark/sbin
