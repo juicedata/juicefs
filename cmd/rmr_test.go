@@ -45,9 +45,8 @@ func TestRmr(t *testing.T) {
 	}
 
 	for _, path := range paths {
-		dir, err := os.ReadDir(testMountPoint + path)
-		if len(dir) != 0 {
-			t.Fatalf("test rmr error: %s", err)
+		if dir, err := os.ReadDir(testMountPoint + path); !os.IsNotExist(err) {
+			t.Fatalf("test rmr error: %s len(dir): %d", err, len(dir))
 		}
 	}
 }
