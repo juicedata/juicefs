@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
 
@@ -108,7 +107,7 @@ type benchCase struct {
 }
 
 type benchmark struct {
-	tty        bool
+	colorful   bool
 	big, small *benchCase
 	threads    int
 	tmpdir     string
@@ -218,7 +217,7 @@ func (bm *benchmark) newCase(name string, fsize, fcount, bsize int) *benchCase {
 func (bm *benchmark) colorize(item string, value, cost float64, prec int) (string, string) {
 	svalue := strconv.FormatFloat(value, 'f', prec, 64)
 	scost := strconv.FormatFloat(cost, 'f', 2, 64)
-	if bm.tty {
+	if bm.colorful {
 		r, ok := resultRange[item]
 		if !ok {
 			logger.Fatalf("Invalid item: %s", item)
@@ -248,7 +247,7 @@ func (bm *benchmark) colorize(item string, value, cost float64, prec int) (strin
 	return svalue, scost
 }
 
-func printResult(result [][]string, leftAlign int, isatty bool) {
+func printResult(result [][]string, leftAlign int, colorful bool) {
 	if len(result) < 2 {
 		logger.Fatalf("result must not be empty")
 	}
@@ -262,7 +261,7 @@ func printResult(result [][]string, leftAlign int, isatty bool) {
 		}
 	}
 	copy(max, rawmax)
-	if isatty {
+	if colorful {
 		for i := 1; i < colNum; i++ {
 			max[i] -= 11
 		}
@@ -362,8 +361,8 @@ func bench(ctx *cli.Context) error {
 		fmt.Println("Cleaning kernel cache, may ask for root privilege...")
 	}
 	dropCaches()
-	bm.tty = isatty.IsTerminal(os.Stdout.Fd())
-	progress := utils.NewProgress(!bm.tty, false)
+	bm.colorful = utils.SupportANSIColor(os.Stdout.Fd())
+	progress := utils.NewProgress(false, false)
 	if b := bm.big; b != nil {
 		total := int64(bm.threads * b.fcount * b.bcount)
 		b.wbar = progress.AddCountBar("Write big blocks", total)
@@ -465,7 +464,7 @@ func bench(ctx *cli.Context) error {
 		show("Write into cache", "cachewr", "blockcache_write_hist_seconds")
 		show("Read from cache", "cacherd", "blockcache_read_hist_seconds")
 		var fmtString string
-		if bm.tty {
+		if bm.colorful {
 			greenSeq := fmt.Sprintf("%s%dm", COLOR_SEQ, GREEN)
 			fmtString = fmt.Sprintf("Time used: %s%%.1f%s s, CPU: %s%%.1f%s%%%%, Memory: %s%%.1f%s MiB\n",
 				greenSeq, RESET_SEQ, greenSeq, RESET_SEQ, greenSeq, RESET_SEQ)
@@ -474,6 +473,6 @@ func bench(ctx *cli.Context) error {
 		}
 		fmt.Printf(fmtString, diff("uptime"), diff("cpu_usage")*100/diff("uptime"), stats2["juicefs_memory"]/1024/1024)
 	}
-	printResult(result, -1, bm.tty)
+	printResult(result, -1, bm.colorful)
 	return nil
 }
