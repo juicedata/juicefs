@@ -5,13 +5,13 @@ from hypothesis import given, strategies as st, settings, example, assume
 from hypothesis.strategies import composite, tuples
 import os
 
-JFS_SOURCE_DIR='/Users/chengzhou/Documents/juicefs/'
+JFS_SOURCE_DIR='/Users/chengzhou/Documents/juicefs/pkg/'
 JFS_SOURCE_DIR='jfs_source/'
 JFS_BIN='./juicefs-1.0.0-beta1'
 JFS_BIN='./juicefs-1.0.0-beta2'
 JFS_BIN='./juicefs-1.0.0-beta3'
 JFS_BIN='./juicefs'
-MAX_EXAMPLE=10000
+MAX_EXAMPLE=100
 
 def setup():
     meta_url = 'sqlite3://abc.db'
@@ -148,9 +148,9 @@ def do_rsync(source_dir, dest_dir, sync_options):
 
 if __name__ == "__main__":
     setup()
-    test_sync_with_nested_dir()
+    #test_sync_with_nested_dir()
     # test_sync_with_path_entry()
-    # test_sync_with_random_text()
+    test_sync_with_random_text()
     # test_idempotent_with_all_entry()
     # test_idempotent_with_nested_dir()
     # test_idempotent_with_random_text()
