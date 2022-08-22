@@ -128,6 +128,6 @@ func FormatBytes(n uint64) string {
 	return fmt.Sprintf("%.2f %siB (%d Bytes)", float64(m)/1024.0, units[i], n)
 }
 
-func ColorAble(fd uintptr) bool {
+func SupportANSIColor(fd uintptr) bool {
 	return isatty.IsTerminal(fd) && runtime.GOOS != "windows"
 }

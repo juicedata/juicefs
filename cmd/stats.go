@@ -377,7 +377,7 @@ func stats(ctx *cli.Context) error {
 	}
 
 	watcher := &statsWatcher{
-		colorful: !ctx.Bool("no-color") && utils.ColorAble(os.Stdout.Fd()),
+		colorful: !ctx.Bool("no-color") && utils.SupportANSIColor(os.Stdout.Fd()),
 		interval: ctx.Uint("interval"),
 		path:     path.Join(mp, ".stats"),
 	}

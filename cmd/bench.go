@@ -361,7 +361,7 @@ func bench(ctx *cli.Context) error {
 		fmt.Println("Cleaning kernel cache, may ask for root privilege...")
 	}
 	dropCaches()
-	bm.colorful = utils.ColorAble(os.Stdout.Fd())
+	bm.colorful = utils.SupportANSIColor(os.Stdout.Fd())
 	progress := utils.NewProgress(false, false)
 	if b := bm.big; b != nil {
 		total := int64(bm.threads * b.fcount * b.bcount)
