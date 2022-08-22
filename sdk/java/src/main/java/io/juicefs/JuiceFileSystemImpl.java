@@ -24,6 +24,8 @@ import jnr.ffi.LibraryLoader;
 import jnr.ffi.Memory;
 import jnr.ffi.Pointer;
 import jnr.ffi.Runtime;
+import jnr.ffi.annotations.In;
+import jnr.ffi.annotations.Out;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.HadoopIllegalArgumentException;
@@ -117,7 +119,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_pread(long pid, int fd, Pointer b, int len, long offset);
 
-    int jfs_write(long pid, int fd, Pointer b, int len);
+    int jfs_pread(long pid, int fd, @Out ByteBuffer b, int len, long offset);
+
+    int jfs_write(long pid, int fd, @In byte[] b, int len);
 
     int jfs_flush(long pid, int fd);
 
@@ -838,15 +842,14 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (len > 128 << 20) {
         len = 128 << 20;
       }
-      Pointer tmp = Memory.allocate(Runtime.getRuntime(lib), len);
-      int got = lib.jfs_pread(Thread.currentThread().getId(), fd, tmp, len, pos);
+      ByteBuffer buf = ByteBuffer.wrap(b, off, len);
+      int got = lib.jfs_pread(Thread.currentThread().getId(), fd, buf, len, pos);
       if (got == 0)
         return -1;
       if (got == EINVAL)
         throw new IOException("stream was closed");
       if (got < 0)
         throw error(got, path);
-      tmp.get(0, b, off, got);
       statistics.incrementBytesRead(got);
       return got;
     }
@@ -887,9 +890,7 @@ public class JuiceFileSystemImpl extends FileSystem {
           return got;
       } else {
         assert b.isDirect();
-        long address = ((DirectBuffer) b).address() + b.position();
-        Pointer destPtr = Runtime.getRuntime(lib).getMemoryManager().newPointer(address);
-        got = lib.jfs_pread(Thread.currentThread().getId(), fd, destPtr, b.remaining(), pos);
+        got = lib.jfs_pread(Thread.currentThread().getId(), fd, b, b.remaining(), pos);
         if (got == EINVAL)
           throw new IOException("stream was closed");
         if (got < 0)
@@ -1009,9 +1010,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (b.length - off < len) {
         throw new IndexOutOfBoundsException();
       }
-      Pointer buf = Memory.allocate(Runtime.getRuntime(lib), len);
-      buf.put(0, b, off, len);
-      int done = lib.jfs_write(Thread.currentThread().getId(), fd, buf, len);
+      int done = lib.jfs_write(Thread.currentThread().getId(), fd, b, len);
       if (done == EINVAL)
         throw new IOException("stream was closed");
       if (done < 0)
@@ -1023,9 +1022,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     @Override
     public void write(int b) throws IOException {
-      Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 1);
-      buf.putByte(0, (byte) b);
-      int done = lib.jfs_write(Thread.currentThread().getId(), fd, buf, 1);
+      int done = lib.jfs_write(Thread.currentThread().getId(), fd, new byte[]{(byte) b}, 1);
       if (done == EINVAL)
         throw new IOException("stream was closed");
       if (done < 0)
