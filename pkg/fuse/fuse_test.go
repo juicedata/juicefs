@@ -292,6 +292,7 @@ func TestFUSE(t *testing.T) {
 	t.Run("StatFS", func(t *testing.T) {
 		StatFS(t, mp)
 	})
+	delete(posixtest.All, "FdLeak")
 	posixtest.All["Xattrs"] = Xattrs
 	posixtest.All["Flock"] = Flock
 	posixtest.All["POSIXLock"] = PosixLock
