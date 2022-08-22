@@ -34,7 +34,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
 
@@ -145,9 +144,9 @@ func objbench(ctx *cli.Context) error {
 	bCount := int(math.Ceil(float64(fsize) / float64(bSize)))
 	sCount := int(ctx.Uint("small-objects"))
 	threads := int(ctx.Uint("threads"))
-	tty := isatty.IsTerminal(os.Stdout.Fd())
-	progress := utils.NewProgress(!tty, false)
-	if tty {
+	colorful := utils.SupportANSIColor(os.Stdout.Fd())
+	progress := utils.NewProgress(false, false)
+	if colorful {
 		nspt = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, YELLOW, nspt, RESET_SEQ)
 		skipped = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, YELLOW, skipped, RESET_SEQ)
 		pass = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, GREEN, pass, RESET_SEQ)
@@ -158,8 +157,8 @@ func objbench(ctx *cli.Context) error {
 		var result [][]string
 		result = append(result, []string{"CATEGORY", "TEST", "RESULT"})
 		fmt.Println("Start Functional Testing ...")
-		functionalTesting(blob, &result, tty)
-		printResult(result, -1, tty)
+		functionalTesting(blob, &result, colorful)
+		printResult(result, -1, colorful)
 		fmt.Println()
 	}
 	fmt.Println("Start Performance Testing ...")
@@ -174,7 +173,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("smallput", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
+					line[1], line[2] = colorize("smallput", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -187,7 +186,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("smallget", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
+					line[1], line[2] = colorize("smallget", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -201,7 +200,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("put", float64(bSize>>20*bCount)/cost, cost*1000/float64(bCount), 2, tty)
+					line[1], line[2] = colorize("put", float64(bSize>>20*bCount)/cost, cost*1000/float64(bCount), 2, colorful)
 					line[1] += " MiB/s"
 					line[2] += " ms/object"
 				}
@@ -220,7 +219,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("get", float64(bSize>>20*bCount)/cost, cost*1000/float64(bCount), 2, tty)
+					line[1], line[2] = colorize("get", float64(bSize>>20*bCount)/cost, cost*1000/float64(bCount), 2, colorful)
 					line[1] += " MiB/s"
 					line[2] += " ms/object"
 				}
@@ -233,7 +232,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("list", float64(sCount)*100/cost, cost*10, 2, tty)
+					line[1], line[2] = colorize("list", float64(sCount)*100/cost, cost*10, 2, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/op"
 				}
@@ -246,7 +245,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("head", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
+					line[1], line[2] = colorize("head", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -259,7 +258,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chtimes", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
+					line[1], line[2] = colorize("chtimes", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -272,7 +271,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chmod", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
+					line[1], line[2] = colorize("chmod", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -285,7 +284,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chown", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
+					line[1], line[2] = colorize("chown", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -298,7 +297,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("delete", float64(sCount)/cost, cost*1000/float64(sCount), 1, tty)
+					line[1], line[2] = colorize("delete", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -333,7 +332,7 @@ func objbench(ctx *cli.Context) error {
 	pResult[1], pResult[3] = pResult[3], pResult[1]
 	pResult[2], pResult[4] = pResult[4], pResult[2]
 	pResult[7], pResult[10] = pResult[10], pResult[7]
-	printResult(pResult, -1, tty)
+	printResult(pResult, -1, colorful)
 	return nil
 }
 
@@ -351,10 +350,10 @@ var resultRangeForObj = map[string][4]float64{
 	"chtimes":      {10, 30, 30, 100},
 }
 
-func colorize(item string, value, cost float64, prec int, isatty bool) (string, string) {
+func colorize(item string, value, cost float64, prec int, colorful bool) (string, string) {
 	svalue := strconv.FormatFloat(value, 'f', prec, 64)
 	scost := strconv.FormatFloat(cost, 'f', 2, 64)
-	if isatty {
+	if colorful {
 		r, ok := resultRangeForObj[item]
 		if !ok {
 			logger.Fatalf("Invalid item: %s", item)
@@ -582,14 +581,14 @@ var syncTests = map[string]bool{
 	"multipart upload":    true,
 }
 
-func functionalTesting(blob object.ObjectStorage, result *[][]string, tty bool) {
+func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful bool) {
 	runCase := func(title string, fn func(blob object.ObjectStorage) error) {
 		r := pass
 		if err := fn(blob); err == utils.ENOTSUP {
 			r = nspt
 		} else if err != nil {
 			r = err.Error()
-			if tty {
+			if colorful {
 				r = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, RED, r, RESET_SEQ)
 			}
 			logger.Debug(err.Error())
@@ -600,7 +599,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, tty bool) 
 			category = "sync"
 		}
 
-		if tty {
+		if colorful {
 			title = fmt.Sprintf("%s%sm%s%s", COLOR_SEQ, DEFAULT, title, RESET_SEQ)
 		}
 
