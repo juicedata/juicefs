@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
 
@@ -362,8 +361,8 @@ func bench(ctx *cli.Context) error {
 		fmt.Println("Cleaning kernel cache, may ask for root privilege...")
 	}
 	dropCaches()
-	bm.colorful = utils.HasColorAble()
-	progress := utils.NewProgress(!isatty.IsTerminal(os.Stdout.Fd()), false)
+	bm.colorful = utils.ColorAble(os.Stdout.Fd())
+	progress := utils.NewProgress(false, false)
 	if b := bm.big; b != nil {
 		total := int64(bm.threads * b.fcount * b.bcount)
 		b.wbar = progress.AddCountBar("Write big blocks", total)

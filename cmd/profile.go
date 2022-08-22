@@ -363,7 +363,7 @@ func profile(ctx *cli.Context) error {
 	prof := profiler{
 		file:      file,
 		replay:    replay,
-		colorful:  utils.HasColorAble(),
+		colorful:  utils.ColorAble(os.Stdout.Fd()),
 		interval:  time.Second * time.Duration(ctx.Int64("interval")),
 		uids:      strings.Split(ctx.String("uid"), ","),
 		gids:      strings.Split(ctx.String("gid"), ","),

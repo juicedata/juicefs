@@ -34,7 +34,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
 
@@ -145,8 +144,8 @@ func objbench(ctx *cli.Context) error {
 	bCount := int(math.Ceil(float64(fsize) / float64(bSize)))
 	sCount := int(ctx.Uint("small-objects"))
 	threads := int(ctx.Uint("threads"))
-	colorful := utils.HasColorAble()
-	progress := utils.NewProgress(!isatty.IsTerminal(os.Stdout.Fd()), false)
+	colorful := utils.ColorAble(os.Stdout.Fd())
+	progress := utils.NewProgress(false, false)
 	if colorful {
 		nspt = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, YELLOW, nspt, RESET_SEQ)
 		skipped = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, YELLOW, skipped, RESET_SEQ)
