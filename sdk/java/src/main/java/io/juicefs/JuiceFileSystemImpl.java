@@ -45,7 +45,6 @@ import org.apache.hadoop.util.DirectBufferPool;
 import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.util.VersionInfo;
 import org.json.JSONObject;
-import sun.nio.ch.DirectBuffer;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -116,8 +115,6 @@ public class JuiceFileSystemImpl extends FileSystem {
     int jfs_access(long pid, long h, String path, int flags);
 
     long jfs_lseek(long pid, int fd, long pos, int whence);
-
-    int jfs_pread(long pid, int fd, Pointer b, int len, long offset);
 
     int jfs_pread(long pid, int fd, @Out ByteBuffer b, int len, long offset);
 
