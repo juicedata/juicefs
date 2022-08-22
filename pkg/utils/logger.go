@@ -19,6 +19,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -85,7 +86,7 @@ func (l *logHandle) Log(args ...interface{}) {
 }
 
 func newLogger(name string) *logHandle {
-	l := &logHandle{Logger: *logrus.New(), name: name, colorful: isatty.IsTerminal(os.Stderr.Fd())}
+	l := &logHandle{Logger: *logrus.New(), name: name, colorful: isatty.IsTerminal(os.Stderr.Fd()) && runtime.GOOS != "windows"}
 	l.Formatter = l
 	if syslogHook != nil {
 		l.Hooks.Add(syslogHook)
