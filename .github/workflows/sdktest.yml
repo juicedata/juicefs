@@ -20,6 +20,7 @@ on:
 
 jobs:
   sdktest:
+    timeout-minutes: 50
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
