@@ -650,17 +650,6 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, co
 				r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
 			}
 		}
-		for i := 0; i < len(rules); i++ {
-			if _, err := path.Match(rules[i].pattern, "xxxx"); err != nil {
-				flag := "--exclude"
-				if rules[i].include {
-					flag = "--include"
-				}
-				logger.Warnf("ignore invalid pattern: %s %s", flag, rules[i].pattern)
-				rules = append(rules[:i], rules[i+1:]...)
-				i--
-			}
-		}
 		if len(rules) > 0 {
 			srckeys = filter(srckeys, rules)
 			dstkeys = filter(dstkeys, rules)
@@ -768,10 +757,22 @@ func parseIncludeRules(args []string) (rules []rule) {
 			a = a[1:]
 		}
 		if l-1 > i && (a == "-include" || a == "-exclude") {
-			rules = append(rules, rule{pattern: args[i+1], include: a == "-include"})
+			pattern := args[i+1]
+			include := a == "-include"
+			if _, err := path.Match(pattern, "xxxx"); err != nil {
+				logger.Warnf("ignore invalid pattern: %s %s", a, pattern)
+				continue
+			}
+			rules = append(rules, rule{pattern: pattern, include: include})
 		} else if strings.HasPrefix(a, "-include=") || strings.HasPrefix(a, "-exclude=") {
 			if s := strings.Split(a, "="); len(s) == 2 && s[1] != "" {
-				rules = append(rules, rule{pattern: s[1], include: strings.HasPrefix(a, "-include=")})
+				pattern := s[1]
+				include := strings.HasPrefix(a, "-include=")
+				if _, err := path.Match(pattern, "xxxx"); err != nil {
+					logger.Warnf("ignore invalid pattern: %s", a)
+					continue
+				}
+				rules = append(rules, rule{pattern: pattern, include: include})
 			}
 		}
 	}
