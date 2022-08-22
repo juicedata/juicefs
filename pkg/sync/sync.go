@@ -650,8 +650,21 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, co
 				r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
 			}
 		}
-		srckeys = filter(srckeys, rules)
-		dstkeys = filter(dstkeys, rules)
+		for i := 0; i < len(rules); i++ {
+			if _, err := path.Match(rules[i].pattern, "xxxx"); err != nil {
+				flag := "--exclude"
+				if rules[i].include {
+					flag = "--include"
+				}
+				logger.Warnf("ignore invalid pattern: %s %s", flag, rules[i].pattern)
+				rules = append(rules[:i], rules[i+1:]...)
+				i--
+			}
+		}
+		if len(rules) > 0 {
+			srckeys = filter(srckeys, rules)
+			dstkeys = filter(dstkeys, rules)
+		}
 	}
 	go produce(tasks, src, dst, srckeys, dstkeys, config)
 	return nil
