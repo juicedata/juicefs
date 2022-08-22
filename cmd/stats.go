@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
 
@@ -88,7 +87,7 @@ const (
 )
 
 type statsWatcher struct {
-	tty      bool
+	colorful bool
 	interval uint
 	path     string
 	header   string
@@ -96,7 +95,7 @@ type statsWatcher struct {
 }
 
 func (w *statsWatcher) colorize(msg string, color int, dark bool, underline bool) string {
-	if !w.tty || msg == "" || msg == " " {
+	if !w.colorful || msg == "" || msg == " " {
 		return msg
 	}
 	var cseq, useq string
@@ -293,7 +292,7 @@ func (w *statsWatcher) formatCPU(v float64, dark bool) string {
 }
 
 func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
-	if !w.tty && dark {
+	if !w.colorful && dark {
 		return
 	}
 	values := make([]string, len(w.sections))
@@ -333,7 +332,7 @@ func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
 		}
 		values[i] = strings.Join(vals, " ")
 	}
-	if w.tty && dark {
+	if w.colorful && dark {
 		fmt.Printf("%s\r", strings.Join(values, w.colorize("|", BLUE, true, false)))
 	} else {
 		fmt.Printf("%s\n", strings.Join(values, w.colorize("|", BLUE, true, false)))
@@ -378,7 +377,7 @@ func stats(ctx *cli.Context) error {
 	}
 
 	watcher := &statsWatcher{
-		tty:      !ctx.Bool("no-color") && isatty.IsTerminal(os.Stdout.Fd()),
+		colorful: !ctx.Bool("no-color") && utils.SupportANSIColor(os.Stdout.Fd()),
 		interval: ctx.Uint("interval"),
 		path:     path.Join(mp, ".stats"),
 	}
