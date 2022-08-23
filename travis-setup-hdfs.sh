@@ -78,4 +78,4 @@ cd ~/app/hadoop-${HADOOP_VERSION}/sbin
 
 jps
 
-echo "hdfs started successfully 1"
+echo "hdfs started successfully 2"
