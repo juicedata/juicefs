@@ -26,7 +26,7 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: '35 1 * * 4'
+    - cron:  '30 20 * * *'
 
 jobs:
   FoD-SAST-Scan:
@@ -49,7 +49,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: 8
-          distribution: 'temurin'
+          distribution: 'adopt'
 
       # Prepare source+dependencies for upload. The default example is for a Maven project that uses pom.xml.
       # TODO: Update PACKAGE_OPTS based on the ScanCentral Client documentation for your project's included tech stack(s). Helpful hints:
@@ -61,7 +61,7 @@ jobs:
       - name: Download Fortify ScanCentral Client
         uses: fortify/gha-setup-scancentral-client@5b7382f8234fb9840958c49d5f32ae854115f9f3
       - name: Package Code + Dependencies
-        run: scancentral package $PACKAGE_OPTS -o package.zip
+        run: scancentral package $PACKAGE_OPTS -o package.zip --file sdk/java/pom.xml
         env:
           PACKAGE_OPTS: "-bt mvn"
 
