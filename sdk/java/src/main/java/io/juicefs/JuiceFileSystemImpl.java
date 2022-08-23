@@ -728,12 +728,10 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     private ByteBuffer buf;
     private long position;
-    private int size;
 
     public FileInputStream(Path f, int fd, int size) throws IOException {
       path = f;
       this.fd = fd;
-      this.size = size;
       buf = ByteBuffer.allocate(size);
       buf.limit(0);
       position = 0;
@@ -781,34 +779,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     public synchronized int read(byte[] b, int off, int len) throws IOException {
       if (off < 0 || len < 0 || b.length - off < len)
         throw new IndexOutOfBoundsException();
-      if (len == 0)
-        return 0;
-      if (buf == null)
-        throw new IOException("stream was closed");
-      if (!buf.hasRemaining() && len <= buf.capacity() && !refill())
-        return -1; // No bytes were read before EOF.
-
-      int read = Math.min(buf.remaining(), len);
-      if (read > 0) {
-        buf.get(b, off, read);
-        statistics.incrementBytesRead(read);
-        off += read;
-        len -= read;
-      }
-      if (len == 0)
-        return read;
-      int more = read(position, b, off, len);
-      if (more <= 0) {
-        if (read > 0) {
-          return read;
-        } else {
-          return -1;
-        }
-      }
-      position += more;
-      buf.position(0);
-      buf.limit(0);
-      return read + more;
+      return read(ByteBuffer.wrap(b, off, len));
     }
 
     private boolean refill() throws IOException {
@@ -826,21 +797,10 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     @Override
     public synchronized int read(long pos, byte[] b, int off, int len) throws IOException {
-      if (len == 0)
-        return 0;
-      if (buf == null)
-        throw new IOException("stream was closed");
-      if (pos < 0)
-        throw new EOFException("position is negative");
       if (b == null || off < 0 || len < 0 || b.length - off < len) {
         throw new IllegalArgumentException("arguments: " + off + " " + len);
       }
-      if (len > 128 << 20) {
-        len = 128 << 20;
-      }
-      int got = read(pos, ByteBuffer.wrap(b, off, len));
-      statistics.incrementBytesRead(got);
-      return got;
+      return read(pos, ByteBuffer.wrap(b, off, len));
     }
 
     @Override
@@ -852,20 +812,12 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (!buf.hasRemaining() && b.remaining() <= buf.capacity() && !refill()) {
         return -1;
       }
-      int got = readLocalBuffer(b);
-      statistics.incrementBytesRead(got);
-      if (!b.hasRemaining())
-        return got;
-      // small read, use buffer
-      if (b.remaining() < this.size) {
-        if (refill()) {
-          int more = readLocalBuffer(b);
-          statistics.incrementBytesRead(more);
-          return got + more;
-        } else {
-          return -1;
-        }
+      int got = 0;
+      while (b.hasRemaining() && buf.hasRemaining()) {
+        b.put(buf.get());
+        got++;
       }
+      statistics.incrementBytesRead(got);
       int more = read(position, b);
       if (more <= 0)
         return got > 0 ? got : -1;
@@ -876,18 +828,11 @@ public class JuiceFileSystemImpl extends FileSystem {
       return got + more;
     }
 
-    private int readLocalBuffer(ByteBuffer b) {
-      int got = 0;
-      while (b.hasRemaining() && buf.hasRemaining()) {
-        b.put(buf.get());
-        got++;
-      }
-      return got;
-    }
-
     private synchronized int read(long pos, ByteBuffer b) throws IOException {
       if (!b.hasRemaining())
         return 0;
+      if (pos < 0)
+        throw new EOFException("position is negative");
       int got;
       int startPos = b.position();
       got = lib.jfs_pread(Thread.currentThread().getId(), fd, b, b.remaining(), pos);
