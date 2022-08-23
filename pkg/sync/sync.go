@@ -650,8 +650,10 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, co
 				r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
 			}
 		}
-		srckeys = filter(srckeys, rules)
-		dstkeys = filter(dstkeys, rules)
+		if len(rules) > 0 {
+			srckeys = filter(srckeys, rules)
+			dstkeys = filter(dstkeys, rules)
+		}
 	}
 	go produce(tasks, src, dst, srckeys, dstkeys, config)
 	return nil
@@ -755,9 +757,17 @@ func parseIncludeRules(args []string) (rules []rule) {
 			a = a[1:]
 		}
 		if l-1 > i && (a == "-include" || a == "-exclude") {
+			if _, err := path.Match(args[i+1], "xxxx"); err != nil {
+				logger.Warnf("ignore invalid pattern: %s %s", a, args[i+1])
+				continue
+			}
 			rules = append(rules, rule{pattern: args[i+1], include: a == "-include"})
 		} else if strings.HasPrefix(a, "-include=") || strings.HasPrefix(a, "-exclude=") {
 			if s := strings.Split(a, "="); len(s) == 2 && s[1] != "" {
+				if _, err := path.Match(s[1], "xxxx"); err != nil {
+					logger.Warnf("ignore invalid pattern: %s", a)
+					continue
+				}
 				rules = append(rules, rule{pattern: s[1], include: strings.HasPrefix(a, "-include=")})
 			}
 		}

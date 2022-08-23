@@ -16,10 +16,12 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - '.github/**'
   workflow_dispatch:
 
 jobs:
   unittests:
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
       MINIO_TEST_BUCKET: 127.0.0.1:9000/testbucket
