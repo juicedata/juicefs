@@ -5,9 +5,21 @@ on:
   schedule:
     - cron: '30 19 * * 0'
   push:
-    branches: [ "main" ]
+    branches:
+      - "main"
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - "main"
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/**'
+
 
 # Declare default permissions as read only.
 permissions: read-all
