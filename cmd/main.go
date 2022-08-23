@@ -79,7 +79,7 @@ func Main(args []string) error {
 	if calledViaMount(args) {
 		args = handleSysMountArgs(args)
 		if len(args) < 1 {
-			args = []string{"--help"}
+			args = []string{"mount", "--help"}
 		}
 	}
 	return app.Run(reorderOptions(app, args))
@@ -96,7 +96,7 @@ func handleSysMountArgs(args []string) []string {
 		"direntrycacheto": "dir-entry-cache",
 	}
 	newArgs := []string{"juicefs", "mount", "-d"}
-	if len(args) < 4 {
+	if len(args) < 3 {
 		return nil
 	}
 	mountOptions := args[3:]
