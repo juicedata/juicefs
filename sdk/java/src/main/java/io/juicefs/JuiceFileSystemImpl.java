@@ -800,7 +800,9 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (b == null || off < 0 || len < 0 || b.length - off < len) {
         throw new IllegalArgumentException("arguments: " + off + " " + len);
       }
-      return read(pos, ByteBuffer.wrap(b, off, len));
+      int got = read(pos, ByteBuffer.wrap(b, off, len));
+      statistics.incrementBytesRead(got);
+      return got;
     }
 
     @Override
@@ -829,10 +831,10 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
 
     private synchronized int read(long pos, ByteBuffer b) throws IOException {
-      if (!b.hasRemaining())
-        return 0;
       if (pos < 0)
         throw new EOFException("position is negative");
+      if (!b.hasRemaining())
+        return 0;
       int got;
       int startPos = b.position();
       got = lib.jfs_pread(Thread.currentThread().getId(), fd, b, b.remaining(), pos);
