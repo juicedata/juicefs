@@ -8,6 +8,7 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - '.github/**'
   pull_request:
     #The branches below must be a subset of the branches above
     branches: 
@@ -16,6 +17,7 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - '.github/**'
   workflow_dispatch:
 
 jobs:
