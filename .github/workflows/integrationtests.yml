@@ -15,7 +15,7 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
-      - './github/**'
+      - '.github/**'
   workflow_dispatch:
 
 jobs:
