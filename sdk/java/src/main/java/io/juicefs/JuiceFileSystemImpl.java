@@ -41,7 +41,6 @@ import org.apache.hadoop.io.MD5Hash;
 import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.DataChecksum;
-import org.apache.hadoop.util.DirectBufferPool;
 import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.util.VersionInfo;
 import org.json.JSONObject;
@@ -90,7 +89,6 @@ public class JuiceFileSystemImpl extends FileSystem {
   private ScheduledExecutorService nodesFetcherThread;
   private ScheduledExecutorService refreshUidThread;
   private Map<String, FileStatus> lastFileStatus = new HashMap<>();
-  private static final DirectBufferPool bufferPool = new DirectBufferPool();
   private boolean metricsEnable = false;
 
   /*
@@ -734,7 +732,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     public FileInputStream(Path f, int fd, int size) throws IOException {
       path = f;
       this.fd = fd;
-      buf = bufferPool.getBuffer(size);
+      buf = ByteBuffer.allocate(size);
       buf.limit(0);
       position = 0;
     }
@@ -818,7 +816,6 @@ public class JuiceFileSystemImpl extends FileSystem {
         buf.limit(0);
         return false; // EOF
       }
-      statistics.incrementBytesRead(-read);
       buf.position(0);
       buf.limit(read);
       position += read;
@@ -839,14 +836,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (len > 128 << 20) {
         len = 128 << 20;
       }
-      ByteBuffer buf = ByteBuffer.wrap(b, off, len);
-      int got = lib.jfs_pread(Thread.currentThread().getId(), fd, buf, len, pos);
-      if (got == 0)
-        return -1;
-      if (got == EINVAL)
-        throw new IOException("stream was closed");
-      if (got < 0)
-        throw error(got, path);
+      int got = read(pos, ByteBuffer.wrap(b, off, len));
       statistics.incrementBytesRead(got);
       return got;
     }
@@ -857,8 +847,11 @@ public class JuiceFileSystemImpl extends FileSystem {
         return 0;
       if (buf == null)
         throw new IOException("stream was closed");
-      if (!buf.hasRemaining() && b.remaining() <= buf.capacity() && !refill()) {
-        return -1;
+      // only refill in java side when it is heap bytebuffer
+      if (b.hasArray()) {
+        if (!buf.hasRemaining() && b.remaining() <= buf.capacity() && !refill()) {
+          return -1;
+        }
       }
       int got = 0;
       while (b.hasRemaining() && buf.hasRemaining()) {
@@ -872,31 +865,25 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (more <= 0)
         return got > 0 ? got : -1;
       position += more;
+      statistics.incrementBytesRead(more);
       buf.position(0);
       buf.limit(0);
       return got + more;
     }
 
-    public synchronized int read(long pos, ByteBuffer b) throws IOException {
+    private synchronized int read(long pos, ByteBuffer b) throws IOException {
       if (!b.hasRemaining())
         return 0;
       int got;
-      if (b.hasArray()) {
-        got = read(pos, b.array(), b.position(), b.remaining());
-        if (got <= 0)
-          return got;
-      } else {
-        assert b.isDirect();
-        got = lib.jfs_pread(Thread.currentThread().getId(), fd, b, b.remaining(), pos);
-        if (got == EINVAL)
-          throw new IOException("stream was closed");
-        if (got < 0)
-          throw error(got, path);
-        if (got == 0)
-          return -1;
-        statistics.incrementBytesRead(got);
-      }
-      b.position(b.position() + got);
+      int startPos = b.position();
+      got = lib.jfs_pread(Thread.currentThread().getId(), fd, b, b.remaining(), pos);
+      if (got == EINVAL)
+        throw new IOException("stream was closed");
+      if (got < 0)
+        throw error(got, path);
+      if (got == 0)
+        return -1;
+      b.position(startPos + got);
       return got;
     }
 
@@ -937,7 +924,6 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (buf == null) {
         return; // already closed
       }
-      bufferPool.returnBuffer(buf);
       buf = null;
       int r = lib.jfs_close(Thread.currentThread().getId(), fd);
       fd = 0;

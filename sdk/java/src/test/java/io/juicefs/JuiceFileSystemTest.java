@@ -422,6 +422,10 @@ public class JuiceFileSystemTest extends TestCase {
     in.read(3000, new byte[6000], 0, 3000);
     assertEquals(readSize * 2 + 3000 + 3000, statistics.getBytesRead());
 
+    in.read(new byte[3000], 0, 3000);
+    assertEquals(readSize * 2 + 3000 + 3000 + 3000, statistics.getBytesRead());
+
+    in.close();
   }
 
   public void testChecksum() throws IOException {
