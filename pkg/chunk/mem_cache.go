@@ -31,7 +31,7 @@ type memItem struct {
 }
 
 type memcache struct {
-	sync.Mutex
+	sync.RWMutex
 	capacity int64
 	used     int64
 	pages    map[string]memItem
@@ -74,14 +74,14 @@ func newMemStore(config *Config, reg prometheus.Registerer) *memcache {
 }
 
 func (c *memcache) usedMemory() int64 {
-	c.Lock()
-	defer c.Unlock()
+	c.RLock()
+	defer c.RUnlock()
 	return c.used
 }
 
 func (c *memcache) stats() (int64, int64) {
-	c.Lock()
-	defer c.Unlock()
+	c.RLock()
+	defer c.RUnlock()
 	return int64(len(c.pages)), c.used
 }
 
