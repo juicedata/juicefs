@@ -728,10 +728,12 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     private ByteBuffer buf;
     private long position;
+    private int size;
 
     public FileInputStream(Path f, int fd, int size) throws IOException {
       path = f;
       this.fd = fd;
+      this.size = size;
       buf = ByteBuffer.allocate(size);
       buf.limit(0);
       position = 0;
@@ -847,20 +849,23 @@ public class JuiceFileSystemImpl extends FileSystem {
         return 0;
       if (buf == null)
         throw new IOException("stream was closed");
-      // only refill in java side when it is heap bytebuffer
-      if (b.hasArray()) {
-        if (!buf.hasRemaining() && b.remaining() <= buf.capacity() && !refill()) {
-          return -1;
-        }
+      if (!buf.hasRemaining() && b.remaining() <= buf.capacity() && !refill()) {
+        return -1;
       }
-      int got = 0;
-      while (b.hasRemaining() && buf.hasRemaining()) {
-        b.put(buf.get());
-        got++;
-      }
+      int got = readLocalBuffer(b);
       statistics.incrementBytesRead(got);
       if (!b.hasRemaining())
         return got;
+      // small read, use buffer
+      if (b.remaining() < this.size) {
+        if (refill()) {
+          int more = readLocalBuffer(b);
+          statistics.incrementBytesRead(more);
+          return got + more;
+        } else {
+          return -1;
+        }
+      }
       int more = read(position, b);
       if (more <= 0)
         return got > 0 ? got : -1;
@@ -869,6 +874,15 @@ public class JuiceFileSystemImpl extends FileSystem {
       buf.position(0);
       buf.limit(0);
       return got + more;
+    }
+
+    private int readLocalBuffer(ByteBuffer b) {
+      int got = 0;
+      while (b.hasRemaining() && buf.hasRemaining()) {
+        b.put(buf.get());
+        got++;
+      }
+      return got;
     }
 
     private synchronized int read(long pos, ByteBuffer b) throws IOException {
