@@ -42,7 +42,7 @@ juicefs.linux:
 
 juicefs.exe: /usr/local/include/winfsp cmd/*.go pkg/*/*.go
 	GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc \
-	     go build -ldflags="$(LDFLAGS)" -buildmode exe -o juicefs.exe .
+	     go build -ldflags="$(LDFLAGS)" -buildmode exe -o juicefs.exe ..
 
 .PHONY: snapshot release test
 snapshot:
@@ -68,5 +68,4 @@ release:
 
 test:
 	go test -v -cover ./pkg/... -coverprofile=cov1.out
-
 	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword `which go` test -v -cover ./cmd/... -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...
