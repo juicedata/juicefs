@@ -68,4 +68,5 @@ release:
 
 test:
 	go test -v -cover ./pkg/... -coverprofile=cov1.out
+
 	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword `which go` test -v -cover ./cmd/... -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...
