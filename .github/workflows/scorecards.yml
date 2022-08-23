@@ -18,7 +18,6 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
-      - '.github/**'
 
 
 # Declare default permissions as read only.
