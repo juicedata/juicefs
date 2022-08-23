@@ -18,7 +18,6 @@ package vfs
 
 import (
 	"encoding/json"
-	"fmt"
 	"runtime"
 	"sync"
 	"syscall"
@@ -141,7 +140,6 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 		err = syscall.EEXIST
 		return
 	}
-	fmt.Printf("---- vfs MKnod inode %d  name %s  \n", parent, name)
 	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
 		return
@@ -567,7 +565,6 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 	if ino == controlInode && runtime.GOOS == "darwin" {
 		fh = v.getControlHandle(ctx.Pid())
 	}
-	//fmt.Printf("====== hello start from vfs write  2----:    %s\n", buf)
 	defer func() { logit(ctx, "write (%d,%d,%d,%d): %s", ino, size, off, fh, strerr(err)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {

@@ -125,8 +125,7 @@ type Attr struct {
 	KeepCache bool // whether to keep the cached page or not
 }
 
-//quota attr
-//quota for direction
+//quota for directory
 type quota struct {
 	capacity   uint64
 	inodes     uint64

@@ -363,22 +363,16 @@ func (m *baseMeta) refreshQuota() {
 		if quotaMap, err := m.en.doGetQuotaList("dirQuotaList"); err == nil {
 			//get quota form engine and cache to m.quota
 			for key, val := range quotaMap {
-				//Add lock
 				m.Lock()
 				m.quotas[key] = val
 				m.Unlock()
-				/*if s, err := m.en.dogetQuotas(Background, key); err == nil {
-					m.dirQuotas[key] = make(map[Ino]*quota)
-					m.dirQuotas[key][key] = s
-				}*/
+				//Todo how refresh dirQuota when quota change
 			}
 
 		}
 		utils.SleepWithJitter(time.Second * 10)
 
 	}
-	// get m.quotas from meta engine
-
 }
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, size, inodes int64) bool {
@@ -413,8 +407,6 @@ func (m *redisMeta) updateQuotaStats(inode Ino, space int64, inodes int64) {
 		val.usedInodes = val.usedInodes + inodes
 		val.usedSpace = val.usedSpace + space
 		m.Unlock()
-		//atomic.AddUint64(val.usedSpace, space)
-		//atomic.AddUint64(val.usedInodes, inodes)
 	}
 }
 
@@ -799,7 +791,6 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 	if attr == nil {
 		attr = &Attr{}
 	}
-	fmt.Printf("--- am here baseMeta Create inode: %d  attr %+v \n", *inode, *attr)
 	eno := m.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
 	if eno == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
 		eno = 0
@@ -1006,9 +997,9 @@ func (m *baseMeta) SetQuota(ctx Context, inode Ino, capacity, inodes uint64) sys
 	if inode == 0 {
 		return syscall.EINVAL
 	}
-	if m.en.doSetQuotaList(inode.String()) != nil {
-		//Todo change err type
-		return syscall.EROFS
+	err := m.en.doSetQuotaList(inode.String())
+	if err != nil {
+		return errno(err)
 	}
 	defer m.timeit(time.Now())
 	return m.en.doSetQuota(ctx, m.checkRoot(inode), capacity, inodes)
@@ -1068,7 +1059,6 @@ func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64) {
 	select {
 	case m.maxDeleting <- struct{}{}:
 		go func() {
-			fmt.Printf("-- i am here 11 %d\n", inode)
 			m.en.doDeleteFileData(inode, length)
 			<-m.maxDeleting
 		}()

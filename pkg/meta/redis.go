@@ -1245,7 +1245,6 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var _type uint8
 	var trash, inode Ino
-	fmt.Printf("-- doUnlink name %s\n", name)
 	keys := []string{m.entryKey(parent), m.inodeKey(parent)}
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -1399,7 +1398,6 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	var typ uint8
 	var trash, inode Ino
-	fmt.Printf("--- go to doRmdir %d  name %s \n", parent, name)
 	keys := []string{m.inodeKey(parent), m.entryKey(parent)}
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -2173,7 +2171,6 @@ func (m *redisMeta) doRefreshSession() {
 func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var attr Attr
 	var ctx = Background
-	fmt.Printf("=== doDeleteSustainedInode %d \n", inode)
 	a, err := m.rdb.Get(ctx, m.inodeKey(inode)).Bytes()
 	if err == redis.Nil {
 		return nil
@@ -2243,8 +2240,6 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) s
 
 func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
 	defer m.timeit(time.Now())
-	fmt.Printf("====== hello start from vfs writer 9  idex  ----:    %d \n", indx)
-	fmt.Printf("====== hello start from vfs writer 9  slice  ----:    %+v \n", slice)
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -2325,7 +2320,6 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 
 func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
 	defer m.timeit(time.Now())
-	fmt.Printf("-- CopyFileRange fin %d  fout %d \n", fin, fout)
 	f := m.of.find(fout)
 	if f != nil {
 		f.Lock()
@@ -2689,7 +2683,6 @@ func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 	var ctx = Background
 	var indx uint32
 	p := m.rdb.Pipeline()
-	fmt.Printf("---oooooooooooooooo  %d \n", inode)
 	for uint64(indx)*ChunkSize < length {
 		var keys []string
 		for i := 0; uint64(indx)*ChunkSize < length && i < 1000; i++ {
@@ -3223,6 +3216,7 @@ func (m *redisMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
 	} else if out == nil && err == nil {
 		return nil, fmt.Errorf("HGetAll %s ", "none")
 	}
+
 	capacity_quota, err := m.rdb.HGet(ctx, key, "capacity").Bytes()
 	if err == redis.Nil {
 		err = ENOATTR
@@ -3261,7 +3255,6 @@ func (m *redisMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
 	if err != nil {
 		logger.Fatalf("invalid capacity %s", err)
 	}
-
 	return &quota{
 		capacity:   capacity,
 		inodes:     inodes,
@@ -3270,18 +3263,18 @@ func (m *redisMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
 	}, nil
 
 }
+
 func (m *redisMeta) doSetQuotaList(name string) error {
 	m.rdb.SAdd(Background, "dirQuotaList", name)
 	return nil
 }
 
 func (m *redisMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
-	//vals, err := m.rdb.ZRange(Background, name, 0, 1000000).Result()
 	vals, err := m.rdb.SMembers(Background, name).Result()
 	if err != nil {
 		return nil, errno(err)
 	}
-	q1 := make(map[Ino]quota)
+	quotaMap := make(map[Ino]quota)
 	for i := 0; i < len(vals); i++ {
 		inode, err := strconv.ParseUint(vals[i], 10, 64)
 		if err != nil {
@@ -3289,67 +3282,58 @@ func (m *redisMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
 			return nil, err
 		}
 		key := m.quotaKey(Ino(inode))
-		quotasttr, err := m.rdb.HGetAll(Background, key).Result()
+		quotaAttr, err := m.rdb.HGetAll(Background, key).Result()
 		if err != nil {
-			logger.Fatalf("invalid quotaattr  %s", err)
+			logger.Fatalf("invalid quotaAttr  %s", err)
 			return nil, err
 		}
-		if _, ok := quotasttr["capacity"]; !ok {
+		if _, ok := quotaAttr["capacity"]; !ok {
 			logger.Fatalf("invalid capacity %s", err)
 			return nil, err
 		}
-
-		capacity, err := strconv.ParseUint(quotasttr["capacity"], 10, 64)
+		capacity, err := strconv.ParseUint(quotaAttr["capacity"], 10, 64)
 		if err != nil {
 			logger.Fatalf("invalid capacity %s", err)
 			return nil, err
 		}
-
-		if _, ok := quotasttr["inodes"]; !ok {
+		if _, ok := quotaAttr["inodes"]; !ok {
 			logger.Fatalf("invalid inodes %s", err)
 			return nil, err
 		}
-
-		inodes, err := strconv.ParseUint(quotasttr["inodes"], 10, 64)
+		inodes, err := strconv.ParseUint(quotaAttr["inodes"], 10, 64)
 		if err != nil {
 			logger.Fatalf("invalid inodes %s", err)
 			return nil, err
 		}
-
-		if _, ok := quotasttr["usedSpace"]; !ok {
-			q1[Ino(inode)] = quota{
+		if _, ok := quotaAttr["usedSpace"]; !ok {
+			quotaMap[Ino(inode)] = quota{
 				capacity: capacity,
 				inodes:   inodes,
 			}
-			return q1, nil
+			return quotaMap, nil
 		}
-
-		usedSpace, err := strconv.ParseInt(quotasttr["usedSpace"], 10, 64)
+		usedSpace, err := strconv.ParseInt(quotaAttr["usedSpace"], 10, 64)
 		if err != nil {
 			logger.Fatalf("invalid usedSpace %s", err)
 			return nil, err
 		}
-
-		if _, ok := quotasttr["usedInodes"]; !ok {
+		if _, ok := quotaAttr["usedInodes"]; !ok {
 			logger.Fatalf("invalid usedInodes %s", err)
 			return nil, err
 		}
-
-		usedInodes, err := strconv.ParseInt(quotasttr["usedInodes"], 10, 64)
+		usedInodes, err := strconv.ParseInt(quotaAttr["usedInodes"], 10, 64)
 		if err != nil {
 			logger.Fatalf("invalid usedSpace %s", err)
 			return nil, err
 		}
-
-		q1[Ino(inode)] = quota{
+		quotaMap[Ino(inode)] = quota{
 			capacity:   capacity,
 			inodes:     inodes,
 			usedSpace:  usedSpace,
 			usedInodes: usedInodes,
 		}
-
 	}
-	return q1, nil
+	return quotaMap, nil
 
 }
 

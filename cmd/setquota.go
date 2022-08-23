@@ -101,9 +101,7 @@ func setquota(ctx *cli.Context) error {
 	}
 	var capacity, inodes uint64
 	capacity = ctx.Uint64("capacity")
-	fmt.Printf("-----------3 %d \n", capacity)
 	inodes = ctx.Uint64("inodes")
-	fmt.Printf("-----------4 %d \n", inodes)
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)
 		var d string
@@ -131,7 +129,6 @@ func setquota(ctx *cli.Context) error {
 			logger.Errorf("%s is not inside JuiceFS", path)
 			continue
 		}
-
 		wb := utils.NewBuffer(4 + 4 + 8 + 8 + 8)
 		wb.Put32(meta.SetQuota)
 		wb.Put32(8 + 8 + 8)
@@ -149,21 +146,20 @@ func setquota(ctx *cli.Context) error {
 		}
 		_ = f.Close()
 	}
-
 	return nil
 }
 
 func delquota(ctx *cli.Context) error {
 	setup(ctx, 0)
+	//Todo
 	fmt.Printf("remove -----\n")
-
 	return nil
 }
 
 func getquota(ctx *cli.Context) error {
 	setup(ctx, 0)
+	//Todo
 	fmt.Printf("get -----\n")
-
 	return nil
 }
 
@@ -200,7 +196,6 @@ func fsckquota(ctx *cli.Context) error {
 			logger.Errorf("%s is not inside JuiceFS", path)
 			continue
 		}
-
 		wb := utils.NewBuffer(4 + 4 + 8)
 		wb.Put32(meta.FsckQuota)
 		wb.Put32(8)
@@ -216,6 +211,5 @@ func fsckquota(ctx *cli.Context) error {
 		}
 		_ = f.Close()
 	}
-
 	return nil
 }

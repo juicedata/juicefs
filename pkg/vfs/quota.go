@@ -20,22 +20,17 @@
 package vfs
 
 import (
-	"fmt"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 )
 
 func (v *VFS) setQuota(ctx meta.Context, ino Ino, capacity, inodes uint64) (err syscall.Errno) {
-	//todo
-	fmt.Printf("just for test ----ino: %d  capacity:%d, inodes: %d \n", ino, capacity, inodes)
 	err = v.Meta.SetQuota(ctx, ino, capacity, inodes)
 	return
 }
 
 func (v *VFS) fsckQuota(ctx meta.Context, ino Ino) (err syscall.Errno) {
-	//todo
-	fmt.Printf("just for test ----ino: %d \n", ino)
 	err = v.Meta.FsckQuota(ctx, ino)
 	return
 }
