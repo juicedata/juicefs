@@ -22,7 +22,7 @@ lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/jui
 
 If you'd like to control this process by hand, note that:
 
-* A symlink needs to be created from the juicefs executable to `/sbin/mount.juicefs`, e.g. `ln -s /usr/loal/bin/juicefs /sbin/mount.juicefs`.
+* A symlink needs to be created from `/sbin/mount.juicefs` to the JuiceFS executable, e.g. `ln -s /usr/local/bin/juicefs /sbin/mount.juicefs`.
 * All mount options must also be included in the fstab options to take effect. Remember to remove the prefixing hyphen(s), and add their values with `=`, for example:
 
   ```bash

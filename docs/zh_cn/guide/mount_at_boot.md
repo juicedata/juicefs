@@ -22,8 +22,8 @@ lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/jui
 
 如果你有意自行控制，请注意：
 
-* 需要创建一个从 /sbin/mount.juicefs 到 juicefs 可执行文件的软链接，比如 `ln -s /usr/loal/bin/juicefs /sbin/mount.juicefs`。
-* 挂载命令所包含的各种参数，也需要在 fstab options 列加以声明，注意去掉 `-` 前缀，并将参数取值以 `=` 连接，举例说明：
+* 需要创建一个从 `/sbin/mount.juicefs` 到 JuiceFS 可执行文件的软链接，比如 `ln -s /usr/local/bin/juicefs /sbin/mount.juicefs`。
+* 挂载命令所包含的各种选项，也需要在 fstab options 列加以声明，注意去掉 `-` 前缀，并将选项取值以 `=` 连接，举例说明：
 
   ```bash
   $ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 -o max_read=99 <META-URL> /jfs
