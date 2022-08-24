@@ -3,18 +3,16 @@ name: verify
 on:
   push:
     branches:
-    - main
-    - 'release-**'
-    paths:
-      - '**.go'
+      - main
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/**'
   pull_request:
     branches:
       - 'main'
       - 'release-**'
-    paths:
-      - '**.yml'
-      - '**.go'
-      - 'Makefile'
     paths-ignore:
       - 'docs/**'
       - '**.md'
