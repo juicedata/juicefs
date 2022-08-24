@@ -22,24 +22,26 @@ import (
 	"testing"
 
 	"github.com/agiledragon/gomonkey/v2"
+
 	. "github.com/smartystreets/goconvey/convey"
 )
 
 func TestStatus(t *testing.T) {
-	Convey("TestInfo", t, func() {
-		Convey("TestInfo", func() {
+	Convey("TestStatus", t, func() {
+		Convey("TestStatus", func() {
 			tmpFile, err := os.CreateTemp("/tmp", "")
 			if err != nil {
 				t.Fatalf("create temporary file: %s", err)
 			}
 			defer tmpFile.Close()
 			defer os.Remove(tmpFile.Name())
-			// mock os.Stdout
-			patches := gomonkey.ApplyGlobalVar(os.Stdout, *tmpFile)
-			defer patches.Reset()
 
 			mountTemp(t, nil, nil, nil)
 			defer umountTemp(t)
+
+			// mock os.Stdout
+			patches := gomonkey.ApplyGlobalVar(os.Stdout, *tmpFile)
+			defer patches.Reset()
 
 			if err = Main([]string{"", "status", testMeta}); err != nil {
 				t.Fatalf("status failed: %s", err)
