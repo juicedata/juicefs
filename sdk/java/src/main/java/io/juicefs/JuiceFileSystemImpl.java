@@ -1010,6 +1010,10 @@ public class JuiceFileSystemImpl extends FileSystem {
       flush();
       ((FSOutputStream) out).fsync();
     }
+
+    public OutputStream getOutputStream() {
+      return out;
+    }
   }
 
   static class BufferedFSOutputStreamWithStreamCapabilities extends BufferedFSOutputStream
