@@ -29,6 +29,7 @@ import org.apache.hadoop.security.UserGroupInformation;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.security.PrivilegedExceptionAction;
@@ -132,6 +133,18 @@ public class JuiceFileSystemTest extends TestCase {
     } catch (IOException e) {
       fs.setPermission(new Path("/hello"), new FsPermission((short) 0644));
     }
+  }
+
+  public void testWrite() throws Exception {
+    Path f = new Path("/testWriteFile");
+    FSDataOutputStream fou = fs.create(f);
+    byte[] b = "hello world".getBytes();
+    OutputStream ou = ((JuiceFileSystemImpl.BufferedFSOutputStream)fou.getWrappedStream()).getOutputStream();
+    ou.write(b, 6, 5);
+    ou.close();
+    FSDataInputStream in = fs.open(f);
+    String str = IOUtils.toString(in);
+    assertEquals("world", str);
   }
 
   public void testReadSkip() throws Exception {
