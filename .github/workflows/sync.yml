@@ -135,7 +135,7 @@ jobs:
           echo "juicefs log"
           sudo tail -n 1000 ~/.juicefs/juicefs.log
           grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
-          grep "database is locked" ~/.juicefs/juicefs.log && exit 1 || true
+          # grep "database is locked" ~/.juicefs/juicefs.log && exit 1 || true
 
       - name: Send Slack Notification
         if: ${{ failure() }}
