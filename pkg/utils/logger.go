@@ -22,7 +22,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mattn/go-isatty"
 	"github.com/sirupsen/logrus"
 )
 
@@ -85,7 +84,7 @@ func (l *logHandle) Log(args ...interface{}) {
 }
 
 func newLogger(name string) *logHandle {
-	l := &logHandle{Logger: *logrus.New(), name: name, colorful: isatty.IsTerminal(os.Stderr.Fd())}
+	l := &logHandle{Logger: *logrus.New(), name: name, colorful: SupportANSIColor(os.Stderr.Fd())}
 	l.Formatter = l
 	if syslogHook != nil {
 		l.Hooks.Add(syslogHook)

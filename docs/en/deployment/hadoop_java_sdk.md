@@ -33,7 +33,7 @@ If you want to use JuiceFS in a distributed environment, when creating a file sy
 
 ### 4. Memory
 
-JuiceFS Hadoop Java SDK need extra 4 * [`juicefs.memory-size`](#io-configurations) off-heap memory at most. By default, up to 1.2 GB of additional memory is required (depends on write load).
+Depending on the read and write load of computing tasks (such as Spark executor), JuiceFS Hadoop Java SDK may require an additional 4 * [`juicefs.memory-size`](#io-configurations) off-heap memory to speed up read and write performance. By default, it is recommended to configure at least 1.2GB of off-heap memory for compute tasks.
 
 ## Install and compile the client
 
@@ -116,20 +116,20 @@ It is recommended to place the JAR file in a fixed location, and the other locat
 
 ### Big Data Platforms
 
-| Name              | Installing Paths                                             |
-| ----------------- | ------------------------------------------------------------ |
-| CDH               | `/opt/cloudera/parcels/CDH/lib/hadoop/lib`<br></br>`/opt/cloudera/parcels/CDH/spark/jars`<br></br>`/var/lib/impala` |
-| HDP               | `/usr/hdp/current/hadoop-client/lib`<br></br>`/usr/hdp/current/hive-client/auxlib`<br></br>`/usr/hdp/current/spark2-client/jars` |
-| Amazon EMR        | `/usr/lib/hadoop/lib`<br></br>`/usr/lib/spark/jars`<br></br>`/usr/lib/hive/auxlib` |
+| Name              | Installing Paths                                                                                                                                                                                                                                                                                                                               |
+|-------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| CDH               | `/opt/cloudera/parcels/CDH/lib/hadoop/lib`<br></br>`/opt/cloudera/parcels/CDH/spark/jars`<br></br>`/var/lib/impala`                                                                                                                                                                                                                            |
+| HDP               | `/usr/hdp/current/hadoop-client/lib`<br></br>`/usr/hdp/current/hive-client/auxlib`<br></br>`/usr/hdp/current/spark2-client/jars`                                                                                                                                                                                                               |
+| Amazon EMR        | `/usr/lib/hadoop/lib`<br></br>`/usr/lib/spark/jars`<br></br>`/usr/lib/hive/auxlib`                                                                                                                                                                                                                                                             |
 | Alibaba Cloud EMR | `/opt/apps/ecm/service/hadoop/*/package/hadoop*/share/hadoop/common/lib`<br></br>`/opt/apps/ecm/service/spark/*/package/spark*/jars`<br></br>`/opt/apps/ecm/service/presto/*/package/presto*/plugin/hive-hadoop2`<br></br>`/opt/apps/ecm/service/hive/*/package/apache-hive*/lib`<br></br>`/opt/apps/ecm/service/impala/*/package/impala*/lib` |
-| Tencent Cloud EMR | `/usr/local/service/hadoop/share/hadoop/common/lib`<br></br>`/usr/local/service/presto/plugin/hive-hadoop2`<br></br>`/usr/local/service/spark/jars`<br></br>`/usr/local/service/hive/auxlib` |
-| UCloud UHadoop    | `/home/hadoop/share/hadoop/common/lib`<br></br>`/home/hadoop/hive/auxlib`<br></br>`/home/hadoop/spark/jars`<br></br>`/home/hadoop/presto/plugin/hive-hadoop2` |
-| Baidu Cloud EMR   | `/opt/bmr/hadoop/share/hadoop/common/lib`<br></br>`/opt/bmr/hive/auxlib`<br></br>`/opt/bmr/spark2/jars` |
+| Tencent Cloud EMR | `/usr/local/service/hadoop/share/hadoop/common/lib`<br></br>`/usr/local/service/presto/plugin/hive-hadoop2`<br></br>`/usr/local/service/spark/jars`<br></br>`/usr/local/service/hive/auxlib`                                                                                                                                                   |
+| UCloud UHadoop    | `/home/hadoop/share/hadoop/common/lib`<br></br>`/home/hadoop/hive/auxlib`<br></br>`/home/hadoop/spark/jars`<br></br>`/home/hadoop/presto/plugin/hive-hadoop2`                                                                                                                                                                                  |
+| Baidu Cloud EMR   | `/opt/bmr/hadoop/share/hadoop/common/lib`<br></br>`/opt/bmr/hive/auxlib`<br></br>`/opt/bmr/spark2/jars`                                                                                                                                                                                                                                        |
 
 ### Community Components
 
 | Name   | Installing Paths                     |
-| ------ | ------------------------------------ |
+|--------|--------------------------------------|
 | Spark  | `${SPARK_HOME}/jars`                 |
 | Presto | `${PRESTO_HOME}/plugin/hive-hadoop2` |
 | Flink  | `${FLINK_HOME}/lib`                  |
@@ -141,7 +141,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 #### Core Configurations
 
 | Configuration                    | Default Value                | Description                                                                                                                                                                                                                                                                                  |
-| -------------------------------- | ---------------------------- | ------------------------------------------------------------                                                                                                                                                                                                                                 |
+|----------------------------------|------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | Specify the storage implementation to be used. By default, `jfs://` scheme is used. If you want to use different scheme (e.g. `cfs://`), just modify it to `fs.cfs.impl`. No matter what sheme you use, it is always access the data in JuiceFS.                                             |
 | `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         | Specify the storage implementation to be used. By default, `jfs://` scheme is used. If you want to use different scheme (e.g. `cfs://`), just modify it to `fs.AbstractFileSystem.cfs.impl`. No matter what sheme you use, it is always access the data in JuiceFS.                          |
 | `juicefs.meta`                   |                              | Specify the metadata engine address of the pre-created JuiceFS file system. You can configure multiple file systems for the client at the same time through the format of `juicefs.{vol_name}.meta`. Refer to ["Multiple file systems configuration"](#multiple-file-systems-configuration). |
@@ -149,11 +149,12 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 #### Cache Configurations
 
 | Configuration                | Default Value | Description                                                                                                                                                                                                                                                                                           |
-| ---------------------------- | ------------- | ------------------------------------------------------------                                                                                                                                                                                                                                          |
+|------------------------------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `juicefs.cache-dir`          |               | Directory paths of local cache. Use colon to separate multiple paths. Also support wildcard in path. **It's recommended create these directories manually and set `0777` permission so that different applications could share the cache data.**                                                      |
 | `juicefs.cache-size`         | 0             | Maximum size of local cache in MiB. The default value is 0, which means that caching is disabled. It's the total size when set multiple cache directories.                                                                                                                                            |
 | `juicefs.cache-full-block`   | `true`        | Whether cache every read blocks, `false` means only cache random/small read blocks.                                                                                                                                                                                                                   |
 | `juicefs.free-space`         | 0.1           | Min free space ratio of cache directory                                                                                                                                                                                                                                                               |
+| `juicefs.open-cache`         | 0             | Open files cache timeout in seconds (0 means disable this feature)                                                                                                                                                                                                                                    |
 | `juicefs.attr-cache`         | 0             | Expire of attributes cache in seconds                                                                                                                                                                                                                                                                 |
 | `juicefs.entry-cache`        | 0             | Expire of file entry cache in seconds                                                                                                                                                                                                                                                                 |
 | `juicefs.dir-entry-cache`    | 0             | Expire of directory entry cache in seconds                                                                                                                                                                                                                                                            |
@@ -162,7 +163,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 #### I/O Configurations
 
 | Configuration            | Default Value | Description                                     |
-| ------------------------ | ------------- | ----------------------------------------------- |
+|--------------------------|---------------|-------------------------------------------------|
 | `juicefs.max-uploads`    | 20            | The max number of connections to upload         |
 | `juicefs.max-deletes`    | 2             | The max number of connections to delete         |
 | `juicefs.get-timeout`    | 5             | The max number of seconds to download an object |
@@ -171,6 +172,10 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.prefetch`       | 1             | Prefetch N blocks in parallel                   |
 | `juicefs.upload-limit`   | 0             | Bandwidth limit for upload in Mbps              |
 | `juicefs.download-limit` | 0             | Bandwidth limit for download in Mbps            |
+| `juicefs.io-retries`     | 10            | Number of retries after network failure         |
+| `juicefs.writeback`      | `false`       | Upload objects in background                    |
+
+
 
 #### Other Configurations
 
@@ -189,6 +194,9 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.push-interval`   | 10            | Metric push interval (in seconds)                                                                                                                                           |
 | `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                                |
 | `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.                         |
+| `juicefs.no-bgjob`        | `false`       | Disable background jobs (clean-up, backup, etc.)                                                                                                                            |
+| `juicefs.backup-meta`     | 3600          | Interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup)                                                                       |
+| `juicefs.heartbeat`       | 12            | Heartbeat interval (in seconds) between client and metadata engine. It's recommended that all clients use the same value.                                                   |
 
 #### Multiple file systems configuration
 
@@ -350,6 +358,10 @@ Before restart, you need to confirm JuiceFS related configuration has been writt
 HDFS, Hue, ZooKeeper and other services don't need to be restarted.
 
 When `Class io.juicefs.JuiceFileSystem not found` or `No FilesSystem for scheme: jfs` exceptions was occurred after restart, reference [FAQ](#faq).
+
+### Trash
+
+JuiceFS Hadoop Java SDK also has the same trash function as HDFS, which needs to be enabled by setting `fs.trash.interval` and `fs.trash.checkpoint.interval`, please refer to [HDFS documentation](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html#File_Deletes_and_Undeletes) for more information.
 
 ## Environmental Verification
 

@@ -6,15 +6,19 @@ on:
     - main
     - 'release-**'
     paths:
-    - '**.go'
+      - '**.go'
   pull_request:
     branches:
-    - 'main'
-    - 'release-**'
+      - 'main'
+      - 'release-**'
     paths:
-    - '**.yml'
-    - '**.go'
-    - 'Makefile'
+      - '**.yml'
+      - '**.go'
+      - 'Makefile'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/**'
   workflow_dispatch:
 
 jobs:

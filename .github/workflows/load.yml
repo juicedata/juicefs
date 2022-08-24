@@ -114,9 +114,7 @@ jobs:
         with:
           meta_url: "tikv://127.0.0.1:2379/load_test"
           load_file: "2M_emtpy_files.dump"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
+
 
   load-to-badgerdb:
     runs-on: ubuntu-latest
@@ -132,9 +130,7 @@ jobs:
         with:
           meta_url: "badger://load_test"
           load_file: "2M_emtpy_files.dump"    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
+
 
   load-to-mariadb:
     runs-on: ubuntu-latest          
@@ -152,9 +148,7 @@ jobs:
         with:
           meta_url: "mysql://root:root@\\(127.0.0.1\\)/load_test"
           load_file: "2M_emtpy_files.dump"   
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
+
 
   load-to-tidb:
     runs-on: ubuntu-latest          
@@ -176,6 +170,3 @@ jobs:
         with:
           meta_url: "mysql://root:@\\(127.0.0.1:4000\\)/load_test"
           load_file: "2M_emtpy_files.dump"   
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1

@@ -11,8 +11,6 @@
 
 With JuiceFS, massive cloud storage can be directly connected to big data, machine learning, artificial intelligence, and various application platforms in production environments. Without modifying code, the massive cloud storage can be used as efficiently as local storage.
 
-📺 **Video**: [What is JuiceFS?](https://www.youtube.com/watch?v=8RdZoBG-D6Y)
-
 📖 **Document**: [Quick Start Guide](https://juicefs.com/docs/community/quick_start_guide)
 
 ## Highlighted Features

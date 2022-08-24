@@ -29,10 +29,11 @@ While using the JuiceFS file system - no matter which database you choose to sto
 
 ## Redis
 
-[Redis](https://redis.io/) is an open source (BSD license) memory-based Key-Value storage system, often used as a database, cache, and message broker.
+[Redis](https://redis.io) is an open source (BSD license) memory-based Key-Value storage system, often used as a database, cache, and message broker.
 
 :::note
-JuiceFS requires Redis 4.0+
+JuiceFS requires Redis version 4.0 and above, and using a lower version of Redis will result in an error.
+
 To ensure metadata security, JuiceFS requires Redis' `maxmemory_policy` to be set to `noeviction`, otherwise it will try to set it to `noeviction` when starting JuiceFS, and will print a warning log if it fails to do so.
 :::
 
@@ -399,9 +400,13 @@ Since BadgerDB is a standalone database, it can only be used locally and does no
 
 ## TiKV
 
-[TiKV](https://github.com/tikv/tikv) is a distributed transactional Key-Value database. It is originally developed by [PingCAP](https://pingcap.com) as the storage layer for their flagship product [TiDB](https://github.com/pingcap/tidb). Now TiKV is an independent open source project, and is also a granduated project of [CNCF](https://www.cncf.io/projects).
+[TiKV](https://tikv.org) is a distributed transactional Key-Value database. It is originally developed by PingCAP as the storage layer for their flagship product TiDB. Now TiKV is an independent open source project, and is also a granduated project of CNCF.
 
-By using the official tool TiUP, you can easily build a local playground for testing (refer [here](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/) for details). Production environment generally requires at least three hosts to store three data replicas (refer to the [official document](https://tikv.org/docs/5.1/deploy/install/install/) for all deployment steps).
+By using the official tool TiUP, you can easily build a local playground for testing (refer [here](https://tikv.org/docs/latest/concepts/tikv-in-5-minutes) for details). Production environment generally requires at least three hosts to store three data replicas (refer to the [official document](https://tikv.org/docs/latest/deploy/install/install) for all deployment steps).
+
+:::note
+It's recommended to use dedicated TiKV 5.0+ cluster as the metadata engine for JuiceFS.
+:::
 
 ### Create a file system
 
@@ -425,12 +430,12 @@ juicefs format \
 
 If you need to enable TLS, you can set the TLS configuration item by adding the query parameter after the metadata URL. Currently supported configuration items:
 
-| Name        | Value                                                                                                                                                   |
-|-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `ca`        | CA root certificate, used to connect TiKV/PD with TLS                                                                                                   |
-| `cert`      | certificate file path, used to connect TiKV/PD with TLS                                                                                                 |
-| `key`       | private key file path, used to connect TiKV/PD with TLS                                                                                                 |
-| `verify-cn` | verify component caller's identity, [reference link](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
+| Name        | Value                                                                                                                                                      |
+|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `ca`        | CA root certificate, used to connect TiKV/PD with TLS                                                                                                      |
+| `cert`      | certificate file path, used to connect TiKV/PD with TLS                                                                                                    |
+| `key`       | private key file path, used to connect TiKV/PD with TLS                                                                                                    |
+| `verify-cn` | verify component caller's identity, [reference link](https://docs.pingcap.com/tidb/stable/enable-tls-between-components#verify-component-callers-identity) |
 
 For example:
 

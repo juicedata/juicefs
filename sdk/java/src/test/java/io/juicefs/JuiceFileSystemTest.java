@@ -36,6 +36,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_CHECKPOINT_INTERVAL_KEY;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_KEY;
 import static org.junit.Assert.assertArrayEquals;
 
 public class JuiceFileSystemTest extends TestCase {
@@ -46,7 +48,9 @@ public class JuiceFileSystemTest extends TestCase {
   public void setUp() throws Exception {
     cfg = new Configuration();
     cfg.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
-    fs = FileSystem.get(cfg);
+    cfg.set(FS_TRASH_INTERVAL_KEY, "6");
+    cfg.set(FS_TRASH_CHECKPOINT_INTERVAL_KEY, "2");
+    fs = FileSystem.newInstance(cfg);
     fs.delete(new Path("/hello"));
     FSDataOutputStream out = fs.create(new Path("/hello"), true);
     out.writeBytes("hello\n");
@@ -345,6 +349,21 @@ public class JuiceFileSystemTest extends TestCase {
         throw new IOException("Reached the end of stream. Still have: " + buf.remaining() + " bytes left");
       }
     }
+
+    Path directReadFile = new Path("/direct_file");
+    FSDataOutputStream ou = fs.create(directReadFile);
+    ou.write("hello world".getBytes());
+    ou.close();
+    FSDataInputStream dto = fs.open(directReadFile);
+    ByteBuffer directBuf = ByteBuffer.allocateDirect(11);
+    directBuf.put("hello ".getBytes());
+    dto.seek(6);
+    dto.read(directBuf);
+    byte[] rest = new byte[11];
+    directBuf.flip();
+    directBuf.get(rest, 0, rest.length);
+    assertEquals("hello world", new String(rest));
+
     /*
      * FSDataOutputStream out = fs.create(new Path("/bigfile"), true); byte[] arr =
      * new byte[1<<20]; for (int i=0; i<1024; i++) { out.write(arr); } out.close();
@@ -403,6 +422,10 @@ public class JuiceFileSystemTest extends TestCase {
     in.read(3000, new byte[6000], 0, 3000);
     assertEquals(readSize * 2 + 3000 + 3000, statistics.getBytesRead());
 
+    in.read(new byte[3000], 0, 3000);
+    assertEquals(readSize * 2 + 3000 + 3000 + 3000, statistics.getBytesRead());
+
+    in.close();
   }
 
   public void testChecksum() throws IOException {
@@ -654,5 +677,26 @@ public class JuiceFileSystemTest extends TestCase {
     assertEquals("10000", fooFs.getFileStatus(f).getOwner());
 
     fooFs.delete(f, false);
+  }
+
+  public void testTrash() throws Exception {
+    Trash trash = new Trash(fs, cfg);
+    Path trashFile = new Path("/tmp/trashfile");
+    trash.expungeImmediately();
+    fs.create(trashFile).close();
+    Trash.moveToAppropriateTrash(fs, trashFile, cfg);
+    trash.checkpoint();
+    fs.create(trashFile).close();
+    Trash.moveToAppropriateTrash(fs, trashFile, cfg);
+    assertEquals(2, fs.listStatus(fs.getTrashRoot(trashFile)).length);
+    trash.expungeImmediately();
+    assertEquals(0, fs.listStatus(fs.getTrashRoot(trashFile)).length);
+  }
+
+  public void testBlockSize() throws Exception {
+    Configuration newConf = new Configuration(cfg);
+    newConf.set("dfs.blocksize", "256m");
+    FileSystem newFs = FileSystem.newInstance(newConf);
+    assertEquals(256 << 20, newFs.getDefaultBlockSize(new Path("/")));
   }
 }

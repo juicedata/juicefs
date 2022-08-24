@@ -1,4 +1,4 @@
-name: "sysbench"
+name: "sysbenchrndrw"
 
 on:
 #  push:
@@ -6,94 +6,75 @@ on:
 #      - 'release-**'
 #    paths-ignore:
 #      - 'docs/**'
-#  pull_request:
-#    #The branches below must be a subset of the branches above
-#    branches:
-#      - 'release-**'
-#    paths-ignore:
-#      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
   workflow_dispatch:
 
 jobs:
-  sysbenchsmallfilerandrw:
+  smallfilerndrw:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.18.x'
-
-      - name: Set up Docker
-        uses: docker-practice/actions-setup-docker@master
-
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
-
-      - name: Build linux target
-        run: make juicefs
-
-      - name: Run Redis
-        run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
-
-      - name: Juicefs Format
-        run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 pics
-
-      - name: Juicefs Mount
-        run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs --no-usage-report &
-
-
-      - name: Install Sysbench
-        run: |
-          curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
-          sudo apt -y install sysbench
-
-
-      - name: Smallfile Test 1M
-        run: |
-          date +%Y_%m_%d_%H_%M_%S > /tmp/datetime
-          DATE_TIME=$(cat /tmp/datetime)
-          cd /jfs
-          sudo stat /jfs
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
-          fileName=result_rndrw_1M_6000_$DATE_TIME
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
-          sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
-          cat $fileName
-          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
-
-      - name: Smallfile Test 100K
-        run: |
-          DATE_TIME=$(cat /tmp/datetime)
-          cd /jfs
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
-          fileName=result_rndrw_100K_60000_$DATE_TIME
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
-          sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
-          cat $fileName
-          curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
-
-      - name: Log
-        if: ${{ always() }}
-        run: |
-          echo "juicefs log"
-          sudo tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+      - name: NotCompress
+        uses: ./.github/actions/sysbenchrndrw/
+        with:
+          type: none
+          upload: ${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
-      - name: Setup upterm session
+
+  smallfilerndrw_lz4:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: LZ4
+        uses: ./.github/actions/sysbenchrndrw/
+        with:
+          type: lz4
+          upload: ${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+
+      - name: Send Slack Notification
         if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+
+  smallfilerndrw_zstd:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: ZSTD
+        uses: ./.github/actions/sysbenchrndrw/
+        with:
+          type: zstd
+          upload: ${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"

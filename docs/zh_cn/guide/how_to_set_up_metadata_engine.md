@@ -29,11 +29,12 @@ JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性
 
 ## Redis
 
-[Redis](https://redis.io/) 是基于内存的键值存储系统，在 BSD 协议下开源，可用于数据库、缓存和消息代理。
+[Redis](https://redis.io) 是基于内存的键值存储系统，在 BSD 协议下开源，可用于数据库、缓存和消息代理。
 
 :::note 注意
-JuiceFS 要求 Redis 4.0+ 版本
-为了保证元数据安全，JuiceFS 要求 Redis 的淘汰策略（maxmemory_policy）设置为不淘汰（noeviction），否则在启动 JuiceFS 的时候将会尝试将其设置为（noeviction），如果设置失败将会打印告警日志。
+JuiceFS 要求使用 4.0 及以上版本的 Redis，使用低版本的 Redis 将会报错。
+
+为了保证元数据安全，JuiceFS 要求 Redis 的淘汰策略（`maxmemory_policy`）设置为不淘汰（`noeviction`），否则在启动 JuiceFS 的时候将会尝试将其设置为 `noeviction`，如果设置失败将会打印告警日志。
 :::
 
 ### 创建文件系统
@@ -399,9 +400,13 @@ juicefs mount -d badger://$HOME/badger-data /mnt/jfs
 
 ## TiKV
 
-[TiKV](https://github.com/tikv/tikv) 是一个分布式事务型的键值数据库，最初作为 [PingCAP](https://pingcap.com) 旗舰产品 [TiDB](https://github.com/pingcap/tidb) 的存储层而研发，现已独立开源并从 [CNCF](https://www.cncf.io/projects) 毕业。
+[TiKV](https://tikv.org) 是一个分布式事务型的键值数据库，最初作为 PingCAP 旗舰产品 TiDB 的存储层而研发，现已独立开源并从 CNCF 毕业。
 
-TiKV 的测试环境搭建非常简单，使用官方提供的 TiUP 工具即可实现一键部署，具体可参见[这里](https://tikv.org/docs/5.1/concepts/tikv-in-5-minutes/)。生产环境一般需要至少三个节点来存储三份数据副本，部署步骤可以参考[官方文档](https://tikv.org/docs/5.1/deploy/install/install/)。
+TiKV 的测试环境搭建非常简单，使用官方提供的 TiUP 工具即可实现一键部署，具体可参见[这里](https://tikv.org/docs/latest/concepts/tikv-in-5-minutes)。生产环境一般需要至少三个节点来存储三份数据副本，部署步骤可以参考[官方文档](https://tikv.org/docs/latest/deploy/install/install)。
+
+:::note 注意
+建议使用独立部署的 TiKV 5.0+ 集群作为 JuiceFS 的元数据引擎
+:::
 
 ### 创建文件系统
 
@@ -426,12 +431,12 @@ juicefs format \
 如果需要开启 TLS，可以通过在元数据 URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
 
 
-| 配置项      | 值                                                                                                                                                                                             |
-|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `ca`        | CA 根证书，用于用 TLS 连接 TiKV/PD                                                                                                                                                             |
-| `cert`      | 证书文件路径，用于用 TLS 连接 TiKV/PD                                                                                                                                                          |
-| `key`       | 私钥文件路径，用于用 TLS 连接 TiKV/PD                                                                                                                                                          |
-| `verify-cn` | 证书通用名称，用于验证调用者身份，[详情](https://docs.pingcap.com/zh/tidb/dev/enable-tls-between-components#%E8%AE%A4%E8%AF%81%E7%BB%84%E4%BB%B6%E8%B0%83%E7%94%A8%E8%80%85%E8%BA%AB%E4%BB%BD) |
+| 配置项      | 值                                                                                                                                                                                                |
+|-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `ca`        | CA 根证书，用于用 TLS 连接 TiKV/PD                                                                                                                                                                |
+| `cert`      | 证书文件路径，用于用 TLS 连接 TiKV/PD                                                                                                                                                             |
+| `key`       | 私钥文件路径，用于用 TLS 连接 TiKV/PD                                                                                                                                                             |
+| `verify-cn` | 证书通用名称，用于验证调用者身份，[详情](https://docs.pingcap.com/zh/tidb/stable/enable-tls-between-components#%E8%AE%A4%E8%AF%81%E7%BB%84%E4%BB%B6%E8%B0%83%E7%94%A8%E8%80%85%E8%BA%AB%E4%BB%BD) |
 
 例子：
 

@@ -23,7 +23,7 @@ import (
 )
 
 func TestRmr(t *testing.T) {
-	mountTemp(t, nil, true)
+	mountTemp(t, nil, nil, nil)
 	defer umountTemp(t)
 
 	paths := []string{"/dir1", "/dir2", "/dir3/dir2"}

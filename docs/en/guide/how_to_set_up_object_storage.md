@@ -891,6 +891,10 @@ juicefs format \
 
 TiKV can be used as both metadata storage and data storage for JuiceFS.
 
+:::note
+It's recommended to use dedicated TiKV 5.0+ cluster as the data storage for JuiceFS.
+:::
+
 The `--bucket` option format is `<host>:<port>,<host>:<port>,<host>:<port>`, and `<host>` is the address of Placement Driver (PD). The options `--access-key` and `--secret-key` have no effect and can be omitted. For example:
 
 ```bash
@@ -902,7 +906,7 @@ juicefs format \
 ```
 
 :::note
-Don't use the same TiKV cluster for both metadata and data, because JuiceFS uses non-transactional protocol (RawKV) for objects and transactional protocol (TnxKV) for metadata. The TxnKV protocol has special encoding for keys, so they may overlap with keys even they has different prefixes. BTW, it's recommmended to enable [Titan](https://tikv.org/docs/5.1/deploy/configure/titan/) in TiKV for data cluster.
+Don't use the same TiKV cluster for both metadata and data, because JuiceFS uses non-transactional protocol (RawKV) for objects and transactional protocol (TnxKV) for metadata. The TxnKV protocol has special encoding for keys, so they may overlap with keys even they has different prefixes. BTW, it's recommmended to enable [Titan](https://tikv.org/docs/latest/deploy/configure/titan) in TiKV for data cluster.
 :::
 
 ### Set up TLS

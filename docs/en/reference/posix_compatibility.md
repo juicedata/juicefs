@@ -101,7 +101,7 @@ Machine Architecture: x86_64
 Here are causes of the skipped and failed tests:
 
 - fcntl17, fcntl17_64: it requires file system to automatically detect deadlock when trying to add POSIX locks. JuiceFS doesn't support it yet.
-- getxattr05: need ACL, which is not supported yet.
+- getxattr05: need extended ACL, which is not supported yet.
 - ioctl_loop05, ioctl_ns07, setxattr03: need `ioctl`, which is not supported yet.
 - lseek11: require `lseek` to handle SEEK_DATA and SEEK_HOLE flags. JuiceFS however uses kernel general function, which doesn't support these two flags.
 - open14, openat03: need `open` to handle O_TMPFILE flag. JuiceFS can do nothing with it since it's not supported by FUSE.
