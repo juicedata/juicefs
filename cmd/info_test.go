@@ -35,12 +35,11 @@ func TestInfo(t *testing.T) {
 			}
 			defer tmpFile.Close()
 			defer os.Remove(tmpFile.Name())
+			mountTemp(t, nil, nil, nil)
+			defer umountTemp(t)
 			// mock os.Stdout
 			patches := gomonkey.ApplyGlobalVar(os.Stdout, *tmpFile)
 			defer patches.Reset()
-
-			mountTemp(t, nil, nil, nil)
-			defer umountTemp(t)
 
 			if err = os.MkdirAll(fmt.Sprintf("%s/dir1", testMountPoint), 0777); err != nil {
 				t.Fatalf("mkdirAll failed: %s", err)
