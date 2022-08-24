@@ -506,4 +506,27 @@ juicefs mount -d "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs"
 
 ## FoundationDB
 
-即将推出......
+[FoundationDB](http://www.foundationdb.org/)是“一个能在多集群服务器上存放大规模结构化数据的分布式数据库”。该数据库系统专注于高性能、高可扩展性、和不错的容错能力。
+
+### 创建文件系统
+
+使用 foundationdb 作为元数据引擎时，需要使用如下格式来指定 `Meta-URL` 参数：
+
+```
+fdb://[config file address]:<prefix>
+```
+
+其中`config file address`为fdb的配置文件，由配置文件来进行对fdb server的连接。示例如下：
+
+```bash
+juicefs format 
+ fdb:///etc/foundationdb/fdb.cluster:jfs
+ pics
+```
+
+### 挂载文件系统
+
+```shell
+juicefs mount -d 
+"fdb:///etc/foundationdb/fdb.cluster:jfs" /mnt/jfs
+```

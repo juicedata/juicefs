@@ -505,4 +505,27 @@ When mounting to the background, the path to the certificate needs to use an abs
 
 ## FoundationDB
 
-Coming soon...
+[FoundationDB](http://www.foundationdb.org/) is "a distributed database that can hold large-scale structured data on multiple clustered servers". The database system focuses on high performance, high scalability, and good fault tolerance.
+
+### Create a file system
+
+When using foundationdb as the metadata engine, the `Meta-URL` parameter needs to be specified in the following format:
+
+```
+fdb://[config file address]:<prefix>
+```
+
+The 'config file address' is The FDB cluster configuration file, which is used to connect to The FDB server. An sample is as follows :
+
+```bash
+juicefs format 
+ fdb:///etc/foundationdb/fdb.cluster:jfs
+ pics
+```
+
+### Mount a file system
+
+```shell
+juicefs mount -d 
+"fdb:///etc/foundationdb/fdb.cluster:jfs" /mnt/jfs
+```
