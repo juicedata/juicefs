@@ -1,12 +1,12 @@
 import subprocess
 import random
 import shutil
-from hypothesis import given, strategies as st, settings, example, assume
-from hypothesis.strategies import composite, tuples
+from hypothesis import given, strategies as st, settings, example
 import os
 
 JFS_SOURCE_DIR='/Users/chengzhou/Documents/juicefs/pkg/'
-JFS_SOURCE_DIR='jfs_source/'
+JFS_SOURCE_DIR='jfs_source/pkg'
+MOUNT_POINT='/tmp/sync-test/'
 JFS_BIN='./juicefs-1.0.0-beta1'
 JFS_BIN='./juicefs-1.0.0-beta2'
 JFS_BIN='./juicefs-1.0.0-beta3'
@@ -15,12 +15,11 @@ MAX_EXAMPLE=100
 
 def setup():
     meta_url = 'sqlite3://abc.db'
-    mount_point='/tmp/sync-test/'
     volume_name='sync-test'
     if os.path.isfile('abc.db'):
         os.remove('abc.db')
-    if os.path.exists(mount_point):
-        os.system('umount %s'%mount_point)
+    if os.path.exists(MOUNT_POINT):
+        os.system('umount %s'%MOUNT_POINT)
     cache_dir = os.path.expanduser('~/.juicefs/local/%s/'%volume_name)
     if os.path.exists(cache_dir):
         try:
@@ -28,8 +27,8 @@ def setup():
         except OSError as e:
             print("Error: %s : %s" % (cache_dir, e.strerror))
     subprocess.check_call([JFS_BIN, 'format', meta_url, volume_name])
-    subprocess.check_call([JFS_BIN, 'mount', '-d', meta_url, mount_point])
-    subprocess.check_call([JFS_BIN, 'sync', JFS_SOURCE_DIR, mount_point])
+    subprocess.check_call([JFS_BIN, 'mount', '-d', meta_url, MOUNT_POINT])
+    subprocess.check_call([JFS_BIN, 'sync', JFS_SOURCE_DIR, MOUNT_POINT+'jfs_source/'])
 
 def generate_all_entries(root_dir):
     entries = set()
@@ -77,6 +76,7 @@ valid_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc
 st_random_text = st.lists(valid_name).map(lambda x: change_entry(x)).filter(lambda x: len(x) != 0)
 
 @given(sync_options=st_random_text)
+@example([['--include', '[*'] ])
 @settings(max_examples=MAX_EXAMPLE, deadline=None)
 def test_sync_with_random_text(sync_options):
     print(sync_options)
@@ -93,34 +93,11 @@ def test_sync_with_path_entry(sync_options):
 def test_sync_with_nested_dir(sync_options):
     compare_rsync_and_juicesync(sync_options)
 
-@given(sync_options=st_random_text)
-@settings(max_examples=MAX_EXAMPLE, deadline=None)
-def test_idempotent_with_random_text(sync_options):
-    compare_juicesync_twice(sync_options)
-
-@given(sync_options=st_all_entry)
-@settings(max_examples=MAX_EXAMPLE, deadline=None)
-def test_idempotent_with_all_entry(sync_options):
-    compare_juicesync_twice(sync_options)
-
-@given(sync_options=st_nested_dir)
-@settings(max_examples=MAX_EXAMPLE, deadline=None)
-def test_idempotent_with_nested_dir(sync_options):
-    compare_juicesync_twice(sync_options)
-
-def compare_juicesync_twice(sync_options):    
-    assert sync_options != 0
-    sync_options = [item for sublist in sync_options for item in sublist]
-    do_juicesync(JFS_SOURCE_DIR, 'juicesync_dir1/', sync_options)
-    do_juicesync('juicesync_dir1/', 'juicesync_dir2/', sync_options)
-    diff_result = os.system('diff -ur juicesync_dir1 juicesync_dir2')
-    assert diff_result==0
-
 def compare_rsync_and_juicesync(sync_options):
     assert sync_options != 0
     sync_options = [item for sublist in sync_options for item in sublist]
-    do_rsync(JFS_SOURCE_DIR, 'rsync_dir/', sync_options)
-    do_juicesync(JFS_SOURCE_DIR, 'juicesync_dir/', sync_options)
+    do_rsync(MOUNT_POINT+'jfs_source/', 'rsync_dir/', sync_options)
+    do_juicesync(MOUNT_POINT+'jfs_source/', 'juicesync_dir/', sync_options)
     diff_result = os.system('diff -ur juicesync_dir rsync_dir')
     assert diff_result==0
 
@@ -148,9 +125,7 @@ def do_rsync(source_dir, dest_dir, sync_options):
 
 if __name__ == "__main__":
     setup()
-    #test_sync_with_nested_dir()
-    # test_sync_with_path_entry()
     test_sync_with_random_text()
-    # test_idempotent_with_all_entry()
-    # test_idempotent_with_nested_dir()
-    # test_idempotent_with_random_text()
+    test_sync_with_nested_dir()
+    test_sync_with_path_entry()
+    
