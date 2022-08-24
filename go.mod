@@ -72,6 +72,7 @@ require (
 	google.golang.org/api v0.70.0
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
 	xorm.io/xorm v1.0.7
+	github.com/gin-gonic/gin v1.6.3
 )
 
 require (
