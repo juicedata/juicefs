@@ -5,7 +5,7 @@ from hypothesis import given, strategies as st, settings, example
 import os
 
 JFS_SOURCE_DIR='/Users/chengzhou/Documents/juicefs/pkg/'
-JFS_SOURCE_DIR='jfs_source/pkg'
+JFS_SOURCE_DIR='jfs_source/pkg/'
 MOUNT_POINT='/tmp/sync-test/'
 JFS_BIN='./juicefs-1.0.0-beta1'
 JFS_BIN='./juicefs-1.0.0-beta2'
