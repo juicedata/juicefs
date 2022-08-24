@@ -145,11 +145,11 @@ func (b *Buffer) Bytes() []byte {
 	return b.buf
 }
 
-var nativeEndian binary.ByteOrder
+var NativeEndian binary.ByteOrder
 
 // NewNativeBuffer utility to create *Buffer of given size with nativeEndian
 func NewNativeBuffer(buf []byte) *Buffer {
-	return &Buffer{nativeEndian, 0, buf}
+	return &Buffer{NativeEndian, 0, buf}
 }
 
 func init() {
@@ -158,9 +158,9 @@ func init() {
 
 	switch buf {
 	case [2]byte{0xCD, 0xAB}:
-		nativeEndian = binary.LittleEndian
+		NativeEndian = binary.LittleEndian
 	case [2]byte{0xAB, 0xCD}:
-		nativeEndian = binary.BigEndian
+		NativeEndian = binary.BigEndian
 	default:
 		panic("Could not determine native endianness.")
 	}

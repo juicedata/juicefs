@@ -794,6 +794,10 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 			cur.Mtimensec = uint32(now.Nanosecond())
 			changed = true
 		}
+		if set&SetAttrFlag != 0 {
+			cur.Flags = attr.Flags
+			changed = true
+		}
 		if !changed {
 			*attr = cur
 			return nil
@@ -911,6 +915,12 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		if t.Typ != TypeFile {
 			return syscall.EPERM
 		}
+		if (t.Flags & FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+		if (t.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {
+			return syscall.EPERM
+		}
 		length := t.Length
 		if off+size > t.Length {
 			if mode&fallocKeepSize == 0 {
@@ -1006,6 +1016,9 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		m.parseAttr(a, &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if (pattr.Flags & FlagImmutable) != 0 {
+			return syscall.EPERM
 		}
 
 		buf := tx.get(m.entryKey(parent, name))
@@ -1114,11 +1127,19 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+		attr = Attr{}
+		opened = false
 		now := time.Now()
 		if rs[1] != nil {
 			m.parseAttr(rs[1], &attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
+			}
+			if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
+				return syscall.EPERM
 			}
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
@@ -1223,6 +1244,9 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
 		if tx.exist(m.entryKey(inode, "")) {
 			return syscall.ENOTEMPTY
 		}
@@ -1314,6 +1338,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return syscall.ENOTDIR
 		}
 		m.parseAttr(rs[2], &iattr)
+		if (sattr.Flags&FlagAppend) != 0 || (sattr.Flags&FlagImmutable) != 0 || (dattr.Flags&FlagImmutable) != 0 || (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
 
 		dbuf := tx.get(m.entryKey(parentDst, nameDst))
 		if dbuf == nil && m.conf.CaseInsensi {
@@ -1335,6 +1362,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				trash = 0
 			}
 			m.parseAttr(a, &tattr)
+			if (tattr.Flags&FlagAppend) != 0 || (tattr.Flags&FlagImmutable) != 0 {
+				return syscall.EPERM
+			}
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())
 			if exchange {
@@ -1497,8 +1527,14 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if pattr.Flags&FlagImmutable != 0 {
+			return syscall.EPERM
+		}
 		m.parseAttr(rs[1], &iattr)
 		if iattr.Typ == TypeDirectory {
+			return syscall.EPERM
+		}
+		if (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
 		buf := tx.get(m.entryKey(parent, name))
@@ -1743,6 +1779,9 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		m.parseAttr(rs[1], &attr)
 		if attr.Typ != TypeFile {
 			return syscall.EINVAL
+		}
+		if (attr.Flags&FlagImmutable) != 0 || (attr.Flags&FlagAppend) != 0 {
+			return syscall.EPERM
 		}
 
 		newleng := offOut + size

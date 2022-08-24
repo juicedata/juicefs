@@ -930,6 +930,12 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		if t.Typ != TypeFile {
 			return syscall.EPERM
 		}
+		if (t.Flags & FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+		if (t.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {
+			return syscall.EPERM
+		}
 		length := t.Length
 		if off+size > t.Length {
 			if mode&fallocKeepSize == 0 {
@@ -1037,6 +1043,10 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			cur.Mtimensec = uint32(now.Nanosecond())
 			changed = true
 		}
+		if set&SetAttrFlag != 0 {
+			cur.Flags = attr.Flags
+			changed = true
+		}
 		if !changed {
 			*attr = cur
 			return nil
@@ -1105,6 +1115,9 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		m.parseAttr(a, &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if (pattr.Flags & FlagImmutable) != 0 {
+			return syscall.EPERM
 		}
 
 		buf, err := tx.HGet(ctx, m.entryKey(parent), name).Bytes()
@@ -1229,6 +1242,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
 		var updateParent bool
 		now := time.Now()
 		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
@@ -1242,6 +1258,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 			m.parseAttr([]byte(rs[1].(string)), &attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
+			}
+			if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
+				return syscall.EPERM
 			}
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
@@ -1348,6 +1367,9 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 		m.parseAttr([]byte(rs[0].(string)), &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+			return syscall.EPERM
 		}
 		now := time.Now()
 		pattr.Nlink--
@@ -1482,6 +1504,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return syscall.ENOTDIR
 		}
 		m.parseAttr([]byte(rs[2].(string)), &iattr)
+		if (sattr.Flags&FlagAppend) != 0 || (sattr.Flags&FlagImmutable) != 0 || (dattr.Flags&FlagImmutable) != 0 || (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
 
 		var supdate, dupdate bool
 		now := time.Now()
@@ -1491,6 +1516,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				trash = 0
 			}
 			m.parseAttr([]byte(rs[3].(string)), &tattr)
+			if (tattr.Flags&FlagAppend) != 0 || (tattr.Flags&FlagImmutable) != 0 {
+				return syscall.EPERM
+			}
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())
 			if exchange {
@@ -1666,6 +1694,9 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if pattr.Flags&FlagImmutable != 0 {
+			return syscall.EPERM
+		}
 		var updateParent bool
 		now := time.Now()
 		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
@@ -1677,6 +1708,9 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		}
 		m.parseAttr([]byte(rs[1].(string)), &iattr)
 		if iattr.Typ == TypeDirectory {
+			return syscall.EPERM
+		}
+		if (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
 		oldParent := iattr.Parent
@@ -2052,6 +2086,9 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		m.parseAttr([]byte(rs[1].(string)), &attr)
 		if attr.Typ != TypeFile {
 			return syscall.EINVAL
+		}
+		if (attr.Flags&FlagImmutable) != 0 || (attr.Flags&FlagAppend) != 0 {
+			return syscall.EPERM
 		}
 
 		newleng := offOut + size

@@ -26,6 +26,7 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 
 	"golang.org/x/sys/unix"
 )
@@ -287,6 +288,67 @@ func (v *VFS) Flock(ctx Context, ino Ino, fh uint64, owner uint64, typ uint32, b
 			h.flockOwner = owner
 		}
 		h.Unlock()
+	}
+	return
+}
+
+func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut []byte) (err syscall.Errno) {
+	const (
+		FS_IOC_GETFLAGS    = 0x80086601
+		FS_IOC_SETFLAGS    = 0x40086602
+		FS_IOC_GETFLAGS_32 = 0x80046601
+		FS_IOC_SETFLAGS_32 = 0x40046602
+	)
+	const (
+		FS_IMMUTABLE_FL = 0x00000010
+		FS_APPEND_FL    = 0x00000020
+	)
+	defer func() { logit(ctx, "ioctl (%d,0x%X,0x%X,%v,%v): %s", ino, cmd, arg, bufIn, bufOut, strerr(err)) }()
+	switch cmd {
+	default:
+		err = syscall.ENOTTY
+		return
+	case FS_IOC_SETFLAGS, FS_IOC_GETFLAGS, FS_IOC_SETFLAGS_32, FS_IOC_GETFLAGS_32:
+	}
+	if IsSpecialNode(ino) {
+		err = syscall.EPERM
+		return
+	}
+	var attr = &Attr{}
+	if cmd>>30 == 1 { // set
+		var iflag uint64
+		if len(bufIn) == 8 {
+			iflag = utils.NativeEndian.Uint64(bufIn)
+		} else if len(bufIn) == 4 {
+			iflag = uint64(utils.NativeEndian.Uint32(bufIn))
+		} else {
+			err = syscall.EINVAL
+			return
+		}
+		if (iflag & FS_IMMUTABLE_FL) != 0 {
+			attr.Flags |= meta.FlagImmutable
+		}
+		if (iflag & FS_APPEND_FL) != 0 {
+			attr.Flags |= meta.FlagAppend
+		}
+		err = v.Meta.SetAttr(ctx, ino, meta.SetAttrFlag, 0, attr)
+	} else {
+		err = v.Meta.GetAttr(ctx, ino, attr)
+		var iflag uint64
+		if (attr.Flags & meta.FlagImmutable) != 0 {
+			iflag |= FS_IMMUTABLE_FL
+		}
+		if (attr.Flags & meta.FlagAppend) != 0 {
+			iflag |= FS_APPEND_FL
+		}
+		if len(bufOut) == 8 {
+			utils.NativeEndian.PutUint64(bufOut, iflag)
+		} else if len(bufOut) == 4 {
+			utils.NativeEndian.PutUint32(bufOut, uint32(iflag))
+		} else {
+			err = syscall.EINVAL
+			return
+		}
 	}
 	return
 }

@@ -421,6 +421,13 @@ func (fs *fileSystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fus
 	return 0
 }
 
+func (fs *fileSystem) Ioctl(cancel <-chan struct{}, in *fuse.IoctlIn, out *fuse.IoctlOut, bufIn, bufOut []byte) (status fuse.Status) {
+	ctx := newContext(cancel, &in.InHeader)
+	defer releaseContext(ctx)
+	out.Result = int32(fs.v.Ioctl(ctx, Ino(in.NodeId), in.Cmd, in.Arg, bufIn, bufOut))
+	return 0
+}
+
 // Serve starts a server to serve requests from FUSE.
 func Serve(v *vfs.VFS, options string, xattrs bool) error {
 	if err := syscall.Setpriority(syscall.PRIO_PROCESS, os.Getpid(), -19); err != nil {
