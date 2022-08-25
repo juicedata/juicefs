@@ -136,7 +136,11 @@ JuiceFS 进程需要具有读写 `--cache-dir` 目录的权限。
 
 #### 开机自动挂载
 
-可以用 `juiefs mount --update-fstab` 直接设置出自动挂载，例如：
+在 Linux 环境中，可以在挂载文件系统时通过 `--update-fstab` 选项设置自动挂载，这个选项会将挂载 JuiceFS 所需的选项添加到 `/etc/fstab` 中。例如：
+
+:::note 注意
+此特性需要使用 1.1.0（待发布）及以上版本的 JuiceFS
+:::
 
 ```bash
 $ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1 <MOUNTPOINT>
@@ -146,7 +150,7 @@ $ ls -l /sbin/mount.juicefs
 lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/juicefs
 ```
 
-更多请参考[启动时自动挂载 JuiceFS](../guide/mount_at_boot.md)
+更多请参考[「启动时自动挂载 JuiceFS」](../guide/mount_at_boot.md)。
 
 ### 6. 验证文件系统
 

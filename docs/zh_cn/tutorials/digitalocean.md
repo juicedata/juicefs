@@ -266,17 +266,7 @@ sudo juicefs umount ~/mnt
 
 ### 6. 开机自动挂载
 
-可以用 `juiefs mount --update-fstab` 直接设置出自动挂载，例如：
-
-```bash
-$ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 <MOUNTPOINT>
-$ grep <MOUNTPOINT> /etc/fstab
-rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 <MOUNTPOINT> juicefs _netdev,max-uploads=50,writeback,cache-size=204800 0 0
-$ ls -l /sbin/mount.juicefs
-lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/juicefs
-```
-
-更多请参考[启动时自动挂载 JuiceFS](../guide/mount_at_boot.md)
+请参考[「启动时自动挂载 JuiceFS」](../guide/mount_at_boot.md)
 
 ### 7. 多主机共享挂载
 

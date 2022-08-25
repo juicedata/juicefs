@@ -221,14 +221,4 @@ sudo juicefs umount /mnt/jfs
 
 ### 6. Auto-mount on boot
 
-Use `juicefs mount --update-fstab` to set up auto-mount at boot, for example:
-
-```bash
-$ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1 <MOUNTPOINT>
-$ grep <MOUNTPOINT> /etc/fstab
-redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1 <MOUNTPOINT> juicefs _netdev,max-uploads=50,writeback,cache-size=204800 0 0
-$ ls -l /sbin/mount.juicefs
-lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/juicefs
-```
-
-Refer to [Mount JuiceFS at Boot Time](../guide/mount_at_boot.md) for more details.
+Please refer to ["Mount JuiceFS at Boot Time"](../guide/mount_at_boot.md) for more details.

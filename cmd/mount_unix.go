@@ -162,7 +162,7 @@ func mount_flags() []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:  "update-fstab",
-			Usage: "add / update entry in /etc/fstab, will create a symlink at /sbin/mount.juicefs if not existing",
+			Usage: "add / update entry in /etc/fstab, will create a symlink from /sbin/mount.juicefs to JuiceFS executable if not existing",
 		},
 	}
 	return append(selfFlags, cacheFlags(1.0)...)
