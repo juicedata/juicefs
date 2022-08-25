@@ -51,13 +51,17 @@ var contextPool = sync.Pool{
 	},
 }
 
-func newContext(cancel <-chan struct{}, header *fuse.InHeader) *fuseContext {
+func newContext(cancel <-chan struct{}, header *fuse.InHeader, conf *vfs.Config) *fuseContext {
 	ctx := contextPool.Get().(*fuseContext)
 	ctx.Context = context.Background()
 	ctx.start = time.Now()
 	ctx.canceled = false
 	ctx.cancel = cancel
 	ctx.header = header
+	if header.Uid == 0 && conf.AnonUid > 0 {
+		ctx.header.Uid = conf.AnonUid
+		ctx.header.Gid = conf.AnonGid
+	}
 	return ctx
 }
 

@@ -140,6 +140,10 @@ func mount_flags() []cli.Flag {
 			Name:  "update-fstab",
 			Usage: "add / update entry in /etc/fstab, will create a symlink at /sbin/mount.juicefs if not existing",
 		},
+		&cli.StringFlag{
+			Name:  "root-squash",
+			Usage: "map requests from root (uid 0) to the specified 'uid:gid'",
+		},
 	}
 	return append(selfFlags, cacheFlags(1.0)...)
 }

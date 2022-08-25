@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -81,7 +82,10 @@ $ juicefs mount redis://localhost /mnt/jfs -d --writeback
 $ juicefs mount redis://localhost /mnt/jfs -d --read-only
 
 # Disable metadata backup
-$ juicefs mount redis://localhost /mnt/jfs --backup-meta 0`,
+$ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
+
+# Squash root user to nobody
+$ juicefs mount redis://localhost /mnt/jfs --root-squash 65534:65534`,
 		Flags: expandFlags(compoundFlags),
 	}
 }
@@ -552,6 +556,21 @@ func mount(c *cli.Context) error {
 	registerMetaMsg(metaCli, store, chunkConf)
 
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
+	if c.String("root-squash") != "" {
+		ps := strings.SplitN(c.String("root-squash"), ":", 2)
+		uid, err := strconv.Atoi(ps[0])
+		if err != nil || uid <= 0 {
+			logger.Fatalf("Invalid uid: %s", ps[0])
+		}
+		gid := uid
+		if len(ps) > 1 {
+			if gid, err = strconv.Atoi(ps[1]); err != nil || gid <= 0 {
+				logger.Fatalf("Invalid gid: %s", ps[1])
+			}
+		}
+		vfsConf.AnonUid = uint32(uid)
+		vfsConf.AnonGid = uint32(gid)
+	}
 
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
 		daemonRun(c, addr, vfsConf, metaCli)

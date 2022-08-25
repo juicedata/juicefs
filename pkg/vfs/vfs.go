@@ -52,6 +52,8 @@ type Config struct {
 	FastResolve     bool   `json:",omitempty"`
 	AccessLog       string `json:",omitempty"`
 	HideInternal    bool
+	AnonUid         uint32
+	AnonGid         uint32
 }
 
 var (
