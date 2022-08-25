@@ -95,7 +95,7 @@ runs:
         mv actionfile/*.tbl .
         rm lineorder.tbl.gz*
         ls -lrth
-        sudo du -sh /data/jfs/
+        #sudo du -sh /data/jfs/
         df -lh
 
     - name: Create Table
