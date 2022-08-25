@@ -30,7 +30,7 @@ runs:
     - name: Setup minio
       shell: bash
       run: |
-        docker run -d -p 9000:9000 --name minio \
+        docker run -d -p 9010:9000 --name minio \
                   -e "MINIO_ACCESS_KEY=minioadmin" \
                   -e "MINIO_SECRET_KEY=minioadmin" \
                   -v /tmp/data:/data \
@@ -41,7 +41,7 @@ runs:
     - name: Juicefs Format
       shell: bash
       run: |
-        sudo ./juicefs format --trash-days 0 --storage minio --bucket http://127.0.0.1:9000/mypics \
+        sudo ./juicefs format --trash-days 0 --storage minio --bucket http://127.0.0.1:9010/mypics \
               --access-key minioadmin \
               --secret-key minioadmin \
               redis://127.0.0.1:6379/1 pics
