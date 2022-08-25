@@ -66,6 +66,7 @@ jobs:
           make
           make test
           stat /tmp/jfs
+          hello
 
 
       - name: Log
@@ -83,4 +84,6 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
 
-  
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
