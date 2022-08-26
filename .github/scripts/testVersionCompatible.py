@@ -59,7 +59,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def clear_cache(self):
         os.system('sudo rm -rf /var/jfsCache')
         if sys.platform.startswith('linux') :
-            os.system('echo 3> /proc/sys/vm/drop_caches')
+            os.system('sudo echo 3> /proc/sys/vm/drop_caches')
 
     @rule(
         juicefs=st.sampled_from(JFS_BIN),
