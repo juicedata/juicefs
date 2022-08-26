@@ -190,6 +190,7 @@ jobs:
         run: | 
           wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
           chmod +x mc
+          sudo mv mc /usr/local/bin
           sudo apt install redis-tools
           sudo pip install hypothesis
           sudo pip install minio
