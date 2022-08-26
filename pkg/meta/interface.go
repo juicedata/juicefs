@@ -372,7 +372,7 @@ func setPasswordFromEnv(uri string) (string, error) {
 	dIndex := strings.Index(uri, "://") + 3
 	s := strings.Split(uri[dIndex:atIndex], ":")
 
-	if len(s) > 2 || s[0] == "" {
+	if len(s) > 2 {
 		return "", fmt.Errorf("invalid uri: %s", uri)
 	}
 

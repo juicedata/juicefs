@@ -41,13 +41,14 @@ func Test_setPasswordFromEnv(t *testing.T) {
 			args: "mysql://root@(127.0.0.1:3306)/juicefs",
 			want: "mysql://root:dbPasswd@(127.0.0.1:3306)/juicefs",
 		},
+		// no user is ok
 		{
-			args: "mysql://(127.0.0.1:3306)/juicefs",
-			want: "",
+			args: "mysql://:@(127.0.0.1:3306)/juicefs",
+			want: "mysql://:dbPasswd@(127.0.0.1:3306)/juicefs",
 		},
 		{
 			args: "mysql://:pwd@(127.0.0.1:3306)/juicefs",
-			want: "",
+			want: "mysql://:pwd@(127.0.0.1:3306)/juicefs",
 		},
 		{
 			args: "mysql://a:b:c:@(127.0.0.1:3306)/juicefs",
@@ -65,6 +66,14 @@ func Test_setPasswordFromEnv(t *testing.T) {
 		{
 			args: "postgres://root@192.168.1.6:5432/juicefs",
 			want: "postgres://root:dbPasswd@192.168.1.6:5432/juicefs",
+		},
+		{
+			args: "postgres://root@/pgtest?host=/tmp/pgsocket/&port=5433",
+			want: "postgres://root:dbPasswd@/pgtest?host=/tmp/pgsocket/&port=5433",
+		},
+		{
+			args: "postgres://@/pgtest?host=/tmp/pgsocket/&port=5433&user=pguser",
+			want: "postgres://:dbPasswd@/pgtest?host=/tmp/pgsocket/&port=5433&user=pguser",
 		},
 	}
 	for _, tt := range tests {
