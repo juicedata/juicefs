@@ -146,4 +146,50 @@ jobs:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
           
+  version-compatible-test-hypothesis-redis:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Setup minio
+        run: |
+          docker run -d -p 9000:9000 --name minio \
+                     -e "MINIO_ACCESS_KEY=minioadmin" \
+                     -e "MINIO_SECRET_KEY=minioadmin" \
+                     -v /tmp/data:/data \
+                     -v /tmp/config:/root/.minio \
+                     minio/minio server /data
+          
+      - name: install tools
+        run: | 
+          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
+          chmod +x mc
+          sudo apt install redis-tools
+          sudo pip install hypothesis
+      - name: Test
+        run: | 
+          python3 .github/scripts/testVersionCompatible.py
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
