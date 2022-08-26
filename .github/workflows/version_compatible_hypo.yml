@@ -51,6 +51,7 @@ jobs:
             tar -zxf $(basename $url)
             filename=`basename $url | sed 's/-linux-amd64.tar.gz//g'`
             mv juicefs $filename
+          done
 
       - name: Make Juicefs
         run: | 
