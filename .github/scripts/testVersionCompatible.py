@@ -1,7 +1,5 @@
-from fileinput import filename
 import json
 import os
-import random
 import shutil
 import subprocess
 import sys
@@ -10,8 +8,6 @@ import unittest
 from xmlrpc.client import boolean
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
 from hypothesis import strategies as st
-from hypothesis.strategies import integers, lists
-from hypothesis import given
 from packaging import version
 from minio import Minio
 
@@ -19,10 +15,8 @@ class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
     JFS_BIN = ['juicefs-1.0.0-beta1', 'juicefs-1.0.0-beta2', 'juicefs-1.0.0-beta3', 'juicefs-1.0.0-rc1', 'juicefs-1.0.0-rc2','juicefs-1.0.0-rc3','./juicefs']
-    JFS_BIN = ['./juicefs-1.0.0', './juicefs']
-    META_URL_SQLITE = 'sqlite3:///Users/chengzhou/Documents/juicefs2/abc.db'
-    META_URL_REDIS = 'redis://localhost/1'
-    META_URLS = [META_URL_REDIS]
+    JFS_BIN = ['juicefs-1.0.0-rc1',  './juicefs']
+    META_URLS = ['redis://localhost/1']
     STORAGES = ['minio']
     # META_URL = 'badger://abc.db'
     MOUNT_POINT = '/tmp/sync-test/'
@@ -34,8 +28,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.formatted = False
         self.mounted = False
         self.meta_url = None
-        print('\nINIT------------------------------------------------------\n')
-        
+        print('\nINIT----------------------------------------------------------------------------------------\n')
+
     def flush_meta(self, meta_url):
         if os.path.exists(JuicefsMachine.MOUNT_POINT):
             os.system('umount %s'%JuicefsMachine.MOUNT_POINT)
@@ -47,7 +41,8 @@ class JuicefsMachine(RuleBasedStateMachine):
                 os.remove(path)
                 print(f'remove meta file {path} succeed')
         elif meta_url.startswith('redis://'):
-            self.exec_check_call(['redis-cli', 'flushall'])
+            os.system('redis-cli flushall')
+            print(f'flush redis succeed')
 
     def clear_storage(self, storage, bucket):
         if storage == 'file':
@@ -93,10 +88,17 @@ class JuicefsMachine(RuleBasedStateMachine):
         assert version.parse(min_client_version) <= version.parse(max_client_version)
         options.extend(['--min-client-version', min_client_version])
         options.extend(['--max-client-version', max_client_version])
-        
+        output = self.exec_check_output([juicefs, 'status', self.meta_url])
+        storage = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['Storage']
+
         if change_bucket:
             options.extend(['--bucket', os.path.expanduser('~/.juicefs/local2')])
-        if change_aksk:
+        if change_aksk and storage == 'minio':
+            os.system(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
+            output = subprocess.check_output('mc admin user list myminio'.split())
+            if not output:
+                os.system('mc admin user add myminio juicedata 12345678')
+                os.system('mc admin policy set myminio consoleAdmin user=juicedata')
             options.extend(['--access-key', 'juicedata'])
             options.extend(['--secret-key', '12345678'])
         if encrypt_secret:
@@ -113,7 +115,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           compress=st.sampled_from(['lz4', 'zstd', 'none']),
           shards=st.integers(min_value=0, max_value=1),
           storage=st.sampled_from(STORAGES), 
-          encrypt_rsa_key = st.sampled_from([None]), 
+          encrypt_rsa_key = st.booleans(), 
           encrypt_algo = st.sampled_from(['aes256gcm-rsa','chacha20-rsa']),
           trash_days=st.integers(min_value=0, max_value=10000), 
           hash_prefix=st.booleans(), 
@@ -139,8 +141,10 @@ class JuicefsMachine(RuleBasedStateMachine):
         if no_update:
             options.append('--no-update')
         if encrypt_rsa_key:
-            # TODO: pass real rsa key
-            options.extend(['--encrypt-rsa-key', encrypt_rsa_key])
+            if not os.path.exists('my-priv-key.pem'):
+                subprocess.check_call('openssl genrsa -out my-priv-key.pem -aes256  -passout pass:12345678 2048')
+            os.environ['JFS_RSA_PASSPHRASE'] = '12345678'
+            options.extend(['--encrypt-rsa-key', 'my-priv-key.pem'])
             options.extend(['--encrypt-algo', encrypt_algo])
         
         if storage == 'minio':
@@ -323,7 +327,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print(output)
 
     @rule(juicefs = st.sampled_from(JFS_BIN),
-        port=st.integers(min_value=9000, max_value=10000))
+        port=st.integers(min_value=9001, max_value=10000))
     @precondition(lambda self: self.formatted)
     def gateway(self, juicefs, port):
         if self.is_port_in_use(port):
