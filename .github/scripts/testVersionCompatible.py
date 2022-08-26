@@ -149,7 +149,8 @@ class JuicefsMachine(RuleBasedStateMachine):
                 subprocess.check_call('openssl genrsa -out my-priv-key.pem -aes256  -passout pass:12345678 2048'.split())
             os.environ['JFS_RSA_PASSPHRASE'] = '12345678'
             options.extend(['--encrypt-rsa-key', 'my-priv-key.pem'])
-            options.extend(['--encrypt-algo', encrypt_algo])
+            if os.system(f'{juicefs} format --help | grep encrypt-algo') == 0:
+                options.extend(['--encrypt-algo', encrypt_algo])
         
         if storage == 'minio':
             bucket = 'http://127.0.0.1:9000/test-bucket'
