@@ -47,14 +47,17 @@ class JuicefsMachine(RuleBasedStateMachine):
         elif meta_url.startswith('redis://'):
             subprocess.check_call(['redis-cli', 'flushall'])
 
-    def clear_cache(self):
-        cache_dir = os.path.expanduser('~/.juicefs/local/%s/'%JuicefsMachine.VOLUME_NAME)
-        if os.path.exists(cache_dir):
+    def clear_storage(self):
+        storage_dir = os.path.expanduser('~/.juicefs/local/%s/'%JuicefsMachine.VOLUME_NAME)
+        if os.path.exists(storage_dir):
             try:
-                shutil.rmtree(cache_dir)
-                print(f'remove cache dir {cache_dir} succeed')
+                shutil.rmtree(storage_dir)
+                print(f'remove cache dir {storage_dir} succeed')
             except OSError as e:
-                print("Error: %s : %s" % (cache_dir, e.strerror))
+                print("Error: %s : %s" % (storage_dir, e.strerror))
+
+    def clear_cache(self):
+        os.system('sudo rm -rf /var/jfsCache')
         if sys.platform.startswith('linux') :
             os.system('echo 3> /proc/sys/vm/drop_caches')
 
@@ -132,6 +135,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--access-key', 'minioadmin'])
             options.extend(['--secret-key', 'minioadmin'])
         if not self.formatted:
+            self.clear_storage()
             self.flush_meta(meta_url)
         print(f'format options: {" ".join(options)}' )
         subprocess.check_call(options)
@@ -223,6 +227,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.mounted)
     def bench(self, juicefs, block_size, big_file_size, small_file_size, small_file_count, threads):
         print('start bench')
+        os.system(f'df | grep {JuicefsMachine.MOUNT_POINT}')
         options = [juicefs, 'bench', JuicefsMachine.MOUNT_POINT]
         options.extend(['--block-size', str(block_size)])
         options.extend(['--big-file-size', str(big_file_size)])
@@ -237,7 +242,7 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     @rule(juicefs=st.sampled_from(JFS_BIN),
         threads=st.integers(min_value=1, max_value=100), 
-        backgroud = st.booleans(), 
+        background = st.booleans(), 
         from_file = st.booleans(),
         directory = st.booleans() )
     @precondition(lambda self: self.mounted)
