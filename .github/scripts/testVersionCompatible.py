@@ -18,7 +18,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
     JFS_BIN = ['juicefs-1.0.0-beta1', 'juicefs-1.0.0-beta2', 'juicefs-1.0.0-beta3', './juicefs-latest']
-    JFS_BIN = ['./juicefs-1.0.0', './juicefs-latest']
+    JFS_BIN = ['./juicefs-1.0.0', './juicefs']
     META_URL_SQLITE = 'sqlite3:///Users/chengzhou/Documents/juicefs2/abc.db'
     META_URL_REDIS = 'redis://localhost/1'
     META_URLS = [META_URL_REDIS]
@@ -33,12 +33,10 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.mounted = False
         self.meta_url = None
         
+    def flush_meta(self, meta_url):
         if os.path.exists(JuicefsMachine.MOUNT_POINT):
             os.system('umount %s'%JuicefsMachine.MOUNT_POINT)
             print(f'umount {JuicefsMachine.MOUNT_POINT} succeed')
-
-        self.clear_cache()
-    def flush_meta(self, meta_url):
         if meta_url.startswith('sqlite3://'):
             path = meta_url[len('sqlite3://'):]
             if os.path.isfile(path):
@@ -59,7 +57,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def clear_cache(self):
         os.system('sudo rm -rf /var/jfsCache')
         if sys.platform.startswith('linux') :
-            os.system('sudo echo 3> /proc/sys/vm/drop_caches')
+            os.system('sudo bash -c  "echo 3> /proc/sys/vm/drop_caches"')
 
     @rule(
         juicefs=st.sampled_from(JFS_BIN),
