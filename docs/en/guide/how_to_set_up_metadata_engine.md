@@ -140,14 +140,14 @@ When using PostgreSQL as the metadata storage engine, you need to create a datab
   <TabItem value="tcp" label="TCP">
 
 ```
-postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
+postgres://[username][:<password>]@<host>[:5432]/<database-name>[?parameters]
 ```
 
   </TabItem>
   <TabItem value="unix-socket" label="Unix socket">
 
 ```
-postgres:///<database-name>?host=<socket-directories-path>[&user=<user>&password=<password>]
+postgres://[username][:<password>]@/<database-name>?host=<socket-directories-path>[&parameters]
 ```
 
   </TabItem>

@@ -140,14 +140,14 @@ KeyDB 的数据复制是异步的，使用 Active Active（双活）功能可能
   <TabItem value="tcp" label="TCP">
 
 ```
-postgres://<username>[:<password>]@<host>[:5432]/<database-name>[?parameters]
+postgres://[username][:<password>]@<host>[:5432]/<database-name>[?parameters]
 ```
 
   </TabItem>
   <TabItem value="unix-socket" label="Unix socket">
 
 ```
-postgres:///<database-name>?host=<socket-directories-path>[&user=<user>&password=<password>]
+postgres://[username][:<password>]@/<database-name>?host=<socket-directories-path>[&parameters]
 ```
 
   </TabItem>
