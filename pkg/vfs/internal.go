@@ -344,7 +344,12 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		ino := Ino(r.Get64())
 		capacity := r.Get64()
 		inodes := r.Get64()
-		v.setQuota(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), ino, capacity, inodes)
+		set_capacity := r.Get8()
+		set_inodes := r.Get8()
+		fmt.Printf("777 %d \n", capacity)
+		fmt.Printf("7771 %d \n", set_capacity)
+		fmt.Printf("7772 %d \n", set_inodes)
+		v.setQuota(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), ino, capacity, inodes, set_capacity, set_inodes)
 		*data = append(*data, uint8(0))
 	case meta.FsckQuota:
 		ino := Ino(r.Get64())

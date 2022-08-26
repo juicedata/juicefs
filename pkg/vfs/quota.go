@@ -25,8 +25,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 )
 
-func (v *VFS) setQuota(ctx meta.Context, ino Ino, capacity, inodes uint64) (err syscall.Errno) {
-	err = v.Meta.SetQuota(ctx, ino, capacity, inodes)
+func (v *VFS) setQuota(ctx meta.Context, ino Ino, capacity, inodes uint64, set_capacity, set_inodes uint8) (err syscall.Errno) {
+	err = v.Meta.SetQuota(ctx, ino, capacity, inodes, set_capacity, set_inodes)
 	return
 }
 

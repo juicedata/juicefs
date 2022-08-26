@@ -75,11 +75,11 @@ type engine interface {
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 
 	GetSession(sid uint64, detail bool) (*Session, error)
-	doSetQuota(ctx Context, inode Ino, capacity, inodes uint64) syscall.Errno
+	doSetQuota(ctx Context, inode Ino, capacity, inodes uint64, set_capacity, set_inodes uint8) syscall.Errno
 	doFsckQuota(ctx Context, inode Ino) syscall.Errno
-	dogetQuotas(ctx Context, inode Ino) (*quota, error)
+	dogetQuotas(ctx Context, inode Ino) error
 	doSetQuotaList(name string) error
-	doGetQuotaList(name string) (map[Ino]quota, error)
+	doGetQuotaList(name string) error
 }
 
 type baseMeta struct {
@@ -116,9 +116,11 @@ type baseMeta struct {
 
 	en engine
 	// All user configured quotas: dir inode -> quota
-	quotas map[Ino]quota
+	//quotas map[Ino]quota
+	quotas map[Ino]*quota
 	// Cache a list related to a directory, containing quotas configured on itself and its ancestors
-	dirQuotas map[Ino]map[Ino]*quota
+	//dirQuotas map[Ino]map[Ino]*quota
+	dirQuotas map[Ino][]Ino
 	//quotalist DirQuotaList
 }
 
@@ -164,8 +166,10 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			Help:    "Operation latency distributions.",
 			Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
 		}),
-		quotas:    make(map[Ino]quota),
-		dirQuotas: make(map[Ino]map[Ino]*quota),
+		//quotas:    make(map[Ino]quota),
+		quotas: make(map[Ino]*quota),
+		//dirQuotas: make(map[Ino]map[Ino]*quota),
+		dirQuotas: make(map[Ino][]Ino),
 	}
 }
 
@@ -360,15 +364,9 @@ func (m *baseMeta) refreshUsage() {
 
 func (m *baseMeta) refreshQuota() {
 	for {
-		if quotaMap, err := m.en.doGetQuotaList("dirQuotaList"); err == nil {
+		if err := m.en.doGetQuotaList("dirQuotaList"); err != nil {
 			//get quota form engine and cache to m.quota
-			for key, val := range quotaMap {
-				m.Lock()
-				m.quotas[key] = val
-				m.Unlock()
-				//Todo how refresh dirQuota when quota change
-			}
-
+			logger.Warnf("Get directory from engine  %s", err)
 		}
 		utils.SleepWithJitter(time.Second * 10)
 
@@ -377,15 +375,14 @@ func (m *baseMeta) refreshQuota() {
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, size, inodes int64) bool {
 	if _, ok := m.dirQuotas[inode]; !ok {
-		m.dirQuotas[inode] = make(map[Ino]*quota)
 		m.dirQuotas[inode] = m.getQuotas(ctx, inode, inode)
 	}
 	if _, ok := m.dirQuotas[inode]; ok {
 		for _, q := range m.dirQuotas[inode] {
-			if size > 0 && q.capacity > 0 && atomic.LoadInt64(&q.usedSpace)+size > int64(q.capacity) {
+			if size > 0 && m.quotas[q].capacity > 0 && atomic.LoadInt64(&m.quotas[q].usedSpace)+size > int64(m.quotas[q].capacity) {
 				return true
 			}
-			if inodes > 0 && q.inodes > 0 && atomic.LoadInt64(&q.usedInodes)+inodes > int64(q.inodes) {
+			if inodes > 0 && m.quotas[q].inodes > 0 && atomic.LoadInt64(&m.quotas[q].usedInodes)+inodes > int64(m.quotas[q].inodes) {
 				return true
 			}
 		}
@@ -403,10 +400,8 @@ func (m *baseMeta) checkQuota(size, inodes int64) bool {
 
 func (m *redisMeta) updateQuotaStats(inode Ino, space int64, inodes int64) {
 	for _, val := range m.dirQuotas[inode] {
-		m.Lock()
-		val.usedInodes = val.usedInodes + inodes
-		val.usedSpace = val.usedSpace + space
-		m.Unlock()
+		atomic.AddInt64(&m.quotas[val].usedInodes, inodes)
+		atomic.AddInt64(&m.quotas[val].usedSpace, space)
 	}
 }
 
@@ -739,9 +734,9 @@ func (m *baseMeta) nextInode() (Ino, error) {
 	return Ino(n), nil
 }
 
-func (m *baseMeta) createDirQuotas(ctx Context, parent, inode Ino) map[Ino]*quota {
-	if s, err := m.en.dogetQuotas(ctx, inode); err == nil {
-		m.dirQuotas[parent][inode] = s
+func (m *baseMeta) createDirQuotas(ctx Context, parent, inode Ino) []Ino {
+	if err := m.en.dogetQuotas(ctx, inode); err == nil {
+		m.dirQuotas[parent] = append(m.dirQuotas[parent], inode)
 	}
 	for parentInode, _ := range m.GetParents(ctx, inode) {
 		if parentInode == RootInode {
@@ -753,7 +748,7 @@ func (m *baseMeta) createDirQuotas(ctx Context, parent, inode Ino) map[Ino]*quot
 
 }
 
-func (m *baseMeta) getQuotas(ctx Context, parent, inode Ino) map[Ino]*quota {
+func (m *baseMeta) getQuotas(ctx Context, parent, inode Ino) []Ino {
 	if parent == RootInode {
 		return m.dirQuotas[parent]
 	}
@@ -990,7 +985,7 @@ func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, f
 	return m.en.doSetXattr(ctx, m.checkRoot(inode), name, value, flags)
 }
 
-func (m *baseMeta) SetQuota(ctx Context, inode Ino, capacity, inodes uint64) syscall.Errno {
+func (m *baseMeta) SetQuota(ctx Context, inode Ino, capacity, inodes uint64, set_capacity, set_inodes uint8) syscall.Errno {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
@@ -1002,7 +997,7 @@ func (m *baseMeta) SetQuota(ctx Context, inode Ino, capacity, inodes uint64) sys
 		return errno(err)
 	}
 	defer m.timeit(time.Now())
-	return m.en.doSetQuota(ctx, m.checkRoot(inode), capacity, inodes)
+	return m.en.doSetQuota(ctx, m.checkRoot(inode), capacity, inodes, set_capacity, set_inodes)
 }
 
 func (m *baseMeta) FsckQuota(ctx Context, inode Ino) syscall.Errno {

@@ -370,7 +370,7 @@ func (m *baseMeta) FindDir(ctx Context, inode Ino, count, dirUsedSpace *uint64, 
 			} else {
 				if count != nil {
 					atomic.AddUint64(count, 1)
-					atomic.AddUint64(dirUsedSpace, e.Attr.Length)
+					atomic.AddUint64(dirUsedSpace, uint64(align4K(e.Attr.Length)))
 				}
 			}
 			if ctx.Canceled() {
@@ -411,11 +411,11 @@ func (m *baseMeta) CaculateDirFiles(ctx Context, parent Ino, name string, count,
 	if attr.Typ != TypeDirectory {
 		if count != nil {
 			atomic.AddUint64(count, 1)
-			atomic.AddUint64(dirUsedSpace, attr.Length)
+			atomic.AddUint64(dirUsedSpace, uint64(align4K(attr.Length)))
 		}
 		return 0
 	}
-	concurrent := make(chan int, 1)
+	concurrent := make(chan int, 50)
 	return m.FindEntry(ctx, parent, name, inode, count, dirUsedSpace, concurrent)
 }
 
@@ -454,6 +454,89 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool
 		summary.Files++
 		summary.Length += attr.Length
 		summary.Size += uint64(align4K(attr.Length))
+	}
+	return 0
+}
+
+func CompareSlice(slice1, slice2 []Ino) bool {
+	if len(slice1) != len(slice2) {
+		return false
+	}
+	if (slice1 == nil) != (slice2 == nil) {
+		return false
+	}
+	var i int
+	for _, v := range slice1 {
+		for _, m := range slice2 {
+			if v == m {
+				i++
+				break
+			}
+		}
+	}
+	return len(slice1) == i
+}
+
+func GetSummaryConcurrence(r Meta, ctx Context, inode Ino, summary *Summary, concurrent chan int, recursive bool) syscall.Errno {
+	var attr Attr
+	var wg sync.WaitGroup
+	var status syscall.Errno
+	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
+		return st
+	}
+	if attr.Typ == TypeDirectory {
+		var entries []*Entry
+		if st := r.Readdir(ctx, inode, 1, &entries); st != 0 {
+			return st
+		}
+		for _, e := range entries {
+			if e.Inode == inode || len(e.Name) == 2 && bytes.Equal(e.Name, []byte("..")) {
+				continue
+			}
+			if e.Attr.Typ == TypeDirectory {
+				select {
+				case concurrent <- 1:
+					wg.Add(1)
+					go func(child Ino) {
+						defer wg.Done()
+						if recursive {
+							if e := GetSummary(r, ctx, child, summary, recursive); e != 0 {
+								if e != 0 && e != syscall.ENOENT {
+									status = e
+								}
+								<-concurrent
+							}
+						} else {
+							atomic.AddUint64(&summary.Dirs, 1)
+							atomic.AddUint64(&summary.Size, 4096)
+						}
+					}(e.Inode)
+				default:
+					if recursive {
+						if st := GetSummary(r, ctx, e.Inode, summary, recursive); st != 0 {
+							return st
+						}
+					} else {
+						atomic.AddUint64(&summary.Dirs, 1)
+						atomic.AddUint64(&summary.Size, 4096)
+					}
+				}
+			} else {
+				atomic.AddUint64(&summary.Files, 1)
+				atomic.AddUint64(&summary.Length, e.Attr.Length)
+				atomic.AddUint64(&summary.Size, uint64(align4K(e.Attr.Length)))
+			}
+		}
+		wg.Wait()
+		atomic.AddUint64(&summary.Dirs, 1)
+		atomic.AddUint64(&summary.Size, 4096)
+	} else {
+		atomic.AddUint64(&summary.Files, 1)
+		atomic.AddUint64(&summary.Length, attr.Length)
+		atomic.AddUint64(&summary.Size, uint64(align4K(attr.Length)))
+	}
+	if status != 0 {
+		return status
 	}
 	return 0
 }

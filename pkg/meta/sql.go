@@ -2607,7 +2607,7 @@ func (m *dbMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 	}))
 }
 
-func (m *dbMeta) doSetQuota(ctx Context, inode Ino, capacity, inodes uint64) syscall.Errno {
+func (m *dbMeta) doSetQuota(ctx Context, inode Ino, capacity, inodes uint64, set_capacity, set_inodes uint8) syscall.Errno {
 	return errno(nil)
 }
 
@@ -2628,9 +2628,9 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-func (m *dbMeta) dogetQuotas(ctx Context, inode Ino) (*quota, error) {
+func (m *dbMeta) dogetQuotas(ctx Context, inode Ino) error {
 	//Todo
-	return nil, nil
+	return nil
 }
 
 func (m *dbMeta) doSetQuotaList(name string) error {
@@ -2638,9 +2638,9 @@ func (m *dbMeta) doSetQuotaList(name string) error {
 	return nil
 }
 
-func (m *dbMeta) doGetQuotaList(name string) (map[Ino]quota, error) {
+func (m *dbMeta) doGetQuotaList(name string) error {
 	//Todo
-	return nil, nil
+	return nil
 }
 
 func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry, error) {

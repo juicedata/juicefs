@@ -373,9 +373,9 @@ type Meta interface {
 	// getBase return the base engine.
 	getBase() *baseMeta
 	InitMetrics(registerer prometheus.Registerer)
-	//SetQuota set quota for directory
-	SetQuota(ctx Context, inode Ino, capacity, inodes uint64) syscall.Errno
-	//FsckQuota set quota for directory
+	// SetQuota set quota for directory
+	SetQuota(ctx Context, inode Ino, capacity, inodes uint64, set_capacity, set_inodes uint8) syscall.Errno
+	// FsckQuota set quota for directory
 	FsckQuota(ctx Context, inode Ino) syscall.Errno
 }
 

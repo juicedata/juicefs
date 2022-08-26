@@ -100,8 +100,18 @@ func setquota(ctx *cli.Context) error {
 		return nil
 	}
 	var capacity, inodes uint64
+	var set_capacity, set_inodes uint8
 	capacity = ctx.Uint64("capacity")
 	inodes = ctx.Uint64("inodes")
+	for _, flag := range ctx.FlagNames() {
+		switch flag {
+		case "capacity":
+			set_capacity = 1
+
+		case "inodes":
+			set_inodes = 1
+		}
+	}
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)
 		var d string
@@ -129,12 +139,14 @@ func setquota(ctx *cli.Context) error {
 			logger.Errorf("%s is not inside JuiceFS", path)
 			continue
 		}
-		wb := utils.NewBuffer(4 + 4 + 8 + 8 + 8)
+		wb := utils.NewBuffer(4 + 4 + 8 + 8 + 8 + 1 + 1)
 		wb.Put32(meta.SetQuota)
-		wb.Put32(8 + 8 + 8)
+		wb.Put32(8 + 8 + 8 + 1 + 1)
 		wb.Put64(inode)
 		wb.Put64(capacity)
 		wb.Put64(inodes)
+		wb.Put8(set_capacity)
+		wb.Put8(set_inodes)
 		_, err = f.Write(wb.Bytes())
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
