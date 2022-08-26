@@ -13,15 +13,17 @@ from hypothesis import strategies as st
 from hypothesis.strategies import integers, lists
 from hypothesis import given
 from packaging import version
+from minio import Minio
 
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
-    JFS_BIN = ['juicefs-1.0.0-beta1', 'juicefs-1.0.0-beta2', 'juicefs-1.0.0-beta3', './juicefs-latest']
+    JFS_BIN = ['juicefs-1.0.0-beta1', 'juicefs-1.0.0-beta2', 'juicefs-1.0.0-beta3', 'juicefs-1.0.0-rc1', 'juicefs-1.0.0-rc2','juicefs-1.0.0-rc3','./juicefs']
     JFS_BIN = ['./juicefs-1.0.0', './juicefs']
     META_URL_SQLITE = 'sqlite3:///Users/chengzhou/Documents/juicefs2/abc.db'
     META_URL_REDIS = 'redis://localhost/1'
     META_URLS = [META_URL_REDIS]
+    STORAGES = ['minio']
     # META_URL = 'badger://abc.db'
     MOUNT_POINT = '/tmp/sync-test/'
     VOLUME_NAME = 'test-volume'
@@ -32,27 +34,38 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.formatted = False
         self.mounted = False
         self.meta_url = None
+        print('\nINIT------------------------------------------------------\n')
         
     def flush_meta(self, meta_url):
         if os.path.exists(JuicefsMachine.MOUNT_POINT):
             os.system('umount %s'%JuicefsMachine.MOUNT_POINT)
             print(f'umount {JuicefsMachine.MOUNT_POINT} succeed')
+            self.mounted = False
         if meta_url.startswith('sqlite3://'):
             path = meta_url[len('sqlite3://'):]
             if os.path.isfile(path):
                 os.remove(path)
                 print(f'remove meta file {path} succeed')
         elif meta_url.startswith('redis://'):
-            subprocess.check_call(['redis-cli', 'flushall'])
+            self.exec_check_call(['redis-cli', 'flushall'])
 
-    def clear_storage(self):
-        storage_dir = os.path.expanduser('~/.juicefs/local/%s/'%JuicefsMachine.VOLUME_NAME)
-        if os.path.exists(storage_dir):
-            try:
-                shutil.rmtree(storage_dir)
-                print(f'remove cache dir {storage_dir} succeed')
-            except OSError as e:
-                print("Error: %s : %s" % (storage_dir, e.strerror))
+    def clear_storage(self, storage, bucket):
+        if storage == 'file':
+            storage_dir = os.path.join(bucket, JuicefsMachine.VOLUME_NAME) 
+            if os.path.exists(storage_dir):
+                try:
+                    shutil.rmtree(storage_dir)
+                    print(f'remove cache dir {storage_dir} succeed')
+                except OSError as e:
+                    print("Error: %s : %s" % (storage_dir, e.strerror))
+        elif storage == 'minio':
+            from urllib.parse import urlparse
+            url = urlparse(bucket)
+            c = Minio(url.netloc, access_key='minioadmin', secret_key='minioadmin', secure=False)
+            if c.bucket_exists(url.path[1:]):
+                # c.remove_bucket(url.path[1:])
+                os.system(f'mc alias set myminio http://{url.netloc} minioadmin minioadmin')
+                os.system(f'mc rm --recursive --force  myminio/{url.path[1:]}')
 
     def clear_cache(self):
         os.system('sudo rm -rf /var/jfsCache')
@@ -89,7 +102,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         if encrypt_secret:
             options.append('--encrypt-secret')
         options.append('--force')
-        subprocess.check_call(options)
+        self.exec_check_call(options)
         print('config succeed')
 
     @rule(
@@ -99,7 +112,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           inodes=st.integers(min_value=1024*1024, max_value=1024*1024*1024),
           compress=st.sampled_from(['lz4', 'zstd', 'none']),
           shards=st.integers(min_value=0, max_value=1),
-          storage=st.sampled_from(['file']), 
+          storage=st.sampled_from(STORAGES), 
           encrypt_rsa_key = st.sampled_from([None]), 
           encrypt_algo = st.sampled_from(['aes256gcm-rsa','chacha20-rsa']),
           trash_days=st.integers(min_value=0, max_value=10000), 
@@ -114,6 +127,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--block-size', str(block_size)])
             options.extend(['--compress', compress])
             options.extend(['--shards', str(shards)])
+            options.extend(['--storage', storage])
             if hash_prefix:
                 options.append('--hash-prefix')
         options.extend(['--capacity', str(capacity)])
@@ -128,15 +142,23 @@ class JuicefsMachine(RuleBasedStateMachine):
             # TODO: pass real rsa key
             options.extend(['--encrypt-rsa-key', encrypt_rsa_key])
             options.extend(['--encrypt-algo', encrypt_algo])
+        
         if storage == 'minio':
-            options.extend(['--bucket', 'http://127.0.0.1:9000/test-bucket'])
+            bucket = 'http://127.0.0.1:9000/test-bucket'
+            options.extend(['--bucket', bucket])
             options.extend(['--access-key', 'minioadmin'])
             options.extend(['--secret-key', 'minioadmin'])
+        elif storage == 'file':
+            bucket = os.path.expanduser('~/.juicefs/local/')
+            options.extend(['--bucket', bucket])
+        else:
+            assert False
+
         if not self.formatted:
-            self.clear_storage()
+            self.clear_storage(storage, bucket)
             self.flush_meta(meta_url)
         print(f'format options: {" ".join(options)}' )
-        subprocess.check_call(options)
+        self.exec_check_call(options)
         self.meta_url = meta_url
         self.formatted = True
         print('format succeed')
@@ -144,7 +166,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted )
     def status(self, juicefs):
-        output = subprocess.check_output([juicefs, 'status', self.meta_url])
+        output = self.exec_check_output([juicefs, 'status', self.meta_url])
         uuid = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
         if self.mounted:
@@ -155,7 +177,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted )
     def mount(self, juicefs):
-        subprocess.check_call([juicefs, 'mount', '-d',  self.meta_url, JuicefsMachine.MOUNT_POINT])
+        self.exec_check_call([juicefs, 'mount', '-d',  self.meta_url, JuicefsMachine.MOUNT_POINT])
         time.sleep(1)
         self.mounted = True
         print('mount succeed')
@@ -167,19 +189,19 @@ class JuicefsMachine(RuleBasedStateMachine):
         options = [juicefs, 'umount', JuicefsMachine.MOUNT_POINT]
         if force:
             options.append('--force')
-        subprocess.check_call(options)
+        self.exec_check_call(options)
         self.mounted = False
         print('umount succeed')
 
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted and not self.mounted)
     def destroy(self, juicefs):
-        output = subprocess.check_output([juicefs, 'status', self.meta_url])
+        output = self.exec_check_output([juicefs, 'status', self.meta_url])
         uuid = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
         options = [juicefs, 'destroy', self.meta_url, uuid]
         options.append('--force')
-        subprocess.check_call(options)
+        self.exec_check_call(options)
         self.formatted = False
         self.mounted = False
         print('destroy succeed')
@@ -199,30 +221,45 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs = st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted )
     def dump(self, juicefs):
-        subprocess.check_call([juicefs, 'dump', self.meta_url, 'dump.json'])
+        self.exec_check_call([juicefs, 'dump', self.meta_url, 'dump.json'])
         print('dump succeed')
 
     @rule(juicefs = st.sampled_from(JFS_BIN))
-    @precondition(lambda self: self.formatted and os.path.exists('dump.json'))
+    @precondition(lambda self: os.path.exists('dump.json'))
     def load(self, juicefs):
         print('start to load')
         self.flush_meta(self.meta_url)
-        subprocess.check_call([juicefs, 'load', self.meta_url, 'dump.json'])
+        self.exec_check_call([juicefs, 'load', self.meta_url, 'dump.json'])
         print('load succeed')
+        options = [juicefs, 'config', self.meta_url]
+        options.extend(['access-key', 'minioadmin', '--secret-key', 'minioadmin', '--encrypt-secret'])
+        self.exec_check_call(options)
+        self.formatted = True
 
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted)
     def fsck(self, juicefs):
-        subprocess.check_call([juicefs, 'fsck', self.meta_url])
+        self.exec_check_call([juicefs, 'fsck', self.meta_url])
         print('fsck succeed')
+
+    def exec_check_call(self, options):
+        print('exec:'+' '.join(options))
+        result = subprocess.check_call(options)
+        return result
+
+    def exec_check_output(self, options):
+        print('exec:'+' '.join(options))
+        output = subprocess.check_output(options)
+        print('succeed')
+        return output
 
     @rule(juicefs=st.sampled_from(JFS_BIN),
      block_size=st.integers(min_value=1, max_value=32),
-     big_file_size=st.integers(min_value=100, max_value=1024),
-     small_file_size=st.integers(min_value=1, max_value=1024),
-     small_file_count=st.integers(min_value=100, max_value=1024), 
+     big_file_size=st.integers(min_value=100, max_value=200),
+     small_file_size=st.integers(min_value=1, max_value=256),
+     small_file_count=st.integers(min_value=100, max_value=256), 
      threads=st.integers(min_value=1, max_value=100))
-    @precondition(lambda self: self.mounted)
+    @precondition(lambda self: self.mounted and False)
     def bench(self, juicefs, block_size, big_file_size, small_file_size, small_file_count, threads):
         print('start bench')
         os.system(f'df | grep {JuicefsMachine.MOUNT_POINT}')
@@ -232,7 +269,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--small-file-size', str(small_file_size)])
         options.extend(['--small-file-count', str(small_file_count)])
         options.extend(['--threads', str(threads)])
-        output = subprocess.check_output(options)
+        output = self.exec_check_output(options)
         summary = output.decode('utf8').split('\n')[2]
         expected = f'BlockSize: {block_size} MiB, BigFileSize: {big_file_size} MiB, SmallFileSize: {small_file_size} KiB, SmallFileCount: {small_file_count}, NumThreads: {threads}'
         assert summary == expected
@@ -264,7 +301,7 @@ class JuicefsMachine(RuleBasedStateMachine):
                 os.system(f'dd if=/dev/urandom of={JuicefsMachine.MOUNT_POINT}/bigfile iflag=fullblock,count_bytes bs=1M count=1G')
                 options.append(JuicefsMachine.MOUNT_POINT+'/bigfile')
                 
-        output = subprocess.check_output(options)
+        output = self.exec_check_output(options)
         print(output)
         # assert output.decode('utf8').split('\n')[0].startswith('Warming up count: ')
         # assert output.decode('utf8').split('\n')[0].startswith('Warming up bytes: ')
@@ -282,7 +319,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         if delete:
             options.append('--delete')
         options.extend(['--threads', str(threads)])
-        output = subprocess.check_output(options)
+        output = self.exec_check_output(options)
         print(output)
 
     @rule(juicefs = st.sampled_from(JFS_BIN),

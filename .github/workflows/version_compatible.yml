@@ -192,6 +192,7 @@ jobs:
           chmod +x mc
           sudo apt install redis-tools
           sudo pip install hypothesis
+          sudo pip install minio
       - name: Test
         run: | 
           python3 .github/scripts/testVersionCompatible.py
