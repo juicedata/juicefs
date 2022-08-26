@@ -31,6 +31,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('\nINIT----------------------------------------------------------------------------------------\n')
 
     def flush_meta(self, meta_url):
+        print('start flush meta')
         if os.path.exists(JuicefsMachine.MOUNT_POINT):
             os.system('umount %s'%JuicefsMachine.MOUNT_POINT)
             print(f'umount {JuicefsMachine.MOUNT_POINT} succeed')
@@ -43,8 +44,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         elif meta_url.startswith('redis://'):
             os.system('redis-cli flushall')
             print(f'flush redis succeed')
-
+        print('flush meta succeed')
     def clear_storage(self, storage, bucket):
+        print('start clear storage')
         if storage == 'file':
             storage_dir = os.path.join(bucket, JuicefsMachine.VOLUME_NAME) 
             if os.path.exists(storage_dir):
@@ -61,7 +63,7 @@ class JuicefsMachine(RuleBasedStateMachine):
                 # c.remove_bucket(url.path[1:])
                 os.system(f'mc alias set myminio http://{url.netloc} minioadmin minioadmin')
                 os.system(f'mc rm --recursive --force  myminio/{url.path[1:]}')
-
+        print('clear storage succeed')
     def clear_cache(self):
         os.system('sudo rm -rf /var/jfsCache')
         if sys.platform.startswith('linux') :
@@ -81,6 +83,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     )
     @precondition(lambda self: self.formatted)
     def config(self, juicefs, capacity, inodes, change_bucket, change_aksk, encrypt_secret, trash_days, min_client_version, max_client_version, force):
+        print('start config')
         options = [juicefs, 'config', self.meta_url]
         options.extend(['--trash-days', str(trash_days)])
         options.extend(['--capacity', str(capacity)])
@@ -124,6 +127,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           meta_url=st.sampled_from(META_URLS),
           )
     def format(self, juicefs, block_size, capacity, inodes, compress, shards, storage, encrypt_rsa_key, encrypt_algo, trash_days, hash_prefix, force, no_update, meta_url):
+        print('start format')
         options = [juicefs, 'format',  meta_url, JuicefsMachine.VOLUME_NAME]
         if not self.formatted:
             options.extend(['--block-size', str(block_size)])
@@ -170,6 +174,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted )
     def status(self, juicefs):
+        print('start status')
         output = self.exec_check_output([juicefs, 'status', self.meta_url])
         uuid = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
@@ -181,6 +186,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted )
     def mount(self, juicefs):
+        print('start mount')
         self.exec_check_call([juicefs, 'mount', '-d',  self.meta_url, JuicefsMachine.MOUNT_POINT])
         time.sleep(1)
         self.mounted = True
@@ -190,6 +196,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     force=st.booleans())
     @precondition(lambda self: self.mounted)
     def umount(self, juicefs, force):
+        print('start umount')
         options = [juicefs, 'umount', JuicefsMachine.MOUNT_POINT]
         if force:
             options.append('--force')
@@ -200,6 +207,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted and not self.mounted)
     def destroy(self, juicefs):
+        print('start destroy')
         output = self.exec_check_output([juicefs, 'status', self.meta_url])
         uuid = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
@@ -213,7 +221,8 @@ class JuicefsMachine(RuleBasedStateMachine):
     valid_file_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
     @rule(file_name=valid_file_name, data=st.binary() )
     @precondition(lambda self: self.mounted )
-    def write(self, file_name, data):
+    def write_and_read(self, file_name, data):
+        print('start write and read')
         path = JuicefsMachine.MOUNT_POINT+file_name
         with open(path, "wb") as f:
             f.write(data)
@@ -225,13 +234,14 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs = st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted )
     def dump(self, juicefs):
+        print('start dump')
         self.exec_check_call([juicefs, 'dump', self.meta_url, 'dump.json'])
         print('dump succeed')
 
     @rule(juicefs = st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted and os.path.exists('dump.json'))
     def load(self, juicefs):
-        print('start to load')
+        print('start load')
         self.flush_meta(self.meta_url)
         self.exec_check_call([juicefs, 'load', self.meta_url, 'dump.json'])
         print('load succeed')
@@ -243,15 +253,18 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted)
     def fsck(self, juicefs):
+        print('start fsck')
         self.exec_check_call([juicefs, 'fsck', self.meta_url])
         print('fsck succeed')
 
     def exec_check_call(self, options):
+        options.append('--debug')
         print('exec:'+' '.join(options))
         result = subprocess.check_call(options)
         return result
 
     def exec_check_output(self, options):
+        options.append('--debug')
         print('exec:'+' '.join(options))
         output = subprocess.check_output(options)
         print('succeed')
@@ -286,6 +299,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         directory = st.booleans() )
     @precondition(lambda self: self.mounted)
     def warmup(self, juicefs, threads, background, from_file, directory):
+        print('start warmup')
         self.clear_cache()
         options = [juicefs, 'warmup']
         options.extend(['--threads', threads])
@@ -307,6 +321,7 @@ class JuicefsMachine(RuleBasedStateMachine):
                 
         output = self.exec_check_output(options)
         print(output)
+        print('warmup succeed')
         # assert output.decode('utf8').split('\n')[0].startswith('Warming up count: ')
         # assert output.decode('utf8').split('\n')[0].startswith('Warming up bytes: ')
 
@@ -317,6 +332,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         threads=st.integers(min_value=0, max_value=100) )
     @precondition(lambda self: self.formatted)
     def gc(self, juicefs, compact, delete, threads):
+        print('start gc')
         options = [juicefs, 'gc', self.meta_url]
         if compact:
             options.append('--compact')
@@ -325,11 +341,13 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--threads', str(threads)])
         output = self.exec_check_output(options)
         print(output)
+        print('gc succeed')
 
     @rule(juicefs = st.sampled_from(JFS_BIN),
         port=st.integers(min_value=9001, max_value=10000))
     @precondition(lambda self: self.formatted)
     def gateway(self, juicefs, port):
+        print('start gateway')
         if self.is_port_in_use(port):
             return
         os.environ['MINIO_ROOT_USER'] = 'admin'
@@ -338,18 +356,19 @@ class JuicefsMachine(RuleBasedStateMachine):
         proc=subprocess.Popen(options)
         time.sleep(2.0)
         subprocess.Popen.kill(proc)
-
+        print('gateway succeed')
     @rule(juicefs = st.sampled_from(JFS_BIN), 
         port=st.integers(min_value=10001, max_value=11000)) 
     @precondition(lambda self: self.formatted )
     def webdav(self, juicefs, port):
+        print('start webdav')
         if self.is_port_in_use(port):
             return 
         options = [juicefs, 'webdav', self.meta_url, f'localhost:{port}']
         proc = subprocess.Popen(options)
         time.sleep(2.0)
         subprocess.Popen.kill(proc)
-    
+        print('webdav succeed')
     def is_port_in_use(self, port: int) -> bool:
         import socket
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
