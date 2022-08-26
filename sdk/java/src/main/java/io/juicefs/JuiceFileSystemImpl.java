@@ -21,11 +21,9 @@ import io.juicefs.utils.ConsistentHash;
 import io.juicefs.utils.NodesFetcher;
 import io.juicefs.utils.NodesFetcherBuilder;
 import jnr.ffi.LibraryLoader;
-import jnr.ffi.Memory;
-import jnr.ffi.Pointer;
-import jnr.ffi.Runtime;
 import jnr.ffi.annotations.In;
 import jnr.ffi.annotations.Out;
+import jnr.ffi.util.BufferUtil;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.HadoopIllegalArgumentException;
@@ -52,6 +50,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
@@ -136,13 +136,13 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_rename(long pid, long h, String src, String dst);
 
-    int jfs_stat1(long pid, long h, String path, Pointer buf);
+    int jfs_stat1(long pid, long h, String path, @Out ByteBuffer buf);
 
-    int jfs_lstat1(long pid, long h, String path, Pointer buf);
+    int jfs_lstat1(long pid, long h, String path, @Out ByteBuffer buf);
 
-    int jfs_summary(long pid, long h, String path, Pointer buf);
+    int jfs_summary(long pid, long h, String path, @Out ByteBuffer buf);
 
-    int jfs_statvfs(long pid, long h, Pointer buf);
+    int jfs_statvfs(long pid, long h, @Out ByteBuffer buf);
 
     int jfs_chmod(long pid, long h, String path, int mode);
 
@@ -150,15 +150,15 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_utime(long pid, long h, String path, long mtime, long atime);
 
-    int jfs_listdir(long pid, long h, String path, int offset, Pointer buf, int size);
+    int jfs_listdir(long pid, long h, String path, int offset, @Out ByteBuffer buf, int size);
 
-    int jfs_concat(long pid, long h, String path, Pointer buf, int bufsize);
+    int jfs_concat(long pid, long h, String path, @In ByteBuffer buf, int bufsize);
 
-    int jfs_setXattr(long pid, long h, String path, String name, Pointer value, int vlen, int mode);
+    int jfs_setXattr(long pid, long h, String path, String name, @In ByteBuffer value, int vlen, int mode);
 
-    int jfs_getXattr(long pid, long h, String path, String name, Pointer buf, int size);
+    int jfs_getXattr(long pid, long h, String path, String name, @Out ByteBuffer buf, int size);
 
-    int jfs_listXattr(long pid, long h, String path, Pointer buf, int size);
+    int jfs_listXattr(long pid, long h, String path, @Out ByteBuffer buf, int size);
 
     int jfs_removeXattr(long pid, long h, String path, String name);
   }
@@ -1032,6 +1032,12 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
   }
 
+  private ByteBuffer allocNativeOrderBuf(int size) {
+    ByteBuffer res = ByteBuffer.allocate(size);
+    res.order(ByteOrder.nativeOrder());
+    return res;
+  }
+
   @Override
   public FSDataOutputStream append(Path f, int bufferSize, Progressable progress) throws IOException {
     statistics.incrementWriteOps(1);
@@ -1195,13 +1201,12 @@ public class JuiceFileSystemImpl extends FileSystem {
       srcbytes[i] = normalizePath(srcs[i]).getBytes("UTF-8");
       bufsize += srcbytes[i].length + 1;
     }
-    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), bufsize);
-    long offset = 0;
+    ByteBuffer buf = allocNativeOrderBuf(bufsize);
     for (int i = 0; i < srcs.length; i++) {
-      buf.put(offset, srcbytes[i], 0, srcbytes[i].length);
-      buf.putByte(offset + srcbytes[i].length, (byte) 0);
-      offset += srcbytes[i].length + 1;
+      buf.put(srcbytes[i]);
+      buf.put((byte) 0);
     }
+    buf.flip();
     int r = lib.jfs_concat(Thread.currentThread().getId(), handle, normalizePath(dst), buf, bufsize);
     if (r < 0) {
       if (r == ENOENT) {
@@ -1285,36 +1290,45 @@ public class JuiceFileSystemImpl extends FileSystem {
   public ContentSummary getContentSummary(Path f) throws IOException {
     statistics.incrementReadOps(1);
     String path = normalizePath(f);
-    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 24);
+    ByteBuffer buf = allocNativeOrderBuf(56);
     int r = lib.jfs_summary(Thread.currentThread().getId(), handle, path, buf);
     if (r < 0) {
       throw error(r, f);
     }
-    long size = buf.getLongLong(0);
-    long files = buf.getLongLong(8);
-    long dirs = buf.getLongLong(16);
+    long size = buf.getLong();
+    long files = buf.getLong();
+    long dirs = buf.getLong();
     return new ContentSummary(size, files, dirs);
   }
 
-  private FileStatus newFileStatus(Path p, Pointer buf, int size, boolean readlink) throws IOException {
-    int mode = buf.getInt(0);
+  private FileStatus newFileStatus(Path p, ByteBuffer buf, int size, boolean readlink) throws IOException {
+    int mode = buf.getInt();
     boolean isdir = ((mode >>> 31) & 1) == 1; // Go
     int stickybit = (mode >>> 20) & 1;
     FsPermission perm = new FsPermission((short) ((mode & 0777) | (stickybit << 9)));
-    long length = buf.getLongLong(4);
-    long mtime = buf.getLongLong(12);
-    long atime = buf.getLongLong(20);
-    String user = buf.getString(28);
-    String group = buf.getString(28 + user.length() + 1);
+    long length = buf.getLong();
+    long mtime = buf.getLong();
+    long atime = buf.getLong();
+    String user = getStrFromBuf(buf);
+    buf.position(buf.position() + 1);
+    String group = getStrFromBuf(buf);
+    buf.position(buf.position() + 1);
     assert (30 + user.length() + group.length() == size);
     return new FileStatus(length, isdir, 1, blocksize, mtime, atime, perm, user, group, p);
+  }
+
+  private static String getStrFromBuf(ByteBuffer buf) {
+    int startPos = buf.position();
+    String str = BufferUtil.getString(buf, Charset.defaultCharset());
+    buf.position(startPos + str.getBytes().length);
+    return str;
   }
 
   @Override
   public FileStatus[] listStatus(Path f) throws FileNotFoundException, IOException {
     statistics.incrementReadOps(1);
     int bufsize = 32 << 10;
-    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), bufsize); // TODO: smaller buff
+    ByteBuffer buf = allocNativeOrderBuf(bufsize); // TODO: smaller buff
     String path = normalizePath(f);
     int r = lib.jfs_listdir(Thread.currentThread().getId(), handle, path, 0, buf, bufsize);
     if (r == ENOENT) {
@@ -1328,28 +1342,28 @@ public class JuiceFileSystemImpl extends FileSystem {
     results = new FileStatus[1024];
     int j = 0;
     while (r > 0) {
-      long offset = 0;
-      while (offset < r) {
-        int len = buf.getByte(offset) & 0xff;
+      buf.limit(r).position(0);
+      while (buf.hasRemaining()) {
+        int len = buf.get() & 0xff;
         byte[] name = new byte[len];
-        buf.get(offset + 1, name, 0, len);
-        offset += 1 + len;
-        int size = buf.getByte(offset) & 0xff;
+        buf.get(name);
+        int size = buf.get() & 0xff;
         if (j == results.length) {
           FileStatus[] rs = new FileStatus[results.length * 2];
           System.arraycopy(results, 0, rs, 0, j);
           results = rs;
         }
         Path p = makeQualified(new Path(f, new String(name)));
-        FileStatus st = newFileStatus(p, buf.slice(offset + 1), size, false);
+        FileStatus st = newFileStatus(p, buf, size, false);
         results[j] = st;
-        offset += 1 + size;
         j++;
       }
-      int left = buf.getInt(offset);
+      buf.limit(buf.limit()+ 8);
+      int left = buf.getInt();
       if (left == 0)
         break;
-      int fd = buf.getInt(offset + 4);
+      int fd = buf.getInt();
+      buf.clear();
       r = lib.jfs_listdir(Thread.currentThread().getId(), fd, path, j, buf, bufsize);
     }
     if (r < 0) {
@@ -1406,7 +1420,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   private FileStatus getFileStatusInternal(final Path f, boolean dereference) throws IOException {
     String path = normalizePath(f);
-    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 130);
+    ByteBuffer buf = allocNativeOrderBuf(130);
     int r;
     if (dereference) {
       r = lib.jfs_stat1(Thread.currentThread().getId(), handle, path, buf);
@@ -1421,7 +1435,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   private FileStatus getFileStatusInternalNoException(final Path f) throws IOException {
     String path = normalizePath(f);
-    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 130);
+    ByteBuffer buf = allocNativeOrderBuf(130);
     int r = lib.jfs_lstat1(Thread.currentThread().getId(), handle, path, buf);
     if (r < 0) {
       return null;
@@ -1442,12 +1456,12 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public FsStatus getStatus(Path p) throws IOException {
     statistics.incrementReadOps(1);
-    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 16);
+    ByteBuffer buf = allocNativeOrderBuf(16);
     int r = lib.jfs_statvfs(Thread.currentThread().getId(), handle, buf);
     if (r != 0)
       throw error(r, p);
-    long capacity = buf.getLongLong(0);
-    long remaining = buf.getLongLong(8);
+    long capacity = buf.getLong();
+    long remaining = buf.getLong();
     return new FsStatus(capacity, capacity - remaining, remaining);
   }
 
@@ -1492,8 +1506,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   public void setXAttr(Path path, String name, byte[] value, EnumSet<XAttrSetFlag> flag) throws IOException {
-    Pointer buf = Memory.allocate(Runtime.getRuntime(lib), value.length);
-    buf.put(0, value, 0, value.length);
+    ByteBuffer buf = ByteBuffer.wrap(value);
     int mode = 0; // create or replace
     if (flag.contains(XAttrSetFlag.CREATE) && flag.contains(XAttrSetFlag.REPLACE)) {
       mode = 0;
@@ -1509,12 +1522,12 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   public byte[] getXAttr(Path path, String name) throws IOException {
-    Pointer buf;
+    ByteBuffer buf;
     int bufsize = 16 << 10;
     int r;
     do {
       bufsize *= 2;
-      buf = Memory.allocate(Runtime.getRuntime(lib), bufsize);
+      buf = allocNativeOrderBuf(bufsize);
       r = lib.jfs_getXattr(Thread.currentThread().getId(), handle, normalizePath(path), name, buf, bufsize);
     } while (r == bufsize);
     if (r == ENOATTR || r == ENODATA)
@@ -1522,7 +1535,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     if (r < 0)
       throw error(r, path);
     byte[] value = new byte[r];
-    buf.get(0, value, 0, r);
+    buf.get(value);
     return value;
   }
 
@@ -1542,26 +1555,21 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   public List<String> listXAttrs(Path path) throws IOException {
-    Pointer buf;
+    ByteBuffer buf;
     int bufsize = 1024;
     int r;
     do {
       bufsize *= 2;
-      buf = Memory.allocate(Runtime.getRuntime(lib), bufsize);
+      buf = allocNativeOrderBuf(bufsize);
       r = lib.jfs_listXattr(Thread.currentThread().getId(), handle, normalizePath(path), buf, bufsize);
     } while (r == bufsize);
     if (r < 0)
       throw error(r, path);
     List<String> result = new ArrayList<String>();
-    int off = 0, last = 0;
-    while (off < r) {
-      if (buf.getByte(off) == 0) {
-        byte[] arr = new byte[off - last];
-        buf.get(last, arr, 0, arr.length);
-        result.add(new String(arr));
-        last = off + 1;
-      }
-      off++;
+    buf.limit(r);
+    while (buf.hasRemaining()) {
+      result.add(getStrFromBuf(buf));
+      buf.position(buf.position() + 1);
     }
     return result;
   }
