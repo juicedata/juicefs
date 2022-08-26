@@ -116,7 +116,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_pread(long pid, int fd, @Out ByteBuffer b, int len, long offset);
 
-    int jfs_write(long pid, int fd, @In byte[] b, int len);
+    int jfs_write(long pid, int fd, @In ByteBuffer b, int len);
 
     int jfs_flush(long pid, int fd);
 
@@ -954,7 +954,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (b.length - off < len) {
         throw new IndexOutOfBoundsException();
       }
-      int done = lib.jfs_write(Thread.currentThread().getId(), fd, b, len);
+      int done = lib.jfs_write(Thread.currentThread().getId(), fd, ByteBuffer.wrap(b, off, len), len);
       if (done == EINVAL)
         throw new IOException("stream was closed");
       if (done < 0)
@@ -966,7 +966,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     @Override
     public void write(int b) throws IOException {
-      int done = lib.jfs_write(Thread.currentThread().getId(), fd, new byte[]{(byte) b}, 1);
+      int done = lib.jfs_write(Thread.currentThread().getId(), fd, ByteBuffer.wrap(new byte[]{(byte) b}), 1);
       if (done == EINVAL)
         throw new IOException("stream was closed");
       if (done < 0)
@@ -1009,6 +1009,10 @@ public class JuiceFileSystemImpl extends FileSystem {
     public void hsync() throws IOException {
       flush();
       ((FSOutputStream) out).fsync();
+    }
+
+    public OutputStream getOutputStream() {
+      return out;
     }
   }
 

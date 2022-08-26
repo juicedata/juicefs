@@ -111,7 +111,7 @@ func mountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraMoun
 	// must do reset, otherwise will panic
 	ResetHttp()
 
-	mountArgs := []string{"", "mount", "--enable-xattr", testMeta, testMountPoint, "--no-usage-report"}
+	mountArgs := []string{"", "mount", "--enable-xattr", testMeta, testMountPoint, "--attr-cache", "0", "--entry-cache", "0", "--dir-entry-cache", "0", "--no-usage-report"}
 	if extraMountOpts != nil {
 		mountArgs = append(mountArgs, extraMountOpts...)
 	}
@@ -120,7 +120,16 @@ func mountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraMoun
 			t.Errorf("mount failed: %s", err)
 		}
 	}()
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
+	inode, err := utils.GetFileInode(testMountPoint)
+	if err != nil {
+		t.Fatalf("get file inode failed: %s", err)
+	}
+	if inode != 1 {
+		t.Fatalf("mount failed: inode of %s is not 1", testMountPoint)
+	} else {
+		t.Logf("mount %s success", testMountPoint)
+	}
 }
 
 func umountTemp(t *testing.T) {

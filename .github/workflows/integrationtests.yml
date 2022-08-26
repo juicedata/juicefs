@@ -39,6 +39,7 @@ jobs:
       - name: Build linux target
         run: |
           make juicefs
+          cp juicefs /tmp/mount.juicefs
 
 
       - name: Run Redis
@@ -88,6 +89,11 @@ jobs:
         shell: 'script -q -e -c "bash {0}"'
         run: |
           sudo DURATION=60 make -C fstests fsracer
+
+      - name: MountJuiceFSTest
+        run: |
+          sudo /tmp/mount.juicefs redis://127.0.0.1:6379/1 /tmp/mount-jfs
+          [ `stat --format "%i" /tmp/mount-jfs` -eq 1 ]
 
 
       - name: log
