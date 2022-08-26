@@ -95,7 +95,10 @@ class JuicefsMachine(RuleBasedStateMachine):
         storage = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['Storage']
 
         if change_bucket:
-            options.extend(['--bucket', os.path.expanduser('~/.juicefs/local2')])
+            if storage == 'file':
+                options.extend(['--bucket', os.path.expanduser('~/.juicefs/local2')])
+            else: 
+                options.extend(['--bucket', 'http://localhost:9000/test-bucket2'])
         if change_aksk and storage == 'minio':
             os.system(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
             output = subprocess.check_output('mc admin user list myminio'.split())
