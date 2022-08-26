@@ -225,7 +225,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('dump succeed')
 
     @rule(juicefs = st.sampled_from(JFS_BIN))
-    @precondition(lambda self: os.path.exists('dump.json'))
+    @precondition(lambda self: self.formatted and os.path.exists('dump.json'))
     def load(self, juicefs):
         print('start to load')
         self.flush_meta(self.meta_url)
@@ -234,7 +234,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         options = [juicefs, 'config', self.meta_url]
         options.extend(['access-key', 'minioadmin', '--secret-key', 'minioadmin', '--encrypt-secret'])
         self.exec_check_call(options)
-        self.formatted = True
+        os.remove('dump.json')
 
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted)
