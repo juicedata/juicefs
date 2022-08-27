@@ -28,6 +28,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.formatted = False
         self.mounted = False
         self.meta_url = None
+        os.system(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
         print('\nINIT----------------------------------------------------------------------------------------\n')
 
     def flush_meta(self, meta_url):
@@ -58,11 +59,11 @@ class JuicefsMachine(RuleBasedStateMachine):
         elif storage == 'minio':
             from urllib.parse import urlparse
             url = urlparse(bucket)
-            c = Minio(url.netloc, access_key='minioadmin', secret_key='minioadmin', secure=False)
+            c = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
             if c.bucket_exists(url.path[1:]):
                 # c.remove_bucket(url.path[1:])
-                os.system(f'mc alias set myminio http://{url.netloc} minioadmin minioadmin')
                 os.system(f'mc rm --recursive --force  myminio/{url.path[1:]}')
+            assert not c.bucket_exists(url.path[1:])
         print('clear storage succeed')
     def clear_cache(self):
         os.system('sudo rm -rf /var/jfsCache')
@@ -93,14 +94,17 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--max-client-version', max_client_version])
         output = self.exec_check_output([juicefs, 'status', self.meta_url])
         storage = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['Storage']
-
+        
         if change_bucket:
             if storage == 'file':
                 options.extend(['--bucket', os.path.expanduser('~/.juicefs/local2')])
             else: 
+                c = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
+                if not c.bucket_exists('test-bucket2'):
+                    os.system('mc mb myminio/test-bucket2')
+                assert c.bucket_exists('test-bucket2')
                 options.extend(['--bucket', 'http://localhost:9000/test-bucket2'])
         if change_aksk and storage == 'minio':
-            os.system(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
             output = subprocess.check_output('mc admin user list myminio'.split())
             if not output:
                 os.system('mc admin user add myminio juicedata 12345678')
@@ -156,7 +160,7 @@ class JuicefsMachine(RuleBasedStateMachine):
                 options.extend(['--encrypt-algo', encrypt_algo])
         
         if storage == 'minio':
-            bucket = 'http://127.0.0.1:9000/test-bucket'
+            bucket = 'http://localhost:9000/test-bucket'
             options.extend(['--bucket', bucket])
             options.extend(['--access-key', 'minioadmin'])
             options.extend(['--secret-key', 'minioadmin'])
