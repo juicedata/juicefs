@@ -63,7 +63,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             if c.bucket_exists(url.path[1:]):
                 # c.remove_bucket(url.path[1:])
                 os.system(f'mc rm --recursive --force  myminio/{url.path[1:]}')
-            assert not c.bucket_exists(url.path[1:])
+                # assert not c.bucket_exists(url.path[1:])
         print('clear storage succeed')
     def clear_cache(self):
         os.system('sudo rm -rf /var/jfsCache')
@@ -102,7 +102,7 @@ class JuicefsMachine(RuleBasedStateMachine):
                 c = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
                 if not c.bucket_exists('test-bucket2'):
                     os.system('mc mb myminio/test-bucket2')
-                assert c.bucket_exists('test-bucket2')
+                    # assert c.bucket_exists('test-bucket2')
                 options.extend(['--bucket', 'http://localhost:9000/test-bucket2'])
         if change_aksk and storage == 'minio':
             output = subprocess.check_output('mc admin user list myminio'.split())
