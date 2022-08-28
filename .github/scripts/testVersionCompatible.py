@@ -12,7 +12,7 @@ from packaging import version
 from minio import Minio
 
 class JuicefsMachine(RuleBasedStateMachine):
-    MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0']
+    MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
     JFS_BIN = ['./juicefs-1.0.0-beta1', './juicefs-1.0.0-beta2', './juicefs-1.0.0-beta3', './juicefs-1.0.0-rc1', './juicefs-1.0.0-rc2','./juicefs-1.0.0-rc3','./juicefs']
     JFS_BIN = ['./juicefs-1.0.0-rc1',  './juicefs']
