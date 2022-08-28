@@ -310,7 +310,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('start warmup')
         self.clear_cache()
         options = [juicefs, 'warmup']
-        options.extend(['--threads', threads])
+        options.extend(['--threads', str(threads)])
         if background:
             options.append('--background')
         if from_file:
