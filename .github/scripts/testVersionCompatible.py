@@ -314,11 +314,12 @@ class JuicefsMachine(RuleBasedStateMachine):
         if background:
             options.append('--background')
         if from_file:
-            file_list = [JuicefsMachine.MOUNT_POINT+'file1', JuicefsMachine.MOUNT_POINT+'file2', JuicefsMachine.MOUNT_POINT+'file3']
-            for filepath in file_list:
+            path_list = [JuicefsMachine.MOUNT_POINT+'file1', JuicefsMachine.MOUNT_POINT+'file2', JuicefsMachine.MOUNT_POINT+'file3']
+            for filepath in path_list:
                 os.system(f'dd if=/dev/urandom of={filepath} iflag=fullblock,count_bytes bs=1M count=1G')
             with open('file.list', 'w') as f:
-                f.writelines(file_list)
+                for path in path_list:
+                    f.write(path+'\n')
             options.extend(['--file', 'file.list'])
         else:
             if directory:
