@@ -758,3 +758,22 @@ JuiceFS 可以使用本地磁盘作为缓存加速数据访问，以下数据是
 ### 2. 出现 `No FilesSystem for scheme: jfs` 异常
 
 出现这个异常的原因是 `core-site.xml` 配置文件中的 JuiceFS 配置没有被读取到，需要检查组件配置的 `core-site.xml` 中是否有 JuiceFS 相关配置。
+
+### 3. JuiceFS 与 HDFS 的用户权限管控有何相同和不同之处？
+
+JuiceFS 默认也是使用 ugo 的方式管理文件权限，默认是使用的本地 users 和 groups。在 hadoop 场景下，可以通过 `juicefs.users` 和 `juicefs.groups` 配置全局 users 和 groups。
+可以通过挂载方式很方便的编辑此文件，添加修改 user 和 group。
+
+### 4. JuiceFS 与 Hadoop 整合后，如何达到 Hadoop 原有回收站的效果，目前看数据都是直接在 JuiceFS 的 trash 目录，虽然文件在但是很难像以前 HDFS 通过简单的 `mv` 操作就能恢复数据，是否有某种办法达到 HDFS 类似回收站效果？
+
+在 Hadoop 应用场景下，仍然保留了类似于 hdfs 的回收站。需要配置 `fs.trash.interval` 以及 `fs.trash.checkpoint.interval` 。
+
+### 5. 设置 `discover-node-url` 这个参数有什么好处？
+
+在 HDFS 里面，数据 block 会有 blocklocation（节点信息），计算引擎会利用此信息尽量将计算调度到数据所在节点。
+JuiceFS 会通过一致性 hash 算法为每个 block 计算出对应的 blocklocation，这样第二次读相同的数据，计算引擎将计算调度到相同的机器上时，就会利用第一次缓存在本地磁盘的数据。
+此算法需要事先知道所有的计算节点信息，此参数就是用来获得这些计算节点信息的。
+
+### 6. 对于Cloudera CDH 采用 kerberos认证，juiceFS目前社区版能否支持呢？
+
+不支持。JuiceFS 这边不会校验 kerberos 用户的合法性，但是可以使用通过 kerberos 认证的用户名。
