@@ -16,7 +16,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
     # JFS_BIN = ['./juicefs-1.0.0-beta1', './juicefs-1.0.0-beta2', './juicefs-1.0.0-beta3', './juicefs-1.0.0-rc1', './juicefs-1.0.0-rc2','./juicefs-1.0.0-rc3','./juicefs']
     JFS_BINS = [os.environ.get('OLD_JFS_BIN'), os.environ.get('NEW_JFS_BIN')]
-    # JFS_BIN = ['./juicefs-1.0.0-rc2',  './juicefs-1.1.0-dev']
+    # JFS_BINS = ['./juicefs-1.0.0-rc2',  './juicefs-1.1.0-dev']
     META_URLS = ['redis://localhost/1']
     STORAGES = ['minio']
     # META_URL = 'badger://abc.db'
@@ -283,8 +283,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         # options.append('--debug')
         print('exec:'+' '.join(options))
         # result = subprocess.check_call(options)
-        # result = subprocess.check_call(options, stdout=sys.stderr, stderr=sys.stderr)
-        result = os.system(' '.join(options))
+        result = subprocess.check_call(options, bufsize=1)
+        # result = os.system(' '.join(options))
         print('exec succeed')
         return result
 
@@ -292,7 +292,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.append('--debug')
         print('exec:'+' '.join(options))
         # output = subprocess.check_output(options)
-        output = subprocess.check_output(options, stdout=sys.stderr, stderr=sys.stderr)
+        output = subprocess.check_output(options, bufsize=1)
         print('exec succeed')
         return output
 

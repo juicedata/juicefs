@@ -101,7 +101,7 @@ jobs:
 
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 60
+        timeout-minutes: 30
         uses: lhotari/action-upterm@v1
 
   test-compatible-with-1-0-0-beta1:
@@ -193,5 +193,5 @@ jobs:
 
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 60
+        timeout-minutes: 30
         uses: lhotari/action-upterm@v1
