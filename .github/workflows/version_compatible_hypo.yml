@@ -136,6 +136,15 @@ jobs:
             mv juicefs $filename
           done
 
+      - name: Cache go modules
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-dependencies
+        with:
+          key: ${{ runner.os }}-build-${{ env.cache-name }}
+          path: |
+            /home/runner/go/pkg/mod
+
       - name: Make Juicefs
         run: | 
           make juicefs
