@@ -105,7 +105,7 @@ class JuicefsMachine(RuleBasedStateMachine):
                     # assert c.bucket_exists('test-bucket2')
                 options.extend(['--bucket', 'http://localhost:9000/test-bucket2'])
         if change_aksk and storage == 'minio':
-            output = subprocess.check_output('mc admin user list myminio'.split())
+            output = subprocess.check_output('mc admin user list myminio'.split(), stderr=sys.stdout)
             if not output:
                 os.system('mc admin user add myminio juicedata 12345678')
                 os.system('mc admin policy set myminio consoleAdmin user=juicedata')
@@ -175,6 +175,8 @@ class JuicefsMachine(RuleBasedStateMachine):
             self.flush_meta(meta_url)
         print(f'format options: {" ".join(options)}' )
         self.exec_check_call(options)
+        # if juicefs == JuicefsMachine.JFS_BIN[-1]:
+        #     self.formatted_by_newer_version = True
         self.meta_url = meta_url
         self.formatted = True
         print('format succeed')
@@ -268,14 +270,15 @@ class JuicefsMachine(RuleBasedStateMachine):
     def exec_check_call(self, options):
         options.append('--debug')
         print('exec:'+' '.join(options))
-        result = subprocess.check_call(options)
+        result = subprocess.check_call(options, stdout=sys.stdout, stderr=sys.stdout)
+        print('exec succeed')
         return result
 
     def exec_check_output(self, options):
         options.append('--debug')
         print('exec:'+' '.join(options))
-        output = subprocess.check_output(options)
-        print('succeed')
+        output = subprocess.check_output(options, stderr=sys.stdout)
+        print('exec succeed')
         return output
 
     @rule(juicefs=st.sampled_from(JFS_BIN),
