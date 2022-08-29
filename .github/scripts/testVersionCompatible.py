@@ -30,6 +30,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.meta_url = None
         self.formatted_by = ''
         os.system(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
+        if os.path.isfile('dump.json'):
+            os.remove('dump.json')
         print('\nINIT----------------------------------------------------------------------------------------\n')
 
     def flush_meta(self, meta_url):
@@ -264,7 +266,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.exec_check_call([juicefs, 'load', self.meta_url, 'dump.json'])
         print('load succeed')
         options = [juicefs, 'config', self.meta_url]
-        options.extend(['access-key', 'minioadmin', '--secret-key', 'minioadmin', '--encrypt-secret'])
+        options.extend(['--access-key', 'minioadmin', '--secret-key', 'minioadmin', '--encrypt-secret'])
         self.exec_check_call(options)
         os.remove('dump.json')
 
@@ -332,7 +334,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         if from_file:
             path_list = [JuicefsMachine.MOUNT_POINT+'file1', JuicefsMachine.MOUNT_POINT+'file2', JuicefsMachine.MOUNT_POINT+'file3']
             for filepath in path_list:
-                os.system(f'dd if=/dev/urandom of={filepath} iflag=fullblock,count_bytes bs=1M count=1G')
+                if not os.path.exists(filepath):
+                    os.system(f'dd if=/dev/urandom of={filepath} bs=1048576 count=129')
             with open('file.list', 'w') as f:
                 for path in path_list:
                     f.write(path+'\n')
@@ -341,7 +344,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             if directory:
                 options.append(JuicefsMachine.MOUNT_POINT)
             else:
-                os.system(f'dd if=/dev/urandom of={JuicefsMachine.MOUNT_POINT}/bigfile iflag=fullblock,count_bytes bs=1M count=1G')
+                os.system(f'dd if=/dev/urandom of={JuicefsMachine.MOUNT_POINT}/bigfile bs=1048576 count=1024')
                 options.append(JuicefsMachine.MOUNT_POINT+'/bigfile')
                 
         output = self.exec_check_output(options)
