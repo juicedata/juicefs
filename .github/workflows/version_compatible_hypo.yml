@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-compatible-with-1.0.0-rc2:
+  test-compatible-with-1-0-0-rc2:
     runs-on: ubuntu-latest
     services:
       redis:
@@ -104,7 +104,7 @@ jobs:
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
-  test-compatible-with-1.0.0-beta1:
+  test-compatible-with-1-0-0-beta1:
     runs-on: ubuntu-latest
     services:
       redis:
