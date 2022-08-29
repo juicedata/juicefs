@@ -284,7 +284,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('exec:'+' '.join(options))
         # result = subprocess.check_call(options)
         # result = subprocess.check_call(options, stdout=sys.stderr, stderr=sys.stderr)
-        os.system(' '.join(options))
+        result = os.system(' '.join(options))
         print('exec succeed')
         return result
 
