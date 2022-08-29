@@ -17,6 +17,19 @@ runs:
     - name: Set up Docker
       uses: docker-practice/actions-setup-docker@master
 
+    - id: go-cache-paths
+      shell: bash
+      run: |
+        echo "::set-output name=go-build::$(go env GOCACHE)"
+        echo "::set-output name=go-mod::$(go env GOMODCACHE)"
+        
+    # Cache go mod cache, used to speedup builds
+    - name: Go Mod Cache
+      uses: actions/cache@v2
+      with:
+        path: ${{ steps.go-cache-paths.outputs.go-mod }}
+        key: ${{ runner.os }}-go-mod-${{ hashFiles('**/go.sum') }}  
+
     - name: Build linux target
       shell: bash
       run: make juicefs

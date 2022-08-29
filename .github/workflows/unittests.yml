@@ -49,6 +49,25 @@ jobs:
         with:
           fetch-depth: 100
 
+      - id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(go env GOCACHE)"
+          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
+          
+      # Cache go build cache, used to speedup go test
+      - name: Go Build Cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ steps.go-cache-paths.outputs.go-build }}
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}
+
+      # Cache go mod cache, used to speedup builds
+      - name: Go Mod Cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ steps.go-cache-paths.outputs.go-mod }}
+          key: ${{ runner.os }}-go-mod-${{ hashFiles('**/go.sum') }}  
+
       - name: Install Packages
         run: |
           sudo apt install -y g++-multilib
@@ -56,7 +75,6 @@ jobs:
           sudo apt install -y libacl1-dev
           sudo apt install -y attr
           sudo mkdir -p /home/travis/.m2/
-
 
       - name: Download Zip
         run: |
@@ -68,7 +86,6 @@ jobs:
           tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2/
           cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
           tar -zxf /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz -C /home/travis/.m2/
-
 
       - name: Prepare Database
         run: |

@@ -48,6 +48,19 @@ jobs:
         sudo apt-get update
         sudo apt-get install g++-multilib gcc-mingw-w64
 
+    - id: go-cache-paths
+      run: |
+        echo "::set-output name=go-build::$(go env GOCACHE)"
+        echo "::set-output name=go-mod::$(go env GOMODCACHE)"
+        
+    # Cache go mod cache, used to speedup builds
+    - name: Go Mod Cache
+      uses: actions/cache@v2
+      with:
+        path: ${{ steps.go-cache-paths.outputs.go-mod }}
+        key: ${{ runner.os }}-go-mod-${{ hashFiles('**/go.sum') }}  
+              
+
     - name: Build linux target
       run: GOPATH=$HOME/go make
 

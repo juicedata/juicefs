@@ -40,10 +40,20 @@ jobs:
           echo ::set-output name=BACKWARD_VERSIONS::1
           echo ::set-output name=PYROSCOPE_URL::http://172.27.0.1:4040
 
+      - id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(go env GOCACHE)"
+          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
+          
+      # Cache go mod cache, used to speedup builds
+      - name: Go Mod Cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ steps.go-cache-paths.outputs.go-mod }}
+          key: ${{ runner.os }}-go-mod-${{ hashFiles('**/go.sum') }}  
+
       - name: Build linux target
         run: |
-          export GOPATH=/usr/local/go
-          export HOME=/root
           make juicefs
 
       - name: Clean Before
