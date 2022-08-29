@@ -7,7 +7,7 @@ import time
 import unittest
 from xmlrpc.client import boolean
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
-from hypothesis import strategies as st
+from hypothesis import assume, strategies as st
 from packaging import version
 from minio import Minio
 
@@ -28,6 +28,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.formatted = False
         self.mounted = False
         self.meta_url = None
+        self.formatted_by = ''
         os.system(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
         print('\nINIT----------------------------------------------------------------------------------------\n')
 
@@ -105,7 +106,7 @@ class JuicefsMachine(RuleBasedStateMachine):
                     # assert c.bucket_exists('test-bucket2')
                 options.extend(['--bucket', 'http://localhost:9000/test-bucket2'])
         if change_aksk and storage == 'minio':
-            output = subprocess.check_output('mc admin user list myminio'.split(), stderr=sys.stdout)
+            output = subprocess.check_output('mc admin user list myminio'.split())
             if not output:
                 os.system('mc admin user add myminio juicedata 12345678')
                 os.system('mc admin policy set myminio consoleAdmin user=juicedata')
@@ -134,6 +135,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           meta_url=st.sampled_from(META_URLS),
           )
     def format(self, juicefs, block_size, capacity, inodes, compress, shards, storage, encrypt_rsa_key, encrypt_algo, trash_days, hash_prefix, force, no_update, meta_url):
+        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
         print('start format')
         options = [juicefs, 'format',  meta_url, JuicefsMachine.VOLUME_NAME]
         if not self.formatted:
@@ -175,10 +177,9 @@ class JuicefsMachine(RuleBasedStateMachine):
             self.flush_meta(meta_url)
         print(f'format options: {" ".join(options)}' )
         self.exec_check_call(options)
-        # if juicefs == JuicefsMachine.JFS_BIN[-1]:
-        #     self.formatted_by_newer_version = True
         self.meta_url = meta_url
         self.formatted = True
+        self.formatted_by = juicefs
         print('format succeed')
 
     @rule(juicefs=st.sampled_from(JFS_BIN))
@@ -196,6 +197,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted )
     def mount(self, juicefs):
+        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
         print('start mount')
         self.exec_check_call([juicefs, 'mount', '-d',  self.meta_url, JuicefsMachine.MOUNT_POINT])
         time.sleep(1)
@@ -206,6 +208,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     force=st.booleans())
     @precondition(lambda self: self.mounted)
     def umount(self, juicefs, force):
+        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
         print('start umount')
         options = [juicefs, 'umount', JuicefsMachine.MOUNT_POINT]
         if force:
@@ -217,6 +220,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted and not self.mounted)
     def destroy(self, juicefs):
+        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
         print('start destroy')
         output = self.exec_check_output([juicefs, 'status', self.meta_url])
         uuid = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['UUID']
@@ -244,6 +248,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs = st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted )
     def dump(self, juicefs):
+        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
         print('start dump')
         self.exec_check_call([juicefs, 'dump', self.meta_url, 'dump.json'])
         print('dump succeed')
@@ -251,6 +256,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs = st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted and os.path.exists('dump.json'))
     def load(self, juicefs):
+        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
         print('start load')
         self.flush_meta(self.meta_url)
         self.exec_check_call([juicefs, 'load', self.meta_url, 'dump.json'])
@@ -263,6 +269,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted)
     def fsck(self, juicefs):
+        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
         print('start fsck')
         self.exec_check_call([juicefs, 'fsck', self.meta_url])
         print('fsck succeed')
@@ -270,14 +277,16 @@ class JuicefsMachine(RuleBasedStateMachine):
     def exec_check_call(self, options):
         options.append('--debug')
         print('exec:'+' '.join(options))
-        result = subprocess.check_call(options, stdout=sys.stdout, stderr=sys.stdout)
+        result = subprocess.check_call(options)
+        # result = subprocess.check_call(options, stdout=sys.stdout, stderr=sys.stdout)
         print('exec succeed')
         return result
 
     def exec_check_output(self, options):
         options.append('--debug')
         print('exec:'+' '.join(options))
-        output = subprocess.check_output(options, stderr=sys.stdout)
+        output = subprocess.check_output(options)
+        # output = subprocess.check_output(options, stderr=sys.stdout)
         print('exec succeed')
         return output
 
@@ -310,6 +319,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         directory = st.booleans() )
     @precondition(lambda self: self.mounted)
     def warmup(self, juicefs, threads, background, from_file, directory):
+        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
         print('start warmup')
         self.clear_cache()
         options = [juicefs, 'warmup']
@@ -344,6 +354,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         threads=st.integers(min_value=0, max_value=100) )
     @precondition(lambda self: self.formatted)
     def gc(self, juicefs, compact, delete, threads):
+        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
         print('start gc')
         options = [juicefs, 'gc', self.meta_url]
         if compact:
@@ -359,6 +370,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         port=st.integers(min_value=9001, max_value=10000))
     @precondition(lambda self: self.formatted)
     def gateway(self, juicefs, port):
+        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
         print('start gateway')
         if self.is_port_in_use(port):
             return
@@ -373,6 +385,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         port=st.integers(min_value=10001, max_value=11000)) 
     @precondition(lambda self: self.formatted )
     def webdav(self, juicefs, port):
+        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
         print('start webdav')
         if self.is_port_in_use(port):
             return 
