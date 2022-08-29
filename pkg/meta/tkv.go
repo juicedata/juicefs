@@ -555,7 +555,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 			ls := unmarshalPlock(v)
 			for o, l := range ls {
 				if o.sid == sid {
-					s.Plocks = append(s.Plocks, Plock{inode, o.sid, l})
+					s.Plocks = append(s.Plocks, Plock{inode, o.sid, loadLocks(l)})
 				}
 			}
 		}

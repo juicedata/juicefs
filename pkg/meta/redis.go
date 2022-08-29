@@ -400,7 +400,7 @@ func (m *redisMeta) getSession(sid string, detail bool) (*Session, error) {
 				if isFlock {
 					s.Flocks = append(s.Flocks, Flock{Ino(inode), owner, v})
 				} else {
-					s.Plocks = append(s.Plocks, Plock{Ino(inode), owner, []byte(v)})
+					s.Plocks = append(s.Plocks, Plock{Ino(inode), owner, loadLocks([]byte(v))})
 				}
 			}
 		}

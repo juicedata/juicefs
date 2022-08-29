@@ -234,7 +234,7 @@ type Flock struct {
 type Plock struct {
 	Inode   Ino
 	Owner   uint64
-	Records []byte // FIXME: loadLocks
+	Records []plockRecord
 }
 
 // Session contains detailed information of a client session
