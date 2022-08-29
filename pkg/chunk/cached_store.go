@@ -808,7 +808,8 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		logger.Debugf("Key %s is not needed, drop it", key)
 		return
 	}
-	f, err := os.Open(stagingPath)
+	blen := parseObjOrigSize(key)
+	f, err := openCacheFile(stagingPath, blen)
 	if err != nil {
 		store.pendingMutex.Lock()
 		_, ok = store.pendingKeys[key]
@@ -820,9 +821,8 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		}
 		return
 	}
-	blen := parseObjOrigSize(key)
 	block := NewOffPage(blen)
-	_, err = io.ReadFull(f, block.Data)
+	_, err = f.ReadAt(block.Data, 0)
 	_ = f.Close()
 	if err != nil {
 		block.Release()

@@ -17,7 +17,10 @@
 package chunk
 
 import (
+	"encoding/binary"
 	"errors"
+	"fmt"
+	"hash/crc32"
 	"hash/fnv"
 	"io"
 	"math"
@@ -194,6 +197,11 @@ func (cache *cacheStore) flushPage(path string, data []byte) (err error) {
 		_ = f.Close()
 		return
 	}
+	if _, err = f.Write(checksum(data)); err != nil {
+		logger.Warnf("Write checksum to cache file %s failed: %s", tmp, err)
+		_ = f.Close()
+		return
+	}
 	if err = f.Close(); err != nil {
 		logger.Warnf("Close cache file %s failed: %s", tmp, err)
 		return
@@ -256,7 +264,7 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 		return nil, errors.New("not cached")
 	}
 	cache.Unlock()
-	f, err := os.Open(cache.cachePath(key))
+	f, err := openCacheFile(cache.cachePath(key), parseObjOrigSize(key))
 	cache.Lock()
 	if err == nil {
 		if it, ok := cache.keys[key]; ok {
@@ -723,7 +731,7 @@ func (m *cacheManager) cache(key string, p *Page, force bool) {
 }
 
 type ReadCloser interface {
-	io.Reader
+	// io.Reader
 	io.ReaderAt
 	io.Closer
 }
@@ -746,4 +754,58 @@ func (m *cacheManager) stagePath(key string) string {
 
 func (m *cacheManager) uploaded(key string, size int) {
 	m.getStore(key).uploaded(key, size)
+}
+
+type cacheFile struct {
+	*os.File
+	length int  // length of data
+	check  bool // has checksum
+}
+
+func checksum(data []byte) []byte {
+	sum := crc32.ChecksumIEEE(data)
+	// buf := []byte{106, 102, 115, 99, 115, 95, 118, 48, 0, 0, 0, 0} // jfscs_v0
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, sum)
+	return buf
+}
+
+func openCacheFile(name string, length int) (*cacheFile, error) {
+	fp, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := fp.Stat()
+	if err != nil {
+		_ = fp.Close()
+		return nil, err
+	}
+	switch fi.Size() - int64(length) {
+	case 0:
+		return &cacheFile{fp, length, false}, nil
+	case 4:
+		return &cacheFile{fp, length, true}, nil
+	default:
+		_ = fp.Close()
+		return nil, fmt.Errorf("invalid file size %d, data length %d", fi.Size(), length)
+	}
+}
+
+func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
+	if n, err = cf.File.ReadAt(b, off); err != nil {
+		return
+	}
+	if cf.check && off == 0 && n == cf.length {
+		buf := make([]byte, 4) // TODO: use sync.Pool
+		if _, err = cf.File.ReadAt(buf, int64(n)); err != nil {
+			return
+		}
+		sum := crc32.ChecksumIEEE(b)
+		expect := binary.BigEndian.Uint32(buf)
+		logger.Debugf("Cache file read data checksum %d, expected %d", sum, expect)
+		if sum != expect {
+			err = fmt.Errorf("data checksum %d != expect %d", sum, expect)
+		}
+	}
+	return
 }
