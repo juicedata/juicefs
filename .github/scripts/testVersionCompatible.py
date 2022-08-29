@@ -283,7 +283,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         # options.append('--debug')
         print('exec:'+' '.join(options))
         # result = subprocess.check_call(options)
-        result = subprocess.check_call(options, stdout=sys.stderr, stderr=sys.stderr)
+        # result = subprocess.check_call(options, stdout=sys.stderr, stderr=sys.stderr)
+        os.system(' '.join(options))
         print('exec succeed')
         return result
 
@@ -348,8 +349,8 @@ class JuicefsMachine(RuleBasedStateMachine):
                 os.system(f'dd if=/dev/urandom of={JuicefsMachine.MOUNT_POINT}/bigfile bs=1048576 count=512')
                 options.append(JuicefsMachine.MOUNT_POINT+'/bigfile')
                 
-        output = self.exec_check_output(options)
-        print(output)
+        self.exec_check_call(options)
+        # print(output)
         print('warmup succeed')
         # assert output.decode('utf8').split('\n')[0].startswith('Warming up count: ')
         # assert output.decode('utf8').split('\n')[0].startswith('Warming up bytes: ')
@@ -369,8 +370,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         if delete:
             options.append('--delete')
         options.extend(['--threads', str(threads)])
-        output = self.exec_check_output(options)
-        print(output)
+        self.exec_check_call(options)
+        # print(output)
         print('gc succeed')
 
     @rule(juicefs = st.sampled_from(JFS_BINS),
