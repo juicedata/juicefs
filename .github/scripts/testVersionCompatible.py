@@ -15,7 +15,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
     JFS_BIN = ['./juicefs-1.0.0-beta1', './juicefs-1.0.0-beta2', './juicefs-1.0.0-beta3', './juicefs-1.0.0-rc1', './juicefs-1.0.0-rc2','./juicefs-1.0.0-rc3','./juicefs']
-    JFS_BIN = ['./juicefs-1.0.0-rc1',  './juicefs']
+    JFS_BIN = ['./juicefs-1.0.0-rc1',  './juicefs-1.1.0-dev']
     META_URLS = ['redis://localhost/1']
     STORAGES = ['minio']
     # META_URL = 'badger://abc.db'
@@ -85,6 +85,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     )
     @precondition(lambda self: self.formatted)
     def config(self, juicefs, capacity, inodes, change_bucket, change_aksk, encrypt_secret, trash_days, min_client_version, max_client_version, force):
+        assume (self.is_supported_version(juicefs))
         print('start config')
         options = [juicefs, 'config', self.meta_url]
         options.extend(['--trash-days', str(trash_days)])
@@ -135,7 +136,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           meta_url=st.sampled_from(META_URLS),
           )
     def format(self, juicefs, block_size, capacity, inodes, compress, shards, storage, encrypt_rsa_key, encrypt_algo, trash_days, hash_prefix, force, no_update, meta_url):
-        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
+        assume (self.is_supported_version(juicefs))
         print('start format')
         options = [juicefs, 'format',  meta_url, JuicefsMachine.VOLUME_NAME]
         if not self.formatted:
@@ -185,6 +186,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted )
     def status(self, juicefs):
+        assume (self.is_supported_version(juicefs))
         print('start status')
         output = self.exec_check_output([juicefs, 'status', self.meta_url])
         uuid = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['UUID']
@@ -197,7 +199,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted )
     def mount(self, juicefs):
-        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
+        assume (self.is_supported_version(juicefs))
         print('start mount')
         self.exec_check_call([juicefs, 'mount', '-d',  self.meta_url, JuicefsMachine.MOUNT_POINT])
         time.sleep(1)
@@ -208,7 +210,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     force=st.booleans())
     @precondition(lambda self: self.mounted)
     def umount(self, juicefs, force):
-        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
+        assume (self.is_supported_version(juicefs))
         print('start umount')
         options = [juicefs, 'umount', JuicefsMachine.MOUNT_POINT]
         if force:
@@ -220,7 +222,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted and not self.mounted)
     def destroy(self, juicefs):
-        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
+        assume (self.is_supported_version(juicefs))
         print('start destroy')
         output = self.exec_check_output([juicefs, 'status', self.meta_url])
         uuid = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['UUID']
@@ -248,7 +250,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs = st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted )
     def dump(self, juicefs):
-        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
+        assume (self.is_supported_version(juicefs))
         print('start dump')
         self.exec_check_call([juicefs, 'dump', self.meta_url, 'dump.json'])
         print('dump succeed')
@@ -256,7 +258,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs = st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted and os.path.exists('dump.json'))
     def load(self, juicefs):
-        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
+        assume (self.is_supported_version(juicefs))
         print('start load')
         self.flush_meta(self.meta_url)
         self.exec_check_call([juicefs, 'load', self.meta_url, 'dump.json'])
@@ -269,7 +271,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BIN))
     @precondition(lambda self: self.formatted)
     def fsck(self, juicefs):
-        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
+        assume (self.is_supported_version(juicefs))
         print('start fsck')
         self.exec_check_call([juicefs, 'fsck', self.meta_url])
         print('fsck succeed')
@@ -298,6 +300,7 @@ class JuicefsMachine(RuleBasedStateMachine):
      threads=st.integers(min_value=1, max_value=100))
     @precondition(lambda self: self.mounted and False)
     def bench(self, juicefs, block_size, big_file_size, small_file_size, small_file_count, threads):
+        assume (self.is_supported_version(juicefs))
         print('start bench')
         os.system(f'df | grep {JuicefsMachine.MOUNT_POINT}')
         options = [juicefs, 'bench', JuicefsMachine.MOUNT_POINT]
@@ -319,7 +322,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         directory = st.booleans() )
     @precondition(lambda self: self.mounted)
     def warmup(self, juicefs, threads, background, from_file, directory):
-        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
+        assume (self.is_supported_version(juicefs))
         print('start warmup')
         self.clear_cache()
         options = [juicefs, 'warmup']
@@ -354,7 +357,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         threads=st.integers(min_value=0, max_value=100) )
     @precondition(lambda self: self.formatted)
     def gc(self, juicefs, compact, delete, threads):
-        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
+        assume (self.is_supported_version(juicefs))
         print('start gc')
         options = [juicefs, 'gc', self.meta_url]
         if compact:
@@ -370,7 +373,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         port=st.integers(min_value=9001, max_value=10000))
     @precondition(lambda self: self.formatted)
     def gateway(self, juicefs, port):
-        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
+        assume (self.is_supported_version(juicefs))
         print('start gateway')
         if self.is_port_in_use(port):
             return
@@ -385,7 +388,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         port=st.integers(min_value=10001, max_value=11000)) 
     @precondition(lambda self: self.formatted )
     def webdav(self, juicefs, port):
-        assume (version.parse(juicefs) >=  version.parse(self.formatted_by))
+        assume (self.is_supported_version(juicefs))
         print('start webdav')
         if self.is_port_in_use(port):
             return 
@@ -398,6 +401,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         import socket
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             return s.connect_ex(('localhost', port)) == 0
+
+    def is_supported_version(self, ver):
+        return version.parse('-'.join(ver.split('-')[1:])) >=  version.parse('-'.join(self.formatted_by.split('-')[1:]))
 
 TestJuiceFS = JuicefsMachine.TestCase
 

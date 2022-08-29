@@ -56,6 +56,8 @@ jobs:
       - name: Make Juicefs
         run: | 
           make juicefs
+          version=`./juicefs version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          mv juicefs juicefs-$version
 
       - name: Setup minio
         run: |
@@ -89,8 +91,10 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: | 
-          tail -500 ~/.juicefs/juicefs.log
-          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          if [ -f "~/.juicefs/juicefs.log" ]; then
+            tail -500 ~/.juicefs/juicefs.log
+            grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          fi
 
       - name: Setup upterm session
         if: ${{ failure() }}
