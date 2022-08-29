@@ -17,6 +17,7 @@ package io.juicefs;
 
 import com.kenai.jffi.internal.StubLoader;
 import io.juicefs.metrics.JuiceFSInstrumentation;
+import io.juicefs.utils.BufferPool;
 import io.juicefs.utils.ConsistentHash;
 import io.juicefs.utils.NodesFetcher;
 import io.juicefs.utils.NodesFetcherBuilder;
@@ -732,7 +733,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     public FileInputStream(Path f, int fd, int size) throws IOException {
       path = f;
       this.fd = fd;
-      buf = ByteBuffer.allocate(size);
+      buf = BufferPool.getBuffer(size);
       buf.limit(0);
       position = 0;
     }
@@ -885,6 +886,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (buf == null) {
         return; // already closed
       }
+      BufferPool.returnBuffer(buf);
       buf = null;
       int r = lib.jfs_close(Thread.currentThread().getId(), fd);
       fd = 0;
