@@ -80,7 +80,7 @@ jobs:
       - name: Test
         run: |
           export OLD_JFS_BIN=./juicefs-1.0.0-rc1
-          export NEW_JFS_BIN=./juicefs-1.0.0-dev 
+          export NEW_JFS_BIN=./juicefs-1.1.0-dev 
           python3 .github/scripts/testVersionCompatible.py
           
       - name: Display log
@@ -172,7 +172,7 @@ jobs:
       - name: Test
         run: | 
           export OLD_JFS_BIN=./juicefs-1.0.0-beta1
-          export NEW_JFS_BIN=./juicefs-1.0.0-dev 
+          export NEW_JFS_BIN=./juicefs-1.1.0-dev 
           python3 .github/scripts/testVersionCompatible.py
           
       - name: Display log
