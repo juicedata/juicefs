@@ -14,8 +14,9 @@ from minio import Minio
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
-    JFS_BIN = ['./juicefs-1.0.0-beta1', './juicefs-1.0.0-beta2', './juicefs-1.0.0-beta3', './juicefs-1.0.0-rc1', './juicefs-1.0.0-rc2','./juicefs-1.0.0-rc3','./juicefs']
-    JFS_BIN = ['./juicefs-1.0.0-rc2',  './juicefs-1.1.0-dev']
+    # JFS_BIN = ['./juicefs-1.0.0-beta1', './juicefs-1.0.0-beta2', './juicefs-1.0.0-beta3', './juicefs-1.0.0-rc1', './juicefs-1.0.0-rc2','./juicefs-1.0.0-rc3','./juicefs']
+    JFS_BINS = [os.environ.get('OLD_JFS_BIN'), os.environ.get('NEW_JFS_BIN')]
+    # JFS_BIN = ['./juicefs-1.0.0-rc2',  './juicefs-1.1.0-dev']
     META_URLS = ['redis://localhost/1']
     STORAGES = ['minio']
     # META_URL = 'badger://abc.db'
@@ -74,7 +75,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             os.system('sudo bash -c  "echo 3> /proc/sys/vm/drop_caches"')
 
     @rule(
-        juicefs=st.sampled_from(JFS_BIN),
+        juicefs=st.sampled_from(JFS_BINS),
         capacity=st.integers(min_value=0, max_value=1024), 
         inodes=st.integers(min_value=1024*1024, max_value=1024*1024*1024),
         change_bucket=st.booleans(), 
@@ -122,7 +123,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('config succeed')
 
     @rule(
-          juicefs=st.sampled_from(JFS_BIN),
+          juicefs=st.sampled_from(JFS_BINS),
           block_size=st.integers(min_value=1, max_value=4096*10), 
           capacity=st.integers(min_value=0, max_value=1024),
           inodes=st.integers(min_value=1024*1024, max_value=1024*1024*1024),
@@ -185,7 +186,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.formatted_by = juicefs
         print('format succeed')
 
-    @rule(juicefs=st.sampled_from(JFS_BIN))
+    @rule(juicefs=st.sampled_from(JFS_BINS))
     @precondition(lambda self: self.formatted )
     def status(self, juicefs):
         assume (self.is_supported_version(juicefs))
@@ -198,7 +199,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             assert len(sessions) != 0 
         print('status succeed')
 
-    @rule(juicefs=st.sampled_from(JFS_BIN))
+    @rule(juicefs=st.sampled_from(JFS_BINS))
     @precondition(lambda self: self.formatted )
     def mount(self, juicefs):
         assume (self.is_supported_version(juicefs))
@@ -208,7 +209,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.mounted = True
         print('mount succeed')
 
-    @rule(juicefs=st.sampled_from(JFS_BIN), 
+    @rule(juicefs=st.sampled_from(JFS_BINS), 
     force=st.booleans())
     @precondition(lambda self: self.mounted)
     def umount(self, juicefs, force):
@@ -221,7 +222,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.mounted = False
         print('umount succeed')
 
-    @rule(juicefs=st.sampled_from(JFS_BIN))
+    @rule(juicefs=st.sampled_from(JFS_BINS))
     @precondition(lambda self: self.formatted and not self.mounted)
     def destroy(self, juicefs):
         assume (self.is_supported_version(juicefs))
@@ -249,7 +250,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assert str(result) == str(data)
         print('write and read succeed')
 
-    @rule(juicefs = st.sampled_from(JFS_BIN))
+    @rule(juicefs = st.sampled_from(JFS_BINS))
     @precondition(lambda self: self.formatted )
     def dump(self, juicefs):
         assume (self.is_supported_version(juicefs))
@@ -257,7 +258,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.exec_check_call([juicefs, 'dump', self.meta_url, 'dump.json'])
         print('dump succeed')
 
-    @rule(juicefs = st.sampled_from(JFS_BIN))
+    @rule(juicefs = st.sampled_from(JFS_BINS))
     @precondition(lambda self: self.formatted and os.path.exists('dump.json'))
     def load(self, juicefs):
         assume (self.is_supported_version(juicefs))
@@ -270,7 +271,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.exec_check_call(options)
         os.remove('dump.json')
 
-    @rule(juicefs=st.sampled_from(JFS_BIN))
+    @rule(juicefs=st.sampled_from(JFS_BINS))
     @precondition(lambda self: self.formatted)
     def fsck(self, juicefs):
         assume (self.is_supported_version(juicefs))
@@ -294,7 +295,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('exec succeed')
         return output
 
-    @rule(juicefs=st.sampled_from(JFS_BIN),
+    @rule(juicefs=st.sampled_from(JFS_BINS),
      block_size=st.integers(min_value=1, max_value=32),
      big_file_size=st.integers(min_value=100, max_value=200),
      small_file_size=st.integers(min_value=1, max_value=256),
@@ -317,7 +318,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assert summary == expected
         print('bench succeed')
 
-    @rule(juicefs=st.sampled_from(JFS_BIN),
+    @rule(juicefs=st.sampled_from(JFS_BINS),
         threads=st.integers(min_value=1, max_value=100), 
         background = st.booleans(), 
         from_file = st.booleans(),
@@ -354,7 +355,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         # assert output.decode('utf8').split('\n')[0].startswith('Warming up bytes: ')
 
     @rule(
-        juicefs = st.sampled_from(JFS_BIN), 
+        juicefs = st.sampled_from(JFS_BINS), 
         compact=st.booleans(), 
         delete=st.booleans(),
         threads=st.integers(min_value=0, max_value=100) )
@@ -372,7 +373,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print(output)
         print('gc succeed')
 
-    @rule(juicefs = st.sampled_from(JFS_BIN),
+    @rule(juicefs = st.sampled_from(JFS_BINS),
         port=st.integers(min_value=9001, max_value=10000))
     @precondition(lambda self: self.formatted)
     def gateway(self, juicefs, port):
@@ -387,7 +388,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         time.sleep(2.0)
         subprocess.Popen.kill(proc)
         print('gateway succeed')
-    @rule(juicefs = st.sampled_from(JFS_BIN), 
+    @rule(juicefs = st.sampled_from(JFS_BINS), 
         port=st.integers(min_value=10001, max_value=11000)) 
     @precondition(lambda self: self.formatted )
     def webdav(self, juicefs, port):
