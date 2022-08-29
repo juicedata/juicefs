@@ -15,7 +15,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
     JFS_BIN = ['./juicefs-1.0.0-beta1', './juicefs-1.0.0-beta2', './juicefs-1.0.0-beta3', './juicefs-1.0.0-rc1', './juicefs-1.0.0-rc2','./juicefs-1.0.0-rc3','./juicefs']
-    JFS_BIN = ['./juicefs-1.0.0-rc1',  './juicefs-1.1.0-dev']
+    JFS_BIN = ['./juicefs-1.0.0-rc2',  './juicefs-1.1.0-dev']
     META_URLS = ['redis://localhost/1']
     STORAGES = ['minio']
     # META_URL = 'badger://abc.db'
@@ -335,7 +335,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             path_list = [JuicefsMachine.MOUNT_POINT+'file1', JuicefsMachine.MOUNT_POINT+'file2', JuicefsMachine.MOUNT_POINT+'file3']
             for filepath in path_list:
                 if not os.path.exists(filepath):
-                    os.system(f'dd if=/dev/urandom of={filepath} bs=1048576 count=129')
+                    os.system(f'dd if=/dev/urandom of={filepath} bs=1048576 count=65')
             with open('file.list', 'w') as f:
                 for path in path_list:
                     f.write(path+'\n')
@@ -344,7 +344,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             if directory:
                 options.append(JuicefsMachine.MOUNT_POINT)
             else:
-                os.system(f'dd if=/dev/urandom of={JuicefsMachine.MOUNT_POINT}/bigfile bs=1048576 count=1024')
+                os.system(f'dd if=/dev/urandom of={JuicefsMachine.MOUNT_POINT}/bigfile bs=1048576 count=512')
                 options.append(JuicefsMachine.MOUNT_POINT+'/bigfile')
                 
         output = self.exec_check_output(options)
