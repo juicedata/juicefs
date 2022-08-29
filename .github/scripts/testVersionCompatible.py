@@ -280,18 +280,18 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('fsck succeed')
 
     def exec_check_call(self, options):
-        options.append('--debug')
+        # options.append('--debug')
         print('exec:'+' '.join(options))
-        result = subprocess.check_call(options)
-        # result = subprocess.check_call(options, stdout=sys.stdout, stderr=sys.stdout)
+        # result = subprocess.check_call(options)
+        result = subprocess.check_call(options, stdout=sys.stderr, stderr=sys.stderr)
         print('exec succeed')
         return result
 
     def exec_check_output(self, options):
         options.append('--debug')
         print('exec:'+' '.join(options))
-        output = subprocess.check_output(options)
-        # output = subprocess.check_output(options, stderr=sys.stdout)
+        # output = subprocess.check_output(options)
+        output = subprocess.check_output(options, stdout=sys.stderr, stderr=sys.stderr)
         print('exec succeed')
         return output
 
