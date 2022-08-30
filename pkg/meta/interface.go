@@ -75,12 +75,6 @@ const (
 	SetAttrCtime
 	SetAttrAtimeNow
 	SetAttrMtimeNow
-	SetAttrFlag = 1 << 15
-)
-
-const (
-	FlagImmutable = 1 << iota
-	FlagAppend
 )
 
 const MaxName = 255
@@ -105,7 +99,7 @@ type MsgCallback func(...interface{}) error
 
 // Attr represents attributes of a node.
 type Attr struct {
-	Flags     uint8  // flags
+	Flags     uint8  // reserved flags
 	Typ       uint8  // type of a node
 	Mode      uint16 // permission mode
 	Uid       uint32 // owner id
