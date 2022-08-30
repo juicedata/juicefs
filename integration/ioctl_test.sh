@@ -59,7 +59,7 @@ trap cleanup INT EXIT
 {
   touch "$a_test_dir"/afile
   sudo chattr "+a" "$a_test_dir"/afile
-#  exec_should_success_cmd '[ "$(lsattr "$a_test_dir/afile")" == "-----a---------- $a_test_dir/afile" ]'
+  exec_should_success_cmd '[[ "$(lsattr $a_test_dir/afile | awk -F " " "{print \$1}")" =~ "a" ]]'
   exec_should_failed_cmd "echo aa > $a_test_dir/afile"
   exec_should_failed_cmd "rm -rf $a_test_dir/afile"
   touch "$a_test_dir/tmpfile"
@@ -77,7 +77,7 @@ trap cleanup INT EXIT
   mkdir -p "$a_test_dir"/adir/child_dir1/child_dir2
   touch "$a_test_dir"/adir/file
   sudo chattr "+a" "$a_test_dir"/adir
-#  exec_should_success_cmd '[ "$(lsattr -d "$a_test_dir/adir")" == "-----a---------- $a_test_dir/adir" ]'
+  exec_should_success_cmd '[[ "$(lsattr -d $a_test_dir/adir | awk -F " " "{print \$1}")" =~ "a" ]]'
   exec_should_failed_cmd 'rm -rf $a_test_dir/adir'
   exec_should_failed_cmd 'rm -rf $a_test_dir/adir/file'
   exec_should_success_cmd 'touch "$a_test_dir"/adir/child_dir1/child_file'
@@ -105,7 +105,7 @@ mkdir "$i_test_dir"
   touch "$i_test_dir"/ifile
   echo "12345" >> "$i_test_dir"/ifile
   sudo chattr "+i" "$i_test_dir"/ifile
-#  exec_should_success_cmd '[ "$(lsattr "$i_test_dir/ifile")" == "----i----------- $i_test_dir/ifile" ]'
+  exec_should_success_cmd '[[ "$(lsattr $i_test_dir/ifile | awk -F " " "{print \$1}")" =~ "i" ]]'
   exec_should_success_cmd '[ "$(cat "$a_test_dir"/afile)" == "12345" ]'
 
   exec_should_failed_cmd "echo aa > $i_test_dir/ifile"
@@ -125,7 +125,7 @@ mkdir "$i_test_dir"
   touch "$i_test_dir"/idir/file
 
   sudo chattr "+i" "$i_test_dir"/idir
-#  exec_should_success_cmd '[ "$(lsattr -d "$i_test_dir/idir")" == "----i----------- $i_test_dir/idir" ]'
+  exec_should_success_cmd '[[ "$(lsattr -d $i_test_dir/idir | awk -F " " "{print \$1}")" =~ "i" ]]'
   exec_should_success_cmd 'touch "$i_test_dir"/idir/child_dir1/child_file'
   exec_should_success_cmd 'rm -rf $i_test_dir/idir/child_dir1/child_dir2'
   exec_should_success_cmd 'rm -rf $i_test_dir/idir/child_dir1/child_file'
