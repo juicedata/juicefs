@@ -19,7 +19,7 @@ JuiceFS Hadoop Java SDK is compatible with Hadoop 2.x and Hadoop 3.x. As well as
 
 ### 2. User permissions
 
-JuiceFS use local mapping of `user` and `UID`. So, you should [sync all the needed users and their UIDs](../administration/sync_accounts_between_multiple_hosts.md) across the whole Hadoop cluster to avoid permission error. You can also specify a global user list and user group file, please refer to the [relevant configurations](#other-configurations).
+JuiceFS uses local "User/UID" and "Group/GID" mappings by default, and when used in a distributed environment, to avoid permission issues, please refer to [documentation](../administration/sync_accounts_between_multiple_hosts.md) synchronizes the "User/UID" and "Group/GID" that needs to be used to all Hadoop nodes. It is also possible to define a global user and group file to make all nodes in the cluster share the permission configuration. Please see [here](#other-configurations) for related configurations.
 
 ### 3. File system
 
@@ -744,3 +744,21 @@ Some Hadoop distribution also need to modify `mapred-site.xml` and put the JAR f
 ### 2. `No FilesSystem for scheme: jfs` exception
 
 It means JuiceFS Hadoop Java SDK was not configured properly, you need to check whether there is JuiceFS related configuration in the `core-site.xml` of the component configuration.
+
+### 3. What are the similarities and differences between user permission management in JuiceFS and HDFS?
+
+JuiceFS also uses the "User/Group" method to manage file permissions, using local users and groups by default. In order to ensure the unified permissions of different nodes during distributed computing, you can configure global "User/UID" and "Group/GID" mappings through `juicefs.users` and `juicefs.groups` configurations.
+
+### 4. After the data is deleted, it is directly stored in the `.trash` directory of JuiceFS. Although the files are all there, it is difficult to restore the data through the `mv` command as easily as HDFS. Is there any way to achieve a similar effect of HDFS trash?
+
+In the Hadoop application scenario, the functions similar to the HDFS trash are still retained. It needs to be explicitly enabled by `fs.trash.interval` and `fs.trash.checkpoint.interval` configurations, please refer to [document](#trash) for more information.
+
+### 5. What are the benefits of setting the `juicefs.discover-nodes-url` configuration?
+
+In HDFS, each data block will have [`BlockLocation`](https://hadoop.apache.org/docs/current/api/org/apache/hadoop/fs/BlockLocation.html) information, which the computing engine uses to schedule the computing tasks as much as possible to the nodes where the data is stored. JuiceFS will calculate the corresponding `BlockLocation` for each data block through the consistent hashing algorithm, so that when the same data is read for the second time, the computing engine may schedule the computing task to the same node, and the data cached on the local disk during the first computing can be used to accelerate data access.
+
+This algorithm needs to know all the computing node information in advance. The `juicefs.discover-nodes-url` configuration is used to obtain these computing node information.
+
+### 6. Does the community version of JuiceFS currently support a Kerberos-authenticated CDH cluster?
+
+Not supported. JuiceFS does not verify the validity of Kerberos users, but can use Kerberos-authenticated username.
