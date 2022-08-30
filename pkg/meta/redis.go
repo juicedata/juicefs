@@ -1233,26 +1233,28 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 		if err := tx.Watch(ctx, m.inodeKey(inode)).Err(); err != nil {
 			return err
 		}
-		rs, _ := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
-		if rs[0] == nil {
-			return redis.Nil
-		}
+
 		var pattr Attr
-		m.parseAttr([]byte(rs[0].(string)), &pattr)
-		if pattr.Typ != TypeDirectory {
-			return syscall.ENOTDIR
-		}
-		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
-			return syscall.EPERM
-		}
 		var updateParent bool
+		rs, _ := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
 		now := time.Now()
-		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
-			pattr.Mtime = now.Unix()
-			pattr.Mtimensec = uint32(now.Nanosecond())
-			pattr.Ctime = now.Unix()
-			pattr.Ctimensec = uint32(now.Nanosecond())
-			updateParent = true
+		if rs[0] != nil {
+			m.parseAttr([]byte(rs[0].(string)), &pattr)
+			if pattr.Typ != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+			if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+				return syscall.EPERM
+			}
+			if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+				pattr.Mtime = now.Unix()
+				pattr.Mtimensec = uint32(now.Nanosecond())
+				pattr.Ctime = now.Unix()
+				pattr.Ctimensec = uint32(now.Nanosecond())
+				updateParent = true
+			}
+		} else {
+			logger.Warnf("No attribute for parent inode %d", parent)
 		}
 		if rs[1] != nil {
 			m.parseAttr([]byte(rs[1].(string)), &attr)
@@ -1359,25 +1361,29 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 			return err
 		}
 
-		rs, _ := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
-		if rs[0] == nil {
-			return redis.Nil
-		}
 		var pattr, attr Attr
-		m.parseAttr([]byte(rs[0].(string)), &pattr)
-		if pattr.Typ != TypeDirectory {
-			return syscall.ENOTDIR
-		}
-		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
-			return syscall.EPERM
-		}
+		var updateParent bool
+		rs, _ := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
 		now := time.Now()
-		pattr.Nlink--
-		pattr.Mtime = now.Unix()
-		pattr.Mtimensec = uint32(now.Nanosecond())
-		pattr.Ctime = now.Unix()
-		pattr.Ctimensec = uint32(now.Nanosecond())
-
+		if rs[0] != nil {
+			m.parseAttr([]byte(rs[0].(string)), &pattr)
+			if pattr.Typ != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+			if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
+				return syscall.EPERM
+			}
+			if !isTrash(parent) {
+				pattr.Nlink--
+				pattr.Mtime = now.Unix()
+				pattr.Mtimensec = uint32(now.Nanosecond())
+				pattr.Ctime = now.Unix()
+				pattr.Ctimensec = uint32(now.Nanosecond())
+				updateParent = true
+			}
+		} else {
+			logger.Warnf("No attribute for parent inode %d", parent)
+		}
 		cnt, err := tx.HLen(ctx, m.entryKey(inode)).Result()
 		if err != nil {
 			return err
@@ -1402,7 +1408,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HDel(ctx, m.entryKey(parent), name)
-			if !isTrash(parent) {
+			if updateParent {
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
 			if trash > 0 {
@@ -1491,13 +1497,17 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			keys = append(keys, m.inodeKey(dino))
 		}
 		rs, _ := tx.MGet(ctx, keys...).Result()
-		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
+		if rs[1] == nil || rs[2] == nil {
 			return redis.Nil
 		}
 		var sattr, dattr, iattr Attr
-		m.parseAttr([]byte(rs[0].(string)), &sattr)
-		if sattr.Typ != TypeDirectory {
-			return syscall.ENOTDIR
+		if rs[0] != nil {
+			m.parseAttr([]byte(rs[0].(string)), &sattr)
+			if sattr.Typ != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+		} else {
+			logger.Warnf("No attribute for parent inode %d", parentSrc)
 		}
 		m.parseAttr([]byte(rs[1].(string)), &dattr)
 		if dattr.Typ != TypeDirectory {
@@ -1580,7 +1590,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				iattr.Parent = parentDst
 			}
 		}
-		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime {
+		if rs[0] == nil {
+			supdate = false
+		} else if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime {
 			sattr.Mtime = now.Unix()
 			sattr.Mtimensec = uint32(now.Nanosecond())
 			sattr.Ctime = now.Unix()
