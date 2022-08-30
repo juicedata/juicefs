@@ -452,7 +452,7 @@ func (v *VFS) ReleaseHandler(ino Ino, fh uint64) {
 
 func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 	var err syscall.Errno
-	defer func() { logit(ctx, "release (%d): %s", ino, strerr(err)) }()
+	defer func() { logit(ctx, "release (%d,%d): %s", ino, fh, strerr(err)) }()
 	if IsSpecialNode(ino) {
 		if ino == logInode {
 			closeAccessLog(fh)
@@ -730,7 +730,7 @@ func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err sysc
 		fh = v.getControlHandle(ctx.Pid())
 		defer v.releaseControlHandle(ctx.Pid())
 	}
-	defer func() { logit(ctx, "flush (%d,%d): %s", ino, fh, strerr(err)) }()
+	defer func() { logit(ctx, "flush (%d,%d,%016X): %s", ino, fh, lockOwner, strerr(err)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
