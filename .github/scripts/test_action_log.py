@@ -84,7 +84,9 @@ def testLog2():
             print(f'remove cache dir {storage_dir} succeed')
         except OSError as e:
             print("Error: %s : %s" % (storage_dir, e.strerror))
-    os.system('redis-cli flushall')
+    output = subprocess.check_output('redis-cli flushall'.split())
+    print(output.decode())
+
     print('start format')
     # os.system('./juicefs-1.0.0-dev version')
     options = ['./juicefs-1.0.0', 'format', 'redis://localhost/1', 'test']
