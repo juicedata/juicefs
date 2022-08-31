@@ -64,14 +64,15 @@ class JuicefsMachine(RuleBasedStateMachine):
 TestJuiceFS = JuicefsMachine.TestCase
 
 def testLog():
-    print('start status')
+    print('start status\n')
     # os.system('./juicefs-1.0.0-dev version')
     options = ['./juicefs-1.0.0', 'status', 'redis://localhost/1']
     output = subprocess.check_call(['date'])
-    print('status succeed1')
+
+    print('status succeed1\n')
     output = subprocess.check_output(['date', '-R'])
     print(output)
-    print('status succeed2')
+    print('status succeed2\n')
 
 if __name__ == "__main__":
     for i in range(4):
