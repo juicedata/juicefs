@@ -95,7 +95,7 @@ jobs:
         run: |
           export OLD_JFS_BIN=./juicefs-1.0.0-rc1
           export NEW_JFS_BIN=./juicefs-1.1.0-dev 
-          python3 test_action_log.py
+          python3 .github/scripts/test_action_log.py
           # python3 .github/scripts/testVersionCompatible.py
           
       - name: Display log
