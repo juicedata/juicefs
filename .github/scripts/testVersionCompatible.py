@@ -362,7 +362,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         juicefs = st.sampled_from(JFS_BINS), 
         compact=st.booleans(), 
         delete=st.booleans(),
-        threads=st.integers(min_value=0, max_value=100) )
+        threads=st.integers(min_value=1, max_value=100) )
     @precondition(lambda self: self.formatted)
     def gc(self, juicefs, compact, delete, threads):
         assume (self.is_supported_version(juicefs))
