@@ -283,8 +283,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         # options.append('--debug')
         print('exec:'+' '.join(options))
         # result = subprocess.check_call(options)
-        result = subprocess.check_call(options, bufsize=1)
-        # result = os.system(' '.join(options))
+        result = subprocess.run(options, check=True, capture_output=True)
+        print(result.stdout.decode())
         print('exec succeed')
         return result
 
