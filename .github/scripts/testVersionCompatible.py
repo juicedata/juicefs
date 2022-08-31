@@ -294,7 +294,11 @@ class JuicefsMachine(RuleBasedStateMachine):
     def run(self, options):
         options.append('--debug')
         print('run:'+' '.join(options))
-        output = subprocess.run(options, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        try:
+            output = subprocess.run(options, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError as e:
+            print(e.output)
+            raise 
         print(output.stdout.decode())
         print('run succeed')
         return output.stdout.decode()
