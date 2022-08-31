@@ -12,8 +12,8 @@ from packaging import version
 from minio import Minio
 
 # JFS_BIN = ['./juicefs-1.0.0-beta1', './juicefs-1.0.0-beta2', './juicefs-1.0.0-beta3', './juicefs-1.0.0-rc1', './juicefs-1.0.0-rc2','./juicefs-1.0.0-rc3','./juicefs']
-JFS_BIN = [os.environ.get('OLD_JFS_BIN'), os.environ.get('NEW_JFS_BIN')]
-# JFS_BIN = ['./juicefs-1.0.0-rc1', './juicefs-1.1.0-dev'
+# JFS_BIN = [os.environ.get('OLD_JFS_BIN'), os.environ.get('NEW_JFS_BIN')]
+JFS_BIN = ['./juicefs-1.0.0-rc1', './juicefs-1.1.0-dev']
 
 
 class JuicefsMachine(RuleBasedStateMachine):
@@ -46,7 +46,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         os.system(f'{juicefs} version')
         options = [juicefs, 'format',  meta_url, JuicefsMachine.VOLUME_NAME]
         print(f'format options: {" ".join(options)}' )
-        subprocess.check_call(['ls', '-l'])
+        subprocess.check_call(['ls'])
         self.meta_url = meta_url
         self.formatted = True
         self.formatted_by = juicefs
@@ -58,7 +58,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('start status')
         os.system(f'{juicefs} version')
         options =[juicefs, 'status', self.meta_url]
-        output = subprocess.check_call(['ls', '-l'])
+        output = subprocess.check_call(['date'])
         
         print('status succeed')
 
