@@ -29,7 +29,7 @@ function cleanup() {
     fi
     trap - EXIT
     sudo chattr -R "=" "$test_dir"
-    rm -rf "$test_dir"
+#    rm -rf "$test_dir"
     exit $code
 }
 
@@ -54,7 +54,7 @@ sudo chattr -R "=" "${test_dir:?}"
 sudo rm -rf "${test_dir:?}"/*
 mkdir "$a_test_dir"
 
-#trap cleanup INT EXIT
+trap cleanup INT EXIT
 
 {
   touch "$a_test_dir"/afile
