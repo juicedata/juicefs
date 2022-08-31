@@ -33,7 +33,7 @@ function cleanup() {
     exit $code
 }
 
-function exec_should_failed_cmd() {
+function exec_should_failed() {
   eval "$1"
   if [ $? -eq 0 ]; then
       echo "$1 should fail"
@@ -41,7 +41,7 @@ function exec_should_failed_cmd() {
   fi
 }
 
-function exec_should_success_cmd() {
+function exec_should_success() {
   eval "$1"
   if [ $? -ne 0 ]; then
       echo "$1 should success"
@@ -59,40 +59,40 @@ trap cleanup INT EXIT
 {
   touch "$a_test_dir"/afile
   sudo chattr "+a" "$a_test_dir"/afile
-  exec_should_success_cmd '[[ "$(lsattr $a_test_dir/afile | awk -F " " "{print \$1}")" =~ "a" ]]'
-  exec_should_failed_cmd "echo aa > $a_test_dir/afile"
-  exec_should_failed_cmd "rm -rf $a_test_dir/afile"
+  exec_should_success '[[ "$(lsattr $a_test_dir/afile | awk -F " " "{print \$1}")" =~ "a" ]]'
+  exec_should_failed "echo aa > $a_test_dir/afile"
+  exec_should_failed "rm -rf $a_test_dir/afile"
   touch "$a_test_dir/tmpfile"
-  exec_should_failed_cmd "mv -f $a_test_dir/tmpfile $a_test_dir/afile"
-  exec_should_failed_cmd "mv -f $a_test_dir/afile $a_test_dir/tmpfile"
-  exec_should_failed_cmd "ln afile $a_test_dir/linkfile"
+  exec_should_failed "mv -f $a_test_dir/tmpfile $a_test_dir/afile"
+  exec_should_failed "mv -f $a_test_dir/afile $a_test_dir/tmpfile"
+  exec_should_failed "ln afile $a_test_dir/linkfile"
   echo "12345" >> "$a_test_dir"/afile
-  exec_should_success_cmd '[ "$(cat "$a_test_dir"/afile)" == "12345" ]'
+  exec_should_success '[ "$(cat "$a_test_dir"/afile)" == "12345" ]'
   touch "$a_test_dir"/fallocatefile
   sudo chattr "+a" "$a_test_dir"/fallocatefile
-  exec_should_failed_cmd 'fallocate -l 1k -n $a_test_dir/fallocatefile'
+  exec_should_failed 'fallocate -l 1k -n $a_test_dir/fallocatefile'
 }
 
 {
   mkdir -p "$a_test_dir"/adir/child_dir1/child_dir2
   touch "$a_test_dir"/adir/file
   sudo chattr "+a" "$a_test_dir"/adir
-  exec_should_success_cmd '[[ "$(lsattr -d $a_test_dir/adir | awk -F " " "{print \$1}")" =~ "a" ]]'
-  exec_should_failed_cmd 'rm -rf $a_test_dir/adir'
-  exec_should_failed_cmd 'rm -rf $a_test_dir/adir/file'
-  exec_should_success_cmd 'touch "$a_test_dir"/adir/child_dir1/child_file'
-  exec_should_success_cmd 'rm -rf $a_test_dir/adir/child_dir1/child_dir2'
-  exec_should_success_cmd 'rm -rf $a_test_dir/adir/child_dir1/child_file'
-  exec_should_failed_cmd 'rm -rf $a_test_dir/adir/child_dir1'
+  exec_should_success '[[ "$(lsattr -d $a_test_dir/adir | awk -F " " "{print \$1}")" =~ "a" ]]'
+  exec_should_failed 'rm -rf $a_test_dir/adir'
+  exec_should_failed 'rm -rf $a_test_dir/adir/file'
+  exec_should_success 'touch "$a_test_dir"/adir/child_dir1/child_file'
+  exec_should_success 'rm -rf $a_test_dir/adir/child_dir1/child_dir2'
+  exec_should_success 'rm -rf $a_test_dir/adir/child_dir1/child_file'
+  exec_should_failed 'rm -rf $a_test_dir/adir/child_dir1'
 
-  exec_should_success_cmd 'touch $a_test_dir/adir/tmpfile'
-  exec_should_success_cmd 'echo 123 > $a_test_dir/adir/tmpfile'
-  exec_should_success_cmd 'echo 123 >> $a_test_dir/adir/tmpfile'
+  exec_should_success 'touch $a_test_dir/adir/tmpfile'
+  exec_should_success 'echo 123 > $a_test_dir/adir/tmpfile'
+  exec_should_success 'echo 123 >> $a_test_dir/adir/tmpfile'
 
-  exec_should_failed_cmd 'mv -f $a_test_dir/adir/tmpfile $a_test_dir/adir/file'
-  exec_should_failed_cmd 'mv -f $a_test_dir/adir/file $a_test_dir/adir/tmpfile'
+  exec_should_failed 'mv -f $a_test_dir/adir/tmpfile $a_test_dir/adir/file'
+  exec_should_failed 'mv -f $a_test_dir/adir/file $a_test_dir/adir/tmpfile'
   touch "$a_test_dir"/tfile
-  exec_should_success_cmd 'mv -f $a_test_dir/tfile $a_test_dir/adir/file2'
+  exec_should_success 'mv -f $a_test_dir/tfile $a_test_dir/adir/file2'
 }
 
 
@@ -105,19 +105,19 @@ mkdir "$i_test_dir"
   touch "$i_test_dir"/ifile
   echo "12345" >> "$i_test_dir"/ifile
   sudo chattr "+i" "$i_test_dir"/ifile
-  exec_should_success_cmd '[[ "$(lsattr $i_test_dir/ifile | awk -F " " "{print \$1}")" =~ "i" ]]'
-  exec_should_success_cmd '[ "$(cat "$a_test_dir"/afile)" == "12345" ]'
+  exec_should_success '[[ "$(lsattr $i_test_dir/ifile | awk -F " " "{print \$1}")" =~ "i" ]]'
+  exec_should_success '[ "$(cat "$a_test_dir"/afile)" == "12345" ]'
 
-  exec_should_failed_cmd "echo aa > $i_test_dir/ifile"
-  exec_should_failed_cmd "echo aa >> $i_test_dir/ifile"
-  exec_should_failed_cmd "rm -rf $i_test_dir/ifile"
+  exec_should_failed "echo aa > $i_test_dir/ifile"
+  exec_should_failed "echo aa >> $i_test_dir/ifile"
+  exec_should_failed "rm -rf $i_test_dir/ifile"
   touch "$i_test_dir/tmpfile"
-  exec_should_failed_cmd "mv -f $i_test_dir/tmpfile $i_test_dir/ifile"
-  exec_should_failed_cmd "mv -f $i_test_dir/ifile $a_test_dir/tmpfile"
-  exec_should_failed_cmd "ln ifile $i_test_dir/linkfile"
+  exec_should_failed "mv -f $i_test_dir/tmpfile $i_test_dir/ifile"
+  exec_should_failed "mv -f $i_test_dir/ifile $a_test_dir/tmpfile"
+  exec_should_failed "ln ifile $i_test_dir/linkfile"
   touch "$i_test_dir"/fallocatefile
   sudo chattr "+i" "$i_test_dir"/fallocatefile
-  exec_should_failed_cmd 'fallocate -l 1k -n $i_test_dir/fallocatefile'
+  exec_should_failed 'fallocate -l 1k -n $i_test_dir/fallocatefile'
 }
 
 {
@@ -125,20 +125,20 @@ mkdir "$i_test_dir"
   touch "$i_test_dir"/idir/file
 
   sudo chattr "+i" "$i_test_dir"/idir
-  exec_should_success_cmd '[[ "$(lsattr -d $i_test_dir/idir | awk -F " " "{print \$1}")" =~ "i" ]]'
-  exec_should_success_cmd 'touch "$i_test_dir"/idir/child_dir1/child_file'
-  exec_should_success_cmd 'rm -rf $i_test_dir/idir/child_dir1/child_dir2'
-  exec_should_success_cmd 'rm -rf $i_test_dir/idir/child_dir1/child_file'
-  exec_should_failed_cmd 'rm -rf $i_test_dir/idir'
-  exec_should_failed_cmd 'rm -rf $i_test_dir/idir/file'
-  exec_should_failed_cmd 'rm -rf $i_test_dir/idir/child_dir1'
+  exec_should_success '[[ "$(lsattr -d $i_test_dir/idir | awk -F " " "{print \$1}")" =~ "i" ]]'
+  exec_should_success 'touch "$i_test_dir"/idir/child_dir1/child_file'
+  exec_should_success 'rm -rf $i_test_dir/idir/child_dir1/child_dir2'
+  exec_should_success 'rm -rf $i_test_dir/idir/child_dir1/child_file'
+  exec_should_failed 'rm -rf $i_test_dir/idir'
+  exec_should_failed 'rm -rf $i_test_dir/idir/file'
+  exec_should_failed 'rm -rf $i_test_dir/idir/child_dir1'
 
-  exec_should_failed_cmd 'touch $i_test_dir/idir/tmpfile'
-  exec_should_success_cmd 'echo 123 > $i_test_dir/idir/file'
-  exec_should_success_cmd 'echo 123 >> $i_test_dir/idir/file'
+  exec_should_failed 'touch $i_test_dir/idir/tmpfile'
+  exec_should_success 'echo 123 > $i_test_dir/idir/file'
+  exec_should_success 'echo 123 >> $i_test_dir/idir/file'
 
-  exec_should_failed_cmd 'mv -f $i_test_dir/idir/tmpfile $i_test_dir/idir/file'
-  exec_should_failed_cmd 'mv -f $i_test_dir/idir/file $i_test_dir/idir/tmpfile'
+  exec_should_failed 'mv -f $i_test_dir/idir/tmpfile $i_test_dir/idir/file'
+  exec_should_failed 'mv -f $i_test_dir/idir/file $i_test_dir/idir/tmpfile'
   touch "$i_test_dir"/tfile
-  exec_should_failed_cmd 'mv -f $i_test_dir/tfile $i_test_dir/idir/file2'
+  exec_should_failed 'mv -f $i_test_dir/tfile $i_test_dir/idir/file2'
 }
