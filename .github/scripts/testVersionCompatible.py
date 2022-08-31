@@ -192,7 +192,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.is_supported_version(juicefs))
         print('start status')
         output = self.run([juicefs, 'status', self.meta_url])
-        uuid = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['UUID']
+        uuid = json.loads(output.replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
         if self.mounted:
             sessions = json.loads(output.decode('utf8').replace("'", '"'))['Sessions']
@@ -389,7 +389,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         time.sleep(2.0)
         subprocess.Popen.kill(proc)
         print('gateway succeed')
-        
+
     @rule(juicefs = st.sampled_from(JFS_BINS), 
         port=st.integers(min_value=10001, max_value=11000)) 
     @precondition(lambda self: self.formatted )
