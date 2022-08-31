@@ -63,7 +63,7 @@ class JuicefsMachine(RuleBasedStateMachine):
 
 TestJuiceFS = JuicefsMachine.TestCase
 
-def testLog():
+def testLog1():
     print('start status\n')
     # os.system('./juicefs-1.0.0-dev version')
     options = ['./juicefs-1.0.0', 'status', 'redis://localhost/1']
@@ -75,7 +75,35 @@ def testLog():
     print(output)
     print('status succeed2\n')
 
+def testLog2():
+    print('start testLog2---------------------')
+    storage_dir = os.path.expanduser('~/.juicefs/local/test')
+    if os.path.exists(storage_dir):
+        try:
+            shutil.rmtree(storage_dir)
+            print(f'remove cache dir {storage_dir} succeed')
+        except OSError as e:
+            print("Error: %s : %s" % (storage_dir, e.strerror))
+    os.system('redis-cli flushall')
+    print('start format')
+    # os.system('./juicefs-1.0.0-dev version')
+    options = ['./juicefs-1.0.0', 'format', 'redis://localhost/1', 'test']
+    #output = subprocess.run(options, check=True, capture_output=True)
+    # print(output.stdout.decode())
+    output = subprocess.check_output(options)
+    print(output.decode())
+
+    print('format  succeed1')
+
+    print('start status')
+    options = ['./juicefs-1.0.0', 'status', 'redis://localhost/1']
+    output = subprocess.check_output(options)
+    print(output.decode())
+    print('status succeed2')
+
 if __name__ == "__main__":
+    # for i in range(4):
+    #    testLog1()
     for i in range(4):
-        testLog()
+        testLog2()
     # unittest.main()
