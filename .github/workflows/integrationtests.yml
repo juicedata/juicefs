@@ -36,11 +36,19 @@ jobs:
         with:
           fetch-depth: 1
 
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
       - name: Build linux target
         run: |
           make juicefs
           cp juicefs /tmp/mount.juicefs
-
 
       - name: Run Redis
         run: |

@@ -204,7 +204,7 @@ func (l lockType) String() string {
 
 func (v *VFS) Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *uint64, typ *uint32, pid *uint32) (err syscall.Errno) {
 	defer func() {
-		logit(ctx, "getlk (%d,%016X): %s (%d,%d,%s,%d)", ino, owner, strerr(err), *start, *len, lockType(*typ), *pid)
+		logit(ctx, "getlk (%d,%d,%016X): %s (%d,%d,%s,%d)", ino, fh, owner, strerr(err), *start, *len, lockType(*typ), *pid)
 	}()
 	if lockType(*typ).String() == "X" {
 		return syscall.EINVAL
@@ -223,7 +223,7 @@ func (v *VFS) Getlk(ctx Context, ino Ino, fh uint64, owner uint64, start, len *u
 
 func (v *VFS) Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end uint64, typ uint32, pid uint32, block bool) (err syscall.Errno) {
 	defer func() {
-		logit(ctx, "setlk (%d,%016X,%d,%d,%s,%t,%d): %s", ino, owner, start, end, lockType(typ), block, pid, strerr(err))
+		logit(ctx, "setlk (%d,%d,%016X,%d,%d,%s,%t,%d): %s", ino, fh, owner, start, end, lockType(typ), block, pid, strerr(err))
 	}()
 	if lockType(typ).String() == "X" {
 		return syscall.EINVAL
@@ -253,8 +253,7 @@ func (v *VFS) Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end ui
 
 func (v *VFS) Flock(ctx Context, ino Ino, fh uint64, owner uint64, typ uint32, block bool) (err syscall.Errno) {
 	var name string
-	var reqid uint32
-	defer func() { logit(ctx, "flock (%d,%d,%016X,%s,%t): %s", reqid, ino, owner, name, block, strerr(err)) }()
+	defer func() { logit(ctx, "flock (%d,%d,%016X,%s,%t): %s", ino, fh, owner, name, block, strerr(err)) }()
 	switch typ {
 	case syscall.F_RDLCK:
 		name = "LOCKSH"

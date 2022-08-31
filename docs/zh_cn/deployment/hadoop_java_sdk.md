@@ -19,7 +19,7 @@ JuiceFS Hadoop Java SDK 同时兼容 Hadoop 2.x、Hadoop 3.x，以及 Hadoop 生
 
 ### 2. 用户权限
 
-JuiceFS 默认使用本地的 `用户` 和 `UID` 映射，在分布式环境下使用时，为了避免权限问题，请参考[文档](../administration/sync_accounts_between_multiple_hosts.md)将需要使用的 `用户` 和 `UID` 同步到所有 Hadoop 节点。也可以通过定义一个全局的用户和用户组文件给集群共享读取，[查看详情](#其它配置)。
+JuiceFS 默认使用本地的「用户／UID」及「用户组／GID」映射，在分布式环境下使用时，为了避免权限问题，请参考[文档](../administration/sync_accounts_between_multiple_hosts.md)将需要使用的「用户／UID」及「用户组／GID」同步到所有 Hadoop 节点。也可以通过定义一个全局的用户和用户组文件使得集群中的所有节点共享权限配置，相关配置请查看[这里](#其它配置)。
 
 ### 3. 文件系统
 
@@ -758,3 +758,21 @@ JuiceFS 可以使用本地磁盘作为缓存加速数据访问，以下数据是
 ### 2. 出现 `No FilesSystem for scheme: jfs` 异常
 
 出现这个异常的原因是 `core-site.xml` 配置文件中的 JuiceFS 配置没有被读取到，需要检查组件配置的 `core-site.xml` 中是否有 JuiceFS 相关配置。
+
+### 3. JuiceFS 与 HDFS 的用户权限管理有何相同和不同之处？
+
+JuiceFS 也是使用「用户／用户组」的方式管理文件权限，默认使用的是本地的用户和用户组。为了保证分布式计算时不同节点的权限统一，可以通过 `juicefs.users` 和 `juicefs.groups` 配置全局的「用户／UID」和「用户组／GID」映射。
+
+### 4. 数据删除后都是直接存储在 JuiceFS 的 `.trash` 目录，虽然文件都在但是很难像 HDFS 那样简单通过 `mv` 命令就能恢复数据，是否有某种办法可以达到类似 HDFS 回收站的效果？
+
+在 Hadoop 应用场景下，仍然保留了类似于 HDFS 回收站的功能。需要通过 `fs.trash.interval` 以及 `fs.trash.checkpoint.interval` 配置来显式开启，请参考[文档](#回收站)了解更多信息。
+
+### 5. 设置 `juicefs.discover-nodes-url` 这个参数有什么好处？
+
+在 HDFS 里面，每个数据块会有 [`BlockLocation`](https://hadoop.apache.org/docs/current/api/org/apache/hadoop/fs/BlockLocation.html) 信息，计算引擎会利用此信息尽量将计算任务调度到数据所存储的节点。JuiceFS 会通过一致性哈希算法为每个数据块计算出对应的 `BlockLocation`，这样第二次读取相同的数据时，计算引擎有可能将计算任务调度到相同的机器上，就可以利用第一次计算时缓存在本地磁盘的数据来加速数据访问。
+
+此算法需要事先知道所有的计算节点信息，`juicefs.discover-nodes-url` 参数就是用来获得这些计算节点信息的。
+
+### 6. 对于采用 Kerberos 认证的 CDH 集群，社区版 JuiceFS 目前能否支持呢？
+
+不支持。JuiceFS 不会校验 Kerberos 用户的合法性，但是可以使用通过 Kerberos 认证的用户名。

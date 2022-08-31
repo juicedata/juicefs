@@ -448,7 +448,7 @@ func (m *dbMeta) getSession(row interface{}, detail bool) (*Session, error) {
 			}
 			s.Plocks = make([]Plock, 0, len(prows))
 			for _, prow := range prows {
-				s.Plocks = append(s.Plocks, Plock{prow.Inode, uint64(prow.Owner), prow.Records})
+				s.Plocks = append(s.Plocks, Plock{prow.Inode, uint64(prow.Owner), loadLocks(prow.Records)})
 			}
 			return nil
 		})
