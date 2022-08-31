@@ -100,7 +100,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--min-client-version', min_client_version])
         options.extend(['--max-client-version', max_client_version])
         output = subprocess.check_output([juicefs, 'status', self.meta_url])
-        storage = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['Storage']
+        storage = json.loads(output.decode().replace("'", '"'))['Setting']['Storage']
         
         if change_bucket:
             if storage == 'file':
@@ -193,12 +193,12 @@ class JuicefsMachine(RuleBasedStateMachine):
     def status(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start status')
-        output = self.run([juicefs, 'status', self.meta_url])
+        output = subprocess.checkout_output([juicefs, 'status', self.meta_url])
         print(f'status output: {output}')
-        uuid = json.loads(output.replace("'", '"'))['Setting']['UUID']
+        uuid = json.loads(output.decode().replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
         if self.mounted:
-            sessions = json.loads(output.decode('utf8').replace("'", '"'))['Sessions']
+            sessions = json.loads(output.decode().replace("'", '"'))['Sessions']
             assert len(sessions) != 0 
         print('status succeed')
 
@@ -231,7 +231,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.is_supported_version(juicefs))
         print('start destroy')
         output = subprocess.check_output([juicefs, 'status', self.meta_url])
-        uuid = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['UUID']
+        uuid = json.loads(output.decode().replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
         options = [juicefs, 'destroy', self.meta_url, uuid]
         options.append('--force')
