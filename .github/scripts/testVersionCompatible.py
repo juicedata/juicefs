@@ -15,10 +15,12 @@ class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
     # JFS_BIN = ['./juicefs-1.0.0-beta1', './juicefs-1.0.0-beta2', './juicefs-1.0.0-beta3', './juicefs-1.0.0-rc1', './juicefs-1.0.0-rc2','./juicefs-1.0.0-rc3','./juicefs']
-    JFS_BINS = [os.environ.get('OLD_JFS_BIN'), os.environ.get('NEW_JFS_BIN')]
+    # juicefs_version = subprocess.check_output(['./juicefs', 'version']).decode().split()[-1].split('+')[0]
+    # os.environ['NEW_JFS_BIN'] = f'./juicefs-{juicefs_version}'
+    JFS_BINS = ['./'+os.environ.get('OLD_JFS_BIN'), './'+os.environ.get('NEW_JFS_BIN')]
     # JFS_BINS = ['./juicefs-1.0.0-rc2',  './juicefs-1.1.0-dev']
-    META_URLS = ['redis://localhost/1']
-    STORAGES = ['minio']
+    META_URLS = [os.environ.get('META_URL')]
+    STORAGES = [os.environ.get('STORAGE')]
     # META_URL = 'badger://abc.db'
     MOUNT_POINT = '/tmp/sync-test/'
     VOLUME_NAME = 'test-volume'
