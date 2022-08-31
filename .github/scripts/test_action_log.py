@@ -67,7 +67,8 @@ def testLog():
     print('start status\n')
     # os.system('./juicefs-1.0.0-dev version')
     options = ['./juicefs-1.0.0', 'status', 'redis://localhost/1']
-    subprocess.run(['date'], check=True)
+    result = subprocess.run(['date'], check=True, capture_output=True)
+    print(result.stdout.decode())
 
     print('status succeed1\n')
     output = subprocess.check_output(['date', '-R'])
