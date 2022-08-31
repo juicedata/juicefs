@@ -53,14 +53,19 @@ jobs:
             mv juicefs $filename
           done
 
-      - name: Cache go modules
-        uses: actions/cache@v3
-        env:
-          cache-name: cache-dependencies
+      - name: Set up Go
+        uses: actions/setup-go@v2
         with:
-          key: ${{ runner.os }}-build-${{ env.cache-name }}
+          go-version: '1.18.x'
+
+      - uses: actions/cache@v3
+        with:
           path: |
-            /home/runner/go/pkg/mod
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
       - name: Make Juicefs
         run: | 
@@ -146,14 +151,19 @@ jobs:
             mv juicefs $filename
           done
 
-      - name: Cache go modules
-        uses: actions/cache@v3
-        env:
-          cache-name: cache-dependencies
+      - name: Set up Go
+        uses: actions/setup-go@v2
         with:
-          key: ${{ runner.os }}-build-${{ env.cache-name }}
+          go-version: '1.18.x'
+          
+      - uses: actions/cache@v3
+        with:
           path: |
-            /home/runner/go/pkg/mod
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
       - name: Make Juicefs
         run: | 
