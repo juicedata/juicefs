@@ -27,8 +27,7 @@ runs:
         wget -q $url
         tar -zxf $filename
         mv juicefs juicefs-${{inputs.old_juicefs_version}}
-        export OLD_JFS_BIN=juicefs-${{inputs.old_juicefs_version}}
-
+        
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
@@ -47,9 +46,7 @@ runs:
       shell: bash
       run: | 
         make juicefs
-        version=`./juicefs version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
-        mv juicefs juicefs-$version
-        export NEW_JFS_BIN="juicefs-$version"
+        
 
     - name: Setup minio
       shell: bash
@@ -76,6 +73,11 @@ runs:
       run: |
         export META_URL=${{inputs.meta_url}}
         export STORAGE=${{inputs.storage}}
+        version=`./juicefs version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+        mv juicefs juicefs-$version
+        export NEW_JFS_BIN="juicefs-$version"
+        export OLD_JFS_BIN="juicefs-${{inputs.old_juicefs_version}}"
+
         # python3 .github/scripts/test_action_log.py
         python3 .github/scripts/testVersionCompatible.py
         
