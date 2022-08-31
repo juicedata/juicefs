@@ -47,6 +47,13 @@ jobs:
         with:
           old_juicefs_version: '1.0.0-rc2'
 
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
       - name: Setup upterm session
         if: ${{ failure() }}
         timeout-minutes: 30
