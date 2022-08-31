@@ -194,6 +194,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.is_supported_version(juicefs))
         print('start status')
         output = self.run([juicefs, 'status', self.meta_url])
+        print(f'status output: {output}')
         uuid = json.loads(output.replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
         if self.mounted:
