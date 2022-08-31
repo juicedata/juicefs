@@ -25,7 +25,7 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     def __init__(self):
         super(JuicefsMachine, self).__init__()
-        print('__init__')
+        print('\n__init__')
         self.formatted = False
         self.mounted = False
         self.meta_url = None
@@ -33,7 +33,6 @@ class JuicefsMachine(RuleBasedStateMachine):
         os.system(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
         if os.path.isfile('dump.json'):
             os.remove('dump.json')
-        print('\nINIT----------------------------------------------------------------------------------------\n')
 
     def flush_meta(self, meta_url):
         print('start flush meta')
@@ -50,6 +49,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             os.system('redis-cli flushall')
             print(f'flush redis succeed')
         print('flush meta succeed')
+
     def clear_storage(self, storage, bucket):
         print('start clear storage')
         if storage == 'file':
@@ -97,7 +97,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assert version.parse(min_client_version) <= version.parse(max_client_version)
         options.extend(['--min-client-version', min_client_version])
         options.extend(['--max-client-version', max_client_version])
-        output = self.exec_check_output([juicefs, 'status', self.meta_url])
+        output = subprocess.check_output([juicefs, 'status', self.meta_url])
         storage = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['Storage']
         
         if change_bucket:
@@ -191,7 +191,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def status(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start status')
-        output = self.exec_check_output([juicefs, 'status', self.meta_url])
+        output = self.run([juicefs, 'status', self.meta_url])
         uuid = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
         if self.mounted:
@@ -227,7 +227,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def destroy(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start destroy')
-        output = self.exec_check_output([juicefs, 'status', self.meta_url])
+        output = subprocess.check_output([juicefs, 'status', self.meta_url])
         uuid = json.loads(output.decode('utf8').replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
         options = [juicefs, 'destroy', self.meta_url, uuid]
@@ -288,20 +288,13 @@ class JuicefsMachine(RuleBasedStateMachine):
     #     print('exec succeed')
     #     return result
 
-    def exec_check_output(self, options):
-        options.append('--debug')
-        print('check:'+' '.join(options))
-        output = subprocess.run(options, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        # print(output.stdout.decode())
-        print('check succeed')
-        return output.stdout.decode()
-
     def run(self, options):
         options.append('--debug')
         print('run:'+' '.join(options))
         output = subprocess.run(options, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         print(output.stdout.decode())
         print('run succeed')
+        return output.stdout.decode()
 
     @rule(juicefs=st.sampled_from(JFS_BINS),
      block_size=st.integers(min_value=1, max_value=32),
@@ -320,7 +313,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--small-file-size', str(small_file_size)])
         options.extend(['--small-file-count', str(small_file_count)])
         options.extend(['--threads', str(threads)])
-        output = self.exec_check_output(options)
+        output = self.run(options)
         summary = output.decode('utf8').split('\n')[2]
         expected = f'BlockSize: {block_size} MiB, BigFileSize: {big_file_size} MiB, SmallFileSize: {small_file_size} KiB, SmallFileCount: {small_file_count}, NumThreads: {threads}'
         assert summary == expected
@@ -396,6 +389,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         time.sleep(2.0)
         subprocess.Popen.kill(proc)
         print('gateway succeed')
+        
     @rule(juicefs = st.sampled_from(JFS_BINS), 
         port=st.integers(min_value=10001, max_value=11000)) 
     @precondition(lambda self: self.formatted )
