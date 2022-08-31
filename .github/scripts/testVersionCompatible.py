@@ -193,7 +193,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def status(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start status')
-        output = subprocess.checkout_output([juicefs, 'status', self.meta_url])
+        output = subprocess.check_output([juicefs, 'status', self.meta_url])
         print(f'status output: {output}')
         uuid = json.loads(output.decode().replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
