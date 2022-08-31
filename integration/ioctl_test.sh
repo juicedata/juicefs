@@ -105,7 +105,7 @@ mkdir "$i_test_dir"
 {
   touch "$i_test_dir"/ifile
   echo "12345" >> "$i_test_dir"/ifile
-  sudo chattr "+i" "$i_test_dir"/ifile
+  exec_should_success 'sudo chattr "+i" "$i_test_dir"/ifile'
   exec_should_success '[[ "$(lsattr $i_test_dir/ifile | awk -F " " "{print \$1}")" =~ "i" ]]'
   exec_should_success '[ "$(cat "$a_test_dir"/afile)" == "12345" ]'
 
