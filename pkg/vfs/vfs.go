@@ -473,7 +473,7 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 				}
 			}
 			locks := f.locks
-			owner := f.flockOwner
+			owner := f.lockOwner
 			f.Unlock()
 			if f.writer != nil {
 				_ = f.writer.Flush(ctx)
@@ -730,7 +730,7 @@ func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err sysc
 		fh = v.getControlHandle(ctx.Pid())
 		defer v.releaseControlHandle(ctx.Pid())
 	}
-	defer func() { logit(ctx, "flush (%d,%d,%016X): %s", ino, fh, lockOwner, strerr(err)) }()
+	defer func() { logit(ctx, "flush (%d,%d): %s", ino, fh, strerr(err)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
@@ -762,9 +762,10 @@ func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err sysc
 
 	h.Lock()
 	locks := h.locks
+	owner := h.lockOwner
 	h.Unlock()
 	if locks&2 != 0 {
-		_ = v.Meta.Setlk(ctx, ino, lockOwner, false, F_UNLCK, 0, 0x7FFFFFFFFFFFFFFF, 0)
+		_ = v.Meta.Setlk(ctx, ino, owner, false, F_UNLCK, 0, 0x7FFFFFFFFFFFFFFF, 0)
 	}
 	return
 }
