@@ -90,7 +90,7 @@ def testLog2():
     print('start format')
     # os.system('./juicefs-1.0.0-dev version')
     options = ['./juicefs-1.0.0', 'format', 'redis://localhost/1', 'test']
-    output = subprocess.run(options, check=True, capture_output=True)
+    output = subprocess.run(options, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     print(output.stdout.decode())
     # output = subprocess.check_output(options)
     # print(output.decode())
