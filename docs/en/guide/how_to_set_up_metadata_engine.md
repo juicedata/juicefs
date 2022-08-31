@@ -366,6 +366,14 @@ Please note the location of the database file, if it is not in the current direc
 juicefs mount -d "sqlite3:///home/herald/my-jfs.db" /mnt/jfs/
 ```
 
+One can also add driver supported [PRAGMA Statements](https://www.sqlite.org/pragma.html) to the connection string like:
+
+```shell
+"sqlite3://my-jfs.db?cache=shared&_busy_timeout=5000"
+```
+
+For more examples of SQLite database address format, please refer to [Go-SQLite3-Driver](https://github.com/mattn/go-sqlite3#connection-string).
+
 :::note
 Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for standalone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
 :::
