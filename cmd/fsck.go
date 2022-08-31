@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -43,7 +44,20 @@ It scans all objects in data storage and slices in metadata, comparing them to s
 lost object or broken file.
 
 Examples:
-$ juicefs fsck redis://localhost`,
+$ juicefs fsck redis://localhost
+
+# Repair broken directories
+$ juicefs fsck redis://localhost --paths /d1/d2 /d1/d3 --repair`,
+		Flags: []cli.Flag{
+			&cli.StringSliceFlag{
+				Name:  "paths",
+				Usage: "absolute paths within JuiceFS to check",
+			},
+			&cli.BoolFlag{
+				Name:  "repair",
+				Usage: "repair specified paths if they are broken",
+			},
+		},
 	}
 }
 
@@ -54,6 +68,18 @@ func fsck(ctx *cli.Context) error {
 	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
+	}
+	if ps := ctx.StringSlice("paths"); len(ps) > 0 {
+		var needRepair int
+		for _, p := range ps {
+			if checkPath(m, p, ctx.Bool("repair")) {
+				needRepair++
+			}
+		}
+		if needRepair > 0 {
+			logger.Infof("%d paths can be repaired, please re-run fsck with `--repair` option")
+		}
+		return nil
 	}
 
 	chunkConf := chunk.Config{
@@ -169,4 +195,42 @@ func fsck(ctx *cli.Context) error {
 	}
 
 	return nil
+}
+
+func checkPath(m meta.Meta, fpath string, repair bool) (needRepair bool) {
+	if !strings.HasPrefix(fpath, "/") {
+		logger.Fatalf("File path should be the absolute path within JuiceFS")
+	}
+	var attr meta.Attr
+	var inode meta.Ino
+	var parent meta.Ino = 1
+	ps := strings.Split(fpath, "/")
+	for i, name := range ps {
+		if len(name) == 0 {
+			continue
+		}
+		if st := m.Lookup(meta.Background, parent, name, &inode, &attr); st != 0 {
+			logger.Fatalf("Lookup parent %d name %s: %s", parent, name, st)
+		} else if !attr.Full { // missing attribute
+			p := "/" + path.Join(ps[:i+1]...)
+			if attr.Typ == meta.TypeDirectory {
+				if repair {
+					if st = m.RepairInode(meta.Background, parent, inode); st == 0 {
+						logger.Infof("Path %s is successfully repaired: inode %d", p, inode)
+					} else {
+						logger.Fatalf("Repair path %s inode %d: %s", p, inode, st)
+					}
+				} else {
+					needRepair = true
+					logger.Warnf("Path %s is lack of attribute: inode %d", p, inode)
+				}
+			} else { // TODO: determine file size?
+				logger.Warnf("Path %s cannot be auto-repaired: inode %d type %d", p, inode, attr.Typ)
+			}
+			return // handle one missing inode at a time
+		}
+		parent = inode
+	}
+	logger.Infof("Path %s inode %d is valid", fpath, parent)
+	return
 }
