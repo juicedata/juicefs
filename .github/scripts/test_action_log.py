@@ -39,14 +39,14 @@ class JuicefsMachine(RuleBasedStateMachine):
           juicefs=st.sampled_from(JFS_BIN),
           meta_url=st.sampled_from(META_URLS),
           )
-    
+    @precondition(lambda self: not self.formatted)
     def format(self, juicefs, meta_url):
         print(f'juicefs: {juicefs}, formatted by : {self.formatted_by}')
         print('start format')
         os.system(f'{juicefs} version')
         options = [juicefs, 'format',  meta_url, JuicefsMachine.VOLUME_NAME]
         print(f'format options: {" ".join(options)}' )
-        subprocess.check_call(['ls'])
+        subprocess.check_call(['date'])
         self.meta_url = meta_url
         self.formatted = True
         self.formatted_by = juicefs
@@ -59,10 +59,21 @@ class JuicefsMachine(RuleBasedStateMachine):
         os.system(f'{juicefs} version')
         options =[juicefs, 'status', self.meta_url]
         output = subprocess.check_call(['date'])
-        
         print('status succeed')
 
 TestJuiceFS = JuicefsMachine.TestCase
 
+def testLog():
+    print('start status')
+    # os.system('./juicefs-1.0.0-dev version')
+    options = ['./juicefs-1.0.0', 'status', 'redis://localhost/1']
+    output = subprocess.check_call(['date'])
+    print('status succeed1')
+    output = subprocess.check_output(['date', '-R'])
+    print(output)
+    print('status succeed2')
+
 if __name__ == "__main__":
-    unittest.main()
+    for i in range(4):
+        testLog()
+    # unittest.main()
