@@ -57,7 +57,6 @@ mkdir "$a_test_dir"
 trap cleanup INT EXIT
 
 {
-  cat /tmp/jfs-unit-test/.accesslog > aclog.txt &
   touch "$a_test_dir"/fallocatefile2
   exec_should_success 'sudo chattr "+a" $a_test_dir/fallocatefile2'
 
