@@ -1,4 +1,5 @@
 import os
+from posixpath import expanduser
 import shutil
 import subprocess
 import sys
@@ -47,6 +48,7 @@ def clear_storage(storage, bucket, volume):
 
 def clear_cache(self):
     os.system('sudo rm -rf /var/jfsCache')
+    os.system(f'sudo rm {os.path.expanduser("~/.juicefs/cache")}')
     if sys.platform.startswith('linux') :
         os.system('sudo bash -c  "echo 3> /proc/sys/vm/drop_caches"')
 

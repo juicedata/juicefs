@@ -158,7 +158,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.is_supported_version(juicefs))
         print('start status')
         output = subprocess.check_output([juicefs, 'status', self.meta_url])
-        print(f'status output: {output}')
+        print(f'status output: {output.decode()}')
         uuid = json.loads(output.decode().replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
         if self.mounted:
@@ -174,7 +174,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         run_jfs_cmd([juicefs, 'mount', '-d',  self.meta_url, JuicefsMachine.MOUNT_POINT])
         time.sleep(2)
         output = subprocess.check_output([juicefs, 'status', self.meta_url])
-        print(f'status output: {output}')
+        print(f'status output: {output.decode()}')
         sessions = json.loads(output.decode().replace("'", '"'))['Sessions']
         assert len(sessions) != 0 
         self.mounted = True
@@ -286,7 +286,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def warmup(self, juicefs, threads, background, from_file, directory):
         assume (self.is_supported_version(juicefs))
         print('start warmup')
-        self.clear_cache()
+        clear_cache()
         options = [juicefs, 'warmup']
         options.extend(['--threads', str(threads)])
         if background:
