@@ -52,6 +52,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.formatted)
     def config(self, juicefs, capacity, inodes, change_bucket, change_aksk, encrypt_secret, trash_days, min_client_version, max_client_version, force):
         assume (self.is_supported_version(juicefs))
+        assume(os.system(f'{juicefs} --help | grep destroy') == 0)
         print('start config')
         options = [juicefs, 'config', self.meta_url]
         options.extend(['--trash-days', str(trash_days)])
@@ -110,11 +111,12 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--compress', compress])
             options.extend(['--shards', str(shards)])
             options.extend(['--storage', storage])
-            if hash_prefix:
+            if hash_prefix and os.system(f'{juicefs} format --help | grep hash-prefix') == 0:
                 options.append('--hash-prefix')
         options.extend(['--capacity', str(capacity)])
         options.extend(['--inodes', str(inodes)])
-        options.extend(['--trash-days', str(trash_days)])
+        if os.system(f'{juicefs} format --help | grep trash-days') == 0:
+            options.extend(['--trash-days', str(trash_days)])
         
         if force:
             options.append('--force')
@@ -197,6 +199,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.formatted and not self.mounted)
     def destroy(self, juicefs):
         assume (self.is_supported_version(juicefs))
+        assume(os.system(f'{juicefs} --help | grep destroy') == 0)
         print('start destroy')
         output = subprocess.check_output([juicefs, 'status', self.meta_url])
         uuid = json.loads(output.decode().replace("'", '"'))['Setting']['UUID']
@@ -295,7 +298,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             path_list = [JuicefsMachine.MOUNT_POINT+'file1', JuicefsMachine.MOUNT_POINT+'file2', JuicefsMachine.MOUNT_POINT+'file3']
             for filepath in path_list:
                 if not os.path.exists(filepath):
-                    os.system(f'dd if=/dev/urandom of={filepath} bs=1048576 count=65')
+                    os.system(f'dd if=/dev/urandom of={filepath} bs=4096 count=100')
             with open('file.list', 'w') as f:
                 for path in path_list:
                     f.write(path+'\n')
@@ -304,7 +307,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             if directory:
                 options.append(JuicefsMachine.MOUNT_POINT)
             else:
-                os.system(f'dd if=/dev/urandom of={JuicefsMachine.MOUNT_POINT}/bigfile bs=1048576 count=512')
+                os.system(f'dd if=/dev/urandom of={JuicefsMachine.MOUNT_POINT}/bigfile bs=1048576 count=10')
                 options.append(JuicefsMachine.MOUNT_POINT+'/bigfile')
                 
         run_jfs_cmd(options)

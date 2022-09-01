@@ -46,9 +46,9 @@ def clear_storage(storage, bucket, volume):
     print('clear storage succeed')
 
 
-def clear_cache(self):
+def clear_cache():
     os.system('sudo rm -rf /var/jfsCache')
-    os.system(f'sudo rm {os.path.expanduser("~/.juicefs/cache")}')
+    os.system(f'sudo rm -rf {os.path.expanduser("~/.juicefs/cache")}')
     if sys.platform.startswith('linux') :
         os.system('sudo bash -c  "echo 3> /proc/sys/vm/drop_caches"')
 
