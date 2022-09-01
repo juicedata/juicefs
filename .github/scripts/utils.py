@@ -31,15 +31,17 @@ def clear_storage(storage, bucket, volume):
         from urllib.parse import urlparse
         url = urlparse(bucket)
         c = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
-        while list(c.list_objects(url.path[1:])) :
+        bucket_name = url.path[1:]
+        while c.bucket_exists(bucket_name) and list(c.list_objects(bucket_name)) :
             print(f'try to remove bucket {url.path[1:]}')
-            result = os.system(f'mc rm --recursive --force  myminio/{url.path[1:]}')
+            result = os.system(f'mc rm --recursive --force  myminio/{bucket_name}')
             if result != 0:
-                raise Exception(f'remove {url.path[1:]} failed')
-            if list(c.list_objects(url.path[1:])):
+                raise Exception(f'remove {bucket_name} failed')
+            if c.bucket_exists(url.path[1:]) and list(c.list_objects(bucket_name)):
                 time.sleep(1)
-        print(f'remove bucket {url.path[1:]} succeed')
-        assert not list(c.list_objects(url.path[1:]))
+        print(f'remove bucket {bucket_name} succeed')
+        if c.bucket_exists(bucket_name):
+            assert not list(c.list_objects(bucket_name))
     print('clear storage succeed')
 
 
