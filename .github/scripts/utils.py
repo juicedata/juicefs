@@ -1,5 +1,6 @@
 import os
 import shutil
+import subprocess
 import sys
 from minio import Minio
 
@@ -41,3 +42,15 @@ def clear_cache(self):
     os.system('sudo rm -rf /var/jfsCache')
     if sys.platform.startswith('linux') :
         os.system('sudo bash -c  "echo 3> /proc/sys/vm/drop_caches"')
+
+def run_jfs_cmd( options):
+    options.append('--debug')
+    print('run_jfs_cmd:'+' '.join(options))
+    try:
+        output = subprocess.run(options, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        print(f'subprocess run error: {e.output.decode()}')
+        raise Exception('subprocess run error')
+    print(output.stdout.decode())
+    print('run_jfs_cmd succeed')
+    return output.stdout.decode()
