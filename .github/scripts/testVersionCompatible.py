@@ -10,6 +10,7 @@ from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
 from hypothesis import assume, strategies as st
 from packaging import version
 from minio import Minio
+from utils import flush_meta, clear_storage, clear_cache
 
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
@@ -35,49 +36,6 @@ class JuicefsMachine(RuleBasedStateMachine):
         os.system(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
         if os.path.isfile('dump.json'):
             os.remove('dump.json')
-
-    def flush_meta(self, meta_url):
-        print('start flush meta')
-        if os.path.exists(JuicefsMachine.MOUNT_POINT):
-            os.system('umount %s'%JuicefsMachine.MOUNT_POINT)
-            print(f'umount {JuicefsMachine.MOUNT_POINT} succeed')
-            self.mounted = False
-        if meta_url.startswith('sqlite3://'):
-            path = meta_url[len('sqlite3://'):]
-            if os.path.isfile(path):
-                os.remove(path)
-                print(f'remove meta file {path} succeed')
-        elif meta_url.startswith('redis://'):
-            os.system('redis-cli flushall')
-            print(f'flush redis succeed')
-        print('flush meta succeed')
-
-    def clear_storage(self, storage, bucket):
-        print('start clear storage')
-        if storage == 'file':
-            storage_dir = os.path.join(bucket, JuicefsMachine.VOLUME_NAME) 
-            if os.path.exists(storage_dir):
-                try:
-                    shutil.rmtree(storage_dir)
-                    print(f'remove cache dir {storage_dir} succeed')
-                except OSError as e:
-                    print("Error: %s : %s" % (storage_dir, e.strerror))
-        elif storage == 'minio':
-            from urllib.parse import urlparse
-            url = urlparse(bucket)
-            c = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
-            if c.bucket_exists(url.path[1:]):
-                result = os.system(f'mc rm --recursive --force  myminio/{url.path[1:]}')
-                if result != 0:
-                    raise Exception(f'remove {url.path[1:]} failed')
-                print(f'remove {url.path[1:]} succeed')
-                # assert not c.bucket_exists(url.path[1:])
-        print('clear storage succeed')
-        
-    def clear_cache(self):
-        os.system('sudo rm -rf /var/jfsCache')
-        if sys.platform.startswith('linux') :
-            os.system('sudo bash -c  "echo 3> /proc/sys/vm/drop_caches"')
 
     @rule(
         juicefs=st.sampled_from(JFS_BINS),
@@ -182,8 +140,11 @@ class JuicefsMachine(RuleBasedStateMachine):
             raise Exception(f'storage value error: {storage}')
 
         if not self.formatted:
-            self.clear_storage(storage, bucket)
-            self.flush_meta(meta_url)
+            if os.path.exists(JuicefsMachine.MOUNT_POINT):
+                os.system('umount %s'%JuicefsMachine.MOUNT_POINT)
+                print(f'umount {JuicefsMachine.MOUNT_POINT} succeed')
+            clear_storage(storage, bucket, JuicefsMachine.VOLUME_NAME)
+            flush_meta(meta_url)
         print(f'format options: {" ".join(options)}' )
         self.run(options)
         self.meta_url = meta_url
@@ -211,7 +172,11 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.is_supported_version(juicefs))
         print('start mount')
         self.run([juicefs, 'mount', '-d',  self.meta_url, JuicefsMachine.MOUNT_POINT])
-        time.sleep(1)
+        time.sleep(2)
+        output = subprocess.check_output([juicefs, 'status', self.meta_url])
+        print(f'status output: {output}')
+        sessions = json.loads(output.decode().replace("'", '"'))['Sessions']
+        assert len(sessions) != 0 
         self.mounted = True
         print('mount succeed')
 
@@ -269,7 +234,11 @@ class JuicefsMachine(RuleBasedStateMachine):
     def load(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start load')
-        self.flush_meta(self.meta_url)
+        if os.path.exists(JuicefsMachine.MOUNT_POINT):
+            os.system('umount %s'%JuicefsMachine.MOUNT_POINT)
+            print(f'umount {JuicefsMachine.MOUNT_POINT} succeed')
+            self.mounted = False
+        flush_meta(self.meta_url)
         self.run([juicefs, 'load', self.meta_url, 'dump.json'])
         print('load succeed')
         options = [juicefs, 'config', self.meta_url]
