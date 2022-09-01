@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from minio import Minio
 
 def flush_meta(meta_url):
@@ -30,14 +31,17 @@ def clear_storage(storage, bucket, volume):
         from urllib.parse import urlparse
         url = urlparse(bucket)
         c = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
-        if c.bucket_exists(url.path[1:]):
+        while list(c.list_objects(url.path[1:])) :
+            print(f'try to remove bucket {url.path[1:]}')
             result = os.system(f'mc rm --recursive --force  myminio/{url.path[1:]}')
             if result != 0:
                 raise Exception(f'remove {url.path[1:]} failed')
-            print(f'remove {url.path[1:]} succeed')
-            # assert not c.bucket_exists(url.path[1:])
+            time.sleep(1)
+        print(f'remove bucket {url.path[1:]} succeed')
+        # assert not c.bucket_exists(url.path[1:])
     print('clear storage succeed')
-    
+
+
 def clear_cache(self):
     os.system('sudo rm -rf /var/jfsCache')
     if sys.platform.startswith('linux') :
