@@ -28,7 +28,7 @@ function cleanup() {
       echo "ioctl test failed"
     fi
     trap - EXIT
-    sudo chattr -R "=" "$test_dir"
+#    sudo chattr -R "=" "$test_dir"
 #    rm -rf "$test_dir"
     exit $code
 }
@@ -57,20 +57,21 @@ mkdir "$a_test_dir"
 trap cleanup INT EXIT
 
 {
+  cat /tmp/jfs-unit-test/.accesslog > aclog.txt &
   touch "$a_test_dir"/fallocatefile2
   exec_should_success 'sudo chattr "+a" $a_test_dir/fallocatefile2'
 
   touch "$a_test_dir"/afile
   exec_should_success 'sudo chattr "+a" $a_test_dir/afile'
   exec_should_success '[[ "$(lsattr $a_test_dir/afile | awk -F " " "{print \$1}")" =~ "a" ]]'
-#  exec_should_failed "echo aa > $a_test_dir/afile"
-#  exec_should_failed "rm -rf $a_test_dir/afile"
-#  touch "$a_test_dir/tmpfile"
-#  exec_should_failed "mv -f $a_test_dir/tmpfile $a_test_dir/afile"
-#  exec_should_failed "mv -f $a_test_dir/afile $a_test_dir/tmpfile"
-#  exec_should_failed "ln afile $a_test_dir/linkfile"
-#  echo "12345" >> "$a_test_dir"/afile
-#  exec_should_success '[ "$(cat "$a_test_dir"/afile)" == "12345" ]'
+  exec_should_failed "echo aa > $a_test_dir/afile"
+  exec_should_failed "rm -rf $a_test_dir/afile"
+  touch "$a_test_dir/tmpfile"
+  exec_should_failed "mv -f $a_test_dir/tmpfile $a_test_dir/afile"
+  exec_should_failed "mv -f $a_test_dir/afile $a_test_dir/tmpfile"
+  exec_should_failed "ln afile $a_test_dir/linkfile"
+  echo "12345" >> "$a_test_dir"/afile
+  exec_should_success '[ "$(cat "$a_test_dir"/afile)" == "12345" ]'
   touch "$a_test_dir"/fallocatefile
   exec_should_success 'sudo chattr "+a" $a_test_dir/fallocatefile'
   exec_should_success '[[ "$(lsattr $a_test_dir/fallocatefile | awk -F " " "{print \$1}")" =~ "a" ]]'
