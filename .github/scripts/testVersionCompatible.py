@@ -67,10 +67,13 @@ class JuicefsMachine(RuleBasedStateMachine):
             url = urlparse(bucket)
             c = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
             if c.bucket_exists(url.path[1:]):
-                # c.remove_bucket(url.path[1:])
-                os.system(f'mc rm --recursive --force  myminio/{url.path[1:]}')
+                result = os.system(f'mc rm --recursive --force  myminio/{url.path[1:]}')
+                if result != 0:
+                    raise Exception(f'remove {url.path[1:]} failed')
+                print(f'remove {url.path[1:]} succeed')
                 # assert not c.bucket_exists(url.path[1:])
         print('clear storage succeed')
+        
     def clear_cache(self):
         os.system('sudo rm -rf /var/jfsCache')
         if sys.platform.startswith('linux') :
@@ -176,7 +179,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             bucket = os.path.expanduser('~/.juicefs/local/')
             options.extend(['--bucket', bucket])
         else:
-            assert False
+            raise Exception(f'storage value error: {storage}')
 
         if not self.formatted:
             self.clear_storage(storage, bucket)
@@ -297,8 +300,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         try:
             output = subprocess.run(options, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
-            print(e.output)
-            raise 
+            print(f'subprocess run error: {e.output.decode()}')
+            raise Exception('subprocess run error')
         print(output.stdout.decode())
         print('run succeed')
         return output.stdout.decode()
