@@ -1,6 +1,6 @@
 DURATION ?= 10
 
-all: ioctl2 ioctl xattrs fsx s3test webdav
+all: ioctl xattrs fsx s3test webdav
 
 
 xattrs:
@@ -31,6 +31,3 @@ webdav:
 
 ioctl:
 	bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test
-
-ioctl2:
-	bash -x ioctl_test.sh /jfs/ioctl_test
