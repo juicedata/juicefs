@@ -85,7 +85,7 @@ runs:
       if: ${{ always() }}
       shell: bash
       run: | 
-        if [ -f "~/.juicefs/juicefs.log" ]; then
+        if [ -f "$HOME/.juicefs/juicefs.log" ]; then
           tail -500 ~/.juicefs/juicefs.log
           grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
         fi
