@@ -4,7 +4,7 @@ inputs:
   old_juicefs_version:
     description: 'old juicefs version'
     required: true
-    default: '1.0.0'
+    default: ''
   meta_url:  
     description: 'meta url'
     required: true
@@ -99,7 +99,11 @@ runs:
         version=`./juicefs version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
         mv juicefs juicefs-$version
         export NEW_JFS_BIN="juicefs-$version"
-        export OLD_JFS_BIN="juicefs-${{inputs.old_juicefs_version}}"
+        if [ -z "${{inputs.old_juicefs_version}}" ]; then
+          export OLD_JFS_BIN=$NEW_JFS_BIN
+        else
+          export OLD_JFS_BIN="juicefs-${{inputs.old_juicefs_version}}"
+        fi
 
         case "${{inputs.command}}" in
           "all") python3 .github/scripts/testVersionCompatible.py

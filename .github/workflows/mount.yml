@@ -45,7 +45,6 @@ jobs:
       - name: Test
         uses: ./.github/actions/version-compatible-hypo
         with:
-          old_juicefs_version: '1.0.0'
           command: 'mount'
 
       - name: Send Slack Notification
