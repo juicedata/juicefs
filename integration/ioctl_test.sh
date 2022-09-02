@@ -30,6 +30,7 @@ function cleanup() {
     trap - EXIT
 #    sudo chattr -R "=" "$test_dir"
 #    rm -rf "$test_dir"
+    cat /home/runner/work/juicefs/juicefs/aclog.txt
     exit $code
 }
 
