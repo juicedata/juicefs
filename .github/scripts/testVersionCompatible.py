@@ -80,11 +80,13 @@ class JuicefsMachine(RuleBasedStateMachine):
                 os.system('mc admin policy set myminio consoleAdmin user=juicedata')
             options.extend(['--access-key', 'juicedata'])
             options.extend(['--secret-key', '12345678'])
-        if encrypt_secret:
+        if encrypt_secret and version.parse('-'.join(juicefs.split('-')[1:])) >= version.parse('1.0.0-rc2'):
             options.append('--encrypt-secret')
         options.append('--force')
         run_jfs_cmd(options)
         print('config succeed')
+    
+    
 
     @rule(
           juicefs=st.sampled_from(JFS_BINS),
@@ -245,7 +247,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         run_jfs_cmd([juicefs, 'load', self.meta_url, 'dump.json'])
         print('load succeed')
         options = [juicefs, 'config', self.meta_url]
-        options.extend(['--access-key', 'minioadmin', '--secret-key', 'minioadmin', '--encrypt-secret'])
+        options.extend(['--access-key', 'minioadmin', '--secret-key', 'minioadmin'])
+        if version.parse('-'.join(juicefs.split('-')[1:])) >= version.parse('1.0.0-rc2'):
+            options.append('--encrypt-secret')
         run_jfs_cmd(options)
         os.remove('dump.json')
 
