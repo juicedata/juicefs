@@ -54,9 +54,9 @@ func logit(ctx Context, format string, args ...interface{}) {
 	opsDurationsHistogram.Observe(used.Seconds())
 	readerLock.Lock()
 	defer readerLock.Unlock()
-	if len(readers) == 0 && used < time.Second*10 {
-		return
-	}
+	//if len(readers) == 0 && used < time.Second*10 {
+	//	return
+	//}
 
 	cmd := fmt.Sprintf(format, args...)
 	t := utils.Now()
@@ -77,12 +77,12 @@ func logit(ctx Context, format string, args ...interface{}) {
 		logger.Errorf("failed to write access log: %s", err)
 	}
 
-	for _, r := range readers {
-		select {
-		case r.buffer <- line:
-		default:
-		}
-	}
+	//for _, r := range readers {
+	//	select {
+	//	case r.buffer <- line:
+	//	default:
+	//	}
+	//}
 }
 
 func openAccessLog(fh uint64) uint64 {
