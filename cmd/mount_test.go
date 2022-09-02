@@ -19,11 +19,8 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"os"
-	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -31,10 +28,7 @@ import (
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/go-redis/redis/v8"
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-	. "github.com/smartystreets/goconvey/convey"
-	"github.com/urfave/cli/v2"
 )
 
 const testMeta = "redis://127.0.0.1:6379/11"
@@ -42,46 +36,46 @@ const testMountPoint = "/tmp/jfs-unit-test"
 const testVolume = "test"
 
 // gomonkey may encounter the problem of insufficient permissions under mac, please solve it by viewing this link https://github.com/agiledragon/gomonkey/issues/70
-func Test_exposeMetrics(t *testing.T) {
-	Convey("Test_exposeMetrics", t, func() {
-		Convey("Test_exposeMetrics", func() {
-			addr := "redis://127.0.0.1:6379/12"
-			client := meta.NewClient(addr, &meta.Config{})
-			format := meta.Format{
-				Name:      "test",
-				BlockSize: 4096,
-				Capacity:  1 << 30,
-			}
-			_ = client.Init(format, true)
-			var appCtx *cli.Context
-			stringPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "String", func(_ *cli.Context, arg string) string {
-				switch arg {
-				case "metrics":
-					return "127.0.0.1:9567"
-				case "consul":
-					return "127.0.0.1:8500"
-				default:
-					return ""
-				}
-			})
-			isSetPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "IsSet", func(_ *cli.Context, _ string) bool {
-				return false
-			})
-			defer stringPatches.Reset()
-			defer isSetPatches.Reset()
-			ResetHttp()
-			registerer, registry := wrapRegister("test", "test")
-			metricsAddr := exposeMetrics(appCtx, client, registerer, registry)
-
-			u := url.URL{Scheme: "http", Host: metricsAddr, Path: "/metrics"}
-			resp, err := http.Get(u.String())
-			So(err, ShouldBeNil)
-			all, err := io.ReadAll(resp.Body)
-			So(err, ShouldBeNil)
-			So(string(all), ShouldNotBeBlank)
-		})
-	})
-}
+//func Test_exposeMetrics(t *testing.T) {
+//	Convey("Test_exposeMetrics", t, func() {
+//		Convey("Test_exposeMetrics", func() {
+//			addr := "redis://127.0.0.1:6379/12"
+//			client := meta.NewClient(addr, &meta.Config{})
+//			format := meta.Format{
+//				Name:      "test",
+//				BlockSize: 4096,
+//				Capacity:  1 << 30,
+//			}
+//			_ = client.Init(format, true)
+//			var appCtx *cli.Context
+//			stringPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "String", func(_ *cli.Context, arg string) string {
+//				switch arg {
+//				case "metrics":
+//					return "127.0.0.1:9567"
+//				case "consul":
+//					return "127.0.0.1:8500"
+//				default:
+//					return ""
+//				}
+//			})
+//			isSetPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "IsSet", func(_ *cli.Context, _ string) bool {
+//				return false
+//			})
+//			defer stringPatches.Reset()
+//			defer isSetPatches.Reset()
+//			ResetHttp()
+//			registerer, registry := wrapRegister("test", "test")
+//			metricsAddr := exposeMetrics(appCtx, client, registerer, registry)
+//
+//			u := url.URL{Scheme: "http", Host: metricsAddr, Path: "/metrics"}
+//			resp, err := http.Get(u.String())
+//			So(err, ShouldBeNil)
+//			all, err := io.ReadAll(resp.Body)
+//			So(err, ShouldBeNil)
+//			So(string(all), ShouldNotBeBlank)
+//		})
+//	})
+//}
 
 func ResetHttp() {
 	http.DefaultServeMux = http.NewServeMux()
