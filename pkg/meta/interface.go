@@ -351,6 +351,8 @@ type Meta interface {
 	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
 	// Currently only repairs a directory that is lack of attribute
 	RepairInode(ctx Context, parent, inode Ino) syscall.Errno
+	// Check integrity of a node and repair it if asked
+	// Check(ctx Context, typ uint8, inode Ino, repair bool) syscall.Errno
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)

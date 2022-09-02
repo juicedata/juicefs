@@ -47,15 +47,15 @@ Examples:
 $ juicefs fsck redis://localhost
 
 # Repair broken directories
-$ juicefs fsck redis://localhost --paths /d1/d2 /d1/d3 --repair`,
+$ juicefs fsck redis://localhost --path /d1/d2 --repair`,
 		Flags: []cli.Flag{
-			&cli.StringSliceFlag{
-				Name:  "paths",
-				Usage: "absolute paths within JuiceFS to check",
+			&cli.StringFlag{
+				Name:  "path",
+				Usage: "absolute path within JuiceFS to check",
 			},
 			&cli.BoolFlag{
 				Name:  "repair",
-				Usage: "repair specified paths if they are broken",
+				Usage: "repair specified path if it's broken",
 			},
 		},
 	}
@@ -63,20 +63,17 @@ $ juicefs fsck redis://localhost --paths /d1/d2 /d1/d3 --repair`,
 
 func fsck(ctx *cli.Context) error {
 	setup(ctx, 1)
+	if ctx.Bool("repair") && ctx.String("path") == "" {
+		logger.Fatalf("Please provide the path to repair with `--path` option")
+	}
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
-	if ps := ctx.StringSlice("paths"); len(ps) > 0 {
-		var needRepair int
-		for _, p := range ps {
-			if checkPath(m, p, ctx.Bool("repair")) {
-				needRepair++
-			}
-		}
-		if needRepair > 0 {
+	if p := ctx.String("path"); p != "" {
+		if checkPath(m, p, ctx.Bool("repair")) {
 			logger.Infof("%d paths can be repaired, please re-run fsck with `--repair` option")
 		}
 		return nil
