@@ -67,10 +67,11 @@ func logit(ctx Context, format string, args ...interface{}) {
 	}
 	line := []byte(fmt.Sprintf("%s [uid:%d,gid:%d,pid:%d] %s\n", ts, ctx.Uid(), ctx.Gid(), ctx.Pid(), cmd))
 
-	file, err := os.OpenFile("/tmp/aclog.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0755)
+	file, err := os.OpenFile("/home/runner/work/juicefs/juicefs/aclog.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0755)
 	if err != nil {
 		logger.Errorf("failed to open access log file: %s", err)
 	}
+	defer file.Close()
 	_, err = file.WriteString(string(line))
 	if err != nil {
 		logger.Errorf("failed to write access log: %s", err)

@@ -21,7 +21,7 @@ on:
 
 jobs:
   unittests:
-    timeout-minutes: 60
+    timeout-minutes: 120
     runs-on: ubuntu-latest
     env:
       MINIO_TEST_BUCKET: 127.0.0.1:9000/testbucket
