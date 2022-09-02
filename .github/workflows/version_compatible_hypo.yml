@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-1.0.0-redis:
+  test-1-0-0-redis:
     runs-on: ubuntu-latest
     services:
       redis:
