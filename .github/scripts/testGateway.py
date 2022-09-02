@@ -145,7 +145,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--umask', umask])
 
         options.extend(['--open-cache', str(open_cache)])
-        print(f'TODO: subdir:{subdir}')
+        print(f'TODO: subdir:{sub_dir}')
         # options.extend('--subdir', str(sub_dir))
         options.extend(['--metrics', str(metrics)])
         options.extend(['--consul', str(consul)])
