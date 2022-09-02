@@ -1,0 +1,174 @@
+name: "version-compatible-test-hypo"
+
+on:
+  # push:
+  #   branches: 
+  #     - main
+  #     - release-**
+  #   paths-ignore:
+  #     - 'docs/**'
+  #     - '**.md'
+  # pull_request:
+  #   #The branches below must be a subset of the branches above
+  #   branches: 
+  #     - main
+  #     - release-**
+  #   paths-ignore:
+  #     - 'docs/**'
+  #     - '**.md'
+  schedule:
+    - cron:  '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  test-1-0-0-redis:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      
+      - name: Test
+        uses: ./.github/actions/version-compatible-hypo
+        with:
+          old_juicefs_version: '1.0.0'
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      # - name: Setup upterm session
+      #   if: ${{ failure() }}
+      #   timeout-minutes: 30
+      #   uses: lhotari/action-upterm@v1
+
+  test-1-0-0-rc2-redis:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      
+      - name: Test
+        uses: ./.github/actions/version-compatible-hypo
+        with:
+          old_juicefs_version: '1.0.0-rc2'
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      # - name: Setup upterm session
+      #   if: ${{ failure() }}
+      #   timeout-minutes: 30
+      #   uses: lhotari/action-upterm@v1
+
+  test-1-0-0-beta1-redis:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      
+      - name: Test
+        uses: ./.github/actions/version-compatible-hypo
+        with:
+          old_juicefs_version: '1.0.0-beta1'
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      # - name: Setup upterm session
+      #   if: ${{ failure() }}
+      #   timeout-minutes: 30
+      #   uses: lhotari/action-upterm@v1
+
+  test-0-17-1-redis:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        # Docker Hub image
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      
+      - name: Test
+        uses: ./.github/actions/version-compatible-hypo
+        with:
+          old_juicefs_version: '0.17.1'
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      # - name: Setup upterm session
+      #   if: ${{ failure() }}
+      #   timeout-minutes: 30
+      #   uses: lhotari/action-upterm@v1
