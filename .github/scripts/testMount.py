@@ -67,7 +67,6 @@ class JuicefsMachine(RuleBasedStateMachine):
     valid_file_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
     @rule(juicefs=st.sampled_from(JFS_BINS), 
         no_syslog=st.booleans(),
-        log_file_name=valid_file_name, 
         other_fuse_options=st.lists(st.sampled_from(['debug', 'allow_other', 'writeback_cache']), unique=True), 
         enable_xattr=st.booleans(),
         attr_cache=st.integers(min_value=1, max_value=10), 
@@ -107,7 +106,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         options = [juicefs, 'mount', '-d',  self.meta_url, JuicefsMachine.MOUNT_POINT]
         if no_syslog:
             options.append('--no-syslog')
-        options.extend(['--log', os.path.expanduser(f'~/.juicefs/{log_file_name}.log')])
+        options.extend(['--log', os.path.expanduser(f'~/.juicefs/juicefs.log')])
         if other_fuse_options:
             options.extend(['-o', ','.join(other_fuse_options)])
         if enable_xattr:
