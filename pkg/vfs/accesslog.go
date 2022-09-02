@@ -65,7 +65,7 @@ func logit(ctx Context, format string, args ...interface{}) {
 		logger.Infof("slow operation: %s", cmd)
 	}
 	line := []byte(fmt.Sprintf("%s [uid:%d,gid:%d,pid:%d] %s\n", ts, ctx.Uid(), ctx.Gid(), ctx.Pid(), cmd))
-
+	logger.Infof(string(line))
 	for _, r := range readers {
 		select {
 		case r.buffer <- line:
