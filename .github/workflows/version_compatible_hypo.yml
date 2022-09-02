@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  1-0-0-redis:
+  test-1.0.0-redis:
     runs-on: ubuntu-latest
     services:
       redis:
@@ -59,7 +59,7 @@ jobs:
       #   timeout-minutes: 30
       #   uses: lhotari/action-upterm@v1
 
-  1-0-0-rc2-redis:
+  test-1-0-0-rc2-redis:
     runs-on: ubuntu-latest
     services:
       redis:
@@ -97,7 +97,7 @@ jobs:
       #   timeout-minutes: 30
       #   uses: lhotari/action-upterm@v1
 
-  1-0-0-beta1-redis:
+  test-1-0-0-beta1-redis:
     runs-on: ubuntu-latest
     services:
       redis:
@@ -135,7 +135,7 @@ jobs:
       #   timeout-minutes: 30
       #   uses: lhotari/action-upterm@v1
 
-  0-17-1-redis:
+  test-0-17-1-redis:
     runs-on: ubuntu-latest
     services:
       redis:
