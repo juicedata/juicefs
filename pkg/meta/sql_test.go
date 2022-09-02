@@ -18,11 +18,9 @@
 package meta
 
 import (
-	"fmt"
 	"path"
+	"strings"
 	"testing"
-
-	"github.com/pkg/errors"
 )
 
 func TestSQLiteClient(t *testing.T) {
@@ -51,7 +49,7 @@ func TestPostgreSQLClient(t *testing.T) {
 
 func TestPostgreSQLClientWithSearchPath(t *testing.T) {
 	_, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", &Config{})
-	if errors.Is(err, fmt.Errorf("currently, only one schema is supported in search_path")) {
-		t.Fatalf("create meta: %s", err)
+	if !strings.Contains(err.Error(), "currently, only one schema is supported in search_path") {
+		t.Fatalf("TestPostgreSQLClientWithSearchPath error: %s", err)
 	}
 }

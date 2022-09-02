@@ -215,7 +215,9 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	if time.Since(start) > time.Millisecond*5 {
 		logger.Warnf("The latency to database is too high: %s", time.Since(start))
 	}
-	engine.SetSchema(searchPath)
+	if searchPath != "" {
+		engine.SetSchema(searchPath)
+	}
 	engine.DB().SetMaxIdleConns(runtime.NumCPU() * 2)
 	engine.DB().SetConnMaxIdleTime(time.Minute * 5)
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))

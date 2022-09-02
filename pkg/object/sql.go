@@ -189,7 +189,9 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	default:
 		engine.SetLogLevel(log.LOG_OFF)
 	}
-	engine.SetSchema(searchPath)
+	if searchPath != "" {
+		engine.SetSchema(searchPath)
+	}
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	if err := engine.Sync2(new(blob)); err != nil {
 		return nil, fmt.Errorf("create table blob: %s", err)
