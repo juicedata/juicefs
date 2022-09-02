@@ -58,9 +58,6 @@ mkdir "$a_test_dir"
 trap cleanup INT EXIT
 
 {
-  touch "$a_test_dir"/fallocatefile2
-  exec_should_success 'sudo chattr "+a" $a_test_dir/fallocatefile2'
-
   touch "$a_test_dir"/afile
   exec_should_success 'sudo chattr "+a" $a_test_dir/afile'
   exec_should_success '[[ "$(lsattr $a_test_dir/afile | awk -F " " "{print \$1}")" =~ "a" ]]'
