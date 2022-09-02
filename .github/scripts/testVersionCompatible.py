@@ -454,7 +454,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         consul=st.sampled_from(['127.0.0.1:8500', '127.0.0.1:8501']), 
         no_usage_report=st.booleans(),
         sub_dir=valid_file_name,
-        port=st.integers(min_value=9001, max_value=10000))
+        port=st.integers(min_value=9001, max_value=10000)
     )
     @precondition(lambda self: self.formatted )
     def gateway(self, juicefs, get_timeout, put_timeout, io_retries, max_uploads, max_deletes, buffer_size, upload_limit, 
