@@ -109,6 +109,10 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--log', os.path.expanduser(f'~/.juicefs/juicefs.log')])
         if other_fuse_options:
             options.extend(['-o', ','.join(other_fuse_options)])
+        if 'user_allow_other' in other_fuse_options:
+            if os.path.exists('/etc/fuse.conf'):
+                # subprocess.check_call(['sudo', 'bash',  '-c', '"echo user_allow_other >>/etc/fuse.conf"' ])
+                os.system('sudo bash -c "echo user_allow_other >>/etc/fuse.conf"')
         if enable_xattr:
             options.append('--enable-xattr')
         options.extend(['--attr-cache', str(attr_cache)])
