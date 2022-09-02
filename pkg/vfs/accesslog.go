@@ -18,6 +18,7 @@ package vfs
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -65,7 +66,16 @@ func logit(ctx Context, format string, args ...interface{}) {
 		logger.Infof("slow operation: %s", cmd)
 	}
 	line := []byte(fmt.Sprintf("%s [uid:%d,gid:%d,pid:%d] %s\n", ts, ctx.Uid(), ctx.Gid(), ctx.Pid(), cmd))
-	logger.Infof(string(line))
+
+	file, err := os.OpenFile("/tmp/aclog.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0755)
+	if err != nil {
+		logger.Errorf("failed to open access log file: %s", err)
+	}
+	_, err = file.WriteString(string(line))
+	if err != nil {
+		logger.Errorf("failed to write access log: %s", err)
+	}
+
 	for _, r := range readers {
 		select {
 		case r.buffer <- line:
