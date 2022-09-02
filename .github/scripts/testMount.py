@@ -98,7 +98,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         no_usage_report=st.booleans(),
     )
     @precondition(lambda self: self.formatted )
-    def mount(self, juicefs, no_syslog, log_file_name, other_fuse_options, enable_xattr, attr_cache, entry_cache, dir_entry_cache,
+    def mount(self, juicefs, no_syslog, other_fuse_options, enable_xattr, attr_cache, entry_cache, dir_entry_cache,
         get_timeout, put_timeout, io_retries, max_uploads, max_deletes, buffer_size, upload_limit, download_limit, prefetch, 
         writeback, upload_delay, cache_dir, cache_size, free_space_ratio, cache_partial_only, backup_meta, heartbeat, read_only,
         no_bgjob, open_cache, sub_dir, metrics, consul, no_usage_report):
