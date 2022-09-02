@@ -13,7 +13,7 @@ from minio import Minio
 from utils import clear_cache, clear_storage, flush_meta, run_jfs_cmd
 
 class JuicefsMachine(RuleBasedStateMachine):
-    JFS_BINS = ['./juicefs']
+    JFS_BINS = ['./'+os.environ.get('OLD_JFS_BIN'), './'+os.environ.get('NEW_JFS_BIN')]
     META_URLS = [os.environ.get('META_URL')]
     STORAGES = [os.environ.get('STORAGE')]
     MOUNT_POINT = '/tmp/sync-test/'
