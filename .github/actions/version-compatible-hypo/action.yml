@@ -43,13 +43,15 @@ runs:
     - name: Download old version
       shell: bash
       run: | 
-        filename=juicefs-${{inputs.old_juicefs_version}}-linux-amd64.tar.gz
-        echo filename is: $filename
-        url=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep $filename | awk -F\" '{print $4}' | head -1)
-        echo download url is: $url
-        wget -q $url
-        tar -zxf $filename
-        mv juicefs juicefs-${{inputs.old_juicefs_version}}
+        if [ ! -z "${{inputs.old_juicefs_version}}" ]; then
+          filename=juicefs-${{inputs.old_juicefs_version}}-linux-amd64.tar.gz
+          echo filename is: $filename
+          url=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep $filename | awk -F\" '{print $4}' | head -1)
+          echo download url is: $url
+          wget -q $url
+          tar -zxf $filename
+          mv juicefs juicefs-${{inputs.old_juicefs_version}}
+        fi
         
     - name: Set up Go
       uses: actions/setup-go@v2
