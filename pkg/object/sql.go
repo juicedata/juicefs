@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -157,8 +158,20 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	if user != "" {
 		uri = user + ":" + password + "@" + addr
 	}
+	var searchPath string
 	if driver == "postgres" {
 		uri = "postgres://" + uri
+
+		parse, err := url.Parse(addr)
+		if err != nil {
+			return nil, fmt.Errorf("parse url %s failed: %s", addr, err)
+		}
+		searchPath = parse.Query().Get("search_path")
+		if searchPath != "" {
+			if len(strings.Split(searchPath, ",")) > 1 {
+				return nil, fmt.Errorf("currently, only one schema is supported in search_path")
+			}
+		}
 	}
 	engine, err := xorm.NewEngine(driver, uri)
 	if err != nil {
@@ -176,6 +189,7 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	default:
 		engine.SetLogLevel(log.LOG_OFF)
 	}
+	engine.SetSchema(searchPath)
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	if err := engine.Sync2(new(blob)); err != nil {
 		return nil, fmt.Errorf("create table blob: %s", err)
