@@ -617,6 +617,12 @@ func TestPG(t *testing.T) {
 	testStorage(t, s)
 
 }
+func TestPGWithSearchPath(t *testing.T) {
+	_, err := newSQLStore("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", "", "")
+	if !strings.Contains(err.Error(), "currently, only one schema is supported in search_path") {
+		t.Fatalf("TestPGWithSearchPath error: %s", err)
+	}
+}
 
 func TestMySQL(t *testing.T) {
 	if os.Getenv("MYSQL_ADDR") == "" {
