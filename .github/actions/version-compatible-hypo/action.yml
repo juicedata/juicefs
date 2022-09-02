@@ -2,9 +2,9 @@ name: 'Version Compatible Hypo'
 description: 'Version Compatible Hypo action'
 inputs:
   old_juicefs_version:
-    description: 'old juicefs'
+    description: 'old juicefs version'
     required: true
-    default: ''
+    default: '1.0.0'
   meta_url:  
     description: 'meta url'
     required: true
@@ -13,6 +13,10 @@ inputs:
     description: 'storage'
     required: true
     default: "minio"
+  command:
+    description: 'the target command to test'
+    required: true
+    default: "all"
 
 runs:
   using: "composite"
@@ -97,8 +101,16 @@ runs:
         export NEW_JFS_BIN="juicefs-$version"
         export OLD_JFS_BIN="juicefs-${{inputs.old_juicefs_version}}"
 
-        # python3 .github/scripts/test_action_log.py
-        python3 .github/scripts/testVersionCompatible.py
+        case "${{inputs.command}}" in
+          "all") python3 .github/scripts/testVersionCompatible.py
+          ;;
+          "mount") python3 .github/scripts/testMount.py
+          ;;
+          "gateway") python3 .github/scripts/testGateway.py
+          ;;
+          *) echo ${{inputs.command}} is not supported && exit 1
+          ;;
+        esac
         
     - name: Display log
       if: ${{ always() }}
