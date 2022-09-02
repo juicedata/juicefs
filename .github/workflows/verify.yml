@@ -48,6 +48,15 @@ jobs:
         sudo apt-get update
         sudo apt-get install g++-multilib gcc-mingw-w64
 
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
     - name: Build linux target
       run: GOPATH=$HOME/go make
 
