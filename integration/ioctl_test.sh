@@ -83,6 +83,7 @@ trap cleanup INT EXIT
   exec_should_failed 'fallocate -l 1k -n $a_test_dir/fallocatefile'
 }
 
+
 {
   mkdir -p "$a_test_dir"/adir/child_dir1/child_dir2
   touch "$a_test_dir"/adir/file
