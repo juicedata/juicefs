@@ -72,6 +72,7 @@ trap cleanup INT EXIT
   echo "12345" >> "$a_test_dir"/afile
   exec_should_success '[ "$(cat "$a_test_dir"/afile)" == "12345" ]'
 
+
   touch "$a_test_dir"/fallocatefile
   stat --format "%i" "$a_test_dir"/fallocatefile
   exec_should_success 'sudo chattr "+a" $a_test_dir/fallocatefile'
