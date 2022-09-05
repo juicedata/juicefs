@@ -194,7 +194,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         free_space_ratio=st.floats(min_value=0.1, max_value=0.5), 
         cache_partial_only=st.booleans(),
         backup_meta=st.integers(min_value=300, max_value=3600),
-        heartbeat=st.integers(min_value=1, max_value=12), 
+        heartbeat=st.integers(min_value=5, max_value=12), 
         read_only=st.booleans(),
         no_bgjob=st.booleans(),
         open_cache=st.integers(min_value=0, max_value=100),
