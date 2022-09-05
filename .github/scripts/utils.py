@@ -15,7 +15,7 @@ def flush_meta(meta_url):
             os.remove(path)
             print(f'remove meta file {path} succeed')
     elif meta_url.startswith('redis://'):
-        os.system('redis-cli flushall')
+        run_cmd('redis-cli flushall')
         print(f'flush redis succeed')
     print('flush meta succeed')
 
@@ -36,7 +36,7 @@ def clear_storage(storage, bucket, volume):
         bucket_name = url.path[1:]
         while c.bucket_exists(bucket_name) and list(c.list_objects(bucket_name)) :
             print(f'try to remove bucket {url.path[1:]}')
-            result = os.system(f'mc rm --recursive --force  myminio/{bucket_name}')
+            result = run_cmd(f'mc rm --recursive --force  myminio/{bucket_name}')
             if result != 0:
                 raise Exception(f'remove {bucket_name} failed')
             if c.bucket_exists(url.path[1:]) and list(c.list_objects(bucket_name)):
@@ -48,8 +48,8 @@ def clear_storage(storage, bucket, volume):
 
 
 def clear_cache():
-    os.system('sudo rm -rf /var/jfsCache')
-    os.system(f'sudo rm -rf {os.path.expanduser("~/.juicefs/cache")}')
+    run_cmd('sudo rm -rf /var/jfsCache')
+    run_cmd(f'sudo rm -rf {os.path.expanduser("~/.juicefs/cache")}')
     if sys.platform.startswith('linux') :
         os.system('sudo bash -c  "echo 3> /proc/sys/vm/drop_caches"')
 
