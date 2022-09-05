@@ -257,6 +257,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--consul', str(consul)])
         if no_usage_report:
             options.append('--no-usage-report')
+        if os.path.exists(JuicefsMachine.MOUNT_POINT):
+            run_cmd(f'stat {JuicefsMachine.MOUNT_POINT}')
         run_jfs_cmd(options)
         time.sleep(2)
         output = subprocess.check_output([juicefs, 'status', self.meta_url])
@@ -273,8 +275,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.is_supported_version(juicefs))
         print('start umount')
         options = [juicefs, 'umount', JuicefsMachine.MOUNT_POINT]
-        if force:
-            options.append('--force')
+        # don't force umount because it may not unmounted succeed.
+        # if force:
+        #    options.append('--force')
         run_jfs_cmd(options)
         self.mounted = False
         print('umount succeed')
