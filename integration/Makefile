@@ -30,4 +30,9 @@ webdav:
 	cd /home/travis/.m2/litmus-0.13 ; for i in "basic" "copymove" "http"; do sudo ./$${i} http://127.0.0.1:9009 ; done
 
 ioctl:
-	bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test
+	bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test1
+	bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test2
+	bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test3
+	bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test4
+	bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test5
+	bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test6
