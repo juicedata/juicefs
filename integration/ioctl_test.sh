@@ -75,6 +75,7 @@ trap cleanup INT EXIT
   exec_should_success '[ "$(cat "$a_test_dir"/afile)" == "12345" ]'
 
 
+
   touch "$a_test_dir"/fallocatefile
   stat --format "%i" "$a_test_dir"/fallocatefile
   echo "-------------------------------------------"
