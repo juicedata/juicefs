@@ -60,7 +60,9 @@ trap cleanup INT EXIT
 {
   touch "$a_test_dir"/afile
   stat --format "%i" "$a_test_dir"/afile
+  echo "-------------------------------------------"
   exec_should_success 'sudo strace chattr "+a" $a_test_dir/afile'
+  echo "-------------------------------------------"
   exec_should_success '[[ "$(lsattr $a_test_dir/afile | awk -F " " "{print \$1}")" =~ "a" ]]'
   exec_should_failed "echo aa > $a_test_dir/afile"
   exec_should_failed "rm -rf $a_test_dir/afile"
@@ -75,7 +77,9 @@ trap cleanup INT EXIT
 
   touch "$a_test_dir"/fallocatefile
   stat --format "%i" "$a_test_dir"/fallocatefile
+  echo "-------------------------------------------"
   exec_should_success 'sudo strace chattr "+a" $a_test_dir/fallocatefile'
+  echo "-------------------------------------------"
   exec_should_success '[[ "$(lsattr $a_test_dir/fallocatefile | awk -F " " "{print \$1}")" =~ "a" ]]'
   exec_should_failed 'fallocate -l 1k -n $a_test_dir/fallocatefile'
 }
