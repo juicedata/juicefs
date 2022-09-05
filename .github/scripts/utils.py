@@ -73,10 +73,11 @@ def run_cmd(command):
     if '|' in command:
         return os.system(command)
     try:
-        output = subprocess.run(command.split(), check=True,  stderr=subprocess.STDOUT, shell=True)
+        output = subprocess.run(command.split(), check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
         print(f'<FATAL>: subprocess run error: {e.output.decode()}')
         return e.returncode
-    print(output.stdout.decode())
+    if output.stdout:
+        print(output.stdout.decode())
     print('run_cmd succeed')
     return output.returncode
