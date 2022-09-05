@@ -55,6 +55,9 @@ def clear_cache():
 def run_jfs_cmd( options):
     options.append('--debug')
     print('run_jfs_cmd:'+' '.join(options))
+    with open('command.log', 'a') as f:
+        f.write(' '.join(options))
+        f.write('\n')
     try:
         output = subprocess.run(options, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
