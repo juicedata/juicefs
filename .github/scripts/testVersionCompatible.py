@@ -145,7 +145,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             raise Exception(f'storage value error: {storage}')
 
         if not self.formatted:
-            if os.path.exists(JuicefsMachine.MOUNT_POINT):
+            if os.path.exists(JuicefsMachine.MOUNT_POINT) and os.path.exists(JuicefsMachine.MOUNT_POINT+'.accesslog'):
                 run_cmd('umount %s'%JuicefsMachine.MOUNT_POINT)
                 print(f'umount {JuicefsMachine.MOUNT_POINT} succeed')
             clear_storage(storage, bucket, JuicefsMachine.VOLUME_NAME)
