@@ -68,7 +68,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         if change_bucket:
             if storage == 'file':
                 options.extend(['--bucket', os.path.expanduser('~/.juicefs/local2')])
-            else: 
+            elif storage == 'minio': 
                 c = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
                 if not c.bucket_exists('test-bucket2'):
                     run_cmd('mc mb myminio/test-bucket2')
@@ -85,6 +85,12 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.append('--encrypt-secret')
         options.append('--force')
         run_jfs_cmd(options)
+        if change_bucket:
+            # change bucket back to avoid fsck fail.
+            if storage == 'file':
+                run_jfs_cmd([juicefs, 'config', self.meta_url, '--bucket', os.path.expanduser('~/.juicefs/local')])
+            elif storage == 'minio':
+                run_jfs_cmd([juicefs, 'config', self.meta_url, '--bucket', 'http://localhost:9000/test-bucket'])
         print('config succeed')
     
     
