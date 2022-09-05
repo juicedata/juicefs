@@ -30,5 +30,37 @@ webdav:
 	cd /home/travis/.m2/litmus-0.13 ; for i in "basic" "copymove" "http"; do sudo ./$${i} http://127.0.0.1:9009 ; done
 
 ioctl:
-	for i in {0..10}; do echo ----- ioctl_test$$i start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test$$i; echo ----- ioctl_test$$i over----- ;done
+	echo ----- ioctl_test1 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test1;  echo ----- ioctl_test1 -- ;
+	echo ----- ioctl_test2 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test2;  echo ----- ioctl_test2 -- ;
+	echo ----- ioctl_test3 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test3;  echo ----- ioctl_test3 -- ;
+	echo ----- ioctl_test4 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test4;  echo ----- ioctl_test4 -- ;
+	echo ----- ioctl_test5 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test5;  echo ----- ioctl_test5 -- ;
+	echo ----- ioctl_test6 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test6;  echo ----- ioctl_test6 -- ;
+	echo ----- ioctl_test7 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test7;  echo ----- ioctl_test7 -- ;
+	echo ----- ioctl_test8 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test8;  echo ----- ioctl_test8 -- ;
+	echo ----- ioctl_test9 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test9;  echo ----- ioctl_test9 -- ;
+	echo ----- ioctl_test10 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test10; echo ----ioctl_test10----- ;
+	echo ----- ioctl_test11 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test11; echo ----ioctl_test11----- ;
+	echo ----- ioctl_test12 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test12; echo ----ioctl_test12----- ;
+	echo ----- ioctl_test13 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test13; echo ----ioctl_test13----- ;
+	echo ----- ioctl_test14 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test14; echo ----ioctl_test14----- ;
+	echo ----- ioctl_test15 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test15; echo ----ioctl_test15----- ;
+	echo ----- ioctl_test16 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test16; echo ----ioctl_test16----- ;
+	echo ----- ioctl_test17 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test17; echo ----ioctl_test17----- ;
+	echo ----- ioctl_test18 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test18; echo ----ioctl_test18----- ;
+	echo ----- ioctl_test19 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test19; echo ----ioctl_test19----- ;
+	echo ----- ioctl_test20 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test20; echo ----ioctl_test20----- ;
+	echo ----- ioctl_test21 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test21; echo ----ioctl_test21----- ;
+	echo ----- ioctl_test22 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test22; echo ----ioctl_test22----- ;
+	echo ----- ioctl_test23 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test23; echo ----ioctl_test23----- ;
+	echo ----- ioctl_test24 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test24; echo ----ioctl_test24----- ;
+	echo ----- ioctl_test25 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test25; echo ----ioctl_test25----- ;
+	echo ----- ioctl_test26 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test26; echo ----ioctl_test26----- ;
+	echo ----- ioctl_test27 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test27; echo ----ioctl_test27----- ;
+	echo ----- ioctl_test28 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test28; echo ----ioctl_test28----- ;
+	echo ----- ioctl_test29 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test29; echo ----ioctl_test29----- ;
+	echo ----- ioctl_test30 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test30; echo ----ioctl_test30----- ;
+
+
+
 
