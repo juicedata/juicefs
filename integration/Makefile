@@ -30,14 +30,5 @@ webdav:
 	cd /home/travis/.m2/litmus-0.13 ; for i in "basic" "copymove" "http"; do sudo ./$${i} http://127.0.0.1:9009 ; done
 
 ioctl:
-	echo ----- ioctl_test1 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test1; echo ----- ioctl_test1 over----- ;
-	echo ----- ioctl_test2 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test2; echo ----- ioctl_test2 over----- ;
-	echo ----- ioctl_test3 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test3; echo ----- ioctl_test3 over----- ;
-	echo ----- ioctl_test4 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test4; echo ----- ioctl_test4 over----- ;
-	echo ----- ioctl_test5 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test5; echo ----- ioctl_test5 over----- ;
-	echo ----- ioctl_test6 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test6; echo ----- ioctl_test6 over----- ;
-	echo ----- ioctl_test7 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test7; echo ----- ioctl_test7 over----- ;
-	echo ----- ioctl_test8 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test8; echo ----- ioctl_test8 over----- ;
-	echo ----- ioctl_test9 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test9; echo ----- ioctl_test9 over----- ;
-	echo ----- ioctl_test10 start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test10; echo ----- ioctl_test10 over----- ;
+	for i in {0..10}; do echo ----- ioctl_test$$i start-----; bash -x ioctl_test.sh /tmp/jfs-unit-test/ioctl_test$$i; echo ----- ioctl_test$$i over----- ;done
 
