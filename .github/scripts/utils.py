@@ -6,6 +6,7 @@ import sys
 import time
 from minio import Minio
 
+
 def flush_meta(meta_url):
     print('start flush meta')
     if meta_url.startswith('sqlite3://'):
@@ -61,8 +62,21 @@ def run_jfs_cmd( options):
     try:
         output = subprocess.run(options, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
-        print(f'subprocess run error: {e.output.decode()}')
+        print(f'<FATAL>: subprocess run error: {e.output.decode()}')
         raise Exception('subprocess run error')
     print(output.stdout.decode())
     print('run_jfs_cmd succeed')
     return output.stdout.decode()
+
+def run_cmd(command):
+    print('run_cmd:'+command)
+    if '|' in command:
+        return os.system(command)
+    try:
+        output = subprocess.run(command.split(), check=True,  stderr=subprocess.STDOUT, shell=True)
+    except subprocess.CalledProcessError as e:
+        print(f'<FATAL>: subprocess run error: {e.output.decode()}')
+        return e.returncode
+    print(output.stdout.decode())
+    print('run_cmd succeed')
+    return output.returncode
