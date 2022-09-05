@@ -99,13 +99,6 @@ runs:
 
         # python3 .github/scripts/test_action_log.py
         python3 .github/scripts/testVersionCompatible.py
-        
-    - name: Upload juicefs log
-      if: ${{ always() }}
-      uses: actions/upload-artifact@v3
-      with:
-        name: juicefs.log
-        path: /home/runner/.juicefs/juicefs.log
 
     - name: Upload command log
       if: ${{ always() }}
@@ -113,12 +106,3 @@ runs:
       with:
         name: command.log
         path: command.log
-
-    - name: Display log
-      if: ${{ always() }}
-      shell: bash
-      run: | 
-        if [ -f "/home/runner/.juicefs/juicefs.log" ]; then
-          tail -500 /home/runner/.juicefs/juicefs.log
-          grep "<FATAL>:" /home/runner/.juicefs/juicefs.log && exit 1 || true
-        fi

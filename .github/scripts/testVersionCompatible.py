@@ -392,8 +392,9 @@ class JuicefsMachine(RuleBasedStateMachine):
             if directory:
                 options.append(JuicefsMachine.MOUNT_POINT)
             else:
-                os.system(f'dd if=/dev/urandom of={JuicefsMachine.MOUNT_POINT}/bigfile bs=1048576 count=10')
-                options.append(JuicefsMachine.MOUNT_POINT+'/bigfile')
+                os.system(f'dd if=/dev/urandom of={JuicefsMachine.MOUNT_POINT}/bigfile bs=1048576 count=100')
+                assert os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/bigfile')
+                options.append(f'{JuicefsMachine.MOUNT_POINT}/bigfile')
                 
         run_jfs_cmd(options)
         # print(output)
