@@ -219,7 +219,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         if 'allow_other' in other_fuse_options:
             if os.path.exists('/etc/fuse.conf'):
                 # subprocess.check_call(['sudo', 'bash',  '-c', '"echo user_allow_other >>/etc/fuse.conf"' ])
-                run_cmd('sudo bash -c "echo user_allow_other >>/etc/fuse.conf"')
+                os.system('sudo bash -c "echo user_allow_other >>/etc/fuse.conf"')
                 print('add user_allow_other to /etc/fuse.conf succeed')
         if enable_xattr:
             options.append('--enable-xattr')
@@ -320,7 +320,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def load(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start load')
-        if os.path.exists(JuicefsMachine.MOUNT_POINT):
+        if os.path.exists(JuicefsMachine.MOUNT_POINT) and os.path.exists(JuicefsMachine.MOUNT_POINT+'.accesslog'):
             run_cmd('umount %s'%JuicefsMachine.MOUNT_POINT)
             print(f'umount {JuicefsMachine.MOUNT_POINT} succeed')
             self.mounted = False
