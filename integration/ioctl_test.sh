@@ -59,20 +59,21 @@ trap cleanup INT EXIT
 
 {
   touch "$a_test_dir"/afile
+  stat --format "%i" "$a_test_dir"/afile
   exec_should_success 'sudo chattr "+a" $a_test_dir/afile'
   exec_should_success '[[ "$(lsattr $a_test_dir/afile | awk -F " " "{print \$1}")" =~ "a" ]]'
   exec_should_failed "echo aa > $a_test_dir/afile"
   exec_should_failed "rm -rf $a_test_dir/afile"
   touch "$a_test_dir/tmpfile"
+  stat --format "%i" "$a_test_dir/tmpfile"
   exec_should_failed "mv -f $a_test_dir/tmpfile $a_test_dir/afile"
   exec_should_failed "mv -f $a_test_dir/afile $a_test_dir/tmpfile"
   exec_should_failed "ln afile $a_test_dir/linkfile"
   echo "12345" >> "$a_test_dir"/afile
   exec_should_success '[ "$(cat "$a_test_dir"/afile)" == "12345" ]'
 
-
-
   touch "$a_test_dir"/fallocatefile
+  stat --format "%i" "$a_test_dir"/fallocatefile
   exec_should_success 'sudo chattr "+a" $a_test_dir/fallocatefile'
   exec_should_success '[[ "$(lsattr $a_test_dir/fallocatefile | awk -F " " "{print \$1}")" =~ "a" ]]'
   exec_should_failed 'fallocate -l 1k -n $a_test_dir/fallocatefile'
@@ -81,6 +82,7 @@ trap cleanup INT EXIT
 {
   mkdir -p "$a_test_dir"/adir/child_dir1/child_dir2
   touch "$a_test_dir"/adir/file
+  stat --format "%i" "$a_test_dir"/adir/file
   exec_should_success 'sudo chattr "+a" $a_test_dir/adir'
   exec_should_success '[[ "$(lsattr -d $a_test_dir/adir | awk -F " " "{print \$1}")" =~ "a" ]]'
   exec_should_failed 'rm -rf $a_test_dir/adir'
@@ -108,6 +110,7 @@ mkdir "$i_test_dir"
 
 {
   touch "$i_test_dir"/ifile
+  stat --format "%i" "$i_test_dir"/ifile
   exec_should_success 'sudo chattr "+i" "$i_test_dir"/ifile'
   exec_should_success '[[ "$(lsattr $i_test_dir/ifile | awk -F " " "{print \$1}")" =~ "i" ]]'
 
@@ -115,11 +118,13 @@ mkdir "$i_test_dir"
   exec_should_failed "echo aa >> $i_test_dir/ifile"
   exec_should_failed "rm -rf $i_test_dir/ifile"
   touch "$i_test_dir/tmpfile"
+  stat --format "%i" touch "$i_test_dir/tmpfile"
   exec_should_failed "mv -f $i_test_dir/tmpfile $i_test_dir/ifile"
   exec_should_failed "mv -f $i_test_dir/ifile $a_test_dir/tmpfile"
   exec_should_failed "ln ifile $i_test_dir/linkfile"
 
   touch "$i_test_dir"/fallocatefile
+  stat --format "%i" "$i_test_dir"/fallocatefile
   exec_should_success 'sudo chattr "+i" $i_test_dir/fallocatefile'
   exec_should_success '[[ "$(lsattr $i_test_dir/fallocatefile | awk -F " " "{print \$1}")" =~ "i" ]]'
   exec_should_failed 'fallocate -l 1k -n $i_test_dir/fallocatefile'
@@ -128,6 +133,7 @@ mkdir "$i_test_dir"
 {
   mkdir -p "$i_test_dir"/idir/child_dir1/child_dir2
   touch "$i_test_dir"/idir/file
+  stat --format "%i" "$i_test_dir"/idir/file
 
   exec_should_success 'sudo chattr "+i" $i_test_dir/idir'
   exec_should_success '[[ "$(lsattr -d $i_test_dir/idir | awk -F " " "{print \$1}")" =~ "i" ]]'
@@ -145,5 +151,6 @@ mkdir "$i_test_dir"
   exec_should_failed 'mv -f $i_test_dir/idir/tmpfile $i_test_dir/idir/file'
   exec_should_failed 'mv -f $i_test_dir/idir/file $i_test_dir/idir/tmpfile'
   touch "$i_test_dir"/tfile
+  stat --format "%i" "$i_test_dir"/tfile
   exec_should_failed 'mv -f $i_test_dir/tfile $i_test_dir/idir/file2'
 }
