@@ -245,7 +245,6 @@ func (v *VFS) Setlk(ctx Context, ino Ino, fh uint64, owner uint64, start, end ui
 		h.Lock()
 		if typ != syscall.F_UNLCK {
 			h.locks |= 2
-			h.plockOwner = owner
 		}
 		h.Unlock()
 	}
