@@ -135,7 +135,7 @@ func destroy(ctx *cli.Context) error {
 			for i, s := range sessions {
 				ss[i] = [3]string{strconv.FormatUint(s.Sid, 10), s.HostName, s.MountPoint}
 			}
-			logger.Errorf("%d sessions are active, please disconnect them first:\n", num)
+			logger.Errorf("%d sessions are active, please disconnect them first:", num)
 			fmt.Println(printSessions(ss))
 			logger.Exit(1)
 		}
