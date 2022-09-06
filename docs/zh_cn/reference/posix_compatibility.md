@@ -31,7 +31,11 @@ Result: PASS
 - 支持 fallocate 以及空洞
 - 支持扩展属性
 - 支持 BSD 锁（flock）
-- 支持 POSIX 记录锁（fcntl）
+- 支持传统 POSIX 记录锁（fcntl）
+
+:::note 注意
+POSIX 记录锁分为**传统锁**和 **OFD 锁**（Open file description locks）两类，它们的加锁操作命令分别为 `F_SETLK` 和 `F_OFD_SETLK`。受限于 FUSE 内核模块的实现，目前 JuiceFS 只支持传统类型的记录锁。更多细节可参见：https://man7.org/linux/man-pages/man2/fcntl.2.html。
+:::
 
 ## LTP
 
