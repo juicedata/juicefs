@@ -2605,6 +2605,34 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	return errno(err)
 }
 
+func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	n := &node{
+		Inode:  inode,
+		Type:   attr.Typ,
+		Mode:   attr.Mode,
+		Uid:    attr.Uid,
+		Gid:    attr.Gid,
+		Atime:  attr.Atime * 1e6,
+		Mtime:  attr.Mtime * 1e6,
+		Ctime:  attr.Ctime * 1e6,
+		Length: 4 << 10,
+		Parent: attr.Parent,
+	}
+	return errno(m.txn(func(s *xorm.Session) error {
+		n.Nlink = 2
+		var rows []edge
+		if err := s.Find(&rows, &edge{Parent: inode}); err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if row.Type == TypeDirectory {
+				n.Nlink++
+			}
+		}
+		return mustInsert(s, n)
+	}, inode))
+}
+
 func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
 	defer m.timeit(time.Now())
 	inode = m.checkRoot(inode)

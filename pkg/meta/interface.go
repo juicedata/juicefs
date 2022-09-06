@@ -349,6 +349,8 @@ type Meta interface {
 	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
 	// Remove all files and directories recursively.
 	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
+	// Check integrity of an absolute path and repair it if asked
+	Check(ctx Context, fpath string, repair bool) syscall.Errno
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)

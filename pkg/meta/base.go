@@ -19,6 +19,7 @@ package meta
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"runtime"
 	"sort"
 	"strings"
@@ -73,6 +74,7 @@ type engine interface {
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doGetParents(ctx Context, inode Ino) map[Ino]int
+	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 
 	GetSession(sid uint64, detail bool) (*Session, error)
 }
@@ -949,6 +951,52 @@ func (m *baseMeta) GetParents(ctx Context, inode Ino) map[Ino]int {
 	} else {
 		return m.en.doGetParents(ctx, inode)
 	}
+}
+
+func (m *baseMeta) Check(ctx Context, fpath string, repair bool) (st syscall.Errno) {
+	var attr Attr
+	var inode Ino
+	var parent Ino = 1
+	ps := strings.Split(fpath, "/")
+	for i, name := range ps {
+		if len(name) == 0 {
+			continue
+		}
+		if st = m.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
+			logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
+			return
+		}
+		if attr.Full {
+			parent = inode
+			continue
+		}
+
+		// missing attribute
+		p := "/" + path.Join(ps[:i+1]...)
+		if attr.Typ != TypeDirectory { // TODO: determine file size?
+			logger.Errorf("Path %s (inode %d type %d) cannot be auto-repaired, you have to repair it manually or remove it", p, inode, attr.Typ)
+		} else if !repair {
+			logger.Warnf("Path %s (inode %d) can be repaired, please re-check with 'repair' enabled", p, inode)
+		} else { // repair directory inode
+			now := time.Now().Unix()
+			attr.Mode = 0644
+			attr.Uid = ctx.Uid()
+			attr.Gid = ctx.Gid()
+			attr.Atime = now
+			attr.Mtime = now
+			attr.Ctime = now
+			attr.Length = 4 << 10
+			attr.Parent = parent
+			if st = m.en.doRepair(ctx, inode, &attr); st == 0 {
+				logger.Infof("Path %s (inode %d) is successfully repaired", p, inode)
+			} else {
+				logger.Errorf("Repair path %s inode %d: %s", p, inode, st)
+			}
+		}
+		return // handle one missing inode at a time
+	}
+	logger.Infof("Path %s inode %d is valid", fpath, parent)
+	return
 }
 
 func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
