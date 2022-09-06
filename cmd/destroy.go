@@ -135,9 +135,9 @@ func destroy(ctx *cli.Context) error {
 			for i, s := range sessions {
 				ss[i] = [3]string{strconv.FormatUint(s.Sid, 10), s.HostName, s.MountPoint}
 			}
-			logger.Infof("%d sessions are active, please disconnect them first or with --force param skip sanity check and force destroy the volume:\n", num)
+			logger.Errorf("%d sessions are active, please disconnect them first:\n", num)
 			fmt.Println(printSessions(ss))
-			logger.Exit(0)
+			logger.Exit(1)
 		}
 		var totalSpace, availSpace, iused, iavail uint64
 		_ = m.StatFS(meta.Background, &totalSpace, &availSpace, &iused, &iavail)
