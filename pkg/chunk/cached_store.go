@@ -539,6 +539,7 @@ type Config struct {
 	BufferSize     int
 	Readahead      int
 	Prefetch       int
+	Checksum       int
 }
 
 type cachedStore struct {
@@ -809,7 +810,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		return
 	}
 	blen := parseObjOrigSize(key)
-	f, err := openCacheFile(stagingPath, blen)
+	f, err := openCacheFile(stagingPath, blen, store.conf.Checksum)
 	if err != nil {
 		store.pendingMutex.Lock()
 		_, ok = store.pendingKeys[key]

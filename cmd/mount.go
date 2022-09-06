@@ -333,6 +333,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		FreeSpace:      float32(c.Float64("free-space-ratio")),
 		CacheMode:      os.FileMode(0600),
 		CacheFullBlock: !c.Bool("cache-partial-only"),
+		Checksum:       c.Int("checksum"),
 		AutoCreate:     true,
 	}
 	if chunkConf.MaxUpload <= 0 {
