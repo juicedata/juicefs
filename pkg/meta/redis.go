@@ -2824,16 +2824,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	return errno(err)
 }
 
-func (m *redisMeta) RepairInode(ctx Context, parent, inode Ino) syscall.Errno {
-	now := time.Now().Unix()
-	attr := &Attr{
-		Typ:    TypeDirectory,
-		Atime:  now,
-		Mtime:  now,
-		Ctime:  now,
-		Length: 4 << 10,
-		Parent: parent,
-	}
+func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		attr.Nlink = 2
 		vals, err := tx.HGetAll(ctx, m.entryKey(inode)).Result()

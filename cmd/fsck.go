@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"fmt"
-	"path"
 	"sort"
 	"strings"
 	"time"
@@ -72,11 +71,12 @@ func fsck(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
+	var c = meta.NewContext(0, 0, []uint32{0})
 	if p := ctx.String("path"); p != "" {
-		if checkPath(m, p, ctx.Bool("repair")) {
-			logger.Infof("%d paths can be repaired, please re-run fsck with `--repair` option")
+		if !strings.HasPrefix(p, "/") {
+			logger.Fatalf("File path should be the absolute path within JuiceFS")
 		}
-		return nil
+		return m.Check(c, p, ctx.Bool("repair"))
 	}
 
 	chunkConf := chunk.Config{
@@ -129,7 +129,6 @@ func fsck(ctx *cli.Context) error {
 
 	// List all slices in metadata engine
 	sliceCSpin := progress.AddCountSpinner("Listed slices")
-	var c = meta.NewContext(0, 0, []uint32{0})
 	slices := make(map[meta.Ino][]meta.Slice)
 	r := m.ListSlices(c, slices, false, sliceCSpin.Increment)
 	if r != 0 {
@@ -192,42 +191,4 @@ func fsck(ctx *cli.Context) error {
 	}
 
 	return nil
-}
-
-func checkPath(m meta.Meta, fpath string, repair bool) (needRepair bool) {
-	if !strings.HasPrefix(fpath, "/") {
-		logger.Fatalf("File path should be the absolute path within JuiceFS")
-	}
-	var attr meta.Attr
-	var inode meta.Ino
-	var parent meta.Ino = 1
-	ps := strings.Split(fpath, "/")
-	for i, name := range ps {
-		if len(name) == 0 {
-			continue
-		}
-		if st := m.Lookup(meta.Background, parent, name, &inode, &attr); st != 0 {
-			logger.Fatalf("Lookup parent %d name %s: %s", parent, name, st)
-		} else if !attr.Full { // missing attribute
-			p := "/" + path.Join(ps[:i+1]...)
-			if attr.Typ == meta.TypeDirectory {
-				if repair {
-					if st = m.RepairInode(meta.Background, parent, inode); st == 0 {
-						logger.Infof("Path %s is successfully repaired: inode %d", p, inode)
-					} else {
-						logger.Fatalf("Repair path %s inode %d: %s", p, inode, st)
-					}
-				} else {
-					needRepair = true
-					logger.Warnf("Path %s is lack of attribute: inode %d", p, inode)
-				}
-			} else { // TODO: determine file size?
-				logger.Warnf("Path %s cannot be auto-repaired: inode %d type %d", p, inode, attr.Typ)
-			}
-			return // handle one missing inode at a time
-		}
-		parent = inode
-	}
-	logger.Infof("Path %s inode %d is valid", fpath, parent)
-	return
 }

@@ -2590,15 +2590,18 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	return errno(err)
 }
 
-func (m *dbMeta) RepairInode(ctx Context, parent, inode Ino) syscall.Errno {
-	now := time.Now()
+func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	n := &node{
-		Type:   TypeDirectory,
-		Atime:  now.UnixNano() / 1000,
-		Mtime:  now.UnixNano() / 1000,
-		Ctime:  now.UnixNano() / 1000,
+		Inode:  inode,
+		Type:   attr.Typ,
+		Mode:   attr.Mode,
+		Uid:    attr.Uid,
+		Gid:    attr.Gid,
+		Atime:  attr.Atime * 1e6,
+		Mtime:  attr.Mtime * 1e6,
+		Ctime:  attr.Ctime * 1e6,
 		Length: 4 << 10,
-		Parent: parent,
+		Parent: attr.Parent,
 	}
 	return errno(m.txn(func(s *xorm.Session) error {
 		n.Nlink = 2
