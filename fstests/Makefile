@@ -24,9 +24,12 @@ setup:
 	echo yes | redis-cli --cluster create 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003
 	mkdir -p /jfs
 	../juicefs format localhost unittest
-	../juicefs mount -d --no-usage-report --enable-xattr --attr-cache 0 --entry-cache 0  --dir-entry-cache 0 localhost /jfs
+	sudo ../juicefs mount -d --no-usage-report --enable-xattr --attr-cache 0 --entry-cache 0  --dir-entry-cache 0 localhost /jfs
 
-	sudo ../juicefs mount -d --no-usage-report --enable-xattr localhost /jfs2
+	sudo ../juicefs mount -d --no-usage-report --enable-xattr localhost /tmp/sudonocache
+	sudo ../juicefs mount -d --no-usage-report --enable-xattr --attr-cache 0 --entry-cache 0  --dir-entry-cache 0 localhost /tmp//tmp/sudocache
+	../juicefs mount -d --no-usage-report --enable-xattr localhost /tmp/nosudonocache
+	../juicefs mount -d --no-usage-report --enable-xattr --attr-cache 0 --entry-cache 0  --dir-entry-cache 0 localhost /tmp//tmp/nosudocache
 
 healthcheck:
 	pgrep juicefs

@@ -1,6 +1,6 @@
 DURATION ?= 10
 
-all: xattrs fsx s3test webdav ioctlnocache ioctlcache
+all: xattrs fsx s3test webdav sudocache sudonocache nosudocache nosudonocache
 
 
 xattrs:
@@ -29,13 +29,25 @@ s3test:
 webdav:
 	cd /home/travis/.m2/litmus-0.13 ; for i in "basic" "copymove" "http"; do sudo ./$${i} http://127.0.0.1:9009 ; done
 
-ioctlcache:
-	bash ioctl_test.sh /jfs/ioctl_test
-	bash ioctl_test.sh /jfs/ioctl_test1
-	bash ioctl_test.sh /jfs/ioctl_test2
+sudocache:
+	bash ioctl_test.sh /tmp/sudocache/sudocache1
+	bash ioctl_test.sh /tmp/sudocache/sudocache2
+	bash ioctl_test.sh /tmp/sudocache/sudocache3
 
 
-ioctlnocache:
-	bash ioctl_test.sh /jfs2/nocache1
-	bash ioctl_test.sh /jfs2/nocache2
-	bash ioctl_test.sh /jfs2/nocache3
+sudonocache:
+	bash ioctl_test.sh /tmp/sudonocache/sudonocache1
+	bash ioctl_test.sh /tmp/sudonocache/sudonocache2
+	bash ioctl_test.sh /tmp/sudonocache/sudonocache3
+
+
+nosudocache:
+	bash ioctl_test.sh /tmp/nosudocache/nosudocache1
+	bash ioctl_test.sh /tmp/nosudocache/nosudocache2
+	bash ioctl_test.sh /tmp/nosudocache/nosudocache3
+
+
+nosudonocache:
+	bash ioctl_test.sh /tmp/nosudonocache/nosudonocache1
+	bash ioctl_test.sh /tmp/nosudonocache/nosudonocache2
+	bash ioctl_test.sh /tmp/nosudonocache/nosudonocache3
