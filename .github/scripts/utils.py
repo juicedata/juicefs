@@ -68,6 +68,37 @@ def get_upload_delay_seconds(filesystem):
         config = json.load(f)
         return config['Chunk']['UploadDelay']/1000000000
     
+def get_stage_blocks(filesystem):
+    try:
+        ps = subprocess.Popen(('cat', f'{filesystem}/.stats'), stdout=subprocess.PIPE)
+        output = subprocess.check_output(('grep', 'juicefs_staging_blocks'), stdin=ps.stdout)
+        ps.wait()
+        return int(output.decode().split()[1])
+    except subprocess.CalledProcessError:
+        print('get_stage_blocks: no juicefs_staging_blocks find')
+        return 0
+
+def write(filesystem, path, data):
+    with open(path, "wb") as f:
+        f.write(data)
+    time.sleep(get_upload_delay_seconds(filesystem)+1)
+    retry = 10
+    while get_stage_blocks(filesystem) != 0 and retry > 0:
+        print('sleep for stage')
+        retry = retry - 1
+        time.sleep(1)
+    assert get_stage_blocks(filesystem) == 0
+
+def write(filesystem, filepath, bs, count):
+    run_cmd(f'dd if=/dev/urandom of={filepath} bs={bs} count={count}')
+    time.sleep(get_upload_delay_seconds(filesystem)+1)
+    retry = 10
+    while get_stage_blocks(filesystem) != 0 and retry > 0:
+        print('sleep for stage')
+        retry = retry - 1
+        time.sleep(1)
+    assert get_stage_blocks(filesystem) == 0
+
 def run_jfs_cmd( options):
     options.append('--debug')
     print('run_jfs_cmd:'+' '.join(options))

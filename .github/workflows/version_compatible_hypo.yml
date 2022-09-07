@@ -56,6 +56,14 @@ jobs:
             grep "<FATAL>:" /home/runner/.juicefs/juicefs.log && exit 1 || true
           fi
 
+      - name: Display command
+        if: ${{ always() }}
+        shell: bash
+        run: | 
+          if [ -f "command.log" ]; then
+            tail -100 command.log
+          fi
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
