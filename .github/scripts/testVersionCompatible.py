@@ -1,5 +1,6 @@
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -275,9 +276,12 @@ class JuicefsMachine(RuleBasedStateMachine):
             run_cmd(f'stat {JuicefsMachine.MOUNT_POINT}')
         run_jfs_cmd(options)
         time.sleep(2)
-        inode = subprocess.check_output(f'stat --format=%i {JuicefsMachine.MOUNT_POINT}')
+        if platform.system() == 'Linux':
+            inode = subprocess.check_output(f'stat -c %i {JuicefsMachine.MOUNT_POINT}'.split())
+        elif platform.system() == 'Darwin':
+            inode = subprocess.check_output(f'stat -f %i {JuicefsMachine.MOUNT_POINT}'.split())
         print(f'inode number: {inode}')
-        assert(inode.decode() == '1')
+        assert(inode.decode()[:-1] == '1')
         output = subprocess.check_output([juicefs, 'status', self.meta_url])
         print(f'status output: {output}')
         sessions = json.loads(output.decode().replace("'", '"'))['Sessions']
@@ -555,7 +559,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         time.sleep(2.0)
         subprocess.Popen.kill(proc)
         print('webdav succeed')
-        
+
     def is_port_in_use(self, port: int) -> bool:
         import socket
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
