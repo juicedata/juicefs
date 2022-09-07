@@ -147,7 +147,7 @@ $ cat /jfs/.accesslog
 2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
 ```
 
-The last number on each line is the time (in seconds) that the current operation takes. You can directly use this to debug and analyze performance issues, or try `./juicefs profile /jfs` to monitor real time statistics. Please run `./juicefs profile -h` or refer to [here](https://juicefs.com/docs/community/operations_profiling) to learn more about this subcommand.
+The last number on each line is the time (in seconds) that the current operation takes. You can directly use this to debug and analyze performance issues, or try `juicefs profile /jfs` to monitor real time statistics. Please run `juicefs profile -h` or refer to [here](https://juicefs.com/docs/community/operations_profiling) to learn more about this subcommand.
 
 ## Supported Object Storage
 
@@ -162,6 +162,7 @@ The last number on each line is the time (in seconds) that the current operation
 - MinIO
 - Local disk
 - Redis
+- ...
 
 JuiceFS supports almost all object storage services. [Learn more](https://juicefs.com/docs/community/how_to_setup_object_storage#supported-object-storage).
 
@@ -185,7 +186,7 @@ We use [GitHub Issues](https://github.com/juicedata/juicefs/issues) to track com
 
 ## Contributing
 
-Thank you for your contribution! Please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) for more information.
+Thank you for your contribution! Please refer to the [JuiceFS Contributing Guide](https://juicefs.com/docs/community/development/contributing_guide) for more information.
 
 ## Community
 
@@ -223,7 +224,7 @@ See ["Redis Best Practices"](https://juicefs.com/docs/community/redis_best_pract
 
 ### What's the difference between JuiceFS and XXX?
 
-See ["Comparison with Others"](docs/en/introduction/comparison) for more information.
+See ["Comparison with Others"](https://juicefs.com/docs/community/comparison/juicefs_vs_alluxio) for more information.
 
 For more FAQs, please see the [full list](https://juicefs.com/docs/community/faq).
 

@@ -103,7 +103,7 @@ Files=235, Tests=8813, 233 wallclock secs ( 2.77 usr  0.38 sys +  2.57 cusr  3.9
 Result: PASS
 ```
 
-除了 pjdfstests 覆盖的那些 POSIX 特性外，JuiceFS 还支持：
+除了 pjdfstest 覆盖的那些 POSIX 特性外，JuiceFS 还支持：
 
 - 关闭再打开（close-to-open）一致性。一旦一个文件写入完成并关闭，之后的打开和读操作保证可以访问之前写入的数据。如果是在同一个挂载点，所有写入的数据都可以立即读。
 - 重命名以及所有其他元数据操作都是原子的，由 Redis 的事务机制保证。
@@ -149,7 +149,7 @@ $ cat /jfs/.accesslog
 2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
 ```
 
-每一行的最后一个数字是该操作所消耗的时间，单位是秒。你可以直接利用它来分析各种性能问题，或者尝试 `./juicefs profile /jfs` 命令实时监控统计信息。欲进一步了解此子命令请运行 `./juicefs profile -h` 或参阅[这里](https://juicefs.com/docs/zh/community/operations_profiling)。
+每一行的最后一个数字是该操作所消耗的时间，单位是秒。你可以直接利用它来分析各种性能问题，或者尝试 `juicefs profile /jfs` 命令实时监控统计信息。欲进一步了解此子命令请运行 `juicefs profile -h` 或参阅[这里](https://juicefs.com/docs/zh/community/operations_profiling)。
 
 ## 支持的对象存储
 
@@ -163,6 +163,7 @@ $ cat /jfs/.accesslog
 - MinIO
 - 本地目录
 - Redis
+- ……
 
 JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](https://juicefs.com/docs/zh/community/how_to_setup_object_storage)。
 
@@ -186,7 +187,7 @@ JuiceFS 的存储格式已经稳定，会被后续发布的所有版本支持。
 
 ## 贡献
 
-感谢你的兴趣，请参考 [CONTRIBUTING.md](CONTRIBUTING.md)。
+感谢你对 JuiceFS 社区的贡献！请参考 [JuiceFS 贡献指南](https://juicefs.com/docs/zh/community/development/contributing_guide) 了解更多信息。
 
 ## 社区
 
@@ -224,7 +225,7 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 
 ### JuiceFS 与 XXX 的区别是什么？
 
-请查看[「同类技术对比」](docs/zh_cn/introduction/comparison)文档了解更多信息。
+请查看[「同类技术对比」](https://juicefs.com/docs/zh/community/comparison/juicefs_vs_alluxio)文档了解更多信息。
 
 更多 FAQ 请查看[完整列表](https://juicefs.com/docs/zh/community/faq)。
 
