@@ -160,7 +160,7 @@ func clientFlags() []cli.Flag {
 		},
 		&cli.IntFlag{
 			Name:  "checksum",
-			Value: 2,
+			Value: 1,
 			Usage: "checksum level (0: disable, 1: only full, 2: shrink, 3: extend)",
 		},
 		&cli.StringFlag{
