@@ -27,7 +27,7 @@ JuiceFS 提供了丰富的 API，适用于各种形式数据的管理、分析�
 1. **POSIX 兼容**：像本地文件系统一样使用，无缝对接已有应用，无业务侵入性；
 2. **HDFS 兼容**：完整兼容 [HDFS API](../deployment/hadoop_java_sdk.md)，提供更强的元数据性能；
 3. **S3 兼容**：提供 [S3 网关](../deployment/s3_gateway.md) 实现 S3 协议兼容的访问接口；
-4. **云原生**：通过 [CSI Driver](../deployment/how_to_use_on_kubernetes.md) 轻松地在 Kubernetes 中使用 JuiceFS；
+4. **云原生**：通过 [Kubernetes CSI 驱动](../deployment/how_to_use_on_kubernetes.md) 轻松地在 Kubernetes 中使用 JuiceFS；
 5. **分布式设计**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
 6. **强一致性**：确认的文件修改会在所有服务器上立即可见，保证强一致性；
 7. **强悍性能**：毫秒级延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](../benchmark/benchmark.md)；

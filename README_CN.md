@@ -1,4 +1,4 @@
-<p align="center"><a href="https://github.com/juicedata/juicefs"><img alt="JuiceFS Logo" src="docs/zh_cn/images/juicefs-logo.svg" width="50%" /></a></p>
+<p align="center"><a href="https://github.com/juicedata/juicefs"><img alt="JuiceFS Logo" src="docs/zh_cn/images/juicefs-logo-new.svg" width="50%" /></a></p>
 <p align="center">
     <a href="https://app.travis-ci.com/github/juicedata/juicefs"><img alt="Travis CI Status" src="https://img.shields.io/travis/com/juicedata/juicefs/main?label=Unit%20Testing" /></a>
     <a href="https://github.com/juicedata/juicefs/actions/workflows/integrationtests.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/juicedata/juicefs/integrationtests?label=Integration%20Testing" /></a>
@@ -18,15 +18,15 @@ JuiceFS 可以简单便捷的将海量云存储直接接入已投入生产环境
 ## 核心特性
 
 1. **POSIX 兼容**：像本地文件系统一样使用，无缝对接已有应用，无业务侵入性；
-2. **HDFS 兼容**：完整兼容 [HDFS API](docs/zh_cn/deployment/hadoop_java_sdk.md)，提供更强的元数据性能；
-3. **S3 兼容**：提供 [S3 网关](docs/zh_cn/deployment/s3_gateway.md) 实现 S3 协议兼容的访问接口；
-4. **云原生**：通过 [Kubernetes CSI 驱动](docs/zh_cn/deployment/how_to_use_on_kubernetes.md) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
+2. **HDFS 兼容**：完整兼容 [HDFS API](https://juicefs.com/docs/zh/community/hadoop_java_sdk)，提供更强的元数据性能；
+3. **S3 兼容**：提供 [S3 网关](https://juicefs.com/docs/zh/community/s3_gateway) 实现 S3 协议兼容的访问接口；
+4. **云原生**：通过 [Kubernetes CSI 驱动](https://juicefs.com/docs/zh/community/how_to_use_on_kubernetes) 可以很便捷地在 Kubernetes 中使用 JuiceFS；
 5. **多端共享**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
 6. **强一致性**：确认的修改会在所有挂载了同一文件系统的服务器上立即可见，保证强一致性；
-7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](docs/zh_cn/benchmark/benchmark.md)；
-8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest），[查看详情](docs/zh_cn/security/encrypt.md)；
+7. **强悍性能**：毫秒级的延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](https://juicefs.com/docs/zh/community/benchmark)；
+8. **数据安全**：支持传输中加密（encryption in transit）以及静态加密（encryption at rest），[查看详情](https://juicefs.com/docs/zh/community/security/encrypt)；
 9. **文件锁**：支持 BSD 锁（flock）及 POSIX 锁（fcntl）；
-10. **数据压缩**：支持使用 [LZ4](https://lz4.github.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 压缩数据，节省存储空间；
+10. **数据压缩**：支持使用 [LZ4](https://lz4.github.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 压缩数据，节省存储空间。
 
 ---
 
@@ -44,11 +44,11 @@ JuiceFS 由三个部分组成：
 
 ![JuiceFS Architecture](docs/zh_cn/images/juicefs-arch-new.png)
 
-JuiceFS 依靠 Redis 来存储文件的元数据。Redis 是基于内存的高性能的键值数据存储，非常适合存储元数据。与此同时，所有数据将通过 JuiceFS 客户端存储到对象存储中。[了解详情](docs/zh_cn/introduction/architecture.md)
+JuiceFS 依靠 Redis 来存储文件的元数据。Redis 是基于内存的高性能的键值数据存储，非常适合存储元数据。与此同时，所有数据将通过 JuiceFS 客户端存储到对象存储中。[了解详情](https://juicefs.com/docs/zh/community/architecture)
 
 ![JuiceFS Storage Format](docs/zh_cn/images/juicefs-storage-format-new.png)
 
-任何存入 JuiceFS 的文件都会被拆分成固定大小的 **"Chunk"**，默认的容量上限是 64 MiB。每个 Chunk 由一个或多个 **"Slice"** 组成，Slice 的长度不固定，取决于文件写入的方式。每个 Slice 又会被进一步拆分成固定大小的 **"Block"**，默认为 4 MiB。最后，这些 Block 会被存储到对象存储。与此同时，JuiceFS 会将每个文件以及它的 Chunks、Slices、Blocks 等元数据信息存储在元数据引擎中。[了解详情](docs/zh_cn/reference/how_juicefs_store_files.md)
+任何存入 JuiceFS 的文件都会被拆分成固定大小的 **"Chunk"**，默认的容量上限是 64 MiB。每个 Chunk 由一个或多个 **"Slice"** 组成，Slice 的长度不固定，取决于文件写入的方式。每个 Slice 又会被进一步拆分成固定大小的 **"Block"**，默认为 4 MiB。最后，这些 Block 会被存储到对象存储。与此同时，JuiceFS 会将每个文件以及它的 Chunks、Slices、Blocks 等元数据信息存储在元数据引擎中。[了解详情](https://juicefs.com/docs/zh/community/architecture#%E5%A6%82%E4%BD%95%E5%AD%98%E5%82%A8%E6%96%87%E4%BB%B6)
 
 ![How JuiceFS stores your files](docs/zh_cn/images/how-juicefs-stores-files-new.png)
 
@@ -66,25 +66,25 @@ JuiceFS 依靠 Redis 来存储文件的元数据。Redis 是基于内存的高�
 
 ### 命令索引
 
-请点击 [这里](docs/zh_cn/reference/command_reference.md) 查看所有子命令以及命令行参数。
+请点击 [这里](https://juicefs.com/docs/zh/community/command_reference) 查看所有子命令以及命令行参数。
 
 ### Kubernetes
 
-在 Kubernetes 中使用 JuiceFS 非常便捷，请查看 [这个文档](docs/zh_cn/deployment/how_to_use_on_kubernetes.md) 了解更多信息。
+在 Kubernetes 中使用 JuiceFS 非常便捷，请查看 [这个文档](https://juicefs.com/docs/zh/community/how_to_use_on_kubernetes) 了解更多信息。
 
 ### Hadoop Java SDK
 
-JuiceFS 使用 [Hadoop Java SDK](docs/zh_cn/deployment/hadoop_java_sdk.md) 与 Hadoop 生态结合。
+JuiceFS 使用 [Hadoop Java SDK](https://juicefs.com/docs/zh/community/hadoop_java_sdk) 与 Hadoop 生态结合。
 
 ## 进阶主题
 
-- [Redis 最佳实践](docs/zh_cn/administration/metadata/redis_best_practices.md)
-- [如何设置对象存储](docs/zh_cn/guide/how_to_setup_object_storage.md)
-- [缓存管理](docs/zh_cn/guide/cache_management.md)
-- [故障诊断和分析](docs/zh_cn/administration/fault_diagnosis_and_analysis.md)
-- [FUSE 挂载选项](docs/zh_cn/reference/fuse_mount_options.md)
-- [在 Windows 中使用 JuiceFS](docs/zh_cn/getting-started/installation.md#windows-系统)
-- [S3 网关](docs/zh_cn/deployment/s3_gateway.md)
+- [Redis 最佳实践](https://juicefs.com/docs/zh/community/redis_best_practices)
+- [如何设置对象存储](https://juicefs.com/docs/zh/community/how_to_setup_object_storage)
+- [缓存管理](https://juicefs.com/docs/zh/community/cache_management)
+- [故障诊断和分析](https://juicefs.com/docs/zh/community/fault_diagnosis_and_analysis)
+- [FUSE 挂载选项](https://juicefs.com/docs/zh/community/fuse_mount_options)
+- [在 Windows 中使用 JuiceFS](https://juicefs.com/docs/zh/community/installation#windows-系统)
+- [S3 网关](https://juicefs.com/docs/zh/community/s3_gateway)
 
 请查阅 [JuiceFS 文档中心](https://juicefs.com/docs/zh/community/introduction) 了解更多信息。
 
@@ -103,7 +103,7 @@ Files=235, Tests=8813, 233 wallclock secs ( 2.77 usr  0.38 sys +  2.57 cusr  3.9
 Result: PASS
 ```
 
-除了 pjdfstests 覆盖的那些 POSIX 特性外，JuiceFS 还支持：
+除了 pjdfstest 覆盖的那些 POSIX 特性外，JuiceFS 还支持：
 
 - 关闭再打开（close-to-open）一致性。一旦一个文件写入完成并关闭，之后的打开和读操作保证可以访问之前写入的数据。如果是在同一个挂载点，所有写入的数据都可以立即读。
 - 重命名以及所有其他元数据操作都是原子的，由 Redis 的事务机制保证。
@@ -128,7 +128,7 @@ JuiceFS 提供一个性能测试的子命令来帮助你了解它在你的环境
 
 ![Sequential Read Write Benchmark](docs/zh_cn/images/sequential-read-write-benchmark.svg)
 
-上图显示 JuiceFS 可以比其他两者提供 10 倍以上的吞吐，详细结果请看[这里](docs/zh_cn/benchmark/fio.md)。
+上图显示 JuiceFS 可以比其他两者提供 10 倍以上的吞吐，详细结果请看[这里](https://juicefs.com/docs/zh/community/fio)。
 
 ### 元数据性能
 
@@ -136,7 +136,7 @@ JuiceFS 提供一个性能测试的子命令来帮助你了解它在你的环境
 
 ![Metadata Benchmark](docs/zh_cn/images/metadata-benchmark.svg)
 
-上图显示 JuiceFS 的元数据性能显著优于其他两个，详细的测试报告请看[这里](docs/zh_cn/benchmark/mdtest.md)。
+上图显示 JuiceFS 的元数据性能显著优于其他两个，详细的测试报告请看[这里](https://juicefs.com/docs/zh/community/mdtest)。
 
 ### 性能分析
 
@@ -149,7 +149,7 @@ $ cat /jfs/.accesslog
 2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
 ```
 
-每一行的最后一个数字是该操作所消耗的时间，单位是秒。你可以直接利用它来分析各种性能问题，或者尝试 `./juicefs profile /jfs` 命令实时监控统计信息。欲进一步了解此子命令请运行 `./juicefs profile -h` 或参阅[这里](docs/zh_cn/benchmark/operations_profiling.md)。
+每一行的最后一个数字是该操作所消耗的时间，单位是秒。你可以直接利用它来分析各种性能问题，或者尝试 `juicefs profile /jfs` 命令实时监控统计信息。欲进一步了解此子命令请运行 `juicefs profile -h` 或参阅[这里](https://juicefs.com/docs/zh/community/operations_profiling)。
 
 ## 支持的对象存储
 
@@ -163,8 +163,9 @@ $ cat /jfs/.accesslog
 - MinIO
 - 本地目录
 - Redis
+- ……
 
-JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](docs/zh_cn/guide/how_to_setup_object_storage.md)。
+JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](https://juicefs.com/docs/zh/community/how_to_setup_object_storage/#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1)。
 
 ## 谁在使用
 
@@ -186,7 +187,7 @@ JuiceFS 的存储格式已经稳定，会被后续发布的所有版本支持。
 
 ## 贡献
 
-感谢你的兴趣，请参考 [CONTRIBUTING.md](CONTRIBUTING.md)。
+感谢你对 JuiceFS 社区的贡献！请参考 [JuiceFS 贡献指南](https://juicefs.com/docs/zh/community/development/contributing_guide) 了解更多信息。
 
 ## 社区
 
@@ -214,19 +215,19 @@ JuiceFS 的设计参考了 [Google File System](https://research.google/pubs/pub
 
 ### 为什么不支持某个对象存储？
 
-已经支持了绝大部分对象存储，参考这个[列表](docs/zh_cn/guide/how_to_setup_object_storage.md#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
+已经支持了绝大部分对象存储，参考这个[列表](https://juicefs.com/docs/zh/community/how_to_setup_object_storage#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
 ### 是否可以使用 Redis 集群版作为元数据引擎？
 
 可以。自 [v1.0.0 Beta3](https://github.com/juicedata/juicefs/releases/tag/v1.0.0-beta3) 版本开始 JuiceFS 支持使用 [Redis 集群版](https://redis.io/docs/manual/scaling)作为元数据引擎，不过需要注意的是 Redis 集群版要求一个事务中所有操作的 key 必须在同一个 hash slot 中，因此一个 JuiceFS 文件系统只能使用一个 hash slot。
 
-请查看[「Redis 最佳实践」](docs/zh_cn/administration/metadata/redis_best_practices.md)了解更多信息。
+请查看[「Redis 最佳实践」](https://juicefs.com/docs/zh/community/redis_best_practices)了解更多信息。
 
 ### JuiceFS 与 XXX 的区别是什么？
 
-请查看[「同类技术对比」](docs/zh_cn/introduction/comparison)文档了解更多信息。
+请查看[「同类技术对比」](https://juicefs.com/docs/zh/community/comparison/juicefs_vs_alluxio)文档了解更多信息。
 
-更多 FAQ 请查看[完整列表](docs/zh_cn/faq.md)。
+更多 FAQ 请查看[完整列表](https://juicefs.com/docs/zh/community/faq)。
 
 ## 历史加星
 
