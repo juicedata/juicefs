@@ -27,9 +27,9 @@ setup:
 	sudo ../juicefs mount -d --no-usage-report --enable-xattr --attr-cache 0 --entry-cache 0  --dir-entry-cache 0 localhost /jfs
 
 	sudo ../juicefs mount -d --no-usage-report --enable-xattr localhost /tmp/sudonocache
-	sudo ../juicefs mount -d --no-usage-report --enable-xattr --attr-cache 0 --entry-cache 0  --dir-entry-cache 0 localhost /tmp//tmp/sudocache
+	sudo ../juicefs mount -d --no-usage-report --enable-xattr --attr-cache 0 --entry-cache 0  --dir-entry-cache 0 localhost /tmp/sudocache
 	../juicefs mount -d --no-usage-report --enable-xattr localhost /tmp/nosudonocache
-	../juicefs mount -d --no-usage-report --enable-xattr --attr-cache 0 --entry-cache 0  --dir-entry-cache 0 localhost /tmp//tmp/nosudocache
+	../juicefs mount -d --no-usage-report --enable-xattr --attr-cache 0 --entry-cache 0  --dir-entry-cache 0 localhost /tmp/nosudocache
 
 healthcheck:
 	pgrep juicefs
