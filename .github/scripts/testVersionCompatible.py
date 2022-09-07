@@ -31,6 +31,8 @@ class JuicefsMachine(RuleBasedStateMachine):
     def __init__(self):
         super(JuicefsMachine, self).__init__()
         print('\n__init__')
+        with open('command.log', 'a') as f:
+            f.write('init------------------------------------\n')
         self.formatted = False
         self.mounted = False
         self.meta_url = None
