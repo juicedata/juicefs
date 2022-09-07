@@ -1,3 +1,4 @@
+import json
 import os
 from posixpath import expanduser
 import shutil
@@ -53,6 +54,13 @@ def clear_cache():
     if sys.platform.startswith('linux') :
         os.system('sudo bash -c  "echo 3> /proc/sys/vm/drop_caches"')
 
+def is_readonly(filesystem):
+    if not os.path.exists(f'{filesystem}/.config'):
+        return False
+    with open(f'{filesystem}/.config') as f:
+        config = json.load(f)
+        return config['Meta']['ReadOnly']
+    
 def run_jfs_cmd( options):
     options.append('--debug')
     print('run_jfs_cmd:'+' '.join(options))

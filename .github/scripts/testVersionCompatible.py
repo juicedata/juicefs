@@ -11,7 +11,7 @@ from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
 from hypothesis import assume, strategies as st
 from packaging import version
 from minio import Minio
-from utils import flush_meta, clear_storage, clear_cache, run_jfs_cmd, run_cmd
+from utils import flush_meta, clear_storage, clear_cache, run_jfs_cmd, run_cmd, is_readonly
 
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
@@ -325,6 +325,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(file_name=valid_file_name, data=st.binary() )
     @precondition(lambda self: self.mounted )
     def write_and_read(self, file_name, data):
+        assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start write and read')
         path = JuicefsMachine.MOUNT_POINT+file_name
@@ -402,6 +403,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.mounted)
     def warmup(self, juicefs, threads, background, from_file, directory):
         assume (self.is_supported_version(juicefs))
+        assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start warmup')
         clear_cache()
