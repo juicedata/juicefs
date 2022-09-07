@@ -40,6 +40,8 @@ juicefs.linux:
 	sudo mkdir -p /usr/local/include/winfsp
 	sudo cp hack/winfsp_headers/* /usr/local/include/winfsp
 
+# This is the script for compiling the Windows version on the MacOS platform.
+# Please execute the `brew install mingw-w64` command before using it.
 juicefs.exe: /usr/local/include/winfsp cmd/*.go pkg/*/*.go
 	GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc \
 	     go build -ldflags="$(LDFLAGS)" -buildmode exe -o juicefs.exe .
