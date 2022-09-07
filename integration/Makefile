@@ -30,24 +30,28 @@ webdav:
 	cd /home/travis/.m2/litmus-0.13 ; for i in "basic" "copymove" "http"; do sudo ./$${i} http://127.0.0.1:9009 ; done
 
 sudocache:
+	stat --format "%i" /tmp/sudocache
 	bash ioctl_test.sh /tmp/sudocache/sudocache1
 	bash ioctl_test.sh /tmp/sudocache/sudocache2
 	bash ioctl_test.sh /tmp/sudocache/sudocache3
 
 
 sudonocache:
+	stat --format "%i" /tmp/sudonocache
 	bash ioctl_test.sh /tmp/sudonocache/sudonocache1
 	bash ioctl_test.sh /tmp/sudonocache/sudonocache2
 	bash ioctl_test.sh /tmp/sudonocache/sudonocache3
 
 
 nosudocache:
+	stat --format "%i" /tmp/nosudocache
 	bash ioctl_test.sh /tmp/nosudocache/nosudocache1
 	bash ioctl_test.sh /tmp/nosudocache/nosudocache2
 	bash ioctl_test.sh /tmp/nosudocache/nosudocache3
 
 
 nosudonocache:
+	stat --format "%i" /tmp/nosudonocache
 	bash ioctl_test.sh /tmp/nosudonocache/nosudonocache1
 	bash ioctl_test.sh /tmp/nosudonocache/nosudonocache2
 	bash ioctl_test.sh /tmp/nosudonocache/nosudonocache3
