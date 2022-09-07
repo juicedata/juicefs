@@ -11,7 +11,7 @@ from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
 from hypothesis import assume, strategies as st
 from packaging import version
 from minio import Minio
-from utils import flush_meta, clear_storage, clear_cache, run_jfs_cmd, run_cmd, is_readonly, get_upload_delay_seconds, get_stage_blocks, write
+from utils import flush_meta, clear_storage, clear_cache, run_jfs_cmd, run_cmd, is_readonly, get_upload_delay_seconds, get_stage_blocks, write_data, write_block
 
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
@@ -329,7 +329,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start write and read')
         path = JuicefsMachine.MOUNT_POINT+file_name
-        write(JuicefsMachine.MOUNT_POINT, path, data)
+        write_data(JuicefsMachine.MOUNT_POINT, path, data)
         with open(path, "rb") as f:
             result = f.read()
         assert str(result) == str(data)
@@ -414,7 +414,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             path_list = [JuicefsMachine.MOUNT_POINT+'file1', JuicefsMachine.MOUNT_POINT+'file2', JuicefsMachine.MOUNT_POINT+'file3']
             for filepath in path_list:
                 if not os.path.exists(filepath):
-                    write(JuicefsMachine.MOUNT_POINT, filepath, 4096, 100)
+                    write_block(JuicefsMachine.MOUNT_POINT, filepath, 4096, 100)
             with open('file.list', 'w') as f:
                 for path in path_list:
                     f.write(path+'\n')
@@ -427,7 +427,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             if directory:
                 options.append(JuicefsMachine.MOUNT_POINT)
             else:
-                write(JuicefsMachine.MOUNT_POINT, f'{JuicefsMachine.MOUNT_POINT}/bigfile', 1048576, 100)
+                write_block(JuicefsMachine.MOUNT_POINT, f'{JuicefsMachine.MOUNT_POINT}/bigfile', 1048576, 100)
                 assert os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/bigfile')
                 options.append(f'{JuicefsMachine.MOUNT_POINT}/bigfile')
                 
