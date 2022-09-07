@@ -66,7 +66,7 @@ def get_upload_delay_seconds(filesystem):
         return False
     with open(f'{filesystem}/.config') as f:
         config = json.load(f)
-        return config['Meta']['UploadDelay']/1000000000
+        return config['Chunk']['UploadDelay']/1000000000
     
 def run_jfs_cmd( options):
     options.append('--debug')
