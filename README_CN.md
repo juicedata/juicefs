@@ -165,7 +165,7 @@ $ cat /jfs/.accesslog
 - Redis
 - ……
 
-JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](https://juicefs.com/docs/zh/community/how_to_setup_object_storage)。
+JuiceFS 支持几乎所有主流的对象存储服务，[查看详情](https://juicefs.com/docs/zh/community/how_to_setup_object_storage/#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1)。
 
 ## 谁在使用
 
