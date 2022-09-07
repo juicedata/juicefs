@@ -26,7 +26,6 @@ setup:
 	../juicefs format localhost unittest
 	../juicefs mount -d --no-usage-report --enable-xattr --attr-cache 0 --entry-cache 0  --dir-entry-cache 0 localhost /jfs
 
-	../juicefs format localhost unittest2
 	sudo ../juicefs mount -d --no-usage-report --enable-xattr --attr-cache 0 --entry-cache 0  --dir-entry-cache 0 localhost /jfs2
 
 healthcheck:

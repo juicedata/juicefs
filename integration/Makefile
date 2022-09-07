@@ -31,6 +31,10 @@ webdav:
 
 ioctl:
 	bash ioctl_test.sh /jfs/ioctl_test
+	bash ioctl_test.sh /jfs/ioctl_test1
+	bash ioctl_test.sh /jfs/ioctl_test2
 
 ioctl2:
 	bash ioctl_test.sh /jfs2/ioctl_test
+	bash ioctl_test.sh /jfs2/ioctl_test1
+	bash ioctl_test.sh /jfs2/ioctl_test2
