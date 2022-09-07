@@ -287,7 +287,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         output = subprocess.check_output([juicefs, 'status', self.meta_url])
         print(f'status output: {output}')
         sessions = json.loads(output.decode().replace("'", '"'))['Sessions']
-        assert len(sessions) != 0 
+        if not read_only: 
+            assert len(sessions) != 0 
         self.mounted = True
         print('mount succeed')
 
