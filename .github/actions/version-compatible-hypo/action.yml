@@ -99,12 +99,10 @@ runs:
 
         # python3 .github/scripts/test_action_log.py
         python3 .github/scripts/testVersionCompatible.py
-        
-    - name: Display log
+
+    - name: Upload command log
       if: ${{ always() }}
-      shell: bash
-      run: | 
-        if [ -f "$HOME/.juicefs/juicefs.log" ]; then
-          tail -500 ~/.juicefs/juicefs.log
-          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
-        fi
+      uses: actions/upload-artifact@v3
+      with:
+        name: command.log
+        path: command.log
