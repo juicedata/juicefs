@@ -1,6 +1,6 @@
 DURATION ?= 10
 
-all: xattrs fsx s3test webdav sudocache sudonocache nosudocache nosudonocache
+all: xattrs fsx s3test webdav nosudocache nosudonocache sudocache sudonocache
 
 
 xattrs:
