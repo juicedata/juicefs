@@ -516,7 +516,7 @@ func (cache *cacheStore) scanCached() {
 	cache.Unlock()
 }
 
-var pathReg, _ = regexp.Compile(`^chunks\/\d+\/\d+\/\d+_\d+_\d+$`)
+var pathReg, _ = regexp.Compile(`^chunks/\d+/\d+/\d+_\d+_\d+$`)
 
 func (cache *cacheStore) scanStaging() {
 	if cache.uploader == nil {
