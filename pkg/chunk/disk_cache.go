@@ -849,19 +849,21 @@ func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
 	}
 
 	ioff := int(roff) / csBlock // index offset
-	if roff%csBlock != 0 {      // must be csShrink
-		if o := csBlock - int(roff)%csBlock; len(rb) <= o {
-			return
-		} else {
-			rb = rb[o:]
-			ioff += 1
+	if cf.csLevel == csShrink {
+		if roff%csBlock != 0 {
+			if o := csBlock - int(roff)%csBlock; len(rb) <= o {
+				return
+			} else {
+				rb = rb[o:]
+				ioff += 1
+			}
 		}
-	}
-	if end := int(roff) + n; end != cf.length && end%csBlock != 0 { // must be csShrink
-		if len(rb) <= end%csBlock {
-			return
+		if end := int(roff) + n; end != cf.length && end%csBlock != 0 {
+			if len(rb) <= end%csBlock {
+				return
+			}
+			rb = rb[:len(rb)-end%csBlock]
 		}
-		rb = rb[:len(rb)-end%csBlock]
 	}
 	// now rb contains the data to check
 	length := len(rb)
