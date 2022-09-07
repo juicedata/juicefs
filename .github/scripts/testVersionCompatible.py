@@ -175,7 +175,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print(f'status output: {output.decode()}')
         uuid = json.loads(output.decode().replace("'", '"'))['Setting']['UUID']
         assert len(uuid) != 0
-        if self.mounted:
+        if self.mounted and not is_readonly(JuicefsMachine.MOUNT_POINT):
             sessions = json.loads(output.decode().replace("'", '"'))['Sessions']
             assert len(sessions) != 0 
         print('status succeed')
