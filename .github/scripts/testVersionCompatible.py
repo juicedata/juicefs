@@ -209,12 +209,20 @@ class JuicefsMachine(RuleBasedStateMachine):
         consul=st.sampled_from(['127.0.0.1:8500', '127.0.0.1:8501']), 
         no_usage_report=st.booleans(),
     )
-    @precondition(lambda self: self.formatted )
+    @precondition(lambda self: self.formatted  )
     def mount(self, juicefs, no_syslog, other_fuse_options, enable_xattr, attr_cache, entry_cache, dir_entry_cache,
         get_timeout, put_timeout, io_retries, max_uploads, max_deletes, buffer_size, upload_limit, download_limit, prefetch, 
         writeback, upload_delay, cache_dir, cache_size, free_space_ratio, cache_partial_only, backup_meta, heartbeat, read_only,
         no_bgjob, open_cache, sub_dir, metrics, consul, no_usage_report):
         assume (self.is_supported_version(juicefs))
+        retry = 3
+        while os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog') and retry > 0:
+            os.system(f'umount {JuicefsMachine.MOUNT_POINT}')
+            retry = retry - 1 
+            time.sleep(1)
+        if os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'):
+            print(f'FATAL: umount {JuicefsMachine.MOUNT_POINT} failed.')
+        assume(not os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start mount')
         options = [juicefs, 'mount', '-d',  self.meta_url, JuicefsMachine.MOUNT_POINT]
         if no_syslog:
@@ -267,6 +275,9 @@ class JuicefsMachine(RuleBasedStateMachine):
             run_cmd(f'stat {JuicefsMachine.MOUNT_POINT}')
         run_jfs_cmd(options)
         time.sleep(2)
+        inode = subprocess.check_output(f'stat --format=%i {JuicefsMachine.MOUNT_POINT}')
+        print(f'inode number: {inode}')
+        assert(inode.decode() == '1')
         output = subprocess.check_output([juicefs, 'status', self.meta_url])
         print(f'status output: {output}')
         sessions = json.loads(output.decode().replace("'", '"'))['Sessions']
@@ -307,6 +318,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(file_name=valid_file_name, data=st.binary() )
     @precondition(lambda self: self.mounted )
     def write_and_read(self, file_name, data):
+        assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start write and read')
         path = JuicefsMachine.MOUNT_POINT+file_name
         with open(path, "wb") as f:
@@ -360,6 +372,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.mounted and False)
     def bench(self, juicefs, block_size, big_file_size, small_file_size, small_file_count, threads):
         assume (self.is_supported_version(juicefs))
+        assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start bench')
         run_cmd(f'df | grep {JuicefsMachine.MOUNT_POINT}')
         options = [juicefs, 'bench', JuicefsMachine.MOUNT_POINT]
@@ -382,6 +395,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.mounted)
     def warmup(self, juicefs, threads, background, from_file, directory):
         assume (self.is_supported_version(juicefs))
+        assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start warmup')
         clear_cache()
         options = [juicefs, 'warmup']
@@ -527,21 +541,6 @@ class JuicefsMachine(RuleBasedStateMachine):
         subprocess.Popen.kill(proc)
         print('gateway succeed')
 
-    @rule(juicefs = st.sampled_from(JFS_BINS),
-        port=st.integers(min_value=9001, max_value=10000))
-    @precondition(lambda self: self.formatted)
-    def gateway(self, juicefs, port):
-        assume (self.is_supported_version(juicefs))
-        print('start gateway')
-        if self.is_port_in_use(port):
-            return
-        os.environ['MINIO_ROOT_USER'] = 'admin'
-        os.environ['MINIO_ROOT_PASSWORD'] = '12345678'
-        options = [juicefs, 'gateway', self.meta_url, f'localhost:{port}']
-        proc=subprocess.Popen(options)
-        time.sleep(2.0)
-        subprocess.Popen.kill(proc)
-        print('gateway succeed')
 
     @rule(juicefs = st.sampled_from(JFS_BINS), 
         port=st.integers(min_value=10001, max_value=11000)) 
@@ -556,6 +555,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         time.sleep(2.0)
         subprocess.Popen.kill(proc)
         print('webdav succeed')
+        
     def is_port_in_use(self, port: int) -> bool:
         import socket
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
