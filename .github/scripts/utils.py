@@ -60,6 +60,13 @@ def is_readonly(filesystem):
     with open(f'{filesystem}/.config') as f:
         config = json.load(f)
         return config['Meta']['ReadOnly']
+
+def get_upload_delay_seconds(filesystem):
+    if not os.path.exists(f'{filesystem}/.config'):
+        return False
+    with open(f'{filesystem}/.config') as f:
+        config = json.load(f)
+        return config['Meta']['UploadDelay']/1000000000
     
 def run_jfs_cmd( options):
     options.append('--debug')

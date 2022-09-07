@@ -11,7 +11,7 @@ from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
 from hypothesis import assume, strategies as st
 from packaging import version
 from minio import Minio
-from utils import flush_meta, clear_storage, clear_cache, run_jfs_cmd, run_cmd, is_readonly
+from utils import flush_meta, clear_storage, clear_cache, run_jfs_cmd, run_cmd, is_readonly, get_upload_delay_seconds
 
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
@@ -197,7 +197,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         download_limit=st.integers(min_value=0, max_value=1000), 
         prefetch=st.integers(min_value=0, max_value=100), 
         writeback=st.booleans(),
-        upload_delay=st.integers(min_value=0, max_value=60), 
+        upload_delay=st.sampled_from([0, 2]), 
         cache_dir=valid_file_name,
         cache_size=st.integers(min_value=0, max_value=1024000), 
         free_space_ratio=st.floats(min_value=0.1, max_value=0.5), 
@@ -419,6 +419,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             with open('file.list', 'w') as f:
                 for path in path_list:
                     f.write(path+'\n')
+            time.sleep(get_upload_delay_seconds(f'{JuicefsMachine.MOUNT_POINT}')+2)
             options.extend(['--file', 'file.list'])
         else:
             if directory:
