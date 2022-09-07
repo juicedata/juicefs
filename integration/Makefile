@@ -1,6 +1,6 @@
 DURATION ?= 10
 
-all: xattrs fsx s3test webdav ioctl
+all: xattrs fsx s3test webdav ioctl ioctl2
 
 
 xattrs:
@@ -30,4 +30,7 @@ webdav:
 	cd /home/travis/.m2/litmus-0.13 ; for i in "basic" "copymove" "http"; do sudo ./$${i} http://127.0.0.1:9009 ; done
 
 ioctl:
-	bash ioctl_test.sh /jfs/ioctl_test 2>/dev/null
+	bash ioctl_test.sh /jfs/ioctl_test
+
+ioctl2:
+	bash ioctl_test.sh /jfs2/ioctl_test
