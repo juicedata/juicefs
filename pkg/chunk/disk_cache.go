@@ -516,7 +516,7 @@ func (cache *cacheStore) scanCached() {
 	cache.Unlock()
 }
 
-var pathReg, _ = regexp.Compile(`^chunks(\/|\\)\d+(\/|\\)\d+(\/|\\)\d+_\d+_\d+$`)
+var pathReg, _ = regexp.Compile(`^chunks\/\d+\/\d+\/\d+_\d+_\d+$`)
 
 func (cache *cacheStore) scanStaging() {
 	if cache.uploader == nil {
@@ -539,7 +539,9 @@ func (cache *cacheStore) scanStaging() {
 				}
 			} else {
 				key := path[len(stagingPrefix)+1:]
-
+				if runtime.GOOS == "windows" {
+					key = strings.ReplaceAll(key, "\\", "/")
+				}
 				if !pathReg.MatchString(key) {
 					logger.Warnf("Ignore invalid file in staging: %s", path)
 					return nil
@@ -551,9 +553,6 @@ func (cache *cacheStore) scanStaging() {
 				logger.Debugf("Found staging block: %s", path)
 				cache.m.stageBlocks.Add(1)
 				cache.m.stageBlockBytes.Add(float64(fi.Size()))
-				if runtime.GOOS == "windows" {
-					key = strings.ReplaceAll(key, "\\", "/")
-				}
 				cache.uploader(key, path, false)
 				count++
 			}

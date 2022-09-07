@@ -102,24 +102,6 @@ func TestCheckPath(t *testing.T) {
 		{path: "chunks/111_/2222/3333_3333_3333", expected: false},
 		{path: "chunks/111/22_22/3333_3333_3333", expected: false},
 		{path: "chunks/111/22_22/3333_3333_3333", expected: false},
-
-		// windows path style
-		{path: "chunks\\111\\222\\3333_3333_3333", expected: true},
-		{path: "chunks\\111\\222\\3333_3333_0", expected: true},
-		{path: "chunks\\0\\0\\0_0_0", expected: true},
-		{path: "chunks\\01\\10\\0_01_0", expected: true},
-		{path: "achunks\\111\\222\\3333_3333_3333", expected: false},
-		{path: "chunksa\\111\\222\\3333_3333_3333", expected: false},
-		{path: "chunksa", expected: false},
-		{path: "chunks\\111", expected: false},
-		{path: "chunks\\111\\2222", expected: false},
-		{path: "chunks\\111\\2222\\3", expected: false},
-		{path: "chunks\\111\\2222\\3333_3333", expected: false},
-		{path: "chunks\\111\\2222\\3333_3333_3333_4444", expected: false},
-		{path: "chunks\\111\\2222\\3333_3333_3333\\4444", expected: false},
-		{path: "chunks\\111_\\2222\\3333_3333_3333", expected: false},
-		{path: "chunks\\111\\22_22\\3333_3333_3333", expected: false},
-		{path: "chunks\\111\\22_22\\3333_3333_3333", expected: false},
 	}
 	for _, c := range cases {
 		if res := pathReg.MatchString(c.path); res != c.expected {
