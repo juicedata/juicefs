@@ -53,13 +53,14 @@ type pendingFile struct {
 type cacheStore struct {
 	totalPages int64
 	sync.Mutex
-	dir       string
-	mode      os.FileMode
-	capacity  int64
-	freeRatio float32
-	pending   chan pendingFile
-	pages     map[string]*Page
-	m         *cacheManager
+	dir          string
+	mode         os.FileMode
+	capacity     int64
+	freeRatio    float32
+	scanInterval time.Duration
+	pending      chan pendingFile
+	pages        map[string]*Page
+	m            *cacheManager
 
 	used     int64
 	keys     map[string]cacheItem
@@ -76,15 +77,16 @@ func newCacheStore(m *cacheManager, dir string, cacheSize int64, pendingPages in
 		config.FreeSpace = 0.1 // 10%
 	}
 	c := &cacheStore{
-		m:         m,
-		dir:       dir,
-		mode:      config.CacheMode,
-		capacity:  cacheSize,
-		freeRatio: config.FreeSpace,
-		keys:      make(map[string]cacheItem),
-		pending:   make(chan pendingFile, pendingPages),
-		pages:     make(map[string]*Page),
-		uploader:  uploader,
+		m:            m,
+		dir:          dir,
+		mode:         config.CacheMode,
+		capacity:     cacheSize,
+		freeRatio:    config.FreeSpace,
+		scanInterval: config.CacheScanInterval,
+		keys:         make(map[string]cacheItem),
+		pending:      make(chan pendingFile, pendingPages),
+		pages:        make(map[string]*Page),
+		uploader:     uploader,
 	}
 	c.createDir(c.dir)
 	br, fr := c.curFreeRatio()
@@ -129,9 +131,12 @@ func (cache *cacheStore) checkFreeSpace() {
 }
 
 func (cache *cacheStore) refreshCacheKeys() {
-	for {
-		cache.scanCached()
-		time.Sleep(time.Minute * 5)
+	cache.scanCached()
+	if cache.scanInterval > 0 {
+		for {
+			time.Sleep(cache.scanInterval)
+			cache.scanCached()
+		}
 	}
 }
 

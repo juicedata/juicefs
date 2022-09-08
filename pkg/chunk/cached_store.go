@@ -518,27 +518,28 @@ func (s *wSlice) Abort() {
 
 // Config contains options for cachedStore
 type Config struct {
-	CacheDir       string
-	CacheMode      os.FileMode
-	CacheSize      int64
-	FreeSpace      float32
-	AutoCreate     bool
-	Compress       string
-	MaxUpload      int
-	MaxDeletes     int
-	MaxRetries     int
-	UploadLimit    int64 // bytes per second
-	DownloadLimit  int64 // bytes per second
-	Writeback      bool
-	UploadDelay    time.Duration
-	HashPrefix     bool
-	BlockSize      int
-	GetTimeout     time.Duration
-	PutTimeout     time.Duration
-	CacheFullBlock bool
-	BufferSize     int
-	Readahead      int
-	Prefetch       int
+	CacheDir          string
+	CacheMode         os.FileMode
+	CacheSize         int64
+	CacheScanInterval time.Duration
+	FreeSpace         float32
+	AutoCreate        bool
+	Compress          string
+	MaxUpload         int
+	MaxDeletes        int
+	MaxRetries        int
+	UploadLimit       int64 // bytes per second
+	DownloadLimit     int64 // bytes per second
+	Writeback         bool
+	UploadDelay       time.Duration
+	HashPrefix        bool
+	BlockSize         int
+	GetTimeout        time.Duration
+	PutTimeout        time.Duration
+	CacheFullBlock    bool
+	BufferSize        int
+	Readahead         int
+	Prefetch          int
 }
 
 type cachedStore struct {
