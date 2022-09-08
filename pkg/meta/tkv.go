@@ -2416,7 +2416,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	return nil
 }
 
-func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
+func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			debug.PrintStack()
@@ -2587,11 +2587,11 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 		Sustained: sessions,
 		DelFiles:  dels,
 	}
-	if dm.Setting.SecretKey != "" {
+	if !keepSecret && dm.Setting.SecretKey != "" {
 		dm.Setting.SecretKey = "removed"
 		logger.Warnf("Secret key is removed for the sake of safety")
 	}
-	if dm.Setting.SessionToken != "" {
+	if !keepSecret && dm.Setting.SessionToken != "" {
 		dm.Setting.SessionToken = "removed"
 		logger.Warnf("Session token is removed for the sake of safety")
 	}

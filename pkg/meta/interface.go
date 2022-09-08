@@ -356,7 +356,7 @@ type Meta interface {
 	OnMsg(mtype uint32, cb MsgCallback)
 
 	// Dump the tree under root, which may be modified by checkRoot
-	DumpMeta(w io.Writer, root Ino) error
+	DumpMeta(w io.Writer, root Ino, keepSecret bool) error
 	LoadMeta(r io.Reader) error
 
 	// getBase return the base engine.
