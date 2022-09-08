@@ -30,7 +30,7 @@ function cleanup() {
     trap - EXIT
     sudo chattr -R "=" "$test_dir"
     rm -rf "$test_dir"
-    exit $code
+    exit 0
 }
 
 function exec_should_failed() {
