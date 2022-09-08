@@ -328,12 +328,13 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		DownloadLimit: c.Int64("download-limit") * 1e6 / 8,
 		UploadDelay:   duration(c.String("upload-delay")),
 
-		CacheDir:       c.String("cache-dir"),
-		CacheSize:      int64(c.Int("cache-size")),
-		FreeSpace:      float32(c.Float64("free-space-ratio")),
-		CacheMode:      os.FileMode(0600),
-		CacheFullBlock: !c.Bool("cache-partial-only"),
-		AutoCreate:     true,
+		CacheDir:          c.String("cache-dir"),
+		CacheSize:         int64(c.Int("cache-size")),
+		FreeSpace:         float32(c.Float64("free-space-ratio")),
+		CacheMode:         os.FileMode(0600),
+		CacheFullBlock:    !c.Bool("cache-partial-only"),
+		CacheScanInterval: duration(c.String("cache-scan-interval")),
+		AutoCreate:        true,
 	}
 	if chunkConf.MaxUpload <= 0 {
 		logger.Warnf("max-uploads should be greater than 0, set it to 1")
