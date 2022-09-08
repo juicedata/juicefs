@@ -523,6 +523,7 @@ type Config struct {
 	CacheSize      int64
 	FreeSpace      float32
 	AutoCreate     bool
+	CacheChecksum  string
 	Compress       string
 	MaxUpload      int
 	MaxDeletes     int
@@ -539,7 +540,6 @@ type Config struct {
 	BufferSize     int
 	Readahead      int
 	Prefetch       int
-	Checksum       int
 }
 
 type cachedStore struct {
@@ -810,7 +810,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		return
 	}
 	blen := parseObjOrigSize(key)
-	f, err := openCacheFile(stagingPath, blen, store.conf.Checksum)
+	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
 		store.pendingMutex.Lock()
 		_, ok = store.pendingKeys[key]

@@ -158,10 +158,10 @@ func clientFlags() []cli.Flag {
 			Name:  "cache-partial-only",
 			Usage: "cache only random/small read",
 		},
-		&cli.IntFlag{
-			Name:  "checksum",
-			Value: 1,
-			Usage: "checksum level (0: disable, 1: only full, 2: shrink, 3: extend)",
+		&cli.StringFlag{
+			Name:  "verify-cache-checksum",
+			Value: "full",
+			Usage: "checksum level (none, full, shrink, extend)",
 		},
 		&cli.StringFlag{
 			Name:  "backup-meta",

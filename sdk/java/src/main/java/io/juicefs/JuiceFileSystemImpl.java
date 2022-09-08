@@ -311,6 +311,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("entryTimeout", Float.valueOf(getConf(conf, "entry-cache", "0.0")));
     obj.put("dirEntryTimeout", Float.valueOf(getConf(conf, "dir-entry-cache", "0.0")));
     obj.put("cacheFullBlock", Boolean.valueOf(getConf(conf, "cache-full-block", "true")));
+    obj.put("cacheChecksum", getConf(conf, "verify-cache-checksum", "full"));
     obj.put("metacache", Boolean.valueOf(getConf(conf, "metacache", "true")));
     obj.put("autoCreate", Boolean.valueOf(getConf(conf, "auto-create-cache-dir", "true")));
     obj.put("maxUploads", Integer.valueOf(getConf(conf, "max-uploads", "20")));

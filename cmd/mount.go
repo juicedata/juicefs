@@ -333,7 +333,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		FreeSpace:      float32(c.Float64("free-space-ratio")),
 		CacheMode:      os.FileMode(0600),
 		CacheFullBlock: !c.Bool("cache-partial-only"),
-		Checksum:       c.Int("checksum"),
+		CacheChecksum:  c.String("verify-cache-checksum"),
 		AutoCreate:     true,
 	}
 	if chunkConf.MaxUpload <= 0 {
@@ -351,6 +351,10 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 			ds[i] = filepath.Join(ds[i], format.UUID)
 		}
 		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
+	}
+	if cs := []string{chunk.CsNone, chunk.CsFull, chunk.CsShrink, chunk.CsExtend}; !utils.StringContains(cs, chunkConf.CacheChecksum) {
+		logger.Warnf("verify-cache-checksum should be one of %v", cs)
+		chunkConf.CacheChecksum = chunk.CsFull
 	}
 	return chunkConf
 }

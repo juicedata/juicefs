@@ -66,7 +66,7 @@ type cacheStore struct {
 	keys     map[string]cacheItem
 	scanned  bool
 	full     bool
-	checksum int // checksum level
+	checksum string // checksum level
 	uploader func(key, path string, force bool) bool
 }
 
@@ -86,7 +86,7 @@ func newCacheStore(m *cacheManager, dir string, cacheSize int64, pendingPages in
 		keys:      make(map[string]cacheItem),
 		pending:   make(chan pendingFile, pendingPages),
 		pages:     make(map[string]*Page),
-		checksum:  config.Checksum,
+		checksum:  config.CacheChecksum,
 		uploader:  uploader,
 	}
 	c.createDir(c.dir)
@@ -198,7 +198,7 @@ func (cache *cacheStore) flushPage(path string, data []byte) (err error) {
 		_ = f.Close()
 		return
 	}
-	if cache.checksum > 0 {
+	if cache.checksum != CsNone {
 		if _, err = f.Write(checksum(data)); err != nil {
 			logger.Warnf("Write checksum to cache file %s failed: %s", tmp, err)
 			_ = f.Close()
@@ -761,10 +761,10 @@ func (m *cacheManager) uploaded(key string, size int) {
 
 /* --- Checksum --- */
 const (
-	csNone = iota
-	csFull
-	csShrink
-	csExtend
+	CsNone   = "none"
+	CsFull   = "full"
+	CsShrink = "shrink"
+	CsExtend = "extend"
 
 	csBlock = 32 << 10
 )
@@ -772,7 +772,7 @@ const (
 type cacheFile struct {
 	*os.File
 	length  int // length of data
-	csLevel int
+	csLevel string
 }
 
 // Calculate 32-bits checksum for every 32 KiB data, so 512 Bytes for 4 MiB in total
@@ -790,7 +790,7 @@ func checksum(data []byte) []byte {
 	return buf.Bytes()
 }
 
-func openCacheFile(name string, length int, level int) (*cacheFile, error) {
+func openCacheFile(name string, length int, level string) (*cacheFile, error) {
 	fp, err := os.Open(name)
 	if err != nil {
 		return nil, err
@@ -803,7 +803,7 @@ func openCacheFile(name string, length int, level int) (*cacheFile, error) {
 	checksumLength := ((length-1)/csBlock + 1) * 4
 	switch fi.Size() - int64(length) {
 	case 0:
-		return &cacheFile{fp, length, csNone}, nil
+		return &cacheFile{fp, length, CsNone}, nil
 	case int64(checksumLength):
 		return &cacheFile{fp, length, level}, nil
 	default:
@@ -817,12 +817,12 @@ func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
 	defer func() {
 		logger.Tracef("CacheFile readat returns n %d err %s", n, err)
 	}()
-	if cf.csLevel == csNone || cf.csLevel == csFull && (off != 0 || len(b) != cf.length) {
+	if cf.csLevel == CsNone || cf.csLevel == CsFull && (off != 0 || len(b) != cf.length) {
 		return cf.File.ReadAt(b, off)
 	}
 	var rb = b     // read buffer
 	var roff = off // read offset
-	if cf.csLevel == csExtend {
+	if cf.csLevel == CsExtend {
 		roff = off / csBlock * csBlock
 		rend := int(off) + len(b)
 		if rend%csBlock != 0 {
@@ -849,7 +849,7 @@ func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
 	}
 
 	ioff := int(roff) / csBlock // index offset
-	if cf.csLevel == csShrink {
+	if cf.csLevel == CsShrink {
 		if roff%csBlock != 0 {
 			if o := csBlock - int(roff)%csBlock; len(rb) <= o {
 				return
