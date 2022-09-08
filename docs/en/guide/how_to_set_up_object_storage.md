@@ -642,7 +642,6 @@ Please follow [this document](https://docs.jdcloud.com/cn/account-management/acc
 The `--bucket` option format is `https://<bucket>.<region>.jdcloud-oss.com`，and please replace `<region>` with specific region code. You could find all available region codes [here](https://docs.jdcloud.com/cn/object-storage-service/oss-endpont-list). For example:
 
 ```bash
-# Running within JD Cloud
 juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<region>.jdcloud-oss.com \

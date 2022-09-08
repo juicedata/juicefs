@@ -642,7 +642,6 @@ juicefs format \
 `--bucket` 选项的格式为 `https://<bucket>.<region>.jdcloud-oss.com`，请将 `<region>` 替换成你实际使用的存储区域，区域代码[点此查看](https://docs.jdcloud.com/cn/object-storage-service/oss-endpont-list) 。例如：
 
 ```bash
-# 在京东云中运行
 juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<region>.jdcloud-oss.com \
