@@ -174,9 +174,9 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		conf,
 		&jfsgateway.Config{
 			MultiBucket: c.Bool("multi-buckets"),
-			KeepEtag: c.Bool("keep-etag"),
-			Mode: uint16(0666 &^ umask),
-			DirMode: uint16(0777 &^ umask),
+			KeepEtag:    c.Bool("keep-etag"),
+			Mode:        uint16(0666 &^ umask),
+			DirMode:     uint16(0777 &^ umask),
 		},
 	)
 }
@@ -190,8 +190,8 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 		logger.Fatalf("load setting: %s", err)
 	}
 	registerer, registry := wrapRegister(mp, format.Name)
-	if !c.Bool("writeback") && c.IsSet("upload-delay") {
-		logger.Warnf("delayed upload only work in writeback mode")
+	if err = checkFlags(c); err != nil {
+		logger.Fatalf("check flags: %s", err)
 	}
 
 	blob, err := NewReloadableStorage(format, func() (*meta.Format, error) {
