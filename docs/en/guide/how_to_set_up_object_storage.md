@@ -145,7 +145,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Sina Cloud Storage](#sina-cloud-storage)                   | `scs`      |
 | [CTYun OOS](#ctyun-oos)                                     | `oos`      |
 | [ECloud Object Storage](#ecloud-object-storage)             | `eos`      |
-| [JD Cloud OSS](#jd-cloud-oss)                               | `oss`      |
+| [JD Cloud OSS](#jd-cloud-oss)                               | `s3`       |
 | [UCloud US3](#ucloud-us3)                                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                                   | `ceph`     |
 | [Ceph RGW](#ceph-rgw)                                       | `s3`       |
@@ -644,7 +644,7 @@ The `--bucket` option format is `https://<bucket>.<region>.jdcloud-oss.com`，an
 ```bash
 # Running within JD Cloud
 juicefs format \
-    --storage oss \
+    --storage s3 \
     --bucket https://<bucket>.<region>.jdcloud-oss.com \
     ... \
     myjfs

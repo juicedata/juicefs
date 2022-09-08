@@ -145,7 +145,7 @@ juicefs format \
 | [新浪云 SCS](#新浪云-scs)                   | `scs`      |
 | [天翼云 OOS](#天翼云-oos)                   | `oos`      |
 | [移动云 EOS](#移动云-eos)                   | `eos`      |
-| [京东云 OSS](#京东云-oss)                   | `oss`      |
+| [京东云 OSS](#京东云-oss)                   | `s3`       |
 | [优刻得 US3](#优刻得-us3)                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                   | `ceph`     |
 | [Ceph RGW](#ceph-rgw)                       | `s3`       |
@@ -644,7 +644,7 @@ juicefs format \
 ```bash
 # 在京东云中运行
 juicefs format \
-    --storage oss \
+    --storage s3 \
     --bucket https://<bucket>.<region>.jdcloud-oss.com \
     ... \
     myjfs
