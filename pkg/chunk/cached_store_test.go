@@ -91,16 +91,19 @@ func testStore(t *testing.T, store ChunkStore) {
 }
 
 var defaultConf = Config{
-	BlockSize:  1 << 20,
-	CacheDir:   filepath.Join(os.TempDir(), "diskCache"),
-	CacheSize:  1,
-	MaxUpload:  1,
-	MaxDeletes: 1,
-	MaxRetries: 10,
-	PutTimeout: time.Second,
-	GetTimeout: time.Second * 2,
-	AutoCreate: true,
-	BufferSize: 10 << 20,
+	BlockSize:         1 << 20,
+	CacheDir:          filepath.Join(os.TempDir(), "diskCache"),
+	CacheMode:         0600,
+	CacheSize:         10,
+	CacheChecksum:     CsNone,
+	CacheScanInterval: time.Second * 300,
+	MaxUpload:         1,
+	MaxDeletes:        1,
+	MaxRetries:        10,
+	PutTimeout:        time.Second,
+	GetTimeout:        time.Second * 2,
+	AutoCreate:        true,
+	BufferSize:        10 << 20,
 }
 
 func TestStoreDefault(t *testing.T) {
