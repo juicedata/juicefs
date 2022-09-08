@@ -1429,6 +1429,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     if (f == null) {
       throw new IllegalArgumentException("mkdirs path arg is null");
     }
+    f = makeQualified(f);
     String path = normalizePath(f);
     if ("/".equals(path))
       return true;
