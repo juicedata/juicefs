@@ -769,6 +769,8 @@ const (
 	csBlock = 32 << 10
 )
 
+var crc32c = crc32.MakeTable(crc32.Castagnoli)
+
 type cacheFile struct {
 	*os.File
 	length  int // length of data
@@ -784,7 +786,7 @@ func checksum(data []byte) []byte {
 		if end > length {
 			end = length
 		}
-		sum := crc32.ChecksumIEEE(data[start:end])
+		sum := crc32.Checksum(data[start:end], crc32c)
 		buf.Put32(sum)
 	}
 	return buf.Bytes()
@@ -877,7 +879,7 @@ func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
 		if end > length {
 			end = length
 		}
-		sum := crc32.ChecksumIEEE(rb[start:end])
+		sum := crc32.Checksum(rb[start:end], crc32c)
 		expect := buf.Get32()
 		logger.Debugf("Cache file read data start %d end %d checksum %d, expected %d", start, end, sum, expect)
 		if sum != expect {
