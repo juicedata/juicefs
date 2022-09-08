@@ -48,6 +48,10 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 				Name:  "subdir",
 				Usage: "only dump a sub-directory",
 			},
+			&cli.BoolFlag{
+				Name:  "keep-secret-key",
+				Usage: "keep secret keys intact (WARNING: Be careful as they may be leaked)",
+			},
 		},
 	}
 }
@@ -70,7 +74,7 @@ func dump(ctx *cli.Context) error {
 	if _, err := m.Load(true); err != nil {
 		return err
 	}
-	if err := m.DumpMeta(fp, 1); err != nil {
+	if err := m.DumpMeta(fp, 1, ctx.Bool("keep-secret-key")); err != nil {
 		return err
 	}
 	logger.Infof("Dump metadata into %s succeed", ctx.Args().Get(1))

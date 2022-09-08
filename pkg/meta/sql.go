@@ -2945,7 +2945,7 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 	return nil
 }
 
-func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
+func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if e, ok := p.(error); ok {
@@ -3030,11 +3030,11 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 			Sustained: sessions,
 			DelFiles:  dels,
 		}
-		if dm.Setting.SecretKey != "" {
+		if !keepSecret && dm.Setting.SecretKey != "" {
 			dm.Setting.SecretKey = "removed"
 			logger.Warnf("Secret key is removed for the sake of safety")
 		}
-		if dm.Setting.SessionToken != "" {
+		if !keepSecret && dm.Setting.SessionToken != "" {
 			dm.Setting.SessionToken = "removed"
 			logger.Warnf("Session token is removed for the sake of safety")
 		}
