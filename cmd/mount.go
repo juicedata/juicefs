@@ -335,32 +335,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
 	}
-	if chunkConf.CacheSize == 0 {
-		logger.Warnf("cache-size is 0, writeback and prefetch will be disable")
-		chunkConf.Writeback = false
-		chunkConf.Prefetch = 0
-		chunkConf.CacheDir = "memory"
-	}
-	if !chunkConf.Writeback && c.IsSet("upload-delay") {
-		logger.Warnf("delayed upload only work in writeback mode")
-		chunkConf.UploadDelay = 0
-	}
-	if chunkConf.MaxUpload <= 0 {
-		logger.Warnf("max-uploads should be greater than 0, set it to 1")
-		chunkConf.MaxUpload = 1
-	}
-	if chunkConf.BufferSize <= 32<<20 {
-		logger.Warnf("buffer-size should be more than 32 MiB")
-		chunkConf.BufferSize = 32 << 20
-	}
-
-	if chunkConf.CacheDir != "memory" {
-		ds := utils.SplitDir(chunkConf.CacheDir)
-		for i := range ds {
-			ds[i] = filepath.Join(ds[i], format.UUID)
-		}
-		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
-	}
+	chunkConf.SelfCheck(format.UUID)
 	return chunkConf
 }
 
