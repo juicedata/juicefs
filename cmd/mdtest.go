@@ -188,9 +188,6 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 		logger.Fatalf("load setting: %s", err)
 	}
 	registerer, registry := wrapRegister(mp, format.Name)
-	if !c.Bool("writeback") && c.IsSet("upload-delay") {
-		logger.Warnf("delayed upload only work in writeback mode")
-	}
 
 	blob, err := NewReloadableStorage(format, func() (*meta.Format, error) {
 		return getFormat(c, m)
