@@ -831,7 +831,7 @@ func openCacheFile(name string, length int, level string) (*cacheFile, error) {
 }
 
 func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
-	logger.Tracef("CacheFile length %d level %d, readat off %d buffer size %d", cf.length, cf.csLevel, off, len(b))
+	logger.Tracef("CacheFile length %d level %s, readat off %d buffer size %d", cf.length, cf.csLevel, off, len(b))
 	defer func() {
 		logger.Tracef("CacheFile readat returns n %d err %s", n, err)
 	}()
