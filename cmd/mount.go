@@ -310,10 +310,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	return cfg
 }
 
-func getChunkConf(c *cli.Context, format *meta.Format) (*chunk.Config, error) {
-	if err := checkFlags(c); err != nil {
-		return nil, err
-	}
+func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 	chunkConf := &chunk.Config{
 		BlockSize:  format.BlockSize * 1024,
 		Compress:   format.Compression,
@@ -338,6 +335,16 @@ func getChunkConf(c *cli.Context, format *meta.Format) (*chunk.Config, error) {
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
 	}
+	if chunkConf.CacheSize == 0 {
+		logger.Warnf("cache-size is 0, writeback and prefetch will be disable")
+		chunkConf.Writeback = false
+		chunkConf.Prefetch = 0
+		chunkConf.CacheDir = "memory"
+	}
+	if !chunkConf.Writeback && c.IsSet("upload-delay") {
+		logger.Warnf("delayed upload only work in writeback mode")
+		chunkConf.UploadDelay = 0
+	}
 	if chunkConf.MaxUpload <= 0 {
 		logger.Warnf("max-uploads should be greater than 0, set it to 1")
 		chunkConf.MaxUpload = 1
@@ -354,7 +361,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) (*chunk.Config, error) {
 		}
 		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 	}
-	return chunkConf, nil
+	return chunkConf
 }
 
 func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Config, m meta.Meta, blob object.ObjectStorage, registerer prometheus.Registerer, registry *prometheus.Registry) {
@@ -508,29 +515,6 @@ func updateFstab(c *cli.Context) error {
 	return os.Rename(tempFstab, fstab)
 }
 
-func checkFlags(c *cli.Context) error {
-	if c.Int64("cache-size") == 0 {
-		logger.Warnf("cache-size is 0, writeback and prefetch will be disable")
-		if err := c.Set("writeback", "false"); err != nil {
-			return fmt.Errorf("reset writeback: %s", err)
-		}
-		if err := c.Set("prefetch", "0"); err != nil {
-			return fmt.Errorf("reset prefetch: %s", err)
-		}
-		if err := c.Set("cache-dir", "memory"); err != nil {
-			return fmt.Errorf("reset cache-dir: %s", err)
-		}
-	}
-
-	if !c.Bool("writeback") && c.IsSet("upload-delay") {
-		logger.Warnf("delayed upload only work in writeback mode")
-		if err := c.Set("upload-delay", "0"); err != nil {
-			return fmt.Errorf("reset upload-delay: %s", err)
-		}
-	}
-	return nil
-}
-
 func mount(c *cli.Context) error {
 	setup(c, 2)
 	addr := c.Args().Get(0)
@@ -569,10 +553,7 @@ func mount(c *cli.Context) error {
 		}
 	}
 
-	chunkConf, err := getChunkConf(c, format)
-	if err != nil {
-		logger.Fatal(err)
-	}
+	chunkConf := getChunkConf(c, format)
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
 
