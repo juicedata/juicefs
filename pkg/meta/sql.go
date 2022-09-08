@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"runtime"
 	"sort"
 	"strings"
@@ -175,8 +176,20 @@ type dbSnap struct {
 }
 
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
+	var searchPath string
 	if driver == "postgres" {
 		addr = driver + "://" + addr
+
+		parse, err := url.Parse(addr)
+		if err != nil {
+			return nil, fmt.Errorf("parse url %s failed: %s", addr, err)
+		}
+		searchPath = parse.Query().Get("search_path")
+		if searchPath != "" {
+			if len(strings.Split(searchPath, ",")) > 1 {
+				return nil, fmt.Errorf("currently, only one schema is supported in search_path")
+			}
+		}
 	}
 	engine, err := xorm.NewEngine(driver, addr)
 	if err != nil {
@@ -202,7 +215,9 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	if time.Since(start) > time.Millisecond*5 {
 		logger.Warnf("The latency to database is too high: %s", time.Since(start))
 	}
-
+	if searchPath != "" {
+		engine.SetSchema(searchPath)
+	}
 	engine.DB().SetMaxIdleConns(runtime.NumCPU() * 2)
 	engine.DB().SetConnMaxIdleTime(time.Minute * 5)
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
@@ -448,7 +463,7 @@ func (m *dbMeta) getSession(row interface{}, detail bool) (*Session, error) {
 			}
 			s.Plocks = make([]Plock, 0, len(prows))
 			for _, prow := range prows {
-				s.Plocks = append(s.Plocks, Plock{prow.Inode, uint64(prow.Owner), prow.Records})
+				s.Plocks = append(s.Plocks, Plock{prow.Inode, uint64(prow.Owner), loadLocks(prow.Records)})
 			}
 			return nil
 		})
@@ -2588,6 +2603,34 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return nil
 	})
 	return errno(err)
+}
+
+func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	n := &node{
+		Inode:  inode,
+		Type:   attr.Typ,
+		Mode:   attr.Mode,
+		Uid:    attr.Uid,
+		Gid:    attr.Gid,
+		Atime:  attr.Atime * 1e6,
+		Mtime:  attr.Mtime * 1e6,
+		Ctime:  attr.Ctime * 1e6,
+		Length: 4 << 10,
+		Parent: attr.Parent,
+	}
+	return errno(m.txn(func(s *xorm.Session) error {
+		n.Nlink = 2
+		var rows []edge
+		if err := s.Find(&rows, &edge{Parent: inode}); err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if row.Type == TypeDirectory {
+				n.Nlink++
+			}
+		}
+		return mustInsert(s, n)
+	}, inode))
 }
 
 func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {

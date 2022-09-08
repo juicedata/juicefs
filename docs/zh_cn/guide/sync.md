@@ -167,7 +167,7 @@ juicefs sync --include 'pic/' --include '4.png' --exclude '*' /mnt/jfs/ s3://ABC
 
 ### 多线程和带宽限制
 
-JuiceFS `sync` 默认启用 10 个线程执行同步任务，可以根据需要设置 `--thread` 选项调大或减少线程数。
+JuiceFS `sync` 默认启用 10 个线程执行同步任务，可以根据需要设置 `--threads` 选项调大或减少线程数。
 
 另外，如果需要限制同步任务占用的带宽，可以设置 `--bwlimit` 选项，单位 `Mbps`，默认值为 `0` 即不限制。
 

@@ -164,6 +164,11 @@ func clientFlags() []cli.Flag {
 			Usage: "checksum level (none, full, shrink, extend)",
 		},
 		&cli.StringFlag{
+			Name:  "cache-scan-interval",
+			Value: "3600",
+			Usage: "interval (in seconds) to scan cache-dir to rebuild in-memory index",
+		},
+		&cli.StringFlag{
 			Name:  "backup-meta",
 			Value: "3600",
 			Usage: "interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup)",

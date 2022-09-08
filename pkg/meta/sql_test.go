@@ -19,6 +19,7 @@ package meta
 
 import (
 	"path"
+	"strings"
 	"testing"
 )
 
@@ -44,4 +45,11 @@ func TestPostgreSQLClient(t *testing.T) {
 		t.Fatalf("create meta: %s", err)
 	}
 	testMeta(t, m)
+}
+
+func TestPostgreSQLClientWithSearchPath(t *testing.T) {
+	_, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", &Config{})
+	if !strings.Contains(err.Error(), "currently, only one schema is supported in search_path") {
+		t.Fatalf("TestPostgreSQLClientWithSearchPath error: %s", err)
+	}
 }

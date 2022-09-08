@@ -17,6 +17,7 @@ package io.juicefs;
 
 import com.kenai.jffi.internal.StubLoader;
 import io.juicefs.metrics.JuiceFSInstrumentation;
+import io.juicefs.utils.BufferPool;
 import io.juicefs.utils.ConsistentHash;
 import io.juicefs.utils.NodesFetcher;
 import io.juicefs.utils.NodesFetcherBuilder;
@@ -312,6 +313,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("dirEntryTimeout", Float.valueOf(getConf(conf, "dir-entry-cache", "0.0")));
     obj.put("cacheFullBlock", Boolean.valueOf(getConf(conf, "cache-full-block", "true")));
     obj.put("cacheChecksum", getConf(conf, "verify-cache-checksum", "full"));
+    obj.put("cacheScanInterval", Integer.valueOf(getConf(conf, "cache-scan-interval", "300")));
     obj.put("metacache", Boolean.valueOf(getConf(conf, "metacache", "true")));
     obj.put("autoCreate", Boolean.valueOf(getConf(conf, "auto-create-cache-dir", "true")));
     obj.put("maxUploads", Integer.valueOf(getConf(conf, "max-uploads", "20")));
@@ -733,7 +735,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     public FileInputStream(Path f, int fd, int size) throws IOException {
       path = f;
       this.fd = fd;
-      buf = ByteBuffer.allocate(size);
+      buf = BufferPool.getBuffer(size);
       buf.limit(0);
       position = 0;
     }
@@ -886,6 +888,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (buf == null) {
         return; // already closed
       }
+      BufferPool.returnBuffer(buf);
       buf = null;
       int r = lib.jfs_close(Thread.currentThread().getId(), fd);
       fd = 0;
@@ -1380,6 +1383,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     if (f == null) {
       throw new IllegalArgumentException("mkdirs path arg is null");
     }
+    f = makeQualified(f);
     String path = normalizePath(f);
     if ("/".equals(path))
       return true;

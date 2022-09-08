@@ -178,6 +178,13 @@ juicefs format \
     pics
 ```
 
+:::note 
+1. juicefs uses public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) by default, if you want to use a `non-public schema`,  you need to specify `search_path` in the connection string parameter. e.g `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
+2. If the `public schema` is not the first hit in the `search_path` configured on the PostgreSQL server, the `search_path` parameter must be explicitly set in the connection string.
+3. The `search_path` connection parameter can be set to multiple schemas natively, but currently juicefs only supports setting one. `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` will be considered illegal.
+:::
+
+
 ### Mount a file system
 
 ```shell
@@ -366,6 +373,14 @@ Please note the location of the database file, if it is not in the current direc
 juicefs mount -d "sqlite3:///home/herald/my-jfs.db" /mnt/jfs/
 ```
 
+One can also add driver supported [PRAGMA Statements](https://www.sqlite.org/pragma.html) to the connection string like:
+
+```shell
+"sqlite3://my-jfs.db?cache=shared&_busy_timeout=5000"
+```
+
+For more examples of SQLite database address format, please refer to [Go-SQLite3-Driver](https://github.com/mattn/go-sqlite3#connection-string).
+
 :::note
 Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for standalone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
 :::
@@ -489,7 +504,7 @@ For example:
 juicefs format \
     --storage s3 \
     ... \
-    "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs?ca=/path/to/ca.pem&cacert=/path/to/etcd-server.pem&key=/path/to/etcd-key.pem&server-name=etcd" \
+    "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs?cert=/path/to/ca.pem&cacert=/path/to/etcd-server.pem&key=/path/to/etcd-key.pem&server-name=etcd" \
     pics
 ```
 

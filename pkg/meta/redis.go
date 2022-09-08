@@ -400,7 +400,7 @@ func (m *redisMeta) getSession(sid string, detail bool) (*Session, error) {
 				if isFlock {
 					s.Flocks = append(s.Flocks, Flock{Ino(inode), owner, v})
 				} else {
-					s.Plocks = append(s.Plocks, Plock{Ino(inode), owner, []byte(v)})
+					s.Plocks = append(s.Plocks, Plock{Ino(inode), owner, loadLocks([]byte(v))})
 				}
 			}
 		}
@@ -2822,6 +2822,23 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 		return nil
 	})
 	return errno(err)
+}
+
+func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		attr.Nlink = 2
+		vals, err := tx.HGetAll(ctx, m.entryKey(inode)).Result()
+		if err != nil {
+			return err
+		}
+		for _, v := range vals {
+			typ, _ := m.parseEntry([]byte(v))
+			if typ == TypeDirectory {
+				attr.Nlink++
+			}
+		}
+		return tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err()
+	}, m.entryKey(inode), m.inodeKey(inode)))
 }
 
 func (m *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {

@@ -25,6 +25,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -54,13 +55,14 @@ type pendingFile struct {
 type cacheStore struct {
 	totalPages int64
 	sync.Mutex
-	dir       string
-	mode      os.FileMode
-	capacity  int64
-	freeRatio float32
-	pending   chan pendingFile
-	pages     map[string]*Page
-	m         *cacheManager
+	dir          string
+	mode         os.FileMode
+	capacity     int64
+	freeRatio    float32
+	scanInterval time.Duration
+	pending      chan pendingFile
+	pages        map[string]*Page
+	m            *cacheManager
 
 	used     int64
 	keys     map[string]cacheItem
@@ -78,16 +80,17 @@ func newCacheStore(m *cacheManager, dir string, cacheSize int64, pendingPages in
 		config.FreeSpace = 0.1 // 10%
 	}
 	c := &cacheStore{
-		m:         m,
-		dir:       dir,
-		mode:      config.CacheMode,
-		capacity:  cacheSize,
-		freeRatio: config.FreeSpace,
-		keys:      make(map[string]cacheItem),
-		pending:   make(chan pendingFile, pendingPages),
-		pages:     make(map[string]*Page),
-		checksum:  config.CacheChecksum,
-		uploader:  uploader,
+		m:            m,
+		dir:          dir,
+		mode:         config.CacheMode,
+		capacity:     cacheSize,
+		freeRatio:    config.FreeSpace,
+		checksum:     config.CacheChecksum,
+		scanInterval: config.CacheScanInterval,
+		keys:         make(map[string]cacheItem),
+		pending:      make(chan pendingFile, pendingPages),
+		pages:        make(map[string]*Page),
+		uploader:     uploader,
 	}
 	c.createDir(c.dir)
 	br, fr := c.curFreeRatio()
@@ -132,9 +135,12 @@ func (cache *cacheStore) checkFreeSpace() {
 }
 
 func (cache *cacheStore) refreshCacheKeys() {
-	for {
-		cache.scanCached()
-		time.Sleep(time.Minute * 5)
+	cache.scanCached()
+	if cache.scanInterval > 0 {
+		for {
+			time.Sleep(cache.scanInterval)
+			cache.scanCached()
+		}
 	}
 }
 
@@ -526,6 +532,8 @@ func (cache *cacheStore) scanCached() {
 	cache.Unlock()
 }
 
+var pathReg, _ = regexp.Compile(`^chunks/\d+/\d+/\d+_\d+_\d+$`)
+
 func (cache *cacheStore) scanStaging() {
 	if cache.uploader == nil {
 		return
@@ -546,13 +554,21 @@ func (cache *cacheStore) scanStaging() {
 					}
 				}
 			} else {
-				logger.Debugf("Found staging block: %s", path)
-				cache.m.stageBlocks.Add(1)
-				cache.m.stageBlockBytes.Add(float64(fi.Size()))
 				key := path[len(stagingPrefix)+1:]
 				if runtime.GOOS == "windows" {
 					key = strings.ReplaceAll(key, "\\", "/")
 				}
+				if !pathReg.MatchString(key) {
+					logger.Warnf("Ignore invalid file in staging: %s", path)
+					return nil
+				}
+				if parseObjOrigSize(key) == 0 {
+					logger.Warnf("Ignore file with zero size: %s", path)
+					return nil
+				}
+				logger.Debugf("Found staging block: %s", path)
+				cache.m.stageBlocks.Add(1)
+				cache.m.stageBlockBytes.Add(float64(fi.Size()))
 				cache.uploader(key, path, false)
 				count++
 			}

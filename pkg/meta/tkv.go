@@ -555,7 +555,7 @@ func (m *kvMeta) getSession(sid uint64, detail bool) (*Session, error) {
 			ls := unmarshalPlock(v)
 			for o, l := range ls {
 				if o.sid == sid {
-					s.Plocks = append(s.Plocks, Plock{inode, o.sid, l})
+					s.Plocks = append(s.Plocks, Plock{inode, o.sid, loadLocks(l)})
 				}
 			}
 		}
@@ -2219,6 +2219,21 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		}
 	}
 	return 0
+}
+
+func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	return errno(m.txn(func(tx kvTxn) error {
+		attr.Nlink = 2
+		_ = tx.scanValues(m.entryKey(inode, ""), 0, func(k, v []byte) bool {
+			typ, _ := m.parseEntry(v)
+			if typ == TypeDirectory {
+				attr.Nlink++
+			}
+			return false
+		})
+		tx.set(m.inodeKey(inode), m.marshal(attr))
+		return nil
+	}, inode))
 }
 
 func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
