@@ -347,7 +347,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) (*chunk.Config, error) {
 		chunkConf.BufferSize = 32 << 20
 	}
 
-	if chunkConf.CacheDir != "" && chunkConf.CacheDir != "memory" {
+	if chunkConf.CacheDir != "memory" {
 		ds := utils.SplitDir(chunkConf.CacheDir)
 		for i := range ds {
 			ds[i] = filepath.Join(ds[i], format.UUID)
@@ -509,12 +509,6 @@ func updateFstab(c *cli.Context) error {
 }
 
 func checkFlags(c *cli.Context) error {
-	if !c.Bool("writeback") && c.IsSet("upload-delay") {
-		logger.Warnf("delayed upload only work in writeback mode")
-		if err := c.Set("upload-delay", "0"); err != nil {
-			return fmt.Errorf("reset upload-delay: %s", err)
-		}
-	}
 	if c.Int64("cache-size") == 0 {
 		logger.Warnf("cache-size is 0, writeback and prefetch will be disable")
 		if err := c.Set("writeback", "false"); err != nil {
@@ -523,8 +517,15 @@ func checkFlags(c *cli.Context) error {
 		if err := c.Set("prefetch", "0"); err != nil {
 			return fmt.Errorf("reset prefetch: %s", err)
 		}
-		if err := c.Set("cache-dir", ""); err != nil {
+		if err := c.Set("cache-dir", "memory"); err != nil {
 			return fmt.Errorf("reset cache-dir: %s", err)
+		}
+	}
+
+	if !c.Bool("writeback") && c.IsSet("upload-delay") {
+		logger.Warnf("delayed upload only work in writeback mode")
+		if err := c.Set("upload-delay", "0"); err != nil {
+			return fmt.Errorf("reset upload-delay: %s", err)
 		}
 	}
 	return nil
