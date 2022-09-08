@@ -23,6 +23,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -515,6 +516,8 @@ func (cache *cacheStore) scanCached() {
 	cache.Unlock()
 }
 
+var pathReg, _ = regexp.Compile(`^chunks/\d+/\d+/\d+_\d+_\d+$`)
+
 func (cache *cacheStore) scanStaging() {
 	if cache.uploader == nil {
 		return
@@ -535,13 +538,21 @@ func (cache *cacheStore) scanStaging() {
 					}
 				}
 			} else {
-				logger.Debugf("Found staging block: %s", path)
-				cache.m.stageBlocks.Add(1)
-				cache.m.stageBlockBytes.Add(float64(fi.Size()))
 				key := path[len(stagingPrefix)+1:]
 				if runtime.GOOS == "windows" {
 					key = strings.ReplaceAll(key, "\\", "/")
 				}
+				if !pathReg.MatchString(key) {
+					logger.Warnf("Ignore invalid file in staging: %s", path)
+					return nil
+				}
+				if parseObjOrigSize(key) == 0 {
+					logger.Warnf("Ignore file with zero size: %s", path)
+					return nil
+				}
+				logger.Debugf("Found staging block: %s", path)
+				cache.m.stageBlocks.Add(1)
+				cache.m.stageBlockBytes.Add(float64(fi.Size()))
 				cache.uploader(key, path, false)
 				count++
 			}
