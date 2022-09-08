@@ -190,9 +190,6 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 		logger.Fatalf("load setting: %s", err)
 	}
 	registerer, registry := wrapRegister(mp, format.Name)
-	if err = checkFlags(c); err != nil {
-		logger.Fatalf("check flags: %s", err)
-	}
 
 	blob, err := NewReloadableStorage(format, func() (*meta.Format, error) {
 		return getFormat(c, metaCli)
@@ -202,7 +199,10 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	}
 	logger.Infof("Data use %s", blob)
 
-	chunkConf := getChunkConf(c, format)
+	chunkConf, err := getChunkConf(c, format)
+	if err != nil {
+		logger.Fatal(err)
+	}
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
 

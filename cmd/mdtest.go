@@ -188,9 +188,6 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 		logger.Fatalf("load setting: %s", err)
 	}
 	registerer, registry := wrapRegister(mp, format.Name)
-	if err = checkFlags(c); err != nil {
-		logger.Fatalf("check flags: %s", err)
-	}
 
 	blob, err := NewReloadableStorage(format, func() (*meta.Format, error) {
 		return getFormat(c, m)
@@ -200,7 +197,10 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 	}
 	logger.Infof("Data use %s", blob)
 
-	chunkConf := getChunkConf(c, format)
+	chunkConf, err := getChunkConf(c, format)
+	if err != nil {
+		logger.Fatal(err)
+	}
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(m, store, chunkConf)
 

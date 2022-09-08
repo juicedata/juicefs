@@ -310,7 +310,10 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	return cfg
 }
 
-func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
+func getChunkConf(c *cli.Context, format *meta.Format) (*chunk.Config, error) {
+	if err := checkFlags(c); err != nil {
+		return nil, err
+	}
 	chunkConf := &chunk.Config{
 		BlockSize:  format.BlockSize * 1024,
 		Compress:   format.Compression,
@@ -351,7 +354,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		}
 		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
 	}
-	return chunkConf
+	return chunkConf, nil
 }
 
 func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Config, m meta.Meta, blob object.ObjectStorage, registerer prometheus.Registerer, registry *prometheus.Registry) {
@@ -544,10 +547,6 @@ func mount(c *cli.Context) error {
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
 	registerer, registry := wrapRegister(mp, format.Name)
 
-	if err = checkFlags(c); err != nil {
-		return err
-	}
-
 	blob, err := NewReloadableStorage(format, func() (*meta.Format, error) {
 		return getFormat(c, metaCli)
 	})
@@ -569,7 +568,10 @@ func mount(c *cli.Context) error {
 		}
 	}
 
-	chunkConf := getChunkConf(c, format)
+	chunkConf, err := getChunkConf(c, format)
+	if err != nil {
+		logger.Fatal(err)
+	}
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
 
