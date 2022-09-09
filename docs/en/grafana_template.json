@@ -1471,7 +1471,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(go_goroutines) by (instance,mp)",
+          "expr": "sum(juicefs_go_goroutines) by (instance,mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
