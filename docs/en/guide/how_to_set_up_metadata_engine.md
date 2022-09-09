@@ -522,7 +522,94 @@ juicefs format
  fdb:///etc/foundationdb/fdb.cluster:jfs
  pics
 ```
+### [Set up TLS](https://apple.github.io/foundationdb/tls.html)
 
+**Use OpenSSL to generate a CA certificate**
+
+```
+user@host:> openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout private.key -out cert.crt
+user@host:> cat cert.crt private.key > fdb.pem
+```
+
+**configure TLS**
+
+|Command-line Option|Client Option|Environment Variable|	Purpose|
+|---------|-------|-------|------|
+|tls_certificate_file|TLS_cert_path| FDB_TLS_CERTIFICATE_FILE | Path to the file from which the local certificates can be loaded|
+| tls_key_file | TLS_key_path | FDB_TLS_KEY_FILE | Path to the file from which to load the private key | 
+| tls_verify_peers | tls_verify_peers | FDB_TLS_VERIFY_PEERS | The byte-string for the verification of peer certificates and sessions| 
+| tls_password | tls_password | FDB_TLS_PASSWORD | The byte-string representing the passcode for unencrypting the private key |
+| tls_ca_file | TLS_ca_path | FDB_TLS_CA_FILE | Path to the file containing the CA certificates to trust |
+
+**Configure the server**
+
+The TLS parameters can be configured in foundationdb.conf or environment variables, as shown in the following configuration files (emphasis on the [foundationdb.4500] configuration).
+
+```
+[fdbmonitor]
+user = foundationdb
+group = foundationdb
+
+[general]
+restart-delay = 60
+
+## by default, restart-backoff = restart-delay-reset-interval = restart-delay
+# initial-restart-delay = 0
+# restart-backoff = 60
+# restart-delay-reset-interval = 60
+cluster-file = /etc/foundationdb/fdb.cluster
+# delete-envvars =
+# kill-on-configuration-change = true
+## Default parameters for individual fdbserver processes
+
+[fdbserver]
+command = /usr/sbin/fdbserver
+#public-address = auto:$ID
+#listen-address = public
+datadir = /var/lib/foundationdb/data/$ID
+logdir = /var/log/foundationdb
+# logsize = 10MiB
+# maxlogssize = 100MiB
+# machine-id =
+# datacenter-id =
+# class =
+# memory = 8GiB
+# storage-memory = 1GiB
+# cache-memory = 2GiB
+# metrics-cluster =
+# metrics-prefix =
+
+[fdbserver.4500]
+Public - address = 127.0.0.1:4500: TLS
+listen-address = public
+tls_certificate_file = /etc/foundationdb/fdb.pem
+tls_ca_file = /etc/foundationdb/cert.crt
+tls_key_file = /etc/foundationdb/private.key
+tls_verify_peers= Check.Valid=0
+
+[backup_agent]
+command = /usr/lib/foundationdb/backup_agent/backup_agent
+logdir = /var/log/foundationdb
+
+[backup_agent.1]
+```
+
+In addition, you need to add the suffix ': TLS' after the address in fdb.cluster, fdb.cluster is as follows:
+
+```
+U6pT9Jhl: ClZfjAWM@127.0.0.1:4500: TLS
+```
+
+**Configure the client**
+
+Fdbcli Similarly, you need to configure TLS parameters and fdb.cluster on the client machine.
+
+```
+fdbcli --tls_certificate_file=/etc/foundationdb/fdb.pem \
+--tls_ca_file=/etc/foundationdb/cert.crt \
+--tls_key_file=/etc/foundationdb/private.key \
+--tls_verify_peers=Check.Valid=0
+```
 ### Mount a file system
 
 ```shell
