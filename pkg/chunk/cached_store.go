@@ -862,7 +862,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}
 
 	if m, ok := store.bcache.(*cacheManager); ok {
-		m.stageBlockDelay.Add(time.Now().Sub(addTime).Seconds())
+		m.stageBlockDelay.Add(time.Since(addTime).Seconds())
 	}
 	if err = store.upload(key, block, nil); err == nil {
 		store.bcache.uploaded(key, blen)
