@@ -186,7 +186,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             raise Exception(f'parse uuid failed, output: {output}')
         assert len(uuid) != 0
         if self.mounted and not is_readonly(JuicefsMachine.MOUNT_POINT):
-            sessions = json.loads(output.decode().replace("'", '"'))['Sessions']
+            sessions = json.loads(output.replace("'", '"'))['Sessions']
             assert len(sessions) != 0 
         print('status succeed')
 
