@@ -145,6 +145,7 @@ juicefs format \
 | [新浪云 SCS](#新浪云-scs)                   | `scs`      |
 | [天翼云 OOS](#天翼云-oos)                   | `oos`      |
 | [移动云 EOS](#移动云-eos)                   | `eos`      |
+| [京东云 OSS](#京东云-oss)                   | `s3`       |
 | [优刻得 US3](#优刻得-us3)                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                   | `ceph`     |
 | [Ceph RGW](#ceph-rgw)                       | `s3`       |
@@ -630,6 +631,20 @@ juicefs format \
 juicefs format \
     --storage eos \
     --bucket https://<bucket>.<endpoint> \
+    ... \
+    myjfs
+```
+
+## 京东云 OSS
+
+使用京东云 OSS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.jdcloud.com/cn/account-management/accesskey-management) 了解如何创建 Access Key 和 Secret Key。
+
+`--bucket` 选项的格式为 `https://<bucket>.<region>.jdcloud-oss.com`，请将 `<region>` 替换成你实际使用的存储区域，区域代码[点此查看](https://docs.jdcloud.com/cn/object-storage-service/oss-endpont-list) 。例如：
+
+```bash
+juicefs format \
+    --storage s3 \
+    --bucket https://<bucket>.<region>.jdcloud-oss.com \
     ... \
     myjfs
 ```

@@ -87,7 +87,7 @@ func newLogger(name string) *logHandle {
 	l := &logHandle{Logger: *logrus.New(), name: name, colorful: SupportANSIColor(os.Stderr.Fd())}
 	l.Formatter = l
 	if syslogHook != nil {
-		l.Hooks.Add(syslogHook)
+		l.AddHook(syslogHook)
 	}
 	l.SetReportCaller(true)
 	return l
@@ -108,12 +108,16 @@ func GetLogger(name string) *logHandle {
 
 // SetLogLevel sets Level to all the loggers in the map
 func SetLogLevel(lvl logrus.Level) {
+	mu.Lock()
+	defer mu.Unlock()
 	for _, logger := range loggers {
 		logger.Level = lvl
 	}
 }
 
 func DisableLogColor() {
+	mu.Lock()
+	defer mu.Unlock()
 	for _, logger := range loggers {
 		logger.colorful = false
 	}
@@ -124,6 +128,8 @@ func SetOutFile(name string) {
 	if err != nil {
 		return
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	for _, logger := range loggers {
 		logger.SetOutput(file)
 		logger.colorful = false
@@ -131,6 +137,8 @@ func SetOutFile(name string) {
 }
 
 func SetOutput(w io.Writer) {
+	mu.Lock()
+	defer mu.Unlock()
 	for _, logger := range loggers {
 		logger.SetOutput(w)
 	}

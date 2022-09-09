@@ -145,6 +145,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Sina Cloud Storage](#sina-cloud-storage)                   | `scs`      |
 | [CTYun OOS](#ctyun-oos)                                     | `oos`      |
 | [ECloud Object Storage](#ecloud-object-storage)             | `eos`      |
+| [JD Cloud OSS](#jd-cloud-oss)                               | `s3`       |
 | [UCloud US3](#ucloud-us3)                                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                                   | `ceph`     |
 | [Ceph RGW](#ceph-rgw)                                       | `s3`       |
@@ -630,6 +631,20 @@ ECloud Object Storage provides [multiple endpoints](https://ecloud.10086.cn/op-h
 juicefs format \
     --storage eos \
     --bucket https://<bucket>.<endpoint> \
+    ... \
+    myjfs
+```
+
+## JD Cloud OSS
+
+Please follow [this document](https://docs.jdcloud.com/cn/account-management/accesskey-management)  to learn how to get access key and secret key.
+
+The `--bucket` option format is `https://<bucket>.<region>.jdcloud-oss.com`，and please replace `<region>` with specific region code. You could find all available region codes [here](https://docs.jdcloud.com/cn/object-storage-service/oss-endpont-list). For example:
+
+```bash
+juicefs format \
+    --storage s3 \
+    --bucket https://<bucket>.<region>.jdcloud-oss.com \
     ... \
     myjfs
 ```

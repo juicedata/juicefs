@@ -19,6 +19,7 @@ JuiceFS 提供了丰富的 API，适用于各种形式数据的管理、分析�
   <BilibiliEmbedRenderer
     aid="931107196"
     width="100%"
+    height="360"
   />
 </div>
 

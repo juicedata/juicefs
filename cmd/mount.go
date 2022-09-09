@@ -328,29 +328,16 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		DownloadLimit: c.Int64("download-limit") * 1e6 / 8,
 		UploadDelay:   duration(c.String("upload-delay")),
 
-		CacheDir:       c.String("cache-dir"),
-		CacheSize:      int64(c.Int("cache-size")),
-		FreeSpace:      float32(c.Float64("free-space-ratio")),
-		CacheMode:      os.FileMode(0600),
-		CacheFullBlock: !c.Bool("cache-partial-only"),
-		AutoCreate:     true,
+		CacheDir:          c.String("cache-dir"),
+		CacheSize:         int64(c.Int("cache-size")),
+		FreeSpace:         float32(c.Float64("free-space-ratio")),
+		CacheMode:         os.FileMode(0600),
+		CacheFullBlock:    !c.Bool("cache-partial-only"),
+		CacheChecksum:     c.String("verify-cache-checksum"),
+		CacheScanInterval: duration(c.String("cache-scan-interval")),
+		AutoCreate:        true,
 	}
-	if chunkConf.MaxUpload <= 0 {
-		logger.Warnf("max-uploads should be greater than 0, set it to 1")
-		chunkConf.MaxUpload = 1
-	}
-	if chunkConf.BufferSize <= 32<<20 {
-		logger.Warnf("buffer-size should be more than 32 MiB")
-		chunkConf.BufferSize = 32 << 20
-	}
-
-	if chunkConf.CacheDir != "memory" {
-		ds := utils.SplitDir(chunkConf.CacheDir)
-		for i := range ds {
-			ds[i] = filepath.Join(ds[i], format.UUID)
-		}
-		chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
-	}
+	chunkConf.SelfCheck(format.UUID)
 	return chunkConf
 }
 
@@ -521,10 +508,6 @@ func mount(c *cli.Context) error {
 
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
 	registerer, registry := wrapRegister(mp, format.Name)
-
-	if !c.Bool("writeback") && c.IsSet("upload-delay") {
-		logger.Warnf("delayed upload only work in writeback mode")
-	}
 
 	blob, err := NewReloadableStorage(format, func() (*meta.Format, error) {
 		return getFormat(c, metaCli)

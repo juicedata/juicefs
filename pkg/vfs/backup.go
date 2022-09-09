@@ -76,15 +76,14 @@ func Backup(m meta.Meta, blob object.ObjectStorage, interval time.Duration) {
 
 func backup(m meta.Meta, blob object.ObjectStorage, now time.Time) error {
 	name := "dump-" + now.UTC().Format("2006-01-02-150405") + ".json.gz"
-	fpath := "/tmp/juicefs-meta-" + name
-	fp, err := os.OpenFile(fpath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0444)
+	fp, err := os.CreateTemp("", "juicefs-meta-*")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(fpath)
+	defer os.Remove(fp.Name())
 	defer fp.Close()
 	zw := gzip.NewWriter(fp)
-	err = m.DumpMeta(zw, 0) // force dump the whole tree
+	err = m.DumpMeta(zw, 0, false) // force dump the whole tree
 	_ = zw.Close()
 	if err != nil {
 		return err
