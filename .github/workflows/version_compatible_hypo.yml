@@ -13,7 +13,8 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         old_juicefs_version: ['1.0.0-rc1', '1.0.0-beta1']
-        meta_url: ['redis://localhost/1']
+        meta_url: ['tikv://127.0.0.1:2379']
+        # meta_url: ['redis://localhost/1']
         # meta_url: ['redis://localhost/1', 'mysql://root:root@\(127.0.0.1\)/test', 'postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable']
         include:
           - os: macos-latest
@@ -26,32 +27,8 @@ jobs:
     #     old_juicefs_version: ['1.0.0-rc1']
     #     meta_url: ['redis://localhost/1']
 
+
     runs-on: ubuntu-latest
-    services:
-      redis:
-        # Docker Hub image
-        image: redis
-        # Set health checks to wait until redis has started
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          # Maps port 6379 on service container to the host
-          - 6379:6379
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          # Maps tcp port 5432 on service container to the host
-          - 5432:5432
 
     steps:
       - name: Checkout
@@ -64,11 +41,13 @@ jobs:
         with:
           go-version: '1.18.x'
 
-      - name: Create database
+      - name: Prepare meta database
         run: | 
           meta_url=${{matrix.meta_url}}
           db_name=$(basename $meta_url | awk -F? '{print $1}')
-          if [[ "$meta_url" == mysql* ]]; then
+          if [[ "$meta_url" == redis* ]]; then
+            sudo apt-get install -y redis-tools redis-server
+          elif [[ "$meta_url" == mysql* ]]; then
             sudo /etc/init.d/mysql start
             sleep 3
             user=$(echo $meta_url |  awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $1}')
@@ -79,8 +58,19 @@ jobs:
             test -z "$port" && port="3306"
             mysql -u$user $password -h $host -P $port -e "drop database if exists $db_name; create database $db_name;" 
           elif [[ "$meta_url" == postgres* ]]; then
+            sudo service postgresql start
             export PGPASSWORD="postgres"
             printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
+          elif [[ "meta_url" == tikv* ]]; then
+            git clone https://github.com/c4pt0r/tcli
+            cd tcli && make
+            sudo cp bin/tcli /usr/local/bin
+            cd -
+            curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+            source /home/runner/.bash_profile
+            source /home/runner/.profile
+            tiup playground --mode tikv-slim &
+            sleep 5
           fi
 
       - name: Download old version

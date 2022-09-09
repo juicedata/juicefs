@@ -210,7 +210,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         cache_size=st.integers(min_value=0, max_value=1024000), 
         free_space_ratio=st.floats(min_value=0.1, max_value=0.5), 
         cache_partial_only=st.booleans(),
-        backup_meta=st.integers(min_value=300, max_value=3600),
+        backup_meta=st.integers(min_value=30, max_value=59),
         heartbeat=st.integers(min_value=5, max_value=12), 
         read_only=st.booleans(),
         no_bgjob=st.booleans(),
@@ -268,7 +268,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--free-space-ratio', str(free_space_ratio)])
         if cache_partial_only:
             options.append('--cache-partial-only')
-        options.extend(['--backup-meta', str(backup_meta)])
+        if run_cmd(f'{juicefs} mount --help | grep --backup-meta') == 0:
+            options.extend(['--backup-meta', str(backup_meta)])
         if run_cmd(f'{juicefs} mount --help | grep --heartbeat') == 0:
             options.extend(['--heartbeat', str(heartbeat)])
         if read_only:
@@ -537,10 +538,11 @@ class JuicefsMachine(RuleBasedStateMachine):
         if cache_partial_only:
             options.append('--cache-partial-only')
         options.extend(['--backup-meta', str(backup_meta)])
-        options.extend(['--heartbeat', str(heartbeat)])
+        if run_cmd(f'{juicefs} gateway --help | grep --heartbeat') == 0:
+            options.extend(['--heartbeat', str(heartbeat)])
         if read_only:
             options.append('--read-only')
-        if no_bgjob:
+        if no_bgjob and run_cmd(f'{juicefs} gateway --help | grep --no-bgjob') == 0:
             options.append('--no-bgjob')
         if no_banner:
             options.append('--no-banner')

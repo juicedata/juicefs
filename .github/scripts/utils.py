@@ -37,6 +37,8 @@ def flush_meta(meta_url):
             db_name = db_name.split('?')[0]
         os.environ['PGPASSWORD'] = 'postgres'
         run_cmd(f'printf "\set AUTOCOMMIT on\ndrop database if exists {db_name}; create database {db_name}; " |  psql -U postgres -h localhost')
+    elif meta_url.startswith('tikv://'):
+        run_cmd('echo "delall --yes" |tcli -pd localhost:2379')
     else:
         raise Exception(f'{meta_url} not supported')
     print('flush meta succeed')
