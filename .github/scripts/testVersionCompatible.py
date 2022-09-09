@@ -472,7 +472,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('gc succeed')
 
 
-    valid_file_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
+    valid_file_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
     @rule(juicefs=st.sampled_from(JFS_BINS), 
         get_timeout=st.integers(min_value=30, max_value=60), 
         put_timeout=st.integers(min_value=30, max_value=60), 
