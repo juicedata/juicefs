@@ -12,7 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        old_juicefs_version: ['1.0.0', '1.0.0-rc1',  '1.0.0-beta1', '0.17.1']
+        old_juicefs_version: ['1.0.0', '1.0.0-rc1',  '1.0.0-beta1']
         # old_juicefs_version: ['0.17.1']
         # meta_url: ['tikv://127.0.0.1:2379']
         # meta_url: ['redis://localhost/1']
@@ -21,6 +21,9 @@ jobs:
         include:
           - os: macos-latest
             old_juicefs_version: '1.0.0'
+            meta_url: 'redis://localhost/1'
+          - os: ubuntu-latest
+            old_juicefs_version: '0.17.1'
             meta_url: 'redis://localhost/1'
 
     runs-on: ubuntu-latest
