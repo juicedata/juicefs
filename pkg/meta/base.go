@@ -80,6 +80,7 @@ type engine interface {
 }
 
 // fsStat aligned for atomic operations
+// nolint:structcheck
 type fsStat struct {
 	newSpace   int64
 	newInodes  int64
