@@ -361,8 +361,6 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('load succeed')
         options = [juicefs, 'config', self.meta_url]
         options.extend(['--access-key', 'minioadmin', '--secret-key', 'minioadmin'])
-        if version.parse('-'.join(juicefs.split('-')[1:])) >= version.parse('1.0.0-rc2'):
-            options.append('--encrypt-secret')
         run_jfs_cmd(options)
         os.remove('dump.json')
 
