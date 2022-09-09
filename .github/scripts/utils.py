@@ -7,7 +7,6 @@ import sys
 import time
 from minio import Minio
 
-
 def flush_meta(meta_url):
     print('start flush meta')
     if meta_url.startswith('sqlite3://'):

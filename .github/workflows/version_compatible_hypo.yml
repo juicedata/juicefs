@@ -2,7 +2,7 @@ name: "version-compatible-test-hypo"
 
 on:
   schedule:
-    - cron:  '0 0 * * *'
+    - cron:  '0 16 * * *'
   workflow_dispatch:
 
 jobs:
@@ -11,8 +11,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        old_juicefs_version: ['1.0.0', '1.0.0-rc2']
-        meta_url: ['mysql://root:root@\(127.0.0.1\)/test', 'postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable']
+        os: [ubuntu-latest]
+        old_juicefs_version: ['1.0.0-rc1', '1.0.0-beta1']
+        meta_url: ['redis://localhost/1']
+        # meta_url: ['redis://localhost/1', 'mysql://root:root@\(127.0.0.1\)/test', 'postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable']
+        include:
+          - os: macos-latest
+            old_juicefs_version: '1.0.0'
+            meta_url: 'redis://localhost/1'
+    # strategy:
+    #   fail-fast: false
+    #   matrix:
+    #     os: [ubuntu-latest]
+    #     old_juicefs_version: ['1.0.0-rc1']
+    #     meta_url: ['redis://localhost/1']
 
     runs-on: ubuntu-latest
     services:
