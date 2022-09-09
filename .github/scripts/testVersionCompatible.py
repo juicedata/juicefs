@@ -179,7 +179,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def status(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start status')
-        output = run_jfs_cmd([juicefs, 'status', self.meta_url])
+        output = subprocess.check_output([juicefs, 'status', self.meta_url]).decode()
         try:
             uuid = json.loads(output.replace("'", '"'))['Setting']['UUID']
         except:
