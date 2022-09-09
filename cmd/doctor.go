@@ -54,7 +54,7 @@ func cmdDoctor() *cli.Command {
 		ArgsUsage: "MOUNTPOINT",
 		Usage:     "Collect and show system static and runtime information",
 		Description: `
-It collects and shares information from multiple dimensions such as the running environment and system logs, etc.
+It collects and show information from multiple dimensions such as the running environment and system logs, etc.
 
 Examples:
 $ juicefs doctor /mnt/jfs
@@ -115,9 +115,9 @@ func getCmdMount(mp string) (pid, cmd string, err error) {
 		return "", "", nil
 	}
 
-	ret, err := exec.Command("bash", "-c", "ps -ef | grep 'juicefs mount' | grep "+mp).CombinedOutput()
+	ret, err := exec.Command("bash", "-c", "ps -ef | grep -v grep | grep 'juicefs mount' | grep "+mp).CombinedOutput()
 	// `exit status 1"` occurs when there is no matching item for `grep`
-	if err != nil && !strings.Contains(err.Error(), "exit status 1") {
+	if err != nil {
 		return "", "", fmt.Errorf("failed to execute command `ps -ef | grep juicefs | grep %s`: %v", mp, err)
 	}
 
@@ -228,19 +228,13 @@ func copyLogFile(logPath, retLogPath string, limit uint64) error {
 	return nil
 }
 
-const (
-	InvalidPort  = -1
-	pprofMinPort = 6060
-	pprofMaxPort = 6099
-)
-
 func getPprofPort(pid, mp string) (int, error) {
 	if !isUnix() {
 		logger.Warnf("Failed to get pprof port: %s is not supported", runtime.GOOS)
 		return 0, nil
 	}
 
-	cmdStr := "lsof -i -nP | grep LISTEN | grep " + pid
+	cmdStr := "lsof -i -nP | grep -v grep | grep LISTEN | grep " + pid
 	if os.Getuid() == 0 {
 		cmdStr = "sudo " + cmdStr
 	}
@@ -261,7 +255,7 @@ func getPprofPort(pid, mp string) (int, error) {
 			if err != nil {
 				logger.Errorf("failed to parse port %v: %v", port, err)
 			}
-			if port >= pprofMinPort && port <= pprofMaxPort && port <= listenPort {
+			if port >= 6060 && port <= 6099 && port > listenPort {
 				if err := checkPort(port, mp); err == nil {
 					listenPort = port
 				}
@@ -355,6 +349,16 @@ func isUnix() bool {
 	return runtime.GOOS == "linux" || runtime.GOOS == "darwin"
 }
 
+func checkAgent(cmd string) bool {
+	fields := strings.Fields(cmd)
+	for _, field := range fields {
+		if field == "--no-agent" {
+			return false
+		}
+	}
+	return true
+}
+
 func doctor(ctx *cli.Context) error {
 	currTime := time.Now().Format("20060102150405")
 	setup(ctx, 1)
@@ -369,6 +373,7 @@ func doctor(ctx *cli.Context) error {
 
 	outDir := ctx.String("out-dir")
 	// special treatment for non-existing out dir
+
 	if _, err := os.Stat(outDir); os.IsNotExist(err) {
 		if err := os.Mkdir(outDir, os.ModePerm); err != nil {
 			return fmt.Errorf("failed to create out dir %s: %v", outDir, err)
@@ -406,7 +411,7 @@ JuiceFS Version:
 	if _, err = file.WriteString(result); err != nil {
 		return fmt.Errorf("failed to write system info %s: %v", filePath, err)
 	}
-	fmt.Printf("\nSystem Info:\n%s\n", result)
+	fmt.Printf("\n%s\n", result)
 
 	mp, _ = filepath.Abs(mp)
 	conf, err := getVolumeConf(mp)
@@ -445,7 +450,12 @@ JuiceFS Version:
 		logger.Infof("Log %s is collected", logPath)
 	}
 
-	if ctx.Bool("collect-pprof") {
+	enableAgent := checkAgent(cmd)
+	if !enableAgent {
+		logger.Infof("No agent found")
+	}
+
+	if enableAgent && ctx.Bool("collect-pprof") {
 		port, err := getPprofPort(pid, mp)
 		if err != nil {
 			return err
@@ -478,7 +488,7 @@ JuiceFS Version:
 				defer wg.Done()
 
 				if name == "profile" {
-					logger.Infof("Trace metrics are being sampled, sampling duration: %ds", profile)
+					logger.Infof("Profile metrics are being sampled, sampling duration: %ds", profile)
 				}
 				if name == "trace" {
 					logger.Infof("Trace metrics are being sampled, sampling duration: %ds", trace)
