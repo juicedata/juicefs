@@ -56,15 +56,17 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.formatted)
     def config(self, juicefs, capacity, inodes, change_bucket, change_aksk, encrypt_secret, trash_days, min_client_version, max_client_version, force):
         assume (self.is_supported_version(juicefs))
-        assume(run_cmd(f'{juicefs} --help | grep destroy') == 0)
+        assume(run_cmd(f'{juicefs} --help | grep config') == 0)
         print('start config')
         options = [juicefs, 'config', self.meta_url]
         options.extend(['--trash-days', str(trash_days)])
         options.extend(['--capacity', str(capacity)])
         options.extend(['--inodes', str(inodes)])
         assert version.parse(min_client_version) <= version.parse(max_client_version)
-        options.extend(['--min-client-version', min_client_version])
-        options.extend(['--max-client-version', max_client_version])
+        if run_cmd(f'{juicefs} config --help | grep --min-client-version') == 0:
+            options.extend(['--min-client-version', min_client_version])
+        if run_cmd(f'{juicefs} config --help | grep --max-client-version') == 0:
+            options.extend(['--max-client-version', max_client_version])
         output = subprocess.check_output([juicefs, 'status', self.meta_url])
         storage = json.loads(output.decode().replace("'", '"'))['Setting']['Storage']
         
@@ -84,7 +86,9 @@ class JuicefsMachine(RuleBasedStateMachine):
                 run_cmd('mc admin policy set myminio consoleAdmin user=juicedata')
             options.extend(['--access-key', 'juicedata'])
             options.extend(['--secret-key', '12345678'])
-        if encrypt_secret and version.parse('-'.join(juicefs.split('-')[1:])) >= version.parse('1.0.0-rc2'):
+        if encrypt_secret and version.parse('-'.join(JuicefsMachine.JFS_BINS[0].split('-')[1:])) >= version.parse('1.0.0-rc2') \
+            and version.parse('-'.join(JuicefsMachine.JFS_BINS[1].split('-')[1:])) >= version.parse('1.0.0-rc2'):
+            # rc1 has a bug on encrypt-secret
             options.append('--encrypt-secret')
         options.append('--force')
         run_jfs_cmd(options)
