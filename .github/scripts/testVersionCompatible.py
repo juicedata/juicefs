@@ -257,7 +257,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--put-timeout', str(put_timeout)])
         options.extend(['--io-retries', str(io_retries)])
         options.extend(['--max-uploads', str(max_uploads)])
-        options.extend(['--max-deletes', str(max_deletes)])
+        if run_cmd(f'{juicefs} mount --help | grep --max-deletes') == 0:
+            options.extend(['--max-deletes', str(max_deletes)])
         options.extend(['--buffer-size', str(buffer_size)])
         options.extend(['--upload-limit', str(upload_limit)])
         options.extend(['--download-limit', str(download_limit)])
@@ -283,7 +284,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('TODO: subdir')
         # options.extend('--subdir', str(sub_dir))
         options.extend(['--metrics', str(metrics)])
-        options.extend(['--consul', str(consul)])
+        if run_cmd(f'{juicefs} mount --help | grep --consul') == 0:
+            options.extend(['--consul', str(consul)])
         if no_usage_report:
             options.append('--no-usage-report')
         if os.path.exists(JuicefsMachine.MOUNT_POINT):
@@ -525,7 +527,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--put-timeout', str(put_timeout)])
         options.extend(['--io-retries', str(io_retries)])
         options.extend(['--max-uploads', str(max_uploads)])
-        options.extend(['--max-deletes', str(max_deletes)])
+        if run_cmd(f'{juicefs} gateway --help | grep --max-deletes') == 0:
+            options.extend(['--max-deletes', str(max_deletes)])
         options.extend(['--buffer-size', str(buffer_size)])
         options.extend(['--upload-limit', str(upload_limit)])
         options.extend(['--download-limit', str(download_limit)])
@@ -539,7 +542,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--free-space-ratio', str(free_space_ratio)])
         if cache_partial_only:
             options.append('--cache-partial-only')
-        options.extend(['--backup-meta', str(backup_meta)])
+        if run_cmd(f'{juicefs} gateway --help | grep --backup-meta') == 0:
+            options.extend(['--backup-meta', str(backup_meta)])
         if run_cmd(f'{juicefs} gateway --help | grep --heartbeat') == 0:
             options.extend(['--heartbeat', str(heartbeat)])
         if read_only:
@@ -548,11 +552,12 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.append('--no-bgjob')
         if no_banner:
             options.append('--no-banner')
-        if multi_buckets:
+        if multi_buckets and run_cmd(f'{juicefs} gateway --help | grep --multi-buckets') == 0:
             options.append('--multi-buckets')
-        if keep_etag:
+        if keep_etag and run_cmd(f'{juicefs} gateway --help | grep --keep-etag') == 0:
             options.append('--keep-etag')
-        options.extend(['--umask', umask])
+        if run_cmd(f'{juicefs} gateway --help | grep --umask') == 0:
+            options.extend(['--umask', umask])
 
         options.extend(['--open-cache', str(open_cache)])
         print(f'TODO: subdir:{sub_dir}')
