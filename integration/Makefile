@@ -1,6 +1,6 @@
 DURATION ?= 10
 
-all: xattrs fsx s3test webdav
+all: xattrs fsx s3test webdav ioctl
 
 
 xattrs:
