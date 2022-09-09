@@ -208,7 +208,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         prefetch=st.integers(min_value=0, max_value=100), 
         writeback=st.booleans(),
         upload_delay=st.sampled_from([0, 2]), 
-        cache_dir=valid_file_name,
+        cache_dir=st.sampled_from(['cache1', 'cache2']),
         cache_size=st.integers(min_value=0, max_value=1024000), 
         free_space_ratio=st.floats(min_value=0.1, max_value=0.5), 
         cache_partial_only=st.booleans(),
@@ -472,7 +472,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('gc succeed')
 
 
-    valid_file_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
+    valid_file_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
     @rule(juicefs=st.sampled_from(JFS_BINS), 
         get_timeout=st.integers(min_value=30, max_value=60), 
         put_timeout=st.integers(min_value=30, max_value=60), 
@@ -485,7 +485,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         prefetch=st.integers(min_value=0, max_value=100), 
         writeback=st.booleans(),
         upload_delay=st.integers(min_value=0, max_value=60), 
-        cache_dir=valid_file_name,
+        cache_dir=st.sampled_from(['cache1', 'cache2']),
         cache_size=st.integers(min_value=0, max_value=1024000), 
         free_space_ratio=st.floats(min_value=0.1, max_value=0.5), 
         cache_partial_only=st.booleans(),
