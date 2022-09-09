@@ -87,7 +87,7 @@ func newLogger(name string) *logHandle {
 	l := &logHandle{Logger: *logrus.New(), name: name, colorful: SupportANSIColor(os.Stderr.Fd())}
 	l.Formatter = l
 	if syslogHook != nil {
-		l.Hooks.Add(syslogHook)
+		l.AddHook(syslogHook)
 	}
 	l.SetReportCaller(true)
 	return l

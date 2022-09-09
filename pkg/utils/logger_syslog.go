@@ -70,7 +70,7 @@ func InitLoggers(logToSyslog bool) {
 		syslogHook = &SyslogHook{hook}
 
 		for _, l := range loggers {
-			l.Hooks.Add(syslogHook)
+			l.AddHook(syslogHook)
 		}
 	}
 }
