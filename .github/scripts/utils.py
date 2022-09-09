@@ -34,6 +34,8 @@ def flush_meta(meta_url):
         run_cmd(f'mysql -u{user} {password} -h {host} -P {port} -e "drop database if exists {db_name}; create database {db_name};"')
     elif meta_url.startswith('postgres://'): 
         db_name = meta_url[8:].split('@')[1].split('/')[1]
+        if '?' in db_name:
+            db_name = db_name.split('?')[0]
         os.environ['PGPASSWORD'] = 'postgres'
         run_cmd(f'"\set AUTOCOMMIT on\ndrop database if exists ${db_name}; create database {db_name}; " |  psql -U postgres -h localhost')
     else:
