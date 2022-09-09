@@ -79,6 +79,14 @@ type engine interface {
 	GetSession(sid uint64, detail bool) (*Session, error)
 }
 
+// fsStat aligned for atomic operations
+type fsStat struct {
+	newSpace   int64
+	newInodes  int64
+	usedSpace  int64
+	usedInodes int64
+}
+
 type baseMeta struct {
 	sync.Mutex
 	addr string
@@ -95,11 +103,9 @@ type baseMeta struct {
 	maxDeleting  chan struct{}
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
-	newSpace     int64
-	newInodes    int64
-	usedSpace    int64
-	usedInodes   int64
 	umounting    bool
+
+	*fsStat
 
 	freeMu     sync.Mutex
 	freeInodes freeID
@@ -130,6 +136,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		compacting:   make(map[uint64]bool),
 		maxDeleting:  make(chan struct{}, 100),
 		symlinks:     &sync.Map{},
+		fsStat:       new(fsStat),
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
