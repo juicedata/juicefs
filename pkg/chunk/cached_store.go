@@ -522,6 +522,7 @@ type Config struct {
 	CacheDir          string
 	CacheMode         os.FileMode
 	CacheSize         int64
+	CacheChecksum     string
 	CacheScanInterval time.Duration
 	FreeSpace         float32
 	AutoCreate        bool
@@ -562,13 +563,16 @@ func (c *Config) SelfCheck(uuid string) {
 		logger.Warnf("buffer-size should be more than 32 MiB")
 		c.BufferSize = 32 << 20
 	}
-
 	if c.CacheDir != "memory" {
 		ds := utils.SplitDir(c.CacheDir)
 		for i := range ds {
 			ds[i] = filepath.Join(ds[i], uuid)
 		}
 		c.CacheDir = strings.Join(ds, string(os.PathListSeparator))
+	}
+	if cs := []string{CsNone, CsFull, CsShrink, CsExtend}; !utils.StringContains(cs, c.CacheChecksum) {
+		logger.Warnf("verify-cache-checksum should be one of %v", cs)
+		c.CacheChecksum = CsFull
 	}
 }
 
@@ -839,7 +843,8 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		logger.Debugf("Key %s is not needed, drop it", key)
 		return
 	}
-	f, err := os.Open(stagingPath)
+	blen := parseObjOrigSize(key)
+	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
 		store.pendingMutex.Lock()
 		_, ok = store.pendingKeys[key]
@@ -851,9 +856,8 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		}
 		return
 	}
-	blen := parseObjOrigSize(key)
 	block := NewOffPage(blen)
-	_, err = io.ReadFull(f, block.Data)
+	_, err = f.ReadAt(block.Data, 0)
 	_ = f.Close()
 	if err != nil {
 		block.Release()

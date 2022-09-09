@@ -239,6 +239,7 @@ type javaConf struct {
 	FreeSpace         string  `json:"freeSpace"`
 	AutoCreate        bool    `json:"autoCreate"`
 	CacheFullBlock    bool    `json:"cacheFullBlock"`
+	CacheChecksum     string  `json:"cacheChecksum"`
 	CacheScanInterval int     `json:"cacheScanInterval"`
 	Writeback         bool    `json:"writeback"`
 	MemorySize        int     `json:"memorySize"`
@@ -452,6 +453,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			FreeSpace:         float32(freeSpaceRatio),
 			AutoCreate:        jConf.AutoCreate,
 			CacheFullBlock:    jConf.CacheFullBlock,
+			CacheChecksum:     jConf.CacheChecksum,
 			CacheScanInterval: time.Second * time.Duration(jConf.CacheScanInterval),
 			MaxUpload:         jConf.MaxUploads,
 			MaxDeletes:        jConf.MaxDeletes,

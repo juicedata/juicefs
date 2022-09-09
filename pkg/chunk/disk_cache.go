@@ -18,6 +18,8 @@ package chunk
 
 import (
 	"errors"
+	"fmt"
+	"hash/crc32"
 	"hash/fnv"
 	"io"
 	"math"
@@ -66,6 +68,7 @@ type cacheStore struct {
 	keys     map[string]cacheItem
 	scanned  bool
 	full     bool
+	checksum string // checksum level
 	uploader func(key, path string, force bool) bool
 }
 
@@ -82,6 +85,7 @@ func newCacheStore(m *cacheManager, dir string, cacheSize int64, pendingPages in
 		mode:         config.CacheMode,
 		capacity:     cacheSize,
 		freeRatio:    config.FreeSpace,
+		checksum:     config.CacheChecksum,
 		scanInterval: config.CacheScanInterval,
 		keys:         make(map[string]cacheItem),
 		pending:      make(chan pendingFile, pendingPages),
@@ -200,6 +204,13 @@ func (cache *cacheStore) flushPage(path string, data []byte) (err error) {
 		_ = f.Close()
 		return
 	}
+	if cache.checksum != CsNone {
+		if _, err = f.Write(checksum(data)); err != nil {
+			logger.Warnf("Write checksum to cache file %s failed: %s", tmp, err)
+			_ = f.Close()
+			return
+		}
+	}
 	if err = f.Close(); err != nil {
 		logger.Warnf("Close cache file %s failed: %s", tmp, err)
 		return
@@ -262,7 +273,7 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 		return nil, errors.New("not cached")
 	}
 	cache.Unlock()
-	f, err := os.Open(cache.cachePath(key))
+	f, err := openCacheFile(cache.cachePath(key), parseObjOrigSize(key), cache.checksum)
 	cache.Lock()
 	if err == nil {
 		if it, ok := cache.keys[key]; ok {
@@ -739,7 +750,7 @@ func (m *cacheManager) cache(key string, p *Page, force bool) {
 }
 
 type ReadCloser interface {
-	io.Reader
+	// io.Reader
 	io.ReaderAt
 	io.Closer
 }
@@ -762,4 +773,135 @@ func (m *cacheManager) stagePath(key string) string {
 
 func (m *cacheManager) uploaded(key string, size int) {
 	m.getStore(key).uploaded(key, size)
+}
+
+/* --- Checksum --- */
+const (
+	CsNone   = "none"
+	CsFull   = "full"
+	CsShrink = "shrink"
+	CsExtend = "extend"
+
+	csBlock = 32 << 10
+)
+
+var crc32c = crc32.MakeTable(crc32.Castagnoli)
+
+type cacheFile struct {
+	*os.File
+	length  int // length of data
+	csLevel string
+}
+
+// Calculate 32-bits checksum for every 32 KiB data, so 512 Bytes for 4 MiB in total
+func checksum(data []byte) []byte {
+	length := len(data)
+	buf := utils.NewBuffer(uint32((length-1)/csBlock+1) * 4)
+	for start, end := 0, 0; start < length; start = end {
+		end = start + csBlock
+		if end > length {
+			end = length
+		}
+		sum := crc32.Checksum(data[start:end], crc32c)
+		buf.Put32(sum)
+	}
+	return buf.Bytes()
+}
+
+func openCacheFile(name string, length int, level string) (*cacheFile, error) {
+	fp, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := fp.Stat()
+	if err != nil {
+		_ = fp.Close()
+		return nil, err
+	}
+	checksumLength := ((length-1)/csBlock + 1) * 4
+	switch fi.Size() - int64(length) {
+	case 0:
+		return &cacheFile{fp, length, CsNone}, nil
+	case int64(checksumLength):
+		return &cacheFile{fp, length, level}, nil
+	default:
+		_ = fp.Close()
+		return nil, fmt.Errorf("invalid file size %d, data length %d", fi.Size(), length)
+	}
+}
+
+func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
+	logger.Tracef("CacheFile length %d level %s, readat off %d buffer size %d", cf.length, cf.csLevel, off, len(b))
+	defer func() {
+		logger.Tracef("CacheFile readat returns n %d err %s", n, err)
+	}()
+	if cf.csLevel == CsNone || cf.csLevel == CsFull && (off != 0 || len(b) != cf.length) {
+		return cf.File.ReadAt(b, off)
+	}
+	var rb = b     // read buffer
+	var roff = off // read offset
+	if cf.csLevel == CsExtend {
+		roff = off / csBlock * csBlock
+		rend := int(off) + len(b)
+		if rend%csBlock != 0 {
+			rend = (rend/csBlock + 1) * csBlock
+			if rend > cf.length {
+				rend = cf.length
+			}
+		}
+		if size := rend - int(roff); size != len(b) {
+			p := NewOffPage(size)
+			rb = p.Data
+			defer func() {
+				if err == nil {
+					n = copy(b, rb[off-roff:])
+				} else {
+					n = 0
+				}
+				p.Release()
+			}()
+		}
+	}
+	if n, err = cf.File.ReadAt(rb, roff); err != nil {
+		return
+	}
+
+	ioff := int(roff) / csBlock // index offset
+	if cf.csLevel == CsShrink {
+		if roff%csBlock != 0 {
+			if o := csBlock - int(roff)%csBlock; len(rb) <= o {
+				return
+			} else {
+				rb = rb[o:]
+				ioff += 1
+			}
+		}
+		if end := int(roff) + n; end != cf.length && end%csBlock != 0 {
+			if len(rb) <= end%csBlock {
+				return
+			}
+			rb = rb[:len(rb)-end%csBlock]
+		}
+	}
+	// now rb contains the data to check
+	length := len(rb)
+	buf := utils.NewBuffer(uint32((length-1)/csBlock+1) * 4)
+	if _, err = cf.File.ReadAt(buf.Bytes(), int64(cf.length+ioff*4)); err != nil {
+		logger.Warnf("Read checksum of data length %d checksum offset %d: %s", length, cf.length+ioff*4, err)
+		return
+	}
+	for start, end := 0, 0; start < length; start = end {
+		end = start + csBlock
+		if end > length {
+			end = length
+		}
+		sum := crc32.Checksum(rb[start:end], crc32c)
+		expect := buf.Get32()
+		logger.Debugf("Cache file read data start %d end %d checksum %d, expected %d", start, end, sum, expect)
+		if sum != expect {
+			err = fmt.Errorf("data checksum %d != expect %d", sum, expect)
+			break
+		}
+	}
+	return
 }
