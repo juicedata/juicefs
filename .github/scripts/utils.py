@@ -37,7 +37,7 @@ def flush_meta(meta_url):
         if '?' in db_name:
             db_name = db_name.split('?')[0]
         os.environ['PGPASSWORD'] = 'postgres'
-        run_cmd(f'printf "\set AUTOCOMMIT on\ndrop database if exists ${db_name}; create database {db_name}; " |  psql -U postgres -h localhost')
+        run_cmd(f'printf "\set AUTOCOMMIT on\ndrop database if exists {db_name}; create database {db_name}; " |  psql -U postgres -h localhost')
     else:
         raise Exception(f'{meta_url} not supported')
     print('flush meta succeed')
