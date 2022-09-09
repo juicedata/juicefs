@@ -179,9 +179,11 @@ class JuicefsMachine(RuleBasedStateMachine):
     def status(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start status')
-        output = subprocess.check_output([juicefs, 'status', self.meta_url])
-        print(f'status output: {output.decode()}')
-        uuid = json.loads(output.decode().replace("'", '"'))['Setting']['UUID']
+        output = run_jfs_cmd([juicefs, 'status', self.meta_url])
+        try:
+            uuid = json.loads(output.replace("'", '"'))['Setting']['UUID']
+        except:
+            raise Exception(f'parse uuid failed, output: {output}')
         assert len(uuid) != 0
         if self.mounted and not is_readonly(JuicefsMachine.MOUNT_POINT):
             sessions = json.loads(output.decode().replace("'", '"'))['Sessions']
