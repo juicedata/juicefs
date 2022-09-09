@@ -233,7 +233,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   private String normalizePath(Path path) {
-    return makeQualified(path).toUri().getPath();
+    return path.toUri().getPath();
   }
 
   public String getScheme() {
@@ -898,6 +898,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path f, int bufferSize) throws IOException {
+    f = makeQualified(f);
     statistics.incrementReadOps(1);
     int fd = lib.jfs_open(Thread.currentThread().getId(), handle, normalizePath(f), MODE_MASK_R);
     if (fd < 0) {
@@ -908,6 +909,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void access(Path path, FsAction mode) throws IOException {
+    path = makeQualified(path);
     int r = lib.jfs_access(Thread.currentThread().getId(), handle, normalizePath(path), mode.ordinal());
     if (r < 0)
       throw error(r, path);
@@ -1037,6 +1039,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FSDataOutputStream append(Path f, int bufferSize, Progressable progress) throws IOException {
+    f = makeQualified(f);
     statistics.incrementWriteOps(1);
     int fd = lib.jfs_open(Thread.currentThread().getId(), handle, normalizePath(f), MODE_MASK_W);
     if (fd < 0)
@@ -1050,6 +1053,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize,
                                    short replication, long blockSize, Progressable progress) throws IOException {
+    f = makeQualified(f);
     statistics.incrementWriteOps(1);
     permission = permission.applyUMask(uMask);
     while (true) {
@@ -1087,6 +1091,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, EnumSet<CreateFlag> flag,
                                                int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
+    f = makeQualified(f);
     statistics.incrementWriteOps(1);
     permission = permission.applyUMask(uMask);
     int fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort());
@@ -1120,6 +1125,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FileChecksum getFileChecksum(Path f, long length) throws IOException {
+    f = makeQualified(f);
     statistics.incrementReadOps(1);
     if (!fileChecksumEnabled)
       return null;
@@ -1179,11 +1185,13 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   @Override
-  public void concat(final Path dst, final Path[] srcs) throws IOException {
+  public void concat(Path dst, Path[] srcs) throws IOException {
     statistics.incrementWriteOps(1);
     if (srcs.length == 0) {
       throw new IllegalArgumentException("No sources given");
     }
+    dst = makeQualified(dst);
+    srcs = Arrays.stream(srcs).map(this::makeQualified).toArray(Path[]::new);
     Path dp = dst.getParent();
     for (Path src : srcs) {
       if (!src.getParent().equals(dp)) {
@@ -1221,8 +1229,10 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
     statistics.incrementWriteOps(1);
-    String srcStr = makeQualified(src).toUri().getPath();
-    String dstStr = makeQualified(dst).toUri().getPath();
+    src = makeQualified(src);
+    dst = makeQualified(dst);
+    String srcStr = normalizePath(src);
+    String dstStr = normalizePath(dst);
     if (src.equals(dst)) {
       FileStatus st = getFileStatus(src);
       return st.isFile();
@@ -1230,13 +1240,13 @@ public class JuiceFileSystemImpl extends FileSystem {
     if (dstStr.startsWith(srcStr) && (dstStr.charAt(srcStr.length()) == Path.SEPARATOR_CHAR)) {
       return false;
     }
-    int r = lib.jfs_rename(Thread.currentThread().getId(), handle, normalizePath(src), normalizePath(dst));
+    int r = lib.jfs_rename(Thread.currentThread().getId(), handle, srcStr, dstStr);
     if (r == EEXIST) {
       try {
         FileStatus st = getFileStatus(dst);
         if (st.isDirectory()) {
           dst = new Path(dst, src.getName());
-          r = lib.jfs_rename(Thread.currentThread().getId(), handle, normalizePath(src), normalizePath(dst));
+          r = lib.jfs_rename(Thread.currentThread().getId(), handle, srcStr, normalizePath(dst));
         } else {
           return false;
         }
@@ -1252,6 +1262,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public boolean truncate(Path f, long newLength) throws IOException {
+    f = makeQualified(f);
     int r = lib.jfs_truncate(Thread.currentThread().getId(), handle, normalizePath(f), newLength);
     if (r < 0)
       throw error(r, f);
@@ -1271,6 +1282,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public boolean delete(Path p, boolean recursive) throws IOException {
+    p = makeQualified(p);
     statistics.incrementWriteOps(1);
     if (recursive)
       return rmr(p);
@@ -1286,6 +1298,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public ContentSummary getContentSummary(Path f) throws IOException {
+    f = makeQualified(f);
     statistics.incrementReadOps(1);
     String path = normalizePath(f);
     Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 24);
@@ -1315,6 +1328,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path f) throws FileNotFoundException, IOException {
+    f = makeQualified(f);
     statistics.incrementReadOps(1);
     int bufsize = 32 << 10;
     Pointer buf = Memory.allocate(Runtime.getRuntime(lib), bufsize); // TODO: smaller buff
@@ -1400,6 +1414,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FileStatus getFileStatus(Path f) throws IOException {
+    f = makeQualified(f);
     statistics.incrementReadOps(1);
     try {
       return getFileStatusInternal(f, true);
@@ -1445,6 +1460,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FsStatus getStatus(Path p) throws IOException {
+    p = makeQualified(p);
     statistics.incrementReadOps(1);
     Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 16);
     int r = lib.jfs_statvfs(Thread.currentThread().getId(), handle, buf);
@@ -1457,6 +1473,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void setPermission(Path p, FsPermission permission) throws IOException {
+    p = makeQualified(p);
     statistics.incrementWriteOps(1);
     int r = lib.jfs_chmod(Thread.currentThread().getId(), handle, normalizePath(p), permission.toShort());
     if (r != 0)
@@ -1465,6 +1482,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void setOwner(Path p, String username, String groupname) throws IOException {
+    p = makeQualified(p);
     statistics.incrementWriteOps(1);
     int r = lib.jfs_setOwner(Thread.currentThread().getId(), handle, normalizePath(p), username, groupname);
     if (r != 0)
@@ -1473,6 +1491,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public void setTimes(Path p, long mtime, long atime) throws IOException {
+    p = makeQualified(p);
     statistics.incrementWriteOps(1);
     int r = lib.jfs_utime(Thread.currentThread().getId(), handle, normalizePath(p), mtime >= 0 ? mtime : -1,
             atime >= 0 ? atime : -1);
@@ -1496,6 +1515,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   public void setXAttr(Path path, String name, byte[] value, EnumSet<XAttrSetFlag> flag) throws IOException {
+    path = makeQualified(path);
     Pointer buf = Memory.allocate(Runtime.getRuntime(lib), value.length);
     buf.put(0, value, 0, value.length);
     int mode = 0; // create or replace
@@ -1513,6 +1533,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   public byte[] getXAttr(Path path, String name) throws IOException {
+    path = makeQualified(path);
     Pointer buf;
     int bufsize = 16 << 10;
     int r;
@@ -1531,10 +1552,12 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   public Map<String, byte[]> getXAttrs(Path path) throws IOException {
+    path = makeQualified(path);
     return getXAttrs(path, listXAttrs(path));
   }
 
   public Map<String, byte[]> getXAttrs(Path path, List<String> names) throws IOException {
+    path = makeQualified(path);
     Map<String, byte[]> result = new HashMap<String, byte[]>();
     for (String n : names) {
       byte[] value = getXAttr(path, n);
@@ -1546,6 +1569,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   public List<String> listXAttrs(Path path) throws IOException {
+    path = makeQualified(path);
     Pointer buf;
     int bufsize = 1024;
     int r;
@@ -1571,6 +1595,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   public void removeXAttr(Path path, String name) throws IOException {
+    path = makeQualified(path);
     int r = lib.jfs_removeXattr(Thread.currentThread().getId(), handle, normalizePath(path), name);
     if (r == ENOATTR || r == ENODATA) {
       throw new IOException("No matching attributes found for remove operation");
