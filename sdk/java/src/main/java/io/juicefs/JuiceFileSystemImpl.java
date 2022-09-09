@@ -184,7 +184,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   static int MODE_MASK_X = 1;
 
   private IOException error(int errno, Path p) {
-    String pStr = p == null ? "" : normalizePath(p);
+    String pStr = p == null ? "" : p.toString();
     if (errno == EPERM) {
       return new PathPermissionException(pStr);
     } else if (errno == ENOTDIR) {
@@ -1188,9 +1188,9 @@ public class JuiceFileSystemImpl extends FileSystem {
     Path dp = makeQualified(dst).getParent();
     for (Path src : srcs) {
       if (!makeQualified(src).getParent().equals(dp)) {
-        throw new HadoopIllegalArgumentException("Source file " + src
+        throw new HadoopIllegalArgumentException("Source file " + normalizePath(src)
                 + " is not in the same directory with the target "
-                + makeQualified(dst));
+                + normalizePath(dst));
       }
     }
     byte[][] srcbytes = new byte[srcs.length][];
