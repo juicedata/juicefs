@@ -138,7 +138,7 @@ def run_jfs_cmd( options):
 
 def run_cmd(command):
     print('run_cmd:'+command)
-    if '|' in command:
+    if '|' in command or '"' in command:
         return os.system(command)
     try:
         output = subprocess.run(command.split(), check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
