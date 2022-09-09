@@ -67,6 +67,7 @@ func TestChecksum(t *testing.T) {
 		t.Fatalf("Write checksum to cache file %s: %s", fpath, err)
 	}
 	_ = f.Close()
+	s.add(k4, 102400, uint32(time.Now().Unix()))
 
 	buf = make([]byte, 1048576)
 	_, _ = rand.Read(buf)
