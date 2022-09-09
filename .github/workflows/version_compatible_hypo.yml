@@ -12,15 +12,16 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        # old_juicefs_version: ['1.0.0-rc1', '1.0.0-beta1']
-        old_juicefs_version: ['0.17.1']
+        old_juicefs_version: ['1.0.0', '1.0.0-rc1',  '1.0.0-beta1', '0.17.1']
+        # old_juicefs_version: ['0.17.1']
         # meta_url: ['tikv://127.0.0.1:2379']
-        meta_url: ['redis://localhost/1']
-        # meta_url: ['redis://localhost/1', 'mysql://root:root@\(127.0.0.1\)/test', 'postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable']
-        # include:
-        #   - os: macos-latest
-        #     old_juicefs_version: '1.0.0'
-        #     meta_url: 'redis://localhost/1'
+        # meta_url: ['redis://localhost/1']
+        # meta_url: ['redis://localhost/1', 'mysql://root:root@\(127.0.0.1\)/test', 'tikv://127.0.0.1:2379', 'postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable']
+        meta_url: ['redis://localhost/1', 'mysql://root:root@\(127.0.0.1\)/test', 'tikv://127.0.0.1:2379']
+        include:
+          - os: macos-latest
+            old_juicefs_version: '1.0.0'
+            meta_url: 'redis://localhost/1'
 
     runs-on: ubuntu-latest
 
@@ -155,5 +156,5 @@ jobs:
 
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 30
+        timeout-minutes: 1
         uses: lhotari/action-upterm@v1
