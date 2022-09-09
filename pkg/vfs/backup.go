@@ -84,7 +84,7 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time) error {
 	defer os.Remove(fpath)
 	defer fp.Close()
 	zw := gzip.NewWriter(fp)
-	err = m.DumpMeta(zw, 0) // force dump the whole tree
+	err = m.DumpMeta(zw, 0, false) // force dump the whole tree
 	_ = zw.Close()
 	if err != nil {
 		return err

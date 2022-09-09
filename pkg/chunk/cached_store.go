@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -541,6 +542,38 @@ type Config struct {
 	BufferSize        int
 	Readahead         int
 	Prefetch          int
+}
+
+func (c *Config) SelfCheck(uuid string) {
+	if c.CacheSize == 0 {
+		logger.Warnf("cache-size is 0, writeback and prefetch will be disabled")
+		c.Writeback = false
+		c.Prefetch = 0
+		c.CacheDir = "memory"
+	}
+	if !c.Writeback && c.UploadDelay > 0 {
+		logger.Warnf("delayed upload is disabled in non-writeback mode")
+		c.UploadDelay = 0
+	}
+	if c.MaxUpload <= 0 {
+		logger.Warnf("max-uploads should be greater than 0, set it to 1")
+		c.MaxUpload = 1
+	}
+	if c.BufferSize <= 32<<20 {
+		logger.Warnf("buffer-size should be more than 32 MiB")
+		c.BufferSize = 32 << 20
+	}
+	if c.CacheDir != "memory" {
+		ds := utils.SplitDir(c.CacheDir)
+		for i := range ds {
+			ds[i] = filepath.Join(ds[i], uuid)
+		}
+		c.CacheDir = strings.Join(ds, string(os.PathListSeparator))
+	}
+	if cs := []string{CsNone, CsFull, CsShrink, CsExtend}; !utils.StringContains(cs, c.CacheChecksum) {
+		logger.Warnf("verify-cache-checksum should be one of %v", cs)
+		c.CacheChecksum = CsFull
+	}
 }
 
 type cachedStore struct {
