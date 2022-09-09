@@ -579,6 +579,7 @@ type cacheManager struct {
 	cacheWriteHist  prometheus.Histogram
 	stageBlocks     prometheus.Gauge
 	stageBlockBytes prometheus.Gauge
+	stageBlockDelay prometheus.Counter
 }
 
 func keyHash(s string) uint32 {
@@ -693,6 +694,10 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 			Name: "staging_block_bytes",
 			Help: "Total bytes of blocks in the staging path.",
 		}),
+		stageBlockDelay: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "staging_block_delay_seconds",
+			Help: "Total seconds of delay for staging blocks",
+		}),
 	}
 	if reg != nil {
 		reg.MustRegister(m.cacheWrites)
@@ -702,6 +707,7 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 		reg.MustRegister(m.cacheWriteHist)
 		reg.MustRegister(m.stageBlocks)
 		reg.MustRegister(m.stageBlockBytes)
+		reg.MustRegister(m.stageBlockDelay)
 	}
 
 	// 20% of buffer could be used for pending pages

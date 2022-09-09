@@ -833,7 +833,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}()
 
 	store.pendingMutex.Lock()
-	_, ok := store.pendingKeys[key]
+	addTime, ok := store.pendingKeys[key]
 	store.pendingMutex.Unlock()
 	if !ok {
 		logger.Debugf("Key %s is not needed, drop it", key)
@@ -861,6 +861,9 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		return
 	}
 
+	if m, ok := store.bcache.(*cacheManager); ok {
+		m.stageBlockDelay.Add(time.Now().Sub(addTime).Seconds())
+	}
 	if err = store.upload(key, block, nil); err == nil {
 		store.bcache.uploaded(key, blen)
 		store.removePending(key)
