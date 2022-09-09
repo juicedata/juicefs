@@ -856,7 +856,7 @@ func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
 				if err == nil {
 					n = copy(b, rb[off-roff:])
 				} else {
-					n = 0 // TODO: adjust n and b
+					n = 0
 				}
 				p.Release()
 			}()
