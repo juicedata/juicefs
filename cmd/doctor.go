@@ -100,25 +100,51 @@ $ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /
 	}
 }
 
-func getVolumeConf(mp string) (string, error) {
-	confPath := path.Join(mp, ".config")
-	conf, err := os.ReadFile(confPath)
+func copyVolumeConfWindows(srcPath, destPath string) error {
+	srcFile, err := os.Open(srcPath)
 	if err != nil {
-		return "", fmt.Errorf("error reading config %s: %v", confPath, err)
+		return err
 	}
-	return string(conf), nil
+	defer closeFile(srcFile)
+	destFile, err := os.Create(destPath)
+	if err != nil {
+		return err
+	}
+	defer closeFile(destFile)
+	if _, err := io.Copy(destFile, srcFile); err != nil {
+		return err
+	}
+	return nil
 }
 
-func getCmdMount(mp string) (pid, cmd string, err error) {
-	if !isUnix() {
-		logger.Warnf("Failed to get command mount: %s is not supported", runtime.GOOS)
-		return "", "", nil
+func copyConfigFile(srcPath, destPath string, rootPrivileges bool) error {
+	if runtime.GOOS == "windows" {
+		return copyVolumeConfWindows(srcPath, destPath)
 	}
 
-	ret, err := exec.Command("bash", "-c", "ps -ef | grep -v grep | grep 'juicefs mount' | grep "+mp).CombinedOutput()
+	var copyArgs []string
+	if rootPrivileges {
+		copyArgs = append(copyArgs, "sudo")
+	}
+	copyArgs = append(copyArgs, "bash", "-c", fmt.Sprintf("cp %s %s", srcPath, destPath))
+	if err := exec.Command(copyArgs[0], copyArgs[1:]...).Run(); err != nil {
+		fmt.Println(strings.Join(copyArgs, " "))
+		return err
+	}
+
+	return nil
+}
+
+func getCmdMount(mp string) (uid, pid, cmd string, err error) {
+	if !isUnix() {
+		logger.Warnf("Failed to get command mount: %s is not supported", runtime.GOOS)
+		return "", "", "", nil
+	}
+
+	ret, err := exec.Command("/bin/sh", "-c", "ps -ef | grep -v grep | grep 'juicefs mount' | grep "+mp).CombinedOutput()
 	// `exit status 1"` occurs when there is no matching item for `grep`
 	if err != nil {
-		return "", "", fmt.Errorf("failed to execute command `ps -ef | grep juicefs | grep %s`: %v", mp, err)
+		return "", "", "", fmt.Errorf("failed to execute command `ps -ef | grep juicefs | grep %s`: %v", mp, err)
 	}
 
 	lines := strings.Split(string(ret), "\n")
@@ -132,15 +158,15 @@ func getCmdMount(mp string) (pid, cmd string, err error) {
 		for _, arg := range cmdFields {
 			if mp == arg {
 				cmd = strings.Join(fields[7:], " ")
-				pid = fields[1]
+				uid, pid = strings.TrimSpace(fields[0]), strings.TrimSpace(fields[1])
 				break
 			}
 		}
 	}
 	if cmd == "" {
-		return "", "", fmt.Errorf("not found mount point: %s", mp)
+		return "", "", "", fmt.Errorf("not found mount point: %s", mp)
 	}
-	return pid, cmd, nil
+	return uid, pid, cmd, nil
 }
 
 func getDefaultLogDir() (string, error) {
@@ -206,7 +232,7 @@ func copyLogFile(logPath, retLogPath string, limit uint64) error {
 
 	if limit > 0 {
 		cmdStr := fmt.Sprintf("tail -n %d %s", limit, logPath)
-		ret, err := exec.Command("bash", "-c", cmdStr).Output()
+		ret, err := exec.Command("/bin/sh", "-c", cmdStr).Output()
 		if err != nil {
 			return fmt.Errorf("tailing log error: %v", err)
 		}
@@ -228,19 +254,20 @@ func copyLogFile(logPath, retLogPath string, limit uint64) error {
 	return nil
 }
 
-func getPprofPort(pid, mp string) (int, error) {
+func getPprofPort(pid, mp string, rootPrivileges bool) (int, error) {
 	if !isUnix() {
 		logger.Warnf("Failed to get pprof port: %s is not supported", runtime.GOOS)
 		return 0, nil
 	}
 
-	cmdStr := "lsof -i -nP | grep -v grep | grep LISTEN | grep " + pid
-	if os.Getuid() == 0 {
-		cmdStr = "sudo " + cmdStr
+	var lsofArgs []string
+	if rootPrivileges {
+		lsofArgs = append(lsofArgs, "sudo")
 	}
-	ret, err := exec.Command("bash", "-c", cmdStr).CombinedOutput()
+	lsofArgs = append(lsofArgs, "/bin/sh", "-c", "lsof -i -nP | grep -v grep | grep LISTEN | grep "+pid)
+	ret, err := exec.Command(lsofArgs[0], lsofArgs[1:]...).CombinedOutput()
 	if err != nil {
-		return 0, fmt.Errorf("failed to execute command `%s`: %v", cmdStr, err)
+		return 0, fmt.Errorf("failed to execute command `%s`: %v", strings.Join(lsofArgs, " "), err)
 	}
 	lines := strings.Split(string(ret), "\n")
 	if len(lines) == 0 {
@@ -360,7 +387,6 @@ func checkAgent(cmd string) bool {
 }
 
 func doctor(ctx *cli.Context) error {
-	currTime := time.Now().Format("20060102150405")
 	setup(ctx, 1)
 	mp := ctx.Args().First()
 	inode, err := utils.GetFileInode(mp)
@@ -371,9 +397,12 @@ func doctor(ctx *cli.Context) error {
 		return fmt.Errorf("path %s is not a mount point", mp)
 	}
 
+	currTime := time.Now().Format("20060102150405")
+	prefix := strings.Trim(strings.Join(strings.Split(mp, "/"), "-"), "-")
+	rootPrivileges := false
+
 	outDir := ctx.String("out-dir")
 	// special treatment for non-existing out dir
-
 	if _, err := os.Stat(outDir); os.IsNotExist(err) {
 		if err := os.Mkdir(outDir, os.ModePerm); err != nil {
 			return fmt.Errorf("failed to create out dir %s: %v", outDir, err)
@@ -394,7 +423,7 @@ func doctor(ctx *cli.Context) error {
 	file, err := os.Create(filePath)
 	defer closeFile(file)
 	if err != nil {
-		return fmt.Errorf("failed to create file %s: %v", filePath, err)
+		return fmt.Errorf("failed to create system info file %s: %v", filePath, err)
 	}
 
 	osEntry, err := utils.GetEntry()
@@ -414,26 +443,24 @@ JuiceFS Version:
 	fmt.Printf("\n%s\n", result)
 
 	mp, _ = filepath.Abs(mp)
-	conf, err := getVolumeConf(mp)
-	if err != nil {
-		return err
-	}
-	prefix := strings.Trim(strings.Join(strings.Split(mp, "/"), "-"), "-")
-	confPath := path.Join(outDir, fmt.Sprintf("%s-%s.config", prefix, currTime))
-	confFile, err := os.Create(confPath)
-	defer closeFile(confFile)
-	if err != nil {
-		return fmt.Errorf("failed to create config file %s: %v", confPath, err)
-	}
-	if _, err = confFile.WriteString(conf); err != nil {
-		return fmt.Errorf("failed to write config %s: %v", confPath, err)
-	}
-
-	pid, cmd, err := getCmdMount(mp)
+	uid, pid, cmd, err := getCmdMount(mp)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("\nMount Command:\n%s\n\n", cmd)
+
+	if uid == "0" && os.Getuid() != 0 {
+		logger.Info("Mount point is mounted by the root user, may ask for root privilege...")
+		rootPrivileges = true
+	}
+
+	confItems := []string{".config", ".stats"}
+	for _, item := range confItems {
+		destPath := path.Join(outDir, fmt.Sprintf("%s-%s%s", prefix, currTime, item))
+		if err := copyConfigFile(path.Join(mp, item), destPath, rootPrivileges); err != nil {
+			return fmt.Errorf("failed to get volume config %s: %v", item, err)
+		}
+	}
 
 	if ctx.Bool("collect-log") {
 		logPath, err := getLogPath(cmd)
@@ -445,7 +472,7 @@ JuiceFS Version:
 		retLogPath := path.Join(outDir, fmt.Sprintf("%s-%s.log", prefix, currTime))
 
 		if err := copyLogFile(logPath, retLogPath, limit); err != nil {
-			return fmt.Errorf("error copying log file: %v", err)
+			return fmt.Errorf("error get log file: %v", err)
 		}
 		logger.Infof("Log %s is collected", logPath)
 	}
@@ -456,9 +483,9 @@ JuiceFS Version:
 	}
 
 	if enableAgent && ctx.Bool("collect-pprof") {
-		port, err := getPprofPort(pid, mp)
+		port, err := getPprofPort(pid, mp, rootPrivileges)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed get pprof port: %v", err)
 		}
 		baseUrl := fmt.Sprintf("http://localhost:%d/debug/pprof/", port)
 		trace := ctx.Uint64("trace-sec")
@@ -478,7 +505,7 @@ JuiceFS Version:
 
 		pprofOutDir := path.Join(outDir, fmt.Sprintf("pprof-%s-%s", prefix, currTime))
 		if err := os.Mkdir(pprofOutDir, os.ModePerm); err != nil {
-			return fmt.Errorf("error creating directory: %v", err)
+			return fmt.Errorf("failed to create pprof result directory: %v", err)
 		}
 
 		var wg sync.WaitGroup
@@ -494,7 +521,7 @@ JuiceFS Version:
 					logger.Infof("Trace metrics are being sampled, sampling duration: %ds", trace)
 				}
 				if err := reqAndSaveMetric(name, metric, pprofOutDir); err != nil {
-					logger.Errorf("Error saving metric %s: %v", name, err)
+					logger.Errorf("Failed to get and save metric %s: %v", name, err)
 				}
 			}(name, metric)
 		}
