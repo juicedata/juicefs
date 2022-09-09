@@ -86,6 +86,9 @@ class JuicefsMachine(RuleBasedStateMachine):
                 run_cmd('mc admin policy set myminio consoleAdmin user=juicedata')
             options.extend(['--access-key', 'juicedata'])
             options.extend(['--secret-key', '12345678'])
+            if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-rc1'):
+                # use the latest version to set secret-key because rc1 has a bug for secret-key
+                options[0] = JuicefsMachine.JFS_BINS[1]
         if encrypt_secret and run_cmd(f'{juicefs} config --help | grep --encrypt-secret') == 0:
             # version.parse('-'.join(JuicefsMachine.JFS_BINS[1].split('-')[1:])) >= version.parse('1.0.0-rc2'):
             # rc1 has a bug on encrypt-secret 
@@ -151,6 +154,9 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--bucket', bucket])
             options.extend(['--access-key', 'minioadmin'])
             options.extend(['--secret-key', 'minioadmin'])
+            if self.formatted and version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-rc1'):
+                # use the latest version to change secret-key because rc1 has a bug for secret-key
+                options[0] = JuicefsMachine.JFS_BINS[1]
         elif storage == 'file':
             bucket = os.path.expanduser('~/.juicefs/local/')
             options.extend(['--bucket', bucket])
@@ -359,11 +365,10 @@ class JuicefsMachine(RuleBasedStateMachine):
         flush_meta(self.meta_url)
         run_jfs_cmd([juicefs, 'load', self.meta_url, 'dump.json'])
         print('load succeed')
-        if version.parse('-'.join(juicefs.split('-')[1:])) >= version.parse('1.0.0-rc2'):
-            options = [juicefs, 'config', self.meta_url]
-        else:
-            # rc1 has a bug for config
-            options = [JuicefsMachine.JFS_BINS[1], 'config', self.meta_url]
+        options = [juicefs, 'config', self.meta_url]
+        if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-rc1'):
+            # use the latest version to change secret-key because rc1 has a bug for secret-key
+            options[0] = JuicefsMachine.JFS_BINS[1]
         options.extend(['--access-key', 'minioadmin', '--secret-key', 'minioadmin'])
         run_jfs_cmd(options)
         os.remove('dump.json')
