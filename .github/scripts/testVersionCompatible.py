@@ -88,7 +88,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--secret-key', '12345678'])
         if encrypt_secret and run_cmd(f'{juicefs} config --help | grep --encrypt-secret') == 0:
             # version.parse('-'.join(JuicefsMachine.JFS_BINS[1].split('-')[1:])) >= version.parse('1.0.0-rc2'):
-            # rc1 has a bug on encrypt-secret
+            # rc1 has a bug on encrypt-secret 
             options.append('--encrypt-secret')
         options.append('--force')
         run_jfs_cmd(options)
