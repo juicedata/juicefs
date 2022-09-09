@@ -184,12 +184,13 @@ public class JuiceFileSystemImpl extends FileSystem {
   static int MODE_MASK_X = 1;
 
   private IOException error(int errno, Path p) {
+    String pStr = p == null ? "" : p.toString();
     if (errno == EPERM) {
-      return new PathPermissionException(p.toString());
+      return new PathPermissionException(pStr);
     } else if (errno == ENOTDIR) {
       return new ParentNotDirectoryException();
     } else if (errno == ENOENT) {
-      return new FileNotFoundException(p.toString() + ": not found");
+      return new FileNotFoundException(pStr+ ": not found");
     } else if (errno == EACCESS) {
       try {
         String user = ugi.getShortUserName();
@@ -202,25 +203,25 @@ public class JuiceFileSystemImpl extends FileSystem {
       } catch (Exception e) {
         LOG.warn("fail to generate better error message", e);
       }
-      return new AccessControlException("Permission denied: " + p.toString());
+      return new AccessControlException("Permission denied: " + pStr);
     } else if (errno == EEXIST) {
       return new FileAlreadyExistsException();
     } else if (errno == EINVAL) {
       return new InvalidRequestException("Invalid parameter");
     } else if (errno == ENOTEMPTY) {
-      return new PathIsNotEmptyDirectoryException(p.toString());
+      return new PathIsNotEmptyDirectoryException(pStr);
     } else if (errno == EINTR) {
       return new InterruptedIOException();
     } else if (errno == ENOTSUP) {
-      return new PathOperationException(p.toString());
+      return new PathOperationException(pStr);
     } else if (errno == ENOSPACE) {
       return new IOException("No space");
     } else if (errno == EROFS) {
       return new IOException("Read-only Filesystem");
     } else if (errno == EIO) {
-      return new IOException(p.toString());
+      return new IOException(pStr);
     } else {
-      return new IOException("errno: " + errno + " " + p.toString());
+      return new IOException("errno: " + errno + " " + pStr);
     }
   }
 
@@ -1460,7 +1461,6 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   @Override
   public FsStatus getStatus(Path p) throws IOException {
-    p = makeQualified(p);
     statistics.incrementReadOps(1);
     Pointer buf = Memory.allocate(Runtime.getRuntime(lib), 16);
     int r = lib.jfs_statvfs(Thread.currentThread().getId(), handle, buf);
