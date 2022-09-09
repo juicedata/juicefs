@@ -188,6 +188,8 @@ public class JuiceFileSystemTest extends TestCase {
     }
     assertEquals(5001, fs.listStatus(new Path("/mkdirs/")).length);
     assertTrue(fs.delete(new Path("/mkdirs"), true));
+    assertTrue(fs.mkdirs(new Path("parent/dir")));
+    assertTrue(fs.exists(new Path(fs.getHomeDirectory(), "parent")));
   }
 
   public void testCreateWithoutPermission() throws Exception {
