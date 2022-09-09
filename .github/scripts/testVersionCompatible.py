@@ -102,8 +102,6 @@ class JuicefsMachine(RuleBasedStateMachine):
             elif storage == 'minio':
                 run_jfs_cmd([juicefs, 'config', self.meta_url, '--bucket', 'http://localhost:9000/test-bucket'])
         print('config succeed')
-    
-    
 
     @rule(
           juicefs=st.sampled_from(JFS_BINS),
@@ -271,10 +269,11 @@ class JuicefsMachine(RuleBasedStateMachine):
         if cache_partial_only:
             options.append('--cache-partial-only')
         options.extend(['--backup-meta', str(backup_meta)])
-        options.extend(['--heartbeat', str(heartbeat)])
+        if run_cmd(f'{juicefs} mount --help | grep --heartbeat') == 0:
+            options.extend(['--heartbeat', str(heartbeat)])
         if read_only:
             options.append('--read-only')
-        if no_bgjob:
+        if no_bgjob and run_cmd(f'{juicefs} mount --help | grep --no-bgjob') == 0:
             options.append('--no-bgjob')
 
         options.extend(['--open-cache', str(open_cache)])
