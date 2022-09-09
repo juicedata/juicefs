@@ -12,7 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         old_juicefs_version: ['1.0.0', '1.0.0-rc2']
-        meta_url: ['redis://localhost/1', 'mysql://root:root@(127.0.0.1)/test']
+        meta_url: ['redis://localhost/1', 'mysql://root:root@\(127.0.0.1\)/test']
 
     runs-on: ubuntu-latest
     services:
