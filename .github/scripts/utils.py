@@ -14,6 +14,11 @@ def flush_meta(meta_url):
         if os.path.isfile(path):
             os.remove(path)
             print(f'remove meta file {path} succeed')
+    elif meta_url.startswith('badger://'):
+        path = meta_url[len('badger://'):]
+        if os.path.isdir(path):
+            os.removedirs(path)
+            print(f'remove badger dir {path} succeed')
     elif meta_url.startswith('redis://'):
         run_cmd('redis-cli flushall')
         print(f'flush redis succeed')

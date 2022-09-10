@@ -225,7 +225,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
       - name: Test
         uses: ./.github/actions/gateway
         with:
@@ -238,7 +237,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
       - name: Test
         uses: ./.github/actions/gateway
         with:
