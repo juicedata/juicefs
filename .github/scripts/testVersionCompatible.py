@@ -279,9 +279,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         backup_meta = str(backup_meta)
         if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-beta2'):
             backup_meta = backup_meta + 's'
-        if run_cmd(f'{juicefs} mount --help | grep --backup-meta') == 0:
+        if run_cmd(f'{juicefs} mount --help | grep backup-meta') == 0:
             options.extend(['--backup-meta', backup_meta])
-        if run_cmd(f'{juicefs} mount --help | grep --heartbeat') == 0:
+        if run_cmd(f'{juicefs} mount --help | grep heartbeat') == 0:
             options.extend(['--heartbeat', str(heartbeat)])
         if read_only:
             options.append('--read-only')
