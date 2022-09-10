@@ -265,14 +265,20 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--prefetch', str(prefetch)])
         if writeback:
             options.append('--writeback')
+        upload_delay = str(upload_delay)
+        if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-beta2'):
+            upload_delay = upload_delay + 's'
         options.extend(['--upload-delay', str(upload_delay)])
         options.extend(['--cache-dir', os.path.expanduser(f'~/.juicefs/{cache_dir}')])
         options.extend(['--cache-size', str(cache_size)])
         options.extend(['--free-space-ratio', str(free_space_ratio)])
         if cache_partial_only:
             options.append('--cache-partial-only')
+        backup_meta = str(backup_meta)
+        if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-beta2'):
+            backup_meta = backup_meta + 's'
         if run_cmd(f'{juicefs} mount --help | grep --backup-meta') == 0:
-            options.extend(['--backup-meta', str(backup_meta)])
+            options.extend(['--backup-meta', backup_meta])
         if run_cmd(f'{juicefs} mount --help | grep --heartbeat') == 0:
             options.extend(['--heartbeat', str(heartbeat)])
         if read_only:
@@ -474,8 +480,8 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     valid_file_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
     @rule(juicefs=st.sampled_from(JFS_BINS), 
-        get_timeout=st.integers(min_value=30, max_value=60), 
-        put_timeout=st.integers(min_value=30, max_value=60), 
+        get_timeout=st.integers(min_value=30, max_value=59), 
+        put_timeout=st.integers(min_value=30, max_value=59), 
         io_retries=st.integers(min_value=5, max_value=15), 
         max_uploads=st.integers(min_value=1, max_value=100), 
         max_deletes=st.integers(min_value=1, max_value=100), 
@@ -484,12 +490,12 @@ class JuicefsMachine(RuleBasedStateMachine):
         download_limit=st.integers(min_value=0, max_value=1000), 
         prefetch=st.integers(min_value=0, max_value=100), 
         writeback=st.booleans(),
-        upload_delay=st.integers(min_value=0, max_value=60), 
+        upload_delay=st.integers(min_value=0, max_value=59), 
         cache_dir=st.sampled_from(['cache1', 'cache2']),
         cache_size=st.integers(min_value=0, max_value=1024000), 
         free_space_ratio=st.floats(min_value=0.1, max_value=0.5), 
         cache_partial_only=st.booleans(),
-        backup_meta=st.integers(min_value=300, max_value=3600),
+        backup_meta=st.integers(min_value=30, max_value=59),
         heartbeat=st.integers(min_value=5, max_value=30), 
         read_only=st.booleans(),
         no_bgjob=st.booleans(),
@@ -535,15 +541,21 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--prefetch', str(prefetch)])
         if writeback:
             options.append('--writeback')
-        options.extend(['--upload-delay', str(upload_delay)])
+        upload_delay = str(upload_delay)
+        if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-beta2'):
+            upload_delay = upload_delay + 's'
+        options.extend(['--upload-delay', upload_delay])
         options.extend(['--cache-dir', os.path.expanduser(f'~/.juicefs/{cache_dir}')])
         options.extend(['--access-log', os.path.expanduser(f'~/.juicefs/{access_log}')])
         options.extend(['--cache-size', str(cache_size)])
         options.extend(['--free-space-ratio', str(free_space_ratio)])
         if cache_partial_only:
             options.append('--cache-partial-only')
+        backup_meta = str(backup_meta)
+        if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-beta2'):
+            backup_meta = backup_meta + 's'
         if run_cmd(f'{juicefs} gateway --help | grep --backup-meta') == 0:
-            options.extend(['--backup-meta', str(backup_meta)])
+            options.extend(['--backup-meta', backup_meta])
         if run_cmd(f'{juicefs} gateway --help | grep --heartbeat') == 0:
             options.extend(['--heartbeat', str(heartbeat)])
         if read_only:
