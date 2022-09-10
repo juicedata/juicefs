@@ -118,7 +118,7 @@ jobs:
           
       - name: Test
         run: |
-          export META_URL= ${{ steps.vars.meta.META_URL }}
+          export META_URL=${{ steps.vars.meta.META_URL }}
           export STORAGE='minio'
           version=`./juicefs version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
           mv juicefs juicefs-$version
