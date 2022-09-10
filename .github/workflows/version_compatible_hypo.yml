@@ -126,16 +126,11 @@ jobs:
           # python3 .github/scripts/test_action_log.py
           python3 .github/scripts/testVersionCompatible.py
 
-      - name: Generate artifact name
-        id: generate-name
-        run: |
-          echo "::set-output name=artifact::${{ github.run_id }}.log"
-
       - name: Upload command log
         if: ${{ always() }}
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ steps.generate-name.outputs.artifact }}
+          name: command.${{ github.run_id }}.log
           path: command.log
 
       - name: Display log
