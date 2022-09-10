@@ -11,6 +11,7 @@ from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
 from hypothesis import assume, strategies as st
 from packaging import version
 from minio import Minio
+import uuid
 from utils import flush_meta, clear_storage, clear_cache, run_jfs_cmd, run_cmd, is_readonly, get_upload_delay_seconds, get_stage_blocks, write_data, write_block
 
 class JuicefsMachine(RuleBasedStateMachine):
@@ -30,9 +31,10 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     def __init__(self):
         super(JuicefsMachine, self).__init__()
-        print('\n__init__')
+        self.run_id = uuid.uuid4().hex
+        print(f'\ninit with run_id: {self.run_id}')
         with open('command.log', 'a') as f:
-            f.write('init------------------------------------\n')
+            f.write(f'init with run_id: {self.run_id}\n')
         self.formatted = False
         self.mounted = False
         self.meta_url = None
