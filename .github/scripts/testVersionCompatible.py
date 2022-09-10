@@ -214,7 +214,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         cache_size=st.integers(min_value=0, max_value=1024000), 
         free_space_ratio=st.floats(min_value=0.1, max_value=0.5), 
         cache_partial_only=st.booleans(),
-        backup_meta=st.integers(min_value=30, max_value=59),
+        backup_meta=st.integers(min_value=300, max_value=1000),
         heartbeat=st.integers(min_value=5, max_value=12), 
         read_only=st.booleans(),
         no_bgjob=st.booleans(),
@@ -278,7 +278,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.append('--cache-partial-only')
         backup_meta = str(backup_meta)
         if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-beta2'):
-            backup_meta = backup_meta + 's'
+            backup_meta = '1h0m0s'
         if run_cmd(f'{juicefs} mount --help | grep backup-meta') == 0:
             options.extend(['--backup-meta', backup_meta])
         if run_cmd(f'{juicefs} mount --help | grep heartbeat') == 0:
@@ -498,7 +498,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         cache_size=st.integers(min_value=0, max_value=1024000), 
         free_space_ratio=st.floats(min_value=0.1, max_value=0.5), 
         cache_partial_only=st.booleans(),
-        backup_meta=st.integers(min_value=30, max_value=59),
+        backup_meta=st.integers(min_value=300, max_value=1000),
         heartbeat=st.integers(min_value=5, max_value=30), 
         read_only=st.booleans(),
         no_bgjob=st.booleans(),
@@ -556,7 +556,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.append('--cache-partial-only')
         backup_meta = str(backup_meta)
         if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-beta2'):
-            backup_meta = backup_meta + 's'
+            backup_meta = '1h0m0s'
         if run_cmd(f'{juicefs} gateway --help | grep backup-meta') == 0:
             options.extend(['--backup-meta', backup_meta])
         if run_cmd(f'{juicefs} gateway --help | grep heartbeat') == 0:
