@@ -139,7 +139,7 @@ jobs:
           mv juicefs juicefs-$version
           export NEW_JFS_BIN="juicefs-$version"
           export OLD_JFS_BIN="juicefs-${{matrix.old_juicefs_version}}"
-
+          export PGPASSWORD="postgres"
           # python3 .github/scripts/test_action_log.py
           python3 .github/scripts/testVersionCompatible.py
 

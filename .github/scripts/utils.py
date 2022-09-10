@@ -17,7 +17,7 @@ def flush_meta(meta_url):
     elif meta_url.startswith('badger://'):
         path = meta_url[len('badger://'):]
         if os.path.isdir(path):
-            os.removedirs(path)
+            shutil.rmtree(path)
             print(f'remove badger dir {path} succeed')
     elif meta_url.startswith('redis://'):
         run_cmd('redis-cli flushall')
