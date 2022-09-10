@@ -40,10 +40,10 @@ jobs:
         run: | 
           meta=${{matrix.meta}}
           db_name=$(basename $meta_url | awk -F? '{print $1}')
-          if [[ "$meta" == redis* ]]; then
+          if [[ "$meta" == redis ]]; then
             meta_url='redis://localhost/1'
             sudo apt-get install -y redis-tools redis-server
-          elif [[ "$meta" == mysql* ]]; then
+          elif [[ "$meta" == mysql ]]; then
             meta_url='mysql://root:root@\(127.0.0.1\)/test'
             sudo /etc/init.d/mysql start
             sleep 3
@@ -54,12 +54,12 @@ jobs:
             port=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $2}')
             test -z "$port" && port="3306"
             mysql -u$user $password -h $host -P $port -e "drop database if exists $db_name; create database $db_name;" 
-          elif [[ "$meta" == postgres* ]]; then
+          elif [[ "$meta" == postgres ]]; then
             meta_url='postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable'
             sudo service postgresql start
             export PGPASSWORD="postgres"
             printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
-          elif [[ "$meta" == tikv* ]]; then
+          elif [[ "$meta" == tikv ]]; then
             meta_url='tikv://127.0.0.1:2379'
             git clone https://github.com/c4pt0r/tcli
             cd tcli && make
