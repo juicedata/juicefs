@@ -39,12 +39,12 @@ jobs:
         id: meta
         run: | 
           meta=${{matrix.meta}}
-          db_name=$(basename $meta_url | awk -F? '{print $1}')
           if [[ "$meta" == redis ]]; then
             meta_url='redis://localhost/1'
             sudo apt-get install -y redis-tools redis-server
           elif [[ "$meta" == mysql ]]; then
             meta_url='mysql://root:root@\(127.0.0.1\)/test'
+            db_name=$(basename $meta_url | awk -F? '{print $1}')
             sudo /etc/init.d/mysql start
             sleep 3
             user=$(echo $meta_url |  awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $1}')
@@ -56,6 +56,7 @@ jobs:
             mysql -u$user $password -h $host -P $port -e "drop database if exists $db_name; create database $db_name;" 
           elif [[ "$meta" == postgres ]]; then
             meta_url='postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable'
+            db_name=$(basename $meta_url | awk -F? '{print $1}')
             sudo service postgresql start
             export PGPASSWORD="postgres"
             printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
@@ -118,7 +119,7 @@ jobs:
           
       - name: Test
         run: |
-          export META_URL=${{ steps.vars.meta.META_URL }}
+          export META_URL=${{ steps.meta.META_URL }}
           export STORAGE='minio'
           version=`./juicefs version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
           mv juicefs juicefs-$version
