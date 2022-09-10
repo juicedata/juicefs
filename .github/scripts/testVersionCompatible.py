@@ -490,7 +490,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         download_limit=st.integers(min_value=0, max_value=1000), 
         prefetch=st.integers(min_value=0, max_value=100), 
         writeback=st.booleans(),
-        upload_delay=st.integers(min_value=0, max_value=59), 
+        upload_delay=st.sampled_from([0, 2]), 
         cache_dir=st.sampled_from(['cache1', 'cache2']),
         cache_size=st.integers(min_value=0, max_value=1024000), 
         free_space_ratio=st.floats(min_value=0.1, max_value=0.5), 

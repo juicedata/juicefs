@@ -17,7 +17,7 @@ jobs:
         # meta_url: ['tikv://127.0.0.1:2379']
         # meta_url: ['redis://localhost/1']
         # meta_url: ['redis://localhost/1', 'mysql://root:root@\(127.0.0.1\)/test', 'tikv://127.0.0.1:2379', 'postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable']
-        meta_url: ['redis://localhost/1', 'mysql://root:root@\(127.0.0.1\)/test', 'tikv://127.0.0.1:2379']
+        meta_url: ['redis://localhost/1', 'mysql://root:root@\(127.0.0.1\)/test']
         include:
           - os: macos-latest
             old_juicefs_version: '1.0.0'
