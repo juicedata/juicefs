@@ -43,7 +43,7 @@ jobs:
             meta_url='redis://localhost/1'
             sudo apt-get install -y redis-tools redis-server
           elif [[ "$meta" == mysql ]]; then
-            meta_url='mysql://root:root@\(127.0.0.1\)/test'
+            meta_url='mysql://root:root@(127.0.0.1)/test'
             db_name=$(basename $meta_url | awk -F? '{print $1}')
             sudo /etc/init.d/mysql start
             sleep 3
