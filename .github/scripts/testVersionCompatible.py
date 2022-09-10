@@ -389,6 +389,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.formatted)
     def fsck(self, juicefs):
         assume (self.is_supported_version(juicefs))
+        assume (get_stage_blocks(JuicefsMachine.MOUNT_POINT) == 0)
         print('start fsck')
         run_jfs_cmd([juicefs, 'fsck', self.meta_url])
         print('fsck succeed')
