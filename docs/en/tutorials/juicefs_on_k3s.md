@@ -129,7 +129,7 @@ juicefs-sc             csi.juicefs.com         Retain          Immediate        
 
 Next, deploy an Nginx Pod using a persistent storage declared by the JuiceFS storage class.
 
-### Depolyment
+### Deployment
 
 Create a configuration file, for example: `depolyment.yaml`
 

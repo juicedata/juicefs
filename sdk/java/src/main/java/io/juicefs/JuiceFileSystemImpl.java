@@ -93,7 +93,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   private boolean metricsEnable = false;
 
   /*
-   * hadoop compability
+   * hadoop compatibility
    */
   private boolean withStreamCapability;
   // constructor for BufferedFSOutputStreamWithStreamCapabilities
