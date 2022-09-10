@@ -27,7 +27,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     # META_URL = 'badger://abc.db'
     MOUNT_POINT = '/tmp/sync-test/'
     VOLUME_NAME = 'test-volume'
-    valid_file_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
+    # valid_file_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
 
     def __init__(self):
         super(JuicefsMachine, self).__init__()
@@ -219,7 +219,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         read_only=st.booleans(),
         no_bgjob=st.booleans(),
         open_cache=st.integers(min_value=0, max_value=100),
-        sub_dir=valid_file_name,
+        sub_dir=st.sampled_from(['dir1', 'dir2']),
         metrics=st.sampled_from(['127.0.0.1:9567', '127.0.0.1:9568']), 
         consul=st.sampled_from(['127.0.0.1:8500', '127.0.0.1:8501']), 
         no_usage_report=st.booleans(),
@@ -344,7 +344,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.mounted = False
         print('destroy succeed')
 
-    @rule(file_name=valid_file_name, data=st.binary() )
+    @rule(file_name=st.sampled_from(['myfile1', 'myfile2']), 
+        data=st.binary() )
     @precondition(lambda self: self.mounted )
     def write_and_read(self, file_name, data):
         assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
@@ -481,7 +482,6 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('gc succeed')
 
 
-    valid_file_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
     @rule(juicefs=st.sampled_from(JFS_BINS), 
         get_timeout=st.integers(min_value=30, max_value=59), 
         put_timeout=st.integers(min_value=30, max_value=59), 
@@ -506,7 +506,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         attr_cache=st.integers(min_value=1, max_value=10), 
         entry_cache=st.integers(min_value=1, max_value=10), 
         dir_entry_cache=st.integers(min_value=1, max_value=10), 
-        access_log=valid_file_name,
+        access_log=st.sampled_from(['accesslog1', 'accesslog2']),
         no_banner=st.booleans(),
         multi_buckets=st.booleans(), 
         keep_etag=st.booleans(),
@@ -514,7 +514,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         metrics=st.sampled_from(['127.0.0.1:9567', '127.0.0.1:9568']), 
         consul=st.sampled_from(['127.0.0.1:8500', '127.0.0.1:8501']), 
         no_usage_report=st.booleans(),
-        sub_dir=valid_file_name,
+        sub_dir=st.sampled_from(['dir1', 'dir2']),
         port=st.integers(min_value=9001, max_value=10000)
     )
     @precondition(lambda self: self.formatted )
