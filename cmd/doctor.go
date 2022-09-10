@@ -126,7 +126,7 @@ func copyConfigFile(srcPath, destPath string, rootPrivileges bool) error {
 	if rootPrivileges {
 		copyArgs = append(copyArgs, "sudo")
 	}
-	copyArgs = append(copyArgs, "bash", "-c", fmt.Sprintf("cp %s %s", srcPath, destPath))
+	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cp %s %s", srcPath, destPath))
 	if err := exec.Command(copyArgs[0], copyArgs[1:]...).Run(); err != nil {
 		fmt.Println(strings.Join(copyArgs, " "))
 		return err
@@ -180,7 +180,7 @@ func getDefaultLogDir() (string, error) {
 	case "darwin":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return "", fmt.Errorf("faild to get home directory")
+			return "", fmt.Errorf("failed to get home directory")
 		}
 		defaultLogDir = path.Join(homeDir, ".juicefs")
 	}
@@ -212,7 +212,7 @@ func getLogPath(cmd string) (string, error) {
 
 func closeFile(file *os.File) {
 	if err := file.Close(); err != nil {
-		logger.Fatalf("error closing log file %s: %v", file.Name(), err)
+		logger.Fatalf("failed to close file %s: %v", file.Name(), err)
 	}
 }
 
@@ -234,14 +234,13 @@ func copyLogFile(logPath, retLogPath string, limit uint64) error {
 		cmdStr := fmt.Sprintf("tail -n %d %s", limit, logPath)
 		ret, err := exec.Command("/bin/sh", "-c", cmdStr).Output()
 		if err != nil {
-			return fmt.Errorf("tailing log error: %v", err)
+			return fmt.Errorf("failed to tail log file: %v", err)
 		}
 		if _, err = writer.Write(ret); err != nil {
-			return fmt.Errorf("failed to copy log file: %v", err)
+			return fmt.Errorf("failed to write log file: %v", err)
 		}
 	} else {
-		reader := bufio.NewReader(logFile)
-		if _, err := io.Copy(writer, reader); err != nil {
+		if _, err := io.Copy(writer, bufio.NewReader(logFile)); err != nil {
 			return fmt.Errorf("failed to copy log file: %v", err)
 		}
 	}
@@ -249,7 +248,7 @@ func copyLogFile(logPath, retLogPath string, limit uint64) error {
 		return fmt.Errorf("failed to flush writer: %v", err)
 	}
 	if err := os.Rename(tmpFile.Name(), retLogPath); err != nil {
-		return err
+		return fmt.Errorf("failed to rename log file: %v", err)
 	}
 	return nil
 }
@@ -397,8 +396,8 @@ func doctor(ctx *cli.Context) error {
 		return fmt.Errorf("path %s is not a mount point", mp)
 	}
 
-	currTime := time.Now().Format("20060102150405")
-	prefix := strings.Trim(strings.Join(strings.Split(mp, "/"), "-"), "-")
+	mp, _ = filepath.Abs(mp)
+	prefix := fmt.Sprintf("%s-%s", strings.Trim(strings.Join(strings.Split(mp, "/"), "-"), "-"), time.Now().Format("20060102150405"))
 	rootPrivileges := false
 
 	outDir := ctx.String("out-dir")
@@ -419,13 +418,6 @@ func doctor(ctx *cli.Context) error {
 		return fmt.Errorf("argument --out-dir must be directory %s", outDir)
 	}
 
-	filePath := path.Join(outDir, fmt.Sprintf("system-info-%s.log", currTime))
-	file, err := os.Create(filePath)
-	defer closeFile(file)
-	if err != nil {
-		return fmt.Errorf("failed to create system info file %s: %v", filePath, err)
-	}
-
 	osEntry, err := utils.GetEntry()
 	if err != nil {
 		return fmt.Errorf("failed to get system info: %v", err)
@@ -437,15 +429,21 @@ func doctor(ctx *cli.Context) error {
 JuiceFS Version:
 %s`, runtime.GOOS, runtime.GOARCH, osEntry, ctx.App.Version)
 
-	if _, err = file.WriteString(result); err != nil {
-		return fmt.Errorf("failed to write system info %s: %v", filePath, err)
+	sysPath := path.Join(outDir, fmt.Sprintf("system-info-%s.log", prefix))
+	sysFile, err := os.Create(sysPath)
+	defer closeFile(sysFile)
+	if err != nil {
+		return fmt.Errorf("failed to create system info file %s: %v", sysPath, err)
 	}
+	if _, err = sysFile.WriteString(result); err != nil {
+		return fmt.Errorf("failed to write system info file %s: %v", sysPath, err)
+	}
+
 	fmt.Printf("\n%s\n", result)
 
-	mp, _ = filepath.Abs(mp)
 	uid, pid, cmd, err := getCmdMount(mp)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get mount command: %v", err)
 	}
 	fmt.Printf("\nMount Command:\n%s\n\n", cmd)
 
@@ -456,7 +454,7 @@ JuiceFS Version:
 
 	confItems := []string{".config", ".stats"}
 	for _, item := range confItems {
-		destPath := path.Join(outDir, fmt.Sprintf("%s-%s%s", prefix, currTime, item))
+		destPath := path.Join(outDir, fmt.Sprintf("%s%s", prefix, item))
 		if err := copyConfigFile(path.Join(mp, item), destPath, rootPrivileges); err != nil {
 			return fmt.Errorf("failed to get volume config %s: %v", item, err)
 		}
@@ -465,27 +463,27 @@ JuiceFS Version:
 	if ctx.Bool("collect-log") {
 		logPath, err := getLogPath(cmd)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get log path: %v", err)
 		}
 
 		limit := ctx.Uint64("limit")
-		retLogPath := path.Join(outDir, fmt.Sprintf("%s-%s.log", prefix, currTime))
+		retLogPath := path.Join(outDir, fmt.Sprintf("%s.log", prefix))
 
 		if err := copyLogFile(logPath, retLogPath, limit); err != nil {
-			return fmt.Errorf("error get log file: %v", err)
+			return fmt.Errorf("failed to get log file: %v", err)
 		}
 		logger.Infof("Log %s is collected", logPath)
 	}
 
 	enableAgent := checkAgent(cmd)
 	if !enableAgent {
-		logger.Infof("No agent found")
+		logger.Warnf("No agent found, the pprof metrics will not be collected")
 	}
 
 	if enableAgent && ctx.Bool("collect-pprof") {
 		port, err := getPprofPort(pid, mp, rootPrivileges)
 		if err != nil {
-			return fmt.Errorf("failed get pprof port: %v", err)
+			return fmt.Errorf("failed to get pprof port: %v", err)
 		}
 		baseUrl := fmt.Sprintf("http://localhost:%d/debug/pprof/", port)
 		trace := ctx.Uint64("trace-sec")
@@ -503,9 +501,9 @@ JuiceFS Version:
 			"profile":      {name: fmt.Sprintf("profile.%ds.pb.gz", profile), url: fmt.Sprintf("%sprofile?seconds=%d", baseUrl, profile)},
 		}
 
-		pprofOutDir := path.Join(outDir, fmt.Sprintf("pprof-%s-%s", prefix, currTime))
+		pprofOutDir := path.Join(outDir, fmt.Sprintf("pprof-%s", prefix))
 		if err := os.Mkdir(pprofOutDir, os.ModePerm); err != nil {
-			return fmt.Errorf("failed to create pprof result directory: %v", err)
+			return fmt.Errorf("failed to create out directory: %v", err)
 		}
 
 		var wg sync.WaitGroup
