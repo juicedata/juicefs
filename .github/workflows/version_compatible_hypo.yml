@@ -13,7 +13,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         old_juicefs_version: ['1.0.0', '1.0.0-rc1',  '1.0.0-beta1']
-        meta_url: ['redis', 'mysql']
+        meta: ['redis', 'mysql']
         include:
           - os: macos-latest
             old_juicefs_version: '1.0.0'
