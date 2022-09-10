@@ -155,3 +155,8 @@ def run_cmd(command):
         print(output.stdout.decode())
     print('run_cmd succeed')
     return output.returncode
+
+def is_port_in_use(port: int) -> bool:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) == 0

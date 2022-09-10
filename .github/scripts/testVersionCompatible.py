@@ -12,7 +12,7 @@ from hypothesis import assume, strategies as st
 from packaging import version
 from minio import Minio
 import uuid
-from utils import flush_meta, clear_storage, clear_cache, run_jfs_cmd, run_cmd, is_readonly, get_upload_delay_seconds, get_stage_blocks, write_data, write_block
+from utils import flush_meta, clear_storage, clear_cache, run_jfs_cmd, run_cmd, is_readonly, get_upload_delay_seconds, get_stage_blocks, write_data, write_block, is_port_in_use
 
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
@@ -230,6 +230,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         writeback, upload_delay, cache_dir, cache_size, free_space_ratio, cache_partial_only, backup_meta, heartbeat, read_only,
         no_bgjob, open_cache, sub_dir, metrics, consul, no_usage_report):
         assume (self.is_supported_version(juicefs))
+        if self.meta_url.startswith('badger://'):
+            assume(not self.mounted)
         retry = 3
         while os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog') and retry > 0:
             os.system(f'umount {JuicefsMachine.MOUNT_POINT}')
@@ -523,7 +525,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         backup_meta,heartbeat, read_only, no_bgjob, open_cache, attr_cache, entry_cache, dir_entry_cache, access_log, 
         no_banner, multi_buckets, keep_etag, umask, metrics, consul, no_usage_report, sub_dir, port):
         assume (self.is_supported_version(juicefs))
-        assume(self.is_port_in_use(port))
+        assume(not is_port_in_use(port))
+        if self.meta_url.startswith('badger://'):
+            assume(not self.mounted)
         print('start gateway')
         os.environ['MINIO_ROOT_USER'] = 'admin'
         os.environ['MINIO_ROOT_PASSWORD'] = '12345678'
@@ -593,19 +597,16 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.formatted )
     def webdav(self, juicefs, port):
         assume (self.is_supported_version(juicefs))
+        assume (not is_port_in_use(port))
+        if self.meta_url.startswith('badger://'):
+            assume(not self.mounted)
         print('start webdav')
-        if self.is_port_in_use(port):
-            return 
+        
         options = [juicefs, 'webdav', self.meta_url, f'localhost:{port}']
         proc = subprocess.Popen(options)
         time.sleep(2.0)
         subprocess.Popen.kill(proc)
         print('webdav succeed')
-
-    def is_port_in_use(self, port: int) -> bool:
-        import socket
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            return s.connect_ex(('localhost', port)) == 0
 
     def is_supported_version(self, ver):
         return version.parse('-'.join(ver.split('-')[1:])) >=  version.parse('-'.join(self.formatted_by.split('-')[1:]))
