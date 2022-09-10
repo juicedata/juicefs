@@ -65,9 +65,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--capacity', str(capacity)])
         options.extend(['--inodes', str(inodes)])
         assert version.parse(min_client_version) <= version.parse(max_client_version)
-        if run_cmd(f'{juicefs} config --help | grep --min-client-version') == 0:
+        if run_cmd(f'{juicefs} config --help | grep min-client-version') == 0:
             options.extend(['--min-client-version', min_client_version])
-        if run_cmd(f'{juicefs} config --help | grep --max-client-version') == 0:
+        if run_cmd(f'{juicefs} config --help | grep max-client-version') == 0:
             options.extend(['--max-client-version', max_client_version])
         output = subprocess.check_output([juicefs, 'status', self.meta_url])
         storage = json.loads(output.decode().replace("'", '"'))['Setting']['Storage']
@@ -91,7 +91,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-rc1'):
                 # use the latest version to set secret-key because rc1 has a bug for secret-key
                 options[0] = JuicefsMachine.JFS_BINS[1]
-        if encrypt_secret and run_cmd(f'{juicefs} config --help | grep --encrypt-secret') == 0:
+        if encrypt_secret and run_cmd(f'{juicefs} config --help | grep encrypt-secret') == 0:
             # version.parse('-'.join(JuicefsMachine.JFS_BINS[1].split('-')[1:])) >= version.parse('1.0.0-rc2'):
             # rc1 has a bug on encrypt-secret 
             options.append('--encrypt-secret')
@@ -259,7 +259,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--put-timeout', str(put_timeout)])
         options.extend(['--io-retries', str(io_retries)])
         options.extend(['--max-uploads', str(max_uploads)])
-        if run_cmd(f'{juicefs} mount --help | grep --max-deletes') == 0:
+        if run_cmd(f'{juicefs} mount --help | grep max-deletes') == 0:
             options.extend(['--max-deletes', str(max_deletes)])
         options.extend(['--buffer-size', str(buffer_size)])
         options.extend(['--upload-limit', str(upload_limit)])
@@ -285,14 +285,14 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--heartbeat', str(heartbeat)])
         if read_only:
             options.append('--read-only')
-        if no_bgjob and run_cmd(f'{juicefs} mount --help | grep --no-bgjob') == 0:
+        if no_bgjob and run_cmd(f'{juicefs} mount --help | grep no-bgjob') == 0:
             options.append('--no-bgjob')
 
         options.extend(['--open-cache', str(open_cache)])
         print('TODO: subdir')
         # options.extend('--subdir', str(sub_dir))
         options.extend(['--metrics', str(metrics)])
-        if run_cmd(f'{juicefs} mount --help | grep --consul') == 0:
+        if run_cmd(f'{juicefs} mount --help | grep consul') == 0:
             options.extend(['--consul', str(consul)])
         if no_usage_report:
             options.append('--no-usage-report')
@@ -536,7 +536,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--put-timeout', str(put_timeout)])
         options.extend(['--io-retries', str(io_retries)])
         options.extend(['--max-uploads', str(max_uploads)])
-        if run_cmd(f'{juicefs} gateway --help | grep --max-deletes') == 0:
+        if run_cmd(f'{juicefs} gateway --help | grep max-deletes') == 0:
             options.extend(['--max-deletes', str(max_deletes)])
         options.extend(['--buffer-size', str(buffer_size)])
         options.extend(['--upload-limit', str(upload_limit)])
@@ -557,21 +557,21 @@ class JuicefsMachine(RuleBasedStateMachine):
         backup_meta = str(backup_meta)
         if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-beta2'):
             backup_meta = backup_meta + 's'
-        if run_cmd(f'{juicefs} gateway --help | grep --backup-meta') == 0:
+        if run_cmd(f'{juicefs} gateway --help | grep backup-meta') == 0:
             options.extend(['--backup-meta', backup_meta])
-        if run_cmd(f'{juicefs} gateway --help | grep --heartbeat') == 0:
+        if run_cmd(f'{juicefs} gateway --help | grep heartbeat') == 0:
             options.extend(['--heartbeat', str(heartbeat)])
         if read_only:
             options.append('--read-only')
-        if no_bgjob and run_cmd(f'{juicefs} gateway --help | grep --no-bgjob') == 0:
+        if no_bgjob and run_cmd(f'{juicefs} gateway --help | grep no-bgjob') == 0:
             options.append('--no-bgjob')
         if no_banner:
             options.append('--no-banner')
-        if multi_buckets and run_cmd(f'{juicefs} gateway --help | grep --multi-buckets') == 0:
+        if multi_buckets and run_cmd(f'{juicefs} gateway --help | grep multi-buckets') == 0:
             options.append('--multi-buckets')
-        if keep_etag and run_cmd(f'{juicefs} gateway --help | grep --keep-etag') == 0:
+        if keep_etag and run_cmd(f'{juicefs} gateway --help | grep keep-etag') == 0:
             options.append('--keep-etag')
-        if run_cmd(f'{juicefs} gateway --help | grep --umask') == 0:
+        if run_cmd(f'{juicefs} gateway --help | grep umask') == 0:
             options.extend(['--umask', umask])
 
         options.extend(['--open-cache', str(open_cache)])
