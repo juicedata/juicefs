@@ -135,7 +135,7 @@ juicefs-sc             csi.juicefs.com         Retain          Immediate        
 
 接下来部署一个 Nginx Pod，使用 JuiceFS 存储类声明的持久化存储。
 
-### Depolyment
+### Deployment
 
 创建一个配置文件，例如：`depolyment.yaml`
 
