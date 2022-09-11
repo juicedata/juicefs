@@ -62,7 +62,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.is_supported_version(juicefs))
         assume(run_cmd(f'{juicefs} --help | grep config') == 0)
         print('start config')
-        options = [juicefs, 'config', JuicefsMachine.META_URL_url]
+        options = [juicefs, 'config', JuicefsMachine.META_URL]
         options.extend(['--trash-days', str(trash_days)])
         options.extend(['--capacity', str(capacity)])
         options.extend(['--inodes', str(inodes)])
@@ -71,7 +71,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--min-client-version', min_client_version])
         if run_cmd(f'{juicefs} config --help | grep max-client-version') == 0:
             options.extend(['--max-client-version', max_client_version])
-        output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL_url])
+        output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL])
         storage = json.loads(output.decode().replace("'", '"'))['Setting']['Storage']
         
         if change_bucket:
@@ -102,9 +102,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         if change_bucket:
             # change bucket back to avoid fsck fail.
             if storage == 'file':
-                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL_url, '--bucket', os.path.expanduser('~/.juicefs/local')])
+                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', os.path.expanduser('~/.juicefs/local')])
             elif storage == 'minio':
-                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL_url, '--bucket', 'http://localhost:9000/test-bucket'])
+                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', 'http://localhost:9000/test-bucket'])
         print('config succeed')
 
     @rule(
@@ -181,7 +181,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def status(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start status')
-        output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL_url]).decode()
+        output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL]).decode()
         try:
             uuid = json.loads(output.replace("'", '"'))['Setting']['UUID']
         except:
@@ -230,7 +230,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         writeback, upload_delay, cache_dir, cache_size, free_space_ratio, cache_partial_only, backup_meta, heartbeat, read_only,
         no_bgjob, open_cache, sub_dir, metrics, consul, no_usage_report):
         assume (self.is_supported_version(juicefs))
-        if JuicefsMachine.META_URL_url.startswith('badger://'):
+        if JuicefsMachine.META_URL.startswith('badger://'):
             assume(not self.mounted)
         retry = 3
         while os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog') and retry > 0:
@@ -241,7 +241,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             print(f'FATAL: umount {JuicefsMachine.MOUNT_POINT} failed.')
         assume(not os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start mount')
-        options = [juicefs, 'mount', '-d',  JuicefsMachine.META_URL_url, JuicefsMachine.MOUNT_POINT]
+        options = [juicefs, 'mount', '-d',  JuicefsMachine.META_URL, JuicefsMachine.MOUNT_POINT]
         if no_syslog:
             options.append('--no-syslog')
         options.extend(['--log', os.path.expanduser(f'~/.juicefs/juicefs.log')])
@@ -308,7 +308,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             inode = subprocess.check_output(f'stat -f %i {JuicefsMachine.MOUNT_POINT}'.split())
         print(f'inode number: {inode}')
         assert(inode.decode()[:-1] == '1')
-        output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL_url])
+        output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL])
         print(f'status output: {output}')
         sessions = json.loads(output.decode().replace("'", '"'))['Sessions']
         if not read_only: 
@@ -336,12 +336,12 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.is_supported_version(juicefs))
         assume(run_cmd(f'{juicefs} --help | grep destroy') == 0)
         print('start destroy')
-        output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL_url])
+        output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL])
         print(f'status output:{output.decode()}')
         uuid = json.loads(output.decode().replace("'", '"'))['Setting']['UUID']
         print(f'uuid is: {uuid}')
         assert len(uuid) != 0
-        options = [juicefs, 'destroy', JuicefsMachine.META_URL_url, uuid]
+        options = [juicefs, 'destroy', JuicefsMachine.META_URL, uuid]
         options.append('--force')
         run_jfs_cmd(options)
         self.formatted = False
@@ -367,7 +367,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def dump(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start dump')
-        run_jfs_cmd([juicefs, 'dump', JuicefsMachine.META_URL_url, 'dump.json'])
+        run_jfs_cmd([juicefs, 'dump', JuicefsMachine.META_URL, 'dump.json'])
         print('dump succeed')
 
     @rule(juicefs = st.sampled_from(JFS_BINS))
@@ -379,10 +379,10 @@ class JuicefsMachine(RuleBasedStateMachine):
             run_cmd('umount %s'%JuicefsMachine.MOUNT_POINT)
             print(f'umount {JuicefsMachine.MOUNT_POINT} succeed')
             self.mounted = False
-        flush_meta(JuicefsMachine.META_URL_url)
-        run_jfs_cmd([juicefs, 'load', JuicefsMachine.META_URL_url, 'dump.json'])
+        flush_meta(JuicefsMachine.META_URL)
+        run_jfs_cmd([juicefs, 'load', JuicefsMachine.META_URL, 'dump.json'])
         print('load succeed')
-        options = [juicefs, 'config', JuicefsMachine.META_URL_url]
+        options = [juicefs, 'config', JuicefsMachine.META_URL]
         if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-rc1'):
             # use the latest version to change secret-key because rc1 has a bug for secret-key
             options[0] = JuicefsMachine.JFS_BINS[1]
@@ -396,7 +396,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.is_supported_version(juicefs))
         assume (get_stage_blocks(JuicefsMachine.MOUNT_POINT) == 0)
         print('start fsck')
-        run_jfs_cmd([juicefs, 'fsck', JuicefsMachine.META_URL_url])
+        run_jfs_cmd([juicefs, 'fsck', JuicefsMachine.META_URL])
         print('fsck succeed')
 
     @rule(juicefs=st.sampled_from(JFS_BINS),
@@ -475,7 +475,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def gc(self, juicefs, compact, delete, threads):
         assume (self.is_supported_version(juicefs))
         print('start gc')
-        options = [juicefs, 'gc', JuicefsMachine.META_URL_url]
+        options = [juicefs, 'gc', JuicefsMachine.META_URL]
         if compact:
             options.append('--compact')
         if delete:
@@ -528,12 +528,12 @@ class JuicefsMachine(RuleBasedStateMachine):
         no_banner, multi_buckets, keep_etag, umask, metrics, consul, no_usage_report, sub_dir, port):
         assume (self.is_supported_version(juicefs))
         assume(not is_port_in_use(port))
-        if JuicefsMachine.META_URL_url.startswith('badger://'):
+        if JuicefsMachine.META_URL.startswith('badger://'):
             assume(not self.mounted)
         print('start gateway')
         os.environ['MINIO_ROOT_USER'] = 'admin'
         os.environ['MINIO_ROOT_PASSWORD'] = '12345678'
-        options = [juicefs, 'gateway', JuicefsMachine.META_URL_url, f'localhost:{port}']
+        options = [juicefs, 'gateway', JuicefsMachine.META_URL, f'localhost:{port}']
         
         options.extend(['--attr-cache', str(attr_cache)])
         options.extend(['--entry-cache', str(entry_cache)])
@@ -600,11 +600,11 @@ class JuicefsMachine(RuleBasedStateMachine):
     def webdav(self, juicefs, port):
         assume (self.is_supported_version(juicefs))
         assume (not is_port_in_use(port))
-        if JuicefsMachine.META_URL_url.startswith('badger://'):
+        if JuicefsMachine.META_URL.startswith('badger://'):
             assume(not self.mounted)
         print('start webdav')
         
-        options = [juicefs, 'webdav', JuicefsMachine.META_URL_url, f'localhost:{port}']
+        options = [juicefs, 'webdav', JuicefsMachine.META_URL, f'localhost:{port}']
         proc = subprocess.Popen(options)
         time.sleep(2.0)
         subprocess.Popen.kill(proc)
