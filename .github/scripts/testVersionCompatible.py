@@ -337,7 +337,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume(run_cmd(f'{juicefs} --help | grep destroy') == 0)
         print('start destroy')
         output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL_url])
+        print(f'status output:{output.decode()}')
         uuid = json.loads(output.decode().replace("'", '"'))['Setting']['UUID']
+        print(f'uuid is: {uuid}')
         assert len(uuid) != 0
         options = [juicefs, 'destroy', JuicefsMachine.META_URL_url, uuid]
         options.append('--force')

@@ -15,7 +15,7 @@ jobs:
         # old_juicefs_version: ['1.0.0', '1.0.0-rc1',  '1.0.0-beta1']
         old_juicefs_version: ['1.0.0']
         # meta: ['redis', 'mysql', 'tikv']
-        meta: ['badger', 'postgres']
+        meta: ['postgres']
         include:
           # - os: macos-latest
           #   old_juicefs_version: '1.0.0'
@@ -32,9 +32,9 @@ jobs:
           # - os: ubuntu-latest
           #   old_juicefs_version: '1.0.0'
           #   meta: 'sqlite3'
-          - os: ubuntu-latest
-            old_juicefs_version: '1.0.0'
-            meta: 'badger'
+          # - os: ubuntu-latest
+          #   old_juicefs_version: '1.0.0'
+          #   meta: 'badger'
 
     runs-on: ${{matrix.os}}
 
