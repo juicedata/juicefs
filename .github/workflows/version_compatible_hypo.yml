@@ -35,7 +35,20 @@ jobs:
             old_juicefs_version: '1.0.0'
             meta: 'badger'
 
-    runs-on: ubuntu-latest
+    runs-on: ${{matrix.os}}
+
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
       - name: Checkout
@@ -56,8 +69,6 @@ jobs:
             sudo apt-get install -y redis-tools redis-server
           elif [[ "$meta" == mysql ]]; then
             sudo /etc/init.d/mysql start
-          elif [[ "$meta" == postgres ]]; then
-            sudo service postgresql start
           elif [[ "$meta" == tikv ]]; then
             curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
             source /home/runner/.bash_profile
