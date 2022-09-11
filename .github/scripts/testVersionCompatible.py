@@ -22,7 +22,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     # os.environ['NEW_JFS_BIN'] = f'./juicefs-{juicefs_version}'
     JFS_BINS = ['./'+os.environ.get('OLD_JFS_BIN'), './'+os.environ.get('NEW_JFS_BIN')]
     # JFS_BINS = ['./juicefs-1.0.0-rc2',  './juicefs-1.1.0-dev']
-    META_URLS = [os.environ.get('META_URL')]
+    META_URL = os.environ.get('META_URL')
     STORAGES = [os.environ.get('STORAGE')]
     # META_URL = 'badger://abc.db'
     MOUNT_POINT = '/tmp/sync-test/'
@@ -37,8 +37,10 @@ class JuicefsMachine(RuleBasedStateMachine):
             f.write(f'init with run_id: {self.run_id}\n')
         self.formatted = False
         self.mounted = False
-        self.meta_url = None
         self.formatted_by = ''
+        if JuicefsMachine.META_URL.startswith('badger://'):
+            # change url every
+            JuicefsMachine.META_URL = f'badger://badger-{uuid.uuid4().hex}'
         run_cmd(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
         if os.path.isfile('dump.json'):
             os.remove('dump.json')
@@ -118,10 +120,9 @@ class JuicefsMachine(RuleBasedStateMachine):
           trash_days=st.integers(min_value=0, max_value=10000), 
           hash_prefix=st.booleans(), 
           force = st.booleans(), 
-          no_update = st.booleans(),
-          meta_url=st.sampled_from(META_URLS),
+          no_update = st.booleans()
           )
-    def format(self, juicefs, block_size, capacity, inodes, compress, shards, storage, encrypt_rsa_key, encrypt_algo, trash_days, hash_prefix, force, no_update, meta_url):
+    def format(self, juicefs, block_size, capacity, inodes, compress, shards, storage, encrypt_rsa_key, encrypt_algo, trash_days, hash_prefix, force, no_update):
         assume (self.is_supported_version(juicefs))
         print('start format')
         options = [juicefs, 'format',  meta_url, JuicefsMachine.VOLUME_NAME]
@@ -168,10 +169,9 @@ class JuicefsMachine(RuleBasedStateMachine):
                 run_cmd('umount %s'%JuicefsMachine.MOUNT_POINT)
                 print(f'umount {JuicefsMachine.MOUNT_POINT} succeed')
             clear_storage(storage, bucket, JuicefsMachine.VOLUME_NAME)
-            flush_meta(meta_url)
+            flush_meta(JuicefsMachine.META_URL)
         print(f'format options: {" ".join(options)}' )
         run_jfs_cmd(options)
-        self.meta_url = meta_url
         self.formatted = True
         self.formatted_by = juicefs
         print('format succeed')
