@@ -32,9 +32,9 @@ jobs:
           # - os: ubuntu-latest
           #   old_juicefs_version: '1.0.0'
           #   meta: 'sqlite3'
-          # - os: ubuntu-latest
-          #   old_juicefs_version: '1.0.0'
-          #   meta: 'badger'
+          - os: ubuntu-latest
+            old_juicefs_version: '1.0.0'
+            meta: 'badger'
 
     runs-on: ${{matrix.os}}
 
