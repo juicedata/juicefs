@@ -78,8 +78,9 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--min-client-version', min_client_version])
         if run_cmd(f'{juicefs} config --help | grep max-client-version') == 0:
             options.extend(['--max-client-version', max_client_version])
-        output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL])
-        storage = json.loads(output.decode().replace("'", '"'))['Setting']['Storage']
+        output = subprocess.run([juicefs, 'status', JuicefsMachine.META_URL], check=True, stdout=subprocess.PIPE).stdout.decode()
+        print(f'status output: {output}')
+        storage = json.loads(output.replace("'", '"'))['Setting']['Storage']
         
         if change_bucket:
             if storage == 'file':
@@ -188,7 +189,8 @@ class JuicefsMachine(RuleBasedStateMachine):
     def status(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start status')
-        output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL]).decode()
+        output = subprocess.run([juicefs, 'status', JuicefsMachine.META_URL], check=True, stdout=subprocess.PIPE).stdout.decode()
+        print(f'status output: {output}')
         try:
             uuid = json.loads(output.replace("'", '"'))['Setting']['UUID']
         except:
@@ -344,9 +346,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.is_supported_version(juicefs))
         assume(run_cmd(f'{juicefs} --help | grep destroy') == 0)
         print('start destroy')
-        output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL])
-        print(f'status output:{output.decode()}')
-        uuid = json.loads(output.decode().replace("'", '"'))['Setting']['UUID']
+        output = subprocess.run([juicefs, 'status', JuicefsMachine.META_URL], check=True, stdout=subprocess.PIPE).stdout.decode()
+        print(f'status output: {output}')
+        uuid = json.loads(output.replace("'", '"'))['Setting']['UUID']
         print(f'uuid is: {uuid}')
         assert len(uuid) != 0
         options = [juicefs, 'destroy', JuicefsMachine.META_URL, uuid]
