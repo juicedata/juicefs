@@ -105,8 +105,8 @@ class JuicefsMachine(RuleBasedStateMachine):
                 # use the latest version to set secret-key because rc1 has a bug for secret-key
                 options[0] = JuicefsMachine.JFS_BINS[1]
         if encrypt_secret and run_cmd(f'{juicefs} config --help | grep encrypt-secret') == 0:
-            # version.parse('-'.join(JuicefsMachine.JFS_BINS[1].split('-')[1:])) >= version.parse('1.0.0-rc2'):
-            # rc1 has a bug on encrypt-secret 
+            # 0.17.5 store the secret without encrypt, ref: https://github.com/juicedata/juicefs/issues/2721
+            #if version.parse('-'.join(juicefs.split('-')[1:])) > version.parse('0.17.5'):
             options.append('--encrypt-secret')
         options.append('--force')
         run_jfs_cmd(options)
@@ -116,6 +116,7 @@ class JuicefsMachine(RuleBasedStateMachine):
                 run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', os.path.expanduser('~/.juicefs/local')])
             elif storage == 'minio':
                 run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', 'http://localhost:9000/test-bucket'])
+        self.formatted_by = juicefs
         print('config succeed')
 
     @rule(
@@ -622,6 +623,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.formatted )
     def webdav(self, juicefs, port):
         assume (self.is_supported_version(juicefs))
+        assert version.parse('-'.join(juicefs.split('-')[1:])) >=  version.parse('-'.join(self.formatted_by.split('-')[1:]))
         assume (not is_port_in_use(port))
         if JuicefsMachine.META_URL.startswith('badger://'):
             assume(not self.mounted)
