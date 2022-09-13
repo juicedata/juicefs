@@ -14,8 +14,8 @@ jobs:
         os: [ubuntu-latest]
         # old_juicefs_version: ['1.0.0', '1.0.0-rc1',  '1.0.0-beta1']
         old_juicefs_version: ['1.0.0']
-        # meta: ['redis', 'mysql', 'tikv']
-        meta: ['tikv']
+        meta: ['tikv', 'postsqlgres']
+        # meta: ['tikv']
         include:
           # - os: macos-latest
           #   old_juicefs_version: '1.0.0'
@@ -129,30 +129,13 @@ jobs:
           sudo pip install minio
           
       - name: Test
-        run: |
-          meta=${{matrix.meta}}
-          if [[ "$meta" == redis ]]; then
-            export META_URL=redis://localhost/1
-          elif [[ "$meta" == mysql ]]; then
-            export META_URL=mysql://root:root@\(127.0.0.1\)/test
-          elif [[ "$meta" == postgres ]]; then
-            export META_URL=postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable
-          elif [[ "$meta" == tikv ]]; then
-            export META_URL=tikv://127.0.0.1:2379
-          elif [[ "$meta" == sqlite3 ]]; then
-            export META_URL=sqlite3://test.db
-          elif [[ "$meta" == badger ]]; then
-            export META_URL=badger://badger-data
-          elif [[ "$meta" == mariadb ]]; then
-            export META_URL=mysql://root:root@\(127.0.0.1\)/test
-          fi
-          
+        run: |          
+          export META=${{matrix.meta}}
           export STORAGE='minio'
           version=`./juicefs version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
           mv juicefs juicefs-$version
           export NEW_JFS_BIN="juicefs-$version"
           export OLD_JFS_BIN="juicefs-${{matrix.old_juicefs_version}}"
-          export PGPASSWORD="postgres"
           # python3 .github/scripts/test_action_log.py
           python3 .github/scripts/testVersionCompatible.py
 

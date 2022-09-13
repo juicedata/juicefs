@@ -22,7 +22,11 @@ class JuicefsMachine(RuleBasedStateMachine):
     # os.environ['NEW_JFS_BIN'] = f'./juicefs-{juicefs_version}'
     JFS_BINS = ['./'+os.environ.get('OLD_JFS_BIN'), './'+os.environ.get('NEW_JFS_BIN')]
     # JFS_BINS = ['./juicefs-1.0.0-rc2',  './juicefs-1.1.0-dev']
-    META_URL = os.environ.get('META_URL')
+    meta_dict = {'redis':'redis://localhost/1', 'mysql':'mysql://root:root@(127.0.0.1)/test', 'postgres':'postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable', \
+        'tikv':'tikv://127.0.0.1:2379', 'badger':'badger://badger-data', 'mariadb': 'mysql://root:root@(127.0.0.1)/test', \
+            'sqlite3': 'sqlite3://test.db'}
+    META_URL = meta_dict[os.environ.get('META')]
+
     STORAGES = [os.environ.get('STORAGE')]
     # META_URL = 'badger://abc.db'
     MOUNT_POINT = '/tmp/sync-test/'
@@ -44,6 +48,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         run_cmd(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
         if os.path.isfile('dump.json'):
             os.remove('dump.json')
+        os.environ['PGPASSWORD'] = 'postgres'
 
     @rule(
         juicefs=st.sampled_from(JFS_BINS),
