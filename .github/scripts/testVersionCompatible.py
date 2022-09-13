@@ -309,7 +309,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--open-cache', str(open_cache)])
         print('TODO: subdir')
         # options.extend('--subdir', str(sub_dir))
-        options.extend(['--metrics', str(metrics)])
+        if not is_port_in_use( int(metrics.split(':')[1])):
+            options.extend(['--metrics', str(metrics)])
         # if run_cmd(f'{juicefs} mount --help | grep consul') == 0:
         #     options.extend(['--consul', str(consul)])
         if no_usage_report:
@@ -606,7 +607,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         options.extend(['--open-cache', str(open_cache)])
         print(f'TODO: subdir:{sub_dir}')
         # options.extend('--subdir', str(sub_dir))
-        options.extend(['--metrics', str(metrics)])
+        if not is_port_in_use( int(metrics.split(':')[1])):
+            options.extend(['--metrics', str(metrics)])
         # if run_cmd(f'{juicefs} mount --help | grep consul') == 0:
         #     options.extend(['--consul', str(consul)])
         if no_usage_report:
