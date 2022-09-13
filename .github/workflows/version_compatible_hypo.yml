@@ -14,15 +14,15 @@ jobs:
         os: [ubuntu-latest]
         # old_juicefs_version: ['1.0.0', '1.0.0-rc1',  '1.0.0-beta1']
         old_juicefs_version: ['1.0.0']
-        meta: ['tikv']
+        meta: ['tikv', 'redis', 'mysql', 'postgres', 'sqlite3']
         # meta: ['tikv']
         include:
-          # - os: macos-latest
-          #   old_juicefs_version: '1.0.0'
-          #   meta: 'redis'
-          # - os: ubuntu-latest
-          #   old_juicefs_version: '0.17.1'
-          #   meta: 'redis'
+          - os: macos-latest
+            old_juicefs_version: '1.0.0'
+            meta: 'redis'
+          - os: ubuntu-latest
+            old_juicefs_version: '0.17.1'
+            meta: 'redis'
           # - os: ubuntu-latest
           #   old_juicefs_version: '1.0.0'
           #   meta: 'tikv'
@@ -32,9 +32,6 @@ jobs:
           # - os: ubuntu-latest
           #   old_juicefs_version: '1.0.0'
           #   meta: 'sqlite3'
-          - os: ubuntu-latest
-            old_juicefs_version: '1.0.0'
-            meta: 'tikv'
 
     runs-on: ${{matrix.os}}
 
