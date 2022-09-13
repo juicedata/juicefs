@@ -133,7 +133,7 @@ def run_jfs_cmd( options):
         f.write(' '.join(options))
         f.write('\n')
     try:
-        output = subprocess.run(options, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        output = subprocess.run(options, check=True, stdout=subprocess.PIPE)
     except subprocess.CalledProcessError as e:
         print(f'<FATAL>: subprocess run error: {e.output.decode()}')
         raise Exception('subprocess run error')
@@ -146,7 +146,7 @@ def run_cmd(command):
     if '|' in command or '"' in command:
         return os.system(command)
     try:
-        output = subprocess.run(command.split(), check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        output = subprocess.run(command.split(), check=True, stdout=subprocess.PIPE)
     except subprocess.CalledProcessError as e:
         print(f'FATAL: subprocess run error: {e.output.decode()}')
         return e.returncode

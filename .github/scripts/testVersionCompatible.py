@@ -315,9 +315,9 @@ class JuicefsMachine(RuleBasedStateMachine):
             inode = subprocess.check_output(f'stat -f %i {JuicefsMachine.MOUNT_POINT}'.split())
         print(f'inode number: {inode}')
         assert(inode.decode()[:-1] == '1')
-        output = subprocess.check_output([juicefs, 'status', JuicefsMachine.META_URL])
+        output = subprocess.run([juicefs, 'status', JuicefsMachine.META_URL], check=True, stdout=subprocess.PIPE).stdout.decode()
         print(f'status output: {output}')
-        sessions = json.loads(output.decode().replace("'", '"'))['Sessions']
+        sessions = json.loads(output.replace("'", '"'))['Sessions']
         if not read_only: 
             assert len(sessions) != 0 
         self.mounted = True
