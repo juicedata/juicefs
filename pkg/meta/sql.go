@@ -477,21 +477,23 @@ func (m *dbMeta) getSession(row interface{}, detail bool) (*Session, error) {
 func (m *dbMeta) GetSession(sid uint64, detail bool) (s *Session, err error) {
 	err = m.roTxn(func(ses *xorm.Session) error {
 		row := session2{Sid: sid}
-		if ok, err := ses.Get(&row); err != nil {
-			return err
-		} else if ok {
+		if ok, err := ses.Get(&row); err == nil && ok {
 			s, err = m.getSession(&row, detail)
 			return err
 		}
-		if ok, err := ses.IsTableExist(&session{}); err != nil {
+		if ok, err := ses.IsTableExist(&session2{}); err != nil {
 			return err
-		} else if ok {
-			row := session{Sid: sid}
-			if ok, err := ses.Get(&row); err != nil {
+		} else if !ok {
+			if ok, err := ses.IsTableExist(&session{}); err != nil {
 				return err
 			} else if ok {
-				s, err = m.getSession(&row, detail)
-				return err
+				row := session{Sid: sid}
+				if ok, err := ses.Get(&row); err != nil {
+					return err
+				} else if ok {
+					s, err = m.getSession(&row, detail)
+					return err
+				}
 			}
 		}
 		return fmt.Errorf("session not found: %d", sid)
@@ -504,17 +506,20 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 	err := m.roTxn(func(ses *xorm.Session) error {
 		var rows []session2
 		err := ses.Find(&rows)
-		if err != nil {
-			return err
-		}
-		sessions = make([]*Session, 0, len(rows))
-		for i := range rows {
-			s, err := m.getSession(&rows[i], false)
-			if err != nil {
-				logger.Errorf("get session: %s", err)
-				continue
+		if err == nil {
+			sessions = make([]*Session, 0, len(rows))
+			for i := range rows {
+				s, err := m.getSession(&rows[i], false)
+				if err != nil {
+					logger.Errorf("get session: %s", err)
+					continue
+				}
+				sessions = append(sessions, s)
 			}
-			sessions = append(sessions, s)
+		} else {
+			if ok, e := ses.IsTableExist(&session2{}); e != nil || ok {
+				return err
+			}
 		}
 		if ok, err := ses.IsTableExist(&session{}); err != nil {
 			logger.Errorf("Check legacy session table: %s", err)
