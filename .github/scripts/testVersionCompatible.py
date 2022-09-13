@@ -41,6 +41,8 @@ class JuicefsMachine(RuleBasedStateMachine):
             f.write(f'init with run_id: {self.run_id}\n')
         self.formatted = False
         self.mounted = False
+        # mount at least once, ref: https://github.com/juicedata/juicefs/issues/2717
+        self.mounted_once = False 
         self.formatted_by = ''
         if JuicefsMachine.META_URL.startswith('badger://'):
             # change url every
@@ -319,6 +321,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         if not read_only: 
             assert len(sessions) != 0 
         self.mounted = True
+        self.mounted_once = True
         print('mount succeed')
 
     @rule(juicefs=st.sampled_from(JFS_BINS), 
@@ -368,7 +371,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('write and read succeed')
 
     @rule(juicefs = st.sampled_from(JFS_BINS))
-    @precondition(lambda self: self.formatted  and self.mounted)
+    @precondition(lambda self: self.formatted  and self.mounted_once)
     def dump(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start dump')
