@@ -476,24 +476,26 @@ func (m *dbMeta) getSession(row interface{}, detail bool) (*Session, error) {
 
 func (m *dbMeta) GetSession(sid uint64, detail bool) (s *Session, err error) {
 	err = m.roTxn(func(ses *xorm.Session) error {
-		row := session2{Sid: sid}
-		if ok, err := ses.Get(&row); err == nil && ok {
-			s, err = m.getSession(&row, detail)
-			return err
-		}
 		if ok, err := ses.IsTableExist(&session2{}); err != nil {
 			return err
-		} else if !ok {
-			if ok, err := ses.IsTableExist(&session{}); err != nil {
+		} else if ok {
+			row := session2{Sid: sid}
+			if ok, err = ses.Get(&row); err != nil {
 				return err
 			} else if ok {
-				row := session{Sid: sid}
-				if ok, err := ses.Get(&row); err != nil {
-					return err
-				} else if ok {
-					s, err = m.getSession(&row, detail)
-					return err
-				}
+				s, err = m.getSession(&row, detail)
+				return err
+			}
+		}
+		if ok, err := ses.IsTableExist(&session{}); err != nil {
+			return err
+		} else if ok {
+			row := session{Sid: sid}
+			if ok, err = ses.Get(&row); err != nil {
+				return err
+			} else if ok {
+				s, err = m.getSession(&row, detail)
+				return err
 			}
 		}
 		return fmt.Errorf("session not found: %d", sid)
@@ -504,9 +506,11 @@ func (m *dbMeta) GetSession(sid uint64, detail bool) (s *Session, err error) {
 func (m *dbMeta) ListSessions() ([]*Session, error) {
 	var sessions []*Session
 	err := m.roTxn(func(ses *xorm.Session) error {
-		var rows []session2
-		if ok, err := ses.IsTableExist(&session2{}); err == nil && ok {
-			if err := ses.Find(&rows); err != nil {
+		if ok, err := ses.IsTableExist(&session2{}); err != nil {
+			return err
+		} else if ok {
+			var rows []session2
+			if err = ses.Find(&rows); err != nil {
 				return err
 			}
 			sessions = make([]*Session, 0, len(rows))
