@@ -79,6 +79,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         if run_cmd(f'{juicefs} config --help | grep max-client-version') == 0:
             options.extend(['--max-client-version', max_client_version])
         output = subprocess.run([juicefs, 'status', JuicefsMachine.META_URL], check=True, stdout=subprocess.PIPE).stdout.decode()
+        if 'get timestamp too slow' in output: 
+            # remove the first line caust it is tikv log message
+            output = '\n'.join(output.split('\n')[1:])
         print(f'status output: {output}')
         storage = json.loads(output.replace("'", '"'))['Setting']['Storage']
         
