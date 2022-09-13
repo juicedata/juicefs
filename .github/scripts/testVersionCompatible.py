@@ -42,7 +42,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.formatted = False
         self.mounted = False
         # mount at least once, ref: https://github.com/juicedata/juicefs/issues/2717
-        self.mounted_once = False 
+        self.mounted_by = []
         self.formatted_by = ''
         if JuicefsMachine.META_URL.startswith('badger://'):
             # change url every
@@ -334,7 +334,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         if not read_only: 
             assert len(sessions) != 0 
         self.mounted = True
-        self.mounted_once = True
+        self.mounted_by.append(juicefs)
         print('mount succeed')
 
     @rule(juicefs=st.sampled_from(JFS_BINS), 
@@ -387,9 +387,11 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('write and read succeed')
 
     @rule(juicefs = st.sampled_from(JFS_BINS))
-    @precondition(lambda self: self.formatted  and self.mounted_once)
+    @precondition(lambda self: self.formatted )
     def dump(self, juicefs):
         assume (self.is_supported_version(juicefs))
+        # check this because of: https://github.com/juicedata/juicefs/issues/2717
+        assume(juicefs in self.mounted_by)
         print('start dump')
         run_jfs_cmd([juicefs, 'dump', JuicefsMachine.META_URL, 'dump.json'])
         print('dump succeed')
@@ -418,6 +420,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.formatted)
     def fsck(self, juicefs):
         assume (self.is_supported_version(juicefs))
+        assume(juicefs in self.mounted_by)
         assume (get_stage_blocks(JuicefsMachine.MOUNT_POINT) == 0)
         print('start fsck')
         run_jfs_cmd([juicefs, 'fsck', JuicefsMachine.META_URL])
@@ -498,6 +501,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.formatted)
     def gc(self, juicefs, compact, delete, threads):
         assume (self.is_supported_version(juicefs))
+        assume(juicefs in self.mounted_by)
         print('start gc')
         options = [juicefs, 'gc', JuicefsMachine.META_URL]
         if compact:
