@@ -368,7 +368,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('write and read succeed')
 
     @rule(juicefs = st.sampled_from(JFS_BINS))
-    @precondition(lambda self: self.formatted )
+    @precondition(lambda self: self.formatted  and self.mounted)
     def dump(self, juicefs):
         assume (self.is_supported_version(juicefs))
         print('start dump')
