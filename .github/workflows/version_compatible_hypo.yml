@@ -13,8 +13,8 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         # old_juicefs_version: ['1.0.0', '1.0.0-rc1',  '1.0.0-beta1']
-        old_juicefs_version: ['1.0.0']
-        meta: ['tikv', 'redis', 'mysql', 'postgres', 'sqlite3']
+        old_juicefs_version: ['1.0.0-beta1']
+        meta: ['mysql', 'redis']
         # meta: ['tikv']
         include:
           - os: macos-latest
@@ -58,6 +58,12 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: '1.18.x'
+
+      - name: Setup Docker
+        uses: docker-practice/actions-setup-docker@master
+        with:
+          docker_version: 20.10
+          docker_channel: stable
 
       - name: Prepare meta database
         run: | 
@@ -169,5 +175,5 @@ jobs:
 
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 60
+        timeout-minutes: 15
         uses: lhotari/action-upterm@v1
