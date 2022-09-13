@@ -684,7 +684,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 	var readAheadTotal = 256 << 20
 	var readAheadMax = conf.Chunk.BlockSize * 8
 	if conf.Chunk.BufferSize > 0 {
-		readAheadTotal = conf.Chunk.BufferSize * 8 / 10 // 80% of total buffer
+		readAheadTotal = conf.Chunk.BufferSize / 10 * 8 // 80% of total buffer
 	}
 	if conf.Chunk.Readahead > 0 {
 		readAheadMax = conf.Chunk.Readahead

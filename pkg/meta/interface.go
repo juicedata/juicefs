@@ -21,7 +21,6 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -349,6 +348,8 @@ type Meta interface {
 	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
 	// Remove all files and directories recursively.
 	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
+	// GetPaths returns all paths of an inode
+	GetPaths(ctx Context, inode Ino) []string
 	// Check integrity of an absolute path and repair it if asked
 	Check(ctx Context, fpath string, repair bool) syscall.Errno
 
@@ -426,90 +427,4 @@ func newSessionInfo() *SessionInfo {
 		host = ""
 	}
 	return &SessionInfo{Version: version.Version(), HostName: host, ProcessID: os.Getpid()}
-}
-
-// Get all paths of an inode
-func GetPaths(m Meta, ctx Context, inode Ino) []string {
-	if inode == RootInode {
-		return []string{"/"}
-	}
-
-	if inode == TrashInode {
-		return []string{"/.trash"}
-	}
-
-	base := m.getBase()
-	outside := "path not shown because it's outside of the mounted root"
-	getDirPath := func(ino Ino) (string, error) {
-		var names []string
-		var attr Attr
-		for ino != RootInode && ino != base.root {
-			if st := base.en.doGetAttr(ctx, ino, &attr); st != 0 {
-				return "", fmt.Errorf("getattr inode %d: %s", ino, st)
-			}
-			if attr.Typ != TypeDirectory {
-				return "", fmt.Errorf("inode %d is not a directory", ino)
-			}
-			var entries []*Entry
-			if st := base.en.doReaddir(ctx, attr.Parent, 0, &entries, -1); st != 0 {
-				return "", fmt.Errorf("readdir inode %d: %s", ino, st)
-			}
-			var name string
-			for _, e := range entries {
-				if e.Inode == ino {
-					name = string(e.Name)
-					break
-				}
-			}
-			if attr.Parent == RootInode && ino == TrashInode {
-				name = TrashName
-			}
-			if name == "" {
-				return "", fmt.Errorf("entry %d/%d not found", attr.Parent, ino)
-			}
-			names = append(names, name)
-			ino = attr.Parent
-		}
-		if base.root != RootInode && ino == RootInode {
-			return outside, nil
-		}
-		names = append(names, "/") // add root
-
-		for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
-			names[i], names[j] = names[j], names[i]
-		}
-		return path.Join(names...), nil
-	}
-
-	var paths []string
-	// inode != RootInode, parent is the real parent inode
-	for parent, count := range m.GetParents(ctx, inode) {
-		if count <= 0 {
-			continue
-		}
-		dir, err := getDirPath(parent)
-		if err != nil {
-			logger.Warnf("Get directory path of %d: %s", parent, err)
-			continue
-		} else if dir == outside {
-			paths = append(paths, outside)
-			continue
-		}
-		var entries []*Entry
-		if st := base.en.doReaddir(ctx, parent, 0, &entries, -1); st != 0 {
-			logger.Warnf("Readdir inode %d: %s", parent, st)
-			continue
-		}
-		var c int
-		for _, e := range entries {
-			if e.Inode == inode {
-				c++
-				paths = append(paths, path.Join(dir, string(e.Name)))
-			}
-		}
-		if c != count {
-			logger.Warnf("Expect to find %d entries under parent %d, but got %d", count, parent, c)
-		}
-	}
-	return paths
 }

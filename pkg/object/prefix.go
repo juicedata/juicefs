@@ -28,7 +28,7 @@ type withPrefix struct {
 	prefix string
 }
 
-// WithPrefix retuns a object storage that add a prefix to keys.
+// WithPrefix return an object storage that add a prefix to keys.
 func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 	return &withPrefix{os, prefix}
 }

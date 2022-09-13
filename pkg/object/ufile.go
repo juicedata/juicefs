@@ -245,7 +245,7 @@ func (u *ufile) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 }
 
 func (u *ufile) UploadPart(key string, uploadID string, num int, data []byte) (*Part, error) {
-	// UFile require the PartNumber to start from 0 (continious)
+	// UFile require the PartNumber to start from 0 (continuous)
 	num--
 	path := fmt.Sprintf("%s?uploadId=%s&partNumber=%d", key, uploadID, num)
 	resp, err := u.request("PUT", path, bytes.NewReader(data), nil)

@@ -735,10 +735,10 @@ func testRemove(t *testing.T, m Meta) {
 	if st := m.Create(ctx, parent, "f", 0644, 0, 0, &inode, attr); st != 0 {
 		t.Fatalf("create d/f: %s", st)
 	}
-	if ps := GetPaths(m, ctx, parent); len(ps) == 0 || ps[0] != "/d" {
+	if ps := m.GetPaths(ctx, parent); len(ps) == 0 || ps[0] != "/d" {
 		t.Fatalf("get path /d: %v", ps)
 	}
-	if ps := GetPaths(m, ctx, inode); len(ps) == 0 || ps[0] != "/d/f" {
+	if ps := m.GetPaths(ctx, inode); len(ps) == 0 || ps[0] != "/d/f" {
 		t.Fatalf("get path /d/f: %v", ps)
 	}
 	for i := 0; i < 4096; i++ {
