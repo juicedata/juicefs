@@ -309,8 +309,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('TODO: subdir')
         # options.extend('--subdir', str(sub_dir))
         options.extend(['--metrics', str(metrics)])
-        if run_cmd(f'{juicefs} mount --help | grep consul') == 0:
-            options.extend(['--consul', str(consul)])
+        # if run_cmd(f'{juicefs} mount --help | grep consul') == 0:
+        #     options.extend(['--consul', str(consul)])
         if no_usage_report:
             options.append('--no-usage-report')
         if os.path.exists(JuicefsMachine.MOUNT_POINT):
@@ -606,7 +606,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         print(f'TODO: subdir:{sub_dir}')
         # options.extend('--subdir', str(sub_dir))
         options.extend(['--metrics', str(metrics)])
-        options.extend(['--consul', str(consul)])
+        # if run_cmd(f'{juicefs} mount --help | grep consul') == 0:
+        #     options.extend(['--consul', str(consul)])
         if no_usage_report:
             options.append('--no-usage-report')
 
