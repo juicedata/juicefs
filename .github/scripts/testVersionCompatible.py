@@ -190,6 +190,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.is_supported_version(juicefs))
         print('start status')
         output = subprocess.run([juicefs, 'status', JuicefsMachine.META_URL], check=True, stdout=subprocess.PIPE).stdout.decode()
+        if 'get timestamp too slow' in output: 
+            # remove the first line caust it is tikv log message
+            output = '\n'.join(output.split('\n')[1:] 
         print(f'status output: {output}')
         try:
             uuid = json.loads(output.replace("'", '"'))['Setting']['UUID']
@@ -318,6 +321,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         print(f'inode number: {inode}')
         assert(inode.decode()[:-1] == '1')
         output = subprocess.run([juicefs, 'status', JuicefsMachine.META_URL], check=True, stdout=subprocess.PIPE).stdout.decode()
+        if 'get timestamp too slow' in output: 
+            # remove the first line caust it is tikv log message
+            output = '\n'.join(output.split('\n')[1:] 
         print(f'status output: {output}')
         sessions = json.loads(output.replace("'", '"'))['Sessions']
         if not read_only: 
@@ -347,6 +353,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume(run_cmd(f'{juicefs} --help | grep destroy') == 0)
         print('start destroy')
         output = subprocess.run([juicefs, 'status', JuicefsMachine.META_URL], check=True, stdout=subprocess.PIPE).stdout.decode()
+        if 'get timestamp too slow' in output: 
+            # remove the first line caust it is tikv log message
+            output = '\n'.join(output.split('\n')[1:] 
         print(f'status output: {output}')
         uuid = json.loads(output.replace("'", '"'))['Setting']['UUID']
         print(f'uuid is: {uuid}')
