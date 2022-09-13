@@ -148,3 +148,6 @@ mkdir02 mkdir02
 setxattr03 setxattr03
 quotactl08 quotactl08
 statx04 statx04
+chdir01 chdir01
+sync01 sync01
+fanotify15 fanotify15
