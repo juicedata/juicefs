@@ -505,8 +505,10 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 	var sessions []*Session
 	err := m.roTxn(func(ses *xorm.Session) error {
 		var rows []session2
-		err := ses.Find(&rows)
-		if err == nil {
+		if ok, err := ses.IsTableExist(&session2{}); err == nil && ok {
+			if err := ses.Find(&rows); err != nil {
+				return err
+			}
 			sessions = make([]*Session, 0, len(rows))
 			for i := range rows {
 				s, err := m.getSession(&rows[i], false)
@@ -515,10 +517,6 @@ func (m *dbMeta) ListSessions() ([]*Session, error) {
 					continue
 				}
 				sessions = append(sessions, s)
-			}
-		} else {
-			if ok, e := ses.IsTableExist(&session2{}); e != nil || ok {
-				return err
 			}
 		}
 		if ok, err := ses.IsTableExist(&session{}); err != nil {
