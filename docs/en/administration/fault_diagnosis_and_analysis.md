@@ -153,7 +153,7 @@ By default, pprof listens on port numbers ranging from 6060 to 6099. That's why 
 :::tip
 You can also use the doctor command to automatically collect these runtime information and save it locally. By default, it is saved to the doctor directory under the current directory, for example:
 ```bash
-juicefs doctor --collect-pprof
+juicefs doctor --collect-pprof /mnt/jfs
 ```
 For more information about the doctor command, see [command reference](https://juicefs.com/docs/community/command_reference#juicefs-doctor)
 :::
