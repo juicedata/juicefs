@@ -137,7 +137,7 @@ def run_jfs_cmd( options):
     except subprocess.CalledProcessError as e:
         print(f'<FATAL>: subprocess run error, return code: {e.returncode} , error message: {e.output.decode()}')
         raise Exception('subprocess run error')
-    print(f'run_jfs_cmd output: {output.stdout.decode()}')
+    print(f'run_jfs_cmd return code: {output.returncode}, output: {output.stdout.decode()}')
     print('run_jfs_cmd succeed')
     return output.stdout.decode()
 

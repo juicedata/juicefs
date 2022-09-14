@@ -364,6 +364,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         assert os.path.exists(JuicefsMachine.MOUNT_POINT+'test')
         options = [juicefs, 'rmr', JuicefsMachine.MOUNT_POINT+'test']
         run_jfs_cmd(options)
+        if os.path.exists(JuicefsMachine.MOUNT_POINT+'test'):
+            os.system(f'tree {JuicefsMachine.MOUNT_POINT}/test')
         assert not os.path.exists(JuicefsMachine.MOUNT_POINT+'test')
         print('info succeed')
 
