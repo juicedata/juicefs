@@ -105,6 +105,7 @@ jobs:
         run: |
           cd /usr/local/share/filebench/workloads/
           sudo sed -i "s?/tmp?/tmp/jfs?" videoserver.f
+          hello
           sudo sed -i "s?$filesize=10g?$filesize=100m?" videoserver.f
           #sudo sed  "s?run 60?run 300?" videoserver.f
           df -lh
