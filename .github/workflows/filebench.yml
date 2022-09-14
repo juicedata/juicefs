@@ -73,11 +73,21 @@ jobs:
           ./configure
           make
           sudo make install
-          filebench
+          filebench -h
+          echo "randomize_va_space"
+          cat /proc/sys/kernel/randomize_va_space
+          sudo -i
+          echo 0 > /proc/sys/kernel/randomize_va_space
+          logout
+          echo "randomize_va_space"
+          cat /proc/sys/kernel/randomize_va_space
+          cd /usr/local/share/filebench/workloads/
+          filebench -f varmail.f
 
 
-      - name: LTP FS
-        timeout-minutes: 50
+
+      - name: Varmail
+        timeout-minutes: 5
         run: |
           wget -O ltp.tar.gz https://github.com/linux-test-project/ltp/archive/refs/tags/20210927.tar.gz
 
