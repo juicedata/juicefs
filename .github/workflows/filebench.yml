@@ -34,6 +34,7 @@ jobs:
         with:
           fetch-depth: 1
 
+
       - uses: actions/cache@v3
         with:
           path: |
@@ -59,6 +60,21 @@ jobs:
       - name: Juicefs Mount
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
+
+
+      - name: Install Dependcy
+        run: |
+          wget -O filebench.tar.gz https://github.com/filebench/filebench/releases/download/1.5-alpha3/filebench-1.5-alpha3.tar.gz
+          tar -zxvf filebench.tar.gz
+          cd filebench-1.5-alpha3
+          #sudo apt install -y bison
+          #sudo apt install -y byacc
+          #sudo apt install -y flex
+          ./configure
+          make
+          sudo make install
+          filebench
+
 
       - name: LTP FS
         timeout-minutes: 50
