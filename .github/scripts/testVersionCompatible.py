@@ -174,6 +174,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             bucket = os.path.expanduser('~/.juicefs/local/')
             options.extend(['--bucket', bucket])
         else:
+            print(f'storage is {storage}')
             raise Exception(f'storage value error: {storage}')
 
         if not self.formatted:
