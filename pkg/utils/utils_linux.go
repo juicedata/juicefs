@@ -47,24 +47,15 @@ func GetKernelVersion() (major, minor int) {
 	return
 }
 
-func CheckExists(fileName string) bool {
-	if _, err := os.Stat(fileName); err != nil {
-		return false
-	} else {
-		return true
-	}
-}
-
-const procPath = "/proc/version"
-
-func GetEntry() (string, error) {
+func GetSysInfo() (string, error) {
 	var (
 		kernel    []byte
 		osVersion []byte
 		err       error
 	)
 
-	if CheckExists(procPath) {
+	procPath := "/proc/version"
+	if _, err := os.Stat(procPath); err == nil {
 		kernel, err = exec.Command("cat", procPath).Output()
 		if err != nil {
 			return "", fmt.Errorf("failed to execute command `cat %s`: %s", procPath, err)

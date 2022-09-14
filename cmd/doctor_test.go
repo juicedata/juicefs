@@ -17,7 +17,7 @@
 package cmd
 
 import (
-	"os"
+	"fmt"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
@@ -27,21 +27,6 @@ func TestDoctor(t *testing.T) {
 	mountTemp(t, nil, nil, nil)
 	defer umountTemp(t)
 	Convey("TestDoctor", t, func() {
-		cases := []struct {
-			name string
-			args []string
-		}{
-			{"Simple cases", []string{"", "doctor"}},
-			{"Enable collecting syslog", []string{"", "doctor", "--collect-log"}},
-			{"Max 5 log entries", []string{"", "doctor", "--collect-log", "--limit", "5"}},
-		}
-
-		for _, c := range cases {
-			Convey(c.name, func() {
-				So(Main(append(c.args, testMountPoint)), ShouldBeNil)
-			})
-		}
-
 		Convey("Mount point does not exist", func() {
 			mp := "/jfs/test/mp"
 			So(Main([]string{"", "doctor", mp}), ShouldNotBeNil)
@@ -55,28 +40,24 @@ func TestDoctor(t *testing.T) {
 	})
 
 	Convey("TestDoctor_OutDir", t, func() {
-
-		Convey("Use default out dir", func() {
-			So(Main([]string{"", "doctor", testMountPoint}), ShouldBeNil)
-		})
-
-		outDir := "./doctor/ok"
-		Convey("Specify existing out dir", func() {
-			if err := os.MkdirAll(outDir, 0755); err != nil {
-				t.Fatalf("doctor error: %v", err)
-			}
-			So(Main([]string{"", "doctor", "--out-dir", outDir, testMountPoint}), ShouldBeNil)
-			if err := os.RemoveAll(outDir); err != nil {
-				t.Fatalf("doctor error: %v", err)
-			}
-		})
-
-		Convey("Specify a non-existing out dir", func() {
-			So(Main([]string{"", "doctor", "--out-dir", "./doctor/out1", testMountPoint}), ShouldBeNil)
-		})
-
 		Convey("Specify a file as out dir", func() {
 			So(Main([]string{"", "doctor", "--out-dir", "./doctor_test.go", testMountPoint}), ShouldNotBeNil)
 		})
+	})
+
+	Convey("TestDoctor_LogArg", t, func() {
+		cases := []string{
+			"--log /var/log/jfs.log",
+			"--log=/var/log/jfs.log",
+			"--log   =   /var/log/jfs.log",
+			"--log=    /var/log/jfs.log",
+			"--log    =/var/log/jfs.log",
+			"--log      /var/log/jfs.log",
+		}
+		for i, c := range cases {
+			Convey(fmt.Sprintf("valid log arg %d", i), func() {
+				So(logArg.MatchString(c), ShouldBeTrue)
+			})
+		}
 	})
 }

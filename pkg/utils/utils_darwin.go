@@ -23,7 +23,7 @@ import (
 
 func GetKernelVersion() (major, minor int) { return }
 
-func GetEntry() (string, error) {
+func GetSysInfo() (string, error) {
 	var (
 		kernel    string
 		osVersion []byte
@@ -39,7 +39,7 @@ func GetEntry() (string, error) {
 		return "", fmt.Errorf("failed to execute command `sw_vers`: %s", err)
 	}
 
-	if hardware, err = exec.Command("system_profiler", "SPMemoryDataType ", "SPStorageDataType").Output(); err != nil {
+	if hardware, err = exec.Command("system_profiler", "SPMemoryDataType", "SPStorageDataType").Output(); err != nil {
 		return "", fmt.Errorf("failed to execute command `system_profiler`: %s", err)
 	}
 

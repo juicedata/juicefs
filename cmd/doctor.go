@@ -52,9 +52,9 @@ func cmdDoctor() *cli.Command {
 		Action:    doctor,
 		Category:  "INSPECTOR",
 		ArgsUsage: "MOUNTPOINT",
-		Usage:     "Collect and show system static and runtime information",
+		Usage:     "Collect and display system static and runtime information",
 		Description: `
-It collects and show information from multiple dimensions such as the running environment and system logs, etc.
+It collects and display information from multiple dimensions such as the running environment and system logs, etc.
 
 Examples:
 $ juicefs doctor /mnt/jfs
@@ -62,7 +62,7 @@ $ juicefs doctor /mnt/jfs
 # Result will be output to /var/log/
 $ juicefs doctor --out-dir=/var/log /mnt/jfs
 
-# Get log file up to 1000 entries
+# Get the last up to 1000 log entries
 $ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 /mnt/jfs
 
 # Get pprof information
@@ -128,7 +128,6 @@ func copyConfigFile(srcPath, destPath string, rootPrivileges bool) error {
 	}
 	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cp %s %s", srcPath, destPath))
 	if err := exec.Command(copyArgs[0], copyArgs[1:]...).Run(); err != nil {
-		fmt.Println(strings.Join(copyArgs, " "))
 		return err
 	}
 
@@ -187,7 +186,7 @@ func getDefaultLogDir() (string, error) {
 	return defaultLogDir, nil
 }
 
-var logArg = regexp.MustCompile(`--log([=|\s])(\S+)`)
+var logArg = regexp.MustCompile(`--log(\s*=?\s*)(\S+)`)
 
 func getLogPath(cmd string) (string, error) {
 	if !isUnix() {
@@ -418,7 +417,7 @@ func doctor(ctx *cli.Context) error {
 		return fmt.Errorf("argument --out-dir must be directory %s", outDir)
 	}
 
-	osEntry, err := utils.GetEntry()
+	sysInfo, err := utils.GetSysInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get system info: %v", err)
 	}
@@ -427,7 +426,7 @@ func doctor(ctx *cli.Context) error {
 %s %s
 %s
 JuiceFS Version:
-%s`, runtime.GOOS, runtime.GOARCH, osEntry, ctx.App.Version)
+%s`, runtime.GOOS, runtime.GOARCH, sysInfo, ctx.App.Version)
 
 	sysPath := path.Join(outDir, fmt.Sprintf("system-info-%s.log", prefix))
 	sysFile, err := os.Create(sysPath)
@@ -452,11 +451,12 @@ JuiceFS Version:
 		rootPrivileges = true
 	}
 
-	confItems := []string{".config", ".stats"}
-	for _, item := range confItems {
+	configItems := []string{".config", ".stats"}
+	for _, item := range configItems {
 		destPath := path.Join(outDir, fmt.Sprintf("%s%s", prefix, item))
-		if err := copyConfigFile(path.Join(mp, item), destPath, rootPrivileges); err != nil {
-			return fmt.Errorf("failed to get volume config %s: %v", item, err)
+		srcPath := path.Join(mp, item)
+		if err := copyConfigFile(srcPath, destPath, rootPrivileges); err != nil {
+			return fmt.Errorf("failed to get volume config %s: %v", srcPath, err)
 		}
 	}
 

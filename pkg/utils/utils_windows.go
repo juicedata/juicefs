@@ -43,10 +43,10 @@ func GetKernelVersion() (major, minor int) { return }
 
 func GetDev(fpath string) int { return -1 }
 
-func GetEntry() (string, error) {
-	entry, err := exec.Command("systeminfo").Output()
+func GetSysInfo() (string, error) {
+	sysInfo, err := exec.Command("systeminfo").Output()
 	if err != nil {
 		return "", fmt.Errorf("Failed to execute command `systeminfo`: %s", err)
 	}
-	return string(entry), nil
+	return string(sysInfo), nil
 }
