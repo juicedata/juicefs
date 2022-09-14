@@ -422,7 +422,7 @@ func format(c *cli.Context) error {
 			format.SessionToken = os.Getenv("SESSION_TOKEN")
 			_ = os.Unsetenv("SESSION_TOKEN")
 		}
-		if format.Storage != "redis" && strings.HasPrefix(format.Bucket, format.Storage+"://") {
+		if format.Storage != "redis" {
 			format.Bucket = strings.TrimPrefix(format.Bucket, format.Storage+"://")
 		}
 	} else {
