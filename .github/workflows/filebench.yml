@@ -62,7 +62,7 @@ jobs:
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
 
 
-      - name: Install Dependcy
+      - name: Install Dependency
         run: |
           wget -O filebench.tar.gz https://github.com/filebench/filebench/releases/download/1.5-alpha3/filebench-1.5-alpha3.tar.gz
           tar -zxvf filebench.tar.gz
@@ -105,13 +105,17 @@ jobs:
           cd /usr/local/share/filebench/workloads/
           sudo sed -i "s?/tmp?/tmp/jfs?" videoserver.f
           #sudo sed  "s?run 60?run 300?" videoserver.f
+          df -lh
+          echo "run 60" >>videoserver.f
           cat videoserver.f
           sudo filebench -f videoserver.f
+          df -lh
 
 
       - name: Log
         if: ${{ always() }}
         run: |
+          df -lh
           tail -300 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
