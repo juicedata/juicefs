@@ -166,7 +166,7 @@ jobs:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        timeout-minutes: 15
-        uses: lhotari/action-upterm@v1
+      # - name: Setup upterm session
+      #   if: ${{ failure() }}
+      #   timeout-minutes: 1
+      #   uses: lhotari/action-upterm@v1
