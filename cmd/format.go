@@ -422,6 +422,9 @@ func format(c *cli.Context) error {
 			format.SessionToken = os.Getenv("SESSION_TOKEN")
 			_ = os.Unsetenv("SESSION_TOKEN")
 		}
+		if format.Storage != "redis" && strings.HasPrefix(format.Bucket, format.Storage+"://") {
+			format.Bucket = strings.TrimPrefix(format.Bucket, format.Storage+"://")
+		}
 	} else {
 		logger.Fatalf("Load metadata: %s", err)
 	}
