@@ -46,6 +46,8 @@ jobs:
 
       - name: Build linux target
         run: |
+          sudo -i
+          id
           make juicefs
 
       - name: Run Redis
