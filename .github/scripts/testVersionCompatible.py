@@ -345,7 +345,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.greater_than_version_mounted(juicefs))
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start info')
-        os.system('echo abc>abc.info')
+        os.system(f'echo abc>{JuicefsMachine.MOUNT_POINT}/abc.info')
         options = [juicefs, 'info', JuicefsMachine.MOUNT_POINT+'abc.info']
         run_jfs_cmd(options)
         print('info succeed')
@@ -359,6 +359,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('start info')
         juicefs_new = './'+os.environ.get('NEW_JFS_BIN')
         cwd = os.getcwd()
+        run_cmd(f'ln -s {cwd}/{juicefs_new} {JuicefsMachine.MOUNT_POINT}/{juicefs_new}')
         os.chdir(JuicefsMachine.MOUNT_POINT)
         run_jfs_cmd(f'{juicefs_new} mdtest {JuicefsMachine.META_URL} test --dirs 5 --depth 3 --files 10 --threads 10 --write 8192'.split())
         os.chdir(cwd)
