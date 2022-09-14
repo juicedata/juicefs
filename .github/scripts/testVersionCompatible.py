@@ -4,6 +4,7 @@ import platform
 import shutil
 import subprocess
 import sys
+from termios import TIOCPKT_DOSTOP
 import time
 import unittest
 from xmlrpc.client import boolean
@@ -361,12 +362,19 @@ class JuicefsMachine(RuleBasedStateMachine):
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start info')
         path = f'{JuicefsMachine.MOUNT_POINT}/{file_name}'
-        write_block(JuicefsMachine.MOUNT_POINT, path, 1048576, 100)
+        write_block(JuicefsMachine.MOUNT_POINT, path, 1048576, 3)
         options = [juicefs, 'rmr', path]
         run_jfs_cmd(options)
+        retry = get_upload_delay_seconds(JuicefsMachine.MOUNT_POINT) + 5
+        while get_stage_blocks(JuicefsMachine.MOUNT_POINT) != 0 and retry > 0:
+            print('sleep for stage')
+            retry = retry - 1
+            time.sleep(1)
         if os.path.exists(path):
             os.system(f'ls -l {path}')
-            raise Exception(f'{path} not removed')
+            print(f'<FATAL:> {path} not removed') 
+            #TODO: uncomment raise 
+            # raise Exception(f'{path} not removed')
         print('info succeed')
 
     @rule(juicefs=st.sampled_from(JFS_BINS), 

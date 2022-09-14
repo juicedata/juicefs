@@ -108,8 +108,7 @@ def get_stage_blocks(filesystem):
 def write_data(filesystem, path, data):
     with open(path, "wb") as f:
         f.write(data)
-    time.sleep(get_upload_delay_seconds(filesystem)+1)
-    retry = 5
+    retry = get_upload_delay_seconds(filesystem) + 5
     while get_stage_blocks(filesystem) != 0 and retry > 0:
         print('sleep for stage')
         retry = retry - 1
@@ -118,8 +117,7 @@ def write_data(filesystem, path, data):
 
 def write_block(filesystem, filepath, bs, count):
     run_cmd(f'dd if=/dev/urandom of={filepath} bs={bs} count={count}')
-    time.sleep(get_upload_delay_seconds(filesystem)+1)
-    retry = 10
+    retry = get_upload_delay_seconds(filesystem) + 5
     while get_stage_blocks(filesystem) != 0 and retry > 0:
         print('sleep for stage')
         retry = retry - 1
