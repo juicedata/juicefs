@@ -114,19 +114,6 @@ jobs:
           df -lh
 
 
-      - name: Videoserver
-        timeout-minutes: 10
-        run: |
-          cd /usr/local/share/filebench/workloads/
-          sudo sed -i "s?/tmp?/tmp/jfs?" videoserver.f
-          sudo sed -i "s?$filesize=10g?$filesize=150m?" videoserver.f
-          sudo sed -i "s?$numpassivevids=194?$numpassivevids=100?" videoserver.f
-          df -lh
-          cat videoserver.f
-          sudo filebench -f videoserver.f
-          df -lh
-
-
       - name: Videoserver 500M
         timeout-minutes: 10
         run: |
