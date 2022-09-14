@@ -150,7 +150,11 @@ func config(ctx *cli.Context) error {
 				quota = true
 			}
 		case "bucket":
-			if new := ctx.String(flag); new != format.Bucket {
+			new := ctx.String(flag)
+			if format.Storage != "redis" {
+				new = strings.TrimPrefix(new, format.Storage+"://")
+			}
+			if new != format.Bucket {
 				if format.Storage == "file" {
 					if p, err := filepath.Abs(new); err == nil {
 						new = p + "/"

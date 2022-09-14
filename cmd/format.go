@@ -422,9 +422,6 @@ func format(c *cli.Context) error {
 			format.SessionToken = os.Getenv("SESSION_TOKEN")
 			_ = os.Unsetenv("SESSION_TOKEN")
 		}
-		if format.Storage != "redis" {
-			format.Bucket = strings.TrimPrefix(format.Bucket, format.Storage+"://")
-		}
 	} else {
 		logger.Fatalf("Load metadata: %s", err)
 	}
@@ -439,7 +436,9 @@ func format(c *cli.Context) error {
 			format.Bucket += "/"
 		}
 	}
-
+	if format.Storage != "redis" {
+		format.Bucket = strings.TrimPrefix(format.Bucket, format.Storage+"://")
+	}
 	blob, err := createStorage(*format)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
