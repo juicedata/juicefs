@@ -126,6 +126,22 @@ def write_block(filesystem, filepath, bs, count):
         time.sleep(1)
     # assert get_stage_blocks(filesystem) == 0
 
+def mdtest(filesystem, meta_url):
+    juicefs_new = './'+os.environ.get('NEW_JFS_BIN')
+    cwd = os.getcwd()
+    if not os.path.exists(f'{filesystem}/{juicefs_new}'):
+        run_cmd(f'ln -s {cwd}/{juicefs_new} {filesystem}/{juicefs_new}')
+    os.chdir(filesystem)
+    run_jfs_cmd(f'{juicefs_new} mdtest {meta_url} mdtest --dirs 5 --depth 2 --files 5 --threads 5 --write 8192'.split())
+    os.chdir(cwd)
+    time.sleep(get_upload_delay_seconds(filesystem)+1)
+    retry = 5
+    while get_stage_blocks(filesystem) != 0 and retry > 0:
+        print('sleep for stage')
+        retry = retry - 1
+        time.sleep(1)
+    assert os.path.exists(filesystem+'mdtest')
+
 def run_jfs_cmd( options):
     options.append('--debug')
     print('run_jfs_cmd:'+' '.join(options))

@@ -334,43 +334,39 @@ class JuicefsMachine(RuleBasedStateMachine):
             self.mounted_by.append(juicefs)
         print('mount succeed')
 
-    @rule(juicefs=st.sampled_from(JFS_BINS))
+    @rule(juicefs=st.sampled_from(JFS_BINS), 
+        file_name=st.just('abc.info'), 
+        data = st.binary())
     @precondition(lambda self: self.formatted and self.mounted )
-    def info(self, juicefs):
+    def info(self, juicefs, file_name, data):
         assume (self.greater_than_version_formatted(juicefs))
         assume (self.greater_than_version_mounted(juicefs))
         assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start info')
-        os.system(f'echo abc>{JuicefsMachine.MOUNT_POINT}/abc.info')
-        options = [juicefs, 'info', JuicefsMachine.MOUNT_POINT+'abc.info']
+        path = JuicefsMachine.MOUNT_POINT+file_name
+        write_data(JuicefsMachine.MOUNT_POINT, path, data)
+        options = [juicefs, 'info', path]
         run_jfs_cmd(options)
         print('info succeed')
 
-    @rule(juicefs=st.sampled_from(JFS_BINS))
+    @rule(juicefs=st.sampled_from(JFS_BINS), 
+    file_name=st.just('file_to_rmr'))
     @precondition(lambda self: self.formatted and self.mounted )
-    def rmr(self, juicefs):
+    def rmr(self, juicefs, file_name):
         assume (self.greater_than_version_formatted(juicefs))
         assume (self.greater_than_version_mounted(juicefs))
         assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
         assume(not os.path.exists(JuicefsMachine.MOUNT_POINT+'mdtest'))
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start info')
-        juicefs_new = './'+os.environ.get('NEW_JFS_BIN')
-        cwd = os.getcwd()
-        if not os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/{juicefs_new}'):
-            run_cmd(f'ln -s {cwd}/{juicefs_new} {JuicefsMachine.MOUNT_POINT}/{juicefs_new}')
-        os.chdir(JuicefsMachine.MOUNT_POINT)
-        run_jfs_cmd(f'{juicefs_new} mdtest {JuicefsMachine.META_URL} mdtest --dirs 5 --depth 2 --files 5 --threads 5 --write 8192'.split())
-        os.chdir(cwd)
-        assert os.path.exists(JuicefsMachine.MOUNT_POINT+'mdtest')
-        options = [juicefs, 'rmr', JuicefsMachine.MOUNT_POINT+'mdtest']
+        path = f'{JuicefsMachine.MOUNT_POINT}/{file_name}'
+        write_block(JuicefsMachine.MOUNT_POINT, path, 1048576, 100)
+        options = [juicefs, 'rmr', path]
         run_jfs_cmd(options)
-        if os.path.exists(JuicefsMachine.MOUNT_POINT+'mdtest'):
-            os.system(f'ls -l {JuicefsMachine.MOUNT_POINT}/mdtest')
-            # TODO: should add raise 
-            # raise Exception(f'{JuicefsMachine.MOUNT_POINT}test not removed')
-        
+        if os.path.exists(path):
+            os.system(f'ls -l {path}')
+            raise Exception(f'{path} not removed')
         print('info succeed')
 
     @rule(juicefs=st.sampled_from(JFS_BINS), 
