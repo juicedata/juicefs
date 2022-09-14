@@ -359,14 +359,15 @@ class JuicefsMachine(RuleBasedStateMachine):
         cwd = os.getcwd()
         run_cmd(f'ln -s {cwd}/{juicefs_new} {JuicefsMachine.MOUNT_POINT}/{juicefs_new}')
         os.chdir(JuicefsMachine.MOUNT_POINT)
-        run_jfs_cmd(f'{juicefs_new} mdtest {JuicefsMachine.META_URL} test --dirs 5 --depth 3 --files 10 --threads 10 --write 8192'.split())
+        run_jfs_cmd(f'{juicefs_new} mdtest {JuicefsMachine.META_URL} test --dirs 5 --depth 2 --files 5 --threads 5 --write 8192'.split())
         os.chdir(cwd)
         assert os.path.exists(JuicefsMachine.MOUNT_POINT+'test')
         options = [juicefs, 'rmr', JuicefsMachine.MOUNT_POINT+'test']
         run_jfs_cmd(options)
         if os.path.exists(JuicefsMachine.MOUNT_POINT+'test'):
-            os.system(f'tree {JuicefsMachine.MOUNT_POINT}/test')
-        assert not os.path.exists(JuicefsMachine.MOUNT_POINT+'test')
+            os.system(f'ls -l {JuicefsMachine.MOUNT_POINT}/test')
+            raise Exception(f'{JuicefsMachine.MOUNT_POINT}test not removed')
+        
         print('info succeed')
 
     @rule(juicefs=st.sampled_from(JFS_BINS), 
