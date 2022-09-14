@@ -335,7 +335,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         if not read_only: 
             assert len(sessions) != 0 
         self.mounted = True
-        self.mounted_by.append(juicefs)
+        if not read_only:
+            self.mounted_by.append(juicefs)
         print('mount succeed')
 
     @rule(juicefs=st.sampled_from(JFS_BINS))
