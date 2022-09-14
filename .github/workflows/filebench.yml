@@ -74,22 +74,39 @@ jobs:
           make
           sudo make install
           filebench -h
-          echo "randomize_va_space"
-          cat /proc/sys/kernel/randomize_va_space
           echo 0 >randomize_va_space
           sudo cp randomize_va_space /proc/sys/kernel/
           echo "randomize_va_space"
           cat /proc/sys/kernel/randomize_va_space
-          cd /usr/local/share/filebench/workloads/
-          filebench -f varmail.f
-
 
 
       - name: Varmail
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
-          wget -O ltp.tar.gz https://github.com/linux-test-project/ltp/archive/refs/tags/20210927.tar.gz
+          cd /usr/local/share/filebench/workloads/
+          sudo sed -i "s?/tmp?/tmp/jfs?" varmail.f
+          #sudo sed  "s?run 60?run 300?" varmail.f
+          cat varmail.f
+          sudo filebench -f varmail.f
 
+      - name: Webserver
+        timeout-minutes: 10
+        run: |
+          cd /usr/local/share/filebench/workloads/
+          sudo sed -i "s?/tmp?/tmp/jfs?" webserver.f
+          #sudo sed  "s?run 60?run 300?" webserver.f
+          cat webserver.f
+          sudo filebench -f webserver.f
+
+
+      - name: Videoserver
+        timeout-minutes: 10
+        run: |
+          cd /usr/local/share/filebench/workloads/
+          sudo sed -i "s?/tmp?/tmp/jfs?" videoserver.f
+          #sudo sed  "s?run 60?run 300?" videoserver.f
+          cat videoserver.f
+          sudo filebench -f videoserver.f
 
 
       - name: Log
