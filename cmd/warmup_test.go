@@ -27,6 +27,14 @@ import (
 )
 
 func TestWarmup(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		t.Logf("warmup %d times", i)
+		warmupFunc(t)
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func warmupFunc(t *testing.T) {
 	mountTemp(t, nil, nil, nil)
 	defer umountTemp(t)
 
