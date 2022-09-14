@@ -53,6 +53,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
@@ -62,6 +63,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipEntry;
 
 /****************************************************************
  * Implement the FileSystem API for JuiceFS
@@ -530,40 +532,30 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     File libFile = new File(dir, name);
 
-    URL res = null;
-    String jarPath;
-    try {
-      jarPath = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
-    } catch (URISyntaxException e) {
-      throw new IOException("get jar path failed", e);
-    }
-    Enumeration<URL> resources = JuiceFileSystemImpl.class.getClassLoader().getResources(resource);
-    while (resources.hasMoreElements()) {
-      res = resources.nextElement();
-      if (URI.create(res.getPath()).getPath().startsWith(jarPath)) {
-        break;
+    URL location = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation();
+    InputStream ins;
+    long soTime;
+
+    if (location.getProtocol().equals("jar")) {
+      LOG.debug("juicefs-hadoop.jar is a nested jar");
+      JarURLConnection connection = (JarURLConnection) location.openConnection();
+      JarFile jfsJar = connection.getJarFile();
+      ZipEntry entry = jfsJar.getJarEntry(resource);
+      soTime = entry.getLastModifiedTime().toMillis();
+      ins = jfsJar.getInputStream(entry);
+    } else {
+      String jarPath = URLDecoder.decode(location.getPath(), Charset.defaultCharset().name());
+      if (jarPath.endsWith(".jar")) {
+        JarFile jfsJar = new JarFile(jarPath);
+        ZipEntry entry = jfsJar.getJarEntry(resource);
+        soTime = entry.getLastModifiedTime().toMillis();
+        ins = jfsJar.getInputStream(entry);
+      } else { // for debug: sdk/java/target/classes
+        soTime = location.openConnection().getLastModified();
+        ins = JuiceFileSystemImpl.class.getClassLoader().getResourceAsStream(resource);
       }
     }
-    if (res == null) {
-      // jar may changed
-      return libjfsLibraryLoader.load(libFile.getAbsolutePath());
-    }
-    URLConnection conn;
-    try {
-      conn = res.openConnection();
-    } catch (FileNotFoundException e) {
-      // jar may changed
-      return libjfsLibraryLoader.load(libFile.getAbsolutePath());
-    }
 
-    long soTime = conn.getLastModified();
-    if (res.getProtocol().equalsIgnoreCase("jar")) {
-      soTime = new JarFile(jarPath).getJarEntry(resource)
-              .getLastModifiedTime()
-              .toMillis();
-    }
-
-    InputStream ins = conn.getInputStream();
     synchronized (JuiceFileSystemImpl.class) {
       if (!libFile.exists() || libFile.lastModified() < soTime) {
         // try the name for current user
