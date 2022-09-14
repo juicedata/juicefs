@@ -46,8 +46,6 @@ jobs:
 
       - name: Build linux target
         run: |
-          sudo -i
-          id
           make juicefs
 
       - name: Run Redis
@@ -78,9 +76,8 @@ jobs:
           filebench -h
           echo "randomize_va_space"
           cat /proc/sys/kernel/randomize_va_space
-          sudo -i
-          echo 0 > /proc/sys/kernel/randomize_va_space
-          logout
+          echo 0 >randomize_va_space
+          sudo cp randomize_va_space > /proc/sys/kernel/
           echo "randomize_va_space"
           cat /proc/sys/kernel/randomize_va_space
           cd /usr/local/share/filebench/workloads/
