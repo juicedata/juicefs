@@ -86,7 +86,7 @@ jobs:
           cd /usr/local/share/filebench/workloads/
           sudo chmod 777 *
           sudo sed -i "s?/tmp?/tmp/jfs?" varmail.f
-          sudo sed  "s?run 60?run 300?" varmail.f
+          sudo sed -i "s?run 60?run 300?" varmail.f
           cat varmail.f
           sudo filebench -f varmail.f
 
@@ -95,7 +95,7 @@ jobs:
         run: |
           cd /usr/local/share/filebench/workloads/
           sudo sed -i "s?/tmp?/tmp/jfs?" webserver.f
-          sudo sed  "s?run 60?run 300?" webserver.f
+          sudo sed -i "s?run 60?run 300?" webserver.f
           cat webserver.f
           sudo filebench -f webserver.f
 
