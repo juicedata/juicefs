@@ -77,7 +77,7 @@ jobs:
           echo "randomize_va_space"
           cat /proc/sys/kernel/randomize_va_space
           echo 0 >randomize_va_space
-          sudo cp randomize_va_space > /proc/sys/kernel/
+          sudo cp randomize_va_space /proc/sys/kernel/
           echo "randomize_va_space"
           cat /proc/sys/kernel/randomize_va_space
           cd /usr/local/share/filebench/workloads/
