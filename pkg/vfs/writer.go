@@ -357,7 +357,7 @@ func (f *fileWriter) flush(ctx meta.Context, writeback bool) syscall.Errno {
 				}
 			}
 		}
-		if f.flushcond.WaitWithTimeout(time.Second*3) && ctx.Canceled() {
+		if f.flushcond.WaitWithTimeout(time.Second*3) && ctx.Canceled() && time.Since(s) > f.w.conf.Chunk.PutTimeout*2 {
 			logger.Warnf("flush %d interrupted after %d", f.inode, time.Since(s))
 			err = syscall.EINTR
 			break
@@ -412,6 +412,7 @@ type dataWriter struct {
 	sync.Mutex
 	m          meta.Meta
 	store      chunk.ChunkStore
+	conf       *Config
 	reader     DataReader
 	blockSize  int
 	bufferSize int64
@@ -424,6 +425,7 @@ func NewDataWriter(conf *Config, m meta.Meta, store chunk.ChunkStore, reader Dat
 		m:          m,
 		store:      store,
 		reader:     reader,
+		conf:       conf,
 		blockSize:  conf.Chunk.BlockSize,
 		bufferSize: int64(conf.Chunk.BufferSize),
 		files:      make(map[Ino]*fileWriter),
