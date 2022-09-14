@@ -1238,11 +1238,11 @@ profile指标采样秒数 (默认：30)
 # 收集并展示挂载点 /mnt/jfs 的各类信息
 $ juicefs doctor /mnt/jfs
 
-# 指定输出目录为 /var/jfs/doctor
-$ juicefs doctor --out-dir=/var/jfs/doctor /mnt/jfs
+# 指定输出目录为 /var/log
+$ juicefs doctor --out-dir=/var/log /mnt/jfs
 
-# 启用日志收集
-$ juicefs doctor --out-dir=/var/jfs/doctor --collect-log --limit=1000 /mnt/jfs
+# 启用日志收集，并收集最后1000条日志条目
+$ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 /mnt/jfs
 
 # 启用pprof指标收集
 $ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /mnt/jfs

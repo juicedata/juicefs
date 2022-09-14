@@ -1235,11 +1235,11 @@ The number of seconds to sample profile metrics (default: 30)
 # Collect and display information about the mount point /mnt/jfs
 $ juicefs doctor /mnt/jfs
 
-# Specify the output directory as /var/jfs/doctor
-$ juicefs doctor --out-dir=/var/jfs/doctor /mnt/jfs
+# Specify the output directory as /var/log
+$ juicefs doctor --out-dir=/var/log /mnt/jfs
 
-# Enable log collection
-$ juicefs doctor --out-dir=/var/jfs/doctor --collect-log --limit=1000 /mnt/jfs
+# Enable log collection and get the last up to 1000 log entries
+$ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 /mnt/jfs
 
 # Enable pprof metrics collection
 $ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /mnt/jfs
