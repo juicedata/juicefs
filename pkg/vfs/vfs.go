@@ -744,10 +744,8 @@ func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err sysc
 	}
 
 	if h.writer != nil {
-		if !h.Wlock(ctx) {
+		for !h.Wlock(ctx) {
 			h.cancelOp(ctx.Pid())
-			err = syscall.EINTR
-			return
 		}
 
 		err = h.writer.Flush(ctx)
