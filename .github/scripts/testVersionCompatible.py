@@ -17,18 +17,12 @@ from utils import flush_meta, clear_storage, clear_cache, run_jfs_cmd, run_cmd, 
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
-    # JFS_BIN = ['./juicefs-1.0.0-beta1', './juicefs-1.0.0-beta2', './juicefs-1.0.0-beta3', './juicefs-1.0.0-rc1', './juicefs-1.0.0-rc2','./juicefs-1.0.0-rc3','./juicefs']
-    # juicefs_version = subprocess.check_output(['./juicefs', 'version']).decode().split()[-1].split('+')[0]
-    # os.environ['NEW_JFS_BIN'] = f'./juicefs-{juicefs_version}'
     JFS_BINS = ['./'+os.environ.get('OLD_JFS_BIN'), './'+os.environ.get('NEW_JFS_BIN')]
-    # JFS_BINS = ['./juicefs-1.0.0-rc2',  './juicefs-1.1.0-dev']
     meta_dict = {'redis':'redis://localhost/1', 'mysql':'mysql://root:root@(127.0.0.1)/test', 'postgres':'postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable', \
         'tikv':'tikv://127.0.0.1:2379', 'badger':'badger://badger-data', 'mariadb': 'mysql://root:root@(127.0.0.1)/test', \
             'sqlite3': 'sqlite3://test.db'}
     META_URL = meta_dict[os.environ.get('META')]
-
     STORAGES = [os.environ.get('STORAGE')]
-    # META_URL = 'badger://abc.db'
     MOUNT_POINT = '/tmp/sync-test/'
     VOLUME_NAME = 'test-volume'
     # valid_file_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
@@ -41,11 +35,11 @@ class JuicefsMachine(RuleBasedStateMachine):
             f.write(f'init with run_id: {self.run_id}\n')
         self.formatted = False
         self.mounted = False
-        # mount at least once, ref: https://github.com/juicedata/juicefs/issues/2717
+        # mount at least once, see ref: https://github.com/juicedata/juicefs/issues/2717
         self.mounted_by = []
         self.formatted_by = ''
         if JuicefsMachine.META_URL.startswith('badger://'):
-            # change url every
+            # change url for each run
             JuicefsMachine.META_URL = f'badger://badger-{uuid.uuid4().hex}'
         run_cmd(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
         if os.path.isfile('dump.json'):
