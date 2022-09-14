@@ -4,23 +4,6 @@ on:
   schedule:
     - cron:  '0 16 * * *'
   workflow_dispatch:
-    # inputs:
-    #   meta:
-    #     description: 'meta(redis, tikv etc.)'
-    #     required: true
-    #     default: 'redis'
-    #   storage:
-    #     description: 'storage(minio, mysql, hdfs etc.)'
-    #     required: true
-    #     default: 'minio'
-    #   os:
-    #     description: 'os(ubuntu-latest, macos-latest)'
-    #     required: true
-    #     default: 'ubuntu-latest'
-    #   old_juicefs_version:
-    #     description: 'old juicefs version(1.0.0, 1.0.0-rc1)'
-    #     required: true
-    #     default: '1.0.0'
 
 jobs:
   vc-hypo:
