@@ -343,6 +343,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def info(self, juicefs):
         assume (self.greater_than_version_formatted(juicefs))
         assume (self.greater_than_version_mounted(juicefs))
+        assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start info')
         os.system(f'echo abc>{JuicefsMachine.MOUNT_POINT}/abc.info')
@@ -355,6 +356,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def rmr(self, juicefs):
         assume (self.greater_than_version_formatted(juicefs))
         assume (self.greater_than_version_mounted(juicefs))
+        assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start info')
         juicefs_new = './'+os.environ.get('NEW_JFS_BIN')
