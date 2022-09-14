@@ -145,6 +145,7 @@ juicefs format \
 | [新浪云 SCS](#新浪云-scs)                   | `scs`      |
 | [天翼云 OOS](#天翼云-oos)                   | `oos`      |
 | [移动云 EOS](#移动云-eos)                   | `eos`      |
+| [联通云 CUOS](#联通云-cuos)                   | `cuos`      |
 | [京东云 OSS](#京东云-oss)                   | `s3`       |
 | [优刻得 US3](#优刻得-us3)                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                   | `ceph`     |
@@ -634,6 +635,22 @@ juicefs format \
     ... \
     myjfs
 ```
+## 联通云 CUOS
+
+使用联通云 CUOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://console.cucloud.cn/console/uiam/user/531891/security) 了解如何创建 Access Key 和 Secret Key。
+
+联通云 CUOS 为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://support.cucloud.cn/document.html?id=133&arcid=1080)，你可以根据实际的场景选用。例如：
+
+```bash
+juicefs format \
+    --storage cuos \
+    --bucket https://<bucket>.<endpoint> \
+      --access-key ... \
+      --secret-key ... \
+      <META_URL> \
+    myjfs
+```
+
 
 ## 京东云 OSS
 

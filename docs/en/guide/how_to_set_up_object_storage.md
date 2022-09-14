@@ -145,6 +145,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Sina Cloud Storage](#sina-cloud-storage)                   | `scs`      |
 | [CTYun OOS](#ctyun-oos)                                     | `oos`      |
 | [ECloud Object Storage](#ecloud-object-storage)             | `eos`      |
+| [CUCloud Object Storage](#cucloud-object-storage)             | `cuos`      |
 | [JD Cloud OSS](#jd-cloud-oss)                               | `s3`       |
 | [UCloud US3](#ucloud-us3)                                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                                   | `ceph`     |
@@ -632,6 +633,22 @@ juicefs format \
     --storage eos \
     --bucket https://<bucket>.<endpoint> \
     ... \
+    myjfs
+```
+
+## CUCloud Object Storage
+
+Please follow [this document](https://console.cucloud.cn/console/uiam/user/531891/security) to learn how to get access key and secret key.
+
+CUCloud Object Storage provides [multiple endpoints](https://support.cucloud.cn/document.html?id=133&arcid=1080) for each region, depending on your network (e.g. public or internal). Please choose an appropriate endpoint. For example:
+
+```bash
+juicefs format \
+    --storage cuos \
+    --bucket https://<bucket>.<endpoint> \
+      --access-key ... \
+      --secret-key ... \
+      <META_URL> \
     myjfs
 ```
 
