@@ -357,7 +357,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('start info')
         juicefs_new = './'+os.environ.get('NEW_JFS_BIN')
         cwd = os.getcwd()
-        run_cmd(f'ln -s {cwd}/{juicefs_new} {JuicefsMachine.MOUNT_POINT}/{juicefs_new}')
+        if not os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/{juicefs_new}'):
+            run_cmd(f'ln -s {cwd}/{juicefs_new} {JuicefsMachine.MOUNT_POINT}/{juicefs_new}')
         os.chdir(JuicefsMachine.MOUNT_POINT)
         run_jfs_cmd(f'{juicefs_new} mdtest {JuicefsMachine.META_URL} test --dirs 5 --depth 2 --files 5 --threads 5 --write 8192'.split())
         os.chdir(cwd)
