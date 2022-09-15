@@ -105,7 +105,7 @@ jobs:
         run: |
           cd /usr/local/share/filebench/workloads/
           sudo sed -i "s?/tmp?/tmp/jfs?" videoserver.f
-          sudo sed -i "s?$filesize=10g?$filesize=150m?" videoserver.f
+          sudo sed -i "s?$filesize=10g?$filesize=100m?" videoserver.f
           sudo sed -i "s?$numpassivevids=194?$numpassivevids=100?" videoserver.f
           sudo echo "run 300" >>videoserver.f
           df -lh
@@ -118,7 +118,7 @@ jobs:
         timeout-minutes: 10
         run: |
           cd /usr/local/share/filebench/workloads/
-          cp videoserver.f videoserver_500m.f
+          sudo cp videoserver.f videoserver_500m.f
           sudo sed -i "s?$eventrate=96?$eventrate=500?" videoserver_500m.f
           df -lh
           cat videoserver_500m.f
@@ -130,7 +130,7 @@ jobs:
         timeout-minutes: 10
         run: |
           cd /usr/local/share/filebench/workloads/
-          cp videoserver.f videoserver_1000m.f
+          sudo cp videoserver.f videoserver_1000m.f
           sudo sed -i "s?$eventrate=96?$eventrate=1000?" videoserver_1000m.f
           df -lh
           cat videoserver_1000m.f
