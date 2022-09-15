@@ -1,51 +1,146 @@
 name: "version-compatible-test-hypo"
 
 on:
-  # push:
-  #   branches: 
-  #     - main
-  #     - release-**
-  #   paths-ignore:
-  #     - 'docs/**'
-  #     - '**.md'
-  # pull_request:
-  #   #The branches below must be a subset of the branches above
-  #   branches: 
-  #     - main
-  #     - release-**
-  #   paths-ignore:
-  #     - 'docs/**'
-  #     - '**.md'
   schedule:
-    - cron:  '0 0 * * *'
+    - cron:  '0 16 * * *'
   workflow_dispatch:
 
 jobs:
-  test-1-0-0-redis:
-    runs-on: ubuntu-latest
+  vc-hypo:
+    continue-on-error: false
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        old_juicefs_version: ['1.0.0', '1.0.0-rc1', '1.0.0-beta1']
+        # old_juicefs_version: ['1.0.0-beta1']
+        meta: ['redis', 'mysql', 'tikv', 'postgres' ]
+        storage: ['minio']
+        include:
+          - os: ubuntu-latest
+            old_juicefs_version: '0.17.1'
+            meta: 'redis'
+            storage: 'minio'
+          # - os: ubuntu-latest
+          #   old_juicefs_version: '1.0.0'
+          #   meta: 'tikv'
+          # - os: ubuntu-latest
+          #   old_juicefs_version: '1.0.0'
+          #   meta: 'postgres'
+          # - os: ubuntu-latest
+          #   old_juicefs_version: '1.0.0'
+          #   meta: 'sqlite3'
+
+    runs-on: ${{matrix.os}}
+
     services:
-      redis:
-        # Docker Hub image
-        image: redis
-        # Set health checks to wait until redis has started
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
         options: >-
-          --health-cmd "redis-cli ping"
+          --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
         ports:
-          # Maps port 6379 on service container to the host
-          - 6379:6379
+          - 5432:5432
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
-      
-      - name: Test
-        uses: ./.github/actions/version-compatible-hypo
+          
+      - name: Set up Go
+        uses: actions/setup-go@v2
         with:
-          old_juicefs_version: '1.0.0'
+          go-version: '1.18.x'
+
+      - name: Prepare meta database
+        run: | 
+          meta=${{matrix.meta}}
+          if [[ "$meta" == redis ]]; then
+            meta_url='redis://localhost/1'
+            sudo apt-get install -y redis-tools redis-server
+          elif [[ "$meta" == mysql ]]; then
+            sudo /etc/init.d/mysql start
+          elif [[ "$meta" == tikv ]]; then
+            curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+            source /home/runner/.bash_profile
+            source /home/runner/.profile
+            tiup playground --mode tikv-slim &
+            git clone https://github.com/c4pt0r/tcli
+            cd tcli && make
+            sudo cp bin/tcli /usr/local/bin
+            cd -
+          elif [[ "$meta" == badger ]]; then
+            sudo go get github.com/dgraph-io/badger/v3
+          elif [[ "$meta" == mariadb ]]; then
+            docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
+          fi
+
+      - name: Download old version
+        run: | 
+          filename=juicefs-${{matrix.old_juicefs_version}}-linux-amd64.tar.gz
+          echo filename is: $filename
+          url=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep $filename | awk -F\" '{print $4}' | head -1)
+          echo download url is: $url
+          wget -q $url
+          tar -zxf $filename
+          mv juicefs juicefs-${{matrix.old_juicefs_version}}
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Make Juicefs
+        shell: bash
+        run: | 
+          make juicefs
+          
+      - name: Setup minio
+        shell: bash
+        run: |
+          docker run -d -p 9000:9000 --name minio \
+                      -e "MINIO_ACCESS_KEY=minioadmin" \
+                      -e "MINIO_SECRET_KEY=minioadmin" \
+                      -v /tmp/data:/data \
+                      -v /tmp/config:/root/.minio \
+                      minio/minio server /data
+          
+      - name: Install tools
+        run: | 
+          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
+          chmod +x mc
+          sudo mv mc /usr/local/bin
+          sudo apt install redis-tools
+          sudo pip install hypothesis
+          sudo pip install minio
+          
+      - name: Test
+        timeout-minutes: 60
+        run: |          
+          export META=${{matrix.meta}}
+          export STORAGE=${{matrix.storage}}
+          version=`./juicefs version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          mv juicefs juicefs-$version
+          export NEW_JFS_BIN="juicefs-$version"
+          export OLD_JFS_BIN="juicefs-${{matrix.old_juicefs_version}}"
+          # python3 .github/scripts/test_action_log.py
+          python3 .github/scripts/testVersionCompatible.py
+
+      - name: Upload command log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{matrix.os}}-${{matrix.meta}}-${{matrix.old_juicefs_version}}.command.log
+          path: command.log
 
       - name: Display log
         if: ${{ always() }}
@@ -73,146 +168,5 @@ jobs:
 
       # - name: Setup upterm session
       #   if: ${{ failure() }}
-      #   timeout-minutes: 30
-      #   uses: lhotari/action-upterm@v1
-
-  # test-1-0-0-rc2-redis:
-  #   runs-on: ubuntu-latest
-  #   services:
-  #     redis:
-  #       # Docker Hub image
-  #       image: redis
-  #       # Set health checks to wait until redis has started
-  #       options: >-
-  #         --health-cmd "redis-cli ping"
-  #         --health-interval 10s
-  #         --health-timeout 5s
-  #         --health-retries 5
-  #       ports:
-  #         # Maps port 6379 on service container to the host
-  #         - 6379:6379
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v3
-  #       with:
-  #         fetch-depth: 1
-      
-  #     - name: Test
-  #       uses: ./.github/actions/version-compatible-hypo
-  #       with:
-  #         old_juicefs_version: '1.0.0-rc2'
-
-  #     - name: Display log
-  #       if: ${{ always() }}
-  #       shell: bash
-  #       run: | 
-  #         if [ -f "/home/runner/.juicefs/juicefs.log" ]; then
-  #           cat /home/runner/.juicefs/juicefs.log
-  #           grep "<FATAL>:" /home/runner/.juicefs/juicefs.log && exit 1 || true
-  #         fi
-
-  #     - name: Send Slack Notification
-  #       if: ${{ failure() }}
-  #       uses: juicedata/slack-notify-action@main
-  #       with:
-  #         channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-  #         slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
-
-      # - name: Setup upterm session
-      #   if: ${{ failure() }}
-      #   timeout-minutes: 30
-      #   uses: lhotari/action-upterm@v1
-
-  # test-1-0-0-beta1-redis:
-  #   runs-on: ubuntu-latest
-  #   services:
-  #     redis:
-  #       # Docker Hub image
-  #       image: redis
-  #       # Set health checks to wait until redis has started
-  #       options: >-
-  #         --health-cmd "redis-cli ping"
-  #         --health-interval 10s
-  #         --health-timeout 5s
-  #         --health-retries 5
-  #       ports:
-  #         # Maps port 6379 on service container to the host
-  #         - 6379:6379
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v3
-  #       with:
-  #         fetch-depth: 1
-      
-  #     - name: Test
-  #       uses: ./.github/actions/version-compatible-hypo
-  #       with:
-  #         old_juicefs_version: '1.0.0-beta1'
-
-  #     - name: Display log
-  #       if: ${{ always() }}
-  #       shell: bash
-  #       run: | 
-  #         if [ -f "/home/runner/.juicefs/juicefs.log" ]; then
-  #           cat /home/runner/.juicefs/juicefs.log
-  #           grep "<FATAL>:" /home/runner/.juicefs/juicefs.log && exit 1 || true
-  #         fi
-
-  #     - name: Send Slack Notification
-  #       if: ${{ failure() }}
-  #       uses: juicedata/slack-notify-action@main
-  #       with:
-  #         channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-  #         slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
-
-      # - name: Setup upterm session
-      #   if: ${{ failure() }}
-      #   timeout-minutes: 30
-      #   uses: lhotari/action-upterm@v1
-
-  # test-0-17-1-redis:
-  #   runs-on: ubuntu-latest
-  #   services:
-  #     redis:
-  #       # Docker Hub image
-  #       image: redis
-  #       # Set health checks to wait until redis has started
-  #       options: >-
-  #         --health-cmd "redis-cli ping"
-  #         --health-interval 10s
-  #         --health-timeout 5s
-  #         --health-retries 5
-  #       ports:
-  #         # Maps port 6379 on service container to the host
-  #         - 6379:6379
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v3
-  #       with:
-  #         fetch-depth: 1
-      
-  #     - name: Test
-  #       uses: ./.github/actions/version-compatible-hypo
-  #       with:
-  #         old_juicefs_version: '0.17.1'
-
-  #     - name: Display log
-  #       if: ${{ always() }}
-  #       shell: bash
-  #       run: | 
-  #         if [ -f "/home/runner/.juicefs/juicefs.log" ]; then
-  #           cat /home/runner/.juicefs/juicefs.log
-  #           grep "<FATAL>:" /home/runner/.juicefs/juicefs.log && exit 1 || true
-  #         fi
-
-  #     - name: Send Slack Notification
-  #       if: ${{ failure() }}
-  #       uses: juicedata/slack-notify-action@main
-  #       with:
-  #         channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-  #         slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
-
-      # - name: Setup upterm session
-      #   if: ${{ failure() }}
-      #   timeout-minutes: 30
+      #   timeout-minutes: 1
       #   uses: lhotari/action-upterm@v1

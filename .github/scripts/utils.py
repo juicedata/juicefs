@@ -7,7 +7,6 @@ import sys
 import time
 from minio import Minio
 
-
 def flush_meta(meta_url):
     print('start flush meta')
     if meta_url.startswith('sqlite3://'):
@@ -15,9 +14,37 @@ def flush_meta(meta_url):
         if os.path.isfile(path):
             os.remove(path)
             print(f'remove meta file {path} succeed')
+    elif meta_url.startswith('badger://'):
+        path = meta_url[len('badger://'):]
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+            print(f'remove badger dir {path} succeed')
     elif meta_url.startswith('redis://'):
         run_cmd('redis-cli flushall')
         print(f'flush redis succeed')
+    elif meta_url.startswith('mysql://'):
+        db_name = meta_url[8:].split('@')[1].split('/')[1]
+        user = meta_url[8:].split('@')[0].split(':')[0]
+        password = meta_url[8:].split('@')[0].split(':')[1]
+        if password: 
+            password = f'-p{password}'
+        host_port= meta_url[8:].split('@')[1].split('/')[0].replace('(', '').replace(')', '')
+        if ':' in host_port:
+            host = host_port.split(':')[0]
+            port = host_port.split(':')[1]
+        else:
+            host = host_port
+            port = '3306'
+        run_cmd(f'mysql -u{user} {password} -h {host} -P {port} -e "drop database if exists {db_name}; create database {db_name};"')
+    elif meta_url.startswith('postgres://'): 
+        db_name = meta_url[8:].split('@')[1].split('/')[1]
+        if '?' in db_name:
+            db_name = db_name.split('?')[0]
+        run_cmd(f'printf "\set AUTOCOMMIT on\ndrop database if exists {db_name}; create database {db_name}; " |  psql -U postgres -h localhost')
+    elif meta_url.startswith('tikv://'):
+        run_cmd('echo "delall --yes" |tcli -pd localhost:2379')
+    else:
+        raise Exception(f'{meta_url} not supported')
     print('flush meta succeed')
 
 def clear_storage(storage, bucket, volume):
@@ -63,7 +90,7 @@ def is_readonly(filesystem):
 
 def get_upload_delay_seconds(filesystem):
     if not os.path.exists(f'{filesystem}/.config'):
-        return False
+        return 0
     with open(f'{filesystem}/.config') as f:
         config = json.load(f)
         return config['Chunk']['UploadDelay']/1000000000
@@ -81,49 +108,68 @@ def get_stage_blocks(filesystem):
 def write_data(filesystem, path, data):
     with open(path, "wb") as f:
         f.write(data)
-    time.sleep(get_upload_delay_seconds(filesystem)+1)
-    retry = 10
+    retry = get_upload_delay_seconds(filesystem) + 10
     while get_stage_blocks(filesystem) != 0 and retry > 0:
         print('sleep for stage')
         retry = retry - 1
         time.sleep(1)
-    assert get_stage_blocks(filesystem) == 0
+    # assert get_stage_blocks(filesystem) == 0
 
 def write_block(filesystem, filepath, bs, count):
     run_cmd(f'dd if=/dev/urandom of={filepath} bs={bs} count={count}')
-    time.sleep(get_upload_delay_seconds(filesystem)+1)
-    retry = 10
+    retry = get_upload_delay_seconds(filesystem) + 10
     while get_stage_blocks(filesystem) != 0 and retry > 0:
         print('sleep for stage')
         retry = retry - 1
         time.sleep(1)
-    assert get_stage_blocks(filesystem) == 0
+    # assert get_stage_blocks(filesystem) == 0
+
+def mdtest(filesystem, meta_url):
+    juicefs_new = './'+os.environ.get('NEW_JFS_BIN')
+    cwd = os.getcwd()
+    if not os.path.exists(f'{filesystem}/{juicefs_new}'):
+        run_cmd(f'ln -s {cwd}/{juicefs_new} {filesystem}/{juicefs_new}')
+    os.chdir(filesystem)
+    run_jfs_cmd(f'{juicefs_new} mdtest {meta_url} mdtest --dirs 5 --depth 2 --files 5 --threads 5 --write 8192'.split())
+    os.chdir(cwd)
+    time.sleep(get_upload_delay_seconds(filesystem)+1)
+    retry = 5
+    while get_stage_blocks(filesystem) != 0 and retry > 0:
+        print('sleep for stage')
+        retry = retry - 1
+        time.sleep(1)
+    assert os.path.exists(filesystem+'mdtest')
 
 def run_jfs_cmd( options):
     options.append('--debug')
     print('run_jfs_cmd:'+' '.join(options))
     with open('command.log', 'a') as f:
-        f.write(' '.join(options))
+        f.write(' '.join(options).replace('/home/runner', '~'))
         f.write('\n')
     try:
         output = subprocess.run(options, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
-        print(f'<FATAL>: subprocess run error: {e.output.decode()}')
+        print(f'<FATAL>: subprocess run error, return code: {e.returncode} , error message: {e.output.decode()}')
         raise Exception('subprocess run error')
-    print(output.stdout.decode())
+    print(f'run_jfs_cmd return code: {output.returncode}, output: {output.stdout.decode()}')
     print('run_jfs_cmd succeed')
     return output.stdout.decode()
 
 def run_cmd(command):
     print('run_cmd:'+command)
-    if '|' in command:
+    if '|' in command or '"' in command:
         return os.system(command)
     try:
         output = subprocess.run(command.split(), check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
-        print(f'FATAL: subprocess run error: {e.output.decode()}')
+        print(f'<FATAL>: subprocess run error, return code: {e.returncode} , error message: {e.output.decode()}')
         return e.returncode
     if output.stdout:
         print(output.stdout.decode())
     print('run_cmd succeed')
     return output.returncode
+
+def is_port_in_use(port: int) -> bool:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) == 0
