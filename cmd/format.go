@@ -37,6 +37,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -191,6 +192,8 @@ func fixObjectSize(s int) int {
 	return s
 }
 
+const tlsInsecureSkipVerify = "tls-insecure-skip-verify"
+
 func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	if err := format.Decrypt(); err != nil {
 		return nil, fmt.Errorf("format decrypt: %s", err)
@@ -198,20 +201,34 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	object.UserAgent = "JuiceFS-" + version.Version()
 	var blob object.ObjectStorage
 	var err error
-
-	if u, err := url.Parse(format.Bucket); err == nil {
-		values := u.Query()
-		if values.Get("tls-insecure-skip-verify") != "" {
-			var tlsSkipVerify bool
-			if tlsSkipVerify, err = strconv.ParseBool(values.Get("tls-insecure-skip-verify")); err != nil {
-				return nil, err
+	var tlsSkipVerify bool
+	switch format.Storage {
+	case "mysql":
+		if cfg, err := mysql.ParseDSN(strings.TrimPrefix(format.Bucket, "mysql://")); err == nil && cfg.Params[tlsInsecureSkipVerify] != "" {
+			if tlsSkipVerify, err = strconv.ParseBool(cfg.Params[tlsInsecureSkipVerify]); err != nil {
+				return nil, fmt.Errorf("%s is not a valid boolean value", cfg.Params[tlsInsecureSkipVerify])
 			}
-			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: tlsSkipVerify}
-			values.Del("tls-insecure-skip-verify")
-			u.RawQuery = values.Encode()
-			format.Bucket = u.String()
+			delete(cfg.Params, tlsInsecureSkipVerify)
+			format.Bucket = cfg.FormatDSN()
+		} else {
+			logger.Warnf("bucket url maybe invalid,skip query parametes check: %s", format.Bucket)
+		}
+	default:
+		if u, err := url.Parse(format.Bucket); err == nil {
+			values := u.Query()
+			if values.Get(tlsInsecureSkipVerify) != "" {
+				if tlsSkipVerify, err = strconv.ParseBool(values.Get(tlsInsecureSkipVerify)); err != nil {
+					return nil, fmt.Errorf("%s is not a valid boolean value", values.Get(tlsInsecureSkipVerify))
+				}
+				values.Del(tlsInsecureSkipVerify)
+				u.RawQuery = values.Encode()
+				format.Bucket = u.String()
+			}
+		} else {
+			logger.Warnf("bucket url maybe invalid,skip query parametes check: %s", format.Bucket)
 		}
 	}
+	object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: tlsSkipVerify}
 
 	if format.Shards > 1 {
 		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.Shards)
