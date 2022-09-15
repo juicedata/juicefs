@@ -150,11 +150,7 @@ func config(ctx *cli.Context) error {
 				quota = true
 			}
 		case "bucket":
-			new := ctx.String(flag)
-			if format.Storage == "tikv" || format.Storage == "etcd" || format.Storage == "mysql" || format.Storage == "postgres" {
-				new = strings.TrimPrefix(new, format.Storage+"://")
-			}
-			if new != format.Bucket {
+			if new := ctx.String(flag); new != format.Bucket {
 				if format.Storage == "file" {
 					if p, err := filepath.Abs(new); err == nil {
 						new = p + "/"

@@ -154,17 +154,23 @@ func (s *sqlStore) List(prefix, marker string, limit int64) ([]Object, error) {
 
 func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	var err error
-	uri := addr
-	if user != "" {
-		uri = user + ":" + password + "@" + addr
-	}
 	var searchPath string
-	if driver == "postgres" {
-		uri = "postgres://" + uri
-
-		parse, err := url.Parse(addr)
+	uri := addr
+	switch driver {
+	case "mysql":
+		if user != "" {
+			uri = user + ":" + password + "@" + addr
+		}
+	case "postgres":
+		if !strings.HasPrefix(uri, "postgres://") {
+			uri = "postgres://" + uri
+		}
+		parse, err := url.Parse(uri)
 		if err != nil {
-			return nil, fmt.Errorf("parse url %s failed: %s", addr, err)
+			return nil, fmt.Errorf("parse url %s failed: %s", uri, err)
+		}
+		if user != "" {
+			parse.User = url.UserPassword(user, password)
 		}
 		searchPath = parse.Query().Get("search_path")
 		if searchPath != "" {
@@ -172,6 +178,7 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 				return nil, fmt.Errorf("currently, only one schema is supported in search_path")
 			}
 		}
+		uri = parse.String()
 	}
 	engine, err := xorm.NewEngine(driver, uri)
 	if err != nil {
