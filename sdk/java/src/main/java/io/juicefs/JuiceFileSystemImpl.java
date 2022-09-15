@@ -532,11 +532,20 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     File libFile = new File(dir, name);
 
-    URL location = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation();
     InputStream ins;
     long soTime;
-
-    URLConnection con = location.openConnection();
+    URL location = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation();
+    if (location == null) {
+      // jar may changed
+      return libjfsLibraryLoader.load(libFile.getAbsolutePath());
+    }
+    URLConnection con;
+    try {
+      con = location.openConnection();
+    } catch (FileNotFoundException e) {
+      // jar may changed
+      return libjfsLibraryLoader.load(libFile.getAbsolutePath());
+    }
     if (location.getProtocol().equals("jar") && (con instanceof JarURLConnection)) {
       LOG.debug("juicefs-hadoop.jar is a nested jar");
       JarURLConnection connection = (JarURLConnection) con;
