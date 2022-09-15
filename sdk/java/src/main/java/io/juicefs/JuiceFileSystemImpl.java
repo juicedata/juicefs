@@ -536,9 +536,10 @@ public class JuiceFileSystemImpl extends FileSystem {
     InputStream ins;
     long soTime;
 
-    if (location.getProtocol().equals("jar")) {
+    URLConnection con = location.openConnection();
+    if (location.getProtocol().equals("jar") && (con instanceof JarURLConnection)) {
       LOG.debug("juicefs-hadoop.jar is a nested jar");
-      JarURLConnection connection = (JarURLConnection) location.openConnection();
+      JarURLConnection connection = (JarURLConnection) con;
       JarFile jfsJar = connection.getJarFile();
       ZipEntry entry = jfsJar.getJarEntry(resource);
       soTime = entry.getLastModifiedTime().toMillis();
@@ -551,7 +552,7 @@ public class JuiceFileSystemImpl extends FileSystem {
         soTime = entry.getLastModifiedTime().toMillis();
         ins = jfsJar.getInputStream(entry);
       } else { // for debug: sdk/java/target/classes
-        soTime = location.openConnection().getLastModified();
+        soTime = con.getLastModified();
         ins = JuiceFileSystemImpl.class.getClassLoader().getResourceAsStream(resource);
       }
     }
