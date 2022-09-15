@@ -154,23 +154,17 @@ func (s *sqlStore) List(prefix, marker string, limit int64) ([]Object, error) {
 
 func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	var err error
-	var searchPath string
 	uri := addr
-	switch driver {
-	case "mysql":
-		if user != "" {
-			uri = user + ":" + password + "@" + addr
-		}
-	case "postgres":
-		if !strings.HasPrefix(uri, "postgres://") {
-			uri = "postgres://" + uri
-		}
-		parse, err := url.Parse(uri)
+	if user != "" {
+		uri = user + ":" + password + "@" + addr
+	}
+	var searchPath string
+	if driver == "postgres" {
+		uri = "postgres://" + uri
+
+		parse, err := url.Parse(addr)
 		if err != nil {
-			return nil, fmt.Errorf("parse url %s failed: %s", uri, err)
-		}
-		if user != "" {
-			parse.User = url.UserPassword(user, password)
+			return nil, fmt.Errorf("parse url %s failed: %s", addr, err)
 		}
 		searchPath = parse.Query().Get("search_path")
 		if searchPath != "" {
@@ -178,7 +172,6 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 				return nil, fmt.Errorf("currently, only one schema is supported in search_path")
 			}
 		}
-		uri = parse.String()
 	}
 	engine, err := xorm.NewEngine(driver, uri)
 	if err != nil {
@@ -206,22 +199,22 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	return &sqlStore{DefaultObjectStorage{}, engine, addr}, nil
 }
 
+func removeScheme(addr string) string {
+	p := strings.Index(addr, "://")
+	if p > 0 {
+		addr = addr[p+3:]
+	}
+	return addr
+}
+
 func init() {
 	Register("sqlite3", func(addr, user, pass, token string) (ObjectStorage, error) {
-		p := strings.Index(addr, "://")
-		if p > 0 {
-			addr = addr[p+3:]
-		}
-		return newSQLStore("sqlite3", addr, user, pass)
+		return newSQLStore("sqlite3", removeScheme(addr), user, pass)
 	})
 	Register("mysql", func(addr, user, pass, token string) (ObjectStorage, error) {
-		p := strings.Index(addr, "://")
-		if p > 0 {
-			addr = addr[p+3:]
-		}
-		return newSQLStore("mysql", addr, user, pass)
+		return newSQLStore("mysql", removeScheme(addr), user, pass)
 	})
 	Register("postgres", func(addr, user, pass, token string) (ObjectStorage, error) {
-		return newSQLStore("postgres", addr, user, pass)
+		return newSQLStore("postgres", removeScheme(addr), user, pass)
 	})
 }
