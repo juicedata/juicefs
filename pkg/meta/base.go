@@ -737,6 +737,8 @@ func (m *baseMeta) nextInode() (Ino, error) {
 func (m *baseMeta) createDirQuotas(ctx Context, parent, inode Ino) []Ino {
 	if err := m.en.dogetQuotas(ctx, inode); err == nil {
 		m.dirQuotas[parent] = append(m.dirQuotas[parent], inode)
+		fmt.Printf("show inode %d\n", inode)
+		fmt.Printf("show dirQuotas %+v\n", m.dirQuotas)
 	}
 	for parentInode, _ := range m.GetParents(ctx, inode) {
 		if parentInode == RootInode {
