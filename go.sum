@@ -863,6 +863,8 @@ github.com/pyroscope-io/client v0.2.1 h1:GUyrncANOCuFhnmgURnpJ90o9z/uwZMx+1l9RMJ
 github.com/pyroscope-io/client v0.2.1/go.mod h1:zRdQXIGxy0H2QbKEkCmZBR6KOLLIFYLWsdzVI0MRm2E=
 github.com/qingstor/qingstor-sdk-go/v4 v4.4.0 h1:tbItWtGB1TDfYzqK8dtm6tV+xWU5iYMwL37C6AL5dDs=
 github.com/qingstor/qingstor-sdk-go/v4 v4.4.0/go.mod h1:mDVFtA7+bXQ5xoELTWkoFy1Ad13wtp8jtlnl/RU+zzM=
+github.com/qingyunha/go-fuse/v2 v2.1.1-0.20220915030024-ebb8a5435c9f h1:/4ddR36udmDhg9xENXv5gBoX2h0oBl3lcfSPUBQehp4=
+github.com/qingyunha/go-fuse/v2 v2.1.1-0.20220915030024-ebb8a5435c9f/go.mod h1:oRyA5eK+pvJyv5otpO/DgccS8y/RvYMaO00GgRLGryc=
 github.com/qiniu/dyn v1.3.0/go.mod h1:E8oERcm8TtwJiZvkQPbcAh0RL8jO1G0VXJMW3FAWdkk=
 github.com/qiniu/go-sdk/v7 v7.11.1 h1:/LZ9rvFS4p6SnszhGv11FNB1+n4OZvBCwFg7opH5Ovs=
 github.com/qiniu/go-sdk/v7 v7.11.1/go.mod h1:btsaOc8CA3hdVloULfFdDgDc+g4f3TDZEFsDY0BLE+w=

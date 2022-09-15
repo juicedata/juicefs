@@ -406,10 +406,29 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 	}
 
 	err = v.Meta.Open(ctx, ino, flags, attr)
-	if err == 0 {
-		v.UpdateLength(ino, attr)
-		fh = v.newFileHandle(ino, attr.Length, flags)
-		entry = &meta.Entry{Inode: ino, Attr: attr}
+	if err != 0 {
+		return
+	}
+	v.UpdateLength(ino, attr)
+	fh = v.newFileHandle(ino, attr.Length, flags)
+	entry = &meta.Entry{Inode: ino, Attr: attr}
+	if flags&(syscall.O_WRONLY|syscall.O_RDWR) != 0 && flags&syscall.O_TRUNC != 0 &&
+		attr.Typ == meta.TypeFile && attr.Length > 0 {
+		hs := v.findAllHandles(ino)
+		for _, h := range hs {
+			if !h.Wlock(ctx) {
+				err = syscall.EINTR
+				return
+			}
+			defer func(h *handle) { h.Wunlock() }(h)
+		}
+		_ = v.writer.Flush(ctx, ino)
+		err = v.Meta.Truncate(ctx, ino, 0, 0, attr)
+		if err == 0 {
+			v.writer.Truncate(ino, 0)
+			v.reader.Truncate(ino, 0)
+			v.invalidateLength(ino)
+		}
 	}
 	return
 }
