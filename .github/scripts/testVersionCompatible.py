@@ -359,7 +359,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.greater_than_version_mounted(juicefs))
         assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
         # TODO: should test upload delay.
-        assume(get_upload_delay_seconds() == 0)
+        assume(get_upload_delay_seconds(JuicefsMachine.MOUNT_POINT) == 0)
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start rmr')
         path = f'{JuicefsMachine.MOUNT_POINT}/{file_name}'
