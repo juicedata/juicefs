@@ -151,7 +151,7 @@ func config(ctx *cli.Context) error {
 			}
 		case "bucket":
 			new := ctx.String(flag)
-			if format.Storage != "redis" {
+			if format.Storage == "tikv" || format.Storage == "etcd" || format.Storage == "mysql" || format.Storage == "postgres" {
 				new = strings.TrimPrefix(new, format.Storage+"://")
 			}
 			if new != format.Bucket {

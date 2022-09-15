@@ -436,7 +436,7 @@ func format(c *cli.Context) error {
 			format.Bucket += "/"
 		}
 	}
-	if format.Storage != "redis" {
+	if format.Storage == "tikv" || format.Storage == "etcd" || format.Storage == "mysql" || format.Storage == "postgres" {
 		format.Bucket = strings.TrimPrefix(format.Bucket, format.Storage+"://")
 	}
 	blob, err := createStorage(*format)
