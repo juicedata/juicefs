@@ -358,24 +358,17 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.greater_than_version_formatted(juicefs))
         assume (self.greater_than_version_mounted(juicefs))
         assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
-        assume(not os.path.exists(JuicefsMachine.MOUNT_POINT+'mdtest'))
+        # TODO: should test upload delay.
+        assume(get_upload_delay_seconds() == 0)
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
-        print('start info')
+        print('start rmr')
         path = f'{JuicefsMachine.MOUNT_POINT}/{file_name}'
         write_block(JuicefsMachine.MOUNT_POINT, path, 1048576, 3)
+        assert(os.path.exists(path))
         options = [juicefs, 'rmr', path]
         run_jfs_cmd(options)
-        retry = get_upload_delay_seconds(JuicefsMachine.MOUNT_POINT) + 5
-        while get_stage_blocks(JuicefsMachine.MOUNT_POINT) != 0 and retry > 0:
-            print('sleep for stage')
-            retry = retry - 1
-            time.sleep(1)
-        if os.path.exists(path):
-            os.system(f'ls -l {path}')
-            print(f'<FATAL:> {path} not removed') 
-            #TODO: uncomment raise 
-            # raise Exception(f'{path} not removed')
-        print('info succeed')
+        assert(not os.path.exists(path))
+        print('rmr succeed')
 
     @rule(juicefs=st.sampled_from(JFS_BINS), 
     force=st.booleans())
@@ -410,6 +403,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         run_jfs_cmd(options)
         self.formatted = False
         self.mounted = False
+        self.mounted_by = []
+        self.formatted_by = ''
         print('destroy succeed')
 
     @rule(file_name=st.sampled_from(['myfile1', 'myfile2']), 

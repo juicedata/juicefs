@@ -90,7 +90,7 @@ def is_readonly(filesystem):
 
 def get_upload_delay_seconds(filesystem):
     if not os.path.exists(f'{filesystem}/.config'):
-        return False
+        return 0
     with open(f'{filesystem}/.config') as f:
         config = json.load(f)
         return config['Chunk']['UploadDelay']/1000000000
@@ -108,7 +108,7 @@ def get_stage_blocks(filesystem):
 def write_data(filesystem, path, data):
     with open(path, "wb") as f:
         f.write(data)
-    retry = get_upload_delay_seconds(filesystem) + 5
+    retry = get_upload_delay_seconds(filesystem) + 10
     while get_stage_blocks(filesystem) != 0 and retry > 0:
         print('sleep for stage')
         retry = retry - 1
@@ -117,7 +117,7 @@ def write_data(filesystem, path, data):
 
 def write_block(filesystem, filepath, bs, count):
     run_cmd(f'dd if=/dev/urandom of={filepath} bs={bs} count={count}')
-    retry = get_upload_delay_seconds(filesystem) + 5
+    retry = get_upload_delay_seconds(filesystem) + 10
     while get_stage_blocks(filesystem) != 0 and retry > 0:
         print('sleep for stage')
         retry = retry - 1
