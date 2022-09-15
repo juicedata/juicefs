@@ -19,6 +19,7 @@ on:
 
 jobs:
   filebench:
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -102,7 +103,7 @@ jobs:
           cd /usr/local/share/filebench/workloads/
           sudo chmod 777 *
           sudo sed -i "s?/tmp?/data/jfs?" varmail.f
-          #sudo sed -i "s?run 60?run 300?" varmail.f
+          sudo sed -i "s?run 60?run 300?" varmail.f
           cat varmail.f
           sudo filebench -f varmail.f
 
@@ -111,7 +112,7 @@ jobs:
         run: |
           cd /usr/local/share/filebench/workloads/
           sudo sed -i "s?/tmp?/data/jfs?" webserver.f
-          #sudo sed -i "s?run 60?run 300?" webserver.f
+          sudo sed -i "s?run 60?run 300?" webserver.f
           cat webserver.f
           sudo filebench -f webserver.f
 
@@ -127,7 +128,6 @@ jobs:
           df -lh
           cat videoserver.f
           sudo filebench -f videoserver.f
-          df -lh
 
 
       - name: Videoserver 500M
@@ -139,7 +139,6 @@ jobs:
           df -lh
           cat videoserver_500m.f
           sudo filebench -f videoserver_500m.f
-          df -lh
 
 
       - name: Videoserver 1000M
