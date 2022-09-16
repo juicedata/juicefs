@@ -91,8 +91,10 @@ jobs:
           if [[ "$meta" == redis ]]; then
             meta_url='redis://localhost/1'
             sudo apt-get install -y redis-tools redis-server
+          fi
           if [[ "$meta" == mysql || "$storage" == mysql ]]; then
             sudo /etc/init.d/mysql start
+          fi
           if [[ "$meta" == tikv ]]; then
             curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
             source /home/runner/.bash_profile
@@ -102,8 +104,10 @@ jobs:
             cd tcli && make
             sudo cp bin/tcli /usr/local/bin
             cd -
+          fi
           if [[ "$meta" == badger ]]; then
             sudo go get github.com/dgraph-io/badger/v3
+          fi
           if [[ "$meta" == mariadb ]]; then
             docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
           fi
