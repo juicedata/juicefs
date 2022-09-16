@@ -13,7 +13,7 @@ from hypothesis import assume, strategies as st
 from packaging import version
 from minio import Minio
 import uuid
-from utils import flush_meta, clear_storage, clear_cache, run_jfs_cmd, run_cmd, is_readonly, get_upload_delay_seconds, get_stage_blocks, write_data, write_block, is_port_in_use
+from utils import *
 
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
@@ -23,7 +23,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         'tikv':'tikv://127.0.0.1:2379', 'badger':'badger://badger-data', 'mariadb': 'mysql://root:root@(127.0.0.1)/test', \
             'sqlite3': 'sqlite3://test.db'}
     META_URL = meta_dict[os.environ.get('META')]
-    STORAGES = [os.environ.get('STORAGE')]
+    STORAGE = os.environ.get('STORAGE')
     MOUNT_POINT = '/tmp/sync-test/'
     VOLUME_NAME = 'test-volume'
     # valid_file_name = st.text(st.characters(max_codepoint=1000, blacklist_categories=('Cc', 'Cs')), min_size=2).map(lambda s: s.strip()).filter(lambda s: len(s) > 0)
@@ -42,77 +42,11 @@ class JuicefsMachine(RuleBasedStateMachine):
         if JuicefsMachine.META_URL.startswith('badger://'):
             # change url for each run
             JuicefsMachine.META_URL = f'badger://badger-{uuid.uuid4().hex}'
-        run_cmd(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
+        if JuicefsMachine.STORAGE == 'minio':
+            run_cmd(f'mc alias set myminio http://localhost:9000 minioadmin minioadmin')
         if os.path.isfile('dump.json'):
             os.remove('dump.json')
         os.environ['PGPASSWORD'] = 'postgres'
-
-    @rule(
-        juicefs=st.sampled_from(JFS_BINS),
-        capacity=st.integers(min_value=0, max_value=1024), 
-        inodes=st.integers(min_value=1024*1024, max_value=1024*1024*1024),
-        change_bucket=st.booleans(), 
-        change_aksk=st.booleans(), 
-        encrypt_secret = st.booleans(), 
-        trash_days =  st.integers(min_value=0, max_value=10000),
-        min_client_version = st.sampled_from(MIN_CLIENT_VERSIONS), 
-        max_client_version = st.sampled_from(MAX_CLIENT_VERSIONS), 
-        force = st.booleans(),
-    )
-    @precondition(lambda self: self.formatted)
-    def config(self, juicefs, capacity, inodes, change_bucket, change_aksk, encrypt_secret, trash_days, min_client_version, max_client_version, force):
-        assume (self.greater_than_version_formatted(juicefs))
-        assume(run_cmd(f'{juicefs} --help | grep config') == 0)
-        print('start config')
-        options = [juicefs, 'config', JuicefsMachine.META_URL]
-        options.extend(['--trash-days', str(trash_days)])
-        options.extend(['--capacity', str(capacity)])
-        options.extend(['--inodes', str(inodes)])
-        assert version.parse(min_client_version) <= version.parse(max_client_version)
-        if run_cmd(f'{juicefs} config --help | grep min-client-version') == 0:
-            options.extend(['--min-client-version', min_client_version])
-        if run_cmd(f'{juicefs} config --help | grep max-client-version') == 0:
-            options.extend(['--max-client-version', max_client_version])
-        output = subprocess.run([juicefs, 'status', JuicefsMachine.META_URL], check=True, stdout=subprocess.PIPE).stdout.decode()
-        if 'get timestamp too slow' in output: 
-            # remove the first line caust it is tikv log message
-            output = '\n'.join(output.split('\n')[1:])
-        print(f'status output: {output}')
-        storage = json.loads(output.replace("'", '"'))['Setting']['Storage']
-        
-        if change_bucket:
-            if storage == 'file':
-                options.extend(['--bucket', os.path.expanduser('~/.juicefs/local2')])
-            elif storage == 'minio': 
-                c = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
-                if not c.bucket_exists('test-bucket2'):
-                    run_cmd('mc mb myminio/test-bucket2')
-                    # assert c.bucket_exists('test-bucket2')
-                options.extend(['--bucket', 'http://localhost:9000/test-bucket2'])
-        if change_aksk and storage == 'minio':
-            output = subprocess.check_output('mc admin user list myminio'.split())
-            if not output:
-                run_cmd('mc admin user add myminio juicedata 12345678')
-                run_cmd('mc admin policy set myminio consoleAdmin user=juicedata')
-            options.extend(['--access-key', 'juicedata'])
-            options.extend(['--secret-key', '12345678'])
-            if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-rc1'):
-                # use the latest version to set secret-key because rc1 has a bug for secret-key
-                options[0] = JuicefsMachine.JFS_BINS[1]
-        if encrypt_secret and run_cmd(f'{juicefs} config --help | grep encrypt-secret') == 0:
-            # 0.17.5 store the secret without encrypt, ref: https://github.com/juicedata/juicefs/issues/2721
-            #if version.parse('-'.join(juicefs.split('-')[1:])) > version.parse('0.17.5'):
-            options.append('--encrypt-secret')
-        options.append('--force')
-        run_jfs_cmd(options)
-        if change_bucket:
-            # change bucket back to avoid fsck fail.
-            if storage == 'file':
-                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', os.path.expanduser('~/.juicefs/local')])
-            elif storage == 'minio':
-                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', 'http://localhost:9000/test-bucket'])
-        self.formatted_by = juicefs
-        print('config succeed')
 
     @rule(
           juicefs=st.sampled_from(JFS_BINS),
@@ -121,7 +55,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           inodes=st.integers(min_value=1024*1024, max_value=1024*1024*1024),
           compress=st.sampled_from(['lz4', 'zstd', 'none']),
           shards=st.integers(min_value=0, max_value=1),
-          storage=st.sampled_from(STORAGES), 
+          storage=st.just(STORAGE), 
           encrypt_rsa_key = st.booleans(), 
           encrypt_algo = st.sampled_from(['aes256gcm-rsa','chacha20-rsa']),
           trash_days=st.integers(min_value=0, max_value=10000), 
@@ -158,7 +92,7 @@ class JuicefsMachine(RuleBasedStateMachine):
                 options.extend(['--encrypt-algo', encrypt_algo])
         
         if storage == 'minio':
-            bucket = 'http://localhost:9000/test-bucket'
+            bucket = 'http://localhost:9000/test_bucket'
             options.extend(['--bucket', bucket])
             options.extend(['--access-key', 'minioadmin'])
             options.extend(['--secret-key', 'minioadmin'])
@@ -168,6 +102,11 @@ class JuicefsMachine(RuleBasedStateMachine):
         elif storage == 'file':
             bucket = os.path.expanduser('~/.juicefs/local/')
             options.extend(['--bucket', bucket])
+        elif storage == 'mysql':
+            bucket = '(localhost:3306)/test_bucket'
+            options.extend(['--bucket', bucket])
+            options.extend(['--access-key', 'root'])
+            options.extend(['--secret-key', 'root'])
         else:
             print(f'storage is {storage}')
             raise Exception(f'storage value error: {storage}')
@@ -183,6 +122,76 @@ class JuicefsMachine(RuleBasedStateMachine):
         self.formatted = True
         self.formatted_by = juicefs
         print('format succeed')
+
+
+    @rule(
+        juicefs=st.sampled_from(JFS_BINS),
+        capacity=st.integers(min_value=0, max_value=1024), 
+        inodes=st.integers(min_value=1024*1024, max_value=1024*1024*1024),
+        change_bucket=st.booleans(), 
+        change_aksk=st.booleans(), 
+        encrypt_secret = st.booleans(), 
+        trash_days =  st.integers(min_value=0, max_value=10000),
+        min_client_version = st.sampled_from(MIN_CLIENT_VERSIONS), 
+        max_client_version = st.sampled_from(MAX_CLIENT_VERSIONS), 
+        force = st.booleans(),
+    )
+    @precondition(lambda self: self.formatted)
+    def config(self, juicefs, capacity, inodes, change_bucket, change_aksk, encrypt_secret, trash_days, min_client_version, max_client_version, force):
+        assume (self.greater_than_version_formatted(juicefs))
+        assume(run_cmd(f'{juicefs} --help | grep config') == 0)
+        print('start config')
+        options = [juicefs, 'config', JuicefsMachine.META_URL]
+        options.extend(['--trash-days', str(trash_days)])
+        options.extend(['--capacity', str(capacity)])
+        options.extend(['--inodes', str(inodes)])
+        assert version.parse(min_client_version) <= version.parse(max_client_version)
+        if run_cmd(f'{juicefs} config --help | grep min-client-version') == 0:
+            options.extend(['--min-client-version', min_client_version])
+        if run_cmd(f'{juicefs} config --help | grep max-client-version') == 0:
+            options.extend(['--max-client-version', max_client_version])
+        storage = get_storage(juicefs, JuicefsMachine.META_URL)
+        
+        if change_bucket:
+            if storage == 'file':
+                options.extend(['--bucket', os.path.expanduser('~/.juicefs/local2')])
+            elif storage == 'minio': 
+                c = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
+                if not c.bucket_exists('test_bucket2'):
+                    run_cmd('mc mb myminio/test_bucket2')
+                    # assert c.bucket_exists('test_bucket2')
+                options.extend(['--bucket', 'http://localhost:9000/test_bucket2'])
+            elif storage == 'mysql':
+                create_mysql_db('mysql://root:root@(localhost:3306)/test_bucket2')
+                options.extend(['--bucket', '(localhost:3306)/test_bucket2'])
+
+        if change_aksk and storage == 'minio':
+            output = subprocess.check_output('mc admin user list myminio'.split())
+            if not output:
+                run_cmd('mc admin user add myminio juicedata 12345678')
+                run_cmd('mc admin policy set myminio consoleAdmin user=juicedata')
+            options.extend(['--access-key', 'juicedata'])
+            options.extend(['--secret-key', '12345678'])
+            if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-rc1'):
+                # use the latest version to set secret-key because rc1 has a bug for secret-key
+                options[0] = JuicefsMachine.JFS_BINS[1]
+        if encrypt_secret and run_cmd(f'{juicefs} config --help | grep encrypt-secret') == 0:
+            # 0.17.5 store the secret without encrypt, ref: https://github.com/juicedata/juicefs/issues/2721
+            #if version.parse('-'.join(juicefs.split('-')[1:])) > version.parse('0.17.5'):
+            options.append('--encrypt-secret')
+        options.append('--force')
+        run_jfs_cmd(options)
+        if change_bucket:
+            # change bucket back to avoid fsck fail.
+            if storage == 'file':
+                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', os.path.expanduser('~/.juicefs/local')])
+            elif storage == 'minio':
+                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', 'http://localhost:9000/test_bucket'])
+            elif storage == 'mysql':
+                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', '(localhost:3306)/test_bucket'])
+        self.formatted_by = juicefs
+        print('config succeed')
+
 
     @rule(juicefs=st.sampled_from(JFS_BINS))
     @precondition(lambda self: self.formatted )
@@ -336,7 +345,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('mount succeed')
 
     @rule(juicefs=st.sampled_from(JFS_BINS), 
-        file_name=st.just('abc.info'), 
+        file_name=st.just('file_to_info'), 
         data = st.binary())
     @precondition(lambda self: self.formatted and self.mounted )
     def info(self, juicefs, file_name, data):
@@ -362,7 +371,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume(get_upload_delay_seconds(JuicefsMachine.MOUNT_POINT) == 0)
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         print('start rmr')
-        path = f'{JuicefsMachine.MOUNT_POINT}/{file_name}'
+        path = f'{JuicefsMachine.MOUNT_POINT}{file_name}'
         write_block(JuicefsMachine.MOUNT_POINT, path, 1048576, 3)
         assert(os.path.exists(path))
         options = [juicefs, 'rmr', path]
@@ -448,8 +457,12 @@ class JuicefsMachine(RuleBasedStateMachine):
         if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-rc1'):
             # use the latest version to change secret-key because rc1 has a bug for secret-key
             options[0] = JuicefsMachine.JFS_BINS[1]
-        options.extend(['--access-key', 'minioadmin', '--secret-key', 'minioadmin'])
-        run_jfs_cmd(options)
+        storage = get_storage(juicefs, JuicefsMachine.META_URL)
+        if storage == 'minio':
+            run_jfs_cmd([juicefs, JuicefsMachine.META_URL, '--access-key', 'minioadmin', '--secret-key', 'minioadmin'])
+        elif storage == 'mysql':
+            run_jfs_cmd([juicefs, JuicefsMachine.META_URL, '--access-key', 'root', '--secret-key', 'root'])
+        
         os.remove('dump.json')
 
     @rule(juicefs=st.sampled_from(JFS_BINS))
