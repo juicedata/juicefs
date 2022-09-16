@@ -1518,7 +1518,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			}
 			return nil
 		}
-		keys = []string{m.inodeKey(ino)}
+		keys := []string{m.inodeKey(ino)}
 		dbuf, err := tx.HGet(ctx, m.entryKey(parentDst), nameDst).Bytes()
 		if err == redis.Nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
@@ -1549,7 +1549,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return err
 		}
 
-		keys := []string{m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino)}
+		keys = []string{m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino)}
 		if dino > 0 {
 			keys = append(keys, m.inodeKey(dino))
 		}
