@@ -76,6 +76,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: release-${{matrix.old_juicefs_version}}
+          path: release-${{matrix.old_juicefs_version}}
 
       - name: Make old build
         run: | 
