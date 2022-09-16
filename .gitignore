@@ -25,3 +25,5 @@ docs/node_modules
 cmd/cmd
 *.dump
 *.out
+.hypothesis
+__pycache__
