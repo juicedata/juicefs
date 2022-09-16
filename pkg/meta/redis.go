@@ -479,6 +479,10 @@ func (m *redisMeta) symKey(inode Ino) string {
 	return m.prefix + "s" + inode.String()
 }
 
+func (m *redisMeta) quotaKey(inode Ino) string {
+	return m.prefix + "q" + inode.String()
+}
+
 func (m *redisMeta) inodeKey(inode Ino) string {
 	return m.prefix + "i" + inode.String()
 }
@@ -822,6 +826,9 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
+		if newSpace > 0 && m.checkDirQuota(ctx, inode, newSpace, 0) {
+			return syscall.ENOSPC
+		}
 		var zeroChunks []uint32
 		var left, right = t.Length, length
 		if left > right {
@@ -877,6 +884,17 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 				pipe.RPush(ctx, m.chunkKey(inode, uint32(right/ChunkSize)), marshalSlice(0, 0, 0, 0, uint32(right%ChunkSize)))
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+			for parentInode, _ := range m.GetParents(ctx, inode) {
+				if _, ok := m.dirQuotas[parentInode]; !ok {
+					m.dirQuotas[parentInode] = m.getQuotas(ctx, parentInode, inode)
+				}
+				if m.dirQuotas[parentInode] != nil {
+					for _, val := range m.dirQuotas[parentInode] {
+						quota_key := m.quotaKey(val)
+						pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpace)
+					}
+				}
+			}
 			return nil
 		})
 		if err == nil {
@@ -888,6 +906,10 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 	}, m.inodeKey(inode))
 	if err == nil {
 		m.updateStats(newSpace, 0)
+		//refresh dirQuotas
+		for parentInode, _ := range m.GetParents(ctx, inode) {
+			m.updateQuotaStats(parentInode, newSpace, 0)
+		}
 	}
 	return errno(err)
 }
@@ -948,6 +970,9 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
+		if newSpace > 0 && m.checkDirQuota(ctx, inode, newSpace, 0) {
+			return syscall.ENOSPC
+		}
 		t.Length = length
 		now := time.Now()
 		t.Mtime = now.Unix()
@@ -974,12 +999,27 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 				}
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(length)-align4K(old))
+			for parentInode, _ := range m.GetParents(ctx, inode) {
+				if _, ok := m.dirQuotas[parentInode]; !ok {
+					m.dirQuotas[parentInode] = m.getQuotas(ctx, parentInode, inode)
+				}
+				if m.dirQuotas[parentInode] != nil {
+					for _, val := range m.dirQuotas[parentInode] {
+						quota_key := m.quotaKey(val)
+						pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpace)
+					}
+				}
+			}
 			return nil
 		})
 		return err
 	}, m.inodeKey(inode))
 	if err == nil {
 		m.updateStats(newSpace, 0)
+		//refresh dirQuotas
+		for parentInode, _ := range m.GetParents(ctx, inode) {
+			m.updateQuotaStats(parentInode, newSpace, 0)
+		}
 	}
 	return errno(err)
 }
@@ -1189,12 +1229,25 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
 			pipe.Incr(ctx, m.totalInodesKey())
+			//refresh dir usedSpace and usedinode in redis
+			if _, ok := m.dirQuotas[parent]; !ok {
+				m.dirQuotas[parent] = m.getQuotas(ctx, parent, ino)
+			}
+			if m.dirQuotas[parent] != nil {
+				for _, val := range m.dirQuotas[parent] {
+					quota_key := m.quotaKey(val)
+					pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+align4K(0))
+					pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes+1)
+				}
+			}
 			return nil
 		})
 		return err
 	}, m.inodeKey(parent), m.entryKey(parent))
 	if err == nil {
 		m.updateStats(align4K(0), 1)
+		//refresh dirQuotas
+		m.updateQuotaStats(parent, align4K(0), 1)
 	}
 	return errno(err)
 }
@@ -1305,6 +1358,16 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 						newSpace, newInode = -align4K(attr.Length), -1
 						pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 						pipe.Decr(ctx, m.totalInodesKey())
+						if _, ok := m.dirQuotas[parent]; !ok {
+							m.dirQuotas[parent] = m.getQuotas(ctx, parent, inode)
+						}
+						if m.dirQuotas[parent] != nil {
+							for _, val := range m.dirQuotas[parent] {
+								quota_key := m.quotaKey(val)
+								pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpace)
+								pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes-1)
+							}
+						}
 					}
 				case TypeSymlink:
 					pipe.Del(ctx, m.symKey(inode))
@@ -1314,6 +1377,16 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 					newSpace, newInode = -align4K(0), -1
 					pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 					pipe.Decr(ctx, m.totalInodesKey())
+					if _, ok := m.dirQuotas[parent]; !ok {
+						m.dirQuotas[parent] = m.getQuotas(ctx, parent, inode)
+					}
+					if m.dirQuotas[parent] != nil {
+						for _, val := range m.dirQuotas[parent] {
+							quota_key := m.quotaKey(val)
+							pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpace)
+							pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes-1)
+						}
+					}
 				}
 				pipe.Del(ctx, m.xattrKey(inode))
 				if attr.Parent == 0 {
@@ -1330,6 +1403,8 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 			m.fileDeleted(opened, inode, attr.Length)
 		}
 		m.updateStats(newSpace, newInode)
+		//refresh dirQuotas
+		m.updateQuotaStats(parent, newSpace, newInode)
 	}
 	return errno(err)
 }
@@ -1413,6 +1488,17 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 				pipe.Del(ctx, m.xattrKey(inode))
 				pipe.IncrBy(ctx, m.usedSpaceKey(), -align4K(0))
 				pipe.Decr(ctx, m.totalInodesKey())
+				if _, ok := m.dirQuotas[parent]; !ok {
+					m.dirQuotas[parent] = m.getQuotas(ctx, parent, inode)
+				}
+				if m.dirQuotas[parent] != nil {
+					for _, val := range m.dirQuotas[parent] {
+						quota_key := m.quotaKey(val)
+						pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace-align4K(0))
+						pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes-1)
+					}
+				}
+
 			}
 			return nil
 		})
@@ -1420,6 +1506,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 	}, m.inodeKey(parent), m.entryKey(parent))
 	if err == nil && trash == 0 {
 		m.updateStats(-align4K(0), -1)
+		m.updateQuotaStats(parent, -align4K(0), -1)
 	}
 	return errno(err)
 }
@@ -1431,6 +1518,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 	var dtyp uint8
 	var tattr Attr
 	var newSpace, newInode int64
+	var newSpaceDst, newInodeDst, newSpaceSrc, newInodeSrc int64
+	//var count, dirUsedSpace uint64
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		opened = false
 		dino, dtyp = 0, 0
@@ -1455,7 +1544,6 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return nil
 		}
 		keys := []string{m.inodeKey(ino)}
-
 		dbuf, err := tx.HGet(ctx, m.entryKey(parentDst), nameDst).Bytes()
 		if err == redis.Nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
@@ -1626,29 +1714,168 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 							pipe.HIncrBy(ctx, m.parentKey(dino), parentDst.String(), -1)
 						}
 					} else {
-						if dtyp == TypeFile {
-							if opened {
-								pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
-								pipe.SAdd(ctx, m.sustained(m.sid), strconv.Itoa(int(dino)))
+						if parentDst != parentSrc {
+							if dtyp == TypeFile {
+								if opened {
+									pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
+									pipe.SAdd(ctx, m.sustained(m.sid), strconv.Itoa(int(dino)))
+								} else {
+									pipe.ZAdd(ctx, m.delfiles(), &redis.Z{Score: float64(now.Unix()), Member: m.toDelete(dino, tattr.Length)})
+									pipe.Del(ctx, m.inodeKey(dino))
+									newSpace, newInode = -align4K(tattr.Length), -1
+									pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+									pipe.Decr(ctx, m.totalInodesKey())
+									//update dirQuotas[parentDst]
+									newSpaceDst, newInodeDst = align4K(sattr.Length)-align4K(tattr.Length), 0
+									//check dirQuota
+									if m.checkDirQuota(ctx, parentDst, newSpaceDst, newInodeDst) {
+										return syscall.ENOSPC
+									}
+									newSpaceSrc, newInodeSrc = -align4K(sattr.Length), -1
+									if _, ok := m.dirQuotas[parentDst]; !ok {
+										m.dirQuotas[parentDst] = m.getQuotas(ctx, parentDst, parentDst)
+									}
+									if m.dirQuotas[parentDst] != nil {
+										for _, val := range m.dirQuotas[parentDst] {
+											quota_key := m.quotaKey(val)
+											pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpaceDst)
+											pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes+newInodeDst)
+										}
+									}
+									//update dirQuotas[parentSrc]
+									if _, ok := m.dirQuotas[parentSrc]; !ok {
+										m.dirQuotas[parentSrc] = m.getQuotas(ctx, parentSrc, ino)
+									}
+									if m.dirQuotas[parentSrc] != nil {
+										for _, val := range m.dirQuotas[parentSrc] {
+											quota_key := m.quotaKey(val)
+											pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpaceSrc)
+											pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes+newInodeSrc)
+										}
+									}
+								}
 							} else {
-								pipe.ZAdd(ctx, m.delfiles(), &redis.Z{Score: float64(now.Unix()), Member: m.toDelete(dino, tattr.Length)})
+								if dtyp == TypeSymlink {
+									pipe.Del(ctx, m.symKey(dino))
+								}
 								pipe.Del(ctx, m.inodeKey(dino))
-								newSpace, newInode = -align4K(tattr.Length), -1
+								newSpace, newInode = -align4K(0), -1
 								pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 								pipe.Decr(ctx, m.totalInodesKey())
+								//update dirQuotas[parentDst]
+								if _, ok := m.dirQuotas[parentDst]; !ok {
+									m.dirQuotas[parentDst] = m.getQuotas(ctx, parentDst, parentDst)
+								}
+								if m.dirQuotas[parentDst] != nil {
+									newSpaceDst, newInodeDst = align4K(sattr.Length), 1
+									for _, val := range m.dirQuotas[parentDst] {
+										quota_key := m.quotaKey(val)
+										pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpaceDst)
+										pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes+newInodeDst)
+									}
+								}
+								//update dirQuotas[parentSrc]
+								if _, ok := m.dirQuotas[parentSrc]; !ok {
+									m.dirQuotas[parentSrc] = m.getQuotas(ctx, parentSrc, ino)
+								}
+								if m.dirQuotas[parentSrc] != nil {
+									newSpaceSrc, newInodeSrc = -align4K(sattr.Length), -1
+									for _, val := range m.dirQuotas[parentSrc] {
+										quota_key := m.quotaKey(val)
+										pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpaceSrc)
+										pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes+newInodeSrc)
+									}
+								}
 							}
 						} else {
-							if dtyp == TypeSymlink {
-								pipe.Del(ctx, m.symKey(dino))
+							if dtyp == TypeFile {
+								if opened {
+									pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
+									pipe.SAdd(ctx, m.sustained(m.sid), strconv.Itoa(int(dino)))
+								} else {
+									pipe.ZAdd(ctx, m.delfiles(), &redis.Z{Score: float64(now.Unix()), Member: m.toDelete(dino, tattr.Length)})
+									pipe.Del(ctx, m.inodeKey(dino))
+									newSpace, newInode = -align4K(tattr.Length), -1
+									pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+									pipe.Decr(ctx, m.totalInodesKey())
+									//update dirQuotas[parentDst]
+									if _, ok := m.dirQuotas[parentDst]; !ok {
+										m.dirQuotas[parentDst] = m.getQuotas(ctx, parentDst, parentDst)
+									}
+									if m.dirQuotas[parentDst] != nil {
+										newSpaceDst, newInodeDst = align4K(sattr.Length), 1
+										for _, val := range m.dirQuotas[parentDst] {
+											quota_key := m.quotaKey(val)
+											pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpaceDst)
+											pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes+newInodeDst)
+										}
+									}
+								}
+							} else {
+								if dtyp == TypeSymlink {
+									pipe.Del(ctx, m.symKey(dino))
+								}
+								pipe.Del(ctx, m.inodeKey(dino))
+								newSpace, newInode = -align4K(0), -1
+								pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+								pipe.Decr(ctx, m.totalInodesKey())
+								//update dirQuotas[parentDst]
+								if _, ok := m.dirQuotas[parentDst]; !ok {
+									m.dirQuotas[parentDst] = m.getQuotas(ctx, parentDst, parentDst)
+								}
+								if m.dirQuotas[parentDst] != nil {
+									newSpaceDst, newInodeDst = -align4K(tattr.Length), -1
+									for _, val := range m.dirQuotas[parentDst] {
+										quota_key := m.quotaKey(val)
+										pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpaceDst)
+										pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes+newInodeDst)
+									}
+								}
+
 							}
-							pipe.Del(ctx, m.inodeKey(dino))
-							newSpace, newInode = -align4K(0), -1
-							pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
-							pipe.Decr(ctx, m.totalInodesKey())
 						}
 						pipe.Del(ctx, m.xattrKey(dino))
 						if tattr.Parent == 0 {
 							pipe.Del(ctx, m.parentKey(dino))
+						}
+					}
+				} else {
+					if parentDst != parentSrc {
+						//update dirQuotas[parentDst]
+						//only when dirQuotas[parentDst] != dirQuotas[parentSrc]
+						if _, ok := m.dirQuotas[parentDst]; !ok {
+							m.dirQuotas[parentDst] = m.getQuotas(ctx, parentDst, parentDst)
+						}
+						if _, ok := m.dirQuotas[parentSrc]; !ok {
+							m.dirQuotas[parentSrc] = m.getQuotas(ctx, parentSrc, ino)
+						}
+						if !CompareSlice(m.dirQuotas[parentDst], m.dirQuotas[parentSrc]) {
+							//test
+							concurrent := make(chan int, 50)
+							var summary Summary
+							if st := GetSummaryConcurrence(m, ctx, ino, &summary, concurrent, true); st == 0 {
+								newSpaceDst, newInodeDst = int64(summary.Size), int64(summary.Files+summary.Dirs)
+								newSpaceSrc, newInodeSrc = -int64(summary.Size), -int64(summary.Files+summary.Dirs)
+								if m.checkDirQuota(ctx, parentDst, newSpaceDst, newInodeDst) {
+									return syscall.ENOSPC
+								}
+								if m.dirQuotas[parentDst] != nil {
+									for _, val := range m.dirQuotas[parentDst] {
+										quota_key := m.quotaKey(val)
+										pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpaceDst)
+										pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes+newInodeDst)
+									}
+								}
+								//update dirQuotas[parentSrc]
+								if m.dirQuotas[parentSrc] != nil {
+									for _, val := range m.dirQuotas[parentSrc] {
+										quota_key := m.quotaKey(val)
+										pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpaceSrc)
+										pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes+newInodeSrc)
+									}
+								}
+							}
+							//if st := m.CaculateDirFiles(ctx, parentSrc, nameSrc, &count, &dirUsedSpace); st == 0 {}
 						}
 					}
 				}
@@ -1676,6 +1903,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			m.fileDeleted(opened, dino, tattr.Length)
 		}
 		m.updateStats(newSpace, newInode)
+		//refresh dirQuotas
+		m.updateQuotaStats(parentDst, newSpaceDst, newInodeDst)
+		m.updateQuotaStats(parentSrc, newSpaceSrc, newInodeSrc)
 	}
 	return errno(err)
 }
@@ -1958,11 +2188,27 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 		pipe.Decr(ctx, m.totalInodesKey())
 		pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
+		//update dirQuotas[parentDst]
+		for parentInode, _ := range m.GetParents(ctx, inode) {
+			if _, ok := m.dirQuotas[parentInode]; !ok {
+				m.dirQuotas[parentInode] = m.getQuotas(ctx, parentInode, inode)
+			}
+			if m.dirQuotas[parentInode] != nil {
+				for _, val := range m.dirQuotas[parentInode] {
+					quota_key := m.quotaKey(val)
+					pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpace)
+					pipe.HSet(ctx, quota_key, "usedInodes", m.quotas[val].usedInodes-1)
+				}
+			}
+		}
 		return nil
 	})
 	if err == nil {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length)
+		for parentInode, _ := range m.GetParents(ctx, inode) {
+			m.updateQuotaStats(parentInode, newSpace, -1)
+		}
 	}
 	return err
 }
@@ -2020,6 +2266,9 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		if m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
+		if m.checkDirQuota(ctx, inode, newSpace, 0) {
+			return syscall.ENOSPC
+		}
 		now := time.Now()
 		attr.Mtime = now.Unix()
 		attr.Mtimensec = uint32(now.Nanosecond())
@@ -2034,6 +2283,18 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
 			if newSpace > 0 {
 				pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+				//update quota
+				for parentInode, _ := range m.GetParents(ctx, inode) {
+					if _, ok := m.dirQuotas[parentInode]; !ok {
+						m.dirQuotas[parentInode] = m.getQuotas(ctx, parentInode, inode)
+					}
+					if m.dirQuotas[parentInode] != nil {
+						for _, val := range m.dirQuotas[parentInode] {
+							quota_key := m.quotaKey(val)
+							pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpace)
+						}
+					}
+				}
 			}
 			return nil
 		})
@@ -2047,6 +2308,11 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			go m.compactChunk(inode, indx, false)
 		}
 		m.updateStats(newSpace, 0)
+		//refresh dirQuotas
+		for parentInode, _ := range m.GetParents(ctx, inode) {
+			m.updateQuotaStats(parentInode, newSpace, 0)
+		}
+
 	}
 	return errno(err)
 }
@@ -2097,6 +2363,9 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			attr.Length = newleng
 		}
 		if m.checkQuota(newSpace, 0) {
+			return syscall.ENOSPC
+		}
+		if m.checkDirQuota(ctx, fout, newSpace, 0) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
@@ -2163,6 +2432,17 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			pipe.Set(ctx, m.inodeKey(fout), m.marshal(&attr), 0)
 			if newSpace > 0 {
 				pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+				for parentInode, _ := range m.GetParents(ctx, fout) {
+					if _, ok := m.dirQuotas[parentInode]; !ok {
+						m.dirQuotas[parentInode] = m.getQuotas(ctx, parentInode, fout)
+					}
+					if m.dirQuotas[parentInode] != nil {
+						for _, val := range m.dirQuotas[parentInode] {
+							quota_key := m.quotaKey(val)
+							pipe.HSet(ctx, quota_key, "usedSpace", m.quotas[val].usedSpace+newSpace)
+						}
+					}
+				}
 			}
 			return nil
 		})
@@ -2173,6 +2453,10 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 	}, m.inodeKey(fout), m.inodeKey(fin))
 	if err == nil {
 		m.updateStats(newSpace, 0)
+		//refresh dirQuotas
+		for parentInode, _ := range m.GetParents(ctx, fout) {
+			m.updateQuotaStats(parentInode, newSpace, 0)
+		}
 	}
 	return errno(err)
 }
@@ -2893,6 +3177,152 @@ func (m *redisMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte
 			return err
 		}
 	}, key))
+}
+
+func (m *redisMeta) doSetQuota(ctx Context, inode Ino, cap, inodes uint64, set_capacity, set_inodes uint8) syscall.Errno {
+	key := m.quotaKey(inode)
+	if set_capacity == 1 {
+		if _, err := m.rdb.HSet(ctx, key, "capacity", cap).Result(); err != nil {
+			return errno(err)
+		}
+	}
+	if set_inodes == 1 {
+		if _, err := m.rdb.HSet(ctx, key, "inodes", inodes).Result(); err != nil {
+			return errno(err)
+		}
+	}
+	_, ok := m.baseMeta.quotas[inode]
+	if ok {
+		if set_capacity == 1 {
+			m.baseMeta.quotas[inode].capacity = cap
+		}
+		if set_inodes == 1 {
+			m.baseMeta.quotas[inode].inodes = inodes
+		}
+	} else {
+		m.baseMeta.quotas[inode] = &quota{
+			capacity: cap,
+			inodes:   inodes,
+		}
+	}
+	return 0
+}
+
+func (m *redisMeta) doFsckQuota(ctx Context, inode Ino) syscall.Errno {
+	if err := m.en.doGetQuotaList("dirQuotaList"); err == nil {
+		//get quota form engine and cache to m.quota
+		var wg sync.WaitGroup
+		for key, _ := range m.quotas {
+			wg.Add(1)
+			go func(iterm Ino) {
+				defer wg.Done()
+				var summary Summary
+				if st := GetSummary(m, ctx, iterm, &summary, true); st != 0 {
+					panic(fmt.Errorf("fsck error : %s", st))
+				}
+				m.quotas[iterm].usedInodes = int64(summary.Size)
+				m.quotas[iterm].usedInodes = int64(summary.Files) + int64(summary.Dirs)
+				fmt.Printf("--- 881 %+v \n", m.dirQuotas[iterm])
+				fmt.Printf("--- 88 %+v \n", m.quotas)
+				quota_key := m.quotaKey(iterm)
+				if err = m.rdb.HSet(ctx, quota_key, "usedSpace", int64(summary.Size)).Err(); err != nil {
+					panic(fmt.Errorf("fsck set usedSpace to engine error: %s", err))
+				}
+				if err = m.rdb.HSet(ctx, quota_key, "usedInodes", int64(summary.Files)+int64(summary.Dirs)).Err(); err != nil {
+					panic(fmt.Errorf("fsck set usedInodes to engine error: %s", err))
+				}
+			}(key)
+		}
+		wg.Wait()
+	}
+	return 0
+}
+
+func (m *redisMeta) dogetQuotas(ctx Context, inode Ino) error {
+	vals, err := m.rdb.SMembers(Background, "dirQuotaList").Result()
+	if err != nil {
+		return errno(err)
+	}
+	for _, eachInode := range vals {
+		if eachInode == inode.String() {
+			return nil
+		}
+	}
+	return fmt.Errorf("found quota %s ", "none")
+}
+
+func (m *redisMeta) doSetQuotaList(name string) error {
+	m.rdb.SAdd(Background, "dirQuotaList", name)
+	return nil
+}
+
+func (m *redisMeta) doGetQuotaList(name string) error {
+	vals, err := m.rdb.SMembers(Background, name).Result()
+	if err != nil {
+		return errno(err)
+	}
+	for i := 0; i < len(vals); i++ {
+		inode, err := strconv.ParseUint(vals[i], 10, 64)
+		if err != nil {
+			logger.Fatalf("invalid capacity %s", err)
+			return err
+		}
+		key := m.quotaKey(Ino(inode))
+		quotaAttr, err := m.rdb.HGetAll(Background, key).Result()
+		if err != nil {
+			logger.Fatalf("invalid quotaAttr  %s", err)
+			return err
+		}
+		if _, ok := quotaAttr["capacity"]; !ok {
+			logger.Fatalf("invalid capacity %s", err)
+			return err
+		}
+		capacity, err := strconv.ParseUint(quotaAttr["capacity"], 10, 64)
+		if err != nil {
+			logger.Fatalf("invalid capacity %s", err)
+			return err
+		}
+		if _, ok := quotaAttr["inodes"]; !ok {
+			logger.Fatalf("invalid inodes %s", err)
+			return err
+		}
+		inodes, err := strconv.ParseUint(quotaAttr["inodes"], 10, 64)
+		if err != nil {
+			logger.Fatalf("invalid inodes %s", err)
+			return err
+		}
+		if _, ok := quotaAttr["usedSpace"]; !ok {
+			m.quotas[Ino(inode)].capacity = capacity
+			m.quotas[Ino(inode)].inodes = inodes
+			return nil
+		}
+		usedSpace, err := strconv.ParseInt(quotaAttr["usedSpace"], 10, 64)
+		if err != nil {
+			logger.Fatalf("invalid usedSpace %s", err)
+			return err
+		}
+		if _, ok := quotaAttr["usedInodes"]; !ok {
+			logger.Fatalf("invalid usedInodes %s", err)
+			return err
+		}
+		usedInodes, err := strconv.ParseInt(quotaAttr["usedInodes"], 10, 64)
+		if err != nil {
+			logger.Fatalf("invalid usedSpace %s", err)
+			return err
+		}
+		//m.quotas[Ino(inode)] = []Ino{}
+		//m.quotas[Ino(inode)].capacity = capacity
+		//m.quotas[Ino(inode)].inodes = inodes
+		//m.quotas[Ino(inode)].usedSpace = usedSpace
+		//m.quotas[Ino(inode)].usedInodes = usedInodes
+		m.quotas[Ino(inode)] = &quota{
+			capacity:   capacity,
+			inodes:     inodes,
+			usedSpace:  usedSpace,
+			usedInodes: usedInodes,
+		}
+	}
+	return nil
 }
 
 func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {

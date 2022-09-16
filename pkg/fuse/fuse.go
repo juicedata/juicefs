@@ -269,6 +269,7 @@ func (fs *fileSystem) Release(cancel <-chan struct{}, in *fuse.ReleaseIn) {
 func (fs *fileSystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte) (written uint32, code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
+	//fmt.Printf("====== hello start from fuse 1----:    %s\n", data)
 	err := fs.v.Write(ctx, Ino(in.NodeId), data, in.Offset, in.Fh)
 	if err != 0 {
 		return 0, fuse.Status(err)

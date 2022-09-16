@@ -326,6 +326,99 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, count *uint64) s
 	return m.emptyEntry(ctx, parent, name, inode, count, concurrent)
 }
 
+//
+func (m *baseMeta) FindDir(ctx Context, inode Ino, count, dirUsedSpace *uint64, concurrent chan int) syscall.Errno {
+	if st := m.Access(ctx, inode, 3, nil); st != 0 {
+		return st
+	}
+	for i := 0; i < 1; i++ {
+		var entries []*Entry
+		if st := m.en.doReaddir(ctx, inode, 0, &entries, -1); st != 0 && st != syscall.ENOENT {
+			return st
+		}
+		if len(entries) == 0 {
+			return 0
+		}
+		var wg sync.WaitGroup
+		var status syscall.Errno
+		// try directories first to increase parallel
+		var dirs int
+		for i, e := range entries {
+			if e.Attr.Typ == TypeDirectory {
+				entries[dirs], entries[i] = entries[i], entries[dirs]
+				dirs++
+			}
+		}
+		for i, e := range entries {
+			if e.Attr.Typ == TypeDirectory {
+				select {
+				case concurrent <- 1:
+					wg.Add(1)
+					go func(child Ino, name string) {
+						defer wg.Done()
+						e := m.FindEntry(ctx, inode, name, child, count, dirUsedSpace, concurrent)
+						if e != 0 && e != syscall.ENOENT {
+							status = e
+						}
+						<-concurrent
+					}(e.Inode, string(e.Name))
+				default:
+					if st := m.FindEntry(ctx, inode, string(e.Name), e.Inode, count, dirUsedSpace, concurrent); st != 0 && st != syscall.ENOENT {
+						return st
+					}
+				}
+			} else {
+				if count != nil {
+					atomic.AddUint64(count, 1)
+					atomic.AddUint64(dirUsedSpace, uint64(align4K(e.Attr.Length)))
+				}
+			}
+			if ctx.Canceled() {
+				return syscall.EINTR
+			}
+			entries[i] = nil // release memory
+		}
+		wg.Wait()
+		if status != 0 {
+			return status
+		}
+	}
+	return 0
+}
+
+//FindEntry finds the entries in dir
+func (m *baseMeta) FindEntry(ctx Context, parent Ino, name string, inode Ino, count *uint64, dirUsedSpace *uint64, concurrent chan int) syscall.Errno {
+	st := m.FindDir(ctx, inode, count, dirUsedSpace, concurrent)
+	if st == 0 {
+		atomic.AddUint64(count, 1)
+		atomic.AddUint64(dirUsedSpace, uint64(align4K(0)))
+		return 0
+	}
+	return st
+}
+
+//Count the number of files in a directory
+func (m *baseMeta) CaculateDirFiles(ctx Context, parent Ino, name string, count, dirUsedSpace *uint64) syscall.Errno {
+	parent = m.checkRoot(parent)
+	if st := m.Access(ctx, parent, 3, nil); st != 0 {
+		return st
+	}
+	var inode Ino
+	var attr Attr
+	if st := m.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
+		return st
+	}
+	if attr.Typ != TypeDirectory {
+		if count != nil {
+			atomic.AddUint64(count, 1)
+			atomic.AddUint64(dirUsedSpace, uint64(align4K(attr.Length)))
+		}
+		return 0
+	}
+	concurrent := make(chan int, 50)
+	return m.FindEntry(ctx, parent, name, inode, count, dirUsedSpace, concurrent)
+}
+
 func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
 	var attr Attr
 	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
@@ -361,6 +454,89 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool
 		summary.Files++
 		summary.Length += attr.Length
 		summary.Size += uint64(align4K(attr.Length))
+	}
+	return 0
+}
+
+func CompareSlice(slice1, slice2 []Ino) bool {
+	if len(slice1) != len(slice2) {
+		return false
+	}
+	if (slice1 == nil) != (slice2 == nil) {
+		return false
+	}
+	var i int
+	for _, v := range slice1 {
+		for _, m := range slice2 {
+			if v == m {
+				i++
+				break
+			}
+		}
+	}
+	return len(slice1) == i
+}
+
+func GetSummaryConcurrence(r Meta, ctx Context, inode Ino, summary *Summary, concurrent chan int, recursive bool) syscall.Errno {
+	var attr Attr
+	var wg sync.WaitGroup
+	var status syscall.Errno
+	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
+		return st
+	}
+	if attr.Typ == TypeDirectory {
+		var entries []*Entry
+		if st := r.Readdir(ctx, inode, 1, &entries); st != 0 {
+			return st
+		}
+		for _, e := range entries {
+			if e.Inode == inode || len(e.Name) == 2 && bytes.Equal(e.Name, []byte("..")) {
+				continue
+			}
+			if e.Attr.Typ == TypeDirectory {
+				select {
+				case concurrent <- 1:
+					wg.Add(1)
+					go func(child Ino) {
+						defer wg.Done()
+						if recursive {
+							if e := GetSummary(r, ctx, child, summary, recursive); e != 0 {
+								if e != 0 && e != syscall.ENOENT {
+									status = e
+								}
+								<-concurrent
+							}
+						} else {
+							atomic.AddUint64(&summary.Dirs, 1)
+							atomic.AddUint64(&summary.Size, 4096)
+						}
+					}(e.Inode)
+				default:
+					if recursive {
+						if st := GetSummary(r, ctx, e.Inode, summary, recursive); st != 0 {
+							return st
+						}
+					} else {
+						atomic.AddUint64(&summary.Dirs, 1)
+						atomic.AddUint64(&summary.Size, 4096)
+					}
+				}
+			} else {
+				atomic.AddUint64(&summary.Files, 1)
+				atomic.AddUint64(&summary.Length, e.Attr.Length)
+				atomic.AddUint64(&summary.Size, uint64(align4K(e.Attr.Length)))
+			}
+		}
+		wg.Wait()
+		atomic.AddUint64(&summary.Dirs, 1)
+		atomic.AddUint64(&summary.Size, 4096)
+	} else {
+		atomic.AddUint64(&summary.Files, 1)
+		atomic.AddUint64(&summary.Length, attr.Length)
+		atomic.AddUint64(&summary.Size, uint64(align4K(attr.Length)))
+	}
+	if status != 0 {
+		return status
 	}
 	return 0
 }
