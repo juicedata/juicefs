@@ -141,11 +141,11 @@ jobs:
         run: |          
           export META=${{matrix.meta}}
           export STORAGE=${{matrix.storage}}
-          new_version=`./juicefs version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          new_version=`./juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
           mv juicefs juicefs-$new_version
           export NEW_JFS_BIN="juicefs-$new_version"
-          old_version=`release-${{matrix.old_juicefs_version}}/juicefs version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
-          mv juicefs juicefs-$old_version
+          old_version=`release-${{matrix.old_juicefs_version}}/juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          mv release-${{matrix.old_juicefs_version}}/juicefs juicefs-$old_version
           export NEW_JFS_BIN="juicefs-$old_version"
           # python3 .github/scripts/test_action_log.py
           python3 .github/scripts/testVersionCompatible.py
