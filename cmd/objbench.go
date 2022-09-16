@@ -160,6 +160,10 @@ func objbench(ctx *cli.Context) error {
 		functionalTesting(blob, &result, colorful)
 		printResult(result, -1, colorful)
 		fmt.Println()
+	} else {
+		if err := blob.Create(); err != nil {
+			return fmt.Errorf("can't create bucket: %s", err)
+		}
 	}
 	fmt.Println("Start Performance Testing ...")
 	var pResult [][]string
