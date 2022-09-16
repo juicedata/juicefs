@@ -905,6 +905,7 @@ type VFS struct {
 	Conf   *Config
 	Meta   meta.Meta
 	Store  chunk.ChunkStore
+	RmrCB  func(parent meta.Ino, name string) syscall.Errno
 	reader DataReader
 	writer DataWriter
 
