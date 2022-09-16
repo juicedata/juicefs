@@ -1491,7 +1491,6 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 
 func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	exchange := flags == RenameExchange
-	fmt.Printf("--- exchange %d, parentsrc %d namesrc %s parentdst %d namedst %s \n", flags, parentSrc, nameSrc, parentDst, nameDst)
 	keys := []string{m.entryKey(parentSrc), m.inodeKey(parentSrc), m.entryKey(parentDst), m.inodeKey(parentDst)}
 	var opened bool
 	var trash, dino Ino
@@ -1522,10 +1521,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		keys = []string{m.inodeKey(ino)}
 		dbuf, err := tx.HGet(ctx, m.entryKey(parentDst), nameDst).Bytes()
 		if err == redis.Nil && m.conf.CaseInsensi {
-			fmt.Printf("---keys 9971  %s \n", err)
 			if e := m.resolveCase(ctx, parentDst, nameDst); e != nil {
 				nameDst = string(e.Name)
-				fmt.Printf("---keys 99711  %s \n", nameDst)
 				buf = m.packEntry(e.Attr.Typ, e.Inode)
 				err = nil
 			}
@@ -1539,7 +1536,6 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			}
 			dtyp, dino = m.parseEntry(dbuf)
 			keys = append(keys, m.inodeKey(dino))
-			fmt.Printf("---keys 999  %s \n", keys)
 			if dtyp == TypeDirectory {
 				keys = append(keys, m.entryKey(dino))
 			}
@@ -1549,13 +1545,11 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				}
 			}
 		}
-		fmt.Printf("---keys 999111 trash   %d \n", trash)
 		if err := tx.Watch(ctx, keys...).Err(); err != nil {
 			return err
 		}
 
 		keys := []string{m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino)}
-		fmt.Printf("---keys 9999  %s \n", keys)
 		if dino > 0 {
 			keys = append(keys, m.inodeKey(dino))
 		}
@@ -1584,7 +1578,6 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				trash = 0
 			}
 			m.parseAttr([]byte(rs[3].(string)), &tattr)
-			fmt.Printf("---keys 999 tattr   %+v \n", tattr)
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())
 			if exchange {
@@ -1669,8 +1662,6 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if attr != nil {
 			*attr = iattr
 		}
-		fmt.Printf("---keys 999 dino   %d \n", dino)
-		fmt.Printf("---keys 999 dtyp   %d \n", dtyp)
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			if exchange { // dbuf, tattr are valid
 				pipe.HSet(ctx, m.entryKey(parentSrc), nameSrc, dbuf)
@@ -1683,7 +1674,6 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				pipe.HDel(ctx, m.entryKey(parentSrc), nameSrc)
 				if dino > 0 {
 					if trash > 0 {
-						fmt.Printf("---099 trash %d \n", trash)
 						pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
 						pipe.HSet(ctx, m.entryKey(trash), m.trashEntry(parentDst, dino, nameDst), dbuf)
 						if tattr.Parent == 0 {
@@ -1691,21 +1681,17 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 							pipe.HIncrBy(ctx, m.parentKey(dino), parentDst.String(), -1)
 						}
 					} else if dtyp != TypeDirectory && tattr.Nlink > 0 {
-						fmt.Printf("---099 tattr.Nlink %d \n", tattr.Nlink)
 						pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
 						if tattr.Parent == 0 {
 							pipe.HIncrBy(ctx, m.parentKey(dino), parentDst.String(), -1)
 						}
 					} else {
-						fmt.Printf("---099www \n")
 						if parentDst != parentSrc {
-							fmt.Printf("---099www1 \n")
 							if dtyp == TypeFile {
 								if opened {
 									pipe.Set(ctx, m.inodeKey(dino), m.marshal(&tattr), 0)
 									pipe.SAdd(ctx, m.sustained(m.sid), strconv.Itoa(int(dino)))
 								} else {
-									fmt.Printf("---099www3 \n")
 									pipe.ZAdd(ctx, m.delfiles(), &redis.Z{Score: float64(now.Unix()), Member: m.toDelete(dino, tattr.Length)})
 									pipe.Del(ctx, m.inodeKey(dino))
 									newSpace, newInode = -align4K(tattr.Length), -1
@@ -1827,7 +1813,6 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 					}
 				} else {
 					if parentDst != parentSrc {
-						fmt.Printf("--- 001 \n")
 						//update dirQuotas[parentDst]
 						//only when dirQuotas[parentDst] != dirQuotas[parentSrc]
 						if _, ok := m.dirQuotas[parentDst]; !ok {
@@ -1837,17 +1822,12 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 							m.dirQuotas[parentSrc] = m.getQuotas(ctx, parentSrc, ino)
 						}
 						if !CompareSlice(m.dirQuotas[parentDst], m.dirQuotas[parentSrc]) {
-							fmt.Printf("--- 002   %s \n", m.dirQuotas[parentDst])
-							fmt.Printf("--- 003   %s \n", m.dirQuotas[parentSrc])
 							//test
 							concurrent := make(chan int, 50)
 							var summary Summary
 							if st := GetSummaryConcurrence(m, ctx, ino, &summary, concurrent, true); st == 0 {
-								fmt.Printf("---999 %+v \n", summary)
 								newSpaceDst, newInodeDst = int64(summary.Size), int64(summary.Files+summary.Dirs)
 								newSpaceSrc, newInodeSrc = -int64(summary.Size), -int64(summary.Files+summary.Dirs)
-								fmt.Printf("--- 004   %d \n", newSpaceSrc)
-								fmt.Printf("--- 005   %d \n", newInodeSrc)
 								if m.checkDirQuota(ctx, parentDst, newSpaceDst, newInodeDst) {
 									return syscall.ENOSPC
 								}
