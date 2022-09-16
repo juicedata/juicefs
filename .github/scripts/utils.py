@@ -77,7 +77,7 @@ def clear_storage(storage, bucket, volume):
             assert not list(c.list_objects(bucket_name))
     elif storage == 'mysql':
         db_name = bucket.split('/')[-1]
-        run_cmd(f'mysql -uroot -proot -h localhost -P 3306 -e "drop database if exists {db_name};"')
+        run_cmd(f'mysql -uroot -proot -h localhost -P 3306 -e "drop database if exists {db_name};create database {db_name};"')
     print('clear storage succeed')
 
 
