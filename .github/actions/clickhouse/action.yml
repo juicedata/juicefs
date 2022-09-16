@@ -100,7 +100,7 @@ runs:
         cd chdata
         cat lineorder.tbl.gz* >lineorder.tbl.gz
         gzip -dk lineorder.tbl.gz
-        git clone https://github.com/sanwan/actionfile.git || git clone https://github.com/sanwan/chdata.git
+        git clone https://github.com/sanwan/actionfile.git || git clone https://github.com/sanwan/actionfile.git
         mv actionfile/*.tbl .
         rm lineorder.tbl.gz*
         ls -lrth
