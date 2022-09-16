@@ -9,11 +9,11 @@
 
 ## Coding Style
 
-- We're following ["Effective Go"](https://golang.org/doc/effective_go.html) and ["Go Code Review Comments"](https://github.com/golang/go/wiki/CodeReviewComments).
+- We're following ["Effective Go"](https://go.dev/doc/effective_go) and ["Go Code Review Comments"](https://github.com/golang/go/wiki/CodeReviewComments).
 - Use `go fmt` to format your code before committing. You can find information in editor support for Go tools in ["IDEs and Plugins for Go"](https://github.com/golang/go/wiki/IDEsAndTextEditorPlugins).
 - If you see any code which clearly violates the style guide, please fix it and send a pull request.
 - Every new source file must begin with a license header.
-- Install [pre-commit](https://pre-commit.com/) and use it to set up a pre-commit hook for static analysis. Just run `pre-commit install` in the root of the repo.
+- Install [pre-commit](https://pre-commit.com) and use it to set up a pre-commit hook for static analysis. Just run `pre-commit install` in the root of the repo.
 
 ## Sign the CLA
 
@@ -30,11 +30,11 @@ Before you can contribute to JuiceFS, you will need to sign the [Contributor Lic
 
 This is a rough outline of what a contributor's workflow looks like:
 
-- Create a topic branch from where to base the contribution. This is usually `main`.
-- Make commits of logical units.
-- Make sure commit messages are in the proper format.
-- Push changes in a topic branch to a personal fork of the repository.
-- Submit a pull request to [juicedata/juicefs](https://github.com/juicedata/juicefs/compare). The PR should link to one issue which either created by you or others.
-- The PR must receive approval from at least one maintainer before it be merged.
+1. Create a topic branch from where to base the contribution. This is usually `main`.
+1. Make commits of logical units.
+1. Make sure commit messages are in the proper format.
+1. Push changes in a topic branch to a personal fork of the repository.
+1. Submit a pull request to [juicedata/juicefs](https://github.com/juicedata/juicefs/compare). The PR should link to one issue which either created by you or others.
+1. The PR must receive approval from at least one maintainer before it be merged.
 
 Happy hacking!

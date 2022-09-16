@@ -29,6 +29,7 @@ import org.apache.hadoop.security.UserGroupInformation;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.security.PrivilegedExceptionAction;
@@ -36,6 +37,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_CHECKPOINT_INTERVAL_KEY;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_KEY;
 import static org.junit.Assert.assertArrayEquals;
 
 public class JuiceFileSystemTest extends TestCase {
@@ -46,7 +49,9 @@ public class JuiceFileSystemTest extends TestCase {
   public void setUp() throws Exception {
     cfg = new Configuration();
     cfg.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
-    fs = FileSystem.get(cfg);
+    cfg.set(FS_TRASH_INTERVAL_KEY, "6");
+    cfg.set(FS_TRASH_CHECKPOINT_INTERVAL_KEY, "2");
+    fs = FileSystem.newInstance(cfg);
     fs.delete(new Path("/hello"));
     FSDataOutputStream out = fs.create(new Path("/hello"), true);
     out.writeBytes("hello\n");
@@ -130,6 +135,18 @@ public class JuiceFileSystemTest extends TestCase {
     }
   }
 
+  public void testWrite() throws Exception {
+    Path f = new Path("/testWriteFile");
+    FSDataOutputStream fou = fs.create(f);
+    byte[] b = "hello world".getBytes();
+    OutputStream ou = ((JuiceFileSystemImpl.BufferedFSOutputStream)fou.getWrappedStream()).getOutputStream();
+    ou.write(b, 6, 5);
+    ou.close();
+    FSDataInputStream in = fs.open(f);
+    String str = IOUtils.toString(in);
+    assertEquals("world", str);
+  }
+
   public void testReadSkip() throws Exception {
     Path p = new Path("/test_readskip");
     fs.create(p).close();
@@ -171,6 +188,8 @@ public class JuiceFileSystemTest extends TestCase {
     }
     assertEquals(5001, fs.listStatus(new Path("/mkdirs/")).length);
     assertTrue(fs.delete(new Path("/mkdirs"), true));
+    assertTrue(fs.mkdirs(new Path("parent/dir")));
+    assertTrue(fs.exists(new Path(fs.getHomeDirectory(), "parent")));
   }
 
   public void testCreateWithoutPermission() throws Exception {
@@ -345,6 +364,21 @@ public class JuiceFileSystemTest extends TestCase {
         throw new IOException("Reached the end of stream. Still have: " + buf.remaining() + " bytes left");
       }
     }
+
+    Path directReadFile = new Path("/direct_file");
+    FSDataOutputStream ou = fs.create(directReadFile);
+    ou.write("hello world".getBytes());
+    ou.close();
+    FSDataInputStream dto = fs.open(directReadFile);
+    ByteBuffer directBuf = ByteBuffer.allocateDirect(11);
+    directBuf.put("hello ".getBytes());
+    dto.seek(6);
+    dto.read(directBuf);
+    byte[] rest = new byte[11];
+    directBuf.flip();
+    directBuf.get(rest, 0, rest.length);
+    assertEquals("hello world", new String(rest));
+
     /*
      * FSDataOutputStream out = fs.create(new Path("/bigfile"), true); byte[] arr =
      * new byte[1<<20]; for (int i=0; i<1024; i++) { out.write(arr); } out.close();
@@ -403,6 +437,10 @@ public class JuiceFileSystemTest extends TestCase {
     in.read(3000, new byte[6000], 0, 3000);
     assertEquals(readSize * 2 + 3000 + 3000, statistics.getBytesRead());
 
+    in.read(new byte[3000], 0, 3000);
+    assertEquals(readSize * 2 + 3000 + 3000 + 3000, statistics.getBytesRead());
+
+    in.close();
   }
 
   public void testChecksum() throws IOException {
@@ -511,6 +549,17 @@ public class JuiceFileSystemTest extends TestCase {
     // src should be deleted after concat
     assertFalse(fs.exists(src1));
     assertFalse(fs.exists(src2));
+
+    Path emptyFile = new Path("/tmp/concat_empty_file");
+    Path src = new Path("/tmp/concat_empty_file_src");
+    FSDataOutputStream srcOu = fs.create(src);
+    srcOu.write("hello".getBytes());
+    srcOu.close();
+    fs.create(emptyFile).close();
+    fs.concat(emptyFile, new Path[]{src});
+    in = fs.open(emptyFile);
+    assertEquals("hello", IOUtils.toString(in));
+    in.close();
   }
 
   public void testList() throws Exception {
@@ -621,5 +670,48 @@ public class JuiceFileSystemTest extends TestCase {
     assertEquals(FsPermission.createImmutable((short) 0777), newFs.getFileStatus(new Path("/test_umask/dir")).getPermission());
     assertEquals(FsPermission.createImmutable((short) 0666), newFs.getFileStatus(new Path("/test_umask/dir/f")).getPermission());
     newFs.close();
+  }
+
+  public void testGuidMapping() throws Exception {
+    Configuration newConf = new Configuration(cfg);
+
+    FSDataOutputStream ou = fs.create(new Path("/etc/users"));
+    ou.write("foo:10000\n".getBytes());
+    ou.close();
+    newConf.set("juicefs.users", "/etc/users");
+
+    FileSystem fooFs = createNewFs(newConf, "foo", new String[]{"nogrp"});
+    Path f = new Path("/test_foo");
+    fooFs.create(f).close();
+    assertEquals("foo", fooFs.getFileStatus(f).getOwner());
+
+    ou = fs.create(new Path("/etc/users"));
+    ou.write("foo:10001\n".getBytes());
+    ou.close();
+    FileSystem newFS = FileSystem.newInstance(newConf);
+    assertEquals("10000", fooFs.getFileStatus(f).getOwner());
+
+    fooFs.delete(f, false);
+  }
+
+  public void testTrash() throws Exception {
+    Trash trash = new Trash(fs, cfg);
+    Path trashFile = new Path("/tmp/trashfile");
+    trash.expungeImmediately();
+    fs.create(trashFile).close();
+    Trash.moveToAppropriateTrash(fs, trashFile, cfg);
+    trash.checkpoint();
+    fs.create(trashFile).close();
+    Trash.moveToAppropriateTrash(fs, trashFile, cfg);
+    assertEquals(2, fs.listStatus(fs.getTrashRoot(trashFile)).length);
+    trash.expungeImmediately();
+    assertEquals(0, fs.listStatus(fs.getTrashRoot(trashFile)).length);
+  }
+
+  public void testBlockSize() throws Exception {
+    Configuration newConf = new Configuration(cfg);
+    newConf.set("dfs.blocksize", "256m");
+    FileSystem newFs = FileSystem.newInstance(newConf);
+    assertEquals(256 << 20, newFs.getDefaultBlockSize(new Path("/")));
   }
 }

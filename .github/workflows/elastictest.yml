@@ -24,7 +24,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.17.x'
+          go-version: '1.18.x'
 
       - name: Set up Docker
         uses: docker-practice/actions-setup-docker@master
@@ -34,6 +34,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+            
       - name: Build linux target
         run: make juicefs
 
@@ -42,9 +51,22 @@ jobs:
           sudo docker run -d --name redis -v redis-data:/data  \
           -p 6379:6379  redis redis-server --appendonly yes
 
+      - name: Setup minio
+        run: |
+          docker run -d -p 9000:9000 --name minio \
+                    -e "MINIO_ACCESS_KEY=minioadmin" \
+                    -e "MINIO_SECRET_KEY=minioadmin" \
+                    -v /tmp/data:/data \
+                    -v /tmp/config:/root/.minio \
+                    minio/minio server /data
+          sleep 5
+
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format --trash-days 0 redis://127.0.0.1:6379/1 pics
+          sudo ./juicefs format --trash-days 0 --storage minio --bucket http://127.0.0.1:9000/mypics \
+             --access-key minioadmin \
+             --secret-key minioadmin \
+             redis://127.0.0.1:6379/1 pics
 
       - name: Juicefs Mount
         run: |
@@ -78,6 +100,7 @@ jobs:
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1
 
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -85,7 +108,3 @@ jobs:
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
-
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1

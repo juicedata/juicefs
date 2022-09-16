@@ -6,7 +6,7 @@ slug: /sync_accounts_between_multiple_hosts
 
 # 多主机间同步账户
 
-JuiceFS 支持 POSIX 兼容的 ACL，以目录或文件的粒度管理权限。该行为与本地文件系统相同。
+JuiceFS 支持 Unix 文件权限（但不支持 POSIX extended ACL），以目录或文件的粒度管理权限。该行为与本地文件系统相同。
 
 为了让用户获得直观一致的权限管理体验（例如，用户 A 在主机 X 中访问的文件，在主机 Y 中也应该可以用相同的用户身份访问），想要访问 JuiceFS 存储的同一个用户，应该在所有主机上具有相同的 UID 和 GID。
 

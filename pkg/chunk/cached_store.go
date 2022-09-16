@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -518,27 +519,61 @@ func (s *wSlice) Abort() {
 
 // Config contains options for cachedStore
 type Config struct {
-	CacheDir       string
-	CacheMode      os.FileMode
-	CacheSize      int64
-	FreeSpace      float32
-	AutoCreate     bool
-	Compress       string
-	MaxUpload      int
-	MaxDeletes     int
-	MaxRetries     int
-	UploadLimit    int64 // bytes per second
-	DownloadLimit  int64 // bytes per second
-	Writeback      bool
-	UploadDelay    time.Duration
-	HashPrefix     bool
-	BlockSize      int
-	GetTimeout     time.Duration
-	PutTimeout     time.Duration
-	CacheFullBlock bool
-	BufferSize     int
-	Readahead      int
-	Prefetch       int
+	CacheDir          string
+	CacheMode         os.FileMode
+	CacheSize         int64
+	CacheChecksum     string
+	CacheScanInterval time.Duration
+	FreeSpace         float32
+	AutoCreate        bool
+	Compress          string
+	MaxUpload         int
+	MaxDeletes        int
+	MaxRetries        int
+	UploadLimit       int64 // bytes per second
+	DownloadLimit     int64 // bytes per second
+	Writeback         bool
+	UploadDelay       time.Duration
+	HashPrefix        bool
+	BlockSize         int
+	GetTimeout        time.Duration
+	PutTimeout        time.Duration
+	CacheFullBlock    bool
+	BufferSize        int
+	Readahead         int
+	Prefetch          int
+}
+
+func (c *Config) SelfCheck(uuid string) {
+	if c.CacheSize == 0 {
+		logger.Warnf("cache-size is 0, writeback and prefetch will be disabled")
+		c.Writeback = false
+		c.Prefetch = 0
+		c.CacheDir = "memory"
+	}
+	if !c.Writeback && c.UploadDelay > 0 {
+		logger.Warnf("delayed upload is disabled in non-writeback mode")
+		c.UploadDelay = 0
+	}
+	if c.MaxUpload <= 0 {
+		logger.Warnf("max-uploads should be greater than 0, set it to 1")
+		c.MaxUpload = 1
+	}
+	if c.BufferSize <= 32<<20 {
+		logger.Warnf("buffer-size should be more than 32 MiB")
+		c.BufferSize = 32 << 20
+	}
+	if c.CacheDir != "memory" {
+		ds := utils.SplitDir(c.CacheDir)
+		for i := range ds {
+			ds[i] = filepath.Join(ds[i], uuid)
+		}
+		c.CacheDir = strings.Join(ds, string(os.PathListSeparator))
+	}
+	if cs := []string{CsNone, CsFull, CsShrink, CsExtend}; !utils.StringContains(cs, c.CacheChecksum) {
+		logger.Warnf("verify-cache-checksum should be one of %v", cs)
+		c.CacheChecksum = CsFull
+	}
 }
 
 type cachedStore struct {
@@ -671,6 +706,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 	if config.DownloadLimit > 0 {
 		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit)
 	}
+	store.initMetrics()
 	store.bcache = newCacheManager(&config, reg, func(key, fpath string, force bool) bool {
 		if force {
 			return store.addDelayedStaging(key, fpath, time.Time{}, true)
@@ -711,7 +747,11 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 			}
 		}()
 	}
+	store.regMetrics(reg)
+	return store
+}
 
+func (store *cachedStore) initMetrics() {
 	store.cacheHits = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "blockcache_hits",
 		Help: "read from cached block",
@@ -746,12 +786,9 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		Name: "object_request_data_bytes",
 		Help: "Object requests size in bytes.",
 	}, []string{"method"})
-	store.initMetrics(reg)
-
-	return store
 }
 
-func (store *cachedStore) initMetrics(reg prometheus.Registerer) {
+func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 	if reg == nil {
 		return
 	}
@@ -800,13 +837,14 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}()
 
 	store.pendingMutex.Lock()
-	_, ok := store.pendingKeys[key]
+	addTime, ok := store.pendingKeys[key]
 	store.pendingMutex.Unlock()
 	if !ok {
 		logger.Debugf("Key %s is not needed, drop it", key)
 		return
 	}
-	f, err := os.Open(stagingPath)
+	blen := parseObjOrigSize(key)
+	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
 		store.pendingMutex.Lock()
 		_, ok = store.pendingKeys[key]
@@ -818,9 +856,8 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		}
 		return
 	}
-	blen := parseObjOrigSize(key)
 	block := NewOffPage(blen)
-	_, err = io.ReadFull(f, block.Data)
+	_, err = f.ReadAt(block.Data, 0)
 	_ = f.Close()
 	if err != nil {
 		block.Release()
@@ -828,6 +865,9 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		return
 	}
 
+	if m, ok := store.bcache.(*cacheManager); ok {
+		m.stageBlockDelay.Add(time.Since(addTime).Seconds())
+	}
 	if err = store.upload(key, block, nil); err == nil {
 		store.bcache.uploaded(key, blen)
 		store.removePending(key)

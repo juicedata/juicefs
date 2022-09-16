@@ -556,7 +556,7 @@ func TestEncrypted(t *testing.T) {
 	s, _ := CreateStorage("mem", "", "", "", "")
 	privkey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	kc := NewRSAEncryptor(privkey)
-	dc := NewAESEncryptor(kc)
+	dc, _ := NewDataEncryptor(kc, AES256GCM_RSA)
 	es := NewEncrypted(s, dc)
 	testStorage(t, es)
 }
@@ -616,6 +616,12 @@ func TestPG(t *testing.T) {
 	}
 	testStorage(t, s)
 
+}
+func TestPGWithSearchPath(t *testing.T) {
+	_, err := newSQLStore("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", "", "")
+	if !strings.Contains(err.Error(), "currently, only one schema is supported in search_path") {
+		t.Fatalf("TestPGWithSearchPath error: %s", err)
+	}
 }
 
 func TestMySQL(t *testing.T) {

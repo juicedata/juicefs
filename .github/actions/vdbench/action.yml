@@ -60,6 +60,20 @@ runs:
                      -v /tmp/config:/root/.minio \
                      minio/minio server /data
       
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.18.x'
+
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
     - name: Build linux target
       shell: bash
       run: |
@@ -100,3 +114,10 @@ runs:
       with:
         name: output-small
         path: output
+
+    - name: log
+      if: ${{ always() }}
+      shell: bash
+      run: | 
+        tail -300 ~/.juicefs/juicefs.log
+        grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true

@@ -40,9 +40,6 @@ jobs:
           meta_url: "redis://localhost/1"
           file_size: "100M"
           file_count: 5
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
 
   upload-small-files-with-redis:
     runs-on: ubuntu-latest
@@ -67,9 +64,7 @@ jobs:
           meta_url: "redis://localhost/1"
           file_size: "8K"
           file_count: 2500
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-small-files-with-mysql-read-uncommitted:
     runs-on: ubuntu-latest
@@ -83,9 +78,7 @@ jobs:
           file_size: "8K"
           file_count: 2500
           isolation_level: "read uncommitted"    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-small-files-with-mysql-read-committed:
     runs-on: ubuntu-latest
@@ -99,9 +92,7 @@ jobs:
           file_size: "8K"
           file_count: 2500
           isolation_level: "read committed"    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-small-files-with-mysql-repeatable-read:
     runs-on: ubuntu-latest
@@ -115,9 +106,7 @@ jobs:
           file_size: "8K"
           file_count: 2500
           isolation_level: "repeatable read"   
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-small-files-with-mysql-serializable:
     runs-on: ubuntu-latest
@@ -131,9 +120,7 @@ jobs:
           file_size: "8K"
           file_count: 2500
           isolation_level: "serializable"     
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-big-files-with-mysql-read-uncommitted:
     runs-on: ubuntu-latest          
@@ -147,9 +134,7 @@ jobs:
           file_size: "100M"
           file_count: 5
           isolation_level: "read uncommitted"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-big-files-with-mysql-read-committed:
     runs-on: ubuntu-latest          
@@ -163,9 +148,7 @@ jobs:
           file_size: "100M"
           file_count: 5
           isolation_level: "read committed"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-big-files-with-mysql-repeatable-read:
     runs-on: ubuntu-latest          
@@ -179,9 +162,7 @@ jobs:
           file_size: "100M"
           file_count: 5
           isolation_level: "repeatable read"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-big-files-with-mysql-serializable:
     runs-on: ubuntu-latest          
@@ -195,9 +176,7 @@ jobs:
           file_size: "100M"
           file_count: 5
           isolation_level: "serializable"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-big-files-with-mariadb-read-committed:
     runs-on: ubuntu-latest          
@@ -213,9 +192,7 @@ jobs:
           file_size: "100M"
           file_count: 5
           isolation_level: "read committed"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-big-files-with-badgerdb:
     runs-on: ubuntu-latest
@@ -228,9 +205,7 @@ jobs:
           meta_url: "badger://badger-data"
           file_size: "100M"
           file_count: 1
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-small-files-with-badgerdb:
     runs-on: ubuntu-latest
@@ -243,40 +218,32 @@ jobs:
           meta_url: "badger://badger-data"
           file_size: "8K"
           file_count: 2500
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
 
   upload-small-files-with-sqlite:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
       - name: Test
         uses: ./.github/actions/gateway
         with:
           meta_url: "sqlite3://test.db"
           file_size: "8K"
           file_count: 2500    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-big-files-with-sqlite:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
       - name: Test
         uses: ./.github/actions/gateway
         with:
           meta_url: "sqlite3://test.db"
           file_size: "100M"
           file_count: 5    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-small-files-with-pg:
     runs-on: ubuntu-latest
@@ -302,9 +269,7 @@ jobs:
           file_size: "8K"
           file_count: 2500
           threads: 10    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-big-files-with-pg-read-committed:
     runs-on: ubuntu-latest
@@ -332,9 +297,7 @@ jobs:
           threads: 10
           isolation_level: "read committed"
 
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-big-files-with-pg-repeatable-read:
     runs-on: ubuntu-latest
@@ -362,9 +325,7 @@ jobs:
           threads: 10
           isolation_level: "repeatable read"
 
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-big-files-with-pg-serializable:
     runs-on: ubuntu-latest
@@ -392,9 +353,7 @@ jobs:
           threads: 10
           isolation_level: "serializable"
 
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-big-files-with-tidb-read-committed:
     runs-on: ubuntu-latest
@@ -414,9 +373,7 @@ jobs:
           file_size: "100M"
           file_count: 5
           isolation_level: "read committed"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1   
+
   upload-big-files-with-tidb-repeatable-read:
     runs-on: ubuntu-latest
     steps:
@@ -435,9 +392,7 @@ jobs:
           file_size: "100M"
           file_count: 5
           isolation_level: "repeatable read"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1   
+
 
   upload-small-files-with-etcd:
     runs-on: ubuntu-latest
@@ -450,9 +405,7 @@ jobs:
           meta_url: "etcd://localhost:2379/jfs"
           file_size: "8K"
           file_count: 2500    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   upload-big-files-with-etcd:
     runs-on: ubuntu-latest
@@ -465,9 +418,7 @@ jobs:
           meta_url: "etcd://localhost:2379/jfs"
           file_size: "200M"
           file_count: 5    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
+
 
   # upload-big-file-with-oceanbase-read-committed:
   #   runs-on: [self-hosted, daily-build, bench-02]
@@ -541,9 +492,7 @@ jobs:
           meta_url: "tikv://127.0.0.1:2379"
           file_size: "8K"
           file_count: 2500
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
+
 
   upload-big-files-with-tikv:
     runs-on: ubuntu-latest
@@ -563,9 +512,7 @@ jobs:
           meta_url: "tikv://127.0.0.1:2379"
           file_size: "100M"
           file_count: 5
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
+
 
   sync-to-gateway-with-multithread:
     runs-on: ubuntu-latest
@@ -574,6 +521,21 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
+          
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.18.x'
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+            
       - name: Build linux target
         run: |
           make juicefs
@@ -603,6 +565,3 @@ jobs:
           echo time is: $time
           ./juicefs mount -d $meta_url $mp
           rm -rf $mp/source_dir
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1

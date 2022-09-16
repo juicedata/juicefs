@@ -23,3 +23,5 @@ libjfs.h
 .DS_Store
 docs/node_modules
 cmd/cmd
+*.dump
+*.out

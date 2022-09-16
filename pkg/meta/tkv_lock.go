@@ -144,12 +144,12 @@ func (m *kvMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, star
 		ls := loadLocks(records)
 		for _, l := range ls {
 			// find conflicted locks
-			if (*ltype == F_WRLCK || l.ltype == F_WRLCK) && *end >= l.start && *start <= l.end {
-				*ltype = l.ltype
-				*start = l.start
-				*end = l.end
+			if (*ltype == F_WRLCK || l.Type == F_WRLCK) && *end >= l.Start && *start <= l.End {
+				*ltype = l.Type
+				*start = l.Start
+				*end = l.End
 				if o.sid == m.sid {
-					*pid = l.pid
+					*pid = l.Pid
 				} else {
 					*pid = 0
 				}
@@ -191,7 +191,7 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 					ls := loadLocks(d)
 					for _, l := range ls {
 						// find conflicted locks
-						if (ltype == F_WRLCK || l.ltype == F_WRLCK) && end >= l.start && start <= l.end {
+						if (ltype == F_WRLCK || l.Type == F_WRLCK) && end >= l.Start && start <= l.End {
 							return syscall.EAGAIN
 						}
 					}

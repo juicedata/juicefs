@@ -2,7 +2,7 @@
 
 ## Why doesn't JuiceFS support XXX object storage?
 
-JuiceFS already supported many object storage, please check [the list](guide/how_to_setup_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
+JuiceFS already supported many object storage, please check [the list](guide/how_to_set_up_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
 
 ## Does support Redis in Sentinel or Cluster-mode as the metadata engine for JuiceFS?
 
@@ -46,7 +46,7 @@ From the answer to this question ["What is the implementation principle of Juice
 
 In addition, if the JuiceFS file system has compression enabled (not enabled by default), the objects stored on the object storage may be smaller than the actual file size (depending on the compression ratio of different types of files).
 
-If the above factors have been excluded, please check the [storage class](guide/how_to_setup_object_storage.md#storage-class) of the object storage you are using. The cloud service provider may set the minimum billable size for some storage classes. For example, the [minimum billable size](https://www.alibabacloud.com/help/en/object-storage-service/latest/storage-fees) of Alibaba Cloud OSS IA storage is 64KB. If a single file is smaller than 64KB, it will be calculated as 64KB.
+If the above factors have been excluded, please check the [storage class](guide/how_to_set_up_object_storage.md#storage-class) of the object storage you are using. The cloud service provider may set the minimum billable size for some storage classes. For example, the [minimum billable size](https://www.alibabacloud.com/help/en/object-storage-service/latest/storage-fees) of Alibaba Cloud OSS IA storage is 64KB. If a single file is smaller than 64KB, it will be calculated as 64KB.
 
 ## When my update will be visible to other clients?
 
@@ -125,6 +125,9 @@ $ ls -l /usr/bin/fusermount
 ```
 
 Above example means all users have executable permission.
+
+## `cannot update volume XXX from XXX to XXX`
+The meta database has already been formatted and previous configuration cannot be updated by this `format`. You can execute the `juicefs format` command after manually cleaning up the meta database.
 
 ## Why the same user on host X has permission to access a file in JuiceFS while has no permission to it on host Y?
 

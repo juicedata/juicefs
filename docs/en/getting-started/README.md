@@ -6,11 +6,11 @@ slug: /quick_start_guide
 
 # Quick Start Guide for Standalone Mode
 
-The JuiceFS file system is driven by both ["Object Storage"](../guide/how_to_setup_object_storage.md) and ["Database"](../guide/how_to_setup_metadata_engine.md). In addition to object storage, it also supports to use local disk, WebDAV and HDFS, etc., as underlying storage. Therefore, you can create a standalone file system using local disks and SQLite database to get a quick overview of how JuiceFS works.
+The JuiceFS file system is driven by both ["Object Storage"](../guide/how_to_set_up_object_storage.md) and ["Database"](../guide/how_to_set_up_metadata_engine.md). In addition to object storage, it also supports to use local disk, WebDAV and HDFS, etc., as underlying storage. Therefore, you can create a standalone file system using local disks and SQLite database to get a quick overview of how JuiceFS works.
 
 ## Install Client
 
-For details, please refer to [Installation & Upgrade](installation.md).
+For details, please refer to ["Installation"](installation.md).
 
 A help message will return after executing `juicefs` in terminal once the JuiceFS client is successfully installed regardless of operating system.
 
@@ -31,7 +31,7 @@ As you can see, 3 types of information are required to format a file system.
 3. **NAME**: the name of the file system.
 
 :::tip
-JuiceFS supports a wide range of storage media and metadata storage engines. See [JuiceFS supported storage media](../guide/how_to_setup_object_storage.md) and [JuiceFS supported metadata storage engines](../guide/how_to_setup_metadata_engine.md).
+JuiceFS supports a wide range of storage media and metadata storage engines. See [JuiceFS supported storage media](../guide/how_to_set_up_object_storage.md) and [JuiceFS supported metadata storage engines](../guide/how_to_set_up_metadata_engine.md).
 :::
 
 ### Hands-on Practice
@@ -116,7 +116,7 @@ The above exercise only helps you to have a quick experience with JuiceFS locall
 
 Object Storage is a web storage service based on the HTTP protocol that offers simple APIs for access. It has a flat structure, and is easy to scale and relatively inexpensive, particularly suitable for storing large amounts of unstructured data. Almost all mainstream cloud computing platforms provide object storage services, such as Amazon S3, Alibaba Cloud OSS, and Backblaze B2.
 
-JuiceFS supports almost all object storage services, see [JuiceFS supported storage medias](../guide/how_to_setup_object_storage.md).
+JuiceFS supports almost all object storage services, see [JuiceFS supported storage medias](../guide/how_to_set_up_object_storage.md).
 
 In general, only 2 steps are required to create an object storage:
 

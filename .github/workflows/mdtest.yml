@@ -40,6 +40,15 @@ jobs:
           echo ::set-output name=BACKWARD_VERSIONS::1
           echo ::set-output name=PYROSCOPE_URL::http://172.27.0.1:4040
 
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
       - name: Build linux target
         run: |
           export GOPATH=/usr/local/go

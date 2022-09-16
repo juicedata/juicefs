@@ -1,10 +1,6 @@
 # JuiceFS User Manual
 
-For reading on GitHub, please select your language:
+Please visit JuiceFS Documentation Center for more information:
 
-- [🇬🇧 English](en/README.md)
-- [🇨🇳 简体中文](zh_cn/README.md)
-
-Or, visit the JuiceFS Documentation Center at
-
-[🌍 https://juicefs.com/docs/](https://juicefs.com/docs/)
+- [🇬🇧 English](https://juicefs.com/docs/community/introduction)
+- [🇨🇳 简体中文](https://juicefs.com/docs/zh/community/introduction)

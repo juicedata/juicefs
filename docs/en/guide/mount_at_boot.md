@@ -16,7 +16,7 @@ Copy `juicefs` as `/sbin/mount.juicefs`, then edit `/etc/fstab` with following l
 <META-URL>    <MOUNTPOINT>       juicefs     _netdev[,<MOUNT-OPTIONS>]     0  0
 ```
 
-For the format of `<META-URL>`, please refer to the ["How to Setup Metadata Engine"](how_to_setup_metadata_engine.md) document, such as `redis://localhost:6379/1`. Then replace `<MOUNTPOINT>` with the path you want JuiceFS to mount, e.g. `/jfs`. If you want to set [mount options](../reference/command_reference.md#juicefs-mount), separate the options list with commas and replace `[,<MOUNT-OPTIONS>]`. Here is an example:
+For the format of `<META-URL>`, please refer to the ["How to Set Up Metadata Engine"](how_to_set_up_metadata_engine.md) document, such as `redis://localhost:6379/1`. Then replace `<MOUNTPOINT>` with the path you want JuiceFS to mount, e.g. `/jfs`. If you want to set [mount options](../reference/command_reference.md#juicefs-mount), separate the options list with commas and replace `[,<MOUNT-OPTIONS>]`. Here is an example:
 
 ```
 redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=204800     0  0

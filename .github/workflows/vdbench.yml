@@ -7,6 +7,7 @@ on:
       - 'release-**'
     paths-ignore:
       - 'docs/**'
+      - '**.md'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
@@ -14,6 +15,8 @@ on:
       - 'release-**'
     paths-ignore:
       - 'docs/**'
+      - '**.md'
+      - '.github/**'
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
@@ -39,6 +42,3 @@ jobs:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"          
 
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1

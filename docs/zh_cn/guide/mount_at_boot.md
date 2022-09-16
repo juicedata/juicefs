@@ -16,7 +16,7 @@ slug: /mount_juicefs_at_boot_time
 <META-URL>    <MOUNTPOINT>       juicefs     _netdev[,<MOUNT-OPTIONS>]     0  0
 ```
 
-`<META-URL>` 的格式请参考[「如何设置元数据引擎」](how_to_setup_metadata_engine.md)文档，比如 `redis://localhost:6379/1`。然后用你希望 JuiceFS 挂载的路径替换 `<MOUNTPOINT>` ，比如 `/jfs`。如果你想要设置[挂载选项](../reference/command_reference.md#juicefs-mount)，用逗号分隔选项列表并替换 `[,<MOUNT-OPTIONS>]` 。下面是一个示例：
+`<META-URL>` 的格式请参考[「如何设置元数据引擎」](how_to_set_up_metadata_engine.md)文档，比如 `redis://localhost:6379/1`。然后用你希望 JuiceFS 挂载的路径替换 `<MOUNTPOINT>` ，比如 `/jfs`。如果你想要设置[挂载选项](../reference/command_reference.md#juicefs-mount)，用逗号分隔选项列表并替换 `[,<MOUNT-OPTIONS>]` 。下面是一个示例：
 
 ```
 redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=204800     0  0

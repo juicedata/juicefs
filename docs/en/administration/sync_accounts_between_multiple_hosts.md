@@ -6,25 +6,25 @@ slug: /sync_accounts_between_multiple_hosts
 
 # Sync Accounts between Multiple Hosts
 
-JuiceFS supports POSIX compatible ACL to manage permissions in the granularity of directory or file. The behavior is the same as a local file system.
+JuiceFS supports Unix file permission (but not POSIX extended ACL), you can manage permissions by directory or file granularity, just like a local file system.
 
-To provide users with an intuitive and consistent permission management experience (e.g. the files accessible by user A in host X should be accessible in host Y with the same user), the same user who want to access JuiceFS should have the same UID and GID on all hosts.
+To provide users with an intuitive and consistent permission management experience (e.g. the files accessible by user A on host X should be accessible by the same user on host Y), the same user who wants to access JuiceFS should have the same UID and GID on all hosts.
 
 Here we provide a simple [Ansible](https://www.ansible.com/community) playbook to demonstrate how to ensure an account with same UID and GID on multiple hosts.
 
 :::note
-If you are using JuiceFS in Hadoop environment, besides sync accounts between multiple hosts, you can also specify a global user list and user group file, please refer to [here](../deployment/hadoop_java_sdk.md#other-configurations) for more information.
+If you are using JuiceFS in Hadoop environment, besides sync accounts between multiple hosts, you can also specify a global user list and user group file. Please refer to [here](../deployment/hadoop_java_sdk.md#other-configurations) for more information.
 :::
 
 ## Install Ansible
 
-Select a host as a [control node](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#managed-node-requirements) which can access all hosts using `ssh` with the same privileged account like `root` or other sudo account. Install Ansible on this host. Read [Installing Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible) for more installation details.
+Select a host as a [control node](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#managed-node-requirements) which can access all hosts using `ssh` with the same privileged account like `root` or other sudo account. Then, install Ansible on this host. Refer to [Installing Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible) for details.
 
 
 
 ## Ensure the same account on all hosts
 
-Create an empty directory `account-sync` , save below content in `play.yaml` under this directory.
+Create `account-sync/play.yaml` as follows:
 
 ```yaml
 ---
@@ -46,9 +46,9 @@ Create an empty directory `account-sync` , save below content in `play.yaml` und
 
 
 
-Create a file named `hosts` in this directory, place IP addresses of all hosts need to create account in this file, each line with a host's IP.
+Create the Ansible inventory `hosts`, which contains IP addresses of all hosts that need to create account.
 
-Here we ensure an account `alice` with UID 1200 and  group `staff` with GID 500 on 2 hosts:
+Here we ensure an account `alice` with UID 1200 and group `staff` with GID 500 on 2 hosts:
 
 ```shell
 ~/account-sync$ cat hosts
@@ -78,7 +78,7 @@ PLAY RECAP *********************************************************************
 
 Now the new account `alice:staff` has been created on these 2 hosts.
 
-If the UID or GID specified has been allocated to another user or group on some hosts, the creation would failed.
+If the specified UID or GID has been allocated to another user or group on some hosts, the creation would fail.
 
 ```shell
 ~/account-sync$ ansible-playbook -i hosts -u root --ssh-extra-args "-o StrictHostKeyChecking=no" \
@@ -103,10 +103,10 @@ PLAY RECAP *********************************************************************
 172.16.255.180             : ok=1    changed=0    unreachable=0    failed=1
 ```
 
-In above example,  the group ID 1000 has been allocated to another group on host `172.16.255.180` , we should **change the GID**  or **delete the group with GID 1000** on host `172.16.255.180` , then run the playbook again.
+In the above example, the group ID 1000 has been allocated to another group on host `172.16.255.180`. So we should **change the GID**  or **delete the group with GID 1000** on host `172.16.255.180`, and then run the playbook again.
 
 :::caution
-If the user account has already existed on the host and we change it to another UID or GID value, the user may loss permissions to the files and directories which they previously have. For example:
+If the UID / GID of an existing user is changed, the user may lose permissions to previously accessible files. For example:
 
 ```shell
 $ ls -l /tmp/hello.txt

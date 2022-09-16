@@ -32,6 +32,7 @@ type pwent struct {
 type mapping struct {
 	sync.Mutex
 	salt      string
+	local     bool
 	usernames map[string]uint32
 	userIDs   map[uint32]string
 	groups    map[string]uint32
@@ -46,7 +47,7 @@ func newMapping(salt string) *mapping {
 		groups:    make(map[string]uint32),
 		groupIDs:  make(map[uint32]string),
 	}
-	m.update(genAllUids(), genAllGids())
+	m.update(genAllUids(), genAllGids(), true)
 	return m
 }
 
@@ -63,6 +64,9 @@ func (m *mapping) lookupUser(name string) uint32 {
 	var id uint32
 	if id, ok := m.usernames[name]; ok {
 		return id
+	}
+	if !m.local {
+		return m.genGuid(name)
 	}
 	u, _ := user.Lookup(name)
 	if u != nil {
@@ -83,6 +87,9 @@ func (m *mapping) lookupGroup(name string) uint32 {
 	if id, ok := m.groups[name]; ok {
 		return id
 	}
+	if !m.local {
+		return m.genGuid(name)
+	}
 	g, _ := user.LookupGroup(name)
 	if g == nil {
 		id = m.genGuid(name)
@@ -100,6 +107,9 @@ func (m *mapping) lookupUserID(id uint32) string {
 	defer m.Unlock()
 	if name, ok := m.userIDs[id]; ok {
 		return name
+	}
+	if !m.local {
+		return strconv.Itoa(int(id))
 	}
 	u, _ := user.LookupId(strconv.Itoa(int(id)))
 	if u == nil {
@@ -120,6 +130,9 @@ func (m *mapping) lookupGroupID(id uint32) string {
 	if name, ok := m.groupIDs[id]; ok {
 		return name
 	}
+	if !m.local {
+		return strconv.Itoa(int(id))
+	}
 	g, _ := user.LookupGroupId(strconv.Itoa(int(id)))
 	if g == nil {
 		g = &user.Group{Name: strconv.Itoa(int(id))}
@@ -133,14 +146,23 @@ func (m *mapping) lookupGroupID(id uint32) string {
 	return name
 }
 
-func (m *mapping) update(uids []pwent, gids []pwent) {
+func (m *mapping) update(uids []pwent, gids []pwent, local bool) {
 	m.Lock()
 	defer m.Unlock()
+	m.local = local
 	for _, u := range uids {
+		oldId := m.usernames[u.name]
+		oldName := m.userIDs[u.id]
+		delete(m.userIDs, oldId)
+		delete(m.usernames, oldName)
 		m.usernames[u.name] = u.id
 		m.userIDs[u.id] = u.name
 	}
 	for _, g := range gids {
+		oldId := m.groups[g.name]
+		oldName := m.groupIDs[g.id]
+		delete(m.groupIDs, oldId)
+		delete(m.groups, oldName)
 		m.groups[g.name] = g.id
 		m.groupIDs[g.id] = g.name
 	}

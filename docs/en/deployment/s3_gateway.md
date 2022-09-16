@@ -1,8 +1,9 @@
 ---
 sidebar_label: Deploy JuiceFS S3 Gateway
-sidebar_position: 4
+sidebar_position: 5
 slug: /s3_gateway
 ---
+
 # Deploy JuiceFS S3 Gateway
 
 JuiceFS has introduced S3 gateway since v0.11. The feature is implemented based on the [MinIO S3 Gateway](https://docs.min.io/docs/minio-gateway-for-s3.html). It provides an S3-compatible RESTful API for files on JuiceFS, enabling the management of files stored on JuiceFS with tools such as s3cmd, AWS CLI, and MinIO Client (mc) in cases where mounting is not convenient. In addition, S3 gateway also provides a web-based file manager that allows users to manage files in web browsers.
@@ -24,6 +25,9 @@ The S3 gateway can be enabled on the current host using the `gateway` subcommand
 ```shell
 export MINIO_ROOT_USER=admin
 export MINIO_ROOT_PASSWORD=12345678
+```
+
+```shell
 juicefs gateway redis://localhost:6379 localhost:9000
 ```
 
@@ -131,11 +135,11 @@ kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
 Here we have:
 
 - `name`: name of the JuiceFS file system.
-- `metaurl`: URL of the metadata engine (e.g. Redis). Read [this document](../guide/how_to_setup_metadata_engine.md) for more information.
-- `storage`: Object storage type, such as `s3`, `gs`, `oss`. Read [this document](../guide/how_to_setup_object_storage.md) to find all supported object storages.
-- `bucket`: Bucket URL. Read [this document](../guide/how_to_setup_object_storage.md) to learn how to setup different object storage.
-- `access-key`: Access key of object storage. Read [this document](../guide/how_to_setup_object_storage.md) for more information.
-- `secret-key`: Secret key of object storage. Read [this document](../guide/how_to_setup_object_storage.md) for more information.
+- `metaurl`: URL of the metadata engine (e.g. Redis). Read [this document](../guide/how_to_set_up_metadata_engine.md) for more information.
+- `storage`: Object storage type, such as `s3`, `gs`, `oss`. Read [this document](../guide/how_to_set_up_object_storage.md) to find all supported object storages.
+- `bucket`: Bucket URL. Read [this document](../guide/how_to_set_up_object_storage.md) to learn how to set up different object storage.
+- `access-key`: Access key of object storage. Read [this document](../guide/how_to_set_up_object_storage.md) for more information.
+- `secret-key`: Secret key of object storage. Read [this document](../guide/how_to_set_up_object_storage.md) for more information.
 
 Then download the S3 gateway [deployment YAML](https://github.com/juicedata/juicefs/blob/main/deploy/juicefs-s3-gateway.yaml) and create the `Deployment` and `Service` resources with `kubectl`. The following points require special attention:
 
@@ -154,9 +158,12 @@ curl -sSL https://raw.githubusercontent.com/juicedata/juicefs/main/deploy/juicef
 Check if it's deployed successfully:
 
 ```shell
-# kubectl -n $NAMESPACE get po -o wide -l app.kubernetes.io/name=juicefs-s3-gateway
+$ kubectl -n $NAMESPACE get po -o wide -l app.kubernetes.io/name=juicefs-s3-gateway
 juicefs-s3-gateway-5c7d65c77f-gj69l         1/1     Running   0          37m     10.244.2.238   kube-node-3   <none>           <none>
-# kubectl -n $NAMESPACE get svc -l app.kubernetes.io/name=juicefs-s3-gateway
+```
+
+```shell
+$ kubectl -n $NAMESPACE get svc -l app.kubernetes.io/name=juicefs-s3-gateway
 NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
 juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
 ```
@@ -201,7 +208,7 @@ There are some differences between the various versions of Ingress. For more usa
 
    Create a configuration file, for example: `values.yaml`. Copy and fill in the following configuration information. Among them, the `secret` part is the information related to the JuiceFS file system, and you can refer to [JuiceFS Quick Start Guide](../getting-started/README.md) for more information.
 
-   ```yaml
+   ```yaml title="values.yaml"
    secret:
      name: "<name>"
      metaurl: "<meta-url>"
@@ -213,7 +220,7 @@ There are some differences between the various versions of Ingress. For more usa
 
    If you want to deploy Ingress, add the following snippet into `values.yaml`:
 
-   ```yaml
+   ```yaml title="values.yaml"
    ingress:
      enables: true
    ```
@@ -280,6 +287,9 @@ Similar to the S3 gateway integrated with JuiceFS, the gateway service can be st
 ```shell
 export MINIO_ROOT_USER=admin
 export MINIO_ROOT_PASSWORD=12345678
+```
+
+```shell
 ./minio gateway juicefs --console-address ':59001' redis://localhost:6379
 ```
 

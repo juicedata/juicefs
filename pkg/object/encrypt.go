@@ -30,6 +30,8 @@ import (
 	"io"
 	"io/ioutil"
 	"strings"
+
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 type Encryptor interface {
@@ -114,16 +116,35 @@ func (e *rsaEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 	return rsa.DecryptOAEP(sha256.New(), rand.Reader, e.privKey, ciphertext, e.label)
 }
 
-type aesEncryptor struct {
+type dataEncryptor struct {
 	keyEncryptor Encryptor
 	keyLen       int
+	aead         func(key []byte) (cipher.AEAD, error)
 }
 
-func NewAESEncryptor(keyEncryptor Encryptor) Encryptor {
-	return &aesEncryptor{keyEncryptor, 32} //  AES-256-GCM
+const (
+	AES256GCM_RSA = "aes256gcm-rsa"
+	CHACHA20_RSA  = "chacha20-rsa"
+)
+
+func NewDataEncryptor(keyEncryptor Encryptor, algo string) (Encryptor, error) {
+	switch algo {
+	case "", AES256GCM_RSA:
+		aead := func(key []byte) (cipher.AEAD, error) {
+			block, err := aes.NewCipher(key)
+			if err != nil {
+				return nil, err
+			}
+			return cipher.NewGCM(block)
+		}
+		return &dataEncryptor{keyEncryptor, 32, aead}, nil
+	case CHACHA20_RSA:
+		return &dataEncryptor{keyEncryptor, chacha20poly1305.KeySize, chacha20poly1305.New}, nil
+	}
+	return nil, fmt.Errorf("unsupport cipher: %s", algo)
 }
 
-func (e *aesEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
+func (e *dataEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
 	key := make([]byte, e.keyLen)
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, err
@@ -132,21 +153,17 @@ func (e *aesEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	block, err := aes.NewCipher(key)
+	aead, err := e.aead(key)
 	if err != nil {
 		return nil, err
 	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	nonce := make([]byte, aesgcm.NonceSize())
+	nonce := make([]byte, aead.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, err
 	}
 
 	headerSize := 3 + len(cipherkey) + len(nonce)
-	buf := make([]byte, headerSize+len(plaintext)+aesgcm.Overhead())
+	buf := make([]byte, headerSize+len(plaintext)+aead.Overhead())
 	buf[0] = byte(len(cipherkey) >> 8)
 	buf[1] = byte(len(cipherkey) & 0xFF)
 	buf[2] = byte(len(nonce))
@@ -155,11 +172,11 @@ func (e *aesEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
 	p = p[len(cipherkey):]
 	copy(p, nonce)
 	p = p[len(nonce):]
-	ciphertext := aesgcm.Seal(p[:0], nonce, plaintext, nil)
+	ciphertext := aead.Seal(p[:0], nonce, plaintext, nil)
 	return buf[:headerSize+len(ciphertext)], nil
 }
 
-func (e *aesEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
+func (e *dataEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 	keyLen := int(ciphertext[0])<<8 + int(ciphertext[1])
 	nonceLen := int(ciphertext[2])
 	if 3+keyLen+nonceLen >= len(ciphertext) {
@@ -174,15 +191,11 @@ func (e *aesEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, errors.New("decryt key: " + err.Error())
 	}
-	block, err := aes.NewCipher(key)
+	aead, err := e.aead(key)
 	if err != nil {
 		return nil, err
 	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	return aesgcm.Open(ciphertext[:0], nonce, ciphertext, nil)
+	return aead.Open(ciphertext[:0], nonce, ciphertext, nil)
 }
 
 type encrypted struct {

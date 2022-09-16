@@ -29,7 +29,6 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
 
@@ -86,7 +85,7 @@ var findDigits = regexp.MustCompile(`\d+`)
 type profiler struct {
 	file      *os.File
 	replay    bool
-	tty       bool
+	colorful  bool
 	interval  time.Duration
 	uids      []string
 	gids      []string
@@ -246,8 +245,8 @@ func (p *profiler) fastCounter() {
 	p.printTime <- last
 }
 
-func printLines(lines []string, tty bool) {
-	if tty {
+func printLines(lines []string, colorful bool) {
+	if colorful {
 		fmt.Print("\033[2J\033[1;1H") // clear screen
 		fmt.Printf("\033[92m%s\n\033[0m", lines[0])
 		fmt.Printf("\033[97m%s\n\033[0m", lines[1])
@@ -286,7 +285,7 @@ func (p *profiler) flush(timeStamp time.Time, keyStats []keyStat, done bool) {
 	if p.replay {
 		output[1] = fmt.Sprintln("\n[enter]Pause/Continue")
 	}
-	printLines(output, p.tty)
+	printLines(output, p.colorful)
 }
 
 func (p *profiler) flusher() {
@@ -364,7 +363,7 @@ func profile(ctx *cli.Context) error {
 	prof := profiler{
 		file:      file,
 		replay:    replay,
-		tty:       isatty.IsTerminal(os.Stdout.Fd()),
+		colorful:  utils.SupportANSIColor(os.Stdout.Fd()),
 		interval:  time.Second * time.Duration(ctx.Int64("interval")),
 		uids:      strings.Split(ctx.String("uid"), ","),
 		gids:      strings.Split(ctx.String("gid"), ","),
@@ -402,7 +401,7 @@ func profile(ctx *cli.Context) error {
 	var input string
 	for {
 		_, _ = fmt.Scanln(&input)
-		if prof.tty {
+		if prof.colorful {
 			fmt.Print("\033[1A\033[K") // move cursor back
 		}
 		if prof.replay {

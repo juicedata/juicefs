@@ -61,7 +61,7 @@ $ juicefs gc redis://localhost --delete`,
 			},
 			&cli.BoolFlag{
 				Name:  "delete",
-				Usage: "deleted leaked objects",
+				Usage: "delete leaked objects",
 			},
 			&cli.IntFlag{
 				Name:    "threads",
@@ -196,22 +196,30 @@ func gc(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("list all blocks: %s", err)
 	}
-	keys := make(map[uint64]uint32)
+	vkeys := make(map[uint64]uint32)
+	ckeys := make(map[uint64]uint32)
 	var total int64
 	var totalBytes uint64
+	for _, s := range slices[1] {
+		ckeys[s.Id] = s.Size
+		total += int64(int(s.Size-1)/chunkConf.BlockSize) + 1
+		totalBytes += uint64(s.Size)
+	}
+	slices[1] = nil
 	for _, ss := range slices {
 		for _, s := range ss {
-			keys[s.Id] = s.Size
+			vkeys[s.Id] = s.Size
 			total += int64(int(s.Size-1)/chunkConf.BlockSize) + 1 // s.Size should be > 0
 			totalBytes += uint64(s.Size)
 		}
 	}
 	if progress.Quiet {
-		logger.Infof("using %d slices (%d bytes)", len(keys), totalBytes)
+		logger.Infof("using %d slices (%d bytes)", len(vkeys)+len(ckeys), totalBytes)
 	}
 
 	bar := progress.AddCountBar("Scanned objects", total)
 	valid := progress.AddDoubleSpinner("Valid objects")
+	compacted := progress.AddDoubleSpinner("Compacted objects")
 	leaked := progress.AddDoubleSpinner("Leaked objects")
 	skipped := progress.AddDoubleSpinner("Skipped objects")
 	maxMtime := time.Now().Add(time.Hour * -1)
@@ -272,7 +280,12 @@ func gc(ctx *cli.Context) error {
 		}
 		bar.Increment()
 		cid, _ := strconv.Atoi(parts[0])
-		size := keys[uint64(cid)]
+		size := vkeys[uint64(cid)]
+		var cobj bool
+		if size == 0 {
+			size = ckeys[uint64(cid)]
+			cobj = true
+		}
 		if size == 0 {
 			logger.Debugf("find leaked object: %s, size: %d", obj.Key(), obj.Size())
 			foundLeaked(obj)
@@ -284,6 +297,8 @@ func gc(ctx *cli.Context) error {
 			if (indx+1)*csize > int(size) {
 				logger.Warnf("size of slice %d is larger than expected: %d > %d", cid, indx*chunkConf.BlockSize+csize, size)
 				foundLeaked(obj)
+			} else if cobj {
+				compacted.IncrInt64(obj.Size())
 			} else {
 				valid.IncrInt64(obj.Size())
 			}
@@ -291,6 +306,8 @@ func gc(ctx *cli.Context) error {
 			if indx*chunkConf.BlockSize+csize != int(size) {
 				logger.Warnf("size of slice %d is %d, but expect %d", cid, indx*chunkConf.BlockSize+csize, size)
 				foundLeaked(obj)
+			} else if cobj {
+				compacted.IncrInt64(obj.Size())
 			} else {
 				valid.IncrInt64(obj.Size())
 			}
@@ -301,10 +318,11 @@ func gc(ctx *cli.Context) error {
 	progress.Done()
 
 	vc, _ := valid.Current()
+	cc, cb := compacted.Current()
 	lc, lb := leaked.Current()
 	sc, sb := skipped.Current()
-	logger.Infof("scanned %d objects, %d valid, %d leaked (%d bytes), %d skipped (%d bytes)",
-		bar.Current(), vc, lc, lb, sc, sb)
+	logger.Infof("scanned %d objects, %d valid, %d compacted (%d bytes), %d leaked (%d bytes), %d skipped (%d bytes)",
+		bar.Current(), vc, cc, cb, lc, lb, sc, sb)
 	if lc > 0 && !delete {
 		logger.Infof("Please add `--delete` to clean leaked objects")
 	}

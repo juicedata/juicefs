@@ -1,0 +1,106 @@
+name: 'JuiceFS Sysbench Random Action'
+description: 'JuiceFS Sysbench action'
+inputs:
+  type:
+    description: 'type of the test, include compress method with none lz4 and zstd'
+    required: true
+    default: 'none'
+  
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.18.x'
+
+    - name: Set up Docker
+      uses: docker-practice/actions-setup-docker@master
+
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Build linux target
+      shell: bash
+      run: make juicefs
+
+    - name: Run Redis
+      shell: bash
+      run: |
+        sudo docker run -d --name redis -v redis-data:/data  \
+        -p 6379:6379  redis redis-server --appendonly yes
+
+
+    - name: Setup minio
+      shell: bash
+      run: |
+        docker run -d -p 9000:9000 --name minio \
+                  -e "MINIO_ACCESS_KEY=minioadmin" \
+                  -e "MINIO_SECRET_KEY=minioadmin" \
+                  -v /tmp/data:/data \
+                  -v /tmp/config:/root/.minio \
+                  minio/minio server /data
+        sleep 5
+
+    - name: Juicefs Format
+      shell: bash
+      run: |
+        sudo ./juicefs format --trash-days 0 --compress ${{inputs.type}} --storage minio --bucket http://127.0.0.1:9000/mypics \
+           --access-key minioadmin \
+           --secret-key minioadmin \
+           redis://127.0.0.1:6379/1 pics
+
+    - name: Juicefs Mount
+      shell: bash
+      run: |
+        sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs --no-usage-report &
+
+
+    - name: Install Sysbench
+      shell: bash
+      run: |
+        curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
+        sudo apt -y install sysbench
+
+
+    - name: Smallfile Test 1M
+      shell: bash
+      run: |
+        date +%Y_%m_%d_%H_%M_%S > /tmp/datetime
+        DATE_TIME=$(cat /tmp/datetime)
+        cd /jfs
+        sudo stat /jfs
+        sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
+        fileName=result_rndrw_1M_6000_$DATE_TIME
+        sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
+        sysbench fileio --file-num=6000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
+        cat $fileName
+        curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{inputs.upload}}
+
+
+    - name: Smallfile Test 100K
+      shell: bash
+      run: |
+        DATE_TIME=$(cat /tmp/datetime)
+        cd /jfs
+        sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  prepare
+        fileName=result_rndrw_100K_60000_$DATE_TIME
+        sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  run >"$fileName"
+        sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
+        cat $fileName
+        curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{inputs.upload}}
+
+
+    - name: Log
+      shell: bash
+      if: ${{ always() }}
+      run: |
+        echo "juicefs log"
+        sudo tail -n 1000 /var/log/juicefs.log
+        grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true

@@ -1,10 +1,13 @@
 ---
-sidebar_label: How to Setup Object Storage
+sidebar_label: How to Set Up Object Storage
 sidebar_position: 2
 slug: /how_to_setup_object_storage
 ---
 
-# How to Setup Object Storage
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# How to Set Up Object Storage
 
 As you can learn from [JuiceFS Technical Architecture](../introduction/architecture.md), JuiceFS is a distributed file system with data and metadata stored separately. JuiceFS uses object storage as the main data storage and uses databases such as Redis, PostgreSQL and MySQL as metadata storage.
 
@@ -19,7 +22,7 @@ When creating a JuiceFS file system, there are following options to set up the s
 For example, the following command uses Amazon S3 object storage to create a file system:
 
 ```shell
-$ juicefs format --storage s3 \
+juicefs format --storage s3 \
 	--bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
 	--access-key abcdefghijklmn \
 	--secret-key nmlkjihgfedAcBdEfg \
@@ -29,11 +32,11 @@ $ juicefs format --storage s3 \
 
 ## Other options
 
-Some query string parameters are available for bucket URLs, which can be appended to the option `--bucket` of the commands `format` and `mount`. For example, to skip certificate verification for https requests, you can append `tls-insecure-skip-verify` parameter to a bucket URL like `https://myjuicefs.s3.us-east-2.amazonaws.com/?tls-insecure-skip-verify=true`
+When executing the `juicefs format` or `juicefs mount` command, you can set some special options in the form of URL parameters in the `--bucket` option, such as `tls-insecure-skip-verify=true` in `https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` is to skip the certificate verification of HTTPS requests.
 
 ## Access Key and Secret Key
 
-In general, object storages are authenticated with `Access Key ID` and `Access Key Secret`. For JuiceFS file system, they are provided by options `--access-key` and `--secret-key` (or AK, SK for short).
+In general, object storages are authenticated with Access Key ID and Access Key Secret. For JuiceFS file system, they are provided by options `--access-key` and `--secret-key` (or AK, SK for short).
 
 It is more secure to pass credentials via environment variables `ACCESS_KEY` and `SECRET_KEY` instead of explicitly specifying the options `--access-key` and `--secret-key` in the command line when creating a filesystem, e.g.,
 
@@ -50,26 +53,33 @@ Public clouds typically allow users to create IAM (Identity and Access Managemen
 
 ## Use temporary access credentials
 
-Permanent access credentials generally have two parts, accessKey, secretKey, while temporary access credentials generally include three parts, accessKey, secretKey and token, and temporary access credentials have an expiration time, usually between a few minutes and a few hours.
+Permanent access credentials generally have two parts, Access Key, Secret Key, while temporary access credentials generally include three parts, Access Key, Secret Key and token, and temporary access credentials have an expiration time, usually between a few minutes and a few hours.
 
 ### How to get temporary credentials
 
-Different cloud vendors have different access methods. Generally, the accessKey, secretKey and the ARN representing the permission boundary of the temporary access credential are used as parameters to request to the STS server of the cloud service vendor to obtain the temporary access credential. This process can be simplified by the SDK provided by the cloud vendor. For example, AWS S3 can refer to this [link](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html) to obtain temporary credentials, and Alibaba Cloud OSS can refer to this [link](https://help.aliyun.com/document_detail/100624.html).
+Different cloud vendors have different acquisition methods. Generally, the Access Key, Secret Key and ARN representing the permission boundary of the temporary access credential are required as parameters to request access to the STS server of the cloud service vendor to obtain the temporary access credential. This process can generally be simplified by the SDK provided by the cloud vendor. For example, Amazon S3 can refer to this [link](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html) to obtain temporary credentials, and Alibaba Cloud OSS can refer to this [link](https://www.alibabacloud.com/help/en/object-storage-service/latest/use-a-temporary-credential-provided-by-sts-to-access-oss).
 
-### How to setup object storage with temporary access credentials
+### How to set up object storage with temporary access credentials
 
-The way temporary credentials are used is not much different than permanent credentials. In the `format` filesystem step, set the accessKey, secretKey, and token of the temporary credential through the --access-key, --secret-key, --session-token parameters, respectively. For example:
+The way of using temporary credentials is not much different from using permanent credentials. When formatting the file system, pass the Access Key, Secret Key, and token of the temporary credentials through `--access-key`, `--secret-key`, ` --session-token` can set the value. E.g:
 
 ```bash
-juicefs format --storage oss --access-key xxxx --secret-key xxxx --session-token xxxx --bucket https://bucketName.oss-cn-hangzhou.aliyuncs.com redis://localhost:6379 /1 test1
-````
+juicefs format \
+    --storage oss \
+    --access-key xxxx \
+    --secret-key xxxx \
+    --session-token xxxx \
+    --bucket https://bucketName.oss-cn-hangzhou.aliyuncs.com \
+    redis://localhost:6379/1 \
+    test1
+```
 
-Since temporary credentials expire quickly, the key is how to update the temporary credentials that juicefs uses after `format` the filesystem before the temporary credentials expire. The credential update process is divided into two steps:
+Since temporary credentials expire quickly, the key is how to update the temporary credentials that JuiceFS uses after `format` the filesystem before the temporary credentials expire. The credential update process is divided into two steps:
 
-1. Before the temporary certificate expires, apply for a new temporary certificate
-2. Without stopping the running juicefs, use the `juicefs config Meta-URL --access-key xxxx --secret-key xxxx --session-token xxxx` command to hot update the access credentials
+1. Before the temporary certificate expires, apply for a new temporary certificate;
+2. Without stopping the running JuiceFS, use the `juicefs config Meta-URL --access-key xxxx --secret-key xxxx --session-token xxxx` command to hot update the access credentials.
 
-Newly mounted clients will use the new credentials directly, and all clients already running will also update their credentials within a minute. The entire update process will not affect the running business. Due to the short expiration time of the temporary credentials, the above steps need to **be executed in a long-term loop** to ensure that the juicefs service can access the object storage normally.
+Newly mounted clients will use the new credentials directly, and all clients already running will also update their credentials within a minute. The entire update process will not affect the running business. Due to the short expiration time of the temporary credentials, the above steps need to **be executed in a long-term loop** to ensure that the JuiceFS service can access the object storage normally.
 
 ## Internal and Public Endpoint
 
@@ -99,9 +109,9 @@ If the network environment where the client is located is affected by firewall p
 On Linux, for example, the proxy can be set by creating `http_proxy` and `https_proxy` environment variables.
 
 ```shell
-$ export http_proxy=http://localhost:8035/
-$ export https_proxy=http://localhost:8035/
-$ juicefs format \
+export http_proxy=http://localhost:8035/
+export https_proxy=http://localhost:8035/
+juicefs format \
     --storage s3 \
     ... \
     myjfs
@@ -112,7 +122,7 @@ $ juicefs format \
 If you wish to use a storage system that is not listed, feel free to submit a requirement [issue](https://github.com/juicedata/juicefs/issues).
 
 | Name                                                        | Value      |
-| ---------------------------------------------------------   | ---------- |
+|-------------------------------------------------------------|------------|
 | [Amazon S3](#amazon-s3)                                     | `s3`       |
 | [Google Cloud Storage](#google-cloud-storage)               | `gs`       |
 | [Azure Blob Storage](#azure-blob-storage)                   | `wasb`     |
@@ -135,6 +145,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Sina Cloud Storage](#sina-cloud-storage)                   | `scs`      |
 | [CTYun OOS](#ctyun-oos)                                     | `oos`      |
 | [ECloud Object Storage](#ecloud-object-storage)             | `eos`      |
+| [JD Cloud OSS](#jd-cloud-oss)                               | `s3`       |
 | [UCloud US3](#ucloud-us3)                                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                                   | `ceph`     |
 | [Ceph RGW](#ceph-rgw)                                       | `s3`       |
@@ -145,6 +156,10 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Apache Ozone](#apache-ozone)                               | `s3`       |
 | [Redis](#redis)                                             | `redis`    |
 | [TiKV](#tikv)                                               | `tikv`     |
+| [etcd](#etcd)                                               | `etcd`     |
+| [SQLite](#sqlite)                                           | `sqlite3`  |
+| [MySQL](#mysql)                                             | `mysql`    |
+| [PostgreSQL](#postgresql)                                   | `postgres` |
 | [Local disk](#local-disk)                                   | `file`     |
 
 ## Amazon S3
@@ -168,7 +183,7 @@ Versions prior to JuiceFS v0.12 only support the virtual hosting type, v0.12 and
 
 ```bash
 # virtual hosted-style
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://<bucket>.s3.<region>.amazonaws.com \
     ... \
@@ -177,7 +192,7 @@ $ juicefs format \
 
 ```bash
 # path-style
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://s3.<region>.amazonaws.com/<bucket> \
     ... \
@@ -188,7 +203,7 @@ You can also set `--storage` to `s3` to connect to S3-compatible object storage,
 
 ```bash
 # virtual hosted-style
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<endpoint> \
     ... \
@@ -197,7 +212,7 @@ $ juicefs format \
 
 ```bash
 # path-style
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://<endpoint>/<bucket> \
     ... \
@@ -214,9 +229,9 @@ Google Cloud uses [IAM](https://cloud.google.com/iam/docs/overview) to manage pe
 
 For cloud servers and object storage that belong to the same service account, as long as the account grants access to the relevant resources, there is no need to provide authentication information when creating a JuiceFS file system, and the cloud platform will automatically complete authentication.
 
-For cases where you want to access the object storage from outside the Google Cloud Platform, for example, to create a JuiceFS file system on your local computer using Google Cloud Storage, you need to configure authentication information. Since Google Cloud Storage does not use `Access Key ID` and `Access Key Secret`, but rather the `JSON key file` of the service account to authenticate the identity.
+For cases where you want to access the object storage from outside the Google Cloud Platform, for example, to create a JuiceFS file system on your local computer using Google Cloud Storage, you need to configure authentication information. Since Google Cloud Storage does not use Access Key ID and Access Key Secret, but rather the JSON key file of the service account to authenticate the identity.
 
-Please refer to "[Authentication as a service account](https://cloud.google.com/docs/authentication/production)" to create `JSON key file` for the service account and download it to the local computer, and define the path to the key file via the environment variable `GOOGLE_APPLICATION_ CREDENTIALS`, e.g.
+Please refer to ["Authentication as a service account"](https://cloud.google.com/docs/authentication/production) to create JSON key file for the service account and download it to the local computer, and define the path to the key file via the environment variable `GOOGLE_APPLICATION_ CREDENTIALS`, e.g.:
 
 ```shell
 export GOOGLE_APPLICATION_CREDENTIALS="$HOME/service-account-file.json"
@@ -227,7 +242,7 @@ You can write the command to create environment variables to `~/.bashrc` or `~/.
 Once you have configured the environment variables for passing key information, the commands to create a file system locally and on Google Cloud Server are identical. For example,
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage gs \
     --bucket <bucket> \
     ... \
@@ -256,8 +271,8 @@ In addition to providing authorization information through the options `--access
 
 ```bash
 # Use connection string
-$ export AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;AccountName=XXX;AccountKey=XXX;EndpointSuffix=core.windows.net"
-$ juicefs format \
+export AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;AccountName=XXX;AccountKey=XXX;EndpointSuffix=core.windows.net"
+juicefs format \
     --storage wasb \
     --bucket https://<container> \
     ... \
@@ -270,7 +285,7 @@ For Azure users in China, the value of `EndpointSuffix` is `core.chinacloudapi.c
 
 ## Backblaze B2
 
-To use Backblaze B2 as a data storage for JuiceFS, you need to create [application key](https://www.backblaze.com/b2/docs/application_keys.html) first. **Application Key ID** and **Application Key** corresponds to `Access key` and `Secret key`, respectively.
+To use Backblaze B2 as a data storage for JuiceFS, you need to create [application key](https://www.backblaze.com/b2/docs/application_keys.html) first. **Application Key ID** and **Application Key** corresponds to Access Key and Secret Key, respectively.
 
 Backblaze B2 supports two access interfaces: the B2 native API and the S3-compatible API.
 
@@ -279,7 +294,7 @@ Backblaze B2 supports two access interfaces: the B2 native API and the S3-compat
 The storage type should be set to `b2`, and only the bucket name needs to be set in the option `--bucket`. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage b2 \
     --bucket <bucket> \
     --access-key <application-key-ID> \
@@ -293,7 +308,7 @@ $ juicefs format \
 The storage type should be set to `s3`, and the full bucket address in the option `bucket` needs to be specified. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://s3.eu-central-003.backblazeb2.com/<bucket> \
     --access-key <application-key-ID> \
@@ -309,7 +324,7 @@ When creating JuiceFS file system using IBM Cloud Object Storage, you first need
 IBM Cloud Object Storage provides [multiple endpoints](https://cloud.ibm.com/docs/cloud-object-storage?topic=cloud-object-storage-endpoints) for each region, depending on your network (e.g. public or private). Thus, please choose an appropriate endpoint. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage ibmcos \
     --bucket https://<bucket>.<endpoint> \
     --access-key <API-key> \
@@ -325,7 +340,7 @@ Oracle Cloud Object Storage supports S3 compatible access. Please refer to [offi
 The `endpoint` format for this object storage is: `${namespace}.compat.objectstorage.${region}.oraclecloud.com`, for example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<endpoint> \
     --access-key <your-access-key> \
@@ -341,7 +356,7 @@ Please follow [this document](https://www.scaleway.com/en/docs/generate-api-keys
 The `--bucket` option format is `https://<bucket>.s3.<region>.scw.cloud`. Remember to replace `<region>` with specific region code, e.g. the region code of "Amsterdam, The Netherlands" is `nl-ams`. All available region codes can be found [here](https://www.scaleway.com/en/docs/object-storage-feature/#-Core-Concepts). For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage scw \
     --bucket https://<bucket>.s3.<region>.scw.cloud \
     ... \
@@ -355,7 +370,7 @@ Please follow [this document](https://www.digitalocean.com/community/tutorials/h
 The `--bucket` option format is `https://<space-name>.<region>.digitaloceanspaces.com`. Please replace `<region>` with specific region code, e.g. `nyc3`. All available region codes can be found [here](https://www.digitalocean.com/docs/spaces/#regional-availability). For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage space \
     --bucket https://<space-name>.<region>.digitaloceanspaces.com \
     ... \
@@ -369,7 +384,7 @@ Please follow [this document](https://wasabi-support.zendesk.com/hc/en-us/articl
 The `--bucket` option format is `https://<bucket>.s3.<region>.wasabisys.com`, replace `<region>` with specific region code, e.g. the region code of US East 1 (N. Virginia) is `us-east-1`. All available region codes can be found [here](https://wasabi-support.zendesk.com/hc/en-us/articles/360.15.26031-What-are-the-service-URLs-for-Wasabi-s-different-regions-). For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage wasabi \
     --bucket https://<bucket>.s3.<region>.wasabisys.com \
     ... \
@@ -387,7 +402,7 @@ Please refer to [this document](https://docs.storj.io/api-reference/s3-compatibl
 Storj DCS is an S3-compatible storage, using `s3` for option `--storage`. The setting format of the option `--bucket` is `https://gateway.<region>.storjshare.io/<bucket>`, and please replace `<region>` with the corresponding region code you need. There are currently three available regions: `us1`, `ap1` and `eu1`. For example:
 
 ```shell
-$ juicefs format \
+juicefs format \
 	--storage s3 \
 	--bucket https://gateway.<region>.storjshare.io/<bucket> \
 	--access-key <your-access-key> \
@@ -401,7 +416,7 @@ $ juicefs format \
 Vultr Object Storage is an S3-compatible storage, using `s3` for `--storage` option. The format of the option `--bucket` is `https://<bucket>.<region>.vultrobjects.com/`. For example:
 
 ```shell
-$ juicefs format \
+juicefs format \
 	--storage s3 \
 	--bucket https://<bucket>.ewr1.vultrobjects.com/ \
 	--access-key <your-access-key> \
@@ -420,10 +435,10 @@ Alibaba Cloud also supports using [Security Token Service (STS)](https://www.ali
 
 ```bash
 # Use Security Token Service (STS)
-$ export ALICLOUD_ACCESS_KEY_ID=XXX
-$ export ALICLOUD_ACCESS_KEY_SECRET=XXX
-$ export SECURITY_TOKEN=XXX
-$ juicefs format \
+export ALICLOUD_ACCESS_KEY_ID=XXX
+export ALICLOUD_ACCESS_KEY_SECRET=XXX
+export SECURITY_TOKEN=XXX
+juicefs format \
     --storage oss \
     --bucket https://<bucket>.<endpoint> \
     ... \
@@ -436,7 +451,7 @@ If you are creating a file system on AliCloud's server, you can specify the buck
 
 ```bash
 # Running within Alibaba Cloud
-$ juicefs format \
+juicefs format \
     --storage oss \
     --bucket <bucket> \
     ... \
@@ -450,7 +465,7 @@ The naming rule of bucket in Tencent Cloud is `<bucket>-<APPID>`, so you must ap
 The full format of `--bucket` option is `https://<bucket>-<APPID>.cos.<region>.myqcloud.com`, and please replace `<region>` with specific region code. E.g. the region code of Shanghai is `ap-shanghai`. You could find all available region codes [here](https://intl.cloud.tencent.com/document/product/436/6224). For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage cos \
     --bucket https://<bucket>-<APPID>.cos.<region>.myqcloud.com \
     ... \
@@ -461,7 +476,7 @@ If you are creating a file system on Tencent Cloud's server, you can specify the
 
 ```bash
 # Running within Tencent Cloud
-$ juicefs format \
+juicefs format \
     --storage cos \
     --bucket <bucket>-<APPID> \
     ... \
@@ -475,7 +490,7 @@ Please follow [this document](https://support.huaweicloud.com/usermanual-ca/zh-c
 The `--bucket` option format is `https://<bucket>.obs.<region>.myhuaweicloud.com`, and please replace `<region>` with specific region code. E.g. the region code of Beijing 1 is `cn-north-1`. You could find all available region codes [here](https://developer.huaweicloud.com/endpoint?OBS). For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage obs \
     --bucket https://<bucket>.obs.<region>.myhuaweicloud.com \
     ... \
@@ -486,7 +501,7 @@ If you are creating a file system on Huawei Cloud's server, you can specify the 
 
 ```bash
 # Running within Huawei Cloud
-$ juicefs format \
+juicefs format \
     --storage obs \
     --bucket <bucket> \
     ... \
@@ -500,7 +515,7 @@ Please follow [this document](https://cloud.baidu.com/doc/Reference/s/9jwvz2egb)
 The `--bucket` option format is `https://<bucket>.<region>.bcebos.com`, and please replace `<region>` with specific region code. E.g. the region code of Beijing is `bj`. You could find all available region codes [here](https://cloud.baidu.com/doc/BOS/s/Ck1rk80hn#%E8%AE%BF%E9%97%AE%E5%9F%9F%E5%90%8D%EF%BC%88endpoint%EF%BC%89). For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage bos \
     --bucket https://<bucket>.<region>.bcebos.com \
     ... \
@@ -511,7 +526,7 @@ If you are creating a file system on Baidu Cloud's server, you can specify the b
 
 ```bash
 # Running within Baidu Cloud
-$ juicefs format \
+juicefs format \
     --storage bos \
     --bucket <bucket> \
     ... \
@@ -525,7 +540,7 @@ Please follow [this document](https://docs.ksyun.com/documents/1386) to learn ho
 KS3 provides [multiple endpoints](https://docs.ksyun.com/documents/6761) for each region, depending on your network (e.g. public or internal). Please choose an appropriate endpoint. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage ks3 \
     --bucket https://<bucket>.<endpoint> \
     ... \
@@ -539,7 +554,7 @@ Please follow [this document](https://www.163yun.com/help/documents/554852782201
 NOS provides [multiple endpoints](https://www.163yun.com/help/documents/67078583131230208) for each region, depending on your network (e.g. public or internal). Please choose an appropriate endpoint. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage nos \
     --bucket https://<bucket>.<endpoint> \
     ... \
@@ -553,7 +568,7 @@ Please follow [this document](https://docsv3.qingcloud.com/storage/object-storag
 The `--bucket` option format is `https://<bucket>.<region>.qingstor.com`, replace `<region>` with specific region code. E.g. the region code of Beijing 3-A is `pek3a`. You could find all available region codes [here](https://docs.qingcloud.com/qingstor/#%E5%8C%BA%E5%9F%9F%E5%8F%8A%E8%AE%BF%E9%97%AE%E5%9F%9F%E5%90%8D). For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage qingstor \
     --bucket https://<bucket>.<region>.qingstor.com \
     ... \
@@ -571,7 +586,7 @@ Please follow [this document](https://developer.qiniu.com/af/kb/1479/how-to-acce
 The `--bucket` option format is `https://<bucket>.s3-<region>.qiniucs.com`, replace `<region>` with specific region code. E.g. the region code of China East is `cn-east-1`. You could find all available region codes [here](https://developer.qiniu.com/kodo/4088/s3-access-domainname). For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage qiniu \
     --bucket https://<bucket>.s3-<region>.qiniucs.com \
     ... \
@@ -585,7 +600,7 @@ Please follow [this document](https://scs.sinacloud.com/doc/scs/guide/quick_star
 The `--bucket` option format is `https://<bucket>.stor.sinaapp.com`. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage scs \
     --bucket https://<bucket>.stor.sinaapp.com \
     ... \
@@ -599,7 +614,7 @@ Please follow [this document](https://www.ctyun.cn/help2/10000101/10473683) to l
 The `--bucket` option format is `https://<bucket>.<endpoint>`,  For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage oos \
     --bucket https://<bucket>.<endpoint> \
     ... \
@@ -613,9 +628,23 @@ Please follow [this document](https://ecloud.10086.cn/op-help-center/doc/article
 ECloud Object Storage provides [multiple endpoints](https://ecloud.10086.cn/op-help-center/doc/article/40956) for each region, depending on your network (e.g. public or internal). Please choose an appropriate endpoint. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage eos \
     --bucket https://<bucket>.<endpoint> \
+    ... \
+    myjfs
+```
+
+## JD Cloud OSS
+
+Please follow [this document](https://docs.jdcloud.com/cn/account-management/accesskey-management)  to learn how to get access key and secret key.
+
+The `--bucket` option format is `https://<bucket>.<region>.jdcloud-oss.com`，and please replace `<region>` with specific region code. You could find all available region codes [here](https://docs.jdcloud.com/cn/object-storage-service/oss-endpont-list). For example:
+
+```bash
+juicefs format \
+    --storage s3 \
+    --bucket https://<bucket>.<region>.jdcloud-oss.com \
     ... \
     myjfs
 ```
@@ -627,7 +656,7 @@ Please follow [this document](https://docs.ucloud.cn/uai-censor/access/key) to l
 US3 (formerly UFile) provides [multiple endpoints](https://docs.ucloud.cn/ufile/introduction/region) for each region, depending on your network (e.g. public or internal). Please choose an appropriate endpoint. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage ufile \
     --bucket https://<bucket>.<endpoint> \
     ... \
@@ -653,15 +682,22 @@ First, install `librados`:
 It is recommended to use `librados` that matches your Ceph version. For example, if Ceph version is Octopus (v15.2.\*), then it is recommended to use `librados` v15.2.\*. Some Linux distributions (e.g. CentOS 7) may come with a lower version of `librados`, so if you fail to compile JuiceFS, try to download a higher version of the package.
 :::
 
+<Tabs>
+  <TabItem value="debian" label="Debian and derivatives">
+
 ```bash
-# Debian based system
 sudo apt-get install librados-dev
 ```
 
+  </TabItem>
+  <TabItem value="centos" label="RHEL and derivatives">
+
 ```bash
-# RPM based system
 sudo yum install librados2-devel
 ```
+
+  </TabItem>
+</Tabs>
 
 Then compile JuiceFS for Ceph (make sure you have Go 1.17+ and GCC 5.4+ installed):
 
@@ -681,7 +717,7 @@ For connecting to Ceph Monitor, `librados` reads Ceph configuration file by sear
 The example command is:
 
 ```bash
-$ juicefs.ceph format \
+juicefs.ceph format \
     --storage ceph \
     --bucket ceph://<pool-name> \
     --access-key <cluster-name> \
@@ -697,7 +733,7 @@ $ juicefs.ceph format \
 The `--bucket` option format is `http://<bucket>.<endpoint>` (virtual hosted-style). For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket http://<bucket>.<endpoint> \
     ... \
@@ -715,7 +751,7 @@ The `--bucket` option format is `http://<container>.<endpoint>`. A container def
 The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage swift \
     --bucket http://<container>.<endpoint> \
     --access-key <username> \
@@ -751,7 +787,7 @@ The initial Access Key and Secret Key of the object storage are both `minioadmin
 When using MinIO as data storage for JuiceFS, set the option `--storage` to `minio`.
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage minio \
     --bucket http://127.0.0.1:9000/<bucket> \
     --access-key minioadmin \
@@ -761,7 +797,8 @@ $ juicefs format \
 ```
 
 :::note
-Currently, JuiceFS only supports path-style MinIO URI addresses, e.g., `http://127.0.0.1:9000/myjfs`.
+1. Currently, JuiceFS only supports path-style MinIO URI addresses, e.g., `http://127.0.0.1:9000/myjfs`.
+2. The `MINIO_REGION` environment variable can be used to set the region of MinIO, if not set, the default is `us-east-1`.
 :::
 
 ## WebDAV
@@ -773,7 +810,7 @@ From JuiceFS v0.15+, JuiceFS can use a storage that speaks WebDAV as a data stor
 You need to set `--storage` to `webdav`, and `--bucket` to the endpoint of WebDAV. If basic authorization is enabled, username and password should be provided as `--access-key` and `--secret-key`, for example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage webdav \
     --bucket http://<endpoint>/ \
     --access-key <username> \
@@ -789,7 +826,7 @@ $ juicefs format \
 When HDFS is used, `--access-key` can be used to specify the `username`, and `hdfs` is usually the default superuser. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage hdfs \
     --bucket namenode1:8020 \
     --access-key hdfs \
@@ -808,7 +845,7 @@ For HA cluster, the addresses of NameNodes can be specified together like this: 
 Apache Ozone is a scalable, redundant, and distributed object storage for Hadoop. It supports S3-compatible interface, so we could set `--storage` to `s3` directly.
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket http://<endpoint>/<bucket>\
     --access-key <your-access-key> \
@@ -822,10 +859,11 @@ $ juicefs format \
 [Redis](https://redis.io) can be used as both metadata storage for JuiceFS and as data storage, but when using Redis as a data storage, it is recommended not to store large-scale data.
 
 ### Standalone
+
 The `--bucket` option format is `redis://<host>:<port>/<db>`. The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage redis \
     --bucket redis://<host>:<port>/<db> \
     --access-key <username> \
@@ -833,12 +871,14 @@ $ juicefs format \
     ... \
     myjfs
 ```
-### Redis sentinel
-In Redis Sentinel mode, the format of '--bucket' option is `redis[s]://MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`. The sentinel password is declared using the 'SENTINEL_PASSWORD_FOR_OBJ' environment variable. For example:
+
+### Redis Sentinel
+
+In Redis Sentinel mode, the format of the `--bucket` option is `redis[s]://MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`. Sentinel's password needs to be declared through the `SENTINEL_PASSWORD_FOR_OBJ` environment variable. For example:
 
 ```bash
-$ export SENTINEL_PASSWORD_FOR_OBJ=sentinel_password
-$ juicefs format \
+export SENTINEL_PASSWORD_FOR_OBJ=sentinel_password
+juicefs format \
     --storage redis \
     --bucket redis://masterName,1.2.3.4,1.2.5.6:26379/2  \
     --access-key <username> \
@@ -847,11 +887,12 @@ $ juicefs format \
     myjfs
 ```
 
-### Redis cluster
-In Redis cluster mode, the format of `--bucket` option is `redis[s]://ADDR:PORT,[ADDR:PORT],[ADDR:PORT]`. For example:
+### Redis Cluster
+
+In Redis Cluster mode, the format of `--bucket` option is `redis[s]://ADDR:PORT,[ADDR:PORT],[ADDR:PORT]`. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage redis \
     --bucket redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002  \
     --access-key <username> \
@@ -866,10 +907,14 @@ $ juicefs format \
 
 TiKV can be used as both metadata storage and data storage for JuiceFS.
 
+:::note
+It's recommended to use dedicated TiKV 5.0+ cluster as the data storage for JuiceFS.
+:::
+
 The `--bucket` option format is `<host>:<port>,<host>:<port>,<host>:<port>`, and `<host>` is the address of Placement Driver (PD). The options `--access-key` and `--secret-key` have no effect and can be omitted. For example:
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage tikv \
     --bucket "<host>:<port>,<host>:<port>,<host>:<port>" \
     ... \
@@ -877,29 +922,136 @@ $ juicefs format \
 ```
 
 :::note
-Don't use the same TiKV cluster for both metadata and data, because JuiceFS uses non-transactional protocol (RawKV) for objects
-and transactional protocol (TnxKV) for metadata. The TxnKV protocol has special encoding for keys, so they may overlap with keys
-even they has different prefixes. Btw, it's recommmended to enable [Titan](https://tikv.org/docs/5.1/deploy/configure/titan/) in TiKV for data cluster.
+Don't use the same TiKV cluster for both metadata and data, because JuiceFS uses non-transactional protocol (RawKV) for objects and transactional protocol (TnxKV) for metadata. The TxnKV protocol has special encoding for keys, so they may overlap with keys even they has different prefixes. BTW, it's recommmended to enable [Titan](https://tikv.org/docs/latest/deploy/configure/titan) in TiKV for data cluster.
 :::
 
 ### Set up TLS
-If you need to enable TLS, you can set the TLS configuration item by adding the query parameter after the Bucket-URL. Currently supported configuration items:
 
-| name                 | value                                                                                                                                                       |
-|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ca    | CA root certificate, used to connect TiKV/PD with tls                                                                                                   |
-| cert  | certificate file path, used to connect TiKV/PD with tls                                                                                                 |
-| key   | private key file path, used to connect TiKV/PD with tls                                                                                                 |
-| verify-cn | verify component caller's identity, [reference link](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
+If you need to enable TLS, you can set the TLS configuration item by adding the query parameter after the bucket URL. Currently supported configuration items:
 
-example:
+| Name        | Value                                                                                                                                                   |
+|-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `ca`        | CA root certificate, used to connect TiKV/PD with TLS                                                                                                   |
+| `cert`      | certificate file path, used to connect TiKV/PD with TLS                                                                                                 |
+| `key`       | private key file path, used to connect TiKV/PD with TLS                                                                                                 |
+| `verify-cn` | verify component caller's identity, [reference link](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
+
+For example:
+
 ```bash
-$ juicefs format \
+juicefs format \
     --storage tikv \
     --bucket "<host>:<port>,<host>:<port>,<host>:<port>?ca=/path/to/ca.pem&cert=/path/to/tikv-server.pem&key=/path/to/tikv-server-key.pem&verify-cn=CN1,CN2" \
     ... \
     myjfs
 ```
+
+## etcd
+
+[etcd](https://etcd.io) is a small-scale key-value database with high availability and reliability, which can be used as both the metadata storage of JuiceFS and the data storage of JuiceFS.
+
+etcd will [limit](https://etcd.io/docs/latest/dev-guide/limit) a single request to no more than 1.5MB by default, you need to change the block size (`--block-size` option) of JuiceFS to 1MB or even lower.
+
+The `--bucket` option needs to fill in the etcd address, the format is similar to `<host1>:<port>,<host2>:<port>,<host3>:<port>`. The `--access-key` and `--secret-key` options are filled with username and password, which can be omitted when etcd does not enable user authentication. E.g:
+
+```bash
+juicefs format \
+    --storage etcd \
+    --block-size 1024 \  # This option is very important
+    --bucket "<host1>:<port>,<host2>:<port>,<host3>:<port>/prefix" \
+    --access-key myname \
+    --secret-key mypass \
+    ... \
+    myjfs
+```
+
+### Set up TLS
+
+If you need to enable TLS, you can set the TLS configuration item by adding the query parameter after the bucket URL. Currently supported configuration items:
+
+| Name                   | Value                 |
+|------------------------|-----------------------|
+| `cacert`               | CA root certificate   |
+| `cert`                 | certificate file path |
+| `key`                  | private key file path |
+| `server-name`          | name of server        |
+| `insecure-skip-verify` | 1                     |
+
+For example:
+
+```bash
+juicefs format \
+    --storage etcd \
+    --bucket "<host>:<port>,<host>:<port>,<host>:<port>?cacert=/path/to/ca.pem&cert=/path/to/server.pem&key=/path/to/key.pem&server-name=etcd" \
+    ... \
+    myjfs
+```
+
+:::note
+The path to the certificate needs to be an absolute path, and make sure that all machines that need to mount can use this path to access them.
+:::
+
+## SQLite
+
+[SQLite](https://sqlite.org) is a small, fast, single-file, reliable, full-featured single-file SQL database engine widely used around the world.
+
+When using SQLite as a data store, you only need to specify its absolute path.
+
+```shell
+juicefs format \
+    --storage sqlite3 \
+    --bucket /path/to/sqlite3.db \
+    ... \
+    myjfs
+```
+
+:::note
+Since SQLite is an embedded database, only the host where the database is located can access it, and cannot be used in multi-machine sharing scenarios. If a relative path is used when formatting, it will cause problems when mounting, please use an absolute path.
+:::
+
+## MySQL
+
+[MySQL](https://www.mysql.com) is one of the popular open source relational databases, often used as the database of choice for web applications, both as a metadata engine for JuiceFS and for storing files data. MySQL-compatible [MariaDB](https://mariadb.org), [TiDB](https://github.com/pingcap/tidb), etc. can be used as data storage.
+
+When using MySQL as a data storage, you need to create a database in advance and add the desired permissions, specify the access address through the `--bucket` option, specify the user name through the `--access-key` option, and specify the password through the `--secret-key` option. An example is as follows:
+
+```shell
+juicefs format \
+    --storage mysql \
+    --bucket (<host>:3306)/<database-name> \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+After the file system is created, JuiceFS creates a table named `jfs_blob` in the database to store the data.
+
+:::note
+Don't miss the parentheses `()` in the `--bucket` parameter.
+:::
+
+## PostgreSQL
+
+[PostgreSQL](https://www.postgresql.org) is a powerful open source relational database with a complete ecology and rich application scenarios. It can be used as both the metadata engine of JuiceFS and the data storage. Other databases compatible with the PostgreSQL protocol (such as [CockroachDB](https://github.com/cockroachdb/cockroach), etc.) can also be used as data storage.
+
+When creating a file system, you need to create a database and add the corresponding read and write permissions. Use the `--bucket` option to specify the address of the data, use the `--access-key` option to specify the username, and use the `--secret-key` option to specify the password. An example is as follows:
+
+```shell
+juicefs format \
+    --storage postgres \
+    --bucket <host>:<port>/<db>[?parameters] \
+    --access-key <username> \
+    --secret-key <password> \
+    ... \
+    myjfs
+```
+
+After the file system is created, JuiceFS creates a table named `jfs_blob` in the database to store the data.
+
+### Troubleshooting
+
+The JuiceFS client uses SSL encryption to connect to PostgreSQL by default. If the connection error `pq: SSL is not enabled on the server` indicates that the database does not have SSL enabled. You can enable SSL encryption for PostgreSQL according to your business scenario, or you can add the parameter `sslmode=disable` to the bucket URL to disable encryption verification.
 
 ## Local disk
 

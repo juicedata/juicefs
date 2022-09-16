@@ -2,7 +2,7 @@
 
 ## 为什么不支持某个对象存储？
 
-已经支持了绝大部分对象存储，参考这个[列表](guide/how_to_setup_object_storage.md#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
+已经支持了绝大部分对象存储，参考这个[列表](guide/how_to_set_up_object_storage.md#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
 ## 支持哨兵或者集群模式的 Redis 作为 JuiceFS 的元数据引擎吗？
 
@@ -46,7 +46,7 @@ JuiceFS 不将原始文件存入对象存储，而是将其按照某个大小（
 
 另外如果 JuiceFS 文件系统开启了压缩功能（默认不开启），那么对象存储上存储的对象有可能比实际文件大小更小（取决于不同类型文件的压缩比）。
 
-如果以上因素都已经排除，请检查你使用的对象存储的[存储类型](guide/how_to_setup_object_storage.md#存储类型)是什么，云服务商可能会针对某些存储类型设置最小计量单位。例如阿里云 OSS 低频访问存储的[最小计量单位](https://help.aliyun.com/document_detail/173534.html)是 64KB，如果单个文件小于 64KB 也会按照 64KB 计算。
+如果以上因素都已经排除，请检查你使用的对象存储的[存储类型](guide/how_to_set_up_object_storage.md#存储类型)是什么，云服务商可能会针对某些存储类型设置最小计量单位。例如阿里云 OSS 低频访问存储的[最小计量单位](https://help.aliyun.com/document_detail/173534.html)是 64KB，如果单个文件小于 64KB 也会按照 64KB 计算。
 
 ## 数据更新什么时候会对其它客户端可见？
 
@@ -125,6 +125,9 @@ $ ls -l /usr/bin/fusermount
 ```
 
 上面的例子表示所有用户都有权限执行。
+
+## `cannot update volume XXX from XXX to XXX`
+使用的元数据库已经被 format 过了并且本次 format 无法更新之前的某些配置。需要在手动清理元数据库后再执行 `juicefs format` 命令。
 
 ## 为什么同一个用户在主机 X 上有权限访问 JuiceFS 的文件，在主机 Y 上访问该文件却没有权限？
 

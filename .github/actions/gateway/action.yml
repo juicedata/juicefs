@@ -37,7 +37,21 @@ runs:
       uses: actions/checkout@v2
       with:
         fetch-depth: 1
-          
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.18.x'
+
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
     - name: Build linux target
       run: |
         #if it is self ruuner
@@ -174,3 +188,10 @@ runs:
         [ -d "$mp/test/" ] && exit 1 
         ./juicefs umount  $mp --force
       shell: bash
+
+    - name: log
+      if: ${{ always() }}
+      shell: bash
+      run: | 
+        tail -300 ~/.juicefs/juicefs.log
+        grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true

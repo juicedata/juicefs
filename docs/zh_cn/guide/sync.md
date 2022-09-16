@@ -5,7 +5,7 @@ position: 4
 
 # 使用 JuiceFS Sync 跨云迁移和同步数据
 
-JuiceFS 的 `sync` 子命令是功能完整的数据同步实用工具，可以在所有 [JuiceFS 支持的对象存储](../guide/how_to_setup_object_storage.md)之间多线程并发同步或迁移数据，既支持在「对象存储」与「JuiceFS」之间迁移数据，也支持在「对象存储」与「对象存储」之间跨云跨区迁移数据。与 rsync 类似，除了对象存储也支持同步本地目录、通过 SSH 访问远程目录、HDFS、WebDAV 等，同时提供全量同步、增量同步、条件模式匹配等高级功能。
+JuiceFS 的 `sync` 子命令是功能完整的数据同步实用工具，可以在所有 [JuiceFS 支持的对象存储](../guide/how_to_set_up_object_storage.md)之间多线程并发同步或迁移数据，既支持在「对象存储」与「JuiceFS」之间迁移数据，也支持在「对象存储」与「对象存储」之间跨云跨区迁移数据。与 rsync 类似，除了对象存储也支持同步本地目录、通过 SSH 访问远程目录、HDFS、WebDAV 等，同时提供全量同步、增量同步、条件模式匹配等高级功能。
 
 ## 基本用法
 
@@ -31,7 +31,7 @@ minio 目前仅支持路径风格，地址格式为 `minio://[ACCESS_KEY:SECRET_
 
 其中：
 
-- `NAME` 是存储类型，比如 `s3`、`oss`。详情查看[所有支持的存储服务](../guide/how_to_setup_object_storage.md#支持的存储服务)
+- `NAME` 是存储类型，比如 `s3`、`oss`。详情查看[所有支持的存储服务](../guide/how_to_set_up_object_storage.md#支持的存储服务)
 - `ACCESS_KEY` 和 `SECRET_KEY` 是对象存储的 API 访问密钥，如果包含了特殊字符，则需要手动转义并替换，比如 `/` 需要被替换为其转义符 `%2F`
 - `BUCKET[.ENDPOINT]` 是对象存储的访问地址
 - `PREFIX` 是可选的，限定要同步的目录名前缀。
@@ -167,7 +167,7 @@ juicefs sync --include 'pic/' --include '4.png' --exclude '*' /mnt/jfs/ s3://ABC
 
 ### 多线程和带宽限制
 
-JuiceFS `sync` 默认启用 10 个线程执行同步任务，可以根据需要设置 `--thread` 选项调大或减少线程数。
+JuiceFS `sync` 默认启用 10 个线程执行同步任务，可以根据需要设置 `--threads` 选项调大或减少线程数。
 
 另外，如果需要限制同步任务占用的带宽，可以设置 `--bwlimit` 选项，单位 `Mbps`，默认值为 `0` 即不限制。
 

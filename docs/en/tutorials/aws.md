@@ -27,7 +27,7 @@ JuiceFS clients will occupy 1GB of disk space as cache by default. When dealing 
 
 Amazon S3 is the de facto standard for public cloud object storage services, and the object storage services provided by other major cloud platforms are generally compatible with the S3 API. Thus, applications developed for S3 can switch object storage services between different platforms freely.
 
-JuiceFS fully supports Amazon S3 and all S3-like object storage services, and you can see the documentation for [all object storage services supported by JuiceFS](../guide/how_to_setup_object_storage.md).
+JuiceFS fully supports Amazon S3 and all S3-like object storage services, and you can see the documentation for [all object storage services supported by JuiceFS](../guide/how_to_set_up_object_storage.md).
 
 Amazon S3 offers a range of storage classes for different use cases, mainly including:
 
@@ -198,7 +198,7 @@ Seeing the output like the following means the file system was mounted successfu
 2021/10/14 08:47:50.132003 juicefs[10601] <INFO>: OK, mystor is ready at /mnt/jfs
 ```
 
-To check how the file system is mounted, you can use the command `df`, 
+To check how the file system is mounted, you can use the command `df`,
 
 ```shell
 $ df -Th

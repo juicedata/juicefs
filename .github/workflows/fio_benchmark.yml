@@ -140,9 +140,7 @@ jobs:
           fio_job: "big-file-rand-read-4k:       --rw=randread --refill_buffers --size=1G --filename=randread.bin --bs=4k" 
           mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
           PYROSCOPE_AUTH_TOKEN: ${{secrets.PYROSCOPE_AUTH_TOKEN}}
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
+
         
   big-file-rand-read-256k:
     if: github.repository == 'juicedata/juicefs'
@@ -158,9 +156,7 @@ jobs:
           fio_job: "big-file-rand-read-256k:       --rw=randread --refill_buffers --size=1G --filename=randread.bin --bs=256k" 
           mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
           PYROSCOPE_AUTH_TOKEN: ${{secrets.PYROSCOPE_AUTH_TOKEN}}
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
+
 
   big-file-random-write-16k:
     if: github.repository == 'juicedata/juicefs'
@@ -207,6 +203,7 @@ jobs:
           mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
           PYROSCOPE_AUTH_TOKEN: ${{secrets.PYROSCOPE_AUTH_TOKEN}}
 
+
   small-file-seq-read-256k:
     if: github.repository == 'juicedata/juicefs'
     runs-on: [ubuntu-latest]
@@ -222,6 +219,7 @@ jobs:
           mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
           PYROSCOPE_AUTH_TOKEN: ${{secrets.PYROSCOPE_AUTH_TOKEN}}
 
+        
   small-file-seq-write-4k:
     if: github.repository == 'juicedata/juicefs'
     runs-on: [ubuntu-latest]

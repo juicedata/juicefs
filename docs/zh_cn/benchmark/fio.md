@@ -17,7 +17,7 @@ JuiceFS v1.0+ 默认启用了回收站，基准测试会在文件系统中创建
 
 以下测试使用的工具为 fio 3.1。
 
-顺序读测试 (任务数: 1):
+顺序读测试 (任务数：1):
 
 ```
 fio --name=sequential-read --directory=/s3fs --rw=read --refill_buffers --bs=4M --size=4G
@@ -25,7 +25,7 @@ fio --name=sequential-read --directory=/efs --rw=read --refill_buffers --bs=4M -
 fio --name=sequential-read --directory=/jfs --rw=read --refill_buffers --bs=4M --size=4G
 ```
 
-顺序写测试 (任务数: 1):
+顺序写测试 (任务数：1):
 
 ```
 fio --name=sequential-write --directory=/s3fs --rw=write --refill_buffers --bs=4M --size=4G --end_fsync=1
@@ -33,7 +33,7 @@ fio --name=sequential-write --directory=/efs --rw=write  --refill_buffers --bs=4
 fio --name=sequential-write --directory=/jfs --rw=write --refill_buffers --bs=4M --size=4G --end_fsync=1
 ```
 
-顺序读测试 (任务数: 16):
+顺序读测试 (任务数：16):
 
 ```
 fio --name=big-file-multi-read --directory=/s3fs --rw=read --refill_buffers --bs=4M --size=4G --numjobs=16
@@ -41,7 +41,7 @@ fio --name=big-file-multi-read --directory=/efs --rw=read --refill_buffers --bs=
 fio --name=big-file-multi-read --directory=/jfs --rw=read --refill_buffers --bs=4M --size=4G --numjobs=16
 ```
 
-顺序写测试 (任务数: 16):
+顺序写测试 (任务数：16):
 
 ```
 fio --name=big-file-multi-write --directory=/s3fs --rw=write --refill_buffers --bs=4M --size=4G --numjobs=16 --end_fsync=1
@@ -53,7 +53,7 @@ fio --name=big-file-multi-write --directory=/jfs --rw=write --refill_buffers --b
 
 以下测试结果均使用 fio 在亚马逊云 c5d.18xlarge EC2  (72 CPU, 144G RAM) 实例得出，操作系统采用 Ubuntu 18.04 LTS (Kernel 5.4.0) ，JuiceFS 使用同主机的本地 Redis (version 4.0.9) 实例存储元数据。
 
-JuiceFS 挂载命令:
+JuiceFS 挂载命令：
 
 ```
 ./juicefs format --storage=s3 --bucket=https://<BUCKET>.s3.<REGION>.amazonaws.com localhost benchmark
@@ -66,7 +66,7 @@ EFS 挂载命令 (与配置说明中一致):
 mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport, <EFS-ID>.efs.<REGION>.amazonaws.com:/ /efs
 ```
 
-S3FS (version 1.82) 挂载命令:
+S3FS (version 1.82) 挂载命令：
 
 ```
 s3fs <BUCKET>:/s3fs /s3fs -o host=https://s3.<REGION>.amazonaws.com,endpoint=<REGION>,passwd_file=${HOME}/.passwd-s3fs

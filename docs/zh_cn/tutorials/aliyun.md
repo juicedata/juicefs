@@ -37,7 +37,7 @@ JuiceFS 默认会占用不超过 1GB 的硬盘空间作为缓存，可以根据�
 | **CPU**          | 1 核                     |
 | **内存**         | 1 GB                     |
 | **存储**         | 40 GB                    |
-| **操作系统**     | Ubuntu Server 20.04 64位 |
+| **操作系统**     | Ubuntu Server 20.04 64 位 |
 | **地域及可用区** | 华东 2（上海）           |
 
 ### 二、云数据库
@@ -59,13 +59,11 @@ JuiceFS 会将数据对应的元数据全部存储在独立的数据库中，目
 |  **可靠性**  |            低            |            适中            |           低           |
 | **应用场景** | 海量数据、分布式高频读写 | 海量数据、分布式中低频读写 | 少量数据单机中低频读写 |
 
-> **注意**：如果使用 JuiceFS 的[托管服务](https://juicefs.com/docs/zh/hosted_service.html)，则无需单独准备数据库。
-
 **本文使用了[云数据 Redis 版](https://www.aliyun.com/product/kvstore)，以下连接地址只是为了演示目的编制的伪地址：**
 
 | Redis 版本   | 5.0 社区版                           |
 | ------------ | ------------------------------------ |
-| **实例规格** | 256M 标准版-单副本                   |
+| **实例规格** | 256M 标准版 - 单副本                   |
 | **连接地址** | herald-sh-abc.redis.rds.aliyuncs.com |
 | **可用区**   | 上海                                 |
 
@@ -156,7 +154,7 @@ JuiceFS 具有良好的跨平台兼容性，同时支持在 Linux、Windows 和 
 
 JuiceFS 客户端安装好以后，现在就可以使用前面准备好的 Redis 数据库和 OSS 对象存储来创建 JuiceFS 存储了。
 
-严格意义上说，这一步操作应该叫做 “Format a volume”，即格式化一个卷。但考虑到有很多用户可能不了解或者不关心文件系统的标准术语，所以简单起见，我们就直白的把这个过程叫做“创建 JuiceFS 存储”。
+严格意义上说，这一步操作应该叫做“Format a volume”，即格式化一个卷。但考虑到有很多用户可能不了解或者不关心文件系统的标准术语，所以简单起见，我们就直白的把这个过程叫做“创建 JuiceFS 存储”。
 
 以下命令使用 JuiceFS 客户端提供的 `format` 子命令创建了一个名为 `mystor` 的存储，即文件系统：
 
@@ -172,7 +170,7 @@ $ juicefs format \
 
 **选项说明：**
 
-- `--storage`：指定对象存储类型，[点此查看](../guide/how_to_setup_object_storage.md#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1) JuiceFS 支持的对象存储。
+- `--storage`：指定对象存储类型，[点此查看](../guide/how_to_set_up_object_storage.md#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1) JuiceFS 支持的对象存储。
 - `--bucket`：对象存储的 Bucket 域名。当使用阿里云 OSS 时，只需填写 bucket 名称即可，无需填写完整的域名，JuiceFS 会自动识别并补全地址。
 - `--access-key` 和 `--secret-key`：访问对象存储 API 的秘钥对，[点此查看](https://help.aliyun.com/document_detail/38738.html)获取方式。
 

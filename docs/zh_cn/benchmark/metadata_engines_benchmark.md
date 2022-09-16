@@ -36,7 +36,7 @@ Amazon S3
 
 ### 元数据节点
 
-- Amazon c5d.xlarge：4 vCPUs，8 GiB 内存，最高 10 Gigabit 网络, 100 GB SSD（为元数据引擎提供本地存储）
+- Amazon c5d.xlarge：4 vCPUs，8 GiB 内存，最高 10 Gigabit 网络，100 GB SSD（为元数据引擎提供本地存储）
 - Ubuntu 20.04.1 LTS
 - SSD 数据盘被格式化为 ext4 文件系统并挂载到 `/data` 目录
 
@@ -97,7 +97,7 @@ client2 slots=4
 client3 slots=4
 ```
 
-测试命令:
+测试命令：
 
 meta only
 ```shell

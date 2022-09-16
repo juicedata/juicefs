@@ -23,7 +23,7 @@ import (
 )
 
 func TestRmr(t *testing.T) {
-	mountTemp(t, nil, true)
+	mountTemp(t, nil, nil, nil)
 	defer umountTemp(t)
 
 	paths := []string{"/dir1", "/dir2", "/dir3/dir2"}
@@ -45,9 +45,8 @@ func TestRmr(t *testing.T) {
 	}
 
 	for _, path := range paths {
-		dir, err := os.ReadDir(testMountPoint + path)
-		if len(dir) != 0 {
-			t.Fatalf("test rmr error: %s", err)
+		if dir, err := os.ReadDir(testMountPoint + path); !os.IsNotExist(err) {
+			t.Fatalf("test rmr error: %s len(dir): %d", err, len(dir))
 		}
 	}
 }

@@ -21,7 +21,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.17.x'
+          go-version: '1.18.x'
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -37,10 +37,18 @@ jobs:
         with:
           fetch-depth: 1
 
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
       - name: Build linux target
         run: |
           make juicefs
-
 
       - name: Run Redis
         run: |
@@ -93,13 +101,12 @@ jobs:
           time ./bin/ycsb run mongodb -s -P workloads/workloadf -threads 10 > outputRun.txt
           df -lh
 
-
-
       - name: Log
-        if: ${{ failure() }}
+        if: ${{ always() }}
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -108,6 +115,3 @@ jobs:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1

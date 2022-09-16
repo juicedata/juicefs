@@ -20,6 +20,7 @@ ifdef STATIC
 endif
 
 juicefs: Makefile cmd/*.go pkg/*/*.go go.*
+	go version
 	go build -ldflags="$(LDFLAGS)"  -o juicefs .
 
 juicefs.lite: Makefile cmd/*.go pkg/*/*.go
@@ -39,6 +40,8 @@ juicefs.linux:
 	sudo mkdir -p /usr/local/include/winfsp
 	sudo cp hack/winfsp_headers/* /usr/local/include/winfsp
 
+# This is the script for compiling the Windows version on the MacOS platform.
+# Please execute the `brew install mingw-w64` command before using it.
 juicefs.exe: /usr/local/include/winfsp cmd/*.go pkg/*/*.go
 	GOOS=windows CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc \
 	     go build -ldflags="$(LDFLAGS)" -buildmode exe -o juicefs.exe .
@@ -66,5 +69,5 @@ release:
 		juicedata/golang-cross:latest release --rm-dist
 
 test:
-	go test -v -cover ./pkg/... -coverprofile=cov1.out
-	sudo JFS_GC_SKIPPEDTIME=1 `which go` test -v -cover ./cmd/... -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...
+	go test -v -cover -count=1 -timeout=8m ./pkg/... -coverprofile=cov1.out
+	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword go test -v -count=1 -cover -timeout=8m ./cmd/... -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...

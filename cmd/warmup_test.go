@@ -27,7 +27,7 @@ import (
 )
 
 func TestWarmup(t *testing.T) {
-	mountTemp(t, nil, true)
+	mountTemp(t, nil, nil, nil)
 	defer umountTemp(t)
 
 	if err := os.WriteFile(fmt.Sprintf("%s/f1.txt", testMountPoint), []byte("test"), 0644); err != nil {
@@ -65,7 +65,7 @@ func TestWarmup(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	filePath = fmt.Sprintf("%s/%s/raw/chunks/0/0/1_0_4", cacheDir, uuid)
 	content, err := os.ReadFile(filePath)
-	if err != nil || string(content) != "test" {
+	if err != nil || len(content) < 4 || string(content[:4]) != "test" {
 		t.Fatalf("warmup: %s; got content %s", err, content)
 	}
 }

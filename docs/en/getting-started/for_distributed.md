@@ -42,11 +42,11 @@ For simplicity, we take Amazon ElastiCache for Redis as an example. The most bas
 
 ### 1. Install Client
 
-Install the JuiceFS client on all computers that need to mount the file system, refer to [Installation & Upgrade](installation.md) for details.
+Install the JuiceFS client on all computers that need to mount the file system, refer to ["Installation"](installation.md) for details.
 
 ### 2. Preparing Object Storage
 
-Here is a pseudo sample with Amazon S3 as an example. You can also switch to other object storage (refer to [JuiceFS Supported Storage](../guide/how_to_setup_object_storage.md#supported-object-storage) for details).
+Here is a pseudo sample with Amazon S3 as an example. You can also switch to other object storage (refer to [JuiceFS Supported Storage](../guide/how_to_set_up_object_storage.md#supported-object-storage) for details).
 
 - **Bucket Endpoint**: `https://myjfs.s3.us-west-1.amazonaws.com`
 - **Access Key ID**: `ABCDEFGHIJKLMNopqXYZ`
@@ -54,7 +54,7 @@ Here is a pseudo sample with Amazon S3 as an example. You can also switch to oth
 
 ### 3. Preparing Database
 
-Here is a pseudo sample with Amazon ElastiCache for Redis as an example. You can also switch to other types of databases (refer to [JuiceFS Supported Databases](../guide/how_to_setup_metadata_engine.md) for details).
+Here is a pseudo sample with Amazon ElastiCache for Redis as an example. You can also switch to other types of databases (refer to [JuiceFS Supported Databases](../guide/how_to_set_up_metadata_engine.md) for details).
 
 - **Database Address**: `myjfs-sh-abc.apse1.cache.amazonaws.com:6379`
 - **Database Username**: `tom`
@@ -151,7 +151,23 @@ redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1    /mnt/myj
 By default, CentOS 6 does not mount the network file system during boot, you need to run the command `sudo chkconfig --add netfs` to enable automatically mounting.
 :::
 
-### 6. Unmounting the file system
+### 6. Verify the file system
+
+After the file system is mounted, you can use the `juicefs bench` command to perform basic performance tests and functional verification of the file system to ensure that the JuiceFS file system can be accessed normally and its performance meets expectations.
+
+:::info
+The `juicefs bench` command can only complete basic performance tests. If you need a more complete evaluation of JuiceFS, please refer to ["JuiceFS Performance Evaluation Guide"](../benchmark/performance_evaluation_guide.md).
+:::
+
+```shell
+juicefs bench ~/jfs
+```
+
+After running the `juicefs bench` command, N large files (1 by default) and N small files (100 by default) will be written to and read from the JuiceFS file system according to the specified concurrency (1 by default), and statistics the throughput of read and write and the latency of a single operation, as well as the latency of accessing the metadata engine.
+
+If you encounter any problems during the verification of the file system, please refer to the ["Fault Diagnosis and Analysis"](../administration/fault_diagnosis_and_analysis.md) document for troubleshooting first.
+
+### 7. Unmounting the file system
 
 You can unmount the JuiceFS file system (assuming the mount point path is `~/jfs`) by the command `juicefs umount`.
 

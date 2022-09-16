@@ -59,8 +59,6 @@ On the other hand, if you cannot successfully connect to the cloud database thro
 | **Reliability** |                           Low                           |                            Medium                            |                             Low                              |
 |  **Scenario**   | Massive data, distributed high-frequency read and write | Massive data, distributed low and medium frequency read and write | Low frequency read and write in single machine for small amount of data |
 
-> **Note**: If you use [JuiceFS Hosted Service](https://juicefs.com/docs/en/hosted_service.html), you do not need to prepare a database.
-
 **This article uses the [ApsaraDB for Redis](https://www.alibabacloud.com/product/apsaradb-for-redis), and the following is pseudo address compiled for demonstration purposes only:**
 
 | Redis Version               | 5.0 Community Edition                  |
@@ -172,7 +170,7 @@ $ juicefs format \
 
 **Option description:**
 
-- `--storage`: Specify the type of object storage, [click here to view](../guide/how_to_setup_object_storage.md) object storage services supported by JuiceFS.
+- `--storage`: Specify the type of object storage, [click here to view](../guide/how_to_set_up_object_storage.md) object storage services supported by JuiceFS.
 - `--bucket`: Bucket domain name of the object storage. When using OSS, just fill in the bucket name, no need to fill in the full domain name, JuiceFS will automatically identify and fill in the full address.
 - `--access-key` and `--secret-key`: the secret key pair to access the object storage API, [click here](https://www.alibabacloud.com/help/doc-detail/125558.htm) to get the way.
 

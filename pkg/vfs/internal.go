@@ -290,7 +290,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		fmt.Fprintf(w, "   dirs: %d\n", summary.Dirs)
 		fmt.Fprintf(w, " length: %s\n", utils.FormatBytes(summary.Length))
 		fmt.Fprintf(w, "   size: %s\n", utils.FormatBytes(summary.Size))
-		ps := meta.GetPaths(v.Meta, ctx, inode)
+		ps := v.Meta.GetPaths(ctx, inode)
 		switch len(ps) {
 		case 0:
 			fmt.Fprintf(w, "   path: %s\n", "unknown")

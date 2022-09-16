@@ -1,8 +1,9 @@
 ---
 sidebar_label: 配置 JuiceFS S3 网关
-sidebar_position: 4
+sidebar_position: 5
 slug: /s3_gateway
 ---
+
 # 启用 JuiceFS 的 S3 网关
 
 JuiceFS 从 v0.11 开始引入了 S3 网关，这是一个通过 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)实现的功能。它为 JuiceFS 中的文件提供跟 S3 兼容的 RESTful API，在不方便挂载的情况下能够用 s3cmd、AWS CLI、MinIO Client（mc）等工具管理 JuiceFS 上存储的文件。另外，S3 网关还提供了一个基于网页的文件管理器，用户使用浏览器就能对 JuiceFS 上的文件进行常规的增删管理。
@@ -24,6 +25,9 @@ JuiceFS S3 网关是 v0.11 中引入的功能，请确保您拥有最新版本�
 ```shell
 export MINIO_ROOT_USER=admin
 export MINIO_ROOT_PASSWORD=12345678
+```
+
+```shell
 juicefs gateway redis://localhost:6379 localhost:9000
 ```
 
@@ -131,11 +135,11 @@ kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
 其中：
 
 - `name`：JuiceFS 文件系统名称
-- `metaurl`：元数据服务的访问 URL（比如 Redis）。更多信息参考[这篇文档](../guide/how_to_setup_metadata_engine.md)。
-- `storage`：对象存储类型，比如 `s3`、`gs`、`oss`。更多信息参考[这篇文档](../guide/how_to_setup_object_storage.md)。
-- `bucket`：Bucket URL。更多信息参考[这篇文档](../guide/how_to_setup_object_storage.md)。
-- `access-key`：对象存储的 access key。更多信息参考[这篇文档](../guide/how_to_setup_object_storage.md)。
-- `secret-key`：对象存储的 secret key。更多信息参考[这篇文档](../guide/how_to_setup_object_storage.md)。
+- `metaurl`：元数据服务的访问 URL（比如 Redis）。更多信息参考[这篇文档](../guide/how_to_set_up_metadata_engine.md)。
+- `storage`：对象存储类型，比如 `s3`、`gs`、`oss`。更多信息参考[这篇文档](../guide/how_to_set_up_object_storage.md)。
+- `bucket`：Bucket URL。更多信息参考[这篇文档](../guide/how_to_set_up_object_storage.md)。
+- `access-key`：对象存储的 access key。更多信息参考[这篇文档](../guide/how_to_set_up_object_storage.md)。
+- `secret-key`：对象存储的 secret key。更多信息参考[这篇文档](../guide/how_to_set_up_object_storage.md)。
 
 然后下载 S3 网关[部署 YAML](https://github.com/juicedata/juicefs/blob/main/deploy/juicefs-s3-gateway.yaml) 并通过 `kubectl` 创建 `Deployment` 和 `Service` 资源。以下几点需要特别注意：
 
@@ -154,9 +158,12 @@ curl -sSL https://raw.githubusercontent.com/juicedata/juicefs/main/deploy/juicef
 检查是否已经部署成功：
 
 ```shell
-# kubectl -n $NAMESPACE get po -o wide -l app.kubernetes.io/name=juicefs-s3-gateway
+$ kubectl -n $NAMESPACE get po -o wide -l app.kubernetes.io/name=juicefs-s3-gateway
 juicefs-s3-gateway-5c7d65c77f-gj69l         1/1     Running   0          37m     10.244.2.238   kube-node-3   <none>           <none>
-# kubectl -n $NAMESPACE get svc -l app.kubernetes.io/name=juicefs-s3-gateway
+```
+
+```shell
+$ kubectl -n $NAMESPACE get svc -l app.kubernetes.io/name=juicefs-s3-gateway
 NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
 juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
 ```
@@ -201,7 +208,7 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
 
    创建一个配置文件，例如：`values.yaml`，复制并完善下列配置信息。其中，`secret` 部分是 JuiceFS 文件系统相关的信息，你可以参照 [JuiceFS 快速上手指南](../getting-started/README.md) 了解相关内容。
 
-   ```yaml
+   ```yaml title="values.yaml"
    secret:
      name: "<name>"
      metaurl: "<meta-url>"
@@ -213,7 +220,7 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
 
    若需要部署 Ingress，在 `values.yaml` 中再加上：
 
-   ```yaml
+   ```yaml title="values.yaml"
    ingress:
      enables: true
    ```
@@ -279,6 +286,9 @@ make build
 ```shell
 export MINIO_ROOT_USER=admin
 export MINIO_ROOT_PASSWORD=12345678
+```
+
+```shell
 ./minio gateway juicefs --console-address ':59001' redis://localhost:6379
 ```
 

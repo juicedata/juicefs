@@ -4,11 +4,14 @@ sidebar_position: 2
 slug: /how_to_setup_object_storage
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # 如何设置对象存储
 
 通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md)可以了解到，JuiceFS 是一个数据与元数据分离的分布式文件系统，以对象存储作为主要的数据存储，以 Redis、PostgreSQL、MySQL 等数据库作为元数据存储。
 
-## 存储参数
+## 存储选项
 
 在创建 JuiceFS 文件系统时，设置数据存储一般涉及以下几个选项：
 
@@ -27,13 +30,13 @@ juicefs format --storage s3 \
     myjfs
 ```
 
-## 其他参数
+## 其他选项
 
-在执行 `format` 或 `mount` 命令时，可以在`--bucket`参数中以URL参数的形式设置一些特别的参数，比如`https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` 即为https请求跳过证书验证。
+在执行 `juicefs format` 或 `juicefs mount` 命令时，可以在 `--bucket` 选项中以 URL 参数的形式设置一些特别的选项，比如 `https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` 中的 `tls-insecure-skip-verify=true` 即为跳过 HTTPS 请求的证书验证环节。
 
 ## Access Key 和 Secret Key
 
-一般而言，对象存储通过 `Access Key ID` 和 `Access Key Secret` 验证用户身份，对应到 JuiceFS 文件系统就是 `--access-key` 和 `--secret-key` 这两个选项（或者简称为 AK、SK）。
+一般而言，对象存储通过 Access Key ID 和 Access Key Secret 验证用户身份，对应到 JuiceFS 文件系统就是 `--access-key` 和 `--secret-key` 这两个选项（或者简称为 AK、SK）。
 
 创建文件系统时除了使用 `--access-key` 和 `--secret-key` 两个选项显式指定，更安全的做法是通过 `ACCESS_KEY` 和 `SECRET_KEY` 环境变量传递密钥信息，例如：
 
@@ -50,27 +53,33 @@ juicefs format --storage s3 \
 
 ## 使用临时访问凭证
 
-永久访问凭证一般有两个部分，accessKey，secretKey，而临时访问凭证一般包括 3 个部分，accessKey，secretKey 与 token，并且临时访问凭证具有过期时间，一般在几分钟到几个小时之间。
+永久访问凭证一般有两个部分：Access Key 和 Secret Key，而临时访问凭证一般包括 3 个部分：Access Key、Secret Key 与 token，并且临时访问凭证具有过期时间，一般在几分钟到几个小时之间。
 
 ### 如何获取临时凭证
 
-不同云厂商的获取方式不同，一般是需要以具有相应权限用户的 accessKey，secretKey 以及代表临时访问凭证的权限边界的 ARN 作为参数请求访问云服务厂商的 STS 服务器来获取临时访问凭证。这个过程一般可以由云厂商提供的 SDK 简化操作。比如 AWS S3 获取临时凭证方式可以参考这个[链接](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html)，阿里云 OSS 获取临时凭证方式可以参考这个[链接](https://help.aliyun.com/document_detail/100624.html)。
+不同云厂商的获取方式不同，一般是需要已具有相应权限用户的 Access Key、Secret Key 以及代表临时访问凭证的权限边界的 ARN 作为参数请求访问云服务厂商的 STS 服务器来获取临时访问凭证。这个过程一般可以由云厂商提供的 SDK 简化操作。比如 Amazon S3 获取临时凭证方式可以参考这个[链接](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html)，阿里云 OSS 获取临时凭证方式可以参考这个[链接](https://help.aliyun.com/document_detail/100624.html)。
 
 ### 如何使用临时访问凭证设置对象存储
 
-使用临时凭证的方式与使用永久凭证差异不大，在文件系统 `format` 时，将临时凭证的 accessKey， secretKey， token 分别通过 --access-key，--secret-key，--session-token 设置值即可。 例如：
+使用临时凭证的方式与使用永久凭证差异不大，在格式化文件系统时，将临时凭证的 Access Key、Secret Key、token 分别通过 `--access-key`、`--secret-key`、`--session-token` 设置值即可。例如：
 
 ```bash
-juicefs format --storage oss --access-key xxxx --secret-key xxxx --session-token xxxx --bucket https://bucketName.oss-cn-hangzhou.aliyuncs.com redis://localhost:6379/1 test1
+juicefs format \
+    --storage oss \
+    --access-key xxxx \
+    --secret-key xxxx \
+    --session-token xxxx \
+    --bucket https://bucketName.oss-cn-hangzhou.aliyuncs.com \
+    redis://localhost:6379/1 \
+    test1
 ```
 
-由于临时凭证很快就会过期，所以关键在于在 `format` 文件系统后，如何在临时凭证过期前更新 juicefs 正在使用的临时凭证。一次凭证更新过程分为两步:
+由于临时凭证很快就会过期，所以关键在于格式化文件系统以后，如何在临时凭证过期前更新 JuiceFS 正在使用的临时凭证。一次凭证更新过程分为两步：
 
-1. 在临时凭证过期前，申请好新的临时凭证
-2. 无需停止正在运行的 juicefs ，直接使用 `juicefs config Meta-URL --access-key xxxx  --secret-key xxxx --session-token xxxx` 命令热更新访问凭证
+1. 在临时凭证过期前，申请好新的临时凭证；
+2. 无需停止正在运行的 JuiceFS，直接使用 `juicefs config Meta-URL --access-key xxxx --secret-key xxxx --session-token xxxx` 命令热更新访问凭证。
 
-新挂载的客户端会直接使用新的凭证，已经在运行的所有客户端也会在一分钟内更新自己的凭证。整个更新过程不会影响正在运行的业务。由于临时凭证过期时间较短，所以以上步骤需要**长期循环执行**才能保证 juicefs 服务可以正常访问到对象存储。
-
+新挂载的客户端会直接使用新的凭证，已经在运行的所有客户端也会在一分钟内更新自己的凭证。整个更新过程不会影响正在运行的业务。由于临时凭证过期时间较短，所以以上步骤需要**长期循环执行**才能保证 JuiceFS 服务可以正常访问到对象存储。
 
 ## 内网和外网 Endpoint
 
@@ -100,9 +109,9 @@ JuiceFS 对这种区分内网外地址的对象存储服务也做了灵活的支
 以 Linux 为例，可以通过创建 `http_proxy` 和 `https_proxy` 环境变量设置代理：
 
 ```shell
-$ export http_proxy=http://localhost:8035/
-$ export https_proxy=http://localhost:8035/
-$ juicefs format \
+export http_proxy=http://localhost:8035/
+export https_proxy=http://localhost:8035/
+juicefs format \
     --storage s3 \
     ... \
     myjfs
@@ -112,45 +121,46 @@ $ juicefs format \
 
 如果你希望使用的存储类型不在列表中，欢迎提交需求 [issue](https://github.com/juicedata/juicefs/issues)。
 
-| Name                                        | Value        |
-| ------------------------------------------- | ------------ |
-| [Amazon S3](#amazon-s3)                     | `s3`         |
-| [Google 云存储](#google-云存储)             | `gs`         |
-| [Azure Blob 存储](#azure-blob-存储)         | `wasb`       |
-| [Backblaze B2](#backblaze-b2)               | `b2`         |
-| [IBM 云对象存储](#ibm-云对象存储)           | `ibmcos`     |
-| [Oracle 云对象存储](#oracle-云对象存储)     | `s3`         |
-| [Scaleway](#scaleway)                       | `scw`        |
-| [DigitalOcean Spaces](#digitalocean-spaces) | `space`      |
-| [Wasabi](#wasabi)                           | `wasabi`     |
-| [Storj DCS](#storj-dcs)                     | `s3`         |
-| [Vultr 对象存储](#vultr-对象存储)           | `s3`         |
-| [阿里云 OSS](#阿里云-oss)                   | `oss`        |
-| [腾讯云 COS](#腾讯云-cos)                   | `cos`        |
-| [华为云 OBS](#华为云-obs)                   | `obs`        |
-| [百度云 BOS](#百度云-bos)                   | `bos`        |
-| [金山云 KS3](#金山云-ks3)                   | `ks3`        |
-| [网易云 NOS](#网易云-nos)                   | `nos`        |
-| [青云 QingStor](#青云-qingstor)             | `qingstor`   |
-| [七牛云 Kodo](#七牛云-kodo)                 | `qiniu`      |
-| [新浪云 SCS](#新浪云-scs)                   | `scs`        |
-| [天翼云 OOS](#天翼云-oos)                   | `oos`        |
-| [移动云 EOS](#移动云-eos)                   | `eos`        |
-| [优刻得 US3](#优刻得-us3)                   | `ufile`      |
-| [Ceph RADOS](#ceph-rados)                   | `ceph`       |
-| [Ceph RGW](#ceph-rgw)                       | `s3`         |
-| [Swift](#swift)                             | `swift`      |
-| [MinIO](#minio)                             | `minio`      |
-| [WebDAV](#webdav)                           | `webdav`     |
-| [HDFS](#hdfs)                               | `hdfs`       |
-| [Apache Ozone](#apache-ozone)               | `s3`         |
-| [Redis](#redis)                             | `redis`      |
-| [TiKV](#tikv)                               | `tikv`       |
-| [etcd](#etcd)                               | `etcd`       |
-| [SQLite](#sqlite)                           | `sqlite3`    |
-| [MySQL](#mysql)                             | `mysql`      |
-| [PostgreSQL](#postgresql)                   | `postgres`   |
-| [本地磁盘](#本地磁盘)                       | `file`       |
+| Name                                        | Value      |
+|---------------------------------------------|------------|
+| [Amazon S3](#amazon-s3)                     | `s3`       |
+| [Google 云存储](#google-云存储)             | `gs`       |
+| [Azure Blob 存储](#azure-blob-存储)         | `wasb`     |
+| [Backblaze B2](#backblaze-b2)               | `b2`       |
+| [IBM 云对象存储](#ibm-云对象存储)           | `ibmcos`   |
+| [Oracle 云对象存储](#oracle-云对象存储)     | `s3`       |
+| [Scaleway](#scaleway)                       | `scw`      |
+| [DigitalOcean Spaces](#digitalocean-spaces) | `space`    |
+| [Wasabi](#wasabi)                           | `wasabi`   |
+| [Storj DCS](#storj-dcs)                     | `s3`       |
+| [Vultr 对象存储](#vultr-对象存储)           | `s3`       |
+| [阿里云 OSS](#阿里云-oss)                   | `oss`      |
+| [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
+| [华为云 OBS](#华为云-obs)                   | `obs`      |
+| [百度云 BOS](#百度云-bos)                   | `bos`      |
+| [金山云 KS3](#金山云-ks3)                   | `ks3`      |
+| [网易云 NOS](#网易云-nos)                   | `nos`      |
+| [青云 QingStor](#青云-qingstor)             | `qingstor` |
+| [七牛云 Kodo](#七牛云-kodo)                 | `qiniu`    |
+| [新浪云 SCS](#新浪云-scs)                   | `scs`      |
+| [天翼云 OOS](#天翼云-oos)                   | `oos`      |
+| [移动云 EOS](#移动云-eos)                   | `eos`      |
+| [京东云 OSS](#京东云-oss)                   | `s3`       |
+| [优刻得 US3](#优刻得-us3)                   | `ufile`    |
+| [Ceph RADOS](#ceph-rados)                   | `ceph`     |
+| [Ceph RGW](#ceph-rgw)                       | `s3`       |
+| [Swift](#swift)                             | `swift`    |
+| [MinIO](#minio)                             | `minio`    |
+| [WebDAV](#webdav)                           | `webdav`   |
+| [HDFS](#hdfs)                               | `hdfs`     |
+| [Apache Ozone](#apache-ozone)               | `s3`       |
+| [Redis](#redis)                             | `redis`    |
+| [TiKV](#tikv)                               | `tikv`     |
+| [etcd](#etcd)                               | `etcd`     |
+| [SQLite](#sqlite)                           | `sqlite3`  |
+| [MySQL](#mysql)                             | `mysql`    |
+| [PostgreSQL](#postgresql)                   | `postgres` |
+| [本地磁盘](#本地磁盘)                       | `file`     |
 
 ## Amazon S3
 
@@ -173,7 +183,7 @@ JuiceFS v0.12 之前的版本仅支持虚拟托管类型，v0.12 以及之后的
 
 ```bash
 # 虚拟托管类型
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://<bucket>.s3.<region>.amazonaws.com \
     ... \
@@ -182,7 +192,7 @@ $ juicefs format \
 
 ```bash
 # 路径类型
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://s3.<region>.amazonaws.com/<bucket> \
     ... \
@@ -193,7 +203,7 @@ $ juicefs format \
 
 ```bash
 # 虚拟托管类型
-$ ./juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<endpoint> \
     ... \
@@ -202,7 +212,7 @@ $ ./juicefs format \
 
 ```bash
 # 路径类型
-$ ./juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://<endpoint>/<bucket> \
     ... \
@@ -219,9 +229,9 @@ Google 云采用 [IAM](https://cloud.google.com/iam/docs/overview) 管理资源�
 
 对于归属于同一服务账号的云服务器和对象存储，只要该账号赋予了相关资源的访问权限，创建 JuiceFS 文件系统时无需提供身份验证信息，云平台会自行完成鉴权。
 
-对于要从谷歌云平台外部访问对象存储的情况，比如要在本地计算机上使用 Google 云存储创建 JuiceFS 文件系统，则需要配置认证信息。由于 Google 云存储并不使用 `Access Key ID` 和 `Access Key Secret`，而是通过服务账号的 `JSON 密钥文件`验证身份。
+对于要从谷歌云平台外部访问对象存储的情况，比如要在本地计算机上使用 Google 云存储创建 JuiceFS 文件系统，则需要配置认证信息。由于 Google 云存储并不使用 Access Key ID 和 Access Key Secret，而是通过服务账号的 JSON 密钥文件验证身份。
 
-请参考《[以服务帐号身份进行身份验证](https://cloud.google.com/docs/authentication/production)》为服务账号创建 `JSON 密钥文件`并下载到本地计算机，通过 `GOOGLE_APPLICATION_CREDENTIALS` 环境变量定义密钥文件的路径，例如：
+请参考[「以服务帐号身份进行身份验证」](https://cloud.google.com/docs/authentication/production)为服务账号创建 JSON 密钥文件并下载到本地计算机，通过 `GOOGLE_APPLICATION_CREDENTIALS` 环境变量定义密钥文件的路径，例如：
 
 ```shell
 export GOOGLE_APPLICATION_CREDENTIALS="$HOME/service-account-file.json"
@@ -232,7 +242,7 @@ export GOOGLE_APPLICATION_CREDENTIALS="$HOME/service-account-file.json"
 配置了传递密钥信息的环境变量以后，在本地和在 Google 云服务器上创建文件系统的命令是完全相同的。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage gs \
     --bucket <bucket> \
     ... \
@@ -261,8 +271,8 @@ juicefs format \
 
 ```bash
 # Use connection string
-$ export AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;AccountName=XXX;AccountKey=XXX;EndpointSuffix=core.windows.net"
-$ juicefs format \
+export AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;AccountName=XXX;AccountKey=XXX;EndpointSuffix=core.windows.net"
+juicefs format \
     --storage wasb \
     --bucket https://<container> \
     ... \
@@ -275,7 +285,7 @@ $ juicefs format \
 
 ## Backblaze B2
 
-使用 Backblaze B2 作为 JuiceFS 的数据存储，需要先创建  [application key](https://www.backblaze.com/b2/docs/application_keys.html)，**Application Key ID** 和 **Application Key** 分别对应 `Access key` 和 `Secret key`。
+使用 Backblaze B2 作为 JuiceFS 的数据存储，需要先创建 [application key](https://www.backblaze.com/b2/docs/application_keys.html)，**Application Key ID** 和 **Application Key** 分别对应 Access Key 和 Secret Key。
 
 Backblaze B2 支持两种访问接口：B2 原生 API 和 S3 兼容 API。
 
@@ -284,7 +294,7 @@ Backblaze B2 支持两种访问接口：B2 原生 API 和 S3 兼容 API。
 存储类型应设置为 `b2`，`--bucket` 只需设置 bucket 名称。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage b2 \
     --bucket <bucket> \
     --access-key <application-key-ID> \
@@ -298,7 +308,7 @@ $ juicefs format \
 存储类型应设置为 `s3`，`--bucket` 应指定完整的 bucket 地址。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://s3.eu-central-003.backblazeb2.com/<bucket> \
     --access-key <application-key-ID> \
@@ -309,12 +319,12 @@ $ juicefs format \
 
 ## IBM 云对象存储
 
-使用 IBM 云对象存储创建 JuiceFS 文件系统，你首先需要创建 [API key](https://cloud.ibm.com/docs/account?topic=account-manapikey) 和 [instance ID](https://cloud.ibm.com/docs/key-protect?topic=key-protect-retrieve-instance-ID)。**API key** 和 **instance ID** 分别对应 `Access key` 和 `Secret key`。
+使用 IBM 云对象存储创建 JuiceFS 文件系统，你首先需要创建 [API key](https://cloud.ibm.com/docs/account?topic=account-manapikey) 和 [instance ID](https://cloud.ibm.com/docs/key-protect?topic=key-protect-retrieve-instance-ID)。**API key** 和 **instance ID** 分别对应 Access Key 和 Secret Key。
 
 IBM 云对象存储为每一个区域提供了 `公网` 和 `内网` 两种 [endpoint 地址](https://cloud.ibm.com/docs/cloud-object-storage?topic=cloud-object-storage-endpoints)，你可以根据实际需要选用。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage ibmcos \
     --bucket https://<bucket>.<endpoint> \
     --access-key <API-key> \
@@ -330,7 +340,7 @@ Oracle 云对象存储支持 S3 兼容的形式进行访问，详细请参考[�
 该对象存储的 `endpoint` 格式为：`${namespace}.compat.objectstorage.${region}.oraclecloud.com`，例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<endpoint> \
     --access-key <your-access-key> \
@@ -341,12 +351,12 @@ $ juicefs format \
 
 ## Scaleway
 
-使用 Scaleway 对象存储作为 JuiceFS 数据存储，请先 [查看文档](https://www.scaleway.com/en/docs/generate-api-keys) 了解如何创建  `Access key` 和 `Secret key`。
+使用 Scaleway 对象存储作为 JuiceFS 数据存储，请先 [查看文档](https://www.scaleway.com/en/docs/generate-api-keys) 了解如何创建 Access Key 和 Secret Key。
 
 `--bucket` 选项的设置格式为 `https://<bucket>.s3.<region>.scw.cloud`，请将其中的 `<region>` 替换成实际的区域代码，例如：荷兰阿姆斯特丹的区域代码是 `nl-ams`。[点此查看](https://www.scaleway.com/en/docs/object-storage-feature/#-Core-Concepts) 所有可用的区域代码。
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage scw \
     --bucket https://<bucket>.s3.<region>.scw.cloud \
     ... \
@@ -355,12 +365,12 @@ $ juicefs format \
 
 ## DigitalOcean Spaces
 
-使用 DigitalOcean Spaces 作为 JuiceFS 数据存储，请先 [查看文档](https://www.digitalocean.com/community/tutorials/how-to-create-a-digitalocean-space-and-api-key) 了解如何创建  `Access key` 和 `Secret key`。
+使用 DigitalOcean Spaces 作为 JuiceFS 数据存储，请先 [查看文档](https://www.digitalocean.com/community/tutorials/how-to-create-a-digitalocean-space-and-api-key) 了解如何创建 Access Key 和 Secret Key。
 
 `--bucket` 选项的设置格式为 `https://<space-name>.<region>.digitaloceanspaces.com`，请将其中的 `<region>` 替换成实际的区域代码，例如：`nyc3`。[点此查看](https://www.digitalocean.com/docs/spaces/#regional-availability) 所有可用的区域代码。
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage space \
     --bucket https://<space-name>.<region>.digitaloceanspaces.com \
     ... \
@@ -369,12 +379,12 @@ $ juicefs format \
 
 ## Wasabi
 
-使用 Wasabi 作为 JuiceFS 数据存储，请先 [查看文档](https://wasabi-support.zendesk.com/hc/en-us/articles/360019677192-Creating-a-Root-Access-Key-and-Secret-Key) 了解如何创建  `Access key` 和 `Secret key`。
+使用 Wasabi 作为 JuiceFS 数据存储，请先 [查看文档](https://wasabi-support.zendesk.com/hc/en-us/articles/360019677192-Creating-a-Root-Access-Key-and-Secret-Key) 了解如何创建 Access Key 和 Secret Key。
 
 `--bucket` 选项的设置格式为 `https://<bucket>.s3.<region>.wasabisys.com`，请将其中的  `<region>`  替换成实际的区域代码，例如：US East 1 (N. Virginia) 的区域代码为 `us-east-1`。[点此查看](https://wasabi-support.zendesk.com/hc/en-us/articles/360.15.26031-What-are-the-service-URLs-for-Wasabi-s-different-regions-) 所有可用的区域代码。
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage wasabi \
     --bucket https://<bucket>.s3.<region>.wasabisys.com \
     ... \
@@ -387,12 +397,12 @@ Tokyo (ap-northeast-1) 区域的用户，查看 [这篇文档](https://wasabi-su
 
 ## Storj DCS
 
-使用 Storj DCS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.storj.io/api-reference/s3-compatible-gateway) 了解如何创建 `Access key` 和 `Secret key`。
+使用 Storj DCS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.storj.io/api-reference/s3-compatible-gateway) 了解如何创建 Access Key 和 Secret Key。
 
 Storj DCS 兼容 AWS S3，存储类型使用 `s3` ，`--bucket` 格式为 `https://gateway.<region>.storjshare.io/<bucket>`。`<region>` 为存储区域，目前 DCS 有三个可用存储区域：us1、ap1 和 eu1。
 
 ```shell
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://gateway.<region>.storjshare.io/<bucket> \
     --access-key <your-access-key> \
@@ -406,7 +416,7 @@ $ juicefs format \
 Vultr 的对象存储兼容 S3 API，存储类型使用 `s3`，`--bucket` 格式为 `https://<bucket>.<region>.vultrobjects.com/`。例如：
 
 ```shell
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket https://<bucket>.ewr1.vultrobjects.com/ \
     --access-key <your-access-key> \
@@ -419,16 +429,16 @@ $ juicefs format \
 
 ## 阿里云 OSS
 
-使用阿里云 OSS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://help.aliyun.com/document_detail/38738.html) 了解如何创建 `Access key` 和 `Secret key`。如果你已经创建了 [RAM 角色](https://help.aliyun.com/document_detail/93689.html) 并指派给了云服务器实例，则在创建文件系统时可以忽略 `--access-key` 和 `--secret-key` 选项。
+使用阿里云 OSS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://help.aliyun.com/document_detail/38738.html) 了解如何创建 Access Key 和 Secret Key。如果你已经创建了 [RAM 角色](https://help.aliyun.com/document_detail/93689.html) 并指派给了云服务器实例，则在创建文件系统时可以忽略 `--access-key` 和 `--secret-key` 选项。
 
 阿里云也支持使用 [Security Token Service (STS)](https://help.aliyun.com/document_detail/100624.html) 作为 OSS 的临时访问身份验证。如果你要使用 STS，请设置  `ALICLOUD_ACCESS_KEY_ID`、`ALICLOUD_ACCESS_KEY_SECRET` 和 `SECURITY_TOKEN ` 环境变量，不要设置 `--access-key` and `--secret-key` 选项。例如：
 
 ```bash
 # Use Security Token Service (STS)
-$ export ALICLOUD_ACCESS_KEY_ID=XXX
-$ export ALICLOUD_ACCESS_KEY_SECRET=XXX
-$ export SECURITY_TOKEN=XXX
-$ juicefs format \
+export ALICLOUD_ACCESS_KEY_ID=XXX
+export ALICLOUD_ACCESS_KEY_SECRET=XXX
+export SECURITY_TOKEN=XXX
+juicefs format \
     --storage oss \
     --bucket https://<bucket>.<endpoint> \
     ... \
@@ -440,7 +450,8 @@ $ juicefs format \
 如果你是在阿里云的服务器上创建文件系统，可以在 `--bucket` 选项中直接指定 bucket 名称。例如：
 
 ```bash
-$ juicefs format \
+# 在阿里云中运行
+juicefs format \
     --storage oss \
     --bucket <bucket> \
     ... \
@@ -454,18 +465,18 @@ $ juicefs format \
 `--bucket` 选项的完整格式为 `https://<bucket>-<APPID>.cos.<region>.myqcloud.com`，请将 `<region>` 替换成你实际使用的存储区域，例如：上海的区域代码为 `ap-shanghai`。[点此查看](https://cloud.tencent.com/document/product/436/6224) 所有可用的区域代码。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage cos \
     --bucket https://<bucket>-<APPID>.cos.<region>.myqcloud.com \
     ... \
     myjfs
 ```
 
-如果你是在腾讯云的服务器上创建文件系统，可以在 `--bucket` 选项中直接指定 bucket 名称。 例如：
+如果你是在腾讯云的服务器上创建文件系统，可以在 `--bucket` 选项中直接指定 bucket 名称。例如：
 
 ```bash
-# Running within Tencent Cloud
-$ juicefs format \
+# 在腾讯云中运行
+juicefs format \
     --storage cos \
     --bucket <bucket>-<APPID> \
     ... \
@@ -474,12 +485,12 @@ $ juicefs format \
 
 ## 华为云 OBS
 
-使用华为云 OBS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://support.huaweicloud.com/usermanual-ca/zh-cn_topic_0046606340.html) 了解如何创建 `Access key` 和 `Secret key`。
+使用华为云 OBS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://support.huaweicloud.com/usermanual-ca/zh-cn_topic_0046606340.html) 了解如何创建 Access Key 和 Secret Key。
 
 `--bucket` 选项的格式为 `https://<bucket>.obs.<region>.myhuaweicloud.com`，请将 `<region>` 替换成你实际使用的存储区域，例如：北京一的区域代码为 `cn-north-1`。[点此查看](https://developer.huaweicloud.com/endpoint?OBS) 所有可用的区域代码。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage obs \
     --bucket https://<bucket>.obs.<region>.myhuaweicloud.com \
     ... \
@@ -489,8 +500,8 @@ $ juicefs format \
 如果是你在华为云的服务器上创建文件系统，可以在 `--bucket` 直接指定 bucket 名称。例如：
 
 ```bash
-# Running within Huawei Cloud
-$ juicefs format \
+# 在华为云中运行
+juicefs format \
     --storage obs \
     --bucket <bucket> \
     ... \
@@ -499,12 +510,12 @@ $ juicefs format \
 
 ## 百度 BOS
 
-使用百度云 BOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://cloud.baidu.com/doc/Reference/s/9jwvz2egb) 了解如何创建 `Access key` 和 `Secret key`。
+使用百度云 BOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://cloud.baidu.com/doc/Reference/s/9jwvz2egb) 了解如何创建 Access Key 和 Secret Key。
 
 `--bucket` 选项的格式为 `https://<bucket>.<region>.bcebos.com`，请将 `<region>` 替换成你实际使用的存储区域，例如：北京的区域代码为 `bj`。[点此查看](https://cloud.baidu.com/doc/BOS/s/Ck1rk80hn#%E8%AE%BF%E9%97%AE%E5%9F%9F%E5%90%8D%EF%BC%88endpoint%EF%BC%89) 所有可用的区域代码。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage bos \
     --bucket https://<bucket>.<region>.bcebos.com \
     ... \
@@ -514,8 +525,8 @@ $ juicefs format \
 如果你是在百度云的服务器上创建文件系统，可以在 `--bucket` 直接指定 bucket 名称。例如：
 
 ```bash
-# Running within Baidu Cloud
-$ juicefs format \
+# 在百度云中运行
+juicefs format \
     --storage bos \
     --bucket <bucket> \
     ... \
@@ -524,12 +535,12 @@ $ juicefs format \
 
 ## 金山云 KS3
 
-使用金山云 KS3 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.ksyun.com/documents/1386) 了解如何创建 `Access key` 和 `Secret key`。
+使用金山云 KS3 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.ksyun.com/documents/1386) 了解如何创建 Access Key 和 Secret Key。
 
 金山云 KS3 为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://docs.ksyun.com/documents/6761)，你可以根据实际的场景选用。
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage ks3 \
     --bucket https://<bucket>.<endpoint> \
     ... \
@@ -538,12 +549,12 @@ $ juicefs format \
 
 ## 网易云 NOS
 
-使用网易云 NOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.163yun.com/help/documents/55485278220111872) 了解如何创建 `Access key` 和 `Secret key`。
+使用网易云 NOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.163yun.com/help/documents/55485278220111872) 了解如何创建 Access Key 和 Secret Key。
 
 网易云 NOS 为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://www.163yun.com/help/documents/67078583131230208)，你可以根据实际的场景选用。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage nos \
     --bucket https://<bucket>.<endpoint> \
     ... \
@@ -552,12 +563,12 @@ $ juicefs format \
 
 ## 青云 QingStor
 
-使用青云 QingStor 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docsv3.qingcloud.com/storage/object-storage/api/practices/signature/#%E8%8E%B7%E5%8F%96-access-key) 了解如何创建 `Access key` 和 `Secret key`。
+使用青云 QingStor 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docsv3.qingcloud.com/storage/object-storage/api/practices/signature/#%E8%8E%B7%E5%8F%96-access-key) 了解如何创建 Access Key 和 Secret Key。
 
 `--bucket` 选项的格式为 `https://<bucket>.<region>.qingstor.com`，请将 `<region>` 替换成你实际使用的存储区域，例如：北京 3-A 的区域代码为 `pek3a`。[点此查看](https://docs.qingcloud.com/qingstor/#%E5%8C%BA%E5%9F%9F%E5%8F%8A%E8%AE%BF%E9%97%AE%E5%9F%9F%E5%90%8D) 所有可用的区域代码。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage qingstor \
     --bucket https://<bucket>.<region>.qingstor.com \
     ... \
@@ -570,12 +581,12 @@ $ juicefs format \
 
 ## 七牛云 Kodo
 
-使用七牛云 Kodo 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://developer.qiniu.com/af/kb/1479/how-to-access-or-locate-the-access-key-and-secret-key) 了解如何创建 `Access key` 和 `Secret key`。
+使用七牛云 Kodo 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://developer.qiniu.com/af/kb/1479/how-to-access-or-locate-the-access-key-and-secret-key) 了解如何创建 Access Key 和 Secret Key。
 
 `--bucket` 选项的格式为 `https://<bucket>.s3-<region>.qiniucs.com`，请将 `<region>` 替换成你实际使用的存储区域，例如：中国东部的区域代码为 `cn-east-1`。[点此查看](https://developer.qiniu.com/kodo/4088/s3-access-domainname) 所有可用的区域代码。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage qiniu \
     --bucket https://<bucket>.s3-<region>.qiniucs.com \
     ... \
@@ -584,12 +595,12 @@ $ juicefs format \
 
 ## 新浪云 SCS
 
-使用新浪云 SCS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) 了解如何创建 `Access key` 和 `Secret key`。
+使用新浪云 SCS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) 了解如何创建 Access Key 和 Secret Key。
 
 `--bucket` 选项格式为 `https://<bucket>.stor.sinaapp.com`。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage scs \
     --bucket https://<bucket>.stor.sinaapp.com \
     ... \
@@ -598,12 +609,12 @@ $ juicefs format \
 
 ## 天翼云 OOS
 
-使用天翼云 OOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.ctyun.cn/help2/10000101/10473683) 了解如何创建 `Access key` 和 `Secret key`。
+使用天翼云 OOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.ctyun.cn/help2/10000101/10473683) 了解如何创建 Access Key 和 Secret Key。
 
 `--bucket` 选项的格式为 `https://<bucket>.<endpoint>`，例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage oos \
     --bucket https://<bucket>.<endpoint> \
     ... \
@@ -612,26 +623,40 @@ $ juicefs format \
 
 ## 移动云 EOS
 
-使用移动云 EOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://ecloud.10086.cn/op-help-center/doc/article/24501) 了解如何创建 `Access key` 和 `Secret key`。
+使用移动云 EOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://ecloud.10086.cn/op-help-center/doc/article/24501) 了解如何创建 Access Key 和 Secret Key。
 
 移动云 EOS 为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://ecloud.10086.cn/op-help-center/doc/article/40956)，你可以根据实际的场景选用。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage eos \
     --bucket https://<bucket>.<endpoint> \
     ... \
     myjfs
 ```
 
-## 优刻得 US3
+## 京东云 OSS
 
-使用优刻得 US3 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.ucloud.cn/uai-censor/access/key) 了解如何创建 `Access key` 和 `Secret key`。
+使用京东云 OSS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.jdcloud.com/cn/account-management/accesskey-management) 了解如何创建 Access Key 和 Secret Key。
 
-优刻得 US3（原名 UFile） 为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://docs.ucloud.cn/ufile/introduction/region)，你可以根据实际的场景选用。例如：
+`--bucket` 选项的格式为 `https://<bucket>.<region>.jdcloud-oss.com`，请将 `<region>` 替换成你实际使用的存储区域，区域代码[点此查看](https://docs.jdcloud.com/cn/object-storage-service/oss-endpont-list) 。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
+    --storage s3 \
+    --bucket https://<bucket>.<region>.jdcloud-oss.com \
+    ... \
+    myjfs
+```
+
+## 优刻得 US3
+
+使用优刻得 US3 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.ucloud.cn/uai-censor/access/key) 了解如何创建 Access Key 和 Secret Key。
+
+优刻得 US3（原名 UFile）为每个区域都提供了 `公网` 和 `内网` [endpoint 链接](https://docs.ucloud.cn/ufile/introduction/region)，你可以根据实际的场景选用。例如：
+
+```bash
+juicefs format \
     --storage ufile \
     --bucket https://<bucket>.<endpoint> \
     ... \
@@ -657,13 +682,22 @@ JuiceFS 支持使用基于 `librados` 的本地 Ceph API。您需要分别安装
 建议使用匹配你的 Ceph 版本的 `librados`，例如 Ceph 版本是 Octopus（v15.2.\*），那么 `librados` 也建议使用 v15.2.\* 版本。某些 Linux 发行版（如 CentOS 7）自带的 `librados` 版本可能较低，如果编译 JuiceFS 失败可以尝试下载更高版本的安装包。
 :::
 
-```bash
-# Debian based system
-sudo apt-get install librados-dev
+<Tabs>
+  <TabItem value="debian" label="Debian 及衍生版本">
 
-# RPM based system
+```bash
+sudo apt-get install librados-dev
+```
+
+  </TabItem>
+  <TabItem value="centos" label="RHEL 及衍生版本">
+
+```bash
 sudo yum install librados2-devel
 ```
+
+  </TabItem>
+</Tabs>
 
 然后为 Ceph 编译 JuiceFS（要求 Go 1.17+ 和 GCC 5.4+）：
 
@@ -673,7 +707,7 @@ make juicefs.ceph
 
 [存储池](https://docs.ceph.com/zh_CN/latest/rados/operations/pools) 是用于存储对象的逻辑分区，您可能需要首先创建一个存储池。 `--access-key` 选项的值是 Ceph 集群名称，默认集群名称是 `ceph`。` --secret-key` 选项的值是 [Ceph 客户端用户名](https://docs.ceph.com/en/latest/rados/operations/user-management)，默认用户名是 `client.admin`。
 
-为了连接到 Ceph Monitor，`librados` 将通过搜索默认位置读取 Ceph 的配置文件，并使用找到的第一个。 这些位置是：
+为了连接到 Ceph Monitor，`librados` 将通过搜索默认位置读取 Ceph 的配置文件，并使用找到的第一个。这些位置是：
 
 - `CEPH_CONF` 环境变量
 - `/etc/ceph/ceph.conf`
@@ -683,7 +717,7 @@ make juicefs.ceph
 例如：
 
 ```bash
-$ juicefs.ceph format \
+juicefs.ceph format \
     --storage ceph \
     --bucket ceph://<pool-name> \
     --access-key <cluster-name> \
@@ -699,7 +733,7 @@ $ juicefs.ceph format \
 `--bucket` 选项的格式为 `http://<bucket>.<endpoint>`（虚拟托管类型），例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket http://<bucket>.<endpoint> \
     ... \
@@ -717,7 +751,7 @@ $ juicefs format \
 `--access-key` 选项的值是用户名，`--secret-key` 选项的值是密码。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage swift \
     --bucket http://<container>.<endpoint> \
     --access-key <username> \
@@ -753,7 +787,7 @@ $ sudo docker run -d --name minio \
 使用 MinIO 作为 JuiceFS 的数据存储，`--storage` 选项设置为 `minio`。
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage minio \
     --bucket http://127.0.0.1:9000/<bucket> \
     --access-key minioadmin \
@@ -763,7 +797,8 @@ $ juicefs format \
 ```
 
 :::note 注意
-当前，JuiceFS 仅支持路径风格的 MinIO URI 地址，例如：`http://127.0.0.1:9000/myjfs`。
+1. 当前，JuiceFS 仅支持路径风格的 MinIO URI 地址，例如：`http://127.0.0.1:9000/myjfs`。
+2. `MINIO_REGION` 环境变量可以用于设置 MinIO 的 region，如果不设置，默认为 `us-east-1`。
 :::
 
 ## WebDAV
@@ -773,7 +808,7 @@ $ juicefs format \
 你需要将 `--storage` 设置为 `webdav`，并通过 `--bucket` 来指定访问 WebDAV 的地址。如果存储系统启用了用户验证，用户名和密码可以通过 `--access-key` 和 `--secret-key` 来指定，例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage webdav \
     --bucket http://<endpoint>/ \
     --access-key <username> \
@@ -789,7 +824,7 @@ Hadoop 的文件系统 [HDFS](https://hadoop.apache.org) 也可以作为对象�
 当使用 HDFS 作为 JuiceFS 数据存储，`--access-key` 的值设置为用户名，默认的超级用户通常是 `hdfs`。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage hdfs \
     --bucket namenode1:8020 \
     --access-key hdfs \
@@ -808,7 +843,7 @@ JuiceFS 会尝试基于 `$HADOOP_CONF_DIR` 或 `$HADOOP_HOME` 为 HDFS 客户端
 Apache Ozone 是 Hadoop 的分布式对象存储系统，提供了 S3 兼容的 API。所以可以通过 S3 兼容的模式作为对象存储供 JuiceFS 使用。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage s3 \
     --bucket http://<endpoint>/<bucket>\
     --access-key <your-access-key> \
@@ -822,10 +857,11 @@ $ juicefs format \
 Redis 既可以作为 JuiceFS 的元数据存储，也可以作为数据存储，但当使用 Redis 作为数据存储时，建议不要存储大规模数据。
 
 ### 单机模式
+
 `--bucket` 选项格式为 `redis://<host>:<port>/<db>`。`--access-key` 选项的值是用户名，`--secret-key` 选项的值是密码。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage redis \
     --bucket redis://<host>:<port>/<db> \
     --access-key <username> \
@@ -834,12 +870,13 @@ $ juicefs format \
     myjfs
 ```
 
-### Redis sentinel
-Redis sentinel 模式下，`--bucket` 选项格式为 `redis[s]://MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`。sentinel 的密码则需要通过 `SENTINEL_PASSWORD_FOR_OBJ` 环境变量来声明。例如：
+### Redis Sentinel
+
+Redis Sentinel 模式下，`--bucket` 选项格式为 `redis[s]://MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`。Sentinel 的密码则需要通过 `SENTINEL_PASSWORD_FOR_OBJ` 环境变量来声明。例如：
 
 ```bash
-$ export SENTINEL_PASSWORD_FOR_OBJ=sentinel_password
-$ juicefs format \
+export SENTINEL_PASSWORD_FOR_OBJ=sentinel_password
+juicefs format \
     --storage redis \
     --bucket redis://masterName,1.2.3.4,1.2.5.6:26379/2  \
     --access-key <username> \
@@ -848,11 +885,12 @@ $ juicefs format \
     myjfs
 ```
 
-### Redis cluster
-Redis cluster 模式下，`--bucket` 选项格式为 `redis[s]://ADDR:PORT,[ADDR:PORT],[ADDR:PORT]`。例如：
+### Redis 集群
+
+Redis 集群模式下，`--bucket` 选项格式为 `redis[s]://ADDR:PORT,[ADDR:PORT],[ADDR:PORT]`。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage redis \
     --bucket redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002  \
     --access-key <username> \
@@ -867,10 +905,14 @@ $ juicefs format \
 
 TiKV 既可以用作 JuiceFS 的元数据存储，也可以用于 JuiceFS 的数据存储。
 
+:::note 注意
+建议使用独立部署的 TiKV 5.0+ 集群作为 JuiceFS 的数据存储
+:::
+
 `--bucket` 选项格式类似 `<host>:<port>,<host>:<port>,<host>:<port>`，其中 `<host>` 是 Placement Driver（PD）的地址。`--access-key` 和 `--secret-key` 选项没有作用，可以省略。例如：
 
 ```bash
-$ juicefs format \
+juicefs format \
     --storage tikv \
     --bucket "<host>:<port>,<host>:<port>,<host>:<port>" \
     ... \
@@ -878,23 +920,24 @@ $ juicefs format \
 ```
 
 :::note 注意
-不要使用同一个集群来存储元数据和数据，因为 JuiceFS 是使用不同的协议来存储元数据（支持事务的TxnKV) 和数据 (不支持事务的 RawKV)，TxnKV 的对象名会被编码后存储，
-即使添加了不同的前缀也可能导致它们的名字冲突。另外，建议启用 [Titan](https://tikv.org/docs/5.1/deploy/configure/titan/) 来提升存储数据的集群的性能。
+不要使用同一个 TiKV 集群来存储元数据和数据，因为 JuiceFS 是使用不同的协议来存储元数据（支持事务的 TxnKV) 和数据 (不支持事务的 RawKV)，TxnKV 的对象名会被编码后存储，即使添加了不同的前缀也可能导致它们的名字冲突。另外，建议启用 [Titan](https://tikv.org/docs/latest/deploy/configure/titan) 来提升存储数据的集群的性能。
 :::
 
 ### 设置 TLS
-如果需要开启 TLS，可以通过在 Bucket-URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
 
-| 配置项               | 值                                                                                                                        |
-|-------------------|--------------------------------------------------------------------------------------------------------------------------|
-| ca    | CA 根证书，用于用 tls 连接 TiKV/PD                                                                                                |
-| cert  | 证书文件路径，用于用 tls 连接 TiKV/PD                                                                                                |
-| key   | 私钥文件路径，用于用 tls 连接 TiKV/PD                                                                                                |
-| verify-cn | 证书通用名称，用于验证调用者身份，[详情](https://docs.pingcap.com/tidb/dev/enable-tls-between-components#verify-component-callers-identity) |
+如果需要开启 TLS，可以通过在 Bucket URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
+
+| 配置项      | 值                                                                                                                                                                                             |
+|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `ca`        | CA 根证书，用于用 TLS 连接 TiKV/PD                                                                                                                                                             |
+| `cert`      | 证书文件路径，用于用 TLS 连接 TiKV/PD                                                                                                                                                          |
+| `key`       | 私钥文件路径，用于用 TLS 连接 TiKV/PD                                                                                                                                                          |
+| `verify-cn` | 证书通用名称，用于验证调用者身份，[详情](https://docs.pingcap.com/zh/tidb/dev/enable-tls-between-components#%E8%AE%A4%E8%AF%81%E7%BB%84%E4%BB%B6%E8%B0%83%E7%94%A8%E8%80%85%E8%BA%AB%E4%BB%BD) |
 
 例子：
+
 ```bash
-$ juicefs format \
+juicefs format \
     --storage tikv \
     --bucket "<host>:<port>,<host>:<port>,<host>:<port>?ca=/path/to/ca.pem&cert=/path/to/tikv-server.pem&key=/path/to/tikv-server-key.pem&verify-cn=CN1,CN2" \
     ... \
@@ -905,42 +948,46 @@ $ juicefs format \
 
 [etcd](https://etcd.io) 是一个高可用高可靠的小规模键值数据库，既可以用作 JuiceFS 的元数据存储，也可以用于 JuiceFS 的数据存储。
 
-etcd 默认会限制单个请求不能超过 1.5MB，需要将 JuiceFS 的分块大小改成 1MB 甚至更低。
+etcd 默认会[限制](https://etcd.io/docs/latest/dev-guide/limit)单个请求不能超过 1.5MB，需要将 JuiceFS 的分块大小（`--block-size` 选项）改成 1MB 甚至更低。
 
-`--bucket` 选项需要填 etcd 的地址，格式类似 `<host1>:<port>,<host2>:<port>,<host3>:<port>`，`--access-key` 和 `--secret-key` 填用户名和密码，当 etcd 没有设置用户认证时可以省略。例如：
+`--bucket` 选项需要填 etcd 的地址，格式类似 `<host1>:<port>,<host2>:<port>,<host3>:<port>`。`--access-key` 和 `--secret-key` 选项填用户名和密码，当 etcd 没有启用用户认证时可以省略。例如：
 
 ```bash
-$ juicefs format \
-    --storage etcd --block-size 1024 \
+juicefs format \
+    --storage etcd \
+    --block-size 1024 \  # 这个选项非常重要
     --bucket "<host1>:<port>,<host2>:<port>,<host3>:<port>/prefix" \
-    --access-key myname
-    --secret-key mypass
+    --access-key myname \
+    --secret-key mypass \
     ... \
     myjfs
 ```
 
 ### 设置 TLS
 
-如果需要开启 TLS，可以通过在 Bucket-URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
+如果需要开启 TLS，可以通过在 Bucket URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
 
-| 配置项             | 值                    |
-|-------------------|-----------------------|
-| cacert            | CA 根证书              |
-| cert              | 证书文件路径            |
-| key               | 私钥文件路径            |
-| server-name       | 服务器名称              |
-| insecure-skip-verify | 1                  |
+| 配置项                 | 值           |
+|------------------------|--------------|
+| `cacert`               | CA 根证书    |
+| `cert`                 | 证书文件路径 |
+| `key`                  | 私钥文件路径 |
+| `server-name`          | 服务器名称   |
+| `insecure-skip-verify` | 1            |
 
 例子：
+
 ```bash
-$ juicefs format \
+juicefs format \
     --storage etcd \
     --bucket "<host>:<port>,<host>:<port>,<host>:<port>?cacert=/path/to/ca.pem&cert=/path/to/server.pem&key=/path/to/key.pem&server-name=etcd" \
     ... \
     myjfs
 ```
 
-注意：证书的路径需要使用绝对路径，并且确保所有需要挂载的机器上能用该路径访问到它们。
+:::note 注意
+证书的路径需要使用绝对路径，并且确保所有需要挂载的机器上能用该路径访问到它们。
+:::
 
 ## SQLite
 
@@ -949,9 +996,9 @@ $ juicefs format \
 使用 SQLite 作为数据存储时只需要指定它的绝对路径即可。
 
 ```shell
-$ juicefs format \
+juicefs format \
     --storage sqlite3 \
-    --bucket /path/to/sqlite3.db
+    --bucket /path/to/sqlite3.db \
     ... \
     myjfs
 ```
@@ -962,12 +1009,12 @@ $ juicefs format \
 
 ## MySQL
 
-[MySQL](https://www.mysql.com/) 是受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库，既可以作为 JuiceFS 的元数据引擎也可以用来存储文件数据。跟 MySQL 兼容的 [MariaDB](https://mariadb.org)、[TiDB](https://pingcap.com/) 等都可以用来作为数据存储。
+[MySQL](https://www.mysql.com) 是受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库，既可以作为 JuiceFS 的元数据引擎也可以用来存储文件数据。跟 MySQL 兼容的 [MariaDB](https://mariadb.org)、[TiDB](https://github.com/pingcap/tidb) 等都可以用来作为数据存储。
 
-使用 MySQL 作为数据存储时，需要提前创建数据库并添加想要权限，通过`--bucket`参数指定访问地址，通过`--access-key`指定用户名，通过 `--secret-key`指定密码，示例如下：
+使用 MySQL 作为数据存储时，需要提前创建数据库并添加想要权限，通过 `--bucket` 选项指定访问地址，通过 `--access-key` 选项指定用户名，通过 `--secret-key` 选项指定密码，示例如下：
 
 ```shell
-$ juicefs format \
+juicefs format \
     --storage mysql \
     --bucket (<host>:3306)/<database-name> \
     --access-key <username> \
@@ -979,17 +1026,17 @@ $ juicefs format \
 创建文件系统后，JuiceFS 会在该数据库中创建名为 `jfs_blob` 的表用来存储数据。
 
 :::note 注意
-不要漏掉 `--bucket` 参数里的括号 `()` 。
+不要漏掉 `--bucket` 参数里的括号 `()`。
 :::
 
 ## PostgreSQL
 
-[PostgreSQL](https://www.postgresql.org/) 是功能强大的开源关系型数据库，有完善的生态和丰富的应用场景，既可以作为 JuiceFS 的元数据引擎也可以作为数据存储。其他跟 PostgreSQL 协议兼容的数据库（比如 CockroachDB 等) 也可以。
+[PostgreSQL](https://www.postgresql.org) 是功能强大的开源关系型数据库，有完善的生态和丰富的应用场景，既可以作为 JuiceFS 的元数据引擎也可以作为数据存储。其他跟 PostgreSQL 协议兼容的数据库（比如 [CockroachDB](https://github.com/cockroachdb/cockroach) 等) 也可以用来作为数据存储。
 
-创建文件系统时需要先创建好数据库并添加相应读写权限，使用 `--bucket` 来指定数据的地址，使用 `--access-key` 指定用户名，使用 `--secret-key`指定密码，实例如下：
+创建文件系统时需要先创建好数据库并添加相应读写权限，使用 `--bucket` 选项来指定数据的地址，使用 `--access-key` 选项指定用户名，使用 `--secret-key` 选项指定密码，示例如下：
 
 ```shell
-$ juicefs format \
+juicefs format \
     --storage postgres \
     --bucket <host>:<port>/<db>[?parameters] \
     --access-key <username> \
@@ -1002,7 +1049,7 @@ $ juicefs format \
 
 ### 故障排除
 
-JuiceFS 客户端默认采用 SSL 加密连接 PostgreSQL，如果连接时报错  `pq: SSL is not enabled on the server` 说明数据库没有启用 SSL。可以根据业务场景为 PostgreSQL 启用 SSL 加密，也可以在元数据 URL 中添加参数 `sslmode=disable` 禁用加密验证。
+JuiceFS 客户端默认采用 SSL 加密连接 PostgreSQL，如果连接时报错 `pq: SSL is not enabled on the server` 说明数据库没有启用 SSL。可以根据业务场景为 PostgreSQL 启用 SSL 加密，也可以在 bucket URL 中添加参数 `sslmode=disable` 禁用加密验证。
 
 ## 本地磁盘
 

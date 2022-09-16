@@ -3,18 +3,20 @@ name: verify
 on:
   push:
     branches:
-    - main
-    - 'release-**'
-    paths:
-    - '**.go'
+      - main
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/**'
   pull_request:
     branches:
-    - 'main'
-    - 'release-**'
-    paths:
-    - '**.yml'
-    - '**.go'
-    - 'Makefile'
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/**'
   workflow_dispatch:
 
 jobs:
@@ -35,7 +37,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: '1.17.x'
+        go-version: '1.18.x'
       id: go
 
     - name: Check out code
@@ -45,6 +47,15 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install g++-multilib gcc-mingw-w64
+
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
 
     - name: Build linux target
       run: GOPATH=$HOME/go make

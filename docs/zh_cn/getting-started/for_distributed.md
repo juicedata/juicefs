@@ -42,11 +42,11 @@ JuiceFS 目前支持的基于网络的数据库有：
 
 ### 1. 安装客户端
 
-在所有需要挂载文件系统的计算机上安装 JuiceFS 客户端，详情参照[「安装 & 升级」](installation.md)。
+在所有需要挂载文件系统的计算机上安装 JuiceFS 客户端，详情参照[「安装」](installation.md)。
 
 ### 2. 准备对象存储
 
-以下是以阿里云 OSS 为例的伪样本，你可以改用其他对象存储，详情参考 [JuiceFS 支持的存储](../guide/how_to_setup_object_storage.md#支持的存储服务)。
+以下是以阿里云 OSS 为例的伪样本，你可以改用其他对象存储，详情参考 [JuiceFS 支持的存储](../guide/how_to_set_up_object_storage.md#支持的存储服务)。
 
 - **Bucket Endpoint**：`https://myjfs.oss-cn-shanghai.aliyuncs.com`
 - **Access Key ID**：`ABCDEFGHIJKLMNopqXYZ`
@@ -54,7 +54,7 @@ JuiceFS 目前支持的基于网络的数据库有：
 
 ### 3. 准备数据库
 
-以下是以阿里云数据库 Redis 版为例的伪样本，你可以改用其他类型的数据库，详情参考 [JuiceFS 支持的数据库](../guide/how_to_setup_metadata_engine.md)。
+以下是以阿里云数据库 Redis 版为例的伪样本，你可以改用其他类型的数据库，详情参考 [JuiceFS 支持的数据库](../guide/how_to_set_up_metadata_engine.md)。
 
 - **数据库地址**：`myjfs-sh-abc.redis.rds.aliyuncs.com:6379`
 - **数据库用户名**：`tom`
@@ -151,7 +151,23 @@ redis://tom:mypassword@myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1    /mnt/myjfs 
 默认情况下，CentOS 6 在系统启动时不会挂载网络文件系统，你需要执行命令开启网络文件系统的自动挂载支持：`sudo chkconfig --add netfs`
 :::
 
-### 6. 卸载文件系统
+### 6. 验证文件系统
+
+当挂载好文件系统以后可以通过 `juicefs bench` 命令对文件系统进行基础的性能测试和功能验证，确保 JuiceFS 文件系统能够正常访问且性能符合预期。
+
+:::info 说明
+`juicefs bench` 命令只能完成基础的性能测试，如果需要对 JuiceFS 进行更完整的评估，请参考[「JuiceFS 性能评估指南」](../benchmark/performance_evaluation_guide.md)。
+:::
+
+```shell
+juicefs bench ~/jfs
+```
+
+运行 `juicefs bench` 命令以后会根据指定的并发度（默认为 1）往 JuiceFS 文件系统中写入及读取 N 个大文件（默认为 1）及 N 个小文件（默认为 100），并统计读写的吞吐和单次操作的延迟，以及访问元数据引擎的延迟。
+
+如果在验证文件系统的过程中遇到任何问题，请先参考[「故障诊断和分析」](../administration/fault_diagnosis_and_analysis.md)文档进行问题排查。
+
+### 7. 卸载文件系统
 
 你可以通过 `juicefs umount` 命令卸载 JuiceFS 文件系统（假设挂载点路径是 `~/jfs`）：
 

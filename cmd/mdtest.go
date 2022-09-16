@@ -81,7 +81,7 @@ func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, 
 }
 
 func runTest(jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes int) {
-	dirs := 0
+	dirs := 1
 	w := width
 	z := depth
 	for z > 0 {
@@ -188,9 +188,6 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 		logger.Fatalf("load setting: %s", err)
 	}
 	registerer, registry := wrapRegister(mp, format.Name)
-	if !c.Bool("writeback") && c.IsSet("upload-delay") {
-		logger.Warnf("delayed upload only work in writeback mode")
-	}
 
 	blob, err := NewReloadableStorage(format, func() (*meta.Format, error) {
 		return getFormat(c, m)

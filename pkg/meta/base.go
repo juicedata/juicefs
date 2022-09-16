@@ -19,6 +19,7 @@ package meta
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"runtime"
 	"sort"
 	"strings"
@@ -73,6 +74,7 @@ type engine interface {
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doGetParents(ctx Context, inode Ino) map[Ino]int
+	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 
 	GetSession(sid uint64, detail bool) (*Session, error)
 	doSetQuota(ctx Context, inode Ino, capacity, inodes uint64, set_capacity, set_inodes uint8) syscall.Errno
@@ -80,6 +82,15 @@ type engine interface {
 	dogetQuotas(ctx Context, inode Ino) error
 	doSetQuotaList(name string) error
 	doGetQuotaList(name string) error
+}
+
+// fsStat aligned for atomic operations
+// nolint:structcheck
+type fsStat struct {
+	newSpace   int64
+	newInodes  int64
+	usedSpace  int64
+	usedInodes int64
 }
 
 type baseMeta struct {
@@ -98,11 +109,9 @@ type baseMeta struct {
 	maxDeleting  chan struct{}
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
-	newSpace     int64
-	newInodes    int64
-	usedSpace    int64
-	usedInodes   int64
 	umounting    bool
+
+	*fsStat
 
 	freeMu     sync.Mutex
 	freeInodes freeID
@@ -140,6 +149,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		compacting:   make(map[uint64]bool),
 		maxDeleting:  make(chan struct{}, 100),
 		symlinks:     &sync.Map{},
+		fsStat:       new(fsStat),
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
@@ -305,8 +315,13 @@ func (m *baseMeta) refreshSession() {
 		}
 		m.en.doRefreshSession()
 		m.Unlock()
+		old := m.fmt.UUID
 		if _, err := m.Load(false); err != nil {
 			logger.Warnf("reload setting: %s", err)
+		} else if m.fmt.MetaVersion > MaxVersion {
+			logger.Fatalf("incompatible metadata version %d > max version %d", m.fmt.MetaVersion, MaxVersion)
+		} else if m.fmt.UUID != old {
+			logger.Fatalf("UUID changed from %s to %s", old, m.fmt.UUID)
 		}
 		if m.conf.NoBGJob {
 			continue
@@ -911,6 +926,19 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscal
 	if attr != nil && !attr.Full {
 		err = m.GetAttr(ctx, inode, attr)
 	}
+	if attr.Flags&FlagImmutable != 0 {
+		if flags&(syscall.O_WRONLY|syscall.O_RDWR) != 0 {
+			return syscall.EPERM
+		}
+	}
+	if attr.Flags&FlagAppend != 0 {
+		if (flags&(syscall.O_WRONLY|syscall.O_RDWR)) != 0 && (flags&syscall.O_APPEND) == 0 {
+			return syscall.EPERM
+		}
+		if flags&syscall.O_TRUNC != 0 {
+			return syscall.EPERM
+		}
+	}
 	if err == 0 {
 		m.of.Open(inode, attr)
 	}
@@ -1040,6 +1068,136 @@ func (m *baseMeta) GetParents(ctx Context, inode Ino) map[Ino]int {
 	} else {
 		return m.en.doGetParents(ctx, inode)
 	}
+}
+
+func (m *baseMeta) GetPaths(ctx Context, inode Ino) []string {
+	if inode == RootInode {
+		return []string{"/"}
+	}
+
+	if inode == TrashInode {
+		return []string{"/.trash"}
+	}
+
+	outside := "path not shown because it's outside of the mounted root"
+	getDirPath := func(ino Ino) (string, error) {
+		var names []string
+		var attr Attr
+		for ino != RootInode && ino != m.root {
+			if st := m.en.doGetAttr(ctx, ino, &attr); st != 0 {
+				return "", fmt.Errorf("getattr inode %d: %s", ino, st)
+			}
+			if attr.Typ != TypeDirectory {
+				return "", fmt.Errorf("inode %d is not a directory", ino)
+			}
+			var entries []*Entry
+			if st := m.en.doReaddir(ctx, attr.Parent, 0, &entries, -1); st != 0 {
+				return "", fmt.Errorf("readdir inode %d: %s", ino, st)
+			}
+			var name string
+			for _, e := range entries {
+				if e.Inode == ino {
+					name = string(e.Name)
+					break
+				}
+			}
+			if attr.Parent == RootInode && ino == TrashInode {
+				name = TrashName
+			}
+			if name == "" {
+				return "", fmt.Errorf("entry %d/%d not found", attr.Parent, ino)
+			}
+			names = append(names, name)
+			ino = attr.Parent
+		}
+		if m.root != RootInode && ino == RootInode {
+			return outside, nil
+		}
+		names = append(names, "/") // add root
+
+		for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
+			names[i], names[j] = names[j], names[i]
+		}
+		return path.Join(names...), nil
+	}
+
+	var paths []string
+	// inode != RootInode, parent is the real parent inode
+	for parent, count := range m.GetParents(ctx, inode) {
+		if count <= 0 {
+			continue
+		}
+		dir, err := getDirPath(parent)
+		if err != nil {
+			logger.Warnf("Get directory path of %d: %s", parent, err)
+			continue
+		} else if dir == outside {
+			paths = append(paths, outside)
+			continue
+		}
+		var entries []*Entry
+		if st := m.en.doReaddir(ctx, parent, 0, &entries, -1); st != 0 {
+			logger.Warnf("Readdir inode %d: %s", parent, st)
+			continue
+		}
+		var c int
+		for _, e := range entries {
+			if e.Inode == inode {
+				c++
+				paths = append(paths, path.Join(dir, string(e.Name)))
+			}
+		}
+		if c != count {
+			logger.Warnf("Expect to find %d entries under parent %d, but got %d", count, parent, c)
+		}
+	}
+	return paths
+}
+
+func (m *baseMeta) Check(ctx Context, fpath string, repair bool) (st syscall.Errno) {
+	var attr Attr
+	var inode Ino
+	var parent Ino = 1
+	ps := strings.Split(fpath, "/")
+	for i, name := range ps {
+		if len(name) == 0 {
+			continue
+		}
+		if st = m.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
+			logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
+			return
+		}
+		if attr.Full {
+			parent = inode
+			continue
+		}
+
+		// missing attribute
+		p := "/" + path.Join(ps[:i+1]...)
+		if attr.Typ != TypeDirectory { // TODO: determine file size?
+			logger.Errorf("Path %s (inode %d type %d) cannot be auto-repaired, you have to repair it manually or remove it", p, inode, attr.Typ)
+		} else if !repair {
+			logger.Warnf("Path %s (inode %d) can be repaired, please re-check with 'repair' enabled", p, inode)
+		} else { // repair directory inode
+			now := time.Now().Unix()
+			attr.Mode = 0644
+			attr.Uid = ctx.Uid()
+			attr.Gid = ctx.Gid()
+			attr.Atime = now
+			attr.Mtime = now
+			attr.Ctime = now
+			attr.Length = 4 << 10
+			attr.Parent = parent
+			if st = m.en.doRepair(ctx, inode, &attr); st == 0 {
+				logger.Infof("Path %s (inode %d) is successfully repaired", p, inode)
+			} else {
+				logger.Errorf("Repair path %s inode %d: %s", p, inode, st)
+			}
+		}
+		return // handle one missing inode at a time
+	}
+	logger.Infof("Path %s inode %d is valid", fpath, parent)
+	return
 }
 
 func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {

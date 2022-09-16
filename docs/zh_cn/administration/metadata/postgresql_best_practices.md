@@ -1,6 +1,7 @@
 ---
 sidebar_label: PostgreSQL
 sidebar_position: 2
+slug: /postgresql_best_practices
 ---
 # PostgreSQL 最佳实践
 
