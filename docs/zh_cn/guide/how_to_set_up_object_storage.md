@@ -411,6 +411,10 @@ juicefs format \
     myjfs
 ```
 
+:::caution 特别提示
+因为 Storj DCS 的 [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API 并非 S3 兼容，所以 juicefs 的部分功能无法使用。比如 `juicefs gc`,`juicefs fsck`,`juicefs sync`,`juicefs destroy`。并且使用 `juicefs mount` 时需要关闭[元数据自动备份](../administration/metadata_dump_load.md#自动备份)功能即加上 `--backup-meta 0`。
+:::
+
 ## Vultr 对象存储
 
 Vultr 的对象存储兼容 S3 API，存储类型使用 `s3`，`--bucket` 格式为 `https://<bucket>.<region>.vultrobjects.com/`。例如：
