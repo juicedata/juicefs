@@ -153,17 +153,17 @@ func objbench(ctx *cli.Context) error {
 		failed = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, RED, failed, RESET_SEQ)
 	}
 
-	if ctx.Bool("skip-functional-tests") == false {
+	if ctx.Bool("skip-functional-tests") {
+		if err := blob.Create(); err != nil {
+			return fmt.Errorf("can't create bucket: %s", err)
+		}
+	} else {
 		var result [][]string
 		result = append(result, []string{"CATEGORY", "TEST", "RESULT"})
 		fmt.Println("Start Functional Testing ...")
 		functionalTesting(blob, &result, colorful)
 		printResult(result, -1, colorful)
 		fmt.Println()
-	} else {
-		if err := blob.Create(); err != nil {
-			return fmt.Errorf("can't create bucket: %s", err)
-		}
 	}
 	fmt.Println("Start Performance Testing ...")
 	var pResult [][]string
