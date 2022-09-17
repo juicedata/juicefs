@@ -1214,6 +1214,9 @@ juicefs doctor [command options] MOUNTPOINT
 `--out-dir value`<br />
 The output directory of the results, automatically created if the directory does not exist (default: ./doctor/)
 
+`--stats-sec value`<br />
+The number of seconds to sample .stats file (default: 5)
+
 `--collect-log`<br />
 enable log collection (default: false)
 

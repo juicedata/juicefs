@@ -1217,6 +1217,9 @@ juicefs doctor [command options] MOUNTPOINT
 `--out-dir value`<br />
 结果输出目录，若目录不存在则自动创建 (默认：./doctor/)
 
+`--stats-sec value`<br />
+.stats文件采样秒数 (默认：5)
+
 `--collect-log`<br />
 启用日志收集 (默认：false)
 
