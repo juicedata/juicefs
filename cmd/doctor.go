@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"fmt"
@@ -42,6 +43,7 @@ import (
 var defaultOutDir = path.Join(".", "doctor")
 
 const (
+	defaultStatsTime   = 5
 	defaultTraceTime   = 5
 	defaultProfileTime = 30
 )
@@ -73,6 +75,11 @@ $ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /
 				Name:  "out-dir",
 				Value: defaultOutDir,
 				Usage: "the output directory of the result file",
+			},
+			&cli.Uint64Flag{
+				Name:  "stats-sec",
+				Value: defaultStatsTime,
+				Usage: "stats sampling duration",
 			},
 			&cli.BoolFlag{
 				Name:  "collect-log",
@@ -126,7 +133,7 @@ func copyConfigFile(srcPath, destPath string, rootPrivileges bool) error {
 	if rootPrivileges {
 		copyArgs = append(copyArgs, "sudo")
 	}
-	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cp %s %s", srcPath, destPath))
+	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("echo %s > %s", srcPath, destPath))
 	if err := exec.Command(copyArgs[0], copyArgs[1:]...).Run(); err != nil {
 		return err
 	}
@@ -135,11 +142,6 @@ func copyConfigFile(srcPath, destPath string, rootPrivileges bool) error {
 }
 
 func getCmdMount(mp string) (uid, pid, cmd string, err error) {
-	if !isUnix() {
-		logger.Warnf("Failed to get command mount: %s is not supported", runtime.GOOS)
-		return "", "", "", nil
-	}
-
 	ret, err := exec.Command("/bin/sh", "-c", "ps -ef | grep -v grep | grep 'juicefs mount' | grep "+mp).CombinedOutput()
 	// `exit status 1"` occurs when there is no matching item for `grep`
 	if err != nil {
@@ -189,11 +191,6 @@ func getDefaultLogDir() (string, error) {
 var logArg = regexp.MustCompile(`--log(\s*=?\s*)(\S+)`)
 
 func getLogPath(cmd string) (string, error) {
-	if !isUnix() {
-		logger.Warnf("Failed to get log path: %s is not supported", runtime.GOOS)
-		return "", nil
-	}
-
 	var logPath string
 	tmp := logArg.FindStringSubmatch(cmd)
 	if len(tmp) == 3 {
@@ -253,11 +250,6 @@ func copyLogFile(logPath, retLogPath string, limit uint64) error {
 }
 
 func getPprofPort(pid, mp string, rootPrivileges bool) (int, error) {
-	if !isUnix() {
-		logger.Warnf("Failed to get pprof port: %s is not supported", runtime.GOOS)
-		return 0, nil
-	}
-
 	var lsofArgs []string
 	if rootPrivileges {
 		lsofArgs = append(lsofArgs, "sudo")
@@ -384,6 +376,47 @@ func checkAgent(cmd string) bool {
 	return true
 }
 
+func geneZipFile(srcPath, destPath string) error {
+	zipfile, err := os.Create(destPath)
+	if err != nil {
+		return err
+	}
+	defer zipfile.Close()
+	archive := zip.NewWriter(zipfile)
+	defer archive.Close()
+
+	filepath.Walk(srcPath, func(path string, info os.FileInfo, _ error) error {
+		if path == srcPath {
+			return nil
+		}
+
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+		header.Name = strings.TrimPrefix(path, srcPath+`/`)
+		if info.IsDir() {
+			header.Name += `/`
+		} else {
+			header.Method = zip.Deflate
+		}
+
+		writer, err := archive.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			file, _ := os.Open(path)
+			defer file.Close()
+			if _, err := io.Copy(writer, file); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return nil
+}
+
 func doctor(ctx *cli.Context) error {
 	setup(ctx, 1)
 	mp := ctx.Args().First()
@@ -395,8 +428,6 @@ func doctor(ctx *cli.Context) error {
 		return fmt.Errorf("path %s is not a mount point", mp)
 	}
 
-	mp, _ = filepath.Abs(mp)
-	prefix := fmt.Sprintf("%s-%s", strings.Trim(strings.Join(strings.Split(mp, "/"), "-"), "-"), time.Now().Format("20060102150405"))
 	rootPrivileges := false
 
 	outDir := ctx.String("out-dir")
@@ -414,7 +445,14 @@ func doctor(ctx *cli.Context) error {
 	}
 
 	if !outDirInfo.IsDir() {
-		return fmt.Errorf("argument --out-dir must be directory %s", outDir)
+		return fmt.Errorf("argument --out-dir is not directory: %s", outDir)
+	}
+
+	mp, _ = filepath.Abs(mp)
+	timestamp := time.Now().Format("20060102150405")
+	currDir := path.Join(outDir, fmt.Sprintf("%s-%s", strings.Trim(strings.Join(strings.Split(mp, "/"), "-"), "-"), timestamp))
+	if err := os.Mkdir(currDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create current out dir %s: %v", currDir, err)
 	}
 
 	sysInfo, err := utils.GetSysInfo()
@@ -428,7 +466,7 @@ func doctor(ctx *cli.Context) error {
 JuiceFS Version:
 %s`, runtime.GOOS, runtime.GOARCH, sysInfo, ctx.App.Version)
 
-	sysPath := path.Join(outDir, fmt.Sprintf("system-info-%s.log", prefix))
+	sysPath := path.Join(currDir, "system-info.log")
 	sysFile, err := os.Create(sysPath)
 	defer closeFile(sysFile)
 	if err != nil {
@@ -451,23 +489,43 @@ JuiceFS Version:
 		rootPrivileges = true
 	}
 
-	configItems := []string{".config", ".stats"}
-	for _, item := range configItems {
-		destPath := path.Join(outDir, fmt.Sprintf("%s%s", prefix, item))
-		srcPath := path.Join(mp, item)
-		if err := copyConfigFile(srcPath, destPath, rootPrivileges); err != nil {
-			return fmt.Errorf("failed to get volume config %s: %v", srcPath, err)
-		}
+	configName := ".config"
+	if err := copyConfigFile(path.Join(mp, configName), path.Join(currDir, configName), rootPrivileges); err != nil {
+		return fmt.Errorf("failed to get volume config %s: %v", configName, err)
 	}
 
-	if ctx.Bool("collect-log") {
+	statsName := ".stats"
+	stats := ctx.Uint64("stats-sec")
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		srcPath := path.Join(mp, statsName)
+		destPath := path.Join(currDir, statsName)
+		if err := copyConfigFile(srcPath, destPath, rootPrivileges); err != nil {
+			logger.Errorf("Failed to get volume config %s: %v", statsName, err)
+		}
+
+		logger.Infof("Stats metrics are being sampled, sampling duration: %ds", stats)
+		time.Sleep(time.Second * time.Duration(stats))
+
+		if err := copyConfigFile(srcPath, destPath, rootPrivileges); err != nil {
+			logger.Errorf("Failed to get volume config %s: %v", statsName, err)
+		}
+	}()
+
+	if !isUnix() {
+		logger.Warnf("Collecting log currently only support Linux/macOS")
+	}
+
+	if isUnix() && ctx.Bool("collect-log") {
 		logPath, err := getLogPath(cmd)
 		if err != nil {
 			return fmt.Errorf("failed to get log path: %v", err)
 		}
 
 		limit := ctx.Uint64("limit")
-		retLogPath := path.Join(outDir, fmt.Sprintf("%s.log", prefix))
+		retLogPath := path.Join(currDir, "juicefs.log")
 
 		if err := copyLogFile(logPath, retLogPath, limit); err != nil {
 			return fmt.Errorf("failed to get log file: %v", err)
@@ -480,7 +538,11 @@ JuiceFS Version:
 		logger.Warnf("No agent found, the pprof metrics will not be collected")
 	}
 
-	if enableAgent && ctx.Bool("collect-pprof") {
+	if !isUnix() {
+		logger.Warnf("Collecting pprof currently only support Linux/macOS")
+	}
+
+	if isUnix() && enableAgent && ctx.Bool("collect-pprof") {
 		port, err := getPprofPort(pid, mp, rootPrivileges)
 		if err != nil {
 			return fmt.Errorf("failed to get pprof port: %v", err)
@@ -501,12 +563,11 @@ JuiceFS Version:
 			"profile":      {name: fmt.Sprintf("profile.%ds.pb.gz", profile), url: fmt.Sprintf("%sprofile?seconds=%d", baseUrl, profile)},
 		}
 
-		pprofOutDir := path.Join(outDir, fmt.Sprintf("pprof-%s", prefix))
+		pprofOutDir := path.Join(currDir, "pprof")
 		if err := os.Mkdir(pprofOutDir, os.ModePerm); err != nil {
 			return fmt.Errorf("failed to create out directory: %v", err)
 		}
 
-		var wg sync.WaitGroup
 		for name, metric := range metrics {
 			wg.Add(1)
 			go func(name string, metric metricItem) {
@@ -523,7 +584,11 @@ JuiceFS Version:
 				}
 			}(name, metric)
 		}
-		wg.Wait()
+	}
+	wg.Wait()
+
+	if err := geneZipFile(currDir, path.Join(outDir, fmt.Sprintf("doctor-%s.zip", timestamp))); err != nil {
+		return fmt.Errorf("failed to zip result %s: %v", currDir, err)
 	}
 	return nil
 }
