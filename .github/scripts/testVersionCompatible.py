@@ -374,6 +374,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         path = f'{JuicefsMachine.MOUNT_POINT}{file_name}'
         write_block(JuicefsMachine.MOUNT_POINT, path, 1048576, 3)
         assert(os.path.exists(path))
+        run_cmd(f'stat {path}')
         options = [juicefs, 'rmr', path]
         run_jfs_cmd(options)
         # TODO: should uncomment the assert
