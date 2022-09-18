@@ -527,7 +527,6 @@ jobs:
         with:
           go-version: '1.18.x'
 
-<<<<<<< HEAD
       - uses: actions/cache@v3
         with:
           path: |
@@ -537,13 +536,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
             
-=======
       - name: Install Fdb C Lib
         run: |
           wget https://github.com/apple/foundationdb/releases/download/6.3.24/foundationdb-clients_6.3.24-1_amd64.deb
           sudo dpkg -i foundationdb-clients_6.3.24-1_amd64.deb
 
->>>>>>> fdb : suport fdb for metadata engine
       - name: Build linux target
         run: |
           make juicefs
