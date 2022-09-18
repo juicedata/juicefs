@@ -1,8 +1,8 @@
-//go:build linux
-// +build linux
+//go:build !nofdb
+// +build !nofdb
 
 /*
- * JuiceFS, Copyright 2021 Juicedata, Inc.
+ * JuiceFS, Copyright 2022 Juicedata, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ func (c *fdbClient) scan(prefix []byte, handler func(key, value []byte)) error {
 		snapshot := t.Snapshot()
 		iter := snapshot.GetRange(
 			fdb.KeyRange{Begin: fdb.Key(prefix), End: fdb.Key(nextKey(prefix))},
-			fdb.RangeOptions{},
+			fdb.RangeOptions{Mode: fdb.StreamingModeWantAll},
 		).Iterator()
 		for iter.Advance() {
 			r := iter.MustGet()
@@ -119,10 +119,10 @@ func (tx *fdbTxn) gets(keys ...[]byte) [][]byte {
 }
 
 func (tx *fdbTxn) range0(begin, end []byte) *fdb.RangeIterator {
-	return (tx.GetRange(
+	return tx.GetRange(
 		fdb.KeyRange{Begin: fdb.Key(begin), End: fdb.Key(end)},
-		fdb.RangeOptions{Limit: 0, Mode: fdb.StreamingModeWantAll},
-	).Iterator())
+		fdb.RangeOptions{Mode: fdb.StreamingModeWantAll},
+	).Iterator()
 }
 
 func (tx *fdbTxn) scanRange(begin, end []byte) map[string][]byte {
