@@ -31,7 +31,7 @@ jobs:
       - name: Install Fdb C Lib
         run: |
           wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-          sudo dpkg -i foundationdb-clients_6.3.24-1_amd64.deb
+          sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
@@ -57,7 +57,7 @@ jobs:
     - name: Install Fdb C Lib
       run: |
         wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-        sudo dpkg -i foundationdb-clients_6.3.24-1_amd64.deb
+        sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
 
     - uses: actions/cache@v3
       with:
