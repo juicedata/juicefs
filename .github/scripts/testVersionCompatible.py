@@ -92,7 +92,7 @@ class JuicefsMachine(RuleBasedStateMachine):
                 options.extend(['--encrypt-algo', encrypt_algo])
         
         if storage == 'minio':
-            bucket = 'http://localhost:9000/testBucket'
+            bucket = 'http://localhost:9000/testbucket'
             options.extend(['--bucket', bucket])
             options.extend(['--access-key', 'minioadmin'])
             options.extend(['--secret-key', 'minioadmin'])
@@ -103,12 +103,12 @@ class JuicefsMachine(RuleBasedStateMachine):
             bucket = os.path.expanduser('~/.juicefs/local/')
             options.extend(['--bucket', bucket])
         elif storage == 'mysql':
-            bucket = '(localhost:3306)/testBucket'
+            bucket = '(localhost:3306)/testbucket'
             options.extend(['--bucket', bucket])
             options.extend(['--access-key', 'root'])
             options.extend(['--secret-key', 'root'])
         elif storage == 'postgres':
-            bucket = 'localhost:5432/testBucket?sslmode=disable'
+            bucket = 'localhost:5432/testbucket?sslmode=disable'
             options.extend(['--bucket', bucket])
             options.extend(['--access-key', 'postgres'])
             options.extend(['--secret-key', 'postgres'])
@@ -162,16 +162,16 @@ class JuicefsMachine(RuleBasedStateMachine):
                 options.extend(['--bucket', os.path.expanduser('~/.juicefs/local2')])
             elif storage == 'minio': 
                 c = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
-                if not c.bucket_exists('testBucket2'):
-                    run_cmd('mc mb myminio/testBucket2')
-                    # assert c.bucket_exists('test_bucket2')
-                options.extend(['--bucket', 'http://localhost:9000/testBucket2'])
+                if not c.bucket_exists('testbucket2'):
+                    run_cmd('mc mb myminio/testbucket2')
+                    # assert c.bucket_exists('testbucket2')
+                options.extend(['--bucket', 'http://localhost:9000/testbucket2'])
             elif storage == 'mysql':
-                create_mysql_db('mysql://root:root@(localhost:3306)/testBucket2')
-                options.extend(['--bucket', '(localhost:3306)/testBucket2'])
+                create_mysql_db('mysql://root:root@(localhost:3306)/testbucket2')
+                options.extend(['--bucket', '(localhost:3306)/testbucket2'])
             elif storage == 'postgres':
-                create_postgres_db('postgres://postgres:postgres@localhost:5432/testBucket2?sslmode=disable')
-                options.extend(['--bucket', 'localhost:5432/testBucket2?sslmode=disable'])
+                create_postgres_db('postgres://postgres:postgres@localhost:5432/testbucket2?sslmode=disable')
+                options.extend(['--bucket', 'localhost:5432/testbucket2?sslmode=disable'])
         if change_aksk and storage == 'minio':
             output = subprocess.check_output('mc admin user list myminio'.split())
             if not output:
@@ -193,11 +193,11 @@ class JuicefsMachine(RuleBasedStateMachine):
             if storage == 'file':
                 run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', os.path.expanduser('~/.juicefs/local')])
             elif storage == 'minio':
-                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', 'http://localhost:9000/testBucket'])
+                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', 'http://localhost:9000/testbucket'])
             elif storage == 'mysql':
-                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', '(localhost:3306)/testBucket'])
+                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', '(localhost:3306)/testbucket'])
             elif storage == 'postgres':
-                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', 'localhost:5432/testBucket?sslmode=disable'])
+                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', 'localhost:5432/testbucket?sslmode=disable'])
         self.formatted_by = juicefs
         print('config succeed')
 
