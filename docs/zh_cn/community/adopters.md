@@ -20,14 +20,19 @@ slug: /adopters
 | [国家超级计算济南中心](https://www.nsccjn.cn/)   | Production | DevOps                                                                                           |
 | [云知声](https://www.unisound.com)               | Production | AI（[案例](https://juicefs.com/zh-cn/blog/juicefs-support-ai-storage-at-unisound)）              |
 | [网易游戏](https://game.163.com)                 | Production | 大数据，共享文件存储                                                                             |
-| [一面数据](https://www.yimian.com.cn)            | Production | 大数据                                                                                           |
-| [携程旅行](https://www.ctrip.com)                | Production | 大数据，共享文件存储                                                                             |
+| [一面数据](https://www.yimian.com.cn)            | Production | 大数据（[案例](https://juicefs.com/zh-cn/blog/yimiancase/)）                                                                                           |
+| [携程旅行](https://www.ctrip.com)                | Production | 大数据，共享文件存储（[案例](https://juicefs.com/zh-cn/blog/xiecheng-case/)）                                                                             |
 | [vivo](https://www.vivo.com)                     | Production | AI，共享文件存储                                                                                 |
 | [地平线](https://horizon.ai)                     | Production | AI                                                                                               |
 | [商汤科技](https://www.sensetime.com/cn)         | Production | 共享文件存储                                                                                     |
 | [深势科技](https://www.dp.tech)                  | Production | 共享文件存储（[案例](https://juicefs.com/zh-cn/blog/dptech-ai-storage-in-multi-cloud-practice)） |
 | [嘉谊互娱](http://www.joyient.com)               | Production | 共享文件存储，渲染                                                                               |
 | [DJI 大疆创新](https://www.dji.com/cn)           | Production | AI                                                                                               |
+| [金山云](https://www.ksyun.com/)    | Production | 大数据   |
+| [天桐互动](http://www.hehemobile.com/)  | Production | AI，共享文件存储     |
+| [Clobotics](https://clobotics.com/) | Production | AI   |
+| [CVTE 视源股份](http://www.cvte.com/) | Production | 共享文件存储     |
+| [蔚来汽车](https://www.nio.cn/)  | Production | AI   | 
 | [移动云](https://ecloud.he.chinamobile.com)      | Testing    | 大数据（[案例](https://juicefs.com/zh-cn/blog/juicefs-support-hbase-at-chinamobile-cloud)）      |
 | [火山引擎](https://www.volcengine.com)           | Testing    | 共享文件存储                                                                                     |
 | [叮咚买菜](https://www.100.me)                   | Testing    | 大数据                                                                                           |

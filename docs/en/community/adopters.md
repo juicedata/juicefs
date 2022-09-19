@@ -18,7 +18,7 @@ slug: /adopters
 | [Gene Way](https://www.geneway.cn)                                                      | Production  | File Sharing                                                                        |
 | [SAIC Motor](https://www.saicmotor.com/english/index.shtml)                             | Production  | AI                                                                                  |
 | [National Supercomputing Center in JiNan](https://www.nsccjn.cn/)                       | Production  | DevOps                                                                              |
-| [UniSound](https://www.unisound.com)                                                    | Production  | AI                                                                                  |
+| [UniSound](https://www.unisound.com)                                                    | Production  | AI([Case Study](https://juicefs.com/en/blog/unisounds-hpc-platform-accelerates-ai-model-training-and-development-with-juicefs/))                                                                                  |
 | [NetEase Games](http://www.neteasegames.com)                                            | Production  | Big Data, File Sharing                                                              |
 | [Yimian](https://www.yimian.io)                                                         | Production  | Big Data                                                                            |
 | [Trip.com](https://www.trip.com)                                                        | Production  | Big Data, File Sharing                                                              |
@@ -28,6 +28,11 @@ slug: /adopters
 | [DP Technology](https://www.dp.tech)                                                    | Production  | File Sharing                                                                        |
 | [Joyient](http://www.joyient.com)                                                       | Prodcution  | File Sharing, 3D Rendering                                                          |
 | [DJI](https://www.dji.com)                                                              | Production  | AI                                                                                  |
+| [KingsoftCloud](https://en.ksyun.com/)    | Production | Big Data   |
+| [Skyplatanus](http://www.hehemobile.com/)  | Production | AI，File Sharing     |
+| [Clobotics](https://clobotics.com/) | Production | AI   |
+| [CVTE Dream Future](http://www.cvte.com/en/) | Production | File Sharing     |
+| [NIO Auto](https://www.nio.com/)  | Production | AI   | 
 | [China Mobile Cloud](https://ecloud.he.chinamobile.com)                                 | Testing     | Big Data                                                                            |
 | [Volcano Engine](https://www.volcengine.com)                                            | Testing     | File Sharing                                                                        |
 | [Dingdong Fresh](https://www.100.me)                                                    | Testing     | Big Data                                                                            |
