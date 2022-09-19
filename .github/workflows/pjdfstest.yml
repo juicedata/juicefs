@@ -70,7 +70,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libtap-harness-archive-perl
           cd /tmp/jfs/
-          git clone https://github.com/sanwan/pjdfstest.git
+          git clone https://github.com/pjd/pjdfstest.git
           cd pjdfstest
           autoreconf -ifs
           ./configure
