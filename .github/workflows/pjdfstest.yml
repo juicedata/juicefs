@@ -75,6 +75,7 @@ jobs:
           ./configure
           make pjdfstest
           cd /tmp/jfs
+          stat --format "%i" /tmp/jfs
           sudo prove -rv /tmp/pjdfstest/tests/
 
       - name: Log
