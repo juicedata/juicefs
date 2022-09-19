@@ -471,11 +471,11 @@ class JuicefsMachine(RuleBasedStateMachine):
             options[0] = JuicefsMachine.JFS_BINS[1]
         storage = get_storage(juicefs, JuicefsMachine.META_URL)
         if storage == 'minio':
-            run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--access-key', 'minioadmin', '--secret-key', 'minioadmin'])
+            run_jfs_cmd([JuicefsMachine.JFS_BINS[1], 'config', JuicefsMachine.META_URL, '--access-key', 'minioadmin', '--secret-key', 'minioadmin'])
         elif storage == 'mysql':
-            run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--access-key', 'root', '--secret-key', 'root'])
+            run_jfs_cmd([JuicefsMachine.JFS_BINS[1], 'config', JuicefsMachine.META_URL, '--access-key', 'root', '--secret-key', 'root'])
         elif storage == 'postgres':
-            run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--access-key', 'postgres', '--secret-key', 'postgres'])
+            run_jfs_cmd([JuicefsMachine.JFS_BINS[1], 'config', JuicefsMachine.META_URL, '--access-key', 'postgres', '--secret-key', 'postgres'])
         
         os.remove('dump.json')
 
