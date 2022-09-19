@@ -8,7 +8,6 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
-#      - '.github/**'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
@@ -63,20 +62,19 @@ jobs:
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
+
       - name: Pjdfstest
         run: |
-          cd /tmp
           sudo apt-get update
           sudo apt-get install -y libtap-harness-archive-perl
-#          cd /tmp/jfs/
+          cd /tmp/jfs/
           git clone https://github.com/pjd/pjdfstest.git
           cd pjdfstest
           autoreconf -ifs
           ./configure
           make pjdfstest
-          cd /tmp/jfs
-          sudo prove -rv /tmp/pjdfstest/tests/
+          sudo prove -rv tests/
 
       - name: Log
         if: ${{ always() }}
