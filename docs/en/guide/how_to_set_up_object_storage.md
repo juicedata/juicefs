@@ -411,6 +411,10 @@ juicefs format \
     myjfs
 ```
 
+:::caution 
+Storj DCS [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API is not fully S3 compatible (result list is not sorted), so some features of juicefs do not work. For example, `juicefs gc`, `juicefs fsck`, `juicefs sync`, `juicefs destroy`. And when using `juicefs mount`, you need to disable [automatic-backup](../administration/metadata_dump_load.md#automatic-backup) function by adding `--backup-meta 0`.
+:::
+
 ## Vultr Object Storage
 
 Vultr Object Storage is an S3-compatible storage, using `s3` for `--storage` option. The format of the option `--bucket` is `https://<bucket>.<region>.vultrobjects.com/`. For example:

@@ -127,7 +127,10 @@ func newTiKV(endpoint, accesskey, secretkey, token string) (ObjectStorage, error
 	l, prop, _ := plog.InitLogger(&plog.Config{Level: plvl})
 	plog.ReplaceGlobals(l, prop)
 
-	tUrl, err := url.Parse("tikv://" + endpoint)
+	if !strings.HasPrefix(endpoint, "tikv://") {
+		endpoint = "tikv://" + endpoint
+	}
+	tUrl, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
 	}
