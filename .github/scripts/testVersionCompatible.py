@@ -171,7 +171,7 @@ class JuicefsMachine(RuleBasedStateMachine):
                 options.extend(['--bucket', '(localhost:3306)/test_bucket2'])
             elif storage == 'postgres':
                 create_postgres_db('postgres://postgres:postgres@localhost:5432/test_bucket2?sslmode=disable')
-                options.extend('--bucket', 'localhost:5432/test_bucket2?sslmode=disable')
+                options.extend(['--bucket', 'localhost:5432/test_bucket2?sslmode=disable'])
         if change_aksk and storage == 'minio':
             output = subprocess.check_output('mc admin user list myminio'.split())
             if not output:
