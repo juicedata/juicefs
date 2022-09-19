@@ -108,7 +108,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--access-key', 'root'])
             options.extend(['--secret-key', 'root'])
         elif storage == 'postgres':
-            bucket = 'localhost:5432/test_bucket'
+            bucket = 'localhost:5432/test_bucket?sslmode=disable'
             options.extend(['--bucket', bucket])
             options.extend(['--access-key', 'postgres'])
             options.extend(['--secret-key', 'postgres'])
@@ -170,8 +170,8 @@ class JuicefsMachine(RuleBasedStateMachine):
                 create_mysql_db('mysql://root:root@(localhost:3306)/test_bucket2')
                 options.extend(['--bucket', '(localhost:3306)/test_bucket2'])
             elif storage == 'postgres':
-                create_postgres_db('postgres://postgres:postgres@localhost:5432/test_bucket2')
-                options.extend('--bucket', 'localhost:5432/test_bucket2')
+                create_postgres_db('postgres://postgres:postgres@localhost:5432/test_bucket2?sslmode=disable')
+                options.extend('--bucket', 'localhost:5432/test_bucket2?sslmode=disable')
         if change_aksk and storage == 'minio':
             output = subprocess.check_output('mc admin user list myminio'.split())
             if not output:
@@ -197,7 +197,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             elif storage == 'mysql':
                 run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', '(localhost:3306)/test_bucket'])
             elif storage == 'postgres':
-                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', 'localhost:5432/test_bucket'])
+                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', 'localhost:5432/test_bucket?sslmode=disable'])
         self.formatted_by = juicefs
         print('config succeed')
 
