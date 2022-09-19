@@ -56,7 +56,7 @@ func cmdDoctor() *cli.Command {
 		ArgsUsage: "MOUNTPOINT",
 		Usage:     "Collect and display system static and runtime information",
 		Description: `
-It collects and display information from multiple dimensions such as the running environment and system logs, etc.
+It collects and displays information from multiple dimensions such as the running environment and system logs, etc.
 
 Examples:
 $ juicefs doctor /mnt/jfs
@@ -377,15 +377,19 @@ func checkAgent(cmd string) bool {
 }
 
 func geneZipFile(srcPath, destPath string) error {
-	zipfile, err := os.Create(destPath)
+	zipFile, err := os.Create(destPath)
 	if err != nil {
 		return err
 	}
-	defer zipfile.Close()
-	archive := zip.NewWriter(zipfile)
-	defer archive.Close()
+	defer closeFile(zipFile)
+	archive := zip.NewWriter(zipFile)
+	defer func() {
+		if err := archive.Close(); err != nil {
+			logger.Fatalf("error closing zip archive: %v", err)
+		}
+	}()
 
-	filepath.Walk(srcPath, func(path string, info os.FileInfo, _ error) error {
+	if err = filepath.Walk(srcPath, func(path string, info os.FileInfo, _ error) error {
 		if path == srcPath {
 			return nil
 		}
@@ -407,13 +411,16 @@ func geneZipFile(srcPath, destPath string) error {
 		}
 		if !info.IsDir() {
 			file, _ := os.Open(path)
-			defer file.Close()
+			defer closeFile(file)
 			if _, err := io.Copy(writer, file); err != nil {
 				return err
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
