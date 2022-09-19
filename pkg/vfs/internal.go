@@ -263,9 +263,9 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			close(done)
 		}()
 		writeProgress(&count, nil, data, done)
-		if st == 0 && v.RmrCB != nil {
-			if st = v.RmrCB(inode, name); st != 0 {
-				logger.Errorf("Rmr callback %d/%s: %s", inode, name, st)
+		if st == 0 && v.InvalidateEntry != nil {
+			if st = v.InvalidateEntry(inode, name); st != 0 {
+				logger.Errorf("Invalidate entry %d/%s: %s", inode, name, st)
 			}
 		}
 		*data = append(*data, uint8(st))
