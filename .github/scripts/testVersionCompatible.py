@@ -376,6 +376,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.greater_than_version_formatted(juicefs))
         assume (self.greater_than_version_mounted(juicefs))
         assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
+        # ref: https://github.com/juicedata/juicefs/pull/2776
+        assume(version.parse('-'.join(juicefs.split('-')[1:])) >= version.parse('1.1.0-dev'))
         # TODO: should test upload delay.
         assume(get_upload_delay_seconds(JuicefsMachine.MOUNT_POINT) == 0)
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
@@ -385,9 +387,6 @@ class JuicefsMachine(RuleBasedStateMachine):
         assert(os.path.exists(path))
         run_cmd(f'stat {path}')
         options = [juicefs, 'rmr', path]
-        if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0'):
-            # ref: https://github.com/juicedata/juicefs/pull/2776
-            options[0] = JuicefsMachine.JFS_BINS[1]
         run_jfs_cmd(options)
         # TODO: should uncomment the assert
         # assert(not os.path.exists(path))
