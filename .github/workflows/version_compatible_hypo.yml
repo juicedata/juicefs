@@ -12,16 +12,24 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        #old_juicefs_version: ['1.0', '1.0-rc1', '1.0-beta1']
-        old_juicefs_version: ['1.0']
-        # meta: ['redis', 'mysql', 'tikv', 'postgres' ]
-        meta: ['redis']
-        storage: ['postgres']
+        # old_juicefs_version: ['1.0']
+        old_juicefs_version: ['1.0', '1.0-rc1', '1.0-beta1']
+        # meta: ['redis']
+        meta: ['redis', 'mysql', 'tikv', 'postgres']
+        storage: ['minio']
         include:
           - os: ubuntu-latest
             old_juicefs_version: '1.0'
             meta: 'redis'
             storage: 'postgres'
+          - os: ubuntu-latest
+            old_juicefs_version: '1.0'
+            meta: 'redis'
+            storage: 'mysql'
+          - os: ubuntu-latest
+            old_juicefs_version: '0.17'
+            meta: 'redis'
+            storage: 'minio'
           # - os: ubuntu-latest
           #   old_juicefs_version: '1.0'
           #   meta: 'tikv'
@@ -187,5 +195,5 @@ jobs:
 
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 30
+        timeout-minutes: 1
         uses: lhotari/action-upterm@v1
