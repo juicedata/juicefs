@@ -902,11 +902,12 @@ func (v *VFS) RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno)
 var logger = utils.GetLogger("juicefs")
 
 type VFS struct {
-	Conf   *Config
-	Meta   meta.Meta
-	Store  chunk.ChunkStore
-	reader DataReader
-	writer DataWriter
+	Conf            *Config
+	Meta            meta.Meta
+	Store           chunk.ChunkStore
+	InvalidateEntry func(parent meta.Ino, name string) syscall.Errno
+	reader          DataReader
+	writer          DataWriter
 
 	handles map[Ino][]*handle
 	hanleM  sync.Mutex

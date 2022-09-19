@@ -251,11 +251,11 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 	switch cmd {
 	case meta.Rmr:
 		done := make(chan struct{})
+		inode := Ino(r.Get64())
+		name := string(r.Get(int(r.Get8())))
 		var count uint64
 		var st syscall.Errno
 		go func() {
-			inode := Ino(r.Get64())
-			name := string(r.Get(int(r.Get8())))
 			st = v.Meta.Remove(ctx, inode, name, &count)
 			if st != 0 {
 				logger.Errorf("remove %d/%s: %s", inode, name, st)
@@ -263,6 +263,11 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			close(done)
 		}()
 		writeProgress(&count, nil, data, done)
+		if st == 0 && v.InvalidateEntry != nil {
+			if st = v.InvalidateEntry(inode, name); st != 0 {
+				logger.Errorf("Invalidate entry %d/%s: %s", inode, name, st)
+			}
+		}
 		*data = append(*data, uint8(st))
 	case meta.Info:
 		var summary meta.Summary
