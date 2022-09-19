@@ -49,11 +49,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Install Fdb C Lib
-        run: |
-          wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-          sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
-
       - name: Build linux target
         run: |
           url=https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta2/juicefs-1.0.0-beta2-linux-amd64.tar.gz
