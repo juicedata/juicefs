@@ -385,6 +385,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         assert(os.path.exists(path))
         run_cmd(f'stat {path}')
         options = [juicefs, 'rmr', path]
+        if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0'):
+            # ref: https://github.com/juicedata/juicefs/pull/2776
+            options[0] = JuicefsMachine.JFS_BINS[1]
         run_jfs_cmd(options)
         # TODO: should uncomment the assert
         # assert(not os.path.exists(path))
@@ -545,9 +548,9 @@ class JuicefsMachine(RuleBasedStateMachine):
             if directory:
                 options.append(JuicefsMachine.MOUNT_POINT)
             else:
-                write_block(JuicefsMachine.MOUNT_POINT, f'{JuicefsMachine.MOUNT_POINT}/bigfile', 1048576, 100)
-                assert os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/bigfile')
-                options.append(f'{JuicefsMachine.MOUNT_POINT}/bigfile')
+                write_block(JuicefsMachine.MOUNT_POINT, f'{JuicefsMachine.MOUNT_POINT}/file_to_warmup', 1048576, 100)
+                assert os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/file_to_warmup')
+                options.append(f'{JuicefsMachine.MOUNT_POINT}/file_to_warmup')
                 
         run_jfs_cmd(options)
         # print(output)

@@ -12,33 +12,24 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        # old_juicefs_version: ['1.0']
-        old_juicefs_version: ['1.0', '1.0-rc1', '1.0-beta1']
+        # old_juicefs_version: ['release-1.0']
+        old_juicefs_version: ['main', 'release-1.0', 'release-1.0-rc1']
         # meta: ['redis']
         meta: ['redis', 'mysql', 'tikv', 'postgres']
         storage: ['minio']
         include:
           - os: ubuntu-latest
-            old_juicefs_version: '1.0'
+            old_juicefs_version: 'release-1.0'
             meta: 'redis'
             storage: 'postgres'
           - os: ubuntu-latest
-            old_juicefs_version: '1.0'
+            old_juicefs_version: 'release-1.0'
             meta: 'redis'
             storage: 'mysql'
           - os: ubuntu-latest
-            old_juicefs_version: '0.17'
+            old_juicefs_version: 'release-0.17'
             meta: 'redis'
             storage: 'minio'
-          # - os: ubuntu-latest
-          #   old_juicefs_version: '1.0'
-          #   meta: 'tikv'
-          # - os: ubuntu-latest
-          #   old_juicefs_version: '1.0'
-          #   meta: 'postgres'
-          # - os: ubuntu-latest
-          #   old_juicefs_version: '1.0'
-          #   meta: 'sqlite3'
 
     runs-on: ${{matrix.os}}
 
@@ -83,12 +74,12 @@ jobs:
       - name: Checkout old version
         uses: actions/checkout@v3
         with:
-          ref: release-${{matrix.old_juicefs_version}}
-          path: release-${{matrix.old_juicefs_version}}
+          ref: ${{matrix.old_juicefs_version}}
+          path: ${{matrix.old_juicefs_version}}
 
       - name: Make old build
         run: | 
-          cd release-${{matrix.old_juicefs_version}}
+          cd ${{matrix.old_juicefs_version}}
           make juicefs
           cd -
 
@@ -157,8 +148,8 @@ jobs:
           new_version=`./juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
           mv juicefs juicefs-$new_version
           export NEW_JFS_BIN="juicefs-$new_version"
-          old_version=`release-${{matrix.old_juicefs_version}}/juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
-          mv release-${{matrix.old_juicefs_version}}/juicefs juicefs-$old_version
+          old_version=`${{matrix.old_juicefs_version}}/juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          mv ${{matrix.old_juicefs_version}}/juicefs juicefs-$old_version
           export OLD_JFS_BIN="juicefs-$old_version"
           python3 .github/scripts/testVersionCompatible.py
 
