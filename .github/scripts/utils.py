@@ -1,3 +1,4 @@
+from curses import meta
 import json
 import os
 from posixpath import expanduser
@@ -25,10 +26,7 @@ def flush_meta(meta_url):
     elif meta_url.startswith('mysql://'):
         create_mysql_db(meta_url)
     elif meta_url.startswith('postgres://'): 
-        db_name = meta_url[8:].split('@')[1].split('/')[1]
-        if '?' in db_name:
-            db_name = db_name.split('?')[0]
-        run_cmd(f'printf "\set AUTOCOMMIT on\ndrop database if exists {db_name}; create database {db_name}; " |  psql -U postgres -h localhost')
+        create_postgres_db(meta_url)
     elif meta_url.startswith('tikv://'):
         run_cmd('echo "delall --yes" |tcli -pd localhost:2379')
     else:
@@ -49,6 +47,12 @@ def create_mysql_db(meta_url):
         host = host_port
         port = '3306'
     run_cmd(f'mysql -u{user} {password} -h {host} -P {port} -e "drop database if exists {db_name}; create database {db_name};"')
+
+def create_postgres_db(meta_url):
+    db_name = meta_url[8:].split('@')[1].split('/')[1]
+    if '?' in db_name:
+        db_name = db_name.split('?')[0]
+    run_cmd(f'printf "\set AUTOCOMMIT on\ndrop database if exists {db_name}; create database {db_name}; " |  psql -U postgres -h localhost')
 
 def clear_storage(storage, bucket, volume):
     print('start clear storage')
@@ -78,6 +82,11 @@ def clear_storage(storage, bucket, volume):
     elif storage == 'mysql':
         db_name = bucket.split('/')[-1]
         run_cmd(f'mysql -uroot -proot -h localhost -P 3306 -e "drop database if exists {db_name};create database {db_name};"')
+    elif storage == 'postgres':
+        db_name = bucket.split('/')[1]
+        if '?' in db_name:
+            db_name = db_name.split('?')[0]
+        run_cmd(f'printf "\set AUTOCOMMIT on\ndrop database if exists {db_name}; create database {db_name}; " |  psql -U postgres -h localhost')
     print('clear storage succeed')
 
 

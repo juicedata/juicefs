@@ -107,6 +107,11 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--bucket', bucket])
             options.extend(['--access-key', 'root'])
             options.extend(['--secret-key', 'root'])
+        elif storage == 'postgres':
+            bucket = 'localhost:5432/test_bucket'
+            options.extend(['--bucket', bucket])
+            options.extend(['--access-key', 'postgres'])
+            options.extend(['--secret-key', 'postgres'])
         else:
             print(f'storage is {storage}')
             raise Exception(f'storage value error: {storage}')
@@ -164,7 +169,9 @@ class JuicefsMachine(RuleBasedStateMachine):
             elif storage == 'mysql':
                 create_mysql_db('mysql://root:root@(localhost:3306)/test_bucket2')
                 options.extend(['--bucket', '(localhost:3306)/test_bucket2'])
-
+            elif storage == 'postgres':
+                create_postgres_db('postgres://postgres:postgres@localhost:5432/test_bucket2')
+                options.extend('--bucket', 'localhost:5432/test_bucket2')
         if change_aksk and storage == 'minio':
             output = subprocess.check_output('mc admin user list myminio'.split())
             if not output:
@@ -189,6 +196,8 @@ class JuicefsMachine(RuleBasedStateMachine):
                 run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', 'http://localhost:9000/test_bucket'])
             elif storage == 'mysql':
                 run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', '(localhost:3306)/test_bucket'])
+            elif storage == 'postgres':
+                run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--bucket', 'localhost:5432/test_bucket'])
         self.formatted_by = juicefs
         print('config succeed')
 
@@ -463,6 +472,8 @@ class JuicefsMachine(RuleBasedStateMachine):
             run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--access-key', 'minioadmin', '--secret-key', 'minioadmin'])
         elif storage == 'mysql':
             run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--access-key', 'root', '--secret-key', 'root'])
+        elif storage == 'postgres':
+            run_jfs_cmd([juicefs, 'config', JuicefsMachine.META_URL, '--access-key', 'postgres', '--secret-key', 'postgres'])
         
         os.remove('dump.json')
 
