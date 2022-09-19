@@ -12,11 +12,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        old_juicefs_version: ['release-1.0']
+        # old_juicefs_version: ['release-1.0']
         old_juicefs_version: ['main', 'release-1.0', 'release-1.0-rc1']
         # meta: ['redis']
         meta: ['redis', 'mysql', 'tikv', 'postgres']
-        # storage: ['minio']
+        storage: ['minio']
         include:
           - os: ubuntu-latest
             old_juicefs_version: 'release-1.0'
