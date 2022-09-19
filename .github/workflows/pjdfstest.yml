@@ -68,13 +68,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libtap-harness-archive-perl
-          cd /tmp/jfs/
+          cd /tmp
           git clone https://github.com/pjd/pjdfstest.git
           cd pjdfstest
           autoreconf -ifs
           ./configure
           make pjdfstest
-          sudo prove -rv tests/
+          cd /tmp/jfs
+          sudo prove -rv /tmp/pjdfstest/tests/
 
       - name: Log
         if: ${{ always() }}
