@@ -111,7 +111,7 @@ jobs:
             docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
           fi
 
-          if [[ "$storage" == mysql ]]; then
+          if [[ "$storage" == minio ]]; then
             docker run -d -p 9000:9000 --name minio \
                         -e "MINIO_ACCESS_KEY=minioadmin" \
                         -e "MINIO_SECRET_KEY=minioadmin" \
