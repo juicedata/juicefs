@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -1044,21 +1045,76 @@ func (m *baseMeta) GetPaths(ctx Context, inode Ino) []string {
 	}
 	return paths
 }
-
-func (m *baseMeta) Check(ctx Context, fpath string, repair bool) (st syscall.Errno) {
-	var attr Attr
-	var inode Ino
-	var parent Ino = 1
-	ps := strings.Split(fpath, "/")
-	for i, name := range ps {
-		if len(name) == 0 {
-			continue
+func (m *baseMeta) reCountDirNlink(ctx Context, inode Ino) (uint32, syscall.Errno) {
+	var entries []*Entry
+	if st := m.en.doReaddir(ctx, inode, 0, &entries, -1); st != 0 {
+		logger.Errorf("readdir inode %d: %s", inode, st)
+		return 0, st
+	}
+	var dirCounter uint32 = 2
+	for _, e := range entries {
+		if e.Attr.Typ == TypeDirectory {
+			dirCounter++
 		}
+	}
+	return dirCounter, 0
+}
+
+type metaWalkFunc func(ctx Context, inode Ino, path string, attr *Attr, st syscall.Errno) syscall.Errno
+
+const skipDir = syscall.Errno(10000)
+
+func (m *baseMeta) walkHelpFunc(ctx Context, inode Ino, path string, attr *Attr, walkFn metaWalkFunc) syscall.Errno {
+	if attr.Typ != TypeDirectory {
+		return walkFn(ctx, inode, path, attr, 0)
+	}
+	var entries []*Entry
+	st := m.en.doReaddir(ctx, inode, 0, &entries, -1)
+	st1 := walkFn(ctx, inode, path, attr, st)
+	if st != 0 || st1 != 0 {
+		return st1
+	}
+
+	for _, entry := range entries {
+		filename := filepath.Join(path, string(entry.Name))
+		if entry.Attr.Typ == TypeDirectory {
+			if st := m.walkHelpFunc(ctx, entry.Inode, filename, entry.Attr, walkFn); st != 0 && st != skipDir {
+				return st
+			}
+		} else {
+			if st := walkFn(ctx, entry.Inode, filename, entry.Attr, 0); st != 0 && st != skipDir {
+				return st
+			}
+		}
+	}
+	return 0
+}
+
+func (m *baseMeta) walk(ctx Context, inode Ino, path string, attr *Attr, walkFn metaWalkFunc) syscall.Errno {
+	st := m.walkHelpFunc(ctx, inode, path, attr, walkFn)
+	if st == skipDir {
+		return 0
+	}
+	return st
+}
+
+func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recur bool) (st syscall.Errno) {
+	var attr Attr
+	var inode Ino = 1
+	var parent Ino = 1
+	attr.Typ = TypeDirectory
+	ps := strings.FieldsFunc(fpath, func(r rune) bool {
+		return r == '/'
+	})
+	for i, name := range ps {
 		if st = m.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
 			logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
 			return
 		}
 		if attr.Full {
+			if i >= len(ps)-1 {
+				break
+			}
 			parent = inode
 			continue
 		}
@@ -1079,13 +1135,74 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool) (st syscall.Err
 			attr.Ctime = now
 			attr.Length = 4 << 10
 			attr.Parent = parent
+			if attr.Nlink, st = m.reCountDirNlink(ctx, inode); st != 0 {
+				logger.Errorf("Recount nlink for inode %d: %s", inode, st)
+				return
+			}
 			if st = m.en.doRepair(ctx, inode, &attr); st == 0 {
 				logger.Infof("Path %s (inode %d) is successfully repaired", p, inode)
 			} else {
 				logger.Errorf("Repair path %s inode %d: %s", p, inode, st)
 			}
 		}
-		return // handle one missing inode at a time
+		if !recur {
+			return // handle one missing inode at a time
+		}
+	}
+	if st = m.walk(ctx, inode, fpath, &attr, func(ctx Context, inode1 Ino, path string, attr *Attr, st1 syscall.Errno) syscall.Errno {
+		if st1 != 0 {
+			logger.Errorf("Walk path %s inode %d: %s", path, inode1, st1)
+			return st1
+		}
+		if attr.Typ != TypeDirectory {
+			logger.Debugf("Path %s (inode %d) is a file, skip the nlink check", path, inode1)
+			return 0
+		}
+		if st1 := m.GetAttr(ctx, inode1, attr); st1 != 0 {
+			logger.Errorf("GetAttr inode %d: %s", inode1, st1)
+			return st1
+		}
+		nlink, st1 := m.reCountDirNlink(ctx, inode1)
+		if st1 != 0 {
+			logger.Errorf("Recount nlink for inode %d: %s", inode1, st1)
+			return st1
+		}
+		if attr.Full && attr.Nlink == nlink {
+			if !recur && inode1 == inode {
+				return skipDir
+			}
+			return 0
+		}
+		if !attr.Full {
+			now := time.Now().Unix()
+			attr.Mode = 0644
+			attr.Uid = ctx.Uid()
+			attr.Gid = ctx.Gid()
+			attr.Atime = now
+			attr.Mtime = now
+			attr.Ctime = now
+			attr.Length = 4 << 10
+			attr.Parent = parent
+		}
+		attr.Nlink = nlink
+		if repair {
+			if st1 = m.en.doRepair(ctx, inode1, attr); st1 == 0 {
+				logger.Infof("Path %s (inode %d) is successfully repaired", path, inode1)
+				if !recur && inode1 == inode {
+					return skipDir
+				}
+			} else {
+				logger.Errorf("Repair path %s inode %d: %s", path, inode1, st1)
+			}
+			return st1
+		}
+		logger.Warnf("Path %s (inode %d) can be repaired, please re-check with 'repair' enabled", path, inode1)
+		if !recur && inode1 == inode {
+			return skipDir
+		}
+		return 0
+	}); st != 0 {
+		return
 	}
 	logger.Infof("Path %s inode %d is valid", fpath, parent)
 	return

@@ -2622,19 +2622,14 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		Atime:  attr.Atime * 1e6,
 		Mtime:  attr.Mtime * 1e6,
 		Ctime:  attr.Ctime * 1e6,
-		Length: 4 << 10,
+		Length: attr.Length,
 		Parent: attr.Parent,
+		Nlink:  attr.Nlink,
 	}
 	return errno(m.txn(func(s *xorm.Session) error {
-		n.Nlink = 2
-		var rows []edge
-		if err := s.Find(&rows, &edge{Parent: inode}); err != nil {
+		if ok, err := s.ForUpdate().Get(&node{Inode: inode}); err == nil && ok {
+			_, err := s.Update(n, &node{Inode: inode})
 			return err
-		}
-		for _, row := range rows {
-			if row.Type == TypeDirectory {
-				n.Nlink++
-			}
 		}
 		return mustInsert(s, n)
 	}, inode))
