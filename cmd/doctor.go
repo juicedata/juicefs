@@ -435,8 +435,6 @@ func doctor(ctx *cli.Context) error {
 		return fmt.Errorf("path %s is not a mount point", mp)
 	}
 
-	rootPrivileges := false
-
 	outDir := ctx.String("out-dir")
 	// special treatment for non-existing out dir
 	if _, err := os.Stat(outDir); os.IsNotExist(err) {
@@ -457,7 +455,8 @@ func doctor(ctx *cli.Context) error {
 
 	mp, _ = filepath.Abs(mp)
 	timestamp := time.Now().Format("20060102150405")
-	currDir := path.Join(outDir, fmt.Sprintf("%s-%s", strings.Trim(strings.Join(strings.Split(mp, "/"), "-"), "-"), timestamp))
+	prefix := strings.Trim(strings.Join(strings.Split(mp, "/"), "-"), "-")
+	currDir := path.Join(outDir, fmt.Sprintf("%s-%s", prefix, timestamp))
 	if err := os.Mkdir(currDir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create current out dir %s: %v", currDir, err)
 	}
@@ -491,13 +490,14 @@ JuiceFS Version:
 	}
 	fmt.Printf("\nMount Command:\n%s\n\n", cmd)
 
+	rootPrivileges := false
 	if uid == "0" && os.Getuid() != 0 {
 		logger.Info("Mount point is mounted by the root user, may ask for root privilege...")
 		rootPrivileges = true
 	}
 
 	configName := ".config"
-	if err := copyConfigFile(path.Join(mp, configName), path.Join(currDir, configName), rootPrivileges); err != nil {
+	if err := copyConfigFile(path.Join(mp, configName), path.Join(currDir, "config.txt"), rootPrivileges); err != nil {
 		return fmt.Errorf("failed to get volume config %s: %v", configName, err)
 	}
 
@@ -508,7 +508,7 @@ JuiceFS Version:
 	go func() {
 		defer wg.Done()
 		srcPath := path.Join(mp, statsName)
-		destPath := path.Join(currDir, statsName)
+		destPath := path.Join(currDir, "stats.txt")
 		if err := copyConfigFile(srcPath, destPath, rootPrivileges); err != nil {
 			logger.Errorf("Failed to get volume config %s: %v", statsName, err)
 		}
@@ -516,6 +516,7 @@ JuiceFS Version:
 		logger.Infof("Stats metrics are being sampled, sampling duration: %ds", stats)
 		time.Sleep(time.Second * time.Duration(stats))
 
+		destPath = path.Join(currDir, fmt.Sprintf("stats.%ds.txt", stats))
 		if err := copyConfigFile(srcPath, destPath, rootPrivileges); err != nil {
 			logger.Errorf("Failed to get volume config %s: %v", statsName, err)
 		}
@@ -594,7 +595,7 @@ JuiceFS Version:
 	}
 	wg.Wait()
 
-	if err := geneZipFile(currDir, path.Join(outDir, fmt.Sprintf("doctor-%s.zip", timestamp))); err != nil {
+	if err := geneZipFile(currDir, path.Join(outDir, fmt.Sprintf("%s-%s.zip", prefix, timestamp))); err != nil {
 		return fmt.Errorf("failed to zip result %s: %v", currDir, err)
 	}
 	return nil
