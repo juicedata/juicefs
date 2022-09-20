@@ -30,8 +30,7 @@ const (
 	sqlAddr   = "sqlite3://juicefs.db"
 	// sqlAddr = "mysql://root:@/juicefs" // MySQL
 	// sqlAddr = "mysql://root:@tcp(127.0.0.1:4000)/juicefs" // TiDB
-	tkvAddr = "fdb:///etc/foundationdb/fdb.cluster:fdb_test"
-	// tkvAddr = "badger://test_db"
+	tkvAddr = "badger://test_db"
 	// tkvAddr = "tikv://127.0.0.1:2379/juicefs"
 )
 

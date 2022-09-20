@@ -1,5 +1,5 @@
-//go:build !nofdb
-// +build !nofdb
+//go:build fdb
+// +build fdb
 
 /*
  * JuiceFS, Copyright 2022 Juicedata, Inc.

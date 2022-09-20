@@ -66,11 +66,6 @@ jobs:
           sudo apt install -y attr
           sudo mkdir -p /home/travis/.m2/
 
-      - name: Install FoundationDB
-        run: |
-          wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-          wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
-          sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb foundationdb-server_6.3.23-1_amd64.deb
 
       - name: Download Zip
         run: |
@@ -78,6 +73,8 @@ jobs:
           wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
           wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
           wget -O /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz  https://github.com/etcd-io/etcd/releases/download/v3.5.2/etcd-v3.5.2-linux-amd64.tar.gz
+          wget -O /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+          wget -O /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
           unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2/
           tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2/
           cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
@@ -103,6 +100,7 @@ jobs:
           source /home/runner/.bash_profile
           tiup -v
           nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
+          sudo dpkg -i /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb
           docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
           go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
           nohup /home/travis/.m2/rclone-v1.57.0-linux-amd64/rclone serve webdav local --addr 127.0.0.1:9007 >> rclone.log 2>&1 &
@@ -114,7 +112,7 @@ jobs:
           chmod +x travis-setup-hdfs.sh
           sudo lsof -i :8020 || true
           ./travis-setup-hdfs.sh
-          for i in {2222,3306,5432,8020,9000,9007} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+          for i in {2222,3306,5432,8020,9000,9007,4500} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
           sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
 
 
@@ -125,6 +123,8 @@ jobs:
           make test
           cat cov1.out >> coverage.txt
           cat cov2.out >> coverage.txt
+          make test.fdb
+          cat cov3.out >> coverage.txt
           sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
           sudo ./juicefs gc localhost
           sudo ./juicefs fsck localhost

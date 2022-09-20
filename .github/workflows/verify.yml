@@ -27,12 +27,6 @@ jobs:
         with:
           go-version: '1.17.x'
       - uses: actions/checkout@v2
-
-      - name: Install Fdb C Lib
-        run: |
-          wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-          sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
-
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
@@ -53,11 +47,6 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install g++-multilib gcc-mingw-w64
-    
-    - name: Install Fdb C Lib
-      run: |
-        wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-        sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
 
     - uses: actions/cache@v3
       with:
@@ -85,3 +74,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install librados-dev
         GOPATH=$HOME/go make juicefs.ceph
+
+    - name: build fdb
+      run: |
+        wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+        sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+        GOPATH=$HOME/go make juicefs.fdb
