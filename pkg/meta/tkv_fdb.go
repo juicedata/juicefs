@@ -21,9 +21,9 @@ package meta
 
 import (
 	"fmt"
-	"strings"
+	"net/url"
 
-	fdb "github.com/apple/foundationdb/bindings/go/src/fdb"
+	"github.com/apple/foundationdb/bindings/go/src/fdb"
 )
 
 func init() {
@@ -39,21 +39,20 @@ type fdbClient struct {
 	client fdb.Database
 }
 
-func newFdbClient(address string) (tkvClient, error) {
-	args := strings.Split(address, ":")
+func newFdbClient(addr string) (tkvClient, error) {
 	err := fdb.APIVersion(630)
 	if err != nil {
 		return nil, fmt.Errorf("set API version: %s", err)
 	}
-	db, err := fdb.OpenDatabase(args[0])
+	u, err := url.Parse("fdb://" + addr)
 	if err != nil {
-		return nil, fmt.Errorf("open DataBase Failed: %s", err)
+		return nil, err
 	}
-	prefix := ""
-	if len(args) == 2 {
-		prefix = args[1]
+	db, err := fdb.OpenDatabase(u.Path)
+	if err != nil {
+		return nil, fmt.Errorf("open database: %s", err)
 	}
-	return withPrefix(&fdbClient{db}, append([]byte(prefix), 0xFD)), nil
+	return withPrefix(&fdbClient{db}, append([]byte(u.Query().Get("prefix")), 0xFD)), nil
 }
 
 func (c *fdbClient) name() string {
@@ -105,8 +104,7 @@ func (c *fdbClient) shouldRetry(err error) bool {
 }
 
 func (tx *fdbTxn) get(key []byte) []byte {
-	ret := tx.Get(fdb.Key(key)).MustGet()
-	return ret
+	return tx.Get(fdb.Key(key)).MustGet()
 }
 
 func (tx *fdbTxn) gets(keys ...[]byte) [][]byte {

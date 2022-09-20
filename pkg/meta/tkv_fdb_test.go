@@ -25,7 +25,7 @@ import (
 )
 
 func TestFdbClient(t *testing.T) {
-	m, err := newKVMeta("fdb", "/etc/foundationdb/fdb.cluster:fdb-test2", &Config{})
+	m, err := newKVMeta("fdb", "/etc/foundationdb/fdb.cluster?prefix=test2", &Config{})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -33,7 +33,7 @@ func TestFdbClient(t *testing.T) {
 }
 
 func TestFdb(t *testing.T) {
-	c, err := newFdbClient("/etc/foundationdb/fdb.cluster:fdb-test1")
+	c, err := newFdbClient("/etc/foundationdb/fdb.cluster?prefix=test1")
 	if err != nil {
 		t.Fatal(err)
 	}
