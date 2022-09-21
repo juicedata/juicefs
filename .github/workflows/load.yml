@@ -116,20 +116,20 @@ jobs:
           load_file: "2M_emtpy_files.dump"
 
 
-  load-to-badgerdb:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: download data
-        run: |
-          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
-          gzip -dk  2M_emtpy_files.dump.gz
-      - run: sudo go get github.com/dgraph-io/badger/v3
-      - name: Test
-        uses: ./.github/actions/load
-        with:
-          meta_url: "badger://load_test"
-          load_file: "2M_emtpy_files.dump"    
+#  load-to-badgerdb:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v3
+#      - name: download data
+#        run: |
+#          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
+#          gzip -dk  2M_emtpy_files.dump.gz
+#      - run: sudo go get github.com/dgraph-io/badger/v3
+#      - name: Test
+#        uses: ./.github/actions/load
+#        with:
+#          meta_url: "badger://load_test"
+#          load_file: "2M_emtpy_files.dump"
 
 
   load-to-mariadb:
