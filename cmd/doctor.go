@@ -138,10 +138,10 @@ func copyConfigFile(srcPath, destPath string, rootPrivileges bool) error {
 }
 
 func getCmdMount(mp string) (uid, pid, cmd string, err error) {
-	ret, err := exec.Command("/bin/sh", "-c", "ps -ef | grep -v grep | grep 'juicefs mount' | grep "+mp).CombinedOutput()
-	// `exit status 1"` occurs when there is no matching item for `grep`
+	psArgs := []string{"/bin/sh", "-c", "ps -ef | grep -v grep | grep 'juicefs mount' | grep " + mp}
+	ret, err := exec.Command(psArgs[0], psArgs[1:]...).CombinedOutput()
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to execute command `ps -ef | grep juicefs | grep %s`: %v", mp, err)
+		return "", "", "", fmt.Errorf("failed to execute command `%s`: %v", strings.Join(psArgs, " "), err)
 	}
 
 	lines := strings.Split(string(ret), "\n")
@@ -161,7 +161,7 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 		}
 	}
 	if cmd == "" {
-		return "", "", "", fmt.Errorf("not found mount point: %s", mp)
+		return "", "", "", fmt.Errorf("no mount command found for %s", mp)
 	}
 	return uid, pid, cmd, nil
 }
@@ -210,13 +210,13 @@ func closeFile(file *os.File) {
 func copyLogFile(logPath, retLogPath string, limit uint64) error {
 	logFile, err := os.Open(logPath)
 	if err != nil {
-		return fmt.Errorf("error opening log file %s: %v", logPath, err)
+		return fmt.Errorf("failed to open log file %s: %v", logPath, err)
 	}
 	defer closeFile(logFile)
 
 	tmpFile, err := ioutil.TempFile("", "juicefs-")
 	if err != nil {
-		return fmt.Errorf("error creating log file %s: %v", tmpFile.Name(), err)
+		return fmt.Errorf("failed to creat log file %s: %v", tmpFile.Name(), err)
 	}
 	defer closeFile(tmpFile)
 	writer := bufio.NewWriter(tmpFile)
@@ -348,7 +348,7 @@ func reqAndSaveMetric(name string, metric metricItem, outDir string) error {
 
 	writer := bufio.NewWriter(retFile)
 	if _, err := writer.Write(resp); err != nil {
-		return fmt.Errorf("error writing metric %s: %v", name, err)
+		return fmt.Errorf("failed to write metric %s: %v", name, err)
 	}
 	if err := writer.Flush(); err != nil {
 		return fmt.Errorf("failed to flush writer: %v", err)
