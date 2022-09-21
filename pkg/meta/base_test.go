@@ -30,7 +30,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"xorm.io/xorm"
 )
 
 func TestRedisClient(t *testing.T) {
@@ -78,6 +80,8 @@ func testMeta(t *testing.T, m Meta) {
 	testCaseIncensi(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
+	base.conf.ReadOnly = false
+	testCheckAndRepair(t, m)
 }
 
 func testMetaClient(t *testing.T, m Meta) {
@@ -1582,5 +1586,160 @@ func testAttrFlags(t *testing.T, m Meta) {
 	}
 	if st := m.CopyFileRange(ctx, copysrcFile, 0, copydstFile, 0, 1024, 0, nil); st != syscall.EPERM {
 		t.Fatalf("copy_file_range f: %s", st)
+	}
+}
+
+func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
+	var err error
+	switch m := m.(type) {
+	case *redisMeta:
+		err = m.txn(Background, func(tx *redis.Tx) error {
+			return tx.Set(Background, m.inodeKey(inode), m.marshal(attr), 0).Err()
+		}, m.inodeKey(inode))
+	case *dbMeta:
+		err = m.txn(func(s *xorm.Session) error {
+			_, err = s.ID(inode).AllCols().Update(&node{
+				Inode:  inode,
+				Type:   attr.Typ,
+				Flags:  attr.Flags,
+				Mode:   attr.Mode,
+				Uid:    attr.Uid,
+				Gid:    attr.Gid,
+				Mtime:  attr.Mtime * 1e6,
+				Ctime:  attr.Ctime * 1e6,
+				Atime:  attr.Atime * 1e6,
+				Nlink:  attr.Nlink,
+				Length: attr.Length,
+				Rdev:   attr.Rdev,
+				Parent: attr.Parent,
+			})
+			return err
+		})
+	case *kvMeta:
+		err = m.txn(func(tx kvTxn) error {
+			tx.set(m.inodeKey(inode), m.marshal(attr))
+			return nil
+		})
+	}
+	if err != nil {
+		t.Fatalf("setAttr: %v", err)
+	}
+}
+
+func testCheckAndRepair(t *testing.T, m Meta) {
+	if err := m.NewSession(); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
+	var checkInode, d1Inode, d2Inode, d3Inode, d4Inode Ino
+	dirAttr := &Attr{Mode: 0644, Full: true, Typ: TypeDirectory, Nlink: 3}
+	dirAttr.Parent = RootInode
+	if st := m.Mkdir(Background, RootInode, "check", 0640, 022, 0, &checkInode, dirAttr); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	dirAttr.Parent = checkInode
+	if st := m.Mkdir(Background, checkInode, "d1", 0640, 022, 0, &d1Inode, dirAttr); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	dirAttr.Parent = d1Inode
+	if st := m.Mkdir(Background, d1Inode, "d2", 0640, 022, 0, &d2Inode, dirAttr); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	dirAttr.Parent = d2Inode
+	if st := m.Mkdir(Background, d2Inode, "d3", 0640, 022, 0, &d3Inode, dirAttr); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	dirAttr.Parent = d3Inode
+	dirAttr.Nlink = 2
+	if st := m.Mkdir(Background, d3Inode, "d4", 0640, 022, 0, &d4Inode, dirAttr); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+
+	if st := m.GetAttr(Background, checkInode, dirAttr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	dirAttr.Nlink = 0
+	setAttr(t, m, checkInode, dirAttr)
+
+	if st := m.GetAttr(Background, d1Inode, dirAttr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	dirAttr.Nlink = 0
+	setAttr(t, m, d1Inode, dirAttr)
+
+	if st := m.GetAttr(Background, d2Inode, dirAttr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	dirAttr.Nlink = 0
+	setAttr(t, m, d2Inode, dirAttr)
+
+	if st := m.GetAttr(Background, d3Inode, dirAttr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	dirAttr.Nlink = 0
+	setAttr(t, m, d3Inode, dirAttr)
+
+	if st := m.GetAttr(Background, d4Inode, dirAttr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	dirAttr.Full = false
+	dirAttr.Nlink = 0
+	setAttr(t, m, d4Inode, dirAttr)
+
+	if st := m.Check(Background, "/check", false, false); st != 0 {
+		t.Fatalf("check: %s", st)
+	}
+	if st := m.GetAttr(Background, checkInode, dirAttr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	if dirAttr.Nlink != 0 {
+		t.Fatalf("checkInode nlink should is 0 now: %d", dirAttr.Nlink)
+	}
+
+	if st := m.Check(Background, "/check", true, false); st != 0 {
+		t.Fatalf("check: %s", st)
+	}
+	if st := m.GetAttr(Background, checkInode, dirAttr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	if dirAttr.Nlink != 3 {
+		t.Fatalf("checkInode nlink should is 3 now: %d", dirAttr.Nlink)
+	}
+
+	if st := m.Check(Background, "/check/d1/d2", true, false); st != 0 {
+		t.Fatalf("check: %s", st)
+	}
+	if st := m.GetAttr(Background, d2Inode, dirAttr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	if dirAttr.Nlink != 3 {
+		t.Fatalf("d2Inode nlink should is 3 now: %d", dirAttr.Nlink)
+	}
+	if st := m.GetAttr(Background, d1Inode, dirAttr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	if dirAttr.Nlink != 0 {
+		t.Fatalf("d1Inode nlink should is  now: %d", dirAttr.Nlink)
+	}
+
+	if st := m.Check(Background, "/", true, true); st != 0 {
+		t.Fatalf("check: %s", st)
+	}
+	for _, ino := range []Ino{checkInode, d1Inode, d2Inode, d3Inode} {
+		if st := m.GetAttr(Background, ino, dirAttr); st != 0 {
+			t.Fatalf("getattr: %s", st)
+		}
+		if dirAttr.Nlink != 3 {
+			t.Fatalf("nlink should is 3 now: %d", dirAttr.Nlink)
+		}
+	}
+	if st := m.GetAttr(Background, d4Inode, dirAttr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	if !dirAttr.Full {
+		t.Fatalf("d4Inode attr should not be missing: %v", dirAttr.Full)
+	}
+	if dirAttr.Nlink != 2 {
+		t.Fatalf("d4Inode nlink should is 2 now: %d", dirAttr.Nlink)
 	}
 }
