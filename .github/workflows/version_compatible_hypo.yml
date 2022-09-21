@@ -27,6 +27,10 @@ jobs:
             meta: 'redis'
             storage: 'mysql'
           - os: ubuntu-latest
+            old_juicefs_version: 'release-1.0-beta1'
+            meta: 'redis'
+            storage: 'minio'
+          - os: ubuntu-latest
             old_juicefs_version: 'release-0.17'
             meta: 'redis'
             storage: 'minio'
