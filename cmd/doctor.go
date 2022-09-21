@@ -133,12 +133,8 @@ func copyConfigFile(srcPath, destPath string, rootPrivileges bool) error {
 	if rootPrivileges {
 		copyArgs = append(copyArgs, "sudo")
 	}
-	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("echo %s > %s", srcPath, destPath))
-	if err := exec.Command(copyArgs[0], copyArgs[1:]...).Run(); err != nil {
-		return err
-	}
-
-	return nil
+	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cat %s > %s", srcPath, destPath))
+	return exec.Command(copyArgs[0], copyArgs[1:]...).Run()
 }
 
 func getCmdMount(mp string) (uid, pid, cmd string, err error) {
@@ -170,15 +166,14 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 	return uid, pid, cmd, nil
 }
 
-func getDefaultLogDir() (string, error) {
+func getDefaultLogDir(rootPrivileges bool) (string, error) {
 	var defaultLogDir = "/var/log"
 	switch runtime.GOOS {
 	case "linux":
-		if os.Getuid() == 0 {
+	case "darwin":
+		if rootPrivileges {
 			break
 		}
-		fallthrough
-	case "darwin":
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("failed to get home directory")
@@ -190,13 +185,13 @@ func getDefaultLogDir() (string, error) {
 
 var logArg = regexp.MustCompile(`--log(\s*=?\s*)(\S+)`)
 
-func getLogPath(cmd string) (string, error) {
+func getLogPath(cmd string, rootPrivileges bool) (string, error) {
 	var logPath string
 	tmp := logArg.FindStringSubmatch(cmd)
 	if len(tmp) == 3 {
 		logPath = tmp[2]
 	} else {
-		defaultLogDir, err := getDefaultLogDir()
+		defaultLogDir, err := getDefaultLogDir(rootPrivileges)
 		if err != nil {
 			return "", err
 		}
@@ -491,8 +486,8 @@ JuiceFS Version:
 	fmt.Printf("\nMount Command:\n%s\n\n", cmd)
 
 	rootPrivileges := false
-	if uid == "0" && os.Getuid() != 0 {
-		logger.Info("Mount point is mounted by the root user, may ask for root privilege...")
+	if (uid == "0" || uid == "root") && os.Getuid() != 0 {
+		fmt.Println("Mount point is mounted by the root user, may ask for root privilege...")
 		rootPrivileges = true
 	}
 
@@ -527,18 +522,17 @@ JuiceFS Version:
 	}
 
 	if isUnix() && ctx.Bool("collect-log") {
-		logPath, err := getLogPath(cmd)
+		logPath, err := getLogPath(cmd, rootPrivileges)
 		if err != nil {
 			return fmt.Errorf("failed to get log path: %v", err)
 		}
-
 		limit := ctx.Uint64("limit")
 		retLogPath := path.Join(currDir, "juicefs.log")
 
+		logger.Infof("Log %s is being collected", logPath)
 		if err := copyLogFile(logPath, retLogPath, limit); err != nil {
 			return fmt.Errorf("failed to get log file: %v", err)
 		}
-		logger.Infof("Log %s is collected", logPath)
 	}
 
 	enableAgent := checkAgent(cmd)
