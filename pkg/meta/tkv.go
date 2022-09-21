@@ -2223,6 +2223,14 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 
 func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(tx kvTxn) error {
+		attr.Nlink = 2
+		_ = tx.scanValues(m.entryKey(inode, ""), 0, func(k, v []byte) bool {
+			typ, _ := m.parseEntry(v)
+			if typ == TypeDirectory {
+				attr.Nlink++
+			}
+			return false
+		})
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		return nil
 	}, inode))

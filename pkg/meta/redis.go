@@ -2826,6 +2826,17 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 
 func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		attr.Nlink = 2
+		vals, err := tx.HGetAll(ctx, m.entryKey(inode)).Result()
+		if err != nil {
+			return err
+		}
+		for _, v := range vals {
+			typ, _ := m.parseEntry([]byte(v))
+			if typ == TypeDirectory {
+				attr.Nlink++
+			}
+		}
 		return tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err()
 	}, m.entryKey(inode), m.inodeKey(inode)))
 }

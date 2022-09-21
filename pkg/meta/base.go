@@ -1098,7 +1098,7 @@ func (m *baseMeta) walk(ctx Context, inode Ino, path string, attr *Attr, walkFn 
 	return st
 }
 
-func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recur bool) (st syscall.Errno) {
+func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool) (st syscall.Errno) {
 	var attr Attr
 	var inode Ino = 1
 	var parent Ino = 1
@@ -1145,7 +1145,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recur bool) (st
 				logger.Errorf("Repair path %s inode %d: %s", p, inode, st)
 			}
 		}
-		if !recur {
+		if !recursive {
 			return // handle one missing inode at a time
 		}
 	}
@@ -1168,7 +1168,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recur bool) (st
 			return st1
 		}
 		if attr.Full && attr.Nlink == nlink {
-			if !recur && inode1 == inode {
+			if !recursive && inode1 == inode {
 				return skipDir
 			}
 			return 0
@@ -1188,7 +1188,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recur bool) (st
 		if repair {
 			if st1 = m.en.doRepair(ctx, inode1, attr); st1 == 0 {
 				logger.Infof("Path %s (inode %d) is successfully repaired", path, inode1)
-				if !recur && inode1 == inode {
+				if !recursive && inode1 == inode {
 					return skipDir
 				}
 			} else {
@@ -1197,7 +1197,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recur bool) (st
 			return st1
 		}
 		logger.Warnf("Path %s (inode %d) can be repaired, please re-check with 'repair' enabled", path, inode1)
-		if !recur && inode1 == inode {
+		if !recursive && inode1 == inode {
 			return skipDir
 		}
 		return 0

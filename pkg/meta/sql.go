@@ -2627,6 +2627,16 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		Nlink:  attr.Nlink,
 	}
 	return errno(m.txn(func(s *xorm.Session) error {
+		n.Nlink = 2
+		var rows []edge
+		if err := s.Find(&rows, &edge{Parent: inode}); err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if row.Type == TypeDirectory {
+				n.Nlink++
+			}
+		}
 		if ok, err := s.ForUpdate().Get(&node{Inode: inode}); err == nil && ok {
 			_, err := s.Update(n, &node{Inode: inode})
 			return err
