@@ -513,14 +513,14 @@ juicefs mount -d "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs"
 使用 foundationdb 作为元数据引擎时，需要使用如下格式来指定 `Meta-URL` 参数：
 
 ```
-fdb://[cluster file path]:<prefix>
+fdb://[cluster file path]?prefix=<prefix>
 ```
 
 其中`cluster file path`为fdb的配置文件，由配置文件来进行对fdb server的连接。示例如下：
 
 ```bash
 juicefs format 
- fdb:///etc/foundationdb/fdb.cluster:jfs
+ fdb:///etc/foundationdb/fdb.cluster?prefix=jfs
  pics
 ```
 ### [设置 TLS](https://apple.github.io/foundationdb/tls.html)
@@ -597,6 +597,8 @@ u6pT9Jhl:ClZfjAWM@127.0.0.1:4500:tls
 **配置client端**
 
 fdbcli同理，在client机器上需要配置tls参数以及fdb.cluster。
+
+通过fdbcli连接时
 ```
 fdbcli --tls_certificate_file=/etc/foundationdb/fdb.pem \
        --tls_ca_file=/etc/foundationdb/cert.crt \
@@ -604,9 +606,17 @@ fdbcli --tls_certificate_file=/etc/foundationdb/fdb.pem \
        --tls_verify_peers=Check.Valid=0
 ```
 
+通过api连接时(fdbcli也适用)
+```
+export FDB_TLS_CERTIFICATE_FILE=/etc/foundationdb/fdb.pem \
+export FDB_TLS_CA_FILE=/etc/foundationdb/cert.crt \
+export FDB_TLS_KEY_FILE=/etc/foundationdb/private.key \
+export FDB_TLS_VERIFY_PEERS=Check.Valid=0
+```
+
 ### 挂载文件系统
 
 ```shell
 juicefs mount -d 
-"fdb:///etc/foundationdb/fdb.cluster:jfs" /mnt/jfs
+"fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" /mnt/jfs
 ```

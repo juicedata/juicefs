@@ -512,14 +512,14 @@ When mounting to the background, the path to the certificate needs to use an abs
 When using foundationdb as the metadata engine, the `Meta-URL` parameter needs to be specified in the following format:
 
 ```
-fdb://[config file address]:<prefix>
+fdb://[config file address]?prefix=<prefix>
 ```
 
 The 'config file address' is The FDB cluster configuration file, which is used to connect to The FDB server. An sample is as follows :
 
 ```bash
 juicefs format 
- fdb:///etc/foundationdb/fdb.cluster:jfs
+ fdb:///etc/foundationdb/fdb.cluster?prefix=jfs
  pics
 ```
 ### [Set up TLS](https://apple.github.io/foundationdb/tls.html)
@@ -594,25 +594,35 @@ logdir = /var/log/foundationdb
 [backup_agent.1]
 ```
 
-In addition, you need to add the suffix ': TLS' after the address in fdb.cluster, fdb.cluster is as follows:
+In addition, you need to add the suffix `:tls` after the address in fdb.cluster, fdb.cluster is as follows:
 
 ```
-U6pT9Jhl: ClZfjAWM@127.0.0.1:4500: TLS
+U6pT9Jhl:ClZfjAWM@127.0.0.1:4500:tls
 ```
 
 **Configure the client**
 
 Fdbcli Similarly, you need to configure TLS parameters and fdb.cluster on the client machine.
 
+Connected by fdbcli
 ```
 fdbcli --tls_certificate_file=/etc/foundationdb/fdb.pem \
---tls_ca_file=/etc/foundationdb/cert.crt \
---tls_key_file=/etc/foundationdb/private.key \
---tls_verify_peers=Check.Valid=0
+       --tls_ca_file=/etc/foundationdb/cert.crt \
+       --tls_key_file=/etc/foundationdb/private.key \
+       --tls_verify_peers=Check.Valid=0
 ```
+
+Connected by API
+```
+export FDB_TLS_CERTIFICATE_FILE=/etc/foundationdb/fdb.pem \
+export FDB_TLS_CA_FILE=/etc/foundationdb/cert.crt \
+export FDB_TLS_KEY_FILE=/etc/foundationdb/private.key \
+export FDB_TLS_VERIFY_PEERS=Check.Valid=0
+```
+
 ### Mount a file system
 
 ```shell
 juicefs mount -d 
-"fdb:///etc/foundationdb/fdb.cluster:jfs" /mnt/jfs
+"fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" /mnt/jfs
 ```
