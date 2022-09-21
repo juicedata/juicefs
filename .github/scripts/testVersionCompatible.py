@@ -1,5 +1,6 @@
 import json
 import os
+from pickle import FALSE
 import platform
 import shutil
 import subprocess
@@ -487,7 +488,6 @@ class JuicefsMachine(RuleBasedStateMachine):
     def fsck(self, juicefs):
         assume (self.greater_than_version_formatted(juicefs))
         assume(juicefs in self.mounted_by)
-        assume (get_stage_blocks(JuicefsMachine.MOUNT_POINT) == 0)
         print('start fsck')
         run_jfs_cmd([juicefs, 'fsck', JuicefsMachine.META_URL])
         print('fsck succeed')
@@ -591,7 +591,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         upload_limit=st.integers(min_value=0, max_value=1000), 
         download_limit=st.integers(min_value=0, max_value=1000), 
         prefetch=st.integers(min_value=0, max_value=100), 
-        writeback=st.booleans(),
+        writeback=st.just(False),
         upload_delay=st.sampled_from([0, 2]), 
         cache_dir=st.sampled_from(['cache1', 'cache2']),
         cache_size=st.integers(min_value=0, max_value=1024000), 
