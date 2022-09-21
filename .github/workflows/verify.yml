@@ -74,3 +74,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install librados-dev
         GOPATH=$HOME/go make juicefs.ceph
+
+    - name: build fdb
+      run: |
+        wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+        sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+        GOPATH=$HOME/go make juicefs.fdb
