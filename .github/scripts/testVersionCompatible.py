@@ -39,6 +39,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         # mount at least once, see ref: https://github.com/juicedata/juicefs/issues/2717
         self.mounted_by = []
         self.formatted_by = ''
+        self.dumped_by = ''
         if JuicefsMachine.META_URL.startswith('badger://'):
             # change url for each run
             JuicefsMachine.META_URL = f'badger://badger-{uuid.uuid4().hex}'
@@ -451,12 +452,14 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume(juicefs in self.mounted_by)
         print('start dump')
         run_jfs_cmd([juicefs, 'dump', JuicefsMachine.META_URL, 'dump.json'])
+        self.dumped_by = juicefs
         print('dump succeed')
 
     @rule(juicefs = st.sampled_from(JFS_BINS))
     @precondition(lambda self: self.formatted and os.path.exists('dump.json'))
     def load(self, juicefs):
         assume (self.greater_than_version_formatted(juicefs))
+        assume (self.greater_than_version_dumped(juicefs))
         print('start load')
         if os.path.exists(JuicefsMachine.MOUNT_POINT) and os.path.exists(JuicefsMachine.MOUNT_POINT+'.accesslog'):
             run_cmd('umount %s'%JuicefsMachine.MOUNT_POINT)
@@ -707,6 +710,9 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     def greater_than_version_formatted(self, ver):
         return version.parse('-'.join(ver.split('-')[1:])) >=  version.parse('-'.join(self.formatted_by.split('-')[1:]))
+
+    def greater_than_version_dumped(self, ver):
+        return version.parse('-'.join(ver.split('-')[1:])) >=  version.parse('-'.join(self.dumped_by.split('-')[1:]))
 
     def greater_than_version_mounted(self, ver):
         for mounted_version in self.mounted_by:
