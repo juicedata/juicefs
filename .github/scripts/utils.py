@@ -1,3 +1,4 @@
+from curses import meta
 import json
 import os
 from posixpath import expanduser
@@ -23,29 +24,35 @@ def flush_meta(meta_url):
         run_cmd('redis-cli flushall')
         print(f'flush redis succeed')
     elif meta_url.startswith('mysql://'):
-        db_name = meta_url[8:].split('@')[1].split('/')[1]
-        user = meta_url[8:].split('@')[0].split(':')[0]
-        password = meta_url[8:].split('@')[0].split(':')[1]
-        if password: 
-            password = f'-p{password}'
-        host_port= meta_url[8:].split('@')[1].split('/')[0].replace('(', '').replace(')', '')
-        if ':' in host_port:
-            host = host_port.split(':')[0]
-            port = host_port.split(':')[1]
-        else:
-            host = host_port
-            port = '3306'
-        run_cmd(f'mysql -u{user} {password} -h {host} -P {port} -e "drop database if exists {db_name}; create database {db_name};"')
+        create_mysql_db(meta_url)
     elif meta_url.startswith('postgres://'): 
-        db_name = meta_url[8:].split('@')[1].split('/')[1]
-        if '?' in db_name:
-            db_name = db_name.split('?')[0]
-        run_cmd(f'printf "\set AUTOCOMMIT on\ndrop database if exists {db_name}; create database {db_name}; " |  psql -U postgres -h localhost')
+        create_postgres_db(meta_url)
     elif meta_url.startswith('tikv://'):
         run_cmd('echo "delall --yes" |tcli -pd localhost:2379')
     else:
         raise Exception(f'{meta_url} not supported')
     print('flush meta succeed')
+
+def create_mysql_db(meta_url):
+    db_name = meta_url[8:].split('@')[1].split('/')[1]
+    user = meta_url[8:].split('@')[0].split(':')[0]
+    password = meta_url[8:].split('@')[0].split(':')[1]
+    if password: 
+        password = f'-p{password}'
+    host_port= meta_url[8:].split('@')[1].split('/')[0].replace('(', '').replace(')', '')
+    if ':' in host_port:
+        host = host_port.split(':')[0]
+        port = host_port.split(':')[1]
+    else:
+        host = host_port
+        port = '3306'
+    run_cmd(f'mysql -u{user} {password} -h {host} -P {port} -e "drop database if exists {db_name}; create database {db_name};"')
+
+def create_postgres_db(meta_url):
+    db_name = meta_url[8:].split('@')[1].split('/')[1]
+    if '?' in db_name:
+        db_name = db_name.split('?')[0]
+    run_cmd(f'printf "\set AUTOCOMMIT on\ndrop database if exists {db_name}; create database {db_name}; " |  psql -U postgres -h localhost')
 
 def clear_storage(storage, bucket, volume):
     print('start clear storage')
@@ -72,6 +79,14 @@ def clear_storage(storage, bucket, volume):
         print(f'remove bucket {bucket_name} succeed')
         if c.bucket_exists(bucket_name):
             assert not list(c.list_objects(bucket_name))
+    elif storage == 'mysql':
+        db_name = bucket.split('/')[-1]
+        run_cmd(f'mysql -uroot -proot -h localhost -P 3306 -e "drop database if exists {db_name};create database {db_name};"')
+    elif storage == 'postgres':
+        db_name = bucket.split('/')[1]
+        if '?' in db_name:
+            db_name = db_name.split('?')[0]
+        run_cmd(f'printf "\set AUTOCOMMIT on\ndrop database if exists {db_name}; create database {db_name}; " |  psql -U postgres -h localhost')
     print('clear storage succeed')
 
 
@@ -173,3 +188,15 @@ def is_port_in_use(port: int) -> bool:
     import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port)) == 0
+
+def get_storage(juicefs, meta_url):
+    output = subprocess.run([juicefs, 'status', meta_url], check=True, stdout=subprocess.PIPE).stdout.decode()
+    if 'get timestamp too slow' in output: 
+        # remove the first line caust it is tikv log message
+        output = '\n'.join(output.split('\n')[1:])
+    print(f'status output: {output}')
+    storage = json.loads(output.replace("'", '"'))['Setting']['Storage']
+    return storage
+
+if __name__ == "__main__":
+    run_jfs_cmd(['./juicefs-1.1.0-dev', 'rmr', '/tmp/sync-test/file_to_rmr', '--debug'])

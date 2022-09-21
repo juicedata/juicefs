@@ -12,24 +12,28 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        old_juicefs_version: ['1.0.0', '1.0.0-rc1', '1.0.0-beta1']
-        # old_juicefs_version: ['1.0.0-beta1']
-        meta: ['redis', 'mysql', 'tikv', 'postgres' ]
+        # old_juicefs_version: ['release-1.0']
+        old_juicefs_version: ['main', 'release-1.0', 'release-1.0-rc1']
+        # meta: ['redis']
+        meta: ['redis', 'mysql', 'tikv', 'postgres']
         storage: ['minio']
         include:
           - os: ubuntu-latest
-            old_juicefs_version: '0.17.1'
+            old_juicefs_version: 'release-1.0'
+            meta: 'redis'
+            storage: 'postgres'
+          - os: ubuntu-latest
+            old_juicefs_version: 'release-1.0'
+            meta: 'redis'
+            storage: 'mysql'
+          - os: ubuntu-latest
+            old_juicefs_version: 'release-1.0-beta1'
             meta: 'redis'
             storage: 'minio'
-          # - os: ubuntu-latest
-          #   old_juicefs_version: '1.0.0'
-          #   meta: 'tikv'
-          # - os: ubuntu-latest
-          #   old_juicefs_version: '1.0.0'
-          #   meta: 'postgres'
-          # - os: ubuntu-latest
-          #   old_juicefs_version: '1.0.0'
-          #   meta: 'sqlite3'
+          - os: ubuntu-latest
+            old_juicefs_version: 'release-0.17'
+            meta: 'redis'
+            storage: 'minio'
 
     runs-on: ${{matrix.os}}
 
@@ -47,48 +51,10 @@ jobs:
           - 5432:5432
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-          
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
           go-version: '1.18.x'
-
-      - name: Prepare meta database
-        run: | 
-          meta=${{matrix.meta}}
-          if [[ "$meta" == redis ]]; then
-            meta_url='redis://localhost/1'
-            sudo apt-get install -y redis-tools redis-server
-          elif [[ "$meta" == mysql ]]; then
-            sudo /etc/init.d/mysql start
-          elif [[ "$meta" == tikv ]]; then
-            curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-            source /home/runner/.bash_profile
-            source /home/runner/.profile
-            tiup playground --mode tikv-slim &
-            git clone https://github.com/c4pt0r/tcli
-            cd tcli && make
-            sudo cp bin/tcli /usr/local/bin
-            cd -
-          elif [[ "$meta" == badger ]]; then
-            sudo go get github.com/dgraph-io/badger/v3
-          elif [[ "$meta" == mariadb ]]; then
-            docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
-          fi
-
-      - name: Download old version
-        run: | 
-          filename=juicefs-${{matrix.old_juicefs_version}}-linux-amd64.tar.gz
-          echo filename is: $filename
-          url=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep $filename | awk -F\" '{print $4}' | head -1)
-          echo download url is: $url
-          wget -q $url
-          tar -zxf $filename
-          mv juicefs juicefs-${{matrix.old_juicefs_version}}
 
       - uses: actions/cache@v3
         with:
@@ -99,20 +65,64 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
       - name: Make Juicefs
         shell: bash
         run: | 
           make juicefs
-          
-      - name: Setup minio
-        shell: bash
-        run: |
-          docker run -d -p 9000:9000 --name minio \
-                      -e "MINIO_ACCESS_KEY=minioadmin" \
-                      -e "MINIO_SECRET_KEY=minioadmin" \
-                      -v /tmp/data:/data \
-                      -v /tmp/config:/root/.minio \
-                      minio/minio server /data
+
+      - name: Checkout old version
+        uses: actions/checkout@v3
+        with:
+          ref: ${{matrix.old_juicefs_version}}
+          path: ${{matrix.old_juicefs_version}}
+
+      - name: Make old build
+        run: | 
+          cd ${{matrix.old_juicefs_version}}
+          make juicefs
+          cd -
+
+      - name: Prepare meta database
+        run: | 
+          meta=${{matrix.meta}}
+          storage=${{matrix.storage}}
+          if [[ "$meta" == redis ]]; then
+            meta_url='redis://localhost/1'
+            sudo apt-get install -y redis-tools redis-server
+          fi
+          if [[ "$meta" == mysql || "$storage" == mysql ]]; then
+            sudo /etc/init.d/mysql start
+          fi
+          if [[ "$meta" == tikv ]]; then
+            curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+            source /home/runner/.bash_profile
+            source /home/runner/.profile
+            tiup playground --mode tikv-slim &
+            git clone https://github.com/c4pt0r/tcli
+            cd tcli && make
+            sudo cp bin/tcli /usr/local/bin
+            cd -
+          fi
+          if [[ "$meta" == badger ]]; then
+            sudo go get github.com/dgraph-io/badger/v3
+          fi
+          if [[ "$meta" == mariadb ]]; then
+            docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
+          fi
+
+          if [[ "$storage" == minio ]]; then
+            docker run -d -p 9000:9000 --name minio \
+                        -e "MINIO_ACCESS_KEY=minioadmin" \
+                        -e "MINIO_SECRET_KEY=minioadmin" \
+                        -v /tmp/data:/data \
+                        -v /tmp/config:/root/.minio \
+                        minio/minio server /data
+          fi
           
       - name: Install tools
         run: | 
@@ -128,11 +138,12 @@ jobs:
         run: |          
           export META=${{matrix.meta}}
           export STORAGE=${{matrix.storage}}
-          version=`./juicefs version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
-          mv juicefs juicefs-$version
-          export NEW_JFS_BIN="juicefs-$version"
-          export OLD_JFS_BIN="juicefs-${{matrix.old_juicefs_version}}"
-          # python3 .github/scripts/test_action_log.py
+          new_version=`./juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          mv juicefs juicefs-$new_version
+          export NEW_JFS_BIN="juicefs-$new_version"
+          old_version=`${{matrix.old_juicefs_version}}/juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          mv ${{matrix.old_juicefs_version}}/juicefs juicefs-$old_version
+          export OLD_JFS_BIN="juicefs-$old_version"
           python3 .github/scripts/testVersionCompatible.py
 
       - name: Upload command log
@@ -166,7 +177,7 @@ jobs:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
-      # - name: Setup upterm session
-      #   if: ${{ failure() }}
-      #   timeout-minutes: 1
-      #   uses: lhotari/action-upterm@v1
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        timeout-minutes: 1
+        uses: lhotari/action-upterm@v1
