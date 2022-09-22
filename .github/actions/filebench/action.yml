@@ -115,6 +115,7 @@ runs:
       shell: bash
       if: ${{ always() }}
       run: |
+        df -lh
         echo "juicefs log"
         sudo tail -n 1000 /var/log/juicefs.log
         grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
