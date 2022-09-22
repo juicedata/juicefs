@@ -154,7 +154,7 @@ jobs:
       - name: create database
         shell: bash
         run: | 
-          meta_url="${{ steps.vars.outputs.meta_url }}"
+          meta_url=${{ steps.vars.outputs.meta_url }}
           isolation_level="${{matrix.isolation_level}}"
           db_name=$(basename $meta_url | awk -F? '{print $1}')
           if [[ "$meta_url" == mysql* ]]; then
@@ -176,7 +176,7 @@ jobs:
       - name: start gateway
         shell: bash
         run: |
-          meta_url=“${{ steps.vars.outputs.meta_url }}”
+          meta_url=${{ steps.vars.outputs.meta_url }}
           mp="/tmp/myjfs"
           volume="myjfs"
           export MINIO_ROOT_USER=minioadmin
@@ -196,7 +196,7 @@ jobs:
       - name: Sync with multiple process
         shell: bash
         run: |
-          meta_url=“${{ steps.vars.outputs.meta_url }}”
+          meta_url=${{ steps.vars.outputs.meta_url }}
           file_size=${{matrix.file_size}}
           if [ $file_size="100M" ]; then 
             file_count=5
@@ -237,7 +237,7 @@ jobs:
         
       - name: Sync with empty dir
         run: |
-          meta_url=“${{ steps.vars.outputs.meta_url }}”
+          meta_url=${{ steps.vars.outputs.meta_url }}
           threads=20
           mp=/tmp/myjfs
           volume=myjfs
