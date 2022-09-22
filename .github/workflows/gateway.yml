@@ -75,7 +75,7 @@ jobs:
           if [ "${{matrix.meta}}" == "postgres" ]; then
             meta_url="postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable" 
           elif [ "${{matrix.meta}}" == "mysql" ]; then
-            meta_url=mysql://root:root@\\(127.0.0.1\\)/sync_test
+            meta_url="mysql://root:root@\\(127.0.0.1\\)/sync_test"
           elif [ "${{matrix.meta}}" == "redis" ]; then
             meta_url="redis://127.0.0.1:6379/1"
           elif [ "${{matrix.meta}}" == "sqlite3" ]; then
