@@ -1628,24 +1628,18 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 func testCheckAndRepair(t *testing.T, m Meta) {
 	var checkInode, d1Inode, d2Inode, d3Inode, d4Inode Ino
 	dirAttr := &Attr{Mode: 0644, Full: true, Typ: TypeDirectory, Nlink: 3}
-	dirAttr.Parent = RootInode
 	if st := m.Mkdir(Background, RootInode, "check", 0640, 022, 0, &checkInode, dirAttr); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	dirAttr.Parent = checkInode
 	if st := m.Mkdir(Background, checkInode, "d1", 0640, 022, 0, &d1Inode, dirAttr); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	dirAttr.Parent = d1Inode
 	if st := m.Mkdir(Background, d1Inode, "d2", 0640, 022, 0, &d2Inode, dirAttr); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	dirAttr.Parent = d2Inode
 	if st := m.Mkdir(Background, d2Inode, "d3", 0640, 022, 0, &d3Inode, dirAttr); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	dirAttr.Parent = d3Inode
-	dirAttr.Nlink = 2
 	if st := m.Mkdir(Background, d3Inode, "d4", 0640, 022, 0, &d4Inode, dirAttr); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
