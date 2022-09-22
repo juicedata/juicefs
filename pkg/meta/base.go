@@ -1061,7 +1061,7 @@ func (m *baseMeta) countDirNlink(ctx Context, inode Ino) (uint32, syscall.Errno)
 	return dirCounter, 0
 }
 
-type metaWalkFunc func(ctx Context, inode Ino, path string, attr *Attr) syscall.Errno
+type metaWalkFunc func(ctx Context, inode Ino, path string, attr *Attr)
 
 func (m *baseMeta) walk(ctx Context, inode Ino, path string, attr *Attr, walkFn metaWalkFunc) syscall.Errno {
 	walkFn(ctx, inode, path, attr)
@@ -1075,7 +1075,9 @@ func (m *baseMeta) walk(ctx Context, inode Ino, path string, attr *Attr, walkFn 
 		if !entry.Attr.Full {
 			entry.Attr.Parent = inode
 		}
-		m.walk(ctx, entry.Inode, filepath.Join(path, string(entry.Name)), entry.Attr, walkFn)
+		if st := m.walk(ctx, entry.Inode, filepath.Join(path, string(entry.Name)), entry.Attr, walkFn); st != 0 {
+			return st
+		}
 	}
 	return 0
 }
@@ -1117,9 +1119,8 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool)
 	go func() {
 		defer close(nodes)
 		if recursive {
-			st = m.walk(ctx, inode, fpath, &attr, func(ctx Context, inode Ino, path string, attr *Attr) syscall.Errno {
+			st = m.walk(ctx, inode, fpath, &attr, func(ctx Context, inode Ino, path string, attr *Attr) {
 				nodes <- &node{inode, path, attr}
-				return 0
 			})
 		} else {
 			nodes <- &node{inode, fpath, &attr}
