@@ -126,7 +126,7 @@ func copyConfigFile(srcPath, destPath string, rootPrivileges bool) error {
 	if rootPrivileges {
 		copyArgs = append(copyArgs, "sudo")
 	}
-	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cp %s %s", srcPath, destPath))
+	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cat %s > %s", srcPath, destPath))
 	return exec.Command(copyArgs[0], copyArgs[1:]...).Run()
 }
 
@@ -214,7 +214,7 @@ func copyLogFile(logPath, retLogPath string, limit uint64, rootPrivileges bool) 
 	if limit > 0 {
 		copyArgs = append(copyArgs, fmt.Sprintf("tail -n %d %s > %s", limit, logPath, retLogPath))
 	} else {
-		copyArgs = append(copyArgs, fmt.Sprintf("cp %s %s", logPath, retLogPath))
+		copyArgs = append(copyArgs, fmt.Sprintf("cat %s > %s", logPath, retLogPath))
 	}
 	return exec.Command(copyArgs[0], copyArgs[1:]...).Run()
 }
@@ -380,7 +380,10 @@ func geneZipFile(srcPath, destPath string) error {
 			return err
 		}
 		if !info.IsDir() {
-			file, _ := os.Open(path)
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
 			defer closeFile(file)
 			if _, err := io.Copy(writer, file); err != nil {
 				return err
@@ -426,7 +429,7 @@ func doctor(ctx *cli.Context) error {
 	mp, _ = filepath.Abs(mp)
 	timestamp := time.Now().Format("20060102150405")
 	prefix := strings.Trim(strings.Join(strings.Split(mp, "/"), "-"), "-")
-	currDir := path.Join(outDir, fmt.Sprintf("%s-%s", prefix, timestamp))
+	currDir := filepath.Join(outDir, fmt.Sprintf("%s-%s", prefix, timestamp))
 	if err := os.Mkdir(currDir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create current out dir %s: %v", currDir, err)
 	}
