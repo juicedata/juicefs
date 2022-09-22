@@ -410,19 +410,11 @@ func doctor(ctx *cli.Context) error {
 
 	outDir := ctx.String("out-dir")
 	// special treatment for non-existing out dir
-	if _, err := os.Stat(outDir); os.IsNotExist(err) {
-		if err := os.Mkdir(outDir, os.ModePerm); err != nil {
+	if outDirInfo, err := os.Stat(outDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(outDir, os.ModePerm); err != nil {
 			return fmt.Errorf("failed to create out dir %s: %v", outDir, err)
 		}
-	}
-
-	// double check the file stat
-	outDirInfo, err := os.Stat(outDir)
-	if err != nil {
-		return fmt.Errorf("failed to stat out dir %s: %v", outDir, err)
-	}
-
-	if !outDirInfo.IsDir() {
+	} else if err == nil && !outDirInfo.IsDir() {
 		return fmt.Errorf("argument --out-dir is not directory: %s", outDir)
 	}
 
@@ -535,7 +527,6 @@ JuiceFS Version:
 			"blocks":       {name: "block.pb.gz", url: baseUrl + "block"},
 			"cmdline":      {name: "cmdline.txt", url: baseUrl + "cmdline"},
 			"goroutine":    {name: "goroutine.pb.gz", url: baseUrl + "goroutine"},
-			"fullstack":    {name: "full.goroutine.stack.txt", url: baseUrl + "goroutine?debug=2"},
 			"heap":         {name: "heap.pb.gz", url: baseUrl + "heap"},
 			"mutex":        {name: "mutex.pb.gz", url: baseUrl + "mutex"},
 			"threadcreate": {name: "threadcreate.pb.gz", url: baseUrl + "threadcreate"},
