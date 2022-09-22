@@ -2837,8 +2837,7 @@ func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 				attr.Nlink++
 			}
 		}
-		err = tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err()
-		return err
+		return tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err()
 	}, m.entryKey(inode), m.inodeKey(inode)))
 }
 

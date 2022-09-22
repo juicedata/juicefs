@@ -1708,7 +1708,7 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 		t.Fatalf("getattr: %s", st)
 	}
 	if dirAttr.Nlink != 0 || dirAttr.Parent != checkInode {
-		t.Fatalf("d1Inode nlink should is  now: %d", dirAttr.Nlink)
+		t.Fatalf("d1Inode nlink should is 0 now: %d", dirAttr.Nlink)
 	}
 
 	if st := m.Check(Background, "/", true, true); st != 0 {
