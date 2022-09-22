@@ -80,17 +80,17 @@ jobs:
           if [ "${{matrix.meta}}" == "postgres" ]; then
             meta_url="postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable" 
           elif [ "${{matrix.meta}}" == "mysql" ]; then
-            meta_url="mysql://root:root@\(127.0.0.1\)/sync_test" 
+            meta_url=mysql://root:root@\(127.0.0.1\)/sync_test
           elif [ "${{matrix.meta}}" == "redis" ]; then
             meta_url="redis://127.0.0.1:6379/1"
           elif [ "${{matrix.meta}}" == "sqlite3" ]; then
             meta_url="sqlite3://sync-test.db"
-          elif [ "${{matrix.meta}}" == "sqlite3" ]; then
+          elif [ "${{matrix.meta}}" == "tikv" ]; then
             meta_url="tikv://127.0.0.1:2379/load_test"
           elif [ "${{matrix.meta}}" == "badgerdb" ]; then
             meta_url="badger://load_test"
           elif [ "${{matrix.meta}}" == "mariadb" ]; then
-            meta_url="mysql://root:root@\(127.0.0.1\)/load_test"
+            meta_url="mysql://root:root@(127.0.0.1)/load_test"
           elif [ "${{matrix.meta}}" == "tidb" ]; then
             meta_url="mysql://root:@\(127.0.0.1:4000\)/load_test"
           else
@@ -132,12 +132,12 @@ jobs:
           tail -300 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+      # - name: Send Slack Notification
+      #   if: ${{ failure() }}
+      #   uses: juicedata/slack-notify-action@main
+      #   with:
+      #     channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+      #     slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
           
       - name: Setup upterm session
         if: ${{ failure() }}
