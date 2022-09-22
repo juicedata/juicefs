@@ -1592,7 +1592,7 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		})
 	}
 
-	if plus != 0 {
+	if plus != 0 && len(*entries) != 0 {
 		fillAttr := func(es []*Entry) error {
 			var keys = make([][]byte, len(es))
 			for i, e := range es {

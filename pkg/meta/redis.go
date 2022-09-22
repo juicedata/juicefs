@@ -1777,7 +1777,7 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 		return errno(err)
 	}
 
-	if plus != 0 {
+	if plus != 0 && len(*entries) != 0 {
 		fillAttr := func(es []*Entry) error {
 			var keys = make([]string, len(es))
 			for i, e := range es {
@@ -2837,7 +2837,8 @@ func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 				attr.Nlink++
 			}
 		}
-		return tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err()
+		err = tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err()
+		return err
 	}, m.entryKey(inode), m.inodeKey(inode)))
 }
 
