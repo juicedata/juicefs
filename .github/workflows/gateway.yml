@@ -203,7 +203,7 @@ jobs:
           else
             file_count=2000
           fi
-          threads=${{matrix.threads}}
+          threads=20
           mp=/tmp/myjfs
           volume=myjfs
           
@@ -238,7 +238,7 @@ jobs:
       - name: Sync with empty dir
         run: |
           meta_url=${{ steps.vars.outputs.meta_url }}
-          threads=${{matrix.threads}}
+          threads=20
           mp=/tmp/myjfs
           volume=myjfs
           export MINIO_ROOT_USER=minioadmin
