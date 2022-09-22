@@ -30,7 +30,7 @@ jobs:
       - name: Varmail
         uses: ./.github/actions/filebench/
         with:
-          type: varmail
+          workload: varmail
 
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -51,7 +51,7 @@ jobs:
       - name: Webserver
         uses: ./.github/actions/filebench/
         with:
-          type: webserver
+          workload: webserver
 
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -72,7 +72,7 @@ jobs:
       - name: Videoserver
         uses: ./.github/actions/filebench/
         with:
-          type: videoserver
+          workload: videoserver
 
       - name: Send Slack Notification
         if: ${{ failure() }}
