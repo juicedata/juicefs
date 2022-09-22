@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -34,18 +33,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 
 	"github.com/urfave/cli/v2"
 )
 
-var defaultOutDir = path.Join(".", "doctor")
-
-const (
-	defaultStatsTime   = 5
-	defaultTraceTime   = 5
-	defaultProfileTime = 30
-)
+var defaultOutDir = filepath.Join(".", "doctor")
 
 func cmdDoctor() *cli.Command {
 	return &cli.Command{
@@ -77,7 +71,7 @@ $ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /
 			},
 			&cli.Uint64Flag{
 				Name:  "stats-sec",
-				Value: defaultStatsTime,
+				Value: 5,
 				Usage: "stats sampling duration",
 			},
 			&cli.BoolFlag{
@@ -94,12 +88,12 @@ $ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /
 			},
 			&cli.Uint64Flag{
 				Name:  "trace-sec",
-				Value: defaultTraceTime,
+				Value: 5,
 				Usage: "trace sampling duration",
 			},
 			&cli.Uint64Flag{
 				Name:  "profile-sec",
-				Value: defaultProfileTime,
+				Value: 30,
 				Usage: "profile sampling duration",
 			},
 		},
@@ -132,7 +126,7 @@ func copyConfigFile(srcPath, destPath string, rootPrivileges bool) error {
 	if rootPrivileges {
 		copyArgs = append(copyArgs, "sudo")
 	}
-	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cat %s > %s", srcPath, destPath))
+	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cp %s %s", srcPath, destPath))
 	return exec.Command(copyArgs[0], copyArgs[1:]...).Run()
 }
 
@@ -182,7 +176,7 @@ func getDefaultLogDir(rootPrivileges bool) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to get home directory")
 		}
-		defaultLogDir = path.Join(homeDir, ".juicefs")
+		defaultLogDir = filepath.Join(homeDir, ".juicefs")
 	}
 	return defaultLogDir, nil
 }
@@ -199,7 +193,7 @@ func getLogPath(cmd string, rootPrivileges bool) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		logPath = path.Join(defaultLogDir, "juicefs.log")
+		logPath = filepath.Join(defaultLogDir, "juicefs.log")
 	}
 
 	return logPath, nil
@@ -220,7 +214,7 @@ func copyLogFile(logPath, retLogPath string, limit uint64, rootPrivileges bool) 
 	if limit > 0 {
 		copyArgs = append(copyArgs, fmt.Sprintf("tail -n %d %s > %s", limit, logPath, retLogPath))
 	} else {
-		copyArgs = append(copyArgs, fmt.Sprintf("cat %s > %s", logPath, retLogPath))
+		copyArgs = append(copyArgs, fmt.Sprintf("cp %s %s", logPath, retLogPath))
 	}
 	return exec.Command(copyArgs[0], copyArgs[1:]...).Run()
 }
@@ -316,7 +310,7 @@ func reqAndSaveMetric(name string, metric metricItem, outDir string) error {
 	if err != nil {
 		return fmt.Errorf("error getting metric: %v", err)
 	}
-	retPath := path.Join(outDir, fmt.Sprintf("juicefs.%s", metric.name))
+	retPath := filepath.Join(outDir, fmt.Sprintf("juicefs.%s", metric.name))
 	retFile, err := os.Create(retPath)
 	if err != nil {
 		logger.Fatalf("error creating metric file %s: %v", retPath, err)
@@ -405,9 +399,9 @@ func doctor(ctx *cli.Context) error {
 	mp := ctx.Args().First()
 	inode, err := utils.GetFileInode(mp)
 	if err != nil {
-		return fmt.Errorf("lookup inode for %s: %s", mp, err)
+		return fmt.Errorf("failed to lookup inode for %s: %s", mp, err)
 	}
-	if inode != 1 {
+	if inode != uint64(meta.RootInode) {
 		return fmt.Errorf("path %s is not a mount point", mp)
 	}
 
@@ -448,12 +442,12 @@ func doctor(ctx *cli.Context) error {
 JuiceFS Version:
 %s`, runtime.GOOS, runtime.GOARCH, sysInfo, ctx.App.Version)
 
-	sysPath := path.Join(currDir, "system-info.log")
+	sysPath := filepath.Join(currDir, "system-info.log")
 	sysFile, err := os.Create(sysPath)
-	defer closeFile(sysFile)
 	if err != nil {
 		return fmt.Errorf("failed to create system info file %s: %v", sysPath, err)
 	}
+	defer closeFile(sysFile)
 	if _, err = sysFile.WriteString(result); err != nil {
 		return fmt.Errorf("failed to write system info file %s: %v", sysPath, err)
 	}
@@ -473,7 +467,7 @@ JuiceFS Version:
 	}
 
 	configName := ".config"
-	if err := copyConfigFile(path.Join(mp, configName), path.Join(currDir, "config.txt"), rootPrivileges); err != nil {
+	if err := copyConfigFile(filepath.Join(mp, configName), filepath.Join(currDir, "config.txt"), rootPrivileges); err != nil {
 		return fmt.Errorf("failed to get volume config %s: %v", configName, err)
 	}
 
@@ -483,8 +477,8 @@ JuiceFS Version:
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		srcPath := path.Join(mp, statsName)
-		destPath := path.Join(currDir, "stats.txt")
+		srcPath := filepath.Join(mp, statsName)
+		destPath := filepath.Join(currDir, "stats.txt")
 		if err := copyConfigFile(srcPath, destPath, rootPrivileges); err != nil {
 			logger.Errorf("Failed to get volume config %s: %v", statsName, err)
 		}
@@ -492,7 +486,7 @@ JuiceFS Version:
 		logger.Infof("Stats metrics are being sampled, sampling duration: %ds", stats)
 		time.Sleep(time.Second * time.Duration(stats))
 
-		destPath = path.Join(currDir, fmt.Sprintf("stats.%ds.txt", stats))
+		destPath = filepath.Join(currDir, fmt.Sprintf("stats.%ds.txt", stats))
 		if err := copyConfigFile(srcPath, destPath, rootPrivileges); err != nil {
 			logger.Errorf("Failed to get volume config %s: %v", statsName, err)
 		}
@@ -508,7 +502,7 @@ JuiceFS Version:
 			return fmt.Errorf("failed to get log path: %v", err)
 		}
 		limit := ctx.Uint64("limit")
-		retLogPath := path.Join(currDir, "juicefs.log")
+		retLogPath := filepath.Join(currDir, "juicefs.log")
 
 		logger.Infof("Log %s is being collected", logPath)
 		if err := copyLogFile(logPath, retLogPath, limit, rootPrivileges); err != nil {
@@ -546,7 +540,7 @@ JuiceFS Version:
 			"profile":      {name: fmt.Sprintf("profile.%ds.pb.gz", profile), url: fmt.Sprintf("%sprofile?seconds=%d", baseUrl, profile)},
 		}
 
-		pprofOutDir := path.Join(currDir, "pprof")
+		pprofOutDir := filepath.Join(currDir, "pprof")
 		if err := os.Mkdir(pprofOutDir, os.ModePerm); err != nil {
 			return fmt.Errorf("failed to create out directory: %v", err)
 		}
@@ -570,7 +564,7 @@ JuiceFS Version:
 	}
 	wg.Wait()
 
-	if err := geneZipFile(currDir, path.Join(outDir, fmt.Sprintf("%s-%s.zip", prefix, timestamp))); err != nil {
+	if err := geneZipFile(currDir, filepath.Join(outDir, fmt.Sprintf("%s-%s.zip", prefix, timestamp))); err != nil {
 		return fmt.Errorf("failed to zip result %s: %v", currDir, err)
 	}
 	return nil
