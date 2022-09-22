@@ -1111,19 +1111,22 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool)
 			logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
 			return
 		}
+		isLast := i >= len(ps)-1
 		if attr.Full {
-			if i >= len(ps)-1 {
+			if isLast {
 				break
 			}
 			parent = inode
 			continue
 		}
-
+		if !isLast {
+			parent = inode
+		}
 		// missing attribute
 		p := "/" + path.Join(ps[:i+1]...)
 		if attr.Typ != TypeDirectory { // TODO: determine file size?
 			logger.Warnf("Path %s (inode %d type %d) attribute is missing and cannot be auto-repaired, you have to repair it manually or remove it", p, inode, attr.Typ)
-		} else {
+		} else if !repair {
 			logger.Warnf("Path %s (inode %d) attribute is missing but can be repaired, please re-run with '--path %s --repair' to fix it", p, inode, p)
 		}
 	}
@@ -1183,7 +1186,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool)
 	}); st != 0 {
 		return
 	}
-	logger.Infof("Path %s inode %d is valid", fpath, parent)
+	logger.Infof("Path %s inode %d is valid", fpath, inode)
 	return
 }
 
