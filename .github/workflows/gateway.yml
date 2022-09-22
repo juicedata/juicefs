@@ -28,17 +28,49 @@ jobs:
           - meta: 'mysql'
             file_size: '100M'
             isolation_level: "read committed"
+          - meta: 'mysql'
+            file_size: '100M'
+            isolation_level: "repeatable read"
+          - meta: 'mysql'
+            file_size: '100M'
+            isolation_level: "serializable"
+
           - meta: 'mariadb'
+            file_size: '100M'
+            isolation_level: "read committed"
+
+          - meta: 'postgres'
             file_size: '100M'
             isolation_level: "read committed"
           - meta: 'postgres'
             file_size: '100M'
-            isolation_level: "read committed"
+            isolation_level: "repeatable read"
+          - meta: 'postgres'
+            file_size: '100M'
+            isolation_level: "serializable"
+
           - meta: 'tidb'
             file_size: '100M'
             isolation_level: "read committed"
+          - meta: 'tidb'
+            file_size: '100M'
+            isolation_level: "repeatable read"
 
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps: 
       - name: Checkout
         uses: actions/checkout@v2
@@ -135,21 +167,6 @@ jobs:
           wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
           chmod +x mc 
         shell: bash
-
-      # - name: Init
-      #   shell: bash
-      #   run: | 
-      #     set -x
-      #     mp=${{inputs.mount_point}}
-      #     meta_url=${{inputs.meta_url}}
-      #     volume=${{inputs.volume_name}}
-      #     test -d $mp && ./juicefs umount -f $mp
-      #     ./juicefs status $meta_url && UUID=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || echo "meta not exist"
-      #     if [ -n "$UUID" ];then
-      #       ./juicefs destroy --force $meta_url $UUID
-      #     fi
-      #     test -d /var/jfs/$volume && rm -rf /var/jfs/$volume || true
-      #     echo finished
         
       - name: create database
         shell: bash
@@ -266,9 +283,22 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: | 
-          tail -300 ~/.juicefs/juicefs.log
-          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          if [ -f ~/.juicefs/juicefs.log ]; then
+            tail -300 ~/.juicefs/juicefs.log
+            grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          fi
 
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        timeout-minutes: 1
+        uses: lhotari/action-upterm@v1
 
   sync-to-gateway-with-multithread:
     runs-on: ubuntu-latest
@@ -321,3 +351,15 @@ jobs:
           echo time is: $time
           ./juicefs mount -d $meta_url $mp
           rm -rf $mp/source_dir
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        timeout-minutes: 1
+        uses: lhotari/action-upterm@v1
