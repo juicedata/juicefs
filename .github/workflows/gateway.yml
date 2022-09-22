@@ -117,7 +117,7 @@ jobs:
           elif [ "${{matrix.meta}}" == "badgerdb" ]; then
             meta_url="badger://load_test"
           elif [ "${{matrix.meta}}" == "mariadb" ]; then
-            meta_url="mysql://root:root@\\(127.0.0.1\\)/load_test"
+            meta_url="mysql://root:root@\\(127.0.0.1\\)/test"
           elif [ "${{matrix.meta}}" == "tidb" ]; then
             meta_url="mysql://root:@\\(127.0.0.1:4000\\)/load_test"
           elif [ "${{matrix.meta}}" == "etcd" ]; then
