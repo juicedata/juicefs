@@ -92,7 +92,6 @@ jobs:
           meta=${{matrix.meta}}
           storage=${{matrix.storage}}
           if [[ "$meta" == redis ]]; then
-            meta_url='redis://localhost/1'
             sudo apt-get install -y redis-tools redis-server
           fi
           if [[ "$meta" == mysql || "$storage" == mysql ]]; then
