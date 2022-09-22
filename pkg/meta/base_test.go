@@ -1691,7 +1691,7 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 	if st := m.GetAttr(Background, checkInode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
-	if dirAttr.Nlink != 3 {
+	if dirAttr.Nlink != 3 || dirAttr.Parent != RootInode {
 		t.Fatalf("checkInode nlink should is 3 now: %d", dirAttr.Nlink)
 	}
 
@@ -1701,13 +1701,13 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 	if st := m.GetAttr(Background, d2Inode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
-	if dirAttr.Nlink != 3 {
+	if dirAttr.Nlink != 3 || dirAttr.Parent != d1Inode {
 		t.Fatalf("d2Inode nlink should is 3 now: %d", dirAttr.Nlink)
 	}
 	if st := m.GetAttr(Background, d1Inode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
-	if dirAttr.Nlink != 0 {
+	if dirAttr.Nlink != 0 || dirAttr.Parent != checkInode {
 		t.Fatalf("d1Inode nlink should is  now: %d", dirAttr.Nlink)
 	}
 
@@ -1718,17 +1718,14 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 		if st := m.GetAttr(Background, ino, dirAttr); st != 0 {
 			t.Fatalf("getattr: %s", st)
 		}
-		if dirAttr.Nlink != 3 {
+		if !dirAttr.Full || dirAttr.Nlink != 3 {
 			t.Fatalf("nlink should is 3 now: %d", dirAttr.Nlink)
 		}
 	}
 	if st := m.GetAttr(Background, d4Inode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
 	}
-	if !dirAttr.Full {
-		t.Fatalf("d4Inode attr should not be missing: %v", dirAttr.Full)
-	}
-	if dirAttr.Nlink != 2 {
-		t.Fatalf("d4Inode nlink should is 2 now: %d", dirAttr.Nlink)
+	if !dirAttr.Full || dirAttr.Nlink != 2 || dirAttr.Parent != d3Inode {
+		t.Fatalf("d4Inode attr: %+v", *dirAttr)
 	}
 }
