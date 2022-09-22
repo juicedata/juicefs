@@ -75,7 +75,7 @@ jobs:
           if [ "${{matrix.meta}}" == "postgres" ]; then
             meta_url="postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable" 
           elif [ "${{matrix.meta}}" == "mysql" ]; then
-            meta_url="mysql://root:root@(127.0.0.1)/sync_test"
+            meta_url=mysql://root:root@\(127.0.0.1\)/sync_test
           elif [ "${{matrix.meta}}" == "redis" ]; then
             meta_url="redis://127.0.0.1:6379/1"
           elif [ "${{matrix.meta}}" == "sqlite3" ]; then
@@ -85,13 +85,13 @@ jobs:
           elif [ "${{matrix.meta}}" == "badgerdb" ]; then
             meta_url="badger://load_test"
           elif [ "${{matrix.meta}}" == "mariadb" ]; then
-            meta_url="mysql://root:root@(127.0.0.1)/load_test"
+            meta_url=mysql://root:root@\(127.0.0.1\)/load_test
           elif [ "${{matrix.meta}}" == "tidb" ]; then
-            meta_url="mysql://root:@(127.0.0.1:4000)/load_test"
+            meta_url=mysql://root:@\(127.0.0.1:4000\)/load_test
           elif [ "${{matrix.meta}}" == "etcd" ]; then
             meta_url="etcd://localhost:2379/jfs"
           elif [ "${{matrix.meta}}" == "ob" ]; then
-            meta_url="mysql://root:@\\(127.0.0.1:2881\\)/test"
+            meta_url=mysql://root:@\(127.0.0.1:2881\)/test
           else
             echo "<FATAL>: meta ${{matrix.meta}} is not supported"
             exit 1
@@ -154,7 +154,7 @@ jobs:
       - name: create database
         shell: bash
         run: | 
-          meta_url=${{ steps.vars.outputs.meta_url }}
+          meta_url="${{ steps.vars.outputs.meta_url }}"
           isolation_level="${{matrix.isolation_level}}"
           db_name=$(basename $meta_url | awk -F? '{print $1}')
           if [[ "$meta_url" == mysql* ]]; then
@@ -176,7 +176,7 @@ jobs:
       - name: start gateway
         shell: bash
         run: |
-          meta_url=${{ steps.vars.outputs.meta_url }}
+          meta_url=“${{ steps.vars.outputs.meta_url }}”
           mp="/tmp/myjfs"
           volume="myjfs"
           export MINIO_ROOT_USER=minioadmin
@@ -196,7 +196,7 @@ jobs:
       - name: Sync with multiple process
         shell: bash
         run: |
-          meta_url=${{ steps.vars.outputs.meta_url }}
+          meta_url=“${{ steps.vars.outputs.meta_url }}”
           file_size=${{matrix.file_size}}
           if [ $file_size="100M" ]; then 
             file_count=5
@@ -237,7 +237,7 @@ jobs:
         
       - name: Sync with empty dir
         run: |
-          meta_url=${{ steps.vars.outputs.meta_url }}
+          meta_url=“${{ steps.vars.outputs.meta_url }}”
           threads=20
           mp=/tmp/myjfs
           volume=myjfs
