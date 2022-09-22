@@ -132,12 +132,12 @@ jobs:
           tail -300 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
-      # - name: Send Slack Notification
-      #   if: ${{ failure() }}
-      #   uses: juicedata/slack-notify-action@main
-      #   with:
-      #     channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-      #     slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
           
       - name: Setup upterm session
         if: ${{ failure() }}
