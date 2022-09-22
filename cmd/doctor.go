@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -170,8 +169,13 @@ func getDefaultLogDir(rootPrivileges bool) (string, error) {
 	var defaultLogDir = "/var/log"
 	switch runtime.GOOS {
 	case "linux":
+		if rootPrivileges {
+			break
+		}
+		fallthrough
 	case "darwin":
 		if rootPrivileges {
+			defaultLogDir = "/var/root/.juicefs"
 			break
 		}
 		homeDir, err := os.UserHomeDir()
@@ -207,41 +211,18 @@ func closeFile(file *os.File) {
 	}
 }
 
-func copyLogFile(logPath, retLogPath string, limit uint64) error {
-	logFile, err := os.Open(logPath)
-	if err != nil {
-		return fmt.Errorf("failed to open log file %s: %v", logPath, err)
+func copyLogFile(logPath, retLogPath string, limit uint64, rootPrivileges bool) error {
+	var copyArgs []string
+	if rootPrivileges {
+		copyArgs = append(copyArgs, "sudo")
 	}
-	defer closeFile(logFile)
-
-	tmpFile, err := ioutil.TempFile("", "juicefs-")
-	if err != nil {
-		return fmt.Errorf("failed to creat log file %s: %v", tmpFile.Name(), err)
-	}
-	defer closeFile(tmpFile)
-	writer := bufio.NewWriter(tmpFile)
-
+	copyArgs = append(copyArgs, "/bin/sh", "-c")
 	if limit > 0 {
-		cmdStr := fmt.Sprintf("tail -n %d %s", limit, logPath)
-		ret, err := exec.Command("/bin/sh", "-c", cmdStr).Output()
-		if err != nil {
-			return fmt.Errorf("failed to tail log file: %v", err)
-		}
-		if _, err = writer.Write(ret); err != nil {
-			return fmt.Errorf("failed to write log file: %v", err)
-		}
+		copyArgs = append(copyArgs, fmt.Sprintf("tail -n %d %s > %s", limit, logPath, retLogPath))
 	} else {
-		if _, err := io.Copy(writer, bufio.NewReader(logFile)); err != nil {
-			return fmt.Errorf("failed to copy log file: %v", err)
-		}
+		copyArgs = append(copyArgs, fmt.Sprintf("cat %s > %s", logPath, retLogPath))
 	}
-	if err := writer.Flush(); err != nil {
-		return fmt.Errorf("failed to flush writer: %v", err)
-	}
-	if err := os.Rename(tmpFile.Name(), retLogPath); err != nil {
-		return fmt.Errorf("failed to rename log file: %v", err)
-	}
-	return nil
+	return exec.Command(copyArgs[0], copyArgs[1:]...).Run()
 }
 
 func getPprofPort(pid, mp string, rootPrivileges bool) (int, error) {
@@ -530,7 +511,7 @@ JuiceFS Version:
 		retLogPath := path.Join(currDir, "juicefs.log")
 
 		logger.Infof("Log %s is being collected", logPath)
-		if err := copyLogFile(logPath, retLogPath, limit); err != nil {
+		if err := copyLogFile(logPath, retLogPath, limit, rootPrivileges); err != nil {
 			return fmt.Errorf("failed to get log file: %v", err)
 		}
 	}

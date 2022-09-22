@@ -46,17 +46,20 @@ func TestDoctor(t *testing.T) {
 	})
 
 	Convey("TestDoctor_LogArg", t, func() {
-		cases := []string{
-			"--log /var/log/jfs.log",
-			"--log=/var/log/jfs.log",
-			"--log   =   /var/log/jfs.log",
-			"--log=    /var/log/jfs.log",
-			"--log    =/var/log/jfs.log",
-			"--log      /var/log/jfs.log",
+		cases := []struct {
+			arg string
+			val string
+		}{
+			{"--log /var/log/jfs.log", "/var/log/jfs.log"},
+			{"--log=/var/log/jfs.log", "/var/log/jfs.log"},
+			{"--log   =   /var/log/jfs.log", "/var/log/jfs.log"},
+			{"--log=    /var/log/jfs.log", "/var/log/jfs.log"},
+			{"--log    =/var/log/jfs.log", "/var/log/jfs.log"},
+			{"--log      /var/log/jfs.log", "/var/log/jfs.log"},
 		}
 		for i, c := range cases {
 			Convey(fmt.Sprintf("valid log arg %d", i), func() {
-				So(logArg.MatchString(c), ShouldBeTrue)
+				So(logArg.FindStringSubmatch(c.arg)[2] == c.val, ShouldBeTrue)
 			})
 		}
 	})
