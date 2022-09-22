@@ -129,7 +129,7 @@ jobs:
         uses: ./.github/actions/load
         with:
           meta_url: "badger://load_test"
-          load_file: "2M_emtpy_files.dump"
+          load_file: "2M_emtpy_files.dump"    
 
 
   load-to-mariadb:
