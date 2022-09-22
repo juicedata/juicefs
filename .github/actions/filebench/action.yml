@@ -51,6 +51,9 @@ runs:
     - name: Juicefs Format
       shell: bash
       run: |
+        pwd
+        echo "hello"
+        ls
         sudo ./juicefs format --trash-days 0 --compress ${{inputs.type}} --storage minio --bucket http://127.0.0.1:9000/mypics \
            --access-key minioadmin \
            --secret-key minioadmin \
