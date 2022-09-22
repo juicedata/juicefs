@@ -31,7 +31,7 @@ jobs:
           - meta: 'mariadb'
             file_size: '100M'
             isolation_level: "read committed"
-          - meta: 'pg'
+          - meta: 'postgres'
             file_size: '100M'
             isolation_level: "read committed"
           - meta: 'tidb'
@@ -87,11 +87,11 @@ jobs:
           elif [ "${{matrix.meta}}" == "mariadb" ]; then
             meta_url="mysql://root:root@\\(127.0.0.1\\)/load_test"
           elif [ "${{matrix.meta}}" == "tidb" ]; then
-            meta_url=mysql://root:@\(127.0.0.1:4000\)/load_test
+            meta_url=mysql://root:@\\(127.0.0.1:4000\\)/load_test
           elif [ "${{matrix.meta}}" == "etcd" ]; then
             meta_url="etcd://localhost:2379/jfs"
           elif [ "${{matrix.meta}}" == "ob" ]; then
-            meta_url=mysql://root:@\(127.0.0.1:2881\)/test
+            meta_url=mysql://root:@\\(127.0.0.1:2881\\)/test
           else
             echo "<FATAL>: meta ${{matrix.meta}} is not supported"
             exit 1
