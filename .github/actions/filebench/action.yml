@@ -104,7 +104,7 @@ runs:
         elif [ ${{inputs.workload}} == "videoserver" ];then
           echo "run videoserver worload"
           sudo sed -i "s?/tmp?/data/jfs?" videoserver.f
-          sudo sed -i "s?$filesize=10g?$filesize=1000m?" videoserver.f
+          sudo sed -i "s?$filesize=10g?$filesize=500m?" videoserver.f
           sudo sed -i "s?$numpassivevids=194?$numpassivevids=100?" videoserver.f
           sudo echo "run 1800" >>videoserver.f
           cat videoserver.f
