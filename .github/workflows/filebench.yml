@@ -33,12 +33,9 @@ jobs:
           workload: varmail
 
 
-      - name: Send Slack Notification
+      - name: Setup upterm session
         if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+        uses: lhotari/action-upterm@v1
 
 
   filebench_webserver:
@@ -54,12 +51,9 @@ jobs:
         with:
           workload: webserver
 
-      - name: Send Slack Notification
+      - name: Setup upterm session
         if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+        uses: lhotari/action-upterm@v1
 
 
   filebench_videoserver:
@@ -75,9 +69,6 @@ jobs:
         with:
           workload: videoserver
 
-      - name: Send Slack Notification
+      - name: Setup upterm session
         if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+        uses: lhotari/action-upterm@v1
