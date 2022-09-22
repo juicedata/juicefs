@@ -24,19 +24,19 @@ jobs:
         meta: [  'sqlite3', 'redis','tikv', 'badgerdb',  'etcd']
         file_size: ['100M', '8K']
         isolation_level: ['']
-      include:
-        - meta: 'mysql'
-          file_size: '100M'
-          isolation_level: "read committed"
-        - meta: 'mariadb'
-          file_size: '100M'
-          isolation_level: "read committed"
-        - meta: 'pg'
-          file_size: '100M'
-          isolation_level: "read committed"
-        - meta: 'tidb'
-          file_size: '100M'
-          isolation_level: "read committed"
+        include:
+          - meta: 'mysql'
+            file_size: '100M'
+            isolation_level: "read committed"
+          - meta: 'mariadb'
+            file_size: '100M'
+            isolation_level: "read committed"
+          - meta: 'pg'
+            file_size: '100M'
+            isolation_level: "read committed"
+          - meta: 'tidb'
+            file_size: '100M'
+            isolation_level: "read committed"
 
     runs-on: ubuntu-latest
     steps: 
