@@ -101,7 +101,7 @@ runs:
           sudo sed -i "s?run 60?run 1800?" webserver.f
           cat webserver.f
           sudo filebench -f webserver.f
-        elif [ ${{inputs.workload}} == "videoserver"];then
+        elif [ ${{inputs.workload}} == "videoserver" ];then
           echo "run videoserver worload"
           sudo sed -i "s?/tmp?/data/jfs?" videoserver.f
           sudo sed -i "s?$filesize=10g?$filesize=1000m?" videoserver.f
