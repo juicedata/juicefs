@@ -2637,11 +2637,15 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 				n.Nlink++
 			}
 		}
-		if ok, err := s.ForUpdate().Get(&node{Inode: inode}); err == nil && ok {
-			_, err := s.Update(n, &node{Inode: inode})
-			return err
+		ok, err := s.ForUpdate().Get(&node{Inode: inode})
+		if err == nil {
+			if ok {
+				_, err = s.Update(n, &node{Inode: inode})
+			} else {
+				err = mustInsert(s, n)
+			}
 		}
-		return mustInsert(s, n)
+		return err
 	}, inode))
 }
 

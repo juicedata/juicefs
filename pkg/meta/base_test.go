@@ -78,10 +78,9 @@ func testMeta(t *testing.T, m Meta) {
 	testOpenCache(t, m)
 	base.conf.CaseInsensi = true
 	testCaseIncensi(t, m)
+	testCheckAndRepair(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
-	base.conf.ReadOnly = false
-	testCheckAndRepair(t, m)
 }
 
 func testMetaClient(t *testing.T, m Meta) {
@@ -1627,10 +1626,6 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 }
 
 func testCheckAndRepair(t *testing.T, m Meta) {
-	if err := m.NewSession(); err != nil {
-		t.Fatalf("new session: %s", err)
-	}
-	defer m.CloseSession()
 	var checkInode, d1Inode, d2Inode, d3Inode, d4Inode Ino
 	dirAttr := &Attr{Mode: 0644, Full: true, Typ: TypeDirectory, Nlink: 3}
 	dirAttr.Parent = RootInode
