@@ -54,7 +54,7 @@ runs:
         pwd
         echo "hello"
         ls
-        sudo ./juicefs format --trash-days 0 --compress ${{inputs.type}} --storage minio --bucket http://127.0.0.1:9000/mypics \
+        sudo ./juicefs format --trash-days 0  --storage minio --bucket http://127.0.0.1:9000/mypics \
            --access-key minioadmin \
            --secret-key minioadmin \
            redis://127.0.0.1:6379/1 pics
