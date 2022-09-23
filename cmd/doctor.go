@@ -527,6 +527,7 @@ JuiceFS Version:
 			"blocks":       {name: "block.pb.gz", url: baseUrl + "block"},
 			"cmdline":      {name: "cmdline.txt", url: baseUrl + "cmdline"},
 			"goroutine":    {name: "goroutine.pb.gz", url: baseUrl + "goroutine"},
+			"stack":        {name: "goroutine.stack.txt", url: baseUrl + "goroutine?debug=1"},
 			"heap":         {name: "heap.pb.gz", url: baseUrl + "heap"},
 			"mutex":        {name: "mutex.pb.gz", url: baseUrl + "mutex"},
 			"threadcreate": {name: "threadcreate.pb.gz", url: baseUrl + "threadcreate"},
