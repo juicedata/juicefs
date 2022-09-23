@@ -2622,8 +2622,9 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		Atime:  attr.Atime * 1e6,
 		Mtime:  attr.Mtime * 1e6,
 		Ctime:  attr.Ctime * 1e6,
-		Length: 4 << 10,
+		Length: attr.Length,
 		Parent: attr.Parent,
+		Nlink:  attr.Nlink,
 	}
 	return errno(m.txn(func(s *xorm.Session) error {
 		n.Nlink = 2
@@ -2636,7 +2637,15 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 				n.Nlink++
 			}
 		}
-		return mustInsert(s, n)
+		ok, err := s.ForUpdate().Get(&node{Inode: inode})
+		if err == nil {
+			if ok {
+				_, err = s.Update(n, &node{Inode: inode})
+			} else {
+				err = mustInsert(s, n)
+			}
+		}
+		return err
 	}, inode))
 }
 

@@ -46,7 +46,10 @@ Examples:
 $ juicefs fsck redis://localhost
 
 # Repair broken directories
-$ juicefs fsck redis://localhost --path /d1/d2 --repair`,
+$ juicefs fsck redis://localhost --path /d1/d2 --repair
+
+# recursively check
+$ juicefs fsck redis://localhost --path /d1/d2 --recursive`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "path",
@@ -55,6 +58,11 @@ $ juicefs fsck redis://localhost --path /d1/d2 --repair`,
 			&cli.BoolFlag{
 				Name:  "repair",
 				Usage: "repair specified path if it's broken",
+			},
+			&cli.BoolFlag{
+				Name:    "recursive",
+				Aliases: []string{"r"},
+				Usage:   "recursively check or repair",
 			},
 		},
 	}
@@ -76,7 +84,7 @@ func fsck(ctx *cli.Context) error {
 		if !strings.HasPrefix(p, "/") {
 			logger.Fatalf("File path should be the absolute path within JuiceFS")
 		}
-		return m.Check(c, p, ctx.Bool("repair"))
+		return m.Check(c, p, ctx.Bool("repair"), ctx.Bool("recursive"))
 	}
 
 	chunkConf := chunk.Config{

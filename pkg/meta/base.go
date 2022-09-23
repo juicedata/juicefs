@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -1045,49 +1046,137 @@ func (m *baseMeta) GetPaths(ctx Context, inode Ino) []string {
 	return paths
 }
 
-func (m *baseMeta) Check(ctx Context, fpath string, repair bool) (st syscall.Errno) {
-	var attr Attr
-	var inode Ino
-	var parent Ino = 1
-	ps := strings.Split(fpath, "/")
-	for i, name := range ps {
-		if len(name) == 0 {
-			continue
+func (m *baseMeta) countDirNlink(ctx Context, inode Ino) (uint32, syscall.Errno) {
+	var entries []*Entry
+	if st := m.en.doReaddir(ctx, inode, 0, &entries, -1); st != 0 {
+		logger.Errorf("readdir inode %d: %s", inode, st)
+		return 0, st
+	}
+	var dirCounter uint32 = 2
+	for _, e := range entries {
+		if e.Attr.Typ == TypeDirectory {
+			dirCounter++
 		}
+	}
+	return dirCounter, 0
+}
+
+type metaWalkFunc func(ctx Context, inode Ino, path string, attr *Attr)
+
+func (m *baseMeta) walk(ctx Context, inode Ino, path string, attr *Attr, walkFn metaWalkFunc) syscall.Errno {
+	walkFn(ctx, inode, path, attr)
+	var entries []*Entry
+	st := m.en.doReaddir(ctx, inode, 1, &entries, -1)
+	if st != 0 {
+		logger.Errorf("list %s: %s", path, st)
+		return st
+	}
+	for _, entry := range entries {
+		if !entry.Attr.Full {
+			entry.Attr.Parent = inode
+		}
+		if st := m.walk(ctx, entry.Inode, filepath.Join(path, string(entry.Name)), entry.Attr, walkFn); st != 0 {
+			return st
+		}
+	}
+	return 0
+}
+
+func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool) (st syscall.Errno) {
+	var attr Attr
+	var inode = RootInode
+	var parent = RootInode
+	attr.Typ = TypeDirectory
+	ps := strings.FieldsFunc(fpath, func(r rune) bool {
+		return r == '/'
+	})
+	for i, name := range ps {
+		parent = inode
 		if st = m.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
 			logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
 			return
 		}
-		if attr.Full {
-			parent = inode
-			continue
-		}
-
-		// missing attribute
-		p := "/" + path.Join(ps[:i+1]...)
-		if attr.Typ != TypeDirectory { // TODO: determine file size?
-			logger.Errorf("Path %s (inode %d type %d) cannot be auto-repaired, you have to repair it manually or remove it", p, inode, attr.Typ)
-		} else if !repair {
-			logger.Warnf("Path %s (inode %d) can be repaired, please re-check with 'repair' enabled", p, inode)
-		} else { // repair directory inode
-			now := time.Now().Unix()
-			attr.Mode = 0644
-			attr.Uid = ctx.Uid()
-			attr.Gid = ctx.Gid()
-			attr.Atime = now
-			attr.Mtime = now
-			attr.Ctime = now
-			attr.Length = 4 << 10
-			attr.Parent = parent
-			if st = m.en.doRepair(ctx, inode, &attr); st == 0 {
-				logger.Infof("Path %s (inode %d) is successfully repaired", p, inode)
+		if !attr.Full && i < len(ps)-1 {
+			// missing attribute
+			p := "/" + path.Join(ps[:i+1]...)
+			if attr.Typ != TypeDirectory { // TODO: determine file size?
+				logger.Warnf("Attribute of %s (inode %d type %d) is missing and cannot be auto-repaired, please repair it manually or remove it", p, inode, attr.Typ)
 			} else {
-				logger.Errorf("Repair path %s inode %d: %s", p, inode, st)
+				logger.Warnf("Attribute of %s (inode %d) is missing, please re-run with '--path %s --repair' to fix it", p, inode, p)
 			}
 		}
-		return // handle one missing inode at a time
 	}
-	logger.Infof("Path %s inode %d is valid", fpath, parent)
+	if !attr.Full {
+		attr.Parent = parent
+	}
+
+	type node struct {
+		inode Ino
+		path  string
+		attr  *Attr
+	}
+	nodes := make(chan *node, 1000)
+	go func() {
+		defer close(nodes)
+		if recursive {
+			st = m.walk(ctx, inode, fpath, &attr, func(ctx Context, inode Ino, path string, attr *Attr) {
+				nodes <- &node{inode, path, attr}
+			})
+		} else {
+			nodes <- &node{inode, fpath, &attr}
+		}
+	}()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for e := range nodes {
+				inode := e.inode
+				path := e.path
+				attr := e.attr
+				if attr.Typ != TypeDirectory {
+					// TODO
+					continue
+				}
+				if attr.Full {
+					nlink, st := m.countDirNlink(ctx, inode)
+					if st != 0 {
+						logger.Errorf("Count nlink for inode %d: %s", inode, st)
+						continue
+					}
+					if attr.Nlink == nlink {
+						continue
+					}
+					logger.Warnf("nlink of %s should be %d, but got %d", path, nlink, attr.Nlink)
+				} else {
+					logger.Warnf("attribute of %s is missing", path)
+				}
+
+				if repair {
+					if !attr.Full {
+						now := time.Now().Unix()
+						attr.Mode = 0644
+						attr.Uid = ctx.Uid()
+						attr.Gid = ctx.Gid()
+						attr.Atime = now
+						attr.Mtime = now
+						attr.Ctime = now
+						attr.Length = 4 << 10
+					}
+					if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 {
+						logger.Infof("Path %s (inode %d) is successfully repaired", path, inode)
+					} else {
+						logger.Errorf("Repair path %s inode %d: %s", path, inode, st1)
+					}
+				} else {
+					logger.Warnf("Path %s (inode %d) can be repaired, please re-run with '--path %s --repair' to fix it", path, inode, path)
+				}
+			}
+		}()
+	}
+	wg.Wait()
 	return
 }
 

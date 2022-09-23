@@ -1592,7 +1592,7 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		})
 	}
 
-	if plus != 0 {
+	if plus != 0 && len(*entries) != 0 {
 		fillAttr := func(es []*Entry) error {
 			var keys = make([][]byte, len(es))
 			for i, e := range es {
@@ -2224,7 +2224,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(tx kvTxn) error {
 		attr.Nlink = 2
-		_ = tx.scanValues(m.entryKey(inode, ""), 0, func(k, v []byte) bool {
+		_ = tx.scanValues(m.entryKey(inode, ""), -1, func(k, v []byte) bool {
 			typ, _ := m.parseEntry(v)
 			if typ == TypeDirectory {
 				attr.Nlink++

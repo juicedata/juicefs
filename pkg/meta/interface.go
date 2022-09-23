@@ -351,7 +351,7 @@ type Meta interface {
 	// GetPaths returns all paths of an inode
 	GetPaths(ctx Context, inode Ino) []string
 	// Check integrity of an absolute path and repair it if asked
-	Check(ctx Context, fpath string, repair bool) syscall.Errno
+	Check(ctx Context, fpath string, repair bool, recursive bool) syscall.Errno
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
