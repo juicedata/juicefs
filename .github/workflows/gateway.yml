@@ -21,40 +21,41 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        meta: [  'sqlite3', 'redis','tikv', 'badgerdb',  'etcd']
+        # meta: [  'sqlite3', 'redis','tikv', 'badgerdb',  'etcd']
+        meta: ['redis' ]
         file_size: ['100M', '8K']
         isolation_level: ['']
         include:
-          - meta: 'mysql'
-            file_size: '100M'
-            isolation_level: "read committed"
-          - meta: 'mysql'
-            file_size: '100M'
-            isolation_level: "repeatable read"
-          - meta: 'mysql'
-            file_size: '100M'
-            isolation_level: "serializable"
-
           - meta: 'mariadb'
             file_size: '100M'
             isolation_level: "read committed"
 
-          - meta: 'postgres'
-            file_size: '100M'
-            isolation_level: "read committed"
-          - meta: 'postgres'
-            file_size: '100M'
-            isolation_level: "repeatable read"
-          - meta: 'postgres'
-            file_size: '100M'
-            isolation_level: "serializable"
+          # - meta: 'mysql'
+          #   file_size: '100M'
+          #   isolation_level: "read committed"
+          # - meta: 'mysql'
+          #   file_size: '100M'
+          #   isolation_level: "repeatable read"
+          # - meta: 'mysql'
+          #   file_size: '100M'
+          #   isolation_level: "serializable"
 
-          - meta: 'tidb'
-            file_size: '100M'
-            isolation_level: "read committed"
-          - meta: 'tidb'
-            file_size: '100M'
-            isolation_level: "repeatable read"
+          # - meta: 'postgres'
+          #   file_size: '100M'
+          #   isolation_level: "read committed"
+          # - meta: 'postgres'
+          #   file_size: '100M'
+          #   isolation_level: "repeatable read"
+          # - meta: 'postgres'
+          #   file_size: '100M'
+          #   isolation_level: "serializable"
+
+          # - meta: 'tidb'
+          #   file_size: '100M'
+          #   isolation_level: "read committed"
+          # - meta: 'tidb'
+          #   file_size: '100M'
+          #   isolation_level: "repeatable read"
 
     runs-on: ubuntu-latest
 
@@ -181,6 +182,7 @@ jobs:
             host=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $1}')
             port=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $2}')
             test -z "$port" && port="3306"
+            echo user=$user, password=$password, host=$host, port=$port, db_name=$db_name, isolation_level=$isolation_level
             mysql -u$user $password -h $host -P $port -e "set global transaction isolation level $isolation_level;" 
             mysql -u$user $password -h $host -P $port -e "show variables like '%isolation%;'" 
             mysql -u$user $password -h $host -P $port -e "drop database if exists $db_name; create database $db_name;" 
@@ -287,70 +289,6 @@ jobs:
             tail -300 ~/.juicefs/juicefs.log
             grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
           fi
-
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
-
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        timeout-minutes: 1
-        uses: lhotari/action-upterm@v1
-
-  sync-to-gateway-with-multithread:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 1
-          
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.18.x'
-
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go
-          restore-keys: |
-            ${{ runner.os }}-go
-            
-      - name: Build linux target
-        run: |
-          make juicefs
-          #wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
-          #tar -xzf juicefs-1.0.0-beta3-linux-amd64.tar.gz
-      - name: Test sync to gateway with multithread
-        run: | 
-          #test for PR: https://github.com/juicedata/juicefs/pull/2024
-          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
-          chmod +x mc 
-          sudo apt install md5deep
-          sudo /etc/init.d/mysql start
-          meta_url="mysql://root:root@(127.0.0.1)/test"
-          volume=myjfs
-          mp=/tmp/myjfs
-          db_name=$(basename $meta_url)
-          mysql -uroot -proot -e "set global transaction isolation level repeatable read;" 
-          mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
-          export MINIO_ROOT_USER=minioadmin
-          export MINIO_ROOT_PASSWORD=minioadmin
-          ./juicefs format $meta_url $volume
-          ./juicefs gateway $meta_url localhost:9000 &
-          start=`date +%s`
-          ./juicefs sync --dirs ./  s3://minioadmin:minioadmin@localhost:9000/$volume/source_dir/ --no-https -p 50
-          end=`date +%s`
-          time=$((end-start))
-          echo time is: $time
-          ./juicefs mount -d $meta_url $mp
-          rm -rf $mp/source_dir
 
       - name: Send Slack Notification
         if: ${{ failure() }}
