@@ -147,7 +147,7 @@ jobs:
           elif [ "${{matrix.meta}}" == "badgerdb" ]; then
             sudo go get github.com/dgraph-io/badger/v3
           elif [ "${{matrix.meta}}" == "mariadb" ]; then
-            docker run -p 0.0.0.0:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
+            docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
           elif [ "${{matrix.meta}}" == "tidb" ]; then
             curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
             source /home/runner/.profile
@@ -299,5 +299,5 @@ jobs:
 
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 1
+        timeout-minutes: 30
         uses: lhotari/action-upterm@v1
