@@ -21,41 +21,40 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # meta: [  'sqlite3', 'redis','tikv', 'badgerdb',  'etcd']
-        meta: ['redis' ]
-        file_size: ['100M', '8K']
+        meta: [  'sqlite3', 'redis','tikv', 'badgerdb',  'etcd']
+        file_size: ['100M']
         isolation_level: ['']
         include:
           - meta: 'mariadb'
             file_size: '100M'
             isolation_level: "read committed"
 
-          # - meta: 'mysql'
-          #   file_size: '100M'
-          #   isolation_level: "read committed"
-          # - meta: 'mysql'
-          #   file_size: '100M'
-          #   isolation_level: "repeatable read"
-          # - meta: 'mysql'
-          #   file_size: '100M'
-          #   isolation_level: "serializable"
+          - meta: 'mysql'
+            file_size: '100M'
+            isolation_level: "read committed"
+          - meta: 'mysql'
+            file_size: '100M'
+            isolation_level: "repeatable read"
+          - meta: 'mysql'
+            file_size: '100M'
+            isolation_level: "serializable"
 
-          # - meta: 'postgres'
-          #   file_size: '100M'
-          #   isolation_level: "read committed"
-          # - meta: 'postgres'
-          #   file_size: '100M'
-          #   isolation_level: "repeatable read"
-          # - meta: 'postgres'
-          #   file_size: '100M'
-          #   isolation_level: "serializable"
+          - meta: 'postgres'
+            file_size: '100M'
+            isolation_level: "read committed"
+          - meta: 'postgres'
+            file_size: '100M'
+            isolation_level: "repeatable read"
+          - meta: 'postgres'
+            file_size: '100M'
+            isolation_level: "serializable"
 
-          # - meta: 'tidb'
-          #   file_size: '100M'
-          #   isolation_level: "read committed"
-          # - meta: 'tidb'
-          #   file_size: '100M'
-          #   isolation_level: "repeatable read"
+          - meta: 'tidb'
+            file_size: '100M'
+            isolation_level: "read committed"
+          - meta: 'tidb'
+            file_size: '100M'
+            isolation_level: "repeatable read"
 
     runs-on: ubuntu-latest
 
@@ -300,5 +299,5 @@ jobs:
 
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 30
+        timeout-minutes: 1
         uses: lhotari/action-upterm@v1
