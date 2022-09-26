@@ -46,8 +46,27 @@ get_meta_url(){
     elif [ "$meta" == "tidb" ]; then
         meta_url="mysql://root:@(127.0.0.1:4000)/load_test"
     else
-        echo "<FATAL>: meta $meta is not supported"
+        echo >&2 "<FATAL>: meta $meta is not supported"
         meta_url=""
+        return 1
     fi
-    return $meta_url
+    echo $meta_url
+    return 0
+}
+
+create_database(){
+    meta_url=$1
+    db_name=$(basename $meta_url | awk -F? '{print $1}')
+    if [[ "$meta_url" == mysql* ]]; then
+        user=$(echo $meta_url |  awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $1}')
+        password=$(echo $meta_url |  awk -F/ '{print $3}' | awk -F@ '{print $1}' | awk -F: '{print $2}')
+        test -n "$password" && password="-p$password" || password=""
+        host=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $1}')
+        port=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $2}')
+        test -z "$port" && port="3306" 
+        mysql -u$user $password -h $host -P $port -e "drop database if exists $db_name; create database $db_name;" 
+    elif [[ "$meta_url" == postgres* ]]; then
+        export PGPASSWORD="postgres"
+        printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
+    fi
 }
