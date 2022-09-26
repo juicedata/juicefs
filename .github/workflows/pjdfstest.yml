@@ -21,6 +21,12 @@ on:
 
 jobs:
   pjdfstest:
+    strategy:
+      fail-fast: false
+      matrix:
+        # TODO: add fdb
+        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb']
+        # meta: ['fdb']
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -52,17 +58,22 @@ jobs:
       - name: Build linux target
         run: make juicefs
 
-      - name: Run Redis
-        run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
+      - name: Prepare meta db
+        run: | 
+          sudo chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 --trash-days 0 pics
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs format $meta_url --trash-days 0 pics
 
       - name: Juicefs Mount
         run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
 
       - name: Pjdfstest
