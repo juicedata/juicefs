@@ -22,7 +22,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     JFS_BINS = ['./'+os.environ.get('OLD_JFS_BIN'), './'+os.environ.get('NEW_JFS_BIN')]
     meta_dict = {'redis':'redis://localhost/1', 'mysql':'mysql://root:root@(127.0.0.1)/test', 'postgres':'postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable', \
         'tikv':'tikv://127.0.0.1:2379', 'badger':'badger://badger-data', 'mariadb': 'mysql://root:root@(127.0.0.1)/test', \
-            'sqlite3': 'sqlite3://test.db'}
+            'sqlite3': 'sqlite3://test.db', 'fdb':'fdb:///home/runner/fdb.cluster?prefix=jfs'}
     META_URL = meta_dict[os.environ.get('META')]
     STORAGE = os.environ.get('STORAGE')
     MOUNT_POINT = '/tmp/sync-test/'

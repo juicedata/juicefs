@@ -9,7 +9,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        meta: [ 'tidb', 'sqlite3', 'redis', 'mysql', 'tikv', 'postgres', 'badgerdb', 'mariadb']
+        # TODO: add fdb
+        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb']
+        # meta: ['fdb']
     runs-on: ubuntu-latest
 
     services:
@@ -47,7 +49,16 @@ jobs:
 
       - name: Build linux target
         run: |
-          make juicefs 
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "build juicefs.fdb"
+            wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+            make juicefs.fdb
+            mv juicefs.fdb juicefs
+          else
+            echo "build juicefs"
+            make juicefs 
+          fi
         shell: bash
 
       - name: Prepare meta db
@@ -57,6 +68,7 @@ jobs:
           start_meta_engine ${{matrix.meta}}
 
       - name: Test
+        timeout-minutes: 30
         run: |
           sudo chmod +x .github/scripts/start_meta_engine.sh
           source .github/scripts/start_meta_engine.sh

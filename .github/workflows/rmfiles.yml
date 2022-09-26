@@ -6,7 +6,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  rmr-with-pg:
+  rmr-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: [ 'sqlite3', 'redis', 'mysql',  'postgres', 'tikv', 'fdb', 'badger', 'etcd']
+
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -20,84 +25,107 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
         with:
           fetch-depth: 1
 
-      - name: Rmr
-        uses: ./.github/actions/rmr
+      - name: Set up Go
+        uses: actions/setup-go@v2
         with:
-          meta_url: "postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable"
+          go-version: '1.18.x'
 
-
-  rmr-with-mysql:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/cache@v3
         with:
-          fetch-depth: 1
-      - name: start mysql
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go
+          restore-keys: |
+            ${{ runner.os }}-go
+
+      - name: Build linux target
         run: |
-          sudo /etc/init.d/mysql start
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "build juicefs.fdb"
+            wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+            make juicefs.fdb
+            mv juicefs.fdb juicefs
+          else
+            echo "build juicefs"
+            make juicefs 
+          fi
+        shell: bash
+
+      - name: Prepare meta db
+        run: | 
+          sudo chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
 
       - name: Rmr
-        uses: ./.github/actions/rmr
-        with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/sync_test"
-
-
-  rmr-with-redis:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-
-      - name: start redis
+        shell: bash
         run: |
-          docker run --name my-redis -p 6379:6379 -d redis
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+          mp=/tmp/jfs
+          # wget -q https://s.juicefs.com/static/bench/500K_empty_files.dump.gz
+          # gzip -dk  500K_empty_files.dump.gz
+          # ./juicefs load $meta_url 500K_empty_files.dump
+          ./juicefs format $meta_url jfs
+          ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 10 --threads 10 --no-usage-report
+          ./juicefs mount -d $meta_url $mp
+          sleep 3
+          ls -l $mp/test
+          ./juicefs rmr $mp/test/
+          sleep 3 
+          ls -l $mp/test && exit 1 || true
+        
+      - name: Clear
+        run: | 
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          mp=/tmp/jfs
+          volume=jfs
+          test -d $mp && ./juicefs umount -f $mp
+          ./juicefs status $meta_url && UUID=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || echo "meta not exist"
+          if [ -n "$UUID" ];then
+            ./juicefs destroy --force $meta_url $UUID
+          fi
+          test -d /var/jfs/$volume && rm -rf /var/jfs/$volume || true
+        shell: bash
 
-      - name: Rmr
-        uses: ./.github/actions/rmr
-        with:
-          meta_url: "redis://localhost/1"
-
-
-  rmr-with-sqlite:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-
-      - name: Rmr
-        uses: ./.github/actions/rmr
-        with:
-          meta_url: "sqlite3://test.db"
-
-
-  rmr-with-tikv:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-          
-      - name: Install TiKV
+      - name: Rmr Parallel
+        shell: bash
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-          source /home/runner/.bash_profile
-          source /home/runner/.profile
-          tiup playground --mode tikv-slim &
-          sleep 5
+          sudo chmod 777 /var
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          mp=/tmp/jfs
+          # wget -q https://s.juicefs.com/static/bench/500K_empty_files.dump.gz
+          # gzip -dk  500K_empty_files.dump.gz
+          # ./juicefs load $meta_url 500K_empty_files.dump
+          ./juicefs format $meta_url jfs
+          ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 15 --threads 10 --no-usage-report
+          ./juicefs mount -d $meta_url $mp
+          sleep 3
+          declare -a pidlist
+          ./juicefs rmr $mp/test/ || true &
+          pidlist+=($!)
+          ./juicefs rmr $mp/test/ || true &
+          pidlist+=($!)
+          ./juicefs rmr $mp/test/ || true &
+          pidlist+=($!)
+          wait "${pidlist[@]}"
+          ls -l $mp/test && exit 1 || true
 
-      - name: Rmr
-        uses: ./.github/actions/rmr
-        with:
-          meta_url: "tikv://127.0.0.1:2379"
+      - name: log
+        if: ${{ always() }}
+        shell: bash
+        run: | 
+          tail -300 ~/.juicefs/juicefs.log
+          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true

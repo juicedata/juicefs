@@ -29,6 +29,8 @@ def flush_meta(meta_url):
         create_postgres_db(meta_url)
     elif meta_url.startswith('tikv://'):
         run_cmd('echo "delall --yes" |tcli -pd localhost:2379')
+    elif meta_url.startswith('fdb://'):
+        run_cmd('''fdbcli -C /home/runner/fdb.cluster --exec "writemode on ; clearrange '' \xFF"''')
     else:
         raise Exception(f'{meta_url} not supported')
     print('flush meta succeed')
