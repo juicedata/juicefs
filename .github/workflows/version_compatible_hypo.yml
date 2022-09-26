@@ -19,6 +19,10 @@ jobs:
         storage: ['minio']
         include:
           - os: ubuntu-latest
+            old_juicefs_version: 'main'
+            meta: 'fdb'
+            storage: 'minio'
+          - os: ubuntu-latest
             old_juicefs_version: 'release-1.0'
             meta: 'redis'
             storage: 'postgres'
@@ -73,7 +77,16 @@ jobs:
       - name: Make Juicefs
         shell: bash
         run: | 
-          make juicefs
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "build juicefs.fdb"
+            wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+            make juicefs.fdb
+            mv juicefs.fdb juicefs
+          else
+            echo "build juicefs"
+            make juicefs 
+          fi
 
       - name: Checkout old version
         uses: actions/checkout@v3
@@ -84,7 +97,16 @@ jobs:
       - name: Make old build
         run: | 
           cd ${{matrix.old_juicefs_version}}
-          make juicefs
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "build juicefs.fdb"
+            wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+            make juicefs.fdb
+            mv juicefs.fdb juicefs
+          else
+            echo "build juicefs"
+            make juicefs 
+          fi
           cd -
 
       - name: Prepare meta database
@@ -113,7 +135,13 @@ jobs:
           if [[ "$meta" == mariadb ]]; then
             docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
           fi
-
+          if [[ "$meta" == fdb ]]; then
+            docker run --name fdb --rm -d -p 4500:4500 foundationdb/foundationdb:6.3.23
+            sleep 5
+            docker exec fdb fdbcli --exec "configure new single memory"
+            echo "docker:docker@127.0.0.1:4500" > /home/runner/fdb.cluster 
+            fdbcli -C /home/runner/fdb.cluster --exec "status"
+          fi
           if [[ "$storage" == minio ]]; then
             docker run -d -p 9000:9000 --name minio \
                         -e "MINIO_ACCESS_KEY=minioadmin" \

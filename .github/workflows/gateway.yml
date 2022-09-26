@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        meta: [  'sqlite3', 'redis','tikv', 'badgerdb',  'etcd']
+        meta: [  'sqlite3', 'redis','tikv', 'badgerdb',  'etcd', 'fdb']
         file_size: ['100M']
         isolation_level: ['']
         include:
@@ -93,11 +93,16 @@ jobs:
 
       - name: Build linux target
         run: |
-          #if it is self ruuner
-          hostname | grep bench && export GOPATH=/usr/local/go && export HOME=/root
-          make juicefs 
-          #wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
-          #tar -xzf juicefs-1.0.0-beta3-linux-amd64.tar.gz
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "build juicefs.fdb"
+            wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+            make juicefs.fdb
+            mv juicefs.fdb juicefs
+          else
+            echo "build juicefs"
+            make juicefs 
+          fi
         shell: bash
 
       - name: Start meta
