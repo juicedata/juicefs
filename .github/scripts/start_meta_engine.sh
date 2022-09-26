@@ -24,6 +24,13 @@ start_meta_engine(){
         tiup playground 5.4.0 &
         sleep 120
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
+    elif [ "$meta" == "etcd" ]; then
+        sudo apt install etcd
+    elif [ "$meta" == "ob" ]; then
+        docker rm obstandalone --force || echo "remove obstandalone failed"
+        docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+        sleep 60
+        mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
     fi
 }
 
@@ -63,10 +70,20 @@ create_database(){
         test -n "$password" && password="-p$password" || password=""
         host=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $1}')
         port=$(basename $(dirname $meta_url) | awk -F@ '{print $2}'| sed 's/(//g' | sed 's/)//g' | awk -F: '{print $2}')
-        test -z "$port" && port="3306" 
+        test -z "$port" && port="3306"
+        echo user=$user, password=$password, host=$host, port=$port, db_name=$db_name
+        if [ "$#" -eq 2 ]; then
+            echo isolation_level=$2
+            mysql -u$user $password -h $host -P $port -e "set global transaction isolation level $2;" 
+            mysql -u$user $password -h $host -P $port -e "show variables like '%isolation%;'" 
+        fi
         mysql -u$user $password -h $host -P $port -e "drop database if exists $db_name; create database $db_name;" 
     elif [[ "$meta_url" == postgres* ]]; then
         export PGPASSWORD="postgres"
         printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
-    fi
+        if [ "$#" -eq 2 ]; then
+            echo isolation_level=$2
+            printf "\set AUTOCOMMIT on\nALTER DATABASE $db_name SET DEFAULT_TRANSACTION_ISOLATION TO '$2';" |  psql -U postgres -h localhost
+        fi
+    fi      
 }
