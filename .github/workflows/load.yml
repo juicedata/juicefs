@@ -49,11 +49,13 @@ jobs:
       - name: Build linux target
         run: |
           if [ "${{matrix.meta}})" == "fdb" ]; then
+            echo "build juicefs.fdb"
             wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-            dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
             make juicefs.fdb
             mv juicefs.fdb juicefs
           else
+            echo "build juicefs"
             make juicefs 
           fi
         shell: bash
