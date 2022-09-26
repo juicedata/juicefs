@@ -80,6 +80,7 @@ jobs:
           echo `date`, start load
           sudo ./juicefs load $meta_url $load_file
           echo `date`, finish load
+          exit 1
           echo `date`, start dump
           sudo ./juicefs dump $meta_url dump.json
           echo `date`, finish dump
