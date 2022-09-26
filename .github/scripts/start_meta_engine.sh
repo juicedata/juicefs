@@ -52,6 +52,10 @@ get_meta_url(){
         meta_url="mysql://root:root@(127.0.0.1)/load_test"
     elif [ "$meta" == "tidb" ]; then
         meta_url="mysql://root:@(127.0.0.1:4000)/load_test"
+    elif [ "$meta" == "etcd" ]; then
+        meta_url="etcd://localhost:2379/jfs"
+    elif [ "$meta" == "ob" ]; then
+        meta_url="mysql://root:@\\(127.0.0.1:2881\\)/test"
     else
         echo >&2 "<FATAL>: meta $meta is not supported"
         meta_url=""
