@@ -30,6 +30,7 @@ start_meta_engine(){
         docker run --name fdb --rm -d -p 4500:4500 foundationdb/foundationdb:6.3.23
         sleep 5
         docker exec fdb fdbcli --exec "configure new single memory"
+        sudo mkdir /etc/foundationdb
         sudo echo "docker:docker@127.0.0.1:4500" > /etc/foundationdb/fdb.cluster 
         fdbcli --exec "status"
     elif [ "$meta" == "ob" ]; then
