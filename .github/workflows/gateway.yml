@@ -115,6 +115,7 @@ jobs:
       - name: start gateway
         shell: bash
         run: |
+          source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           create_database $meta_url ${{matrix.isolation_level}}
           mp="/tmp/myjfs"
@@ -136,6 +137,7 @@ jobs:
       - name: Sync with multiple process
         shell: bash
         run: |
+          source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           file_size=${{matrix.file_size}}
           if [ $file_size="100M" ]; then 
@@ -177,6 +179,7 @@ jobs:
         
       - name: Sync with empty dir
         run: |
+          source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           threads=20
           mp=/tmp/myjfs
