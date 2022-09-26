@@ -40,6 +40,7 @@ COMMANDS:
      stats    Show real time performance statistics of JuiceFS
      profile  Show profiling of operations completed in JuiceFS
      info     Show internal information of a path or inode
+     doctor   Show information from multiple dimensions such as the operating environment and system logs
    SERVICE:
      mount    Mount a volume
      umount   Unmount a volume
@@ -1194,4 +1195,55 @@ skip sanity check and force destroy the volume (default: false)
 
 ```bash
 $ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
+```
+
+### juicefs doctor
+
+#### Description
+
+It collects and displays information from multiple dimensions such as the operating environment and system logs to help better locate errors
+
+#### Synopsis
+
+```
+juicefs doctor [command options] MOUNTPOINT
+```
+
+#### Options
+
+`--out-dir value`<br />
+The output directory of the results, automatically created if the directory does not exist (default: ./doctor/)
+
+`--stats-sec value`<br />
+The number of seconds to sample .stats file (default: 5)
+
+`--collect-log`<br />
+enable log collection (default: false)
+
+`--limit value`<br />
+The number of log entries collected, from newest to oldest, if not specified, all entries will be collected
+
+`--collect-pprof`<br />
+enable pprof metrics collection (default: false)
+
+`--trace-sec value`<br />
+The number of seconds to sample trace metrics (default: 5)
+
+`--profile-sec value`<br />
+The number of seconds to sample profile metrics (default: 30)
+
+#### Examples
+
+```bash
+# Collect and display information about the mount point /mnt/jfs
+$ juicefs doctor /mnt/jfs
+
+# Specify the output directory as /var/log
+$ juicefs doctor --out-dir=/var/log /mnt/jfs
+
+# Enable log collection and get the last up to 1000 log entries
+$ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 /mnt/jfs
+
+# Enable pprof metrics collection
+$ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /mnt/jfs
 ```

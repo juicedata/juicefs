@@ -149,6 +149,14 @@ By default, pprof listens on port numbers ranging from 6060 to 6099. That's why 
 - Goroutine stack information: `http://localhost:<port>/debug/pprof/goroutine?debug=1`
 - CPU performance statistics: `http://localhost:<port>/debug/pprof/profile?seconds=30`
 - Memory allocation statistics: `http://localhost:<port>/debug/pprof/heap`
+- 
+:::tip
+You can also use the doctor command to automatically collect these runtime information and save it locally. By default, it is saved to the doctor directory under the current directory, for example:
+```bash
+juicefs doctor --collect-pprof /mnt/jfs
+```
+For more information about the doctor command, see [command reference](https://juicefs.com/docs/community/command_reference#juicefs-doctor)
+:::
 
 To make it easier to analyze this runtime information, you can save it locally, e.g.:
 
