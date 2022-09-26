@@ -27,6 +27,11 @@ jobs:
           - 5432:5432
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+          
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
