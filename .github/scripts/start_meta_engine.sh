@@ -3,7 +3,7 @@
 meta=$1
 if [ "$meta" == "mysql" ]; then
     sudo /etc/init.d/mysql start
-elif [ "$$meta" == "redis" ]; then
+elif [ "$meta" == "redis" ]; then
     sudo apt-get install -y redis-tools redis-server
 elif [ "$meta" == "tikv" ]; then
     curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
