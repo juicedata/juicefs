@@ -25,7 +25,8 @@ jobs:
       fail-fast: false
       matrix:
         # TODO: add fdb
-        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb']
+        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb']
+        meta: [ 'sqlite3', 'redis', 'mysql']
         # meta: ['fdb']
     runs-on: ubuntu-latest
     steps:
@@ -79,13 +80,13 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs format $meta_url --trash-days 0 pics
+          sudo ./juicefs format $meta_url --trash-days 0 pics
 
       - name: Juicefs Mount
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
+          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
 
       - name: Pjdfstest
         run: |
