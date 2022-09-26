@@ -63,6 +63,7 @@ jobs:
           sudo chmod +x .github/scripts/start_meta_engine.sh
           source .github/scripts/start_meta_engine.sh
           start_meta_engine ${{matrix.meta}}
+          create_database $meta_url
 
       - name: Juicefs Format
         run: |
