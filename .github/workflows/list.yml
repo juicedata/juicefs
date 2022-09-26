@@ -79,6 +79,7 @@ jobs:
           ls -lh
       
       - name: Load
+        timeout-minutes: 30
         run: | 
           sudo chmod +x .github/scripts/start_meta_engine.sh
           source .github/scripts/start_meta_engine.sh
@@ -92,6 +93,7 @@ jobs:
           sudo ./juicefs mount $meta_url $mount_point -d
 
       - name: List
+        timeout-minutes: 30
         run: |
           cd /tmp/juicefs-load-test/createfile/
           ls -lh |wc -l >/tmp/count.log

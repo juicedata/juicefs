@@ -9,8 +9,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # meta: [ 'tidb', 'sqlite3', 'redis', 'mysql', 'tikv', 'postgres', 'badgerdb', 'mariadb']
-        meta: ['fdb']
+        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb', 'fdb']
+        # meta: ['fdb']
     runs-on: ubuntu-latest
 
     services:
@@ -67,6 +67,7 @@ jobs:
           start_meta_engine ${{matrix.meta}}
 
       - name: Test
+        timeout-minutes: 30
         run: |
           sudo chmod +x .github/scripts/start_meta_engine.sh
           source .github/scripts/start_meta_engine.sh
@@ -80,7 +81,6 @@ jobs:
           echo `date`, start load
           sudo ./juicefs load $meta_url $load_file
           echo `date`, finish load
-          exit 1
           echo `date`, start dump
           sudo ./juicefs dump $meta_url dump.json
           echo `date`, finish dump
@@ -102,5 +102,5 @@ jobs:
           
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 30
+        timeout-minutes: 1
         uses: lhotari/action-upterm@v1

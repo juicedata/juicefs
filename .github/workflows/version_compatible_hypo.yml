@@ -12,32 +12,32 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        old_juicefs_version: ['main']
-        # old_juicefs_version: ['main', 'release-1.0', 'release-1.0-rc1']
-        meta: ['fdb']
-        # meta: ['redis', 'mysql', 'tikv', 'postgres']
+        # old_juicefs_version: ['main']
+        old_juicefs_version: ['main', 'release-1.0', 'release-1.0-rc1']
+        # meta: ['fdb']
+        meta: ['redis', 'mysql', 'tikv', 'postgres']
         storage: ['minio']
         include:
           - os: ubuntu-latest
             old_juicefs_version: 'main'
             meta: 'fdb'
             storage: 'minio'
-          # - os: ubuntu-latest
-          #   old_juicefs_version: 'release-1.0'
-          #   meta: 'redis'
-          #   storage: 'postgres'
-          # - os: ubuntu-latest
-          #   old_juicefs_version: 'release-1.0'
-          #   meta: 'redis'
-          #   storage: 'mysql'
-          # - os: ubuntu-latest
-          #   old_juicefs_version: 'release-1.0-beta1'
-          #   meta: 'redis'
-          #   storage: 'minio'
-          # - os: ubuntu-latest
-          #   old_juicefs_version: 'release-0.17'
-          #   meta: 'redis'
-          #   storage: 'minio'
+          - os: ubuntu-latest
+            old_juicefs_version: 'release-1.0'
+            meta: 'redis'
+            storage: 'postgres'
+          - os: ubuntu-latest
+            old_juicefs_version: 'release-1.0'
+            meta: 'redis'
+            storage: 'mysql'
+          - os: ubuntu-latest
+            old_juicefs_version: 'release-1.0-beta1'
+            meta: 'redis'
+            storage: 'minio'
+          - os: ubuntu-latest
+            old_juicefs_version: 'release-0.17'
+            meta: 'redis'
+            storage: 'minio'
 
     runs-on: ${{matrix.os}}
 
@@ -206,5 +206,5 @@ jobs:
 
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 30
+        timeout-minutes: 1
         uses: lhotari/action-upterm@v1
