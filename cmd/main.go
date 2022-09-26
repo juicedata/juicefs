@@ -74,6 +74,7 @@ func Main(args []string) error {
 			cmdWarmup(),
 			cmdRmr(),
 			cmdSync(),
+			cmdDoctor(),
 		},
 	}
 
