@@ -26,6 +26,12 @@ start_meta_engine(){
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
     elif [ "$meta" == "etcd" ]; then
         sudo apt install etcd
+    elif [ "$meta" == "fdb" ]; then
+        docker run --name fdb --rm -d -p 4500:4500 foundationdb/foundationdb:6.3.23
+        sleep 5
+        docker exec fdb fdbcli --exec "configure new single memory"
+        sudo echo "docker:docker@127.0.0.1:4500" > /etc/foundationdb/fdb.cluster 
+        fdbcli --exec "status"
     elif [ "$meta" == "ob" ]; then
         docker rm obstandalone --force || echo "remove obstandalone failed"
         docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
@@ -54,6 +60,8 @@ get_meta_url(){
         meta_url="mysql://root:@(127.0.0.1:4000)/load_test"
     elif [ "$meta" == "etcd" ]; then
         meta_url="etcd://localhost:2379/jfs"
+    elif [ "$meta" == "fdb" ]; then
+        meta_url="fdb:///etc/foundationdb/fdb.cluster?prefix=jfs"
     elif [ "$meta" == "ob" ]; then
         meta_url="mysql://root:@\\(127.0.0.1:2881\\)/test"
     else
