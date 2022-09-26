@@ -10,7 +10,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        meta: [ 'sqlite3', 'redis', 'mysql',  'postgres', 'fdb']
+        # TODO: add fdb
+        meta: [ 'sqlite3', 'redis', 'mysql',  'postgres']
     runs-on: ubuntu-latest
 
     services:
