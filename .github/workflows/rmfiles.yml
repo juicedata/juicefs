@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
-          
+
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
@@ -72,11 +72,11 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           create_database $meta_url
-          mp=${{inputs.mount_point}}
+          mp=/tmp/jfs
           # wget -q https://s.juicefs.com/static/bench/500K_empty_files.dump.gz
           # gzip -dk  500K_empty_files.dump.gz
           # ./juicefs load $meta_url 500K_empty_files.dump
-          ./juicefs format $meta_url ${{inputs.volume_name}}
+          ./juicefs format $meta_url jfs
           ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 10 --threads 10 --no-usage-report
           ./juicefs mount -d $meta_url $mp
           sleep 3
@@ -89,8 +89,8 @@ jobs:
         run: | 
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          mp=${{inputs.mount_point}}
-          volume=${{inputs.volume_name}}
+          mp=/tmp/jfs
+          volume=jfs
           test -d $mp && ./juicefs umount -f $mp
           ./juicefs status $meta_url && UUID=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || echo "meta not exist"
           if [ -n "$UUID" ];then
@@ -105,11 +105,11 @@ jobs:
           sudo chmod 777 /var
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          mp=${{inputs.mount_point}}
+          mp=/tmp/jfs
           # wget -q https://s.juicefs.com/static/bench/500K_empty_files.dump.gz
           # gzip -dk  500K_empty_files.dump.gz
           # ./juicefs load $meta_url 500K_empty_files.dump
-          ./juicefs format $meta_url ${{inputs.volume_name}}
+          ./juicefs format $meta_url jfs
           ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 15 --threads 10 --no-usage-report
           ./juicefs mount -d $meta_url $mp
           sleep 3
