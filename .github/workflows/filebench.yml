@@ -16,156 +16,57 @@ on:
     - cron:  '30 20 * * *'
   workflow_dispatch:
 
+
 jobs:
-  filebench:
+  filebench_varmail:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.18.x'
-
-      - name: Set up Docker
-        uses: docker-practice/actions-setup-docker@master
-
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
-
-
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go
-          restore-keys: |
-            ${{ runner.os }}-go
-
-      - name: Build linux target
-        run: |
-          make juicefs
-
-      - name: Run Redis
-        run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
-
-
-      - name: Setup minio
-        run: |
-          docker run -d -p 9000:9000 --name minio \
-                    -e "MINIO_ACCESS_KEY=minioadmin" \
-                    -e "MINIO_SECRET_KEY=minioadmin" \
-                    -v /tmp/data:/data \
-                    -v /tmp/config:/root/.minio \
-                    minio/minio server /data
-          sleep 5
-
-
-      - name: Juicefs Format
-        run: |
-          sudo ./juicefs format --trash-days 0 --storage minio --bucket http://127.0.0.1:9000/mypics \
-             --access-key minioadmin \
-             --secret-key minioadmin \
-             redis://127.0.0.1:6379/1 pics
-
-
-      - name: Juicefs Mount
-        run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /data/jfs --no-usage-report &
-
-
-      - name: Install Dependency
-        run: |
-          wget -O filebench.tar.gz https://github.com/filebench/filebench/releases/download/1.5-alpha3/filebench-1.5-alpha3.tar.gz
-          tar -zxvf filebench.tar.gz
-          cd filebench-1.5-alpha3
-          #sudo apt install -y bison
-          #sudo apt install -y byacc
-          #sudo apt install -y flex
-          ./configure
-          make
-          sudo make install
-          filebench -h
-          echo 0 >randomize_va_space
-          sudo cp randomize_va_space /proc/sys/kernel/
-          echo "randomize_va_space"
-          cat /proc/sys/kernel/randomize_va_space
-
-
       - name: Varmail
-        timeout-minutes: 10
-        run: |
-          cd /usr/local/share/filebench/workloads/
-          sudo chmod 777 *
-          sudo sed -i "s?/tmp?/data/jfs?" varmail.f
-          sudo sed -i "s?run 60?run 300?" varmail.f
-          cat varmail.f
-          sudo filebench -f varmail.f
-
-      - name: Webserver
-        timeout-minutes: 10
-        run: |
-          cd /usr/local/share/filebench/workloads/
-          sudo sed -i "s?/tmp?/data/jfs?" webserver.f
-          sudo sed -i "s?run 60?run 300?" webserver.f
-          cat webserver.f
-          sudo filebench -f webserver.f
-
-
-      - name: Videoserver
-        timeout-minutes: 10
-        run: |
-          cd /usr/local/share/filebench/workloads/
-          sudo sed -i "s?/tmp?/data/jfs?" videoserver.f
-          sudo sed -i "s?$filesize=10g?$filesize=100m?" videoserver.f
-          sudo sed -i "s?$numpassivevids=194?$numpassivevids=100?" videoserver.f
-          sudo echo "run 300" >>videoserver.f
-          df -lh
-          cat videoserver.f
-          sudo filebench -f videoserver.f
-
-
-      - name: Videoserver 500M
-        timeout-minutes: 10
-        run: |
-          cd /usr/local/share/filebench/workloads/
-          sudo cp videoserver.f videoserver_500m.f
-          sudo sed -i "s?$eventrate=96?$eventrate=500?" videoserver_500m.f
-          df -lh
-          cat videoserver_500m.f
-          sudo filebench -f videoserver_500m.f
-
-
-      - name: Videoserver 1000M
-        timeout-minutes: 10
-        run: |
-          cd /usr/local/share/filebench/workloads/
-          sudo cp videoserver.f videoserver_1000m.f
-          sudo sed -i "s?$eventrate=96?$eventrate=1000?" videoserver_1000m.f
-          df -lh
-          cat videoserver_1000m.f
-          sudo filebench -f videoserver_1000m.f
-          df -lh
-
-
-      - name: Log
-        if: ${{ always() }}
-        run: |
-          df -lh
-          tail -300 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
-
-      - name: Send Slack Notification
-        if: ${{ failure() }}
-        uses: juicedata/slack-notify-action@main
+        uses: ./.github/actions/filebench/
         with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+          workload: varmail
 
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+
+  filebench_webserver:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: Webserver
+        uses: ./.github/actions/filebench/
+        with:
+          workload: webserver
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+
+  filebench_videoserver:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: Videoserver
+        uses: ./.github/actions/filebench/
+        with:
+          workload: videoserver
 
       - name: Setup upterm session
         if: ${{ failure() }}
