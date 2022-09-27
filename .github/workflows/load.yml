@@ -147,8 +147,10 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: | 
-          tail -300 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          if [ -f ~/.juicefs/juicefs.log ]; then
+            tail -300 ~/.juicefs/juicefs.log
+            grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          fi
 
       - name: Send Slack Notification
         if: ${{ failure() }}
