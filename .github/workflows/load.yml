@@ -113,9 +113,9 @@ jobs:
           create_database $meta_url
           echo meta_url is: $meta_url
           mount_point=/tmp/juicefs-load-test
-          wget -q https://s.juicefs.com/static/bench/1M_emtpy_files_in_one_dir.dump.gz
-          gzip -dk  1M_emtpy_files_in_one_dir.dump.gz
-          load_file=1M_emtpy_files_in_one_dir.dump
+          wget -q https://s.juicefs.com/static/bench/1M_files_in_one_dir.dump.gz
+          gzip -dk  1M_files_in_one_dir.dump.gz
+          load_file=1M_files_in_one_dir.dump
           echo `date`, start load
           ./juicefs load $meta_url $load_file
           echo `date`, finish load
@@ -130,7 +130,7 @@ jobs:
             exit 1
           fi
 
-      - name: List
+      - name: List big directory
         timeout-minutes: 30
         run: | 
           mount_point=/tmp/juicefs-load-test
