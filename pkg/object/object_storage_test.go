@@ -192,8 +192,12 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put("c/", bytes.NewReader(nil)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
-	if obs, err := s.List("", "", "/", 10); err != nil && !errors.Is(err, notSupportedDelimiter) {
-		t.Fatalf("list with delimiter: %s", err)
+	if obs, err := s.List("", "", "/", 10); err != nil {
+		if !(errors.Is(err, notSupportedDelimiter) || errors.Is(err, notSupported)) {
+			t.Fatalf("list with delimiter: %s", err)
+		} else {
+			t.Logf("list api error: %s", err)
+		}
 	} else {
 		if len(obs) != 4 {
 			t.Fatalf("list with delimiter should return four results but got %d", len(obs))
@@ -331,6 +335,7 @@ func TestMem(t *testing.T) {
 }
 
 func TestDisk(t *testing.T) {
+	_ = os.RemoveAll("/tmp/abc/")
 	s, _ := newDisk("/tmp/abc/", "", "", "")
 	testStorage(t, s)
 }
