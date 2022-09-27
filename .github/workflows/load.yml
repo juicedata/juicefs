@@ -9,9 +9,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO: add fdb
-        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb']
-        # meta: ['fdb']
+        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb', 'fdb']
+        meta: ['fdb']
     runs-on: ubuntu-latest
 
     services:
@@ -128,6 +127,7 @@ jobs:
           ./juicefs mount $meta_url $mount_point -d
           df -i $mount_point
           inode=$(df -i $mount_point | grep JuiceFS |awk -F" " '{print $3}')
+          echo "inode: $inode"
           if [ "$inode" -ne "1000003" ]; then 
             echo "<FATAL>: inode error: $inode"
             exit 1
@@ -138,6 +138,7 @@ jobs:
         run: | 
           mount_point=/tmp/juicefs-load-test
           file_count=$(ls -l $mount_point/test/test-dir.0-0/mdtest_tree.0/ | wc -l)
+          echo "file_count: $file_count"
           if [ "$file_count" -ne "1000001" ]; then 
             echo "<FATAL>: file_count error: $file_count"
             exit 1
