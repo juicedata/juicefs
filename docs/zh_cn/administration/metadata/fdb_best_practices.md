@@ -20,7 +20,39 @@ fdb支持横向扩容，一旦数据存储达到集群的最高负载，只需�
 - 存储
   - 存储数据小于内存时使用内存存储引擎
   - 存储数据大于内存时使用SSD存储引擎
-  
+
+## 如何配置FoundationDB
+### 在单机上配置FoundationDB
+
+**[Ubuntu](https://apple.github.io/foundationdb/getting-started-linux.html)**
+```
+//下载server和client deb包
+wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
+//安装
+sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb \
+foundationdb-server_6.3.23-1_amd64.deb
+```
+**[RHEL/CentOS6/CentOS7](https://apple.github.io/foundationdb/getting-started-linux.html)**
+```
+//下载server和client rpm包
+wget https://github.com/apple/foundationdb/releases/download/6.3.12/foundationdb-clients-6.3.23-1.el7.x86_64.rpm
+wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server-6.3.23-1.el7.x86_64.rpm
+//安装
+sudo rpm -Uvh foundationdb-clients-6.3.23-1.el7.x86_64.rpm \
+foundationdb-server-6.3.23-1.el7.x86_64.rpm
+```
+**[macOS](https://apple.github.io/foundationdb/getting-started-linux.html)**
+
+详情请移步foundationdb官网
+
+### [在多台机器上配置foundationdb集群](https://apple.github.io/foundationdb/administration.html#adding-machines-to-a-cluster)
+> 部署单台机器的步骤与上述一致。
+- 首先在每台机器上部署好单个foundationdb
+- 选择一个节点将其fdb.cluster文件修改（路径默认/etc/foundationdb/fdb.cluster），此文件由一行字符串组成，格式为description:ID@IP:PORT,IP:PORT,...，仅添加其他机器的IP:PORT即可。
+- 将此修改完的fdb.cluster拷贝到其他节点
+- 将机器重启（sudo service foundationdb restart）
+
 ## 冗余模式
 FoundationDB 支持多种冗余模式。这些模式定义了存储要求、所需的集群大小和故障恢复能力，用户可根据不同的机器配置选择相对应的冗余模式。要更改冗余模式，请使用 的configure命令fdbcli。示例如下：
 ```
