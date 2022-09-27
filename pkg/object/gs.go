@@ -25,7 +25,9 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/compute/metadata"
 	"cloud.google.com/go/storage"
@@ -136,14 +138,11 @@ func (g *gs) Delete(key string) error {
 }
 
 func (g *gs) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	if delimiter != "" {
-		return nil, notSupported
-	}
 	if marker != "" && g.pageToken == "" {
 		// last page
 		return nil, nil
 	}
-	objectIterator := g.client.Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix})
+	objectIterator := g.client.Bucket(g.bucket).Objects(ctx, &storage.Query{Prefix: prefix, Delimiter: delimiter})
 	pager := iterator.NewPager(objectIterator, int(limit), g.pageToken)
 	var entries []*storage.ObjectAttrs
 	nextPageToken, err := pager.NextPage(&entries)
@@ -155,7 +154,14 @@ func (g *gs) List(prefix, marker, delimiter string, limit int64) ([]Object, erro
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		item := entries[i]
-		objs[i] = &obj{item.Name, item.Size, item.Updated, strings.HasSuffix(item.Name, "/")}
+		if delimiter != "" && item.Prefix != "" {
+			objs[i] = &obj{item.Prefix, 0, time.Unix(0, 0), true}
+		} else {
+			objs[i] = &obj{item.Name, item.Size, item.Updated, strings.HasSuffix(item.Name, "/")}
+		}
+	}
+	if delimiter != "" {
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }
