@@ -98,10 +98,10 @@ jobs:
           cd /tmp/jfs/
           sudo git clone https://github.com/sanwan/pjdfstest.git
           cd pjdfstest
-          autoreconf -ifs
-          ./configure
-          make pjdfstest
-          prove -rv tests/
+          sudo autoreconf -ifs
+          sudo ./configure
+          sudo make pjdfstest
+          sudo prove -rv tests/
 
       - name: log
         if: ${{ always() }}
