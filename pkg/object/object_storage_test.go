@@ -172,21 +172,38 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
+	defer s.Delete("a/a")
 	if err := s.Put("a/a", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
-	defer s.Delete("a/a")
-	if err := s.Put("b/b", bytes.NewReader(br)); err != nil {
+	defer s.Delete("a/a1")
+	if err := s.Put("a/a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 	defer s.Delete("b/b")
-	if obs, err := s.List("", "", "/", 10); err != nil && !errors.Is(err, notSupported) {
+	if err := s.Put("b/b", bytes.NewReader(br)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
+	defer s.Delete("b/b1")
+	if err := s.Put("b/b1", bytes.NewReader(br)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
+	defer s.Delete("c/")
+	if err := s.Put("c/", bytes.NewReader(nil)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
+	if obs, err := s.List("", "", "/", 10); err != nil && !errors.Is(err, notSupportedDelimiter) {
 		t.Fatalf("list with delimiter: %s", err)
-	} else if len(obs) != 3 {
-		for i, o := range obs {
-			t.Logf("%d %s", i, o.Key())
+	} else {
+		if len(obs) != 4 {
+			t.Fatalf("list with delimiter should return four results but got %d", len(obs))
 		}
-		t.Fatalf("list with delimiter returned: %d  %+v", len(obs), obs)
+		keys := []string{"a/", "b/", "c/", "test"}
+		for i, o := range obs {
+			if o.Key() != keys[i] {
+				t.Fatalf("should get key %s but got %s", keys[i], o.Key())
+			}
+		}
 	}
 
 	// test redis cluster list all api
