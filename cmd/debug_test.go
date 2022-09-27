@@ -23,29 +23,29 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-func TestDoctor(t *testing.T) {
+func TestDebug(t *testing.T) {
 	mountTemp(t, nil, nil, nil)
 	defer umountTemp(t)
-	Convey("TestDoctor", t, func() {
+	Convey("TestDebug", t, func() {
 		Convey("Mount point does not exist", func() {
 			mp := "/jfs/test/mp"
-			So(Main([]string{"", "doctor", mp}), ShouldNotBeNil)
+			So(Main([]string{"", "debug", mp}), ShouldNotBeNil)
 		})
 
 		Convey("Directory is not a mount point", func() {
 			mp := "./"
-			So(Main([]string{"", "doctor", mp}), ShouldNotBeNil)
+			So(Main([]string{"", "debug", mp}), ShouldNotBeNil)
 		})
 
 	})
 
-	Convey("TestDoctor_OutDir", t, func() {
+	Convey("TestDebug_OutDir", t, func() {
 		Convey("Specify a file as out dir", func() {
-			So(Main([]string{"", "doctor", "--out-dir", "./doctor_test.go", testMountPoint}), ShouldNotBeNil)
+			So(Main([]string{"", "debug", "--out-dir", "./debug_test.go", testMountPoint}), ShouldNotBeNil)
 		})
 	})
 
-	Convey("TestDoctor_LogArg", t, func() {
+	Convey("TestDebug_LogArg", t, func() {
 		cases := []struct {
 			arg string
 			val string

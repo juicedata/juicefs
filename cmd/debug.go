@@ -39,12 +39,12 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var defaultOutDir = filepath.Join(".", "doctor")
+var defaultOutDir = filepath.Join(".", "debug")
 
 func cmdDoctor() *cli.Command {
 	return &cli.Command{
-		Name:      "doctor",
-		Action:    doctor,
+		Name:      "debug",
+		Action:    debug,
 		Category:  "INSPECTOR",
 		ArgsUsage: "MOUNTPOINT",
 		Usage:     "Collect and display system static and runtime information",
@@ -52,27 +52,22 @@ func cmdDoctor() *cli.Command {
 It collects and displays information from multiple dimensions such as the running environment and system logs, etc.
 
 Examples:
-$ juicefs doctor /mnt/jfs
+$ juicefs debug /mnt/jfs
 
 # Result will be output to /var/log/
-$ juicefs doctor --out-dir=/var/log /mnt/jfs
+$ juicefs debug --out-dir=/var/log /mnt/jfs
 
 # Get the last up to 1000 log entries
-$ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 /mnt/jfs
+$ juicefs debug --out-dir=/var/log --collect-log --limit=1000 /mnt/jfs
 
 # Get pprof information
-$ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /mnt/jfs
+$ juicefs debug --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /mnt/jfs
 `,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "out-dir",
 				Value: defaultOutDir,
 				Usage: "the output directory of the result file",
-			},
-			&cli.Uint64Flag{
-				Name:  "stats-sec",
-				Value: 5,
-				Usage: "stats sampling duration",
 			},
 			&cli.BoolFlag{
 				Name:  "collect-log",
@@ -85,6 +80,11 @@ $ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /
 			&cli.BoolFlag{
 				Name:  "collect-pprof",
 				Usage: "enable pprof collection",
+			},
+			&cli.Uint64Flag{
+				Name:  "stats-sec",
+				Value: 5,
+				Usage: "stats sampling duration",
 			},
 			&cli.Uint64Flag{
 				Name:  "trace-sec",
@@ -397,7 +397,7 @@ func geneZipFile(srcPath, destPath string) error {
 	return nil
 }
 
-func doctor(ctx *cli.Context) error {
+func debug(ctx *cli.Context) error {
 	setup(ctx, 1)
 	mp := ctx.Args().First()
 	inode, err := utils.GetFileInode(mp)
