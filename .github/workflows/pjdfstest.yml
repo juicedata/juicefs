@@ -30,6 +30,7 @@ jobs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
 
   pjdfstest:
+    needs: build-matrix
     strategy:
       fail-fast: false
       matrix:
