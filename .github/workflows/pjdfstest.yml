@@ -119,7 +119,7 @@ jobs:
           autoreconf -ifs
           ./configure
           make pjdfstest
-          prove -rv tests/
+          sudo prove -rv tests/
 
       - name: log
         if: ${{ always() }}
