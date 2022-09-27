@@ -17,19 +17,54 @@ on:
       - 'docs/**'
       - '**.md'
       - '.github/**'
+  schedule:
+    - cron:  '0 16 * * *'
   workflow_dispatch:
 
 jobs:
-  pjdfstest:
+  build-matrix:
     runs-on: ubuntu-latest
+    steps:
+      - id: set-matrix
+        run: |
+          echo "github.event_name is ${{github.event_name}}"
+          echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
+          if [ "${{github.event_name}}" == "schedule"  ]; then
+            echo '::set-output name=meta_matrix::[ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb', 'fdb']'
+          else
+            echo '::set-output name=meta_matrix::["redis"]'
+          fi
+    outputs:
+      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
+
+  pjdfstest:
+    needs: build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        # [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb', 'fdb']
+        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
           go-version: '1.18.x'
 
-      - name: Set up Docker
-        uses: docker-practice/actions-setup-docker@master
+      # - name: Set up Docker
+      #   uses: docker-practice/actions-setup-docker@master
 
       - uses: shogo82148/actions-setup-perl@v1
         with:
@@ -50,20 +85,44 @@ jobs:
             ${{ runner.os }}-go
 
       - name: Build linux target
-        run: make juicefs
-
-      - name: Run Redis
         run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "build juicefs.fdb"
+            wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+            make juicefs.fdb
+            mv juicefs.fdb juicefs
+          else
+            echo "build juicefs"
+            make juicefs 
+          fi
+
+      - name: Prepare meta db
+        run: | 
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
 
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format redis://127.0.0.1:6379/1 --trash-days 0 pics
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs format $meta_url --trash-days 0 pics
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          # sudo mkdir /var/jfs
+          # sudo chmod 777 /var/jfs
+          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report &
+          sleep 5
+          if [ ! -f /tmp/jfs/.accesslog ]; then
+            echo "<FATAL>: mount failed"
+            exit 1
+          fi
 
       - name: Pjdfstest
         run: |
@@ -77,11 +136,18 @@ jobs:
           make pjdfstest
           sudo prove -rv tests/
 
-      - name: Log
+      - name: log
         if: ${{ always() }}
-        run: |
-          tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+        shell: bash
+        run: | 
+          if [ -f ~/.juicefs/juicefs.log ]; then
+            tail -300 ~/.juicefs/juicefs.log
+            grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          fi
+          if [ -f /var/log/juicefs.log ]; then
+            tail -300 /var/log/juicefs.log
+            grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          fi
 
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -89,3 +155,8 @@ jobs:
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        timeout-minutes: 1
+        uses: lhotari/action-upterm@v1
