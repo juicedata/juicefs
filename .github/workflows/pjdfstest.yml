@@ -26,7 +26,7 @@ jobs:
       matrix:
         # TODO: add fdb
         # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb']
-        meta: [ 'sqlite3', 'redis', 'mysql']
+        meta: [ 'mysql']
         # meta: ['fdb']
     runs-on: ubuntu-latest
     steps:
@@ -113,3 +113,8 @@ jobs:
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
