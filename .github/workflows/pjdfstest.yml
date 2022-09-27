@@ -20,13 +20,21 @@ on:
   workflow_dispatch:
 
 jobs:
+  build-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - id: set-matrix
+        run: |
+          echo '::set-output name=meta_matrix::["redis", "mysql", "fdb"]'
+    outputs:
+      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
+
   pjdfstest:
     strategy:
       fail-fast: false
       matrix:
-        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb', 'fdb']
-        # meta: [ 'mysql', 'redis']
-        # meta: ['fdb']
+        # [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb', 'fdb']
+        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     runs-on: ubuntu-latest
     services:
       postgres:
