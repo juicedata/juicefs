@@ -24,9 +24,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO: add fdb
-        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb', 'fdb']
-        meta: [ 'mysql', 'redis']
+        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb', 'fdb']
+        # meta: [ 'mysql', 'redis']
         # meta: ['fdb']
     runs-on: ubuntu-latest
     services:
