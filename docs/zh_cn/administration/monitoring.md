@@ -1,6 +1,6 @@
 ---
 sidebar_label: 监控与数据可视化
-sidebar_position: 6
+sidebar_position: 3
 ---
 
 # 监控与数据可视化
@@ -79,19 +79,19 @@ scrape_configs:
 当通过 [`juicefs mount`](../reference/command_reference.md#juicefs-mount) 命令挂载 JuiceFS 文件系统后，可以通过 `http://localhost:9567/metrics` 这个地址收集监控指标，你也可以通过 `--metrics` 选项自定义。如：
 
 ```shell
-$ juicefs mount --metrics localhost:9567 ...
+juicefs mount --metrics localhost:9567 ...
 ```
 
 你可以使用命令行工具查看这些监控指标：
 
 ```shell
-$ curl http://localhost:9567/metrics
+curl http://localhost:9567/metrics
 ```
 
 除此之外，每个 JuiceFS 文件系统的根目录还有一个叫做 `.stats` 的隐藏文件，通过这个文件也可以查看监控指标。例如（这里假设挂载点的路径是 `/jfs`）：
 
 ```shell
-$ cat /jfs/.stats
+cat /jfs/.stats
 ```
 
 ### Kubernetes
@@ -158,7 +158,7 @@ scrape_configs:
 [JuiceFS S3 网关](../deployment/s3_gateway.md)默认会在 `http://localhost:9567/metrics` 这个地址提供监控指标，你也可以通过 `--metrics` 选项自定义。如：
 
 ```shell
-$ juicefs gateway --metrics localhost:9567 ...
+juicefs gateway --metrics localhost:9567 ...
 ```
 
 如果你是在 Kubernetes 中部署 JuiceFS S3 网关，可以参考 [Kubernetes](#kubernetes) 小节的 Prometheus 配置来收集监控指标（区别主要在于 `__meta_kubernetes_pod_label_app_kubernetes_io_name` 这个标签的正则表达式），例如：
@@ -235,7 +235,7 @@ spec:
 定期使用下面的命令清理 Pushgateway 的指标数据，清空指标不影响运行中的 JuiceFS Hadoop Java SDK 持续上报数据。**注意 Pushgateway 启动时必须指定 `--web.enable-admin-api` 选项，同时以下命令会清空 Pushgateway 中的所有监控指标。**
 
 ```bash
-$ curl -X PUT http://host:9091/api/v1/admin/wipe
+curl -X PUT http://host:9091/api/v1/admin/wipe
 ```
 :::
 
@@ -265,7 +265,7 @@ JuiceFS Hadoop Java SDK 支持的所有配置参数请参考[文档](../deployme
 JuiceFS 支持使用 Consul 作为监控指标 API 的注册中心，默认的 Consul 地址是 `127.0.0.1:8500`，你也可以通过 `--consul` 选项自定义。如：
 
 ```shell
-$ juicefs mount --consul 1.2.3.4:8500 ...
+juicefs mount --consul 1.2.3.4:8500 ...
 ```
 
 当配置了 Consul 地址以后，`--metrics` 选项不再需要配置，JuiceFS 将会根据自身网络与端口情况自动配置监控指标 URL。如果同时设置了 `--metrics`，则会优先尝试监听配置的 URL。

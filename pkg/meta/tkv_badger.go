@@ -227,30 +227,10 @@ func (c *badgerClient) scan(prefix []byte, handler func(key []byte, value []byte
 }
 
 func (c *badgerClient) reset(prefix []byte) error {
-	for {
-		tx := c.client.NewTransaction(true)
-		defer tx.Discard()
-		it := tx.NewIterator(badger.IteratorOptions{
-			Prefix:       prefix,
-			PrefetchSize: 1024,
-		})
-		it.Rewind()
-		if !it.Valid() {
-			it.Close()
-			return nil
-		}
-		for ; it.Valid(); it.Next() {
-			if err := tx.Delete(it.Item().Key()); err == badger.ErrTxnTooBig {
-				break
-			} else if err != nil {
-				it.Close()
-				return err
-			}
-		}
-		it.Close()
-		if err := tx.Commit(); err != nil {
-			return err
-		}
+	if prefix == nil {
+		return c.client.DropAll()
+	} else {
+		return c.client.DropPrefix(prefix)
 	}
 }
 

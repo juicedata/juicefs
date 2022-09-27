@@ -27,7 +27,7 @@ JuiceFS clients will occupy 1GB of disk space as cache by default. When dealing 
 
 Amazon S3 is the de facto standard for public cloud object storage services, and the object storage services provided by other major cloud platforms are generally compatible with the S3 API. Thus, applications developed for S3 can switch object storage services between different platforms freely.
 
-JuiceFS fully supports Amazon S3 and all S3-like object storage services, and you can see the documentation for [all object storage services supported by JuiceFS](../reference/how_to_setup_object_storage.md).
+JuiceFS fully supports Amazon S3 and all S3-like object storage services, and you can see the documentation for [all object storage services supported by JuiceFS](../guide/how_to_set_up_object_storage.md).
 
 Amazon S3 offers a range of storage classes for different use cases, mainly including:
 
@@ -62,23 +62,23 @@ Next, we briefly describe how to install and use JuiceFS using ElastiCache clust
 Here we are using a Linux system with x64 bit architecture. Execute the following commands, the latest version of JuiceFS client will be downloaded.
 
 ```shell
-$ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
 ```
 
 ```shell
-$ wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
+wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 ```
 
 After downloading, unzip the application into the `juice` folder.
 
 ```shell
-$ mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
+mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
 ```
 
 Install the JuiceFS client to the system `$PATH`, e.g., `/usr/local/bin`.
 
 ```shell
-$ sudo install juice/juicefs /usr/local/bin
+sudo install juice/juicefs /usr/local/bin
 ```
 
 Execute the above command. The successful installation of the client will be indicated by the returned help message of `juicefs` as shown below.
@@ -177,7 +177,7 @@ The process of creating a file system will store the information of the object s
 Use the `mount` subcommand of the JuiceFS client to mount the file system to the `/mnt/jfs` directory.
 
 ```shell
-$ sudo juicefs mount -d redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1  /mnt/jfs
+sudo juicefs mount -d redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1  /mnt/jfs
 ```
 
 > **Note**: When mounting a file system, only the database address is required but not the file system name. The default cache path is `/var/jfsCache`. Please make sure the current user has enough read/write permissions.
@@ -185,7 +185,7 @@ $ sudo juicefs mount -d redis://[<redis-username>]:<redis-password>@<redis-url>:
 You can optimize JuiceFS by adjusting the [mount options](../reference/command_reference.md#juicefs-mount), for example by `--cache-size` to change cache to 20GB.
 
 ```shell
-$ sudo juicefs mount --cache-size 20480 -d redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1  /mnt/jfs
+sudo juicefs mount --cache-size 20480 -d redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1  /mnt/jfs
 ```
 
 Seeing the output like the following means the file system was mounted successfully.
@@ -198,7 +198,7 @@ Seeing the output like the following means the file system was mounted successfu
 2021/10/14 08:47:50.132003 juicefs[10601] <INFO>: OK, mystor is ready at /mnt/jfs
 ```
 
-To check how the file system is mounted, you can use the command `df`, 
+To check how the file system is mounted, you can use the command `df`,
 
 ```shell
 $ df -Th
@@ -215,7 +215,7 @@ Once mounted, the file system can be used like a local disk, and the data stored
 The file system can be unmounted using the command `umount` provided by the JuiceFS client, e.g.
 
 ```shell
-$ sudo juicefs umount /mnt/jfs
+sudo juicefs umount /mnt/jfs
 ```
 
 > **Note**: Forcing to unmount the file system in use may result in data corruption or loss, so please be sure to proceed with caution.
@@ -227,7 +227,7 @@ If you don't want to re-mount JuiceFS storage manually every time you reboot you
 First, you need to rename the `juicefs` client to `mount.juicefs` and copy it to the directory `/sbin/`.
 
 ```shell
-$ sudo cp juice/juicefs /sbin/mount.juicefs
+sudo cp juice/juicefs /sbin/mount.juicefs
 ```
 
 Edit the `/etc/fstab` configuration file and add a new record:

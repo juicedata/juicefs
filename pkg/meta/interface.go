@@ -21,7 +21,6 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -32,10 +31,12 @@ import (
 )
 
 const (
+	// MaxVersion is the max of supported versions.
+	MaxVersion = 1
 	// ChunkSize is size of a chunk
 	ChunkSize = 1 << 26 // 64M
-	// DeleteChunk is a message to delete a chunk from object store.
-	DeleteChunk = 1000
+	// DeleteSlice is a message to delete a slice from object store.
+	DeleteSlice = 1000
 	// CompactChunk is a message to compact a chunk in object store.
 	CompactChunk = 1001
 	// Rmr is a message to remove a directory recursively.
@@ -73,6 +74,12 @@ const (
 	SetAttrCtime
 	SetAttrAtimeNow
 	SetAttrMtimeNow
+	SetAttrFlag = 1 << 15
+)
+
+const (
+	FlagImmutable = 1 << iota
+	FlagAppend
 )
 
 const MaxName = 255
@@ -97,7 +104,7 @@ type MsgCallback func(...interface{}) error
 
 // Attr represents attributes of a node.
 type Attr struct {
-	Flags     uint8  // reserved flags
+	Flags     uint8  // flags
 	Typ       uint8  // type of a node
 	Mode      uint16 // permission mode
 	Uid       uint32 // owner id
@@ -195,10 +202,10 @@ type Entry struct {
 // Slice is a slice of a chunk.
 // Multiple slices could be combined together as a chunk.
 type Slice struct {
-	Chunkid uint64
-	Size    uint32
-	Off     uint32
-	Len     uint32
+	Id   uint64
+	Size uint32
+	Off  uint32
+	Len  uint32
 }
 
 // Summary represents the total number of files/directories and
@@ -226,7 +233,7 @@ type Flock struct {
 type Plock struct {
 	Inode   Ino
 	Owner   uint64
-	Records []byte // FIXME: loadLocks
+	Records []plockRecord
 }
 
 // Session contains detailed information of a client session
@@ -308,9 +315,9 @@ type Meta interface {
 	// Close a file.
 	Close(ctx Context, inode Ino) syscall.Errno
 	// Read returns the list of slices on the given chunk.
-	Read(ctx Context, inode Ino, indx uint32, chunks *[]Slice) syscall.Errno
-	// NewChunk returns a new id for new data.
-	NewChunk(ctx Context, chunkid *uint64) syscall.Errno
+	Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) syscall.Errno
+	// NewSlice returns an id for new slice.
+	NewSlice(ctx Context, id *uint64) syscall.Errno
 	// Write put a slice of data on top of the given chunk.
 	Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno
 	// InvalidateChunkCache invalidate chunk cache
@@ -341,12 +348,16 @@ type Meta interface {
 	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
 	// Remove all files and directories recursively.
 	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
+	// GetPaths returns all paths of an inode
+	GetPaths(ctx Context, inode Ino) []string
+	// Check integrity of an absolute path and repair it if asked
+	Check(ctx Context, fpath string, repair bool, recursive bool) syscall.Errno
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
 
 	// Dump the tree under root, which may be modified by checkRoot
-	DumpMeta(w io.Writer, root Ino) error
+	DumpMeta(w io.Writer, root Ino, keepSecret bool) error
 	LoadMeta(r io.Reader) error
 
 	// getBase return the base engine.
@@ -370,7 +381,7 @@ func setPasswordFromEnv(uri string) (string, error) {
 	dIndex := strings.Index(uri, "://") + 3
 	s := strings.Split(uri[dIndex:atIndex], ":")
 
-	if len(s) > 2 || s[0] == "" {
+	if len(s) > 2 {
 		return "", fmt.Errorf("invalid uri: %s", uri)
 	}
 
@@ -416,83 +427,4 @@ func newSessionInfo() *SessionInfo {
 		host = ""
 	}
 	return &SessionInfo{Version: version.Version(), HostName: host, ProcessID: os.Getpid()}
-}
-
-// Get all paths of an inode
-func GetPaths(m Meta, ctx Context, inode Ino) []string {
-	if inode == RootInode {
-		return []string{"/"}
-	}
-
-	base := m.getBase()
-	outside := "path not shown because it's outside of the mounted root"
-	getDirPath := func(ino Ino) (string, error) {
-		var names []string
-		var attr Attr
-		for ino != RootInode && ino != base.root {
-			if st := base.en.doGetAttr(ctx, ino, &attr); st != 0 {
-				return "", fmt.Errorf("getattr inode %d: %s", ino, st)
-			}
-			if attr.Typ != TypeDirectory {
-				return "", fmt.Errorf("inode %d is not a directory", ino)
-			}
-			var entries []*Entry
-			if st := base.en.doReaddir(ctx, attr.Parent, 0, &entries, -1); st != 0 {
-				return "", fmt.Errorf("readdir inode %d: %s", ino, st)
-			}
-			var name string
-			for _, e := range entries {
-				if e.Inode == ino {
-					name = string(e.Name)
-					break
-				}
-			}
-			if name == "" {
-				return "", fmt.Errorf("entry %d/%d not found", attr.Parent, ino)
-			}
-			names = append(names, name)
-			ino = attr.Parent
-		}
-		if base.root != RootInode && ino == RootInode {
-			return outside, nil
-		}
-		names = append(names, "/") // add root
-
-		for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 { // reverse
-			names[i], names[j] = names[j], names[i]
-		}
-		return path.Join(names...), nil
-	}
-
-	var paths []string
-	// inode != RootInode, parent is the real parent inode
-	for parent, count := range m.GetParents(ctx, inode) {
-		if count <= 0 {
-			continue
-		}
-		dir, err := getDirPath(parent)
-		if err != nil {
-			logger.Warnf("Get directory path of %d: %s", parent, err)
-			continue
-		} else if dir == outside {
-			paths = append(paths, outside)
-			continue
-		}
-		var entries []*Entry
-		if st := base.en.doReaddir(ctx, parent, 0, &entries, -1); st != 0 {
-			logger.Warnf("Readdir inode %d: %s", parent, st)
-			continue
-		}
-		var c int
-		for _, e := range entries {
-			if e.Inode == inode {
-				c++
-				paths = append(paths, path.Join(dir, string(e.Name)))
-			}
-		}
-		if c != count {
-			logger.Warnf("Expect to find %d entries under parent %d, but got %d", count, parent, c)
-		}
-	}
-	return paths
 }

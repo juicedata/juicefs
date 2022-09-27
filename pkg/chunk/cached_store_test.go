@@ -29,8 +29,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 )
 
-func forgeChunk(store ChunkStore, chunkid uint64, size int) error {
-	w := store.NewWriter(chunkid)
+func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
+	w := store.NewWriter(sliceId)
 	buf := bytes.Repeat([]byte{0x41}, size)
 	if _, err := w.WriteAt(buf, 0); err != nil {
 		return err
@@ -74,13 +74,13 @@ func testStore(t *testing.T, store ChunkStore) {
 	bsize := defaultConf.BlockSize / 2
 	errs := make(chan error, 3)
 	for i := 2; i < 5; i++ {
-		go func(chunkid uint64) {
-			if err := forgeChunk(store, chunkid, bsize); err != nil {
+		go func(sliceId uint64) {
+			if err := forgetSlice(store, sliceId, bsize); err != nil {
 				errs <- err
 				return
 			}
 			time.Sleep(time.Millisecond * 100) // waiting for flush
-			errs <- store.Remove(chunkid, bsize)
+			errs <- store.Remove(sliceId, bsize)
 		}(uint64(i))
 	}
 	for i := 0; i < 3; i++ {
@@ -91,16 +91,19 @@ func testStore(t *testing.T, store ChunkStore) {
 }
 
 var defaultConf = Config{
-	BlockSize:  1 << 20,
-	CacheDir:   filepath.Join(os.TempDir(), "diskCache"),
-	CacheSize:  1,
-	MaxUpload:  1,
-	MaxDeletes: 1,
-	MaxRetries: 10,
-	PutTimeout: time.Second,
-	GetTimeout: time.Second * 2,
-	AutoCreate: true,
-	BufferSize: 10 << 20,
+	BlockSize:         1 << 20,
+	CacheDir:          filepath.Join(os.TempDir(), "diskCache"),
+	CacheMode:         0600,
+	CacheSize:         10,
+	CacheChecksum:     CsNone,
+	CacheScanInterval: time.Second * 300,
+	MaxUpload:         1,
+	MaxDeletes:        1,
+	MaxRetries:        10,
+	PutTimeout:        time.Second,
+	GetTimeout:        time.Second * 2,
+	AutoCreate:        true,
+	BufferSize:        10 << 20,
 }
 
 func TestStoreDefault(t *testing.T) {
@@ -193,8 +196,8 @@ func TestStoreDelayed(t *testing.T) {
 	store := NewCachedStore(mem, conf, nil)
 	time.Sleep(time.Second) // waiting for cache scanned
 	testStore(t, store)
-	if err := forgeChunk(store, 10, 1024); err != nil {
-		t.Fatalf("forge chunk 10 1024: %s", err)
+	if err := forgetSlice(store, 10, 1024); err != nil {
+		t.Fatalf("forge slice 10 1024: %s", err)
 	}
 	defer store.Remove(10, 1024)
 	time.Sleep(time.Second) // waiting for upload
@@ -217,13 +220,13 @@ func TestFillCache(t *testing.T) {
 	conf.CacheSize = 10
 	_ = os.RemoveAll(conf.CacheDir)
 	store := NewCachedStore(mem, conf, nil)
-	if err := forgeChunk(store, 10, 1024); err != nil {
-		t.Fatalf("forge chunk 10 1024: %s", err)
+	if err := forgetSlice(store, 10, 1024); err != nil {
+		t.Fatalf("forge slice 10 1024: %s", err)
 	}
 	defer store.Remove(10, 1024)
 	bsize := conf.BlockSize
-	if err := forgeChunk(store, 11, bsize); err != nil {
-		t.Fatalf("forge chunk 11 %d: %s", bsize, err)
+	if err := forgetSlice(store, 11, bsize); err != nil {
+		t.Fatalf("forge slice 11 %d: %s", bsize, err)
 	}
 	defer store.Remove(11, bsize)
 

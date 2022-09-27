@@ -289,7 +289,7 @@ func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		Endpoint:         strings.SplitN(uri.Host, ".", 2)[1],
 		DisableSSL:       !ssl,
 		HTTPClient:       httpClient,
-		S3ForcePathStyle: true,
+		S3ForcePathStyle: false,
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}
 

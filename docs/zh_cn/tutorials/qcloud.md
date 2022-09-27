@@ -37,7 +37,7 @@ JuiceFS 默认会占用不超过 1GB 的硬盘空间作为缓存，可以根据�
 | **CPU**      | 1 核                     |
 | **内存**     | 2 GB                     |
 | **存储**     | 50 GB                    |
-| **操作系统** | Ubuntu Server 20.04 64位 |
+| **操作系统** | Ubuntu Server 20.04 64 位 |
 | **地域**     | 上海五区                 |
 
 ### 二、云数据库
@@ -58,8 +58,6 @@ JuiceFS 会将数据对应的元数据全部存储在独立的数据库中，目
 | **运维门槛** |            高            |            适中            |           低           |
 |  **可靠性**  |            低            |            适中            |           低           |
 | **应用场景** | 海量数据、分布式高频读写 | 海量数据、分布式中低频读写 | 少量数据单机中低频读写 |
-
-> **注意**：如果使用 JuiceFS 的[托管服务](https://juicefs.com/docs/zh/hosted_service.html)，则无需单独准备数据库。
 
 **本文使用了云数据库 TencentDB Redis，通过 VPC 私有网络与 CVM 云服务器交互访问：**
 
@@ -94,23 +92,23 @@ JuiceFS 会将所有的数据都存储到对象存储中，它支持几乎所有
 我当前使用的是 Ubuntu Server 20.04 64 位系统，依次执行以下命令可以下载最新版本客户端。你也可以访问 [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) 页面选择其他版本。
 
 ```shell
-$ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
 ```
 
 ```shell
-$ wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
+wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 ```
 
 下载完成以后，解压程序到 `juice` 文件夹：
 
 ```shell
-$ mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
+mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
 ```
 
 将 JuiceFS 客户端安装到 `/usr/local/bin` ：
 
 ```shell
-$ sudo install juice/juicefs /usr/local/bin
+sudo install juice/juicefs /usr/local/bin
 ```
 
 执行命令，看到返回 `juicefs` 的命令帮助信息，代表客户端安装成功。
@@ -162,7 +160,7 @@ JuiceFS 具有良好的跨平台兼容性，同时支持在 Linux、Windows 和 
 
 JuiceFS 客户端安装好以后，现在就可以使用前面准备好的 Redis 数据库和 COS 对象存储来创建 JuiceFS 存储了。
 
-严格意义上说，这一步操作应该叫做 “Format a volume”，即格式化一个卷。但考虑到有很多用户可能不了解或者不关心文件系统的标准术语，所以简单起见，我们就直白的把这个过程叫做“创建 JuiceFS 存储”。
+严格意义上说，这一步操作应该叫做“Format a volume”，即格式化一个卷。但考虑到有很多用户可能不了解或者不关心文件系统的标准术语，所以简单起见，我们就直白的把这个过程叫做“创建 JuiceFS 存储”。
 
 以下命令使用 JuiceFS 客户端提供的 `format` 子命令创建了一个名为 `mystor` 的存储，即文件系统：
 
@@ -178,7 +176,7 @@ $ juicefs format \
 
 **选项说明：**
 
-- `--storage`：指定对象存储类型，[点此查看](../reference/how_to_setup_object_storage.md#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1) JuiceFS 支持的对象存储。
+- `--storage`：指定对象存储类型，[点此查看](../guide/how_to_set_up_object_storage.md#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1) JuiceFS 支持的对象存储。
 - `--bucket`：对象存储的 Bucket 访问域名，可以在 COS 的管理控制台找到。
   ![cos-bucket-url](../images/cos-bucket-url.png)
 - `--access-key` 和 `--secret-key`：访问对象存储 API 的秘钥对，[点此查看](https://cloud.tencent.com/document/product/598/37140)获取方式。
@@ -202,7 +200,7 @@ $ juicefs format \
 使用 `mount` 子命令，将文件系统挂载到 `/mnt/jfs` 目录：
 
 ```shell
-$ sudo juicefs mount -d redis://:<your-redis-password>@192.168.5.5:6379/1 /mnt/jfs
+sudo juicefs mount -d redis://:<your-redis-password>@192.168.5.5:6379/1 /mnt/jfs
 ```
 
 > **注意**：挂载文件系统时，只需填写 Redis 数据库地址，不需要文件系统名称。默认的缓存路径为 `/var/jfsCache`，请确保当前用户有足够的读写权限。
@@ -280,7 +278,7 @@ $ juicefs status redis://:<your-redis-password>@192.168.5.5:6379/1
 使用 JuiceFS 客户端提供的 `umount` 命令即可卸载文件系统，比如：
 
 ```shell
-$ sudo juicefs umount /mnt/jfs
+sudo juicefs umount /mnt/jfs
 ```
 
 > **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。
@@ -292,7 +290,7 @@ $ sudo juicefs umount /mnt/jfs
 首先，需要将  `juicefs` 客户端重命名为 `mount.juicefs` 并复制到 `/sbin/` 目录：
 
 ```shell
-$ sudo cp juice/juicefs /sbin/mount.juicefs
+sudo cp juice/juicefs /sbin/mount.juicefs
 ```
 
 编辑 `/etc/fstab` 配置文件，新增一条记录：

@@ -1,0 +1,73 @@
+name: "filebench"
+
+on:
+  push:
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+  schedule:
+    - cron:  '30 20 * * *'
+  workflow_dispatch:
+
+
+jobs:
+  filebench_varmail:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: Varmail
+        uses: ./.github/actions/filebench/
+        with:
+          workload: varmail
+
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+
+  filebench_webserver:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: Webserver
+        uses: ./.github/actions/filebench/
+        with:
+          workload: webserver
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
+
+
+  filebench_videoserver:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: Videoserver
+        uses: ./.github/actions/filebench/
+        with:
+          workload: videoserver
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1

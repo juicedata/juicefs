@@ -1,0 +1,148 @@
+name: "unittests"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-*'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'main'
+      - 'release-*'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/**'
+  workflow_dispatch:
+
+jobs:
+  unittests:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      MINIO_TEST_BUCKET: 127.0.0.1:9000/testbucket
+      MINIO_ACCESS_KEY: testUser
+      MINIO_SECRET_KEY: testUserPassword
+      DISPLAY_PROGRESSBAR: false
+      HDFS_ADDR: localhost:8020
+      SFTP_HOST: localhost:2222:/upload/
+      SFTP_USER: root
+      SFTP_PASS: password
+      WEBDAV_TEST_BUCKET: 127.0.0.1:9007
+      TIKV_ADDR: 127.0.0.1
+      REDIS_ADDR: redis://127.0.0.1:6379/13
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.18.x'
+
+      - name: Set up Docker
+        uses: docker-practice/actions-setup-docker@master
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 100
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go
+          restore-keys: |
+            ${{ runner.os }}-go
+
+      - name: Install Packages
+        run: |
+          sudo apt install -y g++-multilib
+          sudo apt install -y redis-server
+          sudo apt install -y libacl1-dev
+          sudo apt install -y attr
+          sudo mkdir -p /home/travis/.m2/
+
+
+      - name: Download Zip
+        run: |
+          wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
+          wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
+          wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
+          wget -O /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz  https://github.com/etcd-io/etcd/releases/download/v3.5.2/etcd-v3.5.2-linux-amd64.tar.gz
+          wget -O /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+          wget -O /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
+          unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2/
+          tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2/
+          cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
+          tar -zxf /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz -C /home/travis/.m2/
+
+
+      - name: Prepare Database
+        run: |
+          sudo service mysql start
+          sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
+          sudo service postgresql start
+          sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?host.*all.*all.*32.*scram-sha-256?host    all             all             127.0.0.1/32            trust?" /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?host.*all.*all.*128.*scram-sha-256?host    all             all             ::1/128                 trust?" /etc/postgresql/*/main/pg_hba.conf
+          cat /etc/postgresql/*/main/pg_hba.conf
+          sudo service postgresql restart
+          psql -c "create user runner superuser;" -U postgres
+          sudo service postgresql restart
+          sudo mysql -e "create database dev;"
+          psql -c 'create database test;' -U postgres
+          bash /home/travis/.m2/install.sh
+          source /home/runner/.bash_profile
+          tiup -v
+          nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
+          sudo dpkg -i /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb
+          docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
+          go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
+          nohup /home/travis/.m2/rclone-v1.57.0-linux-amd64/rclone serve webdav local --addr 127.0.0.1:9007 >> rclone.log 2>&1 &
+          #sudo chmod 777 /usr/share/apache*/conf/settings.xml
+          #sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/share/apache*/conf/settings.xml
+          docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
+          make
+          sudo make -C fstests setup
+          chmod +x travis-setup-hdfs.sh
+          sudo lsof -i :8020 || true
+          ./travis-setup-hdfs.sh
+          for i in {2222,3306,5432,8020,9000,9007,4500} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+          sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
+
+
+      - name: Unit Test
+        timeout-minutes: 30
+        run: |
+          sudo chmod 777 /var/jfsCache
+          make test
+          cat cov1.out >> coverage.txt
+          cat cov2.out >> coverage.txt
+          make test.fdb
+          cat cov3.out >> coverage.txt
+          sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
+          sudo ./juicefs gc localhost
+          sudo ./juicefs fsck localhost
+
+
+      - name: Code Coverage
+        uses: codecov/codecov-action@v1
+        with:
+          files: ./coverage.txt
+
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1

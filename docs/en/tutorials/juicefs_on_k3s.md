@@ -25,7 +25,7 @@ The IP address of the server node is: `192.168.1.35`
 You can use the official script provided by K3s to deploy the server node on a regular Linux distribution.
 
 ```shell
-$ curl -sfL https://get.k3s.io | sh -
+curl -sfL https://get.k3s.io | sh -
 ```
 
 After the deployment is successful, the K3s service will automatically start, and kubectl and other tools will also be installed at the same time.
@@ -41,8 +41,7 @@ k3s-s1   Ready    control-plane,master   28h   v1.21.4+k3s1
 Get the `node-token`:
 
 ```shell
-$ sudo -u root cat /var/lib/rancher/k3s/server/node-token
-K1041f7c4fabcdefghijklmnopqrste2ec338b7300674f::server:3d0ab12800000000000000006328bbd80
+sudo -u root cat /var/lib/rancher/k3s/server/node-token
 ```
 
 ### K3s worker node
@@ -71,7 +70,7 @@ It is consistent with the method of [Use JuiceFS on Kubernetes](../deployment/ho
 Here we use kubectl as an example. Execute the following command to install the CSI Driver:
 
 ```shell
-$ kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
+kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
 ```
 
 ### Create Storage Class
@@ -112,7 +111,7 @@ The `stringData` part of the configuration file is used to set the information r
 Execute the command to deploy the storage class:
 
 ```shell
-$ kubectl apply -f juicefs-sc.yaml
+kubectl apply -f juicefs-sc.yaml
 ```
 
 View storage class status:
@@ -130,7 +129,7 @@ juicefs-sc             csi.juicefs.com         Retain          Immediate        
 
 Next, deploy an Nginx Pod using a persistent storage declared by the JuiceFS storage class.
 
-### Depolyment
+### Deployment
 
 Create a configuration file, for example: `depolyment.yaml`
 
@@ -180,7 +179,7 @@ spec:
 Depoly it:
 
 ```
-$ sudo kubectl apply -f depolyment.yaml
+sudo kubectl apply -f depolyment.yaml
 ```
 
 ### Service
@@ -203,7 +202,7 @@ spec:
 Depoly it:
 
 ```shell
-$ sudo kubectl apply -f service.yaml
+sudo kubectl apply -f service.yaml
 ```
 
 ### Ingress
@@ -233,7 +232,7 @@ spec:
 Depoly it:
 
 ```shell
-$ sudo kubectl apply -f ingress.yaml
+sudo kubectl apply -f ingress.yaml
 ```
 
 ### Visit

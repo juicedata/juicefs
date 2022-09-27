@@ -1,12 +1,19 @@
 name: "load-test"
 on:
   schedule:
-    - cron:  '0 3 * * *'
+    - cron:  '0 16 * * *'
   workflow_dispatch:
 
 jobs:
-  load-to-pg:
+  load:
+    strategy:
+      fail-fast: false
+      matrix:
+        # TODO : add fdb later
+        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badgerdb']
+        # meta: ['badgerdb']
     runs-on: ubuntu-latest
+
     services:
       postgres:
         image: postgres
@@ -19,163 +26,142 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+
     steps:
-      - uses: actions/checkout@v3
       - name: Checkout
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
-      - name: download data
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.18.x'
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go
+          restore-keys: |
+            ${{ runner.os }}-go
+
+      - name: Build linux target
         run: |
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "build juicefs.fdb"
+            wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+            make juicefs.fdb
+            mv juicefs.fdb juicefs
+          else
+            echo "build juicefs"
+            make juicefs 
+          fi
+        shell: bash
+
+      - name: Prepare meta db
+        run: | 
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+
+      - name: Load and dump with small directory
+        timeout-minutes: 30
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+          echo meta_url is: $meta_url
+          mount_point=/tmp/juicefs-load-test
           wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
           gzip -dk  2M_emtpy_files.dump.gz
-      - name: Load
-        uses: ./.github/actions/load
+          load_file=2M_emtpy_files.dump
+          echo `date`, start load
+          ./juicefs load $meta_url $load_file
+          echo `date`, finish load
+          echo `date`, start dump
+          ./juicefs dump $meta_url dump.json
+          echo `date`, finish dump
+          sudo mkdir /var/jfs
+          sudo chmod 777 /var/jfs
+          ./juicefs mount $meta_url $mount_point -d
+          inode=$(df -i $mount_point | grep JuiceFS |awk -F" " '{print $3}')
+          if [ "$inode" -ne "2233313" ]; then 
+            echo "<FATAL>: inode error: $inode"
+            exit 1
+          fi
+
+      - name: Clear
+        run: | 
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          mp=/tmp/juicefs-load-test
+          volume=jfs
+          test -d $mp && ./juicefs umount -f $mp
+          ./juicefs status $meta_url && UUID=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || echo "meta not exist"
+          if [ -n "$UUID" ];then
+            ./juicefs destroy --force $meta_url $UUID
+          fi
+          test -d /var/jfs/$volume && rm -rf /var/jfs/$volume || true
+        shell: bash
+
+      - name: Load and dump with big directory
+        timeout-minutes: 30
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+          echo meta_url is: $meta_url
+          mount_point=/tmp/juicefs-load-test
+          wget -q https://s.juicefs.com/static/bench/1M_files_in_one_dir.dump.gz
+          gzip -dk  1M_files_in_one_dir.dump.gz
+          load_file=1M_files_in_one_dir.dump
+          echo `date`, start load
+          ./juicefs load $meta_url $load_file
+          echo `date`, finish load
+          echo `date`, start dump
+          ./juicefs dump $meta_url dump.json
+          echo `date`, finish dump
+          sudo chmod 777 /var/jfs
+          ./juicefs mount $meta_url $mount_point -d
+          df -i $mount_point
+          inode=$(df -i $mount_point | grep JuiceFS |awk -F" " '{print $3}')
+          echo "inode: $inode"
+          if [ "$inode" -ne "1000003" ]; then 
+            echo "<FATAL>: inode error: $inode"
+            exit 1
+          fi
+
+      - name: List big directory
+        timeout-minutes: 30
+        run: | 
+          mount_point=/tmp/juicefs-load-test
+          file_count=$(ls -l $mount_point/test/test-dir.0-0/mdtest_tree.0/ | wc -l)
+          echo "file_count: $file_count"
+          if [ "$file_count" -ne "1000001" ]; then 
+            echo "<FATAL>: file_count error: $file_count"
+            exit 1
+          fi
+
+      - name: log
+        if: ${{ always() }}
+        shell: bash
+        run: | 
+          if [ -f ~/.juicefs/juicefs.log ]; then
+            tail -300 ~/.juicefs/juicefs.log
+            grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          fi
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
         with:
-          meta_url: "postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable" 
-          load_file: "2M_emtpy_files.dump"            
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
           
-  load-to-mysql:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: download data
-        run: |
-          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
-          gzip -dk  2M_emtpy_files.dump.gz
-      - name: start mysql
-        run: |
-          # sudo chmod 777 /var
-          sudo /etc/init.d/mysql start
-      - name: Load
-        uses: ./.github/actions/load
-        with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/sync_test" 
-          load_file: "2M_emtpy_files.dump"      
-            
-  load-to-redis:
-    runs-on: ubuntu-latest
-    services:
-      redis:
-        # Docker Hub image
-        image: redis
-        # Set health checks to wait until redis has started
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          # Maps port 6379 on service container to the host
-          - 6379:6379
-    steps:
-      - uses: actions/checkout@v3
-      - name: download data
-        run: |
-          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
-          gzip -dk  2M_emtpy_files.dump.gz
-      - name: Load
-        uses: ./.github/actions/load
-        with:
-          meta_url: redis://127.0.0.1:6379/1 
-          load_file: "2M_emtpy_files.dump"      
-
-  load-to-sqlite3:
-    runs-on: ubuntu-latest   
-    steps:
-      - uses: actions/checkout@v3
-      - name: download data
-        run: |
-          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
-          gzip -dk  2M_emtpy_files.dump.gz
-      - name: Load
-        uses: ./.github/actions/load
-        with:
-          meta_url: sqlite3://sync-test.db
-          load_file: "2M_emtpy_files.dump"      
-    
-  load-to-tikv:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: download data
-        run: |
-          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
-          gzip -dk  2M_emtpy_files.dump.gz
-      - name: Install TiKV
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-          source /home/runner/.bash_profile
-          source /home/runner/.profile
-          tiup playground --mode tikv-slim &
-          sleep 5
-      - name: Test
-        uses: ./.github/actions/load
-        with:
-          meta_url: "tikv://127.0.0.1:2379/load_test"
-          load_file: "2M_emtpy_files.dump"
       - name: Setup upterm session
         if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
-
-  load-to-badgerdb:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: download data
-        run: |
-          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
-          gzip -dk  2M_emtpy_files.dump.gz
-      - run: sudo go get github.com/dgraph-io/badger/v3
-      - name: Test
-        uses: ./.github/actions/load
-        with:
-          meta_url: "badger://load_test"
-          load_file: "2M_emtpy_files.dump"    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
-
-  load-to-mariadb:
-    runs-on: ubuntu-latest          
-    steps:
-      - uses: actions/checkout@v3
-      - name: download data
-        run: |
-          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
-          gzip -dk  2M_emtpy_files.dump.gz
-      - name: install 
-        run: | 
-          docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
-      - name: Test
-        uses: ./.github/actions/load
-        with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/load_test"
-          load_file: "2M_emtpy_files.dump"   
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
-
-  load-to-tidb:
-    runs-on: ubuntu-latest          
-    steps:
-      - uses: actions/checkout@v3
-      - name: download data
-        run: |
-          wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
-          gzip -dk  2M_emtpy_files.dump.gz
-      - name: install 
-        run: | 
-          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-          source /home/runner/.profile
-          tiup playground 5.4.0 &
-          sleep 120
-          mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
-      - name: Test
-        uses: ./.github/actions/load
-        with:
-          meta_url: "mysql://root:@\\(127.0.0.1:4000\\)/load_test"
-          load_file: "2M_emtpy_files.dump"   
-      - name: Setup upterm session
-        if: ${{ failure() }}
+        timeout-minutes: 1
         uses: lhotari/action-upterm@v1

@@ -737,6 +737,9 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 			break
 		}
 		if i > 0 {
+			if (name == "." || name == "..") && attr.Typ != meta.TypeDirectory {
+				return nil, syscall.ENOTDIR
+			}
 			if err := fs.m.Access(ctx, parent, mMaskX, attr); err != 0 {
 				return nil, err
 			}

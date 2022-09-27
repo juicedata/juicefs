@@ -31,7 +31,11 @@ Result: PASS
 - 支持 fallocate 以及空洞
 - 支持扩展属性
 - 支持 BSD 锁（flock）
-- 支持 POSIX 记录锁（fcntl）
+- 支持传统 POSIX 记录锁（fcntl）
+
+:::note 注意
+POSIX 记录锁分为**传统锁**和 **OFD 锁**（Open file description locks）两类，它们的加锁操作命令分别为 `F_SETLK` 和 `F_OFD_SETLK`。受限于 FUSE 内核模块的实现，目前 JuiceFS 只支持传统类型的记录锁。更多细节可参见：https://man7.org/linux/man-pages/man2/fcntl.2.html。
+:::
 
 ## LTP
 
@@ -39,10 +43,10 @@ Result: PASS
 
 ### 测试环境
 
-- 测试主机: Amazon EC2: c5d.xlarge (4C 8G)
-- 操作系统: Ubuntu 20.04.1 LTS (Kernel 5.4.0-1029-aws)
-- 对象存储: Amazon S3
-- JuiceFS 版本: 0.17-dev (2021-09-16 292f2b65)
+- 测试主机：Amazon EC2: c5d.xlarge (4C 8G)
+- 操作系统：Ubuntu 20.04.1 LTS (Kernel 5.4.0-1029-aws)
+- 对象存储：Amazon S3
+- JuiceFS 版本：0.17-dev (2021-09-16 292f2b65)
 
 ### 测试步骤
 
@@ -50,23 +54,31 @@ Result: PASS
 2. 解压后编译安装：
 
 ```bash
-$ tar -jvxf ltp-full-20210524.tar.bz2
-$ cd ltp-full-20210524
-$ ./configure
-$ make all
-$ make install
+tar -jvxf ltp-full-20210524.tar.bz2
+```
+```bash
+cd ltp-full-20210524
+```
+```bash
+./configure
+```
+```bash
+make all
+```
+```bash
+make install
 ```
 
 3. 测试工具安装在 `/opt/ltp`，需先切换到此目录：
 
 ```bash
-$ cd /opt/ltp
+cd /opt/ltp
 ```
 
 测试配置文件在 `runtest` 目录下；为方便测试，删去了 `fs` 和 `syscalls` 中部分压力测试和与文件系统不想关的条目（参见[附录](#附录)，修改后保存到文件 `fs-jfs` 和 `syscalls-jfs`），然后执行命令：
 
 ```bash
-$ ./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
+./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
 ```
 
 ### 测试结果
@@ -95,7 +107,7 @@ Machine Architecture: x86_64
 其中跳过和失败的测试例原因如下：
 
 - fcntl17，fcntl17_64：在 POSIX locks 加锁时需要文件系统自动检测死锁，目前 JuiceFS 尚不支持
-- getxattr05：需要设置 ACL，目前 JuiceFS 尚不支持
+- getxattr05：需要设置文件扩展权限 ACL，目前 JuiceFS 尚不支持
 - ioctl_loop05，ioctl_ns07，setxattr03：需要调用 `ioctl`，目前 JuiceFS 尚不支持
 - lseek11：需要 `lseek` 处理 SEEK_DATA 和 SEEK_HOLE 标记位，目前 JuiceFS 用的是内核通用实现，尚不支持这两个 flags
 - open14，openat03：需要 `open` 处理 O_TMPFILE 标记位，由于 FUSE 不支持，JuiceFS 也无法实现

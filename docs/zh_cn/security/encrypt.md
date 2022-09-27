@@ -1,3 +1,6 @@
+---
+sidebar_position: 1
+---
 # 数据加密
 
 在数据安全方面，JuiceFS 提供两个方面的数据加密保护：
@@ -25,7 +28,7 @@ juicefs format --storage s3
 
 ### 通过 TLS/SSL 加密连接到数据库
 
-对于所有[支持的元数据引擎](../reference/how_to_setup_metadata_engine.md)，只要数据库本身支持并配置了 TLS/SSL 等加密链接，JuiceFS 即可通过其加密通道进行连接。例如，配置了 TLS 加密的 Redis 数据库可以使用 `rediss://` 协议头进行链接：
+对于所有[支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)，只要数据库本身支持并配置了 TLS/SSL 等加密链接，JuiceFS 即可通过其加密通道进行连接。例如，配置了 TLS 加密的 Redis 数据库可以使用 `rediss://` 协议头进行链接：
 
 ```shell {3}
 juicefs format --storage s3
@@ -122,7 +125,7 @@ RSA 私钥的安全极其重要，一旦泄露可能导致数据安全风险。�
     export JFS_RSA_PASSPHRASE=the-passwd-for-rsa
     ```
 2. 挂载文件系统
-    ```shell 
+    ```shell
     juicefs mount redis://127.0.0.1:6379/1 /mnt/myjfs
     ```
 

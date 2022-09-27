@@ -1,6 +1,6 @@
 ---
 sidebar_label: Use JuiceFS on Kubernetes
-sidebar_position: 2
+sidebar_position: 3
 slug: /how_to_use_on_kubernetes
 ---
 
@@ -11,7 +11,7 @@ JuiceFS is ideal for use as a storage layer for Kubernetes clusters, and current
 ## JuiceFS CSI Driver
 
 :::tip
-It is recommended to use the JuiceFS CSI Driver for installation and deployment. For more information about the JuiceFS CSI Driver, please visit [project homepage](https://juicefs.com/docs/csi/introduction).
+It is recommended to use the deployment method of the JuiceFS CSI Driver in Kubernetes. For more information about the JuiceFS CSI Driver, please visit [project homepage](https://juicefs.com/docs/csi/introduction).
 :::
 
 [JuiceFS CSI Driver](https://github.com/juicedata/juicefs-csi-driver) follows the [CSI](https://github.com/container-storage-interface/spec/blob/master/spec.md) specification, implements the interface between the container orchestration system and the JuiceFS file system, and supports dynamic configured JuiceFS volumes for use by Pod.
@@ -40,7 +40,11 @@ To install Helm, refer to the [Helm Installation Guide](https://helm.sh/docs/int
 
 1. Prepare a YAML file
 
-   Create a configuration file, for example: `values.yaml`, copy and complete the following configuration information. Among them, the `backend` part is the information related to the JuiceFS file system, you can refer to ["JuiceFS Quick Start Guide"](../getting-started/for_local.md) for more information. If you are using a JuiceFS volume that has been created, you only need to fill in the two items `name` and `metaurl`. The `mountPod` part can specify CPU/memory limits and requests of mount pod for pods using this driver. Unneeded items should be deleted, or its value should be left blank.
+   Create a configuration file, for example: `values.yaml`, copy and complete the following configuration information. Among them, the `backend` part is the information related to the JuiceFS file system, you can refer to ["JuiceFS Quick Start Guide"](../getting-started/README.md) for more information. If you are using a JuiceFS volume that has been created, you only need to fill in the two items `name` and `metaurl`. The `mountPod` part can specify CPU/memory limits and requests of mount pod for pods using this driver. Unneeded items should be deleted, or its value should be left blank.
+
+   :::info
+   Please refer to [documentation](https://github.com/juicedata/charts/blob/main/charts/juicefs-csi-driver/README.md#values) for all configuration items supported by Helm chart of JuiceFS CSI Driver
+   :::
 
    ```yaml title="values.yaml"
    storageClasses:
@@ -54,6 +58,8 @@ To install Helm, refer to the [Helm Installation Guide](https://helm.sh/docs/int
        accessKey: "<access-key>"
        secretKey: "<secret-key>"
        bucket: "<bucket>"
+       # If you need to set the time zone of the JuiceFS Mount Pod, please uncomment the next line, the default is UTC time.
+       # envs: "{TZ: Asia/Shanghai}"
      mountPod:
        resources:
          limits:
@@ -145,35 +151,39 @@ Since Kubernetes will deprecate some old APIs when a new version is released, yo
 
 2. Deploy
 
-   **If the check command returns a non-empty result**, it means that the root directory (`--root-dir`) of the kubelet is not the default (`/var/lib/kubelet`), so you need to update the `kubeletDir` path in the CSI Driver's deployment file and deploy.
+   - **If the check command returns a non-empty result**, it means that the root directory (`--root-dir`) of the kubelet is not the default (`/var/lib/kubelet`), so you need to update the `kubeletDir` path in the CSI Driver's deployment file and deploy.
 
-   ```shell
-   # Kubernetes version >= v1.18
-   curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml | sed 's@/var/lib/kubelet@{{KUBELET_DIR}}@g' | kubectl apply -f -
+     :::note
+     Please replace `{{KUBELET_DIR}}` in the below command with the actual root directory path of kubelet.
+     :::
 
-   # Kubernetes version < v1.18
-   curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s_before_v1_18.yaml | sed 's@/var/lib/kubelet@{{KUBELET_DIR}}@g' | kubectl apply -f -
-   ```
+     ```shell
+     # Kubernetes version >= v1.18
+     curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml | sed 's@/var/lib/kubelet@{{KUBELET_DIR}}@g' | kubectl apply -f -
+     ```
 
-   :::note
-   Please replace `{{KUBELET_DIR}}` in the above command with the actual root directory path of kubelet.
-   :::
+     ```shell
+     # Kubernetes version < v1.18
+     curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s_before_v1_18.yaml | sed 's@/var/lib/kubelet@{{KUBELET_DIR}}@g' | kubectl apply -f -
+     ```
 
-   **If the check command returns an empty result**, you can deploy directly without modifying the configuration:
+   - **If the check command returns an empty result**, you can deploy directly without modifying the configuration:
 
-   ```shell
-   # Kubernetes version >= v1.18
-   kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
+     ```shell
+     # Kubernetes version >= v1.18
+     kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
+     ```
 
-   # Kubernetes version < v1.18
-   kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s_before_v1_18.yaml
-   ```
+     ```shell
+     # Kubernetes version < v1.18
+     kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s_before_v1_18.yaml
+     ```
 
 3. Create storage class
 
    Create a configuration file with reference to the following content, for example: `juicefs-sc.yaml`, fill in the configuration information of the JuiceFS file system in the `stringData` section:
 
-   ```yaml title="juicefs-sc.yaml" {7-13}
+   ```yaml title="juicefs-sc.yaml" {7-15}
    apiVersion: v1
    kind: Secret
    metadata:
@@ -187,6 +197,8 @@ Since Kubernetes will deprecate some old APIs when a new version is released, yo
      bucket: "https://juicefs-test.s3.us-east-1.amazonaws.com"
      access-key: ""
      secret-key: ""
+     # If you need to set the time zone of the JuiceFS Mount Pod, please uncomment the next line, the default is UTC time.
+     # envs: "{TZ: Asia/Shanghai}"
    ---
    apiVersion: storage.k8s.io/v1
    kind: StorageClass

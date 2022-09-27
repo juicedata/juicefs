@@ -1,5 +1,6 @@
 ---
 sidebar_label: 销毁文件系统
+position: 7
 ---
 # 如何销毁文件系统
 

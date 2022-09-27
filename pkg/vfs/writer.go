@@ -69,7 +69,7 @@ func (s *sliceWriter) prepareID(ctx meta.Context, retry bool) {
 	for s.id == 0 {
 		var id uint64
 		f.Unlock()
-		st := f.w.m.NewChunk(ctx, &id)
+		st := f.w.m.NewSlice(ctx, &id)
 		f.Lock()
 		if st != 0 && st != syscall.EIO {
 			s.err = st
@@ -197,7 +197,7 @@ func (c *chunkWriter) commitThread() {
 		f.Unlock()
 
 		if err == 0 {
-			var ss = meta.Slice{Chunkid: s.id, Size: s.length, Off: s.soff, Len: s.slen}
+			var ss = meta.Slice{Id: s.id, Size: s.length, Off: s.soff, Len: s.slen}
 			err = f.w.m.Write(meta.Background, f.inode, c.indx, s.off, ss)
 			f.w.reader.Invalidate(f.inode, uint64(c.indx)*meta.ChunkSize+uint64(s.off), uint64(ss.Len))
 		}
@@ -357,7 +357,7 @@ func (f *fileWriter) flush(ctx meta.Context, writeback bool) syscall.Errno {
 				}
 			}
 		}
-		if f.flushcond.WaitWithTimeout(time.Second*3) && ctx.Canceled() {
+		if f.flushcond.WaitWithTimeout(time.Second*3) && ctx.Canceled() && time.Since(s) > f.w.conf.Chunk.PutTimeout*2 {
 			logger.Warnf("flush %d interrupted after %d", f.inode, time.Since(s))
 			err = syscall.EINTR
 			break
@@ -412,6 +412,7 @@ type dataWriter struct {
 	sync.Mutex
 	m          meta.Meta
 	store      chunk.ChunkStore
+	conf       *Config
 	reader     DataReader
 	blockSize  int
 	bufferSize int64
@@ -424,6 +425,7 @@ func NewDataWriter(conf *Config, m meta.Meta, store chunk.ChunkStore, reader Dat
 		m:          m,
 		store:      store,
 		reader:     reader,
+		conf:       conf,
 		blockSize:  conf.Chunk.BlockSize,
 		bufferSize: int64(conf.Chunk.BufferSize),
 		files:      make(map[Ino]*fileWriter),

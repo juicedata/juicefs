@@ -31,7 +31,11 @@ Besides the features covered by pjdfstest, JuiceFS provides:
 - Fallocate with punch hole support.
 - Extended attributes (xattr).
 - BSD locks (flock).
-- POSIX record locks (fcntl).
+- POSIX traditional record locks (fcntl).
+
+:::note
+POSIX record locks are classified as **traditional locks** ("process-associated") and **OFD locks** (Open file description locks), and their locking operation commands are `F_SETLK` and `F_OFD_SETLK` respectively. Due to the implementation of the FUSE kernel module, JuiceFS currently only supports traditional record locks. More details can be found at: https://man7.org/linux/man-pages/man2/fcntl.2.html.
+:::
 
 ## LTP
 
@@ -56,23 +60,23 @@ JuiceFS passed most of the file system related tests.
 2. Unarchive, compile and install:
 
 ```bash
-$ tar -jvxf ltp-full-20210524.tar.bz2
-$ cd ltp-full-20210524
-$ ./configure
-$ make all
-$ make install
+tar -jvxf ltp-full-20210524.tar.bz2
+cd ltp-full-20210524
+./configure
+make all
+make install
 ```
 
 3. Change directory to `/opt/ltp` since test tools are installed here:
 
 ```bash
-$ cd /opt/ltp
+cd /opt/ltp
 ```
 
 The test definition files are located under `runtest`. To speed up testing, we delete some pressure cases and unrelated cases in `fs` and `syscalls` (refer to [Appendix](#Appendix), modified files are saved as `fs-jfs` and `syscalls-jfs`), then execute:
 
 ```bash
-$ ./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
+./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
 ```
 
 ### Test Result
@@ -101,7 +105,7 @@ Machine Architecture: x86_64
 Here are causes of the skipped and failed tests:
 
 - fcntl17, fcntl17_64: it requires file system to automatically detect deadlock when trying to add POSIX locks. JuiceFS doesn't support it yet.
-- getxattr05: need ACL, which is not supported yet.
+- getxattr05: need extended ACL, which is not supported yet.
 - ioctl_loop05, ioctl_ns07, setxattr03: need `ioctl`, which is not supported yet.
 - lseek11: require `lseek` to handle SEEK_DATA and SEEK_HOLE flags. JuiceFS however uses kernel general function, which doesn't support these two flags.
 - open14, openat03: need `open` to handle O_TMPFILE flag. JuiceFS can do nothing with it since it's not supported by FUSE.

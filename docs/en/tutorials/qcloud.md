@@ -50,8 +50,6 @@ If you must access the database through the public network, you can enhance the 
 | **Reliability** |                           Low                           |                            Medium                            |                             Low                              |
 |  **Scenario**   | Massive data, distributed high-frequency read and write | Massive data, distributed low and medium frequency read and write | Low frequency read and write in single machine for small amount of data |
 
-> **Note**: If you use [JuiceFS Hosted Service](https://juicefs.com/docs/en/hosted_service.html), you do not need to prepare a database.
-
 **This article uses the TencentDB for Redis, which is accessed through a VPC private network interacting with the CVM:**
 
 | Redis version               | 5.0 community edition                      |
@@ -83,23 +81,23 @@ Tencent Cloud COS needs to be accessed through API, you need to prepare the acce
 Here we are using Ubuntu Server 20.04 64-bit system, and the latest version of the client can be downloaded by running the following commands. You can also choose another version by visiting the [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) page.
 
 ```shell
-$ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
 ```
 
 ```shell
-$ wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
+wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 ```
 
 After downloading, unzip the program into the `juice` folder.
 
 ```shell
-$ mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
+mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
 ```
 
 Install the JuiceFS client to `/usr/local/bin` :
 
 ```shell
-$ sudo install juice/juicefs /usr/local/bin
+sudo install juice/juicefs /usr/local/bin
 ```
 
 Execute the command and see the help message `juicefs` returned, which means the client installation is successful.
@@ -190,7 +188,7 @@ When the file system is created, the information related to the object storage i
 Use the `mount` subcommand to mount the file system to the `/mnt/jfs` directory.
 
 ```shell
-$ sudo juicefs mount -d redis://:<your-redis-password>@192.168.5.5:6379/1 /mnt/jfs
+sudo juicefs mount -d redis://:<your-redis-password>@192.168.5.5:6379/1 /mnt/jfs
 ```
 
 > **Note**: When mounting the file system, only the Redis database address is required, not the file system name. The default cache path is `/var/jfsCache`, please make sure the current user has enough read/write permissions.
@@ -268,7 +266,7 @@ $ juicefs status redis://:<your-redis-password>@192.168.5.5:6379/1
 The file system can be unmounted using the `umount` command provided by the JuiceFS client, e.g.
 
 ```shell
-$ sudo juicefs umount /mnt/jfs
+sudo juicefs umount /mnt/jfs
 ```
 
 > **Note**: Forced unmount of the file system in use may result in data corruption or loss, so please be sure to proceed with caution.
@@ -280,7 +278,7 @@ If you don't want to manually remount JuiceFS storage on reboot, you can set up 
 First, you need to rename the `juicefs` client to `mount.juicefs` and copy it to the `/sbin/` directory.
 
 ```shell
-$ sudo cp juice/juicefs /sbin/mount.juicefs
+sudo cp juice/juicefs /sbin/mount.juicefs
 ```
 
 Edit the `/etc/fstab` configuration file and add a new record.

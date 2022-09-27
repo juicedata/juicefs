@@ -36,7 +36,7 @@ Amazon S3
 
 ### 元数据节点
 
-- Amazon c5d.xlarge：4 vCPUs，8 GiB 内存，最高 10 Gigabit 网络, 100 GB SSD（为元数据引擎提供本地存储）
+- Amazon c5d.xlarge：4 vCPUs，8 GiB 内存，最高 10 Gigabit 网络，100 GB SSD（为元数据引擎提供本地存储）
 - Ubuntu 20.04.1 LTS
 - SSD 数据盘被格式化为 ext4 文件系统并挂载到 `/data` 目录
 
@@ -81,7 +81,7 @@ Amazon S3
 JuiceFS 提供了一个基础的性能测试命令：
 
 ```bash
-./juicefs bench /mnt/jfs -p 4
+juicefs bench /mnt/jfs -p 4
 ```
 
 ### mdtest
@@ -97,14 +97,15 @@ client2 slots=4
 client3 slots=4
 ```
 
-测试命令:
+测试命令：
 
-```bash
-# meta only
-$ mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-by slot /root/mdtest -b 3 -z 1 -I 100 -u -d /mnt/jfs
-
-# 12000 * 100KiB files
-$ mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-by slot /root/mdtest -F -w 102400 -I 1000 -z 0 -u -d /mnt/jfs
+meta only
+```shell
+mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-by slot /root/mdtest -b 3 -z 1 -I 100 -u -d /mnt/jfs
+```
+12000 * 100KiB files
+```shell
+mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-by slot /root/mdtest -F -w 102400 -I 1000 -z 0 -u -d /mnt/jfs
 ```
 
 ### fio

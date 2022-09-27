@@ -1471,7 +1471,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(go_goroutines) by (instance,mp)",
+          "expr": "sum(juicefs_go_goroutines) by (instance,mp)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1792,7 +1792,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Block Cache Hit Rate",
+      "title": "Block Cache Hit Ratio",
       "tooltip": {
         "shared": false,
         "sort": 0,

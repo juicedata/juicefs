@@ -1,6 +1,6 @@
 ---
 sidebar_label: Kubernetes 使用 JuiceFS
-sidebar_position: 2
+sidebar_position: 3
 slug: /how_to_use_on_kubernetes
 ---
 
@@ -11,7 +11,7 @@ JuiceFS 非常适合用作 Kubernetes 集群的存储层，目前有两种常见
 ## JuiceFS CSI 驱动
 
 :::tip 提示
-推荐使用 JuiceFS CSI 驱动的方式进行安装和部署，了解更多关于 JuiceFS CSI 驱动的信息请访问[项目主页](https://juicefs.com/docs/zh/csi/introduction)。
+推荐在 Kubernetes 中使用 JuiceFS CSI 驱动的部署方式，了解更多关于 JuiceFS CSI 驱动的信息请访问[项目主页](https://juicefs.com/docs/zh/csi/introduction)。
 :::
 
 [JuiceFS CSI 驱动](https://github.com/juicedata/juicefs-csi-driver)遵循 [CSI](https://github.com/container-storage-interface/spec/blob/master/spec.md) 规范，实现了容器编排系统与 JuiceFS 文件系统之间的接口，支持动态配置 JuiceFS 卷提供给 Pod 使用。
@@ -40,7 +40,11 @@ Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把
 
 1. 准备配置文件
 
-   创建一个配置文件，例如：`values.yaml`，复制并完善下列配置信息。其中，`backend` 部分是 JuiceFS 文件系统相关的信息，你可以参照[「JuiceFS 快速上手指南」](../getting-started/for_local.md)了解相关内容。如果使用的是已经提前创建好的 JuiceFS 卷，则只需填写 `name` 和 `metaurl` 这两项即可。`mountPod` 部分可以对使用此驱动的 Pod 设置 CPU 和内存的资源配置。不需要的项可以删除，或者将它的值留空。
+   创建一个配置文件，例如：`values.yaml`，复制并完善下列配置信息。其中，`backend` 部分是 JuiceFS 文件系统相关的信息，你可以参照[「JuiceFS 快速上手指南」](../getting-started/README.md)了解相关内容。如果使用的是已经提前创建好的 JuiceFS 卷，则只需填写 `name` 和 `metaurl` 这两项即可。`mountPod` 部分可以对使用此驱动的 Pod 设置 CPU 和内存的资源配置。不需要的项可以删除，或者将它的值留空。
+
+   :::info 说明
+   请参考[文档](https://github.com/juicedata/charts/blob/main/charts/juicefs-csi-driver/README.md#values)了解 JuiceFS CSI 驱动的 Helm chart 支持的所有配置项
+   :::
 
    ```yaml title="values.yaml"
    storageClasses:
@@ -54,6 +58,8 @@ Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把
        accessKey: "<access-key>"
        secretKey: "<secret-key>"
        bucket: "<bucket>"
+       # 如果需要设置 JuiceFS Mount Pod 的时区请将下一行的注释符号删除，默认为 UTC 时间。
+       # envs: "{TZ: Asia/Shanghai}"
      mountPod:
        resources:
          limits:
@@ -84,7 +90,11 @@ Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把
 
    ```sh
    helm repo add juicefs-csi-driver https://juicedata.github.io/charts/
+   ```
+   ```sh
    helm repo update
+   ```
+   ```sh
    helm install juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver -n kube-system -f ./values.yaml
    ```
 
@@ -93,7 +103,9 @@ Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把
    - **检查 Pods**：部署过程会启动一个名为 `juicefs-csi-controller` 的 `StatefulSet` 及一个 replica，以及一个名为 `juicefs-csi-node` 的 `DaemonSet`。执行命令 `kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver` 会看到有 `n+1` 个（`n` 指 Kubernetes 的 Node 数量）pod 在运行，例如：
 
      ```sh
-     $ kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver
+     kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver
+     ```
+     ```output
      NAME                       READY   STATUS    RESTARTS   AGE
      juicefs-csi-controller-0   3/3     Running   0          22m
      juicefs-csi-node-v9tzb     3/3     Running   0          14m
@@ -145,35 +157,39 @@ Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把
 
 2. 部署
 
-   **如果上一步检查命令返回的结果不为空**，则代表 kubelet 的根目录（`--root-dir`）不是默认值（`/var/lib/kubelet`），因此需要在 CSI 驱动的部署文件中更新 `kubeletDir` 路径并部署：
+   - **如果上一步检查命令返回的结果不为空**，则代表 kubelet 的根目录（`--root-dir`）不是默认值（`/var/lib/kubelet`），因此需要在 CSI 驱动的部署文件中更新 `kubeletDir` 路径并部署：
 
-   ```shell
-   # Kubernetes 版本 >= v1.18
-   curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml | sed 's@/var/lib/kubelet@{{KUBELET_DIR}}@g' | kubectl apply -f -
+     :::note 注意
+     请将下述命令中的 `{{KUBELET_DIR}}` 替换成 kubelet 当前的根目录路径。
+     :::
 
-   # Kubernetes 版本 < v1.18
-   curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s_before_v1_18.yaml | sed 's@/var/lib/kubelet@{{KUBELET_DIR}}@g' | kubectl apply -f -
-   ```
+     ```shell
+     # Kubernetes 版本 >= v1.18
+     curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml | sed 's@/var/lib/kubelet@{{KUBELET_DIR}}@g' | kubectl apply -f -
+     ```
 
-   :::note 注意
-   请将上述命令中 `{{KUBELET_DIR}}` 替换成 kubelet 当前的根目录路径。
-   :::
+     ```shell
+     # Kubernetes 版本 < v1.18
+     curl -sSL https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s_before_v1_18.yaml | sed 's@/var/lib/kubelet@{{KUBELET_DIR}}@g' | kubectl apply -f -
+     ```
 
-   **如果前面检查命令返回的结果为空**，无需修改配置，可直接部署：
+   - **如果前面检查命令返回的结果为空**，无需修改配置，可直接部署：
 
-   ```shell
-   # Kubernetes 版本 >= v1.18
-   kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
+     ```shell
+     # Kubernetes 版本 >= v1.18
+     kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
+     ```
 
-   # Kubernetes 版本 < v1.18
-   kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s_before_v1_18.yaml
-   ```
+     ```shell
+     # Kubernetes 版本 < v1.18
+     kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s_before_v1_18.yaml
+     ```
 
 3. 创建存储类
 
    参考以下内容创建一个配置文件，例如：`juicefs-sc.yaml`，在 `stringData` 部分填写 JuiceFS 文件系统的配置信息：
 
-   ```yaml title="juicefs-sc.yaml" {7-13}
+   ```yaml title="juicefs-sc.yaml" {7-15}
    apiVersion: v1
    kind: Secret
    metadata:
@@ -187,6 +203,8 @@ Helm 是 Kubernetes 的包管理器，Chart 是 Helm 管理的包。你可以把
      bucket: "https://juicefs-test.s3.us-east-1.amazonaws.com"
      access-key: ""
      secret-key: ""
+     # 如果需要设置 JuiceFS Mount Pod 的时区请将下一行的注释符号删除，默认为 UTC 时间。
+     # envs: "{TZ: Asia/Shanghai}"
    ---
    apiVersion: storage.k8s.io/v1
    kind: StorageClass
@@ -297,7 +315,9 @@ kubectl apply -f ./development.yaml
 部署成功以后，查看 pods 状态：
 
 ```shell
-$ kubectl get pods
+kubectl get pods
+```
+```output
 NAME                         READY   STATUS    RESTARTS   AGE
 nginx-run-7d6fb7d6df-cfsvp   1/1     Running   0          21m
 ```
@@ -305,7 +325,9 @@ nginx-run-7d6fb7d6df-cfsvp   1/1     Running   0          21m
 可以简单地通过 `kubectl exec` 命令查看容器中的文件系统挂载情况：
 
 ```shell
-$ kubectl exec nginx-run-7d6fb7d6df-cfsvp -- df -Th
+kubectl exec nginx-run-7d6fb7d6df-cfsvp -- df -Th
+```
+```output
 Filesystem     Type          Size  Used Avail Use% Mounted on
 overlay        overlay        40G  7.0G   34G  18% /
 tmpfs          tmpfs          64M     0   64M   0% /dev
@@ -319,7 +341,9 @@ JuiceFS:jfs    fuse.juicefs  1.0P  180M  1.0P   1% /config
 像上面这样通过 PVC 动态创建 PV 时，JuiceFS 会在文件系统根目录创建与 PV 同名的目录并挂载到容器中。执行下列命令，可以查看集群中所有 PV：
 
 ```shell
-$ kubectl get pv -A
+kubectl get pv -A
+```
+```output
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM             STORAGECLASS   REASON   AGE
 pvc-b670c8a1-2962-497c-afa2-33bc8b8bb05d   10Pi       RWX            Retain           Bound    default/web-pvc   juicefs-sc              34m
 ```
@@ -357,7 +381,9 @@ helm upgrade juicefs-csi-driver juicefs-csi-driver/juicefs-csi-driver --install 
 查看集群中存储类的情况：
 
 ```shell
-$ kubectl get sc
+kubectl get sc
+```
+```shell
 NAME                 PROVISIONER                RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
 juicefs-sc           csi.juicefs.com            Retain          Immediate           false                  88m
 juicefs-sc2          csi.juicefs.com            Retain          Immediate           false                  13m

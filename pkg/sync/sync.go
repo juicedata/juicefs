@@ -327,6 +327,42 @@ func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, erro
 }
 
 func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
+	if size > maxBlock && !strings.HasPrefix(src.String(), "file://") && !strings.HasPrefix(src.String(), "hdfs://") {
+		var err error
+		var in io.Reader
+		downer := newParallelDownloader(src, key, size, 10<<20, concurrent)
+		defer downer.Close()
+		if strings.HasPrefix(dst.String(), "file://") || strings.HasPrefix(dst.String(), "hdfs://") {
+			in = downer
+		} else {
+			var f *os.File
+			// download the object into disk
+			if f, err = ioutil.TempFile("", "rep"); err != nil {
+				logger.Warnf("create temp file: %s", err)
+				goto SINGLE
+			}
+			_ = os.Remove(f.Name()) // will be deleted after Close()
+			defer f.Close()
+			buf := bufPool.Get().(*[]byte)
+			defer bufPool.Put(buf)
+			if _, err = io.CopyBuffer(struct{ io.Writer }{f}, downer, *buf); err == nil {
+				_, err = f.Seek(0, 0)
+				in = f
+			}
+		}
+		if err == nil {
+			err = dst.Put(key, in)
+		}
+		if err != nil {
+			if _, e := src.Head(key); os.IsNotExist(e) {
+				logger.Debugf("Head src %s: %s", key, err)
+				copied.IncrInt64(-1)
+				err = nil
+			}
+		}
+		return err
+	}
+SINGLE:
 	if limiter != nil {
 		limiter.Wait(size)
 	}
@@ -344,39 +380,17 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 			if _, e := src.Head(key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
 				copied.IncrInt64(-1)
-				copiedBytes.IncrInt64(size * (-1))
-				return nil
+				err = nil
 			}
 			return err
 		}
 	}
-
 	defer in.Close()
 
-	if size <= maxBlock ||
-		strings.HasPrefix(src.String(), "file://") ||
-		strings.HasPrefix(dst.String(), "file://") {
-		return dst.Put(key, in)
-	} else { // obj.Size > maxBlock, download the object into disk first
-		f, err := ioutil.TempFile("", "rep")
-		if err != nil {
-			return err
-		}
-		_ = os.Remove(f.Name()) // will be deleted after Close()
-		defer f.Close()
-
-		// in is not *os.File, use bufPool
-		buf := bufPool.Get().(*[]byte)
-		defer bufPool.Put(buf)
-		if _, err = io.CopyBuffer(struct{ io.Writer }{f}, in, *buf); err != nil {
-			return err
-		}
-		// upload
-		if _, err = f.Seek(0, 0); err != nil {
-			return err
-		}
-		return dst.Put(key, f)
+	if err = dst.Put(key, in); err == nil {
+		copiedBytes.IncrInt64(size)
 	}
+	return err
 }
 
 func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
@@ -455,23 +469,18 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 
 func copyData(src, dst object.ObjectStorage, key string, size int64) error {
 	start := time.Now()
-	var multiple bool
 	var err error
 	if size < maxBlock {
 		err = try(3, func() error { return doCopySingle(src, dst, key, size) })
 	} else {
 		var upload *object.MultipartUpload
 		if upload, err = dst.CreateMultipartUpload(key); err == nil {
-			multiple = true
 			err = doCopyMultiple(src, dst, key, size, upload)
 		} else { // fallback
 			err = try(3, func() error { return doCopySingle(src, dst, key, size) })
 		}
 	}
 	if err == nil {
-		if !multiple {
-			copiedBytes.IncrInt64(size)
-		}
 		logger.Debugf("Copied data of %s (%d bytes) in %s", key, size, time.Since(start))
 	} else {
 		logger.Errorf("Failed to copy data of %s in %s: %s", key, time.Since(start), err)
@@ -641,8 +650,10 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, co
 				r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
 			}
 		}
-		srckeys = filter(srckeys, rules)
-		dstkeys = filter(dstkeys, rules)
+		if len(rules) > 0 {
+			srckeys = filter(srckeys, rules)
+			dstkeys = filter(dstkeys, rules)
+		}
 	}
 	go produce(tasks, src, dst, srckeys, dstkeys, config)
 	return nil
@@ -746,9 +757,17 @@ func parseIncludeRules(args []string) (rules []rule) {
 			a = a[1:]
 		}
 		if l-1 > i && (a == "-include" || a == "-exclude") {
+			if _, err := path.Match(args[i+1], "xxxx"); err != nil {
+				logger.Warnf("ignore invalid pattern: %s %s", a, args[i+1])
+				continue
+			}
 			rules = append(rules, rule{pattern: args[i+1], include: a == "-include"})
 		} else if strings.HasPrefix(a, "-include=") || strings.HasPrefix(a, "-exclude=") {
 			if s := strings.Split(a, "="); len(s) == 2 && s[1] != "" {
+				if _, err := path.Match(s[1], "xxxx"); err != nil {
+					logger.Warnf("ignore invalid pattern: %s", a)
+					continue
+				}
 				rules = append(rules, rule{pattern: s[1], include: strings.HasPrefix(a, "-include=")})
 			}
 		}
@@ -805,7 +824,7 @@ func matchKey(rules []rule, key string) bool {
 			suffix := suffixForPattern(prefix+s, rule.pattern)
 			ok, err := path.Match(rule.pattern, suffix)
 			if err != nil {
-				panic(fmt.Sprintf("match %s with %s: %v", rule.pattern, suffix, err))
+				logger.Fatalf("match %s with %s: %v", rule.pattern, suffix, err)
 			}
 			if ok {
 				if rule.include {
@@ -823,8 +842,10 @@ func matchKey(rules []rule, key string) bool {
 func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if strings.HasPrefix(src.String(), "file://") && strings.HasPrefix(dst.String(), "file://") {
 		major, minor := utils.GetKernelVersion()
-		// copy_file_range() system call first appeared in Linux 4.5
-		if major > 4 || major == 4 && minor > 4 {
+		// copy_file_range() system call first appeared in Linux 4.5, and reworked in 5.3
+		// Go requires kernel >= 5.3 to use copy_file_range(), see:
+		// https://github.com/golang/go/blob/go1.17.11/src/internal/poll/copy_file_range_linux.go#L58-L66
+		if major > 5 || (major == 5 && minor >= 3) {
 			d1 := utils.GetDev(src.String()[7:]) // remove prefix "file://"
 			d2 := utils.GetDev(dst.String()[7:])
 			if d1 != -1 && d1 == d2 {

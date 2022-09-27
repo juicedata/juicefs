@@ -590,7 +590,7 @@ func TestInternalFile(t *testing.T) {
 	ctx := NewLogContext(meta.Background)
 	// list internal files
 	fh, _ := v.Opendir(ctx, 1)
-	entries, e := v.Readdir(ctx, 1, 1024, 0, fh, true)
+	entries, _, e := v.Readdir(ctx, 1, 1024, 0, fh, true)
 	if e != 0 {
 		t.Fatalf("readdir 1: %s", e)
 	}

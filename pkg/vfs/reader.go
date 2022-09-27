@@ -171,8 +171,8 @@ func (s *sliceReader) run() {
 	f.Lock()
 	length := f.length
 	f.Unlock()
-	var chunks []meta.Slice
-	err := f.r.m.Read(meta.Background, inode, indx, &chunks)
+	var slices []meta.Slice
+	err := f.r.m.Read(meta.Background, inode, indx, &slices)
 	f.Lock()
 	if s.state != BUSY || f.err != 0 || f.closing {
 		s.done(0, 0)
@@ -204,7 +204,7 @@ func (s *sliceReader) run() {
 	defer p.Release()
 	var n int
 	ctx := context.TODO()
-	n = f.r.Read(ctx, p, chunks, (uint32(s.block.off))%meta.ChunkSize)
+	n = f.r.Read(ctx, p, slices, (uint32(s.block.off))%meta.ChunkSize)
 
 	f.Lock()
 	if s.state != BUSY || f.shouldStop() {
@@ -684,7 +684,7 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 	var readAheadTotal = 256 << 20
 	var readAheadMax = conf.Chunk.BlockSize * 8
 	if conf.Chunk.BufferSize > 0 {
-		readAheadTotal = conf.Chunk.BufferSize * 8 / 10 // 80% of total buffer
+		readAheadTotal = conf.Chunk.BufferSize / 10 * 8 // 80% of total buffer
 	}
 	if conf.Chunk.Readahead > 0 {
 		readAheadMax = conf.Chunk.Readahead
@@ -782,7 +782,7 @@ func (r *dataReader) Invalidate(inode Ino, off, length uint64) {
 func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.Page, off int) error {
 	buf := page.Data
 	read := 0
-	if s.Chunkid == 0 {
+	if s.Id == 0 {
 		for read < len(buf) {
 			buf[read] = 0
 			read++
@@ -790,14 +790,14 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 		return nil
 	}
 
-	reader := r.store.NewReader(s.Chunkid, int(s.Size))
+	reader := r.store.NewReader(s.Id, int(s.Size))
 	for read < len(buf) {
 		p := page.Slice(read, len(buf)-read)
 		n, err := reader.ReadAt(ctx, p, off+int(s.Off))
 		p.Release()
 		if n == 0 && err != nil {
-			logger.Warningf("fail to read chunkid %d (off:%d, size:%d, clen: %d): %s",
-				s.Chunkid, off+int(s.Off), len(buf)-read, s.Size, err)
+			logger.Warningf("fail to read sliceId %d (off:%d, size:%d, clen: %d): %s",
+				s.Id, off+int(s.Off), len(buf)-read, s.Size, err)
 			return err
 		}
 		read += n
@@ -806,9 +806,9 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 	return nil
 }
 
-func (r *dataReader) Read(ctx context.Context, page *chunk.Page, chunks []meta.Slice, offset uint32) int {
-	if len(chunks) > 16 {
-		return r.readManyChunks(ctx, page, chunks, offset)
+func (r *dataReader) Read(ctx context.Context, page *chunk.Page, slices []meta.Slice, offset uint32) int {
+	if len(slices) > 16 {
+		return r.readManySlices(ctx, page, slices, offset)
 	}
 	read := 0
 	var pos uint32
@@ -816,18 +816,18 @@ func (r *dataReader) Read(ctx context.Context, page *chunk.Page, chunks []meta.S
 	waits := 0
 	buf := page.Data
 	size := len(buf)
-	for i := 0; i < len(chunks); i++ {
-		if read < size && offset < pos+chunks[i].Len {
-			toread := utils.Min(size-read, int(pos+chunks[i].Len-offset))
+	for i := 0; i < len(slices); i++ {
+		if read < size && offset < pos+slices[i].Len {
+			toread := utils.Min(size-read, int(pos+slices[i].Len-offset))
 			go func(s *meta.Slice, p *chunk.Page, off, pos uint32) {
 				defer p.Release()
 				errs <- r.readSlice(ctx, s, p, int(off))
-			}(&chunks[i], page.Slice(read, toread), offset-pos, pos)
+			}(&slices[i], page.Slice(read, toread), offset-pos, pos)
 			read += toread
 			offset += uint32(toread)
 			waits++
 		}
-		pos += chunks[i].Len
+		pos += slices[i].Len
 	}
 	for read < size {
 		buf[read] = 0
@@ -847,7 +847,7 @@ func (r *dataReader) Read(ctx context.Context, page *chunk.Page, chunks []meta.S
 	return read
 }
 
-func (r *dataReader) readManyChunks(ctx context.Context, page *chunk.Page, chunks []meta.Slice, offset uint32) int {
+func (r *dataReader) readManySlices(ctx context.Context, page *chunk.Page, slices []meta.Slice, offset uint32) int {
 	read := 0
 	var pos uint32
 	var err error
@@ -857,10 +857,10 @@ func (r *dataReader) readManyChunks(ctx context.Context, page *chunk.Page, chunk
 	size := len(buf)
 	concurrency := make(chan byte, 16)
 
-CHUNKS:
-	for i := 0; i < len(chunks); i++ {
-		if read < size && offset < pos+chunks[i].Len {
-			toread := utils.Min(size-read, int(pos+chunks[i].Len-offset))
+SLICES:
+	for i := 0; i < len(slices); i++ {
+		if read < size && offset < pos+slices[i].Len {
+			toread := utils.Min(size-read, int(pos+slices[i].Len-offset))
 		WAIT:
 			for {
 				select {
@@ -870,7 +870,7 @@ CHUNKS:
 					waits--
 					if e != nil {
 						err = e
-						break CHUNKS
+						break SLICES
 					}
 				}
 			}
@@ -878,13 +878,13 @@ CHUNKS:
 				defer p.Release()
 				errs <- r.readSlice(ctx, s, p, off)
 				<-concurrency
-			}(&chunks[i], page.Slice(read, toread), int(offset-pos), pos)
+			}(&slices[i], page.Slice(read, toread), int(offset-pos), pos)
 
 			read += toread
 			offset += uint32(toread)
 			waits++
 		}
-		pos += chunks[i].Len
+		pos += slices[i].Len
 	}
 	// wait for all jobs done, otherwise they may access invalid memory
 	for waits > 0 {

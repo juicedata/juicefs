@@ -47,19 +47,35 @@ func newFileSystem(conf *vfs.Config, v *vfs.VFS) *fileSystem {
 	}
 }
 
-func (fs *fileSystem) replyEntry(out *fuse.EntryOut, e *meta.Entry) fuse.Status {
+type setTimeout func(time.Duration)
+
+func (fs *fileSystem) replyAttr(ctx *fuseContext, entry *meta.Entry, attr *fuse.Attr, set setTimeout) {
+	if vfs.IsSpecialNode(entry.Inode) {
+		set(time.Hour)
+	} else if entry.Attr.Typ == meta.TypeFile && fs.v.ModifiedSince(entry.Inode, ctx.start) {
+		logger.Debugf("refresh attr for %d", entry.Inode)
+		var attr meta.Attr
+		st := fs.v.Meta.GetAttr(ctx, entry.Inode, &attr)
+		if st == 0 {
+			*entry.Attr = attr
+			set(fs.conf.AttrTimeout)
+		}
+	} else {
+		set(fs.conf.AttrTimeout)
+	}
+	fs.v.UpdateLength(entry.Inode, entry.Attr)
+	attrToStat(entry.Inode, entry.Attr, attr)
+}
+
+func (fs *fileSystem) replyEntry(ctx *fuseContext, out *fuse.EntryOut, e *meta.Entry) fuse.Status {
 	out.NodeId = uint64(e.Inode)
 	out.Generation = 1
-	out.SetAttrTimeout(fs.conf.AttrTimeout)
 	if e.Attr.Typ == meta.TypeDirectory {
 		out.SetEntryTimeout(fs.conf.DirEntryTimeout)
 	} else {
 		out.SetEntryTimeout(fs.conf.EntryTimeout)
 	}
-	if vfs.IsSpecialNode(e.Inode) {
-		out.SetAttrTimeout(time.Hour)
-	}
-	attrToStat(e.Inode, e.Attr, &out.Attr)
+	fs.replyAttr(ctx, e, &out.Attr, out.SetAttrTimeout)
 	return 0
 }
 
@@ -70,7 +86,7 @@ func (fs *fileSystem) Lookup(cancel <-chan struct{}, header *fuse.InHeader, name
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	return fs.replyEntry(out, entry)
+	return fs.replyEntry(ctx, out, entry)
 }
 
 func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fuse.AttrOut) (code fuse.Status) {
@@ -84,11 +100,7 @@ func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *f
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	attrToStat(entry.Inode, entry.Attr, &out.Attr)
-	out.AttrValid = uint64(fs.conf.AttrTimeout.Seconds())
-	if vfs.IsSpecialNode(Ino(in.NodeId)) {
-		out.AttrValid = 3600
-	}
+	fs.replyAttr(ctx, entry, &out.Attr, out.SetTimeout)
 	return 0
 }
 
@@ -103,11 +115,7 @@ func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *f
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	out.AttrValid = uint64(fs.conf.AttrTimeout.Seconds())
-	if vfs.IsSpecialNode(entry.Inode) {
-		out.AttrValid = 3600
-	}
-	attrToStat(entry.Inode, entry.Attr, &out.Attr)
+	fs.replyAttr(ctx, entry, &out.Attr, out.SetTimeout)
 	return 0
 }
 
@@ -118,7 +126,7 @@ func (fs *fileSystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name strin
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	return fs.replyEntry(out, entry)
+	return fs.replyEntry(ctx, out, entry)
 }
 
 func (fs *fileSystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string, out *fuse.EntryOut) (code fuse.Status) {
@@ -128,7 +136,7 @@ func (fs *fileSystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name strin
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	return fs.replyEntry(out, entry)
+	return fs.replyEntry(ctx, out, entry)
 }
 
 func (fs *fileSystem) Unlink(cancel <-chan struct{}, header *fuse.InHeader, name string) (code fuse.Status) {
@@ -159,7 +167,7 @@ func (fs *fileSystem) Link(cancel <-chan struct{}, in *fuse.LinkIn, name string,
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	return fs.replyEntry(out, entry)
+	return fs.replyEntry(ctx, out, entry)
 }
 
 func (fs *fileSystem) Symlink(cancel <-chan struct{}, header *fuse.InHeader, target string, name string, out *fuse.EntryOut) (code fuse.Status) {
@@ -169,7 +177,7 @@ func (fs *fileSystem) Symlink(cancel <-chan struct{}, header *fuse.InHeader, tar
 	if err != 0 {
 		return fuse.Status(err)
 	}
-	return fs.replyEntry(out, entry)
+	return fs.replyEntry(ctx, out, entry)
 }
 
 func (fs *fileSystem) Readlink(cancel <-chan struct{}, header *fuse.InHeader) (out []byte, code fuse.Status) {
@@ -223,7 +231,7 @@ func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name str
 		return fuse.Status(err)
 	}
 	out.Fh = fh
-	return fs.replyEntry(&out.EntryOut, entry)
+	return fs.replyEntry(ctx, &out.EntryOut, entry)
 }
 
 func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
@@ -347,7 +355,7 @@ func (fs *fileSystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse
 func (fs *fileSystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	entries, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, false)
+	entries, _, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, false)
 	var de fuse.DirEntry
 	for _, e := range entries {
 		de.Ino = uint64(e.Inode)
@@ -363,7 +371,8 @@ func (fs *fileSystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse
 func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	entries, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, true)
+	entries, readAt, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, true)
+	ctx.start = readAt
 	var de fuse.DirEntry
 	for _, e := range entries {
 		de.Ino = uint64(e.Inode)
@@ -374,8 +383,7 @@ func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *
 			break
 		}
 		if e.Attr.Full {
-			fs.v.UpdateLength(e.Inode, e.Attr)
-			fs.replyEntry(eo, e)
+			fs.replyEntry(ctx, eo, e)
 		} else {
 			eo.Ino = uint64(e.Inode)
 			eo.Generation = 1
@@ -410,6 +418,13 @@ func (fs *fileSystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fus
 	out.Bfree = out.Bavail
 	out.Files = st.Files
 	out.Ffree = st.Favail
+	return 0
+}
+
+func (fs *fileSystem) Ioctl(cancel <-chan struct{}, in *fuse.IoctlIn, out *fuse.IoctlOut, bufIn, bufOut []byte) (status fuse.Status) {
+	ctx := newContext(cancel, &in.InHeader)
+	defer releaseContext(ctx)
+	out.Result = int32(fs.v.Ioctl(ctx, Ino(in.NodeId), in.Cmd, in.Arg, bufIn, bufOut))
 	return 0
 }
 
@@ -455,6 +470,9 @@ func Serve(v *vfs.VFS, options string, xattrs bool) error {
 	fssrv, err := fuse.NewServer(imp, conf.Meta.MountPoint, &opt)
 	if err != nil {
 		return fmt.Errorf("fuse: %s", err)
+	}
+	v.InvalidateEntry = func(parent Ino, name string) syscall.Errno {
+		return syscall.Errno(fssrv.EntryNotify(uint64(parent), name))
 	}
 
 	fssrv.Serve()

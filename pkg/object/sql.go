@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -161,8 +162,20 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	if user != "" {
 		uri = user + ":" + password + "@" + addr
 	}
+	var searchPath string
 	if driver == "postgres" {
 		uri = "postgres://" + uri
+
+		parse, err := url.Parse(addr)
+		if err != nil {
+			return nil, fmt.Errorf("parse url %s failed: %s", addr, err)
+		}
+		searchPath = parse.Query().Get("search_path")
+		if searchPath != "" {
+			if len(strings.Split(searchPath, ",")) > 1 {
+				return nil, fmt.Errorf("currently, only one schema is supported in search_path")
+			}
+		}
 	}
 	engine, err := xorm.NewEngine(driver, uri)
 	if err != nil {
@@ -180,6 +193,9 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	default:
 		engine.SetLogLevel(log.LOG_OFF)
 	}
+	if searchPath != "" {
+		engine.SetSchema(searchPath)
+	}
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	if err := engine.Sync2(new(blob)); err != nil {
 		return nil, fmt.Errorf("create table blob: %s", err)
@@ -187,22 +203,22 @@ func newSQLStore(driver, addr, user, password string) (ObjectStorage, error) {
 	return &sqlStore{DefaultObjectStorage{}, engine, addr}, nil
 }
 
+func removeScheme(addr string) string {
+	p := strings.Index(addr, "://")
+	if p > 0 {
+		addr = addr[p+3:]
+	}
+	return addr
+}
+
 func init() {
 	Register("sqlite3", func(addr, user, pass, token string) (ObjectStorage, error) {
-		p := strings.Index(addr, "://")
-		if p > 0 {
-			addr = addr[p+3:]
-		}
-		return newSQLStore("sqlite3", addr, user, pass)
+		return newSQLStore("sqlite3", removeScheme(addr), user, pass)
 	})
 	Register("mysql", func(addr, user, pass, token string) (ObjectStorage, error) {
-		p := strings.Index(addr, "://")
-		if p > 0 {
-			addr = addr[p+3:]
-		}
-		return newSQLStore("mysql", addr, user, pass)
+		return newSQLStore("mysql", removeScheme(addr), user, pass)
 	})
 	Register("postgres", func(addr, user, pass, token string) (ObjectStorage, error) {
-		return newSQLStore("postgres", addr, user, pass)
+		return newSQLStore("postgres", removeScheme(addr), user, pass)
 	})
 }

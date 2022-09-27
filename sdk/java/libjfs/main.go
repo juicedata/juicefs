@@ -227,40 +227,42 @@ func freeHandle(fd int) {
 }
 
 type javaConf struct {
-	MetaURL         string  `json:"meta"`
-	Bucket          string  `json:"bucket"`
-	ReadOnly        bool    `json:"readOnly"`
-	NoBGJob         bool    `json:"noBGJob"`
-	OpenCache       float64 `json:"openCache"`
-	BackupMeta      int64   `json:"backupMeta"`
-	Heartbeat       int     `json:"heartbeat"`
-	CacheDir        string  `json:"cacheDir"`
-	CacheSize       int64   `json:"cacheSize"`
-	FreeSpace       string  `json:"freeSpace"`
-	AutoCreate      bool    `json:"autoCreate"`
-	CacheFullBlock  bool    `json:"cacheFullBlock"`
-	Writeback       bool    `json:"writeback"`
-	MemorySize      int     `json:"memorySize"`
-	Prefetch        int     `json:"prefetch"`
-	Readahead       int     `json:"readahead"`
-	UploadLimit     int     `json:"uploadLimit"`
-	DownloadLimit   int     `json:"downloadLimit"`
-	MaxUploads      int     `json:"maxUploads"`
-	MaxDeletes      int     `json:"maxDeletes"`
-	IORetries       int     `json:"ioRetries"`
-	GetTimeout      int     `json:"getTimeout"`
-	PutTimeout      int     `json:"putTimeout"`
-	FastResolve     bool    `json:"fastResolve"`
-	AttrTimeout     float64 `json:"attrTimeout"`
-	EntryTimeout    float64 `json:"entryTimeout"`
-	DirEntryTimeout float64 `json:"dirEntryTimeout"`
-	Debug           bool    `json:"debug"`
-	NoUsageReport   bool    `json:"noUsageReport"`
-	AccessLog       string  `json:"accessLog"`
-	PushGateway     string  `json:"pushGateway"`
-	PushInterval    int     `json:"pushInterval"`
-	PushAuth        string  `json:"pushAuth"`
-	PushGraphite    string  `json:"pushGraphite"`
+	MetaURL           string  `json:"meta"`
+	Bucket            string  `json:"bucket"`
+	ReadOnly          bool    `json:"readOnly"`
+	NoBGJob           bool    `json:"noBGJob"`
+	OpenCache         float64 `json:"openCache"`
+	BackupMeta        int64   `json:"backupMeta"`
+	Heartbeat         int     `json:"heartbeat"`
+	CacheDir          string  `json:"cacheDir"`
+	CacheSize         int64   `json:"cacheSize"`
+	FreeSpace         string  `json:"freeSpace"`
+	AutoCreate        bool    `json:"autoCreate"`
+	CacheFullBlock    bool    `json:"cacheFullBlock"`
+	CacheChecksum     string  `json:"cacheChecksum"`
+	CacheScanInterval int     `json:"cacheScanInterval"`
+	Writeback         bool    `json:"writeback"`
+	MemorySize        int     `json:"memorySize"`
+	Prefetch          int     `json:"prefetch"`
+	Readahead         int     `json:"readahead"`
+	UploadLimit       int     `json:"uploadLimit"`
+	DownloadLimit     int     `json:"downloadLimit"`
+	MaxUploads        int     `json:"maxUploads"`
+	MaxDeletes        int     `json:"maxDeletes"`
+	IORetries         int     `json:"ioRetries"`
+	GetTimeout        int     `json:"getTimeout"`
+	PutTimeout        int     `json:"putTimeout"`
+	FastResolve       bool    `json:"fastResolve"`
+	AttrTimeout       float64 `json:"attrTimeout"`
+	EntryTimeout      float64 `json:"entryTimeout"`
+	DirEntryTimeout   float64 `json:"dirEntryTimeout"`
+	Debug             bool    `json:"debug"`
+	NoUsageReport     bool    `json:"noUsageReport"`
+	AccessLog         string  `json:"accessLog"`
+	PushGateway       string  `json:"pushGateway"`
+	PushInterval      int     `json:"pushInterval"`
+	PushAuth          string  `json:"pushAuth"`
+	PushGraphite      string  `json:"pushGraphite"`
 }
 
 func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.FileSystem) uintptr {
@@ -443,44 +445,40 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			freeSpaceRatio, _ = strconv.ParseFloat(jConf.FreeSpace, 64)
 		}
 		chunkConf := chunk.Config{
-			BlockSize:      format.BlockSize * 1024,
-			Compress:       format.Compression,
-			CacheDir:       jConf.CacheDir,
-			CacheMode:      0644, // all user can read cache
-			CacheSize:      jConf.CacheSize,
-			FreeSpace:      float32(freeSpaceRatio),
-			AutoCreate:     jConf.AutoCreate,
-			CacheFullBlock: jConf.CacheFullBlock,
-			MaxUpload:      jConf.MaxUploads,
-			MaxDeletes:     jConf.MaxDeletes,
-			MaxRetries:     jConf.IORetries,
-			UploadLimit:    int64(jConf.UploadLimit) * 1e6 / 8,
-			DownloadLimit:  int64(jConf.DownloadLimit) * 1e6 / 8,
-			Prefetch:       jConf.Prefetch,
-			Writeback:      jConf.Writeback,
-			HashPrefix:     format.HashPrefix,
-			GetTimeout:     time.Second * time.Duration(jConf.GetTimeout),
-			PutTimeout:     time.Second * time.Duration(jConf.PutTimeout),
-			BufferSize:     jConf.MemorySize << 20,
-			Readahead:      jConf.Readahead << 20,
+			BlockSize:         format.BlockSize * 1024,
+			Compress:          format.Compression,
+			CacheDir:          jConf.CacheDir,
+			CacheMode:         0644, // all user can read cache
+			CacheSize:         jConf.CacheSize,
+			FreeSpace:         float32(freeSpaceRatio),
+			AutoCreate:        jConf.AutoCreate,
+			CacheFullBlock:    jConf.CacheFullBlock,
+			CacheChecksum:     jConf.CacheChecksum,
+			CacheScanInterval: time.Second * time.Duration(jConf.CacheScanInterval),
+			MaxUpload:         jConf.MaxUploads,
+			MaxDeletes:        jConf.MaxDeletes,
+			MaxRetries:        jConf.IORetries,
+			UploadLimit:       int64(jConf.UploadLimit) * 1e6 / 8,
+			DownloadLimit:     int64(jConf.DownloadLimit) * 1e6 / 8,
+			Prefetch:          jConf.Prefetch,
+			Writeback:         jConf.Writeback,
+			HashPrefix:        format.HashPrefix,
+			GetTimeout:        time.Second * time.Duration(jConf.GetTimeout),
+			PutTimeout:        time.Second * time.Duration(jConf.PutTimeout),
+			BufferSize:        jConf.MemorySize << 20,
+			Readahead:         jConf.Readahead << 20,
 		}
-		if chunkConf.CacheDir != "memory" {
-			ds := utils.SplitDir(chunkConf.CacheDir)
-			for i := range ds {
-				ds[i] = filepath.Join(ds[i], format.UUID)
-			}
-			chunkConf.CacheDir = strings.Join(ds, string(os.PathListSeparator))
-		}
+		chunkConf.SelfCheck(format.UUID)
 		store := chunk.NewCachedStore(blob, chunkConf, registerer)
-		m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
-			chunkid := args[0].(uint64)
+		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
+			id := args[0].(uint64)
 			length := args[1].(uint32)
-			return store.Remove(chunkid, int(length))
+			return store.Remove(id, int(length))
 		})
 		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 			slices := args[0].([]meta.Slice)
-			chunkid := args[1].(uint64)
-			return vfs.Compact(chunkConf, store, slices, chunkid)
+			id := args[1].(uint64)
+			return vfs.Compact(chunkConf, store, slices, id)
 		})
 		err = m.NewSession()
 		if err != nil {
@@ -567,12 +565,16 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 		}
 		logger.Debugf("Update groups of %s to %s", w.user, strings.Join(groups, ","))
 	}
-	w.m.update(uids, gids)
+	w.m.update(uids, gids, false)
 
 	if w.isSuperuser(w.user, groups) {
 		w.ctx = meta.NewContext(uint32(os.Getpid()), 0, []uint32{0})
-	} else if len(groups) > 0 {
-		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), w.lookupGids(strings.Join(groups, ",")))
+	} else {
+		gids := w.ctx.Gids()
+		if len(groups) > 0 {
+			gids = w.lookupGids(strings.Join(groups, ","))
+		}
+		w.ctx = meta.NewContext(uint32(os.Getpid()), w.lookupUid(w.user), gids)
 	}
 }
 

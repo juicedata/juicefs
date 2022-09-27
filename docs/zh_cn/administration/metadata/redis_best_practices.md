@@ -40,9 +40,7 @@ used_memory_dataset_perc: 70.12%
 
 ## 数据可用性
 
-:::caution 注意
-JuiceFS 使用 「[Redis 事务](https://redis.io/docs/manual/transactions)」保证元数据操作的原子性。但由于 Redis Cluster 集群模式不支持事务（Transactions），因此 Redis 集群不可用作 JuiceFS 元数据存储。如有 Redis 高可用需求，请使用 Sentinel 哨兵模式。
-:::
+### 哨兵模式
 
 [Redis 哨兵](https://redis.io/docs/manual/sentinel) 是 Redis 官方的高可用解决方案，它提供以下功能：
 
@@ -79,6 +77,22 @@ juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2 ~/jfs
 需要注意由于 Redis 主节点的数据是异步复制到副本节点，因此有可能读到的元数据不是最新的。
 :::
 
+### 集群模式
+
+:::note 注意
+此特性需要使用 1.0.0 及以上版本的 JuiceFS
+:::
+
+JuiceFS 同样支持集群模式的 Redis 作为元数据引擎，Redis 集群模式的 `META-URL` 为 `redis[s]://[[USER]:PASSWORD@]ADDR:PORT,[ADDR:PORT],[ADDR:PORT][/DB]`，例如：
+
+```shell
+juicefs format redis://127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002/1 myjfs
+```
+
+:::tip 提示
+Redis 集群不再支持多数据库，而是将所有 keys 分散到 16384 个 hash slots 中，再将这些 hash slots 打散到多个 Redis master 节点来存储。JuiceFS 利用了 Redis 集群的 [Hash Tag](https://redis.io/docs/reference/cluster-spec/#hash-tags) 特性，通过将 `{DB}` 作为 key 的前缀来将一个文件系统中的所有 keys 都存放在同一个 hash slot，以保证集群模式下操作的事务性。另外，通过设置不同的 `DB` 可以让一个 Redis 集群同时作为多个 JuiceFS 的元数据库。
+:::
+
 ## 数据持久性
 
 Redis 提供了不同范围的[持久性](https://redis.io/docs/manual/persistence)选项：
@@ -113,7 +127,7 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 
 - 在您的服务器中创建一个 cron 任务，在一个目录中创建 RDB 文件的每小时快照，并在另一个目录中创建每日快照。
 - 每次 cron 脚本运行时，请务必调用 `find` 命令以确保删除太旧的快照：例如，您可以保留最近 48 小时的每小时快照，以及一至两个月的每日快照。要确保使用数据和时间信息来命名快照。
-- 确保每天至少一次将 RDB 快照从运行 Redis 的实例传输至 _数据中心以外_ 或至少传输至 _物理机以外_ 。
+- 确保每天至少一次将 RDB 快照从运行 Redis 的实例传输至 _数据中心以外_ 或至少传输至 _物理机以外_。
 
 更多信息请阅读[官方文档](https://redis.io/docs/manual/persistence)。
 
@@ -129,13 +143,13 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 
 ## 推荐的 Redis 托管服务
 
+### Amazon MemoryDB for Redis
+
+[Amazon MemoryDB for Redis](https://aws.amazon.com/memorydb) 是一种持久的内存数据库服务，可提供超快的性能。MemoryDB 与 Redis 兼容，使用 MemoryDB，你的所有数据都存储在内存中，这使你能够实现微秒级读取和数毫秒的写入延迟和高吞吐。MemoryDB 还使用多可用区事务日志跨多个可用区持久存储数据，以实现快速故障切换、数据库恢复和节点重启。
+
 ### Amazon ElastiCache for Redis
 
 [Amazon ElastiCache for Redis](https://aws.amazon.com/elasticache/redis) 是为云构建的完全托管的、与 Redis 兼容的内存数据存储。它提供[自动故障切换](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html)、[自动备份](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/backups-automatic.html)等功能以确保可用性和持久性。
-
-:::info 说明
-Amazon ElastiCache for Redis 有两种类型：禁用集群模式和启用集群模式。因为 JuiceFS 使用[事务](https://redis.io/docs/manual/transactions)来保证元数据操作的原子性，所以不能使用「启用集群模式」类型。
-:::
 
 ### Google Cloud Memorystore for Redis
 
@@ -145,18 +159,10 @@ Amazon ElastiCache for Redis 有两种类型：禁用集群模式和启用集群
 
 [Azure Cache for Redis](https://azure.microsoft.com/en-us/services/cache) 是一个完全托管的内存缓存，支持高性能和可扩展的架构。使用它来创建云或混合部署，以亚毫秒级延迟处理每秒数百万个请求——所有这些都具有托管服务的配置、安全性和可用性优势。
 
-### 阿里云 ApsaraDB for Redis
+### 阿里云云数据库 Redis 版
 
-[阿里云 ApsaraDB for Redis](https://www.alibabacloud.com/product/apsaradb-for-redis) 是一种兼容原生 Redis 协议的数据库服务。它支持混合内存和硬盘以实现数据持久性。云数据库 Redis 版提供高可用的热备架构，可扩展以满足高性能、低延迟的读写操作需求。
+[阿里云云数据库 Redis 版](https://www.aliyun.com/product/kvstore)是一种兼容原生 Redis 协议的数据库服务。它支持混合内存和硬盘以实现数据持久性。云数据库 Redis 版提供高可用的热备架构，可扩展以满足高性能、低延迟的读写操作需求。
 
-:::info 说明
-ApsaraDB for Redis 支持 3 种类型的[架构](https://www.alibabacloud.com/help/doc-detail/86132.htm)：标准、集群和读写分离。因为 JuiceFS 使用[事务](https://redis.io/docs/manual/transactions)来保证元数据操作的原子性，所以不能使用集群类型架构。
-:::
+### 腾讯云云数据库 Redis
 
-### 腾讯云 TencentDB for Redis
-
-[腾讯云 TencentDB for Redis](https://intl.cloud.tencent.com/product/crs) 是一种兼容 Redis 协议的缓存和存储服务。丰富多样的数据结构选项，帮助您开发不同类型的业务场景，提供主从热备份、容灾自动切换、数据备份、故障转移、实例监控、在线等一整套数据库服务缩放和数据回滚。
-
-:::info 说明
-TencentDB for Redis 支持两种类型的[架构](https://intl.cloud.tencent.com/document/product/239/3205)：标准和集群。因为 JuiceFS 使用[事务](https://redis.io/docs/manual/transactions)来保证元数据操作的原子性，所以不能使用集群类型架构。
-:::
+[腾讯云云数据库 Redis](https://cloud.tencent.com/product/crs) 是一种兼容 Redis 协议的缓存和存储服务。丰富多样的数据结构选项，帮助您开发不同类型的业务场景，提供主从热备份、容灾自动切换、数据备份、故障转移、实例监控、在线等一整套数据库服务缩放和数据回滚。

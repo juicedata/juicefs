@@ -42,7 +42,7 @@ func TestFill(t *testing.T) {
 	var slices []meta.Slice
 	_ = v.Meta.Read(meta.Background, fe.Inode, 0, &slices)
 	for _, s := range slices {
-		_ = v.Store.Remove(s.Chunkid, int(s.Size))
+		_ = v.Store.Remove(s.Id, int(s.Size))
 	}
 	// bad cases
 	v.fillCache(meta.Background, []string{"/test/file", "/sym2", "/sym3", "/.stats", "/not_exists"}, 2, nil, nil)

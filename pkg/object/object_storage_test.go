@@ -23,10 +23,12 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -187,6 +189,33 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("list with delimiter returned: %d  %+v", len(obs), obs)
 	}
 
+	// test redis cluster list all api
+	keyTotal := 100
+	var sortedKeys []string
+	for i := 0; i < keyTotal; i++ {
+		k := fmt.Sprintf("hashKey%d", i)
+		sortedKeys = append(sortedKeys, k)
+		if err := s.Put(k, bytes.NewReader(br)); err != nil {
+			t.Fatalf("PUT failed: %s", err.Error())
+		}
+	}
+	sort.Strings(sortedKeys)
+	defer func() {
+		for i := 0; i < keyTotal; i++ {
+			_ = s.Delete(fmt.Sprintf("hashKey%d", i))
+		}
+	}()
+	objs, err := listAll(s, "hashKey", "", int64(keyTotal))
+	if err != nil {
+		t.Fatalf("list4 failed: %s", err.Error())
+	} else {
+		for i := 0; i < keyTotal; i++ {
+			if objs[i].Key() != sortedKeys[i] {
+				t.Fatal("The result for list4 is incorrect")
+			}
+		}
+	}
+
 	f, _ := ioutil.TempFile("", "test")
 	f.Write([]byte("this is a file"))
 	f.Seek(0, 0)
@@ -318,15 +347,12 @@ func TestS3(t *testing.T) {
 }
 
 func TestOSS(t *testing.T) {
-	if os.Getenv("OSS_ACCESS_KEY") == "" {
+	if os.Getenv("ALICLOUD_ACCESS_KEY_ID") == "" {
 		t.SkipNow()
 	}
-	s, err := newOSS(os.Getenv("ALICLOUD_ENDPOINT"),
-		os.Getenv("OSS_ACCESS_KEY"),
-		os.Getenv("OSS_SECRET_KEY"), "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	s, _ := newOSS(os.Getenv("ALICLOUD_ENDPOINT"),
+		os.Getenv("ALICLOUD_ACCESS_KEY_ID"),
+		os.Getenv("ALICLOUD_ACCESS_KEY_SECRET"), "")
 	testStorage(t, s)
 }
 
@@ -383,7 +409,7 @@ func TestAzure(t *testing.T) {
 		t.SkipNow()
 	}
 	//https://containersName.core.windows.net
-	abs, _ := newWabs(os.Getenv("AZURE_ENDPOINT"),
+	abs, _ := newWasb(os.Getenv("AZURE_ENDPOINT"),
 		os.Getenv("AZURE_STORAGE_ACCOUNT"), os.Getenv("AZURE_STORAGE_KEY"), "")
 	testStorage(t, abs)
 }
@@ -547,7 +573,7 @@ func TestEncrypted(t *testing.T) {
 	s, _ := CreateStorage("mem", "", "", "", "")
 	privkey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	kc := NewRSAEncryptor(privkey)
-	dc := NewAESEncryptor(kc)
+	dc, _ := NewDataEncryptor(kc, AES256GCM_RSA)
 	es := NewEncrypted(s, dc)
 	testStorage(t, es)
 }
@@ -607,6 +633,12 @@ func TestPG(t *testing.T) {
 	}
 	testStorage(t, s)
 
+}
+func TestPGWithSearchPath(t *testing.T) {
+	_, err := newSQLStore("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", "", "")
+	if !strings.Contains(err.Error(), "currently, only one schema is supported in search_path") {
+		t.Fatalf("TestPGWithSearchPath error: %s", err)
+	}
 }
 
 func TestMySQL(t *testing.T) {

@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -57,6 +58,10 @@ $ juicefs info -i 100`,
 				Aliases: []string{"r"},
 				Usage:   "get summary of directories recursively (NOTE: it may take a long time for huge trees)",
 			},
+			&cli.BoolFlag{
+				Name:  "raw",
+				Usage: "show internal raw information",
+			},
 		},
 	}
 }
@@ -67,9 +72,12 @@ func info(ctx *cli.Context) error {
 		logger.Infof("Windows is not supported")
 		return nil
 	}
-	var recursive uint8
+	var recursive, raw uint8
 	if ctx.Bool("recursive") {
 		recursive = 1
+	}
+	if ctx.Bool("raw") {
+		raw = 1
 	}
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)
@@ -99,11 +107,12 @@ func info(ctx *cli.Context) error {
 			continue
 		}
 
-		wb := utils.NewBuffer(8 + 9)
+		wb := utils.NewBuffer(8 + 10)
 		wb.Put32(meta.Info)
-		wb.Put32(9)
+		wb.Put32(10)
 		wb.Put64(inode)
 		wb.Put8(recursive)
+		wb.Put8(raw)
 		_, err = f.Write(wb.Bytes())
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
@@ -121,9 +130,49 @@ func info(ctx *cli.Context) error {
 			logger.Fatalf("read info: %s", err)
 		}
 		fmt.Println(path, ":")
-		fmt.Println(string(data[:n]))
+		resp := string(data[:n])
+		var p int
+		if p = strings.Index(resp, "chunks:\n"); p > 0 {
+			p += 8
+			raw = 1 // legacy clients always return chunks
+		} else if p = strings.Index(resp, "objects:\n"); p > 0 {
+			p += 9
+		}
+		if p <= 0 {
+			fmt.Println(resp)
+		} else {
+			fmt.Println(resp[:p-1])
+			if len(resp[p:]) > 0 {
+				printChunks(resp[p:], raw == 1)
+			}
+		}
 		_ = f.Close()
 	}
 
 	return nil
+}
+
+func printChunks(resp string, raw bool) {
+	cs := strings.Split(resp, "\n")
+	result := make([][]string, len(cs))
+	result[0] = []string{"chunkIndex", "objectName", "size", "offset", "length"}
+	leftAlign := 1
+	if raw {
+		result[0][1] = "sliceId"
+		leftAlign = -1
+	}
+	for i := 1; i < len(result); i++ {
+		result[i] = make([]string, 5) // len(result[0])
+	}
+
+	for i, c := range cs[:len(cs)-1] { // remove the last empty string
+		ps := strings.Split(c, "\t")[1:] // remove the first empty string
+		for j, p := range ps {
+			if j == 0 {
+				p = p[:len(p)-1] // remove the last ':'
+			}
+			result[i+1][j] = p
+		}
+	}
+	printResult(result, leftAlign, false)
 }

@@ -188,8 +188,8 @@ func (v *VFS) fillInode(ctx meta.Context, inode Ino, size uint64, bytes *uint64)
 			if bytes != nil {
 				atomic.AddUint64(bytes, uint64(s.Size))
 			}
-			if err := v.Store.FillCache(s.Chunkid, s.Size); err != nil {
-				return fmt.Errorf("Failed to cache inode %d slice %d: %s", inode, s.Chunkid, err)
+			if err := v.Store.FillCache(s.Id, s.Size); err != nil {
+				return fmt.Errorf("Failed to cache inode %d slice %d: %s", inode, s.Id, err)
 			}
 			if ctx.Canceled() {
 				return syscall.EINTR

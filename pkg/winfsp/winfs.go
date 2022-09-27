@@ -380,6 +380,7 @@ func (j *juice) Getattr(p string, stat *fuse.Stat_t, fh uint64) (e int) {
 		e = -int(errrno)
 		return
 	}
+	j.vfs.UpdateLength(entry.Inode, entry.Attr)
 	attrToStat(entry.Inode, entry.Attr, stat)
 	return
 }
@@ -518,7 +519,7 @@ func (j *juice) Readdir(path string,
 		return
 	}
 	ctx := j.newContext()
-	entries, err := j.vfs.Readdir(ctx, ino, 100000, int(ofst), fh, true)
+	entries, readAt, err := j.vfs.Readdir(ctx, ino, 100000, int(ofst), fh, true)
 	if err != 0 {
 		e = -int(err)
 		return
@@ -536,6 +537,11 @@ func (j *juice) Readdir(path string,
 	for _, e := range entries {
 		name := string(e.Name)
 		if full {
+			if j.vfs.ModifiedSince(e.Inode, readAt) {
+				if e2, err := j.vfs.GetAttr(ctx, e.Inode, 0); err == 0 {
+					e.Attr = e2.Attr
+				}
+			}
 			j.vfs.UpdateLength(e.Inode, e.Attr)
 			attrToStat(e.Inode, e.Attr, &st)
 			ok = fill(name, &st, 0)

@@ -35,13 +35,13 @@
       "big": {
         "attr": {"inode":6,"type":"regular","mode":420,"uid":501,"gid":0,"atime":1637150857,"mtime":1637150858,"ctime":1637150878,"atimensec":961503000,"mtimensec":961503000,"ctimensec":961503000,"nlink":1,"length":104857600},
         "chunks": [
-          {"index":0,"slices":[{"chunkid":5,"size":67108864,"len":67108864}]},
-          {"index":1,"slices":[{"chunkid":6,"size":37748736,"len":37748736}]}
+          {"index":0,"slices":[{"id":5,"size":67108864,"len":67108864}]},
+          {"index":1,"slices":[{"id":6,"size":37748736,"len":37748736}]}
         ]
       },
       "f11": {
         "attr": {"inode":4,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746610,"mtime":1623746610,"ctime":1623746639,"atimensec":591590000,"mtimensec":591590000,"ctimensec":591590000,"nlink":2,"length":12},
-        "chunks": [{"index":0,"slices":[{"chunkid":2,"size":12,"len":12}]}]
+        "chunks": [{"index":0,"slices":[{"id":2,"size":12,"len":12}]}]
       }
     }
   }

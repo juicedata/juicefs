@@ -25,7 +25,7 @@ K3s 对硬件的**最低要求**很低：
 使用 K3s 官方提供的脚本，即可将常规的 Linux 发行版自动部署成为 server 节点。
 
 ```shell
-$ curl -sfL https://get.k3s.io | sh -
+curl -sfL https://get.k3s.io | sh -
 ```
 
 部署成功后，K3s 服务会自动启动，kubectl 等工具也会一并安装。
@@ -33,7 +33,9 @@ $ curl -sfL https://get.k3s.io | sh -
 执行命令查看节点状态：
 
 ```shell
-$ sudo kubectl get nodes
+sudo kubectl get nodes
+```
+```output
 NAME     STATUS   ROLES                  AGE   VERSION
 k3s-s1   Ready    control-plane,master   28h   v1.21.4+k3s1
 ```
@@ -41,8 +43,7 @@ k3s-s1   Ready    control-plane,master   28h   v1.21.4+k3s1
 获取 `node-token`：
 
 ```shell
-$ sudo -u root cat /var/lib/rancher/k3s/server/node-token
-K1041f7c4fabcdefghijklmnopqrste2ec338b7300674f::server:3d0ab12800000000000000006328bbd80
+sudo -u root cat /var/lib/rancher/k3s/server/node-token
 ```
 
 ### K3s worker 节点
@@ -58,7 +59,9 @@ $ curl -sfL https://get.k3s.io | K3S_URL=http://192.168.1.35:6443 K3S_TOKEN=K104
 部署成功以后，回到 server 节点查看节点状态：
 
 ```shell
-$ sudo kubectl get nodes
+sudo kubectl get nodes
+```
+```output
 NAME     STATUS   ROLES                  AGE   VERSION
 k3s-s1   Ready    control-plane,master   28h   v1.21.4+k3s1
 k3s-n1   Ready    <none>                 28h   v1.21.4+k3s1
@@ -71,7 +74,7 @@ k3s-n1   Ready    <none>                 28h   v1.21.4+k3s1
 这里我们用 kubectl 安装，执行以下命令安装 JuiceFS CSI Driver：
 
 ```shell
-$ kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
+kubectl apply -f https://raw.githubusercontent.com/juicedata/juicefs-csi-driver/master/deploy/k8s.yaml
 ```
 
 ### 创建存储类
@@ -112,13 +115,15 @@ parameters:
 执行命令，部署存储类：
 
 ```shell
-$ kubectl apply -f juicefs-sc.yaml
+kubectl apply -f juicefs-sc.yaml
 ```
 
 查看存储类状态：
 
 ```shell
-$ sudo kubectl get sc
+sudo kubectl get sc
+```
+```output
 NAME                   PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
 local-path (default)   rancher.io/local-path   Delete          WaitForFirstConsumer   false                  28h
 juicefs-sc             csi.juicefs.com         Retain          Immediate              false                  28h
@@ -130,7 +135,7 @@ juicefs-sc             csi.juicefs.com         Retain          Immediate        
 
 接下来部署一个 Nginx Pod，使用 JuiceFS 存储类声明的持久化存储。
 
-### Depolyment
+### Deployment
 
 创建一个配置文件，例如：`depolyment.yaml`
 
@@ -180,7 +185,7 @@ spec:
 执行部署：
 
 ```
-$ sudo kubectl apply -f depolyment.yaml
+sudo kubectl apply -f depolyment.yaml
 ```
 
 ### Service
@@ -203,7 +208,7 @@ spec:
 执行部署：
 
 ```shell
-$ sudo kubectl apply -f service.yaml
+sudo kubectl apply -f service.yaml
 ```
 
 ### Ingress
@@ -233,7 +238,7 @@ spec:
 执行部署：
 
 ```shell
-$ sudo kubectl apply -f ingress.yaml
+sudo kubectl apply -f ingress.yaml
 ```
 
 ### 访问
@@ -245,7 +250,9 @@ $ sudo kubectl apply -f ingress.yaml
 接下来查看一下容器是否成功挂载了 JuiceFS，执行命令查看 Pod 状态：
 
 ```shell
-$ sudo kubectl get pods
+sudo kubectl get pods
+```
+```output
 NAME                         READY   STATUS    RESTARTS   AGE
 nginx-run-7d6fb7d6df-qhr2m   1/1     Running   0          28h
 nginx-run-7d6fb7d6df-5hpv7   1/1     Running   0          24h

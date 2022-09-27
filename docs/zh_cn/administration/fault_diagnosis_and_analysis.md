@@ -1,10 +1,13 @@
 ---
 sidebar_label: 故障诊断和分析
-sidebar_position: 9
+sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
 ---
 
-# JuiceFS 故障诊断和分析
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# 故障诊断和分析
 
 ## 客户端日志
 
@@ -14,29 +17,45 @@ JuiceFS 客户端在运行过程中会输出日志用于故障诊断，日志等
 
 ### 挂载点
 
-当挂载 JuiceFS 文件系统时加上了 [`-d` 选项](../reference/command_reference.md#juicefs-mount)（表示后台运行），日志会输出到系统日志和 `/var/log/juicefs.log`（需要 v0.15 及以上版本客户端，参见 [`--log` 选项](../reference/command_reference.md#juicefs-mount)）。取决于你使用的操作系统，你可以通过不同的命令获取日志：
+当挂载 JuiceFS 文件系统时加上了 [`-d` 选项](../reference/command_reference.md#juicefs-mount)（表示后台运行），日志会同时输出到系统日志和本地日志文件，取决于挂载文件系统时的运行用户，本地日志文件的路径稍有区别。root 用户对应的日志文件路径是 `/var/log/juicefs.log`，非 root 用户的日志文件路径是 `$HOME/.juicefs/juicefs.log`，具体请参见 [`--log` 选项](../reference/command_reference.md#juicefs-mount)。
+
+取决于你使用的操作系统，你可以通过不同的命令获取系统日志或直接读取本地日志文件：
+
+<Tabs>
+  <TabItem value="local-log-file" label="本地日志文件">
 
 ```bash
-# macOS
-$ syslog | grep 'juicefs'
-
-# Debian based system
-$ cat /var/log/syslog | grep 'juicefs'
-
-# CentOS based system
-$ cat /var/log/messages | grep 'juicefs'
-
-# All system (require v0.15+ JuiceFS)
-$ tail -n 100 /var/log/juicefs.log
+tail -n 100 /var/log/juicefs.log
 ```
+
+  </TabItem>
+  <TabItem value="macos-syslog" label="macOS 系统日志">
+
+```bash
+syslog | grep 'juicefs'
+```
+
+  </TabItem>
+  <TabItem value="debian-syslog" label="Debian 系统日志">
+
+```bash
+cat /var/log/syslog | grep 'juicefs'
+```
+
+  </TabItem>
+  <TabItem value="centos-syslog" label="CentOS 系统日志">
+
+```bash
+cat /var/log/messages | grep 'juicefs'
+```
+
+  </TabItem>
+</Tabs>
 
 你可以使用 `grep` 命令过滤显示不同等级的日志信息，从而进行性能统计和故障追踪，例如：
 
-```bash
-$ cat /var/log/syslog | grep 'juicefs' | grep '<INFO>'
-$ cat /var/log/syslog | grep 'juicefs' | grep '<WARNING>'
-$ cat /var/log/syslog | grep 'juicefs' | grep '<ERROR>'
-$ cat /var/log/syslog | grep 'juicefs' | grep '<FATAL>'
+```shell
+cat /var/log/syslog | grep 'juicefs' | grep '<ERROR>'
 ```
 
 ### Kubernetes CSI 驱动
@@ -82,7 +101,10 @@ S3 网关仅支持在前台运行，因此客户端日志会直接输出到终�
 在 JuiceFS 文件系统挂载点的根目录中有一个名为 `.accesslog` 的虚拟文件，通过 `cat` 命令可以查看其中的内容（命令不会退出），例如（假设挂载点根目录为 `/jfs`）：
 
 ```bash
-$ cat /jfs/.accesslog
+cat /jfs/.accesslog
+```
+
+```output
 2021.01.15 08:26:11.003330 [uid:0,gid:0,pid:4403] write (17669,8666,4993160): OK <0.000010>
 2021.01.15 08:26:11.003473 [uid:0,gid:0,pid:4403] write (17675,198,997439): OK <0.000014>
 2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
@@ -114,7 +136,10 @@ JuiceFS 客户端默认会通过 [pprof](https://pkg.go.dev/net/http/pprof) 在�
 :::
 
 ```bash
-$ lsof -i -nP | grep LISTEN | grep juicefs
+lsof -i -nP | grep LISTEN | grep juicefs
+```
+
+```output
 juicefs   32666 user    8u  IPv4 0x44992f0610d9870b      0t0  TCP 127.0.0.1:6061 (LISTEN)
 juicefs   32666 user    9u  IPv4 0x44992f0619bf91cb      0t0  TCP 127.0.0.1:6071 (LISTEN)
 juicefs   32666 user   15u  IPv4 0x44992f062886fc5b      0t0  TCP 127.0.0.1:9567 (LISTEN)
@@ -129,10 +154,22 @@ juicefs   32666 user   15u  IPv4 0x44992f062886fc5b      0t0  TCP 127.0.0.1:9567
 为了便于分析这些运行时信息，可以将它们保存到本地，例如：
 
 ```bash
-$ curl 'http://localhost:<port>/debug/pprof/goroutine?debug=1' > juicefs.goroutine.txt
-$ curl 'http://localhost:<port>/debug/pprof/profile?seconds=30' > juicefs.cpu.pb.gz
-$ curl 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pb.gz
+curl 'http://localhost:<port>/debug/pprof/goroutine?debug=1' > juicefs.goroutine.txt
 ```
+```bash
+curl 'http://localhost:<port>/debug/pprof/profile?seconds=30' > juicefs.cpu.pb.gz
+```
+```bash
+curl 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pb.gz
+```
+
+:::tip 建议
+你也可以使用doctor命令自动收集这些运行时信息并保存到本地，默认保存到当前目录下的doctor目录中，例如：
+```bash
+juicefs doctor --collect-pprof /mnt/jfs
+```
+关于doctor命令的更多信息，请查看[命令参考](https://juicefs.com/docs/zh/community/command_reference#juicefs-doctor)
+:::
 
 如果你安装了 `go` 命令，那么可以通过 `go tool pprof` 命令直接分析，例如分析 CPU 性能统计：
 
@@ -168,7 +205,7 @@ Showing top 10 nodes out of 192
 :::
 
 ```bash
-$ go tool pprof -pdf 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pdf
+go tool pprof -pdf 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pdf
 ```
 
 关于 pprof 的更多信息，请查看[官方文档](https://github.com/google/pprof/blob/master/doc/README.md)。

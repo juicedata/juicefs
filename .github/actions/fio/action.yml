@@ -63,6 +63,21 @@ runs:
                      -v /tmp/config:/root/.minio \
                      minio/minio server /data
       shell: bash
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.18.x'
+
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go
+        restore-keys: |
+          ${{ runner.os }}-go
+          
     - name: Build linux target
       run: |
         make juicefs
@@ -81,6 +96,7 @@ runs:
       shell: bash
     - name: Fio Benchmark 
       run: |
+        set -o pipefail
         PYROSCOPE_URL=http://172.27.0.1:4040
         export PYROSCOPE_AUTH_TOKEN=${{inputs.PYROSCOPE_AUTH_TOKEN}}
         urls=("juicefs")
@@ -138,3 +154,12 @@ runs:
         done
         # mysql -h 8.210.231.144 -u juicedata -p${{inputs.mysql_password}} -e "use  test_result; LOAD DATA INFILE '/var/lib/mysql-files/result.csv' INTO TABLE fio_test FIELDS TERMINATED BY ',' (name, bandwidth,  juicefs_version, size, nrfiles, ref_name, created_date, github_revision, workflow_url, meta_engine, storage, runner); " 
       shell: bash
+
+    - name: log
+      if: ${{ always() }}
+      shell: bash
+      run: | 
+        if [ -f ~/.juicefs/juicefs.log ]; then
+          tail -300 ~/.juicefs/juicefs.log
+          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+        fi

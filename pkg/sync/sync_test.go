@@ -131,7 +131,7 @@ func TestSync(t *testing.T) {
 	if err := Sync(a, b, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
-	// No copy occured
+	// No copy occurred
 	if c := copied.Current(); c != 0 {
 		t.Fatalf("should copy 0 keys, but got %d", c)
 	}

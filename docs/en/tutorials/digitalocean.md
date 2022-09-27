@@ -64,25 +64,25 @@ We currently using Ubuntu Server 20.04, execute the following commands in sequen
 Check current system and set temporary environment variable:
 
 ```shell
-$ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
 ```
 
 Download the latest version of the client software package adapted to the current system:
 
 ```shell
-$ wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
+wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 ```
 
 Unzip the installation package:
 
 ```shell
-$ mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
+mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
 ```
 
 Install the client to `/usr/local/bin`:
 
 ```shell
-$ sudo install juice/juicefs /usr/local/bin
+sudo install juice/juicefs /usr/local/bin
 ```
 
 Execute the command and see the command help information returned to `juicefs`, which means that the client is installed successfully.
@@ -137,7 +137,7 @@ In addition, you can also visit the [JuiceFS GitHub Releases](https://github.com
 To create a file system, use the `format` subcommand, the format is:
 
 ```shell
-$ juicefs format [command options] META-URL NAME
+juicefs format [command options] META-URL NAME
 ```
 
 The following command creates a file system named `mystor`:
@@ -154,7 +154,7 @@ $ juicefs format \
 
 **Parameter Description:**
 
-- `--storage`: Specify the data storage engine, here is `space`, click here to view all [supported storage](../reference/how_to_setup_object_storage.md).
+- `--storage`: Specify the data storage engine, here is `space`, click here to view all [supported storage](../guide/how_to_set_up_object_storage.md).
 - `--bucket`: Specify the bucket access address.
 - `--access-key` and `--secret-key`: Specify the secret key for accessing the object storage API.
 - The Redis managed by DigitalOcean needs to be accessed with TLS/SSL encryption, so it needs to use the `rediss://` protocol header. The `/1` added at the end of the link represents the use of Redis's No. 1 database.
@@ -174,7 +174,7 @@ If you see output similar to the following, it means that the file system is cre
 To mount a file system, use the `mount` subcommand, and use the `-d` parameter to mount it as a daemon. The following command mounts the newly created file system to the `mnt` directory under the current directory:
 
 ```shell
-$ sudo juicefs mount -d \
+sudo juicefs mount -d \
     rediss://default:your-password@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 mnt
 ```
 
@@ -202,7 +202,7 @@ JuiceFS:mystor fuse.juicefs       1.0P   64K  1.0P   1%     /home/herald/mnt
 As you can see from the output information of the mount command, JuiceFS defaults to sets 1024 MB as the local cache. Setting a larger cache can make JuiceFS have better performance. You can set the cache (in MiB) through the `--cache-size` option when mounting a file system. For example, set a 20GB local cache:
 
 ```shell
-$ sudo juicefs mount -d --cache-size 20000 \
+sudo juicefs mount -d --cache-size 20000 \
     rediss://default:your-password@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1 mnt
 ```
 
@@ -258,7 +258,7 @@ $ juicefs status rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-d
 Use the `umount` subcommand to unmount a file system, for example:
 
 ```shell
-$ sudo juicefs umount ~/mnt
+sudo juicefs umount ~/mnt
 ```
 
 > **Note**: Force unmount the file system in use may cause data damage or loss, please be careful to operate.
@@ -270,7 +270,7 @@ If you don't want to manually remount JuiceFS every time you restart the system,
 First, you need to rename the `juicefs` client to `mount.juicefs` and copy it to the `/sbin/` directory:
 
 ```shell
-$ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
+sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 ```
 
 Edit the `/etc/fstab` configuration file and add a new record:

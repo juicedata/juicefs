@@ -20,7 +20,7 @@ For now there are 2 modes of profiling: real time and replay.
 By executing the following command you can watch real time operations under the mount point:
 
 ```bash
-$ juicefs profile MOUNTPOINT
+juicefs profile MOUNTPOINT
 ```
 
 > **Tip**: The result is sorted in a descending order by total time.
@@ -30,15 +30,15 @@ $ juicefs profile MOUNTPOINT
 Running the `profile` command on an existing log file enables the **replay mode**:
 
 ```bash
-$ juicefs profile LOGFILE
+juicefs profile LOGFILE
 ```
 
 When debugging or analyzing perfomance issues, it is usually more practical to record access log first and then replay it (multiple times). For example:
 
 ```bash
-$ cat /jfs/.accesslog > /tmp/jfs-oplog
+cat /jfs/.accesslog > /tmp/jfs-oplog
 # later
-$ juicefs profile /tmp/jfs-oplog
+juicefs profile /tmp/jfs-oplog
 ```
 
 > **Tip 1**: The replay could be paused anytime by <kbd>Enter/Return</kbd>, and continued by pressing it again.
@@ -50,7 +50,7 @@ $ juicefs profile /tmp/jfs-oplog
 Sometimes we are only interested in a certain user or process, then we can filter others out by specifying IDs, e.g:
 
 ```bash
-$ juicefs profile /tmp/jfs-oplog --uid 12345
+juicefs profile /tmp/jfs-oplog --uid 12345
 ```
 
 For more information, please run `juicefs profile -h`.

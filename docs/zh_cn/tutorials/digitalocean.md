@@ -43,7 +43,7 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 在数据库的选择方面请不要有顾虑，JuiceFS 客户端提供了元数据迁移功能，你可以将元数据从一种数据库中轻松的导出并迁移到其他的数据库中。
 
-本文我们使用 DigitalOcean 的 Redis 6 数据库托管服务，区域选择 `新加坡`，选择与已存在的 Droplet 相同的 VPC 私有网络。创建 Redis 大概需要 5 分钟左右的时间， 我们跟随设置向导对数据库进行初始化设置。
+本文我们使用 DigitalOcean 的 Redis 6 数据库托管服务，区域选择 `新加坡`，选择与已存在的 Droplet 相同的 VPC 私有网络。创建 Redis 大概需要 5 分钟左右的时间，我们跟随设置向导对数据库进行初始化设置。
 
 ![](../images/digitalocean-redis-guide.png)
 
@@ -66,25 +66,25 @@ Redis 的访问地址可以从控制台的 `Connection Details` 中找到，如�
 检测当前系统信息并设置临时的环境变量：
 
 ```shell
-$ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
 ```
 
 下载适配当前系统的最新版客户端软件包：
 
 ```shell
-$ wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
+wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 ```
 
 解压安装包：
 
 ```shell
-$ mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
+mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
 ```
 
 将客户端安装到 `/usr/local/bin` ：
 
 ```shell
-$ sudo install juice/juicefs /usr/local/bin
+sudo install juice/juicefs /usr/local/bin
 ```
 
 执行命令，看到返回 `juicefs` 的命令帮助信息，代表客户端安装成功。
@@ -139,7 +139,7 @@ COPYRIGHT:
 创建文件系统使用 `format` 子命令，格式为：
 
 ```shell
-$ juicefs format [command options] META-URL NAME
+juicefs format [command options] META-URL NAME
 ```
 
 以下命令创建了一个名为 `mystor` 的文件系统：
@@ -156,7 +156,7 @@ $ juicefs format \
 
 **参数说明：**
 
-- `--storage`：指定数据存储引擎，这里使用的是 `space`，点此查看所有[支持的存储](../reference/how_to_setup_object_storage.md)。
+- `--storage`：指定数据存储引擎，这里使用的是 `space`，点此查看所有[支持的存储](../guide/how_to_set_up_object_storage.md)。
 - `--bucket`：指定存储桶访问地址。
 - `--access-key` 和 `--secret-key`：指定访问对象存储 API 的秘钥。
 - DigitalOcean 托管的 Redis 需要使用 TLS/SSL 加密访问，因此需要使用 `rediss://` 协议头，链接最后添加的 `/1` 代表使用 Redis 的 1 号数据库。
@@ -260,7 +260,7 @@ $ juicefs status rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-d
 使用 `umount` 子命令卸载文件系统，比如：
 
 ```shell
-$ sudo juicefs umount ~/mnt
+sudo juicefs umount ~/mnt
 ```
 
 > **注意**：强制卸载使用中的文件系统可能导致数据损坏或丢失，请务必谨慎操作。
@@ -272,7 +272,7 @@ $ sudo juicefs umount ~/mnt
 首先，需要将  `juicefs` 客户端重命名为 `mount.juicefs` 并复制到 `/sbin/` 目录：
 
 ```shell
-$ sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
+sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
 ```
 
 编辑 `/etc/fstab` 配置文件，新增一条记录：

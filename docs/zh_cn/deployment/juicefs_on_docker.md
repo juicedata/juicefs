@@ -1,6 +1,6 @@
 ---
 sidebar_label: Docker 使用 JuiceFS
-sidebar_position: 1
+sidebar_position: 2
 slug: /juicefs_on_docker
 ---
 # 在 Docker 使用 JuiceFS
@@ -9,10 +9,10 @@ slug: /juicefs_on_docker
 
 ## 1. 卷映射
 
-这种方法是将 JuiceFS 挂载点中的目录映射给 Docker 容器。比如， JuiceFS 文件系统挂载在 `/mnt/jfs` 目录，在创建容器时可以这样将 JuiceFS 存储映射到 Docker 容器：
+这种方法是将 JuiceFS 挂载点中的目录映射给 Docker 容器。比如，JuiceFS 文件系统挂载在 `/mnt/jfs` 目录，在创建容器时可以这样将 JuiceFS 存储映射到 Docker 容器：
 
 ```sh
-$ sudo docker run -d --name nginx \
+sudo docker run -d --name nginx \
   -v /mnt/jfs/html:/usr/share/nginx/html \
   -p 8080:80 \
   nginx
@@ -31,7 +31,7 @@ $ sudo docker run -d --name nginx \
 编辑 FUSE 的配置文件，通常是 `/etc/fuse.conf`：
 
 ```sh
-$ sudo nano /etc/fuse.conf
+sudo nano /etc/fuse.conf
 ```
 
 将配置文件中的 `user_allow_other` 前面的 `#` 注释符删掉，修改后类似下面这样：
@@ -52,7 +52,7 @@ user_allow_other
 FUSE 的 `user_allow_other` 启用后，你需要重新挂载 JuiceFS 文件系统，使用 `-o` 选项设置 `allow_other`，例如：
 
 ```sh
-$ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
+juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 ```
 
 ## 2. Docker Volume Plugin
@@ -99,7 +99,7 @@ ENTRYPOINT ["/usr/bin/juicefs", "mount"]
 另外，由于在容器中使用 FUSE 需要相应的权限，在创建容器时，需要指定 `--privileged=true` 选项，比如：
 
 ```sh
-$ sudo docker run -d --name nginx \
+sudo docker run -d --name nginx \
   -v /mnt/jfs/html:/usr/share/nginx/html \
   -p 8080:80 \
   --privileged=true \

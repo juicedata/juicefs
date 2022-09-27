@@ -40,7 +40,7 @@ WARNING: Do NOT use new engine and the old one at the same time, otherwise it wi
 consistency of the volume.
 
 Examples:
-$ juicefs load meta-dump redis://localhost/1
+$ juicefs load redis://localhost/1 meta-dump
 
 Details: https://juicefs.com/docs/community/metadata_dump_load`,
 	}

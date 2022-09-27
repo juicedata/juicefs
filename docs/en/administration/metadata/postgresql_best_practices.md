@@ -1,26 +1,27 @@
 ---
 sidebar_label: PostgreSQL
 sidebar_position: 2
+slug: /postgresql_best_practices
 ---
 # PostgreSQL Best Practices
 
-For distributed file systems where data and metadata are stored separately, the read and write performance of metadata directly affects the efficiency of the whole system, and the security of metadata is also directly related to the data security of the whole system.
+For distributed file systems where data and metadata are stored separately, the read and write performance and security of metadata directly affects the efficiency and data security of the whole system, respectively.
 
-In the production environment, it is recommended that you give priority to the hosted cloud database provided by the cloud computing platform with appropriate high availability architecture.
+In the production environment, it is recommended to select hosted cloud databases provided by cloud computing platforms first, and comebine it with appropriate high availability architecture to use.
 
-Whether you build it yourself or use a cloud database, you should always pay attention to the integrity and security of metadata when using JuiceFS.
+Please always pay attention to the integrity and security of metadata when using JuiceFS no matter whether databases is build on your own or in the cloud.
 
 ## Communication Security
 
 By default, JuiceFS clients will use SSL encryption to connect to PostgreSQL. If SSL encryption is not enabled on the database, you need to append the `sslmode=disable` parameter to the metadata URL.
 
-It is recommended to configure and always enable SSL encryption on the database server side.
+It is recommended to configure and keep SSL encryption enabled on the database server side all the time.
 
 ## Passing sensitive information via environment variables
 
-Although it is easy and convenient to set the database password directly in the metadata URL, JuiceFS hides it from logging and process list, but it's still possible to leak in other ways. For data security, it's better to pass the database password through an environment variable.
+Database password can be set directly through the metadata URL. Although it is easy and convenient, the password may leak during logging and process outputing processes. For the sake of security, it's better to pass the database password through an environment variable.
 
-`META_PASSWORD` is a predefined environment variable for it:
+`META_PASSWORD` is a predefined environment variable for the database password:
 
 ```shell
 export META_PASSWORD=mypassword
@@ -29,26 +30,26 @@ juicefs mount -d "postgres://user@192.168.1.6:5432/juicefs" /mnt/jfs
 
 ## Authentication methods
 
-Authentication with PostgreSQL is currently possible with "md5" method. The following section can be adapted in the pg_hba.conf of your PostgreSQL instance.
+PostgreSQL supports the md5 authentication method. The following section can be adapted in the pg_hba.conf of your PostgreSQL instance.
 
 ```
 # TYPE  DATABASE        USER            ADDRESS                 METHOD
 host    juicefs         juicefsuser     192.168.1.0/24          md5
 ```
 
-## Backup periodically
+## Periodic backups
 
-Please refer to the official manual [Chapter 26. Backup and Restore](https://www.postgresql.org/docs/current/backup.html) to learn how to backup and restore the database.
+Please refer to the official manual [Chapter 26. Backup and Restore](https://www.postgresql.org/docs/current/backup.html) to learn how to back up and restore databases.
 
-It is recommended to make a database backup plan and follow it periodically, and at the same time, try to restore the data in an experimental environment to confirm that the backup is valid.
+It is recommended to make a plan for regularly backing up your database, and at the same time, do some tests to restore the data in an experimental environment to confirm that the backup is valid.
 
-## Using connection pooling
+## Using connection pooler
 
-Connection pooling is an intermediate layer between the client and the database, which acts as an intermediary to improve connection efficiency and reduce the loss of short connections. Commonly used connection pools are [PgBouncer](https://www.pgbouncer.org/) and [Pgpool-II](https://www.pgpool.net/).
+Connection pooler is a middleware that works between client and database and reuses the earlier connection from the pool, which improve connection efficiency and reduce the loss of short connections. Commonly used connection poolers are [PgBouncer](https://www.pgbouncer.org/) and [Pgpool-II](https://www.pgpool.net/).
 
 ## High Availability
 
-The official PostgreSQL document [High Availability, Load Balancing, and Replication](https://www.postgresql.org/docs/current/different-replication-solutions.html) compares several common database high availability solutions, please choose the appropriate according to your needs.
+The official PostgreSQL document [High Availability, Load Balancing, and Replication](https://www.postgresql.org/docs/current/different-replication-solutions.html) compares several common databases in terms of high availability solutions. Please choose the appropriate ones according to your needs.
 
 :::note
 JuiceFS uses [transactions](https://www.postgresql.org/docs/current/tutorial-transactions.html) to ensure atomicity of metadata operations. Since PostgreSQL does not yet support Muti-Shard (Distributed) transactions, do not use a multi-server distributed architecture for the JuiceFS metadata.

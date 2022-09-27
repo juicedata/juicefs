@@ -209,15 +209,53 @@ func writeProgress(count, bytes *uint64, data *[]byte, done chan struct{}) {
 	}
 }
 
+type obj struct {
+	key            string
+	size, off, len uint32
+}
+
+func (v *VFS) caclObjects(id uint64, size, offset, length uint32) []*obj {
+	if id == 0 {
+		return []*obj{{"", size, offset, length}}
+	}
+	if length == 0 || offset+length > size {
+		logger.Warnf("Corrupt slice id %d size %d offset %d length %d", id, size, offset, length)
+		return nil
+	}
+	bsize := uint32(v.Conf.Chunk.BlockSize)
+	var prefix string
+	if v.Conf.Chunk.HashPrefix {
+		prefix = fmt.Sprintf("%s/chunks/%02X/%v/%v", v.Conf.Format.Name, id%256, id/1000/1000, id)
+	} else {
+		prefix = fmt.Sprintf("%s/chunks/%v/%v/%v", v.Conf.Format.Name, id/1000/1000, id/1000, id)
+	}
+	first := offset / bsize
+	last := (offset + length - 1) / bsize
+	objs := make([]*obj, 0, last-first+1)
+	for indx := first; indx <= last; indx++ {
+		objs = append(objs, &obj{fmt.Sprintf("%s_%d_%d", prefix, indx, bsize), bsize, 0, bsize})
+	}
+	fo, lo := objs[0], objs[len(objs)-1]
+	fo.off = offset - first*bsize
+	fo.len = fo.size - fo.off
+	if (last+1)*bsize > size {
+		lo.size = size - last*bsize
+		lo.key = fmt.Sprintf("%s_%d_%d", prefix, last, lo.size)
+	}
+	lo.len = (offset + length) - last*bsize - lo.off
+
+	return objs
+}
+
 func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, data *[]byte) {
 	switch cmd {
 	case meta.Rmr:
 		done := make(chan struct{})
+		inode := Ino(r.Get64())
+		name := string(r.Get(int(r.Get8())))
 		var count uint64
 		var st syscall.Errno
 		go func() {
-			inode := Ino(r.Get64())
-			name := string(r.Get(int(r.Get8())))
 			st = v.Meta.Remove(ctx, inode, name, &count)
 			if st != 0 {
 				logger.Errorf("remove %d/%s: %s", inode, name, st)
@@ -225,6 +263,11 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			close(done)
 		}()
 		writeProgress(&count, nil, data, done)
+		if st == 0 && v.InvalidateEntry != nil {
+			if st = v.InvalidateEntry(inode, name); st != 0 {
+				logger.Errorf("Invalidate entry %d/%s: %s", inode, name, st)
+			}
+		}
 		*data = append(*data, uint8(st))
 	case meta.Info:
 		var summary meta.Summary
@@ -232,6 +275,10 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		var recursive uint8 = 1
 		if r.HasMore() {
 			recursive = r.Get8()
+		}
+		var raw bool
+		if r.HasMore() {
+			raw = r.Get8() != 0
 		}
 
 		wb := utils.NewBuffer(4)
@@ -248,7 +295,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		fmt.Fprintf(w, "   dirs: %d\n", summary.Dirs)
 		fmt.Fprintf(w, " length: %s\n", utils.FormatBytes(summary.Length))
 		fmt.Fprintf(w, "   size: %s\n", utils.FormatBytes(summary.Size))
-		ps := meta.GetPaths(v.Meta, ctx, inode)
+		ps := v.Meta.GetPaths(ctx, inode)
 		switch len(ps) {
 		case 0:
 			fmt.Fprintf(w, "   path: %s\n", "unknown")
@@ -260,14 +307,23 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 				fmt.Fprintf(w, "\t%s\n", p)
 			}
 		}
-
 		if summary.Files == 1 && summary.Dirs == 0 {
-			fmt.Fprintf(w, " chunks:\n")
+			if raw {
+				fmt.Fprintf(w, " chunks:\n")
+			} else {
+				fmt.Fprintf(w, "objects:\n")
+			}
 			for indx := uint64(0); indx*meta.ChunkSize < summary.Length; indx++ {
 				var cs []meta.Slice
 				_ = v.Meta.Read(ctx, inode, uint32(indx), &cs)
 				for _, c := range cs {
-					fmt.Fprintf(w, "\t%d:\t%d\t%d\t%d\t%d\n", indx, c.Chunkid, c.Size, c.Off, c.Len)
+					if raw {
+						fmt.Fprintf(w, "\t%d:\t%d\t%d\t%d\t%d\n", indx, c.Id, c.Size, c.Off, c.Len)
+					} else {
+						for _, o := range v.caclObjects(c.Id, c.Size, c.Off, c.Len) {
+							fmt.Fprintf(w, "\t%d:\t%s\t%d\t%d\t%d\n", indx, o.key, o.size, o.off, o.len)
+						}
+					}
 				}
 			}
 		}

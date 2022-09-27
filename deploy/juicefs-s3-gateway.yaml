@@ -15,7 +15,7 @@ spec:
     spec:
       initContainers:
         - name: format
-          image: juicedata/juicefs-csi-driver:v0.12.0
+          image: juicedata/juicefs-csi-driver:v0.15.1
           command:
             - sh
             - -c
@@ -36,7 +36,7 @@ spec:
                   key: secret-key
       containers:
         - name: gateway
-          image: juicedata/juicefs-csi-driver:v0.12.0
+          image: juicedata/juicefs-csi-driver:v0.15.1
           command:
             - sh
             - -c

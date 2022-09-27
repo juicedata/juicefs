@@ -1,9 +1,9 @@
 ---
 sidebar_label: 元数据备份和恢复
-sidebar_position: 4
+sidebar_position: 2
 slug: /metadata_dump_load
 ---
-# JuiceFS 元数据备份和恢复
+# 元数据备份和恢复
 
 :::tip 提示
 - JuiceFS v0.15.2 开始支持元数据手动备份、恢复和引擎间迁移。
@@ -12,7 +12,7 @@ slug: /metadata_dump_load
 
 ## 手动备份
 
-JuiceFS 支持[多种元数据存储引擎](../reference/how_to_setup_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 `dump` 命令允许将所有元数据以统一格式写入到 [JSON](https://www.json.org/json-en.html) 文件进行备份。同时，JuiceFS 也提供了 `load` 命令，允许将备份恢复或迁移到任意元数据存储引擎。命令的详细信息请参考[这里](../reference/command_reference.md#juicefs-dump)。
+JuiceFS 支持[多种元数据存储引擎](../guide/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 `dump` 命令允许将所有元数据以统一格式写入到 [JSON](https://www.json.org/json-en.html) 文件进行备份。同时，JuiceFS 也提供了 `load` 命令，允许将备份恢复或迁移到任意元数据存储引擎。命令的详细信息请参考[这里](../reference/command_reference.md#juicefs-dump)。
 
 ### 元数据备份
 
@@ -50,6 +50,10 @@ juicefs load redis://192.168.1.6:6379/1 meta.dump
 
 该命令会自动处理因包含不同时间点文件而产生的冲突问题，并重新计算文件系统的统计信息（空间使用量，inode 计数器等），最后在数据库中生成一份全局一致的元数据。另外，如果你想自定义某些元数据（请务必小心），可以尝试在 load 前手动修改 JSON 文件。
 
+:::note 注意
+为了保证对象存储 SecretKey 与 SessionToken 的安全性，`juicefs dump` 得到的备份文件中的 SecretKey 与 SessionToken 会被改写为“removed”，所以在对其执行 `juicefs load` 恢复到元数据引擎后，需要使用 `juicefs config --secret-key xxxxx META-URL` 来重新设置 SecretKey。
+:::
+
 ### 元数据迁移
 
 :::tip 特别提示
@@ -59,14 +63,16 @@ juicefs load redis://192.168.1.6:6379/1 meta.dump
 得益于 JSON 格式的通用性，JuiceFS 支持的所有元数据存储引擎都能识别，因此可以将元数据信息从一种引擎中导出为 JSON 备份，然后再导入到另外一种引擎，从而实现元数据在不同类型引擎间的迁移。例如：
 
 ```bash
-$ juicefs dump redis://192.168.1.6:6379/1 meta.dump
-$ juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs meta.dump
+juicefs dump redis://192.168.1.6:6379/1 meta.dump
+```
+```bash
+juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs meta.dump
 ```
 
 也可以通过系统的 Pipe 直接迁移：
 
 ```bash
-$ juicefs dump redis://192.168.1.6:6379/1 | juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs
+juicefs dump redis://192.168.1.6:6379/1 | juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs
 ```
 
 :::caution 风险提示
@@ -78,7 +84,7 @@ $ juicefs dump redis://192.168.1.6:6379/1 | juicefs load mysql://user:password@(
 除了可以导出完整的元数据信息，`dump` 命令还支持导出特定子目录中的元数据。因为导出的 JSON 内容可以让用户非常直观地查看到指定目录树下所有文件的内部信息，因此常被用来辅助排查问题。例如：
 
 ```bash
-$ juicefs dump redis://192.168.1.6:6379/1 meta.dump --subdir /path/in/juicefs
+juicefs dump redis://192.168.1.6:6379/1 meta.dump --subdir /path/in/juicefs
 ```
 
 另外，也可以使用 `jq` 等工具对导出文件进行分析。
@@ -98,7 +104,7 @@ $ juicefs dump redis://192.168.1.6:6379/1 meta.dump --subdir /path/in/juicefs
 默认情况下，JuiceFS 客户端每小时备份一次元数据，自动备份的频率可以在挂载文件系统时通过 `--backup-meta` 选项进行调整，例如，要设置为每 8 个小时执行一次自动备份：
 
 ```
-$ sudo juicefs mount -d --backup-meta 8h redis://127.0.0.1:6379/1 /mnt
+sudo juicefs mount -d --backup-meta 8h redis://127.0.0.1:6379/1 /mnt
 ```
 
 备份频率可以精确到秒，支持的单位如下：

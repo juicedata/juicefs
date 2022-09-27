@@ -58,6 +58,7 @@ type Format struct {
 	Capacity         uint64 `json:",omitempty"`
 	Inodes           uint64 `json:",omitempty"`
 	EncryptKey       string `json:",omitempty"`
+	EncryptAlgo      string `json:",omitempty"`
 	KeyEncrypted     bool   `json:",omitempty"`
 	TrashDays        int    `json:",omitempty"`
 	MetaVersion      int    `json:",omitempty"`
@@ -115,7 +116,7 @@ func (f *Format) String() string {
 }
 
 func (f *Format) CheckVersion() error {
-	if f.MetaVersion > 1 {
+	if f.MetaVersion > MaxVersion {
 		return fmt.Errorf("incompatible metadata version: %d; please upgrade the client", f.MetaVersion)
 	}
 

@@ -380,8 +380,8 @@ public class NNBench extends Main.Command {
             "                      Files per thread: " + numberOfFiles,
             "            Successful file operations: " + threadsPerMap * numberOfFiles,
             "",
-            "                           TPS: Create: " + (int) (totalTimeTPS),
-            "                  Avg Lat (ms): Create: " + String.format("%.2f", (double) (end - start) / (threadsPerMap * numberOfFiles)),
+            "                                   TPS: " + (int) (totalTimeTPS),
+            "                          Avg Lat (ms): " + String.format("%.2f", (double) (end - start) / (threadsPerMap * numberOfFiles)),
             "",
             "           RAW DATA: Job Duration (ms): " + (end - start),
             ""};

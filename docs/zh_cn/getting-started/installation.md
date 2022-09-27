@@ -1,10 +1,10 @@
 ---
-sidebar_label: 安装 & 升级
+sidebar_label: 安装
 sidebar_position: 1
 slug: /installation
 ---
 
-# 安装与升级
+# 安装
 
 JuiceFS 有良好的跨平台能力，支持在几乎所有主流架构的各类操作系统上运行，包括且不限于 Linux、macOS、Windows 等。
 
@@ -174,10 +174,10 @@ CMD [ "juicefs" ]
 
 3. 切换分支
 
-   源代码默认使用 `main` 分支，你可以切换到任何正式发布的版本，比如切换到 `v1.0.0-beta2` 版本：
+   源代码默认使用 `main` 分支，你可以切换到任何正式发布的版本，比如切换到 `v1.0.0` 版本：
 
    ```shell
-   git checkout v1.0.0-beta2
+   git checkout v1.0.0
    ```
 
    :::caution 注意
@@ -273,18 +273,6 @@ make juicefs.exe
    ```shell
    make juicefs.linux
    ```
-
-
-## 客户端升级
-
-JuiceFS 客户端只有一个二进制程序，升级新版只需用新版程序替换旧版程序即可。
-
-- **使用预编译客户端**：可以参照本文档中相应系统的安装方法，下载最新的客户端，覆盖旧版客户端即可。
-- **手动编译客户端**：可以拉取最新的源代码重新编译，覆盖旧版客户端即可。
-
-:::caution 注意
-对于使用旧版 JuiceFS 客户端已经挂载好的文件系统，需要先[卸载文件系统](for_distributed.md#6-卸载文件系统)，然后用新版 JuiceFS 客户端重新挂载。
-:::
 
 ## 卸载客户端
 

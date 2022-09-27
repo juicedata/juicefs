@@ -34,6 +34,20 @@ jobs:
           echo ::set-output name=MOUNT_POINT2::/tmp/juicefs-mysql-encoding-test2
           echo ::set-output name=BUCKET::/var/jfs/
           echo ::set-output name=NAME::mysql-encoding-test
+          
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.18.x'
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go
+          restore-keys: |
+            ${{ runner.os }}-go
 
       - name: Build linux target
         run: |
@@ -288,13 +302,15 @@ jobs:
           ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT1}} || echo $?
           ./juicefs umount ${{steps.vars.outputs.MOUNT_POINT2}} || echo $?
           
+      - name: log
+        if: ${{ always() }}
+        run: | 
+          tail -300 ~/.juicefs/juicefs.log
+          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
-
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"

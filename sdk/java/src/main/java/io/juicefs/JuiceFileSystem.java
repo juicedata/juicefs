@@ -21,12 +21,14 @@ import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.Progressable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
+import java.security.PrivilegedExceptionAction;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -67,18 +69,27 @@ public class JuiceFileSystem extends FilterFileSystem {
   public void initialize(URI uri, Configuration conf) throws IOException {
     super.initialize(uri, conf);
     fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
-    startTrashEmptier(conf);
+    startTrashEmptier(uri, conf);
   }
 
-  private void startTrashEmptier(final Configuration conf) throws IOException {
-
+  private void startTrashEmptier(URI uri, final Configuration conf) throws IOException {
     emptier = Executors.newScheduledThreadPool(1, r -> {
       Thread t = new Thread(r, "Trash Emptier");
       t.setDaemon(true);
       return t;
     });
 
-    emptier.schedule(new Trash(this, conf).getEmptier(), 10, TimeUnit.MINUTES);
+    try {
+      UserGroupInformation superUser = UserGroupInformation.createRemoteUser(getConf(conf, "superuser", "hdfs"));
+      FileSystem emptierFs = superUser.doAs((PrivilegedExceptionAction<FileSystem>) () -> {
+        JuiceFileSystemImpl fs = new JuiceFileSystemImpl();
+        fs.initialize(uri, conf);
+        return fs;
+      });
+      emptier.schedule(new Trash(emptierFs, conf).getEmptier(), 10, TimeUnit.MINUTES);
+    } catch (Exception e) {
+      throw new IOException("start trash failed!",e);
+    }
   }
 
   private String getConf(Configuration conf, String key, String value) {

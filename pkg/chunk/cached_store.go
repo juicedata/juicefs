@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,68 +49,68 @@ type pendingItem struct {
 	fpath string
 }
 
-// chunk for read only
-type rChunk struct {
+// slice for read and remove
+type rSlice struct {
 	id     uint64
 	length int
 	store  *cachedStore
 }
 
-func chunkForRead(id uint64, length int, store *cachedStore) *rChunk {
-	return &rChunk{id, length, store}
+func sliceForRead(id uint64, length int, store *cachedStore) *rSlice {
+	return &rSlice{id, length, store}
 }
 
-func (c *rChunk) blockSize(indx int) int {
-	bsize := c.length - indx*c.store.conf.BlockSize
-	if bsize > c.store.conf.BlockSize {
-		bsize = c.store.conf.BlockSize
+func (s *rSlice) blockSize(indx int) int {
+	bsize := s.length - indx*s.store.conf.BlockSize
+	if bsize > s.store.conf.BlockSize {
+		bsize = s.store.conf.BlockSize
 	}
 	return bsize
 }
 
-func (c *rChunk) key(indx int) string {
-	if c.store.conf.HashPrefix {
-		return fmt.Sprintf("chunks/%02X/%v/%v_%v_%v", c.id%256, c.id/1000/1000, c.id, indx, c.blockSize(indx))
+func (s *rSlice) key(indx int) string {
+	if s.store.conf.HashPrefix {
+		return fmt.Sprintf("chunks/%02X/%v/%v_%v_%v", s.id%256, s.id/1000/1000, s.id, indx, s.blockSize(indx))
 	}
-	return fmt.Sprintf("chunks/%v/%v/%v_%v_%v", c.id/1000/1000, c.id/1000, c.id, indx, c.blockSize(indx))
+	return fmt.Sprintf("chunks/%v/%v/%v_%v_%v", s.id/1000/1000, s.id/1000, s.id, indx, s.blockSize(indx))
 }
 
-func (c *rChunk) index(off int) int {
-	return off / c.store.conf.BlockSize
+func (s *rSlice) index(off int) int {
+	return off / s.store.conf.BlockSize
 }
 
-func (c *rChunk) keys() []string {
-	if c.length <= 0 {
+func (s *rSlice) keys() []string {
+	if s.length <= 0 {
 		return nil
 	}
-	lastIndx := (c.length - 1) / c.store.conf.BlockSize
+	lastIndx := (s.length - 1) / s.store.conf.BlockSize
 	keys := make([]string, lastIndx+1)
 	for i := 0; i <= lastIndx; i++ {
-		keys[i] = c.key(i)
+		keys[i] = s.key(i)
 	}
 	return keys
 }
 
-func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err error) {
+func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err error) {
 	p := page.Data
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if off >= c.length {
+	if off >= s.length {
 		return 0, io.EOF
 	}
 
-	indx := c.index(off)
-	boff := off % c.store.conf.BlockSize
-	blockSize := c.blockSize(indx)
+	indx := s.index(off)
+	boff := off % s.store.conf.BlockSize
+	blockSize := s.blockSize(indx)
 	if boff+len(p) > blockSize {
 		// read beyond currend page
 		var got int
 		for got < len(p) {
 			// aligned to current page
-			l := utils.Min(len(p)-got, c.blockSize(c.index(off))-off%c.store.conf.BlockSize)
+			l := utils.Min(len(p)-got, s.blockSize(s.index(off))-off%s.store.conf.BlockSize)
 			pp := page.Slice(got, l)
-			n, err = c.ReadAt(ctx, pp, off)
+			n, err = s.ReadAt(ctx, pp, off)
 			pp.Release()
 			if err != nil {
 				return got + n, err
@@ -123,17 +124,17 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		return got, nil
 	}
 
-	key := c.key(indx)
-	if c.store.conf.CacheSize > 0 {
+	key := s.key(indx)
+	if s.store.conf.CacheSize > 0 {
 		start := time.Now()
-		r, err := c.store.bcache.load(key)
+		r, err := s.store.bcache.load(key)
 		if err == nil {
 			n, err = r.ReadAt(p, int64(boff))
 			_ = r.Close()
 			if err == nil {
-				c.store.cacheHits.Add(1)
-				c.store.cacheHitBytes.Add(float64(n))
-				c.store.cacheReadHist.Observe(time.Since(start).Seconds())
+				s.store.cacheHits.Add(1)
+				s.store.cacheHitBytes.Add(float64(n))
+				s.store.cacheReadHist.Observe(time.Since(start).Seconds())
 				return n, nil
 			}
 			if f, ok := r.(*os.File); ok {
@@ -143,16 +144,16 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		}
 	}
 
-	c.store.cacheMiss.Add(1)
-	c.store.cacheMissBytes.Add(float64(len(p)))
+	s.store.cacheMiss.Add(1)
+	s.store.cacheMissBytes.Add(float64(len(p)))
 
-	if c.store.seekable && boff > 0 && len(p) <= blockSize/4 {
-		if c.store.downLimit != nil {
-			c.store.downLimit.Wait(int64(len(p)))
+	if s.store.seekable && boff > 0 && len(p) <= blockSize/4 {
+		if s.store.downLimit != nil {
+			s.store.downLimit.Wait(int64(len(p)))
 		}
 		// partial read
 		st := time.Now()
-		in, err := c.store.storage.Get(key, int64(boff), int64(len(p)))
+		in, err := s.store.storage.Get(key, int64(boff), int64(len(p)))
 		if err == nil {
 			n, err = io.ReadFull(in, p)
 			_ = in.Close()
@@ -162,17 +163,17 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		if used > SlowRequest {
 			logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
 		}
-		c.store.objectDataBytes.WithLabelValues("GET").Add(float64(n))
-		c.store.objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
-		c.store.fetcher.fetch(key)
+		s.store.objectDataBytes.WithLabelValues("GET").Add(float64(n))
+		s.store.objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
+		s.store.fetcher.fetch(key)
 		if err == nil {
 			return n, nil
 		} else {
-			c.store.objectReqErrors.Add(1)
+			s.store.objectReqErrors.Add(1)
 		}
 	}
 
-	block, err := c.store.group.Execute(key, func() (*Page, error) {
+	block, err := s.store.group.Execute(key, func() (*Page, error) {
 		tmp := page
 		if boff > 0 || len(p) < blockSize {
 			tmp = NewOffPage(blockSize)
@@ -182,8 +183,8 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		tmp.Acquire()
 		err := utils.WithTimeout(func() error {
 			defer tmp.Release()
-			return c.store.load(key, tmp, c.store.shouldCache(blockSize), false)
-		}, c.store.conf.GetTimeout)
+			return s.store.load(key, tmp, s.store.shouldCache(blockSize), false)
+		}, s.store.conf.GetTimeout)
 		return tmp, err
 	})
 	defer block.Release()
@@ -196,48 +197,48 @@ func (c *rChunk) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 	return len(p), nil
 }
 
-func (c *rChunk) delete(indx int) error {
-	key := c.key(indx)
+func (s *rSlice) delete(indx int) error {
+	key := s.key(indx)
 	st := time.Now()
-	err := c.store.storage.Delete(key)
+	err := s.store.storage.Delete(key)
 	used := time.Since(st)
 	logger.Debugf("DELETE %v (%v, %.3fs)", key, err, used.Seconds())
 	if used > SlowRequest {
 		logger.Infof("slow request: DELETE %v (%v, %.3fs)", key, err, used.Seconds())
 	}
-	c.store.objectReqsHistogram.WithLabelValues("DELETE").Observe(used.Seconds())
+	s.store.objectReqsHistogram.WithLabelValues("DELETE").Observe(used.Seconds())
 	if err != nil {
-		c.store.objectReqErrors.Add(1)
+		s.store.objectReqErrors.Add(1)
 	}
 	return err
 }
 
-func (c *rChunk) Remove() error {
-	if c.length == 0 {
+func (s *rSlice) Remove() error {
+	if s.length == 0 {
 		// no block
 		return nil
 	}
 
-	lastIndx := (c.length - 1) / c.store.conf.BlockSize
+	lastIndx := (s.length - 1) / s.store.conf.BlockSize
 	for i := 0; i <= lastIndx; i++ {
 		// there could be multiple clients try to remove the same chunk in the same time,
 		// any of them should succeed if any blocks is removed
-		key := c.key(i)
-		c.store.removePending(key)
-		c.store.bcache.remove(key)
+		key := s.key(i)
+		s.store.removePending(key)
+		s.store.bcache.remove(key)
 	}
 
-	if c.store.conf.MaxDeletes == 0 {
+	if s.store.conf.MaxDeletes == 0 {
 		return errors.New("skip deleting objects because MaxDeletes is 0")
 	}
 	var err error
-	c.store.currentDelete <- struct{}{}
+	s.store.currentDelete <- struct{}{}
 	for i := 0; i <= lastIndx; i++ {
-		if e := c.delete(i); e != nil {
+		if e := s.delete(i); e != nil {
 			err = e
 		}
 	}
-	<-c.store.currentDelete
+	<-s.store.currentDelete
 	return err
 }
 
@@ -267,9 +268,9 @@ func freePage(p *Page) {
 	}
 }
 
-// chunk for write only
-type wChunk struct {
-	rChunk
+// slice for write only
+type wSlice struct {
+	rSlice
 	pages       [][]*Page
 	uploaded    int
 	errors      chan error
@@ -277,48 +278,48 @@ type wChunk struct {
 	pendings    int
 }
 
-func chunkForWrite(id uint64, store *cachedStore) *wChunk {
-	return &wChunk{
-		rChunk: rChunk{id, 0, store},
+func sliceForWrite(id uint64, store *cachedStore) *wSlice {
+	return &wSlice{
+		rSlice: rSlice{id, 0, store},
 		pages:  make([][]*Page, chunkSize/store.conf.BlockSize),
 		errors: make(chan error, chunkSize/store.conf.BlockSize),
 	}
 }
 
-func (c *wChunk) SetID(id uint64) {
-	c.id = id
+func (s *wSlice) SetID(id uint64) {
+	s.id = id
 }
 
-func (c *wChunk) WriteAt(p []byte, off int64) (n int, err error) {
+func (s *wSlice) WriteAt(p []byte, off int64) (n int, err error) {
 	if int(off)+len(p) > chunkSize {
 		return 0, fmt.Errorf("write out of chunk boudary: %d > %d", int(off)+len(p), chunkSize)
 	}
-	if off < int64(c.uploaded) {
-		return 0, fmt.Errorf("Cannot overwrite uploaded block: %d < %d", off, c.uploaded)
+	if off < int64(s.uploaded) {
+		return 0, fmt.Errorf("Cannot overwrite uploaded block: %d < %d", off, s.uploaded)
 	}
 
 	// Fill previous blocks with zeros
-	if c.length < int(off) {
-		zeros := make([]byte, int(off)-c.length)
-		_, _ = c.WriteAt(zeros, int64(c.length))
+	if s.length < int(off) {
+		zeros := make([]byte, int(off)-s.length)
+		_, _ = s.WriteAt(zeros, int64(s.length))
 	}
 
 	for n < len(p) {
-		indx := c.index(int(off) + n)
-		boff := (int(off) + n) % c.store.conf.BlockSize
+		indx := s.index(int(off) + n)
+		boff := (int(off) + n) % s.store.conf.BlockSize
 		var bs = pageSize
-		if indx > 0 || bs > c.store.conf.BlockSize {
-			bs = c.store.conf.BlockSize
+		if indx > 0 || bs > s.store.conf.BlockSize {
+			bs = s.store.conf.BlockSize
 		}
 		bi := boff / bs
 		bo := boff % bs
 		var page *Page
-		if bi < len(c.pages[indx]) {
-			page = c.pages[indx][bi]
+		if bi < len(s.pages[indx]) {
+			page = s.pages[indx][bi]
 		} else {
 			page = allocPage(bs)
 			page.Data = page.Data[:0]
-			c.pages[indx] = append(c.pages[indx], page)
+			s.pages[indx] = append(s.pages[indx], page)
 		}
 		left := len(p) - n
 		if bo+left > bs {
@@ -328,8 +329,8 @@ func (c *wChunk) WriteAt(p []byte, off int64) (n int, err error) {
 		}
 		n += copy(page.Data[bo:], p[n:])
 	}
-	if int(off)+n > c.length {
-		c.length = int(off) + n
+	if int(off)+n > s.length {
+		s.length = int(off) + n
 	}
 	return n, nil
 }
@@ -357,8 +358,8 @@ func (store *cachedStore) put(key string, p *Page) error {
 	}, store.conf.PutTimeout)
 }
 
-func (store *cachedStore) upload(key string, block *Page, c *wChunk) error {
-	sync := c != nil
+func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
+	sync := s != nil
 	blen := len(block.Data)
 	bufSize := store.compressor.CompressBound(blen)
 	var buf *Page
@@ -386,7 +387,7 @@ func (store *cachedStore) upload(key string, block *Page, c *wChunk) error {
 	}
 	for ; try < max; try++ {
 		time.Sleep(time.Second * time.Duration(try*try))
-		if c != nil && c.uploadError != nil {
+		if s != nil && s.uploadError != nil {
 			err = fmt.Errorf("(cancelled) upload block %s: %s (after %d tries)", key, err, try)
 			break
 		}
@@ -401,12 +402,12 @@ func (store *cachedStore) upload(key string, block *Page, c *wChunk) error {
 	return err
 }
 
-func (c *wChunk) upload(indx int) {
-	blen := c.blockSize(indx)
-	key := c.key(indx)
-	pages := c.pages[indx]
-	c.pages[indx] = nil
-	c.pendings++
+func (s *wSlice) upload(indx int) {
+	blen := s.blockSize(indx)
+	key := s.key(indx)
+	pages := s.pages[indx]
+	s.pages[indx] = nil
+	s.pendings++
 
 	go func() {
 		var block *Page
@@ -424,121 +425,155 @@ func (c *wChunk) upload(indx int) {
 		if off != blen {
 			panic(fmt.Sprintf("block length does not match: %v != %v", off, blen))
 		}
-		if c.store.conf.Writeback {
-			stagingPath, err := c.store.bcache.stage(key, block.Data, c.store.shouldCache(blen))
+		if s.store.conf.Writeback {
+			stagingPath, err := s.store.bcache.stage(key, block.Data, s.store.shouldCache(blen))
 			if err != nil {
 				logger.Warnf("write %s to disk: %s, upload it directly", stagingPath, err)
 			} else {
-				c.errors <- nil
-				if c.store.conf.UploadDelay == 0 {
+				s.errors <- nil
+				if s.store.conf.UploadDelay == 0 {
 					select {
-					case c.store.currentUpload <- true:
-						defer func() { <-c.store.currentUpload }()
-						if err = c.store.upload(key, block, nil); err == nil {
-							c.store.bcache.uploaded(key, blen)
+					case s.store.currentUpload <- true:
+						defer func() { <-s.store.currentUpload }()
+						if err = s.store.upload(key, block, nil); err == nil {
+							s.store.bcache.uploaded(key, blen)
 							if os.Remove(stagingPath) == nil {
-								if m, ok := c.store.bcache.(*cacheManager); ok {
+								if m, ok := s.store.bcache.(*cacheManager); ok {
 									m.stageBlocks.Sub(1)
 									m.stageBlockBytes.Sub(float64(blen))
 								}
 							}
 						} else { // add to delay list and wait for later scanning
-							c.store.addDelayedStaging(key, stagingPath, time.Now().Add(time.Second*30), false)
+							s.store.addDelayedStaging(key, stagingPath, time.Now().Add(time.Second*30), false)
 						}
 						return
 					default:
 					}
 				}
 				block.Release()
-				c.store.addDelayedStaging(key, stagingPath, time.Now(), c.store.conf.UploadDelay == 0)
+				s.store.addDelayedStaging(key, stagingPath, time.Now(), s.store.conf.UploadDelay == 0)
 				return
 			}
 		}
-		c.store.currentUpload <- true
-		defer func() { <-c.store.currentUpload }()
-		c.errors <- c.store.upload(key, block, c)
+		s.store.currentUpload <- true
+		defer func() { <-s.store.currentUpload }()
+		s.errors <- s.store.upload(key, block, s)
 	}()
 }
 
-func (c *wChunk) ID() uint64 {
-	return c.id
+func (s *wSlice) ID() uint64 {
+	return s.id
 }
 
-func (c *wChunk) Len() int {
-	return c.length
+func (s *wSlice) Len() int {
+	return s.length
 }
 
-func (c *wChunk) FlushTo(offset int) error {
-	if offset < c.uploaded {
-		panic(fmt.Sprintf("Invalid offset: %d < %d", offset, c.uploaded))
+func (s *wSlice) FlushTo(offset int) error {
+	if offset < s.uploaded {
+		panic(fmt.Sprintf("Invalid offset: %d < %d", offset, s.uploaded))
 	}
-	for i, block := range c.pages {
-		start := i * c.store.conf.BlockSize
-		end := start + c.store.conf.BlockSize
-		if start >= c.uploaded && end <= offset {
+	for i, block := range s.pages {
+		start := i * s.store.conf.BlockSize
+		end := start + s.store.conf.BlockSize
+		if start >= s.uploaded && end <= offset {
 			if block != nil {
-				c.upload(i)
+				s.upload(i)
 			}
-			c.uploaded = end
+			s.uploaded = end
 		}
 	}
 
 	return nil
 }
 
-func (c *wChunk) Finish(length int) error {
-	if c.length != length {
-		return fmt.Errorf("Length mismatch: %v != %v", c.length, length)
+func (s *wSlice) Finish(length int) error {
+	if s.length != length {
+		return fmt.Errorf("Length mismatch: %v != %v", s.length, length)
 	}
 
-	n := (length-1)/c.store.conf.BlockSize + 1
-	if err := c.FlushTo(n * c.store.conf.BlockSize); err != nil {
+	n := (length-1)/s.store.conf.BlockSize + 1
+	if err := s.FlushTo(n * s.store.conf.BlockSize); err != nil {
 		return err
 	}
-	for i := 0; i < c.pendings; i++ {
-		if err := <-c.errors; err != nil {
-			c.uploadError = err
+	for i := 0; i < s.pendings; i++ {
+		if err := <-s.errors; err != nil {
+			s.uploadError = err
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *wChunk) Abort() {
-	for i := range c.pages {
-		for _, b := range c.pages[i] {
+func (s *wSlice) Abort() {
+	for i := range s.pages {
+		for _, b := range s.pages[i] {
 			freePage(b)
 		}
-		c.pages[i] = nil
+		s.pages[i] = nil
 	}
 	// delete uploaded blocks
-	c.length = c.uploaded
-	_ = c.Remove()
+	s.length = s.uploaded
+	_ = s.Remove()
 }
 
 // Config contains options for cachedStore
 type Config struct {
-	CacheDir       string
-	CacheMode      os.FileMode
-	CacheSize      int64
-	FreeSpace      float32
-	AutoCreate     bool
-	Compress       string
-	MaxUpload      int
-	MaxDeletes     int
-	MaxRetries     int
-	UploadLimit    int64 // bytes per second
-	DownloadLimit  int64 // bytes per second
-	Writeback      bool
-	UploadDelay    time.Duration
-	HashPrefix     bool
-	BlockSize      int
-	GetTimeout     time.Duration
-	PutTimeout     time.Duration
-	CacheFullBlock bool
-	BufferSize     int
-	Readahead      int
-	Prefetch       int
+	CacheDir          string
+	CacheMode         os.FileMode
+	CacheSize         int64
+	CacheChecksum     string
+	CacheScanInterval time.Duration
+	FreeSpace         float32
+	AutoCreate        bool
+	Compress          string
+	MaxUpload         int
+	MaxDeletes        int
+	MaxRetries        int
+	UploadLimit       int64 // bytes per second
+	DownloadLimit     int64 // bytes per second
+	Writeback         bool
+	UploadDelay       time.Duration
+	HashPrefix        bool
+	BlockSize         int
+	GetTimeout        time.Duration
+	PutTimeout        time.Duration
+	CacheFullBlock    bool
+	BufferSize        int
+	Readahead         int
+	Prefetch          int
+}
+
+func (c *Config) SelfCheck(uuid string) {
+	if c.CacheSize == 0 {
+		logger.Warnf("cache-size is 0, writeback and prefetch will be disabled")
+		c.Writeback = false
+		c.Prefetch = 0
+		c.CacheDir = "memory"
+	}
+	if !c.Writeback && c.UploadDelay > 0 {
+		logger.Warnf("delayed upload is disabled in non-writeback mode")
+		c.UploadDelay = 0
+	}
+	if c.MaxUpload <= 0 {
+		logger.Warnf("max-uploads should be greater than 0, set it to 1")
+		c.MaxUpload = 1
+	}
+	if c.BufferSize <= 32<<20 {
+		logger.Warnf("buffer-size should be more than 32 MiB")
+		c.BufferSize = 32 << 20
+	}
+	if c.CacheDir != "memory" {
+		ds := utils.SplitDir(c.CacheDir)
+		for i := range ds {
+			ds[i] = filepath.Join(ds[i], uuid)
+		}
+		c.CacheDir = strings.Join(ds, string(os.PathListSeparator))
+	}
+	if cs := []string{CsNone, CsFull, CsShrink, CsExtend}; !utils.StringContains(cs, c.CacheChecksum) {
+		logger.Warnf("verify-cache-checksum should be one of %v", cs)
+		c.CacheChecksum = CsFull
+	}
 }
 
 type cachedStore struct {
@@ -671,6 +706,7 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 	if config.DownloadLimit > 0 {
 		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit)
 	}
+	store.initMetrics()
 	store.bcache = newCacheManager(&config, reg, func(key, fpath string, force bool) bool {
 		if force {
 			return store.addDelayedStaging(key, fpath, time.Time{}, true)
@@ -711,7 +747,11 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 			}
 		}()
 	}
+	store.regMetrics(reg)
+	return store
+}
 
+func (store *cachedStore) initMetrics() {
 	store.cacheHits = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "blockcache_hits",
 		Help: "read from cached block",
@@ -746,12 +786,9 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		Name: "object_request_data_bytes",
 		Help: "Object requests size in bytes.",
 	}, []string{"method"})
-	store.initMetrics(reg)
-
-	return store
 }
 
-func (store *cachedStore) initMetrics(reg prometheus.Registerer) {
+func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 	if reg == nil {
 		return
 	}
@@ -800,13 +837,14 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}()
 
 	store.pendingMutex.Lock()
-	_, ok := store.pendingKeys[key]
+	addTime, ok := store.pendingKeys[key]
 	store.pendingMutex.Unlock()
 	if !ok {
 		logger.Debugf("Key %s is not needed, drop it", key)
 		return
 	}
-	f, err := os.Open(stagingPath)
+	blen := parseObjOrigSize(key)
+	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
 		store.pendingMutex.Lock()
 		_, ok = store.pendingKeys[key]
@@ -818,9 +856,8 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		}
 		return
 	}
-	blen := parseObjOrigSize(key)
 	block := NewOffPage(blen)
-	_, err = io.ReadFull(f, block.Data)
+	_, err = f.ReadAt(block.Data, 0)
 	_ = f.Close()
 	if err != nil {
 		block.Release()
@@ -828,6 +865,9 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		return
 	}
 
+	if m, ok := store.bcache.(*cacheManager); ok {
+		m.stageBlockDelay.Add(time.Since(addTime).Seconds())
+	}
 	if err = store.upload(key, block, nil); err == nil {
 		store.bcache.uploaded(key, blen)
 		store.removePending(key)
@@ -879,21 +919,21 @@ func (store *cachedStore) uploader() {
 	}
 }
 
-func (store *cachedStore) NewReader(chunkid uint64, length int) Reader {
-	return chunkForRead(chunkid, length, store)
+func (store *cachedStore) NewReader(id uint64, length int) Reader {
+	return sliceForRead(id, length, store)
 }
 
-func (store *cachedStore) NewWriter(chunkid uint64) Writer {
-	return chunkForWrite(chunkid, store)
+func (store *cachedStore) NewWriter(id uint64) Writer {
+	return sliceForWrite(id, store)
 }
 
-func (store *cachedStore) Remove(chunkid uint64, length int) error {
-	r := chunkForRead(chunkid, length, store)
+func (store *cachedStore) Remove(id uint64, length int) error {
+	r := sliceForRead(id, length, store)
 	return r.Remove()
 }
 
-func (store *cachedStore) FillCache(chunkid uint64, length uint32) error {
-	r := chunkForRead(chunkid, int(length), store)
+func (store *cachedStore) FillCache(id uint64, length uint32) error {
+	r := sliceForRead(id, int(length), store)
 	keys := r.keys()
 	var err error
 	for _, k := range keys {

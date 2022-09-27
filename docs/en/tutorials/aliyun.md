@@ -59,8 +59,6 @@ On the other hand, if you cannot successfully connect to the cloud database thro
 | **Reliability** |                           Low                           |                            Medium                            |                             Low                              |
 |  **Scenario**   | Massive data, distributed high-frequency read and write | Massive data, distributed low and medium frequency read and write | Low frequency read and write in single machine for small amount of data |
 
-> **Note**: If you use [JuiceFS Hosted Service](https://juicefs.com/docs/en/hosted_service.html), you do not need to prepare a database.
-
 **This article uses the [ApsaraDB for Redis](https://www.alibabacloud.com/product/apsaradb-for-redis), and the following is pseudo address compiled for demonstration purposes only:**
 
 | Redis Version               | 5.0 Community Edition                  |
@@ -88,23 +86,23 @@ Alibaba Cloud OSS needs to be accessed through API, you need to prepare the acce
 We currently using Ubuntu Server 20.04 64-bit, so you can download the latest version of the client by running the following commands. You can also choose another version by visiting the [JuiceFS GitHub Releases](https://github.com/juicedata/juicefs/releases) page.
 
 ```shell
-$ JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
+JFS_LATEST_TAG=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v')
 ```
 
 ```shell
-$ wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
+wget "https://github.com/juicedata/juicefs/releases/download/v${JFS_LATEST_TAG}/juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz"
 ```
 
 After downloading, unzip the program into the `juice` folder.
 
 ```shell
-$ mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
+mkdir juice && tar -zxvf "juicefs-${JFS_LATEST_TAG}-linux-amd64.tar.gz" -C juice
 ```
 
 Install the JuiceFS client to `/usr/local/bin` :
 
 ```shell
-$ sudo install juice/juicefs /usr/local/bin
+sudo install juice/juicefs /usr/local/bin
 ```
 
 Execute the command and see the help message `juicefs` returned, which means the client installation is successful.
@@ -172,7 +170,7 @@ $ juicefs format \
 
 **Option description:**
 
-- `--storage`: Specify the type of object storage, [click here to view](../reference/how_to_setup_object_storage.md) object storage services supported by JuiceFS.
+- `--storage`: Specify the type of object storage, [click here to view](../guide/how_to_set_up_object_storage.md) object storage services supported by JuiceFS.
 - `--bucket`: Bucket domain name of the object storage. When using OSS, just fill in the bucket name, no need to fill in the full domain name, JuiceFS will automatically identify and fill in the full address.
 - `--access-key` and `--secret-key`: the secret key pair to access the object storage API, [click here](https://www.alibabacloud.com/help/doc-detail/125558.htm) to get the way.
 
@@ -205,7 +203,7 @@ When the file system is created, the information related to the object storage i
 Use the `mount` subcommand to mount the file system to the `/mnt/jfs` directory.
 
 ```shell
-$ sudo juicefs mount -d redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1 /mnt/jfs
+sudo juicefs mount -d redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1 /mnt/jfs
 ```
 
 > **Note**: When mounting the file system, only the Redis database address is required, not the file system name. The default cache path is `/var/jfsCache`, please make sure the current user has enough read/write permissions.
@@ -275,7 +273,7 @@ $ juicefs status redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs
 The file system can be unmounted using the `umount` command provided by the JuiceFS client, e.g.
 
 ```shell
-$ sudo juicefs umount /mnt/jfs
+sudo juicefs umount /mnt/jfs
 ```
 
 > **Note**: Forced unmount of the file system in use may result in data corruption or loss, so please be sure to proceed with caution.
@@ -287,7 +285,7 @@ If you don't want to manually remount JuiceFS storage on reboot, you can set up 
 First, you need to rename the `juicefs` client to `mount.juicefs` and copy it to the `/sbin/` directory.
 
 ```shell
-$ sudo cp juice/juicefs /sbin/mount.juicefs
+sudo cp juice/juicefs /sbin/mount.juicefs
 ```
 
 Edit the `/etc/fstab` configuration file and add a new record.

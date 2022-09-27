@@ -147,6 +147,11 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 				Name:  "encrypt-rsa-key",
 				Usage: "a path to RSA private key (PEM)",
 			},
+			&cli.StringFlag{
+				Name:  "encrypt-algo",
+				Usage: "encrypt algorithm (aes256gcm-rsa, chacha20-rsa)",
+				Value: object.AES256GCM_RSA,
+			},
 			&cli.IntFlag{
 				Name:  "trash-days",
 				Value: 1,
@@ -193,23 +198,21 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	object.UserAgent = "JuiceFS-" + version.Version()
 	var blob object.ObjectStorage
 	var err error
-	var query string
-	if p := strings.Index(format.Bucket, "?"); p > 0 && p+1 < len(format.Bucket) {
-		query = format.Bucket[p+1:]
-		format.Bucket = format.Bucket[:p]
-		logger.Debugf("query string: %s", query)
-	}
-	if query != "" {
-		values, err := url.ParseQuery(query)
-		if err != nil {
-			return nil, err
+
+	if u, err := url.Parse(format.Bucket); err == nil {
+		values := u.Query()
+		if values.Get("tls-insecure-skip-verify") != "" {
+			var tlsSkipVerify bool
+			if tlsSkipVerify, err = strconv.ParseBool(values.Get("tls-insecure-skip-verify")); err != nil {
+				return nil, err
+			}
+			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: tlsSkipVerify}
+			values.Del("tls-insecure-skip-verify")
+			u.RawQuery = values.Encode()
+			format.Bucket = u.String()
 		}
-		var tlsSkipVerify bool
-		if tlsSkipVerify, err = strconv.ParseBool(values.Get("tls-insecure-skip-verify")); err != nil {
-			return nil, err
-		}
-		object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: tlsSkipVerify}
 	}
+
 	if format.Shards > 1 {
 		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.Shards)
 	} else {
@@ -239,7 +242,10 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("incorrect passphrase: %s", err)
 		}
-		encryptor := object.NewAESEncryptor(object.NewRSAEncryptor(privKey))
+		encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), format.EncryptAlgo)
+		if err != nil {
+			return nil, err
+		}
 		blob = object.NewEncrypted(blob, encryptor)
 	}
 	return blob, nil
@@ -379,11 +385,11 @@ func format(c *cli.Context) error {
 				format.HashPrefix = c.Bool(flag)
 			case "storage":
 				format.Storage = c.String(flag)
-			case "encrypt-rsa-key":
+			case "encrypt-rsa-key", "encrypt-algo":
 				logger.Warnf("Flag %s is ignored since it cannot be updated", flag)
 			}
 		}
-	} else if err.Error() == "database is not formatted" {
+	} else if strings.HasPrefix(err.Error(), "database is not formatted") {
 		create = true
 		format = &meta.Format{
 			Name:         name,
@@ -394,6 +400,7 @@ func format(c *cli.Context) error {
 			SecretKey:    c.String("secret-key"),
 			SessionToken: c.String("session-token"),
 			EncryptKey:   loadEncrypt(c.String("encrypt-rsa-key")),
+			EncryptAlgo:  c.String("encrypt-algo"),
 			Shards:       c.Int("shards"),
 			HashPrefix:   c.Bool("hash-prefix"),
 			Capacity:     c.Uint64("capacity") << 30,
@@ -401,7 +408,7 @@ func format(c *cli.Context) error {
 			BlockSize:    fixObjectSize(c.Int("block-size")),
 			Compression:  c.String("compress"),
 			TrashDays:    c.Int("trash-days"),
-			MetaVersion:  1,
+			MetaVersion:  meta.MaxVersion,
 		}
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")

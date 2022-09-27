@@ -23,7 +23,7 @@ import (
 )
 
 func TestFsck(t *testing.T) {
-	mountTemp(t, nil, true)
+	mountTemp(t, nil, nil, nil)
 	defer umountTemp(t)
 
 	for i := 0; i < 10; i++ {
@@ -33,6 +33,9 @@ func TestFsck(t *testing.T) {
 		}
 	}
 	if err := Main([]string{"", "fsck", testMeta}); err != nil {
+		t.Fatalf("fsck failed: %s", err)
+	}
+	if err := Main([]string{"", "fsck", testMeta, "--path", "/f3.txt"}); err != nil {
 		t.Fatalf("fsck failed: %s", err)
 	}
 }

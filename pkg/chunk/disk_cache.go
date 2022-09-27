@@ -18,11 +18,14 @@ package chunk
 
 import (
 	"errors"
+	"fmt"
+	"hash/crc32"
 	"hash/fnv"
 	"io"
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -52,18 +55,20 @@ type pendingFile struct {
 type cacheStore struct {
 	totalPages int64
 	sync.Mutex
-	dir       string
-	mode      os.FileMode
-	capacity  int64
-	freeRatio float32
-	pending   chan pendingFile
-	pages     map[string]*Page
-	m         *cacheManager
+	dir          string
+	mode         os.FileMode
+	capacity     int64
+	freeRatio    float32
+	scanInterval time.Duration
+	pending      chan pendingFile
+	pages        map[string]*Page
+	m            *cacheManager
 
 	used     int64
 	keys     map[string]cacheItem
 	scanned  bool
 	full     bool
+	checksum string // checksum level
 	uploader func(key, path string, force bool) bool
 }
 
@@ -75,15 +80,17 @@ func newCacheStore(m *cacheManager, dir string, cacheSize int64, pendingPages in
 		config.FreeSpace = 0.1 // 10%
 	}
 	c := &cacheStore{
-		m:         m,
-		dir:       dir,
-		mode:      config.CacheMode,
-		capacity:  cacheSize,
-		freeRatio: config.FreeSpace,
-		keys:      make(map[string]cacheItem),
-		pending:   make(chan pendingFile, pendingPages),
-		pages:     make(map[string]*Page),
-		uploader:  uploader,
+		m:            m,
+		dir:          dir,
+		mode:         config.CacheMode,
+		capacity:     cacheSize,
+		freeRatio:    config.FreeSpace,
+		checksum:     config.CacheChecksum,
+		scanInterval: config.CacheScanInterval,
+		keys:         make(map[string]cacheItem),
+		pending:      make(chan pendingFile, pendingPages),
+		pages:        make(map[string]*Page),
+		uploader:     uploader,
 	}
 	c.createDir(c.dir)
 	br, fr := c.curFreeRatio()
@@ -128,9 +135,12 @@ func (cache *cacheStore) checkFreeSpace() {
 }
 
 func (cache *cacheStore) refreshCacheKeys() {
-	for {
-		cache.scanCached()
-		time.Sleep(time.Minute * 5)
+	cache.scanCached()
+	if cache.scanInterval > 0 {
+		for {
+			time.Sleep(cache.scanInterval)
+			cache.scanCached()
+		}
 	}
 }
 
@@ -194,6 +204,13 @@ func (cache *cacheStore) flushPage(path string, data []byte) (err error) {
 		_ = f.Close()
 		return
 	}
+	if cache.checksum != CsNone {
+		if _, err = f.Write(checksum(data)); err != nil {
+			logger.Warnf("Write checksum to cache file %s failed: %s", tmp, err)
+			_ = f.Close()
+			return
+		}
+	}
 	if err = f.Close(); err != nil {
 		logger.Warnf("Close cache file %s failed: %s", tmp, err)
 		return
@@ -222,6 +239,7 @@ func (cache *cacheStore) createDir(dir string) {
 
 func (cache *cacheStore) remove(key string) {
 	cache.Lock()
+	delete(cache.pages, key)
 	path := cache.cachePath(key)
 	if it, ok := cache.keys[key]; ok {
 		if it.size > 0 {
@@ -255,7 +273,7 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 		return nil, errors.New("not cached")
 	}
 	cache.Unlock()
-	f, err := os.Open(cache.cachePath(key))
+	f, err := openCacheFile(cache.cachePath(key), parseObjOrigSize(key), cache.checksum)
 	cache.Lock()
 	if err == nil {
 		if it, ok := cache.keys[key]; ok {
@@ -288,10 +306,14 @@ func (cache *cacheStore) flush() {
 			cache.add(w.key, int32(len(w.page.Data)), uint32(time.Now().Unix()))
 		}
 		cache.Lock()
+		_, ok := cache.pages[w.key]
 		delete(cache.pages, w.key)
 		atomic.AddInt64(&cache.totalPages, -int64(cap(w.page.Data)))
 		cache.Unlock()
 		w.page.Release()
+		if !ok {
+			cache.remove(w.key)
+		}
 	}
 }
 
@@ -510,6 +532,8 @@ func (cache *cacheStore) scanCached() {
 	cache.Unlock()
 }
 
+var pathReg, _ = regexp.Compile(`^chunks/\d+/\d+/\d+_\d+_\d+$`)
+
 func (cache *cacheStore) scanStaging() {
 	if cache.uploader == nil {
 		return
@@ -530,13 +554,21 @@ func (cache *cacheStore) scanStaging() {
 					}
 				}
 			} else {
-				logger.Debugf("Found staging block: %s", path)
-				cache.m.stageBlocks.Add(1)
-				cache.m.stageBlockBytes.Add(float64(fi.Size()))
 				key := path[len(stagingPrefix)+1:]
 				if runtime.GOOS == "windows" {
 					key = strings.ReplaceAll(key, "\\", "/")
 				}
+				if !pathReg.MatchString(key) {
+					logger.Warnf("Ignore invalid file in staging: %s", path)
+					return nil
+				}
+				if parseObjOrigSize(key) == 0 {
+					logger.Warnf("Ignore file with zero size: %s", path)
+					return nil
+				}
+				logger.Debugf("Found staging block: %s", path)
+				cache.m.stageBlocks.Add(1)
+				cache.m.stageBlockBytes.Add(float64(fi.Size()))
 				cache.uploader(key, path, false)
 				count++
 			}
@@ -558,6 +590,7 @@ type cacheManager struct {
 	cacheWriteHist  prometheus.Histogram
 	stageBlocks     prometheus.Gauge
 	stageBlockBytes prometheus.Gauge
+	stageBlockDelay prometheus.Counter
 }
 
 func keyHash(s string) uint32 {
@@ -672,6 +705,10 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 			Name: "staging_block_bytes",
 			Help: "Total bytes of blocks in the staging path.",
 		}),
+		stageBlockDelay: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "staging_block_delay_seconds",
+			Help: "Total seconds of delay for staging blocks",
+		}),
 	}
 	if reg != nil {
 		reg.MustRegister(m.cacheWrites)
@@ -681,6 +718,7 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 		reg.MustRegister(m.cacheWriteHist)
 		reg.MustRegister(m.stageBlocks)
 		reg.MustRegister(m.stageBlockBytes)
+		reg.MustRegister(m.stageBlockDelay)
 	}
 
 	// 20% of buffer could be used for pending pages
@@ -718,7 +756,7 @@ func (m *cacheManager) cache(key string, p *Page, force bool) {
 }
 
 type ReadCloser interface {
-	io.Reader
+	// io.Reader
 	io.ReaderAt
 	io.Closer
 }
@@ -741,4 +779,135 @@ func (m *cacheManager) stagePath(key string) string {
 
 func (m *cacheManager) uploaded(key string, size int) {
 	m.getStore(key).uploaded(key, size)
+}
+
+/* --- Checksum --- */
+const (
+	CsNone   = "none"
+	CsFull   = "full"
+	CsShrink = "shrink"
+	CsExtend = "extend"
+
+	csBlock = 32 << 10
+)
+
+var crc32c = crc32.MakeTable(crc32.Castagnoli)
+
+type cacheFile struct {
+	*os.File
+	length  int // length of data
+	csLevel string
+}
+
+// Calculate 32-bits checksum for every 32 KiB data, so 512 Bytes for 4 MiB in total
+func checksum(data []byte) []byte {
+	length := len(data)
+	buf := utils.NewBuffer(uint32((length-1)/csBlock+1) * 4)
+	for start, end := 0, 0; start < length; start = end {
+		end = start + csBlock
+		if end > length {
+			end = length
+		}
+		sum := crc32.Checksum(data[start:end], crc32c)
+		buf.Put32(sum)
+	}
+	return buf.Bytes()
+}
+
+func openCacheFile(name string, length int, level string) (*cacheFile, error) {
+	fp, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := fp.Stat()
+	if err != nil {
+		_ = fp.Close()
+		return nil, err
+	}
+	checksumLength := ((length-1)/csBlock + 1) * 4
+	switch fi.Size() - int64(length) {
+	case 0:
+		return &cacheFile{fp, length, CsNone}, nil
+	case int64(checksumLength):
+		return &cacheFile{fp, length, level}, nil
+	default:
+		_ = fp.Close()
+		return nil, fmt.Errorf("invalid file size %d, data length %d", fi.Size(), length)
+	}
+}
+
+func (cf *cacheFile) ReadAt(b []byte, off int64) (n int, err error) {
+	logger.Tracef("CacheFile length %d level %s, readat off %d buffer size %d", cf.length, cf.csLevel, off, len(b))
+	defer func() {
+		logger.Tracef("CacheFile readat returns n %d err %s", n, err)
+	}()
+	if cf.csLevel == CsNone || cf.csLevel == CsFull && (off != 0 || len(b) != cf.length) {
+		return cf.File.ReadAt(b, off)
+	}
+	var rb = b     // read buffer
+	var roff = off // read offset
+	if cf.csLevel == CsExtend {
+		roff = off / csBlock * csBlock
+		rend := int(off) + len(b)
+		if rend%csBlock != 0 {
+			rend = (rend/csBlock + 1) * csBlock
+			if rend > cf.length {
+				rend = cf.length
+			}
+		}
+		if size := rend - int(roff); size != len(b) {
+			p := NewOffPage(size)
+			rb = p.Data
+			defer func() {
+				if err == nil {
+					n = copy(b, rb[off-roff:])
+				} else {
+					n = 0
+				}
+				p.Release()
+			}()
+		}
+	}
+	if n, err = cf.File.ReadAt(rb, roff); err != nil {
+		return
+	}
+
+	ioff := int(roff) / csBlock // index offset
+	if cf.csLevel == CsShrink {
+		if roff%csBlock != 0 {
+			if o := csBlock - int(roff)%csBlock; len(rb) <= o {
+				return
+			} else {
+				rb = rb[o:]
+				ioff += 1
+			}
+		}
+		if end := int(roff) + n; end != cf.length && end%csBlock != 0 {
+			if len(rb) <= end%csBlock {
+				return
+			}
+			rb = rb[:len(rb)-end%csBlock]
+		}
+	}
+	// now rb contains the data to check
+	length := len(rb)
+	buf := utils.NewBuffer(uint32((length-1)/csBlock+1) * 4)
+	if _, err = cf.File.ReadAt(buf.Bytes(), int64(cf.length+ioff*4)); err != nil {
+		logger.Warnf("Read checksum of data length %d checksum offset %d: %s", length, cf.length+ioff*4, err)
+		return
+	}
+	for start, end := 0, 0; start < length; start = end {
+		end = start + csBlock
+		if end > length {
+			end = length
+		}
+		sum := crc32.Checksum(rb[start:end], crc32c)
+		expect := buf.Get32()
+		logger.Debugf("Cache file read data start %d end %d checksum %d, expected %d", start, end, sum, expect)
+		if sum != expect {
+			err = fmt.Errorf("data checksum %d != expect %d", sum, expect)
+			break
+		}
+	}
+	return
 }

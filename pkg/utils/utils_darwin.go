@@ -16,4 +16,38 @@
 
 package utils
 
+import (
+	"fmt"
+	"os/exec"
+)
+
 func GetKernelVersion() (major, minor int) { return }
+
+func GetSysInfo() (string, error) {
+	var (
+		kernel    string
+		osVersion []byte
+		hardware  []byte
+		err       error
+	)
+
+	if kernel, err = GetKernelInfo(); err != nil {
+		return "", fmt.Errorf("failed to execute command `uname`: %s", err)
+	}
+
+	if osVersion, err = exec.Command("sw_vers").Output(); err != nil {
+		return "", fmt.Errorf("failed to execute command `sw_vers`: %s", err)
+	}
+
+	if hardware, err = exec.Command("system_profiler", "SPMemoryDataType", "SPStorageDataType").Output(); err != nil {
+		return "", fmt.Errorf("failed to execute command `system_profiler`: %s", err)
+	}
+
+	return fmt.Sprintf(`
+Kernel: 
+%s
+OS: 
+%s
+Hardware: 
+%s`, kernel, string(osVersion), string(hardware)), nil
+}

@@ -1,0 +1,210 @@
+name: "version-compatible-test-hypo"
+
+on:
+  schedule:
+    - cron:  '0 16 * * *'
+  workflow_dispatch:
+
+jobs:
+  vc-hypo:
+    continue-on-error: false
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        # old_juicefs_version: ['main']
+        old_juicefs_version: ['main', 'release-1.0', 'release-1.0-rc1']
+        # meta: ['fdb']
+        meta: ['redis', 'mysql', 'tikv', 'postgres']
+        storage: ['minio']
+        include:
+          - os: ubuntu-latest
+            old_juicefs_version: 'main'
+            meta: 'fdb'
+            storage: 'minio'
+          - os: ubuntu-latest
+            old_juicefs_version: 'release-1.0'
+            meta: 'redis'
+            storage: 'postgres'
+          - os: ubuntu-latest
+            old_juicefs_version: 'release-1.0'
+            meta: 'redis'
+            storage: 'mysql'
+          - os: ubuntu-latest
+            old_juicefs_version: 'release-1.0-beta1'
+            meta: 'redis'
+            storage: 'minio'
+          - os: ubuntu-latest
+            old_juicefs_version: 'release-0.17'
+            meta: 'redis'
+            storage: 'minio'
+
+    runs-on: ${{matrix.os}}
+
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.18.x'
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go
+          restore-keys: |
+            ${{ runner.os }}-go
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Make Juicefs
+        shell: bash
+        run: | 
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "build juicefs.fdb"
+            wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+            make juicefs.fdb
+            mv juicefs.fdb juicefs
+          else
+            echo "build juicefs"
+            make juicefs 
+          fi
+
+      - name: Checkout old version
+        uses: actions/checkout@v3
+        with:
+          ref: ${{matrix.old_juicefs_version}}
+          path: ${{matrix.old_juicefs_version}}
+
+      - name: Make old build
+        run: | 
+          cd ${{matrix.old_juicefs_version}}
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "build juicefs.fdb"
+            wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+            make juicefs.fdb
+            mv juicefs.fdb juicefs
+          else
+            echo "build juicefs"
+            make juicefs 
+          fi
+          cd -
+
+      - name: Prepare meta database
+        run: | 
+          meta=${{matrix.meta}}
+          storage=${{matrix.storage}}
+          if [[ "$meta" == redis ]]; then
+            sudo apt-get install -y redis-tools redis-server
+          fi
+          if [[ "$meta" == mysql || "$storage" == mysql ]]; then
+            sudo /etc/init.d/mysql start
+          fi
+          if [[ "$meta" == tikv ]]; then
+            curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+            source /home/runner/.bash_profile
+            source /home/runner/.profile
+            tiup playground --mode tikv-slim &
+            git clone https://github.com/c4pt0r/tcli
+            cd tcli && make
+            sudo cp bin/tcli /usr/local/bin
+            cd -
+          fi
+          if [[ "$meta" == badger ]]; then
+            sudo go get github.com/dgraph-io/badger/v3
+          fi
+          if [[ "$meta" == mariadb ]]; then
+            docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
+          fi
+          if [[ "$meta" == fdb ]]; then
+            docker run --name fdb --rm -d -p 4500:4500 foundationdb/foundationdb:6.3.23
+            sleep 5
+            docker exec fdb fdbcli --exec "configure new single memory"
+            echo "docker:docker@127.0.0.1:4500" > /home/runner/fdb.cluster 
+            fdbcli -C /home/runner/fdb.cluster --exec "status"
+          fi
+          if [[ "$storage" == minio ]]; then
+            docker run -d -p 9000:9000 --name minio \
+                        -e "MINIO_ACCESS_KEY=minioadmin" \
+                        -e "MINIO_SECRET_KEY=minioadmin" \
+                        -v /tmp/data:/data \
+                        -v /tmp/config:/root/.minio \
+                        minio/minio server /data
+          fi
+          
+      - name: Install tools
+        run: | 
+          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
+          chmod +x mc
+          sudo mv mc /usr/local/bin
+          sudo apt install redis-tools
+          sudo pip install hypothesis
+          sudo pip install minio
+          
+      - name: Test
+        timeout-minutes: 60
+        run: |          
+          export META=${{matrix.meta}}
+          export STORAGE=${{matrix.storage}}
+          new_version=`./juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          mv juicefs juicefs-$new_version
+          export NEW_JFS_BIN="juicefs-$new_version"
+          old_version=`${{matrix.old_juicefs_version}}/juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          mv ${{matrix.old_juicefs_version}}/juicefs juicefs-$old_version
+          export OLD_JFS_BIN="juicefs-$old_version"
+          python3 .github/scripts/testVersionCompatible.py
+
+      - name: Upload command log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{matrix.os}}-${{matrix.meta}}-${{matrix.old_juicefs_version}}.command.log
+          path: command.log
+
+      - name: Display log
+        if: ${{ always() }}
+        shell: bash
+        run: | 
+          if [ -f "/home/runner/.juicefs/juicefs.log" ]; then
+            cat /home/runner/.juicefs/juicefs.log
+            grep "<FATAL>:" /home/runner/.juicefs/juicefs.log && exit 1 || true
+          fi
+
+      - name: Display command
+        if: ${{ always() }}
+        shell: bash
+        run: | 
+          if [ -f "command.log" ]; then
+            tail -100 command.log
+          fi
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        timeout-minutes: 1
+        uses: lhotari/action-upterm@v1

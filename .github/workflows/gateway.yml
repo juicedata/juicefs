@@ -17,269 +17,47 @@ on:
   workflow_dispatch:
 
 jobs:
-  upload-big-file-with-redis:
+  gateway:
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: [  'sqlite3', 'redis','tikv', 'badgerdb',  'etcd', 'fdb']
+        file_size: ['100M']
+        isolation_level: ['']
+        include:
+          - meta: 'mariadb'
+            file_size: '100M'
+            isolation_level: "read committed"
+
+          - meta: 'mysql'
+            file_size: '100M'
+            isolation_level: "read committed"
+          - meta: 'mysql'
+            file_size: '100M'
+            isolation_level: "repeatable read"
+          - meta: 'mysql'
+            file_size: '100M'
+            isolation_level: "serializable"
+
+          - meta: 'postgres'
+            file_size: '100M'
+            isolation_level: "read committed"
+          - meta: 'postgres'
+            file_size: '100M'
+            isolation_level: "repeatable read"
+          - meta: 'postgres'
+            file_size: '100M'
+            isolation_level: "serializable"
+
+          - meta: 'tidb'
+            file_size: '100M'
+            isolation_level: "read committed"
+          - meta: 'tidb'
+            file_size: '100M'
+            isolation_level: "repeatable read"
+
     runs-on: ubuntu-latest
-    services:
-      redis:
-        # Docker Hub image
-        image: redis
-        # Set health checks to wait until redis has started
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          # Maps port 6379 on service container to the host
-          - 6379:6379
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "redis://localhost/1"
-          file_size: "100M"
-          file_count: 5
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
 
-  upload-small-files-with-redis:
-    runs-on: ubuntu-latest
-    services:
-      redis:
-        # Docker Hub image
-        image: redis
-        # Set health checks to wait until redis has started
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          # Maps port 6379 on service container to the host
-          - 6379:6379
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "redis://localhost/1"
-          file_size: "8K"
-          file_count: 2500
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-small-files-with-mysql-read-uncommitted:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "8K"
-          file_count: 2500
-          isolation_level: "read uncommitted"    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-small-files-with-mysql-read-committed:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "8K"
-          file_count: 2500
-          isolation_level: "read committed"    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-small-files-with-mysql-repeatable-read:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "8K"
-          file_count: 2500
-          isolation_level: "repeatable read"   
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-small-files-with-mysql-serializable:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "8K"
-          file_count: 2500
-          isolation_level: "serializable"     
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-big-files-with-mysql-read-uncommitted:
-    runs-on: ubuntu-latest          
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "100M"
-          file_count: 5
-          isolation_level: "read uncommitted"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-big-files-with-mysql-read-committed:
-    runs-on: ubuntu-latest          
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "100M"
-          file_count: 5
-          isolation_level: "read committed"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-big-files-with-mysql-repeatable-read:
-    runs-on: ubuntu-latest          
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "100M"
-          file_count: 5
-          isolation_level: "repeatable read"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-big-files-with-mysql-serializable:
-    runs-on: ubuntu-latest          
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "100M"
-          file_count: 5
-          isolation_level: "serializable"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-big-files-with-mariadb-read-committed:
-    runs-on: ubuntu-latest          
-    steps:
-      - uses: actions/checkout@v3
-      - name: install 
-        run: | 
-          docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:root@\\(127.0.0.1\\)/test"
-          file_size: "100M"
-          file_count: 5
-          isolation_level: "read committed"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-big-files-with-badgerdb:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo go get github.com/dgraph-io/badger/v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "badger://badger-data"
-          file_size: "100M"
-          file_count: 1
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-small-files-with-badgerdb:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo go get github.com/dgraph-io/badger/v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "badger://badger-data"
-          file_size: "8K"
-          file_count: 2500
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-
-  upload-small-files-with-sqlite:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "sqlite3://test.db"
-          file_size: "8K"
-          file_count: 2500    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-big-files-with-sqlite:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo /etc/init.d/mysql start
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "sqlite3://test.db"
-          file_size: "100M"
-          file_count: 5    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-small-files-with-pg:
-    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres
@@ -291,318 +69,164 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         ports:
-          # Maps tcp port 5432 on service container to the host
           - 5432:5432
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
-          file_size: "8K"
-          file_count: 2500
-          threads: 10    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
 
-  upload-big-files-with-pg-read-committed:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          # Maps tcp port 5432 on service container to the host
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
-          file_size: "100M"
-          file_count: 3
-          threads: 10
-          isolation_level: "read committed"
-
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-big-files-with-pg-repeatable-read:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          # Maps tcp port 5432 on service container to the host
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
-          file_size: "100M"
-          file_count: 5
-          threads: 10
-          isolation_level: "repeatable read"
-
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-big-files-with-pg-serializable:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          # Maps tcp port 5432 on service container to the host
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
-          file_size: "100M"
-          file_count: 5
-          threads: 10
-          isolation_level: "serializable"
-
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-big-files-with-tidb-read-committed:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install TiDB
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-          source /home/runner/.profile
-          tiup playground 5.4.0 &
-          sleep 120
-          mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:@\\(127.0.0.1:4000\\)/test"
-          file_size: "100M"
-          file_count: 5
-          isolation_level: "read committed"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1   
-  upload-big-files-with-tidb-repeatable-read:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install TiDB
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-          source /home/runner/.profile
-          tiup playground 5.4.0 &
-          sleep 120
-          mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "mysql://root:@\\(127.0.0.1:4000\\)/test"
-          file_size: "100M"
-          file_count: 5
-          isolation_level: "repeatable read"
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1   
-
-  upload-small-files-with-etcd:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo apt install etcd
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "etcd://localhost:2379/jfs"
-          file_size: "8K"
-          file_count: 2500    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  upload-big-files-with-etcd:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: sudo apt install etcd
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "etcd://localhost:2379/jfs"
-          file_size: "200M"
-          file_count: 5    
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1    
-
-  # upload-big-file-with-oceanbase-read-committed:
-  #   runs-on: [self-hosted, daily-build, bench-02]
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: install ob
-  #       run: |
-  #         docker rm obstandalone --force || echo "remove obstandalone failed"
-  #         docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
-  #         sleep 60
-  #         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
-  #     - name: Test
-  #       uses: ./.github/actions/gateway
-  #       with:
-  #         meta_url: "mysql://root:@\\(127.0.0.1:2881\\)/test"
-  #         file_size: "200M"
-  #         file_count: 5
-  #         isolation_level: "read committed"   
-
-  # upload-big-file-with-oceanbase-repeatable-read:
-  #   runs-on: [self-hosted, daily-build, bench-03]
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: install ob
-  #       run: |
-  #         docker rm obstandalone --force || echo "remove obstandalone failed"
-  #         docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
-  #         sleep 60
-  #         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
-  #     - name: Test
-  #       uses: ./.github/actions/gateway
-  #       with:
-  #         meta_url: "mysql://root:@\\(localhost:2881\\)/test"
-  #         file_size: "200M"
-  #         file_count: 5
-  #         isolation_level: "repeatable read"   
-
-  # upload-big-file-with-oceanbase-serializable:
-  #   runs-on: [self-hosted, daily-build, bench-03]
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: install ob
-  #       run: |
-  #         docker rm obstandalone --force || echo "remove obstandalone failed"
-  #         docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
-  #         sleep 60
-  #         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
-  #     - name: Test
-  #       uses: ./.github/actions/gateway
-  #       with:
-  #         meta_url: "mysql://root:@\\(localhost:2881\\)/test"
-  #         file_size: "200M"
-  #         file_count: 5
-  #         isolation_level: "serializable"    
-
-  upload-small-files-with-tikv:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install TiKV
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-          source /home/runner/.bash_profile
-          source /home/runner/.profile
-          tiup playground --mode tikv-slim &
-          sleep 5
-
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "tikv://127.0.0.1:2379"
-          file_size: "8K"
-          file_count: 2500
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
-
-  upload-big-files-with-tikv:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install TiKV
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-          source /home/runner/.bash_profile
-          source /home/runner/.profile
-          tiup playground --mode tikv-slim &
-          sleep 5
-
-      - name: Test
-        uses: ./.github/actions/gateway
-        with:
-          meta_url: "tikv://127.0.0.1:2379"
-          file_size: "100M"
-          file_count: 5
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        uses: lhotari/action-upterm@v1
-
-  sync-to-gateway-with-multithread:
-    runs-on: ubuntu-latest
-    steps:
+    steps: 
       - name: Checkout
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.18.x'
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go
+          restore-keys: |
+            ${{ runner.os }}-go
+
       - name: Build linux target
         run: |
-          make juicefs
-          #wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta3/juicefs-1.0.0-beta3-linux-amd64.tar.gz
-          #tar -xzf juicefs-1.0.0-beta3-linux-amd64.tar.gz
-      - name: Test sync to gateway with multithread
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo "build juicefs.fdb"
+            wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+            make juicefs.fdb
+            mv juicefs.fdb juicefs
+          else
+            echo "build juicefs"
+            make juicefs 
+          fi
+        shell: bash
+
+      - name: Start meta
         run: | 
-          #test for PR: https://github.com/juicedata/juicefs/pull/2024
+          sudo chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+
+      - name: Install tools
+        run: | 
           wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
           chmod +x mc 
-          sudo apt install md5deep
-          sudo /etc/init.d/mysql start
-          meta_url="mysql://root:root@(127.0.0.1)/test"
-          volume=myjfs
-          mp=/tmp/myjfs
-          db_name=$(basename $meta_url)
-          mysql -uroot -proot -e "set global transaction isolation level repeatable read;" 
-          mysql -uroot -proot -e "drop database if exists $db_name; create database $db_name;" 
+        shell: bash
+        
+      - name: start gateway
+        shell: bash
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url ${{matrix.isolation_level}}
+          mp="/tmp/myjfs"
+          volume="myjfs"
           export MINIO_ROOT_USER=minioadmin
           export MINIO_ROOT_PASSWORD=minioadmin
-          ./juicefs format $meta_url $volume
-          ./juicefs gateway $meta_url localhost:9000 &
+          ./juicefs format $meta_url $volume --trash-days 0
+          if [[ "$meta_url" == badger* ]]; then
+            ./juicefs gateway $meta_url localhost:8080 --no-usage-report /tmp/access1.log &
+          else
+            ./juicefs gateway $meta_url localhost:8080 --access-log /tmp/access1.log &
+            #./juicefs gateway $meta_url localhost:9000 --access-log /tmp/access1.log &
+            #./juicefs gateway $meta_url localhost:9001 --access-log /tmp/access2.log &
+            #sudo cp .github/workflows/resources/load-balancer.conf /etc/nginx/conf.d/load-balancer.conf
+            #sudo rm /etc/nginx/sites-enabled/default
+            #sudo systemctl restart nginx
+          fi
+        
+      - name: Sync with multiple process
+        shell: bash
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          file_size=${{matrix.file_size}}
+          if [ $file_size="100M" ]; then 
+            file_count=5
+          else
+            file_count=2000
+          fi
+          threads=20
+          mp=/tmp/myjfs
+          volume=myjfs
+          
+          dd if=/dev/urandom of=file iflag=fullblock,count_bytes bs=4k count="$file_size" > /dev/null
+          mkdir data
+          for i in $(seq 1 $file_count); do
+            cp file data/file$i
+          done
           start=`date +%s`
-          ./juicefs sync --dirs ./  s3://minioadmin:minioadmin@localhost:9000/$volume/source_dir/ --no-https -p 50
+          declare -a pids   
+          ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:8080/$volume/data/ --no-https -p $threads &
+          pids+=($!)
+          ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:8080/$volume/data/ --no-https -p $threads &
+          pids+=($!)
+          ./juicefs sync --dirs data/  s3://minioadmin:minioadmin@localhost:8080/$volume/data/ --no-https -p $threads &
+          pids+=($!)
+          wait "${pids[@]}"
+          rm -rf $HOME/.juicefs/cache/ || true
+          # ./mc alias set minio http://localhost:9000 minioadmin minioadmin --api S3v4
+          # ./mc mb minio/$volume
+          # ./mc cp --recursive data/  minio/$volume/data
           end=`date +%s`
           time=$((end-start))
-          echo time is: $time
+          echo time cost is: $time second
+          killall juicefs 
+          sleep 3
           ./juicefs mount -d $meta_url $mp
-          rm -rf $mp/source_dir
+          diff -ur data/ $mp/data/ 
+          echo "diff succeed"
+          ./juicefs umount  $mp --force
+        
+      - name: Sync with empty dir
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          threads=20
+          mp=/tmp/myjfs
+          volume=myjfs
+          export MINIO_ROOT_USER=minioadmin
+          export MINIO_ROOT_PASSWORD=minioadmin
+          ./juicefs mdtest $meta_url test --dirs 10 --depth 2 --files 10 --threads 10 --no-usage-report
+          ./juicefs gateway $meta_url localhost:8080 --access-log /tmp/access1.log &
+          sleep 10
+          mkdir emptydir
+          declare -a pids  
+          ./juicefs sync emptydir/ s3://minioadmin:minioadmin@localhost:8080/$volume/test/ --delete-dst --no-https -p $threads &
+          pids+=($!)
+          ./juicefs sync emptydir/ s3://minioadmin:minioadmin@localhost:8080/$volume/test/ --delete-dst --no-https -p $threads &
+          pids+=($!)
+          ./juicefs sync emptydir/ s3://minioadmin:minioadmin@localhost:8080/$volume/test/ --delete-dst --no-https -p $threads &
+          pids+=($!)
+          wait "${pids[@]}"
+          killall juicefs
+          sleep 3
+          ./juicefs mount -d $meta_url $mp
+          [ -d "$mp/test/" ] && exit 1 
+          ./juicefs umount  $mp --force
+        shell: bash
+
+      - name: log
+        if: ${{ always() }}
+        shell: bash
+        run: | 
+          if [ -f ~/.juicefs/juicefs.log ]; then
+            tail -300 ~/.juicefs/juicefs.log
+            grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          fi
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
       - name: Setup upterm session
         if: ${{ failure() }}
+        timeout-minutes: 1
         uses: lhotari/action-upterm@v1
