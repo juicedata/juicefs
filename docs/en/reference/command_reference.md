@@ -40,7 +40,7 @@ COMMANDS:
      stats    Show real time performance statistics of JuiceFS
      profile  Show profiling of operations completed in JuiceFS
      info     Show internal information of a path or inode
-     doctor   Show information from multiple dimensions such as the operating environment and system logs
+     debug    Show information from multiple dimensions such as the operating environment and system logs
    SERVICE:
      mount    Mount a volume
      umount   Unmount a volume
@@ -1197,7 +1197,7 @@ skip sanity check and force destroy the volume (default: false)
 $ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 ```
 
-### juicefs doctor
+### juicefs debug
 
 #### Description
 
@@ -1206,13 +1206,13 @@ It collects and displays information from multiple dimensions such as the operat
 #### Synopsis
 
 ```
-juicefs doctor [command options] MOUNTPOINT
+juicefs debug [command options] MOUNTPOINT
 ```
 
 #### Options
 
 `--out-dir value`<br />
-The output directory of the results, automatically created if the directory does not exist (default: ./doctor/)
+The output directory of the results, automatically created if the directory does not exist (default: ./debug/)
 
 `--stats-sec value`<br />
 The number of seconds to sample .stats file (default: 5)
@@ -1236,14 +1236,14 @@ The number of seconds to sample profile metrics (default: 30)
 
 ```bash
 # Collect and display information about the mount point /mnt/jfs
-$ juicefs doctor /mnt/jfs
+$ juicefs debug /mnt/jfs
 
 # Specify the output directory as /var/log
-$ juicefs doctor --out-dir=/var/log /mnt/jfs
+$ juicefs debug --out-dir=/var/log /mnt/jfs
 
 # Enable log collection and get the last up to 1000 log entries
-$ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 /mnt/jfs
+$ juicefs debug --out-dir=/var/log --collect-log --limit=1000 /mnt/jfs
 
 # Enable pprof metrics collection
-$ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /mnt/jfs
+$ juicefs debug --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /mnt/jfs
 ```

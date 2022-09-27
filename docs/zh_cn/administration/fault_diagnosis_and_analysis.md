@@ -164,11 +164,11 @@ curl 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pb.gz
 ```
 
 :::tip 建议
-你也可以使用doctor命令自动收集这些运行时信息并保存到本地，默认保存到当前目录下的doctor目录中，例如：
+你也可以使用 juicefs debug 命令自动收集这些运行时信息并保存到本地，默认保存到当前目录下的 debug 目录中，例如：
 ```bash
-juicefs doctor --collect-pprof /mnt/jfs
+juicefs debug --collect-pprof /mnt/jfs
 ```
-关于doctor命令的更多信息，请查看[命令参考](https://juicefs.com/docs/zh/community/command_reference#juicefs-doctor)
+关于 juicefs debug 命令的更多信息，请查看[命令参考](https://juicefs.com/docs/zh/community/command_reference#juicefs-debug)
 :::
 
 如果你安装了 `go` 命令，那么可以通过 `go tool pprof` 命令直接分析，例如分析 CPU 性能统计：

@@ -40,7 +40,7 @@ COMMANDS:
      stats    Show real time performance statistics of JuiceFS
      profile  Show profiling of operations completed in JuiceFS
      info     Show internal information of a path or inode
-     doctor   Show information from multiple dimensions such as the operating environment and system logs
+     debug   Show information from multiple dimensions such as the operating environment and system logs
    SERVICE:
      mount    Mount a volume
      umount   Unmount a volume
@@ -1200,7 +1200,7 @@ juicefs destroy [command options] META-URL UUID
 $ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 ```
 
-### juicefs doctor
+### juicefs debug
 
 #### 描述
 
@@ -1209,13 +1209,13 @@ $ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 #### 使用
 
 ```
-juicefs doctor [command options] MOUNTPOINT
+juicefs debug [command options] MOUNTPOINT
 ```
 
 #### 选项
 
 `--out-dir value`<br />
-结果输出目录，若目录不存在则自动创建 (默认：./doctor/)
+结果输出目录，若目录不存在则自动创建 (默认：./debug/)
 
 `--stats-sec value`<br />
 .stats文件采样秒数 (默认：5)
@@ -1239,14 +1239,14 @@ profile指标采样秒数 (默认：30)
 
 ```bash
 # 收集并展示挂载点 /mnt/jfs 的各类信息
-$ juicefs doctor /mnt/jfs
+$ juicefs debug /mnt/jfs
 
 # 指定输出目录为 /var/log
-$ juicefs doctor --out-dir=/var/log /mnt/jfs
+$ juicefs debug --out-dir=/var/log /mnt/jfs
 
 # 启用日志收集，并收集最后1000条日志条目
-$ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 /mnt/jfs
+$ juicefs debug --out-dir=/var/log --collect-log --limit=1000 /mnt/jfs
 
 # 启用pprof指标收集
-$ juicefs doctor --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /mnt/jfs
+$ juicefs debug --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /mnt/jfs
 ```
