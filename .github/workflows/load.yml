@@ -9,8 +9,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb', 'fdb']
-        meta: ['fdb']
+        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb']
+        meta: ['badgerdb']
     runs-on: ubuntu-latest
 
     services:
@@ -66,7 +66,7 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           start_meta_engine ${{matrix.meta}}
 
-      - name: Load and dump
+      - name: Load and dump with small directory
         timeout-minutes: 30
         run: |
           source .github/scripts/start_meta_engine.sh
@@ -162,5 +162,5 @@ jobs:
           
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 1
+        timeout-minutes: 30
         uses: lhotari/action-upterm@v1
