@@ -93,15 +93,15 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs format $meta_url --trash-days 0 pics
+          sudo ./juicefs format $meta_url --trash-days 0 pics
 
       - name: Juicefs Mount
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo mkdir /var/jfs
-          sudo chmod 777 /var/jfs
-          ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report &
+          # sudo mkdir /var/jfs
+          # sudo chmod 777 /var/jfs
+          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report &
           sleep 5
           if [ ! -f /tmp/jfs/.accesslog ]; then
             echo "<FATAL>: mount failed"
@@ -110,7 +110,6 @@ jobs:
 
       - name: Pjdfstest
         run: |
-          
           sudo apt-get update
           sudo apt-get install -y libtap-harness-archive-perl
           cd /tmp/jfs/
@@ -128,6 +127,10 @@ jobs:
           if [ -f ~/.juicefs/juicefs.log ]; then
             tail -300 ~/.juicefs/juicefs.log
             grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          fi
+          if [ -f /var/log/juicefs.log ]; then
+            tail -300 /var/log/juicefs.log
+            grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           fi
 
       - name: Send Slack Notification
