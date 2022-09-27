@@ -85,7 +85,7 @@ jobs:
           ./juicefs dump $meta_url dump.json
           echo `date`, finish dump
           sudo mkdir /var/jfs
-          chmod 777 /var/jfs
+          sudo chmod 777 /var/jfs
           ./juicefs mount $meta_url $mount_point -d
           inode=$(df -i $mount_point | grep JuiceFS |awk -F" " '{print $3}')
           if [ "$inode" -ne "2233313" ]; then 
@@ -124,7 +124,7 @@ jobs:
           echo `date`, start dump
           ./juicefs dump $meta_url dump.json
           echo `date`, finish dump
-          chmod 777 /var/jfs
+          sudo chmod 777 /var/jfs
           ./juicefs mount $meta_url $mount_point -d
           df -i $mount_point
           inode=$(df -i $mount_point | grep JuiceFS |awk -F" " '{print $3}')
