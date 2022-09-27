@@ -25,10 +25,22 @@ jobs:
       fail-fast: false
       matrix:
         # TODO: add fdb
-        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb', 'fdb']
-        # meta: [ 'mysql']
+        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badgerdb', 'mariadb', 'fdb']
+        meta: [ 'mysql', 'redis']
         # meta: ['fdb']
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
@@ -89,19 +101,25 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           sudo mkdir /var/jfs
           sudo chmod 777 /var/jfs
-          ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
+          ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report &
+          sleep 5
+          if [ ! -f /tmp/jfs/.accesslog ]; then
+            echo "<FATAL>: mount failed"
+            exit 1
+          fi
 
       - name: Pjdfstest
         run: |
+          
           sudo apt-get update
           sudo apt-get install -y libtap-harness-archive-perl
           cd /tmp/jfs/
-          sudo git clone https://github.com/sanwan/pjdfstest.git
+          git clone https://github.com/sanwan/pjdfstest.git
           cd pjdfstest
-          sudo autoreconf -ifs
-          sudo ./configure
-          sudo make pjdfstest
-          sudo prove -rv tests/
+          autoreconf -ifs
+          ./configure
+          make pjdfstest
+          prove -rv tests/
 
       - name: log
         if: ${{ always() }}
