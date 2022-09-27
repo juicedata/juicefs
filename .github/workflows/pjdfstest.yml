@@ -81,31 +81,36 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs format $meta_url --trash-days 0 pics
+          ./juicefs format $meta_url --trash-days 0 pics
 
       - name: Juicefs Mount
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
+          sudo mkdir /var/jfs
+          sudo chmod 777 /var/jfs
+          ./juicefs mount -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
 
       - name: Pjdfstest
         run: |
           sudo apt-get update
           sudo apt-get install -y libtap-harness-archive-perl
           cd /tmp/jfs/
-          git clone https://github.com/sanwan/pjdfstest.git
+          sudo git clone https://github.com/sanwan/pjdfstest.git
           cd pjdfstest
           autoreconf -ifs
           ./configure
           make pjdfstest
-          sudo prove -rv tests/
+          prove -rv tests/
 
-      - name: Log
+      - name: log
         if: ${{ always() }}
-        run: |
-          tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+        shell: bash
+        run: | 
+          if [ -f ~/.juicefs/juicefs.log ]; then
+            tail -300 ~/.juicefs/juicefs.log
+            grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          fi
 
       - name: Send Slack Notification
         if: ${{ failure() }}
