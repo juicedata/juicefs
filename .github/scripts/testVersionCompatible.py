@@ -241,7 +241,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         upload_limit=st.integers(min_value=0, max_value=1000), 
         download_limit=st.integers(min_value=0, max_value=1000), 
         prefetch=st.integers(min_value=0, max_value=100), 
-        writeback=st.booleans(),
+        writeback=st.just(False),
         upload_delay=st.sampled_from([0, 2]), 
         cache_dir=st.sampled_from(['cache1', 'cache2']),
         cache_size=st.integers(min_value=0, max_value=1024000), 
@@ -386,6 +386,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('start rmr')
         path = f'{JuicefsMachine.MOUNT_POINT}{file_name}'
         write_block(JuicefsMachine.MOUNT_POINT, path, 1048576, 3)
+        os.system(f'ls -l {path}')
         assert(os.path.exists(path))
         run_cmd(f'stat {path}')
         options = [juicefs, 'rmr', path]
