@@ -62,8 +62,6 @@ func (s *speedy) List(prefix, marker, delimiter string, limit int64) ([]Object, 
 	query := url.Values{}
 	query.Add("prefix", prefix)
 	query.Add("marker", marker)
-	query.Add("delimiter", delimiter)
-
 	if limit > 100000 {
 		limit = 100000
 	}

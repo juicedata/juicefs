@@ -81,8 +81,12 @@ func (s *swiftOSS) List(prefix, marker, delimiter string, limit int64) ([]Object
 		limit = 10000
 	}
 	var delimiter_ rune
-	if len([]rune(delimiter)) == 1 {
-		delimiter_ = []rune(delimiter)[0]
+	if delimiter != "" {
+		if len([]rune(delimiter)) == 1 {
+			delimiter_ = []rune(delimiter)[0]
+		} else {
+			return nil, fmt.Errorf("delimiter should be a rune but now is %s", delimiter)
+		}
 	}
 	objects, err := s.conn.Objects(s.container, &swift.ObjectsOpts{Prefix: prefix, Marker: marker, Delimiter: delimiter_, Limit: int(limit)})
 	if err != nil {

@@ -90,6 +90,9 @@ func (t *tikv) Delete(key string) error {
 }
 
 func (t *tikv) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+	if delimiter != "" {
+		return nil, notSupportedDelimiter
+	}
 	if marker == "" {
 		marker = prefix
 	}
@@ -97,11 +100,11 @@ func (t *tikv) List(prefix, marker, delimiter string, limit int64) ([]Object, er
 		limit = int64(rawkv.MaxRawKVScanLimit)
 	}
 	// TODO: key only
-	keys, vs, err := t.c.Scan(context.TODO(), []byte(marker), []byte(delimiter), int(limit))
+	keys, vs, err := t.c.Scan(context.TODO(), []byte(marker), nil, int(limit))
 	if err != nil {
 		return nil, err
 	}
-	var objs []Object = make([]Object, len(keys))
+	var objs = make([]Object, len(keys))
 	mtime := time.Now()
 	for i, k := range keys {
 		// FIXME: mtime
