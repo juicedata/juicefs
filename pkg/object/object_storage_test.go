@@ -189,8 +189,12 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 	defer s.Delete("c/")
-	if err := s.Put("c/", bytes.NewReader(nil)); err != nil {
-		t.Fatalf("PUT failed: %s", err.Error())
+	//tikv will appear empty value is not supported
+	if err1 := s.Put("c/", bytes.NewReader(nil)); err1 != nil {
+		//minio will appear XMinioObjectExistsAsDirectory: Object name already exists as a directory. status code: 409
+		if err2 := s.Put("c/", bytes.NewReader(br)); err2 != nil {
+			t.Fatalf("PUT failed err1: %s, err2: %s", err1.Error(), err2.Error())
+		}
 	}
 	defer s.Delete("a1")
 	if err := s.Put("a1", bytes.NewReader(br)); err != nil {
@@ -737,7 +741,7 @@ func TestIBMCOS(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	// schema: S3 AWS_ENDPOINT=xxxxx  AWS_ACCESS_KEY_ID=xxxx  AWS_SECRET_ACCESS_KEY=xxxx
-	envFile := "/Users/duanjiaxing/apps/aksk.txt"
+	envFile := "/tmp/aksk.txt"
 	if _, err := os.Stat(envFile); err == nil {
 		file, _ := os.ReadFile(envFile)
 		for _, line := range strings.Split(strings.TrimSpace(string(file)), "\n") {
