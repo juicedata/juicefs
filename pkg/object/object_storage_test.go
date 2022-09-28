@@ -191,7 +191,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	defer s.Delete("c/")
 	//tikv will appear empty value is not supported
 	if err1 := s.Put("c/", bytes.NewReader(nil)); err1 != nil {
-		//minio will appear XMinioObjectExistsAsDirectory: Object name already exists as a directory. status code: 409
+		//minio will appear XMinioObjectExistsAsDirectory: Object name already exists as a directory. status code:  409
 		if err2 := s.Put("c/", bytes.NewReader(br)); err2 != nil {
 			t.Fatalf("PUT failed err1: %s, err2: %s", err1.Error(), err2.Error())
 		}
