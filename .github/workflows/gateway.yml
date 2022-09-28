@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        meta: [  'sqlite3', 'redis','tikv', 'badgerdb',  'etcd', 'fdb']
+        meta: [  'sqlite3', 'redis','tikv', 'badger',  'etcd', 'fdb']
         file_size: ['100M']
         isolation_level: ['']
         include:
