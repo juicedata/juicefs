@@ -189,7 +189,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 	defer s.Delete("c/")
-	if err := s.Put("c/", bytes.NewReader(br)); err != nil {
+	if err := s.Put("c/", bytes.NewReader(nil)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 	defer s.Delete("a1")
@@ -737,7 +737,7 @@ func TestIBMCOS(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	// schema: S3 AWS_ENDPOINT=xxxxx  AWS_ACCESS_KEY_ID=xxxx  AWS_SECRET_ACCESS_KEY=xxxx
-	envFile := "/tmp/aksk.txt"
+	envFile := "/Users/duanjiaxing/apps/aksk.txt"
 	if _, err := os.Stat(envFile); err == nil {
 		file, _ := os.ReadFile(envFile)
 		for _, line := range strings.Split(strings.TrimSpace(string(file)), "\n") {
