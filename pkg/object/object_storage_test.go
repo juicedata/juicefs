@@ -189,7 +189,11 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 	defer s.Delete("c/")
-	if err := s.Put("c/", bytes.NewReader(nil)); err != nil {
+	if err := s.Put("c/", bytes.NewReader(br)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
+	defer s.Delete("a1")
+	if err := s.Put("a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 	if obs, err := s.List("", "", "/", 10); err != nil {
@@ -199,10 +203,10 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Logf("list api error: %s", err)
 		}
 	} else {
-		if len(obs) != 4 {
-			t.Fatalf("list with delimiter should return four results but got %d", len(obs))
+		if len(obs) != 5 {
+			t.Fatalf("list with delimiter should return five results but got %d", len(obs))
 		}
-		keys := []string{"a/", "b/", "c/", "test"}
+		keys := []string{"a/", "a1", "b/", "c/", "test"}
 		for i, o := range obs {
 			if o.Key() != keys[i] {
 				t.Fatalf("should get key %s but got %s", keys[i], o.Key())

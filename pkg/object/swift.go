@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/ncw/swift"
@@ -89,6 +90,10 @@ func (s *swiftOSS) List(prefix, marker, delimiter string, limit int64) ([]Object
 	}
 	var objs = make([]Object, len(objects))
 	for i, o := range objects {
+		// https://docs.openstack.org/swift/latest/api/pseudo-hierarchical-folders-directories.html
+		if delimiter != "" && o.PseudoDirectory {
+			objs = append(objs, &obj{o.SubDir, 0, time.Unix(0, 0), true})
+		}
 		objs[i] = &obj{o.Name, o.Bytes, o.LastModified, strings.HasSuffix(o.Name, "/")}
 	}
 	return objs, nil
