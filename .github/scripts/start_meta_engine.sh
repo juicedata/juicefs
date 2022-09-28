@@ -13,7 +13,7 @@ start_meta_engine(){
         source /home/runner/.profile
         tiup playground --mode tikv-slim &
         sleep 5
-    elif [ "$meta" == "badgerdb" ]; then
+    elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
     elif [ "$meta" == "mariadb" ]; then
         docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
@@ -52,7 +52,7 @@ get_meta_url(){
         meta_url="sqlite3://sync-test.db"
     elif [ "$meta" == "tikv" ]; then
         meta_url="tikv://127.0.0.1:2379/load_test"
-    elif [ "$meta" == "badgerdb" ]; then
+    elif [ "$meta" == "badger" ]; then
         meta_url="badger://load_test"
     elif [ "$meta" == "mariadb" ]; then
         meta_url="mysql://root:root@(127.0.0.1)/load_test"
