@@ -130,36 +130,16 @@ func (m *memStore) Delete(key string) error {
 }
 
 func (m *memStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+	if delimiter != "" {
+		return nil, notSupportedDelimiter
+	}
 	m.Lock()
 	defer m.Unlock()
 
 	objs := make([]Object, 0)
-	var exist = make(map[string]struct{})
 	for k := range m.objects {
 		if strings.HasPrefix(k, prefix) && k > marker {
 			o := m.objects[k]
-			if delimiter != "" {
-				noPrefixKey := strings.TrimPrefix(k, prefix)
-				if strings.Contains(noPrefixKey, delimiter) {
-					commonPrefix := prefix + noPrefixKey[:strings.Index(noPrefixKey, delimiter)+1]
-					if _, ok := exist[commonPrefix]; !ok {
-						objs = append(objs, &file{
-							obj{
-								commonPrefix,
-								0,
-								time.Unix(0, 0),
-								true,
-							},
-							o.owner,
-							o.group,
-							o.mode,
-							false,
-						})
-						exist[commonPrefix] = struct{}{}
-					}
-					continue
-				}
-			}
 			f := &file{
 				obj{
 					k,
