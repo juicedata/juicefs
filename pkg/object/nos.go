@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -130,12 +131,13 @@ func (s *nos) Delete(key string) error {
 	return s.client.DeleteObject(&param)
 }
 
-func (s *nos) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *nos) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	param := model.ListObjectsRequest{
-		Bucket:  s.bucket,
-		Prefix:  prefix,
-		Marker:  marker,
-		MaxKeys: int(limit),
+		Bucket:    s.bucket,
+		Prefix:    prefix,
+		Marker:    marker,
+		MaxKeys:   int(limit),
+		Delimiter: delimiter,
 	}
 	resp, err := s.client.ListObjects(&param)
 	if err != nil {
@@ -150,6 +152,12 @@ func (s *nos) List(prefix, marker string, limit int64) ([]Object, error) {
 			mtime = mtime.Add(-8 * time.Hour)
 		}
 		objs[i] = &obj{o.Key, o.Size, mtime, strings.HasSuffix(o.Key, "/")}
+	}
+	if delimiter != "" {
+		for _, p := range resp.CommonPrefixes {
+			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }

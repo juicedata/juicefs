@@ -89,7 +89,7 @@ func (s *scsClient) Delete(key string) error {
 	return s.b.Delete(key)
 }
 
-func (s *scsClient) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *scsClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if marker != "" {
 		if s.marker == "" {
 			// last page
@@ -97,7 +97,7 @@ func (s *scsClient) List(prefix, marker string, limit int64) ([]Object, error) {
 		}
 		marker = s.marker
 	}
-	list, err := s.b.List("", prefix, marker, limit)
+	list, err := s.b.List(delimiter, prefix, marker, limit)
 	if err != nil {
 		s.marker = ""
 		return nil, err
@@ -118,6 +118,12 @@ func (s *scsClient) List(prefix, marker string, limit int64) ([]Object, error) {
 			mtime: mtime,
 			isDir: strings.HasSuffix(ob.Name, "/"),
 		}
+	}
+	if delimiter != "" {
+		for _, p := range list.CommonPrefixes {
+			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }

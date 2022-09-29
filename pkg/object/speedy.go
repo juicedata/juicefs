@@ -45,7 +45,7 @@ type ListBucketResult struct {
 	Marker         string
 	MaxKeys        string
 	NextMarker     string
-	CommonPrefixes string
+	CommonPrefixes []string
 }
 
 func (s *speedy) String() string {
@@ -53,7 +53,10 @@ func (s *speedy) String() string {
 	return fmt.Sprintf("speedy://%s/", uri.Host)
 }
 
-func (s *speedy) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *speedy) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+	if delimiter != "" {
+		return nil, notSupportedDelimiter
+	}
 	uri, _ := url.ParseRequestURI(s.endpoint)
 
 	query := url.Values{}

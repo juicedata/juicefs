@@ -200,7 +200,10 @@ type uFileListObjectsOutput struct {
 	DataSet []*DataItem `json:"DataSet,omitempty"`
 }
 
-func (u *ufile) List(prefix, marker string, limit int64) ([]Object, error) {
+func (u *ufile) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+	if delimiter != "" {
+		return nil, notSupportedDelimiter
+	}
 	query := url.Values{}
 	query.Add("list", "")
 	query.Add("prefix", prefix)

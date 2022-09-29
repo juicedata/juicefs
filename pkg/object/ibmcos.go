@@ -27,7 +27,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/IBM/ibm-cos-sdk-go/aws"
 	"github.com/IBM/ibm-cos-sdk-go/aws/awserr"
@@ -134,12 +136,13 @@ func (s *ibmcos) Delete(key string) error {
 	return err
 }
 
-func (s *ibmcos) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *ibmcos) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	param := s3.ListObjectsInput{
-		Bucket:  &s.bucket,
-		Prefix:  &prefix,
-		Marker:  &marker,
-		MaxKeys: &limit,
+		Bucket:    &s.bucket,
+		Prefix:    &prefix,
+		Marker:    &marker,
+		MaxKeys:   &limit,
+		Delimiter: &delimiter,
 	}
 	resp, err := s.s3.ListObjects(&param)
 	if err != nil {
@@ -150,6 +153,12 @@ func (s *ibmcos) List(prefix, marker string, limit int64) ([]Object, error) {
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
 		objs[i] = &obj{*o.Key, *o.Size, *o.LastModified, strings.HasSuffix(*o.Key, "/")}
+	}
+	if delimiter != "" {
+		for _, p := range resp.CommonPrefixes {
+			objs = append(objs, &obj{*p.Prefix, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }

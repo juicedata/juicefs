@@ -562,7 +562,7 @@ func (bm *benchMarkObj) chtimes(key string, startKey int) error {
 }
 
 func listAll(s object.ObjectStorage, prefix, marker string, limit int64) ([]object.Object, error) {
-	r, err := s.List(prefix, marker, limit)
+	r, err := s.List(prefix, marker, "", limit)
 	if err == nil {
 		return r, nil
 	}

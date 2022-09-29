@@ -27,7 +27,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -139,12 +141,13 @@ func (s *ks3) Delete(key string) error {
 	return err
 }
 
-func (s *ks3) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *ks3) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	param := s3.ListObjectsInput{
-		Bucket:  &s.bucket,
-		Prefix:  &prefix,
-		Marker:  &marker,
-		MaxKeys: &limit,
+		Bucket:    &s.bucket,
+		Prefix:    &prefix,
+		Marker:    &marker,
+		MaxKeys:   &limit,
+		Delimiter: &delimiter,
 	}
 	resp, err := s.s3.ListObjects(&param)
 	if err != nil {
@@ -155,6 +158,12 @@ func (s *ks3) List(prefix, marker string, limit int64) ([]Object, error) {
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
 		objs[i] = &obj{*o.Key, *o.Size, *o.LastModified, strings.HasSuffix(*o.Key, "/")}
+	}
+	if delimiter != "" {
+		for _, p := range resp.CommonPrefixes {
+			objs = append(objs, &obj{*p.Prefix, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }

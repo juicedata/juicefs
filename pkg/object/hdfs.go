@@ -177,7 +177,7 @@ func (h *hdfsclient) Delete(key string) error {
 	return err
 }
 
-func (h *hdfsclient) List(prefix, marker string, limit int64) ([]Object, error) {
+func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	return nil, notSupported
 }
 

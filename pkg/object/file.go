@@ -319,7 +319,7 @@ func readDirSorted(dirname string) ([]*mEntry, error) {
 	return mEntries, err
 }
 
-func (d *filestore) List(prefix, marker string, limit int64) ([]Object, error) {
+func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	return nil, notSupported
 }
 

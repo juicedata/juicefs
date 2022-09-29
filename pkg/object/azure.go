@@ -93,7 +93,11 @@ func (b *wasb) Delete(key string) error {
 	return err
 }
 
-func (b *wasb) List(prefix, marker string, limit int64) ([]Object, error) {
+func (b *wasb) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+	if delimiter != "" {
+		return nil, notSupportedDelimiter
+	}
+	// todo
 	if marker != "" {
 		if b.marker == "" {
 			// last page

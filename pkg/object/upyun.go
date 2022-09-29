@@ -98,7 +98,10 @@ func (u *up) Copy(dst, src string) error {
 	})
 }
 
-func (u *up) List(prefix, marker string, limit int64) ([]Object, error) {
+func (u *up) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+	if delimiter != "" {
+		return nil, notSupportedDelimiter
+	}
 	if u.listing == nil {
 		listing := make(chan *upyun.FileInfo, limit)
 		go func() {

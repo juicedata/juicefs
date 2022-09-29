@@ -29,7 +29,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -157,13 +159,14 @@ func (s *obsClient) Delete(key string) error {
 	return err
 }
 
-func (s *obsClient) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *obsClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	input := &obs.ListObjectsInput{
 		Bucket: s.bucket,
 		Marker: marker,
 	}
 	input.Prefix = prefix
 	input.MaxKeys = int(limit)
+	input.Delimiter = delimiter
 	resp, err := s.c.ListObjects(input)
 	if err != nil {
 		return nil, err
@@ -173,6 +176,12 @@ func (s *obsClient) List(prefix, marker string, limit int64) ([]Object, error) {
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
 		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
+	}
+	if delimiter != "" {
+		for _, p := range resp.CommonPrefixes {
+			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }

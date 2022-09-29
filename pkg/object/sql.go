@@ -127,9 +127,13 @@ func (s *sqlStore) Delete(key string) error {
 	return err
 }
 
-func (s *sqlStore) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *sqlStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if marker == "" {
 		marker = prefix
+	}
+	// todo
+	if delimiter != "" {
+		return nil, notSupportedDelimiter
 	}
 	var bs []blob
 	err := s.db.Where("`key` >= ?", marker).Limit(int(limit)).Cols("`key`", "size", "modified").OrderBy("`key`").Find(&bs)

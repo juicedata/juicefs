@@ -18,6 +18,7 @@ package object
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -103,6 +104,7 @@ type FileSystem interface {
 }
 
 var notSupported = utils.ENOTSUP
+var notSupportedDelimiter = errors.New("not supported delimiter")
 
 type DefaultObjectStorage struct{}
 
@@ -132,7 +134,7 @@ func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string
 	return nil, "", nil
 }
 
-func (s DefaultObjectStorage) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s DefaultObjectStorage) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	return nil, notSupported
 }
 

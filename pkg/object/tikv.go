@@ -89,7 +89,10 @@ func (t *tikv) Delete(key string) error {
 	return t.c.Delete(context.TODO(), []byte(key))
 }
 
-func (t *tikv) List(prefix, marker string, limit int64) ([]Object, error) {
+func (t *tikv) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+	if delimiter != "" {
+		return nil, notSupportedDelimiter
+	}
 	if marker == "" {
 		marker = prefix
 	}
@@ -101,7 +104,7 @@ func (t *tikv) List(prefix, marker string, limit int64) ([]Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	var objs []Object = make([]Object, len(keys))
+	var objs = make([]Object, len(keys))
 	mtime := time.Now()
 	for i, k := range keys {
 		// FIXME: mtime

@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -112,12 +113,12 @@ func (q *bosclient) Delete(key string) error {
 	return err
 }
 
-func (q *bosclient) List(prefix, marker string, limit int64) ([]Object, error) {
+func (q *bosclient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
 	limit_ := int(limit)
-	out, err := q.c.SimpleListObjects(q.bucket, prefix, limit_, marker, "")
+	out, err := q.c.SimpleListObjects(q.bucket, prefix, limit_, marker, delimiter)
 	if err != nil {
 		return nil, err
 	}
@@ -127,6 +128,12 @@ func (q *bosclient) List(prefix, marker string, limit int64) ([]Object, error) {
 		k := out.Contents[i]
 		mod, _ := time.Parse("2006-01-02T15:04:05Z", k.LastModified)
 		objs[i] = &obj{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/")}
+	}
+	if delimiter != "" {
+		for _, p := range out.CommonPrefixes {
+			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }

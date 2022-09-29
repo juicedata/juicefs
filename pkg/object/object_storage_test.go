@@ -49,7 +49,7 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 }
 
 func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, error) {
-	r, err := s.List(prefix, marker, limit)
+	r, err := s.List(prefix, marker, "", limit)
 	if !errors.Is(err, notSupported) {
 		return r, nil
 	}
@@ -169,6 +169,52 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("list3 failed: %s", err2.Error())
 		} else if len(objs) != 0 {
 			t.Fatalf("list3 should not return anything, but got %d", len(objs))
+		}
+	}
+
+	defer s.Delete("a/a")
+	if err := s.Put("a/a", bytes.NewReader(br)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
+	defer s.Delete("a/a1")
+	if err := s.Put("a/a1", bytes.NewReader(br)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
+	defer s.Delete("b/b")
+	if err := s.Put("b/b", bytes.NewReader(br)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
+	defer s.Delete("b/b1")
+	if err := s.Put("b/b1", bytes.NewReader(br)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
+	defer s.Delete("c/")
+	//tikv will appear empty value is not supported
+	if err1 := s.Put("c/", bytes.NewReader(nil)); err1 != nil {
+		//minio will appear XMinioObjectExistsAsDirectory: Object name already exists as a directory. status code:  409
+		if err2 := s.Put("c/", bytes.NewReader(br)); err2 != nil {
+			t.Fatalf("PUT failed err1: %s, err2: %s", err1.Error(), err2.Error())
+		}
+	}
+	defer s.Delete("a1")
+	if err := s.Put("a1", bytes.NewReader(br)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
+	if obs, err := s.List("", "", "/", 10); err != nil {
+		if !(errors.Is(err, notSupportedDelimiter) || errors.Is(err, notSupported)) {
+			t.Fatalf("list with delimiter: %s", err)
+		} else {
+			t.Logf("list api error: %s", err)
+		}
+	} else {
+		if len(obs) != 5 {
+			t.Fatalf("list with delimiter should return five results but got %d", len(obs))
+		}
+		keys := []string{"a/", "a1", "b/", "c/", "test"}
+		for i, o := range obs {
+			if o.Key() != keys[i] {
+				t.Fatalf("should get key %s but got %s", keys[i], o.Key())
+			}
 		}
 	}
 
@@ -297,6 +343,7 @@ func TestMem(t *testing.T) {
 }
 
 func TestDisk(t *testing.T) {
+	_ = os.RemoveAll("/tmp/abc/")
 	s, _ := newDisk("/tmp/abc/", "", "", "")
 	testStorage(t, s)
 }

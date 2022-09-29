@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -161,15 +162,16 @@ func (q *qingstor) Delete(key string) error {
 	return err
 }
 
-func (q *qingstor) List(prefix, marker string, limit int64) ([]Object, error) {
+func (q *qingstor) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
 	limit_ := int(limit)
 	input := &qs.ListObjectsInput{
-		Prefix: &prefix,
-		Marker: &marker,
-		Limit:  &limit_,
+		Prefix:    &prefix,
+		Marker:    &marker,
+		Limit:     &limit_,
+		Delimiter: &delimiter,
 	}
 	out, err := q.bucket.ListObjects(input)
 	if err != nil {
@@ -185,6 +187,12 @@ func (q *qingstor) List(prefix, marker string, limit int64) ([]Object, error) {
 			time.Unix(int64(*k.Modified), 0),
 			strings.HasSuffix(*k.Key, "/"),
 		}
+	}
+	if delimiter != "" {
+		for _, p := range out.CommonPrefixes {
+			objs = append(objs, &obj{*p, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }

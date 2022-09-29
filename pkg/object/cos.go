@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -119,11 +120,12 @@ func (c *COS) Delete(key string) error {
 	return err
 }
 
-func (c *COS) List(prefix, marker string, limit int64) ([]Object, error) {
+func (c *COS) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	param := cos.BucketGetOptions{
-		Prefix:  prefix,
-		Marker:  marker,
-		MaxKeys: int(limit),
+		Prefix:    prefix,
+		Marker:    marker,
+		MaxKeys:   int(limit),
+		Delimiter: delimiter,
 	}
 	resp, _, err := c.c.Bucket.Get(ctx, &param)
 	for err == nil && len(resp.Contents) == 0 && resp.IsTruncated {
@@ -139,6 +141,12 @@ func (c *COS) List(prefix, marker string, limit int64) ([]Object, error) {
 		o := resp.Contents[i]
 		t, _ := time.Parse(time.RFC3339, o.LastModified)
 		objs[i] = &obj{o.Key, int64(o.Size), t, strings.HasSuffix(o.Key, "/")}
+	}
+	if delimiter != "" {
+		for _, p := range resp.CommonPrefixes {
+			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true})
+		}
+		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }

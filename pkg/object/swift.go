@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/ncw/swift"
@@ -75,17 +76,30 @@ func (s *swiftOSS) Delete(key string) error {
 	return err
 }
 
-func (s *swiftOSS) List(prefix, marker string, limit int64) ([]Object, error) {
+func (s *swiftOSS) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if limit > 10000 {
 		limit = 10000
 	}
-	objects, err := s.conn.Objects(s.container, &swift.ObjectsOpts{Prefix: prefix, Marker: marker, Limit: int(limit)})
+	var delimiter_ rune
+	if delimiter != "" {
+		if len([]rune(delimiter)) == 1 {
+			delimiter_ = []rune(delimiter)[0]
+		} else {
+			return nil, fmt.Errorf("delimiter should be a rune but now is %s", delimiter)
+		}
+	}
+	objects, err := s.conn.Objects(s.container, &swift.ObjectsOpts{Prefix: prefix, Marker: marker, Delimiter: delimiter_, Limit: int(limit)})
 	if err != nil {
 		return nil, err
 	}
 	var objs = make([]Object, len(objects))
 	for i, o := range objects {
-		objs[i] = &obj{o.Name, o.Bytes, o.LastModified, strings.HasSuffix(o.Name, "/")}
+		// https://docs.openstack.org/swift/latest/api/pseudo-hierarchical-folders-directories.html
+		if delimiter != "" && o.PseudoDirectory {
+			objs[i] = &obj{o.SubDir, 0, time.Unix(0, 0), true}
+		} else {
+			objs[i] = &obj{o.Name, o.Bytes, o.LastModified, strings.HasSuffix(o.Name, "/")}
+		}
 	}
 	return objs, nil
 }

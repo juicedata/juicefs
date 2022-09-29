@@ -129,7 +129,10 @@ func (m *memStore) Delete(key string) error {
 	return nil
 }
 
-func (m *memStore) List(prefix, marker string, limit int64) ([]Object, error) {
+func (m *memStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+	if delimiter != "" {
+		return nil, notSupportedDelimiter
+	}
 	m.Lock()
 	defer m.Unlock()
 
