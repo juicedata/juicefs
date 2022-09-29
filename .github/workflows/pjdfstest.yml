@@ -34,7 +34,7 @@ jobs:
             echo "set-output for schedule succeed"
           else
             # echo '::set-output name=meta_matrix::["redis"]'
-            echo '::set-output name=meta_matrix::[ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badger', 'mariadb', 'fdb']'
+            echo '::set-output name=meta_matrix::["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]'
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
