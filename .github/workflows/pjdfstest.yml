@@ -58,14 +58,6 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.18.x'
-
-      # - name: Set up Docker
-      #   uses: docker-practice/actions-setup-docker@master
-
       - uses: shogo82148/actions-setup-perl@v1
         with:
           perl-version: '5.34'
@@ -75,27 +67,18 @@ jobs:
         with:
           fetch-depth: 1
 
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Build linux target
+      - name: Set Variable
+        id: vars
         run: |
           if [ "${{matrix.meta}}" == "fdb" ]; then
-            echo "build juicefs.fdb"
-            wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
-            make juicefs.fdb
-            mv juicefs.fdb juicefs
+            echo ::set-output name=target::"juicefs.fdb"
           else
-            echo "build juicefs"
-            make juicefs 
-          fi
+            echo ::set-output name=target::"juicefs"
+
+      - name: Build
+        uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
 
       - name: Prepare meta db
         run: | 
