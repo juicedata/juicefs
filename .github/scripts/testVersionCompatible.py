@@ -33,7 +33,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         super(JuicefsMachine, self).__init__()
         self.run_id = uuid.uuid4().hex
         print(f'\ninit with run_id: {self.run_id}')
-        with open('command.log', 'a') as f:
+        with open(os.path.expanduser('~/command.log'), 'a') as f:
             f.write(f'init with run_id: {self.run_id}\n')
         self.formatted = False
         self.mounted = False

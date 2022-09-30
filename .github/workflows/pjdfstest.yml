@@ -74,6 +74,7 @@ jobs:
             echo ::set-output name=target::"juicefs.fdb"
           else
             echo ::set-output name=target::"juicefs"
+          fi
 
       - name: Build
         uses: ./.github/actions/build
