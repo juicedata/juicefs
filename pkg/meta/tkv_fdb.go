@@ -68,19 +68,37 @@ func (c *fdbClient) txn(f func(kvTxn) error) error {
 }
 
 func (c *fdbClient) scan(prefix []byte, handler func(key, value []byte)) error {
-	_, err := c.client.ReadTransact(func(t fdb.ReadTransaction) (interface{}, error) {
-		snapshot := t.Snapshot()
-		iter := snapshot.GetRange(
-			fdb.KeyRange{Begin: fdb.Key(prefix), End: fdb.Key(nextKey(prefix))},
-			fdb.RangeOptions{Mode: fdb.StreamingModeWantAll},
-		).Iterator()
-		for iter.Advance() {
-			r := iter.MustGet()
-			handler(r.Key, r.Value)
+	begin := fdb.Key(prefix)
+	end := fdb.Key(nextKey(prefix))
+	limit := 102400
+	var done bool
+	for {
+		if _, err := c.client.ReadTransact(func(t fdb.ReadTransaction) (interface{}, error) {
+			snapshot := t.Snapshot()
+			iter := snapshot.GetRange(
+				fdb.KeyRange{Begin: begin, End: end},
+				fdb.RangeOptions{Limit: limit, Mode: fdb.StreamingModeWantAll},
+			).Iterator()
+			var r fdb.KeyValue
+			var count int
+			for iter.Advance() {
+				r = iter.MustGet()
+				handler(r.Key, r.Value)
+				count++
+			}
+			if count < limit {
+				done = true
+			} else {
+				begin = append(r.Key, 0)
+			}
+			return nil, nil
+		}); err != nil {
+			return err
 		}
-		return nil, nil
-	})
-	return err
+		if done {
+			return nil
+		}
+	}
 }
 
 func (c *fdbClient) reset(prefix []byte) error {
