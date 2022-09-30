@@ -160,7 +160,7 @@ def mdtest(filesystem, meta_url):
 def run_jfs_cmd( options):
     options.append('--debug')
     print('run_jfs_cmd:'+' '.join(options))
-    with open('command.log', 'a') as f:
+    with open(os.path.expanduser('~/command.log'), 'a') as f:
         f.write(' '.join(options).replace('/home/runner', '~'))
         f.write('\n')
     try:

@@ -34,28 +34,16 @@ jobs:
           echo ::set-output name=MOUNT_POINT2::/tmp/juicefs-mysql-encoding-test2
           echo ::set-output name=BUCKET::/var/jfs/
           echo ::set-output name=NAME::mysql-encoding-test
-          
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.18.x'
 
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go
-          restore-keys: |
-            ${{ runner.os }}-go
-
-      - name: Build linux target
+      - name: Download old linux target
         run: |
           url=https://github.com/juicedata/juicefs/releases/download/v1.0.0-beta2/juicefs-1.0.0-beta2-linux-amd64.tar.gz
           wget -q $url 
           tar -zxf $(basename $url)
           mv juicefs juicefs_old
-          make juicefs
+
+      - name: Build new linux target
+        uses: ./.github/actions/build
 
       - name: Init 
         run: |

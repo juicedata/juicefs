@@ -18,37 +18,19 @@ jobs:
   mongodb_mmap:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.18.x'
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '2.7'
           architecture: 'x64'
 
-      - name: Set up Docker
-        uses: docker-practice/actions-setup-docker@master
-
       - name: Checkout
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
 
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go
-          restore-keys: |
-            ${{ runner.os }}-go
-
-      - name: Build linux target
-        run: |
-          make juicefs
+      - name: Build
+        uses: ./.github/actions/build
 
       - name: Run Redis
         run: |

@@ -70,9 +70,9 @@ runs:
         path: |
           ~/.cache/go-build
           ~/go/pkg/mod
-        key: ${{ runner.os }}-go
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go
+          ${{ runner.os }}-go-
 
     - name: Build linux target
       shell: bash

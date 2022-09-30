@@ -55,38 +55,24 @@ jobs:
           - 5432:5432
 
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.18.x'
-
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go
-          restore-keys: |
-            ${{ runner.os }}-go
-
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
-      - name: Make Juicefs
-        shell: bash
-        run: | 
+      - name: Set Variable
+        id: vars
+        run: |
           if [ "${{matrix.meta}}" == "fdb" ]; then
-            echo "build juicefs.fdb"
-            wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-            sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
-            make juicefs.fdb
-            mv juicefs.fdb juicefs
+            echo ::set-output name=target::"juicefs.fdb"
           else
-            echo "build juicefs"
-            make juicefs 
+            echo ::set-output name=target::"juicefs"
           fi
+
+      - name: Build new version
+        uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
 
       - name: Checkout old version
         uses: actions/checkout@v3

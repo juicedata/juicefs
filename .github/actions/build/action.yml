@@ -1,0 +1,38 @@
+name: 'Build Action'
+description: 'Build action'
+inputs:
+  target:
+    description: 'build target: juicefs, juicefs.fdb etc'
+    required: true
+    default: 'juicefs'
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.18.x'
+
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Build linux target
+      shell: bash
+      run: |
+        if [ "${{inputs.target}}" == "juicefs.fdb" ]; then
+          echo "build juicefs.fdb"
+          wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+          sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+          make ${{inputs.target}}
+          mv juicefs.fdb juicefs
+        else
+          echo "build juicefs"
+          make ${{inputs.target}}
+        fi
+

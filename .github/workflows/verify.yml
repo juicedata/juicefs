@@ -53,30 +53,30 @@ jobs:
         path: |
           ~/.cache/go-build
           ~/go/pkg/mod
-        key: ${{ runner.os }}-go
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go
+          ${{ runner.os }}-go-
 
     - name: Build linux target
-      run: GOPATH=$HOME/go make
+      run: make
 
     - name: build lite
-      run: GOPATH=$HOME/go make juicefs.lite
+      run: make juicefs.lite
 
     - name: build windows
-      run: GOPATH=$HOME/go make juicefs.exe
+      run: make juicefs.exe
 
     - name: build libjfs.dll
-      run: GOPATH=$HOME/go make -C sdk/java/libjfs libjfs.dll
+      run: make -C sdk/java/libjfs libjfs.dll
 
     - name: build ceph
       run: |
         sudo apt-get update
         sudo apt-get install librados-dev
-        GOPATH=$HOME/go make juicefs.ceph
+        make juicefs.ceph
 
     - name: build fdb
       run: |
         wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
         sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
-        GOPATH=$HOME/go make juicefs.fdb
+        make juicefs.fdb
