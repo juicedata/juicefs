@@ -512,4 +512,117 @@ juicefs mount -d "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs"
 
 ## FoundationDB
 
-即将推出......
+[FoundationDB](http://www.foundationdb.org/)是“一个能在多集群服务器上存放大规模结构化数据的分布式数据库”。该数据库系统专注于高性能、高可扩展性、和不错的容错能力。
+
+### 创建文件系统
+
+使用 foundationdb 作为元数据引擎时，需要使用如下格式来指定 `Meta-URL` 参数：
+
+```
+fdb://[cluster file path]?prefix=<prefix>
+```
+
+其中`cluster file path`为fdb的配置文件，由配置文件来进行对fdb server的连接。示例如下：
+
+```bash
+juicefs format 
+ fdb:///etc/foundationdb/fdb.cluster?prefix=jfs
+ pics
+```
+### [设置 TLS](https://apple.github.io/foundationdb/tls.html)
+**使用openssl生成CA证书**
+```
+user@host:> openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout private.key -out cert.crt
+user@host:> cat cert.crt private.key > fdb.pem
+```
+**配置TLS**
+
+| 命令行选项 | 客户选项 | 环境变量 | 目的 |
+|--------- |-------|-------|------|
+|tls_certificate_file|TLS_cert_path|FDB_TLS_CERTIFICATE_FILE|可以从中加载本地证书的文件的路径|
+|tls_key_file|TLS_key_path|FDB_TLS_KEY_FILE|从中加载私钥的文件的路径|
+|tls_verify_peers|TLS_verify_peers|FDB_TLS_VERIFY_PEERS|用于验证对等证书和会话的字节字符串|
+|tls_password|TLS_password|FDB_TLS_PASSWORD|表示用于解密私钥的密码的字节字符串|
+|tls_ca_file|TLS_ca_path|FDB_TLS_CA_FILE|包含要信任的CA 证书的文件的路径|
+
+**配置server端TLS**
+
+可以在foundationdb.conf或者环境变量中配置TLS参数，配置文件如下(重点在[foundationdb.4500]配置中)。
+```
+[fdbmonitor]
+user = foundationdb
+group = foundationdb
+
+[general]
+restart-delay = 60
+## by default, restart-backoff = restart-delay-reset-interval = restart-delay
+# initial-restart-delay = 0
+# restart-backoff = 60
+# restart-delay-reset-interval = 60
+cluster-file = /etc/foundationdb/fdb.cluster
+# delete-envvars =
+# kill-on-configuration-change = true
+
+## Default parameters for individual fdbserver processes
+[fdbserver]
+command = /usr/sbin/fdbserver
+#public-address = auto:$ID
+#listen-address = public
+datadir = /var/lib/foundationdb/data/$ID
+logdir = /var/log/foundationdb
+# logsize = 10MiB
+# maxlogssize = 100MiB
+# machine-id =
+# datacenter-id =
+# class = 
+# memory = 8GiB
+# storage-memory = 1GiB
+# cache-memory = 2GiB
+# metrics-cluster =
+# metrics-prefix =
+
+[fdbserver.4500]
+public-address = 127.0.0.1:4500:tls
+listen-address = public
+tls_certificate_file = /etc/foundationdb/fdb.pem
+tls_ca_file = /etc/foundationdb/cert.crt
+tls_key_file = /etc/foundationdb/private.key
+tls_verify_peers= Check.Valid=0
+
+[backup_agent]
+command = /usr/lib/foundationdb/backup_agent/backup_agent
+logdir = /var/log/foundationdb
+
+[backup_agent.1]
+```
+除此之外还需在fdb.cluster中在地址后加上`:tls`后缀，fdb.cluster如下：
+```
+u6pT9Jhl:ClZfjAWM@127.0.0.1:4500:tls
+```
+
+**配置client端**
+
+fdbcli同理，在client机器上需要配置tls参数以及fdb.cluster。
+
+通过fdbcli连接时
+```
+fdbcli --tls_certificate_file=/etc/foundationdb/fdb.pem \
+       --tls_ca_file=/etc/foundationdb/cert.crt \
+       --tls_key_file=/etc/foundationdb/private.key \
+       --tls_verify_peers=Check.Valid=0
+```
+
+通过api连接时(fdbcli也适用)
+```
+export FDB_TLS_CERTIFICATE_FILE=/etc/foundationdb/fdb.pem \
+export FDB_TLS_CA_FILE=/etc/foundationdb/cert.crt \
+export FDB_TLS_KEY_FILE=/etc/foundationdb/private.key \
+export FDB_TLS_VERIFY_PEERS=Check.Valid=0
+```
+
+### 挂载文件系统
+
+```shell
+juicefs mount -d 
+"fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" /mnt/jfs
+```
