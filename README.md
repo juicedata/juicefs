@@ -194,7 +194,7 @@ Welcome to join the [Discussions](https://github.com/juicedata/juicefs/discussio
 
 ## Usage Tracking
 
-JuiceFS collects **anonymous** usage data by default to help us better understand how the community is using JuiceFS. Only core metrics (e.g. version number) will be reported, and user data and any other sensitive data will not be included. The related code can be viwed [here](pkg/usage/usage.go).
+JuiceFS collects **anonymous** usage data by default to help us better understand how the community is using JuiceFS. Only core metrics (e.g. version number) will be reported, and user data and any other sensitive data will not be included. The related code can be viewed [here](pkg/usage/usage.go).
 
 You could also disable reporting easily by command line option `--no-usage-report`:
 
