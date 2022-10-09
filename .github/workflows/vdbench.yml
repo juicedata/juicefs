@@ -50,6 +50,7 @@ jobs:
           unzip vdbench50407.zip -d vdbench
           
       - name: Start minio
+        run: |
           docker run -d -p 9000:9000 --name minio \
                       -e "MINIO_ACCESS_KEY=minioadmin" \
                       -e "MINIO_SECRET_KEY=minioadmin" \
@@ -71,7 +72,7 @@ jobs:
           name: output-big
           path: output
 
-      - name: clean
+      - name: Clean
         shell: bash
         run: |
           source .github/scripts/start_meta_engine.sh
