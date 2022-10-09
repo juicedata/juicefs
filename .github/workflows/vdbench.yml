@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
+        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'fdb']
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -62,7 +62,7 @@ jobs:
           
       - name: Start minio
         run: |
-          docker run -d -p 9000:9000 --name minio \
+          docker run -d -p 19000:9000 --name minio \
                       -e "MINIO_ACCESS_KEY=minioadmin" \
                       -e "MINIO_SECRET_KEY=minioadmin" \
                       -v /tmp/data:/data \
@@ -74,7 +74,7 @@ jobs:
         run: | 
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs format --storage minio --bucket http://127.0.0.1:9000/mypics \ 
+          ./juicefs format --storage minio --bucket http://127.0.0.1:19000/mypics \ 
             --access-key minioadmin --secret-key minioadmin $meta_url vdbench-big
           ./juicefs mount -d $meta_url /tmp/vdbench
           vdbench/vdbench -f .github/workflows/resources/vdbench_big_file.conf
