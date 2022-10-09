@@ -32,7 +32,8 @@ jobs:
           if [ "${{github.event_name}}" == "schedule"  ]; then
             echo '::set-output name=meta_matrix::["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]'
           else
-            echo '::set-output name=meta_matrix::["redis"]'
+            # echo '::set-output name=meta_matrix::["redis"]'
+            echo '::set-output name=meta_matrix::["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]'
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
