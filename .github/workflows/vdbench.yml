@@ -84,12 +84,11 @@ jobs:
           path: output
 
       - name: Clean
-        shell: bash
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           rm /var/jfsCache/ -rf || true
-          if [ -d /tmp/vdbench }} ]; then
+          if [ -d /tmp/vdbench ]; then
             ./juicefs umount /tmp/vdbench || true
           fi
           uuid=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || true
@@ -98,13 +97,12 @@ jobs:
           fi
 
       - name: vdbench-small
-        shell: bash
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           ./juicefs format $meta_url vdbench-small
           ./juicefs mount -d $meta_url /tmp/vdbench     
-          vdbench/vdbench -f ./.github/workflows/resources/vdbench_small_file.conf
+          vdbench/vdbench -f .github/workflows/resources/vdbench_small_file.conf
 
       - uses: actions/upload-artifact@v3
         with:
