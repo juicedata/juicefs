@@ -112,6 +112,7 @@ jobs:
             sudo tail -n 500 runtest/syscalls > runtest/syscalls2
           else
             echo "matrix.type: ${{matrix.type}} is not valid" && exit 1
+          fi
           sudo chmod 777 runtest/syscalls2
           sudo ./runltp -d /tmp/jfs -f syscalls2 -C result.log.failed -T result.log.tconf -l result.log  &
           wait $!
