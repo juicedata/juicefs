@@ -21,7 +21,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        type: [ 'normal', 'limitcache', 'local']
+        type: [ 'normal', 'limitcache']
+        # type: ['local']
 
     runs-on: ubuntu-latest
     steps:
