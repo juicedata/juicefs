@@ -17,7 +17,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  mysqltestbigtable:
+  mysqltest:
+    strategy:
+      fail-fast: false
+      matrix:
+        size: [ 'big', 'small' ]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -59,6 +63,12 @@ jobs:
           sudo service mysql status
           sudo mysql -uroot -proot  -e "select @@datadir;"
 
+      - name: Change Parameters
+        run: |
+          mysql -uroot -proot  -e "show variables like 'log_error';"
+          mysql -uroot -proot -e "set global log_error_verbosity=3;"
+          mysql -uroot -proot  -e "show variables like 'log_error_verbosity';"
+
       - name: Install Sysbench
         run: |
           curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
@@ -69,17 +79,27 @@ jobs:
           echo "mysql-user=root" >>/tmp/config.cfg
           echo "mysql-password=root" >>/tmp/config.cfg
           echo "mysql-db=test" >>/tmp/config.cfg
-          echo "threads=4" >>/tmp/config.cfg
           echo "report-interval=10" >>/tmp/config.cfg
           echo "db-driver=mysql" >>/tmp/config.cfg
 
       - name: Big Size Table Test
         run: |
-          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000 prepare
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=4 --time=300 --table-size=5000000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=300 --table-size=5000000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=600 --table-size=5000000 run
-          sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000 cleanup
+          if [ "${{matrix.size}}" == "big"]; then
+            echo "threads=4" >>/tmp/config.cfg
+            sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000 prepare
+            sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=4 --time=300 --table-size=5000000 run
+            sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=300 --table-size=5000000 run
+            sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=600 --table-size=5000000 run
+            sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000 cleanup
+          else
+            echo "threads=64" >>/tmp/config.cfg
+            sudo mysql -uroot -proot  -e "use mysql;set global max_prepared_stmt_count = 100000;"
+            sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 prepare
+            sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=64 --time=300 --table-size=100000 run
+            sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=64 --time=300 --table-size=100000 run
+            sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=64 --time=600 --table-size=100000 run
+            sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
+          fi
 
       - name: Log
         if: ${{ always() }}
