@@ -74,7 +74,8 @@ jobs:
         run: | 
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs format $meta_url vdbench-big
+          ./juicefs format --storage minio --bucket http://127.0.0.1:9000/mypics \ 
+            --access-key minioadmin --secret-key minioadmin $meta_url vdbench-big
           ./juicefs mount -d $meta_url /tmp/vdbench
           vdbench/vdbench -f .github/workflows/resources/vdbench_big_file.conf
 
@@ -100,8 +101,9 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs format $meta_url vdbench-small
-          ./juicefs mount -d $meta_url /tmp/vdbench     
+          ./juicefs format --storage minio --bucket http://127.0.0.1:9000/mypics \ 
+            --access-key minioadmin --secret-key minioadmin $meta_url vdbench-small
+          ./juicefs mount -d $meta_url /tmp/vdbench   
           vdbench/vdbench -f .github/workflows/resources/vdbench_small_file.conf
 
       - uses: actions/upload-artifact@v3
