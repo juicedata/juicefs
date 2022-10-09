@@ -12,7 +12,7 @@ start_meta_engine(){
         source /home/runner/.bash_profile
         source /home/runner/.profile
         tiup playground --mode tikv-slim &
-        sleep 5
+        sleep 30
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
     elif [ "$meta" == "mariadb" ]; then
