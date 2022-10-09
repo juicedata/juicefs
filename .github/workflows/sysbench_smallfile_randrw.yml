@@ -10,9 +10,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
-        meta: ['redis']
-        compress: [ 'none', 'lz4', 'zstd']
+        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
+        compress: [ 'lz4', ]
+        include: 
+          - meta: 'redis'
+            compress: 'zstd'
+          - meta: 'redis'
+            compress: 'none'
 
     runs-on: ubuntu-latest
 
@@ -85,7 +89,7 @@ jobs:
           curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
           sudo apt -y install sysbench
 
-      - name: Smallfile Test Read 1M
+      - name: Smallfile seq read 1M
         run: |
           date +%Y_%m_%d_%H_%M_%S > /tmp/datetime
           DATE_TIME=$(cat /tmp/datetime)
@@ -98,7 +102,7 @@ jobs:
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
 
-      - name: Smallfile Test Write 1M
+      - name: Smallfile seq write 1M
         run: |
           DATE_TIME=$(cat /tmp/datetime)
           cd /jfs
@@ -109,7 +113,7 @@ jobs:
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
 
-      - name: Smallfile Test Read 100K
+      - name: Smallfile seq read 100K
         run: |
           DATE_TIME=$(cat /tmp/datetime)
           cd /jfs
@@ -120,7 +124,7 @@ jobs:
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
 
-      - name: Smallfile Test Write 100K
+      - name: Smallfile seq write 100K
         run: |
           DATE_TIME=$(cat /tmp/datetime)
           cd /jfs
@@ -130,7 +134,7 @@ jobs:
           sysbench fileio --file-num=40000  --file-total-size=4G --file-test-mode=seqwr --time=600  cleanup
           curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
-      - name: Smallfile Test 1M
+      - name: Smallfile random readwrite 1M
         run: |
           date +%Y_%m_%d_%H_%M_%S > /tmp/datetime
           DATE_TIME=$(cat /tmp/datetime)
@@ -143,8 +147,7 @@ jobs:
           cat $fileName
           curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
 
-
-      - name: Smallfile Test 100K
+      - name: Smallfile random readwrite 100K
         run: |
           DATE_TIME=$(cat /tmp/datetime)
           cd /jfs
@@ -154,7 +157,6 @@ jobs:
           sysbench fileio --file-num=60000  --file-total-size=6G --file-test-mode=rndrw --time=600  cleanup
           cat $fileName
           curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
-
 
       - name: Send Slack Notification
         if: ${{ failure() }}
