@@ -62,6 +62,8 @@ jobs:
           chmod +x .github/scripts/start_meta_engine.sh
           source .github/scripts/start_meta_engine.sh
           start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
 
       - name: Copy
         run: |
