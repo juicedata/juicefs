@@ -12,7 +12,18 @@ jobs:
       matrix:
         meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
     runs-on: ubuntu-latest
-
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:        
       - name: Checkout
         uses: actions/checkout@v3
@@ -64,8 +75,8 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           ./juicefs format $meta_url vdbench-big
-          ./juicefs mount -d $meta_url /tmp/jfs
-          vdbench/vdbench -f ./.github/workflows/resources/vdbench_big_file.conf
+          ./juicefs mount -d $meta_url /tmp/vdbench
+          vdbench/vdbench -f .github/workflows/resources/vdbench_big_file.conf
 
       - uses: actions/upload-artifact@v3
         with:
@@ -78,8 +89,8 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           rm /var/jfsCache/ -rf || true
-          if [ -d /tmp/jfs }} ]; then
-            ./juicefs umount /tmp/jfs || true
+          if [ -d /tmp/vdbench }} ]; then
+            ./juicefs umount /tmp/vdbench || true
           fi
           uuid=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || true
           if [ -n "$uuid" ];then
@@ -92,7 +103,7 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           ./juicefs format $meta_url vdbench-small
-          ./juicefs mount -d $meta_url /tmp/jfs       
+          ./juicefs mount -d $meta_url /tmp/vdbench     
           vdbench/vdbench -f ./.github/workflows/resources/vdbench_small_file.conf
 
       - uses: actions/upload-artifact@v3
