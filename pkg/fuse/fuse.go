@@ -471,8 +471,10 @@ func Serve(v *vfs.VFS, options string, xattrs bool) error {
 	if err != nil {
 		return fmt.Errorf("fuse: %s", err)
 	}
-	v.InvalidateEntry = func(parent Ino, name string) syscall.Errno {
-		return syscall.Errno(fssrv.EntryNotify(uint64(parent), name))
+	if runtime.GOOS == "linux" {
+		v.InvalidateEntry = func(parent Ino, name string) syscall.Errno {
+			return syscall.Errno(fssrv.EntryNotify(uint64(parent), name))
+		}
 	}
 
 	fssrv.Serve()
