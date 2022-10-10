@@ -1,4 +1,4 @@
-name: "ltp-syscalls-head"
+name: "ltp-syscalls"
 
 on:
   push:
@@ -17,37 +17,72 @@ on:
   workflow_dispatch:
 
 jobs:
-  ltpsyscallshead:
+  ltpsyscalls:
+    strategy:
+      fail-fast: false
+      matrix:
+        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
+        meta: ['redis']
+        type: [ 'head', 'middle', 'tail']
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:
       - name: Checkout
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
 
+      - name: Set Variable
+        id: vars
+        run: |
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo ::set-output name=target::"juicefs.fdb"
+          else
+            echo ::set-output name=target::"juicefs"
+          fi
+
       - name: Build
         uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}
 
-      - name: copy
+      - name: Prepare meta db
+        run: | 
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+
+      - name: Copy
         run: |
           cp .github/workflows/bash/rm_syscalls /tmp/
           cp .github/workflows/bash/rm_list.sh /tmp/
 
-      - name: Run Redis
-        run: |
-          sudo docker run -d --name redis -v redis-data:/data  \
-          -p 6379:6379  redis redis-server --appendonly yes
-
       - name: Juicefs Format
         run: |
-          sudo ./juicefs format --trash-days 0 redis://127.0.0.1:6379/1 pics
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs format --trash-days 0 $meta_url pics
 
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount --enable-xattr -d redis://127.0.0.1:6379/1 /tmp/jfs --no-usage-report &
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          sudo ./juicefs mount --enable-xattr -d $meta_url /tmp/jfs --no-usage-report &
 
-      - name: LTP Syscalls
-        timeout-minutes: 50
+      - name: Install LTP Syscalls
         run: |
           wget -O ltp.tar.gz https://github.com/linux-test-project/ltp/archive/refs/tags/20210927.tar.gz
           mkdir ltp
@@ -57,6 +92,10 @@ jobs:
           ./configure
           make
           sudo make install
+
+      - name: Run LTP Syscalls
+        timeout-minutes: 60
+        run: |
           cd /opt/ltp
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/syscalls
@@ -64,11 +103,18 @@ jobs:
           echo "setxattr01 setxattr01" >>/tmp/rm_syscalls
           cat /tmp/rm_syscalls
           sudo /tmp/rm_list.sh /tmp/rm_syscalls /opt/ltp/runtest/syscalls
-          sudo head -n 600 runtest/syscalls > runtest/syscallshead
-          sudo chmod 777 runtest/syscallshead
-          df -lh
-          pwd
-          sudo ./runltp -d /tmp/jfs -f syscallshead -C result.log.failed -T result.log.tconf -l result.log  &
+          if [ "${{matrix.type}}" == "head" ]; then
+            sudo head -n 600 runtest/syscalls > runtest/syscalls2
+          elif [ "${{matrix.type}}" == "middle" ]; then
+            sudo head -n 1300 runtest/syscalls > runtest/syscallstmp
+            sudo tail -n 700  runtest/syscallstmp > runtest/syscalls2
+          elif [ "${{matrix.type}}" == "tail" ]; then
+            sudo tail -n 500 runtest/syscalls > runtest/syscalls2
+          else
+            echo "matrix.type: ${{matrix.type}} is not valid" && exit 1
+          fi
+          sudo chmod 777 runtest/syscalls2
+          sudo ./runltp -d /tmp/jfs -f syscalls2 -C result.log.failed -T result.log.tconf -l result.log  &
           wait $!
 
       - name: Log
@@ -78,7 +124,6 @@ jobs:
           tail -300 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
       
-
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main

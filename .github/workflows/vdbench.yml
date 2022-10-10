@@ -1,39 +1,120 @@
 name: "vdbench"
 
 on:
-  push:
-    branches:
-      - 'main'
-      - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-  pull_request:
-    #The branches below must be a subset of the branches above
-    branches:
-      - 'main'
-      - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      - '.github/**'
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
   
 jobs:
   vdbench:
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'fdb']
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:        
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
+
+      - name: Set Variable
+        id: vars
+        run: |
+          if [ "${{matrix.meta}}" == "fdb" ]; then
+            echo ::set-output name=target::"juicefs.fdb"
+          else
+            echo ::set-output name=target::"juicefs"
+          fi
+
+      - name: Build
+        uses: ./.github/actions/build
+        with: 
+          target: ${{steps.vars.outputs.target}}    
+
+      - name: Prepare meta db
+        run: | 
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}}
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          create_database $meta_url
+
+      - name: Install tools
+        shell: bash
+        run: |
+          wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
+          chmod +x mc 
+          wget -q https://s.juicefs.com/static/bench/vdbench50407.zip
+          unzip vdbench50407.zip -d vdbench
           
-      - name: Test
-        uses: ./.github/actions/vdbench
+      - name: Start minio
+        run: |
+          docker run -d -p 19000:9000 --name minio \
+                      -e "MINIO_ACCESS_KEY=minioadmin" \
+                      -e "MINIO_SECRET_KEY=minioadmin" \
+                      -v /tmp/data:/data \
+                      -v /tmp/config:/root/.minio \
+                      minio/minio server /data
+          sleep 5
+      - name: vdbench-big 
+        shell: bash
+        run: | 
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          ./juicefs format $meta_url vdbench-big --storage minio --bucket http://127.0.0.1:19000/mypics --access-key minioadmin --secret-key minioadmin 
+          ./juicefs mount -d $meta_url /tmp/vdbench
+          vdbench/vdbench -f .github/workflows/resources/vdbench_big_file.conf
+
+      - uses: actions/upload-artifact@v3
         with:
-          meta_url: "redis://localhost/1"
+          name: output-big
+          path: output
+
+      - name: Clean
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          rm /var/jfsCache/ -rf || true
+          if [ -d /tmp/vdbench ]; then
+            ./juicefs umount /tmp/vdbench || true
+          fi
+          uuid=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || true
+          if [ -n "$uuid" ];then
+            sudo ./juicefs destroy --force $meta_url $uuid
+          fi
+
+      - name: vdbench-small
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          ./juicefs format $meta_url vdbench-small --storage minio --bucket http://127.0.0.1:19000/mypics --access-key minioadmin --secret-key minioadmin 
+          ./juicefs mount -d $meta_url /tmp/vdbench   
+          vdbench/vdbench -f .github/workflows/resources/vdbench_small_file.conf
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: output-small
+          path: output
+
+      - name: log
+        if: ${{ always() }}
+        shell: bash
+        run: | 
+          tail -300 ~/.juicefs/juicefs.log
+          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
           
       - name: Send Slack Notification
         if: ${{ failure() }}
