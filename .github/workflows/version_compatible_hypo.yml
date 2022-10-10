@@ -147,7 +147,7 @@ jobs:
           sudo pip install minio
           
       - name: Test
-        timeout-minutes: 60
+        timeout-minutes: 90
         run: |          
           export META=${{matrix.meta}}
           export STORAGE=${{matrix.storage}}
