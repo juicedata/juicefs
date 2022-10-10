@@ -49,8 +49,8 @@ before_script:
   - go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
   - nohup /home/travis/.m2/rclone-v1.57.0-linux-amd64/rclone serve webdav local --addr 127.0.0.1:9007 >> rclone.log 2>&1 &
   - # nohup /home/travis/.m2/etcd-v3.5.2-linux-amd64/etcd --unsafe-no-fsync --listen-client-urls http://127.0.0.1:2389 --advertise-client-urls http://127.0.0.1:2389 &
-  - sudo chmod 777 /usr/local/maven-3.6.3/conf/settings.xml
-  - sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/local/maven-3.6.3/conf/settings.xml
+  - sudo chmod 777 /usr/local/maven/conf/settings.xml
+  - sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/local/maven/conf/settings.xml
   - docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
   - make
   - sudo make -C fstests setup
