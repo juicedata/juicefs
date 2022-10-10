@@ -53,7 +53,7 @@ get_meta_url(){
     elif [ "$meta" == "tikv" ]; then
         meta_url="tikv://127.0.0.1:2379/load_test"
     elif [ "$meta" == "badger" ]; then
-        meta_url="badger://load_test"
+        meta_url="badger:///tmp/load_test"
     elif [ "$meta" == "mariadb" ]; then
         meta_url="mysql://root:root@(127.0.0.1)/load_test"
     elif [ "$meta" == "tidb" ]; then
