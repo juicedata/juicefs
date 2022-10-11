@@ -494,7 +494,7 @@ juicefs gateway [command options] META-URL ADDRESS
 禁用后台作业（清理、备份等）（默认值：false）
 
 `--umask value`
-新文件的 umask 的八进制格式 (默认值:“022”)
+新文件和新目录的 umask 的八进制格式 (默认值:“022”)
 
 `--consul value`<br />
 consul 注册中心地址 (默认："127.0.0.1:8500")

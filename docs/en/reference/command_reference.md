@@ -494,7 +494,7 @@ interval (in seconds) to send heartbeat; it's recommended that all clients use t
 disable background jobs (clean-up, backup, etc.) (default: false)
 
 `--umask value`<br />
-umask for new file in octal (default: "022")
+umask for new file and directory in octal (default: "022")
 
 `--consul value`<br />
 consul address to register (default: "127.0.0.1:8500")
