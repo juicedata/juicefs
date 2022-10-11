@@ -305,7 +305,7 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 	defer func() { logit(ctx, "ioctl (%d,0x%X,0x%X,%v,%v): %s", ino, cmd, arg, bufIn, bufOut, strerr(err)) }()
 	switch cmd {
 	default:
-		err = syscall.ENOTTY
+		err = syscall.ENOSYS
 		return
 	case FS_IOC_SETFLAGS, FS_IOC_GETFLAGS, FS_IOC_SETFLAGS_32, FS_IOC_GETFLAGS_32:
 	}
