@@ -95,6 +95,13 @@ jobs:
           fi
           cd -
 
+      - uses: actions/cache@v3
+        with:
+          path: ~/.tiup
+          key: ${{ runner.os }}-tiup
+          restore-keys: |
+            ${{ runner.os }}-tiup
+
       - name: Prepare meta database
         run: | 
           meta=${{matrix.meta}}

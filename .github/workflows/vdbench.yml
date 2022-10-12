@@ -44,6 +44,13 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}    
 
+      - uses: actions/cache@v3
+        with:
+          path: ~/.tiup
+          key: ${{ runner.os }}-tiup
+          restore-keys: |
+            ${{ runner.os }}-tiup
+
       - name: Prepare meta db
         run: | 
           chmod +x .github/scripts/start_meta_engine.sh
