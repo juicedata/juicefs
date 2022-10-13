@@ -45,7 +45,7 @@ This feature requires JuiceFS >= 0.15.2
 
 When a JuiceFS client `open()` a file, the attributes of the file are automatically cached in client memory. If the [`--open-cache`](../reference/command_reference.md#juicefs-mount) option is set to a value greater than 0 when mounting the file system, subsequent `getattr()` and `open()` operations will return the result from the in-memory cache immediately, as long as the cache has not expired.
 
-When dong `read()` on a file, the chunk and slice information of the file is automatically cached in the client memory. Reading the chunk again during the cache lifetime will return the slice information from the in-memory cache immediately.
+When doing `read()` on a file, the chunk and slice information of the file is automatically cached in the client memory. Reading the chunk again during the cache lifetime will return the slice information from the in-memory cache immediately.
 
 :::tip
 You can check ["How JuiceFS Stores Files"](../reference/how_juicefs_store_files.md) to know what chunk and slice are.
@@ -120,7 +120,7 @@ When writing a large number of small files in a short period of time, it is reco
 When asynchronous upload is enabled, i.e. `--writeback` is specified when mounting the file system, do not delete the contents in `<cache-dir>/<UUID>/rawstaging` directory, as this will result in data loss.
 :::
 
-When the cache disk is almost full, it will pause writing data and change to uploading data directly to the object storage (i.e., the client write cache feature is turned off).
+Also, `--writeback` size is not affected by `--cache-size` or `--free-space-ratio` values and `<cache-dir>/<UUID>/rawstaging` directory will grow in size as much as needed until data is effectively uploaded to the object storage. Nevertheless, when the cache disk is almost full, it will pause writing data and change to uploading data directly to the object storage (i.e., the client write cache feature is turned off).
 
 When the asynchronous upload function is enabled, the reliability of the cache itself is directly related to the reliability of data writing. Thus, this function should be used with caution for scenarios requiring high data reliability.
 
@@ -253,4 +253,4 @@ For example, `--cache-dir` is `/data1:/data2`, where `/data1` has a free space o
 
 JuiceFS currently estimates the size of cached objects by adding up the size of all cached objects plus a fixed overhead (4KiB), which is not exactly the same as the value obtained by the `du` command.
 
-To prevent the cache disk from being written to full, the client will try to reduce the cache usage when the file system the cache directory is located on is running out of space.
+To prevent the cache disk from being written to full, the client will try to reduce the cache usage when the file system where the cache directory is located on is running out of space.
