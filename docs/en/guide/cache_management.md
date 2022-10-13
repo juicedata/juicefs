@@ -81,7 +81,7 @@ The local cache can be adjusted at [mounting file system](../reference/command_r
 
 ```
 --cache-dir value         directory paths of local cache, use colon to separate multiple paths (default: "$HOME/.juicefs/cache" or "/var/jfsCache")
---cache-size value        size of cached objects in MiB (default: 102400)
+--cache-size value        size of cached object for read in MiB (default: 102400)
 --free-space-ratio value  minimum free space (ratio) (default: 0.1)
 --cache-partial-only      cache only random/small read (default: false)
 ```
