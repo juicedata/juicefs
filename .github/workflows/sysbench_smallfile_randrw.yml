@@ -92,6 +92,7 @@ jobs:
           curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
           sudo apt -y install sysbench
           sudo pip install mysqlclient
+          date +%Y_%m_%d_%H_%M_%S > /tmp/datetime
 
       - name: seq read 1M
         uses: ./.github/actions/sysbench
