@@ -90,7 +90,7 @@ jobs:
           fi
           export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
           sudo chmod +x .github/scripts/db.py
-          .github/scripts/db.py --name load --result 111 --version 1.0.0 --meta redis --storage minio
+          python3 .github/scripts/db.py --name load --result 111 --version 1.0.0 --meta redis --storage minio
 
       - name: Clear
         run: | 
