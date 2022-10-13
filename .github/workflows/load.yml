@@ -81,13 +81,13 @@ jobs:
           export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
           sudo chmod +x .github/scripts/db.py
           version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
-          python3 .github/scripts/db.py --name load_with_small_dir --result $runtime --version $version --meta ${{matrix.meta}}) --storage file
+          python3 .github/scripts/db.py --name load_with_small_dir --result $runtime --version $version --meta ${{matrix.meta}} --storage file
           echo "load cost $runtime seconds"
           start=`date +%s`
           ./juicefs dump $meta_url dump.json
           end=`date +%s`
           runtime=$((end-start))
-          python3 .github/scripts/db.py --name dump_with_small_dir --result $runtime --version $version --meta ${{matrix.meta}}) --storage file
+          python3 .github/scripts/db.py --name dump_with_small_dir --result $runtime --version $version --meta ${{matrix.meta}} --storage file
           sudo mkdir /var/jfs
           sudo chmod 777 /var/jfs
           ./juicefs mount $meta_url $mount_point -d
