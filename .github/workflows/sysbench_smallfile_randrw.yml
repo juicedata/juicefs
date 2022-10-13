@@ -91,74 +91,65 @@ jobs:
           curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
           sudo apt -y install sysbench
 
-      - name: Smallfile seq read 1M
-        run: |
-          date +%Y_%m_%d_%H_%M_%S > /tmp/datetime
-          DATE_TIME=$(cat /tmp/datetime)
-          cd /jfs
-          sudo stat /jfs
-          sysbench fileio --file-num=1000  --file-total-size=1G --file-test-mode=seqrd --time=120  prepare
-          fileName=result_seqrd_1M_1000_$DATE_TIME
-          sysbench fileio --file-num=1000  --file-total-size=1G --file-test-mode=seqrd --time=120  run >"$fileName"
-          sysbench fileio --file-num=1000  --file-total-size=1G --file-test-mode=seqrd --time=120  cleanup
-          curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+      - name: seq read 1M
+        uses: ./.github/actions/sysbench
+        with:
+          mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
+          file_num: 1000
+          file_total_size: '1G'
+          file_test_mode: 'seqrd'
+          meta: ${{matrix.meta}}
+          storage: 'minio'
 
+      - name: seq write 1M
+        uses: ./.github/actions/sysbench
+        with:
+          mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
+          file_num: 1000
+          file_total_size: '1G'
+          file_test_mode: 'seqwr'
+          meta: ${{matrix.meta}}
+          storage: 'minio'
 
-      - name: Smallfile seq write 1M
-        run: |
-          DATE_TIME=$(cat /tmp/datetime)
-          cd /jfs
-          sysbench fileio --file-num=1000  --file-total-size=1G --file-test-mode=seqwr --time=120  prepare
-          fileName=result_seqwr_1M_1000_$DATE_TIME
-          sysbench fileio --file-num=1000  --file-total-size=1G --file-test-mode=seqwr --time=120  run >"$fileName"
-          sysbench fileio --file-num=1000  --file-total-size=1G --file-test-mode=seqwr --time=120  cleanup
-          curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+      - name: seq read 100K
+        uses: ./.github/actions/sysbench
+        with:
+          mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
+          file_num: 10000
+          file_total_size: '1G'
+          file_test_mode: 'seqrd'
+          meta: ${{matrix.meta}}
+          storage: 'minio'
 
+      - name: seq write 100K
+        uses: ./.github/actions/sysbench
+        with:
+          mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
+          file_num: 10000
+          file_total_size: '1G'
+          file_test_mode: 'seqwr'
+          meta: ${{matrix.meta}}
+          storage: 'minio'
 
-      - name: Smallfile seq read 100K
-        run: |
-          DATE_TIME=$(cat /tmp/datetime)
-          cd /jfs
-          sysbench fileio --file-num=10000  --file-total-size=1G --file-test-mode=seqrd --time=120  prepare
-          fileName=result_seqrd_100K_10000_$DATE_TIME
-          sysbench fileio --file-num=10000  --file-total-size=1G --file-test-mode=seqrd --time=120  run >"$fileName"
-          sysbench fileio --file-num=10000  --file-total-size=1G --file-test-mode=seqrd --time=120  cleanup
-          curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+      - name: random readwrite 1M
+        uses: ./.github/actions/sysbench
+        with:
+          mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
+          file_num: 1000
+          file_total_size: '1G'
+          file_test_mode: 'rndrw'
+          meta: ${{matrix.meta}}
+          storage: 'minio'
 
-
-      - name: Smallfile seq write 100K
-        run: |
-          DATE_TIME=$(cat /tmp/datetime)
-          cd /jfs
-          sysbench fileio --file-num=10000  --file-total-size=1G --file-test-mode=seqwr --time=120  prepare
-          fileName=result_seqwr_100K_10000_$DATE_TIME
-          sysbench fileio --file-num=10000  --file-total-size=1G --file-test-mode=seqwr --time=120  run >"$fileName"
-          sysbench fileio --file-num=10000  --file-total-size=1G --file-test-mode=seqwr --time=120  cleanup
-          curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
-
-      - name: Smallfile random readwrite 1M
-        run: |
-          date +%Y_%m_%d_%H_%M_%S > /tmp/datetime
-          DATE_TIME=$(cat /tmp/datetime)
-          cd /jfs
-          sudo stat /jfs
-          sysbench fileio --file-num=1000  --file-total-size=1G --file-test-mode=rndrw --time=120  prepare
-          fileName=result_rndrw_1M_1000_$DATE_TIME
-          sysbench fileio --file-num=1000  --file-total-size=1G --file-test-mode=rndrw --time=120  run >"$fileName"
-          sysbench fileio --file-num=1000  --file-total-size=11G --file-test-mode=rndrw --time=120  cleanup
-          cat $fileName
-          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
-
-      - name: Smallfile random readwrite 100K
-        run: |
-          DATE_TIME=$(cat /tmp/datetime)
-          cd /jfs
-          sysbench fileio --file-num=10000  --file-total-size=1G --file-test-mode=rndrw --time=120  prepare
-          fileName=result_rndrw_100K_10000_$DATE_TIME
-          sysbench fileio --file-num=10000  --file-total-size=1G --file-test-mode=rndrw --time=120  run >"$fileName"
-          sysbench fileio --file-num=10000  --file-total-size=1G --file-test-mode=rndrw --time=120  cleanup
-          cat $fileName
-          curl -w '%{http_code}' -F file=@"$fileName" https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}
+      - name: random readwrite 1K
+        uses: ./.github/actions/sysbench
+        with:
+          mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
+          file_num: 10000
+          file_total_size: '1G'
+          file_test_mode: 'rndrw'
+          meta: ${{matrix.meta}}
+          storage: 'minio'
 
       - name: Send Slack Notification
         if: ${{ failure() }}
