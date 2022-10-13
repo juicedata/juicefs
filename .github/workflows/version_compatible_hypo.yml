@@ -96,6 +96,7 @@ jobs:
           cd -
 
       - uses: actions/cache@v3
+        if: ${{ matrix.meta == 'tikv' || matrix.meta == 'tidb' }}
         with:
           path: ~/.tiup
           key: ${{ runner.os }}-tiup
