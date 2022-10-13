@@ -10,8 +10,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
-        meta: ['redis']
+        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
+        # meta: ['redis']
         compress: [ 'lz4']
         include: 
           - meta: 'redis'
@@ -55,7 +55,7 @@ jobs:
           target: ${{steps.vars.outputs.target}}
 
       - uses: actions/cache@v3
-        if: ${{ matrix.meta == 'tikv' }}
+        if: ${{ matrix.meta == 'tikv' || matrix.meta == 'tidb' }}
         with:
           path: ~/.tiup
           key: ${{ runner.os }}-tiup
