@@ -52,6 +52,6 @@ runs:
         runtime=$((end-start))
         echo "cost $runtime seconds"
         cd -
-        export MYSQL_PASSWORD=${{inputs.mysql_passowrd}}
+        export MYSQL_PASSWORD=${{inputs.mysql_password}}
         version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
         python3 .github/scripts/db.py --name ${{inputs.name}} --result $runtime --version $version --meta ${{inputs.meta}} --storage ${{inputs.storage}} --extra ${{inputs.compress}}
