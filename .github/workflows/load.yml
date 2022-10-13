@@ -58,6 +58,10 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           start_meta_engine ${{matrix.meta}}
 
+      - name: Install tools
+        run: | 
+          sudo pip install mysqlclient
+
       - name: Load and dump with small directory
         timeout-minutes: 30
         run: |
@@ -83,6 +87,8 @@ jobs:
             echo "<FATAL>: inode error: $inode"
             exit 1
           fi
+          export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
+          .github/scripts/db.py --name load --result 111 --version 1.0.0 --meta redis --storage minio
 
       - name: Clear
         run: | 
