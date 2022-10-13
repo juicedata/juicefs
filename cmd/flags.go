@@ -147,7 +147,7 @@ func clientFlags() []cli.Flag {
 		&cli.IntFlag{
 			Name:  "cache-size",
 			Value: 100 << 10,
-			Usage: "size of read cache objects in MiB",
+			Usage: "size of cached object for read in MiB",
 		},
 		&cli.Float64Flag{
 			Name:  "free-space-ratio",
