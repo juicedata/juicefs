@@ -10,6 +10,7 @@ jobs:
       fail-fast: false
       matrix:
         meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
+        # meta: ['redis']
     runs-on: ubuntu-latest
 
     services:
@@ -46,6 +47,7 @@ jobs:
           target: ${{steps.vars.outputs.target}}
 
       - uses: actions/cache@v3
+        if: ${{ matrix.meta == 'tikv' || matrix.meta == 'tidb' }}
         with:
           path: ~/.tiup
           key: ${{ runner.os }}-tiup
@@ -58,6 +60,10 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           start_meta_engine ${{matrix.meta}}
 
+      - name: Install tools
+        run: | 
+          sudo pip install mysqlclient
+
       - name: Load and dump with small directory
         timeout-minutes: 30
         run: |
@@ -69,12 +75,21 @@ jobs:
           wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
           gzip -dk  2M_emtpy_files.dump.gz
           load_file=2M_emtpy_files.dump
-          echo `date`, start load
+          start=`date +%s`
           ./juicefs load $meta_url $load_file
-          echo `date`, finish load
-          echo `date`, start dump
+          end=`date +%s`
+          runtime=$((end-start))
+          export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
+          sudo chmod +x .github/scripts/db.py
+          version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
+          python3 .github/scripts/db.py --name load_small_dir --result $runtime --version $version --meta ${{matrix.meta}} --storage file
+          echo "load cost $runtime seconds"
+          start=`date +%s`
           ./juicefs dump $meta_url dump.json
-          echo `date`, finish dump
+          end=`date +%s`
+          runtime=$((end-start))
+          echo "dump cost $runtime seconds"
+          python3 .github/scripts/db.py --name dump_small_dir --result $runtime --version $version --meta ${{matrix.meta}} --storage file
           sudo mkdir /var/jfs
           sudo chmod 777 /var/jfs
           ./juicefs mount $meta_url $mount_point -d
@@ -83,7 +98,7 @@ jobs:
             echo "<FATAL>: inode error: $inode"
             exit 1
           fi
-
+          
       - name: Clear
         run: | 
           source .github/scripts/start_meta_engine.sh
@@ -109,12 +124,21 @@ jobs:
           wget -q https://s.juicefs.com/static/bench/1M_files_in_one_dir.dump.gz
           gzip -dk  1M_files_in_one_dir.dump.gz
           load_file=1M_files_in_one_dir.dump
-          echo `date`, start load
+          start=`date +%s`
           ./juicefs load $meta_url $load_file
-          echo `date`, finish load
-          echo `date`, start dump
+          end=`date +%s`
+          runtime=$((end-start))
+          echo "load cost $runtime seconds"
+          export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
+          sudo chmod +x .github/scripts/db.py
+          version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
+          python3 .github/scripts/db.py --name load_big_dir --result $runtime --version $version --meta ${{matrix.meta}} --storage file
+          start=`date +%s`
           ./juicefs dump $meta_url dump.json
-          echo `date`, finish dump
+          end=`date +%s`
+          runtime=$((end-start))
+          echo "dump cost $runtime seconds"
+          python3 .github/scripts/db.py --name dump_big_dir --result $runtime --version $version --meta ${{matrix.meta}} --storage file
           sudo chmod 777 /var/jfs
           ./juicefs mount $meta_url $mount_point -d
           df -i $mount_point
@@ -124,13 +148,20 @@ jobs:
             echo "<FATAL>: inode error: $inode"
             exit 1
           fi
-
+          
       - name: List big directory
         timeout-minutes: 30
         run: | 
           mount_point=/tmp/juicefs-load-test
+          start=`date +%s`
           file_count=$(ls -l $mount_point/test/test-dir.0-0/mdtest_tree.0/ | wc -l)
           echo "file_count: $file_count"
+          end=`date +%s`
+          runtime=$((end-start))
+          echo "list cost $runtime seconds"
+          export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
+          version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
+          python3 .github/scripts/db.py --name list_big_dir --result $runtime --version $version --meta ${{matrix.meta}} --storage file
           if [ "$file_count" -ne "1000001" ]; then 
             echo "<FATAL>: file_count error: $file_count"
             exit 1
@@ -154,5 +185,5 @@ jobs:
           
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 1
+        timeout-minutes: 20
         uses: lhotari/action-upterm@v1

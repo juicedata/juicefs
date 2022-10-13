@@ -1,0 +1,57 @@
+name: 'Sysbenc Action'
+description: 'sysbench action'
+inputs:
+  file_num:
+    description: 'file number'
+    required: true
+    default: 1000
+  file_total_size:
+    description: 'file total size'
+    required: true
+    default: '1G'
+  file_test_mode:
+    description: 'file test mode'
+    required: true
+    default: 'seqrd'
+  mysql_password:
+    description: 'mysql password'
+    required: true
+    default: ''
+  meta:
+    description: 'meta'
+    required: true
+    default: 'redis'
+  storage:
+    description: 'storage'
+    required: true
+    default: 'minio'
+  name: 
+    description: 'name'
+    required: true
+    default: 'sysbench'
+  compress:
+    description: 'name'
+    required: true
+    default: 'none'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Sysbench
+      shell: bash
+      run : |
+        DATE_TIME=$(cat /tmp/datetime)
+        cd /jfs
+        sudo stat /jfs
+        start=`date +%s`
+        sysbench fileio --file-num=${{inputs.file_num}}  --file-total-size=${{inputs.file_total_size}} --file-test-mode=${{inputs.file_test_mode}} --time=120  prepare
+        fileName=result_seqrd_${{inputs.file_num}}_${{inputs.file_total_size}}_$DATE_TIME
+        sysbench fileio --file-num=${{inputs.file_num}}  --file-total-size=${{inputs.file_total_size}} --file-test-mode=${{inputs.file_test_mode}} --time=120  run >"$fileName"
+        sysbench fileio --file-num=${{inputs.file_num}}  --file-total-size=${{inputs.file_total_size}} --file-test-mode=${{inputs.file_test_mode}} --time=120  cleanup
+        end=`date +%s`
+        runtime=$((end-start))
+        echo "cost $runtime seconds"
+        cd -
+        export MYSQL_PASSWORD=${{inputs.mysql_password}}
+        version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
+        python3 .github/scripts/db.py --name ${{inputs.name}} --result $runtime --version $version --meta ${{inputs.meta}} --storage ${{inputs.storage}} --extra ${{inputs.compress}}
