@@ -74,12 +74,20 @@ jobs:
           wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
           gzip -dk  2M_emtpy_files.dump.gz
           load_file=2M_emtpy_files.dump
-          echo `date`, start load
+          start=`date +%s`
           ./juicefs load $meta_url $load_file
-          echo `date`, finish load
-          echo `date`, start dump
+          end=`date +%s`
+          runtime=$((end-start))
+          export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
+          sudo chmod +x .github/scripts/db.py
+          version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
+          python3 .github/scripts/db.py --name load_with_small_dir --result $runtime --version $version --meta ${{matrix.meta}}) --storage file
+          echo "load cost $runtime seconds"
+          start=`date +%s`
           ./juicefs dump $meta_url dump.json
-          echo `date`, finish dump
+          end=`date +%s`
+          runtime=$((end-start))
+          python3 .github/scripts/db.py --name dump_with_small_dir --result $runtime --version $version --meta ${{matrix.meta}}) --storage file
           sudo mkdir /var/jfs
           sudo chmod 777 /var/jfs
           ./juicefs mount $meta_url $mount_point -d
@@ -88,10 +96,7 @@ jobs:
             echo "<FATAL>: inode error: $inode"
             exit 1
           fi
-          export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
-          sudo chmod +x .github/scripts/db.py
-          python3 .github/scripts/db.py --name load --result 111 --version 1.0.0 --meta redis --storage minio
-
+          
       - name: Clear
         run: | 
           source .github/scripts/start_meta_engine.sh
@@ -117,12 +122,20 @@ jobs:
           wget -q https://s.juicefs.com/static/bench/1M_files_in_one_dir.dump.gz
           gzip -dk  1M_files_in_one_dir.dump.gz
           load_file=1M_files_in_one_dir.dump
-          echo `date`, start load
+          start=`date +%s`
           ./juicefs load $meta_url $load_file
-          echo `date`, finish load
-          echo `date`, start dump
+          end=`date +%s`
+          runtime=$((end-start))
+          echo "load cost $runtime seconds"
+          export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
+          sudo chmod +x .github/scripts/db.py
+          version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
+          python3 .github/scripts/db.py --name load_with_big_dir --result $runtime --version $version --meta ${{matrix.meta}}) --storage file
+          start=`date +%s`
           ./juicefs dump $meta_url dump.json
-          echo `date`, finish dump
+          end=`date +%s`
+          runtime=$((end-start))
+          python3 .github/scripts/db.py --name dump_with_big_dir --result $runtime --version $version --meta ${{matrix.meta}}) --storage file
           sudo chmod 777 /var/jfs
           ./juicefs mount $meta_url $mount_point -d
           df -i $mount_point
@@ -132,7 +145,7 @@ jobs:
             echo "<FATAL>: inode error: $inode"
             exit 1
           fi
-
+          
       - name: List big directory
         timeout-minutes: 30
         run: | 
