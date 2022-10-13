@@ -19,7 +19,7 @@ import argparse
 #   `created_date` datetime DEFAULT NULL
 # )
 
-def add_perf_record(name, result, product_version,  meta, storage):
+def add_perf_record(name, result, product_version,  meta, storage, extra):
     result = float(result)
     passowrd = os.environ['MYSQL_PASSWORD']
     github_ref_name = os.environ.get('GITHUB_REF_NAME')
@@ -34,12 +34,12 @@ def add_perf_record(name, result, product_version,  meta, storage):
     product_name = 'juicefs'
     db = MySQLdb.connect(host="8.210.231.144", user="juicedata", passwd=passowrd, db="test_result")
     c = db.cursor()
-    c.execute("insert into benchmark(name, result, product_name, product_version, meta, storage, github_ref_name, github_run_id, github_sha, github_runner, created_date) \
-        values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (name, result, product_name, product_version, meta, storage, github_ref_name, github_run_id, github_sha, github_runner, created_date))
+    c.execute("insert into benchmark(name, result, product_name, product_version, meta, storage, github_ref_name, github_run_id, github_sha, github_runner, created_date, extra) \
+        values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (name, result, product_name, product_version, meta, storage, github_ref_name, github_run_id, github_sha, github_runner, created_date, extra))
     db.commit()
     c.close()
     db.close()
-    
+
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument("-n", "--name", required=True, help="the name of performace test")
@@ -47,7 +47,10 @@ if __name__ == "__main__":
     args.add_argument("-v", "--version", required=True, help="the version of juicefs")
     args.add_argument("-m", "--meta", required=True, help="meta for juicefs")
     args.add_argument("-s", "--storage", required=True, help="storage for juicefs")
+    args.add_argument("-e", "--extra", required=True, help="extra info")
+    
     args = vars(args.parse_args())
-    add_perf_record(args['name'], args['result'], args['version'], args['meta'], args['storage'])
+    
+    add_perf_record(args['name'], args['result'], args['version'], args['meta'], args.get('storage', ''), args.get('extra', ''))
 
 

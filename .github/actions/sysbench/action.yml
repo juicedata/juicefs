@@ -25,6 +25,14 @@ inputs:
     description: 'storage'
     required: true
     default: 'minio'
+  name: 
+    description: 'name'
+    required: true
+    default: 'sysbench'
+  compress:
+    description: 'name'
+    required: true
+    default: 'none'
 
 runs:
   using: "composite"
@@ -46,5 +54,5 @@ runs:
         cd -
         export MYSQL_PASSWORD=${{inputs.mysql_passowrd}}
         version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
-        python3 .github/scripts/db.py --name sysbench_seq_read_1m --result $runtime --version $version --meta ${{inputs.meta}} --storage ${{inputs.storage}}
+        python3 .github/scripts/db.py --name ${{inputs.name}} --result $runtime --version $version --meta ${{inputs.meta}} --storage ${{inputs.storage}} --extra ${{inputs.compress}}
         # curl -w '%{http_code}' -F file=@$fileName https://juicefs.com/upload-file-u80sdvuke/$fileName?token=${{secrets.FILE_UPLOAD_AUTH_TOKEN}}

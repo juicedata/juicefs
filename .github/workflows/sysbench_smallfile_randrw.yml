@@ -12,7 +12,7 @@ jobs:
       matrix:
         # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
         meta: ['redis']
-        compress: [ 'lz4', ]
+        compress: [ 'lz4']
         include: 
           - meta: 'redis'
             compress: 'zstd'
@@ -91,6 +91,7 @@ jobs:
         run: |
           curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
           sudo apt -y install sysbench
+          sudo pip install mysqlclient
 
       - name: seq read 1M
         uses: ./.github/actions/sysbench
@@ -101,6 +102,8 @@ jobs:
           file_test_mode: 'seqrd'
           meta: ${{matrix.meta}}
           storage: 'minio'
+          name: 'sysbench_seq_read_1m'
+          compress: ${{matrix.compress}}
 
       - name: seq write 1M
         uses: ./.github/actions/sysbench
@@ -111,6 +114,8 @@ jobs:
           file_test_mode: 'seqwr'
           meta: ${{matrix.meta}}
           storage: 'minio'
+          name: 'sysbench_seq_write_1m'
+          compress: ${{matrix.compress}}
 
       - name: seq read 100K
         uses: ./.github/actions/sysbench
@@ -121,6 +126,8 @@ jobs:
           file_test_mode: 'seqrd'
           meta: ${{matrix.meta}}
           storage: 'minio'
+          name: 'sysbench_seq_read_100k'
+          compress: ${{matrix.compress}}
 
       - name: seq write 100K
         uses: ./.github/actions/sysbench
@@ -131,6 +138,8 @@ jobs:
           file_test_mode: 'seqwr'
           meta: ${{matrix.meta}}
           storage: 'minio'
+          name: 'sysbench_seq_write_100k'
+          compress: ${{matrix.compress}}
 
       - name: random readwrite 1M
         uses: ./.github/actions/sysbench
@@ -141,8 +150,10 @@ jobs:
           file_test_mode: 'rndrw'
           meta: ${{matrix.meta}}
           storage: 'minio'
+          name: 'sysbench_rand_rw_1m'
+          compress: ${{matrix.compress}}
 
-      - name: random readwrite 1K
+      - name: random readwrite 100K
         uses: ./.github/actions/sysbench
         with:
           mysql_password: ${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}}
@@ -151,6 +162,8 @@ jobs:
           file_test_mode: 'rndrw'
           meta: ${{matrix.meta}}
           storage: 'minio'
+          name: 'sysbench_rand_rw_100k'
+          compress: ${{matrix.compress}}
 
       - name: Send Slack Notification
         if: ${{ failure() }}
