@@ -47,7 +47,7 @@ if __name__ == "__main__":
     args.add_argument("-v", "--version", required=True, help="the version of juicefs")
     args.add_argument("-m", "--meta", required=True, help="meta for juicefs")
     args.add_argument("-s", "--storage", required=True, help="storage for juicefs")
-    args.add_argument("-e", "--extra", required=True, help="extra info")
+    args.add_argument("-e", "--extra", required=False, help="extra info")
     
     args = vars(args.parse_args())
     
