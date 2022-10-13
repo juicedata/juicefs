@@ -55,7 +55,7 @@ jobs:
           target: ${{steps.vars.outputs.target}}
 
       - uses: actions/cache@v3
-        if: ${{ ${{matrix.meta}} == 'tikv' }}
+        if: ${{ matrix.meta == 'tikv' }}
         with:
           path: ~/.tiup
           key: ${{ runner.os }}-tiup
