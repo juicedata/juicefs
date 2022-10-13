@@ -153,7 +153,7 @@ By default, pprof listens on port numbers ranging from 6060 to 6099. That's why 
 :::tip
 You can also use the debug command to automatically collect these runtime information and save it locally. By default, it is saved to the debug directory under the current directory, for example:
 ```bash
-juicefs debug --collect-pprof /mnt/jfs
+juicefs debug /mnt/jfs
 ```
 For more information about the debug command, see [command reference](https://juicefs.com/docs/community/command_reference#juicefs-debug)
 :::

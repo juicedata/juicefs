@@ -166,7 +166,7 @@ curl 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pb.gz
 :::tip 建议
 你也可以使用 juicefs debug 命令自动收集这些运行时信息并保存到本地，默认保存到当前目录下的 debug 目录中，例如：
 ```bash
-juicefs debug --collect-pprof /mnt/jfs
+juicefs debug /mnt/jfs
 ```
 关于 juicefs debug 命令的更多信息，请查看[命令参考](https://juicefs.com/docs/zh/community/command_reference#juicefs-debug)
 :::

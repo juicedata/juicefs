@@ -35,7 +35,6 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/urfave/cli/v2"
 )
 
@@ -58,10 +57,10 @@ $ juicefs debug /mnt/jfs
 $ juicefs debug --out-dir=/var/log /mnt/jfs
 
 # Get the last up to 1000 log entries
-$ juicefs debug --out-dir=/var/log --collect-log --limit=1000 /mnt/jfs
+$ juicefs debug --out-dir=/var/log --limit=1000 /mnt/jfs
 
-# Get pprof information
-$ juicefs debug --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /mnt/jfs
+# Don't collect pprof information
+$ juicefs debug --out-dir=/var/log --no-collect-pprof --limit=1000 /mnt/jfs
 `,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -70,16 +69,16 @@ $ juicefs debug --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /m
 				Usage: "the output directory of the result file",
 			},
 			&cli.BoolFlag{
-				Name:  "collect-log",
-				Usage: "enable log collection",
+				Name:  "no-collect-log",
+				Usage: "do not collect log",
 			},
 			&cli.Uint64Flag{
 				Name:  "limit",
 				Usage: "the number of last entries to be collected",
 			},
 			&cli.BoolFlag{
-				Name:  "collect-pprof",
-				Usage: "enable pprof collection",
+				Name:  "no-collect-pprof",
+				Usage: "do not collect pprof",
 			},
 			&cli.Uint64Flag{
 				Name:  "stats-sec",
@@ -100,7 +99,7 @@ $ juicefs debug --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /m
 	}
 }
 
-func copyVolumeConfWindows(srcPath, destPath string) error {
+func copyFileOnWindows(srcPath, destPath string) error {
 	srcFile, err := os.Open(srcPath)
 	if err != nil {
 		return err
@@ -117,9 +116,9 @@ func copyVolumeConfWindows(srcPath, destPath string) error {
 	return nil
 }
 
-func copyConfigFile(srcPath, destPath string, rootPrivileges bool) error {
+func copyFile(srcPath, destPath string, rootPrivileges bool) error {
 	if runtime.GOOS == "windows" {
-		return copyVolumeConfWindows(srcPath, destPath)
+		return copyFileOnWindows(srcPath, destPath)
 	}
 
 	var copyArgs []string
@@ -219,7 +218,7 @@ func copyLogFile(logPath, retLogPath string, limit uint64, rootPrivileges bool) 
 	return exec.Command(copyArgs[0], copyArgs[1:]...).Run()
 }
 
-func getPprofPort(pid, mp string, rootPrivileges bool) (int, error) {
+func getPprofPort(pid, amp string, rootPrivileges bool) (int, error) {
 	var lsofArgs []string
 	if rootPrivileges {
 		lsofArgs = append(lsofArgs, "sudo")
@@ -243,7 +242,7 @@ func getPprofPort(pid, mp string, rootPrivileges bool) (int, error) {
 				logger.Errorf("failed to parse port %v: %v", port, err)
 			}
 			if port >= 6060 && port <= 6099 && port > listenPort {
-				if err := checkPort(port, mp); err == nil {
+				if err := checkPort(port, amp); err == nil {
 					listenPort = port
 				}
 				continue
@@ -280,7 +279,7 @@ func getRequest(url string) ([]byte, error) {
 }
 
 // check pprof service status
-func checkPort(port int, mp string) error {
+func checkPort(port int, amp string) error {
 	url := fmt.Sprintf("http://localhost:%d/debug/pprof/cmdline?debug=1", port)
 	resp, err := getRequest(url)
 	if err != nil {
@@ -290,14 +289,13 @@ func checkPort(port int, mp string) error {
 	fields := strings.Fields(string(resp))
 	flag := false
 	for _, field := range fields {
-		if mp == field {
+		if amp == field {
 			flag = true
 		}
 	}
 	if !flag {
-		return fmt.Errorf("mount point mismatch: \n%s\n%s", resp, mp)
+		return fmt.Errorf("mount point mismatch: \n%s\n%s", resp, amp)
 	}
-
 	return nil
 }
 
@@ -325,11 +323,7 @@ func reqAndSaveMetric(name string, metric metricItem, outDir string) error {
 	if _, err := writer.Write(resp); err != nil {
 		return fmt.Errorf("failed to write metric %s: %v", name, err)
 	}
-	if err := writer.Flush(); err != nil {
-		return fmt.Errorf("failed to flush writer: %v", err)
-	}
-
-	return nil
+	return writer.Flush()
 }
 
 func isUnix() bool {
@@ -337,8 +331,7 @@ func isUnix() bool {
 }
 
 func checkAgent(cmd string) bool {
-	fields := strings.Fields(cmd)
-	for _, field := range fields {
+	for _, field := range strings.Fields(cmd) {
 		if field == "--no-agent" {
 			return false
 		}
@@ -359,7 +352,7 @@ func geneZipFile(srcPath, destPath string) error {
 		}
 	}()
 
-	if err = filepath.Walk(srcPath, func(path string, info os.FileInfo, _ error) error {
+	return filepath.Walk(srcPath, func(path string, info os.FileInfo, _ error) error {
 		if path == srcPath {
 			return nil
 		}
@@ -390,45 +383,84 @@ func geneZipFile(srcPath, destPath string) error {
 			}
 		}
 		return nil
-	}); err != nil {
-		return err
+	})
+}
+
+func collectPprof(ctx *cli.Context, cmd string, pid string, amp string, rootPrivileges bool, currDir string, wg *sync.WaitGroup) error {
+	if !checkAgent(cmd) {
+		logger.Warnf("No agent found, the pprof metrics will not be collected")
+		return nil
 	}
 
+	if !isUnix() {
+		logger.Warnf("Collecting pprof currently only support Linux/macOS")
+		return nil
+	}
+
+	port, err := getPprofPort(pid, amp, rootPrivileges)
+	if err != nil {
+		return fmt.Errorf("failed to get pprof port: %v", err)
+	}
+	baseUrl := fmt.Sprintf("http://localhost:%d/debug/pprof/", port)
+	trace := ctx.Uint64("trace-sec")
+	profile := ctx.Uint64("profile-sec")
+	metrics := map[string]metricItem{
+		"allocs":       {name: "allocs.pb.gz", url: baseUrl + "allocs"},
+		"blocks":       {name: "block.pb.gz", url: baseUrl + "block"},
+		"cmdline":      {name: "cmdline.txt", url: baseUrl + "cmdline"},
+		"goroutine":    {name: "goroutine.pb.gz", url: baseUrl + "goroutine"},
+		"stack":        {name: "goroutine.stack.txt", url: baseUrl + "goroutine?debug=1"},
+		"heap":         {name: "heap.pb.gz", url: baseUrl + "heap"},
+		"mutex":        {name: "mutex.pb.gz", url: baseUrl + "mutex"},
+		"threadcreate": {name: "threadcreate.pb.gz", url: baseUrl + "threadcreate"},
+		"trace":        {name: fmt.Sprintf("trace.%ds.pb.gz", trace), url: fmt.Sprintf("%strace?seconds=%d", baseUrl, trace)},
+		"profile":      {name: fmt.Sprintf("profile.%ds.pb.gz", profile), url: fmt.Sprintf("%sprofile?seconds=%d", baseUrl, profile)},
+	}
+
+	pprofOutDir := filepath.Join(currDir, "pprof")
+	if err := os.Mkdir(pprofOutDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create out directory: %v", err)
+	}
+
+	for name, metric := range metrics {
+		wg.Add(1)
+		go func(name string, metric metricItem) {
+			defer wg.Done()
+
+			if name == "profile" {
+				logger.Infof("Profile metrics are being sampled, sampling duration: %ds", profile)
+			}
+			if name == "trace" {
+				logger.Infof("Trace metrics are being sampled, sampling duration: %ds", trace)
+			}
+			if err := reqAndSaveMetric(name, metric, pprofOutDir); err != nil {
+				logger.Errorf("Failed to get and save metric %s: %v", name, err)
+			}
+		}(name, metric)
+	}
 	return nil
 }
 
-func debug(ctx *cli.Context) error {
-	setup(ctx, 1)
-	mp := ctx.Args().First()
-	inode, err := utils.GetFileInode(mp)
+func collectLog(ctx *cli.Context, cmd string, rootPrivileges bool, currDir string) error {
+	if !isUnix() {
+		logger.Warnf("Collecting log currently only support Linux/macOS")
+		return nil
+	}
+	logPath, err := getLogPath(cmd, rootPrivileges)
 	if err != nil {
-		return fmt.Errorf("failed to lookup inode for %s: %s", mp, err)
+		return fmt.Errorf("failed to get log path: %v", err)
 	}
-	if inode != uint64(meta.RootInode) {
-		return fmt.Errorf("path %s is not a mount point", mp)
-	}
+	limit := ctx.Uint64("limit")
+	retLogPath := filepath.Join(currDir, "juicefs.log")
 
-	outDir := ctx.String("out-dir")
-	// special treatment for non-existing out dir
-	if outDirInfo, err := os.Stat(outDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(outDir, os.ModePerm); err != nil {
-			return fmt.Errorf("failed to create out dir %s: %v", outDir, err)
-		}
-	} else if err == nil && !outDirInfo.IsDir() {
-		return fmt.Errorf("argument --out-dir is not directory: %s", outDir)
-	}
+	logger.Infof("Log %s is being collected", logPath)
+	return copyLogFile(logPath, retLogPath, limit, rootPrivileges)
+}
 
-	mp, _ = filepath.Abs(mp)
-	timestamp := time.Now().Format("20060102150405")
-	prefix := strings.Trim(strings.Join(strings.Split(mp, "/"), "-"), "-")
-	currDir := filepath.Join(outDir, fmt.Sprintf("%s-%s", prefix, timestamp))
-	if err := os.Mkdir(currDir, os.ModePerm); err != nil {
-		return fmt.Errorf("failed to create current out dir %s: %v", currDir, err)
-	}
-
+func collectSysInfo(ctx *cli.Context, currDir string) error {
 	sysInfo, err := utils.GetSysInfo()
 	if err != nil {
-		return fmt.Errorf("failed to get system info: %v", err)
+		return err
 	}
 
 	result := fmt.Sprintf(`Platform: 
@@ -448,8 +480,64 @@ JuiceFS Version:
 	}
 
 	fmt.Printf("\n%s\n", result)
+	return nil
+}
 
-	uid, pid, cmd, err := getCmdMount(mp)
+func collectSpecialFile(ctx *cli.Context, amp string, currDir string, rootPrivileges bool, wg *sync.WaitGroup) error {
+	configName := ".config"
+	if err := copyFile(filepath.Join(amp, configName), filepath.Join(currDir, "config.txt"), rootPrivileges); err != nil {
+		return fmt.Errorf("failed to get volume config %s: %v", configName, err)
+	}
+
+	statsName := ".stats"
+	stats := ctx.Uint64("stats-sec")
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		srcPath := filepath.Join(amp, statsName)
+		destPath := filepath.Join(currDir, "stats.txt")
+		if err := copyFile(srcPath, destPath, rootPrivileges); err != nil {
+			logger.Errorf("Failed to get volume config %s: %v", statsName, err)
+		}
+
+		logger.Infof("Stats metrics are being sampled, sampling duration: %ds", stats)
+		time.Sleep(time.Second * time.Duration(stats))
+		destPath = filepath.Join(currDir, fmt.Sprintf("stats.%ds.txt", stats))
+		if err := copyFile(srcPath, destPath, rootPrivileges); err != nil {
+			logger.Errorf("Failed to get volume config %s: %v", statsName, err)
+		}
+	}()
+	return nil
+}
+
+func debug(ctx *cli.Context) error {
+	setup(ctx, 1)
+	mp := ctx.Args().First()
+	inode, err := utils.GetFileInode(mp)
+	if err != nil {
+		return fmt.Errorf("failed to lookup inode for %s: %s", mp, err)
+	}
+	if inode != uint64(meta.RootInode) {
+		return fmt.Errorf("path %s is not a mount point", mp)
+	}
+
+	amp, err := filepath.Abs(mp)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path: %v", err)
+	}
+	timestamp := time.Now().Format("20060102150405")
+	prefix := strings.Trim(strings.Join(strings.Split(amp, "/"), "-"), "-")
+	outDir := ctx.String("out-dir")
+	currDir := filepath.Join(outDir, fmt.Sprintf("%s-%s", prefix, timestamp))
+	if err := os.MkdirAll(currDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create current out dir %s: %v", currDir, err)
+	}
+
+	if err := collectSysInfo(ctx, currDir); err != nil {
+		return err
+	}
+
+	uid, pid, cmd, err := getCmdMount(amp)
 	if err != nil {
 		return fmt.Errorf("failed to get mount command: %v", err)
 	}
@@ -461,106 +549,22 @@ JuiceFS Version:
 		rootPrivileges = true
 	}
 
-	configName := ".config"
-	if err := copyConfigFile(filepath.Join(mp, configName), filepath.Join(currDir, "config.txt"), rootPrivileges); err != nil {
-		return fmt.Errorf("failed to get volume config %s: %v", configName, err)
-	}
-
-	statsName := ".stats"
-	stats := ctx.Uint64("stats-sec")
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		srcPath := filepath.Join(mp, statsName)
-		destPath := filepath.Join(currDir, "stats.txt")
-		if err := copyConfigFile(srcPath, destPath, rootPrivileges); err != nil {
-			logger.Errorf("Failed to get volume config %s: %v", statsName, err)
-		}
-
-		logger.Infof("Stats metrics are being sampled, sampling duration: %ds", stats)
-		time.Sleep(time.Second * time.Duration(stats))
-
-		destPath = filepath.Join(currDir, fmt.Sprintf("stats.%ds.txt", stats))
-		if err := copyConfigFile(srcPath, destPath, rootPrivileges); err != nil {
-			logger.Errorf("Failed to get volume config %s: %v", statsName, err)
-		}
-	}()
-
-	if !isUnix() {
-		logger.Warnf("Collecting log currently only support Linux/macOS")
+	if err := collectSpecialFile(ctx, amp, currDir, rootPrivileges, &wg); err != nil {
+		return err
 	}
 
-	if isUnix() && ctx.Bool("collect-log") {
-		logPath, err := getLogPath(cmd, rootPrivileges)
-		if err != nil {
-			return fmt.Errorf("failed to get log path: %v", err)
-		}
-		limit := ctx.Uint64("limit")
-		retLogPath := filepath.Join(currDir, "juicefs.log")
-
-		logger.Infof("Log %s is being collected", logPath)
-		if err := copyLogFile(logPath, retLogPath, limit, rootPrivileges); err != nil {
-			return fmt.Errorf("failed to get log file: %v", err)
+	if !ctx.Bool("no-collect-log") {
+		if err := collectLog(ctx, cmd, rootPrivileges, currDir); err != nil {
+			return err
 		}
 	}
 
-	enableAgent := checkAgent(cmd)
-	if !enableAgent {
-		logger.Warnf("No agent found, the pprof metrics will not be collected")
-	}
-
-	if !isUnix() {
-		logger.Warnf("Collecting pprof currently only support Linux/macOS")
-	}
-
-	if isUnix() && enableAgent && ctx.Bool("collect-pprof") {
-		port, err := getPprofPort(pid, mp, rootPrivileges)
-		if err != nil {
-			return fmt.Errorf("failed to get pprof port: %v", err)
-		}
-		baseUrl := fmt.Sprintf("http://localhost:%d/debug/pprof/", port)
-		trace := ctx.Uint64("trace-sec")
-		profile := ctx.Uint64("profile-sec")
-		metrics := map[string]metricItem{
-			"allocs":       {name: "allocs.pb.gz", url: baseUrl + "allocs"},
-			"blocks":       {name: "block.pb.gz", url: baseUrl + "block"},
-			"cmdline":      {name: "cmdline.txt", url: baseUrl + "cmdline"},
-			"goroutine":    {name: "goroutine.pb.gz", url: baseUrl + "goroutine"},
-			"stack":        {name: "goroutine.stack.txt", url: baseUrl + "goroutine?debug=1"},
-			"heap":         {name: "heap.pb.gz", url: baseUrl + "heap"},
-			"mutex":        {name: "mutex.pb.gz", url: baseUrl + "mutex"},
-			"threadcreate": {name: "threadcreate.pb.gz", url: baseUrl + "threadcreate"},
-			"trace":        {name: fmt.Sprintf("trace.%ds.pb.gz", trace), url: fmt.Sprintf("%strace?seconds=%d", baseUrl, trace)},
-			"profile":      {name: fmt.Sprintf("profile.%ds.pb.gz", profile), url: fmt.Sprintf("%sprofile?seconds=%d", baseUrl, profile)},
-		}
-
-		pprofOutDir := filepath.Join(currDir, "pprof")
-		if err := os.Mkdir(pprofOutDir, os.ModePerm); err != nil {
-			return fmt.Errorf("failed to create out directory: %v", err)
-		}
-
-		for name, metric := range metrics {
-			wg.Add(1)
-			go func(name string, metric metricItem) {
-				defer wg.Done()
-
-				if name == "profile" {
-					logger.Infof("Profile metrics are being sampled, sampling duration: %ds", profile)
-				}
-				if name == "trace" {
-					logger.Infof("Trace metrics are being sampled, sampling duration: %ds", trace)
-				}
-				if err := reqAndSaveMetric(name, metric, pprofOutDir); err != nil {
-					logger.Errorf("Failed to get and save metric %s: %v", name, err)
-				}
-			}(name, metric)
+	if !ctx.Bool("no-collect-pprof") {
+		if err := collectPprof(ctx, cmd, pid, amp, rootPrivileges, currDir, &wg); err != nil {
+			return err
 		}
 	}
 	wg.Wait()
-
-	if err := geneZipFile(currDir, filepath.Join(outDir, fmt.Sprintf("%s-%s.zip", prefix, timestamp))); err != nil {
-		return fmt.Errorf("failed to zip result %s: %v", currDir, err)
-	}
-	return nil
+	return geneZipFile(currDir, filepath.Join(outDir, fmt.Sprintf("%s-%s.zip", prefix, timestamp)))
 }

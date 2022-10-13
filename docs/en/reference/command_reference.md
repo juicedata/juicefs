@@ -1217,14 +1217,14 @@ The output directory of the results, automatically created if the directory does
 `--stats-sec value`<br />
 The number of seconds to sample .stats file (default: 5)
 
-`--collect-log`<br />
-enable log collection (default: false)
+`--no-collect-log`<br />
+do not collect log (default: false)
 
 `--limit value`<br />
 The number of log entries collected, from newest to oldest, if not specified, all entries will be collected
 
-`--collect-pprof`<br />
-enable pprof metrics collection (default: false)
+`--no-collect-pprof`<br />
+do not collect pprof metrics (default: false)
 
 `--trace-sec value`<br />
 The number of seconds to sample trace metrics (default: 5)
@@ -1241,9 +1241,9 @@ $ juicefs debug /mnt/jfs
 # Specify the output directory as /var/log
 $ juicefs debug --out-dir=/var/log /mnt/jfs
 
-# Enable log collection and get the last up to 1000 log entries
-$ juicefs debug --out-dir=/var/log --collect-log --limit=1000 /mnt/jfs
+# Get the last up to 1000 log entries
+$ juicefs debug --out-dir=/var/log --limit=1000 /mnt/jfs
 
-# Enable pprof metrics collection
-$ juicefs debug --out-dir=/var/log --collect-log --limit=1000 --collect-pprof /mnt/jfs
+# Don't collect pprof information
+$ juicefs debug --out-dir=/var/log --no-collect-pprof --limit=1000 /mnt/jfs
 ```
