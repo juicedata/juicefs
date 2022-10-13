@@ -36,7 +36,10 @@ def add_perf_record(name, result, product_version,  meta, storage):
     c = db.cursor()
     c.execute("insert into benchmark(name, result, product_name, product_version, meta, storage, github_ref_name, github_run_id, github_sha, github_runner, created_date) \
         values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (name, result, product_name, product_version, meta, storage, github_ref_name, github_run_id, github_sha, github_runner, created_date))
-
+    db.commit()
+    c.close()
+    db.close()
+    
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument("-n", "--name", required=True, help="the name of performace test")
