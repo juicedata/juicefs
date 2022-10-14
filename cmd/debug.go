@@ -42,7 +42,7 @@ import (
 
 var defaultOutDir = filepath.Join(".", "debug")
 
-func cmdDoctor() *cli.Command {
+func cmdDebug() *cli.Command {
 	return &cli.Command{
 		Name:      "debug",
 		Action:    debug,
