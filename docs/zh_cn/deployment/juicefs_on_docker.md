@@ -76,11 +76,15 @@ sudo docker plugin install juicedata/juicefs --alias juicefs
 
 ### 命令行下使用
 
+使用 JuiceFS Docker 卷插件创建存储卷的过程类似于在 Docker 容器中使用 JuiceFS 客户端创建和挂载文件系统，因此需要提供数据库和对象存储的信息，以便于卷插件可以完成相应的操作。
+
 :::tip
 由于 SQLite 是单机版数据库，在宿主机创建的数据库无法被卷插件容器读取。因此，在使用 Docker 卷插件时，仅可使用基于网络链接的数据库如 Reids、MySQL 等。
 :::
 
-在 JuiceFS 上创建存储卷：
+#### 创建存储卷
+
+请将以下命令中的 `<VOLUME_NAME>`、`<META_URL>`、`<STORAGE_TYPE>`、`<BUCKET_NAME>`、`<ACCESS_KEY>`、`<SECRET_KEY>` 替换成你自己的文件系统配置。
 
 ```shell
 sudo docker volume create -d juicefs \
@@ -93,13 +97,28 @@ sudo docker volume create -d juicefs \
     jfsvolume
 ```
 
-将上面 `<VOLUME_NAME>`、`<META_URL>`、`<STORAGE_TYPE>`、`<BUCKET_NAME>`、`<ACCESS_KEY>`、`<SECRET_KEY>` 替换成你自己的文件系统配置。想要了解更多 JuiceFS 卷插件内容，可以访问  [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) 代码仓库。
+:::tip
+通过指定不同的 `<VOLUME_NAME>` 卷名称和 `<META_URL>` 数据库，即可在同一个对象存储上创建多个文件系统。
+:::
+
+对于已经预先创建好的文件系统，在用其创建卷插件时，只需指定文件系统名称和数据库地址，例如：
+
+```shell
+sudo docker volume create -d juicefs \
+    -o name=<VOLUME_NAME> \
+    -o metaurl=<META_URL> \
+    jfsvolume
+```
+
+#### 使用存储卷
 
 创建容器时挂载卷：
 
-```sh
-docker run -it -v jfsvolume:/opt busybox ls /opt
+```shell
+sudo docker run -it -v jfsvolume:/opt busybox ls /opt
 ```
+
+想要了解更多 JuiceFS 卷插件内容，可以访问  [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) 代码仓库。
 
 ## 3. 在 Docker 容器中挂载 JuiceFS
 
@@ -118,7 +137,7 @@ docker run -it -v jfsvolume:/opt busybox ls /opt
 - **nightly** - 包含最新的开发分支客户端
 
 :::tip
-生产环境建议手动指定镜像的版本标签，例如 `:v1.0.0-4.8.0`。
+生产环境建议手动指定镜像的[版本标签](https://hub.docker.com/r/juicedata/mount/tags)，例如 `:v1.0.0-4.8.0`。
 :::
 
 ### 手动编译镜像
