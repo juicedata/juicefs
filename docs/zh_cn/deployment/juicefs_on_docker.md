@@ -145,6 +145,20 @@ sudo docker plugin enable juicefs
 sudo docker plugin rm juicefs
 ```
 
+### 卷插件故障排查
+
+#### 创建的存储卷未被使用却无法删除
+
+出现这种情况可能是在创建存储卷时设置的参数不正确，建议检查对象存储的类型、bucket 名称、Access Key、Secret Key、数据库地址等信息。可以尝试先禁用并重新启用 juicefs 卷插件的方式来释放掉有问题的卷，然后使用正确的参数信息重新创建存储卷。
+
+#### 收集卷插件日志
+
+以 systemd 为例，在使用卷插件创建存储卷时的信息会动态输出到系统日志，为了排查故障，可以在执行操作时另开一个终端窗口执行以下命令查看实时日志信息：
+
+```shell
+journalctl -f -u docker | grep "plugin="
+```
+
 想要了解更多 JuiceFS 卷插件内容，可以访问  [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) 代码仓库。
 
 ## 3. 在 Docker 容器中挂载 JuiceFS
