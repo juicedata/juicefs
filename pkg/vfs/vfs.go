@@ -40,10 +40,19 @@ const (
 	maxFileSize = meta.ChunkSize << 31
 )
 
+type Port struct {
+	PrometheusAgent string `json:",omitempty"`
+	DebugAgent      string `json:",omitempty"`
+	GopsAgent       string `json:",omitempty"`
+	ConsulAddr      string `json:",omitempty"`
+	PyroscopeAddr   string `json:",omitempty"`
+}
+
 type Config struct {
 	Meta            *meta.Config
 	Format          *meta.Format
 	Chunk           *chunk.Config
+	Port            *Port
 	Version         string
 	AttrTimeout     time.Duration
 	DirEntryTimeout time.Duration
