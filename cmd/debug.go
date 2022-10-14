@@ -20,6 +20,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,6 +36,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
 
@@ -208,6 +210,24 @@ func copyLogFile(logPath, retLogPath string, limit uint64, rootPrivileges bool) 
 }
 
 func getPprofPort(pid, amp string, rootPrivileges bool) (int, error) {
+	content, err := os.ReadFile(filepath.Join(amp, ".config"))
+	if err != nil {
+		logger.Warnf("failed to read config file: %v", err)
+	}
+	cfg := vfs.Config{}
+	if err := json.Unmarshal(content, &cfg); err != nil {
+		logger.Warnf("failed to unmarshal config file: %v", err)
+	}
+	if cfg.Port.DebugAgent != "" {
+		if len(strings.Split(cfg.Port.DebugAgent, ":")) >= 2 {
+			if port, err := strconv.Atoi(strings.Split(cfg.Port.DebugAgent, ":")[1]); err != nil {
+				logger.Warnf("failed to parse debug agent port: %v", err)
+			} else {
+				return port, nil
+			}
+		}
+	}
+
 	var lsofArgs []string
 	if rootPrivileges {
 		lsofArgs = append(lsofArgs, "sudo")
