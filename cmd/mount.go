@@ -245,12 +245,11 @@ func expandPathForEmbedded(addr string) string {
 
 func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
 	cfg := &vfs.Config{
-		Meta:        metaConf,
-		Format:      format,
-		Version:     version.Version(),
-		Chunk:       chunkConf,
-		BackupMeta:  duration(c.String("backup-meta")),
-		EnableIoctl: c.Bool("enable-ioctl"),
+		Meta:       metaConf,
+		Format:     format,
+		Version:    version.Version(),
+		Chunk:      chunkConf,
+		BackupMeta: duration(c.String("backup-meta")),
 	}
 	if cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
 		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)
