@@ -250,6 +250,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		Version:    version.Version(),
 		Chunk:      chunkConf,
 		BackupMeta: duration(c.String("backup-meta")),
+		Port:       &vfs.Port{DebugAgent: debugAgent, GopsAgent: gopsAgent, PyroscopeAddr: c.String("pyroscope")},
 	}
 	if cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
 		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)
@@ -343,8 +344,10 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 
 func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Config, m meta.Meta, blob object.ObjectStorage, registerer prometheus.Registerer, registry *prometheus.Registry) {
 	metricsAddr := exposeMetrics(c, m, registerer, registry)
+	vfsConf.Port.PrometheusAgent = metricsAddr
 	if c.IsSet("consul") {
 		metric.RegisterToConsul(c.String("consul"), metricsAddr, vfsConf.Meta.MountPoint)
+		vfsConf.Port.ConsulAddr = c.String("consul")
 	}
 	if !metaConf.ReadOnly && !metaConf.NoBGJob && vfsConf.BackupMeta > 0 {
 		go vfs.Backup(m, blob, vfsConf.BackupMeta)

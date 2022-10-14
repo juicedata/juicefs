@@ -35,6 +35,7 @@ import (
 )
 
 var logger = utils.GetLogger("juicefs")
+var debugAgent, gopsAgent string
 
 func Main(args []string) error {
 	// we have to call this because gspt removes all arguments
@@ -258,12 +259,14 @@ func setup(c *cli.Context, n int) {
 	if !c.Bool("no-agent") {
 		go func() {
 			for port := 6060; port < 6100; port++ {
-				_ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil)
+				debugAgent = fmt.Sprintf("127.0.0.1:%d", port)
+				_ = http.ListenAndServe(debugAgent, nil)
 			}
 		}()
 		go func() {
 			for port := 6070; port < 6100; port++ {
-				_ = agent.Listen(agent.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
+				gopsAgent = fmt.Sprintf("127.0.0.1:%d", port)
+				_ = agent.Listen(agent.Options{Addr: gopsAgent})
 			}
 		}()
 	}
