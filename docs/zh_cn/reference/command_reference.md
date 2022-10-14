@@ -1220,14 +1220,8 @@ juicefs debug [command options] MOUNTPOINT
 `--stats-sec value`<br />
 .stats文件采样秒数 (默认：5)
 
-`--no-collect-log`<br />
-不收集日志 (默认：false)
-
 `--limit value`<br />
 收集的日志条目数，从新到旧，若不指定则收集全部条目
-
-`--no-collect-pprof`<br />
-不收集 pprof 指标 (默认：false)
 
 `--trace-sec value`<br />
 trace指标采样秒数 (默认：5)
@@ -1246,7 +1240,4 @@ $ juicefs debug --out-dir=/var/log /mnt/jfs
 
 # 收集最后 1000 条日志条目
 $ juicefs debug --out-dir=/var/log --limit=1000 /mnt/jfs
-
-# 不收集 pprof 指标
-$ juicefs debug --out-dir=/var/log --no-collect-pprof --limit=1000 /mnt/jfs
 ```

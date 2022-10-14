@@ -58,9 +58,6 @@ $ juicefs debug --out-dir=/var/log /mnt/jfs
 
 # Get the last up to 1000 log entries
 $ juicefs debug --out-dir=/var/log --limit=1000 /mnt/jfs
-
-# Don't collect pprof information
-$ juicefs debug --out-dir=/var/log --no-collect-pprof --limit=1000 /mnt/jfs
 `,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -68,17 +65,9 @@ $ juicefs debug --out-dir=/var/log --no-collect-pprof --limit=1000 /mnt/jfs
 				Value: defaultOutDir,
 				Usage: "the output directory of the result file",
 			},
-			&cli.BoolFlag{
-				Name:  "no-collect-log",
-				Usage: "do not collect log",
-			},
 			&cli.Uint64Flag{
 				Name:  "limit",
 				Usage: "the number of last entries to be collected",
-			},
-			&cli.BoolFlag{
-				Name:  "no-collect-pprof",
-				Usage: "do not collect pprof",
 			},
 			&cli.Uint64Flag{
 				Name:  "stats-sec",
@@ -554,17 +543,14 @@ func debug(ctx *cli.Context) error {
 		return err
 	}
 
-	if !ctx.Bool("no-collect-log") {
-		if err := collectLog(ctx, cmd, rootPrivileges, currDir); err != nil {
-			return err
-		}
+	if err := collectLog(ctx, cmd, rootPrivileges, currDir); err != nil {
+		return err
 	}
 
-	if !ctx.Bool("no-collect-pprof") {
-		if err := collectPprof(ctx, cmd, pid, amp, rootPrivileges, currDir, &wg); err != nil {
-			return err
-		}
+	if err := collectPprof(ctx, cmd, pid, amp, rootPrivileges, currDir, &wg); err != nil {
+		return err
 	}
+
 	wg.Wait()
 	return geneZipFile(currDir, filepath.Join(outDir, fmt.Sprintf("%s-%s.zip", prefix, timestamp)))
 }
