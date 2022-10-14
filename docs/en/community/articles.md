@@ -1,17 +1,11 @@
 ---
-sidebar_label: Use Scenarios & Limits
+sidebar_label: User Articles
 sidebar_position: 2
-slug: /case
+slug: /articles
 ---
-# JuiceFS Use Scenarios & Limits
+# User Article Collection
 
 JuiceFS is widely applicable to various data storage and sharing scenarios. JuiceFS application cases from all over the world are summarized here. All community users are welcome to maintain this case list.
-
-## Data backup and recovery
-
-- [JuiceFS for archive NGINX logs](https://juicefs.com/docs/en/archive_nginx_log_in_juicefs.html)
-- [JuiceFS for MySQL backup, verification and recovery](https://juicefs.com/docs/en/backup_mysql_in_juicefs.html)
-- [Customer Stories: Xiachufang MySQL backup practice on JuiceFS](https://juicefs.com/blog/en/posts/xiachufang-mysql-backup-practice-on-juicefs/)
 
 ## Big Data
 
@@ -24,6 +18,11 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. Juic
 
 - [Building a Milvus Cluster Based on JuiceFS](https://juicefs.com/blog/en/posts/build-milvus-distributed-cluster-based-on-juicefs/)
 
+## Data backup and recovery
+
+- [JuiceFS for archive NGINX logs](https://juicefs.com/docs/en/archive_nginx_log_in_juicefs.html)
+- [JuiceFS for MySQL backup, verification and recovery](https://juicefs.com/docs/en/backup_mysql_in_juicefs.html)
+- [Customer Stories: Xiachufang MySQL backup practice on JuiceFS](https://juicefs.com/blog/en/posts/xiachufang-mysql-backup-practice-on-juicefs/)
 
 ## Contribution
 
