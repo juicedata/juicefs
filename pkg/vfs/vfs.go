@@ -52,6 +52,7 @@ type Config struct {
 	FastResolve     bool   `json:",omitempty"`
 	AccessLog       string `json:",omitempty"`
 	HideInternal    bool
+	EnableIoctl     bool
 }
 
 var (

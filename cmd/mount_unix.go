@@ -137,6 +137,10 @@ func mount_flags() []cli.Flag {
 			Usage: "enable extended attributes (xattr)",
 		},
 		&cli.BoolFlag{
+			Name:  "enable-ioctl",
+			Usage: "enable ioctl (support GETFLAGS/SETFLAGS only)",
+		},
+		&cli.BoolFlag{
 			Name:  "update-fstab",
 			Usage: "add / update entry in /etc/fstab, will create a symlink at /sbin/mount.juicefs if not existing",
 		},
