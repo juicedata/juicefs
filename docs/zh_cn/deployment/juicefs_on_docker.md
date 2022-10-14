@@ -153,7 +153,7 @@ sudo docker plugin rm juicefs
 
 #### 收集卷插件日志
 
-以 systemd 为例，在使用卷插件创建存储卷时的信息会动态输出到系统日志，为了排查故障，可以在执行操作时另开一个终端窗口执行以下命令查看实时日志信息：
+以 systemd 为例，在使用卷插件创建存储卷时的信息会动态输出到 docker daemon 日志，为了排查故障，可以在执行操作时另开一个终端窗口执行以下命令查看实时日志信息：
 
 ```shell
 journalctl -f -u docker | grep "plugin="
