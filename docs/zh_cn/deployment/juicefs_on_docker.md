@@ -118,6 +118,33 @@ sudo docker volume create -d juicefs \
 sudo docker run -it -v jfsvolume:/opt busybox ls /opt
 ```
 
+#### 删除存储卷
+
+```shell
+sudo docker volume rm jfsvolume
+```
+
+### 升级和卸载卷插件
+
+升级或卸载 Docker 卷插件之前需要先停用插件：
+
+```shell
+sudo docker plugin disable juicefs
+```
+
+升级插件：
+
+```shell
+sudo docker plugin upgrade juicefs
+sudo docker plugin enable juicefs
+```
+
+卸载插件：
+
+```shell
+sudo docker plugin rm juicefs
+```
+
 想要了解更多 JuiceFS 卷插件内容，可以访问  [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) 代码仓库。
 
 ## 3. 在 Docker 容器中挂载 JuiceFS
