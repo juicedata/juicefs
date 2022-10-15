@@ -20,3 +20,7 @@ slug: /integrations
 
 - [Apache Kylin 4.0](http://kylin.apache.org) that is a OLAP engine could deploy with the JuiceFS in dissaggregated storage and compute architecture on every public cloud platform, there is [the video sharing](https://www.bilibili.com/video/BV1c54y1W72S) (in Chinese) and [the post](https://juicefs.com/en/blog/optimize-kylin-on-juicefs/) for this use case.
 - [Apache Hudi](https://hudi.apache.org) supports JuiceFS since v0.10.0, you can refer to [official documentation](https://hudi.apache.org/docs/jfs_hoodie) to learn how to configure JuiceFS.
+
+## DevOps
+
+- [Terraform Provider for JuiceFS](https://github.com/toowoxx/terraform-provider-juicefs) by Toowoxx IT GmbH, an IT service company from Germany
