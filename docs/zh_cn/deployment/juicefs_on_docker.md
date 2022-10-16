@@ -263,9 +263,13 @@ services:
       - /dev/fuse
     security_opt:
       - apparmor:unconfined
-    command: ["/usr/local/bin/juicefs", "mount", "${METADATA_URL}", "/mnt"]
+    command: ["/usr/local/bin/juicefs", "mount", "--writeback", "${METADATA_URL}", "/mnt"]
     restart: unless-stopped
 ```
+
+在上述代码中为 mount 命令添加了 `--writeback` 参数，这会让文件先存入本地缓存然后再异步上传到对象存储，当本地主机与对象存储网络连接不稳定的情况启用该功能会非常有用，可以有效提高操作体验和读写效率。但由于该功能采用异步上传，对于多个客户端同时读写同一文件系统的情况，可能会因为网络不稳定而出现一定的延迟。
+
+更多文件系统创建和挂载参数请参考[命令参考](./command_reference#juicefs-mount)。
 
 #### 部署和使用
 
