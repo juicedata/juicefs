@@ -135,6 +135,9 @@ func (cache *cacheStore) checkFreeSpace() {
 }
 
 func (cache *cacheStore) refreshCacheKeys() {
+	if cache.scanInterval < 0 {
+		return
+	}
 	cache.scanCached()
 	if cache.scanInterval > 0 {
 		for {
