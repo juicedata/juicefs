@@ -134,6 +134,7 @@ juicefs format \
 | [Wasabi](#wasabi)                           | `wasabi`   |
 | [Storj DCS](#storj-dcs)                     | `s3`       |
 | [Vultr 对象存储](#vultr-对象存储)           | `s3`       |
+| [Cloudflare R2](#r2)                      | `s3`       |
 | [阿里云 OSS](#阿里云-oss)                   | `oss`      |
 | [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
 | [华为云 OBS](#华为云-obs)                   | `obs`      |
@@ -430,6 +431,32 @@ juicefs format \
 ```
 
 访问对象存储的 API 密钥可以在 [管理控制台](https://my.vultr.com/objectstorage/) 中找到。
+
+## Cloudflare R2 {#r2}
+
+R2 是 Cloudflare 的对象存储服务，提供 S3 兼容的 API，因此用法与 Amazon S3 基本一致。请参照[文档](https://developers.cloudflare.com/r2/data-access/s3-api/tokens/)了解如何创建 Access Key 和 Secret Key。
+
+```shell
+juicefs format \
+    --storage s3 \
+    --bucket https://<ACCOUNT_ID>.r2.cloudflarestorage.com/myjfs \
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
+    ... \
+    myjfs
+```
+
+对于生产环境，建议通过 `ACCESS_KEY` 和 `SECRET_KEY` 环境变量传递密钥信息，例如：
+
+```shell
+export ACCESS_KEY=<your-access-key>
+export SECRET_KEY=<your-sceret-key>
+juicefs format \
+    --storage s3 \
+    --bucket https://<ACCOUNT_ID>.r2.cloudflarestorage.com/myjfs \
+    ... \
+    myjfs
+```
 
 ## 阿里云 OSS
 

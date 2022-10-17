@@ -134,6 +134,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Wasabi](#wasabi)                                           | `wasabi`   |
 | [Storj DCS](#storj-dcs)                                     | `s3`       |
 | [Vultr Object Storage](#vultr-object-storage)               | `s3`       |
+| [Cloudflare R2](#r2)                                        | `s3`       |
 | [Alibaba Cloud OSS](#alibaba-cloud-oss)                     | `oss`      |
 | [Tencent Cloud COS](#tencent-cloud-cos)                     | `cos`      |
 | [Huawei Cloud OBS](#huawei-cloud-obs)                       | `obs`      |
@@ -431,6 +432,31 @@ juicefs format \
 
 Please find the access and secret keys for object storage [in the customer portal](https://my.vultr.com/objectstorage/).
 
+## Cloudflare R2 {#r2}
+
+R2 is Cloudflare's object storage service and provides an S3-compatible API, so usage is the same as Amazon S3. Please refer to [Documentation](https://developers.cloudflare.com/r2/data-access/s3-api/tokens/) to learn how to create Access Key and Secret Key.
+
+```shell
+juicefs format \
+    --storage s3 \
+    --bucket https://<ACCOUNT_ID>.r2.cloudflarestorage.com/myjfs \
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
+    ... \
+    myjfs
+```
+
+For production, it is recommended to pass key information via the `ACCESS_KEY` and `SECRET_KEY` environment variables, e.g.
+
+```shell
+export ACCESS_KEY=<your-access-key>
+export SECRET_KEY=<your-sceret-key>
+juicefs format \
+    --storage s3 \
+    --bucket https://<ACCOUNT_ID>.r2.cloudflarestorage.com/myjfs \
+    ... \
+    myjfs
+```
 ## Alibaba Cloud OSS
 
 Please follow [this document](https://www.alibabacloud.com/help/doc-detail/125558.htm) to learn how to get access key and secret key. If you have already created [RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm) and assigned it to a VM instance, you could omit the options `--access-key` and `--secret-key`.
