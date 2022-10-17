@@ -131,7 +131,7 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Objec
 				if !first && key <= lastkey {
 					logger.Errorf("The keys are out of order: marker %q, last %q current %q", marker, lastkey, key)
 					out <- nil
-					return
+					break END
 				}
 				if end != "" && key > end {
 					break END
