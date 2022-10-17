@@ -7,7 +7,7 @@ slug: /juicefs_on_docker
 
 将 JuiceFS 作为 Docker 持久化存储有以下几种常用方法：
 
-## 1. 卷映射
+## 1. 卷映射 {#volume-mapping}
 
 这种方法是将 JuiceFS 挂载点中的目录映射给 Docker 容器。比如，JuiceFS 文件系统挂载在 `/mnt/jfs` 目录，在创建容器时可以这样将 JuiceFS 存储映射到 Docker 容器：
 
@@ -54,7 +54,7 @@ FUSE 的 `user_allow_other` 启用后，你需要重新挂载 JuiceFS 文件系�
 juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 ```
 
-## 2. Docker Volume Plugin（卷插件）
+## 2. Docker Volume Plugin（卷插件） {#docker-volume-plugin}
 
 JuiceFS 面向 Docker 环境提供了 [volume plugin](https://docs.docker.com/engine/extend/)（卷插件），可以像本地磁盘一样在 JuiceFS 上创建存储卷。
 
@@ -161,7 +161,7 @@ journalctl -f -u docker | grep "plugin="
 
 想要了解更多 JuiceFS 卷插件内容，可以访问  [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) 代码仓库。
 
-## 3. 在 Docker 容器中挂载 JuiceFS
+## 3. 在 Docker 容器中挂载 JuiceFS {#mount-juicefs-in-docker}
 
 在 Docker 容器中挂载 JuiceFS 通常有两种作用，一种是为容器中的应用提供存储，另一种是把容器中挂载的 JuiceFS 存储映射给主机读写使用。为此，可以使用 JuiceFS 官方预构建的镜像，也可以自己编写 Dockerfile 将 JuiceFS 客户端打包到满足需要的系统镜像中。
 
@@ -204,7 +204,7 @@ RUN apk add --no-cache curl && \
 ENTRYPOINT ["/usr/bin/juicefs", "--version"]
 ```
 
-### 将容器中挂载的 JuiceFS 存储映射到本地
+### 将容器中挂载的 JuiceFS 存储映射到宿主机
 
 JuiceFS 可以很便利地将云上的对象存储接入本地，让你可以像使用本地磁盘一样读写云存储。而如果能把整个挂载过程放在 Docker 容器中完成，那么不但能够简化操作，也更方便日常的维护和管理。这种方式非常适合企业或家庭服务器、 NAS 系统等设备创建云上数据容灾环境。
 
