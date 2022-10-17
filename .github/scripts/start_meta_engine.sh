@@ -44,6 +44,7 @@ start_meta_engine(){
             -p 5432:5432 \
             -v /tmp/data:/var/lib/postgresql/data \
             -d postgres
+        sleep 10
     fi
 }
 
