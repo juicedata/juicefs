@@ -137,6 +137,10 @@ func mount_flags() []cli.Flag {
 			Usage: "enable extended attributes (xattr)",
 		},
 		&cli.BoolFlag{
+			Name:  "enable-ioctl",
+			Usage: "enable ioctl (support GETFLAGS/SETFLAGS only)",
+		},
+		&cli.BoolFlag{
 			Name:  "update-fstab",
 			Usage: "add / update entry in /etc/fstab, will create a symlink at /sbin/mount.juicefs if not existing",
 		},
@@ -183,7 +187,7 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
 	conf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
 	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Meta.MountPoint)
-	err := fuse.Serve(v, c.String("o"), c.Bool("enable-xattr"))
+	err := fuse.Serve(v, c.String("o"), c.Bool("enable-xattr"), c.Bool("enable-ioctl"))
 	if err != nil {
 		logger.Fatalf("fuse: %s", err)
 	}
