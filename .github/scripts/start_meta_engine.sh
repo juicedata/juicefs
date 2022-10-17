@@ -37,6 +37,14 @@ start_meta_engine(){
         docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
         sleep 60
         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
+    elif [ "$meta" == "postgres" ]; then
+        docker run --name postgresql \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -p 5432:5432 \
+            -v /tmp/data:/var/lib/postgresql/data \
+            -d postgres
+        sleep 10
     fi
 }
 
