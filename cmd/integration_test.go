@@ -74,7 +74,7 @@ func startWebdav(t *testing.T) {
 }
 
 func TestIntegration(t *testing.T) {
-	mountTemp(t, nil, nil, nil)
+	mountTemp(t, nil, nil, []string{"--enable-ioctl"})
 	defer umountTemp(t)
 	startGateway(t)
 	startWebdav(t)

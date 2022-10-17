@@ -429,7 +429,7 @@ func (fs *fileSystem) Ioctl(cancel <-chan struct{}, in *fuse.IoctlIn, out *fuse.
 }
 
 // Serve starts a server to serve requests from FUSE.
-func Serve(v *vfs.VFS, options string, xattrs bool) error {
+func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	if err := syscall.Setpriority(syscall.PRIO_PROCESS, os.Getpid(), -19); err != nil {
 		logger.Warnf("setpriority: %s", err)
 	}
@@ -444,6 +444,7 @@ func Serve(v *vfs.VFS, options string, xattrs bool) error {
 	opt.MaxBackground = 50
 	opt.EnableLocks = true
 	opt.DisableXAttrs = !xattrs
+	opt.EnableIoctl = ioctl
 	opt.IgnoreSecurityLabels = true
 	opt.MaxWrite = 1 << 20
 	opt.MaxReadAhead = 1 << 20

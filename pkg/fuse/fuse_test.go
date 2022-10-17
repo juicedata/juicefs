@@ -113,7 +113,7 @@ func mount(url, mp string) {
 	conf.DirEntryTimeout = time.Second
 	conf.HideInternal = true
 	v := vfs.NewVFS(conf, m, store, nil, nil)
-	err = Serve(v, "", true)
+	err = Serve(v, "", true, true)
 	if err != nil {
 		log.Fatalf("fuse server err: %s\n", err)
 	}
