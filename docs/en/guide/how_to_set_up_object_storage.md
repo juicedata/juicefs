@@ -457,6 +457,11 @@ juicefs format \
     ... \
     myjfs
 ```
+
+:::caution 
+Cloudflare R2 `ListObjects` API is not fully S3 compatible (result list is not sorted), so some features of juicefs do not work. For example, `juicefs gc`, `juicefs fsck`, `juicefs sync`, `juicefs destroy`. And when using `juicefs mount`, you need to disable [automatic-backup](../administration/metadata_dump_load.md#automatic-backup) function by adding `--backup-meta 0`.
+:::
+
 ## Alibaba Cloud OSS
 
 Please follow [this document](https://www.alibabacloud.com/help/doc-detail/125558.htm) to learn how to get access key and secret key. If you have already created [RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm) and assigned it to a VM instance, you could omit the options `--access-key` and `--secret-key`.

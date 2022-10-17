@@ -458,6 +458,10 @@ juicefs format \
     myjfs
 ```
 
+:::caution 特别提示
+因为 Cloudflare R2 的 `ListObjects` API 并非完全 S3 兼容（返回结果没有实现排序功能），所以 juicefs 的部分功能无法使用，比如 `juicefs gc`，`juicefs fsck`，`juicefs sync`，`juicefs destroy`。另外，使用 `juicefs mount` 时需要关闭[元数据自动备份](../administration/metadata_dump_load.md#自动备份)功能，即加上 `--backup-meta 0`。
+:::
+
 ## 阿里云 OSS
 
 使用阿里云 OSS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://help.aliyun.com/document_detail/38738.html) 了解如何创建 Access Key 和 Secret Key。如果你已经创建了 [RAM 角色](https://help.aliyun.com/document_detail/93689.html) 并指派给了云服务器实例，则在创建文件系统时可以忽略 `--access-key` 和 `--secret-key` 选项。
