@@ -102,7 +102,7 @@ sudo docker volume create -d juicefs \
 You can create multiple file systems on the same object storage bucket by specifying different `<VOLUME_NAME>` volume names and `<META_URL>` database address.
 :::
 
-For pre-created file systems, when creating volume plug-ins with them, simply specify the file system name and database address, e.g.
+To use docker volume plugin with existing JuiceFS volumes, simply specify the file system name and database address, e.g.
 
 ```shell
 sudo docker volume create -d juicefs \
