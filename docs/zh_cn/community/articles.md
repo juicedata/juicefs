@@ -10,6 +10,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## AI
 
+- [vivo AI 计算平台的轩辕文件存储实践](https://www.infoq.cn/article/3oFSOWfYGsX5h7xzsIe6)，2022-10-18，彭毅格@vivo AI计算平台团队
 - [深势科技分享 AI 企业多云存储架构实践](https://juicefs.com/zh-cn/blog/user-stories/dptech-ai-storage-in-multi-cloud-practice)，2022-07-06，李样兵@深势科技
 - [AI 场景存储优化：云知声超算平台基于 JuiceFS 的存储实践](https://juicefs.com/zh-cn/blog/user-stories/juicefs-support-ai-storage-at-unisound)，2022-06-28，吕冬冬@云知声
 - [上汽云 x JuiceFS：iGear 用了这个小魔法，模型训练速度提升 300%](https://juicefs.com/zh-cn/blog/user-stories/performance-boost-3x-on-igear-platform)，2022-01-27，上汽云iGear
