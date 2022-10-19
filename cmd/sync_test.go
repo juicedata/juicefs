@@ -104,6 +104,8 @@ func Test_extractToken(t *testing.T) {
 		{"NAME://:@BUCKET.ENDPOINT/PREFIX", "NAME://:@BUCKET.ENDPOINT/PREFIX", ""},
 		{"NAME://::TOKEN@BUCKET.ENDPOINT/PREFIX", "NAME://:@BUCKET.ENDPOINT/PREFIX", "TOKEN"},
 		{"NAME://BUCKET.ENDPOINT/PREFIX", "NAME://BUCKET.ENDPOINT/PREFIX", ""},
+		{"file:///tmp/testbucket", "file:///tmp/testbucket", ""},
+		{"/tmp/testbucket", "/tmp/testbucket", ""},
 	}
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
