@@ -1983,6 +1983,9 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) s
 		return errno(err)
 	}
 	ss := readSlices(vals)
+	if ss == nil {
+		return syscall.EIO
+	}
 	*slices = buildSlice(ss)
 	m.of.CacheChunk(inode, indx, *slices)
 	if !m.conf.ReadOnly && (len(vals) >= 5 || len(*slices) >= 5) {
