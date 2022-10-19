@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"os/user"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -158,7 +159,7 @@ func (f *sftpStore) path(key string) string {
 	if key == "" {
 		return f.root
 	}
-	return f.root + key
+	return path.Join(f.root, key)
 }
 
 func (f *sftpStore) Head(key string) (Object, error) {
@@ -445,7 +446,7 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 		root = strings.Replace(root, "\\", "/", -1)
 	}
 	// append suffix `/` removed by filepath.Clean()
-	if !strings.HasSuffix(root, dirSuffix) {
+	if strings.HasSuffix(endpoint[idx+1:], dirSuffix) {
 		root = root + dirSuffix
 	}
 
