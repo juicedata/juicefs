@@ -159,7 +159,11 @@ func (f *sftpStore) path(key string) string {
 	if key == "" {
 		return f.root
 	}
-	return path.Join(f.root, key)
+	p := path.Join(f.root, key)
+	if !strings.HasSuffix(p, "/") {
+		p += "/"
+	}
+	return p
 }
 
 func (f *sftpStore) Head(key string) (Object, error) {
