@@ -641,10 +641,11 @@ juicefs sync [command options] SRC DST
 - **SRC**: source path
 - **DST**: destination path
 
-The format of both source and destination paths is `[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`, in which:
+The format of both source and destination paths is `[NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]`, in which:
 
 - `NAME`: JuiceFS supported data storage types (e.g. `s3`, `oss`) (please refer to [this document](../guide/how_to_set_up_object_storage.md#supported-object-storage)).
 - `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage (please refer to [this document](../guide/how_to_set_up_object_storage.md#access-key-and-secret-key)).
+- `TOKEN` token used to access the object storage, as some object storage supports the use of temporary token to obtain permission for a limited time
 - `BUCKET[.ENDPOINT]`: The access address of the data storage service. The format may be different for different storage types, and please refer to [the document](../guide/how_to_set_up_object_storage.md#supported-object-storage).
 - `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit synchronization of data only in certain paths.
 

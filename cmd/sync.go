@@ -41,7 +41,7 @@ func cmdSync() *cli.Command {
 		ArgsUsage: "SRC DST",
 		Description: `
 This tool spawns multiple threads to concurrently syncs objects of two data storages.
-SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX].
+SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX].
 
 Include/exclude pattern rules:
 The include/exclude rules each specify a pattern that is matched against the names of the files that are going to be transferred.  These patterns can take several forms:
@@ -203,6 +203,13 @@ func isFilePath(uri string) bool {
 	return !strings.Contains(uri, ":")
 }
 
+func extractToken(uri string) (string, string) {
+	if submatch := regexp.MustCompile(`^.*:.*:.*(:.*)@.*$`).FindStringSubmatch(uri); len(submatch) == 2 {
+		return strings.ReplaceAll(uri, submatch[1], ""), strings.TrimLeft(submatch[1], ":")
+	}
+	return uri, ""
+}
+
 func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, error) {
 	if !strings.Contains(uri, "://") {
 		if isFilePath(uri) {
@@ -235,6 +242,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			return object.CreateStorage("sftp", uri, user, pass, "")
 		}
 	}
+	uri, token := extractToken(uri)
 	u, err := url.Parse(uri)
 	if err != nil {
 		logger.Fatalf("Can't parse %s: %s", uri, err.Error())
@@ -267,7 +275,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		endpoint += u.Path
 	}
 
-	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, "")
+	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, token)
 	if err != nil {
 		return nil, fmt.Errorf("create %s %s: %s", name, endpoint, err)
 	}
