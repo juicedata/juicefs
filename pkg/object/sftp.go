@@ -14,7 +14,6 @@ import (
 	"net"
 	"os"
 	"os/user"
-	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -159,11 +158,10 @@ func (f *sftpStore) path(key string) string {
 	if key == "" {
 		return f.root
 	}
-	p := path.Join(f.root, key)
-	if !strings.HasSuffix(p, "/") {
-		p += "/"
+	if !strings.HasSuffix(f.root, "/") {
+		return f.root + "/" + key
 	}
-	return p
+	return f.root + key
 }
 
 func (f *sftpStore) Head(key string) (Object, error) {
