@@ -235,6 +235,11 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			return object.CreateStorage("sftp", uri, user, pass, "")
 		}
 	}
+	var token string
+	if submatch := regexp.MustCompile(`^.*:.*:.*(:.*)@.*$`).FindStringSubmatch(uri); len(submatch) == 2 {
+		token = strings.TrimLeft(submatch[1], ":")
+		uri = strings.ReplaceAll(uri, submatch[1], "")
+	}
 	u, err := url.Parse(uri)
 	if err != nil {
 		logger.Fatalf("Can't parse %s: %s", uri, err.Error())
@@ -267,7 +272,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		endpoint += u.Path
 	}
 
-	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, "")
+	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, token)
 	if err != nil {
 		return nil, fmt.Errorf("create %s %s: %s", name, endpoint, err)
 	}
