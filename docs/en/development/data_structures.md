@@ -60,7 +60,7 @@ type Format struct {
 - Bucket: the bucket path of the object storage
 - AccessKey: access key used to access the object storage
 - SecretKey: secret key used to access the object storage
-- SessionToken: session token used to access the object storage, as some object storage supports the use of temporary token to obtain limited time permissions
+- SessionToken: session token used to access the object storage, as some object storage supports the use of temporary token to obtain permission for a limited time
 - BlockSize: size of the data block when splitting the file (the default is 4 MiB)
 - Compression: compression algorithm that is executed before uploading data blocks to the object storage (the default is no compression)
 - Shards: number of buckets in the object storage, only one bucket by default; when Shards > 1, data objects will be randomly hashed into Shards buckets
