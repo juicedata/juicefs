@@ -445,7 +445,7 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 		root = strings.Replace(root, "\\", "/", -1)
 	}
 	// append suffix `/` removed by filepath.Clean()
-	if strings.HasSuffix(endpoint[idx+1:], dirSuffix) {
+	if !strings.HasSuffix(root, dirSuffix) {
 		root = root + dirSuffix
 	}
 
