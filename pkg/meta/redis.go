@@ -2358,43 +2358,34 @@ func (m *redisMeta) toDelete(inode Ino, length uint64) string {
 func (m *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 	var ctx = Background
 	key := m.chunkKey(inode, indx)
-	for {
-		var slices []*slice
-		var rs []*redis.IntCmd
-		err := m.txn(ctx, func(tx *redis.Tx) error {
-			vals, err := tx.LRange(ctx, key, 0, 100).Result()
-			if err == redis.Nil {
-				return nil
-			}
-			slices = slices[:0]
-			rs = rs[:0]
-			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				for _, v := range vals {
-					pipe.LPop(ctx, key)
-					rb := utils.ReadBuffer([]byte(v))
-					_ = rb.Get32() // pos
-					id := rb.Get64()
-					if id == 0 {
-						continue
-					}
-					size := rb.Get32()
-					slices = append(slices, &slice{id: id, size: size})
-					rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(id, size), -1))
+	var todel []*slice
+	var rs []*redis.IntCmd
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		todel = todel[:0]
+		rs = rs[:0]
+		vals, err := tx.LRange(ctx, key, 0, 1000000).Result()
+		if err == redis.Nil {
+			return nil
+		}
+		slices := readSlices(vals)
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Del(ctx, key)
+			for _, s := range slices {
+				if s.id > 0 {
+					todel = append(todel, s)
+					rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.id, s.size), -1))
 				}
-				return nil
-			})
-			return err
-		}, key)
-		if err != nil {
-			return fmt.Errorf("delete slice from chunk %s fail: %s, retry later", key, err)
-		}
-		for i, s := range slices {
-			if rs[i].Val() < 0 {
-				m.deleteSlice(s.id, s.size)
 			}
-		}
-		if len(slices) < 100 {
-			break
+			return nil
+		})
+		return err
+	}, key)
+	if err != nil {
+		return fmt.Errorf("delete slice from chunk %s fail: %s, retry later", key, err)
+	}
+	for i, s := range todel {
+		if rs[i].Val() < 0 {
+			m.deleteSlice(s.id, s.size)
 		}
 	}
 	return nil
