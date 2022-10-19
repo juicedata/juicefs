@@ -92,3 +92,28 @@ func Test_isS3PathType(t *testing.T) {
 		})
 	}
 }
+
+func Test_extractToken(t *testing.T) {
+	// [NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]
+	tests := []struct {
+		uri, removedTokenUri, token string
+	}{
+		{"NAME://ACCESS_KEY:SECRET_KEY@BUCKET.ENDPOINT/PREFIX", "NAME://ACCESS_KEY:SECRET_KEY@BUCKET.ENDPOINT/PREFIX", ""},
+		{"NAME://:@BUCKET.ENDPOINT/PREFIX", "NAME://:@BUCKET.ENDPOINT/PREFIX", ""},
+		{"NAME://ACCESS_KEY:SECRET_KEY:TOKEN@BUCKET.ENDPOINT/PREFIX", "NAME://ACCESS_KEY:SECRET_KEY@BUCKET.ENDPOINT/PREFIX", "TOKEN"},
+		{"NAME://:@BUCKET.ENDPOINT/PREFIX", "NAME://:@BUCKET.ENDPOINT/PREFIX", ""},
+		{"NAME://::TOKEN@BUCKET.ENDPOINT/PREFIX", "NAME://:@BUCKET.ENDPOINT/PREFIX", "TOKEN"},
+		{"NAME://BUCKET.ENDPOINT/PREFIX", "NAME://BUCKET.ENDPOINT/PREFIX", ""},
+	}
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			removedTokenUri, token := extractToken(tt.uri)
+			if removedTokenUri != tt.removedTokenUri {
+				t.Errorf("extractToken() removedTokenUri = %v, want %v", removedTokenUri, tt.removedTokenUri)
+			}
+			if token != tt.token {
+				t.Errorf("extractToken() token = %v, want %v", token, tt.token)
+			}
+		})
+	}
+}

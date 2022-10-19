@@ -203,6 +203,13 @@ func isFilePath(uri string) bool {
 	return !strings.Contains(uri, ":")
 }
 
+func extractToken(uri string) (string, string) {
+	if submatch := regexp.MustCompile(`^.*:.*:.*(:.*)@.*$`).FindStringSubmatch(uri); len(submatch) == 2 {
+		return strings.ReplaceAll(uri, submatch[1], ""), strings.TrimLeft(submatch[1], ":")
+	}
+	return uri, ""
+}
+
 func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, error) {
 	if !strings.Contains(uri, "://") {
 		if isFilePath(uri) {
@@ -235,11 +242,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			return object.CreateStorage("sftp", uri, user, pass, "")
 		}
 	}
-	var token string
-	if submatch := regexp.MustCompile(`^.*:.*:.*(:.*)@.*$`).FindStringSubmatch(uri); len(submatch) == 2 {
-		token = strings.TrimLeft(submatch[1], ":")
-		uri = strings.ReplaceAll(uri, submatch[1], "")
-	}
+	uri, token := extractToken(uri)
 	u, err := url.Parse(uri)
 	if err != nil {
 		logger.Fatalf("Can't parse %s: %s", uri, err.Error())
