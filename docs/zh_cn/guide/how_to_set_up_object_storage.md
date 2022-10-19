@@ -1103,7 +1103,7 @@ juicefs format redis://localhost:6379/1 myjfs
 
 SFTP 全称 Secure File Transfer Protocol 即安全文件传输协议，它并不是文件存储。准确来说，JuiceFS 是通过 SFTP/SSH 这种文件传输协议对远程主机上的磁盘进行连接和读写，从而让任何启用了 SSH 服务的操作系统都可以作为 JuiceFS 的数据存储来使用。
 
-例如，以下命令使用 sftp 协议连接远程服务器 `192.168.1.11` ，在用户 `tom` 的 `$HOME` 下创建 `/myjfs/` 作为文件系统的数据存储。
+例如，以下命令使用 sftp 协议连接远程服务器 `192.168.1.11` ，在用户 `tom` 的 `$HOME` 目录下创建 `myjfs/` 文件夹作为文件系统的数据存储。
 
 ```shell
 juicefs format  \
