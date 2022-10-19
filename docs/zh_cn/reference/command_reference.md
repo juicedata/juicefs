@@ -640,10 +640,11 @@ juicefs sync [command options] SRC DST
 - **SRC**：源路径
 - **DST**：目标路径
 
-源路径和目标路径的格式均为 `[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`，其中：
+源路径和目标路径的格式均为 `[NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]`，其中：
 
 - `NAME`：JuiceFS 支持的数据存储类型（如 `s3`、`oss`），请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)。
 - `ACCESS_KEY` 和 `SECRET_KEY`：访问数据存储所需的密钥信息，请参考[文档](../guide/how_to_set_up_object_storage.md#access-key-和-secret-key)。
+- `TOKEN` 用来访问对象存储的 token，部分对象存储支持使用临时的 token 以获得有限时间的权限
 - `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同，具体请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)。
 - `[/PREFIX]`：可选，源路径和目标路径的前缀，可用于限定只同步某些路径中的数据。
 
