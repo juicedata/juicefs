@@ -41,7 +41,7 @@ func cmdSync() *cli.Command {
 		ArgsUsage: "SRC DST",
 		Description: `
 This tool spawns multiple threads to concurrently syncs objects of two data storages.
-SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX].
+SRC and DST should be [NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX].
 
 Include/exclude pattern rules:
 The include/exclude rules each specify a pattern that is matched against the names of the files that are going to be transferred.  These patterns can take several forms:

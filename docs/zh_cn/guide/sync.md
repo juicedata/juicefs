@@ -23,16 +23,17 @@ juicefs sync [command options] SRC DST
 - `DST` 代表目标地址及路径
 - `[command options]` 代表可选的同步选项，详情查看[命令参考](../reference/command_reference.md#juicefs-sync)。
 
-地址格式均为 `[NAME://][ACCESS_KEY:SECRET_KEY@]BUCKET[.ENDPOINT][/PREFIX]`
+地址格式均为 `[NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]`
 
 :::tip 提示
-minio 目前仅支持路径风格，地址格式为 `minio://[ACCESS_KEY:SECRET_KEY@]ENDPOINT/BUCKET[/PREFIX]`
+minio 目前仅支持路径风格，地址格式为 `minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]`
 :::
 
 其中：
 
 - `NAME` 是存储类型，比如 `s3`、`oss`。详情查看[所有支持的存储服务](../guide/how_to_set_up_object_storage.md#支持的存储服务)
 - `ACCESS_KEY` 和 `SECRET_KEY` 是对象存储的 API 访问密钥，如果包含了特殊字符，则需要手动转义并替换，比如 `/` 需要被替换为其转义符 `%2F`
+- `TOKEN` 用来访问对象存储的 token，部分对象存储支持使用临时的 token 以获得有限时间的权限
 - `BUCKET[.ENDPOINT]` 是对象存储的访问地址
 - `PREFIX` 是可选的，限定要同步的目录名前缀。
 
