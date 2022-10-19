@@ -2122,7 +2122,11 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			for _, v := range vals {
 				sv := v.(*redis.StringSliceCmd).Val()
 				// Add a zero chunk for hole
-				ss := append([]*slice{{len: ChunkSize}}, readSlices(sv)...)
+				ss := readSlices(sv)
+				if ss == nil {
+					return syscall.EIO
+				}
+				ss = append([]*slice{{len: ChunkSize}}, ss...)
 				cs := buildSlice(ss)
 				tpos := coff
 				for _, s := range cs {
@@ -2368,6 +2372,9 @@ func (m *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 			return nil
 		}
 		slices := readSlices(vals)
+		if slices == nil {
+			logger.Errorf("Corrupt value for inode %d chunk index %d, use `gc` to clean up leaked slices", inode, indx)
+		}
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Del(ctx, key)
 			for _, s := range slices {
@@ -2520,6 +2527,10 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	ss := readSlices(vals)
+	if ss == nil {
+		logger.Errorf("Corrupt value for inode %d chunk indx %d", inode, indx)
+		return
+	}
 	skipped := skipSome(ss)
 	ss = ss[skipped:]
 	pos, size, slices := compactChunk(ss)
@@ -2782,6 +2793,10 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 			inode, _ := strconv.Atoi(strings.Split(key[len(m.prefix)+1:], "_")[0])
 			vals := cmd.(*redis.StringSliceCmd).Val()
 			ss := readSlices(vals)
+			if ss == nil {
+				logger.Errorf("Corrupt value for inode %d chunk key %s", inode, key)
+				continue
+			}
 			for _, s := range ss {
 				if s.id > 0 {
 					slices[Ino(inode)] = append(slices[Ino(inode)], Slice{Id: s.id, Size: s.size})
@@ -3015,6 +3030,9 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					}
 					if len(vals) > 0 {
 						ss := readSlices(vals)
+						if ss == nil {
+							logger.Errorf("Corrupt value for inode %d chunk index %d", inode, 0)
+						}
 						slices := make([]*DumpedSlice, 0, len(ss))
 						for _, s := range ss {
 							slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
@@ -3068,12 +3086,15 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					return err
 				}
 				if len(vals) > 0 {
+					e := es[lcs[i].i]
 					ss := readSlices(vals)
+					if ss == nil {
+						logger.Errorf("Corrupt value for inode %d chunk index %d", e.Attr.Inode, lcs[i].indx)
+					}
 					slices := make([]*DumpedSlice, 0, len(ss))
 					for _, s := range ss {
 						slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
 					}
-					e := es[lcs[i].i]
 					e.Chunks = append(e.Chunks, &DumpedChunk{lcs[i].indx, slices})
 				}
 			}

@@ -2142,6 +2142,9 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		chunks := make(map[uint32][]*slice)
 		for _, c := range cs {
 			chunks[c.Indx] = readSliceBuf(c.Slices)
+			if chunks[c.Indx] == nil {
+				return syscall.EIO
+			}
 		}
 
 		ses := s
@@ -2265,6 +2268,9 @@ func (m *dbMeta) deleteChunk(inode Ino, indx uint32) error {
 			return nil
 		}
 		ss = readSliceBuf(c.Slices)
+		if ss == nil {
+			logger.Errorf("Corrupt value for inode %d chunk index %d, use `gc` to clean up leaked slices", inode, indx)
+		}
 		for _, sc := range ss {
 			if sc.id == 0 {
 				continue
@@ -2404,6 +2410,10 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 
 	ss := readSliceBuf(c.Slices)
+	if ss == nil {
+		logger.Errorf("Corrupt value for inode %d chunk indx %d", inode, indx)
+		return
+	}
 	skipped := skipSome(ss)
 	ss = ss[skipped:]
 	pos, size, slices := compactChunk(ss)
@@ -2563,6 +2573,10 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		}
 		for _, c := range cs {
 			ss := readSliceBuf(c.Slices)
+			if ss == nil {
+				logger.Errorf("Corrupt value for inode %d chunk index %d", c.Inode, c.Indx)
+				continue
+			}
 			for _, s := range ss {
 				if s.id > 0 {
 					slices[c.Inode] = append(slices[c.Inode], Slice{Id: s.id, Size: s.size})
@@ -2768,6 +2782,9 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 				continue
 			}
 			ss := readSliceBuf(c.Slices)
+			if ss == nil {
+				logger.Errorf("Corrupt value for inode %d chunk index %d", inode, indx)
+			}
 			slices := make([]*DumpedSlice, 0, len(ss))
 			for _, s := range ss {
 				slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
@@ -2818,6 +2835,9 @@ func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEnt
 				continue
 			}
 			ss := readSliceBuf(c.Slices)
+			if ss == nil {
+				logger.Errorf("Corrupt value for inode %d chunk index %d", inode, indx)
+			}
 			slices := make([]*DumpedSlice, 0, len(ss))
 			for _, s := range ss {
 				slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
