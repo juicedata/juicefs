@@ -44,7 +44,7 @@ func globalFlags() []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:  "no-agent",
-			Usage: "disable pprof (:6060) and gops (:6070) agent",
+			Usage: "disable pprof (:6060) agent",
 		},
 		&cli.StringFlag{
 			Name:  "pyroscope",
