@@ -57,7 +57,7 @@ GLOBAL OPTIONS:
    --verbose, --debug, -v  enable debug log (default: false)
    --quiet, -q             show warning and errors only (default: false)
    --trace                 enable trace log (default: false)
-   --no-agent              disable pprof (:6060) and gops (:6070) agent (default: false)
+   --no-agent              disable pprof (:6060) agent (default: false)
    --pyroscope value       pyroscope address
    --no-color              disable colors (default: false)
    --help, -h              show help (default: false)

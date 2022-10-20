@@ -26,7 +26,6 @@ import (
 	"syscall"
 
 	"github.com/erikdubbelboer/gspt"
-	"github.com/google/gops/agent"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/pyroscope-io/client/pyroscope"
@@ -35,7 +34,7 @@ import (
 )
 
 var logger = utils.GetLogger("juicefs")
-var debugAgent, gopsAgent string
+var debugAgent string
 
 func Main(args []string) error {
 	// we have to call this because gspt removes all arguments
@@ -261,12 +260,6 @@ func setup(c *cli.Context, n int) {
 			for port := 6060; port < 6100; port++ {
 				debugAgent = fmt.Sprintf("127.0.0.1:%d", port)
 				_ = http.ListenAndServe(debugAgent, nil)
-			}
-		}()
-		go func() {
-			for port := 6070; port < 6100; port++ {
-				gopsAgent = fmt.Sprintf("127.0.0.1:%d", port)
-				_ = agent.Listen(agent.Options{Addr: gopsAgent})
 			}
 		}()
 	}

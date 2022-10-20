@@ -43,7 +43,6 @@ const (
 type Port struct {
 	PrometheusAgent string `json:",omitempty"`
 	DebugAgent      string `json:",omitempty"`
-	GopsAgent       string `json:",omitempty"`
 	ConsulAddr      string `json:",omitempty"`
 	PyroscopeAddr   string `json:",omitempty"`
 }
