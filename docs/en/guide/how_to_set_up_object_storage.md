@@ -162,6 +162,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [MySQL](#mysql)                                             | `mysql`    |
 | [PostgreSQL](#postgresql)                                   | `postgres` |
 | [Local disk](#local-disk)                                   | `file`     |
+| [SFTP/SSH](#sftp)                                           | `sftp`     |
 
 ## Amazon S3
 
@@ -1099,3 +1100,26 @@ juicefs format redis://localhost:6379/1 test
 ```
 
 Local storage is usually only used to help users understand how JuiceFS works and to give users an experience on the basic features of JuiceFS. The created JuiceFS storage cannot be mounted by other clients within the network and can only be used on a single machine.
+
+## SFTP/SSH {#sftp}
+
+SFTP - Secure File Transfer Protocol，It is not a type of storage. To be precise, JuiceFS reads and writes to disks on remote hosts via SFTP/SSH, thus allowing any SSH-enabled operating system to be used as a data storage for JuiceFS.
+
+For example, the following command uses the sftp protocol to connect to the remote server `192.168.1.11` and creates the `myjfs/` folder in the `$HOME` directory of user `tom` as the data storage of JuiceFS.
+
+```shell
+juicefs format  \
+    --storage sftp \
+    --bucket 192.168.1.11:myjfs/ \
+    --access-key tom \
+    --secret-key 123456 \
+    ...
+    redis://localhost:6379/1 myjfs
+```
+
+### Notes
+
+- `--bucket` is used to set the server address and storage path in the format `<IP/Domain>:<Path>`. Note that the directory name should end with `/`, e.g. `myjfs/`.
+- Currently only the default `22` port is supported to access the remote server
+- `--access-key` set the username of the remote server
+- `--secret-key` set the password of the remote server
