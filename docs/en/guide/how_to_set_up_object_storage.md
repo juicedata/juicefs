@@ -1119,6 +1119,6 @@ juicefs format  \
 
 ### Notes
 
-- `--bucket` is used to set the server address and storage path in the format `<IP/Domain>:<Path>`. Note that the address should not contain a protocol header, the directory name should end with `/`, and the port number is optionally defaulted to `22`, e.g. `192.168.1.11:22:myjfs/`.
+- `--bucket` is used to set the server address and storage path in the format `<IP/Domain>:[port]:<Path>`. Note that the address should not contain a protocol header, the directory name should end with `/`, and the port number is optionally defaulted to `22`, e.g. `192.168.1.11:22:myjfs/`.
 - `--access-key` set the username of the remote server
 - `--secret-key` set the password of the remote server
