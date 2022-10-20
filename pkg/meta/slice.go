@@ -104,6 +104,10 @@ func readSlices(vals []string) []*slice {
 	slices := make([]slice, len(vals))
 	ss := make([]*slice, len(vals))
 	for i, val := range vals {
+		if len(val) != sliceBytes {
+			logger.Errorf("corrupt slice: len=%d, val=%v", len(val), []byte(val))
+			return nil
+		}
 		s := &slices[i]
 		s.read([]byte(val))
 		ss[i] = s
