@@ -1764,6 +1764,9 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		for indx := uint32(offIn / ChunkSize); indx <= uint32((offIn+size)/ChunkSize); indx++ {
 			if v, ok := vals[string(m.chunkKey(fin, indx))]; ok {
 				chunks[indx] = readSliceBuf(v)
+				if chunks[indx] == nil {
+					return syscall.EIO
+				}
 			}
 		}
 
@@ -1880,6 +1883,9 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 		todel = todel[:0]
 		buf := tx.get(key)
 		slices := readSliceBuf(buf)
+		if slices == nil {
+			logger.Errorf("Corrupt value for inode %d chunk index %d, use `gc` to clean up leaked slices", inode, indx)
+		}
 		tx.dels(key)
 		for _, s := range slices {
 			if s.id > 0 && tx.incrBy(m.sliceKey(s.id, s.size), -1) < 0 {
@@ -2004,6 +2010,10 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		buf = buf[:sliceBytes*100]
 	}
 	ss := readSliceBuf(buf)
+	if ss == nil {
+		logger.Errorf("Corrupt value for inode %d chunk indx %d", inode, indx)
+		return
+	}
 	skipped := skipSome(ss)
 	ss = ss[skipped:]
 	pos, size, slices := compactChunk(ss)
@@ -2142,6 +2152,10 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	for key, value := range result {
 		inode := m.decodeInode([]byte(key)[1:9])
 		ss := readSliceBuf(value)
+		if ss == nil {
+			logger.Errorf("Corrupt value for inode %d chunk key %s", inode, key)
+			continue
+		}
 		for _, s := range ss {
 			if s.id > 0 {
 				slices[inode] = append(slices[inode], Slice{Id: s.id, Size: s.size})
@@ -2281,6 +2295,9 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 					continue
 				}
 				ss := readSliceBuf(v)
+				if ss == nil {
+					logger.Errorf("Corrupt value for inode %d chunk index %d", inode, indx)
+				}
 				slices := make([]*DumpedSlice, 0, len(ss))
 				for _, s := range ss {
 					slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
@@ -2428,6 +2445,9 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino) (err error) {
 				case 'C':
 					indx := binary.BigEndian.Uint32(key[10:])
 					ss := readSliceBuf(value)
+					if ss == nil {
+						logger.Errorf("Corrupt value for inode %d chunk index %d", ino, indx)
+					}
 					slices := make([]*DumpedSlice, 0, len(ss))
 					for _, s := range ss {
 						slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
