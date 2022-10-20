@@ -162,6 +162,7 @@ juicefs format \
 | [MySQL](#mysql)                             | `mysql`    |
 | [PostgreSQL](#postgresql)                   | `postgres` |
 | [本地磁盘](#本地磁盘)                       | `file`     |
+| [SFTP/SSH](#sftp)                           | `sftp`     |
 
 ## Amazon S3
 
@@ -1097,3 +1098,25 @@ juicefs format redis://localhost:6379/1 myjfs
 ```
 
 本地存储通常仅用于了解和体验 JuiceFS 的基本功能，创建的 JuiceFS 存储无法被网络内的其他客户端挂载，只能单机使用。
+
+## SFTP/SSH {#sftp}
+
+SFTP 全称 Secure File Transfer Protocol 即安全文件传输协议，它并不是文件存储。准确来说，JuiceFS 是通过 SFTP/SSH 这种文件传输协议对远程主机上的磁盘进行连接和读写，从而让任何启用了 SSH 服务的操作系统都可以作为 JuiceFS 的数据存储来使用。
+
+例如，以下命令使用 sftp 协议连接远程服务器 `192.168.1.11` ，在用户 `tom` 的 `$HOME` 目录下创建 `myjfs/` 文件夹作为文件系统的数据存储。
+
+```shell
+juicefs format  \
+    --storage sftp \
+    --bucket 192.168.1.11:myjfs/ \
+    --access-key tom \
+    --secret-key 123456 \
+    ...
+    redis://localhost:6379/1 myjfs
+```
+
+### 注意事项
+
+- `--bucket` 用来设置服务器的地址及存储路径，格式为 `<IP/Domain>:[port]:<Path>`。注意，地址中不要包含协议头，目录名应该以 `/` 结尾，端口号为可选项默认为 `22`，例如 `192.168.1.11:22:myjfs/`。
+- `--access-key` 用来设置远程服务器的用户名
+- `--secret-key` 用来设置远程服务器的密码
