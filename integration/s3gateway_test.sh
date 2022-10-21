@@ -25,14 +25,6 @@ fi
 echo "os=$os"
 
 set -x
-os="linux"
-errno=$errno
-if [[ `uname  -a` =~ "Darwin" ]];then
-    os="mac"
-    errno=254
-fi
-echo "os=$os"
-
 
 MINT_DATA_DIR=testdata
 MINT_MODE=core
@@ -43,9 +35,7 @@ ENABLE_HTTPS=0
 SERVER_REGION=us-east-1
 ENABLE_VIRTUAL_STYLE=0
 
-
-
-
+# macos need bash 4.0+
 # create testdata
 declare -A data_file_map
 data_file_map["datafile-0-b"]="0"
