@@ -4,7 +4,7 @@
 start_meta_engine(){
     meta=$1
     storage=$2
-    if [ "$meta" == "mysql" "$storage" == "mysql"]; then
+    if [ "$meta" == "mysql" ]; then
         sudo /etc/init.d/mysql start
     elif [ "$meta" == "redis" ]; then
         sudo apt-get install -y redis-tools redis-server
@@ -38,7 +38,8 @@ start_meta_engine(){
         docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
         sleep 60
         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
-    elif [ "$meta" == "postgres" || "$storage" == "postgres"]; then
+    elif [ "$meta" == "postgres" ]; then
+        echo "start postgres"
         docker run --name postgresql \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=postgres \
@@ -54,6 +55,26 @@ start_meta_engine(){
                     -v /tmp/config:/root/.minio \
                     minio/minio server /data
     fi
+
+    if [ "$storage" == "minio" ]; then
+        docker run -d -p 9000:9000 --name minio \
+                    -e "MINIO_ACCESS_KEY=minioadmin" \
+                    -e "MINIO_SECRET_KEY=minioadmin" \
+                    -v /tmp/data:/data \
+                    -v /tmp/config:/root/.minio \
+                    minio/minio server /data
+    elif [ "$meta" != "postgres" && "$storage" == "postgres"]; then
+        echo "start postgres"
+        docker run --name postgresql \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -p 5432:5432 \
+            -v /tmp/data:/var/lib/postgresql/data \
+            -d postgres
+        sleep 10
+    elif [ "$meta" != "mysql" && "$storage" == "mysql"]; then
+        echo "start mysql"
+        sudo /etc/init.d/mysql start
 }
 
 get_meta_url(){
