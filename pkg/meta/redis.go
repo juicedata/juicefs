@@ -323,8 +323,8 @@ func (m *redisMeta) incrCounter(name string, value int64) (int64, error) {
 	if m.conf.ReadOnly {
 		return 0, syscall.EROFS
 	}
-	if name == "nextInode" || name == "nextChunk" {
-		// for nextinode, nextchunk
+	if name == "nextInode" || name == "nextSlice" {
+		// for nextinode, nextslice
 		// the current one is already used
 		v, err := m.rdb.IncrBy(Background, m.prefix+strings.ToLower(name), value).Result()
 		return v + 1, err
@@ -3221,7 +3221,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 		dels = append(dels, &DumpedDelFile{Ino(inode), length, int64(z.Score)})
 	}
 
-	names := []string{usedSpace, totalInodes, "nextinode", "nextchunk", "nextsession", "nextTrash"}
+	names := []string{usedSpace, totalInodes, "nextinode", "nextslice", "nextsession", "nextTrash"}
 	for i := range names {
 		names[i] = m.prefix + names[i]
 	}
@@ -3260,8 +3260,8 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
-			NextInode:   cs[2] + 1, // Redis nextInode/nextChunk is 1 smaller than sql/tkv
-			NextChunk:   cs[3] + 1,
+			NextInode:   cs[2] + 1, // Redis nextInode/nextSlice is 1 smaller than sql/tkv
+			NextSlice:   cs[3] + 1,
 			NextSession: cs[4],
 			NextTrash:   cs[5],
 		},
@@ -3433,7 +3433,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	cs[m.prefix+usedSpace] = counters.UsedSpace
 	cs[m.prefix+totalInodes] = counters.UsedInodes
 	cs[m.prefix+"nextinode"] = counters.NextInode - 1
-	cs[m.prefix+"nextchunk"] = counters.NextChunk - 1
+	cs[m.prefix+"nextslice"] = counters.NextSlice - 1
 	cs[m.prefix+"nextsession"] = counters.NextSession
 	cs[m.prefix+"nextTrash"] = counters.NextTrash
 	p.MSet(ctx, cs)

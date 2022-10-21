@@ -16,7 +16,7 @@
     "usedSpace": 115392512,
     "usedInodes": 14,
     "nextInodes": 35,
-    "nextChunk": 9,
+    "nextSlice": 9,
     "nextSession": 0,
     "nextTrash": 1
   },

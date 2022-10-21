@@ -36,7 +36,7 @@ type DumpedCounters struct {
 	UsedSpace         int64 `json:"usedSpace"`
 	UsedInodes        int64 `json:"usedInodes"`
 	NextInode         int64 `json:"nextInodes"`
-	NextChunk         int64 `json:"nextChunk"`
+	NextSlice         int64 `json:"nextSlice"`
 	NextSession       int64 `json:"nextSession"`
 	NextTrash         int64 `json:"nextTrash"`
 	NextCleanupSlices int64 `json:"nextCleanupSlices,omitempty"` // deprecated, always 0
@@ -320,7 +320,7 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 	dm = &DumpedMeta{}
 	counters = &DumpedCounters{ // rebuild counters
 		NextInode: 2,
-		NextChunk: 1,
+		NextSlice: 1,
 	}
 	parents = make(map[Ino][]Ino)
 	refs = make(map[chunkKey]int64)
@@ -418,8 +418,8 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 						if addChunk != nil && refs[ck] == 1 {
 							addChunk(&ck)
 						}
-						if cs.NextChunk <= int64(s.Id) {
-							cs.NextChunk = int64(s.Id) + 1
+						if cs.NextSlice <= int64(s.Id) {
+							cs.NextSlice = int64(s.Id) + 1
 						}
 					}
 				}

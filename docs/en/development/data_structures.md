@@ -83,7 +83,7 @@ Maintains the value of each counter in the system and the start timestamps of so
 - usedSpace: used capacity of the file system
 - totalInodes: number of used files in the file system
 - nextInode: the next available inode number (in Redis, the maximum inode number currently in use)
-- nextChunk: the next available sliceId (in Redis, the largest sliceId currently in use)
+- nextSlice: the next available sliceId (in Redis, the largest sliceId currently in use)
 - nextSession: the maximum sid (sessionID) currently in use
 - nextTrash: the maximum trash inode number currently in use
 - nextCleanupSlices: timestamp of the last check on the cleanup of residual slices

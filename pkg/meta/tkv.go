@@ -373,7 +373,7 @@ func (m *kvMeta) Init(format Format, force bool) error {
 			attr.Mode = 0777
 			tx.set(m.inodeKey(1), m.marshal(attr))
 			tx.incrBy(m.counterKey("nextInode"), 2)
-			tx.incrBy(m.counterKey("nextChunk"), 1)
+			tx.incrBy(m.counterKey("nextSlice"), 1)
 		}
 		return nil
 	})
@@ -2473,7 +2473,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		bInodes, _ := m.get(m.counterKey(totalInodes))
 		used := parseCounter(bUsed)
 		inodeTotal := parseCounter(bInodes)
-		var guessKeyTotal int64 = 3 // setting, nextInode, nextChunk
+		var guessKeyTotal int64 = 3 // setting, nextInode, nextSlice
 		if inodeTotal > 0 {
 			guessKeyTotal += int64(math.Ceil((float64(used/inodeTotal/(64*1024*1024)) + float64(3)) * float64(inodeTotal)))
 		}
@@ -2560,7 +2560,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		rs = tx.gets(m.counterKey(usedSpace),
 			m.counterKey(totalInodes),
 			m.counterKey("nextInode"),
-			m.counterKey("nextChunk"),
+			m.counterKey("nextSlice"),
 			m.counterKey("nextSession"),
 			m.counterKey("nextTrash"))
 		return nil
@@ -2600,7 +2600,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
 			NextInode:   cs[2],
-			NextChunk:   cs[3],
+			NextSlice:   cs[3],
 			NextSession: cs[4],
 			NextTrash:   cs[5],
 		},
@@ -2750,7 +2750,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	kv <- &pair{m.counterKey(usedSpace), packCounter(counters.UsedSpace)}
 	kv <- &pair{m.counterKey(totalInodes), packCounter(counters.UsedInodes)}
 	kv <- &pair{m.counterKey("nextInode"), packCounter(counters.NextInode)}
-	kv <- &pair{m.counterKey("nextChunk"), packCounter(counters.NextChunk)}
+	kv <- &pair{m.counterKey("nextSlice"), packCounter(counters.NextSlice)}
 	kv <- &pair{m.counterKey("nextSession"), packCounter(counters.NextSession)}
 	kv <- &pair{m.counterKey("nextTrash"), packCounter(counters.NextTrash)}
 	for _, d := range dm.DelFiles {

@@ -83,7 +83,7 @@ type Format struct {
 - usedSpace：文件系统的已使用容量
 - totalInodes：文件系统的已使用文件数
 - nextInode：下一个可用的 inode 号（Redis 中为当前已用的最大 inode 号）
-- nextChunk：下一个可用的 sliceId（Redis 中为当前已用的最大 sliceId）
+- nextSlice：下一个可用的 sliceId（Redis 中为当前已用的最大 sliceId）
 - nextSession：当前已用的最大 sid（sessionID）
 - nextTrash：当前已用的最大 trash inode 号
 - nextCleanupSlices：上一次检查清理残留 slices 的时间点

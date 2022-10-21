@@ -873,7 +873,7 @@ func (m *baseMeta) NewSlice(ctx Context, id *uint64) syscall.Errno {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 	if m.freeSlices.next >= m.freeSlices.maxid {
-		v, err := m.en.incrCounter("nextChunk", sliceIdBatch)
+		v, err := m.en.incrCounter("nextSlice", sliceIdBatch)
 		if err != nil {
 			return errno(err)
 		}

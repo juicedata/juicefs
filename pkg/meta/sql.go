@@ -341,7 +341,7 @@ func (m *dbMeta) Init(format Format, force bool) error {
 		n.Mode = 0777
 		var cs = []counter{
 			{"nextInode", 2}, // 1 is root
-			{"nextChunk", 1},
+			{"nextSlice", 1},
 			{"nextSession", 0},
 			{"usedSpace", 0},
 			{"totalInodes", 0},
@@ -3038,8 +3038,8 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 				counters.UsedInodes = row.Value
 			case "nextInode":
 				counters.NextInode = row.Value
-			case "nextChunk":
-				counters.NextChunk = row.Value
+			case "nextSlice":
+				counters.NextSlice = row.Value
 			case "nextSession":
 				counters.NextSession = row.Value
 			case "nextTrash":
@@ -3250,7 +3250,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	chs[5] <- &counter{usedSpace, counters.UsedSpace}
 	chs[5] <- &counter{totalInodes, counters.UsedInodes}
 	chs[5] <- &counter{"nextInode", counters.NextInode}
-	chs[5] <- &counter{"nextChunk", counters.NextChunk}
+	chs[5] <- &counter{"nextSlice", counters.NextSlice}
 	chs[5] <- &counter{"nextSession", counters.NextSession}
 	chs[5] <- &counter{"nextTrash", counters.NextTrash}
 	for _, d := range dm.DelFiles {
