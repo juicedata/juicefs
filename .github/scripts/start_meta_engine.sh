@@ -60,7 +60,7 @@ start_meta_engine(){
                     -v /tmp/data:/data \
                     -v /tmp/config:/root/.minio \
                     minio/minio server /data
-    elif [ "$meta" != "postgres" && "$storage" == "postgres" ]; then
+    elif [ "$meta" != "postgres" ] && [ "$storage" == "postgres" ]; then
         echo "start postgres"
         docker run --name postgresql \
             -e POSTGRES_USER=postgres \
@@ -69,7 +69,7 @@ start_meta_engine(){
             -v /tmp/data:/var/lib/postgresql/data \
             -d postgres
         sleep 10
-    elif [ "$meta" != "mysql" && "$storage" == "mysql" ]; then
+    elif [ "$meta" != "mysql" ] && [ "$storage" == "mysql" ]; then
         echo "start mysql"
         sudo /etc/init.d/mysql start
     fi
