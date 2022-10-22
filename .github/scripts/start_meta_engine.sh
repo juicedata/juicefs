@@ -13,6 +13,10 @@ start_meta_engine(){
         source /home/runner/.bash_profile
         source /home/runner/.profile
         tiup playground --mode tikv-slim &
+        git clone https://github.com/c4pt0r/tcli
+        cd tcli && make
+        sudo cp bin/tcli /usr/local/bin
+        cd -
         sleep 5
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
