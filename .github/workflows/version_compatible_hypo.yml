@@ -4,6 +4,12 @@ on:
   schedule:
     - cron:  '0 16 * * *'
   workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
 
 jobs:
   vc-hypo:
@@ -11,35 +17,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
         # old_juicefs_version: ['main']
         old_juicefs_version: ['main', 'release-1.0', 'release-1.0-rc1']
-        # meta: ['fdb']
+        # meta: ['postgres']
         meta: ['redis', 'mysql', 'tikv', 'postgres']
         storage: ['minio']
         include:
-          - os: ubuntu-latest
-            old_juicefs_version: 'main'
+          - old_juicefs_version: 'main'
             meta: 'fdb'
             storage: 'minio'
-          - os: ubuntu-latest
-            old_juicefs_version: 'release-1.0'
+          - old_juicefs_version: 'release-1.0'
             meta: 'redis'
             storage: 'postgres'
-          - os: ubuntu-latest
-            old_juicefs_version: 'release-1.0'
+          - old_juicefs_version: 'release-1.0'
             meta: 'redis'
             storage: 'mysql'
-          - os: ubuntu-latest
-            old_juicefs_version: 'release-1.0-beta1'
+          - old_juicefs_version: 'release-1.0-beta1'
             meta: 'redis'
             storage: 'minio'
-          - os: ubuntu-latest
-            old_juicefs_version: 'release-0.17'
+          - old_juicefs_version: 'release-0.17'
             meta: 'redis'
             storage: 'minio'
 
-    runs-on: ${{matrix.os}}
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -92,45 +92,11 @@ jobs:
 
       - name: Prepare meta database
         run: | 
-          meta=${{matrix.meta}}
-          storage=${{matrix.storage}}
-          if [[ "$meta" == redis ]]; then
-            sudo apt-get install -y redis-tools redis-server
-          fi
-          if [[ "$meta" == mysql || "$storage" == mysql ]]; then
-            sudo /etc/init.d/mysql start
-          fi
-          if [[ "$meta" == tikv ]]; then
-            curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-            source /home/runner/.bash_profile
-            source /home/runner/.profile
-            tiup playground --mode tikv-slim &
-            git clone https://github.com/c4pt0r/tcli
-            cd tcli && make
-            sudo cp bin/tcli /usr/local/bin
-            cd -
-          fi
-          if [[ "$meta" == badger ]]; then
-            sudo go get github.com/dgraph-io/badger/v3
-          fi
-          if [[ "$meta" == mariadb ]]; then
-            docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
-          fi
-          if [[ "$meta" == fdb ]]; then
-            docker run --name fdb --rm -d -p 4500:4500 foundationdb/foundationdb:6.3.23
-            sleep 5
-            docker exec fdb fdbcli --exec "configure new single memory"
-            echo "docker:docker@127.0.0.1:4500" > /home/runner/fdb.cluster 
-            fdbcli -C /home/runner/fdb.cluster --exec "status"
-          fi
-          if [[ "$storage" == minio ]]; then
-            docker run -d -p 9000:9000 --name minio \
-                        -e "MINIO_ACCESS_KEY=minioadmin" \
-                        -e "MINIO_SECRET_KEY=minioadmin" \
-                        -v /tmp/data:/data \
-                        -v /tmp/config:/root/.minio \
-                        minio/minio server /data
-          fi
+          chmod +x .github/scripts/start_meta_engine.sh
+          source .github/scripts/start_meta_engine.sh
+          start_meta_engine ${{matrix.meta}} ${{matrix.storage}}
+          # meta_url=$(get_meta_url ${{matrix.meta}})
+          # create_database $meta_url
           
       - name: Install tools
         run: | 
@@ -158,7 +124,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v3
         with:
-          name: ${{matrix.os}}-${{matrix.meta}}-${{matrix.old_juicefs_version}}.command.log
+          name: ${{matrix.meta}}-${{matrix.old_juicefs_version}}.command.log
           path: command.log
 
       - name: Display log
@@ -186,6 +152,6 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
       - name: Setup upterm session
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
         timeout-minutes: 1
         uses: lhotari/action-upterm@v1

@@ -3,6 +3,7 @@
 
 start_meta_engine(){
     meta=$1
+    storage=$2
     if [ "$meta" == "mysql" ]; then
         sudo /etc/init.d/mysql start
     elif [ "$meta" == "redis" ]; then
@@ -12,6 +13,10 @@ start_meta_engine(){
         source /home/runner/.bash_profile
         source /home/runner/.profile
         tiup playground --mode tikv-slim &
+        git clone https://github.com/c4pt0r/tcli
+        cd tcli && make
+        sudo cp bin/tcli /usr/local/bin
+        cd -
         sleep 5
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
@@ -38,6 +43,7 @@ start_meta_engine(){
         sleep 60
         mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
     elif [ "$meta" == "postgres" ]; then
+        echo "start postgres"
         docker run --name postgresql \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=postgres \
@@ -45,6 +51,27 @@ start_meta_engine(){
             -v /tmp/data:/var/lib/postgresql/data \
             -d postgres
         sleep 10
+    fi
+
+    if [ "$storage" == "minio" ]; then
+        docker run -d -p 9000:9000 --name minio \
+                    -e "MINIO_ACCESS_KEY=minioadmin" \
+                    -e "MINIO_SECRET_KEY=minioadmin" \
+                    -v /tmp/data:/data \
+                    -v /tmp/config:/root/.minio \
+                    minio/minio server /data
+    elif [ "$meta" != "postgres" ] && [ "$storage" == "postgres" ]; then
+        echo "start postgres"
+        docker run --name postgresql \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -p 5432:5432 \
+            -v /tmp/data:/var/lib/postgresql/data \
+            -d postgres
+        sleep 10
+    elif [ "$meta" != "mysql" ] && [ "$storage" == "mysql" ]; then
+        echo "start mysql"
+        sudo /etc/init.d/mysql start
     fi
 }
 
