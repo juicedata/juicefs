@@ -17,27 +17,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        old_juicefs_version: ['main']
-        # old_juicefs_version: ['main', 'release-1.0', 'release-1.0-rc1']
+        # old_juicefs_version: ['main']
+        old_juicefs_version: ['main', 'release-1.0', 'release-1.0-rc1']
         # meta: ['postgres']
         meta: ['redis', 'mysql', 'tikv', 'postgres']
         storage: ['minio']
-        # include:
-        #   - old_juicefs_version: 'main'
-        #     meta: 'fdb'
-        #     storage: 'minio'
-        #   - old_juicefs_version: 'release-1.0'
-        #     meta: 'redis'
-        #     storage: 'postgres'
-        #   - old_juicefs_version: 'release-1.0'
-        #     meta: 'redis'
-        #     storage: 'mysql'
-        #   - old_juicefs_version: 'release-1.0-beta1'
-        #     meta: 'redis'
-        #     storage: 'minio'
-        #   - old_juicefs_version: 'release-0.17'
-        #     meta: 'redis'
-        #     storage: 'minio'
+        include:
+          - old_juicefs_version: 'main'
+            meta: 'fdb'
+            storage: 'minio'
+          - old_juicefs_version: 'release-1.0'
+            meta: 'redis'
+            storage: 'postgres'
+          - old_juicefs_version: 'release-1.0'
+            meta: 'redis'
+            storage: 'mysql'
+          - old_juicefs_version: 'release-1.0-beta1'
+            meta: 'redis'
+            storage: 'minio'
+          - old_juicefs_version: 'release-0.17'
+            meta: 'redis'
+            storage: 'minio'
 
     runs-on: ubuntu-latest
 
