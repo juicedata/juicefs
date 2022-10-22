@@ -47,13 +47,6 @@ start_meta_engine(){
             -v /tmp/data:/var/lib/postgresql/data \
             -d postgres
         sleep 10
-    elif [ "$storage" == minio ]; then
-        docker run -d -p 9000:9000 --name minio \
-                    -e "MINIO_ACCESS_KEY=minioadmin" \
-                    -e "MINIO_SECRET_KEY=minioadmin" \
-                    -v /tmp/data:/data \
-                    -v /tmp/config:/root/.minio \
-                    minio/minio server /data
     fi
 
     if [ "$storage" == "minio" ]; then
@@ -75,6 +68,7 @@ start_meta_engine(){
     elif [ "$meta" != "mysql" && "$storage" == "mysql"]; then
         echo "start mysql"
         sudo /etc/init.d/mysql start
+    fi
 }
 
 get_meta_url(){
