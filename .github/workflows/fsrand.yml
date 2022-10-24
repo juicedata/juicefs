@@ -89,15 +89,16 @@ jobs:
         run: |
           chmod +x .github/scripts/fsrand.py
           chmod +x .github/scripts/cmptree.py
+          count=100000
           ts=$(date +%s)
           mkdir /tmp/fsrand
           mkdir /jfs/fsrand
-          # declare -a pids   
-          python3 .github/scripts/fsrand.py  -v -s $ts /tmp/fsrand 
-          # pids+=($!)
-          python3 .github/scripts/fsrand.py  -v -s $ts /jfs/fsrand 
-          # pids+=($!)
-          # wait "${pids[@]}"
+          declare -a pids   
+          python3 .github/scripts/fsrand.py  -c $count-v -s $ts /tmp/fsrand 
+          pids+=($!)
+          python3 .github/scripts/fsrand.py  -c $count -v -s $ts /jfs/fsrand 
+          pids+=($!)
+          wait "${pids[@]}"
           python3 .github/scripts/cmptree.py /tmp/fsrand /jfs/fsrand
 
       - name: log
