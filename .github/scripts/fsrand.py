@@ -122,7 +122,7 @@ class FsRandomizer(object):
             elif op == "L":
                 src = self.__getsubpath(self.__getdir())
                 dest = self.__newsubpath(self.__getdir())
-                if src not in dest:
+                if src in dest:
                     continue
                 if self.verbose:
                     self.__stderr("CREATE LINK %s" % path)
