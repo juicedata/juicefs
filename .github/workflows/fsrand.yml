@@ -94,9 +94,9 @@ jobs:
           mkdir /tmp/fsrand
           mkdir /jfs/fsrand
           declare -a pids   
-          python3 .github/scripts/fsrand.py  -c $count  -s $ts /tmp/fsrand &
+          python3 .github/scripts/fsrand.py  -c $count -v -s $ts /tmp/fsrand &
           pids+=($!)
-          python3 .github/scripts/fsrand.py  -c $count  -s $ts /jfs/fsrand &
+          python3 .github/scripts/fsrand.py  -c $count -v -s $ts /jfs/fsrand &
           pids+=($!)
           wait "${pids[@]}"
           python3 .github/scripts/cmptree.py /tmp/fsrand /jfs/fsrand
