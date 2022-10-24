@@ -124,6 +124,8 @@ class FsRandomizer(object):
                 dest = self.__newsubpath(self.__getdir())
                 if src in dest:
                     continue
+                if os.path.isdir(src):
+                    continue
                 if self.verbose:
                     self.__stderr("CREATE LINK from %s to %s" % (src, dest))
                 os.link(src, dest)
