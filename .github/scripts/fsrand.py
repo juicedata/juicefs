@@ -82,7 +82,7 @@ class FsRandomizer(object):
     def __newsubpath(self, path):
         while True:
             p = os.path.join(path, self.__newname())
-            if not os.path.exists(p):
+            if not os.path.lexists(p):
                 return p
     def __newmode(self, mode):
         return mode | self.random.randint(0, 0o077)
