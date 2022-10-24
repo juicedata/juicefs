@@ -52,7 +52,7 @@ class FsRandomizer(object):
         self.stderr.write(str(s) + "\n")
     def __getdir_recurse(self, path):
         try:
-            n = self.random.choice(os.listdir(path))
+            n = self.random.choice(sorted(os.listdir(path)))
         except:
             return path
         p = os.path.join(path, n)
@@ -67,7 +67,8 @@ class FsRandomizer(object):
         return os.path.join(self.path, *parts)
     def __getsubpath(self, path):
         try:
-            n = self.random.choice(os.listdir(path))
+            # print("\t".join(sorted(os.listdir(path))))
+            n = self.random.choice(sorted(os.listdir(path)))
         except:
             return path
         return os.path.join(path, n)
@@ -167,7 +168,8 @@ if "__main__" == __name__:
         if args.seed == 0:
             args.seed = int(time.time())
         if not os.path.isdir(args.path):
-            fail("path must exist and be a directory")
+            os.mkdir(args.path)
+            # fail("path must exist and be a directory")
         if args.dictionary:
             with open(args.dictionary) as f:
                 args.dictionary = [l.strip() for l in f]
