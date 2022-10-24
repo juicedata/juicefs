@@ -461,7 +461,7 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     @rule()
     @precondition(lambda self: self.mounted )
-    def write_random_files(self):
+    def write_rand_files_and_compare(self):
         seed = int(time.time())
         self.write_random_files(JuicefsMachine.MOUNT_POINT+'fsrand', seed)
         self.write_random_files('/tmp/fsrand', seed)
