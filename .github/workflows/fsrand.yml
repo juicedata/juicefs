@@ -92,12 +92,12 @@ jobs:
           ts=$(date +%s)
           mkdir /tmp/fsrand
           mkdir /jfs/fsrand
-          declare -a pids   
-          python3 .github/scripts/fsrand.py -s $ts /tmp/fsrand &
-          pids+=($!)
-          python3 .github/scripts/fsrand.py -s $ts /jfs/fsrand &
-          pids+=($!)
-          wait "${pids[@]}"
+          # declare -a pids   
+          python3 .github/scripts/fsrand.py -s $ts /tmp/fsrand 
+          # pids+=($!)
+          python3 .github/scripts/fsrand.py -s $ts /jfs/fsrand 
+          # pids+=($!)
+          # wait "${pids[@]}"
           python3 .github/scripts/cmptree.py /tmp/fsrand /jfs/fsrand
 
       - name: log
