@@ -1,22 +1,5 @@
 name: "fsrand"
 on:
-  push:
-    branches:
-      - 'main'
-      - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-  pull_request:
-    #The branches below must be a subset of the branches above
-    branches:
-      - 'main'
-      - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      - '.github/**'
-      - '!.github/workflows/fsrand.yml'
   schedule:
     - cron:  '0 18 * * *'
   workflow_dispatch:
