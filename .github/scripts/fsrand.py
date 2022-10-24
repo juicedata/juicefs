@@ -117,7 +117,7 @@ class FsRandomizer(object):
                 src = self.__getsubpath(self.__getdir())
                 dest = self.__newsubpath(self.__getdir())
                 if self.verbose:
-                    self.__stderr("CREATE SYMLINK %s" % path)
+                    self.__stderr("CREATE SYMLINK from %s to %s" % (src, dest))
                 os.symlink(src, dest)
             elif op == "L":
                 src = self.__getsubpath(self.__getdir())
@@ -125,7 +125,7 @@ class FsRandomizer(object):
                 if src in dest:
                     continue
                 if self.verbose:
-                    self.__stderr("CREATE LINK %s" % path)
+                    self.__stderr("CREATE LINK from %s to %s" % (src, dest))
                 os.link(src, dest)
             elif op == "R":
                 path = self.__getsubpath(self.__getdir())
