@@ -15,6 +15,8 @@ from packaging import version
 from minio import Minio
 import uuid
 from utils import *
+from fsrand import *
+from cmptree import *
 
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
@@ -445,6 +447,32 @@ class JuicefsMachine(RuleBasedStateMachine):
             result = f.read()
         assert str(result) == str(data)
         print('write and read succeed')
+    
+    def write_rand_files(self, path, seed):
+        count = 100
+        if os.path.isdir(path):
+            os.rmdir(path)
+        os.mkdir(path)
+        fsrand = FsRandomizer(path, count, seed)
+        fsrand.stdout = sys.stdout
+        fsrand.stderr = sys.stderr
+        fsrand.verbose = True
+        fsrand.randomize()
+
+    @rule()
+    @precondition(lambda self: self.mounted )
+    def write_random_files(self):
+        seed = int(time.time())
+        self.write_random_files(JuicefsMachine.MOUNT_POINT+'fsrand', seed)
+        self.write_random_files('/tmp/fsrand', seed)
+        tcmp = TreeComparator(JuicefsMachine.MOUNT_POINT+'fsrand', '/tmp/fsrand')
+        tcmp.compare()
+        res = len(tcmp.left_only) + len(tcmp.right_only) + \
+            len(tcmp.common_funny) + len(tcmp.funny_files) + len(tcmp.diff_files)
+        if res > 0:
+            raise Exception("compare failed")
+        os.system(f"rm -rf {JuicefsMachine.MOUNT_POINT}/fsrand")
+        os.system(f"rm -rf /tmp/fsrand")
 
     @rule(juicefs = st.sampled_from(JFS_BINS))
     @precondition(lambda self: self.formatted )
