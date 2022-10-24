@@ -144,6 +144,8 @@ class FsRandomizer(object):
                 path = self.__getsubpath(self.__getdir())
                 if os.path.realpath(path) == self.path:
                     continue
+                if not os.path.exists(path):
+                    continue
                 if self.verbose:
                     self.__stderr("UPDATE %s" % path)
                 u = self.random.randint(0, 2)
