@@ -102,7 +102,7 @@ class FsRandomizer(object):
             self.__random_write(f)
     def randomize(self):
         for i in range(self.count):
-            op = self.random.choice("CRu")
+            op = self.random.choice("CCCCRUUSL")
             if op == "C":
                 path = self.__newsubpath(self.__getdir())
                 if self.verbose:
@@ -113,6 +113,18 @@ class FsRandomizer(object):
                 else:
                     os.mkdir(path)
                     os.chmod(path, self.__newmode(0o0700))
+            elif op == "S":
+                src = self.__getsubpath(self.__getdir())
+                dest = self.__newsubpath(self.__getdir())
+                if self.verbose:
+                    self.__stderr("CREATE SYMLINK %s" % path)
+                os.symlink(src, dest)
+            elif op == "L":
+                src = self.__getsubpath(self.__getdir())
+                dest = self.__newsubpath(self.__getdir())
+                if self.verbose:
+                    self.__stderr("CREATE LINK %s" % path)
+                os.link(src, dest)
             elif op == "R":
                 path = self.__getsubpath(self.__getdir())
                 if os.path.realpath(path) == self.path:
@@ -126,7 +138,7 @@ class FsRandomizer(object):
                         os.rmdir(path)
                     except:
                         pass
-            elif op == "u":
+            elif op == "U":
                 path = self.__getsubpath(self.__getdir())
                 if os.path.realpath(path) == self.path:
                     continue
