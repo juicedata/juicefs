@@ -74,6 +74,10 @@
 							<pattern>org.javassist</pattern>
 							<shadedPattern>io.juicefs.shaded.org.javassist</shadedPattern>
 						</relocation>
+						<relocation>
+							<pattern>com.google.common</pattern>
+							<shadedPattern>io.juicefs.shaded.com.google.common</shadedPattern>
+						</relocation>
 					</relocations>
 				</configuration>
 			</plugin>
@@ -267,6 +271,11 @@
 			<artifactId>flink-core</artifactId>
 			<version>1.10.3</version>
 			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+			<version>27.1-jre</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.hadoop</groupId>
