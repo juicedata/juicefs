@@ -68,7 +68,7 @@ Check out all the command line options in [command reference](https://juicefs.co
 
 ### Containers
 
-Supply persistent storage for containerized technologies such as Docker, Podman, etc. Check [here](https://juicefs.com/docs/community/juicefs_on_docker) for details.
+JuiceFS can be used as a persistent volume for Docker and Podman, please check [here](https://juicefs.com/docs/community/juicefs_on_docker) for details.
 
 ### Kubernetes
 
