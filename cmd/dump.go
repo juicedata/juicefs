@@ -62,9 +62,9 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 func dump(ctx *cli.Context) (err error) {
 	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
-	var fp io.WriteCloser
+	var w io.WriteCloser
 	if ctx.Args().Len() == 1 {
-		fp = os.Stdout
+		w = os.Stdout
 	} else {
 		path := ctx.Args().Get(1)
 		fp, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
@@ -78,20 +78,23 @@ func dump(ctx *cli.Context) (err error) {
 			}
 		}()
 		if strings.HasSuffix(path, ".gz") {
-			w := gzip.NewWriter(fp)
+			zw := gzip.NewWriter(fp)
 			defer func() {
-				e := w.Flush()
+				e := zw.Flush()
 				if err == nil {
 					err = e
 				}
 			}()
+			w = zw
+		} else {
+			w = fp
 		}
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
 	if _, err := m.Load(true); err != nil {
 		return err
 	}
-	if err := m.DumpMeta(fp, 1, ctx.Bool("keep-secret-key")); err != nil {
+	if err := m.DumpMeta(w, 1, ctx.Bool("keep-secret-key")); err != nil {
 		return err
 	}
 	logger.Infof("Dump metadata into %s succeed", ctx.Args().Get(1))

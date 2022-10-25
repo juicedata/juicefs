@@ -49,7 +49,7 @@ func TestDumpAndLoad(t *testing.T) {
 		if err != nil {
 			t.Fatalf("dump error: %v", err)
 		}
-		_, err = os.Stat("/tmp/dump_test.json")
+		_, err = os.Stat("/tmp/dump_test.json.gz")
 		if err != nil {
 			t.Fatalf("dump error: %v", err)
 		}
