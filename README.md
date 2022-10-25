@@ -66,6 +66,10 @@ Please refer to [Quick Start Guide](https://juicefs.com/docs/community/quick_sta
 
 Check out all the command line options in [command reference](https://juicefs.com/docs/community/command_reference).
 
+### Containers
+
+Supply persistent storage for containerized technologies such as Docker, Podman, etc. Check [here](https://juicefs.com/docs/community/juicefs_on_docker) for details.
+
 ### Kubernetes
 
 It is also very easy to use JuiceFS on Kubernetes. Please find more information [here](https://juicefs.com/docs/community/how_to_use_on_kubernetes).
