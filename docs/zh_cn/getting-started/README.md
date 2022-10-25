@@ -16,7 +16,7 @@ JuiceFS 文件系统由[「对象存储」](../guide/how_to_set_up_object_storag
 curl -sSL https://d.juicefs.com/install | sh -
 ```
 
-其他操作系统及安装方式晴查阅[「安装」](installation.md)。
+其他操作系统及安装方式请查阅[「安装」](installation.md)。
 
 不论你使用什么操作系统，当在终端输入并执行 `juicefs` 并返回了程序的帮助信息，就说明你成功安装了 JuiceFS 客户端。
 
