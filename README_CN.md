@@ -68,6 +68,10 @@ JuiceFS 依靠 Redis 来存储文件的元数据。Redis 是基于内存的高�
 
 请点击 [这里](https://juicefs.com/docs/zh/community/command_reference) 查看所有子命令以及命令行参数。
 
+### 容器
+
+JuiceFS 可以为 Docker、Podman 等容器化技术提供持久化存储，请查阅 [文档](https://juicefs.com/docs/community/juicefs_on_docker) 了解详情。
+
 ### Kubernetes
 
 在 Kubernetes 中使用 JuiceFS 非常便捷，请查看 [这个文档](https://juicefs.com/docs/zh/community/how_to_use_on_kubernetes) 了解更多信息。
