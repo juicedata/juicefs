@@ -17,9 +17,11 @@
 package cmd
 
 import (
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -40,7 +42,7 @@ WARNING: Do NOT use new engine and the old one at the same time, otherwise it wi
 consistency of the volume.
 
 Examples:
-$ juicefs load redis://localhost/1 meta-dump
+$ juidefs load redis://localhost/1 meta-dump.json.gz
 
 Details: https://juicefs.com/docs/community/metadata_dump_load`,
 	}
@@ -49,22 +51,30 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 func load(ctx *cli.Context) error {
 	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
-	var fp io.ReadCloser
+	var r io.ReadCloser
 	if ctx.Args().Len() == 1 {
-		fp = os.Stdin
+		r = os.Stdin
 	} else {
-		var err error
-		fp, err = os.Open(ctx.Args().Get(1))
+		path := ctx.Args().Get(1)
+		fp, err := os.Open(path)
 		if err != nil {
 			return err
 		}
 		defer fp.Close()
+		if strings.HasSuffix(path, ".gz") {
+			r, err = gzip.NewReader(fp)
+			if err != nil {
+				return err
+			}
+		} else {
+			r = fp
+		}
 	}
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 	if format, err := m.Load(false); err == nil {
 		return fmt.Errorf("Database %s is used by volume %s", utils.RemovePassword(ctx.Args().Get(0)), format.Name)
 	}
-	if err := m.LoadMeta(fp); err != nil {
+	if err := m.LoadMeta(r); err != nil {
 		return err
 	}
 	if format, err := m.Load(true); err == nil {
