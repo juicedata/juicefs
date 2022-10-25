@@ -10,6 +10,14 @@ JuiceFS has good cross-platform capability and supports running on all kinds of 
 
 The JuiceFS client has only one binary file, you can download the pre-compiled version to unzip it and use it directly, or you can compile it manually with the source code.
 
+## One-Click Installation
+
+The one-click installation script is available for Linux and macOS systems and will automatically download and install the latest version of the JuiceFS client based on your hardware architecture.
+
+```shell
+curl -sSL https://d.juicefs.com/install | sh -
+```
+
 ## Install the pre-compiled client
 
 You can download the latest version of the client at [GitHub](https://github.com/juicedata/juicefs/releases). Pre-compiled versions for different CPU architectures and operating systems are available in the download list of each client version. Please find the version suit your application the best, e.g.,
