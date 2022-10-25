@@ -686,6 +686,17 @@ func TestIBMCOS(t *testing.T) {
 	testStorage(t, s)
 }
 
+func TestTOS(t *testing.T) {
+	if os.Getenv("TOS_ENDPOINT") == "" {
+		t.SkipNow()
+	}
+	tos, err := newTOS(os.Getenv("TOS_ENDPOINT"), os.Getenv("TOS_ACCESS_KEY"), os.Getenv("TOS_SECRET_KEY"), "")
+	if err != nil {
+		t.Fatalf("create: %s", err)
+	}
+	testStorage(t, tos)
+}
+
 func TestMain(m *testing.M) {
 	// schema: S3 AWS_ENDPOINT=xxxxx  AWS_ACCESS_KEY_ID=xxxx  AWS_SECRET_ACCESS_KEY=xxxx
 	envFile := "/tmp/aksk.txt"
