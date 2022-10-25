@@ -10,7 +10,13 @@ The JuiceFS file system is driven by both ["Object Storage"](../guide/how_to_set
 
 ## Install Client
 
-For details, please refer to ["Installation"](installation.md).
+For Linux distributions and macOS users, the JuiceFS client can be quickly installed using a one-click installation script:
+
+```shell
+curl -sSL https://d.juicefs.com/install | sh -
+```
+
+Other operating systems and installation methods, please refer to ["Installation"](installation.md).
 
 A help message will return after executing `juicefs` in terminal once the JuiceFS client is successfully installed regardless of operating system.
 

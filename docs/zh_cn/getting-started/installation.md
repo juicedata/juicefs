@@ -10,6 +10,14 @@ JuiceFS 有良好的跨平台能力，支持在几乎所有主流架构的各类
 
 JuiceFS 客户端只有一个二进制文件，你可以下载预编译的版本直接解压使用，也可以用源代码手动编译。
 
+## 一键安装
+
+一键安装脚本适用于 Linux 和 macOS 系统，会根据你的硬件架构自动下载安装最新版 JuiceFS 客户端。
+
+```shell
+curl -sSL https://d.juicefs.com/install | sh -
+```
+
 ## 安装预编译客户端
 
 你可以在 [GitHub](https://github.com/juicedata/juicefs/releases) 找到最新版客户端下载地址，每个版本的下载列表中都提供了面向不同 CPU 架构和操作系统的预编译版本，请注意识别选择，例如：
