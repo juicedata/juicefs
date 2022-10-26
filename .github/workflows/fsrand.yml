@@ -49,6 +49,10 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           create_database $meta_url
 
+      - name: Install tool
+        run: | 
+          sudo pip install xattr
+
       - name: Juicefs Format
         run: |
           source .github/scripts/start_meta_engine.sh

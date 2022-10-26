@@ -230,7 +230,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(juicefs=st.sampled_from(JFS_BINS), 
         no_syslog=st.booleans(),
         other_fuse_options=st.lists(st.sampled_from(['debug', 'allow_other', 'writeback_cache']), unique=True), 
-        enable_xattr=st.booleans(),
+        enable_xattr=st.just(True),
         attr_cache=st.integers(min_value=1, max_value=10), 
         entry_cache=st.integers(min_value=1, max_value=10), 
         dir_entry_cache=st.integers(min_value=1, max_value=10), 

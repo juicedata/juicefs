@@ -30,7 +30,8 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os, random
-
+import unicodedata
+import xattr 
 class Devnull(object):
     def write(self, *args):
         pass
@@ -72,13 +73,34 @@ class FsRandomizer(object):
         except:
             return path
         return os.path.join(path, n)
+
+    def __gen_unicode_name(self, lower_limit=1, upper_limit=64):
+        unicodes = ''.join(
+            chr(char)
+            for char in range(1000)
+            # use the unicode categories that don't include control codes
+            # if unicodedata.category(chr(char))[0] in ('LMNPSZ') and chr(char) != '/'
+            if unicodedata.category(chr(char))[0] in  ('LMNPSZ') and chr(char) != '/'
+            )
+        assert('/' not in unicodes)
+        rand_length = self.random.randint(lower_limit, upper_limit)
+        # generate it
+        utf_string = ''.join([self.random.choice(unicodes) for i in range(rand_length)])
+        if utf_string == '.' or utf_string == '..':
+            utf_string = 'ABC'
+        assert('/' not in utf_string)
+        # print(''.join([unicodedata.category(c) for c in utf_string]))
+        return utf_string
+
     def __newname(self):
         if self.dictionary:
             return self.random.choice(self.dictionary)
         else:
-            l = self.random.randint(1, 16)
-            n = [self.random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for i in range(l)]
-            return "".join(n)
+            # l = self.random.randint(1, 16)
+            # n = [self.random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for i in range(l)]
+            # return "".join(n)
+            return self.__gen_unicode_name()
+
     def __newsubpath(self, path):
         while True:
             p = os.path.join(path, self.__newname())
@@ -89,9 +111,9 @@ class FsRandomizer(object):
     def __random_write(self, file):
         o = self.random.randint(0, self.maxofs)
         l = self.random.randint(0, self.maxlen)
-        b = [self.random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for i in range(l)]
+        b = self.random.randbytes(l)
         file.seek(o)
-        file.write(bytes("".join(b), "utf-8"))
+        file.write(b)
     def __create(self, path):
         assert not os.path.exists(path)
         with open(path, "wb") as f:
@@ -102,7 +124,7 @@ class FsRandomizer(object):
             self.__random_write(f)
     def randomize(self):
         for i in range(self.count):
-            op = self.random.choice("CCCCRUUSL")
+            op = self.random.choice("CCCCRUUSLXX")
             if op == "C":
                 path = self.__newsubpath(self.__getdir())
                 if self.verbose:
@@ -115,20 +137,36 @@ class FsRandomizer(object):
                     os.chmod(path, self.__newmode(0o0700))
             elif op == "S":
                 src = self.__getsubpath(self.__getdir())
+                assert(os.path.lexists(src))
                 dest = self.__newsubpath(self.__getdir())
+                assert(not os.path.exists(dest))
                 if self.verbose:
                     self.__stderr("CREATE SYMLINK from %s to %s" % (src, dest))
-                os.symlink(src, dest)
+                try:
+                    os.symlink(src, dest)
+                except: 
+                    print("".join([str(ord(c)) for c in src]))
+                    print("".join([str(ord(c)) for c in dest]))
+                    raise Exception("OS error: {0}".format(err))
             elif op == "L":
                 src = self.__getsubpath(self.__getdir())
+                if not os.path.exists(src):
+                    continue
                 dest = self.__newsubpath(self.__getdir())
+                assert(not os.path.exists(dest))
                 if src in dest:
                     continue
                 if os.path.isdir(src):
                     continue
                 if self.verbose:
                     self.__stderr("CREATE LINK from %s to %s" % (src, dest))
-                os.link(src, dest)
+                try:
+                    os.link(src, dest)
+                except OSError as err :
+                    print("".join([str(ord(c)) for c in src]))
+                    print("".join([str(ord(c)) for c in dest]))
+                    print("OS error: {0}".format(err))
+                    raise Exception("OS error: {0}".format(err))
             elif op == "R":
                 path = self.__getsubpath(self.__getdir())
                 if os.path.realpath(path) == self.path:
@@ -142,6 +180,19 @@ class FsRandomizer(object):
                         os.rmdir(path)
                     except:
                         pass
+
+            elif op == "X":
+                path = self.__getsubpath(self.__getdir())
+                if not os.path.exists(path):
+                    continue
+                if self.verbose:
+                    self.__stderr("SETXATTR %s" % path)
+                key = self.__gen_unicode_name()
+                value = bytes(self.__gen_unicode_name(), "utf-8")
+                xattr.setxattr(path, key, value)
+                value_set = xattr.getxattr(path, key)
+                assert(value == value_set)
+
             elif op == "U":
                 path = self.__getsubpath(self.__getdir())
                 if os.path.realpath(path) == self.path:
@@ -165,7 +216,7 @@ class FsRandomizer(object):
                         os.chmod(path, self.__newmode(0o0600))
                     else:
                         os.chmod(path, self.__newmode(0o0700))
-
+            
 if "__main__" == __name__:
     import argparse, sys, time
     def info(s):
