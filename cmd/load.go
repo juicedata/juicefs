@@ -42,7 +42,7 @@ WARNING: Do NOT use new engine and the old one at the same time, otherwise it wi
 consistency of the volume.
 
 Examples:
-$ juidefs load redis://localhost/1 meta-dump.json.gz
+$ juicefs load redis://localhost/1 meta-dump.json.gz
 
 Details: https://juicefs.com/docs/community/metadata_dump_load`,
 	}
@@ -52,8 +52,10 @@ func load(ctx *cli.Context) error {
 	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
 	var r io.ReadCloser
+	src := ctx.Args().Get(1)
 	if ctx.Args().Len() == 1 {
 		r = os.Stdin
+		src = "STDIN"
 	} else {
 		path := ctx.Args().Get(1)
 		fp, err := os.Open(path)
@@ -84,6 +86,6 @@ func load(ctx *cli.Context) error {
 	} else {
 		return err
 	}
-	logger.Infof("Load metadata from %s succeed", ctx.Args().Get(1))
+	logger.Infof("Load metadata from %s succeed", src)
 	return nil
 }

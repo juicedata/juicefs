@@ -63,8 +63,10 @@ func dump(ctx *cli.Context) (err error) {
 	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
 	var w io.WriteCloser
+	dst := ctx.Args().Get(1)
 	if ctx.Args().Len() == 1 {
 		w = os.Stdout
+		dst = "STDOUT"
 	} else {
 		path := ctx.Args().Get(1)
 		fp, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
@@ -97,6 +99,6 @@ func dump(ctx *cli.Context) (err error) {
 	if err := m.DumpMeta(w, 1, ctx.Bool("keep-secret-key")); err != nil {
 		return err
 	}
-	logger.Infof("Dump metadata into %s succeed", ctx.Args().Get(1))
+	logger.Infof("Dump metadata into %s succeed", dst)
 	return nil
 }
