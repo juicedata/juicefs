@@ -216,6 +216,16 @@ func (t tosClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
+func (t tosClient) Copy(dst, src string) error {
+	_, err := t.client.CopyObject(context.Background(), &tos.CopyObjectInput{
+		SrcBucket: t.bucket,
+		Bucket:    t.bucket,
+		SrcKey:    src,
+		Key:       dst,
+	})
+	return err
+}
+
 func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
