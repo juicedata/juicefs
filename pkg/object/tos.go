@@ -229,7 +229,7 @@ func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	credentials.WithSecurityToken(token)
 	cli, err := tos.NewClientV2(
 		hostParts[1]+"."+hostParts[2],
-		tos.WithRegion(strings.TrimSuffix("tos-", hostParts[1])),
+		tos.WithRegion(strings.TrimSuffix(hostParts[1], "tos-")),
 		tos.WithCredentials(credentials))
 	if err != nil {
 		return nil, err
