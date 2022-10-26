@@ -267,6 +267,107 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 
 将配置参数加入 `conf/flink-conf.yaml`。如果只是在 Flink 中使用 JuiceFS, 可以不在 Hadoop 环境配置 JuiceFS，只需要配置 Flink 客户端即可。
 
+#### 在阿里云实时平台 Flink sql 使用 JuiceFS
+
+1. 创建 maven 项目，根据 flink 不同版本引入如下依赖
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>io.juicefs</groupId>
+        <artifactId>juicefs-hadoop</artifactId>
+        <version>{JUICEFS_HADOOP_VERSION}</version>
+    </dependency>
+    
+    <!-- for flink-1.13 -->
+    <dependency>
+        <groupId>org.apache.flink</groupId>
+        <artifactId>flink-table-runtime-blink_2.12</artifactId>
+        <version>1.13.5</version>
+        <scope>provided</scope>
+    </dependency>
+
+    <!-- for flink-1.15 -->
+    <dependency>
+        <groupId>org.apache.flink</groupId>
+        <artifactId>flink-table-common</artifactId>
+        <version>1.15.2</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.flink</groupId>
+        <artifactId>flink-connector-files</artifactId>
+        <version>1.15.2</version>
+        <scope>provided</scope>
+    </dependency>
+</dependencies>
+```
+
+2. 创建一个 Java class
+```java
+public class JuiceFileSystemTableFactory extends FileSystemTableFactory {
+  @Override
+  public String factoryIdentifier() {
+    return "juicefs";
+  }
+}
+```
+
+3. Flink table connector 是使用 Java’s Service Provider Interfaces (SPI) 加载自定义实现。
+在 resources 按照如下结构创建文件
+
+```
+## for flink-1.13 
+src/main/resources
+├── META-INF
+│   └── services
+│        └── org.apache.flink.table.factories.Factory
+```
+
+org.apache.flink.table.factories.Factory 文件内容：
+
+```
+{YOUR_PACKAGE}.JuiceFileSystemTableFactory
+```
+
+4. 将填写有 JuiceFS 配置的 core-site.xml 放到 src/main/resources 内：
+```xml
+<configuration>
+	<property>
+		<name>fs.juicefs.impl</name>
+		<value>io.juicefs.JuiceFileSystem</value>
+	</property>
+	<property>
+		<name>juicefs.meta</name>
+		<value>redis://xxx.redis.rds.aliyuncs.com:6379/0</value>
+	</property>
+    ...
+</configuration>
+```
+:::note 注意
+由于 jfs scheme 被阿里其他文件系统占用，所以需要配置 fs.juicefs.impl 类为 JuiceFS 的实现类，并在后续路径使用 ``juicefs://`` 协议
+:::
+5. 打包，确保 jar 内包含 resources 目录下内容
+6. 通过阿里云实时计算平台控制台->应用->作业开发->connectors界面上传 jar 文件
+7. 测试，将如下 sql 上线运行，可以在 JuiceFS 的 `tmp/tbl` 目录下发现写入内容
+```sql
+CREATE TEMPORARY TABLE datagen_source(
+  name VARCHAR
+) WITH (
+  'connector' = 'datagen',
+  'number-of-rows' = '100'
+);
+
+CREATE TEMPORARY TABLE jfs_sink (name string)
+with (
+    'connector' = 'juicefs', 'path' = 'juicefs://{VOL_NAME}/tmp/tbl', 'format' = 'csv'
+);
+
+INSERT INTO jfs_sink
+SELECT
+  name
+from datagen_source;
+```
+
 ### Hudi
 
 :::note 注意
