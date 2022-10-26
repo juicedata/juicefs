@@ -54,6 +54,7 @@ import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.Executors;
@@ -537,14 +538,14 @@ public class JuiceFileSystemImpl extends FileSystem {
     URL location = JuiceFileSystemImpl.class.getProtectionDomain().getCodeSource().getLocation();
     if (location == null) {
       // jar may changed
-      return libjfsLibraryLoader.load(libFile.getAbsolutePath());
+      return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
     }
     URLConnection con;
     try {
       con = location.openConnection();
     } catch (FileNotFoundException e) {
       // jar may changed
-      return libjfsLibraryLoader.load(libFile.getAbsolutePath());
+      return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
     }
     if (location.getProtocol().equals("jar") && (con instanceof JarURLConnection)) {
       LOG.debug("juicefs-hadoop.jar is a nested jar");
@@ -555,14 +556,19 @@ public class JuiceFileSystemImpl extends FileSystem {
       ins = jfsJar.getInputStream(entry);
     } else {
       String jarPath = URLDecoder.decode(location.getPath(), Charset.defaultCharset().name());
-      if (jarPath.endsWith(".jar")) {
-        JarFile jfsJar = new JarFile(jarPath);
+      if (Files.isDirectory(Paths.get(jarPath))) { // for debug: sdk/java/target/classes
+        soTime = con.getLastModified();
+        ins = JuiceFileSystemImpl.class.getClassLoader().getResourceAsStream(resource);
+      } else {
+        JarFile jfsJar;
+        try {
+          jfsJar = new JarFile(jarPath);
+        } catch (FileNotFoundException fne) {
+          return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
+        }
         ZipEntry entry = jfsJar.getJarEntry(resource);
         soTime = entry.getLastModifiedTime().toMillis();
         ins = jfsJar.getInputStream(entry);
-      } else { // for debug: sdk/java/target/classes
-        soTime = con.getLastModified();
-        ins = JuiceFileSystemImpl.class.getClassLoader().getResourceAsStream(resource);
       }
     }
 
@@ -595,6 +601,15 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
     ins.close();
     return libjfsLibraryLoader.load(libFile.getAbsolutePath());
+  }
+
+  private static Libjfs loadExistLib(LibraryLoader<Libjfs> libjfsLibraryLoader, File dir, String name, File libFile) {
+    File currentUserLib = new File(dir, System.getProperty("user.name") + "-" + name);
+    if (currentUserLib.exists()) {
+      return libjfsLibraryLoader.load(currentUserLib.getAbsolutePath());
+    } else {
+      return libjfsLibraryLoader.load(libFile.getAbsolutePath());
+    }
   }
 
   private void initCache(Configuration conf) {
