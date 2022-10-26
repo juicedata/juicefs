@@ -42,17 +42,28 @@ func TestDumpAndLoad(t *testing.T) {
 		if rdb.DBSize(context.Background()).Val() == 0 {
 			t.Fatalf("load error: %v", err)
 		}
-
 	})
 	t.Run("Test dump", func(t *testing.T) {
-		dumpArgs := []string{"", "dump", metaUrl, "/tmp/dump_test.json"}
+		dumpArgs := []string{"", "dump", metaUrl, "/tmp/dump_test.json.gz"}
 		err := Main(dumpArgs)
 		if err != nil {
 			t.Fatalf("dump error: %v", err)
 		}
-		_, err = os.Stat("/tmp/dump_test.json")
+		_, err = os.Stat("/tmp/dump_test.json.gz")
 		if err != nil {
 			t.Fatalf("dump error: %v", err)
+		}
+	})
+
+	rdb.FlushDB(context.Background())
+	t.Run("Test load compressed", func(t *testing.T) {
+		loadArgs := []string{"", "load", metaUrl, "/tmp/dump_test.json.gz"}
+		err := Main(loadArgs)
+		if err != nil {
+			t.Fatalf("load error: %v", err)
+		}
+		if rdb.DBSize(context.Background()).Val() == 0 {
+			t.Fatalf("load error: %v", err)
 		}
 	})
 
