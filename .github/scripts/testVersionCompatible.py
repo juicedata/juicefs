@@ -462,6 +462,8 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule()
     @precondition(lambda self: self.mounted )
     def write_rand_files_and_compare(self):
+        assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
+        assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         seed = int(time.time())
         self.write_rand_files(JuicefsMachine.MOUNT_POINT+'fsrand', seed)
         self.write_rand_files('/tmp/fsrand', seed)
