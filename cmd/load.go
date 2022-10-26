@@ -50,31 +50,32 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 
 func load(ctx *cli.Context) error {
 	setup(ctx, 1)
-	removePassword(ctx.Args().Get(0))
-	var r io.ReadCloser
+	metaUri := ctx.Args().Get(0)
 	src := ctx.Args().Get(1)
+	removePassword(metaUri)
+	var r io.ReadCloser
 	if ctx.Args().Len() == 1 {
 		r = os.Stdin
 		src = "STDIN"
 	} else {
-		path := ctx.Args().Get(1)
-		fp, err := os.Open(path)
+		fp, err := os.Open(src)
 		if err != nil {
 			return err
 		}
 		defer fp.Close()
-		if strings.HasSuffix(path, ".gz") {
+		if strings.HasSuffix(src, ".gz") {
 			r, err = gzip.NewReader(fp)
 			if err != nil {
 				return err
 			}
+			defer r.Close()
 		} else {
 			r = fp
 		}
 	}
-	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
+	m := meta.NewClient(metaUri, &meta.Config{Retries: 10, Strict: true})
 	if format, err := m.Load(false); err == nil {
-		return fmt.Errorf("Database %s is used by volume %s", utils.RemovePassword(ctx.Args().Get(0)), format.Name)
+		return fmt.Errorf("Database %s is used by volume %s", utils.RemovePassword(metaUri), format.Name)
 	}
 	if err := m.LoadMeta(r); err != nil {
 		return err

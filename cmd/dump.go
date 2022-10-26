@@ -61,15 +61,15 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 
 func dump(ctx *cli.Context) (err error) {
 	setup(ctx, 1)
-	removePassword(ctx.Args().Get(0))
-	var w io.WriteCloser
+	metaUri := ctx.Args().Get(0)
 	dst := ctx.Args().Get(1)
+	removePassword(metaUri)
+	var w io.WriteCloser
 	if ctx.Args().Len() == 1 {
 		w = os.Stdout
 		dst = "STDOUT"
 	} else {
-		path := ctx.Args().Get(1)
-		fp, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		fp, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			return err
 		}
@@ -79,10 +79,10 @@ func dump(ctx *cli.Context) (err error) {
 				err = e
 			}
 		}()
-		if strings.HasSuffix(path, ".gz") {
+		if strings.HasSuffix(dst, ".gz") {
 			zw := gzip.NewWriter(fp)
 			defer func() {
-				e := zw.Flush()
+				e := zw.Close()
 				if err == nil {
 					err = e
 				}
@@ -92,7 +92,7 @@ func dump(ctx *cli.Context) (err error) {
 			w = fp
 		}
 	}
-	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
+	m := meta.NewClient(metaUri, &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
 	if _, err := m.Load(true); err != nil {
 		return err
 	}
