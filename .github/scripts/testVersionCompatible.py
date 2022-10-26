@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import os
 from pickle import FALSE
@@ -449,19 +450,20 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('write and read succeed')
     
     def write_rand_files(self, path, seed):
-        count = 100
+        count = 50
         if os.path.isdir(path):
             shutil.rmtree(path)
         os.mkdir(path)
         fsrand = FsRandomizer(path, count, seed)
         fsrand.stdout = sys.stdout
         fsrand.stderr = sys.stderr
-        fsrand.verbose = True
+        fsrand.verbose = False
         fsrand.randomize()
 
     @rule()
     @precondition(lambda self: self.mounted )
     def write_rand_files_and_compare(self):
+        start = time.time()
         assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
         assert(os.path.exists(f'{JuicefsMachine.MOUNT_POINT}/.accesslog'))
         seed = int(time.time())
@@ -475,6 +477,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             raise Exception("compare failed")
         os.system(f"rm -rf {JuicefsMachine.MOUNT_POINT}/fsrand")
         os.system(f"rm -rf /tmp/fsrand")
+        print('write_rand_files_and_compare execution time:', time.time()-start, 'seconds')
 
     @rule(juicefs = st.sampled_from(JFS_BINS))
     @precondition(lambda self: self.formatted )
