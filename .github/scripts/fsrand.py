@@ -31,6 +31,7 @@
 
 import os, random
 import unicodedata
+from xmlrpc.client import boolean
 import xattr 
 class Devnull(object):
     def write(self, *args):
@@ -92,14 +93,19 @@ class FsRandomizer(object):
         # print(''.join([unicodedata.category(c) for c in utf_string]))
         return utf_string
 
+    def __gen_ascii_name(self, lower_limit=1, upper_limit=64):
+        l = self.random.randint(lower_limit, upper_limit)
+        n = [self.random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for i in range(l)]
+        return "".join(n)
+
     def __newname(self):
         if self.dictionary:
             return self.random.choice(self.dictionary)
         else:
-            # l = self.random.randint(1, 16)
-            # n = [self.random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for i in range(l)]
-            # return "".join(n)
-            return self.__gen_unicode_name()
+            if self.ascii:
+                return self.__gen_ascii_name()
+            else:
+                return self.__gen_unicode_name()
 
     def __newsubpath(self, path):
         while True:
@@ -137,7 +143,8 @@ class FsRandomizer(object):
                     os.chmod(path, self.__newmode(0o0700))
             elif op == "S":
                 src = self.__getsubpath(self.__getdir())
-                assert(os.path.lexists(src))
+                if not os.path.exists(src):
+                    continue
                 dest = self.__newsubpath(self.__getdir())
                 assert(not os.path.exists(dest))
                 if self.verbose:
@@ -231,6 +238,7 @@ if "__main__" == __name__:
         p.add_argument("-v", "--verbose", action="count", default=0)
         p.add_argument("-c", "--count", type=int, default=100)
         p.add_argument("-s", "--seed", type=int, default=0)
+        p.add_argument("-a", "--ascii", action="count", default=0)
         p.add_argument("-d", "--dictionary")
         p.add_argument("path")
         args = p.parse_args(sys.argv[1:])
@@ -242,13 +250,14 @@ if "__main__" == __name__:
         if args.dictionary:
             with open(args.dictionary) as f:
                 args.dictionary = [l.strip() for l in f]
-        info("count=%s seed=%s" % (args.count, args.seed))
+        info("count=%s seed=%s " % (args.count, args.seed))
         os.umask(0)
         fsrand = FsRandomizer(args.path, args.count, args.seed)
         fsrand.dictionary = args.dictionary
         fsrand.stdout = sys.stdout
         fsrand.stderr = sys.stderr
         fsrand.verbose = args.verbose
+        fsrand.ascii = args.ascii
         fsrand.randomize()
     def __entry():
         try:
