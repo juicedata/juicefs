@@ -451,7 +451,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def write_rand_files(self, path, seed):
         count = 100
         if os.path.isdir(path):
-            os.rmdir(path)
+            shutil.rmtree(path)
         os.mkdir(path)
         fsrand = FsRandomizer(path, count, seed)
         fsrand.stdout = sys.stdout
