@@ -463,8 +463,8 @@ class JuicefsMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.mounted )
     def write_rand_files_and_compare(self):
         seed = int(time.time())
-        self.write_random_files(JuicefsMachine.MOUNT_POINT+'fsrand', seed)
-        self.write_random_files('/tmp/fsrand', seed)
+        self.write_rand_files(JuicefsMachine.MOUNT_POINT+'fsrand', seed)
+        self.write_rand_files('/tmp/fsrand', seed)
         tcmp = TreeComparator(JuicefsMachine.MOUNT_POINT+'fsrand', '/tmp/fsrand')
         tcmp.compare()
         res = len(tcmp.left_only) + len(tcmp.right_only) + \
