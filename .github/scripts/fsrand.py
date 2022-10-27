@@ -117,7 +117,8 @@ class FsRandomizer(object):
     def __random_write(self, file):
         o = self.random.randint(0, self.maxofs)
         l = self.random.randint(0, self.maxlen)
-        b = self.random.randbytes(l)
+        b = bytearray(random.getrandbits(8) for _ in range(l))
+        # b = self.random.randbytes(l)
         file.seek(o)
         file.write(b)
     def __create(self, path):
