@@ -460,7 +460,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         fsrand.verbose = False
         fsrand.randomize()
 
-    @rule()
+    # @rule()
     @precondition(lambda self: self.mounted )
     def write_rand_files_and_compare(self):
         start = time.time()
