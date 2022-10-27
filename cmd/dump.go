@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"compress/gzip"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/urfave/cli/v2"
@@ -37,10 +39,11 @@ Output of this command can be loaded later into an empty database, serving as a 
 metadata or to change metadata engine.
 
 Examples:
-$ juicefs dump redis://localhost meta-dump
+$ juicefs dump redis://localhost meta-dump.json
+$ juicefs dump redis://localhost meta-dump.json.gz
 
-# Dump only a subtree of the volume
-$ juicefs dump redis://localhost sub-meta-dump --subdir /dir/in/jfs
+# Dump only a subtree of the volume to STDOUT
+$ juicefs dump redis://localhost --subdir /dir/in/jfs
 
 Details: https://juicefs.com/docs/community/metadata_dump_load`,
 		Flags: []cli.Flag{
@@ -56,27 +59,46 @@ Details: https://juicefs.com/docs/community/metadata_dump_load`,
 	}
 }
 
-func dump(ctx *cli.Context) error {
+func dump(ctx *cli.Context) (err error) {
 	setup(ctx, 1)
-	removePassword(ctx.Args().Get(0))
-	var fp io.WriteCloser
+	metaUri := ctx.Args().Get(0)
+	dst := ctx.Args().Get(1)
+	removePassword(metaUri)
+	var w io.WriteCloser
 	if ctx.Args().Len() == 1 {
-		fp = os.Stdout
+		w = os.Stdout
+		dst = "STDOUT"
 	} else {
-		var err error
-		fp, err = os.OpenFile(ctx.Args().Get(1), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		fp, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			return err
 		}
-		defer fp.Close()
+		defer func() {
+			e := fp.Close()
+			if err == nil {
+				err = e
+			}
+		}()
+		if strings.HasSuffix(dst, ".gz") {
+			zw := gzip.NewWriter(fp)
+			defer func() {
+				e := zw.Close()
+				if err == nil {
+					err = e
+				}
+			}()
+			w = zw
+		} else {
+			w = fp
+		}
 	}
-	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
+	m := meta.NewClient(metaUri, &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
 	if _, err := m.Load(true); err != nil {
 		return err
 	}
-	if err := m.DumpMeta(fp, 1, ctx.Bool("keep-secret-key")); err != nil {
+	if err := m.DumpMeta(w, 1, ctx.Bool("keep-secret-key")); err != nil {
 		return err
 	}
-	logger.Infof("Dump metadata into %s succeed", ctx.Args().Get(1))
+	logger.Infof("Dump metadata into %s succeed", dst)
 	return nil
 }
