@@ -351,6 +351,9 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Symlink(ctx, 1, "s", "/f", &inode, attr); st != 0 {
 		t.Fatalf("symlink s -> /f: %s", st)
 	}
+	if attr.Mode&0777 != 0777 {
+		t.Fatalf("mode of symlink should be 0777")
+	}
 	defer m.Unlink(ctx, 1, "s")
 	var target1, target2 []byte
 	if st := m.ReadLink(ctx, inode, &target1); st != 0 {
