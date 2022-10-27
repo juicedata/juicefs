@@ -737,7 +737,7 @@ func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cuma
 }
 
 func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
-	return m.Mknod(ctx, parent, name, TypeSymlink, 0644, 022, 0, path, inode, attr)
+	return m.Mknod(ctx, parent, name, TypeSymlink, 0777, 022, 0, path, inode, attr)
 }
 
 func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
