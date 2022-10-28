@@ -81,6 +81,7 @@ jobs:
           fi
 
       - name: Generate random files
+        timeout-minutes: 60
         run: |
           count=1000
           ts=$(date +%s)
