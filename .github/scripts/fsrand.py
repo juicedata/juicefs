@@ -30,6 +30,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os, random
+import platform
 import unicodedata
 from xmlrpc.client import boolean
 import xattr 
@@ -197,10 +198,14 @@ class FsRandomizer(object):
                 if self.verbose:
                     self.__stderr("SETXATTR %s" % path)
                 key = self.__gen_unicode_name()
-                value = bytes(self.__gen_unicode_name(), "utf-8")
-                xattr.setxattr(path, key, value)
+                value = self.__gen_unicode_name()
+                if platform.system() == 'Linux':
+                    os.system(f'setfattr -n {key} -v {value} {path}')
+                else:
+                    xattr.setxattr(path, key, bytes(value, "utf-8"))
+    
                 value_set = xattr.getxattr(path, key)
-                assert(value == value_set)
+                assert( bytes(value, 'utf-8') == value_set)
 
             elif op == "U":
                 path = self.__getsubpath(self.__getdir())

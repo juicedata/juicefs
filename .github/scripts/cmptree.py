@@ -129,10 +129,10 @@ if "__main__" == __name__:
                 print ("Funny files:")
                 for n in tcmp.funny_files:
                     print( "    %s" % n)
-            if tcmp.common_funny:
-                print ("Differing stats:")
-                for n in tcmp.common_funny:
-                    print ("    %s" % n)
+            # if tcmp.common_funny:
+            #     print ("Differing stats:")
+            #     for n in tcmp.common_funny:
+            #         print ("    %s" % n)
             if tcmp.diff_files:
                 print ("Differing files:")
                 for n in tcmp.diff_files:
