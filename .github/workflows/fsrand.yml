@@ -51,6 +51,7 @@ jobs:
 
       - name: Install tool
         run: | 
+          sudo apt install attr
           sudo pip install xattr
 
       - name: Juicefs Format
@@ -74,7 +75,6 @@ jobs:
 
       - name: Test with fsrand
         run: |
-          exit 1
           chmod +x .github/scripts/fsrand.py
           chmod +x .github/scripts/cmptree.py
           count=50000
