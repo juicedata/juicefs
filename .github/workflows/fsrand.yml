@@ -15,8 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
-        # meta: ['redis']
+        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
+        meta: ['postgres', 'mysql']
     runs-on: ubuntu-latest
 
     steps:
@@ -82,7 +82,7 @@ jobs:
 
       - name: Generate random files
         run: |
-          count=1000
+          count=100
           ts=$(date +%s)
           mkdir /tmp/fsrand
           mkdir /tmp/jfs/fsrand
@@ -105,7 +105,6 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           python3 .github/scripts/flush_meta.py $meta_url
-          create_database $meta_url
           umount /tmp/jfs
           ./juicefs load $meta_url dump.json
           ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr
