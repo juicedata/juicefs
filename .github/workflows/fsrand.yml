@@ -113,7 +113,7 @@ jobs:
           python3 .github/scripts/cmptree.py /tmp/fsrand /tmp/jfs/fsrand
 
       - name: Rmr random files
-        run:
+        run: | 
           ./juicefs rmr /tmp/jfs/fsrand
           ls -l /tmp/jfs/fsrand && exit 1 || true
 
