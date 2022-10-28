@@ -3,6 +3,12 @@ on:
   schedule:
     - cron:  '0 18 * * *'
   workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
 
 jobs:
   fsrand:
@@ -82,9 +88,9 @@ jobs:
           mkdir /tmp/fsrand
           mkdir /tmp/jfs/fsrand
           declare -a pids   
-          python3 .github/scripts/fsrand.py  -c $count -v -s $ts /tmp/fsrand &
+          python3 .github/scripts/fsrand.py  -c $count -v -s $ts -a /tmp/fsrand &
           pids+=($!)
-          python3 .github/scripts/fsrand.py  -c $count -v -s $ts /tmp/jfs/fsrand &
+          python3 .github/scripts/fsrand.py  -c $count -v -s $ts -a /tmp/jfs/fsrand &
           pids+=($!)
           wait "${pids[@]}"
           python3 .github/scripts/cmptree.py /tmp/fsrand /tmp/jfs/fsrand
@@ -126,13 +132,13 @@ jobs:
           fi
 
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
           
       - name: Setup upterm session
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
