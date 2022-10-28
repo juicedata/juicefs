@@ -15,8 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
-        meta: ['redis']
+        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
+        # meta: ['redis']
     runs-on: ubuntu-latest
 
     steps:
@@ -82,7 +82,7 @@ jobs:
 
       - name: Generate random files
         run: |
-          count=3000
+          count=5000
           ts=$(date +%s)
           mkdir /tmp/fsrand
           mkdir /tmp/jfs/fsrand
