@@ -74,6 +74,7 @@ jobs:
 
       - name: Test with fsrand
         run: |
+          exit 1
           chmod +x .github/scripts/fsrand.py
           chmod +x .github/scripts/cmptree.py
           count=50000
