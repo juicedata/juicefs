@@ -82,7 +82,7 @@ jobs:
 
       - name: Generate random files
         run: |
-          count=500
+          count=10000
           ts=$(date +%s)
           mkdir /tmp/fsrand
           mkdir /tmp/jfs/fsrand
