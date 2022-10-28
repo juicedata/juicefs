@@ -59,6 +59,7 @@ jobs:
         run: | 
           sudo apt install attr
           sudo pip install xattr
+          sudo pip install minio
 
       - name: Juicefs Format
         run: |
