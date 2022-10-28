@@ -77,7 +77,7 @@ jobs:
         run: |
           chmod +x .github/scripts/fsrand.py
           chmod +x .github/scripts/cmptree.py
-          count=50000
+          count=5000
           ts=$(date +%s)
           mkdir /tmp/fsrand
           mkdir /jfs/fsrand
