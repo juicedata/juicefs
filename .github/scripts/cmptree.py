@@ -110,6 +110,7 @@ if "__main__" == __name__:
         p.add_argument("dir1")
         p.add_argument("dir2")
         args = p.parse_args(sys.argv[1:])
+        print('start compare tree')
         tcmp = TreeComparator(args.dir1, args.dir2)
         tcmp.compare()
         res = len(tcmp.left_only) + len(tcmp.right_only) + \

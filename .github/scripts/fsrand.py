@@ -137,7 +137,7 @@ class FsRandomizer(object):
             if op == "C":
                 path = self.__newsubpath(self.__getdir())
                 if self.verbose:
-                    self.__stderr("CREATE %s" % path)
+                    self.__stderr("%s, CREATE %s" % (str(i), path))
                 if self.random.randint(0, 1):
                     self.__create(path)
                     os.chmod(path, self.__newmode(0o0600))
@@ -151,7 +151,7 @@ class FsRandomizer(object):
                 dest = self.__newsubpath(self.__getdir())
                 assert(not os.path.exists(dest))
                 if self.verbose:
-                    self.__stderr("CREATE SYMLINK from %s to %s" % (src, dest))
+                    self.__stderr("%s, CREATE SYMLINK from %s to %s" % (str(i), src, dest))
                 try:
                     os.symlink(src, dest)
                 except: 
@@ -169,7 +169,7 @@ class FsRandomizer(object):
                 if os.path.isdir(src):
                     continue
                 if self.verbose:
-                    self.__stderr("CREATE LINK from %s to %s" % (src, dest))
+                    self.__stderr("%s, CREATE LINK from %s to %s" % (str(i), src, dest))
                 try:
                     os.link(src, dest)
                 except OSError as err :
@@ -182,7 +182,7 @@ class FsRandomizer(object):
                 if os.path.realpath(path) == self.path:
                     continue
                 if self.verbose:
-                    self.__stderr("REMOVE %s" % path)
+                    self.__stderr("%s, REMOVE %s" % (str(i), path))
                 if not os.path.isdir(path):
                     os.unlink(path)
                 else:
@@ -196,7 +196,7 @@ class FsRandomizer(object):
                 if not os.path.exists(path):
                     continue
                 if self.verbose:
-                    self.__stderr("SETXATTR %s" % path)
+                    self.__stderr("%s, SETXATTR %s" % (str(i), path))
                 key = self.__gen_unicode_name()
                 value = self.__gen_unicode_name()
                 if platform.system() == 'Linux':
@@ -214,7 +214,7 @@ class FsRandomizer(object):
                 if not os.path.exists(path):
                     continue
                 if self.verbose:
-                    self.__stderr("UPDATE %s" % path)
+                    self.__stderr("%s, UPDATE %s" % (str(i), path))
                 u = self.random.randint(0, 2)
                 if u == 0:
                     if not os.path.isdir(path):
@@ -266,6 +266,7 @@ if "__main__" == __name__:
         fsrand.verbose = args.verbose
         fsrand.ascii = args.ascii
         fsrand.randomize()
+        info("create files succeed")
     def __entry():
         try:
             main()
