@@ -51,6 +51,7 @@ def create_mysql_db(meta_url):
     run_cmd(f'mysql -u{user} {password} -h {host} -P {port} -e "drop database if exists {db_name}; create database {db_name};"')
 
 def create_postgres_db(meta_url):
+    os.environ['PGPASSWORD'] = 'postgres'
     db_name = meta_url[8:].split('@')[1].split('/')[1]
     if '?' in db_name:
         db_name = db_name.split('?')[0]
