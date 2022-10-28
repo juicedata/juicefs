@@ -58,7 +58,7 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs format $meta_url --trash-days 0 pics
+          ./juicefs format $meta_url --trash-days 0 pics
 
       - name: Juicefs Mount
         run: |
@@ -66,18 +66,18 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           # sudo mkdir /var/jfs
           # sudo chmod 777 /var/jfs
-          sudo ./juicefs mount -d $meta_url /jfs --no-usage-report --enable-xattr&
+          ./juicefs mount -d $meta_url /jfs --no-usage-report --enable-xattr&
           sleep 5
           if [ ! -f /jfs/.accesslog ]; then
             echo "<FATAL>: mount failed"
             exit 1
           fi
 
-      - name: Test with fsrand
+      - name: Generate random files
         run: |
           chmod +x .github/scripts/fsrand.py
           chmod +x .github/scripts/cmptree.py
-          count=5000
+          count=500
           ts=$(date +%s)
           mkdir /tmp/fsrand
           mkdir /jfs/fsrand
@@ -88,6 +88,29 @@ jobs:
           pids+=($!)
           wait "${pids[@]}"
           python3 .github/scripts/cmptree.py /tmp/fsrand /jfs/fsrand
+      
+      - name: Dump with random files
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          ./juicefs dump $meta_url dump.json
+
+      - name: Load random files
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          python3 .github/scripts/flush_meta.py $meta_url
+          create_database $meta_url
+          umount /tmp/jfs
+          ./juicefs load $meta_url dump.json
+          ./juicefs mount -d $meta_url /jfs --no-usage-report --enable-xattr&
+          sleep 5
+          python3 .github/scripts/cmptree.py /tmp/fsrand /jfs/fsrand
+
+      - name: Rmr random files
+        run:
+          ./juicefs rmr /jfs/fsrand
+          ls -l /jfs/fsrand && exit 1 || true
 
       - name: log
         if: ${{ always() }}
