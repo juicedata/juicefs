@@ -48,11 +48,40 @@ class TreeComparator(object):
         self.right_only.extend(os.path.join(p, n) for n in dcmp.right_only)
         self.common_funny.extend(os.path.join(p, n) for n in dcmp.common_funny)
         self.funny_files.extend(os.path.join(p, n) for n in dcmp.funny_files)
-        (match, mismatch, errors) = filecmp.cmpfiles(d1, d2, dcmp.common_files, shallow=False)
+        #(match, mismatch, errors) = filecmp.cmpfiles(d1, d2, dcmp.common_files, shallow=False)
+        #self.diff_files.extend(os.path.join(p, n) for n in mismatch)
+        #self.funny_files.extend(os.path.join(p, n) for n in errors)
+        (match, mismatch, errors) = self.compare_files(d1, d2, dcmp.common_files)
         self.diff_files.extend(os.path.join(p, n) for n in mismatch)
         self.funny_files.extend(os.path.join(p, n) for n in errors)
         for d in dcmp.common_dirs:
             self.compare(os.path.join(p, d))
+
+    def compare_files(self, d1, d2, files):
+        match = []
+        mismatch = []
+        errors = []
+        for f in files:
+            f1 = os.path.join(d1, f)
+            f2 = os.path.join(d2, f)
+            try:
+                s1 = os.stat(f1)
+                s2 = os.stat(f2)                    
+                for attr in ['st_mode', 'st_nlink', 'st_uid', 'st_gid', 'st_size']:
+                    if getattr(s1, attr) != getattr(s2, attr):
+                        print(f'{attr} mismatch with {f1}:{getattr(s1, attr)} and {f2}:{getattr(s2, attr)}')
+                        mismatch.append(f)
+                        continue
+                if not filecmp.cmp(f1, f2):
+                    print(f'content mismatch with {f1} and {f2}')
+                    mismatch.append(f)
+                    continue
+                match.append(f)
+            except:
+                print(f'error: {f}')
+                errors.append(f)
+        return match, mismatch, errors
+
 
 if "__main__" == __name__:
     import argparse, sys
