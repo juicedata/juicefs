@@ -139,6 +139,7 @@ juicefs format \
 | [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
 | [华为云 OBS](#华为云-obs)                   | `obs`      |
 | [百度云 BOS](#百度云-bos)                   | `bos`      |
+| [火山引擎 TOS](#火山引擎-tos)                | `tos`      |
 | [金山云 KS3](#金山云-ks3)                   | `ks3`      |
 | [网易云 NOS](#网易云-nos)                   | `nos`      |
 | [青云 QingStor](#青云-qingstor)             | `qingstor` |
@@ -565,6 +566,18 @@ juicefs format \
 juicefs format \
     --storage bos \
     --bucket <bucket> \
+    ... \
+    myjfs
+```
+## 火山引擎 tos
+使用火山引擎 tos 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.volcengine.com/docs/6291/65568) 了解如何创建 Access Key 和 Secret Key。
+
+`--bucket` 选项的格式为 `https://<bucket>.tos-<region>.volces.com`，请将 `<region>` 替换成你实际使用的存储区域，例如：北京的区域代码为 `cn-beijing`。[点此查看](https://www.volcengine.com/docs/6349/107356) 所有可用的区域代码。例如：
+
+```bash
+juicefs format \
+    --storage tos \
+    --bucket https://<bucket>.tos-<region>.volces.com \
     ... \
     myjfs
 ```

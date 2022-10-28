@@ -139,6 +139,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Tencent Cloud COS](#tencent-cloud-cos)                     | `cos`      |
 | [Huawei Cloud OBS](#huawei-cloud-obs)                       | `obs`      |
 | [Baidu Object Storage](#baidu-object-storage)               | `bos`      |
+| [Volcengine Object Storage](#volcengine-object-storage)     | `tos`      |
 | [Kingsoft KS3](#kingsoft-ks3)                               | `ks3`      |
 | [NetEase Object Storage](#netease-object-storage)           | `nos`      |
 | [QingStor](#qingstor)                                       | `qingstor` |
@@ -568,6 +569,21 @@ juicefs format \
     ... \
     myjfs
 ```
+
+## Volcengine Object Storage
+
+Please follow [this document](https://www.volcengine.com/docs/6291/65568) to learn how to get access key and secret key.
+
+The `--bucket` option format is `https://<bucket>.tos-<region>.volces.com`, and please replace `<region>` with specific region code. E.g. the region code of Beijing is `cn-beijing`. You could find all available region codes [here](https://www.volcengine.com/docs/6349/107356). For example:
+
+```bash
+juicefs format \
+    --storage tos \
+    --bucket https://<bucket>.tos-<region>.volces.com \
+    ... \
+    myjfs
+```
+
 
 ## Kingsoft Cloud KS3
 
