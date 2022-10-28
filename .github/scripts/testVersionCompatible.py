@@ -382,6 +382,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         assume (self.greater_than_version_mounted(juicefs))
         assume(not is_readonly(f'{JuicefsMachine.MOUNT_POINT}'))
         # ref: https://github.com/juicedata/juicefs/pull/2776
+        assert(len(self.mounted_by) > 0)
+        assume(version.parse('-'.join(self.mounted_by[-1].split('-')[1:])) >= version.parse('1.1.0-dev'))
         assume(version.parse('-'.join(juicefs.split('-')[1:])) >= version.parse('1.1.0-dev'))
         # TODO: should test upload delay.
         assume(get_upload_delay_seconds(JuicefsMachine.MOUNT_POINT) == 0)
