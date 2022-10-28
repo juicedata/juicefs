@@ -15,8 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
-        meta: ['postgres', 'mysql']
+        #meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
+        meta: ['redis', 'mysql']
     runs-on: ubuntu-latest
 
     steps:
