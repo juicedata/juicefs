@@ -30,6 +30,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import filecmp, os
+import xattr
 
 class TreeComparator(object):
     def __init__(self, dir1, dir2):
@@ -76,12 +77,23 @@ class TreeComparator(object):
                     print(f'content mismatch with {f1} and {f2}')
                     mismatch.append(f)
                     continue
+                if not self.compare_xattr(f1, f2):
+                    print(f'xattr mismatch with {f1} and {f2}')
+                    mismatch.append(f)
+                    continue
                 match.append(f)
             except:
                 print(f'error: {f}')
                 errors.append(f)
         return match, mismatch, errors
 
+    def compare_xattr(self, f1, f2):
+        for attr in xattr.listxattr(f1):
+            a1 = xattr.getxattr(f1, attr)
+            a2 = xattr.getxattr(f2, attr)
+            if a1 != a2:
+                return False
+        return True
 
 if "__main__" == __name__:
     import argparse, sys
@@ -101,7 +113,9 @@ if "__main__" == __name__:
         tcmp = TreeComparator(args.dir1, args.dir2)
         tcmp.compare()
         res = len(tcmp.left_only) + len(tcmp.right_only) + \
-            len(tcmp.common_funny) + len(tcmp.funny_files) + len(tcmp.diff_files)
+             len(tcmp.funny_files) + len(tcmp.diff_files)
+        # res = len(tcmp.left_only) + len(tcmp.right_only) + \
+        #     len(tcmp.common_funny) + len(tcmp.funny_files) + len(tcmp.diff_files)
         if not args.quiet:
             if tcmp.left_only:
                 print ("Left only:")
