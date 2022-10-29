@@ -15,8 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        #meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
-        meta: ['redis', 'mysql']
+        meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
+        #meta: ['redis', 'mysql']
     runs-on: ubuntu-latest
 
     steps:
@@ -83,7 +83,7 @@ jobs:
       - name: Generate random files
         timeout-minutes: 60
         run: |
-          count=5000
+          count=10000
           seed=$(date +%s)
           echo seed: $seed
           mkdir /tmp/fsrand
