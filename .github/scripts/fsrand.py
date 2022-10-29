@@ -133,7 +133,7 @@ class FsRandomizer(object):
             self.__random_write(f)
     def randomize(self):
         for i in range(self.count):
-            op = self.random.choice("CCCCRUUSL")
+            op = self.random.choice("CCRUUSL")
             if op == "C":
                 path = self.__newsubpath(self.__getdir())
                 if self.verbose:
@@ -147,6 +147,8 @@ class FsRandomizer(object):
             elif op == "S":
                 src = self.__getsubpath(self.__getdir())
                 if not os.path.exists(src):
+                    continue
+                if os.path.isdir(src):
                     continue
                 dest = self.__newsubpath(self.__getdir())
                 assert(not os.path.exists(dest))
@@ -162,12 +164,10 @@ class FsRandomizer(object):
                 src = self.__getsubpath(self.__getdir())
                 if not os.path.exists(src):
                     continue
-                dest = self.__newsubpath(self.__getdir())
-                assert(not os.path.exists(dest))
-                if src in dest:
-                    continue
                 if os.path.isdir(src):
                     continue
+                dest = self.__newsubpath(self.__getdir())
+                assert(not os.path.exists(dest))
                 if self.verbose:
                     self.__stderr("%s, CREATE LINK from %s to %s" % (str(i), src, dest))
                 try:

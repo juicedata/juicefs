@@ -85,7 +85,7 @@ jobs:
         run: |
           count=5000
           seed=$(date +%s)
-          echo $seed
+          echo seed: $seed
           mkdir /tmp/fsrand
           mkdir /tmp/jfs/fsrand
           declare -a pids   

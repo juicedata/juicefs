@@ -44,6 +44,7 @@ class TreeComparator(object):
     def compare(self, p=""):
         d1 = os.path.join(self.dir1, p)
         d2 = os.path.join(self.dir2, p)
+        print(f'compare {d1} with {d2}')
         dcmp = filecmp.dircmp(d1, d2, ignore=[])
         self.left_only.extend(os.path.join(p, n) for n in dcmp.left_only)
         self.right_only.extend(os.path.join(p, n) for n in dcmp.right_only)
