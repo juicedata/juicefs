@@ -84,13 +84,14 @@ jobs:
         timeout-minutes: 60
         run: |
           count=1000
-          ts=$(date +%s)
+          seed=$(date +%s)
+          echo $seed
           mkdir /tmp/fsrand
           mkdir /tmp/jfs/fsrand
           declare -a pids   
-          python3 .github/scripts/fsrand.py  -c $count -v -s $ts  /tmp/fsrand &
+          python3 .github/scripts/fsrand.py  -c $count -v -s $seed  /tmp/fsrand &
           pids+=($!)
-          python3 .github/scripts/fsrand.py  -c $count -v -s $ts  /tmp/jfs/fsrand &
+          python3 .github/scripts/fsrand.py  -c $count -v -s $seed  /tmp/jfs/fsrand &
           pids+=($!)
           wait "${pids[@]}"
           python3 .github/scripts/cmptree.py /tmp/fsrand /tmp/jfs/fsrand
