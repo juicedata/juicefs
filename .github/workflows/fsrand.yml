@@ -83,7 +83,7 @@ jobs:
       - name: Generate random files
         timeout-minutes: 60
         run: |
-          count=1000
+          count=5000
           seed=$(date +%s)
           echo $seed
           mkdir /tmp/fsrand
