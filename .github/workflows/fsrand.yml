@@ -3,6 +3,12 @@ on:
   schedule:
     - cron:  '0 18 * * *'
   workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
 
 jobs:
   fsrand:
@@ -10,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
-        meta: ['redis']
+        meta: ['redis', 'mysql', 'tikv']
     runs-on: ubuntu-latest
 
     steps:
@@ -49,11 +55,17 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           create_database $meta_url
 
+      - name: Install tool
+        run: | 
+          sudo apt install attr
+          sudo pip install xattr
+          sudo pip install minio
+
       - name: Juicefs Format
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          sudo ./juicefs format $meta_url --trash-days 0 pics
+          ./juicefs format $meta_url --trash-days 0 pics
 
       - name: Juicefs Mount
         run: |
@@ -61,28 +73,50 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           # sudo mkdir /var/jfs
           # sudo chmod 777 /var/jfs
-          sudo ./juicefs mount -d $meta_url /jfs --no-usage-report &
+          ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr
           sleep 5
-          if [ ! -f /jfs/.accesslog ]; then
+          if [ ! -f /tmp/jfs/.accesslog ]; then
             echo "<FATAL>: mount failed"
             exit 1
           fi
 
-      - name: Test with fsrand
+      - name: Generate random files
+        timeout-minutes: 60
         run: |
-          chmod +x .github/scripts/fsrand.py
-          chmod +x .github/scripts/cmptree.py
-          count=50000
-          ts=$(date +%s)
+          count=10000
+          seed=$(date +%s)
+          echo seed: $seed
           mkdir /tmp/fsrand
-          mkdir /jfs/fsrand
+          mkdir /tmp/jfs/fsrand
           declare -a pids   
-          python3 .github/scripts/fsrand.py  -c $count -v -s $ts /tmp/fsrand &
+          python3 .github/scripts/fsrand.py  -c $count -v -s $seed  /tmp/fsrand &
           pids+=($!)
-          python3 .github/scripts/fsrand.py  -c $count -v -s $ts /jfs/fsrand &
+          python3 .github/scripts/fsrand.py  -c $count -v -s $seed  /tmp/jfs/fsrand &
           pids+=($!)
           wait "${pids[@]}"
-          python3 .github/scripts/cmptree.py /tmp/fsrand /jfs/fsrand
+          python3 .github/scripts/cmptree.py /tmp/fsrand /tmp/jfs/fsrand
+      
+      - name: Dump with random files
+        run: |
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          ./juicefs dump $meta_url dump.json
+
+      - name: Load random files
+        run: |
+          umount /tmp/jfs
+          source .github/scripts/start_meta_engine.sh
+          meta_url=$(get_meta_url ${{matrix.meta}})
+          python3 .github/scripts/flush_meta.py $meta_url
+          ./juicefs load $meta_url dump.json
+          ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr
+          sleep 5
+          python3 .github/scripts/cmptree.py /tmp/fsrand /tmp/jfs/fsrand
+
+      - name: Rmr random files
+        run: | 
+          ./juicefs rmr /tmp/jfs/fsrand
+          ls -l /tmp/jfs/fsrand && exit 1 || true
 
       - name: log
         if: ${{ always() }}
@@ -98,13 +132,13 @@ jobs:
           fi
 
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
           
       - name: Setup upterm session
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1

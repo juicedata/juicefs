@@ -30,6 +30,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import filecmp, os
+import xattr
 
 class TreeComparator(object):
     def __init__(self, dir1, dir2):
@@ -43,16 +44,57 @@ class TreeComparator(object):
     def compare(self, p=""):
         d1 = os.path.join(self.dir1, p)
         d2 = os.path.join(self.dir2, p)
+        print(f'compare {d1} with {d2}')
         dcmp = filecmp.dircmp(d1, d2, ignore=[])
         self.left_only.extend(os.path.join(p, n) for n in dcmp.left_only)
         self.right_only.extend(os.path.join(p, n) for n in dcmp.right_only)
         self.common_funny.extend(os.path.join(p, n) for n in dcmp.common_funny)
         self.funny_files.extend(os.path.join(p, n) for n in dcmp.funny_files)
-        (match, mismatch, errors) = filecmp.cmpfiles(d1, d2, dcmp.common_files, shallow=False)
+        #(match, mismatch, errors) = filecmp.cmpfiles(d1, d2, dcmp.common_files, shallow=False)
+        #self.diff_files.extend(os.path.join(p, n) for n in mismatch)
+        #self.funny_files.extend(os.path.join(p, n) for n in errors)
+        (match, mismatch, errors) = self.compare_files(d1, d2, dcmp.common_files)
         self.diff_files.extend(os.path.join(p, n) for n in mismatch)
         self.funny_files.extend(os.path.join(p, n) for n in errors)
         for d in dcmp.common_dirs:
             self.compare(os.path.join(p, d))
+
+    def compare_files(self, d1, d2, files):
+        match = []
+        mismatch = []
+        errors = []
+        for f in files:
+            f1 = os.path.join(d1, f)
+            f2 = os.path.join(d2, f)
+            try:
+                s1 = os.stat(f1)
+                s2 = os.stat(f2)                    
+                for attr in ['st_mode', 'st_nlink', 'st_uid', 'st_gid', 'st_size']:
+                    if getattr(s1, attr) != getattr(s2, attr):
+                        print(f'{attr} mismatch with {f1}:{getattr(s1, attr)} and {f2}:{getattr(s2, attr)}')
+                        mismatch.append(f)
+                        continue
+                if not filecmp.cmp(f1, f2):
+                    print(f'content mismatch with {f1} and {f2}')
+                    mismatch.append(f)
+                    continue
+                if not self.compare_xattr(f1, f2):
+                    print(f'xattr mismatch with {f1} and {f2}')
+                    mismatch.append(f)
+                    continue
+                match.append(f)
+            except:
+                print(f'error: {f}')
+                errors.append(f)
+        return match, mismatch, errors
+
+    def compare_xattr(self, f1, f2):
+        for attr in xattr.listxattr(f1):
+            a1 = xattr.getxattr(f1, attr)
+            a2 = xattr.getxattr(f2, attr)
+            if a1 != a2:
+                return False
+        return True
 
 if "__main__" == __name__:
     import argparse, sys
@@ -69,10 +111,13 @@ if "__main__" == __name__:
         p.add_argument("dir1")
         p.add_argument("dir2")
         args = p.parse_args(sys.argv[1:])
+        print('start compare tree')
         tcmp = TreeComparator(args.dir1, args.dir2)
         tcmp.compare()
         res = len(tcmp.left_only) + len(tcmp.right_only) + \
-            len(tcmp.common_funny) + len(tcmp.funny_files) + len(tcmp.diff_files)
+             len(tcmp.funny_files) + len(tcmp.diff_files)
+        # res = len(tcmp.left_only) + len(tcmp.right_only) + \
+        #     len(tcmp.common_funny) + len(tcmp.funny_files) + len(tcmp.diff_files)
         if not args.quiet:
             if tcmp.left_only:
                 print ("Left only:")
@@ -86,10 +131,10 @@ if "__main__" == __name__:
                 print ("Funny files:")
                 for n in tcmp.funny_files:
                     print( "    %s" % n)
-            if tcmp.common_funny:
-                print ("Differing stats:")
-                for n in tcmp.common_funny:
-                    print ("    %s" % n)
+            # if tcmp.common_funny:
+            #     print ("Differing stats:")
+            #     for n in tcmp.common_funny:
+            #         print ("    %s" % n)
             if tcmp.diff_files:
                 print ("Differing files:")
                 for n in tcmp.diff_files:

@@ -30,7 +30,10 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os, random
-
+import platform
+import unicodedata
+from xmlrpc.client import boolean
+import xattr 
 class Devnull(object):
     def write(self, *args):
         pass
@@ -72,13 +75,39 @@ class FsRandomizer(object):
         except:
             return path
         return os.path.join(path, n)
+
+    def __gen_unicode_name(self, lower_limit=1, upper_limit=64):
+        unicodes = ''.join(
+            chr(char)
+            for char in range(1000)
+            # use the unicode categories that don't include control codes
+            # if unicodedata.category(chr(char))[0] in ('LMNPSZ') and chr(char) != '/'
+            if unicodedata.category(chr(char))[0] in  ('LMNPSZ') and chr(char) != '/'
+            )
+        assert('/' not in unicodes)
+        rand_length = self.random.randint(lower_limit, upper_limit)
+        # generate it
+        utf_string = ''.join([self.random.choice(unicodes) for i in range(rand_length)])
+        if utf_string == '.' or utf_string == '..':
+            utf_string = 'ABC'
+        assert('/' not in utf_string)
+        # print(''.join([unicodedata.category(c) for c in utf_string]))
+        return utf_string
+
+    def __gen_ascii_name(self, lower_limit=1, upper_limit=64):
+        l = self.random.randint(lower_limit, upper_limit)
+        n = [self.random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for i in range(l)]
+        return "".join(n)
+
     def __newname(self):
         if self.dictionary:
             return self.random.choice(self.dictionary)
         else:
-            l = self.random.randint(1, 16)
-            n = [self.random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for i in range(l)]
-            return "".join(n)
+            if self.ascii:
+                return self.__gen_ascii_name()
+            else:
+                return self.__gen_unicode_name()
+
     def __newsubpath(self, path):
         while True:
             p = os.path.join(path, self.__newname())
@@ -89,9 +118,11 @@ class FsRandomizer(object):
     def __random_write(self, file):
         o = self.random.randint(0, self.maxofs)
         l = self.random.randint(0, self.maxlen)
-        b = [self.random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for i in range(l)]
+        # b = bytearray(self.random.getrandbits(8) for _ in range(l))
+        # b = self.random.randbytes(l)
+        b = bytes('abc', "utf-8")
         file.seek(o)
-        file.write(bytes("".join(b), "utf-8"))
+        file.write(b)
     def __create(self, path):
         assert not os.path.exists(path)
         with open(path, "wb") as f:
@@ -102,11 +133,11 @@ class FsRandomizer(object):
             self.__random_write(f)
     def randomize(self):
         for i in range(self.count):
-            op = self.random.choice("CCCCRUUSL")
+            op = self.random.choice("CCRUUSL")
             if op == "C":
                 path = self.__newsubpath(self.__getdir())
                 if self.verbose:
-                    self.__stderr("CREATE %s" % path)
+                    self.__stderr("%s, CREATE %s" % (str(i), path))
                 if self.random.randint(0, 1):
                     self.__create(path)
                     os.chmod(path, self.__newmode(0o0600))
@@ -115,26 +146,43 @@ class FsRandomizer(object):
                     os.chmod(path, self.__newmode(0o0700))
             elif op == "S":
                 src = self.__getsubpath(self.__getdir())
-                dest = self.__newsubpath(self.__getdir())
-                if self.verbose:
-                    self.__stderr("CREATE SYMLINK from %s to %s" % (src, dest))
-                os.symlink(src, dest)
-            elif op == "L":
-                src = self.__getsubpath(self.__getdir())
-                dest = self.__newsubpath(self.__getdir())
-                if src in dest:
+                if not os.path.exists(src):
                     continue
                 if os.path.isdir(src):
                     continue
+                dest = self.__newsubpath(self.__getdir())
+                assert(not os.path.exists(dest))
                 if self.verbose:
-                    self.__stderr("CREATE LINK from %s to %s" % (src, dest))
-                os.link(src, dest)
+                    self.__stderr("%s, CREATE SYMLINK from %s to %s" % (str(i), src, dest))
+                try:
+                    os.symlink(src, dest)
+                except: 
+                    print("".join([str(ord(c)) for c in src]))
+                    print("".join([str(ord(c)) for c in dest]))
+                    raise Exception("OS error: {0}".format(err))
+            elif op == "L":
+                src = self.__getsubpath(self.__getdir())
+                if not os.path.exists(src):
+                    continue
+                if os.path.isdir(src):
+                    continue
+                dest = self.__newsubpath(self.__getdir())
+                assert(not os.path.exists(dest))
+                if self.verbose:
+                    self.__stderr("%s, CREATE LINK from %s to %s" % (str(i), src, dest))
+                try:
+                    os.link(src, dest)
+                except OSError as err :
+                    print("".join([str(ord(c)) for c in src]))
+                    print("".join([str(ord(c)) for c in dest]))
+                    print("OS error: {0}".format(err))
+                    raise Exception("OS error: {0}".format(err))
             elif op == "R":
                 path = self.__getsubpath(self.__getdir())
                 if os.path.realpath(path) == self.path:
                     continue
                 if self.verbose:
-                    self.__stderr("REMOVE %s" % path)
+                    self.__stderr("%s, REMOVE %s" % (str(i), path))
                 if not os.path.isdir(path):
                     os.unlink(path)
                 else:
@@ -142,6 +190,23 @@ class FsRandomizer(object):
                         os.rmdir(path)
                     except:
                         pass
+
+            elif op == "X":
+                path = self.__getsubpath(self.__getdir())
+                if not os.path.exists(path):
+                    continue
+                if self.verbose:
+                    self.__stderr("%s, SETXATTR %s" % (str(i), path))
+                key = self.__gen_unicode_name()
+                value = self.__gen_unicode_name()
+                if platform.system() == 'Linux':
+                    os.system(f'setfattr -n {key} -v {value} {path}')
+                else:
+                    xattr.setxattr(path, key, bytes(value, "utf-8"))
+    
+                value_set = xattr.getxattr(path, key)
+                assert( bytes(value, 'utf-8') == value_set)
+
             elif op == "U":
                 path = self.__getsubpath(self.__getdir())
                 if os.path.realpath(path) == self.path:
@@ -149,7 +214,7 @@ class FsRandomizer(object):
                 if not os.path.exists(path):
                     continue
                 if self.verbose:
-                    self.__stderr("UPDATE %s" % path)
+                    self.__stderr("%s, UPDATE %s" % (str(i), path))
                 u = self.random.randint(0, 2)
                 if u == 0:
                     if not os.path.isdir(path):
@@ -165,7 +230,7 @@ class FsRandomizer(object):
                         os.chmod(path, self.__newmode(0o0600))
                     else:
                         os.chmod(path, self.__newmode(0o0700))
-
+            
 if "__main__" == __name__:
     import argparse, sys, time
     def info(s):
@@ -180,6 +245,7 @@ if "__main__" == __name__:
         p.add_argument("-v", "--verbose", action="count", default=0)
         p.add_argument("-c", "--count", type=int, default=100)
         p.add_argument("-s", "--seed", type=int, default=0)
+        p.add_argument("-a", "--ascii", action="count", default=0)
         p.add_argument("-d", "--dictionary")
         p.add_argument("path")
         args = p.parse_args(sys.argv[1:])
@@ -191,14 +257,16 @@ if "__main__" == __name__:
         if args.dictionary:
             with open(args.dictionary) as f:
                 args.dictionary = [l.strip() for l in f]
-        info("count=%s seed=%s" % (args.count, args.seed))
+        info("count=%s seed=%s " % (args.count, args.seed))
         os.umask(0)
         fsrand = FsRandomizer(args.path, args.count, args.seed)
         fsrand.dictionary = args.dictionary
         fsrand.stdout = sys.stdout
         fsrand.stderr = sys.stderr
         fsrand.verbose = args.verbose
+        fsrand.ascii = args.ascii
         fsrand.randomize()
+        info("create files succeed")
     def __entry():
         try:
             main()
