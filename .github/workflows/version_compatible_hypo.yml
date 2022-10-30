@@ -141,7 +141,7 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: | 
-          if [ -f "~/command.log" ]; then
+          if [ -f "$HOME/command.log" ]; then
             tail -100 ~/command.log
           fi
 
