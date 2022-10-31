@@ -52,7 +52,7 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Build Hadoop SDK
-        make -C sdk/java
+        run: make -C sdk/java
 
       - name: Juicefs Format
         run: |
