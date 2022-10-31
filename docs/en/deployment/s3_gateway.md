@@ -55,7 +55,7 @@ In this way, the S3 gateway will accept all network requests by default. S3 clie
 - A third-party client on the same LAN as the host where the S3 gateway is located can access it using `http://192.168.1.8:9000` (assuming the intranet IP address of the S3 gateway-enabled host is 192.168.1.8).
 - The S3 gateway can be accessed over the Internet using `http://110.220.110.220:9000` (assuming that the public IP address of the S3 gateway-enabled host is 110.220.110.220).
 
-## Configure Juicefs S3 Gaterway as Daemon Service
+## Configure S3 Gaterway as Daemon Service
 
 The S3 gateway can be configured as a `daemon service` with `systemd`.
 
