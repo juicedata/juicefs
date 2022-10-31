@@ -54,9 +54,9 @@ jobs:
       - name: Set up Spark
         working-directory: /tmp
         run: |
-          wget  https://dlcdn.apache.org/spark/spark-3.3.0/spark-3.3.0-bin-hadoop3.tgz
-          tar -zxf spark-3.3.0-bin-hadoop3.tgz
-          ln -s spark-3.3.0-bin-hadoop3 spark
+          wget  https://dlcdn.apache.org/spark/spark-3.3.1/spark-3.3.1-bin-hadoop3.tgz
+          tar -zxf spark-3.3.1-bin-hadoop3.tgz
+          ln -s spark-3.3.1-bin-hadoop3 spark
           cp ~/work/juicefs/juicefs/sdk/java/target/juicefs-hadoop*jar /tmp/spark/jars
           cp ~/work/juicefs/juicefs/.github/workflows/resources/core-site.xml /tmp/spark/conf
           export PATH=$PATH:/tmp/spark/bin:/tmp/spark/sbin
