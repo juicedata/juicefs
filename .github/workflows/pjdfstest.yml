@@ -20,6 +20,12 @@ on:
   schedule:
     - cron:  '0 16 * * *'
   workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
 
 jobs:
   build-matrix:
@@ -31,9 +37,12 @@ jobs:
           echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
           if [ "${{github.event_name}}" == "schedule"  ]; then
             echo '::set-output name=meta_matrix::["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]'
+          elif [ "${{github.event_name}}" == "pull_request"  ]; then
+            echo '::set-output name=meta_matrix::["redis"]'
+          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
+            echo '::set-output name=meta_matrix::["tikv", "tidb"]'
           else
             echo '::set-output name=meta_matrix::["redis"]'
-            # echo '::set-output name=meta_matrix::["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]'
           fi
     outputs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
@@ -70,14 +79,6 @@ jobs:
         uses: ./.github/actions/build
         with: 
           target: ${{steps.vars.outputs.target}}
-
-      - uses: actions/cache@v3
-        if: ${{ matrix.meta == 'tikv' || matrix.meta == 'tidb' }}
-        with:
-          path: ~/.tiup
-          key: ${{ runner.os }}-tiup
-          restore-keys: |
-            ${{ runner.os }}-tiup
 
       - name: Prepare meta db
         run: | 
@@ -139,6 +140,6 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
       - name: Setup upterm session
-        if: ${{ failure() }}
-        timeout-minutes: 1
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        timeout-minutes: 60
         uses: lhotari/action-upterm@v1

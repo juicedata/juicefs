@@ -9,6 +9,7 @@ start_meta_engine(){
     elif [ "$meta" == "redis" ]; then
         sudo apt-get install -y redis-tools redis-server
     elif [ "$meta" == "tikv" ]; then
+        sudo echo "13.224.167.19 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
         source /home/runner/.bash_profile
         source /home/runner/.profile
@@ -24,6 +25,7 @@ start_meta_engine(){
         docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
         sleep 10
     elif [ "$meta" == "tidb" ]; then
+        sudo echo "13.224.167.19 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
         source /home/runner/.profile
         tiup playground 5.4.0 &

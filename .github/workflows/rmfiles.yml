@@ -34,14 +34,6 @@ jobs:
         with: 
           target: ${{steps.vars.outputs.target}}
 
-      - uses: actions/cache@v3
-        if: ${{ matrix.meta == 'tikv' || matrix.meta == 'tidb' }}
-        with:
-          path: ~/.tiup
-          key: ${{ runner.os }}-tiup
-          restore-keys: |
-            ${{ runner.os }}-tiup
-
       - name: Prepare meta db
         run: | 
           sudo chmod +x .github/scripts/start_meta_engine.sh
