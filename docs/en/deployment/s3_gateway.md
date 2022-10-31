@@ -55,7 +55,47 @@ In this way, the S3 gateway will accept all network requests by default. S3 clie
 - A third-party client on the same LAN as the host where the S3 gateway is located can access it using `http://192.168.1.8:9000` (assuming the intranet IP address of the S3 gateway-enabled host is 192.168.1.8).
 - The S3 gateway can be accessed over the Internet using `http://110.220.110.220:9000` (assuming that the public IP address of the S3 gateway-enabled host is 110.220.110.220).
 
-## Access S3 gateway
+## Configure S3 Gaterway as Daemon Service
+
+The S3 gateway can be configured as a `daemon service` with `systemd`.
+
+```shell
+cat > /lib/systemd/system/juicefs-gateway.service<<EOF
+[Unit]
+Description=Juicefs S3 Gateway
+Requires=network.target
+After=multi-user.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+Environment="MINIO_ROOT_USER=admin"
+Environment="MINIO_ROOT_PASSWORD=12345678"
+ExecStart=/usr/local/bin/juicefs gateway redis://localhost:6379 localhost:9000
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+To enable the service at starup
+
+```shell
+sudo systemctl daemon-reload
+sudo systemctl enable juicefs-gateway --now
+sudo systemctl status juicefs-gateway
+```
+
+To inspect logs
+
+```bash
+sudo journalctl -xefu juicefs-gateway.service
+```
+
+## Access S3 Gateway
 
 The JuiceFS S3 gateway can be accessed by various clients, desktop applications, web applications, etc. that support the S3 API. Please note the address and port that the S3 gateway listens on when using it.
 

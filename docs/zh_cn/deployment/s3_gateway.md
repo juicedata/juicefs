@@ -55,6 +55,46 @@ juicefs gateway redis://localhost:6379 0.0.0.0:9000
 - 与 S3 网关所在主机处于同一局域网的第三方客户端可以使用 `http://192.168.1.8:9000` 访问（假设启用 S3 网关的主机内网 IP 地址为 192.168.1.8）；
 - 通过互联网访问 S3 网关可以使用 `http://110.220.110.220:9000` 访问（假设启用 S3 网关的主机公网 IP 地址为 110.220.110.220）。
 
+## S3 网关 以守护进程的形式运行
+
+S3 网关 可以通过以下配置以 Linux 守护进程的形式在后台运行。
+
+```shell
+cat > /lib/systemd/system/juicefs-gateway.service<<EOF
+[Unit]
+Description=Juicefs S3 Gateway
+Requires=network.target
+After=multi-user.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+Environment="MINIO_ROOT_USER=admin"
+Environment="MINIO_ROOT_PASSWORD=12345678"
+ExecStart=/usr/local/bin/juicefs gateway redis://localhost:6379 localhost:9000
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+设置进程开机自启动
+
+```shell
+sudo systemctl daemon-reload
+sudo systemctl enable juicefs-gateway --now
+sudo systemctl status juicefs-gateway
+```
+
+检阅进程的日志
+
+```bash
+sudo journalctl -xefu juicefs-gateway.service
+```
+
 ## 访问 S3 网关
 
 各类支持 S3 API 的客户端、桌面程序、Web 程序等都可以访问 JuiceFS S3 网关。使用时请注意 S3 网关监听的地址和端口。
@@ -272,7 +312,9 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
 ```shell
 git clone -b gateway git@github.com:juicedata/minio.git && cd minio
 ```
+
 将会生成 minio 二进制文件
+
 ```shell
 make build
 ```
