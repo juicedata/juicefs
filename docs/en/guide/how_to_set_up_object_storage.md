@@ -139,7 +139,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Tencent Cloud COS](#tencent-cloud-cos)                     | `cos`      |
 | [Huawei Cloud OBS](#huawei-cloud-obs)                       | `obs`      |
 | [Baidu Object Storage](#baidu-object-storage)               | `bos`      |
-| [Volcengine Object Storage](#volcengine-object-storage)     | `tos`      |
+| [Volcano Engine TOS](#volcano-engine-tos)                   | `tos`      |
 | [Kingsoft KS3](#kingsoft-ks3)                               | `ks3`      |
 | [NetEase Object Storage](#netease-object-storage)           | `nos`      |
 | [QingStor](#qingstor)                                       | `qingstor` |
@@ -570,7 +570,7 @@ juicefs format \
     myjfs
 ```
 
-## Volcengine Object Storage
+## Volcano Engine TOS
 
 Please follow [this document](https://www.volcengine.com/docs/6291/65568) to learn how to get access key and secret key.
 
