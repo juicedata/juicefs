@@ -1,21 +1,15 @@
 name: tpcds
 
 on:
-#  push:
-#    branches:
-#      - 'release-**'
-#    paths-ignore:
-#      - 'docs/**'
-#  pull_request:
-#    #The branches below must be a subset of the branches above
-#    branches:
-#      - 'release-**'
-#      - 'main'
-#    paths-ignore:
-#      - 'docs/**'
   schedule:
     - cron:  '30 20 * * *'
   workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
 
 jobs:
   tpcds:
@@ -60,7 +54,7 @@ jobs:
       - name: Set up Spark
         working-directory: /tmp
         run: |
-          wget --quiet https://dlcdn.apache.org/spark/spark-3.3.0/spark-3.3.0-bin-hadoop3.tgz
+          wget  https://dlcdn.apache.org/spark/spark-3.3.0/spark-3.3.0-bin-hadoop3.tgz
           tar -zxf spark-3.3.0-bin-hadoop3.tgz
           ln -s spark-3.3.0-bin-hadoop3 spark
           cp ~/work/juicefs/juicefs/sdk/java/target/juicefs-hadoop*jar /tmp/spark/jars
@@ -162,3 +156,8 @@ jobs:
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
