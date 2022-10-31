@@ -108,7 +108,6 @@ jobs:
         timeout-minutes: 35
         working-directory: /tmp
         run: |
-          exit 0
           spark-shell \
           --jars /tmp/spark-sql-perf/target/scala-2.12/spark-sql-perf*.jar \
           --master spark://localhost:7077 \
@@ -132,7 +131,6 @@ jobs:
         timeout-minutes: 30
         working-directory: /tmp
         run: |
-          exit 0
           spark-shell \
           --jars /tmp/spark-sql-perf/target/scala-2.12/spark-sql-perf*.jar \
           --master spark://localhost:7077 \
