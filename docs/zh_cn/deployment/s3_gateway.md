@@ -72,7 +72,7 @@ Type=simple
 User=root
 Environment="MINIO_ROOT_USER=admin"
 Environment="MINIO_ROOT_PASSWORD=12345678"
-ExecStart=/usr/local/bin/juicefs gateway --storage <storage type> --writeback --cache-size 20480 redis://localhost:6379/1 0.0.0.0:9000
+ExecStart=/usr/local/bin/juicefs gateway redis://localhost:6379/1 localhost:9000
 Restart=on-failure
 RestartSec=60
 
