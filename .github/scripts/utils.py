@@ -90,6 +90,8 @@ def clear_storage(storage, bucket, volume):
         if '?' in db_name:
             db_name = db_name.split('?')[0]
         run_cmd(f'printf "\set AUTOCOMMIT on\ndrop database if exists {db_name}; create database {db_name}; " |  psql -U postgres -h localhost')
+    elif storage == 'hdfs':
+        run_cmd(f'docker exec namenode /bin/bash -c "hdfs dfs -rm -r /{volume}"')
     print('clear storage succeed')
 
 

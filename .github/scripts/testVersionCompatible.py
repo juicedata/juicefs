@@ -117,6 +117,9 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--bucket', bucket])
             options.extend(['--access-key', 'postgres'])
             options.extend(['--secret-key', 'postgres'])
+        elif storage == 'hdfs':
+            bucket = 'localhost:9000'
+            options.extend(['--bucket', bucket])
         else:
             print(f'storage is {storage}')
             raise Exception(f'storage value error: {storage}')

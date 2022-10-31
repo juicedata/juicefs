@@ -74,6 +74,13 @@ start_meta_engine(){
     elif [ "$meta" != "mysql" ] && [ "$storage" == "mysql" ]; then
         echo "start mysql"
         sudo /etc/init.d/mysql start
+    elif ["$storage" == "hdfs"]; then
+        echo "start hdfs"
+        git clone https://github.com/big-data-europe/docker-hadoop
+        cd docker-hadoop
+        docker-compose up -d
+        sleep 10
+        docker container ls
     fi
 }
 
