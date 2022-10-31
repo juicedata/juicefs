@@ -126,7 +126,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: ${{matrix.meta}}-${{matrix.old_juicefs_version}}.command.log
-          path: command.log
+          path: ~/command.log
 
       - name: Display log
         if: ${{ always() }}
@@ -141,8 +141,8 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: | 
-          if [ -f "command.log" ]; then
-            tail -100 command.log
+          if [ -f "$HOME/command.log" ]; then
+            tail -100 ~/command.log
           fi
 
       - name: Send Slack Notification
