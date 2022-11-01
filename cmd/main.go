@@ -31,6 +31,9 @@ import (
 	"github.com/pyroscope-io/client/pyroscope"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
+
+	// set the correct value when it runs inside container
+	_ "go.uber.org/automaxprocs"
 )
 
 var logger = utils.GetLogger("juicefs")
