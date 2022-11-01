@@ -292,6 +292,7 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
         <groupId>org.apache.flink</groupId>
         <artifactId>flink-table-common</artifactId>
         <version>1.15.2</version>
+	<scope>provided</scope>
     </dependency>
     <dependency>
         <groupId>org.apache.flink</groupId>
