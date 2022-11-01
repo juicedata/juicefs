@@ -258,13 +258,12 @@ class JuicefsMachine(RuleBasedStateMachine):
         sub_dir=st.sampled_from(['dir1', 'dir2']),
         metrics=st.sampled_from(['127.0.0.1:9567', '127.0.0.1:9568']), 
         consul=st.sampled_from(['127.0.0.1:8500', '127.0.0.1:8501']), 
-        no_usage_report=st.booleans(),
     )
     @precondition(lambda self: self.formatted  )
     def mount(self, juicefs, no_syslog, other_fuse_options, enable_xattr, attr_cache, entry_cache, dir_entry_cache,
         get_timeout, put_timeout, io_retries, max_uploads, max_deletes, buffer_size, upload_limit, download_limit, prefetch, 
         writeback, upload_delay, cache_dir, cache_size, free_space_ratio, cache_partial_only, backup_meta, heartbeat, read_only,
-        no_bgjob, open_cache, sub_dir, metrics, consul, no_usage_report):
+        no_bgjob, open_cache, sub_dir, metrics, consul):
         assume (self.greater_than_version_formatted(juicefs))
         if JuicefsMachine.META_URL.startswith('badger://'):
             assume(not self.mounted)
@@ -333,8 +332,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--metrics', str(metrics)])
         # if run_cmd(f'{juicefs} mount --help | grep consul') == 0:
         #     options.extend(['--consul', str(consul)])
-        if no_usage_report:
-            options.append('--no-usage-report')
+        options.append('--no-usage-report')
         if os.path.exists(JuicefsMachine.MOUNT_POINT):
             run_cmd(f'stat {JuicefsMachine.MOUNT_POINT}')
         run_jfs_cmd(options)
@@ -648,7 +646,6 @@ class JuicefsMachine(RuleBasedStateMachine):
         umask=st.sampled_from(['022', '755']), 
         metrics=st.sampled_from(['127.0.0.1:9567', '127.0.0.1:9568']), 
         consul=st.sampled_from(['127.0.0.1:8500', '127.0.0.1:8501']), 
-        no_usage_report=st.booleans(),
         sub_dir=st.sampled_from(['dir1', 'dir2']),
         port=st.integers(min_value=9001, max_value=10000)
     )
@@ -656,7 +653,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def gateway(self, juicefs, get_timeout, put_timeout, io_retries, max_uploads, max_deletes, buffer_size, upload_limit, 
         download_limit, prefetch, writeback, upload_delay, cache_dir, cache_size, free_space_ratio, cache_partial_only, 
         backup_meta,heartbeat, read_only, no_bgjob, open_cache, attr_cache, entry_cache, dir_entry_cache, access_log, 
-        no_banner, multi_buckets, keep_etag, umask, metrics, consul, no_usage_report, sub_dir, port):
+        no_banner, multi_buckets, keep_etag, umask, metrics, consul, sub_dir, port):
         assume (self.greater_than_version_formatted(juicefs))
         assume(not is_port_in_use(port))
         if JuicefsMachine.META_URL.startswith('badger://'):
@@ -718,8 +715,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             options.extend(['--metrics', str(metrics)])
         # if run_cmd(f'{juicefs} mount --help | grep consul') == 0:
         #     options.extend(['--consul', str(consul)])
-        if no_usage_report:
-            options.append('--no-usage-report')
+        options.append('--no-usage-report')
 
         proc=subprocess.Popen(options)
         time.sleep(2.0)

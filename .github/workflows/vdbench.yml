@@ -64,7 +64,7 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           ./juicefs format $meta_url vdbench-big --storage minio --bucket http://127.0.0.1:19000/mypics --access-key minioadmin --secret-key minioadmin 
-          ./juicefs mount -d $meta_url /tmp/vdbench
+          ./juicefs mount -d $meta_url /tmp/vdbench --no-usage-report
           vdbench/vdbench -f .github/workflows/resources/vdbench_big_file.conf
 
       - uses: actions/upload-artifact@v3
@@ -78,7 +78,7 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           rm /var/jfsCache/ -rf || true
           if [ -d /tmp/vdbench ]; then
-            ./juicefs umount /tmp/vdbench || true
+            ./juicefs umount /tmp/vdbench --no-usage-report || true
           fi
           uuid=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || true
           if [ -n "$uuid" ];then
@@ -90,7 +90,7 @@ jobs:
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
           ./juicefs format $meta_url vdbench-small --storage minio --bucket http://127.0.0.1:19000/mypics --access-key minioadmin --secret-key minioadmin 
-          ./juicefs mount -d $meta_url /tmp/vdbench   
+          ./juicefs mount -d $meta_url /tmp/vdbench --no-usage-report
           vdbench/vdbench -f .github/workflows/resources/vdbench_small_file.conf
 
       - uses: actions/upload-artifact@v3

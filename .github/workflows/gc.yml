@@ -51,7 +51,7 @@ jobs:
           name=myjfs
           juicefs=./juicefs
           $juicefs format $meta $name --trash-days 1
-          $juicefs mount -d $meta $mp
+          $juicefs mount -d $meta $mp --no-usage-report
           fio --name=abc --rw=randwrite --refill_buffers --size=2G --bs=256k --directory=$mp
           redis-cli save
           # don't skip files when gc compact

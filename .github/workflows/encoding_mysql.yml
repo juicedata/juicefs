@@ -82,7 +82,7 @@ jobs:
           cat backup.dump | grep dir_果汁
           cat backup.dump | grep softlink_果汁
           ./juicefs load ${{steps.vars.outputs.META_URL2}}  backup.dump
-          ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
+          ./juicefs mount --no-usage-report --enable-xattr ${{steps.vars.outputs.META_URL2}} ${{steps.vars.outputs.MOUNT_POINT2}} -d
 
           if [ ! -f `printf "${{steps.vars.outputs.MOUNT_POINT2}}/$filename"` ]; then 
             echo "Fatal: file does not exist: ", ${{steps.vars.outputs.MOUNT_POINT2}}/$filename
@@ -251,7 +251,7 @@ jobs:
  
           ./juicefs_old umount ${{steps.vars.outputs.MOUNT_POINT1}}
           # upgrade table schema
-          ./juicefs mount --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d
+          ./juicefs mount --no-usage-report --enable-xattr ${{steps.vars.outputs.META_URL1}}  ${{steps.vars.outputs.MOUNT_POINT1}} -d
           ./juicefs dump ${{steps.vars.outputs.META_URL1}}  backup.dump
           cat backup.dump | grep file_果汁
           cat backup.dump | grep dir_果汁
