@@ -53,7 +53,7 @@ snapshot:
 		-v `pwd`:/go/src/github.com/juicedata/juicefs \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-w /go/src/github.com/juicedata/juicefs \
-		juicedata/golang-cross:v1.17 release --snapshot --rm-dist --skip-publish
+		juicedata/golang-cross:v1.18.7 release --snapshot --rm-dist --skip-publish
 
 release:
 	docker run --rm --privileged \
@@ -64,7 +64,7 @@ release:
 		-v `pwd`:/go/src/github.com/juicedata/juicefs \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-w /go/src/github.com/juicedata/juicefs \
-		juicedata/golang-cross:v1.17 release --rm-dist
+		juicedata/golang-cross:v1.18.7 release --rm-dist
 
 test:
 	go test -v -cover ./pkg/... -coverprofile=cov1.out
