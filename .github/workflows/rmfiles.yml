@@ -52,7 +52,7 @@ jobs:
           # ./juicefs load $meta_url 500K_empty_files.dump
           ./juicefs format $meta_url jfs
           ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 10 --threads 10 --no-usage-report
-          ./juicefs mount -d $meta_url $mp
+          ./juicefs mount -d $meta_url $mp --no-usage-report
           sleep 3
           ls -l $mp/test
           ./juicefs rmr $mp/test/
@@ -85,7 +85,7 @@ jobs:
           # ./juicefs load $meta_url 500K_empty_files.dump
           ./juicefs format $meta_url jfs
           ./juicefs mdtest $meta_url test --dirs 10 --depth 3 --files 15 --threads 10 --no-usage-report
-          ./juicefs mount -d $meta_url $mp
+          ./juicefs mount -d $meta_url $mp --no-usage-report
           sleep 3
           declare -a pidlist
           ./juicefs rmr $mp/test/ || true &

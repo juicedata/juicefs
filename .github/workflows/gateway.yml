@@ -151,7 +151,7 @@ jobs:
           echo time cost is: $time second
           killall juicefs 
           sleep 3
-          ./juicefs mount -d $meta_url $mp
+          ./juicefs mount -d $meta_url $mp --no-usage-report
           diff -ur data/ $mp/data/ 
           echo "diff succeed"
           ./juicefs umount  $mp --force
@@ -179,7 +179,7 @@ jobs:
           wait "${pids[@]}"
           killall juicefs
           sleep 3
-          ./juicefs mount -d $meta_url $mp
+          ./juicefs mount -d $meta_url $mp --no-usage-report
           [ -d "$mp/test/" ] && exit 1 
           ./juicefs umount  $mp --force
         shell: bash
