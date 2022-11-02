@@ -218,7 +218,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	if searchPath != "" {
 		engine.SetSchema(searchPath)
 	}
-	engine.DB().SetMaxIdleConns(runtime.NumCPU() * 2)
+	engine.DB().SetMaxIdleConns(runtime.GOMAXPROCS(-1) * 2)
 	engine.DB().SetConnMaxIdleTime(time.Minute * 5)
 	engine.SetTableMapper(names.NewPrefixMapper(engine.GetTableMapper(), "jfs_"))
 	m := &dbMeta{

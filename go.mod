@@ -62,6 +62,7 @@ require (
 	github.com/volcengine/ve-tos-golang-sdk/v2 v2.4.2
 	go.etcd.io/etcd v3.3.27+incompatible
 	go.etcd.io/etcd/client/v3 v3.5.2
+	go.uber.org/automaxprocs v1.5.1
 	golang.org/x/crypto v0.0.0-20220112180741-5e0467b6c7ce
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
