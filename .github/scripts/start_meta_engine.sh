@@ -17,6 +17,7 @@ start_meta_engine(){
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
         source /home/runner/.bash_profile
         source /home/runner/.profile
+        # retry because of: https://github.com/pingcap/tiup/issues/2057
         for i in {1..30}; do
             tiup playground --mode tikv-slim &  
             sleep 10
@@ -32,6 +33,7 @@ start_meta_engine(){
         # sudo echo "13.224.167.19 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
         source /home/runner/.profile
+        # retry because of: https://github.com/pingcap/tiup/issues/2057
         for i in {1..30}; do
             tiup playground 5.4.0 &
             sleep 10
