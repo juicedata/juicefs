@@ -31,9 +31,7 @@ import (
 	"github.com/pyroscope-io/client/pyroscope"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-
-	// set the correct value when it runs inside container
-	_ "go.uber.org/automaxprocs"
+	"go.uber.org/automaxprocs/maxprocs"
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -256,6 +254,10 @@ func setup(c *cli.Context, n int) {
 	}
 	if c.Bool("no-color") {
 		utils.DisableLogColor()
+	}
+	// set the correct value when it runs inside container
+	if undo, err := maxprocs.Set(maxprocs.Logger(logger.Debugf)); err != nil {
+		undo()
 	}
 
 	if !c.Bool("no-agent") {
