@@ -9,27 +9,38 @@ start_meta_engine(){
     elif [ "$meta" == "redis" ]; then
         sudo apt-get install -y redis-tools redis-server
     elif [ "$meta" == "tikv" ]; then
-        sudo echo "13.224.167.19 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
-        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-        source /home/runner/.bash_profile
-        source /home/runner/.profile
-        tiup playground --mode tikv-slim &
         git clone https://github.com/c4pt0r/tcli
         cd tcli && make
         sudo cp bin/tcli /usr/local/bin
         cd -
-        sleep 5
+        # sudo echo "13.224.167.111 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
+        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+        source /home/runner/.bash_profile
+        source /home/runner/.profile
+        # retry because of: https://github.com/pingcap/tiup/issues/2057
+        for i in {1..30}; do
+            tiup playground --mode tikv-slim &  
+            sleep 10
+            pgrep pd-server && break || true  
+        done
+        pgrep pd-server
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
     elif [ "$meta" == "mariadb" ]; then
         docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
         sleep 10
     elif [ "$meta" == "tidb" ]; then
-        sudo echo "13.224.167.19 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
+        # sudo echo "13.224.167.19 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
         source /home/runner/.profile
-        tiup playground 5.4.0 &
-        sleep 120
+        # retry because of: https://github.com/pingcap/tiup/issues/2057
+        for i in {1..30}; do
+            tiup playground 5.4.0 &
+            sleep 10
+            pgrep pd-server && break || true  
+        done
+        pgrep pd-server
+        sleep 60
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
     elif [ "$meta" == "etcd" ]; then
         sudo apt install etcd
