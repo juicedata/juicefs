@@ -90,6 +90,10 @@ JuiceFS 不将原始文件存入对象存储，而是将其按照某个大小（
 
 请查看[「客户端写缓存」](guide/cache_management.md#客户端写缓存)了解更多信息。
 
+### JuiceFS 目前支持分布式缓存吗？
+
+到 JuiceFS 1.0 为止，还不支持该功能。
+
 ## 访问相关问题
 
 ### 数据更新什么时候会对其它客户端可见？
@@ -187,10 +191,6 @@ uid=1201(alice) gid=500(staff) groups=500(staff)
 ### JuiceFS S3 网关支持多用户管理等高级功能吗？
 
 JuiceFS 内置的 `gateway` 子命令不支持多用户管理等功能，只提供基本的 S3 网关功能。如果需要使用这些高级功能，请参考[文档](deployment/s3_gateway.md#使用功能更完整的-s3-网关)。
-
-### JuiceFS 目前支持分布式缓存吗？
-
-到 JuiceFS 1.0 为止，还不支持该功能。
 
 ### JuiceFS 目前有 SDK 可以使用吗？
 
