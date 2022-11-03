@@ -1,6 +1,5 @@
 ---
 sidebar_label: FAQ
-toc_max_heading_level: 5
 slug: /faq
 ---
 # JuiceFS 常见问题
