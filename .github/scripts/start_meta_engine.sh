@@ -9,16 +9,17 @@ start_meta_engine(){
     elif [ "$meta" == "redis" ]; then
         sudo apt-get install -y redis-tools redis-server
     elif [ "$meta" == "tikv" ]; then
-        sudo echo "13.224.167.19 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
-        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-        source /home/runner/.bash_profile
-        source /home/runner/.profile
-        tiup playground --mode tikv-slim &
         git clone https://github.com/c4pt0r/tcli
         cd tcli && make
         sudo cp bin/tcli /usr/local/bin
         cd -
+        sudo echo "13.224.167.19 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
+        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+        source /home/runner/.bash_profile
+        source /home/runner/.profile
+        tiup playground --mode tikv-slim &  
         sleep 5
+        exit 1
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
     elif [ "$meta" == "mariadb" ]; then
