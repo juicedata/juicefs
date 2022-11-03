@@ -13,13 +13,18 @@ start_meta_engine(){
         cd tcli && make
         sudo cp bin/tcli /usr/local/bin
         cd -
-        sudo echo "13.224.167.19 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
+        
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
         source /home/runner/.bash_profile
         source /home/runner/.profile
-        tiup playground --mode tikv-slim &  
-        sleep 5
-        exit 1
+        sudo echo "13.224.167.111 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
+        for i in {1..10}; do
+            tiup playground --mode tikv-slim &  
+            sleep 5
+            pgrep pd-server && break || true  
+        done
+        pgrep pd-server || exit 1  
+        
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
     elif [ "$meta" == "mariadb" ]; then
@@ -29,7 +34,13 @@ start_meta_engine(){
         sudo echo "13.224.167.19 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
         curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
         source /home/runner/.profile
-        tiup playground 5.4.0 &
+        for i in {1..10}; do
+            tiup playground 5.4.0 &
+            sleep 10
+            pgrep pd-server && break || true  
+        done
+        pgrep pd-server || exit 1  
+        exit 1
         sleep 120
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
     elif [ "$meta" == "etcd" ]; then
