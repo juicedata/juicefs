@@ -16,8 +16,10 @@ runs:
     - name: Change go version for root user
       shell: bash
       run: |
+        go_path=`which go`
+        echo $go_path
         sudo rm -f /usr/bin/go
-        sudo ln -s /opt/hostedtoolcache/go/1.18.7/x64/bin/go /usr/bin/go
+        sudo ln -s $go_path /usr/bin/go
         go version
         sudo go version
 
