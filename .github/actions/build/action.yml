@@ -19,7 +19,7 @@ runs:
         go_path=`which go`
         echo $go_path
         root_go_path=`sudo which go`
-        echo $sudo_go_path
+        echo $root_go_path
         sudo rm -f $root_go_path
         sudo ln -s $go_path $root_go_path
         go version
