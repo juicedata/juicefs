@@ -36,24 +36,13 @@ jobs:
       TIKV_ADDR: 127.0.0.1
       REDIS_ADDR: redis://127.0.0.1:6379/13
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.18.x'
-
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          fetch-depth: 100
-
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          fetch-depth: 1
+          
+      - name: Build
+        uses: ./.github/actions/build
 
       - name: Install Packages
         run: |
@@ -62,7 +51,6 @@ jobs:
           sudo apt install -y libacl1-dev
           sudo apt install -y attr
           sudo mkdir -p /home/travis/.m2/
-
 
       - name: Download Zip
         run: |

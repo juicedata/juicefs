@@ -13,6 +13,18 @@ runs:
       with:
         go-version: '1.18.x'
 
+    - name: Change go version for root user
+      shell: bash
+      run: |
+        go_path=`which go`
+        echo $go_path
+        root_go_path=`sudo which go`
+        echo $root_go_path
+        sudo rm -f $root_go_path
+        sudo ln -s $go_path $root_go_path
+        go version
+        sudo go version
+
     - uses: actions/cache@v3
       with:
         path: |
