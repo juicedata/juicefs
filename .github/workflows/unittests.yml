@@ -36,6 +36,11 @@ jobs:
       TIKV_ADDR: 127.0.0.1
       REDIS_ADDR: redis://127.0.0.1:6379/13
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          
       - name: Build
         uses: ./.github/actions/build
 
