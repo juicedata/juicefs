@@ -22,6 +22,11 @@ Files=235, Tests=8813, 233 wallclock secs ( 2.77 usr  0.38 sys +  2.57 cusr  3.9
 Result: PASS
 ```
 
+:::note
+When testing pjdfstest, the JuiceFS trash bin needs to be turned off because the delete behavior of the pjdfstest test is delete directly instead of entering the trash bin. And the JuiceFS trash bin is enabled by default.
+Turn off trash bin command: `juicefs config <meta-url> --trash-days 0`
+:::
+
 Besides the features covered by pjdfstest, JuiceFS provides:
 
 - Close-to-open consistency. Once a file is closed, it is guaranteed to view the written data in the following open and read. Within the same mount point, all the written data can be read immediately.
