@@ -2,7 +2,9 @@
 sidebar_label: FAQ
 slug: /faq
 ---
+
 # JuiceFS 常见问题
+
 
 ## 一般问题
 
@@ -18,14 +20,33 @@ slug: /faq
 
 不同类型的 JuiceFS 客户端获取日志的方式也不同，详情请参考[「客户端日志」](administration/fault_diagnosis_and_analysis.md#客户端日志)文档。
 
+### 怎么卸载 JuiceFS 文件系统？
+
+请使用 [`juicefs umount`](reference/command_reference.md#juicefs-umount) 命令卸载。
+
+### 卸载挂载点时报 `Resource busy -- try 'diskutil unmount'` 错误
+
+这代表挂载点下的某个文件或者目录正在被使用，无法直接 `umount`，可以检查（如通过 `lsof` 命令）是否有打开的终端正位于 JuiceFS 挂载点的某个目录，或者某个应用程序正在处理挂载点中的文件。如果有，则退出终端或应用程序后再尝试使用 `juicefs umount` 命令卸载文件系统。
+
 ### 如何销毁一个文件系统？
 
 使用 `juicefs destroy` 命令销毁一个文件系统，该命令将会清空元数据引擎与对象存储中的相关数据。关于该命令的使用详情请参考[文档](administration/destroy.md)。
+
+
 ## 元数据相关问题
 
 ### 支持哨兵或者集群模式的 Redis 作为 JuiceFS 的元数据引擎吗？
 
 支持，另外这里还有一篇 Redis 作为 JuiceFS 元数据引擎的[最佳实践文档](administration/metadata/redis_best_practices.md)可供参考。
+
+### `format: ERR wrong number of arguments for 'auth' command`
+
+这个错误意味着你使用的 Redis 版本小于 6.0.0 同时在执行 `juicefs format` 命令时指定了 username 参数。只有 Redis 6.0.0 版本以后才支持指定 username，因此你需要省略 URL 中的 username 参数，例如 `redis://:password@host:6379/1`。
+
+### `cannot update volume XXX from XXX to XXX`
+
+使用的元数据库已经被 format 过了并且本次 format 无法更新之前的某些配置。需要在手动清理元数据库后再执行 `juicefs format` 命令。
+
 
 ## 对象存储相关问题
 
@@ -59,9 +80,10 @@ slug: /faq
 
 到 JuiceFS 1.0 为止，还不支持该功能。
 
-### 一个 volume 可以绑定多个不同的 bucket 么？比如用一个 AWS S3、一个 GCS和一个 OSS 组成一个 Volume？
+### 一个文件系统可以绑定多个不同的对象存储吗（比如同时用 Amazon S3、GCS 和 OSS 组成一个文件系统）？
 
-不支持。但在创建 Volume 时可以设定关联多个 bucket，从而解决单个 bucket 对象数量限制的问题。
+不支持。但在创建文件系统时可以设定关联同一个对象存储的多个 bucket，从而解决单个 bucket 对象数量限制的问题。具体请参考 [`--shards`](./reference/command_reference.md#juicefs-format) 选项的说明。
+
 
 ## 性能相关问题
 
@@ -93,31 +115,14 @@ JuiceFS 不将原始文件存入对象存储，而是将其按照某个大小（
 
 到 JuiceFS 1.0 为止，还不支持该功能。
 
-## 访问相关问题
 
-### 数据更新什么时候会对其它客户端可见？
-
-所有的元数据更新都是立即对其它客户端可见。JuiceFS 保证关闭再打开（close-to-open）一致性，请查看[「一致性」](guide/cache_management.md#数据一致性)了解更多信息。
-
-通过 `write()` 新写入的数据会缓存在内核和客户端中，可以被当前机器的其它进程看到，其它机器暂时看不到。
-
-调用 `fsync()`、`fdatasync()` 或者 `close()` 来强制将数据上传到对象存储并更新元数据，或者数秒钟自动刷新后，其它客户端才能看到更新，这也是绝大多数分布式文件系统采取的策略。
-
-请查看[「客户端写缓存」](guide/cache_management.md#客户端写缓存)了解更多信息。
+## 挂载相关问题
 
 ### 可以用 `root` 以外的用户挂载吗？
 
 可以，JuiceFS 可以由任何用户挂载。默认的缓存目录是 `$HOME/.juicefs/cache`（macOS）或者 `/var/jfsCache`（Linux），请确保该用户对这个目录有写权限，或者切换到其它有权限的目录。
 
 请查看[「客户端读缓存」](guide/cache_management.md#客户端读缓存)了解更多信息。
-
-### 怎么卸载 JuiceFS 文件系统？
-
-请使用 [`juicefs umount`](reference/command_reference.md#juicefs-umount) 命令卸载。
-
-### 卸载挂载点时报 `Resource busy -- try 'diskutil unmount'` 错误
-
-这代表挂载点下的某个文件或者目录正在被使用，无法直接 `umount`，可以检查（如通过 `lsof` 命令）是否有打开的终端正位于 JuiceFS 挂载点的某个目录，或者某个应用程序正在处理挂载点中的文件。如果有，则退出终端或应用程序后再尝试使用 `juicefs umount` 命令卸载文件系统。
 
 ### `docker: Error response from daemon: error while creating mount source path 'XXX': mkdir XXX: file exists.`
 
@@ -127,14 +132,6 @@ JuiceFS 不将原始文件存入对象存储，而是将其按照某个大小（
 
 1. 用 root 用户执行 `juicefs mount` 命令
 2. 修改 FUSE 的配置文件以及增加 `allow_other` 挂载选项，请查看[这个文档](reference/fuse_mount_options.md#allow_other)了解更多信息。
-
-### `/go/pkg/tool/linux_amd64/link: running gcc failed: exit status 1` 或者 `/go/pkg/tool/linux_amd64/compile: signal: killed`
-
-这个错误有可能是因为 GCC 版本过低导致，请尝试升级 GCC 到 5.4 及以上版本。
-
-### `format: ERR wrong number of arguments for 'auth' command`
-
-这个错误意味着你使用的 Redis 版本小于 6.0.0 同时在执行 `juicefs format` 命令时指定了 username 参数。只有 Redis 6.0.0 版本以后才支持指定 username，因此你需要省略 URL 中的 username 参数，例如 `redis://:password@host:6379/1`。
 
 ### `fuse: fuse: exec: "/bin/fusermount": stat /bin/fusermount: no such file or directory`
 
@@ -163,8 +160,18 @@ $ ls -l /usr/bin/fusermount
 
 上面的例子表示所有用户都有权限执行。
 
-### `cannot update volume XXX from XXX to XXX`
-使用的元数据库已经被 format 过了并且本次 format 无法更新之前的某些配置。需要在手动清理元数据库后再执行 `juicefs format` 命令。
+
+## 访问相关问题
+
+### 数据更新什么时候会对其它客户端可见？
+
+所有的元数据更新都是立即对其它客户端可见。JuiceFS 保证关闭再打开（close-to-open）一致性，请查看[「一致性」](guide/cache_management.md#数据一致性)了解更多信息。
+
+通过 `write()` 新写入的数据会缓存在内核和客户端中，可以被当前机器的其它进程看到，其它机器暂时看不到。
+
+调用 `fsync()`、`fdatasync()` 或者 `close()` 来强制将数据上传到对象存储并更新元数据，或者数秒钟自动刷新后，其它客户端才能看到更新，这也是绝大多数分布式文件系统采取的策略。
+
+请查看[「客户端写缓存」](guide/cache_management.md#客户端写缓存)了解更多信息。
 
 ### 为什么同一个用户在主机 X 上有权限访问 JuiceFS 的文件，在主机 Y 上访问该文件却没有权限？
 
@@ -194,3 +201,10 @@ JuiceFS 内置的 `gateway` 子命令不支持多用户管理等功能，只提�
 ### JuiceFS 目前有 SDK 可以使用吗？
 
 截止到 JuiceFS 1.0 发布，社区有两个 SDK，一个是 Juicedata 官方维护的 HDFS 接口高度兼容的 [Java SDK](deployment/hadoop_java_sdk.md)，另一个是由社区用户维护的 [Python SDK](https://github.com/megvii-research/juicefs-python)。
+
+
+## 开发相关问题
+
+### `/go/pkg/tool/linux_amd64/link: running gcc failed: exit status 1` 或者 `/go/pkg/tool/linux_amd64/compile: signal: killed`
+
+这个错误有可能是因为 GCC 版本过低导致，请尝试升级 GCC 到 5.4 及以上版本。
