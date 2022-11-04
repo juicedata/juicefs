@@ -22,6 +22,11 @@ Files=235, Tests=8813, 233 wallclock secs ( 2.77 usr  0.38 sys +  2.57 cusr  3.9
 Result: PASS
 ```
 
+:::note 注意
+测试 pjdfstest 时，需要将 JuiceFS 的回收站关闭，因为 pjdfstest 测试的删除行为是直接删除而非进入回收站，而 JuiceFS 回收站是默认开启的。
+关闭回收站命令: `juicefs config <meta-url> --trash-days 0`
+:::
+
 此外，JuiceFS 还提供：
 
 - 关闭再打开（close-to-open）一致性。一旦一个文件写入完成并关闭，之后的打开和读操作保证可以访问之前写入的数据。如果是在同一个挂载点，所有写入的数据都可以立即读。
