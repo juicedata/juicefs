@@ -9,7 +9,7 @@ This article aims to give some recommendations when deploying JuiceFS to a produ
 
 ## Metrics Collection and Visualization
 
-Be sure to collect and visualize the monitoring metrics for your JuiceFS client through Grafana, as described in this [documentation](... /administration/monitoring.md).
+Be sure to collect and visualize the monitoring metrics for your JuiceFS client through Grafana, as described in this [documentation](../administration/monitoring.md).
 
 ## Automatic Metadata Backup
 
