@@ -37,6 +37,7 @@ type Config struct {
 	CaseInsensi bool
 	ReadOnly    bool
 	NoBGJob     bool // disable background jobs like clean-up, backup, etc.
+	DirQuota    bool // enable directory quota
 	OpenCache   time.Duration
 	Heartbeat   time.Duration
 	MountPoint  string

@@ -195,6 +195,10 @@ func clientFlags() []cli.Flag {
 			Name:  "subdir",
 			Usage: "mount a sub-directory as root",
 		},
+		&cli.BoolFlag{
+			Name:  "dir-quota",
+			Usage: "enable dir quota",
+		},
 	}
 }
 
