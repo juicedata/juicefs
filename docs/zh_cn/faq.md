@@ -82,7 +82,7 @@ slug: /faq
 
 ### 一个文件系统可以绑定多个不同的对象存储吗（比如同时用 Amazon S3、GCS 和 OSS 组成一个文件系统）？
 
-不支持。但在创建文件系统时可以设定关联同一个对象存储的多个 bucket，从而解决单个 bucket 对象数量限制的问题。具体请参考 [`--shards`](./reference/command_reference.md#juicefs-format) 选项的说明。
+不支持。但在创建文件系统时可以设定关联同一个对象存储的多个 bucket，从而解决单个 bucket 对象数量限制的问题，例如，可以为一个文件系统关联多个 S3 Bucket。具体请参考 [`--shards`](./reference/command_reference.md#juicefs-format) 选项的说明。
 
 
 ## 性能相关问题
