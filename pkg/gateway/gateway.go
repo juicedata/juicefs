@@ -332,11 +332,15 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	getObjectInfo := func(ctx context.Context, bucket, object string) (obj minio.ObjectInfo, err error) {
 		fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
 		if eno == 0 {
+			size := fi.Size()
+			if fi.IsDir() {
+				size = 0
+			}
 			obj = minio.ObjectInfo{
 				Bucket:  bucket,
 				Name:    object,
 				ModTime: fi.ModTime(),
-				Size:    fi.Size(),
+				Size:    size,
 				IsDir:   fi.IsDir(),
 				AccTime: fi.ModTime(),
 			}
