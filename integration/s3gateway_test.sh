@@ -403,6 +403,30 @@ function test_list_objects() {
         fi
     fi
 
+    # put /di1/datafile-1-kB  listobject(prefix=dir1/) should return "dir1/","dir1/datafile-1-kB"
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /dir1/datafile-1-kB"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # if upload objects succeeds, list objects with existing prefix
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix dir1/"
+        test_function=${function}
+        out=$($function)
+        rv=$?
+        key_name=$(echo "$out" | jq -r .Contents[0].Key)
+        if [ $rv -eq 0 ] && [ "$key_name" != "dir1/" ]; then
+            rv=1
+            # since rv is 0, command passed, but didn't return expected value. In this case set the output
+            out="list-objects with prefix is dir failed"
+        fi
+    fi
+
     # if upload objects succeeds, list objectsv2 with existing prefix
     if [ $rv -eq 0 ]; then
         function="${AWS} s3api list-objects-v2 --bucket ${bucket_name} --prefix datafile-1-kB"
