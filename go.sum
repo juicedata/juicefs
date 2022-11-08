@@ -602,8 +602,8 @@ github.com/juicedata/go-fuse/v2 v2.1.1-0.20221017015650-252d763b37fa h1:9H5ADELl
 github.com/juicedata/go-fuse/v2 v2.1.1-0.20221017015650-252d763b37fa/go.mod h1:oRyA5eK+pvJyv5otpO/DgccS8y/RvYMaO00GgRLGryc=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d h1:kpQMvNZJKGY3PTt7OSoahYc4nM0HY67SvK0YyS0GLwA=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d/go.mod h1:dlxKkLh3qAIPtgr2U/RVzsZJDuXA1ffg+Njikfmhvgw=
-github.com/juicedata/minio v0.0.0-20220913070254-47325cb1d5fe h1:BcKE03BrzklTWcU9RtLsjahnXPhEKBF/xac/Q1flnVU=
-github.com/juicedata/minio v0.0.0-20220913070254-47325cb1d5fe/go.mod h1:8oMBmyEWA8aYwMwO7eUNOjvVNOhDeqDlio2RSv6T/4Q=
+github.com/juicedata/minio v0.0.0-20221108073235-71c51ebca406 h1:yRd0+el56B8mFXk4jFyZ74MQz9Fp6HY6eeEa2EB2tEg=
+github.com/juicedata/minio v0.0.0-20221108073235-71c51ebca406/go.mod h1:8oMBmyEWA8aYwMwO7eUNOjvVNOhDeqDlio2RSv6T/4Q=
 github.com/juicedata/mpb/v7 v7.0.4-0.20220719014258-68df1356cfba h1:YSCPvyONPDp/ivKgRanFpNEHh3N5/0UsKmwbbKQIuGE=
 github.com/juicedata/mpb/v7 v7.0.4-0.20220719014258-68df1356cfba/go.mod h1:NXGsfPGx6G2JssqvEcULtDqUrxuuYs4llpv8W6ZUpzk=
 github.com/juju/ratelimit v1.0.1 h1:+7AIFJVQ0EQgq/K9+0Krm7m530Du7tIz0METWzN0RgY=

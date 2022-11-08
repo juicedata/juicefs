@@ -283,6 +283,9 @@ func (n *jfsObjects) isLeaf(bucket, leafPath string) bool {
 
 func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 	return func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
+		if prefixEntry == "" {
+			entries = append(entries, "")
+		}
 		f, eno := n.fs.Open(mctx, n.path(bucket, prefixDir), 0)
 		if eno != 0 {
 			return fs.IsNotExist(eno), nil, false
