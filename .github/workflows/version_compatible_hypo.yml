@@ -2,7 +2,7 @@ name: "version-compatible-test-hypo"
 
 on:
   schedule:
-    - cron:  '0 16 * * *'
+    - cron:  '0 19 * * *'
   workflow_dispatch:
     inputs:
       debug:
