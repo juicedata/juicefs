@@ -496,6 +496,9 @@ juicefs gateway [command options] META-URL ADDRESS
 `--umask value`
 新文件和新目录的 umask 的八进制格式 (默认值:“022”)
 
+`--return-dir-in-list value`
+listObject api 返回结果中包含目录 (默认：false)
+
 `--consul value`<br />
 consul 注册中心地址 (默认："127.0.0.1:8500")
 

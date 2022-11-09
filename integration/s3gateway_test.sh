@@ -427,6 +427,22 @@ function test_list_objects() {
         fi
     fi
 
+     # if upload objects succeeds, list objects with existing prefix
+        if [ $rv -eq 0 ]; then
+            function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix dir1/ --delimiter /"
+            test_function=${function}
+            out=$($function)
+            rv=$?
+            hasCommonPrefixes=$(echo "$out" | jq '. | has("CommonPrefixes")')
+            echo "hasCommonPrefixes:" $hasCommonPrefixes
+            if [ $rv -eq 0 ] && [ "$hasCommonPrefixes" != "false" ]; then
+                rv=1
+                # since rv is 0, command passed, but didn't return expected value. In this case set the output
+                out="list-objects with delimiter failed"
+            fi
+        fi
+
+
     # if upload objects succeeds, list objectsv2 with existing prefix
     if [ $rv -eq 0 ]; then
         function="${AWS} s3api list-objects-v2 --bucket ${bucket_name} --prefix datafile-1-kB"

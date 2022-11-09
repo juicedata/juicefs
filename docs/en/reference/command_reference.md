@@ -496,6 +496,9 @@ disable background jobs (clean-up, backup, etc.) (default: false)
 `--umask value`<br />
 umask for new file and directory in octal (default: "022")
 
+`--multi-buckets`<br />
+return dir in listObject api (default: false)
+
 `--consul value`<br />
 consul address to register (default: "127.0.0.1:8500")
 
