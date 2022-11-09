@@ -167,7 +167,7 @@ juicefs format [command options] META-URL NAME
 压缩算法 (lz4, zstd, none) (默认："none")
 
 `--shards value`<br />
-将数据块根据名字哈希存入 N 个桶中 (默认：0)
+将数据块根据名字哈希存入 N 个桶中 (默认：0)，当 N 大于 0 时，`bucket` 需要写成 `%d` 的形式，例如 `--bucket "juicefs-%d"`
 
 `--storage value`<br />
 对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#支持的存储服务)查看所有支持的对象存储类型)

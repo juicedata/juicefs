@@ -167,7 +167,7 @@ the limit for number of inodes (0 means unlimited) (default: 0)
 compression algorithm (lz4, zstd, none) (default: "none")
 
 `--shards value`<br />
-store the blocks into N buckets by hash of key (default: 0)
+store the blocks into N buckets by hash of key (default: 0), when N is greater than 0, `bucket` should to be in the form of `%d`, e.g. `--bucket "juicefs-%d"`
 
 `--storage value`<br />
 Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)
