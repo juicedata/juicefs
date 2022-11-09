@@ -49,10 +49,11 @@ var mctx meta.Context
 var logger = utils.GetLogger("juicefs")
 
 type Config struct {
-	MultiBucket bool
-	KeepEtag    bool
-	Mode        uint16
-	DirMode     uint16
+	MultiBucket     bool
+	KeepEtag        bool
+	Mode            uint16
+	DirMode         uint16
+	ReturnDirInList bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -281,9 +282,9 @@ func (n *jfsObjects) isLeaf(bucket, leafPath string) bool {
 	return !strings.HasSuffix(leafPath, "/")
 }
 
-func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
+func (n *jfsObjects) listDirFactory(delimiter string) minio.ListDirFunc {
 	return func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
-		if prefixEntry == "" {
+		if n.gConf.ReturnDirInList && delimiter != sep && prefixEntry == "" {
 			entries = append(entries, "")
 		}
 		f, eno := n.fs.Open(mctx, n.path(bucket, prefixDir), 0)
@@ -351,7 +352,7 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	if maxKeys == 0 {
 		maxKeys = -1 // list as many objects as possible
 	}
-	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
+	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(delimiter), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
 }
 
 // ListObjectsV2 lists all blobs in JFS bucket filtered by prefix
