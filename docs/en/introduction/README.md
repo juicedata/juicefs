@@ -29,9 +29,9 @@ JuiceFS provides rich APIs for various forms of data management, analysis, archi
 
 JuiceFS is designed for massive data storage and can be used as an alternative to many distributed file systems and network file systems, especially for the following scenarios.
 
-- **Big Data Analytics**: compatible with HDFS without requiring extra API; seamlessly integrated with mainstream computing engines (Spark, Presto, Hive, etc.); unlimited storage space; nearly zero operation and maintenance costs; well-developed caching mechanism, and better performance than object storage.
-- **Machine Learning**: compatible with POSIX, supporting all machine learning and deep learning frameworks; shareable file  storage, which can improve the efficiency of team management and data use.
-- **Persistent volumes in container clusters**: supporting Kubernetes CSI; persistent storage and independent of container lifetime; strong consistency to ensure that date stored is correct; take over data storage requirements to ensure statelessness of the service.
+- **Big Data Analytics**: JuiceFS is compatible with HDFS and can be seamlessly integrated with mainstream computing engines (Spark, Presto, Hive, etc.), bringing much better performance than directly using object storage. 
+- **Machine Learning**: JuiceFS is compatible with POSIX, and supports all machine learning and deep learning frameworks; As a shareable file storage, JuiceFS can improve the efficiency of team management and data usage.
+- **Persistent volumes in container clusters**: JuiceFS supports Kubernetes CSI, providing decoupled persistent storage for pods so that you application can be stateless, also great for data sharing among containers.
 - **Shared Workspace**: JuiceFS file system can be mounted on any host; no restrictions to client concurrent read/write; POSIX compatible with existing data flow and scripting operations.
 - **Data Backup**: Back up all kinds of data in scalable storage space without limitation; combined with the shared mount feature, data from multiple hosts can be aggregated into one place and then backed up together.
 
