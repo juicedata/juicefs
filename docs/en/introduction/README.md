@@ -31,7 +31,7 @@ JuiceFS is designed for massive data storage and can be used as an alternative t
 
 - **Big Data Analytics**: JuiceFS is compatible with HDFS and can be seamlessly integrated with mainstream computing engines (Spark, Presto, Hive, etc.), bringing much better performance than directly using object storage. 
 - **Machine Learning**: JuiceFS is compatible with POSIX, and supports all machine learning and deep learning frameworks; As a shareable file storage, JuiceFS can improve the efficiency of team management and data usage.
-- **Persistent volumes in container clusters**: JuiceFS supports Kubernetes CSI, providing decoupled persistent storage for pods so that you application can be stateless, also great for data sharing among containers.
+- **Kubernetes**: JuiceFS supports Kubernetes CSI, providing decoupled persistent storage for pods so that you application can be stateless, also great for data sharing among containers.
 - **Shared Workspace**: JuiceFS file system can be mounted on any host; no restrictions to client concurrent read/write; POSIX compatible with existing data flow and scripting operations.
 - **Data Backup**: Back up all kinds of data in scalable storage space without limitation; combined with the shared mount feature, data from multiple hosts can be aggregated into one place and then backed up together.
 
