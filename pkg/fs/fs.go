@@ -112,6 +112,10 @@ func (fs *FileStat) Gid() int         { return int(fs.attr.Gid) }
 func (fs *FileStat) Atime() int64 { return fs.attr.Atime*1000 + int64(fs.attr.Atimensec/1e6) }
 func (fs *FileStat) Mtime() int64 { return fs.attr.Mtime*1000 + int64(fs.attr.Mtimensec/1e6) }
 
+func (fs *FileStat) ACCTime() time.Time {
+	return time.Unix(fs.attr.Atime, int64(fs.attr.Atimensec))
+}
+
 func AttrToFileInfo(inode Ino, attr *Attr) *FileStat {
 	return &FileStat{inode: inode, attr: attr}
 }

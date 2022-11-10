@@ -61,10 +61,6 @@ func cmdGateway() *cli.Command {
 			Value: "022",
 			Usage: "umask for new files and directories in octal",
 		},
-		&cli.BoolFlag{
-			Name:  "return-dir-in-list",
-			Usage: "return dir in listObject api",
-		},
 	}
 
 	compoundFlags := [][]cli.Flag{
@@ -177,11 +173,10 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		jfs,
 		conf,
 		&jfsgateway.Config{
-			MultiBucket:     c.Bool("multi-buckets"),
-			KeepEtag:        c.Bool("keep-etag"),
-			Mode:            uint16(0666 &^ umask),
-			DirMode:         uint16(0777 &^ umask),
-			ReturnDirInList: c.Bool("return-dir-in-list"),
+			MultiBucket: c.Bool("multi-buckets"),
+			KeepEtag:    c.Bool("keep-etag"),
+			Mode:        uint16(0666 &^ umask),
+			DirMode:     uint16(0777 &^ umask),
 		},
 	)
 }
