@@ -412,8 +412,6 @@ function test_list_objects() {
         # if make bucket fails, $bucket_name has the error output
         out="${bucket_name}"
     fi
-    # FIXME: should succeed without sleep
-    sleep 1
     if [ $rv -eq 0 ]; then
         function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix dir1/"
         test_function=${function}

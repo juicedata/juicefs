@@ -283,7 +283,7 @@ func (n *jfsObjects) isLeaf(bucket, leafPath string) bool {
 
 func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 	return func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
-		// if the prefixEntry is empty, and the atime of prefixDir is 0, return it in the result
+		// always return directories here, and then ignore directories with atime is 0 in minio generateListObjectsResponse
 		if prefixEntry == "" {
 			entries = append(entries, "")
 		}
