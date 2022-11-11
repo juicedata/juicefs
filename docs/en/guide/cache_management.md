@@ -9,6 +9,10 @@ For a file system driven by a combination of object storage and database, cache 
 
 JuiceFS provides various caching mechanisms including metadata caching, data read/write caching, etc.
 
+:::tip Does my application really need cache?
+Cache improve performance, only when application needs to repeatedly read files, so if you know for sure you're in a scenario where data is only accessed once (e.g. data cleansing during ETL), you can safely turn off cache to prevent overhead.
+:::
+
 ## Data consistency
 
 JuiceFS provides a "close-to-open" consistency guarantee, which means that when two or more clients read and write the same file at the same time, the changes made by client A may not be immediately visible to client B. However, once the file is closed by client A, any client re-opened it afterwards is guaranteed to see the latest data, no matter it is on the same node with A or not.
@@ -55,7 +59,15 @@ By default, if there is a file whose metadata has been cached in memory and not 
 
 ## Data cache
 
-JuiceFS also provides various kinds of data cache, including page cache in the kernel and local cache on the client host, to improve performance.
+To improve performance, JuiceFS also provides various caching mechanisms for data, including page cache in the kernel, local file system cache in client host, and read/write buffer in client process itself.
+
+### Read/Write Buffer {#buffer-size}
+
+Mount parameter [`--buffer-size`](../reference/command_reference.md#mount) controls the Read/Write buffer size for JuiceFS Client, which defaults to 300 (in MiB). Buffer size dictates both the memory data size for file read (and readahead), and memory data size for writing pending pages. Naturally, we recommend increasing `--buffer-size` when under high concurrency, to effectively improve performance.
+
+If you wish to improve write speed, and have already increased [`--max-uploads`](../reference/command_reference.md#mount) for more upload concurrency, with no noticeable increase in upload traffic, consider also increasing `--buffer-size` so that concurrent threads may easier allocate memory for data uploads. This also works in the opposite direction: if tuning up `--buffer-size` didn't bring out an increase in upload traffic, you should probably increase `--max-uploads` as well.
+
+The `--buffer-size` also controls the data upload size for each `flush` operation, this means for clients working in a low bandwidth environment, you may need to use a lower `--buffer-size` to avoid `flush` timeouts.
 
 ### Kernel data cache
 
@@ -94,13 +106,14 @@ Data caching can effectively improve the performance of random reads. For applic
 
 #### Cache life cycle
 
-When the cache usage space reaches the upper limit (that is, the cache size is greater than or equal to `--cache-size`) or the disk is almost full (that is, the free disk space ratio is less than `--free-space-ratio`), the JuiceFS client will automatically clean the cache.
+When the cache usage space reaches the upper limit (that is, the cache size is greater than or equal to `--cache-size`) or the disk is almost full (that is, the free disk space ratio is less than `--free-space-ratio`), the JuiceFS client will automatically expire cache using random two algorithm, i.e. pick two blocks and expire the least accessed one.
 
 JuiceFS allocates 100GiB cache space by default, but this does not mean that you have to have a disk with a capacity more than that. This value represents the maximum capacity that a JuiceFS client may use if the disk capacity allows. When the remaining space on the disk is less than 100GiB, ensure that the remaining space is not less than 10% by default.
 
 For example, if you set `--cache-dir` to a partition with a capacity of 50GiB, then if `--cache-size` is set to 100GiB, JuiceFS will always keep the cache capacity around 45GiB, which means that more than 10% of the partition is reserved.
 
-When cache is full, JuiceFS Client will expire cache using random two algorithm, i.e. pick two blocks and expire the least accessed one.
+
+JuiceFS currently estimates the size of cached objects by adding up the size of all cached objects with a minimum size of 4KiB, which is usually different from the `du` results.
 
 ### Client write data cache {#writeback}
 
@@ -241,16 +254,6 @@ sudo juicefs mount --cache-dir ~/jfscache:/mnt/jfscache:/dev/shm/jfscache redis:
 
 When multiple cache paths are set, the client will write data evenly to each cache path using hash policy.
 
-:::note
-When multiple cache directories are set, the `--cache-size` option represents the total size of data in all cache directories. It is recommended that the free space of different cache directories are close to each other, otherwise, the space of a cache directory may not be fully utilized.
+When multiple cache directories are set, the `--cache-size` option represents the total size of data in all cache directories. It is recommended to ensure that the free space of different cache directories are close to each other, otherwise, the space of a cache directory may not be fully utilized.
 
 For example, `--cache-dir` is `/data1:/data2`, where `/data1` has a free space of 1GiB, `/data2` has a free space of 2GiB, `--cache-size` is 3GiB, `--free-space-ratio` is 0.1. Because the cache write strategy is to write evenly, the maximum space allocated to each cache directory is `3GiB / 2 = 1.5GiB`, resulting in a maximum of 1.5GiB cache space in the `/data2` directory instead of `2GiB * 0.9 = 1.8GiB`.
-:::
-
-## FAQ
-
-### Why 60 GiB disk spaces are occupied while I set cache size to 50 GiB?
-
-JuiceFS currently estimates the size of cached objects by adding up the size of all cached objects plus a fixed overhead (4KiB), which is not exactly the same as the value obtained by the `du` command.
-
-To prevent the cache disk from being written to full, the client will try to reduce the cache usage when the file system where the cache directory is located on is running out of space.
