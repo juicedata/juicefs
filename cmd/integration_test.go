@@ -46,7 +46,7 @@ func startGateway(t *testing.T) {
 	ResetHttp()
 
 	go func() {
-		if err := Main([]string{"", "gateway", gatewayMeta, gatewayAddr, "--multi-buckets", "--attr-cache", "0", "--keep-etag", "--no-usage-report"}); err != nil {
+		if err := Main([]string{"", "gateway", gatewayMeta, gatewayAddr, "--multi-buckets", "--keep-etag", "--no-usage-report"}); err != nil {
 			t.Errorf("gateway failed: %s", err)
 		}
 	}()

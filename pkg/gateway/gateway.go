@@ -283,15 +283,15 @@ func (n *jfsObjects) isLeaf(bucket, leafPath string) bool {
 
 func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 	return func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
-		// always return directories here, and then ignore directories with atime is 0 in minio generateListObjectsResponse
-		if prefixEntry == "" {
-			entries = append(entries, "")
-		}
 		f, eno := n.fs.Open(mctx, n.path(bucket, prefixDir), 0)
 		if eno != 0 {
 			return fs.IsNotExist(eno), nil, false
 		}
 		defer f.Close(mctx)
+		if fi, _ := f.Stat(); fi.(*fs.FileStat).Atime() == 0 && prefixEntry == "" {
+			entries = append(entries, "")
+		}
+
 		fis, eno := f.Readdir(mctx, 0)
 		if eno != 0 {
 			return
@@ -343,7 +343,7 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 				ModTime: fi.ModTime(),
 				Size:    size,
 				IsDir:   fi.IsDir(),
-				AccTime: fi.ACCTime(),
+				AccTime: fi.ModTime(),
 			}
 		}
 		return obj, jfsToObjectErr(ctx, eno, bucket, object)
@@ -379,32 +379,15 @@ func (n *jfsObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 	return loi, err
 }
 
-func (n *jfsObjects) setZeroAtime(p string) bool {
+func (n *jfsObjects) setFileAtime(p string, atime int64) {
 	if f, eno := n.fs.Open(mctx, p, 0); eno == 0 {
 		defer f.Close(mctx)
-		if fis, eno := f.Readdir(mctx, 0); eno == 0 {
-			if len(fis) != 0 {
-				if fi, errno := n.fs.Stat(mctx, p); errno == 0 {
-					var attr = &meta.Attr{}
-					now := time.Now()
-					attr.Atime = now.Unix()
-					attr.Atimensec = uint32(now.Nanosecond())
-					if errno := n.fs.Meta().SetAttr(mctx, fi.Inode(), meta.SetAttrAtime, 0, attr); errno == 0 {
-						return true
-					} else {
-						logger.Warnf("set dir atime failed %s: %s", p, errno)
-					}
-				} else {
-					logger.Warnf("stat dir failed %s: %s", p, errno)
-				}
-			}
-		} else {
-			logger.Warnf("readdir: %s", eno)
+		if eno := f.Utime(mctx, atime, -1); eno != 0 {
+			logger.Warnf("set file atime failed: %s: %s", p, eno)
 		}
 	} else {
-		logger.Warnf("open: %s", eno)
+		logger.Warnf("open failed: %s %s", p, eno)
 	}
-	return false
 }
 
 func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, options minio.ObjectOptions) (info minio.ObjectInfo, err error) {
@@ -416,25 +399,28 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	p := n.path(bucket, object)
 	root := n.path(bucket)
 
-	// if the delete object is a directory, and it has children entry, set its atime to now to represent that it has been removed
-	needDelete := true
 	if strings.HasSuffix(object, sep) {
-		needDelete = !n.setZeroAtime(n.path(bucket, object))
+		n.setFileAtime(n.path(bucket, object), time.Now().Unix())
 	}
 	// p should not end with /  because if p=/d1/d2/  next step p is /d1/d2 instead of /d1 as expected
 	p = path.Clean(p)
-	if needDelete {
-		for p != root {
-			if eno := n.fs.Delete(mctx, p); eno != 0 {
-				if fs.IsNotEmpty(eno) {
-					err = nil
-				} else {
-					err = eno
-				}
+	for p != root {
+		if f, eno := n.fs.Open(mctx, p, 0); eno == 0 {
+			if fi, _ := f.Stat(); fi.(*fs.FileStat).Atime() == 0 {
 				break
 			}
-			p = path.Dir(p)
+		} else {
+			logger.Warnf("open failed: %s %s", p, eno)
 		}
+		if eno := n.fs.Delete(mctx, p); eno != 0 {
+			if fs.IsNotEmpty(eno) {
+				err = nil
+			} else {
+				err = eno
+			}
+			break
+		}
+		p = path.Dir(p)
 	}
 	return info, jfsToObjectErr(ctx, err, bucket, object)
 }
@@ -542,7 +528,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		ModTime: fi.ModTime(),
 		Size:    fi.Size(),
 		IsDir:   fi.IsDir(),
-		AccTime: fi.ACCTime(),
+		AccTime: fi.ModTime(),
 	}, nil
 }
 
@@ -613,7 +599,7 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		ModTime: fi.ModTime(),
 		Size:    size,
 		IsDir:   fi.IsDir(),
-		AccTime: fi.ACCTime(),
+		AccTime: fi.ModTime(),
 		ETag:    string(etag),
 	}, nil
 }
@@ -701,20 +687,6 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 			err = jfsToObjectErr(ctx, err, bucket, object)
 			return
 		}
-
-		// if the put object is a directory, set its atime to 0
-		if fi, errno := n.fs.Stat(mctx, p); errno == 0 {
-			var attr = &meta.Attr{}
-			zeroTime := time.Time{}
-			attr.Atime = zeroTime.Unix()
-			attr.Atimensec = uint32(zeroTime.Nanosecond())
-			if errno := n.fs.Meta().SetAttr(mctx, fi.Inode(), meta.SetAttrAtime, 0, attr); errno != 0 {
-				logger.Warnf("set dir atime failed %s: %s", p, errno)
-			}
-		} else {
-			logger.Warnf("stat dir failed %s: %s", p, errno)
-		}
-
 		if r.Size() > 0 {
 			err = minio.ObjectExistsAsDirectory{
 				Bucket: bucket,
@@ -723,6 +695,8 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 			}
 			return
 		}
+		// if the put object is a directory, set its atime to 0
+		n.setFileAtime(p, 0)
 	} else if err = n.putObject(ctx, bucket, p, r, opts); err != nil {
 		return
 	}
@@ -744,7 +718,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 		ModTime: fi.ModTime(),
 		Size:    fi.Size(),
 		IsDir:   fi.IsDir(),
-		AccTime: fi.ACCTime(),
+		AccTime: fi.ModTime(),
 	}, nil
 }
 
@@ -973,7 +947,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		ModTime: fi.ModTime(),
 		Size:    fi.Size(),
 		IsDir:   fi.IsDir(),
-		AccTime: fi.ACCTime(),
+		AccTime: fi.ModTime(),
 	}, nil
 }
 

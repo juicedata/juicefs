@@ -112,10 +112,6 @@ func (fs *FileStat) Gid() int         { return int(fs.attr.Gid) }
 func (fs *FileStat) Atime() int64 { return fs.attr.Atime*1000 + int64(fs.attr.Atimensec/1e6) }
 func (fs *FileStat) Mtime() int64 { return fs.attr.Mtime*1000 + int64(fs.attr.Mtimensec/1e6) }
 
-func (fs *FileStat) ACCTime() time.Time {
-	return time.Unix(fs.attr.Atime, int64(fs.attr.Atimensec))
-}
-
 func AttrToFileInfo(inode Ino, attr *Attr) *FileStat {
 	return &FileStat{inode: inode, attr: attr}
 }
@@ -932,6 +928,7 @@ func (f *File) Utime(ctx meta.Context, atime, mtime int64) (err syscall.Errno) {
 	attr.Mtime = mtime / 1000
 	attr.Mtimensec = uint32(mtime%1000) * 1e6
 	err = f.fs.m.SetAttr(ctx, f.inode, flag, 0, &attr)
+	f.fs.invalidateAttr(f.inode)
 	return
 }
 
