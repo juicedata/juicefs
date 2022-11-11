@@ -4,6 +4,7 @@ sidebar_label: Introduction to JuiceFS
 sidebar_position: 1
 slug: .
 ---
+
 # Introduction
 
 **JuiceFS** is an open source, high-performance distributed file system designed for the cloud, released under the Apache License 2.0. It provides full [POSIX](https://en.wikipedia.org/wiki/POSIX) compatibility, allowing almost all kinds of object storage to be used locally as massive local disks and to be mounted and read on different cross-platform and cross-region hosts at the same time.
@@ -27,13 +28,13 @@ JuiceFS provides rich APIs for various forms of data management, analysis, archi
 
 ## Scenarios
 
-JuiceFS is designed for massive data storage and can be used as an alternative to many distributed file systems and network file systems, especially for the following scenarios.
+JuiceFS is designed for massive data storage and can be used as an alternative to many distributed file systems and network file systems, especially for the following scenarios:
 
-- **Big Data Analytics**: JuiceFS is compatible with HDFS and can be seamlessly integrated with mainstream computing engines (Spark, Presto, Hive, etc.), bringing much better performance than directly using object storage. 
+- **Big Data**: JuiceFS is compatible with HDFS and can be seamlessly integrated with mainstream computing engines (Spark, Presto, Hive, etc.), bringing much better performance than directly using object storage.
 - **Machine Learning**: JuiceFS is compatible with POSIX, and supports all machine learning and deep learning frameworks; As a shareable file storage, JuiceFS can improve the efficiency of team management and data usage.
-- **Kubernetes**: JuiceFS supports Kubernetes CSI, providing decoupled persistent storage for pods so that you application can be stateless, also great for data sharing among containers.
+- **Kubernetes**: JuiceFS supports Kubernetes CSI, providing decoupled persistent storage for pods so that your application can be stateless, also great for data sharing among containers.
 - **Shared Workspace**: JuiceFS file system can be mounted on any host; no restrictions to client concurrent read/write; POSIX compatible with existing data flow and scripting operations.
-- **Data Backup**: Back up all kinds of data in scalable storage space without limitation; combined with the shared mount feature, data from multiple hosts can be aggregated into one place and then backed up together.
+- **Data Backup**: Backup all kinds of data in scalable storage space without limitation; combined with the shared mount feature, data from multiple hosts can be aggregated into one place and then backed up together.
 
 ## Data Privacy
 
