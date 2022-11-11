@@ -19,31 +19,31 @@ $ juicefs status redis://xxx.cache.amazonaws.com:6379/1
 
 {
 	"Setting": {
-	"Name": "myjfs",
-	"UUID": "6b0452fc-0502-404c-b163-c9ab577ec766",
-	"Storage": "s3",
-	"Bucket": "https://xxx.s3.amazonaws.com",
-	"AccessKey": "xxx",
-	"SecretKey": "removed",
-	"BlockSize": 4096,
-	"Compression": "none",
+    "Name": "myjfs",
+    "UUID": "6b0452fc-0502-404c-b163-c9ab577ec766",
+    "Storage": "s3",
+    "Bucket": "https://xxx.s3.amazonaws.com",
+    "AccessKey": "xxx",
+    "SecretKey": "removed",
+    "BlockSize": 4096,
+    "Compression": "none",
     "TrashDays": 1,
     "MetaVersion": 1
 	},
 	"Sessions": [
 		{
-		"Sid": 2,
-		"Heartbeat": "2021-08-23T16:47:59+08:00",
-		"Version": "0.16.2 (2021-08-25T04:01:15Z 29d6fee)",
-		"Hostname": "ubuntu-s-1vcpu-1gb-sgp1-01",
-		"MountPoint": "/home/herald/mnt",
-		"ProcessID": 2869146
+      "Sid": 2,
+      "Heartbeat": "2021-08-23T16:47:59+08:00",
+      "Version": "1.0.0+2022-08-08.cf0c269",
+      "Hostname": "ubuntu-s-1vcpu-1gb-sgp1-01",
+      "MountPoint": "/home/herald/mnt",
+      "ProcessID": 2869146
 		}
 	]
 }
 ```
 
-通过 `--session, -s` 选项指定会话的 `sid` 可以打印会话的状态：
+通过 `--session, -s` 选项指定会话的 `sid` 可以显示会话更进一步的信息：
 
 ```shell
 $ juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1
@@ -51,16 +51,22 @@ $ juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1
 {
 	"Sid": 2,
 	"Heartbeat": "2021-08-23T16:47:59+08:00",
-	"Version": "0.16.2 (2021-08-25T04:01:15Z 29d6fee)",
+	"Version": "1.0.0+2022-08-08.cf0c269",
 	"Hostname": "ubuntu-s-1vcpu-1gb-sgp1-01",
 	"MountPoint": "/home/herald/mnt",
 	"ProcessID": 2869146
 }
 ```
 
+根据会话的状态，信息中还可能包括：
+
+- sustained inodes：这些是已经被删掉，但是因为在这个会话中被打开的文件，会被暂时保留直至文件关闭。
+- flocks：被这个会话加锁的文件 flock 锁信息
+- plocks：被这个会话加锁的文件 plock 锁信息
+
 ## info
 
-`juicefs info` 用于检查指定文件或目录的元数据信息。
+`juicefs info` 用于检查指定文件或目录的元数据信息，包括文件对应的所有对象名称。
 
 ### 检查一个文件的元数据
 
@@ -114,7 +120,7 @@ $ juicefs info -r ./mnt
 
 ### 使用 inode 检查元数据
 
-当需要使用 inode 来检查元数据信息时，需要先进入挂载点：
+还可以inode 来反查文件及数据对象的信息，但需要先进入挂载点：
 
 ```shell
 ~     $ cd mnt
@@ -144,7 +150,7 @@ objects:
 :::
 
 :::tip 提示
-文件在上传到对象存储时可能产生临时的中间文件，它们会在存储完成后被清理。为了避免中间文件被误判为泄漏的对象，`juicefs gc` 默认会跳过最近 1 个小时上传的文件。可以通过 `JFS_GC_SKIPPEDTIME` 环境变量调整跳过时间范围，单位是分钟，例如，设置跳过最近 2 个小时的文件： `export JFS_GC_SKIPPEDTIME=120`。
+文件在上传到对象存储时可能产生临时的中间文件，它们会在存储完成后被清理。为了避免中间文件被误判为泄漏的对象，`juicefs gc` 默认会跳过最近 1 个小时上传的文件。可以通过 `JFS_GC_SKIPPEDTIME` 环境变量调整跳过时间范围，单位是秒，例如，设置跳过最近 2 个小时的文件： `export JFS_GC_SKIPPEDTIME=7200`。
 :::
 
 ### 扫描「泄漏的对象」
@@ -192,7 +198,7 @@ Skipped objects bytes: 0.00 b    (0 Bytes)
 
 ## fsck
 
-`juicefs fsck` 是一个以数据块为基准与元数据进行逐一扫描比对的工具，它可以帮你找到元数据中存在记录，但对象存储中没有对应数据块的情况。例如：
+`juicefs fsck` 是一个以数据块为基准与元数据进行逐一扫描比对的工具，主要用来修复文件系统内可能发生而且可以修复的各种问题。它可以帮你找到元数据中存在记录，但对象存储中没有对应数据块的情况，还可以检查文件属性信息，后续会增加更多子功能。
 
 ```shell {5}
 $ juicefs fsck sqlite3://myjfs2.db
