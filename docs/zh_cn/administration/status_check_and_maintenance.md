@@ -15,10 +15,12 @@ JuiceFS 提供了一系列检查和维护文件系统的工具，不但可以帮
 文件系统的基本信息中包括名称、UUID、存储类型、对象存储 Bucket、回收站状态等。
 
 ```shell
-$ juicefs status redis://xxx.cache.amazonaws.com:6379/1
+juicefs status redis://xxx.cache.amazonaws.com:6379/1
+```
 
+```json
 {
-	"Setting": {
+  "Setting": {
     "Name": "myjfs",
     "UUID": "6b0452fc-0502-404c-b163-c9ab577ec766",
     "Storage": "s3",
@@ -29,44 +31,46 @@ $ juicefs status redis://xxx.cache.amazonaws.com:6379/1
     "Compression": "none",
     "TrashDays": 1,
     "MetaVersion": 1
-	},
-	"Sessions": [
-		{
+  },
+  "Sessions": [
+    {
       "Sid": 2,
       "Heartbeat": "2021-08-23T16:47:59+08:00",
       "Version": "1.0.0+2022-08-08.cf0c269",
       "Hostname": "ubuntu-s-1vcpu-1gb-sgp1-01",
       "MountPoint": "/home/herald/mnt",
       "ProcessID": 2869146
-		}
-	]
+    }
+  ]
 }
 ```
 
-通过 `--session, -s` 选项指定会话的 `sid` 可以显示会话更进一步的信息：
+通过 `--session, -s` 选项指定会话的 `Sid` 可以进一步显示该会话的更多信息：
 
 ```shell
-$ juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1
+juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1
+```
 
+```json
 {
-	"Sid": 2,
-	"Heartbeat": "2021-08-23T16:47:59+08:00",
-	"Version": "1.0.0+2022-08-08.cf0c269",
-	"Hostname": "ubuntu-s-1vcpu-1gb-sgp1-01",
-	"MountPoint": "/home/herald/mnt",
-	"ProcessID": 2869146
+  "Sid": 2,
+  "Heartbeat": "2021-08-23T16:47:59+08:00",
+  "Version": "1.0.0+2022-08-08.cf0c269",
+  "Hostname": "ubuntu-s-1vcpu-1gb-sgp1-01",
+  "MountPoint": "/home/herald/mnt",
+  "ProcessID": 2869146
 }
 ```
 
 根据会话的状态，信息中还可能包括：
 
-- sustained inodes：这些是已经被删掉，但是因为在这个会话中被打开的文件，会被暂时保留直至文件关闭。
-- flocks：被这个会话加锁的文件 flock 锁信息
-- plocks：被这个会话加锁的文件 plock 锁信息
+- Sustained inodes：这些是已经被删掉的文件，但是因为在这个会话中已经被打开，因此会被暂时保留直至文件关闭。
+- Flocks：被这个会话加锁的文件 flock 锁信息
+- Plocks：被这个会话加锁的文件 plock 锁信息
 
 ## info
 
-`juicefs info` 用于检查指定文件或目录的元数据信息，包括文件对应的所有对象名称。
+`juicefs info` 用于检查指定文件或目录的元数据信息，其中包括该文件对应的每个 block 在对象存储上的对象路径。
 
 ### 检查一个文件的元数据
 
@@ -120,7 +124,7 @@ $ juicefs info -r ./mnt
 
 ### 使用 inode 检查元数据
 
-还可以inode 来反查文件及数据对象的信息，但需要先进入挂载点：
+还可以 inode 来反向查找文件路径及数据块的信息，但需要先进入挂载点：
 
 ```shell
 ~     $ cd mnt
@@ -143,14 +147,18 @@ objects:
 
 ## gc
 
-`juicefs gc` 是一个专门用来处理「对象泄漏」的工具，它以元数据信息为基准与对象存储中的数据进行逐一扫描比对，从而找出或清理元数据引擎中未记录的数据块。
+`juicefs gc` 是一个专门用来处理「对象泄漏」，以及因为覆盖写而产生的碎片数据的工具。它以元数据信息为基准与对象存储中的数据进行逐一扫描比对，从而找出或清理对象存储上需要处理的数据块。
 
 :::info 说明
 **对象泄漏**是指数据块在对象存储，但元数据引擎中没有对应的记录的情况。对象泄漏极少出现，成因可能是程序 bug、元数据引擎或对象存储的未预期问题、断电、断网等等。
 :::
 
 :::tip 提示
-文件在上传到对象存储时可能产生临时的中间文件，它们会在存储完成后被清理。为了避免中间文件被误判为泄漏的对象，`juicefs gc` 默认会跳过最近 1 个小时上传的文件。可以通过 `JFS_GC_SKIPPEDTIME` 环境变量调整跳过时间范围，单位是秒，例如，设置跳过最近 2 个小时的文件： `export JFS_GC_SKIPPEDTIME=7200`。
+文件在上传到对象存储时可能产生临时的中间文件，它们会在存储完成后被清理。为了避免中间文件被误判为泄漏的对象，`juicefs gc` 默认会跳过最近 1 个小时上传的文件。可以通过 `JFS_GC_SKIPPEDTIME` 环境变量调整跳过的时间范围（单位为秒）。例如设置跳过最近 2 个小时的文件：`export JFS_GC_SKIPPEDTIME=7200`。
+:::
+
+:::tip 提示
+因为 `juicefs gc` 命令会扫描对象存储中的所有对象，所以对于数据量较大的文件系统执行这个命令会有一定开销。
 :::
 
 ### 扫描「泄漏的对象」
@@ -198,7 +206,7 @@ Skipped objects bytes: 0.00 b    (0 Bytes)
 
 ## fsck
 
-`juicefs fsck` 是一个以数据块为基准与元数据进行逐一扫描比对的工具，主要用来修复文件系统内可能发生而且可以修复的各种问题。它可以帮你找到元数据中存在记录，但对象存储中没有对应数据块的情况，还可以检查文件属性信息，后续会增加更多子功能。
+`juicefs fsck` 是一个以数据块为基准与元数据进行逐一扫描比对的工具，主要用来修复文件系统内可能发生而且可以修复的各种问题。它可以帮你找到元数据引擎中存在记录，但对象存储中没有对应数据块的情况，还可以检查文件的属性信息是否存在。
 
 ```shell {5}
 $ juicefs fsck sqlite3://myjfs2.db
@@ -220,4 +228,4 @@ Scanned slices bytes: 36.81 MiB (38597789 Bytes)
 
 从结果可以看到，`juicefs fsck` 扫描发现文件系统中因为丢失了数据块致使一个文件损坏。
 
-虽然结果表明后端存储中的文件已经损坏，但还是有必要去挂载点查验一下文件是否可以访问，因为 JuiceFS 会在本地缓存最近的文件，文件损坏之前的版本如果已经缓存在本地，则可以使用缓存的文件重新上传以避免丢失数据。
+虽然结果表明后端存储中的文件已经损坏，但还是有必要去挂载点查验一下文件是否可以访问，因为 JuiceFS 会在本地缓存最近访问过的文件数据，文件损坏之前的版本如果已经缓存在本地，则可以将缓存的文件数据块重新上传以避免丢失数据。你可以在缓存目录（即 `--cache-dir` 选项对应的路径）中根据 `juicefs fsck` 命令输出的数据块路径查找是否存在缓存数据，例如上面例子中丢失的数据块路径为 `0/1/1063_0_2693747`。
