@@ -29,7 +29,7 @@ JuiceFS provides a multi-level cache to improve the performance of frequently ac
 
 JuiceFS supports caching metadata both in kernel and in client memory (i.e. JuiceFS processes) to improve metadata access performance.
 
-### Kernel metadata cache
+### Kernel metadata cache {#kernel-metadata-cache}
 
 There are three kinds of metadata which can be cached in kernel: **attribute**, **entry** and **directory**. The TTL of them can be specified by the following [mount options](../reference/command_reference.md#juicefs-mount):
 
@@ -81,7 +81,7 @@ Thanks to the kernel cache, repeated reads of the same file in JuiceFS can be ex
 
 JuiceFS clients currently do not have kernel write caching enabled by default. Starting with [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports ["writeback-cache mode"]( https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means that the `write()` system call can be done very quickly. You can set the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option at [mounting file system](../reference/command_reference.md#juicefs-mount) to enable writeback-cache mode. It is recommended to enable this mount option when very small data (e.g. around 100 bytes) needs to be written frequently.
 
-### Client read data cache
+### Client read data cache {#client-read-cache}
 
 The JuiceFS client automatically prefetches data into the cache based on the read pattern, thus improving sequential read performance. By default, it prefetches 1 block concurrently and caches it locally when reading. The local cache can be set up on any local file system based on HDD, SSD or memory.
 

@@ -29,7 +29,7 @@ JuiceFS 提供「关闭再打开（close-to-open）」一致性保证，即当�
 
 JuiceFS 支持在内核和客户端内存（即 JuiceFS 进程）中缓存元数据以提升元数据的访问性能。
 
-### 内核元数据缓存
+### 内核元数据缓存 {#kernel-metadata-cache}
 
 内核中可以缓存三种元数据：**属性（attribute)**、**文件项（entry）**和**目录项（direntry）**，可以通过以下[挂载参数](../reference/command_reference.md#juicefs-mount)控制缓存时间：
 

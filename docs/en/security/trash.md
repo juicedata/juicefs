@@ -42,14 +42,10 @@ The `.trash` directory is automatically created under the root of the JuiceFS mo
 
 ### Tree Structure
 
-There are only two levels under the tree rooted by `.trash`. The first one is a list of directories that are automatically created by JuiceFS and named as `year-month-day-hour` (e.g. `2021-11-30-10`). All files removed within an hour will be moved into the corresponding directory. The second level is just a plain list of removed files and empty directories (the usual `rm -rf <dir>` command removes files in `<dir>` first, and then removes the empty `<dir>` itself). Obviously, the original tree structure is lost when files are moved into the trash. To save as much information about the original hierarchy as possible without impact on the performance, JuiceFS renames files in trash to `{parentInode-fileInode-fileName}`. Here `inode` is an internal number used for organizing file system, and can be ignored if you only care about the name of the original file.
+There are only two levels under the tree rooted by `.trash`. The first one is a list of directories that are automatically created by JuiceFS and named as `year-month-day-hour` (e.g. `2021-11-30-10`). All files removed within an hour will be moved into the corresponding directory. The second level is just a plain list of removed files and empty directories (the usual `rm -rf <dir>` command removes files in `<dir>` first, and then removes the empty `<dir>` itself). **The original directory structure is lost when files are moved into the trash.** To save as much information about the original hierarchy as possible without impact on the performance, JuiceFS renames files in trash to `{parentInode-fileInode-fileName}`. Here `inode` is an internal number used for organizing file system (use [`juicefs info`](../reference/command_reference.md#info) to check file inode), and can be ignored if you only care about the name of the original file.
 
 :::note
 The first level directory is named after the UTC time.
-:::
-
-:::tip
-You can use `juicefs info` to check inode of a file or a directory.
 :::
 
 ### Privileges

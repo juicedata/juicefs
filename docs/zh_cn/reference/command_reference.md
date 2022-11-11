@@ -151,7 +151,7 @@ juicefs format [command options] META-URL NAME
 #### 选项
 
 `--block-size value`<br />
-块大小；单位为 KiB (默认：4096)。4M 是一个较好的默认值，不少对象存储（比如 S3）都将 4M 设为内部的块大小，因此将 JuiceFS Block Size 设为 4M，往往也能获得更好的性能
+块大小；单位为 KiB (默认：4096)。4M 是一个较好的默认值，不少对象存储（比如 S3）都将 4M 设为内部的块大小，因此将 JuiceFS block size 设为相同大小，往往也能获得更好的性能
 
 `--capacity value`<br />
 容量配额；单位为 GiB (默认：不限制)。如果启用了回收站，那么配额大小也将包含回收站文件
@@ -252,13 +252,13 @@ consul 注册中心地址 (默认："127.0.0.1:8500")
 其他 FUSE 选项 (参见[此文档](../reference/fuse_mount_options.md)来了解更多信息)
 
 `--attr-cache value`<br />
-属性缓存过期时间；单位为秒 (默认：1)。阅读[「缓存」](../guide/cache_management.md)了解更多
+属性缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--entry-cache value`<br />
-文件项缓存过期时间；单位为秒 (默认：1)。阅读[「缓存」](../guide/cache_management.md)了解更多
+文件项缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--dir-entry-cache value`<br />
-目录项缓存过期时间；单位为秒 (默认：1)。阅读[「缓存」](../guide/cache_management.md)了解更多
+目录项缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--enable-xattr`<br />
 启用扩展属性 (xattr) 功能 (默认：false)
@@ -448,13 +448,13 @@ juicefs gateway [command options] META-URL ADDRESS
 将某个子目录挂载为根 (默认："")
 
 `--attr-cache value`<br />
-属性缓存过期时间；单位为秒 (默认：1)。阅读[「缓存」](../guide/cache_management.md)了解更多
+属性缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--entry-cache value`<br />
-文件项缓存过期时间；单位为秒 (默认：0)。阅读[「缓存」](../guide/cache_management.md)了解更多
+文件项缓存过期时间；单位为秒 (默认：0)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--dir-entry-cache value`<br />
-目录项缓存过期时间；单位为秒 (默认：1)。阅读[「缓存」](../guide/cache_management.md)了解更多
+目录项缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--access-log value`<br />
 访问日志的路径
@@ -583,13 +583,13 @@ juicefs webdav [command options] META-URL ADDRESS
 将某个子目录挂载为根 (默认："")
 
 `--attr-cache value`<br />
-属性缓存过期时间；单位为秒 (默认：1)。阅读[「缓存」](../guide/cache_management.md)了解更多
+属性缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--entry-cache value`<br />
-文件项缓存过期时间；单位为秒 (默认：0)。阅读[「缓存」](../guide/cache_management.md)了解更多
+文件项缓存过期时间；单位为秒 (默认：0)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--dir-entry-cache value`<br />
-目录项缓存过期时间；单位为秒 (默认：1)。阅读[「缓存」](../guide/cache_management.md)了解更多
+目录项缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--gzip`<br />
 通过 gzip 压缩提供的文件（默认值：false）
@@ -750,7 +750,7 @@ juicefs rmr PATH ...
 $ juicefs rmr /mnt/jfs/foo
 ```
 
-### juicefs info
+### juicefs info {#info}
 
 #### 描述
 
