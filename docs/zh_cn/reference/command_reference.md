@@ -1180,7 +1180,7 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 
 #### 描述
 
-销毁一个已经存在的文件系统
+销毁一个已经存在的文件系统，将会清空元数据引擎与对象存储中的相关数据。详见[「如何销毁文件系统」](administration/destroy.md)。
 
 #### 使用
 

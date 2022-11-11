@@ -1177,7 +1177,7 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 
 #### Description
 
-Destroy an existing volume
+Destroy an existing volume, will delete relevant data in metadata engine and object storage. See [How to destroy a file system](../administration/destroy.md).
 
 #### Synopsis
 

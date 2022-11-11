@@ -27,10 +27,6 @@ Use [`juicefs umount`](reference/command_reference.md#juicefs-umount) command to
 
 This means that a file or directory under the mount point is in use and cannot be `umount` directly. You can check (such as through the `lsof` command) whether an open terminal is located in a directory on the JuiceFS mount point, or an application is processing files in the mount point. If so, exit the terminal or application and try to unmount the file system using the `juicefs umount` command.
 
-### How to destroy a file system?
-
-Destroy a file system with `juicefs destroy` command, which will clear the metadata engine and object storage related data. For details about the use of this command, please refer to the [document](administration/destroy.md).
-
 ## Metadata Related Questions
 
 ### Does support Redis in Sentinel or Cluster-mode as the metadata engine for JuiceFS?
