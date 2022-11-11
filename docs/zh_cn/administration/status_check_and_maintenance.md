@@ -16,45 +16,45 @@ JuiceFS 提供了一系列检查和维护文件系统的工具，不但可以帮
 
 ```shell
 $ juicefs status redis://xxx.cache.amazonaws.com:6379/1
- 
-{  
-	"Setting": {  
-	"Name": "myjfs",  
-	"UUID": "6b0452fc-0502-404c-b163-c9ab577ec766",  
-	"Storage": "s3",  
-	"Bucket": "https://xxx.s3.amazonaws.com",  
-	"AccessKey": "xxx",  
-	"SecretKey": "removed",  
-	"BlockSize": 4096,  
+
+{
+	"Setting": {
+	"Name": "myjfs",
+	"UUID": "6b0452fc-0502-404c-b163-c9ab577ec766",
+	"Storage": "s3",
+	"Bucket": "https://xxx.s3.amazonaws.com",
+	"AccessKey": "xxx",
+	"SecretKey": "removed",
+	"BlockSize": 4096,
 	"Compression": "none",
     "TrashDays": 1,
     "MetaVersion": 1
-	},  
-	"Sessions": [  
-		{  
-		"Sid": 2,  
-		"Heartbeat": "2021-08-23T16:47:59+08:00",  
-		"Version": "0.16.2 (2021-08-25T04:01:15Z 29d6fee)",  
-		"Hostname": "ubuntu-s-1vcpu-1gb-sgp1-01",  
-		"MountPoint": "/home/herald/mnt",  
-		"ProcessID": 2869146  
-		}  
-	]  
+	},
+	"Sessions": [
+		{
+		"Sid": 2,
+		"Heartbeat": "2021-08-23T16:47:59+08:00",
+		"Version": "0.16.2 (2021-08-25T04:01:15Z 29d6fee)",
+		"Hostname": "ubuntu-s-1vcpu-1gb-sgp1-01",
+		"MountPoint": "/home/herald/mnt",
+		"ProcessID": 2869146
+		}
+	]
 }
 ```
 
 通过 `--session, -s` 选项指定会话的 `sid` 可以打印会话的状态：
 
 ```shell
-$ juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1                         
+$ juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1
 
 {
-	"Sid": 2,  
-	"Heartbeat": "2021-08-23T16:47:59+08:00",  
-	"Version": "0.16.2 (2021-08-25T04:01:15Z 29d6fee)",  
-	"Hostname": "ubuntu-s-1vcpu-1gb-sgp1-01",  
-	"MountPoint": "/home/herald/mnt",  
-	"ProcessID": 2869146  
+	"Sid": 2,
+	"Heartbeat": "2021-08-23T16:47:59+08:00",
+	"Version": "0.16.2 (2021-08-25T04:01:15Z 29d6fee)",
+	"Hostname": "ubuntu-s-1vcpu-1gb-sgp1-01",
+	"MountPoint": "/home/herald/mnt",
+	"ProcessID": 2869146
 }
 ```
 
@@ -84,7 +84,7 @@ objects:
 
 ### 检查一个目录的元数据
 
-该命令默认只检查一层目录:
+该命令默认只检查一层目录：
 
 ```shell
 $ juicefs info ./mnt
@@ -137,17 +137,17 @@ objects:
 
 ## gc
 
-`juicefs gc` 是一个专门用来处理”对象泄漏“的工具，它以元数据信息为基准与对象存储中的数据进行逐一扫描比对，从而找出或清理元数据引擎中未记录的数据块。
+`juicefs gc` 是一个专门用来处理「对象泄漏」的工具，它以元数据信息为基准与对象存储中的数据进行逐一扫描比对，从而找出或清理元数据引擎中未记录的数据块。
 
 :::info 说明
-**对象泄漏**是指数据块在对象存储，但元数据引擎中没有对应的记录的情况。对象泄漏极少出现，成因可能是程序 BUG、元数据引擎或对象存储的未预期问题、断电、断网等等。
+**对象泄漏**是指数据块在对象存储，但元数据引擎中没有对应的记录的情况。对象泄漏极少出现，成因可能是程序 bug、元数据引擎或对象存储的未预期问题、断电、断网等等。
 :::
 
 :::tip 提示
 文件在上传到对象存储时可能产生临时的中间文件，它们会在存储完成后被清理。为了避免中间文件被误判为泄漏的对象，`juicefs gc` 默认会跳过最近 1 个小时上传的文件。可以通过 `JFS_GC_SKIPPEDTIME` 环境变量调整跳过时间范围，单位是分钟，例如，设置跳过最近 2 个小时的文件： `export JFS_GC_SKIPPEDTIME=120`。
 :::
 
-### 扫描“泄漏的对象”
+### 扫描「泄漏的对象」
 
 虽然几乎不会出现对象泄漏的情况，但你仍然可以根据需要进行相应例行检查，默认情况下 `juicefs gc` 仅执行扫描：
 
@@ -167,9 +167,9 @@ Skipped objects bytes: 0.00 b   (0 Bytes)
 2022/11/10 11:35:53.665015 juicefs[24404] <INFO>: scanned 91 objects, 91 valid, 0 leaked (0 bytes), 0 skipped (0 bytes) [gc.go:306]
 ```
 
-### 清理“泄漏的对象”
+### 清理「泄漏的对象」
 
-当 gc 命令扫描到了“泄漏的对象”，可以通过 `--delete` 选项对它们进行清理。客户端默认启动 10 个线程执行清理操作，可以使用 `--threads, -p` 选项来调整线程数量。
+当 `juicefs gc` 命令扫描到了「泄漏的对象」，可以通过 `--delete` 选项对它们进行清理。客户端默认启动 10 个线程执行清理操作，可以使用 `--threads, -p` 选项来调整线程数量。
 
 ```shell
 $ juicefs gc sqlite3://myjfs.db --delete
@@ -194,7 +194,7 @@ Skipped objects bytes: 0.00 b    (0 Bytes)
 
 `juicefs fsck` 是一个以数据块为基准与元数据进行逐一扫描比对的工具，它可以帮你找到元数据中存在记录，但对象存储中没有对应数据块的情况。例如：
 
-```shell
+```shell {5}
 $ juicefs fsck sqlite3://myjfs2.db
 
 2022/11/10 17:31:19.062348 juicefs[26158] <INFO>: Meta address: sqlite3://myjfs2.db [interface.go:402]
@@ -212,6 +212,6 @@ Scanned slices bytes: 36.81 MiB (38597789 Bytes)
            57: /david-bruno-silva-Z19vToWBDIc-unsplash.jpg [fsck.go:168]
 ```
 
-从结果可以看到，fsck 扫描发现文件系统中因为丢失了数据块致使一个文件损坏。
+从结果可以看到，`juicefs fsck` 扫描发现文件系统中因为丢失了数据块致使一个文件损坏。
 
 虽然结果表明后端存储中的文件已经损坏，但还是有必要去挂载点查验一下文件是否可以访问，因为 JuiceFS 会在本地缓存最近的文件，文件损坏之前的版本如果已经缓存在本地，则可以使用缓存的文件重新上传以避免丢失数据。
