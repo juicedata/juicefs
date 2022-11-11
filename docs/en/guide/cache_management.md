@@ -5,7 +5,7 @@ slug: /cache_management
 ---
 # Cache
 
-For a file system driven by a combination of object storage and database, the cache is an important medium for interacting efficiently between the local client and the remote service. Read and write data can be loaded into the cache in advance or asynchronously, and then the client uploads to or prefetches from the remote service in the background. The use of caching technology can significantly reduce the latency of storage operations and increase data throughput compared to interacting with remote services directly.
+For a file system driven by a combination of object storage and database, cache is an important medium for interacting efficiently between the local client and the remote service. Read and write data can be loaded into the cache in advance or asynchronously, and then the client uploads to or prefetches from the remote service in the background. The use of caching technology can significantly reduce the latency of storage operations and increase data throughput compared to interacting with remote services directly.
 
 JuiceFS provides various caching mechanisms including metadata caching, data read/write caching, etc.
 
@@ -17,7 +17,7 @@ JuiceFS provides a "close-to-open" consistency guarantee, which means that when 
 
 ## Cache read mechanism
 
-JuiceFS provides a multi-level cache to improve the performance of frequently accessed data. Read requests will try the kernel page cache, the pre-read buffer of the JuiceFS process, and the local disk cache in turn. If the data requested is not found in any level of the cache, it will be read from the object storage, and also be written into every level of the cache asynchronously to improve the performance of the next access. 
+JuiceFS provides a multi-level cache to improve the performance of frequently accessed data. Read requests will try kernel page cache, the pre-read buffer of the JuiceFS process, and the local disk cache in turn. If the data requested is not found in any level of the cache, it will be read from the object storage, and also be written into every level of the cache asynchronously to improve the performance of subsequent accesses.
 
 ![](../images/juicefs-cache.png)
 
@@ -63,9 +63,9 @@ JuiceFS also provides various kinds of data cache, including page cache in the k
 This feature requires JuiceFS >= 0.15.2
 :::
 
-For a file that has already been read, the kernel automatically caches its content. If this file is not updated (i.e. its `mtime` doesn't change) in the further accessings, it will be read directly from the kernel cache to obtain better performance.
+For a file that has already been read, the kernel automatically caches its content. If this file is not updated (i.e. its `mtime` doesn't change) afterwards, it will be read directly from the kernel cache to achieve better performance.
 
-Thanks to the kernel cache, repeated reads of the same file in JuiceFS can be extremely fast, with latencies as low as a few microseconds and throughputs up to several GiBs per second.
+Thanks to the kernel cache, repeated reads of the same file in JuiceFS can be extremely fast, with latencies as low as a few microseconds and throughput up to several GiBs per second.
 
 JuiceFS clients currently do not have kernel write caching enabled by default. Starting with [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports ["writeback-cache mode"]( https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means that the `write()` system call can be done very quickly. You can set the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option at [mounting file system](../reference/command_reference.md#juicefs-mount) to enable writeback-cache mode. It is recommended to enable this mount option when very small data (e.g. around 100 bytes) needs to be written frequently.
 
@@ -100,9 +100,9 @@ JuiceFS allocates 100GiB cache space by default, but this does not mean that you
 
 For example, if you set `--cache-dir` to a partition with a capacity of 50GiB, then if `--cache-size` is set to 100GiB, JuiceFS will always keep the cache capacity around 45GiB, which means that more than 10% of the partition is reserved.
 
-When the cache is full, the JuiceFS client cleans the cache using LRU-like algorithm, i.e., it tries to clean the oldest and least-used data.
+When cache is full, JuiceFS Client will expire cache using random two algorithm, i.e. pick two blocks and expire the least accessed one.
 
-### Client write data cache
+### Client write data cache {#writeback}
 
 When writing data, the JuiceFS client caches the data in memory until it is uploaded to the object storage when a chunk is written or when the operation is forced by `close()` or `fsync()`. When `fsync()` or `close()` is called, the client waits for data to be written to the object storage and notifies the metadata service before returning, thus ensuring data integrity.
 
@@ -124,7 +124,7 @@ Also, `--writeback` size is not affected by `--cache-size` or `--free-space-rati
 
 When the asynchronous upload function is enabled, the reliability of the cache itself is directly related to the reliability of data writing. Thus, this function should be used with caution for scenarios requiring high data reliability.
 
-## Cache warm-up
+## Cache warm-up {#warmup}
 
 JuiceFS cache warm-up is an active caching means to improve the efficiency of file reading and writing by pre-caching frequently used data locally.
 
