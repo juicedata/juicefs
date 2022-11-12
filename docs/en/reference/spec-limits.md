@@ -2,7 +2,7 @@
 
 ## File System Limits
 
-Below are theoretical limits for JuiceFS, numbers are very large so don't worry about them in practical use.
+Below are theoretical limits for JuiceFS, in real use, performance and file system size will be limited by the metadata engine and object storage of your choice.
 
 * Directory tree depth: unlimited
 * File name length: 255 Bytes
