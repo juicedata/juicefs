@@ -1,8 +1,8 @@
 ---
 title: JuiceFS 简介
-sidebar_label: JuiceFS 简介
 sidebar_position: 1
 slug: .
+pagination_next: introduction/architecture
 ---
 
 import BilibiliEmbedRenderer from 'react-bilibili-embed-renderer';

@@ -2,6 +2,7 @@
 sidebar_label: Quick Start (Standalone Mode)
 sidebar_position: 2
 slug: /quick_start_guide
+pagination_next: getting-started/for_distributed
 ---
 
 # Quick Start Guide for Standalone Mode

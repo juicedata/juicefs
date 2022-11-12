@@ -2,6 +2,7 @@
 sidebar_label: Installation
 sidebar_position: 1
 slug: /installation
+pagination_prev: introduction/comparison/juicefs_vs_s3ql
 ---
 
 # Installation
