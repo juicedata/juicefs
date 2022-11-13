@@ -59,10 +59,12 @@ func TestChecksum(t *testing.T) {
 		_ = f.Close()
 		t.Fatalf("Write cache file %s: %s", fpath, err)
 	}
+	corrupt := make([]byte, 102400)
+	copy(corrupt, buf)
 	for i := 98304; i < 102400; i++ { // reset 96K ~ 100K
-		buf[i] = 0
+		corrupt[i] = 0
 	}
-	if _, err = f.Write(checksum(buf)); err != nil {
+	if _, err = f.Write(checksum(corrupt)); err != nil {
 		_ = f.Close()
 		t.Fatalf("Write checksum to cache file %s: %s", fpath, err)
 	}
@@ -74,7 +76,7 @@ func TestChecksum(t *testing.T) {
 	s.cache(k5, NewPage(buf), true)
 	time.Sleep(time.Second * 5) // wait for cache file flushed
 
-	check := func(key string, off int64, size int) bool {
+	check := func(key string, off int64, size int) error {
 		rc, err := s.load(key)
 		if err != nil {
 			t.Fatalf("CacheStore load key %s: %s", key, err)
@@ -82,7 +84,7 @@ func TestChecksum(t *testing.T) {
 		defer rc.Close()
 		buf := make([]byte, size)
 		_, err = rc.ReadAt(buf, off)
-		return err == nil
+		return err
 	}
 	cases := []struct {
 		key    string
@@ -111,8 +113,8 @@ func TestChecksum(t *testing.T) {
 			cases[7].expect = false
 		}
 		for _, c := range cases {
-			if check(c.key, c.off, c.size) != c.expect {
-				t.Fatalf("CacheStore check level %s case %+v", l, c)
+			if err = check(c.key, c.off, c.size); (err == nil) != c.expect {
+				t.Fatalf("CacheStore check level %s case %+v: %s", l, c, err)
 			}
 		}
 	}
