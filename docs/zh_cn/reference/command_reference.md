@@ -879,7 +879,7 @@ $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  h
 
 #### 描述
 
-收集泄漏的对象。我们不认为 JuiceFS 会产生对象泄露（出现泄露说明有 Bug），如果你观察到对象存储用量异常，怀疑出现了对象泄露，可以使用该命令进行检查和处理。
+收集泄漏的对象。JuiceFS 通常不会产生对象泄露（若出现泄露，说明存在 Bug），如果你观察到对象存储用量异常，怀疑出现了对象泄露，可以使用该命令进行检查和处理。
 
 #### 使用
 
