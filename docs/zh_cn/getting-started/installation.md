@@ -2,6 +2,7 @@
 sidebar_label: 安装
 sidebar_position: 1
 slug: /installation
+pagination_prev: introduction/comparison/juicefs_vs_s3ql
 ---
 
 # 安装

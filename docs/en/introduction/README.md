@@ -1,8 +1,8 @@
 ---
 title: Introduction to JuiceFS
-sidebar_label: Introduction to JuiceFS
 sidebar_position: 1
 slug: .
+pagination_next: introduction/architecture
 ---
 
 # Introduction
