@@ -18,12 +18,14 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -268,26 +270,63 @@ func registerMetaMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Confi
 	})
 }
 
-func prepareMp(mp string) {
+func configEqual(a, b *vfs.Config) bool {
+	ac, bc := *a, *b
+	aFormat, bFormat := *ac.Format, *bc.Format
+	aFormat.SecretKey, bFormat.SecretKey = "", ""
+	ac.Meta, ac.Chunk, ac.Format, ac.Port, ac.AttrTimeout, ac.DirEntryTimeout, ac.EntryTimeout = nil, nil, nil, nil, 0, 0, 0
+	bc.Meta, bc.Chunk, bc.Format, bc.Port, bc.AttrTimeout, bc.DirEntryTimeout, bc.EntryTimeout = nil, nil, nil, nil, 0, 0, 0
+	return *a.Meta == *b.Meta && *a.Chunk == *b.Chunk && aFormat == bFormat && ac == bc
+}
+
+func prepareMp(newCfg *vfs.Config, mp string) (ignore bool) {
 	fi, err := os.Stat(mp)
-	if !strings.Contains(mp, ":") && err != nil {
+	if err != nil {
+		if strings.Contains(mp, ":") {
+			// Windows path, users should inspect mount point by themselves
+			return
+		}
 		if err := os.MkdirAll(mp, 0777); err != nil {
 			if os.IsExist(err) {
-				// a broken mount point, umount it
+				// a broken mount point, umount it and continue to mount
 				_ = doUmount(mp, true)
-			} else {
-				logger.Fatalf("create %s: %s", mp, err)
+				return
 			}
+			logger.Fatalf("create %s: %s", mp, err)
 		}
-	} else if err == nil {
-		ino, _ := utils.GetFileInode(mp)
-		if ino <= uint64(meta.RootInode) && fi.Size() == 0 {
-			// a broken mount point, umount it
-			_ = doUmount(mp, true)
-		} else if ino == uint64(meta.RootInode) {
-			logger.Warnf("%s is already mounted by juicefs, maybe you should umount it first.", mp)
-		}
+		return
 	}
+	if fi.Size() == 0 {
+		// a broken mount point, umount it and continue to mount
+		_ = doUmount(mp, true)
+		return
+	}
+
+	ino, _ := utils.GetFileInode(mp)
+	if ino != uint64(meta.RootInode) {
+		// not a mount point, just mount it
+		return
+	}
+
+	contents, err := os.ReadFile(path.Join(mp, ".config"))
+	if err != nil {
+		// failed to read juicefs config, continue to mount
+		return
+	}
+
+	originConfig := vfs.Config{}
+	if err = json.Unmarshal(contents, &originConfig); err != nil {
+		// not a valid juicefs config, continue to mount
+		return
+	}
+
+	if !configEqual(newCfg, &originConfig) {
+		// not the same juicefs, continue to mount
+		return
+	}
+
+	logger.Warnf("%s is already mounted by the same juicefs, ignored", mp)
+	return true
 }
 
 func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
@@ -506,7 +545,6 @@ func mount(c *cli.Context) error {
 	addr := c.Args().Get(0)
 	mp := c.Args().Get(1)
 
-	prepareMp(mp)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only") || utils.StringContains(strings.Split(c.String("o"), ","), "ro"))
 	metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
 	metaCli := meta.NewClient(addr, metaConf)
@@ -544,6 +582,10 @@ func mount(c *cli.Context) error {
 	registerMetaMsg(metaCli, store, chunkConf)
 
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
+	ignore := prepareMp(vfsConf, mp)
+	if !c.Bool("force") && ignore {
+		return nil
+	}
 
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
 		daemonRun(c, addr, vfsConf, metaCli)

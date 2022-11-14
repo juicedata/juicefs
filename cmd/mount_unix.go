@@ -141,6 +141,10 @@ func mount_flags() []cli.Flag {
 			Usage: "enable ioctl (support GETFLAGS/SETFLAGS only)",
 		},
 		&cli.BoolFlag{
+			Name:  "force",
+			Usage: "force to mount even if the mount point is already mounted by the same filesystem",
+		},
+		&cli.BoolFlag{
 			Name:  "update-fstab",
 			Usage: "add / update entry in /etc/fstab, will create a symlink at /sbin/mount.juicefs if not existing",
 		},
