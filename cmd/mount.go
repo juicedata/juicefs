@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -302,6 +303,11 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 }
 
 func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
+	cm, err := strconv.ParseUint(c.String("cache-mode"), 8, 32)
+	if err != nil {
+		logger.Warnf("Invalid cache-mode %s, using default value 0600", c.String("cache-mode"))
+		cm = 0600
+	}
 	chunkConf := &chunk.Config{
 		BlockSize:  format.BlockSize * 1024,
 		Compress:   format.Compression,
@@ -322,7 +328,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheDir:       c.String("cache-dir"),
 		CacheSize:      int64(c.Int("cache-size")),
 		FreeSpace:      float32(c.Float64("free-space-ratio")),
-		CacheMode:      os.FileMode(0600),
+		CacheMode:      os.FileMode(cm),
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
 	}
