@@ -267,7 +267,7 @@ type Meta interface {
 	GetSession(sid uint64, detail bool) (*Session, error)
 	// ListSessions returns all client sessions.
 	ListSessions() ([]*Session, error)
-	// ListDelayedSlices returns all slices are delayed to be deleted.
+	// ScanDelayedSlices scans all slices are delayed to be deleted.
 	ScanDelayedSlices(ctx context.Context, visitor func(Slice) error) error
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
 	CleanStaleSessions()
