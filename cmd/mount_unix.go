@@ -141,9 +141,8 @@ func mount_flags() []cli.Flag {
 			Usage: "enable ioctl (support GETFLAGS/SETFLAGS only)",
 		},
 		&cli.BoolFlag{
-			Name:    "f",
-			Aliases: []string{"force"},
-			Usage:   "force to mount even if the mount point is already mounted by the same filesystem",
+			Name:  "force",
+			Usage: "force to mount even if the mount point is already mounted by the same filesystem",
 		},
 		&cli.BoolFlag{
 			Name:  "update-fstab",
