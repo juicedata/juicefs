@@ -269,7 +269,16 @@ func registerMetaMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Confi
 	})
 }
 
-func prepareMp(format *meta.Format, mp string) (ignore bool) {
+func configEqual(a, b *vfs.Config) bool {
+	ac, bc := *a, *b
+	aFormat, bFormat := *ac.Format, *bc.Format
+	aFormat.SecretKey, bFormat.SecretKey = "", ""
+	ac.Meta, ac.Chunk, ac.Format, ac.Port, ac.AttrTimeout, ac.DirEntryTimeout, ac.EntryTimeout = nil, nil, nil, nil, 0, 0, 0
+	bc.Meta, bc.Chunk, bc.Format, bc.Port, bc.AttrTimeout, bc.DirEntryTimeout, bc.EntryTimeout = nil, nil, nil, nil, 0, 0, 0
+	return *a.Meta == *b.Meta && *a.Chunk == *b.Chunk && aFormat == bFormat && ac == bc
+}
+
+func prepareMp(newCfg *vfs.Config, mp string) (ignore bool) {
 	fi, err := os.Stat(mp)
 	if err != nil {
 		if strings.Contains(mp, ":") {
@@ -278,12 +287,17 @@ func prepareMp(format *meta.Format, mp string) (ignore bool) {
 		}
 		if err := os.MkdirAll(mp, 0777); err != nil {
 			if os.IsExist(err) {
-				// a broken mount point, umount it and prepare again
+				// a broken mount point, umount it and continue to mount
 				_ = doUmount(mp, true)
-				return prepareMp(format, mp)
+				return
 			}
 			logger.Fatalf("create %s: %s", mp, err)
 		}
+		return
+	}
+	if fi.Size() == 0 {
+		// a broken mount point, umount it and continue to mount
+		_ = doUmount(mp, true)
 		return
 	}
 
@@ -293,25 +307,19 @@ func prepareMp(format *meta.Format, mp string) (ignore bool) {
 		return
 	}
 
-	if fi.Size() == 0 {
-		// a broken mount point, umount it and prepare again
-		_ = doUmount(mp, true)
-		return prepareMp(format, mp)
-	}
-
 	contents, err := os.ReadFile(path.Join(mp, ".config"))
 	if err != nil {
 		// failed to read juicefs config, continue to mount
 		return
 	}
 
-	vfsConfig := vfs.Config{}
-	if err = json.Unmarshal(contents, &vfsConfig); err != nil {
+	originConfig := vfs.Config{}
+	if err = json.Unmarshal(contents, &originConfig); err != nil {
 		// not a valid juicefs config, continue to mount
 		return
 	}
 
-	if vfsConfig.Format.UUID != format.UUID {
+	if !configEqual(newCfg, &originConfig) {
 		// not the same juicefs, continue to mount
 		return
 	}
@@ -539,11 +547,6 @@ func mount(c *cli.Context) error {
 		return err
 	}
 
-	ignore := prepareMp(format, mp)
-	if !c.Bool("force") && ignore {
-		return nil
-	}
-
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
 	registerer, registry := wrapRegister(mp, format.Name)
 
@@ -573,6 +576,10 @@ func mount(c *cli.Context) error {
 	registerMetaMsg(metaCli, store, chunkConf)
 
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
+	ignore := prepareMp(vfsConf, mp)
+	if !c.Bool("force") && ignore {
+		return nil
+	}
 
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
 		daemonRun(c, addr, vfsConf, metaCli)
