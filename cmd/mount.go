@@ -18,12 +18,14 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -267,26 +269,55 @@ func registerMetaMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Confi
 	})
 }
 
-func prepareMp(mp string) {
+func prepareMp(format *meta.Format, mp string) (ignore bool) {
 	fi, err := os.Stat(mp)
-	if !strings.Contains(mp, ":") && err != nil {
+	if err != nil {
+		if strings.Contains(mp, ":") {
+			// Windows path, users should inspect mount point by themselves
+			return
+		}
 		if err := os.MkdirAll(mp, 0777); err != nil {
 			if os.IsExist(err) {
-				// a broken mount point, umount it
+				// a broken mount point, umount it and prepare again
 				_ = doUmount(mp, true)
-			} else {
-				logger.Fatalf("create %s: %s", mp, err)
+				return prepareMp(format, mp)
 			}
+			logger.Fatalf("create %s: %s", mp, err)
 		}
-	} else if err == nil {
-		ino, _ := utils.GetFileInode(mp)
-		if ino <= uint64(meta.RootInode) && fi.Size() == 0 {
-			// a broken mount point, umount it
-			_ = doUmount(mp, true)
-		} else if ino == uint64(meta.RootInode) {
-			logger.Warnf("%s is already mounted by juicefs, maybe you should umount it first.", mp)
-		}
+		return
 	}
+
+	ino, _ := utils.GetFileInode(mp)
+	if ino != uint64(meta.RootInode) {
+		// not a mount point, just mount it
+		return
+	}
+
+	if fi.Size() == 0 {
+		// a broken mount point, umount it and prepare again
+		_ = doUmount(mp, true)
+		return prepareMp(format, mp)
+	}
+
+	contents, err := os.ReadFile(path.Join(mp, ".config"))
+	if err != nil {
+		// failed to read juicefs config, continue to mount
+		return
+	}
+
+	vfsConfig := vfs.Config{}
+	if err = json.Unmarshal(contents, &vfsConfig); err != nil {
+		// not a valid juicefs config, continue to mount
+		return
+	}
+
+	if vfsConfig.Format.UUID != format.UUID {
+		// not the same juicefs, continue to mount
+		return
+	}
+
+	logger.Warnf("%s is already mounted by the same juicefs, ignored", mp)
+	return true
 }
 
 func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
@@ -500,13 +531,17 @@ func mount(c *cli.Context) error {
 	addr := c.Args().Get(0)
 	mp := c.Args().Get(1)
 
-	prepareMp(mp)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only") || utils.StringContains(strings.Split(c.String("o"), ","), "ro"))
 	metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
 	metaCli := meta.NewClient(addr, metaConf)
 	format, err := getFormat(c, metaCli)
 	if err != nil {
 		return err
+	}
+
+	ignore := prepareMp(format, mp)
+	if !c.Bool("force") && ignore {
+		return nil
 	}
 
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
