@@ -2209,34 +2209,38 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	slices[0], err = m.ListDelayedSlices(ctx, showProgress)
-	return errno(err)
+	return errno(m.ScanDelayedSlices(ctx, func(s Slice) error {
+		slices[1] = append(slices[1], s)
+		if showProgress != nil {
+			showProgress()
+		}
+		return nil
+	}))
 }
 
-func (m *kvMeta) ListDelayedSlices(ctx context.Context, showProgress func()) ([]Slice, error) {
+func (m *kvMeta) ScanDelayedSlices(ctx context.Context, visitor func(s Slice) error) error {
 	// delayed slices: Lttttttttcccccccc
 	klen := 1 + 8 + 8
 	result, err := m.scanValues(m.fmtKey("L"), -1, func(k, v []byte) bool {
 		return len(k) == klen
 	})
+	if err != nil {
+		return err
+	}
 
-	var slices []Slice
 	var ss []Slice
 	for _, value := range result {
 		ss = ss[:0]
 		m.decodeDelayedSlices(value, &ss)
-		if showProgress != nil {
-			for range ss {
-				showProgress()
-			}
-		}
 		for _, s := range ss {
 			if s.Id > 0 {
-				slices = append(slices, s)
+				if err := visitor(s); err != nil {
+					return err
+				}
 			}
 		}
 	}
-	return slices, err
+	return nil
 }
 
 func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {

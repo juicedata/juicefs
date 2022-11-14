@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
 
@@ -95,16 +96,25 @@ func status(ctx *cli.Context) error {
 		logger.Fatalf("list sessions: %s", err)
 	}
 
-	slices := &sliceStat{}
-	delayed, err := m.ListDelayedSlices(ctx.Context, nil)
-	if err != nil {
-		logger.Fatalf("list delayed slices: %s", err)
-	}
-	for _, s := range delayed {
-		slices.Delayed.Count++
-		slices.Delayed.TotalSize += uint64(s.Size)
-	}
+	progress := utils.NewProgress(false, false)
+	slicesSpinner := progress.AddDoubleSpinner("Delayed Slices")
 
+	err = m.ScanDelayedSlices(ctx.Context, func(s meta.Slice) error {
+		slicesSpinner.IncrInt64(int64(s.Size))
+		return nil
+	})
+	if err != nil {
+		logger.Fatalf("scan delayed slices: %s", err)
+	}
+	slicesSpinner.Done()
+
+	count, size := slicesSpinner.Current()
+	slices := &sliceStat{
+		Delayed: statAggr{
+			Count:     uint64(count),
+			TotalSize: uint64(size),
+		},
+	}
 	printJson(&sections{format, sessions, slices})
 	return nil
 }

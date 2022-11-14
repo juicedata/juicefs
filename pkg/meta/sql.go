@@ -2596,13 +2596,20 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	slices[1], err = m.ListDelayedSlices(ctx, showProgress)
-	return errno(err)
+	return errno(m.ScanDelayedSlices(ctx, func(s Slice) error {
+		slices[1] = append(slices[1], s)
+		if showProgress != nil {
+			showProgress()
+		}
+		return nil
+	}))
 }
 
-func (m *dbMeta) ListDelayedSlices(ctx context.Context, showProgress func()) ([]Slice, error) {
-	var slices []Slice
-	err := m.roTxn(func(s *xorm.Session) error {
+func (m *dbMeta) ScanDelayedSlices(ctx context.Context, visitor func(s Slice) error) error {
+	if visitor == nil {
+		return nil
+	}
+	return m.roTxn(func(s *xorm.Session) error {
 		if ok, err := s.IsTableExist(&delslices{}); err != nil {
 			return err
 		} else if !ok {
@@ -2617,20 +2624,16 @@ func (m *dbMeta) ListDelayedSlices(ctx context.Context, showProgress func()) ([]
 		for _, ds := range dss {
 			ss = ss[:0]
 			m.decodeDelayedSlices(ds.Slices, &ss)
-			if showProgress != nil {
-				for range ss {
-					showProgress()
-				}
-			}
 			for _, s := range ss {
 				if s.Id > 0 {
-					slices = append(slices, s)
+					if err := visitor(s); err != nil {
+						return err
+					}
 				}
 			}
 		}
 		return nil
 	})
-	return slices, err
 }
 
 func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {

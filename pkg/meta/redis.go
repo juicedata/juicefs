@@ -2812,31 +2812,34 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 		return errno(err)
 	}
 
-	slices[1], err = m.ListDelayedSlices(ctx, showProgress)
-	return errno(err)
+	return errno(m.ScanDelayedSlices(ctx, func(s Slice) error {
+		slices[1] = append(slices[1], s)
+		if showProgress != nil {
+			showProgress()
+		}
+		return nil
+	}))
 }
 
-func (m *redisMeta) ListDelayedSlices(ctx context.Context, showProgress func()) ([]Slice, error) {
-	var slices []Slice
-	err := m.hscan(ctx, m.delSlices(), func(keys []string) error {
+func (m *redisMeta) ScanDelayedSlices(ctx context.Context, visitor func(s Slice) error) error {
+	if visitor == nil {
+		return nil
+	}
+	return m.hscan(ctx, m.delSlices(), func(keys []string) error {
 		var ss []Slice
 		for i := 0; i < len(keys); i += 2 {
 			ss = ss[:0]
 			m.decodeDelayedSlices([]byte(keys[i+1]), &ss)
-			if showProgress != nil {
-				for range ss {
-					showProgress()
-				}
-			}
 			for _, s := range ss {
 				if s.Id > 0 {
-					slices = append(slices, s)
+					if err := visitor(s); err != nil {
+						return err
+					}
 				}
 			}
 		}
 		return nil
 	})
-	return slices, err
 }
 
 func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
