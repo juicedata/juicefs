@@ -240,7 +240,8 @@ func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	cli, err := tos.NewClientV2(
 		hostParts[1]+"."+hostParts[2],
 		tos.WithRegion(strings.TrimSuffix(hostParts[1], "tos-")),
-		tos.WithCredentials(credentials))
+		tos.WithCredentials(credentials),
+		tos.WithEnableVerifySSL(httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify))
 	if err != nil {
 		return nil, err
 	}

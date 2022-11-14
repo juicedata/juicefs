@@ -335,7 +335,7 @@ func newOBS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	// Empty proxy url string has no effect
 	// there is a bug in the retry of PUT (did not call Seek(0,0) before retry), so disable the retry here
 	c, err := obs.New(accessKey, secretKey, endpoint, obs.WithSecurityToken(token),
-		obs.WithProxyUrl(urlString), obs.WithMaxRetryCount(0))
+		obs.WithProxyUrl(urlString), obs.WithMaxRetryCount(0), obs.WithHttpTransport(httpClient.Transport.(*http.Transport)))
 	if err != nil {
 		return nil, fmt.Errorf("fail to initialize OBS: %q", err)
 	}

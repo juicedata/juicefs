@@ -26,6 +26,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"sort"
@@ -199,6 +200,7 @@ func newRedis(uri, user, passwd, token string) (ObjectStorage, error) {
 	if opt.MaxRetries == 0 {
 		opt.MaxRetries = -1 // Redis use -1 to disable retries
 	}
+	opt.TLSConfig.InsecureSkipVerify = httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify
 	var rdb redis.UniversalClient
 	if strings.Contains(hosts, ",") && strings.Index(hosts, ",") < strings.Index(hosts, ":") {
 		var fopt redis.FailoverOptions

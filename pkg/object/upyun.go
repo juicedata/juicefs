@@ -151,7 +151,9 @@ func newUpyun(endpoint, user, passwd, token string) (ObjectStorage, error) {
 	if strings.Contains(uri.Host, ".") {
 		cfg.Hosts["v0.api.upyun.com"] = strings.SplitN(uri.Host, ".", 2)[1]
 	}
-	return &up{c: upyun.NewUpYun(cfg)}, nil
+	upYun := upyun.NewUpYun(cfg)
+	upYun.SetHTTPClient(httpClient)
+	return &up{c: upYun}, nil
 }
 
 func init() {
