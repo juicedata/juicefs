@@ -878,7 +878,9 @@ $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  h
 
 #### Description
 
-Collect and delete leaked objects. JuiceFS doesn't usually produce leak in object storage (only happens when there's bug in JuiceFS), use this command if you notice any abnormal usage in object storage.
+用来处理「对象泄漏」，以及因为覆盖写而产生的碎片数据的命令。详见[「状态检查 & 维护」](../administration/status_check_and_maintenance.md#gc)。
+
+Deal with leaked objects, and garbage fragments produced by file overwrites. See [Status Check & Maintenance](../administration/status_check_and_maintenance.md#gc).
 
 #### Synopsis
 
