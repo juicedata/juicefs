@@ -396,10 +396,8 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	}
 	info.Bucket = bucket
 	info.Name = object
-	p := n.path(bucket, object)
+	p := path.Clean(n.path(bucket, object))
 	root := n.path(bucket)
-
-	p = path.Clean(p)
 	if strings.HasSuffix(object, sep) {
 		// reset atime
 		n.setFileAtime(p, time.Now().Unix())
