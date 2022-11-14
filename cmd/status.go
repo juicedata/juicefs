@@ -52,6 +52,15 @@ $ juicefs status redis://localhost`,
 type sections struct {
 	Setting  *meta.Format
 	Sessions []*meta.Session
+	Slices   *sliceStat
+}
+
+type sliceStat struct {
+	Delayed statAggr
+}
+type statAggr struct {
+	Count     uint64
+	TotalSize uint64
 }
 
 func printJson(v interface{}) {
@@ -86,6 +95,16 @@ func status(ctx *cli.Context) error {
 		logger.Fatalf("list sessions: %s", err)
 	}
 
-	printJson(&sections{format, sessions})
+	slices := &sliceStat{}
+	delayed, err := m.ListDelayedSlices(ctx.Context, nil)
+	if err != nil {
+		logger.Fatalf("list delayed slices: %s", err)
+	}
+	for _, s := range delayed {
+		slices.Delayed.Count++
+		slices.Delayed.TotalSize += uint64(s.Size)
+	}
+
+	printJson(&sections{format, sessions, slices})
 	return nil
 }

@@ -22,6 +22,7 @@ package meta
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -2595,7 +2596,13 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	err = m.roTxn(func(s *xorm.Session) error {
+	slices[1], err = m.ListDelayedSlices(ctx, showProgress)
+	return errno(err)
+}
+
+func (m *dbMeta) ListDelayedSlices(ctx context.Context, showProgress func()) ([]Slice, error) {
+	var slices []Slice
+	err := m.roTxn(func(s *xorm.Session) error {
 		if ok, err := s.IsTableExist(&delslices{}); err != nil {
 			return err
 		} else if !ok {
@@ -2617,13 +2624,13 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 			}
 			for _, s := range ss {
 				if s.Id > 0 {
-					slices[1] = append(slices[1], s)
+					slices = append(slices, s)
 				}
 			}
 		}
 		return nil
 	})
-	return errno(err)
+	return slices, err
 }
 
 func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {

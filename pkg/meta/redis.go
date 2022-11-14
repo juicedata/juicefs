@@ -2812,8 +2812,14 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 		return errno(err)
 	}
 
-	var ss []Slice
-	err = m.hscan(ctx, m.delSlices(), func(keys []string) error {
+	slices[1], err = m.ListDelayedSlices(ctx, showProgress)
+	return errno(err)
+}
+
+func (m *redisMeta) ListDelayedSlices(ctx context.Context, showProgress func()) ([]Slice, error) {
+	var slices []Slice
+	err := m.hscan(ctx, m.delSlices(), func(keys []string) error {
+		var ss []Slice
 		for i := 0; i < len(keys); i += 2 {
 			ss = ss[:0]
 			m.decodeDelayedSlices([]byte(keys[i+1]), &ss)
@@ -2824,13 +2830,13 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 			}
 			for _, s := range ss {
 				if s.Id > 0 {
-					slices[1] = append(slices[1], s)
+					slices = append(slices, s)
 				}
 			}
 		}
 		return nil
 	})
-	return errno(err)
+	return slices, err
 }
 
 func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {

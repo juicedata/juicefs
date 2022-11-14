@@ -19,6 +19,7 @@ package meta
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -2208,15 +2209,18 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
+	slices[0], err = m.ListDelayedSlices(ctx, showProgress)
+	return errno(err)
+}
+
+func (m *kvMeta) ListDelayedSlices(ctx context.Context, showProgress func()) ([]Slice, error) {
 	// delayed slices: Lttttttttcccccccc
-	klen = 1 + 8 + 8
-	result, err = m.scanValues(m.fmtKey("L"), -1, func(k, v []byte) bool {
+	klen := 1 + 8 + 8
+	result, err := m.scanValues(m.fmtKey("L"), -1, func(k, v []byte) bool {
 		return len(k) == klen
 	})
-	if err != nil {
-		logger.Warnf("Scan delayed slices: %s", err)
-		return errno(err)
-	}
+
+	var slices []Slice
 	var ss []Slice
 	for _, value := range result {
 		ss = ss[:0]
@@ -2228,11 +2232,11 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		}
 		for _, s := range ss {
 			if s.Id > 0 {
-				slices[1] = append(slices[1], s)
+				slices = append(slices, s)
 			}
 		}
 	}
-	return 0
+	return slices, err
 }
 
 func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {

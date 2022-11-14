@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -266,6 +267,8 @@ type Meta interface {
 	GetSession(sid uint64, detail bool) (*Session, error)
 	// ListSessions returns all client sessions.
 	ListSessions() ([]*Session, error)
+	// ListDelayedSlices returns all slices are delayed to be deleted.
+	ListDelayedSlices(ctx context.Context, showProgress func()) ([]Slice, error)
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
 	CleanStaleSessions()
 
