@@ -288,12 +288,13 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 			return fs.IsNotExist(eno), nil, false
 		}
 		defer f.Close(mctx)
+		if fi, _ := f.Stat(); fi.(*fs.FileStat).Atime() == 0 && prefixEntry == "" {
+			entries = append(entries, "")
+		}
+
 		fis, eno := f.Readdir(mctx, 0)
 		if eno != 0 {
 			return
-		}
-		if len(fis) == 0 {
-			return true, nil, false
 		}
 		root := n.path(bucket, prefixDir) == "/"
 		for _, fi := range fis {
@@ -305,6 +306,9 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 			} else {
 				entries = append(entries, fi.Name())
 			}
+		}
+		if len(entries) == 0 {
+			return true, nil, false
 		}
 		entries, delayIsLeaf = minio.FilterListEntries(bucket, prefixDir, entries, prefixEntry, n.isLeaf)
 		return false, entries, delayIsLeaf
@@ -329,11 +333,15 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	getObjectInfo := func(ctx context.Context, bucket, object string) (obj minio.ObjectInfo, err error) {
 		fi, eno := n.fs.Stat(mctx, n.path(bucket, object))
 		if eno == 0 {
+			size := fi.Size()
+			if fi.IsDir() {
+				size = 0
+			}
 			obj = minio.ObjectInfo{
 				Bucket:  bucket,
 				Name:    object,
 				ModTime: fi.ModTime(),
-				Size:    fi.Size(),
+				Size:    size,
 				IsDir:   fi.IsDir(),
 				AccTime: fi.ModTime(),
 			}
@@ -371,17 +379,32 @@ func (n *jfsObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 	return loi, err
 }
 
+func (n *jfsObjects) setFileAtime(p string, atime int64) {
+	if f, eno := n.fs.Open(mctx, p, 0); eno == 0 {
+		defer f.Close(mctx)
+		if eno := f.Utime(mctx, atime, -1); eno != 0 {
+			logger.Warnf("set atime of %s: %s", p, eno)
+		}
+	} else if eno != syscall.ENOENT {
+		logger.Warnf("open %s: %s", p, eno)
+	}
+}
+
 func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, options minio.ObjectOptions) (info minio.ObjectInfo, err error) {
 	if err = n.checkBucket(ctx, bucket); err != nil {
 		return
 	}
 	info.Bucket = bucket
 	info.Name = object
-	p := n.path(bucket, object)
+	p := path.Clean(n.path(bucket, object))
 	root := n.path(bucket)
+	if strings.HasSuffix(object, sep) {
+		// reset atime
+		n.setFileAtime(p, time.Now().Unix())
+	}
 	for p != root {
 		if eno := n.fs.Delete(mctx, p); eno != 0 {
-			if fs.IsNotEmpty(eno) {
+			if fs.IsNotEmpty(eno) || fs.IsNotExist(eno) {
 				err = nil
 			} else {
 				err = eno
@@ -389,6 +412,9 @@ func (n *jfsObjects) DeleteObject(ctx context.Context, bucket, object string, op
 			break
 		}
 		p = path.Dir(p)
+		if fi, _ := n.fs.Stat(mctx, p); fi == nil || fi.Atime() == 0 {
+			break
+		}
 	}
 	return info, jfsToObjectErr(ctx, err, bucket, object)
 }
@@ -663,6 +689,8 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 			}
 			return
 		}
+		// if the put object is a directory, set its atime to 0
+		n.setFileAtime(p, 0)
 	} else if err = n.putObject(ctx, bucket, p, r, opts); err != nil {
 		return
 	}
@@ -671,7 +699,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 		return objInfo, jfsToObjectErr(ctx, eno, bucket, object)
 	}
 	etag := r.MD5CurrentHexString()
-	if n.gConf.KeepEtag {
+	if n.gConf.KeepEtag && !strings.HasSuffix(object, sep) {
 		eno = n.fs.SetXattr(mctx, p, s3Etag, []byte(etag), 0)
 		if eno != 0 {
 			logger.Errorf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", p, s3Etag, etag, 0)
