@@ -133,7 +133,7 @@ source /etc/bash_completion.d/juicefs
 
 ## Commands
 
-### juicefs format
+### juicefs format {#format}
 
 #### Description
 
@@ -874,7 +874,7 @@ number of concurrent threads (default: 4)
 $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
 ```
 
-### juicefs gc
+### juicefs gc {#gc}
 
 #### Description
 

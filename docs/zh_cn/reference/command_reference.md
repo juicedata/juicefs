@@ -133,7 +133,7 @@ source /etc/bash_completion.d/juicefs
 
 ## 命令列表
 
-### juicefs format
+### juicefs format {#format}
 
 #### 描述
 
@@ -875,7 +875,7 @@ juicefs objbench [command options] BUCKET
 $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
 ```
 
-### juicefs gc
+### juicefs gc {#gc}
 
 #### 描述
 
