@@ -374,7 +374,8 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		logger.Debugf("Use endpoint %q", domain)
 	}
 
-	client, err := oss.New(domain, accessKey, secretKey, oss.SecurityToken(token))
+	client, err := oss.New(domain, accessKey, secretKey, oss.SecurityToken(token),
+		oss.InsecureSkipVerify(httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify))
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create OSS client with endpoint %s: %s", endpoint, err)
 	}
