@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"net/url"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -455,8 +456,10 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 			username = u.Username
 		}
 	}
+	username, _ = url.QueryUnescape(username)
 	var auth []ssh.AuthMethod
 	if pass != "" {
+		pass, _ = url.QueryUnescape(pass)
 		auth = append(auth, ssh.Password(pass))
 	} else {
 		auth = append(auth, ssh.KeyboardInteractive(SshInteractive))
