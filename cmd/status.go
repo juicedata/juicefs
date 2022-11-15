@@ -59,10 +59,10 @@ $ juicefs status redis://localhost`,
 }
 
 type sections struct {
-	Setting  *meta.Format
-	Sessions []*meta.Session
-	FsStat   *fsStat
-	Slices   *sliceStat `json:",omitempty"`
+	Setting   *meta.Format
+	Sessions  []*meta.Session
+	FsStat    *fsStat
+	Statistic *statistic `json:",omitempty"`
 }
 
 type fsStat struct {
@@ -75,10 +75,10 @@ type fsStat struct {
 	availableSpace uint64
 }
 
-type sliceStat struct {
-	Delayed statAggr
+type statistic struct {
+	DelayedSlices *statDelayedSlices
 }
-type statAggr struct {
+type statDelayedSlices struct {
 	Count     uint64
 	TotalSize string
 
@@ -90,7 +90,7 @@ func (s *fsStat) Format() {
 	s.UsedSpace = humanize.IBytes(s.totalSpace - s.availableSpace)
 }
 
-func (s *statAggr) Format() {
+func (s *statDelayedSlices) Format() {
 	s.TotalSize = humanize.IBytes(s.totalSize)
 }
 
@@ -134,13 +134,14 @@ func status(ctx *cli.Context) error {
 
 	sec := &sections{format, sessions, &fs, nil}
 	if scan := ctx.StringSlice("scan"); len(scan) > 0 {
+		stat := &statistic{}
 		progress := utils.NewProgress(false, false)
 		eg := &errgroup.Group{}
 		for _, s := range scan {
 			switch s {
 			case "slices":
 				eg.Go(func() (err error) {
-					sec.Slices, err = scanSlices(ctx, m, progress)
+					stat.DelayedSlices, err = scanSlices(ctx, m, progress)
 					return err
 				})
 			default:
@@ -150,12 +151,13 @@ func status(ctx *cli.Context) error {
 		if err := eg.Wait(); err != nil {
 			logger.Fatalf("scan: %s", err)
 		}
+		sec.Statistic = stat
 	}
 	printJson(sec)
 	return nil
 }
 
-func scanSlices(ctx *cli.Context, m meta.Meta, progress *utils.Progress) (*sliceStat, error) {
+func scanSlices(ctx *cli.Context, m meta.Meta, progress *utils.Progress) (*statDelayedSlices, error) {
 	slicesSpinner := progress.AddDoubleSpinner("Delayed Slices")
 	err := m.ScanDelayedSlices(ctx.Context, func(s meta.Slice) error {
 		slicesSpinner.IncrInt64(int64(s.Size))
@@ -167,10 +169,10 @@ func scanSlices(ctx *cli.Context, m meta.Meta, progress *utils.Progress) (*slice
 	slicesSpinner.Done()
 
 	count, size := slicesSpinner.Current()
-	aggr := statAggr{
+	slicesStat := &statDelayedSlices{
 		Count:     uint64(count),
 		totalSize: uint64(size),
 	}
-	aggr.Format()
-	return &sliceStat{aggr}, nil
+	slicesStat.Format()
+	return slicesStat, nil
 }
