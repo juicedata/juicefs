@@ -217,7 +217,7 @@ func newBOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	hostParts := strings.SplitN(uri.Host, ".", 2)
 	bucketName := hostParts[0]
 	if len(hostParts) > 1 {
-		endpoint = fmt.Sprintf("https://%s", hostParts[1])
+		endpoint = fmt.Sprintf("%s://%s", uri.Scheme, hostParts[1])
 	}
 
 	if accessKey == "" {

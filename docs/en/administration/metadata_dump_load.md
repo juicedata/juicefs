@@ -97,6 +97,10 @@ Starting with JuiceFS v1.0.0, the client automatically backs up metadata and cop
 
 The backup files are stored in the `meta` directory of the object storage. It is a separate directory from the data store and not visible in the mount point and does not interact with the data store, and the directory can be viewed and managed using the file browser of the object storage.
 
+:::tip
+Automatic backup use Gzip compression, the backup files end with `.gz` and need to be decompressed with the `gzip -d` command first.
+:::
+
 ![](../images/meta-auto-backup-list.png)
 
 By default, the JuiceFS client backs up metadata once an hour. The frequency of automatic backups can be adjusted by the `--backup-meta` option when mounting the filesystem, for example, to set the auto-backup to be performed every 8 hours.

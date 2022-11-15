@@ -282,7 +282,7 @@ func newWebDAV(endpoint, user, passwd, token string) (ObjectStorage, error) {
 	}
 	uri.User = url.UserPassword(user, passwd)
 	c := gowebdav.NewClient(uri.String(), user, passwd)
-
+	c.SetTransport(httpClient.Transport)
 	return &webdav{endpoint: uri, c: c}, nil
 }
 
