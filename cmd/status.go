@@ -19,10 +19,14 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+
+	"github.com/dustin/go-humanize"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 func cmdStatus() *cli.Command {
@@ -46,6 +50,10 @@ $ juicefs status redis://localhost`,
 				Aliases: []string{"s"},
 				Usage:   "show detailed information (sustained inodes, locks) of the specified session (sid)",
 			},
+			&cli.StringSliceFlag{
+				Name:  "scan",
+				Usage: "scanning the meta engine for more information, may take a long time",
+			},
 		},
 	}
 }
@@ -53,7 +61,18 @@ $ juicefs status redis://localhost`,
 type sections struct {
 	Setting  *meta.Format
 	Sessions []*meta.Session
-	Slices   *sliceStat
+	FsStat   *fsStat
+	Slices   *sliceStat `json:",omitempty"`
+}
+
+type fsStat struct {
+	UsedSpace       string
+	AvailableSpace  string
+	UsedInodes      uint64
+	AvailableInodes uint64
+
+	totalSpace     uint64
+	availableSpace uint64
 }
 
 type sliceStat struct {
@@ -61,7 +80,18 @@ type sliceStat struct {
 }
 type statAggr struct {
 	Count     uint64
-	TotalSize uint64
+	TotalSize string
+
+	totalSize uint64
+}
+
+func (s *fsStat) Format() {
+	s.AvailableSpace = humanize.IBytes(s.availableSpace)
+	s.UsedSpace = humanize.IBytes(s.totalSpace - s.availableSpace)
+}
+
+func (s *statAggr) Format() {
+	s.TotalSize = humanize.IBytes(s.totalSize)
 }
 
 func printJson(v interface{}) {
@@ -96,10 +126,38 @@ func status(ctx *cli.Context) error {
 		logger.Fatalf("list sessions: %s", err)
 	}
 
-	progress := utils.NewProgress(false, false)
-	slicesSpinner := progress.AddDoubleSpinner("Delayed Slices")
+	var fs fsStat
+	if err = m.StatFS(meta.Background, &fs.totalSpace, &fs.availableSpace, &fs.UsedInodes, &fs.AvailableInodes); err != syscall.Errno(0) {
+		logger.Fatalf("stat fs: %s", err)
+	}
+	fs.Format()
 
-	err = m.ScanDelayedSlices(ctx.Context, func(s meta.Slice) error {
+	sec := &sections{format, sessions, &fs, nil}
+	if scan := ctx.StringSlice("scan"); len(scan) > 0 {
+		progress := utils.NewProgress(false, false)
+		eg := &errgroup.Group{}
+		for _, s := range scan {
+			switch s {
+			case "slices":
+				eg.Go(func() (err error) {
+					sec.Slices, err = scanSlices(ctx, m, progress)
+					return err
+				})
+			default:
+				logger.Warnf("unknown scan option: %s, ignored", s)
+			}
+		}
+		if err := eg.Wait(); err != nil {
+			logger.Fatalf("scan: %s", err)
+		}
+	}
+	printJson(sec)
+	return nil
+}
+
+func scanSlices(ctx *cli.Context, m meta.Meta, progress *utils.Progress) (*sliceStat, error) {
+	slicesSpinner := progress.AddDoubleSpinner("Delayed Slices")
+	err := m.ScanDelayedSlices(ctx.Context, func(s meta.Slice) error {
 		slicesSpinner.IncrInt64(int64(s.Size))
 		return nil
 	})
@@ -109,12 +167,10 @@ func status(ctx *cli.Context) error {
 	slicesSpinner.Done()
 
 	count, size := slicesSpinner.Current()
-	slices := &sliceStat{
-		Delayed: statAggr{
-			Count:     uint64(count),
-			TotalSize: uint64(size),
-		},
+	aggr := statAggr{
+		Count:     uint64(count),
+		totalSize: uint64(size),
 	}
-	printJson(&sections{format, sessions, slices})
-	return nil
+	aggr.Format()
+	return &sliceStat{aggr}, nil
 }
