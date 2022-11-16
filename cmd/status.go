@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -79,6 +80,8 @@ type statistic struct {
 	DelayedDeleted statDelayedDeleted `json:",omitempty"`
 }
 type statDelayedDeleted struct {
+	mu sync.Mutex
+
 	SliceCount uint64 `json:",omitempty"`
 	SliceSize  string `json:",omitempty"`
 	FileCount  uint64 `json:",omitempty"`
@@ -100,6 +103,22 @@ func (s *statDelayedDeleted) Format() {
 	if s.FileCount > 0 {
 		s.FileSize = humanize.IBytes(s.fileSize)
 	}
+}
+
+func (s *statDelayedDeleted) setSlices(count uint64, size uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.SliceCount = count
+	s.sliceSize = size
+	s.Format()
+}
+
+func (s *statDelayedDeleted) setFiles(count uint64, size uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.FileCount = count
+	s.fileSize = size
+	s.Format()
 }
 
 func printJson(v interface{}) {
@@ -180,9 +199,7 @@ func scanDeletedSlices(ctx *cli.Context, m meta.Meta, stat *statDelayedDeleted, 
 		return err
 	}
 	count, size := slicesSpinner.Current()
-	stat.SliceCount = uint64(count)
-	stat.sliceSize = uint64(size)
-	stat.Format()
+	stat.setSlices(uint64(count), uint64(size))
 	return nil
 }
 
@@ -198,8 +215,6 @@ func scanDeletedFiles(ctx *cli.Context, m meta.Meta, stat *statDelayedDeleted, p
 		return err
 	}
 	count, size := fileSpinner.Current()
-	stat.FileCount = uint64(count)
-	stat.fileSize = uint64(size)
-	stat.Format()
+	stat.setFiles(uint64(count), uint64(size))
 	return nil
 }
