@@ -20,6 +20,7 @@
 package meta
 
 import (
+	"bytes"
 	"fmt"
 	"syscall"
 	"time"
@@ -67,14 +68,18 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 				return mustInsert(s, flock{Inode: inode, Owner: owner, Ltype: 'R', Sid: m.sid})
 			}
 			me := key{m.sid, owner}
-			_, ok := locks[me]
+			flk, ok := locks[me]
 			delete(locks, me)
 			if len(locks) > 0 {
 				return syscall.EAGAIN
 			}
 			var n int64
 			if ok {
-				n, err = s.Cols("Ltype").Update(&flock{Ltype: 'W'}, &flock{Inode: inode, Owner: owner, Sid: m.sid})
+				if flk.Ltype != 'W' {
+					n, err = s.Cols("Ltype").Update(&flock{Ltype: 'W'}, &flock{Inode: inode, Owner: owner, Sid: m.sid})
+				} else {
+					n = 1
+				}
 			} else {
 				n, err = s.InsertOne(&flock{Inode: inode, Owner: owner, Ltype: 'W', Sid: m.sid})
 			}
@@ -211,11 +216,16 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 			}
 			ls := updateLocks(loadLocks(locks[lkey]), lock)
 			var n int64
+			records := dumpLocks(ls)
 			if len(locks[lkey]) > 0 {
-				n, err = s.Cols("records").Update(plock{Records: dumpLocks(ls)},
-					&plock{Inode: inode, Sid: m.sid, Owner: owner})
+				if !bytes.Equal(locks[lkey], records) {
+					n, err = s.Cols("records").Update(plock{Records: records},
+						&plock{Inode: inode, Sid: m.sid, Owner: owner})
+				} else {
+					n = 1
+				}
 			} else {
-				n, err = s.InsertOne(&plock{Inode: inode, Sid: m.sid, Owner: owner, Records: dumpLocks(ls)})
+				n, err = s.InsertOne(&plock{Inode: inode, Sid: m.sid, Owner: owner, Records: records})
 			}
 			if err == nil && n == 0 {
 				err = fmt.Errorf("insert/update failed")
