@@ -53,6 +53,7 @@ $ juicefs status redis://localhost`,
 			},
 			&cli.StringSliceFlag{
 				Name:  "scan",
+				Value: cli.NewStringSlice("file"),
 				Usage: "scanning the meta engine for more information, may take a long time",
 			},
 		},
