@@ -431,6 +431,14 @@ func SshInteractive(user, instruction string, questions []string, echos []bool) 
 	}
 	return answers, nil
 }
+func unescape(original string) string {
+	if escaped, err := url.QueryUnescape(original); err != nil {
+		logger.Warnf("unescape(%s) error: %s", original, err)
+		return original
+	} else {
+		return escaped
+	}
+}
 
 func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 	idx := strings.LastIndex(endpoint, ":")
@@ -456,10 +464,10 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 			username = u.Username
 		}
 	}
-	username, _ = url.QueryUnescape(username)
+	username = unescape(username)
 	var auth []ssh.AuthMethod
 	if pass != "" {
-		pass, _ = url.QueryUnescape(pass)
+		pass = unescape(pass)
 		auth = append(auth, ssh.Password(pass))
 	} else {
 		auth = append(auth, ssh.KeyboardInteractive(SshInteractive))
