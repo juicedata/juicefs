@@ -76,13 +76,16 @@ type fsStat struct {
 }
 
 type statistic struct {
-	DelayedSlices *statDelayedSlices
+	DelayedDeleted statDelayedDeleted `json:",omitempty"`
 }
-type statDelayedSlices struct {
-	Count     uint64
-	TotalSize string
+type statDelayedDeleted struct {
+	SliceCount uint64 `json:",omitempty"`
+	SliceSize  string `json:",omitempty"`
+	FileCount  uint64 `json:",omitempty"`
+	FileSize   string `json:",omitempty"`
 
-	totalSize uint64
+	sliceSize uint64
+	fileSize  uint64
 }
 
 func (s *fsStat) Format() {
@@ -90,8 +93,13 @@ func (s *fsStat) Format() {
 	s.UsedSpace = humanize.IBytes(s.totalSpace - s.availableSpace)
 }
 
-func (s *statDelayedSlices) Format() {
-	s.TotalSize = humanize.IBytes(s.totalSize)
+func (s *statDelayedDeleted) Format() {
+	if s.SliceCount > 0 {
+		s.SliceSize = humanize.IBytes(s.sliceSize)
+	}
+	if s.FileCount > 0 {
+		s.FileSize = humanize.IBytes(s.fileSize)
+	}
 }
 
 func printJson(v interface{}) {
@@ -139,10 +147,13 @@ func status(ctx *cli.Context) error {
 		eg := &errgroup.Group{}
 		for _, s := range scan {
 			switch s {
-			case "slices":
+			case "slice":
 				eg.Go(func() (err error) {
-					stat.DelayedSlices, err = scanSlices(ctx, m, progress)
-					return err
+					return scanDeletedSlices(ctx, m, &stat.DelayedDeleted, progress)
+				})
+			case "file":
+				eg.Go(func() (err error) {
+					return scanDeletedFiles(ctx, m, &stat.DelayedDeleted, progress)
 				})
 			default:
 				logger.Warnf("unknown scan option: %s, ignored", s)
@@ -157,22 +168,38 @@ func status(ctx *cli.Context) error {
 	return nil
 }
 
-func scanSlices(ctx *cli.Context, m meta.Meta, progress *utils.Progress) (*statDelayedSlices, error) {
+func scanDeletedSlices(ctx *cli.Context, m meta.Meta, stat *statDelayedDeleted, progress *utils.Progress) error {
 	slicesSpinner := progress.AddDoubleSpinner("Delayed Slices")
-	err := m.ScanDelayedSlices(ctx.Context, func(s meta.Slice) error {
+	defer slicesSpinner.Done()
+	err := m.ScanDeletedSlices(ctx.Context, func(s meta.Slice) error {
 		slicesSpinner.IncrInt64(int64(s.Size))
 		return nil
 	})
 	if err != nil {
 		logger.Fatalf("scan delayed slices: %s", err)
+		return err
 	}
-	slicesSpinner.Done()
-
 	count, size := slicesSpinner.Current()
-	slicesStat := &statDelayedSlices{
-		Count:     uint64(count),
-		totalSize: uint64(size),
+	stat.SliceCount = uint64(count)
+	stat.sliceSize = uint64(size)
+	stat.Format()
+	return nil
+}
+
+func scanDeletedFiles(ctx *cli.Context, m meta.Meta, stat *statDelayedDeleted, progress *utils.Progress) error {
+	fileSpinner := progress.AddDoubleSpinner("Delayed Files")
+	defer fileSpinner.Done()
+	err := m.ScanDeletedFiles(ctx.Context, func(_ meta.Ino, size uint64) error {
+		fileSpinner.IncrInt64(int64(size))
+		return nil
+	})
+	if err != nil {
+		logger.Fatalf("scan delayed files: %s", err)
+		return err
 	}
-	slicesStat.Format()
-	return slicesStat, nil
+	count, size := fileSpinner.Current()
+	stat.FileCount = uint64(count)
+	stat.fileSize = uint64(size)
+	stat.Format()
+	return nil
 }

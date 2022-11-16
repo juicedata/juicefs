@@ -2812,7 +2812,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 		return errno(err)
 	}
 
-	return errno(m.ScanDelayedSlices(ctx, func(s Slice) error {
+	return errno(m.ScanDeletedSlices(ctx, func(s Slice) error {
 		slices[1] = append(slices[1], s)
 		if showProgress != nil {
 			showProgress()
@@ -2821,17 +2821,19 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	}))
 }
 
-func (m *redisMeta) ScanDelayedSlices(ctx context.Context, visitor func(s Slice) error) error {
+func (m *redisMeta) ScanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error {
 	if visitor == nil {
 		return nil
 	}
+	visited := make(map[uint64]bool)
 	return m.hscan(ctx, m.delSlices(), func(keys []string) error {
 		var ss []Slice
 		for i := 0; i < len(keys); i += 2 {
 			ss = ss[:0]
 			m.decodeDelayedSlices([]byte(keys[i+1]), &ss)
 			for _, s := range ss {
-				if s.Id > 0 {
+				if s.Id > 0 && !visited[s.Id] {
+					visited[s.Id] = true
 					if err := visitor(s); err != nil {
 						return err
 					}
@@ -2840,6 +2842,42 @@ func (m *redisMeta) ScanDelayedSlices(ctx context.Context, visitor func(s Slice)
 		}
 		return nil
 	})
+}
+
+func (m *redisMeta) ScanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
+	if visitor == nil {
+		return nil
+	}
+
+	visited := make(map[Ino]bool)
+	start := int64(0)
+	const batchSize = 1000
+	for {
+		vals, err := m.rdb.ZRange(Background, m.delfiles(), start, start+batchSize).Result()
+		if err != nil {
+			return err
+		}
+		start += batchSize
+		for _, v := range vals {
+			ps := strings.Split(v, ":")
+			if len(ps) != 2 { // will be cleaned up as legacy
+				continue
+			}
+			inode, _ := strconv.ParseUint(ps[0], 10, 64)
+			if visited[Ino(inode)] {
+				continue
+			}
+			visited[Ino(inode)] = true
+			size, _ := strconv.ParseUint(ps[1], 10, 64)
+			if err := visitor(Ino(inode), size); err != nil {
+				return err
+			}
+		}
+		if len(vals) < batchSize {
+			break
+		}
+	}
+	return nil
 }
 
 func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {

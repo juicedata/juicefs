@@ -268,7 +268,8 @@ type Meta interface {
 	// ListSessions returns all client sessions.
 	ListSessions() ([]*Session, error)
 	// ScanDelayedSlices scans all slices are delayed to be deleted.
-	ScanDelayedSlices(ctx context.Context, visitor func(Slice) error) error
+	ScanDeletedSlices(ctx context.Context, visitor func(Slice) error) error
+	ScanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
 	CleanStaleSessions()
 
