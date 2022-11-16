@@ -2244,7 +2244,24 @@ func (m *kvMeta) ScanDeletedSlices(ctx context.Context, visitor func(s Slice) er
 }
 
 func (m *kvMeta) ScanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
-	panic("implement me")
+	// deleted files: Dttttttttcccccccc
+	klen := 1 + 8 + 8
+	keys, err := m.scanKeys(m.fmtKey("D"))
+	if err != nil {
+		return err
+	}
+
+	for _, key := range keys {
+		if len(key) != klen {
+			return fmt.Errorf("invalid key %x", key)
+		}
+		ino := m.decodeInode([]byte(key)[1:9])
+		size := binary.BigEndian.Uint64([]byte(key)[9:])
+		if err := visitor(ino, size); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {

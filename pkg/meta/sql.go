@@ -2637,7 +2637,27 @@ func (m *dbMeta) ScanDeletedSlices(ctx context.Context, visitor func(s Slice) er
 }
 
 func (m *dbMeta) ScanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
-	panic("implement me")
+	if visitor == nil {
+		return nil
+	}
+	return m.roTxn(func(s *xorm.Session) error {
+		if ok, err := s.IsTableExist(&delfile{}); err != nil {
+			return err
+		} else if !ok {
+			return nil
+		}
+		var dfs []delfile
+		err := s.Find(&dfs)
+		if err != nil {
+			return err
+		}
+		for _, ds := range dfs {
+			if err := visitor(ds.Inode, ds.Length); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
