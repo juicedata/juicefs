@@ -217,7 +217,7 @@ SORTED SET 类型：
 + [ZREM](https://redis.io/commands/zrem/)
 + [ZRANGEBYSCORE](https://redis.io/commands/zrangebyscore/)
 
-List 类型：
+LIST 类型：
 + [LRANGE](https://redis.io/commands/lrange/)
 + [LPUSH](https://redis.io/commands/lpush/)
 + [LTRIM](https://redis.io/commands/ltrim/)
