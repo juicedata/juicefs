@@ -1946,11 +1946,16 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 
 func (m *dbMeta) doRefreshSession() {
 	_ = m.txn(func(ses *xorm.Session) error {
-		if _, err := ses.Cols("Expire").Update(&session2{Expire: m.expireTime()}, &session2{Sid: m.sid}); err != nil {
-			logger.Errorf("update session: %s", err)
-			return err
+		exist, err := ses.Exist(&session2{Sid: m.sid})
+		if exist {
+			if _, err := ses.Cols("Expire").Update(&session2{Expire: m.expireTime()}, &session2{Sid: m.sid}); err != nil {
+				logger.Errorf("update session: %s", err)
+				return err
+			}
+		} else {
+			logger.Warnf("session %d not found", m.sid)
 		}
-		return nil
+		return err
 	})
 }
 
