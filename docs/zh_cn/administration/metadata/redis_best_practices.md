@@ -166,3 +166,76 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 ### 腾讯云云数据库 Redis
 
 [腾讯云云数据库 Redis](https://cloud.tencent.com/product/crs) 是一种兼容 Redis 协议的缓存和存储服务。丰富多样的数据结构选项，帮助您开发不同类型的业务场景，提供主从热备份、容灾自动切换、数据备份、故障转移、实例监控、在线等一整套数据库服务缩放和数据回滚。
+
+
+## 使用 Redis 兼容的产品
+
+如果想要使用 Redis 兼容产品作为元数据引擎，需要确认 JuiceFS 需要的 Redis 特性是否被支持。
+
+### JuiceFS 使用到的 Redis 的数据类型包括：
+
++ [STRING](https://redis.io/docs/data-types/strings/)
++ [SET](https://redis.io/docs/data-types/sets/)
++ [SORTED-SET](https://redis.io/docs/data-types/sorted-sets/)
++ [HASH](https://redis.io/docs/data-types/hashes/)
++ [LIST](https://redis.io/docs/data-types/lists/)
+
+### JuiceFS 使用到的 Redis 命令包括：
+
+STRING 类型：
++ [GET](https://redis.io/commands/get/)
++ [SET](https://redis.io/commands/set/)
++ [DEL](https://redis.io/commands/del/)
++ [MGET](https://redis.io/commands/mget/)
++ [MSET](https://redis.io/commands/mget/)
++ [SETNX](https://redis.io/commands/setnx/)
++ [INCRBY](https://redis.io/commands/incrby/)
++ [DECRBY](https://redis.io/commands/decrby/)
+
+SET 类型：
++ [SREM](https://redis.io/commands/srem/)
++ [SADD](https://redis.io/commands/sadd/)
++ [SMEMBERS](https://redis.io/commands/smembers/)
+
+HASH 类型：
++ [HGET](https://redis.io/commands/hget/)
++ [HSET](https://redis.io/commands/hset/)
++ [HDEL](https://redis.io/commands/hdel/)
++ [HGETALL](https://redis.io/commands/hgetall/)
++ [HKEYS](https://redis.io/commands/hkeys/)
++ [HDEL](https://redis.io/commands/hdel/)
++ [HSETNX](https://redis.io/commands/hsetnx/)
++ [HSCAN](https://redis.io/commands/hscan/)
++ [HINCRBY](https://redis.io/commands/hincrby/)
++ [HEXISTS](https://redis.io/commands/hexists/)
++ [HINCRBY](https://redis.io/commands/hincrby/)
+
+SORTED SET 类型：
++ [ZADD](https://redis.io/commands/zadd/)
++ [ZSCORE](https://redis.io/commands/zscore/)
++ [ZRANGE](https://redis.io/commands/zrange/)
++ [ZREM](https://redis.io/commands/zrem/)
++ [ZRANGEBYSCORE](https://redis.io/commands/zrangebyscore/)
+
+LIST 类型：
++ [LRANGE](https://redis.io/commands/lrange/)
++ [LPUSH](https://redis.io/commands/lpush/)
++ [LTRIM](https://redis.io/commands/ltrim/)
++ [LLEN](https://redis.io/commands/lpush/)
++ [RPUSH](https://redis.io/commands/rpush/)
++ [RPUSHX](https://redis.io/commands/rpushx/)
++ [SCAN](https://redis.io/commands/scan/)
+
+其他类型：
++ [WATCH](https://redis.io/commands/watch/)
++ [CLIENT-INFO](https://redis.io/commands/client-info/)
++ [PING](https://redis.io/commands/ping/)
++ [CONFIG-GET](https://redis.io/commands/config-get/)
++ [CONFIG-SET](https://redis.io/commands/config-set/)
++ [DBSIZE](https://redis.io/commands/dbsize/)
++ [EVALSHA](https://redis.io/commands/evalsha/) (非必需)
++ [SCRIPT-LOAD](https://redis.io/commands/script-load/) (非必需)
+
+### 事务与管道
++ [TRANSACTION](https://redis.io/docs/manual/transactions/)
++ [PIPELINE](https://redis.io/docs/manual/pipelining/)
