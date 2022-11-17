@@ -17,6 +17,16 @@ slug: /redis_best_practices
 本文部分内容来自 Redis 官网，若有不一致的表述，请以 Redis 官方文档为准。
 :::
 
+
+:::note 注意
+如果想要使用 Redis 兼容产品作为元数据引擎，需要确认 JuiceFS 需要的 Redis API 是否被支持。目前 JuiceFS 需要的 Redis API 包括：
++ [Sorted Set](https://redis.io/docs/data-types/sorted-sets/) 
++ [Hash](https://redis.io/docs/data-types/hashes/) 
++ [Transaction](https://redis.io/docs/manual/transactions/) 
++ [Scripting](https://redis.io/commands/eval/) 
++ [Scan](https://redis.io/commands/scan/)
+:::
+
 ## 内存使用量
 
 JuiceFS 元数据引擎的使用空间主要与文件系统中的文件数量有关，根据我们的经验，每一个文件的元数据会大约占用 300 字节内存。因此，如果要存储 1 亿个文件，大约需要 30GiB 内存。

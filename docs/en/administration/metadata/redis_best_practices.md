@@ -17,6 +17,15 @@ If you insist to operate Redis yourself in production environment, please keep i
 Part of the content in this article comes from the Redis official website. If there is any inconsistency, please refer to the official Redis document.
 :::
 
+:::note
+If you want to use a Redis compatible product as the metadata engine, you need to verify that the Redis API required by JuiceFS is supported. Currently, the Redis API required for JuiceFS includes:
++ [Sorted Set](https://redis.io/docs/data-types/sorted-sets/)
++ [Hash](https://redis.io/docs/data-types/hashes/)
++ [Transaction](https://redis.io/docs/manual/transactions/)
++ [Scripting](https://redis.io/commands/eval/)
++ [Scan](https://redis.io/commands/scan/)
+  :::
+
 ## Memory usage
 
 The space used by the JuiceFS metadata engine is mainly related to the number of files in the file system. According to our experience, the metadata of each file occupies approximately 300 bytes of memory. Therefore, if you want to store 100 million files, approximately 30 GiB of memory is required.
