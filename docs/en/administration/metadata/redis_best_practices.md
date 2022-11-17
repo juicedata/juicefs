@@ -17,15 +17,6 @@ If you insist to operate Redis yourself in production environment, please keep i
 Part of the content in this article comes from the Redis official website. If there is any inconsistency, please refer to the official Redis document.
 :::
 
-:::note
-If you want to use a Redis compatible product as the metadata engine, you need to verify that the Redis API required by JuiceFS is supported. Currently, the Redis API required for JuiceFS includes:
-+ [Sorted Set](https://redis.io/docs/data-types/sorted-sets/)
-+ [Hash](https://redis.io/docs/data-types/hashes/)
-+ [Transaction](https://redis.io/docs/manual/transactions/)
-+ [Scripting](https://redis.io/commands/eval/)
-+ [Scan](https://redis.io/commands/scan/)
-  :::
-
 ## Memory usage
 
 The space used by the JuiceFS metadata engine is mainly related to the number of files in the file system. According to our experience, the metadata of each file occupies approximately 300 bytes of memory. Therefore, if you want to store 100 million files, approximately 30 GiB of memory is required.
@@ -175,3 +166,76 @@ After recovering Redis data, you can continue to use the JuiceFS file system via
 ### Tencent Cloud TencentDB for Redis
 
 [Tencent Cloud TencentDB for Redis](https://intl.cloud.tencent.com/product/crs) is a caching and storage service compatible with the Redis protocol. It features a rich variety of data structure options to help you develop different types of business scenarios, and offers a complete set of database services such as primary-secondary hot backup, automatic switchover for disaster recovery, data backup, failover, instance monitoring, online scaling and data rollback.
+
+
+## Use Redis compatible products as metadata engine
+
+If you want to use a Redis compatible product as the metadata engine, you need to verify that the Redis API required by JuiceFS is supported.
+
+### The data types of Redis used by JuiceFS include:
+
++ [STRING](https://redis.io/docs/data-types/strings/)
++ [SET](https://redis.io/docs/data-types/sets/)
++ [SORTED-SET](https://redis.io/docs/data-types/sorted-sets/)
++ [HASH](https://redis.io/docs/data-types/hashes/)
++ [LIST](https://redis.io/docs/data-types/lists/)
+
+### The Redis commands used by JuiceFS include:
+
+STRING type:
++ [GET](https://redis.io/commands/get/)
++ [SET](https://redis.io/commands/set/)
++ [DEL](https://redis.io/commands/del/)
++ [MGET](https://redis.io/commands/mget/)
++ [MSET](https://redis.io/commands/mget/)
++ [SETNX](https://redis.io/commands/setnx/)
++ [INCRBY](https://redis.io/commands/incrby/)
++ [DECRBY](https://redis.io/commands/decrby/)
+
+SET type:
++ [SREM](https://redis.io/commands/srem/)
++ [SADD](https://redis.io/commands/sadd/)
++ [SMEMBERS](https://redis.io/commands/smembers/)
+
+HASH type:
++ [HGET](https://redis.io/commands/hget/)
++ [HSET](https://redis.io/commands/hset/)
++ [HDEL](https://redis.io/commands/hdel/)
++ [HGETALL](https://redis.io/commands/hgetall/)
++ [HKEYS](https://redis.io/commands/hkeys/)
++ [HDEL](https://redis.io/commands/hdel/)
++ [HSETNX](https://redis.io/commands/hsetnx/)
++ [HSCAN](https://redis.io/commands/hscan/)
++ [HINCRBY](https://redis.io/commands/hincrby/)
++ [HEXISTS](https://redis.io/commands/hexists/)
++ [HINCRBY](https://redis.io/commands/hincrby/)
+
+SORTED SET type:
++ [ZADD](https://redis.io/commands/zadd/)
++ [ZSCORE](https://redis.io/commands/zscore/)
++ [ZRANGE](https://redis.io/commands/zrange/)
++ [ZREM](https://redis.io/commands/zrem/)
++ [ZRANGEBYSCORE](https://redis.io/commands/zrangebyscore/)
+
+List type:
++ [LRANGE](https://redis.io/commands/lrange/)
++ [LPUSH](https://redis.io/commands/lpush/)
++ [LTRIM](https://redis.io/commands/ltrim/)
++ [LLEN](https://redis.io/commands/lpush/)
++ [RPUSH](https://redis.io/commands/rpush/)
++ [RPUSHX](https://redis.io/commands/rpushx/)
++ [SCAN](https://redis.io/commands/scan/)
+
+others:
++ [WATCH](https://redis.io/commands/watch/)
++ [CLIENT-INFO](https://redis.io/commands/client-info/)
++ [PING](https://redis.io/commands/ping/)
++ [CONFIG-GET](https://redis.io/commands/config-get/)
++ [CONFIG-SET](https://redis.io/commands/config-set/)
++ [DBSIZE](https://redis.io/commands/dbsize/)
++ [EVALSHA (OPTION)](https://redis.io/commands/evalsha/)
++ [SCRIPT-LOAD (OPTION)](https://redis.io/commands/script-load/)
+
+### Transactions and pipelines
++ [TRANSACTION](https://redis.io/docs/manual/transactions/)
++ [PIPELINE](https://redis.io/docs/manual/pipelining/)
