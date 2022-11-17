@@ -233,8 +233,8 @@ others:
 + [CONFIG-GET](https://redis.io/commands/config-get/)
 + [CONFIG-SET](https://redis.io/commands/config-set/)
 + [DBSIZE](https://redis.io/commands/dbsize/)
-+ [EVALSHA (OPTION)](https://redis.io/commands/evalsha/)
-+ [SCRIPT-LOAD (OPTION)](https://redis.io/commands/script-load/)
++ [EVALSHA](https://redis.io/commands/evalsha/) (optional)
++ [SCRIPT-LOAD](https://redis.io/commands/script-load/) (optional)
 
 ### Transactions and pipelines
 + [TRANSACTION](https://redis.io/docs/manual/transactions/)
