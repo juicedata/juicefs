@@ -19,8 +19,11 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/urfave/cli/v2"
 )
 
@@ -45,13 +48,30 @@ $ juicefs status redis://localhost`,
 				Aliases: []string{"s"},
 				Usage:   "show detailed information (sustained inodes, locks) of the specified session (sid)",
 			},
+			&cli.BoolFlag{
+				Name:    "more",
+				Aliases: []string{"m"},
+				Usage:   "show more statistic information, may take a long time",
+			},
 		},
 	}
 }
 
 type sections struct {
-	Setting  *meta.Format
-	Sessions []*meta.Session
+	Setting   *meta.Format
+	Sessions  []*meta.Session
+	Statistic *statistic
+}
+
+type statistic struct {
+	UsedSpace         uint64
+	AvailableSpace    uint64
+	UsedInodes        uint64
+	AvailableInodes   uint64
+	DeletedSliceCount int64 `json:",omitempty"`
+	DeletedSliceSize  int64 `json:",omitempty"`
+	DeletedFileCount  int64 `json:",omitempty"`
+	DeletedFileSize   int64 `json:",omitempty"`
 }
 
 func printJson(v interface{}) {
@@ -86,6 +106,39 @@ func status(ctx *cli.Context) error {
 		logger.Fatalf("list sessions: %s", err)
 	}
 
-	printJson(&sections{format, sessions})
+	stat := &statistic{}
+	var totalSpace uint64
+	if err = m.StatFS(meta.Background, &totalSpace, &stat.AvailableSpace, &stat.UsedInodes, &stat.AvailableInodes); err != syscall.Errno(0) {
+		logger.Fatalf("stat fs: %s", err)
+	}
+	stat.UsedSpace = totalSpace - stat.AvailableSpace
+
+	if ctx.Bool("more") {
+		progress := utils.NewProgress(false, false)
+		slicesSpinner := progress.AddDoubleSpinner("Delayed Slices")
+		defer slicesSpinner.Done()
+		fileSpinner := progress.AddDoubleSpinner("Delayed Files")
+		defer fileSpinner.Done()
+
+		err = m.Statistic(
+			ctx.Context,
+			func(s meta.Slice) error {
+				slicesSpinner.IncrInt64(int64(s.Size))
+				return nil
+			},
+			func(_ meta.Ino, size uint64) error {
+				fileSpinner.IncrInt64(int64(size))
+				return nil
+			},
+		)
+		if err != nil {
+			logger.Fatalf("statistic: %s", err)
+			return err
+		}
+		stat.DeletedSliceCount, stat.DeletedSliceSize = slicesSpinner.Current()
+		stat.DeletedFileCount, stat.DeletedFileSize = fileSpinner.Current()
+	}
+
+	printJson(&sections{format, sessions, stat})
 	return nil
 }

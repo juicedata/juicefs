@@ -22,6 +22,7 @@ package meta
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -2595,7 +2596,20 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	err = m.roTxn(func(s *xorm.Session) error {
+	return errno(m.scanDeletedSlices(ctx, func(s Slice) error {
+		slices[1] = append(slices[1], s)
+		if showProgress != nil {
+			showProgress()
+		}
+		return nil
+	}))
+}
+
+func (m *dbMeta) scanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error {
+	if visitor == nil {
+		return nil
+	}
+	return m.roTxn(func(s *xorm.Session) error {
 		if ok, err := s.IsTableExist(&delslices{}); err != nil {
 			return err
 		} else if !ok {
@@ -2610,20 +2624,40 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		for _, ds := range dss {
 			ss = ss[:0]
 			m.decodeDelayedSlices(ds.Slices, &ss)
-			if showProgress != nil {
-				for range ss {
-					showProgress()
-				}
-			}
 			for _, s := range ss {
 				if s.Id > 0 {
-					slices[1] = append(slices[1], s)
+					if err := visitor(s); err != nil {
+						return err
+					}
 				}
 			}
 		}
 		return nil
 	})
-	return errno(err)
+}
+
+func (m *dbMeta) scanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
+	if visitor == nil {
+		return nil
+	}
+	return m.roTxn(func(s *xorm.Session) error {
+		if ok, err := s.IsTableExist(&delfile{}); err != nil {
+			return err
+		} else if !ok {
+			return nil
+		}
+		var dfs []delfile
+		err := s.Find(&dfs)
+		if err != nil {
+			return err
+		}
+		for _, ds := range dfs {
+			if err := visitor(ds.Inode, ds.Length); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
