@@ -198,7 +198,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	object.UserAgent = "JuiceFS-" + version.Version()
 	var blob object.ObjectStorage
 	var err error
-
+	object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig = &tls.Config{}
 	if u, err := url.Parse(format.Bucket); err == nil {
 		values := u.Query()
 		if values.Get("tls-insecure-skip-verify") != "" {
@@ -206,7 +206,7 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 			if tlsSkipVerify, err = strconv.ParseBool(values.Get("tls-insecure-skip-verify")); err != nil {
 				return nil, err
 			}
-			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: tlsSkipVerify}
+			object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = tlsSkipVerify
 			values.Del("tls-insecure-skip-verify")
 			u.RawQuery = values.Encode()
 			format.Bucket = u.String()
