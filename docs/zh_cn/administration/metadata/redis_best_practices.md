@@ -187,7 +187,7 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 + [GET](https://redis.io/commands/get/)
 + [INCRBY](https://redis.io/commands/incrby/)
 + [MGET](https://redis.io/commands/mget/)
-+ [MSET](https://redis.io/commands/mget/)
++ [MSET](https://redis.io/commands/mset/)
 + [SETNX](https://redis.io/commands/setnx/)
 + [SET](https://redis.io/commands/set/)
 
@@ -208,11 +208,9 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 #### Hash
 
 + [HDEL](https://redis.io/commands/hdel/)
-+ [HDEL](https://redis.io/commands/hdel/)
 + [HEXISTS](https://redis.io/commands/hexists/)
 + [HGETALL](https://redis.io/commands/hgetall/)
 + [HGET](https://redis.io/commands/hget/)
-+ [HINCRBY](https://redis.io/commands/hincrby/)
 + [HINCRBY](https://redis.io/commands/hincrby/)
 + [HKEYS](https://redis.io/commands/hkeys/)
 + [HSCAN](https://redis.io/commands/hscan/)
@@ -221,7 +219,7 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 
 #### List
 
-+ [LLEN](https://redis.io/commands/lpush/)
++ [LLEN](https://redis.io/commands/llen/)
 + [LPUSH](https://redis.io/commands/lpush/)
 + [LRANGE](https://redis.io/commands/lrange/)
 + [LTRIM](https://redis.io/commands/ltrim/)
@@ -245,7 +243,7 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 + [CONFIG GET](https://redis.io/commands/config-get/)
 + [CONFIG SET](https://redis.io/commands/config-set/)
 + [DBSIZE](https://redis.io/commands/dbsize/)
-+ [FLUSHDB](https://redis.io/commands/flushdb/)
++ [FLUSHDB](https://redis.io/commands/flushdb/)（可选）
 + [INFO](https://redis.io/commands/info/)
 
 #### 集群管理
