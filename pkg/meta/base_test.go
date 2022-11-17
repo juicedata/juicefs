@@ -600,6 +600,15 @@ func testLocks(t *testing.T, m Meta) {
 	}
 	// flock
 	o1 := uint64(0xF000000000000001)
+	if st := m.Flock(ctx, inode, o1, syscall.F_WRLCK, false); st != 0 {
+		t.Fatalf("flock wlock: %s", st)
+	}
+	if st := m.Flock(ctx, inode, o1, syscall.F_WRLCK, false); st != 0 {
+		t.Fatalf("flock wlock: %s", st)
+	}
+	if st := m.Flock(ctx, inode, o1, syscall.F_UNLCK, false); st != 0 {
+		t.Fatalf("flock unlock: %s", st)
+	}
 	if st := m.Flock(ctx, inode, o1, syscall.F_RDLCK, false); st != 0 {
 		t.Fatalf("flock rlock: %s", st)
 	}
@@ -637,6 +646,9 @@ func testLocks(t *testing.T, m Meta) {
 	// POSIX locks
 	if st := m.Setlk(ctx, inode, o1, false, syscall.F_UNLCK, 0, 0xFFFF, 1); st != 0 {
 		t.Fatalf("plock unlock: %s", st)
+	}
+	if st := m.Setlk(ctx, inode, o1, false, syscall.F_RDLCK, 0, 0xFFFF, 1); st != 0 {
+		t.Fatalf("plock rlock: %s", st)
 	}
 	if st := m.Setlk(ctx, inode, o1, false, syscall.F_RDLCK, 0, 0xFFFF, 1); st != 0 {
 		t.Fatalf("plock rlock: %s", st)
