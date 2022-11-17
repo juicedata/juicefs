@@ -178,6 +178,10 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 + [Hash](https://redis.io/docs/data-types/hashes/)
 + [List](https://redis.io/docs/data-types/lists/)
 
+### JuiceFS 使用到的 Redis 特性
+
++ [管道](https://redis.io/docs/manual/pipelining)
+
 ### JuiceFS 使用到的 Redis 命令
 
 #### String

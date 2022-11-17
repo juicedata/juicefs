@@ -161,16 +161,15 @@ After recovering Redis data, you can continue to use the JuiceFS file system via
 
 [Alibaba Cloud ApsaraDB for Redis](https://www.alibabacloud.com/product/apsaradb-for-redis) is a database service compatible with native Redis protocols. It supports hybrid of memory and hard disks for data persistence. ApsaraDB for Redis provides a highly available hot standby architecture and are scalable to meet requirements for high-performance and low-latency read/write operations.
 
-=======
 ### Tencent Cloud TencentDB for Redis
 
 [Tencent Cloud TencentDB for Redis](https://intl.cloud.tencent.com/product/crs) is a caching and storage service compatible with the Redis protocol. It features a rich variety of data structure options to help you develop different types of business scenarios, and offers a complete set of database services such as primary-secondary hot backup, automatic switchover for disaster recovery, data backup, failover, instance monitoring, online scaling and data rollback.
 
-## Use Redis compatible products as metadata engine
+## Use Redis compatible product as metadata engine
 
 If you want to use a Redis compatible product as the metadata engine, you need to confirm whether the following Redis data types and commands required by JuiceFS are fully supported.
 
-### The data types of Redis used by JuiceFS
+### Redis data types used by JuiceFS
 
 + [String](https://redis.io/docs/data-types/strings/)
 + [Set](https://redis.io/docs/data-types/sets/)
@@ -178,7 +177,11 @@ If you want to use a Redis compatible product as the metadata engine, you need t
 + [Hash](https://redis.io/docs/data-types/hashes/)
 + [List](https://redis.io/docs/data-types/lists/)
 
-### The Redis commands used by JuiceFS
+### Redis features used by JuiceFS
+
++ [Pipelining](https://redis.io/docs/manual/pipelining)
+
+### Redis commands used by JuiceFS
 
 #### String
 
@@ -244,7 +247,7 @@ If you want to use a Redis compatible product as the metadata engine, you need t
 + [CONFIG GET](https://redis.io/commands/config-get/)
 + [CONFIG SET](https://redis.io/commands/config-set/)
 + [DBSIZE](https://redis.io/commands/dbsize/)
-+ [FLUSHDB](https://redis.io/commands/flushdb/)(optional)
++ [FLUSHDB](https://redis.io/commands/flushdb/) (optional)
 + [INFO](https://redis.io/commands/info/)
 
 #### Cluster management
