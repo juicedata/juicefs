@@ -233,8 +233,8 @@ LIST 类型：
 + [CONFIG-GET](https://redis.io/commands/config-get/)
 + [CONFIG-SET](https://redis.io/commands/config-set/)
 + [DBSIZE](https://redis.io/commands/dbsize/)
-+ [EVALSHA (OPTION)](https://redis.io/commands/evalsha/)
-+ [SCRIPT-LOAD (OPTION)](https://redis.io/commands/script-load/)
++ [EVALSHA](https://redis.io/commands/evalsha/) (非必需)
++ [SCRIPT-LOAD](https://redis.io/commands/script-load/) (非必需)
 
 ### 事务与管道
 + [TRANSACTION](https://redis.io/docs/manual/transactions/)
