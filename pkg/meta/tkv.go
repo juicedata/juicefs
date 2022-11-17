@@ -2209,7 +2209,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	return errno(m.ScanDeletedSlices(ctx, func(s Slice) error {
+	return errno(m.scanDeletedSlices(ctx, func(s Slice) error {
 		slices[1] = append(slices[1], s)
 		if showProgress != nil {
 			showProgress()
@@ -2218,7 +2218,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	}))
 }
 
-func (m *kvMeta) ScanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error {
+func (m *kvMeta) scanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error {
 	// delayed slices: Lttttttttcccccccc
 	klen := 1 + 8 + 8
 	result, err := m.scanValues(m.fmtKey("L"), -1, func(k, v []byte) bool {
@@ -2243,7 +2243,7 @@ func (m *kvMeta) ScanDeletedSlices(ctx context.Context, visitor func(s Slice) er
 	return nil
 }
 
-func (m *kvMeta) ScanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
+func (m *kvMeta) scanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
 	// deleted files: Dttttttttcccccccc
 	klen := 1 + 8 + 8
 	keys, err := m.scanKeys(m.fmtKey("D"))

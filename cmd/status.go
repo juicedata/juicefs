@@ -19,15 +19,12 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 
-	"github.com/dustin/go-humanize"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/sync/errgroup"
 )
 
 func cmdStatus() *cli.Command {
@@ -51,10 +48,10 @@ $ juicefs status redis://localhost`,
 				Aliases: []string{"s"},
 				Usage:   "show detailed information (sustained inodes, locks) of the specified session (sid)",
 			},
-			&cli.StringSliceFlag{
-				Name:  "scan",
-				Value: cli.NewStringSlice("file"),
-				Usage: "scanning the meta engine for more information, may take a long time",
+			&cli.BoolFlag{
+				Name:    "more",
+				Aliases: []string{"m"},
+				Usage:   "show more statistic information, may take a long time",
 			},
 		},
 	}
@@ -63,63 +60,18 @@ $ juicefs status redis://localhost`,
 type sections struct {
 	Setting   *meta.Format
 	Sessions  []*meta.Session
-	FsStat    *fsStat
-	Statistic *statistic `json:",omitempty"`
-}
-
-type fsStat struct {
-	UsedSpace       string
-	AvailableSpace  string
-	UsedInodes      uint64
-	AvailableInodes uint64
-
-	totalSpace     uint64
-	availableSpace uint64
+	Statistic *statistic
 }
 
 type statistic struct {
-	DelayedDeleted statDelayedDeleted `json:",omitempty"`
-}
-type statDelayedDeleted struct {
-	mu sync.Mutex
-
-	SliceCount uint64 `json:",omitempty"`
-	SliceSize  string `json:",omitempty"`
-	FileCount  uint64 `json:",omitempty"`
-	FileSize   string `json:",omitempty"`
-
-	sliceSize uint64
-	fileSize  uint64
-}
-
-func (s *fsStat) Format() {
-	s.AvailableSpace = humanize.IBytes(s.availableSpace)
-	s.UsedSpace = humanize.IBytes(s.totalSpace - s.availableSpace)
-}
-
-func (s *statDelayedDeleted) Format() {
-	if s.SliceCount > 0 {
-		s.SliceSize = humanize.IBytes(s.sliceSize)
-	}
-	if s.FileCount > 0 {
-		s.FileSize = humanize.IBytes(s.fileSize)
-	}
-}
-
-func (s *statDelayedDeleted) setSlices(count uint64, size uint64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.SliceCount = count
-	s.sliceSize = size
-	s.Format()
-}
-
-func (s *statDelayedDeleted) setFiles(count uint64, size uint64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.FileCount = count
-	s.fileSize = size
-	s.Format()
+	UsedSpace         uint64
+	AvailableSpace    uint64
+	UsedInodes        uint64
+	AvailableInodes   uint64
+	DeletedSliceCount int64 `json:",omitempty"`
+	DeletedSliceSize  int64 `json:",omitempty"`
+	DeletedFileCount  int64 `json:",omitempty"`
+	DeletedFileSize   int64 `json:",omitempty"`
 }
 
 func printJson(v interface{}) {
@@ -154,68 +106,39 @@ func status(ctx *cli.Context) error {
 		logger.Fatalf("list sessions: %s", err)
 	}
 
-	var fs fsStat
-	if err = m.StatFS(meta.Background, &fs.totalSpace, &fs.availableSpace, &fs.UsedInodes, &fs.AvailableInodes); err != syscall.Errno(0) {
+	stat := &statistic{}
+	var totalSpace uint64
+	if err = m.StatFS(meta.Background, &totalSpace, &stat.AvailableSpace, &stat.UsedInodes, &stat.AvailableInodes); err != syscall.Errno(0) {
 		logger.Fatalf("stat fs: %s", err)
 	}
-	fs.Format()
+	stat.UsedSpace = totalSpace - stat.AvailableSpace
 
-	sec := &sections{format, sessions, &fs, nil}
-	if scan := ctx.StringSlice("scan"); len(scan) > 0 {
-		stat := &statistic{}
+	if ctx.Bool("more") {
 		progress := utils.NewProgress(false, false)
-		eg := &errgroup.Group{}
-		for _, s := range scan {
-			switch s {
-			case "slice":
-				eg.Go(func() (err error) {
-					return scanDeletedSlices(ctx, m, &stat.DelayedDeleted, progress)
-				})
-			case "file":
-				eg.Go(func() (err error) {
-					return scanDeletedFiles(ctx, m, &stat.DelayedDeleted, progress)
-				})
-			default:
-				logger.Warnf("unknown scan option: %s, ignored", s)
-			}
-		}
-		if err := eg.Wait(); err != nil {
-			logger.Fatalf("scan: %s", err)
-		}
-		sec.Statistic = stat
-	}
-	printJson(sec)
-	return nil
-}
+		slicesSpinner := progress.AddDoubleSpinner("Delayed Slices")
+		defer slicesSpinner.Done()
+		fileSpinner := progress.AddDoubleSpinner("Delayed Files")
+		defer fileSpinner.Done()
 
-func scanDeletedSlices(ctx *cli.Context, m meta.Meta, stat *statDelayedDeleted, progress *utils.Progress) error {
-	slicesSpinner := progress.AddDoubleSpinner("Delayed Slices")
-	defer slicesSpinner.Done()
-	err := m.ScanDeletedSlices(ctx.Context, func(s meta.Slice) error {
-		slicesSpinner.IncrInt64(int64(s.Size))
-		return nil
-	})
-	if err != nil {
-		logger.Fatalf("scan delayed slices: %s", err)
-		return err
+		err = m.Statistic(
+			ctx.Context,
+			func(s meta.Slice) error {
+				slicesSpinner.IncrInt64(int64(s.Size))
+				return nil
+			},
+			func(_ meta.Ino, size uint64) error {
+				fileSpinner.IncrInt64(int64(size))
+				return nil
+			},
+		)
+		if err != nil {
+			logger.Fatalf("statistic: %s", err)
+			return err
+		}
+		stat.DeletedSliceCount, stat.DeletedSliceSize = slicesSpinner.Current()
+		stat.DeletedFileCount, stat.DeletedFileSize = fileSpinner.Current()
 	}
-	count, size := slicesSpinner.Current()
-	stat.setSlices(uint64(count), uint64(size))
-	return nil
-}
 
-func scanDeletedFiles(ctx *cli.Context, m meta.Meta, stat *statDelayedDeleted, progress *utils.Progress) error {
-	fileSpinner := progress.AddDoubleSpinner("Delayed Files")
-	defer fileSpinner.Done()
-	err := m.ScanDeletedFiles(ctx.Context, func(_ meta.Ino, size uint64) error {
-		fileSpinner.IncrInt64(int64(size))
-		return nil
-	})
-	if err != nil {
-		logger.Fatalf("scan delayed files: %s", err)
-		return err
-	}
-	count, size := fileSpinner.Current()
-	stat.setFiles(uint64(count), uint64(size))
+	printJson(&sections{format, sessions, stat})
 	return nil
 }

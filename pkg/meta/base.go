@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -32,6 +33,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -76,6 +78,9 @@ type engine interface {
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
+
+	scanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error
+	scanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
 }
@@ -1359,4 +1364,19 @@ func (m *baseMeta) cleanupDelayedSlices() {
 	} else {
 		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)
 	}
+}
+
+func (m *baseMeta) Statistic(ctx context.Context, slicesDeletedScan func(Slice) error, fileDeletedScan func(ino Ino, size uint64) error) error {
+	eg := errgroup.Group{}
+	if slicesDeletedScan != nil {
+		eg.Go(func() error {
+			return m.en.scanDeletedSlices(ctx, slicesDeletedScan)
+		})
+	}
+	if fileDeletedScan != nil {
+		eg.Go(func() error {
+			return m.en.scanDeletedFiles(ctx, fileDeletedScan)
+		})
+	}
+	return eg.Wait()
 }

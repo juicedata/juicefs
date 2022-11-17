@@ -2596,7 +2596,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	return errno(m.ScanDeletedSlices(ctx, func(s Slice) error {
+	return errno(m.scanDeletedSlices(ctx, func(s Slice) error {
 		slices[1] = append(slices[1], s)
 		if showProgress != nil {
 			showProgress()
@@ -2605,7 +2605,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	}))
 }
 
-func (m *dbMeta) ScanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error {
+func (m *dbMeta) scanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error {
 	if visitor == nil {
 		return nil
 	}
@@ -2636,7 +2636,7 @@ func (m *dbMeta) ScanDeletedSlices(ctx context.Context, visitor func(s Slice) er
 	})
 }
 
-func (m *dbMeta) ScanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
+func (m *dbMeta) scanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
 	if visitor == nil {
 		return nil
 	}

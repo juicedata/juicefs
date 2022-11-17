@@ -2812,7 +2812,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 		return errno(err)
 	}
 
-	return errno(m.ScanDeletedSlices(ctx, func(s Slice) error {
+	return errno(m.scanDeletedSlices(ctx, func(s Slice) error {
 		slices[1] = append(slices[1], s)
 		if showProgress != nil {
 			showProgress()
@@ -2821,7 +2821,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	}))
 }
 
-func (m *redisMeta) ScanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error {
+func (m *redisMeta) scanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error {
 	if visitor == nil {
 		return nil
 	}
@@ -2844,7 +2844,7 @@ func (m *redisMeta) ScanDeletedSlices(ctx context.Context, visitor func(s Slice)
 	})
 }
 
-func (m *redisMeta) ScanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
+func (m *redisMeta) scanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
 	if visitor == nil {
 		return nil
 	}
