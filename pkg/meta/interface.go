@@ -358,6 +358,8 @@ type Meta interface {
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
+	// OnReload register a callback for any change founded after reloaded.
+	OnReload(func(new *Format))
 
 	// Dump the tree under root, which may be modified by checkRoot
 	DumpMeta(w io.Writer, root Ino, keepSecret bool) error

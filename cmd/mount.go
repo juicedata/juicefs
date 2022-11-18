@@ -175,18 +175,16 @@ func wrapRegister(mp, name string) (prometheus.Registerer, *prometheus.Registry)
 	return registerer, registry
 }
 
-func getFormat(c *cli.Context, metaCli meta.Meta) (*meta.Format, error) {
-	format, err := metaCli.Load(true)
-	if err != nil {
-		return nil, fmt.Errorf("load setting: %s", err)
+func updateFormat(c *cli.Context) func(*meta.Format) *meta.Format {
+	return func(format *meta.Format) *meta.Format {
+		if c.IsSet("bucket") {
+			format.Bucket = c.String("bucket")
+		}
+		if c.IsSet("storage") {
+			format.Storage = c.String("storage")
+		}
+		return format
 	}
-	if c.IsSet("bucket") {
-		format.Bucket = c.String("bucket")
-	}
-	if c.IsSet("storage") {
-		format.Storage = c.String("storage")
-	}
-	return format, nil
 }
 
 func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
@@ -404,35 +402,38 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 
 type storageHolder struct {
 	object.ObjectStorage
+	fmt meta.Format
 }
 
-func NewReloadableStorage(format *meta.Format, reload func() (*meta.Format, error)) (object.ObjectStorage, error) {
+func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.Format) *meta.Format) (object.ObjectStorage, error) {
+	if patch != nil {
+		format = patch(format)
+	}
 	blob, err := createStorage(*format)
 	if err != nil {
 		return nil, err
 	}
-	holder := &storageHolder{blob}
-	go func() {
-		old := *format // keep a copy, so it will not refreshed
-		for {
-			time.Sleep(time.Minute)
-			new, err := reload()
-			if err != nil {
-				logger.Warnf("reload config: %s", err)
-				continue
-			}
-			if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken {
-				logger.Infof("found new configuration: storage=%s bucket=%s ak=%s", new.Storage, new.Bucket, new.AccessKey)
-				newBlob, err := createStorage(*new)
-				if err != nil {
-					logger.Warnf("object storage: %s", err)
-					continue
-				}
-				holder.ObjectStorage = newBlob
-				old = *new
-			}
+	holder := &storageHolder{
+		ObjectStorage: blob,
+		fmt:           *format, // keep a copy to find the change
+	}
+	cli.OnReload(func(new *meta.Format) {
+		if patch != nil {
+			new = patch(new)
 		}
-	}()
+		old := &holder.fmt
+		if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken {
+			logger.Infof("found new configuration: storage=%s bucket=%s ak=%s", new.Storage, new.Bucket, new.AccessKey)
+
+			newBlob, err := createStorage(*new)
+			if err != nil {
+				logger.Warnf("object storage: %s", err)
+				return
+			}
+			holder.ObjectStorage = newBlob
+			holder.fmt = *new
+		}
+	})
 	return holder, nil
 }
 
@@ -548,7 +549,7 @@ func mount(c *cli.Context) error {
 	metaConf := getMetaConf(c, mp, c.Bool("read-only") || utils.StringContains(strings.Split(c.String("o"), ","), "ro"))
 	metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
 	metaCli := meta.NewClient(addr, metaConf)
-	format, err := getFormat(c, metaCli)
+	format, err := metaCli.Load(true)
 	if err != nil {
 		return err
 	}
@@ -556,9 +557,7 @@ func mount(c *cli.Context) error {
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
 	registerer, registry := wrapRegister(mp, format.Name)
 
-	blob, err := NewReloadableStorage(format, func() (*meta.Format, error) {
-		return getFormat(c, metaCli)
-	})
+	blob, err := NewReloadableStorage(format, metaCli, updateFormat(c))
 	if err != nil {
 		return fmt.Errorf("object storage: %s", err)
 	}

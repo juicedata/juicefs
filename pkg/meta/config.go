@@ -66,6 +66,10 @@ type Format struct {
 	MaxClientVersion string `json:",omitempty"`
 }
 
+func (f *Format) OnReload(fn func(f *Format)) {
+
+}
+
 func (f *Format) update(old *Format, force bool) error {
 	if force {
 		logger.Warnf("Existing volume will be overwrited: %s", old)

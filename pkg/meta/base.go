@@ -110,6 +110,7 @@ type baseMeta struct {
 	maxDeleting  chan struct{}
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
+	reloadCb     []func(*Format)
 	umounting    bool
 
 	*fsStat
@@ -256,6 +257,28 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 		}
 	}
 	return &m.fmt, nil
+}
+
+func (m *baseMeta) OnReload(fn func(f *Format)) {
+	m.msgCallbacks.Lock()
+	defer m.msgCallbacks.Unlock()
+	m.reloadCb = append(m.reloadCb, fn)
+	if len(m.reloadCb) == 1 {
+		go func() {
+			time.Sleep(time.Minute)
+			f, err := m.Load(true)
+			if err == nil {
+				m.msgCallbacks.Lock()
+				cbs := m.reloadCb
+				m.msgCallbacks.Unlock()
+				for _, cb := range cbs {
+					cb(f)
+				}
+			} else {
+				logger.Warnf("reload config: %s", err)
+			}
+		}()
+	}
 }
 
 func (m *baseMeta) NewSession() error {
