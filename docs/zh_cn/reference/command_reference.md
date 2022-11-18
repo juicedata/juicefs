@@ -68,10 +68,6 @@ COPYRIGHT:
 ```
 
 :::note 注意
-如果 `juicefs` 不在 `$PATH` 中，你需要指定程序所在的路径才能执行。例如，`juicefs` 如果在当前目录中，则可以使用 `./juicefs`。为了方便使用，建议将 `juicefs` 添加到  `$PATH` 中。可以参考[「安装」](../getting-started/installation.md)了解安装相关内容。
-:::
-
-:::note 注意
 如果命令选项是布尔（boolean）类型，例如 `--debug` ，无需设置任何值，只要在命令中添加 `--debug` 即代表启用该功能，反之则代表不启用。
 :::
 
@@ -137,7 +133,7 @@ source /etc/bash_completion.d/juicefs
 
 ## 命令列表
 
-### juicefs format
+### juicefs format {#format}
 
 #### 描述
 
@@ -155,16 +151,16 @@ juicefs format [command options] META-URL NAME
 #### 选项
 
 `--block-size value`<br />
-块大小；单位为 KiB (默认：4096)
+块大小；单位为 KiB (默认：4096)。4M 是一个较好的默认值，不少对象存储（比如 S3）都将 4M 设为内部的块大小，因此将 JuiceFS block size 设为相同大小，往往也能获得更好的性能
 
 `--capacity value`<br />
-容量配额；单位为 GiB (默认：不限制)
+容量配额；单位为 GiB (默认：不限制)。如果启用了回收站，那么配额大小也将包含回收站文件
 
 `--inodes value`<br />
 文件数配额 (默认：不限制)
 
 `--compress value`<br />
-压缩算法 (lz4, zstd, none) (默认："none")
+压缩算法 (lz4, zstd, none) (默认："none")，开启压缩将不可避免地对性能产生一定影响，请权衡。
 
 `--shards value`<br />
 将数据块根据名字哈希存入 N 个桶中 (默认：0)，当 N 大于 0 时，`bucket` 需要写成 `%d` 的形式，例如 `--bucket "juicefs-%d"`
@@ -217,7 +213,7 @@ $ juicefs format sqlite3://myjfs.db myjfs --inode 1000000 --capacity 102400
 $ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
 ```
 
-### juicefs mount
+### juicefs mount {#mount}
 
 #### 描述
 
@@ -256,13 +252,13 @@ consul 注册中心地址 (默认："127.0.0.1:8500")
 其他 FUSE 选项 (参见[此文档](../reference/fuse_mount_options.md)来了解更多信息)
 
 `--attr-cache value`<br />
-属性缓存过期时间；单位为秒 (默认：1)
+属性缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--entry-cache value`<br />
-文件项缓存过期时间；单位为秒 (默认：1)
+文件项缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--dir-entry-cache value`<br />
-目录项缓存过期时间；单位为秒 (默认：1)
+目录项缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--enable-xattr`<br />
 启用扩展属性 (xattr) 功能 (默认：false)
@@ -298,25 +294,25 @@ consul 注册中心地址 (默认："127.0.0.1:8500")
 并发预读 N 个块 (默认：1)
 
 `--writeback`<br />
-后台异步上传对象 (默认：false)
+后台异步上传对象 (默认：false)。阅读[「客户端写缓存」](../guide/cache_management.md#writeback)了解更多
 
 `--cache-dir value`<br />
-本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`"$HOME/.juicefs/cache"` 或 `"/var/jfsCache"`)
+本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`"$HOME/.juicefs/cache"` 或 `"/var/jfsCache"`)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--cache-size value`<br />
-缓存对象的总大小；单位为 MiB (默认：102400)
+缓存对象的总大小；单位为 MiB (默认：102400)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--free-space-ratio value`<br />
-最小剩余空间比例 (默认：0.1)
+最小剩余空间比例 (默认：0.1)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--cache-partial-only`<br />
-仅缓存随机小块读 (默认：false)
+仅缓存随机小块读 (默认：false)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--read-only`<br />
 只读模式 (默认：false)
 
 `--open-cache value`<br />
-打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)
+打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--subdir value`<br />
 将某个子目录挂载为根 (默认："")
@@ -325,7 +321,7 @@ consul 注册中心地址 (默认："127.0.0.1:8500")
 自动备份元数据到对象存储的间隔时间；单位秒 (0 表示不备份) (默认：3600)
 
 `--heartbeat value`<br />
-发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认：12)。
+发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认：12)
 
 `--upload-delay value`<br />
 数据上传到对象存储的延迟时间，支持秒分时精度，对应格式分别为 ("s", "m", "h")，默认为 0 秒
@@ -431,34 +427,34 @@ juicefs gateway [command options] META-URL ADDRESS
 后台异步上传对象 (默认：false)
 
 `--cache-dir value`<br />
-本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
+本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--cache-size value`<br />
-缓存对象的总大小；单位为 MiB (默认：102400)
+缓存对象的总大小；单位为 MiB (默认：102400)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--free-space-ratio value`<br />
-最小剩余空间比例 (默认：0.1)
+最小剩余空间比例 (默认：0.1)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--cache-partial-only`<br />
-仅缓存随机小块读 (默认：false)
+仅缓存随机小块读 (默认：false)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--read-only`<br />
 只读模式 (默认：false)
 
 `--open-cache value`<br />
-打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)
+打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--subdir value`<br />
 将某个子目录挂载为根 (默认："")
 
 `--attr-cache value`<br />
-属性缓存过期时间；单位为秒 (默认：1)
+属性缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--entry-cache value`<br />
-文件项缓存过期时间；单位为秒 (默认：0)
+文件项缓存过期时间；单位为秒 (默认：0)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--dir-entry-cache value`<br />
-目录项缓存过期时间；单位为秒 (默认：1)
+目录项缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--access-log value`<br />
 访问日志的路径
@@ -554,22 +550,22 @@ juicefs webdav [command options] META-URL ADDRESS
 并发预读 N 个块 (默认：1)
 
 `--writeback`<br />
-后台异步上传对象 (默认：false)
+后台异步上传对象 (默认：false)。阅读[「客户端写缓存」](../guide/cache_management.md#writeback)了解更多
 
 `--upload-delay`<br />
 数据上传到对象存储的延迟时间，支持秒分时精度，对应格式分别为 ("s", "m", "h")，默认为 0 秒
 
 `--cache-dir value`<br />
-本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)
+本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--cache-size value`<br />
-缓存对象的总大小；单位为 MiB (默认：102400)
+缓存对象的总大小；单位为 MiB (默认：102400)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--free-space-ratio value`<br />
-最小剩余空间比例 (默认：0.1)
+最小剩余空间比例 (默认：0.1)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--cache-partial-only`<br />
-仅缓存随机小块读 (默认：false)
+仅缓存随机小块读 (默认：false)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--read-only`<br />
 只读模式 (默认：false)
@@ -581,19 +577,19 @@ juicefs webdav [command options] META-URL ADDRESS
 禁用后台作业（清理、备份等）（默认值：false）
 
 `--open-cache value`<br />
-打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)
+打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--subdir value`<br />
 将某个子目录挂载为根 (默认："")
 
 `--attr-cache value`<br />
-属性缓存过期时间；单位为秒 (默认：1)
+属性缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--entry-cache value`<br />
-文件项缓存过期时间；单位为秒 (默认：0)
+文件项缓存过期时间；单位为秒 (默认：0)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--dir-entry-cache value`<br />
-目录项缓存过期时间；单位为秒 (默认：1)
+目录项缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
 `--gzip`<br />
 通过 gzip 压缩提供的文件（默认值：false）
@@ -738,7 +734,9 @@ $ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3
 
 #### 描述
 
-递归删除指定目录下的所有文件。
+快速删除目录里的所有文件和子目录，效果等同于 `rm -rf`，但该命令直接操纵元数据，不经过 POSIX，所以速度更快。
+
+如果文件系统启用了回收站功能，被删除的文件会进入回收站。详见[「回收站」](../security/trash.md)。
 
 #### 使用
 
@@ -752,7 +750,7 @@ juicefs rmr PATH ...
 $ juicefs rmr /mnt/jfs/foo
 ```
 
-### juicefs info
+### juicefs info {#info}
 
 #### 描述
 
@@ -778,7 +776,7 @@ juicefs info [command options] PATH or INODE
 #### 示例
 
 ```bash
-$ 检查路径
+# 检查路径
 $ juicefs info /mnt/jfs/foo
 
 # 检查 inode
@@ -877,11 +875,11 @@ juicefs objbench [command options] BUCKET
 $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
 ```
 
-### juicefs gc
+### juicefs gc {#gc}
 
 #### 描述
 
-收集泄漏的对象。
+用来处理「对象泄漏」，以及因为覆盖写而产生的碎片数据的命令。详见[「状态检查 & 维护」](../administration/status_check_and_maintenance.md#gc)。
 
 #### 使用
 
@@ -1034,7 +1032,7 @@ $ juicefs status redis://localhost
 
 #### 描述
 
-主动为指定目录/文件建立缓存。
+主动为指定目录/文件建立缓存。阅读[「缓存预热」](../guide/cache_management.md#warmup)了解更多。
 
 #### 使用
 
@@ -1182,7 +1180,7 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 
 #### 描述
 
-销毁一个已经存在的文件系统
+销毁一个已经存在的文件系统，将会清空元数据引擎与对象存储中的相关数据。详见[「如何销毁文件系统」](administration/destroy.md)。
 
 #### 使用
 
