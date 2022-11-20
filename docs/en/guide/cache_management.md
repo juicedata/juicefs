@@ -10,7 +10,9 @@ For a file system driven by a combination of object storage and database, cache 
 JuiceFS provides various caching mechanisms including metadata caching, data read/write caching, etc.
 
 :::tip Does my application really need cache?
-Cache improve performance, only when application needs to repeatedly read files, so if you know for sure you're in a scenario where data is only accessed once (e.g. data cleansing during ETL), you can safely turn off cache to prevent overhead.
+Data caching will effectively improve the performance of random reads. For applications that require high random read performance (e.g. Elasticsearch, ClickHouse), it is recommended to use faster storage medium and allocate more space for cache.
+
+Meanwhile, cache improve performance only when application needs to repeatedly read files, so if you know for sure you're in a scenario where data is only accessed once (e.g. data cleansing during ETL), you can safely turn off cache to prevent overhead.
 :::
 
 ## Data consistency
@@ -39,7 +41,7 @@ There are three kinds of metadata which can be cached in kernel: **attribute**, 
 --dir-entry-cache value  dir entry cache TTL in seconds (default: 1)
 ```
 
-JuiceFS caches attributes, file entries, and directory entries in kernel for 1 second by default to improve the performance of `lookup` and `getattr`. When clients on multiple nodes are sharing the same file system, the metadata cached in kernel will only expire due to TTL exceeding. That is, in an edge case, it may happen that the metadata modification (e.g., `chown`) on node A cannot be seen immediately on node B. Of course, all nodes will eventually be able to see the changes made by A after the expiry of the cache.
+Attribute, entry and direntries are cached for 1 second by default, this speeds up lookup and getattr operations. When clients on multiple nodes are sharing the same file system, the metadata cached in kernel will only expire by TTL. So in edge cases, it's possible that metadata modifications (e.g., chown) on node A cannot be seen immediately on node B. Nevertheless, all nodes will eventually be able to see the changes made by A after cache expiration.
 
 ### In-memory client metadata cache
 
@@ -83,37 +85,41 @@ JuiceFS clients currently do not have kernel write caching enabled by default. S
 
 ### Client read data cache {#client-read-cache}
 
-The JuiceFS client automatically prefetches data into the cache based on the read pattern, thus improving sequential read performance. By default, it prefetches 1 block concurrently and caches it locally when reading. The local cache can be set up on any local file system based on HDD, SSD or memory.
+The JuiceFS client automatically prefetches data into cache based on read pattern, improving sequential read performance. By default, it prefetches 1 block concurrently and caches locally (learn about block in ["How JuiceFS Stores Files"](../reference/how_juicefs_store_files.md)). Local cache can be set up on any local file system based on HDD, SSD or memory.
 
-:::tip Hint
-You can check ["How JuiceFS Stores Files"](../reference/how_juicefs_store_files.md) to learn what a block is.
-:::
+In case of cache file system failure, if error can be returned immediately, JuiceFS will automatically fallback and access object storage directly. This is the usual case for local file systems, but with others, file system (such as some kernel-mode network file system) failure may manifest in read hanging, causing JuiceFS reads to hang as well. If this happens, try to adjust settings so that cache file system fails fast.
 
-The local cache can be adjusted at [mounting file system](../reference/command_reference.md#juicefs-mount) with the following options.
+Data downloaded from object storage, as well as small data (smaller than a single block) uploaded to object storage will be cached by JuiceFS Client, without compression or encryption.
 
-```
---cache-dir value         directory paths of local cache, use colon to separate multiple paths (default: "$HOME/.juicefs/cache" or "/var/jfsCache")
---cache-size value        size of cached object for read in MiB (default: 102400)
---free-space-ratio value  minimum free space (ratio) (default: 0.1)
---cache-partial-only      cache only random/small read (default: false)
-```
+Below are some important parameters for cache config (see [juicefs mount](../reference/command_reference.md#mount) for complete reference):
 
-Specifically, there are two ways to store the local cache of JuiceFS in memory, i.e., setting `--cache-dir` to `memory` or `/dev/shm/<cache-dir>`. The difference between these two approaches is that the former deletes the cache data after remounting the JuiceFS file system, while the latter retains the cache data. Still, there is not much difference in performance between them.
+* `--prefetch`
 
-The JuiceFS client writes data downloaded from the object storage (including new uploaded data containing less than 1 block) to the cache directory as fast as possible, without compression or encryption. **Because JuiceFS generates unique names for all block objects written to the object storage, and all block objects are not modified, there is no need to worry about the invalidation of the cached data when the file content is updated.**
+  Prefetch N blocks concurrently (default to 1), prefetch mechanism works like this: when reading a block at arbitrary position, the whole block is asynchronously scheduled for download. Prefetch often improves random read performance, but if your scenario cannot effectively utilize prefetched data (for example, reading large files randomly and sparsely), prefetch will bring read amplification, consider set to 0 to disable it.
 
-Data caching can effectively improve the performance of random reads. For applications like Elasticsearch, ClickHouse, etc. that require higher random read performance, it is recommended to point the cache path to a faster storage medium and allocate more cache space.
+  JuiceFS is equipped with another internal similar mechanism called readahead: when doing sequential reads, client will download nearby blocks in advance, improving sequential performance.
 
-#### Cache life cycle
+* `--cache-dir`
 
-When the cache usage space reaches the upper limit (that is, the cache size is greater than or equal to `--cache-size`) or the disk is almost full (that is, the free disk space ratio is less than `--free-space-ratio`), the JuiceFS client will automatically expire cache using random two algorithm, i.e. pick two blocks and expire the least accessed one.
+  Cache directory, default to `/var/jfsCache` or `$HOME/.juicefs/cache`, supports multiple values separated by `:`, this is mostly used by dedicated cache node which has multiple storage devices mounted. Also, `/dev/shm` is supported if you'd like to use memory for cache. Another way to use memory for cache is to pass the string `memory` to this parameter, this puts cache directly in client process memory, which is simpler compared to `/dev/shm`, but obviously cache will be lost after process restart, use this for tests and evaluations.
 
-JuiceFS allocates 100GiB cache space by default, but this does not mean that you have to have a disk with a capacity more than that. This value represents the maximum capacity that a JuiceFS client may use if the disk capacity allows. When the remaining space on the disk is less than 100GiB, ensure that the remaining space is not less than 10% by default.
+  When multiple cache directories are set, the `--cache-size` option represents the total size of data in all cache directories. JuiceFS balance cache writes with a simple hash algorithm, and cannot tailor write strategies for different cache directories, thus it is recommended that the free space of different cache directories are close to each other, otherwise, the space of a cache directory may not be fully utilized. This is also true when multiple disks are used as cache devices.
 
-For example, if you set `--cache-dir` to a partition with a capacity of 50GiB, then if `--cache-size` is set to 100GiB, JuiceFS will always keep the cache capacity around 45GiB, which means that more than 10% of the partition is reserved.
+  For example, `--cache-dir` is `/data1:/data2`, where `/data1` has a free space of 1GiB, `/data2` has a free space of 2GiB, `--cache-size` is 3GiB, `--free-space-ratio` is 0.1. Because the cache write strategy is to write evenly, the maximum space allocated to each cache directory is `3GiB / 2 = 1.5GiB`, resulting in a maximum of 1.5GiB cache space in the `/data2` directory instead of `2GiB * 0.9 = 1.8GiB`.
 
+  If you are in urgent need to free up disk space, you can manually delete data under the cache directory, which is usually `/var/jfsCache/<vol-name>/raw/`.
 
-JuiceFS currently estimates the size of cached objects by adding up the size of all cached objects with a minimum size of 4KiB, which is usually different from the `du` results.
+* `--cache-size` and `--free-space-ratio`
+
+  Cache size (in MiB, default to 102400) and minimum ratio of free size (default 0.1). Both parameters is able to control cache size, if any of the two criteria is met, JuiceFS Client will expire cache usage using an algorithm similar to LRU, i.e. remove older and less used blocks.
+
+  Actual cache size may exceed configured value, because it is difficult to calculate the exact disk space taken by cache. Currently, JuiceFS takes the sum of all cached objects sizes using a minimum 4 KiB size, which is often different from the result of `du`.
+
+* `--cache-partial-only`
+
+  Only cache small files and random small reads, do not cache whole block. This applies to conditions where object storage throughput is higher than the local cache device. Default value is false.
+
+  There are two main read patterns, sequential read and random read. Sequential read usually demands higher throughput while random reads needs lower latency. When local disk throughput is lower than object storage, consider enable `--cache-partial-only` so that sequential reads do not cache the whole block, but rather, only small reads (like Parquet / ORC footer) are cached. This allows JuiceFS to take advantage of low latency provided by local disk, and high throughput provided by object storage, at the same time.
 
 ### Client write data cache {#writeback}
 
