@@ -2153,25 +2153,20 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 }
 
-func (r *kvMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
+func (m *kvMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
-	result, err := r.scanValues(r.fmtKey("A"), -1, func(k, v []byte) bool {
-		return len(k) == klen && k[1+8] == 'C' && len(v) > sliceBytes
-	})
-	if err != nil {
+	if err := m.client.scan(m.fmtKey("A"), func(k, v []byte) {
+		if len(k) == klen && k[1+8] == 'C' && len(v) > sliceBytes {
+			inode := m.decodeInode(k[1:9])
+			indx := binary.BigEndian.Uint32(k[10:])
+			logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, len(v)/sliceBytes)
+			m.compactChunk(inode, indx, true)
+			bar.Increment()
+		}
+	}); err != nil {
 		logger.Warnf("scan chunks: %s", err)
 		return errno(err)
-	}
-
-	bar.IncrTotal(int64(len(result)))
-	for k, value := range result {
-		key := []byte(k[1:])
-		inode := r.decodeInode(key[:8])
-		indx := binary.BigEndian.Uint32(key[9:])
-		logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, len(value)/sliceBytes)
-		r.compactChunk(inode, indx, true)
-		bar.Increment()
 	}
 	return 0
 }
