@@ -268,8 +268,8 @@ func (c *memKV) txn(f func(kvTxn) error) error {
 }
 
 func (c *memKV) scan(prefix []byte, handler func(key []byte, value []byte)) error {
-	c.Lock()
-	defer c.Unlock()
+	// c.Lock()
+	// defer c.Unlock()
 	begin := string(prefix)
 	end := string(nextKey(prefix))
 	c.items.AscendGreaterOrEqual(&kvItem{key: begin}, func(i btree.Item) bool {
