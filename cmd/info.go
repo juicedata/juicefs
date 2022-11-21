@@ -174,7 +174,7 @@ func info(ctx *cli.Context) error {
 			printResult(results, 1, false)
 		}
 		if len(resp.FLocks) > 0 {
-			fmt.Println("  flocks:")
+			fmt.Println(" flocks:")
 			results := make([][]string, 0, 1+len(resp.FLocks))
 			results = append(results, []string{"Sid", "Owner", "Type"})
 			for _, l := range resp.FLocks {
@@ -187,7 +187,7 @@ func info(ctx *cli.Context) error {
 			printResult(results, 0, false)
 		}
 		if len(resp.PLocks) > 0 {
-			fmt.Println("  plocks:")
+			fmt.Println(" plocks:")
 			results := make([][]string, 0, 1+len(resp.PLocks))
 			results = append(results, []string{"Sid", "Owner", "Type", "Pid", "Start", "End"})
 			for _, l := range resp.PLocks {
