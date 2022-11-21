@@ -878,14 +878,14 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (!buf.hasRemaining() && b.remaining() <= buf.capacity() && !refill()) {
         return -1;
       }
-      int got = 0;
-      while (b.hasRemaining() && buf.hasRemaining()) {
-        b.put(buf.get());
-        got++;
+      ByteBuffer srcBuf = buf.duplicate();
+      int got = Math.min(b.remaining(), srcBuf.remaining());
+      if (got > 0) {
+        srcBuf.limit(srcBuf.position() + got);
+        b.put(srcBuf);
+        buf.position(srcBuf.position());
+        statistics.incrementBytesRead(got);
       }
-      statistics.incrementBytesRead(got);
-      if (!b.hasRemaining())
-        return got;
       int more = read(position, b);
       if (more <= 0)
         return got > 0 ? got : -1;
@@ -1250,8 +1250,8 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public void concat(final Path dst, final Path[] srcs) throws IOException {
     statistics.incrementWriteOps(1);
-    if (getFileStatus(dst).getLen() == 0) {
-      throw new IOException(dst + "is empty");
+    if (srcs.length == 0) {
+      throw new IllegalArgumentException("No sources given");
     }
     Path dp = makeQualified(dst).getParent();
     for (Path src : srcs) {
@@ -1261,7 +1261,6 @@ public class JuiceFileSystemImpl extends FileSystem {
                 + normalizePath(dst));
       }
     }
-    if (srcs.length == 0) { return; }
     byte[][] srcbytes = new byte[srcs.length][];
     int bufsize = 0;
     for (int i = 0; i < srcs.length; i++) {
