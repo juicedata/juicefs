@@ -17,13 +17,11 @@
 package cmd
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -147,19 +145,33 @@ func info(ctx *cli.Context) error {
 		}
 		if len(resp.Chunks) > 0 {
 			fmt.Println(" chunks:")
-			buf := bytes.NewBuffer(nil)
+			results := make([][]string, 0, 1+len(resp.Chunks))
+			results = append(results, []string{"chunkIndex", "sliceId", "size", "offset", "length"})
 			for _, c := range resp.Chunks {
-				fmt.Fprintf(buf, "\t%d:\t%d\t%d\t%d\t%d\n", c.ChunkIndex, c.Id, c.Size, c.Off, c.Len)
+				results = append(results, []string{
+					strconv.FormatUint(c.ChunkIndex, 10),
+					strconv.FormatUint(c.Id, 10),
+					strconv.FormatUint(uint64(c.Size), 10),
+					strconv.FormatUint(uint64(c.Off), 10),
+					strconv.FormatUint(uint64(c.Len), 10),
+				})
 			}
-			printChunks(buf.String(), true)
+			printResult(results, -1, false)
 		}
 		if len(resp.Objects) > 0 {
 			fmt.Println(" objects:")
-			buf := bytes.NewBuffer(nil)
+			results := make([][]string, 0, 1+len(resp.Objects))
+			results = append(results, []string{"chunkIndex", "objectName", "size", "offset", "length"})
 			for _, o := range resp.Objects {
-				fmt.Fprintf(buf, "\t%d:\t%s\t%d\t%d\t%d\n", o.ChunkIndex, o.Key, o.Size, o.Off, o.Len)
+				results = append(results, []string{
+					strconv.FormatUint(o.ChunkIndex, 10),
+					o.Key,
+					strconv.FormatUint(uint64(o.Size), 10),
+					strconv.FormatUint(uint64(o.Off), 10),
+					strconv.FormatUint(uint64(o.Len), 10),
+				})
 			}
-			printChunks(buf.String(), false)
+			printResult(results, 1, false)
 		}
 		if len(resp.FLocks) > 0 {
 			fmt.Println("  flocks:")
@@ -204,29 +216,4 @@ func ltypeToString(t uint32) string {
 	default:
 		return "UNKNOWN"
 	}
-}
-
-func printChunks(resp string, raw bool) {
-	cs := strings.Split(resp, "\n")
-	result := make([][]string, len(cs))
-	result[0] = []string{"chunkIndex", "objectName", "size", "offset", "length"}
-	leftAlign := 1
-	if raw {
-		result[0][1] = "sliceId"
-		leftAlign = -1
-	}
-	for i := 1; i < len(result); i++ {
-		result[i] = make([]string, 5) // len(result[0])
-	}
-
-	for i, c := range cs[:len(cs)-1] { // remove the last empty string
-		ps := strings.Split(c, "\t")[1:] // remove the first empty string
-		for j, p := range ps {
-			if j == 0 {
-				p = p[:len(p)-1] // remove the last ':'
-			}
-			result[i+1][j] = p
-		}
-	}
-	printResult(result, leftAlign, false)
 }
