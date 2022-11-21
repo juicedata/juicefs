@@ -2543,11 +2543,12 @@ func dup(b []byte) []byte {
 	return r
 }
 
-func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk) error {
+func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {
 	return m.roTxn(func(s *xorm.Session) error {
 		return s.Table(&chunk{}).Iterate(new(chunk), func(idx int, bean interface{}) error {
 			c := bean.(*chunk)
 			if len(c.Slices) > sliceBytes {
+				bar.IncrTotal(1)
 				ch <- cchunk{c.Inode, c.Indx, len(c.Slices) / sliceBytes}
 			}
 			return nil

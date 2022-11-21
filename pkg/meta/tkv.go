@@ -2153,15 +2153,17 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 }
 
-func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk) error {
+func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
 	return m.client.scan(m.fmtKey("A"), func(k, v []byte) {
 		if len(k) == klen && k[1+8] == 'C' && len(v) > sliceBytes {
+			bar.IncrTotal(1)
 			ch <- cchunk{
 				inode:  m.decodeInode(k[1:9]),
 				indx:   binary.BigEndian.Uint32(k[10:]),
-				slices: len(v) / sliceBytes}
+				slices: len(v) / sliceBytes,
+			}
 		}
 	})
 }

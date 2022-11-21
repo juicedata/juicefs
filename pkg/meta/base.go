@@ -58,7 +58,7 @@ type engine interface {
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
 
-	scanAllChunks(ctx Context, ch chan<- cchunk) error
+	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
 	compactChunk(inode Ino, indx uint32, force bool)
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
@@ -1195,10 +1195,10 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool)
 	return
 }
 
-func (m *baseMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
+func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno {
 	var wg sync.WaitGroup
-	ch := make(chan cchunk, 1000)
-	for i := 0; i < 10; i++ {
+	ch := make(chan cchunk, 1000000)
+	for i := 0; i < threads; i++ {
 		wg.Add(1)
 		go func() {
 			for c := range ch {
@@ -1210,7 +1210,7 @@ func (m *baseMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 		}()
 	}
 
-	err := m.en.scanAllChunks(ctx, ch)
+	err := m.en.scanAllChunks(ctx, ch, bar)
 	close(ch)
 	wg.Wait()
 	if err != nil {

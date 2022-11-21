@@ -2638,7 +2638,7 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 }
 
-func (m *redisMeta) scanAllChunks(ctx Context, ch chan<- cchunk) error {
+func (m *redisMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {
 	p := m.rdb.Pipeline()
 	return m.scan(ctx, "c*_*", func(keys []string) error {
 		for _, key := range keys {
@@ -2656,6 +2656,7 @@ func (m *redisMeta) scanAllChunks(ctx Context, ch chan<- cchunk) error {
 				var indx uint32
 				n, err := fmt.Sscanf(keys[i], m.prefix+"c%d_%d", &inode, &indx)
 				if err == nil && n == 2 {
+					bar.IncrTotal(1)
 					ch <- cchunk{Ino(inode), indx, int(cnt)}
 				}
 			}
