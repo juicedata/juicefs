@@ -463,7 +463,7 @@ func tryToInstallMountExec() error {
 	if _, err := os.Stat("/sbin/mount.juicefs"); err == nil {
 		return nil
 	}
-	src, err := filepath.Abs(os.Args[0])
+	src, err := os.Executable()
 	if err != nil {
 		return err
 	}
