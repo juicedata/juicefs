@@ -17,16 +17,17 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
 
@@ -117,36 +118,49 @@ func info(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
 		}
-		data := make([]byte, 4)
-		n := readControl(f, data)
-		if n == 1 && data[0] == byte(syscall.EINVAL&0xff) {
-			logger.Fatalf("info is not supported, please upgrade and mount again")
+		err = f.Sync()
+		if err != nil {
+			logger.Fatalf("sync control file: %s", err)
 		}
-		r := utils.ReadBuffer(data)
-		size := r.Get32()
-		data = make([]byte, size)
-		n, err = f.Read(data)
+		var resp vfs.InfoResponse
+		err = resp.Decode(f)
 		if err != nil {
 			logger.Fatalf("read info: %s", err)
 		}
+		_ = f.Close()
 		fmt.Println(path, ":")
-		resp := string(data[:n])
-		var p int
-		if p = strings.Index(resp, "chunks:\n"); p > 0 {
-			p += 8
-			raw = 1 // legacy clients always return chunks
-		} else if p = strings.Index(resp, "objects:\n"); p > 0 {
-			p += 9
-		}
-		if p <= 0 {
-			fmt.Println(resp)
-		} else {
-			fmt.Println(resp[:p-1])
-			if len(resp[p:]) > 0 {
-				printChunks(resp[p:], raw == 1)
+		fmt.Printf("  inode: %d\n", resp.Ino)
+		fmt.Printf("  files: %d\n", resp.Summary.Files)
+		fmt.Printf("   dirs: %d\n", resp.Summary.Dirs)
+		fmt.Printf(" length: %s\n", utils.FormatBytes(resp.Summary.Length))
+		fmt.Printf("   size: %s\n", utils.FormatBytes(resp.Summary.Size))
+		switch len(resp.Paths) {
+		case 0:
+			fmt.Printf("   path: %s\n", "unknown")
+		case 1:
+			fmt.Printf("   path: %s\n", resp.Paths[0])
+		default:
+			fmt.Printf("  paths:\n")
+			for _, p := range resp.Paths {
+				fmt.Printf("\t%s\n", p)
 			}
 		}
-		_ = f.Close()
+		if len(resp.Chunks) > 0 {
+			fmt.Println(" chunks:")
+			buf := bytes.NewBuffer(nil)
+			for _, c := range resp.Chunks {
+				fmt.Fprintf(buf, "\t%d:\t%d\t%d\t%d\t%d\n", c.ChunkIndex, c.Id, c.Size, c.Off, c.Len)
+			}
+			printChunks(buf.String(), true)
+		}
+		if len(resp.Objects) > 0 {
+			fmt.Println(" objects:")
+			buf := bytes.NewBuffer(nil)
+			for _, o := range resp.Objects {
+				fmt.Fprintf(buf, "\t%d:\t%s\t%d\t%d\t%d\n", o.ChunkIndex, o.Key, o.Size, o.Off, o.Len)
+			}
+			printChunks(buf.String(), false)
+		}
 	}
 
 	return nil
