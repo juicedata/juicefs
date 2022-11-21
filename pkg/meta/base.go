@@ -1195,7 +1195,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool)
 	return
 }
 
-func (m *baseMeta) CompactAll(ctx Context, spin *utils.Bar) syscall.Errno {
+func (m *baseMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 	var wg sync.WaitGroup
 	ch := make(chan cchunk, 1000)
 	for i := 0; i < 10; i++ {
@@ -1204,7 +1204,7 @@ func (m *baseMeta) CompactAll(ctx Context, spin *utils.Bar) syscall.Errno {
 			for c := range ch {
 				logger.Debugf("Compacting chunk %d:%d (%d slices)", c.inode, c.indx, c.slices)
 				m.en.compactChunk(c.inode, c.indx, true)
-				spin.Increment()
+				bar.Increment()
 			}
 			wg.Done()
 		}()
