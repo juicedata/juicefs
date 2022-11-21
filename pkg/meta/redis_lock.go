@@ -226,6 +226,9 @@ func (r *redisMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FL
 	}
 
 	rawPLocks, err := r.rdb.HGetAll(ctx, pKey).Result()
+	if err != nil {
+		return nil, nil, err
+	}
 	plocks := make([]PLockItem, 0)
 	for k, d := range rawPLocks {
 		owner, err := parseOwnerKey(k)
