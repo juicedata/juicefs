@@ -103,6 +103,7 @@ type baseMeta struct {
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
 	umounting    bool
+	sesMu        sync.Mutex
 
 	*fsStat
 
@@ -289,13 +290,14 @@ func (m *baseMeta) expireTime() int64 {
 func (m *baseMeta) refreshSession() {
 	for {
 		utils.SleepWithJitter(m.conf.Heartbeat)
-		m.Lock()
+		m.sesMu.Lock()
 		if m.umounting {
-			m.Unlock()
+			m.sesMu.Unlock()
 			return
 		}
 		m.en.doRefreshSession()
-		m.Unlock()
+		m.sesMu.Unlock()
+
 		old := m.fmt.UUID
 		if _, err := m.Load(false); err != nil {
 			logger.Warnf("reload setting: %s", err)
@@ -335,9 +337,9 @@ func (m *baseMeta) CloseSession() error {
 	if m.conf.ReadOnly {
 		return nil
 	}
-	m.Lock()
+	m.sesMu.Lock()
 	m.umounting = true
-	m.Unlock()
+	m.sesMu.Unlock()
 	logger.Infof("close session %d: %s", m.sid, m.en.doCleanStaleSession(m.sid))
 	return nil
 }
@@ -872,9 +874,12 @@ func (m *baseMeta) NewSlice(ctx Context, id *uint64) syscall.Errno {
 func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 	if m.of.Close(inode) {
 		m.Lock()
-		defer m.Unlock()
-		if m.removedFiles[inode] {
+		_, removed := m.removedFiles[inode]
+		if removed {
 			delete(m.removedFiles, inode)
+		}
+		m.Unlock()
+		if removed {
 			_ = m.en.doDeleteSustainedInode(m.sid, inode)
 		}
 	}
