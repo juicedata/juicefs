@@ -2543,23 +2543,16 @@ func dup(b []byte) []byte {
 	return r
 }
 
-func (m *dbMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
-	var cs []chunk
-	err := m.roTxn(func(s *xorm.Session) error {
-		cs = nil
-		return s.Where("length(slices) >= ?", sliceBytes*2).Cols("inode", "indx").Find(&cs)
+func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk) error {
+	return m.roTxn(func(s *xorm.Session) error {
+		return s.Table(&chunk{}).Iterate(new(chunk), func(idx int, bean interface{}) error {
+			c := bean.(*chunk)
+			if len(c.Slices) > sliceBytes {
+				ch <- cchunk{c.Inode, c.Indx, len(c.Slices) / sliceBytes}
+			}
+			return nil
+		})
 	})
-	if err != nil {
-		return errno(err)
-	}
-
-	bar.IncrTotal(int64(len(cs)))
-	for _, c := range cs {
-		logger.Debugf("compact chunk %d:%d (%d slices)", c.Inode, c.Indx, len(c.Slices)/sliceBytes)
-		m.compactChunk(c.Inode, c.Indx, true)
-		bar.Increment()
-	}
-	return 0
 }
 
 func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {

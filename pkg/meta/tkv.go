@@ -2153,22 +2153,17 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 }
 
-func (m *kvMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
+func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk) error {
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
-	if err := m.client.scan(m.fmtKey("A"), func(k, v []byte) {
+	return m.client.scan(m.fmtKey("A"), func(k, v []byte) {
 		if len(k) == klen && k[1+8] == 'C' && len(v) > sliceBytes {
-			inode := m.decodeInode(k[1:9])
-			indx := binary.BigEndian.Uint32(k[10:])
-			logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, len(v)/sliceBytes)
-			m.compactChunk(inode, indx, true)
-			bar.Increment()
+			ch <- cchunk{
+				inode:  m.decodeInode(k[1:9]),
+				indx:   binary.BigEndian.Uint32(k[10:]),
+				slices: len(v) / sliceBytes}
 		}
-	}); err != nil {
-		logger.Warnf("scan chunks: %s", err)
-		return errno(err)
-	}
-	return 0
+	})
 }
 
 func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
