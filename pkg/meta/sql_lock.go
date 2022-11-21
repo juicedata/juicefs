@@ -21,6 +21,7 @@ package meta
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"syscall"
 	"time"
@@ -246,4 +247,30 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 		}
 	}
 	return err
+}
+
+func (r *dbMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
+	var fs []flock
+	if err := r.db.Find(&fs, &flock{Inode: inode}); err != nil {
+		return nil, nil, err
+	}
+
+	flocks := make([]FLockItem, 0, len(fs))
+	for _, f := range fs {
+		flocks = append(flocks, FLockItem{ownerKey{f.Sid, uint64(f.Owner)}, string(f.Ltype)})
+	}
+
+	var ps []plock
+	if err := r.db.Find(&ps, &plock{Inode: inode}); err != nil {
+		return nil, nil, err
+	}
+
+	plocks := make([]PLockItem, 0)
+	for _, p := range ps {
+		ls := loadLocks(p.Records)
+		for _, l := range ls {
+			plocks = append(plocks, PLockItem{ownerKey{p.Sid, uint64(p.Owner)}, l})
+		}
+	}
+	return plocks, flocks, nil
 }

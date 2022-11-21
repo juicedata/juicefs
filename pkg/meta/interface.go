@@ -267,6 +267,8 @@ type Meta interface {
 	GetSession(sid uint64, detail bool) (*Session, error)
 	// ListSessions returns all client sessions.
 	ListSessions() ([]*Session, error)
+	// ListLocks returns all locks of a inode.
+	ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error)
 	// Statistic scan metadata by visitors.
 	Statistic(ctx context.Context, slicesDelayedScan func(Slice) error, fileDelayedScan func(ino Ino, size uint64) error) error
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes

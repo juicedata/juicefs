@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -132,6 +133,37 @@ type plockRecord struct {
 	Pid   uint32
 	Start uint64
 	End   uint64
+}
+
+type ownerKey struct {
+	Sid   uint64
+	Owner uint64
+}
+
+type PLockItem struct {
+	ownerKey
+	plockRecord
+}
+
+type FLockItem struct {
+	ownerKey
+	Type string
+}
+
+func parseOwnerKey(key string) (*ownerKey, error) {
+	pair := strings.Split(key, "_")
+	if len(pair) != 2 {
+		return nil, fmt.Errorf("invalid owner key: %s", key)
+	}
+	sid, err := strconv.ParseUint(pair[0], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	owner, err := strconv.ParseUint(pair[1], 16, 64)
+	if err != nil {
+		return nil, err
+	}
+	return &ownerKey{sid, owner}, nil
 }
 
 func loadLocks(d []byte) []plockRecord {

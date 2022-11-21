@@ -257,6 +257,8 @@ type InfoResponse struct {
 	Paths   []string
 	Chunks  []*chunkSlice
 	Objects []*chunkObj
+	PLocks  []meta.PLockItem
+	FLocks  []meta.FLockItem
 }
 
 type chunkSlice struct {
@@ -339,7 +341,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		if r != 0 {
 			info.Success = true
 			info.Reason = r.Error()
-			*data = info.Encode()
+			*data = append(*data, info.Encode()...)
 			return
 		}
 
@@ -358,6 +360,12 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 					}
 				}
 			}
+		}
+
+		var err error
+		if info.PLocks, info.FLocks, err = v.Meta.ListLocks(ctx, inode); err != nil {
+			info.Success = true
+			info.Reason = err.Error()
 		}
 		*data = append(*data, info.Encode()...)
 	case meta.FillCache:

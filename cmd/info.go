@@ -161,9 +161,49 @@ func info(ctx *cli.Context) error {
 			}
 			printChunks(buf.String(), false)
 		}
+		if len(resp.FLocks) > 0 {
+			fmt.Println("  flocks:")
+			results := make([][]string, 0, 1+len(resp.FLocks))
+			results = append(results, []string{"Sid", "Owner", "Type"})
+			for _, l := range resp.FLocks {
+				results = append(results, []string{
+					strconv.FormatUint(l.Sid, 10),
+					strconv.FormatUint(l.Owner, 10),
+					l.Type,
+				})
+			}
+			printResult(results, 0, false)
+		}
+		if len(resp.PLocks) > 0 {
+			fmt.Println("  plocks:")
+			results := make([][]string, 0, 1+len(resp.PLocks))
+			results = append(results, []string{"Sid", "Owner", "Type", "Pid", "Start", "End"})
+			for _, l := range resp.PLocks {
+				results = append(results, []string{
+					strconv.FormatUint(l.Sid, 10),
+					strconv.FormatUint(l.Owner, 10),
+					ltypeToString(l.Type),
+					strconv.FormatUint(uint64(l.Pid), 10),
+					strconv.FormatUint(l.Start, 10),
+					strconv.FormatUint(l.End, 10),
+				})
+			}
+			printResult(results, 0, false)
+		}
 	}
 
 	return nil
+}
+
+func ltypeToString(t uint32) string {
+	switch t {
+	case meta.F_RDLCK:
+		return "R"
+	case meta.F_WRLCK:
+		return "W"
+	default:
+		return "UNKNOWN"
+	}
 }
 
 func printChunks(resp string, raw bool) {
