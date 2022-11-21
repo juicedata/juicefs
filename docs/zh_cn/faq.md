@@ -4,8 +4,6 @@ slug: /faq
 ---
 
 # JuiceFS 常见问题
-
-
 ## 一般问题
 
 ### JuiceFS 与 XXX 的区别是什么？
@@ -49,10 +47,6 @@ slug: /faq
 
 已经支持了绝大部分对象存储，参考这个[列表](guide/how_to_set_up_object_storage.md#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
-### 为什么在对象存储中看不到那些已经存入 JuiceFS 的原始文件？
-
-使用 JuiceFS，文件最终会被拆分成 Chunks、Slices 和 Blocks 存储在对象存储。因此，你会发现在对象存储平台的文件浏览器中找不到存入 JuiceFS 的原始文件，存储桶中只有一个 chunks 目录和一堆数字编号的目录和文件。不要惊慌，这正是 JuiceFS 文件系统高效运作的秘诀！详情请参考[「JuiceFS 如何存储文件」](introduction/architecture.md#如何存储文件)。
-
 ### 为什么我在挂载点删除了文件，但是对象存储占用空间没有变化或者变化很小？
 
 第一个原因是你可能开启了回收站特性。为了保证数据安全回收站默认开启，删除的文件其实被放到了回收站，实际并没有被删除，所以对象存储大小不会变化。回收站的保留时间可以通过 `juicefs format` 指定或者通过 `juicefs config` 修改。请参考[「回收站」](security/trash.md)文档了解更多信息。
@@ -78,7 +72,6 @@ slug: /faq
 ### 一个文件系统可以绑定多个不同的对象存储吗（比如同时用 Amazon S3、GCS 和 OSS 组成一个文件系统）？
 
 不支持。但在创建文件系统时可以设定关联同一个对象存储的多个 bucket，从而解决单个 bucket 对象数量限制的问题，例如，可以为一个文件系统关联多个 S3 Bucket。具体请参考 [`--shards`](./reference/command_reference.md#juicefs-format) 选项的说明。
-
 
 ## 性能相关问题
 
@@ -110,52 +103,6 @@ JuiceFS 不将原始文件存入对象存储，而是将其按照某个大小（
 
 到 JuiceFS 1.0 为止，还不支持该功能。
 
-
-## 挂载相关问题
-
-### 可以用 `root` 以外的用户挂载吗？
-
-可以，JuiceFS 可以由任何用户挂载。默认的缓存目录是 `$HOME/.juicefs/cache`（macOS）或者 `/var/jfsCache`（Linux），请确保该用户对这个目录有写权限，或者切换到其它有权限的目录。
-
-请查看[「客户端读缓存」](guide/cache_management.md#客户端读缓存)了解更多信息。
-
-### `docker: Error response from daemon: error while creating mount source path 'XXX': mkdir XXX: file exists.`
-
-当你使用 [Docker bind mounts](https://docs.docker.com/storage/bind-mounts) 把宿主机上的一个目录挂载到容器中时，你可能会遇到这个错误。这是因为使用了非 root 用户执行了 `juicefs mount` 命令，进而导致 Docker 没有权限访问这个目录。
-
-这个问题有两种解决方法：
-
-1. 用 root 用户执行 `juicefs mount` 命令
-2. 修改 FUSE 的配置文件以及增加 `allow_other` 挂载选项，请查看[这个文档](reference/fuse_mount_options.md#allow_other)了解更多信息。
-
-### `fuse: fuse: exec: "/bin/fusermount": stat /bin/fusermount: no such file or directory`
-
-这个错误意味着使用了非 root 用户执行 `juicefs mount` 命令，并且 `fusermount` 这个命令也找不到。
-
-这个问题有两种解决方法：
-
-1. 用 root 用户执行 `juicefs mount` 命令
-2. 安装 `fuse` 包（例如 `apt-get install fuse`、`yum install fuse`）
-
-### `fuse: fuse: fork/exec /usr/bin/fusermount: permission denied`
-
-这个错误意味着当前用户没有执行 `fusermount` 命令的权限。例如，你可以通过下面的命令检查 `fusermount` 命令的权限：
-
-```sh
-$ ls -l /usr/bin/fusermount
--rwsr-x---. 1 root fuse 27968 Dec  7  2011 /usr/bin/fusermount
-```
-
-上面的例子表示只有 root 用户和 `fuse` 用户组的用户有权限执行。另一个例子：
-
-```sh
-$ ls -l /usr/bin/fusermount
--rwsr-xr-x 1 root root 32096 Oct 30  2018 /usr/bin/fusermount
-```
-
-上面的例子表示所有用户都有权限执行。
-
-
 ## 访问相关问题
 
 ### 数据更新什么时候会对其它客户端可见？
@@ -183,7 +130,7 @@ uid=1201(alice) gid=500(staff) groups=500(staff)
 
 除了挂载外，还支持以下几种方式：
 
-- Kuberenetes CSI 驱动：通过 Kubernetes CSI 驱动的方式将 JuiceFS 作为 Kubernetes 集群的存储层，详情请参考[「Kubernetes 使用 JuiceFS」](deployment/how_to_use_on_kubernetes.md)。
+- Kubernetes CSI 驱动：通过 Kubernetes CSI 驱动的方式将 JuiceFS 作为 Kubernetes 集群的存储层，详情请参考[「JuiceFS CSI 驱动」](https://juicefs.com/docs/zh/csi/introduction/)。
 - Hadoop Java SDK：方便在 Hadoop 体系中使用兼容 HDFS 接口的 Java 客户端访问 JuiceFS。详情请参考[「Hadoop 使用 JuiceFS」](deployment/hadoop_java_sdk.md)。
 - S3 网关：通过 S3 协议访问 JuiceFS，详情请参考[「配置 JuiceFS S3 网关」](deployment/s3_gateway.md)。
 - Docker Volume 插件：在 Docker 中方便使用 JuiceFS 的方式，详情请参考[「Docker 使用 JuiceFS」](deployment/juicefs_on_docker.md)。
@@ -196,10 +143,3 @@ JuiceFS 内置的 `gateway` 子命令不支持多用户管理等功能，只提�
 ### JuiceFS 目前有 SDK 可以使用吗？
 
 截止到 JuiceFS 1.0 发布，社区有两个 SDK，一个是 Juicedata 官方维护的 HDFS 接口高度兼容的 [Java SDK](deployment/hadoop_java_sdk.md)，另一个是由社区用户维护的 [Python SDK](https://github.com/megvii-research/juicefs-python)。
-
-
-## 开发相关问题
-
-### `/go/pkg/tool/linux_amd64/link: running gcc failed: exit status 1` 或者 `/go/pkg/tool/linux_amd64/compile: signal: killed`
-
-这个错误有可能是因为 GCC 版本过低导致，请尝试升级 GCC 到 5.4 及以上版本。

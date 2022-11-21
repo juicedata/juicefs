@@ -46,10 +46,6 @@ The meta database has already been formatted and previous configuration cannot b
 
 JuiceFS already supported many object storage, please check [the list](guide/how_to_set_up_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
 
-### Why can't I see the original files that have been stored in JuiceFS in object storage?
-
-While using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and stored in object storage. Therefore, you may notice that the source files stored in JuiceFS cannot be found in the file browser of the object storage platform; instead, there are only a directory of chunks and a bunch of directories and files named by numbers in the bucket. Don't panic! That's exactly what makes JuiceFS a high-performance file system. For details, please refer to ["How JuiceFS Store Files"](introduction/architecture.md#how-juicefs-stores-files).
-
 ### Why do I delete files at the mount point, but there is no change or very little change in object storage footprint?
 
 The first reason is that you may have enabled the trash feature. In order to ensure data security, the trash is enabled by default. The deleted files are actually placed in the trash and are not actually deleted, so the size of the object storage will not change. trash retention time can be specified with `juicefs format` or modified with `juicefs config`. Please refer to the ["Trash"](security/trash.md) documentation for more information.

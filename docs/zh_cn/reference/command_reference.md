@@ -217,7 +217,7 @@ $ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
 
 #### 描述
 
-挂载一个已经格式化的文件系统。
+挂载一个已经创建的文件系统。你可以用任意用户执行挂载命令，不过请确保该用户对缓存目录（`--cache-dir`）有写权限。默认的缓存目录是 `$HOME/.juicefs/cache`（macOS）或者 `/var/jfsCache`（Linux）。
 
 #### 使用
 
