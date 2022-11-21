@@ -17,7 +17,6 @@ package io.juicefs;
 
 import com.kenai.jffi.internal.StubLoader;
 import io.juicefs.metrics.JuiceFSInstrumentation;
-import io.juicefs.utils.BufferPool;
 import io.juicefs.utils.ConsistentHash;
 import io.juicefs.utils.NodesFetcher;
 import io.juicefs.utils.NodesFetcherBuilder;
@@ -42,6 +41,7 @@ import org.apache.hadoop.io.MD5Hash;
 import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.DataChecksum;
+import org.apache.hadoop.util.DirectBufferPool;
 import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.util.VersionInfo;
 import org.json.JSONObject;
@@ -93,6 +93,8 @@ public class JuiceFileSystemImpl extends FileSystem {
   private ScheduledExecutorService nodesFetcherThread;
   private ScheduledExecutorService refreshUidThread;
   private Map<String, FileStatus> lastFileStatus = new HashMap<>();
+  private static final DirectBufferPool directBufferPool = new DirectBufferPool();
+
   private boolean metricsEnable = false;
 
   /*
@@ -753,7 +755,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     public FileInputStream(Path f, int fd, int size) throws IOException {
       path = f;
       this.fd = fd;
-      buf = BufferPool.getBuffer(size);
+      buf = directBufferPool.getBuffer(size);
       buf.limit(0);
       position = 0;
     }
@@ -835,12 +837,14 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (!buf.hasRemaining() && b.remaining() <= buf.capacity() && !refill()) {
         return -1;
       }
-      int got = 0;
-      while (b.hasRemaining() && buf.hasRemaining()) {
-        b.put(buf.get());
-        got++;
+      ByteBuffer srcBuf = buf.duplicate();
+      int got = Math.min(b.remaining(), srcBuf.remaining());
+      if (got > 0) {
+        srcBuf.limit(srcBuf.position() + got);
+        b.put(srcBuf);
+        buf.position(srcBuf.position());
+        statistics.incrementBytesRead(got);
       }
-      statistics.incrementBytesRead(got);
       int more = read(position, b);
       if (more <= 0)
         return got > 0 ? got : -1;
@@ -906,7 +910,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       if (buf == null) {
         return; // already closed
       }
-      BufferPool.returnBuffer(buf);
+      directBufferPool.returnBuffer(buf);
       buf = null;
       int r = lib.jfs_close(Thread.currentThread().getId(), fd);
       fd = 0;
