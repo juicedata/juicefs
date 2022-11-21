@@ -406,7 +406,7 @@ func NewClient(uri string, conf *Config) Meta {
 	}
 	m, err := f(driver, uri[p+3:], conf)
 	if err != nil {
-		logger.Fatalf("Meta %s is not available: %s", uri, err)
+		logger.Fatalf("Meta %s is not available: %s", utils.RemovePassword(uri), err)
 	}
 	return m
 }
