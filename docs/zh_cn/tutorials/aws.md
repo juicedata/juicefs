@@ -183,7 +183,7 @@ sudo juicefs mount -d redis://[<redis-username>]:<redis-password>@<redis-url>:63
 
 > **注意**：挂载文件系统时，只需填写数据库地址，不需要文件系统名称。默认的缓存路径为 `/var/jfsCache`，请确保当前用户有足够的读写权限。
 
-你可以通过调整[挂载参数](../reference/command_reference.md#juicefs-mount)，对 JuiceFS 进行优化，比如可以通过 `--cache-size` 将缓存修改为 20GB：
+你可以通过调整[挂载参数](../reference/command_reference.md#mount)，对 JuiceFS 进行优化，比如可以通过 `--cache-size` 将缓存修改为 20GB：
 
 ```shell
 sudo juicefs mount --cache-size 20480 -d redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1  /mnt/jfs

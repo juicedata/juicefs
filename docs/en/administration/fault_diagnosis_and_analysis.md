@@ -11,15 +11,15 @@ import TabItem from '@theme/TabItem';
 
 ## Client log
 
-JuiceFS client will output logs for troubleshooting while running. The level of logs in terms of fatality follows DEBUG < INFO < WARNING < ERROR < FATAL. Since DEBUG logs are not printed by default, you need to explicitly enable it if needed, e.g. by adding the `--debug` option when running the JuiceFS client. 
+JuiceFS client will output logs for troubleshooting while running. The level of logs in terms of fatality follows DEBUG < INFO < WARNING < ERROR < FATAL. Since DEBUG logs are not printed by default, you need to explicitly enable it if needed, e.g. by adding the `--debug` option when running the JuiceFS client.
 
 Different JuiceFS clients print logs in different ways, which are described as follows.
 
 ### Mount point
 
-When a JuiceFS file system is mounted with the [`-d` option](../reference/command_reference.md#juicefs-mount) (indicating running in the background), it will print logs to the system log file and local log file simultaneously. Depending on which user is running when mounting the file system, the paths of the local log files are slightly different. For root, the local log file locates at `/var/log/juicefs.log`, while it locates at `$HOME/.juicefs/juicefs.log` for non-root users. Please refer to [`--log` option](../reference/command_reference.md#juicefs-mount) for details.
+When a JuiceFS file system is mounted with the [`-d` option](../reference/command_reference.md#mount) (indicating running in the background), it will print logs to the system log file and local log file simultaneously. Depending on which user is running when mounting the file system, the paths of the local log files are slightly different. For root, the local log file locates at `/var/log/juicefs.log`, while it locates at `$HOME/.juicefs/juicefs.log` for non-root users. Please refer to [`--log` option](../reference/command_reference.md#mount) for details.
 
-Depending on the operating system, there are different commands to retrieve system logs or read local log files directly. 
+Depending on the operating system, there are different commands to retrieve system logs or read local log files directly.
 
 <Tabs>
   <TabItem value="local-log-file" label="Local log file">
@@ -149,7 +149,7 @@ By default, pprof listens on port numbers ranging from 6060 to 6099. That's why 
 - Goroutine stack information: `http://localhost:<port>/debug/pprof/goroutine?debug=1`
 - CPU performance statistics: `http://localhost:<port>/debug/pprof/profile?seconds=30`
 - Memory allocation statistics: `http://localhost:<port>/debug/pprof/heap`
-- 
+-
 :::tip
 You can also use the debug command to automatically collect these runtime information and save it locally. By default, it is saved to the debug directory under the current directory, for example:
 ```bash

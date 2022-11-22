@@ -5,7 +5,7 @@ slug: /fuse_mount_options
 ---
 # FUSE Mount Options
 
-This guide lists important FUSE mount options. These mount options are specified by the option `-o`  when execute the command [`juicefs mount`](../reference/command_reference.md#juicefs-mount) (use comma to separate multiple options). For example:
+This guide lists important FUSE mount options. These mount options are specified by the option `-o`  when execute the command [`juicefs mount`](../reference/command_reference.md#mount) (use comma to separate multiple options). For example:
 
 ```bash
 juicefs mount -d -o allow_other,writeback_cache localhost ~/jfs

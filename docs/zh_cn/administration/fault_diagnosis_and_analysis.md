@@ -17,7 +17,7 @@ JuiceFS 客户端在运行过程中会输出日志用于故障诊断，日志等
 
 ### 挂载点
 
-当挂载 JuiceFS 文件系统时加上了 [`-d` 选项](../reference/command_reference.md#juicefs-mount)（表示后台运行），日志会同时输出到系统日志和本地日志文件，取决于挂载文件系统时的运行用户，本地日志文件的路径稍有区别。root 用户对应的日志文件路径是 `/var/log/juicefs.log`，非 root 用户的日志文件路径是 `$HOME/.juicefs/juicefs.log`，具体请参见 [`--log` 选项](../reference/command_reference.md#juicefs-mount)。
+当挂载 JuiceFS 文件系统时加上了 [`-d` 选项](../reference/command_reference.md#mount)（表示后台运行），日志会同时输出到系统日志和本地日志文件，取决于挂载文件系统时的运行用户，本地日志文件的路径稍有区别。root 用户对应的日志文件路径是 `/var/log/juicefs.log`，非 root 用户的日志文件路径是 `$HOME/.juicefs/juicefs.log`，具体请参见 [`--log` 选项](../reference/command_reference.md#mount)。
 
 取决于你使用的操作系统，你可以通过不同的命令获取系统日志或直接读取本地日志文件：
 

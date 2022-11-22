@@ -269,7 +269,7 @@ services:
 
 可以根据需要调整上述代码中 format 和 mount 命令的参数，例如，当本地与对象存储的网络连接存在一定延迟且本地存储相对可靠时，可以通过添加 `--writeback` 选项挂载文件系统，让文件可以先存储到本地缓存，再异步上传到对象存储，详情参考[客户端写缓存](./cache_management/#客户端写缓存)。
 
-更多文件系统创建和挂载参数请查看[命令参考](./command_reference#juicefs-mount)。
+更多文件系统创建和挂载参数请查看[命令参考](../reference/command_reference.md#mount)。
 
 #### 部署和使用
 

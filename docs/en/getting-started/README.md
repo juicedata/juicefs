@@ -69,7 +69,7 @@ Since no storage-related options are specified in this example, the local disk i
 
 ### Basic Concept
 
-JuiceFS client provides a command [`mount`](../reference/command_reference.md#juicefs-mount) to mount file systems in the following format.
+JuiceFS client provides a command [`mount`](../reference/command_reference.md#mount) to mount file systems in the following format.
 
 ```shell
 juicefs mount [command options] META-URL MOUNTPOINT

@@ -269,7 +269,7 @@ services:
 
 You can adjust the parameters of the format and mount commands in the above code as needed. For example, when there is some latency in the network connection between local and object storage and local storage is reliable, you can mount the file system by adding the `--writeback` option so that files can be stored to the local cache first and then uploaded to the object storage asynchronously, see [client-side write cache](./cache_management/#client-write-data-cache) for details.
 
-For more file system creation and mounting parameters, please see [command reference](./command_reference#juicefs-mount).
+For more file system creation and mounting parameters, please see [command reference](../reference/command_reference.md#mount).
 
 #### Deployment and Usage
 
