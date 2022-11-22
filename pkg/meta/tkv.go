@@ -2153,27 +2153,19 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 }
 
-func (r *kvMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
+func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4
-	result, err := r.scanValues(r.fmtKey("A"), -1, func(k, v []byte) bool {
-		return len(k) == klen && k[1+8] == 'C' && len(v) > sliceBytes
+	return m.client.scan(m.fmtKey("A"), func(k, v []byte) {
+		if len(k) == klen && k[1+8] == 'C' && len(v) > sliceBytes {
+			bar.IncrTotal(1)
+			ch <- cchunk{
+				inode:  m.decodeInode(k[1:9]),
+				indx:   binary.BigEndian.Uint32(k[10:]),
+				slices: len(v) / sliceBytes,
+			}
+		}
 	})
-	if err != nil {
-		logger.Warnf("scan chunks: %s", err)
-		return errno(err)
-	}
-
-	bar.IncrTotal(int64(len(result)))
-	for k, value := range result {
-		key := []byte(k[1:])
-		inode := r.decodeInode(key[:8])
-		indx := binary.BigEndian.Uint32(key[9:])
-		logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, len(value)/sliceBytes)
-		r.compactChunk(inode, indx, true)
-		bar.Increment()
-	}
-	return 0
 }
 
 func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {

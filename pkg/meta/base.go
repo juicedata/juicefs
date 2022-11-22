@@ -58,6 +58,8 @@ type engine interface {
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
 
+	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
+	compactChunk(inode Ino, indx uint32, force bool)
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
@@ -92,6 +94,13 @@ type fsStat struct {
 	newInodes  int64
 	usedSpace  int64
 	usedInodes int64
+}
+
+// chunk for compaction
+type cchunk struct {
+	inode  Ino
+	indx   uint32
+	slices int
 }
 
 type baseMeta struct {
@@ -1189,6 +1198,31 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool)
 	}
 	wg.Wait()
 	return
+}
+
+func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno {
+	var wg sync.WaitGroup
+	ch := make(chan cchunk, 1000000)
+	for i := 0; i < threads; i++ {
+		wg.Add(1)
+		go func() {
+			for c := range ch {
+				logger.Debugf("Compacting chunk %d:%d (%d slices)", c.inode, c.indx, c.slices)
+				m.en.compactChunk(c.inode, c.indx, true)
+				bar.Increment()
+			}
+			wg.Done()
+		}()
+	}
+
+	err := m.en.scanAllChunks(ctx, ch, bar)
+	close(ch)
+	wg.Wait()
+	if err != nil {
+		logger.Warnf("Scan chunks: %s", err)
+		return errno(err)
+	}
+	return 0
 }
 
 func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {

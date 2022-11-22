@@ -904,7 +904,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 
 	// TODO: check result if that's predictable
 	p, bar := utils.MockProgress()
-	if st := m.CompactAll(ctx, bar); st != 0 {
+	if st := m.CompactAll(ctx, 8, bar); st != 0 {
 		t.Fatalf("compactall: %s", st)
 	}
 	p.Done()

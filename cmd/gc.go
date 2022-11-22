@@ -111,7 +111,7 @@ func gc(ctx *cli.Context) error {
 	// Scan all chunks first and do compaction if necessary
 	progress := utils.NewProgress(false, false)
 	if ctx.Bool("compact") {
-		bar := progress.AddCountBar("Scanned chunks", 0)
+		bar := progress.AddCountBar("Compacted chunks", 0)
 		spin := progress.AddDoubleSpinner("Compacted slices")
 		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
 			return store.Remove(args[0].(uint64), int(args[1].(uint32)))
@@ -124,7 +124,7 @@ func gc(ctx *cli.Context) error {
 			}
 			return err
 		})
-		if st := m.CompactAll(meta.Background, bar); st == 0 {
+		if st := m.CompactAll(meta.Background, ctx.Int("threads"), bar); st == 0 {
 			bar.Done()
 			spin.Done()
 			if progress.Quiet {
