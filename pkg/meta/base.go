@@ -264,7 +264,7 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 		return nil, fmt.Errorf("json: %s", err)
 	}
 	if checkVersion {
-		if err = m.fmt.CheckVersion(); err != nil {
+		if err = format.CheckVersion(); err != nil {
 			return nil, fmt.Errorf("check version: %s", err)
 		}
 	}
