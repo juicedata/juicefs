@@ -425,11 +425,10 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		if jConf.Bucket != "" {
 			format.Bucket = jConf.Bucket
 		}
-		blob, err := cmd.NewReloadableStorage(format, m, func(f *meta.Format) *meta.Format {
+		blob, err := cmd.NewReloadableStorage(format, m, func(f *meta.Format) {
 			if jConf.Bucket != "" {
 				format.Bucket = jConf.Bucket
 			}
-			return format
 		})
 		if err != nil {
 			logger.Errorf("object storage: %s", err)

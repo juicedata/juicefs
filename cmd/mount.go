@@ -175,15 +175,14 @@ func wrapRegister(mp, name string) (prometheus.Registerer, *prometheus.Registry)
 	return registerer, registry
 }
 
-func updateFormat(c *cli.Context) func(*meta.Format) *meta.Format {
-	return func(format *meta.Format) *meta.Format {
+func updateFormat(c *cli.Context) func(*meta.Format) {
+	return func(format *meta.Format) {
 		if c.IsSet("bucket") {
 			format.Bucket = c.String("bucket")
 		}
 		if c.IsSet("storage") {
 			format.Storage = c.String("storage")
 		}
-		return format
 	}
 }
 
@@ -405,9 +404,9 @@ type storageHolder struct {
 	fmt meta.Format
 }
 
-func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.Format) *meta.Format) (object.ObjectStorage, error) {
+func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.Format)) (object.ObjectStorage, error) {
 	if patch != nil {
-		format = patch(format)
+		patch(format)
 	}
 	blob, err := createStorage(*format)
 	if err != nil {
@@ -419,7 +418,7 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 	}
 	cli.OnReload(func(new *meta.Format) {
 		if patch != nil {
-			new = patch(new)
+			patch(new)
 		}
 		old := &holder.fmt
 		if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken {
