@@ -107,13 +107,13 @@ func copyFileOnWindows(srcPath, destPath string) error {
 	return nil
 }
 
-func copyFile(srcPath, destPath string, rootPrivileges bool) error {
+func copyFile(srcPath, destPath string, requireRootPrivileges bool) error {
 	if runtime.GOOS == "windows" {
 		return copyFileOnWindows(srcPath, destPath)
 	}
 
 	var copyArgs []string
-	if rootPrivileges {
+	if requireRootPrivileges {
 		copyArgs = append(copyArgs, "sudo")
 	}
 	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("cat %s > %s", srcPath, destPath))
@@ -121,7 +121,7 @@ func copyFile(srcPath, destPath string, rootPrivileges bool) error {
 }
 
 func getCmdMount(mp string) (uid, pid, cmd string, err error) {
-	psArgs := []string{"/bin/sh", "-c", "ps -ef | grep -v grep | grep 'juicefs mount' | grep " + mp}
+	psArgs := []string{"/bin/sh", "-c", fmt.Sprintf("ps -ef | grep -v grep | grep -E \"%s mount | /sbin/mount.juicefs\" | grep %s", os.Args[0], mp)}
 	ret, err := exec.Command(psArgs[0], psArgs[1:]...).CombinedOutput()
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to execute command `%s`: %v", strings.Join(psArgs, " "), err)
@@ -149,16 +149,16 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 	return uid, pid, cmd, nil
 }
 
-func getDefaultLogDir(rootPrivileges bool) (string, error) {
+func getDefaultLogDir(requireRootPrivileges bool) (string, error) {
 	var defaultLogDir = "/var/log"
 	switch runtime.GOOS {
 	case "linux":
-		if rootPrivileges {
+		if os.Getuid() == 0 {
 			break
 		}
 		fallthrough
 	case "darwin":
-		if rootPrivileges {
+		if requireRootPrivileges {
 			defaultLogDir = "/var/root/.juicefs"
 			break
 		}
@@ -173,13 +173,13 @@ func getDefaultLogDir(rootPrivileges bool) (string, error) {
 
 var logArg = regexp.MustCompile(`--log(\s*=?\s*)(\S+)`)
 
-func getLogPath(cmd string, rootPrivileges bool) (string, error) {
+func getLogPath(cmd string, requireRootPrivileges bool) (string, error) {
 	var logPath string
 	tmp := logArg.FindStringSubmatch(cmd)
 	if len(tmp) == 3 {
 		logPath = tmp[2]
 	} else {
-		defaultLogDir, err := getDefaultLogDir(rootPrivileges)
+		defaultLogDir, err := getDefaultLogDir(requireRootPrivileges)
 		if err != nil {
 			return "", err
 		}
@@ -195,9 +195,9 @@ func closeFile(file *os.File) {
 	}
 }
 
-func copyLogFile(logPath, retLogPath string, limit uint64, rootPrivileges bool) error {
+func copyLogFile(logPath, retLogPath string, limit uint64, requireRootPrivileges bool) error {
 	var copyArgs []string
-	if rootPrivileges {
+	if requireRootPrivileges {
 		copyArgs = append(copyArgs, "sudo")
 	}
 	copyArgs = append(copyArgs, "/bin/sh", "-c")
@@ -209,7 +209,7 @@ func copyLogFile(logPath, retLogPath string, limit uint64, rootPrivileges bool) 
 	return exec.Command(copyArgs[0], copyArgs[1:]...).Run()
 }
 
-func getPprofPort(pid, amp string, rootPrivileges bool) (int, error) {
+func getPprofPort(pid, amp string, requireRootPrivileges bool) (int, error) {
 	content, err := os.ReadFile(filepath.Join(amp, ".config"))
 	if err != nil {
 		logger.Warnf("failed to read config file: %v", err)
@@ -229,7 +229,7 @@ func getPprofPort(pid, amp string, rootPrivileges bool) (int, error) {
 	}
 
 	var lsofArgs []string
-	if rootPrivileges {
+	if requireRootPrivileges {
 		lsofArgs = append(lsofArgs, "sudo")
 	}
 	lsofArgs = append(lsofArgs, "/bin/sh", "-c", "lsof -i -nP | grep -v grep | grep LISTEN | grep "+pid)
@@ -395,7 +395,7 @@ func geneZipFile(srcPath, destPath string) error {
 	})
 }
 
-func collectPprof(ctx *cli.Context, cmd string, pid string, amp string, rootPrivileges bool, currDir string, wg *sync.WaitGroup) error {
+func collectPprof(ctx *cli.Context, cmd string, pid string, amp string, requireRootPrivileges bool, currDir string, wg *sync.WaitGroup) error {
 	if !checkAgent(cmd) {
 		logger.Warnf("No agent found, the pprof metrics will not be collected")
 		return nil
@@ -406,7 +406,7 @@ func collectPprof(ctx *cli.Context, cmd string, pid string, amp string, rootPriv
 		return nil
 	}
 
-	port, err := getPprofPort(pid, amp, rootPrivileges)
+	port, err := getPprofPort(pid, amp, requireRootPrivileges)
 	if err != nil {
 		return fmt.Errorf("failed to get pprof port: %v", err)
 	}
@@ -450,12 +450,12 @@ func collectPprof(ctx *cli.Context, cmd string, pid string, amp string, rootPriv
 	return nil
 }
 
-func collectLog(ctx *cli.Context, cmd string, rootPrivileges bool, currDir string) error {
+func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDir string) error {
 	if !isUnix() {
 		logger.Warnf("Collecting log currently only support Linux/macOS")
 		return nil
 	}
-	logPath, err := getLogPath(cmd, rootPrivileges)
+	logPath, err := getLogPath(cmd, requireRootPrivileges)
 	if err != nil {
 		return fmt.Errorf("failed to get log path: %v", err)
 	}
@@ -463,7 +463,7 @@ func collectLog(ctx *cli.Context, cmd string, rootPrivileges bool, currDir strin
 	retLogPath := filepath.Join(currDir, "juicefs.log")
 
 	logger.Infof("Log %s is being collected", logPath)
-	return copyLogFile(logPath, retLogPath, limit, rootPrivileges)
+	return copyLogFile(logPath, retLogPath, limit, requireRootPrivileges)
 }
 
 func collectSysInfo(ctx *cli.Context, currDir string) error {
@@ -492,9 +492,9 @@ JuiceFS Version:
 	return nil
 }
 
-func collectSpecialFile(ctx *cli.Context, amp string, currDir string, rootPrivileges bool, wg *sync.WaitGroup) error {
+func collectSpecialFile(ctx *cli.Context, amp string, currDir string, requireRootPrivileges bool, wg *sync.WaitGroup) error {
 	configName := ".config"
-	if err := copyFile(filepath.Join(amp, configName), filepath.Join(currDir, "config.txt"), rootPrivileges); err != nil {
+	if err := copyFile(filepath.Join(amp, configName), filepath.Join(currDir, "config.txt"), requireRootPrivileges); err != nil {
 		return fmt.Errorf("failed to get volume config %s: %v", configName, err)
 	}
 
@@ -505,14 +505,14 @@ func collectSpecialFile(ctx *cli.Context, amp string, currDir string, rootPrivil
 		defer wg.Done()
 		srcPath := filepath.Join(amp, statsName)
 		destPath := filepath.Join(currDir, "stats.txt")
-		if err := copyFile(srcPath, destPath, rootPrivileges); err != nil {
+		if err := copyFile(srcPath, destPath, requireRootPrivileges); err != nil {
 			logger.Errorf("Failed to get volume config %s: %v", statsName, err)
 		}
 
 		logger.Infof("Stats metrics are being sampled, sampling duration: %ds", stats)
 		time.Sleep(time.Second * time.Duration(stats))
 		destPath = filepath.Join(currDir, fmt.Sprintf("stats.%ds.txt", stats))
-		if err := copyFile(srcPath, destPath, rootPrivileges); err != nil {
+		if err := copyFile(srcPath, destPath, requireRootPrivileges); err != nil {
 			logger.Errorf("Failed to get volume config %s: %v", statsName, err)
 		}
 	}()
@@ -552,22 +552,22 @@ func debug(ctx *cli.Context) error {
 	}
 	fmt.Printf("\nMount Command:\n%s\n\n", cmd)
 
-	rootPrivileges := false
+	requireRootPrivileges := false
 	if (uid == "0" || uid == "root") && os.Getuid() != 0 {
 		fmt.Println("Mount point is mounted by the root user, may ask for root privilege...")
-		rootPrivileges = true
+		requireRootPrivileges = true
 	}
 
 	var wg sync.WaitGroup
-	if err := collectSpecialFile(ctx, amp, currDir, rootPrivileges, &wg); err != nil {
+	if err := collectSpecialFile(ctx, amp, currDir, requireRootPrivileges, &wg); err != nil {
 		return err
 	}
 
-	if err := collectLog(ctx, cmd, rootPrivileges, currDir); err != nil {
+	if err := collectLog(ctx, cmd, requireRootPrivileges, currDir); err != nil {
 		return err
 	}
 
-	if err := collectPprof(ctx, cmd, pid, amp, rootPrivileges, currDir, &wg); err != nil {
+	if err := collectPprof(ctx, cmd, pid, amp, requireRootPrivileges, currDir, &wg); err != nil {
 		return err
 	}
 

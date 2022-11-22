@@ -33,9 +33,9 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.security.PrivilegedExceptionAction;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_CHECKPOINT_INTERVAL_KEY;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_KEY;
@@ -724,5 +724,36 @@ public class JuiceFileSystemTest extends TestCase {
     newConf.set("dfs.blocksize", "256m");
     FileSystem newFs = FileSystem.newInstance(newConf);
     assertEquals(256 << 20, newFs.getDefaultBlockSize(new Path("/")));
+  }
+
+  public void testReadSpeed() throws Exception {
+    int read = (128 << 10) ;
+    Path speedFile = new Path("/tmp/speedFile");
+    fs.delete(speedFile, false);
+    FSDataOutputStream ou = fs.create(speedFile);
+    int fileSize = 128 << 20;
+    ou.write(new byte[fileSize]);
+    ou.close();
+    FSDataInputStream open = fs.open(speedFile);
+    AtomicLong counter = new AtomicLong(0L);
+    AtomicBoolean finished = new AtomicBoolean(false);
+    TimerTask timerTask = new TimerTask() {
+      @Override
+      public void run() {
+        System.out.printf("read method calls: %d\n", counter.get());
+        finished.set(true);
+      }
+    };
+    Timer timer = new Timer();
+    timer.schedule(timerTask, 1000);
+
+    ByteBuffer readArray = ByteBuffer.allocateDirect(read);
+    while (!finished.get()) {
+      open.seek(0);
+      readArray.position(0);
+      readArray.limit(read);
+      open.read(readArray);
+      counter.getAndIncrement();
+    }
   }
 }

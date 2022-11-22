@@ -277,7 +277,9 @@ func (c *memKV) scan(prefix []byte, handler func(key []byte, value []byte)) erro
 		if end != "" && it.key >= end {
 			return false
 		}
+		c.Unlock()
 		handler([]byte(it.key), it.value)
+		c.Lock()
 		return true
 	})
 	return nil

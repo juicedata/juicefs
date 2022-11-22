@@ -2638,17 +2638,16 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	}
 }
 
-func (m *redisMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
+func (m *redisMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {
 	p := m.rdb.Pipeline()
-	return errno(m.scan(ctx, "c*_*", func(keys []string) error {
-		bar.IncrTotal(int64(len(keys)))
+	return m.scan(ctx, "c*_*", func(keys []string) error {
 		for _, key := range keys {
 			_ = p.LLen(ctx, key)
 		}
 		cmds, err := p.Exec(ctx)
 		if err != nil {
 			logger.Warnf("list slices: %s", err)
-			return errno(err)
+			return err
 		}
 		for i, cmd := range cmds {
 			cnt := cmd.(*redis.IntCmd).Val()
@@ -2657,14 +2656,13 @@ func (m *redisMeta) CompactAll(ctx Context, bar *utils.Bar) syscall.Errno {
 				var indx uint32
 				n, err := fmt.Sscanf(keys[i], m.prefix+"c%d_%d", &inode, &indx)
 				if err == nil && n == 2 {
-					logger.Debugf("compact chunk %d:%d (%d slices)", inode, indx, cnt)
-					m.compactChunk(Ino(inode), indx, true)
+					bar.IncrTotal(1)
+					ch <- cchunk{Ino(inode), indx, int(cnt)}
 				}
 			}
-			bar.Increment()
 		}
 		return nil
-	}))
+	})
 }
 
 func (m *redisMeta) cleanupLeakedInodes(delete bool) {
