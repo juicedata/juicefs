@@ -251,7 +251,7 @@ func (v *VFS) caclObjects(id uint64, size, offset, length uint32) []*obj {
 
 type InfoResponse struct {
 	Ino     Ino
-	Success bool
+	Failed  bool
 	Reason  string
 	Summary meta.Summary
 	Paths   []string
@@ -273,7 +273,7 @@ type chunkObj struct {
 }
 
 func (r *InfoResponse) Encode() []byte {
-	resp, _ := json.Marshal(r)
+	resp, _ := json.MarshalIndent(r, "", "  ")
 	buffer := utils.NewBuffer(4 + uint32(len(resp)))
 	buffer.Put32(uint32(len(resp)))
 	buffer.Put(resp)
@@ -282,12 +282,16 @@ func (r *InfoResponse) Encode() []byte {
 
 func (r *InfoResponse) Decode(reader io.Reader) error {
 	sizeBuf := make([]byte, 4)
-	n, err := reader.Read(sizeBuf[:])
-	if err != nil && err != io.EOF {
-		return err
-	}
-	if n == 1 && sizeBuf[0] == byte(syscall.EINVAL&0xff) {
-		return syscall.EINVAL
+	n := 0
+	for n == 0 {
+		i, err := reader.Read(sizeBuf[n:])
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if i == 1 && sizeBuf[0] == byte(syscall.EINVAL&0xff) {
+			return syscall.EINVAL
+		}
+		n += i
 	}
 
 	size := utils.ReadBuffer(sizeBuf).Get32()
@@ -320,7 +324,16 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			}
 		}
 		*data = append(*data, uint8(st))
-	case meta.Info | meta.InfoV2:
+	case meta.Info:
+		inode := Ino(r.Get64())
+		info := &InfoResponse{
+			Ino:    inode,
+			Failed: true,
+			Reason: "Deprecated API, please upgrade to the latest version of command line tool",
+		}
+		*data = append(*data, info.Encode()...)
+		return
+	case meta.InfoV2:
 		inode := Ino(r.Get64())
 		info := &InfoResponse{
 			Ino: inode,
@@ -335,14 +348,9 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			raw = r.Get8() != 0
 		}
 
-		if cmd == meta.Info {
-			info.Reason = "Deprecated API, please upgrade to the latest version of the juicefs"
-			*data = append(*data, info.Encode()...)
-			return
-		}
-
 		r := meta.GetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
 		if r != 0 {
+			info.Failed = true
 			info.Reason = r.Error()
 			*data = append(*data, info.Encode()...)
 			return
@@ -367,10 +375,8 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 
 		var err error
 		if info.PLocks, info.FLocks, err = v.Meta.ListLocks(ctx, inode); err != nil {
-			info.Success = true
 			info.Reason = err.Error()
 		}
-		info.Success = true
 		*data = append(*data, info.Encode()...)
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")

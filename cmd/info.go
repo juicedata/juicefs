@@ -133,6 +133,11 @@ func info(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("read info: %s", err)
 		}
+
+		if resp.Failed {
+			logger.Fatalf("failed to get info: %s", resp.Reason)
+		}
+
 		fmt.Println(path, ":")
 		fmt.Printf("  inode: %d\n", resp.Ino)
 		fmt.Printf("  files: %d\n", resp.Summary.Files)
