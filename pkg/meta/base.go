@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strings"
@@ -107,7 +108,7 @@ type baseMeta struct {
 	sync.Mutex
 	addr string
 	conf *Config
-	fmt  Format
+	fmt  *Format
 
 	root         Ino
 	txlocks      [nlocks]sync.Mutex // Pessimistic locks to reduce conflict
@@ -119,6 +120,7 @@ type baseMeta struct {
 	maxDeleting  chan struct{}
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
+	reloadCb     []func(*Format)
 	umounting    bool
 	sesMu        sync.Mutex
 
@@ -257,19 +259,21 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = json.Unmarshal(body, &m.fmt); err != nil {
+	var format Format
+	if err = json.Unmarshal(body, &format); err != nil {
 		return nil, fmt.Errorf("json: %s", err)
 	}
 	if checkVersion {
-		if err = m.fmt.CheckVersion(); err != nil {
+		if err = format.CheckVersion(); err != nil {
 			return nil, fmt.Errorf("check version: %s", err)
 		}
 	}
-	return &m.fmt, nil
+	m.fmt = &format
+	return m.fmt, nil
 }
 
 func (m *baseMeta) NewSession() error {
-	go m.refreshUsage()
+	go m.refresh()
 	if m.conf.ReadOnly {
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
 		return nil
@@ -291,7 +295,6 @@ func (m *baseMeta) NewSession() error {
 	}
 	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
-	go m.refreshSession()
 	if !m.conf.NoBGJob {
 		go m.cleanupDeletedFiles()
 		go m.cleanupSlices()
@@ -304,7 +307,13 @@ func (m *baseMeta) expireTime() int64 {
 	return time.Now().Add(5 * m.conf.Heartbeat).Unix()
 }
 
-func (m *baseMeta) refreshSession() {
+func (m *baseMeta) OnReload(fn func(f *Format)) {
+	m.msgCallbacks.Lock()
+	defer m.msgCallbacks.Unlock()
+	m.reloadCb = append(m.reloadCb, fn)
+}
+
+func (m *baseMeta) refresh() {
 	for {
 		utils.SleepWithJitter(m.conf.Heartbeat)
 		m.sesMu.Lock()
@@ -312,18 +321,39 @@ func (m *baseMeta) refreshSession() {
 			m.sesMu.Unlock()
 			return
 		}
-		m.en.doRefreshSession()
+		if !m.conf.ReadOnly {
+			m.en.doRefreshSession()
+		}
 		m.sesMu.Unlock()
 
-		old := m.fmt.UUID
+		old := m.fmt
 		if _, err := m.Load(false); err != nil {
 			logger.Warnf("reload setting: %s", err)
 		} else if m.fmt.MetaVersion > MaxVersion {
 			logger.Fatalf("incompatible metadata version %d > max version %d", m.fmt.MetaVersion, MaxVersion)
-		} else if m.fmt.UUID != old {
+		} else if m.fmt.UUID != old.UUID {
 			logger.Fatalf("UUID changed from %s to %s", old, m.fmt.UUID)
+		} else if !reflect.DeepEqual(m.fmt, old) {
+			m.msgCallbacks.Lock()
+			cbs := m.reloadCb
+			m.msgCallbacks.Unlock()
+			for _, cb := range cbs {
+				cb(m.fmt)
+			}
 		}
-		if m.conf.NoBGJob {
+
+		if v, err := m.en.getCounter(usedSpace); err == nil {
+			atomic.StoreInt64(&m.usedSpace, v)
+		} else {
+			logger.Warnf("Get counter %s: %s", usedSpace, err)
+		}
+		if v, err := m.en.getCounter(totalInodes); err == nil {
+			atomic.StoreInt64(&m.usedInodes, v)
+		} else {
+			logger.Warnf("Get counter %s: %s", totalInodes, err)
+		}
+
+		if m.conf.ReadOnly || m.conf.NoBGJob {
 			continue
 		}
 		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64(m.conf.Heartbeat/time.Second)); err != nil {
@@ -359,22 +389,6 @@ func (m *baseMeta) CloseSession() error {
 	m.sesMu.Unlock()
 	logger.Infof("close session %d: %s", m.sid, m.en.doCleanStaleSession(m.sid))
 	return nil
-}
-
-func (m *baseMeta) refreshUsage() {
-	for {
-		if v, err := m.en.getCounter(usedSpace); err == nil {
-			atomic.StoreInt64(&m.usedSpace, v)
-		} else {
-			logger.Warnf("Get counter %s: %s", usedSpace, err)
-		}
-		if v, err := m.en.getCounter(totalInodes); err == nil {
-			atomic.StoreInt64(&m.usedInodes, v)
-		} else {
-			logger.Warnf("Get counter %s: %s", totalInodes, err)
-		}
-		utils.SleepWithJitter(time.Second * 10)
-	}
 }
 
 func (m *baseMeta) checkQuota(size, inodes int64) bool {

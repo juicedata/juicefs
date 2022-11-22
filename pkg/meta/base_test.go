@@ -91,10 +91,10 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("getattr root: %s", st)
 	}
 
-	if err := m.Init(Format{Name: "test"}, true); err != nil {
+	if err := m.Init(&Format{Name: "test"}, true); err != nil {
 		t.Fatalf("initialize failed: %s", err)
 	}
-	if err := m.Init(Format{Name: "test2"}, false); err == nil { // not allowed
+	if err := m.Init(&Format{Name: "test2"}, false); err == nil { // not allowed
 		t.Fatalf("change name without --force is not allowed")
 	}
 	format, err := m.Load(true)
@@ -475,7 +475,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	format.Capacity = 1 << 20
 	format.Inodes = 100
-	if err = m.Init(*format, false); err != nil {
+	if err = m.Init(format, false); err != nil {
 		t.Fatalf("set quota failed: %s", err)
 	}
 	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail); st != 0 {
@@ -530,7 +530,7 @@ func testMetaClient(t *testing.T, m Meta) {
 }
 
 func testStickyBit(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, false)
+	_ = m.Init(&Format{Name: "test"}, false)
 	ctx := Background
 	var sticky, normal, inode Ino
 	var attr = &Attr{}
@@ -597,7 +597,7 @@ func testStickyBit(t *testing.T, m Meta) {
 }
 
 func testLocks(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, false)
+	_ = m.Init(&Format{Name: "test"}, false)
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -734,7 +734,7 @@ func testLocks(t *testing.T, m Meta) {
 }
 
 func testRemove(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, false)
+	_ = m.Init(&Format{Name: "test"}, false)
 	ctx := Background
 	var inode, parent Ino
 	var attr = &Attr{}
@@ -776,7 +776,7 @@ func testRemove(t *testing.T, m Meta) {
 }
 
 func testCaseIncensi(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, false)
+	_ = m.Init(&Format{Name: "test"}, false)
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -825,9 +825,9 @@ type compactor interface {
 
 func testCompaction(t *testing.T, m Meta, trash bool) {
 	if trash {
-		_ = m.Init(Format{Name: "test", TrashDays: 1}, false)
+		_ = m.Init(&Format{Name: "test", TrashDays: 1}, false)
 	} else {
-		_ = m.Init(Format{Name: "test"}, false)
+		_ = m.Init(&Format{Name: "test"}, false)
 	}
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
@@ -940,7 +940,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 	m.OnMsg(CompactChunk, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(Format{Name: "test"}, false)
+	_ = m.Init(&Format{Name: "test"}, false)
 
 	ctx := Background
 	var inode Ino
@@ -982,7 +982,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	// remove quota
 	format, _ := m.Load(false)
 	format.Capacity = 0
-	_ = m.Init(*format, false)
+	_ = m.Init(format, false)
 
 	ctx := Background
 	var inode Ino
@@ -1043,7 +1043,7 @@ func testCopyFileRange(t *testing.T, m Meta) {
 	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(Format{Name: "test"}, false)
+	_ = m.Init(&Format{Name: "test"}, false)
 
 	ctx := Background
 	var iin, iout Ino
@@ -1093,7 +1093,7 @@ func testCopyFileRange(t *testing.T, m Meta) {
 }
 
 func testCloseSession(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, false)
+	_ = m.Init(&Format{Name: "test"}, false)
 	if err := m.NewSession(); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
@@ -1152,7 +1152,7 @@ func testCloseSession(t *testing.T, m Meta) {
 }
 
 func testTrash(t *testing.T, m Meta) {
-	if err := m.Init(Format{Name: "test", TrashDays: 1}, false); err != nil {
+	if err := m.Init(&Format{Name: "test", TrashDays: 1}, false); err != nil {
 		t.Fatalf("init: %s", err)
 	}
 	ctx := Background
@@ -1248,7 +1248,7 @@ func testTrash(t *testing.T, m Meta) {
 }
 
 func testParents(t *testing.T, m Meta) {
-	if err := m.Init(Format{Name: "test"}, false); err != nil {
+	if err := m.Init(&Format{Name: "test"}, false); err != nil {
 		t.Fatalf("init: %s", err)
 	}
 	ctx := Background
@@ -1382,7 +1382,7 @@ func testConcurrentDir(t *testing.T, m Meta) {
 	format, err := m.Load(false)
 	format.Capacity = 0
 	format.Inodes = 0
-	if err = m.Init(*format, false); err != nil {
+	if err = m.Init(format, false); err != nil {
 		t.Fatalf("set quota failed: %s", err)
 	}
 	for i := 0; i < 100; i++ {

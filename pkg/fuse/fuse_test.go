@@ -46,7 +46,7 @@ import (
 
 func format(url string) {
 	m := meta.NewClient(url, &meta.Config{})
-	format := meta.Format{
+	format := &meta.Format{
 		Name:      "test",
 		UUID:      uuid.New().String(),
 		Storage:   "file",

@@ -328,7 +328,7 @@ func (m *kvMeta) scanValues(prefix []byte, limit int, filter func(k, v []byte) b
 	return values, err
 }
 
-func (m *kvMeta) Init(format Format, force bool) error {
+func (m *kvMeta) Init(format *Format, force bool) error {
 	body, err := m.get(m.fmtKey("setting"))
 	if err != nil {
 		return err
@@ -2616,7 +2616,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	}
 
 	dm := DumpedMeta{
-		Setting: m.fmt,
+		Setting: *m.fmt,
 		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
