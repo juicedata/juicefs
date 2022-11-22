@@ -182,7 +182,7 @@ sudo juicefs mount -d redis://[<redis-username>]:<redis-password>@<redis-url>:63
 
 > **Note**: When mounting a file system, only the database address is required but not the file system name. The default cache path is `/var/jfsCache`. Please make sure the current user has enough read/write permissions.
 
-You can optimize JuiceFS by adjusting the [mount options](../reference/command_reference.md#juicefs-mount), for example by `--cache-size` to change cache to 20GB.
+You can optimize JuiceFS by adjusting the [mount options](../reference/command_reference.md#mount), for example by `--cache-size` to change cache to 20GB.
 
 ```shell
 sudo juicefs mount --cache-size 20480 -d redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1  /mnt/jfs

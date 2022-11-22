@@ -102,7 +102,7 @@ JuiceFS 不将原始文件存入对象存储，而是将其按照某个大小（
 
 ### 怎么快速地拷贝大量小文件到 JuiceFS？
 
-请在挂载时加上 [`--writeback` 选项](reference/command_reference.md#juicefs-mount)，它会先把数据写入本机的缓存，然后再异步上传到对象存储，会比直接上传到对象存储快很多倍。
+请在挂载时加上 [`--writeback` 选项](reference/command_reference.md#mount)，它会先把数据写入本机的缓存，然后再异步上传到对象存储，会比直接上传到对象存储快很多倍。
 
 请查看[「客户端写缓存」](guide/cache_management.md#客户端写缓存)了解更多信息。
 
