@@ -255,7 +255,7 @@ func (m *dbMeta) syncTable(beans ...interface{}) error {
 	return err
 }
 
-func (m *dbMeta) Init(format Format, force bool) error {
+func (m *dbMeta) Init(format *Format, force bool) error {
 	if err := m.syncTable(new(setting), new(counter)); err != nil {
 		return fmt.Errorf("create table setting, counter: %s", err)
 	}
@@ -3089,7 +3089,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		}
 
 		dm := DumpedMeta{
-			Setting:   m.fmt,
+			Setting:   *m.fmt,
 			Counters:  counters,
 			Sustained: sessions,
 			DelFiles:  dels,

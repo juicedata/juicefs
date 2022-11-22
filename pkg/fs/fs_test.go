@@ -269,7 +269,7 @@ func createTestFS(t *testing.T) *FileSystem {
 	checkAccessFile = time.Millisecond
 	rotateAccessLog = 500
 	m := meta.NewClient("memkv://", &meta.Config{})
-	format := meta.Format{
+	format := &meta.Format{
 		Name:      "test",
 		BlockSize: 4096,
 		Capacity:  1 << 30,

@@ -472,7 +472,7 @@ func format(c *cli.Context) error {
 			logger.Fatalf("Format encrypt: %s", err)
 		}
 	}
-	if err = m.Init(*format, c.Bool("force")); err != nil {
+	if err = m.Init(format, c.Bool("force")); err != nil {
 		if create {
 			_ = blob.Delete("juicefs_uuid")
 		}

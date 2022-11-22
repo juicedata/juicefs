@@ -218,7 +218,7 @@ func (m *redisMeta) Name() string {
 	return "redis"
 }
 
-func (m *redisMeta) Init(format Format, force bool) error {
+func (m *redisMeta) Init(format *Format, force bool) error {
 	ctx := Background
 	body, err := m.rdb.Get(ctx, m.setting()).Bytes()
 	if err != nil && err != redis.Nil {
@@ -3301,7 +3301,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 	}
 
 	dm := &DumpedMeta{
-		Setting: m.fmt,
+		Setting: *m.fmt,
 		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],

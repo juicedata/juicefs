@@ -44,7 +44,7 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 		MountPoint: mp,
 	}
 	m := meta.NewClient("memkv://", metaConf)
-	format := meta.Format{
+	format := &meta.Format{
 		Name:        "test",
 		UUID:        uuid.New().String(),
 		Storage:     "mem",
@@ -57,7 +57,7 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 	}
 	conf := &Config{
 		Meta:    metaConf,
-		Format:  &format,
+		Format:  format,
 		Version: "Juicefs",
 		Chunk: &chunk.Config{
 			BlockSize:  format.BlockSize * 1024,

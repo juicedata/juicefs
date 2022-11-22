@@ -258,7 +258,7 @@ func config(ctx *cli.Context) error {
 			logger.Fatalf("Format encrypt: %s", err)
 		}
 	}
-	if err = m.Init(*format, false); err == nil {
+	if err = m.Init(format, false); err == nil {
 		fmt.Println(msg.String()[:msg.Len()-1])
 	}
 	return err
