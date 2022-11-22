@@ -324,7 +324,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			}
 		}
 		*data = append(*data, uint8(st))
-	case meta.Info:
+	case meta.LegacyInfo:
 		inode := Ino(r.Get64())
 		info := &InfoResponse{
 			Ino:    inode,

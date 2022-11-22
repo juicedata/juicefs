@@ -42,8 +42,8 @@ const (
 	CompactChunk = 1001
 	// Rmr is a message to remove a directory recursively.
 	Rmr = 1002
-	// Deprecated: Info is a message to get the internal info for file or directory.
-	Info = 1003
+	// LegacyInfo is a message to get the internal info for file or directory.
+	LegacyInfo = 1003
 	// FillCache is a message to build cache for target directories/files
 	FillCache = 1004
 	// InfoV2 is a message to get the internal info for file or directory.

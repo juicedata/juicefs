@@ -240,7 +240,7 @@ func legacyInfo(d, path string, inode uint64, recursive, raw uint8) {
 	}
 
 	wb := utils.NewBuffer(8 + 10)
-	wb.Put32(meta.Info)
+	wb.Put32(meta.LegacyInfo)
 	wb.Put32(10)
 	wb.Put64(inode)
 	wb.Put8(recursive)
