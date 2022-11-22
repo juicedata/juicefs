@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
+	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -107,7 +109,7 @@ func info(ctx *cli.Context) error {
 		}
 
 		wb := utils.NewBuffer(8 + 10)
-		wb.Put32(meta.Info)
+		wb.Put32(meta.InfoV2)
 		wb.Put32(10)
 		wb.Put64(inode)
 		wb.Put8(recursive)
@@ -122,10 +124,15 @@ func info(ctx *cli.Context) error {
 		}
 		var resp vfs.InfoResponse
 		err = resp.Decode(f)
+		_ = f.Close()
+		if err == syscall.EINVAL {
+			legacyInfo(d, path, inode, recursive, raw)
+			continue
+		}
+
 		if err != nil {
 			logger.Fatalf("read info: %s", err)
 		}
-		_ = f.Close()
 		fmt.Println(path, ":")
 		fmt.Printf("  inode: %d\n", resp.Ino)
 		fmt.Printf("  files: %d\n", resp.Summary.Files)
@@ -216,4 +223,79 @@ func ltypeToString(t uint32) string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+func legacyInfo(d, path string, inode uint64, recursive, raw uint8) {
+	f := openController(d)
+	defer f.Close()
+	if f == nil {
+		logger.Errorf("%s is not inside JuiceFS", path)
+		// continue to next path
+		return
+	}
+
+	wb := utils.NewBuffer(8 + 10)
+	wb.Put32(meta.Info)
+	wb.Put32(10)
+	wb.Put64(inode)
+	wb.Put8(recursive)
+	wb.Put8(raw)
+	_, err := f.Write(wb.Bytes())
+	if err != nil {
+		logger.Fatalf("write message: %s", err)
+	}
+	data := make([]byte, 4)
+	n := readControl(f, data)
+	if n == 1 && data[0] == byte(syscall.EINVAL&0xff) {
+		logger.Fatalf("info is not supported, please upgrade and mount again")
+	}
+	r := utils.ReadBuffer(data)
+	size := r.Get32()
+	data = make([]byte, size)
+	n, err = f.Read(data)
+	if err != nil {
+		logger.Fatalf("read info: %s", err)
+	}
+	fmt.Println(path, ":")
+	resp := string(data[:n])
+	var p int
+	if p = strings.Index(resp, "chunks:\n"); p > 0 {
+		p += 8
+		raw = 1 // legacy clients always return chunks
+	} else if p = strings.Index(resp, "objects:\n"); p > 0 {
+		p += 9
+	}
+	if p <= 0 {
+		fmt.Println(resp)
+	} else {
+		fmt.Println(resp[:p-1])
+		if len(resp[p:]) > 0 {
+			legacyPrintChunks(resp[p:], raw == 1)
+		}
+	}
+}
+
+func legacyPrintChunks(resp string, raw bool) {
+	cs := strings.Split(resp, "\n")
+	result := make([][]string, len(cs))
+	result[0] = []string{"chunkIndex", "objectName", "size", "offset", "length"}
+	leftAlign := 1
+	if raw {
+		result[0][1] = "sliceId"
+		leftAlign = -1
+	}
+	for i := 1; i < len(result); i++ {
+		result[i] = make([]string, 5) // len(result[0])
+	}
+
+	for i, c := range cs[:len(cs)-1] { // remove the last empty string
+		ps := strings.Split(c, "\t")[1:] // remove the first empty string
+		for j, p := range ps {
+			if j == 0 {
+				p = p[:len(p)-1] // remove the last ':'
+			}
+			result[i+1][j] = p
+		}
+	}
+	printResult(result, leftAlign, false)
 }

@@ -282,13 +282,12 @@ func (r *InfoResponse) Encode() []byte {
 
 func (r *InfoResponse) Decode(reader io.Reader) error {
 	sizeBuf := make([]byte, 4)
-	n := 0
-	for n != 4 {
-		i, err := reader.Read(sizeBuf[n:])
-		if err != nil && err != io.EOF {
-			return err
-		}
-		n += i
+	n, err := reader.Read(sizeBuf[:])
+	if err != nil && err != io.EOF {
+		return err
+	}
+	if n == 1 && sizeBuf[0] == byte(syscall.EINVAL&0xff) {
+		return syscall.EINVAL
 	}
 
 	size := utils.ReadBuffer(sizeBuf).Get32()
@@ -321,7 +320,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			}
 		}
 		*data = append(*data, uint8(st))
-	case meta.Info:
+	case meta.Info | meta.InfoV2:
 		inode := Ino(r.Get64())
 		info := &InfoResponse{
 			Ino: inode,
@@ -336,10 +335,14 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			raw = r.Get8() != 0
 		}
 
-		fmt.Printf("ino %d, recursive %d, raw %v\n", inode, recursive, raw)
+		if cmd == meta.Info {
+			info.Reason = "Deprecated API, please upgrade to the latest version of the juicefs"
+			*data = append(*data, info.Encode()...)
+			return
+		}
+
 		r := meta.GetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
 		if r != 0 {
-			info.Success = true
 			info.Reason = r.Error()
 			*data = append(*data, info.Encode()...)
 			return
@@ -367,6 +370,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			info.Success = true
 			info.Reason = err.Error()
 		}
+		info.Success = true
 		*data = append(*data, info.Encode()...)
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
