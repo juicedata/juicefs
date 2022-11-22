@@ -621,7 +621,7 @@ func benchmarkData(b *testing.B, m Meta) {
 }
 
 func benchmarkAll(b *testing.B, m Meta) {
-	_ = m.Init(Format{Name: "benchmarkAll"}, true)
+	_ = m.Init(&Format{Name: "benchmarkAll"}, true)
 	_ = m.NewSession()
 	benchmarkDir(b, m)
 	benchmarkFile(b, m)
