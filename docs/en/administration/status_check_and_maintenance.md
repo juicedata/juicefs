@@ -147,7 +147,7 @@ objects:
 
 ## gc
 
-`juicefs gc` is designed to handle "object leaks" and fragmented data due to overwrite writes. It uses metadata information as a base to compare with the data in the object storage on a scan-by-scan basis to find or clean up the data blocks on the object storage that need to be processed.
+`juicefs gc` is designed to handle "object leaks" and run compaction on data fragments created by file overwrites. It scans metadata and compare with object storage to find or clean up any object storage blocks that need processing.
 
 :::info
 **Object Leak** is a situation where a block of data is in the object storage, but there is no corresponding record in the metadata engine. Object leaks are rare and can be caused by program bugs, unanticipated problems with the metadata engine or object storage, power outages, network disconnections, etc.
