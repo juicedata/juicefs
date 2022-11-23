@@ -124,7 +124,7 @@ $ juicefs info -r ./mnt
 
 ### Checking metadata with inode
 
-You can also inode to reverse the file path and data block information, but you need to enter the mount point first.
+You can also perform reverse lookup on the file path and data block information via inode , but you need to enter the mountpoint directory.
 
 ```shell
 ~     $ cd mnt
