@@ -18,7 +18,6 @@ package meta
 
 import (
 	"bytes"
-	"fmt"
 	"net/url"
 	"runtime/debug"
 	"sort"
@@ -126,33 +125,6 @@ func align4K(length uint64) int64 {
 		return 1 << 12
 	}
 	return int64((((length - 1) >> 12) + 1) << 12)
-}
-
-func lookupSubdir(m Meta, subdir string) (Ino, error) {
-	var root Ino = 1
-	for subdir != "" {
-		ps := strings.SplitN(subdir, "/", 2)
-		if ps[0] != "" {
-			var attr Attr
-			var inode Ino
-			r := m.Lookup(Background, root, ps[0], &inode, &attr)
-			if r == syscall.ENOENT {
-				r = m.Mkdir(Background, root, ps[0], 0777, 0, 0, &inode, &attr)
-			}
-			if r != 0 {
-				return 0, fmt.Errorf("lookup subdir %s: %s", ps[0], r)
-			}
-			if attr.Typ != TypeDirectory {
-				return 0, fmt.Errorf("%s is not a redirectory", ps[0])
-			}
-			root = inode
-		}
-		if len(ps) == 1 {
-			break
-		}
-		subdir = ps[1]
-	}
-	return root, nil
 }
 
 type plockRecord struct {

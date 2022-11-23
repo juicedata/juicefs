@@ -202,8 +202,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	}
 	m.en = m
 	m.checkServerConfig()
-	m.root, err = lookupSubdir(m, conf.Subdir)
-	return m, err
+	return m, nil
 }
 
 func (m *redisMeta) Shutdown() error {
