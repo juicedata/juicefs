@@ -1,9 +1,10 @@
 ---
-sidebar_label: FAQ
+sidebar_label: 常见问题
 slug: /faq
 ---
 
 # JuiceFS 常见问题
+
 ## 一般问题
 
 ### JuiceFS 与 XXX 的区别是什么？
@@ -40,7 +41,6 @@ slug: /faq
 
 使用的元数据库已经被 format 过了并且本次 format 无法更新之前的某些配置。需要在手动清理元数据库后再执行 `juicefs format` 命令。
 
-
 ## 对象存储相关问题
 
 ### 为什么不支持某个对象存储？
@@ -61,7 +61,7 @@ slug: /faq
 
 如果以上因素都已经排除，请检查你使用的对象存储的[存储类型](guide/how_to_set_up_object_storage.md#存储类型)是什么，云服务商可能会针对某些存储类型设置最小计量单位。例如阿里云 OSS 低频访问存储的[最小计量单位](https://help.aliyun.com/document_detail/173534.html)是 64KB，如果单个文件小于 64KB 也会按照 64KB 计算。
 
-### JuiceFS 支持使用对象存储中的某个目录作为 `—-bucket` 选项的值吗？
+### JuiceFS 支持使用对象存储中的某个目录作为 `--bucket` 选项的值吗？
 
 到 JuiceFS 1.0 为止，还不支持该功能。
 
@@ -130,7 +130,7 @@ uid=1201(alice) gid=500(staff) groups=500(staff)
 
 除了挂载外，还支持以下几种方式：
 
-- Kubernetes CSI 驱动：通过 Kubernetes CSI 驱动的方式将 JuiceFS 作为 Kubernetes 集群的存储层，详情请参考[「JuiceFS CSI 驱动」](https://juicefs.com/docs/zh/csi/introduction/)。
+- Kubernetes CSI 驱动：通过 Kubernetes CSI 驱动的方式将 JuiceFS 作为 Kubernetes 集群的存储层，详情请参考[「JuiceFS CSI 驱动」](deployment/how_to_use_on_kubernetes.md)。
 - Hadoop Java SDK：方便在 Hadoop 体系中使用兼容 HDFS 接口的 Java 客户端访问 JuiceFS。详情请参考[「Hadoop 使用 JuiceFS」](deployment/hadoop_java_sdk.md)。
 - S3 网关：通过 S3 协议访问 JuiceFS，详情请参考[「配置 JuiceFS S3 网关」](deployment/s3_gateway.md)。
 - Docker Volume 插件：在 Docker 中方便使用 JuiceFS 的方式，详情请参考[「Docker 使用 JuiceFS」](deployment/juicefs_on_docker.md)。

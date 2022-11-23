@@ -70,7 +70,7 @@ The S3 gateway can only run in the foreground, so client logs are output directl
 
 The JuiceFS client logs will be mixed into the logs of processes using JuiceFS Hadoop Java SDK, e.g. Spark executor. Thus, you need to use keywords, e.g. `juicefs` (case-insensitive), to filter out the logs you do not want.
 
-## Access log {#accesslog}
+## Access log {#access-log}
 
 Each JuiceFS client has an access log that records all operations on the file system in detail, such as operation type, user ID, group ID, file inodes and time cost. Access logs can be used for various purposes such as performance analysis, auditing, and troubleshooting.
 

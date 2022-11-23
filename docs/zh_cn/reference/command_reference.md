@@ -217,7 +217,9 @@ $ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
 
 #### 描述
 
-挂载一个已经创建的文件系统。你可以用任意用户执行挂载命令，不过请确保该用户对缓存目录（`--cache-dir`）有写权限。默认的缓存目录是 `$HOME/.juicefs/cache`（macOS）或者 `/var/jfsCache`（Linux）。
+挂载一个已经创建的文件系统。
+
+你可以用任意用户执行挂载命令，不过请确保该用户对缓存目录（`--cache-dir`）有写权限，请阅读[「缓存位置」](../guide/cache_management.md#cache-dir)文档了解更多信息。
 
 #### 使用
 
@@ -225,7 +227,7 @@ $ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
 juicefs mount [command options] META-URL MOUNTPOINT
 ```
 
-- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。
+- **META-URL**：用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。
 - **MOUNTPOINT**：文件系统挂载点，例如：`/mnt/jfs`、`Z:`。
 
 #### 选项
@@ -933,7 +935,7 @@ $ juicefs fsck redis://localhost
 
 #### 描述
 
-分析[访问日志](../administration/fault_diagnosis_and_analysis.md#访问日志)。
+分析[访问日志](../administration/fault_diagnosis_and_analysis.md#access-log)。
 
 #### 使用
 

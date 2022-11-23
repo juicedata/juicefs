@@ -1,6 +1,6 @@
 ---
 sidebar_label: How to destroy a file system
-position: 7
+sidebar_position: 8
 ---
 # How to destroy a file system
 
