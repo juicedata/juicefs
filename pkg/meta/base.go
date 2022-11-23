@@ -17,7 +17,6 @@
 package meta
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -82,11 +81,14 @@ type engine interface {
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 
-	scanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error
-	scanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error
+	scanDeletedSlices(Context, deletedSliceScan) error
+	scanDeletedFiles(Context, deletedFileScan) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
 }
+
+type deletedSliceScan func(ss []Slice, ts int64) (clean bool, err error)
+type deletedFileScan func(ino Ino, size uint64, ts int64) (clean bool, err error)
 
 // fsStat aligned for atomic operations
 // nolint:structcheck
@@ -1445,16 +1447,16 @@ func (m *baseMeta) cleanupDelayedSlices() {
 	}
 }
 
-func (m *baseMeta) Statistic(ctx context.Context, slicesDeletedScan func(Slice) error, fileDeletedScan func(ino Ino, size uint64) error) error {
+func (m *baseMeta) Statistic(ctx Context, sliceScan deletedSliceScan, fileScan deletedFileScan) error {
 	eg := errgroup.Group{}
-	if slicesDeletedScan != nil {
+	if sliceScan != nil {
 		eg.Go(func() error {
-			return m.en.scanDeletedSlices(ctx, slicesDeletedScan)
+			return m.en.scanDeletedSlices(ctx, sliceScan)
 		})
 	}
-	if fileDeletedScan != nil {
+	if fileScan != nil {
 		eg.Go(func() error {
-			return m.en.scanDeletedFiles(ctx, fileDeletedScan)
+			return m.en.scanDeletedFiles(ctx, fileScan)
 		})
 	}
 	return eg.Wait()

@@ -22,7 +22,6 @@ package meta
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -2588,68 +2587,103 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	return errno(m.scanDeletedSlices(ctx, func(s Slice) error {
-		slices[1] = append(slices[1], s)
+	return errno(m.scanDeletedSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
+		slices[1] = append(slices[1], ss...)
 		if showProgress != nil {
-			showProgress()
+			for range ss {
+				showProgress()
+			}
 		}
-		return nil
+		return false, nil
 	}))
 }
 
-func (m *dbMeta) scanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error {
-	if visitor == nil {
+func (m *dbMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
+	if scan == nil {
 		return nil
 	}
-	return m.roTxn(func(s *xorm.Session) error {
-		if ok, err := s.IsTableExist(&delslices{}); err != nil {
+	var dss []delslices
+
+	err := m.roTxn(func(tx *xorm.Session) error {
+		if ok, err := tx.IsTableExist(&delslices{}); err != nil {
 			return err
 		} else if !ok {
 			return nil
 		}
-		var dss []delslices
-		err := s.Find(&dss)
+		return tx.Find(&dss)
+	})
+	if err != nil {
+		return err
+	}
+	var ss []Slice
+	for _, ds := range dss {
+		ss = ss[:0]
+		var clean bool
+		m.decodeDelayedSlices(ds.Slices, &ss)
+		err = m.txn(func(tx *xorm.Session) error {
+			clean, err = scan(ss, ds.Deleted)
+			if err != nil {
+				return err
+			}
+			if clean {
+				for _, s := range ss {
+					if _, e := tx.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.Id, s.Size); e != nil {
+						return e
+					}
+				}
+				_, err = tx.Delete(&delslices{Id: ds.Id})
+			}
+			return err
+		})
 		if err != nil {
 			return err
 		}
-		var ss []Slice
-		for _, ds := range dss {
-			ss = ss[:0]
-			m.decodeDelayedSlices(ds.Slices, &ss)
+		if clean {
 			for _, s := range ss {
-				if s.Id > 0 {
-					if err := visitor(s); err != nil {
-						return err
+				var ref = sliceRef{Id: s.Id}
+				err := m.roTxn(func(tx *xorm.Session) error {
+					ok, err := tx.Get(&ref)
+					if err == nil && !ok {
+						err = errors.New("not found")
 					}
+					return err
+				})
+				if err == nil && ref.Refs <= 0 {
+					m.deleteSlice(s.Id, s.Size)
 				}
 			}
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
-func (m *dbMeta) scanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
-	if visitor == nil {
+func (m *dbMeta) scanDeletedFiles(ctx Context, scan deletedFileScan) error {
+	if scan == nil {
 		return nil
 	}
-	return m.roTxn(func(s *xorm.Session) error {
+
+	var dfs []delfile
+	err := m.roTxn(func(s *xorm.Session) error {
 		if ok, err := s.IsTableExist(&delfile{}); err != nil {
 			return err
 		} else if !ok {
 			return nil
 		}
-		var dfs []delfile
-		err := s.Find(&dfs)
+		return s.Find(&dfs)
+	})
+	if err != nil {
+		return err
+	}
+	for _, ds := range dfs {
+		clean, err := scan(ds.Inode, ds.Length, ds.Expire)
 		if err != nil {
 			return err
 		}
-		for _, ds := range dfs {
-			if err := visitor(ds.Inode, ds.Length); err != nil {
-				return err
-			}
+		if clean {
+			m.doDeleteFileData(ds.Inode, ds.Length)
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {

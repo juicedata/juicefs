@@ -17,7 +17,6 @@
 package meta
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -268,7 +267,7 @@ type Meta interface {
 	// ListSessions returns all client sessions.
 	ListSessions() ([]*Session, error)
 	// Statistic scan metadata by visitors.
-	Statistic(ctx context.Context, slicesDelayedScan func(Slice) error, fileDelayedScan func(ino Ino, size uint64) error) error
+	Statistic(Context, deletedSliceScan, deletedFileScan) error
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
 	CleanStaleSessions()
 

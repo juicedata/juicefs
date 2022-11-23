@@ -121,14 +121,16 @@ func status(ctx *cli.Context) error {
 		defer fileSpinner.Done()
 
 		err = m.Statistic(
-			ctx.Context,
-			func(s meta.Slice) error {
-				slicesSpinner.IncrInt64(int64(s.Size))
-				return nil
+			meta.WrapContext(ctx.Context),
+			func(ss []meta.Slice, _ int64) (bool, error) {
+				for _, s := range ss {
+					slicesSpinner.IncrInt64(int64(s.Size))
+				}
+				return false, nil
 			},
-			func(_ meta.Ino, size uint64) error {
+			func(_ meta.Ino, size uint64, _ int64) (bool, error) {
 				fileSpinner.IncrInt64(int64(size))
-				return nil
+				return false, nil
 			},
 		)
 		if err != nil {

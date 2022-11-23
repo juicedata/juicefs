@@ -2809,40 +2809,91 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 		return errno(err)
 	}
 
-	return errno(m.scanDeletedSlices(ctx, func(s Slice) error {
-		slices[1] = append(slices[1], s)
+	return errno(m.scanDeletedSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
+		slices[1] = append(slices[1], ss...)
 		if showProgress != nil {
-			showProgress()
+			for range ss {
+				showProgress()
+			}
 		}
-		return nil
+		return false, nil
 	}))
 }
 
-func (m *redisMeta) scanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error {
-	if visitor == nil {
+func (m *redisMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
+	if scan == nil {
 		return nil
 	}
-	visited := make(map[uint64]bool)
-	return m.hscan(ctx, m.delSlices(), func(keys []string) error {
-		var ss []Slice
-		for i := 0; i < len(keys); i += 2 {
-			ss = ss[:0]
-			m.decodeDelayedSlices([]byte(keys[i+1]), &ss)
-			for _, s := range ss {
-				if s.Id > 0 && !visited[s.Id] {
-					visited[s.Id] = true
-					if err := visitor(s); err != nil {
-						return err
+
+	delKeys := make(chan string, 1000)
+	c, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		_ = m.hscan(c, m.delSlices(), func(keys []string) error {
+			for i := 0; i < len(keys); i += 2 {
+				delKeys <- keys[i]
+			}
+			return nil
+		})
+		close(delKeys)
+	}()
+
+	var ss []Slice
+	var rs []*redis.IntCmd
+	for key := range delKeys {
+		ss = ss[:0]
+		rs = rs[:0]
+		var clean bool
+		task := func(tx *redis.Tx) error {
+			val, err := tx.HGet(ctx, m.delSlices(), key).Result()
+			if err == redis.Nil {
+				return nil
+			} else if err != nil {
+				return err
+			}
+			ps := strings.Split(key, "_")
+			if len(ps) != 2 {
+				return fmt.Errorf("invalid key %s", key)
+			}
+			ts, err := strconv.ParseInt(ps[1], 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid key %s, fail to parse timestamp", key)
+			}
+
+			m.decodeDelayedSlices([]byte(val), &ss)
+			clean, err = scan(ss, ts)
+			if err != nil {
+				return err
+			}
+			if clean {
+				_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+					for _, s := range ss {
+						rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.Id, s.Size), -1))
 					}
+					pipe.HDel(ctx, m.delSlices(), key)
+					return nil
+				})
+			}
+			return err
+		}
+		err := m.txn(ctx, task, m.delSlices())
+		if err != nil {
+			return err
+		}
+		if clean && len(rs) == len(ss) {
+			for i, s := range ss {
+				if rs[i].Err() == nil && rs[i].Val() < 0 {
+					m.deleteSlice(s.Id, s.Size)
 				}
 			}
 		}
-		return nil
-	})
+	}
+
+	return nil
 }
 
-func (m *redisMeta) scanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
-	if visitor == nil {
+func (m *redisMeta) scanDeletedFiles(ctx Context, scan deletedFileScan) error {
+	if scan == nil {
 		return nil
 	}
 
@@ -2850,12 +2901,13 @@ func (m *redisMeta) scanDeletedFiles(ctx context.Context, visitor func(ino Ino, 
 	start := int64(0)
 	const batchSize = 1000
 	for {
-		vals, err := m.rdb.ZRange(Background, m.delfiles(), start, start+batchSize).Result()
+		pairs, err := m.rdb.ZRangeWithScores(Background, m.delfiles(), start, start+batchSize).Result()
 		if err != nil {
 			return err
 		}
 		start += batchSize
-		for _, v := range vals {
+		for _, p := range pairs {
+			v := p.Member.(string)
 			ps := strings.Split(v, ":")
 			if len(ps) != 2 { // will be cleaned up as legacy
 				continue
@@ -2866,11 +2918,15 @@ func (m *redisMeta) scanDeletedFiles(ctx context.Context, visitor func(ino Ino, 
 			}
 			visited[Ino(inode)] = true
 			size, _ := strconv.ParseUint(ps[1], 10, 64)
-			if err := visitor(Ino(inode), size); err != nil {
+			clean, err := scan(Ino(inode), size, int64(p.Score))
+			if err != nil {
 				return err
 			}
+			if clean {
+				m.doDeleteFileData_(Ino(inode), size, v)
+			}
 		}
-		if len(vals) < batchSize {
+		if len(pairs) < batchSize {
 			break
 		}
 	}
