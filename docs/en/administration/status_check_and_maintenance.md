@@ -45,7 +45,7 @@ juicefs status redis://xxx.cache.amazonaws.com:6379/1
 }
 ```
 
-Specifying the `Sid` of a session with the `-session, -s` option allows you to further indicate more information about the session.
+Specifying the `Sid` of a session with the `--session, -s` option allows you to provide more information about the session.
 
 ```shell
 juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1
