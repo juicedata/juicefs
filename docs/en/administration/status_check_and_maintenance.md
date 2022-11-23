@@ -2,6 +2,7 @@
 sidebar_label: Status Check & Maintenance
 sidebar_position: 4
 ---
+
 # Status Check & Maintenance
 
 Any kind of storage system needs to be checked and maintained regularly after it is put into use, so that potential problems can be found and fixed as early as possible to ensure reliable operation of the file system and the integrity and consistency of the stored data.
@@ -12,7 +13,7 @@ JuiceFS provides a series of tools to check and maintain the file system, not on
 
 `juicefs status` is used to review basic information about a JuiceFS file system and the status of all active sessions (including mounts, SDK accesses, S3 gateways, WebDAV connections).
 
-The basic information of the file system includes name, UUID, storage type,  Bucket, recycle bin status, etc.
+The basic information of the file system includes name, UUID, storage type, bucket, trash status, etc.
 
 ```shell
 juicefs status redis://xxx.cache.amazonaws.com:6379/1
@@ -65,8 +66,8 @@ juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1
 Depending on the status of the session, the message may also include.
 
 - Sustained inodes: These are files that have been deleted, but because they have been opened in this session, they will be held temporarily until the file is closed.
-- Flocks: Information about the file flock locked by this session
-- Plocks: Information about the file plock locked by this session
+- Flocks: BSD lock information about the file that locked by this session
+- Plocks: POSIX lock Information about the file that locked by this session
 
 ## info
 
@@ -94,7 +95,7 @@ objects:
 
 ### Checking the metadata of a directory
 
-This command checks only one level of directories by default.
+This command checks only one level of directories by default:
 
 ```shell
 $ juicefs info ./mnt
@@ -108,7 +109,7 @@ mnt :
    path: /
 ```
 
-If you want to recursively check all subdirectories, you need to specify the `--recursive, -r` option.
+If you want to recursively check all subdirectories, you need to specify the `--recursive, -r` option:
 
 ```shell
 $ juicefs info -r ./mnt
@@ -124,7 +125,7 @@ $ juicefs info -r ./mnt
 
 ### Checking metadata with inode
 
-You can also perform reverse lookup on the file path and data block information via inode , but you need to enter the mountpoint directory.
+You can also perform reverse lookup on the file path and data block information via inode, but you need to enter the mount point directory.
 
 ```shell
 ~     $ cd mnt
@@ -147,23 +148,23 @@ objects:
 
 ## gc
 
-`juicefs gc` is designed to handle "object leaks" and run compaction on data fragments created by file overwrites. It scans metadata and compare with object storage to find or clean up any object storage blocks that need processing.
+`juicefs gc` is designed to handle "object leak" and run compaction on data fragments created by file overwrites. It scans metadata and compare with object storage to find or clean up any object storage blocks that need processing.
 
 :::info
-**Object Leak** is a situation where a block of data is in the object storage, but there is no corresponding record in the metadata engine. Object leaks are rare and can be caused by program bugs, unanticipated problems with the metadata engine or object storage, power outages, network disconnections, etc.
+**Object leak** is a situation where a block of data is in the object storage, but there is no corresponding record in the metadata engine. Object leak are rare and can be caused by program bugs, unanticipated problems with the metadata engine or object storage, power outages, network disconnections, etc.
 :::
 
 :::tip
-Temporary intermediate files may be produced when files are uploaded to the object storage, and they are cleaned up when the storage is complete. To avoid intermediate files being misclassified as leaked objects, `juicefs gc` skips files uploaded in the last 1 hour by default. The skipped time range (in seconds) can be adjusted via the `JFS_GC_SKIPPEDTIME` environment variable. For example, to set skip the last 2 hours of files: `export JFS_GC_SKIPPEDTIME=7200`.
+Temporary intermediate files may be produced when files are uploaded to the object storage, and they will be cleaned up after the writing is complete. To avoid intermediate files being misclassified as leaked objects, `juicefs gc` skips files uploaded in the last 1 hour by default. The skipped time range (in seconds) can be adjusted via the `JFS_GC_SKIPPEDTIME` environment variable. For example, to set skip the last 2 hours of files: `export JFS_GC_SKIPPEDTIME=7200`.
 :::
 
 :::tip
-Because the `juicefs gc` command scans all objects in the object storage, there is some overhead in executing this command for file systems with large amounts of data.
+Because the `juicefs gc` command scans all objects in the object storage, there is some overhead in executing this command for file system with large amounts of data.
 :::
 
 ### Scan for leaked objects
 
-Although object leaks almost never occur, you can still perform the appropriate routine checks as needed, and by default `juicefs gc` only performs a scan for:
+Although object leak almost never occur, you can still perform the appropriate routine checks as needed, and by default `juicefs gc` only performs scans:
 
 ```shell
 $ juicefs gc sqlite3://myjfs.db

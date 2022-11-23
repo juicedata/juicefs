@@ -2,6 +2,7 @@
 sidebar_label: 状态检查 & 维护
 sidebar_position: 4
 ---
+
 # 状态检查 & 维护
 
 任何一种存储系统在投入使用之后都需要定期进行检查和维护，尽早发现并修复潜在的问题，从而保证文件系统可靠运行、存储的数据完整一致。
@@ -65,8 +66,8 @@ juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1
 根据会话的状态，信息中还可能包括：
 
 - Sustained inodes：这些是已经被删掉的文件，但是因为在这个会话中已经被打开，因此会被暂时保留直至文件关闭。
-- Flocks：被这个会话加锁的文件 flock 锁信息
-- Plocks：被这个会话加锁的文件 plock 锁信息
+- Flocks：被这个会话加锁的文件的 BSD 锁信息
+- Plocks：被这个会话加锁的文件的 POSIX 锁信息
 
 ## info
 
@@ -154,7 +155,7 @@ objects:
 :::
 
 :::tip 提示
-文件在上传到对象存储时可能产生临时的中间文件，它们会在存储完成后被清理。为了避免中间文件被误判为泄漏的对象，`juicefs gc` 默认会跳过最近 1 个小时上传的文件。可以通过 `JFS_GC_SKIPPEDTIME` 环境变量调整跳过的时间范围（单位为秒）。例如设置跳过最近 2 个小时的文件：`export JFS_GC_SKIPPEDTIME=7200`。
+文件在上传到对象存储时可能产生临时的中间文件，它们会在写入完成后被清理。为了避免中间文件被误判为泄漏的对象，`juicefs gc` 默认会跳过最近 1 个小时上传的文件。可以通过 `JFS_GC_SKIPPEDTIME` 环境变量调整跳过的时间范围（单位为秒）。例如设置跳过最近 2 个小时的文件：`export JFS_GC_SKIPPEDTIME=7200`。
 :::
 
 :::tip 提示
