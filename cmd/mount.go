@@ -552,7 +552,7 @@ func mount(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if st := metaCli.SwitchRoot(meta.Background, metaConf.Subdir); st != 0 {
+	if st := metaCli.Chroot(meta.Background, metaConf.Subdir); st != 0 {
 		return st
 	}
 

@@ -203,8 +203,8 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
-	if st := m.SwitchRoot(meta.Background, metaConf.Subdir); st != 0 {
-		logger.Fatalf("SwitchRoot to %s: %s", metaConf.Subdir, st)
+	if st := m.Chroot(meta.Background, metaConf.Subdir); st != 0 {
+		logger.Fatalf("Chroot to %s: %s", metaConf.Subdir, st)
 	}
 	registerer, registry := wrapRegister(mp, format.Name)
 

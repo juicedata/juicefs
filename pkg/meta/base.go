@@ -1214,7 +1214,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool)
 	return
 }
 
-func (m *baseMeta) SwitchRoot(ctx Context, subdir string) syscall.Errno {
+func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 	for subdir != "" {
 		ps := strings.SplitN(subdir, "/", 2)
 		if ps[0] != "" {

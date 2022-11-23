@@ -189,8 +189,8 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
 	}
-	if st := metaCli.SwitchRoot(meta.Background, metaConf.Subdir); st != 0 {
-		logger.Fatalf("SwitchRoot to %s: %s", metaConf.Subdir, st)
+	if st := metaCli.Chroot(meta.Background, metaConf.Subdir); st != 0 {
+		logger.Fatalf("Chroot to %s: %s", metaConf.Subdir, st)
 	}
 	registerer, registry := wrapRegister(mp, format.Name)
 

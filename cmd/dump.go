@@ -97,7 +97,7 @@ func dump(ctx *cli.Context) (err error) {
 	if _, err := m.Load(true); err != nil {
 		return err
 	}
-	if st := m.SwitchRoot(meta.Background, metaConf.Subdir); st != 0 {
+	if st := m.Chroot(meta.Background, metaConf.Subdir); st != 0 {
 		return st
 	}
 	if err := m.DumpMeta(w, 1, ctx.Bool("keep-secret-key")); err != nil {

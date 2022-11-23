@@ -355,8 +355,8 @@ type Meta interface {
 	GetPaths(ctx Context, inode Ino) []string
 	// Check integrity of an absolute path and repair it if asked
 	Check(ctx Context, fpath string, repair bool, recursive bool) syscall.Errno
-	// Switch to a new root inode specified by subdir
-	SwitchRoot(ctx Context, subdir string) syscall.Errno
+	// Change root to a directory specified by subdir
+	Chroot(ctx Context, subdir string) syscall.Errno
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
