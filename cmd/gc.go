@@ -174,12 +174,49 @@ func gc(ctx *cli.Context) error {
 	}
 
 	// List all slices in metadata engine
-	var c = meta.NewContext(0, 0, []uint32{0})
+	var c = meta.WrapContext(ctx.Context)
 	slices := make(map[meta.Ino][]meta.Slice)
 	r := m.ListSlices(c, slices, delete, sliceCSpin.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
+
+	delayedSliceSpin := progress.AddDoubleSpinner("Delslices")
+	cleanedSliceSpin := progress.AddDoubleSpinner("Cleaned delslices")
+	delayedFileSpin := progress.AddDoubleSpinner("Delfiles")
+	cleanedFileSpin := progress.AddDoubleSpinner("Cleaned delfiles")
+	deadline := time.Now().Unix() - int64(format.TrashDays)*24*3600
+	err = m.Statistic(
+		c,
+		func(ss []meta.Slice, ts int64) (bool, error) {
+			for _, s := range ss {
+				delayedSliceSpin.IncrInt64(int64(s.Size))
+				if delete && ts < deadline {
+					cleanedSliceSpin.IncrInt64(int64(s.Size))
+				}
+			}
+			if delete && ts < deadline {
+				return true, nil
+			}
+			return false, nil
+		},
+		func(_ meta.Ino, size uint64, ts int64) (bool, error) {
+			delayedFileSpin.IncrInt64(int64(size))
+			if delete {
+				cleanedFileSpin.IncrInt64(int64(size))
+				return true, nil
+			}
+			return false, nil
+		},
+	)
+	if err != nil {
+		logger.Fatalf("statistic: %s", err)
+	}
+	delayedSliceSpin.Done()
+	cleanedSliceSpin.Done()
+	delayedFileSpin.Done()
+	cleanedFileSpin.Done()
+
 	if delete {
 		close(sliceChan)
 		wg.Wait()
