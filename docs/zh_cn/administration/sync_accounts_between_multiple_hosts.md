@@ -1,6 +1,6 @@
 ---
 sidebar_label: 多主机间同步账户
-sidebar_position: 6
+sidebar_position: 7
 slug: /sync_accounts_between_multiple_hosts
 ---
 

@@ -1,9 +1,11 @@
 ---
-sidebar_label: FAQ
+title: FAQ
 slug: /faq
 ---
 
-# JuiceFS FAQ
+## My question is not answered in the documentations
+
+Try searching using different keywords (top right corner), if that doesn't help, reach our community at [JuiceFS Community](https://juicefs.com/en/community).
 
 ## General Questions
 
@@ -48,7 +50,7 @@ JuiceFS already supported many object storage, please check [the list](guide/how
 
 ### Why can't I see the original files that have been stored in JuiceFS in object storage?
 
-While using JuiceFS, files will eventually be split into Chunks, Slices and Blocks and stored in object storage. Therefore, you may notice that the source files stored in JuiceFS cannot be found in the file browser of the object storage platform; instead, there are only a directory of chunks and a bunch of directories and files named by numbers in the bucket. Don't panic! That's exactly what makes JuiceFS a high-performance file system. For details, please refer to ["How JuiceFS Store Files"](introduction/architecture.md#how-juicefs-stores-files).
+Refer to ["How JuiceFS Store Files"](introduction/architecture.md#how-juicefs-stores-files).
 
 ### Why do I delete files at the mount point, but there is no change or very little change in object storage footprint?
 
@@ -115,41 +117,6 @@ Yes, JuiceFS could be mounted using `juicefs` without root. The default director
 
 See ["Read Cache in Client"](guide/cache_management.md#read-cache-in-client) for more information.
 
-### `docker: Error response from daemon: error while creating mount source path 'XXX': mkdir XXX: file exists.`
-
-When you use [Docker bind mounts](https://docs.docker.com/storage/bind-mounts) to mount a directory on the host machine into a container, you may encounter this error. The reason is that `juicefs mount` command was executed with non-root user. In turn, Docker daemon doesn't have permission to access the directory.
-
-There are two solutions to this problem:
-
-1. Execute `juicefs mount` command with root user
-2. Modify FUSE configuration and add `allow_other` mount option, see [this document](reference/fuse_mount_options.md#allow_other) for more information.
-
-### `fuse: fuse: exec: "/bin/fusermount": stat /bin/fusermount: no such file or directory`
-
-This error means `juicefs mount` command was executed with non-root user, and `fusermount` command cannot found.
-
-There are two solutions to this problem:
-
-1. Execute `juicefs mount` command with root user
-2. Install `fuse` package (e.g. `apt-get install fuse`, `yum install fuse`)
-
-### `fuse: fuse: fork/exec /usr/bin/fusermount: permission denied`
-
-This error means current user doesn't have permission to execute `fusermount` command. For example, check `fusermount` permission with following command:
-
-```sh
-$ ls -l /usr/bin/fusermount
--rwsr-x---. 1 root fuse 27968 Dec  7  2011 /usr/bin/fusermount
-```
-
-Above example means only root user and `fuse` group user have executable permission. Another example:
-
-```sh
-$ ls -l /usr/bin/fusermount
--rwsr-xr-x 1 root root 32096 Oct 30  2018 /usr/bin/fusermount
-```
-
-Above example means all users have executable permission.
 
 ## Access Related Questions
 
@@ -191,9 +158,3 @@ The built-in `gateway` subcommand of JuiceFS does not support functions such as 
 ### Is there currently an SDK available for JuiceFS?
 
 As of the release of JuiceFS 1.0, the community has two SDKs, one is the [Java SDK](deployment/hadoop_java_sdk.md) that is highly compatible with the HDFS interface officially maintained by Juicedata, and the other is the [Python SDK](https://github.com/megvii-research/juicefs-python) maintained by community users.
-
-## Development Related Questions
-
-### `/go/pkg/tool/linux_amd64/link: running gcc failed: exit status 1` or `/go/pkg/tool/linux_amd64/compile: signal: killed`
-
-This error may caused by GCC version is too low, please try to upgrade your GCC to 5.4+.

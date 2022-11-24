@@ -1,3 +1,7 @@
+---
+sidebar_position: 9
+---
+
 # Upgrade
 
 Upgrade methods vary with different JuiceFS clients.
