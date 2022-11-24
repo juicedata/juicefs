@@ -51,7 +51,7 @@ JuiceFS 主要实现一个 libjfs 库和 FUSE 客户端程序、Java SDK 等，�
 | 客户端数据缓存          | ✕                 | ✓             |
 | Hadoop 数据本地性       | ✕                 | ✓             |
 | S3 兼容                 | ✕                 | ✓             |
-| 配额                    | 目录级配额        | Volume 级配额 |
+| 配额                    | 目录级配额        | 文件系统（Volume）级配额 |
 | 开发语言                | C++               | Go            |
 | 开源协议                | LGPLv2.1 & LGPLv3 | Apache License 2.0        |
 
