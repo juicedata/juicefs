@@ -325,14 +325,65 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		}
 		*data = append(*data, uint8(st))
 	case meta.LegacyInfo:
+		var summary meta.Summary
 		inode := Ino(r.Get64())
-		info := &InfoResponse{
-			Ino:    inode,
-			Failed: true,
-			Reason: "Deprecated API, please upgrade to the latest version of command line tool",
+		var recursive uint8 = 1
+		if r.HasMore() {
+			recursive = r.Get8()
 		}
-		*data = append(*data, info.Encode()...)
-		return
+		var raw bool
+		if r.HasMore() {
+			raw = r.Get8() != 0
+		}
+
+		wb := utils.NewBuffer(4)
+		r := meta.GetSummary(v.Meta, ctx, inode, &summary, recursive != 0)
+		if r != 0 {
+			msg := r.Error()
+			wb.Put32(uint32(len(msg)))
+			*data = append(*data, append(wb.Bytes(), msg...)...)
+			return
+		}
+		var w = bytes.NewBuffer(nil)
+		fmt.Fprintf(w, "  inode: %d\n", inode)
+		fmt.Fprintf(w, "  files: %d\n", summary.Files)
+		fmt.Fprintf(w, "   dirs: %d\n", summary.Dirs)
+		fmt.Fprintf(w, " length: %s\n", utils.FormatBytes(summary.Length))
+		fmt.Fprintf(w, "   size: %s\n", utils.FormatBytes(summary.Size))
+		ps := v.Meta.GetPaths(ctx, inode)
+		switch len(ps) {
+		case 0:
+			fmt.Fprintf(w, "   path: %s\n", "unknown")
+		case 1:
+			fmt.Fprintf(w, "   path: %s\n", ps[0])
+		default:
+			fmt.Fprintf(w, "  paths:\n")
+			for _, p := range ps {
+				fmt.Fprintf(w, "\t%s\n", p)
+			}
+		}
+		if summary.Files == 1 && summary.Dirs == 0 {
+			if raw {
+				fmt.Fprintf(w, " chunks:\n")
+			} else {
+				fmt.Fprintf(w, "objects:\n")
+			}
+			for indx := uint64(0); indx*meta.ChunkSize < summary.Length; indx++ {
+				var cs []meta.Slice
+				_ = v.Meta.Read(ctx, inode, uint32(indx), &cs)
+				for _, c := range cs {
+					if raw {
+						fmt.Fprintf(w, "\t%d:\t%d\t%d\t%d\t%d\n", indx, c.Id, c.Size, c.Off, c.Len)
+					} else {
+						for _, o := range v.caclObjects(c.Id, c.Size, c.Off, c.Len) {
+							fmt.Fprintf(w, "\t%d:\t%s\t%d\t%d\t%d\n", indx, o.key, o.size, o.off, o.len)
+						}
+					}
+				}
+			}
+		}
+		wb.Put32(uint32(w.Len()))
+		*data = append(*data, append(wb.Bytes(), w.Bytes()...)...)
 	case meta.InfoV2:
 		inode := Ino(r.Get64())
 		info := &InfoResponse{

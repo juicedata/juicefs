@@ -740,7 +740,7 @@ func TestInternalFile(t *testing.T) {
 	// info
 	buf = make([]byte, 4+4+8)
 	w = utils.FromBuffer(buf)
-	w.Put32(meta.InfoV2)
+	w.Put32(meta.LegacyInfo)
 	w.Put32(8)
 	w.Put64(1)
 	if e := v.Write(ctx, fe.Inode, w.Bytes(), off, fh); e != 0 {
