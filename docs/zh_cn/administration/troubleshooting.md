@@ -38,7 +38,7 @@ fuse: fuse: fork/exec /usr/bin/fusermount: permission denied
 此时可以通过下面的命令检查 `fusermount` 命令的权限：
 
 ```shell
-# 只有 root 用户和 `fuse` 用户组的用户有权限执行
+# 只有 root 用户和 fuse 用户组的用户有权限执行
 $ ls -l /usr/bin/fusermount
 -rwsr-x---. 1 root fuse 27968 Dec  7  2011 /usr/bin/fusermount
 
@@ -60,7 +60,7 @@ $ ls -l /usr/bin/fusermount
 <ERROR>: pending slice 9902558-80: ...
 ```
 
-如果是网络异常导致无法访问，或者对象存储本身服务异常，问题排查相对简单。但在如果是在低带宽场景下希望优化 JuiceFS 的使用体验，需要留意的事情就稍微多一些。
+如果是网络异常导致无法访问，或者对象存储本身出现服务异常，问题排查相对简单。但在如果是在低带宽场景下希望优化 JuiceFS 的使用体验，需要留意的事情就稍微多一些。
 
 首先，在网速慢的时候，JuiceFS 客户端上传／下载文件容易超时（类似上方的错误日志），这种情况下可以考虑：
 
@@ -81,7 +81,7 @@ $ ls -l /usr/bin/fusermount
 
 ## 读放大 {#read-amplification}
 
-在 JuiceFS 中，一个典型的读放大现象是：对象存储的下行流量，远大于实际读文件的速度。比方说 JuiceFS 客户端的读吞吐为 200MiB/s，但是在 S3 观察到了 2GB/s 的下行流量。
+在 JuiceFS 中，一个典型的读放大现象是：对象存储的下行流量，远大于实际读文件的速度。比方说 JuiceFS 客户端的读吞吐为 200MiB/s，但是在 S3 观察到了 2GiB/s 的下行流量。
 
 JuiceFS 中内置了[预读](../guide/cache_management.md#client-read-cache)（prefetch）机制：随机读 block 的某一段，会触发整个 block 下载，这个默认开启的读优化策略，在某些场景下会带来读放大。了解这个设计以后，我们就可以开始排查了。
 
