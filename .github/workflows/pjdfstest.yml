@@ -66,6 +66,27 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: get added and changed files
+        uses: jitterbit/get-changed-files@v1
+        id: get_changed_files
+        with:
+          format: space-delimited
+
+      - name: Printing
+        run: |
+          echo "All:"
+          echo "${{ steps.get_changed_files.outputs.all }}"
+          echo "Added:"
+          echo "${{ steps.get_changed_files.outputs.added }}"
+          echo "Removed:"
+          echo "${{ steps.get_changed_files.outputs.removed }}"
+          echo "Renamed:"
+          echo "${{ steps.get_changed_files.outputs.renamed }}"
+          echo "Modified:"
+          echo "${{ steps.get_changed_files.outputs.modified }}"
+          echo "Added+Modified:"
+          echo "${{ steps.get_changed_files.outputs.added_modified }}"
+
       - name: Set Variable
         id: vars
         run: |
