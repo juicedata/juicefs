@@ -15,8 +15,8 @@ docker: Error response from daemon: error while creating mount source path 'XXX'
 
 这往往是因为使用了非 root 用户执行 `juicefs mount` 命令，进而导致 Docker 没有权限访问这个目录。这个问题有两种解决方法：
 
-1. 用 root 用户执行 `juicefs mount` 命令
-2. 在 FUSE 的配置文件，以及挂载命令中增加 [`allow_other`](../reference/fuse_mount_options.md#allow_other) 挂载选项。
+* 用 root 用户执行 `juicefs mount` 命令
+* 在 FUSE 的配置文件，以及挂载命令中增加 [`allow_other`](../reference/fuse_mount_options.md#allow_other) 挂载选项。
 
 使用普通用户执行 `juicefs mount` 命令时，可能遇到下方错误：
 
@@ -24,10 +24,10 @@ docker: Error response from daemon: error while creating mount source path 'XXX'
 fuse: fuse: exec: "/bin/fusermount": stat /bin/fusermount: no such file or directory
 ```
 
-这个错误意味着使用了非 root 用户执行 `juicefs mount` 命令，并且 `fusermount` 这个命令也找不到。这个问题有两种解决方法：
+这个错误仅在普通用户执行挂载时出现，意味着找不到 `fusermount` 这个命令。此问题有两种解决方法：
 
-1. 用 root 用户执行 `juicefs mount` 命令
-2. 安装 `fuse` 包（例如 `apt-get install fuse`、`yum install fuse`）
+* 用 root 用户执行 `juicefs mount` 命令
+* 安装 `fuse` 包（例如 `apt-get install fuse`、`yum install fuse`）
 
 而如果当前用户不具备 `fusermount` 命令的执行权限，则还会遇到以下错误：
 
@@ -38,18 +38,14 @@ fuse: fuse: fork/exec /usr/bin/fusermount: permission denied
 此时可以通过下面的命令检查 `fusermount` 命令的权限：
 
 ```shell
+# 只有 root 用户和 `fuse` 用户组的用户有权限执行
 $ ls -l /usr/bin/fusermount
 -rwsr-x---. 1 root fuse 27968 Dec  7  2011 /usr/bin/fusermount
-```
 
-上面的例子表示只有 root 用户和 `fuse` 用户组的用户有权限执行。另一个例子：
-
-```shell
+# 所有用户都有权限执行
 $ ls -l /usr/bin/fusermount
 -rwsr-xr-x 1 root root 32096 Oct 30  2018 /usr/bin/fusermount
 ```
-
-上面的例子表示所有用户都有权限执行。
 
 ## 与对象存储通信不畅（网速慢） {#io-error-object-storage}
 
@@ -89,7 +85,7 @@ $ ls -l /usr/bin/fusermount
 
 JuiceFS 中内置了[预读](../guide/cache_management.md#client-read-cache)（prefetch）机制：随机读 block 的某一段，会触发整个 block 下载，这个默认开启的读优化策略，在某些场景下会带来读放大。了解这个设计以后，我们就可以开始排查了。
 
-结合先前故障诊断和分析一章中介绍的[访问日志](./fault_diagnosis_and_analysis.md#access-log)知识，我们可以采集一些访问日志来分析程序的读模式，然后针对性地调整配置。下面是一个实际生产环境案例的排查过程：
+结合先前问题排查方法一章中介绍的[访问日志](./fault_diagnosis_and_analysis.md#access-log)知识，我们可以采集一些访问日志来分析程序的读模式，然后针对性地调整配置。下面是一个实际生产环境案例的排查过程：
 
 ```shell
 # 收集一段时间的访问日志，比如 30 秒：

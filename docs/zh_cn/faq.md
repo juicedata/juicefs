@@ -1,9 +1,11 @@
 ---
-sidebar_label: 常见问题
+title: 常见问题（FAQ）
 slug: /faq
 ---
 
-# JuiceFS 常见问题
+## 文档没能解答我的疑问
+
+请首先尝试使用站内搜索功能（右上角），尝试用不同的关键词进行检索，如果文档始终未能解决你的疑问，可以加入 [JuiceFS 开源社区](https://juicefs.com/zh-cn/community)以寻求帮助。
 
 ## 一般问题
 
@@ -46,6 +48,10 @@ slug: /faq
 ### 为什么不支持某个对象存储？
 
 已经支持了绝大部分对象存储，参考这个[列表](guide/how_to_set_up_object_storage.md#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
+
+### 为什么在对象存储中看不到那些已经存入 JuiceFS 的原始文件？
+
+请参考[「JuiceFS 如何存储文件」](introduction/architecture.md#如何存储文件)。
 
 ### 为什么我在挂载点删除了文件，但是对象存储占用空间没有变化或者变化很小？
 
