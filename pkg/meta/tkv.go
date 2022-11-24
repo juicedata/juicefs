@@ -89,8 +89,7 @@ func newKVMeta(driver, addr string, conf *Config) (Meta, error) {
 		client:   client,
 	}
 	m.en = m
-	m.root, err = lookupSubdir(m, conf.Subdir)
-	return m, err
+	return m, nil
 }
 
 func (m *kvMeta) Shutdown() error {

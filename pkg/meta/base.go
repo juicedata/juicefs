@@ -1214,6 +1214,32 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool)
 	return
 }
 
+func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
+	for subdir != "" {
+		ps := strings.SplitN(subdir, "/", 2)
+		if ps[0] != "" {
+			var attr Attr
+			var inode Ino
+			r := m.Lookup(ctx, m.root, ps[0], &inode, &attr)
+			if r == syscall.ENOENT {
+				r = m.Mkdir(ctx, m.root, ps[0], 0777, 0, 0, &inode, &attr)
+			}
+			if r != 0 {
+				return r
+			}
+			if attr.Typ != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+			m.root = inode
+		}
+		if len(ps) == 1 {
+			break
+		}
+		subdir = ps[1]
+	}
+	return 0
+}
+
 func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno {
 	var wg sync.WaitGroup
 	ch := make(chan cchunk, 1000000)

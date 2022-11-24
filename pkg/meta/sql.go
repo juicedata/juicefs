@@ -227,9 +227,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 		db:       engine,
 	}
 	m.en = m
-	m.root, err = lookupSubdir(m, conf.Subdir)
-
-	return m, err
+	return m, nil
 }
 
 func (m *dbMeta) Shutdown() error {

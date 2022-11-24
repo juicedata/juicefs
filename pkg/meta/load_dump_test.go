@@ -212,6 +212,7 @@ func testLoadDump(t *testing.T, name, addr string) {
 		testDump(t, m, 1, sampleFile, "test.dump")
 		m.Shutdown()
 		m = NewClient(addr, &Config{Retries: 10, Strict: true, Subdir: "d1"})
+		_ = m.Chroot(Background, "d1")
 		testDump(t, m, 1, subSampleFile, "test_subdir.dump")
 		testDump(t, m, 0, sampleFile, "test.dump")
 		_ = m.Shutdown()
@@ -240,9 +241,8 @@ func TestLoadDump_MemKV(t *testing.T) {
 		_ = os.Remove(settingPath)
 		m := testLoad(t, "memkv://user:pass@test/jfs", sampleFile)
 		if kvm, ok := m.(*kvMeta); ok { // memkv will be empty if created again
-			var err error
-			if kvm.root, err = lookupSubdir(kvm, "d1"); err != nil {
-				t.Fatalf("lookup subdir d1: %s", err)
+			if st := kvm.Chroot(Background, "d1"); st != 0 {
+				t.Fatalf("Chroot to subdir d1: %s", st)
 			}
 		}
 		testDump(t, m, 1, subSampleFile, "test_subdir.dump")

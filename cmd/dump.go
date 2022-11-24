@@ -92,9 +92,13 @@ func dump(ctx *cli.Context) (err error) {
 			w = fp
 		}
 	}
-	m := meta.NewClient(metaUri, &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")})
+	metaConf := &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")}
+	m := meta.NewClient(metaUri, metaConf)
 	if _, err := m.Load(true); err != nil {
 		return err
+	}
+	if st := m.Chroot(meta.Background, metaConf.Subdir); st != 0 {
+		return st
 	}
 	if err := m.DumpMeta(w, 1, ctx.Bool("keep-secret-key")); err != nil {
 		return err

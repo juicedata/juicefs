@@ -552,6 +552,9 @@ func mount(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	if st := metaCli.Chroot(meta.Background, metaConf.Subdir); st != 0 {
+		return st
+	}
 
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
 	registerer, registry := wrapRegister(mp, format.Name)
