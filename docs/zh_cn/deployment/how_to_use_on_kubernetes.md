@@ -1,10 +1,42 @@
 ---
-sidebar_label: Kubernetes 使用 JuiceFS
+title: Kubernetes 使用 JuiceFS
 sidebar_position: 3
 slug: /how_to_use_on_kubernetes
 ---
 
 JuiceFS 非常适合用作 Kubernetes 集群的存储层，阅读本文以了解如何使用。
+
+## 以 hostPath 方式挂载 JuiceFS
+
+如果你仅仅需要 Kubernetes 容器中使用 JuiceFS，没有其他任何复杂需要（比如隔离性，权限控制），那么完全可以在 [hostPath](https://kubernetes.io/zh-cn/docs/concepts/storage/volumes/#hostpath) 方式下使用 JuiceFS，搭建起来也十分简单：
+
+1. 在 Kubernetes 节点上统一安装、挂载 JuiceFS，如果节点众多，考虑[自动化部署](./automation.md)。
+1. 在 pod 定义中使用 hostPath，直接将宿主机目录挂载到容器中：
+
+```
+volumes:
+  - name: jfs-data
+    hostPath:
+      path: "/jfs/myapp/"
+      type: Directory
+
+volumeMounts:
+  - name: jfs-data
+    mountPath: /opt/app-data
+```
+
+相比以 CSI 驱动的方式来使用 JuiceFS，hostPath 更为简单直接，出问题也更易排查，但也要注意：
+
+* 所有节点都需要提前挂载 JuiceFS，因此集群加入新节点，需要在初始化流程里进行安装和挂载，否则新节点没有 JuiceFS 挂载点，容器将无法创建。
+* 为求管理方便，一般所有容器都在使用同一个宿主机挂载点，缺乏隔离可能导致数据安全问题，请谨慎评估。
+* 如果你使用 Docker 作为 Kubernetes 容器运行环境，最好令 JuiceFS 先于 Docker 启动，否则在节点重启的时候，偶尔可能出现容器启动时，JuiceFS 尚未挂载好的情况，此时便会因该依赖问题启动失败。以 systemd 为例，可以用下方 unit file 来配置启动顺序：
+
+  ``` title="/etc/systemd/system/docker.service.d/override.conf"
+  [Unit]
+  # 请使用下方命令确定 JuiceFS mount service 的名称
+  # systemctl list-units | grep "\.mount"
+  After=network-online.target firewalld.service containerd.service jfs.mount
+  ```
 
 ## JuiceFS CSI 驱动
 
