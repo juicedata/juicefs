@@ -12,10 +12,8 @@ on:
     branches:
       - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      - '.github/**'
+    paths:
+      - '**/*_test.go'
 
   workflow_dispatch:
     inputs:
