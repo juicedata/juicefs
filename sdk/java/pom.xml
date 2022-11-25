@@ -185,6 +185,20 @@
 					</execution>
 				</executions>
 			</plugin>
+			<plugin>
+				<groupId>org.pitest</groupId>
+				<artifactId>pitest-maven</artifactId>
+				<version>1.9.11</version>
+				<configuration>
+					<targetClasses>
+						<param>io.juicefs.JuiceFileSystemImpl*</param>
+					</targetClasses>
+					<targetTests>
+						<param>io.juicefs.JuiceFileSystemTest</param>
+					</targetTests>
+					<timeoutConstant>1000</timeoutConstant>
+				</configuration>
+			</plugin>
 		</plugins>
 		<resources>
 			<resource>
