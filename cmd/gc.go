@@ -110,12 +110,69 @@ func gc(ctx *cli.Context) error {
 
 	// Scan all chunks first and do compaction if necessary
 	progress := utils.NewProgress(false, false)
-	if ctx.Bool("compact") {
+	// Delete pending slices while listing all slices
+	delete := ctx.Bool("delete")
+	threads := ctx.Int("threads")
+	compact := ctx.Bool("compact")
+	if (delete || compact) && threads <= 0 {
+		logger.Fatal("threads should be greater than 0 to delete or compact objects")
+	}
+
+	var wg sync.WaitGroup
+	var delSpin *utils.Bar
+	var sliceChan chan *dSlice // pending delete slices
+
+	if delete || compact {
+		delSpin = progress.AddCountSpinner("Deleted pending")
+		sliceChan = make(chan *dSlice, 10240)
+		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
+			delSpin.Increment()
+			sliceChan <- &dSlice{args[0].(uint64), args[1].(uint32)}
+			return nil
+		})
+		for i := 0; i < threads; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for s := range sliceChan {
+					if err := store.Remove(s.id, int(s.length)); err != nil {
+						logger.Warnf("remove %d_%d: %s", s.id, s.length, err)
+					}
+				}
+			}()
+		}
+	}
+
+	c := meta.WrapContext(ctx.Context)
+	delayedFileSpin := progress.AddDoubleSpinner("Delfiles")
+	cleanedFileSpin := progress.AddDoubleSpinner("Cleaned delfiles")
+	edge := time.Now().Add(-time.Duration(format.TrashDays) * 24 * time.Hour)
+	if delete {
+		cleanTrashSpin := progress.AddCountSpinner("Cleaned trash")
+		m.CleanupTrashBefore(c, edge, cleanTrashSpin.Increment)
+		cleanTrashSpin.Done()
+	}
+	err = m.Statistic(
+		c,
+		nil,
+		func(_ meta.Ino, size uint64, ts int64) (bool, error) {
+			delayedFileSpin.IncrInt64(int64(size))
+			if delete {
+				cleanedFileSpin.IncrInt64(int64(size))
+				return true, nil
+			}
+			return false, nil
+		},
+	)
+	if err != nil {
+		logger.Fatalf("statistic: %s", err)
+	}
+	delayedFileSpin.Done()
+	cleanedFileSpin.Done()
+
+	if compact {
 		bar := progress.AddCountBar("Compacted chunks", 0)
 		spin := progress.AddDoubleSpinner("Compacted slices")
-		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
-			return store.Remove(args[0].(uint64), int(args[1].(uint32)))
-		})
 		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 			slices := args[0].([]meta.Slice)
 			err := vfs.Compact(chunkConf, store, slices, args[1].(uint64))
@@ -143,38 +200,7 @@ func gc(ctx *cli.Context) error {
 	// put it above delete count spinner
 	sliceCSpin := progress.AddCountSpinner("Listed slices")
 
-	// Delete pending slices while listing all slices
-	delete := ctx.Bool("delete")
-	threads := ctx.Int("threads")
-	if delete && threads <= 0 {
-		logger.Fatal("threads should be greater than 0 to delete objects")
-	}
-	var delSpin *utils.Bar
-	var sliceChan chan *dSlice // pending delete slices
-	var wg sync.WaitGroup
-	if delete {
-		delSpin = progress.AddCountSpinner("Deleted pending")
-		sliceChan = make(chan *dSlice, 10240)
-		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
-			delSpin.Increment()
-			sliceChan <- &dSlice{args[0].(uint64), args[1].(uint32)}
-			return nil
-		})
-		for i := 0; i < threads; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for s := range sliceChan {
-					if err := store.Remove(s.id, int(s.length)); err != nil {
-						logger.Warnf("remove %d_%d: %s", s.id, s.length, err)
-					}
-				}
-			}()
-		}
-	}
-
 	// List all slices in metadata engine
-	var c = meta.WrapContext(ctx.Context)
 	slices := make(map[meta.Ino][]meta.Slice)
 	r := m.ListSlices(c, slices, delete, sliceCSpin.Increment)
 	if r != 0 {
@@ -183,39 +209,28 @@ func gc(ctx *cli.Context) error {
 
 	delayedSliceSpin := progress.AddDoubleSpinner("Delslices")
 	cleanedSliceSpin := progress.AddDoubleSpinner("Cleaned delslices")
-	delayedFileSpin := progress.AddDoubleSpinner("Delfiles")
-	cleanedFileSpin := progress.AddDoubleSpinner("Cleaned delfiles")
-	deadline := time.Now().Unix() - int64(format.TrashDays)*24*3600
+
 	err = m.Statistic(
 		c,
 		func(ss []meta.Slice, ts int64) (bool, error) {
 			for _, s := range ss {
 				delayedSliceSpin.IncrInt64(int64(s.Size))
-				if delete && ts < deadline {
+				if delete && ts < edge.Unix() {
 					cleanedSliceSpin.IncrInt64(int64(s.Size))
 				}
 			}
-			if delete && ts < deadline {
+			if delete && ts < edge.Unix() {
 				return true, nil
 			}
 			return false, nil
 		},
-		func(_ meta.Ino, size uint64, ts int64) (bool, error) {
-			delayedFileSpin.IncrInt64(int64(size))
-			if delete {
-				cleanedFileSpin.IncrInt64(int64(size))
-				return true, nil
-			}
-			return false, nil
-		},
+		nil,
 	)
 	if err != nil {
 		logger.Fatalf("statistic: %s", err)
 	}
 	delayedSliceSpin.Done()
 	cleanedSliceSpin.Done()
-	delayedFileSpin.Done()
-	cleanedFileSpin.Done()
 
 	if delete {
 		close(sliceChan)

@@ -270,6 +270,8 @@ type Meta interface {
 	Statistic(Context, deletedSliceScan, deletedFileScan) error
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
 	CleanStaleSessions()
+	// CleanupTrashBefore deletes all files in trash before the given time.
+	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func())
 
 	// StatFS returns summary statistics of a volume.
 	StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno

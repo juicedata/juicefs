@@ -1365,9 +1365,8 @@ func (m *baseMeta) cleanupTrash() {
 	}
 }
 
-func (m *baseMeta) doCleanupTrash(force bool) {
+func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func()) {
 	logger.Debugf("cleanup trash: started")
-	ctx := Background
 	now := time.Now()
 	var st syscall.Errno
 	var entries []*Entry
@@ -1385,7 +1384,6 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 		}
 	}()
 	batch := 1000000
-	edge := now.Add(-time.Duration(24*m.fmt.TrashDays+1) * time.Hour)
 	for len(entries) > 0 {
 		e := entries[0]
 		ts, err := time.Parse("2006-01-02-15", string(e.Name))
@@ -1393,7 +1391,7 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 			logger.Warnf("bad entry as a subTrash: %s", e.Name)
 			continue
 		}
-		if ts.Before(edge) || force {
+		if ts.Before(edge) {
 			var subEntries []*Entry
 			if st = m.en.doReaddir(ctx, e.Inode, 0, &subEntries, batch); st != 0 {
 				logger.Warnf("readdir subTrash %d: %s", e.Inode, st)
@@ -1411,6 +1409,7 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 				}
 				if st == 0 {
 					count++
+					increProgress()
 				} else {
 					logger.Warnf("delete from trash %s/%s: %s", e.Name, se.Name, st)
 					rmdir = false
@@ -1429,6 +1428,14 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 			break
 		}
 	}
+}
+
+func (m *baseMeta) doCleanupTrash(force bool) {
+	edge := time.Now().Add(-time.Duration(24*m.fmt.TrashDays+1) * time.Hour)
+	if force {
+		edge = time.Now()
+	}
+	m.CleanupTrashBefore(Background, edge, nil)
 }
 
 func (m *baseMeta) cleanupDelayedSlices() {
