@@ -93,16 +93,6 @@ jobs:
         run: |
           go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
 
-      - name: Setup minio
-        run: |
-          docker run -d -p 9000:9000 --name minio \
-                    -e "MINIO_ACCESS_KEY=testUser" \
-                    -e "MINIO_SECRET_KEY=testUserPassword" \
-                    -v /tmp/data:/data \
-                    -v /tmp/config:/root/.minio \
-                    minio/minio server /data
-
-
       - name: Install Packages
         run: |
           sudo apt install -y g++-multilib
