@@ -1,6 +1,6 @@
 ---
 sidebar_label: Use JuiceFS on Hadoop Ecosystem
-sidebar_position: 4
+sidebar_position: 5
 slug: /hadoop_java_sdk
 ---
 

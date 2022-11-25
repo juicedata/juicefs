@@ -1,6 +1,6 @@
 ---
 sidebar_label: Use JuiceFS on Kubernetes
-sidebar_position: 3
+sidebar_position: 4
 slug: /how_to_use_on_kubernetes
 ---
 
@@ -8,8 +8,7 @@ JuiceFS is an ideal storage layer for Kubernetes, read this chapter to learn how
 
 ## JuiceFS CSI Driver
 
-To use JuiceFS in Kubernetes, refer to [JuiceFS CSI Driver Documentation](https://juicefs.com/docs/csi/introduction/).
-
+To use JuiceFS in Kubernetes, refer to [JuiceFS CSI Driver Documentation](https://juicefs.com/docs/csi/introduction).
 
 ## Mount JuiceFS in the container
 

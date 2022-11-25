@@ -1,9 +1,9 @@
 ---
-sidebar_label: 自动化部署
-sidebar_position: 4
+title: 自动化部署 JuiceFS
+sidebar_position: 2
 ---
 
-面对大量节点需要安装并挂载 JuiceFS，请用本章介绍的方法进行自动化部署。
+面对大量节点需要安装并挂载 JuiceFS 时，可以用本章介绍的方法进行自动化部署。
 
 继续阅读前，请提前[创建好 JuiceFS 文件系统](../getting-started/README.md#juicefs-format)。
 
