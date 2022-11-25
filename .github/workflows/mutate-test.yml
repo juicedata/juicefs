@@ -116,6 +116,7 @@ jobs:
 
 
       - name: Prepare Database
+        timeout-minutes: 10
         run: |
           sudo service mysql start
           sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
