@@ -1,0 +1,141 @@
+name: mutate-test
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/**'
+
+  workflow_dispatch:
+    inputs:
+      test_file:
+        type: string
+        description: "the go test file relative path you want to mutate, eg cmd/meta/xattr_test.go"
+        required: true
+        default: ""  
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false  
+
+jobs:
+
+  build-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: get-changed-files
+        if: ${{ github.event_name == 'pull_request'}} 
+        uses: jitterbit/get-changed-files@v1
+        id: get_changed_files
+        with:
+          format: space-delimited
+
+      - id: set-matrix
+        run: |
+          if [ "${{github.event_name}}" == "pull_request"  ]; then
+            changed_file_array=(${{ steps.get_changed_files.outputs.added_modified }})
+            test_files=""
+            for file_name in "${changed_file_array[@]}"
+            do
+              if [[ "$file_name" == *_test.go ]]; then
+                test_files="\"$file_name\",$test_files"
+              fi
+            done
+            echo "test_files: $test_files"
+            if [ -n "$test_files" ]; then 
+              echo "test_files is not empty"
+              # echo '::set-output name=test_file_matrix::["cmd/meta/xattr_test.go", "cmd/meta/utils_test.go"]'
+              echo "::set-output name=test_file_matrix::[$test_files]"
+              echo "::set-output name=is_test_file_changed::true"
+            else
+              echo "test_files is empty"
+              echo "::set-output name=is_test_file_changed::false"
+            fi
+          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
+            test_file="\"${{github.event.inputs.test_file}}\""
+            echo "test file is $test_file"
+            echo "::set-output name=test_file_matrix::[$test_file]"
+            echo "::set-output name=is_test_file_changed::true"
+          fi
+
+    outputs:
+      test_file: ${{ steps.set-matrix.outputs.test_file_matrix }}
+      is_test_file_changed: ${{ steps.set-matrix.outputs.is_test_file_changed }}
+
+  mutate-test:
+    needs: build-matrix
+    if: needs.build-matrix.outputs.is_test_file_changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        test_file: ${{ fromJson(needs.build-matrix.outputs.test_file) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build
+        uses: ./.github/actions/build
+
+      - name: install go-mutesting
+        run: |
+          go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+
+      - name: start meta
+        run: |
+          sudo mkdir -p /etc/jfs
+          sudo mkdir -p /var/lib/jfs
+          sudo mkdir -p /var/lib/jfs2
+          sudo cp -f conf/meta.cfg /etc/jfs/meta.cfg
+          sudo cp -f conf/zone1.cfg /etc/jfs/zone1.cfg
+          sudo cp -f conf/exports.cfg /etc/jfs/exports.cfg
+          sudo cmd/meta/meta -c /etc/jfs/zone1.cfg
+          sudo cmd/meta/meta -c /etc/jfs/meta.cfg
+          sleep 3
+          sudo ps -ef | grep 'meta -c'
+
+      - name: run mutate test
+        timeout-minutes: 120
+        run: |
+          test_file=${{matrix.test_file}}
+          echo "test file is :" $test_file
+          if [ -z "$test_file" ]; then 
+            echo "test file is empty, will not run mutate test"
+            exit 0
+          fi
+          source_file=${test_file%"_test.go"}.go
+          echo "source file is :" $source_file
+          package_path=$(dirname $test_file)
+
+          test_cases=$(TEST_FILE_NAME=$test_file python3 .github/scripts/parse_test_cases.py)
+          if [ $? -ne 0 ]; then
+            echo "no test cases in test file, will not run mutate test"
+            exit 0
+          fi
+          echo "test cases: $test_cases"
+          go test ./$package_path/... -v -run "$test_cases" -cover -count=1 -timeout=8m  -coverpkg=./$package_path,./pkg/...  -coverprofile=meta-cov.out
+          COVERAGE_FILE=meta-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder
+          
+      - name: Send Slack Notification
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
