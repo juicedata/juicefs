@@ -459,7 +459,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		} else if n == "writeback_cache" || n == "writeback" {
 			opt.EnableWriteback = true
 		} else if strings.TrimSpace(n) != "" {
-			opt.Options = append(opt.Options, n)
+			opt.Options = append(opt.Options, strings.TrimSpace(n))
 		}
 	}
 	opt.Options = append(opt.Options, "default_permissions")
