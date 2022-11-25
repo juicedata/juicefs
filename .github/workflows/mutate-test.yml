@@ -163,6 +163,7 @@ jobs:
           source_file=${test_file%"_test.go"}.go
           echo "source file is :" $source_file
           package_path=$(dirname $test_file)
+          echo "package path is :" $package_path
 
           test_cases=$(TEST_FILE_NAME=$test_file python3 .github/scripts/parse_test_cases.py)
           if [ $? -ne 0 ]; then

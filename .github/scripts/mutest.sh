@@ -54,7 +54,7 @@ fi
 mv $MUTATE_ORIGINAL $MUTATE_ORIGINAL.tmp
 cp $MUTATE_CHANGED $MUTATE_ORIGINAL
 
-go test ./pkg/...  -v -cover -count=1 -timeout=5m 
+go test ./$PACKAGE_PATH/...  -v -cover -count=1 -timeout=5m 
 # go test ./$PACKAGE_PATH/... -run "$test_cases" -v -count=1 -timeout=1m 
 # go test ../cmd/meta/... -run (TestXattr1|TestXattr2) -v -cover -count=1 -timeout=8m  -coverpkg=../cmd/meta  -coverprofile=meta-cov.out
 # GOMUTESTING_TEST=$(go test -timeout $(printf '%ds' $MUTATE_TIMEOUT) $MUTATE_PACKAGE$TEST_RECURSIVE 2>&1)
