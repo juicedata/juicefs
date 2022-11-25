@@ -60,7 +60,7 @@ func TestInfo(t *testing.T) {
 			}
 			replacer := strings.NewReplacer("\n", "", " ", "")
 			res := replacer.Replace(string(content))
-			answer := fmt.Sprintf("%s/dir1: inode: 2 files: 10 dirs: 1 length: 40 Bytes size: 44.00 KiB (45056 Bytes)  path: /dir1", testMountPoint)
+			answer := fmt.Sprintf("%s/dir1: inode: 2 files: 10 dirs: 1 length: 40 Bytes size: 44.00 KiB (45056 Bytes) path: /dir1", testMountPoint)
 			answer = replacer.Replace(answer)
 			So(res, ShouldEqual, answer)
 		})
