@@ -75,7 +75,9 @@ jobs:
             timeConstant="${{github.event.inputs.timeConstant}}"
           fi
           POM_XML_PATH="sdk/java/pom.xml" TARGET_TESTS=$targetTests TARGET_CLASSES=targetClasses TIME_CONSTANT=$timeConstant python3 .github/scripts/modify_sdk_pom.py
+          cd sdk/java
           mvn test-compile org.pitest:pitest-maven:mutationCoverage
+          cd -
 
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
