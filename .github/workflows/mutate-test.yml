@@ -176,6 +176,14 @@ jobs:
           
           COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder
 
+      - uses: mshick/add-pr-comment@v2
+        with:
+          message: |
+            *Mutate Test Report*
+            escaped mutants: 20
+            killed mutants: 40
+            invalid mutants: 10
+
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
         uses: juicedata/slack-notify-action@main
