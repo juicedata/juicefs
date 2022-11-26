@@ -77,19 +77,13 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v3
-      - uses: mshick/add-pr-comment@v2
-        with:
-          message: |
-            **Mutate Coverage**
-            mutants escaped: 50
-            mutants killed: 10
 
       - name: Build
         uses: ./.github/actions/build
 
       - name: install go-mutesting
         run: |
-          go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+          go install github.com/zhouchengly/go-mutesting/cmd/go-mutesting@latest
 
       - name: Install Packages
         run: |
@@ -181,7 +175,14 @@ jobs:
           fi
           
           COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder
-          
+
+      - uses: mshick/add-pr-comment@v2
+        with:
+          message: |
+            **Mutate Coverage**
+            mutants escaped: 50
+            mutants killed: 10
+
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
         uses: juicedata/slack-notify-action@main
