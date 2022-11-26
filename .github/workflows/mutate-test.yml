@@ -82,8 +82,17 @@ jobs:
       matrix:
         test_file: ${{ fromJson(needs.build-matrix.outputs.test_file) }}
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - uses: actions/checkout@v3
+      - uses: mshick/add-pr-comment@v2
+        with:
+          message: |
+            **Mutate Coverage**
+            mutants escaped: 50
+            mutants killed: 10
+
       - name: Build
         uses: ./.github/actions/build
 
