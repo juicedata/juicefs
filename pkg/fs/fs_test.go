@@ -292,7 +292,7 @@ func createTestFS(t *testing.T) *FileSystem {
 	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
 	jfs, err := NewFileSystem(&conf, m, store)
 	if err != nil {
-		t.Fatalf("initialize  failed: %s", err)
+		t.Fatalf("initialize failed: %s", err)
 	}
 	return jfs
 }
