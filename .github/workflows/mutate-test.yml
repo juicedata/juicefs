@@ -189,9 +189,9 @@ jobs:
       - uses: mshick/add-pr-comment@v2
         with:
           message: |
-            *Mutate Test Report*
+            *Mutate Test Report For ${{matrix.test_file}}*
             ${{env.mutate_report}}
-            Report detail: "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}/jobs/${{github.job_id}}"
+            Report detail: "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"
 
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
