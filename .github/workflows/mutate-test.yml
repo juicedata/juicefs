@@ -66,6 +66,7 @@ jobs:
       is_test_file_changed: ${{ steps.set-matrix.outputs.is_test_file_changed }}
 
   mutate-test:
+    name: ${{matrix.test_file}}
     needs: build-matrix
     if: needs.build-matrix.outputs.is_test_file_changed == 'true'
     strategy:
@@ -77,6 +78,14 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v3
+
+      - name: set job id
+        id: set-job-id
+        uses: ayachensiyuan/get-action-job-id@v1.6
+        env: 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          job-name: '${{matrix.test_file}}' # must be the same as 'get-job-id.name' 
 
       - name: Build
         uses: ./.github/actions/build
@@ -174,7 +183,24 @@ jobs:
             exit 0
           fi
           
-          COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder
+          log_file=$(basename ${{matrix.test_file}}).log
+          echo "log_file=$log_file" >> $GITHUB_ENV
+          COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder | tee -a $log_file
+          mutate_report=`LOG_FILE=$log_file python3 .github/scripts/parse_mutate_log.py`
+          echo "mutate_report is $mutate_report"
+          echo "mutate_report=$mutate_report" >> $GITHUB_ENV
+
+      # - uses: actions/upload-artifact@v3
+      #   with:
+      #     name: ${{env.log_file}}
+      #     path: ${{env.log_file}}
+
+      - uses: mshick/add-pr-comment@v2
+        with:
+          message: |
+            *Mutate Test Report For ${{matrix.test_file}}*
+            ${{env.mutate_report}}
+            Report detail: "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}/jobs/${{ steps.set-job-id.outputs.jobId }}"
 
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
