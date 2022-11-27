@@ -174,12 +174,14 @@ jobs:
             exit 0
           fi
           
-          COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder | tee -a ${{matrix.test_file}}.log
+          log_file=$(basename ${{matrix.test_file}}).log
+          echo "log_file=$log_file" >> $GITHUB_ENV
+          COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder | tee -a $log_file
 
       - uses: actions/upload-artifact@v3
         with:
-          name: ${{matrix.test_file}}.log
-          path: ${{matrix.test_file}}.log
+          name: ${{env.log_file}}
+          path: ${{env.log_file}}
 
       - uses: mshick/add-pr-comment@v2
         with:
