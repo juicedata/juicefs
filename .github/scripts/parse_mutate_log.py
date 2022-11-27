@@ -17,7 +17,7 @@ def parse_mutate_log(log_file):
                 duplicated = result.group(4)
                 skipped = result.group(5)
                 total = result.group(6)
-                score = passed * 1.0 / (total - skipped)
+                score = int(passed) * 1.0 / (int(total) - int(skipped))
                 return f'The mutation score is {score} ({passed} passed, {failed} failed, {duplicated} duplicated, {skipped} skipped, total is {total})'
     return ''
 
