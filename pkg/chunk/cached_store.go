@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/time/rate"
 	"io"
 	"os"
 	"path/filepath"
@@ -32,7 +33,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/compress"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/juju/ratelimit"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -42,6 +42,8 @@ const SlowRequest = time.Second * time.Duration(10)
 
 var (
 	logger = utils.GetLogger("juicefs")
+	UseMountUploadLimitConf = false
+	UseMountDownloadLimitConf = false
 )
 
 type pendingItem struct {
@@ -149,7 +151,11 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 
 	if s.store.seekable && boff > 0 && len(p) <= blockSize/4 {
 		if s.store.downLimit != nil {
-			s.store.downLimit.Wait(int64(len(p)))
+			err = s.store.downLimit.WaitN(context.TODO(), len(p))
+			if err != nil {
+				s.store.getTokenFromBucketErrors.WithLabelValues("download").Add(1)
+				return 0, fmt.Errorf("method: ReadAt, key = %s, get token from tokenBucket, need token count (page) = %d, error : %s", key, len(p), err)
+			}
 		}
 		// partial read
 		st := time.Now()
@@ -337,7 +343,11 @@ func (s *wSlice) WriteAt(p []byte, off int64) (n int, err error) {
 
 func (store *cachedStore) put(key string, p *Page) error {
 	if store.upLimit != nil {
-		store.upLimit.Wait(int64(len(p.Data)))
+		var err = store.upLimit.WaitN(context.TODO(), len(p.Data))
+		if err != nil {
+			store.getTokenFromBucketErrors.WithLabelValues("upload").Add(1)
+			return fmt.Errorf("method: put, key = %s, get token from tokenBucket, need token count (page.Data) = %d, error : %s", key, len(p.Data), err)
+		}
 	}
 	p.Acquire()
 	return utils.WithTimeout(func() error {
@@ -589,17 +599,18 @@ type cachedStore struct {
 	pendingMutex  sync.Mutex
 	compressor    compress.Compressor
 	seekable      bool
-	upLimit       *ratelimit.Bucket
-	downLimit     *ratelimit.Bucket
+	upLimit       *rate.Limiter
+	downLimit     *rate.Limiter
 
-	cacheHits           prometheus.Counter
-	cacheMiss           prometheus.Counter
-	cacheHitBytes       prometheus.Counter
-	cacheMissBytes      prometheus.Counter
-	cacheReadHist       prometheus.Histogram
-	objectReqsHistogram *prometheus.HistogramVec
-	objectReqErrors     prometheus.Counter
-	objectDataBytes     *prometheus.CounterVec
+	cacheHits                prometheus.Counter
+	cacheMiss                prometheus.Counter
+	cacheHitBytes            prometheus.Counter
+	cacheMissBytes           prometheus.Counter
+	cacheReadHist            prometheus.Histogram
+	objectReqsHistogram      *prometheus.HistogramVec
+	objectReqErrors          prometheus.Counter
+	objectDataBytes          *prometheus.CounterVec
+	getTokenFromBucketErrors *prometheus.CounterVec
 }
 
 func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bool) (err error) {
@@ -613,7 +624,11 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	compressed := needed > len(page.Data)
 	// we don't know the actual size for compressed block
 	if store.downLimit != nil && !compressed {
-		store.downLimit.Wait(int64(len(page.Data)))
+		err = store.downLimit.WaitN(context.TODO(), len(page.Data))
+		if err != nil {
+			store.getTokenFromBucketErrors.WithLabelValues("download").Add(1)
+			return fmt.Errorf("method: load, key = %s, get token from tokenBucket, need token count (page.Data) = %d, error : %s", key, len(page.Data), err)
+		}
 	}
 	err = errors.New("Not downloaded")
 	var in io.ReadCloser
@@ -651,14 +666,24 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	if used > SlowRequest {
 		logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
 	}
-	if store.downLimit != nil && compressed {
-		store.downLimit.Wait(int64(n))
-	}
 	store.objectDataBytes.WithLabelValues("GET").Add(float64(n))
 	store.objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
 	if err != nil {
 		store.objectReqErrors.Add(1)
+		logger.Error("get %s: %s", key, err)
+	}
+	var err1 error
+	if store.downLimit != nil && compressed {
+		err1 = store.downLimit.WaitN(context.TODO(), n)
+		if err1 != nil {
+			store.getTokenFromBucketErrors.WithLabelValues("download").Add(1)
+			logger.Error("method: load, key = %s, get token from tokenBucket, need token count(buf) = %d, error1 : %s", key, n, err1)
+		}
+	}
+	if err != nil {
 		return fmt.Errorf("get %s: %s", key, err)
+	} else if err1 != nil {
+		return fmt.Errorf("method: load, key = %s, get token from tokenBucket, need token count(buf) = %d, error1 : %s", key, n, err1)
 	}
 	if compressed {
 		n, err = store.compressor.Decompress(page.Data, buf[:n])
@@ -701,10 +726,10 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 	}
 	if config.UploadLimit > 0 {
 		// there are overheads coming from HTTP/TCP/IP
-		store.upLimit = ratelimit.NewBucketWithRate(float64(config.UploadLimit)*0.85, config.UploadLimit)
+		store.upLimit = rate.NewLimiter(rate.Limit(float64(config.UploadLimit)*0.85), int(config.UploadLimit))
 	}
 	if config.DownloadLimit > 0 {
-		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit)
+		store.downLimit = rate.NewLimiter(rate.Limit(float64(config.DownloadLimit)*0.85), int(config.DownloadLimit))
 	}
 	store.initMetrics()
 	store.bcache = newCacheManager(&config, reg, func(key, fpath string, force bool) bool {
@@ -751,6 +776,41 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 	return store
 }
 
+// UpdateCachedStoreRateLimit update traffic limit param
+// /**
+// * limit : new limit value(int64) bytes per second
+// * lastLimit : old limit value(int64)
+// * limitType : 'upLimit','downLimit'
+// */
+func (store *cachedStore) UpdateCachedStoreRateLimit(limit int64, lastLimit int64, limitType string) {
+	switch limitType {
+	case "upLimit":
+		if (store.upLimit == nil || lastLimit == 0) && limit > 0 {
+			store.upLimit = rate.NewLimiter(rate.Limit(float64(limit)*0.85), int(limit))
+		} else if store.upLimit != nil && limit != lastLimit {
+			if lastLimit > 0 && limit > 0 {
+				store.upLimit.SetLimit(rate.Limit(float64(limit)*0.85))
+				store.upLimit.SetBurst(int(limit))
+			} else if lastLimit > 0 && limit == 0 {
+				store.upLimit = nil
+			}
+		}
+	case "downLimit":
+		if (store.downLimit == nil || lastLimit == 0) && limit > 0 {
+			store.downLimit = rate.NewLimiter(rate.Limit(float64(limit)*0.85), int(limit))
+		} else if store.downLimit != nil && limit != lastLimit {
+			if lastLimit > 0 && limit > 0 {
+				store.downLimit.SetLimit(rate.Limit(float64(limit)*0.85))
+				store.downLimit.SetBurst(int(limit))
+			} else if lastLimit > 0 && limit == 0 {
+				store.downLimit = nil
+			}
+		}
+	default:
+		logger.Errorf("method: UpdateCachedStoreRateLimit, limitType error")
+	}
+}
+
 func (store *cachedStore) initMetrics() {
 	store.cacheHits = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "blockcache_hits",
@@ -786,6 +846,10 @@ func (store *cachedStore) initMetrics() {
 		Name: "object_request_data_bytes",
 		Help: "Object requests size in bytes.",
 	}, []string{"method"})
+	store.getTokenFromBucketErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "object_token_limit_errors",
+		Help: "Object requests get token from rateLimit bucket error.",
+	}, []string{"method"})
 }
 
 func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
@@ -800,6 +864,7 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(store.objectReqsHistogram)
 	reg.MustRegister(store.objectReqErrors)
 	reg.MustRegister(store.objectDataBytes)
+	reg.MustRegister(store.getTokenFromBucketErrors)
 	reg.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "blockcache_blocks",

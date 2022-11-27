@@ -64,6 +64,8 @@ type Format struct {
 	MetaVersion      int    `json:",omitempty"`
 	MinClientVersion string `json:",omitempty"`
 	MaxClientVersion string `json:",omitempty"`
+	DefaultUpLimit   int64 // bytes per second
+	DefaultDownLimit int64 // bytes per second
 }
 
 func (f *Format) update(old *Format, force bool) error {

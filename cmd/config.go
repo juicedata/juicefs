@@ -95,6 +95,16 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 				Name:  "force",
 				Usage: "skip sanity check and force update the configurations",
 			},
+			&cli.Int64Flag{
+				Name:  "default-upload-limit",
+				Value: 0,
+				Usage: "bandwidth limit for upload in Mbps, volume level configuration, priority is lower than mount",
+			},
+			&cli.Int64Flag{
+				Name:  "default-download-limit",
+				Value: 0,
+				Usage: "bandwidth limit for download in Mbps, volume level configuration, priority is lower than mount",
+			},
 		},
 	}
 }
@@ -208,6 +218,22 @@ func config(ctx *cli.Context) error {
 				msg.WriteString(fmt.Sprintf("%s: %s -> %s\n", flag, format.MaxClientVersion, new))
 				format.MaxClientVersion = new
 				clientVer = true
+			}
+		case "default-upload-limit":
+			if new := ctx.Int64(flag) * 1e6 / 8; new != format.DefaultUpLimit {
+				if new < 0 {
+					return fmt.Errorf("Invalid DefaultUpLimit: %d", new)
+				}
+				msg.WriteString(fmt.Sprintf("%s: %d -> %d\n", flag, format.DefaultUpLimit, new))
+				format.DefaultUpLimit = new
+			}
+		case "default-download-limit":
+			if new := ctx.Int64(flag) * 1e6 / 8; new != format.DefaultDownLimit {
+				if new < 0 {
+					return fmt.Errorf("Invalid DefaultDownLimit: %d", new)
+				}
+				msg.WriteString(fmt.Sprintf("%s: %d -> %d\n", flag, format.DefaultDownLimit, new))
+				format.DefaultDownLimit = new
 			}
 		}
 	}

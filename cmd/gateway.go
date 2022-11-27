@@ -216,6 +216,10 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	vfsConf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
 
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
+
+	setRateLimitPriority(c)
+	NewReloadRateLimit(format, metaCli, store)
+
 	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store)
 	if err != nil {
 		logger.Fatalf("Initialize failed: %s", err)

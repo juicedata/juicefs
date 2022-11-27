@@ -31,6 +31,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -49,6 +50,8 @@ import (
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
+
+var rateLimitConfLock sync.Mutex
 
 func cmdMount() *cli.Command {
 	compoundFlags := [][]cli.Flag{
@@ -436,6 +439,30 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 	return holder, nil
 }
 
+func NewReloadRateLimit(format *meta.Format, cli meta.Meta, store chunk.ChunkStore) {
+	// backup last value, if not change, need not update
+	lastUpLimit := format.DefaultUpLimit
+	lastDownLimit := format.DefaultDownLimit
+
+	// config not update && default-upload-limit/default-download-limit > 0 (init)
+	if !chunk.UseMountUploadLimitConf && lastUpLimit > 0{
+		store.UpdateCachedStoreRateLimit(format.DefaultUpLimit, lastUpLimit, "upLimit")
+	}
+	if !chunk.UseMountDownloadLimitConf && lastDownLimit > 0{
+		store.UpdateCachedStoreRateLimit(format.DefaultDownLimit, lastDownLimit, "downLimit")
+	}
+	cli.OnReload(func(new *meta.Format) {
+		if !chunk.UseMountUploadLimitConf {
+			store.UpdateCachedStoreRateLimit(new.DefaultUpLimit, lastUpLimit, "upLimit")
+			lastUpLimit = new.DefaultUpLimit
+		}
+		if !chunk.UseMountDownloadLimitConf {
+			store.UpdateCachedStoreRateLimit(new.DefaultDownLimit, lastDownLimit, "downLimit")
+			lastDownLimit = new.DefaultDownLimit
+		}
+	})
+}
+
 func tellFstabOptions(c *cli.Context) string {
 	opts := []string{"_netdev"}
 	for _, s := range os.Args[2:] {
@@ -603,6 +630,23 @@ func mount(c *cli.Context) error {
 	installHandler(mp)
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
+
+	setRateLimitPriority(c)
+	NewReloadRateLimit(format, metaCli, store)
+
 	mount_main(v, c)
 	return metaCli.CloseSession()
+}
+
+func setRateLimitPriority(c *cli.Context)  {
+	if c.Int64("upload-limit") > 0 {
+		rateLimitConfLock.Lock()
+		chunk.UseMountUploadLimitConf = true
+		rateLimitConfLock.Unlock()
+	}
+	if c.Int64("download-limit") > 0 {
+		rateLimitConfLock.Lock()
+		chunk.UseMountDownloadLimitConf = true
+		rateLimitConfLock.Unlock()
+	}
 }
