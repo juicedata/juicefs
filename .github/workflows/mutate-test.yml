@@ -177,19 +177,21 @@ jobs:
           log_file=$(basename ${{matrix.test_file}}).log
           echo "log_file=$log_file" >> $GITHUB_ENV
           COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder | tee -a $log_file
+          mutate_report=`LOG_FILE=$log_file python3 .github/scripts/parse_mutate_log.py`
+          echo "mutate_report is $mutate_report"
+          echo "mutate_report=$mutate_report" >> $GITHUB_ENV
 
-      - uses: actions/upload-artifact@v3
-        with:
-          name: ${{env.log_file}}
-          path: ${{env.log_file}}
+      # - uses: actions/upload-artifact@v3
+      #   with:
+      #     name: ${{env.log_file}}
+      #     path: ${{env.log_file}}
 
       - uses: mshick/add-pr-comment@v2
         with:
           message: |
             *Mutate Test Report*
-            escaped mutants: 20
-            killed mutants: 40
-            invalid mutants: 10
+            ${{env.mutate_report}}
+            Report detail: "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}/jobs/${{github.job_id}}"
 
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
