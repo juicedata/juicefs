@@ -66,7 +66,7 @@ jobs:
       is_test_file_changed: ${{ steps.set-matrix.outputs.is_test_file_changed }}
 
   mutate-test:
-    name: mutate-test
+    name: mutate-test-${{matrix.test_file}}
     needs: build-matrix
     if: needs.build-matrix.outputs.is_test_file_changed == 'true'
     strategy:
