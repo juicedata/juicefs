@@ -46,26 +46,22 @@ jobs:
               echo "test_files is not empty"
               # echo '::set-output name=test_file_matrix::["cmd/meta/xattr_test.go", "cmd/meta/utils_test.go"]'
               echo "::set-output name=test_file_matrix::[$test_files]"
-              echo "::set-output name=is_test_file_changed::true"
             else
               echo "test_files is empty"
-              echo "::set-output name=is_test_file_changed::false"
+              exit 1
             fi
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             test_file="\"${{github.event.inputs.test_file}}\""
             echo "test file is $test_file"
             echo "::set-output name=test_file_matrix::[$test_file]"
-            echo "::set-output name=is_test_file_changed::true"
           fi
 
     outputs:
       test_file: ${{ steps.set-matrix.outputs.test_file_matrix }}
-      is_test_file_changed: ${{ steps.set-matrix.outputs.is_test_file_changed }}
 
   mutate-test:
     name: ${{matrix.test_file}}
     needs: build-matrix
-    if: needs.build-matrix.outputs.is_test_file_changed == 'true'
     strategy:
       fail-fast: false
       matrix:
