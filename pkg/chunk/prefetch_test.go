@@ -6,6 +6,9 @@ import (
 	"time"
 )
 
+//checksum: 2058c80f7579f6fe7847fa44f612fa11
+//checksum: bb9e9497f17e191adf89b5a2ef6764eb
+
 func TestPrefetcher(t *testing.T) {
 	t.Run("should fetch given keys", func(t *testing.T) {
 		keys := []string{"source/1", "source/2", "source/3", "source/4"}

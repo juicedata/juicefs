@@ -39,7 +39,7 @@ func newPrefetcher(parallel int, fetch func(string)) *prefetcher {
 
 func (p *prefetcher) do() {
 	for key := range p.pending {
-		p.Lock()
+		p.Lock() //skip mutate
 		if _, ok := p.busy[key]; !ok {
 			p.busy[key] = true
 			p.Unlock()
