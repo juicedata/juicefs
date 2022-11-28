@@ -9,7 +9,7 @@ def parse_check_sum(test_file_path):
     with open(test_file_path) as f:
         lines = f.readlines()
         for line in lines:
-            # //checksum: 5b1ca0cfedd786d9df136a0e042df23a
+            # //checksum 5b1ca0cfedd786d9df136a0e042df23a
             group = re.match('//checksum\s+(.{32})$', line.strip())
             if group:
                 check_sum_list.append(group.group(1))
