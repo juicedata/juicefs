@@ -273,7 +273,7 @@ type chunkObj struct {
 }
 
 func (r *InfoResponse) Encode() []byte {
-	resp, _ := json.MarshalIndent(r, "", "  ")
+	resp, _ := json.Marshal(r)
 	buffer := utils.NewBuffer(4 + uint32(len(resp)))
 	buffer.Put32(uint32(len(resp)))
 	buffer.Put(resp)
