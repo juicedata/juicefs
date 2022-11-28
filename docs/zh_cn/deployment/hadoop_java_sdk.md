@@ -1,6 +1,6 @@
 ---
 sidebar_label: Hadoop 使用 JuiceFS
-sidebar_position: 4
+sidebar_position: 5
 slug: /hadoop_java_sdk
 ---
 
@@ -278,7 +278,7 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
         <artifactId>juicefs-hadoop</artifactId>
         <version>{JUICEFS_HADOOP_VERSION}</version>
     </dependency>
-    
+
     <!-- for flink-1.13 -->
     <dependency>
         <groupId>org.apache.flink</groupId>
@@ -317,7 +317,7 @@ public class JuiceFileSystemTableFactory extends FileSystemTableFactory {
 在 resources 按照如下结构创建文件
 
 ```
-## for flink-1.13 
+## for flink-1.13
 src/main/resources
 ├── META-INF
 │   └── services

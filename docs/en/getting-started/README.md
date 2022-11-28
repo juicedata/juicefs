@@ -21,7 +21,7 @@ Other operating systems and installation methods, please refer to ["Installation
 
 A help message will return after executing `juicefs` in terminal once the JuiceFS client is successfully installed regardless of operating system.
 
-## Creating a File System
+## Creating a File System {#juicefs-format}
 
 ### Basic Concept
 
