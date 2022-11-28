@@ -72,28 +72,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: set job id
-        id: set-job-id
-        uses: ayachensiyuan/get-action-job-id@v1.6
-        env: 
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          job-name: '${{matrix.test_file}}' 
-
-      - name: display job id
-        run: |
-          echo "github job : ${{env.GITHUB_JOB}}"
-          echo "job id: ${{ steps.set-job-id.outputs.jobId }}"
-
       - name: Get Current Job Log URL
         uses: Tiryoh/gha-jobid-action@v0
         id: jobs
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           job_name: ${{matrix.test_file}}
-
-      - name: Output Current Job Log URL
-        run: echo ${{ steps.jobs.outputs.html_url }}          
 
       - name: Build
         uses: ./.github/actions/build
@@ -201,8 +185,8 @@ jobs:
         with:
           message: |
             *Mutate Test Report For ${{matrix.test_file}}*
-            ${{env.mutate_report}}
-            Report detail: "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}/jobs/${{ steps.set-job-id.outputs.jobId }}"
+            ${{env.mutate_report}} 
+            Report detail: ${{ steps.jobs.outputs.html_url }}  
 
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
