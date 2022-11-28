@@ -6,9 +6,9 @@ slug: /how_to_use_on_kubernetes
 
 JuiceFS is an ideal storage layer for Kubernetes, read this chapter to learn how to use JuiceFS in Kubernetes.
 
-## Use JuiceFS via hostPath
+## Use JuiceFS via `hostPath`
 
-If you simply need to use JuiceFS inside Kubernetes pods, without any special requirements (isolation, permission control), then [`hostPath`](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath) can be a good practice, which is also really easy to setup:
+If you simply need to use JuiceFS inside Kubernetes pods, without any special requirements (e.g. isolation, permission control), then [`hostPath`](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath) can be a good practice, which is also really easy to setup:
 
 1. Install and mount JuiceFS on all Kubernetes worker nodes, [Automated Deployment](./automation.md) is recommended for this type of work.
 1. Use `hostPath` volume inside pod definition, and mount a JuiceFS sub-directory to container:
@@ -27,16 +27,17 @@ If you simply need to use JuiceFS inside Kubernetes pods, without any special re
      volumes:
        - name: jfs-data
          hostPath:
-           # assuming JuiceFS is mounted on /jfs
+           # Assuming JuiceFS is mounted on /jfs
            path: "/jfs/myapp/"
            type: Directory
    ```
 
 In comparison to using JuiceFS CSI Driver, `hostPath` is a much more simple practice, and easier to debug when things go wrong, but notice that:
 
-* All worker nodes should mount JuiceFS in advance, you should add JuiceFS installation to initialization steps.
-* Resources occupied by JuiceFS Client is not managed by Kubernetes, consider using [`system-reserved`](https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/#system-reserved) to reserve resources for JuiceFS Client.
-* If JuiceFS Client crashes, pods will not be able to automatically recover, you'll have to re-mount JuiceFS and re-create pods. However, CSI Driver solves this problem well by providing the [Automatic Mount Point Recovery](https://juicefs.com/docs/csi/recover-failed-mountpoint) mechanism.
+* All worker nodes should mount JuiceFS in advance, so when adding a new node to the cluster, JuiceFS needs to be installed and mounted during the initialization process, otherwise the new node does not have a JuiceFS mount point, and the container will not be created.
+* For the convenience of management, all containers generally use the same host mount point. Lack of isolation may lead to data security issues. Please evaluate carefully.
+* The system resources (such as CPU, memory, etc.) occupied by the JuiceFS mounting process on the host are not controlled by Kubernetes, and may occupy too many host resources. You can consider using [`system-reserved`](https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/#system-reserved) to properly adjust the system resource reservation of Kubernetes, to reserve more resources for the JuiceFS mount process.
+* If the JuiceFS mount process on the host exits unexpectedly, the application pod will not be able to access the mount point normally. In this case, the JuiceFS file system needs to be remounted and the application pod must be rebuilt. However, JuiceFS CSI Driver solves this problem well by providing the [Automatic Mount Point Recovery](https://juicefs.com/docs/csi/recover-failed-mountpoint) mechanism.
 * If you're using Docker as Kubernetes container runtime, it's best to start JuiceFS mount prior to Docker in startup order, to avoid containers being created before JuiceFS is properly mounted. For systemd, you can use below unit file to manually control startup order:
 
   ```systemd title="/etc/systemd/system/docker.service.d/override.conf"

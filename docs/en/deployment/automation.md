@@ -9,20 +9,20 @@ Below examples only demonstrate the mount process, you should [Create a file sys
 
 ## Ansible
 
-Below is the ansible example to install and mount JuiceFS in localhost:
+Below is the [Ansible](https://ansible.com) example to install and mount JuiceFS in localhost:
 
 ```yaml
 - hosts: localhost
   tasks:
     - set_fact:
-        # change accordingly
+        # Change accordingly
         meta_url: sqlite3:///tmp/myjfs.db
         jfs_path: /jfs
         jfs_pkg: /tmp/juicefs-ce.tar.gz
         jfs_bin_dir: /usr/local/bin
 
     - get_url:
-        # change download url accordingly
+        # Change download URL accordingly
         url: https://d.juicefs.com/juicefs/releases/download/v1.0.2/juicefs-1.0.2-linux-amd64.tar.gz
         dest: "{{jfs_pkg}}"
 
