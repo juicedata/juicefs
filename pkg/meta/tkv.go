@@ -2222,10 +2222,13 @@ func (m *kvMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
 		return err
 	}
 
+	fmt.Println("find keys", len(keys))
+
 	var ss []Slice
 	var rs []int64
 	for _, key := range keys {
-		if len(keys) != klen {
+		if len(key) != klen {
+			fmt.Println("invalid key length", len(key))
 			continue
 		}
 		ss := ss[:0]
