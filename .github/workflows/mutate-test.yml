@@ -183,6 +183,7 @@ jobs:
 
       - uses: mshick/add-pr-comment@v2
         with:
+          allow-repeats: true
           message: |
             *Mutate Test Report For ${{matrix.test_file}}*
             ${{env.mutate_report}} 
