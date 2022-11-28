@@ -1,6 +1,6 @@
 ---
 sidebar_label: Docker 使用 JuiceFS
-sidebar_position: 2
+sidebar_position: 3
 slug: /juicefs_on_docker
 ---
 # 在 Docker 使用 JuiceFS
