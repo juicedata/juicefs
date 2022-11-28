@@ -6,6 +6,46 @@ slug: /how_to_use_on_kubernetes
 
 JuiceFS is an ideal storage layer for Kubernetes, read this chapter to learn how to use JuiceFS in Kubernetes.
 
+## Use JuiceFS via hostPath
+
+If you simply need to use JuiceFS inside Kubernetes pods, without any special requirements (isolation, permission control), then [`hostPath`](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath) can be a good practice, which is also really easy to setup:
+
+1. Install and mount JuiceFS on all Kubernetes worker nodes, [Automated Deployment](./automation.md) is recommended for this type of work.
+1. Use `hostPath` volume inside pod definition, and mount a JuiceFS sub-directory to container:
+
+   ```yaml {8-15}
+   apiVersion: v1
+   kind: Pod
+   metadata:
+     name: juicefs-app
+   spec:
+     containers:
+       - ...
+         volumeMounts:
+           - name: jfs-data
+             mountPath: /opt/app-data
+     volumes:
+       - name: jfs-data
+         hostPath:
+           # assuming JuiceFS is mounted on /jfs
+           path: "/jfs/myapp/"
+           type: Directory
+   ```
+
+In comparison to using JuiceFS CSI Driver, `hostPath` is a much more simple practice, and easier to debug when things go wrong, but notice that:
+
+* All worker nodes should mount JuiceFS in advance, you should add JuiceFS installation to initialization steps.
+* Resources occupied by JuiceFS Client is not managed by Kubernetes, consider using [`system-reserved`](https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/#system-reserved) to reserve resources for JuiceFS Client.
+* If JuiceFS Client crashes, pods will not be able to automatically recover, you'll have to re-mount JuiceFS and re-create pods. However, CSI Driver solves this problem well by providing the [Automatic Mount Point Recovery](https://juicefs.com/docs/csi/recover-failed-mountpoint) mechanism.
+* If you're using Docker as Kubernetes container runtime, it's best to start JuiceFS mount prior to Docker in startup order, to avoid containers being created before JuiceFS is properly mounted. For systemd, you can use below unit file to manually control startup order:
+
+  ```systemd title="/etc/systemd/system/docker.service.d/override.conf"
+  [Unit]
+  # Use below command to obtain JuiceFS mount service name
+  # systemctl list-units | grep "\.mount"
+  After=network-online.target firewalld.service containerd.service jfs.mount
+  ```
+
 ## JuiceFS CSI Driver
 
 To use JuiceFS in Kubernetes, refer to [JuiceFS CSI Driver Documentation](https://juicefs.com/docs/csi/introduction).

@@ -8,10 +8,10 @@ JuiceFS 非常适合用作 Kubernetes 集群的存储层，阅读本文以了解
 
 ## 以 `hostPath` 方式挂载 JuiceFS
 
-如果你仅仅需要 Kubernetes 容器中使用 JuiceFS，没有其他任何复杂需要（比如隔离性、权限控制），那么完全可以以 [`hostPath` 卷](https://kubernetes.io/zh-cn/docs/concepts/storage/volumes/#hostpath) 的方式使用 JuiceFS，搭建起来也十分简单：
+如果你仅仅需要在 Kubernetes 容器中简单使用 JuiceFS，没有其他任何复杂要求（比如隔离性、权限控制），那么完全可以以 [`hostPath` 卷](https://kubernetes.io/zh-cn/docs/concepts/storage/volumes/#hostpath) 的方式使用 JuiceFS，搭建起来也十分简单：
 
 1. 在 Kubernetes 节点上统一安装、挂载 JuiceFS，如果节点众多，考虑[自动化部署 JuiceFS](./automation.md)。
-1. 在 pod 定义中使用 `hostPath` 卷，直接将宿主机上的 JuiceFS 挂载点挂载到容器中：
+1. 在 pod 定义中使用 `hostPath` 卷，直接将宿主机上的 JuiceFS 子目录挂载到容器中：
 
    ```yaml {8-15}
    apiVersion: v1
@@ -27,7 +27,8 @@ JuiceFS 非常适合用作 Kubernetes 集群的存储层，阅读本文以了解
      volumes:
        - name: jfs-data
          hostPath:
-           path: "/jfs/myapp/"  # JuiceFS 挂载点
+           # 假设挂载点为 /jfs
+           path: "/jfs/myapp/"
            type: Directory
    ```
 
@@ -35,7 +36,7 @@ JuiceFS 非常适合用作 Kubernetes 集群的存储层，阅读本文以了解
 
 * 所有节点都需要提前挂载 JuiceFS，因此集群加入新节点，需要在初始化流程里进行安装和挂载，否则新节点没有 JuiceFS 挂载点，容器将无法创建。
 * 为求管理方便，一般所有容器都在使用同一个宿主机挂载点，缺乏隔离可能导致数据安全问题，请谨慎评估。
-* 宿主机上的 JuiceFS 挂载进程所占用的系统资源（如 CPU、内存等）不受 Kubernetes 控制，根据你的应用负载，可能会占用较多宿主机资源。
+* 宿主机上的 JuiceFS 挂载进程所占用的系统资源（如 CPU、内存等）不受 Kubernetes 控制，如果占用了较多宿主机资源，考虑用 [`system-reserved`](https://kubernetes.io/zh-cn/docs/tasks/administer-cluster/reserve-compute-resources/#system-reserved) 来调整 Kubernetes 的系统资源预留值。
 * 如果宿主机上的 JuiceFS 挂载进程意外退出，将会导致应用 pod 无法正常访问挂载点，此时需要重新挂载 JuiceFS 文件系统并重建应用 pod。作为对比，JuiceFS CSI 驱动提供[「挂载点自动恢复」](https://juicefs.com/docs/zh/csi/recover-failed-mountpoint)功能。
 * 如果你使用 Docker 作为 Kubernetes 容器运行环境，最好令 JuiceFS 先于 Docker 启动，否则在节点重启的时候，偶尔可能出现容器启动时，JuiceFS 尚未挂载好的情况，此时便会因该依赖问题启动失败。以 systemd 为例，可以用下方 unit file 来配置启动顺序：
 
