@@ -8,8 +8,9 @@ def is_mutation_skipped_by_comment(original_file, changed_file):
     changed = open(changed_file, 'r').readlines()
     for i in range( min(len(original), len(changed)) ):
         if original[i] != changed[i]:
-            print(f'line {i+1} is different')
+            # print(f'line {i+1} is different')
             if 'skip mutate' in original[i]:
+                print(f'line {i+1} is skipped by comment')
                 return  True
     return False
 
@@ -17,7 +18,7 @@ def is_mutation_skipped_by_comment(original_file, changed_file):
 if __name__ == '__main__':
     original_file = os.environ['MUTATE_ORIGINAL']
     changed_file = os.environ['MUTATE_CHANGED']
-    if is_mutation_skipped_by_comment():
+    if is_mutation_skipped_by_comment(original_file, changed_file):
         exit(1)
     else:
         exit(0)
