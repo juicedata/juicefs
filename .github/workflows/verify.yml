@@ -11,7 +11,7 @@ on:
       - '.github/**'
   pull_request:
     branches:
-      - 'main'
+      # - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
