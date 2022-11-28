@@ -81,8 +81,9 @@ jobs:
           job-name: '${{matrix.test_file}}' 
 
       - name: display job id
-        echo "github job : ${{env.GITHUB_JOB}}"
-        echo "job id: ${{ steps.set-job-id.outputs.jobId }}"
+        run: |
+          echo "github job : ${{env.GITHUB_JOB}}"
+          echo "job id: ${{ steps.set-job-id.outputs.jobId }}"
 
       - name: Build
         uses: ./.github/actions/build
