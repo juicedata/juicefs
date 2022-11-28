@@ -145,7 +145,7 @@ jobs:
 
 
       - name: run mutate test
-        timeout-minutes: 120
+        # timeout-minutes: 120
         run: |
           sudo chmod 777 /var/jfsCache
           test_file=${{matrix.test_file}}
