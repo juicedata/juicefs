@@ -25,18 +25,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
-      - name: get-changed-files
-        if: ${{ github.event_name == 'pull_request'}} 
-        uses: jitterbit/get-changed-files@v1
-        id: get_changed_files
         with:
-          format: space-delimited
+          fetch-depth: 0
 
       - id: set-matrix
         run: |
           if [ "${{github.event_name}}" == "pull_request"  ]; then
-            changed_file_array=(${{ steps.get_changed_files.outputs.added_modified }})
+            changed_file_str=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep _test.go$ | xargs)
+            echo "added or changed test files: $changed_file_str"
+            changed_file_array=($changed_file_str)
             test_files=""
             for file_name in "${changed_file_array[@]}"
             do
@@ -184,16 +181,10 @@ jobs:
           fi
           
           log_file=$(basename ${{matrix.test_file}}).log
-          echo "log_file=$log_file" >> $GITHUB_ENV
           COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder | tee -a $log_file
           mutate_report=`LOG_FILE=$log_file python3 .github/scripts/parse_mutate_log.py`
           echo "mutate_report is $mutate_report"
           echo "mutate_report=$mutate_report" >> $GITHUB_ENV
-
-      # - uses: actions/upload-artifact@v3
-      #   with:
-      #     name: ${{env.log_file}}
-      #     path: ${{env.log_file}}
 
       - uses: mshick/add-pr-comment@v2
         with:
