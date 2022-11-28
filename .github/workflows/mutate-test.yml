@@ -1,0 +1,201 @@
+name: mutate-test
+on:
+  pull_request:
+    branches:
+      - 'main'
+    paths:
+      - '**/*_test.go'
+
+  workflow_dispatch:
+    inputs:
+      test_file:
+        type: string
+        description: "the go test file relative path you want to mutate, eg cmd/meta/xattr_test.go"
+        required: true
+        default: ""  
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false  
+
+jobs:
+
+  build-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - id: set-matrix
+        run: |
+          if [ "${{github.event_name}}" == "pull_request"  ]; then
+            changed_file_str=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep _test.go$ | xargs)
+            echo "added or changed test files: $changed_file_str"
+            changed_file_array=($changed_file_str)
+            test_files=""
+            for file_name in "${changed_file_array[@]}"
+            do
+              if [[ "$file_name" == *_test.go ]]; then
+                test_files="\"$file_name\",$test_files"
+              fi
+            done
+            echo "test_files: $test_files"
+            if [ -n "$test_files" ]; then 
+              echo "test_files is not empty"
+              # echo '::set-output name=test_file_matrix::["cmd/meta/xattr_test.go", "cmd/meta/utils_test.go"]'
+              echo "::set-output name=test_file_matrix::[$test_files]"
+            else
+              echo "test_files is empty"
+              exit 1
+            fi
+          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
+            test_file="\"${{github.event.inputs.test_file}}\""
+            echo "test file is $test_file"
+            echo "::set-output name=test_file_matrix::[$test_file]"
+          fi
+
+    outputs:
+      test_file: ${{ steps.set-matrix.outputs.test_file_matrix }}
+
+  mutate-test:
+    name: ${{matrix.test_file}}
+    needs: build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        test_file: ${{ fromJson(needs.build-matrix.outputs.test_file) }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Get Current Job Log URL
+        uses: Tiryoh/gha-jobid-action@v0
+        id: jobs
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          job_name: ${{matrix.test_file}}
+
+      - name: Build
+        uses: ./.github/actions/build
+
+      - name: install go-mutesting
+        run: |
+          go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+
+      - name: Install Packages
+        run: |
+          sudo apt install -y g++-multilib
+          sudo apt install -y redis-server
+          sudo apt install -y libacl1-dev
+          sudo apt install -y attr
+          sudo mkdir -p /home/travis/.m2/
+
+      - name: Download Zip
+        run: |
+          wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
+          wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
+          wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
+          wget -O /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz  https://github.com/etcd-io/etcd/releases/download/v3.5.2/etcd-v3.5.2-linux-amd64.tar.gz
+          wget -O /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+          wget -O /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
+          unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2/
+          tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2/
+          cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
+          tar -zxf /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz -C /home/travis/.m2/
+
+
+      - name: Prepare Database
+        timeout-minutes: 10
+        run: |
+          sudo service mysql start
+          sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
+          sudo service postgresql start
+          sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?host.*all.*all.*32.*scram-sha-256?host    all             all             127.0.0.1/32            trust?" /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?host.*all.*all.*128.*scram-sha-256?host    all             all             ::1/128                 trust?" /etc/postgresql/*/main/pg_hba.conf
+          cat /etc/postgresql/*/main/pg_hba.conf
+          sudo service postgresql restart
+          psql -c "create user runner superuser;" -U postgres
+          sudo service postgresql restart
+          sudo mysql -e "create database dev;"
+          psql -c 'create database test;' -U postgres
+          bash /home/travis/.m2/install.sh
+          source /home/runner/.bash_profile
+          tiup -v
+          nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
+          sudo dpkg -i /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb
+          docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
+          go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
+          nohup /home/travis/.m2/rclone-v1.57.0-linux-amd64/rclone serve webdav local --addr 127.0.0.1:9007 >> rclone.log 2>&1 &
+          #sudo chmod 777 /usr/share/apache*/conf/settings.xml
+          #sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/share/apache*/conf/settings.xml
+          docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
+          make
+          sudo make -C fstests setup
+          chmod +x travis-setup-hdfs.sh
+          sudo lsof -i :8020 || true
+          ./travis-setup-hdfs.sh
+          for i in {2222,3306,5432,8020,9000,9007,4500} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+          sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
+
+
+      - name: run mutate test
+        timeout-minutes: 120
+        run: |
+          sudo chmod 777 /var/jfsCache
+          test_file=${{matrix.test_file}}
+          echo "test file is :" $test_file
+          if [ -z "$test_file" ]; then 
+            echo "test file is empty, will not run mutate test"
+            exit 0
+          fi
+          source_file=${test_file%"_test.go"}.go
+          echo "source file is :" $source_file
+          package_path=$(dirname $test_file)
+          echo "package path is :" $package_path
+
+          test_cases=$(TEST_FILE_NAME=$test_file python3 .github/scripts/parse_test_cases.py)
+          if [ $? -ne 0 ]; then
+            echo "no test cases in test file, will not run mutate test"
+            exit 0
+          fi
+          echo "test cases: $test_cases"
+
+          if [[ "$test_file" =~ ^pkg/.* ]]; then
+            go test ./$package_path/...  -v -run "$test_cases" -count=1 -cover -timeout=1m -coverpkg=./$package_path/... -coverprofile=mutest-cov.out
+          elif [[ "$test_file" =~ ^cmd/.* ]]; then
+            sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword go test ./cmd/... -v -run "$test_cases" -count=1 -cover -timeout=1m -coverpkg=./pkg/...,./cmd/... -coverprofile=mutest-cov.out 
+          else
+            echo "test file location error: $test_file"
+            exit 0
+          fi
+          
+          log_file=$(basename ${{matrix.test_file}}).log
+          COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder | tee -a $log_file
+          mutate_report=`LOG_FILE=$log_file python3 .github/scripts/parse_mutate_log.py`
+          echo "mutate_report is $mutate_report"
+          echo "mutate_report=$mutate_report" >> $GITHUB_ENV
+
+      - uses: mshick/add-pr-comment@v2
+        with:
+          message: |
+            *Mutate Test Report For ${{matrix.test_file}}*
+            ${{env.mutate_report}} 
+            Report detail: ${{ steps.jobs.outputs.html_url }}  
+
+      - name: Send Slack Notification
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1

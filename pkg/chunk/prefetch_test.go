@@ -42,7 +42,7 @@ func TestPrefetcher(t *testing.T) {
 			f.fetch("a")
 		}
 		if atomic.LoadInt32(&counter) > 1 {
-			t.Errorf("Duplicate keys fetched")
+			t.Errorf("Duplicate keys  fetched")
 		}
 	})
 }
