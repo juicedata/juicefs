@@ -22,6 +22,7 @@ import (
 	"time"
 )
 
+//checksum: 5c789f64314e663ed981ee1f9f397f01
 func TestMin(t *testing.T) {
 	assertEqual(t, Min(1, 2), 1)
 	assertEqual(t, Min(-1, -2), -2)
