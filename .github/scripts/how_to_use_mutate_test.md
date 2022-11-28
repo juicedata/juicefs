@@ -1,6 +1,12 @@
 # what is mutate test?
 Mutation testing (or Mutation analysis or Program mutation) is used to design new software tests and evaluate the quality of existing software tests. Mutation testing involves modifying a program in small ways. Each mutated version is called a mutant and tests detect and reject mutants by causing the behavior of the original version to differ from the mutant. This is called killing the mutant. Test suites are measured by the percentage of mutants that they kill. New tests can be designed to kill additional mutants.
 
+# what is the difference between mutants?
+there are several kind of mutants:
+1. killed mutants: the mutants which is killed by the unit test. which is identified by "tests passed -> FAIL" in the log
+2. failed or escaped mutants: the mutants which pass the unit test. which is identified by "tests failed -> PASS" in the log
+3. skipped mutants: the mutants may skipped because of 1. out of coverage code. 2. in the black list, 3. skipped by comment. 4. other exception cases.
+
 # how to checkout the failed mutation?
 1. open the github action workflow page
 2. click "run mutate test" step
