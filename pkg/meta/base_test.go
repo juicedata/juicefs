@@ -1741,6 +1741,6 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 		t.Fatalf("getattr: %s", st)
 	}
 	if !dirAttr.Full || dirAttr.Nlink != 2 || dirAttr.Parent != d3Inode {
-		t.Fatalf("d4Inode attr: %+v", *dirAttr)
+		t.Fatalf("d4Inode  attr: %+v", *dirAttr)
 	}
 }
