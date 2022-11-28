@@ -90,7 +90,7 @@ jobs:
         id: jobs
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          job_name: ${{ github.job }}
+          job_name: ${{matrix.test_file}}
 
       - name: Output Current Job Log URL
         run: echo ${{ steps.jobs.outputs.html_url }}          
