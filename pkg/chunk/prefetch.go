@@ -31,7 +31,7 @@ func newPrefetcher(parallel int, fetch func(string)) *prefetcher {
 		busy:    make(map[string]bool),
 		op:      fetch,
 	}
-	for i := 0; i < parallel; i++ { //skip mutate
+	for i := 0; i < parallel; i++ {
 		go p.do()
 	}
 	return p
@@ -39,7 +39,7 @@ func newPrefetcher(parallel int, fetch func(string)) *prefetcher {
 
 func (p *prefetcher) do() {
 	for key := range p.pending {
-		p.Lock() //skip mutate
+		p.Lock()
 		if _, ok := p.busy[key]; !ok {
 			p.busy[key] = true
 			p.Unlock()
