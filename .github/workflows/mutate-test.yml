@@ -78,7 +78,11 @@ jobs:
         env: 
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          job-name: '${{matrix.test_file}}' # must be the same as 'get-job-id.name' 
+          job-name: '${{matrix.test_file}}' 
+
+      - name: display job id
+        echo "github job : ${{env.GITHUB_JOB}}"
+        echo "job id: ${{ steps.set-job-id.outputs.jobId }}"
 
       - name: Build
         uses: ./.github/actions/build
