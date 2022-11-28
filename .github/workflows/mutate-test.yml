@@ -79,6 +79,13 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           job_name: ${{matrix.test_file}}
 
+      - uses: mshick/add-pr-comment@v2
+        with:
+          allow-repeats: true
+          message: |
+            *Mutate Test Report For ${{matrix.test_file}}*
+            Report detail: ${{ steps.jobs.outputs.html_url }}  
+
       - name: Build
         uses: ./.github/actions/build
 
