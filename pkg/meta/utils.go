@@ -18,6 +18,7 @@ package meta
 
 import (
 	"bytes"
+	"fmt"
 	"net/url"
 	"runtime/debug"
 	"sort"

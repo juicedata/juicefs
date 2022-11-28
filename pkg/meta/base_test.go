@@ -598,7 +598,7 @@ func testStickyBit(t *testing.T, m Meta) {
 }
 
 func testListLocks(t *testing.T, m Meta) {
-	_ = m.Init(Format{Name: "test"}, false)
+	_ = m.Init(&Format{Name: "test"}, false)
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
