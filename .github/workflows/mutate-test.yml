@@ -167,7 +167,7 @@ jobs:
           echo "test cases: $test_cases"
 
           if [[ "$test_file" =~ ^pkg/.* ]]; then
-            go test ./$package_path/...  -v -run "$test_cases" -count=1 -cover -timeout=1m -coverpkg=./$package_path/... -coverprofile=mutest-cov.out
+            go test ./$package_path/...  -v -run "$test_cases" -count=1 -cover -timeout=5m -coverpkg=./$package_path/... -coverprofile=mutest-cov.out
           elif [[ "$test_file" =~ ^cmd/.* ]]; then
             sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword go test ./cmd/... -v -run "$test_cases" -count=1 -cover -timeout=1m -coverpkg=./pkg/...,./cmd/... -coverprofile=mutest-cov.out 
           else
