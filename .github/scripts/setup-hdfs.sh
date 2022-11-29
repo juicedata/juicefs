@@ -80,7 +80,7 @@ jps
 
 echo "hello world" > /tmp/testfile
 cd ~/app/hadoop-${HADOOP_VERSION}/bin
-./hdfs dfs put /tmp/testfile /
-./hdfs dfs rm /testfile
+./hdfs dfs -put /tmp/testfile /
+./hdfs dfs -rm /testfile
 
 echo "hdfs started successfully"
