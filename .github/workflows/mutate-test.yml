@@ -45,6 +45,7 @@ jobs:
             for file_name in "${changed_file_array[@]}"
             do
               total_count=$(go-mutesting $file_name --debug --no-exec | grep "Save mutation into" | wc -l)
+              echo $total_count
               if [ $total_count -gt 200 ]; then
                 for i in {1..4} 
                 do
