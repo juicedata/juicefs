@@ -40,7 +40,7 @@ def do_mutate_test(mutation_dir, index, total):
         stats['total'] += 1
     if stats['total'] == 0:
         stats['score'] = 1.0
-    else
+    else:
         stats['score'] = stats['passed'] / stats['total']
     return stats
 
