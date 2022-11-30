@@ -128,7 +128,6 @@ jobs:
           cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
           tar -zxf /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz -C /home/travis/.m2/
 
-
       - name: Prepare Database
         timeout-minutes: 10
         run: |
@@ -208,33 +207,15 @@ jobs:
           cat $black_list_file
 
           go-mutesting $source_file --debug --no-exec --do-not-remove-tmp-folder  --blacklist $black_list_file | tee -a mutate.log
-          mutation_dir==$(cat mutate.log | grep "Save mutations into" | awk -F' ' '{print $4}' | sed -e 's:"::g')
+          mutation_dir=$(cat mutate.log | grep "Save mutations into" | awk -F' ' '{print $4}' | sed -e 's:"::g')
           echo "mutation dir is $mutation_dir"
           JOB_INDEX=$job_index JOB_TOTAL=$job_total MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutesting.py
-
-          exit 1
 
           # log_file=$(basename ${{matrix.test_file}}).log
           # COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a $log_file
           # mutate_report=`LOG_FILE=$log_file python3 .github/scripts/parse_mutate_log.py`
           # echo "mutate_report is $mutate_report"
           # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
-
-      # - uses: mshick/add-pr-comment@v2
-      #   with:
-      #     allow-repeats: true
-      #     message: |
-      #       *Mutate Test Report For ${{matrix.test_file}}*
-      #       ${{env.mutate_report}} 
-      #       Report detail: ${{ steps.jobs.outputs.html_url }}
-      #       Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
-
-      # - name: Send Slack Notification
-      #   if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
-      #   uses: juicedata/slack-notify-action@main
-      #   with:
-      #     channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-      #     slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Setup upterm session
         # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true'}}
@@ -244,13 +225,34 @@ jobs:
 
   success-all-test:
     runs-on: ubuntu-latest
-    needs: [mutate-test]
+    needs: [build-matrix, mutate-test]
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v2
+      - name: print
+        run: |
+          echo ${{ fromJson(needs.build-matrix.outputs.matrix) }}
+
       - name: Check Failure
         if: env.WORKFLOW_CONCLUSION == 'failure'
         run: exit 1
+
+      - uses: mshick/add-pr-comment@v2
+        with:
+          allow-repeats: true
+          message: |
+            *Mutate Test Report For ${{matrix.test_file}}*
+            ${{env.mutate_report}} 
+            Report detail: ${{ steps.jobs.outputs.html_url }}
+            Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
+
+      - name: Send Slack Notification
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
       - name: Success
         if: ${{ success() }}
         run: echo "All Done"
