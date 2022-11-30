@@ -220,14 +220,14 @@ jobs:
           # echo "mutate_report is $mutate_report"
           # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
 
-      - uses: mshick/add-pr-comment@v2
-        with:
-          allow-repeats: true
-          message: |
-            *Mutate Test Report For ${{matrix.test_file}}*
-            ${{env.mutate_report}} 
-            Report detail: ${{ steps.jobs.outputs.html_url }}
-            Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
+      # - uses: mshick/add-pr-comment@v2
+      #   with:
+      #     allow-repeats: true
+      #     message: |
+      #       *Mutate Test Report For ${{matrix.test_file}}*
+      #       ${{env.mutate_report}} 
+      #       Report detail: ${{ steps.jobs.outputs.html_url }}
+      #       Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
 
       # - name: Send Slack Notification
       #   if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
