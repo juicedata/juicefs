@@ -175,6 +175,7 @@ jobs:
             job_total=1
           else
             job_total=${{ needs.build-matrix.outputs.job_total }}
+          fi
           echo "test file is :$test_file, job_index is $job_index, job_total is $job_total"
           if [ -z "$test_file" ]; then 
             echo "test file is empty, will not run mutate test"
@@ -235,11 +236,11 @@ jobs:
       #     channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
       #     slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
-      # - name: Setup upterm session
-      #   if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true'}}
-      #   # if: failure()
-      #   timeout-minutes: 60
-      #   uses: lhotari/action-upterm@v1
+      - name: Setup upterm session
+        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true'}}
+        if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
 
   success-all-test:
     runs-on: ubuntu-latest
