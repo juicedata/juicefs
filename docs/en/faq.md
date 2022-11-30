@@ -50,7 +50,7 @@ JuiceFS already supported many object storage, please check [the list](guide/how
 
 ### Why can't I see the original files that have been stored in JuiceFS in object storage?
 
-Refer to ["How JuiceFS Store Files"](introduction/architecture.md#how-juicefs-stores-files).
+Refer to ["How JuiceFS Store Files"](./introduction/architecture.md#how-juicefs-store-files).
 
 ### Why do I delete files at the mount point, but there is no change or very little change in object storage footprint?
 

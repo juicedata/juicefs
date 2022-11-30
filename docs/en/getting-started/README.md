@@ -107,7 +107,7 @@ In order to keep the file system mounted in the background, you can specify the 
 juicefs mount sqlite3://myjfs.db ~/jfs -d
 ```
 
-Next, any files stored in the mount point `~/jfs` will be split into specific blocks according to [How JuiceFS Stores Files](../introduction/architecture.md#how-juicefs-stores-files), and stored in `$HOME/.juicefs/local/myjfs` directory; the corresponding metadata will be stored in the `myjfs.db` database.
+Next, any files stored in the mount point `~/jfs` will be split into specific blocks according to [How JuiceFS Stores Files](../introduction/architecture.md#how-juicefs-store-files), and stored in `$HOME/.juicefs/local/myjfs` directory; the corresponding metadata will be stored in the `myjfs.db` database.
 
 In the end, the mount point `~/jfs` can be unmounted by executing the following command.
 
