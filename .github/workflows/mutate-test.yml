@@ -208,12 +208,12 @@ jobs:
             Report detail: ${{ steps.jobs.outputs.html_url }}
             Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
 
-      - name: Send Slack Notification
-        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
-        uses: juicedata/slack-notify-action@main
-        with:
-          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+      # - name: Send Slack Notification
+      #   if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+      #   uses: juicedata/slack-notify-action@main
+      #   with:
+      #     channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+      #     slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Setup upterm session
         if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
