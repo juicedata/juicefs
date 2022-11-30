@@ -14,7 +14,7 @@ With trash enabled, if application frequently delete or overwrite files, expect 
 1. Files deleted by user, they can be directly viewed and manipulated in the `.trash` directory
 2. Data blocks created during file overwrites (see [FAQ](../faq.md#what-is-the-implementation-principle-of-juicefs-supporting-random-write)) are kept in trash as well, but users won't be able to see these files, thus cannot be force deleted by default, see [Recovery/Purge](#recover-purge)
 
-## Configure
+## Configure {#configure}
 
 When using `juicefs format` command to initialize JuiceFS volume, users are allowed to specify `--trash-days <val>` to set the number of days which files are kept in the `.trash` directory. Within this period, user-removed files are not actually purged, so the file system usage shown in the output of `df` command will not decrease, and the blocks in the object storage will still exist.
 
@@ -45,14 +45,18 @@ juicefs status META-URL
 
 The `.trash` directory resides under the root of the JuiceFS mount point, use it like this for example:
 
-```
+```shell
 cd /jfs
-# purge files from trash directory
+
+# Purge files from trash directory
 find .trash -name '*.tmp' | xargs rm -f
-# recover files from trash directory
-# original directory structure is lost, however inode info will be prefixed in the file name, continue reading for more
+
+# Recover files from trash directory
+# Note: original directory structure is lost, however inode info will be prefixed in the file name, continue reading for more
 mv .trash/[parent inode]-[file inode]-[file name] .
 ```
+
+When mounting a subdirectory, you will not be able to enter the trash directory.
 
 ### Tree Structure
 
@@ -74,4 +78,4 @@ Recover/Purge files in trash are only available for root users, simply use `mv` 
 
 JuiceFS Client is in charge of periodically checking trash and expire old entries (run every hour by default), so you need at least one active client mounted (without [`--no-bgjob`](../reference/command_reference.md#mount)). If you wish to quickly free up object storage, you can manually delete files in the `.trash` directory using the `rm` command.
 
-Furthermore, garbage blocks created by file overwrites are not visible to users, if you must force delete them, you'll have to temporarily disable trash (setting  [`--trash-days 0`](../reference/command_reference.md#format)), and then manually run garbage collection using [`juicefs gc`](../reference/command_reference.md#gc). Remember to re-enable trash after done.
+Furthermore, garbage blocks created by file overwrites are not visible to users, if you must force delete them, you'll have to temporarily disable trash (setting [`--trash-days 0`](#configure)), and then manually run garbage collection using [`juicefs gc`](../reference/command_reference.md#gc). Remember to re-enable trash after done.

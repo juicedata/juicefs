@@ -1,6 +1,6 @@
 ---
 sidebar_label: Deploy JuiceFS S3 Gateway
-sidebar_position: 5
+sidebar_position: 6
 slug: /s3_gateway
 ---
 

@@ -8,7 +8,7 @@ slug: /fuse_mount_options
 本指南列出了重要的 FUSE 挂载选项。当执行 [`juicefs mount`](../reference/command_reference.md#mount) 命令时，这些安装选项由 `-o` 选项指定，多个选项使用半角逗号分隔。例如：
 
 ```bash
-juicefs mount -d -o allow_other,writeback_cache localhost ~/jfs
+juicefs mount -d -o allow_other,writeback_cache sqlite3://myjfs.db ~/jfs
 ```
 
 ## debug

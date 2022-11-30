@@ -8,7 +8,7 @@ slug: /fuse_mount_options
 This guide lists important FUSE mount options. These mount options are specified by the option `-o`  when execute the command [`juicefs mount`](../reference/command_reference.md#mount) (use comma to separate multiple options). For example:
 
 ```bash
-juicefs mount -d -o allow_other,writeback_cache localhost ~/jfs
+juicefs mount -d -o allow_other,writeback_cache sqlite3://myjfs.db ~/jfs
 ```
 
 ## debug

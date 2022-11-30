@@ -21,7 +21,7 @@ curl -sSL https://d.juicefs.com/install | sh -
 
 不论你使用什么操作系统，当在终端输入并执行 `juicefs` 并返回了程序的帮助信息，就说明你成功安装了 JuiceFS 客户端。
 
-## 创建文件系统
+## 创建文件系统 {#juicefs-format}
 
 ### 基本概念
 
