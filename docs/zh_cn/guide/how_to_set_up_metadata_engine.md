@@ -525,7 +525,7 @@ fdb://[cluster file path]?prefix=<prefix>
 其中`cluster file path`为fdb的配置文件，由配置文件来进行对fdb server的连接。示例如下：
 
 ```bash
-juicefs format 
+juicefs format
  fdb:///etc/foundationdb/fdb.cluster?prefix=jfs
  pics
 ```
@@ -574,7 +574,7 @@ logdir = /var/log/foundationdb
 # maxlogssize = 100MiB
 # machine-id =
 # datacenter-id =
-# class = 
+# class =
 # memory = 8GiB
 # storage-memory = 1GiB
 # cache-memory = 2GiB
@@ -623,6 +623,6 @@ export FDB_TLS_VERIFY_PEERS=Check.Valid=0
 ### 挂载文件系统
 
 ```shell
-juicefs mount -d 
+juicefs mount -d
 "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" /mnt/jfs
 ```
