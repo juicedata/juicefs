@@ -217,8 +217,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 
-	setRateLimitPriority(c)
-	NewReloadRateLimit(format, metaCli, store)
+	NewReloadRateLimit(format, metaCli, store, chunkConf)
 
 	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store)
 	if err != nil {

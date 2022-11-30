@@ -42,8 +42,6 @@ const SlowRequest = time.Second * time.Duration(10)
 
 var (
 	logger = utils.GetLogger("juicefs")
-	UseMountUploadLimitConf = false
-	UseMountDownloadLimitConf = false
 )
 
 type pendingItem struct {
@@ -552,6 +550,18 @@ type Config struct {
 	BufferSize        int
 	Readahead         int
 	Prefetch          int
+
+	UseMountUploadLimitConf   bool
+	UseMountDownloadLimitConf bool
+}
+
+func (c *Config) SetRateLimitPriority() {
+	if c.UploadLimit > 0 {
+		c.UseMountUploadLimitConf = true
+	}
+	if c.DownloadLimit > 0 {
+		c.UseMountDownloadLimitConf = true
+	}
 }
 
 func (c *Config) SelfCheck(uuid string) {
@@ -789,7 +799,7 @@ func (store *cachedStore) UpdateCachedStoreRateLimit(limit int64, lastLimit int6
 			store.upLimit = rate.NewLimiter(rate.Limit(float64(limit)*0.85), int(limit))
 		} else if store.upLimit != nil && limit != lastLimit {
 			if lastLimit > 0 && limit > 0 {
-				store.upLimit.SetLimit(rate.Limit(float64(limit)*0.85))
+				store.upLimit.SetLimit(rate.Limit(float64(limit) * 0.85))
 				store.upLimit.SetBurst(int(limit))
 			} else if lastLimit > 0 && limit == 0 {
 				store.upLimit = nil
@@ -800,7 +810,7 @@ func (store *cachedStore) UpdateCachedStoreRateLimit(limit int64, lastLimit int6
 			store.downLimit = rate.NewLimiter(rate.Limit(float64(limit)*0.85), int(limit))
 		} else if store.downLimit != nil && limit != lastLimit {
 			if lastLimit > 0 && limit > 0 {
-				store.downLimit.SetLimit(rate.Limit(float64(limit)*0.85))
+				store.downLimit.SetLimit(rate.Limit(float64(limit) * 0.85))
 				store.downLimit.SetBurst(int(limit))
 			} else if lastLimit > 0 && limit == 0 {
 				store.downLimit = nil
