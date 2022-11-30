@@ -26,7 +26,7 @@ JuiceFS provides a "close-to-open" consistency guarantee, which means that when 
 
 As for object storage, JuiceFS divides files into data blocks (default 4MiB), assigns unique IDs and saves them on object storage. Any modification operation of the file will generate a new data block, and the original block remains unchanged, including the cached data on the local disk. So don't worry about the consistency of the data cache, because once the file is modified, JuiceFS will read the new data block from the object storage, and will not read the data block (which will be deleted later) corresponding to the overwritten part of the file.
 
-## Metadata cache
+## Metadata cache {#metadata-cache}
 
 JuiceFS supports caching metadata both in kernel and in client memory (i.e. JuiceFS processes) to improve metadata access performance.
 

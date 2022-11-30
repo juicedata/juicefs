@@ -74,6 +74,6 @@ mv .trash/[parent inode]-[file inode]-[file name] .
 
 只有 root 用户具有回收站目录的写权限，在 root 用户下，可以用 `mv` 的命令将文件移出回收站来恢复删掉的文件，或者用 `rm` 将文件从回收站彻底删除。普通用户则没有回收站的写权限，无法方便地使用 `mv`, `rm` 等命令，如果要从回收站恢复文件，只能读取（有访问权限的）文件，再写入到新文件。
 
-回收站的清理由 JuiceFS 客户端定期运行后台任务执行（默认每小时清理一次），因此需要至少有 1 个在线的挂载点（不能开启 [`--no-bgjob`](../reference/command_reference.md#mount）。如果你希望尽快释放对象存储空间，也可以手动强制清理，以 root 身份在 `.trash` 目录执行 `rm` 命令即可。
+回收站的清理由 JuiceFS 客户端定期运行后台任务执行（默认每小时清理一次），因此需要至少有 1 个在线的挂载点（不能开启 [`--no-bgjob`](../reference/command_reference.md#mount)。如果你希望尽快释放对象存储空间，也可以手动强制清理，以 root 身份在 `.trash` 目录执行 `rm` 命令即可。
 
 值得一提，覆写产生的文件碎片由于对用户不可见，所以无法轻易强制删除。如果你确实想要主动清理它们，可以临时禁用回收站（设置 [`--trash-days 0`](../reference/command_reference.md#format)），再通过 [`juicefs gc`](../reference/command_reference.md#gc) 命令将这些数据块标为泄漏并删除。操作完成以后，记得重新开启回收站。
