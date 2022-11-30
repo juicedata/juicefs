@@ -4,6 +4,8 @@ import glob
 import os
 
 def do_mutate_test(mutation_dir, index, total):
+    print(f'mutation dir is {mutation_dir}, inde is {index}, total is {total}')
+    os.system(f'ls -l mutation_dir')
     list_of_files = filter( os.path.isfile, glob.glob(mutation_dir + '/*') )
     list_of_files = sorted( list_of_files, key = os.path.getmtime)
     stats = {'passed':0, 'failed':0, 'compile_error':0, 'out_of_coverage':0, 'skip_by_comment':0}
