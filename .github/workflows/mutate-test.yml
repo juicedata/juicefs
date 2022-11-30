@@ -28,6 +28,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: install go-mutesting
+        run: |
+          go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+
+
+
       - id: set-matrix
         run: |
           sudo apt-get install jq
@@ -38,10 +44,15 @@ jobs:
             declare -a Jobs=();
             for file_name in "${changed_file_array[@]}"
             do
-              for i in {1..4}
+              total_count=$(go-mutesting $file_name --debug --no-exec | grep "Save mutation into" | wc -l)
+              if [ $total_count -gt 200 ]; then
+                for i in {1..4} 
                 do
                   Jobs=("${Jobs[@]}" "$file_name-$i")
                 done
+              else
+                Jobs=("${Jobs[@]}" "$file_name")
+              fi
             done
             value=`printf '%s\n' "${Jobs[@]}" | jq -R . | jq -cs .`
             echo "value: $value"
