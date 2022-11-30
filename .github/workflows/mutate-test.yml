@@ -51,7 +51,7 @@ jobs:
               source_file_name=${test_file_name%"_test.go"}.go
               echo "source_file_name is :" $source_file_name
               total_count=$(go-mutesting $source_file_name --debug --no-exec | grep "Save mutation into" | wc -l)
-              echo $total_count
+              echo "total_count is $total_count"
               if [ $total_count -gt 200 ]; then
                 for i in {1..4} 
                 do
@@ -64,7 +64,6 @@ jobs:
             value=`printf '%s\n' "${Jobs[@]}" | jq -R . | jq -cs .`
             echo "value: $value"
             echo "matrix=$value" >> $GITHUB_OUTPUT
-            exit 1
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo "to be impl"
             exit 1
@@ -88,11 +87,6 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v3
-
-      - name: print matrix
-        run: |
-          echo ${{matrix.test_file}}
-          exit 1
 
       - name: Get Current Job Log URL
         uses: Tiryoh/gha-jobid-action@v0
@@ -170,8 +164,9 @@ jobs:
         # timeout-minutes: 120
         run: |
           sudo chmod 777 /var/jfsCache
-          test_file=${{matrix.test_file}}
-          echo "test file is :" $test_file
+          test_file=$(echo ${{matrix.test_file}} | awk -F'-' '{print $1}')
+          index=$(echo ${{matrix.test_file}} | awk -F'-' '{print $2}')
+          echo "test file is :$test_file, index is $index"
           if [ -z "$test_file" ]; then 
             echo "test file is empty, will not run mutate test"
             exit 0
@@ -201,11 +196,16 @@ jobs:
           TEST_FILE_NAME="$test_file" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/parse_black_list.py 
           echo "black list checksum: "
           cat $black_list_file
-          log_file=$(basename ${{matrix.test_file}}).log
-          COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a $log_file
-          mutate_report=`LOG_FILE=$log_file python3 .github/scripts/parse_mutate_log.py`
-          echo "mutate_report is $mutate_report"
-          echo "mutate_report=$mutate_report" >> $GITHUB_ENV
+
+          go-mutesting $source_file --debug --no-exec --do-not-remove-tmp-folder  --blacklist $black_list_file | tee -a mutate.log
+          cat mutate.log
+
+
+          # log_file=$(basename ${{matrix.test_file}}).log
+          # COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a $log_file
+          # mutate_report=`LOG_FILE=$log_file python3 .github/scripts/parse_mutate_log.py`
+          # echo "mutate_report is $mutate_report"
+          # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
 
       - uses: mshick/add-pr-comment@v2
         with:
