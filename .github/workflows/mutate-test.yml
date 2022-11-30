@@ -205,7 +205,7 @@ jobs:
           cat $black_list_file
 
           go-mutesting $source_file --debug --no-exec --do-not-remove-tmp-folder  --blacklist $black_list_file | tee -a mutate.log
-          mutation_dir==$(echo mutate.log | grep "Save mutations into" | awk -F' ' '{print $4}' | sed -e 's:"::g')
+          mutation_dir==$(cat mutate.log | grep "Save mutations into" | awk -F' ' '{print $4}' | sed -e 's:"::g')
           echo "mutation dir is $mutation_dir"
           JOB_INDEX=$job_index JOB_TOTAL=$job_total MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutesting.py
 
