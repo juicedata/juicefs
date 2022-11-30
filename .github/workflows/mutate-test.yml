@@ -68,9 +68,7 @@ jobs:
             echo "to be impl"
             exit 1
           fi
-      - name: Setup upterm session
-        timeout-minutes: 60
-        uses: lhotari/action-upterm@v1
+
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
 
