@@ -58,7 +58,7 @@ jobs:
               echo "total_count is $total_count"
               if [ $total_count -gt 200 ]; then
                 job_total=4
-                for i in {1..$job_total} 
+                for i in `seq 1 $job_total` 
                 do
                   Jobs=("${Jobs[@]}" "$test_file_name-$i")
                 done
