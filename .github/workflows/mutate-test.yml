@@ -235,8 +235,21 @@ jobs:
       #     channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
       #     slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
-      - name: Setup upterm session
-        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
-        if: failure()
-        timeout-minutes: 60
-        uses: lhotari/action-upterm@v1
+      # - name: Setup upterm session
+      #   if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true'}}
+      #   # if: failure()
+      #   timeout-minutes: 60
+      #   uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [mutate-test]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v2
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+      - name: Success
+        if: ${{ success() }}
+        run: echo "All Done"
