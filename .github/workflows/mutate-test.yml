@@ -70,8 +70,9 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: print matrix
-        echo ${{matrix.test_file}}
-        exit 1
+        run: |
+          echo ${{matrix.test_file}}
+          exit 1
 
       - name: Get Current Job Log URL
         uses: Tiryoh/gha-jobid-action@v0
