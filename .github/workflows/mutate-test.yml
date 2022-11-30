@@ -234,9 +234,14 @@ jobs:
       - uses: technote-space/workflow-conclusion-action@v2
       - name: print
         run: |
-          echo ${{ fromJson(needs.build-matrix.outputs.matrix) }}
-          echo report for fs_test.go: ${{env.mutate_report_pkg_fs_fs_test_go_3}}
-          echo report for utils_test.go: ${{env.mutate_report_pkg_utils_utils_test_go}}
+          files=${{ fromJson(needs.build-matrix.outputs.matrix) }}
+          echo ${files[@]}
+          for file in ${files[@]}; 
+          do
+            report_id=$(echo mutate_report_$file | sed -e 's:/:_:g' | sed -e 's:.:_:g' | sed -e 's:-:_:g' )
+            echo "report_id is $report_id"
+            echo "report for $file is: ${{env.report_id}}"
+          done
 
       - name: Check Failure
         if: env.WORKFLOW_CONCLUSION == 'failure'
