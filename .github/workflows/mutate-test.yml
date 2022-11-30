@@ -56,7 +56,7 @@ jobs:
               cat $black_list_file
               total_count=$(go-mutesting $source_file_name --debug --no-exec --blacklist $black_list_file| grep "Save mutation into" | wc -l)
               echo "total_count is $total_count"
-              if [ $total_count -gt 200 ]; then
+              if [ $total_count -gt 10 ]; then
                 job_total=4
                 echo "job_total=$job_total" >> $GITHUB_OUTPUT
                 for i in `seq 1 $job_total` 
@@ -209,7 +209,11 @@ jobs:
           go-mutesting $source_file --debug --no-exec --do-not-remove-tmp-folder  --blacklist $black_list_file | tee -a mutate.log
           mutation_dir=$(cat mutate.log | grep "Save mutations into" | awk -F' ' '{print $4}' | sed -e 's:"::g')
           echo "mutation dir is $mutation_dir"
-          JOB_INDEX=$job_index JOB_TOTAL=$job_total MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutesting.py
+          mutate_report=$(JOB_INDEX=$job_index JOB_TOTAL=$job_total MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutesting.py)
+          echo "mutate_report: $mutate_report"
+          report_id=$(echo mutate_report_$test_file | sed -e 's:/:_:g' | sed -e 's:.:_:g' | sed -e 's:-:_:g' )
+          echo "report_id is $report_id"
+          echo "$report_id=$mutate_report" >> $GITHUB_ENV
 
           # log_file=$(basename ${{matrix.test_file}}).log
           # COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a $log_file
@@ -218,9 +222,8 @@ jobs:
           # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
 
       - name: Setup upterm session
-        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true'}}
         if: failure()
-        timeout-minutes: 60
+        timeout-minutes: 1
         uses: lhotari/action-upterm@v1
 
   success-all-test:
@@ -232,6 +235,8 @@ jobs:
       - name: print
         run: |
           echo ${{ fromJson(needs.build-matrix.outputs.matrix) }}
+          echo report for fs_test.go: ${{env.mutate_report_pkg_fs_fs_test_go_3}}
+          echo report for utils_test.go: ${{env.mutate_report_pkg_utils_utils_test_go}}
 
       - name: Check Failure
         if: env.WORKFLOW_CONCLUSION == 'failure'
@@ -241,9 +246,9 @@ jobs:
         with:
           allow-repeats: true
           message: |
-            *Mutate Test Report For ${{matrix.test_file}}*
+            *Mutate Test Report For ${{ fromJson(needs.build-matrix.outputs.matrix) }}
             ${{env.mutate_report}} 
-            Report detail: ${{ steps.jobs.outputs.html_url }}
+            Report detail: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
             Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
 
       - name: Send Slack Notification
