@@ -45,18 +45,20 @@ jobs:
             echo "added or changed test files: $changed_file_str"
             changed_file_array=($changed_file_str)
             declare -a Jobs=();
-            for file_name in "${changed_file_array[@]}"
+            for test_file_name in "${changed_file_array[@]}"
             do
-              echo "file_name is $file_name"
-              total_count=$(go-mutesting $file_name --debug --no-exec | grep "Save mutation into" | wc -l)
+              echo "test_file_name is $test_file_name"
+              source_file_name=${test_file_name%"_test.go"}.go
+              echo "source_file_name is :" $source_file_name
+              total_count=$(go-mutesting $source_file_name --debug --no-exec | grep "Save mutation into" | wc -l)
               echo $total_count
               if [ $total_count -gt 200 ]; then
                 for i in {1..4} 
                 do
-                  Jobs=("${Jobs[@]}" "$file_name-$i")
+                  Jobs=("${Jobs[@]}" "$test_file_name-$i")
                 done
               else
-                Jobs=("${Jobs[@]}" "$file_name")
+                Jobs=("${Jobs[@]}" "$test_file_name")
               fi
             done
             value=`printf '%s\n' "${Jobs[@]}" | jq -R . | jq -cs .`
