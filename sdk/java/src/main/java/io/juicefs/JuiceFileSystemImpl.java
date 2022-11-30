@@ -1009,7 +1009,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   static class BufferedFSOutputStream extends BufferedOutputStream implements Syncable {
     private String hflushMethod;
-    private volatile boolean closed;
+    private boolean closed;
 
     public BufferedFSOutputStream(OutputStream out) {
       super(out);
@@ -1042,7 +1042,18 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
 
     @Override
-    public void hflush() throws IOException {
+    public synchronized void flush() throws IOException {
+      if (closed) {
+        throw new IOException("stream was closed");
+      }
+      super.flush();
+    }
+
+    @Override
+    public synchronized void hflush() throws IOException {
+      if (closed) {
+        throw new IOException("stream was closed");
+      }
       flush();
       if (hflushMethod.equals("writeback")) {
         ((FSOutputStream) out).hflush();
@@ -1054,13 +1065,16 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
 
     @Override
-    public void hsync() throws IOException {
+    public synchronized void hsync() throws IOException {
+      if (closed) {
+        throw new IOException("stream was closed");
+      }
       flush();
       ((FSOutputStream) out).fsync();
     }
 
     @Override
-    public void close() throws IOException {
+    public synchronized void close() throws IOException {
       super.close();
       closed = true;
     }
