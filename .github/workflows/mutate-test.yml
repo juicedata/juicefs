@@ -30,34 +30,31 @@ jobs:
 
       - id: set-matrix
         run: |
+          sudo apt-get install jq
           if [ "${{github.event_name}}" == "pull_request"  ]; then
             changed_file_str=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep _test.go$ | xargs)
             echo "added or changed test files: $changed_file_str"
             changed_file_array=($changed_file_str)
-            test_files=""
+            declare -a Jobs=();
             for file_name in "${changed_file_array[@]}"
             do
-              if [[ "$file_name" == *_test.go ]]; then
-                test_files="\"$file_name\",$test_files"
-              fi
+              for i in {1..4}
+                do
+                  Jobs=("${Jobs[@]}" "$file_name-$i")
+                done
             done
-            echo "test_files: $test_files"
-            if [ -n "$test_files" ]; then 
-              echo "test_files is not empty"
-              # echo '::set-output name=test_file_matrix::["cmd/meta/xattr_test.go", "cmd/meta/utils_test.go"]'
-              echo "::set-output name=test_file_matrix::[$test_files]"
-            else
-              echo "test_files is empty"
-              exit 1
-            fi
+            value=`printf '%s\n' "${Jobs[@]}" | jq -R . | jq -cs .`
+            echo "value: $value"
+            echo "matrix=$value" >> $GITHUB_OUTPUT
+            
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
-            test_file="\"${{github.event.inputs.test_file}}\""
-            echo "test file is $test_file"
-            echo "::set-output name=test_file_matrix::[$test_file]"
+            echo "to be impl"
+            exit 1
           fi
 
     outputs:
-      test_file: ${{ steps.set-matrix.outputs.test_file_matrix }}
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
 
   mutate-test:
     name: ${{matrix.test_file}}
@@ -65,12 +62,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_file: ${{ fromJson(needs.build-matrix.outputs.test_file) }}
+        test_file: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
     steps:
       - uses: actions/checkout@v3
+
+      - name: print matrix
+        echo ${{matrix.test_file}}
+        exit 1
 
       - name: Get Current Job Log URL
         uses: Tiryoh/gha-jobid-action@v0
