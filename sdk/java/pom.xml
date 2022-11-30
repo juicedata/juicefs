@@ -197,6 +197,12 @@
 						<param>io.juicefs.JuiceFileSystemTest</param>
 					</targetTests>
 					<timeoutConstant>1000</timeoutConstant>
+					<avoidCallsTo>
+						<avoidCallsTo>org.apache.log4j</avoidCallsTo>
+						<avoidCallsTo>org.slf4j</avoidCallsTo>
+						<avoidCallsTo>org.apache.commons.logging</avoidCallsTo>
+						<avoidCallsTo></avoidCallsTo>
+					</avoidCallsTo>
 				</configuration>
 			</plugin>
 		</plugins>
