@@ -14,7 +14,7 @@ JuiceFS 文件系统由三个部分组成：
 - 通过 **Hadoop Java SDK**，JuiceFS 文件系统能够直接替代 HDFS，为 Hadoop 提供低成本的海量存储。
 - 通过 **Kubernetes CSI 驱动**，JuiceFS 文件系统能够直接为 Kubernetes 提供海量存储。
 - 通过 **S3 网关**，使用 S3 作为存储层的应用可直接接入，同时可使用 AWS CLI、s3cmd、MinIO client 等工具访问 JuiceFS 文件系统。
-- 通过 **WebDAV 服务**，以 HTTP 协议，通过 RESTful API 接入 JuiceFS 并直接操作其中的文件。
+- 通过 **WebDAV 服务**，以 HTTP 协议，以类似 RESTful API 的方式接入 JuiceFS 并直接操作其中的文件。
 
 **数据存储（Data Storage）**：文件将会切分上传保存在对象存储服务，既可以使用公有云的对象存储，也可以接入私有部署的自建对象存储。JuiceFS 支持几乎所有的公有云对象存储，同时也支持 OpenStack Swift、Ceph、MinIO 等私有化的对象存储。
 

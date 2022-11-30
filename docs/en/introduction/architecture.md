@@ -25,7 +25,7 @@ The JuiceFS file system consists of three parts:
 
 JuiceFS supports a variety of common databases as metadata engine, like Redis, TiKV, MySQL/MariaDB, PostgreSQL, SQLite...and the list is still expanding. [Submit an issue](https://github.com/juicedata/juicefs/issues) if your favorite database isn't supported.
 
-## How JuiceFS Stores Files {#how-juicefs-stores-files}
+## How JuiceFS Stores Files {#how-juicefs-store-files}
 
 The strong consistency and high performance of JuiceFS is ascribed to its special file management model. Traditional file systems use local disks to store both file data and metadata, while JuiceFS formats data first and then stores them in object storage, with the corresponding metadata being stored in the metadata engine such as Redis.
 

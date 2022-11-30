@@ -29,13 +29,13 @@ The following table shows the differences of main features between Alluxio and J
 
 ### Storage format
 
-A single file is [stored](../architecture.md#how-juicefs-stores-files) in JuiceFS in three levels: chunk, slice and block. A file will be split into multiple blocks, and be compressed and encrypted (optional) before it is stored into object storage.
+A single file is [stored](../architecture.md#how-juicefs-store-files) in JuiceFS in three levels: chunk, slice and block. A file will be split into multiple blocks, and be compressed and encrypted (optional) before it is stored into object storage.
 
 Alluxio stores files as _objects_ into UFS. It doesn't split files info blocks like what JuiceFS does.
 
 ### Cache granularity
 
-The [default block size](../architecture.md#how-juicefs-stores-files) of JuiceFS is 4MiB, and thus its granularity is smaller compared to 64MiB of Alluxio. Smaller block size is better for random read (e.g. Parquet and ORC) workload, i.e. cache management will be more efficiency.
+The [default block size](../architecture.md#how-juicefs-store-files) of JuiceFS is 4MiB, and thus its granularity is smaller compared to 64MiB of Alluxio. Smaller block size is better for random read (e.g. Parquet and ORC) workload, i.e. cache management will be more efficiency.
 
 ### Hadoop-compatible
 
