@@ -9,7 +9,7 @@ def is_mutation_in_coverage(original_file, changed_file, coverage_file):
 	changed = open(changed_file, 'r').readlines()
 	for i in range( min(len(original), len(changed)) ):
 		if original[i] != changed[i]:
-			print(f'line {i+1} is different')
+			# print(f'line {i+1} is different')
 			if (i+1) not in coverage:
 				# print(f'line {i+1} is not in coverage')
 				return False
@@ -39,7 +39,7 @@ if __name__ == '__main__':
 	original_file = os.environ['MUTATE_ORIGINAL']
 	changed_file = os.environ['MUTATE_CHANGED']
 	coverage_file = os.environ['COVERAGE_FILE']
-	print(f'MUTATE_ORIGINAL={original_file} MUTATE_CHANGED={changed_file} COVERAGE_FILE={coverage_file} python3 ../../scripts/check_coverage.py')
+	# print(f'MUTATE_ORIGINAL={original_file} MUTATE_CHANGED={changed_file} COVERAGE_FILE={coverage_file} python3 ../../scripts/check_coverage.py')
 	r = is_mutation_in_coverage(original_file, changed_file, coverage_file)
 	if r:
 		exit(0)

@@ -57,13 +57,16 @@ jobs:
               total_count=$(go-mutesting $source_file_name --debug --no-exec --blacklist $black_list_file| grep "Save mutation into" | wc -l)
               echo "total_count is $total_count"
               if [ $total_count -gt 200 ]; then
-                for i in {1..4} 
+                job_total=4
+                for i in {1..$job_total} 
                 do
                   Jobs=("${Jobs[@]}" "$test_file_name-$i")
                 done
               else
+                job_total=1
                 Jobs=("${Jobs[@]}" "$test_file_name")
               fi
+              echo "job_total=$job_total" >> $GITHUB_OUTPUT
             done
             value=`printf '%s\n' "${Jobs[@]}" | jq -R . | jq -cs .`
             echo "value: $value"
@@ -75,6 +78,7 @@ jobs:
 
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      job_total: ${{ steps.set-matrix.outputs.job_total }}
 
 
   mutate-test:
@@ -167,8 +171,9 @@ jobs:
         run: |
           sudo chmod 777 /var/jfsCache
           test_file=$(echo ${{matrix.test_file}} | awk -F'-' '{print $1}')
-          index=$(echo ${{matrix.test_file}} | awk -F'-' '{print $2}')
-          echo "test file is :$test_file, index is $index"
+          job_index=$(echo ${{matrix.test_file}} | awk -F'-' '{print $2}')
+          job_total=${{ needs.build-matrix.outputs.job_total }}
+          echo "test file is :$test_file, job_index is $job_index, job_total is $job_total"
           if [ -z "$test_file" ]; then 
             echo "test file is empty, will not run mutate test"
             exit 0
@@ -199,9 +204,10 @@ jobs:
           echo "black list checksum: "
           cat $black_list_file
 
-          mutation_dir=$(go-mutesting $source_file --debug --no-exec --do-not-remove-tmp-folder  --blacklist $black_list_file | grep "Save mutations into" | awk -F' ' '{print $4}' | sed -e 's:"::g')
+          go-mutesting $source_file --debug --no-exec --do-not-remove-tmp-folder  --blacklist $black_list_file | tee -a mutate.log
+          mutation_dir==$(echo mutate.log | grep "Save mutations into" | awk -F' ' '{print $4}' | sed -e 's:"::g')
           echo "mutation dir is $mutation_dir"
-          MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutesting.py
+          JOB_INDEX=$job_index JOB_TOTAL=$job_total MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutesting.py
 
           # log_file=$(basename ${{matrix.test_file}}).log
           # COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a $log_file
