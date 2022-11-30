@@ -47,6 +47,7 @@ jobs:
             declare -a Jobs=();
             for file_name in "${changed_file_array[@]}"
             do
+              echo "file_name is $file_name"
               total_count=$(go-mutesting $file_name --debug --no-exec | grep "Save mutation into" | wc -l)
               echo $total_count
               if [ $total_count -gt 200 ]; then
@@ -61,12 +62,14 @@ jobs:
             value=`printf '%s\n' "${Jobs[@]}" | jq -R . | jq -cs .`
             echo "value: $value"
             echo "matrix=$value" >> $GITHUB_OUTPUT
-            
+            exit 1
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
             echo "to be impl"
             exit 1
           fi
-
+      - name: Setup upterm session
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
 
