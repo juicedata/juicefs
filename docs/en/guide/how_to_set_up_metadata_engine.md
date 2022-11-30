@@ -13,7 +13,7 @@ import TabItem from '@theme/TabItem';
 The environment variable `META_PASSWORD` used in this document is a new feature in JuiceFS v1.0, and not applied to old clients. Please [upgrade the clients](../administration/upgrade.md) before using it if you are using the old ones.
 :::
 
-As mentioned in [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md), JuiceFS is designed to store data and metadata seperately. Generally, data is stored in the cloud storage based on object storage, and metadata corresponding to the data is stored in an independent database. The database that supports storing metadata is referred to "Metadata Storage Engine".
+As mentioned in [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../introduction/architecture.md#how-juicefs-stores-files), JuiceFS is designed to store data and metadata separately. Generally, data is stored in the cloud storage based on object storage, and metadata corresponding to the data is stored in an independent database. The database that supports storing metadata is referred to "Metadata Storage Engine".
 
 ## Metadata Storage Engine
 
@@ -178,7 +178,7 @@ juicefs format \
     pics
 ```
 
-:::note 
+:::note
 1. juicefs uses public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) by default, if you want to use a `non-public schema`,  you need to specify `search_path` in the connection string parameter. e.g `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
 2. If the `public schema` is not the first hit in the `search_path` configured on the PostgreSQL server, the `search_path` parameter must be explicitly set in the connection string.
 3. The `search_path` connection parameter can be set to multiple schemas natively, but currently juicefs only supports setting one. `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` will be considered illegal.
@@ -533,7 +533,7 @@ fdb://[config file address]?prefix=<prefix>
 The 'config file address' is The FDB cluster configuration file, which is used to connect to The FDB server. An sample is as follows :
 
 ```bash
-juicefs format 
+juicefs format
  fdb:///etc/foundationdb/fdb.cluster?prefix=jfs
  pics
 ```
@@ -551,8 +551,8 @@ user@host:> cat cert.crt private.key > fdb.pem
 |Command-line Option|Client Option|Environment Variable|	Purpose|
 |---------|-------|-------|------|
 |tls_certificate_file|TLS_cert_path| FDB_TLS_CERTIFICATE_FILE | Path to the file from which the local certificates can be loaded|
-| tls_key_file | TLS_key_path | FDB_TLS_KEY_FILE | Path to the file from which to load the private key | 
-| tls_verify_peers | tls_verify_peers | FDB_TLS_VERIFY_PEERS | The byte-string for the verification of peer certificates and sessions| 
+| tls_key_file | TLS_key_path | FDB_TLS_KEY_FILE | Path to the file from which to load the private key |
+| tls_verify_peers | tls_verify_peers | FDB_TLS_VERIFY_PEERS | The byte-string for the verification of peer certificates and sessions|
 | tls_password | tls_password | FDB_TLS_PASSWORD | The byte-string representing the passcode for unencrypting the private key |
 | tls_ca_file | TLS_ca_path | FDB_TLS_CA_FILE | Path to the file containing the CA certificates to trust |
 
@@ -638,6 +638,6 @@ export FDB_TLS_VERIFY_PEERS=Check.Valid=0
 ### Mount a file system
 
 ```shell
-juicefs mount -d 
+juicefs mount -d
 "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" /mnt/jfs
 ```

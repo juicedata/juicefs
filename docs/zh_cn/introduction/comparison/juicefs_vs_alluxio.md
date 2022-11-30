@@ -29,13 +29,13 @@ slug: /comparison/juicefs_vs_alluxio
 
 ### 存储格式
 
-JuiceFS 中一个文件的[存储格式](../../reference/how_juicefs_store_files.md)包含三个层级：chunk、slice 和 block。一个文件将被分割成多个块，并被压缩和加密（可选）存储到对象存储中。
+JuiceFS 中一个文件的[存储格式](../architecture.md#how-juicefs-stores-files)包含三个层级：chunk、slice 和 block。一个文件将被分割成多个块，并被压缩和加密（可选）存储到对象存储中。
 
 Alluxio 将文件作为「对象」存储到 UFS。文件不会像 JuiceFS 那样被拆分成 block。
 
 ### 缓存粒度
 
-JuiceFS 的[默认块大小](../../reference/how_juicefs_store_files.md)为 4MiB，相比 Alluxio 的 64MiB，粒度更小。较小的块大小更适合随机读取（例如 Parquet 和 ORC）工作负载，即缓存管理将更有效率。
+JuiceFS 的[默认块大小](../architecture.md#how-juicefs-stores-files)为 4MiB，相比 Alluxio 的 64MiB，粒度更小。较小的块大小更适合随机读取（例如 Parquet 和 ORC）工作负载，即缓存管理将更有效率。
 
 ### Hadoop 兼容
 

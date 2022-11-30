@@ -29,7 +29,7 @@ In terms of **File System Interface** implementation:
 - With **WebDAV Server**, files in JuiceFS can be operated directly using HTTP protocol.
 
 
-## How JuiceFS Stores Files
+## How JuiceFS Stores Files {#how-juicefs-stores-files}
 
 The file system acts as a medium for interaction between user and hard drive, which allows files to be stored on the hard drive properly. As you know, the file systems FAT32 and NTFS are commonly used on Windows, while Ext4, XFS and Btrfs are commonly used on Linux. Each file system has its own unique way of organizing and managing files, which determines the file system features such as storage capacity and performance.
 

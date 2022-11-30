@@ -31,7 +31,7 @@ JuiceFS 文件系统由三个部分组成：
 - 通过 **S3 Gateway**，使用 S3 作为存储层的应用可直接接入，同时可使用 AWS CLI、s3cmd、MinIO client 等工具访问 JuiceFS 文件系统。
 - 通过 **WebDAV Server**，使用 HTTP 协议接入 JuiceFS 并直接操作其中的文件。
 
-## 如何存储文件
+## 如何存储文件 {#how-juicefs-stores-files}
 
 文件系统作为用户和硬盘之间交互的媒介，它让文件可以妥善的被存储在硬盘上。如你所知，Windows  常用的文件系统有 FAT32、NTFS，Linux 常用的文件系统有 Ext4、XFS、Btrfs 等，每一种文件系统都有其独特的组织和管理文件的方式，它决定了文件系统的存储能力和性能等特征。
 
