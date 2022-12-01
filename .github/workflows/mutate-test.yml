@@ -145,7 +145,7 @@ jobs:
 
 
       - name: run mutate test
-        timeout-minutes: 120
+        # timeout-minutes: 120
         run: |
           sudo chmod 777 /var/jfsCache
           test_file=${{matrix.test_file}}
@@ -175,18 +175,24 @@ jobs:
             exit 0
           fi
           
+          black_list_file=black.list
+          TEST_FILE_NAME="$test_file" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/parse_black_list.py 
+          echo "black list checksum: "
+          cat $black_list_file
           log_file=$(basename ${{matrix.test_file}}).log
-          COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder | tee -a $log_file
+          COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a $log_file
           mutate_report=`LOG_FILE=$log_file python3 .github/scripts/parse_mutate_log.py`
           echo "mutate_report is $mutate_report"
           echo "mutate_report=$mutate_report" >> $GITHUB_ENV
 
       - uses: mshick/add-pr-comment@v2
         with:
+          allow-repeats: true
           message: |
             *Mutate Test Report For ${{matrix.test_file}}*
             ${{env.mutate_report}} 
-            Report detail: ${{ steps.jobs.outputs.html_url }}  
+            Report detail: ${{ steps.jobs.outputs.html_url }}
+            Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
 
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
