@@ -96,8 +96,8 @@ jobs:
       - name: print
         run: |
           echo '${{ needs.build-matrix.outputs.matrix }}'
-          files=${{ fromJson(needs.build-matrix.outputs.matrix) }}
-          echo ${files[@]}
+          files='${{ fromJson(needs.build-matrix.outputs.matrix) }}'
+          echo '${files[@]}'
           for file in ${files[@]}; 
           do
             echo "file is $file"
