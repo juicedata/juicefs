@@ -105,7 +105,8 @@ jobs:
           job_url_id=$(echo job_url_${{matrix.test_file}} | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
           echo "job_url_id is $job_url_id"
           echo "job url is : ${{ steps.jobs.outputs.html_url }}"
-          echo "$job_url_id=${{ steps.jobs.outputs.html_url }}" >> $GITHUB_ENV
+          echo "$job_url_id=${{ steps.jobs.outputs.html_url }}" >> $GITHUB_OUTPUT
+          echo $GITHUB_OUTPUT
 
       - name: print
         run: |
@@ -250,16 +251,13 @@ jobs:
         run: |
           files=($(echo ${{ needs.build-matrix.outputs.matrix }} | sed -e 's:"::g' | sed -e 's:\[::g' | sed -e 's:\]::g' | sed -e 's:,: :g'))
           echo ${files[@]}
+          echo $GITHUB_OUTPUT
+          echo "job url is ${{needs.mutate-test.outputs.job_url_pkg_meta_config_test_go_1}}"
           for file in ${files[@]}; 
           do
             echo "file is $file"
             job_url_id=$(echo job_url_$file | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
             echo "job_url_id is $job_url_id"
-            echo "job url is: ${!job_url_id}"
-
-            report_id=$(echo mutate_report_$file | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
-            echo "report_id is $report_id"
-            echo "report is: ${!report_id}"
           done
 
       - name: Check Failure
