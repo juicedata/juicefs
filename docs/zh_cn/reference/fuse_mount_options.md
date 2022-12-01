@@ -53,5 +53,5 @@ FUSE 支持[「writeback-cache 模式」](https://www.kernel.org/doc/Documentati
 该选项会将低层类库（go-fuse）的 Debug 信息输出到 `juicefs.log` 中，详情参考文档[故障诊断和分析](https://juicefs.com/docs/zh/community/fault_diagnosis_and_analysis)。
 
 :::note 注意
-需要注意的是，FUSE 的 debug 选项与 JuiceFS 客户端的全局 `--debug` 选项不同，前者是输出 go-fuse 类库的调试信息，后者是输出 JucieFS 客户端的调试信息。
+该选项会将低层类库（go-fuse）的 Debug 信息输出到 `juicefs.log` 中，需要注意的是，该选项与 JuiceFS 客户端的全局 `--debug` 选项不同，前者是输出 go-fuse 类库的调试信息，后者是输出 JucieFS 客户端的调试信息。详情参考文档[故障诊断和分析](https://juicefs.com/docs/zh/community/fault_diagnosis_and_analysis)。
 :::
