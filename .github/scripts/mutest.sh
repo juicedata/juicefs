@@ -45,10 +45,16 @@ if [ $? -ne 0 ]; then
 	exit 101
 fi
 
+python3 .github/scripts/check_skip_by_comment.py
+if [ $? -ne 0 ]; then
+	echo "mutate is skipped by comment", $MUTATE_CHANGED
+	exit 102
+fi
+
 test_cases=$(python3 .github/scripts/parse_test_cases.py)
 if [ $? -ne 0 ]; then
 	echo "no test cases in test file ", $TEST_FILE_NAME
-	exit 102
+	exit 103
 fi
 
 mv $MUTATE_ORIGINAL $MUTATE_ORIGINAL.tmp

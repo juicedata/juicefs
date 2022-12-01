@@ -1389,12 +1389,14 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 		ts, err := time.Parse("2006-01-02-15", string(e.Name))
 		if err != nil {
 			logger.Warnf("bad entry as a subTrash: %s", e.Name)
+			entries = entries[1:]
 			continue
 		}
 		if ts.Before(edge) || force {
 			var subEntries []*Entry
 			if st = m.en.doReaddir(ctx, e.Inode, 0, &subEntries, batch); st != 0 {
 				logger.Warnf("readdir subTrash %d: %s", e.Inode, st)
+				entries = entries[1:]
 				continue
 			}
 			rmdir := len(subEntries) < batch

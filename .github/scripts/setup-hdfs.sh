@@ -20,7 +20,7 @@ sudo apt-get update
 sudo apt-get install openjdk-8-jdk -y
 
 HADOOP_VERSION="2.10.1"
-wget https://dlcdn.apache.org/hadoop/common/hadoop-2.10.1/hadoop-2.10.1.tar.gz
+wget -q https://dlcdn.apache.org/hadoop/common/hadoop-2.10.1/hadoop-2.10.1.tar.gz
 mkdir ~/app
 tar -zxf hadoop-${HADOOP_VERSION}.tar.gz -C ~/app
 
@@ -76,6 +76,19 @@ cd ~/app/hadoop-${HADOOP_VERSION}/bin
 cd ~/app/hadoop-${HADOOP_VERSION}/sbin
 ./start-dfs.sh
 
-jps
+for i in {1..3} ; do
+  ProcNumber=$( jps |grep -w DataNode|wc -l)
+  if [ ${ProcNumber} -lt 1 ];then
+    echo "current java process:"
+    jps
+    echo "The DataNode is not running, Retry for the $i time..."
+    ./start-dfs.sh
+  fi
+done
+
+echo "hello world" > /tmp/testfile
+cd ~/app/hadoop-${HADOOP_VERSION}/bin
+./hdfs dfs -put /tmp/testfile /
+./hdfs dfs -rm /testfile
 
 echo "hdfs started successfully"
