@@ -111,7 +111,7 @@ jobs:
         run: |
           job_url_id=$(echo job_url_${{matrix.test_file}} | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
           echo "job_url is: ${!job_url_id}" 
-          echo "job_url is: ${{env.${!job_url_id}}}" 
+          # echo "job_url is: ${{env.!job_url_id}}" 
           
       - name: Build
         uses: ./.github/actions/build
