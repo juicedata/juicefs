@@ -1,13 +1,11 @@
 ---
-sidebar_label: Fault Diagnosis and Analysis
+sidebar_label: Troubleshooting Methods
 sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
-# Fault Diagnosis and Analysis
 
 ## Client log
 
