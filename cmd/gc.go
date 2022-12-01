@@ -152,7 +152,7 @@ func gc(ctx *cli.Context) error {
 		m.CleanupTrashBefore(c, edge, cleanTrashSpin.Increment)
 		cleanTrashSpin.Done()
 	}
-	err = m.Statistic(
+	err = m.ScanDeletedObject(
 		c,
 		nil,
 		func(_ meta.Ino, size uint64, ts int64) (bool, error) {
@@ -210,7 +210,7 @@ func gc(ctx *cli.Context) error {
 	delayedSliceSpin := progress.AddDoubleSpinner("Delslices")
 	cleanedSliceSpin := progress.AddDoubleSpinner("Cleaned delslices")
 
-	err = m.Statistic(
+	err = m.ScanDeletedObject(
 		c,
 		func(ss []meta.Slice, ts int64) (bool, error) {
 			for _, s := range ss {

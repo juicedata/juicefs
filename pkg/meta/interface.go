@@ -266,8 +266,8 @@ type Meta interface {
 	GetSession(sid uint64, detail bool) (*Session, error)
 	// ListSessions returns all client sessions.
 	ListSessions() ([]*Session, error)
-	// Statistic scan metadata by visitors.
-	Statistic(Context, deletedSliceScan, deletedFileScan) error
+	// ScanDeletedObject scan deleted objects by customized scanner.
+	ScanDeletedObject(Context, deletedSliceScan, deletedFileScan) error
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
 	CleanStaleSessions()
 	// CleanupTrashBefore deletes all files in trash before the given time.

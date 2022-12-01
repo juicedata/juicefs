@@ -120,7 +120,7 @@ func status(ctx *cli.Context) error {
 		fileSpinner := progress.AddDoubleSpinner("Delayed Files")
 		defer fileSpinner.Done()
 
-		err = m.Statistic(
+		err = m.ScanDeletedObject(
 			meta.WrapContext(ctx.Context),
 			func(ss []meta.Slice, _ int64) (bool, error) {
 				for _, s := range ss {

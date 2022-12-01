@@ -1456,7 +1456,7 @@ func (m *baseMeta) cleanupDelayedSlices() {
 	}
 }
 
-func (m *baseMeta) Statistic(ctx Context, sliceScan deletedSliceScan, fileScan deletedFileScan) error {
+func (m *baseMeta) ScanDeletedObject(ctx Context, sliceScan deletedSliceScan, fileScan deletedFileScan) error {
 	eg := errgroup.Group{}
 	if sliceScan != nil {
 		eg.Go(func() error {
