@@ -93,16 +93,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: print
-        run: |
-          files=($(echo ${{ needs.build-matrix.outputs.matrix }} | sed -e 's:"::g' | sed -e 's:\[::g' | sed -e 's:\]::g' | sed -e 's:,: :g'))
-          echo '${files[@]}'
-          for file in ${files[@]}; 
-          do
-            echo "file is $file"
-          done
-          exit 1
-
       - name: Get Current Job Log URL
         uses: Tiryoh/gha-jobid-action@v0
         id: jobs
@@ -110,6 +100,13 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           job_name: ${{matrix.test_file}}
 
+      - name: Set Current Job Log URL to Env
+        run: |
+          job_url_id=$(echo job_url_${{matrix.test_file}} | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
+          echo "job_url_id is $job_url_id"
+          echo "job url is : ${{ steps.jobs.outputs.html_url }}"
+          echo "$job_url_id=${{ steps.jobs.outputs.html_url }}" >> $GITHUB_ENV
+          
       - name: Build
         uses: ./.github/actions/build
 
@@ -222,7 +219,7 @@ jobs:
           JOB_INDEX=$job_index JOB_TOTAL=$job_total MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutesting.py | tee -a mutesting.log
           mutate_report=$(tail -1 mutesting.log)
           echo "mutate_report: $mutate_report"
-          report_id=$(echo mutate_report_$test_file | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
+          report_id=$(echo mutate_report_${{matrix.test_file}} | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
           echo "report_id is $report_id"
           echo "$report_id=$mutate_report" >> $GITHUB_ENV
 
@@ -245,14 +242,18 @@ jobs:
       - uses: technote-space/workflow-conclusion-action@v2
       - name: print
         run: |
-          files=${{ fromJson(needs.build-matrix.outputs.matrix) }}
-          
+          files=($(echo ${{ needs.build-matrix.outputs.matrix }} | sed -e 's:"::g' | sed -e 's:\[::g' | sed -e 's:\]::g' | sed -e 's:,: :g'))
           echo ${files[@]}
           for file in ${files[@]}; 
           do
+            echo "file is $file"
             report_id=$(echo mutate_report_$file | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
             echo "report_id is $report_id"
-            echo "report for $file is: ${{env.report_id}}"
+            echo "report is: ${{env.$report_id}}"
+
+            job_url_id=$(echo job_url_$file | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
+            echo "job_url_id is $job_url_id"
+            echo "job url is: ${{env.$job_url_id}}"
           done
 
       - name: Check Failure
