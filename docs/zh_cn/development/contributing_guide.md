@@ -1,9 +1,7 @@
 ---
-sidebar_label: 贡献指南
+title: 贡献指南
 sidebar_position: 1
 ---
-
-# JuiceFS 贡献指南
 
 ## 基本准则
 

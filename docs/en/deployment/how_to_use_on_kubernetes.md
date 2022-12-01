@@ -1,5 +1,5 @@
 ---
-sidebar_label: Use JuiceFS on Kubernetes
+title: Use JuiceFS on Kubernetes
 sidebar_position: 4
 slug: /how_to_use_on_kubernetes
 ---

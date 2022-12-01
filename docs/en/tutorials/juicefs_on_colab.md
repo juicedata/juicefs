@@ -1,10 +1,8 @@
 ---
-sidebar_label: Use JuiceFS on Colab with Google CloudSQL and GCS
+title: Use JuiceFS on Colab with Google CloudSQL and GCS
 sidebar_position: 4
 slug: /juicefs_on_colab
 ---
-
-# Use JuiceFS on Colab with Google CloudSQL and GCS
 
 [Colaboratory](https://colab.research.google.com), or “Colab” for short, is a product from Google Research. Colab allows
 anybody to write and execute arbitrary python code through the browser, and is especially well suited to machine

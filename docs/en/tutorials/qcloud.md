@@ -1,9 +1,8 @@
 ---
-sidebar_label: Use JuiceFS on Tencent Cloud
+title: Use JuiceFS on Tencent Cloud
 sidebar_position: 7
 slug: /clouds/qcloud
 ---
-# Use JuiceFS on Tencent Cloud
 
 JuiceFS needs to be used with database and object storage together. Here we directly use Tencent Cloud's CVM cloud server, combined with cloud database and COS object storage.
 

@@ -1,9 +1,8 @@
 ---
-sidebar_label: FUSE Mount Options
+title: FUSE Mount Options
 sidebar_position: 6
 slug: /fuse_mount_options
 ---
-# FUSE Mount Options
 
 This guide lists important FUSE mount options. These mount options are specified by the option `-o`  when execute the command [`juicefs mount`](../reference/command_reference.md#mount) (use comma to separate multiple options). For example:
 

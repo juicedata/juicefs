@@ -1,11 +1,9 @@
 ---
-sidebar_label: 安装
+title: 安装
 sidebar_position: 1
 slug: /installation
 pagination_prev: introduction/comparison/juicefs_vs_s3ql
 ---
-
-# 安装
 
 JuiceFS 有良好的跨平台能力，支持在几乎所有主流架构的各类操作系统上运行，包括且不限于 Linux、macOS、Windows 等。
 

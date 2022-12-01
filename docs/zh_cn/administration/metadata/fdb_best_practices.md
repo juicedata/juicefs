@@ -5,6 +5,7 @@ slug: /fdb_best_practices
 ---
 
 # FoundationDB 最佳实践
+
 fdb支持横向扩容，一旦数据存储达到集群的最高负载，只需要在集群中添加新的机器即可。配置集群的详细教程可见官网 https://apple.github.io/foundationdb/configuration.html ，对于不同场景不同机器数量的性能测试可见 https://apple.github.io/foundationdb/benchmarking.html。
 
 ## 系统要求

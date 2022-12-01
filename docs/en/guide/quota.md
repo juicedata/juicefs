@@ -1,8 +1,7 @@
 ---
-sidebar_label: Storage Quota
+title: Storage Quota
 sidebar_position: 5
 ---
-# Storage Quota
 
 Since JuiceFS v0.14.2, JuiceFS have supported file system level storage quotas. This feature allows users to:
 

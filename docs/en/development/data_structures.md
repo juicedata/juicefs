@@ -1,9 +1,8 @@
 ---
-sidebar_label: Internals
+title: Internals
 sidebar_position: 4
 slug: /internals
 ---
-# JuiceFS Internals
 
 ## 1. Introduction
 

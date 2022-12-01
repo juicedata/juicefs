@@ -1,12 +1,8 @@
 ---
-sidebar_label: 启动时自动挂载 JuiceFS
+title: 启动时自动挂载 JuiceFS
 sidebar_position: 2
 slug: /mount_juicefs_at_boot_time
 ---
-
-# 启动时自动挂载 JuiceFS
-
-这是一篇关于如何在启动时自动挂载 JuiceFS 的指南。
 
 ## Linux
 

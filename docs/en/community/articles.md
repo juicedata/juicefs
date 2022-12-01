@@ -1,10 +1,8 @@
 ---
-sidebar_label: User Articles
+title: User Articles
 sidebar_position: 2
 slug: /articles
 ---
-
-# User Article Collection
 
 JuiceFS is widely applicable to various data storage and sharing scenarios. JuiceFS application cases from all over the world are summarized here. All community users are welcome to maintain this list.
 

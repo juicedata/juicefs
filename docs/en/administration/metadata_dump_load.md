@@ -1,9 +1,8 @@
 ---
-sidebar_label: Metadata Backup & Recovery
+title: Metadata Backup & Recovery
 sidebar_position: 2
 slug: /metadata_dump_load
 ---
-# Metadata Backup & Recovery
 
 :::tip
 - JuiceFS v0.15.2 started to support manual backup, recovery and inter-engine migration of metadata.

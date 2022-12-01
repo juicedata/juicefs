@@ -1,5 +1,5 @@
 ---
-sidebar_label: Data Processing Flow
+sidebar_label: Data Processing Workflow
 sidebar_position: 3
 slug: /internals/io_processing
 ---

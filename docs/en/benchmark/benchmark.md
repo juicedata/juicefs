@@ -1,9 +1,8 @@
 ---
-sidebar_label: Performance Benchmark
+title: Performance Benchmark
 sidebar_position: 1
 slug: .
 ---
-# Performance Benchmark
 
 ## Basic benchmark
 

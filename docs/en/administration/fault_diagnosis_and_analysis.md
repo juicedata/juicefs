@@ -1,5 +1,5 @@
 ---
-sidebar_label: Troubleshooting Methods
+title: Troubleshooting Methods
 sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
 ---
