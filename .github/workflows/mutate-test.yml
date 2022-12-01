@@ -97,6 +97,7 @@ jobs:
         run: |
           echo '${{ needs.build-matrix.outputs.matrix }}'
           files='${{ fromJson(needs.build-matrix.outputs.matrix) }}'
+          echo $files
           echo '${files[@]}'
           for file in ${files[@]}; 
           do

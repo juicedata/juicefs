@@ -49,6 +49,6 @@ func TestEncrypt(t *testing.T) {
 		t.Fatalf("Format decrypt: %s", err)
 	}
 	if format.SecretKey != "testSecret" || format.SessionToken != "token" || format.EncryptKey != "testEncrypt" {
-		t.Fatalf("invalid  format: %+v", format)
+		t.Fatalf("invalid format: %+v", format)
 	}
 }
