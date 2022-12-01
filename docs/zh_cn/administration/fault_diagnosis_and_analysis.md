@@ -4,6 +4,8 @@ sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
 ---
 
+# 故障诊断和分析
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
