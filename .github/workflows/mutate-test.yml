@@ -93,6 +93,16 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: print
+        run: |
+          echo ${{ fromJson(needs.build-matrix.outputs.matrix) }}
+          files=${{ fromJson(needs.build-matrix.outputs.matrix) }}
+          echo ${files[@]}
+          for file in ${files[@]}; 
+          do
+            echo "file is $file"
+          done
+
       - name: Get Current Job Log URL
         uses: Tiryoh/gha-jobid-action@v0
         id: jobs
