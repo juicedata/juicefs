@@ -95,13 +95,14 @@ jobs:
 
       - name: print
         run: |
-          echo ${{ fromJson(needs.build-matrix.outputs.matrix) }}
+          echo '${{ needs.build-matrix.outputs.matrix }}'
           files=${{ fromJson(needs.build-matrix.outputs.matrix) }}
           echo ${files[@]}
           for file in ${files[@]}; 
           do
             echo "file is $file"
           done
+          exit 1
 
       - name: Get Current Job Log URL
         uses: Tiryoh/gha-jobid-action@v0
