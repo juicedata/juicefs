@@ -42,7 +42,7 @@ func cmdGC() *cli.Command {
 		ArgsUsage: "META-URL",
 		Description: `
 It scans all objects in data storage and slices in metadata, comparing them to see if there is any
-leaked object. It can also actively trigger compaction of slices.
+leaked object. It can also actively trigger compaction of slices and the cleanup of delayed deleted slices or files.
 Use this command if you find that data storage takes more than expected.
 
 Examples:
@@ -52,7 +52,7 @@ $ juicefs gc redis://localhost
 # Trigger compaction of all slices
 $ juicefs gc redis://localhost --compact
 
-# Delete leaked objects
+# Delete leaked objects and delayed deleted slices or files
 $ juicefs gc redis://localhost --delete`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
@@ -61,7 +61,7 @@ $ juicefs gc redis://localhost --delete`,
 			},
 			&cli.BoolFlag{
 				Name:  "delete",
-				Usage: "delete leaked objects",
+				Usage: "delete leaked objects and delayed deleted slices or files",
 			},
 			&cli.IntFlag{
 				Name:    "threads",
@@ -373,8 +373,10 @@ func gc(ctx *cli.Context) error {
 	cc, cb := compacted.Current()
 	lc, lb := leaked.Current()
 	sc, sb := skipped.Current()
-	logger.Infof("scanned %d objects, %d valid, %d compacted (%d bytes), %d leaked (%d bytes), %d skipped (%d bytes)",
-		bar.Current(), vc, cc, cb, lc, lb, sc, sb)
+	dsc, dsb := cleanedSliceSpin.Current()
+	fc, fb := cleanedFileSpin.Current()
+	logger.Infof("scanned %d objects, %d valid, %d compacted (%d bytes), %d leaked (%d bytes), %d delslices (%d bytes), %d delfiles (%d bytes), %d skipped (%d bytes)",
+		bar.Current(), vc, cc, cb, lc, lb, dsc, dsb, fc, fb, sc, sb)
 	if lc > 0 && !delete {
 		logger.Infof("Please add `--delete` to clean leaked objects")
 	}
