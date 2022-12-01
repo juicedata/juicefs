@@ -118,10 +118,6 @@ func info(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
 		}
-		err = f.Sync()
-		if err != nil {
-			logger.Fatalf("sync control file: %s", err)
-		}
 		var resp vfs.InfoResponse
 		err = resp.Decode(f)
 		_ = f.Close()
