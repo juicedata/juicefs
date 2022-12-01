@@ -57,6 +57,7 @@ jobs:
               total_count=$(go-mutesting $source_file_name --debug --no-exec --blacklist $black_list_file| grep "Save mutation into" | wc -l)
               echo "total_count is $total_count"
               job_total=$(TEST_FILE_NAME=$test_file_name python3 .github/scripts/parse_job_total.py)
+              echo "job_total: $job_total"
               if [ $job_total -eq 0 ]; then
                 if [ $total_count -gt 200 ]; then
                   job_total=4
@@ -64,6 +65,7 @@ jobs:
                   job_total=1
                 fi
               fi
+              echo "job_total: $job_total"
               echo "job_total=$job_total" >> $GITHUB_OUTPUT
               if [ $job_total -gt 1 ]; then
                 for i in `seq 1 $job_total` 

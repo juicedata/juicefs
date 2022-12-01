@@ -13,7 +13,7 @@ def parse_test_jobs(test_file_path):
             if g:
                 return int(g.group(1))
                 
-    return 4
+    return 0
 
 if __name__ == '__main__':
     test_file_path = os.environ['TEST_FILE_NAME']
