@@ -81,6 +81,7 @@ case $GOMUTESTING_RESULT in
 	if [ "$MUTATE_DEBUG" = true ] ; then
 		echo "$GOMUTESTING_DIFF"
 	fi
+	echo "$GOMUTESTING_DIFF"
 	echo "tests failed -> PASS"
 	exit 0
 	;;
