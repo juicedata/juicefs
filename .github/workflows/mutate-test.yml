@@ -95,9 +95,7 @@ jobs:
 
       - name: print
         run: |
-          echo '${{ needs.build-matrix.outputs.matrix }}'
-          files='${{ fromJson(needs.build-matrix.outputs.matrix) }}'
-          echo $files
+          files=($(echo ${{ needs.build-matrix.outputs.matrix }} | sed -e 's:"::g' | sed -e 's:\[::g' | sed -e 's:\]::g' | sed -e 's:,: :g'))
           echo '${files[@]}'
           for file in ${files[@]}; 
           do
@@ -248,6 +246,7 @@ jobs:
       - name: print
         run: |
           files=${{ fromJson(needs.build-matrix.outputs.matrix) }}
+          
           echo ${files[@]}
           for file in ${files[@]}; 
           do
