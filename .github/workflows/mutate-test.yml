@@ -209,9 +209,10 @@ jobs:
           go-mutesting $source_file --debug --no-exec --do-not-remove-tmp-folder  --blacklist $black_list_file | tee -a mutate.log
           mutation_dir=$(cat mutate.log | grep "Save mutations into" | awk -F' ' '{print $4}' | sed -e 's:"::g')
           echo "mutation dir is $mutation_dir"
-          mutate_report=$(JOB_INDEX=$job_index JOB_TOTAL=$job_total MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutesting.py)
+          JOB_INDEX=$job_index JOB_TOTAL=$job_total MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutesting.py | tee -a mutesting.log
+          mutate_report=$(tail -1 mutesting.log)
           echo "mutate_report: $mutate_report"
-          report_id=$(echo mutate_report_$test_file | sed -e 's:/:_:g' | sed -e 's:.:_:g' | sed -e 's:-:_:g' )
+          report_id=$(echo mutate_report_$test_file | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
           echo "report_id is $report_id"
           echo "$report_id=$mutate_report" >> $GITHUB_ENV
 
@@ -238,7 +239,7 @@ jobs:
           echo ${files[@]}
           for file in ${files[@]}; 
           do
-            report_id=$(echo mutate_report_$file | sed -e 's:/:_:g' | sed -e 's:.:_:g' | sed -e 's:-:_:g' )
+            report_id=$(echo mutate_report_$file | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
             echo "report_id is $report_id"
             echo "report for $file is: ${{env.report_id}}"
           done
