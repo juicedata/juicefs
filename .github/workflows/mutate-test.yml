@@ -56,9 +56,16 @@ jobs:
               cat $black_list_file
               total_count=$(go-mutesting $source_file_name --debug --no-exec --blacklist $black_list_file| grep "Save mutation into" | wc -l)
               echo "total_count is $total_count"
-              if [ $total_count -gt 10 ]; then
-                job_total=4
-                echo "job_total=$job_total" >> $GITHUB_OUTPUT
+              job_total=$(TEST_FILE_NAME=$test_file_name python3 .github/scripts/parse_job_total.py)
+              if [ $job_total -eq 0 ]; then
+                if [ $total_count -gt 200 ]; then
+                  job_total=4
+                else
+                  job_total=1
+                fi
+              fi
+              echo "job_total=$job_total" >> $GITHUB_OUTPUT
+              if [ $job_total -gt 1 ]; then
                 for i in `seq 1 $job_total` 
                 do
                   Jobs=("${Jobs[@]}" "$test_file_name-$i")
@@ -173,16 +180,12 @@ jobs:
 
 
       - name: run mutate test
-        # timeout-minutes: 120
+        timeout-minutes: 120
         run: |
           sudo chmod 777 /var/jfsCache
           test_file=$(echo ${{matrix.test_file}} | awk -F'-' '{print $1}')
           job_index=$(echo ${{matrix.test_file}} | awk -F'-' '{print $2}')
-          if [ -z job_index ]; then
-            job_total=1
-          else
-            job_total=${{ needs.build-matrix.outputs.job_total }}
-          fi
+          job_total=${{ needs.build-matrix.outputs.job_total }}
           echo "test file is :$test_file, job_index is $job_index, job_total is $job_total"
           if [ -z "$test_file" ]; then 
             echo "test file is empty, will not run mutate test"
@@ -232,16 +235,14 @@ jobs:
           # echo "mutate_report is $mutate_report"
           # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
 
-
       - uses: mshick/add-pr-comment@v2
         with:
-          allow-repeats: false
+          allow-repeats: true
           message: |
             *Mutate Test Report For ${{matrix.test_file}}
             ${{env.mutate_report}} 
             Report detail: ${{ steps.jobs.outputs.html_url }}
             Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
-
 
       - name: Setup upterm session
         if: failure()
@@ -258,7 +259,6 @@ jobs:
       #   run: |
       #     files=($(echo ${{ needs.build-matrix.outputs.matrix }} | sed -e 's:"::g' | sed -e 's:\[::g' | sed -e 's:\]::g' | sed -e 's:,: :g'))
       #     echo ${files[@]}
-      #     echo $GITHUB_OUTPUT
       #     echo "job url is ${{needs.mutate-test.outputs.job_url_pkg_meta_config_test_go_1}}"
       #     for file in ${files[@]}; 
       #     do
