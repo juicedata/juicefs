@@ -112,7 +112,6 @@ jobs:
           job_url_id=$(echo job_url_${{matrix.test_file}} | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
           echo "job_url is: ${!job_url_id}" 
           echo "job_url is: ${{!env.job_url_id}}" 
-          echo "job_url is: ${{env.!job_url_id}}" 
           
       - name: Build
         uses: ./.github/actions/build
@@ -257,11 +256,11 @@ jobs:
             report_id=$(echo mutate_report_$file | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
             echo "report_id is $report_id"
             echo "report is: ${!report_id}"
-            # echo "report is: ${{env.{!report_id}}}"
+            echo "report is: ${!env.report_id}"
 
             job_url_id=$(echo job_url_$file | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
             echo "job_url_id is $job_url_id"
-            echo "job url is: ${{!env.job_url_id}}"
+            echo "job url is: ${{env.job_url_id}}"
           done
 
       - name: Check Failure
