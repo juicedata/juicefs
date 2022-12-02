@@ -46,7 +46,10 @@ jobs:
         run: |
           sudo apt-get install jq
           if [ "${{github.event_name}}" == "pull_request"  ]; then
-            changed_file_str=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep _test.go$ | xargs)
+            echo github.event.pull_request.base.sha is ${{github.event.pull_request.base.sha}}
+            echo github.event.pull_request.head.sha is ${{github.event.pull_request.head.sha}}
+            echo github.sha is ${{ github.sha }}
+            changed_file_str=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep _test.go$ | xargs)
             echo "added or changed test files: $changed_file_str"
             changed_file_array=($changed_file_str)
             declare -a Jobs=();
