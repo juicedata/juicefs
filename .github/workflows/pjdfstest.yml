@@ -74,6 +74,7 @@ jobs:
           else
             echo ::set-output name=target::"juicefs"
           fi
+          exit 1
 
       - name: Build
         uses: ./.github/actions/build
