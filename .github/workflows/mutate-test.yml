@@ -13,6 +13,11 @@ on:
         description: "the go test file relative path you want to mutate, eg cmd/meta/xattr_test.go"
         required: true
         default: ""  
+      job_total:
+        type: string
+        description: "number of job to run mutation test"
+        required: true
+        default: "1"
       debug:
         type: boolean
         description: "Run the build with tmate debugging enabled"
@@ -185,7 +190,7 @@ jobs:
 
 
       - name: run mutate test
-        timeout-minutes: 120
+        # timeout-minutes: 120
         run: |
           sudo chmod 777 /var/jfsCache
           test_file=$(echo ${{matrix.test_file}} | awk -F'-' '{print $1}')
@@ -250,8 +255,8 @@ jobs:
             Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
 
       - name: Setup upterm session
-        if: failure()
-        timeout-minutes: 1
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
   success-all-test:
