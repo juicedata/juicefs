@@ -1,9 +1,8 @@
 ---
-sidebar_label: 常规测试
+title: 常规测试
 sidebar_position: 1
 slug: .
 ---
-# JuiceFS 常规测试
 
 ### 基础测试
 

@@ -1,5 +1,5 @@
 ---
-sidebar_label: 在 K3s 上使用 JuiceFS
+title: 在 K3s 上使用 JuiceFS
 sidebar_position: 1
 slug: /juicefs_on_k3s
 ---

@@ -1,5 +1,5 @@
 ---
-sidebar_label: 问题排查方法
+title: 问题排查方法
 sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
 ---

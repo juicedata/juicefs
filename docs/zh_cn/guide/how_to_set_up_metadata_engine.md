@@ -1,13 +1,11 @@
 ---
-sidebar_label: 如何设置元数据引擎
+title: 如何设置元数据引擎
 sidebar_position: 1
 slug: /databases_for_metadata
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
-# 如何设置元数据引擎
 
 :::tip 版本提示
 本文档使用的环境变量 `META_PASSWORD` 是 JuiceFS v1.0 新增功能，旧版客户端需要[升级](../administration/upgrade.md)后才能使用。

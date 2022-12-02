@@ -1,9 +1,8 @@
 ---
-sidebar_label: Use JuiceFS on AWS
+title: Use JuiceFS on AWS
 sidebar_position: 4
 slug: /clouds/aws
 ---
-# Use JuiceFS on AWS
 
 AWS is the world's leading cloud computing platform, offering almost all types of cloud computing services. Thanks to the rich product line of AWS, users can choose JuiceFS components in a very flexible way.
 

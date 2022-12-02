@@ -1,10 +1,8 @@
 ---
-sidebar_label: Performance Evaluation Guide
+title: Performance Evaluation Guide
 sidebar_position: 2
 slug: /performance_evaluation_guide
 ---
-
-# JuiceFS Performance Evaluation Guide
 
 Before starting performance testing, it is a good idea to write down a general description of usage scenario, including:
 

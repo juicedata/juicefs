@@ -1,9 +1,8 @@
 ---
-sidebar_label: POSIX Compatibility
+title: POSIX Compatibility
 sidebar_position: 6
 slug: /posix_compatibility
 ---
-# POSIX Compatibility
 
 JuiceFS ensures POSIX compatibility with the help of pjdfstest and LTP.
 

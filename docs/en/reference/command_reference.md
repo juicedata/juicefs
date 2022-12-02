@@ -1,15 +1,11 @@
 ---
-sidebar_label: Command Reference
+title: Command Reference
 sidebar_position: 1
 slug: /command_reference
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
-# Command Reference
-
-There are many commands to help you manage your file system. This page provides a detailed reference for these commands.
 
 ## Overview
 

@@ -1,8 +1,7 @@
 ---
-sidebar_label: How to destroy a file system
+title: How to destroy a file system
 sidebar_position: 8
 ---
-# How to destroy a file system
 
 JuiceFS client provides the `destroy` command to completely destroy a file system, which will result in
 

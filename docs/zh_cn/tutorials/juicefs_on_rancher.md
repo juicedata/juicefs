@@ -1,9 +1,8 @@
 ---
-sidebar_label: 在 Rancher 上使用 JuiceFS
+title: 在 Rancher 上使用 JuiceFS
 sidebar_position: 2
 slug: /juicefs_on_rancher
 ---
-# 在 Rancher 上使用 JuiceFS
 
 简单来说，[Rancher](https://rancher.com/) 是一个企业级的 Kubernetes 集群管理工具，使用它可以非常轻松的在各种云计算平台上快速的完成 Kubernetes 集群的部署。
 

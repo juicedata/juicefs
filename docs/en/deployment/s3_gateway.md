@@ -1,10 +1,8 @@
 ---
-sidebar_label: Deploy JuiceFS S3 Gateway
+title: Deploy JuiceFS S3 Gateway
 sidebar_position: 6
 slug: /s3_gateway
 ---
-
-# Deploy JuiceFS S3 Gateway
 
 JuiceFS has introduced S3 gateway since v0.11. The feature is implemented based on the [MinIO S3 Gateway](https://docs.min.io/docs/minio-gateway-for-s3.html). It provides an S3-compatible RESTful API for files on JuiceFS, enabling the management of files stored on JuiceFS with tools such as s3cmd, AWS CLI, and MinIO Client (mc) in cases where mounting is not convenient. In addition, S3 gateway also provides a web-based file manager that allows users to manage files in web browsers.
 

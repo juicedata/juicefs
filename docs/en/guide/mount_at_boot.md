@@ -1,12 +1,8 @@
 ---
-sidebar_label: Mount JuiceFS at Boot Time
+title: Mount JuiceFS at Boot Time
 sidebar_position: 2
 slug: /mount_juicefs_at_boot_time
 ---
-
-# Mount JuiceFS at Boot Time
-
-This is a guide about how to mount JuiceFS automatically at boot.
 
 ## Linux
 

@@ -1,9 +1,8 @@
 ---
-sidebar_label: Use JuiceFS on Rancher
+title: Use JuiceFS on Rancher
 sidebar_position: 2
 slug: /juicefs_on_rancher
 ---
-# Use JuiceFS on Rancher
 
 [Rancher](https://rancher.com/) is an enterprise-level Kubernetes cluster management system, which can be used to quickly complete the deployment of Kubernetes clusters on various cloud computing platforms.
 

@@ -1,9 +1,8 @@
 ---
-sidebar_label: Cache
+title: Cache
 sidebar_position: 3
 slug: /cache_management
 ---
-# Cache
 
 For a file system driven by a combination of object storage and database, cache is an important medium for interacting efficiently between the local client and the remote service. Read and write data can be loaded into the cache in advance or asynchronously, and then the client uploads to or prefetches from the remote service in the background. The use of caching technology can significantly reduce the latency of storage operations and increase data throughput compared to interacting with remote services directly.
 

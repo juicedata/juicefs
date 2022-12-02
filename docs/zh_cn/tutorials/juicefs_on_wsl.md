@@ -1,8 +1,6 @@
 ---
-sidebar_label: 在 WSL 中使用 JuiceFS
+title: 在 WSL 中使用 JuiceFS
 ---
-
-# 在 WSL 中使用 JuiceFS
 
 WSL 全称 Windows Subsystem for Linux，即适用于 Linux 的 Windows 子系统。它可以让你在 Windows 系统环境下运行大多数 GNU/Linux 原生命令、工具和程序，且不必像用虚拟机或双系统那样产生额外的硬件开销。
 

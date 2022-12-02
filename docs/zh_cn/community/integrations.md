@@ -1,10 +1,8 @@
 ---
-sidebar_label: 社区集成
+title: 社区集成
 sidebar_position: 2
 slug: /integrations
 ---
-
-# 社区集成
 
 ## SDK
 

@@ -1,9 +1,8 @@
 ---
-sidebar_label: FUSE 挂载选项
+title: FUSE 挂载选项
 sidebar_position: 6
 slug: /fuse_mount_options
 ---
-# FUSE 挂载选项
 
 JuiceFS 文件系统为用户提供多种访问方式，FUSE 是其中较为常用的一种，即使用 `juicefs mount` 命令将文件系统挂载到本地的方式。用户可以根据需要添加 FUSE 支持的挂载选项，从而实现更细粒度的控制。
 
