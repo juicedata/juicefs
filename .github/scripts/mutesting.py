@@ -9,6 +9,8 @@ def do_mutate_test(mutation_dir, index, total):
     print(f'mutation dir is {mutation_dir}, inde is {index}, total is {total}', file=sys.stderr)
     # os.system(f'ls -l {mutation_dir}')
     list_of_files = Tcl().call('lsort', '-dict', glob.glob(mutation_dir + '/*.go.*') )
+    if len(list_of_files) > 0 and 'original' in list_of_files[-1]:
+        list_of_files = list_of_files[:-1]
     print('\n'.join(list_of_files), file=sys.stderr)
     stats = {'passed':0, 'failed':0, 'compile_error':0, 'out_of_coverage':0, 'skip_by_comment':0, 'others':0, 'total':0}
     count = int(len(list_of_files)/total) + 1
@@ -36,10 +38,10 @@ def do_mutate_test(mutation_dir, index, total):
         else:
             stats['others'] += 1
         stats['total'] += 1
-    if stats['total'] == 0:
+    if stats['passed'] + stats['failed'] == 0:
         stats['score'] = 1.0
     else:
-        stats['score'] = stats['passed'] / stats['total']
+        stats['score'] = stats['passed'] / (stats['passed'] + stats['failed'])
     return stats
 
 if __name__ == '__main__':
