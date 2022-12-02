@@ -11,7 +11,7 @@ def do_mutate_test(mutation_dir, index, total):
     list_of_files = Tcl().call('lsort', '-dict', glob.glob(mutation_dir + '/*.go.*') )
     if len(list_of_files) > 0 and 'original' in list_of_files[-1]:
         list_of_files = list_of_files[:-1]
-    print('\n'.join(list_of_files), file=sys.stderr)
+    # print('\n'.join(list_of_files), file=sys.stderr)
     stats = {'passed':0, 'failed':0, 'compile_error':0, 'out_of_coverage':0, 'skip_by_comment':0, 'others':0, 'total':0}
     count = int(len(list_of_files)/total) + 1
     start = index*count
