@@ -192,7 +192,6 @@ jobs:
           for i in {2222,3306,5432,8020,9000,9007,4500} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
           sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
 
-
       - name: run mutate test
         # timeout-minutes: 120
         run: |
