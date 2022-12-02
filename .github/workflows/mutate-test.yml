@@ -57,7 +57,7 @@ jobs:
               total_count=$(go-mutesting $source_file_name --debug --no-exec --blacklist $black_list_file| grep "Save mutation into" | wc -l)
               echo "total_count is $total_count"
               job_total=$(TEST_FILE_NAME=$test_file_name python3 .github/scripts/parse_job_total.py)
-              echo "job_total: $job_total"
+              echo "job_total specified: $job_total"
               if [ $job_total -eq 0 ]; then
                 if [ $total_count -gt 200 ]; then
                   job_total=4
@@ -66,28 +66,31 @@ jobs:
                 fi
               fi
               echo "job_total: $job_total"
-              echo "job_total=$job_total" >> $GITHUB_OUTPUT
-              if [ $job_total -gt 1 ]; then
-                for i in `seq 1 $job_total` 
-                do
-                  Jobs=("${Jobs[@]}" "$test_file_name-$i")
-                done
-              else
-                Jobs=("${Jobs[@]}" "$test_file_name")
-              fi
+              for i in `seq 1 $job_total` 
+              do
+                Jobs=("${Jobs[@]}" "$test_file_name-$i-$job_total")
+              done
             done
             value=`printf '%s\n' "${Jobs[@]}" | jq -R . | jq -cs .`
             echo "value: $value"
             echo "matrix=$value" >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
-            echo "to be impl"
-            exit 1
+            test_file_name=${{github.event.inputs.test_file}}
+            echo "test file is $test_file_name"
+            job_total=${{github.event.inputs.job_total}}
+            echo "job_total is $job_total"
+            declare -a Jobs=();
+            for i in `seq 1 $job_total` 
+              do
+                Jobs=("${Jobs[@]}" "$test_file_name-$i-$job_total")
+              done
+            value=`printf '%s\n' "${Jobs[@]}" | jq -R . | jq -cs .`
+            echo "value: $value"
+            echo "matrix=$value" >> $GITHUB_OUTPUT
           fi
 
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
-      job_total: ${{ steps.set-matrix.outputs.job_total }}
-
 
   mutate-test:
     name: ${{matrix.test_file}}
@@ -187,7 +190,7 @@ jobs:
           sudo chmod 777 /var/jfsCache
           test_file=$(echo ${{matrix.test_file}} | awk -F'-' '{print $1}')
           job_index=$(echo ${{matrix.test_file}} | awk -F'-' '{print $2}')
-          job_total=${{ needs.build-matrix.outputs.job_total }}
+          job_total=$(echo ${{matrix.test_file}} | awk -F'-' '{print $3}')
           echo "test file is :$test_file, job_index is $job_index, job_total is $job_total"
           if [ -z "$test_file" ]; then 
             echo "test file is empty, will not run mutate test"
