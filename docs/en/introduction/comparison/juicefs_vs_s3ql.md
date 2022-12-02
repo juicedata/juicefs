@@ -15,7 +15,7 @@ S3QL was no longer maintenance on November 9, 2022, see [S3QL Repository](https:
 - Both support the standard POSIX file system interface through the FUSE module, so that massive cloud storage can be mounted locally and used like local storage.
 - Both provide standard file system features: hard links, symbolic links, extended attributes, file permissions.
 - Both support data compression and encryption, but the algorithms used are different.
-- Both support metadatabase backup, S3QL automatically backs up SQLite databases to object storage, and JuiceFS automatically exports metadata to json format files every hour and backs them up to object storage for easy recovery and migration between various metadata engines.
+- Both support metadata backup, S3QL automatically backs up SQLite databases to object storage, and JuiceFS automatically exports metadata to json format files every hour and backs them up to object storage for easy recovery and migration between various metadata engines.
 
 ## Differences
 
