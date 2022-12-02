@@ -22,7 +22,6 @@ def do_mutate_test(mutation_dir, index, total):
         #                             time.gmtime(os.path.getmtime(changed_file))) 
         # print(timestamp_str, ' -->', changed_file) 
         os.environ['MUTATE_CHANGED'] = changed_file
-        print('-----------------------------------------------------------------', file=sys.stderr)
         ret = os.system('.github/scripts/mutest.sh') >> 8
         if ret == 0:
             stats['passed'] += 1
