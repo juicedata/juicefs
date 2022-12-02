@@ -30,6 +30,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
+//mutate_test_job_number: 5
 func TestFileStat(t *testing.T) {
 	attr := meta.Attr{
 		Typ:   meta.TypeDirectory,

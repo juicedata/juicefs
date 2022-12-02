@@ -38,3 +38,7 @@ For example:
 	if err != nil { //skip mutate
 		return "", fmt.Errorf("failed to execute command `lsb_release`: %s", err)
 	}
+
+# how to customize mutate test job in parallel?
+if the mutants of the target source file is more than 200, we will use 4 github jobs to run it. otherwise we will use 1 job to run.
+you can customize it in your test file with adding "//mutate_test_job_number: number", eg: //mutate_test_job_number: 8

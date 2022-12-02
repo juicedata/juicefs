@@ -13,6 +13,11 @@ on:
         description: "the go test file relative path you want to mutate, eg cmd/meta/xattr_test.go"
         required: true
         default: ""  
+      job_total:
+        type: string
+        description: "number of job to run mutation test"
+        required: true
+        default: "1"
       debug:
         type: boolean
         description: "Run the build with tmate debugging enabled"
@@ -28,36 +33,72 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.18.x'
+
+      - name: install go-mutesting
+        run: |
+          go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+
       - id: set-matrix
         run: |
+          sudo apt-get install jq
           if [ "${{github.event_name}}" == "pull_request"  ]; then
-            changed_file_str=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep _test.go$ | xargs)
+            echo github.event.pull_request.base.sha is ${{github.event.pull_request.base.sha}}
+            echo github.event.pull_request.head.sha is ${{github.event.pull_request.head.sha}}
+            echo github.sha is ${{ github.sha }}
+            changed_file_str=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep _test.go$ | xargs)
             echo "added or changed test files: $changed_file_str"
             changed_file_array=($changed_file_str)
-            test_files=""
-            for file_name in "${changed_file_array[@]}"
+            declare -a Jobs=();
+            for test_file_name in "${changed_file_array[@]}"
             do
-              if [[ "$file_name" == *_test.go ]]; then
-                test_files="\"$file_name\",$test_files"
+              echo "test_file_name is $test_file_name"
+              source_file_name=${test_file_name%"_test.go"}.go
+              echo "source_file_name is :" $source_file_name
+              black_list_file=black.list
+              TEST_FILE_NAME="$test_file_name" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/parse_black_list.py 
+              echo "black list checksum: "
+              cat $black_list_file
+              total_count=$(go-mutesting $source_file_name --debug --no-exec --blacklist $black_list_file| grep "Save mutation into" | wc -l)
+              echo "total_count is $total_count"
+              job_total=$(TEST_FILE_NAME=$test_file_name python3 .github/scripts/parse_job_total.py)
+              echo "job_total specified: $job_total"
+              if [ $job_total -eq 0 ]; then
+                if [ $total_count -gt 200 ]; then
+                  job_total=4
+                else
+                  job_total=1
+                fi
               fi
+              echo "job_total: $job_total"
+              for i in `seq 1 $job_total` 
+              do
+                Jobs=("${Jobs[@]}" "$test_file_name-$i-$job_total")
+              done
             done
-            echo "test_files: $test_files"
-            if [ -n "$test_files" ]; then 
-              echo "test_files is not empty"
-              # echo '::set-output name=test_file_matrix::["cmd/meta/xattr_test.go", "cmd/meta/utils_test.go"]'
-              echo "::set-output name=test_file_matrix::[$test_files]"
-            else
-              echo "test_files is empty"
-              exit 1
-            fi
+            value=`printf '%s\n' "${Jobs[@]}" | jq -R . | jq -cs .`
+            echo "value: $value"
+            echo "matrix=$value" >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
-            test_file="\"${{github.event.inputs.test_file}}\""
-            echo "test file is $test_file"
-            echo "::set-output name=test_file_matrix::[$test_file]"
+            test_file_name=${{github.event.inputs.test_file}}
+            echo "test file is $test_file_name"
+            job_total=${{github.event.inputs.job_total}}
+            echo "job_total is $job_total"
+            declare -a Jobs=();
+            for i in `seq 1 $job_total` 
+              do
+                Jobs=("${Jobs[@]}" "$test_file_name-$i-$job_total")
+              done
+            value=`printf '%s\n' "${Jobs[@]}" | jq -R . | jq -cs .`
+            echo "value: $value"
+            echo "matrix=$value" >> $GITHUB_OUTPUT
           fi
 
     outputs:
-      test_file: ${{ steps.set-matrix.outputs.test_file_matrix }}
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
 
   mutate-test:
     name: ${{matrix.test_file}}
@@ -65,7 +106,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_file: ${{ fromJson(needs.build-matrix.outputs.test_file) }}
+        test_file: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -79,6 +120,14 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           job_name: ${{matrix.test_file}}
 
+      - name: Set Current Job Log URL to Env
+        run: |
+          job_url_id=$(echo job_url_${{matrix.test_file}} | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
+          echo "job_url_id is $job_url_id"
+          echo "job url is : ${{ steps.jobs.outputs.html_url }}"
+          echo "$job_url_id=${{ steps.jobs.outputs.html_url }}" >> $GITHUB_OUTPUT
+          echo $GITHUB_OUTPUT
+          
       - name: Build
         uses: ./.github/actions/build
 
@@ -92,6 +141,7 @@ jobs:
           sudo apt install -y redis-server
           sudo apt install -y libacl1-dev
           sudo apt install -y attr
+          sudo apt install python3-tk
           sudo mkdir -p /home/travis/.m2/
 
       - name: Download Zip
@@ -106,7 +156,6 @@ jobs:
           tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2/
           cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
           tar -zxf /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz -C /home/travis/.m2/
-
 
       - name: Prepare Database
         timeout-minutes: 10
@@ -143,13 +192,14 @@ jobs:
           for i in {2222,3306,5432,8020,9000,9007,4500} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
           sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
 
-
       - name: run mutate test
         # timeout-minutes: 120
         run: |
           sudo chmod 777 /var/jfsCache
-          test_file=${{matrix.test_file}}
-          echo "test file is :" $test_file
+          test_file=$(echo ${{matrix.test_file}} | awk -F'-' '{print $1}')
+          job_index=$(echo ${{matrix.test_file}} | awk -F'-' '{print $2}')
+          job_total=$(echo ${{matrix.test_file}} | awk -F'-' '{print $3}')
+          echo "test file is :$test_file, job_index is $job_index, job_total is $job_total"
           if [ -z "$test_file" ]; then 
             echo "test file is empty, will not run mutate test"
             exit 0
@@ -179,11 +229,25 @@ jobs:
           TEST_FILE_NAME="$test_file" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/parse_black_list.py 
           echo "black list checksum: "
           cat $black_list_file
-          log_file=$(basename ${{matrix.test_file}}).log
-          COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a $log_file
-          mutate_report=`LOG_FILE=$log_file python3 .github/scripts/parse_mutate_log.py`
-          echo "mutate_report is $mutate_report"
+
+          go-mutesting $source_file --debug --no-exec --do-not-remove-tmp-folder  --blacklist $black_list_file | tee -a mutate.log
+          mutation_dir=$(cat mutate.log | grep "Save mutations into" | awk -F' ' '{print $4}' | sed -e 's:"::g')
+          echo "mutation dir is $mutation_dir"
+          JOB_INDEX=$job_index JOB_TOTAL=$job_total MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutesting.py | tee -a mutesting.log
+          if [ $? != 0 ]; then echo "run mutesting.py failed" && exit 1; fi
+          mutate_report=$(tail -1 mutesting.log)
+          echo "mutate_report: $mutate_report"
           echo "mutate_report=$mutate_report" >> $GITHUB_ENV
+          
+          # report_id=$(echo mutate_report_${{matrix.test_file}} | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
+          # echo "report_id is $report_id"
+          # echo "$report_id=$mutate_report" >> $GITHUB_ENV
+
+          # log_file=$(basename ${{matrix.test_file}}).log
+          # COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a $log_file
+          # mutate_report=`LOG_FILE=$log_file python3 .github/scripts/parse_mutate_log.py`
+          # echo "mutate_report is $mutate_report"
+          # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
 
       - uses: mshick/add-pr-comment@v2
         with:
@@ -194,6 +258,32 @@ jobs:
             Report detail: ${{ steps.jobs.outputs.html_url }}
             Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
 
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [build-matrix, mutate-test]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v2
+      # - name: print
+      #   run: |
+      #     files=($(echo ${{ needs.build-matrix.outputs.matrix }} | sed -e 's:"::g' | sed -e 's:\[::g' | sed -e 's:\]::g' | sed -e 's:,: :g'))
+      #     echo ${files[@]}
+      #     echo "job url is ${{needs.mutate-test.outputs.job_url_pkg_meta_config_test_go_1}}"
+      #     for file in ${files[@]}; 
+      #     do
+      #       echo "file is $file"
+      #       job_url_id=$(echo job_url_$file | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
+      #       echo "job_url_id is $job_url_id"
+      #     done
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
         uses: juicedata/slack-notify-action@main
@@ -201,7 +291,7 @@ jobs:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
-      - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
-        timeout-minutes: 60
-        uses: lhotari/action-upterm@v1
+      - name: Success
+        if: ${{ success() }}
+        run: echo "All Done"
+
