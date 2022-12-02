@@ -127,7 +127,6 @@ jobs:
           echo "job url is : ${{ steps.jobs.outputs.html_url }}"
           echo "$job_url_id=${{ steps.jobs.outputs.html_url }}" >> $GITHUB_OUTPUT
           echo $GITHUB_OUTPUT
-          exit 1
           
       - name: Build
         uses: ./.github/actions/build
@@ -142,6 +141,7 @@ jobs:
           sudo apt install -y redis-server
           sudo apt install -y libacl1-dev
           sudo apt install -y attr
+          sudo apt install python3-tk
           sudo mkdir -p /home/travis/.m2/
 
       - name: Download Zip
@@ -260,8 +260,7 @@ jobs:
             Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
 
       - name: Setup upterm session
-        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
-        if: failure()
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
