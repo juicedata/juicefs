@@ -303,6 +303,7 @@ func push2Gateway(pushGatewayAddr, pushAuth string, pushInterVal time.Duration, 
 			pusher.BasicAuth(parts[0], parts[1])
 		}
 	}
+	pusher.Client(&http.Client{Timeout: 2 * time.Second})
 	pushers = append(pushers, pusher)
 
 	pOnce.Do(func() {
