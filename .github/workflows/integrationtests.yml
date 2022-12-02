@@ -17,6 +17,12 @@ on:
       - '**.md'
       - '.github/**'
   workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
 
 jobs:
   integrationtests:
@@ -104,5 +110,6 @@ jobs:
 
 
       - name: Setup upterm session
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        timeout-minutes: 60
         uses: lhotari/action-upterm@v1
