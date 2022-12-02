@@ -17,6 +17,7 @@
 package vfs
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"reflect"
@@ -737,21 +738,40 @@ func TestInternalFile(t *testing.T) {
 	} else {
 		off += uint64(n)
 	}
-	// info
+	// legacy info
 	buf = make([]byte, 4+4+8)
 	w = utils.FromBuffer(buf)
-	w.Put32(meta.Info)
+	w.Put32(meta.LegacyInfo)
 	w.Put32(8)
 	w.Put64(1)
 	if e := v.Write(ctx, fe.Inode, w.Bytes(), off, fh); e != 0 {
-		t.Fatalf("write info: %s", e)
+		t.Fatalf("write legacy info: %s", e)
 	}
 	off += uint64(len(buf))
 	buf = make([]byte, 1024*10)
 	if n, e = readControl(buf, &off); e != 0 {
 		t.Fatalf("read result: %s %d", e, n)
 	} else if !strings.Contains(string(buf[:n]), "dirs:") {
-		t.Fatalf("info result: %s", string(buf[:n]))
+		t.Fatalf("legacy info result: %s", string(buf[:n]))
+	} else {
+		off += uint64(n)
+	}
+	// info v2
+	buf = make([]byte, 4+4+8)
+	w = utils.FromBuffer(buf)
+	w.Put32(meta.InfoV2)
+	w.Put32(8)
+	w.Put64(1)
+	if e := v.Write(ctx, fe.Inode, w.Bytes(), off, fh); e != 0 {
+		t.Fatalf("write info v2: %s", e)
+	}
+	off += uint64(len(buf))
+	buf = make([]byte, 1024*10)
+	var infoResp InfoResponse
+	if n, e = readControl(buf, &off); e != 0 {
+		t.Fatalf("read result: %s %d", e, n)
+	} else if infoResp.Decode(bytes.NewBuffer(buf[:n])) != nil {
+		t.Fatalf("info v2 result: %s", string(buf[:n]))
 	} else {
 		off += uint64(n)
 	}

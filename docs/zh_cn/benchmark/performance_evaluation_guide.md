@@ -1,10 +1,8 @@
 ---
-sidebar_label: 性能评估指南
+title: 性能评估指南
 sidebar_position: 2
 slug: /performance_evaluation_guide
 ---
-
-# JuiceFS 性能评估指南
 
 在进行性能测试之前，最好写下该使用场景的大致描述，包括：
 

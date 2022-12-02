@@ -18,7 +18,9 @@ package vfs
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -247,6 +249,59 @@ func (v *VFS) caclObjects(id uint64, size, offset, length uint32) []*obj {
 	return objs
 }
 
+type InfoResponse struct {
+	Ino     Ino
+	Failed  bool
+	Reason  string
+	Summary meta.Summary
+	Paths   []string
+	Chunks  []*chunkSlice
+	Objects []*chunkObj
+	PLocks  []meta.PLockItem
+	FLocks  []meta.FLockItem
+}
+
+type chunkSlice struct {
+	ChunkIndex uint64
+	meta.Slice
+}
+
+type chunkObj struct {
+	ChunkIndex     uint64
+	Key            string
+	Size, Off, Len uint32
+}
+
+func (r *InfoResponse) Encode() []byte {
+	resp, _ := json.Marshal(r)
+	buffer := utils.NewBuffer(4 + uint32(len(resp)))
+	buffer.Put32(uint32(len(resp)))
+	buffer.Put(resp)
+	return buffer.Bytes()
+}
+
+func (r *InfoResponse) Decode(reader io.Reader) error {
+	sizeBuf := make([]byte, 4)
+	n := 0
+	for n == 0 {
+		i, err := reader.Read(sizeBuf[n:])
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if i == 1 && sizeBuf[0] == byte(syscall.EINVAL&0xff) {
+			return syscall.EINVAL
+		}
+		n += i
+	}
+
+	size := utils.ReadBuffer(sizeBuf).Get32()
+	respBuf := make([]byte, size)
+	if _, err := io.ReadFull(reader, respBuf); err != nil {
+		return err
+	}
+	return json.Unmarshal(respBuf, r)
+}
+
 func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, data *[]byte) {
 	switch cmd {
 	case meta.Rmr:
@@ -269,7 +324,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			}
 		}
 		*data = append(*data, uint8(st))
-	case meta.Info:
+	case meta.LegacyInfo:
 		var summary meta.Summary
 		inode := Ino(r.Get64())
 		var recursive uint8 = 1
@@ -329,6 +384,51 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		}
 		wb.Put32(uint32(w.Len()))
 		*data = append(*data, append(wb.Bytes(), w.Bytes()...)...)
+	case meta.InfoV2:
+		inode := Ino(r.Get64())
+		info := &InfoResponse{
+			Ino: inode,
+		}
+
+		var recursive uint8 = 1
+		if r.HasMore() {
+			recursive = r.Get8()
+		}
+		var raw bool
+		if r.HasMore() {
+			raw = r.Get8() != 0
+		}
+
+		r := meta.GetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
+		if r != 0 {
+			info.Failed = true
+			info.Reason = r.Error()
+			*data = append(*data, info.Encode()...)
+			return
+		}
+
+		info.Paths = v.Meta.GetPaths(ctx, inode)
+		if info.Summary.Files == 1 && info.Summary.Dirs == 0 {
+			for indx := uint64(0); indx*meta.ChunkSize < info.Summary.Length; indx++ {
+				var cs []meta.Slice
+				_ = v.Meta.Read(ctx, inode, uint32(indx), &cs)
+				for _, c := range cs {
+					if raw {
+						info.Chunks = append(info.Chunks, &chunkSlice{indx, c})
+					} else {
+						for _, o := range v.caclObjects(c.Id, c.Size, c.Off, c.Len) {
+							info.Objects = append(info.Objects, &chunkObj{indx, o.key, o.size, o.off, o.len})
+						}
+					}
+				}
+			}
+		}
+
+		var err error
+		if info.PLocks, info.FLocks, err = v.Meta.ListLocks(ctx, inode); err != nil {
+			info.Reason = err.Error()
+		}
+		*data = append(*data, info.Encode()...)
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()

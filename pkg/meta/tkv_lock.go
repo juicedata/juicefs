@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"context"
 	"syscall"
 	"time"
 
@@ -220,4 +221,30 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 		}
 	}
 	return errno(err)
+}
+
+func (m *kvMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
+	fKey := m.flockKey(inode)
+	pKey := m.plockKey(inode)
+
+	var flocks []FLockItem
+	var plocks []PLockItem
+	err := m.txn(func(tx kvTxn) error {
+		fv := tx.get(fKey)
+		fs := unmarshalFlock(fv)
+		for k, t := range fs {
+			flocks = append(flocks, FLockItem{ownerKey{k.sid, k.owner}, string(t)})
+		}
+
+		pv := tx.get(pKey)
+		owners := unmarshalPlock(pv)
+		for k, records := range owners {
+			ls := loadLocks(records)
+			for _, l := range ls {
+				plocks = append(plocks, PLockItem{ownerKey{k.sid, k.owner}, l})
+			}
+		}
+		return nil
+	})
+	return plocks, flocks, err
 }

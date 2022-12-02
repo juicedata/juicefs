@@ -1,13 +1,11 @@
 ---
-sidebar_label: 如何设置对象存储
+title: 如何设置对象存储
 sidebar_position: 2
 slug: /how_to_setup_object_storage
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
-# 如何设置对象存储
 
 通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md)可以了解到，JuiceFS 是一个数据与元数据分离的分布式文件系统，以对象存储作为主要的数据存储，以 Redis、PostgreSQL、MySQL 等数据库作为元数据存储。
 

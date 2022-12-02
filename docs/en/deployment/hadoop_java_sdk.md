@@ -1,13 +1,11 @@
 ---
-sidebar_label: Use JuiceFS on Hadoop Ecosystem
+title: Use JuiceFS on Hadoop Ecosystem
 sidebar_position: 5
 slug: /hadoop_java_sdk
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
-# Use JuiceFS on Hadoop Ecosystem
 
 JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK. Various applications in the Hadoop ecosystem can smoothly use JuiceFS to store data without changing the code.
 

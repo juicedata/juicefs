@@ -1,9 +1,7 @@
 ---
-sidebar_label: Usage Tracking
+title: Usage Tracking
 sidebar_position: 4
 ---
-
-# Usage Tracking
 
 JuiceFS by default collects and reports **anonymous** usage data. It only collects core metrics (e.g. version number, file system size), no user or any sensitive data will be collected. You could review related code [here](https://github.com/juicedata/juicefs/blob/main/pkg/usage/usage.go).
 

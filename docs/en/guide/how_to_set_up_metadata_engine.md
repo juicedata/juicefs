@@ -1,13 +1,11 @@
 ---
-sidebar_label: How to Set Up Metadata Engine
+title: How to Set Up Metadata Engine
 sidebar_position: 1
 slug: /databases_for_metadata
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
-# How to Set Up Metadata Engine
 
 :::tip Version Tips
 The environment variable `META_PASSWORD` used in this document is a new feature in JuiceFS v1.0, and not applied to old clients. Please [upgrade the clients](../administration/upgrade.md) before using it if you are using the old ones.

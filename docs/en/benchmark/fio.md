@@ -1,9 +1,8 @@
 ---
-sidebar_label: Benchmark with fio
+title: Benchmark with fio
 sidebar_position: 7
 slug: /fio
 ---
-# Benchmark with fio
 
 :::tip
 Trash is enabled in JuiceFS v1.0+ by default. As a result, temporary files are created and deleted in the file system during the benchmark, and these files will be eventually dumped into a directory named `.trash`. To avoid storage space being occupied by `.trash`, you can run command `juicefs config META-URL --trash-days 0` to disable Trash before benchmark. See [trash](../security/trash.md) for details.

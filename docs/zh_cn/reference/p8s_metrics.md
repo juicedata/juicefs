@@ -1,10 +1,8 @@
 ---
-sidebar_label: JuiceFS 监控指标
+title: JuiceFS 监控指标
 sidebar_position: 2
 slug: /p8s_metrics
 ---
-
-# JuiceFS 监控指标
 
 :::tip 提示
 请查看[「监控」](../administration/monitoring.md)文档了解如何收集及展示 JuiceFS 监控指标

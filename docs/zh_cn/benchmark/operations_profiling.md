@@ -1,9 +1,8 @@
 ---
-sidebar_label: 性能诊断
+title: 性能诊断
 sidebar_position: 3
 slug: /operations_profiling
 ---
-# JuiceFS 性能诊断
 
 ## 介绍
 

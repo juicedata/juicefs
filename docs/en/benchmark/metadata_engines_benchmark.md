@@ -1,10 +1,8 @@
 ---
-sidebar_label: Metadata Engines Benchmark
+title: Metadata Engines Benchmark
 sidebar_position: 6
 slug: /metadata_engines_benchmark
 ---
-
-# Metadata Engines Benchmark
 
 Conclusion first:
 

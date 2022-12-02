@@ -1,9 +1,8 @@
 ---
-sidebar_label: Use JuiceFS on Docker
+title: Use JuiceFS on Docker
 sidebar_position: 3
 slug: /juicefs_on_docker
 ---
-# Use JuiceFS on Docker
 
 There are several common ways to use JuiceFS as Docker persistent storage.
 

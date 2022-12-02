@@ -137,3 +137,12 @@ grep "read (148153116," access.log
 /go/pkg/tool/linux_amd64/link: running gcc failed: exit status 1
 /go/pkg/tool/linux_amd64/compile: signal: killed
 ```
+
+如果编译环境与运行环境的 glibc 版本不同，会发生如下报错：
+
+```
+$ juicefs
+juicefs: /lib/aarch64-linux-gnu/libc.so.6: version 'GLIBC_2.28' not found (required by juicefs)
+```
+
+这需要你在运行环境重新编译 JuiceFS 客户端，大部分 Linux 发行版都预置了 glibc，你可以用 `ldd --version` 确认其版本。

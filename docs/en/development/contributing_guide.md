@@ -1,9 +1,7 @@
 ---
-sidebar_label: Contributing Guide
+title: Contributing Guide
 sidebar_position: 1
 ---
-
-# Contributing to JuiceFS
 
 ## Guidelines
 
