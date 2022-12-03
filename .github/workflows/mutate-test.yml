@@ -255,6 +255,10 @@ jobs:
         if: env.WORKFLOW_CONCLUSION == 'failure'
         run: exit 1
 
+      - name: Install tools
+        run: |
+          sudo pip install mysqlclient
+
       - name: Generate mutate report
         run: |
           export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
