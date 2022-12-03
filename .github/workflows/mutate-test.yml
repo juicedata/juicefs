@@ -59,12 +59,12 @@ jobs:
               source_file_name=${test_file_name%"_test.go"}.go
               echo "source_file_name is :" $source_file_name
               black_list_file=black.list
-              TEST_FILE_NAME="$test_file_name" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/parse_black_list.py 
+              TEST_FILE_NAME="$test_file_name" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/mutate/parse_black_list.py 
               echo "black list checksum: "
               cat $black_list_file
               total_count=$(go-mutesting $source_file_name --debug --no-exec --blacklist $black_list_file| grep "Save mutation into" | wc -l)
               echo "total_count is $total_count"
-              job_total=$(TEST_FILE_NAME=$test_file_name python3 .github/scripts/parse_job_total.py)
+              job_total=$(TEST_FILE_NAME=$test_file_name python3 .github/scripts/mutate/parse_job_total.py)
               echo "job_total specified: $job_total"
               if [ $job_total -eq 0 ]; then
                 if [ $total_count -gt 200 ]; then
@@ -130,6 +130,11 @@ jobs:
           
       - name: Build
         uses: ./.github/actions/build
+
+      - name: Remove problem matcher for go
+        run: |
+          # https://github.com/actions/setup-go/blob/main/matchers.json
+          echo "::remove-matcher owner=go::"
 
       - name: install go-mutesting
         run: |
@@ -209,7 +214,7 @@ jobs:
           package_path=$(dirname $test_file)
           echo "package path is :" $package_path
 
-          test_cases=$(TEST_FILE_NAME=$test_file python3 .github/scripts/parse_test_cases.py)
+          test_cases=$(TEST_FILE_NAME=$test_file python3 .github/scripts/mutate/parse_test_cases.py)
           if [ $? -ne 0 ]; then
             echo "no test cases in test file, will not run mutate test"
             exit 0
@@ -226,7 +231,7 @@ jobs:
           fi
           
           black_list_file=black.list
-          TEST_FILE_NAME="$test_file" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/parse_black_list.py 
+          TEST_FILE_NAME="$test_file" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/mutate/parse_black_list.py 
           echo "black list checksum: "
           cat $black_list_file
 
@@ -244,8 +249,8 @@ jobs:
           # echo "$report_id=$mutate_report" >> $GITHUB_ENV
 
           # log_file=$(basename ${{matrix.test_file}}).log
-          # COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a $log_file
-          # mutate_report=`LOG_FILE=$log_file python3 .github/scripts/parse_mutate_log.py`
+          # COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutate/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a $log_file
+          # mutate_report=`LOG_FILE=$log_file python3 .github/scripts/mutate/parse_mutate_log.py`
           # echo "mutate_report is $mutate_report"
           # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
 
@@ -256,7 +261,7 @@ jobs:
             *Mutate Test Report For ${{matrix.test_file}}*
             ${{env.mutate_report}} 
             Report detail: ${{ steps.jobs.outputs.html_url }}
-            Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
+            Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/mutate/how_to_use_mutate_test.md  
 
       - name: Setup upterm session
         if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
