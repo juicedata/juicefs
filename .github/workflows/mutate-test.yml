@@ -59,12 +59,12 @@ jobs:
               source_file_name=${test_file_name%"_test.go"}.go
               echo "source_file_name is :" $source_file_name
               black_list_file=black.list
-              TEST_FILE_NAME="$test_file_name" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/parse_black_list.py 
+              TEST_FILE_NAME="$test_file_name" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/mutate/parse_black_list.py 
               echo "black list checksum: "
               cat $black_list_file
               total_count=$(go-mutesting $source_file_name --debug --no-exec --blacklist $black_list_file| grep "Save mutation into" | wc -l)
               echo "total_count is $total_count"
-              job_total=$(TEST_FILE_NAME=$test_file_name python3 .github/scripts/parse_job_total.py)
+              job_total=$(TEST_FILE_NAME=$test_file_name python3 .github/scripts/mutate/parse_job_total.py)
               echo "job_total specified: $job_total"
               if [ $job_total -eq 0 ]; then
                 if [ $total_count -gt 200 ]; then
@@ -120,32 +120,27 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           job_name: ${{matrix.test_file}}
 
-      - name: Set Current Job Log URL to Env
-        run: |
-          job_url_id=$(echo job_url_${{matrix.test_file}} | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
-          echo "job_url_id is $job_url_id"
-          echo "job url is : ${{ steps.jobs.outputs.html_url }}"
-          echo "$job_url_id=${{ steps.jobs.outputs.html_url }}" >> $GITHUB_OUTPUT
-          echo $GITHUB_OUTPUT
-          
       - name: Build
         uses: ./.github/actions/build
 
-      - name: install go-mutesting
+      - name: Remove problem matcher for go
         run: |
-          go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+          # https://github.com/actions/setup-go/blob/main/matchers.json
+          echo "::remove-matcher owner=go::"
 
       - name: Install Packages
         run: |
+          go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
           sudo apt install -y g++-multilib
           sudo apt install -y redis-server
           sudo apt install -y libacl1-dev
           sudo apt install -y attr
           sudo apt install python3-tk
-          sudo mkdir -p /home/travis/.m2/
-
+          sudo pip install mysqlclient
+          
       - name: Download Zip
         run: |
+          sudo mkdir -p /home/travis/.m2/
           wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
           wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
           wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
@@ -209,7 +204,7 @@ jobs:
           package_path=$(dirname $test_file)
           echo "package path is :" $package_path
 
-          test_cases=$(TEST_FILE_NAME=$test_file python3 .github/scripts/parse_test_cases.py)
+          test_cases=$(TEST_FILE_NAME=$test_file python3 .github/scripts/mutate/parse_test_cases.py)
           if [ $? -ne 0 ]; then
             echo "no test cases in test file, will not run mutate test"
             exit 0
@@ -226,37 +221,19 @@ jobs:
           fi
           
           black_list_file=black.list
-          TEST_FILE_NAME="$test_file" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/parse_black_list.py 
+          TEST_FILE_NAME="$test_file" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/mutate/parse_black_list.py 
           echo "black list checksum: "
           cat $black_list_file
 
           go-mutesting $source_file --debug --no-exec --do-not-remove-tmp-folder  --blacklist $black_list_file | tee -a mutate.log
           mutation_dir=$(cat mutate.log | grep "Save mutations into" | awk -F' ' '{print $4}' | sed -e 's:"::g')
           echo "mutation dir is $mutation_dir"
-          JOB_INDEX=$job_index JOB_TOTAL=$job_total MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutesting.py | tee -a mutesting.log
+          JOB_INDEX=$job_index JOB_TOTAL=$job_total MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutate/mutesting.py | tee -a mutesting.log
+          # COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutate/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a mutesting.log
           if [ $? != 0 ]; then echo "run mutesting.py failed" && exit 1; fi
-          mutate_report=$(tail -1 mutesting.log)
-          echo "mutate_report: $mutate_report"
-          echo "mutate_report=$mutate_report" >> $GITHUB_ENV
           
-          # report_id=$(echo mutate_report_${{matrix.test_file}} | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
-          # echo "report_id is $report_id"
-          # echo "$report_id=$mutate_report" >> $GITHUB_ENV
-
-          # log_file=$(basename ${{matrix.test_file}}).log
-          # COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a $log_file
-          # mutate_report=`LOG_FILE=$log_file python3 .github/scripts/parse_mutate_log.py`
-          # echo "mutate_report is $mutate_report"
-          # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
-
-      - uses: mshick/add-pr-comment@v2
-        with:
-          allow-repeats: true
-          message: |
-            *Mutate Test Report For ${{matrix.test_file}}*
-            ${{env.mutate_report}} 
-            Report detail: ${{ steps.jobs.outputs.html_url }}
-            Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/how_to_use_mutate_test.md  
+          export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
+          JOB_NAME=${{matrix.test_file}} JOB_URL=${{steps.jobs.outputs.html_url}}  REPORT_FILE=mutesting.log python3 .github/scripts/mutate/save_report.py
 
       - name: Setup upterm session
         if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
@@ -269,20 +246,38 @@ jobs:
     if: always()
     steps:
       - uses: technote-space/workflow-conclusion-action@v2
-      # - name: print
-      #   run: |
-      #     files=($(echo ${{ needs.build-matrix.outputs.matrix }} | sed -e 's:"::g' | sed -e 's:\[::g' | sed -e 's:\]::g' | sed -e 's:,: :g'))
-      #     echo ${files[@]}
-      #     echo "job url is ${{needs.mutate-test.outputs.job_url_pkg_meta_config_test_go_1}}"
-      #     for file in ${files[@]}; 
-      #     do
-      #       echo "file is $file"
-      #       job_url_id=$(echo job_url_$file | sed -e 's:/:_:g' | sed -e 's:\.:_:g' | sed -e 's:-:_:g' )
-      #       echo "job_url_id is $job_url_id"
-      #     done
+      - uses: actions/checkout@v3
+
       - name: Check Failure
         if: env.WORKFLOW_CONCLUSION == 'failure'
         run: exit 1
+
+      - name: Install tools
+        run: |
+          sudo pip install mysqlclient
+
+      - name: Generate mutate report
+        run: |
+          export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
+          mutate_report=$(python3 .github/scripts/mutate/query_report.py)
+          echo "mutate_report is $mutate_report"
+          # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
+          MY_STRING=$(cat << EOF
+          $mutate_report
+          EOF
+          )
+          echo "MY_STRING<<EOF" >> $GITHUB_ENV
+          echo "$MY_STRING" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+      - uses: mshick/add-pr-comment@v2
+        with:
+          allow-repeats: true
+          message: |
+            *Mutate Test Report*
+            ${{env.MY_STRING}} 
+            
+            Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/mutate/how_to_use_mutate_test.md  
 
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
