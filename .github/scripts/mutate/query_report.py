@@ -1,5 +1,6 @@
 
 import os
+import sys
 import MySQLdb
 
 def query_report(repo, run_id):
@@ -9,15 +10,16 @@ def query_report(repo, run_id):
         WHERE github_repo="{repo}" AND github_run_id={run_id}""")
     r=db.store_result()
     for i in range(r.num_rows()):
-        row = r.fetch_row()
-        print(row)
+        row = r.fetch_row()[0]
+        print(f'job name: {row[0]}, job url: {row[1]}, passed {row[2]}, failed {row[3]}')
     db.close()
 
 if __name__ == "__main__":
     repo = os.environ.get('GITHUB_REPOSITORY')
     run_id = os.environ.get('GITHUB_RUN_ID')
-    if os.environ.get('REPO'): 
-        repo = os.environ.get('REPO')
-    if os.environ.get('RUN_ID'): 
-        run_id = os.environ.get('RUN_ID')
+    if not repo: 
+        repo = 'juicedata/juicefs'
+    if not run_id: 
+        run_id = '3608018336'
+    print(f'repo is {repo}, run_id is {run_id}', file=sys.stderr)
     query_report(repo, run_id)

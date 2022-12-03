@@ -133,7 +133,7 @@ jobs:
       - name: Generate mutate report
         run: |
           export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
-          REPO=juicedata/juicefs RUN_ID=3608018336 mutate_report=$(python3 .github/scripts/mutate/query_report.py)
+          mutate_report=$(python3 .github/scripts/mutate/query_report.py)
           echo "mutate_report is $mutate_report"
           # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
           mutate_report="first line \n seconde line \n third line"
