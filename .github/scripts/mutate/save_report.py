@@ -22,8 +22,7 @@ import argparse
 #   `others` int
 # )
 
-def add_report(job_name, report):
-    result = float(result)
+def save_report(job_name, report):
     passowrd = os.environ['MYSQL_PASSWORD']
     github_repo = os.environ.get('GITHUB_REPOSITORY')
     print(f'github_repo is: {github_repo}')
@@ -39,7 +38,7 @@ def add_report(job_name, report):
     db = MySQLdb.connect(host="8.210.231.144", user="juicedata", passwd=passowrd, db="mutate")
     c = db.cursor()
     c.execute(f"insert into report(github_repo, github_ref_name,  github_sha, github_run_id, github_job_url, created_date, job_name, passed, failed, compile_error, out_of_coverage, skip_by_comment, others) \
-        values({github_repo}, {github_ref_name},  {github_sha}, {github_run_id}, {github_job_url}, {created_date}, {job_name}, {report['passed']}, {report['failed']}, {report['compile_error']}, {report['out_of_coverage']}, {report['skip_by_comment']}, {report['others']})")
+        values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (github_repo, github_ref_name, github_sha, github_run_id, github_job_url, created_date, job_name, report['passed'], report['failed'], report['compile_error'], report['out_of_coverage'], report['skip_by_comment'], report['others']))
     db.commit()
     c.close()
     db.close()
@@ -48,11 +47,12 @@ def add_report(job_name, report):
 if __name__ == "__main__":
     job_name = os.environ.get('JOB_NAME')
     report_file = os.environ.get('REPORT_FILE')
+    print(f'save report for {job_name}, report file is {report_file}')
     with open(report_file) as f:
         lines = f.readlines()
         print(f'last line: {lines[-1]}')
         if lines[-1].startswith('mutate_report:'):
-            add_report(job_name, eval(lines[-1].replace('mutate_report:', '')))
+            save_report(job_name, eval(lines[-1].replace('mutate_report:', '')))
     
 
 
