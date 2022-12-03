@@ -120,23 +120,13 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           job_name: ${{matrix.test_file}}
 
-      - name: Install Packages
-        run: |
-          sudo apt install -y g++-multilib
-          sudo apt install -y redis-server
-          sudo apt install -y libacl1-dev
-          sudo apt install -y attr
-          sudo apt install python3-tk
-          sudo pip install mysqlclient
-          sudo mkdir -p /home/travis/.m2/
-
       - name: Generate mutate report
         run: |
+          sudo pip install mysqlclient
           export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
           mutate_report=$(python3 .github/scripts/mutate/query_report.py)
           echo "mutate_report is $mutate_report"
           # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
-          mutate_report="first line \n seconde line \n third line"
           MY_STRING=$(cat << EOF
           $mutate_report
           EOF
@@ -161,13 +151,19 @@ jobs:
           # https://github.com/actions/setup-go/blob/main/matchers.json
           echo "::remove-matcher owner=go::"
 
-      - name: install go-mutesting
+      - name: Install Packages
         run: |
           go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
-
-
+          sudo apt install -y g++-multilib
+          sudo apt install -y redis-server
+          sudo apt install -y libacl1-dev
+          sudo apt install -y attr
+          sudo apt install python3-tk
+          sudo pip install mysqlclient
+          
       - name: Download Zip
         run: |
+          sudo mkdir -p /home/travis/.m2/
           wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
           wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
           wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
