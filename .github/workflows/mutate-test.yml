@@ -120,29 +120,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           job_name: ${{matrix.test_file}}
 
-      - name: Generate mutate report
-        run: |
-          sudo pip install mysqlclient
-          export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
-          mutate_report=$(python3 .github/scripts/mutate/query_report.py)
-          echo "mutate_report is $mutate_report"
-          # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
-          MY_STRING=$(cat << EOF
-          $mutate_report
-          EOF
-          )
-          echo "MY_STRING<<EOF" >> $GITHUB_ENV
-          echo "$MY_STRING" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-          
-      - uses: mshick/add-pr-comment@v2
-        with:
-          allow-repeats: true
-          message: |
-            *Mutate Test Report*
-            ${{env.MY_STRING}} 
-            Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/mutate/how_to_use_mutate_test.md  
-
       - name: Build
         uses: ./.github/actions/build
 
@@ -285,17 +262,14 @@ jobs:
           mutate_report=$(python3 .github/scripts/mutate/query_report.py)
           echo "mutate_report is $mutate_report"
           # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
-
           MY_STRING=$(cat << EOF
-          first line
-          second line
-          third line
+          $mutate_report
           EOF
           )
           echo "MY_STRING<<EOF" >> $GITHUB_ENV
           echo "$MY_STRING" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
-
+          
       - uses: mshick/add-pr-comment@v2
         with:
           allow-repeats: true
