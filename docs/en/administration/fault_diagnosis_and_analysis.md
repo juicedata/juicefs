@@ -3,6 +3,7 @@ title: Troubleshooting Methods
 sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
 ---
+# Fault Diagnosis and Analysis
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
