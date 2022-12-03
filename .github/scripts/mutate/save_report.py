@@ -6,21 +6,21 @@ import MySQLdb
 from datetime import datetime
 import argparse
 # CREATE DATABASE mutate
-CREATE TABLE `report` (
-  `github_repo` varchar(128) DEFAULT NULL,
-  `github_ref_name` varchar(64) DEFAULT NULL,
-  `github_sha` varchar(128) DEFAULT NULL,
-  `github_run_id` varchar(64) DEFAULT NULL,
-  `github_job_url` varchar(1024) DEFAULT NULL,
-  `created_date` datetime DEFAULT NULL,
-  `job_name` varchar(64) DEFAULT NULL,
-  `passed` int,
-  `failed` int,
-  `compile_error` int, 
-  `out_of_coverage` int, 
-  `skip_by_comment` int,
-  `others` int
-)
+# CREATE TABLE `report` (
+#   `github_repo` varchar(128) DEFAULT NULL,
+#   `github_ref_name` varchar(64) DEFAULT NULL,
+#   `github_sha` varchar(128) DEFAULT NULL,
+#   `github_run_id` varchar(64) DEFAULT NULL,
+#   `github_job_url` varchar(1024) DEFAULT NULL,
+#   `created_date` datetime DEFAULT NULL,
+#   `job_name` varchar(64) DEFAULT NULL,
+#   `passed` int,
+#   `failed` int,
+#   `compile_error` int, 
+#   `out_of_coverage` int, 
+#   `skip_by_comment` int,
+#   `others` int
+# )
 
 def add_report(job_name, report):
     result = float(result)
