@@ -17,9 +17,7 @@ def query_report(repo, run_id):
 if __name__ == "__main__":
     repo = os.environ.get('GITHUB_REPOSITORY')
     run_id = os.environ.get('GITHUB_RUN_ID')
-    if not repo: 
-        repo = 'juicedata/juicefs'
-    if not run_id: 
-        run_id = '3608018336'
+    repo = 'juicedata/juicefs'
+    run_id = '3608018336'
     print(f'repo is {repo}, run_id is {run_id}', file=sys.stderr)
     query_report(repo, run_id)
