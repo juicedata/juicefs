@@ -276,6 +276,7 @@ jobs:
           message: |
             *Mutate Test Report*
             ${{env.MY_STRING}} 
+            
             Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/mutate/how_to_use_mutate_test.md  
 
       - name: Send Slack Notification
