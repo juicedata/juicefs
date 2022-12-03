@@ -51,7 +51,8 @@ if __name__ == "__main__":
     with open(report_file) as f:
         lines = f.readlines()
         print(f'last line: {lines[-1]}')
-        add_report(job_name, json.loads(lines[-1]))
+        if lines[-1].startswith('mutate_report:'):
+            add_report(job_name, eval(lines[-1].replace('mutate_report:', '')))
     
 
 
