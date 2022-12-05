@@ -21,7 +21,7 @@ endif
 
 juicefs: Makefile cmd/*.go pkg/*/*.go go.*
 	go version
-	go build -v -ldflags="$(LDFLAGS)"  -o juicefs .
+	go build -ldflags="$(LDFLAGS)"  -o juicefs .
 
 juicefs.lite: Makefile cmd/*.go pkg/*/*.go
 	go build -tags nogateway,nowebdav,nocos,nobos,nohdfs,noibmcos,noobs,nooss,noqingstor,noscs,nosftp,noswift,noupyun,noazure,nogs,noufile,nob2,nosqlite,nomysql,nopg,notikv,nobadger,noetcd \
