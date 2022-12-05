@@ -795,25 +795,25 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 func (store *cachedStore) UpdateCachedStoreRateLimit(limit int64, lastLimit int64, limitType string) {
 	switch limitType {
 	case "upLimit":
-		if (store.upLimit == nil || lastLimit == 0) && limit > 0 {
+		if store.upLimit == nil && limit > 0 {
 			store.upLimit = rate.NewLimiter(rate.Limit(float64(limit)*0.85), int(limit))
 		} else if store.upLimit != nil && limit != lastLimit {
-			if lastLimit > 0 && limit > 0 {
+			if limit > 0 {
 				store.upLimit.SetLimit(rate.Limit(float64(limit) * 0.85))
 				store.upLimit.SetBurst(int(limit))
 			} else if lastLimit > 0 && limit == 0 {
-				store.upLimit = nil
+				store.upLimit.SetLimit(rate.Inf)
 			}
 		}
 	case "downLimit":
-		if (store.downLimit == nil || lastLimit == 0) && limit > 0 {
+		if store.downLimit == nil && limit > 0 {
 			store.downLimit = rate.NewLimiter(rate.Limit(float64(limit)*0.85), int(limit))
 		} else if store.downLimit != nil && limit != lastLimit {
-			if lastLimit > 0 && limit > 0 {
+			if limit > 0 {
 				store.downLimit.SetLimit(rate.Limit(float64(limit) * 0.85))
 				store.downLimit.SetBurst(int(limit))
 			} else if lastLimit > 0 && limit == 0 {
-				store.downLimit = nil
+				store.downLimit.SetLimit(rate.Inf)
 			}
 		}
 	default:
