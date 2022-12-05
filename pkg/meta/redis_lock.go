@@ -20,6 +20,7 @@
 package meta
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"syscall"
@@ -205,4 +206,39 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 		}
 	}
 	return errno(err)
+}
+
+func (r *redisMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
+	fKey := r.flockKey(inode)
+	pKey := r.plockKey(inode)
+
+	rawFLocks, err := r.rdb.HGetAll(ctx, fKey).Result()
+	if err != nil {
+		return nil, nil, err
+	}
+	flocks := make([]FLockItem, 0, len(rawFLocks))
+	for k, v := range rawFLocks {
+		owner, err := parseOwnerKey(k)
+		if err != nil {
+			return nil, nil, err
+		}
+		flocks = append(flocks, FLockItem{*owner, v})
+	}
+
+	rawPLocks, err := r.rdb.HGetAll(ctx, pKey).Result()
+	if err != nil {
+		return nil, nil, err
+	}
+	plocks := make([]PLockItem, 0)
+	for k, d := range rawPLocks {
+		owner, err := parseOwnerKey(k)
+		if err != nil {
+			return nil, nil, err
+		}
+		ls := loadLocks([]byte(d))
+		for _, l := range ls {
+			plocks = append(plocks, PLockItem{*owner, l})
+		}
+	}
+	return plocks, flocks, nil
 }

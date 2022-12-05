@@ -1,9 +1,8 @@
 ---
-sidebar_label: 内部实现
+title: 内部实现
 sidebar_position: 3
 slug: /internals
 ---
-# JuiceFS 内部实现
 
 ## 1. 简介
 

@@ -40,7 +40,7 @@ func Min(a, b int) int {
 // Exists checks if the file/folder in given path exists
 func Exists(path string) bool {
 	_, err := os.Stat(path)
-	return err == nil || !os.IsNotExist(err)
+	return err == nil || !os.IsNotExist(err) //skip mutate
 }
 
 // SplitDir splits a path with default path list separator or comma.

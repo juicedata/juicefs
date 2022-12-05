@@ -1,8 +1,7 @@
 ---
-sidebar_label: 销毁文件系统
+title: 销毁文件系统
 sidebar_position: 8
 ---
-# 如何销毁文件系统
 
 JuiceFS 客户端提供了 `destroy` 命令用以彻底销毁一个文件系统，销毁操作将会产生以下结果：
 

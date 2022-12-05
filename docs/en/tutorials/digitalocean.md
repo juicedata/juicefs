@@ -1,9 +1,8 @@
 ---
-sidebar_label: Use JuiceFS on DigitalOcean
+title: Use JuiceFS on DigitalOcean
 sidebar_position: 5
 slug: /clouds/digitalocean
 ---
-# Use JuiceFS on DigitalOcean
 
 JuiceFS is designed for the cloud, using the cloud platform out-of-the-box storage and database services, and can be configured and put into use in as little as a few minutes. This article uses the DigitalOcean as an example to introduce how to quickly and easily install and use JuiceFS on the cloud computing platform.
 

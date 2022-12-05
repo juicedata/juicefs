@@ -1,9 +1,7 @@
 ---
-sidebar_label: 用量上报
+title: 用量上报
 sidebar_position: 4
 ---
-
-# 用量上报
 
 JuiceFS 默认会收集并上报**「匿名」**的使用数据。这些数据仅仅包含核心指标（如版本号、文件系统大小），不会包含任何用户信息或者敏感数据。你可以查看[这里](https://github.com/juicedata/juicefs/blob/main/pkg/usage/usage.go)检查相关代码。
 

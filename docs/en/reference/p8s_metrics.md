@@ -1,10 +1,8 @@
 ---
-sidebar_label: JuiceFS Metrics
+title: JuiceFS Metrics
 sidebar_position: 2
 slug: /p8s_metrics
 ---
-
-# JuiceFS Metrics
 
 :::tip
 Please see the ["Monitoring"](../administration/monitoring.md) documentation to learn how to collect and display JuiceFS monitoring metrics.

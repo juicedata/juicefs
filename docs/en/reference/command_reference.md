@@ -1,15 +1,11 @@
 ---
-sidebar_label: Command Reference
+title: Command Reference
 sidebar_position: 1
 slug: /command_reference
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
-# Command Reference
-
-There are many commands to help you manage your file system. This page provides a detailed reference for these commands.
 
 ## Overview
 
@@ -249,7 +245,7 @@ disable syslog (default: false)
 path of log file when running in background (default: `$HOME/.juicefs/juicefs.log` or `/var/log/juicefs.log`)
 
 `-o value`<br />
-other FUSE options (see [this document](../reference/fuse_mount_options.md) for more information)
+other FUSE options, see [FUSE Mount Options](../reference/fuse_mount_options.md)
 
 `--attr-cache value`<br />
 attributes cache timeout in seconds (default: 1), read [Kernel Metadata Cache](../guide/cache_management.md#kernel-metadata-cache)

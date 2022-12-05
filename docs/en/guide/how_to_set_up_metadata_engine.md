@@ -1,5 +1,5 @@
 ---
-sidebar_label: How to Set Up Metadata Engine
+title: How to Set Up Metadata Engine
 sidebar_position: 1
 slug: /databases_for_metadata
 ---
@@ -7,13 +7,11 @@ slug: /databases_for_metadata
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# How to Set Up Metadata Engine
-
 :::tip Version Tips
 The environment variable `META_PASSWORD` used in this document is a new feature in JuiceFS v1.0, and not applied to old clients. Please [upgrade the clients](../administration/upgrade.md) before using it if you are using the old ones.
 :::
 
-As mentioned in [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../reference/how_juicefs_store_files.md), JuiceFS is designed to store data and metadata seperately. Generally, data is stored in the cloud storage based on object storage, and metadata corresponding to the data is stored in an independent database. The database that supports storing metadata is referred to "Metadata Storage Engine".
+As mentioned in [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../introduction/architecture.md#how-juicefs-store-files), JuiceFS is designed to store data and metadata separately. Generally, data is stored in the cloud storage based on object storage, and metadata corresponding to the data is stored in an independent database. The database that supports storing metadata is referred to "Metadata Storage Engine".
 
 ## Metadata Storage Engine
 
@@ -178,7 +176,7 @@ juicefs format \
     pics
 ```
 
-:::note 
+:::note
 1. juicefs uses public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) by default, if you want to use a `non-public schema`,  you need to specify `search_path` in the connection string parameter. e.g `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
 2. If the `public schema` is not the first hit in the `search_path` configured on the PostgreSQL server, the `search_path` parameter must be explicitly set in the connection string.
 3. The `search_path` connection parameter can be set to multiple schemas natively, but currently juicefs only supports setting one. `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` will be considered illegal.
@@ -379,7 +377,7 @@ One can also add driver supported [PRAGMA Statements](https://www.sqlite.org/pra
 "sqlite3://my-jfs.db?cache=shared&_busy_timeout=5000"
 ```
 
-For more examples of SQLite database address format, please refer to [Go-SQLite3-Driver](https://github.com/mattn/go-sqlite3#connection-string).
+For more examples of SQLite database address format, please refer to [Go-SQLite3 Driver](https://github.com/mattn/go-sqlite3#connection-string).
 
 :::note
 Since SQLite is a single-file database, usually only the host where the database is located can access it. Therefore, SQLite database is more suitable for standalone use. For multiple servers sharing the same file system, it is recommended to use databases such as Redis or MySQL.
@@ -520,54 +518,58 @@ When mounting to the background, the path to the certificate needs to use an abs
 
 ## FoundationDB
 
-[FoundationDB](http://www.foundationdb.org/) is "a distributed database that can hold large-scale structured data on multiple clustered servers". The database system focuses on high performance, high scalability, and good fault tolerance.
+[FoundationDB](https://www.foundationdb.org) is a distributed database that can hold large-scale structured data on multiple clustered servers. The database system focuses on high performance, high scalability, and good fault tolerance.
 
 ### Create a file system
 
-When using foundationdb as the metadata engine, the `Meta-URL` parameter needs to be specified in the following format:
+When using FoundationDB as the metadata engine, the `Meta-URL` parameter needs to be specified in the following format:
 
-```
+```uri
 fdb://[config file address]?prefix=<prefix>
 ```
 
-The 'config file address' is The FDB cluster configuration file, which is used to connect to The FDB server. An sample is as follows :
+The `<cluster_file_path>` is the FoundationDB configuration file path, which is used to connect to the FoundationDB server. The `<prefix>` is a user-defined string, which can be used to distinguish multiple file systems or applications when they share the same FoundationDB cluster. For example:
 
-```bash
-juicefs format 
- fdb:///etc/foundationdb/fdb.cluster?prefix=jfs
- pics
-```
-### [Set up TLS](https://apple.github.io/foundationdb/tls.html)
-
-**Use OpenSSL to generate a CA certificate**
-
-```
-user@host:> openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout private.key -out cert.crt
-user@host:> cat cert.crt private.key > fdb.pem
+```shell
+juicefs format \
+    --storage s3 \
+    ... \
+    "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
+    pics
 ```
 
-**configure TLS**
+### Set up TLS
 
-|Command-line Option|Client Option|Environment Variable|	Purpose|
-|---------|-------|-------|------|
-|tls_certificate_file|TLS_cert_path| FDB_TLS_CERTIFICATE_FILE | Path to the file from which the local certificates can be loaded|
-| tls_key_file | TLS_key_path | FDB_TLS_KEY_FILE | Path to the file from which to load the private key | 
-| tls_verify_peers | tls_verify_peers | FDB_TLS_VERIFY_PEERS | The byte-string for the verification of peer certificates and sessions| 
-| tls_password | tls_password | FDB_TLS_PASSWORD | The byte-string representing the passcode for unencrypting the private key |
-| tls_ca_file | TLS_ca_path | FDB_TLS_CA_FILE | Path to the file containing the CA certificates to trust |
+If you need to enable TLS, the general steps are as follows. For details, please refer to [official documentation](https://apple.github.io/foundationdb/tls.html).
 
-**Configure the server**
+#### Use OpenSSL to generate a CA certificate
 
-The TLS parameters can be configured in foundationdb.conf or environment variables, as shown in the following configuration files (emphasis on the [foundationdb.4500] configuration).
-
+```shell
+$ openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout private.key -out cert.crt
+$ cat cert.crt private.key > fdb.pem
 ```
+
+#### Configure TLS
+
+| Command-line Option    | Client Option      | Environment Variable       | Purpose                                                                    |
+|------------------------|--------------------|----------------------------|----------------------------------------------------------------------------|
+| `tls_certificate_file` | `TLS_cert_path`    | `FDB_TLS_CERTIFICATE_FILE` | Path to the file from which the local certificates can be loaded           |
+| `tls_key_file`         | `TLS_key_path`     | `FDB_TLS_KEY_FILE`         | Path to the file from which to load the private key                        |
+| `tls_verify_peers`     | `tls_verify_peers` | `FDB_TLS_VERIFY_PEERS`     | The byte-string for the verification of peer certificates and sessions     |
+| `tls_password`         | `tls_password`     | `FDB_TLS_PASSWORD`         | The byte-string representing the passcode for unencrypting the private key |
+| `tls_ca_file`          | `TLS_ca_path`      | `FDB_TLS_CA_FILE`          | Path to the file containing the CA certificates to trust                   |
+
+#### Configure the server
+
+The TLS parameters can be configured in `foundationdb.conf` or environment variables, as shown in the following configuration files (emphasis on the `[foundationdb.4500]` configuration).
+
+```ini title="foundationdb.conf"
 [fdbmonitor]
 user = foundationdb
 group = foundationdb
 
 [general]
 restart-delay = 60
-
 ## by default, restart-backoff = restart-delay-reset-interval = restart-delay
 # initial-restart-delay = 0
 # restart-backoff = 60
@@ -609,26 +611,28 @@ logdir = /var/log/foundationdb
 [backup_agent.1]
 ```
 
-In addition, you need to add the suffix `:tls` after the address in fdb.cluster, fdb.cluster is as follows:
+In addition, you need to add the suffix `:tls` after the address in `fdb.cluster`, `fdb.cluster` is as follows:
 
-```
+```uri title="fdb.cluster"
 U6pT9Jhl:ClZfjAWM@127.0.0.1:4500:tls
 ```
 
-**Configure the client**
+#### Configure the client
 
-Fdbcli Similarly, you need to configure TLS parameters and fdb.cluster on the client machine.
+You need to configure TLS parameters and `fdb.cluster` on the client machine, `fdbcli` is the same.
 
-Connected by fdbcli
-```
+Connected by `fdbcli`:
+
+```shell
 fdbcli --tls_certificate_file=/etc/foundationdb/fdb.pem \
        --tls_ca_file=/etc/foundationdb/cert.crt \
        --tls_key_file=/etc/foundationdb/private.key \
        --tls_verify_peers=Check.Valid=0
 ```
 
-Connected by API
-```
+Connected by API (`fdbcli` also applies):
+
+```shell
 export FDB_TLS_CERTIFICATE_FILE=/etc/foundationdb/fdb.pem \
 export FDB_TLS_CA_FILE=/etc/foundationdb/cert.crt \
 export FDB_TLS_KEY_FILE=/etc/foundationdb/private.key \
@@ -638,6 +642,7 @@ export FDB_TLS_VERIFY_PEERS=Check.Valid=0
 ### Mount a file system
 
 ```shell
-juicefs mount -d 
-"fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" /mnt/jfs
+juicefs mount -d \
+    "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
+    /mnt/jfs
 ```

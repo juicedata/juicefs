@@ -1,10 +1,8 @@
 ---
-sidebar_label: Sync Accounts between Multiple Hosts
+title: Sync Accounts between Multiple Hosts
 sidebar_position: 7
 slug: /sync_accounts_between_multiple_hosts
 ---
-
-# Sync Accounts between Multiple Hosts
 
 JuiceFS supports Unix file permission (but not POSIX extended ACL), you can manage permissions by directory or file granularity, just like a local file system.
 

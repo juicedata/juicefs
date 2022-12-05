@@ -1,9 +1,8 @@
 ---
-sidebar_label: Use JuiceFS on Alibaba Cloud
+title: Use JuiceFS on Alibaba Cloud
 sidebar_position: 6
 slug: /clouds/aliyun
 ---
-# Use JuiceFS on Alibaba Cloud
 
 As shown in the figure below, JuiceFS is driven by both the database and the object storage. The files stored in JuiceFS are split into fixed-size data blocks and stored in the object store according to certain rules, while the metadata corresponding to the data is stored in the database.
 

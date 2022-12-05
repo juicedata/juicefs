@@ -1,15 +1,11 @@
 ---
-sidebar_label: 命令参考
+title: 命令参考
 sidebar_position: 1
 slug: /command_reference
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
-# JuiceFS 命令参考
-
-有许多命令可帮助您管理文件系统，该页面提供了有关这些命令的详细参考。
 
 ## 概览
 
@@ -251,7 +247,7 @@ consul 注册中心地址 (默认："127.0.0.1:8500")
 后台运行时日志文件的位置 (默认：`$HOME/.juicefs/juicefs.log` 或 `/var/log/juicefs.log`)
 
 `-o value`<br />
-其他 FUSE 选项 (参见[此文档](../reference/fuse_mount_options.md)来了解更多信息)
+其他 FUSE 选项，详见 [FUSE 挂载选项](../reference/fuse_mount_options.md)
 
 `--attr-cache value`<br />
 属性缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
@@ -326,7 +322,7 @@ consul 注册中心地址 (默认："127.0.0.1:8500")
 发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认：12)
 
 `--upload-delay value`<br />
-数据上传到对象存储的延迟时间，支持秒分时精度，对应格式分别为 ("s", "m", "h")，默认为 0 秒
+数据上传到对象存储的延迟时间，支持秒分时精度，对应格式分别为 ("s", "m", "h")，默认为 0 秒。如果在等待的时间内数据被应用删除，则无需再上传到对象存储，既提升了性能也节省了成本，如果数据只是临时落盘，之后会迅速删除，考虑用该选项进行优化。
 
 `--no-bgjob`<br />
 禁用后台作业（清理、备份等）（默认：false）

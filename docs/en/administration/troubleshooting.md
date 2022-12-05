@@ -137,3 +137,12 @@ Compiling JuiceFS requires GCC 5.4 and above, this error may occur when using lo
 /go/pkg/tool/linux_amd64/link: running gcc failed: exit status 1
 /go/pkg/tool/linux_amd64/compile: signal: killed
 ```
+
+If glibc version is different between build environment and runtime, you may see below error:
+
+```
+$ juicefs
+juicefs: /lib/aarch64-linux-gnu/libc.so.6: version 'GLIBC_2.28' not found (required by juicefs)
+```
+
+This requires you to re-compile JuiceFS Client in your runtime host environment. Most Linux distributions comes with glibc by default, you can check its version with `ldd --version`.

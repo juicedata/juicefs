@@ -1,9 +1,8 @@
 ---
-sidebar_label: Operations Profiling
+title: Operations Profiling
 sidebar_position: 3
 slug: /operations_profiling
 ---
-# Operations Profiling
 
 ## Introduction
 

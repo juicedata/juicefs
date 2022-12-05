@@ -27,6 +27,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
 
@@ -108,7 +109,7 @@ func info(ctx *cli.Context) error {
 		}
 
 		wb := utils.NewBuffer(8 + 10)
-		wb.Put32(meta.Info)
+		wb.Put32(meta.InfoV2)
 		wb.Put32(10)
 		wb.Put64(inode)
 		wb.Put8(recursive)
@@ -117,42 +118,165 @@ func info(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
 		}
-		data := make([]byte, 4)
-		n := readControl(f, data)
-		if n == 1 && data[0] == byte(syscall.EINVAL&0xff) {
-			logger.Fatalf("info is not supported, please upgrade and mount again")
+		var resp vfs.InfoResponse
+		err = resp.Decode(f)
+		_ = f.Close()
+		if err == syscall.EINVAL {
+			legacyInfo(d, path, inode, recursive, raw)
+			continue
 		}
-		r := utils.ReadBuffer(data)
-		size := r.Get32()
-		data = make([]byte, size)
-		n, err = f.Read(data)
+
 		if err != nil {
 			logger.Fatalf("read info: %s", err)
 		}
-		fmt.Println(path, ":")
-		resp := string(data[:n])
-		var p int
-		if p = strings.Index(resp, "chunks:\n"); p > 0 {
-			p += 8
-			raw = 1 // legacy clients always return chunks
-		} else if p = strings.Index(resp, "objects:\n"); p > 0 {
-			p += 9
+
+		if resp.Failed {
+			logger.Fatalf("failed to get info: %s", resp.Reason)
 		}
-		if p <= 0 {
-			fmt.Println(resp)
-		} else {
-			fmt.Println(resp[:p-1])
-			if len(resp[p:]) > 0 {
-				printChunks(resp[p:], raw == 1)
+
+		fmt.Println(path, ":")
+		fmt.Printf("  inode: %d\n", resp.Ino)
+		fmt.Printf("  files: %d\n", resp.Summary.Files)
+		fmt.Printf("   dirs: %d\n", resp.Summary.Dirs)
+		fmt.Printf(" length: %s\n", utils.FormatBytes(resp.Summary.Length))
+		fmt.Printf("   size: %s\n", utils.FormatBytes(resp.Summary.Size))
+		switch len(resp.Paths) {
+		case 0:
+			fmt.Printf("   path: %s\n", "unknown")
+		case 1:
+			fmt.Printf("   path: %s\n", resp.Paths[0])
+		default:
+			fmt.Printf("  paths:\n")
+			for _, p := range resp.Paths {
+				fmt.Printf("\t%s\n", p)
 			}
 		}
-		_ = f.Close()
+		if len(resp.Chunks) > 0 {
+			fmt.Println(" chunks:")
+			results := make([][]string, 0, 1+len(resp.Chunks))
+			results = append(results, []string{"chunkIndex", "sliceId", "size", "offset", "length"})
+			for _, c := range resp.Chunks {
+				results = append(results, []string{
+					strconv.FormatUint(c.ChunkIndex, 10),
+					strconv.FormatUint(c.Id, 10),
+					strconv.FormatUint(uint64(c.Size), 10),
+					strconv.FormatUint(uint64(c.Off), 10),
+					strconv.FormatUint(uint64(c.Len), 10),
+				})
+			}
+			printResult(results, -1, false)
+		}
+		if len(resp.Objects) > 0 {
+			fmt.Println(" objects:")
+			results := make([][]string, 0, 1+len(resp.Objects))
+			results = append(results, []string{"chunkIndex", "objectName", "size", "offset", "length"})
+			for _, o := range resp.Objects {
+				results = append(results, []string{
+					strconv.FormatUint(o.ChunkIndex, 10),
+					o.Key,
+					strconv.FormatUint(uint64(o.Size), 10),
+					strconv.FormatUint(uint64(o.Off), 10),
+					strconv.FormatUint(uint64(o.Len), 10),
+				})
+			}
+			printResult(results, 1, false)
+		}
+		if len(resp.FLocks) > 0 {
+			fmt.Println(" flocks:")
+			results := make([][]string, 0, 1+len(resp.FLocks))
+			results = append(results, []string{"Sid", "Owner", "Type"})
+			for _, l := range resp.FLocks {
+				results = append(results, []string{
+					strconv.FormatUint(l.Sid, 10),
+					strconv.FormatUint(l.Owner, 10),
+					l.Type,
+				})
+			}
+			printResult(results, 0, false)
+		}
+		if len(resp.PLocks) > 0 {
+			fmt.Println(" plocks:")
+			results := make([][]string, 0, 1+len(resp.PLocks))
+			results = append(results, []string{"Sid", "Owner", "Type", "Pid", "Start", "End"})
+			for _, l := range resp.PLocks {
+				results = append(results, []string{
+					strconv.FormatUint(l.Sid, 10),
+					strconv.FormatUint(l.Owner, 10),
+					ltypeToString(l.Type),
+					strconv.FormatUint(uint64(l.Pid), 10),
+					strconv.FormatUint(l.Start, 10),
+					strconv.FormatUint(l.End, 10),
+				})
+			}
+			printResult(results, 0, false)
+		}
 	}
 
 	return nil
 }
 
-func printChunks(resp string, raw bool) {
+func ltypeToString(t uint32) string {
+	switch t {
+	case meta.F_RDLCK:
+		return "R"
+	case meta.F_WRLCK:
+		return "W"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func legacyInfo(d, path string, inode uint64, recursive, raw uint8) {
+	f := openController(d)
+	defer f.Close()
+	if f == nil {
+		logger.Errorf("%s is not inside JuiceFS", path)
+		// continue to next path
+		return
+	}
+
+	wb := utils.NewBuffer(8 + 10)
+	wb.Put32(meta.LegacyInfo)
+	wb.Put32(10)
+	wb.Put64(inode)
+	wb.Put8(recursive)
+	wb.Put8(raw)
+	_, err := f.Write(wb.Bytes())
+	if err != nil {
+		logger.Fatalf("write message: %s", err)
+	}
+	data := make([]byte, 4)
+	n := readControl(f, data)
+	if n == 1 && data[0] == byte(syscall.EINVAL&0xff) {
+		logger.Fatalf("info is not supported, please upgrade and mount again")
+	}
+	r := utils.ReadBuffer(data)
+	size := r.Get32()
+	data = make([]byte, size)
+	n, err = f.Read(data)
+	if err != nil {
+		logger.Fatalf("read info: %s", err)
+	}
+	fmt.Println(path, ":")
+	resp := string(data[:n])
+	var p int
+	if p = strings.Index(resp, "chunks:\n"); p > 0 {
+		p += 8
+		raw = 1 // legacy clients always return chunks
+	} else if p = strings.Index(resp, "objects:\n"); p > 0 {
+		p += 9
+	}
+	if p <= 0 {
+		fmt.Println(resp)
+	} else {
+		fmt.Println(resp[:p-1])
+		if len(resp[p:]) > 0 {
+			legacyPrintChunks(resp[p:], raw == 1)
+		}
+	}
+}
+
+func legacyPrintChunks(resp string, raw bool) {
 	cs := strings.Split(resp, "\n")
 	result := make([][]string, len(cs))
 	result[0] = []string{"chunkIndex", "objectName", "size", "offset", "length"}

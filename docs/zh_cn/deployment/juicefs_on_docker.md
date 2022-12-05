@@ -1,9 +1,8 @@
 ---
-sidebar_label: Docker 使用 JuiceFS
+title: Docker 使用 JuiceFS
 sidebar_position: 3
 slug: /juicefs_on_docker
 ---
-# 在 Docker 使用 JuiceFS
 
 将 JuiceFS 作为 Docker 持久化存储有以下几种常用方法：
 

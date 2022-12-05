@@ -1,9 +1,8 @@
 ---
-sidebar_label: 在 KubeSphere 上使用 JuiceFS
+title: 在 KubeSphere 上使用 JuiceFS
 sidebar_position: 3
 slug: /juicefs_on_kubesphere
 ---
-# 在 KubeSphere 上使用 JuiceFS
 
 [KubeSphere](https://kubesphere.com.cn/) 是在 Kubernetes 之上构建的以应用为中心的多租户容器平台，提供全栈的 IT 自动化运维的能力，简化企业的 DevOps 工作流。
 

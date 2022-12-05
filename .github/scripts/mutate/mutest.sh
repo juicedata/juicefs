@@ -38,22 +38,29 @@ if [ -z "$GOMUTESTING_DIFF" ]; then
 	exit 100
 fi
 
-python3 .github/scripts/check_coverage.py
+python3 .github/scripts/mutate/check_coverage.py
 
 if [ $? -ne 0 ]; then
-	echo "mutate is out of code coverage", $COVERAGE_FILE, $MUTATE_CHANGED
+	echo "mutate is out of code coverage", $MUTATE_CHANGED
 	exit 101
 fi
 
-test_cases=$(python3 .github/scripts/parse_test_cases.py)
+python3 .github/scripts/mutate/check_skip_by_comment.py
+if [ $? -ne 0 ]; then
+	echo "mutate is skipped by comment", $MUTATE_CHANGED
+	exit 102
+fi
+
+test_cases=$(python3 .github/scripts/mutate/parse_test_cases.py)
 if [ $? -ne 0 ]; then
 	echo "no test cases in test file ", $TEST_FILE_NAME
-	exit 102
+	exit 103
 fi
 
 mv $MUTATE_ORIGINAL $MUTATE_ORIGINAL.tmp
 cp $MUTATE_CHANGED $MUTATE_ORIGINAL
-
+echo "------------------------------------------------------------------------"
+echo "Start unit test with: $MUTATE_CHANGED"
 go test ./$PACKAGE_PATH/...  -run "$test_cases" -v -cover -count=1 -timeout=5m 
 # GOMUTESTING_TEST=$(go test -timeout $(printf '%ds' $MUTATE_TIMEOUT) $MUTATE_PACKAGE$TEST_RECURSIVE 2>&1)
 export GOMUTESTING_RESULT=$?
@@ -72,9 +79,7 @@ case $GOMUTESTING_RESULT in
 	exit 1
 	;;
 1) # tests failed -> PASS
-	if [ "$MUTATE_DEBUG" = true ] ; then
-		echo "$GOMUTESTING_DIFF"
-	fi
+	echo "$GOMUTESTING_DIFF"
 	echo "tests failed -> PASS"
 	exit 0
 	;;

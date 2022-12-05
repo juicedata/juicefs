@@ -1,9 +1,8 @@
 ---
-sidebar_label: Use JuiceFS on KubeSphere
+title: Use JuiceFS on KubeSphere
 sidebar_position: 3
 slug: /juicefs_on_kubesphere
 ---
-# Use JuiceFS on KubeSphere
 
 [KubeSphere](https://kubesphere.com.cn/) is an application-centric multi-tenant container platform built on Kubernetes. It provides full-stack IT automated operation and maintenance capabilities and simplifies the DevOps workflow of the enterprise.
 

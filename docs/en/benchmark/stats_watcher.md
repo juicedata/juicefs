@@ -1,11 +1,10 @@
 ---
-sidebar_label: Performance Statistics Watcher
+title: Performance Statistics Monitor
 sidebar_position: 4
 slug: /stats_watcher
 ---
-# JuiceFS Performance Statistics Monitor
 
-JuiceFS exposes a lot of [Promethues metrics](../administration/monitoring.md) for monitoring system internal performance. However, when diagnosing performance issues in practice, users may need a more real-time monitoring tool to know what is actually going on within a certain time range. Thus, we provide a command `stats` to print metrics every second, just like what the Linux command `dstat` does. The output is like:
+JuiceFS exposes a lot of [Prometheus metrics](../administration/monitoring.md) for monitoring system internal performance. However, when diagnosing performance issues in practice, users may need a more real-time monitoring tool to know what is actually going on within a certain time range. Thus, we provide a command `stats` to print metrics every second, just like what the Linux command `dstat` does. The output is like:
 
 ![stats_watcher](../images/juicefs_stats_watcher.png)
 

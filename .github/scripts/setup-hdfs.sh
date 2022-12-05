@@ -76,7 +76,15 @@ cd ~/app/hadoop-${HADOOP_VERSION}/bin
 cd ~/app/hadoop-${HADOOP_VERSION}/sbin
 ./start-dfs.sh
 
-jps
+for i in {1..3} ; do
+  ProcNumber=$( jps |grep -w DataNode|wc -l)
+  if [ ${ProcNumber} -lt 1 ];then
+    echo "current java process:"
+    jps
+    echo "The DataNode is not running, Retry for the $i time..."
+    ./start-dfs.sh
+  fi
+done
 
 echo "hello world" > /tmp/testfile
 cd ~/app/hadoop-${HADOOP_VERSION}/bin
