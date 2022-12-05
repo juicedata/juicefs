@@ -152,27 +152,24 @@ func gc(ctx *cli.Context) error {
 		m.CleanupTrashBefore(c, edge, cleanTrashSpin.Increment)
 		cleanTrashSpin.Done()
 	}
-	wg.Add(1)
-	go func() {
-		defer delayedFileSpin.Done()
-		defer cleanedFileSpin.Done()
-		defer wg.Done()
-		err := m.ScanDeletedObject(
-			c,
-			nil,
-			func(_ meta.Ino, size uint64, ts int64) (bool, error) {
-				delayedFileSpin.IncrInt64(int64(size))
-				if delete {
-					cleanedFileSpin.IncrInt64(int64(size))
-					return true, nil
-				}
-				return false, nil
-			},
-		)
-		if err != nil {
-			logger.Fatalf("scan deleted object: %s", err)
-		}
-	}()
+
+	err = m.ScanDeletedObject(
+		c,
+		nil,
+		func(_ meta.Ino, size uint64, ts int64) (bool, error) {
+			delayedFileSpin.IncrInt64(int64(size))
+			if delete {
+				cleanedFileSpin.IncrInt64(int64(size))
+				return true, nil
+			}
+			return false, nil
+		},
+	)
+	if err != nil {
+		logger.Fatalf("scan deleted object: %s", err)
+	}
+	delayedFileSpin.Done()
+	cleanedFileSpin.Done()
 
 	if compact {
 		bar := progress.AddCountBar("Compacted chunks", 0)
@@ -214,31 +211,27 @@ func gc(ctx *cli.Context) error {
 	delayedSliceSpin := progress.AddDoubleSpinner("Delslices")
 	cleanedSliceSpin := progress.AddDoubleSpinner("Cleaned delslices")
 
-	wg.Add(1)
-	go func() {
-		defer delayedSliceSpin.Done()
-		defer cleanedSliceSpin.Done()
-		defer wg.Done()
-		err := m.ScanDeletedObject(
-			c,
-			func(ss []meta.Slice, ts int64) (bool, error) {
-				for _, s := range ss {
-					delayedSliceSpin.IncrInt64(int64(s.Size))
-					if delete && ts < edge.Unix() {
-						cleanedSliceSpin.IncrInt64(int64(s.Size))
-					}
-				}
+	err = m.ScanDeletedObject(
+		c,
+		func(ss []meta.Slice, ts int64) (bool, error) {
+			for _, s := range ss {
+				delayedSliceSpin.IncrInt64(int64(s.Size))
 				if delete && ts < edge.Unix() {
-					return true, nil
+					cleanedSliceSpin.IncrInt64(int64(s.Size))
 				}
-				return false, nil
-			},
-			nil,
-		)
-		if err != nil {
-			logger.Fatalf("statistic: %s", err)
-		}
-	}()
+			}
+			if delete && ts < edge.Unix() {
+				return true, nil
+			}
+			return false, nil
+		},
+		nil,
+	)
+	if err != nil {
+		logger.Fatalf("statistic: %s", err)
+	}
+	delayedSliceSpin.Done()
+	cleanedSliceSpin.Done()
 
 	// Scan all objects to find leaked ones
 	blob = object.WithPrefix(blob, "chunks/")
