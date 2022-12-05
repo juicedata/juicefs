@@ -165,7 +165,7 @@ func gc(ctx *cli.Context) error {
 		},
 	)
 	if err != nil {
-		logger.Fatalf("statistic: %s", err)
+		logger.Fatalf("scan deleted object: %s", err)
 	}
 	delayedFileSpin.Done()
 	cleanedFileSpin.Done()
