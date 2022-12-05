@@ -2841,10 +2841,10 @@ func (m *redisMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error 
 	var ss []Slice
 	var rs []*redis.IntCmd
 	for key := range delKeys {
-		ss = ss[:0]
-		rs = rs[:0]
 		var clean bool
 		task := func(tx *redis.Tx) error {
+			ss = ss[:0]
+			rs = rs[:0]
 			val, err := tx.HGet(ctx, m.delSlices(), key).Result()
 			if err == redis.Nil {
 				return nil

@@ -2228,10 +2228,10 @@ func (m *kvMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
 		if len(key) != klen {
 			continue
 		}
-		ss := ss[:0]
-		rs := rs[:0]
 		var clean bool
 		err = m.txn(func(tx kvTxn) error {
+			ss := ss[:0]
+			rs := rs[:0]
 			v := tx.get(key)
 			if len(v) == 0 {
 				return nil

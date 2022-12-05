@@ -24,7 +24,6 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -37,6 +36,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
 	"xorm.io/xorm/log"
@@ -2619,11 +2619,19 @@ func (m *dbMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
 	}
 	var ss []Slice
 	for _, ds := range dss {
-		ss = ss[:0]
 		var clean bool
-		m.decodeDelayedSlices(ds.Slices, &ss)
 		err = m.txn(func(tx *xorm.Session) error {
-			clean, err = scan(ss, ds.Deleted)
+			ss = ss[:0]
+			del := delslices{Id: ds.Id}
+			found, err := tx.Get(&del)
+			if err != nil {
+				return errors.Wrapf(err, "get delslices %d", ds.Id)
+			}
+			if !found {
+				return nil
+			}
+			m.decodeDelayedSlices(del.Slices, &ss)
+			clean, err = scan(ss, del.Deleted)
 			if err != nil {
 				return err
 			}
@@ -2633,7 +2641,7 @@ func (m *dbMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
 						return e
 					}
 				}
-				_, err = tx.Delete(&delslices{Id: ds.Id})
+				_, err = tx.Delete(del)
 			}
 			return err
 		})
