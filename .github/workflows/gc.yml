@@ -46,7 +46,6 @@ jobs:
 
       - name: Install Tools
         run: | 
-          exit 1 
           sudo apt install redis-tools
           sudo apt install fio
           
