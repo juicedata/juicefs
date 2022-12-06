@@ -35,7 +35,7 @@ jobs:
         uses: ./.github/actions/build
 
       - name: Creating kind cluster
-        uses: helm/kind-action@v1.0.0-rc.1
+        uses: helm/kind-action@v1.2.0
 
       - name: Print cluster information
         run: |
@@ -77,6 +77,6 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"          
 
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        if: ${{ failure() }}
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
