@@ -1,0 +1,63 @@
+name: "chaos-test"
+
+on:
+  push:
+    branches:
+      - release-**
+      - main
+    paths-ignore:
+      - docs/**
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - release-**
+      - main
+    paths-ignore:
+      - docs/**
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+jobs:
+  chaos-test:
+    runs-on: ubuntu-latest
+    
+    steps:        
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Build
+        uses: ./.github/actions/build
+
+      - name: Install Tools
+        run: | 
+          sudo apt install redis-tools
+          
+      - name: Test delay delete slice after compaction
+        run: |
+          exit 0
+
+      - name: log
+        if: ${{ always() }}
+        run: | 
+          if [ -f ~/.juicefs/juicefs.log ]; then
+            tail -300 ~/.juicefs/juicefs.log
+            grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          fi
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"          
+
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
