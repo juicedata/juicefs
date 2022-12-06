@@ -49,12 +49,18 @@ jobs:
       - name: Deploy an application
         run: |
           kubectl apply -f https://raw.githubusercontent.com/chaos-mesh/apps/master/ping/busybox-statefulset.yaml
-            
+
+      - name: Get Config Base64
+        run: | 
+          network_delay_base64=$(base64 .github/scripts/chaos/network-delay.yaml)
+          echo "network_delay_base64 is $network_delay_base64"
+          echo "network_delay_base64=$network_delay_base64" >> $GITHUB_ENV
+
       - name: Run chaos mesh action
         uses: chaos-mesh/chaos-mesh-action@v0.5
         env:
           CHAOS_MESH_VERSION: v1.0.0
-          CFG_BASE64: YXBpVmVyc2lvbjogY2hhb3MtbWVzaC5vcmcvdjFhbHBoYTEKa2luZDogTmV0d29ya0NoYW9zCm1ldGFkYXRhOgogIG5hbWU6IG5ldHdvcmstZGVsYXkKICBuYW1lc3BhY2U6IGJ1c3lib3gKc3BlYzoKICBhY3Rpb246IGRlbGF5ICMgdGhlIHNwZWNpZmljIGNoYW9zIGFjdGlvbiB0byBpbmplY3QKICBtb2RlOiBhbGwKICBzZWxlY3RvcjoKICAgIHBvZHM6CiAgICAgIGJ1c3lib3g6CiAgICAgICAgLSBidXN5Ym94LTAKICBkZWxheToKICAgIGxhdGVuY3k6ICIxMG1zIgogIGR1cmF0aW9uOiAiNXMiCiAgc2NoZWR1bGVyOgogICAgY3JvbjogIkBldmVyeSAxMHMiCiAgZGlyZWN0aW9uOiB0bwogIHRhcmdldDoKICAgIHNlbGVjdG9yOgogICAgICBwb2RzOgogICAgICAgIGJ1c3lib3g6CiAgICAgICAgICAtIGJ1c3lib3gtMQogICAgbW9kZTogYWxsCg==
+          CFG_BASE64: ${{env.network_delay_base64}}
 
       - name: Verify
         run: |
