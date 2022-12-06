@@ -52,7 +52,7 @@ jobs:
 
       - name: Get Config Base64
         run: | 
-          network_delay_base64=$(base64 .github/scripts/chaos/network-delay.yaml | xargs)
+          network_delay_base64=$(base64 .github/scripts/chaos/network-delay.yaml | xargs | sed -e 's: ::g' )
           echo "network_delay_base64 is $network_delay_base64"
           echo "network_delay_base64=$network_delay_base64" >> $GITHUB_ENV
 
