@@ -40,58 +40,53 @@ type Context interface {
 	Canceled() bool
 }
 
-type emptyContext struct {
+var Background Context = WrapContext(context.Background())
+
+type wrapContext struct {
 	context.Context
+	cancel func()
+	pid    uint32
+	uid    uint32
+	gids   []uint32
 }
 
-func (ctx *emptyContext) Gid() uint32    { return 0 }
-func (ctx *emptyContext) Gids() []uint32 { return []uint32{0} }
-func (ctx *emptyContext) Uid() uint32    { return 0 }
-func (ctx *emptyContext) Pid() uint32    { return 1 }
-func (ctx *emptyContext) Cancel()        {}
-func (ctx *emptyContext) Canceled() bool { return false }
-func (ctx *emptyContext) WithValue(k, v interface{}) {
-	ctx.Context = context.WithValue(ctx.Context, k, v)
-}
-
-var Background Context = &emptyContext{context.Background()}
-
-type myContext struct {
-	context.Context
-	pid      uint32
-	uid      uint32
-	gids     []uint32
-	canceled bool
-}
-
-func (c *myContext) Uid() uint32 {
+func (c *wrapContext) Uid() uint32 {
 	return c.uid
 }
 
-func (c *myContext) Gid() uint32 {
+func (c *wrapContext) Gid() uint32 {
 	return c.gids[0]
 }
 
-func (c *myContext) Gids() []uint32 {
+func (c *wrapContext) Gids() []uint32 {
 	return c.gids
 }
 
-func (c *myContext) Pid() uint32 {
+func (c *wrapContext) Pid() uint32 {
 	return c.pid
 }
 
-func (c *myContext) Cancel() {
-	c.canceled = true
+func (c *wrapContext) Cancel() {
+	c.cancel()
 }
 
-func (c *myContext) Canceled() bool {
-	return c.canceled
+func (c *wrapContext) Canceled() bool {
+	return c.Err() != nil
 }
 
-func (c *myContext) WithValue(k, v interface{}) {
+func (c *wrapContext) WithValue(k, v interface{}) {
 	c.Context = context.WithValue(c.Context, k, v)
 }
 
 func NewContext(pid, uid uint32, gids []uint32) Context {
-	return &myContext{context.Background(), pid, uid, gids, false}
+	return wrap(context.Background(), pid, uid, gids)
+}
+
+func WrapContext(ctx context.Context) Context {
+	return wrap(ctx, 0, 0, []uint32{0})
+}
+
+func wrap(ctx context.Context, pid, uid uint32, gids []uint32) Context {
+	c, cancel := context.WithCancel(ctx)
+	return &wrapContext{c, cancel, pid, uid, gids}
 }
