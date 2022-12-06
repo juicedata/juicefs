@@ -268,12 +268,36 @@ func registerMetaMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Confi
 }
 
 func configEqual(a, b *vfs.Config) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+
 	ac, bc := *a, *b
-	aFormat, bFormat := *ac.Format, *bc.Format
-	aFormat.SecretKey, bFormat.SecretKey = "", ""
 	ac.Meta, ac.Chunk, ac.Format, ac.Port, ac.AttrTimeout, ac.DirEntryTimeout, ac.EntryTimeout = nil, nil, nil, nil, 0, 0, 0
 	bc.Meta, bc.Chunk, bc.Format, bc.Port, bc.AttrTimeout, bc.DirEntryTimeout, bc.EntryTimeout = nil, nil, nil, nil, 0, 0, 0
-	return *a.Meta == *b.Meta && *a.Chunk == *b.Chunk && aFormat == bFormat && ac == bc
+	eq := ac == bc
+
+	if a.Format == nil || b.Format == nil {
+		eq = eq && a.Format == b.Format
+	} else {
+		af, bf := *a.Format, *b.Format
+		af.SecretKey, bf.SecretKey = "", ""
+		eq = eq && af == bf
+	}
+
+	if a.Meta == nil || b.Meta == nil {
+		eq = eq && a.Meta == b.Meta
+	} else {
+		eq = eq && *a.Meta == *b.Meta
+	}
+
+	if a.Chunk == nil || b.Chunk == nil {
+		eq = eq && a.Chunk == b.Chunk
+	} else {
+		eq = eq && *a.Chunk == *b.Chunk
+	}
+
+	return eq
 }
 
 func prepareMp(newCfg *vfs.Config, mp string) (ignore bool) {

@@ -33,6 +33,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/vfs"
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/urfave/cli/v2"
 )
@@ -188,5 +189,46 @@ func TestUmount(t *testing.T) {
 	}
 	if inode == 1 {
 		t.Fatalf("umount failed: inode of %s is 1", testMountPoint)
+	}
+}
+
+func Test_configEqual(t *testing.T) {
+	cases := []struct {
+		a, b  *vfs.Config
+		equal bool
+	}{
+		{
+			a: nil, b: nil, equal: true,
+		},
+		{
+			a: &vfs.Config{}, b: nil, equal: false,
+		},
+		{
+			a: nil, b: &vfs.Config{}, equal: false,
+		},
+		{
+			a: &vfs.Config{}, b: &vfs.Config{}, equal: true,
+		},
+		{
+			a: &vfs.Config{Format: &meta.Format{}}, b: &vfs.Config{}, equal: false,
+		},
+		{
+			a: &vfs.Config{}, b: &vfs.Config{Format: &meta.Format{}}, equal: false,
+		},
+		{
+			a: &vfs.Config{Format: &meta.Format{}}, b: &vfs.Config{Format: &meta.Format{}}, equal: true,
+		},
+		{
+			a: &vfs.Config{Format: &meta.Format{SecretKey: "1"}}, b: &vfs.Config{Format: &meta.Format{SecretKey: "2"}}, equal: true,
+		},
+		{
+			a: &vfs.Config{Port: &vfs.Port{}}, b: &vfs.Config{}, equal: true,
+		},
+	}
+
+	for _, c := range cases {
+		if configEqual(c.a, c.b) != c.equal {
+			t.Errorf("configEqual(%v, %v) should be %v", c.a, c.b, c.equal)
+		}
 	}
 }
