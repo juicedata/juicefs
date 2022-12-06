@@ -269,12 +269,14 @@ type Meta interface {
 	GetSession(sid uint64, detail bool) (*Session, error)
 	// ListSessions returns all client sessions.
 	ListSessions() ([]*Session, error)
+	// ScanDeletedObject scan deleted objects by customized scanner.
+	ScanDeletedObject(Context, deletedSliceScan, deletedFileScan) error
 	// ListLocks returns all locks of a inode.
 	ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error)
-	// Statistic scan metadata by visitors.
-	Statistic(ctx context.Context, slicesDelayedScan func(Slice) error, fileDelayedScan func(ino Ino, size uint64) error) error
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
 	CleanStaleSessions()
+	// CleanupTrashBefore deletes all files in trash before the given time.
+	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func())
 
 	// StatFS returns summary statistics of a volume.
 	StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno

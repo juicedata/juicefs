@@ -19,7 +19,6 @@ package meta
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -2200,56 +2199,99 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	return errno(m.scanDeletedSlices(ctx, func(s Slice) error {
-		slices[1] = append(slices[1], s)
+	return errno(m.scanDeletedSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
+		slices[1] = append(slices[1], ss...)
 		if showProgress != nil {
-			showProgress()
+			for range ss {
+				showProgress()
+			}
 		}
-		return nil
+		return false, nil
 	}))
 }
 
-func (m *kvMeta) scanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error {
+func (m *kvMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
+	if scan == nil {
+		return nil
+	}
+
 	// delayed slices: Lttttttttcccccccc
 	klen := 1 + 8 + 8
-	result, err := m.scanValues(m.fmtKey("L"), -1, func(k, v []byte) bool {
+	keys, err := m.scanKeys(m.fmtKey("L"))
+	if err != nil {
+		return err
+	}
+
+	var ss []Slice
+	var rs []int64
+	for _, key := range keys {
+		if len(key) != klen {
+			continue
+		}
+		var clean bool
+		err = m.txn(func(tx kvTxn) error {
+			ss := ss[:0]
+			rs := rs[:0]
+			v := tx.get(key)
+			if len(v) == 0 {
+				return nil
+			}
+			b := utils.ReadBuffer([]byte(key)[1:])
+			ts := b.Get64()
+			m.decodeDelayedSlices(v, &ss)
+			clean, err = scan(ss, int64(ts))
+			if err != nil {
+				return err
+			}
+			if clean {
+				for _, s := range ss {
+					rs = append(rs, tx.incrBy(m.sliceKey(s.Id, s.Size), -1))
+				}
+				tx.dels(key)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		if clean && len(rs) == len(ss) {
+			for i, s := range ss {
+				if rs[i] < 0 {
+					m.deleteSlice(s.Id, s.Size)
+				}
+			}
+		}
+
+	}
+	return nil
+}
+
+func (m *kvMeta) scanDeletedFiles(ctx Context, scan deletedFileScan) error {
+	if scan == nil {
+		return nil
+	}
+	// deleted files: Diiiiiiiissssssss
+	klen := 1 + 8 + 8
+	pairs, err := m.scanValues(m.fmtKey("D"), -1, func(k, v []byte) bool {
 		return len(k) == klen
 	})
 	if err != nil {
 		return err
 	}
 
-	var ss []Slice
-	for _, value := range result {
-		ss = ss[:0]
-		m.decodeDelayedSlices(value, &ss)
-		for _, s := range ss {
-			if s.Id > 0 {
-				if err := visitor(s); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (m *kvMeta) scanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
-	// deleted files: Dttttttttcccccccc
-	klen := 1 + 8 + 8
-	keys, err := m.scanKeys(m.fmtKey("D"))
-	if err != nil {
-		return err
-	}
-
-	for _, key := range keys {
+	for key, value := range pairs {
 		if len(key) != klen {
 			return fmt.Errorf("invalid key %x", key)
 		}
 		ino := m.decodeInode([]byte(key)[1:9])
 		size := binary.BigEndian.Uint64([]byte(key)[9:])
-		if err := visitor(ino, size); err != nil {
+		ts := m.parseInt64(value)
+		clean, err := scan(ino, size, ts)
+		if err != nil {
 			return err
+		}
+		if clean {
+			m.doDeleteFileData(ino, size)
 		}
 	}
 	return nil
