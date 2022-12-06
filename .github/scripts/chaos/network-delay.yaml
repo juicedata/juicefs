@@ -1,0 +1,24 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-delay
+  namespace: busybox
+spec:
+  action: delay # the specific chaos action to inject
+  mode: all
+  selector:
+    pods:
+      busybox:
+        - busybox-0
+  delay:
+    latency: '10ms'
+  duration: '5s'
+  scheduler:
+    cron: '@every 10s'
+  direction: to
+  target:
+    selector:
+      pods:
+        busybox:
+          - busybox-1
+    mode: all
