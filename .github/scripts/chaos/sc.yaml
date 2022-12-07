@@ -16,7 +16,7 @@ volumeBindingMode: Immediate
 apiVersion: v1
 stringData:
   access-key: minioadmin
-  bucket: http://minio.kube-system/minio/dynamic-ce
+  bucket: http://minio.kube-system:9000/minio/dynamic-ce
   name: dynamic-ce
   metaurl: redis://redis.kube-system:6379/0
   secret-key: minioadmin
