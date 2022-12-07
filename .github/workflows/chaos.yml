@@ -45,6 +45,7 @@ jobs:
           kubectl get pods -n kube-system
           helm version
           kubectl version
+          exit 1
 
       - name: Deploy an application
         run: |
@@ -60,7 +61,8 @@ jobs:
 
       - name: Mount Juicefs 
         run: | 
-          exit 0
+          kubectl apply -f .github/scripts/chaos/sc.yaml
+          kubectl apply -f .github/scripts/chaos/pvc.yaml
 
       - name: Start vdbenh
         run: |
