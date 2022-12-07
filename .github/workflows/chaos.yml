@@ -47,6 +47,12 @@ jobs:
           kubectl version
           exit 1
 
+      - name: Install JuiceFS CSI Driver
+        run: |
+          helm repo add juicefs https://juicedata.github.io/charts/
+          helm repo update
+          helm install juicefs-csi-driver juicefs/juicefs-csi-driver -n kube-system 
+
       - name: Deploy an application
         run: |
           kubectl apply -f https://raw.githubusercontent.com/chaos-mesh/apps/master/ping/busybox-statefulset.yaml
@@ -85,6 +91,7 @@ jobs:
           echo "do some verification"
           kubectl exec busybox-0 -it -n busybox -- ping -c 30 busybox-1.busybox.busybox.svc
           exit 1
+
       - name: log
         if: ${{ always() }}
         run: | 
