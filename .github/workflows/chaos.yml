@@ -54,6 +54,10 @@ jobs:
         run: |
           kubectl apply -f .github/scripts/chaos/redis.yaml
 
+      - name: Deploy minio
+        run: |
+          kubectl apply -f .github/scripts/chaos/minio.yaml
+
       - name: Get Config Base64
         run: | 
           network_delay_base64=$(base64 .github/scripts/chaos/network-delay.yaml | xargs | sed -e 's: ::g' )
@@ -70,7 +74,7 @@ jobs:
         run: |
           echo "do some verification"
           kubectl exec busybox-0 -it -n busybox -- ping -c 30 busybox-1.busybox.busybox.svc
-
+          exit 1
       - name: log
         if: ${{ always() }}
         run: | 
