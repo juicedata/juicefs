@@ -76,7 +76,7 @@ jobs:
           echo "workflow_base64=$base64" >> $GITHUB_ENV
 
       - name: Run chaos mesh action
-        uses: chaos-mesh/chaos-mesh-action@v0.5
+        uses: chaos-mesh/chaos-mesh-action@master
         env:
           CHAOS_MESH_VERSION: v2.5.0
           CFG_BASE64: ${{env.workflow_base64}}
