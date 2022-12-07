@@ -50,6 +50,10 @@ jobs:
         run: |
           kubectl apply -f https://raw.githubusercontent.com/chaos-mesh/apps/master/ping/busybox-statefulset.yaml
 
+      - name: Deploy redis
+        run: |
+          kubectl apply -f .github/scripts/chaos/redis.yaml
+
       - name: Get Config Base64
         run: | 
           network_delay_base64=$(base64 .github/scripts/chaos/network-delay.yaml | xargs | sed -e 's: ::g' )
