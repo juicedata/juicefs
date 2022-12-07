@@ -51,6 +51,7 @@ jobs:
           helm repo add juicefs https://juicedata.github.io/charts/
           helm repo update
           helm install juicefs-csi-driver juicefs/juicefs-csi-driver -n kube-system 
+          kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver
 
       - name: Deploy redis
         run: |
@@ -102,5 +103,5 @@ jobs:
 
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 60
+        timeout-minutes: 120
         uses: lhotari/action-upterm@v1
