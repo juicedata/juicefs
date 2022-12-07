@@ -53,10 +53,6 @@ jobs:
           helm repo update
           helm install juicefs-csi-driver juicefs/juicefs-csi-driver -n kube-system 
 
-      - name: Deploy an application
-        run: |
-          kubectl apply -f https://raw.githubusercontent.com/chaos-mesh/apps/master/ping/busybox-statefulset.yaml
-
       - name: Deploy redis
         run: |
           kubectl apply -f .github/scripts/chaos/redis.yaml
@@ -76,20 +72,18 @@ jobs:
 
       - name: Get Config Base64
         run: | 
-          network_delay_base64=$(base64 .github/scripts/chaos/network-delay.yaml | xargs | sed -e 's: ::g' )
-          echo "network_delay_base64 is $network_delay_base64"
-          echo "network_delay_base64=$network_delay_base64" >> $GITHUB_ENV
+          base64=$(base64 .github/scripts/chaos/workflow.yaml | xargs | sed -e 's: ::g' )
+          echo "base64 is $base64"
+          echo "workflow_base64=$base64" >> $GITHUB_ENV
 
       - name: Run chaos mesh action
         uses: chaos-mesh/chaos-mesh-action@v0.5
         env:
           CHAOS_MESH_VERSION: v1.0.0
-          CFG_BASE64: ${{env.network_delay_base64}}
+          CFG_BASE64: ${{env.workflow_base64}}
 
       - name: Verify
         run: |
-          echo "do some verification"
-          kubectl exec busybox-0 -it -n busybox -- ping -c 30 busybox-1.busybox.busybox.svc
           exit 1
 
       - name: log
