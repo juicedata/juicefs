@@ -58,6 +58,14 @@ jobs:
         run: |
           kubectl apply -f .github/scripts/chaos/minio.yaml
 
+      - name: Mount Juicefs 
+        run: | 
+          exit 0
+
+      - name: Start vdbenh
+        run: |
+          kubectl apply -f .github/scripts/chaos/dynamic.yaml
+
       - name: Get Config Base64
         run: | 
           network_delay_base64=$(base64 .github/scripts/chaos/network-delay.yaml | xargs | sed -e 's: ::g' )

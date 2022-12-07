@@ -1,0 +1,29 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: dynamic-ce
+parameters:
+  csi.storage.k8s.io/node-publish-secret-name: dynamic-ce
+  csi.storage.k8s.io/node-publish-secret-namespace: kube-system
+  csi.storage.k8s.io/provisioner-secret-name: dynamic-ce
+  csi.storage.k8s.io/provisioner-secret-namespace: kube-system
+#mountOptions:
+#  - cache-dir=/var/foo:/var/foo1:/var/foo2
+provisioner: csi.juicefs.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+---
+apiVersion: v1
+stringData:
+  access-key: minioadmin
+  bucket: http://10.99.187.224:9000/minio/dynamic-ce
+  name: dynamic-ce
+  metaurl: redis://10.110.1.49:6379/0
+  secret-key: minioadmin
+  storage: minio
+  format-options: trash-days=0,block-size=4096
+kind: Secret
+metadata:
+  name: dynamic-ce
+  namespace: kube-system
+type: Opaque
