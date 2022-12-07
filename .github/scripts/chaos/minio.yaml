@@ -16,7 +16,6 @@ spec:
       labels:
         app: minio-server
     spec:
-      nodeName: chaos-k8s-001
       containers:
       - name: minio
         image: minio/minio

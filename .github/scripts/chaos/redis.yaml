@@ -16,7 +16,6 @@ spec:
       labels:
         app: redis-server
     spec:
-      nodeName: chaos-k8s-001
       containers:
       - name: redis
         image: redis
