@@ -45,7 +45,6 @@ jobs:
           kubectl get pods -n kube-system
           helm version
           kubectl version
-          exit 1
 
       - name: Install JuiceFS CSI Driver
         run: |
