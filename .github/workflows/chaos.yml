@@ -34,6 +34,11 @@ jobs:
       - name: Build
         uses: ./.github/actions/build
 
+      - name: Build Docker Image
+        run:
+          docker build -f .github/scripts/chaos/juicefs.Dockerfile .
+          exit 1
+
       - name: Creating kind cluster
         uses: helm/kind-action@v1.2.0
 
@@ -85,7 +90,7 @@ jobs:
       - name: Verify
         run: |
           kubectl get pods --all-namespaces
-          
+
           exit 1
 
       - name: log
