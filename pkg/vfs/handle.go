@@ -154,9 +154,12 @@ func (v *VFS) newHandle(inode Ino) *handle {
 		length := len(v.idleHandles[inode])
 		h := v.idleHandles[inode][length-1]
 		attr := &meta.Attr{}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-		defer cancel()
-		if err := v.Meta.GetAttr(meta.WrapContext(ctx), inode, attr); err != 0 {
+		err := func() syscall.Errno {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+			defer cancel()
+			return v.Meta.GetAttr(meta.WrapContext(ctx), inode, attr)
+		}()
+		if err != 0 {
 			logger.Warnf("get attr of %d: %s", h.inode, syscall.Errno(err))
 			break
 		}
