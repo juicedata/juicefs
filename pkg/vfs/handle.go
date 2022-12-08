@@ -17,6 +17,7 @@
 package vfs
 
 import (
+	"context"
 	"sync"
 	"syscall"
 	"time"
@@ -31,8 +32,9 @@ type handle struct {
 	fh    uint64
 
 	// for dir
-	children []*meta.Entry
-	readAt   time.Time
+	children  []*meta.Entry
+	readAt    time.Time
+	releaseAt *time.Time
 
 	// for file
 	locks      uint8
@@ -145,9 +147,47 @@ func (h *handle) Close() {
 	}
 }
 
+func (v *VFS) cleanupExpiredIdles(inode Ino, lifetime time.Duration) {
+	now := time.Now()
+	idles := v.idleHandles[inode]
+	for len(idles) > 0 {
+		f := idles[0]
+		if f.releaseAt != nil && now.Sub(*f.releaseAt) < lifetime {
+			break
+		}
+		idles = idles[1:]
+	}
+	if len(idles) == 0 {
+		delete(v.idleHandles, inode)
+	} else {
+		v.idleHandles[inode] = idles
+	}
+}
+
 func (v *VFS) newHandle(inode Ino) *handle {
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
+	for len(v.idleHandles[inode]) > 0 {
+		length := len(v.idleHandles[inode])
+		h := v.idleHandles[inode][length-1]
+		attr := &meta.Attr{}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+		if err := v.Meta.GetAttr(meta.WrapContext(ctx), inode, attr); err != 0 {
+			logger.Warnf("get attr of %d: %s", h.inode, syscall.Errno(err))
+			break
+		}
+		v.idleHandles[inode] = v.idleHandles[inode][:length-1]
+		if attr.Mtime > h.readAt.Unix() {
+			logger.Debugf("inode %d changed, discard idle handle", h.inode)
+			continue
+		}
+		v.handles[inode] = append(v.handles[inode], h)
+		h.releaseAt = nil
+		defer v.cleanupExpiredIdles(inode, time.Second*10)
+		return h
+	}
+
 	fh := v.nextfh
 	h := &handle{inode: inode, fh: fh}
 	v.nextfh++
@@ -187,6 +227,9 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 			} else {
 				delete(v.handles, inode)
 			}
+			now := time.Now()
+			f.releaseAt = &now
+			v.idleHandles[inode] = append(v.idleHandles[inode], f)
 			break
 		}
 	}

@@ -917,9 +917,10 @@ type VFS struct {
 	reader          DataReader
 	writer          DataWriter
 
-	handles map[Ino][]*handle
-	hanleM  sync.Mutex
-	nextfh  uint64
+	handles     map[Ino][]*handle
+	idleHandles map[Ino][]*handle
+	hanleM      sync.Mutex
+	nextfh      uint64
 
 	modM       sync.Mutex
 	modifiedAt map[Ino]time.Time
@@ -935,15 +936,16 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	writer := NewDataWriter(conf, m, store, reader)
 
 	v := &VFS{
-		Conf:       conf,
-		Meta:       m,
-		Store:      store,
-		reader:     reader,
-		writer:     writer,
-		handles:    make(map[Ino][]*handle),
-		modifiedAt: make(map[meta.Ino]time.Time),
-		nextfh:     1,
-		registry:   registry,
+		Conf:        conf,
+		Meta:        m,
+		Store:       store,
+		reader:      reader,
+		writer:      writer,
+		handles:     make(map[Ino][]*handle),
+		idleHandles: make(map[Ino][]*handle),
+		modifiedAt:  make(map[meta.Ino]time.Time),
+		nextfh:      1,
+		registry:    registry,
 	}
 
 	n := getInternalNode(configInode)
