@@ -24,7 +24,6 @@ spec:
           name: redis-data
         resources:
           requests:
-            cpu: 100m
             memory: 100m
         ports:
         - containerPort: 6379
