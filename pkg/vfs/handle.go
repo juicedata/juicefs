@@ -32,9 +32,9 @@ type handle struct {
 	fh    uint64
 
 	// for dir
-	children  []*meta.Entry
-	readAt    time.Time
-	releaseAt *time.Time
+	children   []*meta.Entry
+	readAt     time.Time
+	releasedAt *time.Time
 
 	// for file
 	locks      uint8
@@ -152,7 +152,7 @@ func (v *VFS) cleanupExpiredIdles(inode Ino, lifetime time.Duration) {
 	idles := v.idleHandles[inode]
 	for len(idles) > 0 {
 		f := idles[0]
-		if f.releaseAt != nil && now.Sub(*f.releaseAt) < lifetime {
+		if f.releasedAt != nil && now.Sub(*f.releasedAt) < lifetime {
 			break
 		}
 		idles = idles[1:]
@@ -183,7 +183,7 @@ func (v *VFS) newHandle(inode Ino) *handle {
 			continue
 		}
 		v.handles[inode] = append(v.handles[inode], h)
-		h.releaseAt = nil
+		h.releasedAt = nil
 		defer v.cleanupExpiredIdles(inode, time.Second*10)
 		return h
 	}
@@ -228,7 +228,7 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 				delete(v.handles, inode)
 			}
 			now := time.Now()
-			f.releaseAt = &now
+			f.releasedAt = &now
 			v.idleHandles[inode] = append(v.idleHandles[inode], f)
 			break
 		}
