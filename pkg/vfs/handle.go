@@ -34,7 +34,7 @@ type handle struct {
 	// for dir
 	children   []*meta.Entry
 	readAt     time.Time
-	releasedAt *time.Time
+	releasedAt time.Time
 
 	// for file
 	locks      uint8
@@ -147,23 +147,6 @@ func (h *handle) Close() {
 	}
 }
 
-func (v *VFS) cleanupExpiredIdles(inode Ino, lifetime time.Duration) {
-	now := time.Now()
-	idles := v.idleHandles[inode]
-	for len(idles) > 0 {
-		f := idles[0]
-		if f.releasedAt != nil && now.Sub(*f.releasedAt) < lifetime {
-			break
-		}
-		idles = idles[1:]
-	}
-	if len(idles) == 0 {
-		delete(v.idleHandles, inode)
-	} else {
-		v.idleHandles[inode] = idles
-	}
-}
-
 func (v *VFS) newHandle(inode Ino) *handle {
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
@@ -179,12 +162,11 @@ func (v *VFS) newHandle(inode Ino) *handle {
 		}
 		v.idleHandles[inode] = v.idleHandles[inode][:length-1]
 		if attr.Mtime > h.readAt.Unix() {
-			logger.Debugf("inode %d changed, discard idle handle", h.inode)
+			logger.Debugf("inode %d changed, discard idle handle %d", h.inode, h.fh)
 			continue
 		}
 		v.handles[inode] = append(v.handles[inode], h)
-		h.releasedAt = nil
-		defer v.cleanupExpiredIdles(inode, time.Second*10)
+		h.releasedAt = time.Time{}
 		return h
 	}
 
@@ -213,6 +195,28 @@ func (v *VFS) findHandle(inode Ino, fh uint64) *handle {
 	return nil
 }
 
+func (v *VFS) cleanupExpiredIdles(inode Ino, lifetime time.Duration) {
+	if !v.hanleM.TryLock() {
+		return
+	}
+	defer v.hanleM.Unlock()
+	now := time.Now()
+	idles := v.idleHandles[inode]
+	for len(idles) > 0 {
+		f := idles[0]
+		if now.Sub(f.releasedAt) < lifetime {
+			break
+		}
+		logger.Debugf("clean idle handle %d for inode %d", f.fh, inode)
+		idles = idles[1:]
+	}
+	if len(idles) == 0 {
+		delete(v.idleHandles, inode)
+	} else {
+		v.idleHandles[inode] = idles
+	}
+}
+
 func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
@@ -227,9 +231,13 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 			} else {
 				delete(v.handles, inode)
 			}
-			now := time.Now()
-			f.releasedAt = &now
-			v.idleHandles[inode] = append(v.idleHandles[inode], f)
+			if !f.readAt.IsZero() {
+				f.releasedAt = time.Now()
+				v.idleHandles[inode] = append(v.idleHandles[inode], f)
+				time.AfterFunc(time.Second*10, func() {
+					v.cleanupExpiredIdles(inode, time.Second*10)
+				})
+			}
 			break
 		}
 	}
