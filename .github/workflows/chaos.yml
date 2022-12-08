@@ -85,6 +85,7 @@ jobs:
       - name: Verify
         run: |
           kubectl get pods --all-namespaces
+          
           exit 1
 
       - name: log
