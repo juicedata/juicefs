@@ -34,6 +34,12 @@ jobs:
       - name: Build
         uses: ./.github/actions/build
 
+      - name: Copy
+        run: | 
+          mkdir /app
+          cp juicefs /app/juicefs
+          /app/juicefs --version
+
       - name: Creating kind cluster
         uses: helm/kind-action@v1.2.0
 
@@ -48,8 +54,8 @@ jobs:
 
       - name: Build CSI Docker Image
         run: |
-          docker build -f .github/scripts/chaos/juicefs.Dockerfile -t juicedata/juicefs-csi-driver:v0.17.3 .
-          exit 1
+          docker build -f .github/scripts/chaos/juicefs-csi-driver.Dockerfile -t juicedata/juicefs-csi-driver:v0.17.3 .
+          
       - name: Load CSI Docker Image
         run: | 
           kind load docker-image juicedata/juicefs-csi-driver:v0.17.3 --name chart-testing
