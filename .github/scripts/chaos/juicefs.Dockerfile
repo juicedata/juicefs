@@ -45,6 +45,5 @@ RUN apt-get update && apt-get install -y librados2 curl fuse procps iputils-ping
     ln -sf /root/.acl/passwd /etc/passwd && ln -sf /root/.acl/group  /etc/group
 
 RUN ln -s /usr/local/bin/juicefs /bin/mount.juicefs
-COPY THIRD-PARTY /
 
 RUN /usr/bin/juicefs version && /usr/local/bin/juicefs --version
