@@ -1,7 +1,7 @@
 FROM juicedata/juicefs-csi-driver:latest
 
-WORKDIR /tmp/app
+WORKDIR /home/runner/work/juicefs/juicefs/app
 
-COPY /tmp/app/juicefs /usr/local/bin/juicefs
+COPY juicefs /usr/local/bin/juicefs
 
-RUN /usr/local/bin/juicefs --version
+# RUN /usr/local/bin/juicefs --version
