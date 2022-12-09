@@ -46,6 +46,14 @@ jobs:
           helm version
           kubectl version
 
+      - name: Build CSI Docker Image
+        run: |
+          docker build -f .github/scripts/chaos/juicefs.Dockerfile -t juicedata/juicefs-csi-driver:v0.17.3 .
+          exit 1
+      - name: Load CSI Docker Image
+        run: | 
+          kind load docker-image juicedata/juicefs-csi-driver:v0.17.3 --name chart-testing
+
       - name: Install JuiceFS CSI Driver
         run: |
           helm repo add juicefs https://juicedata.github.io/charts/
@@ -60,11 +68,6 @@ jobs:
       - name: Deploy minio
         run: |
           kubectl apply -f .github/scripts/chaos/minio.yaml
-
-      - name: Build Docker Image
-        run: |
-          docker build -f .github/scripts/chaos/juicefs.Dockerfile .
-          exit 1
 
       - name: Mount Juicefs 
         run: | 
