@@ -1075,6 +1075,9 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     @Override
     public synchronized void close() throws IOException {
+      if (closed) {
+        return;
+      }
       super.close();
       closed = true;
     }
