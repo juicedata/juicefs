@@ -36,9 +36,8 @@ jobs:
 
       - name: Copy
         run: | 
-          mkdir /app
-          cp juicefs /app/juicefs
-          /app/juicefs --version
+          mkdir /tmp/app
+          cp juicefs /tmp/app/juicefs
 
       - name: Creating kind cluster
         uses: helm/kind-action@v1.2.0
