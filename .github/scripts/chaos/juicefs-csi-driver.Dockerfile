@@ -1,4 +1,4 @@
-FROM juicedata/juicefs-juicedata/juicefs-csi-driver:latest
+FROM juicedata/juicefs-csi-driver:latest
 
 WORKDIR /tmp/app
 
