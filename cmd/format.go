@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -189,11 +188,6 @@ func fixObjectSize(s int) int {
 		s = max
 	}
 	return s
-}
-
-type encryptedPrivateKeyInfo struct {
-	EncryptionAlgorithm pkix.AlgorithmIdentifier
-	EncryptedData       []byte
 }
 
 func createStorage(format meta.Format) (object.ObjectStorage, error) {
