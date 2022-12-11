@@ -31,6 +31,7 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"github.com/youmark/pkcs8"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
@@ -62,9 +63,13 @@ func ExportRsaPrivateKeyToPem(key *rsa.PrivateKey, passphrase string) string {
 	return string(privPEM)
 }
 
-func ParseRsaPrivateKeyFromPem(block *pem.Block, passphrase string) (*rsa.PrivateKey, error) {
+func ParseRsaPrivateKeyFromPem(enc []byte, passphrase []byte) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode(enc)
+	if block == nil {
+		return nil, errors.New("failed to parse PEM block containing the key")
+	}
 	buf := block.Bytes
-	if passphrase != "" {
+	if passphrase != nil {
 		var err error
 		// nolint:staticcheck
 		buf, err = x509.DecryptPEMBlock(block, []byte(passphrase))
@@ -72,16 +77,33 @@ func ParseRsaPrivateKeyFromPem(block *pem.Block, passphrase string) (*rsa.Privat
 			if err == x509.IncorrectPasswordError {
 				return nil, err
 			}
-			return nil, fmt.Errorf("cannot decode encrypted private keys: %v", err)
+			privKey, err := pkcs8.ParsePKCS8PrivateKeyRSA(block.Bytes, []byte(passphrase))
+			if err == nil {
+				return privKey, nil
+			}
+			privKey, err = pkcs8.ParsePKCS8PrivateKeyRSA(block.Bytes, nil)
+			if err == nil {
+				return privKey, nil
+			}
+			if !strings.Contains(err.Error(), "ParsePKCS1PrivateKey") {
+				return nil, fmt.Errorf("cannot decode encrypted private keys: %v", err)
+			}
+			buf = block.Bytes
 		}
 	}
 
 	priv, err := x509.ParsePKCS1PrivateKey(buf)
+	if err == nil {
+		return priv, nil
+	}
+	key, err := x509.ParsePKCS8PrivateKey(buf)
 	if err != nil {
 		return nil, err
 	}
-
-	return priv, nil
+	if priv, ok := key.(*rsa.PrivateKey); ok {
+		return priv, nil
+	}
+	return nil, fmt.Errorf("is not RSA private key")
 }
 
 func ParseRsaPrivateKeyFromPath(path, passphrase string) (*rsa.PrivateKey, error) {
@@ -89,19 +111,7 @@ func ParseRsaPrivateKeyFromPath(path, passphrase string) (*rsa.PrivateKey, error
 	if err != nil {
 		return nil, err
 	}
-	block, _ := pem.Decode(b)
-	if block == nil {
-		return nil, errors.New("failed to parse PEM block containing the key")
-	}
-	// nolint:staticcheck
-	if strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
-		if passphrase == "" {
-			return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
-		}
-	} else if passphrase != "" {
-		logger.Warningf("passphrase is not used, because private key is not encrypted")
-	}
-	return ParseRsaPrivateKeyFromPem(block, passphrase)
+	return ParseRsaPrivateKeyFromPem(b, []byte(passphrase))
 }
 
 func NewRSAEncryptor(privKey *rsa.PrivateKey) Encryptor {

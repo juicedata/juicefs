@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -191,6 +191,11 @@ func fixObjectSize(s int) int {
 	return s
 }
 
+type encryptedPrivateKeyInfo struct {
+	EncryptionAlgorithm pkix.AlgorithmIdentifier
+	EncryptedData       []byte
+}
+
 func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	if err := format.Decrypt(); err != nil {
 		return nil, fmt.Errorf("format decrypt: %s", err)
@@ -225,22 +230,17 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 
 	if format.EncryptKey != "" {
 		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
-		block, _ := pem.Decode([]byte(format.EncryptKey))
-		if block == nil {
-			return nil, errors.New("failed to parse PEM block containing the key")
-		}
-		// nolint:staticcheck
-		if strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
-			if passphrase == "" {
+		if passphrase == "" {
+			block, _ := pem.Decode([]byte(format.EncryptKey))
+			// nolint:staticcheck
+			if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
 				return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
 			}
-		} else if passphrase != "" {
-			logger.Warningf("passphrase is not used, because private key is not encrypted")
 		}
 
-		privKey, err := object.ParseRsaPrivateKeyFromPem(block, passphrase)
+		privKey, err := object.ParseRsaPrivateKeyFromPem([]byte(format.EncryptKey), []byte(passphrase))
 		if err != nil {
-			return nil, fmt.Errorf("incorrect passphrase: %s", err)
+			return nil, fmt.Errorf("parse rsa: %s", err)
 		}
 		encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), format.EncryptAlgo)
 		if err != nil {
