@@ -111,6 +111,13 @@ func ParseRsaPrivateKeyFromPath(path, passphrase string) (*rsa.PrivateKey, error
 	if err != nil {
 		return nil, err
 	}
+	if passphrase == "" {
+		block, _ := pem.Decode(b)
+		// nolint:staticcheck
+		if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
+			return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
+		}
+	}
 	return ParseRsaPrivateKeyFromPem(b, []byte(passphrase))
 }
 
