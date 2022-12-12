@@ -69,15 +69,15 @@ func ParseRsaPrivateKeyFromPem(enc []byte, passphrase []byte) (*rsa.PrivateKey, 
 		return nil, errors.New("failed to parse PEM block containing the key")
 	}
 	buf := block.Bytes
-	if passphrase != nil {
+	if len(passphrase) != 0 {
 		var err error
 		// nolint:staticcheck
-		buf, err = x509.DecryptPEMBlock(block, []byte(passphrase))
+		buf, err = x509.DecryptPEMBlock(block, passphrase)
 		if err != nil {
 			if err == x509.IncorrectPasswordError {
 				return nil, err
 			}
-			privKey, err := pkcs8.ParsePKCS8PrivateKeyRSA(block.Bytes, []byte(passphrase))
+			privKey, err := pkcs8.ParsePKCS8PrivateKeyRSA(block.Bytes, passphrase)
 			if err == nil {
 				return privKey, nil
 			}
