@@ -22,7 +22,7 @@ on:
 jobs:
   unittests:
     timeout-minutes: 60
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     env:
       MINIO_TEST_BUCKET: 127.0.0.1:9000/testbucket
       MINIO_ACCESS_KEY: testUser
