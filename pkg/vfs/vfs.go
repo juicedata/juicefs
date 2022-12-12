@@ -547,7 +547,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		return
 	}
 	if h.reader == nil {
-		err = syscall.EACCES
+		err = syscall.EBADF
 		return
 	}
 	if !h.Rlock(ctx) {
@@ -606,7 +606,7 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 	}
 
 	if h.writer == nil {
-		err = syscall.EACCES
+		err = syscall.EBADF
 		return
 	}
 
@@ -649,7 +649,7 @@ func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh 
 		return
 	}
 	if h.writer == nil {
-		err = syscall.EACCES
+		err = syscall.EBADF
 		return
 	}
 	if !h.Wlock(ctx) {
