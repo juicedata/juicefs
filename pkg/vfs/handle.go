@@ -148,21 +148,20 @@ func (h *handle) Close() {
 }
 
 func (v *VFS) newHandle(inode Ino) *handle {
+	attr := &meta.Attr{}
+	err := func() syscall.Errno {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+		return v.Meta.GetAttr(meta.WrapContext(ctx), inode, attr)
+	}()
+	if err != 0 {
+		logger.Warnf("get attr of %d: %s", inode, err.Error())
+	}
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
-	for len(v.idleHandles[inode]) > 0 {
+	for err == 0 && len(v.idleHandles[inode]) > 0 {
 		length := len(v.idleHandles[inode])
 		h := v.idleHandles[inode][length-1]
-		attr := &meta.Attr{}
-		err := func() syscall.Errno {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-			defer cancel()
-			return v.Meta.GetAttr(meta.WrapContext(ctx), inode, attr)
-		}()
-		if err != 0 {
-			logger.Warnf("get attr of %d: %s", h.inode, syscall.Errno(err))
-			break
-		}
 		v.idleHandles[inode] = v.idleHandles[inode][:length-1]
 		if attr.Mtime > h.readAt.Unix() {
 			logger.Debugf("inode %d changed, discard idle handle %d", h.inode, h.fh)
