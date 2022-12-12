@@ -7,6 +7,7 @@ ARG JUICEFS_REPO_REF=${JUICEFS_REPO_BRANCH}
 
 WORKDIR /workspace
 ENV GOPROXY=${GOPROXY:-https://proxy.golang.org}
+ENV STATIC=1
 RUN apt-get update && apt-get install -y musl-tools upx-ucl && \
     cd /workspace && git clone --branch=$JUICEFS_REPO_BRANCH $JUICEFS_REPO_URL && \
     cd juicefs && git checkout $JUICEFS_REPO_REF && make juicefs
