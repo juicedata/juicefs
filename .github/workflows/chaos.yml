@@ -51,13 +51,13 @@ jobs:
           helm version
           kubectl version
 
-      # - name: Build CSI Docker Image
-      #   run: |
-      #     docker build -f .github/scripts/chaos/juicefs-csi-driver.Dockerfile -t juicedata/juicefs-csi-driver:v0.17.3 .
+      - name: Build CSI Docker Image
+        run: |
+          docker build -f .github/scripts/chaos/juicefs-csi-driver.Dockerfile -t juicedata/juicefs-csi-driver:v0.17.3 .
           
-      # - name: Load CSI Docker Image
-      #   run: | 
-      #     kind load docker-image juicedata/juicefs-csi-driver:v0.17.3 --name chart-testing
+      - name: Load CSI Docker Image
+        run: | 
+          kind load docker-image juicedata/juicefs-csi-driver:v0.17.3 --name chart-testing
 
       - name: Install JuiceFS CSI Driver
         run: |
