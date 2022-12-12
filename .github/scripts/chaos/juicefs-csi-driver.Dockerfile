@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y musl-tools upx-ucl && \
     cd juicefs && git checkout $JUICEFS_REPO_REF && make juicefs
 
 
-FROM juicedata/juicefs-csi-driver:latest
+FROM juicedata/juicefs-csi-driver:nightly
 
 WORKDIR /app
 COPY --from=builder /workspace/juicefs/juicefs /usr/local/bin/
