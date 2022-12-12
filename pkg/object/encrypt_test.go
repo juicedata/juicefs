@@ -29,6 +29,64 @@ import (
 
 var testkey = GenerateRsaKeyPair()
 
+var keyInPKCS8 = `-----BEGIN ENCRYPTED PRIVATE KEY-----
+MIICzzBJBgkqhkiG9w0BBQ0wPDAbBgkqhkiG9w0BBQwwDgQIEEEvSFbVLkUCAggA
+MB0GCWCGSAFlAwQBKgQQhuaBA77wcAHA7bl4dkbFsQSCAoBi5hgqWhK2ic3HBSUX
+JBFFh7omdhU4uK7mQzVVx/RvnUCbw5T7ghfboJhP5bHkj+UnnFiKD6vFZfSgH/Q3
+5KUjPIveLa0urly1bC1SMequXggjEgSPUe8XBjWJJcwkbELFiQzD76GSnveCMokZ
+X7WvoZeY0AaSAnQwe5r1evAdilWXdb2fUmRA23gco8pgSrkdVPyz9lb+FbDjrd8j
+7qiMDcoZ4qFrQ4v8IQJv+ED5f7fLen7UGpG5uOZT9Ez153f7Zw+eEAmp5qwE5SCP
+JbVLsR++HXkntJg1q2Yw4rIOi7qing408jwroed/W6AzS8A49RvrI2/Ac5dHfEnB
+LkC23Ep47/e9B8cZQCmIZXEnUpcjSwWKe5U4nCXyeskuhRhTtA3EpYFXx+/P3yNE
+YISywz6brtAxDwfk8LNAGkZRQ5c+nIFh43M+m5LLHAOSug/TbIvVvgottdc0VRHl
+Q72zeXu8X7PF8dhnoxVSBdKfRYCHQWg+PBw8IYn1KA1SfvwakeVnYcU8P4BMOXo5
+36Q4CVDIW9zWCrW49Cq/dxi0yqYyoA5hw8lIqMzmewdiUH0BwlsaOBz0utz0GhOi
+mBsK7O5819orKnuGmWzuvEETiRJ+HZTgkWAC0Wu1r7gjbMKow8grkygQz0iqMrSE
+kY7gfcnT2mpR7ow0DbWqiidb4PrxYsk0X1hOswsAek62xL/sdqlA9C3eZuqPNfqa
+yatWjKjQY4ukKUm7QplPOgOuP01GN0XF7zMEqXtl1GxPp9uDnKFzDopQau+3OrID
+ljSQG+zYqxPFeLZ06zh3bYqS5E5RjlguF6055m5NaudQ9b+/7NjPDHdpWth6cQFx
+OIGw
+-----END ENCRYPTED PRIVATE KEY-----
+`
+
+var pemWithoutPass = `-----BEGIN RSA PRIVATE KEY-----
+MIICXAIBAAKBgQCaPxhJMEfX0CaYIziQxwjlVlh75xw1xWlF14GGdpZYaM70BzMu
+XdB22X7PnkK38PHk4saXKz0blhaf/qllJP7mcdqFEcs4sWsVhU1KoLdRNH/1AJQK
+0/Oehr3vov1CjsR+51RRuDFcVOBd7lpglK5s0+TGRYyImFc+JhZ23RVFNwIDAQAB
+AoGAGtobDzqxdxeMcHXJNiMAIHScqM098vpv7jGrIc5pM/Di/kZ2mX7JeLc6RUiG
+0uDGK5NzAQQM+k1xmN7LfIkpOo2pSlL0gC/M6q0TAJqRLXBKjMVqlHLUytqKTtEg
+4PeF93GnxJZt9NSqo5HH87OwkjXeG1brqhZTfKtL/tbRpRECQQDLJAIFri3pGzni
+Xq4s2NogxUnC8cg9I7jEv4gTH/KuFQTsh/5i2+1tsGyFdXKzFd0A8DcZx+MzBm7q
+qwF46vw5AkEAwmIN0s9EcUVeVyorgdphl81QV+x9TR5wZbksigPQcNqU2NJVZKtd
+1f0o2H3E2XHV2DLjeLWctlmx+i0k3Sos7wJAJR/Sgsk/OK+yF22oNSf4TS7g+RCI
+wKurk8FRE/WtuyS6PqPn2JdKv9YTLxy0tofTWN2NpFeEbQnK8XYJEdkX+QJAR/GC
+rEOKUWIbSKeS8ryg4k5bLi+ZMLHTZ9LhaTOAMkS0UouGj3vdfxXzyCzEbrZzL1Gm
+X0bYeaU4+h87RaAWgQJBALhNFDDGXnEd0Lj2pUhBcdaRXGqrg8PZWekr0GLDPEvO
+s+yhHoqRlGKUwQtwwB3HCIEWxe7siOa0YTy9MJ5QySY=
+-----END RSA PRIVATE KEY-----`
+
+func TestParsePKCS8(t *testing.T) {
+	_, err := ParseRsaPrivateKeyFromPem([]byte(keyInPKCS8), []byte("12345678"))
+	if err != nil {
+		t.Fatalf("parse rsa: %s", err)
+	}
+	_, err = ParseRsaPrivateKeyFromPem([]byte(keyInPKCS8), []byte("1234567"))
+	if err == nil {
+		t.Fatalf("parse rsa: %s", err)
+	}
+}
+
+func TestParsePemWithoutPassword(t *testing.T) {
+	_, err := ParseRsaPrivateKeyFromPem([]byte(pemWithoutPass), nil)
+	if err != nil {
+		t.Fatalf("parse rsa: %s", err)
+	}
+	_, err = ParseRsaPrivateKeyFromPem([]byte(pemWithoutPass), []byte("123"))
+	if err != nil {
+		t.Fatalf("parse rsa: %s", err)
+	}
+}
+
 func GenerateRsaKeyPair() *rsa.PrivateKey {
 	privkey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	return privkey
@@ -39,24 +97,20 @@ func TestRSA(t *testing.T) {
 	ciphertext, _ := c1.Encrypt([]byte("hello"))
 
 	privPEM := ExportRsaPrivateKeyToPem(testkey, "abc")
-	block, _ := pem.Decode([]byte(privPEM))
-	if block == nil {
-		t.Fatalf("failed to parse PEM block containing the key")
-	}
 
-	key2, _ := ParseRsaPrivateKeyFromPem(block, "abc")
+	key2, _ := ParseRsaPrivateKeyFromPem([]byte(privPEM), []byte("abc"))
 	c2 := NewRSAEncryptor(key2)
 	plaintext, _ := c2.Decrypt(ciphertext)
 	if string(plaintext) != "hello" {
 		t.Fail()
 	}
 
-	_, err := ParseRsaPrivateKeyFromPem(block, "")
+	_, err := ParseRsaPrivateKeyFromPem([]byte(privPEM), nil)
 	if err == nil {
 		t.Errorf("parse without passphrase should fail")
 		t.Fail()
 	}
-	_, err = ParseRsaPrivateKeyFromPem(block, "ab")
+	_, err = ParseRsaPrivateKeyFromPem([]byte(privPEM), []byte("ab"))
 	if err == nil {
 		t.Errorf("parse with incorrect passphrase should return fail")
 		t.Fail()
