@@ -21,7 +21,7 @@ spec:
         # - juicefs-bandwidth
         # - juicefs-memory
         # - juicefs-cpu
-        - juicefs-delay
+        # - juicefs-delay
     # minio 带宽
     - name: minio-bandwidth
       templateType: NetworkChaos

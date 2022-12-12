@@ -21,9 +21,14 @@ on:
         required: false
         default: false
 jobs:
+
   chaos-test:
     runs-on: ubuntu-20.04
-    
+    strategy:
+      fail-fast: false
+      matrix:
+        chaos: ["minio-io", "minio-memory", "minio-cpu", "minio-bandwidth", "redis-bandwidth", "redis-io", "redis-delay", "redis-memory", "redis-cpu", "juicefs-bandwidth", "juicefs-memory", "juicefs-cpu", "juicefs-delay"]
+
     steps:        
       - name: Checkout
         uses: actions/checkout@v2
@@ -84,7 +89,10 @@ jobs:
 
       - name: Get Config Base64
         run: | 
-          base64=$(base64 .github/scripts/chaos/workflow.yaml | xargs | sed -e 's: ::g' )
+          chaos=${{matrix.chaos}}
+          sed -i "s/# - $chaos/ - $chaos/g" .github/scripts/chaos/workflow.yaml > workflow.yaml
+          grep $chaos workflow.yaml
+          base64=$(base64  workflow.yaml | xargs | sed -e 's: ::g' )
           echo "base64 is $base64"
           echo "workflow_base64=$base64" >> $GITHUB_ENV
 
@@ -97,7 +105,13 @@ jobs:
       - name: Verify
         run: |
           sleep 120
-          kubectl get pods --all-namespaces
+          kubectl get pods --all-namespaces | grep dynamic-ce | grep Running
+          kubectl get pods --all-namespaces | grep juicefs-csi-node | grep Running
+          kubectl get pods --all-namespaces | grep juicefs-csi-controller | grep Running
+          kubectl get pods --all-namespaces | grep juicefs-chart-testing-control-plane-pvc | grep Running
+          kubectl get pods --all-namespaces | grep redis | grep Running
+          kubectl get pods --all-namespaces | grep minio | grep Running
+
           MOUNT_POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-chart-testing-control-plane-pvc)
           echo MOUNT_POD_NAME is $MOUNT_POD_NAME
           kubectl logs -n kube-system $MOUNT_POD_NAME > juicefs.log
