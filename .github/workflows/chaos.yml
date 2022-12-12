@@ -90,9 +90,9 @@ jobs:
       - name: Get Config Base64
         run: | 
           chaos=${{matrix.chaos}}
-          sed -i "s/# - $chaos/ - $chaos/g" .github/scripts/chaos/workflow.yaml > workflow.yaml
-          grep $chaos workflow.yaml
-          base64=$(base64  workflow.yaml | xargs | sed -e 's: ::g' )
+          sed -i "s/# - $chaos/- $chaos/g" .github/scripts/chaos/workflow.yaml 
+          cat .github/scripts/chaos/workflow.yaml 
+          base64=$(base64  .github/scripts/chaos/workflow.yaml  | xargs | sed -e 's: ::g' )
           echo "base64 is $base64"
           echo "workflow_base64=$base64" >> $GITHUB_ENV
 
