@@ -27,7 +27,7 @@ on:
 jobs:
 
   build-matrix:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -107,7 +107,7 @@ jobs:
       fail-fast: false
       matrix:
         test_file: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     permissions:
       pull-requests: write
     steps:
@@ -241,7 +241,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   success-all-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: [build-matrix, mutate-test]
     if: always()
     steps:
