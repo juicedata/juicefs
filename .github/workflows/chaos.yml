@@ -8,7 +8,6 @@ on:
     paths-ignore:
       - docs/**
   pull_request:
-    #The branches below must be a subset of the branches above
     branches:
       - release-**
       - main
@@ -97,24 +96,23 @@ jobs:
 
       - name: Verify
         run: |
+          sleep 120
           kubectl get pods --all-namespaces
+          MOUNT_POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-chart-testing-control-plane-pvc)
+          echo MOUNT_POD_NAME is $MOUNT_POD_NAME
+          kubectl logs -n kube-system $MOUNT_POD_NAME > juicefs.log
+          grep "<FATAL>:" juicefs.log && exit 1 || true
+          VDBENCH_POD_NAME=$(kubectl get pods -n default -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep dynamic-ce )
+          echo VDBENCH_POD_NAME is $VDBENCH_POD_NAME
+          kubectl logs -n default $VDBENCH_POD_NAME > vdbench.log
+          grep -i "error" vdbench.log && exit 1 || true
 
-          exit 1
-
-      - name: log
-        if: ${{ always() }}
-        run: | 
-          if [ -f ~/.juicefs/juicefs.log ]; then
-            tail -300 ~/.juicefs/juicefs.log
-            grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
-          fi
-
-      # - name: Send Slack Notification
-      #   if: ${{ failure() && github.event_name == 'pull_request'}}
-      #   uses: juicedata/slack-notify-action@main
-      #   with:
-      #     channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-      #     slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"          
+      - name: Send Slack Notification
+        if: ${{ failure() && github.event_name == 'pull_request'}}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"          
 
       - name: Setup upterm session
         if: ${{ failure() }}
