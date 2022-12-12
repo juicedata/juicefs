@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'fdb']
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:        
       - name: Checkout
