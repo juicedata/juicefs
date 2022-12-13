@@ -10,7 +10,8 @@ type openFile struct {
 	attr      Attr
 	refs      int
 	lastCheck time.Time
-	chunks    map[uint32][]Slice
+	chunks    map[uint32][]Slice // for normal file
+	children  []*Entry           // for directory
 }
 
 type openfiles struct {
@@ -68,12 +69,14 @@ func (o *openfiles) Open(ino Ino, attr *Attr) {
 	of, ok := o.files[ino]
 	if !ok {
 		of = &openFile{}
-		of.chunks = make(map[uint32][]Slice)
+		if attr != nil && attr.Typ == TypeFile {
+			of.chunks = make(map[uint32][]Slice)
+		}
 		o.files[ino] = of
 	} else if attr != nil && attr.Mtime == of.attr.Mtime && attr.Mtimensec == of.attr.Mtimensec {
 		attr.KeepCache = of.attr.KeepCache
 	} else {
-		of.chunks = make(map[uint32][]Slice)
+		of.resetCache()
 	}
 	if attr != nil {
 		of.attr = *attr
@@ -118,7 +121,7 @@ func (o *openfiles) Update(ino Ino, attr *Attr) bool {
 	of, ok := o.files[ino]
 	if ok {
 		if attr.Mtime != of.attr.Mtime || attr.Mtimensec != of.attr.Mtimensec {
-			of.chunks = make(map[uint32][]Slice)
+			of.resetCache()
 		} else {
 			attr.KeepCache = of.attr.KeepCache
 		}
@@ -174,4 +177,14 @@ func (o *openfiles) find(ino Ino) *openFile {
 	o.Lock()
 	defer o.Unlock()
 	return o.files[ino]
+}
+
+func (of *openFile) resetCache() {
+	of.Lock()
+	defer of.Unlock()
+	if of.attr.Typ == TypeFile {
+		of.chunks = make(map[uint32][]Slice)
+	} else if of.attr.Typ == TypeDirectory {
+		of.children = nil
+	}
 }

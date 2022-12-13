@@ -289,6 +289,9 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 
 func (v *VFS) Opendir(ctx Context, ino Ino) (fh uint64, err syscall.Errno) {
 	defer func() { logit(ctx, "opendir (%d): %s [fh:%d]", ino, strerr(err), fh) }()
+	if err = v.Meta.OpenDir(ctx, ino); err != 0 {
+		return
+	}
 	fh = v.newHandle(ino).fh
 	return
 }
@@ -349,7 +352,7 @@ func (v *VFS) Releasedir(ctx Context, ino Ino, fh uint64) int {
 	}
 	v.ReleaseHandler(ino, fh)
 	logit(ctx, "releasedir (%d): OK", ino)
-	return 0
+	return int(v.Meta.Close(ctx, ino))
 }
 
 func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32) (entry *meta.Entry, fh uint64, err syscall.Errno) {
