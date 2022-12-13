@@ -897,11 +897,18 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscal
 	return err
 }
 
-func (m *baseMeta) OpenDir(ctx Context, inode Ino) syscall.Errno {
-	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, nil) {
+func (m *baseMeta) OpenDir(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
 		return 0
 	}
-	m.of.Open(inode, nil)
+	var err syscall.Errno
+	// attr may be valid, see fs.Open()
+	if attr != nil && !attr.Full {
+		err = m.GetAttr(ctx, inode, attr)
+	}
+	if err == 0 {
+		m.of.Open(inode, attr)
+	}
 	return 0
 }
 

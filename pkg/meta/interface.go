@@ -322,7 +322,7 @@ type Meta interface {
 	// Open checks permission on a node and track it as open.
 	Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno
 	// OpenDir track a directory as open.
-	OpenDir(ctx Context, inode Ino) syscall.Errno
+	OpenDir(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	// Close a file.
 	Close(ctx Context, inode Ino) syscall.Errno
 	// Read returns the list of slices on the given chunk.

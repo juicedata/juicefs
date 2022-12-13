@@ -289,7 +289,7 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 
 func (v *VFS) Opendir(ctx Context, ino Ino) (fh uint64, err syscall.Errno) {
 	defer func() { logit(ctx, "opendir (%d): %s [fh:%d]", ino, strerr(err), fh) }()
-	if err = v.Meta.OpenDir(ctx, ino); err != 0 {
+	if err = v.Meta.OpenDir(ctx, ino, &meta.Attr{}); err != 0 {
 		return
 	}
 	fh = v.newHandle(ino).fh
