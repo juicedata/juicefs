@@ -30,6 +30,11 @@ jobs:
         chaos: ["minio-io", "minio-memory", "minio-cpu", "minio-bandwidth", "redis-bandwidth", "redis-io", "redis-delay", "redis-memory", "redis-cpu", "juicefs-bandwidth", "juicefs-memory", "juicefs-cpu", "juicefs-delay"]
 
     steps:        
+      - name: Print Env
+        run: | 
+          echo "GITHUB_SHA is: "  $GITHUB_SHA 
+          echo "GITHUB_REF is: "  $GITHUB_REF
+
       - name: Checkout
         uses: actions/checkout@v2
         with:
@@ -57,7 +62,9 @@ jobs:
 
       - name: Build CSI Docker Image
         run: |
-          docker build -f .github/scripts/chaos/juicefs-csi-driver.Dockerfile -t juicedata/juicefs-csi-driver:v0.17.3 .
+          echo GITHUB_REF is $GITHUB_REF
+          echo GITHUB_SHA is $GITHUB_SHA
+          docker build --build-arg GITHUB_REF=$GITHUB_REF --build-arg GITHUB_SHA=$GITHUB_SHA -f .github/scripts/chaos/juicefs-csi-driver.Dockerfile -t juicedata/juicefs-csi-driver:v0.17.3 .
           
       - name: Load CSI Docker Image
         run: | 
