@@ -13,7 +13,7 @@ ENV STATIC=1
 
 RUN apt-get update && apt-get install -y musl-tools upx-ucl && \
     cd /workspace && git clone --depth=1 $JUICEFS_REPO_URL && \
-    cd juicefs && git fetch --no-tags --prune origin +GITHUB_SHA:$GITHUB_REF && \
+    cd juicefs && git fetch --no-tags --prune origin +$GITHUB_SHA:$GITHUB_REF && \
     git checkout $GITHUB_REF && \
     make juicefs
 

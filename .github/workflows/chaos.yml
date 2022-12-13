@@ -21,14 +21,13 @@ on:
         required: false
         default: false
 jobs:
-
   chaos-test:
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
-        chaos: ["minio-io", "minio-memory", "minio-cpu", "minio-bandwidth", "redis-bandwidth", "redis-io", "redis-delay", "redis-memory", "redis-cpu", "juicefs-bandwidth", "juicefs-memory", "juicefs-cpu", "juicefs-delay"]
-
+        # chaos: ["minio-io", "minio-memory", "minio-cpu", "minio-bandwidth", "redis-bandwidth", "redis-io", "redis-delay", "redis-memory", "redis-cpu", "juicefs-bandwidth", "juicefs-memory", "juicefs-cpu", "juicefs-delay"]
+        chaos: ["minio-io"]
     steps:        
       - name: Print Env
         run: | 
@@ -127,15 +126,31 @@ jobs:
           echo VDBENCH_POD_NAME is $VDBENCH_POD_NAME
           kubectl logs -n default $VDBENCH_POD_NAME > vdbench.log
           grep -i "error" vdbench.log && exit 1 || true
+      
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        timeout-minutes: 1
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [chaos-test]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v2
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
 
       - name: Send Slack Notification
-        if: ${{ failure() && github.event_name == 'pull_request'}}
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"          
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
-      - name: Setup upterm session
-        if: ${{ failure() }}
-        timeout-minutes: 120
-        uses: lhotari/action-upterm@v1
+      - name: Success
+        if: ${{ success() }}
+        run: echo "All Done"
