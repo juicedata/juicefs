@@ -64,7 +64,7 @@ type engine interface {
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices()
-	doCleanupDelayedSlices(edge int64, limit int) (int, error)
+	doCleanupDelayedSlices(edge int64, limit int) (int, int, error)
 	doDeleteSlice(id uint64, size uint32) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
@@ -1446,15 +1446,20 @@ func (m *baseMeta) cleanupDelayedSlices() {
 	now := time.Now()
 	edge := now.Unix() - int64(m.fmt.TrashDays)*24*3600
 	logger.Debugf("Cleanup delayed slices: started with edge %d", edge)
-	if count, err := m.en.doCleanupDelayedSlices(edge, 3e5); err == nil {
-		msg := fmt.Sprintf("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
-		if count >= 3e5 {
-			logger.Warnf("%s (reached max limit, stop)", msg)
-		} else {
-			logger.Debugf(msg)
+	var limit int = 1e5
+	var count, nk, ns int
+	var err error
+	for {
+		nk, ns, err = m.en.doCleanupDelayedSlices(edge, limit)
+		count += ns
+		if err != nil || nk < limit || time.Since(now) > 50*time.Minute {
+			break
 		}
-	} else {
+	}
+	if err != nil {
 		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)
+	} else if count > 0 {
+		logger.Infof("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
 	}
 }
 

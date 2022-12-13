@@ -43,6 +43,7 @@ type kvTxn interface {
 	gets(keys ...[]byte) [][]byte
 	scanRange(begin, end []byte) map[string][]byte
 	scanKeys(prefix []byte) [][]byte
+	scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte
 	scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
 	set(key, value []byte)
@@ -1969,20 +1970,16 @@ func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
 	_ = m.deleteKeys(m.delfileKey(inode, length))
 }
 
-func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
+func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, int, error) {
 	var keys [][]byte
 	if err := m.client.txn(func(tx kvTxn) error {
-		vals := tx.scanRange(m.delSliceKey(0, 0), m.delSliceKey(edge, 0))
-		for k := range vals {
-			if len(k) != 1+8+8 { // delayed slices: Lttttttttcccccccc
-				continue
-			}
-			keys = append(keys, []byte(k))
-		}
+		keys = tx.scanKeysRange(m.delSliceKey(0, 0), m.delSliceKey(edge, 0), limit, func(k []byte) bool {
+			return len(k) == 1+8+8 // delayed slices: Lttttttttcccccccc
+		})
 		return nil
 	}); err != nil {
 		logger.Warnf("Scan delayed slices: %s", err)
-		return 0, err
+		return 0, 0, err
 	}
 
 	var count int
@@ -2014,11 +2011,8 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 				count++
 			}
 		}
-		if count >= limit {
-			break
-		}
 	}
-	return count, nil
+	return len(keys), count, nil
 }
 
 func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {

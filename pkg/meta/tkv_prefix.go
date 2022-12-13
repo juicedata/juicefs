@@ -62,6 +62,19 @@ func (tx *prefixTxn) scanKeys(prefix []byte) [][]byte {
 	return keys
 }
 
+func (tx *prefixTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte {
+	keys := tx.kvTxn.scanKeysRange(tx.realKey(begin), tx.realKey(end), limit, func(k []byte) bool {
+		if filter == nil {
+			return true
+		}
+		return filter(tx.origKey(k))
+	})
+	for i, k := range keys {
+		keys[i] = tx.origKey(k)
+	}
+	return keys
+}
+
 func (tx *prefixTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
 	r := tx.kvTxn.scanValues(tx.realKey(prefix), limit, func(k, v []byte) bool {
 		if filter == nil {
