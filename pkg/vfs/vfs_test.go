@@ -233,9 +233,18 @@ func TestVFSIO(t *testing.T) {
 
 	// edge cases
 	_, fh2, _ := v.Open(ctx, fe.Inode, syscall.O_RDONLY)
+	_, fh3, _ := v.Open(ctx, fe.Inode, syscall.O_WRONLY)
+	wHandle := v.findHandle(fe.Inode, fh3)
+	if wHandle == nil {
+		t.Fatalf("failed to find O_WRONLY handle")
+	}
+	wHandle.reader = nil
 	// read
 	if _, e = v.Read(ctx, fe.Inode, nil, 0, 0); e != syscall.EBADF {
 		t.Fatalf("read bad fd: %s", e)
+	}
+	if _, e = v.Read(ctx, fe.Inode, make([]byte, 1024), 0, fh3); e != syscall.EBADF {
+		t.Fatalf("read write-only fd: %s", e)
 	}
 	if _, e = v.Read(ctx, fe.Inode, nil, 1<<60, fh2); e != syscall.EFBIG {
 		t.Fatalf("read off too big: %s", e)
@@ -247,8 +256,8 @@ func TestVFSIO(t *testing.T) {
 	if e = v.Write(ctx, fe.Inode, nil, 1<<60, fh2); e != syscall.EFBIG {
 		t.Fatalf("write off too big: %s", e)
 	}
-	if e = v.Write(ctx, fe.Inode, make([]byte, 1024), 0, fh2); e != syscall.EACCES {
-		t.Fatalf("write off too big: %s", e)
+	if e = v.Write(ctx, fe.Inode, make([]byte, 1024), 0, fh2); e != syscall.EBADF {
+		t.Fatalf("write read-only fd: %s", e)
 	}
 	// truncate
 	if e = v.Truncate(ctx, fe.Inode, -1, 0, &meta.Attr{}); e != syscall.EINVAL {
@@ -270,8 +279,8 @@ func TestVFSIO(t *testing.T) {
 	if e = v.Fallocate(ctx, fe.Inode, 0, 1<<60, 1<<60, fh); e != syscall.EFBIG {
 		t.Fatalf("fallocate invalid off,length: %s", e)
 	}
-	if e = v.Fallocate(ctx, fe.Inode, 0, 1<<10, 1<<20, fh2); e != syscall.EACCES {
-		t.Fatalf("fallocate invalid off,length: %s", e)
+	if e = v.Fallocate(ctx, fe.Inode, 0, 1<<10, 1<<20, fh2); e != syscall.EBADF {
+		t.Fatalf("fallocate read-only fd: %s", e)
 	}
 
 	// copy file range
