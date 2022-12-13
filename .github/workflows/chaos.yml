@@ -129,18 +129,18 @@ jobs:
       - name: Check Redis log
         if: ${{ always() }}
         run: | 
-          POD_NAME=$(kubectl get pods -n default -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep redis )
+          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep redis )
           echo POD_NAME is $POD_NAME
-          kubectl logs -n default $POD_NAME > redis.log
+          kubectl logs -n kube-system $POD_NAME > redis.log
           cat redis.log
           # grep -i "error" redis.log && exit 1 || true
 
       - name: Check Minio log
         if: ${{ always() }}
         run: | 
-          POD_NAME=$(kubectl get pods -n default -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep minio )
+          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep minio )
           echo POD_NAME is $POD_NAME
-          kubectl logs -n default $POD_NAME > minio.log
+          kubectl logs -n kube-system $POD_NAME > minio.log
           cat minio.log
           # grep -i "error" minio.log && exit 1 || true
 
