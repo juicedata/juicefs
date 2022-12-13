@@ -408,7 +408,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 				// compatible s3
 				bucketName = hostParts[0]
 				ep = hostParts[1]
-				oracleCompile := regexp.MustCompile(`.*\\.compat\\.objectstorage\\.(.*)\\.oraclecloud\\.com`)
+				oracleCompile := regexp.MustCompile(`.*\.compat.objectstorage\.(.*)\.oraclecloud\.com`)
 				if oracleCompile.MatchString(ep) {
 					if submatch := oracleCompile.FindStringSubmatch(ep); len(submatch) == 2 {
 						region = submatch[1]
