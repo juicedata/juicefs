@@ -20,32 +20,22 @@ on:
         description: "Run the build with tmate debugging enabled"
         required: false
         default: false
+  schedule:
+    - cron:  '0 */2 * * *'        
+
 jobs:
   chaos-test:
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
-        # chaos: ["minio-io", "minio-memory", "minio-cpu", "minio-bandwidth", "redis-bandwidth", "redis-io", "redis-delay", "redis-memory", "redis-cpu", "juicefs-bandwidth", "juicefs-memory", "juicefs-cpu", "juicefs-delay"]
-        chaos: ["minio-io"]
+        chaos: ["minio-io", "minio-memory", "minio-cpu", "minio-bandwidth", "redis-bandwidth", "redis-io", "redis-delay", "redis-memory", "redis-cpu", "juicefs-bandwidth", "juicefs-memory", "juicefs-cpu", "juicefs-delay"]
+        # chaos: ["minio-io"]
     steps:        
-      - name: Print Env
-        run: | 
-          echo "GITHUB_SHA is: "  $GITHUB_SHA 
-          echo "GITHUB_REF is: "  $GITHUB_REF
-
       - name: Checkout
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
-
-      - name: Build
-        uses: ./.github/actions/build
-
-      - name: Copy
-        run: | 
-          mkdir app
-          cp juicefs app/juicefs
 
       - name: Creating kind cluster
         uses: helm/kind-action@v1.2.0
@@ -108,7 +98,7 @@ jobs:
           CHAOS_MESH_VERSION: v2.5.0
           CFG_BASE64: ${{env.workflow_base64}}
 
-      - name: Verify
+      - name: Verify 
         run: |
           sleep 120
           kubectl get pods --all-namespaces | grep dynamic-ce | grep Running
@@ -118,18 +108,45 @@ jobs:
           kubectl get pods --all-namespaces | grep redis | grep Running
           kubectl get pods --all-namespaces | grep minio | grep Running
 
-          MOUNT_POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-chart-testing-control-plane-pvc)
-          echo MOUNT_POD_NAME is $MOUNT_POD_NAME
-          kubectl logs -n kube-system $MOUNT_POD_NAME > juicefs.log
+      - name: Check juicefs log
+        if: ${{ always() }}
+        run: | 
+          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-chart-testing-control-plane-pvc)
+          echo POD_NAME is $POD_NAME
+          kubectl logs -n kube-system $POD_NAME > juicefs.log
+          cat juicefs.log
           grep "<FATAL>:" juicefs.log && exit 1 || true
-          VDBENCH_POD_NAME=$(kubectl get pods -n default -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep dynamic-ce )
-          echo VDBENCH_POD_NAME is $VDBENCH_POD_NAME
-          kubectl logs -n default $VDBENCH_POD_NAME > vdbench.log
-          grep -i "error" vdbench.log && exit 1 || true
-      
+
+      - name: Check vdbench log
+        if: ${{ always() }}
+        run: | 
+          POD_NAME=$(kubectl get pods -n default -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep dynamic-ce )
+          echo POD_NAME is $POD_NAME
+          kubectl logs -n default $POD_NAME > vdbench.log
+          cat vdbench.log
+          # grep -i "error" vdbench.log && exit 1 || true
+
+      - name: Check Redis log
+        if: ${{ always() }}
+        run: | 
+          POD_NAME=$(kubectl get pods -n default -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep redis )
+          echo POD_NAME is $POD_NAME
+          kubectl logs -n default $POD_NAME > redis.log
+          cat redis.log
+          # grep -i "error" redis.log && exit 1 || true
+
+      - name: Check Minio log
+        if: ${{ always() }}
+        run: | 
+          POD_NAME=$(kubectl get pods -n default -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep minio )
+          echo POD_NAME is $POD_NAME
+          kubectl logs -n default $POD_NAME > minio.log
+          cat minio.log
+          # grep -i "error" minio.log && exit 1 || true
+
       - name: Setup upterm session
         if: ${{ failure() }}
-        timeout-minutes: 1
+        timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
   success-all-test:
