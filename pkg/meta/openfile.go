@@ -180,8 +180,6 @@ func (o *openfiles) find(ino Ino) *openFile {
 }
 
 func (of *openFile) resetCache() {
-	of.Lock()
-	defer of.Unlock()
 	if of.attr.Typ == TypeFile {
 		of.chunks = make(map[uint32][]Slice)
 	} else if of.attr.Typ == TypeDirectory {
