@@ -79,7 +79,7 @@ sudo docker plugin install juicedata/juicefs --alias juicefs
 The process of creating a storage volume using the JuiceFS Docker Volume Plugin is similar to creating and mounting a filesystem in a Docker container using the JuiceFS client, so you need to provide information about the database and object storage so that the volume plugin can perform the appropriate operations.
 
 :::tip
-Since SQLite is a standalone database, the volume plugin container cannot read the database created by the host. Therefore, when using the Docker volume plugin, you can only use network based databases such as Reids, MySQL, etc.
+Since SQLite is a standalone database, the volume plugin container cannot read the database created by the host. Therefore, when using the Docker volume plugin, you can only use network based databases such as Redis, MySQL, etc.
 :::
 
 #### Create a Storage Volume
