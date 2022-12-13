@@ -46,6 +46,8 @@ func init() {
 			ResponseHeaderTimeout: time.Second * 30,
 			IdleConnTimeout:       time.Second * 300,
 			MaxIdleConnsPerHost:   500,
+			ReadBufferSize:        32 << 10,
+			WriteBufferSize:       32 << 10,
 			Dial: func(network string, address string) (net.Conn, error) {
 				separator := strings.LastIndex(address, ":")
 				host := address[:separator]
