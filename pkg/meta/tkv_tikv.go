@@ -153,6 +153,33 @@ func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
 	return ret
 }
 
+func (tx *tikvTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte {
+	if limit == 0 {
+		return nil
+	}
+	it, err := tx.Iter(begin, end)
+	if err != nil {
+		panic(err)
+	}
+	defer it.Close()
+	var ret [][]byte
+	for it.Valid() {
+		key := it.Key()
+		if filter == nil || filter(key) {
+			ret = append(ret, it.Key())
+			if limit > 0 {
+				if limit--; limit == 0 {
+					break
+				}
+			}
+		}
+		if err = it.Next(); err != nil {
+			panic(err)
+		}
+	}
+	return ret
+}
+
 func (tx *tikvTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
 	return tx.scanRange0(prefix, nextKey(prefix), limit, filter)
 }
