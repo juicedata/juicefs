@@ -936,19 +936,16 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
 	inode = m.checkRoot(inode)
 	attr := &Attr{}
-	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
-		return 0
+	if m.conf.OpenCache == 0 || !m.of.OpenCheck(inode, attr) {
+		err := m.GetAttr(ctx, inode, attr)
+		if err != 0 {
+			return err
+		}
+		if m.conf.OpenCache > 0 {
+			m.of.Open(inode, attr)
+			defer m.Close(ctx, inode)
+		}
 	}
-	var err syscall.Errno
-	// attr may be valid, see fs.Open()
-	if attr != nil && !attr.Full {
-		err = m.GetAttr(ctx, inode, attr)
-	}
-	if err != 0 {
-		return err
-	}
-	m.of.Open(inode, attr)
-	defer m.of.Close(inode)
 
 	of := m.of.find(inode)
 	if of != nil {
@@ -975,7 +972,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
-	err = m.en.doReaddir(ctx, inode, plus, entries, -1)
+	err := m.en.doReaddir(ctx, inode, plus, entries, -1)
 	if err == 0 && of != nil {
 		of.children = *entries
 	}
