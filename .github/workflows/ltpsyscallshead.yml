@@ -24,7 +24,7 @@ jobs:
         # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
         meta: ['redis']
         type: [ 'head', 'middle', 'tail']
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Checkout

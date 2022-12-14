@@ -813,7 +813,7 @@ juicefs format \
 
 [MinIO](https://min.io) 是开源的轻量级对象存储，兼容 Amazon S3 API。
 
-使用 Docker 可以很容易地在本地运行一个 MinIO 对象存储实例。例如，以下命令通过 `--console-address ":9900"` 为控制台设置并映射了 `9900` 端口，还将 MinIO 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改这些参数：
+使用 Docker 可以很容易地在本地运行一个 MinIO 实例。例如，以下命令通过 `--console-address ":9900"` 为控制台设置并映射了 `9900` 端口，还将 MinIO 的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改这些参数：
 
 ```shell
 $ sudo docker run -d --name minio \
@@ -828,8 +828,8 @@ $ sudo docker run -d --name minio \
 
 容器创建成功以后使用以下地址访问：
 
-- **MinIO 管理界面**：[http://127.0.0.1:9900](http://127.0.0.1:9900/)
-- **MinIO API**：[http://127.0.0.1:9000](http://127.0.0.1:9000/)
+- **MinIO API**：[http://127.0.0.1:9000](http://127.0.0.1:9000/)，这也是 JuiceFS 访问对象存储时所使用的的 API
+- **MinIO 管理界面**：[http://127.0.0.1:9900](http://127.0.0.1:9900/)，用于管理对象存储本身，与 JuiceFS 无关
 
 对象存储初始的 Access Key 和 Secret Key 均为 `minioadmin`。
 
@@ -845,9 +845,10 @@ juicefs format \
     myjfs
 ```
 
-:::note 注意
-1. 当前，JuiceFS 仅支持路径风格的 MinIO URI 地址，例如：`http://127.0.0.1:9000/myjfs`。
-2. `MINIO_REGION` 环境变量可以用于设置 MinIO 的 region，如果不设置，默认为 `us-east-1`。
+:::note
+1. 当前，JuiceFS 仅支持路径风格的 MinIO URI 地址，例如：`http://127.0.0.1:9000/myjfs`
+1. `MINIO_REGION` 环境变量可以用于设置 MinIO 的 region，如果不设置，默认为 `us-east-1`
+1. 面对多节点 MinIO 集群，考虑在 Endpoint 中使用 DNS 域名，解析到各个 MinIO 节点，作为简易负载均衡，比如 `http://minio.example.com:9000/myjfs`
 :::
 
 ## WebDAV

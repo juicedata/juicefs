@@ -29,7 +29,7 @@ on:
 
 jobs:
   build-matrix:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - id: set-matrix
         run: |
@@ -54,7 +54,7 @@ jobs:
       matrix:
         # [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badger', 'mariadb', 'fdb']
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - uses: shogo82148/actions-setup-perl@v1
@@ -143,3 +143,26 @@ jobs:
         if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [pjdfstest]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v2
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Send Slack Notification
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: ${{ success() }}
+        run: echo "All Done"

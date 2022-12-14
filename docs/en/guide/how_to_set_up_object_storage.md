@@ -814,7 +814,7 @@ juicefs format \
 
 [MinIO](https://min.io) is an open source lightweight object storage, compatible with Amazon S3 API.
 
-It is easy to run a MinIO object storage instance locally using Docker. For example, the following command sets and maps port `9900` for the console with `-console-address ":9900"` and also maps the data path for the MinIO object storage to the `minio-data` folder in the current directory, which can be modified if needed.
+It is easy to run a MinIO instance locally using Docker. For example, the following command sets and maps port `9900` for the console with `--console-address ":9900"` and also maps the data path for the MinIO to the `minio-data` folder in the current directory, which can be modified if needed.
 
 ```shell
 sudo docker run -d --name minio \
@@ -827,10 +827,10 @@ sudo docker run -d --name minio \
     minio/minio server /data --console-address ":9900"
 ```
 
-It is accessed using the following address:
+After container is up and running, you can access:
 
-- **MinIO UI**: [http://127.0.0.1:9900](http://127.0.0.1:9900/)
-- **MinIO API**: [http://127.0.0.1:9000](http://127.0.0.1:9000/)
+- **MinIO API**: [http://127.0.0.1:9000](http://127.0.0.1:9000/), this is the object storage service address used by JuiceFS
+- **MinIO UI**: [http://127.0.0.1:9900](http://127.0.0.1:9900/), this is used to manage the object storage itself, not related to JuiceFS
 
 The initial Access Key and Secret Key of the object storage are both `minioadmin`.
 
@@ -848,7 +848,8 @@ juicefs format \
 
 :::note
 1. Currently, JuiceFS only supports path-style MinIO URI addresses, e.g., `http://127.0.0.1:9000/myjfs`.
-2. The `MINIO_REGION` environment variable can be used to set the region of MinIO, if not set, the default is `us-east-1`.
+1. The `MINIO_REGION` environment variable can be used to set the region of MinIO, if not set, the default is `us-east-1`.
+1. When using Multi-Node MinIO deployment, consider setting using a DNS address in the service endpoint, resolving to all MinIO Node IPs, as a simple load-balancer, e.g. `http://minio.example.com:9000/myjfs`
 :::
 
 ## WebDAV

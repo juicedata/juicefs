@@ -16,7 +16,7 @@ on:
 
 jobs:
   compare-with-rsync:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     services:
       redis:
         # Docker Hub image
@@ -95,7 +95,7 @@ jobs:
 
 
   compare-with-rsync-randomly:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -140,7 +140,7 @@ jobs:
       #   uses: lhotari/action-upterm@v1
 
   file-head-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
         uses: actions/checkout@v2

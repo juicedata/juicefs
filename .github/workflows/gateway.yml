@@ -61,7 +61,7 @@ jobs:
             file_size: '100M'
             isolation_level: "repeatable read"
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps: 
       - name: Checkout

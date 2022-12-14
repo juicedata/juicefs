@@ -51,6 +51,7 @@ public class JuiceFileSystemTest extends TestCase {
     cfg.addResource(JuiceFileSystemTest.class.getClassLoader().getResourceAsStream("core-site.xml"));
     cfg.set(FS_TRASH_INTERVAL_KEY, "6");
     cfg.set(FS_TRASH_CHECKPOINT_INTERVAL_KEY, "2");
+    cfg.set("juicefs.access-log", "/tmp/jfs.access.log");
     fs = FileSystem.newInstance(cfg);
     fs.delete(new Path("/hello"));
     FSDataOutputStream out = fs.create(new Path("/hello"), true);
@@ -805,7 +806,6 @@ public class JuiceFileSystemTest extends TestCase {
       ou.write(new byte[1]);
       fail("should not work when write to a closed stream");
     } catch (IOException ignored) {
-      ignored.printStackTrace();
     }
     FSDataInputStream in = fs.open(f);
     in.close();
@@ -814,6 +814,10 @@ public class JuiceFileSystemTest extends TestCase {
       fail("should not work when read a closed stream");
     } catch (IOException ignored) {
     }
+
+    ou = fs.create(f);
+    ou.close();
+    ou.close();
   }
 
   public void testRead() throws Exception {
