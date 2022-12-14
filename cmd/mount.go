@@ -628,5 +628,7 @@ func mount(c *cli.Context) error {
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	mount_main(v, c)
-	return metaCli.CloseSession()
+	err = metaCli.CloseSession()
+	logger.Infof("The juicefs mount process exit successfully, mountpoint: %s", metaConf.MountPoint)
+	return err
 }
