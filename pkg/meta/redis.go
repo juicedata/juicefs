@@ -2437,7 +2437,7 @@ func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 	_ = m.rdb.ZRem(ctx, m.delfiles(), tracking)
 }
 
-func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, int, error) {
+func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	ctx := Background
 	stop := fmt.Errorf("reach limit")
 	var count, nk int
@@ -2499,7 +2499,7 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, int, err
 	if err == stop {
 		err = nil
 	}
-	return nk, count, err
+	return count, err
 }
 
 func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {

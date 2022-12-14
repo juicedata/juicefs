@@ -2328,7 +2328,7 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	})
 }
 
-func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, int, error) {
+func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	var result []delslices
 	_ = m.roTxn(func(s *xorm.Session) error {
 		result = nil
@@ -2376,7 +2376,7 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, int, error)
 			}
 		}
 	}
-	return len(result), count, nil
+	return count, nil
 }
 
 func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {

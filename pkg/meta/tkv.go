@@ -1970,7 +1970,7 @@ func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
 	_ = m.deleteKeys(m.delfileKey(inode, length))
 }
 
-func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, int, error) {
+func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 	var keys [][]byte
 	if err := m.client.txn(func(tx kvTxn) error {
 		keys = tx.scanKeysRange(m.delSliceKey(0, 0), m.delSliceKey(edge, 0), limit, func(k []byte) bool {
@@ -1979,7 +1979,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, int, error)
 		return nil
 	}); err != nil {
 		logger.Warnf("Scan delayed slices: %s", err)
-		return 0, 0, err
+		return 0, err
 	}
 
 	var count int
@@ -2012,7 +2012,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, int, error)
 			}
 		}
 	}
-	return len(keys), count, nil
+	return count, nil
 }
 
 func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
