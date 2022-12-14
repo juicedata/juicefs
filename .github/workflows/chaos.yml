@@ -111,7 +111,7 @@ jobs:
       - name: Check juicefs log
         if: ${{ always() }}
         run: | 
-          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicef-chart-testing-control-plane-pvc)
+          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-chart-testing-control-plane-pvc)
           echo POD_NAME is $POD_NAME
           kubectl logs -n kube-system $POD_NAME > juicefs.log
           cat juicefs.log
