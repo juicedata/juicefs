@@ -916,7 +916,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		if len(sliceMap[1]) < 200 {
 			t.Fatalf("list delayed slices %d is less than 200", len(sliceMap[1]))
 		}
-		m.(engine).doCleanupDelayedSlices(time.Now().Unix()+1, 1000)
+		m.(engine).doCleanupDelayedSlices(time.Now().Unix() + 1)
 		l.Lock()
 		deletes = len(deleted)
 		l.Unlock()

@@ -92,6 +92,30 @@ func (tx *badgerTxn) scanKeys(prefix []byte) [][]byte {
 	return ret
 }
 
+func (tx *badgerTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte {
+	if limit == 0 {
+		return nil
+	}
+	it := tx.t.NewIterator(badger.IteratorOptions{
+		PrefetchValues: true,
+		PrefetchSize:   1024,
+	})
+	defer it.Close()
+	var ret [][]byte
+	for it.Rewind(); it.Valid(); it.Next() {
+		key := it.Item().KeyCopy(nil)
+		if filter == nil || filter(key) {
+			ret = append(ret, key)
+			if limit > 0 {
+				if limit--; limit == 0 {
+					break
+				}
+			}
+		}
+	}
+	return ret
+}
+
 func (tx *badgerTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
 	if limit == 0 {
 		return nil

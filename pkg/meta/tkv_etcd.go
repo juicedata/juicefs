@@ -141,6 +141,28 @@ func (tx *etcdTxn) scanKeys(prefix []byte) [][]byte {
 	return keys
 }
 
+func (tx *etcdTxn) scanKeysRange(begin_, end_ []byte, limit int, filter func(k []byte) bool) [][]byte {
+	if limit == 0 {
+		return nil
+	}
+	resp, err := tx.kv.Get(tx.ctx, string(begin_), etcd.WithRange(string(end_)), etcd.WithKeysOnly())
+	if err != nil {
+		panic(fmt.Errorf("get range [%v-%v): %s", string(begin_), string(end_), err))
+	}
+	var keys [][]byte
+	for _, kv := range resp.Kvs {
+		if filter == nil || filter(kv.Key) {
+			k := string(kv.Key)
+			tx.observed[k] = kv.ModRevision
+			keys = append(keys, kv.Key)
+			if limit > 0 && len(keys) >= limit {
+				break
+			}
+		}
+	}
+	return keys
+}
+
 func (tx *etcdTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
 	if limit == 0 {
 		return nil
