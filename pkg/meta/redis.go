@@ -2437,10 +2437,10 @@ func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 	_ = m.rdb.ZRem(ctx, m.delfiles(), tracking)
 }
 
-func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
+func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	ctx := Background
 	stop := fmt.Errorf("reach limit")
-	var count, nk int
+	var count int
 	var ss []Slice
 	var rs []*redis.IntCmd
 	err := r.hscan(ctx, r.delSlices(), func(keys []string) error {
@@ -2458,7 +2458,6 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 				continue
 			}
 
-			nk++
 			if err := r.txn(ctx, func(tx *redis.Tx) error {
 				ss, rs = ss[:0], rs[:0]
 				val, e := tx.HGet(ctx, r.delSlices(), key).Result()
@@ -2489,9 +2488,6 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 					r.deleteSlice(s.Id, s.Size)
 					count++
 				}
-			}
-			if nk >= limit {
-				return stop
 			}
 		}
 		return nil

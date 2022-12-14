@@ -1970,10 +1970,14 @@ func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
 	_ = m.deleteKeys(m.delfileKey(inode, length))
 }
 
-func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
+func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
+	var count int
+	var ss []Slice
+	var rs []int64
 	var keys [][]byte
+	var batch int = 1e5
 	if err := m.client.txn(func(tx kvTxn) error {
-		keys = tx.scanKeysRange(m.delSliceKey(0, 0), m.delSliceKey(edge, 0), limit, func(k []byte) bool {
+		keys = tx.scanKeysRange(m.delSliceKey(0, 0), m.delSliceKey(edge, 0), batch, func(k []byte) bool {
 			return len(k) == 1+8+8 // delayed slices: Lttttttttcccccccc
 		})
 		return nil
@@ -1982,9 +1986,6 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 		return 0, err
 	}
 
-	var count int
-	var ss []Slice
-	var rs []int64
 	for _, key := range keys {
 		if err := m.txn(func(tx kvTxn) error {
 			ss, rs = ss[:0], rs[:0]

@@ -2328,15 +2328,16 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	})
 }
 
-func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
-	var result []delslices
-	_ = m.roTxn(func(s *xorm.Session) error {
-		result = nil
-		return s.Where("deleted < ?", edge).Limit(limit, 0).Find(&result)
-	})
-
+func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	var count int
 	var ss []Slice
+	var result []delslices
+	var batch int = 1e6
+	_ = m.roTxn(func(s *xorm.Session) error {
+		result = result[:0]
+		return s.Where("deleted < ?", edge).Limit(batch, 0).Find(&result)
+	})
+
 	for _, ds := range result {
 		if err := m.txn(func(ses *xorm.Session) error {
 			ss = ss[:0]
