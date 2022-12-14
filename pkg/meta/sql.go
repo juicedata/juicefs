@@ -1105,6 +1105,7 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino) (target []byte, err error) {
 }
 
 func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
+	defer m.of.InvalidateDir(parent)
 	var ino Ino
 	var err error
 	if parent == TrashInode {
@@ -1187,7 +1188,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			return syscall.EEXIST
 		}
 
-		var updateParent bool
+		updateParent := m.conf.Strict
 		now := time.Now().UnixNano() / 1e3
 		if parent != TrashInode {
 			if _type == TypeDirectory {
@@ -1233,6 +1234,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 }
 
 func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
+	defer m.of.InvalidateDir(parent)
 	var trash Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -1305,7 +1307,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		}
 		defer func() { m.of.InvalidateChunk(e.Inode, 0xFFFFFFFE) }()
 
-		var updateParent bool
+		updateParent := m.conf.Strict
 		if !isTrash(parent) && time.Duration(now-pn.Mtime)*1e3 >= minUpdateTime {
 			pn.Mtime = now
 			pn.Ctime = now
@@ -1375,6 +1377,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
+	defer m.of.InvalidateDir(parent)
 	var trash Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -1487,6 +1490,8 @@ func (m *dbMeta) getNodesForUpdate(s *xorm.Session, nodes ...*node) error {
 }
 
 func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	defer m.of.InvalidateDir(parentSrc)
+	defer m.of.InvalidateDir(parentDst)
 	var trash Ino
 	if st := m.checkTrash(parentDst, &trash); st != 0 {
 		return st
@@ -1749,6 +1754,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 }
 
 func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	defer m.of.InvalidateDir(parent)
 	return errno(m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
 		ok, err := s.ForUpdate().Get(&pn)
@@ -1788,7 +1794,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			return syscall.EPERM
 		}
 
-		var updateParent bool
+		updateParent := m.conf.Strict
 		now := time.Now().UnixNano() / 1e3
 		if time.Duration(now-pn.Mtime)*1e3 >= minUpdateTime {
 			pn.Mtime = now

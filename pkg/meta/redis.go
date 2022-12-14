@@ -1068,6 +1068,7 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino) ([]byte, error) {
 }
 
 func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
+	defer m.of.InvalidateDir(parent)
 	var ino Ino
 	var err error
 	if parent == TrashInode {
@@ -1149,7 +1150,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			return syscall.EEXIST
 		}
 
-		var updateParent bool
+		updateParent := m.conf.Strict
 		now := time.Now()
 		if parent != TrashInode {
 			if _type == TypeDirectory {
@@ -1199,6 +1200,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 }
 
 func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
+	defer m.of.InvalidateDir(parent)
 	var trash, inode Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -1244,7 +1246,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		var updateParent bool
+		updateParent := m.conf.Strict
 		now := time.Now()
 		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
 			pattr.Mtime = now.Unix()
@@ -1334,6 +1336,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 }
 
 func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
+	defer m.of.InvalidateDir(parent)
 	var trash Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -1424,6 +1427,8 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 }
 
 func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	defer m.of.InvalidateDir(parentSrc)
+	defer m.of.InvalidateDir(parentDst)
 	exchange := flags == RenameExchange
 	var opened bool
 	var trash, dino Ino
@@ -1680,6 +1685,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 }
 
 func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	defer m.of.InvalidateDir(parent)
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		rs, err := tx.MGet(ctx, m.inodeKey(parent), m.inodeKey(inode)).Result()
 		if err != nil {
@@ -1696,7 +1702,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		if pattr.Flags&FlagImmutable != 0 {
 			return syscall.EPERM
 		}
-		var updateParent bool
+		updateParent := m.conf.Strict
 		now := time.Now()
 		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
 			pattr.Mtime = now.Unix()

@@ -936,24 +936,27 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
 	inode = m.checkRoot(inode)
 	attr := &Attr{}
-
-	opened := m.of.OpenCheck(inode, attr)
-	if m.conf.OpenCache == 0 || !opened {
-		err := m.GetAttr(ctx, inode, attr)
-		if err != 0 {
-			return err
+	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
+		defer m.of.Close(inode)
+		of := m.of.find(inode)
+		if of != nil && len(of.children) >= 2 && (plus == 0 || of.children[0].Attr.Full) {
+			*entries = of.children
+			return 0
 		}
 	}
-	if !opened {
-		m.of.Open(inode, attr)
-	}
-	defer m.Close(ctx, inode)
 
+	err := m.GetAttr(ctx, inode, attr)
+	if err != 0 {
+		return err
+	}
+
+	m.of.Open(inode, attr)
+	defer m.Close(ctx, inode)
 	of := m.of.find(inode)
 	if of != nil {
 		of.Lock()
 		defer of.Unlock()
-		if len(of.children) >= 2 {
+		if len(of.children) >= 2 && (plus == 0 || of.children[0].Attr.Full) {
 			*entries = of.children
 			return 0
 		}
@@ -974,7 +977,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
-	err := m.en.doReaddir(ctx, inode, plus, entries, -1)
+	err = m.en.doReaddir(ctx, inode, plus, entries, -1)
 	if err == 0 && of != nil {
 		of.children = *entries
 	}

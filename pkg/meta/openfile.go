@@ -173,6 +173,16 @@ func (o *openfiles) InvalidateChunk(ino Ino, indx uint32) {
 	}
 }
 
+func (o *openfiles) InvalidateDir(ino Ino) {
+	o.Lock()
+	defer o.Unlock()
+	of, ok := o.files[ino]
+	if ok {
+		of.children = nil
+		of.lastCheck = time.Unix(0, 0)
+	}
+}
+
 func (o *openfiles) find(ino Ino) *openFile {
 	o.Lock()
 	defer o.Unlock()

@@ -969,6 +969,7 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino) ([]byte, error) {
 }
 
 func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
+	defer m.of.InvalidateDir(parent)
 	var ino Ino
 	var err error
 	if parent == TrashInode {
@@ -1045,7 +1046,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			return syscall.EEXIST
 		}
 
-		var updateParent bool
+		updateParent := m.conf.Strict
 		now := time.Now()
 		if parent != TrashInode {
 			if _type == TypeDirectory {
@@ -1090,6 +1091,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 }
 
 func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
+	defer m.of.InvalidateDir(parent)
 	var trash Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -1156,7 +1158,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		}
 
 		defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
-		var updateParent bool
+		updateParent := m.conf.Strict
 		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
@@ -1215,6 +1217,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
+	defer m.of.InvalidateDir(parent)
 	var trash Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -1291,6 +1294,8 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 }
 
 func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	defer m.of.InvalidateDir(parentSrc)
+	defer m.of.InvalidateDir(parentDst)
 	var trash Ino
 	if st := m.checkTrash(parentDst, &trash); st != 0 {
 		return st
@@ -1516,6 +1521,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 }
 
 func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
+	defer m.of.InvalidateDir(parent)
 	return errno(m.txn(func(tx kvTxn) error {
 		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
 		if rs[0] == nil || rs[1] == nil {
@@ -1541,7 +1547,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			return syscall.EEXIST
 		}
 
-		var updateParent bool
+		updateParent := m.conf.Strict
 		now := time.Now()
 		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
 			pattr.Mtime = now.Unix()
