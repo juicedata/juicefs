@@ -1985,7 +1985,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 			return nil
 		}); err != nil {
 			logger.Warnf("Scan delayed slices: %s", err)
-			return 0, err
+			return count, err
 		}
 
 		for _, key := range keys {
