@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -376,6 +377,20 @@ func TestS3(t *testing.T) {
 		os.Getenv("AWS_SECRET_ACCESS_KEY"),
 		os.Getenv("AWS_SESSION_TOKEN"))
 	testStorage(t, s)
+}
+
+func TestOracleCompileRegexp(t *testing.T) {
+	ep := "zhijian-test.axntujn0ebj1.compat.objectstorage.ap-singapore-1.oraclecloud.com"
+	oracleCompile := regexp.MustCompile(oracleCompileRegexp)
+	if oracleCompile.MatchString(ep) {
+		if submatch := oracleCompile.FindStringSubmatch(ep); len(submatch) == 2 {
+			if submatch[1] != "ap-singapore-1" {
+				t.Fatalf("oracle endpoint parse failed")
+			}
+		}
+	} else {
+		t.Fatalf("oracle endpoint parse failed")
+	}
 }
 
 func TestOSS(t *testing.T) {
