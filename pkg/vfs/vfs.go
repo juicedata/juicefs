@@ -305,11 +305,6 @@ func (v *VFS) UpdateLength(inode Ino, attr *meta.Attr) {
 
 func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (entries []*meta.Entry, readAt time.Time, err syscall.Errno) {
 	defer func() { logit(ctx, "readdir (%d,%d,%d): %s (%d)", ino, size, off, strerr(err), len(entries)) }()
-	if err = v.Meta.OpenDir(ctx, ino, &meta.Attr{}); err != 0 {
-		return
-	}
-	defer v.Meta.Close(ctx, ino)
-
 	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF

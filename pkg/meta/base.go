@@ -897,21 +897,6 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscal
 	return err
 }
 
-func (m *baseMeta) OpenDir(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
-		return 0
-	}
-	var err syscall.Errno
-	// attr may be valid, see fs.Open()
-	if attr != nil && !attr.Full {
-		err = m.GetAttr(ctx, inode, attr)
-	}
-	if err == 0 {
-		m.of.Open(inode, attr)
-	}
-	return 0
-}
-
 func (m *baseMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
 	m.of.InvalidateChunk(inode, indx)
 	return 0
@@ -950,6 +935,21 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 
 func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
 	inode = m.checkRoot(inode)
+	attr := &Attr{}
+	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
+		return 0
+	}
+	var err syscall.Errno
+	// attr may be valid, see fs.Open()
+	if attr != nil && !attr.Full {
+		err = m.GetAttr(ctx, inode, attr)
+	}
+	if err != 0 {
+		return err
+	}
+	m.of.Open(inode, attr)
+	defer m.of.Close(inode)
+
 	of := m.of.find(inode)
 	if of != nil {
 		of.Lock()
@@ -958,10 +958,6 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 			*entries = of.children
 			return 0
 		}
-	}
-	var attr Attr
-	if err := m.GetAttr(ctx, inode, &attr); err != 0 {
-		return err
 	}
 	defer m.timeit(time.Now())
 	if inode == m.root {
@@ -979,7 +975,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
-	err := m.en.doReaddir(ctx, inode, plus, entries, -1)
+	err = m.en.doReaddir(ctx, inode, plus, entries, -1)
 	if err == 0 && of != nil {
 		of.children = *entries
 	}
