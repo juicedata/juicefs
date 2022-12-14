@@ -10,7 +10,7 @@ on:
   pull_request:
     branches:
       - release-**
-      # - main
+      - main
     paths-ignore:
       - docs/**
   workflow_dispatch:
@@ -57,7 +57,7 @@ jobs:
           
       - name: Load CSI Docker Image
         run: | 
-          kind load docker-image juicedata/juicefs-csi-driver:v0.17.3 --name chaos-testing
+          kind load docker-image juicedata/juicefs-csi-driver:v0.17.3 --name chart-testing
 
       - name: Install JuiceFS CSI Driver
         run: |
@@ -104,14 +104,14 @@ jobs:
           kubectl get pods --all-namespaces | grep dynamic-ce | grep Running
           kubectl get pods --all-namespaces | grep juicefs-csi-node | grep Running
           kubectl get pods --all-namespaces | grep juicefs-csi-controller | grep Running
-          kubectl get pods --all-namespaces | grep juicefs-chaos-testing-control-plane-pvc | grep Running
+          kubectl get pods --all-namespaces | grep juicefs-chart-testing-control-plane-pvc | grep Running
           kubectl get pods --all-namespaces | grep redis | grep Running
           kubectl get pods --all-namespaces | grep minio | grep Running
 
       - name: Check juicefs log
         if: ${{ always() }}
         run: | 
-          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicef-chaos-testing-control-plane-pvc)
+          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicef-chart-testing-control-plane-pvc)
           echo POD_NAME is $POD_NAME
           kubectl logs -n kube-system $POD_NAME > juicefs.log
           cat juicefs.log
