@@ -282,7 +282,7 @@ number of retries after network failure (default: 10)
 number of connections to upload (default: 20)
 
 `--max-deletes value`<br />
-number of threads to delete objects (default: 2)
+number of threads to delete objects (default: 10)
 
 `--buffer-size value`<br />
 total read/write buffering in MiB (default: 300)
@@ -412,7 +412,7 @@ number of retries after network failure (default: 10)
 number of connections to upload (default: 20)
 
 `--max-deletes value`<br />
-number of threads to delete objects (default: 2)
+number of threads to delete objects (default: 10)
 
 `--buffer-size value`<br />
 total read/write buffering in MiB (default: 300)
@@ -539,7 +539,7 @@ number of retries after network failure (default: 10)
 number of connections to upload (default: 20)
 
 `--max-deletes value`<br />
-number of threads to delete objects (default: 2)
+number of threads to delete objects (default: 10)
 
 `--buffer-size value`<br />
 total read/write buffering in MiB (default: 300)
