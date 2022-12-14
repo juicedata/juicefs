@@ -615,6 +615,9 @@ func mount(c *cli.Context) error {
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
 		daemonRun(c, addr, vfsConf, metaCli)
 	} else {
+		if c.IsSet("log") {
+			logger.Warnf("--log flag is ignored in foreground mode, the log output will be Stderr")
+		}
 		go checkMountpoint(vfsConf.Format.Name, mp, c.String("log"), false)
 	}
 
