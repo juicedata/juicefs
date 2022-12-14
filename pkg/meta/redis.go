@@ -2439,6 +2439,7 @@ func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 
 func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	ctx := Background
+	start := time.Now()
 	stop := fmt.Errorf("reach limit")
 	var count int
 	var ss []Slice
@@ -2489,6 +2490,9 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 					count++
 				}
 			}
+		}
+		if time.Since(start) > 50*time.Minute {
+			return stop
 		}
 		return nil
 	})
