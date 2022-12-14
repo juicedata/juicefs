@@ -22,6 +22,7 @@ package meta
 import (
 	"context"
 	"net/url"
+	"os"
 	"strings"
 
 	plog "github.com/pingcap/log"
@@ -32,6 +33,7 @@ import (
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv"
 	"github.com/tikv/client-go/v2/txnkv/txnutil"
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -54,7 +56,7 @@ func newTikvClient(addr string) (tkvClient, error) {
 	default:
 		plvl = "dpanic"
 	}
-	l, prop, _ := plog.InitLogger(&plog.Config{Level: plvl})
+	l, prop, _ := plog.InitLogger(&plog.Config{Level: plvl}, zap.Fields(zap.String("component", "tikv"), zap.Int("pid", os.Getpid())))
 	plog.ReplaceGlobals(l, prop)
 
 	tUrl, err := url.Parse("tikv://" + addr)
