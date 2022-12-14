@@ -289,9 +289,6 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 
 func (v *VFS) Opendir(ctx Context, ino Ino) (fh uint64, err syscall.Errno) {
 	defer func() { logit(ctx, "opendir (%d): %s [fh:%d]", ino, strerr(err), fh) }()
-	if err = v.Meta.OpenDir(ctx, ino, &meta.Attr{}); err != 0 {
-		return
-	}
 	fh = v.newHandle(ino).fh
 	return
 }
@@ -308,6 +305,11 @@ func (v *VFS) UpdateLength(inode Ino, attr *meta.Attr) {
 
 func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (entries []*meta.Entry, readAt time.Time, err syscall.Errno) {
 	defer func() { logit(ctx, "readdir (%d,%d,%d): %s (%d)", ino, size, off, strerr(err), len(entries)) }()
+	if err = v.Meta.OpenDir(ctx, ino, &meta.Attr{}); err != 0 {
+		return
+	}
+	defer v.Meta.Close(ctx, ino)
+
 	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
@@ -352,7 +354,7 @@ func (v *VFS) Releasedir(ctx Context, ino Ino, fh uint64) int {
 	}
 	v.ReleaseHandler(ino, fh)
 	logit(ctx, "releasedir (%d): OK", ino)
-	return int(v.Meta.Close(ctx, ino))
+	return 0
 }
 
 func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32) (entry *meta.Entry, fh uint64, err syscall.Errno) {
