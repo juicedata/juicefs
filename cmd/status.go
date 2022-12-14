@@ -70,8 +70,8 @@ type statistic struct {
 	AvailableInodes         uint64
 	TrashSliceCount         int64 `json:",omitempty"`
 	TrashSliceSize          int64 `json:",omitempty"`
-	DelayedDeletedFileCount int64 `json:",omitempty"`
-	DelayedDeletedFileSize  int64 `json:",omitempty"`
+	PendingDeletedFileCount int64 `json:",omitempty"`
+	PendingDeletedFileSize  int64 `json:",omitempty"`
 }
 
 func printJson(v interface{}) {
@@ -117,7 +117,7 @@ func status(ctx *cli.Context) error {
 		progress := utils.NewProgress(false, false)
 		slicesSpinner := progress.AddDoubleSpinner("Trash Slices")
 		defer slicesSpinner.Done()
-		fileSpinner := progress.AddDoubleSpinner("Delayed Deleted Files")
+		fileSpinner := progress.AddDoubleSpinner("Pending Deleted Files")
 		defer fileSpinner.Done()
 
 		err = m.ScanDeletedObject(
@@ -138,7 +138,7 @@ func status(ctx *cli.Context) error {
 			return err
 		}
 		stat.TrashSliceCount, stat.TrashSliceSize = slicesSpinner.Current()
-		stat.DelayedDeletedFileCount, stat.DelayedDeletedFileSize = fileSpinner.Current()
+		stat.PendingDeletedFileCount, stat.PendingDeletedFileSize = fileSpinner.Current()
 	}
 
 	printJson(&sections{format, sessions, stat})
