@@ -103,7 +103,7 @@ jobs:
         run: |
           sleep 120
           kubectl get pods --all-namespaces
-          apps=("dynamic-ce" "juicefs-csi-node" "juicefs-csi-controller", "juicefs-chart-testing-control-plane-pvc", "redis", "minio")
+          apps=("dynamic-ce" "juicefs-csi-node" "juicefs-csi-controller" "juicefs-chart-testing-control-plane-pvc"  "redis" "minio")
           for app in ${apps[@]}; do
             echo app is $app
             kubectl get pods --all-namespaces | grep $app | grep Running
