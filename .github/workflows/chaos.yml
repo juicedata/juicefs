@@ -104,7 +104,7 @@ jobs:
           sleep 120
           kubectl get pods --all-namespaces
           apps=("dynamic-ce" "juicefs-csi-node" "juicefs-csi-controller", "juicefs-chart-testing-control-plane-pvc", "redis", "minio")
-          for app in ${pods[@]}; do
+          for app in ${apps[@]}; do
             echo app is $app
             status=$(kubectl get pods -n kube-system -l app=$app --no-headers -o custom-columns=":status.phase")
             echo status is $status
@@ -112,7 +112,7 @@ jobs:
               echo "status of $app is $status"
               exit 1
             fi
-          done
+          donecnkq
 
       - name: Check csi controller log
         if: ${{ always() }}
