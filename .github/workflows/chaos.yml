@@ -10,7 +10,7 @@ on:
   pull_request:
     branches:
       - release-**
-      # - main
+      - main
     paths-ignore:
       - docs/**
   workflow_dispatch:
