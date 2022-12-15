@@ -198,12 +198,11 @@ func (of *openFile) resetCache() {
 }
 
 func (of *openFile) shouldKeepCache(attr *Attr, strict bool) bool {
-	if attr == nil {
-		return false
-	}
-	if attr.Mtime == of.attr.Mtime && attr.Mtimensec == of.attr.Mtimensec ||
-		!strict && (attr.Mtime-of.attr.Mtime) < time.Second.Microseconds() {
-		return true
+	if attr != nil {
+		if attr.Mtime == of.attr.Mtime && attr.Mtimensec == of.attr.Mtimensec ||
+			!strict && (attr.Mtime-of.attr.Mtime) < time.Second.Microseconds() {
+			return true
+		}
 	}
 	return false
 }
