@@ -102,6 +102,7 @@ jobs:
       - name: Verify 
         run: |
           sleep 120
+          kubectl get pods --all-namespaces
           kubectl get pods --all-namespaces | grep dynamic-ce | grep Running
           kubectl get pods --all-namespaces | grep juicefs-csi-node | grep Running
           kubectl get pods --all-namespaces | grep juicefs-csi-controller | grep Running
