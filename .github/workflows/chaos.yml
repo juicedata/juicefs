@@ -55,16 +55,16 @@ jobs:
           echo GITHUB_SHA is $GITHUB_SHA
           helm repo add juicefs https://juicedata.github.io/charts/
           helm repo update
-          CSI_DRIVER_VERSION=$(helm search repo juicefs/juicefs-csi-driver --versions | grep juicefs | head -1 | awk -F" " '{print $3}')
-          echo CSI_DRIVER_VERSION is $CSI_DRIVER_VERSION
+          APP_VERSION=$(helm search repo juicefs/juicefs-csi-driver --versions | grep juicefs | head -1 | awk -F" " '{print $3}')
+          echo APP_VERSION is $APP_VERSION
           docker build --build-arg GITHUB_REF=$GITHUB_REF --build-arg GITHUB_SHA=$GITHUB_SHA -f .github/scripts/chaos/juicefs-csi-driver.Dockerfile -t juicedata/juicefs-csi-driver:v$CSI_DRIVER_VERSION .
-          kind load docker-image juicedata/juicefs-csi-driver:v$CSI_DRIVER_VERSION --name chart-testing
+          kind load docker-image juicedata/juicefs-csi-driver:v$APP_VERSION --name chart-testing
 
       - name: Install JuiceFS CSI Driver
         run: |
-          CSI_DRIVER_VERSION=$(helm search repo juicefs/juicefs-csi-driver --versions | grep juicefs | head -1 | awk -F" " '{print $3}')
-          echo CSI_DRIVER_VERSION is $CSI_DRIVER_VERSION
-          helm install juicefs-csi-driver juicefs/juicefs-csi-driver -n kube-system --version $CSI_DRIVER_VERSION
+          CHART_VERSION=$(helm search repo juicefs/juicefs-csi-driver --versions | grep juicefs | head -1 | awk -F" " '{print $2}')
+          echo CHART_VERSION is $CHART_VERSION
+          helm install juicefs-csi-driver juicefs/juicefs-csi-driver -n kube-system --version $CHART_VERSION
           kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver
 
       - name: Deploy redis
