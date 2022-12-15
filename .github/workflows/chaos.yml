@@ -106,13 +106,12 @@ jobs:
           apps=("dynamic-ce" "juicefs-csi-node" "juicefs-csi-controller", "juicefs-chart-testing-control-plane-pvc", "redis", "minio")
           for app in ${apps[@]}; do
             echo app is $app
-            status=$(kubectl get pods -n kube-system -l app=$app --no-headers -o custom-columns=":status.phase")
-            echo status is $status
-            if [ $status != "Running" ]; then
-              echo "status of $app is $status"
+            kubectl get pods --all-namespaces | grep $app | grep Running
+            if [ $? != 0 ]; then
+              echo status of $app is not expected.
               exit 1
             fi
-          donecnkq
+          done
 
       - name: Check csi controller log
         if: ${{ always() }}
@@ -166,7 +165,7 @@ jobs:
           # grep -i "error" minio.log && exit 1 || true
 
       - name: Setup upterm session
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
