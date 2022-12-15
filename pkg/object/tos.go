@@ -26,9 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos"
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/codes"
@@ -110,14 +108,13 @@ func (t tosClient) Head(key string) (Object, error) {
 	}, err
 }
 
-func (t tosClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (t tosClient) List(prefix, marker string, limit int64) ([]Object, error) {
 	resp, err := t.client.ListObjectsV2(context.Background(), &tos.ListObjectsV2Input{
 		Bucket: t.bucket,
 		ListObjectsInput: tos.ListObjectsInput{
-			Delimiter: delimiter,
-			Prefix:    prefix,
-			Marker:    marker,
-			MaxKeys:   int(limit),
+			Prefix:  prefix,
+			Marker:  marker,
+			MaxKeys: int(limit),
 		},
 	})
 	if err != nil {
@@ -136,12 +133,6 @@ func (t tosClient) List(prefix, marker, delimiter string, limit int64) ([]Object
 			o.LastModified,
 			strings.HasSuffix(o.Key, "/"),
 		}
-	}
-	if delimiter != "" {
-		for _, p := range resp.CommonPrefixes {
-			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true})
-		}
-		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
 }
