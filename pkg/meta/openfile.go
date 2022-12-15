@@ -63,7 +63,7 @@ func (o *openfiles) OpenCheck(ino Ino, attr *Attr) bool {
 	return false
 }
 
-func (o *openfiles) Open(ino Ino, attr *Attr) {
+func (o *openfiles) Open(ino Ino, attr *Attr, strict bool) {
 	o.Lock()
 	defer o.Unlock()
 	of, ok := o.files[ino]
@@ -73,7 +73,7 @@ func (o *openfiles) Open(ino Ino, attr *Attr) {
 			of.chunks = make(map[uint32][]Slice)
 		}
 		o.files[ino] = of
-	} else if attr != nil && attr.Mtime == of.attr.Mtime && attr.Mtimensec == of.attr.Mtimensec {
+	} else if of.shouldKeepCache(attr, strict) {
 		attr.KeepCache = of.attr.KeepCache
 	} else {
 		of.resetCache()
@@ -112,7 +112,7 @@ func (o *openfiles) Check(ino Ino, attr *Attr) bool {
 	return false
 }
 
-func (o *openfiles) Update(ino Ino, attr *Attr) bool {
+func (o *openfiles) Update(ino Ino, attr *Attr, strict bool) bool {
 	if attr == nil {
 		panic("attr is nil")
 	}
@@ -120,7 +120,7 @@ func (o *openfiles) Update(ino Ino, attr *Attr) bool {
 	defer o.Unlock()
 	of, ok := o.files[ino]
 	if ok {
-		if attr.Mtime != of.attr.Mtime || attr.Mtimensec != of.attr.Mtimensec {
+		if !of.shouldKeepCache(attr, strict) {
 			of.resetCache()
 		} else {
 			attr.KeepCache = of.attr.KeepCache
@@ -195,4 +195,15 @@ func (of *openFile) resetCache() {
 	} else if of.attr.Typ == TypeDirectory {
 		of.children = nil
 	}
+}
+
+func (of *openFile) shouldKeepCache(attr *Attr, strict bool) bool {
+	if attr == nil {
+		return false
+	}
+	if attr.Mtime == of.attr.Mtime && attr.Mtimensec == of.attr.Mtimensec ||
+		!strict && (attr.Mtime-of.attr.Mtime) < time.Second.Microseconds() {
+		return true
+	}
+	return false
 }

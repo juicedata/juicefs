@@ -704,7 +704,7 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		err = m.en.doGetAttr(ctx, inode, attr)
 	}
 	if err == 0 {
-		m.of.Update(inode, attr)
+		m.of.Update(inode, attr, m.conf.Strict)
 	}
 	return err
 }
@@ -759,7 +759,7 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 		eno = 0
 	}
 	if eno == 0 && inode != nil {
-		m.of.Open(*inode, attr)
+		m.of.Open(*inode, attr, m.conf.Strict)
 	}
 	return eno
 }
@@ -892,7 +892,7 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscal
 		}
 	}
 	if err == 0 {
-		m.of.Open(inode, attr)
+		m.of.Open(inode, attr, m.conf.Strict)
 	}
 	return err
 }
@@ -950,7 +950,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		return err
 	}
 
-	m.of.Open(inode, attr)
+	m.of.Open(inode, attr, m.conf.Strict)
 	defer m.Close(ctx, inode)
 	of := m.of.find(inode)
 	if of != nil {
