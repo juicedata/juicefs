@@ -103,12 +103,31 @@ jobs:
         run: |
           sleep 120
           kubectl get pods --all-namespaces
-          kubectl get pods --all-namespaces | grep dynamic-ce | grep Running
-          kubectl get pods --all-namespaces | grep juicefs-csi-node | grep Running
-          kubectl get pods --all-namespaces | grep juicefs-csi-controller | grep Running
-          kubectl get pods --all-namespaces | grep juicefs-chart-testing-control-plane-pvc | grep Running
-          kubectl get pods --all-namespaces | grep redis | grep Running
-          kubectl get pods --all-namespaces | grep minio | grep Running
+          apps=("dynamic-ce" "juicefs-csi-node" "juicefs-csi-controller", "juicefs-chart-testing-control-plane-pvc", "redis", "minio")
+          for app in ${pods[@]}; do
+            echo app is $app
+            status=$(kubectl get pods -n kube-system -l app=$app --no-headers -o custom-columns=":status.phase")
+            echo status is $status
+            if [ $status != "Running" ]; then
+              echo "status of $app is $status"
+              exit 1
+            fi
+          done
+
+      - name: Check csi controller log
+        if: ${{ always() }}
+        run: |
+          kubectl -n kube-system get po -l app=juicefs-csi-controller
+          kubectl -n kube-system logs juicefs-csi-controller-0 juicefs-plugin
+
+      - name: Check csi node log
+        if: ${{ always() }}
+        run: |
+          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-csi-node)
+          echo POD_NAME is $POD_NAME
+          kubectl -n kube-system logs $POD_NAME -c juicefs-plugin > csi_node.log
+          cat csi_node.log
+          # grep -i "error" csi_node.log && exit 1 || true
 
       - name: Check juicefs log
         if: ${{ always() }}
