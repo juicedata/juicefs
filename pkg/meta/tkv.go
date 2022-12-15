@@ -1046,7 +1046,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			return syscall.EEXIST
 		}
 
-		updateParent := m.conf.Strict
+		var updateParent bool
 		now := time.Now()
 		if parent != TrashInode {
 			if _type == TypeDirectory {
@@ -1158,7 +1158,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		}
 
 		defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
-		updateParent := m.conf.Strict
+		var updateParent bool
 		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
@@ -1547,7 +1547,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			return syscall.EEXIST
 		}
 
-		updateParent := m.conf.Strict
+		var updateParent bool
 		now := time.Now()
 		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
 			pattr.Mtime = now.Unix()

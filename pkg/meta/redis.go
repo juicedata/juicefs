@@ -1150,7 +1150,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			return syscall.EEXIST
 		}
 
-		updateParent := m.conf.Strict
+		var updateParent bool
 		now := time.Now()
 		if parent != TrashInode {
 			if _type == TypeDirectory {
@@ -1246,7 +1246,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		updateParent := m.conf.Strict
+		var updateParent bool
 		now := time.Now()
 		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
 			pattr.Mtime = now.Unix()
@@ -1702,7 +1702,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		if pattr.Flags&FlagImmutable != 0 {
 			return syscall.EPERM
 		}
-		updateParent := m.conf.Strict
+		var updateParent bool
 		now := time.Now()
 		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
 			pattr.Mtime = now.Unix()
