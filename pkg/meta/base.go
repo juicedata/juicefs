@@ -317,7 +317,7 @@ func (m *baseMeta) OnReload(fn func(f *Format)) {
 
 func (m *baseMeta) refresh() {
 	for {
-		dur := utils.SleepWithJitter(m.conf.Heartbeat)
+		utils.SleepWithJitter(m.conf.Heartbeat)
 		m.sesMu.Lock()
 		if m.umounting {
 			m.sesMu.Unlock()
@@ -358,7 +358,7 @@ func (m *baseMeta) refresh() {
 		if m.conf.ReadOnly || m.conf.NoBGJob {
 			continue
 		}
-		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64(dur/time.Second)); err != nil {
+		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64((m.conf.Heartbeat * 9 / 10).Seconds())); err != nil {
 			logger.Warnf("checking counter lastCleanupSessions: %s", err)
 		} else if ok {
 			go m.CleanStaleSessions()
@@ -427,8 +427,8 @@ func (m *baseMeta) flushStats() {
 
 func (m *baseMeta) cleanupDeletedFiles() {
 	for {
-		dur := utils.SleepWithJitter(time.Minute)
-		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(dur.Seconds())); err != nil {
+		utils.SleepWithJitter(time.Minute)
+		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Minute.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
 		} else if ok {
 			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 10000)
@@ -446,8 +446,8 @@ func (m *baseMeta) cleanupDeletedFiles() {
 
 func (m *baseMeta) cleanupSlices() {
 	for {
-		dur := utils.SleepWithJitter(time.Hour)
-		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(dur.Seconds())); err != nil {
+		utils.SleepWithJitter(time.Hour)
+		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter nextCleanupSlices: %s", err)
 		} else if ok {
 			m.en.doCleanupSlices()
@@ -1349,14 +1349,14 @@ func (m *baseMeta) trashEntry(parent, inode Ino, name string) string {
 
 func (m *baseMeta) cleanupTrash() {
 	for {
-		dur := utils.SleepWithJitter(time.Hour)
+		utils.SleepWithJitter(time.Hour)
 		if st := m.en.doGetAttr(Background, TrashInode, nil); st != 0 {
 			if st != syscall.ENOENT {
 				logger.Warnf("getattr inode %d: %s", TrashInode, st)
 			}
 			continue
 		}
-		if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), int64(dur.Seconds())); err != nil {
+		if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupTrash: %s", err)
 		} else if ok {
 			go m.doCleanupTrash(false)

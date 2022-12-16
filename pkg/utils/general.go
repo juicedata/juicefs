@@ -21,9 +21,7 @@ import (
 	"time"
 )
 
-func SleepWithJitter(d time.Duration) time.Duration {
+func SleepWithJitter(d time.Duration) {
 	j := int64(d / 20) // +- 5%
-	dur := d + time.Duration(rand.Int63n(2*j+1)-j)
-	time.Sleep(dur)
-	return dur
+	time.Sleep(d + time.Duration(rand.Int63n(2*j+1)-j))
 }
