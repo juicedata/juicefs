@@ -427,8 +427,8 @@ func (m *baseMeta) flushStats() {
 
 func (m *baseMeta) cleanupDeletedFiles() {
 	for {
-		utils.SleepWithJitter(time.Minute)
-		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), 60); err != nil {
+		dur := utils.SleepWithJitter(time.Minute)
+		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(dur.Seconds())); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
 		} else if ok {
 			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 10000)
@@ -446,8 +446,8 @@ func (m *baseMeta) cleanupDeletedFiles() {
 
 func (m *baseMeta) cleanupSlices() {
 	for {
-		utils.SleepWithJitter(time.Hour)
-		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), 3600); err != nil {
+		dur := utils.SleepWithJitter(time.Hour)
+		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(dur.Seconds())); err != nil {
 			logger.Warnf("checking counter nextCleanupSlices: %s", err)
 		} else if ok {
 			m.en.doCleanupSlices()
@@ -1349,14 +1349,14 @@ func (m *baseMeta) trashEntry(parent, inode Ino, name string) string {
 
 func (m *baseMeta) cleanupTrash() {
 	for {
-		utils.SleepWithJitter(time.Hour)
+		dur := utils.SleepWithJitter(time.Hour)
 		if st := m.en.doGetAttr(Background, TrashInode, nil); st != 0 {
 			if st != syscall.ENOENT {
 				logger.Warnf("getattr inode %d: %s", TrashInode, st)
 			}
 			continue
 		}
-		if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), 3600); err != nil {
+		if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), int64(dur.Seconds())); err != nil {
 			logger.Warnf("checking counter lastCleanupTrash: %s", err)
 		} else if ok {
 			go m.doCleanupTrash(false)
