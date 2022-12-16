@@ -7,6 +7,10 @@ parameters:
   csi.storage.k8s.io/node-publish-secret-namespace: kube-system
   csi.storage.k8s.io/provisioner-secret-name: dynamic-ce
   csi.storage.k8s.io/provisioner-secret-namespace: kube-system
+  juicefs/mount-cpu-limit: 5000m
+  juicefs/mount-memory-limit: 1Gi
+  juicefs/mount-cpu-request: 100m
+  juicefs/mount-memory-request: 500Mi
 #mountOptions:
 #  - cache-dir=/var/foo:/var/foo1:/var/foo2
 provisioner: csi.juicefs.com
