@@ -277,7 +277,7 @@ consul 注册中心地址 (默认："127.0.0.1:8500")
 上传对象的连接数 (默认：20)
 
 `--max-deletes value`<br />
-删除对象的连接数 (默认：2)
+删除对象的连接数 (默认：10)
 
 `--buffer-size value`<br />
 读写缓存的总大小；单位为 MiB (默认：300)
@@ -407,7 +407,7 @@ juicefs gateway [command options] META-URL ADDRESS
 上传对象的连接数 (默认：20)
 
 `--max-deletes value`<br />
-删除对象的连接数 (默认：2)
+删除对象的连接数 (默认：10)
 
 `--buffer-size value`<br />
 读写缓存的总大小；单位为 MiB (默认：300)
@@ -533,7 +533,7 @@ juicefs webdav [command options] META-URL ADDRESS
 上传对象的连接数 (默认：20)
 
 `--max-deletes value`<br />
-删除对象的连接数 (默认：2)
+删除对象的连接数 (默认：10)
 
 `--buffer-size value`<br />
 读写缓存的总大小；单位为 MiB (默认：300)

@@ -121,7 +121,7 @@ func copyFile(srcPath, destPath string, requireRootPrivileges bool) error {
 }
 
 func getCmdMount(mp string) (uid, pid, cmd string, err error) {
-	psArgs := []string{"/bin/sh", "-c", fmt.Sprintf("ps -ef | grep -v grep | grep -E \"%s mount | /sbin/mount.juicefs\" | grep %s", os.Args[0], mp)}
+	psArgs := []string{"/bin/sh", "-c", fmt.Sprintf("ps -ef | grep -v grep | grep mount | grep %s", mp)}
 	ret, err := exec.Command(psArgs[0], psArgs[1:]...).CombinedOutput()
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to execute command `%s`: %v", strings.Join(psArgs, " "), err)
@@ -218,7 +218,7 @@ func getPprofPort(pid, amp string, requireRootPrivileges bool) (int, error) {
 	if err := json.Unmarshal(content, &cfg); err != nil {
 		logger.Warnf("failed to unmarshal config file: %v", err)
 	}
-	if cfg.Port.DebugAgent != "" {
+	if cfg.Port != nil {
 		if len(strings.Split(cfg.Port.DebugAgent, ":")) >= 2 {
 			if port, err := strconv.Atoi(strings.Split(cfg.Port.DebugAgent, ":")[1]); err != nil {
 				logger.Warnf("failed to parse debug agent port: %v", err)
@@ -455,6 +455,14 @@ func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDi
 		logger.Warnf("Collecting log currently only support Linux/macOS")
 		return nil
 	}
+	matched, err := regexp.MatchString(`.*\s-d\s.*`, cmd)
+	if err != nil {
+		return fmt.Errorf("failed to match cmd: %v", err)
+	}
+	if !matched {
+		logger.Warnf("The juicefs mount by foreground, the log will not be collected")
+		return nil
+	}
 	logPath, err := getLogPath(cmd, requireRootPrivileges)
 	if err != nil {
 		return fmt.Errorf("failed to get log path: %v", err)
@@ -474,9 +482,7 @@ func collectSysInfo(ctx *cli.Context, currDir string) error {
 
 	result := fmt.Sprintf(`Platform: 
 %s %s
-%s
-JuiceFS Version:
-%s`, runtime.GOOS, runtime.GOARCH, sysInfo, ctx.App.Version)
+%s`, runtime.GOOS, runtime.GOARCH, sysInfo)
 
 	sysPath := filepath.Join(currDir, "system-info.log")
 	sysFile, err := os.Create(sysPath)
@@ -543,7 +549,7 @@ func debug(ctx *cli.Context) error {
 	}
 
 	if err := collectSysInfo(ctx, currDir); err != nil {
-		return err
+		logger.Errorf("Failed to collect system info: %v", err)
 	}
 
 	uid, pid, cmd, err := getCmdMount(amp)
@@ -560,15 +566,15 @@ func debug(ctx *cli.Context) error {
 
 	var wg sync.WaitGroup
 	if err := collectSpecialFile(ctx, amp, currDir, requireRootPrivileges, &wg); err != nil {
-		return err
+		logger.Errorf("Failed to collect special file: %v", err)
 	}
 
 	if err := collectLog(ctx, cmd, requireRootPrivileges, currDir); err != nil {
-		return err
+		logger.Errorf("Failed to collect log: %v", err)
 	}
 
 	if err := collectPprof(ctx, cmd, pid, amp, requireRootPrivileges, currDir, &wg); err != nil {
-		return err
+		logger.Errorf("Failed to collect pprof: %v", err)
 	}
 
 	wg.Wait()

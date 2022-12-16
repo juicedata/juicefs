@@ -64,7 +64,7 @@ type engine interface {
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices()
-	doCleanupDelayedSlices(edge int64, limit int) (int, error)
+	doCleanupDelayedSlices(edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
@@ -358,7 +358,7 @@ func (m *baseMeta) refresh() {
 		if m.conf.ReadOnly || m.conf.NoBGJob {
 			continue
 		}
-		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64(m.conf.Heartbeat/time.Second)); err != nil {
+		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64((m.conf.Heartbeat * 9 / 10).Seconds())); err != nil {
 			logger.Warnf("checking counter lastCleanupSessions: %s", err)
 		} else if ok {
 			go m.CleanStaleSessions()
@@ -428,7 +428,7 @@ func (m *baseMeta) flushStats() {
 func (m *baseMeta) cleanupDeletedFiles() {
 	for {
 		utils.SleepWithJitter(time.Minute)
-		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), 60); err != nil {
+		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Minute.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
 		} else if ok {
 			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 10000)
@@ -447,7 +447,7 @@ func (m *baseMeta) cleanupDeletedFiles() {
 func (m *baseMeta) cleanupSlices() {
 	for {
 		utils.SleepWithJitter(time.Hour)
-		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), 3600); err != nil {
+		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter nextCleanupSlices: %s", err)
 		} else if ok {
 			m.en.doCleanupSlices()
@@ -1382,7 +1382,7 @@ func (m *baseMeta) cleanupTrash() {
 			}
 			continue
 		}
-		if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), 3600); err != nil {
+		if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupTrash: %s", err)
 		} else if ok {
 			go m.doCleanupTrash(false)
@@ -1472,15 +1472,10 @@ func (m *baseMeta) cleanupDelayedSlices() {
 	now := time.Now()
 	edge := now.Unix() - int64(m.fmt.TrashDays)*24*3600
 	logger.Debugf("Cleanup delayed slices: started with edge %d", edge)
-	if count, err := m.en.doCleanupDelayedSlices(edge, 3e5); err == nil {
-		msg := fmt.Sprintf("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
-		if count >= 3e5 {
-			logger.Warnf("%s (reached max limit, stop)", msg)
-		} else {
-			logger.Debugf(msg)
-		}
-	} else {
+	if count, err := m.en.doCleanupDelayedSlices(edge); err != nil {
 		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)
+	} else if count > 0 {
+		logger.Infof("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
 	}
 }
 

@@ -2443,8 +2443,9 @@ func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 	_ = m.rdb.ZRem(ctx, m.delfiles(), tracking)
 }
 
-func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
+func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	ctx := Background
+	start := time.Now()
 	stop := fmt.Errorf("reach limit")
 	var count int
 	var ss []Slice
@@ -2495,9 +2496,9 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
 					count++
 				}
 			}
-			if count >= limit {
-				return stop
-			}
+		}
+		if time.Since(start) > 50*time.Minute {
+			return stop
 		}
 		return nil
 	})

@@ -2334,54 +2334,58 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	})
 }
 
-func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
-	var result []delslices
-	_ = m.roTxn(func(s *xorm.Session) error {
-		result = nil
-		return s.Where("deleted < ?", edge).Limit(limit, 0).Find(&result)
-	})
-
+func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
+	start := time.Now()
 	var count int
 	var ss []Slice
-	for _, ds := range result {
-		if err := m.txn(func(ses *xorm.Session) error {
-			ss = ss[:0]
-			ds := delslices{Id: ds.Id}
-			if ok, e := ses.ForUpdate().Get(&ds); e != nil {
+	var result []delslices
+	var batch int = 1e6
+	for {
+		_ = m.roTxn(func(s *xorm.Session) error {
+			result = result[:0]
+			return s.Where("deleted < ?", edge).Limit(batch, 0).Find(&result)
+		})
+
+		for _, ds := range result {
+			if err := m.txn(func(ses *xorm.Session) error {
+				ss = ss[:0]
+				ds := delslices{Id: ds.Id}
+				if ok, e := ses.ForUpdate().Get(&ds); e != nil {
+					return e
+				} else if !ok {
+					return nil
+				}
+				m.decodeDelayedSlices(ds.Slices, &ss)
+				if len(ss) == 0 {
+					return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Id, ds.Slices)
+				}
+				for _, s := range ss {
+					if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.Id, s.Size); e != nil {
+						return e
+					}
+				}
+				_, e := ses.Delete(&delslices{Id: ds.Id})
 				return e
-			} else if !ok {
-				return nil
-			}
-			m.decodeDelayedSlices(ds.Slices, &ss)
-			if len(ss) == 0 {
-				return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Id, ds.Slices)
+			}); err != nil {
+				logger.Warnf("Cleanup delayed slices %d: %s", ds.Id, err)
+				continue
 			}
 			for _, s := range ss {
-				if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.Id, s.Size); e != nil {
-					return e
+				var ref = sliceRef{Id: s.Id}
+				err := m.roTxn(func(s *xorm.Session) error {
+					ok, err := s.Get(&ref)
+					if err == nil && !ok {
+						err = errors.New("not found")
+					}
+					return err
+				})
+				if err == nil && ref.Refs <= 0 {
+					m.deleteSlice(s.Id, s.Size)
+					count++
 				}
 			}
-			_, e := ses.Delete(&delslices{Id: ds.Id})
-			return e
-		}); err != nil {
-			logger.Warnf("Cleanup delayed slices %d: %s", ds.Id, err)
-			continue
 		}
-		for _, s := range ss {
-			var ref = sliceRef{Id: s.Id}
-			err := m.roTxn(func(s *xorm.Session) error {
-				ok, err := s.Get(&ref)
-				if err == nil && !ok {
-					err = errors.New("not found")
-				}
-				return err
-			})
-			if err == nil && ref.Refs <= 0 {
-				m.deleteSlice(s.Id, s.Size)
-				count++
-			}
-		}
-		if count >= limit {
+		if len(result) < batch || time.Since(start) > 50*time.Minute {
 			break
 		}
 	}

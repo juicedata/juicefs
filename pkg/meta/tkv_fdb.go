@@ -160,6 +160,23 @@ func (tx *fdbTxn) scanKeys(prefix []byte) [][]byte {
 	return ret
 }
 
+func (tx *fdbTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte {
+	ret := make([][]byte, 0)
+	iter := tx.range0(begin, end)
+	for iter.Advance() {
+		r := iter.MustGet()
+		if filter == nil || filter(r.Key) {
+			ret = append(ret, r.Key)
+			if limit > 0 {
+				if limit--; limit == 0 {
+					break
+				}
+			}
+		}
+	}
+	return ret
+}
+
 func (tx *fdbTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
 	ret := make(map[string][]byte)
 	iter := tx.range0(prefix, nextKey(prefix))

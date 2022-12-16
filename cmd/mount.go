@@ -615,6 +615,9 @@ func mount(c *cli.Context) error {
 	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
 		daemonRun(c, addr, vfsConf, metaCli)
 	} else {
+		if c.IsSet("log") {
+			logger.Warnf("--log flag is ignored in foreground mode, the log output will be Stderr")
+		}
 		go checkMountpoint(vfsConf.Format.Name, mp, c.String("log"), false)
 	}
 
@@ -628,5 +631,7 @@ func mount(c *cli.Context) error {
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	mount_main(v, c)
-	return metaCli.CloseSession()
+	err = metaCli.CloseSession()
+	logger.Infof("The juicefs mount process exit successfully, mountpoint: %s", metaConf.MountPoint)
+	return err
 }
