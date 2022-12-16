@@ -256,3 +256,43 @@ sudo juicefs mount --cache-dir ~/jfscache:/mnt/jfscache:/dev/shm/jfscache redis:
 当设置了多个缓存目录，或者使用多块设备作为缓存盘，`--cache-size` 选项表示所有缓存目录中的数据总大小。客户端会采用哈希策略向各个缓存路径中均匀地写入数据，无法对多块容量或性能不同的缓存盘进行特殊调优。
 
 因此建议不同缓存目录／缓存盘的可用空间保持一致，否则可能造成不能充分利用某个缓存目录空间的情况。例如 `--cache-dir` 为 `/data1:/data2`，其中 `/data1` 的可用空间为 1GiB，`/data2` 的可用空间为 2GiB，`--cache-size` 为 3GiB，`--free-space-ratio` 为 0.1。因为缓存的写入策略是均匀写入，所以分配给每个缓存目录的最大空间是 `3GiB / 2 = 1.5GiB`，会造成 `/data2` 目录的缓存空间最大为 1.5GiB，而不是 `2GiB * 0.9 = 1.8GiB`。
+
+
+## 常见问题
+
+### 如何判断写缓存是否完全写入对象存储？
+
+当挂载点开启了 `--writeback` 选项时，JuiceFS 会将写入的文件先刷到本地缓存，然后再异步上传到对象存储。当写入的数据量很大，网络速度又不够稳定时，数据可能需要一些时间才能完全写入对象存储。由于是异步操作，上传的过程对用户是不可见的，如果需要检查数据是否完全写入了对象存储，可以参考以下几种方法。
+
+#### 方法一：查看缓存目录
+
+:::tip
+如果你没有在挂载时通过 `--cache-dir` 手动指定缓存位置，可以参考 [默认的缓存位置](#cache-dir)。默认的缓存目录中可能有很多使用文件系统 UUID 命名的缓存目录，你可以使用 `juicefs status meta-url` 命令找到一个文件系统 UUID。
+:::
+
+因为 `--writeback` 会将数据先写入缓存，所以直接在缓存目录中统计 `rawstaging` 目录的大小即可判断是否还存在未处理完的写缓存。
+
+```shell
+$ du -sh rawstaging
+1.5G	rawstaging
+```
+
+只要 `rawstaging` 目录的容量不为 0，就代表还有写缓存没有完成写入。同样地，还可以使用 `rmdir` 命令删除空目录的方式进行检查，如果命令返回 `Directory not empty` 就代表还有写缓存没有完成写入：
+
+```shell
+$ cd rawstaging/chunks
+$ rmdir *
+rmdir: 0: Directory not empty
+```
+
+#### 方法二：查看 .stats 中的 staging 指标
+
+在挂载点根目录使用 `grep` 过滤 `.stats` 文件中的 `staging` 指标，其中 `juicefs_staging_blocks` 的值即尚未处理完成的写缓存量，当该指标的值为 0 时代表所有写缓存已经完成写入。
+
+```shell
+$ grep staging .stats                 
+juicefs_staging_block_bytes 1621127168
+juicefs_staging_block_delay_seconds 46116860185.95535
+juicefs_staging_blocks 394
+```
+

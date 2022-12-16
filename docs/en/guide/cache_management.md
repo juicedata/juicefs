@@ -255,3 +255,43 @@ sudo juicefs mount --cache-dir ~/jfscache:/mnt/jfscache:/dev/shm/jfscache redis:
 When multiple cache directories are set, or multiple devices are used as cache disks, the `--cache-size` option represents the total size of data in all cache directories. The client will use the hash strategy to evenly write data to each cache path, and cannot perform special tuning for multiple cache disks with different capacities or performances.
 
 Therefore, it is recommended that the available space of different cache directories/cache disks be consistent, otherwise it may cause the situation that the space of a certain cache directory cannot be fully utilized. For example, `--cache-dir` is `/data1:/data2`, where `/data1` has a free space of 1GiB, `/data2` has a free space of 2GiB, `--cache-size` is 3GiB, `--free-space-ratio` is 0.1. Because the cache write strategy is to write evenly, the maximum space allocated to each cache directory is `3GiB / 2 = 1.5GiB`, resulting in a maximum of 1.5GiB cache space in the `/data2` directory instead of `2GiB * 0.9 = 1.8GiB`.
+
+
+## Frequently Asked Questions
+
+### How to determine if the write cache is fully written to the object storage?
+
+When `--writeback` is enabled, JuiceFS will flush the written files to the local cache first, and then upload them to the object storage asynchronously. When the amount of data written is large and the network speed is not stable enough, it may take some time for the data to be fully written to the object storage. Since it is an asynchronous operation, the upload process is not visible to the user. If you need to check whether the data is completely written to the object storage, you can refer to the following methods.
+
+#### Method 1: Check the cache directory
+
+:::tip
+If you did not specify the cache location manually with `-cache-dir`, you can refer to [default cache location](#cache-dir). The default cache directory may have many cache directories named using file system UUIDs, you can use the `juicefs status meta-url` command to find a file system UUID.
+:::
+
+Since `--writeback` writes the data to the cache first, you can count the size of the `rawstaging` directory directly in the cache directory to determine if there is still unprocessed write cache.
+
+```shell
+$ du -sh rawstaging
+1.5G	rawstaging
+```
+
+As long as the `rawstaging` directory does not have a capacity of 0, there is still write cache left to be written. Similarly, you can also check by deleting empty directories with the `rmdir` command, if the command returns `Directory not empty` it means that the write cache has not yet finished writing.
+
+```shell
+$ cd rawstaging/chunks
+$ rmdir *
+rmdir: 0: Directory not empty
+```
+
+#### Method 2: Check the staging metrics in .stats
+
+Use `grep` at the root of the mount point to filter the `staging` metric in the `.stats` file, where the value of `juicefs_staging_blocks` is the amount of write caches that have not yet been processed, and a value of 0 means that all write caches have been written.
+
+```shell
+$ grep staging .stats                 
+juicefs_staging_block_bytes 1621127168
+juicefs_staging_block_delay_seconds 46116860185.95535
+juicefs_staging_blocks 394
+```
+
