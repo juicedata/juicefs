@@ -317,7 +317,7 @@ func (m *baseMeta) OnReload(fn func(f *Format)) {
 
 func (m *baseMeta) refresh() {
 	for {
-		utils.SleepWithJitter(m.conf.Heartbeat)
+		dur := utils.SleepWithJitter(m.conf.Heartbeat)
 		m.sesMu.Lock()
 		if m.umounting {
 			m.sesMu.Unlock()
@@ -358,7 +358,7 @@ func (m *baseMeta) refresh() {
 		if m.conf.ReadOnly || m.conf.NoBGJob {
 			continue
 		}
-		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64(m.conf.Heartbeat/time.Second)); err != nil {
+		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64(dur/time.Second)); err != nil {
 			logger.Warnf("checking counter lastCleanupSessions: %s", err)
 		} else if ok {
 			go m.CleanStaleSessions()
