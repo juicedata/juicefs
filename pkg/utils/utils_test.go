@@ -82,6 +82,6 @@ func TestTimeout(t *testing.T) {
 		return nil
 	}, time.Millisecond*10)
 	if err == nil || !strings.HasPrefix(err.Error(), "timeout after") {
-		t.Fatalf("slow function should be  timeout: %s", err)
+		t.Fatalf("slow function should be timeout: %s", err)
 	}
 }
