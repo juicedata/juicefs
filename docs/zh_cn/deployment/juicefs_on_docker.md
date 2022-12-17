@@ -35,8 +35,9 @@ sudo nano /etc/fuse.conf
 
 将配置文件中的 `user_allow_other` 前面的 `#` 注释符删掉，修改后类似下面这样：
 
+<!-- autocorrect: false -->
 ```conf
-# /etc/fuse.conf - Configuration file for file system in Userspace (FUSE)
+# /etc/fuse.conf - Configuration file for Filesystem in Userspace (FUSE)
 
 # Set the maximum number of FUSE mounts allowed to non-root users.
 # The default is 1000.
@@ -45,6 +46,7 @@ sudo nano /etc/fuse.conf
 # Allow non-root users to specify the allow_other or allow_root mount options.
 user_allow_other
 ```
+<!-- autocorrect: true -->
 
 ### 重新挂载 JuiceFS
 

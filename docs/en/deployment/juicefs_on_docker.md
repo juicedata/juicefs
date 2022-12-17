@@ -35,8 +35,9 @@ sudo nano /etc/fuse.conf
 
 First, uncomment the line `# user_allow_other` by deleting the`#` symbol. Your configuration file should look like the following after the modification.
 
+<!-- autocorrect: false -->
 ```conf
-# /etc/fuse.conf - Configuration file for file system in Userspace (FUSE)
+# /etc/fuse.conf - Configuration file for Filesystem in Userspace (FUSE)
 
 # Set the maximum number of FUSE mounts allowed to non-root users.
 # The default is 1000.
@@ -45,6 +46,7 @@ First, uncomment the line `# user_allow_other` by deleting the`#` symbol. Your c
 # Allow non-root users to specify the allow_other or allow_root mount options.
 user_allow_other
 ```
+<!-- autocorrect: true -->
 
 #### Re-mount JuiceFS
 
