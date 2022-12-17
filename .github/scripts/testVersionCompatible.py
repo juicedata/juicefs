@@ -18,7 +18,7 @@ import uuid
 from utils import *
 from fsrand import *
 from cmptree import *
-
+@seed(random.randint(10000, 1000000))
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
@@ -34,6 +34,7 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     def __init__(self):
         super(JuicefsMachine, self).__init__()
+        print(f"seed is: {self._hypothesis_internal_use_seed}")
         self.run_id = uuid.uuid4().hex
         print(f'\ninit with run_id: {self.run_id}')
         with open(os.path.expanduser('~/command.log'), 'a') as f:
