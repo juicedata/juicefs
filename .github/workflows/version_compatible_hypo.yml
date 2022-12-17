@@ -141,7 +141,7 @@ jobs:
 
       - name: Setup upterm session
         if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
-        timeout-minutes: 1
+        timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
 
