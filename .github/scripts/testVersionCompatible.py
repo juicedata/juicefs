@@ -12,12 +12,15 @@ import unittest
 from xmlrpc.client import boolean
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
 from hypothesis import assume, strategies as st
+from hypothesis import seed
 from packaging import version
 from minio import Minio
 import uuid
 from utils import *
 from fsrand import *
 from cmptree import *
+import random
+
 @seed(random.randint(10000, 1000000))
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
