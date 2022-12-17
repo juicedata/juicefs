@@ -47,17 +47,17 @@ slug: /faq
 
 ### 为什么不支持某个对象存储？
 
-已经支持了绝大部分对象存储，参考这个[列表](guide/how_to_set_up_object_storage.md#支持的存储服务)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
+已经支持了绝大部分对象存储，参考这个[列表](guide/how_to_set_up_object_storage.md#supported-object-storage)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
 ### 为什么在对象存储中看不到那些已经存入 JuiceFS 的原始文件？
 
-请参考[「JuiceFS 如何存储文件」](introduction/architecture.md#如何存储文件)。
+请参考[「JuiceFS 如何存储文件」](introduction/architecture.md#how-juicefs-store-files)。
 
 ### 为什么我在挂载点删除了文件，但是对象存储占用空间没有变化或者变化很小？
 
 第一个原因是你可能开启了回收站特性。为了保证数据安全回收站默认开启，删除的文件其实被放到了回收站，实际并没有被删除，所以对象存储大小不会变化。回收站的保留时间可以通过 `juicefs format` 指定或者通过 `juicefs config` 修改。请参考[「回收站」](security/trash.md)文档了解更多信息。
 
-第二个原因是 JuiceFS 是异步删除对象存储中的数据，所以对象存储的空间变化会慢一点。如果你需要立即清理对象存储中需要被删除的数据，可以尝试运行 [`juicefs gc`](reference/command_reference.md#juicefs-gc) 命令。
+第二个原因是 JuiceFS 是异步删除对象存储中的数据，所以对象存储的空间变化会慢一点。如果你需要立即清理对象存储中需要被删除的数据，可以尝试运行 [`juicefs gc`](reference/command_reference.md#gc) 命令。
 
 ### 为什么挂载点显示的大小与对象存储占用空间存在差异？
 
@@ -77,7 +77,7 @@ slug: /faq
 
 ### 一个文件系统可以绑定多个不同的对象存储吗（比如同时用 Amazon S3、GCS 和 OSS 组成一个文件系统）？
 
-不支持。但在创建文件系统时可以设定关联同一个对象存储的多个 bucket，从而解决单个 bucket 对象数量限制的问题，例如，可以为一个文件系统关联多个 S3 Bucket。具体请参考 [`--shards`](./reference/command_reference.md#juicefs-format) 选项的说明。
+不支持。但在创建文件系统时可以设定关联同一个对象存储的多个 bucket，从而解决单个 bucket 对象数量限制的问题，例如，可以为一个文件系统关联多个 S3 Bucket。具体请参考 [`--shards`](./reference/command_reference.md#format) 选项的说明。
 
 ## 性能相关问题
 
@@ -89,7 +89,7 @@ JuiceFS 内置多级缓存（主动失效），一旦缓存预热好，访问的
 
 ### JuiceFS 支持随机读写吗？
 
-支持，包括通过 mmap 等进行的随机读写。目前 JuiceFS 主要是对顺序读写进行了大量优化，对随机读写的优化也在进行中。如果想要更好的随机读性能，建议关闭压缩（[`--compress none`](reference/command_reference.md#juicefs-format)）。
+支持，包括通过 mmap 等进行的随机读写。目前 JuiceFS 主要是对顺序读写进行了大量优化，对随机读写的优化也在进行中。如果想要更好的随机读性能，建议关闭压缩（[`--compress none`](reference/command_reference.md#format)）。
 
 ### JuiceFS 支持随机写的实现原理是什么？
 
@@ -103,7 +103,7 @@ JuiceFS 不将原始文件存入对象存储，而是将其按照某个大小（
 
 请在挂载时加上 [`--writeback` 选项](reference/command_reference.md#mount)，它会先把数据写入本机的缓存，然后再异步上传到对象存储，会比直接上传到对象存储快很多倍。
 
-请查看[「客户端写缓存」](guide/cache_management.md#客户端写缓存)了解更多信息。
+请查看[「客户端写缓存」](guide/cache_management.md#writeback)了解更多信息。
 
 ### JuiceFS 目前支持分布式缓存吗？
 
@@ -113,13 +113,13 @@ JuiceFS 不将原始文件存入对象存储，而是将其按照某个大小（
 
 ### 数据更新什么时候会对其它客户端可见？
 
-所有的元数据更新都是立即对其它客户端可见。JuiceFS 保证关闭再打开（close-to-open）一致性，请查看[「一致性」](guide/cache_management.md#数据一致性)了解更多信息。
+所有的元数据更新都是立即对其它客户端可见。JuiceFS 保证关闭再打开（close-to-open）一致性，请查看[「一致性」](guide/cache_management.md#consistency)了解更多信息。
 
 通过 `write()` 新写入的数据会缓存在内核和客户端中，可以被当前机器的其它进程看到，其它机器暂时看不到。
 
 调用 `fsync()`、`fdatasync()` 或者 `close()` 来强制将数据上传到对象存储并更新元数据，或者数秒钟自动刷新后，其它客户端才能看到更新，这也是绝大多数分布式文件系统采取的策略。
 
-请查看[「客户端写缓存」](guide/cache_management.md#客户端写缓存)了解更多信息。
+请查看[「客户端写缓存」](guide/cache_management.md#writeback)了解更多信息。
 
 ### 为什么同一个用户在主机 X 上有权限访问 JuiceFS 的文件，在主机 Y 上访问该文件却没有权限？
 

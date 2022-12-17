@@ -4,8 +4,6 @@ sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
 ---
 
-# 故障诊断和分析
-
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
@@ -70,7 +68,6 @@ S3 网关仅支持在前台运行，因此客户端日志会直接输出到终�
 
 使用 JuiceFS Hadoop Java SDK 的应用进程（如 Spark executor）的日志中会包含 JuiceFS 客户端日志，因为和应用自身产生的日志混杂在一起，需要通过特定关键词来过滤筛选（如 `juicefs`，注意这里忽略了大小写）。
 
-
 ## 访问日志 {#access-log}
 
 每个 JuiceFS 客户端都有一个访问日志，其中详细记录了文件系统上的所有操作，如操作类型、用户 ID、用户组 ID、文件 inode 及其花费的时间。访问日志可以有多种用途，如性能分析、审计、故障诊断。
@@ -126,7 +123,6 @@ kubectl -n kube-system exec juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-53079943
 
 需要在 JuiceFS Hadoop Java SDK 的[客户端配置](../deployment/hadoop_java_sdk.md#其它配置)中新增 `juicefs.access-log` 配置项，指定访问日志输出的路径，默认不输出访问日志。
 
-
 ## 运行时信息
 
 JuiceFS 客户端默认会通过 [pprof](https://pkg.go.dev/net/http/pprof) 在本地监听一个 TCP 端口用以获取运行时信息，如 Goroutine 堆栈信息、CPU 性能统计、内存分配统计。你可以通过系统命令（如 `lsof`）查看当前 JuiceFS 客户端监听的具体端口号：
@@ -156,19 +152,23 @@ juicefs   32666 user   15u  IPv4 0x44992f062886fc5b      0t0  TCP 127.0.0.1:9567
 ```bash
 curl 'http://localhost:<port>/debug/pprof/goroutine?debug=1' > juicefs.goroutine.txt
 ```
+
 ```bash
 curl 'http://localhost:<port>/debug/pprof/profile?seconds=30' > juicefs.cpu.pb.gz
 ```
+
 ```bash
 curl 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pb.gz
 ```
 
 :::tip 建议
-你也可以使用 juicefs debug 命令自动收集这些运行时信息并保存到本地，默认保存到当前目录下的 debug 目录中，例如：
+你也可以使用 `juicefs debug` 命令自动收集这些运行时信息并保存到本地，默认保存到当前目录下的 `debug` 目录中，例如：
+
 ```bash
 juicefs debug /mnt/jfs
 ```
-关于 juicefs debug 命令的更多信息，请查看[命令参考](https://juicefs.com/docs/zh/community/command_reference#juicefs-debug)
+
+关于 `juicefs debug` 命令的更多信息，请查看[命令参考](https://juicefs.com/docs/zh/community/command_reference#juicefs-debug)。
 :::
 
 如果你安装了 `go` 命令，那么可以通过 `go tool pprof` 命令直接分析，例如分析 CPU 性能统计：
@@ -224,7 +224,7 @@ go tool pprof -pdf 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pdf
 JuiceFS 支持使用 `--pyroscope` 选项传入 Pyroscope 服务端地址，指标以每隔 10 秒的频率推送到服务端。如果服务端开启了权限校验，校验信息 API Key 可以通过环境变量 `PYROSCOPE_AUTH_TOKEN` 传入：
 
 ```bash
-$ export PYROSCOPE_AUTH_TOKEN=xxxxxxxxxxxxxxxx
-$ juicefs mount --pyroscope http://localhost:4040 redis://localhost /mnt/jfs
-$ juicefs dump --pyroscope http://localhost:4040 redis://localhost dump.json
+export PYROSCOPE_AUTH_TOKEN=xxxxxxxxxxxxxxxx
+juicefs mount --pyroscope http://localhost:4040 redis://localhost /mnt/jfs
+juicefs dump --pyroscope http://localhost:4040 redis://localhost dump.json
 ```

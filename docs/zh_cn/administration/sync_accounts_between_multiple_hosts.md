@@ -90,7 +90,7 @@ fatal: [172.16.255.180]: FAILED! => {"changed": false, "msg": "groupmod: GID '10
 
 TASK [Ensure user ubuntu with uid 1000 exists] ************************************************************
 ok: [172.16.255.163]
-	to retry, use: --limit @/home/ubuntu/account-sync/play.retry
+    to retry, use: --limit @/home/ubuntu/account-sync/play.retry
 
 PLAY RECAP ************************************************************************************************
 172.16.255.163             : ok=3    changed=0    unreachable=0    failed=0
@@ -125,4 +125,5 @@ $ rm /tmp/hello.txt
 rm: remove write-protected regular file '/tmp/hello.txt'? y
 rm: cannot remove '/tmp/hello.txt': Operation not permitted
 ```
+
 :::

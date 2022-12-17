@@ -115,7 +115,7 @@ juicefs format \
     myjfs
 ```
 
-## 支持的存储服务
+## 支持的存储服务 {#supported-object-storage}
 
 如果你希望使用的存储类型不在列表中，欢迎提交需求 [issue](https://github.com/juicedata/juicefs/issues)。
 
@@ -136,7 +136,7 @@ juicefs format \
 | [阿里云 OSS](#阿里云-oss)                   | `oss`      |
 | [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
 | [华为云 OBS](#华为云-obs)                   | `obs`      |
-| [百度云 BOS](#百度云-bos)                   | `bos`      |
+| [百度云 BOS](#百度-bos)                     | `bos`      |
 | [火山引擎 TOS](#火山引擎-tos)               | `tos`      |
 | [金山云 KS3](#金山云-ks3)                   | `ks3`      |
 | [网易云 NOS](#网易云-nos)                   | `nos`      |
@@ -413,7 +413,7 @@ juicefs format \
 ```
 
 :::caution 特别提示
-因为 Storj DCS 的 [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API 并非完全 S3 兼容（返回结果没有实现排序功能），所以 juicefs 的部分功能无法使用，比如 `juicefs gc`，`juicefs fsck`，`juicefs sync`，`juicefs destroy`。另外，使用 `juicefs mount` 时需要关闭[元数据自动备份](../administration/metadata_dump_load.md#自动备份)功能，即加上 `--backup-meta 0`。
+因为 Storj DCS 的 [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API 并非完全 S3 兼容（返回结果没有实现排序功能），所以 JuiceFS 的部分功能无法使用，比如 `juicefs gc`，`juicefs fsck`，`juicefs sync`，`juicefs destroy`。另外，使用 `juicefs mount` 时需要关闭[元数据自动备份](../administration/metadata_dump_load.md#自动备份)功能，即加上 `--backup-meta 0`。
 :::
 
 ## Vultr 对象存储
@@ -466,7 +466,7 @@ juicefs format \
 
 使用阿里云 OSS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://help.aliyun.com/document_detail/38738.html) 了解如何创建 Access Key 和 Secret Key。如果你已经创建了 [RAM 角色](https://help.aliyun.com/document_detail/93689.html) 并指派给了云服务器实例，则在创建文件系统时可以忽略 `--access-key` 和 `--secret-key` 选项。
 
-阿里云也支持使用 [Security Token Service (STS)](https://help.aliyun.com/document_detail/100624.html) 作为 OSS 的临时访问身份验证。如果你要使用 STS，请设置  `ALICLOUD_ACCESS_KEY_ID`、`ALICLOUD_ACCESS_KEY_SECRET` 和 `SECURITY_TOKEN ` 环境变量，不要设置 `--access-key` and `--secret-key` 选项。例如：
+阿里云也支持使用 [Security Token Service (STS)](https://help.aliyun.com/document_detail/100624.html) 作为 OSS 的临时访问身份验证。如果你要使用 STS，请设置  `ALICLOUD_ACCESS_KEY_ID`、`ALICLOUD_ACCESS_KEY_SECRET` 和 `SECURITY_TOKEN` 环境变量，不要设置 `--access-key` and `--secret-key` 选项。例如：
 
 ```bash
 # Use Security Token Service (STS)
@@ -754,7 +754,7 @@ sudo yum install librados2-devel
 make juicefs.ceph
 ```
 
-[存储池](https://docs.ceph.com/zh_CN/latest/rados/operations/pools) 是用于存储对象的逻辑分区，您可能需要首先创建一个存储池。 `--access-key` 选项的值是 Ceph 集群名称，默认集群名称是 `ceph`。` --secret-key` 选项的值是 [Ceph 客户端用户名](https://docs.ceph.com/en/latest/rados/operations/user-management)，默认用户名是 `client.admin`。
+[存储池](https://docs.ceph.com/zh_CN/latest/rados/operations/pools) 是用于存储对象的逻辑分区，您可能需要首先创建一个存储池。 `--access-key` 选项的值是 Ceph 集群名称，默认集群名称是 `ceph`。`--secret-key` 选项的值是 [Ceph 客户端用户名](https://docs.ceph.com/en/latest/rados/operations/user-management)，默认用户名是 `client.admin`。
 
 为了连接到 Ceph Monitor，`librados` 将通过搜索默认位置读取 Ceph 的配置文件，并使用找到的第一个。这些位置是：
 
@@ -846,6 +846,7 @@ juicefs format \
 ```
 
 :::note
+
 1. 当前，JuiceFS 仅支持路径风格的 MinIO URI 地址，例如：`http://127.0.0.1:9000/myjfs`
 1. `MINIO_REGION` 环境变量可以用于设置 MinIO 的 region，如果不设置，默认为 `us-east-1`
 1. 面对多节点 MinIO 集群，考虑在 Endpoint 中使用 DNS 域名，解析到各个 MinIO 节点，作为简易负载均衡，比如 `http://minio.example.com:9000/myjfs`
@@ -1117,7 +1118,7 @@ juicefs format redis://localhost:6379/1 myjfs
 
 SFTP 全称 Secure File Transfer Protocol 即安全文件传输协议，它并不是文件存储。准确来说，JuiceFS 是通过 SFTP/SSH 这种文件传输协议对远程主机上的磁盘进行连接和读写，从而让任何启用了 SSH 服务的操作系统都可以作为 JuiceFS 的数据存储来使用。
 
-例如，以下命令使用 sftp 协议连接远程服务器 `192.168.1.11` ，在用户 `tom` 的 `$HOME` 目录下创建 `myjfs/` 文件夹作为文件系统的数据存储。
+例如，以下命令使用 SFTP 协议连接远程服务器 `192.168.1.11` ，在用户 `tom` 的 `$HOME` 目录下创建 `myjfs/` 文件夹作为文件系统的数据存储。
 
 ```shell
 juicefs format  \

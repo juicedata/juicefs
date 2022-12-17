@@ -50,7 +50,7 @@ Compilation depends on the following tools:
 - [Go](https://golang.org/) 1.17+
 - JDK 8+
 - [Maven](https://maven.apache.org/) 3.3+
-- git
+- Git
 - make
 - GCC 5.4+
 
@@ -172,8 +172,6 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.download-limit` | 0             | Bandwidth limit for download in Mbps            |
 | `juicefs.io-retries`     | 10            | Number of retries after network failure         |
 | `juicefs.writeback`      | `false`       | Upload objects in background                    |
-
-
 
 #### Other Configurations
 
@@ -606,7 +604,6 @@ Computing resources used in this test:
   ```
 
   10 map task, each task read 10000MB random data sequentially
-
 
 - **For reference**
 

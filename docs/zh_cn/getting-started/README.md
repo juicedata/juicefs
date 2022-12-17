@@ -25,7 +25,7 @@ curl -sSL https://d.juicefs.com/install | sh -
 
 ### 基本概念
 
-创建文件系统使用客户端提供的 [`format`](../reference/command_reference.md#juicefs-format) 命令，一般格式为：
+创建文件系统使用客户端提供的 [`format`](../reference/command_reference.md#format) 命令，一般格式为：
 
 ```shell
 juicefs format [command options] META-URL NAME
@@ -107,7 +107,7 @@ juicefs mount sqlite3://myjfs.db ~/jfs
 juicefs mount sqlite3://myjfs.db ~/jfs -d
 ```
 
-接下来，任何存入挂载点 `~/jfs` 的文件，都会按照 [JuiceFS 的文件存储格式](../introduction/architecture.md#如何存储文件)被拆分成特定的「数据块」并存入 `$HOME/.juicefs/local/myjfs` 目录中，相对应的「元数据」会全部存储在 `myjfs.db` 数据库中。
+接下来，任何存入挂载点 `~/jfs` 的文件，都会按照 [JuiceFS 的文件存储格式](../introduction/architecture.md#how-juicefs-store-files)被拆分成特定的「数据块」并存入 `$HOME/.juicefs/local/myjfs` 目录中，相对应的「元数据」会全部存储在 `myjfs.db` 数据库中。
 
 最后执行以下命令可以将挂载点 `~/jfs` 卸载：
 
@@ -117,7 +117,7 @@ juicefs umount ~/jfs
 
 ## 更进一步
 
-前面介绍的内容通常只适用于快速在本地体验和了解，帮助你对 JucieFS 的工作方式建立基本的认识。我们可以在前面内容的基础上更进一步，仍然使用 SQLite 存储元数据，把本地存储换成「对象存储」，做一个更有实用价值的方案。
+前面介绍的内容通常只适用于快速在本地体验和了解，帮助你对 JuiceFS 的工作方式建立基本的认识。我们可以在前面内容的基础上更进一步，仍然使用 SQLite 存储元数据，把本地存储换成「对象存储」，做一个更有实用价值的方案。
 
 ### 对象存储
 

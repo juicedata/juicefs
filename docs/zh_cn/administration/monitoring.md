@@ -3,7 +3,7 @@ title: 监控与数据可视化
 sidebar_position: 3
 ---
 
-作为承载海量数据存储的分布式文件系统，用户通常需要直观地了解整个系统的容量、文件数量、CPU 负载、磁盘 IO、缓存等指标的变化。JuiceFS 通过 Prometheus 兼容的 API 对外提供实时的状态数据，只需将其添加到用户自建的 Prometheus Server 建立时序数据，然后通过 Grafana 等工具即可轻松实现 JucieFS 文件系统的可视化监控。
+作为承载海量数据存储的分布式文件系统，用户通常需要直观地了解整个系统的容量、文件数量、CPU 负载、磁盘 IO、缓存等指标的变化。JuiceFS 通过 Prometheus 兼容的 API 对外提供实时的状态数据，只需将其添加到用户自建的 Prometheus Server 建立时序数据，然后通过 Grafana 等工具即可轻松实现 JuiceFS 文件系统的可视化监控。
 
 ## 快速上手
 
@@ -235,6 +235,7 @@ spec:
 ```bash
 curl -X PUT http://host:9091/api/v1/admin/wipe
 ```
+
 :::
 
 有关 Pushgateway 的更多信息，请查看[官方文档](https://github.com/prometheus/pushgateway/blob/master/README.md)。

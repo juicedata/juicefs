@@ -50,8 +50,8 @@ Rancher 安装成功以后，可以看到它已经在当前容器中部署了一
 
 在集群列表中点击进入创建的 Kubernetes 集群，左侧导航菜单点击展开 `应用市场` → `Chart 仓库`，点击 `创建` 按钮添加 JuiceFS CSI 仓库，填写：
 
-- **仓库名称**：juicefs
-- **Index URL**：https://juicedata.github.io/juicefs-csi-driver/
+- **仓库名称**：`juicefs`
+- **Index URL**：`https://juicedata.github.io/juicefs-csi-driver/`
 
 ![](../images/rancher-new-repo.jpg)
 

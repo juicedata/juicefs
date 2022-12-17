@@ -311,7 +311,7 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
 git clone -b gateway git@github.com:juicedata/minio.git && cd minio
 ```
 
-将会生成 minio 二进制文件
+将会生成 MinIO 二进制文件
 
 ```shell
 make build

@@ -25,7 +25,7 @@ A help message will return after executing `juicefs` in terminal once the JuiceF
 
 ### Basic Concept
 
-JuiceFS client provides a command [`format`](../reference/command_reference.md#juicefs-format) to create a file system as follows.
+JuiceFS client provides a command [`format`](../reference/command_reference.md#format) to create a file system as follows.
 
 ```shell
 juicefs format [command options] META-URL NAME
@@ -117,7 +117,7 @@ juicefs umount ~/jfs
 
 ## Go Further
 
-The above exercise only helps you to have a quick experience with JuiceFS locally and gives you a basic overview of how JucieFS works. To make the example more practical, we can take a step further by using SQLite to store metadata as above but replacing the local storage with "object storage".
+The above exercise only helps you to have a quick experience with JuiceFS locally and gives you a basic overview of how JuiceFS works. To make the example more practical, we can take a step further by using SQLite to store metadata as above but replacing the local storage with "object storage".
 
 ### Object Storage
 

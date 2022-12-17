@@ -22,7 +22,7 @@ slug: /comparison/juicefs_vs_cephfs
   - 服务进程（MDS）：无状态且理论可水平扩展。目前已有成熟的主备机制，但多主部署依然有性能和稳定性隐患；生产环境通常采用一主多备或者多主静态隔离
   - 持久化：独立的 RADOS 存储池，通常采用 SSD 或更高性能的硬件存储
 - 数据：一个或多个 RADOS 存储池，支持通过 Layout 指定不同的配置，如分块大小（默认 4 MiB），冗余方式（多副本，EC）等
-- 客户端：支持内核客户端（kcephfs），用户态客户端（ceph-fuse）以及基于 libcephfs 实现的 C++、Python 等 SDK；近来社区也提供了 Windows 客户端（ceph-dokan）。同时生态中也有与 Samba 对接的 VFS object 和与 NFS-Ganesha 对接的 FSAL 模块可供考虑。
+- 客户端：支持内核客户端（`kcephfs`），用户态客户端（`ceph-fuse`）以及基于 libcephfs 实现的 C++、Python 等 SDK；近来社区也提供了 Windows 客户端（`ceph-dokan`）。同时生态中也有与 Samba 对接的 VFS object 和与 NFS-Ganesha 对接的 FSAL 模块可供考虑。
 
 #### JuiceFS
 

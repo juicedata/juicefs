@@ -50,8 +50,8 @@ After the cluster is created, it will be displayed in Rancher's cluster list.
 
 In the cluster list, click to enter the Kubernetes cluster, click on the left navigation menu to expand `Apps & Marketplace` -> `Chart Repositories`, click the `Create` button to add JuiceFS CSI repository, fill in:
 
-- **Name**: juicefs
-- **Index URL**: https://juicedata.github.io/charts/
+- **Name**: `juicefs`
+- **Index URL**: `https://juicedata.github.io/charts/`
 
 ![](../images/rancher-new-repo.jpg)
 

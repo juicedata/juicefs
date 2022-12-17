@@ -91,6 +91,7 @@ juicefs format \
 ```
 
 :::note 说明
+
 1. 当 Redis 的用户名或者密码中包含特殊字符时需要将特殊字符通过 [URL encode](https://www.w3schools.com/tags/ref_urlencode.ASP) 的方式替换为 `%xx` 的格式，例如 `@` 替换为 `%40`，或者使用环境变量的方式传递密码。
 2. 使用环境变量传递数据库密码也可以采用标准的 URL 格式，如：`"redis://:@192.168.1.6:6379/1"` 保留了用户名和密码之间的 `:` 以及 `@` 分隔符。
 :::
@@ -177,9 +178,10 @@ juicefs format \
 ```
 
 :::note 说明
-1. juicefs 默认使用的 public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) ，如果要使用非 `public schema`，需要在连接字符串中指定 `search_path` 参数，例如 `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
+
+1. JuiceFS 默认使用的 public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) ，如果要使用非 `public schema`，需要在连接字符串中指定 `search_path` 参数，例如 `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
 2. 如果 `public schema` 并非是 PostgreSQL 服务端配置的 `search_path` 中第一个命中的，则必须在连接字符串中明确设置 `search_path` 参数
-3. `search_path` 连接参数原生可以设置为多个 schema，但是目前 juicefs 仅支持设置一个。`postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` 将被认为不合法
+3. `search_path` 连接参数原生可以设置为多个 schema，但是目前 JuiceFS 仅支持设置一个。`postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` 将被认为不合法
 :::
 
 ### 挂载文件系统
@@ -544,8 +546,8 @@ juicefs format \
 #### 使用 OpenSSL 生成 CA 证书
 
 ```shell
-$ openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout private.key -out cert.crt
-$ cat cert.crt private.key > fdb.pem
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout private.key -out cert.crt
+cat cert.crt private.key > fdb.pem
 ```
 
 #### 配置 TLS

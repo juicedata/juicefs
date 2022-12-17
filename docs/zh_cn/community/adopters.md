@@ -43,4 +43,4 @@ slug: /adopters
 | [蒙商消费金融](https://www.mengshangxiaofei.com) | Testing    | 共享文件存储           |                                                                                                                                                                                                       |
 | [多点 DMALL](https://www.dmall.com)              | Testing    | 大数据，共享文件存储   |                                                                                                                                                                                                       |
 
-欢迎你在使用 JuiceFS 后，向大家分享你的使用经验，可以直接向这个列表提交 Pull Request，或者联系我们 hello@juicedata.io。
+欢迎你在使用 JuiceFS 后，向大家分享你的使用经验，可以直接向这个列表提交 Pull Request，或者联系我们 [`hello@juicedata.io`](mailto:hello@juicedata.io)。

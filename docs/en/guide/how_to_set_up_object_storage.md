@@ -21,11 +21,11 @@ For example, the following command uses Amazon S3 object storage to create a fil
 
 ```shell
 juicefs format --storage s3 \
-	--bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
-	--access-key abcdefghijklmn \
-	--secret-key nmlkjihgfedAcBdEfg \
-	redis://192.168.1.6/1 \
-	myjfs
+    --bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
+    --access-key abcdefghijklmn \
+    --secret-key nmlkjihgfedAcBdEfg \
+    redis://192.168.1.6/1 \
+    myjfs
 ```
 
 ## Other options
@@ -42,9 +42,9 @@ It is more secure to pass credentials via environment variables `ACCESS_KEY` and
 export ACCESS_KEY=abcdefghijklmn
 export SECRET_KEY=nmlkjihgfedAcBdEfg
 juicefs format --storage s3 \
-	--bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
-	redis://192.168.1.6/1 \
-	myjfs
+    --bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
+    redis://192.168.1.6/1 \
+    myjfs
 ```
 
 Public clouds typically allow users to create IAM (Identity and Access Management) roles, such as [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) or [Alibaba Cloud RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm), which can be assigned to VM instances. If the cloud server instance already has read and write access to the object storage, there is no need to specify `--access-key` and `--secret-key`.
@@ -59,7 +59,7 @@ Different cloud vendors have different acquisition methods. Generally, the Acces
 
 ### How to set up object storage with temporary access credentials
 
-The way of using temporary credentials is not much different from using permanent credentials. When formatting the file system, pass the Access Key, Secret Key, and token of the temporary credentials through `--access-key`, `--secret-key`, ` --session-token` can set the value. E.g:
+The way of using temporary credentials is not much different from using permanent credentials. When formatting the file system, pass the Access Key, Secret Key, and token of the temporary credentials through `--access-key`, `--secret-key`, `--session-token` can set the value. E.g:
 
 ```bash
 juicefs format \
@@ -72,7 +72,7 @@ juicefs format \
     test1
 ```
 
-Since temporary credentials expire quickly, the key is how to update the temporary credentials that JuiceFS uses after `format` the filesystem before the temporary credentials expire. The credential update process is divided into two steps:
+Since temporary credentials expire quickly, the key is how to update the temporary credentials that JuiceFS uses after `format` the file system before the temporary credentials expire. The credential update process is divided into two steps:
 
 1. Before the temporary certificate expires, apply for a new temporary certificate;
 2. Without stopping the running JuiceFS, use the `juicefs config Meta-URL --access-key xxxx --secret-key xxxx --session-token xxxx` command to hot update the access credentials.
@@ -138,10 +138,10 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Huawei Cloud OBS](#huawei-cloud-obs)                       | `obs`      |
 | [Baidu Object Storage](#baidu-object-storage)               | `bos`      |
 | [Volcano Engine TOS](#volcano-engine-tos)                   | `tos`      |
-| [Kingsoft KS3](#kingsoft-ks3)                               | `ks3`      |
+| [Kingsoft Cloud KS3](#kingsoft-cloud-ks3)                   | `ks3`      |
 | [NetEase Object Storage](#netease-object-storage)           | `nos`      |
 | [QingStor](#qingstor)                                       | `qingstor` |
-| [Qiniu Object Storage](#qiniu-object-storage)               | `qiniu`    |
+| [Qiniu](#qiniu)                                             | `qiniu`    |
 | [Sina Cloud Storage](#sina-cloud-storage)                   | `scs`      |
 | [CTYun OOS](#ctyun-oos)                                     | `oos`      |
 | [ECloud Object Storage](#ecloud-object-storage)             | `eos`      |
@@ -404,16 +404,16 @@ Storj DCS is an S3-compatible storage, using `s3` for option `--storage`. The se
 
 ```shell
 juicefs format \
-	--storage s3 \
-	--bucket https://gateway.<region>.storjshare.io/<bucket> \
-	--access-key <your-access-key> \
-	--secret-key <your-sceret-key> \
-	... \
+    --storage s3 \
+    --bucket https://gateway.<region>.storjshare.io/<bucket> \
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
+    ... \
     myjfs
 ```
 
 :::caution
-Storj DCS [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API is not fully S3 compatible (result list is not sorted), so some features of juicefs do not work. For example, `juicefs gc`, `juicefs fsck`, `juicefs sync`, `juicefs destroy`. And when using `juicefs mount`, you need to disable [automatic-backup](../administration/metadata_dump_load.md#automatic-backup) function by adding `--backup-meta 0`.
+Storj DCS [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API is not fully S3 compatible (result list is not sorted), so some features of JuiceFS do not work. For example, `juicefs gc`, `juicefs fsck`, `juicefs sync`, `juicefs destroy`. And when using `juicefs mount`, you need to disable [automatic-backup](../administration/metadata_dump_load.md#automatic-backup) function by adding `--backup-meta 0`.
 :::
 
 ## Vultr Object Storage
@@ -422,11 +422,11 @@ Vultr Object Storage is an S3-compatible storage, using `s3` for `--storage` opt
 
 ```shell
 juicefs format \
-	--storage s3 \
-	--bucket https://<bucket>.ewr1.vultrobjects.com/ \
-	--access-key <your-access-key> \
-	--secret-key <your-sceret-key> \
-	... \
+    --storage s3 \
+    --bucket https://<bucket>.ewr1.vultrobjects.com/ \
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
+    ... \
     myjfs
 ```
 
@@ -581,7 +581,6 @@ juicefs format \
     ... \
     myjfs
 ```
-
 
 ## Kingsoft Cloud KS3
 
@@ -847,6 +846,7 @@ juicefs format \
 ```
 
 :::note
+
 1. Currently, JuiceFS only supports path-style MinIO URI addresses, e.g., `http://127.0.0.1:9000/myjfs`.
 1. The `MINIO_REGION` environment variable can be used to set the region of MinIO, if not set, the default is `us-east-1`.
 1. When using Multi-Node MinIO deployment, consider setting using a DNS address in the service endpoint, resolving to all MinIO Node IPs, as a simple load-balancer, e.g. `http://minio.example.com:9000/myjfs`
@@ -1118,9 +1118,9 @@ Local storage is usually only used to help users understand how JuiceFS works an
 
 ## SFTP/SSH {#sftp}
 
-SFTP - Secure File Transfer Protocol，It is not a type of storage. To be precise, JuiceFS reads and writes to disks on remote hosts via SFTP/SSH, thus allowing any SSH-enabled operating system to be used as a data storage for JuiceFS.
+SFTP - Secure File Transfer Protocol, It is not a type of storage. To be precise, JuiceFS reads and writes to disks on remote hosts via SFTP/SSH, thus allowing any SSH-enabled operating system to be used as a data storage for JuiceFS.
 
-For example, the following command uses the sftp protocol to connect to the remote server `192.168.1.11` and creates the `myjfs/` folder in the `$HOME` directory of user `tom` as the data storage of JuiceFS.
+For example, the following command uses the SFTP protocol to connect to the remote server `192.168.1.11` and creates the `myjfs/` folder in the `$HOME` directory of user `tom` as the data storage of JuiceFS.
 
 ```shell
 juicefs format  \

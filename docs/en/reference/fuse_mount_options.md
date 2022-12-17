@@ -4,34 +4,34 @@ sidebar_position: 6
 slug: /fuse_mount_options
 ---
 
-JuiceFS provides several access methods, FUSE is the common one, which is the way to mount the filesystem locally using the `juicefs mount` command. Users can add FUSE mount options for more granular control.
+JuiceFS provides several access methods, FUSE is the common one, which is the way to mount the file system locally using the `juicefs mount` command. Users can add FUSE mount options for more granular control.
 
 This guide describes the common FUSE mount options for JuiceFS, with two ways to add mount options:
 
 1. Manually execute [`juicefs mount`](../reference/command_reference.md#mount) command, specified by the `-o` option, with multiple options separated by commas.
 
-```bash
-juicefs mount -d -o allow_other,writeback_cache sqlite3://myjfs.db ~/jfs
-```
+   ```bash
+   juicefs mount -d -o allow_other,writeback_cache sqlite3://myjfs.db ~/jfs
+   ```
 
-2. Linux distributions define automounting via `/etc/fstab` by adding options directly to the `options` field, with multiple options separated by commas.   
+2. Linux distributions define automounting via `/etc/fstab` by adding options directly to the `options` field, with multiple options separated by commas.
 
-```
-# <file system>       <mount point>   <type>      <options>           <dump>  <pass>
-redis://localhost:6379/1    /jfs      juicefs     _netdev,allow_other   0       0
-```
+   ```
+   # <file system>       <mount point>   <type>      <options>           <dump>  <pass>
+   redis://localhost:6379/1    /jfs      juicefs     _netdev,allow_other   0       0
+   ```
 
 ## default_permissions
 
-This option is automatically enabled when JuiceFS is mounted and does not need to be explicitly specified. It will enable the kernel's file access checks, which are performed outside the filesystem. When enabled, both the kernel checks and the filesystem checks must succeed before further operations.
+This option is automatically enabled when JuiceFS is mounted and does not need to be explicitly specified. It will enable the kernel's file access checks, which are performed outside the filesystem. When enabled, both the kernel checks and the file system checks must succeed before further operations.
 
 :::tip
-The kernel performs standard UNIX permission checks based on mode bits, uid/gid, and directory entry ownership.
+The kernel performs standard Unix permission checks based on mode bits, UID/GID, and directory entry ownership.
 :::
 
 ## allow_other
 
-By default, only the user who mounted the filesystem can access the files. The `allow_other` option allows other users (including the root user) to access the files as well.
+By default, only the user who mounted the file system can access the files. The `allow_other` option allows other users (including the root user) to access the files as well.
 
 By default, this option is only available to the root user, but can be unrestricted by modifying `/etc/fuse.conf` and turning on the `user_allow_other` configuration option.
 
@@ -49,8 +49,8 @@ These two options are used to specify the owner ID and owner group ID of the mou
 
 ## debug
 
-This option will output Debug information from the low-level library (go-fuse) to `juicefs.log`.
+This option will output Debug information from the low-level library (`go-fuse`) to `juicefs.log`.
 
 :::note
-This option will output debug information for the low-level library (go-fuse) to `juicefs.log`. Note that this option is different from the global `-debug` option for the JuiceFS client, where the former outputs debug information for the go-fuse library and the latter outputs debug information for the JucieFS client. see the documentation [Fault Diagnosis and Analysis](./fault_diagnosis_and_analysis).
+This option will output debug information for the low-level library (`go-fuse`) to `juicefs.log`. Note that this option is different from the global `-debug` option for the JuiceFS client, where the former outputs debug information for the `go-fuse` library and the latter outputs debug information for the JuiceFS client. see the documentation [Fault Diagnosis and Analysis](../administration/fault_diagnosis_and_analysis.md).
 :::

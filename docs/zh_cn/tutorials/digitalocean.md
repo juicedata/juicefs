@@ -30,7 +30,7 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 这里，我们创建了一个名为 `juicefs` 的 Spaces 存储桶，区域为新加坡 `sgp1`，它的访问地址为：
 
-- https://juicefs.sgp1.digitaloceanspaces.com
+- `https://juicefs.sgp1.digitaloceanspaces.com`
 
 另外，还需要在 API 菜单创建 `Spaces access keys`，JuiceFS 需要用它访问 Spaces 的 API。
 

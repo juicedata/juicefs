@@ -42,4 +42,4 @@ slug: /adopters
 | [Inner Mongolia MENGSHANG Consumer Finance Co., Ltd.](https://www.mengshangxiaofei.com) | Testing     | File Sharing                |                                                                                                                                                                                                     |
 | [Dmall](https://www.dmall.com/en)                                                       | Testing     | Big Data, File Sharing      |                                                                                                                                                                                                     |
 
-You are welcome to share your experience after using JuiceFS, either by submitting a Pull Request directly to this list, or by contacting us at hello@juicedata.io.
+You are welcome to share your experience after using JuiceFS, either by submitting a Pull Request directly to this list, or by contacting us at [`hello@juicedata.io`](mailto:hello@juicedata.io).

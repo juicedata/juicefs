@@ -46,7 +46,7 @@ JuiceFS 目前支持的基于网络的数据库有：
 
 ### 2. 准备对象存储
 
-以下是以阿里云 OSS 为例的伪样本，你可以改用其他对象存储，详情参考 [JuiceFS 支持的存储](../guide/how_to_set_up_object_storage.md#支持的存储服务)。
+以下是以阿里云 OSS 为例的伪样本，你可以改用其他对象存储，详情参考 [JuiceFS 支持的存储](../guide/how_to_set_up_object_storage.md#supported-object-storage)。
 
 - **Bucket Endpoint**：`https://myjfs.oss-cn-shanghai.aliyuncs.com`
 - **Access Key ID**：`ABCDEFGHIJKLMNopqXYZ`

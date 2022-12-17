@@ -91,6 +91,7 @@ juicefs format \
 ```
 
 :::note
+
 1. When a Redis username or password contains special characters, you need to replace them with `%xx` by [URL encode](https://www.w3schools.com/tags/ref_urlencode.ASP), for example `@` with `%40`, or pass the password using an environment variable.
 2. You can also use the standard URL syntax when passing database passwords using environment variables, e.g., `"redis://:@192.168.1.6:6379/1"` which preserves the `:` and `@` separators between the username and password.
 :::
@@ -177,11 +178,11 @@ juicefs format \
 ```
 
 :::note
-1. juicefs uses public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) by default, if you want to use a `non-public schema`,  you need to specify `search_path` in the connection string parameter. e.g `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
-2. If the `public schema` is not the first hit in the `search_path` configured on the PostgreSQL server, the `search_path` parameter must be explicitly set in the connection string.
-3. The `search_path` connection parameter can be set to multiple schemas natively, but currently juicefs only supports setting one. `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` will be considered illegal.
-:::
 
+1. JuiceFS uses public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) by default, if you want to use a `non-public schema`,  you need to specify `search_path` in the connection string parameter. e.g `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
+2. If the `public schema` is not the first hit in the `search_path` configured on the PostgreSQL server, the `search_path` parameter must be explicitly set in the connection string.
+3. The `search_path` connection parameter can be set to multiple schemas natively, but currently JuiceFS only supports setting one. `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` will be considered illegal.
+:::
 
 ### Mount a file system
 
@@ -545,8 +546,8 @@ If you need to enable TLS, the general steps are as follows. For details, please
 #### Use OpenSSL to generate a CA certificate
 
 ```shell
-$ openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout private.key -out cert.crt
-$ cat cert.crt private.key > fdb.pem
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout private.key -out cert.crt
+cat cert.crt private.key > fdb.pem
 ```
 
 #### Configure TLS

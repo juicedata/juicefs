@@ -4,6 +4,8 @@ sidebar_position: 1
 slug: /redis_best_practices
 ---
 
+import Badge from '@site/src/components/Badge';
+
 # Redis Best Practices
 
 Redis is a key component in JuiceFS architecture. It stores all file system metadata and serve metadata operation from client. If any problem occurs to Redis (e.g., unavailable service, losing data), it will directly reduce the read/write speed or cause data damage, and further affect user experience.
@@ -37,7 +39,7 @@ used_memory_dataset: 13439673592
 used_memory_dataset_perc: 70.12%
 ```
 
-Among them, `used_memory_rss` is the total memory size actually used by Redis, which includes not only the size of data stored in Redis (that is, `used_memory_dataset` above) but also some Redis [system overhead](https://redis.io/commands/memory-stats) (that is, `used_memory_overhead` above). As mentioned earlier that the metadata of each file occupies about 300 bytes, this is actually calculated by `used_memory_dataset`. If you find that the metadata of a single file in your JuiceFS file system occupies much more than 300 bytes, you can try to run [`juicefs gc`](../../reference/command_reference.md#juicefs-gc) command to clean up possible redundant data.
+Among them, `used_memory_rss` is the total memory size actually used by Redis, which includes not only the size of data stored in Redis (that is, `used_memory_dataset` above) but also some Redis [system overhead](https://redis.io/commands/memory-stats) (that is, `used_memory_overhead` above). As mentioned earlier that the metadata of each file occupies about 300 bytes, this is actually calculated by `used_memory_dataset`. If you find that the metadata of a single file in your JuiceFS file system occupies much more than 300 bytes, you can try to run [`juicefs gc`](../../reference/command_reference.md#gc) command to clean up possible redundant data.
 
 ## High availability
 
@@ -100,12 +102,12 @@ Redis provides various options for [persistence](https://redis.io/docs/manual/pe
 
 - **RDB**: The RDB persistence performs point-in-time snapshots of your dataset at specified intervals.
 - **AOF**: The AOF persistence logs every write operation received by the server, which will be played again at server startup, meaning that the original dataset will be reconstructed each time server is restarted. Commands are logged using the same format as the Redis protocol in an append-only fashion. Redis is able to rewrite logs in the background when it gets too big.
-- **RDB+AOF** <span className="badge badge--success">Recommended</span>: It is possible to combine AOF and RDB in the same instance. Notice that, in this case, when Redis restarts the AOF file will be used to reconstruct the original dataset since it is guaranteed to be the most complete.
+- **RDB+AOF** <Badge type="success">Recommended</Badge>: It is possible to combine AOF and RDB in the same instance. Notice that, in this case, when Redis restarts the AOF file will be used to reconstruct the original dataset since it is guaranteed to be the most complete.
 
 When using AOF, you can have different fsync policies:
 
 1. No fsync
-2. fsync every second <span className="badge badge--primary">Default</span>
+2. fsync every second <Badge type="primary">Default</Badge>
 3. fsync at every query
 
 With the default policy of fsync every second write performance is good enough  (fsync is performed using a background thread and the main thread will try hard to perform writes when no fsync is in progress.), **but you may lose the writes from the last second**.
@@ -147,7 +149,6 @@ After recovering Redis data, you can continue to use the JuiceFS file system via
 ### Amazon ElastiCache for Redis
 
 [Amazon ElastiCache for Redis](https://aws.amazon.com/elasticache/redis) is a fully managed, Redis-compatible in-memory data store built for the cloud. It provides [automatic failover](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html) and [automatic backup](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/backups-automatic.html) features to ensure availability and durability.
-
 
 ### Google Cloud Memorystore for Redis
 

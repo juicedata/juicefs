@@ -51,6 +51,7 @@ s3fs <BUCKET>:/s3fs /s3fs -o host=https://s3.<REGION>.amazonaws.com,endpoint=<RE
 ![Metadata Benchmark](../images/metadata-benchmark.svg)
 
 ### S3FS
+
 ```
 mdtest-3.4.0+dev was launched with 1 total task(s) on 1 node(s)
 Command line used: ./mdtest '-d' '/s3fs/mdtest' '-b' '6' '-I' '8' '-z' '2'

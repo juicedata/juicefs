@@ -37,7 +37,7 @@ This is a rough outline of what a contributor's workflow looks like:
 1. Make commits of logical units.
 1. Make sure commit messages are in the proper format.
 1. Push changes in a topic branch to a personal fork of the repository.
-1. Submit a pull request to [juicedata/juicefs](https://github.com/juicedata/juicefs/compare). The PR should link to one issue which either created by you or others.
+1. Submit a pull request to [`juicedata/juicefs`](https://github.com/juicedata/juicefs/compare). The PR should link to one issue which either created by you or others.
 1. The PR must receive approval from at least one maintainer before it be merged.
 
 Happy hacking!

@@ -235,6 +235,7 @@ For this, the following command can help. Clearing the metrics will not affect t
 ```bash
 curl -X PUT http://host:9091/api/v1/admin/wipe
 ```
+
 :::
 
 For more information about Pushgateway, please check [official document](https://github.com/prometheus/pushgateway/blob/master/README.md).

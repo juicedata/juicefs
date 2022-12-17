@@ -25,12 +25,14 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. Juic
 - [Building a Milvus Cluster Based on JuiceFS](https://juicefs.com/blog/en/posts/build-milvus-distributed-cluster-based-on-juicefs/)
 
 ## Data backup and recovery
+
 - [Trip.com’s practice of massive cold data migrating to object storage with JuiceFS](https://juicefs.com/en/blog/user-stories/a-practice-of-massive-cold-data-migrating-to-oss-with-juicefs), 2022-09-19, Miaocheng & Xiaofeng@Trip.com
 - [JuiceFS for archive NGINX logs](https://juicefs.com/docs/en/archive_nginx_log_in_juicefs.html)
 - [JuiceFS for MySQL backup, verification and recovery](https://juicefs.com/docs/en/backup_mysql_in_juicefs.html)
 - [Customer Stories: Xiachufang MySQL backup practice on JuiceFS](https://juicefs.com/blog/en/posts/xiachufang-mysql-backup-practice-on-juicefs/)
 
 ## Tutorial, Guide and Best Practice
+
 - [How To Use JuiceFS To Store Data On DigitalOcean](https://www.youtube.com/watch?v=pdFzyflcRGA&t=75s), Youtube video, by Education Ecosystem
 - [Guidance on selecting metadata engine in JuiceFS](https://juicefs.com/en/blog/usage-tips/juicefs-metadata-engine-selection-guide), 2022-10-14, Sandy
 - [The strengths and weaknesses of using Redis as the JuiceFS metadata engine](https://juicefs.com/en/blog/usage-tips/introduce-redis-as-juicefs-metadata-engine), 2022-07-22, Changjian Gao

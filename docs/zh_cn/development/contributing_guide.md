@@ -37,7 +37,7 @@ sidebar_position: 1
 1. 提交代码；
 1. 确保提交消息的格式正确；
 1. 将主题分支中的更改推到个人 fork 的仓库；
-1. 提交一个 PR 到 [juicedata/juicefs](https://github.com/juicedata/juicefs/compare) 仓库。这个 PR 应该链接到你或其他人创建的一个 issue；
+1. 提交一个 PR 到 [`juicedata/juicefs`](https://github.com/juicedata/juicefs/compare) 仓库。这个 PR 应该链接到你或其他人创建的一个 issue；
 1. PR 在合并之前必须得到至少一个维护者的批准。
 
 尽情享受极客的快乐吧！

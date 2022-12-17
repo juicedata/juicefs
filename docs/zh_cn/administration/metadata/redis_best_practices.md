@@ -4,6 +4,8 @@ sidebar_position: 1
 slug: /redis_best_practices
 ---
 
+import Badge from '@site/src/components/Badge';
+
 # Redis 最佳实践
 
 当采用 Redis 作为 JuiceFS 元数据存储引擎时，即由 Redis 负责存储所有元数据并响应客户端对元数据的操作。若 Redis 出现连接不稳定、服务不可用或元数据丢失等问题，可能会导致读写速度慢或数据损坏等情况。
@@ -37,7 +39,7 @@ used_memory_dataset: 13439673592
 used_memory_dataset_perc: 70.12%
 ```
 
-其中 `used_memory_rss` 是 Redis 实际使用的总内存大小，这里既包含了存储在 Redis 中的数据大小（也就是上面的 `used_memory_dataset`），也包含了一些 Redis 的[系统开销](https://redis.io/commands/memory-stats)（也就是上面的 `used_memory_overhead`）。前面提到每个文件的元数据大约占用 300 字节是通过 `used_memory_dataset` 来计算的，如果你发现你的 JuiceFS 文件系统中单个文件元数据占用空间远大于 300 字节，可以尝试运行 [`juicefs gc`](../../reference/command_reference.md#juicefs-gc) 命令来清理可能存在的冗余数据。
+其中 `used_memory_rss` 是 Redis 实际使用的总内存大小，这里既包含了存储在 Redis 中的数据大小（也就是上面的 `used_memory_dataset`），也包含了一些 Redis 的[系统开销](https://redis.io/commands/memory-stats)（也就是上面的 `used_memory_overhead`）。前面提到每个文件的元数据大约占用 300 字节是通过 `used_memory_dataset` 来计算的，如果你发现你的 JuiceFS 文件系统中单个文件元数据占用空间远大于 300 字节，可以尝试运行 [`juicefs gc`](../../reference/command_reference.md#gc) 命令来清理可能存在的冗余数据。
 
 ## 数据可用性
 
@@ -100,12 +102,12 @@ Redis 提供了不同范围的[持久性](https://redis.io/docs/manual/persisten
 
 - **RDB**：以指定的时间间隔生成当前数据集的快照。
 - **AOF**：记录服务器收到的每一个写操作，在服务器启动时重建原始数据集。命令使用与 Redis 协议本身相同的格式以追加写（append-only）的方式记录。当日志变得太大时，Redis 能够在后台重写日志。
-- **RDB+AOF** <span className="badge badge--success">建议</span>：组合使用 AOF 和 RDB。在这种情况下，当 Redis 重新启动时，AOF 文件将用于重建原始数据集，因为它保证是最完整的。
+- **RDB+AOF** <Badge type="success">建议</Badge>：组合使用 AOF 和 RDB。在这种情况下，当 Redis 重新启动时，AOF 文件将用于重建原始数据集，因为它保证是最完整的。
 
 当使用 AOF 时，您可以有不同的 fsync 策略：
 
 1. 没有 fsync；
-2. 每秒 fsync <span className="badge badge--primary">默认</span>；
+2. 每秒 fsync <Badge type="primary">默认</Badge>；
 3. 每次查询 fsync。
 
 默认策略「每秒 fsync」是不错的选择（fsync 是使用后台线程执行的，当没有 fsync 正在进行时，主线程会努力执行写入），**但你可能丢失最近一秒钟的写入**。
