@@ -19,6 +19,7 @@ package fuse
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"syscall"
@@ -470,6 +471,13 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	}
 	fssrv, err := fuse.NewServer(imp, conf.Meta.MountPoint, &opt)
 	if err != nil {
+		if execErr, ok := err.(*exec.Error); ok {
+			if pathErr, ok := execErr.Unwrap().(*os.PathError); ok &&
+				strings.Contains(pathErr.Path, "fusermount") &&
+				pathErr.Unwrap() == syscall.ENOENT {
+				return fmt.Errorf("fuse is not installed. Please install it first")
+			}
+		}
 		return fmt.Errorf("fuse: %s", err)
 	}
 	if runtime.GOOS == "linux" {

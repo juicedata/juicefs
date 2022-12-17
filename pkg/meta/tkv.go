@@ -43,6 +43,7 @@ type kvTxn interface {
 	gets(keys ...[]byte) [][]byte
 	scanRange(begin, end []byte) map[string][]byte
 	scanKeys(prefix []byte) [][]byte
+	scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte
 	scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
 	set(key, value []byte)
@@ -1969,52 +1970,52 @@ func (m *kvMeta) doDeleteFileData(inode Ino, length uint64) {
 	_ = m.deleteKeys(m.delfileKey(inode, length))
 }
 
-func (m *kvMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
-	var keys [][]byte
-	if err := m.client.txn(func(tx kvTxn) error {
-		vals := tx.scanRange(m.delSliceKey(0, 0), m.delSliceKey(edge, 0))
-		for k := range vals {
-			if len(k) != 1+8+8 { // delayed slices: Lttttttttcccccccc
-				continue
-			}
-			keys = append(keys, []byte(k))
-		}
-		return nil
-	}); err != nil {
-		logger.Warnf("Scan delayed slices: %s", err)
-		return 0, err
-	}
-
+func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
+	start := time.Now()
 	var count int
 	var ss []Slice
 	var rs []int64
-	for _, key := range keys {
-		if err := m.txn(func(tx kvTxn) error {
-			ss, rs = ss[:0], rs[:0]
-			buf := tx.get(key)
-			if len(buf) == 0 {
-				return nil
-			}
-			m.decodeDelayedSlices(buf, &ss)
-			if len(ss) == 0 {
-				return fmt.Errorf("invalid value for delayed slices %s: %v", key, buf)
-			}
-			for _, s := range ss {
-				rs = append(rs, tx.incrBy(m.sliceKey(s.Id, s.Size), -1))
-			}
-			tx.dels(key)
+	var keys [][]byte
+	var batch int = 1e5
+	for {
+		if err := m.client.txn(func(tx kvTxn) error {
+			keys = tx.scanKeysRange(m.delSliceKey(0, 0), m.delSliceKey(edge, 0), batch, func(k []byte) bool {
+				return len(k) == 1+8+8 // delayed slices: Lttttttttcccccccc
+			})
 			return nil
 		}); err != nil {
-			logger.Warnf("Cleanup delayed slices %s: %s", key, err)
-			continue
+			logger.Warnf("Scan delayed slices: %s", err)
+			return count, err
 		}
-		for i, s := range ss {
-			if rs[i] < 0 {
-				m.deleteSlice(s.Id, s.Size)
-				count++
+
+		for _, key := range keys {
+			if err := m.txn(func(tx kvTxn) error {
+				ss, rs = ss[:0], rs[:0]
+				buf := tx.get(key)
+				if len(buf) == 0 {
+					return nil
+				}
+				m.decodeDelayedSlices(buf, &ss)
+				if len(ss) == 0 {
+					return fmt.Errorf("invalid value for delayed slices %s: %v", key, buf)
+				}
+				for _, s := range ss {
+					rs = append(rs, tx.incrBy(m.sliceKey(s.Id, s.Size), -1))
+				}
+				tx.dels(key)
+				return nil
+			}); err != nil {
+				logger.Warnf("Cleanup delayed slices %s: %s", key, err)
+				continue
+			}
+			for i, s := range ss {
+				if rs[i] < 0 {
+					m.deleteSlice(s.Id, s.Size)
+					count++
+				}
 			}
 		}
-		if count >= limit {
+		if len(keys) < batch || time.Since(start) > 50*time.Minute {
 			break
 		}
 	}
