@@ -742,9 +742,13 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     def greater_than_version_formatted(self, ver):
         print(f'ver is {ver}, formatted_by is {self.formatted_by}')
+        if not self.formatted_by:
+            return True
         return version.parse('-'.join(ver.split('-')[1:])) >=  version.parse('-'.join(self.formatted_by.split('-')[1:]))
 
     def greater_than_version_dumped(self, ver):
+        if not self.dumped_by:
+            return True
         return version.parse('-'.join(ver.split('-')[1:])) >=  version.parse('-'.join(self.dumped_by.split('-')[1:]))
 
     def greater_than_version_mounted(self, ver):
