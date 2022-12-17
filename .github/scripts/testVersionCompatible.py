@@ -741,6 +741,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('webdav succeed')
 
     def greater_than_version_formatted(self, ver):
+        print(f'ver is {ver}, formatted_by is {self.formatted_by}')
         return version.parse('-'.join(ver.split('-')[1:])) >=  version.parse('-'.join(self.formatted_by.split('-')[1:]))
 
     def greater_than_version_dumped(self, ver):

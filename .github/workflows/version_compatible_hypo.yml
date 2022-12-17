@@ -106,9 +106,11 @@ jobs:
           export META=${{matrix.meta}}
           export STORAGE=${{matrix.storage}}
           new_version=`./juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          echo new_version is $new_version
           mv juicefs juicefs-$new_version
           export NEW_JFS_BIN="juicefs-$new_version"
           old_version=`${{matrix.old_juicefs_version}}/juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          echo old_version is $old_version
           mv ${{matrix.old_juicefs_version}}/juicefs juicefs-$old_version
           export OLD_JFS_BIN="juicefs-$old_version"
           python3 .github/scripts/testVersionCompatible.py
