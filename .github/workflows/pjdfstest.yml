@@ -18,7 +18,7 @@ on:
       - '**.md'
       - '.github/**'
   schedule:
-    - cron:  '0 17 * * *'
+    - cron:  '0 19 * * *'
   workflow_dispatch:
     inputs:
       debug:
@@ -36,7 +36,7 @@ jobs:
           echo "github.event_name is ${{github.event_name}}"
           echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
           if [ "${{github.event_name}}" == "schedule"  ]; then
-            echo '::set-output name=meta_matrix::["sqlite3", "redis", "mysql", "postgres", "badger", "mariadb", "fdb"]'
+            echo '::set-output name=meta_matrix::["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]'
           elif [ "${{github.event_name}}" == "pull_request"  ]; then
             echo '::set-output name=meta_matrix::["redis"]'
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
