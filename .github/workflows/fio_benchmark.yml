@@ -74,7 +74,7 @@ jobs:
       - name: Generate fio job
         id: gen_fio_job
         run: |
-          print matrix.fio_job is ${{matrix.fio_job}}
+          echo matrix.fio_job is ${{matrix.fio_job}}
           case "${{matrix.fio_job}}" in
             "big-file-sequential-read") fio_job="big-file-sequential-read:  --rw=read --refill_buffers --bs=256k --size=1G"
             ;;
