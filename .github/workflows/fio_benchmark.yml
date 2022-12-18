@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         meta: ['redis']
-        fio_job : ['big-file-sequential-read', 'big-file-sequential-write']
+        fio_job : ['big-file-sequential-read']
 
     steps:
       - name: Checkout
@@ -88,9 +88,9 @@ jobs:
           version_count=1
           urls+=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}' | head -$version_count))    
 
-          fio_job=${{ steps.gen_fio_job.outputs.fio_job }}
+          fio_job="${{ steps.gen_fio_job.outputs.fio_job }}"
           echo fio_job is $fio_job
-          
+
           for url in "${urls[@]}"; do
             bin_name=$(echo $(basename $url) | sed 's/.tar.gz//g') 
             echo version: $(./$bin_name -V) 
