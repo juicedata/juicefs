@@ -20,10 +20,10 @@ jobs:
       fail-fast: false
       matrix:
         meta: ['redis']
-        fio_job : ['big-file-sequential-read', 'big-file-sequential-write', 'big-file-multi-read-1', 'big-file-multi-read-4', 'big-file-multi-read-16', \
-          'big-file-multi-write-1', 'big-file-multi-write-4', 'big-file-multi-write-16', 'big-file-rand-read-4k', 'big-file-rand-read-256k', \
-          'big-file-random-write-16k', 'big-file-random-write-256k', 'small-file-seq-read-4k', 'small-file-seq-read-256k', \
-          'small-file-seq-write-4k', 'small-file-seq-write-256k', 'small-file-multi-read-1', 'small-file-multi-read-4', \
+        fio_job : ['big-file-sequential-read', 'big-file-sequential-write', 'big-file-multi-read-1', 'big-file-multi-read-4', 'big-file-multi-read-16', 
+          'big-file-multi-write-1', 'big-file-multi-write-4', 'big-file-multi-write-16', 'big-file-rand-read-4k', 'big-file-rand-read-256k', 
+          'big-file-random-write-16k', 'big-file-random-write-256k', 'small-file-seq-read-4k', 'small-file-seq-read-256k', 
+          'small-file-seq-write-4k', 'small-file-seq-write-256k', 'small-file-multi-read-1', 'small-file-multi-read-4', 
           'small-file-multi-read-16', 'small-file-multi-write-1', 'small-file-multi-write-4', 'small-file-multi-write-16'] 
 
     steps:
@@ -77,6 +77,8 @@ jobs:
           print matrix.fio_job is ${{matrix.fio_job}}
           case "${{matrix.fio_job}}" in
             "big-file-sequential-read") fio_job="big-file-sequential-read:  --rw=read --refill_buffers --bs=256k --size=1G"
+            ;;
+            "big-file-sequential-write") fio_job="big-file-sequential-write:  --rw=write --refill_buffers --bs=256k  --size=1G"
             ;;
             "big-file-multi-read-1") fio_job="big-file-multi-read-1:  --rw=read --refill_buffers --bs=256k --size=1G --numjobs=1"
             ;;
