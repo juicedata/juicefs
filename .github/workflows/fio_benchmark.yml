@@ -68,8 +68,10 @@ jobs:
           done
 
       - name: Generate fio job
+        id: gen_fio_job
         run: |
-          echo "::set-env name=fio_job::big-file-sequential-read:  --rw=read --refill_buffers --bs=256k --size=1G"
+          fio_job="big-file-sequential-read:  --rw=read --refill_buffers --bs=256k --size=1G"
+          echo "fio_job=$fio_job" >> $GITHUB_OUTPUT
 
       - name: Fio Benchmark 
         run: |
@@ -86,7 +88,9 @@ jobs:
           version_count=1
           urls+=($(curl -s https://api.github.com/repos/juicedata/juicefs/releases | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}' | head -$version_count))    
 
+          fio_job=${{ steps.gen_fio_job.outputs.fio_job }}
           echo fio_job is $fio_job
+          
           for url in "${urls[@]}"; do
             bin_name=$(echo $(basename $url) | sed 's/.tar.gz//g') 
             echo version: $(./$bin_name -V) 
