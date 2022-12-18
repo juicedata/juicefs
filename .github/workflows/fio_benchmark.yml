@@ -70,7 +70,51 @@ jobs:
       - name: Generate fio job
         id: gen_fio_job
         run: |
-          fio_job="big-file-sequential-read:  --rw=read --refill_buffers --bs=256k --size=1G"
+          case "${{matrix.fio_job}}" in
+            "big-file-sequential-read") fio_job="big-file-sequential-read:  --rw=read --refill_buffers --bs=256k --size=1G"
+            ;;
+            "big-file-multi-read-1") fio_job="big-file-multi-read-1:  --rw=read --refill_buffers --bs=256k --size=1G --numjobs=1"
+            ;;
+            "big-file-multi-read-4") fio_job="big-file-multi-read-4:  --rw=read --refill_buffers --bs=256k --size=1G --numjobs=4"
+            ;;
+            "big-file-multi-read-16") fio_job="big-file-multi-read-16:  --rw=read --refill_buffers --bs=256k --size=1G --numjobs=16"
+            ;;
+            "big-file-multi-write-1") fio_job="big-file-multi-write-1:       --rw=write --refill_buffers --bs=256k --size=1G --numjobs=1"
+            ;;
+            "big-file-multi-write-4") fio_job="big-file-multi-write-4:       --rw=write --refill_buffers --bs=256k --size=1G --numjobs=4"
+            ;;
+            "big-file-multi-write-16") fio_job="big-file-multi-write-16:       --rw=write --refill_buffers --bs=256k --size=1G --numjobs=16"
+            ;;
+            "big-file-rand-read-4k") fio_job="big-file-rand-read-4k:       --rw=randread --refill_buffers --size=1G --filename=randread.bin --bs=4k"
+            ;;
+            "big-file-rand-read-256k") fio_job="big-file-rand-read-256k:       --rw=randread --refill_buffers --size=1G --filename=randread.bin --bs=256k"
+            ;;
+            "big-file-random-write-16k") fio_job="big-file-random-write-16k:    --rw=randwrite --refill_buffers --size=1G --bs=16k"
+            ;;
+            "big-file-random-write-256k") fio_job="big-file-random-write-256k:    --rw=randwrite --refill_buffers --size=1G --bs=256k"
+            ;;
+            "small-file-seq-read-4k") fio_job="small-file-seq-read-4k:      --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=10000 :--cache-size=0"
+            ;;
+            "small-file-seq-read-256k") fio_job="small-file-seq-read-256k:      --rw=read --file_service_type=sequential --bs=256k --filesize=256k --nrfiles=10000 :--cache-size=0"
+            ;;
+            "small-file-seq-write-4k") fio_job="small-file-seq-write-4k:     --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=10000 :--writeback"
+            ;;
+            "small-file-seq-write-256k") fio_job="small-file-seq-write-256k:     --rw=write --file_service_type=sequential --bs=256k --filesize=256k --nrfiles=10000 :--writeback"
+            ;;
+            "small-file-multi-read-1") fio_job="small-file-multi-read-1:      --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=10000 --numjobs=1"
+            ;;
+            "small-file-multi-read-4") fio_job="small-file-multi-read-4:      --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=10000 --numjobs=4"
+            ;;
+            "small-file-multi-read-16") fio_job="small-file-multi-read-16:      --rw=read --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=10000 --numjobs=16"
+            ;;
+            "small-file-multi-write-1") fio_job="small-file-multi-write-1:     --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=10000 --numjobs=1"
+            ;;
+            "small-file-multi-write-4") fio_job="small-file-multi-write-4:     --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=10000 --numjobs=4"
+            ;;
+            "small-file-multi-write-16") fio_job="small-file-multi-write-16:     --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=10000 --numjobs=16"
+            ;;
+          esac
+          
           echo "fio_job=$fio_job" >> $GITHUB_OUTPUT
 
       - name: Fio Benchmark 
