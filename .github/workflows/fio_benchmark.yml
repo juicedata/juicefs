@@ -74,6 +74,7 @@ jobs:
       - name: Generate fio job
         id: gen_fio_job
         run: |
+          print matrix.fio_job is ${{matrix.fio_job}}
           case "${{matrix.fio_job}}" in
             "big-file-sequential-read") fio_job="big-file-sequential-read:  --rw=read --refill_buffers --bs=256k --size=1G"
             ;;
@@ -118,7 +119,7 @@ jobs:
             "small-file-multi-write-16") fio_job="small-file-multi-write-16:     --rw=write --file_service_type=sequential --bs=4k --filesize=4k --nrfiles=10000 --numjobs=16"
             ;;
           esac
-          
+          echo fio_job is $fio_job
           echo "fio_job=$fio_job" >> $GITHUB_OUTPUT
 
       - name: Fio Benchmark 
