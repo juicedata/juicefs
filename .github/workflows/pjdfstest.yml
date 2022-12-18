@@ -18,7 +18,7 @@ on:
       - '**.md'
       - '.github/**'
   schedule:
-    - cron:  '0 17 * * *'
+    - cron:  '0 19 * * *'
   workflow_dispatch:
     inputs:
       debug:
