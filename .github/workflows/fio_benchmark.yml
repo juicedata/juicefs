@@ -76,7 +76,6 @@ jobs:
       - name: Fio Benchmark 
         run: |
           # set -o pipefail
-          set -x
           PYROSCOPE_URL=http://172.27.0.1:4040
           export PYROSCOPE_AUTH_TOKEN=${{secrets.PYROSCOPE_AUTH_TOKEN}}
 
@@ -100,7 +99,7 @@ jobs:
             mount_arg=$(echo $fio_job | awk -F: '{print $3}' | xargs)
             ./$bin_name format --help | grep "trash-days" && trash_day="--trash-days 0" || trash_day=""
             ./$bin_name --help | grep "pyroscope" && pyroscope="--pyroscope $PYROSCOPE_URL" || pyroscope=""
-            ./$bin_name format $trash_day --storage minio --bucket  http://localhost:9000/fio-test  --access-key minioadmin --secret-key minioadmin  $meta_url  fio_benchmark
+            ./$bin_name format $trash_day --storage minio --bucket  http://localhost:9000/fio-test  --access-key minioadmin --secret-key minioadmin  $meta_url  fio-benchmark
             ./$bin_name mount -d $meta_url $mount_point --no-usage-report $pyroscope  $mount_arg
             if [[ "$name" =~ ^big-file-rand-read.* ]]; then
               block_size=$(echo $name | awk -F- '{print $NF}' | xargs)
