@@ -83,17 +83,6 @@ runs:
         make juicefs
       shell: bash
 
-    - name: Clean Before
-      run: |
-        rm /var/jfsCache/ -rf || true
-        if [ -d ${{ inputs.mount_point }} ]; then
-          ./juicefs umount ${{ inputs.mount_point }} || true
-        fi
-        uuid=$(./juicefs status ${{ inputs.meta_url }} | grep UUID | cut -d '"' -f 4) || true
-        if [ -n "$uuid" ];then
-          sudo ./juicefs destroy --force ${{ inputs.meta_url }} $uuid
-        fi
-      shell: bash
     - name: Fio Benchmark 
       run: |
         set -o pipefail
