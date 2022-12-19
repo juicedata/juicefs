@@ -16,8 +16,8 @@ spellcheck:
   words:
     # Please do not add a general English word (eg. apple, python) here.
     # Users can add their special words to their .autocorrectrc file by their need.
-    - JucieFS = JuiceFS
-    - JuiecFS = JuiceFS
-    - JueicFS = JuiceFS
-    - filesystem = file system
     - Digital Ocean = DigitalOcean
+    - JucieFS = JuiceFS
+    - JueicFS = JuiceFS
+    - JuiecFS = JuiceFS
+    - filesystem = file system
