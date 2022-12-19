@@ -60,7 +60,7 @@ jobs:
           latest_url=$(curl -s https://api.github.com/repos/juicedata/juicefs/releases/latest | grep browser_download_url | grep linux-amd64.tar.gz | awk -F\" '{print $4}' )
           echo latest_url is $latest_url
           echo "latest_url=$latest_url" >> $GITHUB_OUTPUT
-          urls=("juicefs", $latest_url)
+          urls=("juicefs"  $latest_url)
           for url in "${urls[@]}"; do
             if [[ $url == http* ]]; then  
               wget -q $url
@@ -139,7 +139,7 @@ jobs:
 
           latest_url=${{ steps.download.outputs.latest_url }}
           echo latest_url is $latest_url
-          urls=("juicefs", $latest_url)
+          urls=("juicefs" $latest_url)
 
           fio_job="${{ steps.gen_fio_job.outputs.fio_job }}"
           echo fio_job is $fio_job
