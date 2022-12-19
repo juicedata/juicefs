@@ -14,6 +14,8 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+  schedule:
+    - cron:  '0 19 * * *'
   workflow_dispatch:
     inputs:
       debug:
@@ -196,6 +198,7 @@ jobs:
           if [ -f ~/.juicefs/juicefs.log ]; then
             tail -300 ~/.juicefs/juicefs.log
             grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+            grep "database is locked" ~/.juicefs/juicefs.log && exit 1 || true
           fi
 
       - name: Send Slack Notification
