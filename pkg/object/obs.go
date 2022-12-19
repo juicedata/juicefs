@@ -43,7 +43,7 @@ const obsDefaultRegion = "cn-north-1"
 type obsClient struct {
 	bucket    string
 	region    string
-	encrypted bool
+	checkEtag bool
 	c         *obs.ObsClient
 }
 
@@ -136,7 +136,7 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	params.ContentType = mimeType
 	resp, err := s.c.PutObject(params)
-	if err == nil && !s.encrypted && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
+	if err == nil && s.checkEtag && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
 	}
 	return err
@@ -213,7 +213,7 @@ func (s *obsClient) UploadPart(key string, uploadID string, num int, body []byte
 	sum := md5.Sum(body)
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	resp, err := s.c.UploadPart(params)
-	if err == nil && !s.encrypted && strings.Trim(resp.ETag, "\"") != obs.Hex(sum[:]) {
+	if err == nil && s.checkEtag && strings.Trim(resp.ETag, "\"") != obs.Hex(sum[:]) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum[:]))
 	}
 	if err != nil {
@@ -340,16 +340,15 @@ func newOBS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	if err != nil {
 		return nil, fmt.Errorf("fail to initialize OBS: %q", err)
 	}
-	var encrypted bool
+	var checkEtag = true
 	if _, err = c.GetBucketEncryption(bucketName); err == nil {
-		encrypted = true
-		logger.Infof("Bucket %s is configured with encryption enabled, we will ignore the etag check when put", bucketName)
+		checkEtag = false
 	} else {
-		if obsError, ok := err.(*obs.ObsError); ok && obsError.Code != "NoSuchEncryptionConfiguration" {
+		if obsError, ok := err.(*obs.ObsError); ok && obsError.Code != "NoSuchEncryptionConfiguration" && obsError.Code != "NoSuchBucket" {
 			logger.Warnf("fail to get bucket encryption: %q", err)
 		}
 	}
-	return &obsClient{bucket: bucketName, region: region, encrypted: encrypted, c: c}, nil
+	return &obsClient{bucket: bucketName, region: region, checkEtag: checkEtag, c: c}, nil
 }
 
 func init() {
