@@ -343,6 +343,7 @@ func newOBS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	var encrypted bool
 	if _, err = c.GetBucketEncryption(bucketName); err == nil {
 		encrypted = true
+		logger.Warnf("Bucket %s is configured with encryption enabled, we will ignore the etag check when put", bucketName)
 	} else {
 		if obsError, ok := err.(*obs.ObsError); ok {
 			if obsError.Code == "NoSuchEncryptionConfiguration" {
