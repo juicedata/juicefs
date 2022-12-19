@@ -41,9 +41,10 @@ import (
 const obsDefaultRegion = "cn-north-1"
 
 type obsClient struct {
-	bucket string
-	region string
-	c      *obs.ObsClient
+	bucket    string
+	region    string
+	encrypted bool
+	c         *obs.ObsClient
 }
 
 func (s *obsClient) String() string {
@@ -135,7 +136,7 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	params.ContentType = mimeType
 	resp, err := s.c.PutObject(params)
-	if err == nil && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
+	if err == nil && !s.encrypted && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
 	}
 	return err
@@ -212,7 +213,7 @@ func (s *obsClient) UploadPart(key string, uploadID string, num int, body []byte
 	sum := md5.Sum(body)
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	resp, err := s.c.UploadPart(params)
-	if err == nil && strings.Trim(resp.ETag, "\"") != obs.Hex(sum[:]) {
+	if err == nil && !s.encrypted && strings.Trim(resp.ETag, "\"") != obs.Hex(sum[:]) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum[:]))
 	}
 	if err != nil {
@@ -339,7 +340,19 @@ func newOBS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	if err != nil {
 		return nil, fmt.Errorf("fail to initialize OBS: %q", err)
 	}
-	return &obsClient{bucketName, region, c}, nil
+	var encrypted bool
+	if _, err = c.GetBucketEncryption(bucketName); err == nil {
+		encrypted = true
+	} else {
+		if obsError, ok := err.(*obs.ObsError); ok {
+			if obsError.Code == "NoSuchEncryptionConfiguration" {
+				encrypted = false
+			} else {
+				return nil, fmt.Errorf("fail to get bucket encryption: %q", err)
+			}
+		}
+	}
+	return &obsClient{bucket: bucketName, region: region, encrypted: encrypted, c: c}, nil
 }
 
 func init() {
