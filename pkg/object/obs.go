@@ -340,12 +340,12 @@ func newOBS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	if err != nil {
 		return nil, fmt.Errorf("fail to initialize OBS: %q", err)
 	}
-	var checkEtag = true
-	if _, err = c.GetBucketEncryption(bucketName); err == nil {
-		checkEtag = false
-	} else {
-		if obsError, ok := err.(*obs.ObsError); ok && obsError.Code != "NoSuchEncryptionConfiguration" && obsError.Code != "NoSuchBucket" {
-			logger.Warnf("fail to get bucket encryption: %q", err)
+	var checkEtag bool
+	if _, err = c.GetBucketEncryption(bucketName); err != nil {
+		if obsError, ok := err.(*obs.ObsError); ok && obsError.Code == "NoSuchEncryptionConfiguration" {
+			checkEtag = true
+		} else if !ok || obsError.Code != "NoSuchBucket" {
+			logger.Warnf("get bucket encryption: %q", err)
 		}
 	}
 	return &obsClient{bucket: bucketName, region: region, checkEtag: checkEtag, c: c}, nil
