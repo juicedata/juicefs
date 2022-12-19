@@ -28,7 +28,7 @@ jobs:
     runs-on: [self-hosted, daily-build, bench-02]
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 

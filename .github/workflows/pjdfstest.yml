@@ -18,7 +18,7 @@ on:
       - '**.md'
       - '.github/**'
   schedule:
-    - cron:  '0 17 * * *'
+    - cron:  '0 19 * * *'
   workflow_dispatch:
     inputs:
       debug:
@@ -62,7 +62,7 @@ jobs:
           perl-version: '5.34'
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
