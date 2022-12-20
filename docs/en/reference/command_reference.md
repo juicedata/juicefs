@@ -131,8 +131,6 @@ source /etc/bash_completion.d/juicefs
 
 ### juicefs format {#format}
 
-#### Description
-
 Format a volume. It's the first step for initializing a new file system volume.
 
 #### Synopsis
@@ -210,8 +208,6 @@ $ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
 ```
 
 ### juicefs mount {#mount}
-
-#### Description
 
 Mount a volume. The volume must be formatted in advance.
 
@@ -351,8 +347,6 @@ $ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 ### juicefs umount
 
-#### Description
-
 Unmount a volume.
 
 #### Synopsis
@@ -373,8 +367,6 @@ $ juicefs umount /mnt/jfs
 ```
 
 ### juicefs gateway
-
-#### Description
 
 Start an S3-compatible gateway.
 
@@ -501,8 +493,6 @@ $ juicefs gateway redis://localhost localhost:9000
 
 ### juicefs webdav
 
-#### Description
-
 Start a WebDAV server.
 
 #### Synopsis
@@ -620,8 +610,6 @@ $ juicefs webdav redis://localhost localhost:9007
 
 ### juicefs sync
 
-#### Description
-
 Sync between two storage.
 
 #### Synopsis
@@ -730,8 +718,6 @@ $ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3
 
 ### juicefs rmr
 
-#### Description
-
 Remove all the files and subdirectories, similar to rm -rf, except this command deals with metadata directly (bypassing POSIX API), thus is much faster.
 
 If trash is enabled, deleted files are moved into trash. read more at [Trash](../security/trash.md).
@@ -749,8 +735,6 @@ $ juicefs rmr /mnt/jfs/foo
 ```
 
 ### juicefs info {#info}
-
-#### Description
 
 Show internal information for given paths or inodes.
 
@@ -783,8 +767,6 @@ $ juicefs info -i 100
 ```
 
 ### juicefs bench
-
-#### Description
 
 Run benchmark, including read/write/stat for big and small files.
 
@@ -824,8 +806,6 @@ $ juicefs bench /mnt/jfs --big-file-size 0
 ```
 
 ### juicefs objbench
-
-#### Description
 
 Run basic benchmarks on the target object storage to test if it works as expected.
 
@@ -872,8 +852,6 @@ $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  h
 
 ### juicefs gc {#gc}
 
-#### Description
-
 用来处理「对象泄漏」，以及因为覆盖写而产生的碎片数据的命令。详见[「状态检查 & 维护」](../administration/status_check_and_maintenance.md#gc)。
 
 Deal with leaked objects, and garbage fragments produced by file overwrites. See [Status Check & Maintenance](../administration/status_check_and_maintenance.md#gc).
@@ -910,8 +888,6 @@ $ juicefs gc redis://localhost --delete
 
 ### juicefs fsck
 
-#### Description
-
 Check consistency of file system.
 
 #### Synopsis
@@ -927,8 +903,6 @@ $ juicefs fsck redis://localhost
 ```
 
 ### juicefs profile
-
-#### Description
 
 Analyze [access log](../administration/fault_diagnosis_and_analysis.md#access-log).
 
@@ -970,8 +944,6 @@ $ juicefs profile /tmp/jfs.alog --interval 0
 
 ### juicefs stats
 
-#### Description
-
 Show runtime statistics.
 
 #### Synopsis
@@ -1002,8 +974,6 @@ $ juicefs stats /mnt/jfs -l 1
 
 ### juicefs status
 
-#### Description
-
 Show status of JuiceFS.
 
 #### Synopsis
@@ -1024,8 +994,6 @@ $ juicefs status redis://localhost
 ```
 
 ### juicefs warmup
-
-#### Description
 
 Build cache for target directories/files. See [Cache warm-up](../guide/cache_management.md#warmup).
 
@@ -1062,8 +1030,6 @@ $ juicefs warmup -f /tmp/filelist
 
 ### juicefs dump
 
-#### Description
-
 Dump metadata into a JSON file.
 
 #### Synopsis
@@ -1090,8 +1056,6 @@ $ juicefs dump redis://localhost sub-meta-dump --subdir /dir/in/jfs
 
 ### juicefs load
 
-#### Description
-
 Load metadata from a previously dumped JSON file.
 
 #### Synopsis
@@ -1109,8 +1073,6 @@ $ juicefs load redis://localhost/1 meta-dump
 ```
 
 ### juicefs config
-
-#### Description
 
 Change config of a volume.
 
@@ -1173,8 +1135,6 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 
 ### juicefs destroy
 
-#### Description
-
 Destroy an existing volume, will delete relevant data in metadata engine and object storage. See [How to destroy a file system](../administration/destroy.md).
 
 #### Synopsis
@@ -1195,8 +1155,6 @@ $ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 ```
 
 ### juicefs debug
-
-#### Description
 
 It collects and displays information from multiple dimensions such as the operating environment and system logs to help better locate errors
 

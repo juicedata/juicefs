@@ -133,50 +133,6 @@ Also, `--writeback` size is not affected by `--cache-size` or `--free-space-rati
 
 When the asynchronous upload function is enabled, the reliability of the cache itself is directly related to the reliability of data writing. Thus, this function should be used with caution for scenarios requiring high data reliability.
 
-## Cache warm-up {#warmup}
-
-JuiceFS cache warm-up is an active caching means to improve the efficiency of file reading and writing by pre-caching frequently used data locally.
-
-Use the `warmup` subcommand to warm up the cache.
-
-```shell
-juicefs warmup [command options] [PATH ...]
-```
-
-Command options:
-
-- `--file` or `-f`: file containing a list of paths
-- `--threads` or `-p`: number of concurrent workers (default: 50)
-- `--background` or `-b`: run in background
-
-:::tip
-Only files in the mounted file system can be warmed up, i.e. the path to be warmed up must be on the local mount point.
-:::
-
-### Warm up a directory
-
-For example, to cache the `dataset-1` directory in a filesystem mount point locally.
-
-```shell
-juicefs warmup /mnt/jfs/dataset-1
-```
-
-### Warm up multiple directories or files
-
-When you need to warm up the cache of multiple directories or files at the same time, you can write all the paths in a text file. For example, create a text file named `warm.txt` with one mount point path per line.
-
-```
-/mnt/jfs/dataset-1
-/mnt/jfs/dataset-2
-/mnt/jfs/pics
-```
-
-Then run the warm up command.
-
-```shell
-juicefs warmup -f warm.txt
-```
-
 ## Cache directory {#cache-dir}
 
 Depending on the operating system, the default cache path for JuiceFS is as follows:
@@ -198,7 +154,7 @@ juicefs mount --cache-dir ~/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
 :::tip
-Setting up the cache on a faster SSD disk can improve performance.
+It is recommended to use a high performance dedicated disk as the cache directory, avoid using the system disk, and do not share it with other applications. Sharing not only affects the performance of each other, but may also cause errors in other applications (such as insufficient disk space left). If it is unavoidable to share, you must estimate the disk capacity required by other applications, limit the size of the cache space (see below for details), and avoid JuiceFS's read cache or [write cache](#writeback) takes up too much space.
 :::
 
 ### RAM disk
@@ -255,43 +211,3 @@ sudo juicefs mount --cache-dir ~/jfscache:/mnt/jfscache:/dev/shm/jfscache redis:
 When multiple cache directories are set, or multiple devices are used as cache disks, the `--cache-size` option represents the total size of data in all cache directories. The client will use the hash strategy to evenly write data to each cache path, and cannot perform special tuning for multiple cache disks with different capacities or performances.
 
 Therefore, it is recommended that the available space of different cache directories/cache disks be consistent, otherwise it may cause the situation that the space of a certain cache directory cannot be fully utilized. For example, `--cache-dir` is `/data1:/data2`, where `/data1` has a free space of 1GiB, `/data2` has a free space of 2GiB, `--cache-size` is 3GiB, `--free-space-ratio` is 0.1. Because the cache write strategy is to write evenly, the maximum space allocated to each cache directory is `3GiB / 2 = 1.5GiB`, resulting in a maximum of 1.5GiB cache space in the `/data2` directory instead of `2GiB * 0.9 = 1.8GiB`.
-
-## Frequently Asked Questions
-
-### How to determine if the write cache is fully written to the object storage?
-
-When `--writeback` is enabled, JuiceFS will flush the written files to the local cache first, and then upload them to the object storage asynchronously. When the amount of data written is large and the network speed is not stable enough, it may take some time for the data to be fully written to the object storage. Since it is an asynchronous operation, the upload process is invisible. If you need to check whether the data is completely written to the object storage, you can refer to the following methods.
-
-#### Method 1: Check the cache directory
-
-:::tip
-If you did not specify the cache location manually with `--cache-dir`, you can refer to [default cache location](#cache-dir). The default cache directory may have many cache directories named using file system UUIDs, you can use the `juicefs status <META-URL>` command to find a file system UUID.
-:::
-
-Since `--writeback` writes the data to the cache first, you can count the size of the `rawstaging` directory directly in the cache directory to determine if there is still unprocessed write cache.
-
-```shell
-$ cd <cache-dir>/<UUID>/
-$ du -sh rawstaging
-1.5G	rawstaging
-```
-
-As long as the `rawstaging` directory does not have a capacity of 0, there is still write cache left to be written. Similarly, you can also check by deleting empty directories with the `rmdir` command, if the command returns `Directory not empty` it means that the write cache has not yet finished writing.
-
-```shell
-$ cd rawstaging/chunks
-$ rmdir *
-rmdir: 0: Directory not empty
-```
-
-#### Method 2: Check the staging metrics in `.stats`
-
-Use `grep` at the root of the mount point to filter the `staging` metric in the `.stats` file, where the value of `juicefs_staging_blocks` is the amount of write caches that have not yet been processed, and a value of 0 means that all write caches have been written.
-
-```shell
-$ cd /jfs  # Suppose the root directory of the mount point is /jfs
-$ cat .stats | grep "staging"
-juicefs_staging_block_bytes 1621127168
-juicefs_staging_block_delay_seconds 46116860185.95535
-juicefs_staging_blocks 394
-```

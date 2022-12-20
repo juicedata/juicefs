@@ -131,8 +131,6 @@ source /etc/bash_completion.d/juicefs
 
 ### juicefs format {#format}
 
-#### 描述
-
 格式化文件系统；这是使用新文件系统的第一步。
 
 #### 使用
@@ -210,8 +208,6 @@ $ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
 ```
 
 ### juicefs mount {#mount}
-
-#### 描述
 
 挂载一个已经创建的文件系统。
 
@@ -353,8 +349,6 @@ $ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 ### juicefs umount
 
-#### 描述
-
 卸载一个文件文件系统。
 
 #### 使用
@@ -375,8 +369,6 @@ $ juicefs umount /mnt/jfs
 ```
 
 ### juicefs gateway
-
-#### 描述
 
 启动一个 S3 兼容的网关。
 
@@ -503,8 +495,6 @@ $ juicefs gateway redis://localhost localhost:9000
 
 ### juicefs webdav
 
-#### 描述
-
 启动一个 WebDAV 服务。
 
 #### 使用
@@ -621,8 +611,6 @@ $ juicefs webdav redis://localhost localhost:9007
 
 ### juicefs sync
 
-#### 描述
-
 在两个存储系统之间同步数据。
 
 #### 使用
@@ -730,8 +718,6 @@ $ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3
 
 ### juicefs rmr
 
-#### 描述
-
 快速删除目录里的所有文件和子目录，效果等同于 `rm -rf`，但该命令直接操纵元数据，不经过 POSIX，所以速度更快。
 
 如果文件系统启用了回收站功能，被删除的文件会进入回收站。详见[「回收站」](../security/trash.md)。
@@ -749,8 +735,6 @@ $ juicefs rmr /mnt/jfs/foo
 ```
 
 ### juicefs info {#info}
-
-#### 描述
 
 显示指定路径或 inode 的内部信息。
 
@@ -783,8 +767,6 @@ $ juicefs info -i 100
 ```
 
 ### juicefs bench
-
-#### 描述
 
 对指定的路径做基准测试，包括对大文件和小文件的读/写/获取属性操作。
 
@@ -824,8 +806,6 @@ $ juicefs bench /mnt/jfs --big-file-size 0
 ```
 
 ### juicefs objbench
-
-#### 描述
 
 测试对象存储接口的正确性与基本性能
 
@@ -875,8 +855,6 @@ $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  h
 
 ### juicefs gc {#gc}
 
-#### 描述
-
 用来处理「对象泄漏」，以及因为覆盖写而产生的碎片数据的命令。详见[「状态检查 & 维护」](../administration/status_check_and_maintenance.md#gc)。
 
 #### 使用
@@ -911,8 +889,6 @@ $ juicefs gc redis://localhost --delete
 
 ### juicefs fsck
 
-#### 描述
-
 检查文件系统一致性。
 
 #### 使用
@@ -928,8 +904,6 @@ $ juicefs fsck redis://localhost
 ```
 
 ### juicefs profile
-
-#### 描述
 
 分析[访问日志](../administration/fault_diagnosis_and_analysis.md#access-log)。
 
@@ -970,8 +944,6 @@ $ juicefs profile /tmp/jfs.alog --interval 0
 
 ### juicefs stats
 
-#### 描述
-
 展示实时的性能统计信息。
 
 #### 使用
@@ -1005,8 +977,6 @@ $ juicefs stats /mnt/jfs -l 1
 
 ### juicefs status
 
-#### 描述
-
 显示 JuiceFS 的状态。
 
 #### 使用
@@ -1026,11 +996,11 @@ juicefs status [command options] META-URL
 $ juicefs status redis://localhost
 ```
 
-### juicefs warmup
+### juicefs warmup {#warmup}
 
-#### 描述
+缓存预热是一种主动缓存手段，它可以将高频使用的数据预先缓存到本地，从而提升文件的读写效率。
 
-主动为指定目录/文件建立缓存。阅读[「缓存预热」](../guide/cache_management.md#warmup)了解更多。
+只能预热已经挂载的文件系统中的文件，即预热的路径必须在本地挂载点上。
 
 #### 使用
 
@@ -1065,8 +1035,6 @@ $ juicefs warmup -f /tmp/filelist
 
 ### juicefs dump
 
-#### 描述
-
 将元数据导出到一个 JSON 文件中。
 
 #### 使用
@@ -1093,8 +1061,6 @@ $ juicefs dump redis://localhost sub-meta-dump --subdir /dir/in/jfs
 
 ### juicefs load
 
-#### 描述
-
 从之前导出的 JSON 文件中加载元数据。
 
 #### 使用
@@ -1112,8 +1078,6 @@ $ juicefs load redis://localhost/1 meta-dump
 ```
 
 ### juicefs config
-
-#### 描述
 
 修改指定文件系统的配置项。
 
@@ -1176,8 +1140,6 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 
 ### juicefs destroy
 
-#### 描述
-
 销毁一个已经存在的文件系统，将会清空元数据引擎与对象存储中的相关数据。详见[「如何销毁文件系统」](administration/destroy.md)。
 
 #### 使用
@@ -1198,8 +1160,6 @@ $ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 ```
 
 ### juicefs debug
-
-#### 描述
 
 从运行环境、系统日志等多个维度收集和展示信息，帮助更好地定位错误
 
