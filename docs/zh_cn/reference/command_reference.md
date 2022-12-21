@@ -297,7 +297,7 @@ consul 注册中心地址 (默认："127.0.0.1:8500")
 缓存对象的总大小；单位为 MiB (默认：102400)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--free-space-ratio value`<br />
-最小剩余空间比例 (默认：0.1)。阅读[「缓存」](../guide/cache_management.md)了解更多
+最小剩余空间比例 (默认：0.1)。如果启用了[「客户端写缓存」](../guide/cache_management.md#writeback)，则该参数还控制着写缓存占用空间。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--cache-partial-only`<br />
 仅缓存随机小块读 (默认：false)。阅读[「缓存」](../guide/cache_management.md)了解更多

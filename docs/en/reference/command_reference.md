@@ -295,7 +295,7 @@ directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separ
 size of cached object for read in MiB (default: 102400), see [Client read data cache](../guide/cache_management.md#client-read-cache)
 
 `--free-space-ratio value`<br />
-min free space (ratio) (default: 0.1), see [Client read data cache](../guide/cache_management.md#client-read-cache)
+min free space ratio (default: 0.1), if [Client write data cache](../guide/cache_management.md#writeback) is enabled, this option also controls write cache size, see [Client read data cache](../guide/cache_management.md#client-read-cache)
 
 `--cache-partial-only`<br />
 cache random/small read only (default: false), see [Client read data cache](../guide/cache_management.md#client-read-cache)
