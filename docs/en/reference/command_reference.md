@@ -993,9 +993,11 @@ show detailed information (sustained inodes, locks) of the specified session (si
 $ juicefs status redis://localhost
 ```
 
-### juicefs warmup
+### juicefs warmup {#warmup}
 
-Build cache for target directories/files. See [Cache warm-up](../guide/cache_management.md#warmup).
+Download data to local cache in advance, to achieve better performance on application's first read.
+
+Warm-up only works in mounted JuiceFS file systems.
 
 #### Synopsis
 

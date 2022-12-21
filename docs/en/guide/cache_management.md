@@ -55,35 +55,39 @@ To ensure consistency, `--open-cache` is disabled by default, and every time you
 
 ## Data cache
 
-JuiceFS provides a multi-level cache to improve the performance of frequently accessed data. Read requests will try kernel page cache, the pre-read buffer of the JuiceFS process, and the local disk cache in turn. If the data requested is not found in any level of the cache, it will be read from the object storage, and also be written into every level of the cache asynchronously to improve the performance of subsequent accesses.
+To improve performance, JuiceFS also provides various caching mechanisms for data, including page cache in the kernel, local file system cache in client host, and read/write buffer in client process itself. Read requests will try the kernel page cache, the client process buffer, and the local disk cache in turn. If the data requested is not found in any level of the cache, it will be read from the object storage, and also be written into every level of the cache asynchronously to improve the performance of the next access.
 
 ![](../images/juicefs-cache.png)
 
-### Read/Write Buffer {#buffer-size}
+### Read/Write buffer {#buffer-size}
 
 Mount parameter [`--buffer-size`](../reference/command_reference.md#mount) controls the Read/Write buffer size for JuiceFS Client, which defaults to 300 (in MiB). Buffer size dictates both the memory data size for file read (and readahead), and memory data size for writing pending pages. Naturally, we recommend increasing `--buffer-size` when under high concurrency, to effectively improve performance.
 
 If you wish to improve write speed, and have already increased [`--max-uploads`](../reference/command_reference.md#mount) for more upload concurrency, with no noticeable increase in upload traffic, consider also increasing `--buffer-size` so that concurrent threads may easier allocate memory for data uploads. This also works in the opposite direction: if tuning up `--buffer-size` didn't bring out an increase in upload traffic, you should probably increase `--max-uploads` as well.
 
-The `--buffer-size` also controls the data upload size for each `flush` operation, this means for clients working in a low bandwidth environment, you may need to use a lower `--buffer-size` to avoid `flush` timeouts.
+The `--buffer-size` also controls the data upload size for each `flush` operation, this means for clients working in a low bandwidth environment, you may need to use a lower `--buffer-size` to avoid `flush` timeouts. Refer to ["Connection problems with object storage"](../administration/troubleshooting.md#io-error-object-storage) for troubleshooting under low internet speed.
 
-### Kernel data cache
+### Kernel page cache
 
-:::note
-This feature requires JuiceFS >= 0.15.2
-:::
+From JuiceFS 0.15.2 and above, kernel will build page cache for opened files. If this file is not updated (i.e. `mtime` doesn't change) afterwards, it will be read directly from the page cache to achieve the best performance.
 
-For a file that has already been read, the kernel automatically caches its content. If this file is not updated (i.e. its `mtime` doesn't change) afterwards, it will be read directly from the kernel cache to achieve better performance.
+JuiceFS Client tracks a list of recently opened files. If file is opened again, client will check if file has been modified to decide whether the kernel page cache is valid, if file is already modified, all relevant page cache is invalidated on the next open, this ensures that the client can always read the latest data.
 
-Thanks to the kernel cache, repeated reads of the same file in JuiceFS can be extremely fast, with latencies as low as a few microseconds and throughput up to several GiBs per second.
+Repeated reads of the same file in JuiceFS can be extremely fast, with latencies as low as a few microseconds and throughput up to several GiBs per second.
 
-JuiceFS clients currently do not have kernel write caching enabled by default. Starting with [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports ["writeback-cache mode"]( https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt), which means that the `write()` system call can be done very quickly. You can set the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option at [mounting file system](../reference/command_reference.md#mount) to enable writeback-cache mode. It is recommended to enable this mount option when very small data (e.g. around 100 bytes) needs to be written frequently.
+### Kernel writeback-cache mode
+
+Starting with [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports the ["writeback-cache mode"]( https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt). In this mode, kernel will merge high frequency random small writes (10-100 bytes), which significantly improves write performance.
+
+To enable writeback-cache mode, use the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option when you [mount JuiceFS](../reference/command_reference.md#mount). Note that writeback-cache mode is not the same as [Client write data cache](#writeback), the former is a kernel implementation while the latter happens inside the JuiceFS Client, they are meant for different scenarios, read the corresponding section for more.
 
 ### Client read data cache {#client-read-cache}
 
-Local cache can be set up on any local file system based on HDD, SSD or memory.
+The client will perform prefetch and cache automatically to improve sequence read performance according to the read mode in the application. Data will be cached in local file system, which can be any local storage device like HDD, SSD or even memory.
 
-Data downloaded from object storage, as well as small data (smaller than a single block) uploaded to object storage will be cached by JuiceFS Client, without compression or encryption.
+Data downloaded from object storage, as well as small data (smaller than a single block) uploaded to object storage will be cached by JuiceFS Client, without compression or encryption. To achieve better performance on application's first read, use [`juicefs warmup`](../reference/command_reference.md#warmup) to cache data in advance.
+
+If the file system where the cache directory is located is not working properly, the JuiceFS client can immediately return an error and downgrade to direct access to object storage. This is usually true for local disk, but if the file system where the cache directory is located is abnormal and the read operation is stuck (such as some kernel-mode network file system), then JuiceFS will also get stuck together. This requires you to tune the underlying file system behavior of the cache directory to fail fast.
 
 Below are some important options for cache configuration (see [`juicefs mount`](../reference/command_reference.md#mount) for complete reference):
 
@@ -97,7 +101,7 @@ Below are some important options for cache configuration (see [`juicefs mount`](
 
   Cache directory, default to `/var/jfsCache` or `$HOME/.juicefs/cache`. Please read ["Cache directory"](#cache-dir) for more information.
 
-  If you are in urgent need to free up disk space, you can manually delete data under the cache directory, which is usually `<cache-dir>/<UUID>/raw/`.
+  If you are in urgent need to free up disk space, you can manually delete data under the cache directory, which is `<cache-dir>/<UUID>/raw/`.
 
 * `--cache-size` and `--free-space-ratio`
 
@@ -113,27 +117,35 @@ Below are some important options for cache configuration (see [`juicefs mount`](
 
 ### Client write data cache {#writeback}
 
-When writing data, the JuiceFS client caches the data in memory until it is uploaded to the object storage when a chunk is written or when the operation is forced by `close()` or `fsync()`. When `fsync()` or `close()` is called, the client waits for data to be written to the object storage and notifies the metadata service before returning, thus ensuring data integrity.
+Enabling client write cache can improve performance when writing large amount of small files. Read this section to learn about client write cache.
 
-When local storage is reliable and its write performance is significantly better than network writes (e.g. SSD disks), write performance can be improved by enabling asynchronous upload of data. In this way, the `close()` operation does not have to wait for data to be written into the object storage, but returns as soon as the data is written to the local cache directory.
+Client write cache is disabled by default, data writes will be held in the [read/write buffer](#buffer-size) (in memory), and is uploaded to object storage when a chunk is filled full, or forced by application with `close()`/`fsync()` calls. To ensure data security, client will not commit file writes to the Metadata Service until data is uploaded to object storage.
 
-The asynchronous upload feature is disabled by default and can be enabled with the following option.
+You can see how the default "upload first, then commit" write process will not perform well when writing large amount of small files. After the client write cache is enabled, the write process becomes "commit first, then upload asynchronously", file writes will not be blocked by data uploads, instead it will be written to the local cache directory and committed to the metadata service, and then returned immediately. The file data in the cache directory will be asynchronously uploaded to the object storage in the background.
 
+Add `--writeback` to the mount command to enable client write cache, but this mode comes with some risks and caveats:
+
+* Disk reliability is crucial to data integrity, if write cache data suffers loss before upload is complete, file data is lost forever. Use with caution when data reliability is critical.
+* Write cache data by default is stored in `/var/jfsCache/<UUID>/rawstaging/`, do not delete files under this directory or data will be lost.
+* Read cache and write cache share a same storage limit, make sure [`--cache-size`](#client-read-cache) and [`--cache-dir`](#client-read-cache) are set properly.
+* If local disk write speed is lower than object storage upload speed, enabling `--writeback` will only result in worse write performance.
+* If the file system of the cache directory raises error, client will fallback and write synchronously to object storage, which is the same behavior as [Read Cache in Client](#client-read-cache).
+* If object storage upload speed is too slow (low bandwidth), local write cache can take forever to upload, meanwhile reads from other nodes will result in timeout error (I/O error). See [Connection problems with object storage](../administration/troubleshooting.md#io-error-object-storage).
+
+Improper usage of client write cache can easily cause problems, that's why only recommend to temporarily enable this when writing large number of small files (e.g. extracting a compressed file containing a large number of small files).
+
+When `--writeback` is enabled, apart from checking `/var/jfsCache/<UUID>/rawstaging/` directly, you can also view upload progress using:
+
+```shell
+# Assuming mount point is /jfs
+$ cd /jfs
+$ cat .stats | grep "staging"
+juicefs_staging_block_bytes 1621127168
+juicefs_staging_block_delay_seconds 46116860185.95535
+juicefs_staging_blocks 394
 ```
---writeback  upload objects in background (default: false)
-```
 
-When writing a large number of small files in a short period of time, it is recommended to mount the file system with the `--writeback` parameter to improve write performance, and consider re-mounting without the option after the write is complete to make subsequent writes more reliable. It is also recommended to enable `--writeback` for scenarios that require a lot of random writes, such as incremental backups of MySQL.
-
-:::caution
-When asynchronous upload is enabled, i.e. `--writeback` is specified when mounting the file system, do not delete the contents in `<cache-dir>/<UUID>/rawstaging` directory, as this will result in data loss.
-:::
-
-Also, `--writeback` size is not affected by `--cache-size` or `--free-space-ratio` values and `<cache-dir>/<UUID>/rawstaging` directory will grow in size as much as needed until data is effectively uploaded to the object storage. Nevertheless, when the cache disk is almost full, it will pause writing data and change to uploading data directly to the object storage (i.e., the client write cache feature is turned off).
-
-When the asynchronous upload function is enabled, the reliability of the cache itself is directly related to the reliability of data writing. Thus, this function should be used with caution for scenarios requiring high data reliability.
-
-## Cache directory {#cache-dir}
+### Cache directory {#cache-dir}
 
 Depending on the operating system, the default cache path for JuiceFS is as follows:
 
@@ -157,7 +169,7 @@ juicefs mount --cache-dir ~/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 It is recommended to use a high performance dedicated disk as the cache directory, avoid using the system disk, and do not share it with other applications. Sharing not only affects the performance of each other, but may also cause errors in other applications (such as insufficient disk space left). If it is unavoidable to share, you must estimate the disk capacity required by other applications, limit the size of the cache space (see below for details), and avoid JuiceFS's read cache or [write cache](#writeback) takes up too much space.
 :::
 
-### RAM disk
+#### RAM disk
 
 If a higher file read performance is required, you can set up the cache into the RAM disk. For Linux systems, check the `tmpfs` file system with the `df` command.
 
@@ -182,7 +194,7 @@ juicefs mount --cache-dir /dev/shm/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 
 Another way to use memory for cache is set `--cache-dir` option to `memory`, this puts cache directly in client process memory, which is simpler compared to `/dev/shm`, but obviously cache will be lost after process restart, use this for tests and evaluations.
 
-### Shared folders
+#### Shared folders
 
 Shared directories created via SMB or NFS can also be used as cache for JuiceFS. For the case where multiple devices on the LAN mount the same JuiceFS file system, using shared directories on the LAN as cache paths can effectively relieve the bandwidth pressure of duplicate caches for multiple devices.
 
@@ -200,7 +212,7 @@ Using shared directories as JuiceFS caches:
 sudo juicefs mount --cache-dir /mnt/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
-### Multiple cache directories
+#### Multiple cache directories
 
 JuiceFS supports setting multiple cache directories at the same time, thus avoiding the problem of insufficient cache space by separating multiple paths using `:` (Linux, macOS) or `;` (Windows), e.g.:
 
