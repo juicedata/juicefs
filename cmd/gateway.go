@@ -194,10 +194,10 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	go func() {
 		sig := <-signalChan
-		if err := metaCli.CloseSession(); err != nil {
-			logger.Errorf("close session failed: %s", err)
-		}
 		logger.Infof("Received signal %s, exiting...", sig.String())
+		if err := metaCli.CloseSession(); err != nil {
+			logger.Fatalf("close session failed: %s", err)
+		}
 		os.Exit(0)
 	}()
 
