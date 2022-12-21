@@ -21,13 +21,11 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
-	"net/http"
 	"os"
 	"reflect"
 	"regexp"
@@ -785,6 +783,5 @@ func TestMain(m *testing.M) {
 			}
 		}
 	}
-	httpClient.Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: false}
 	m.Run()
 }

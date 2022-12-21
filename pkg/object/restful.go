@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -77,6 +78,7 @@ func init() {
 				return nil, err
 			},
 			DisableCompression: true,
+			TLSClientConfig:    &tls.Config{},
 		},
 		Timeout: time.Hour,
 	}
