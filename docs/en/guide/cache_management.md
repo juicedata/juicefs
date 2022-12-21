@@ -127,7 +127,7 @@ Add `--writeback` to the mount command to enable client write cache, but this mo
 
 * Disk reliability is crucial to data integrity, if write cache data suffers loss before upload is complete, file data is lost forever. Use with caution when data reliability is critical.
 * Write cache data by default is stored in `/var/jfsCache/<UUID>/rawstaging/`, do not delete files under this directory or data will be lost.
-* Read cache and write cache share a same storage limit, make sure [`--cache-size`](#client-read-cache) and [`--cache-dir`](#client-read-cache) are set properly.
+* Write cache size is not limited by `--cache-size`, instead, it will not exceed half of `--free-space-ratio`. Considering `--free-space-ratio` is 0.1 by default, if `--writeback` is enabled, write cache will take up at most 0.05% of disk space.
 * If local disk write speed is lower than object storage upload speed, enabling `--writeback` will only result in worse write performance.
 * If the file system of the cache directory raises error, client will fallback and write synchronously to object storage, which is the same behavior as [Read Cache in Client](#client-read-cache).
 * If object storage upload speed is too slow (low bandwidth), local write cache can take forever to upload, meanwhile reads from other nodes will result in timeout error (I/O error). See [Connection problems with object storage](../administration/troubleshooting.md#io-error-object-storage).
