@@ -371,9 +371,6 @@ func (cache *cacheStore) uploaded(key string, size int) {
 
 // locked
 func (cache *cacheStore) cleanup() {
-	if !cache.scanned {
-		return
-	}
 	goal := cache.capacity * 95 / 100
 	num := len(cache.keys) * 99 / 100
 	// make sure we have enough free space after cleanup
