@@ -117,7 +117,7 @@ juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 
 ## KeyDB
 
-[KeyDB](https://keydb.dev/) 是 Redis 的开源分支，在开发上保持与 Redis 主线对齐。KeyDB 在 Redis 的基础上实现了多线程支持、更好的内存利用率和更大的吞吐量，另外还支持 [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication)，即 Active Active（双活）功能。
+[KeyDB](https://keydb.dev) 是 Redis 的开源分支，在开发上保持与 Redis 主线对齐。KeyDB 在 Redis 的基础上实现了多线程支持、更好的内存利用率和更大的吞吐量，另外还支持 [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication)，即 Active Active（双活）功能。
 
 :::note 注意
 KeyDB 的数据复制是异步的，使用 Active Active（双活）功能可能导致数据一致性问题，请务必充分验证、谨慎使用！
@@ -127,9 +127,9 @@ KeyDB 的数据复制是异步的，使用 Active Active（双活）功能可能
 
 ## PostgreSQL
 
-[PostgreSQL](https://www.postgresql.org/) 是功能强大的开源关系型数据库，有完善的生态和丰富的应用场景，也可以用来作为 JuiceFS 的元数据引擎。
+[PostgreSQL](https://www.postgresql.org) 是功能强大的开源关系型数据库，有完善的生态和丰富的应用场景，也可以用来作为 JuiceFS 的元数据引擎。
 
-许多云计算平台都提供托管的 PostgreSQL 数据库服务，也可以按照[使用向导](https://www.postgresqltutorial.com/postgresql-getting-started/)自己部署一个。
+许多云计算平台都提供托管的 PostgreSQL 数据库服务，也可以按照[使用向导](https://www.postgresqltutorial.com/postgresql-getting-started)自己部署一个。
 
 其他跟 PostgreSQL 协议兼容的数据库（比如 CockroachDB 等) 也可以这样使用。
 
@@ -213,7 +213,7 @@ juicefs format \
 
 ## MySQL
 
-[MySQL](https://www.mysql.com/) 是受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库。
+[MySQL](https://www.mysql.com) 是受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库。
 
 ### 创建文件系统
 

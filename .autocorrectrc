@@ -21,3 +21,4 @@ spellcheck:
     - JueicFS = JuiceFS
     - JuiecFS = JuiceFS
     - filesystem = file system
+    - mountpoint = mount point

@@ -58,7 +58,7 @@ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 
 ## 2. Docker Volume Plugin {#docker-volume-plugin}
 
-JuiceFS provides [volume plugin](https://docs.docker.com/engine/extend/) for Docker environments to create storage volumes on JuiceFS as if they were local disks.
+JuiceFS provides [volume plugin](https://docs.docker.com/engine/extend) for Docker environments to create storage volumes on JuiceFS as if they were local disks.
 
 ### Dependencies
 

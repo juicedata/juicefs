@@ -47,9 +47,9 @@ No matter which system environment the client is compiled for, the compiled JAR 
 
 Compilation depends on the following tools:
 
-- [Go](https://golang.org/) 1.17+
+- [Go](https://golang.org) 1.17+
 - JDK 8+
-- [Maven](https://maven.apache.org/) 3.3+
+- [Maven](https://maven.apache.org) 3.3+
 - Git
 - make
 - GCC 5.4+
@@ -85,7 +85,7 @@ It is recommended to use a version that includes third-party dependencies.
 
 #### Windows
 
-The client used in the Windows environment needs to be obtained through cross-compilation on Linux or macOS. The compilation depends on [mingw-w64](https://www.mingw-w64.org/), which needs to be installed first.
+The client used in the Windows environment needs to be obtained through cross-compilation on Linux or macOS. The compilation depends on [mingw-w64](https://www.mingw-w64.org), which needs to be installed first.
 
 The steps are the same as compiling on Linux or macOS. For example, on the Ubuntu system, install the `mingw-w64` package first to solve the dependency problem:
 

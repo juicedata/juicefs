@@ -172,11 +172,11 @@ If you want to use a Redis compatible product as the metadata engine, you need t
 
 ### Redis data types used by JuiceFS
 
-+ [String](https://redis.io/docs/data-types/strings/)
-+ [Set](https://redis.io/docs/data-types/sets/)
-+ [Sorted Set](https://redis.io/docs/data-types/sorted-sets/)
-+ [Hash](https://redis.io/docs/data-types/hashes/)
-+ [List](https://redis.io/docs/data-types/lists/)
++ [String](https://redis.io/docs/data-types/strings)
++ [Set](https://redis.io/docs/data-types/sets)
++ [Sorted Set](https://redis.io/docs/data-types/sorted-sets)
++ [Hash](https://redis.io/docs/data-types/hashes)
++ [List](https://redis.io/docs/data-types/lists)
 
 ### Redis features used by JuiceFS
 
@@ -186,76 +186,76 @@ If you want to use a Redis compatible product as the metadata engine, you need t
 
 #### String
 
-+ [DECRBY](https://redis.io/commands/decrby/)
-+ [DEL](https://redis.io/commands/del/)
-+ [GET](https://redis.io/commands/get/)
-+ [INCRBY](https://redis.io/commands/incrby/)
-+ [MGET](https://redis.io/commands/mget/)
-+ [MSET](https://redis.io/commands/mset/)
-+ [SETNX](https://redis.io/commands/setnx/)
-+ [SET](https://redis.io/commands/set/)
++ [DECRBY](https://redis.io/commands/decrby)
++ [DEL](https://redis.io/commands/del)
++ [GET](https://redis.io/commands/get)
++ [INCRBY](https://redis.io/commands/incrby)
++ [MGET](https://redis.io/commands/mget)
++ [MSET](https://redis.io/commands/mset)
++ [SETNX](https://redis.io/commands/setnx)
++ [SET](https://redis.io/commands/set)
 
 #### Set
 
-+ [SADD](https://redis.io/commands/sadd/)
-+ [SMEMBERS](https://redis.io/commands/smembers/)
-+ [SREM](https://redis.io/commands/srem/)
++ [SADD](https://redis.io/commands/sadd)
++ [SMEMBERS](https://redis.io/commands/smembers)
++ [SREM](https://redis.io/commands/srem)
 
 #### Sorted Set
 
-+ [ZADD](https://redis.io/commands/zadd/)
-+ [ZRANGEBYSCORE](https://redis.io/commands/zrangebyscore/)
-+ [ZRANGE](https://redis.io/commands/zrange/)
-+ [ZREM](https://redis.io/commands/zrem/)
-+ [ZSCORE](https://redis.io/commands/zscore/)
++ [ZADD](https://redis.io/commands/zadd)
++ [ZRANGEBYSCORE](https://redis.io/commands/zrangebyscore)
++ [ZRANGE](https://redis.io/commands/zrange)
++ [ZREM](https://redis.io/commands/zrem)
++ [ZSCORE](https://redis.io/commands/zscore)
 
 #### Hash
 
-+ [HDEL](https://redis.io/commands/hdel/)
-+ [HEXISTS](https://redis.io/commands/hexists/)
-+ [HGETALL](https://redis.io/commands/hgetall/)
-+ [HGET](https://redis.io/commands/hget/)
-+ [HINCRBY](https://redis.io/commands/hincrby/)
-+ [HINCRBY](https://redis.io/commands/hincrby/)
-+ [HKEYS](https://redis.io/commands/hkeys/)
-+ [HSCAN](https://redis.io/commands/hscan/)
-+ [HSETNX](https://redis.io/commands/hsetnx/)
-+ [HSET](https://redis.io/commands/hset/) (need to support setting multiple fields and values)
++ [HDEL](https://redis.io/commands/hdel)
++ [HEXISTS](https://redis.io/commands/hexists)
++ [HGETALL](https://redis.io/commands/hgetall)
++ [HGET](https://redis.io/commands/hget)
++ [HINCRBY](https://redis.io/commands/hincrby)
++ [HINCRBY](https://redis.io/commands/hincrby)
++ [HKEYS](https://redis.io/commands/hkeys)
++ [HSCAN](https://redis.io/commands/hscan)
++ [HSETNX](https://redis.io/commands/hsetnx)
++ [HSET](https://redis.io/commands/hset) (need to support setting multiple fields and values)
 
 #### List
 
-+ [LLEN](https://redis.io/commands/llen/)
-+ [LPUSH](https://redis.io/commands/lpush/)
-+ [LRANGE](https://redis.io/commands/lrange/)
-+ [LTRIM](https://redis.io/commands/ltrim/)
-+ [RPUSHX](https://redis.io/commands/rpushx/)
-+ [RPUSH](https://redis.io/commands/rpush/)
-+ [SCAN](https://redis.io/commands/scan/)
++ [LLEN](https://redis.io/commands/llen)
++ [LPUSH](https://redis.io/commands/lpush)
++ [LRANGE](https://redis.io/commands/lrange)
++ [LTRIM](https://redis.io/commands/ltrim)
++ [RPUSHX](https://redis.io/commands/rpushx)
++ [RPUSH](https://redis.io/commands/rpush)
++ [SCAN](https://redis.io/commands/scan)
 
 #### Transaction
 
-+ [EXEC](https://redis.io/commands/exec/)
-+ [MULTI](https://redis.io/commands/multi/)
-+ [WATCH](https://redis.io/commands/watch/)
-+ [UNWATCH](https://redis.io/commands/unwatch/)
++ [EXEC](https://redis.io/commands/exec)
++ [MULTI](https://redis.io/commands/multi)
++ [WATCH](https://redis.io/commands/watch)
++ [UNWATCH](https://redis.io/commands/unwatch)
 
 #### Connection management
 
-+ [PING](https://redis.io/commands/ping/)
++ [PING](https://redis.io/commands/ping)
 
 #### Server management
 
-+ [CONFIG GET](https://redis.io/commands/config-get/)
-+ [CONFIG SET](https://redis.io/commands/config-set/)
-+ [DBSIZE](https://redis.io/commands/dbsize/)
-+ [FLUSHDB](https://redis.io/commands/flushdb/) (optional)
-+ [INFO](https://redis.io/commands/info/)
++ [CONFIG GET](https://redis.io/commands/config-get)
++ [CONFIG SET](https://redis.io/commands/config-set)
++ [DBSIZE](https://redis.io/commands/dbsize)
++ [FLUSHDB](https://redis.io/commands/flushdb) (optional)
++ [INFO](https://redis.io/commands/info)
 
 #### Cluster management
 
-+ [CLUSTER INFO](https://redis.io/commands/cluster-info/)
++ [CLUSTER INFO](https://redis.io/commands/cluster-info)
 
 #### Scripting (optional)
 
-+ [EVALSHA](https://redis.io/commands/evalsha/)
-+ [SCRIPT LOAD](https://redis.io/commands/script-load/)
++ [EVALSHA](https://redis.io/commands/evalsha)
++ [SCRIPT LOAD](https://redis.io/commands/script-load)

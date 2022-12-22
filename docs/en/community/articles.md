@@ -15,21 +15,21 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. Juic
 - [From Hadoop to cloud native — Separation of compute and storage for big data platform](https://juicefs.com/en/blog/solutions/from-hadoop-to-cloud-native-separation-of-compute-and-storage-for-big-data-platform), 2022-10-11, Rui Su
 - [Gaoding Technology Saves 60% Of Storage Cost Used By Elasticsearch](https://juicefs.com/en/blog/user-stories/gaoding-with-juicefs), 2021-10-09, Gaoding SRE Team
 - [Shopee x JuiceFS: ClickHouse Cold and Hot Data Separation Storage Architecture and Practice](https://juicefs.com/en/blog/user-stories/shopee-clickhouse-with-juicefs), 2021-10-09, Teng@Shopee
-- [How to effectively reduce the load of HDFS cluster for Qutoutiao(NASDAQ:QTT)](https://juicefs.com/blog/en/posts/qutoutiao-big-data-platform-user-case/)
-- [How does the Globalegrow data platform achieve both speed and money savings?](https://juicefs.com/blog/en/posts/globalegrow-big-data-platform-user-case/)
-- [How to make HBase faster, more stable, and cheaper](https://juicefs.com/blog/en/posts/how-to-make-hbase-faster-more-stable-and-cheaper/)
-- [Exploring storage and computing separation for ClickHouse](https://juicefs.com/blog/en/posts/clickhouse-disaggregated-storage-and-compute-practice/)
+- [How to effectively reduce the load of HDFS cluster for Qutoutiao(NASDAQ:QTT)](https://juicefs.com/blog/en/posts/qutoutiao-big-data-platform-user-case)
+- [How does the Globalegrow data platform achieve both speed and money savings?](https://juicefs.com/blog/en/posts/globalegrow-big-data-platform-user-case)
+- [How to make HBase faster, more stable, and cheaper](https://juicefs.com/blog/en/posts/how-to-make-hbase-faster-more-stable-and-cheaper)
+- [Exploring storage and computing separation for ClickHouse](https://juicefs.com/blog/en/posts/clickhouse-disaggregated-storage-and-compute-practice)
 
 ## Data sharing
 
-- [Building a Milvus Cluster Based on JuiceFS](https://juicefs.com/blog/en/posts/build-milvus-distributed-cluster-based-on-juicefs/)
+- [Building a Milvus Cluster Based on JuiceFS](https://juicefs.com/blog/en/posts/build-milvus-distributed-cluster-based-on-juicefs)
 
 ## Data backup and recovery
 
 - [Trip.com’s practice of massive cold data migrating to object storage with JuiceFS](https://juicefs.com/en/blog/user-stories/a-practice-of-massive-cold-data-migrating-to-oss-with-juicefs), 2022-09-19, Miaocheng & Xiaofeng@Trip.com
 - [JuiceFS for archive NGINX logs](https://juicefs.com/docs/en/archive_nginx_log_in_juicefs.html)
 - [JuiceFS for MySQL backup, verification and recovery](https://juicefs.com/docs/en/backup_mysql_in_juicefs.html)
-- [Customer Stories: Xiachufang MySQL backup practice on JuiceFS](https://juicefs.com/blog/en/posts/xiachufang-mysql-backup-practice-on-juicefs/)
+- [Customer Stories: Xiachufang MySQL backup practice on JuiceFS](https://juicefs.com/blog/en/posts/xiachufang-mysql-backup-practice-on-juicefs)
 
 ## Tutorial, Guide and Best Practice
 

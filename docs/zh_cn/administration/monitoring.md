@@ -9,8 +9,8 @@ sidebar_position: 3
 
 这里假设你搭建的 Prometheus Server、Grafana 与 JuiceFS 客户端都运行在相同的主机上。其中：
 
-- **Prometheus Server**：用于收集并保存各种指标的时序数据，安装方法请参考[官方文档](https://prometheus.io/docs/introduction/first_steps/)。
-- **Grafana**：用于从 Prometheus 读取并可视化展现时序数据，安装方法请参考[官方文档](https://grafana.com/docs/grafana/latest/installation/)。
+- **Prometheus Server**：用于收集并保存各种指标的时序数据，安装方法请参考[官方文档](https://prometheus.io/docs/introduction/first_steps)。
+- **Grafana**：用于从 Prometheus 读取并可视化展现时序数据，安装方法请参考[官方文档](https://grafana.com/docs/grafana/latest/installation)。
 
 ### Ⅰ. 获得实时数据
 

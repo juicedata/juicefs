@@ -174,11 +174,11 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 
 ### JuiceFS 使用到的 Redis 数据类型
 
-+ [String](https://redis.io/docs/data-types/strings/)
-+ [Set](https://redis.io/docs/data-types/sets/)
-+ [Sorted Set](https://redis.io/docs/data-types/sorted-sets/)
-+ [Hash](https://redis.io/docs/data-types/hashes/)
-+ [List](https://redis.io/docs/data-types/lists/)
++ [String](https://redis.io/docs/data-types/strings)
++ [Set](https://redis.io/docs/data-types/sets)
++ [Sorted Set](https://redis.io/docs/data-types/sorted-sets)
++ [Hash](https://redis.io/docs/data-types/hashes)
++ [List](https://redis.io/docs/data-types/lists)
 
 ### JuiceFS 使用到的 Redis 特性
 
@@ -188,75 +188,75 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 
 #### String
 
-+ [DECRBY](https://redis.io/commands/decrby/)
-+ [DEL](https://redis.io/commands/del/)
-+ [GET](https://redis.io/commands/get/)
-+ [INCRBY](https://redis.io/commands/incrby/)
-+ [MGET](https://redis.io/commands/mget/)
-+ [MSET](https://redis.io/commands/mset/)
-+ [SETNX](https://redis.io/commands/setnx/)
-+ [SET](https://redis.io/commands/set/)
++ [DECRBY](https://redis.io/commands/decrby)
++ [DEL](https://redis.io/commands/del)
++ [GET](https://redis.io/commands/get)
++ [INCRBY](https://redis.io/commands/incrby)
++ [MGET](https://redis.io/commands/mget)
++ [MSET](https://redis.io/commands/mset)
++ [SETNX](https://redis.io/commands/setnx)
++ [SET](https://redis.io/commands/set)
 
 #### Set
 
-+ [SADD](https://redis.io/commands/sadd/)
-+ [SMEMBERS](https://redis.io/commands/smembers/)
-+ [SREM](https://redis.io/commands/srem/)
++ [SADD](https://redis.io/commands/sadd)
++ [SMEMBERS](https://redis.io/commands/smembers)
++ [SREM](https://redis.io/commands/srem)
 
 #### Sorted Set
 
-+ [ZADD](https://redis.io/commands/zadd/)
-+ [ZRANGEBYSCORE](https://redis.io/commands/zrangebyscore/)
-+ [ZRANGE](https://redis.io/commands/zrange/)
-+ [ZREM](https://redis.io/commands/zrem/)
-+ [ZSCORE](https://redis.io/commands/zscore/)
++ [ZADD](https://redis.io/commands/zadd)
++ [ZRANGEBYSCORE](https://redis.io/commands/zrangebyscore)
++ [ZRANGE](https://redis.io/commands/zrange)
++ [ZREM](https://redis.io/commands/zrem)
++ [ZSCORE](https://redis.io/commands/zscore)
 
 #### Hash
 
-+ [HDEL](https://redis.io/commands/hdel/)
-+ [HEXISTS](https://redis.io/commands/hexists/)
-+ [HGETALL](https://redis.io/commands/hgetall/)
-+ [HGET](https://redis.io/commands/hget/)
-+ [HINCRBY](https://redis.io/commands/hincrby/)
-+ [HKEYS](https://redis.io/commands/hkeys/)
-+ [HSCAN](https://redis.io/commands/hscan/)
-+ [HSETNX](https://redis.io/commands/hsetnx/)
-+ [HSET](https://redis.io/commands/hset/)（需要支持设置多个 field 和 value）
++ [HDEL](https://redis.io/commands/hdel)
++ [HEXISTS](https://redis.io/commands/hexists)
++ [HGETALL](https://redis.io/commands/hgetall)
++ [HGET](https://redis.io/commands/hget)
++ [HINCRBY](https://redis.io/commands/hincrby)
++ [HKEYS](https://redis.io/commands/hkeys)
++ [HSCAN](https://redis.io/commands/hscan)
++ [HSETNX](https://redis.io/commands/hsetnx)
++ [HSET](https://redis.io/commands/hset)（需要支持设置多个 field 和 value）
 
 #### List
 
-+ [LLEN](https://redis.io/commands/llen/)
-+ [LPUSH](https://redis.io/commands/lpush/)
-+ [LRANGE](https://redis.io/commands/lrange/)
-+ [LTRIM](https://redis.io/commands/ltrim/)
-+ [RPUSHX](https://redis.io/commands/rpushx/)
-+ [RPUSH](https://redis.io/commands/rpush/)
-+ [SCAN](https://redis.io/commands/scan/)
++ [LLEN](https://redis.io/commands/llen)
++ [LPUSH](https://redis.io/commands/lpush)
++ [LRANGE](https://redis.io/commands/lrange)
++ [LTRIM](https://redis.io/commands/ltrim)
++ [RPUSHX](https://redis.io/commands/rpushx)
++ [RPUSH](https://redis.io/commands/rpush)
++ [SCAN](https://redis.io/commands/scan)
 
 #### 事务
 
-+ [EXEC](https://redis.io/commands/exec/)
-+ [MULTI](https://redis.io/commands/multi/)
-+ [WATCH](https://redis.io/commands/watch/)
-+ [UNWATCH](https://redis.io/commands/unwatch/)
++ [EXEC](https://redis.io/commands/exec)
++ [MULTI](https://redis.io/commands/multi)
++ [WATCH](https://redis.io/commands/watch)
++ [UNWATCH](https://redis.io/commands/unwatch)
 
 #### 连接管理
 
-+ [PING](https://redis.io/commands/ping/)
++ [PING](https://redis.io/commands/ping)
 
 #### 服务管理
 
-+ [CONFIG GET](https://redis.io/commands/config-get/)
-+ [CONFIG SET](https://redis.io/commands/config-set/)
-+ [DBSIZE](https://redis.io/commands/dbsize/)
-+ [FLUSHDB](https://redis.io/commands/flushdb/)（可选）
-+ [INFO](https://redis.io/commands/info/)
++ [CONFIG GET](https://redis.io/commands/config-get)
++ [CONFIG SET](https://redis.io/commands/config-set)
++ [DBSIZE](https://redis.io/commands/dbsize)
++ [FLUSHDB](https://redis.io/commands/flushdb)（可选）
++ [INFO](https://redis.io/commands/info)
 
 #### 集群管理
 
-+ [CLUSTER INFO](https://redis.io/commands/cluster-info/)
++ [CLUSTER INFO](https://redis.io/commands/cluster-info)
 
 #### 脚本（可选）
 
-+ [EVALSHA](https://redis.io/commands/evalsha/)
-+ [SCRIPT LOAD](https://redis.io/commands/script-load/)
++ [EVALSHA](https://redis.io/commands/evalsha)
++ [SCRIPT LOAD](https://redis.io/commands/script-load)

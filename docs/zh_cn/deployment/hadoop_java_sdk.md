@@ -49,9 +49,9 @@ JuiceFS 默认使用本地的「用户／UID」及「用户组／GID」映射，
 
 编译依赖以下工具：
 
-- [Go](https://golang.org/) 1.15+（中国用户建议使用 [Goproxy China 镜像加速](https://github.com/goproxy/goproxy.cn)）
+- [Go](https://golang.org) 1.15+（中国用户建议使用 [Goproxy China 镜像加速](https://github.com/goproxy/goproxy.cn)）
 - JDK 8+
-- [Maven](https://maven.apache.org/) 3.3+（中国用户建议使用[阿里云镜像加速](https://maven.aliyun.com)）
+- [Maven](https://maven.apache.org) 3.3+（中国用户建议使用[阿里云镜像加速](https://maven.aliyun.com)）
 - Git
 - make
 - GCC 5.4+
@@ -87,7 +87,7 @@ make
 
 #### Windows
 
-用于 Windows 环境的客户端需要在 Linux 或 macOS 系统上通过交叉编译的方式获得，编译依赖 [mingw-w64](https://www.mingw-w64.org/)，需要提前安装。
+用于 Windows 环境的客户端需要在 Linux 或 macOS 系统上通过交叉编译的方式获得，编译依赖 [mingw-w64](https://www.mingw-w64.org)，需要提前安装。
 
 与编译面向 Linux 和 macOS 客户端的步骤相同，比如在 Ubuntu 系统上，先安装 `mingw-w64` 包，解决依赖问题：
 

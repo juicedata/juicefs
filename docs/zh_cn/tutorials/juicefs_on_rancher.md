@@ -4,7 +4,7 @@ sidebar_position: 2
 slug: /juicefs_on_rancher
 ---
 
-简单来说，[Rancher](https://rancher.com/) 是一个企业级的 Kubernetes 集群管理工具，使用它可以非常轻松的在各种云计算平台上快速的完成 Kubernetes 集群的部署。
+简单来说，[Rancher](https://rancher.com) 是一个企业级的 Kubernetes 集群管理工具，使用它可以非常轻松的在各种云计算平台上快速的完成 Kubernetes 集群的部署。
 
 Rancher 提供了基于浏览器的管理界面，即便是 Kubernetes 经验并不丰富的用户，也能相对轻松的上手开始管理和使用。它默认预置了基于 Helm 的应用市场，可以在图形化界面下非常轻松的安装各种 Kubernetes 应用。
 

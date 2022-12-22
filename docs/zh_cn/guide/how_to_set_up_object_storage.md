@@ -430,11 +430,11 @@ juicefs format \
     myjfs
 ```
 
-访问对象存储的 API 密钥可以在 [管理控制台](https://my.vultr.com/objectstorage/) 中找到。
+访问对象存储的 API 密钥可以在 [管理控制台](https://my.vultr.com/objectstorage) 中找到。
 
 ## Cloudflare R2 {#r2}
 
-R2 是 Cloudflare 的对象存储服务，提供 S3 兼容的 API，因此用法与 Amazon S3 基本一致。请参照[文档](https://developers.cloudflare.com/r2/data-access/s3-api/tokens/)了解如何创建 Access Key 和 Secret Key。
+R2 是 Cloudflare 的对象存储服务，提供 S3 兼容的 API，因此用法与 Amazon S3 基本一致。请参照[文档](https://developers.cloudflare.com/r2/data-access/s3-api/tokens)了解如何创建 Access Key 和 Secret Key。
 
 ```shell
 juicefs format \
@@ -828,8 +828,8 @@ $ sudo docker run -d --name minio \
 
 容器创建成功以后使用以下地址访问：
 
-- **MinIO API**：[http://127.0.0.1:9000](http://127.0.0.1:9000/)，这也是 JuiceFS 访问对象存储时所使用的的 API
-- **MinIO 管理界面**：[http://127.0.0.1:9900](http://127.0.0.1:9900/)，用于管理对象存储本身，与 JuiceFS 无关
+- **MinIO API**：[http://127.0.0.1:9000](http://127.0.0.1:9000)，这也是 JuiceFS 访问对象存储时所使用的的 API
+- **MinIO 管理界面**：[http://127.0.0.1:9900](http://127.0.0.1:9900)，用于管理对象存储本身，与 JuiceFS 无关
 
 对象存储初始的 Access Key 和 Secret Key 均为 `minioadmin`。
 

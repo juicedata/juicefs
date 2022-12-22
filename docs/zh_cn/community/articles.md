@@ -16,7 +16,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [如何在 Kubernetes 集群中玩转 Fluid + JuiceFS](https://juicefs.com/zh-cn/blog/solutions/fluid-with-juicefs)，2021-12-01，吕冬冬@云知声 & 朱唯唯@Juicedata
 - [百亿级小文件存储，JuiceFS 在自动驾驶行业的最佳实践](https://juicefs.com/zh-cn/blog/user-stories/ten-billion-level-small-files-storage-juicefs-best-practice-in-the-autonomous-driving-industry)，2021-10-28，高昌健
 - [初探云原生下的 AI 分布式文件系统-JuiceFS](https://mp.weixin.qq.com/s/AiI0lVgFwycmK9Rl-6KW4w)，2021-08-18，屈骏@梯度科技
-- [如何借助 JuiceFS 为 AI 模型训练提速 7 倍](https://juicefs.com/blog/cn/posts/how-to-use-juicefs-to-speed-up-ai-model-training-by-7-times/)
+- [如何借助 JuiceFS 为 AI 模型训练提速 7 倍](https://juicefs.com/blog/cn/posts/how-to-use-juicefs-to-speed-up-ai-model-training-by-7-times)
 
 ## 大数据
 
@@ -34,12 +34,12 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [Shopee x JuiceFS：ClickHouse 冷热数据分离存储架构与实践](https://juicefs.com/zh-cn/blog/user-stories/shopee-clickhouse-with-juicefs)，2021-10-09，Teng@Shopee
 - [JuiceFS on AWS EMR](https://www.youtube.com/watch?v=PFNOcqiW4-M&t=3s), Youtube video, Pahud Dev
 - [JuiceFS 加速 Spark Shuffle](https://mp.weixin.qq.com/s/JGa2eYqM8db_OMU7SzZw8A)，2021-03-09，RespectM
-- [JuiceFS 如何帮助趣头条超大规模 HDFS 降负载](https://juicefs.com/blog/cn/posts/qutoutiao-big-data-platform-user-case/)
-- [环球易购数据平台如何做到既提速又省钱？](https://juicefs.com/blog/cn/posts/globalegrow-big-data-platform-user-case/)
-- [JuiceFS 在大搜车数据平台的实践](https://juicefs.com/blog/cn/posts/juicefs-practice-in-souche/)
-- [使用 AWS Cloudformation 在 Amazon EMR 中一分钟配置 JuiceFS](https://aws.amazon.com/cn/blogs/china/use-aws-cloudformation-to-configure-juicefs-in-amazon-emr-in-one-minute/)
-- [使用 JuiceFS 在云上优化 Kylin 4.0 的存储性能](https://juicefs.com/blog/cn/posts/optimize-kylin-on-juicefs/)
-- [ClickHouse 存算分离架构探索](https://juicefs.com/blog/cn/posts/clickhouse-disaggregated-storage-and-compute-practice/)
+- [JuiceFS 如何帮助趣头条超大规模 HDFS 降负载](https://juicefs.com/blog/cn/posts/qutoutiao-big-data-platform-user-case)
+- [环球易购数据平台如何做到既提速又省钱？](https://juicefs.com/blog/cn/posts/globalegrow-big-data-platform-user-case)
+- [JuiceFS 在大搜车数据平台的实践](https://juicefs.com/blog/cn/posts/juicefs-practice-in-souche)
+- [使用 AWS Cloudformation 在 Amazon EMR 中一分钟配置 JuiceFS](https://aws.amazon.com/cn/blogs/china/use-aws-cloudformation-to-configure-juicefs-in-amazon-emr-in-one-minute)
+- [使用 JuiceFS 在云上优化 Kylin 4.0 的存储性能](https://juicefs.com/blog/cn/posts/optimize-kylin-on-juicefs)
+- [ClickHouse 存算分离架构探索](https://juicefs.com/blog/cn/posts/clickhouse-disaggregated-storage-and-compute-practice)
 
 ## 云原生 & Kubernetes
 
@@ -53,16 +53,16 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 ## 数据共享
 
 - [基于 JuiceFS 搭建 Milvus 分布式集群](https://juicefs.com/blog/cn/posts/build-milvus-distributed-cluster-based-on-juicefs)
-- [如何解决 NAS 单点故障还顺便省了 90% 的成本？](https://juicefs.com/blog/cn/posts/modao-replace-nas-with-juicefs/)
+- [如何解决 NAS 单点故障还顺便省了 90% 的成本？](https://juicefs.com/blog/cn/posts/modao-replace-nas-with-juicefs)
 
 ## 数据备份、迁移与恢复
 
 - [突破存储数据量限制，JuiceFS 在携程海量冷数据场景下的实践](https://juicefs.com/zh-cn/blog/user-stories/xiecheng-case)，2022-08-29，妙成 & 小峰
 - [40+ 倍提升，详解 JuiceFS 元数据备份恢复性能优化方法](https://juicefs.com/zh-cn/blog/engineering/juicefs-load-and-dump-optimization)，2022-07-13，执剑
-- [利用 JuiceFS 把 MySQL 备份验证性能提升 10 倍](https://juicefs.com/blog/cn/posts/optimize-xtrabackup-prepare-by-oplog/)
-- [跨云数据搬迁利器：Juicesync](https://juicefs.com/blog/cn/posts/juicesync/)
-- [下厨房基于 JuiceFS 的 MySQL 备份实践](https://juicefs.com/blog/cn/posts/xiachufang-mysql-backup-practice-on-juicefs/)
-- [如何用 JuiceFS 归档备份 Nginx 日志](https://juicefs.com/blog/cn/posts/backup-nginx-logs-on-juicefs/)
+- [利用 JuiceFS 把 MySQL 备份验证性能提升 10 倍](https://juicefs.com/blog/cn/posts/optimize-xtrabackup-prepare-by-oplog)
+- [跨云数据搬迁利器：Juicesync](https://juicefs.com/blog/cn/posts/juicesync)
+- [下厨房基于 JuiceFS 的 MySQL 备份实践](https://juicefs.com/blog/cn/posts/xiachufang-mysql-backup-practice-on-juicefs)
+- [如何用 JuiceFS 归档备份 Nginx 日志](https://juicefs.com/blog/cn/posts/backup-nginx-logs-on-juicefs)
 
 ## 教程，使用指南，评测等
 

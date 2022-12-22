@@ -1,6 +1,7 @@
 {
   "customRules": [
-    "markdownlint-rule-enhanced-proper-names/src/enhanced-proper-names.js"
+    "markdownlint-rule-enhanced-proper-names/src/enhanced-proper-names.js",
+    "markdownlint-rule-no-trailing-slash-in-links/src/no-trailing-slash-in-links.js"
   ],
   "config": {
     "default": true,
@@ -21,9 +22,12 @@
         "Badge",
         "TabItem",
         "Tabs",
+        "a",
         "br",
         "div",
+        "img",
         "kbd",
+        "p",
         "span",
         "sup"
       ]
@@ -38,6 +42,7 @@
       "style": "backtick"
     },
     "link-fragments": false,
+    "no-trailing-slash-in-links": true,
     "enhanced-proper-names": {
       "code_blocks": false,
       "html_elements": false,
@@ -141,9 +146,11 @@
         "SDK",
         "SFTP",
         "SID",
+        "SMB",
         "SQL",
         "SQLite",
         "SSH",
+        "Samba",
         "Scala",
         "Spark",
         "StarRocks",
@@ -155,11 +162,13 @@
         "Unix",
         "VFS",
         "WebDAV",
+        "WinFsp",
         "Windows",
         "YAML",
         "YARN",
         "Zstandard",
         "etcd",
+        "macFUSE",
         "macOS"
       ]
     }

@@ -58,7 +58,7 @@ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 
 ## 2. Docker Volume Plugin（卷插件） {#docker-volume-plugin}
 
-JuiceFS 面向 Docker 环境提供了 [volume plugin](https://docs.docker.com/engine/extend/)（卷插件），可以像本地磁盘一样在 JuiceFS 上创建存储卷。
+JuiceFS 面向 Docker 环境提供了 [volume plugin](https://docs.docker.com/engine/extend)（卷插件），可以像本地磁盘一样在 JuiceFS 上创建存储卷。
 
 ### 解决依赖
 

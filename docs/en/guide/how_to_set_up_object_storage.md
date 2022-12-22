@@ -430,11 +430,11 @@ juicefs format \
     myjfs
 ```
 
-Please find the access and secret keys for object storage [in the customer portal](https://my.vultr.com/objectstorage/).
+Please find the access and secret keys for object storage [in the customer portal](https://my.vultr.com/objectstorage).
 
 ## Cloudflare R2 {#r2}
 
-R2 is Cloudflare's object storage service and provides an S3-compatible API, so usage is the same as Amazon S3. Please refer to [Documentation](https://developers.cloudflare.com/r2/data-access/s3-api/tokens/) to learn how to create Access Key and Secret Key.
+R2 is Cloudflare's object storage service and provides an S3-compatible API, so usage is the same as Amazon S3. Please refer to [Documentation](https://developers.cloudflare.com/r2/data-access/s3-api/tokens) to learn how to create Access Key and Secret Key.
 
 ```shell
 juicefs format \
@@ -828,8 +828,8 @@ sudo docker run -d --name minio \
 
 After container is up and running, you can access:
 
-- **MinIO API**: [http://127.0.0.1:9000](http://127.0.0.1:9000/), this is the object storage service address used by JuiceFS
-- **MinIO UI**: [http://127.0.0.1:9900](http://127.0.0.1:9900/), this is used to manage the object storage itself, not related to JuiceFS
+- **MinIO API**: [http://127.0.0.1:9000](http://127.0.0.1:9000), this is the object storage service address used by JuiceFS
+- **MinIO UI**: [http://127.0.0.1:9900](http://127.0.0.1:9900), this is used to manage the object storage itself, not related to JuiceFS
 
 The initial Access Key and Secret Key of the object storage are both `minioadmin`.
 

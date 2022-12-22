@@ -4,7 +4,7 @@ sidebar_position: 3
 slug: /juicefs_on_kubesphere
 ---
 
-[KubeSphere](https://kubesphere.com.cn/) is an application-centric multi-tenant container platform built on Kubernetes. It provides full-stack IT automated operation and maintenance capabilities and simplifies the DevOps workflow of the enterprise.
+[KubeSphere](https://kubesphere.com.cn) is an application-centric multi-tenant container platform built on Kubernetes. It provides full-stack IT automated operation and maintenance capabilities and simplifies the DevOps workflow of the enterprise.
 
 KubeSphere provides a friendly wizard-style operation interface for operation and maintenance, even users who are not experienced in Kubernetes can start management and use relatively easily. It provides a Helm-based application market that can easily install various Kubernetes applications under a graphical interface.
 
@@ -14,11 +14,11 @@ This article will introduce how to deploy JuiceFS CSI Driver in KubeSphere with 
 
 1. **Install KubeSphere**
 
-   There are two ways to install KubeSphere. One is installing in Linux, you can refer to the document: [All-in-One Installation of Kubernetes and KubeSphere on Linux](https://kubesphere.com.cn/en/docs/quick-start/all-in-one-on-linux/) , One is installing in Kubernetes, you can refer to the document: [Minimal KubeSphere on Kubernetes](https://kubesphere.com.cn/en/docs/quick-start/minimal-kubesphere-on-k8s/)
+   There are two ways to install KubeSphere. One is installing in Linux, you can refer to the document: [All-in-One Installation of Kubernetes and KubeSphere on Linux](https://kubesphere.com.cn/en/docs/quick-start/all-in-one-on-linux) , One is installing in Kubernetes, you can refer to the document: [Minimal KubeSphere on Kubernetes](https://kubesphere.com.cn/en/docs/quick-start/minimal-kubesphere-on-k8s)
 
 2. **Enable app store in KubeSphere**
 
-   You can refer to the documentation for enabling the app store in KubeSphere: [KubeSphere App Store](https://kubesphere.com.cn/en/docs/pluggable-components/app-store/)
+   You can refer to the documentation for enabling the app store in KubeSphere: [KubeSphere App Store](https://kubesphere.com.cn/en/docs/pluggable-components/app-store)
 
 ## Install JuiceFS CSI Driver
 

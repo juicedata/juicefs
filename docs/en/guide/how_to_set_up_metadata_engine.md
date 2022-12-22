@@ -117,7 +117,7 @@ If you maintain the Redis database on your own, it is recommended to read [Redis
 
 ## KeyDB
 
-[KeyDB](https://keydb.dev/) is an open source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis, and also supports [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication), i.e., the Active Active feature.
+[KeyDB](https://keydb.dev) is an open source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis, and also supports [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication), i.e., the Active Active feature.
 
 :::note
 Same as Redis, the Active Replication is asychronous, which may cause consistency issues. So use with caution!
@@ -127,9 +127,9 @@ When being used as metadata storage engine for Juice, KeyDB is used exactly in t
 
 ## PostgreSQL
 
-[PostgreSQL](https://www.postgresql.org/) is a powerful open source relational database with a perfect ecosystem and rich application scenarios, and it also works as the metadata engine of JuiceFS.
+[PostgreSQL](https://www.postgresql.org) is a powerful open source relational database with a perfect ecosystem and rich application scenarios, and it also works as the metadata engine of JuiceFS.
 
-Many cloud computing platforms offer hosted PostgreSQL database services, or you can deploy one yourself by following the [Usage Wizard](https://www.postgresqltutorial.com/postgresql-getting-started/).
+Many cloud computing platforms offer hosted PostgreSQL database services, or you can deploy one yourself by following the [Usage Wizard](https://www.postgresqltutorial.com/postgresql-getting-started).
 
 Other PostgreSQL-compatible databases (such as CockroachDB) can also be used as metadata engine.
 
@@ -213,7 +213,7 @@ Additional parameters can be appended to the metadata URL. More details can be s
 
 ## MySQL
 
-[MySQL](https://www.mysql.com/) is one of the most popular open source relational databases, and is often preferred for web applications.
+[MySQL](https://www.mysql.com) is one of the most popular open source relational databases, and is often preferred for web applications.
 
 ### Create a file system
 

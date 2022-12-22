@@ -5,15 +5,16 @@
   "license": "Apache",
   "repository": "github:juicedata/juicefs",
   "scripts": {
-    "autocorrect-lint": "autocorrect --lint ./docs/",
-    "autocorrect-lint-fix": "autocorrect --fix ./docs/",
-    "check-broken-link": "./node_modules/.bin/remark --quiet --frail ./docs/",
-    "markdown-lint": "./node_modules/.bin/markdownlint-cli2 './docs/**/*.md'",
-    "markdown-lint-fix": "./node_modules/.bin/markdownlint-cli2-fix './docs/**/*.md'"
+    "autocorrect-lint": "autocorrect --lint ./docs/ README*.md",
+    "autocorrect-lint-fix": "autocorrect --fix ./docs/ README*.md",
+    "check-broken-link": "./node_modules/.bin/remark --quiet --frail ./docs/ README*.md",
+    "markdown-lint": "./node_modules/.bin/markdownlint-cli2 './docs/**/*.md' README*.md",
+    "markdown-lint-fix": "./node_modules/.bin/markdownlint-cli2-fix './docs/**/*.md' README*.md"
   },
   "dependencies": {
     "markdownlint-cli2": "^0.5.1",
     "markdownlint-rule-enhanced-proper-names": "^0.0.1",
+    "markdownlint-rule-no-trailing-slash-in-links": "^0.0.1",
     "remark-cli": "^11.0.0",
     "remark-validate-links": "^12.1.0",
     "remark-validate-links-heading-id": "^0.0.3"
