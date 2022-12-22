@@ -188,6 +188,7 @@ If you want to use a Redis compatible product as the metadata engine, you need t
 + [DECRBY](https://redis.io/commands/decrby/)
 + [DEL](https://redis.io/commands/del/)
 + [GET](https://redis.io/commands/get/)
++ [INCR](https://redis.io/commands/incr/)
 + [INCRBY](https://redis.io/commands/incrby/)
 + [MGET](https://redis.io/commands/mget/)
 + [MSET](https://redis.io/commands/mset/)
