@@ -37,6 +37,17 @@ jobs:
         with:
           fetch-depth: 1
 
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.18.x'
+          cache: true
+
+      - name: Build 
+        run: | 
+          sudo apt-get update && sudo apt-get install -y musl-tools upx-ucl
+          export STATIC=1
+          make juicefs
+
       - name: Creating kind cluster
         uses: helm/kind-action@v1.5.0
 
@@ -62,9 +73,9 @@ jobs:
 
       - name: Build And Load CSI Docker Image
         run: |
+          docker build -f .github/scripts/chaos/juicefs.Dockerfile -t juicedata/mount:ci .
           helm repo add juicefs https://juicedata.github.io/charts/
           helm repo update
-          docker build -f .github/scripts/chaos/juicefs.Dockerfile -t juicedata/mount:ci .
           kind load docker-image juicedata/mount:ci --name chart-testing
 
       - name: Install JuiceFS CSI Driver
