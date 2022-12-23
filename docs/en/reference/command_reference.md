@@ -325,6 +325,9 @@ delayed duration for uploading objects ("s", "m", "h") (default: 0s)
 `--no-bgjob`<br />
 disable background jobs (clean-up, backup, etc.) (default: false)
 
+`--internal-inodes-prefix value`<br />
+prefix for internal inodes (virtual files - .accesslog, .config, etc.) (default: "")
+
 #### Examples
 
 ```bash
