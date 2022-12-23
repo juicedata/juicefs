@@ -49,16 +49,23 @@ jobs:
           helm version
           kubectl version
 
+      # - name: Build And Load CSI Docker Image
+      #   run: |
+      #     echo GITHUB_REF is $GITHUB_REF
+      #     echo GITHUB_SHA is $GITHUB_SHA
+      #     helm repo add juicefs https://juicedata.github.io/charts/
+      #     helm repo update
+      #     APP_VERSION=$(helm search repo juicefs/juicefs-csi-driver --versions | grep juicefs | head -1 | awk -F" " '{print $3}')
+      #     echo APP_VERSION is $APP_VERSION
+      #     docker build --build-arg GITHUB_REF=$GITHUB_REF --build-arg GITHUB_SHA=$GITHUB_SHA -f .github/scripts/chaos/juicefs-csi-driver.Dockerfile -t juicedata/juicefs-csi-driver:v$APP_VERSION .
+      #     kind load docker-image juicedata/juicefs-csi-driver:v$APP_VERSION --name chart-testing
+
       - name: Build And Load CSI Docker Image
         run: |
-          echo GITHUB_REF is $GITHUB_REF
-          echo GITHUB_SHA is $GITHUB_SHA
           helm repo add juicefs https://juicedata.github.io/charts/
           helm repo update
-          APP_VERSION=$(helm search repo juicefs/juicefs-csi-driver --versions | grep juicefs | head -1 | awk -F" " '{print $3}')
-          echo APP_VERSION is $APP_VERSION
-          docker build --build-arg GITHUB_REF=$GITHUB_REF --build-arg GITHUB_SHA=$GITHUB_SHA -f .github/scripts/chaos/juicefs-csi-driver.Dockerfile -t juicedata/juicefs-csi-driver:v$APP_VERSION .
-          kind load docker-image juicedata/juicefs-csi-driver:v$APP_VERSION --name chart-testing
+          docker build -f .github/scripts/chaos/juicefs.Dockerfile -t juicedata/mount:ci .
+          kind load docker-image juicedata/mount:ci --name chart-testing
 
       - name: Install JuiceFS CSI Driver
         run: |

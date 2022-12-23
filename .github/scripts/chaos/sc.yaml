@@ -11,6 +11,7 @@ parameters:
   juicefs/mount-memory-limit: 1Gi
   juicefs/mount-cpu-request: 100m
   juicefs/mount-memory-request: 500Mi
+  juicefs/mount-image: juicedata/mount:ci
 #mountOptions:
 #  - cache-dir=/var/foo:/var/foo1:/var/foo2
 provisioner: csi.juicefs.com
