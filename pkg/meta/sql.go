@@ -1335,7 +1335,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	}, parent)
 	if err == nil && trash == 0 {
 		if n.Type == TypeFile && n.Nlink == 0 {
-			m.fileDeleted(opened, n.Inode, n.Length)
+			m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1697,7 +1697,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}, parentSrc)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
-			m.fileDeleted(opened, dino, dn.Length)
+			m.fileDeleted(opened, false, dino, dn.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1933,7 +1933,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	})
 	if err == nil {
 		m.updateStats(newSpace, -1)
-		m.tryDeleteFileData(inode, n.Length)
+		m.tryDeleteFileData(inode, n.Length, false)
 	}
 	return err
 }
