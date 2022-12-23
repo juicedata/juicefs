@@ -1267,26 +1267,30 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 	return 0
 }
 
-func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
+func (m *baseMeta) fileDeleted(opened, force bool, inode Ino, length uint64) {
 	if opened {
 		m.Lock()
 		m.removedFiles[inode] = true
 		m.Unlock()
 	} else {
-		m.tryDeleteFileData(inode, length)
+		m.tryDeleteFileData(inode, length, force)
 	}
 }
 
-func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64) {
-	select {
-	case m.maxDeleting <- struct{}{}:
-		go func() {
-			m.en.doDeleteFileData(inode, length)
-			<-m.maxDeleting
-		}()
-	default:
-		// will be cleanup later
+func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64, force bool) {
+	if force {
+		m.maxDeleting <- struct{}{}
+	} else {
+		select {
+		case m.maxDeleting <- struct{}{}:
+		default:
+			return // will be cleanup later
+		}
 	}
+	go func() {
+		m.en.doDeleteFileData(inode, length)
+		<-m.maxDeleting
+	}()
 }
 
 func (m *baseMeta) deleteSlice(id uint64, size uint32) {
