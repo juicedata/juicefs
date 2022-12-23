@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dynamic-ce
+  labels:
+    juicefs-app-type: dynamic-ce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      juicefs-app-type: dynamic-ce
+  template:
+    metadata:
+      labels:
+        juicefs-app-type: dynamic-ce
+    spec:
+      containers:
+      - name: vdbench
+        image: zwwhdlsdocker/vdbench:latest
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - mountPath: /data
+            name: data
+          - mountPath: /vdbench/config
+            name: vdbench-cfg
+          - mountPath: /vdbench/output
+            name: output
+        command: ["sh", "-c", "./vdbench -f /vdbench/config/vdbench.vdb -v"]
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: dynamic-ce
+      - name: output
+        hostPath:
+          path: /root/vdbench/output
+      - name: vdbench-cfg
+        configMap:
+          name: dynamic-ce
+          items:
+          - key: "vdbench.vdb"
+            path: "vdbench.vdb"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dynamic-ce
+data:
+  vdbench.vdb: |
+    messagescan=no
+    fsd=fsd1,anchor=/data,depth=1,width=1,files=20000,size=4k,openflags=o_direct
+    fwd=fwd1,fsd=fsd1,operation=write,xfersize=4k,fileio=random,fileselect=random,threads=1
+    rd=rd1,fwd=fwd1,fwdrate=max,format=yes,elapsed=60,interval=2
