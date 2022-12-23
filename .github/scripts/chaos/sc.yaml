@@ -1,0 +1,34 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: dynamic-ce
+parameters:
+  csi.storage.k8s.io/node-publish-secret-name: dynamic-ce
+  csi.storage.k8s.io/node-publish-secret-namespace: kube-system
+  csi.storage.k8s.io/provisioner-secret-name: dynamic-ce
+  csi.storage.k8s.io/provisioner-secret-namespace: kube-system
+  juicefs/mount-cpu-limit: 5000m
+  juicefs/mount-memory-limit: 1Gi
+  juicefs/mount-cpu-request: 100m
+  juicefs/mount-memory-request: 500Mi
+  juicefs/mount-image: juicedata/mount:ci
+#mountOptions:
+#  - cache-dir=/var/foo:/var/foo1:/var/foo2
+provisioner: csi.juicefs.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+---
+apiVersion: v1
+stringData:
+  access-key: minioadmin
+  bucket: http://minio.kube-system:9000/minio/dynamic-ce
+  name: dynamic-ce
+  metaurl: redis://redis.kube-system:6379/0
+  secret-key: minioadmin
+  storage: minio
+  format-options: trash-days=0,block-size=4096
+kind: Secret
+metadata:
+  name: dynamic-ce
+  namespace: kube-system
+type: Opaque
