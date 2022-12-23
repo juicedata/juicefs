@@ -37,12 +37,13 @@ import (
 
 // nolint:errcheck
 
-func createTestVFS() (*VFS, object.ObjectStorage) {
+func createTestVFS(intPrefix string) (*VFS, object.ObjectStorage) {
 	mp := "/jfs"
 	metaConf := &meta.Config{
 		Retries:    10,
 		Strict:     true,
 		MountPoint: mp,
+		IntPrefix:  intPrefix,
 	}
 	m := meta.NewClient("memkv://", metaConf)
 	format := &meta.Format{
@@ -79,7 +80,7 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 }
 
 func TestVFSBasic(t *testing.T) {
-	v, _ := createTestVFS()
+	v, _ := createTestVFS("")
 	ctx := NewLogContext(meta.NewContext(10, 1, []uint32{2}))
 
 	if st, e := v.StatFS(ctx, 1); e != 0 {
@@ -188,7 +189,7 @@ func TestVFSBasic(t *testing.T) {
 }
 
 func TestVFSIO(t *testing.T) {
-	v, _ := createTestVFS()
+	v, _ := createTestVFS("")
 	ctx := NewLogContext(meta.Background)
 	fe, fh, e := v.Create(ctx, 1, "file", 0755, 0, syscall.O_RDWR)
 	if e != 0 {
@@ -353,7 +354,7 @@ func TestVFSIO(t *testing.T) {
 }
 
 func TestVFSXattrs(t *testing.T) {
-	v, _ := createTestVFS()
+	v, _ := createTestVFS("")
 	ctx := NewLogContext(meta.Background)
 	fe, e := v.Mkdir(ctx, 1, "xattrs", 0755, 0)
 	if e != 0 {
@@ -495,7 +496,7 @@ func TestSetattrStr(t *testing.T) {
 }
 
 func TestVFSLocks(t *testing.T) {
-	v, _ := createTestVFS()
+	v, _ := createTestVFS("")
 	ctx := NewLogContext(meta.Background)
 	fe, fh, e := v.Create(ctx, 1, "flock", 0644, 0, syscall.O_RDWR)
 	if e != 0 {
@@ -596,232 +597,244 @@ func TestVFSLocks(t *testing.T) {
 }
 
 func TestInternalFile(t *testing.T) {
-	v, _ := createTestVFS()
-	ctx := NewLogContext(meta.Background)
-	// list internal files
-	fh, _ := v.Opendir(ctx, 1)
-	entries, _, e := v.Readdir(ctx, 1, 1024, 0, fh, true)
-	if e != 0 {
-		t.Fatalf("readdir 1: %s", e)
-	}
-	internalFiles := make(map[string]bool)
-	for _, e := range entries {
-		if IsSpecialName(string(e.Name)) && e.Attr.Typ == meta.TypeFile {
-			internalFiles[string(e.Name)] = true
-		}
-	}
-	if len(internalFiles) != 3 {
-		t.Fatalf("there should be 3 internal files but got %d", len(internalFiles))
-	}
-	v.Releasedir(ctx, 1, fh)
-
-	// .config
-	ctx2 := NewLogContext(meta.NewContext(10, 111, []uint32{222}))
-	fe, e := v.Lookup(ctx2, 1, ".config")
-	if e != 0 {
-		t.Fatalf("lookup .config: %s", e)
-	}
-	if e := v.Access(ctx2, fe.Inode, unix.R_OK); e != syscall.EACCES { // other user can't access .config
-		t.Fatalf("access .config: %s", e)
-	}
-	if _, e := v.GetAttr(ctx, fe.Inode, 0); e != 0 {
-		t.Fatalf("getattr .config: %s", e)
-	}
-	// ignore setattr on internal files
-	if fe2, e := v.SetAttr(ctx, fe.Inode, meta.SetAttrUID, 0, 0, ctx2.Uid(), 0, 0, 0, 0, 0, 0); e != 0 || fe2.Attr.Uid != fe.Attr.Uid {
-		t.Fatalf("can't setattr on internal files")
-	}
-	if e = v.Unlink(ctx, 1, ".config"); e != syscall.EPERM {
-		t.Fatalf("should not unlink internal file")
-	}
-	if _, _, e = v.Open(ctx, fe.Inode, syscall.O_WRONLY); e != syscall.EACCES {
-		t.Fatalf("write .config: %s", e)
-	}
-	_, fh, e = v.Open(ctx, fe.Inode, syscall.O_RDONLY)
-	if e != 0 {
-		t.Fatalf("open .config: %s", e)
-	}
-	buf := make([]byte, 10240)
-	if _, e := v.Read(ctx, fe.Inode, buf, 0, 0); e != syscall.EBADF {
-		t.Fatalf("read .config: %s", e)
-	}
-	if n, e := v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
-		t.Fatalf("read .config: %s", e)
-	} else if !strings.Contains(string(buf[:n]), v.Conf.Format.UUID) {
-		t.Fatalf("invalid config: %q", string(buf[:n]))
+	var tests = []struct {
+		prefix                            string
+		config, stats, accesslog, control string
+	}{
+		{"", ".config", ".stats", ".accesslog", ".control"},
+		{".jfs", ".jfs.config", ".jfs.stats", ".jfs.accesslog", ".jfs.control"},
 	}
 
-	// .stats
-	fe, e = v.Lookup(ctx, 1, ".stats")
-	if e != 0 {
-		t.Fatalf("lookup .stats: %s", e)
-	}
-	if e := v.Access(ctx, fe.Inode, unix.W_OK); e != 0 { // root can do everything
-		t.Fatalf("access .stats: %s", e)
-	}
-	fe, fh, e = v.Open(ctx, fe.Inode, syscall.O_RDONLY)
-	if e != 0 {
-		t.Fatalf("open .stats: %s", e)
-	}
-	defer v.Release(ctx, fe.Inode, fh)
-	defer v.Flush(ctx, fe.Inode, fh, 0)
-	buf = make([]byte, 128<<10)
-	n, e := v.Read(ctx, fe.Inode, buf[:4<<10], 0, fh)
-	if e != 0 {
-		t.Fatalf("read .stats: %s", e)
-	}
-	if n == 4<<10 {
-		if n2, e := v.Read(ctx, fe.Inode, buf[n:], uint64(n), fh); e != 0 {
-			t.Fatalf("read .stats 2: %s", e)
-		} else {
-			n += n2
-		}
-	}
-	if !strings.Contains(string(buf[:n]), "fuse_open_handlers") {
-		t.Fatalf(".stats should contains `memory`, but got %s", string(buf[:n]))
-	}
-	if e = v.Truncate(ctx, fe.Inode, 0, 1, &meta.Attr{}); e != syscall.EPERM {
-		t.Fatalf("truncate .config: %s", e)
-	}
-
-	// accesslog
-	fe, e = v.Lookup(ctx, 1, ".accesslog")
-	if e != 0 {
-		t.Fatalf("lookup .accesslog: %s", e)
-	}
-	fe, fh, e = v.Open(ctx, fe.Inode, syscall.O_RDONLY)
-	if e != 0 {
-		t.Fatalf("open .accesslog: %s", e)
-	}
-	if n, e = v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
-		t.Fatalf("read .accesslog: %s", e)
-	} else if !strings.Contains(string(buf[:n]), "open (9223372032559808513)") {
-		t.Fatalf("invalid access log: %q", string(buf[:n]))
-	}
-	_ = v.Flush(ctx, fe.Inode, fh, 0)
-	v.Release(ctx, fe.Inode, fh)
-
-	// control messages
-	fe, e = v.Lookup(ctx, 1, ".control")
-	if e != 0 {
-		t.Fatalf("lookup .control: %s", e)
-	}
-	fe, fh, e = v.Open(ctx, fe.Inode, syscall.O_RDWR)
-	if e != 0 {
-		t.Fatalf("open .stats: %s", e)
-	}
-	readControl := func(resp []byte, off *uint64) (int, syscall.Errno) {
-		for {
-			if n, errno := v.Read(ctx, fe.Inode, resp, *off, fh); n == 0 {
-				time.Sleep(time.Millisecond * 300)
-			} else if n%17 == 0 {
-				*off += uint64(n)
-				continue
-			} else if n%17 == 1 {
-				*off += uint64(n / 17 * 17)
-				resp[0] = resp[n-1]
-				return 1, errno
-			} else {
-				return n, errno
+	for _, test := range tests {
+		t.Run(test.prefix, func(t *testing.T) {
+			v, _ := createTestVFS(test.prefix)
+			ctx := NewLogContext(meta.Background)
+			// list internal files
+			fh, _ := v.Opendir(ctx, 1)
+			entries, _, e := v.Readdir(ctx, 1, 1024, 0, fh, true)
+			if e != 0 {
+				t.Fatalf("readdir 1: %s", e)
 			}
-		}
-	}
+			internalFiles := make(map[string]bool)
+			for _, e := range entries {
+				if IsSpecialName(string(e.Name)) && e.Attr.Typ == meta.TypeFile {
+					internalFiles[string(e.Name)] = true
+				}
+			}
+			if len(internalFiles) != 3 {
+				t.Fatalf("there should be 3 internal files but got %d", len(internalFiles))
+			}
+			v.Releasedir(ctx, 1, fh)
 
-	// rmr
-	buf = make([]byte, 4+4+8+1+4)
-	w := utils.FromBuffer(buf)
-	w.Put32(meta.Rmr)
-	w.Put32(13)
-	w.Put64(1)
-	w.Put8(4)
-	w.Put([]byte("file"))
-	if e := v.Write(ctx, fe.Inode, w.Bytes(), 0, fh); e != 0 {
-		t.Fatalf("write info: %s", e)
-	}
-	var off uint64 = uint64(len(buf))
-	resp := make([]byte, 1024*10)
-	if n, e := readControl(resp, &off); e != 0 || n != 1 {
-		t.Fatalf("read result: %s %d", e, n)
-	} else if resp[0] != byte(syscall.ENOENT) {
-		t.Fatalf("rmr result: %s", string(buf[:n]))
-	} else {
-		off += uint64(n)
-	}
-	// legacy info
-	buf = make([]byte, 4+4+8)
-	w = utils.FromBuffer(buf)
-	w.Put32(meta.LegacyInfo)
-	w.Put32(8)
-	w.Put64(1)
-	if e := v.Write(ctx, fe.Inode, w.Bytes(), off, fh); e != 0 {
-		t.Fatalf("write legacy info: %s", e)
-	}
-	off += uint64(len(buf))
-	buf = make([]byte, 1024*10)
-	if n, e = readControl(buf, &off); e != 0 {
-		t.Fatalf("read result: %s %d", e, n)
-	} else if !strings.Contains(string(buf[:n]), "dirs:") {
-		t.Fatalf("legacy info result: %s", string(buf[:n]))
-	} else {
-		off += uint64(n)
-	}
-	// info v2
-	buf = make([]byte, 4+4+8)
-	w = utils.FromBuffer(buf)
-	w.Put32(meta.InfoV2)
-	w.Put32(8)
-	w.Put64(1)
-	if e := v.Write(ctx, fe.Inode, w.Bytes(), off, fh); e != 0 {
-		t.Fatalf("write info v2: %s", e)
-	}
-	off += uint64(len(buf))
-	buf = make([]byte, 1024*10)
-	var infoResp InfoResponse
-	if n, e = readControl(buf, &off); e != 0 {
-		t.Fatalf("read result: %s %d", e, n)
-	} else if infoResp.Decode(bytes.NewBuffer(buf[:n])) != nil {
-		t.Fatalf("info v2 result: %s", string(buf[:n]))
-	} else {
-		off += uint64(n)
-	}
-	// fill
-	buf = make([]byte, 4+4+8+1+1+2+1)
-	w = utils.FromBuffer(buf)
-	w.Put32(meta.FillCache)
-	w.Put32(13)
-	w.Put64(1)
-	w.Put8(1)
-	w.Put([]byte("/"))
-	w.Put16(2)
-	w.Put8(0)
-	if e := v.Write(ctx, fe.Inode, w.Bytes()[:10], 0, fh); e != 0 {
-		t.Fatalf("write fill 1: %s", e)
-	}
-	if e := v.Write(ctx, fe.Inode, w.Bytes()[10:], 0, fh); e != 0 {
-		t.Fatalf("write fill 2: %s", e)
-	}
-	off += uint64(len(buf))
-	resp = make([]byte, 1024*10)
-	if n, e = readControl(resp, &off); e != 0 || n != 1 {
-		t.Fatalf("read result: %s %d", e, n)
-	} else if resp[0] != 0 {
-		t.Fatalf("fill result: %s", string(buf[:n]))
-	}
-	off += uint64(n)
+			// .config
+			ctx2 := NewLogContext(meta.NewContext(10, 111, []uint32{222}))
+			fe, e := v.Lookup(ctx2, 1, test.config)
+			if e != 0 {
+				t.Fatalf("lookup .config: %s", e)
+			}
+			if e := v.Access(ctx2, fe.Inode, unix.R_OK); e != syscall.EACCES { // other user can't access .config
+				t.Fatalf("access .config: %s", e)
+			}
+			if _, e := v.GetAttr(ctx, fe.Inode, 0); e != 0 {
+				t.Fatalf("getattr .config: %s", e)
+			}
+			// ignore setattr on internal files
+			if fe2, e := v.SetAttr(ctx, fe.Inode, meta.SetAttrUID, 0, 0, ctx2.Uid(), 0, 0, 0, 0, 0, 0); e != 0 || fe2.Attr.Uid != fe.Attr.Uid {
+				t.Fatalf("can't setattr on internal files")
+			}
+			if e = v.Unlink(ctx, 1, test.config); e != syscall.EPERM {
+				t.Fatalf("should not unlink internal file")
+			}
+			if _, _, e = v.Open(ctx, fe.Inode, syscall.O_WRONLY); e != syscall.EACCES {
+				t.Fatalf("write .config: %s", e)
+			}
+			_, fh, e = v.Open(ctx, fe.Inode, syscall.O_RDONLY)
+			if e != 0 {
+				t.Fatalf("open .config: %s", e)
+			}
+			buf := make([]byte, 10240)
+			if _, e := v.Read(ctx, fe.Inode, buf, 0, 0); e != syscall.EBADF {
+				t.Fatalf("read .config: %s", e)
+			}
+			if n, e := v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
+				t.Fatalf("read .config: %s", e)
+			} else if !strings.Contains(string(buf[:n]), v.Conf.Format.UUID) {
+				t.Fatalf("invalid config: %q", string(buf[:n]))
+			}
 
-	// invalid msg
-	buf = make([]byte, 4+4+2)
-	w = utils.FromBuffer(buf)
-	w.Put32(meta.Rmr)
-	w.Put32(0)
-	if e := v.Write(ctx, fe.Inode, buf, off, fh); e != 0 {
-		t.Fatalf("write info: %s", e)
-	}
-	off += uint64(len(buf))
-	resp = make([]byte, 1024)
-	if n, e := v.Read(ctx, fe.Inode, resp, off, fh); e != 0 || n != 1 {
-		t.Fatalf("read result: %s %d", e, n)
-	} else if resp[0] != uint8(syscall.EIO) {
-		t.Fatalf("result: %s", string(resp[:n]))
+			// .stats
+			fe, e = v.Lookup(ctx, 1, test.stats)
+			if e != 0 {
+				t.Fatalf("lookup .stats: %s", e)
+			}
+			if e := v.Access(ctx, fe.Inode, unix.W_OK); e != 0 { // root can do everything
+				t.Fatalf("access .stats: %s", e)
+			}
+			fe, fh, e = v.Open(ctx, fe.Inode, syscall.O_RDONLY)
+			if e != 0 {
+				t.Fatalf("open .stats: %s", e)
+			}
+			defer v.Release(ctx, fe.Inode, fh)
+			defer v.Flush(ctx, fe.Inode, fh, 0)
+			buf = make([]byte, 128<<10)
+			n, e := v.Read(ctx, fe.Inode, buf[:4<<10], 0, fh)
+			if e != 0 {
+				t.Fatalf("read .stats: %s", e)
+			}
+			if n == 4<<10 {
+				if n2, e := v.Read(ctx, fe.Inode, buf[n:], uint64(n), fh); e != 0 {
+					t.Fatalf("read .stats 2: %s", e)
+				} else {
+					n += n2
+				}
+			}
+			if !strings.Contains(string(buf[:n]), "fuse_open_handlers") {
+				t.Fatalf(".stats should contains `memory`, but got %s", string(buf[:n]))
+			}
+			if e = v.Truncate(ctx, fe.Inode, 0, 1, &meta.Attr{}); e != syscall.EPERM {
+				t.Fatalf("truncate .config: %s", e)
+			}
+
+			// accesslog
+			fe, e = v.Lookup(ctx, 1, test.accesslog)
+			if e != 0 {
+				t.Fatalf("lookup .accesslog: %s", e)
+			}
+			fe, fh, e = v.Open(ctx, fe.Inode, syscall.O_RDONLY)
+			if e != 0 {
+				t.Fatalf("open .accesslog: %s", e)
+			}
+			if n, e = v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
+				t.Fatalf("read .accesslog: %s", e)
+			} else if !strings.Contains(string(buf[:n]), "open (9223372032559808513)") {
+				t.Fatalf("invalid access log: %q", string(buf[:n]))
+			}
+			_ = v.Flush(ctx, fe.Inode, fh, 0)
+			v.Release(ctx, fe.Inode, fh)
+
+			// control messages
+			fe, e = v.Lookup(ctx, 1, test.control)
+			if e != 0 {
+				t.Fatalf("lookup .control: %s", e)
+			}
+			fe, fh, e = v.Open(ctx, fe.Inode, syscall.O_RDWR)
+			if e != 0 {
+				t.Fatalf("open .stats: %s", e)
+			}
+			readControl := func(resp []byte, off *uint64) (int, syscall.Errno) {
+				for {
+					if n, errno := v.Read(ctx, fe.Inode, resp, *off, fh); n == 0 {
+						time.Sleep(time.Millisecond * 300)
+					} else if n%17 == 0 {
+						*off += uint64(n)
+						continue
+					} else if n%17 == 1 {
+						*off += uint64(n / 17 * 17)
+						resp[0] = resp[n-1]
+						return 1, errno
+					} else {
+						return n, errno
+					}
+				}
+			}
+
+			// rmr
+			buf = make([]byte, 4+4+8+1+4)
+			w := utils.FromBuffer(buf)
+			w.Put32(meta.Rmr)
+			w.Put32(13)
+			w.Put64(1)
+			w.Put8(4)
+			w.Put([]byte("file"))
+			if e := v.Write(ctx, fe.Inode, w.Bytes(), 0, fh); e != 0 {
+				t.Fatalf("write info: %s", e)
+			}
+			var off uint64 = uint64(len(buf))
+			resp := make([]byte, 1024*10)
+			if n, e := readControl(resp, &off); e != 0 || n != 1 {
+				t.Fatalf("read result: %s %d", e, n)
+			} else if resp[0] != byte(syscall.ENOENT) {
+				t.Fatalf("rmr result: %s", string(buf[:n]))
+			} else {
+				off += uint64(n)
+			}
+			// legacy info
+			buf = make([]byte, 4+4+8)
+			w = utils.FromBuffer(buf)
+			w.Put32(meta.LegacyInfo)
+			w.Put32(8)
+			w.Put64(1)
+			if e := v.Write(ctx, fe.Inode, w.Bytes(), off, fh); e != 0 {
+				t.Fatalf("write legacy info: %s", e)
+			}
+			off += uint64(len(buf))
+			buf = make([]byte, 1024*10)
+			if n, e = readControl(buf, &off); e != 0 {
+				t.Fatalf("read result: %s %d", e, n)
+			} else if !strings.Contains(string(buf[:n]), "dirs:") {
+				t.Fatalf("legacy info result: %s", string(buf[:n]))
+			} else {
+				off += uint64(n)
+			}
+			// info v2
+			buf = make([]byte, 4+4+8)
+			w = utils.FromBuffer(buf)
+			w.Put32(meta.InfoV2)
+			w.Put32(8)
+			w.Put64(1)
+			if e := v.Write(ctx, fe.Inode, w.Bytes(), off, fh); e != 0 {
+				t.Fatalf("write info v2: %s", e)
+			}
+			off += uint64(len(buf))
+			buf = make([]byte, 1024*10)
+			var infoResp InfoResponse
+			if n, e = readControl(buf, &off); e != 0 {
+				t.Fatalf("read result: %s %d", e, n)
+			} else if infoResp.Decode(bytes.NewBuffer(buf[:n])) != nil {
+				t.Fatalf("info v2 result: %s", string(buf[:n]))
+			} else {
+				off += uint64(n)
+			}
+			// fill
+			buf = make([]byte, 4+4+8+1+1+2+1)
+			w = utils.FromBuffer(buf)
+			w.Put32(meta.FillCache)
+			w.Put32(13)
+			w.Put64(1)
+			w.Put8(1)
+			w.Put([]byte("/"))
+			w.Put16(2)
+			w.Put8(0)
+			if e := v.Write(ctx, fe.Inode, w.Bytes()[:10], 0, fh); e != 0 {
+				t.Fatalf("write fill 1: %s", e)
+			}
+			if e := v.Write(ctx, fe.Inode, w.Bytes()[10:], 0, fh); e != 0 {
+				t.Fatalf("write fill 2: %s", e)
+			}
+			off += uint64(len(buf))
+			resp = make([]byte, 1024*10)
+			if n, e = readControl(resp, &off); e != 0 || n != 1 {
+				t.Fatalf("read result: %s %d", e, n)
+			} else if resp[0] != 0 {
+				t.Fatalf("fill result: %s", string(buf[:n]))
+			}
+			off += uint64(n)
+
+			// invalid msg
+			buf = make([]byte, 4+4+2)
+			w = utils.FromBuffer(buf)
+			w.Put32(meta.Rmr)
+			w.Put32(0)
+			if e := v.Write(ctx, fe.Inode, buf, off, fh); e != 0 {
+				t.Fatalf("write info: %s", e)
+			}
+			off += uint64(len(buf))
+			resp = make([]byte, 1024)
+			if n, e := v.Read(ctx, fe.Inode, resp, off, fh); e != 0 || n != 1 {
+				t.Fatalf("read result: %s %d", e, n)
+			} else if resp[0] != uint8(syscall.EIO) {
+				t.Fatalf("result: %s", string(resp[:n]))
+			}
+		})
 	}
 }

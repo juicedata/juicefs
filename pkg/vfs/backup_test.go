@@ -68,7 +68,7 @@ func TestRotate(t *testing.T) {
 }
 
 func TestBackup(t *testing.T) {
-	v, blob := createTestVFS()
+	v, blob := createTestVFS("")
 	go Backup(v.Meta, blob, time.Millisecond*100)
 	time.Sleep(time.Millisecond * 100)
 
