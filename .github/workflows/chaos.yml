@@ -21,7 +21,7 @@ on:
         required: false
         default: false
   schedule:
-    - cron:  '0 */2 * * *'        
+    - cron:  '0 */6 * * *'        
 
 jobs:
   chaos-test:
