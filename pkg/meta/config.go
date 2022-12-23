@@ -41,6 +41,7 @@ type Config struct {
 	Heartbeat   time.Duration
 	MountPoint  string
 	Subdir      string
+	IntPrefix   string // prefix for internal inodes (.accesslog, .config, etc.)
 }
 
 type Format struct {

@@ -200,6 +200,11 @@ func clientFlags() []cli.Flag {
 			Name:  "subdir",
 			Usage: "mount a sub-directory as root",
 		},
+		&cli.StringFlag{
+			Name:  "internal-inodes-prefix",
+			Value: "",
+			Usage: "prefix for internal inodes (.accesslog, .config, etc.)",
+		},
 	}
 }
 

@@ -953,6 +953,11 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	if conf.Meta.Subdir != "" { // don't show trash directory
 		internalNodes = internalNodes[:len(internalNodes)-1]
 	}
+	if conf.Meta.IntPrefix != "" { // add prefix to internal nodes
+		for _, n := range internalNodes {
+			n.name = conf.Meta.IntPrefix + n.name
+		}
+	}
 
 	go v.cleanupModified()
 	initVFSMetrics(v, writer, registerer)

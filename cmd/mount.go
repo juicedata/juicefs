@@ -360,6 +360,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		Heartbeat:  duration(c.String("heartbeat")),
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
+		IntPrefix:  c.String("internal-inodes-prefix"),
 	}
 	if cfg.Heartbeat < time.Second {
 		logger.Warnf("heartbeat should not be less than 1 second")
