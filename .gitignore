@@ -6,6 +6,7 @@ ltmain.sh
 .deps
 .dirstamp
 .vscode
+.devcontainer
 .idea
 fstests/secfs.test
 fstests/flock
