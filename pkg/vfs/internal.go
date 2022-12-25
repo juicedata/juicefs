@@ -71,16 +71,17 @@ func (v *VFS) releaseControlHandle(pid uint32) {
 
 type internalNode struct {
 	inode Ino
+	base  string
 	name  string
 	attr  *Attr
 }
 
 var internalNodes = []*internalNode{
-	{controlInode, ".control", &Attr{Mode: 0666}},
-	{logInode, ".accesslog", &Attr{Mode: 0400}},
-	{statsInode, ".stats", &Attr{Mode: 0444}},
-	{configInode, ".config", &Attr{Mode: 0400}},
-	{trashInode, meta.TrashName, &Attr{Mode: 0555}},
+	{controlInode, ".control", "", &Attr{Mode: 0666}},
+	{logInode, ".accesslog", "", &Attr{Mode: 0400}},
+	{statsInode, ".stats", "", &Attr{Mode: 0444}},
+	{configInode, ".config", "", &Attr{Mode: 0400}},
+	{trashInode, meta.TrashName, "", &Attr{Mode: 0555}},
 }
 
 func init() {

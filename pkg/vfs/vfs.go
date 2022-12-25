@@ -946,17 +946,17 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 		registry:   registry,
 	}
 
+	v.Conf.Meta.SanitizePrefix()
+	for _, n := range internalNodes {
+		n.name = conf.Meta.IntPrefix + n.base
+	}
+
 	n := getInternalNode(configInode)
 	v.Conf.Format.RemoveSecret()
 	data, _ := json.MarshalIndent(v.Conf, "", " ")
 	n.attr.Length = uint64(len(data))
 	if conf.Meta.Subdir != "" { // don't show trash directory
 		internalNodes = internalNodes[:len(internalNodes)-1]
-	}
-	if conf.Meta.IntPrefix != "" { // add prefix to internal nodes
-		for _, n := range internalNodes {
-			n.name = conf.Meta.IntPrefix + n.name
-		}
 	}
 
 	go v.cleanupModified()

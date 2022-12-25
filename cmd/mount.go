@@ -370,10 +370,6 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		logger.Warnf("heartbeat shouldd not be greater than 10 minutes")
 		cfg.Heartbeat = time.Minute * 10
 	}
-	if cfg.IntPrefix != "" && cfg.IntPrefix[0] != '.' { // todo: verify the prefix is alpha-numeric
-		logger.Warnf("internal-inodes-prefix should start with a dot (.)")
-		cfg.IntPrefix = "." + cfg.IntPrefix
-	}
 	return cfg
 }
 
