@@ -839,3 +839,42 @@ func TestInternalFile(t *testing.T) {
 		t.Fatalf("result: %s", string(resp[:n]))
 	}
 }
+
+func TestInternalFilePrefix(t *testing.T) {
+	prefixes := map[string]string{ // unsanitized:sanitized
+		"":       "",
+		".jfs":   ".jfs",
+		"jfs":    ".jfs",
+		"/j/f/s": ".jfs",
+	}
+	for unsanitized, sanitized := range prefixes {
+		t.Run(unsanitized, func(t *testing.T) {
+			v, _ := createTestVFS(&meta.Config{
+				Retries:    10,
+				Strict:     true,
+				MountPoint: "/jfs",
+				IntPrefix:  unsanitized,
+			})
+			ctx := NewLogContext(meta.Background)
+			// list internal files
+			fh, _ := v.Opendir(ctx, 1)
+			entries, _, e := v.Readdir(ctx, 1, 1024, 0, fh, true)
+			if e != 0 {
+				t.Fatalf("readdir 1: %s", e)
+			}
+			internalFiles := make(map[string]bool)
+			for _, e := range entries {
+				if IsSpecialName(string(e.Name)) && e.Attr.Typ == meta.TypeFile {
+					if !strings.HasPrefix(string(e.Name), sanitized) {
+						t.Fatalf("internal file %s should begin with '%s'", string(e.Name), sanitized)
+					}
+					internalFiles[string(e.Name)] = true
+				}
+			}
+			if len(internalFiles) != 3 {
+				t.Fatalf("there should be 3 internal files but got %d", len(internalFiles))
+			}
+			v.Releasedir(ctx, 1, fh)
+		})
+	}
+}
