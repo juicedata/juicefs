@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
 )
@@ -68,7 +69,11 @@ func TestRotate(t *testing.T) {
 }
 
 func TestBackup(t *testing.T) {
-	v, blob := createTestVFS("")
+	v, blob := createTestVFS(&meta.Config{
+		Retries:    10,
+		Strict:     true,
+		MountPoint: "/jfs",
+	})
 	go Backup(v.Meta, blob, time.Millisecond*100)
 	time.Sleep(time.Millisecond * 100)
 

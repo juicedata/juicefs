@@ -24,7 +24,11 @@ import (
 )
 
 func TestFill(t *testing.T) {
-	v, _ := createTestVFS("")
+	v, _ := createTestVFS(&meta.Config{
+		Retries:    10,
+		Strict:     true,
+		MountPoint: "/jfs",
+	})
 	ctx := NewLogContext(meta.Background)
 	entry, _ := v.Mkdir(ctx, 1, "test", 0777, 022)
 	fe, fh, _ := v.Create(ctx, entry.Inode, "file", 0644, 0, uint32(os.O_WRONLY))
