@@ -2,6 +2,7 @@
 title: Command Reference
 sidebar_position: 1
 slug: /command_reference
+description: This article provides descriptions, usage and examples of all commands and options included in JuiceFS.
 ---
 
 import Tabs from '@theme/Tabs';
