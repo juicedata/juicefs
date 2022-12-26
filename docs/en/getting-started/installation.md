@@ -3,6 +3,7 @@ title: Installation
 sidebar_position: 1
 slug: /installation
 pagination_prev: introduction/comparison/juicefs_vs_s3ql
+description: This article describes how to install JuiceFS on Linux, macOS and Windows, including one-click installation, compiled and containerized.
 ---
 
 JuiceFS has good cross-platform capability and supports running on all kinds of operating systems of almost all major architectures, including and not limited to Linux, macOS, Windows, etc.
