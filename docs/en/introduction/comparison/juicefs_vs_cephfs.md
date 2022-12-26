@@ -1,5 +1,6 @@
 ---
 slug: /comparison/juicefs_vs_cephfs
+description: Ceph is a unified system that provides object storage, block storage and file storage. This article compares the similarities and differences between JuiceFS and Ceph.
 ---
 
 # JuiceFS vs. CephFS
