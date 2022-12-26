@@ -2,6 +2,7 @@
 sidebar_label: Data Processing Workflow
 sidebar_position: 3
 slug: /internals/io_processing
+description: This article introduces the read and write processes of JuiceFS respectively, and the process of implementing JuiceFS read-write chunking technology.
 ---
 # An introduction to the workflow of processing read and write
 
