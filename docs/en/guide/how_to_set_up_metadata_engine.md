@@ -2,6 +2,7 @@
 title: How to Set Up Metadata Engine
 sidebar_position: 1
 slug: /databases_for_metadata
+description: JuiceFS supports Redis, TiKV, PostgreSQL, MySQL and other databases as metadata engines, and this article describes how to set up and use them.
 ---
 
 import Tabs from '@theme/Tabs';
