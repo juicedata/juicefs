@@ -2,6 +2,7 @@
 title: Architecture
 sidebar_position: 2
 slug: /architecture
+description: This article introduces the technical architecture of JuiceFS and the resulting technical advantages, as well as the file storage principles of JuiceFS.
 ---
 
 The JuiceFS file system consists of three parts:
