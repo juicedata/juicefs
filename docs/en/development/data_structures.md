@@ -2,6 +2,7 @@
 title: Internals
 sidebar_position: 4
 slug: /internals
+description: This article introduces the main implementation details of JuiceFS, which is used as a reference for developers to understand and contribute open source code.
 ---
 
 ## 1. Introduction

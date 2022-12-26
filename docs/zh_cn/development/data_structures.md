@@ -2,6 +2,7 @@
 title: 内部实现
 sidebar_position: 3
 slug: /internals
+description: 本文介绍 JuiceFS 的主要实现细节，用来为开发者了解和贡献开源代码作参考。其中内容对应的 JuiceFS 代码版本为 v1.0.0，元数据版本为 V1。
 ---
 
 ## 1. 简介
