@@ -2,6 +2,7 @@
 sidebar_label: Data Processing Workflow
 sidebar_position: 3
 slug: /internals/io_processing
+description: This article introduces read and write implementation of JuiceFS, including how it split file into chunks.
 ---
 # An introduction to the workflow of processing read and write
 

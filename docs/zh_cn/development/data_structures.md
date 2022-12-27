@@ -2,6 +2,7 @@
 title: 内部实现
 sidebar_position: 3
 slug: /internals
+description: 本文介绍 JuiceFS 的主要实现细节，用来为开发者了解和贡献开源代码作参考。
 ---
 
 ## 1. 简介
