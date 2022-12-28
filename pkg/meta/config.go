@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/version"
@@ -42,7 +41,6 @@ type Config struct {
 	Heartbeat   time.Duration
 	MountPoint  string
 	Subdir      string
-	IntPrefix   string // prefix for internal inodes (.accesslog, .config, etc.)
 }
 
 type Format struct {
@@ -66,19 +64,6 @@ type Format struct {
 	MetaVersion      int    `json:",omitempty"`
 	MinClientVersion string `json:",omitempty"`
 	MaxClientVersion string `json:",omitempty"`
-}
-
-func (c *Config) SanitizePrefix() {
-	if c.IntPrefix != "" {
-		if c.IntPrefix[0] != '.' {
-			logger.Warnf("Internal inodes prefix should start with a dot, changing %s -> %s", c.IntPrefix, "."+c.IntPrefix)
-			c.IntPrefix = "." + c.IntPrefix
-		}
-		if strings.Contains(c.IntPrefix, "/") {
-			logger.Warnf("Internal inodes prefix should not contain slashes, changing %s -> %s", c.IntPrefix, strings.ReplaceAll(c.IntPrefix, "/", ""))
-			c.IntPrefix = strings.ReplaceAll(c.IntPrefix, "/", "")
-		}
-	}
 }
 
 func (f *Format) update(old *Format, force bool) error {

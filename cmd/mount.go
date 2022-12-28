@@ -245,12 +245,13 @@ func expandPathForEmbedded(addr string) string {
 
 func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
 	cfg := &vfs.Config{
-		Meta:       metaConf,
-		Format:     format,
-		Version:    version.Version(),
-		Chunk:      chunkConf,
-		BackupMeta: duration(c.String("backup-meta")),
-		Port:       &vfs.Port{DebugAgent: debugAgent, PyroscopeAddr: c.String("pyroscope")},
+		Meta:                metaConf,
+		Format:              format,
+		Version:             version.Version(),
+		Chunk:               chunkConf,
+		BackupMeta:          duration(c.String("backup-meta")),
+		Port:                &vfs.Port{DebugAgent: debugAgent, PyroscopeAddr: c.String("pyroscope")},
+		InternalInodePrefix: c.String("internal-inodes-prefix"),
 	}
 	if cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
 		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)
@@ -360,7 +361,6 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		Heartbeat:  duration(c.String("heartbeat")),
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
-		IntPrefix:  c.String("internal-inodes-prefix"),
 	}
 	if cfg.Heartbeat < time.Second {
 		logger.Warnf("heartbeat should not be less than 1 second")

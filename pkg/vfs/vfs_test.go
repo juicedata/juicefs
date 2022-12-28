@@ -37,7 +37,13 @@ import (
 
 // nolint:errcheck
 
-func createTestVFS(metaConf *meta.Config) (*VFS, object.ObjectStorage) {
+func createTestVFS(internalNodePrefix string) (*VFS, object.ObjectStorage) {
+	mp := "/jfs"
+	metaConf := &meta.Config{
+		Retries:    10,
+		Strict:     true,
+		MountPoint: mp,
+	}
 	m := meta.NewClient("memkv://", metaConf)
 	format := &meta.Format{
 		Name:        "test",
@@ -63,6 +69,7 @@ func createTestVFS(metaConf *meta.Config) (*VFS, object.ObjectStorage) {
 			CacheSize:  10,
 			CacheDir:   "memory",
 		},
+		InternalInodePrefix: internalNodePrefix,
 	}
 	blob, _ := object.CreateStorage("mem", "", "", "", "")
 	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
@@ -73,11 +80,7 @@ func createTestVFS(metaConf *meta.Config) (*VFS, object.ObjectStorage) {
 }
 
 func TestVFSBasic(t *testing.T) {
-	v, _ := createTestVFS(&meta.Config{
-		Retries:    10,
-		Strict:     true,
-		MountPoint: "/jfs",
-	})
+	v, _ := createTestVFS("")
 	ctx := NewLogContext(meta.NewContext(10, 1, []uint32{2}))
 
 	if st, e := v.StatFS(ctx, 1); e != 0 {
@@ -186,11 +189,7 @@ func TestVFSBasic(t *testing.T) {
 }
 
 func TestVFSIO(t *testing.T) {
-	v, _ := createTestVFS(&meta.Config{
-		Retries:    10,
-		Strict:     true,
-		MountPoint: "/jfs",
-	})
+	v, _ := createTestVFS("")
 	ctx := NewLogContext(meta.Background)
 	fe, fh, e := v.Create(ctx, 1, "file", 0755, 0, syscall.O_RDWR)
 	if e != 0 {
@@ -355,11 +354,7 @@ func TestVFSIO(t *testing.T) {
 }
 
 func TestVFSXattrs(t *testing.T) {
-	v, _ := createTestVFS(&meta.Config{
-		Retries:    10,
-		Strict:     true,
-		MountPoint: "/jfs",
-	})
+	v, _ := createTestVFS("")
 	ctx := NewLogContext(meta.Background)
 	fe, e := v.Mkdir(ctx, 1, "xattrs", 0755, 0)
 	if e != 0 {
@@ -501,11 +496,7 @@ func TestSetattrStr(t *testing.T) {
 }
 
 func TestVFSLocks(t *testing.T) {
-	v, _ := createTestVFS(&meta.Config{
-		Retries:    10,
-		Strict:     true,
-		MountPoint: "/jfs",
-	})
+	v, _ := createTestVFS("")
 	ctx := NewLogContext(meta.Background)
 	fe, fh, e := v.Create(ctx, 1, "flock", 0644, 0, syscall.O_RDWR)
 	if e != 0 {
@@ -606,11 +597,7 @@ func TestVFSLocks(t *testing.T) {
 }
 
 func TestInternalFile(t *testing.T) {
-	v, _ := createTestVFS(&meta.Config{
-		Retries:    10,
-		Strict:     true,
-		MountPoint: "/jfs",
-	})
+	v, _ := createTestVFS("")
 	ctx := NewLogContext(meta.Background)
 	// list internal files
 	fh, _ := v.Opendir(ctx, 1)
@@ -849,12 +836,7 @@ func TestInternalFilePrefix(t *testing.T) {
 	}
 	for unsanitized, sanitized := range prefixes {
 		t.Run(unsanitized, func(t *testing.T) {
-			v, _ := createTestVFS(&meta.Config{
-				Retries:    10,
-				Strict:     true,
-				MountPoint: "/jfs",
-				IntPrefix:  unsanitized,
-			})
+			v, _ := createTestVFS(unsanitized)
 			ctx := NewLogContext(meta.Background)
 			// list internal files
 			fh, _ := v.Opendir(ctx, 1)

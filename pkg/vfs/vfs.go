@@ -19,6 +19,7 @@ package vfs
 import (
 	"encoding/json"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -48,18 +49,19 @@ type Port struct {
 }
 
 type Config struct {
-	Meta            *meta.Config
-	Format          *meta.Format
-	Chunk           *chunk.Config
-	Port            *Port
-	Version         string
-	AttrTimeout     time.Duration
-	DirEntryTimeout time.Duration
-	EntryTimeout    time.Duration
-	BackupMeta      time.Duration
-	FastResolve     bool   `json:",omitempty"`
-	AccessLog       string `json:",omitempty"`
-	HideInternal    bool
+	Meta                *meta.Config
+	Format              *meta.Format
+	Chunk               *chunk.Config
+	Port                *Port
+	Version             string
+	AttrTimeout         time.Duration
+	DirEntryTimeout     time.Duration
+	EntryTimeout        time.Duration
+	BackupMeta          time.Duration
+	FastResolve         bool   `json:",omitempty"`
+	AccessLog           string `json:",omitempty"`
+	HideInternal        bool
+	InternalInodePrefix string // prefix for internal inodes (.accesslog, .config, etc.)
 }
 
 var (
@@ -74,6 +76,19 @@ var (
 		Buckets: prometheus.LinearBuckets(4096, 4096, 32),
 	})
 )
+
+func (c *Config) SanitizePrefix() {
+	if c.InternalInodePrefix != "" {
+		if c.InternalInodePrefix[0] != '.' {
+			logger.Warnf("Internal inodes prefix should start with a dot, changing %s -> %s", c.InternalInodePrefix, "."+c.InternalInodePrefix)
+			c.InternalInodePrefix = "." + c.InternalInodePrefix
+		}
+		if strings.Contains(c.InternalInodePrefix, "/") {
+			logger.Warnf("Internal inodes prefix should not contain slashes, changing %s -> %s", c.InternalInodePrefix, strings.ReplaceAll(c.InternalInodePrefix, "/", ""))
+			c.InternalInodePrefix = strings.ReplaceAll(c.InternalInodePrefix, "/", "")
+		}
+	}
+}
 
 func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
 	var inode Ino
@@ -946,9 +961,9 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 		registry:   registry,
 	}
 
-	v.Conf.Meta.SanitizePrefix()
+	v.Conf.SanitizePrefix()
 	for _, n := range internalNodes {
-		n.name = conf.Meta.IntPrefix + n.base
+		n.name = conf.InternalInodePrefix + n.base
 	}
 
 	n := getInternalNode(configInode)
