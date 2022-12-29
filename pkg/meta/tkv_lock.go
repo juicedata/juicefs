@@ -79,7 +79,7 @@ func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 				return syscall.EINVAL
 			}
 			if len(ls) == 0 {
-				tx.dels(ikey)
+				tx.delete(ikey)
 			} else {
 				tx.set(ikey, marshalFlock(ls))
 			}
@@ -201,7 +201,7 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 				owners[lkey] = dumpLocks(ls)
 			}
 			if len(owners) == 0 {
-				tx.dels(ikey)
+				tx.delete(ikey)
 			} else {
 				tx.set(ikey, marshalPlock(owners))
 			}

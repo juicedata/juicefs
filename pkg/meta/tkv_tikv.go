@@ -217,11 +217,9 @@ func (tx *tikvTxn) incrBy(key []byte, value int64) int64 {
 	return new
 }
 
-func (tx *tikvTxn) dels(keys ...[]byte) {
-	for _, key := range keys {
-		if err := tx.Delete(key); err != nil {
-			panic(err)
-		}
+func (tx *tikvTxn) delete(key []byte) {
+	if err := tx.Delete(key); err != nil {
+		panic(err)
 	}
 }
 

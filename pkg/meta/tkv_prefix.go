@@ -105,11 +105,8 @@ func (tx *prefixTxn) incrBy(key []byte, value int64) int64 {
 	return tx.kvTxn.incrBy(tx.realKey(key), value)
 }
 
-func (tx *prefixTxn) dels(keys ...[]byte) {
-	for i, key := range keys {
-		keys[i] = tx.realKey(key)
-	}
-	tx.kvTxn.dels(keys...)
+func (tx *prefixTxn) delete(key []byte) {
+	tx.kvTxn.delete(tx.realKey(key))
 }
 
 type prefixClient struct {

@@ -187,11 +187,9 @@ func (tx *badgerTxn) incrBy(key []byte, value int64) int64 {
 	return newCounter
 }
 
-func (tx *badgerTxn) dels(keys ...[]byte) {
-	for _, key := range keys {
-		if err := tx.t.Delete(key); err != nil {
-			panic(err)
-		}
+func (tx *badgerTxn) delete(key []byte) {
+	if err := tx.t.Delete(key); err != nil {
+		panic(err)
 	}
 }
 

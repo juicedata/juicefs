@@ -221,10 +221,8 @@ func (tx *etcdTxn) incrBy(key []byte, value int64) int64 {
 	return new
 }
 
-func (tx *etcdTxn) dels(keys ...[]byte) {
-	for _, key := range keys {
-		tx.buffer[string(key)] = nil
-	}
+func (tx *etcdTxn) delete(key []byte) {
+	tx.buffer[string(key)] = nil
 }
 
 func (tx *etcdTxn) commmit() error {

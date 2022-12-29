@@ -206,10 +206,8 @@ func (tx *memTxn) incrBy(key []byte, value int64) int64 {
 	return new
 }
 
-func (tx *memTxn) dels(keys ...[]byte) {
-	for _, key := range keys {
-		tx.buffer[string(key)] = nil
-	}
+func (tx *memTxn) delete(key []byte) {
+	tx.buffer[string(key)] = nil
 }
 
 type kvItem struct {
@@ -323,7 +321,7 @@ func (c *memKV) reset(prefix []byte) error {
 	}
 	return c.txn(func(kt *kvTxn) error {
 		return c.scan(prefix, func(key, value []byte) {
-			kt.dels(key)
+			kt.delete(key)
 		})
 	})
 }

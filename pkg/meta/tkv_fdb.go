@@ -1,6 +1,3 @@
-//go:build fdb
-// +build fdb
-
 /*
  * JuiceFS, Copyright 2022 Juicedata, Inc.
  *
@@ -213,8 +210,6 @@ func (tx *fdbTxn) incrBy(key []byte, value int64) int64 {
 	return parseCounter(tx.Get(fdb.Key(key)).MustGet())
 }
 
-func (tx *fdbTxn) dels(keys ...[]byte) {
-	for _, key := range keys {
-		tx.Clear(fdb.Key(key))
-	}
+func (tx *fdbTxn) delete(key []byte) {
+	tx.Clear(fdb.Key(key))
 }

@@ -131,7 +131,11 @@ func testTKV(t *testing.T, c tkvClient) {
 	if !hasKey {
 		t.Fatalf("has key k*")
 	}
-	txn(func(kt *kvTxn) { kt.dels(keys...) })
+	txn(func(kt *kvTxn) {
+		for _, key := range keys {
+			kt.delete(key)
+		}
+	})
 	txn(func(kt *kvTxn) { r = kt.get(k) })
 	if r != nil {
 		t.Fatalf("expect nil, but got %v", string(r))

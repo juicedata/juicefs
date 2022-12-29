@@ -49,7 +49,7 @@ type kvtxn interface {
 	set(key, value []byte)
 	append(key []byte, value []byte) []byte
 	incrBy(key []byte, value int64) int64
-	dels(keys ...[]byte)
+	delete(key []byte)
 }
 
 type tkvClient interface {
@@ -422,7 +422,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 						if len(ls) > 0 {
 							tx.set([]byte(k), marshalFlock(ls))
 						} else {
-							tx.dels([]byte(k))
+							tx.delete([]byte(k))
 						}
 						return nil
 					}); err != nil {
@@ -449,7 +449,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 						if len(ls) > 0 {
 							tx.set([]byte(k), marshalPlock(ls))
 						} else {
-							tx.dels([]byte(k))
+							tx.delete([]byte(k))
 						}
 						return nil
 					}); err != nil {
@@ -704,7 +704,9 @@ func (m *kvMeta) deleteKeys(keys ...[]byte) error {
 		return nil
 	}
 	return m.txn(func(tx *kvTxn) error {
-		tx.dels(keys...)
+		for _, key := range keys {
+			tx.delete(key)
+		}
 		return nil
 	})
 }
@@ -1170,7 +1172,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			updateParent = true
 		}
 
-		tx.dels(m.entryKey(parent, name))
+		tx.delete(m.entryKey(parent, name))
 		if updateParent {
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
@@ -1193,19 +1195,23 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 					tx.set(m.sustainedKey(m.sid, inode), []byte{1})
 				} else {
 					tx.set(m.delfileKey(inode, attr.Length), m.packInt64(now.Unix()))
-					tx.dels(m.inodeKey(inode))
+					tx.delete(m.inodeKey(inode))
 					newSpace, newInode = -align4K(attr.Length), -1
 				}
 			case TypeSymlink:
-				tx.dels(m.symKey(inode))
+				tx.delete(m.symKey(inode))
 				fallthrough
 			default:
-				tx.dels(m.inodeKey(inode))
+				tx.delete(m.inodeKey(inode))
 				newSpace, newInode = -align4K(0), -1
 			}
-			tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)
+			for _, key := range tx.scanKeys(m.xattrKey(inode, "")) {
+				tx.delete(key)
+			}
 			if attr.Parent == 0 {
-				tx.dels(tx.scanKeys(m.fmtKey("A", inode, "P"))...)
+				for _, key := range tx.scanKeys(m.fmtKey("A", inode, "P")) {
+					tx.delete(key)
+				}
 			}
 		}
 		return nil
@@ -1279,13 +1285,15 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if !isTrash(parent) {
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
-		tx.dels(m.entryKey(parent, name))
+		tx.delete(m.entryKey(parent, name))
 		if trash > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
 			tx.set(m.entryKey(trash, m.trashEntry(parent, inode, name)), buf)
 		} else {
-			tx.dels(m.inodeKey(inode))
-			tx.dels(tx.scanKeys(m.xattrKey(inode, ""))...)
+			tx.delete(m.inodeKey(inode))
+			for _, key := range tx.scanKeys(m.xattrKey(inode, "")) {
+				tx.delete(key)
+			}
 		}
 		return nil
 	}, parent)
@@ -1457,7 +1465,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				tx.incrBy(m.parentKey(dino, parentDst), -1)
 			}
 		} else {
-			tx.dels(m.entryKey(parentSrc, nameSrc))
+			tx.delete(m.entryKey(parentSrc, nameSrc))
 			if dino > 0 {
 				if trash > 0 {
 					tx.set(m.inodeKey(dino), m.marshal(&tattr))
@@ -1478,19 +1486,23 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 							tx.set(m.sustainedKey(m.sid, dino), []byte{1})
 						} else {
 							tx.set(m.delfileKey(dino, tattr.Length), m.packInt64(now.Unix()))
-							tx.dels(m.inodeKey(dino))
+							tx.delete(m.inodeKey(dino))
 							newSpace, newInode = -align4K(tattr.Length), -1
 						}
 					} else {
 						if dtyp == TypeSymlink {
-							tx.dels(m.symKey(dino))
+							tx.delete(m.symKey(dino))
 						}
-						tx.dels(m.inodeKey(dino))
+						tx.delete(m.inodeKey(dino))
 						newSpace, newInode = -align4K(0), -1
 					}
-					tx.dels(tx.scanKeys(m.xattrKey(dino, ""))...)
+					for _, key := range tx.scanKeys(m.xattrKey(dino, "")) {
+						tx.delete(key)
+					}
 					if tattr.Parent == 0 {
-						tx.dels(tx.scanKeys(m.fmtKey("A", dino, "P"))...)
+						for _, key := range tx.scanKeys(m.fmtKey("A", dino, "P")) {
+							tx.delete(key)
+						}
 					}
 				}
 			}
@@ -1664,8 +1676,8 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		}
 		m.parseAttr(a, &attr)
 		tx.set(m.delfileKey(inode, attr.Length), m.packInt64(time.Now().Unix()))
-		tx.dels(m.inodeKey(inode))
-		tx.dels(m.sustainedKey(sid, inode))
+		tx.delete(m.inodeKey(inode))
+		tx.delete(m.sustainedKey(sid, inode))
 		newSpace = -align4K(attr.Length)
 		return nil
 	})
@@ -1929,7 +1941,7 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 		if slices == nil {
 			logger.Errorf("Corrupt value for inode %d chunk index %d, use `gc` to clean up leaked slices", inode, indx)
 		}
-		tx.dels(key)
+		tx.delete(key)
 		for _, s := range slices {
 			if s.id > 0 && tx.incrBy(m.sliceKey(s.id, s.size), -1) < 0 {
 				todel = append(todel, s)
@@ -1952,7 +1964,7 @@ func (r *kvMeta) cleanupZeroRef(id uint64, size uint32) {
 		if v != 0 {
 			return syscall.EINVAL
 		}
-		tx.dels(r.sliceKey(id, size))
+		tx.delete(r.sliceKey(id, size))
 		return nil
 	})
 }
@@ -2006,7 +2018,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 				for _, s := range ss {
 					rs = append(rs, tx.incrBy(m.sliceKey(s.Id, s.Size), -1))
 				}
-				tx.dels(key)
+				tx.delete(key)
 				return nil
 			}); err != nil {
 				logger.Warnf("Cleanup delayed slices %s: %s", key, err)
@@ -2252,7 +2264,7 @@ func (m *kvMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
 				for _, s := range ss {
 					rs = append(rs, tx.incrBy(m.sliceKey(s.Id, s.Size), -1))
 				}
-				tx.dels(key)
+				tx.delete(key)
 			}
 			return nil
 		})
@@ -2374,7 +2386,7 @@ func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 		if value == nil {
 			return ENOATTR
 		}
-		tx.dels(key)
+		tx.delete(key)
 		return nil
 	}))
 }
