@@ -392,16 +392,17 @@ func TestOracleCompileRegexp(t *testing.T) {
 }
 
 func TestOVHCompileRegexp(t *testing.T) {
-	ep := "s3.gra.perf.cloud.ovh.net"
-	ovhCompile := regexp.MustCompile(OVHCompileRegexp)
-	if ovhCompile.MatchString(ep) {
-		if submatch := ovhCompile.FindStringSubmatch(ep); len(submatch) == 2 {
-			if submatch[1] != "gra" {
-				t.Fatalf("oracle endpoint parse failed")
+	for _, ep := range []string{"s3.gra.cloud.ovh.net", "s3.gra.perf.cloud.ovh.net", "s3.gra.io.cloud.ovh.net"} {
+		ovhCompile := regexp.MustCompile(OVHCompileRegexp)
+		if ovhCompile.MatchString(ep) {
+			if submatch := ovhCompile.FindStringSubmatch(ep); len(submatch) == 2 {
+				if strings.Split(submatch[1], ".")[0] != "gra" {
+					t.Fatalf("ovh endpoint parse failed")
+				}
 			}
+		} else {
+			t.Fatalf("ovh endpoint parse failed")
 		}
-	} else {
-		t.Fatalf("ovh endpoint parse failed")
 	}
 }
 
