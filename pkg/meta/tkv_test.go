@@ -57,8 +57,8 @@ func TestEtcdClient(t *testing.T) {
 }
 
 func testTKV(t *testing.T, c tkvClient) {
-	txn := func(f func(kt kvTxn)) {
-		if err := c.txn(func(kt kvTxn) error {
+	txn := func(f func(kt *kvTxn)) {
+		if err := c.txn(func(kt *kvTxn) error {
 			f(kt)
 			return nil
 		}); err != nil {
@@ -71,28 +71,28 @@ func testTKV(t *testing.T, c tkvClient) {
 		t.Fatalf("reset: %s", err)
 	}
 	var hasKey bool
-	txn(func(kt kvTxn) { hasKey = kt.exist(nil) })
+	txn(func(kt *kvTxn) { hasKey = kt.exist(nil) })
 	if hasKey {
 		t.Fatalf("has key after reset")
 	}
 	k := []byte("k")
 	v := []byte("value")
 
-	txn(func(kt kvTxn) {
+	txn(func(kt *kvTxn) {
 		kt.set(k, v)
 		kt.append(k, v)
 	})
 	var r []byte
-	txn(func(kt kvTxn) { r = kt.get(k) })
+	txn(func(kt *kvTxn) { r = kt.get(k) })
 	if !bytes.Equal(r, []byte("valuevalue")) {
 		t.Fatalf("expect 'valuevalue', but got %v", string(r))
 	}
-	txn(func(kt kvTxn) {
+	txn(func(kt *kvTxn) {
 		kt.set([]byte("k2"), v)
 		kt.set([]byte("v"), k)
 	})
 	var ks [][]byte
-	txn(func(kt kvTxn) { ks = kt.gets([]byte("k1"), []byte("k2")) })
+	txn(func(kt *kvTxn) { ks = kt.gets([]byte("k1"), []byte("k2")) })
 	if ks[0] != nil || string(ks[1]) != "value" {
 		t.Fatalf("gets k1,k2: %+v != %+v", ks, [][]byte{nil, []byte("value")})
 	}
@@ -104,62 +104,64 @@ func testTKV(t *testing.T, c tkvClient) {
 	if len(keys) != 2 || string(keys[0]) != "k" || string(keys[1]) != "k2" {
 		t.Fatalf("keys: %+v", keys)
 	}
-	txn(func(kt kvTxn) {
+	txn(func(kt *kvTxn) {
 		keys = kt.scanKeysRange([]byte("a"), []byte("z"), -1, func(k []byte) bool { return len(k) == 1 })
 	})
 	if len(keys) != 2 || string(keys[0]) != "k" || string(keys[1]) != "v" {
 		t.Fatalf("keys: %+v", keys)
 	}
-	txn(func(kt kvTxn) { keys = kt.scanKeys(nil) })
+	txn(func(kt *kvTxn) { keys = kt.scanKeys(nil) })
 	if len(keys) != 3 || string(keys[0]) != "k" || string(keys[1]) != "k2" || string(keys[2]) != "v" {
 		t.Fatalf("keys: %+v", keys)
 	}
 	var values map[string][]byte
-	txn(func(kt kvTxn) { values = kt.scanValues([]byte("k"), -1, func(k, v []byte) bool { return len(v) == 5 }) })
+	txn(func(kt *kvTxn) {
+		values = kt.scanValues([]byte("k"), -1, func(k, v []byte) bool { return len(v) == 5 })
+	})
 	if len(values) != 1 || string(values["k2"]) != "value" {
 		t.Fatalf("scan values: %+v", values)
 	}
-	txn(func(kt kvTxn) { values = kt.scanRange([]byte("k2"), []byte("v")) })
+	txn(func(kt *kvTxn) { values = kt.scanRange([]byte("k2"), []byte("v")) })
 	if len(values) != 1 || string(values["k2"]) != "value" {
 		t.Fatalf("scanRange: %+v", values)
 	}
 
 	// exists
-	txn(func(kt kvTxn) { hasKey = kt.exist([]byte("k")) })
+	txn(func(kt *kvTxn) { hasKey = kt.exist([]byte("k")) })
 	if !hasKey {
 		t.Fatalf("has key k*")
 	}
-	txn(func(kt kvTxn) { kt.dels(keys...) })
-	txn(func(kt kvTxn) { r = kt.get(k) })
+	txn(func(kt *kvTxn) { kt.dels(keys...) })
+	txn(func(kt *kvTxn) { r = kt.get(k) })
 	if r != nil {
 		t.Fatalf("expect nil, but got %v", string(r))
 	}
-	txn(func(kt kvTxn) { keys = kt.scanKeys(nil) })
+	txn(func(kt *kvTxn) { keys = kt.scanKeys(nil) })
 	if len(keys) != 0 {
 		t.Fatalf("no keys: %+v", keys)
 	}
-	txn(func(kt kvTxn) { hasKey = kt.exist(nil) })
+	txn(func(kt *kvTxn) { hasKey = kt.exist(nil) })
 	if hasKey {
 		t.Fatalf("has not keys")
 	}
 
 	// counters
 	var count int64
-	c.txn(func(tx kvTxn) error {
+	c.txn(func(tx *kvTxn) error {
 		count = tx.incrBy([]byte("counter"), -1)
 		return nil
 	})
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
-	c.txn(func(tx kvTxn) error {
+	c.txn(func(tx *kvTxn) error {
 		count = tx.incrBy([]byte("counter"), 0)
 		return nil
 	})
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
-	c.txn(func(tx kvTxn) error {
+	c.txn(func(tx *kvTxn) error {
 		count = tx.incrBy([]byte("counter"), 2)
 		return nil
 	})
@@ -169,11 +171,11 @@ func testTKV(t *testing.T, c tkvClient) {
 
 	// key with zeros
 	k = []byte("k\x001")
-	txn(func(kt kvTxn) {
+	txn(func(kt *kvTxn) {
 		kt.set(k, v)
 	})
 	var v2 []byte
-	txn(func(kt kvTxn) {
+	txn(func(kt *kvTxn) {
 		v2 = kt.get(k)
 	})
 	if !bytes.Equal(v2, v) {

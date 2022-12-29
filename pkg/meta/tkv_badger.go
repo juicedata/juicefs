@@ -208,9 +208,9 @@ func (c *badgerClient) shouldRetry(err error) bool {
 	return err == badger.ErrConflict
 }
 
-func (c *badgerClient) txn(f func(kvTxn) error) (err error) {
-	tx := c.client.NewTransaction(true)
-	defer tx.Discard()
+func (c *badgerClient) txn(f func(*kvTxn) error) (err error) {
+	t := c.client.NewTransaction(true)
+	defer t.Discard()
 	defer func() {
 		if r := recover(); r != nil {
 			fe, ok := r.(error)
@@ -221,13 +221,13 @@ func (c *badgerClient) txn(f func(kvTxn) error) (err error) {
 			}
 		}
 	}()
-	txn := &badgerTxn{tx, c.client}
-	err = f(txn)
+	tx := &badgerTxn{t, c.client}
+	err = f(&kvTxn{tx})
 	if err != nil {
 		return err
 	}
 	// tx could be committed
-	return txn.t.Commit()
+	return tx.t.Commit()
 }
 
 func (c *badgerClient) scan(prefix []byte, handler func(key []byte, value []byte)) error {

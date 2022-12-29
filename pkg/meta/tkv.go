@@ -38,7 +38,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
-type kvTxn interface {
+type kvtxn interface {
 	get(key []byte) []byte
 	gets(keys ...[]byte) [][]byte
 	scanRange(begin, end []byte) map[string][]byte
@@ -54,11 +54,15 @@ type kvTxn interface {
 
 type tkvClient interface {
 	name() string
-	txn(f func(kvTxn) error) error
+	txn(f func(*kvTxn) error) error
 	scan(prefix []byte, handler func(key, value []byte)) error
 	reset(prefix []byte) error
 	close() error
 	shouldRetry(err error) bool
+}
+
+type kvTxn struct {
+	kvtxn
 }
 
 type kvMeta struct {
@@ -302,7 +306,7 @@ func (m *kvMeta) parseEntry(buf []byte) (uint8, Ino) {
 
 func (m *kvMeta) get(key []byte) ([]byte, error) {
 	var value []byte
-	err := m.client.txn(func(tx kvTxn) error {
+	err := m.client.txn(func(tx *kvTxn) error {
 		value = tx.get(key)
 		return nil
 	})
@@ -311,7 +315,7 @@ func (m *kvMeta) get(key []byte) ([]byte, error) {
 
 func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
 	var keys [][]byte
-	err := m.client.txn(func(tx kvTxn) error {
+	err := m.client.txn(func(tx *kvTxn) error {
 		keys = tx.scanKeys(prefix)
 		return nil
 	})
@@ -320,7 +324,7 @@ func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
 
 func (m *kvMeta) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) (map[string][]byte, error) {
 	var values map[string][]byte
-	err := m.client.txn(func(tx kvTxn) error {
+	err := m.client.txn(func(tx *kvTxn) error {
 		values = tx.scanValues(prefix, limit, filter)
 		return nil
 	})
@@ -360,7 +364,7 @@ func (m *kvMeta) Init(format *Format, force bool) error {
 		Length: 4 << 10,
 		Parent: 1,
 	}
-	return m.txn(func(tx kvTxn) error {
+	return m.txn(func(tx *kvTxn) error {
 		if format.TrashDays > 0 {
 			buf := tx.get(m.inodeKey(TrashInode))
 			if buf == nil {
@@ -411,7 +415,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 			ls := unmarshalFlock(v)
 			for o := range ls {
 				if o.sid == sid {
-					if err = m.txn(func(tx kvTxn) error {
+					if err = m.txn(func(tx *kvTxn) error {
 						v := tx.get([]byte(k))
 						ls := unmarshalFlock(v)
 						delete(ls, o)
@@ -438,7 +442,7 @@ func (m *kvMeta) doCleanStaleSession(sid uint64) error {
 			ls := unmarshalPlock(v)
 			for o := range ls {
 				if o.sid == sid {
-					if err = m.txn(func(tx kvTxn) error {
+					if err = m.txn(func(tx *kvTxn) error {
 						v := tx.get([]byte(k))
 						ls := unmarshalPlock(v)
 						delete(ls, o)
@@ -625,7 +629,7 @@ func (m *kvMeta) shouldRetry(err error) bool {
 	return m.client.shouldRetry(err)
 }
 
-func (m *kvMeta) txn(f func(tx kvTxn) error, inodes ...Ino) error {
+func (m *kvMeta) txn(f func(tx *kvTxn) error, inodes ...Ino) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
 	}
@@ -657,7 +661,7 @@ func (m *kvMeta) txn(f func(tx kvTxn) error, inodes ...Ino) error {
 }
 
 func (m *kvMeta) setValue(key, value []byte) error {
-	return m.txn(func(tx kvTxn) error {
+	return m.txn(func(tx *kvTxn) error {
 		tx.set(key, value)
 		return nil
 	})
@@ -671,7 +675,7 @@ func (m *kvMeta) getCounter(name string) (int64, error) {
 func (m *kvMeta) incrCounter(name string, value int64) (int64, error) {
 	var new int64
 	key := m.counterKey(name)
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		new = tx.incrBy(key, value)
 		return nil
 	})
@@ -681,7 +685,7 @@ func (m *kvMeta) incrCounter(name string, value int64) (int64, error) {
 func (m *kvMeta) setIfSmall(name string, value, diff int64) (bool, error) {
 	var changed bool
 	key := m.counterKey(name)
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		changed = false
 		if m.parseInt64(tx.get(key)) > value-diff {
 			return nil
@@ -699,7 +703,7 @@ func (m *kvMeta) deleteKeys(keys ...[]byte) error {
 	if len(keys) == 0 {
 		return nil
 	}
-	return m.txn(func(tx kvTxn) error {
+	return m.txn(func(tx *kvTxn) error {
 		tx.dels(keys...)
 		return nil
 	})
@@ -739,7 +743,7 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 	defer m.timeit(time.Now())
 	inode = m.checkRoot(inode)
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
-	return errno(m.txn(func(tx kvTxn) error {
+	return errno(m.txn(func(tx *kvTxn) error {
 		var cur Attr
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
@@ -819,7 +823,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 	}
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	var newSpace int64
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
 		var t Attr
 		a := tx.get(m.inodeKey(inode))
@@ -901,7 +905,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	}
 	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
 	var newSpace int64
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
 		var t Attr
 		a := tx.get(m.inodeKey(inode))
@@ -1007,7 +1011,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		*inode = ino
 	}
 
-	err = m.txn(func(tx kvTxn) error {
+	err = m.txn(func(tx *kvTxn) error {
 		var pattr Attr
 		a := tx.get(m.inodeKey(parent))
 		if a == nil {
@@ -1100,7 +1104,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var attr Attr
 	var opened bool
 	var newSpace, newInode int64
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		opened = false
 		attr = Attr{}
 		newSpace, newInode = 0, 0
@@ -1220,7 +1224,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
 	}
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		buf := tx.get(m.entryKey(parent, name))
 		if buf == nil && m.conf.CaseInsensi {
 			if e := m.resolveCase(ctx, parent, name); e != nil {
@@ -1302,7 +1306,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dtyp uint8
 	var tattr Attr
 	var newSpace, newInode int64
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		opened = false
 		dino, dtyp = 0, 0
 		tattr = Attr{}
@@ -1517,7 +1521,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 }
 
 func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
-	return errno(m.txn(func(tx kvTxn) error {
+	return errno(m.txn(func(tx *kvTxn) error {
 		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
 		if rs[0] == nil || rs[1] == nil {
 			return syscall.ENOENT
@@ -1599,7 +1603,7 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 				keys[i] = m.inodeKey(e.Inode)
 			}
 			var rs [][]byte
-			err := m.client.txn(func(tx kvTxn) error {
+			err := m.client.txn(func(tx *kvTxn) error {
 				rs = tx.gets(keys...)
 				return nil
 			})
@@ -1652,7 +1656,7 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var attr Attr
 	var newSpace int64
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
@@ -1709,7 +1713,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
 	var needCompact bool
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
 		var attr Attr
 		a := tx.get(m.inodeKey(inode))
@@ -1756,7 +1760,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
 		rs := tx.gets(m.inodeKey(fin), m.inodeKey(fout))
 		if rs[0] == nil || rs[1] == nil {
@@ -1918,7 +1922,7 @@ func (m *kvMeta) doCleanupSlices() {
 func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 	key := m.chunkKey(inode, indx)
 	var todel []*slice
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		todel = todel[:0]
 		buf := tx.get(key)
 		slices := readSliceBuf(buf)
@@ -1943,7 +1947,7 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 }
 
 func (r *kvMeta) cleanupZeroRef(id uint64, size uint32) {
-	_ = r.txn(func(tx kvTxn) error {
+	_ = r.txn(func(tx *kvTxn) error {
 		v := tx.incrBy(r.sliceKey(id, size), 0)
 		if v != 0 {
 			return syscall.EINVAL
@@ -1978,7 +1982,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	var keys [][]byte
 	var batch int = 1e5
 	for {
-		if err := m.client.txn(func(tx kvTxn) error {
+		if err := m.client.txn(func(tx *kvTxn) error {
 			keys = tx.scanKeysRange(m.delSliceKey(0, 0), m.delSliceKey(edge, 0), batch, func(k []byte) bool {
 				return len(k) == 1+8+8 // delayed slices: Lttttttttcccccccc
 			})
@@ -1989,7 +1993,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 		}
 
 		for _, key := range keys {
-			if err := m.txn(func(tx kvTxn) error {
+			if err := m.txn(func(tx *kvTxn) error {
 				ss, rs = ss[:0], rs[:0]
 				buf := tx.get(key)
 				if len(buf) == 0 {
@@ -2082,7 +2086,7 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 		}
 	}
-	err = m.txn(func(tx kvTxn) error {
+	err = m.txn(func(tx *kvTxn) error {
 		buf2 := tx.get(m.chunkKey(inode, indx))
 		if len(buf2) < len(buf) || !bytes.Equal(buf, buf2[:len(buf)]) {
 			logger.Infof("chunk %d:%d was changed %d -> %d", inode, indx, len(buf), len(buf2))
@@ -2129,7 +2133,7 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		if !trash {
 			var refs int64
 			for _, s := range ss {
-				if s.id > 0 && m.client.txn(func(tx kvTxn) error {
+				if s.id > 0 && m.client.txn(func(tx *kvTxn) error {
 					refs = tx.incrBy(m.sliceKey(s.id, s.size), 0)
 					return nil
 				}) == nil && refs < 0 {
@@ -2230,7 +2234,7 @@ func (m *kvMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
 			continue
 		}
 		var clean bool
-		err = m.txn(func(tx kvTxn) error {
+		err = m.txn(func(tx *kvTxn) error {
 			ss := ss[:0]
 			rs := rs[:0]
 			v := tx.get(key)
@@ -2299,7 +2303,7 @@ func (m *kvMeta) scanDeletedFiles(ctx Context, scan deletedFileScan) error {
 }
 
 func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	return errno(m.txn(func(tx kvTxn) error {
+	return errno(m.txn(func(tx *kvTxn) error {
 		attr.Nlink = 2
 		_ = tx.scanValues(m.entryKey(inode, ""), -1, func(k, v []byte) bool {
 			typ, _ := m.parseEntry(v)
@@ -2345,7 +2349,7 @@ func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno 
 
 func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
 	key := m.xattrKey(inode, name)
-	return errno(m.txn(func(tx kvTxn) error {
+	return errno(m.txn(func(tx *kvTxn) error {
 		switch flags {
 		case XattrCreate:
 			v := tx.get(key)
@@ -2365,7 +2369,7 @@ func (m *kvMeta) doSetXattr(ctx Context, inode Ino, name string, value []byte, f
 
 func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno {
 	key := m.xattrKey(inode, name)
-	return errno(m.txn(func(tx kvTxn) error {
+	return errno(m.txn(func(tx *kvTxn) error {
 		value := tx.get(key)
 		if value == nil {
 			return ENOATTR
@@ -2379,7 +2383,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 	if m.snap != nil {
 		return nil
 	}
-	return m.client.txn(func(tx kvTxn) error {
+	return m.client.txn(func(tx *kvTxn) error {
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			logger.Warnf("inode %d not found", inode)
@@ -2619,7 +2623,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	tree.Name = "FSTree"
 
 	var rs [][]byte
-	err = m.txn(func(tx kvTxn) error {
+	err = m.txn(func(tx *kvTxn) error {
 		rs = tx.gets(m.counterKey(usedSpace),
 			m.counterKey(totalInodes),
 			m.counterKey("nextInode"),
@@ -2753,7 +2757,7 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) {
 
 func (m *kvMeta) LoadMeta(r io.Reader) error {
 	var exist bool
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		exist = tx.exist(m.fmtKey())
 		return nil
 	})
@@ -2778,7 +2782,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 			for p := range kv {
 				buffer = append(buffer, p)
 				if len(buffer) >= batch {
-					err := m.txn(func(tx kvTxn) error {
+					err := m.txn(func(tx *kvTxn) error {
 						for _, p := range buffer {
 							tx.set(p.key, p.value)
 						}
@@ -2791,7 +2795,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 				}
 			}
 			if len(buffer) > 0 {
-				err := m.txn(func(tx kvTxn) error {
+				err := m.txn(func(tx *kvTxn) error {
 					for _, p := range buffer {
 						tx.set(p.key, p.value)
 					}
@@ -2829,7 +2833,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 
 	// update nlinks and parents for hardlinks
 	st := make(map[Ino]int64)
-	return m.txn(func(tx kvTxn) error {
+	return m.txn(func(tx *kvTxn) error {
 		for i, ps := range parents {
 			if len(ps) > 1 {
 				a := tx.get(m.inodeKey(i))

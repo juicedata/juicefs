@@ -237,7 +237,7 @@ func (c *tikvClient) shouldRetry(err error) bool {
 	return strings.Contains(err.Error(), "write conflict") || strings.Contains(err.Error(), "TxnLockNotFound")
 }
 
-func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
+func (c *tikvClient) txn(f func(*kvTxn) error) (err error) {
 	tx, err := c.client.Begin()
 	if err != nil {
 		return err
@@ -252,7 +252,7 @@ func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
 			}
 		}
 	}()
-	if err = f(&tikvTxn{tx}); err != nil {
+	if err = f(&kvTxn{&tikvTxn{tx}}); err != nil {
 		return err
 	}
 	if !tx.IsReadOnly() {

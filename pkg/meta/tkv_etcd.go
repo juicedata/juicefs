@@ -269,7 +269,7 @@ func (c *etcdClient) shouldRetry(err error) bool {
 	return errors.Is(err, conflicted)
 }
 
-func (c *etcdClient) txn(f func(kvTxn) error) (err error) {
+func (c *etcdClient) txn(f func(*kvTxn) error) (err error) {
 	ctx := context.Background()
 	tx := &etcdTxn{
 		ctx,
@@ -287,7 +287,7 @@ func (c *etcdClient) txn(f func(kvTxn) error) (err error) {
 			}
 		}
 	}()
-	err = f(tx)
+	err = f(&kvTxn{tx})
 	if err != nil {
 		return err
 	}

@@ -56,7 +56,7 @@ func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 	var err error
 	lkey := lockOwner{m.sid, owner}
 	for {
-		err = m.txn(func(tx kvTxn) error {
+		err = m.txn(func(tx *kvTxn) error {
 			v := tx.get(ikey)
 			ls := unmarshalFlock(v)
 			switch ltype {
@@ -171,7 +171,7 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 	lock := plockRecord{ltype, pid, start, end}
 	lkey := lockOwner{m.sid, owner}
 	for {
-		err = m.txn(func(tx kvTxn) error {
+		err = m.txn(func(tx *kvTxn) error {
 			owners := unmarshalPlock(tx.get(ikey))
 			if ltype == F_UNLCK {
 				records := owners[lkey]
@@ -229,7 +229,7 @@ func (m *kvMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLock
 
 	var flocks []FLockItem
 	var plocks []PLockItem
-	err := m.txn(func(tx kvTxn) error {
+	err := m.txn(func(tx *kvTxn) error {
 		fv := tx.get(fKey)
 		fs := unmarshalFlock(fv)
 		for k, t := range fs {

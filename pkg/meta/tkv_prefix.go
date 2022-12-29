@@ -19,7 +19,7 @@ package meta
 import "fmt"
 
 type prefixTxn struct {
-	kvTxn
+	*kvTxn
 	prefix []byte
 }
 
@@ -117,9 +117,9 @@ type prefixClient struct {
 	prefix []byte
 }
 
-func (c *prefixClient) txn(f func(kvTxn) error) error {
-	return c.tkvClient.txn(func(tx kvTxn) error {
-		return f(&prefixTxn{tx, c.prefix})
+func (c *prefixClient) txn(f func(*kvTxn) error) error {
+	return c.tkvClient.txn(func(tx *kvTxn) error {
+		return f(&kvTxn{&prefixTxn{tx, c.prefix}})
 	})
 }
 
