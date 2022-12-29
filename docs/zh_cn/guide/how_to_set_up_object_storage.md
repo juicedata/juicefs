@@ -684,7 +684,7 @@ sudo yum install librados2-devel
   </TabItem>
 </Tabs>
 
-然后为 Ceph 编译 JuiceFS（要求 Go 1.17+ 和 GCC 5.4+）：
+然后为 Ceph 编译 JuiceFS（要求 Go 1.18+ 和 GCC 5.4+）：
 
 ```bash
 make juicefs.ceph

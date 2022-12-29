@@ -684,7 +684,7 @@ sudo yum install librados2-devel
   </TabItem>
 </Tabs>
 
-Then compile JuiceFS for Ceph (make sure you have Go 1.17+ and GCC 5.4+ installed):
+Then compile JuiceFS for Ceph (make sure you have Go 1.18+ and GCC 5.4+ installed):
 
 ```bash
 make juicefs.ceph
