@@ -43,7 +43,7 @@ type kvtxn interface {
 	gets(keys ...[]byte) [][]byte
 	// scan stops when handler returns false
 	scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool)
-	scanRange(begin, end []byte) map[string][]byte
+	// scanRange(begin, end []byte) map[string][]byte
 	scanKeys(prefix []byte) [][]byte
 	scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte
 	scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte
@@ -860,11 +860,12 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			right, left = left, right
 		}
 		if right/ChunkSize-left/ChunkSize > 1 {
-			zeroChunks := tx.scanRange(m.chunkKey(inode, uint32(left/ChunkSize)+1), m.chunkKey(inode, uint32(right/ChunkSize)))
 			buf := marshalSlice(0, 0, 0, 0, ChunkSize)
-			for key, value := range zeroChunks {
-				tx.set([]byte(key), append(value, buf...))
-			}
+			tx.scan(m.chunkKey(inode, uint32(left/ChunkSize)+1), m.chunkKey(inode, uint32(right/ChunkSize)),
+				false, func(k, v []byte) bool {
+					tx.set(k, append(v, buf...))
+					return true
+				})
 		}
 		l := uint32(right - left)
 		if right > (left/ChunkSize+1)*ChunkSize {
@@ -1813,7 +1814,12 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 
-		vals := tx.scanRange(m.chunkKey(fin, uint32(offIn/ChunkSize)), m.chunkKey(fin, uint32(offIn+size/ChunkSize)+1))
+		vals := make(map[string][]byte)
+		tx.scan(m.chunkKey(fin, uint32(offIn/ChunkSize)), m.chunkKey(fin, uint32(offIn+size/ChunkSize)+1),
+			false, func(k, v []byte) bool {
+				vals[string(k)] = v
+				return true
+			})
 		chunks := make(map[uint32][]*slice)
 		for indx := uint32(offIn / ChunkSize); indx <= uint32((offIn+size)/ChunkSize); indx++ {
 			if v, ok := vals[string(m.chunkKey(fin, indx))]; ok {
@@ -2420,7 +2426,12 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 
 		if attr.Typ == TypeFile {
 			e.Chunks = e.Chunks[:0]
-			vals := tx.scanRange(m.chunkKey(inode, 0), m.chunkKey(inode, uint32(attr.Length/ChunkSize)+1))
+			vals := make(map[string][]byte)
+			tx.scan(m.chunkKey(inode, 0), m.chunkKey(inode, uint32(attr.Length/ChunkSize)+1),
+				false, func(k, v []byte) bool {
+					vals[string(k)] = v
+					return true
+				})
 			for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
 				v, ok := vals[string(m.chunkKey(inode, indx))]
 				if !ok {

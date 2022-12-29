@@ -20,7 +20,6 @@
 package meta
 
 import (
-	"bytes"
 	"time"
 
 	badger "github.com/dgraph-io/badger/v3"
@@ -57,6 +56,7 @@ func (tx *badgerTxn) gets(keys ...[]byte) [][]byte {
 
 func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {}
 
+/*
 func (tx *badgerTxn) scanRange(begin, end []byte) map[string][]byte {
 	it := tx.t.NewIterator(badger.IteratorOptions{
 		PrefetchValues: true,
@@ -79,6 +79,7 @@ func (tx *badgerTxn) scanRange(begin, end []byte) map[string][]byte {
 	}
 	return ret
 }
+*/
 
 func (tx *badgerTxn) scanKeys(prefix []byte) [][]byte {
 	it := tx.t.NewIterator(badger.IteratorOptions{

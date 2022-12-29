@@ -140,6 +140,7 @@ func (tx *fdbTxn) range0(begin, end []byte) *fdb.RangeIterator {
 
 func (tx *fdbTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {}
 
+/*
 func (tx *fdbTxn) scanRange(begin, end []byte) map[string][]byte {
 	ret := make(map[string][]byte)
 	iter := tx.range0(begin, end)
@@ -149,6 +150,7 @@ func (tx *fdbTxn) scanRange(begin, end []byte) map[string][]byte {
 	}
 	return ret
 }
+*/
 
 func (tx *fdbTxn) scanKeys(prefix []byte) [][]byte {
 	ret := make([][]byte, 0)

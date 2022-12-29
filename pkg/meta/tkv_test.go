@@ -121,7 +121,14 @@ func testTKV(t *testing.T, c tkvClient) {
 	if len(values) != 1 || string(values["k2"]) != "value" {
 		t.Fatalf("scan values: %+v", values)
 	}
-	txn(func(kt *kvTxn) { values = kt.scanRange([]byte("k2"), []byte("v")) })
+	values = make(map[string][]byte)
+	txn(func(kt *kvTxn) {
+		kt.scan([]byte("k2"), []byte("v"),
+			false, func(k, v []byte) bool {
+				values[string(k)] = v
+				return true
+			})
+	})
 	if len(values) != 1 || string(values["k2"]) != "value" {
 		t.Fatalf("scanRange: %+v", values)
 	}
