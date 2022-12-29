@@ -378,7 +378,7 @@ func TestS3(t *testing.T) {
 }
 
 func TestOracleCompileRegexp(t *testing.T) {
-	ep := "zhijian-test.axntujn0ebj1.compat.objectstorage.ap-singapore-1.oraclecloud.com"
+	ep := "axntujn0ebj1.compat.objectstorage.ap-singapore-1.oraclecloud.com"
 	oracleCompile := regexp.MustCompile(oracleCompileRegexp)
 	if oracleCompile.MatchString(ep) {
 		if submatch := oracleCompile.FindStringSubmatch(ep); len(submatch) == 2 {
@@ -388,6 +388,20 @@ func TestOracleCompileRegexp(t *testing.T) {
 		}
 	} else {
 		t.Fatalf("oracle endpoint parse failed")
+	}
+}
+
+func TestOVHCompileRegexp(t *testing.T) {
+	ep := "s3.gra.perf.cloud.ovh.net"
+	ovhCompile := regexp.MustCompile(OVHCompileRegexp)
+	if ovhCompile.MatchString(ep) {
+		if submatch := ovhCompile.FindStringSubmatch(ep); len(submatch) == 2 {
+			if submatch[1] != "gra" {
+				t.Fatalf("oracle endpoint parse failed")
+			}
+		}
+	} else {
+		t.Fatalf("ovh endpoint parse failed")
 	}
 }
 
