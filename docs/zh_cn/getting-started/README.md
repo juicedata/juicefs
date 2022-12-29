@@ -77,12 +77,12 @@ juicefs mount [command options] META-URL MOUNTPOINT
 
 与创建文件系统的命令类似，挂载文件系统需要提供以下信息：
 
-1. **[command options]**：用来指定文件系统相关的选项，例如：`-d` 可以实现后台挂载；
-2. **META-URL**：用来设置元数据存储。即数据库相关的信息，通常是数据库的 URL 或文件路径；
-3. **MOUNTPOINT**：指定文件系统的挂载点。
+1. `[command options]`：用来指定文件系统相关的选项，例如：`-d` 可以实现后台挂载；
+2. `META-URL`：用来设置元数据存储。即数据库相关的信息，通常是数据库的 URL 或文件路径；
+3. `MOUNTPOINT`：指定文件系统的挂载点。
 
 :::tip 提示
-Windows 系统的挂载点（MOUNTPOINT）应该使用尚未占用的盘符，比如：`Z:`、`Y:`。
+Windows 系统的挂载点（`MOUNTPOINT`）应该使用尚未占用的盘符，比如：`Z:`、`Y:`。
 :::
 
 ### 上手实践

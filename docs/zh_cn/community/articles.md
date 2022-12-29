@@ -20,10 +20,9 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 大数据
 
-
 - [Protobuf 在知乎大数据场景的应用，利用 JuiceFS 动态注入 JAR 包](https://zhuanlan.zhihu.com/p/586120009)，2022-11-23，胡梦宇@知乎
 - [金山云：基于 JuiceFS 的 Elasticsearch 温冷热数据管理实践](https://juicefs.com/zh-cn/blog/user-stories/juicefs-elasticsearch-cold-heat-data-management)，2022-11-17，侯学峰@金山云
-- [JuiceFS替代HDFS，苦HDFS小文件久矣](https://zhuanlan.zhihu.com/p/569586606)，2022-10-08，久耶供应链 大数据总监
+- [JuiceFS 替代 HDFS，苦 HDFS 小文件久矣](https://zhuanlan.zhihu.com/p/569586606)，2022-10-08，久耶供应链 大数据总监
 - [JuiceFS 在 Elasticsearch/ClickHouse 温冷数据存储中的实践](https://juicefs.com/zh-cn/blog/solutions/juicefs-elasticsearch-clickhouse-hot-cold-data-storage)，2022-09-30，高昌健
 - [从 Hadoop 到云原生，大数据平台如何做存算分离](https://juicefs.com/zh-cn/blog/solutions/hadoop-to-cloud-native-separation-of-compute-and-storage-for-big-data-platform)，2022-09-14，苏锐
 - [理想汽车：从 Hadoop 到云原生的演进与思考](https://juicefs.com/zh-cn/blog/user-stories/li-auto-case-hadoop-cloud-native)，2022-08-30，聂磊@理想汽车

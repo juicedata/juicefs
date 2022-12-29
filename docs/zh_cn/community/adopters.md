@@ -38,25 +38,25 @@ slug: /adopters
 | [云从科技](https://www.cloudwalk.com)            | Production | AI                     |                                                                                                                                                                                                       |
 | 名之梦                                           | Production | AI                     |                                                                                                                                                                                                       |
 | [建信金融科技](https://www.ccbft.com)            | Production | AI，共享文件存储       |                                                                                                                                                                                                       |
-| [思谋 Smartmore](https://cn.smartmore.com/) | Production | AI |    |
-| [汇丰银行 HSBC](https://www.hsbc.com.cn/) | Production | 共享文件存储 |   |
-| [中国电信](http://www.chinatelecom.com.cn/) | Production | 大数据 |     |
-| [酷数智能](http://www.kurudata.com/) | Production | 共享文件存储 |    |
-| [朗新集团](https://www.longshine.com/) | Production | 大数据，共享文件存储 |    |
-| [网易邮箱](https://mail.163.com/) | Production | 大数据 |    |
-| [梧桐车联](https://www.auto-pai.com/) | Production | AI，大数据 |    |
-| [南昌维网科技](https://www.vwell.cn/) | Production | 共享数据存储 |    |
-| [声网](https://www.agora.io/cn/) | Production | 大数据 |    |
-| [南京鹏云网络](https://www.pengyunnetwork.cn/) | Production | 共享文件存储 |    |
-| [聚云位智 LinkoopDB](http://www.datapps.cn/) | Production | 大数据 |    |
-| [之江实验室](https://www.zhejianglab.com/) | Production | AI，共享文件存储 |    |
-| [国家天文科学数据中心](https://nadc.china-vo.org/) | Production | 共享文件存储 |    |
-| [艾莎医学](https://www.ashermed.com/) | Production | 共享文件存储 |    |
-| [蝉妈妈数据](https://www.chanmama.com/) | Production | AI |    |
-| [NodeReal](https://nodereal.io/) | Production | 共享文件存储 |    |
-| [不鸣科技](https://www.boomingtech.com/) | Production | 共享文件存储 |    |
-| [博依特科技](https://www.poi-t.com/) | Production | 大数据 |    |
-| [九曳供应链](https://www.jiuyescm.com/) | Production | 大数据 |    |
+| [思谋 SmartMore](https://cn.smartmore.com) | Production | AI |    |
+| [汇丰银行 HSBC](https://www.hsbc.com.cn) | Production | 共享文件存储 |   |
+| [中国电信](http://www.chinatelecom.com.cn) | Production | 大数据 |     |
+| [酷数智能](http://www.kurudata.com) | Production | 共享文件存储 |    |
+| [朗新集团](https://www.longshine.com) | Production | 大数据，共享文件存储 |    |
+| [网易邮箱](https://mail.163.com) | Production | 大数据 |    |
+| [梧桐车联](https://www.auto-pai.com) | Production | AI，大数据 |    |
+| [南昌维网科技](https://www.vwell.cn) | Production | 共享数据存储 |    |
+| [声网](https://www.agora.io/cn) | Production | 大数据 |    |
+| [南京鹏云网络](https://www.pengyunnetwork.cn) | Production | 共享文件存储 |    |
+| [聚云位智 LinkoopDB](http://www.datapps.cn) | Production | 大数据 |    |
+| [之江实验室](https://www.zhejianglab.com) | Production | AI，共享文件存储 |    |
+| [国家天文科学数据中心](https://nadc.china-vo.org) | Production | 共享文件存储 |    |
+| [艾莎医学](https://www.ashermed.com) | Production | 共享文件存储 |    |
+| [蝉妈妈数据](https://www.chanmama.com) | Production | AI |    |
+| [NodeReal](https://nodereal.io) | Production | 共享文件存储 |    |
+| [不鸣科技](https://www.boomingtech.com) | Production | 共享文件存储 |    |
+| [博依特科技](https://www.poi-t.com) | Production | 大数据 |    |
+| [九曳供应链](https://www.jiuyescm.com) | Production | 大数据 |    |
 | [顺丰速运](https://www.sf-express.com)           | Testing    | 大数据，共享文件存储   |                                                                                                                                                                                                       |
 | [BIGO](https://bigo.tv)                          | Testing    | AI                     |                                                                                                                                                                                                       |
 | [蒙商消费金融](https://www.mengshangxiaofei.com) | Testing    | 共享文件存储           |                                                                                                                                                                                                       |

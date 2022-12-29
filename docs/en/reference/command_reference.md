@@ -222,8 +222,8 @@ Mount a volume. The volume must be formatted in advance.
 juicefs mount [command options] META-URL MOUNTPOINT
 ```
 
-- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md)" for details.
-- **MOUNTPOINT**: file system mount point, e.g. `/mnt/jfs`, `Z:`.
+- `META-URL`: Database URL for metadata storage, see "[JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md)" for details.
+- `MOUNTPOINT`: file system mount point, e.g. `/mnt/jfs`, `Z:`.
 
 #### Options
 
