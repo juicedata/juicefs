@@ -928,6 +928,7 @@ func (f *File) Utime(ctx meta.Context, atime, mtime int64) (err syscall.Errno) {
 	attr.Mtime = mtime / 1000
 	attr.Mtimensec = uint32(mtime%1000) * 1e6
 	err = f.fs.m.SetAttr(ctx, f.inode, flag, 0, &attr)
+	f.fs.invalidateAttr(f.inode)
 	return
 }
 
