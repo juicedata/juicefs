@@ -110,7 +110,13 @@ func testTKV(t *testing.T, c tkvClient) {
 	if len(keys) != 2 || string(keys[0]) != "k" || string(keys[1]) != "v" {
 		t.Fatalf("keys: %+v", keys)
 	}
-	txn(func(kt *kvTxn) { keys = kt.scanKeys(nil) })
+	keys = keys[:0]
+	txn(func(kt *kvTxn) {
+		kt.scan(nil, nil, true, func(k, v []byte) bool {
+			keys = append(keys, k)
+			return true
+		})
+	})
 	if len(keys) != 3 || string(keys[0]) != "k" || string(keys[1]) != "k2" || string(keys[2]) != "v" {
 		t.Fatalf("keys: %+v", keys)
 	}
@@ -147,7 +153,13 @@ func testTKV(t *testing.T, c tkvClient) {
 	if r != nil {
 		t.Fatalf("expect nil, but got %v", string(r))
 	}
-	txn(func(kt *kvTxn) { keys = kt.scanKeys(nil) })
+	keys = keys[:0]
+	txn(func(kt *kvTxn) {
+		kt.scan(nil, nil, true, func(k, v []byte) bool {
+			keys = append(keys, k)
+			return true
+		})
+	})
 	if len(keys) != 0 {
 		t.Fatalf("no keys: %+v", keys)
 	}

@@ -130,7 +130,6 @@ func (tx *etcdTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 	}
 	return ret
 }
-*/
 
 func (tx *etcdTxn) scanKeys(prefix []byte) [][]byte {
 	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithKeysOnly())
@@ -144,6 +143,7 @@ func (tx *etcdTxn) scanKeys(prefix []byte) [][]byte {
 	}
 	return keys
 }
+*/
 
 func (tx *etcdTxn) scanKeysRange(begin_, end_ []byte, limit int, filter func(k []byte) bool) [][]byte {
 	if limit == 0 {

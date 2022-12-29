@@ -150,7 +150,6 @@ func (tx *fdbTxn) scanRange(begin, end []byte) map[string][]byte {
 	}
 	return ret
 }
-*/
 
 func (tx *fdbTxn) scanKeys(prefix []byte) [][]byte {
 	ret := make([][]byte, 0)
@@ -160,6 +159,7 @@ func (tx *fdbTxn) scanKeys(prefix []byte) [][]byte {
 	}
 	return ret
 }
+*/
 
 func (tx *fdbTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte {
 	ret := make([][]byte, 0)

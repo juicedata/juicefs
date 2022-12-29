@@ -56,7 +56,6 @@ func (tx *prefixTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 	}
 	return m
 }
-*/
 
 func (tx *prefixTxn) scanKeys(prefix []byte) [][]byte {
 	keys := tx.kvTxn.scanKeys(tx.realKey(prefix))
@@ -65,6 +64,7 @@ func (tx *prefixTxn) scanKeys(prefix []byte) [][]byte {
 	}
 	return keys
 }
+*/
 
 func (tx *prefixTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte {
 	keys := tx.kvTxn.scanKeysRange(tx.realKey(begin), tx.realKey(end), limit, func(k []byte) bool {

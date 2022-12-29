@@ -44,7 +44,7 @@ type kvtxn interface {
 	// scan stops when handler returns false
 	scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool)
 	// scanRange(begin, end []byte) map[string][]byte
-	scanKeys(prefix []byte) [][]byte
+	// scanKeys(prefix []byte) [][]byte
 	scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte
 	scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
@@ -325,7 +325,11 @@ func (m *kvMeta) get(key []byte) ([]byte, error) {
 func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
 	var keys [][]byte
 	err := m.client.txn(func(tx *kvTxn) error {
-		keys = tx.scanKeys(prefix)
+		tx.scan(prefix, nextKey(prefix),
+			true, func(k, v []byte) bool {
+				keys = append(keys, k)
+				return true
+			})
 		return nil
 	})
 	return keys, err
