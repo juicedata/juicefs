@@ -176,7 +176,6 @@ func (tx *fdbTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []by
 	}
 	return ret
 }
-*/
 
 func (tx *fdbTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
 	ret := make(map[string][]byte)
@@ -194,6 +193,7 @@ func (tx *fdbTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) 
 	}
 	return ret
 }
+*/
 
 func (tx *fdbTxn) exist(prefix []byte) bool {
 	iter := tx.range0(prefix, nextKey(prefix))

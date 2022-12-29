@@ -184,11 +184,11 @@ func (tx *tikvTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []b
 	}
 	return ret
 }
-*/
 
 func (tx *tikvTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
 	return tx.scanRange0(prefix, nextKey(prefix), limit, filter)
 }
+*/
 
 func (tx *tikvTxn) exist(prefix []byte) bool {
 	it, err := tx.Iter(prefix, nextKey(prefix))

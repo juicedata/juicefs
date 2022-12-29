@@ -162,7 +162,6 @@ func (tx *memTxn) scanKeysRange(begin_, end_ []byte, limit int, filter func(k []
 	})
 	return keys
 }
-*/
 
 func (tx *memTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
 	if limit == 0 {
@@ -185,6 +184,7 @@ func (tx *memTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) 
 	}
 	return res
 }
+*/
 
 func (tx *memTxn) exist(prefix []byte) bool {
 	return len(tx.scanKeys(prefix)) > 0

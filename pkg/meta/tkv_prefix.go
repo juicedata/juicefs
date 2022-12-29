@@ -77,7 +77,6 @@ func (tx *prefixTxn) scanKeysRange(begin, end []byte, limit int, filter func(k [
 	}
 	return keys
 }
-*/
 
 func (tx *prefixTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
 	r := tx.kvTxn.scanValues(tx.realKey(prefix), limit, func(k, v []byte) bool {
@@ -92,6 +91,7 @@ func (tx *prefixTxn) scanValues(prefix []byte, limit int, filter func(k, v []byt
 	}
 	return m
 }
+*/
 
 func (tx *prefixTxn) exist(prefix []byte) bool {
 	return tx.kvTxn.exist(tx.realKey(prefix))

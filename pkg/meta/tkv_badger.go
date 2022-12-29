@@ -117,7 +117,6 @@ func (tx *badgerTxn) scanKeysRange(begin, end []byte, limit int, filter func(k [
 	}
 	return ret
 }
-*/
 
 func (tx *badgerTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
 	if limit == 0 {
@@ -148,6 +147,7 @@ func (tx *badgerTxn) scanValues(prefix []byte, limit int, filter func(k, v []byt
 	}
 	return ret
 }
+*/
 
 func (tx *badgerTxn) exist(prefix []byte) bool {
 	it := tx.t.NewIterator(badger.IteratorOptions{

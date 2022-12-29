@@ -126,9 +126,14 @@ func testTKV(t *testing.T, c tkvClient) {
 	if len(keys) != 3 || string(keys[0]) != "k" || string(keys[1]) != "k2" || string(keys[2]) != "v" {
 		t.Fatalf("keys: %+v", keys)
 	}
-	var values map[string][]byte
+	values := make(map[string][]byte)
 	txn(func(kt *kvTxn) {
-		values = kt.scanValues([]byte("k"), -1, func(k, v []byte) bool { return len(v) == 5 })
+		kt.scan([]byte("k"), nextKey([]byte("k")), false, func(k, v []byte) bool {
+			if len(v) == 5 {
+				values[string(k)] = v
+			}
+			return true
+		})
 	})
 	if len(values) != 1 || string(values["k2"]) != "value" {
 		t.Fatalf("scan values: %+v", values)

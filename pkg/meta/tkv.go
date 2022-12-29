@@ -46,7 +46,7 @@ type kvtxn interface {
 	// scanRange(begin, end []byte) map[string][]byte
 	// scanKeys(prefix []byte) [][]byte
 	// scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte
-	scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte
+	// scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
 	set(key, value []byte)
 	append(key []byte, value []byte) []byte
@@ -325,20 +325,29 @@ func (m *kvMeta) get(key []byte) ([]byte, error) {
 func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
 	var keys [][]byte
 	err := m.client.txn(func(tx *kvTxn) error {
-		tx.scan(prefix, nextKey(prefix),
-			true, func(k, v []byte) bool {
-				keys = append(keys, k)
-				return true
-			})
+		tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
+			keys = append(keys, k)
+			return true
+		})
 		return nil
 	})
 	return keys, err
 }
 
 func (m *kvMeta) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) (map[string][]byte, error) {
-	var values map[string][]byte
+	if limit == 0 {
+		return nil, nil
+	}
+	values := make(map[string][]byte)
 	err := m.client.txn(func(tx *kvTxn) error {
-		values = tx.scanValues(prefix, limit, filter)
+		var c int
+		tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
+			if filter == nil || filter(k, v) {
+				values[string(k)] = v
+				c++
+			}
+			return limit < 0 || c < limit
+		})
 		return nil
 	})
 	return values, err
@@ -2331,14 +2340,15 @@ func (m *kvMeta) scanDeletedFiles(ctx Context, scan deletedFileScan) error {
 }
 
 func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	prefix := m.entryKey(inode, "")
 	return errno(m.txn(func(tx *kvTxn) error {
 		attr.Nlink = 2
-		_ = tx.scanValues(m.entryKey(inode, ""), -1, func(k, v []byte) bool {
+		tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
 			typ, _ := m.parseEntry(v)
 			if typ == TypeDirectory {
 				attr.Nlink++
 			}
-			return false
+			return true
 		})
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		return nil
@@ -2425,12 +2435,12 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 		dumpAttr(attr, e.Attr)
 		e.Attr.Inode = inode
 
-		vals := tx.scanValues(m.xattrKey(inode, ""), -1, nil)
-		if len(vals) > 0 {
-			xattrs := make([]*DumpedXattr, 0, len(vals))
-			for k, v := range vals {
-				xattrs = append(xattrs, &DumpedXattr{k[10:], string(v)}) // "A" + inode + "X"
-			}
+		var xattrs []*DumpedXattr
+		tx.scan(m.xattrKey(inode, ""), nextKey(m.xattrKey(inode, "")), false, func(k, v []byte) bool {
+			xattrs = append(xattrs, &DumpedXattr{string(k[10:]), string(v)}) // "A" + inode + "X"
+			return true
+		})
+		if len(xattrs) > 0 {
 			sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
 			e.Xattrs = xattrs
 		}
