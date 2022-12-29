@@ -165,7 +165,7 @@ For users in China, in order to speed up the acquisition of Go modules, it is re
 
 Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the following dependencies:
 
-- [Go](https://golang.org) 1.17+
+- [Go](https://golang.org) 1.18+
 - GCC 5.4+
 
 1. Clone source code
@@ -202,7 +202,7 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 
 ### Compiling on Windows
 
-Compiling the JuiceFS client on Windows requires [Go](https://golang.org) 1.17+ and GCC 5.4+.
+Compiling the JuiceFS client on Windows requires [Go](https://golang.org) 1.18+ and GCC 5.4+.
 
 Since GCC does not have a native Windows client, the version provided by a third party, either [MinGW-w64](https://sourceforge.net/projects/mingw-w64/) or [Cygwin](https://www.cygwin.com/) is needed. Here is an example of using MinGW-w64.
 

@@ -47,7 +47,7 @@ No matter which system environment the client is compiled for, the compiled JAR 
 
 Compilation depends on the following tools:
 
-- [Go](https://golang.org/) 1.17+
+- [Go](https://golang.org/) 1.18+
 - JDK 8+
 - [Maven](https://maven.apache.org/) 3.3+
 - git
