@@ -143,7 +143,6 @@ func (tx *etcdTxn) scanKeys(prefix []byte) [][]byte {
 	}
 	return keys
 }
-*/
 
 func (tx *etcdTxn) scanKeysRange(begin_, end_ []byte, limit int, filter func(k []byte) bool) [][]byte {
 	if limit == 0 {
@@ -166,6 +165,7 @@ func (tx *etcdTxn) scanKeysRange(begin_, end_ []byte, limit int, filter func(k [
 	}
 	return keys
 }
+*/
 
 func (tx *etcdTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
 	if limit == 0 {

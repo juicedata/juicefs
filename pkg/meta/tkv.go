@@ -45,7 +45,7 @@ type kvtxn interface {
 	scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool)
 	// scanRange(begin, end []byte) map[string][]byte
 	// scanKeys(prefix []byte) [][]byte
-	scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte
+	// scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte
 	scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte
 	exist(prefix []byte) bool
 	set(key, value []byte)
@@ -2004,9 +2004,16 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	var batch int = 1e5
 	for {
 		if err := m.client.txn(func(tx *kvTxn) error {
-			keys = tx.scanKeysRange(m.delSliceKey(0, 0), m.delSliceKey(edge, 0), batch, func(k []byte) bool {
-				return len(k) == 1+8+8 // delayed slices: Lttttttttcccccccc
-			})
+			keys = keys[:0]
+			var c int
+			tx.scan(m.delSliceKey(0, 0), m.delSliceKey(edge, 0),
+				true, func(k, v []byte) bool {
+					if len(k) == 1+8+8 { // delayed slices: Lttttttttcccccccc
+						keys = append(keys, k)
+						c++
+					}
+					return c < batch
+				})
 			return nil
 		}); err != nil {
 			logger.Warnf("Scan delayed slices: %s", err)

@@ -157,7 +157,6 @@ func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
 	}
 	return ret
 }
-*/
 
 func (tx *tikvTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte {
 	if limit == 0 {
@@ -185,6 +184,7 @@ func (tx *tikvTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []b
 	}
 	return ret
 }
+*/
 
 func (tx *tikvTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
 	return tx.scanRange0(prefix, nextKey(prefix), limit, filter)
