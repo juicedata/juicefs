@@ -114,6 +114,8 @@ func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
 	return values
 }
 
+func (tx *etcdTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {}
+
 func (tx *etcdTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 	resp, err := tx.kv.Get(tx.ctx, string(begin_), etcd.WithRange(string(end_)))
 	if err != nil {

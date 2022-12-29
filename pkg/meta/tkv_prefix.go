@@ -45,6 +45,8 @@ func (tx *prefixTxn) gets(keys ...[]byte) [][]byte {
 	return tx.kvTxn.gets(keys...)
 }
 
+func (tx *prefixTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {}
+
 func (tx *prefixTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 	r := tx.kvTxn.scanRange(tx.realKey(begin_), tx.realKey(end_))
 	m := make(map[string][]byte, len(r))

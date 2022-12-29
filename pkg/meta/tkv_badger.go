@@ -55,6 +55,8 @@ func (tx *badgerTxn) gets(keys ...[]byte) [][]byte {
 	return values
 }
 
+func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {}
+
 func (tx *badgerTxn) scanRange(begin, end []byte) map[string][]byte {
 	it := tx.t.NewIterator(badger.IteratorOptions{
 		PrefetchValues: true,

@@ -41,6 +41,8 @@ import (
 type kvtxn interface {
 	get(key []byte) []byte
 	gets(keys ...[]byte) [][]byte
+	// scan stops when handler returns false
+	scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool)
 	scanRange(begin, end []byte) map[string][]byte
 	scanKeys(prefix []byte) [][]byte
 	scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte
@@ -63,6 +65,13 @@ type tkvClient interface {
 
 type kvTxn struct {
 	kvtxn
+}
+
+func (tx *kvTxn) deleteKeys(prefix []byte) {
+	tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
+		tx.delete(k)
+		return true
+	})
 }
 
 type kvMeta struct {
@@ -1205,13 +1214,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 				tx.delete(m.inodeKey(inode))
 				newSpace, newInode = -align4K(0), -1
 			}
-			for _, key := range tx.scanKeys(m.xattrKey(inode, "")) {
-				tx.delete(key)
-			}
+			tx.deleteKeys(m.xattrKey(inode, ""))
 			if attr.Parent == 0 {
-				for _, key := range tx.scanKeys(m.fmtKey("A", inode, "P")) {
-					tx.delete(key)
-				}
+				tx.deleteKeys(m.fmtKey("A", inode, "P"))
 			}
 		}
 		return nil
@@ -1291,9 +1296,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			tx.set(m.entryKey(trash, m.trashEntry(parent, inode, name)), buf)
 		} else {
 			tx.delete(m.inodeKey(inode))
-			for _, key := range tx.scanKeys(m.xattrKey(inode, "")) {
-				tx.delete(key)
-			}
+			tx.deleteKeys(m.xattrKey(inode, ""))
 		}
 		return nil
 	}, parent)
@@ -1496,13 +1499,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						tx.delete(m.inodeKey(dino))
 						newSpace, newInode = -align4K(0), -1
 					}
-					for _, key := range tx.scanKeys(m.xattrKey(dino, "")) {
-						tx.delete(key)
-					}
+					tx.deleteKeys(m.xattrKey(dino, ""))
 					if tattr.Parent == 0 {
-						for _, key := range tx.scanKeys(m.fmtKey("A", dino, "P")) {
-							tx.delete(key)
-						}
+						tx.deleteKeys(m.fmtKey("A", dino, "P"))
 					}
 				}
 			}

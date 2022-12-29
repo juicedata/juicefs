@@ -135,6 +135,8 @@ func (tx *tikvTxn) scanRange0(begin, end []byte, limit int, filter func(k, v []b
 	return ret
 }
 
+func (tx *tikvTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {}
+
 func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
 	return tx.scanRange0(begin, end, -1, nil)
 }

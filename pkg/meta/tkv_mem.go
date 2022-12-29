@@ -77,6 +77,8 @@ func (tx *memTxn) gets(keys ...[]byte) [][]byte {
 	return values
 }
 
+func (tx *memTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {}
+
 func (tx *memTxn) scanRange(begin_, end_ []byte) map[string][]byte {
 	tx.store.Lock()
 	defer tx.store.Unlock()
