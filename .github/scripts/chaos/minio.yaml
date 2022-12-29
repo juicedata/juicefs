@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio-server
+  namespace: kube-system
+  labels:
+    app: minio-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio-server
+  serviceName: minio
+  template:
+    metadata:
+      labels:
+        app: minio-server
+    spec:
+      containers:
+      - name: minio
+        image: minio/minio
+        env:
+        - name: MINIO_ROOT_USER
+          value: minioadmin
+        - name: MINIO_ROOT_PASSWORD
+          value: minioadmin
+        args:
+        - server
+        - /data
+        volumeMounts:
+        - mountPath: /data
+          name: minio-data
+        ports:
+        - containerPort: 9000
+          name: sever
+      volumes:
+      - name: minio-data
+        hostPath:
+          path: /data/minio-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: kube-system
+spec:
+  type: NodePort
+  selector:
+    app: minio-server
+  ports:
+  - protocol: TCP
+    port: 9000
+    targetPort: 9000
+    nodePort: 31275
+    name: server

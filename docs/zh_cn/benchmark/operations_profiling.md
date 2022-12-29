@@ -2,6 +2,7 @@
 title: 性能诊断
 sidebar_position: 3
 slug: /operations_profiling
+description: JuiceFS 的 profile 命令主要用作汇总过去某个时间的所有日志并定期显示统计信息，包括实时模式和回放模式。
 ---
 
 ## 介绍

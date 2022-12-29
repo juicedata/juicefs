@@ -177,7 +177,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("smallput", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("smallput", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -190,7 +190,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("smallget", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("smallget", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -204,7 +204,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("put", float64(bSize>>20*bCount)/cost, cost*1000/float64(bCount), 2, colorful)
+					line[1], line[2] = colorize("put", float64(bSize>>20*bCount)/cost, float64(threads)*cost*1000/float64(bCount), 2, colorful)
 					line[1] += " MiB/s"
 					line[2] += " ms/object"
 				}
@@ -223,7 +223,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("get", float64(bSize>>20*bCount)/cost, cost*1000/float64(bCount), 2, colorful)
+					line[1], line[2] = colorize("get", float64(bSize>>20*bCount)/cost, float64(threads)*cost*1000/float64(bCount), 2, colorful)
 					line[1] += " MiB/s"
 					line[2] += " ms/object"
 				}
@@ -236,7 +236,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("list", float64(sCount)*100/cost, cost*10, 2, colorful)
+					line[1], line[2] = colorize("list", float64(sCount)*100/cost, float64(threads)*cost*10, 2, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/op"
 				}
@@ -249,7 +249,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("head", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("head", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -262,7 +262,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chtimes", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("chtimes", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -275,7 +275,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chmod", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("chmod", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -288,7 +288,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chown", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("chown", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -301,7 +301,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("delete", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("delete", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}

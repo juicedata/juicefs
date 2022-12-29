@@ -2,6 +2,7 @@
 title: 如何设置对象存储
 sidebar_position: 2
 slug: /how_to_setup_object_storage
+description: JuiceFS 以对象存储作为数据存储，本文介绍 JuiceFS 支持的对象存储以及相应的配置和使用方法。
 ---
 
 import Tabs from '@theme/Tabs';
@@ -748,7 +749,7 @@ sudo yum install librados2-devel
   </TabItem>
 </Tabs>
 
-然后为 Ceph 编译 JuiceFS（要求 Go 1.17+ 和 GCC 5.4+）：
+然后为 Ceph 编译 JuiceFS（要求 Go 1.18+ 和 GCC 5.4+）：
 
 ```bash
 make juicefs.ceph

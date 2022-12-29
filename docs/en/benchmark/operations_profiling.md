@@ -2,6 +2,7 @@
 title: Operations Profiling
 sidebar_position: 3
 slug: /operations_profiling
+description: JuiceFS profile is to aggregate all logs in the past interval and display statistics periodically, includes real time and replay modes。
 ---
 
 ## Introduction

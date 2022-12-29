@@ -1,5 +1,6 @@
 ---
 slug: /comparison/juicefs_vs_cephfs
+description: Ceph 是一套提供对象存储、块存储和文件存储的统一系统，本文从架构和特性两个维度来对比 JuiceFS 与 Ceph 的异同。
 ---
 
 # JuiceFS 对比 CephFS

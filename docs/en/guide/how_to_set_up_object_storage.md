@@ -2,6 +2,7 @@
 title: How to Set Up Object Storage
 sidebar_position: 2
 slug: /how_to_setup_object_storage
+description: This article introduces the object storages supported by JuiceFS and how to configure and use it.
 ---
 
 import Tabs from '@theme/Tabs';
@@ -748,7 +749,7 @@ sudo yum install librados2-devel
   </TabItem>
 </Tabs>
 
-Then compile JuiceFS for Ceph (make sure you have Go 1.17+ and GCC 5.4+ installed):
+Then compile JuiceFS for Ceph (make sure you have Go 1.18+ and GCC 5.4+ installed):
 
 ```bash
 make juicefs.ceph

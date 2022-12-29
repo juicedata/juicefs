@@ -2,6 +2,7 @@
 title: Troubleshooting Methods
 sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
+description: This article describes how to view and interpret logs in various operating systems for JuiceFS FUSE, CSI Driver, Hadoop Java SDK S3 gateway, S3 gateway clients.
 ---
 
 import Tabs from '@theme/Tabs';

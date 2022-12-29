@@ -1,6 +1,7 @@
 ---
 title: Contributing Guide
 sidebar_position: 1
+description: JuiceFS is open source software and the code is contributed and maintained by developers worldwide. Please refer to this article for participating.
 ---
 
 ## Guidelines

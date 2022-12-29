@@ -2,6 +2,7 @@
 title: 问题排查方法
 sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
+description: 本文介绍 JuiceFS FUSE、CSI Driver、Hadoop Java SDK S3 gateway、S3 gateway 等客户端在各类操作系统中的日志获取和解读方法。
 ---
 
 import Tabs from '@theme/Tabs';

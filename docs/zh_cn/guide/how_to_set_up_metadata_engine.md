@@ -2,6 +2,7 @@
 title: 如何设置元数据引擎
 sidebar_position: 1
 slug: /databases_for_metadata
+description: JuiceFS 支持 Redis、TiKV、PostgreSQL、MySQL 等多种数据库作为元数据引擎，本文分别介绍相应的设置和使用方法。
 ---
 
 import Tabs from '@theme/Tabs';

@@ -1,6 +1,7 @@
 ---
 sidebar_label: 快速上手（分布式模式）
 sidebar_position: 3
+description: 本文将指导你使用基于云的对象存储和数据库，构建一个具有分布式和共享访问能力的 JuiceFS 文件系统。
 ---
 
 # 分布式模式快速上手指南

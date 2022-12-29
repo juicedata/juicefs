@@ -1,6 +1,7 @@
 ---
 title: 贡献指南
 sidebar_position: 1
+description: JuiceFS 是开源软件，代码由全球开发者共同贡献和维护，您可以参考本文了解参与开发的流程和注意事项。
 ---
 
 ## 基本准则

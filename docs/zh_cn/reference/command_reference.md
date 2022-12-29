@@ -2,6 +2,7 @@
 title: 命令参考
 sidebar_position: 1
 slug: /command_reference
+description: 本文提供 JuiceFS 包含的所有命令及选项的说明、用法和示例。
 ---
 
 import Tabs from '@theme/Tabs';

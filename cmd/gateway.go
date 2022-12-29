@@ -22,7 +22,9 @@ package cmd
 import (
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -208,7 +210,18 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}
-
+	// Go will catch all the signals
+	signal.Ignore(syscall.SIGPIPE)
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	go func() {
+		sig := <-signalChan
+		logger.Infof("Received signal %s, exiting...", sig.String())
+		if err := metaCli.CloseSession(); err != nil {
+			logger.Fatalf("close session failed: %s", err)
+		}
+		os.Exit(0)
+	}()
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
 	vfsConf.AccessLog = c.String("access-log")
 	vfsConf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
