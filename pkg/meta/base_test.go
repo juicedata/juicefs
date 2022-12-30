@@ -35,6 +35,7 @@ import (
 	"xorm.io/xorm"
 )
 
+//disable_mutate_test
 func TestRedisClient(t *testing.T) {
 	var conf = Config{}
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", &conf)

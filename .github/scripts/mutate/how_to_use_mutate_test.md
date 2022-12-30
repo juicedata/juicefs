@@ -42,3 +42,6 @@ For example:
 # how to customize mutate test job in parallel?
 if the mutants of the target source file is more than 200, we will use 4 github jobs to run it. otherwise we will use 1 job to run.
 you can customize it in your test file with adding "//mutate_test_job_number: number", eg: //mutate_test_job_number: 8
+
+# how to disable muate test for a specific go file?
+add //disable_mutate_test in the *_test.go file to disable the mutate test.
