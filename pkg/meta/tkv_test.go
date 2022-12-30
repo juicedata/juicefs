@@ -15,6 +15,7 @@
  */
 
 //nolint:errcheck
+//disable_mutate_test
 package meta
 
 import (
@@ -23,7 +24,6 @@ import (
 	"testing"
 )
 
-//disable_mutate_test
 func TestMemKVClient(t *testing.T) {
 	_ = os.Remove(settingPath)
 	m, err := newKVMeta("memkv", "jfs-unit-test", &Config{})
