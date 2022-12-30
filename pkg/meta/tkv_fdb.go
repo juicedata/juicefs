@@ -1,3 +1,6 @@
+//go:build fdb
+// +build fdb
+
 /*
  * JuiceFS, Copyright 2022 Juicedata, Inc.
  *

@@ -118,7 +118,7 @@ func testTKV(t *testing.T, c tkvClient) {
 	}
 	keys = keys[:0]
 	txn(func(kt *kvTxn) {
-		kt.scan(nil, nil, true, func(k, v []byte) bool {
+		kt.scan([]byte("a"), []byte("z"), true, func(k, v []byte) bool {
 			keys = append(keys, k)
 			return true
 		})
@@ -166,7 +166,7 @@ func testTKV(t *testing.T, c tkvClient) {
 	}
 	keys = keys[:0]
 	txn(func(kt *kvTxn) {
-		kt.scan(nil, nil, true, func(k, v []byte) bool {
+		kt.scan([]byte("a"), []byte("z"), true, func(k, v []byte) bool {
 			keys = append(keys, k)
 			return true
 		})
