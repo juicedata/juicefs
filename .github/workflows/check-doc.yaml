@@ -1,16 +1,16 @@
 name: Check document
 
 on:
-  pull_request:
-    branches: [master]
+  push:
+    branches: [main]
     paths:
       - 'docs/**'
       - 'package.json'
       - '.autocorrectrc'
       - '.markdownlint-cli2.jsonc'
       - '.github/workflows/check-doc.yaml'
-  push:
-    branches: [master]
+  pull_request:
+    branches: [main]
     paths:
       - 'docs/**'
       - 'package.json'
