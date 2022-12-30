@@ -102,8 +102,11 @@ func (tx *badgerTxn) scanKeysRange(begin, end []byte, limit int, filter func(k [
 	})
 	defer it.Close()
 	var ret [][]byte
-	for it.Rewind(); it.Valid(); it.Next() {
+	for it.Seek(begin); it.Valid(); it.Next() {
 		key := it.Item().KeyCopy(nil)
+		if bytes.Compare(key, end) >= 0 {
+			break
+		}
 		if filter == nil || filter(key) {
 			ret = append(ret, key)
 			if limit > 0 {
