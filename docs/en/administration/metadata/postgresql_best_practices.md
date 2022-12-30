@@ -45,7 +45,7 @@ It is recommended to make a plan for regularly backing up your database, and at 
 
 ## Using connection pooler
 
-Connection pooler is a middleware that works between client and database and reuses the earlier connection from the pool, which improve connection efficiency and reduce the loss of short connections. Commonly used connection poolers are [PgBouncer](https://www.pgbouncer.org/) and [Pgpool-II](https://www.pgpool.net/).
+Connection pooler is a middleware that works between client and database and reuses the earlier connection from the pool, which improve connection efficiency and reduce the loss of short connections. Commonly used connection poolers are [PgBouncer](https://www.pgbouncer.org) and [Pgpool-II](https://www.pgpool.net).
 
 ## High Availability
 

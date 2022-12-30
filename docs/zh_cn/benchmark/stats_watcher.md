@@ -12,11 +12,11 @@ JuiceFS 预定义了许多监控指标来监测系统运行时的内部性能情
 
 #### usage
 
-- cpu：进程的 CPU 使用率
+- CPU：进程的 CPU 使用率
 - mem：进程的物理内存使用量
 - buf：进程已使用的 Buffer 大小；此值受限于挂载选项 `--buffer-size`
 
-#### fuse
+#### FUSE
 
 - ops/lat：通过 FUSE 接口处理的每秒请求数及其平均时延（单位为毫秒）
 - read/write：通过 FUSE 接口处理的读写带宽

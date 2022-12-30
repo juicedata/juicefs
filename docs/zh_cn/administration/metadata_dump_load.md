@@ -5,6 +5,7 @@ slug: /metadata_dump_load
 ---
 
 :::tip 提示
+
 - JuiceFS v0.15.2 开始支持元数据手动备份、恢复和引擎间迁移。
 - JuiceFS v1.0.0 开始支持元数据自动备份
 :::
@@ -64,6 +65,7 @@ juicefs load redis://192.168.1.6:6379/1 meta.dump
 ```bash
 juicefs dump redis://192.168.1.6:6379/1 meta.dump
 ```
+
 ```bash
 juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs meta.dump
 ```

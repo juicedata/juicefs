@@ -208,7 +208,7 @@ juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
 
 You can use `juicefs-s3-gateway.${NAMESPACE}.svc.cluster.local:9000` or pod IP and port number of `juicefs-s3-gateway` (e.g. `10.244.2.238:9000`) in the application pod to access JuiceFS S3 Gateway.
 
-If you want to access through Ingress, you need to ensure that the Ingress Controller has been deployed in the cluster. Refer to [Ingress Controller Deployment Document](https://kubernetes.github.io/ingress-nginx/deploy/). Then create an `Ingress` resource:
+If you want to access through Ingress, you need to ensure that the Ingress Controller has been deployed in the cluster. Refer to [Ingress Controller Deployment Document](https://kubernetes.github.io/ingress-nginx/deploy). Then create an `Ingress` resource:
 
 ```yaml
 kubectl apply -f - <<EOF
@@ -238,7 +238,7 @@ The S3 gateway can be accessed through `<external IP>` of ingress controller as 
 kubectl get services -n ingress-nginx
 ```
 
-There are some differences between the various versions of Ingress. For more usage methods, please refer to [Ingress Controller Usage Document](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage/).
+There are some differences between the various versions of Ingress. For more usage methods, please refer to [Ingress Controller Usage Document](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage).
 
 ### Install via Helm
 

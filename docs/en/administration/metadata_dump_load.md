@@ -5,6 +5,7 @@ slug: /metadata_dump_load
 ---
 
 :::tip
+
 - JuiceFS v0.15.2 started to support manual backup, recovery and inter-engine migration of metadata.
 - JuiceFS v1.0.0 starts to support automatic metadata backup
 :::
@@ -50,7 +51,7 @@ juicefs load redis://192.168.1.6:6379 meta.dump
 This command automatically handles conflicts due to the inclusion of files from different points in time, recalculates the file system statistics (space usage, inode counters, etc.), and finally generates a globally consistent metadata in the database. Alternatively, if you want to customize some of the metadata (be careful), you can try to manually modify the JSON file before loading.
 
 :::tip
-To ensure the security of object storage secretKey and sessionToken, the secretKey and sessionToken in the backup file obtained by `juicefs dump` is changed to "removed". Therefore, after the 'juicefs load' is executed to restore it to the metadata engine, you need to use `juicefs config --secret-key xxxx META-URL` to reset secretKey.
+To ensure the security of object storage secret key and session token, the secret key and session token in the backup file obtained by `juicefs dump` is changed to "removed". Therefore, after the `juicefs load` is executed to restore it to the metadata engine, you need to use `juicefs config --secret-key xxxx META-URL` to reset secret key.
 :::
 
 ### Metadata Migration Between Engines
@@ -62,14 +63,14 @@ The metadata migration operation requires `newly created database` or `empty dat
 Thanks to the universality of the JSON format, the JSON file can be recognized by all metadata storage engines supported by JuiceFS. THus, it is possible to export metadata information from one engine as a JSON backup and then import it to another engine, implementing the migration of metadata between different types of engines. For example,
 
 ```bash
-$ juicefs dump redis://192.168.1.6:6379 meta.dump
-$ juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs meta.dump
+juicefs dump redis://192.168.1.6:6379 meta.dump
+juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs meta.dump
 ```
 
 It is also possible to migrate directly through the system's Pipe.
 
 ```bash
-$ juicefs dump redis://192.168.1.6:6379 | juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs
+juicefs dump redis://192.168.1.6:6379 | juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs
 ```
 
 :::caution
@@ -81,7 +82,7 @@ To ensure consistency of the file system content before and after migration, you
 In addition to exporting complete metadata information, the `dump` command also supports exporting metadata in specific subdirectories. The exported JSON content is often used to help troubleshoot problems because it allows users to view the internal information of all the files under a given directory tree intuitively. For example.
 
 ```bash
-$ juicefs dump redis://192.168.1.6:6379 meta.dump --subdir /path/in/juicefs
+juicefs dump redis://192.168.1.6:6379 meta.dump --subdir /path/in/juicefs
 ```
 
 Moreover, you can use tools like `jq` to analyze the exported file.
@@ -120,7 +121,7 @@ For reference, when using Redis as the metadata engine, backing up the metadata 
 
 ### Automatic Backup Policy
 
-Although automatic metadata backup becomes a default action for clients, backup conflicts do not occur when multiple hosts share the same filesystem mount.
+Although automatic metadata backup becomes a default action for clients, backup conflicts do not occur when multiple hosts share the same file system mount.
 
 JuiceFS maintains a global timestamp to ensure that only one client performs the backup operation at the same time. When different backup periods are set between clients, then it will back up based on the shortest period setting.
 

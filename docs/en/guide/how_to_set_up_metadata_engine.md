@@ -92,6 +92,7 @@ juicefs format \
 ```
 
 :::note
+
 1. When a Redis username or password contains special characters, you need to replace them with `%xx` by [URL encode](https://www.w3schools.com/tags/ref_urlencode.ASP), for example `@` with `%40`, or pass the password using an environment variable.
 2. You can also use the standard URL syntax when passing database passwords using environment variables, e.g., `"redis://:@192.168.1.6:6379/1"` which preserves the `:` and `@` separators between the username and password.
 :::
@@ -117,7 +118,7 @@ If you maintain the Redis database on your own, it is recommended to read [Redis
 
 ## KeyDB
 
-[KeyDB](https://keydb.dev/) is an open source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis, and also supports [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication), i.e., the Active Active feature.
+[KeyDB](https://keydb.dev) is an open source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis, and also supports [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication), i.e., the Active Active feature.
 
 :::note
 Same as Redis, the Active Replication is asychronous, which may cause consistency issues. So use with caution!
@@ -127,9 +128,9 @@ When being used as metadata storage engine for Juice, KeyDB is used exactly in t
 
 ## PostgreSQL
 
-[PostgreSQL](https://www.postgresql.org/) is a powerful open source relational database with a perfect ecosystem and rich application scenarios, and it also works as the metadata engine of JuiceFS.
+[PostgreSQL](https://www.postgresql.org) is a powerful open source relational database with a perfect ecosystem and rich application scenarios, and it also works as the metadata engine of JuiceFS.
 
-Many cloud computing platforms offer hosted PostgreSQL database services, or you can deploy one yourself by following the [Usage Wizard](https://www.postgresqltutorial.com/postgresql-getting-started/).
+Many cloud computing platforms offer hosted PostgreSQL database services, or you can deploy one yourself by following the [Usage Wizard](https://www.postgresqltutorial.com/postgresql-getting-started).
 
 Other PostgreSQL-compatible databases (such as CockroachDB) can also be used as metadata engine.
 
@@ -178,11 +179,11 @@ juicefs format \
 ```
 
 :::note
-1. juicefs uses public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) by default, if you want to use a `non-public schema`,  you need to specify `search_path` in the connection string parameter. e.g `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
-2. If the `public schema` is not the first hit in the `search_path` configured on the PostgreSQL server, the `search_path` parameter must be explicitly set in the connection string.
-3. The `search_path` connection parameter can be set to multiple schemas natively, but currently juicefs only supports setting one. `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` will be considered illegal.
-:::
 
+1. JuiceFS uses public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) by default, if you want to use a `non-public schema`,  you need to specify `search_path` in the connection string parameter. e.g `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
+2. If the `public schema` is not the first hit in the `search_path` configured on the PostgreSQL server, the `search_path` parameter must be explicitly set in the connection string.
+3. The `search_path` connection parameter can be set to multiple schemas natively, but currently JuiceFS only supports setting one. `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` will be considered illegal.
+:::
 
 ### Mount a file system
 
@@ -213,7 +214,7 @@ Additional parameters can be appended to the metadata URL. More details can be s
 
 ## MySQL
 
-[MySQL](https://www.mysql.com/) is one of the most popular open source relational databases, and is often preferred for web applications.
+[MySQL](https://www.mysql.com) is one of the most popular open source relational databases, and is often preferred for web applications.
 
 ### Create a file system
 
@@ -546,8 +547,8 @@ If you need to enable TLS, the general steps are as follows. For details, please
 #### Use OpenSSL to generate a CA certificate
 
 ```shell
-$ openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout private.key -out cert.crt
-$ cat cert.crt private.key > fdb.pem
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout private.key -out cert.crt
+cat cert.crt private.key > fdb.pem
 ```
 
 #### Configure TLS

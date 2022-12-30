@@ -18,8 +18,6 @@ If you are using JuiceFS in Hadoop environment, besides sync accounts between mu
 
 Select a host as a [control node](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#managed-node-requirements) which can access all hosts using `ssh` with the same privileged account like `root` or other sudo account. Then, install Ansible on this host. Refer to [Installing Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible) for details.
 
-
-
 ## Ensure the same account on all hosts
 
 Create `account-sync/play.yaml` as follows:
@@ -41,8 +39,6 @@ Create `account-sync/play.yaml` as follows:
         group: "{{ gid }}"
         state: present
 ```
-
-
 
 Create the Ansible inventory `hosts`, which contains IP addresses of all hosts that need to create account.
 
@@ -94,7 +90,7 @@ fatal: [172.16.255.180]: FAILED! => {"changed": false, "msg": "groupmod: GID '10
 
 TASK [Ensure user ubuntu with uid 1000 exists] ************************************************************
 ok: [172.16.255.163]
-	to retry, use: --limit @/home/ubuntu/account-sync/play.retry
+    to retry, use: --limit @/home/ubuntu/account-sync/play.retry
 
 PLAY RECAP ************************************************************************************************
 172.16.255.163             : ok=3    changed=0    unreachable=0    failed=0
@@ -129,4 +125,5 @@ $ rm /tmp/hello.txt
 rm: remove write-protected regular file '/tmp/hello.txt'? y
 rm: cannot remove '/tmp/hello.txt': Operation not permitted
 ```
+
 :::

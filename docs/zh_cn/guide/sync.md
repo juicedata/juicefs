@@ -26,12 +26,12 @@ juicefs sync [command options] SRC DST
 地址格式均为 `[NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]`
 
 :::tip 提示
-minio 目前仅支持路径风格，地址格式为 `minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]`
+MinIO 目前仅支持路径风格，地址格式为 `minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]`
 :::
 
 其中：
 
-- `NAME` 是存储类型，比如 `s3`、`oss`。详情查看[所有支持的存储服务](../guide/how_to_set_up_object_storage.md#支持的存储服务)
+- `NAME` 是存储类型，比如 `s3`、`oss`。详情查看[所有支持的存储服务](../guide/how_to_set_up_object_storage.md#supported-object-storage)
 - `ACCESS_KEY` 和 `SECRET_KEY` 是对象存储的 API 访问密钥，如果包含了特殊字符，则需要手动转义并替换，比如 `/` 需要被替换为其转义符 `%2F`
 - `TOKEN` 用来访问对象存储的 token，部分对象存储支持使用临时的 token 以获得有限时间的权限
 - `BUCKET[.ENDPOINT]` 是对象存储的访问地址
@@ -57,19 +57,19 @@ juicefs sync ./te ~/mnt/ab
 
 目标路径中同步来的 `test` 目录名会变成 `abst`，`text` 会变成 `abxt`。
 
-### 资源清单
+### 资源清单 {#required-storages}
 
 这里假设有以下存储资源：
 
-1. **对象存储 A** <span id="bucketA" />
+1. **对象存储 A**
    - Bucket 名：aaa
    - Endpoint：`https://aaa.s3.us-west-1.amazonaws.com`
 
-2. **对象存储 B** <span id="bucketB" />
+2. **对象存储 B**
    - Bucket 名：bbb
    - Endpoint：`https://bbb.oss-cn-hangzhou.aliyuncs.com`
 
-3. **JuiceFS 文件系统** <span id="bucketC" />
+3. **JuiceFS 文件系统**
    - 元数据存储：`redis://10.10.0.8:6379/1`
    - 对象存储：`https://ccc-125000.cos.ap-beijing.myqcloud.com`
 
@@ -80,7 +80,7 @@ juicefs sync ./te ~/mnt/ab
 
 ### 对象存储与 JuiceFS 之间同步
 
-将 [对象存储 A](#bucketA) 的 `movies` 目录同步到 [JuiceFS 文件系统](#bucketC)：
+将 [对象存储 A](#required-storages) 的 `movies` 目录同步到 [JuiceFS 文件系统](#required-storages)：
 
 ```shell
 # 挂载 JuiceFS
@@ -89,7 +89,7 @@ sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
 
-将 [JuiceFS 文件系统](#bucketC) 的 `images` 目录同步到 [对象存储 A](#bucketA)：
+将 [JuiceFS 文件系统](#required-storages) 的 `images` 目录同步到 [对象存储 A](#required-storages)：
 
 ```shell
 # 挂载 JuiceFS
@@ -100,7 +100,7 @@ juicefs sync /mnt/jfs/images/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.co
 
 ### 对象存储与对象存储之间同步
 
-将 [对象存储 A](#bucketA) 的全部数据同步到 [对象存储 B](#bucketB)：
+将 [对象存储 A](#required-storages) 的全部数据同步到 [对象存储 B](#required-storages)：
 
 ```shell
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
@@ -112,7 +112,7 @@ juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:H
 
 sync 命令默认以增量同步方式工作，即先对比源路径与目标路径之间的差异，然后仅同步有差异的部分。可以使用 `--update` 或 `-u` 选项更新文件的 `mtime`。
 
-如需全量同步，即不论目标路径上是否存在相同的文件都重新同步，可以使用 `--force-update` 或 `-f`。例如，将 [对象存储 A](#bucketA) 的 `movies` 目录全量同步到 [JuiceFS 文件系统](#bucketC)：
+如需全量同步，即不论目标路径上是否存在相同的文件都重新同步，可以使用 `--force-update` 或 `-f`。例如，将 [对象存储 A](#required-storages) 的 `movies` 目录全量同步到 [JuiceFS 文件系统](#required-storages)：
 
 ```shell
 # 挂载 JuiceFS
@@ -135,7 +135,7 @@ juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 
 #### 排除文件／目录
 
-使用 `--exclude` 选项设置要排除的目录或文件。例如，将 [JuiceFS 文件系统](#bucketC) 完整同步到[对象存储 A](#bucketA)，但不同步隐藏的文件和文件夹：
+使用 `--exclude` 选项设置要排除的目录或文件。例如，将 [JuiceFS 文件系统](#required-storages) 完整同步到[对象存储 A](#required-storages)，但不同步隐藏的文件和文件夹：
 
 :::note 备注
 在 Linux 系统中所有以 `.` 开始的名称均被视为隐藏文件
@@ -176,7 +176,7 @@ JuiceFS `sync` 默认启用 10 个线程执行同步任务，可以根据需要�
 
 默认情况下，sync 命令只同步文件对象以及包含文件对象的目录，空目录不会被同步。如需同步空目录，可以使用 `--dirs` 选项。
 
-另外，在 local、sftp、hdfs 等文件系统之间同步时，如需保持文件权限，可以使用 `--perms` 选项。
+另外，在 local、SFTP、HDFS 等文件系统之间同步时，如需保持文件权限，可以使用 `--perms` 选项。
 
 ### 拷贝符号链接
 
@@ -205,7 +205,7 @@ Manager 作为主控执行 `sync` 命令，通过 `--worker` 参数定义多个 
 Manager 会将 JuiceFS 客户端程序分发到 Worker 主机，为了避免客户端的兼容性问题，请确保 Manager 和 Worker 使用相同类型和架构的操作系统。
 :::
 
-例如，将 [对象存储 A](#bucketA) 同步到 [对象存储 B](#bucketB)，采用多主机并行同步：
+例如，将 [对象存储 A](#required-storages) 同步到 [对象存储 B](#required-storages)，采用多主机并行同步：
 
 ```shell
 juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
@@ -221,7 +221,7 @@ juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa
 
 ### 数据异地容灾备份
 
-异地容灾备份针对的是文件本身，因此应将 JuiceFS 中存储的文件同步到其他的对象存储，例如，将 [JuiceFS 文件系统](#bucketC) 中的文件同步到 [对象存储 A](#bucketA)：
+异地容灾备份针对的是文件本身，因此应将 JuiceFS 中存储的文件同步到其他的对象存储，例如，将 [JuiceFS 文件系统](#required-storages) 中的文件同步到 [对象存储 A](#required-storages)：
 
 ```shell
 # 挂载 JuiceFS
@@ -230,19 +230,19 @@ sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 sudo juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ```
 
-同步以后，在 [对象存储 A](#bucketA) 中可以直接看到所有的文件。
+同步以后，在 [对象存储 A](#required-storages) 中可以直接看到所有的文件。
 
 ### 建立 JuiceFS 数据副本
 
 与面向文件本身的容灾备份不同，建立 JuiceFS 数据副本的目的是为 JuiceFS 的数据存储建立一个内容和结构完全相同的镜像，当使用中的对象存储发生了故障，可以通过修改配置切换到数据副本继续工作。需要注意这里仅复制了 JuiceFS 文件系统的数据，并没有复制元数据，元数据引擎的数据备份依然需要。
 
-这需要直接操作 JucieFS 底层的对象存储，将它与目标对象存储之间进行同步。例如，要把 [对象存储 B](#bucketB) 作为 [JuiceFS 文件系统](#bucketC) 的数据副本：
+这需要直接操作 JuiceFS 底层的对象存储，将它与目标对象存储之间进行同步。例如，要把 [对象存储 B](#required-storages) 作为 [JuiceFS 文件系统](#required-storages) 的数据副本：
 
 ```shell
 juicefs sync cos://ABCDEFG:HIJKLMN@ccc-125000.cos.ap-beijing.myqcloud.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
 
-同步以后，在 [对象存储 B](#bucketB) 中看到的与 [JuiceFS 使用的对象存储](#bucketC) 中的内容和结构完全一样。
+同步以后，在 [对象存储 B](#required-storages) 中看到的与 [JuiceFS 使用的对象存储](#required-storages) 中的内容和结构完全一样。
 
 :::tip 提示
 请阅读《[技术架构](../introduction/architecture.md)》了解 JuiceFS 如何存储文件。

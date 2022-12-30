@@ -10,8 +10,8 @@ As a distributed file system hosting massive data storage, it is important for u
 
 It is assumed here that Prometheus Server, Grafana and JuiceFS clients are all running on the same host, in which
 
-- **Prometheus Server**: Scrapes and stores the time series data of various metrics. For installation, please refer to the [official documentation](https://prometheus.io/docs/introduction/first_steps/).
-- **Grafana**: Loads and visualizes the time series data from Prometheus. For installation, please refer to the [official documentation](https://grafana.com/docs/grafana/latest/installation/).
+- **Prometheus Server**: Scrapes and stores the time series data of various metrics. For installation, please refer to the [official documentation](https://prometheus.io/docs/introduction/first_steps).
+- **Grafana**: Loads and visualizes the time series data from Prometheus. For installation, please refer to the [official documentation](https://grafana.com/docs/grafana/latest/installation).
 
 ### Ⅰ. Access to real-time data
 
@@ -236,6 +236,7 @@ For this, the following command can help. Clearing the metrics will not affect t
 ```bash
 curl -X PUT http://host:9091/api/v1/admin/wipe
 ```
+
 :::
 
 For more information about Pushgateway, please check [official document](https://github.com/prometheus/pushgateway/blob/master/README.md).

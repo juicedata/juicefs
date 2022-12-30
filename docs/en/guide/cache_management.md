@@ -155,7 +155,7 @@ Only files in the mounted file system can be warmed up, i.e. the path to be warm
 
 ### Warm up a directory
 
-For example, to cache the `dataset-1` directory in a filesystem mount point locally.
+For example, to cache the `dataset-1` directory in a file system mount point locally.
 
 ```shell
 juicefs warmup /mnt/jfs/dataset-1
