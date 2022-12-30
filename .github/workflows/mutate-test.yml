@@ -57,7 +57,8 @@ jobs:
             do
               echo "test_file_name is $test_file_name"
               grep "//disable_mutate_test" $test_file_name
-              if [ $? = 0 ]; then 
+              if [ $? = 0 ]; then
+                echo "find disable" 
                 continue
               fi
               source_file_name=${test_file_name%"_test.go"}.go
