@@ -65,7 +65,7 @@ JuiceFS 对数据也提供多种缓存机制来提高性能，包括内核中的
 
 如果你希望增加写入速度，通过调整 [`--max-uploads`](../reference/command_reference.md#mount) 增大了上传并发度，但并没有观察到上行带宽用量有明显增加，那么此时可能就需要相应地调大 `--buffer-size`，让并发线程更容易申请到内存来工作。这个排查原理反之亦然：如果增大 `--buffer-size` 却没有观察到上行带宽占用提升，也可以考虑增大 `--max-uploads` 来提升上传并发度。
 
-可想而知，`--buffer-size` 也控制着每次 `flush` 操作的上传数据量大小，因此如果客户端处在一个低带宽的网络环境下，可能反而需要降低 `--buffer-size` 来避免 `flush` 超时。关于低带宽场景排查请详见「[与对象存储通信不畅](../administration/troubleshooting.md#io-error-object-storage)」。
+可想而知，`--buffer-size` 也控制着每次 `flush` 操作的上传数据量大小，因此如果客户端处在一个低带宽的网络环境下，可能反而需要降低 `--buffer-size` 来避免 `flush` 超时。关于低带宽场景排查请详见[「与对象存储通信不畅」](../administration/troubleshooting.md#io-error-object-storage)。
 
 ### 内核页缓存 {#kernel-data-cache}
 
@@ -79,7 +79,7 @@ JuiceFS 客户端会跟踪所有最近被打开的文件，要重复打开相同
 
 从 Linux 内核 3.15 开始，FUSE 支持[内核回写（writeback-cache）](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)模式，内核会把高频随机小 IO（例如 10-100 字节）的写请求合并起来，显著提升随机写入的性能。
 
-在挂载命令通过 [`-o writeback_cache`](../reference/fuse_mount_options.md) 选项来开启内核回写模式。注意，内核回写与[「客户端写缓存」](#client-write-cache)并不一样，前者是内核中的实现，后者则发生在 JuiceFS 客户端，二者适用场景也不一样，详读对应章节以了解。
+在挂载命令通过 [`-o writeback_cache`](../reference/fuse_mount_options.md) 选项来开启内核回写模式。注意，内核回写与[「客户端写缓存」](#writeback)并不一样，前者是内核中的实现，后者则发生在 JuiceFS 客户端，二者适用场景也不一样，详读对应章节以了解。
 
 ### 客户端读缓存 {#client-read-cache}
 
@@ -127,22 +127,23 @@ JuiceFS 客户端会把从对象存储下载的数据，以及新上传的小于
 
 * 本地缓存本身的可靠性与缓存盘的可靠性直接相关，如果在上传完成前本地数据遭受损害，意味着数据丢失。因此对数据安全性要求越高，越应谨慎使用。
 * 待上传的文件默认存储在 `/var/jfsCache/<UUID>/rawstaging/`，只要该目录不为空，就表示还有待上传的文件。务必注意不要删除该目录下的文件，否则将造成数据丢失。
-* 写缓存大小并不受 `--cache-size` 制约，而是 `--free-space-ratio` 的一半，默认的 `--free-space-ratio` 是 0.1，那么开启了 `--writeback` 后，写缓存大小最多占用 0.05% 的磁盘空间。
+* 写缓存大小由 [`--free-space-ratio`](#client-read-cache) 控制。默认情况下，如果未开启写缓存，JuiceFS 客户端最多使用缓存目录 90% 的磁盘空间（计算规则是 `(1 - <free-space-ratio>) * 100`）。开启写缓存后会超额使用一定比例的磁盘空间，计算规则是 `(1 - (<free-space-ratio> / 2)) * 100`，即默认情况下最多会使用缓存目录 95% 的磁盘空间。
+* 写缓存和读缓存共享缓存盘空间，因此会互相影响。例如写缓存占用过多磁盘空间，那么将导致读缓存的大小受到限制，反之亦然。
 * 如果本地盘写性能太差，带宽甚至比不上对象存储，那么 `--writeback` 会带来更差的写性能。
 * 如果缓存目录的文件系统出错，客户端则降级为同步写入对象存储，情况类似[客户端读缓存](#client-read-cache)。
 * 如果节点到对象存储的上行带宽不足（网速太差），本地写缓存迟迟无法上传完毕，此时如果在其他节点访问这些文件，则会出现读错误。低带宽场景的排查请详见[「与对象存储通信不畅」](../administration/troubleshooting.md#io-error-object-storage)。
 
 也正由于写缓存的使用注意事项较多，使用不当极易出问题，我们推荐仅在大量写入小文件时临时开启（比如解压包含大量小文件的压缩文件）。
 
-启用 `--writeback` 模式后，除了直接查看 `/var/jfsCache/<UUID>/rawstaging/` 目录，还可以通过以下命令确定待上传文件：
+启用 `--writeback` 模式后，除了直接查看 `/var/jfsCache/<UUID>/rawstaging/` 目录，还可以通过以下命令确定文件上传进度：
 
 ```shell
 # 假设挂载点为 /jfs
 $ cd /jfs
 $ cat .stats | grep "staging"
-juicefs_staging_block_bytes 1621127168
+juicefs_staging_block_bytes 1621127168  # 待上传的数据块大小
 juicefs_staging_block_delay_seconds 46116860185.95535
-juicefs_staging_blocks 394
+juicefs_staging_blocks 394  # 待上传的数据块数量
 ```
 
 ### 缓存位置 {#cache-dir}
@@ -166,7 +167,7 @@ juicefs mount --cache-dir ~/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
 :::tip 提示
-建议缓存目录尽量使用独立的高性能盘，不要用系统盘，也不要和其它应用共用。共用不仅会相互影响性能，还可能导致其它应用出错（例如磁盘剩余空间不足）。如果无法避免必须共用那一定要预估好其它应用所需的磁盘容量，限制缓存空间大小（`--cache-size`），避免 JuiceFS 的读缓存或者[写缓存](#writeback)占用过多空间。
+建议缓存目录尽量使用独立的高性能盘，不要用系统盘，也不要和其它应用共用。共用不仅会相互影响性能，还可能导致其它应用出错（例如磁盘剩余空间不足）。如果无法避免必须共用那一定要预估好其它应用所需的磁盘容量，限制缓存空间大小（`--cache-size`），避免 JuiceFS 的读缓存或者写缓存占用过多空间。
 :::
 
 #### 内存盘

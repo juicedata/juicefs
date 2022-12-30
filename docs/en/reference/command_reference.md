@@ -212,6 +212,8 @@ $ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
 
 Mount a volume. The volume must be formatted in advance.
 
+You can use any user to execute the mount command, but please ensure that the user has write permission to the cache directory (`--cache-dir`), please read ["Cache directory"](../guide/cache_management.md#cache-dir) documentation for more information.
+
 #### Synopsis
 
 ```
@@ -997,7 +999,7 @@ juicefs status redis://localhost
 
 Download data to local cache in advance, to achieve better performance on application's first read.
 
-Warm-up only works in mounted JuiceFS file systems.
+You can specify a mount point path to recursively warm-up all files under this path. You can also specify a file through the `--file` option to only warm-up the files contained in it.
 
 #### Synopsis
 
@@ -1008,7 +1010,7 @@ juicefs warmup [command options] [PATH ...]
 #### Options
 
 `--file value, -f value`<br />
-file containing a list of paths
+file containing a list of paths (each line is a file path)
 
 `--threads value, -p value`<br />
 number of concurrent workers (default: 50)

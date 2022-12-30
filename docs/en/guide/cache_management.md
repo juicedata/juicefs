@@ -127,7 +127,8 @@ Add `--writeback` to the mount command to enable client write cache, but this mo
 
 * Disk reliability is crucial to data integrity, if write cache data suffers loss before upload is complete, file data is lost forever. Use with caution when data reliability is critical.
 * Write cache data by default is stored in `/var/jfsCache/<UUID>/rawstaging/`, do not delete files under this directory or data will be lost.
-* Write cache size is not limited by `--cache-size`, instead, it will not exceed half of `--free-space-ratio`. Considering `--free-space-ratio` is 0.1 by default, if `--writeback` is enabled, write cache will take up at most 0.05% of disk space.
+* Write cache size is controlled by [`--free-space-ratio`](#client-read-cache). By default, if the write cache is not enabled, the JuiceFS client uses up to 90% of the disk space of the cache directory (the calculation rule is `(1 - <free-space-ratio>) * 100`). After the write cache is enabled, a certain percentage of disk space will be overused. The calculation rule is `(1 - (<free-space-ratio> / 2)) * 100`, that is, by default, up to 95% of the disk space of the cache directory will be used.
+* Write cache and read cache share cache disk space, so they affect each other. For example, if the write cache takes up too much disk space, the size of the read cache will be limited, and vice versa.
 * If local disk write speed is lower than object storage upload speed, enabling `--writeback` will only result in worse write performance.
 * If the file system of the cache directory raises error, client will fallback and write synchronously to object storage, which is the same behavior as [Read Cache in Client](#client-read-cache).
 * If object storage upload speed is too slow (low bandwidth), local write cache can take forever to upload, meanwhile reads from other nodes will result in timeout error (I/O error). See [Connection problems with object storage](../administration/troubleshooting.md#io-error-object-storage).
@@ -140,9 +141,9 @@ When `--writeback` is enabled, apart from checking `/var/jfsCache/<UUID>/rawstag
 # Assuming mount point is /jfs
 $ cd /jfs
 $ cat .stats | grep "staging"
-juicefs_staging_block_bytes 1621127168
+juicefs_staging_block_bytes 1621127168  # The size of the data blocks to be uploaded
 juicefs_staging_block_delay_seconds 46116860185.95535
-juicefs_staging_blocks 394
+juicefs_staging_blocks 394  # The number of data blocks to be uploaded
 ```
 
 ### Cache directory {#cache-dir}
@@ -166,7 +167,7 @@ juicefs mount --cache-dir ~/jfscache redis://127.0.0.1:6379/1 /mnt/myjfs
 ```
 
 :::tip
-It is recommended to use a high performance dedicated disk as the cache directory, avoid using the system disk, and do not share it with other applications. Sharing not only affects the performance of each other, but may also cause errors in other applications (such as insufficient disk space left). If it is unavoidable to share, you must estimate the disk capacity required by other applications, limit the size of the cache space (see below for details), and avoid JuiceFS's read cache or [write cache](#writeback) takes up too much space.
+It is recommended to use a high performance dedicated disk as the cache directory, avoid using the system disk, and do not share it with other applications. Sharing not only affects the performance of each other, but may also cause errors in other applications (such as insufficient disk space left). If it is unavoidable to share, you must estimate the disk capacity required by other applications, limit the size of the cache space (see below for details), and avoid JuiceFS's read cache or write cache takes up too much space.
 :::
 
 #### RAM disk
