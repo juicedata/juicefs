@@ -56,6 +56,10 @@ jobs:
             for test_file_name in "${changed_file_array[@]}"
             do
               echo "test_file_name is $test_file_name"
+              grep "//disable_mutate_test" $test_file_name
+              if [ $? = 0 ]; then 
+                continue
+              fi
               source_file_name=${test_file_name%"_test.go"}.go
               echo "source_file_name is :" $source_file_name
               black_list_file=black.list
@@ -245,7 +249,7 @@ jobs:
     needs: [build-matrix, mutate-test]
     if: always()
     steps:
-      - uses: technote-space/workflow-conclusion-action@v2
+      - uses: technote-space/workflow-conclusion-action@v3
       - uses: actions/checkout@v3
 
       - name: Check Failure
