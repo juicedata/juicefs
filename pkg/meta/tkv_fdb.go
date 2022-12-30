@@ -131,73 +131,22 @@ func (tx *fdbTxn) gets(keys ...[]byte) [][]byte {
 	return ret
 }
 
-func (tx *fdbTxn) range0(begin, end []byte) *fdb.RangeIterator {
-	return tx.GetRange(
-		fdb.KeyRange{Begin: fdb.Key(begin), End: fdb.Key(end)},
-		fdb.RangeOptions{Mode: fdb.StreamingModeWantAll},
-	).Iterator()
-}
-
-func (tx *fdbTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {}
-
-/*
-func (tx *fdbTxn) scanRange(begin, end []byte) map[string][]byte {
-	ret := make(map[string][]byte)
-	iter := tx.range0(begin, end)
-	for iter.Advance() {
-		r := iter.MustGet()
-		ret[string(r.Key)] = r.Value
-	}
-	return ret
-}
-
-func (tx *fdbTxn) scanKeys(prefix []byte) [][]byte {
-	ret := make([][]byte, 0)
-	iter := tx.range0(prefix, nextKey(prefix))
-	for iter.Advance() {
-		ret = append(ret, iter.MustGet().Key)
-	}
-	return ret
-}
-
-func (tx *fdbTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte {
-	ret := make([][]byte, 0)
-	iter := tx.range0(begin, end)
-	for iter.Advance() {
-		r := iter.MustGet()
-		if filter == nil || filter(r.Key) {
-			ret = append(ret, r.Key)
-			if limit > 0 {
-				if limit--; limit == 0 {
-					break
-				}
-			}
+func (tx *fdbTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+	it := tx.GetRange(fdb.KeyRange{Begin: fdb.Key(begin), End: fdb.Key(end)},
+		fdb.RangeOptions{Mode: fdb.StreamingModeWantAll}).Iterator()
+	for it.Advance() {
+		kv := it.MustGet()
+		if !handler(kv.Key, kv.Value) {
+			break
 		}
 	}
-	return ret
 }
-
-func (tx *fdbTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
-	ret := make(map[string][]byte)
-	iter := tx.range0(prefix, nextKey(prefix))
-	for iter.Advance() {
-		r := iter.MustGet()
-		if filter == nil || filter(r.Key, r.Value) {
-			ret[string(r.Key)] = r.Value
-			if limit > 0 {
-				if limit--; limit == 0 {
-					break
-				}
-			}
-		}
-	}
-	return ret
-}
-*/
 
 func (tx *fdbTxn) exist(prefix []byte) bool {
-	iter := tx.range0(prefix, nextKey(prefix))
-	return iter.Advance()
+	return tx.GetRange(
+		fdb.KeyRange{Begin: fdb.Key(prefix), End: fdb.Key(nextKey(prefix))},
+		fdb.RangeOptions{Mode: fdb.StreamingModeWantAll},
+	).Iterator().Advance()
 }
 
 func (tx *fdbTxn) set(key, value []byte) {

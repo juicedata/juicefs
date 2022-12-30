@@ -45,53 +45,11 @@ func (tx *prefixTxn) gets(keys ...[]byte) [][]byte {
 	return tx.kvTxn.gets(keys...)
 }
 
-func (tx *prefixTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {}
-
-/*
-func (tx *prefixTxn) scanRange(begin_, end_ []byte) map[string][]byte {
-	r := tx.kvTxn.scanRange(tx.realKey(begin_), tx.realKey(end_))
-	m := make(map[string][]byte, len(r))
-	for k, v := range r {
-		m[k[len(tx.prefix):]] = v
-	}
-	return m
-}
-
-func (tx *prefixTxn) scanKeys(prefix []byte) [][]byte {
-	keys := tx.kvTxn.scanKeys(tx.realKey(prefix))
-	for i, k := range keys {
-		keys[i] = tx.origKey(k)
-	}
-	return keys
-}
-
-func (tx *prefixTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte {
-	keys := tx.kvTxn.scanKeysRange(tx.realKey(begin), tx.realKey(end), limit, func(k []byte) bool {
-		if filter == nil {
-			return true
-		}
-		return filter(tx.origKey(k))
+func (tx *prefixTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+	tx.kvTxn.scan(tx.realKey(begin), tx.realKey(end), keysOnly, func(k, v []byte) bool {
+		return handler(tx.origKey(k), v)
 	})
-	for i, k := range keys {
-		keys[i] = tx.origKey(k)
-	}
-	return keys
 }
-
-func (tx *prefixTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
-	r := tx.kvTxn.scanValues(tx.realKey(prefix), limit, func(k, v []byte) bool {
-		if filter == nil {
-			return true
-		}
-		return filter(tx.origKey(k), v)
-	})
-	m := make(map[string][]byte, len(r))
-	for k, v := range r {
-		m[k[len(tx.prefix):]] = v
-	}
-	return m
-}
-*/
 
 func (tx *prefixTxn) exist(prefix []byte) bool {
 	return tx.kvTxn.exist(tx.realKey(prefix))

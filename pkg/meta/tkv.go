@@ -41,7 +41,7 @@ import (
 type kvtxn interface {
 	get(key []byte) []byte
 	gets(keys ...[]byte) [][]byte
-	// scan stops when handler returns false
+	// scan stops when handler returns false; begin and end must not be nil
 	scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool)
 	// scanRange(begin, end []byte) map[string][]byte
 	// scanKeys(prefix []byte) [][]byte

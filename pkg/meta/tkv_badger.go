@@ -20,6 +20,7 @@
 package meta
 
 import (
+	"bytes"
 	"time"
 
 	badger "github.com/dgraph-io/badger/v3"
@@ -54,100 +55,37 @@ func (tx *badgerTxn) gets(keys ...[]byte) [][]byte {
 	return values
 }
 
-func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {}
-
-/*
-func (tx *badgerTxn) scanRange(begin, end []byte) map[string][]byte {
-	it := tx.t.NewIterator(badger.IteratorOptions{
-		PrefetchValues: true,
+func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+	var prefix bool
+	var options = badger.IteratorOptions{
+		PrefetchValues: !keysOnly,
 		PrefetchSize:   1024,
-	})
+	}
+	if bytes.Equal(nextKey(begin), end) {
+		prefix = true
+		options.Prefix = begin
+	}
+	it := tx.t.NewIterator(options)
+	if prefix {
+		it.Rewind()
+	} else {
+		it.Seek(begin)
+	}
 	defer it.Close()
-	var ret = make(map[string][]byte)
-	for it.Seek(begin); it.Valid(); it.Next() {
+	for ; it.Valid(); it.Next() {
 		item := it.Item()
-		key := item.Key()
-		if bytes.Compare(key, end) >= 0 {
+		if !prefix && bytes.Compare(item.Key(), end) >= 0 {
 			break
 		}
-		var value []byte
 		value, err := item.ValueCopy(nil)
 		if err != nil {
 			panic(err)
 		}
-		ret[string(key)] = value
-	}
-	return ret
-}
-
-func (tx *badgerTxn) scanKeys(prefix []byte) [][]byte {
-	it := tx.t.NewIterator(badger.IteratorOptions{
-		PrefetchValues: false,
-		PrefetchSize:   1024,
-		Prefix:         prefix,
-	})
-	defer it.Close()
-	var ret [][]byte
-	for it.Rewind(); it.Valid(); it.Next() {
-		ret = append(ret, it.Item().KeyCopy(nil))
-	}
-	return ret
-}
-
-func (tx *badgerTxn) scanKeysRange(begin, end []byte, limit int, filter func(k []byte) bool) [][]byte {
-	if limit == 0 {
-		return nil
-	}
-	it := tx.t.NewIterator(badger.IteratorOptions{
-		PrefetchValues: true,
-		PrefetchSize:   1024,
-	})
-	defer it.Close()
-	var ret [][]byte
-	for it.Rewind(); it.Valid(); it.Next() {
-		key := it.Item().KeyCopy(nil)
-		if filter == nil || filter(key) {
-			ret = append(ret, key)
-			if limit > 0 {
-				if limit--; limit == 0 {
-					break
-				}
-			}
+		if !handler(item.KeyCopy(nil), value) {
+			break
 		}
 	}
-	return ret
 }
-
-func (tx *badgerTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
-	if limit == 0 {
-		return nil
-	}
-
-	it := tx.t.NewIterator(badger.IteratorOptions{
-		PrefetchValues: true,
-		PrefetchSize:   1024,
-		Prefix:         prefix,
-	})
-	defer it.Close()
-	var ret = make(map[string][]byte)
-	for it.Rewind(); it.Valid(); it.Next() {
-		item := it.Item()
-		value, err := item.ValueCopy(nil)
-		if err != nil {
-			panic(err)
-		}
-		if filter == nil || filter(item.Key(), value) {
-			ret[string(item.Key())] = value
-			if limit > 0 {
-				if limit--; limit == 0 {
-					break
-				}
-			}
-		}
-	}
-	return ret
-}
-*/
 
 func (tx *badgerTxn) exist(prefix []byte) bool {
 	it := tx.t.NewIterator(badger.IteratorOptions{
