@@ -49,10 +49,10 @@ JuiceFS 默认使用本地的「用户／UID」及「用户组／GID」映射，
 
 编译依赖以下工具：
 
-- [Go](https://golang.org/) 1.15+（中国用户建议使用 [Goproxy China 镜像加速](https://github.com/goproxy/goproxy.cn)）
+- [Go](https://golang.org) 1.15+（中国用户建议使用 [Goproxy China 镜像加速](https://github.com/goproxy/goproxy.cn)）
 - JDK 8+
-- [Maven](https://maven.apache.org/) 3.3+（中国用户建议使用[阿里云镜像加速](https://maven.aliyun.com)）
-- git
+- [Maven](https://maven.apache.org) 3.3+（中国用户建议使用[阿里云镜像加速](https://maven.aliyun.com)）
+- Git
 - make
 - GCC 5.4+
 
@@ -87,7 +87,7 @@ make
 
 #### Windows
 
-用于 Windows 环境的客户端需要在 Linux 或 macOS 系统上通过交叉编译的方式获得，编译依赖 [mingw-w64](https://www.mingw-w64.org/)，需要提前安装。
+用于 Windows 环境的客户端需要在 Linux 或 macOS 系统上通过交叉编译的方式获得，编译依赖 [mingw-w64](https://www.mingw-w64.org)，需要提前安装。
 
 与编译面向 Linux 和 macOS 客户端的步骤相同，比如在 Ubuntu 系统上，先安装 `mingw-w64` 包，解决依赖问题：
 
@@ -100,6 +100,7 @@ sudo apt install mingw-w64
 ```shell
 cd juicefs/sdk/java
 ```
+
 ```shell
 make win
 ```
@@ -267,107 +268,112 @@ $HADOOP_COMMON_HOME/lib/juicefs-hadoop.jar
 
 将配置参数加入 `conf/flink-conf.yaml`。如果只是在 Flink 中使用 JuiceFS, 可以不在 Hadoop 环境配置 JuiceFS，只需要配置 Flink 客户端即可。
 
-#### 在阿里云实时平台 Flink sql 使用 JuiceFS
+#### 在阿里云实时平台 Flink SQL 使用 JuiceFS
 
-1. 创建 maven 项目，根据 flink 不同版本引入如下依赖
+1. 创建 Maven 项目，根据 Flink 不同版本引入如下依赖
 
-```xml
-<dependencies>
-    <dependency>
-        <groupId>io.juicefs</groupId>
-        <artifactId>juicefs-hadoop</artifactId>
-        <version>{JUICEFS_HADOOP_VERSION}</version>
-    </dependency>
+   ```xml
+   <dependencies>
+       <dependency>
+           <groupId>io.juicefs</groupId>
+           <artifactId>juicefs-hadoop</artifactId>
+           <version>{JUICEFS_HADOOP_VERSION}</version>
+       </dependency>
 
-    <!-- for flink-1.13 -->
-    <dependency>
-        <groupId>org.apache.flink</groupId>
-        <artifactId>flink-table-runtime-blink_2.12</artifactId>
-        <version>1.13.5</version>
-        <scope>provided</scope>
-    </dependency>
+       <!-- for flink-1.13 -->
+       <dependency>
+           <groupId>org.apache.flink</groupId>
+           <artifactId>flink-table-runtime-blink_2.12</artifactId>
+           <version>1.13.5</version>
+           <scope>provided</scope>
+       </dependency>
 
-    <!-- for flink-1.15 -->
-    <dependency>
-        <groupId>org.apache.flink</groupId>
-        <artifactId>flink-table-common</artifactId>
-        <version>1.15.2</version>
-	<scope>provided</scope>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.flink</groupId>
-        <artifactId>flink-connector-files</artifactId>
-        <version>1.15.2</version>
-        <scope>provided</scope>
-    </dependency>
-</dependencies>
-```
+       <!-- for flink-1.15 -->
+       <dependency>
+           <groupId>org.apache.flink</groupId>
+           <artifactId>flink-table-common</artifactId>
+           <version>1.15.2</version>
+       <scope>provided</scope>
+       </dependency>
+       <dependency>
+           <groupId>org.apache.flink</groupId>
+           <artifactId>flink-connector-files</artifactId>
+           <version>1.15.2</version>
+           <scope>provided</scope>
+       </dependency>
+   </dependencies>
+   ```
 
 2. 创建一个 Java class
-```java
-public class JuiceFileSystemTableFactory extends FileSystemTableFactory {
-  @Override
-  public String factoryIdentifier() {
-    return "juicefs";
-  }
-}
-```
+
+   ```java
+   public class JuiceFileSystemTableFactory extends FileSystemTableFactory {
+     @Override
+     public String factoryIdentifier() {
+       return "juicefs";
+     }
+   }
+   ```
 
 3. Flink table connector 是使用 Java’s Service Provider Interfaces (SPI) 加载自定义实现。
 在 resources 按照如下结构创建文件
 
-```
-## for flink-1.13
-src/main/resources
-├── META-INF
-│   └── services
-│        └── org.apache.flink.table.factories.Factory
-```
+   ```
+   ## for flink-1.13
+   src/main/resources
+   ├── META-INF
+   │   └── services
+   │        └── org.apache.flink.table.factories.Factory
+   ```
 
-org.apache.flink.table.factories.Factory 文件内容：
+   `org.apache.flink.table.factories.Factory` 文件内容：
 
-```
-{YOUR_PACKAGE}.JuiceFileSystemTableFactory
-```
+   ```
+   {YOUR_PACKAGE}.JuiceFileSystemTableFactory
+   ```
 
 4. 将填写有 JuiceFS 配置的 core-site.xml 放到 src/main/resources 内：
-```xml
-<configuration>
-	<property>
-		<name>fs.juicefs.impl</name>
-		<value>io.juicefs.JuiceFileSystem</value>
-	</property>
-	<property>
-		<name>juicefs.meta</name>
-		<value>redis://xxx.redis.rds.aliyuncs.com:6379/0</value>
-	</property>
-    ...
-</configuration>
-```
-:::note 注意
-由于 jfs scheme 被阿里其他文件系统占用，所以需要配置 fs.juicefs.impl 类为 JuiceFS 的实现类，并在后续路径使用 ``juicefs://`` 协议
-:::
-5. 打包，确保 jar 内包含 resources 目录下内容
-6. 通过阿里云实时计算平台控制台->应用->作业开发->connectors界面上传 jar 文件
-7. 测试，将如下 sql 上线运行，可以在 JuiceFS 的 `tmp/tbl` 目录下发现写入内容
-```sql
-CREATE TEMPORARY TABLE datagen_source(
-  name VARCHAR
-) WITH (
-  'connector' = 'datagen',
-  'number-of-rows' = '100'
-);
 
-CREATE TEMPORARY TABLE jfs_sink (name string)
-with (
-    'connector' = 'juicefs', 'path' = 'juicefs://{VOL_NAME}/tmp/tbl', 'format' = 'csv'
-);
+   ```xml
+   <configuration>
+       <property>
+           <name>fs.juicefs.impl</name>
+           <value>io.juicefs.JuiceFileSystem</value>
+       </property>
+       <property>
+           <name>juicefs.meta</name>
+           <value>redis://xxx.redis.rds.aliyuncs.com:6379/0</value>
+       </property>
+       ...
+   </configuration>
+   ```
 
-INSERT INTO jfs_sink
-SELECT
-  name
-from datagen_source;
-```
+   :::note 注意
+   由于 `jfs://` scheme 被阿里其他文件系统占用，所以需要配置 `fs.juicefs.impl` 类为 JuiceFS 的实现类，并在后续路径使用 `juicefs://` 协议。
+   :::
+
+5. 打包，确保 JAR 内包含 resources 目录下内容
+6. 通过阿里云实时计算平台控制台->应用->作业开发->connectors 界面上传 JAR 文件
+7. 测试，将如下 SQL 上线运行，可以在 JuiceFS 的 `tmp/tbl` 目录下发现写入内容
+
+   ```sql
+   CREATE TEMPORARY TABLE datagen_source(
+     name VARCHAR
+   ) WITH (
+     'connector' = 'datagen',
+     'number-of-rows' = '100'
+   );
+
+   CREATE TEMPORARY TABLE jfs_sink (name string)
+   with (
+       'connector' = 'juicefs', 'path' = 'juicefs://{VOL_NAME}/tmp/tbl', 'format' = 'csv'
+   );
+
+   INSERT INTO jfs_sink
+   SELECT
+     name
+   from datagen_source;
+   ```
 
 ### Hudi
 
@@ -573,12 +579,11 @@ Hadoop 默认使用的 Checksum 算法是 MD5-MD5-CRC32, 严重依赖 HDFS 的�
 
 因为该算法依赖于相同的分块大小，需要通过 `juicefs.block.size` 配置将分块大小设置为跟 HDFS 一样（默认值是 `dfs.blocksize`，它的默认值是 128MB）。
 
-另外，HDFS 里支持给每一个文件设置不同的分块大小，而 JuiceFS 不支持，如果启用 Checksum 校验的话会导致拷贝部分文件失败（因为分块大小不同），JuiceFS Hadoop Java SDK 对 DistCp 打了一个热补丁（需要 tools.jar）来跳过这些分块不同的文件（不做比较，而不是抛异常）。
+另外，HDFS 里支持给每一个文件设置不同的分块大小，而 JuiceFS 不支持，如果启用 Checksum 校验的话会导致拷贝部分文件失败（因为分块大小不同），JuiceFS Hadoop Java SDK 对 DistCp 打了一个热补丁（需要 `tools.jar`）来跳过这些分块不同的文件（不做比较，而不是抛异常）。
 
 ## 基准测试
 
 以下提供了一系列方法，使用 JuiceFS 客户端内置的压测工具，对已经成功部署了客户端环境进行性能测试。
-
 
 ### 1. 本地测试
 
@@ -727,7 +732,6 @@ Hadoop 默认使用的 Checksum 算法是 MD5-MD5-CRC32, 严重依赖 HDFS 的�
 
   此命令会启动 10 个 map task，每个 task 读取 10000MB 的数据
 
-
 - **参考值**
 
   | 操作   | 平均吞吐（MB/s） | 总吞吐（MB/s） |
@@ -853,9 +857,9 @@ JuiceFS 可以使用本地磁盘作为缓存加速数据访问，以下数据是
 
 ### 1. 出现 `Class io.juicefs.JuiceFileSystem not found` 异常
 
-出现这个异常的原因是 juicefs-hadoop.jar 没有被加载，可以用 `lsof -p {pid} | grep juicefs` 查看 JAR 文件是否被加载。需要检查 JAR 文件是否被正确地放置在各个组件的 classpath 里面，并且保证 JAR 文件有可读权限。
+出现这个异常的原因是 `juicefs-hadoop.jar` 没有被加载，可以用 `lsof -p {pid} | grep juicefs` 查看 JAR 文件是否被加载。需要检查 JAR 文件是否被正确地放置在各个组件的 classpath 里面，并且保证 JAR 文件有可读权限。
 
-另外，在某些发行版 Hadoop 环境中，需要修改 `mapred-site.xml` 中的 `mapreduce.application.classpath` 参数，添加 juicefs-hadoop.jar 的路径。
+另外，在某些发行版 Hadoop 环境中，需要修改 `mapred-site.xml` 中的 `mapreduce.application.classpath` 参数，添加 `juicefs-hadoop.jar` 的路径。
 
 ### 2. 出现 `No FilesSystem for scheme: jfs` 异常
 

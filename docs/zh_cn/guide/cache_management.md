@@ -49,7 +49,7 @@ JuiceFS 默认会在内核中缓存属性、文件项和目录项，缓存时长
 
 JuiceFS 客户端在 `open()` 操作即打开一个文件时，其文件属性（attribute）会被自动缓存在客户端内存中。如果在挂载文件系统时设置了 [`--open-cache`](../reference/command_reference.md#mount) 选项且值大于 0，只要缓存尚未超时失效，随后执行的 `getattr()` 和 `open()` 操作会从内存缓存中立即返回结果。
 
-执行 `read()` 操作即读取一个文件时，文件的 chunk 和 slice 信息会被自动缓存在客户端内存。在缓存有效期内，再次读取 chunk 会从内存缓存中立即返回 slice 信息（查阅[「JuiceFS 如何存储文件」](../introduction/architecture.md#如何存储文件)以了解 chunk 和 slice 是什么）。
+执行 `read()` 操作即读取一个文件时，文件的 chunk 和 slice 信息会被自动缓存在客户端内存。在缓存有效期内，再次读取 chunk 会从内存缓存中立即返回 slice 信息（查阅[「JuiceFS 如何存储文件」](../introduction/architecture.md#how-juicefs-store-files)以了解 chunk 和 slice 是什么）。
 
 为保强一致性，`--open-cache` 默认关闭，每次打开文件都需直接访问元数据引擎。但如果文件很少发生修改，或者只读场景下（例如 AI 模型训练），则推荐根据情况设置 `--open-cache`，进一步提高读性能。
 

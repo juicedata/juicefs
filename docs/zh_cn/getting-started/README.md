@@ -25,7 +25,7 @@ curl -sSL https://d.juicefs.com/install | sh -
 
 ### 基本概念
 
-创建文件系统使用客户端提供的 [`format`](../reference/command_reference.md#juicefs-format) 命令，一般格式为：
+创建文件系统使用客户端提供的 [`format`](../reference/command_reference.md#format) 命令，一般格式为：
 
 ```shell
 juicefs format [command options] META-URL NAME
@@ -77,12 +77,12 @@ juicefs mount [command options] META-URL MOUNTPOINT
 
 与创建文件系统的命令类似，挂载文件系统需要提供以下信息：
 
-1. **[command options]**：用来指定文件系统相关的选项，例如：`-d` 可以实现后台挂载；
-2. **META-URL**：用来设置元数据存储。即数据库相关的信息，通常是数据库的 URL 或文件路径；
-3. **MOUNTPOINT**：指定文件系统的挂载点。
+1. `[command options]`：用来指定文件系统相关的选项，例如：`-d` 可以实现后台挂载；
+2. `META-URL`：用来设置元数据存储。即数据库相关的信息，通常是数据库的 URL 或文件路径；
+3. `MOUNTPOINT`：指定文件系统的挂载点。
 
 :::tip 提示
-Windows 系统的挂载点（MOUNTPOINT）应该使用尚未占用的盘符，比如：`Z:`、`Y:`。
+Windows 系统的挂载点（`MOUNTPOINT`）应该使用尚未占用的盘符，比如：`Z:`、`Y:`。
 :::
 
 ### 上手实践
@@ -107,7 +107,7 @@ juicefs mount sqlite3://myjfs.db ~/jfs
 juicefs mount sqlite3://myjfs.db ~/jfs -d
 ```
 
-接下来，任何存入挂载点 `~/jfs` 的文件，都会按照 [JuiceFS 的文件存储格式](../introduction/architecture.md#如何存储文件)被拆分成特定的「数据块」并存入 `$HOME/.juicefs/local/myjfs` 目录中，相对应的「元数据」会全部存储在 `myjfs.db` 数据库中。
+接下来，任何存入挂载点 `~/jfs` 的文件，都会按照 [JuiceFS 的文件存储格式](../introduction/architecture.md#how-juicefs-store-files)被拆分成特定的「数据块」并存入 `$HOME/.juicefs/local/myjfs` 目录中，相对应的「元数据」会全部存储在 `myjfs.db` 数据库中。
 
 最后执行以下命令可以将挂载点 `~/jfs` 卸载：
 
@@ -117,7 +117,7 @@ juicefs umount ~/jfs
 
 ## 更进一步
 
-前面介绍的内容通常只适用于快速在本地体验和了解，帮助你对 JucieFS 的工作方式建立基本的认识。我们可以在前面内容的基础上更进一步，仍然使用 SQLite 存储元数据，把本地存储换成「对象存储」，做一个更有实用价值的方案。
+前面介绍的内容通常只适用于快速在本地体验和了解，帮助你对 JuiceFS 的工作方式建立基本的认识。我们可以在前面内容的基础上更进一步，仍然使用 SQLite 存储元数据，把本地存储换成「对象存储」，做一个更有实用价值的方案。
 
 ### 对象存储
 

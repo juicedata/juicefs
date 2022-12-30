@@ -12,13 +12,16 @@ import unittest
 from xmlrpc.client import boolean
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
 from hypothesis import assume, strategies as st
+from hypothesis import seed
 from packaging import version
 from minio import Minio
 import uuid
 from utils import *
 from fsrand import *
 from cmptree import *
+import random
 
+@seed(random.randint(10000, 1000000))
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
@@ -34,6 +37,7 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     def __init__(self):
         super(JuicefsMachine, self).__init__()
+        print(f"seed is: {self._hypothesis_internal_use_seed}")
         self.run_id = uuid.uuid4().hex
         print(f'\ninit with run_id: {self.run_id}')
         with open(os.path.expanduser('~/command.log'), 'a') as f:
@@ -741,9 +745,14 @@ class JuicefsMachine(RuleBasedStateMachine):
         print('webdav succeed')
 
     def greater_than_version_formatted(self, ver):
+        print(f'ver is {ver}, formatted_by is {self.formatted_by}')
+        if not self.formatted_by:
+            return True
         return version.parse('-'.join(ver.split('-')[1:])) >=  version.parse('-'.join(self.formatted_by.split('-')[1:]))
 
     def greater_than_version_dumped(self, ver):
+        if not self.dumped_by:
+            return True
         return version.parse('-'.join(ver.split('-')[1:])) >=  version.parse('-'.join(self.dumped_by.split('-')[1:]))
 
     def greater_than_version_mounted(self, ver):

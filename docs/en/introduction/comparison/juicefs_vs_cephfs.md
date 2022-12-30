@@ -1,5 +1,6 @@
 ---
 slug: /comparison/juicefs_vs_cephfs
+description: Ceph is a unified system that provides object storage, block storage and file storage. This article compares the similarities and differences between JuiceFS and Ceph.
 ---
 
 # JuiceFS vs. CephFS
@@ -22,7 +23,7 @@ CephFS is a complete and independent system used mainly for private cloud deploy
   - Metadata Server (MDS): stateless, and theoretically horizontally scalable. There are mature primary-secondary mechanisms, while performance and stability concerns still exist when deploying with multiple primaries; production environments typically adopt one-primary-multiple-secondary or multi-primary static isolation.
   - Persistent: independent RADOS storage pools, usually being used with SSD or higher performance hardware storage
 - Data: stored in one or more RADOS storage pools, with supports of specifying different configurations by _Layout_ such as chunk size (default 4 MiB), redundancy (multi-copy, EC), etc.
-- Client: supports kernel client (kcephfs), user state client (ceph-fuse) and libcephfs based SDKs for C++, Python, etc.; recently the community has also provided a Windows client (ceph-dokan). VFS object for Samba and FSAL module for NFS-Ganesha are also available in the ecosystem.
+- Client: supports kernel client (`kcephfs`), user state client (`ceph-fuse`) and libcephfs based SDKs for C++, Python, etc.; recently the community has also provided a Windows client (`ceph-dokan`). VFS object for Samba and FSAL module for NFS-Ganesha are also available in the ecosystem.
 
 #### JuiceFS
 

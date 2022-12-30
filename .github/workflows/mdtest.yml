@@ -28,18 +28,18 @@ jobs:
     runs-on: [self-hosted, daily-build, bench-02]
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
       - name: Set Variable
         id: vars
         run: |
-          echo ::set-output name=META_URL::redis://mymaster,172.27.0.1,172.27.0.2,172.27.0.3:26379/7
-          echo ::set-output name=MOUNT_POINT::/tmp/mdtest
-          echo ::set-output name=BACKWARD_VERSIONS::1
-          echo ::set-output name=PYROSCOPE_URL::http://172.27.0.1:4040
-
+          echo "META_URL=redis://mymaster,172.27.0.1,172.27.0.2,172.27.0.3:26379/7" >> $GITHUB_OUTPUT
+          echo "MOUNT_POINT=/tmp/mdtest" >> $GITHUB_OUTPUT
+          echo "BACKWARD_VERSIONS=1" >> $GITHUB_OUTPUT
+          echo "PYROSCOPE_URL=http://172.27.0.1:4040" >> $GITHUB_OUTPUT
+          
       - name: Build
         uses: ./.github/actions/build
 

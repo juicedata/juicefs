@@ -26,7 +26,7 @@ Arguments:
 Address syntax follows `[NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]`.
 
 :::tip
-Minio only supports path style, and the address format is `minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]`
+MinIO only supports path style, and the address format is `minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]`
 :::
 
 Explanation:
@@ -57,19 +57,19 @@ juicefs sync ./te ~/mnt/ab
 
 the `test` directory synchronized to the destination directory will be renamed as `abst`, and `text` will be `abxt`.
 
-### Required Storages
+### Required Storages {#required-storages}
 
 Assume that we have the following storages.
 
-1. **Object Storage A** <span id="bucketA" />
+1. **Object Storage A**
    - Bucket name: aaa
    - Endpoint: `https://aaa.s3.us-west-1.amazonaws.com`
 
-2. **Object Storage B** <span id="bucketB" />
+2. **Object Storage B**
    - Bucket name: bbb
    - Endpoint: `https://bbb.oss-cn-hangzhou.aliyuncs.com`
 
-3. **JuiceFS File System** <span id="bucketC" />
+3. **JuiceFS File System**
    - Metadata Storage: `redis://10.10.0.8:6379/1`
    - Object Storage: `https://ccc-125000.cos.ap-beijing.myqcloud.com`
 
@@ -80,7 +80,7 @@ All of the storages share the same **secret key**:
 
 ### Synchronize between Object Storage and JuiceFS
 
-The following command synchronizes `movies` directory on [Object Storage A](#bucketA) to [JuiceFS File System](#bucketC).
+The following command synchronizes `movies` directory on [Object Storage A](#required-storages) to [JuiceFS File System](#required-storages).
 
 ```shell
 # mount JuiceFS
@@ -89,7 +89,7 @@ sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
 
-The following command synchronizes `images` directory from [JuiceFS File System](#bucketC) to [Object Storage A](#bucketA).
+The following command synchronizes `images` directory from [JuiceFS File System](#required-storages) to [Object Storage A](#required-storages).
 
 ```shell
 # mount JuiceFS
@@ -100,7 +100,7 @@ juicefs sync /mnt/jfs/images/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.co
 
 ### Synchronize between Object Storages
 
-The following command synchronizes all of the data on [Object Storage A](#bucketA) to [Object Storage B](#bucketB).
+The following command synchronizes all of the data on [Object Storage A](#required-storages) to [Object Storage B](#required-storages).
 
 ```shell
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
@@ -112,7 +112,7 @@ juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:H
 
 The subcommand `sync` works incrementally by default, which compares the differences between the source and target paths, and then synchronizes only the differences. You can add option `--update` or `-u` to keep updated the `mtime` of the synchronized directories and files.
 
-For full synchronization, i.e. synchronizing all the time no matter whether the destination files exist or not, you can add option `--force-update` or `-f`. For example, the following command fully synchronizes `movies` directory from [Object Storage A](#bucketA) to [JuiceFS File System](#bucketC).
+For full synchronization, i.e. synchronizing all the time no matter whether the destination files exist or not, you can add option `--force-update` or `-f`. For example, the following command fully synchronizes `movies` directory from [Object Storage A](#required-storages) to [JuiceFS File System](#required-storages).
 
 ```shell
 # mount JuiceFS
@@ -135,7 +135,7 @@ The pattern matching function of the subcommand `sync` is similar to that of `rs
 
 #### Exclude Directories/Files
 
-Option `--exclude` can be used to exclude patterns. The following example shows a full synchronization from [JuiceFS File System](#bucketC) to [Object Storage A](#bucketA), excluding hidden directories and files:
+Option `--exclude` can be used to exclude patterns. The following example shows a full synchronization from [JuiceFS File System](#required-storages) to [Object Storage A](#required-storages), excluding hidden directories and files:
 
 :::note Remark
 Linux regards a directory or a file with a name starts with `.` as hidden.
@@ -176,7 +176,7 @@ In addition, you can set option `--bwlimit` in the unit `Mbps` to limit the band
 
 The subcommand `sync` only synchronizes file objects and directories containing file objects, and skips empty directories by default. To synchronize empty directories, you can use `--dirs` option.
 
-In addition, when synchronizing between file systems such as local, sftp and hdfs, option `--perms` can be used to synchronize file permissions from the source to the destination.
+In addition, when synchronizing between file systems such as local, SFTP and HDFS, option `--perms` can be used to synchronize file permissions from the source to the destination.
 
 ### Copy Symbolic Links
 
@@ -205,7 +205,7 @@ Passwordless SSH login from Manager to Workers should be enabled before configur
 Manager distributes JuiceFS client programs to Workers. To avoid compatibility issues, please make sure the Workers use the same operating system of the same architecture as the Manager.
 :::
 
-For example, synchronize data from [Object Storage A](#bucketA) to [Object Storage B](#bucketB) concurrently with multiple machines.
+For example, synchronize data from [Object Storage A](#required-storages) to [Object Storage B](#required-storages) concurrently with multiple machines.
 
 ```shell
 juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
@@ -221,7 +221,7 @@ Please set the SSH port in `.ssh/config` on the Manager machine if Workers don't
 
 ### Geo-disaster Recovery Backup
 
-Geo-disaster recovery backup backs up files, and thus the files stored in JuiceFS should be synchronized to other object storages. For example, synchronize files in [JuiceFS File System](#bucketC) to [Object Storage A](#bucketA):
+Geo-disaster recovery backup backs up files, and thus the files stored in JuiceFS should be synchronized to other object storages. For example, synchronize files in [JuiceFS File System](#required-storages) to [Object Storage A](#required-storages):
 
 ```shell
 # mount JuiceFS
@@ -230,19 +230,19 @@ sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 sudo juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ```
 
-After sync, you can see all the files in [Object Storage A](#bucketA).
+After sync, you can see all the files in [Object Storage A](#required-storages).
 
 ### Build a JuiceFS Data Copy
 
 Unlike the file-oriented disaster recovery backup, the purpose of creating a copy of JuiceFS data is to establish a mirror with exactly the same content and structure as the JuiceFS data storage. When the object storage in use fails, you can switch to the data copy by modifying the configurations. Note that only the file data of the JuiceFS file system is replicated, and the metadata stored in the metadata engine still needs to be backed up.
 
-This requires manipulating the underlying object storage directly to synchronize it with the target object storage. For example, to take the [Object Storage B](#bucketB) as the data copy of the [JuiceFS File System](#bucketC):
+This requires manipulating the underlying object storage directly to synchronize it with the target object storage. For example, to take the [Object Storage B](#required-storages) as the data copy of the [JuiceFS File System](#required-storages):
 
 ```shell
 juicefs sync cos://ABCDEFG:HIJKLMN@ccc-125000.cos.ap-beijing.myqcloud.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
 
-After sync, the file content and hierarchy in the [Object Storage B](#bucketB) are exactly the same as the [underlying object storage of JuiceFS](#bucketC).
+After sync, the file content and hierarchy in the [Object Storage B](#required-storages) are exactly the same as the [underlying object storage of JuiceFS](#required-storages).
 
 :::tip Tips
 Please read [architecture](../introduction/architecture.md) for more details about how JuiceFS stores files.

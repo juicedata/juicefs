@@ -2,6 +2,7 @@
 title: Command Reference
 sidebar_position: 1
 slug: /command_reference
+description: This article provides descriptions, usage and examples of all commands and options included in JuiceFS.
 ---
 
 import Tabs from '@theme/Tabs';
@@ -129,7 +130,7 @@ source /etc/bash_completion.d/juicefs
 
 ## Commands
 
-### juicefs format {#format}
+### `juicefs format` {#format}
 
 Format a volume. It's the first step for initializing a new file system volume.
 
@@ -154,7 +155,7 @@ storage space limit in GiB, set to 0 disable limit (default: 0). Capacity will i
 the limit for number of inodes (0 means unlimited) (default: 0)
 
 `--compress value`<br />
-compression algorithm, choose from lz4, zstd, none (default: "none"). Enabling compression will inevitably affect performance, choose wisely
+compression algorithm, choose from `lz4`, `zstd`, `none` (default: "none"). Enabling compression will inevitably affect performance, choose wisely
 
 `--shards value`<br />
 store the blocks into N buckets by hash of key (default: 0), when N is greater than 0, `bucket` should to be in the form of `%d`, e.g. `--bucket "juicefs-%d"`
@@ -207,7 +208,7 @@ $ juicefs format sqlite3://myjfs.db myjfs --inode 1000000 --capacity 102400
 $ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
 ```
 
-### juicefs mount {#mount}
+### `juicefs mount` {#mount}
 
 Mount a volume. The volume must be formatted in advance.
 
@@ -217,8 +218,8 @@ Mount a volume. The volume must be formatted in advance.
 juicefs mount [command options] META-URL MOUNTPOINT
 ```
 
-- **META-URL**: Database URL for metadata storage, see "[JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md)" for details.
-- **MOUNTPOINT**: file system mount point, e.g. `/mnt/jfs`, `Z:`.
+- `META-URL`: Database URL for metadata storage, see "[JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md)" for details.
+- `MOUNTPOINT`: file system mount point, e.g. `/mnt/jfs`, `Z:`.
 
 #### Options
 
@@ -226,7 +227,7 @@ juicefs mount [command options] META-URL MOUNTPOINT
 address to export metrics (default: "127.0.0.1:9567")
 
 `--consul value`<br />
-consul address to register (default: "127.0.0.1:8500")
+Consul address to register (default: "127.0.0.1:8500")
 
 `--no-usage-report`<br />
 do not send usage report (default: false)
@@ -345,7 +346,7 @@ $ juicefs mount redis://localhost /mnt/jfs -d --read-only
 $ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 ```
 
-### juicefs umount
+### `juicefs umount`
 
 Unmount a volume.
 
@@ -363,10 +364,10 @@ force unmount a busy mount point (default: false)
 #### Examples
 
 ```bash
-$ juicefs umount /mnt/jfs
+juicefs umount /mnt/jfs
 ```
 
-### juicefs gateway
+### `juicefs gateway`
 
 Start an S3-compatible gateway.
 
@@ -481,17 +482,17 @@ disable background jobs (clean-up, backup, etc.) (default: false)
 umask for new file and directory in octal (default: "022")
 
 `--consul value`<br />
-consul address to register (default: "127.0.0.1:8500")
+Consul address to register (default: "127.0.0.1:8500")
 
 #### Examples
 
 ```bash
-$ export MINIO_ROOT_USER=admin
-$ export MINIO_ROOT_PASSWORD=12345678
-$ juicefs gateway redis://localhost localhost:9000
+export MINIO_ROOT_USER=admin
+export MINIO_ROOT_PASSWORD=12345678
+juicefs gateway redis://localhost localhost:9000
 ```
 
-### juicefs webdav
+### `juicefs webdav`
 
 Start a WebDAV server.
 
@@ -591,7 +592,7 @@ path for JuiceFS access log
 address to export metrics (default: "127.0.0.1:9567")
 
 `--consul value`<br />
-consul address to register (default: "127.0.0.1:8500")
+Consul address to register (default: "127.0.0.1:8500")
 
 `--no-usage-report`<br />
 do not send usage report (default: false)
@@ -605,10 +606,10 @@ interval (in seconds) to send heartbeat; it's recommended that all clients use t
 #### Examples
 
 ```bash
-$ juicefs webdav redis://localhost localhost:9007
+juicefs webdav redis://localhost localhost:9007
 ```
 
-### juicefs sync
+### `juicefs sync`
 
 Sync between two storage.
 
@@ -675,7 +676,7 @@ don't exclude Key matching PATTERN, need to be used with `--exclude` option
 `--links, -l`<br />
 copy symlinks as symlinks (default: false)
 
-` --limit value`<br />
+`--limit value`<br />
 limit the number of objects that will be processed (default: -1)
 
 `--manager value`<br />
@@ -716,7 +717,7 @@ $ juicefs sync --include='a1/b1' --exclude='a[1-9]/b*' s3://mybucket.s3.us-east-
 $ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
 ```
 
-### juicefs rmr
+### `juicefs rmr`
 
 Remove all the files and subdirectories, similar to rm -rf, except this command deals with metadata directly (bypassing POSIX API), thus is much faster.
 
@@ -731,10 +732,10 @@ juicefs rmr PATH ...
 #### Examples
 
 ```bash
-$ juicefs rmr /mnt/jfs/foo
+juicefs rmr /mnt/jfs/foo
 ```
 
-### juicefs info {#info}
+### `juicefs info` {#info}
 
 Show internal information for given paths or inodes.
 
@@ -766,7 +767,7 @@ $ cd /mnt/jfs
 $ juicefs info -i 100
 ```
 
-### juicefs bench
+### `juicefs bench`
 
 Run benchmark, including read/write/stat for big and small files.
 
@@ -805,7 +806,7 @@ $ juicefs bench /mnt/jfs -p 4
 $ juicefs bench /mnt/jfs --big-file-size 0
 ```
 
-### juicefs objbench
+### `juicefs objbench`
 
 Run basic benchmarks on the target object storage to test if it works as expected.
 
@@ -850,7 +851,7 @@ number of concurrent threads (default: 4)
 $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
 ```
 
-### juicefs gc {#gc}
+### `juicefs gc` {#gc}
 
 用来处理「对象泄漏」，以及因为覆盖写而产生的碎片数据的命令。详见[「状态检查 & 维护」](../administration/status_check_and_maintenance.md#gc)。
 
@@ -886,7 +887,7 @@ $ juicefs gc redis://localhost --compact
 $ juicefs gc redis://localhost --delete
 ```
 
-### juicefs fsck
+### `juicefs fsck`
 
 Check consistency of file system.
 
@@ -899,10 +900,10 @@ juicefs fsck [command options] META-URL
 #### Examples
 
 ```bash
-$ juicefs fsck redis://localhost
+juicefs fsck redis://localhost
 ```
 
-### juicefs profile
+### `juicefs profile`
 
 Analyze [access log](../administration/fault_diagnosis_and_analysis.md#access-log).
 
@@ -926,7 +927,6 @@ only track specified PIDs(separated by comma ,)
 `--interval value`<br />
 flush interval in seconds; set it to 0 when replaying a log file to get an immediate result (default: 2)
 
-
 #### Examples
 
 ```bash
@@ -942,7 +942,7 @@ $ juicefs profile /tmp/jfs.alog
 $ juicefs profile /tmp/jfs.alog --interval 0
 ```
 
-### juicefs stats
+### `juicefs stats`
 
 Show runtime statistics.
 
@@ -955,7 +955,7 @@ juicefs stats [command options] MOUNTPOINT
 #### Options
 
 `--schema value`<br />
-schema string that controls the output sections (u: usage, f: fuse, m: meta, c: blockcache, o: object, g: go) (default: "ufmco")
+schema string that controls the output sections (u: `usage`, f: `fuse`, m: `meta`, c: `blockcache`, o: `object`, g: `go`) (default: "ufmco")
 
 `--interval value`<br />
 interval in seconds between each update (default: 1)
@@ -972,7 +972,7 @@ $ juicefs stats /mnt/jfs
 $ juicefs stats /mnt/jfs -l 1
 ```
 
-### juicefs status
+### `juicefs status`
 
 Show status of JuiceFS.
 
@@ -985,15 +985,15 @@ juicefs status [command options] META-URL
 #### Options
 
 `--session value, -s value`<br />
-show detailed information (sustained inodes, locks) of the specified session (sid) (default: 0)
+show detailed information (sustained inodes, locks) of the specified session (SID) (default: 0)
 
 #### Examples
 
 ```bash
-$ juicefs status redis://localhost
+juicefs status redis://localhost
 ```
 
-### juicefs warmup {#warmup}
+### `juicefs warmup` {#warmup}
 
 Download data to local cache in advance, to achieve better performance on application's first read.
 
@@ -1030,7 +1030,7 @@ $ cat /tmp/filelist
 $ juicefs warmup -f /tmp/filelist
 ```
 
-### juicefs dump
+### `juicefs dump`
 
 Dump metadata into a JSON file.
 
@@ -1056,7 +1056,7 @@ $ juicefs dump redis://localhost meta-dump
 $ juicefs dump redis://localhost sub-meta-dump --subdir /dir/in/jfs
 ```
 
-### juicefs load
+### `juicefs load`
 
 Load metadata from a previously dumped JSON file.
 
@@ -1071,10 +1071,10 @@ When the FILE is not provided, STDIN will be used instead.
 #### Examples
 
 ```bash
-$ juicefs load redis://localhost/1 meta-dump
+juicefs load redis://localhost/1 meta-dump
 ```
 
-### juicefs config
+### `juicefs config`
 
 Change config of a volume.
 
@@ -1135,7 +1135,7 @@ $ juicefs config redis://localhost --trash-days 7
 $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version 1.1.0
 ```
 
-### juicefs destroy
+### `juicefs destroy`
 
 Destroy an existing volume, will delete relevant data in metadata engine and object storage. See [How to destroy a file system](../administration/destroy.md).
 
@@ -1153,10 +1153,10 @@ skip sanity check and force destroy the volume (default: false)
 #### Examples
 
 ```bash
-$ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
+juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 ```
 
-### juicefs debug
+### `juicefs debug`
 
 It collects and displays information from multiple dimensions such as the operating environment and system logs to help better locate errors
 

@@ -3,6 +3,7 @@ title: Installation
 sidebar_position: 1
 slug: /installation
 pagination_prev: introduction/comparison/juicefs_vs_s3ql
+description: This article describes how to install JuiceFS on Linux, macOS and Windows, including one-click installation, compiled and containerized.
 ---
 
 JuiceFS has good cross-platform capability and supports running on all kinds of operating systems of almost all major architectures, including and not limited to Linux, macOS, Windows, etc.
@@ -99,7 +100,7 @@ For details, see "[Using JuiceFS on WSL](../tutorials/juicefs_on_wsl.md)"
 
 ### macOS
 
-Since macOS does not support the FUSE interface by default, you need to install [macFUSE](https://osxfuse.github.io/) first to implement the support for FUSE.
+Since macOS does not support the FUSE interface by default, you need to install [macFUSE](https://osxfuse.github.io) first to implement the support for FUSE.
 
 :::tip
 [macFUSE](https://github.com/osxfuse/osxfuse) is an open source file system enhancement tool that allows macOS to mount third-party file systems, enabling JuiceFS clients to mount file systems on macOS systems.
@@ -107,7 +108,7 @@ Since macOS does not support the FUSE interface by default, you need to install 
 
 #### Homebrew
 
-If you have the [Homebrew](https://brew.sh/) package manager installed on your system, you can install the JuiceFS client by executing the following command.
+If you have the [Homebrew](https://brew.sh) package manager installed on your system, you can install the JuiceFS client by executing the following command.
 
 ```shell
 brew tap juicedata/homebrew-tap
@@ -164,7 +165,7 @@ For users in China, in order to speed up the acquisition of Go modules, it is re
 
 Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the following dependencies:
 
-- [Go](https://golang.org) 1.17+
+- [Go](https://golang.org) 1.18+
 - GCC 5.4+
 
 1. Clone source code
@@ -201,9 +202,9 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 
 ### Compiling on Windows
 
-Compiling the JuiceFS client on Windows requires [Go](https://golang.org) 1.17+ and GCC 5.4+.
+Compiling the JuiceFS client on Windows requires [Go](https://golang.org) 1.18+ and GCC 5.4+.
 
-Since GCC does not have a native Windows client, the version provided by a third party, either [MinGW-w64](https://sourceforge.net/projects/mingw-w64/) or [Cygwin](https://www.cygwin.com/) is needed. Here is an example of using MinGW-w64.
+Since GCC does not have a native Windows client, the version provided by a third party, either [MinGW-w64](https://sourceforge.net/projects/mingw-w64) or [Cygwin](https://www.cygwin.com) is needed. Here is an example of using MinGW-w64.
 
 Download MinGW-w64 and add its `bin` directory to the system environment variables.
 
