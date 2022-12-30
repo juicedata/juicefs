@@ -30,7 +30,7 @@ S3QL was no longer maintained since November 9, 2022, see [S3QL Repository](http
 | Metadata engine           | SQLite                | Redis, MySQL, SQLite, TiKV    |
 | Storage engine            | Object Storage, Local | Object Storage, WebDAV, Local |
 | Operating system          | Unix-like             | Linux, macOS, Windows         |
-| Compression algorithm     | LZMA, bzip2, gzip     | lz4, zstd                     |
+| Compression algorithm     | LZMA, bzip2, gzip     | LZ4, zstd                     |
 | Encryption algorithm      | AES-256               | AES-GCM, RSA                  |
 | POSIX compatible          | ✓                     | ✓                             |
 | Hard link                 | ✓                     | ✓                             |
@@ -62,7 +62,7 @@ During the installation process, we use Rocky Linux 8.4 operating system (kernel
 
 #### S3QL
 
-S3QL is developed in Python and requires python-devel 3.7 or higher to be installed. In addition, at least the following dependencies must be satisfied: fuse3-devel, gcc, pyfuse3, sqlite-devel, cryptography, defusedxml, apsw, dugong. In addition, you need to pay special attention to Python's package dependencies and location issues.
+S3QL is developed in Python and requires `python-devel` 3.7 or higher to be installed. In addition, at least the following dependencies must be satisfied: `fuse3-devel`, `gcc`, `pyfuse3`, `sqlite-devel`, `cryptography`, `defusedxml`, `apsw`, `dugong`. In addition, you need to pay special attention to Python's package dependencies and location issues.
 
 S3QL will install 12 binary programs in the system, and each program provides an independent function, as shown in the figure below.
 
@@ -76,7 +76,7 @@ JuiceFS is developed in Go and can be used directly by downloading the pre-compi
 
 Both S3QL and JuiceFS use database to store metadata. S3QL only supports SQLite databases, while JuiceFS supports databases such as Redis, TiKV, MySQL, MariaDB, PostgreSQL, and SQLite.
 
-Here we create a file system using S3QL and JuiceFS separately with locally created Minio as object storage:
+Here we create a file system using S3QL and JuiceFS separately with locally created MinIO as object storage:
 
 #### S3QL
 

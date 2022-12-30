@@ -47,10 +47,10 @@ No matter which system environment the client is compiled for, the compiled JAR 
 
 Compilation depends on the following tools:
 
-- [Go](https://golang.org/) 1.17+
+- [Go](https://golang.org) 1.18+
 - JDK 8+
-- [Maven](https://maven.apache.org/) 3.3+
-- git
+- [Maven](https://maven.apache.org) 3.3+
+- Git
 - make
 - GCC 5.4+
 
@@ -85,7 +85,7 @@ It is recommended to use a version that includes third-party dependencies.
 
 #### Windows
 
-The client used in the Windows environment needs to be obtained through cross-compilation on Linux or macOS. The compilation depends on [mingw-w64](https://www.mingw-w64.org/), which needs to be installed first.
+The client used in the Windows environment needs to be obtained through cross-compilation on Linux or macOS. The compilation depends on [mingw-w64](https://www.mingw-w64.org), which needs to be installed first.
 
 The steps are the same as compiling on Linux or macOS. For example, on the Ubuntu system, install the `mingw-w64` package first to solve the dependency problem:
 
@@ -172,8 +172,6 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.download-limit` | 0             | Bandwidth limit for download in Mbps            |
 | `juicefs.io-retries`     | 10            | Number of retries after network failure         |
 | `juicefs.writeback`      | `false`       | Upload objects in background                    |
-
-
 
 #### Other Configurations
 
@@ -606,7 +604,6 @@ Computing resources used in this test:
   ```
 
   10 map task, each task read 10000MB random data sequentially
-
 
 - **For reference**
 

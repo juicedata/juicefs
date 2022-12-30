@@ -41,7 +41,7 @@ juicefs mount -d "postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs" /mnt/jfs
 
 ## 使用连接池
 
-连接池是客户端与数据库之间的中间层，由它作为中介提升连接效率，降低短连接的损耗。常用的连接池有 [PgBouncer](https://www.pgbouncer.org/) 和 [Pgpool-II](https://www.pgpool.net/) 。
+连接池是客户端与数据库之间的中间层，由它作为中介提升连接效率，降低短连接的损耗。常用的连接池有 [PgBouncer](https://www.pgbouncer.org) 和 [Pgpool-II](https://www.pgpool.net) 。
 
 ## 高可用
 

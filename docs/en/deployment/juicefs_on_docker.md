@@ -8,7 +8,7 @@ There are several common ways to use JuiceFS as Docker persistent storage.
 
 ## 1. Volume Mapping {#volume-mapping}
 
-Volume mapping maps the directories in the JuiceFS mount point to the Docker container. For example, assuming a JuiceFS file system is mounted to the `/mnt/jfs` directory, you can map this file system when creating a docker container as follows:
+Volume mapping maps the directories in the JuiceFS mount point to the Docker container. For example, assuming a JuiceFS file system is mounted to the `/mnt/jfs` directory, you can map this file system when creating a Docker container as follows:
 
 ```shell
 sudo docker run -d --name nginx \
@@ -17,7 +17,7 @@ sudo docker run -d --name nginx \
   nginx
 ```
 
-By default, only the user who mounts the JuiceFS file system has access permissions. To make a file system mappable for docker containers created by others, you need to enable FUSE option `user_allow_other` first, and then re-mount the file system with option `-o allow_other`.
+By default, only the user who mounts the JuiceFS file system has access permissions. To make a file system mappable for Docker containers created by others, you need to enable FUSE option `user_allow_other` first, and then re-mount the file system with option `-o allow_other`.
 
 > **Note**: JuiceFS file system mounted with root privilege has already enabled the `allow_other` option. Thus, you don't need to set it manually.
 
@@ -35,6 +35,7 @@ sudo nano /etc/fuse.conf
 
 First, uncomment the line `# user_allow_other` by deleting the`#` symbol. Your configuration file should look like the following after the modification.
 
+<!-- autocorrect: false -->
 ```conf
 # /etc/fuse.conf - Configuration file for Filesystem in Userspace (FUSE)
 
@@ -45,6 +46,7 @@ First, uncomment the line `# user_allow_other` by deleting the`#` symbol. Your c
 # Allow non-root users to specify the allow_other or allow_root mount options.
 user_allow_other
 ```
+<!-- autocorrect: true -->
 
 #### Re-mount JuiceFS
 
@@ -56,7 +58,7 @@ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 
 ## 2. Docker Volume Plugin {#docker-volume-plugin}
 
-JuiceFS provides [volume plugin](https://docs.docker.com/engine/extend/) for Docker environments to create storage volumes on JuiceFS as if they were local disks.
+JuiceFS provides [volume plugin](https://docs.docker.com/engine/extend) for Docker environments to create storage volumes on JuiceFS as if they were local disks.
 
 ### Dependencies
 
@@ -76,7 +78,7 @@ sudo docker plugin install juicedata/juicefs --alias juicefs
 
 ### Usage
 
-The process of creating a storage volume using the JuiceFS Docker Volume Plugin is similar to creating and mounting a filesystem in a Docker container using the JuiceFS client, so you need to provide information about the database and object storage so that the volume plugin can perform the appropriate operations.
+The process of creating a storage volume using the JuiceFS Docker Volume Plugin is similar to creating and mounting a file system in a Docker container using the JuiceFS client, so you need to provide information about the database and object storage so that the volume plugin can perform the appropriate operations.
 
 :::tip
 Since SQLite is a standalone database, the volume plugin container cannot read the database created by the host. Therefore, when using the Docker volume plugin, you can only use network based databases such as Redis, MySQL, etc.
@@ -101,7 +103,7 @@ sudo docker volume create -d juicefs \
 You can create multiple file systems on the same object storage bucket by specifying different `<VOLUME_NAME>` volume names and `<META_URL>` database address.
 :::
 
-To use docker volume plugin with existing JuiceFS volumes, simply specify the file system name and database address, e.g.
+To use Docker volume plugin with existing JuiceFS volumes, simply specify the file system name and database address, e.g.
 
 ```shell
 sudo docker volume create -d juicefs \
@@ -149,7 +151,8 @@ sudo docker plugin rm juicefs
 
 #### Storage volumes are not used but cannot be deleted
 
-This may occur because the parameters set when creating the storage volume are incorrect. It is recommended to check the type of object storage, bucket name, Access Key, Secret Key, database address and other information. You can try disabling and re-enabling the juicefs volume plugin to release the failed volume, and then recreate the storage volume with the correct parameter information.
+This may occur because the parameters set when creating the storage volume are incorrect. It is recommended to check the type of object storage, bucket name, Access Key, Secret Key, database address and other information. You can try disabling and re-enabling the JuiceFS volume plugin to release the failed volume, and then recreate the storage volume with the correct parameter information.
+
 #### Log of the collection volume plugin
 
 To troubleshoot, you can open a new terminal window and execute the following command while performing the operation to view the live log information.
@@ -158,7 +161,7 @@ To troubleshoot, you can open a new terminal window and execute the following co
 journalctl -f -u docker | grep "plugin="
 ```
 
-To learn more about the JuiceFS volume plugin, you can visit the [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) code repository.
+To learn more about the JuiceFS volume plugin, you can visit the [`juicedata/docker-volume-juicefs`](https://github.com/juicedata/docker-volume-juicefs) code repository.
 
 ## 3. Mount JuiceFS in a Container {#mount-juicefs-in-docker}
 
@@ -166,7 +169,7 @@ Mounting JuiceFS in a Docker container usually serves two purposes, one is to pr
 
 ### Using pre-built images
 
-[juicedata/mount](https://hub.docker.com/r/juicedata/mount) is the official client image maintained by JuiceFS, in which both the community version and the cloud service client are packaged, and the program paths are:
+[`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) is the official client image maintained by JuiceFS, in which both the community version and the cloud service client are packaged, and the program paths are:
 
 - **Commnity Edition**: `/usr/local/bin/juicefs`
 - **Cloud Service**：`/usr/bin/juicefs`
@@ -182,7 +185,7 @@ It is recommended to manually specify the [version tag](https://hub.docker.com/r
 
 ### Compiling images manually
 
-In some cases, you may need to integrate the JuiceFS client into a specific system image, which requires you to write your own Dockerfile file. In this process, you can either download the pre-compiled client directly or refer to [juicefs.Dockerfile](https://github.com/juicedata/juicefs-csi-driver/blob/master/docker/juicefs.Dockerfile) to compile the client from source code.
+In some cases, you may need to integrate the JuiceFS client into a specific system image, which requires you to write your own Dockerfile file. In this process, you can either download the pre-compiled client directly or refer to [`juicefs.Dockerfile`](https://github.com/juicedata/juicefs-csi-driver/blob/master/docker/juicefs.Dockerfile) to compile the client from source code.
 
 The following is an example of a Dockerfile file using the downloaded pre-compiled binaries.
 
@@ -207,7 +210,7 @@ ENTRYPOINT ["/usr/bin/juicefs", "--version"]
 
 JuiceFS makes it easy to connect object storage on the cloud to local, so you can using the cloud storage as if you were using local disks. If the entire mounting process is done in a Docker container, it not only simplifies the operation, but also facilitates maintenance and management. This approach is ideal for enterprise or home servers, NAS systems, and other devices to create data disaster recovery environments on the cloud.
 
-The following is an example of a Docker Compose implementation that does the creation and mounting of a JuiceFS filesystem in a Docker container and maps the mount point in the container to the `$HOME/mnt` directory on the host.
+The following is an example of a Docker Compose implementation that does the creation and mounting of a JuiceFS file system in a Docker container and maps the mount point in the container to the `$HOME/mnt` directory on the host.
 
 #### Directories, files and structures
 
@@ -266,7 +269,7 @@ services:
     restart: unless-stopped
 ```
 
-You can adjust the parameters of the format and mount commands in the above code as needed. For example, when there is some latency in the network connection between local and object storage and local storage is reliable, you can mount the file system by adding the `--writeback` option so that files can be stored to the local cache first and then uploaded to the object storage asynchronously, see [client-side write cache](./cache_management/#client-write-data-cache) for details.
+You can adjust the parameters of the format and mount commands in the above code as needed. For example, when there is some latency in the network connection between local and object storage and local storage is reliable, you can mount the file system by adding the `--writeback` option so that files can be stored to the local cache first and then uploaded to the object storage asynchronously, see [client-side write cache](../guide/cache_management.md#writeback) for details.
 
 For more file system creation and mounting parameters, please see [command reference](../reference/command_reference.md#mount).
 

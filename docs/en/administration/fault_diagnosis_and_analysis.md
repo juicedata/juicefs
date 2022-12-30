@@ -4,7 +4,6 @@ sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
 description: This article describes how to view and interpret logs in various operating systems for JuiceFS FUSE, CSI Driver, Hadoop Java SDK S3 gateway, S3 gateway clients.
 ---
-# Fault Diagnosis and Analysis
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -100,7 +99,7 @@ Different JuiceFS clients obtain access log in different ways, which are describ
 There is a virtual file named `.accesslog` in the root directory of the JuiceFS file system mount point, the contents of which can be viewed by the `cat` command (the command will not exit), for example (assuming the root directory of the mount point is `/jfs`):
 
 ```bash
-$ cat /jfs/.accesslog
+cat /jfs/.accesslog
 ```
 
 ```output
@@ -111,7 +110,7 @@ $ cat /jfs/.accesslog
 
 ### Kubernetes CSI Driver
 
-Please refer to [CSI Driver documentation](https://juicefs.com/docs/csi/troubleshooting) to find the mount pod or CSI driver pod depending on the version of JuiceFS CSI Driver you are using, and the `.accesslog` file can be viewed in the root directory of the JuiceFS file system mount point in the pod. The mount point path in the pod is `/jfs/<pv_volumeHandle>`. Assuming there is a mount pod named as `juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373`, in which `pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373` is  `<pv_volumeHandle>`, you can then use the following command to view the `.accesslog` file:
+Please refer to [CSI Driver documentation](https://juicefs.com/docs/csi/troubleshooting) to find the mount pod or CSI Driver pod depending on the version of JuiceFS CSI Driver you are using, and the `.accesslog` file can be viewed in the root directory of the JuiceFS file system mount point in the pod. The mount point path in the pod is `/jfs/<pv_volumeHandle>`. Assuming there is a mount pod named as `juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373`, in which `pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373` is  `<pv_volumeHandle>`, you can then use the following command to view the `.accesslog` file:
 
 ```bash
 kubectl -n kube-system exec juicefs-chaos-k8s-002-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373 -- cat /jfs/pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373/.accesslog
@@ -125,7 +124,6 @@ You need to add the [`--access-log` option](../reference/command_reference.md#ju
 
 You need to add the `juicefs.access-log` configuration item in the [client configurations](../deployment/hadoop_java_sdk.md#other-configurations) of the JuiceFS Hadoop Java SDK to specify the path of the access log output, and the access log is not output by default.
 
-
 ## Runtime information
 
 By default, JuiceFS clients will listen to a TCP port locally via [pprof](https://pkg.go.dev/net/http/pprof) to get runtime information such as Goroutine stack information, CPU performance statistics, memory allocation statistics. You can see the specific port number that the current JuiceFS client is listening on by using the system command (e.g. `lsof`):
@@ -135,7 +133,7 @@ If you mount JuiceFS as the root user, you need to add `sudo` before the `lsof` 
 :::
 
 ```bash
-$ lsof -i -nP | grep LISTEN | grep juicefs
+lsof -i -nP | grep LISTEN | grep juicefs
 ```
 
 ```output
@@ -150,18 +148,21 @@ By default, pprof listens on port numbers ranging from 6060 to 6099. That's why 
 - CPU performance statistics: `http://localhost:<port>/debug/pprof/profile?seconds=30`
 - Memory allocation statistics: `http://localhost:<port>/debug/pprof/heap`
 -
+
 :::tip
 You can also use the debug command to automatically collect these runtime information and save it locally. By default, it is saved to the debug directory under the current directory, for example:
+
 ```bash
 juicefs debug /mnt/jfs
 ```
+
 For more information about the debug command, see [command reference](https://juicefs.com/docs/community/command_reference#juicefs-debug)
 :::
 
 To make it easier to analyze this runtime information, you can save it locally, e.g.:
 
 ```bash
-$ curl 'http://localhost:<port>/debug/pprof/goroutine?debug=1' > juicefs.goroutine.txt
+curl 'http://localhost:<port>/debug/pprof/goroutine?debug=1' > juicefs.goroutine.txt
 ```
 
 ```bash

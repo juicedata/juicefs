@@ -8,7 +8,7 @@ JuiceFS ensures POSIX compatibility with the help of pjdfstest and LTP.
 
 ## Pjdfstest
 
- [Pjdfstest](https://github.com/pjd/pjdfstest) is a test suite that helps to test POSIX system calls. JuiceFS passed all of its latest 8813 tests:
+[Pjdfstest](https://github.com/pjd/pjdfstest) is a test suite that helps to test POSIX system calls. JuiceFS passed all of its latest 8813 tests:
 
 ```
 All tests successful.
@@ -38,7 +38,7 @@ Besides the features covered by pjdfstest, JuiceFS provides:
 - POSIX traditional record locks (fcntl).
 
 :::note
-POSIX record locks are classified as **traditional locks** ("process-associated") and **OFD locks** (Open file description locks), and their locking operation commands are `F_SETLK` and `F_OFD_SETLK` respectively. Due to the implementation of the FUSE kernel module, JuiceFS currently only supports traditional record locks. More details can be found at: https://man7.org/linux/man-pages/man2/fcntl.2.html.
+POSIX record locks are classified as **traditional locks** ("process-associated") and **OFD locks** (Open file description locks), and their locking operation commands are `F_SETLK` and `F_OFD_SETLK` respectively. Due to the implementation of the FUSE kernel module, JuiceFS currently only supports traditional record locks. More details can be found at: <https://man7.org/linux/man-pages/man2/fcntl.2.html>.
 :::
 
 ## LTP
@@ -54,7 +54,7 @@ JuiceFS passed most of the file system related tests.
 ### Test Environment
 
 - Host: Amazon EC2: c5d.xlarge (4C 8G)
-- OS: Ubuntu 20.04.1 LTS (Kernel 5.4.0-1029-aws)
+- OS: Ubuntu 20.04.1 LTS (Kernel `5.4.0-1029-aws`)
 - Object storage: Amazon S3
 - JuiceFS version: 0.17-dev (2021-09-16 292f2b65)
 
@@ -63,25 +63,25 @@ JuiceFS passed most of the file system related tests.
 1. Download LTP [release](https://github.com/linux-test-project/ltp/releases/download/20210524/ltp-full-20210524.tar.bz2) from GitHub
 2. Unarchive, compile and install:
 
-```bash
-tar -jvxf ltp-full-20210524.tar.bz2
-cd ltp-full-20210524
-./configure
-make all
-make install
-```
+   ```bash
+   tar -jvxf ltp-full-20210524.tar.bz2
+   cd ltp-full-20210524
+   ./configure
+   make all
+   make install
+   ```
 
 3. Change directory to `/opt/ltp` since test tools are installed here:
 
-```bash
-cd /opt/ltp
-```
+   ```bash
+   cd /opt/ltp
+   ```
 
-The test definition files are located under `runtest`. To speed up testing, we delete some pressure cases and unrelated cases in `fs` and `syscalls` (refer to [Appendix](#Appendix), modified files are saved as `fs-jfs` and `syscalls-jfs`), then execute:
+   The test definition files are located under `runtest`. To speed up testing, we delete some pressure cases and unrelated cases in `fs` and `syscalls` (refer to [Appendix](#Appendix), modified files are saved as `fs-jfs` and `syscalls-jfs`), then execute:
 
-```bash
-./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
-```
+   ```bash
+   ./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
+   ```
 
 ### Test Result
 

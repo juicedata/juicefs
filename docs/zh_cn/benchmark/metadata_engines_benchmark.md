@@ -12,6 +12,7 @@ description: 本文采用亚马逊云的真实环境，介绍如何对 JuiceFS �
 - 对于大 IO（～4 MiB）压力，使用不同元数据引擎的总耗时未见明显差异（此时对象存储成为瓶颈）
 
 :::note 注意
+
 1. Redis 可以通过将 `appendfsync` 配置项由 `always` 改为 `everysec`，牺牲少量可靠性来换取一定的性能提升。更多信息可参见[这里](https://redis.io/docs/manual/persistence)。
 2. 测试中 Redis 和 MySQL 数据均仅在本地存储单副本，TiKV 和 etcd 数据会在三个节点间通过 Raft 协议存储三副本。
 :::
@@ -99,10 +100,13 @@ client3 slots=4
 测试命令：
 
 meta only
+
 ```shell
 mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-by slot /root/mdtest -b 3 -z 1 -I 100 -u -d /mnt/jfs
 ```
+
 12000 * 100KiB files
+
 ```shell
 mpirun --use-hwthread-cpus --allow-run-as-root -np 12 --hostfile myhost --map-by slot /root/mdtest -F -w 102400 -I 1000 -z 0 -u -d /mnt/jfs
 ```
@@ -184,7 +188,6 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 | File removal       | 3615.253     | 7808.427       | 898.631   | 1884.315  | 1228.742 |
 | Tree creation      | 53.523       | 51.871         | 25.276    | 36.511    | 24.960   |
 | Tree removal       | 62.676       | 53.384         | 25.782    | 22.074    | 13.652   |
-
 
 ### fio
 
