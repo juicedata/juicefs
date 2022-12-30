@@ -15,6 +15,7 @@
  */
 
 //nolint:errcheck
+//disable_mutate_test
 package meta
 
 import (
