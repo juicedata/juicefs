@@ -330,7 +330,22 @@ func prepareMp(newCfg *vfs.Config, mp string) (ignore bool) {
 		return
 	}
 
-	contents, err := os.ReadFile(path.Join(mp, ".config"))
+	prefixedConfigName := ".config"
+
+	entries, _ := os.ReadDir(mp)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			// optimization - JuiceFS .config is not a directory
+			continue
+		}
+
+		ino, _ := utils.GetFileInode(path.Join(mp, entry.Name()))
+		if vfs.IsSpecialNode(meta.Ino(ino)) && strings.HasSuffix(entry.Name(), ".config") {
+			prefixedConfigName = entry.Name()
+		}
+	}
+
+	contents, err := os.ReadFile(path.Join(mp, prefixedConfigName))
 	if err != nil {
 		// failed to read juicefs config, continue to mount
 		return
