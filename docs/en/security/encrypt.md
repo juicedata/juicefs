@@ -12,7 +12,7 @@ JuiceFS provides data encrytion from two aspects:
 
 Running JuiceFS generally involves the network connection between database and object storage, which is determined by the architecture of JuiceFS. As long as the servers support encryption connections, JuiceFS can be accessed through the encrypted channel.
 
-### Connect to objetc storage via HTTPS
+### Connect to object storage via HTTPS
 
 Public cloud object storage generally supports both HTTP and HTTPS. If no scheme is specified, JuiceFS uses HTTPS by default. For example, the client will identify the bucket in following command as `https://myjfs.s3.ap-southeast-1.amazonaws.com`.
 
