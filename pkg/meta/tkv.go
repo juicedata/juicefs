@@ -2267,6 +2267,48 @@ func (m *kvMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	return nil
 }
 
+func (m *kvMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
+	if scan == nil {
+		return nil
+	}
+
+	// slice refs: Kiiiiiiiissss
+	klen := 1 + 8 + 4
+	keys, err := m.scanKeys(m.fmtKey("K"))
+	if err != nil {
+		return err
+	}
+
+	for _, key := range keys {
+		if len(key) != klen {
+			continue
+		}
+		b := utils.ReadBuffer([]byte(key)[1:])
+		id := b.Get64()
+		size := b.Get32()
+		var clean bool
+
+		err = m.txn(func(tx kvTxn) (e error) {
+			v := tx.incrBy(key, 0)
+			if v < 0 {
+				clean, e = scan(id, size)
+				if e != nil {
+					return errors.Wrap(e, "scan pending deleted slices")
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		if clean {
+			m.deleteSlice(id, size)
+		}
+
+	}
+	return nil
+}
+
 func (m *kvMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	if scan == nil {
 		return nil
