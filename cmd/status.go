@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"syscall"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -64,14 +65,18 @@ type sections struct {
 }
 
 type statistic struct {
-	UsedSpace               uint64
-	AvailableSpace          uint64
-	UsedInodes              uint64
-	AvailableInodes         uint64
-	TrashSliceCount         int64 `json:",omitempty"`
-	TrashSliceSize          int64 `json:",omitempty"`
-	PendingDeletedFileCount int64 `json:",omitempty"`
-	PendingDeletedFileSize  int64 `json:",omitempty"`
+	UsedSpace                uint64
+	AvailableSpace           uint64
+	UsedInodes               uint64
+	AvailableInodes          uint64
+	TrashSliceCount          int64 `json:",omitempty"`
+	TrashSliceSize           int64 `json:",omitempty"`
+	PendingDeletedSliceCount int64 `json:",omitempty"`
+	PendingDeletedSliceSize  int64 `json:",omitempty"`
+	TrashFileCount           int64 `json:",omitempty"`
+	TrashFileSize            int64 `json:",omitempty"`
+	PendingDeletedFileCount  int64 `json:",omitempty"`
+	PendingDeletedFileSize   int64 `json:",omitempty"`
 }
 
 func printJson(v interface{}) {
@@ -115,30 +120,43 @@ func status(ctx *cli.Context) error {
 
 	if ctx.Bool("more") {
 		progress := utils.NewProgress(false, false)
-		slicesSpinner := progress.AddDoubleSpinner("Trash Slices")
-		defer slicesSpinner.Done()
-		fileSpinner := progress.AddDoubleSpinner("Pending Deleted Files")
-		defer fileSpinner.Done()
-
+		trashSlicesSpinner := progress.AddDoubleSpinner("Trash Slices")
+		pendingDeletedSlicesSpinner := progress.AddDoubleSpinner("Pending Deleted Slices")
+		trashFileSpinner := progress.AddDoubleSpinner("Trash Files")
+		pendingDeletedFileSpinner := progress.AddDoubleSpinner("Pending Deleted Files")
 		err = m.ScanDeletedObject(
 			meta.WrapContext(ctx.Context),
 			func(ss []meta.Slice, _ int64) (bool, error) {
 				for _, s := range ss {
-					slicesSpinner.IncrInt64(int64(s.Size))
+					trashSlicesSpinner.IncrInt64(int64(s.Size))
 				}
 				return false, nil
 			},
+			func(_ uint64, size uint32) (bool, error) {
+				pendingDeletedSlicesSpinner.IncrInt64(int64(size))
+				return false, nil
+			},
+			func(_ meta.Ino, size uint64, _ time.Time) (bool, error) {
+				trashFileSpinner.IncrInt64(int64(size))
+				return false, nil
+			},
 			func(_ meta.Ino, size uint64, _ int64) (bool, error) {
-				fileSpinner.IncrInt64(int64(size))
+				pendingDeletedFileSpinner.IncrInt64(int64(size))
 				return false, nil
 			},
 		)
 		if err != nil {
 			logger.Fatalf("statistic: %s", err)
-			return err
 		}
-		stat.TrashSliceCount, stat.TrashSliceSize = slicesSpinner.Current()
-		stat.PendingDeletedFileCount, stat.PendingDeletedFileSize = fileSpinner.Current()
+		trashSlicesSpinner.Done()
+		pendingDeletedSlicesSpinner.Done()
+		trashFileSpinner.Done()
+		pendingDeletedFileSpinner.Done()
+		progress.Done()
+		stat.TrashSliceCount, stat.TrashSliceSize = trashSlicesSpinner.Current()
+		stat.PendingDeletedSliceCount, stat.PendingDeletedSliceSize = pendingDeletedSlicesSpinner.Current()
+		stat.TrashFileCount, stat.TrashFileSize = trashFileSpinner.Current()
+		stat.PendingDeletedFileCount, stat.PendingDeletedFileSize = pendingDeletedFileSpinner.Current()
 	}
 
 	printJson(&sections{format, sessions, stat})
