@@ -2893,6 +2893,59 @@ func (m *redisMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	return nil
 }
 
+func (m *redisMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
+	if scan == nil {
+		return nil
+	}
+
+	pendingSlices := make(chan Slice, 1000)
+	c, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		_ = m.hscan(c, m.sliceRefs(), func(keys []string) error {
+			for i := 0; i < len(keys); i += 2 {
+				key := keys[i]
+				val := keys[i+1]
+				v, err := strconv.ParseInt(val, 10, 64)
+				if err != nil {
+					logger.Warn(errors.Wrap(err, "invalid slice ref").Error())
+					continue
+				}
+				if v >= 0 {
+					continue
+				}
+
+				ps := strings.Split(key[1:], "_")
+				if len(ps) != 2 {
+					return fmt.Errorf("invalid key %s", key)
+				}
+				id, err := strconv.ParseUint(ps[0], 10, 64)
+				if err != nil {
+					return errors.Wrapf(err, "invalid key %s, fail to parse id", key)
+				}
+				size, err := strconv.ParseUint(ps[1], 10, 64)
+				if err != nil {
+					return errors.Wrapf(err, "invalid key %s, fail to parse size", key)
+				}
+				clean, err := scan(id, uint32(size))
+				if err != nil {
+					return errors.Wrapf(err, "scan slice %d", id)
+				}
+				if clean {
+					pendingSlices <- Slice{Id: id, Size: uint32(size)}
+				}
+			}
+			return nil
+		})
+		close(pendingSlices)
+	}()
+
+	for s := range pendingSlices {
+		m.deleteSlice(s.Id, s.Size)
+	}
+	return nil
+}
+
 func (m *redisMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	if scan == nil {
 		return nil

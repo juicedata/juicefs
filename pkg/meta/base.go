@@ -82,12 +82,15 @@ type engine interface {
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 
 	scanTrashSlices(Context, trashSliceScan) error
+	scanPendingSlices(Context, pendingSliceScan) error
 	scanPendingFiles(Context, pendingFileScan) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
+type pendingSliceScan func(id uint64, size uint32) (clean bool, err error)
+type trashFileScan func(inode Ino, ts int64) (clean bool, err error)
 type pendingFileScan func(ino Ino, size uint64, ts int64) (clean bool, err error)
 
 // fsStat aligned for atomic operations
