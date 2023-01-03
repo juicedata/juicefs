@@ -2671,6 +2671,36 @@ func (m *dbMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	return nil
 }
 
+func (m *dbMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
+	if scan == nil {
+		return nil
+	}
+	var refs []sliceRef
+	err := m.roTxn(func(tx *xorm.Session) error {
+		if ok, err := tx.IsTableExist(&sliceRef{}); err != nil {
+			return err
+		} else if !ok {
+			return nil
+		}
+		return tx.Where("refs <= 0").Find(&refs)
+	})
+	if err != nil {
+		return errors.Wrap(err, "scan slice refs")
+	}
+	for _, ref := range refs {
+		if ref.Refs <= 0 {
+			clean, err := scan(ref.Id, ref.Size)
+			if err != nil {
+				return errors.Wrap(err, "scan slice")
+			}
+			if clean {
+				m.deleteSlice(ref.Id, ref.Size)
+			}
+		}
+	}
+	return nil
+}
+
 func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	if scan == nil {
 		return nil
