@@ -20,7 +20,9 @@ package meta
 
 import (
 	"bytes"
+	"fmt"
 	"os"
+	"sort"
 	"testing"
 )
 
@@ -225,6 +227,32 @@ func testTKV(t *testing.T, c tkvClient) {
 	})
 	if !bytes.Equal(v2, v) {
 		t.Fatalf("expect %v but got %v", v, v2)
+	}
+
+	// scan many key-value pairs
+	keys = make([][]byte, 0, 100000)
+	for i := 0; i < 1000; i++ {
+		txn(func(kt *kvTxn) {
+			for j := 0; j < 100; j++ {
+				k := []byte(fmt.Sprintf("Key_%d_%d", i, j))
+				v := []byte(fmt.Sprintf("Value_%d_%d", i, j))
+				kt.set(k, v)
+				keys = append(keys, k)
+			}
+		})
+	}
+	kvs := make([][]byte, 0, 200000)
+	txn(func(kt *kvTxn) {
+		kt.scan([]byte("A"), []byte("Z"), false, func(k, v []byte) bool {
+			kvs = append(kvs, k, v)
+			return true
+		})
+	})
+	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i], keys[j]) < 0 })
+	for i, k := range keys {
+		if !bytes.Equal(k, kvs[i*2]) || !bytes.Equal([]byte(fmt.Sprintf("Value%s", k[3:])), kvs[i*2+1]) {
+			t.Fatalf("expect %s but got %s, %s", k, keys[i*2], keys[i*2+1])
+		}
 	}
 }
 
