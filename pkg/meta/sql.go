@@ -2593,7 +2593,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	return errno(m.scanDeletedSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
+	return errno(m.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
 		slices[1] = append(slices[1], ss...)
 		if showProgress != nil {
 			for range ss {
@@ -2604,7 +2604,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	}))
 }
 
-func (m *dbMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
+func (m *dbMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	if scan == nil {
 		return nil
 	}
@@ -2671,7 +2671,7 @@ func (m *dbMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
 	return nil
 }
 
-func (m *dbMeta) scanDeletedFiles(ctx Context, scan deletedFileScan) error {
+func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	if scan == nil {
 		return nil
 	}

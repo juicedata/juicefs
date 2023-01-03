@@ -81,14 +81,14 @@ type engine interface {
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 
-	scanDeletedSlices(Context, deletedSliceScan) error
-	scanDeletedFiles(Context, deletedFileScan) error
+	scanTrashSlices(Context, trashSliceScan) error
+	scanPendingFiles(Context, pendingFileScan) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
 }
 
-type deletedSliceScan func(ss []Slice, ts int64) (clean bool, err error)
-type deletedFileScan func(ino Ino, size uint64, ts int64) (clean bool, err error)
+type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
+type pendingFileScan func(ino Ino, size uint64, ts int64) (clean bool, err error)
 
 // fsStat aligned for atomic operations
 // nolint:structcheck
@@ -1457,16 +1457,16 @@ func (m *baseMeta) cleanupDelayedSlices() {
 	}
 }
 
-func (m *baseMeta) ScanDeletedObject(ctx Context, sliceScan deletedSliceScan, fileScan deletedFileScan) error {
+func (m *baseMeta) ScanDeletedObject(ctx Context, sliceScan trashSliceScan, fileScan pendingFileScan) error {
 	eg := errgroup.Group{}
 	if sliceScan != nil {
 		eg.Go(func() error {
-			return m.en.scanDeletedSlices(ctx, sliceScan)
+			return m.en.scanTrashSlices(ctx, sliceScan)
 		})
 	}
 	if fileScan != nil {
 		eg.Go(func() error {
-			return m.en.scanDeletedFiles(ctx, fileScan)
+			return m.en.scanPendingFiles(ctx, fileScan)
 		})
 	}
 	return eg.Wait()
