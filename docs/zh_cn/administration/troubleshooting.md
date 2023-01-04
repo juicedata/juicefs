@@ -5,6 +5,28 @@ sidebar_position: 6
 
 这里收录常见问题的具体排查步骤。
 
+## 创建文件系统（format）错误
+
+**无法重复创建文件系统**
+
+源数据库已经执行了 format，再次执行时可能无法更新之前的某些配置，将会报错：
+
+```
+cannot update volume XXX from XXX to XXX
+```
+
+这种情况需要清理元数据库，再重试。
+
+**Redis URL 格式错误**
+
+使用的 Redis 版本小于 6.0.0 时，执行 `juicefs format` 命令如果指定了 username 参数，将会报错：
+
+```
+format: ERR wrong number of arguments for 'auth' command
+```
+
+只有 Redis 6.0.0 版本以后才支持指定 username，因此你需要省略 URL 中的 username 参数，例如 `redis://:password@host:6379/1`。
+
 ## 权限问题导致挂载错误 {#mount-permission-error}
 
 使用 [Docker bind mounts](https://docs.docker.com/storage/bind-mounts) 把宿主机上的一个目录挂载到容器中时，可能遇到下方错误：
@@ -128,6 +150,28 @@ grep "read (148153116," access.log
 * 读写缓冲区（也就是 `--buffer-size`）的大小，直接与 JuiceFS 客户端内存占用相关，因此可以通过降低读写缓冲区大小来减少内存占用，但请注意降低以后可能同时也会对读写性能造成影响。更多详见[「读写缓冲区」](../guide/cache_management.md#buffer-size)。
 * JuiceFS 挂载客户端是一个 Go 程序，因此也可以通过降低 `GOGC`（默认 100）来令 Go 在运行时执行更为激进的垃圾回收（将带来更多 CPU 消耗，甚至直接影响性能）。详见[「Go Runtime」](https://pkg.go.dev/runtime#hdr-Environment_Variables)。
 * 如果你使用自建的 Ceph RADOS 作为 JuiceFS 的数据存储，可以考虑将 glibc 替换为 [TCMalloc](https://google.github.io/tcmalloc)，后者有着更高效的内存管理实现，能在该场景下有效降低堆外内存占用。
+
+## 卸载错误
+
+卸载 JuiceFS 文件系统时，如果某个文件或者目录正在被使用，那么卸载将会报错（下方假设挂载点为 `/jfs`）：
+
+```
+# Linux
+umount: /jfs: target is busy.
+        (In some cases useful info about processes that use
+         the device is found by lsof(8) or fuser(1))
+
+# macOS
+Resource busy -- try 'diskutil unmount'
+```
+
+这种情况下可以：
+
+* 用类似 `lsof /jfs` 的命令，找出该文件系统下正在使用的文件，然后按需处置对应的进程，比如强制退出，然后再次尝试卸载。
+* 用 `echo 1 > /sys/fs/fuse/connections/[device-number]/abort` 强制关闭 FUSE 连接，然后再次尝试卸载。其中 `[device-number]` 也许需要你用 `lsof /jfs` 手动确认，不过本机只有一个 FUSE 挂载点的话，那么 `/sys/fs/fuse/connections` 下也只会包含一个目录，不必特意确认。
+* 如果并不关心已经打开的文件，只想要尽快卸载，也可以运行 `juicefs umount --force` 来强制卸载，不过注意，强制卸载在 Linux、macOS 上的行为并不一致：
+  * 对 Linux 而言，`juicefs umount --force` 意味着 `umount --lazy`，文件系统会被卸载，但已打开的文件不会关闭，而是等进程退出后再退出 FUSE 客户端。
+  * 对 macOS 而言，`juicefs umount --force` 意味着 `umount -f`，文件系统会被强制卸载，已打开的文件会强制关闭。
 
 ## 开发相关问题
 

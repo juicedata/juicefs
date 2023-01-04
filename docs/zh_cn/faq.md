@@ -21,37 +21,17 @@ slug: /faq
 
 不同类型的 JuiceFS 客户端获取日志的方式也不同，详情请参考[「客户端日志」](administration/fault_diagnosis_and_analysis.md#客户端日志)文档。
 
-### 怎么卸载 JuiceFS 文件系统？
-
-请使用 [`juicefs umount`](reference/command_reference.md#juicefs-umount) 命令卸载。
-
-### 卸载挂载点时报 `Resource busy -- try 'diskutil unmount'` 错误
-
-这代表挂载点下的某个文件或者目录正在被使用，无法直接 `umount`，可以检查（如通过 `lsof` 命令）是否有打开的终端正位于 JuiceFS 挂载点的某个目录，或者某个应用程序正在处理挂载点中的文件。如果有，则退出终端或应用程序后再尝试使用 `juicefs umount` 命令卸载文件系统。
-
 ## 元数据相关问题
 
 ### 支持哨兵或者集群模式的 Redis 作为 JuiceFS 的元数据引擎吗？
 
 支持，另外这里还有一篇 Redis 作为 JuiceFS 元数据引擎的[最佳实践文档](administration/metadata/redis_best_practices.md)可供参考。
 
-### `format: ERR wrong number of arguments for 'auth' command`
-
-这个错误意味着你使用的 Redis 版本小于 6.0.0 同时在执行 `juicefs format` 命令时指定了 username 参数。只有 Redis 6.0.0 版本以后才支持指定 username，因此你需要省略 URL 中的 username 参数，例如 `redis://:password@host:6379/1`。
-
-### `cannot update volume XXX from XXX to XXX`
-
-使用的元数据库已经被 format 过了并且本次 format 无法更新之前的某些配置。需要在手动清理元数据库后再执行 `juicefs format` 命令。
-
 ## 对象存储相关问题
 
 ### 为什么不支持某个对象存储？
 
 已经支持了绝大部分对象存储，参考这个[列表](guide/how_to_set_up_object_storage.md#supported-object-storage)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
-
-### 为什么在对象存储中看不到那些已经存入 JuiceFS 的原始文件？
-
-请参考[「JuiceFS 如何存储文件」](introduction/architecture.md#how-juicefs-store-files)。
 
 ### 为什么我在挂载点删除了文件，但是对象存储占用空间没有变化或者变化很小？
 
