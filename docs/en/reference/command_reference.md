@@ -588,10 +588,10 @@ username for basic auth
 password for basic auth
 
 `--certFile`<br />
-certificate file for https
+certificate file for HTTPS
 
 `--keyFile`<br />
-key file for https
+key file for HTTPS
 
 `--gzip`<br />
 compress served files via gzip (default: false)
