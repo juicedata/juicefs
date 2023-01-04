@@ -51,12 +51,14 @@ jobs:
       - name: Build 
         uses: ./.github/actions/build
 
-      - name: Download tool
+      - name: Install tool
         run: | 
           wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
           chmod +x mc 
+          sudo apt install redis-tools
+          sudo apt install fio
           
-      - name: Test
+      - name: Test config secret key
         run: |
           # # Consider command as failed when any component of the pipe fails:
           # https://stackoverflow.com/questions/1221833/pipe-output-and-capture-exit-status-in-bash
@@ -77,6 +79,48 @@ jobs:
           echo abc > abc.txt
           cp abc.txt $mount_point/abc.txt && echo "write success"
           cat $mount_point/abc.txt | grep abc && echo "read success"
+
+      - name: Test mount process exit on reformat
+        run: |
+          for i in {1..10}; do 
+            echo "round $i"
+            meta=redis://localhost/2
+            ./juicefs format $meta volume-$i
+            for j in {1..10}; do
+              ./juicefs mount -d $meta /tmp/myjfs$i_$j --no-usage-report
+              cd /tmp/myjfs$i_$j
+              bash -c 'for k in {1..300}; do echo abc>$k; sleep 0.2; done' || true & 
+              cd -
+            done
+            sleep 3
+            uuid=$(./juicefs status $meta | grep UUID | cut -d '"' -f 4) 
+            ./juicefs destroy --force $meta $uuid
+            ./juicefs format $meta new-volume-$i 
+            sleep 15   
+            ps -ef | grep juicefs
+            pidof juicefs && exit 1
+            uuid=$(./juicefs status $meta | grep UUID | cut -d '"' -f 4) 
+            ./juicefs destroy --force $meta $uuid
+          done
+          
+      - name: Test delay delete slice after compaction
+        run: |
+          meta=redis://localhost/3
+          mp=myjfs/
+          name=myjfs2
+          juicefs=./juicefs
+          $juicefs format $meta $name --trash-days 1
+          $juicefs mount -d $meta $mp --no-usage-report
+          fio --name=abc --rw=randwrite --refill_buffers --size=2G --bs=256k --directory=$mp
+          redis-cli save
+          # don't skip files when gc compact
+          export JFS_SKIPPED_TIME=1
+          $juicefs gc --compact --delete $meta
+          container_id=$(docker ps -a | grep redis | awk '{print $1}')
+          sudo killall -9 redis-server
+          sudo docker restart $container_id
+          sleep 3
+          $juicefs fsck $meta
 
       - name: log
         if: ${{ always() }}
