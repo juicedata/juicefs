@@ -163,12 +163,37 @@ func (f *davFile) Close() error {
 	return econv(f.File.Close(meta.Background))
 }
 
+type WebdavConfig struct {
+	Addr         string
+	DisallowList bool
+	EnableGzip   bool
+	Username     string
+	Password     string
+	CertFile     string
+	KeyFile      string
+}
+
 type indexHandler struct {
 	*webdav.Handler
-	disallowList bool
+	WebdavConfig
 }
 
 func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
+	//http://www.webdav.org/specs/rfc4918.html#n-guidance-for-clients-desiring-to-authenticate
+	if h.Username != "" && h.Password != "" {
+		userName, pwd, ok := r.BasicAuth()
+		if !ok {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if userName != h.Username || pwd != h.Password {
+			http.Error(w, "WebDAV: need authorized!", http.StatusUnauthorized)
+			return
+		}
+	}
+
 	// Excerpt from RFC4918, section 9.4:
 	//
 	// 		GET, when applied to a collection, may return the contents of an
@@ -179,7 +204,7 @@ func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" && strings.HasPrefix(r.URL.Path, h.Handler.Prefix) {
 		info, err := h.Handler.FileSystem.Stat(context.TODO(), strings.TrimPrefix(r.URL.Path, h.Handler.Prefix))
 		if err == nil && info.IsDir() {
-			if h.disallowList {
+			if h.DisallowList {
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
@@ -192,7 +217,7 @@ func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Handler.ServeHTTP(w, r)
 }
 
-func StartHTTPServer(fs *FileSystem, addr string, gzipEnabled bool, disallowList bool) {
+func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
 	ctx := meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
 	hfs := &webdavFS{ctx, fs}
 	srv := &webdav.Handler{
@@ -206,13 +231,19 @@ func StartHTTPServer(fs *FileSystem, addr string, gzipEnabled bool, disallowList
 			}
 		},
 	}
-	var h http.Handler = &indexHandler{srv, disallowList}
-	if gzipEnabled {
+	var h http.Handler = &indexHandler{Handler: srv, WebdavConfig: config}
+	if config.EnableGzip {
 		h = makeGzipHandler(h)
 	}
 	http.Handle("/", h)
-	logger.Infof("WebDAV listening on %s", addr)
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	logger.Infof("WebDAV listening on %s", config.Addr)
+	var err error
+	if config.CertFile != "" && config.KeyFile != "" {
+		err = http.ListenAndServeTLS(config.Addr, config.CertFile, config.KeyFile, nil)
+	} else {
+		err = http.ListenAndServe(config.Addr, nil)
+	}
+	if err != nil {
 		logger.Fatalf("Error with WebDAV server: %v", err)
 	}
 }
