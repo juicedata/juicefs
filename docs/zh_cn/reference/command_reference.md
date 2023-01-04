@@ -588,10 +588,10 @@ juicefs webdav [command options] META-URL ADDRESS
 基本认证的密码
 
 `--certFile`<br />
-HTTPS证书文件
+HTTPS 证书文件
 
 `--keyFile`<br />
-HTTPS密钥文件
+HTTPS 密钥文件
 
 `--gzip`<br />
 通过 gzip 压缩提供的文件（默认值：false）
