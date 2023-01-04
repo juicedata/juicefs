@@ -140,7 +140,8 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
@@ -149,7 +150,7 @@ jobs:
     needs: [pjdfstest]
     if: always()
     steps:
-      - uses: technote-space/workflow-conclusion-action@v2
+      - uses: technote-space/workflow-conclusion-action@v3
       - uses: actions/checkout@v3
 
       - name: Check Failure
