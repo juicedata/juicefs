@@ -21,37 +21,17 @@ First unmount JuiceFS volume, then re-mount the volume with newer version client
 
 Different types of JuiceFS clients have different ways to obtain logs. For details, please refer to ["Client log"](administration/fault_diagnosis_and_analysis.md#client-log) document.
 
-### How to unmount JuiceFS?
-
-Use [`juicefs umount`](reference/command_reference.md#juicefs-umount) command to unmount the volume.
-
-### `Resource busy -- try 'diskutil unmount'` error when unmounting the mount point
-
-This means that a file or directory under the mount point is in use and cannot be `umount` directly. You can check (such as through the `lsof` command) whether an open terminal is located in a directory on the JuiceFS mount point, or an application is processing files in the mount point. If so, exit the terminal or application and try to unmount the file system using the `juicefs umount` command.
-
 ## Metadata Related Questions
 
 ### Does support Redis in Sentinel or Cluster-mode as the metadata engine for JuiceFS?
 
 Yes, There is also a [best practice document](administration/metadata/redis_best_practices.md) for Redis as the JuiceFS metadata engine for reference.
 
-### `format: ERR wrong number of arguments for 'auth' command`
-
-This error means you use Redis < 6.0.0 and specify username in Redis URL when execute `juicefs format` command. Only Redis >= 6.0.0 supports specify username, so you need omit the username parameter in the URL, e.g. `redis://:password@host:6379/1`.
-
-### `cannot update volume XXX from XXX to XXX`
-
-The meta database has already been formatted and previous configuration cannot be updated by this `format`. You can execute the `juicefs format` command after manually cleaning up the meta database.
-
 ## Object Storage Related Questions
 
 ### Why doesn't JuiceFS support XXX object storage?
 
 JuiceFS already supported many object storage, please check [the list](guide/how_to_set_up_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
-
-### Why can't I see the original files that have been stored in JuiceFS in object storage?
-
-Refer to ["How JuiceFS Store Files"](./introduction/architecture.md#how-juicefs-store-files).
 
 ### Why do I delete files at the mount point, but there is no change or very little change in object storage footprint?
 
@@ -61,7 +41,7 @@ The second reason is that JuiceFS deletes the data in the object storage asynchr
 
 ### Why is the size displayed at the mount point different from the object storage footprint?
 
-From the answer to this question ["What is the implementation principle of JuiceFS supporting random write?"](#what-is-the-implementation-principle-of-juicefs-supporting-random-write), it can be inferred that the occupied space of object storage is greater than or equal to the actual size in most cases, especially after a large number of overwrites in a short period of time generate many file fragments. These fragments still occupy space in object storage until merges and reclamations are triggered. But don't worry about these fragments occupying space all the time, because every time you read/write a file, it will check and trigger the defragmentation of the file when necessary. Alternatively, you can manually trigger merges and recycles with the `juicefs gc --compact --delete` command.
+From the answer to this question ["What is the implementation principle of JuiceFS supporting random write?"](#what-is-the-implementation-principle-of-juicefs-supporting-random-write), it can be inferred that the occupied space of object storage is greater than or equal to the actual size in most cases, especially after a large number of overwrites in a short period of time generate many file fragments. These fragments still occupy space in object storage until merges and reclamations are triggered. But don't worry about these fragments occupying space all the time, because every time you read/write a file, it will check and trigger compaction when necessary. Alternatively, you can manually trigger merges and recycles with the `juicefs gc --compact --delete` command.
 
 In addition, if the JuiceFS file system has compression enabled (not enabled by default), the objects stored on the object storage may be smaller than the actual file size (depending on the compression ratio of different types of files).
 

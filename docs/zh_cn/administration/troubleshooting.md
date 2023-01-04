@@ -9,7 +9,7 @@ sidebar_position: 6
 
 **无法重复创建文件系统**
 
-源数据库已经执行了 format，再次执行时可能无法更新之前的某些配置，将会报错：
+元数据库已经执行了 format，再次执行时可能无法更新之前的某些配置，将会报错：
 
 ```
 cannot update volume XXX from XXX to XXX
