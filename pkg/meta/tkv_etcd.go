@@ -114,75 +114,21 @@ func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
 	return values
 }
 
-func (tx *etcdTxn) scanRange(begin_, end_ []byte) map[string][]byte {
-	resp, err := tx.kv.Get(tx.ctx, string(begin_), etcd.WithRange(string(end_)))
+func (tx *etcdTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+	opts := []etcd.OpOption{etcd.WithRange(string(end))}
+	if keysOnly {
+		opts = append(opts, etcd.WithKeysOnly())
+	}
+	resp, err := tx.kv.Get(tx.ctx, string(begin), opts...)
 	if err != nil {
-		panic(fmt.Errorf("get range [%v-%v): %s", string(begin_), string(end_), err))
+		panic(fmt.Errorf("get range [%v-%v): %s", string(begin), string(end), err))
 	}
-	ret := make(map[string][]byte)
-	for _, kv := range resp.Kvs {
-		k := string(kv.Key)
-		tx.observed[k] = kv.ModRevision
-		ret[k] = kv.Value
-	}
-	return ret
-}
-
-func (tx *etcdTxn) scanKeys(prefix []byte) [][]byte {
-	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithKeysOnly())
-	if err != nil {
-		panic(fmt.Errorf("get prefix %v with keys only: %s", string(prefix), err))
-	}
-	var keys [][]byte
 	for _, kv := range resp.Kvs {
 		tx.observed[string(kv.Key)] = kv.ModRevision
-		keys = append(keys, kv.Key)
-	}
-	return keys
-}
-
-func (tx *etcdTxn) scanKeysRange(begin_, end_ []byte, limit int, filter func(k []byte) bool) [][]byte {
-	if limit == 0 {
-		return nil
-	}
-	resp, err := tx.kv.Get(tx.ctx, string(begin_), etcd.WithRange(string(end_)), etcd.WithKeysOnly())
-	if err != nil {
-		panic(fmt.Errorf("get range [%v-%v): %s", string(begin_), string(end_), err))
-	}
-	var keys [][]byte
-	for _, kv := range resp.Kvs {
-		if filter == nil || filter(kv.Key) {
-			k := string(kv.Key)
-			tx.observed[k] = kv.ModRevision
-			keys = append(keys, kv.Key)
-			if limit > 0 && len(keys) >= limit {
-				break
-			}
+		if !handler(kv.Key, kv.Value) {
+			break
 		}
 	}
-	return keys
-}
-
-func (tx *etcdTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
-	if limit == 0 {
-		return nil
-	}
-	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix())
-	if err != nil {
-		panic(fmt.Errorf("get prefix %s: %s", string(prefix), err))
-	}
-	ret := make(map[string][]byte)
-	for _, kv := range resp.Kvs {
-		if filter == nil || filter(kv.Key, kv.Value) {
-			k := string(kv.Key)
-			tx.observed[k] = kv.ModRevision
-			ret[k] = kv.Value
-			if limit > 0 && len(ret) >= limit {
-				break
-			}
-		}
-	}
-	return ret
 }
 
 func (tx *etcdTxn) exist(prefix []byte) bool {
@@ -221,10 +167,8 @@ func (tx *etcdTxn) incrBy(key []byte, value int64) int64 {
 	return new
 }
 
-func (tx *etcdTxn) dels(keys ...[]byte) {
-	for _, key := range keys {
-		tx.buffer[string(key)] = nil
-	}
+func (tx *etcdTxn) delete(key []byte) {
+	tx.buffer[string(key)] = nil
 }
 
 func (tx *etcdTxn) commmit() error {
@@ -269,7 +213,7 @@ func (c *etcdClient) shouldRetry(err error) bool {
 	return errors.Is(err, conflicted)
 }
 
-func (c *etcdClient) txn(f func(kvTxn) error) (err error) {
+func (c *etcdClient) txn(f func(*kvTxn) error) (err error) {
 	ctx := context.Background()
 	tx := &etcdTxn{
 		ctx,
@@ -287,7 +231,7 @@ func (c *etcdClient) txn(f func(kvTxn) error) (err error) {
 			}
 		}
 	}()
-	err = f(tx)
+	err = f(&kvTxn{tx})
 	if err != nil {
 		return err
 	}
