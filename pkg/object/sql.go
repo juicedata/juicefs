@@ -86,7 +86,7 @@ func (s *sqlStore) Put(key string, in io.Reader) error {
 	var n int64
 	now := time.Now()
 	b := blob{Key: key, Data: d, Size: int64(len(d)), Modified: now}
-	if s.db.DriverName() == "postgres" {
+	if name := s.db.DriverName(); name == "postgres" || name == "pgx" {
 		var r sql.Result
 		r, err = s.db.Exec("INSERT INTO jfs_blob(key, size,modified, data) VALUES(?, ?, ?,? ) "+
 			"ON CONFLICT (key) DO UPDATE SET size=?,data=?", key, b.Size, now, d, b.Size, d)
