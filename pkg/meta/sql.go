@@ -179,6 +179,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
 	if driver == "postgres" {
 		addr = driver + "://" + addr
+		driver = "pgx"
 
 		parse, err := url.Parse(addr)
 		if err != nil {
