@@ -46,7 +46,6 @@ jobs:
                     -v /tmp/data:/data \
                     -v /tmp/config:/root/.minio \
                     minio/minio server /data     
-          sleep 5
 
       - name: Build 
         uses: ./.github/actions/build
@@ -57,34 +56,12 @@ jobs:
           chmod +x mc 
           sudo apt install redis-tools
           sudo apt install fio
-          
-      - name: Test config secret key
-        run: |
-          # # Consider command as failed when any component of the pipe fails:
-          # https://stackoverflow.com/questions/1221833/pipe-output-and-capture-exit-status-in-bash
-          set -o pipefail
-          meta_url=redis://127.0.0.1/1
-          mount_point=/tmp/sync-test/
-          ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
-          ./mc admin user add minio juicedata juicedata
-          ./mc admin policy set minio consoleAdmin user=juicedata
-          ./juicefs format --storage minio --bucket http://localhost:9000/jfs-test --access-key juicedata --secret-key juicedata $meta_url myjfs
-          ./juicefs mount $meta_url $mount_point -d --io-retries 1 --no-usage-report
-
-          ./mc admin user remove minio juicedata
-          ./mc admin user add minio juicedata1 juicedata1
-          ./mc admin policy set minio consoleAdmin user=juicedata1
-          ./juicefs config $meta_url --access-key juicedata1 --secret-key juicedata1
-          sleep 60
-          echo abc > abc.txt
-          cp abc.txt $mount_point/abc.txt && echo "write success"
-          cat $mount_point/abc.txt | grep abc && echo "read success"
 
       - name: Test mount process exit on reformat
         run: |
           for i in {1..10}; do 
             echo "round $i"
-            meta=redis://localhost/2
+            meta=redis://localhost/1
             ./juicefs format $meta volume-$i
             for j in {1..10}; do
               ./juicefs mount -d $meta /tmp/myjfs$i_$j --no-usage-report
@@ -102,6 +79,28 @@ jobs:
             uuid=$(./juicefs status $meta | grep UUID | cut -d '"' -f 4) 
             ./juicefs destroy --force $meta $uuid
           done
+
+      - name: Test config secret key
+        run: |
+          # # Consider command as failed when any component of the pipe fails:
+          # https://stackoverflow.com/questions/1221833/pipe-output-and-capture-exit-status-in-bash
+          set -o pipefail
+          meta_url=redis://127.0.0.1/2
+          mount_point=/tmp/sync-test/
+          ./mc config host add minio http://127.0.0.1:9000 minioadmin minioadmin
+          ./mc admin user add minio juicedata juicedata
+          ./mc admin policy set minio consoleAdmin user=juicedata
+          ./juicefs format --storage minio --bucket http://localhost:9000/jfs-test --access-key juicedata --secret-key juicedata $meta_url myjfs
+          ./juicefs mount $meta_url $mount_point -d --io-retries 1 --no-usage-report
+
+          ./mc admin user remove minio juicedata
+          ./mc admin user add minio juicedata1 juicedata1
+          ./mc admin policy set minio consoleAdmin user=juicedata1
+          ./juicefs config $meta_url --access-key juicedata1 --secret-key juicedata1
+          sleep 60
+          echo abc > abc.txt
+          cp abc.txt $mount_point/abc.txt && echo "write success"
+          cat $mount_point/abc.txt | grep abc && echo "read success"
           
       - name: Test delay delete slice after compaction
         run: |
