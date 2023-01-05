@@ -9,7 +9,7 @@ on:
         required: false
         default: false
   schedule:
-    - cron:  '0 * * * *'        
+    - cron:  '0 0 * * *'        
 
 jobs:
   chaos-test:

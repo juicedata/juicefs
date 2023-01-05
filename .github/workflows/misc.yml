@@ -15,7 +15,8 @@ on:
       - 'docs/**'
       - '**.md'
   workflow_dispatch:
-  
+  schedule:
+    - cron:  '0 0 * * *'
 jobs:
   misc-test:
     runs-on: ubuntu-20.04
