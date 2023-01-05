@@ -1,18 +1,6 @@
 name: "chaos-test"
 
 on:
-  push:
-    branches:
-      - release-**
-      # - main
-    paths-ignore:
-      - docs/**
-  pull_request:
-    branches:
-      - release-**
-      # - main
-    paths-ignore:
-      - docs/**
   workflow_dispatch:
     inputs:
       debug:
@@ -21,7 +9,7 @@ on:
         required: false
         default: false
   schedule:
-    - cron:  '0 */6 * * *'        
+    - cron:  '0 * * * *'        
 
 jobs:
   chaos-test:
@@ -120,7 +108,7 @@ jobs:
 
       - name: Verify 
         run: |
-          sleep 120
+          sleep 1200
           kubectl get pods --all-namespaces
           apps=("dynamic-ce" "juicefs-csi-node" "juicefs-csi-controller" "juicefs-chart-testing-control-plane-pvc"  "redis" "minio")
           for app in ${apps[@]}; do
@@ -190,8 +178,8 @@ jobs:
           # grep -i "error" minio.log && exit 1 || true
 
       - name: Setup upterm session
-        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
-        if: failure()
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 

@@ -1,4 +1,4 @@
-name: "config-test"
+name: "misc-test"
 
 on:
   push:
@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
   
 jobs:
-  config-test:
+  misc-test:
     runs-on: ubuntu-20.04
     services:
       redis:
