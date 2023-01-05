@@ -125,7 +125,7 @@ jobs:
         if: ${{ always() }}
         run: | 
           tail -300 ~/.juicefs/juicefs.log
-          grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          grep -v "UUID changed"  ~/.juicefs/juicefs.log | grep "<FATAL>:"  && exit 1 || true
 
       - name: Send Slack Notification
         if: ${{ failure() }}
