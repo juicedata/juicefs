@@ -66,7 +66,9 @@ func startWebdav(t *testing.T) {
 	ResetHttp()
 
 	go func() {
-		if err := Main([]string{"", "webdav", webdavMeta, webdavAddr, "--username", "root", "--password", "1234", "--no-usage-report"}); err != nil {
+		os.Setenv("WEBDAV_USER", "root")
+		os.Setenv("WEBDAV_PASSWORD", "1234")
+		if err := Main([]string{"", "webdav", webdavMeta, webdavAddr, "--no-usage-report"}); err != nil {
 			t.Errorf("gateway failed: %s", err)
 		}
 	}()

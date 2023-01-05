@@ -581,12 +581,6 @@ juicefs webdav [command options] META-URL ADDRESS
 `--dir-entry-cache value`<br />
 目录项缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)
 
-`--username`<br />
-基本认证的用户名
-
-`--password`<br />
-基本认证的密码
-
 `--certFile`<br />
 HTTPS 证书文件
 

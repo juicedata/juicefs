@@ -581,12 +581,6 @@ file entry cache timeout in seconds (default: 0), read [Kernel Metadata Cache](.
 `--dir-entry-cache value`<br />
 dir entry cache timeout in seconds (default: 1), read [Kernel Metadata Cache](../guide/cache_management.md#kernel-metadata-cache)
 
-`--username`<br />
-username for basic auth
-
-`--password`<br />
-password for basic auth
-
 `--certFile`<br />
 certificate file for HTTPS
 
