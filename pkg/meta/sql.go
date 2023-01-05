@@ -634,7 +634,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		// MySQL, MariaDB or TiDB
 		return strings.Contains(msg, "try restarting transaction") || strings.Contains(msg, "try again later") ||
 			strings.Contains(msg, "duplicate entry")
-	case "postgres", "pgx":
+	case "postgres":
 		return strings.Contains(msg, "current transaction is aborted") || strings.Contains(msg, "deadlock detected") ||
 			strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "could not serialize access") ||
 			strings.Contains(msg, "bad connection") || errors.Is(err, io.EOF) // could not send data to client: No buffer space available
@@ -911,7 +911,7 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 	var r sql.Result
 	var err error
 	driver := m.db.DriverName()
-	if driver == "sqlite3" || driver == "postgres" || driver == "pgx" {
+	if driver == "sqlite3" || driver == "postgres" {
 		r, err = s.Exec("update jfs_chunk set slices=slices || ? where inode=? AND indx=?", buf, inode, indx)
 	} else {
 		r, err = s.Exec("update jfs_chunk set slices=concat(slices, ?) where inode=? AND indx=?", buf, inode, indx)
@@ -3271,7 +3271,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		batch = 999 / MaxFieldsCountOfTable
 	case "mysql":
 		batch = 65535 / MaxFieldsCountOfTable
-	case "postgres", "pgx":
+	case "postgres":
 		batch = 1000
 	}
 	chs := make([]chan interface{}, 6) // node, edge, chunk, chunkRef, xattr, others
