@@ -58,21 +58,21 @@ JuiceFS 支持 HTTPS 加密链接保护的 WebDAV，通过 `--certFile` 和 `--k
 
 1. 生成服务器私钥
 
-```shell
-openssl genrsa -out client.key 4096
-```
+    ```shell
+    openssl genrsa -out client.key 4096
+    ```
 
 2. 生成证书签名请求（CSR）
 
-```shell
-openssl req -new -key client.key -out client.csr
-```
+    ```shell
+    openssl req -new -key client.key -out client.csr
+    ```
 
 3. 使用 CSR 签发证书
 
-```shell
-openssl x509 -req -days 365 -in client.csr -signkey client.key -out client.crt
-```
+    ```shell
+    openssl x509 -req -days 365 -in client.csr -signkey client.key -out client.crt
+    ```
 
 以上三条命令会在当前目录产生以下文件：
 
