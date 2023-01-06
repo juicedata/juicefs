@@ -893,6 +893,7 @@ func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.
 	}
 	store.pendingMutex.Unlock()
 	if item.uploading {
+		logger.Debugf("Key %s is ignored since it's already being uploaded", key)
 		return true
 	}
 	if force || time.Since(added) > store.conf.UploadDelay {
