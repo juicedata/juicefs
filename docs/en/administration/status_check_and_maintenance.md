@@ -1,9 +1,7 @@
 ---
-sidebar_label: Status Check & Maintenance
+title: Status Check & Maintenance
 sidebar_position: 4
 ---
-
-# Status Check & Maintenance
 
 Any kind of storage system needs to be checked and maintained regularly after it is put into use, so that potential problems can be found and fixed as early as possible to ensure reliable operation of the file system and the integrity and consistency of the stored data.
 

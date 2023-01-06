@@ -4,6 +4,8 @@ sidebar_position: 1
 slug: /redis_best_practices
 ---
 
+import Badge from '@site/src/components/Badge';
+
 # Redis 最佳实践
 
 当采用 Redis 作为 JuiceFS 元数据存储引擎时，即由 Redis 负责存储所有元数据并响应客户端对元数据的操作。若 Redis 出现连接不稳定、服务不可用或元数据丢失等问题，可能会导致读写速度慢或数据损坏等情况。
@@ -37,7 +39,7 @@ used_memory_dataset: 13439673592
 used_memory_dataset_perc: 70.12%
 ```
 
-其中 `used_memory_rss` 是 Redis 实际使用的总内存大小，这里既包含了存储在 Redis 中的数据大小（也就是上面的 `used_memory_dataset`），也包含了一些 Redis 的[系统开销](https://redis.io/commands/memory-stats)（也就是上面的 `used_memory_overhead`）。前面提到每个文件的元数据大约占用 300 字节是通过 `used_memory_dataset` 来计算的，如果你发现你的 JuiceFS 文件系统中单个文件元数据占用空间远大于 300 字节，可以尝试运行 [`juicefs gc`](../../reference/command_reference.md#juicefs-gc) 命令来清理可能存在的冗余数据。
+其中 `used_memory_rss` 是 Redis 实际使用的总内存大小，这里既包含了存储在 Redis 中的数据大小（也就是上面的 `used_memory_dataset`），也包含了一些 Redis 的[系统开销](https://redis.io/commands/memory-stats)（也就是上面的 `used_memory_overhead`）。前面提到每个文件的元数据大约占用 300 字节是通过 `used_memory_dataset` 来计算的，如果你发现你的 JuiceFS 文件系统中单个文件元数据占用空间远大于 300 字节，可以尝试运行 [`juicefs gc`](../../reference/command_reference.md#gc) 命令来清理可能存在的冗余数据。
 
 ## 数据可用性
 
@@ -100,12 +102,12 @@ Redis 提供了不同范围的[持久性](https://redis.io/docs/manual/persisten
 
 - **RDB**：以指定的时间间隔生成当前数据集的快照。
 - **AOF**：记录服务器收到的每一个写操作，在服务器启动时重建原始数据集。命令使用与 Redis 协议本身相同的格式以追加写（append-only）的方式记录。当日志变得太大时，Redis 能够在后台重写日志。
-- **RDB+AOF** <span className="badge badge--success">建议</span>：组合使用 AOF 和 RDB。在这种情况下，当 Redis 重新启动时，AOF 文件将用于重建原始数据集，因为它保证是最完整的。
+- **RDB+AOF** <Badge type="success">建议</Badge>：组合使用 AOF 和 RDB。在这种情况下，当 Redis 重新启动时，AOF 文件将用于重建原始数据集，因为它保证是最完整的。
 
 当使用 AOF 时，您可以有不同的 fsync 策略：
 
 1. 没有 fsync；
-2. 每秒 fsync <span className="badge badge--primary">默认</span>；
+2. 每秒 fsync <Badge type="primary">默认</Badge>；
 3. 每次查询 fsync。
 
 默认策略「每秒 fsync」是不错的选择（fsync 是使用后台线程执行的，当没有 fsync 正在进行时，主线程会努力执行写入），**但你可能丢失最近一秒钟的写入**。
@@ -172,11 +174,11 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 
 ### JuiceFS 使用到的 Redis 数据类型
 
-+ [String](https://redis.io/docs/data-types/strings/)
-+ [Set](https://redis.io/docs/data-types/sets/)
-+ [Sorted Set](https://redis.io/docs/data-types/sorted-sets/)
-+ [Hash](https://redis.io/docs/data-types/hashes/)
-+ [List](https://redis.io/docs/data-types/lists/)
++ [String](https://redis.io/docs/data-types/strings)
++ [Set](https://redis.io/docs/data-types/sets)
++ [Sorted Set](https://redis.io/docs/data-types/sorted-sets)
++ [Hash](https://redis.io/docs/data-types/hashes)
++ [List](https://redis.io/docs/data-types/lists)
 
 ### JuiceFS 使用到的 Redis 特性
 
@@ -186,75 +188,77 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 
 #### String
 
-+ [DECRBY](https://redis.io/commands/decrby/)
-+ [DEL](https://redis.io/commands/del/)
-+ [GET](https://redis.io/commands/get/)
-+ [INCRBY](https://redis.io/commands/incrby/)
-+ [MGET](https://redis.io/commands/mget/)
-+ [MSET](https://redis.io/commands/mset/)
-+ [SETNX](https://redis.io/commands/setnx/)
-+ [SET](https://redis.io/commands/set/)
++ [DECRBY](https://redis.io/commands/decrby)
++ [DEL](https://redis.io/commands/del)
++ [GET](https://redis.io/commands/get)
++ [INCR](https://redis.io/commands/incr)
++ [INCRBY](https://redis.io/commands/incrby)
++ [DECR](https://redis.io/commands/decr)
++ [MGET](https://redis.io/commands/mget)
++ [MSET](https://redis.io/commands/mset)
++ [SETNX](https://redis.io/commands/setnx)
++ [SET](https://redis.io/commands/set)
 
 #### Set
 
-+ [SADD](https://redis.io/commands/sadd/)
-+ [SMEMBERS](https://redis.io/commands/smembers/)
-+ [SREM](https://redis.io/commands/srem/)
++ [SADD](https://redis.io/commands/sadd)
++ [SMEMBERS](https://redis.io/commands/smembers)
++ [SREM](https://redis.io/commands/srem)
 
 #### Sorted Set
 
-+ [ZADD](https://redis.io/commands/zadd/)
-+ [ZRANGEBYSCORE](https://redis.io/commands/zrangebyscore/)
-+ [ZRANGE](https://redis.io/commands/zrange/)
-+ [ZREM](https://redis.io/commands/zrem/)
-+ [ZSCORE](https://redis.io/commands/zscore/)
++ [ZADD](https://redis.io/commands/zadd)
++ [ZRANGEBYSCORE](https://redis.io/commands/zrangebyscore)
++ [ZRANGE](https://redis.io/commands/zrange)
++ [ZREM](https://redis.io/commands/zrem)
++ [ZSCORE](https://redis.io/commands/zscore)
 
 #### Hash
 
-+ [HDEL](https://redis.io/commands/hdel/)
-+ [HEXISTS](https://redis.io/commands/hexists/)
-+ [HGETALL](https://redis.io/commands/hgetall/)
-+ [HGET](https://redis.io/commands/hget/)
-+ [HINCRBY](https://redis.io/commands/hincrby/)
-+ [HKEYS](https://redis.io/commands/hkeys/)
-+ [HSCAN](https://redis.io/commands/hscan/)
-+ [HSETNX](https://redis.io/commands/hsetnx/)
-+ [HSET](https://redis.io/commands/hset/)（需要支持设置多个 field 和 value）
++ [HDEL](https://redis.io/commands/hdel)
++ [HEXISTS](https://redis.io/commands/hexists)
++ [HGETALL](https://redis.io/commands/hgetall)
++ [HGET](https://redis.io/commands/hget)
++ [HINCRBY](https://redis.io/commands/hincrby)
++ [HKEYS](https://redis.io/commands/hkeys)
++ [HSCAN](https://redis.io/commands/hscan)
++ [HSETNX](https://redis.io/commands/hsetnx)
++ [HSET](https://redis.io/commands/hset)（需要支持设置多个 field 和 value）
 
 #### List
 
-+ [LLEN](https://redis.io/commands/llen/)
-+ [LPUSH](https://redis.io/commands/lpush/)
-+ [LRANGE](https://redis.io/commands/lrange/)
-+ [LTRIM](https://redis.io/commands/ltrim/)
-+ [RPUSHX](https://redis.io/commands/rpushx/)
-+ [RPUSH](https://redis.io/commands/rpush/)
-+ [SCAN](https://redis.io/commands/scan/)
++ [LLEN](https://redis.io/commands/llen)
++ [LPUSH](https://redis.io/commands/lpush)
++ [LRANGE](https://redis.io/commands/lrange)
++ [LTRIM](https://redis.io/commands/ltrim)
++ [RPUSHX](https://redis.io/commands/rpushx)
++ [RPUSH](https://redis.io/commands/rpush)
++ [SCAN](https://redis.io/commands/scan)
 
 #### 事务
 
-+ [EXEC](https://redis.io/commands/exec/)
-+ [MULTI](https://redis.io/commands/multi/)
-+ [WATCH](https://redis.io/commands/watch/)
-+ [UNWATCH](https://redis.io/commands/unwatch/)
++ [EXEC](https://redis.io/commands/exec)
++ [MULTI](https://redis.io/commands/multi)
++ [WATCH](https://redis.io/commands/watch)
++ [UNWATCH](https://redis.io/commands/unwatch)
 
 #### 连接管理
 
-+ [PING](https://redis.io/commands/ping/)
++ [PING](https://redis.io/commands/ping)
 
 #### 服务管理
 
-+ [CONFIG GET](https://redis.io/commands/config-get/)
-+ [CONFIG SET](https://redis.io/commands/config-set/)
-+ [DBSIZE](https://redis.io/commands/dbsize/)
-+ [FLUSHDB](https://redis.io/commands/flushdb/)（可选）
-+ [INFO](https://redis.io/commands/info/)
++ [CONFIG GET](https://redis.io/commands/config-get)
++ [CONFIG SET](https://redis.io/commands/config-set)
++ [DBSIZE](https://redis.io/commands/dbsize)
++ [FLUSHDB](https://redis.io/commands/flushdb)（可选）
++ [INFO](https://redis.io/commands/info)
 
 #### 集群管理
 
-+ [CLUSTER INFO](https://redis.io/commands/cluster-info/)
++ [CLUSTER INFO](https://redis.io/commands/cluster-info)
 
 #### 脚本（可选）
 
-+ [EVALSHA](https://redis.io/commands/evalsha/)
-+ [SCRIPT LOAD](https://redis.io/commands/script-load/)
++ [EVALSHA](https://redis.io/commands/evalsha)
++ [SCRIPT LOAD](https://redis.io/commands/script-load)

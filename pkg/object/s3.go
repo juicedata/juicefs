@@ -350,6 +350,9 @@ func parseRegion(endpoint string) string {
 	return region
 }
 
+var oracleCompileRegexp = `.*\.compat.objectstorage\.(.*)\.oraclecloud\.com`
+var OVHCompileRegexp = `^s3\.(\w*)(\.\w*)?\.cloud\.ovh\.net$`
+
 func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		if len(strings.Split(endpoint, ".")) > 1 && !strings.HasSuffix(endpoint, ".amazonaws.com") {
@@ -417,10 +420,14 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 				// compatible s3
 				bucketName = hostParts[0]
 				ep = hostParts[1]
-				oracleCompile := regexp.MustCompile(`.*\\.compat\\.objectstorage\\.(.*)\\.oraclecloud\\.com`)
-				if oracleCompile.MatchString(ep) {
-					if submatch := oracleCompile.FindStringSubmatch(ep); len(submatch) == 2 {
-						region = submatch[1]
+
+				for _, compileRegexp := range []string{oracleCompileRegexp, OVHCompileRegexp} {
+					compile := regexp.MustCompile(compileRegexp)
+					if compile.MatchString(ep) {
+						if submatch := compile.FindStringSubmatch(ep); len(submatch) >= 2 {
+							region = submatch[1]
+							break
+						}
 					}
 				}
 			}

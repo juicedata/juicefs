@@ -1,10 +1,8 @@
 ---
-sidebar_label: Performance Evaluation Guide
+title: Performance Evaluation Guide
 sidebar_position: 2
 slug: /performance_evaluation_guide
 ---
-
-# JuiceFS Performance Evaluation Guide
 
 Before starting performance testing, it is a good idea to write down a general description of usage scenario, including:
 
@@ -25,7 +23,7 @@ An example of the basic usage of the JuiceFS built-in `bench` tool is shown belo
 ### Working Environment
 
 - Host: Amazon EC2 c5.xlarge one
-- OS: Ubuntu 20.04.1 LTS (Kernel 5.4.0-1029-aws)
+- OS: Ubuntu 20.04.1 LTS (Kernel `5.4.0-1029-aws`)
 - Metadata Engine: Redis 6.2.3, storage (dir) configured on system disk
 - Object Storage: Amazon S3
 - JuiceFS Version: 0.17-dev (2021-09-23 2ec2badf)
@@ -128,7 +126,6 @@ And then perform performance testing:
 
 Finally clean up the test files.
 
-
 ## Performance Observation and Analysis Tools
 
 The next two performance observation and analysis tools are essential tools for testing, using, and tuning JuiceFS.
@@ -147,24 +144,24 @@ The results are shown below, which would be easier to understand when combing wi
 
 The meaning of indicators is as follows:
 
-- usage
-  - cpu: the CPU usage of JuiceFS process
-  - mem: the physical memory usage of JuiceFS process
-  - buf: internal read/write buffer size of JuiceFS process, limited by mount option `--buffer-size`
-  - cache: internal metric, can be simply ignored
-- fuse
-  - ops/lat: requests per second processed by the FUSE interface and their average latency (in milliseconds)
-  - read/write: bandwidth of the FUSE interface to handle read and write requests per second
-- meta
-  - ops/lat: requests per second processed by the metadata engine and their average latency (in milliseconds). Please note that some requests that can be processed directly in the cache are not included in the statistics, in order to better reflect the time spent by the client interacting with the metadata engine.
-  - txn/lat: **write transactions** per second processed by the metadata engine and their average latency (in milliseconds). Read-only requests such as `getattr` are only counted as ops but not txn.
-  - retry: **write transactions** per second that the metadata engine retries
-- blockcache
-  - read/write: read/write traffic per second for the local data cache of the client
-- object
-  - get/get_c/lat: bandwidth, requests per second, and their average latency (in milliseconds) for object storage processing **read requests**
-  - put/put_c/lat: bandwidth, requests per second, and their average latency (in milliseconds) for object storage processing **write requests**
-  - del_c/lat: **delete requests** per second the object storage can process, and the average latency (in milliseconds)
+- `usage`
+  - `cpu`: the CPU usage of JuiceFS process
+  - `mem`: the physical memory usage of JuiceFS process
+  - `buf`: internal read/write buffer size of JuiceFS process, limited by mount option `--buffer-size`
+  - `cache`: internal metric, can be simply ignored
+- `fuse`
+  - `ops`/`lat`: requests per second processed by the FUSE interface and their average latency (in milliseconds)
+  - `read`/`write`: bandwidth of the FUSE interface to handle read and write requests per second
+- `meta`
+  - `ops`/`lat`: requests per second processed by the metadata engine and their average latency (in milliseconds). Please note that some requests that can be processed directly in the cache are not included in the statistics, in order to better reflect the time spent by the client interacting with the metadata engine.
+  - `txn`/`lat`: **write transactions** per second processed by the metadata engine and their average latency (in milliseconds). Read-only requests such as `getattr` are only counted as ops but not txn.
+  - `retry`: **write transactions** per second that the metadata engine retries
+- `blockcache`
+  - `read`/`write`: read/write traffic per second for the local data cache of the client
+- `object`
+  - `get`/`get_c`/`lat`: bandwidth, requests per second, and their average latency (in milliseconds) for object storage processing **read requests**
+  - `put`/`put_c`/`lat`: bandwidth, requests per second, and their average latency (in milliseconds) for object storage processing **write requests**
+  - `del_c`/`lat`: **delete requests** per second the object storage can process, and the average latency (in milliseconds)
 
 ### JuiceFS Profile
 
@@ -188,7 +185,7 @@ Based on the bench performance test flows as described above, a total of (1 + 10
 
 - 404 create, open and unlink requests
 - 808 flush requests: flush is automatically invoked whenever a file is closed
-- 33168 write/read requests: each large file takes 1024 1 MiB IOs on write, while the maximum size of a request at the FUSE level is 128 KiB by default. It means that each application IO is split into 8 FUSE requests, so there are (1024 * 8 + 100) * 4 = 33168 requests. The read IOs work in a similar way, and so does its counting.
+- 33168 write/read requests: each large file takes 1024 1 MiB IOs on write, while the maximum size of a request at the FUSE level is 128 KiB by default. It means that each application IO is split into 8 FUSE requests, so there are `(1024 * 8 + 100) * 4 = 33168` requests. The read IOs work in a similar way, and so does its counting.
 
 All these values correspond exactly to the results of `profile`. In addition, the test result shows that the average latency for the `write` operations is extreamly low (45 μs). This is because JuiceFS `write` writes to a memory buffer first by default and then calls flush to upload data to the object storage when the file is closed, as expected.
 

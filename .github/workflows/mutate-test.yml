@@ -1,0 +1,296 @@
+name: mutate-test
+on:
+  pull_request:
+    branches:
+      - 'main'
+    paths:
+      - '**/*_test.go'
+
+  workflow_dispatch:
+    inputs:
+      test_file:
+        type: string
+        description: "the go test file relative path you want to mutate, eg cmd/meta/xattr_test.go"
+        required: true
+        default: ""  
+      job_total:
+        type: string
+        description: "number of job to run mutation test"
+        required: true
+        default: "1"
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false  
+
+jobs:
+
+  build-matrix:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.18.x'
+
+      - name: install go-mutesting
+        run: |
+          go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+
+      - id: set-matrix
+        run: |
+          sudo apt-get install jq
+          if [ "${{github.event_name}}" == "pull_request"  ]; then
+            echo github.event.pull_request.base.sha is ${{github.event.pull_request.base.sha}}
+            echo github.event.pull_request.head.sha is ${{github.event.pull_request.head.sha}}
+            echo github.sha is ${{ github.sha }}
+            changed_file_str=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep _test.go$ | xargs)
+            echo "added or changed test files: $changed_file_str"
+            changed_file_array=($changed_file_str)
+            declare -a Jobs=();
+            for test_file_name in "${changed_file_array[@]}"
+            do
+              echo "test_file_name is $test_file_name"
+              if grep -q "//disable_mutate_test" $test_file_name; then
+                echo "found disable_mutate_test in $test_file_name" 
+                continue
+              fi
+              source_file_name=${test_file_name%"_test.go"}.go
+              echo "source_file_name is :" $source_file_name
+              black_list_file=black.list
+              TEST_FILE_NAME="$test_file_name" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/mutate/parse_black_list.py 
+              echo "black list checksum: "
+              cat $black_list_file
+              total_count=$(go-mutesting $source_file_name --debug --no-exec --blacklist $black_list_file| grep "Save mutation into" | wc -l)
+              echo "total_count is $total_count"
+              job_total=$(TEST_FILE_NAME=$test_file_name python3 .github/scripts/mutate/parse_job_total.py)
+              echo "job_total specified: $job_total"
+              if [ $job_total -eq 0 ]; then
+                if [ $total_count -gt 200 ]; then
+                  job_total=4
+                else
+                  job_total=1
+                fi
+              fi
+              echo "job_total: $job_total"
+              for i in `seq 1 $job_total` 
+              do
+                Jobs=("${Jobs[@]}" "$test_file_name-$i-$job_total")
+              done
+            done
+            value=`printf '%s\n' "${Jobs[@]}" | jq -R . | jq -cs .`
+            echo "value: $value"
+            echo "matrix=$value" >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
+            test_file_name=${{github.event.inputs.test_file}}
+            echo "test file is $test_file_name"
+            job_total=${{github.event.inputs.job_total}}
+            echo "job_total is $job_total"
+            declare -a Jobs=();
+            for i in `seq 1 $job_total` 
+              do
+                Jobs=("${Jobs[@]}" "$test_file_name-$i-$job_total")
+              done
+            value=`printf '%s\n' "${Jobs[@]}" | jq -R . | jq -cs .`
+            echo "value: $value"
+            echo "matrix=$value" >> $GITHUB_OUTPUT
+          fi
+
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
+  mutate-test:
+    name: ${{matrix.test_file}}
+    needs: build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        test_file: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
+    runs-on: ubuntu-20.04
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Get Current Job Log URL
+        uses: Tiryoh/gha-jobid-action@v0
+        id: jobs
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          job_name: ${{matrix.test_file}}
+
+      - name: Build
+        uses: ./.github/actions/build
+
+      - name: Remove problem matcher for go
+        run: |
+          # https://github.com/actions/setup-go/blob/main/matchers.json
+          echo "::remove-matcher owner=go::"
+
+      - name: Install Packages
+        run: |
+          go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+          sudo apt install -y g++-multilib
+          sudo apt install -y redis-server
+          sudo apt install -y libacl1-dev
+          sudo apt install -y attr
+          sudo apt install python3-tk
+          sudo pip install mysqlclient
+          
+      - name: Download Zip
+        run: |
+          sudo mkdir -p /home/travis/.m2/
+          wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
+          wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
+          wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
+          wget -O /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz  https://github.com/etcd-io/etcd/releases/download/v3.5.2/etcd-v3.5.2-linux-amd64.tar.gz
+          wget -O /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+          wget -O /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
+          unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2/
+          tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2/
+          cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
+          tar -zxf /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz -C /home/travis/.m2/
+
+      - name: Prepare Database
+        timeout-minutes: 10
+        run: |
+          sudo service mysql start
+          sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
+          sudo service postgresql start
+          sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?host.*all.*all.*32.*scram-sha-256?host    all             all             127.0.0.1/32            trust?" /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?host.*all.*all.*128.*scram-sha-256?host    all             all             ::1/128                 trust?" /etc/postgresql/*/main/pg_hba.conf
+          cat /etc/postgresql/*/main/pg_hba.conf
+          sudo service postgresql restart
+          psql -c "create user runner superuser;" -U postgres
+          sudo service postgresql restart
+          sudo mysql -e "create database dev;"
+          psql -c 'create database test;' -U postgres
+          bash /home/travis/.m2/install.sh
+          source /home/runner/.bash_profile
+          tiup -v
+          nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
+          sudo dpkg -i /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb
+          docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
+          go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
+          nohup /home/travis/.m2/rclone-v1.57.0-linux-amd64/rclone serve webdav local --addr 127.0.0.1:9007 >> rclone.log 2>&1 &
+          #sudo chmod 777 /usr/share/apache*/conf/settings.xml
+          #sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/share/apache*/conf/settings.xml
+          docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
+          make
+          sudo make -C fstests setup
+          chmod +x .github/scripts/setup-hdfs.sh
+          sudo lsof -i :8020 || true
+          ./.github/scripts/setup-hdfs.sh
+          for i in {2222,3306,5432,8020,9000,9007,4500} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+          sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
+
+      - name: run mutate test
+        # timeout-minutes: 120
+        run: |
+          sudo chmod 777 /var/jfsCache
+          test_file=$(echo ${{matrix.test_file}} | awk -F'-' '{print $1}')
+          job_index=$(echo ${{matrix.test_file}} | awk -F'-' '{print $2}')
+          job_total=$(echo ${{matrix.test_file}} | awk -F'-' '{print $3}')
+          echo "test file is :$test_file, job_index is $job_index, job_total is $job_total"
+          if [ -z "$test_file" ]; then 
+            echo "test file is empty, will not run mutate test"
+            exit 0
+          fi
+          source_file=${test_file%"_test.go"}.go
+          echo "source file is :" $source_file
+          package_path=$(dirname $test_file)
+          echo "package path is :" $package_path
+
+          test_cases=$(TEST_FILE_NAME=$test_file python3 .github/scripts/mutate/parse_test_cases.py)
+          if [ $? -ne 0 ]; then
+            echo "no test cases in test file, will not run mutate test"
+            exit 0
+          fi
+          echo "test cases: $test_cases"
+
+          if [[ "$test_file" =~ ^pkg/.* ]]; then
+            go test ./$package_path/...  -v -run "$test_cases" -count=1 -cover -timeout=5m -coverpkg=./$package_path/... -coverprofile=mutest-cov.out
+          elif [[ "$test_file" =~ ^cmd/.* ]]; then
+            sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword go test ./cmd/... -v -run "$test_cases" -count=1 -cover -timeout=5m -coverpkg=./pkg/...,./cmd/... -coverprofile=mutest-cov.out 
+          else
+            echo "test file location error: $test_file"
+            exit 0
+          fi
+          
+          black_list_file=black.list
+          TEST_FILE_NAME="$test_file" BLACK_LIST_FILE=$black_list_file python3 .github/scripts/mutate/parse_black_list.py 
+          echo "black list checksum: "
+          cat $black_list_file
+
+          go-mutesting $source_file --debug --no-exec --do-not-remove-tmp-folder  --blacklist $black_list_file | tee -a mutate.log
+          mutation_dir=$(cat mutate.log | grep "Save mutations into" | awk -F' ' '{print $4}' | sed -e 's:"::g')
+          echo "mutation dir is $mutation_dir"
+          JOB_INDEX=$job_index JOB_TOTAL=$job_total MUTATE_ORIGINAL=$source_file MUTATION_DIR=$mutation_dir COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" python3 .github/scripts/mutate/mutesting.py | tee -a mutesting.log
+          # COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutate/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file | tee -a mutesting.log
+          if [ $? != 0 ]; then echo "run mutesting.py failed" && exit 1; fi
+          
+          export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
+          JOB_NAME=${{matrix.test_file}} JOB_URL=${{steps.jobs.outputs.html_url}}  REPORT_FILE=mutesting.log python3 .github/scripts/mutate/save_report.py
+
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-20.04
+    needs: [build-matrix, mutate-test]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Install tools
+        run: |
+          sudo pip install mysqlclient
+
+      - name: Generate mutate report
+        run: |
+          export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
+          mutate_report=$(python3 .github/scripts/mutate/query_report.py)
+          echo "mutate_report is $mutate_report"
+          # echo "mutate_report=$mutate_report" >> $GITHUB_ENV
+          MY_STRING=$(cat << EOF
+          $mutate_report
+          EOF
+          )
+          echo "MY_STRING<<EOF" >> $GITHUB_ENV
+          echo "$MY_STRING" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+      - uses: mshick/add-pr-comment@v2
+        with:
+          allow-repeats: true
+          message: |
+            *Mutate Test Report*
+            ${{env.MY_STRING}} 
+            
+            Usage: https://github.com/juicedata/juicefs/blob/main/.github/scripts/mutate/how_to_use_mutate_test.md  
+
+      - name: Send Slack Notification
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: ${{ success() }}
+        run: echo "All Done"
+

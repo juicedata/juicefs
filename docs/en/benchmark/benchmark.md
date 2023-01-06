@@ -1,9 +1,9 @@
 ---
-sidebar_label: Performance Benchmark
+title: Performance Benchmark
 sidebar_position: 1
 slug: .
+description: This article describes benchmarking the file system using FIO, mdtest, and the bench command that comes with JuiceFS.
 ---
-# Performance Benchmark
 
 ## Basic benchmark
 

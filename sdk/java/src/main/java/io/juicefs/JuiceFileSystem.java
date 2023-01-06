@@ -45,6 +45,7 @@ public class JuiceFileSystem extends FilterFileSystem {
   private static boolean distcpPatched = false;
 
   private ScheduledExecutorService emptier;
+  private FileSystem emptierFs;
 
   static {
     PatchUtil.patchBefore("org.apache.flink.runtime.fs.hdfs.HadoopRecoverableFsDataOutputStream",
@@ -81,7 +82,7 @@ public class JuiceFileSystem extends FilterFileSystem {
 
     try {
       UserGroupInformation superUser = UserGroupInformation.createRemoteUser(getConf(conf, "superuser", "hdfs"));
-      FileSystem emptierFs = superUser.doAs((PrivilegedExceptionAction<FileSystem>) () -> {
+      emptierFs = superUser.doAs((PrivilegedExceptionAction<FileSystem>) () -> {
         JuiceFileSystemImpl fs = new JuiceFileSystemImpl();
         fs.initialize(uri, conf);
         return fs;
@@ -155,6 +156,7 @@ public class JuiceFileSystem extends FilterFileSystem {
   public void close() throws IOException {
     if (this.emptier != null) {
       emptier.shutdownNow();
+      emptierFs.close();
     }
     super.close();
   }

@@ -1,10 +1,8 @@
 ---
-sidebar_label: 在腾讯云使用 JuiceFS
+title: 在腾讯云使用 JuiceFS
 sidebar_position: 5
 slug: /clouds/qcloud
 ---
-
-# 在腾讯云安装和使用 JuiceFS 存储
 
 如下图所示，JuiceFS 存储由数据库和对象存储共同驱动。存入 JuiceFS 的文件会按照一定的规则被拆分成固定大小的数据块存储在对象存储中，数据对应的元数据则会存储在数据库中。
 
@@ -46,7 +44,7 @@ JuiceFS 会将数据对应的元数据全部存储在独立的数据库中，目
 
 根据数据库类型的不同，带来的元数据性能和可靠性表现也各不相同。比如 Redis 是完全运行在内存上的，它能提供极致的性能，但运维难度较高，可靠性相对低。而 MySQL、PostgreSQL 是关系型数据库，性能不如 Redis，但运维难度不高，可靠性也有一定的保障。SQLite 是单机单文件关系型数据库，性能较低，也不适合用于大规模数据存储，但它免配置，适合单机少量数据存储的场景。
 
-如果只是为了评估 JuiceFS 的功能，你可以在 CVM 云服务器手动搭建数据库使用。当你要在生产环境使用 JucieFS 时，如果没有专业的数据库运维团队，腾讯云的云数据库服务通常是更好的选择。
+如果只是为了评估 JuiceFS 的功能，你可以在 CVM 云服务器手动搭建数据库使用。当你要在生产环境使用 JuiceFS 时，如果没有专业的数据库运维团队，腾讯云的云数据库服务通常是更好的选择。
 
 当然，如果你愿意，也可以使用其他云平台上提供的云数据库服务。但在这种情况下，你只能通过公网访问云数据库，也就是说，你必须向公网暴露数据库的端口，这存在极大的安全风险，最好不要这样使用。
 
@@ -166,17 +164,17 @@ JuiceFS 客户端安装好以后，现在就可以使用前面准备好的 Redis
 
 ```shell
 $ juicefs format \
-	--storage cos \
-	--bucket https://<your-bucket-name> \
-	--access-key <your-access-key-id> \
-	--secret-key <your-access-key-secret> \
-	redis://:<your-redis-password>@192.168.5.5:6379/1 \
-	mystor
+    --storage cos \
+    --bucket https://<your-bucket-name> \
+    --access-key <your-access-key-id> \
+    --secret-key <your-access-key-secret> \
+    redis://:<your-redis-password>@192.168.5.5:6379/1 \
+    mystor
 ```
 
 **选项说明：**
 
-- `--storage`：指定对象存储类型，[点此查看](../guide/how_to_set_up_object_storage.md#%E6%94%AF%E6%8C%81%E7%9A%84%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1) JuiceFS 支持的对象存储。
+- `--storage`：指定对象存储类型，[点此查看](../guide/how_to_set_up_object_storage.md#supported-object-storage) JuiceFS 支持的对象存储。
 - `--bucket`：对象存储的 Bucket 访问域名，可以在 COS 的管理控制台找到。
   ![cos-bucket-url](../images/cos-bucket-url.png)
 - `--access-key` 和 `--secret-key`：访问对象存储 API 的秘钥对，[点此查看](https://cloud.tencent.com/document/product/598/37140)获取方式。

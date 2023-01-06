@@ -1,11 +1,10 @@
 ---
-sidebar_label: 在 KubeSphere 上使用 JuiceFS
+title: 在 KubeSphere 上使用 JuiceFS
 sidebar_position: 3
 slug: /juicefs_on_kubesphere
 ---
-# 在 KubeSphere 上使用 JuiceFS
 
-[KubeSphere](https://kubesphere.com.cn/) 是在 Kubernetes 之上构建的以应用为中心的多租户容器平台，提供全栈的 IT 自动化运维的能力，简化企业的 DevOps 工作流。
+[KubeSphere](https://kubesphere.com.cn) 是在 Kubernetes 之上构建的以应用为中心的多租户容器平台，提供全栈的 IT 自动化运维的能力，简化企业的 DevOps 工作流。
 
 KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 经验并不丰富的用户，也能相对轻松的上手开始管理和使用。它提供了基于 Helm 的应用市场，可以在图形化界面下非常轻松地安装各种 Kubernetes 应用。
 
@@ -15,12 +14,12 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 
 1. 安装 KubeSphere
 
-安装 KubeSphere 有两种方法。一是在 Linux 上直接安装，可以参考文档：[在 Linux 安装 KubeSphere](https://kubesphere.com.cn/docs/quick-start/all-in-one-on-linux/) ；
-二是在已有 Kubernetes 中安装，可以参考文档：[在 Kubernetes 安装 KubeSphere](https://kubesphere.com.cn/docs/quick-start/minimal-kubesphere-on-k8s/) 。
+   安装 KubeSphere 有两种方法。一是在 Linux 上直接安装，可以参考文档：[在 Linux 安装 KubeSphere](https://kubesphere.com.cn/docs/quick-start/all-in-one-on-linux) ；
+二是在已有 Kubernetes 中安装，可以参考文档：[在 Kubernetes 安装 KubeSphere](https://kubesphere.com.cn/docs/quick-start/minimal-kubesphere-on-k8s) 。
 
 2. 在 KubeSphere 中启用应用商店
 
-在 KubeSphere 中启用应用商店可以参考文档：[KubeSphere 应用商店](https://kubesphere.com.cn/docs/pluggable-components/app-store/) 。
+   在 KubeSphere 中启用应用商店可以参考文档：[KubeSphere 应用商店](https://kubesphere.com.cn/docs/pluggable-components/app-store) 。
 
 ## 安装 JuiceFS CSI Driver
 
@@ -34,14 +33,14 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 
 在企业空间中点击进去应用管理，选择「应用仓库」，点击创建按钮添加 JuiceFS CSI 仓库，填写：
 
-- 仓库名称：juicefs-csi-driver
-- Index URL：https://juicedata.github.io/juicefs-csi-driver/
+- 仓库名称：`juicefs-csi-driver`
+- Index URL：`https://juicedata.github.io/juicefs-csi-driver/`
 
 ![](../images/kubesphere_app_shop.png)
 
 #### 方法二：应用模板
 
-先在 JuiceFS CSI Driver 仓库下载 chart 压缩包：https://github.com/juicedata/juicefs-csi-driver/releases 。
+先在 JuiceFS CSI Driver 仓库下载 chart 压缩包：<https://github.com/juicedata/juicefs-csi-driver/releases> 。
 
 在「企业空间」中点击进入「应用管理」，选择「应用模板」，点击「创建」，上传 chart 压缩包：
 
@@ -49,7 +48,7 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 
 ### 安装
 
-在「企业空间」中选择您所需部署的「项目」（KubeSphere 中的项目即为 K8s 中的 namespace），选择「应用负载」，点击「部署新应用」按钮，选择「来自应用商店」，然后选择「juicefs」：
+在「企业空间」中选择您所需部署的「项目」（KubeSphere 中的项目即为 K8s 中的 namespace），选择「应用负载」，点击「部署新应用」按钮，选择「来自应用商店」，然后选择 `juicefs`：
 
 ![](../images/kubesphere_shop_juicefs.jpg)
 
@@ -58,6 +57,7 @@ KubeSphere 提供了运维友好的向导式操作界面，即便是 Kubernetes 
 ![](../images/kubesphere_install_csi.png)
 
 进入配置修改页面后一致，修改以下两个地方：
+
 - namespace：改成对应的项目名
 - storageClass.backend：
   `backend` 部分用来定义文件系统后端的数据库和对象存储，可以查阅 [「JuiceFS 快速上手指南」](../getting-started/README.md) 了解相关内容。

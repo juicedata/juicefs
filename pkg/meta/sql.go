@@ -22,10 +22,8 @@ package meta
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -38,6 +36,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
 	"xorm.io/xorm/log"
@@ -180,6 +179,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
 	if driver == "postgres" {
 		addr = driver + "://" + addr
+		driver = "pgx"
 
 		parse, err := url.Parse(addr)
 		if err != nil {
@@ -235,7 +235,11 @@ func (m *dbMeta) Shutdown() error {
 }
 
 func (m *dbMeta) Name() string {
-	return m.db.DriverName()
+	name := m.db.DriverName()
+	if name == "pgx" {
+		name = "postgres"
+	}
+	return name
 }
 
 func (m *dbMeta) doDeleteSlice(id uint64, size uint32) error {
@@ -627,7 +631,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		logger.Warnf("transaction failed: %s, will retry it. please increase the max number of connections in your database, or use a connection pool.", msg)
 		return true
 	}
-	switch m.db.DriverName() {
+	switch m.Name() {
 	case "sqlite3":
 		return errors.Is(err, errBusy) || strings.Contains(msg, "database is locked")
 	case "mysql":
@@ -649,11 +653,13 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 	}
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
+
+	if m.Name() == "sqlite3" {
+		// sqlite only allow one writer at a time
+		inodes = []Ino{1}
+	}
+
 	if len(inodes) > 0 {
-		if m.db.DriverName() == "sqlite3" {
-			// sqlite only allow one writer at a time
-			inodes[0] = 1
-		}
 		m.txLock(uint(inodes[0]))
 		defer m.txUnlock(uint(inodes[0]))
 	}
@@ -750,7 +756,7 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 
 func (m *dbMeta) flushStats() {
 	var inttype = "BIGINT"
-	if m.db.DriverName() == "mysql" {
+	if m.Name() == "mysql" {
 		inttype = "SIGNED"
 	}
 	for {
@@ -908,7 +914,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte) error {
 	var r sql.Result
 	var err error
-	driver := m.db.DriverName()
+	driver := m.Name()
 	if driver == "sqlite3" || driver == "postgres" {
 		r, err = s.Exec("update jfs_chunk set slices=slices || ? where inode=? AND indx=?", buf, inode, indx)
 	} else {
@@ -1366,7 +1372,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	}, parent)
 	if err == nil && trash == 0 {
 		if n.Type == TypeFile && n.Nlink == 0 {
-			m.fileDeleted(opened, n.Inode, n.Length)
+			m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1740,7 +1746,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}, parentSrc)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
-			m.fileDeleted(opened, dino, dn.Length)
+			m.fileDeleted(opened, false, dino, dn.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1982,7 +1988,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	})
 	if err == nil {
 		m.updateStats(newSpace, -1)
-		m.tryDeleteFileData(inode, n.Length)
+		m.tryDeleteFileData(inode, n.Length, false)
 	}
 	return err
 }
@@ -2327,54 +2333,58 @@ func (m *dbMeta) doDeleteFileData(inode Ino, length uint64) {
 	})
 }
 
-func (m *dbMeta) doCleanupDelayedSlices(edge int64, limit int) (int, error) {
-	var result []delslices
-	_ = m.roTxn(func(s *xorm.Session) error {
-		result = nil
-		return s.Where("deleted < ?", edge).Limit(limit, 0).Find(&result)
-	})
-
+func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
+	start := time.Now()
 	var count int
 	var ss []Slice
-	for _, ds := range result {
-		if err := m.txn(func(ses *xorm.Session) error {
-			ss = ss[:0]
-			ds := delslices{Id: ds.Id}
-			if ok, e := ses.ForUpdate().Get(&ds); e != nil {
+	var result []delslices
+	var batch int = 1e6
+	for {
+		_ = m.roTxn(func(s *xorm.Session) error {
+			result = result[:0]
+			return s.Where("deleted < ?", edge).Limit(batch, 0).Find(&result)
+		})
+
+		for _, ds := range result {
+			if err := m.txn(func(ses *xorm.Session) error {
+				ss = ss[:0]
+				ds := delslices{Id: ds.Id}
+				if ok, e := ses.ForUpdate().Get(&ds); e != nil {
+					return e
+				} else if !ok {
+					return nil
+				}
+				m.decodeDelayedSlices(ds.Slices, &ss)
+				if len(ss) == 0 {
+					return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Id, ds.Slices)
+				}
+				for _, s := range ss {
+					if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.Id, s.Size); e != nil {
+						return e
+					}
+				}
+				_, e := ses.Delete(&delslices{Id: ds.Id})
 				return e
-			} else if !ok {
-				return nil
-			}
-			m.decodeDelayedSlices(ds.Slices, &ss)
-			if len(ss) == 0 {
-				return fmt.Errorf("invalid value for delayed slices %d: %v", ds.Id, ds.Slices)
+			}); err != nil {
+				logger.Warnf("Cleanup delayed slices %d: %s", ds.Id, err)
+				continue
 			}
 			for _, s := range ss {
-				if _, e := ses.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.Id, s.Size); e != nil {
-					return e
+				var ref = sliceRef{Id: s.Id}
+				err := m.roTxn(func(s *xorm.Session) error {
+					ok, err := s.Get(&ref)
+					if err == nil && !ok {
+						err = errors.New("not found")
+					}
+					return err
+				})
+				if err == nil && ref.Refs <= 0 {
+					m.deleteSlice(s.Id, s.Size)
+					count++
 				}
 			}
-			_, e := ses.Delete(&delslices{Id: ds.Id})
-			return e
-		}); err != nil {
-			logger.Warnf("Cleanup delayed slices %d: %s", ds.Id, err)
-			continue
 		}
-		for _, s := range ss {
-			var ref = sliceRef{Id: s.Id}
-			err := m.roTxn(func(s *xorm.Session) error {
-				ok, err := s.Get(&ref)
-				if err == nil && !ok {
-					err = errors.New("not found")
-				}
-				return err
-			})
-			if err == nil && ref.Refs <= 0 {
-				m.deleteSlice(s.Id, s.Size)
-				count++
-			}
-		}
-		if count >= limit {
+		if len(result) < batch || time.Since(start) > 50*time.Minute {
 			break
 		}
 	}
@@ -2588,68 +2598,111 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	return errno(m.scanDeletedSlices(ctx, func(s Slice) error {
-		slices[1] = append(slices[1], s)
+	return errno(m.scanDeletedSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
+		slices[1] = append(slices[1], ss...)
 		if showProgress != nil {
-			showProgress()
+			for range ss {
+				showProgress()
+			}
 		}
-		return nil
+		return false, nil
 	}))
 }
 
-func (m *dbMeta) scanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error {
-	if visitor == nil {
+func (m *dbMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
+	if scan == nil {
 		return nil
 	}
-	return m.roTxn(func(s *xorm.Session) error {
-		if ok, err := s.IsTableExist(&delslices{}); err != nil {
+	var dss []delslices
+
+	err := m.roTxn(func(tx *xorm.Session) error {
+		if ok, err := tx.IsTableExist(&delslices{}); err != nil {
 			return err
 		} else if !ok {
 			return nil
 		}
-		var dss []delslices
-		err := s.Find(&dss)
+		return tx.Find(&dss)
+	})
+	if err != nil {
+		return err
+	}
+	var ss []Slice
+	for _, ds := range dss {
+		var clean bool
+		err = m.txn(func(tx *xorm.Session) error {
+			ss = ss[:0]
+			del := delslices{Id: ds.Id}
+			found, err := tx.Get(&del)
+			if err != nil {
+				return errors.Wrapf(err, "get delslices %d", ds.Id)
+			}
+			if !found {
+				return nil
+			}
+			m.decodeDelayedSlices(del.Slices, &ss)
+			clean, err = scan(ss, del.Deleted)
+			if err != nil {
+				return err
+			}
+			if clean {
+				for _, s := range ss {
+					if _, e := tx.Exec("update jfs_chunk_ref set refs=refs-1 where chunkid=? and size=?", s.Id, s.Size); e != nil {
+						return e
+					}
+				}
+				_, err = tx.Delete(del)
+			}
+			return err
+		})
 		if err != nil {
 			return err
 		}
-		var ss []Slice
-		for _, ds := range dss {
-			ss = ss[:0]
-			m.decodeDelayedSlices(ds.Slices, &ss)
+		if clean {
 			for _, s := range ss {
-				if s.Id > 0 {
-					if err := visitor(s); err != nil {
-						return err
+				var ref = sliceRef{Id: s.Id}
+				err := m.roTxn(func(tx *xorm.Session) error {
+					ok, err := tx.Get(&ref)
+					if err == nil && !ok {
+						err = errors.New("not found")
 					}
+					return err
+				})
+				if err == nil && ref.Refs <= 0 {
+					m.deleteSlice(s.Id, s.Size)
 				}
 			}
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
-func (m *dbMeta) scanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error {
-	if visitor == nil {
+func (m *dbMeta) scanDeletedFiles(ctx Context, scan deletedFileScan) error {
+	if scan == nil {
 		return nil
 	}
-	return m.roTxn(func(s *xorm.Session) error {
+
+	var dfs []delfile
+	err := m.roTxn(func(s *xorm.Session) error {
 		if ok, err := s.IsTableExist(&delfile{}); err != nil {
 			return err
 		} else if !ok {
 			return nil
 		}
-		var dfs []delfile
-		err := s.Find(&dfs)
+		return s.Find(&dfs)
+	})
+	if err != nil {
+		return err
+	}
+	for _, ds := range dfs {
+		clean, err := scan(ds.Inode, ds.Length, ds.Expire)
 		if err != nil {
 			return err
 		}
-		for _, ds := range dfs {
-			if err := visitor(ds.Inode, ds.Length); err != nil {
-				return err
-			}
+		if clean {
+			m.doDeleteFileData(ds.Inode, ds.Length)
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
@@ -3217,7 +3270,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 
 	var batch int
-	switch m.db.DriverName() {
+	switch m.Name() {
 	case "sqlite3":
 		batch = 999 / MaxFieldsCountOfTable
 	case "mysql":

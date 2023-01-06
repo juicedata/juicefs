@@ -11,7 +11,7 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 
 JuiceFS 可以简单便捷的将海量云存储直接接入已投入生产环境的大数据、机器学习、人工智能以及各种应用平台，无需修改代码即可像使用本地存储一样高效使用海量云端存储。
 
-📺 **视频**：[什么是 JuiceFS?](https://www.bilibili.com/video/BV1HK4y197va/)
+📺 **视频**：[什么是 JuiceFS?](https://www.bilibili.com/video/BV1HK4y197va)
 
 📖 **文档**：[快速上手指南](https://juicefs.com/docs/zh/community/quick_start_guide)
 

@@ -1,11 +1,10 @@
 ---
-sidebar_label: Use JuiceFS on KubeSphere
+title: Use JuiceFS on KubeSphere
 sidebar_position: 3
 slug: /juicefs_on_kubesphere
 ---
-# Use JuiceFS on KubeSphere
 
-[KubeSphere](https://kubesphere.com.cn/) is an application-centric multi-tenant container platform built on Kubernetes. It provides full-stack IT automated operation and maintenance capabilities and simplifies the DevOps workflow of the enterprise.
+[KubeSphere](https://kubesphere.com.cn) is an application-centric multi-tenant container platform built on Kubernetes. It provides full-stack IT automated operation and maintenance capabilities and simplifies the DevOps workflow of the enterprise.
 
 KubeSphere provides a friendly wizard-style operation interface for operation and maintenance, even users who are not experienced in Kubernetes can start management and use relatively easily. It provides a Helm-based application market that can easily install various Kubernetes applications under a graphical interface.
 
@@ -15,11 +14,11 @@ This article will introduce how to deploy JuiceFS CSI Driver in KubeSphere with 
 
 1. **Install KubeSphere**
 
-There are two ways to install KubeSphere. One is installing in Linux, you can refer to the document: [All-in-One Installation of Kubernetes and KubeSphere on Linux](https://kubesphere.com.cn/en/docs/quick-start/all-in-one-on-linux/) , One is installing in Kubernetes, you can refer to the document: [Minimal KubeSphere on Kubernetes](https://kubesphere.com.cn/en/docs/quick-start/minimal-kubesphere-on-k8s/)
+   There are two ways to install KubeSphere. One is installing in Linux, you can refer to the document: [All-in-One Installation of Kubernetes and KubeSphere on Linux](https://kubesphere.com.cn/en/docs/quick-start/all-in-one-on-linux) , One is installing in Kubernetes, you can refer to the document: [Minimal KubeSphere on Kubernetes](https://kubesphere.com.cn/en/docs/quick-start/minimal-kubesphere-on-k8s)
 
 2. **Enable app store in KubeSphere**
 
-You can refer to the documentation for enabling the app store in KubeSphere: [KubeSphere App Store](https://kubesphere.com.cn/en/docs/pluggable-components/app-store/)
+   You can refer to the documentation for enabling the app store in KubeSphere: [KubeSphere App Store](https://kubesphere.com.cn/en/docs/pluggable-components/app-store)
 
 ## Install JuiceFS CSI Driver
 
@@ -33,14 +32,14 @@ To install JuiceFS CSI Driver, you first need to create an application template.
 
 Click in the workspace to enter the application management, select "App Repositories", click the create button to add JuiceFS CSI Repository, fill in:
 
-- Repository name: juicefs-csi-driver
-- Index URL: https://juicedata.github.io/charts/
+- Repository name: `juicefs-csi-driver`
+- Index URL: `https://juicedata.github.io/charts/`
 
 ![](../images/kubesphere_app_shop_en.png)
 
 #### Method two: Application Template
 
-Download the chart compressed package from the JuiceFS CSI Driver warehouse: https://github.com/juicedata/juicefs-csi-driver/releases.
+Download the chart compressed package from the JuiceFS CSI Driver warehouse: <https://github.com/juicedata/juicefs-csi-driver/releases>.
 
 In the "Workspace", click to enter the "App Management", select "App Templates", click "create", upload the chart compression package:
 
@@ -48,7 +47,7 @@ In the "Workspace", click to enter the "App Management", select "App Templates",
 
 ### Install
 
-Select "Project" where you want to deploy in the "Workspace" (the project in KubeSphere is the namespace in K8s), select "Apps", click the "create" button, select "From App Store", and then Select "juicefs":
+Select "Project" where you want to deploy in the "Workspace" (the project in KubeSphere is the namespace in K8s), select "Apps", click the "create" button, select "From App Store", and then Select `juicefs`:
 
 ![](../images/kubesphere_shop_juicefs_en.png)
 
@@ -94,7 +93,7 @@ After the configuration is modified, click "Install".
 
 The JuiceFS CSI Driver installed above has created a `StorageClass`, for example, the `StorageClass` created above is `juicefs-sc` , Can be used directly.
 
-Then you need to create a PVC. In "Project", select "Storage Management", then select "Storage Volume", click the " Create" button to create a PVC, and select "juicefs-sc" for the "StorageClass", as follows:
+Then you need to create a PVC. In "Project", select "Storage Management", then select "Storage Volume", click the " Create" button to create a PVC, and select `juicefs-sc` for the "StorageClass", as follows:
 
 ![](../images/kubesphere_pvc_en.png)
 

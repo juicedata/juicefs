@@ -1,10 +1,8 @@
 ---
-sidebar_label: Deploy JuiceFS S3 Gateway
-sidebar_position: 5
+title: Deploy JuiceFS S3 Gateway
+sidebar_position: 6
 slug: /s3_gateway
 ---
-
-# Deploy JuiceFS S3 Gateway
 
 JuiceFS has introduced S3 gateway since v0.11. The feature is implemented based on the [MinIO S3 Gateway](https://docs.min.io/docs/minio-gateway-for-s3.html). It provides an S3-compatible RESTful API for files on JuiceFS, enabling the management of files stored on JuiceFS with tools such as s3cmd, AWS CLI, and MinIO Client (mc) in cases where mounting is not convenient. In addition, S3 gateway also provides a web-based file manager that allows users to manage files in web browsers.
 
@@ -210,7 +208,7 @@ juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
 
 You can use `juicefs-s3-gateway.${NAMESPACE}.svc.cluster.local:9000` or pod IP and port number of `juicefs-s3-gateway` (e.g. `10.244.2.238:9000`) in the application pod to access JuiceFS S3 Gateway.
 
-If you want to access through Ingress, you need to ensure that the Ingress Controller has been deployed in the cluster. Refer to [Ingress Controller Deployment Document](https://kubernetes.github.io/ingress-nginx/deploy/). Then create an `Ingress` resource:
+If you want to access through Ingress, you need to ensure that the Ingress Controller has been deployed in the cluster. Refer to [Ingress Controller Deployment Document](https://kubernetes.github.io/ingress-nginx/deploy). Then create an `Ingress` resource:
 
 ```yaml
 kubectl apply -f - <<EOF
@@ -240,7 +238,7 @@ The S3 gateway can be accessed through `<external IP>` of ingress controller as 
 kubectl get services -n ingress-nginx
 ```
 
-There are some differences between the various versions of Ingress. For more usage methods, please refer to [Ingress Controller Usage Document](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage/).
+There are some differences between the various versions of Ingress. For more usage methods, please refer to [Ingress Controller Usage Document](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage).
 
 ### Install via Helm
 

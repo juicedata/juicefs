@@ -1,6 +1,6 @@
 module github.com/juicedata/juicefs
 
-go 1.17
+go 1.18
 
 require (
 	cloud.google.com/go/compute v1.5.0
@@ -29,11 +29,11 @@ require (
 	github.com/hashicorp/go-hclog v1.2.0
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
+	github.com/jackc/pgx/v5 v5.2.0
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
 	github.com/juju/ratelimit v1.0.1
 	github.com/ks3sdklib/aws-sdk-go v1.1.4
-	github.com/lib/pq v1.8.0
 	github.com/mattn/go-isatty v0.0.14
 	github.com/mattn/go-sqlite3 v1.14.15
 	github.com/minio/cli v1.22.0
@@ -60,15 +60,16 @@ require (
 	github.com/vbauerster/mpb/v7 v7.0.3
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/volcengine/ve-tos-golang-sdk/v2 v2.4.2
+	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a
 	go.etcd.io/etcd v3.3.27+incompatible
 	go.etcd.io/etcd/client/v3 v3.5.2
 	go.uber.org/automaxprocs v1.5.1
-	golang.org/x/crypto v0.0.0-20220112180741-5e0467b6c7ce
+	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
-	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
+	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
-	golang.org/x/text v0.3.7
+	golang.org/x/text v0.3.8
 	google.golang.org/api v0.70.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
@@ -148,6 +149,8 @@ require (
 	github.com/hashicorp/serf v0.9.6 // indirect
 	github.com/hashicorp/vault/api v1.0.4 // indirect
 	github.com/hashicorp/vault/sdk v0.1.13 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/gofork v1.0.0 // indirect
@@ -218,10 +221,10 @@ require (
 	go.etcd.io/etcd/api/v3 v3.5.2 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.2 // indirect
 	go.opencensus.io v0.23.0 // indirect
-	go.uber.org/atomic v1.9.0 // indirect
+	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
-	go.uber.org/zap v1.20.0 // indirect
-	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
+	go.uber.org/zap v1.20.0
+	golang.org/x/sync v0.0.0-20220923202941-7f9b1623fab7
 	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
@@ -236,7 +239,7 @@ require (
 
 replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20221113011458-8866d5c9df8c
 
-replace github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8 => github.com/juicedata/go-fuse/v2 v2.1.1-0.20221017015650-252d763b37fa
+replace github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8 => github.com/juicedata/go-fuse/v2 v2.1.1-0.20221212033224-ed3172586347
 
 replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/golang-jwt/jwt v3.2.1+incompatible
 

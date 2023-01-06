@@ -21,41 +21,33 @@ on:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
-      - uses: actions/setup-go@v2
+      - uses: actions/setup-go@v3
         with:
           go-version: '1.18.x'
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
           version: v1.49.0
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
         go-version: '1.18.x'
+        cache: true
       id: go
-
-    - name: Check out code
-      uses: actions/checkout@v2
-
+      
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install g++-multilib gcc-mingw-w64
-
-    - uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
 
     - name: Build linux target
       run: make

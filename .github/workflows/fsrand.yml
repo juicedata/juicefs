@@ -17,11 +17,11 @@ jobs:
       matrix:
         # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
         meta: ['redis', 'mysql', 'tikv']
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
@@ -29,9 +29,9 @@ jobs:
         id: vars
         run: |
           if [ "${{matrix.meta}}" == "fdb" ]; then
-            echo ::set-output name=target::"juicefs.fdb"
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
           else
-            echo ::set-output name=target::"juicefs"
+            echo "target=juicefs" >> $GITHUB_OUTPUT
           fi
 
       - name: Build
@@ -131,6 +131,6 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
           
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1

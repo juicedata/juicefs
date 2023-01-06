@@ -1,10 +1,8 @@
 ---
-sidebar_label: 多主机间同步账户
+title: 多主机间同步账户
 sidebar_position: 7
 slug: /sync_accounts_between_multiple_hosts
 ---
-
-# 多主机间同步账户
 
 JuiceFS 支持 Unix 文件权限（但不支持 POSIX extended ACL），以目录或文件的粒度管理权限。该行为与本地文件系统相同。
 
@@ -92,7 +90,7 @@ fatal: [172.16.255.180]: FAILED! => {"changed": false, "msg": "groupmod: GID '10
 
 TASK [Ensure user ubuntu with uid 1000 exists] ************************************************************
 ok: [172.16.255.163]
-	to retry, use: --limit @/home/ubuntu/account-sync/play.retry
+    to retry, use: --limit @/home/ubuntu/account-sync/play.retry
 
 PLAY RECAP ************************************************************************************************
 172.16.255.163             : ok=3    changed=0    unreachable=0    failed=0
@@ -127,4 +125,5 @@ $ rm /tmp/hello.txt
 rm: remove write-protected regular file '/tmp/hello.txt'? y
 rm: cannot remove '/tmp/hello.txt': Operation not permitted
 ```
+
 :::

@@ -1,10 +1,8 @@
 ---
-sidebar_label: 在 AWS 上使用 JuiceFS
+title: 在 AWS 上使用 JuiceFS
 sidebar_position: 6
 slug: /clouds/aws
 ---
-
-# 在亚马逊 AWS 安装和使用 JuiceFS 存储
 
 亚马逊 AWS 是全球领先的云计算平台，提供几乎所有类型的云计算服务。得益于 AWS 丰富的产品线，用户可以非常灵活的搭配选择 JuiceFS 组成部分。
 
@@ -136,12 +134,12 @@ JuiceFS 客户端的 `format` 子命令用来创建（格式化）文件系统�
 
 ```shell
 $ juicefs format \
-	--storage s3 \
-	--bucket https://<bucket>.s3.<region>.amazonaws.com \
-	--access-key <access-key-id> \
-	--secret-key <access-key-secret> \
-	redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1 \
-	mystor
+    --storage s3 \
+    --bucket https://<bucket>.s3.<region>.amazonaws.com \
+    --access-key <access-key-id> \
+    --secret-key <access-key-secret> \
+    redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1 \
+    mystor
 ```
 
 **选项说明：**
@@ -156,10 +154,10 @@ $ juicefs format \
 
 ```shell
 $ juicefs format \
-	--storage s3 \
-	--bucket https://herald-demo.s3.<region>.amazonaws.com \
-	redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1 \
-	mystor
+    --storage s3 \
+    --bucket https://herald-demo.s3.<region>.amazonaws.com \
+    redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1 \
+    mystor
 ```
 
 看到类似下面的输出，代表文件系统创建成功了。

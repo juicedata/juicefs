@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'fdb']
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:        
       - name: Checkout
@@ -23,9 +23,9 @@ jobs:
         id: vars
         run: |
           if [ "${{matrix.meta}}" == "fdb" ]; then
-            echo ::set-output name=target::"juicefs.fdb"
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
           else
-            echo ::set-output name=target::"juicefs"
+            echo "target=juicefs" >> $GITHUB_OUTPUT
           fi
 
       - name: Build

@@ -22,10 +22,10 @@ jobs:
       fail-fast: false
       matrix:
         size: [ 'big', 'small' ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
@@ -86,11 +86,12 @@ jobs:
         run: |
           if [ "${{matrix.size}}" == "big"]; then
             echo "threads=4" >>/tmp/config.cfg
-            sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000 prepare
-            sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=4 --time=300 --table-size=5000000 run
-            sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=300 --table-size=5000000 run
-            sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=600 --table-size=5000000 run
-            sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=5000000 cleanup
+            TABLE_SIZE=1000000
+            sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=$TABLE_SIZE prepare
+            sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=4 --time=300 --table-size=$TABLE_SIZE run
+            sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=300 --table-size=$TABLE_SIZE run
+            sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=600 --table-size=$TABLE_SIZE run
+            sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=$TABLE_SIZE cleanup
           else
             echo "threads=64" >>/tmp/config.cfg
             sudo mysql -uroot -proot  -e "use mysql;set global max_prepared_stmt_count = 100000;"

@@ -1,9 +1,8 @@
 ---
-sidebar_label: Use JuiceFS on DigitalOcean
+title: Use JuiceFS on DigitalOcean
 sidebar_position: 5
 slug: /clouds/digitalocean
 ---
-# Use JuiceFS on DigitalOcean
 
 JuiceFS is designed for the cloud, using the cloud platform out-of-the-box storage and database services, and can be configured and put into use in as little as a few minutes. This article uses the DigitalOcean as an example to introduce how to quickly and easily install and use JuiceFS on the cloud computing platform.
 
@@ -12,9 +11,11 @@ JuiceFS is designed for the cloud, using the cloud platform out-of-the-box stora
 JuiceFS is powered by a combination of storage and database, so the things you need to prepare should include.
 
 ### 1. Cloud Server
+
 The cloud server on DigitalOcean is called Droplet. If you already have a Droplet, you do not need to purchase a new one separately in order to use JuiceFS. Whichever cloud server needs to use JuiceFS storage on it, install the JuiceFS client for it.
 
 #### Hardware Specifications
+
 JuiceFS has no special hardware requirements, and any size Droplet can be used stably.  However, it is recommended to choose a better performing SSD and reserve at least 1GB for JuiceFS to use as local cache.
 
 #### Operating System
@@ -29,7 +30,7 @@ Of course, you can also use an object storage service from another platform or b
 
 Here, we created a Spaces storage bucket named `juicefs` with the region `sgp1` in Singapore, and it is accessible at:
 
-- https://juicefs.sgp1.digitaloceanspaces.com
+- `https://juicefs.sgp1.digitaloceanspaces.com`
 
 In addition, you also need to create `Spaces access keys` in the API menu, which JuiceFS needs to access the Spaces API.
 

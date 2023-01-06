@@ -1,0 +1,219 @@
+name: "chaos-test"
+
+on:
+  push:
+    branches:
+      - release-**
+      # - main
+    paths-ignore:
+      - docs/**
+  pull_request:
+    branches:
+      - release-**
+      # - main
+    paths-ignore:
+      - docs/**
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+  schedule:
+    - cron:  '0 */6 * * *'        
+
+jobs:
+  chaos-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # chaos: ["minio-io", "minio-memory", "minio-cpu", "minio-bandwidth", "redis-bandwidth", "redis-io", "redis-delay", "redis-memory", "redis-cpu", "juicefs-bandwidth", "juicefs-memory", "juicefs-cpu", "juicefs-delay"]
+        chaos: ["minio-io", "minio-memory", "minio-cpu", "minio-bandwidth",  "redis-io", "redis-delay", "redis-memory", "redis-cpu", "juicefs-bandwidth", "juicefs-memory", "juicefs-cpu", "juicefs-delay"]
+        # chaos: ["minio-io"]
+    steps:        
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.18.x'
+          cache: true
+
+      - name: Build 
+        run: | 
+          sudo apt-get update && sudo apt-get install -y musl-tools upx-ucl
+          export STATIC=1
+          make juicefs
+
+      - name: Creating kind cluster
+        uses: helm/kind-action@v1.5.0
+
+      - name: Print cluster information
+        run: |
+          kubectl config view
+          kubectl cluster-info
+          kubectl get nodes
+          kubectl get pods -n kube-system
+          helm version
+          kubectl version
+
+      # - name: Build And Load CSI Docker Image
+      #   run: |
+      #     echo GITHUB_REF is $GITHUB_REF
+      #     echo GITHUB_SHA is $GITHUB_SHA
+      #     helm repo add juicefs https://juicedata.github.io/charts/
+      #     helm repo update
+      #     APP_VERSION=$(helm search repo juicefs/juicefs-csi-driver --versions | grep juicefs | head -1 | awk -F" " '{print $3}')
+      #     echo APP_VERSION is $APP_VERSION
+      #     docker build --build-arg GITHUB_REF=$GITHUB_REF --build-arg GITHUB_SHA=$GITHUB_SHA -f .github/scripts/chaos/juicefs-csi-driver.Dockerfile -t juicedata/juicefs-csi-driver:v$APP_VERSION .
+      #     kind load docker-image juicedata/juicefs-csi-driver:v$APP_VERSION --name chart-testing
+
+      - name: Build And Load CSI Docker Image
+        run: |
+          docker build -f .github/scripts/chaos/juicefs.Dockerfile -t juicedata/mount:ci .
+          helm repo add juicefs https://juicedata.github.io/charts/
+          helm repo update
+          kind load docker-image juicedata/mount:ci --name chart-testing
+
+      - name: Install JuiceFS CSI Driver
+        run: |
+          CHART_VERSION=$(helm search repo juicefs/juicefs-csi-driver --versions | grep juicefs | head -1 | awk -F" " '{print $2}')
+          echo CHART_VERSION is $CHART_VERSION
+          helm install juicefs-csi-driver juicefs/juicefs-csi-driver -n kube-system --version $CHART_VERSION
+          kubectl -n kube-system get pods -l app.kubernetes.io/name=juicefs-csi-driver
+
+      - name: Deploy redis
+        run: |
+          kubectl apply -f .github/scripts/chaos/redis.yaml
+
+      - name: Deploy minio
+        run: |
+          kubectl apply -f .github/scripts/chaos/minio.yaml
+
+      - name: Mount Juicefs 
+        run: | 
+          kubectl apply -f .github/scripts/chaos/sc.yaml
+          kubectl apply -f .github/scripts/chaos/pvc.yaml
+
+      - name: Start vdbenh
+        run: |
+          kubectl apply -f .github/scripts/chaos/dynamic.yaml
+
+      - name: Get Config Base64
+        run: | 
+          chaos=${{matrix.chaos}}
+          sed -i "s/# - $chaos/- $chaos/g" .github/scripts/chaos/workflow.yaml 
+          cat .github/scripts/chaos/workflow.yaml 
+          base64=$(base64  .github/scripts/chaos/workflow.yaml  | xargs | sed -e 's: ::g' )
+          echo "base64 is $base64"
+          echo "workflow_base64=$base64" >> $GITHUB_ENV
+
+      - name: Run chaos mesh action
+        uses: chaos-mesh/chaos-mesh-action@master
+        env:
+          CHAOS_MESH_VERSION: v2.5.0
+          CFG_BASE64: ${{env.workflow_base64}}
+
+      - name: Verify 
+        run: |
+          sleep 120
+          kubectl get pods --all-namespaces
+          apps=("dynamic-ce" "juicefs-csi-node" "juicefs-csi-controller" "juicefs-chart-testing-control-plane-pvc"  "redis" "minio")
+          for app in ${apps[@]}; do
+            echo app is $app
+            kubectl get pods --all-namespaces | grep $app | grep Running
+            if [ $? != 0 ]; then
+              echo status of $app is not expected.
+              exit 1
+            fi
+          done
+
+      - name: Check csi controller log
+        if: ${{ always() }}
+        run: |
+          kubectl describe pvc dynamic-ce
+          kubectl -n kube-system get po -l app=juicefs-csi-controller
+          kubectl -n kube-system logs juicefs-csi-controller-0 juicefs-plugin
+
+      - name: Check csi node log
+        if: ${{ always() }}
+        run: |
+          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-csi-node)
+          echo POD_NAME is $POD_NAME
+          kubectl -n kube-system describe po $POD_NAME
+          kubectl -n kube-system logs $POD_NAME -c juicefs-plugin > csi_node.log
+          cat csi_node.log
+          # grep -i "error" csi_node.log && exit 1 || true
+
+      - name: Check mount point pod
+        if: ${{ always() }}
+        run: | 
+          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep juicefs-chart-testing-control-plane-pvc)
+          echo POD_NAME is $POD_NAME
+          kubectl -n kube-system describe po $POD_NAME
+          kubectl logs -n kube-system $POD_NAME > juicefs.log
+          cat juicefs.log
+          grep "<FATAL>:" juicefs.log && exit 1 || true
+
+      - name: Check vdbench log
+        if: ${{ always() }}
+        run: | 
+          POD_NAME=$(kubectl get pods -n default -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep dynamic-ce )
+          echo POD_NAME is $POD_NAME
+          kubectl -n default describe po $POD_NAME
+          kubectl logs -n default $POD_NAME > vdbench.log
+          cat vdbench.log
+          # grep -i "error" vdbench.log && exit 1 || true
+
+      - name: Check Redis log
+        if: ${{ always() }}
+        run: | 
+          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep redis )
+          echo POD_NAME is $POD_NAME
+          kubectl -n kube-system describe po $POD_NAME
+          kubectl logs -n kube-system $POD_NAME > redis.log
+          cat redis.log
+          # grep -i "error" redis.log && exit 1 || true
+
+      - name: Check Minio log
+        if: ${{ always() }}
+        run: | 
+          POD_NAME=$(kubectl get pods -n kube-system -o go-template --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}'  | grep minio )
+          echo POD_NAME is $POD_NAME
+          kubectl -n kube-system describe po $POD_NAME
+          kubectl logs -n kube-system $POD_NAME > minio.log
+          cat minio.log
+          # grep -i "error" minio.log && exit 1 || true
+
+      - name: Setup upterm session
+        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [chaos-test]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Send Slack Notification
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: ${{ success() }}
+        run: echo "All Done"

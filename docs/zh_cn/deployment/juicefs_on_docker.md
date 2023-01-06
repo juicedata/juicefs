@@ -1,9 +1,8 @@
 ---
-sidebar_label: Docker 使用 JuiceFS
-sidebar_position: 2
+title: Docker 使用 JuiceFS
+sidebar_position: 3
 slug: /juicefs_on_docker
 ---
-# 在 Docker 使用 JuiceFS
 
 将 JuiceFS 作为 Docker 持久化存储有以下几种常用方法：
 
@@ -23,6 +22,7 @@ sudo docker run -d --name nginx \
 :::tip
 使用 root 用户或 sudo 命令挂载的 JuiceFS 存储，会自动添加 `allow_other` 选项，无需手动设置。
 :::
+
 ### 调整 FUSE 设置
 
 默认情况下，`allow_other` 选项只允许 root 用户使用，为了让普通用户也有权限使用该挂载选项，需要修改 FUSE 的配置文件。
@@ -35,6 +35,7 @@ sudo nano /etc/fuse.conf
 
 将配置文件中的 `user_allow_other` 前面的 `#` 注释符删掉，修改后类似下面这样：
 
+<!-- autocorrect: false -->
 ```conf
 # /etc/fuse.conf - Configuration file for Filesystem in Userspace (FUSE)
 
@@ -45,6 +46,7 @@ sudo nano /etc/fuse.conf
 # Allow non-root users to specify the allow_other or allow_root mount options.
 user_allow_other
 ```
+<!-- autocorrect: true -->
 
 ### 重新挂载 JuiceFS
 
@@ -56,7 +58,7 @@ juicefs mount -d -o allow_other redis://<your-redis-url>:6379/1 /mnt/jfs
 
 ## 2. Docker Volume Plugin（卷插件） {#docker-volume-plugin}
 
-JuiceFS 面向 Docker 环境提供了 [volume plugin](https://docs.docker.com/engine/extend/)（卷插件），可以像本地磁盘一样在 JuiceFS 上创建存储卷。
+JuiceFS 面向 Docker 环境提供了 [volume plugin](https://docs.docker.com/engine/extend)（卷插件），可以像本地磁盘一样在 JuiceFS 上创建存储卷。
 
 ### 解决依赖
 
@@ -149,17 +151,17 @@ sudo docker plugin rm juicefs
 
 #### 创建的存储卷未被使用却无法删除
 
-出现这种情况可能是在创建存储卷时设置的参数不正确，建议检查对象存储的类型、bucket 名称、Access Key、Secret Key、数据库地址等信息。可以尝试先禁用并重新启用 juicefs 卷插件的方式来释放掉有问题的卷，然后使用正确的参数信息重新创建存储卷。
+出现这种情况可能是在创建存储卷时设置的参数不正确，建议检查对象存储的类型、bucket 名称、Access Key、Secret Key、数据库地址等信息。可以尝试先禁用并重新启用 JuiceFS 卷插件的方式来释放掉有问题的卷，然后使用正确的参数信息重新创建存储卷。
 
 #### 收集卷插件日志
 
-以 systemd 为例，在使用卷插件创建存储卷时的信息会动态输出到 docker daemon 日志，为了排查故障，可以在执行操作时另开一个终端窗口执行以下命令查看实时日志信息：
+以 systemd 为例，在使用卷插件创建存储卷时的信息会动态输出到 Docker daemon 日志，为了排查故障，可以在执行操作时另开一个终端窗口执行以下命令查看实时日志信息：
 
 ```shell
 journalctl -f -u docker | grep "plugin="
 ```
 
-想要了解更多 JuiceFS 卷插件内容，可以访问  [juicedata/docker-volume-juicefs](https://github.com/juicedata/docker-volume-juicefs) 代码仓库。
+想要了解更多 JuiceFS 卷插件内容，可以访问  [`juicedata/docker-volume-juicefs`](https://github.com/juicedata/docker-volume-juicefs) 代码仓库。
 
 ## 3. 在 Docker 容器中挂载 JuiceFS {#mount-juicefs-in-docker}
 
@@ -167,7 +169,7 @@ journalctl -f -u docker | grep "plugin="
 
 ### 使用预构建的镜像
 
-[juicedata/mount](https://hub.docker.com/r/juicedata/mount) 是 JuiceFS 官方维护的客户端镜像，里面同时打包了社区版和云服务客户端，程序路径分别为：
+[`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) 是 JuiceFS 官方维护的客户端镜像，里面同时打包了社区版和云服务客户端，程序路径分别为：
 
 - **社区版**：`/usr/local/bin/juicefs`
 - **云服务**：`/usr/bin/juicefs`
@@ -183,7 +185,7 @@ journalctl -f -u docker | grep "plugin="
 
 ### 手动编译镜像
 
-某些情况下，你可能需要把 JuiceFS 客户端集成到特定的系统镜像，这时需要你自行编写 Dockerfile 文件。在此过程中，你既可以直接下载预编译的客户端，也可以参考 [juicefs.Dockerfile](https://github.com/juicedata/juicefs-csi-driver/blob/master/docker/juicefs.Dockerfile) 从源代码编译客户端。
+某些情况下，你可能需要把 JuiceFS 客户端集成到特定的系统镜像，这时需要你自行编写 Dockerfile 文件。在此过程中，你既可以直接下载预编译的客户端，也可以参考 [`juicefs.Dockerfile`](https://github.com/juicedata/juicefs-csi-driver/blob/master/docker/juicefs.Dockerfile) 从源代码编译客户端。
 
 以下是采用下载预编译二进制文件方式的 Dockerfile 文件示例：
 
@@ -206,7 +208,7 @@ ENTRYPOINT ["/usr/bin/juicefs", "--version"]
 
 ### 将容器中挂载的 JuiceFS 存储映射到宿主机
 
-JuiceFS 可以很便利地将云上的对象存储接入本地，让你可以像使用本地磁盘一样读写云存储。而如果能把整个挂载过程放在 Docker 容器中完成，那么不但能够简化操作，也更方便日常的维护和管理。这种方式非常适合企业或家庭服务器、 NAS 系统等设备创建云上数据容灾环境。
+JuiceFS 可以很便利地将云上的对象存储接入本地，让你可以像使用本地磁盘一样读写云存储。而如果能把整个挂载过程放在 Docker 容器中完成，那么不但能够简化操作，也更方便日常的维护和管理。这种方式非常适合企业或家庭服务器、NAS 系统等设备创建云上数据容灾环境。
 
 以下是一个采用 Docker Compose 实现的示例，它在 Docker 容器中完成 JuiceFS 文件系统的创建和挂载，并将容器中的挂载点映射到宿主机的 `$HOME/mnt` 目录。
 
@@ -267,7 +269,7 @@ services:
     restart: unless-stopped
 ```
 
-可以根据需要调整上述代码中 format 和 mount 命令的参数，例如，当本地与对象存储的网络连接存在一定延迟且本地存储相对可靠时，可以通过添加 `--writeback` 选项挂载文件系统，让文件可以先存储到本地缓存，再异步上传到对象存储，详情参考[客户端写缓存](./cache_management/#客户端写缓存)。
+可以根据需要调整上述代码中 format 和 mount 命令的参数，例如，当本地与对象存储的网络连接存在一定延迟且本地存储相对可靠时，可以通过添加 `--writeback` 选项挂载文件系统，让文件可以先存储到本地缓存，再异步上传到对象存储，详情参考[客户端写缓存](../guide/cache_management.md#writeback)。
 
 更多文件系统创建和挂载参数请查看[命令参考](../reference/command_reference.md#mount)。
 

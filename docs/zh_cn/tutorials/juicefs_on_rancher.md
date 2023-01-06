@@ -1,11 +1,10 @@
 ---
-sidebar_label: 在 Rancher 上使用 JuiceFS
+title: 在 Rancher 上使用 JuiceFS
 sidebar_position: 2
 slug: /juicefs_on_rancher
 ---
-# 在 Rancher 上使用 JuiceFS
 
-简单来说，[Rancher](https://rancher.com/) 是一个企业级的 Kubernetes 集群管理工具，使用它可以非常轻松的在各种云计算平台上快速的完成 Kubernetes 集群的部署。
+简单来说，[Rancher](https://rancher.com) 是一个企业级的 Kubernetes 集群管理工具，使用它可以非常轻松的在各种云计算平台上快速的完成 Kubernetes 集群的部署。
 
 Rancher 提供了基于浏览器的管理界面，即便是 Kubernetes 经验并不丰富的用户，也能相对轻松的上手开始管理和使用。它默认预置了基于 Helm 的应用市场，可以在图形化界面下非常轻松的安装各种 Kubernetes 应用。
 
@@ -51,8 +50,8 @@ Rancher 安装成功以后，可以看到它已经在当前容器中部署了一
 
 在集群列表中点击进入创建的 Kubernetes 集群，左侧导航菜单点击展开 `应用市场` → `Chart 仓库`，点击 `创建` 按钮添加 JuiceFS CSI 仓库，填写：
 
-- **仓库名称**：juicefs
-- **Index URL**：https://juicedata.github.io/juicefs-csi-driver/
+- **仓库名称**：`juicefs`
+- **Index URL**：`https://juicedata.github.io/juicefs-csi-driver/`
 
 ![](../images/rancher-new-repo.jpg)
 

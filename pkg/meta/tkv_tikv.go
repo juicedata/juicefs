@@ -22,6 +22,7 @@ package meta
 import (
 	"context"
 	"net/url"
+	"os"
 	"strings"
 
 	plog "github.com/pingcap/log"
@@ -32,6 +33,7 @@ import (
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv"
 	"github.com/tikv/client-go/v2/txnkv/txnutil"
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -54,7 +56,7 @@ func newTikvClient(addr string) (tkvClient, error) {
 	default:
 		plvl = "dpanic"
 	}
-	l, prop, _ := plog.InitLogger(&plog.Config{Level: plvl})
+	l, prop, _ := plog.InitLogger(&plog.Config{Level: plvl}, zap.Fields(zap.String("component", "tikv"), zap.Int("pid", os.Getpid())))
 	plog.ReplaceGlobals(l, prop)
 
 	tUrl, err := url.Parse("tikv://" + addr)
@@ -104,57 +106,17 @@ func (tx *tikvTxn) gets(keys ...[]byte) [][]byte {
 	return values
 }
 
-func (tx *tikvTxn) scanRange0(begin, end []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
-	if limit == 0 {
-		return nil
-	}
-
+func (tx *tikvTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
 	it, err := tx.Iter(begin, end)
 	if err != nil {
 		panic(err)
 	}
 	defer it.Close()
-	var ret = make(map[string][]byte)
-	for it.Valid() {
-		key := it.Key()
-		value := it.Value()
-		if filter == nil || filter(key, value) {
-			ret[string(key)] = value
-			if limit > 0 {
-				if limit--; limit == 0 {
-					break
-				}
-			}
-		}
+	for it.Valid() && handler(it.Key(), it.Value()) {
 		if err = it.Next(); err != nil {
 			panic(err)
 		}
 	}
-	return ret
-}
-
-func (tx *tikvTxn) scanRange(begin, end []byte) map[string][]byte {
-	return tx.scanRange0(begin, end, -1, nil)
-}
-
-func (tx *tikvTxn) scanKeys(prefix []byte) [][]byte {
-	it, err := tx.Iter(prefix, nextKey(prefix))
-	if err != nil {
-		panic(err)
-	}
-	defer it.Close()
-	var ret [][]byte
-	for it.Valid() {
-		ret = append(ret, it.Key())
-		if err = it.Next(); err != nil {
-			panic(err)
-		}
-	}
-	return ret
-}
-
-func (tx *tikvTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
-	return tx.scanRange0(prefix, nextKey(prefix), limit, filter)
 }
 
 func (tx *tikvTxn) exist(prefix []byte) bool {
@@ -188,11 +150,9 @@ func (tx *tikvTxn) incrBy(key []byte, value int64) int64 {
 	return new
 }
 
-func (tx *tikvTxn) dels(keys ...[]byte) {
-	for _, key := range keys {
-		if err := tx.Delete(key); err != nil {
-			panic(err)
-		}
+func (tx *tikvTxn) delete(key []byte) {
+	if err := tx.Delete(key); err != nil {
+		panic(err)
 	}
 }
 
@@ -208,7 +168,7 @@ func (c *tikvClient) shouldRetry(err error) bool {
 	return strings.Contains(err.Error(), "write conflict") || strings.Contains(err.Error(), "TxnLockNotFound")
 }
 
-func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
+func (c *tikvClient) txn(f func(*kvTxn) error) (err error) {
 	tx, err := c.client.Begin()
 	if err != nil {
 		return err
@@ -223,7 +183,7 @@ func (c *tikvClient) txn(f func(kvTxn) error) (err error) {
 			}
 		}
 	}()
-	if err = f(&tikvTxn{tx}); err != nil {
+	if err = f(&kvTxn{&tikvTxn{tx}}); err != nil {
 		return err
 	}
 	if !tx.IsReadOnly() {

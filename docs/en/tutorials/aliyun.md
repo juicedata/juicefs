@@ -1,9 +1,8 @@
 ---
-sidebar_label: Use JuiceFS on Alibaba Cloud
+title: Use JuiceFS on Alibaba Cloud
 sidebar_position: 6
 slug: /clouds/aliyun
 ---
-# Use JuiceFS on Alibaba Cloud
 
 As shown in the figure below, JuiceFS is driven by both the database and the object storage. The files stored in JuiceFS are split into fixed-size data blocks and stored in the object store according to certain rules, while the metadata corresponding to the data is stored in the database.
 
@@ -20,6 +19,7 @@ From the previous architecture description, you can know that JuiceFS needs to b
 When you create cloud computing resources, try to choose in the same region, so that resources can access each other through intranet and avoid using public network to incur additional traffic costs.
 
 ### 1. ECS
+
 JuiceFS has no special requirements for server hardware, generally speaking, entry-level cloud servers can also use JuiceFS stably, usually you just need to choose the one that can meet your own business.
 
 In particular, you do not need to buy a new server or reinstall the system to use JuiceFS, JuiceFS is not business invasive and will not cause any interference with your existing systems and programs, you can install and use JuiceFS on your running server.
@@ -44,7 +44,7 @@ JuiceFS will store all the metadata corresponding to the data in a separate data
 
 Depending on the database type, the performance and reliability of metadata are different.  For example, Redis runs entirely on memory, which provides the ultimate performance, but is difficult to operate and maintain, and has relatively low reliability. SQLite is a single-file relational database with low performance and is not suitable for large-scale data storage, but it is configuration-free and suitable for a small amount of data storage on a single machine.
 
-If you just want to evaluate the functionality of JuiceFS, you can build the database manually on ECS. When you want to use JucieFS in a production environment, the cloud database service is usually a better choice if you don't have a professional database operation and maintenance team.
+If you just want to evaluate the functionality of JuiceFS, you can build the database manually on ECS. When you want to use JuiceFS in a production environment, the cloud database service is usually a better choice if you don't have a professional database operation and maintenance team.
 
 Of course, you can also use cloud database services provided on other platforms if you wish.But in this case, you have to expose the database port to the public network, which also has some security risks.
 
@@ -61,11 +61,11 @@ On the other hand, if you cannot successfully connect to the cloud database thro
 
 **This article uses the [ApsaraDB for Redis](https://www.alibabacloud.com/product/apsaradb-for-redis), and the following is pseudo address compiled for demonstration purposes only:**
 
-| Redis Version               | 5.0 Community Edition                  |
-| --------------------------- | -------------------------------------- |
-| **Instance Specification**  | 256M Standard master-replica instances |
-| **Connection Address**      | herald-sh-abc.redis.rds.aliyuncs.com   |
-| **Available Zone**          | Shanghai                               |
+| Redis Version              | 5.0 Community Edition                  |
+|----------------------------|----------------------------------------|
+| **Instance Specification** | 256M Standard master-replica instances |
+| **Connection Address**     | `herald-sh-abc.redis.rds.aliyuncs.com` |
+| **Available Zone**         | Shanghai                               |
 
 ### 3. Object Storage OSS
 
@@ -160,12 +160,12 @@ The following command creates a storage called `mystor`, i.e., a file system, us
 
 ```shell
 $ juicefs format \
-	--storage oss \
-	--bucket https://<your-bucket-name> \
-	--access-key <your-access-key-id> \
-	--secret-key <your-access-key-secret> \
-	redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1 \
-	mystor
+    --storage oss \
+    --bucket https://<your-bucket-name> \
+    --access-key <your-access-key-id> \
+    --secret-key <your-access-key-secret> \
+    redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1 \
+    mystor
 ```
 
 **Option description:**
@@ -176,14 +176,14 @@ $ juicefs format \
 
 > Redis 6.0 authentication requires username and password parameters in the format of `redis://username:password@redis-server-url:6379/1`. Currently, Alibaba Cloud Redis only provides Reids 4.0 and 5.0 versions, which require only a password for authentication, and just leave the username empty when setting the Redis server address, for example: `redis://:password@redis-server-url:6379/1`.
 
-When using the RAM role to bind to the ECS, the JucieFS storage can be created by specifying `--storage` and `--bucket` without providing the API access key. The command can be rewritten as follows:
+When using the RAM role to bind to the ECS, the JuiceFS storage can be created by specifying `--storage` and `--bucket` without providing the API access key. The command can be rewritten as follows:
 
 ```shell
 $ juicefs format \
-	--storage oss \
-	--bucket https://mytest.oss-cn-shanghai.aliyuncs.com \
-	redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1 \
-	mystor
+    --storage oss \
+    --bucket https://mytest.oss-cn-shanghai.aliyuncs.com \
+    redis://:<your-redis-password>@herald-sh-abc.redis.rds.aliyuncs.com:6379/1 \
+    mystor
 ```
 
 Output like the following means the file system was created successfully.

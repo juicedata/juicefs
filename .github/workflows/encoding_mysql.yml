@@ -18,22 +18,22 @@ on:
 
 jobs:
   mysql-encoding-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
       - name: Set Variable
         id: vars
         run: |
-          echo ::set-output name=META_URL1::"mysql://root:root@\\(127.0.0.1\\)/mysql_encoding1"
-          echo ::set-output name=META_URL2::"mysql://root:root@\\(127.0.0.1\\)/mysql_encoding2"
-          echo ::set-output name=MOUNT_POINT1::/tmp/juicefs-mysql-encoding-test1
-          echo ::set-output name=MOUNT_POINT2::/tmp/juicefs-mysql-encoding-test2
-          echo ::set-output name=BUCKET::/var/jfs/
-          echo ::set-output name=NAME::mysql-encoding-test
+          echo "META_URL1=mysql://root:root@\\(127.0.0.1\\)/mysql_encoding1" >> $GITHUB_OUTPUT
+          echo "META_URL2=mysql://root:root@\\(127.0.0.1\\)/mysql_encoding2" >> $GITHUB_OUTPUT
+          echo "MOUNT_POINT1=/tmp/juicefs-mysql-encoding-test1" >> $GITHUB_OUTPUT
+          echo "MOUNT_POINT2=/tmp/juicefs-mysql-encoding-test2" >> $GITHUB_OUTPUT
+          echo "BUCKET=/var/jfs/" >> $GITHUB_OUTPUT
+          echo "NAME=mysql-encoding-test" >> $GITHUB_OUTPUT
 
       - name: Download old linux target
         run: |

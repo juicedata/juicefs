@@ -1,13 +1,12 @@
 ---
-sidebar_label: 如何设置对象存储
+title: 如何设置对象存储
 sidebar_position: 2
 slug: /how_to_setup_object_storage
+description: JuiceFS 以对象存储作为数据存储，本文介绍 JuiceFS 支持的对象存储以及相应的配置和使用方法。
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
-# 如何设置对象存储
 
 通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md)可以了解到，JuiceFS 是一个数据与元数据分离的分布式文件系统，以对象存储作为主要的数据存储，以 Redis、PostgreSQL、MySQL 等数据库作为元数据存储。
 
@@ -117,7 +116,7 @@ juicefs format \
     myjfs
 ```
 
-## 支持的存储服务
+## 支持的存储服务 {#supported-object-storage}
 
 如果你希望使用的存储类型不在列表中，欢迎提交需求 [issue](https://github.com/juicedata/juicefs/issues)。
 
@@ -138,7 +137,7 @@ juicefs format \
 | [阿里云 OSS](#阿里云-oss)                   | `oss`      |
 | [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
 | [华为云 OBS](#华为云-obs)                   | `obs`      |
-| [百度云 BOS](#百度云-bos)                   | `bos`      |
+| [百度云 BOS](#百度-bos)                     | `bos`      |
 | [火山引擎 TOS](#火山引擎-tos)               | `tos`      |
 | [金山云 KS3](#金山云-ks3)                   | `ks3`      |
 | [网易云 NOS](#网易云-nos)                   | `nos`      |
@@ -415,7 +414,7 @@ juicefs format \
 ```
 
 :::caution 特别提示
-因为 Storj DCS 的 [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API 并非完全 S3 兼容（返回结果没有实现排序功能），所以 juicefs 的部分功能无法使用，比如 `juicefs gc`，`juicefs fsck`，`juicefs sync`，`juicefs destroy`。另外，使用 `juicefs mount` 时需要关闭[元数据自动备份](../administration/metadata_dump_load.md#自动备份)功能，即加上 `--backup-meta 0`。
+因为 Storj DCS 的 [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API 并非完全 S3 兼容（返回结果没有实现排序功能），所以 JuiceFS 的部分功能无法使用，比如 `juicefs gc`，`juicefs fsck`，`juicefs sync`，`juicefs destroy`。另外，使用 `juicefs mount` 时需要关闭[元数据自动备份](../administration/metadata_dump_load.md#自动备份)功能，即加上 `--backup-meta 0`。
 :::
 
 ## Vultr 对象存储
@@ -432,11 +431,11 @@ juicefs format \
     myjfs
 ```
 
-访问对象存储的 API 密钥可以在 [管理控制台](https://my.vultr.com/objectstorage/) 中找到。
+访问对象存储的 API 密钥可以在 [管理控制台](https://my.vultr.com/objectstorage) 中找到。
 
 ## Cloudflare R2 {#r2}
 
-R2 是 Cloudflare 的对象存储服务，提供 S3 兼容的 API，因此用法与 Amazon S3 基本一致。请参照[文档](https://developers.cloudflare.com/r2/data-access/s3-api/tokens/)了解如何创建 Access Key 和 Secret Key。
+R2 是 Cloudflare 的对象存储服务，提供 S3 兼容的 API，因此用法与 Amazon S3 基本一致。请参照[文档](https://developers.cloudflare.com/r2/data-access/s3-api/tokens)了解如何创建 Access Key 和 Secret Key。
 
 ```shell
 juicefs format \
@@ -468,7 +467,7 @@ juicefs format \
 
 使用阿里云 OSS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://help.aliyun.com/document_detail/38738.html) 了解如何创建 Access Key 和 Secret Key。如果你已经创建了 [RAM 角色](https://help.aliyun.com/document_detail/93689.html) 并指派给了云服务器实例，则在创建文件系统时可以忽略 `--access-key` 和 `--secret-key` 选项。
 
-阿里云也支持使用 [Security Token Service (STS)](https://help.aliyun.com/document_detail/100624.html) 作为 OSS 的临时访问身份验证。如果你要使用 STS，请设置  `ALICLOUD_ACCESS_KEY_ID`、`ALICLOUD_ACCESS_KEY_SECRET` 和 `SECURITY_TOKEN ` 环境变量，不要设置 `--access-key` and `--secret-key` 选项。例如：
+阿里云也支持使用 [Security Token Service (STS)](https://help.aliyun.com/document_detail/100624.html) 作为 OSS 的临时访问身份验证。如果你要使用 STS，请设置  `ALICLOUD_ACCESS_KEY_ID`、`ALICLOUD_ACCESS_KEY_SECRET` 和 `SECURITY_TOKEN` 环境变量，不要设置 `--access-key` and `--secret-key` 选项。例如：
 
 ```bash
 # Use Security Token Service (STS)
@@ -750,13 +749,13 @@ sudo yum install librados2-devel
   </TabItem>
 </Tabs>
 
-然后为 Ceph 编译 JuiceFS（要求 Go 1.17+ 和 GCC 5.4+）：
+然后为 Ceph 编译 JuiceFS（要求 Go 1.18+ 和 GCC 5.4+）：
 
 ```bash
 make juicefs.ceph
 ```
 
-[存储池](https://docs.ceph.com/zh_CN/latest/rados/operations/pools) 是用于存储对象的逻辑分区，您可能需要首先创建一个存储池。 `--access-key` 选项的值是 Ceph 集群名称，默认集群名称是 `ceph`。` --secret-key` 选项的值是 [Ceph 客户端用户名](https://docs.ceph.com/en/latest/rados/operations/user-management)，默认用户名是 `client.admin`。
+[存储池](https://docs.ceph.com/zh_CN/latest/rados/operations/pools) 是用于存储对象的逻辑分区，您可能需要首先创建一个存储池。 `--access-key` 选项的值是 Ceph 集群名称，默认集群名称是 `ceph`。`--secret-key` 选项的值是 [Ceph 客户端用户名](https://docs.ceph.com/en/latest/rados/operations/user-management)，默认用户名是 `client.admin`。
 
 为了连接到 Ceph Monitor，`librados` 将通过搜索默认位置读取 Ceph 的配置文件，并使用找到的第一个。这些位置是：
 
@@ -815,7 +814,7 @@ juicefs format \
 
 [MinIO](https://min.io) 是开源的轻量级对象存储，兼容 Amazon S3 API。
 
-使用 Docker 可以很容易地在本地运行一个 MinIO 对象存储实例。例如，以下命令通过 `--console-address ":9900"` 为控制台设置并映射了 `9900` 端口，还将 MinIO 对象存储的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改这些参数：
+使用 Docker 可以很容易地在本地运行一个 MinIO 实例。例如，以下命令通过 `--console-address ":9900"` 为控制台设置并映射了 `9900` 端口，还将 MinIO 的数据路径映射到了当前目录下的 `minio-data` 文件夹中，你可以按需修改这些参数：
 
 ```shell
 $ sudo docker run -d --name minio \
@@ -830,8 +829,8 @@ $ sudo docker run -d --name minio \
 
 容器创建成功以后使用以下地址访问：
 
-- **MinIO 管理界面**：[http://127.0.0.1:9900](http://127.0.0.1:9900/)
-- **MinIO API**：[http://127.0.0.1:9000](http://127.0.0.1:9000/)
+- **MinIO API**：[http://127.0.0.1:9000](http://127.0.0.1:9000)，这也是 JuiceFS 访问对象存储时所使用的的 API
+- **MinIO 管理界面**：[http://127.0.0.1:9900](http://127.0.0.1:9900)，用于管理对象存储本身，与 JuiceFS 无关
 
 对象存储初始的 Access Key 和 Secret Key 均为 `minioadmin`。
 
@@ -847,9 +846,11 @@ juicefs format \
     myjfs
 ```
 
-:::note 注意
-1. 当前，JuiceFS 仅支持路径风格的 MinIO URI 地址，例如：`http://127.0.0.1:9000/myjfs`。
-2. `MINIO_REGION` 环境变量可以用于设置 MinIO 的 region，如果不设置，默认为 `us-east-1`。
+:::note
+
+1. 当前，JuiceFS 仅支持路径风格的 MinIO URI 地址，例如：`http://127.0.0.1:9000/myjfs`
+1. `MINIO_REGION` 环境变量可以用于设置 MinIO 的 region，如果不设置，默认为 `us-east-1`
+1. 面对多节点 MinIO 集群，考虑在 Endpoint 中使用 DNS 域名，解析到各个 MinIO 节点，作为简易负载均衡，比如 `http://minio.example.com:9000/myjfs`
 :::
 
 ## WebDAV
@@ -1118,7 +1119,7 @@ juicefs format redis://localhost:6379/1 myjfs
 
 SFTP 全称 Secure File Transfer Protocol 即安全文件传输协议，它并不是文件存储。准确来说，JuiceFS 是通过 SFTP/SSH 这种文件传输协议对远程主机上的磁盘进行连接和读写，从而让任何启用了 SSH 服务的操作系统都可以作为 JuiceFS 的数据存储来使用。
 
-例如，以下命令使用 sftp 协议连接远程服务器 `192.168.1.11` ，在用户 `tom` 的 `$HOME` 目录下创建 `myjfs/` 文件夹作为文件系统的数据存储。
+例如，以下命令使用 SFTP 协议连接远程服务器 `192.168.1.11` ，在用户 `tom` 的 `$HOME` 目录下创建 `myjfs/` 文件夹作为文件系统的数据存储。
 
 ```shell
 juicefs format  \

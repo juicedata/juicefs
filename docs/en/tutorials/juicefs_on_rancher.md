@@ -1,11 +1,10 @@
 ---
-sidebar_label: Use JuiceFS on Rancher
+title: Use JuiceFS on Rancher
 sidebar_position: 2
 slug: /juicefs_on_rancher
 ---
-# Use JuiceFS on Rancher
 
-[Rancher](https://rancher.com/) is an enterprise-level Kubernetes cluster management system, which can be used to quickly complete the deployment of Kubernetes clusters on various cloud computing platforms.
+[Rancher](https://rancher.com) is an enterprise-level Kubernetes cluster management system, which can be used to quickly complete the deployment of Kubernetes clusters on various cloud computing platforms.
 
 Rancher provides a browser-based management interface, even users who are not experienced in Kubernetes can start to manage and use easily. It is preset with Helm-based application market by default, and various Kubernetes applications can be installed very easy under the graphical interface.
 
@@ -51,8 +50,8 @@ After the cluster is created, it will be displayed in Rancher's cluster list.
 
 In the cluster list, click to enter the Kubernetes cluster, click on the left navigation menu to expand `Apps & Marketplace` -> `Chart Repositories`, click the `Create` button to add JuiceFS CSI repository, fill in:
 
-- **Name**: juicefs
-- **Index URL**: https://juicedata.github.io/charts/
+- **Name**: `juicefs`
+- **Index URL**: `https://juicedata.github.io/charts/`
 
 ![](../images/rancher-new-repo.jpg)
 

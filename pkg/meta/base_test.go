@@ -15,6 +15,7 @@
  */
 
 //nolint:errcheck
+//disable_mutate_test
 package meta
 
 import (
@@ -64,6 +65,7 @@ func testMeta(t *testing.T, m Meta) {
 	testRemove(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
+	testListLocks(t, m)
 	testConcurrentWrite(t, m)
 	testCompaction(t, m, false)
 	time.Sleep(time.Second)
@@ -596,6 +598,81 @@ func testStickyBit(t *testing.T, m Meta) {
 	}
 }
 
+func testListLocks(t *testing.T, m Meta) {
+	_ = m.Init(&Format{Name: "test"}, false)
+	ctx := Background
+	var inode Ino
+	var attr = &Attr{}
+	defer m.Unlink(ctx, 1, "f")
+	if st := m.Create(ctx, 1, "f", 0644, 0, 0, &inode, attr); st != 0 {
+		t.Fatalf("create f: %s", st)
+	}
+	if plocks, flocks, err := m.ListLocks(ctx, inode); err != nil || len(plocks) != 0 || len(flocks) != 0 {
+		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
+	}
+
+	// flock
+	o1 := uint64(0xF000000000000001)
+	if st := m.Flock(ctx, inode, o1, syscall.F_WRLCK, false); st != 0 {
+		t.Fatalf("flock wlock: %s", st)
+	}
+	if plocks, flocks, err := m.ListLocks(ctx, inode); err != nil || len(plocks) != 0 || len(flocks) != 1 {
+		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
+	}
+	if st := m.Flock(ctx, inode, o1, syscall.F_UNLCK, false); st != 0 {
+		t.Fatalf("flock unlock: %s", st)
+	}
+	if plocks, flocks, err := m.ListLocks(ctx, inode); err != nil || len(plocks) != 0 || len(flocks) != 0 {
+		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
+	}
+	for i := 2; i < 10; i++ {
+		if st := m.Flock(ctx, inode, uint64(i), syscall.F_RDLCK, false); st != 0 {
+			t.Fatalf("flock wlock: %s", st)
+		}
+	}
+	if plocks, flocks, err := m.ListLocks(ctx, inode); err != nil || len(plocks) != 0 || len(flocks) != 8 {
+		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
+	}
+	for i := 2; i < 10; i++ {
+		if st := m.Flock(ctx, inode, uint64(i), syscall.F_UNLCK, false); st != 0 {
+			t.Fatalf("flock unlock: %s", st)
+		}
+	}
+	if plocks, flocks, err := m.ListLocks(ctx, inode); err != nil || len(plocks) != 0 || len(flocks) != 0 {
+		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
+	}
+
+	// plock
+	if st := m.Setlk(ctx, inode, o1, false, syscall.F_WRLCK, 0, 0xFFFF, 1); st != 0 {
+		t.Fatalf("plock rlock: %s", st)
+	}
+	if plocks, flocks, err := m.ListLocks(ctx, inode); err != nil || len(plocks) != 1 || len(flocks) != 0 {
+		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
+	}
+	if st := m.Setlk(ctx, inode, o1, false, syscall.F_UNLCK, 0, 0xFFFF, 1); st != 0 {
+		t.Fatalf("plock unlock: %s", st)
+	}
+	if plocks, flocks, err := m.ListLocks(ctx, inode); err != nil || len(plocks) != 0 || len(flocks) != 0 {
+		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
+	}
+	for i := 2; i < 10; i++ {
+		if st := m.Setlk(ctx, inode, uint64(i), false, syscall.F_RDLCK, 0, 0xFFFF, 1); st != 0 {
+			t.Fatalf("plock rlock: %s", st)
+		}
+	}
+	if plocks, flocks, err := m.ListLocks(ctx, inode); err != nil || len(plocks) != 8 || len(flocks) != 0 {
+		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
+	}
+	for i := 2; i < 10; i++ {
+		if st := m.Setlk(ctx, inode, uint64(i), false, syscall.F_UNLCK, 0, 0xFFFF, 1); st != 0 {
+			t.Fatalf("plock unlock: %s", st)
+		}
+	}
+	if plocks, flocks, err := m.ListLocks(ctx, inode); err != nil || len(plocks) != 0 || len(flocks) != 0 {
+		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
+	}
+}
+
 func testLocks(t *testing.T, m Meta) {
 	_ = m.Init(&Format{Name: "test"}, false)
 	ctx := Background
@@ -923,7 +1000,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		if len(sliceMap[1]) < 200 {
 			t.Fatalf("list delayed slices %d is less than 200", len(sliceMap[1]))
 		}
-		m.(engine).doCleanupDelayedSlices(time.Now().Unix()+1, 1000)
+		m.(engine).doCleanupDelayedSlices(time.Now().Unix() + 1)
 		l.Lock()
 		deletes = len(deleted)
 		l.Unlock()
@@ -1630,7 +1707,7 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 			return err
 		})
 	case *kvMeta:
-		err = m.txn(func(tx kvTxn) error {
+		err = m.txn(func(tx *kvTxn) error {
 			tx.set(m.inodeKey(inode), m.marshal(attr))
 			return nil
 		})
@@ -1741,6 +1818,6 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 		t.Fatalf("getattr: %s", st)
 	}
 	if !dirAttr.Full || dirAttr.Nlink != 2 || dirAttr.Parent != d3Inode {
-		t.Fatalf("d4Inode attr: %+v", *dirAttr)
+		t.Fatalf("d4Inode  attr: %+v", *dirAttr)
 	}
 }

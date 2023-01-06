@@ -18,15 +18,20 @@ on:
       - '**.md'
       - '.github/**'
   workflow_dispatch:
-
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
 
 jobs:
   sdktest:
     timeout-minutes: 50
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
@@ -36,7 +41,7 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@v3
         with:
-          distribution: 'adopt'
+          distribution: 'temurin'
           java-version: '8'
 
       - name: Run Redis
@@ -63,5 +68,6 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
       - name: Setup upterm session
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        timeout-minutes: 60
         uses: lhotari/action-upterm@v1

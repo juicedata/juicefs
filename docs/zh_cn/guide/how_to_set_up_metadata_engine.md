@@ -1,19 +1,18 @@
 ---
-sidebar_label: 如何设置元数据引擎
+title: 如何设置元数据引擎
 sidebar_position: 1
 slug: /databases_for_metadata
+description: JuiceFS 支持 Redis、TiKV、PostgreSQL、MySQL 等多种数据库作为元数据引擎，本文分别介绍相应的设置和使用方法。
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# 如何设置元数据引擎
-
 :::tip 版本提示
 本文档使用的环境变量 `META_PASSWORD` 是 JuiceFS v1.0 新增功能，旧版客户端需要[升级](../administration/upgrade.md)后才能使用。
 :::
 
-通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md) 和 [JuiceFS 如何存储文件](../reference/how_juicefs_store_files.md)，你会了解到 JuiceFS 被设计成了一种将数据和元数据独立存储的架构，通常来说，数据被存储在以对象存储为主的云存储中，而数据所对应的元数据则被存储在独立的数据库中，我们把这些支持存储元数据的数据库称为“元数据存储引擎”。
+通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md)，你会了解到 JuiceFS 被设计成了一种将数据和元数据独立存储的架构，通常来说，数据被存储在以对象存储为主的云存储中，而数据所对应的元数据则被存储在独立的数据库中，我们把这些支持存储元数据的数据库称为“元数据存储引擎”。
 
 ## 元数据与存储引擎
 
@@ -93,6 +92,7 @@ juicefs format \
 ```
 
 :::note 说明
+
 1. 当 Redis 的用户名或者密码中包含特殊字符时需要将特殊字符通过 [URL encode](https://www.w3schools.com/tags/ref_urlencode.ASP) 的方式替换为 `%xx` 的格式，例如 `@` 替换为 `%40`，或者使用环境变量的方式传递密码。
 2. 使用环境变量传递数据库密码也可以采用标准的 URL 格式，如：`"redis://:@192.168.1.6:6379/1"` 保留了用户名和密码之间的 `:` 以及 `@` 分隔符。
 :::
@@ -118,7 +118,7 @@ juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 
 ## KeyDB
 
-[KeyDB](https://keydb.dev/) 是 Redis 的开源分支，在开发上保持与 Redis 主线对齐。KeyDB 在 Redis 的基础上实现了多线程支持、更好的内存利用率和更大的吞吐量，另外还支持 [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication)，即 Active Active（双活）功能。
+[KeyDB](https://keydb.dev) 是 Redis 的开源分支，在开发上保持与 Redis 主线对齐。KeyDB 在 Redis 的基础上实现了多线程支持、更好的内存利用率和更大的吞吐量，另外还支持 [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication)，即 Active Active（双活）功能。
 
 :::note 注意
 KeyDB 的数据复制是异步的，使用 Active Active（双活）功能可能导致数据一致性问题，请务必充分验证、谨慎使用！
@@ -128,9 +128,9 @@ KeyDB 的数据复制是异步的，使用 Active Active（双活）功能可能
 
 ## PostgreSQL
 
-[PostgreSQL](https://www.postgresql.org/) 是功能强大的开源关系型数据库，有完善的生态和丰富的应用场景，也可以用来作为 JuiceFS 的元数据引擎。
+[PostgreSQL](https://www.postgresql.org) 是功能强大的开源关系型数据库，有完善的生态和丰富的应用场景，也可以用来作为 JuiceFS 的元数据引擎。
 
-许多云计算平台都提供托管的 PostgreSQL 数据库服务，也可以按照[使用向导](https://www.postgresqltutorial.com/postgresql-getting-started/)自己部署一个。
+许多云计算平台都提供托管的 PostgreSQL 数据库服务，也可以按照[使用向导](https://www.postgresqltutorial.com/postgresql-getting-started)自己部署一个。
 
 其他跟 PostgreSQL 协议兼容的数据库（比如 CockroachDB 等) 也可以这样使用。
 
@@ -179,9 +179,10 @@ juicefs format \
 ```
 
 :::note 说明
-1. juicefs 默认使用的 public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) ，如果要使用非 `public schema`，需要在连接字符串中指定 `search_path` 参数，例如 `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
+
+1. JuiceFS 默认使用的 public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) ，如果要使用非 `public schema`，需要在连接字符串中指定 `search_path` 参数，例如 `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
 2. 如果 `public schema` 并非是 PostgreSQL 服务端配置的 `search_path` 中第一个命中的，则必须在连接字符串中明确设置 `search_path` 参数
-3. `search_path` 连接参数原生可以设置为多个 schema，但是目前 juicefs 仅支持设置一个。`postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` 将被认为不合法
+3. `search_path` 连接参数原生可以设置为多个 schema，但是目前 JuiceFS 仅支持设置一个。`postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` 将被认为不合法
 :::
 
 ### 挂载文件系统
@@ -213,7 +214,7 @@ juicefs format \
 
 ## MySQL
 
-[MySQL](https://www.mysql.com/) 是受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库。
+[MySQL](https://www.mysql.com) 是受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库。
 
 ### 创建文件系统
 
@@ -372,6 +373,14 @@ juicefs mount -d "sqlite3://my-jfs.db" /mnt/jfs/
 juicefs mount -d "sqlite3:///home/herald/my-jfs.db" /mnt/jfs/
 ```
 
+也可以在连接字符串中添加参数来支持 [PRAGMA 语句](https://www.sqlite.org/pragma.html)：
+
+```shell
+"sqlite3://my-jfs.db?cache=shared&_busy_timeout=5000"
+```
+
+更多 SQLite 数据库的地址格式示例，请参考 [Go-SQLite3 Driver](https://github.com/mattn/go-sqlite3#connection-string)。
+
 :::note 注意
 由于 SQLite 是一款单文件数据库，在不做特殊共享设置的情况下，只有数据库所在的主机可以访问它。对于多台服务器共享同一文件系统的情况，需要使用 Redis 或 MySQL 等数据库。
 :::
@@ -435,7 +444,6 @@ juicefs format \
 ### 设置 TLS
 
 如果需要开启 TLS，可以通过在元数据 URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
-
 
 | 配置项      | 值                                                                                                                                                                                                |
 |-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -512,43 +520,52 @@ juicefs mount -d "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs"
 
 ## FoundationDB
 
-[FoundationDB](http://www.foundationdb.org/)是“一个能在多集群服务器上存放大规模结构化数据的分布式数据库”。该数据库系统专注于高性能、高可扩展性、和不错的容错能力。
+[FoundationDB](https://www.foundationdb.org) 是一个能在多集群服务器上存放大规模结构化数据的分布式数据库。该数据库系统专注于高性能、高可扩展性和不错的容错能力。
 
 ### 创建文件系统
 
-使用 foundationdb 作为元数据引擎时，需要使用如下格式来指定 `Meta-URL` 参数：
+使用 FoundationDB 作为元数据引擎时，需要使用如下格式来指定 `Meta-URL` 参数：
 
-```
-fdb://[cluster file path]?prefix=<prefix>
+```uri
+fdb://<cluster_file_path>?prefix=<prefix>
 ```
 
-其中`cluster file path`为fdb的配置文件，由配置文件来进行对fdb server的连接。示例如下：
+其中 `<cluster_file_path>` 为 FoundationDB 的配置文件路径，用来连接 FoundationDB 服务端。`<prefix>` 是一个用户自定义的字符串，当多个文件系统或者应用共用一个 FoundationDB 集群时，设置前缀可以避免混淆和冲突。示例如下：
 
-```bash
-juicefs format 
- fdb:///etc/foundationdb/fdb.cluster?prefix=jfs
- pics
+```shell
+juicefs format \
+    --storage s3 \
+    ... \
+    "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
+    pics
 ```
-### [设置 TLS](https://apple.github.io/foundationdb/tls.html)
-**使用openssl生成CA证书**
-```
-user@host:> openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout private.key -out cert.crt
-user@host:> cat cert.crt private.key > fdb.pem
-```
-**配置TLS**
 
-| 命令行选项 | 客户选项 | 环境变量 | 目的 |
-|--------- |-------|-------|------|
-|tls_certificate_file|TLS_cert_path|FDB_TLS_CERTIFICATE_FILE|可以从中加载本地证书的文件的路径|
-|tls_key_file|TLS_key_path|FDB_TLS_KEY_FILE|从中加载私钥的文件的路径|
-|tls_verify_peers|TLS_verify_peers|FDB_TLS_VERIFY_PEERS|用于验证对等证书和会话的字节字符串|
-|tls_password|TLS_password|FDB_TLS_PASSWORD|表示用于解密私钥的密码的字节字符串|
-|tls_ca_file|TLS_ca_path|FDB_TLS_CA_FILE|包含要信任的CA 证书的文件的路径|
+### 设置 TLS
 
-**配置server端TLS**
+如果需要开启 TLS，大体步骤如下，详细信息请参考[官方文档](https://apple.github.io/foundationdb/tls.html)。
 
-可以在foundationdb.conf或者环境变量中配置TLS参数，配置文件如下(重点在[foundationdb.4500]配置中)。
+#### 使用 OpenSSL 生成 CA 证书
+
+```shell
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout private.key -out cert.crt
+cat cert.crt private.key > fdb.pem
 ```
+
+#### 配置 TLS
+
+| 命令行选项             | 客户端选项         | 环境变量                   | 目的                               |
+|------------------------|--------------------|----------------------------|------------------------------------|
+| `tls_certificate_file` | `TLS_cert_path`    | `FDB_TLS_CERTIFICATE_FILE` | 可以从中加载本地证书的文件的路径   |
+| `tls_key_file`         | `TLS_key_path`     | `FDB_TLS_KEY_FILE`         | 从中加载私钥的文件的路径           |
+| `tls_verify_peers`     | `TLS_verify_peers` | `FDB_TLS_VERIFY_PEERS`     | 用于验证对等证书和会话的字节字符串 |
+| `tls_password`         | `TLS_password`     | `FDB_TLS_PASSWORD`         | 表示用于解密私钥的密码的字节字符串 |
+| `tls_ca_file`          | `TLS_ca_path`      | `FDB_TLS_CA_FILE`          | 包含要信任的 CA 证书的文件的路径   |
+
+#### 配置服务端 TLS
+
+可以在 `foundationdb.conf` 或者环境变量中配置 TLS 参数，配置文件如下（重点在 `[foundationdb.4500]` 配置中）。
+
+```ini title="foundationdb.conf"
 [fdbmonitor]
 user = foundationdb
 group = foundationdb
@@ -574,7 +591,7 @@ logdir = /var/log/foundationdb
 # maxlogssize = 100MiB
 # machine-id =
 # datacenter-id =
-# class = 
+# class =
 # memory = 8GiB
 # storage-memory = 1GiB
 # cache-memory = 2GiB
@@ -595,25 +612,29 @@ logdir = /var/log/foundationdb
 
 [backup_agent.1]
 ```
-除此之外还需在fdb.cluster中在地址后加上`:tls`后缀，fdb.cluster如下：
-```
+
+除此之外还需将 `fdb.cluster` 中的地址加上 `:tls` 后缀，`fdb.cluster` 示例如下：
+
+```uri title="fdb.cluster"
 u6pT9Jhl:ClZfjAWM@127.0.0.1:4500:tls
 ```
 
-**配置client端**
+#### 配置客户端
 
-fdbcli同理，在client机器上需要配置tls参数以及fdb.cluster。
+在客户端机器上需要配置 TLS 参数以及 `fdb.cluster`，`fdbcli` 同理。
 
-通过fdbcli连接时
-```
+通过 `fdbcli` 连接时：
+
+```shell
 fdbcli --tls_certificate_file=/etc/foundationdb/fdb.pem \
        --tls_ca_file=/etc/foundationdb/cert.crt \
        --tls_key_file=/etc/foundationdb/private.key \
        --tls_verify_peers=Check.Valid=0
 ```
 
-通过api连接时(fdbcli也适用)
-```
+通过 API 连接时（`fdbcli` 也适用）：
+
+```shell
 export FDB_TLS_CERTIFICATE_FILE=/etc/foundationdb/fdb.pem \
 export FDB_TLS_CA_FILE=/etc/foundationdb/cert.crt \
 export FDB_TLS_KEY_FILE=/etc/foundationdb/private.key \
@@ -623,6 +644,7 @@ export FDB_TLS_VERIFY_PEERS=Check.Valid=0
 ### 挂载文件系统
 
 ```shell
-juicefs mount -d 
-"fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" /mnt/jfs
+juicefs mount -d \
+    "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
+    /mnt/jfs
 ```

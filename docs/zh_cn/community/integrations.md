@@ -1,10 +1,8 @@
 ---
-sidebar_label: 社区集成
+title: 社区集成
 sidebar_position: 2
 slug: /integrations
 ---
-
-# 社区集成
 
 ## SDK
 
@@ -18,7 +16,7 @@ slug: /integrations
 
 ## 大数据
 
-- 大数据 OLAP 分析引擎 [Apache Kylin 4.0](http://kylin.apache.org) 可以使用 JuiceFS 在所有公有云上轻松部署存储计算分离架构的集群，请看 [视频分享](https://www.bilibili.com/video/BV1c54y1W72S) 和 [案例文章](https://juicefs.com/zh-cn/blog/optimize-kylin-on-juicefs/)。
+- 大数据 OLAP 分析引擎 [Apache Kylin 4.0](http://kylin.apache.org) 可以使用 JuiceFS 在所有公有云上轻松部署存储计算分离架构的集群，请看 [视频分享](https://www.bilibili.com/video/BV1c54y1W72S) 和 [案例文章](https://juicefs.com/zh-cn/blog/optimize-kylin-on-juicefs)。
 - [Apache Hudi](https://hudi.apache.org) 自 v0.10.0 版本开始支持 JuiceFS，你可以参考[官方文档](https://hudi.apache.org/docs/jfs_hoodie)了解如何配置 JuiceFS。
 
 ## DevOps

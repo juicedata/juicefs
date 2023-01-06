@@ -1,10 +1,8 @@
 ---
-sidebar_label: Sync Accounts between Multiple Hosts
+title: Sync Accounts between Multiple Hosts
 sidebar_position: 7
 slug: /sync_accounts_between_multiple_hosts
 ---
-
-# Sync Accounts between Multiple Hosts
 
 JuiceFS supports Unix file permission (but not POSIX extended ACL), you can manage permissions by directory or file granularity, just like a local file system.
 
@@ -19,8 +17,6 @@ If you are using JuiceFS in Hadoop environment, besides sync accounts between mu
 ## Install Ansible
 
 Select a host as a [control node](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#managed-node-requirements) which can access all hosts using `ssh` with the same privileged account like `root` or other sudo account. Then, install Ansible on this host. Refer to [Installing Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible) for details.
-
-
 
 ## Ensure the same account on all hosts
 
@@ -43,8 +39,6 @@ Create `account-sync/play.yaml` as follows:
         group: "{{ gid }}"
         state: present
 ```
-
-
 
 Create the Ansible inventory `hosts`, which contains IP addresses of all hosts that need to create account.
 
@@ -96,7 +90,7 @@ fatal: [172.16.255.180]: FAILED! => {"changed": false, "msg": "groupmod: GID '10
 
 TASK [Ensure user ubuntu with uid 1000 exists] ************************************************************
 ok: [172.16.255.163]
-	to retry, use: --limit @/home/ubuntu/account-sync/play.retry
+    to retry, use: --limit @/home/ubuntu/account-sync/play.retry
 
 PLAY RECAP ************************************************************************************************
 172.16.255.163             : ok=3    changed=0    unreachable=0    failed=0
@@ -131,4 +125,5 @@ $ rm /tmp/hello.txt
 rm: remove write-protected regular file '/tmp/hello.txt'? y
 rm: cannot remove '/tmp/hello.txt': Operation not permitted
 ```
+
 :::

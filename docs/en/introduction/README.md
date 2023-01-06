@@ -5,8 +5,6 @@ slug: .
 pagination_next: introduction/architecture
 ---
 
-# Introduction
-
 **JuiceFS** is an open source, high-performance distributed file system designed for the cloud, released under the Apache License 2.0. It provides full [POSIX](https://en.wikipedia.org/wiki/POSIX) compatibility, allowing almost all kinds of object storage to be used locally as massive local disks and to be mounted and read on different cross-platform and cross-region hosts at the same time.
 
 JuiceFS separates "data" and "metadata" storage, files are split into chunks and stored in [object storage](../guide/how_to_set_up_object_storage.md#supported-object-storage) like Amazon S3, and the corresponding metadata can be stored in various [databases](../guide/how_to_set_up_metadata_engine.md) such as Redis, MySQL, TiKV, SQLite, etc., based on the scenarios and requirements.

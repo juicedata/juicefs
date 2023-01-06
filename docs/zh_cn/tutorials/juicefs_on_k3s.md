@@ -1,11 +1,10 @@
 ---
-sidebar_label: 在 K3s 上使用 JuiceFS
+title: 在 K3s 上使用 JuiceFS
 sidebar_position: 1
 slug: /juicefs_on_k3s
 ---
-# 在 K3s 上使用 JuiceFS
 
-[K3s](https://k3s.io/) 是一个经过功能优化的 Kubernetes 发行版，它与 Kubernetes 完全兼容，即几乎所有在 Kubernetes 的操作都可以在 K3s 上执行。K3s 将整个容器编排系统打包进了一个容量不足 100MB 的二进制程序，减少了部署 Kubernetes 生产集群的环境依赖，大大降低了安装难度。相比之下，K3s 对操作系统的性能要求更低，树莓派等 ARM 设备都可以用来组建集群。
+[K3s](https://k3s.io) 是一个经过功能优化的 Kubernetes 发行版，它与 Kubernetes 完全兼容，即几乎所有在 Kubernetes 的操作都可以在 K3s 上执行。K3s 将整个容器编排系统打包进了一个容量不足 100MB 的二进制程序，减少了部署 Kubernetes 生产集群的环境依赖，大大降低了安装难度。相比之下，K3s 对操作系统的性能要求更低，树莓派等 ARM 设备都可以用来组建集群。
 
 在本文中，我们会建立一个包含两个节点的 K3s 集群，为集群安装并配置使用 [JuiceFS CSI Driver](https://github.com/juicedata/juicefs-csi-driver)，最后会创建一个 Nginx 容器进行验证。
 
@@ -35,6 +34,7 @@ curl -sfL https://get.k3s.io | sh -
 ```shell
 sudo kubectl get nodes
 ```
+
 ```output
 NAME     STATUS   ROLES                  AGE   VERSION
 k3s-s1   Ready    control-plane,master   28h   v1.21.4+k3s1
@@ -53,7 +53,7 @@ sudo -u root cat /var/lib/rancher/k3s/server/node-token
 执行以下命令，将其中 `K3S_URL` 的值改成 server 节点的 IP 或域名，默认端口 `6443`。将 `K3S_TOKEN` 的值替换成从 server 节点获取的 `node-token`。
 
 ```shell
-$ curl -sfL https://get.k3s.io | K3S_URL=http://192.168.1.35:6443 K3S_TOKEN=K1041f7c4fabcdefghijklmnopqrste2ec338b7300674f::server:3d0ab12800000000000000006328bbd80 sh -
+curl -sfL https://get.k3s.io | K3S_URL=http://192.168.1.35:6443 K3S_TOKEN=K1041f7c4fabcdefghijklmnopqrste2ec338b7300674f::server:3d0ab12800000000000000006328bbd80 sh -
 ```
 
 部署成功以后，回到 server 节点查看节点状态：
@@ -61,6 +61,7 @@ $ curl -sfL https://get.k3s.io | K3S_URL=http://192.168.1.35:6443 K3S_TOKEN=K104
 ```shell
 sudo kubectl get nodes
 ```
+
 ```output
 NAME     STATUS   ROLES                  AGE   VERSION
 k3s-s1   Ready    control-plane,master   28h   v1.21.4+k3s1
@@ -123,6 +124,7 @@ kubectl apply -f juicefs-sc.yaml
 ```shell
 sudo kubectl get sc
 ```
+
 ```output
 NAME                   PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
 local-path (default)   rancher.io/local-path   Delete          WaitForFirstConsumer   false                  28h
@@ -252,6 +254,7 @@ sudo kubectl apply -f ingress.yaml
 ```shell
 sudo kubectl get pods
 ```
+
 ```output
 NAME                         READY   STATUS    RESTARTS   AGE
 nginx-run-7d6fb7d6df-qhr2m   1/1     Running   0          28h

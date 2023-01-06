@@ -1,9 +1,8 @@
 ---
-sidebar_label: 性能统计监控
+title: 性能统计监控
 sidebar_position: 4
 slug: /stats_watcher
 ---
-# JuiceFS 性能统计监控
 
 JuiceFS 预定义了许多监控指标来监测系统运行时的内部性能情况，并通过 Prometheus API [暴露对外接口](../administration/monitoring.md)。然而，在分析一些实际问题时，用户往往需要更实时的性能统计监控。因此，我们开发了 `stats` 命令，以类似 Linux `dstat` 工具的形式实时打印各个指标的每秒变化情况，如下图所示：
 
@@ -13,11 +12,11 @@ JuiceFS 预定义了许多监控指标来监测系统运行时的内部性能情
 
 #### usage
 
-- cpu：进程的 CPU 使用率
+- CPU：进程的 CPU 使用率
 - mem：进程的物理内存使用量
 - buf：进程已使用的 Buffer 大小；此值受限于挂载选项 `--buffer-size`
 
-#### fuse
+#### FUSE
 
 - ops/lat：通过 FUSE 接口处理的每秒请求数及其平均时延（单位为毫秒）
 - read/write：通过 FUSE 接口处理的读写带宽

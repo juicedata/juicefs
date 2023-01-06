@@ -1,9 +1,8 @@
 ---
-sidebar_label: POSIX 兼容性
+title: POSIX 兼容性
 sidebar_position: 6
 slug: /posix_compatibility
 ---
-# POSIX 兼容性
 
 JuiceFS 借助于 pjdfstest 和 LTP 来验证其对 POSIX 的兼容性。
 
@@ -24,7 +23,7 @@ Result: PASS
 
 :::note 注意
 测试 pjdfstest 时，需要将 JuiceFS 的回收站关闭，因为 pjdfstest 测试的删除行为是直接删除而非进入回收站，而 JuiceFS 回收站是默认开启的。
-关闭回收站命令: `juicefs config <meta-url> --trash-days 0`
+关闭回收站命令：`juicefs config <meta-url> --trash-days 0`
 :::
 
 此外，JuiceFS 还提供：
@@ -39,7 +38,7 @@ Result: PASS
 - 支持传统 POSIX 记录锁（fcntl）
 
 :::note 注意
-POSIX 记录锁分为**传统锁**和 **OFD 锁**（Open file description locks）两类，它们的加锁操作命令分别为 `F_SETLK` 和 `F_OFD_SETLK`。受限于 FUSE 内核模块的实现，目前 JuiceFS 只支持传统类型的记录锁。更多细节可参见：https://man7.org/linux/man-pages/man2/fcntl.2.html。
+POSIX 记录锁分为**传统锁**和 **OFD 锁**（Open file description locks）两类，它们的加锁操作命令分别为 `F_SETLK` 和 `F_OFD_SETLK`。受限于 FUSE 内核模块的实现，目前 JuiceFS 只支持传统类型的记录锁。更多细节可参见：<https://man7.org/linux/man-pages/man2/fcntl.2.html>。
 :::
 
 ## LTP
@@ -49,7 +48,7 @@ POSIX 记录锁分为**传统锁**和 **OFD 锁**（Open file description locks�
 ### 测试环境
 
 - 测试主机：Amazon EC2: c5d.xlarge (4C 8G)
-- 操作系统：Ubuntu 20.04.1 LTS (Kernel 5.4.0-1029-aws)
+- 操作系统：Ubuntu 20.04.1 LTS (Kernel `5.4.0-1029-aws`)
 - 对象存储：Amazon S3
 - JuiceFS 版本：0.17-dev (2021-09-16 292f2b65)
 
@@ -58,33 +57,25 @@ POSIX 记录锁分为**传统锁**和 **OFD 锁**（Open file description locks�
 1. 在 GitHub 下载 LTP [源码包](https://github.com/linux-test-project/ltp/releases/download/20210524/ltp-full-20210524.tar.bz2)
 2. 解压后编译安装：
 
-```bash
-tar -jvxf ltp-full-20210524.tar.bz2
-```
-```bash
-cd ltp-full-20210524
-```
-```bash
-./configure
-```
-```bash
-make all
-```
-```bash
-make install
-```
+   ```bash
+   tar -jvxf ltp-full-20210524.tar.bz2
+   cd ltp-full-20210524
+   ./configure
+   make all
+   make install
+   ```
 
 3. 测试工具安装在 `/opt/ltp`，需先切换到此目录：
 
-```bash
-cd /opt/ltp
-```
+   ```bash
+   cd /opt/ltp
+   ```
 
-测试配置文件在 `runtest` 目录下；为方便测试，删去了 `fs` 和 `syscalls` 中部分压力测试和与文件系统不想关的条目（参见[附录](#附录)，修改后保存到文件 `fs-jfs` 和 `syscalls-jfs`），然后执行命令：
+   测试配置文件在 `runtest` 目录下；为方便测试，删去了 `fs` 和 `syscalls` 中部分压力测试和与文件系统不想关的条目（参见[附录](#附录)，修改后保存到文件 `fs-jfs` 和 `syscalls-jfs`），然后执行命令：
 
-```bash
-./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
-```
+   ```bash
+   ./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs
+   ```
 
 ### 测试结果
 

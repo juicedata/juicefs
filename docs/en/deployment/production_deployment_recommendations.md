@@ -1,6 +1,7 @@
 ---
 sidebar_position: 1
 slug: /production_deployment_recommendations
+description: This article is intended as a reference for users who are about to deploy JuiceFS to a production environment and provides a series of environment configuration recommendations.
 ---
 
 # Production Deployment Recommendations

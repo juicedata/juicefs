@@ -1,13 +1,14 @@
 ---
-sidebar_label: Data Processing Flow
+sidebar_label: Data Processing Workflow
 sidebar_position: 3
 slug: /internals/io_processing
+description: This article introduces read and write implementation of JuiceFS, including how it split file into chunks.
 ---
 # An introduction to the workflow of processing read and write
 
 ## Workflow of processing write
 
-JuiceFS splits large files at multiple levels to improve I/O performance. See [how JuiceFS store files](../reference/how_juicefs_store_files.md). When processing write requests, JuiceFS first writes data into the client buffer and stores in chunks and slices. Chunks are successive logical units, which are split in a size of 64 MiB based on file offset. Chunks are isolated from each other and will be further split into slices if necessary. A new slice will be created if it doesn't overlap nor adjoin any existing slices; otherwise,  the affected existing slices will be updated. Slices are logical units for data persistency. When doing a flush, a slice will be first split into 4 MiB blocks and then uploaded to object storage, and eventually the metadata of the slice will be updated. As there is a one-to-one correspondence between blocks and objects, we only need **one** increasing slice and one final flush when writing sequentially. This maximizes the write performance of the object storage. A simple [JuiceFS benchmark](../benchmark/performance_evaluation_guide.md) below shows sequentially writing a 1 GiB file with a 1 MiB I/O size at its first stage. The following figure shows the data flow in each component of the system.
+JuiceFS splits large files at multiple levels to improve I/O performance. See [how JuiceFS store files](./architecture.md#how-juicefs-store-files). When processing write requests, JuiceFS first writes data into the client buffer and stores in chunks and slices. Chunks are successive logical units, which are split in a size of 64 MiB based on file offset. Chunks are isolated from each other and will be further split into slices if necessary. A new slice will be created if it doesn't overlap nor adjoin any existing slices; otherwise,  the affected existing slices will be updated. Slices are logical units for data persistency. When doing a flush, a slice will be first split into 4 MiB blocks and then uploaded to object storage, and eventually the metadata of the slice will be updated. As there is a one-to-one correspondence between blocks and objects, we only need **one** increasing slice and one final flush when writing sequentially. This maximizes the write performance of the object storage. A simple [JuiceFS benchmark](../benchmark/performance_evaluation_guide.md) below shows sequentially writing a 1 GiB file with a 1 MiB I/O size at its first stage. The following figure shows the data flow in each component of the system.
 
 ![write](../images/internals-write.png)
 

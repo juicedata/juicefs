@@ -39,7 +39,7 @@ jobs:
             meta: 'redis'
             storage: 'minio'
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Checkout
@@ -51,9 +51,9 @@ jobs:
         id: vars
         run: |
           if [ "${{matrix.meta}}" == "fdb" ]; then
-            echo ::set-output name=target::"juicefs.fdb"
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
           else
-            echo ::set-output name=target::"juicefs"
+            echo "target=juicefs" >> $GITHUB_OUTPUT
           fi
 
       - name: Build new version
@@ -106,9 +106,11 @@ jobs:
           export META=${{matrix.meta}}
           export STORAGE=${{matrix.storage}}
           new_version=`./juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          echo new_version is $new_version
           mv juicefs juicefs-$new_version
           export NEW_JFS_BIN="juicefs-$new_version"
           old_version=`${{matrix.old_juicefs_version}}/juicefs --version | awk -F" " '{print $3}' | awk -F+ '{print $1}'`
+          echo old_version is $old_version
           mv ${{matrix.old_juicefs_version}}/juicefs juicefs-$old_version
           export OLD_JFS_BIN="juicefs-$old_version"
           python3 .github/scripts/testVersionCompatible.py
@@ -137,14 +139,31 @@ jobs:
             tail -100 ~/command.log
           fi
 
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [vc-hypo]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
-          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
-      - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
-        timeout-minutes: 1
-        uses: lhotari/action-upterm@v1
+      - name: Success
+        if: ${{ success() }}
+        run: echo "All Done"

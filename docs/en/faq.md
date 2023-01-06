@@ -33,13 +33,14 @@ This means that a file or directory under the mount point is in use and cannot b
 
 ### Does support Redis in Sentinel or Cluster-mode as the metadata engine for JuiceFS?
 
-Yes，There is also a [best practice document](administration/metadata/redis_best_practices.md) for Redis as the JuiceFS metadata engine for reference.
+Yes, There is also a [best practice document](administration/metadata/redis_best_practices.md) for Redis as the JuiceFS metadata engine for reference.
 
 ### `format: ERR wrong number of arguments for 'auth' command`
 
 This error means you use Redis < 6.0.0 and specify username in Redis URL when execute `juicefs format` command. Only Redis >= 6.0.0 supports specify username, so you need omit the username parameter in the URL, e.g. `redis://:password@host:6379/1`.
 
 ### `cannot update volume XXX from XXX to XXX`
+
 The meta database has already been formatted and previous configuration cannot be updated by this `format`. You can execute the `juicefs format` command after manually cleaning up the meta database.
 
 ## Object Storage Related Questions
@@ -50,13 +51,13 @@ JuiceFS already supported many object storage, please check [the list](guide/how
 
 ### Why can't I see the original files that have been stored in JuiceFS in object storage?
 
-Refer to ["How JuiceFS Store Files"](introduction/architecture.md#how-juicefs-stores-files).
+Refer to ["How JuiceFS Store Files"](./introduction/architecture.md#how-juicefs-store-files).
 
 ### Why do I delete files at the mount point, but there is no change or very little change in object storage footprint?
 
 The first reason is that you may have enabled the trash feature. In order to ensure data security, the trash is enabled by default. The deleted files are actually placed in the trash and are not actually deleted, so the size of the object storage will not change. trash retention time can be specified with `juicefs format` or modified with `juicefs config`. Please refer to the ["Trash"](security/trash.md) documentation for more information.
 
-The second reason is that JuiceFS deletes the data in the object storage asynchronously, so the space change of the object storage will be slower. If you need to immediately clean up the data in the object store that needs to be deleted, you can try running the [`juicefs gc`](reference/command_reference.md#juicefs-gc) command.
+The second reason is that JuiceFS deletes the data in the object storage asynchronously, so the space change of the object storage will be slower. If you need to immediately clean up the data in the object store that needs to be deleted, you can try running the [`juicefs gc`](reference/command_reference.md#gc) command.
 
 ### Why is the size displayed at the mount point different from the object storage footprint?
 
@@ -76,7 +77,7 @@ As of the release of JuiceFS 1.0, this feature is not supported.
 
 ### Is it possible to bind multiple different object storages to a single file system (e.g. one file system with Amazon S3, GCS and OSS at the same time)?
 
-No. However, you can set up multiple buckets associated with the same object storage service when creating a file system, thus solving the problem of limiting the number of individual bucket objects, for example, multiple S3 Buckets can be associated with a single file system. Please refer to [`--shards`](./reference/command_reference.md#juicefs-format) option for details.
+No. However, you can set up multiple buckets associated with the same object storage service when creating a file system, thus solving the problem of limiting the number of individual bucket objects, for example, multiple S3 Buckets can be associated with a single file system. Please refer to [`--shards`](./reference/command_reference.md#format) option for details.
 
 ## Performance Related Questions
 
@@ -86,10 +87,9 @@ JuiceFS is a distributed file system, the latency of metedata is determined by 1
 
 JuiceFS is built with multiple layers of caching (invalidated automatically), once the caching is warmed up, the latency and throughput of JuiceFS could be close to local filesystem (having the overhead of FUSE).
 
-
 ### Does JuiceFS support random read/write?
 
-Yes, including those issued using mmap. Currently JuiceFS is optimized for sequential reading/writing, and optimized for random reading/writing is work in progress. If you want better random reading performance, it's recommended to turn off compression ([`--compress none`](reference/command_reference.md#juicefs-format)).
+Yes, including those issued using mmap. Currently JuiceFS is optimized for sequential reading/writing, and optimized for random reading/writing is work in progress. If you want better random reading performance, it's recommended to turn off compression ([`--compress none`](reference/command_reference.md#format)).
 
 ### What is the implementation principle of JuiceFS supporting random write?
 
@@ -103,7 +103,7 @@ This is just a rough introduction to the implementation logic. The specific read
 
 You could mount JuiceFS with [`--writeback` option](reference/command_reference.md#mount), which will write the small files into local disks first, then upload them to object storage in background, this could speedup coping many small files into JuiceFS.
 
-See ["Write Cache in Client"](guide/cache_management.md#write-cache-in-client) for more information.
+See ["Write Cache in Client"](guide/cache_management.md#writeback) for more information.
 
 ### Does JuiceFS currently support distributed caching?
 
@@ -115,8 +115,7 @@ As of the release of JuiceFS 1.0, this feature is not supported.
 
 Yes, JuiceFS could be mounted using `juicefs` without root. The default directory for caching is `$HOME/.juicefs/cache` (macOS) or `/var/jfsCache` (Linux), you should change that to a directory which you have write permission.
 
-See ["Read Cache in Client"](guide/cache_management.md#read-cache-in-client) for more information.
-
+See ["Read Cache in Client"](guide/cache_management.md#client-read-cache) for more information.
 
 ## Access Related Questions
 
@@ -128,7 +127,7 @@ The new data written by `write()` will be buffered in kernel or client, visible 
 
 Either call `fsync()`, `fdatasync()` or `close()` to force upload the data to the object storage and update the metadata, or after several seconds of automatic refresh, other clients can visit the updates. It is also the strategy adopted by the vast majority of distributed file systems.
 
-See ["Write Cache in Client"](guide/cache_management.md#write-cache-in-client) for more information.
+See ["Write Cache in Client"](guide/cache_management.md#writeback) for more information.
 
 ### What other ways JuiceFS supports access to data besides mount?
 

@@ -1,9 +1,9 @@
 ---
-sidebar_label: 常规测试
+title: 常规测试
 sidebar_position: 1
 slug: .
+description: 本文介绍使用 FIO、mdtest 以及 JuiceFS 自带的 bench 命令对文件系统进行性能测试。
 ---
-# JuiceFS 常规测试
 
 ### 基础测试
 

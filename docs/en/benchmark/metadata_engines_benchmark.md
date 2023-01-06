@@ -1,10 +1,9 @@
 ---
-sidebar_label: Metadata Engines Benchmark
+title: Metadata Engines Benchmark
 sidebar_position: 6
 slug: /metadata_engines_benchmark
+description: This article describes how to test and evaluate the performance of various metadata engines for JuiceFS using a real-world environment.
 ---
-
-# Metadata Engines Benchmark
 
 Conclusion first:
 
@@ -13,6 +12,7 @@ Conclusion first:
 - For large I/O (~4 MiB) workloads, total time costs with different metadata engines show no significant difference (object storage becomes the bottleneck).
 
 :::note
+
 1. By changing `appendfsync` from `always` to `everysec`, Redis gains performance boost but loses a bit of data reliability. More information can be found [here](https://redis.io/docs/manual/persistence).
 2. Both Redis and MySQL store only one replica locally, while TiKV and etcd stores three replicas on three different hosts using Raft protocol.
 :::

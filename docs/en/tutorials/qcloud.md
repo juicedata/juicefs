@@ -1,9 +1,8 @@
 ---
-sidebar_label: Use JuiceFS on Tencent Cloud
+title: Use JuiceFS on Tencent Cloud
 sidebar_position: 7
 slug: /clouds/qcloud
 ---
-# Use JuiceFS on Tencent Cloud
 
 JuiceFS needs to be used with database and object storage together. Here we directly use Tencent Cloud's CVM cloud server, combined with cloud database and COS object storage.
 
@@ -37,7 +36,7 @@ JuiceFS will store all the metadata corresponding to the data in a separate data
 
 Depending on the database type, the performance and reliability of metadata varies. For example, Redis runs entirely on memory, which provides the ultimate performance, but is difficult to operate and maintain, and has relatively low reliability. SQLite is a single-file relational database with low performance and is not suitable for large-scale data storage, but it is configuration-free and suitable for scenarios with small amounts of data storage.
 
-If you are just evaluating the capabilities of JuiceFS, you can manually build the database for use in the CVM. When you want to use JucieFS in a production environment, the cloud database service of Tencent Cloud is usually a better choice if you don't have a professional database operation and maintenance team.
+If you are just evaluating the capabilities of JuiceFS, you can manually build the database for use in the CVM. When you want to use JuiceFS in a production environment, the cloud database service of Tencent Cloud is usually a better choice if you don't have a professional database operation and maintenance team.
 
 Of course, you can also use cloud database services provided on other cloud platforms if you wish.However, in this case, you can only access the cloud database through the public network, which means that you must expose the database port to the public network, which has some security risks and requires special attention.
 
@@ -155,12 +154,12 @@ The following command creates a storage called `mystor`, i.e., a file system, us
 
 ```shell
 $ juicefs format \
-	--storage cos \
-	--bucket https://<your-bucket-name> \
-	--access-key <your-access-key-id> \
-	--secret-key <your-access-key-secret> \
-	redis://:<your-redis-password>@192.168.5.5:6379/1 \
-	mystor
+    --storage cos \
+    --bucket https://<your-bucket-name> \
+    --access-key <your-access-key-id> \
+    --secret-key <your-access-key-secret> \
+    redis://:<your-redis-password>@192.168.5.5:6379/1 \
+    mystor
 ```
 
 **Option description:**

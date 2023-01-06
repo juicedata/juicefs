@@ -1,13 +1,13 @@
 ---
-sidebar_label: 读写请求处理流程
+title: 读写请求处理流程
 sidebar_position: 3
 slug: /internals/io_processing
+description: 本文分别介绍 JuiceFS 的读和写的流程，更进一步的介绍 JuiceFS 读写分块技术在操作系统上的实现过程。
 ---
-# 读写请求处理流程介绍
 
 ## 写入流程
 
-JuiceFS 对大文件会做多级拆分（参见 [JuiceFS 如何存储文件](../reference/how_juicefs_store_files.md)），以提高读写效率。在处理写请求时，JuiceFS 先将数据写入 Client 的内存缓冲区，并在其中按 Chunk/Slice 的形式进行管理。Chunk 是根据文件内 offset 按 64 MiB 大小拆分的连续逻辑单元，不同 Chunk 之间完全隔离。每个 Chunk 内会根据应用写请求的实际情况进一步拆分成 Slices；当新的写请求与已有的 Slice 连续或有重叠时，会直接在该 Slice 上进行更新，否则就创建新的 Slice。Slice 是启动数据持久化的逻辑单元，其在 flush 时会先将数据按照默认 4 MiB 大小拆分成一个或多个连续的 Blocks，并上传到对象存储，每个 Block 对应一个 Object；然后再更新一次元数据，写入新的 Slice 信息。显然，在应用顺序写情况下，只需要**一个**不停增长的 Slice，最后仅 flush 一次即可；此时能最大化发挥出对象存储的写入性能。以一次简单的 [JuiceFS 基准测试](../benchmark/performance_evaluation_guide.md)为例，其第一阶段是使用 1 MiB IO 顺序写 1 GiB 文件，数据在各个组件中的形式如下图所示：
+JuiceFS 对大文件会做多级拆分（参见 [JuiceFS 如何存储文件](../introduction/architecture.md#how-juicefs-store-files)），以提高读写效率。在处理写请求时，JuiceFS 先将数据写入 Client 的内存缓冲区，并在其中按 Chunk/Slice 的形式进行管理。Chunk 是根据文件内 offset 按 64 MiB 大小拆分的连续逻辑单元，不同 Chunk 之间完全隔离。每个 Chunk 内会根据应用写请求的实际情况进一步拆分成 Slices；当新的写请求与已有的 Slice 连续或有重叠时，会直接在该 Slice 上进行更新，否则就创建新的 Slice。Slice 是启动数据持久化的逻辑单元，其在 flush 时会先将数据按照默认 4 MiB 大小拆分成一个或多个连续的 Blocks，并上传到对象存储，每个 Block 对应一个 Object；然后再更新一次元数据，写入新的 Slice 信息。显然，在应用顺序写情况下，只需要**一个**不停增长的 Slice，最后仅 flush 一次即可；此时能最大化发挥出对象存储的写入性能。以一次简单的 [JuiceFS 基准测试](../benchmark/performance_evaluation_guide.md)为例，其第一阶段是使用 1 MiB IO 顺序写 1 GiB 文件，数据在各个组件中的形式如下图所示：
 
 ![write](../images/internals-write.png)
 

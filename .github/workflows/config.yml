@@ -18,7 +18,7 @@ on:
   
 jobs:
   config-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     services:
       redis:
         # Docker Hub image
@@ -34,7 +34,7 @@ jobs:
           - 6379:6379
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 

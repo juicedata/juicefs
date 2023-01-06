@@ -1,9 +1,8 @@
 ---
-sidebar_label: Benchmark with mdtest
+title: Benchmark with mdtest
 sidebar_position: 8
 slug: /mdtest
 ---
-# Benchmark with mdtest
 
 :::tip
 Trash is enabled in JuiceFS v1.0+ by default. As a result, temporary files are created and deleted in the file system during the benchmark, and these files will be eventually dumped into a directory named `.trash`. To avoid storage space being occupied by `.trash`, you can run command `juicefs config META-URL --trash-days 0` to disable Trash before benchmark. See [trash](../security/trash.md) for details.
@@ -52,6 +51,7 @@ s3fs <BUCKET>:/s3fs /s3fs -o host=https://s3.<REGION>.amazonaws.com,endpoint=<RE
 ![Metadata Benchmark](../images/metadata-benchmark.svg)
 
 ### S3FS
+
 ```
 mdtest-3.4.0+dev was launched with 1 total task(s) on 1 node(s)
 Command line used: ./mdtest '-d' '/s3fs/mdtest' '-b' '6' '-I' '8' '-z' '2'

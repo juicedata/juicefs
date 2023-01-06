@@ -25,6 +25,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 )
 
+//mutate_test_job_number: 3
 func getStdout(args []string) ([]byte, error) {
 	tmp, err := os.CreateTemp("/tmp", "jfstest-*")
 	if err != nil {

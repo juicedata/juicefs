@@ -1,10 +1,8 @@
 ---
-sidebar_label: 配置 JuiceFS S3 网关
-sidebar_position: 5
+title: 配置 JuiceFS S3 网关
+sidebar_position: 6
 slug: /s3_gateway
 ---
-
-# 启用 JuiceFS 的 S3 网关
 
 JuiceFS 从 v0.11 开始引入了 S3 网关，这是一个通过 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)实现的功能。它为 JuiceFS 中的文件提供跟 S3 兼容的 RESTful API，在不方便挂载的情况下能够用 s3cmd、AWS CLI、MinIO Client（mc）等工具管理 JuiceFS 上存储的文件。另外，S3 网关还提供了一个基于网页的文件管理器，用户使用浏览器就能对 JuiceFS 上的文件进行常规的增删管理。
 
@@ -210,7 +208,7 @@ juicefs-s3-gateway   ClusterIP   10.101.108.42   <none>        9000/TCP   142m
 
 可以在应用 pod 中通过 `juicefs-s3-gateway.${NAMESPACE}.svc.cluster.local:9000` 域名或 `juicefs-s3-gateway` 的 pod IP 及端口号（例如 `10.244.2.238:9000`）访问 JuiceFS S3 网关。
 
-若想通过 Ingress 访问，需要确保集群中已经部署了 Ingress Controller，参考 [Ingress Controller 部署文档](https://kubernetes.github.io/ingress-nginx/deploy/)。创建 `Ingress` 资源：
+若想通过 Ingress 访问，需要确保集群中已经部署了 Ingress Controller，参考 [Ingress Controller 部署文档](https://kubernetes.github.io/ingress-nginx/deploy)。创建 `Ingress` 资源：
 
 ```yaml
 kubectl apply -f - <<EOF
@@ -240,7 +238,7 @@ EOF
 kubectl get services -n ingress-nginx
 ```
 
-Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress Controller 使用文档](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage/)。
+Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress Controller 使用文档](https://kubernetes.github.io/ingress-nginx/user-guide/basic-usage)。
 
 ### 通过 Helm 部署
 
@@ -313,7 +311,7 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
 git clone -b gateway git@github.com:juicedata/minio.git && cd minio
 ```
 
-将会生成 minio 二进制文件
+将会生成 MinIO 二进制文件
 
 ```shell
 make build

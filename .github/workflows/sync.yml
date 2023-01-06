@@ -16,7 +16,7 @@ on:
 
 jobs:
   compare-with-rsync:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     services:
       redis:
         # Docker Hub image
@@ -32,7 +32,7 @@ jobs:
           - 6379:6379
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
@@ -40,7 +40,7 @@ jobs:
         uses: ./.github/actions/build
 
       - name: Checkout source code for test
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: juicedata/juicefs
           path: jfs_source
@@ -95,10 +95,10 @@ jobs:
 
 
   compare-with-rsync-randomly:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
           
@@ -106,7 +106,7 @@ jobs:
         uses: ./.github/actions/build
 
       - name: Checkout source code for test
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: juicedata/juicefs
           path: jfs_source
@@ -140,10 +140,10 @@ jobs:
       #   uses: lhotari/action-upterm@v1
 
   file-head-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
@@ -153,7 +153,7 @@ jobs:
           target: ${{steps.vars.outputs.target}}
 
       - name: Checkout source code for test
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: juicedata/juicefs
           path: jfs_source

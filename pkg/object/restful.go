@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -46,6 +47,8 @@ func init() {
 			ResponseHeaderTimeout: time.Second * 30,
 			IdleConnTimeout:       time.Second * 300,
 			MaxIdleConnsPerHost:   500,
+			ReadBufferSize:        32 << 10,
+			WriteBufferSize:       32 << 10,
 			Dial: func(network string, address string) (net.Conn, error) {
 				separator := strings.LastIndex(address, ":")
 				host := address[:separator]
@@ -75,6 +78,7 @@ func init() {
 				return nil, err
 			},
 			DisableCompression: true,
+			TLSClientConfig:    &tls.Config{},
 		},
 		Timeout: time.Hour,
 	}

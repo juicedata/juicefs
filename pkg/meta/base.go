@@ -17,7 +17,6 @@
 package meta
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -65,7 +64,7 @@ type engine interface {
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
 	doDeleteFileData(inode Ino, length uint64)
 	doCleanupSlices()
-	doCleanupDelayedSlices(edge int64, limit int) (int, error)
+	doCleanupDelayedSlices(edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
@@ -82,11 +81,14 @@ type engine interface {
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 
-	scanDeletedSlices(ctx context.Context, visitor func(s Slice) error) error
-	scanDeletedFiles(ctx context.Context, visitor func(ino Ino, size uint64) error) error
+	scanDeletedSlices(Context, deletedSliceScan) error
+	scanDeletedFiles(Context, deletedFileScan) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
 }
+
+type deletedSliceScan func(ss []Slice, ts int64) (clean bool, err error)
+type deletedFileScan func(ino Ino, size uint64, ts int64) (clean bool, err error)
 
 // fsStat aligned for atomic operations
 // nolint:structcheck
@@ -356,7 +358,7 @@ func (m *baseMeta) refresh() {
 		if m.conf.ReadOnly || m.conf.NoBGJob {
 			continue
 		}
-		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64(m.conf.Heartbeat/time.Second)); err != nil {
+		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64((m.conf.Heartbeat * 9 / 10).Seconds())); err != nil {
 			logger.Warnf("checking counter lastCleanupSessions: %s", err)
 		} else if ok {
 			go m.CleanStaleSessions()
@@ -426,7 +428,7 @@ func (m *baseMeta) flushStats() {
 func (m *baseMeta) cleanupDeletedFiles() {
 	for {
 		utils.SleepWithJitter(time.Minute)
-		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), 60); err != nil {
+		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Minute.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupFiles: %s", err)
 		} else if ok {
 			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 10000)
@@ -445,7 +447,7 @@ func (m *baseMeta) cleanupDeletedFiles() {
 func (m *baseMeta) cleanupSlices() {
 	for {
 		utils.SleepWithJitter(time.Hour)
-		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), 3600); err != nil {
+		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter nextCleanupSlices: %s", err)
 		} else if ok {
 			m.en.doCleanupSlices()
@@ -1265,26 +1267,30 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 	return 0
 }
 
-func (m *baseMeta) fileDeleted(opened bool, inode Ino, length uint64) {
+func (m *baseMeta) fileDeleted(opened, force bool, inode Ino, length uint64) {
 	if opened {
 		m.Lock()
 		m.removedFiles[inode] = true
 		m.Unlock()
 	} else {
-		m.tryDeleteFileData(inode, length)
+		m.tryDeleteFileData(inode, length, force)
 	}
 }
 
-func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64) {
-	select {
-	case m.maxDeleting <- struct{}{}:
-		go func() {
-			m.en.doDeleteFileData(inode, length)
-			<-m.maxDeleting
-		}()
-	default:
-		// will be cleanup later
+func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64, force bool) {
+	if force {
+		m.maxDeleting <- struct{}{}
+	} else {
+		select {
+		case m.maxDeleting <- struct{}{}:
+		default:
+			return // will be cleanup later
+		}
 	}
+	go func() {
+		m.en.doDeleteFileData(inode, length)
+		<-m.maxDeleting
+	}()
 }
 
 func (m *baseMeta) deleteSlice(id uint64, size uint32) {
@@ -1354,7 +1360,7 @@ func (m *baseMeta) cleanupTrash() {
 			}
 			continue
 		}
-		if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), 3600); err != nil {
+		if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
 			logger.Warnf("checking counter lastCleanupTrash: %s", err)
 		} else if ok {
 			go m.doCleanupTrash(false)
@@ -1363,9 +1369,8 @@ func (m *baseMeta) cleanupTrash() {
 	}
 }
 
-func (m *baseMeta) doCleanupTrash(force bool) {
+func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func()) {
 	logger.Debugf("cleanup trash: started")
-	ctx := Background
 	now := time.Now()
 	var st syscall.Errno
 	var entries []*Entry
@@ -1383,18 +1388,19 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 		}
 	}()
 	batch := 1000000
-	edge := now.Add(-time.Duration(24*m.fmt.TrashDays+1) * time.Hour)
 	for len(entries) > 0 {
 		e := entries[0]
 		ts, err := time.Parse("2006-01-02-15", string(e.Name))
 		if err != nil {
 			logger.Warnf("bad entry as a subTrash: %s", e.Name)
+			entries = entries[1:]
 			continue
 		}
-		if ts.Before(edge) || force {
+		if ts.Before(edge) {
 			var subEntries []*Entry
 			if st = m.en.doReaddir(ctx, e.Inode, 0, &subEntries, batch); st != 0 {
 				logger.Warnf("readdir subTrash %d: %s", e.Inode, st)
+				entries = entries[1:]
 				continue
 			}
 			rmdir := len(subEntries) < batch
@@ -1409,6 +1415,9 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 				}
 				if st == 0 {
 					count++
+					if increProgress != nil {
+						increProgress()
+					}
 				} else {
 					logger.Warnf("delete from trash %s/%s: %s", e.Name, se.Name, st)
 					rmdir = false
@@ -1429,32 +1438,35 @@ func (m *baseMeta) doCleanupTrash(force bool) {
 	}
 }
 
+func (m *baseMeta) doCleanupTrash(force bool) {
+	edge := time.Now().Add(-time.Duration(24*m.fmt.TrashDays+1) * time.Hour)
+	if force {
+		edge = time.Now()
+	}
+	m.CleanupTrashBefore(Background, edge, nil)
+}
+
 func (m *baseMeta) cleanupDelayedSlices() {
 	now := time.Now()
 	edge := now.Unix() - int64(m.fmt.TrashDays)*24*3600
 	logger.Debugf("Cleanup delayed slices: started with edge %d", edge)
-	if count, err := m.en.doCleanupDelayedSlices(edge, 3e5); err == nil {
-		msg := fmt.Sprintf("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
-		if count >= 3e5 {
-			logger.Warnf("%s (reached max limit, stop)", msg)
-		} else {
-			logger.Debugf(msg)
-		}
-	} else {
+	if count, err := m.en.doCleanupDelayedSlices(edge); err != nil {
 		logger.Warnf("Cleanup delayed slices: deleted %d slices in %v, but got error: %s", count, time.Since(now), err)
+	} else if count > 0 {
+		logger.Infof("Cleanup delayed slices: deleted %d slices in %v", count, time.Since(now))
 	}
 }
 
-func (m *baseMeta) Statistic(ctx context.Context, slicesDeletedScan func(Slice) error, fileDeletedScan func(ino Ino, size uint64) error) error {
+func (m *baseMeta) ScanDeletedObject(ctx Context, sliceScan deletedSliceScan, fileScan deletedFileScan) error {
 	eg := errgroup.Group{}
-	if slicesDeletedScan != nil {
+	if sliceScan != nil {
 		eg.Go(func() error {
-			return m.en.scanDeletedSlices(ctx, slicesDeletedScan)
+			return m.en.scanDeletedSlices(ctx, sliceScan)
 		})
 	}
-	if fileDeletedScan != nil {
+	if fileScan != nil {
 		eg.Go(func() error {
-			return m.en.scanDeletedFiles(ctx, fileDeletedScan)
+			return m.en.scanDeletedFiles(ctx, fileScan)
 		})
 	}
 	return eg.Wait()

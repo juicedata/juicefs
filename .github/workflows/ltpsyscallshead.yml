@@ -15,6 +15,12 @@ on:
   schedule:
     - cron:  '30 20 * * *'
   workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
 
 jobs:
   ltpsyscalls:
@@ -24,11 +30,11 @@ jobs:
         # meta: [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'mariadb', 'badger', 'fdb']
         meta: ['redis']
         type: [ 'head', 'middle', 'tail']
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
@@ -36,23 +42,15 @@ jobs:
         id: vars
         run: |
           if [ "${{matrix.meta}}" == "fdb" ]; then
-            echo ::set-output name=target::"juicefs.fdb"
+            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
           else
-            echo ::set-output name=target::"juicefs"
+            echo "target=juicefs" >> $GITHUB_OUTPUT
           fi
 
       - name: Build
         uses: ./.github/actions/build
         with: 
           target: ${{steps.vars.outputs.target}}
-
-      - uses: actions/cache@v3
-        if: ${{ matrix.meta == 'tikv' || matrix.meta == 'tidb' }}
-        with:
-          path: ~/.tiup
-          key: ${{ runner.os }}-tiup
-          restore-keys: |
-            ${{ runner.os }}-tiup
 
       - name: Prepare meta db
         run: | 
@@ -120,10 +118,20 @@ jobs:
           sudo tail -n 100 /opt/ltp/output/result.log.failed
           tail -300 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
-      
+
+      - name: check ltpsyscall failed log
+        if: ${{ always() }}
+        run: |
+          cat /opt/ltp/output/result.log.failed 
+
       - name: Send Slack Notification
         if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        timeout-minutes: 30
+        uses: lhotari/action-upterm@v1

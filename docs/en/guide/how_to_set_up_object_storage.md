@@ -1,13 +1,12 @@
 ---
-sidebar_label: How to Set Up Object Storage
+title: How to Set Up Object Storage
 sidebar_position: 2
 slug: /how_to_setup_object_storage
+description: This article introduces the object storages supported by JuiceFS and how to configure and use it.
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
-# How to Set Up Object Storage
 
 As you can learn from [JuiceFS Technical Architecture](../introduction/architecture.md), JuiceFS is a distributed file system with data and metadata stored separately. JuiceFS uses object storage as the main data storage and uses databases such as Redis, PostgreSQL and MySQL as metadata storage.
 
@@ -23,11 +22,11 @@ For example, the following command uses Amazon S3 object storage to create a fil
 
 ```shell
 juicefs format --storage s3 \
-	--bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
-	--access-key abcdefghijklmn \
-	--secret-key nmlkjihgfedAcBdEfg \
-	redis://192.168.1.6/1 \
-	myjfs
+    --bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
+    --access-key abcdefghijklmn \
+    --secret-key nmlkjihgfedAcBdEfg \
+    redis://192.168.1.6/1 \
+    myjfs
 ```
 
 ## Other options
@@ -44,9 +43,9 @@ It is more secure to pass credentials via environment variables `ACCESS_KEY` and
 export ACCESS_KEY=abcdefghijklmn
 export SECRET_KEY=nmlkjihgfedAcBdEfg
 juicefs format --storage s3 \
-	--bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
-	redis://192.168.1.6/1 \
-	myjfs
+    --bucket https://myjuicefs.s3.us-east-2.amazonaws.com \
+    redis://192.168.1.6/1 \
+    myjfs
 ```
 
 Public clouds typically allow users to create IAM (Identity and Access Management) roles, such as [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) or [Alibaba Cloud RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm), which can be assigned to VM instances. If the cloud server instance already has read and write access to the object storage, there is no need to specify `--access-key` and `--secret-key`.
@@ -61,7 +60,7 @@ Different cloud vendors have different acquisition methods. Generally, the Acces
 
 ### How to set up object storage with temporary access credentials
 
-The way of using temporary credentials is not much different from using permanent credentials. When formatting the file system, pass the Access Key, Secret Key, and token of the temporary credentials through `--access-key`, `--secret-key`, ` --session-token` can set the value. E.g:
+The way of using temporary credentials is not much different from using permanent credentials. When formatting the file system, pass the Access Key, Secret Key, and token of the temporary credentials through `--access-key`, `--secret-key`, `--session-token` can set the value. E.g:
 
 ```bash
 juicefs format \
@@ -74,7 +73,7 @@ juicefs format \
     test1
 ```
 
-Since temporary credentials expire quickly, the key is how to update the temporary credentials that JuiceFS uses after `format` the filesystem before the temporary credentials expire. The credential update process is divided into two steps:
+Since temporary credentials expire quickly, the key is how to update the temporary credentials that JuiceFS uses after `format` the file system before the temporary credentials expire. The credential update process is divided into two steps:
 
 1. Before the temporary certificate expires, apply for a new temporary certificate;
 2. Without stopping the running JuiceFS, use the `juicefs config Meta-URL --access-key xxxx --secret-key xxxx --session-token xxxx` command to hot update the access credentials.
@@ -140,10 +139,10 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Huawei Cloud OBS](#huawei-cloud-obs)                       | `obs`      |
 | [Baidu Object Storage](#baidu-object-storage)               | `bos`      |
 | [Volcano Engine TOS](#volcano-engine-tos)                   | `tos`      |
-| [Kingsoft KS3](#kingsoft-ks3)                               | `ks3`      |
+| [Kingsoft Cloud KS3](#kingsoft-cloud-ks3)                   | `ks3`      |
 | [NetEase Object Storage](#netease-object-storage)           | `nos`      |
 | [QingStor](#qingstor)                                       | `qingstor` |
-| [Qiniu Object Storage](#qiniu-object-storage)               | `qiniu`    |
+| [Qiniu](#qiniu)                                             | `qiniu`    |
 | [Sina Cloud Storage](#sina-cloud-storage)                   | `scs`      |
 | [CTYun OOS](#ctyun-oos)                                     | `oos`      |
 | [ECloud Object Storage](#ecloud-object-storage)             | `eos`      |
@@ -406,16 +405,16 @@ Storj DCS is an S3-compatible storage, using `s3` for option `--storage`. The se
 
 ```shell
 juicefs format \
-	--storage s3 \
-	--bucket https://gateway.<region>.storjshare.io/<bucket> \
-	--access-key <your-access-key> \
-	--secret-key <your-sceret-key> \
-	... \
+    --storage s3 \
+    --bucket https://gateway.<region>.storjshare.io/<bucket> \
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
+    ... \
     myjfs
 ```
 
 :::caution
-Storj DCS [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API is not fully S3 compatible (result list is not sorted), so some features of juicefs do not work. For example, `juicefs gc`, `juicefs fsck`, `juicefs sync`, `juicefs destroy`. And when using `juicefs mount`, you need to disable [automatic-backup](../administration/metadata_dump_load.md#automatic-backup) function by adding `--backup-meta 0`.
+Storj DCS [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API is not fully S3 compatible (result list is not sorted), so some features of JuiceFS do not work. For example, `juicefs gc`, `juicefs fsck`, `juicefs sync`, `juicefs destroy`. And when using `juicefs mount`, you need to disable [automatic-backup](../administration/metadata_dump_load.md#automatic-backup) function by adding `--backup-meta 0`.
 :::
 
 ## Vultr Object Storage
@@ -424,19 +423,19 @@ Vultr Object Storage is an S3-compatible storage, using `s3` for `--storage` opt
 
 ```shell
 juicefs format \
-	--storage s3 \
-	--bucket https://<bucket>.ewr1.vultrobjects.com/ \
-	--access-key <your-access-key> \
-	--secret-key <your-sceret-key> \
-	... \
+    --storage s3 \
+    --bucket https://<bucket>.ewr1.vultrobjects.com/ \
+    --access-key <your-access-key> \
+    --secret-key <your-sceret-key> \
+    ... \
     myjfs
 ```
 
-Please find the access and secret keys for object storage [in the customer portal](https://my.vultr.com/objectstorage/).
+Please find the access and secret keys for object storage [in the customer portal](https://my.vultr.com/objectstorage).
 
 ## Cloudflare R2 {#r2}
 
-R2 is Cloudflare's object storage service and provides an S3-compatible API, so usage is the same as Amazon S3. Please refer to [Documentation](https://developers.cloudflare.com/r2/data-access/s3-api/tokens/) to learn how to create Access Key and Secret Key.
+R2 is Cloudflare's object storage service and provides an S3-compatible API, so usage is the same as Amazon S3. Please refer to [Documentation](https://developers.cloudflare.com/r2/data-access/s3-api/tokens) to learn how to create Access Key and Secret Key.
 
 ```shell
 juicefs format \
@@ -583,7 +582,6 @@ juicefs format \
     ... \
     myjfs
 ```
-
 
 ## Kingsoft Cloud KS3
 
@@ -751,7 +749,7 @@ sudo yum install librados2-devel
   </TabItem>
 </Tabs>
 
-Then compile JuiceFS for Ceph (make sure you have Go 1.17+ and GCC 5.4+ installed):
+Then compile JuiceFS for Ceph (make sure you have Go 1.18+ and GCC 5.4+ installed):
 
 ```bash
 make juicefs.ceph
@@ -816,7 +814,7 @@ juicefs format \
 
 [MinIO](https://min.io) is an open source lightweight object storage, compatible with Amazon S3 API.
 
-It is easy to run a MinIO object storage instance locally using Docker. For example, the following command sets and maps port `9900` for the console with `-console-address ":9900"` and also maps the data path for the MinIO object storage to the `minio-data` folder in the current directory, which can be modified if needed.
+It is easy to run a MinIO instance locally using Docker. For example, the following command sets and maps port `9900` for the console with `--console-address ":9900"` and also maps the data path for the MinIO to the `minio-data` folder in the current directory, which can be modified if needed.
 
 ```shell
 sudo docker run -d --name minio \
@@ -829,10 +827,10 @@ sudo docker run -d --name minio \
     minio/minio server /data --console-address ":9900"
 ```
 
-It is accessed using the following address:
+After container is up and running, you can access:
 
-- **MinIO UI**: [http://127.0.0.1:9900](http://127.0.0.1:9900/)
-- **MinIO API**: [http://127.0.0.1:9000](http://127.0.0.1:9000/)
+- **MinIO API**: [http://127.0.0.1:9000](http://127.0.0.1:9000), this is the object storage service address used by JuiceFS
+- **MinIO UI**: [http://127.0.0.1:9900](http://127.0.0.1:9900), this is used to manage the object storage itself, not related to JuiceFS
 
 The initial Access Key and Secret Key of the object storage are both `minioadmin`.
 
@@ -849,8 +847,10 @@ juicefs format \
 ```
 
 :::note
+
 1. Currently, JuiceFS only supports path-style MinIO URI addresses, e.g., `http://127.0.0.1:9000/myjfs`.
-2. The `MINIO_REGION` environment variable can be used to set the region of MinIO, if not set, the default is `us-east-1`.
+1. The `MINIO_REGION` environment variable can be used to set the region of MinIO, if not set, the default is `us-east-1`.
+1. When using Multi-Node MinIO deployment, consider setting using a DNS address in the service endpoint, resolving to all MinIO Node IPs, as a simple load-balancer, e.g. `http://minio.example.com:9000/myjfs`
 :::
 
 ## WebDAV
@@ -1119,9 +1119,9 @@ Local storage is usually only used to help users understand how JuiceFS works an
 
 ## SFTP/SSH {#sftp}
 
-SFTP - Secure File Transfer Protocol，It is not a type of storage. To be precise, JuiceFS reads and writes to disks on remote hosts via SFTP/SSH, thus allowing any SSH-enabled operating system to be used as a data storage for JuiceFS.
+SFTP - Secure File Transfer Protocol, It is not a type of storage. To be precise, JuiceFS reads and writes to disks on remote hosts via SFTP/SSH, thus allowing any SSH-enabled operating system to be used as a data storage for JuiceFS.
 
-For example, the following command uses the sftp protocol to connect to the remote server `192.168.1.11` and creates the `myjfs/` folder in the `$HOME` directory of user `tom` as the data storage of JuiceFS.
+For example, the following command uses the SFTP protocol to connect to the remote server `192.168.1.11` and creates the `myjfs/` folder in the `$HOME` directory of user `tom` as the data storage of JuiceFS.
 
 ```shell
 juicefs format  \

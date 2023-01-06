@@ -1,13 +1,11 @@
 ---
-sidebar_label: Use JuiceFS on Hadoop Ecosystem
-sidebar_position: 4
+title: Use JuiceFS on Hadoop Ecosystem
+sidebar_position: 5
 slug: /hadoop_java_sdk
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
-# Use JuiceFS on Hadoop Ecosystem
 
 JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK. Various applications in the Hadoop ecosystem can smoothly use JuiceFS to store data without changing the code.
 
@@ -49,10 +47,10 @@ No matter which system environment the client is compiled for, the compiled JAR 
 
 Compilation depends on the following tools:
 
-- [Go](https://golang.org/) 1.17+
+- [Go](https://golang.org) 1.18+
 - JDK 8+
-- [Maven](https://maven.apache.org/) 3.3+
-- git
+- [Maven](https://maven.apache.org) 3.3+
+- Git
 - make
 - GCC 5.4+
 
@@ -87,7 +85,7 @@ It is recommended to use a version that includes third-party dependencies.
 
 #### Windows
 
-The client used in the Windows environment needs to be obtained through cross-compilation on Linux or macOS. The compilation depends on [mingw-w64](https://www.mingw-w64.org/), which needs to be installed first.
+The client used in the Windows environment needs to be obtained through cross-compilation on Linux or macOS. The compilation depends on [mingw-w64](https://www.mingw-w64.org), which needs to be installed first.
 
 The steps are the same as compiling on Linux or macOS. For example, on the Ubuntu system, install the `mingw-w64` package first to solve the dependency problem:
 
@@ -165,7 +163,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | Configuration            | Default Value | Description                                     |
 |--------------------------|---------------|-------------------------------------------------|
 | `juicefs.max-uploads`    | 20            | The max number of connections to upload         |
-| `juicefs.max-deletes`    | 2             | The max number of connections to delete         |
+| `juicefs.max-deletes`    | 10            | The max number of connections to delete         |
 | `juicefs.get-timeout`    | 5             | The max number of seconds to download an object |
 | `juicefs.put-timeout`    | 60            | The max number of seconds to upload an object   |
 | `juicefs.memory-size`    | 300           | Total read/write buffering in MiB               |
@@ -174,8 +172,6 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.download-limit` | 0             | Bandwidth limit for download in Mbps            |
 | `juicefs.io-retries`     | 10            | Number of retries after network failure         |
 | `juicefs.writeback`      | `false`       | Upload objects in background                    |
-
-
 
 #### Other Configurations
 
@@ -608,7 +604,6 @@ Computing resources used in this test:
   ```
 
   10 map task, each task read 10000MB random data sequentially
-
 
 - **For reference**
 

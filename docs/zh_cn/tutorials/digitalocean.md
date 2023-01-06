@@ -1,9 +1,8 @@
 ---
-sidebar_label: 在 DigitalOcean 使用 JuiceFS
+title: 在 DigitalOcean 使用 JuiceFS
 sidebar_position: 7
 slug: /clouds/digitalocean
 ---
-# 在 DigitalOcean 安装和使用 JuiceFS 存储
 
 JuiceFS 是面向云设计的，使用云平台开箱即用的存储和数据库服务，最快几分钟就能完成配置投入使用，本文以 DigitalOcean 平台为例，介绍如何在云计算平台上快速简单的安装和使用 JuiceFS。
 
@@ -31,7 +30,7 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 这里，我们创建了一个名为 `juicefs` 的 Spaces 存储桶，区域为新加坡 `sgp1`，它的访问地址为：
 
-- https://juicefs.sgp1.digitaloceanspaces.com
+- `https://juicefs.sgp1.digitaloceanspaces.com`
 
 另外，还需要在 API 菜单创建 `Spaces access keys`，JuiceFS 需要用它访问 Spaces 的 API。
 

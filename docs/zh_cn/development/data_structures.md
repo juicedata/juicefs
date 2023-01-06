@@ -1,9 +1,9 @@
 ---
-sidebar_label: 内部实现
+title: 内部实现
 sidebar_position: 3
 slug: /internals
+description: 本文介绍 JuiceFS 的主要实现细节，用来为开发者了解和贡献开源代码作参考。
 ---
-# JuiceFS 内部实现
 
 ## 1. 简介
 
@@ -16,7 +16,7 @@ slug: /internals
   - Redis：Redis 及各种协议兼容的服务
   - SQL：MySQL、PostgreSQL、SQLite 等
   - TKV：TiKV、BadgerDB、etcd 等
-- 数据存储：用来存储和管理文件系统数据的组件，通常由对象存储担任，如 Amazon S3、Aliyun OSS 等；也可由能兼容对象存储语义的其他存储系统担任，如本地文件系统、Ceph Rados、TiKV 等。
+- 数据存储：用来存储和管理文件系统数据的组件，通常由对象存储担任，如 Amazon S3、Aliyun OSS 等；也可由能兼容对象存储语义的其他存储系统担任，如本地文件系统、Ceph RADOS、TiKV 等。
 - 客户端：有多种形式，如挂载（mount）进程、S3 网关、WebDAV 服务器、Java SDK 等。
 - 文件：本文中泛指所有类型的文件，包括普通文件、目录文件、链接文件、设备文件等。
 - 目录：一种特殊的文件，用来组织文件树型结构，其内容是一组其他文件的索引。
@@ -30,33 +30,34 @@ slug: /internals
 #### 3.1.1 Setting
 
 保存文件系统的格式化信息，在执行 `juicefs format` 命令时创建，后续可通过 `juicefs config` 命令修改其中的部分字段。结构具体如下：
+
 ```go
 type Format struct {
-	Name             string
-	UUID             string
-	Storage          string
-	Bucket           string
-	AccessKey        string `json:",omitempty"`
-	SecretKey        string `json:",omitempty"`
-	SessionToken     string `json:",omitempty"`
-	BlockSize        int
-	Compression      string `json:",omitempty"`
-	Shards           int    `json:",omitempty"`
-	HashPrefix       bool   `json:",omitempty"`
-	Capacity         uint64 `json:",omitempty"`
-	Inodes           uint64 `json:",omitempty"`
-	EncryptKey       string `json:",omitempty"`
-	KeyEncrypted     bool   `json:",omitempty"`
-	TrashDays        int    `json:",omitempty"`
-	MetaVersion      int    `json:",omitempty"`
-	MinClientVersion string `json:",omitempty"`
-	MaxClientVersion string `json:",omitempty"`
+    Name             string
+    UUID             string
+    Storage          string
+    Bucket           string
+    AccessKey        string `json:",omitempty"`
+    SecretKey        string `json:",omitempty"`
+    SessionToken     string `json:",omitempty"`
+    BlockSize        int
+    Compression      string `json:",omitempty"`
+    Shards           int    `json:",omitempty"`
+    HashPrefix       bool   `json:",omitempty"`
+    Capacity         uint64 `json:",omitempty"`
+    Inodes           uint64 `json:",omitempty"`
+    EncryptKey       string `json:",omitempty"`
+    KeyEncrypted     bool   `json:",omitempty"`
+    TrashDays        int    `json:",omitempty"`
+    MetaVersion      int    `json:",omitempty"`
+    MinClientVersion string `json:",omitempty"`
+    MaxClientVersion string `json:",omitempty"`
 }
 ```
 
 - Name：文件系统名称，在格式化时由用户指定
 - UUID：文件系统的唯一 ID，在格式化时由系统自动生成
-- Storage：用来保存数据的对象存储简称，如 s3、oss 等
+- Storage：用来保存数据的对象存储简称，如 `s3`、`oss` 等
 - Bucket：对象存储的桶路径
 - AccessKey：用来访问对象存储的 access key
 - SecretKey：用来访问对象存储的 secret key
@@ -84,7 +85,7 @@ type Format struct {
 - totalInodes：文件系统的已使用文件数
 - nextInode：下一个可用的 inode 号（Redis 中为当前已用的最大 inode 号）
 - nextChunk：下一个可用的 sliceId（Redis 中为当前已用的最大 sliceId）
-- nextSession：当前已用的最大 sid（sessionID）
+- nextSession：当前已用的最大 SID（sessionID）
 - nextTrash：当前已用的最大 trash inode 号
 - nextCleanupSlices：上一次检查清理残留 slices 的时间点
 - lastCleanupSessions：上一次检查清理残留 stale sessions 的时间点
@@ -105,10 +106,10 @@ type Format struct {
 
 ```go
 type SessionInfo struct {
-	Version    string // JuiceFS 版本
-	HostName   string // 主机名称
-	MountPoint string // 挂载点路径。S3 网关和 WebDAV 服务分别为 "s3gateway" 和 "webdav"
-	ProcessID  int    // 进程 ID
+    Version    string // JuiceFS 版本
+    HostName   string // 主机名称
+    MountPoint string // 挂载点路径。S3 网关和 WebDAV 服务分别为 "s3gateway" 和 "webdav"
+    ProcessID  int    // 进程 ID
 }
 ```
 
@@ -120,24 +121,24 @@ type SessionInfo struct {
 
 ```go
 type Attr struct {
-	Flags     uint8  // reserved flags
-	Typ       uint8  // type of a node
-	Mode      uint16 // permission mode
-	Uid       uint32 // owner id
-	Gid       uint32 // group id of owner
-	Rdev      uint32 // device number
-	Atime     int64  // last access time
-	Mtime     int64  // last modified time
-	Ctime     int64  // last change time for meta
-	Atimensec uint32 // nanosecond part of atime
-	Mtimensec uint32 // nanosecond part of mtime
-	Ctimensec uint32 // nanosecond part of ctime
-	Nlink     uint32 // number of links (sub-directories or hardlinks)
-	Length    uint64 // length of regular file
+    Flags     uint8  // reserved flags
+    Typ       uint8  // type of a node
+    Mode      uint16 // permission mode
+    Uid       uint32 // owner id
+    Gid       uint32 // group id of owner
+    Rdev      uint32 // device number
+    Atime     int64  // last access time
+    Mtime     int64  // last modified time
+    Ctime     int64  // last change time for meta
+    Atimensec uint32 // nanosecond part of atime
+    Mtimensec uint32 // nanosecond part of mtime
+    Ctimensec uint32 // nanosecond part of ctime
+    Nlink     uint32 // number of links (sub-directories or hardlinks)
+    Length    uint64 // length of regular file
 
-	Parent    Ino  // inode of parent; 0 means tracked by parentKey (for hardlinks)
-	Full      bool // the attributes are completed or not
-	KeepCache bool // whether to keep the cached page or not
+    Parent    Ino  // inode of parent; 0 means tracked by parentKey (for hardlinks)
+    Full      bool // the attributes are completed or not
+    KeepCache bool // whether to keep the cached page or not
 }
 ```
 
@@ -186,11 +187,11 @@ inode, index -> []Slices
 
 ```go
 type Slice struct {
-	Pos  uint32 // Slice 在 Chunk 中的偏移位置
-	ID   uint64 // Slice 的 ID，全局唯一
-	Size uint32 // Slice 的总大小
-	Off  uint32 // 有效数据在此 Slice 中的偏移位置
-	Len  uint32 // 有效数据在此 Slice 中的大小
+    Pos  uint32 // Slice 在 Chunk 中的偏移位置
+    ID   uint64 // Slice 的 ID，全局唯一
+    Size uint32 // Slice 的总大小
+    Off  uint32 // 有效数据在此 Slice 中的偏移位置
+    Len  uint32 // 有效数据在此 Slice 中的大小
 }
 ```
 
@@ -230,7 +231,7 @@ inode, key -> value
 inode, sid, owner -> ltype
 ```
 
-其中 sid 为客户端会话 ID，owner 为一串数字，通常与进程相关联；ltype 为锁类型，可以为 'R' 或者 'W'。
+其中 `sid` 为客户端会话 ID，`owner` 为一串数字，通常与进程相关联；`ltype` 为锁类型，可以为 'R' 或者 'W'。
 
 #### 3.1.13 Plock
 
@@ -244,10 +245,10 @@ inode, sid, owner -> []plockRecord
 
 ```go
 type plockRecord struct {
-	ltype uint32 // 锁类型
-	pid   uint32 // 进程 ID
-	start uint64 // 锁起始位置
-	end   uint64 // 锁结束位置
+    ltype uint32 // 锁类型
+    pid   uint32 // 进程 ID
+    start uint64 // 锁起始位置
+    end   uint64 // 锁结束位置
 }
 ```
 
@@ -275,8 +276,8 @@ sliceId, deleted -> []slice
 
 ```go
 type slice struct {
-	ID   uint64
-	Size uint32
+    ID   uint64
+    Size uint32
 }
 ```
 
@@ -290,7 +291,7 @@ type slice struct {
 sid -> []inode
 ```
 
-其中 sid 为会话 ID，映射值为暂时未删除的文件 inodes 列表。
+其中 `sid` 为会话 ID，映射值为暂时未删除的文件 inodes 列表。
 
 ### 3.2 Redis
 
@@ -393,7 +394,7 @@ Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
 - Value Type：Hash
 - Value：此文件的所有 plocks。在 Hash 中：
   - Key：`${sid}_${owner}`，owner 以十六进制表示
-  - Value：字节数组，其中每 24 字节对应一个 [plockRecord](#3.1.13-Plock)
+  - Value：字节数组，其中每 24 字节对应一个 [plockRecord](#3113-plock)
 
 #### 3.2.14 DelFiles
 
@@ -409,7 +410,7 @@ Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
 - Value Type：Hash
 - Value：所有待清理的 Slices。在 Hash 中：
   - Key：`${sliceId}_${deleted}`
-  - Value：字节数组，其中每 12 字节对应一个 [slice](#3.1.15-DelSlices)
+  - Value：字节数组，其中每 12 字节对应一个 [slice](#3115-delslices)
 
 #### 3.2.16 Sustained
 
@@ -426,8 +427,8 @@ Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
 
 ```go
 type setting struct {
-	Name  string `xorm:"pk"`
-	Value string `xorm:"varchar(4096) notnull"`
+    Name  string `xorm:"pk"`
+    Value string `xorm:"varchar(4096) notnull"`
 }
 ```
 
@@ -437,8 +438,8 @@ type setting struct {
 
 ```go
 type counter struct {
-	Name  string `xorm:"pk"`
-	Value int64  `xorm:"notnull"`
+    Name  string `xorm:"pk"`
+    Value int64  `xorm:"notnull"`
 }
 ```
 
@@ -446,9 +447,9 @@ type counter struct {
 
 ```go
 type session2 struct {
-	Sid    uint64 `xorm:"pk"`
-	Expire int64  `xorm:"notnull"`
-	Info   []byte `xorm:"blob"`
+    Sid    uint64 `xorm:"pk"`
+    Expire int64  `xorm:"notnull"`
+    Info   []byte `xorm:"blob"`
 }
 ```
 
@@ -460,33 +461,33 @@ type session2 struct {
 
 ```go
 type node struct {
-	Inode  Ino    `xorm:"pk"`
-	Type   uint8  `xorm:"notnull"`
-	Flags  uint8  `xorm:"notnull"`
-	Mode   uint16 `xorm:"notnull"`
-	Uid    uint32 `xorm:"notnull"`
-	Gid    uint32 `xorm:"notnull"`
-	Atime  int64  `xorm:"notnull"`
-	Mtime  int64  `xorm:"notnull"`
-	Ctime  int64  `xorm:"notnull"`
-	Nlink  uint32 `xorm:"notnull"`
-	Length uint64 `xorm:"notnull"`
-	Rdev   uint32
-	Parent Ino
+    Inode  Ino    `xorm:"pk"`
+    Type   uint8  `xorm:"notnull"`
+    Flags  uint8  `xorm:"notnull"`
+    Mode   uint16 `xorm:"notnull"`
+    Uid    uint32 `xorm:"notnull"`
+    Gid    uint32 `xorm:"notnull"`
+    Atime  int64  `xorm:"notnull"`
+    Mtime  int64  `xorm:"notnull"`
+    Ctime  int64  `xorm:"notnull"`
+    Nlink  uint32 `xorm:"notnull"`
+    Length uint64 `xorm:"notnull"`
+    Rdev   uint32
+    Parent Ino
 }
 ```
 
-大部分字段与 [Attr](#3.1.5-Node) 相同，但时间戳使用了较低精度，其中 Atime/Mtime/Ctime 的单位为微秒。
+大部分字段与 [Attr](#315-node) 相同，但时间戳使用了较低精度，其中 Atime/Mtime/Ctime 的单位为微秒。
 
 #### 3.3.6 Edge
 
 ```go
 type edge struct {
-	Id     int64  `xorm:"pk bigserial"`
-	Parent Ino    `xorm:"unique(edge) notnull"`
-	Name   []byte `xorm:"unique(edge) varbinary(255) notnull"`
-	Inode  Ino    `xorm:"index notnull"`
-	Type   uint8  `xorm:"notnull"`
+    Id     int64  `xorm:"pk bigserial"`
+    Parent Ino    `xorm:"unique(edge) notnull"`
+    Name   []byte `xorm:"unique(edge) varbinary(255) notnull"`
+    Inode  Ino    `xorm:"index notnull"`
+    Type   uint8  `xorm:"notnull"`
 }
 ```
 
@@ -498,22 +499,22 @@ type edge struct {
 
 ```go
 type chunk struct {
-	Id     int64  `xorm:"pk bigserial"`
-	Inode  Ino    `xorm:"unique(chunk) notnull"`
-	Indx   uint32 `xorm:"unique(chunk) notnull"`
-	Slices []byte `xorm:"blob notnull"`
+    Id     int64  `xorm:"pk bigserial"`
+    Inode  Ino    `xorm:"unique(chunk) notnull"`
+    Indx   uint32 `xorm:"unique(chunk) notnull"`
+    Slices []byte `xorm:"blob notnull"`
 }
 ```
 
-Slices 是一段字节数组，每 24 字节对应一个 [Slice](#3.1.8-Chunk)。
+Slices 是一段字节数组，每 24 字节对应一个 [Slice](#318-chunk)。
 
 #### 3.3.9 SliceRef
 
 ```go
 type sliceRef struct {
-	Id   uint64 `xorm:"pk chunkid"`
-	Size uint32 `xorm:"notnull"`
-	Refs int    `xorm:"notnull"`
+    Id   uint64 `xorm:"pk chunkid"`
+    Size uint32 `xorm:"notnull"`
+    Refs int    `xorm:"notnull"`
 }
 ```
 
@@ -521,8 +522,8 @@ type sliceRef struct {
 
 ```go
 type symlink struct {
-	Inode  Ino    `xorm:"pk"`
-	Target []byte `xorm:"varbinary(4096) notnull"`
+    Inode  Ino    `xorm:"pk"`
+    Target []byte `xorm:"varbinary(4096) notnull"`
 }
 ```
 
@@ -530,10 +531,10 @@ type symlink struct {
 
 ```go
 type xattr struct {
-	Id    int64  `xorm:"pk bigserial"`
-	Inode Ino    `xorm:"unique(name) notnull"`
-	Name  string `xorm:"unique(name) notnull"`
-	Value []byte `xorm:"blob notnull"`
+    Id    int64  `xorm:"pk bigserial"`
+    Inode Ino    `xorm:"unique(name) notnull"`
+    Name  string `xorm:"unique(name) notnull"`
+    Value []byte `xorm:"blob notnull"`
 }
 ```
 
@@ -541,11 +542,11 @@ type xattr struct {
 
 ```go
 type flock struct {
-	Id    int64  `xorm:"pk bigserial"`
-	Inode Ino    `xorm:"notnull unique(flock)"`
-	Sid   uint64 `xorm:"notnull unique(flock)"`
-	Owner int64  `xorm:"notnull unique(flock)"`
-	Ltype byte   `xorm:"notnull"`
+    Id    int64  `xorm:"pk bigserial"`
+    Inode Ino    `xorm:"notnull unique(flock)"`
+    Sid   uint64 `xorm:"notnull unique(flock)"`
+    Owner int64  `xorm:"notnull unique(flock)"`
+    Ltype byte   `xorm:"notnull"`
 }
 ```
 
@@ -553,23 +554,23 @@ type flock struct {
 
 ```go
 type plock struct {
-	Id      int64  `xorm:"pk bigserial"`
-	Inode   Ino    `xorm:"notnull unique(plock)"`
-	Sid     uint64 `xorm:"notnull unique(plock)"`
-	Owner   int64  `xorm:"notnull unique(plock)"`
-	Records []byte `xorm:"blob notnull"`
+    Id      int64  `xorm:"pk bigserial"`
+    Inode   Ino    `xorm:"notnull unique(plock)"`
+    Sid     uint64 `xorm:"notnull unique(plock)"`
+    Owner   int64  `xorm:"notnull unique(plock)"`
+    Records []byte `xorm:"blob notnull"`
 }
 ```
 
-Records 是一段字节数组，每 24 字节对应一个 [plockRecord](#3.1.13-Plock)。
+Records 是一段字节数组，每 24 字节对应一个 [plockRecord](#3113-plock)。
 
 #### 3.3.14 DelFiles
 
 ```go
 type delfile struct {
-	Inode  Ino    `xorm:"pk notnull"`
-	Length uint64 `xorm:"notnull"`
-	Expire int64  `xorm:"notnull"`
+    Inode  Ino    `xorm:"pk notnull"`
+    Length uint64 `xorm:"notnull"`
+    Expire int64  `xorm:"notnull"`
 }
 ```
 
@@ -577,21 +578,21 @@ type delfile struct {
 
 ```go
 type delslices struct {
-	Id      uint64 `xorm:"pk chunkid"`
-	Deleted int64  `xorm:"notnull"`
-	Slices  []byte `xorm:"blob notnull"`
+    Id      uint64 `xorm:"pk chunkid"`
+    Deleted int64  `xorm:"notnull"`
+    Slices  []byte `xorm:"blob notnull"`
 }
 ```
 
-Slices 是一段字节数组，每 12 字节对应一个 [slice](#3.1.15-DelSlices)。
+Slices 是一段字节数组，每 12 字节对应一个 [slice](#3115-delslices)。
 
 #### 3.3.16 Sustained
 
 ```go
 type sustained struct {
-	Id    int64  `xorm:"pk bigserial"`
-	Sid   uint64 `xorm:"unique(sustained) notnull"`
-	Inode Ino    `xorm:"unique(sustained) notnull"`
+    Id    int64  `xorm:"pk bigserial"`
+    Sid   uint64 `xorm:"unique(sustained) notnull"`
+    Inode Ino    `xorm:"unique(sustained) notnull"`
 }
 ```
 
@@ -605,7 +606,7 @@ TKV（Transactional Key-Value Database）中 Key 的通用格式为 `${prefix}${
 在 TKV 的 Keys 中，所有整数都以编码后的二进制形式存储：
 
 - inode 和 counter value 占 8 个字节，使用**小端**编码
-- sid、sliceId 和 timestamp 占 8 个字节，使用**大端**编码
+- SID、sliceId 和 timestamp 占 8 个字节，使用**大端**编码
 
 #### 3.4.1 Setting
 
@@ -655,7 +656,7 @@ A${inode}P${parentInode} -> counter value
 A${inode}C${index} -> Slices
 ```
 
-其中 index 占 4 个字节，使用**大端**编码。Slices 是一段字节数组，每 24 字节对应一个 [Slice](#3.1.8-Chunk)。
+其中 index 占 4 个字节，使用**大端**编码。Slices 是一段字节数组，每 24 字节对应一个 [Slice](#318-chunk)。
 
 #### 3.4.9 SliceRef
 
@@ -687,9 +688,9 @@ F${inode} -> flocks
 
 ```go
 type flock struct {
-	sid   uint64
-	owner uint64
-	ltype uint8
+    sid   uint64
+    owner uint64
+    ltype uint8
 }
 ```
 
@@ -703,14 +704,14 @@ P${inode} -> plocks
 
 ```go
 type plock struct {
-	sid 	uint64
-	owner 	uint64
-	size 	uint32
-	records []byte
+    sid     uint64
+    owner     uint64
+    size     uint32
+    records []byte
 }
 ```
 
-其中 size 是 records 数组的长度，records 中每 24 字节对应一个 [plockRecord](#3.1.13-Plock)。
+其中 size 是 records 数组的长度，records 中每 24 字节对应一个 [plockRecord](#3113-plock)。
 
 #### 3.4.14 DelFiles
 
@@ -726,7 +727,7 @@ D${inode}${length} -> timestamp
 L${timestamp}${sliceId} -> slices
 ```
 
-其中 slices 是一段字节数组，每 12 字节对应一个 [slice](#3.1.15-DelSlices)。
+其中 slices 是一段字节数组，每 12 字节对应一个 [slice](#3115-delslices)。
 
 #### 3.4.16 Sustained
 
@@ -740,12 +741,12 @@ SS${sid}${inode} -> 1
 
 ### 4.1 根据路径查找文件
 
-根据 [Edge](#3.1.6-Edge) 的设计，元数据引擎中只记录了每个目录的直接子节点。当应用提供一个路径来访问文件时，JuiceFS 需要逐级查找。现在假设应用想打开文件 `/dir1/dir2/testfile`，则需要：
+根据 [Edge](#316-edge) 的设计，元数据引擎中只记录了每个目录的直接子节点。当应用提供一个路径来访问文件时，JuiceFS 需要逐级查找。现在假设应用想打开文件 `/dir1/dir2/testfile`，则需要：
 
 1. 在根目录（Inode 号固定为 1）的 Edge 结构中搜寻 name 为 "dir1" 的 entry，得到其 inode 号 N1
 2. 在 N1 的 Edge 结构中搜寻 name 为 "dir2" 的 entry，得到其 inode 号 N2
 3. 在 N2 的 Edge 结构中搜寻 name 为 "testfile" 的 entry，得到其 inode 号 N3
-4. 根据 N3 搜寻其对应的 [Node](#3.1.5-Node) 结构，得到该文件的相关属性
+4. 根据 N3 搜寻其对应的 [Node](#315-node) 结构，得到该文件的相关属性
 
 在以上步骤中，任何一步搜寻失败都会导致该路径指向的文件未找到。
 
@@ -758,7 +759,7 @@ SS${sid}${inode} -> 1
 Chunk: |<---        Chunk 0        --->|<---        Chunk 1        --->|<-- Chunk 2 -->|
 ```
 
-在单机 Redis 中，这意味着有 3 个 [Chunk Keys](#3.1.8-Chunk)，分别为 `c100_0`， `c100_1` 和 `c100_2`，每个 Key 对应一个 Slices 列表。这些 Slices 主要在数据写入时生成，可能互相之间有覆盖，也可能未完全填充满 Chunk。因此，在使用前需要顺序遍历这个 Slices 列表，并重新构建出最新版的数据分布，做到：
+在单机 Redis 中，这意味着有 3 个 [Chunk Keys](#318-chunk)，分别为 `c100_0`， `c100_1` 和 `c100_2`，每个 Key 对应一个 Slices 列表。这些 Slices 主要在数据写入时生成，可能互相之间有覆盖，也可能未完全填充满 Chunk。因此，在使用前需要顺序遍历这个 Slices 列表，并重新构建出最新版的数据分布，做到：
 
 1. 有多个 Slice 覆盖的部分以最后加入的 Slice 为准
 2. 没有被 Slice 覆盖的部分自动补零，用 sliceId = 0 来表示
@@ -785,6 +786,7 @@ New List: |_ _ _ _ _|_ _ _|_ _ _ _ _|_ _ _ _ _|_ _|_ _ _ _ _ _ _ _ _ _ _ _|
 ```
 
 重构后的新列表包含且仅包含了此 Chunk 的最新数据分布，具体如下：
+
 ```go
 Slice{pos:   0, id:  0, size: 10M, off:   0, len: 10M}
 Slice{pos: 10M, id: 10, size: 30M, off:   0, len:  6M}
@@ -808,14 +810,14 @@ Block 是 JuiceFS 管理数据的基本单元，其大小默认为 4 MiB，且�
   - index 是该对象在所属 Slice 中的序号，默认一个 Slice 最多能拆成 16 个 Blocks，因此其取值范围为 [0, 16)
   - size 是该 Block 的大小，默认情况下其取值范围为 (0, 4 MiB]
 
-目前使用的 hash 算法有两种，以 basename 中的 sliceId 为参数，根据文件系统格式化时的 [HashPrefix](#3.1.1-Setting) 配置选择：
+目前使用的 hash 算法有两种，以 basename 中的 sliceId 为参数，根据文件系统格式化时的 [HashPrefix](#311-setting) 配置选择：
 
 ```go
 func hash(sliceId int) string {
-	if HashPrefix {
-		return fmt.Sprintf("%02X/%d", sliceId%256, sliceId/1000/1000)
-	}
-	return fmt.Sprintf("%d/%d", sliceId/1000/1000, sliceId/1000)
+    if HashPrefix {
+        return fmt.Sprintf("%02X/%d", sliceId%256, sliceId/1000/1000)
+    }
+    return fmt.Sprintf("%d/%d", sliceId/1000/1000, sliceId/1000)
 }
 ```
 
@@ -872,11 +874,11 @@ objects:
 
 #### 4.3.2 数据压缩
 
-在文件系统格式化时可以通过 `--compress <value>` 参数配置压缩算法（支持 lz4 和 zstd），使得此文件系统的所有数据 Block 会经过压缩后再上传到对象存储。此时对象名称仍与默认配置相同，且内容为原始数据经压缩算法后的结果，不携带任何其它元信息。因此，文件[文统格式化信息](#3.1.1-Setting)中的压缩算法不允许修改，否则会导致读取已有数据失败。
+在文件系统格式化时可以通过 `--compress <value>` 参数配置压缩算法（支持 LZ4 和 zstd），使得此文件系统的所有数据 Block 会经过压缩后再上传到对象存储。此时对象名称仍与默认配置相同，且内容为原始数据经压缩算法后的结果，不携带任何其它元信息。因此，文件[文统格式化信息](#311-setting)中的压缩算法不允许修改，否则会导致读取已有数据失败。
 
 #### 4.3.3 数据加密
 
-在文件系统格式化时可以通过 `--encrypt-rsa-key <value>` 参数配置 RSA 私钥以开启[静态数据加密](https://juicefs.com/docs/zh/community/security/encrypt#%E9%9D%99%E6%80%81%E6%95%B0%E6%8D%AE%E5%8A%A0%E5%AF%86)功能，使得此文件系统的所有数据 Block 会经过加密后再上传到对象存储。此时对象名称仍与默认配置相同，内容为一段 header 加上数据经加密算法后的结果。这段 header 里记录了用来解密的对称密钥以及随机种子，而对称密钥本身又经过 RSA 私钥加密。因此，文件[文统格式化信息](#3.1.1-Setting)中的 RSA 私钥目前不允许修改，否则会导致读取已有数据失败。
+在文件系统格式化时可以通过 `--encrypt-rsa-key <value>` 参数配置 RSA 私钥以开启[静态数据加密](../security/encrypt.md)功能，使得此文件系统的所有数据 Block 会经过加密后再上传到对象存储。此时对象名称仍与默认配置相同，内容为一段 header 加上数据经加密算法后的结果。这段 header 里记录了用来解密的对称密钥以及随机种子，而对称密钥本身又经过 RSA 私钥加密。因此，文件[文统格式化信息](#311-setting)中的 RSA 私钥目前不允许修改，否则会导致读取已有数据失败。
 
 :::note 备注
 若同时开启压缩和加密，原始数据会先压缩再加密后上传到对象存储。

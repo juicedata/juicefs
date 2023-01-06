@@ -1,9 +1,8 @@
 ---
-sidebar_label: Use JuiceFS on AWS
+title: Use JuiceFS on AWS
 sidebar_position: 4
 slug: /clouds/aws
 ---
-# Use JuiceFS on AWS
 
 AWS is the world's leading cloud computing platform, offering almost all types of cloud computing services. Thanks to the rich product line of AWS, users can choose JuiceFS components in a very flexible way.
 
@@ -135,12 +134,12 @@ The `format` subcommand of the JuiceFS client is used to create (format) a Juice
 
 ```shell
 $ juicefs format \
-	--storage s3 \
-	--bucket https://<bucket>.s3.<region>.amazonaws.com \
-	--access-key <access-key-id> \
-	--secret-key <access-key-secret> \
-	redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1 \
-	mystor
+    --storage s3 \
+    --bucket https://<bucket>.s3.<region>.amazonaws.com \
+    --access-key <access-key-id> \
+    --secret-key <access-key-secret> \
+    redis://[<redis-username>]:<redis-password>@<redis-url>:6379/1 \
+    mystor
 ```
 
 **Option Description:**
@@ -155,10 +154,10 @@ When using the IAM role to bind EC2, you only need to specify `--storage` and `-
 
 ```shell
 $ juicefs format \
-	--storage s3 \
-	--bucket https://herald-demo.s3.<region>.amazonaws.com \
-	redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1 \
-	mystor
+    --storage s3 \
+    --bucket https://herald-demo.s3.<region>.amazonaws.com \
+    redis://herald-demo.abcdefg.0001.apse1.cache.amazonaws.com:6379/1 \
+    mystor
 ```
 
 Seeing the output like the following means that the file system was created successfully.

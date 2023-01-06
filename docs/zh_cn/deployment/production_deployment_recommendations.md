@@ -1,11 +1,12 @@
 ---
 sidebar_position: 1
 slug: /production_deployment_recommendations
+description: 本文面向即将把 JuiceFS 部署到生产环境的用户参考，提供一系列环境配置建议。
 ---
 
 # 生产环境部署建议
 
-本文旨在给出一些部署 JuiceFS 至生产环境时的有效建议，请提前并仔细阅读以下内容。
+生产环境的注意事项在这里罗列介绍。
 
 ## 监控指标收集与可视化
 

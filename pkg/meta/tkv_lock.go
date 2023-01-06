@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"context"
 	"syscall"
 	"time"
 
@@ -55,7 +56,7 @@ func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 	var err error
 	lkey := lockOwner{m.sid, owner}
 	for {
-		err = m.txn(func(tx kvTxn) error {
+		err = m.txn(func(tx *kvTxn) error {
 			v := tx.get(ikey)
 			ls := unmarshalFlock(v)
 			switch ltype {
@@ -78,7 +79,7 @@ func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 				return syscall.EINVAL
 			}
 			if len(ls) == 0 {
-				tx.dels(ikey)
+				tx.delete(ikey)
 			} else {
 				tx.set(ikey, marshalFlock(ls))
 			}
@@ -170,7 +171,7 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 	lock := plockRecord{ltype, pid, start, end}
 	lkey := lockOwner{m.sid, owner}
 	for {
-		err = m.txn(func(tx kvTxn) error {
+		err = m.txn(func(tx *kvTxn) error {
 			owners := unmarshalPlock(tx.get(ikey))
 			if ltype == F_UNLCK {
 				records := owners[lkey]
@@ -200,7 +201,7 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 				owners[lkey] = dumpLocks(ls)
 			}
 			if len(owners) == 0 {
-				tx.dels(ikey)
+				tx.delete(ikey)
 			} else {
 				tx.set(ikey, marshalPlock(owners))
 			}
@@ -220,4 +221,30 @@ func (m *kvMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype u
 		}
 	}
 	return errno(err)
+}
+
+func (m *kvMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
+	fKey := m.flockKey(inode)
+	pKey := m.plockKey(inode)
+
+	var flocks []FLockItem
+	var plocks []PLockItem
+	err := m.txn(func(tx *kvTxn) error {
+		fv := tx.get(fKey)
+		fs := unmarshalFlock(fv)
+		for k, t := range fs {
+			flocks = append(flocks, FLockItem{ownerKey{k.sid, k.owner}, string(t)})
+		}
+
+		pv := tx.get(pKey)
+		owners := unmarshalPlock(pv)
+		for k, records := range owners {
+			ls := loadLocks(records)
+			for _, l := range ls {
+				plocks = append(plocks, PLockItem{ownerKey{k.sid, k.owner}, l})
+			}
+		}
+		return nil
+	})
+	return plocks, flocks, err
 }

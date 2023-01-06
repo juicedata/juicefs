@@ -1,10 +1,8 @@
 ---
-sidebar_label: 性能评估指南
+title: 性能评估指南
 sidebar_position: 2
 slug: /performance_evaluation_guide
 ---
-
-# JuiceFS 性能评估指南
 
 在进行性能测试之前，最好写下该使用场景的大致描述，包括：
 
@@ -25,7 +23,7 @@ slug: /performance_evaluation_guide
 ### 环境配置
 
 - 测试主机：Amazon EC2 c5.xlarge 一台
-- 操作系统：Ubuntu 20.04.1 LTS (Kernel 5.4.0-1029-aws)
+- 操作系统：Ubuntu 20.04.1 LTS (Kernel `5.4.0-1029-aws`)
 - 元数据引擎：Redis 6.2.3, 存储（dir）配置在系统盘
 - 对象存储：Amazon S3
 - JuiceFS version：0.17-dev (2021-09-23 2ec2badf)
@@ -128,7 +126,6 @@ juicefs objbench \
 
 最后清理测试的文件。
 
-
 ## 性能观测和分析工具
 
 接下来介绍两个性能观测和分析工具，是 JuiceFS 测试、使用、调优过程中必备的利器。
@@ -147,24 +144,24 @@ juicefs stats /mnt/jfs --verbosity 1
 
 其中各项指标具体含义如下：
 
-- usage
-  - cpu: JuiceFS 进程消耗的 CPU
-  - mem: JuiceFS 进程占用的物理内存
-  - buf: JuiceFS 进程内部的读写 buffer 大小，受挂载选项 `--buffer-size` 限制
-  - cache: 内部指标，可不关注
-- fuse
-  - ops/lat: FUSE 接口每秒处理的请求个数及其平均时延（单位为毫秒）
-  - read/write: FUSE 接口每秒处理读写请求的带宽值
-- meta
-  - ops/lat: 元数据引擎每秒处理的请求个数及其平均时延（单位为毫秒）。请注意部分能在缓存中直接处理的请求未列入统计，以更好地体现客户端与元数据引擎交互的耗时。
-  - txn/lat: 元数据引擎每秒处理的**写事务**个数及其平均时延（单位为毫秒）。只读请求如 `getattr` 只会计入 ops 而不会计入 txn。
-  - retry: 元数据引擎每秒重试**写事务**的次数
-- blockcache
-  - read/write: 客户端本地数据缓存的每秒读写流量
-- object
-  - get/get_c/lat: 对象存储每秒处理**读请求**的带宽值，请求个数及其平均时延（单位为毫秒）
-  - put/put_c/lat: 对象存储每秒处理**写请求**的带宽值，请求个数及其平均时延（单位为毫秒）
-  - del_c/lat: 对象存储每秒处理**删除请求**的个数和平均时延（单位为毫秒）
+- `usage`
+  - `cpu`: JuiceFS 进程消耗的 CPU
+  - `mem`: JuiceFS 进程占用的物理内存
+  - `buf`: JuiceFS 进程内部的读写 buffer 大小，受挂载选项 `--buffer-size` 限制
+  - `cache`: 内部指标，可不关注
+- `fuse`
+  - `ops`/`lat`: FUSE 接口每秒处理的请求个数及其平均时延（单位为毫秒）
+  - `read`/`write`: FUSE 接口每秒处理读写请求的带宽值
+- `meta`
+  - `ops`/`lat`: 元数据引擎每秒处理的请求个数及其平均时延（单位为毫秒）。请注意部分能在缓存中直接处理的请求未列入统计，以更好地体现客户端与元数据引擎交互的耗时。
+  - `txn`/`lat`: 元数据引擎每秒处理的**写事务**个数及其平均时延（单位为毫秒）。只读请求如 `getattr` 只会计入 ops 而不会计入 txn。
+  - `retry`: 元数据引擎每秒重试**写事务**的次数
+- `blockcache`
+  - `read`/`write`: 客户端本地数据缓存的每秒读写流量
+- `object`
+  - `get`/`get_c`/`lat`: 对象存储每秒处理**读请求**的带宽值，请求个数及其平均时延（单位为毫秒）
+  - `put`/`put_c`/`lat`: 对象存储每秒处理**写请求**的带宽值，请求个数及其平均时延（单位为毫秒）
+  - `del_c`/`lat`: 对象存储每秒处理**删除请求**的个数和平均时延（单位为毫秒）
 
 ### JuiceFS Profile
 
@@ -188,7 +185,7 @@ juicefs profile access.log --interval 0
 
 - 404 次 create，open 和 unlink 请求
 - 808 次 flush 请求：每当文件关闭时会自动调用一次 flush
-- 33168 次 write/read 请求：每个大文件写入了 1024 个 1 MiB IO，而在 FUSE 层请求的默认最大值为 128 KiB，也就是说每个应用 IO 会被拆分成 8 个 FUSE 请求，因此一共有 (1024 * 8 + 100) * 4 = 33168 个请求。读 IO 与之类似，计数也相同。
+- 33168 次 write/read 请求：每个大文件写入了 1024 个 1 MiB IO，而在 FUSE 层请求的默认最大值为 128 KiB，也就是说每个应用 IO 会被拆分成 8 个 FUSE 请求，因此一共有 (1024 *8 + 100)* 4 = 33168 个请求。读 IO 与之类似，计数也相同。
 
 以上这些值均能与 `profile` 的结果完全对应上。另外，结果中还显示 write 的平均时延非常小（45 微秒），而主要耗时点在 flush。这是因为 JuiceFS 的 write 默认先写入内存缓冲区，在文件关闭时再调用 flush 上传数据到对象存储，与预期吻合。
 

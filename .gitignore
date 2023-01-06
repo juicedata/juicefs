@@ -27,3 +27,4 @@ cmd/cmd
 *.out
 .hypothesis
 __pycache__
+/node_modules

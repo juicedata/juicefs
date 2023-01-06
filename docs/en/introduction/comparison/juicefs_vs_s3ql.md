@@ -4,13 +4,18 @@ slug: /comparison/juicefs_vs_s3ql
 
 # JuiceFS vs. S3QL
 
-Similar to JuiceFS, [S3QL](https://github.com/s3ql/s3ql) is also an open source network file system driven by object storage and database. All data will be split into blocks and stored in object storage services such as Amazon S3, Backblaze B2, or OpenStack Swift, and the corresponding metadata will be stored in the database.
+Similar to JuiceFS, S3QL is also an open source network file system driven by object storage and database. All data will be split into blocks and stored in object storage services such as Amazon S3, Backblaze B2, or OpenStack Swift, and the corresponding metadata will be stored in the database.
+
+:::note
+S3QL was no longer maintained since November 9, 2022, see [S3QL Repository](https://github.com/s3ql/s3ql).
+:::
 
 ## Common ground
 
 - Both support the standard POSIX file system interface through the FUSE module, so that massive cloud storage can be mounted locally and used like local storage.
 - Both provide standard file system features: hard links, symbolic links, extended attributes, file permissions.
 - Both support data compression and encryption, but the algorithms used are different.
+- Both support metadata backup, S3QL automatically backs up SQLite databases to object storage, and JuiceFS automatically exports metadata to JSON format files every hour and backs them up to object storage for easy recovery and migration between various metadata engines.
 
 ## Differences
 
@@ -18,14 +23,14 @@ Similar to JuiceFS, [S3QL](https://github.com/s3ql/s3ql) is also an open source 
 - S3QL has no distributed capability and **does not** support multi-host shared mounting. JuiceFS is a typical distributed file system. When using a network-based database, it supports multi-host distributed mount read and write.
 - S3QL commits a data block to S3 when it has not been accessed for more than a few seconds. After a file closed or even fsynced, it is only guranteed to stay in system memory, which may result in data loss if node fails. JuiceFS ensures high data durability, uploading all blocks synchronously when a file is closed.
 - S3QL provides data deduplication. Only one copy of the same data is stored, which can reduce the storage usage, but it will also increase the performance overhead of the system. JuiceFS pays more attention to performance, and it is too expensive to perform deduplication on large-scale data, so this function is temporarily not provided.
-- S3QL provides remote synchronous backup of metadata. SQLite databases with metadata will be backed up asynchronously to object storage. JuiceFS mainly uses network databases such as Redis and MySQL, and does not directly provide SQLite database synchronization backup function. However, JuiceFS supports metadata import and export as well as various storage backend synchronization functions, which allows users to back up metadata to object storage easily. JuiceFS also supports migration between different databases.
 
 |                           | **S3QL**              | **JuiceFS**                   |
 | :------------------------ | :-------------------- | :---------------------------- |
+| Project status            | Stop maintenance      | Active development            |
 | Metadata engine           | SQLite                | Redis, MySQL, SQLite, TiKV    |
 | Storage engine            | Object Storage, Local | Object Storage, WebDAV, Local |
 | Operating system          | Unix-like             | Linux, macOS, Windows         |
-| Compression algorithm     | LZMA, bzip2, gzip     | lz4, zstd                     |
+| Compression algorithm     | LZMA, bzip2, gzip     | LZ4, zstd                     |
 | Encryption algorithm      | AES-256               | AES-GCM, RSA                  |
 | POSIX compatible          | ✓                     | ✓                             |
 | Hard link                 | ✓                     | ✓                             |
@@ -57,7 +62,7 @@ During the installation process, we use Rocky Linux 8.4 operating system (kernel
 
 #### S3QL
 
-S3QL is developed in Python and requires python-devel 3.7 or higher to be installed. In addition, at least the following dependencies must be satisfied: fuse3-devel, gcc, pyfuse3, sqlite-devel, cryptography, defusedxml, apsw, dugong. In addition, you need to pay special attention to Python's package dependencies and location issues.
+S3QL is developed in Python and requires `python-devel` 3.7 or higher to be installed. In addition, at least the following dependencies must be satisfied: `fuse3-devel`, `gcc`, `pyfuse3`, `sqlite-devel`, `cryptography`, `defusedxml`, `apsw`, `dugong`. In addition, you need to pay special attention to Python's package dependencies and location issues.
 
 S3QL will install 12 binary programs in the system, and each program provides an independent function, as shown in the figure below.
 
@@ -71,7 +76,7 @@ JuiceFS is developed in Go and can be used directly by downloading the pre-compi
 
 Both S3QL and JuiceFS use database to store metadata. S3QL only supports SQLite databases, while JuiceFS supports databases such as Redis, TiKV, MySQL, MariaDB, PostgreSQL, and SQLite.
 
-Here we create a file system using S3QL and JuiceFS separately with locally created Minio as object storage:
+Here we create a file system using S3QL and JuiceFS separately with locally created MinIO as object storage:
 
 #### S3QL
 

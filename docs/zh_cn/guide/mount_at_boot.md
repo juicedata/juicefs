@@ -1,12 +1,8 @@
 ---
-sidebar_label: 启动时自动挂载 JuiceFS
+title: 启动时自动挂载 JuiceFS
 sidebar_position: 2
 slug: /mount_juicefs_at_boot_time
 ---
-
-# 启动时自动挂载 JuiceFS
-
-这是一篇关于如何在启动时自动挂载 JuiceFS 的指南。
 
 ## Linux
 
@@ -28,13 +24,14 @@ redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeb
 ```bash
 sudo chkconfig --add netfs
 ```
+
 :::
 
 ## macOS
 
 在 `~/Library/LaunchAgents` 下创建名为 `io.juicefs.<NAME>.plist` 的文件。替换 `<NAME>` 为 JuiceFS 文件系统的名字。添加如下内容到文件中（再次替换 `NAME`、`PATH-TO-JUICEFS`、`META-URL`、`MOUNTPOINT` 和 `MOUNT-OPTIONS` 为适当的值）：
 
-```xml title="io.juicefs.<NAME>.plist"
+```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -64,19 +61,20 @@ sudo chkconfig --add netfs
                 <string>--cache-size</string>
                 <string>204800</string>
 ```
+
 :::
 
 使用以下命令加载上一步创建的文件，并测试加载是否成功。**请确保元数据引擎已正常运行。**
 
 ```bash
-$ launchctl load ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
-$ launchctl start ~/Library/LaunchAgents/io.juicefs.<NAME>
-$ ls <MOUNTPOINT>
+launchctl load ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
+launchctl start ~/Library/LaunchAgents/io.juicefs.<NAME>
+ls <MOUNTPOINT>
 ```
 
 如果挂载失败，可以将以下配置添加到 `io.juicefs.<NAME>.plist` 文件来调试：
 
-```xml title="io.juicefs.<NAME>.plist"
+```xml
         <key>StandardOutPath</key>
         <string>/tmp/juicefs.out</string>
         <key>StandardErrorPath</key>
@@ -86,10 +84,10 @@ $ ls <MOUNTPOINT>
 使用以下命令重新加载最新的配置并检查输出：
 
 ```bash
-$ launchctl unload ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
-$ launchctl load ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
-$ cat /tmp/juicefs.out
-$ cat /tmp/juicefs.err
+launchctl unload ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
+launchctl load ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
+cat /tmp/juicefs.out
+cat /tmp/juicefs.err
 ```
 
 如果你是使用 Homebrew 安装的 Redis 服务，你可以使用以下命令让其在机器启动时启动它：
@@ -100,7 +98,7 @@ brew services start redis
 
 然后添加以下配置到 `io.juicefs.<NAME>.plist` 文件确保 Redis 服务已经启动：
 
-```xml title="io.juicefs.<NAME>.plist"
+```xml
         <key>KeepAlive</key>
         <dict>
                 <key>OtherJobEnabled</key>

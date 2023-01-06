@@ -1,11 +1,10 @@
 ---
-sidebar_label: Use JuiceFS on K3s
+title: Use JuiceFS on K3s
 sidebar_position: 1
 slug: /juicefs_on_k3s
 ---
-# Use JuiceFS on K3s
 
-[K3s](https://k3s.io/) is a functionally optimized lightweight Kubernetes distribution that is fully compatible with Kubernetes, that is, almost all operations on Kubernetes can be performed on K3s. K3s has packaged the entire container orchestration system into a binary program with a capacity of less than 100MB, which greatly reduces the environment dependencies and steps for installation of deploying Kubernetes production clusters. Compared to Kubernetes, K3s has lower performance requirements for the operating system, and ARM devices such as Raspberry Pi can be used to form a cluster.
+[K3s](https://k3s.io) is a functionally optimized lightweight Kubernetes distribution that is fully compatible with Kubernetes, that is, almost all operations on Kubernetes can be performed on K3s. K3s has packaged the entire container orchestration system into a binary program with a capacity of less than 100MB, which greatly reduces the environment dependencies and steps for installation of deploying Kubernetes production clusters. Compared to Kubernetes, K3s has lower performance requirements for the operating system, and ARM devices such as Raspberry Pi can be used to form a cluster.
 
 In this article, we will build a K3s cluster with two nodes, install and configure [JuiceFS CSI Driver](https://github.com/juicedata/juicefs-csi-driver) for the cluster, and lastly create an Nginx Pod for verification.
 
@@ -51,7 +50,7 @@ The IP address of the worker node is: `192.168.1.36`
 Execute the following command and change the value of `K3S_URL` to the IP or domain name of the server node (the default port is `6443`). Replace the value of `K3S_TOKEN` with the `node-token` obtained from the server node.
 
 ```shell
-$ curl -sfL https://get.k3s.io | K3S_URL=http://192.168.1.35:6443 K3S_TOKEN=K1041f7c4fabcdefghijklmnopqrste2ec338b7300674f::server:3d0ab12800000000000000006328bbd80 sh -
+curl -sfL https://get.k3s.io | K3S_URL=http://192.168.1.35:6443 K3S_TOKEN=K1041f7c4fabcdefghijklmnopqrste2ec338b7300674f::server:3d0ab12800000000000000006328bbd80 sh -
 ```
 
 After the deployment is successful, go back to the server node to check the node status:

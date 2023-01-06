@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -77,22 +78,18 @@ func (tx *memTxn) gets(keys ...[]byte) [][]byte {
 	return values
 }
 
-func (tx *memTxn) scanRange(begin_, end_ []byte) map[string][]byte {
+func (tx *memTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
 	tx.store.Lock()
 	defer tx.store.Unlock()
-	begin := string(begin_)
-	end := string(end_)
-	ret := make(map[string][]byte)
-	tx.store.items.AscendGreaterOrEqual(&kvItem{key: begin}, func(i btree.Item) bool {
+	tx.store.items.AscendGreaterOrEqual(&kvItem{key: string(begin)}, func(i btree.Item) bool {
 		it := i.(*kvItem)
-		if end == "" || it.key < end {
-			tx.observed[it.key] = it.ver
-			ret[it.key] = it.value
-			return true
+		key := []byte(it.key)
+		if bytes.Compare(key, end) >= 0 {
+			return false
 		}
-		return false
+		tx.observed[it.key] = it.ver
+		return handler(key, it.value)
 	})
-	return ret
 }
 
 func nextKey(key []byte) []byte {
@@ -115,47 +112,19 @@ func nextKey(key []byte) []byte {
 	return next
 }
 
-func (tx *memTxn) scanKeys(prefix_ []byte) [][]byte {
-	var keys [][]byte
+func (tx *memTxn) exist(prefix []byte) bool {
+	var ret bool
 	tx.store.Lock()
 	defer tx.store.Unlock()
-	prefix := string(prefix_)
-	tx.store.items.AscendGreaterOrEqual(&kvItem{key: prefix}, func(i btree.Item) bool {
+	tx.store.items.AscendGreaterOrEqual(&kvItem{key: string(prefix)}, func(i btree.Item) bool {
 		it := i.(*kvItem)
-		if strings.HasPrefix(it.key, prefix) {
+		if strings.HasPrefix(it.key, string(prefix)) {
 			tx.observed[it.key] = it.ver
-			keys = append(keys, []byte(it.key))
-			return true
+			ret = true
 		}
 		return false
 	})
-	return keys
-}
-
-func (tx *memTxn) scanValues(prefix []byte, limit int, filter func(k, v []byte) bool) map[string][]byte {
-	if limit == 0 {
-		return nil
-	}
-
-	res := tx.scanRange(prefix, nextKey(prefix))
-	for k, v := range res {
-		if filter != nil && !filter([]byte(k), v) {
-			delete(res, k)
-		}
-	}
-	if n := len(res) - limit; limit > 0 && n > 0 {
-		for k := range res {
-			delete(res, k)
-			if n--; n == 0 {
-				break
-			}
-		}
-	}
-	return res
-}
-
-func (tx *memTxn) exist(prefix []byte) bool {
-	return len(tx.scanKeys(prefix)) > 0
+	return ret
 }
 
 func (tx *memTxn) set(key, value []byte) {
@@ -178,10 +147,8 @@ func (tx *memTxn) incrBy(key []byte, value int64) int64 {
 	return new
 }
 
-func (tx *memTxn) dels(keys ...[]byte) {
-	for _, key := range keys {
-		tx.buffer[string(key)] = nil
-	}
+func (tx *memTxn) delete(key []byte) {
+	tx.buffer[string(key)] = nil
 }
 
 type kvItem struct {
@@ -232,13 +199,13 @@ func (c *memKV) set(key string, value []byte) {
 	}
 }
 
-func (c *memKV) txn(f func(kvTxn) error) error {
+func (c *memKV) txn(f func(*kvTxn) error) error {
 	tx := &memTxn{
 		store:    c,
 		observed: make(map[string]int),
 		buffer:   make(map[string][]byte),
 	}
-	if err := f(tx); err != nil {
+	if err := f(&kvTxn{tx}); err != nil {
 		return err
 	}
 
@@ -293,9 +260,9 @@ func (c *memKV) reset(prefix []byte) error {
 		c.Unlock()
 		return nil
 	}
-	return c.txn(func(kt kvTxn) error {
+	return c.txn(func(kt *kvTxn) error {
 		return c.scan(prefix, func(key, value []byte) {
-			kt.dels(key)
+			kt.delete(key)
 		})
 	})
 }

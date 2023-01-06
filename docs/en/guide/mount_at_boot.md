@@ -1,12 +1,8 @@
 ---
-sidebar_label: Mount JuiceFS at Boot Time
+title: Mount JuiceFS at Boot Time
 sidebar_position: 2
 slug: /mount_juicefs_at_boot_time
 ---
-
-# Mount JuiceFS at Boot Time
-
-This is a guide about how to mount JuiceFS automatically at boot.
 
 ## Linux
 
@@ -28,13 +24,14 @@ By default, CentOS 6 will NOT mount network file system after boot, run followin
 ```bash
 sudo chkconfig --add netfs
 ```
+
 :::
 
 ## macOS
 
 Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS file system name. Add following contents to the file (again, replace `NAME`, `PATH-TO-JUICEFS`, `META-URL`, `MOUNTPOINT` and `MOUNT-OPTIONS` with appropriate value):
 
-```xml title="io.juicefs.<NAME>.plist"
+```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -64,19 +61,20 @@ If there are multiple mount options, they can be set in multiple lines, for exam
                 <string>--cache-size</string>
                 <string>204800</string>
 ```
+
 :::
 
 Use following commands to load the file created in the previous step and test whether the loading is successful. **Please make sure the metadata engine is running properly.**
 
 ```bash
-$ launchctl load ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
-$ launchctl start ~/Library/LaunchAgents/io.juicefs.<NAME>
-$ ls <MOUNTPOINT>
+launchctl load ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
+launchctl start ~/Library/LaunchAgents/io.juicefs.<NAME>
+ls <MOUNTPOINT>
 ```
 
 If mount failed, you can add following configuration to `io.juicefs.<NAME>.plist` file for debug purpose:
 
-```xml title="io.juicefs.<NAME>.plist"
+```xml
         <key>StandardOutPath</key>
         <string>/tmp/juicefs.out</string>
         <key>StandardErrorPath</key>
@@ -86,10 +84,10 @@ If mount failed, you can add following configuration to `io.juicefs.<NAME>.plist
 Use following commands to reload the latest configuration and inspect the output:
 
 ```bash
-$ launchctl unload ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
-$ launchctl load ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
-$ cat /tmp/juicefs.out
-$ cat /tmp/juicefs.err
+launchctl unload ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
+launchctl load ~/Library/LaunchAgents/io.juicefs.<NAME>.plist
+cat /tmp/juicefs.out
+cat /tmp/juicefs.err
 ```
 
 If you install Redis server by Homebrew, you could use following command to start it at boot:
@@ -100,7 +98,7 @@ brew services start redis
 
 Then add following configuration to `io.juicefs.<NAME>.plist` file for ensure Redis server is loaded:
 
-```xml title="io.juicefs.<NAME>.plist"
+```xml
         <key>KeepAlive</key>
         <dict>
                 <key>OtherJobEnabled</key>

@@ -1,10 +1,8 @@
 ---
-sidebar_label: Adopters
+title: Adopters
 sidebar_position: 1
 slug: /adopters
 ---
-
-# JuiceFS Adopters
 
 | Company/Team                                                                            | Environment | Use Cases                   | User Story                                                                                                                                                                                          |
 |-----------------------------------------------------------------------------------------|-------------|-----------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -17,7 +15,7 @@ slug: /adopters
 | [Piesat Information Technology Co., Ltd.](https://www.piesat.cn)                        | Production  | File Sharing                |                                                                                                                                                                                                     |
 | [Gene Way](https://www.geneway.cn)                                                      | Production  | File Sharing                |                                                                                                                                                                                                     |
 | [SAIC Motor](https://www.saicmotor.com/english)                                         | Production  | AI                          |                                                                                                                                                                                                     |
-| [National Supercomputing Center in JiNan](https://www.nsccjn.cn/)                       | Production  | DevOps                      |                                                                                                                                                                                                     |
+| [National Supercomputing Center in JiNan](https://www.nsccjn.cn)                       | Production  | DevOps                      |                                                                                                                                                                                                     |
 | [Unisound](https://www.unisound.com)                                                    | Production  | AI                          | [Unisound’s HPC Platform accelerates AI model training and development with JuiceFS](https://juicefs.com/en/blog/unisounds-hpc-platform-accelerates-ai-model-training-and-development-with-juicefs) |
 | [NetEase Games](https://www.neteasegames.com)                                           | Production  | Big Data, File Sharing      |                                                                                                                                                                                                     |
 | [Yimian](https://www.yimian.io)                                                         | Production  | Big Data                    |                                                                                                                                                                                                     |
@@ -44,4 +42,4 @@ slug: /adopters
 | [Inner Mongolia MENGSHANG Consumer Finance Co., Ltd.](https://www.mengshangxiaofei.com) | Testing     | File Sharing                |                                                                                                                                                                                                     |
 | [Dmall](https://www.dmall.com/en)                                                       | Testing     | Big Data, File Sharing      |                                                                                                                                                                                                     |
 
-You are welcome to share your experience after using JuiceFS, either by submitting a Pull Request directly to this list, or by contacting us at hello@juicedata.io.
+You are welcome to share your experience after using JuiceFS, either by submitting a Pull Request directly to this list, or by contacting us at [`hello@juicedata.io`](mailto:hello@juicedata.io).
