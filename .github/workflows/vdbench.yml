@@ -82,7 +82,7 @@ jobs:
           fi
           uuid=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || true
           if [ -n "$uuid" ];then
-            sudo ./juicefs destroy --force $meta_url $uuid
+            sudo ./juicefs destroy --yes $meta_url $uuid
           fi
 
       - name: vdbench-small
