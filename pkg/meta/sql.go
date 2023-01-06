@@ -179,6 +179,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
 	if driver == "postgres" {
 		addr = driver + "://" + addr
+		driver = "pgx"
 
 		parse, err := url.Parse(addr)
 		if err != nil {
@@ -234,7 +235,11 @@ func (m *dbMeta) Shutdown() error {
 }
 
 func (m *dbMeta) Name() string {
-	return m.db.DriverName()
+	name := m.db.DriverName()
+	if name == "pgx" {
+		name = "postgres"
+	}
+	return name
 }
 
 func (m *dbMeta) doDeleteSlice(id uint64, size uint32) error {
@@ -626,7 +631,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		logger.Warnf("transaction failed: %s, will retry it. please increase the max number of connections in your database, or use a connection pool.", msg)
 		return true
 	}
-	switch m.db.DriverName() {
+	switch m.Name() {
 	case "sqlite3":
 		return errors.Is(err, errBusy) || strings.Contains(msg, "database is locked")
 	case "mysql":
@@ -649,7 +654,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
 
-	if m.db.DriverName() == "sqlite3" {
+	if m.Name() == "sqlite3" {
 		// sqlite only allow one writer at a time
 		inodes = []Ino{1}
 	}
@@ -751,7 +756,7 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 
 func (m *dbMeta) flushStats() {
 	var inttype = "BIGINT"
-	if m.db.DriverName() == "mysql" {
+	if m.Name() == "mysql" {
 		inttype = "SIGNED"
 	}
 	for {
@@ -909,7 +914,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte) error {
 	var r sql.Result
 	var err error
-	driver := m.db.DriverName()
+	driver := m.Name()
 	if driver == "sqlite3" || driver == "postgres" {
 		r, err = s.Exec("update jfs_chunk set slices=slices || ? where inode=? AND indx=?", buf, inode, indx)
 	} else {
@@ -3295,7 +3300,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 
 	var batch int
-	switch m.db.DriverName() {
+	switch m.Name() {
 	case "sqlite3":
 		batch = 999 / MaxFieldsCountOfTable
 	case "mysql":
