@@ -11,6 +11,7 @@ on:
     #The branches below must be a subset of the branches above
     branches: 
       - release-**
+      - main
     paths-ignore:
       - 'docs/**'
       - '**.md'
