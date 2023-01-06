@@ -57,16 +57,19 @@ JuiceFS supports HTTPS encrypted link-protected WebDAV, specifying certificates 
 To create a private key and certificate using OpenSSL.
 
 1. Generate server private key
+
 ```shell
 openssl genrsa -out client.key 4096
 ```
 
 2. Generate Certificate Signing Request (CSR)
+
 ```shell
 openssl req -new -key client.key -out client.csr
 ```
 
 3. Issuing certificates using CSR
+
 ```shell
 openssl x509 -req -days 365 -in client.csr -signkey client.key -out client.crt
 ```
