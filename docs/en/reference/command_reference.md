@@ -581,6 +581,12 @@ file entry cache timeout in seconds (default: 0), read [Kernel Metadata Cache](.
 `--dir-entry-cache value`<br />
 dir entry cache timeout in seconds (default: 1), read [Kernel Metadata Cache](../guide/cache_management.md#kernel-metadata-cache)
 
+`--certFile`<br />
+certificate file for HTTPS
+
+`--keyFile`<br />
+key file for HTTPS
+
 `--gzip`<br />
 compress served files via gzip (default: false)
 

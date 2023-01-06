@@ -92,6 +92,11 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 				Usage: "maximum client version allowed to connect",
 			},
 			&cli.BoolFlag{
+				Name:    "yes",
+				Aliases: []string{"y"},
+				Usage:   "automatically answer 'yes' to all prompts and run non-interactively",
+			},
+			&cli.BoolFlag{
 				Name:  "force",
 				Usage: "skip sanity check and force update the configurations",
 			},
@@ -217,6 +222,7 @@ func config(ctx *cli.Context) error {
 	}
 
 	if !ctx.Bool("force") {
+		yes := ctx.Bool("yes")
 		if storage {
 			blob, err := createStorage(*format)
 			if err != nil {
@@ -234,20 +240,20 @@ func config(ctx *cli.Context) error {
 				format.Inodes > 0 && iused >= format.Inodes {
 				warn("New quota is too small (used / quota): %d / %d bytes, %d / %d inodes.",
 					usedSpace, format.Capacity, iused, format.Inodes)
-				if !userConfirmed() {
+				if !yes && !userConfirmed() {
 					return fmt.Errorf("Aborted.")
 				}
 			}
 		}
 		if trash && format.TrashDays == 0 {
 			warn("The current trash will be emptied and future removed files will purged immediately.")
-			if !userConfirmed() {
+			if !yes && !userConfirmed() {
 				return fmt.Errorf("Aborted.")
 			}
 		}
 		if clientVer && format.CheckVersion() != nil {
 			warn("Clients with the same version of this will be rejected after modification.")
-			if !userConfirmed() {
+			if !yes && !userConfirmed() {
 				return fmt.Errorf("Aborted.")
 			}
 		}
