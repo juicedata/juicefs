@@ -2325,7 +2325,7 @@ func (m *kvMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
 		size := b.Get32()
 		var clean bool
 
-		err = m.txn(func(tx kvTxn) (e error) {
+		err = m.txn(func(tx *kvTxn) (e error) {
 			v := tx.incrBy(key, 0)
 			if v < 0 {
 				clean, e = scan(id, size)
