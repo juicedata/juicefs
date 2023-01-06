@@ -1,6 +1,12 @@
 name: "chaos-test"
 
 on:
+  push:
+    branches:
+      - 'release-**'
+  pull_request:
+    branches:
+      - 'release-**'
   workflow_dispatch:
     inputs:
       debug:
@@ -108,7 +114,11 @@ jobs:
 
       - name: Verify 
         run: |
-          sleep 1200
+          if [ "${{github.event_name}}" == "schedule"  ]; then
+            sleep 1200
+          else
+            sleep 600
+          fi
           kubectl get pods --all-namespaces
           apps=("dynamic-ce" "juicefs-csi-node" "juicefs-csi-controller" "juicefs-chart-testing-control-plane-pvc"  "redis" "minio")
           for app in ${apps[@]}; do
