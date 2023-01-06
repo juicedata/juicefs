@@ -10,7 +10,7 @@ JuiceFS supports setting the file system as a WebDAV server, making it very easy
 
 ## Pre-requisites
 
-Before you can configure a WebDAV share, you need to [create a JuiceFS file system](./quick_start_guide#juicefs-format).
+Before you can configure a WebDAV share, you need to [create a JuiceFS file system](../getting-started/README.md#juicefs-format).
 
 ## Anonymous WebDAV
 

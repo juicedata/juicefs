@@ -10,7 +10,7 @@ JuiceFS 支持将文件系统设置为 WebDAV 共享，可以非常方便地把�
 
 ## 前置条件
 
-在配置 WebDAV 共享之前，你需要预先[创建一个 JuiceFS 文件系统](./quick_start_guide#juicefs-format)。
+在配置 WebDAV 共享之前，你需要预先[创建一个 JuiceFS 文件系统](../getting-started/README.md#juicefs-format)。
 
 ## 匿名 WebDAV
 
