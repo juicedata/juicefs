@@ -61,7 +61,13 @@ jobs:
         run: |
           sudo ./juicefs format  localhost dev
 
-      - name: Sdk Test
+      - name: Make SDK
+        run: |
+          cd sdk/java
+          make
+          cd -
+
+      - name: Change pom
         run: |
           if [ "${{github.event_name}}" == "pull_request"  ]; then
             targetTests="io.juicefs.JuiceFileSystemTest"
@@ -75,9 +81,12 @@ jobs:
             timeConstant="${{github.event.inputs.timeConstant}}"
           fi
           POM_XML_PATH="sdk/java/pom.xml" TARGET_TESTS=$targetTests TARGET_CLASSES=targetClasses TIME_CONSTANT=$timeConstant python3 .github/scripts/modify_sdk_pom.py
+          cat sdk/java/pom.xml
+
+      - name: Test SDK
+        run: |
           cd sdk/java
-          make
-          mvn test-compile org.pitest:pitest-maven:mutationCoverage
+          mvn --no-transfer-progress test-compile org.pitest:pitest-maven:mutationCoverage
           cd -
 
       - name: Send Slack Notification
