@@ -2311,37 +2311,25 @@ func (m *kvMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
 
 	// slice refs: Kiiiiiiiissss
 	klen := 1 + 8 + 4
-	keys, err := m.scanKeys(m.fmtKey("K"))
+	pairs, err := m.scanValues(m.fmtKey("K"), -1, func(k, v []byte) bool {
+		refs := parseCounter(v)
+		return len(k) == klen && refs < 0
+	})
 	if err != nil {
 		return err
 	}
 
-	for _, key := range keys {
-		if len(key) != klen {
-			continue
-		}
+	for key := range pairs {
 		b := utils.ReadBuffer([]byte(key)[1:])
 		id := b.Get64()
 		size := b.Get32()
-		var clean bool
-
-		err = m.txn(func(tx *kvTxn) (e error) {
-			v := tx.incrBy(key, 0)
-			if v < 0 {
-				clean, e = scan(id, size)
-				if e != nil {
-					return errors.Wrap(e, "scan pending deleted slices")
-				}
-			}
-			return nil
-		})
+		clean, err := scan(id, size)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "scan pending deleted slices")
 		}
 		if clean {
 			m.deleteSlice(id, size)
 		}
-
 	}
 	return nil
 }
