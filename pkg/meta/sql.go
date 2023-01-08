@@ -2693,14 +2693,12 @@ func (m *dbMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
 		return errors.Wrap(err, "scan slice refs")
 	}
 	for _, ref := range refs {
-		if ref.Refs <= 0 {
-			clean, err := scan(ref.Id, ref.Size)
-			if err != nil {
-				return errors.Wrap(err, "scan slice")
-			}
-			if clean {
-				m.deleteSlice(ref.Id, ref.Size)
-			}
+		clean, err := scan(ref.Id, ref.Size)
+		if err != nil {
+			return errors.Wrap(err, "scan slice")
+		}
+		if clean {
+			m.deleteSlice(ref.Id, ref.Size)
 		}
 	}
 	return nil
