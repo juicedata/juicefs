@@ -69,14 +69,14 @@ type statistic struct {
 	AvailableSpace           uint64
 	UsedInodes               uint64
 	AvailableInodes          uint64
-	TrashSliceCount          int64 `json:",omitempty"`
-	TrashSliceSize           int64 `json:",omitempty"`
-	PendingDeletedSliceCount int64 `json:",omitempty"`
-	PendingDeletedSliceSize  int64 `json:",omitempty"`
 	TrashFileCount           int64 `json:",omitempty"`
 	TrashFileSize            int64 `json:",omitempty"`
 	PendingDeletedFileCount  int64 `json:",omitempty"`
 	PendingDeletedFileSize   int64 `json:",omitempty"`
+	TrashSliceCount          int64 `json:",omitempty"`
+	TrashSliceSize           int64 `json:",omitempty"`
+	PendingDeletedSliceCount int64 `json:",omitempty"`
+	PendingDeletedSliceSize  int64 `json:",omitempty"`
 }
 
 func printJson(v interface{}) {
@@ -120,10 +120,10 @@ func status(ctx *cli.Context) error {
 
 	if ctx.Bool("more") {
 		progress := utils.NewProgress(false, false)
-		trashSlicesSpinner := progress.AddDoubleSpinner("Trash Slices")
-		pendingDeletedSlicesSpinner := progress.AddDoubleSpinner("Pending Deleted Slices")
 		trashFileSpinner := progress.AddDoubleSpinner("Trash Files")
 		pendingDeletedFileSpinner := progress.AddDoubleSpinner("Pending Deleted Files")
+		trashSlicesSpinner := progress.AddDoubleSpinner("Trash Slices")
+		pendingDeletedSlicesSpinner := progress.AddDoubleSpinner("Pending Deleted Slices")
 		err = m.ScanDeletedObject(
 			meta.WrapContext(ctx.Context),
 			func(ss []meta.Slice, _ int64) (bool, error) {
