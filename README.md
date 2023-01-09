@@ -178,7 +178,6 @@ The storage format is stable, will be supported by all future releases.
 
 ## Roadmap
 
-- Support FoundationDB as metadata engine
 - Directory quotas
 - User and group quotas
 - Snapshot
