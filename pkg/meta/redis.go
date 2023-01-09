@@ -2904,7 +2904,16 @@ func (m *redisMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error 
 	go func() {
 		_ = m.hscan(c, m.sliceRefs(), func(keys []string) error {
 			for i := 0; i < len(keys); i += 2 {
-				pendingKeys <- keys[i]
+				val := keys[i+1]
+				refs, err := strconv.ParseInt(val, 10, 64)
+				if err != nil {
+					// ignored
+					logger.Warn(errors.Wrapf(err, "parse slice ref: %s", val))
+					return nil
+				}
+				if refs < 0 {
+					pendingKeys <- keys[i]
+				}
 			}
 			return nil
 		})
@@ -2924,25 +2933,9 @@ func (m *redisMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error 
 		if err != nil {
 			return errors.Wrapf(err, "invalid key %s, fail to parse size", key)
 		}
-		var clean bool
-		task := func(tx *redis.Tx) error {
-			refs, err := tx.HIncrBy(ctx, m.sliceRefs(), key, 0).Result()
-			if err == redis.Nil {
-				return nil
-			} else if err != nil {
-				return errors.Wrap(err, "increment slice refs")
-			}
-			if refs < 0 {
-				clean, err = scan(id, uint32(size))
-				if err != nil {
-					return errors.Wrap(err, "scan pending slices")
-				}
-			}
-			return nil
-		}
-		err = m.txn(ctx, task, m.sliceRefs())
+		clean, err := scan(id, uint32(size))
 		if err != nil {
-			return err
+			return errors.Wrap(err, "scan pending slices")
 		}
 		if clean {
 			m.deleteSlice(id, uint32(size))
