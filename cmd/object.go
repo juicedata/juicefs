@@ -101,7 +101,7 @@ func (j *juiceFS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if off > 0 {
-		f.Seek(ctx, off, io.SeekStart)
+		_, _ = f.Seek(ctx, off, io.SeekStart)
 	}
 	if limit <= 0 {
 		limit = 1 << 62
