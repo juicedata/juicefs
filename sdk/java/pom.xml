@@ -201,7 +201,6 @@
 						<avoidCallsTo>org.apache.log4j</avoidCallsTo>
 						<avoidCallsTo>org.slf4j</avoidCallsTo>
 						<avoidCallsTo>org.apache.commons.logging</avoidCallsTo>
-						<avoidCallsTo></avoidCallsTo>
 					</avoidCallsTo>
 				</configuration>
 			</plugin>
