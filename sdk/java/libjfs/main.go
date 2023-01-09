@@ -855,7 +855,7 @@ func jfs_lstat1(pid int, h uintptr, cpath *C.char, buf uintptr) int {
 	if w == nil {
 		return EINVAL
 	}
-	fi, err := w.Stat(w.withPid(pid), C.GoString(cpath))
+	fi, err := w.Lstat(w.withPid(pid), C.GoString(cpath))
 	if err != 0 {
 		return errno(err)
 	}
