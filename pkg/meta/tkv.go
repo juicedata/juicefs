@@ -2328,7 +2328,9 @@ func (m *kvMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
 			return errors.Wrap(err, "scan pending deleted slices")
 		}
 		if clean {
-			m.deleteSlice(id, size)
+			// TODO: m.deleteSlice(id, size)
+			// avoid lint warning
+			_ = clean
 		}
 	}
 	return nil

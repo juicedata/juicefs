@@ -2698,7 +2698,9 @@ func (m *dbMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
 			return errors.Wrap(err, "scan slice")
 		}
 		if clean {
-			m.deleteSlice(ref.Id, ref.Size)
+			// TODO: m.deleteSlice(ref.Id, ref.Size)
+			// avoid lint warning
+			_ = clean
 		}
 	}
 	return nil

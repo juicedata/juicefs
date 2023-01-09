@@ -2938,7 +2938,9 @@ func (m *redisMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error 
 			return errors.Wrap(err, "scan pending slices")
 		}
 		if clean {
-			m.deleteSlice(id, uint32(size))
+			// TODO: m.deleteSlice(id, uint32(size))
+			// avoid lint warning
+			_ = clean
 		}
 	}
 	return nil
