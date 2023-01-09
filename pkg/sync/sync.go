@@ -25,6 +25,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -220,7 +221,8 @@ func copyPerms(dst object.ObjectStorage, obj object.Object) {
 	key := obj.Key()
 	fi := obj.(object.File)
 	if err := dst.(object.FileSystem).Chmod(key, fi.Mode()); err != nil {
-		logger.Warnf("Chmod %s to %d: %s", key, fi.Mode(), err)
+		logger.Warnf("Chmod %s to %o: %s", key, fi.Mode(), err)
+		debug.PrintStack()
 	}
 	if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
 		logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)

@@ -264,7 +264,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 
 	if name == "file" {
 		endpoint = u.Path
-	} else if name == "hdfs" {
+	} else if name == "hdfs" || name == "jfs" {
 	} else if !conf.NoHTTPS && supportHTTPS(name, endpoint) {
 		endpoint = "https://" + endpoint
 	} else {

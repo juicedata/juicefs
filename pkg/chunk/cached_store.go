@@ -546,9 +546,11 @@ type Config struct {
 
 func (c *Config) SelfCheck(uuid string) {
 	if c.CacheSize == 0 {
-		logger.Warnf("cache-size is 0, writeback and prefetch will be disabled")
-		c.Writeback = false
-		c.Prefetch = 0
+		if c.Writeback || c.Prefetch > 0 {
+			logger.Warnf("cache-size is 0, writeback and prefetch will be disabled")
+			c.Writeback = false
+			c.Prefetch = 0
+		}
 		c.CacheDir = "memory"
 	}
 	if !c.Writeback && c.UploadDelay > 0 {
@@ -569,10 +571,10 @@ func (c *Config) SelfCheck(uuid string) {
 			ds[i] = filepath.Join(ds[i], uuid)
 		}
 		c.CacheDir = strings.Join(ds, string(os.PathListSeparator))
-	}
-	if cs := []string{CsNone, CsFull, CsShrink, CsExtend}; !utils.StringContains(cs, c.CacheChecksum) {
-		logger.Warnf("verify-cache-checksum should be one of %v", cs)
-		c.CacheChecksum = CsFull
+		if cs := []string{CsNone, CsFull, CsShrink, CsExtend}; !utils.StringContains(cs, c.CacheChecksum) {
+			logger.Warnf("verify-cache-checksum should be one of %v", cs)
+			c.CacheChecksum = CsFull
+		}
 	}
 }
 
