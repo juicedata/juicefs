@@ -710,11 +710,10 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 	}
 	store.initMetrics()
 	store.bcache = newCacheManager(&config, reg, func(key, fpath string, force bool) bool {
-		if force {
-			return store.addDelayedStaging(key, fpath, time.Now(), true)
-		} else if fi, err := os.Stat(fpath); err == nil {
-			return store.addDelayedStaging(key, fpath, fi.ModTime(), false)
+		if fi, err := os.Stat(fpath); err == nil {
+			return store.addDelayedStaging(key, fpath, fi.ModTime(), force)
 		} else {
+			logger.Warnf("Stat staging block %s: %s", fpath, err)
 			return false
 		}
 	})
