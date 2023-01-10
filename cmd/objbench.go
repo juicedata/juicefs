@@ -550,7 +550,7 @@ func (bm *benchMarkObj) list(key string, startKey int) error {
 }
 
 func (bm *benchMarkObj) chown(key string, startKey int) error {
-	return bm.blob.(object.FileSystem).Chown(key, "nobody", "nogroup")
+	return bm.blob.(object.FileSystem).Chown(key, "nobody", "nobody")
 }
 
 func (bm *benchMarkObj) chmod(key string, startKey int) error {
@@ -946,7 +946,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		if strings.HasPrefix(blob.String(), "file://") && os.Getuid() != 0 {
 			return errors.New("root required")
 		}
-		if err := fi.Chown(key, "nobody", "nogroup"); err != nil {
+		if err := fi.Chown(key, "nobody", "nobody"); err != nil {
 			return fmt.Errorf("failed to chown object %s", err)
 		}
 		if objInfo, err := blob.Head(key); err != nil {
@@ -955,8 +955,8 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			if info.Owner() != "nobody" {
 				return fmt.Errorf("expect owner nobody but got %s", info.Owner())
 			}
-			if info.Group() != "nogroup" {
-				return fmt.Errorf("expect group nogroup but got %s", info.Group())
+			if info.Group() != "nobody" {
+				return fmt.Errorf("expect group nobody but got %s", info.Group())
 			}
 		}
 		return nil
