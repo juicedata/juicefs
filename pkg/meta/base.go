@@ -1449,30 +1449,21 @@ func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 		return errors.Wrap(st, "read trash")
 	}
 
-	type scannedEntry struct {
-		deletedAt time.Time
-		*Entry
-	}
-
-	scannedEntries := make([]scannedEntry, 0, len(entries))
-	for _, e := range entries {
-		ts, err := time.Parse("2006-01-02-15", string(e.Name))
+	var subEntries []*Entry
+	for _, entry := range entries {
+		ts, err := time.Parse("2006-01-02-15", string(entry.Name))
 		if err != nil {
-			logger.Warnf("bad entry as a subTrash: %s", e.Name)
+			logger.Warnf("bad entry as a subTrash: %s", entry.Name)
 			continue
 		}
-		scannedEntries = append(scannedEntries, scannedEntry{
-			deletedAt: ts,
-			Entry:     e,
-		})
-	}
-
-	for len(scannedEntries) != 0 {
-		poped := scannedEntries
-		scannedEntries = nil
-		for _, entry := range poped {
-			if entry.Attr.Typ == TypeFile {
-				clean, err := scan(entry.Inode, entry.Attr.Length, entry.deletedAt)
+		subEntries = subEntries[:0]
+		if st = m.en.doReaddir(ctx, entry.Inode, 1, &subEntries, -1); st != 0 {
+			logger.Warnf("readdir subEntry %d: %s", entry.Inode, st)
+			continue
+		}
+		for _, se := range subEntries {
+			if se.Attr.Typ == TypeFile {
+				clean, err := scan(se.Inode, se.Attr.Length, ts)
 				if err != nil {
 					return errors.Wrap(err, "scan trash files")
 				}
@@ -1480,20 +1471,6 @@ func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
 					// TODO: m.en.doUnlink(ctx, entry.Attr.Parent, string(entry.Name))
 					// avoid lint warning
 					_ = clean
-				}
-				continue
-			}
-			if entry.Attr.Typ == TypeDirectory {
-				var subEntries []*Entry
-				if st = m.en.doReaddir(ctx, entry.Inode, 1, &subEntries, -1); st != 0 {
-					logger.Warnf("readdir subTrash %d: %s", entry.Inode, st)
-					continue
-				}
-				for _, se := range subEntries {
-					scannedEntries = append(scannedEntries, scannedEntry{
-						deletedAt: entry.deletedAt,
-						Entry:     se,
-					})
 				}
 			}
 		}
