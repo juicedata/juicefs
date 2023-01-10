@@ -253,22 +253,28 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		secretKey, _ = user.Password()
 	}
 	name := strings.ToLower(u.Scheme)
-	endpoint := u.Host
 	if conf.Links && name != "file" {
 		logger.Warnf("storage %s does not support symlink, ignore it", uri)
 		conf.Links = false
 	}
 
-	isS3PathTypeUrl := isS3PathType(endpoint)
-
+	var endpoint string
 	if name == "file" {
 		endpoint = u.Path
-	} else if name == "hdfs" || name == "jfs" {
-	} else if !conf.NoHTTPS && supportHTTPS(name, endpoint) {
-		endpoint = "https://" + endpoint
+	} else if name == "hdfs" {
+		endpoint = u.Host
+	} else if name == "jfs" {
+		endpoint, err = url.PathUnescape(u.Host)
+		if err != nil {
+			return nil, fmt.Errorf("unescape %s: %s", u.Host, err)
+		}
+	} else if !conf.NoHTTPS && supportHTTPS(name, u.Host) {
+		endpoint = "https://" + u.Host
 	} else {
-		endpoint = "http://" + endpoint
+		endpoint = "http://" + u.Host
 	}
+
+	isS3PathTypeUrl := isS3PathType(endpoint)
 	if name == "minio" || name == "s3" && isS3PathTypeUrl {
 		// bucket name is part of path
 		endpoint += u.Path

@@ -22,13 +22,13 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -66,7 +66,7 @@ func (j *juiceFS) Create() error {
 }
 
 func (j *juiceFS) path(key string) string {
-	return "/" + key
+	return dirSuffix + key
 }
 
 type jFile struct {
@@ -112,6 +112,13 @@ func (j *juiceFS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return &jFile{f, limit}, nil
 }
 
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, 128<<10)
+		return &buf
+	},
+}
+
 func (j *juiceFS) Put(key string, in io.Reader) error {
 	p := j.path(key)
 	if strings.HasSuffix(p, "/") {
@@ -127,7 +134,9 @@ func (j *juiceFS) Put(key string, in io.Reader) error {
 	if eno != 0 {
 		return eno
 	}
-	_, err := io.CopyBuffer(&jFile{f, 0}, in, make([]byte, 128<<10))
+	buf := bufPool.Get().(*[]byte)
+	defer bufPool.Put(buf)
+	_, err := io.CopyBuffer(&jFile{f, 0}, in, *buf)
 	if err != nil {
 		_ = j.jfs.Delete(ctx, tmp)
 		return err
@@ -295,13 +304,13 @@ func (d *juiceFS) ListAll(prefix, marker string) (<-chan object.Object, error) {
 		walkRoot = prefix
 	} else {
 		// If the root is not ends with `/`, we'll list the directory root resides.
-		walkRoot = path.Dir(prefix) + "/"
+		walkRoot = path.Dir(prefix) + dirSuffix
 	}
 	if walkRoot == "./" {
 		walkRoot = ""
 	}
 	go func() {
-		_ = d.walkRoot("/"+walkRoot, func(path string, info *fs.FileStat, isSymlink bool, err syscall.Errno) syscall.Errno {
+		_ = d.walkRoot(dirSuffix+walkRoot, func(path string, info *fs.FileStat, isSymlink bool, err syscall.Errno) syscall.Errno {
 			if len(path) > 0 {
 				path = path[1:]
 			}
@@ -400,12 +409,8 @@ func getDefaultChunkConf(format *meta.Format) *chunk.Config {
 
 func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
 	metaUrl := os.Getenv(endpoint)
-	var err error
 	if metaUrl == "" {
-		metaUrl, err = url.PathUnescape(endpoint)
-		if err != nil {
-			return nil, fmt.Errorf("unescape meta url: %s", err)
-		}
+		metaUrl = endpoint
 	}
 	metaConf := &meta.Config{
 		Retries:   10,
