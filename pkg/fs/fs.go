@@ -723,6 +723,10 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 			p = strings.TrimRight(p, "/")
 			ss := strings.Split(p, "/")
 			fi.name = ss[len(ss)-1]
+			if fi.IsSymlink() && followLastSymlink {
+				// fast resolve can't follow symlink
+				err = syscall.ENOTSUP
+			}
 		}
 		if err != syscall.ENOTSUP {
 			return

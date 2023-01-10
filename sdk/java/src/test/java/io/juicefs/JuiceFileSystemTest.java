@@ -711,4 +711,11 @@ public class JuiceFileSystemTest extends TestCase {
       counter.getAndIncrement();
     }
   }
+
+  public void testInnerSymlink() throws Exception {
+    //echo "hello juicefs" > inner_sym_link
+    FileStatus status = fs.getFileStatus(new Path("/inner_sym_link"));
+    assertEquals("inner_sym_link", status.getPath().getName());
+    assertEquals(14, status.getLen());
+  }
 }
