@@ -397,9 +397,13 @@ func getDefaultChunkConf(format *meta.Format) *chunk.Config {
 }
 
 func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
-	metaUrl, err := url.PathUnescape(endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("enescape meta url: %s", err)
+	metaUrl := os.Getenv(endpoint)
+	var err error
+	if metaUrl == "" {
+		metaUrl, err = url.PathUnescape(endpoint)
+		if err != nil {
+			return nil, fmt.Errorf("unescape meta url: %s", err)
+		}
 	}
 	metaConf := &meta.Config{
 		Retries:   10,
