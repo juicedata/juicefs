@@ -116,10 +116,7 @@ func (j *juiceFS) Put(key string, in io.Reader) error {
 	p := j.path(key)
 	if strings.HasSuffix(p, "/") {
 		eno := j.jfs.MkdirAll(ctx, p, 0755)
-		if eno == syscall.EEXIST || eno == 0 {
-			return nil
-		}
-		return eno
+		return toError(eno)
 	}
 	tmp := p + ".tmp" + strconv.Itoa(rand.Int())
 	f, eno := j.jfs.Create(ctx, tmp, 0755)
@@ -433,7 +430,6 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 		Format:          format,
 		Version:         version.Version(),
 		Chunk:           chunkConf,
-		AccessLog:       "/tmp/jfs.log",
 		AttrTimeout:     time.Second,
 		DirEntryTimeout: time.Second,
 	}

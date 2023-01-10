@@ -446,9 +446,7 @@ func (fs *FileSystem) MkdirAll(ctx meta.Context, p string, mode uint16) (err sys
 	err = fs.Mkdir(ctx, p, mode)
 	if err == syscall.ENOENT {
 		_ = fs.MkdirAll(ctx, parentDir(p), mode)
-		if err == 0 {
-			err = fs.Mkdir(ctx, p, mode)
-		}
+		err = fs.Mkdir(ctx, p, mode)
 	}
 	if err == syscall.EEXIST {
 		err = 0
