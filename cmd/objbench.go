@@ -50,6 +50,8 @@ Run basic benchmarks on the target object storage to test if it works as expecte
 Examples:
 # Run benchmarks on S3
 $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
+# Run benchmakks on JuiceFS
+$ juicefs objbench --storage jfs redis://localhost/1
 
 Details: https://juicefs.com/docs/community/performance_evaluation_guide#juicefs-objbench`,
 		Flags: []cli.Flag{

@@ -89,6 +89,12 @@ sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
 
+如果使用的是 JuiceFS 1.1+ 版本，无需挂载就可以直接往 JuiceFS 同步数据：
+
+```shell
+myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/
+```
+
 将 [JuiceFS 文件系统](#required-storages) 的 `images` 目录同步到 [对象存储 A](#required-storages)：
 
 ```shell

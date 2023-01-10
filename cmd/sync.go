@@ -59,8 +59,7 @@ Examples:
 $ juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-east-2.amazonaws.com
 
 # Sync objects from S3 to JuiceFS
-$ juicefs mount -d redis://localhost /mnt/jfs
-$ juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+$ myfs=redis://localhost juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://myfs/ -p 50
 
 # SRC: a1/b1,a2/b2,aaa/b1   DST: empty   sync result: aaa/b1
 $ juicefs sync --exclude='a?/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
