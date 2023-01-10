@@ -408,7 +408,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 			line[0] = api.title
 			return line
 		}
-		if api.name == "chown" && strings.HasPrefix(bm.blob.String(), "file://") && os.Getuid() != 0 {
+		if api.name == "chown" && (strings.HasPrefix(bm.blob.String(), "file://") || strings.HasPrefix(bm.blob.String(), "jfs://")) && os.Getuid() != 0 {
 			logger.Warnf("chown test should be run by root")
 			return []string{api.title, skipped, skipped}
 		}
@@ -945,7 +945,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 	})
 
 	funFSCase("change owner/group", func() error {
-		if strings.HasPrefix(blob.String(), "file://") && os.Getuid() != 0 {
+		if (strings.HasPrefix(blob.String(), "file://") || strings.HasPrefix(blob.String(), "jfs://")) && os.Getuid() != 0 {
 			return errors.New("root required")
 		}
 		if err := fi.Chown(key, "nobody", "nogroup"); err != nil {
