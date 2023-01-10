@@ -2810,7 +2810,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 		return errno(err)
 	}
 
-	return errno(m.scanDeletedSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
+	return errno(m.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
 		slices[1] = append(slices[1], ss...)
 		if showProgress != nil {
 			for range ss {
@@ -2821,7 +2821,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	}))
 }
 
-func (m *redisMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
+func (m *redisMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	if scan == nil {
 		return nil
 	}
@@ -2893,7 +2893,60 @@ func (m *redisMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error 
 	return nil
 }
 
-func (m *redisMeta) scanDeletedFiles(ctx Context, scan deletedFileScan) error {
+func (m *redisMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
+	if scan == nil {
+		return nil
+	}
+
+	pendingKeys := make(chan string, 1000)
+	c, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		_ = m.hscan(c, m.sliceRefs(), func(keys []string) error {
+			for i := 0; i < len(keys); i += 2 {
+				val := keys[i+1]
+				refs, err := strconv.ParseInt(val, 10, 64)
+				if err != nil {
+					// ignored
+					logger.Warn(errors.Wrapf(err, "parse slice ref: %s", val))
+					return nil
+				}
+				if refs < 0 {
+					pendingKeys <- keys[i]
+				}
+			}
+			return nil
+		})
+		close(pendingKeys)
+	}()
+
+	for key := range pendingKeys {
+		ps := strings.Split(key[1:], "_")
+		if len(ps) != 2 {
+			return fmt.Errorf("invalid key %s", key)
+		}
+		id, err := strconv.ParseUint(ps[0], 10, 64)
+		if err != nil {
+			return errors.Wrapf(err, "invalid key %s, fail to parse id", key)
+		}
+		size, err := strconv.ParseUint(ps[1], 10, 64)
+		if err != nil {
+			return errors.Wrapf(err, "invalid key %s, fail to parse size", key)
+		}
+		clean, err := scan(id, uint32(size))
+		if err != nil {
+			return errors.Wrap(err, "scan pending slices")
+		}
+		if clean {
+			// TODO: m.deleteSlice(id, uint32(size))
+			// avoid lint warning
+			_ = clean
+		}
+	}
+	return nil
+}
+
+func (m *redisMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	if scan == nil {
 		return nil
 	}

@@ -2598,7 +2598,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	return errno(m.scanDeletedSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
+	return errno(m.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
 		slices[1] = append(slices[1], ss...)
 		if showProgress != nil {
 			for range ss {
@@ -2609,7 +2609,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	}))
 }
 
-func (m *dbMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
+func (m *dbMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	if scan == nil {
 		return nil
 	}
@@ -2676,7 +2676,37 @@ func (m *dbMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
 	return nil
 }
 
-func (m *dbMeta) scanDeletedFiles(ctx Context, scan deletedFileScan) error {
+func (m *dbMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
+	if scan == nil {
+		return nil
+	}
+	var refs []sliceRef
+	err := m.roTxn(func(tx *xorm.Session) error {
+		if ok, err := tx.IsTableExist(&sliceRef{}); err != nil {
+			return err
+		} else if !ok {
+			return nil
+		}
+		return tx.Where("refs <= 0").Find(&refs)
+	})
+	if err != nil {
+		return errors.Wrap(err, "scan slice refs")
+	}
+	for _, ref := range refs {
+		clean, err := scan(ref.Id, ref.Size)
+		if err != nil {
+			return errors.Wrap(err, "scan slice")
+		}
+		if clean {
+			// TODO: m.deleteSlice(ref.Id, ref.Size)
+			// avoid lint warning
+			_ = clean
+		}
+	}
+	return nil
+}
+
+func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	if scan == nil {
 		return nil
 	}

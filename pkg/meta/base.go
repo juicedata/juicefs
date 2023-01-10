@@ -32,6 +32,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 )
@@ -81,14 +82,17 @@ type engine interface {
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 
-	scanDeletedSlices(Context, deletedSliceScan) error
-	scanDeletedFiles(Context, deletedFileScan) error
+	scanTrashSlices(Context, trashSliceScan) error
+	scanPendingSlices(Context, pendingSliceScan) error
+	scanPendingFiles(Context, pendingFileScan) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
 }
 
-type deletedSliceScan func(ss []Slice, ts int64) (clean bool, err error)
-type deletedFileScan func(ino Ino, size uint64, ts int64) (clean bool, err error)
+type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
+type pendingSliceScan func(id uint64, size uint32) (clean bool, err error)
+type trashFileScan func(inode Ino, size uint64, ts time.Time) (clean bool, err error)
+type pendingFileScan func(ino Ino, size uint64, ts int64) (clean bool, err error)
 
 // fsStat aligned for atomic operations
 // nolint:structcheck
@@ -1438,6 +1442,42 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 	}
 }
 
+func (m *baseMeta) scanTrashFiles(ctx Context, scan trashFileScan) error {
+	var st syscall.Errno
+	var entries []*Entry
+	if st = m.en.doReaddir(ctx, TrashInode, 1, &entries, -1); st != 0 {
+		return errors.Wrap(st, "read trash")
+	}
+
+	var subEntries []*Entry
+	for _, entry := range entries {
+		ts, err := time.Parse("2006-01-02-15", string(entry.Name))
+		if err != nil {
+			logger.Warnf("bad entry as a subTrash: %s", entry.Name)
+			continue
+		}
+		subEntries = subEntries[:0]
+		if st = m.en.doReaddir(ctx, entry.Inode, 1, &subEntries, -1); st != 0 {
+			logger.Warnf("readdir subEntry %d: %s", entry.Inode, st)
+			continue
+		}
+		for _, se := range subEntries {
+			if se.Attr.Typ == TypeFile {
+				clean, err := scan(se.Inode, se.Attr.Length, ts)
+				if err != nil {
+					return errors.Wrap(err, "scan trash files")
+				}
+				if clean {
+					// TODO: m.en.doUnlink(ctx, entry.Attr.Parent, string(entry.Name))
+					// avoid lint warning
+					_ = clean
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (m *baseMeta) doCleanupTrash(force bool) {
 	edge := time.Now().Add(-time.Duration(24*m.fmt.TrashDays+1) * time.Hour)
 	if force {
@@ -1457,16 +1497,26 @@ func (m *baseMeta) cleanupDelayedSlices() {
 	}
 }
 
-func (m *baseMeta) ScanDeletedObject(ctx Context, sliceScan deletedSliceScan, fileScan deletedFileScan) error {
+func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendingSliceScan, tfs trashFileScan, pfs pendingFileScan) error {
 	eg := errgroup.Group{}
-	if sliceScan != nil {
+	if tss != nil {
 		eg.Go(func() error {
-			return m.en.scanDeletedSlices(ctx, sliceScan)
+			return m.en.scanTrashSlices(ctx, tss)
 		})
 	}
-	if fileScan != nil {
+	if pss != nil {
 		eg.Go(func() error {
-			return m.en.scanDeletedFiles(ctx, fileScan)
+			return m.en.scanPendingSlices(ctx, pss)
+		})
+	}
+	if tfs != nil {
+		eg.Go(func() error {
+			return m.scanTrashFiles(ctx, tfs)
+		})
+	}
+	if pfs != nil {
+		eg.Go(func() error {
+			return m.en.scanPendingFiles(ctx, pfs)
 		})
 	}
 	return eg.Wait()
