@@ -58,7 +58,8 @@ jobs:
           sudo ./juicefs mount -d localhost /jfs
           touch /jfs/inner_sym_target
           echo "hello juicefs" > /jfs/inner_sym_target
-          ln -s /jfs/inner_sym_target /jfs/inner_sym_link 
+          cd /jfs
+          ln -s inner_sym_target inner_sym_link 
 
       - name: Sdk Test
         run: |
@@ -75,6 +76,6 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
       - name: Setup upterm session
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
