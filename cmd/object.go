@@ -41,6 +41,9 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
+var skipDir syscall.Errno = 100000
+var dirSuffix = "/"
+
 func toError(eno syscall.Errno) error {
 	if eno == 0 {
 		return nil
@@ -241,9 +244,6 @@ func (j *juiceFS) walkRoot(root string, walkFn WalkFunc) syscall.Errno {
 	return err
 }
 
-var skipDir syscall.Errno = 100000
-var dirSuffix = "/"
-
 type mEntry struct {
 	fi        *fs.FileStat
 	name      string
@@ -292,7 +292,7 @@ type WalkFunc func(path string, info *fs.FileStat, isSymlink bool, err syscall.E
 func (d *juiceFS) ListAll(prefix, marker string) (<-chan object.Object, error) {
 	listed := make(chan object.Object, 10240)
 	var walkRoot string
-	if strings.HasSuffix(prefix, dirSuffix) {
+	if strings.HasSuffix(prefix, dirSuffix) || prefix == "" {
 		walkRoot = prefix
 	} else {
 		// If the root is not ends with `/`, we'll list the directory root resides.
