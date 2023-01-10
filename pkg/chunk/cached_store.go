@@ -44,8 +44,10 @@ var (
 )
 
 type pendingItem struct {
-	key   string
-	fpath string
+	key       string
+	fpath     string    // full path of local file corresponding to the key
+	ts        time.Time // timestamp when this item is added
+	uploading bool
 }
 
 // slice for read and remove
@@ -443,7 +445,7 @@ func (s *wSlice) upload(indx int) {
 								}
 							}
 						} else { // add to delay list and wait for later scanning
-							s.store.addDelayedStaging(key, stagingPath, time.Now().Add(time.Second*30), false)
+							s.store.addDelayedStaging(key, stagingPath, time.Now(), false)
 						}
 						return
 					default:
@@ -549,8 +551,8 @@ type cachedStore struct {
 	group         *Controller
 	currentUpload chan bool
 	currentDelete chan struct{}
-	pendingCh     chan pendingItem
-	pendingKeys   map[string]time.Time
+	pendingCh     chan *pendingItem
+	pendingKeys   map[string]*pendingItem
 	pendingMutex  sync.Mutex
 	compressor    compress.Compressor
 	seekable      bool
@@ -660,8 +662,8 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		currentDelete: make(chan struct{}, config.MaxDeletes),
 		compressor:    compressor,
 		seekable:      compressor.CompressBound(0) == 0,
-		pendingCh:     make(chan pendingItem, 100*config.MaxUpload),
-		pendingKeys:   make(map[string]time.Time),
+		pendingCh:     make(chan *pendingItem, 100*config.MaxUpload),
+		pendingKeys:   make(map[string]*pendingItem),
 		group:         &Controller{},
 	}
 	if config.UploadLimit > 0 {
@@ -673,11 +675,10 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 	}
 	store.initMetrics()
 	store.bcache = newCacheManager(&config, reg, func(key, fpath string, force bool) bool {
-		if force {
-			return store.addDelayedStaging(key, fpath, time.Time{}, true)
-		} else if fi, err := os.Stat(fpath); err == nil {
-			return store.addDelayedStaging(key, fpath, fi.ModTime(), false)
+		if fi, err := os.Stat(fpath); err == nil {
+			return store.addDelayedStaging(key, fpath, fi.ModTime(), force)
 		} else {
+			logger.Warnf("Stat staging block %s: %s", fpath, err)
 			return false
 		}
 	})
@@ -802,7 +803,7 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}()
 
 	store.pendingMutex.Lock()
-	_, ok := store.pendingKeys[key]
+	item, ok := store.pendingKeys[key]
 	store.pendingMutex.Unlock()
 	if !ok {
 		logger.Debugf("Key %s is not needed, drop it", key)
@@ -839,16 +840,27 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 				m.stageBlockBytes.Sub(float64(blen))
 			}
 		}
+	} else {
+		item.uploading = false
 	}
 }
 
 func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.Time, force bool) bool {
 	store.pendingMutex.Lock()
-	store.pendingKeys[key] = added
+	item := store.pendingKeys[key]
+	if item == nil {
+		item = &pendingItem{key, stagingPath, added, false}
+		store.pendingKeys[key] = item
+	}
 	store.pendingMutex.Unlock()
+	if item.uploading {
+		logger.Debugf("Key %s is ignored since it's already being uploaded", key)
+		return true
+	}
 	if force || time.Since(added) > store.conf.UploadDelay {
 		select {
-		case store.pendingCh <- pendingItem{key, stagingPath}:
+		case store.pendingCh <- item:
+			item.uploading = true
 			return true
 		default:
 		}
@@ -866,10 +878,11 @@ func (store *cachedStore) scanDelayedStaging() {
 	cutoff := time.Now().Add(-store.conf.UploadDelay)
 	store.pendingMutex.Lock()
 	defer store.pendingMutex.Unlock()
-	for key, added := range store.pendingKeys {
+	for _, item := range store.pendingKeys {
 		store.pendingMutex.Unlock()
-		if added.Before(cutoff) {
-			store.pendingCh <- pendingItem{key, store.bcache.stagePath(key)}
+		if !item.uploading && item.ts.Before(cutoff) {
+			item.uploading = true
+			store.pendingCh <- item
 		}
 		store.pendingMutex.Lock()
 	}
