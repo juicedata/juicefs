@@ -171,6 +171,6 @@ func TestJFS(t *testing.T) {
 	}
 
 	jstore := &juiceFS{object.DefaultObjectStorage{}, "test", jfs}
-	blob := object.WithPrefix(jstore, "unittest/")
-	testFileSystem(t, blob)
+	testFileSystem(t, jstore)
+	testFileSystem(t, object.WithPrefix(jstore, "unittest/"))
 }

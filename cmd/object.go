@@ -146,10 +146,12 @@ func (j *juiceFS) Put(key string, in io.Reader) error {
 }
 
 func (j *juiceFS) Delete(key string) error {
+	if key == "" {
+		return nil
+	}
 	p := strings.TrimSuffix(j.path(key), dirSuffix)
 	eno := j.jfs.Delete(ctx, p)
 	if eno == syscall.ENOENT {
-
 		eno = 0
 	}
 	return toError(eno)
@@ -289,11 +291,14 @@ type WalkFunc func(path string, info *fs.FileStat, isSymlink bool, err syscall.E
 func (d *juiceFS) ListAll(prefix, marker string) (<-chan object.Object, error) {
 	listed := make(chan object.Object, 10240)
 	var walkRoot string
-	if strings.HasSuffix(prefix, dirSuffix) || prefix == "" {
+	if strings.HasSuffix(prefix, dirSuffix) {
 		walkRoot = prefix
 	} else {
 		// If the root is not ends with `/`, we'll list the directory root resides.
 		walkRoot = path.Dir(prefix) + "/"
+	}
+	if walkRoot == "./" {
+		walkRoot = ""
 	}
 	go func() {
 		_ = d.walkRoot("/"+walkRoot, func(path string, info *fs.FileStat, isSymlink bool, err syscall.Errno) syscall.Errno {
