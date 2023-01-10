@@ -118,7 +118,7 @@ func (j *juiceFS) Put(key string, in io.Reader) error {
 		eno := j.jfs.MkdirAll(ctx, p, 0755)
 		return toError(eno)
 	}
-	tmp := p + ".tmp" + strconv.Itoa(rand.Int())
+	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
 	f, eno := j.jfs.Create(ctx, tmp, 0755)
 	if eno == syscall.ENOENT {
 		_ = j.jfs.MkdirAll(ctx, filepath.Dir(tmp), 0755)
