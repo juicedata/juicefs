@@ -86,7 +86,7 @@ jobs:
       - name: Test SDK
         run: |
           cd sdk/java
-          mvn --no-transfer-progress test-compile org.pitest:pitest-maven:mutationCoverage
+          sudo mvn --no-transfer-progress test-compile org.pitest:pitest-maven:mutationCoverage
           cd -
 
       - name: Send Slack Notification
