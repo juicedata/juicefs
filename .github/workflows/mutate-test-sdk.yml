@@ -89,7 +89,7 @@ jobs:
           cd -
 
       - name: Upload Pit Report
-        - uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v3
           with:
             name: pit-reports
             path: sdk/java/target/pit-reports
