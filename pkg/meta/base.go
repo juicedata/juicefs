@@ -981,7 +981,7 @@ func (m *baseMeta) deleteSlice(id uint64, size uint32) {
 	if id == 0 {
 		return
 	}
-	if err := m.newMsg(DeleteSlice, id, size); err == nil || strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "not found") {
+	if err := m.newMsg(DeleteSlice, id, size); err == nil {
 		if err = m.en.doDeleteSlice(id, size); err != nil {
 			logger.Errorf("delete slice %d: %s", id, err)
 		}

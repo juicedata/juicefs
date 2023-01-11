@@ -203,6 +203,11 @@ func (s *rSlice) delete(indx int) error {
 	st := time.Now()
 	err := s.store.storage.Delete(key)
 	used := time.Since(st)
+	if err != nil && (strings.Contains(err.Error(), "NoSuchKey") ||
+		strings.Contains(err.Error(), "not found") ||
+		strings.Contains(err.Error(), "No such file")) {
+		err = nil
+	}
 	logger.Debugf("DELETE %v (%v, %.3fs)", key, err, used.Seconds())
 	if used > SlowRequest {
 		logger.Infof("slow request: DELETE %v (%v, %.3fs)", key, err, used.Seconds())

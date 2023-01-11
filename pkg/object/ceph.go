@@ -162,9 +162,13 @@ func (c *ceph) Put(key string, in io.Reader) error {
 }
 
 func (c *ceph) Delete(key string) error {
-	return c.do(func(ctx *rados.IOContext) error {
+	err := c.do(func(ctx *rados.IOContext) error {
 		return ctx.Delete(key)
 	})
+	if err == rados.ErrNotFound {
+		err = nil
+	}
+	return err
 }
 
 func (c *ceph) Head(key string) (Object, error) {
