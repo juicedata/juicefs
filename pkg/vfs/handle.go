@@ -54,6 +54,13 @@ type handle struct {
 	bctx    meta.Context
 }
 
+func (h *handle) Write(buf []byte) (int, error) {
+	h.Lock()
+	defer h.Unlock()
+	h.data = append(h.data, buf...)
+	return len(buf), nil
+}
+
 func (h *handle) addOp(ctx Context) {
 	h.Lock()
 	defer h.Unlock()
