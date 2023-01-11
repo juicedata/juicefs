@@ -31,6 +31,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 const (
@@ -401,8 +403,8 @@ func (d *filestore) Chmod(path string, mode os.FileMode) error {
 
 func (d *filestore) Chown(path string, owner, group string) error {
 	p := d.path(path)
-	uid := lookupUser(owner)
-	gid := lookupGroup(group)
+	uid := utils.LookupUser(owner)
+	gid := utils.LookupGroup(group)
 	return os.Chown(p, uid, gid)
 }
 

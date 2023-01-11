@@ -43,7 +43,7 @@ Among them, `used_memory_rss` is the total memory size actually used by Redis, w
 
 ## High availability
 
-### Sentinel mode
+### Sentinel mode {#sentinel-mode}
 
 [Redis Sentinel](https://redis.io/docs/manual/sentinel) is the official solution to high availability for Redis. It provides following capabilities:
 
@@ -80,7 +80,7 @@ Since JuiceFS v1.0.0, it is supported to only connect Redis replica nodes when m
 It should be noted that since the data of the Redis master node is asynchronously replicated to the replica nodes, the read metadata may not be the latest.
 :::
 
-### Cluster mode
+### Cluster mode {#cluster-mode}
 
 :::note
 This feature requires JuiceFS v1.0.0 or higher

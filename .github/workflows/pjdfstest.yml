@@ -149,7 +149,7 @@ jobs:
     needs: [pjdfstest]
     if: always()
     steps:
-      - uses: technote-space/workflow-conclusion-action@v2
+      - uses: technote-space/workflow-conclusion-action@v3
       - uses: actions/checkout@v3
 
       - name: Check Failure

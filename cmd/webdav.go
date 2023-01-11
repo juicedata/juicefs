@@ -30,11 +30,11 @@ import (
 func cmdWebDav() *cli.Command {
 	selfFlags := []cli.Flag{
 		&cli.StringFlag{
-			Name:  "certFile",
+			Name:  "cert-file",
 			Usage: "certificate file for https",
 		},
 		&cli.StringFlag{
-			Name:  "keyFile",
+			Name:  "key-file",
 			Usage: "key file for https",
 		},
 		&cli.BoolFlag{
@@ -83,8 +83,8 @@ func webdav(c *cli.Context) error {
 		EnableGzip:   c.Bool("gzip"),
 		Username:     os.Getenv("WEBDAV_USER"),
 		Password:     os.Getenv("WEBDAV_PASSWORD"),
-		CertFile:     c.String("certFile"),
-		KeyFile:      c.String("keyFile"),
+		CertFile:     c.String("cert-file"),
+		KeyFile:      c.String("key-file"),
 	})
 	return jfs.Meta().CloseSession()
 }

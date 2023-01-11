@@ -19,6 +19,11 @@ on:
 
 jobs:
   aitests:
+    strategy:
+      fail-fast: false
+      matrix:
+        type: [ 'normal', 'cache']
+
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -51,18 +56,22 @@ jobs:
              --secret-key minioadmin \
              redis://127.0.0.1:6379/1 pics
 
-
       - name: Juicefs Mount
         run: |
-          sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
+          if [ "${{matrix.type}}" == "normal" ]; then
+            sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
+          elif [ "${{matrix.type}}" == "cache" ]; then
+            sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --cache-size 3072 --no-usage-report &
+          else
+            echo "matrix.type error: ${{matrix.type}} "
+          fi
+          
           python --version
-
 
       - name: Set up Conda
         uses: s-weigand/setup-conda@v1
         with:
           python-version: 2.7
-
 
       - name: Install Dependency
         run: |
@@ -72,7 +81,6 @@ jobs:
           sudo apt-get install libhdf5-dev
           pip install h5py
           pip install pillow
-
 
       - name: Prepare Data
         run: |

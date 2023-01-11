@@ -883,4 +883,11 @@ public class JuiceFileSystemTest extends TestCase {
     assertEquals(100, skip);
     in.close();
   }
+
+  public void testInnerSymlink() throws Exception {
+    //echo "hello juicefs" > inner_sym_link
+    FileStatus status = fs.getFileStatus(new Path("/inner_sym_link"));
+    assertEquals("inner_sym_link", status.getPath().getName());
+    assertEquals(14, status.getLen());
+  }
 }

@@ -13,18 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package object
+package cmd
 
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/juicedata/juicefs/pkg/chunk"
+	"github.com/juicedata/juicefs/pkg/fs"
+	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
-func testKeysEqual(objs []Object, expectedKeys []string) error {
+func testKeysEqual(objs []object.Object, expectedKeys []string) error {
 	gottenKeys := make([]string, len(objs))
 	for idx, obj := range objs {
 		gottenKeys[idx] = obj.Key()
@@ -43,29 +48,8 @@ func testKeysEqual(objs []Object, expectedKeys []string) error {
 	return nil
 }
 
-func TestDisk2(t *testing.T) {
-	s, _ := newDisk("/tmp/abc/", "", "", "")
-	s = WithPrefix(s, "prefix/")
-	testFileSystem(t, s)
-}
-
-func TestSftp2(t *testing.T) {
-	if os.Getenv("SFTP_HOST") == "" {
-		t.SkipNow()
-	}
-	sftp, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"), "")
-	testFileSystem(t, sftp)
-}
-
-func TestHDFS2(t *testing.T) {
-	if os.Getenv("HDFS_ADDR") == "" {
-		t.Skip()
-	}
-	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "", "")
-	testFileSystem(t, dfs)
-}
-
-func testFileSystem(t *testing.T, s ObjectStorage) {
+// copied from pkg/object/filesystem_test.go
+func testFileSystem(t *testing.T, s object.ObjectStorage) {
 	keys := []string{
 		"x/",
 		"x/x.txt",
@@ -81,7 +65,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 	}
 	if o, err := s.Head("x/"); err != nil {
 		t.Fatalf("Head x/: %s", err)
-	} else if f, ok := o.(File); !ok {
+	} else if f, ok := o.(object.File); !ok {
 		t.Fatalf("Head should return File")
 	} else if !f.IsDir() {
 		t.Fatalf("x/ should be a dir")
@@ -131,15 +115,22 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
 
-	if ss, ok := s.(SupportSymlink); ok {
+	if ss, ok := s.(object.SupportSymlink); ok {
 		// a< a- < a/ < a0    <    b< b- < b/ < b0
 		_ = s.Put("a-", bytes.NewReader([]byte{}))
 		_ = s.Put("a0", bytes.NewReader([]byte{}))
 		_ = s.Put("b-", bytes.NewReader([]byte{}))
 		_ = s.Put("b0", bytes.NewReader([]byte{}))
 		_ = s.Put("xyz/ol1/p.txt", bytes.NewReader([]byte{}))
-		_ = ss.Symlink("./xyz/ol1/", "a")
-		_ = ss.Symlink("./xyz/notExist/", "b")
+		if err = ss.Symlink("./xyz/ol1/", "a"); err != nil {
+			t.Fatalf("symlink a %s", err)
+		}
+		if target, err := ss.Readlink("a"); err != nil || target != "./xyz/ol1/" {
+			t.Fatalf("readlink a %s %s", target, err)
+		}
+		if err = ss.Symlink("./xyz/notExist/", "b"); err != nil {
+			t.Fatalf("symlink b %s", err)
+		}
 		objs, err = listAll(s, "", "", 100)
 		if err != nil {
 			t.Fatalf("listall failed: %s", err)
@@ -149,4 +140,37 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 			t.Fatalf("testKeysEqual fail: %s", err)
 		}
 	}
+}
+
+func TestJFS(t *testing.T) {
+	m := meta.NewClient("memkv://", &meta.Config{})
+	format := &meta.Format{
+		Name:      "test",
+		BlockSize: 4096,
+		Capacity:  1 << 30,
+	}
+	_ = m.Init(format, true)
+	var conf = vfs.Config{
+		Meta: &meta.Config{},
+		Chunk: &chunk.Config{
+			BlockSize:  format.BlockSize << 10,
+			MaxUpload:  1,
+			MaxDeletes: 1,
+			BufferSize: 100 << 20,
+		},
+		DirEntryTimeout: time.Millisecond * 100,
+		EntryTimeout:    time.Millisecond * 100,
+		AttrTimeout:     time.Millisecond * 100,
+		AccessLog:       "/tmp/juicefs.access.log",
+	}
+	objStore, _ := object.CreateStorage("mem", "", "", "", "")
+	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
+	jfs, err := fs.NewFileSystem(&conf, m, store)
+	if err != nil {
+		t.Fatalf("initialize  failed: %s", err)
+	}
+
+	jstore := &juiceFS{object.DefaultObjectStorage{}, "test", jfs}
+	testFileSystem(t, jstore)
+	testFileSystem(t, object.WithPrefix(jstore, "unittest/"))
 }

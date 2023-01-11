@@ -5,6 +5,38 @@ sidebar_position: 6
 
 Debugging process for some frequently encountered JuiceFS problems.
 
+## Volume format error {#format-error}
+
+### Error creating an already formatted volume {#create-file-system-repeatedly}
+
+If `juicefs format` has been run on the metadata engine, executing `juicefs format` command again might result in the following error:
+
+```
+cannot update volume XXX from XXX to XXX
+```
+
+In this case, clean up the metadata engine, and try again.
+
+### Invalid Redis URL {#invalid-redis-url}
+
+When using Redis below 6.0.0, `juicefs format` will fail when `username` is specified:
+
+```
+format: ERR wrong number of arguments for 'auth' command
+```
+
+Username is supported in Redis 6.0.0 and above, you'll need to omit the `username` from the Redis URL, e.g. `redis://:password@host:6379/1`.
+
+### Redis Sentinel mode NOAUTH error {#redis-sentinel-noauth-error}
+
+If you encounter the following error when using [Redis Sentinel mode](../administration/metadata/redis_best_practices.md#sentinel-mode):
+
+```
+sentinel: GetMasterAddrByName master="xxx" failed: NOAUTH Authentication required.
+```
+
+Please confirm whether [the password is set](https://redis.io/docs/management/sentinel/#configuring-sentinel-instances-with-authentication) for the Redis Sentinel instance, if it is set, then you need to pass the `SENTINEL_PASSWORD` environment variable configures the password to connect to the Sentinel instance separately, and the password in the metadata engine URL will only be used to connect to the Redis server.
+
 ## Mount errors due to permission issue {#mount-permission-error}
 
 When using [Docker bind mounts](https://docs.docker.com/storage/bind-mounts) to mount a directory on the host machine into a container, you may encounter the following error:
@@ -129,7 +161,29 @@ If JuiceFS Client takes up too much memory, you may choose to optimize memory us
 * JuiceFS mount client is an Go program, which means you can decrease `GOGC` (default to 100, in percentage) to adopt a more active garbage collection. This inevitably increase CPU usage and may even directly hinder performance. Read more at [Go Runtime](https://pkg.go.dev/runtime#hdr-Environment_Variables).
 * If you use self-hosted Ceph RADOS as the data storage of JuiceFS, consider replacing glibc with [TCMalloc](https://google.github.io/tcmalloc), the latter comes with more efficient memory management and may decrease off-heap memory footprint in this scenario.
 
-## Development Related issue
+## Unmount error {#unmount-error}
+
+If a file or directory are opened when you unmount JuiceFS, you'll see below errors, assuming JuiceFS is mounted on `/jfs`:
+
+```shell
+# Linux
+umount: /jfs: target is busy.
+        (In some cases useful info about processes that use
+         the device is found by lsof(8) or fuser(1))
+
+# macOS
+Resource busy -- try 'diskutil unmount'
+```
+
+In such case:
+
+* Locate the files being opened using commands like `lsof /jfs`, deal with these processes (like force quit), and retry.
+* Force close the FUSE connection by `echo 1 > /sys/fs/fuse/connections/[device-number]/abort`, and then retry. You might need to find out the `[device-number]` using `lsof /jfs`, but if JuiceFS is the only FUSE mount point in the system, then `/sys/fs/fuse/connections` will contain only a single directory, no need to check further.
+* If you just want to unmount ASAP, and do not care what happens to opened files, run `juicefs umount --force` to forcibly umount, note that behavior is different between Linux and macOS:
+  * For Linux, `juicefs umount --force` is translated to `umount --lazy`, file system will be detached, but opened files remain, FUSE client will exit when file descriptors are released.
+  * For macOS, `juicefs umount --force` is translated to `umount -f`, file system will be forcibly unmounted and opened files will be closed immediately.
+
+## Development related issues {#development-related-issues}
 
 Compiling JuiceFS requires GCC 5.4 and above, this error may occur when using lower versions:
 

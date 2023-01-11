@@ -270,7 +270,7 @@ type Meta interface {
 	// ListSessions returns all client sessions.
 	ListSessions() ([]*Session, error)
 	// ScanDeletedObject scan deleted objects by customized scanner.
-	ScanDeletedObject(Context, deletedSliceScan, deletedFileScan) error
+	ScanDeletedObject(Context, trashSliceScan, pendingSliceScan, trashFileScan, pendingFileScan) error
 	// ListLocks returns all locks of a inode.
 	ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error)
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes

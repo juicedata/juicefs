@@ -178,7 +178,7 @@ jobs:
             ./$bin_name umount -f $mount_point
             uuid=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4)
             if [ -n "$uuid" ];then
-              sudo ./juicefs destroy --force $meta_url $uuid
+              sudo ./juicefs destroy --yes $meta_url $uuid
             fi
             # mc rb  myminio/$name --force --dangerous || printf "Warining; remove bucket failed: %s, exit code: %s" "myminio/$name" "$?"
           done
@@ -198,7 +198,7 @@ jobs:
     needs: [fio_benchmark]
     if: always()
     steps:
-      - uses: technote-space/workflow-conclusion-action@v2
+      - uses: technote-space/workflow-conclusion-action@v3
       - uses: actions/checkout@v3
 
       - name: Check Failure

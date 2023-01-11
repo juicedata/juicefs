@@ -155,7 +155,7 @@ func gc(ctx *cli.Context) error {
 
 	err = m.ScanDeletedObject(
 		c,
-		nil,
+		nil, nil, nil,
 		func(_ meta.Ino, size uint64, ts int64) (bool, error) {
 			delayedFileSpin.IncrInt64(int64(size))
 			if delete {
@@ -225,7 +225,7 @@ func gc(ctx *cli.Context) error {
 			}
 			return false, nil
 		},
-		nil,
+		nil, nil, nil,
 	)
 	if err != nil {
 		logger.Fatalf("statistic: %s", err)

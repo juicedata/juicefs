@@ -93,7 +93,7 @@ jobs:
           test -d $mp && ./juicefs umount -f $mp
           ./juicefs status $meta_url && UUID=$(./juicefs status $meta_url | grep UUID | cut -d '"' -f 4) || echo "meta not exist"
           if [ -n "$UUID" ];then
-            ./juicefs destroy --force $meta_url $UUID
+            ./juicefs destroy --yes $meta_url $UUID
           fi
           test -d /var/jfs/$volume && rm -rf /var/jfs/$volume || true
         shell: bash

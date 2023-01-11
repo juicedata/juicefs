@@ -2237,7 +2237,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	return errno(m.scanDeletedSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
+	return errno(m.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
 		slices[1] = append(slices[1], ss...)
 		if showProgress != nil {
 			for range ss {
@@ -2248,7 +2248,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	}))
 }
 
-func (m *kvMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
+func (m *kvMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	if scan == nil {
 		return nil
 	}
@@ -2304,7 +2304,39 @@ func (m *kvMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
 	return nil
 }
 
-func (m *kvMeta) scanDeletedFiles(ctx Context, scan deletedFileScan) error {
+func (m *kvMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
+	if scan == nil {
+		return nil
+	}
+
+	// slice refs: Kiiiiiiiissss
+	klen := 1 + 8 + 4
+	pairs, err := m.scanValues(m.fmtKey("K"), -1, func(k, v []byte) bool {
+		refs := parseCounter(v)
+		return len(k) == klen && refs < 0
+	})
+	if err != nil {
+		return err
+	}
+
+	for key := range pairs {
+		b := utils.ReadBuffer([]byte(key)[1:])
+		id := b.Get64()
+		size := b.Get32()
+		clean, err := scan(id, size)
+		if err != nil {
+			return errors.Wrap(err, "scan pending deleted slices")
+		}
+		if clean {
+			// TODO: m.deleteSlice(id, size)
+			// avoid lint warning
+			_ = clean
+		}
+	}
+	return nil
+}
+
+func (m *kvMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	if scan == nil {
 		return nil
 	}

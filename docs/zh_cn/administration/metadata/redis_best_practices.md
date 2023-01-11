@@ -43,7 +43,7 @@ used_memory_dataset_perc: 70.12%
 
 ## 数据可用性
 
-### 哨兵模式
+### 哨兵模式 {#sentinel-mode}
 
 [Redis 哨兵](https://redis.io/docs/manual/sentinel) 是 Redis 官方的高可用解决方案，它提供以下功能：
 
@@ -80,7 +80,7 @@ juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2 ~/jfs
 需要注意由于 Redis 主节点的数据是异步复制到副本节点，因此有可能读到的元数据不是最新的。
 :::
 
-### 集群模式
+### 集群模式 {#cluster-mode}
 
 :::note 注意
 此特性需要使用 1.0.0 及以上版本的 JuiceFS
