@@ -1,19 +1,10 @@
 name: mutate-test-sdk
 on:
-  push:
-    branches:
-      - 'main'
-      - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
   pull_request:
-    #The branches below must be a subset of the branches above
     branches:
       - 'main'
-      - 'release-**'
     paths:
-      - '**/*Test.java'
+      - '**/JuiceFileSystemTest.java'
 
   workflow_dispatch:
     inputs:
@@ -96,7 +87,12 @@ jobs:
           cd sdk/java
           sudo mvn --no-transfer-progress test-compile org.pitest:pitest-maven:mutationCoverage
           cd -
-          exit 1
+
+      - name: Upload Pit Report
+        - uses: actions/upload-artifact@v3
+          with:
+            name: pit-reports
+            path: sdk/java/target/pit-reports
 
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
@@ -106,7 +102,6 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Setup upterm session
-        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
-        if: failure()
-        timeout-minutes: 90
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        timeout-minutes: 60
         uses: lhotari/action-upterm@v1
