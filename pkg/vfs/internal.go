@@ -185,7 +185,7 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 	return w.Bytes()
 }
 
-func writeProgress(count, bytes *uint64, data *[]byte, done chan struct{}) {
+func writeProgress(count, bytes *uint64, out io.Writer, done chan struct{}) {
 	wb := utils.NewBuffer(17)
 	wb.Put8(meta.CPROGRESS)
 	if bytes == nil {
@@ -197,14 +197,14 @@ func writeProgress(count, bytes *uint64, data *[]byte, done chan struct{}) {
 		case <-ticker.C:
 			wb.Put64(atomic.LoadUint64(count))
 			wb.Put64(atomic.LoadUint64(bytes))
-			*data = append(*data, wb.Bytes()...)
+			_, _ = out.Write(wb.Bytes())
 			wb.Seek(1)
 		case <-done:
 			ticker.Stop()
 			if *count > 0 || *bytes > 0 {
 				wb.Put64(atomic.LoadUint64(count))
 				wb.Put64(atomic.LoadUint64(bytes))
-				*data = append(*data, wb.Bytes()...)
+				_, _ = out.Write(wb.Bytes())
 			}
 			return
 		}
@@ -302,7 +302,7 @@ func (r *InfoResponse) Decode(reader io.Reader) error {
 	return json.Unmarshal(respBuf, r)
 }
 
-func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, data *[]byte) {
+func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, out io.Writer) {
 	switch cmd {
 	case meta.Rmr:
 		done := make(chan struct{})
@@ -317,13 +317,13 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			}
 			close(done)
 		}()
-		writeProgress(&count, nil, data, done)
+		writeProgress(&count, nil, out, done)
 		if st == 0 && v.InvalidateEntry != nil {
 			if st = v.InvalidateEntry(inode, name); st != 0 {
 				logger.Errorf("Invalidate entry %d/%s: %s", inode, name, st)
 			}
 		}
-		*data = append(*data, uint8(st))
+		_, _ = out.Write([]byte{uint8(st)})
 	case meta.LegacyInfo:
 		var summary meta.Summary
 		inode := Ino(r.Get64())
@@ -341,7 +341,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		if r != 0 {
 			msg := r.Error()
 			wb.Put32(uint32(len(msg)))
-			*data = append(*data, append(wb.Bytes(), msg...)...)
+			_, _ = out.Write(append(wb.Bytes(), msg...))
 			return
 		}
 		var w = bytes.NewBuffer(nil)
@@ -383,7 +383,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 			}
 		}
 		wb.Put32(uint32(w.Len()))
-		*data = append(*data, append(wb.Bytes(), w.Bytes()...)...)
+		_, _ = out.Write(append(wb.Bytes(), w.Bytes()...))
 	case meta.InfoV2:
 		inode := Ino(r.Get64())
 		info := &InfoResponse{
@@ -403,7 +403,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		if r != 0 {
 			info.Failed = true
 			info.Reason = r.Error()
-			*data = append(*data, info.Encode()...)
+			_, _ = out.Write(info.Encode())
 			return
 		}
 
@@ -428,7 +428,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 		if info.PLocks, info.FLocks, err = v.Meta.ListLocks(ctx, inode); err != nil {
 			info.Reason = err.Error()
 		}
-		*data = append(*data, info.Encode()...)
+		_, _ = out.Write(info.Encode())
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()
@@ -440,13 +440,13 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, d
 				v.fillCache(ctx, paths, int(concurrent), &count, &bytes)
 				close(done)
 			}()
-			writeProgress(&count, &bytes, data, done)
+			writeProgress(&count, &bytes, out, done)
 		} else {
 			go v.fillCache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), paths, int(concurrent), nil, nil)
 		}
-		*data = append(*data, uint8(0))
+		_, _ = out.Write([]byte{0})
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
-		*data = append(*data, uint8(syscall.EINVAL&0xff))
+		_, _ = out.Write([]byte{byte(syscall.EINVAL & 0xff)})
 	}
 }

@@ -582,6 +582,8 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 	}
 
 	if ino == controlInode {
+		h.Lock()
+		defer h.Unlock()
 		h.pending = append(h.pending, buf...)
 		rb := utils.ReadBuffer(h.pending)
 		cmd := rb.Get32()
@@ -594,7 +596,7 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 		h.pending = h.pending[:0]
 		if rb.Left() == size {
 			h.bctx = meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids())
-			go v.handleInternalMsg(h.bctx, cmd, rb, &h.data)
+			go v.handleInternalMsg(h.bctx, cmd, rb, h)
 		} else {
 			logger.Warnf("broken message: %d %d < %d", cmd, size, rb.Left())
 			h.data = append(h.data, uint8(syscall.EIO&0xff))
