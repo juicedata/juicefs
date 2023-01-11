@@ -96,6 +96,7 @@ jobs:
           cd sdk/java
           sudo mvn --no-transfer-progress test-compile org.pitest:pitest-maven:mutationCoverage
           cd -
+          exit 1
 
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
