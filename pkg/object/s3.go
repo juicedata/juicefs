@@ -162,7 +162,7 @@ func (s *s3client) Delete(key string) error {
 		Key:    &key,
 	}
 	_, err := s.s3.DeleteObject(&param)
-	if err != nil && strings.Contains(err.Error(), "NoSuckKey") {
+	if err != nil && strings.Contains(err.Error(), "NoSuchKey") {
 		err = nil
 	}
 	return err
