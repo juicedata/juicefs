@@ -90,9 +90,9 @@ jobs:
 
       - name: Upload Pit Report
         uses: actions/upload-artifact@v3
-          with:
-            name: pit-reports
-            path: sdk/java/target/pit-reports
+        with:
+          name: pit-reports
+          path: sdk/java/target/pit-reports
 
       - name: Send Slack Notification
         if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
