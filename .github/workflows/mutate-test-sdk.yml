@@ -80,7 +80,7 @@ jobs:
             echo "targetClasses is $targetClasses"
             timeConstant="${{github.event.inputs.timeConstant}}"
           fi
-          POM_XML_PATH="sdk/java/pom.xml" TARGET_TESTS=$targetTests TARGET_CLASSES=$targetClasses TIME_CONSTANT=$timeConstant python3 .github/scripts/modify_sdk_pom.py
+          POM_XML_PATH="sdk/java/pom.xml" TARGET_TESTS=$targetTests TARGET_CLASSES=$targetClasses TIME_CONSTANT=$timeConstant python3 .github/scripts/mutate/modify_sdk_pom.py
           cat sdk/java/pom.xml
 
       - name: Test SDK
