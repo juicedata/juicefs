@@ -773,7 +773,7 @@ public class JuiceFileSystemTest extends TestCase {
     TimerTask timerTask = new TimerTask() {
       @Override
       public void run() {
-        System.out.printf("read  method calls: %d\n", counter.get());
+        System.out.printf("read method calls: %d\n", counter.get());
         finished.set(true);
       }
     };
