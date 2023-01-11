@@ -35,7 +35,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var ctx = meta.Background
+var ctx = meta.NewContext(1, uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
 
 func createDir(jfs *fs.FileSystem, root string, d int, width int) error {
 	if err := jfs.Mkdir(ctx, root, 0755); err != 0 {
@@ -110,7 +110,6 @@ func runTest(jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes 
 	bar := progress.AddCountBar("create file", int64(total))
 	logger.Infof("Create %d files in %d dirs", total, dirs)
 
-	ctx = meta.NewContext(1, uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
 	start := time.Now()
 	if err := jfs.Mkdir(ctx, rootDir, 0755); err != 0 {
 		logger.Errorf("mkdir %s: %s", rootDir, err)

@@ -59,8 +59,7 @@ Examples:
 $ juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-east-2.amazonaws.com
 
 # Sync objects from S3 to JuiceFS
-$ juicefs mount -d redis://localhost /mnt/jfs
-$ juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
+$ myfs=redis://localhost juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://myfs/ -p 50
 
 # SRC: a1/b1,a2/b2,aaa/b1   DST: empty   sync result: aaa/b1
 $ juicefs sync --exclude='a?/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
@@ -254,22 +253,28 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		secretKey, _ = user.Password()
 	}
 	name := strings.ToLower(u.Scheme)
-	endpoint := u.Host
 	if conf.Links && name != "file" {
 		logger.Warnf("storage %s does not support symlink, ignore it", uri)
 		conf.Links = false
 	}
 
-	isS3PathTypeUrl := isS3PathType(endpoint)
-
+	var endpoint string
 	if name == "file" {
 		endpoint = u.Path
 	} else if name == "hdfs" {
-	} else if !conf.NoHTTPS && supportHTTPS(name, endpoint) {
-		endpoint = "https://" + endpoint
+		endpoint = u.Host
+	} else if name == "jfs" {
+		endpoint, err = url.PathUnescape(u.Host)
+		if err != nil {
+			return nil, fmt.Errorf("unescape %s: %s", u.Host, err)
+		}
+	} else if !conf.NoHTTPS && supportHTTPS(name, u.Host) {
+		endpoint = "https://" + u.Host
 	} else {
-		endpoint = "http://" + endpoint
+		endpoint = "http://" + u.Host
 	}
+
+	isS3PathTypeUrl := isS3PathType(endpoint)
 	if name == "minio" || name == "s3" && isS3PathTypeUrl {
 		// bucket name is part of path
 		endpoint += u.Path

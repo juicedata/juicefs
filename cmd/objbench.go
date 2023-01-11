@@ -50,6 +50,8 @@ Run basic benchmarks on the target object storage to test if it works as expecte
 Examples:
 # Run benchmarks on S3
 $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
+# Run benchmakks on JuiceFS
+$ juicefs objbench --storage jfs redis://localhost/1
 
 Details: https://juicefs.com/docs/community/performance_evaluation_guide#juicefs-objbench`,
 		Flags: []cli.Flag{
@@ -406,7 +408,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 			line[0] = api.title
 			return line
 		}
-		if api.name == "chown" && strings.HasPrefix(bm.blob.String(), "file://") && os.Getuid() != 0 {
+		if api.name == "chown" && (strings.HasPrefix(bm.blob.String(), "file://") || strings.HasPrefix(bm.blob.String(), "jfs://")) && os.Getuid() != 0 {
 			logger.Warnf("chown test should be run by root")
 			return []string{api.title, skipped, skipped}
 		}
@@ -943,7 +945,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 	})
 
 	funFSCase("change owner/group", func() error {
-		if strings.HasPrefix(blob.String(), "file://") && os.Getuid() != 0 {
+		if (strings.HasPrefix(blob.String(), "file://") || strings.HasPrefix(blob.String(), "jfs://")) && os.Getuid() != 0 {
 			return errors.New("root required")
 		}
 		if err := fi.Chown(key, "nobody", "nobody"); err != nil {

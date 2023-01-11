@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -276,8 +277,8 @@ func (f *sftpStore) Chown(key string, owner, group string) error {
 		return err
 	}
 	defer f.putSftpConnection(&c, err)
-	uid := lookupUser(owner)
-	gid := lookupGroup(group)
+	uid := utils.LookupUser(owner)
+	gid := utils.LookupGroup(group)
 	return c.sftpClient.Chown(f.path(key), uid, gid)
 }
 

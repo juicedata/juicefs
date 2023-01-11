@@ -442,6 +442,18 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16) (err syscal
 	return
 }
 
+func (fs *FileSystem) MkdirAll(ctx meta.Context, p string, mode uint16) (err syscall.Errno) {
+	err = fs.Mkdir(ctx, p, mode)
+	if err == syscall.ENOENT {
+		_ = fs.MkdirAll(ctx, parentDir(p), mode)
+		err = fs.Mkdir(ctx, p, mode)
+	}
+	if err == syscall.EEXIST {
+		err = 0
+	}
+	return err
+}
+
 func (fs *FileSystem) Delete(ctx meta.Context, p string) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Delete").End()
 	l := vfs.NewLogContext(ctx)
