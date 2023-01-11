@@ -502,6 +502,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		if ino == logInode {
 			n = readAccessLog(fh, buf)
 		} else {
+			defer func() { logit(ctx, "read (%d,%d,%d,%d): %s (%d)", ino, size, off, fh, strerr(err), n) }()
 			if ino == controlInode && runtime.GOOS == "darwin" {
 				fh = v.getControlHandle(ctx.Pid())
 			}
@@ -510,25 +511,21 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 				err = syscall.EBADF
 				return
 			}
-			data := h.data
+			h.Lock()
+			defer h.Unlock()
 			if off < h.off {
-				data = nil
-			} else {
-				off -= h.off
+				logger.Errorf("read dropped data from %s: %d < %d", ino, off, h.off)
+				err = syscall.EIO
+				return
 			}
-			if int(off) < len(data) {
-				data = data[off:]
-				if int(size) < len(data) {
-					data = data[:size]
-				}
-				n = copy(buf, data)
+			if int(off-h.off) < len(h.data) {
+				n = copy(buf, h.data[off-h.off:])
 			}
-			if len(h.data) > 2<<20 {
+			if len(h.data) > 2<<20 && off-h.off > 1<<20 {
 				// drop first part to avoid OOM
 				h.off += 1 << 20
 				h.data = h.data[1<<20:]
 			}
-			logit(ctx, "read (%d,%d,%d,%d): %s (%d)", ino, size, off, fh, strerr(err), n)
 		}
 		return
 	}
