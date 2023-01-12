@@ -793,7 +793,7 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 	defer m.timeit(time.Now())
 	parent = m.checkRoot(parent)
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 	return m.en.doLink(ctx, inode, parent, name, attr)
 }
 

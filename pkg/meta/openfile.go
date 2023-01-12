@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+const (
+	invalidateAllChunks = 0xFFFFFFFF
+	invalidateAttrOnly  = 0xFFFFFFFE
+)
+
 type openFile struct {
 	sync.RWMutex
 	attr      Attr
@@ -161,7 +166,7 @@ func (o *openfiles) InvalidateChunk(ino Ino, indx uint32) {
 	defer o.Unlock()
 	of, ok := o.files[ino]
 	if ok {
-		if indx == 0xFFFFFFFF {
+		if indx == invalidateAllChunks {
 			of.chunks = make(map[uint32][]Slice)
 		} else {
 			delete(of.chunks, indx)

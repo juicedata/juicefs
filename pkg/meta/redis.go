@@ -798,7 +798,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		f.Lock()
 		defer f.Unlock()
 	}
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
+	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
@@ -913,7 +913,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		f.Lock()
 		defer f.Unlock()
 	}
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
+	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
@@ -986,7 +986,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer m.timeit(time.Now())
 	inode = m.checkRoot(inode)
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		var cur Attr
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
@@ -1204,7 +1204,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 		return st
 	}
 	if trash == 0 {
-		defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 	}
 	var _type uint8
 	var opened bool
@@ -1551,7 +1551,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						if dtyp == TypeFile && tattr.Nlink == 0 {
 							opened = m.of.IsOpen(dino)
 						}
-						defer func() { m.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
+						defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 					} else if tattr.Parent > 0 {
 						tattr.Parent = trash
 					}
@@ -2061,7 +2061,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		defer f.Unlock()
 	}
 	var newSpace int64
-	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
+	defer func() { m.of.InvalidateChunk(fout, invalidateAllChunks) }()
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
 		rs, err := tx.MGet(ctx, m.inodeKey(fin), m.inodeKey(fout)).Result()
