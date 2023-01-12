@@ -1246,6 +1246,10 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 	return 0
 }
 
+func (m *baseMeta) GetFormat() Format {
+	return *m.fmt
+}
+
 func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno {
 	var wg sync.WaitGroup
 	ch := make(chan cchunk, 1000000)

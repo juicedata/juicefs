@@ -210,16 +210,7 @@ func Test_configEqual(t *testing.T) {
 			a: &vfs.Config{}, b: &vfs.Config{}, equal: true,
 		},
 		{
-			a: &vfs.Config{Format: &meta.Format{}}, b: &vfs.Config{}, equal: false,
-		},
-		{
-			a: &vfs.Config{}, b: &vfs.Config{Format: &meta.Format{}}, equal: false,
-		},
-		{
-			a: &vfs.Config{Format: &meta.Format{}}, b: &vfs.Config{Format: &meta.Format{}}, equal: true,
-		},
-		{
-			a: &vfs.Config{Format: &meta.Format{SecretKey: "1"}}, b: &vfs.Config{Format: &meta.Format{SecretKey: "2"}}, equal: true,
+			a: &vfs.Config{Format: meta.Format{SecretKey: "1"}}, b: &vfs.Config{Format: meta.Format{SecretKey: "2"}}, equal: true,
 		},
 		{
 			a: &vfs.Config{Port: &vfs.Port{}}, b: &vfs.Config{}, equal: true,

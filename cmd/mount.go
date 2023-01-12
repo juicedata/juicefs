@@ -246,7 +246,7 @@ func expandPathForEmbedded(addr string) string {
 func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
 	cfg := &vfs.Config{
 		Meta:       metaConf,
-		Format:     format,
+		Format:     *format,
 		Version:    version.Version(),
 		Chunk:      chunkConf,
 		BackupMeta: duration(c.String("backup-meta")),
@@ -273,17 +273,9 @@ func configEqual(a, b *vfs.Config) bool {
 	}
 
 	ac, bc := *a, *b
-	ac.Meta, ac.Chunk, ac.Format, ac.Port, ac.AttrTimeout, ac.DirEntryTimeout, ac.EntryTimeout = nil, nil, nil, nil, 0, 0, 0
-	bc.Meta, bc.Chunk, bc.Format, bc.Port, bc.AttrTimeout, bc.DirEntryTimeout, bc.EntryTimeout = nil, nil, nil, nil, 0, 0, 0
+	ac.Meta, ac.Chunk, ac.Port, ac.Format.SecretKey, ac.AttrTimeout, ac.DirEntryTimeout, ac.EntryTimeout = nil, nil, nil, "", 0, 0, 0
+	bc.Meta, bc.Chunk, bc.Port, bc.Format.SecretKey, bc.AttrTimeout, bc.DirEntryTimeout, bc.EntryTimeout = nil, nil, nil, "", 0, 0, 0
 	eq := ac == bc
-
-	if a.Format == nil || b.Format == nil {
-		eq = eq && a.Format == b.Format
-	} else {
-		af, bf := *a.Format, *b.Format
-		af.SecretKey, bf.SecretKey = "", ""
-		eq = eq && af == bf
-	}
 
 	if a.Meta == nil || b.Meta == nil {
 		eq = eq && a.Meta == b.Meta
