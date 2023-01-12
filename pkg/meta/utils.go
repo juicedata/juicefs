@@ -292,7 +292,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, count *uint64, concurrent ch
 			entries[i] = nil // release memory
 		}
 		wg.Wait()
-		if status != 0 {
+		if status != 0 || inode == TrashInode { // try only once for .trash
 			return status
 		}
 	}
@@ -300,7 +300,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, count *uint64, concurrent ch
 
 func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, count *uint64, concurrent chan int) syscall.Errno {
 	st := m.emptyDir(ctx, inode, count, concurrent)
-	if st == 0 {
+	if st == 0 && !isTrash(inode) {
 		st = m.Rmdir(ctx, parent, name)
 		if st == syscall.ENOTEMPTY {
 			st = m.emptyEntry(ctx, parent, name, inode, count, concurrent)
