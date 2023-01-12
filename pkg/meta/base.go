@@ -218,12 +218,8 @@ func (m *baseMeta) timeit(start time.Time) {
 	m.opDist.Observe(time.Since(start).Seconds())
 }
 
-func (m *baseMeta) GetBase() *baseMeta {
+func (m *baseMeta) getBase() *baseMeta {
 	return m
-}
-
-func (m *baseMeta) GetFormat() Format {
-	return *m.fmt
 }
 
 func (m *baseMeta) checkRoot(inode Ino) Ino {
@@ -1248,6 +1244,10 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 		subdir = ps[1]
 	}
 	return 0
+}
+
+func (m *baseMeta) GetFormat() Format {
+	return *m.fmt
 }
 
 func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno {

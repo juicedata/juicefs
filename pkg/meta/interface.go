@@ -363,6 +363,8 @@ type Meta interface {
 	Check(ctx Context, fpath string, repair bool, recursive bool) syscall.Errno
 	// Change root to a directory specified by subdir
 	Chroot(ctx Context, subdir string) syscall.Errno
+	// Get a copy of the current format
+	GetFormat() Format
 
 	// OnMsg add a callback for the given message type.
 	OnMsg(mtype uint32, cb MsgCallback)
@@ -373,8 +375,8 @@ type Meta interface {
 	DumpMeta(w io.Writer, root Ino, keepSecret bool) error
 	LoadMeta(r io.Reader) error
 
-	// GetBase return the base engine.
-	GetBase() *baseMeta
+	// getBase return the base engine.
+	getBase() *baseMeta
 	InitMetrics(registerer prometheus.Registerer)
 }
 

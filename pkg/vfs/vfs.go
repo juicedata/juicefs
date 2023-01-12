@@ -406,7 +406,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 		case statsInode:
 			h.data = collectMetrics(v.registry)
 		case configInode:
-			v.Conf.Format = v.Meta.GetBase().GetFormat()
+			v.Conf.Format = v.Meta.GetFormat()
 			v.Conf.Format.RemoveSecret()
 			h.data, _ = json.MarshalIndent(v.Conf, "", " ")
 			entry.Attr.Length = uint64(len(h.data))

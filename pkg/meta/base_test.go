@@ -74,7 +74,7 @@ func testMeta(t *testing.T, m Meta) {
 	testCloseSession(t, m)
 	testConcurrentDir(t, m)
 	testAttrFlags(t, m)
-	base := m.GetBase()
+	base := m.getBase()
 	base.conf.OpenCache = time.Second
 	base.of.expire = time.Second
 	testOpenCache(t, m)
@@ -114,7 +114,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if err != nil || len(ses) != 1 {
 		t.Fatalf("list sessions %+v: %s", ses, err)
 	}
-	base := m.GetBase()
+	base := m.getBase()
 	if base.sid != ses[0].Sid {
 		t.Fatalf("my sid %d != registered sid %d", base.sid, ses[0].Sid)
 	}
@@ -1193,7 +1193,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink f: %s", st)
 	}
-	sid := m.GetBase().sid
+	sid := m.getBase().sid
 	s, err := m.GetSession(sid, true)
 	if err != nil {
 		t.Fatalf("get session: %s", err)
@@ -1318,7 +1318,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx2, TrashInode+1, "d", 1, "f", 0, &inode, attr); st != syscall.EPERM {
 		t.Fatalf("rename d -> f: %s", st)
 	}
-	m.GetBase().doCleanupTrash(true)
+	m.getBase().doCleanupTrash(true)
 	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
 	}
