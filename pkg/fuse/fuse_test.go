@@ -99,7 +99,7 @@ func mount(url, mp string) {
 
 	conf := &vfs.Config{
 		Meta:   metaConf,
-		Format: format,
+		Format: *format,
 		Chunk:  &chunkConf,
 	}
 
