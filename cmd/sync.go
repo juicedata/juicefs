@@ -274,7 +274,8 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		endpoint = "http://" + u.Host
 	}
 
-	if name == "minio" || name == "s3" && isS3PathType(u.Host) {
+	isS3PathTypeUrl := isS3PathType(u.Host)
+	if name == "minio" || name == "s3" && isS3PathTypeUrl {
 		// bucket name is part of path
 		endpoint += u.Path
 	}
