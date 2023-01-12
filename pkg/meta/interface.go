@@ -373,8 +373,8 @@ type Meta interface {
 	DumpMeta(w io.Writer, root Ino, keepSecret bool) error
 	LoadMeta(r io.Reader) error
 
-	// getBase return the base engine.
-	getBase() *baseMeta
+	// GetBase return the base engine.
+	GetBase() *baseMeta
 	InitMetrics(registerer prometheus.Registerer)
 }
 

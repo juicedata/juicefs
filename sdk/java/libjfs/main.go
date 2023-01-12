@@ -485,7 +485,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 
 		conf := &vfs.Config{
 			Meta:            metaConf,
-			Format:          format,
+			Format:          *format,
 			Chunk:           &chunkConf,
 			AttrTimeout:     time.Millisecond * time.Duration(jConf.AttrTimeout*1000),
 			EntryTimeout:    time.Millisecond * time.Duration(jConf.EntryTimeout*1000),

@@ -437,7 +437,7 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 
 	vfsConf := &vfs.Config{
 		Meta:            metaConf,
-		Format:          format,
+		Format:          *format,
 		Version:         version.Version(),
 		Chunk:           chunkConf,
 		AttrTimeout:     time.Second,

@@ -218,8 +218,12 @@ func (m *baseMeta) timeit(start time.Time) {
 	m.opDist.Observe(time.Since(start).Seconds())
 }
 
-func (m *baseMeta) getBase() *baseMeta {
+func (m *baseMeta) GetBase() *baseMeta {
 	return m
+}
+
+func (m *baseMeta) GetFormat() Format {
+	return *m.fmt
 }
 
 func (m *baseMeta) checkRoot(inode Ino) Ino {
