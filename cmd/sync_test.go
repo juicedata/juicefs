@@ -86,8 +86,10 @@ func Test_isS3PathType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run("Test host", func(t *testing.T) {
-			if got := isS3PathType(tt.endpoint); got != tt.want {
-				t.Errorf("isS3PathType() = %v, want %v", got, tt.want)
+			for _, schema := range []string{"http://", "https://"} {
+				if got := isS3PathType(schema + tt.endpoint); got != tt.want {
+					t.Errorf("isS3PathType() = %v, want %v", got, tt.want)
+				}
 			}
 		})
 	}
