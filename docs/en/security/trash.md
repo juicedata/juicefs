@@ -49,7 +49,7 @@ The `.trash` directory resides under the root of the JuiceFS mount point, use it
 cd /jfs
 
 # Empty trash directory
-rm -rf .trash/* # The level-1 subdirectory in the trash directory (for example, '2021-11-30-10', whose main function is to generalize management, does not take up space) cannot be manually deleted, so it is normal to report `Permission denied`, but the trash files in the level-1 subdirectory be cleared normally.
+juicefs rmr .trash/* # The level-1 subdirectory in the trash directory (for example, '2021-11-30-10', whose main function is to generalize management, does not take up space) cannot be manually deleted.
 
 # Recover files from trash directory
 # Note: original directory structure is lost, however inode info will be prefixed in the file name, continue reading for more
