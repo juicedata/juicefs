@@ -34,7 +34,7 @@ type _file struct {
 	size uint64
 }
 
-func (v *VFS) fillCache(ctx meta.Context, paths []string, concurrent int, count, bytes *uint64) {
+func (v *VFS) fillCache(ctx meta.Context, paths []string, metadata bool, concurrent int, count, bytes *uint64) {
 	logger.Infof("start to warmup %d paths with %d workers", len(paths), concurrent)
 	start := time.Now()
 	todo := make(chan _file, 10240)
@@ -49,6 +49,11 @@ func (v *VFS) fillCache(ctx meta.Context, paths []string, concurrent int, count,
 				}
 				if err := v.fillInode(ctx, f.ino, f.size, bytes); err != nil {
 					logger.Errorf("Inode %d could be corrupted: %s", f.ino, err)
+				}
+				if metadata {
+					if err := v.Meta.Open(ctx, f.ino, syscall.O_RDONLY, &meta.Attr{}); err != 0 {
+						logger.Errorf("Inode %d could be opened: %s", f.ino, err)
+					}
 				}
 				if count != nil {
 					atomic.AddUint64(count, 1)

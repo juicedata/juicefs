@@ -36,7 +36,7 @@ func TestFill(t *testing.T) {
 	_, _ = v.Symlink(ctx, "testfile", 1, "sym3")
 
 	// normal cases
-	v.fillCache(meta.Background, []string{"/test/file", "/test", "/sym", "/"}, 2, nil, nil)
+	v.fillCache(meta.Background, []string{"/test/file", "/test", "/sym", "/"}, false, 2, nil, nil)
 
 	// remove chunk
 	var slices []meta.Slice
@@ -45,5 +45,5 @@ func TestFill(t *testing.T) {
 		_ = v.Store.Remove(s.Id, int(s.Size))
 	}
 	// bad cases
-	v.fillCache(meta.Background, []string{"/test/file", "/sym2", "/sym3", "/.stats", "/not_exists"}, 2, nil, nil)
+	v.fillCache(meta.Background, []string{"/test/file", "/sym2", "/sym3", "/.stats", "/not_exists"}, false, 2, nil, nil)
 }

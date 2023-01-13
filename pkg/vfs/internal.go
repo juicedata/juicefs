@@ -433,16 +433,17 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()
 		background := r.Get8()
+		metadata := r.Get8()
 		if background == 0 {
 			var count, bytes uint64
 			done := make(chan struct{})
 			go func() {
-				v.fillCache(ctx, paths, int(concurrent), &count, &bytes)
+				v.fillCache(ctx, paths, metadata > 0, int(concurrent), &count, &bytes)
 				close(done)
 			}()
 			writeProgress(&count, &bytes, out, done)
 		} else {
-			go v.fillCache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), paths, int(concurrent), nil, nil)
+			go v.fillCache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), paths, metadata > 0, int(concurrent), nil, nil)
 		}
 		_, _ = out.Write([]byte{0})
 	default:
