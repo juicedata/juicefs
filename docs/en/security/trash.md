@@ -49,11 +49,12 @@ The `.trash` directory resides under the root of the JuiceFS mount point, use it
 cd /jfs
 
 # Empty trash directory
-juicefs rmr .trash/* # The level-1 subdirectory in the trash directory (for example, '2021-11-30-10', whose main function is to generalize management, does not take up space) cannot be manually deleted.
+# Note: The level-1 subdirectory in the trash directory (for example, '2022-11-30-10', whose main function is to generalize management, does not take up space) cannot be manually deleted.
+juicefs rmr .trash/
 
 # Recover files from trash directory
 # Note: original directory structure is lost, however inode info will be prefixed in the file name, continue reading for more
-mv .trash/[parent inode]-[file inode]-[file name] .
+mv .trash/2022-11-30-10/[parent inode]-[file inode]-[file name] .
 ```
 
 When mounting a subdirectory, you will not be able to enter the trash directory.
@@ -72,7 +73,7 @@ All users are allowed to browse the trash directory and see the full list of rem
 
 User cannot create new files inside the trash directory, and only root are allowed to move or delete files in trash.
 
-When the juicefs mount process is started by a non-root user, the `-o allow_root` parameter must be specified during the mount; otherwise, the trash cannot be emptied normal.
+When the juicefs mount process is started by a non-root user, the `-o allow_root` parameter must be specified during the mount; otherwise, the trash cannot be emptied normally.
 
 ### Recover/Purge {#recover-purge}
 

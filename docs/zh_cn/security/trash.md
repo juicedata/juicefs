@@ -49,11 +49,12 @@ $ juicefs status META-URL
 cd /jfs
 
 # 清空回收站中所有文件
-juicefs rmr .trash/* # .trash目录下的一级子目录（如 `2021-11-30-10`，其主要功能是归纳管理，目录本身不占空间）无法被手动删除
+# 注意，`.trash` 目录下的一级子目录（如 `2022-11-30-10`，其主要功能是归纳管理，目录本身不占空间）无法被手动删除
+juicefs rmr .trash/
 
 # 从回收站恢复文件
 # 注意，原目录结构信息已丢失，仅在文件名保留 inode 信息，继续阅读下方说明
-mv .trash/[parent inode]-[file inode]-[file name] .
+mv .trash/2022-11-30-10/[parent inode]-[file inode]-[file name] .
 ```
 
 挂载子目录时，将无法进入回收站目录。
@@ -72,7 +73,7 @@ mv .trash/[parent inode]-[file inode]-[file name] .
 
 回收站内不允许用户自行创建新的文件，并且只有 root 用户才能删除或移动其中的文件。
 
-当 juicefs mount 进程由 非 root 用户启动时，需要在 mount 时指定 `-o allow_root` 参数，否则将无法正常清空回收站。
+当 juicefs mount 进程由非 root 用户启动时，需要在 mount 时指定 `-o allow_root` 参数，否则将无法正常清空回收站。
 
 ### 恢复／清理 {#recover-purge}
 
