@@ -409,6 +409,20 @@ function test_list_objects() {
         # if make bucket fails, $bucket_name has the error output
         out="${bucket_name}"
     fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix dir1/dir2/dir3/dir4/"
+        test_function=${function}
+        out=$($function)
+        rv=$?
+        key_name=$(echo "$out" | jq -r .Contents[0].Key)
+        if [ $rv -eq 0 ] && [ "$key_name" != "dir1/dir2/dir3/dir4/" ]; then
+            rv=1
+            # since rv is 0, command passed, but didn't return expected value. In this case set the output
+            out="list-objects with prefix is dir failed"
+        fi
+    fi
+
     if [ $rv -eq 0 ]; then
         function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix dir1/"
         test_function=${function}
