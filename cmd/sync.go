@@ -141,7 +141,7 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 			},
 			&cli.Int64Flag{
 				Name:  "limit",
-				Usage: "limit the number of objects that will be processed",
+				Usage: "limit the number of objects that will be processed (-1 is unlimited, 0 is to process nothing)",
 				Value: -1,
 			},
 			&cli.StringFlag{
