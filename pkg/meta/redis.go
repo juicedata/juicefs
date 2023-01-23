@@ -101,6 +101,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	readTimeout := query.duration("read-timeout", "read_timeout", time.Second*30)
 	writeTimeout := query.duration("write-timeout", "write_timeout", time.Second*5)
 	routeRead := query.pop("route-read")
+	skipVerify := query.pop("insecureSkipVerify")
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
@@ -146,6 +147,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		fopt.Username = opt.Username
 		fopt.Password = opt.Password
 		fopt.TLSConfig = opt.TLSConfig
+		if fopt.TLSConfig != nil {
+			fopt.TLSConfig.ServerName = ""
+			fopt.TLSConfig.InsecureSkipVerify = skipVerify != ""
+		}
 		fopt.MaxRetries = opt.MaxRetries
 		fopt.MinRetryBackoff = opt.MinRetryBackoff
 		fopt.MaxRetryBackoff = opt.MaxRetryBackoff
