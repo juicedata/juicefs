@@ -260,7 +260,7 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
 
    ```yaml title="values.yaml"
    ingress:
-     enables: true
+     enabled: true
    ```
 
 2. 部署
