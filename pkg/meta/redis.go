@@ -1935,21 +1935,14 @@ func (m *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 func (m *redisMeta) doRefreshSession() error {
 	ctx := Background
 	ssid := strconv.FormatUint(m.sid, 10)
-	if ok, err := m.rdb.HExists(ctx, m.sessionInfos(), ssid).Result(); err != nil {
-		return err
-	} else if !ok {
+	// we have to check sessionInfo here because the operations are not within a transaction
+	ok, err := m.rdb.HExists(ctx, m.sessionInfos(), ssid).Result()
+	if err == nil && !ok {
 		logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
-		var data []byte
-		info := newSessionInfo()
-		info.MountPoint = m.conf.MountPoint
-		data, err = json.Marshal(info)
-		if err != nil {
-			return err
-		}
-		err = m.rdb.HSet(ctx, m.sessionInfos(), m.sid, data).Err()
-		if err != nil {
-			return err
-		}
+		err = m.rdb.HSet(ctx, m.sessionInfos(), m.sid, m.newSessionInfo()).Err()
+	}
+	if err != nil {
+		return err
 	}
 	return m.rdb.ZAdd(ctx, m.allSessions(), &redis.Z{
 		Score:  float64(m.expireTime()),

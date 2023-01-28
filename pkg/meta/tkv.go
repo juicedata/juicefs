@@ -426,13 +426,7 @@ func (m *kvMeta) doRefreshSession() error {
 		buf := tx.get(m.sessionKey(m.sid))
 		if buf == nil {
 			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
-			info := newSessionInfo()
-			info.MountPoint = m.conf.MountPoint
-			data, err := json.Marshal(info)
-			if err != nil {
-				return err
-			}
-			tx.set(m.sessionInfoKey(m.sid), data)
+			tx.set(m.sessionInfoKey(m.sid), m.newSessionInfo())
 		}
 		tx.set(m.sessionKey(m.sid), m.packInt64(m.expireTime()))
 		return nil
