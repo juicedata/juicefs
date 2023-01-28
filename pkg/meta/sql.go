@@ -1898,7 +1898,15 @@ func (m *dbMeta) doRefreshSession() {
 	_ = m.txn(func(ses *xorm.Session) error {
 		n, err := ses.Cols("Expire").Update(&session2{Expire: m.expireTime()}, &session2{Sid: m.sid})
 		if err == nil && n == 0 {
-			err = fmt.Errorf("no session found matching sid: %d", m.sid)
+			info := newSessionInfo()
+			info.MountPoint = m.conf.MountPoint
+			data, err := json.Marshal(info)
+			if err != nil {
+				return fmt.Errorf("doRefreshSession create json: %s", err)
+			}
+			if err = m.en.doNewSession(data); err != nil {
+				return fmt.Errorf("doRefreshSession create session: %s", err)
+			}
 		}
 		if err != nil {
 			logger.Errorf("update session: %s", err)
