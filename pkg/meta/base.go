@@ -55,7 +55,7 @@ type engine interface {
 	doLoad() ([]byte, error)
 
 	doNewSession(sinfo []byte) error
-	doRefreshSession()
+	doRefreshSession() error
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
 
@@ -328,7 +328,9 @@ func (m *baseMeta) refresh() {
 			return
 		}
 		if !m.conf.ReadOnly {
-			m.en.doRefreshSession()
+			if err := m.en.doRefreshSession(); err != nil {
+				logger.Errorf("Refresh session %d: %s", m.sid, err)
+			}
 		}
 		m.sesMu.Unlock()
 

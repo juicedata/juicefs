@@ -1949,22 +1949,18 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	return sids, nil
 }
 
-func (m *dbMeta) doRefreshSession() {
-	_ = m.txn(func(ses *xorm.Session) error {
+func (m *dbMeta) doRefreshSession() error {
+	return m.txn(func(ses *xorm.Session) error {
 		n, err := ses.Cols("Expire").Update(&session2{Expire: m.expireTime()}, &session2{Sid: m.sid})
 		if err == nil && n == 0 {
+			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
+			var data []byte
 			info := newSessionInfo()
 			info.MountPoint = m.conf.MountPoint
-			data, err := json.Marshal(info)
-			if err != nil {
-				return fmt.Errorf("doRefreshSession create json: %s", err)
+			data, err = json.Marshal(info)
+			if err == nil {
+				err = mustInsert(ses, &session2{m.sid, m.expireTime(), data})
 			}
-			if err = m.en.doNewSession(data); err != nil {
-				return fmt.Errorf("doRefreshSession create session: %s", err)
-			}
-		}
-		if err != nil {
-			logger.Errorf("update session: %s", err)
 		}
 		return err
 	})
