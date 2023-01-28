@@ -101,7 +101,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	readTimeout := query.duration("read-timeout", "read_timeout", time.Second*30)
 	writeTimeout := query.duration("write-timeout", "write_timeout", time.Second*5)
 	routeRead := query.pop("route-read")
-	skipVerify := query.pop("insecureSkipVerify")
+	skipVerify := query.pop("insecure-skip-verify")
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
