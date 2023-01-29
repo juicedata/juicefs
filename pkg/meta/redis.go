@@ -1932,10 +1932,21 @@ func (m *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	return sids, nil
 }
 
-func (m *redisMeta) doRefreshSession() {
-	m.rdb.ZAdd(Background, m.allSessions(), &redis.Z{
+func (m *redisMeta) doRefreshSession() error {
+	ctx := Background
+	ssid := strconv.FormatUint(m.sid, 10)
+	// we have to check sessionInfo here because the operations are not within a transaction
+	ok, err := m.rdb.HExists(ctx, m.sessionInfos(), ssid).Result()
+	if err == nil && !ok {
+		logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
+		err = m.rdb.HSet(ctx, m.sessionInfos(), m.sid, m.newSessionInfo()).Err()
+	}
+	if err != nil {
+		return err
+	}
+	return m.rdb.ZAdd(ctx, m.allSessions(), &redis.Z{
 		Score:  float64(m.expireTime()),
-		Member: strconv.FormatUint(m.sid, 10)})
+		Member: ssid}).Err()
 }
 
 func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
