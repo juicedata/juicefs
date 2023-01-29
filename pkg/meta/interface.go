@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -409,15 +408,6 @@ func NewClient(uri string, conf *Config) Meta {
 		logger.Fatalf("Meta %s is not available: %s", utils.RemovePassword(uri), err)
 	}
 	return m
-}
-
-func newSessionInfo() *SessionInfo {
-	host, err := os.Hostname()
-	if err != nil {
-		logger.Warnf("Failed to get hostname: %s", err)
-		host = ""
-	}
-	return &SessionInfo{Version: version.Version(), HostName: host, ProcessID: os.Getpid()}
 }
 
 // Get all paths of an inode
