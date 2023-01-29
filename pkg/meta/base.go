@@ -19,6 +19,7 @@ package meta
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -50,7 +51,7 @@ type engine interface {
 	doLoad() ([]byte, error)
 
 	doNewSession(sinfo []byte) error
-	doRefreshSession()
+	doRefreshSession() error
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
 
@@ -251,6 +252,24 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	return &m.fmt, nil
 }
 
+func (m *baseMeta) newSessionInfo() []byte {
+	host, err := os.Hostname()
+	if err != nil {
+		logger.Warnf("Failed to get hostname: %s", err)
+		host = ""
+	}
+	buf, err := json.Marshal(&SessionInfo{
+		Version:    version.Version(),
+		HostName:   host,
+		MountPoint: m.conf.MountPoint,
+		ProcessID:  os.Getpid(),
+	})
+	if err != nil {
+		panic(err) // marshal SessionInfo should never fail
+	}
+	return buf
+}
+
 func (m *baseMeta) NewSession() error {
 	go m.refreshUsage()
 	if m.conf.ReadOnly {
@@ -263,13 +282,7 @@ func (m *baseMeta) NewSession() error {
 		return fmt.Errorf("get session ID: %s", err)
 	}
 	m.sid = uint64(v)
-	info := newSessionInfo()
-	info.MountPoint = m.conf.MountPoint
-	data, err := json.Marshal(info)
-	if err != nil {
-		return fmt.Errorf("json: %s", err)
-	}
-	if err = m.en.doNewSession(data); err != nil {
+	if err = m.en.doNewSession(m.newSessionInfo()); err != nil {
 		return fmt.Errorf("create session: %s", err)
 	}
 	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
@@ -295,7 +308,9 @@ func (m *baseMeta) refreshSession() {
 			m.sesMu.Unlock()
 			return
 		}
-		m.en.doRefreshSession()
+		if err := m.en.doRefreshSession(); err != nil {
+			logger.Errorf("Refresh session %d: %s", m.sid, err)
+		}
 		m.sesMu.Unlock()
 
 		old := m.fmt.UUID
