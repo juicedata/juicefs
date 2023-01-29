@@ -342,7 +342,7 @@ func newOBS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	}
 	var checkEtag bool
 	if _, err = c.GetBucketEncryption(bucketName); err != nil {
-		if obsError, ok := err.(*obs.ObsError); ok && obsError.Code == "NoSuchEncryptionConfiguration" {
+		if obsError, ok := err.(obs.ObsError); ok && obsError.Code == "NoSuchEncryptionConfiguration" {
 			checkEtag = true
 		} else if !ok || obsError.Code != "NoSuchBucket" {
 			logger.Warnf("get bucket encryption: %q", err)
