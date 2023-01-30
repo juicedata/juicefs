@@ -3090,7 +3090,8 @@ func (m *redisMeta) checkServerConfig() {
 	if err != nil {
 		logger.Warnf("parse info: %s", err)
 	}
-	if rInfo.maxMemoryPolicy != "noeviction" {
+	if !(rInfo.isKeyDB && rInfo.storageProvider == "flash") && rInfo.maxMemoryPolicy != "noeviction" {
+		logger.Warnf("maxmemory_policy is %q,  we will try to reconfigure it to 'noeviction'.", rInfo.maxMemoryPolicy)
 		if _, err := m.rdb.ConfigSet(Background, "maxmemory-policy", "noeviction").Result(); err != nil {
 			logger.Errorf("try to reconfigure maxmemory-policy to 'noeviction' failed: %s", err)
 		} else if result, err := m.rdb.ConfigGet(Background, "maxmemory-policy").Result(); err != nil {
