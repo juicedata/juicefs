@@ -62,17 +62,13 @@ type redisInfo struct {
 	aofEnabled      bool
 	maxMemoryPolicy string
 	redisVersion    string
-	isKeyDB         bool
-	storageProvider string
+	storageProvider string // redis is "", keyDB is "none" or "flash"
 }
 
 func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
 	lines := strings.Split(strings.TrimSpace(rawInfo), "\n")
 	for _, l := range lines {
 		l = strings.TrimSpace(l)
-		if l == "# KeyDB" {
-			info.isKeyDB = true
-		}
 		if l == "" || strings.HasPrefix(l, "#") {
 			continue
 		}
@@ -100,7 +96,10 @@ func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
 				}
 			}
 		case "storage_provider":
-			info.storageProvider = val
+			// if storage_provider is none reset it to ""
+			if val == "flash" {
+				info.storageProvider = val
+			}
 		}
 	}
 	return
