@@ -76,6 +76,7 @@ jobs:
           sudo apt update
           sudo apt install keydb
           keydb-server --storage-provider  flash /tmp/ --port 6378 --bind 127.0.0.1 --daemonize yes
+          keydb-server --port 6377 --bind 127.0.0.1 --daemonize yes
           sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
           sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
           sudo sed  -i "s?host.*all.*all.*32.*scram-sha-256?host    all             all             127.0.0.1/32            trust?" /etc/postgresql/*/main/pg_hba.conf
