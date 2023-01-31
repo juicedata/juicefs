@@ -45,6 +45,45 @@ func TestRedisClient(t *testing.T) {
 	testMeta(t, m)
 }
 
+func TestKeyDB(t *testing.T) {
+	m, err := newRedisMeta("redis", "127.0.0.1:6378/10", &Config{})
+	if err != nil || m.Name() != "redis" {
+		t.Fatalf("create meta: %s", err)
+	}
+	if r, ok := m.(*redisMeta); ok {
+		rawInfo, err := r.rdb.Info(Background).Result()
+		if err != nil {
+			t.Fatalf("parse info: %s", err)
+		}
+		var storageProvider, maxMemoryPolicy string
+		for _, l := range strings.Split(strings.TrimSpace(rawInfo), "\n") {
+			l = strings.TrimSpace(l)
+			if l == "" || strings.HasPrefix(l, "#") {
+				continue
+			}
+			kvPair := strings.SplitN(l, ":", 2)
+			if len(kvPair) < 2 {
+				continue
+			}
+			key, val := kvPair[0], kvPair[1]
+			switch key {
+			case "maxmemory_policy":
+				maxMemoryPolicy = val
+			case "storage_provider":
+				storageProvider = val
+			}
+		}
+		if storageProvider == "none" && maxMemoryPolicy != "noeviction" {
+			t.Fatalf("maxmemory_policy should be noeviction")
+		}
+		if storageProvider == "flash" && maxMemoryPolicy == "noeviction" {
+			t.Fatalf("maxmemory_policy should not be noeviction")
+		}
+	} else {
+		t.Fatalf("should be redisMeta")
+	}
+}
+
 func TestRedisCluster(t *testing.T) {
 	var conf = Config{}
 	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", &conf)
