@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -220,6 +221,9 @@ func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
 	err := makeDaemon(c, vfsConf.Format.Name, vfsConf.Meta.MountPoint, m)
 	if err != nil {
 		logger.Fatalf("Failed to make daemon: %s", err)
+	}
+	if runtime.GOOS == "linux" {
+		log.SetOutput(os.Stderr)
 	}
 }
 
