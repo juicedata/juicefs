@@ -62,6 +62,7 @@ type redisInfo struct {
 	aofEnabled      bool
 	maxMemoryPolicy string
 	redisVersion    string
+	storageProvider string // redis is "", keyDB is "none" or "flash"
 }
 
 func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
@@ -84,9 +85,6 @@ func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
 			}
 		case "maxmemory_policy":
 			info.maxMemoryPolicy = val
-			if val != "noeviction" {
-				logger.Warnf("maxmemory_policy is %q,  we will try to reconfigure it to 'noeviction'.", val)
-			}
 		case "redis_version":
 			info.redisVersion = val
 			ver, err := parseRedisVersion(val)
@@ -96,6 +94,11 @@ func checkRedisInfo(rawInfo string) (info redisInfo, err error) {
 				if ver.olderThan(oldestSupportedVer) {
 					logger.Fatalf("Redis version should not be older than %s", oldestSupportedVer)
 				}
+			}
+		case "storage_provider":
+			// if storage_provider is none reset it to ""
+			if val == "flash" {
+				info.storageProvider = val
 			}
 		}
 	}
