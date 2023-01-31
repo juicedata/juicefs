@@ -97,20 +97,36 @@ jobs:
         run: |
           kubectl apply -f .github/scripts/chaos/dynamic.yaml
 
-      - name: Get Config Base64
+      - name: Install Chaos Mesh
+        run: |
+          helm version
+          kubectl version
+          helm repo add chaos-mesh https://charts.chaos-mesh.org
+          kubectl create ns chaos-mesh
+          helm install chaos-mesh chaos-mesh/chaos-mesh -n=chaos-mesh --version 2.5.1 \
+            --set chaosDaemon.runtime=containerd \
+            --set chaosDaemon.socketPath=/run/containerd/containerd.sock \
+            --set controllerManager.replicaCount=1
+          echo "wait pod status to running"
+          for ((k=0; k<120; k++)); do
+              kubectl get pods --namespace chaos-mesh -l app.kubernetes.io/instance=chaos-mesh > pods.status
+              cat pods.status
+
+              run_num=`grep Running pods.status | wc -l`
+              pod_num=$((`cat pods.status | wc -l` - 1))
+              if [ $run_num == $pod_num ]; then
+                  break
+              fi
+
+              sleep 1
+          done
+
+      - name: Run chaos mesh action
         run: | 
           chaos=${{matrix.chaos}}
           sed -i "s/# - $chaos/- $chaos/g" .github/scripts/chaos/workflow.yaml 
           cat .github/scripts/chaos/workflow.yaml 
-          base64=$(base64  .github/scripts/chaos/workflow.yaml  | xargs | sed -e 's: ::g' )
-          echo "base64 is $base64"
-          echo "workflow_base64=$base64" >> $GITHUB_ENV
-
-      - name: Run chaos mesh action
-        uses: chaos-mesh/chaos-mesh-action@master
-        env:
-          CHAOS_MESH_VERSION: v2.5.0
-          CFG_BASE64: ${{env.workflow_base64}}
+          kubectl apply -f .github/scripts/chaos/workflow.yaml 
 
       - name: Verify 
         run: |
