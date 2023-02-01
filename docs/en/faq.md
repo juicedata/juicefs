@@ -67,17 +67,15 @@ JuiceFS is a distributed file system, the latency of metedata is determined by 1
 
 JuiceFS is built with multiple layers of caching (invalidated automatically), once the caching is warmed up, the latency and throughput of JuiceFS could be close to local filesystem (having the overhead of FUSE).
 
-### Does JuiceFS support random read/write?
+### Does JuiceFS support random read/write? How? {#random-write}
 
-Yes, including those issued using mmap. Currently JuiceFS is optimized for sequential reading/writing, and optimized for random reading/writing is work in progress. If you want better random reading performance, it's recommended to turn off compression ([`--compress none`](reference/command_reference.md#format)).
+Yes, including those issued using mmap. Currently JuiceFS is optimized for sequential reading/writing, and optimized for random reading/writing is work in progress. If you want better random read performance, it's best to turn off compression ([`--compress none`](reference/command_reference.md#format)).
 
-### What is the implementation principle of JuiceFS supporting random write?
+JuiceFS does not store the original file in the object storage, but splits it into data blocks using a fixed size (4MiB by default), then uploads it to the object storage, and stores the ID of the data block in the metadata engine. When random write happens, the original metadata is marked stale, and then JuiceFS Client uploads the **new data block** to the object storage, then update the metadata accordingly.
 
-JuiceFS does not store the original file in the object storage, but splits it into N data blocks according to a certain size (4MiB by default), uploads it to the object storage, and stores the ID of the data block in the metadata engine. When writing randomly, it is logical to overwrite the original content. In fact, the metadata of the **data block to be overwritten** is marked as old data, and only the **new data block** generated during random writing is uploaded to the object storage, and update the metadata corresponding to the **new data block** to the metadata engine.
+When reading the data of the overwritten part, according to the **latest metadata**, it can be read from the **new data block** uploaded during random writing, and the **old data block** may be deleted by the background garbage collection tasks automatically clean up. This shifts complexity from random writes to reads.
 
-When reading the data of the overwritten part, according to the **latest metadata**, it can be read from the **new data block** uploaded during random writing, and the **old data block** may be deleted by the background garbage collection tasks automatically clean up. This shifts the complexity of random writes to the complexity of reads.
-
-This is just a rough introduction to the implementation logic. The specific read and write process is very complicated. You can study the two documents ["JuiceFS Internals"](development/data_structures.md) and ["Data Processing Flow"](introduction/io_processing.md) and comb them together with the code.
+Above is just a rough introduction. Read ["JuiceFS Internals"](development/data_structures.md) and ["Data Processing Flow"](introduction/io_processing.md) alongside with source code to learn more.
 
 ### How to copy a large number of small files into JuiceFS quickly?
 
