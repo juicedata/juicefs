@@ -73,7 +73,7 @@ All users are allowed to browse the trash directory and see the full list of rem
 
 User cannot create new files inside the trash directory, and only root are allowed to move or delete files in trash.
 
-When the juicefs mount process is started by a non-root user, the `-o allow_root` parameter must be specified during the mount; otherwise, the trash cannot be emptied normally.
+When JuiceFS Client is started by a non-root user, add the `-o allow_root` option or trash cannot be emptied normally.
 
 ### Recover/Purge {#recover-purge}
 

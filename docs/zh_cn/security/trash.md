@@ -73,7 +73,7 @@ mv .trash/2022-11-30-10/[parent inode]-[file inode]-[file name] .
 
 回收站内不允许用户自行创建新的文件，并且只有 root 用户才能删除或移动其中的文件。
 
-当 juicefs mount 进程由非 root 用户启动时，需要在 mount 时指定 `-o allow_root` 参数，否则将无法正常清空回收站。
+当 JuiceFS 客户端由非 root 用户启动时，需要在 mount 时指定 `-o allow_root` 参数，否则将无法正常清空回收站。
 
 ### 恢复／清理 {#recover-purge}
 
