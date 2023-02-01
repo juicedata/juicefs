@@ -18,12 +18,12 @@ package meta
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/goccy/go-json"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
