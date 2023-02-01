@@ -39,13 +39,13 @@ The first reason is that you may have enabled the trash feature. In order to ens
 
 The second reason is that JuiceFS deletes the data in the object storage asynchronously, so the space change of the object storage will be slower. If you need to immediately clean up the data in the object store that needs to be deleted, you can try running the [`juicefs gc`](reference/command_reference.md#gc) command.
 
-### Why is the size displayed at the mount point different from the object storage footprint?
+### Why is file system data size different from object storage usage?
 
-From the answer to this question ["What is the implementation principle of JuiceFS supporting random write?"](#what-is-the-implementation-principle-of-juicefs-supporting-random-write), it can be inferred that the occupied space of object storage is greater than or equal to the actual size in most cases, especially after a large number of overwrites in a short period of time generate many file fragments. These fragments still occupy space in object storage until merges and reclamations are triggered. But don't worry about these fragments occupying space all the time, because every time you read/write a file, it will check and trigger compaction when necessary. Alternatively, you can manually trigger merges and recycles with the `juicefs gc --compact --delete` command.
-
-In addition, if the JuiceFS file system has compression enabled (not enabled by default), the objects stored on the object storage may be smaller than the actual file size (depending on the compression ratio of different types of files).
-
-If the above factors have been excluded, please check the [storage class](guide/how_to_set_up_object_storage.md#storage-class) of the object storage you are using. The cloud service provider may set the minimum billable size for some storage classes. For example, the [minimum billable size](https://www.alibabacloud.com/help/en/object-storage-service/latest/storage-fees) of Alibaba Cloud OSS IA storage is 64KB. If a single file is smaller than 64KB, it will be calculated as 64KB.
+* ["Random write in JuiceFS"](#random-write) produces data fragments, causing higher storage usage for object storage, especially after a large number of overwrites in a short period of time, many fragments will be generated. These fragments continue to occupy space in object storage until they are compacted and released. You shouldn't worry about this because JuiceFS checks for file compaction with every read/write, and cleans up in the client background job. Alternatively, you can manually trigger merges and garbage collection with [`juicefs gc --compact --delete`](./reference/command_reference.md#gc).
+* If [trash](./security/trash.md) is enabled, deleted files as well as data fragments that has already been compacted will be kept for a specified period of time, and then be garbage collected (all carried out in client background job).
+* If compression is enabled (the `--compress` parameter in the [`format`](./reference/command_reference.md#format) command, disabled by default), object storage usage may be smaller than the actual file size (depending on the compression ratio of different types of files).
+* Different [storage class](guide/how_to_set_up_object_storage.md#storage-class) of the object storage may calculate storage usage differently. The cloud service provider may set the minimum billable size for some storage classes. For example, the [minimum billable size](https://www.alibabacloud.com/help/en/object-storage-service/latest/storage-fees) for Alibaba Cloud OSS IA storage is 64KB. If a file is smaller than 64KB, it will be calculated as 64KB.
+* For self-hosted object storage services, for example MinIO, actual data usage is affected by [storage class settings](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md).
 
 ### Does JuiceFS support using a directory in object storage as the value of the `--bucket` option?
 

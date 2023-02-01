@@ -93,7 +93,7 @@ JuiceFS also provides flexible support for this object storage service that dist
 
 Creating a file system using an internal Endpoint ensures better performance and lower latency, and for clients that cannot be accessed through an internal address, you can specify a public Endpoint to mount with the option `--bucket`.
 
-## Storage Class
+## Storage Class {#storage-class}
 
 Object storage usually supports multiple storage classes, such as standard storage, infrequent access storage, and archive storage. When creating an object storage bucket you can choose an appropriate storage class according to your actual needs, or automatically convert the storage class of existing objects through lifecycle management. Storage classes that support real-time access to data (e.g. standard storage and infrequent access storage) can be used as the underlying JuiceFS data store, while those that require thawing for access in advance (e.g. archive storage) cannot.
 

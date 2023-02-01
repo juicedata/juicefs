@@ -12,7 +12,7 @@ Data security is crucial for storage system, therefore JuiceFS enables the trash
 With trash enabled, if application frequently delete or overwrite files, expect larger usage in object storage than the actual file system, because trash directory contain the following type of files:
 
 1. Files deleted by user, they can be directly viewed and manipulated in the `.trash` directory
-2. Data blocks created during file overwrites (see [FAQ](../faq.md#what-is-the-implementation-principle-of-juicefs-supporting-random-write)) are kept in trash as well, but users won't be able to see these files, thus cannot be force deleted by default, see [Recovery/Purge](#recover-purge)
+2. Data blocks created during file overwrites (see [FAQ](../faq.md#random-write)) are kept in trash as well, but users won't be able to see these files, thus cannot be force deleted by default, see [Recovery/Purge](#recover-purge)
 
 ## Configure {#configure}
 
