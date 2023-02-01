@@ -109,6 +109,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("redis parse %s: %s", uri, err)
 	}
+	if opt.TLSConfig != nil {
+		opt.TLSConfig.ServerName = "" // use the host of each connection as ServerName
+		opt.TLSConfig.InsecureSkipVerify = skipVerify != ""
+	}
 	if opt.Password == "" {
 		opt.Password = os.Getenv("REDIS_PASSWORD")
 	}
@@ -147,10 +151,6 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		fopt.Username = opt.Username
 		fopt.Password = opt.Password
 		fopt.TLSConfig = opt.TLSConfig
-		if fopt.TLSConfig != nil {
-			fopt.TLSConfig.ServerName = ""
-			fopt.TLSConfig.InsecureSkipVerify = skipVerify != ""
-		}
 		fopt.MaxRetries = opt.MaxRetries
 		fopt.MinRetryBackoff = opt.MinRetryBackoff
 		fopt.MaxRetryBackoff = opt.MaxRetryBackoff
