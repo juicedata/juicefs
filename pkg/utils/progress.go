@@ -93,6 +93,9 @@ func (p *Progress) AddCountBar(name string, total int64) *Bar {
 		),
 		mpb.AppendDecorators(
 			decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
+			decor.Name("  Elapsed: ", decor.WC{W: 2}),
+			decor.Elapsed(decor.ET_STYLE_GO, decor.WC{W: 6}),
+			decor.OnComplete(decor.Name(" ETA:", decor.WC{W: 2}), ""),
 			decor.OnComplete(
 				decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 6}), "",
 			),
