@@ -114,19 +114,10 @@ echo "source path/to/zsh_autocomplete" >> ~/.zshrc
 
 Alternatively, if you are using bash on a Linux system, you may just copy the script to `/etc/bash_completion.d` and rename it to `juicefs`:
 
-<Tabs>
-  <TabItem value="bash" label="Bash">
-
 ```shell
 sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
-```
-
-```shell
 source /etc/bash_completion.d/juicefs
 ```
-
-  </TabItem>
-</Tabs>
 
 ## Commands
 

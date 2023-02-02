@@ -420,9 +420,6 @@ CREATE TABLE IF NOT EXISTS person
 
 2. Use the following sample code to verify:
 
-   <Tabs>
-     <TabItem value="java" label="Java">
-
    ```java
    package demo;
 
@@ -446,9 +443,6 @@ CREATE TABLE IF NOT EXISTS person
        }
    }
    ```
-
-     </TabItem>
-   </Tabs>
 
 ## Monitoring metrics collection
 

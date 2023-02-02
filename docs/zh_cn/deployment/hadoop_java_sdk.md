@@ -531,9 +531,6 @@ CREATE TABLE IF NOT EXISTS person
 
 2. 使用以下示例代码验证：
 
-   <Tabs>
-     <TabItem value="java" label="Java">
-
    ```java
    package demo;
 
@@ -557,9 +554,6 @@ CREATE TABLE IF NOT EXISTS person
        }
    }
    ```
-
-     </TabItem>
-   </Tabs>
 
 ## 监控指标收集
 
