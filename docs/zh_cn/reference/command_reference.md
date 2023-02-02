@@ -114,19 +114,10 @@ echo "source path/to/zsh_autocomplete" >> ~/.zshrc
 
 另外，如果你是在 Linux 系统上使用 bash，也可以直接将脚本拷贝到 `/etc/bash_completion.d` 目录并将其重命名为 `juicefs`：
 
-<Tabs>
-  <TabItem value="bash" label="Bash">
-
 ```shell
 sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
-```
-
-```shell
 source /etc/bash_completion.d/juicefs
 ```
-
-  </TabItem>
-</Tabs>
 
 ## 命令列表
 
