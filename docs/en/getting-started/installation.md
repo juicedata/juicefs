@@ -111,9 +111,10 @@ Since macOS does not support the FUSE interface by default, you need to install 
 If you have the [Homebrew](https://brew.sh) package manager installed on your system, you can install the JuiceFS client by executing the following command.
 
 ```shell
-brew tap juicedata/homebrew-tap
 brew install juicefs
 ```
+
+*For more information about this command, please refer to [Homebrew Formulae](https://formulae.brew.sh/formula/juicefs#default) page.*
 
 #### Pre-compiled binary
 
