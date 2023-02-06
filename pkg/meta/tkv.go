@@ -2605,7 +2605,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		dels = append(dels, &DumpedDelFile{inode, b.Get64(), m.parseInt64(v)})
 	}
 
-	progress := utils.NewProgress(false, false)
+	progress := utils.NewProgress(false)
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
 

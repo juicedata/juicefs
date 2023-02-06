@@ -109,7 +109,7 @@ func gc(ctx *cli.Context) error {
 	store := chunk.NewCachedStore(blob, chunkConf, nil)
 
 	// Scan all chunks first and do compaction if necessary
-	progress := utils.NewProgress(false, false)
+	progress := utils.NewProgress(false)
 	// Delete pending slices while listing all slices
 	delete := ctx.Bool("delete")
 	threads := ctx.Int("threads")

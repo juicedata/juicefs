@@ -106,7 +106,7 @@ func runTest(jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes 
 		z--
 	}
 	var total = dirs * np * files
-	progress := utils.NewProgress(!isatty.IsTerminal(os.Stdout.Fd()), false)
+	progress := utils.NewProgress(!isatty.IsTerminal(os.Stdout.Fd()))
 	bar := progress.AddCountBar("create file", int64(total))
 	logger.Infof("Create %d files in %d dirs", total, dirs)
 

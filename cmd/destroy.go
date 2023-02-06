@@ -162,7 +162,7 @@ func destroy(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("list all objects: %s", err)
 	}
-	progress := utils.NewProgress(false, false)
+	progress := utils.NewProgress(false)
 	spin := progress.AddCountSpinner("Deleted objects")
 	var failed int
 	var dirs []string

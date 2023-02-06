@@ -26,9 +26,8 @@ import (
 
 type Progress struct {
 	*mpb.Progress
-	Quiet     bool
-	showSpeed bool
-	bars      []*mpb.Bar
+	Quiet bool
+	bars  []*mpb.Bar
 }
 
 type Bar struct {
@@ -74,12 +73,12 @@ func (s *DoubleSpinner) SetCurrent(count, bytes int64) {
 	s.bytes.SetCurrent(bytes)
 }
 
-func NewProgress(quiet, showSpeed bool) *Progress {
+func NewProgress(quiet bool) *Progress {
 	var p *Progress
 	if quiet || os.Getenv("DISPLAY_PROGRESSBAR") == "false" || !isatty.IsTerminal(os.Stdout.Fd()) {
-		p = &Progress{mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil)), true, showSpeed, nil}
+		p = &Progress{mpb.New(mpb.WithWidth(64), mpb.WithOutput(nil)), true, nil}
 	} else {
-		p = &Progress{mpb.New(mpb.WithWidth(64)), false, showSpeed, nil}
+		p = &Progress{mpb.New(mpb.WithWidth(64)), false, nil}
 		SetOutput(p)
 	}
 	return p
@@ -95,11 +94,10 @@ func (p *Progress) AddCountBar(name string, total int64) *Bar {
 			decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
 			decor.Name("  Elapsed: ", decor.WC{W: 2}),
 			decor.Elapsed(decor.ET_STYLE_GO, decor.WC{W: 6}),
-			decor.OnComplete(decor.Name(" ETA:", decor.WC{W: 2}), ""),
-			decor.OnComplete(
-				decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 6}), "",
-			),
-		),
+			decor.Name("  Speed: ", decor.WC{W: 2}),
+			decor.AverageSpeed(0, "  %.2f/s", decor.WCSyncSpaceR),
+			decor.OnComplete(decor.Name("  ETA:", decor.WC{W: 2}), ""),
+			decor.OnComplete(decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 6}), "")),
 	)
 	b.SetTotal(total, false)
 	p.bars = append(p.bars, b)
@@ -119,9 +117,7 @@ func (p *Progress) AddCountSpinner(name string) *Bar {
 		decor.Name(name+" count: ", decor.WCSyncWidth),
 		decor.Merge(decor.CurrentNoUnit("%d", decor.WCSyncSpaceR), decor.WCSyncSpaceR),
 	}
-	if p.showSpeed {
-		decors = append(decors, decor.AverageSpeed(0, "  %.2f/s", decor.WCSyncSpaceR))
-	}
+	decors = append(decors, decor.AverageSpeed(0, "  %.2f/s", decor.WCSyncSpaceR))
 	b := p.Progress.Add(0, newSpinner(),
 		mpb.PrependDecorators(decors...),
 		mpb.BarFillerClearOnComplete(),
@@ -136,9 +132,8 @@ func (p *Progress) AddByteSpinner(name string) *Bar {
 		decor.CurrentKibiByte("% .2f", decor.WCSyncSpaceR),
 		decor.CurrentNoUnit("(%d Bytes)", decor.WCSyncSpaceR),
 	}
-	if p.showSpeed { // FIXME: maybe use EWMA speed
-		decors = append(decors, decor.AverageSpeed(decor.UnitKiB, "  % .2f", decor.WCSyncSpaceR))
-	}
+	// FIXME: maybe use EWMA speed
+	decors = append(decors, decor.AverageSpeed(decor.UnitKiB, "  % .2f", decor.WCSyncSpaceR))
 	b := p.Progress.Add(0, newSpinner(),
 		mpb.PrependDecorators(decors...),
 		mpb.BarFillerClearOnComplete(),
@@ -184,7 +179,7 @@ func (p *Progress) Done() {
 }
 
 func MockProgress() (*Progress, *Bar) {
-	progress := NewProgress(true, false)
+	progress := NewProgress(true)
 	bar := progress.AddCountBar("Mock", 0)
 	return progress, bar
 }
