@@ -260,7 +260,7 @@ There are some differences between the various versions of Ingress. For more usa
 
    ```yaml title="values.yaml"
    ingress:
-     enables: true
+     enabled: true
    ```
 
 2. Deploy

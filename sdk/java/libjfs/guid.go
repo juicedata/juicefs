@@ -68,12 +68,16 @@ func (m *mapping) lookupUser(name string) uint32 {
 	if !m.local {
 		return m.genGuid(name)
 	}
-	u, _ := user.Lookup(name)
-	if u != nil {
-		id_, _ := strconv.ParseUint(u.Uid, 10, 32)
-		id = uint32(id_)
-	} else {
+	if name == "root" { // root in hdfs sdk is a normal user
 		id = m.genGuid(name)
+	} else {
+		u, _ := user.Lookup(name)
+		if u != nil {
+			id_, _ := strconv.ParseUint(u.Uid, 10, 32)
+			id = uint32(id_)
+		} else {
+			id = m.genGuid(name)
+		}
 	}
 	m.usernames[name] = id
 	m.userIDs[id] = name
@@ -90,12 +94,16 @@ func (m *mapping) lookupGroup(name string) uint32 {
 	if !m.local {
 		return m.genGuid(name)
 	}
-	g, _ := user.LookupGroup(name)
-	if g == nil {
+	if name == "root" {
 		id = m.genGuid(name)
 	} else {
-		id_, _ := strconv.ParseUint(g.Gid, 10, 32)
-		id = uint32(id_)
+		g, _ := user.LookupGroup(name)
+		if g == nil {
+			id = m.genGuid(name)
+		} else {
+			id_, _ := strconv.ParseUint(g.Gid, 10, 32)
+			id = uint32(id_)
+		}
 	}
 	m.groups[name] = id
 	m.groupIDs[id] = name
