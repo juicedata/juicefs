@@ -101,12 +101,17 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	readTimeout := query.duration("read-timeout", "read_timeout", time.Second*30)
 	writeTimeout := query.duration("write-timeout", "write_timeout", time.Second*5)
 	routeRead := query.pop("route-read")
+	skipVerify := query.pop("insecure-skip-verify")
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
 	opt, err := redis.ParseURL(u.String())
 	if err != nil {
 		return nil, fmt.Errorf("redis parse %s: %s", uri, err)
+	}
+	if opt.TLSConfig != nil {
+		opt.TLSConfig.ServerName = "" // use the host of each connection as ServerName
+		opt.TLSConfig.InsecureSkipVerify = skipVerify != ""
 	}
 	if opt.Password == "" {
 		opt.Password = os.Getenv("REDIS_PASSWORD")
