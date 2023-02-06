@@ -111,9 +111,10 @@ JuiceFS 的 Windows 客户端也是一个独立的二进制程序，下载解压
 如果你的系统安装了 [Homebrew](https://brew.sh) 包管理器，可以执行以下命令安装 JuiceFS 客户端：
 
 ```shell
-brew tap juicedata/homebrew-tap
 brew install juicefs
 ```
+
+*请参考 [Homebrew Formulae](https://formulae.brew.sh/formula/juicefs#default) 页面了解命令详情。*
 
 #### 预编译二进制程序
 
