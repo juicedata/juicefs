@@ -96,8 +96,7 @@ func (p *Progress) AddCountBar(name string, total int64) *Bar {
 			decor.Elapsed(decor.ET_STYLE_GO, decor.WC{W: 6}),
 			decor.Name("  Speed: ", decor.WC{W: 2}),
 			decor.AverageSpeed(0, "  %.2f/s", decor.WCSyncSpaceR),
-			decor.OnComplete(decor.Name("  ETA:", decor.WC{W: 2}), ""),
-			decor.OnComplete(decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 6}), "")),
+		),
 	)
 	b.SetTotal(total, false)
 	p.bars = append(p.bars, b)
