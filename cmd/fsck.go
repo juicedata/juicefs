@@ -151,6 +151,7 @@ func fsck(ctx *cli.Context) error {
 	brokens := make(map[meta.Ino]string)
 	for inode, ss := range slices {
 		for _, s := range ss {
+			t := time.Now()
 			n := (s.Size - 1) / uint32(chunkConf.BlockSize)
 			for i := uint32(0); i <= n; i++ {
 				sz := chunkConf.BlockSize
@@ -178,7 +179,7 @@ func fsck(ctx *cli.Context) error {
 					}
 				}
 			}
-			sliceCBar.Increment()
+			sliceCBar.IncrementWithUpdateEwma(t)
 			sliceBSpin.IncrInt64(int64(s.Size))
 		}
 	}

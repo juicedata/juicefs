@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/goccy/go-json"
@@ -363,6 +364,7 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 
 func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[Ino][]Ino,
 	refs map[chunkKey]int64, bar *utils.Bar, load func(*DumpedEntry), addChunk func(*chunkKey)) (*DumpedEntry, error) {
+	t := time.Now()
 	if _, err := dec.Token(); err != nil {
 		return nil, err
 	}
@@ -468,7 +470,7 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 	}
 	if len(e.Parents) == 1 {
 		load(&e)
-		bar.Increment()
+		bar.IncrementWithUpdateEwma(t)
 	}
 	if _, err := dec.Token(); err != nil {
 		return nil, err

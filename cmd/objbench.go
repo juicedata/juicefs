@@ -454,10 +454,11 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 				<-pool
 				wg.Done()
 			}()
+			t := time.Now()
 			if e := fn(strconv.Itoa(key), api.startKey); e != nil {
 				err = e
 			}
-			bar.Increment()
+			bar.IncrementWithUpdateEwma(t)
 		}(i)
 	}
 	wg.Wait()

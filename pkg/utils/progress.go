@@ -17,7 +17,9 @@
 package utils
 
 import (
+	"fmt"
 	"os"
+	"time"
 
 	"github.com/mattn/go-isatty"
 	"github.com/vbauerster/mpb/v7"
@@ -38,6 +40,11 @@ type Bar struct {
 func (b *Bar) IncrTotal(n int64) { // not thread safe
 	b.total += n
 	b.Bar.SetTotal(b.total, false)
+}
+
+func (b *Bar) IncrementWithUpdateEwma(startTime time.Time) {
+	b.Increment()
+	b.DecoratorEwmaUpdate(time.Since(startTime))
 }
 
 func (b *Bar) SetTotal(total int64) { // not thread safe
@@ -85,17 +92,33 @@ func NewProgress(quiet bool) *Progress {
 }
 
 func (p *Progress) AddCountBar(name string, total int64) *Bar {
+	startTime := time.Now()
 	b := p.Progress.AddBar(0, // disable triggerComplete
 		mpb.PrependDecorators(
 			decor.Name(name+" count: ", decor.WCSyncWidth),
-			decor.CountersNoUnit("%d / %d"),
+			decor.CountersNoUnit("%d/%d"),
 		),
 		mpb.AppendDecorators(
-			decor.OnComplete(decor.Percentage(decor.WC{W: 5}), "done"),
-			decor.Name("  Elapsed: ", decor.WC{W: 2}),
-			decor.Elapsed(decor.ET_STYLE_GO, decor.WC{W: 6}),
-			decor.Name("  Speed: ", decor.WC{W: 2}),
-			decor.AverageSpeed(0, "  %.2f/s", decor.WCSyncSpaceR),
+			decor.OnComplete(decor.EwmaSpeed(0, " %.2f/s", 0, decor.WCSyncWidthR), ""),
+			decor.Any(func(s decor.Statistics) string {
+				var msg string
+				if s.Completed {
+					speed := float64(s.Current) / time.Since(startTime).Seconds()
+					msg = fmt.Sprintf(" %.2f/s", speed)
+				}
+				return msg
+			}, decor.WCSyncWidthR),
+			decor.OnComplete(decor.Name(" ETA: ", decor.WCSyncWidthR), ""),
+			decor.OnComplete(
+				decor.AverageETA(decor.ET_STYLE_GO, decor.WCSyncWidthR), "",
+			),
+			decor.Any(func(s decor.Statistics) string {
+				var msg string
+				if s.Completed {
+					msg = " used: " + ((time.Since(startTime) / time.Second) * time.Second).String()
+				}
+				return msg
+			}, decor.WCSyncWidthR),
 		),
 	)
 	b.SetTotal(total, false)

@@ -298,6 +298,7 @@ func gc(ctx *cli.Context) error {
 	}
 
 	for obj := range objs {
+		t := time.Now()
 		if obj == nil {
 			break // failed listing
 		}
@@ -306,7 +307,7 @@ func gc(ctx *cli.Context) error {
 		}
 		if obj.Mtime().After(maxMtime) || obj.Mtime().Unix() == 0 {
 			logger.Debugf("ignore new block: %s %s", obj.Key(), obj.Mtime())
-			bar.Increment()
+			bar.IncrementWithUpdateEwma(t)
 			skipped.IncrInt64(obj.Size())
 			continue
 		}
@@ -321,7 +322,7 @@ func gc(ctx *cli.Context) error {
 		if len(parts) != 3 {
 			continue
 		}
-		bar.Increment()
+		bar.IncrementWithUpdateEwma(t)
 		cid, _ := strconv.Atoi(parts[0])
 		size := vkeys[uint64(cid)]
 		var cobj bool

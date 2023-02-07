@@ -53,6 +53,7 @@ func updateStats(r *Stat) {
 	skipped.IncrInt64(r.Skipped)
 	failed.IncrInt64(r.Failed)
 	handled.IncrInt64(r.Copied + r.Deleted + r.Skipped + r.Failed)
+	//todo: update DecoratorEwmaUpdate()
 }
 
 func httpRequest(url string, body []byte) (ans []byte, err error) {

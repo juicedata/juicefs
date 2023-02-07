@@ -3319,6 +3319,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 		}
 	}
 	for i, e := range entries {
+		t := time.Now()
 		b := i / batch
 		c := b % concurrent
 		ms[c].Lock()
@@ -3352,7 +3353,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 			bwWrite(",")
 		}
 		if bar != nil {
-			bar.IncrInt64(1)
+			bar.IncrementWithUpdateEwma(t)
 		}
 	}
 	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))

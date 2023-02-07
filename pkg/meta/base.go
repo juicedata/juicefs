@@ -1270,14 +1270,15 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 	ch := make(chan cchunk, 1000000)
 	for i := 0; i < threads; i++ {
 		wg.Add(1)
-		go func() {
+		t := time.Now()
+		go func(t time.Time) {
 			for c := range ch {
 				logger.Debugf("Compacting chunk %d:%d (%d slices)", c.inode, c.indx, c.slices)
 				m.en.compactChunk(c.inode, c.indx, true)
-				bar.Increment()
+				bar.IncrementWithUpdateEwma(t)
 			}
 			wg.Done()
-		}()
+		}(t)
 	}
 
 	err := m.en.scanAllChunks(ctx, ch, bar)
