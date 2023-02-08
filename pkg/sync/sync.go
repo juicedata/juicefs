@@ -490,7 +490,6 @@ func copyData(src, dst object.ObjectStorage, key string, size int64) error {
 
 func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *Config) {
 	for obj := range tasks {
-		t := time.Now()
 		key := obj.Key()
 		switch obj.Size() {
 		case markDeleteSrc:
@@ -544,7 +543,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			if config.Links && obj.IsSymlink() {
 				if err = copyLink(src, dst, key); err == nil {
 					copied.Increment()
-					handled.IncrementWithUpdateEwma(t)
+					handled.Increment()
 					break
 				}
 				logger.Errorf("copy link failed: %s", err)
@@ -573,7 +572,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				logger.Errorf("Failed to copy object %s: %s", key, err)
 			}
 		}
-		handled.IncrementWithUpdateEwma(t)
+		handled.Increment()
 	}
 }
 
@@ -664,7 +663,6 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 	defer close(tasks)
 	var dstobj object.Object
 	for obj := range srckeys {
-		t := time.Now()
 		if obj == nil {
 			logger.Errorf("Listing failed, stop syncing, waiting for pending ones")
 			return
@@ -717,7 +715,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 				tasks <- obj
 			} else if config.Update && obj.Mtime().Unix() < dstobj.Mtime().Unix() {
 				skipped.Increment()
-				handled.IncrementWithUpdateEwma(t)
+				handled.Increment()
 			} else if config.CheckAll { // two objects are likely the same
 				tasks <- &withSize{obj, markChecksum}
 			} else if config.DeleteSrc {
@@ -726,7 +724,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 				tasks <- &withFSize{obj.(object.File), markCopyPerms}
 			} else {
 				skipped.Increment()
-				handled.IncrementWithUpdateEwma(t)
+				handled.Increment()
 			}
 			dstobj = nil
 		}

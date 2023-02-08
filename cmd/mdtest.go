@@ -55,7 +55,6 @@ func createDir(jfs *fs.FileSystem, root string, d int, width int) error {
 func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, width, files, bytes int) error {
 	m := jfs.Meta()
 	for i := 0; i < files; i++ {
-		t := time.Now()
 		fn := filepath.Join(root, fmt.Sprintf("file.mdtest.%d.%d", np, i))
 		f, err := jfs.Create(ctx, fn, 0644)
 		if err != 0 {
@@ -77,7 +76,7 @@ func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, 
 			}
 		}
 		f.Close(ctx)
-		bar.IncrementWithUpdateEwma(t)
+		bar.Increment()
 	}
 	if d > 0 {
 		dirs := make([]int, width)

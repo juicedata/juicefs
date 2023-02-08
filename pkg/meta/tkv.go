@@ -2515,8 +2515,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 	})
 }
 
-func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64, startTime time.Time)) error {
-	t := time.Now()
+func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -2546,7 +2545,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	}
 	sort.Slice(sortedName, func(i, j int) bool { return sortedName[i] < sortedName[j] })
 	if showProgress != nil && m.snap == nil {
-		showProgress(int64(len(entries)), 0, t)
+		showProgress(int64(len(entries)), 0)
 	}
 
 	if err = tree.writeJsonWithOutEntry(bw, depth); err != nil {
@@ -2554,7 +2553,6 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	}
 
 	for idx, name := range sortedName {
-		t := time.Now()
 		entry := entries[name]
 		entry.Name = name
 		inode := entry.Attr.Inode
@@ -2574,7 +2572,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 			bwWrite(",")
 		}
 		if showProgress != nil {
-			showProgress(0, 1, t)
+			showProgress(0, 1)
 		}
 	}
 	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
@@ -2630,7 +2628,6 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		threshold := 0.1
 		var cnt int
 		err := m.client.scan(nil, func(key, value []byte) {
-			t := time.Now()
 			if len(key) > 9 && key[0] == 'A' {
 				ino := m.decodeInode(key[1:9])
 				e := m.snap[ino]
@@ -2679,7 +2676,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 				guessKeyTotal += int64(math.Ceil(float64(guessKeyTotal) * threshold))
 				bar.SetTotal(guessKeyTotal)
 			}
-			bar.IncrementWithUpdateEwma(t)
+			bar.Increment()
 		})
 		if err != nil {
 			return err
@@ -2770,22 +2767,16 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	}
 
 	bar := progress.AddCountBar("Dumped entries", 1) // with root
-	bar.IncrementWithUpdateEwma(time.Now())
+	bar.Increment()
 	bar.SetTotal(int64(len(m.snap)))
 	if trash != nil {
-		t := time.Now()
 		trash.Name = "Trash"
 		bar.IncrTotal(1)
-		bar.IncrementWithUpdateEwma(t)
+		bar.Increment()
 	}
-	showProgress := func(totalIncr, currentIncr int64, startTime time.Time) {
-		bar.Lock()
-		defer bar.Unlock()
+	showProgress := func(totalIncr, currentIncr int64) {
 		bar.IncrTotal(totalIncr)
 		bar.IncrInt64(currentIncr)
-		if currentIncr > 0 {
-			bar.DecoratorEwmaUpdate(time.Since(startTime))
-		}
 	}
 	if err = m.dumpDir(root, tree, bw, 1, showProgress); err != nil {
 		return err

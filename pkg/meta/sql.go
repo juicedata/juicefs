@@ -2962,8 +2962,7 @@ func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEnt
 	return e
 }
 
-func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64, startTime time.Time)) error {
-	t := time.Now()
+func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
 	bwWrite := func(s string) {
 		if _, err := bw.WriteString(s); err != nil {
 			panic(err)
@@ -2981,7 +2980,7 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 	}
 
 	if showProgress != nil {
-		showProgress(int64(len(edges)), 0, t)
+		showProgress(int64(len(edges)), 0)
 	}
 	if err := tree.writeJsonWithOutEntry(bw, depth); err != nil {
 		return err
@@ -2990,7 +2989,6 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 	sort.Slice(edges, func(i, j int) bool { return bytes.Compare(edges[i].Name, edges[j].Name) == -1 })
 
 	for idx, e := range edges {
-		t := time.Now()
 		var entry *DumpedEntry
 		if m.snap != nil {
 			entry = m.dumpEntryFast(s, e.Inode, e.Type)
@@ -3019,7 +3017,7 @@ func (m *dbMeta) dumpDir(s *xorm.Session, inode Ino, tree *DumpedEntry, bw *bufi
 			bwWrite(",")
 		}
 		if showProgress != nil {
-			showProgress(0, 1, t)
+			showProgress(0, 1)
 		}
 	}
 	bwWrite(fmt.Sprintf("\n%s}\n%s}", strings.Repeat(jsonIndent, depth+1), strings.Repeat(jsonIndent, depth)))
@@ -3189,21 +3187,15 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		}
 
 		bar := progress.AddCountBar("Dumped entries", 1) // with root
-		bar.IncrementWithUpdateEwma(time.Now())
+		bar.Increment()
 		if trash != nil {
-			t := time.Now()
 			trash.Name = "Trash"
 			bar.IncrTotal(1)
-			bar.IncrementWithUpdateEwma(t)
+			bar.Increment()
 		}
-		showProgress := func(totalIncr, currentIncr int64, startTime time.Time) {
-			bar.Lock()
-			defer bar.Unlock()
+		showProgress := func(totalIncr, currentIncr int64) {
 			bar.IncrTotal(totalIncr)
 			bar.IncrInt64(currentIncr)
-			if currentIncr > 0 {
-				bar.DecoratorEwmaUpdate(time.Since(startTime))
-			}
 		}
 		if err = m.dumpDir(s, root, tree, bw, 1, showProgress); err != nil {
 			logger.Errorf("dump dir %d failed: %s", root, err)

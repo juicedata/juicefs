@@ -28,9 +28,8 @@ func TestProgresBar(t *testing.T) {
 	bp := p.AddByteSpinner("Spinner")
 	bar.SetTotal(50)
 	for i := 0; i < 100; i++ {
-		t := time.Now()
 		time.Sleep(time.Millisecond)
-		bar.IncrementWithUpdateEwma(t)
+		bar.Increment()
 		if i%2 == 0 {
 			bar.IncrTotal(1)
 			cp.Increment()

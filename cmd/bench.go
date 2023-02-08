@@ -123,11 +123,10 @@ func (bc *benchCase) writeFiles(index int) {
 		buf := make([]byte, bc.bsize)
 		_, _ = rand.Read(buf)
 		for j := 0; j < bc.bcount; j++ {
-			t := time.Now()
 			if _, err = fp.Write(buf); err != nil {
 				logger.Fatalf("Failed to write file %s: %s", fname, err)
 			}
-			bc.wbar.IncrementWithUpdateEwma(t)
+			bc.wbar.Increment()
 		}
 		_ = fp.Close()
 	}
@@ -142,11 +141,10 @@ func (bc *benchCase) readFiles(index int) {
 		}
 		buf := make([]byte, bc.bsize)
 		for j := 0; j < bc.bcount; j++ {
-			t := time.Now()
 			if n, err := fp.Read(buf); err != nil || n != bc.bsize {
 				logger.Fatalf("Failed to read file %s: %d %s", fname, n, err)
 			}
-			bc.rbar.IncrementWithUpdateEwma(t)
+			bc.rbar.Increment()
 		}
 		_ = fp.Close()
 	}
@@ -154,12 +152,11 @@ func (bc *benchCase) readFiles(index int) {
 
 func (bc *benchCase) statFiles(index int) {
 	for i := 0; i < bc.fcount; i++ {
-		t := time.Now()
 		fname := fmt.Sprintf("%s/%s.%d.%d", bc.bm.tmpdir, bc.name, index, i)
 		if _, err := os.Stat(fname); err != nil {
 			logger.Fatalf("Failed to stat file %s: %s", fname, err)
 		}
-		bc.sbar.IncrementWithUpdateEwma(t)
+		bc.sbar.Increment()
 	}
 }
 
