@@ -31,9 +31,7 @@ JuiceFS 在挂载时会自动启用该选项，无需显式指定。该选项将
 
 ## allow_other
 
-FUSE 默认只有挂载文件系统的用户可以访问挂载点中的文件，`allow_other` 选项可以让其他用户（包括 root 用户）也可以访问挂载点上的文件。
-
-默认情况下，这个选项只允许 root 用户使用，但是可以通过修改 `/etc/fuse.conf`，在该配置文件中开启 `user_allow_other` 配置选项解除限制。
+FUSE 默认只有挂载文件系统的用户可以访问挂载点中的文件，`allow_other` 选项可以让其他用户也可以访问挂载点上的文件。当 root 用户挂载时，该选项会自动启用（在 [`fuse.go`](https://github.com/juicedata/juicefs/blob/main/pkg/fuse/fuse.go) 搜索 `AllowOther` 字样），无需显式指定。而如果是普通用户挂载，则需要修改 `/etc/fuse.conf`，在该配置文件中开启 `user_allow_other` 配置选项，才能在普通用户挂载时启用 `allow_other`。
 
 ## writeback_cache
 
