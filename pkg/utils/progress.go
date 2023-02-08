@@ -94,12 +94,12 @@ func (p *Progress) AddCountBar(name string, total int64) *Bar {
 			decor.CountersNoUnit("%d/%d"),
 		),
 		mpb.AppendDecorators(
-			decor.OnComplete(decor.AverageSpeed(0, " %.2f/s", decor.WCSyncWidthR), ""),
+			decor.OnComplete(decor.AverageSpeed(0, " %.1f/s", decor.WCSyncWidthR), ""),
 			decor.Any(func(s decor.Statistics) string {
 				var msg string
 				if s.Completed {
 					speed := float64(s.Current) / time.Since(startTime).Seconds()
-					msg = fmt.Sprintf(" %.2f/s", speed)
+					msg = fmt.Sprintf(" %.1f/s", speed)
 				}
 				return msg
 			}, decor.WCSyncWidthR),
@@ -110,7 +110,7 @@ func (p *Progress) AddCountBar(name string, total int64) *Bar {
 			decor.Any(func(s decor.Statistics) string {
 				var msg string
 				if s.Completed {
-					msg = " used: " + ((time.Since(startTime) / time.Second) * time.Second).String()
+					msg = " used: " + (time.Since(startTime)).String()
 				}
 				return msg
 			}, decor.WCSyncWidthR),
@@ -134,7 +134,7 @@ func (p *Progress) AddCountSpinner(name string) *Bar {
 		decor.Name(name+" count: ", decor.WCSyncWidth),
 		decor.Merge(decor.CurrentNoUnit("%d", decor.WCSyncSpaceR), decor.WCSyncSpaceR),
 	}
-	decors = append(decors, decor.AverageSpeed(0, "  %.2f/s", decor.WCSyncSpaceR))
+	decors = append(decors, decor.AverageSpeed(0, "  %.1f/s", decor.WCSyncSpaceR))
 	b := p.Progress.Add(0, newSpinner(),
 		mpb.PrependDecorators(decors...),
 		mpb.BarFillerClearOnComplete(),
@@ -146,11 +146,11 @@ func (p *Progress) AddCountSpinner(name string) *Bar {
 func (p *Progress) AddByteSpinner(name string) *Bar {
 	decors := []decor.Decorator{
 		decor.Name(name+" bytes: ", decor.WCSyncWidth),
-		decor.CurrentKibiByte("% .2f", decor.WCSyncSpaceR),
+		decor.CurrentKibiByte("% .1f", decor.WCSyncSpaceR),
 		decor.CurrentNoUnit("(%d Bytes)", decor.WCSyncSpaceR),
 	}
 	// FIXME: maybe use EWMA speed
-	decors = append(decors, decor.AverageSpeed(decor.UnitKiB, "  % .2f", decor.WCSyncSpaceR))
+	decors = append(decors, decor.AverageSpeed(decor.UnitKiB, "  % .1f", decor.WCSyncSpaceR))
 	b := p.Progress.Add(0, newSpinner(),
 		mpb.PrependDecorators(decors...),
 		mpb.BarFillerClearOnComplete(),
