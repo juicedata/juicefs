@@ -2779,6 +2779,8 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		bar.IncrementWithUpdateEwma(t)
 	}
 	showProgress := func(totalIncr, currentIncr int64, startTime time.Time) {
+		bar.Lock()
+		defer bar.Unlock()
 		bar.IncrTotal(totalIncr)
 		bar.IncrInt64(currentIncr)
 		if currentIncr > 0 {

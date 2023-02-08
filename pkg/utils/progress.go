@@ -19,6 +19,7 @@ package utils
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/mattn/go-isatty"
@@ -35,6 +36,7 @@ type Progress struct {
 type Bar struct {
 	*mpb.Bar
 	total int64
+	sync.Mutex
 }
 
 func (b *Bar) IncrTotal(n int64) { // not thread safe
@@ -43,6 +45,8 @@ func (b *Bar) IncrTotal(n int64) { // not thread safe
 }
 
 func (b *Bar) IncrementWithUpdateEwma(startTime time.Time) {
+	b.Lock()
+	defer b.Unlock()
 	b.Increment()
 	b.DecoratorEwmaUpdate(time.Since(startTime))
 }
