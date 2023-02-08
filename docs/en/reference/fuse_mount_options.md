@@ -31,9 +31,7 @@ The kernel performs standard Unix permission checks based on mode bits, UID/GID,
 
 ## allow_other
 
-By default, only the user who mounted the file system can access the files. The `allow_other` option allows other users (including the root user) to access the files as well.
-
-By default, this option is only available to the root user, but can be unrestricted by modifying `/etc/fuse.conf` and turning on the `user_allow_other` configuration option.
+By default FUSE only allows access to the user mounting the file system. `allow_other` option overrides this behavior to allow access for other users. When mounting JuiceFS using root, `allow_other` is automatically assumed (search for `AllowOther` in [`fuse.go`](https://github.com/juicedata/juicefs/blob/main/pkg/fuse/fuse.go)). When mounting by non-root users, you'll need to first modify `/etc/fuse.conf` and enable `user_allow_other`, and then add `allow_other` to the mount command.
 
 ## writeback_cache
 
