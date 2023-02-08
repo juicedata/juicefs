@@ -41,19 +41,19 @@ func cmdWarmup() *cli.Command {
 		Usage:     "Build cache for target directories/files",
 		ArgsUsage: "[PATH ...]",
 		Description: `
- This command provides a faster way to actively build cache for the target files. It reads all objects
- of the files and then write them into local cache directory.
- 
- Examples:
- # Warm all files in datadir
- $ juicefs warmup /mnt/jfs/datadir
- 
- # Warm only three files in datadir
- $ cat /tmp/filelist
- /mnt/jfs/datadir/f1
- /mnt/jfs/datadir/f2
- /mnt/jfs/datadir/f3
- $ juicefs warmup -f /tmp/filelist`,
+This command provides a faster way to actively build cache for the target files. It reads all objects
+of the files and then write them into local cache directory.
+
+Examples:
+# Warm all files in datadir
+$ juicefs warmup /mnt/jfs/datadir
+
+# Warm only three files in datadir
+$ cat /tmp/filelist
+/mnt/jfs/datadir/f1
+/mnt/jfs/datadir/f2
+/mnt/jfs/datadir/f3
+$ juicefs warmup -f /tmp/filelist`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "file",
