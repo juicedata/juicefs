@@ -147,7 +147,7 @@ func objbench(ctx *cli.Context) error {
 	sCount := int(ctx.Uint("small-objects"))
 	threads := int(ctx.Uint("threads"))
 	colorful := utils.SupportANSIColor(os.Stdout.Fd())
-	progress := utils.NewProgress(false, false)
+	progress := utils.NewProgress(false)
 	if colorful {
 		nspt = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, YELLOW, nspt, RESET_SEQ)
 		skipped = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, YELLOW, skipped, RESET_SEQ)

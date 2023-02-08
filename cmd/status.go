@@ -119,7 +119,7 @@ func status(ctx *cli.Context) error {
 	stat.UsedSpace = totalSpace - stat.AvailableSpace
 
 	if ctx.Bool("more") {
-		progress := utils.NewProgress(false, false)
+		progress := utils.NewProgress(false)
 		trashFileSpinner := progress.AddDoubleSpinner("Trash Files")
 		pendingDeletedFileSpinner := progress.AddDoubleSpinner("Pending Deleted Files")
 		trashSlicesSpinner := progress.AddDoubleSpinner("Trash Slices")

@@ -3099,7 +3099,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		}
 	}()
 
-	progress := utils.NewProgress(false, false)
+	progress := utils.NewProgress(false)
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
 

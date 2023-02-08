@@ -866,7 +866,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		limiter = ratelimit.NewBucketWithRate(bps, int64(bps)*3)
 	}
 
-	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "", true)
+	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "")
 	handled = progress.AddCountBar("Scanned objects", 0)
 	copied = progress.AddCountSpinner("Copied objects")
 	copiedBytes = progress.AddByteSpinner("Copied objects")

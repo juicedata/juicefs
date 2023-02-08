@@ -3452,7 +3452,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 		return err
 	}
 
-	progress := utils.NewProgress(false, false)
+	progress := utils.NewProgress(false)
 	bar := progress.AddCountBar("Dumped entries", dm.Counters.UsedInodes) // with root
 
 	root = m.checkRoot(root)

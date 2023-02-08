@@ -22,7 +22,7 @@ import (
 )
 
 func TestProgresBar(t *testing.T) {
-	p := NewProgress(true, false)
+	p := NewProgress(true)
 	bar := p.AddCountBar("Bar", 0)
 	cp := p.AddCountSpinner("Spinner")
 	bp := p.AddByteSpinner("Spinner")
@@ -42,7 +42,7 @@ func TestProgresBar(t *testing.T) {
 		t.Fatalf("Final values: bar %d, count %d, bytes: %d", bar.Current(), cp.Current(), bp.Current())
 	}
 
-	p = NewProgress(true, true)
+	p = NewProgress(true)
 	dp := p.AddDoubleSpinner("Spinner")
 	go func() {
 		for i := 0; i < 100; i++ {
