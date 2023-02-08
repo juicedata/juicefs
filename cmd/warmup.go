@@ -41,19 +41,19 @@ func cmdWarmup() *cli.Command {
 		Usage:     "Build cache for target directories/files",
 		ArgsUsage: "[PATH ...]",
 		Description: `
-This command provides a faster way to actively build cache for the target files. It reads all objects
-of the files and then write them into local cache directory.
-
-Examples:
-# Warm all files in datadir
-$ juicefs warmup /mnt/jfs/datadir
-
-# Warm only three files in datadir
-$ cat /tmp/filelist
-/mnt/jfs/datadir/f1
-/mnt/jfs/datadir/f2
-/mnt/jfs/datadir/f3
-$ juicefs warmup -f /tmp/filelist`,
+ This command provides a faster way to actively build cache for the target files. It reads all objects
+ of the files and then write them into local cache directory.
+ 
+ Examples:
+ # Warm all files in datadir
+ $ juicefs warmup /mnt/jfs/datadir
+ 
+ # Warm only three files in datadir
+ $ cat /tmp/filelist
+ /mnt/jfs/datadir/f1
+ /mnt/jfs/datadir/f2
+ /mnt/jfs/datadir/f3
+ $ juicefs warmup -f /tmp/filelist`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "file",
@@ -70,11 +70,6 @@ $ juicefs warmup -f /tmp/filelist`,
 				Name:    "background",
 				Aliases: []string{"b"},
 				Usage:   "run in background",
-			},
-			&cli.BoolFlag{
-				Name:    "metadata",
-				Aliases: []string{"m"},
-				Usage:   "also warm up metadata",
 			},
 		},
 	}
@@ -119,24 +114,19 @@ END:
 }
 
 // send fill-cache command to controller file
-func sendCommand(cf *os.File, batch []string, threads uint, background, metadata bool, dspin *utils.DoubleSpinner) {
+func sendCommand(cf *os.File, batch []string, threads uint, background bool, dspin *utils.DoubleSpinner) {
 	paths := strings.Join(batch, "\n")
-	var back, withMeta uint8
+	var back uint8
 	if background {
 		back = 1
 	}
-	if metadata {
-		withMeta = 1
-	}
-
-	wb := utils.NewBuffer(8 + 4 + 4 + uint32(len(paths)))
+	wb := utils.NewBuffer(8 + 4 + 3 + uint32(len(paths)))
 	wb.Put32(meta.FillCache)
-	wb.Put32(4 + 4 + uint32(len(paths)))
+	wb.Put32(4 + 3 + uint32(len(paths)))
 	wb.Put32(uint32(len(paths)))
 	wb.Put([]byte(paths))
 	wb.Put16(uint16(threads))
 	wb.Put8(back)
-	wb.Put8(withMeta)
 	if _, err := cf.Write(wb.Bytes()); err != nil {
 		logger.Fatalf("Write message: %s", err)
 	}
@@ -211,7 +201,6 @@ func warmup(ctx *cli.Context) error {
 		threads = 1
 	}
 	background := ctx.Bool("background")
-	metadata := ctx.Bool("metadata")
 	start := len(mp)
 	batch := make([]string, 0, batchMax)
 	progress := utils.NewProgress(background, true)
@@ -231,12 +220,12 @@ func warmup(ctx *cli.Context) error {
 			continue
 		}
 		if len(batch) >= batchMax {
-			sendCommand(controller, batch, threads, background, metadata, dspin)
+			sendCommand(controller, batch, threads, background, dspin)
 			batch = batch[0:]
 		}
 	}
 	if len(batch) > 0 {
-		sendCommand(controller, batch, threads, background, metadata, dspin)
+		sendCommand(controller, batch, threads, background, dspin)
 	}
 	progress.Done()
 	if !background {
