@@ -17,13 +17,18 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
+	"time"
 
+	"github.com/dustin/go-humanize"
+	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
 
@@ -91,5 +96,85 @@ func umount(ctx *cli.Context) error {
 	setup(ctx, 1)
 	mp := ctx.Args().Get(0)
 	force := ctx.Bool("force")
+	if !force {
+		if err := waitWritebackComplete(mp); err != nil {
+			return err
+		}
+	}
 	return doUmount(mp, force)
+}
+
+func waitWritebackComplete(mp string) error {
+	raw, err := os.ReadFile(path.Join(mp, ".config"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("not a JuiceFS mount point")
+		}
+		return errors.Join(err, errors.New("failed to read config"))
+	}
+
+	var conf vfs.Config
+	if err = json.Unmarshal(raw, &conf); err != nil {
+		return errors.Join(err, errors.New("failed to parse config"))
+	}
+
+	if !conf.Chunk.Writeback {
+		return nil
+	}
+
+	stagingDir := path.Join(conf.Chunk.CacheDir, "rawstaging")
+	lastLeft := uint64(0)
+	for {
+		_, err := os.Stat(stagingDir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return errors.Join(err, errors.New("failed to read staging directory"))
+		}
+		start := time.Now()
+		size, err := fileSizeInDir(stagingDir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return errors.Join(err, errors.New("failed to read staging directory"))
+		}
+		if lastLeft == 0 {
+			lastLeft = size
+		}
+
+		if size == 0 {
+			clearLastLine()
+			fmt.Println("\rall staging chunks are written back")
+			return nil
+		}
+		speed := lastLeft - size
+		leftTime := 720 * time.Hour
+		if speed != 0 {
+			leftTime = time.Duration(size/speed) * time.Second
+		}
+		clearLastLine()
+		fmt.Printf("\r%s staging chunks are being written back... %s/s, left %s", humanize.IBytes(size), humanize.IBytes(speed), leftTime)
+		lastLeft = size
+		time.Sleep(time.Second - time.Since(start))
+	}
+}
+
+func fileSizeInDir(dir string) (uint64, error) {
+	var size uint64
+	err := filepath.Walk(dir, func(name string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += uint64(info.Size())
+		}
+		return nil
+	})
+	return size, err
+}
+
+func clearLastLine() {
+	fmt.Printf("\r                                                                             ")
 }
