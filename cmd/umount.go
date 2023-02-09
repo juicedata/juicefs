@@ -48,6 +48,11 @@ $ juicefs umount /mnt/jfs`,
 				Aliases: []string{"f"},
 				Usage:   "unmount a busy mount point by force",
 			},
+			&cli.BoolFlag{
+				Name:    "writeback",
+				Aliases: []string{"w"},
+				Usage:   "wait for all staging chunks to be written back",
+			},
 		},
 	}
 }
@@ -95,8 +100,7 @@ func doUmount(mp string, force bool) error {
 func umount(ctx *cli.Context) error {
 	setup(ctx, 1)
 	mp := ctx.Args().Get(0)
-	force := ctx.Bool("force")
-	if !force {
+	if ctx.Bool("writeback") {
 		raw, err := os.ReadFile(path.Join(mp, ".config"))
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -125,7 +129,7 @@ func umount(ctx *cli.Context) error {
 			}()
 		}
 	}
-	return doUmount(mp, force)
+	return doUmount(mp, ctx.Bool("force"))
 }
 
 func waitWritebackComplete(stagingDir string) error {
@@ -150,10 +154,15 @@ func waitWritebackComplete(stagingDir string) error {
 			lastLeft = size
 		}
 
-		if size == 0 {
+		if size == 0 && lastLeft == 0 {
 			return nil
 		}
-		speed := lastLeft - size
+
+		speed := uint64(0)
+		if lastLeft > size {
+			speed = lastLeft - size
+		}
+
 		leftTime := 720 * time.Hour
 		if speed != 0 {
 			leftTime = time.Duration(size/speed) * time.Second
