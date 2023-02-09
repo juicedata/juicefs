@@ -97,32 +97,38 @@ func umount(ctx *cli.Context) error {
 	mp := ctx.Args().Get(0)
 	force := ctx.Bool("force")
 	if !force {
-		if err := waitWritebackComplete(mp); err != nil {
-			return err
+		raw, err := os.ReadFile(path.Join(mp, ".config"))
+		if err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("not a JuiceFS mount point")
+			}
+			return errors.Wrap(err, "failed to read config")
+		}
+
+		var conf vfs.Config
+		if err = json.Unmarshal(raw, &conf); err != nil {
+			return errors.Wrap(err, "failed to parse config")
+		}
+		if conf.Chunk.Writeback {
+			stagingDir := path.Join(conf.Chunk.CacheDir, "rawstaging")
+			if err := waitWritebackComplete(stagingDir); err != nil {
+				return err
+			}
+			defer func() {
+				size, _ := fileSizeInDir(stagingDir)
+				clearLastLine()
+				if size == 0 {
+					fmt.Println("\rAll staging chunks are written back")
+				} else {
+					fmt.Printf("\r%s staging chunks are not written back\n", humanize.IBytes(size))
+				}
+			}()
 		}
 	}
 	return doUmount(mp, force)
 }
 
-func waitWritebackComplete(mp string) error {
-	raw, err := os.ReadFile(path.Join(mp, ".config"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("not a JuiceFS mount point")
-		}
-		return errors.Wrap(err, "failed to read config")
-	}
-
-	var conf vfs.Config
-	if err = json.Unmarshal(raw, &conf); err != nil {
-		return errors.Wrap(err, "failed to parse config")
-	}
-
-	if !conf.Chunk.Writeback {
-		return nil
-	}
-
-	stagingDir := path.Join(conf.Chunk.CacheDir, "rawstaging")
+func waitWritebackComplete(stagingDir string) error {
 	lastLeft := uint64(0)
 	for {
 		_, err := os.Stat(stagingDir)
@@ -145,8 +151,6 @@ func waitWritebackComplete(mp string) error {
 		}
 
 		if size == 0 {
-			clearLastLine()
-			fmt.Println("\rall staging chunks are written back")
 			return nil
 		}
 		speed := lastLeft - size
