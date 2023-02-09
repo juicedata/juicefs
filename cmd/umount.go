@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
 
@@ -110,12 +110,12 @@ func waitWritebackComplete(mp string) error {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("not a JuiceFS mount point")
 		}
-		return errors.Join(err, errors.New("failed to read config"))
+		return errors.Wrap(err, "failed to read config")
 	}
 
 	var conf vfs.Config
 	if err = json.Unmarshal(raw, &conf); err != nil {
-		return errors.Join(err, errors.New("failed to parse config"))
+		return errors.Wrap(err, "failed to parse config")
 	}
 
 	if !conf.Chunk.Writeback {
@@ -130,7 +130,7 @@ func waitWritebackComplete(mp string) error {
 			if os.IsNotExist(err) {
 				return nil
 			}
-			return errors.Join(err, errors.New("failed to read staging directory"))
+			return errors.Wrap(err, "failed to read staging directory")
 		}
 		start := time.Now()
 		size, err := fileSizeInDir(stagingDir)
@@ -138,7 +138,7 @@ func waitWritebackComplete(mp string) error {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return errors.Join(err, errors.New("failed to read staging directory"))
+			return errors.Wrap(err, "failed to read staging directory")
 		}
 		if lastLeft == 0 {
 			lastLeft = size
