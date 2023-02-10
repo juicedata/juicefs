@@ -358,6 +358,9 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
 	}
+	if cfg.MaxDeletes == 0 {
+		logger.Warnf("Deleting object will be disabled since max-deletes is 0")
+	}
 	if cfg.Heartbeat < time.Second {
 		logger.Warnf("heartbeat should not be less than 1 second")
 		cfg.Heartbeat = time.Second

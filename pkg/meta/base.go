@@ -168,7 +168,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
 		maxDeleting:  make(chan struct{}, 100),
-		dslices:      make(chan dslice, conf.MaxDeletes*10),
+		dslices:      make(chan dslice, conf.MaxDeletes*100),
 		symlinks:     &sync.Map{},
 		fsStat:       new(fsStat),
 		msgCallbacks: &msgCallbacks{
@@ -1329,9 +1329,6 @@ func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64, force bool) {
 
 func (m *baseMeta) deleteSlices() {
 	for s := range m.dslices {
-		if s.id == 0 {
-			return
-		}
 		if err := m.newMsg(DeleteSlice, s.id, s.size); err == nil {
 			if err = m.en.doDeleteSlice(s.id, s.size); err != nil {
 				logger.Errorf("delete slice %d: %s", s.id, err)
@@ -1343,6 +1340,9 @@ func (m *baseMeta) deleteSlices() {
 }
 
 func (m *baseMeta) deleteSlice(id uint64, size uint32) {
+	if id == 0 || m.conf.MaxDeletes == 0 {
+		return
+	}
 	m.dslices <- dslice{id, size}
 }
 
