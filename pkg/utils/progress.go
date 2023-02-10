@@ -90,7 +90,7 @@ func (p *Progress) AddCountBar(name string, total int64) *Bar {
 	startTime := time.Now()
 	b := p.Progress.AddBar(0, // disable triggerComplete
 		mpb.PrependDecorators(
-			decor.Name(name+" count: ", decor.WCSyncWidth),
+			decor.Name(name+": ", decor.WCSyncWidth),
 			decor.CountersNoUnit("%d/%d"),
 		),
 		mpb.AppendDecorators(
@@ -131,7 +131,7 @@ func newSpinner() mpb.BarFiller {
 
 func (p *Progress) AddCountSpinner(name string) *Bar {
 	decors := []decor.Decorator{
-		decor.Name(name+" count: ", decor.WCSyncWidth),
+		decor.Name(name+": ", decor.WCSyncWidth),
 		decor.Merge(decor.CurrentNoUnit("%d", decor.WCSyncSpaceR), decor.WCSyncSpaceR),
 	}
 	decors = append(decors, decor.AverageSpeed(0, "  %.1f/s", decor.WCSyncSpaceR))
@@ -145,7 +145,7 @@ func (p *Progress) AddCountSpinner(name string) *Bar {
 
 func (p *Progress) AddByteSpinner(name string) *Bar {
 	decors := []decor.Decorator{
-		decor.Name(name+" bytes: ", decor.WCSyncWidth),
+		decor.Name(name+": ", decor.WCSyncWidth),
 		decor.CurrentKibiByte("% .1f", decor.WCSyncSpaceR),
 		decor.CurrentNoUnit("(%d Bytes)", decor.WCSyncSpaceR),
 	}
