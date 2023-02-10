@@ -235,17 +235,12 @@ func (s *rSlice) Remove() error {
 		s.store.bcache.remove(key)
 	}
 
-	if s.store.conf.MaxDeletes == 0 {
-		return errors.New("skip deleting objects because MaxDeletes is 0")
-	}
 	var err error
-	s.store.currentDelete <- struct{}{}
 	for i := 0; i <= lastIndx; i++ {
 		if e := s.delete(i); e != nil {
 			err = e
 		}
 	}
-	<-s.store.currentDelete
 	return err
 }
 
@@ -592,7 +587,6 @@ type cachedStore struct {
 	conf          Config
 	group         *Controller
 	currentUpload chan bool
-	currentDelete chan struct{}
 	pendingCh     chan *pendingItem
 	pendingKeys   map[string]*pendingItem
 	pendingMutex  sync.Mutex
@@ -701,7 +695,6 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		storage:       storage,
 		conf:          config,
 		currentUpload: make(chan bool, config.MaxUpload),
-		currentDelete: make(chan struct{}, config.MaxDeletes),
 		compressor:    compressor,
 		seekable:      compressor.CompressBound(0) == 0,
 		pendingCh:     make(chan *pendingItem, 100*config.MaxUpload),

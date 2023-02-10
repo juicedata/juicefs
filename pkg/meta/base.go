@@ -111,6 +111,12 @@ type cchunk struct {
 	slices int
 }
 
+// slice to delete
+type dslice struct {
+	id   uint64
+	size uint32
+}
+
 type baseMeta struct {
 	sync.Mutex
 	addr string
@@ -125,6 +131,7 @@ type baseMeta struct {
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
 	maxDeleting  chan struct{}
+	dslices      chan dslice
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
 	reloadCb     []func(*Format)
@@ -161,6 +168,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
 		maxDeleting:  make(chan struct{}, 100),
+		dslices:      make(chan dslice, conf.MaxDeletes*10),
 		symlinks:     &sync.Map{},
 		fsStat:       new(fsStat),
 		msgCallbacks: &msgCallbacks{
@@ -314,6 +322,9 @@ func (m *baseMeta) NewSession() error {
 	}
 	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
+	for i := 0; i < m.conf.MaxDeletes; i++ {
+		go m.deleteSlices()
+	}
 	if !m.conf.NoBGJob {
 		go m.cleanupDeletedFiles()
 		go m.cleanupSlices()
@@ -1316,17 +1327,23 @@ func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64, force bool) {
 	}()
 }
 
-func (m *baseMeta) deleteSlice(id uint64, size uint32) {
-	if id == 0 {
-		return
-	}
-	if err := m.newMsg(DeleteSlice, id, size); err == nil {
-		if err = m.en.doDeleteSlice(id, size); err != nil {
-			logger.Errorf("delete slice %d: %s", id, err)
+func (m *baseMeta) deleteSlices() {
+	for s := range m.dslices {
+		if s.id == 0 {
+			return
 		}
-	} else if !strings.Contains(err.Error(), "skip deleting") {
-		logger.Warnf("delete slice %d (%d bytes): %s", id, size, err)
+		if err := m.newMsg(DeleteSlice, s.id, s.size); err == nil {
+			if err = m.en.doDeleteSlice(s.id, s.size); err != nil {
+				logger.Errorf("delete slice %d: %s", s.id, err)
+			}
+		} else {
+			logger.Warnf("delete slice %d (%d bytes): %s", s.id, s.size, err)
+		}
 	}
+}
+
+func (m *baseMeta) deleteSlice(id uint64, size uint32) {
+	m.dslices <- dslice{id, size}
 }
 
 func (m *baseMeta) toTrash(parent Ino) bool {

@@ -350,6 +350,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	cfg := &meta.Config{
 		Retries:    c.Int("io-retries"),
 		Strict:     true,
+		MaxDeletes: c.Int("max-deletes"),
 		ReadOnly:   readOnly,
 		NoBGJob:    c.Bool("no-bgjob"),
 		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
