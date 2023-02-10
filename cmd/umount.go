@@ -121,9 +121,9 @@ func umount(ctx *cli.Context) error {
 				size, _ := fileSizeInDir(stagingDir)
 				clearLastLine()
 				if size == 0 {
-					fmt.Println("\rAll staging chunks are written back")
+					fmt.Println("\rAll staging chunks are flushed")
 				} else {
-					fmt.Printf("\r%s staging chunks are not written back\n", humanize.IBytes(size))
+					fmt.Printf("\r%s staging chunks are not flushed\n", humanize.IBytes(size))
 				}
 			}()
 		}
@@ -167,7 +167,7 @@ func waitWritebackComplete(stagingDir string) error {
 			leftTime = time.Duration(size/speed) * time.Second
 		}
 		clearLastLine()
-		fmt.Printf("\r%s staging chunks are being written back... %s/s, left %s", humanize.IBytes(size), humanize.IBytes(speed), leftTime)
+		fmt.Printf("\r%s staging chunks are being flushed... %s/s, left %s", humanize.IBytes(size), humanize.IBytes(speed), leftTime)
 		lastLeft = size
 		time.Sleep(time.Second - time.Since(start))
 	}
