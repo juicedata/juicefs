@@ -210,6 +210,13 @@ type Slice struct {
 	Len  uint32
 }
 
+// DSlice is a slice with fewer fields, usually used to find its related blocks.
+// 'D' is short for 'deleting'.
+type DSlice struct {
+	Id   uint64
+	Size uint32
+}
+
 // Summary represents the total number of files/directories and
 // total length of all files inside a directory.
 type Summary struct {
