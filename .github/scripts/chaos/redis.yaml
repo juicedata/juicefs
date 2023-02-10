@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-server
+  namespace: kube-system
+  labels:
+    app: redis-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-server
+  serviceName: redis
+  template:
+    metadata:
+      labels:
+        app: redis-server
+    spec:
+      containers:
+      - name: redis
+        image: redis
+        volumeMounts:
+        - mountPath: /data
+          name: redis-data
+        resources:
+          requests:
+            memory: 100m
+        ports:
+        - containerPort: 6379
+      volumes:
+      - name: redis-data
+        hostPath:
+          path: /data/redis
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: kube-system
+spec:
+  type: NodePort
+  selector:
+    app: redis-server
+  ports:
+  - protocol: TCP
+    port: 6379
+    targetPort: 6379
+    nodePort: 31274

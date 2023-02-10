@@ -1,0 +1,24 @@
+rules:
+  # Default rules: https://github.com/huacnlee/autocorrect/raw/main/autocorrect/.autocorrectrc.default
+  spellcheck: 1
+textRules:
+  # Config some special rule for some texts
+  # For example, if we wants to let "Hello你好" just warning, and "Hi你好" to ignore
+  # "Hello你好": 2
+  # "Hi你好": 0
+fileTypes:
+  # Config the files associations, you config is higher priority than default.
+  # "rb": ruby
+  # "Rakefile": ruby
+  # "*.js": javascript
+  # ".mdx": markdown
+spellcheck:
+  words:
+    # Please do not add a general English word (eg. apple, python) here.
+    # Users can add their special words to their .autocorrectrc file by their need.
+    - Digital Ocean = DigitalOcean
+    - JucieFS = JuiceFS
+    - JueicFS = JuiceFS
+    - JuiecFS = JuiceFS
+    - filesystem = file system
+    - mountpoint = mount point

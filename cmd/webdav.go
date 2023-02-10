@@ -21,12 +21,22 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/urfave/cli/v2"
 )
 
 func cmdWebDav() *cli.Command {
 	selfFlags := []cli.Flag{
+		&cli.StringFlag{
+			Name:  "cert-file",
+			Usage: "certificate file for https",
+		},
+		&cli.StringFlag{
+			Name:  "key-file",
+			Usage: "key file for https",
+		},
 		&cli.BoolFlag{
 			Name:  "gzip",
 			Usage: "compress served files via gzip",
@@ -55,6 +65,8 @@ func cmdWebDav() *cli.Command {
 		ArgsUsage: "META-URL ADDRESS",
 		Description: `
 Examples:
+$ export WEBDAV_USER=root
+$ export WEBDAV_PASSWORD=1234
 $ juicefs webdav redis://localhost localhost:9007`,
 		Flags: expandFlags(compoundFlags),
 	}
@@ -65,6 +77,14 @@ func webdav(c *cli.Context) error {
 	metaUrl := c.Args().Get(0)
 	listenAddr := c.Args().Get(1)
 	_, jfs := initForSvc(c, "webdav", metaUrl)
-	fs.StartHTTPServer(jfs, listenAddr, c.Bool("gzip"), c.Bool("disallowList"))
+	fs.StartHTTPServer(jfs, fs.WebdavConfig{
+		Addr:         listenAddr,
+		DisallowList: c.Bool("disallowList"),
+		EnableGzip:   c.Bool("gzip"),
+		Username:     os.Getenv("WEBDAV_USER"),
+		Password:     os.Getenv("WEBDAV_PASSWORD"),
+		CertFile:     c.String("cert-file"),
+		KeyFile:      c.String("key-file"),
+	})
 	return jfs.Meta().CloseSession()
 }

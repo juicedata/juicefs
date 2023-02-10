@@ -109,7 +109,7 @@ func gc(ctx *cli.Context) error {
 	store := chunk.NewCachedStore(blob, chunkConf, nil)
 
 	// Scan all chunks first and do compaction if necessary
-	progress := utils.NewProgress(false, false)
+	progress := utils.NewProgress(false)
 	// Delete pending slices while listing all slices
 	delete := ctx.Bool("delete")
 	threads := ctx.Int("threads")
@@ -155,7 +155,7 @@ func gc(ctx *cli.Context) error {
 
 	err = m.ScanDeletedObject(
 		c,
-		nil,
+		nil, nil, nil,
 		func(_ meta.Ino, size uint64, ts int64) (bool, error) {
 			delayedFileSpin.IncrInt64(int64(size))
 			if delete {
@@ -225,7 +225,7 @@ func gc(ctx *cli.Context) error {
 			}
 			return false, nil
 		},
-		nil,
+		nil, nil, nil,
 	)
 	if err != nil {
 		logger.Fatalf("statistic: %s", err)

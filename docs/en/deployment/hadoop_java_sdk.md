@@ -47,10 +47,10 @@ No matter which system environment the client is compiled for, the compiled JAR 
 
 Compilation depends on the following tools:
 
-- [Go](https://golang.org/) 1.17+
+- [Go](https://golang.org) 1.18+
 - JDK 8+
-- [Maven](https://maven.apache.org/) 3.3+
-- git
+- [Maven](https://maven.apache.org) 3.3+
+- Git
 - make
 - GCC 5.4+
 
@@ -85,7 +85,7 @@ It is recommended to use a version that includes third-party dependencies.
 
 #### Windows
 
-The client used in the Windows environment needs to be obtained through cross-compilation on Linux or macOS. The compilation depends on [mingw-w64](https://www.mingw-w64.org/), which needs to be installed first.
+The client used in the Windows environment needs to be obtained through cross-compilation on Linux or macOS. The compilation depends on [mingw-w64](https://www.mingw-w64.org), which needs to be installed first.
 
 The steps are the same as compiling on Linux or macOS. For example, on the Ubuntu system, install the `mingw-w64` package first to solve the dependency problem:
 
@@ -173,8 +173,6 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.io-retries`     | 10            | Number of retries after network failure         |
 | `juicefs.writeback`      | `false`       | Upload objects in background                    |
 
-
-
 #### Other Configurations
 
 | Configuration             | Default Value | Description                                                                                                                                                                 |
@@ -183,6 +181,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.debug`           | `false`       | Whether enable debug log                                                                                                                                                    |
 | `juicefs.access-log`      |               | Access log path. Ensure Hadoop application has write permission, e.g. `/tmp/juicefs.access.log`. The log file will rotate  automatically to keep at most 7 files.           |
 | `juicefs.superuser`       | `hdfs`        | The super user                                                                                                                                                              |
+| `juicefs.supergroup`      | `supergroup`  | The super user group                                                                                                                                                        |
 | `juicefs.users`           | `null`        | The path of username and UID list file, e.g. `jfs://name/etc/users`. The file format is `<username>:<UID>`, one user per line.                                              |
 | `juicefs.groups`          | `null`        | The path of group name, GID and group members list file, e.g. `jfs://name/etc/groups`. The file format is `<group-name>:<GID>:<username1>,<username2>`, one group per line. |
 | `juicefs.umask`           | `null`        | The umask used when creating files and directories (e.g. `0022`), default value is `fs.permissions.umask-mode`.                                                             |
@@ -422,9 +421,6 @@ CREATE TABLE IF NOT EXISTS person
 
 2. Use the following sample code to verify:
 
-   <Tabs>
-     <TabItem value="java" label="Java">
-
    ```java
    package demo;
 
@@ -448,9 +444,6 @@ CREATE TABLE IF NOT EXISTS person
        }
    }
    ```
-
-     </TabItem>
-   </Tabs>
 
 ## Monitoring metrics collection
 
@@ -606,7 +599,6 @@ Computing resources used in this test:
   ```
 
   10 map task, each task read 10000MB random data sequentially
-
 
 - **For reference**
 

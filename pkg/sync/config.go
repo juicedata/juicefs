@@ -47,8 +47,8 @@ type Config struct {
 }
 
 func NewConfigFromCli(c *cli.Context) *Config {
-	if c.IsSet("limit") && c.Int64("limit") < 0 {
-		logger.Fatal("limit should not be less than 0")
+	if c.Int64("limit") < -1 {
+		logger.Fatal("limit should not be less than -1")
 	}
 
 	cfg := &Config{

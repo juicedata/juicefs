@@ -2,13 +2,14 @@
 title: 性能诊断
 sidebar_position: 3
 slug: /operations_profiling
+description: JuiceFS 的 profile 命令主要用作汇总过去某个时间的所有日志并定期显示统计信息，包括实时模式和回放模式。
 ---
 
 ## 介绍
 
 JuiceFS 文件系统挂载以后，在文件系统的根目录中有一个名为 [`.accesslog`](../administration/fault_diagnosis_and_analysis.md#access-log) 的特殊虚拟文件，用于跟踪其客户端中发生的每个操作。在负载压力较大的情况下，此文件每秒可能会生成数千个日志记录，很难确定特定时间的实际情况。因此，我们制作了一个名为 [`juicefs profile`](../reference/command_reference.md#juicefs-profile) 的简单工具，可以显示最近完成操作的概述。目的是汇总过去某个时间的所有日志并定期显示统计信息，例如：
 
-![juicefs-profiling](../images/juicefs-profiling.gif)
+![JuiceFS-profiling](../images/juicefs-profiling.gif)
 
 ## 诊断模式
 
@@ -37,7 +38,9 @@ juicefs profile LOGFILE
 ```bash
 cat /jfs/.accesslog > /tmp/jfs-oplog
 ```
+
 later
+
 ```bash
 juicefs profile /tmp/jfs-oplog
 ```

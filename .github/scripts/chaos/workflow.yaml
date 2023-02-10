@@ -1,0 +1,224 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Workflow
+metadata:
+  name: juicefs-workflow
+spec:
+  entry: the-entry
+  templates:
+    - name: the-entry
+      templateType: Parallel
+      children:
+        # - minio-delay
+        # - minio-io
+        # - minio-memory
+        # - minio-cpu
+        # - minio-bandwidth
+        # - redis-bandwidth
+        # - redis-io
+        # - redis-delay
+        # - redis-memory
+        # - redis-cpu
+        # - juicefs-bandwidth
+        # - juicefs-memory
+        # - juicefs-cpu
+        # - juicefs-delay
+    # minio 带宽
+    - name: minio-bandwidth
+      templateType: NetworkChaos
+      deadline: 20s
+      networkChaos:
+        action: bandwidth
+        mode: all
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app: minio-server
+        bandwidth:
+          rate: '500bps'
+          limit: 100
+          buffer: 10000
+    # minio 网络延迟
+    - name: minio-delay
+      templateType: NetworkChaos
+      networkChaos:
+        action: delay
+        mode: all
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app: minio-server
+        delay:
+          latency: '500ms'
+          correlation: '50'
+          jitter: '500ms'
+    # minio 磁盘读写延迟
+    - name: minio-io
+      templateType: IOChaos
+      ioChaos:
+        action: latency
+        mode: one
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app: minio-server
+        volumePath: /data
+        delay: '1s'
+    # minio 内存压力
+    - name: minio-memory
+      templateType: StressChaos
+      stressChaos:
+        mode: one
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app: minio-server
+        stressors:
+          memory:
+            workers: 4
+            size: '128MB'
+    # minio cpu 压力
+    - name: minio-cpu
+      templateType: StressChaos
+      stressChaos:
+        mode: one
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app: minio-server
+        stressors:
+          cpu:
+            workers: 4
+            load: 100
+    # redis 带宽
+    - name: redis-bandwidth
+      templateType: NetworkChaos
+      networkChaos:
+        action: bandwidth
+        mode: all
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app: redis-server
+        bandwidth:
+          rate: '200mbps'
+          limit: 100
+          buffer: 10000
+    - name: redis-delay
+      templateType: NetworkChaos
+      networkChaos:
+        action: delay
+        mode: all
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app: redis-server
+        delay:
+          latency: '100ms'
+          correlation: '50'
+          jitter: '500ms'
+    # redis 磁盘读写延迟
+    - name: redis-io
+      templateType: IOChaos
+      ioChaos:
+        action: latency
+        mode: one
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app: redis-server
+        volumePath: /redis
+        delay: '1s'
+    # redis 内存压力
+    - name: redis-memory
+      templateType: StressChaos
+      stressChaos:
+        mode: one
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app: redis-server
+        stressors:
+          memory:
+            workers: 4
+            size: '2GB'
+    # redis cpu 压力
+    - name: redis-cpu
+      templateType: StressChaos
+      stressChaos:
+        mode: one
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app: redis-server
+        stressors:
+          cpu:
+            workers: 4
+            load: 100
+    # 客户端带宽
+    - name: juicefs-bandwidth
+      templateType: NetworkChaos
+      deadline: 20s
+      networkChaos:
+        action: bandwidth
+        mode: all
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app.kubernetes.io/name: juicefs-mount
+        bandwidth:
+          rate: '100bps'
+          limit: 100
+          buffer: 10000
+    - name: juicefs-delay
+      templateType: NetworkChaos
+      networkChaos:
+        action: delay
+        mode: all
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app.kubernetes.io/name: juicefs-mount
+        delay:
+          latency: '100ms'
+          correlation: '50'
+          jitter: '500ms'
+    # 客户端内存压力
+    - name: juicefs-memory
+      templateType: StressChaos
+      stressChaos:
+        mode: one
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app.kubernetes.io/name: juicefs-mount
+        stressors:
+          memory:
+            workers: 4
+            size: '1GB'
+    # 客户端cpu压力
+    - name: juicefs-cpu
+      templateType: StressChaos
+      stressChaos:
+        mode: one
+        selector:
+          namespaces:
+            - kube-system
+          labelSelectors:
+            app.kubernetes.io/name: juicefs-mount
+        stressors:
+          cpu:
+            workers: 4
+            load: 100

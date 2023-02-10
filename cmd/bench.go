@@ -362,7 +362,7 @@ func bench(ctx *cli.Context) error {
 	}
 	dropCaches()
 	bm.colorful = utils.SupportANSIColor(os.Stdout.Fd())
-	progress := utils.NewProgress(false, false)
+	progress := utils.NewProgress(false)
 	if b := bm.big; b != nil {
 		total := int64(bm.threads * b.fcount * b.bcount)
 		b.wbar = progress.AddCountBar("Write big blocks", total)

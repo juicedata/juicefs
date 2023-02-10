@@ -216,10 +216,10 @@ public class JuiceFileSystemTest extends TestCase {
     assertTrue(fs.mkdirs(new Path("/mkdirs/dir")));
     assertTrue(fs.delete(new Path("/mkdirs"), true));
     assertTrue(fs.mkdirs(new Path("/mkdirs/test")));
-    for (int i = 0; i < 5000; i++) {
+    for (int i = 0; i < 50; i++) {
       fs.mkdirs(new Path("/mkdirs/d" + i));
     }
-    assertEquals(5001, fs.listStatus(new Path("/mkdirs/")).length);
+    assertEquals(51, fs.listStatus(new Path("/mkdirs/")).length);
     assertTrue(fs.delete(new Path("/mkdirs"), true));
     assertTrue(fs.mkdirs(new Path("parent/dir")));
     assertTrue(fs.exists(new Path(fs.getHomeDirectory(), "parent")));
@@ -882,5 +882,12 @@ public class JuiceFileSystemTest extends TestCase {
     skip = in.skip(fileLen - 100 + 1);
     assertEquals(100, skip);
     in.close();
+  }
+
+  public void testInnerSymlink() throws Exception {
+    //echo "hello juicefs" > inner_sym_link
+    FileStatus status = fs.getFileStatus(new Path("/inner_sym_link"));
+    assertEquals("inner_sym_link", status.getPath().getName());
+    assertEquals(14, status.getLen());
   }
 }

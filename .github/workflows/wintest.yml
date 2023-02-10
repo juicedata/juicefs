@@ -43,7 +43,7 @@ jobs:
 
       - name: Cache WinFsp
         id: Cache-WinFsp
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: 'C:\wfsp\'
           key: ${{ runner.os }}-winfsp-key

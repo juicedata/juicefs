@@ -270,9 +270,11 @@ func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	bucket := hostParts[0]
 	region := hostParts[1][3:]
 	region = strings.TrimLeft(region, "-")
+	var pathStyle bool = true
 	if strings.HasSuffix(uri.Host, "ksyun.com") || strings.HasSuffix(uri.Host, "ksyuncs.com") {
 		region = strings.TrimSuffix(region, "-internal")
 		region = ks3Regions[region]
+		pathStyle = false
 	} else if envRegion := os.Getenv("AWS_REGION"); envRegion != "" {
 		region = envRegion
 	}
@@ -294,7 +296,7 @@ func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		Endpoint:         strings.SplitN(uri.Host, ".", 2)[1],
 		DisableSSL:       !ssl,
 		HTTPClient:       httpClient,
-		S3ForcePathStyle: true,
+		S3ForcePathStyle: pathStyle,
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}
 

@@ -109,7 +109,7 @@ func fsck(ctx *cli.Context) error {
 	}
 
 	// Find all blocks in object storage
-	progress := utils.NewProgress(false, false)
+	progress := utils.NewProgress(false)
 	blockDSpin := progress.AddDoubleSpinner("Found blocks")
 	var blocks = make(map[string]int64)
 	for obj := range objs {

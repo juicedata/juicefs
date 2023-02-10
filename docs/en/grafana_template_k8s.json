@@ -891,7 +891,7 @@
           "label": null,
           "logBase": 1,
           "max": null,
-          "min": null,
+          "min": 0,
           "show": true
         },
         {
@@ -1913,7 +1913,7 @@
           "label": null,
           "logBase": 1,
           "max": null,
-          "min": null,
+          "min": 0,
           "show": true
         },
         {
@@ -2013,7 +2013,7 @@
           "label": null,
           "logBase": 1,
           "max": null,
-          "min": null,
+          "min": 0,
           "show": true
         },
         {
@@ -2131,6 +2131,294 @@
         "align": false,
         "alignLevel": null
       }
+    },
+    {
+      "id": 28,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 42
+      },
+      "type": "graph",
+      "title": "Juicefs Staging Blocks",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sbjX28j7k"
+      },
+      "thresholds": [],
+      "pluginVersion": "8.5.0",
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "aliasColors": {},
+      "dashLength": 10,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "pointradius": 2,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": true,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sbjX28j7k"
+          },
+          "editorMode": "code",
+          "expr": "juicefs_staging_blocks{vol_name=\"$name\"}",
+          "legendFormat": "{{node}}:{{mp}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "timeRegions": [],
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "xaxis": {
+        "mode": "time",
+        "show": true,
+        "values": [],
+        "name": null,
+        "buckets": null
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:143",
+          "format": "short",
+          "logBase": 1,
+          "min": "0",
+          "show": true
+        },
+        {
+          "$$hashKey": "object:144",
+          "format": "short",
+          "logBase": 1,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false
+      },
+      "bars": false,
+      "dashes": false,
+      "fillGradient": 0,
+      "hiddenSeries": false,
+      "percentage": false,
+      "points": false,
+      "steppedLine": false,
+      "timeFrom": null,
+      "timeShift": null
+    },
+    {
+      "id": 29,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 42
+      },
+      "type": "graph",
+      "title": "Juicefs Staging Block Usage",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sbjX28j7k"
+      },
+      "thresholds": [],
+      "pluginVersion": "8.5.0",
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "aliasColors": {},
+      "dashLength": 10,
+      "fill": 1,
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "pointradius": 2,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": true,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sbjX28j7k"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "juicefs_staging_block_bytes{vol_name=\"$name\"}",
+          "legendFormat": "{{node}}:{{mp}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "timeRegions": [],
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "xaxis": {
+        "mode": "time",
+        "show": true,
+        "values": [],
+        "name": null,
+        "buckets": null
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:576",
+          "format": "bytes",
+          "logBase": 1,
+          "min": "0",
+          "show": true
+        },
+        {
+          "$$hashKey": "object:577",
+          "format": "short",
+          "logBase": 1,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false
+      },
+      "bars": false,
+      "dashes": false,
+      "fillGradient": 0,
+      "hiddenSeries": false,
+      "percentage": false,
+      "points": false,
+      "steppedLine": false,
+      "timeFrom": null,
+      "timeShift": null
+    },
+    {
+      "id": 30,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 42
+      },
+      "type": "graph",
+      "title": "Juicefs Staging Block Delay",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sbjX28j7k"
+      },
+      "thresholds": [],
+      "pluginVersion": "8.5.0",
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "aliasColors": {},
+      "dashLength": 10,
+      "fill": 1,
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "pointradius": 2,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sbjX28j7k"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(rate(juicefs_staging_block_delay_seconds{vol_name=\"$name\"}[1m])) by (node,mp) / sum(rate(juicefs_object_request_durations_histogram_seconds_count{vol_name=\"$name\"}[1m])) by (node,mp) ",
+          "hide": false,
+          "legendFormat": "{{node}}:{{mp}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "timeRegions": [],
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "xaxis": {
+        "mode": "time",
+        "show": true,
+        "values": [],
+        "name": null,
+        "buckets": null
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:1026",
+          "format": "s",
+          "logBase": 1,
+          "min": "0",
+          "show": true
+        },
+        {
+          "$$hashKey": "object:1027",
+          "format": "short",
+          "logBase": 1,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false
+      },
+      "bars": false,
+      "dashes": false,
+      "fillGradient": 0,
+      "hiddenSeries": false,
+      "percentage": false,
+      "points": false,
+      "stack": false,
+      "steppedLine": false,
+      "timeFrom": null,
+      "timeShift": null
     }
   ],
   "refresh": "",

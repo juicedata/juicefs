@@ -69,7 +69,7 @@ func rmr(ctx *cli.Context) error {
 		logger.Infof("Windows is not supported")
 		return nil
 	}
-	progress := utils.NewProgress(false, true)
+	progress := utils.NewProgress(false)
 	spin := progress.AddCountSpinner("Removing entries")
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)

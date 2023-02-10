@@ -2,6 +2,7 @@
 title: 读写请求处理流程
 sidebar_position: 3
 slug: /internals/io_processing
+description: 本文分别介绍 JuiceFS 的读和写的流程，更进一步的介绍 JuiceFS 读写分块技术在操作系统上的实现过程。
 ---
 
 ## 写入流程

@@ -1,7 +1,7 @@
 <p align="center"><a href="https://github.com/juicedata/juicefs"><img alt="JuiceFS Logo" src="docs/zh_cn/images/juicefs-logo-new.svg" width="50%" /></a></p>
 <p align="center">
-    <a href="https://app.travis-ci.com/github/juicedata/juicefs"><img alt="Travis CI Status" src="https://img.shields.io/travis/com/juicedata/juicefs/main?label=Unit%20Testing" /></a>
-    <a href="https://github.com/juicedata/juicefs/actions/workflows/integrationtests.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/juicedata/juicefs/integrationtests?label=Integration%20Testing" /></a>
+    <a href="https://github.com/juicedata/juicefs/actions/workflows/unittests.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/juicedata/juicefs/unittests.yml?branch=main&label=Unit%20Testing" /></a>
+    <a href="https://github.com/juicedata/juicefs/actions/workflows/integrationtests.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/juicedata/juicefs/integrationtests.yml?branch=main&label=Integration%20Testing" /></a>
     <a href="https://goreportcard.com/report/github.com/juicedata/juicefs"><img alt="Go Report" src="https://goreportcard.com/badge/github.com/juicedata/juicefs" /></a>
     <a href="https://juicefs.com/docs/zh/community/introduction"><img alt="English doc" src="https://img.shields.io/badge/docs-文档中心-brightgreen" /></a>
     <a href="https://go.juicefs.com/slack"><img alt="Join Slack" src="https://badgen.net/badge/Slack/加入%20JuiceFS/0abd59?icon=slack" /></a>
@@ -11,7 +11,7 @@ JuiceFS 是一款高性能 [POSIX](https://en.wikipedia.org/wiki/POSIX) 文件�
 
 JuiceFS 可以简单便捷的将海量云存储直接接入已投入生产环境的大数据、机器学习、人工智能以及各种应用平台，无需修改代码即可像使用本地存储一样高效使用海量云端存储。
 
-📺 **视频**：[什么是 JuiceFS?](https://www.bilibili.com/video/BV1HK4y197va/)
+📺 **视频**：[什么是 JuiceFS?](https://www.bilibili.com/video/BV1HK4y197va)
 
 📖 **文档**：[快速上手指南](https://juicefs.com/docs/zh/community/quick_start_guide)
 

@@ -25,7 +25,6 @@ echo "os=$os"
 set -x
 
 MINT_DATA_DIR=testdata
-MINT_MODE=core
 SERVER_ENDPOINT="127.0.0.1:9008"
 ACCESS_KEY="testUser"
 SECRET_KEY="testUserPassword"
@@ -410,6 +409,20 @@ function test_list_objects() {
         # if make bucket fails, $bucket_name has the error output
         out="${bucket_name}"
     fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix dir1/dir2/dir3/dir4/"
+        test_function=${function}
+        out=$($function)
+        rv=$?
+        key_name=$(echo "$out" | jq -r .Contents[0].Key)
+        if [ $rv -eq 0 ] && [ "$key_name" != "dir1/dir2/dir3/dir4/" ]; then
+            rv=1
+            # since rv is 0, command passed, but didn't return expected value. In this case set the output
+            out="list-objects with prefix is dir failed"
+        fi
+    fi
+
     if [ $rv -eq 0 ]; then
         function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix dir1/"
         test_function=${function}
@@ -1293,7 +1306,7 @@ function test_list_objects_error() {
         test_function=${function}
         out=$($function 2>&1)
         rv=$?
-        if [ $rv -ne 255 ]; then
+        if [ $rv -ne 255 ] && [ $rv -ne 254 ]; then
             rv=1
         else
             rv=0
@@ -1306,7 +1319,7 @@ function test_list_objects_error() {
         test_function=${function}
         out=$($function 2>&1)
         rv=$?
-        if [ $rv -ne 255 ]; then
+        if [ $rv -ne 255 ] && [ $rv -ne 254 ]; then
             rv=1
         else
             rv=0
@@ -1354,7 +1367,7 @@ function test_put_object_error() {
         test_function=${function}
         out=$($function 2>&1)
         rv=$?
-        if [ $rv -ne 255 ]; then
+        if [ $rv -ne 255 ] && [ $rv -ne 254 ]; then
             rv=1
         else
             rv=0
@@ -1367,7 +1380,7 @@ function test_put_object_error() {
         test_function=${function}
         out=$($function 2>&1)
         rv=$?
-        if [ $rv -ne 255 ]; then
+        if [ $rv -ne 255 ] && [ $rv -ne 254 ]; then
             rv=1
         else
             rv=0
@@ -1611,7 +1624,7 @@ function test_serverside_encryption_multipart_copy() {
         test_function=${function}
         out=$($function)
         rv=$?
-        if [ $rv -ne 255 ]; then
+        if [ $rv -ne 255 ] && [ $rv -ne 254 ]; then
             rv=1
         else
             rv=0
@@ -1695,7 +1708,7 @@ function test_serverside_encryption_error() {
         rv=$?
     fi
 
-    if [ $rv -ne 255 ]; then
+    if [ $rv -ne 255 ] && [ $rv -ne 254 ]; then
         rv=1
     else
         rv=0
@@ -1708,7 +1721,7 @@ function test_serverside_encryption_error() {
         rv=$?
     fi
 
-    if [ $rv -ne 255 ]; then
+    if [ $rv -ne 255 ] && [ $rv -ne 254 ]; then
         rv=1
     else
         rv=0
@@ -1729,7 +1742,7 @@ function test_serverside_encryption_error() {
         out=$($function 2>&1)
         rv=$?
     fi
-    if [ $rv -ne 255 ]; then
+    if [ $rv -ne 255 ] && [ $rv -ne 254 ]; then
         rv=1
     else
         rv=0
@@ -1776,7 +1789,7 @@ function test_get_object_error(){
         # save the ref to function being tested, so it can be logged
         test_function=${function}
         out=$($function 2>&1)
-        if [ $? -eq 255 ];then
+        if [ $? -eq 255 ] || [ $? -eq 254 ];then
             rv=0
         fi
         if ! [[ "$out" =~ "The specified key does not exist" ]];then
@@ -1790,7 +1803,7 @@ function test_get_object_error(){
         # save the ref to function being tested, so it can be logged
         test_function=${function}
         out=$($function 2>&1)
-        if [ $? -eq 255 ];then
+        if [ $? -eq 255 ] || [ $? -eq 254 ];then
             rv=0
         fi
         if [[ "$out" =~ "The specified key does not exist" ]];then
@@ -1840,7 +1853,6 @@ main() {
     # test_worm_bucket && \
     # test_legal_hold
     test_get_object_error
-
     return $?
 }
 

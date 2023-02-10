@@ -164,7 +164,7 @@ func (s *s3client) Delete(key string) error {
 		Key:    &key,
 	}
 	_, err := s.s3.DeleteObject(&param)
-	if err != nil && strings.Contains(err.Error(), "NoSuckKey") {
+	if err != nil && strings.Contains(err.Error(), "NoSuchKey") {
 		err = nil
 	}
 	return err
@@ -351,6 +351,7 @@ func parseRegion(endpoint string) string {
 }
 
 var oracleCompileRegexp = `.*\.compat.objectstorage\.(.*)\.oraclecloud\.com`
+var OVHCompileRegexp = `^s3\.(\w*)(\.\w*)?\.cloud\.ovh\.net$`
 
 func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
@@ -419,10 +420,14 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 				// compatible s3
 				bucketName = hostParts[0]
 				ep = hostParts[1]
-				oracleCompile := regexp.MustCompile(oracleCompileRegexp)
-				if oracleCompile.MatchString(ep) {
-					if submatch := oracleCompile.FindStringSubmatch(ep); len(submatch) == 2 {
-						region = submatch[1]
+
+				for _, compileRegexp := range []string{oracleCompileRegexp, OVHCompileRegexp} {
+					compile := regexp.MustCompile(compileRegexp)
+					if compile.MatchString(ep) {
+						if submatch := compile.FindStringSubmatch(ep); len(submatch) >= 2 {
+							region = submatch[1]
+							break
+						}
 					}
 				}
 			}

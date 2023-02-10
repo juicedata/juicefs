@@ -179,6 +179,7 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
 	if driver == "postgres" {
 		addr = driver + "://" + addr
+		driver = "pgx"
 
 		parse, err := url.Parse(addr)
 		if err != nil {
@@ -234,7 +235,11 @@ func (m *dbMeta) Shutdown() error {
 }
 
 func (m *dbMeta) Name() string {
-	return m.db.DriverName()
+	name := m.db.DriverName()
+	if name == "pgx" {
+		name = "postgres"
+	}
+	return name
 }
 
 func (m *dbMeta) doDeleteSlice(id uint64, size uint32) error {
@@ -626,7 +631,7 @@ func (m *dbMeta) shouldRetry(err error) bool {
 		logger.Warnf("transaction failed: %s, will retry it. please increase the max number of connections in your database, or use a connection pool.", msg)
 		return true
 	}
-	switch m.db.DriverName() {
+	switch m.Name() {
 	case "sqlite3":
 		return errors.Is(err, errBusy) || strings.Contains(msg, "database is locked")
 	case "mysql":
@@ -649,7 +654,7 @@ func (m *dbMeta) txn(f func(s *xorm.Session) error, inodes ...Ino) error {
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
 
-	if m.db.DriverName() == "sqlite3" {
+	if m.Name() == "sqlite3" {
 		// sqlite only allow one writer at a time
 		inodes = []Ino{1}
 	}
@@ -751,7 +756,7 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 
 func (m *dbMeta) flushStats() {
 	var inttype = "BIGINT"
-	if m.db.DriverName() == "mysql" {
+	if m.Name() == "mysql" {
 		inttype = "SIGNED"
 	}
 	for {
@@ -835,7 +840,7 @@ func clearSUGIDSQL(ctx Context, cur *node, set *Attr) {
 func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer m.timeit(time.Now())
 	inode = m.checkRoot(inode)
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 	return errno(m.txn(func(s *xorm.Session) error {
 		var cur = node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&cur)
@@ -909,7 +914,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte) error {
 	var r sql.Result
 	var err error
-	driver := m.db.DriverName()
+	driver := m.Name()
 	if driver == "sqlite3" || driver == "postgres" {
 		r, err = s.Exec("update jfs_chunk set slices=slices || ? where inode=? AND indx=?", buf, inode, indx)
 	} else {
@@ -930,7 +935,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		f.Lock()
 		defer f.Unlock()
 	}
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
+	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
 		newSpace = 0
@@ -1021,7 +1026,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		f.Lock()
 		defer f.Unlock()
 	}
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
+	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
 		newSpace = 0
@@ -1305,7 +1310,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, name)
 			trash = 0
 		}
-		defer func() { m.of.InvalidateChunk(e.Inode, 0xFFFFFFFE) }()
+		defer func() { m.of.InvalidateChunk(e.Inode, invalidateAttrOnly) }()
 
 		var updateParent bool
 		if !isTrash(parent) && time.Duration(now-pn.Mtime)*1e3 >= minUpdateTime {
@@ -1369,7 +1374,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	}, parent)
 	if err == nil && trash == 0 {
 		if n.Type == TypeFile && n.Nlink == 0 {
-			m.fileDeleted(opened, n.Inode, n.Length)
+			m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1615,7 +1620,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						if de.Type == TypeFile && dn.Nlink == 0 {
 							opened = m.of.IsOpen(dn.Inode)
 						}
-						defer func() { m.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
+						defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 					} else if dn.Parent > 0 {
 						dn.Parent = trash
 					}
@@ -1746,7 +1751,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}, parentSrc)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
-			m.fileDeleted(opened, dino, dn.Length)
+			m.fileDeleted(opened, false, dino, dn.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1950,14 +1955,12 @@ func (m *dbMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	return sids, nil
 }
 
-func (m *dbMeta) doRefreshSession() {
-	_ = m.txn(func(ses *xorm.Session) error {
+func (m *dbMeta) doRefreshSession() error {
+	return m.txn(func(ses *xorm.Session) error {
 		n, err := ses.Cols("Expire").Update(&session2{Expire: m.expireTime()}, &session2{Sid: m.sid})
 		if err == nil && n == 0 {
-			err = fmt.Errorf("no session found matching sid: %d", m.sid)
-		}
-		if err != nil {
-			logger.Errorf("update session: %s", err)
+			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
+			err = mustInsert(ses, &session2{m.sid, m.expireTime(), m.newSessionInfo()})
 		}
 		return err
 	})
@@ -1989,7 +1992,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	})
 	if err == nil {
 		m.updateStats(newSpace, -1)
-		m.tryDeleteFileData(inode, n.Length)
+		m.tryDeleteFileData(inode, n.Length, false)
 	}
 	return err
 }
@@ -2101,7 +2104,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		defer f.Unlock()
 	}
 	var newSpace int64
-	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
+	defer func() { m.of.InvalidateChunk(fout, invalidateAllChunks) }()
 	err := m.txn(func(s *xorm.Session) error {
 		newSpace = 0
 		var nin = node{Inode: fin}
@@ -2599,7 +2602,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 		return 0
 	}
 
-	return errno(m.scanDeletedSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
+	return errno(m.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
 		slices[1] = append(slices[1], ss...)
 		if showProgress != nil {
 			for range ss {
@@ -2610,7 +2613,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	}))
 }
 
-func (m *dbMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
+func (m *dbMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	if scan == nil {
 		return nil
 	}
@@ -2677,7 +2680,37 @@ func (m *dbMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
 	return nil
 }
 
-func (m *dbMeta) scanDeletedFiles(ctx Context, scan deletedFileScan) error {
+func (m *dbMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
+	if scan == nil {
+		return nil
+	}
+	var refs []sliceRef
+	err := m.roTxn(func(tx *xorm.Session) error {
+		if ok, err := tx.IsTableExist(&sliceRef{}); err != nil {
+			return err
+		} else if !ok {
+			return nil
+		}
+		return tx.Where("refs <= 0").Find(&refs)
+	})
+	if err != nil {
+		return errors.Wrap(err, "scan slice refs")
+	}
+	for _, ref := range refs {
+		clean, err := scan(ref.Id, ref.Size)
+		if err != nil {
+			return errors.Wrap(err, "scan slice")
+		}
+		if clean {
+			// TODO: m.deleteSlice(ref.Id, ref.Size)
+			// avoid lint warning
+			_ = clean
+		}
+	}
+	return nil
+}
+
+func (m *dbMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	if scan == nil {
 		return nil
 	}
@@ -3072,7 +3105,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		}
 	}()
 
-	progress := utils.NewProgress(false, false)
+	progress := utils.NewProgress(false)
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
 
@@ -3271,7 +3304,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 
 	var batch int
-	switch m.db.DriverName() {
+	switch m.Name() {
 	case "sqlite3":
 		batch = 999 / MaxFieldsCountOfTable
 	case "mysql":

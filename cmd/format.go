@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -197,7 +196,6 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	object.UserAgent = "JuiceFS-" + version.Version()
 	var blob object.ObjectStorage
 	var err error
-	object.GetHttpClient().Transport.(*http.Transport).TLSClientConfig = &tls.Config{}
 	if u, err := url.Parse(format.Bucket); err == nil {
 		values := u.Query()
 		if values.Get("tls-insecure-skip-verify") != "" {

@@ -237,6 +237,7 @@ func getPprofPort(pid, amp string, requireRootPrivileges bool) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to execute command `%s`: %v", strings.Join(lsofArgs, " "), err)
 	}
+	logger.Debugf("lsof output: \n%s", string(ret))
 	lines := strings.Split(string(ret), "\n")
 	if len(lines) == 0 {
 		return 0, fmt.Errorf("pprof will be collected, but no listen port")
@@ -246,9 +247,21 @@ func getPprofPort(pid, amp string, requireRootPrivileges bool) (int, error) {
 	for _, line := range lines {
 		fields := strings.Fields(line)
 		if len(fields) != 0 {
-			port, err := strconv.Atoi(strings.Split(fields[len(fields)-2], ":")[1])
+			port, err := func() (port int, err error) {
+				defer func() {
+					e := recover()
+					if e != nil {
+						err = fmt.Errorf("failed to parse listen port: %v", e)
+					}
+				}()
+				port, err = strconv.Atoi(strings.Split(fields[len(fields)-2], ":")[1])
+				if err != nil {
+					logger.Errorf("failed to parse port %v: %v", port, err)
+				}
+				return
+			}()
 			if err != nil {
-				logger.Errorf("failed to parse port %v: %v", port, err)
+				continue
 			}
 			if port >= 6060 && port <= 6099 && port > listenPort {
 				if err := checkPort(port, amp); err == nil {

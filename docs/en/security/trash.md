@@ -12,7 +12,7 @@ Data security is crucial for storage system, therefore JuiceFS enables the trash
 With trash enabled, if application frequently delete or overwrite files, expect larger usage in object storage than the actual file system, because trash directory contain the following type of files:
 
 1. Files deleted by user, they can be directly viewed and manipulated in the `.trash` directory
-2. Data blocks created during file overwrites (see [FAQ](../faq.md#what-is-the-implementation-principle-of-juicefs-supporting-random-write)) are kept in trash as well, but users won't be able to see these files, thus cannot be force deleted by default, see [Recovery/Purge](#recover-purge)
+2. Data blocks created during file overwrites (see [FAQ](../faq.md#random-write)) are kept in trash as well, but users won't be able to see these files, thus cannot be force deleted by default, see [Recovery/Purge](#recover-purge)
 
 ## Configure {#configure}
 
@@ -48,12 +48,13 @@ The `.trash` directory resides under the root of the JuiceFS mount point, use it
 ```shell
 cd /jfs
 
-# Purge files from trash directory
-find .trash -name '*.tmp' | xargs rm -f
+# Empty trash directory
+# Note: The level-1 subdirectory in the trash directory (for example, '2022-11-30-10', whose main function is to generalize management, does not take up space) cannot be manually deleted.
+juicefs rmr .trash/
 
 # Recover files from trash directory
 # Note: original directory structure is lost, however inode info will be prefixed in the file name, continue reading for more
-mv .trash/[parent inode]-[file inode]-[file name] .
+mv .trash/2022-11-30-10/[parent inode]-[file inode]-[file name] .
 ```
 
 When mounting a subdirectory, you will not be able to enter the trash directory.
@@ -71,6 +72,8 @@ The first level directory is named after the UTC time.
 All users are allowed to browse the trash directory and see the full list of removed files. However, since JuiceFS keeps the original modes of the trashed files, normal users can only read files that they have permission to. The `.trash` directory is hidden if JuiceFS is mounted with `--subdir <dir>`.
 
 User cannot create new files inside the trash directory, and only root are allowed to move or delete files in trash.
+
+When JuiceFS Client is started by a non-root user, add the `-o allow_root` option or trash cannot be emptied normally.
 
 ### Recover/Purge {#recover-purge}
 

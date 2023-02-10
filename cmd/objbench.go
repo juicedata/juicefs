@@ -50,6 +50,8 @@ Run basic benchmarks on the target object storage to test if it works as expecte
 Examples:
 # Run benchmarks on S3
 $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
+# Run benchmakks on JuiceFS
+$ juicefs objbench --storage jfs redis://localhost/1
 
 Details: https://juicefs.com/docs/community/performance_evaluation_guide#juicefs-objbench`,
 		Flags: []cli.Flag{
@@ -145,7 +147,7 @@ func objbench(ctx *cli.Context) error {
 	sCount := int(ctx.Uint("small-objects"))
 	threads := int(ctx.Uint("threads"))
 	colorful := utils.SupportANSIColor(os.Stdout.Fd())
-	progress := utils.NewProgress(false, false)
+	progress := utils.NewProgress(false)
 	if colorful {
 		nspt = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, YELLOW, nspt, RESET_SEQ)
 		skipped = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, YELLOW, skipped, RESET_SEQ)
@@ -177,7 +179,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("smallput", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("smallput", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -190,7 +192,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("smallget", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("smallget", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -204,7 +206,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("put", float64(bSize>>20*bCount)/cost, cost*1000/float64(bCount), 2, colorful)
+					line[1], line[2] = colorize("put", float64(bSize>>20*bCount)/cost, float64(threads)*cost*1000/float64(bCount), 2, colorful)
 					line[1] += " MiB/s"
 					line[2] += " ms/object"
 				}
@@ -223,7 +225,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("get", float64(bSize>>20*bCount)/cost, cost*1000/float64(bCount), 2, colorful)
+					line[1], line[2] = colorize("get", float64(bSize>>20*bCount)/cost, float64(threads)*cost*1000/float64(bCount), 2, colorful)
 					line[1] += " MiB/s"
 					line[2] += " ms/object"
 				}
@@ -236,7 +238,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("list", float64(sCount)*100/cost, cost*10, 2, colorful)
+					line[1], line[2] = colorize("list", float64(sCount)*100/cost, float64(threads)*cost*10, 2, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/op"
 				}
@@ -249,7 +251,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("head", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("head", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -262,7 +264,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chtimes", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("chtimes", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -275,7 +277,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chmod", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("chmod", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -288,7 +290,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("chown", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("chown", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -301,7 +303,7 @@ func objbench(ctx *cli.Context) error {
 			getResult: func(cost float64) []string {
 				line := []string{"", nspt, nspt}
 				if cost > 0 {
-					line[1], line[2] = colorize("delete", float64(sCount)/cost, cost*1000/float64(sCount), 1, colorful)
+					line[1], line[2] = colorize("delete", float64(sCount)/cost, float64(threads)*cost*1000/float64(sCount), 1, colorful)
 					line[1] += " objects/s"
 					line[2] += " ms/object"
 				}
@@ -406,7 +408,7 @@ func (bm *benchMarkObj) run(api apiInfo) []string {
 			line[0] = api.title
 			return line
 		}
-		if api.name == "chown" && strings.HasPrefix(bm.blob.String(), "file://") && os.Getuid() != 0 {
+		if api.name == "chown" && (strings.HasPrefix(bm.blob.String(), "file://") || strings.HasPrefix(bm.blob.String(), "jfs://")) && os.Getuid() != 0 {
 			logger.Warnf("chown test should be run by root")
 			return []string{api.title, skipped, skipped}
 		}
@@ -550,7 +552,7 @@ func (bm *benchMarkObj) list(key string, startKey int) error {
 }
 
 func (bm *benchMarkObj) chown(key string, startKey int) error {
-	return bm.blob.(object.FileSystem).Chown(key, "nobody", "nogroup")
+	return bm.blob.(object.FileSystem).Chown(key, "nobody", "nobody")
 }
 
 func (bm *benchMarkObj) chmod(key string, startKey int) error {
@@ -943,10 +945,10 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 	})
 
 	funFSCase("change owner/group", func() error {
-		if strings.HasPrefix(blob.String(), "file://") && os.Getuid() != 0 {
+		if (strings.HasPrefix(blob.String(), "file://") || strings.HasPrefix(blob.String(), "jfs://")) && os.Getuid() != 0 {
 			return errors.New("root required")
 		}
-		if err := fi.Chown(key, "nobody", "nogroup"); err != nil {
+		if err := fi.Chown(key, "nobody", "nobody"); err != nil {
 			return fmt.Errorf("failed to chown object %s", err)
 		}
 		if objInfo, err := blob.Head(key); err != nil {
@@ -955,8 +957,8 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			if info.Owner() != "nobody" {
 				return fmt.Errorf("expect owner nobody but got %s", info.Owner())
 			}
-			if info.Group() != "nogroup" {
-				return fmt.Errorf("expect group nogroup but got %s", info.Group())
+			if info.Group() != "nobody" {
+				return fmt.Errorf("expect group nobody but got %s", info.Group())
 			}
 		}
 		return nil

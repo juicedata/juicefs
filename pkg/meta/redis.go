@@ -101,12 +101,17 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	readTimeout := query.duration("read-timeout", "read_timeout", time.Second*30)
 	writeTimeout := query.duration("write-timeout", "write_timeout", time.Second*5)
 	routeRead := query.pop("route-read")
+	skipVerify := query.pop("insecure-skip-verify")
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
 	opt, err := redis.ParseURL(u.String())
 	if err != nil {
 		return nil, fmt.Errorf("redis parse %s: %s", uri, err)
+	}
+	if opt.TLSConfig != nil {
+		opt.TLSConfig.ServerName = "" // use the host of each connection as ServerName
+		opt.TLSConfig.InsecureSkipVerify = skipVerify != ""
 	}
 	if opt.Password == "" {
 		opt.Password = os.Getenv("REDIS_PASSWORD")
@@ -798,7 +803,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		f.Lock()
 		defer f.Unlock()
 	}
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
+	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
@@ -913,7 +918,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		f.Lock()
 		defer f.Unlock()
 	}
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFF) }()
+	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
@@ -986,7 +991,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer m.timeit(time.Now())
 	inode = m.checkRoot(inode)
-	defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		var cur Attr
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
@@ -1206,7 +1211,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 		return st
 	}
 	if trash == 0 {
-		defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 	}
 	var _type uint8
 	var opened bool
@@ -1328,7 +1333,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 	}, m.entryKey(parent), m.inodeKey(parent))
 	if err == nil && trash == 0 {
 		if _type == TypeFile && attr.Nlink == 0 {
-			m.fileDeleted(opened, inode, attr.Length)
+			m.fileDeleted(opened, isTrash(parent), inode, attr.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1556,7 +1561,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						if dtyp == TypeFile && tattr.Nlink == 0 {
 							opened = m.of.IsOpen(dino)
 						}
-						defer func() { m.of.InvalidateChunk(dino, 0xFFFFFFFE) }()
+						defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()
 					} else if tattr.Parent > 0 {
 						tattr.Parent = trash
 					}
@@ -1677,7 +1682,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 	}, m.entryKey(parentSrc), m.inodeKey(parentSrc), m.entryKey(parentDst), m.inodeKey(parentDst))
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
-			m.fileDeleted(opened, dino, tattr.Length)
+			m.fileDeleted(opened, false, dino, tattr.Length)
 		}
 		m.updateStats(newSpace, newInode)
 	}
@@ -1938,10 +1943,21 @@ func (m *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	return sids, nil
 }
 
-func (m *redisMeta) doRefreshSession() {
-	m.rdb.ZAdd(Background, m.allSessions(), &redis.Z{
+func (m *redisMeta) doRefreshSession() error {
+	ctx := Background
+	ssid := strconv.FormatUint(m.sid, 10)
+	// we have to check sessionInfo here because the operations are not within a transaction
+	ok, err := m.rdb.HExists(ctx, m.sessionInfos(), ssid).Result()
+	if err == nil && !ok {
+		logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
+		err = m.rdb.HSet(ctx, m.sessionInfos(), m.sid, m.newSessionInfo()).Err()
+	}
+	if err != nil {
+		return err
+	}
+	return m.rdb.ZAdd(ctx, m.allSessions(), &redis.Z{
 		Score:  float64(m.expireTime()),
-		Member: strconv.FormatUint(m.sid, 10)})
+		Member: ssid}).Err()
 }
 
 func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
@@ -1967,7 +1983,7 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	})
 	if err == nil {
 		m.updateStats(newSpace, -1)
-		m.tryDeleteFileData(inode, attr.Length)
+		m.tryDeleteFileData(inode, attr.Length, false)
 	}
 	return err
 }
@@ -2067,7 +2083,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		defer f.Unlock()
 	}
 	var newSpace int64
-	defer func() { m.of.InvalidateChunk(fout, 0xFFFFFFFF) }()
+	defer func() { m.of.InvalidateChunk(fout, invalidateAllChunks) }()
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
 		rs, err := tx.MGet(ctx, m.inodeKey(fin), m.inodeKey(fout)).Result()
@@ -2816,7 +2832,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 		return errno(err)
 	}
 
-	return errno(m.scanDeletedSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
+	return errno(m.scanTrashSlices(ctx, func(ss []Slice, _ int64) (bool, error) {
 		slices[1] = append(slices[1], ss...)
 		if showProgress != nil {
 			for range ss {
@@ -2827,7 +2843,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	}))
 }
 
-func (m *redisMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error {
+func (m *redisMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 	if scan == nil {
 		return nil
 	}
@@ -2899,7 +2915,60 @@ func (m *redisMeta) scanDeletedSlices(ctx Context, scan deletedSliceScan) error 
 	return nil
 }
 
-func (m *redisMeta) scanDeletedFiles(ctx Context, scan deletedFileScan) error {
+func (m *redisMeta) scanPendingSlices(ctx Context, scan pendingSliceScan) error {
+	if scan == nil {
+		return nil
+	}
+
+	pendingKeys := make(chan string, 1000)
+	c, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		_ = m.hscan(c, m.sliceRefs(), func(keys []string) error {
+			for i := 0; i < len(keys); i += 2 {
+				val := keys[i+1]
+				refs, err := strconv.ParseInt(val, 10, 64)
+				if err != nil {
+					// ignored
+					logger.Warn(errors.Wrapf(err, "parse slice ref: %s", val))
+					return nil
+				}
+				if refs < 0 {
+					pendingKeys <- keys[i]
+				}
+			}
+			return nil
+		})
+		close(pendingKeys)
+	}()
+
+	for key := range pendingKeys {
+		ps := strings.Split(key[1:], "_")
+		if len(ps) != 2 {
+			return fmt.Errorf("invalid key %s", key)
+		}
+		id, err := strconv.ParseUint(ps[0], 10, 64)
+		if err != nil {
+			return errors.Wrapf(err, "invalid key %s, fail to parse id", key)
+		}
+		size, err := strconv.ParseUint(ps[1], 10, 64)
+		if err != nil {
+			return errors.Wrapf(err, "invalid key %s, fail to parse size", key)
+		}
+		clean, err := scan(id, uint32(size))
+		if err != nil {
+			return errors.Wrap(err, "scan pending slices")
+		}
+		if clean {
+			// TODO: m.deleteSlice(id, uint32(size))
+			// avoid lint warning
+			_ = clean
+		}
+	}
+	return nil
+}
+
+func (m *redisMeta) scanPendingFiles(ctx Context, scan pendingFileScan) error {
 	if scan == nil {
 		return nil
 	}
@@ -3032,7 +3101,8 @@ func (m *redisMeta) checkServerConfig() {
 	if err != nil {
 		logger.Warnf("parse info: %s", err)
 	}
-	if rInfo.maxMemoryPolicy != "noeviction" {
+	if rInfo.storageProvider == "" && rInfo.maxMemoryPolicy != "noeviction" {
+		logger.Warnf("maxmemory_policy is %q,  we will try to reconfigure it to 'noeviction'.", rInfo.maxMemoryPolicy)
 		if _, err := m.rdb.ConfigSet(Background, "maxmemory-policy", "noeviction").Result(); err != nil {
 			logger.Errorf("try to reconfigure maxmemory-policy to 'noeviction' failed: %s", err)
 		} else if result, err := m.rdb.ConfigGet(Background, "maxmemory-policy").Result(); err != nil {
@@ -3388,7 +3458,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 		return err
 	}
 
-	progress := utils.NewProgress(false, false)
+	progress := utils.NewProgress(false)
 	bar := progress.AddCountBar("Dumped entries", dm.Counters.UsedInodes) // with root
 
 	root = m.checkRoot(root)

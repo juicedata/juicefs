@@ -6,7 +6,7 @@ For all versions, please see [GitHub Releases](https://github.com/juicedata/juic
 
 ## Upgrade to JuiceFS v1.0.0 Beta3
 
-JuiceFS client has only one binary file, so you only need to replace the old version with the new one when upgrading JuiceFS. 
+JuiceFS client has only one binary file, so you only need to replace the old version with the new one when upgrading JuiceFS.
 
 ### SQL: Update table schema to support encoding other than UTF-8
 

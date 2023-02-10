@@ -17,9 +17,9 @@ JuiceFS 的架构决定了它的运行通常涉及与数据库和对象存储之
 公有云对象存储一般会同时支持 HTTP 和 HTTPS，在创建文件系统时如果没有指定协议头，JuiceFS 会默认使用 HTTPS 协议头。例如：
 
 ```shell {2}
-juicefs format --storage s3
---bucket myjfs.s3.ap-southeast-1.amazonaws.com
-...
+juicefs format --storage s3 \
+  --bucket myjfs.s3.ap-southeast-1.amazonaws.com \
+  ...
 ```
 
 以上命令，客户端会默认将 bucket 识别为 `https://myjfs.s3.ap-southeast-1.amazonaws.com`。
@@ -31,9 +31,9 @@ juicefs format --storage s3
 对于所有[支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)，只要数据库本身支持并配置了 TLS/SSL 等加密链接，JuiceFS 即可通过其加密通道进行连接。例如，配置了 TLS 加密的 Redis 数据库可以使用 `rediss://` 协议头进行链接：
 
 ```shell {3}
-juicefs format --storage s3
---bucket myjfs.s3.ap-southeast-1.amazonaws.com
-"rediss://myredis.ap-southeast-1.amazonaws.com:6379/1" myjfs
+juicefs format --storage s3 \
+  --bucket myjfs.s3.ap-southeast-1.amazonaws.com \
+  "rediss://myredis.ap-southeast-1.amazonaws.com:6379/1" myjfs
 ```
 
 ## 静态数据加密
@@ -42,7 +42,7 @@ JuiceFS 提供静态数据加密支持，即先加密，再上传。所有存入
 
 JuiceFS 的静态数据加密采用了行业标准的 AES-GCM 和 RSA 加密算法，只需在创建文件系统时提供一个 RSA 私钥即可为文件系统启用数据加密功能，通过 `JFS_RSA_PASSPHRASE` 环境变量提供私钥密码。在使用上，挂载点对应用程序完全透明，即加密和解密过程对文件系统的访问不会产生影响。
 
-:::caution
+:::caution 注意
 客户端缓存的数据是**未加密**的！不过，只有 root 用户或文件所有者有权访问这些数据。如果需要对缓存进行加密，可以把缓存目录放在加密的文件系统或加密的块存储中。
 :::
 
@@ -61,7 +61,7 @@ JuiceFS 采用对称加密与非对称加密相结合的静态加密方案，需
 
 #### 数据加密过程
 
-- 在写入对象存储之前，数据块会使用 LZ4 或 ZStandard 进行压缩。
+- 在写入对象存储之前，数据块会使用 LZ4 或 Zstandard 进行压缩。
 - 为每个数据块生成一个随机的 256 位对称密钥 `S` 和一个随机种子 `N`。
 - 基于 AES-GCM 使用 `S` 和 `N` 对每个数据块进行加密得到 `encrypted_data`。
 - 为了避免对称密钥 `S` 在网络上明文传输，使用 RSA 私钥 `M` 对对称密钥 `S` 进行加密得到密文 `K` 。
@@ -106,28 +106,34 @@ RSA 私钥的安全极其重要，一旦泄露可能导致数据安全风险。�
 创建加密的文件系统需要使用 `--encrypt-rsa-key` 选项指定 RSA 私钥，提供的私钥内容将写入元数据引擎。由于 aes256 算法加密的 RSA 私钥强制要求 Passphrase，因此在创建和挂载文件系统之前都需要用环境变量 `JFS_RSA_PASSPHRASE` 来指定私钥的 Passphrase。
 
 1. 用环境变量设置 Passphrase
-    ```shell
-    export JFS_RSA_PASSPHRASE=the-passwd-for-rsa
-    ```
+
+   ```shell
+   export JFS_RSA_PASSPHRASE=the-passwd-for-rsa
+   ```
+
 2. 创建文件系统
-    ```shell {2}
-    juicefs format --storage s3 \
-    --encrypt-rsa-key my-priv-key.pem \
-    ...
-    ```
+
+   ```shell {2}
+   juicefs format --storage s3 \
+     --encrypt-rsa-key my-priv-key.pem \
+     ...
+   ```
 
 #### 第三步 挂载文件系统
 
 挂载加密的文件系统无需指定额外的选项，但在挂载之前需要通先过环境变量设置私钥的 Passphrase。
 
 1. 用环境变量设置 Passphrase
-    ```shell
-    export JFS_RSA_PASSPHRASE=the-passwd-for-rsa
-    ```
+
+   ```shell
+   export JFS_RSA_PASSPHRASE=the-passwd-for-rsa
+   ```
+
 2. 挂载文件系统
-    ```shell
-    juicefs mount redis://127.0.0.1:6379/1 /mnt/myjfs
-    ```
+
+   ```shell
+   juicefs mount redis://127.0.0.1:6379/1 /mnt/myjfs
+   ```
 
 ### 性能提示
 

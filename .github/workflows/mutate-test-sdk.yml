@@ -1,0 +1,107 @@
+name: mutate-test-sdk
+on:
+  pull_request:
+    branches:
+      - 'main'
+    paths:
+      - '**/JuiceFileSystemTest.java'
+
+  workflow_dispatch:
+    inputs:
+      targetTests:
+        type: string
+        description: "Target tests, eg: io.juicefs.JuiceFileSystemTest"
+        required: true
+        default: ""  
+      targetClasses:
+        type: string
+        description: "Target classes, eg: io.juicefs.JuiceFileSystemImpl*"
+        required: true
+        default: ""  
+      timeoutConstant:
+        type: int
+        description: "Timeout constant"
+        required: true
+        default: 1000  
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false  
+
+jobs:
+  mutate-test-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build
+        uses: ./.github/actions/build
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'adopt'
+          java-version: '8'
+
+      - name: Run Redis
+        run: |
+          sudo docker run -d --name redis -v redis-data:/data  \
+          -p 6379:6379  redis redis-server --appendonly yes
+
+      - name: Juicefs Format
+        run: |
+          sudo ./juicefs format  localhost dev
+
+      - name: Juicefs Mount
+        run: |
+          sudo ./juicefs mount -d localhost /jfs
+          touch /jfs/inner_sym_target
+          echo "hello juicefs" > /jfs/inner_sym_target
+          cd /jfs
+          ln -s inner_sym_target inner_sym_link 
+
+      - name: Make SDK
+        run: |
+          cd sdk/java
+          make
+          cd -
+
+      - name: Change pom
+        run: |
+          if [ "${{github.event_name}}" == "pull_request"  ]; then
+            targetTests="io.juicefs.JuiceFileSystemTest"
+            targetClasses="io.juicefs.JuiceFileSystemImpl*"
+            timeConstant=1000
+          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
+            targetTests="${{github.event.inputs.targetTests}}"
+            echo "targetTests is $targetTests"
+            targetClasses="${{github.event.inputs.targetClasses}}"
+            echo "targetClasses is $targetClasses"
+            timeConstant="${{github.event.inputs.timeConstant}}"
+          fi
+          POM_XML_PATH="sdk/java/pom.xml" TARGET_TESTS=$targetTests TARGET_CLASSES=$targetClasses TIME_CONSTANT=$timeConstant python3 .github/scripts/mutate/modify_sdk_pom.py
+          cat sdk/java/pom.xml
+
+      - name: Test SDK
+        run: |
+          cd sdk/java
+          sudo mvn --no-transfer-progress test-compile org.pitest:pitest-maven:mutationCoverage
+          cd -
+
+      - name: Upload Pit Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: pit-reports
+          path: sdk/java/target/pit-reports
+
+      - name: Send Slack Notification
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
