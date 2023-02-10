@@ -49,9 +49,8 @@ $ juicefs umount /mnt/jfs`,
 				Usage:   "unmount a busy mount point by force",
 			},
 			&cli.BoolFlag{
-				Name:    "writeback",
-				Aliases: []string{"w"},
-				Usage:   "wait for all staging chunks to be written back",
+				Name:  "flush",
+				Usage: "wait for all staging chunks to be flushed",
 			},
 		},
 	}
@@ -100,7 +99,7 @@ func doUmount(mp string, force bool) error {
 func umount(ctx *cli.Context) error {
 	setup(ctx, 1)
 	mp := ctx.Args().Get(0)
-	if ctx.Bool("writeback") {
+	if ctx.Bool("flush") {
 		raw, err := os.ReadFile(path.Join(mp, ".config"))
 		if err != nil {
 			if os.IsNotExist(err) {
