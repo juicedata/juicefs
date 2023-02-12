@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -117,7 +116,7 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	if finfo.IsDir() {
 		_ = f.Close()
-		return ioutil.NopCloser(bytes.NewBuffer([]byte{})), nil
+		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
 
 	if off > 0 {
@@ -132,7 +131,7 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		if n, err := f.Read(buf); err != nil {
 			return nil, err
 		} else {
-			return ioutil.NopCloser(bytes.NewBuffer(buf[:n])), nil
+			return io.NopCloser(bytes.NewBuffer(buf[:n])), nil
 		}
 	}
 	return f, nil

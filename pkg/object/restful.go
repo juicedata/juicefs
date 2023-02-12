@@ -24,7 +24,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
@@ -90,7 +89,7 @@ func GetHttpClient() *http.Client {
 
 func cleanup(response *http.Response) {
 	if response != nil && response.Body != nil {
-		_, _ = ioutil.ReadAll(response.Body)
+		_, _ = io.ReadAll(response.Body)
 		_ = response.Body.Close()
 	}
 }
@@ -150,7 +149,7 @@ func (s *RestfulStorage) request(method, key string, body io.Reader, headers map
 }
 
 func parseError(resp *http.Response) error {
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("request failed: %s", err)
 	}
@@ -220,7 +219,7 @@ func (s *RestfulStorage) Copy(dst, src string) error {
 		return err
 	}
 	defer in.Close()
-	d, err := ioutil.ReadAll(in)
+	d, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}

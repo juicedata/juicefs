@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -57,7 +56,7 @@ func TestSync(t *testing.T) {
 	}
 
 	for _, instance := range testInstances {
-		c, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", localDir, instance.path))
+		c, err := os.ReadFile(fmt.Sprintf("%s/%s", localDir, instance.path))
 		if err != nil || string(c) != instance.content {
 			t.Fatalf("sync failed: %v", err)
 		}

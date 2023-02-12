@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"runtime"
@@ -337,7 +336,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 		} else {
 			var f *os.File
 			// download the object into disk
-			if f, err = ioutil.TempFile("", "rep"); err != nil {
+			if f, err = os.CreateTemp("", "rep"); err != nil {
 				logger.Warnf("create temp file: %s", err)
 				goto SINGLE
 			}

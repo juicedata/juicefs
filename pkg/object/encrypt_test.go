@@ -22,7 +22,8 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"io/ioutil"
+	"io"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -153,7 +154,7 @@ func genrsa(path string, password string) error {
 			return err
 		}
 	}
-	if err := ioutil.WriteFile(path, pem.EncodeToMemory(block), 0755); err != nil {
+	if err := os.WriteFile(path, pem.EncodeToMemory(block), 0755); err != nil {
 		return err
 	}
 	return nil
@@ -213,13 +214,13 @@ func TestEncryptedStore(t *testing.T) {
 		t.Errorf("Get a: %s", err)
 		t.Fail()
 	}
-	d, _ := ioutil.ReadAll(r)
+	d, _ := io.ReadAll(r)
 	if string(d) != "el" {
 		t.Fail()
 	}
 
 	r, _ = es.Get("a", 0, -1)
-	d, _ = ioutil.ReadAll(r)
+	d, _ = io.ReadAll(r)
 	if string(d) != "hello" {
 		t.Fail()
 	}

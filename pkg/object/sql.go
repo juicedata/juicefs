@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"strings"
@@ -79,11 +78,11 @@ func (s *sqlStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if limit > 0 && limit < int64(len(data)) {
 		data = data[:limit]
 	}
-	return ioutil.NopCloser(bytes.NewBuffer(data)), nil
+	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
 func (s *sqlStore) Put(key string, in io.Reader) error {
-	d, err := ioutil.ReadAll(in)
+	d, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}

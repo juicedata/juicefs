@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
@@ -624,7 +623,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		if err != nil {
 			return "", err
 		}
-		data, err := ioutil.ReadAll(r)
+		data, err := io.ReadAll(r)
 		if err != nil {
 			return "", err
 		}

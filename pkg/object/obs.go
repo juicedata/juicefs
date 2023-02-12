@@ -25,7 +25,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -118,7 +117,7 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 		sum = h.Sum(nil)
 		body = b
 	} else {
-		data, err := ioutil.ReadAll(in)
+		data, err := io.ReadAll(in)
 		if err != nil {
 			return err
 		}

@@ -24,7 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"os"
 	"reflect"
@@ -42,7 +42,7 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	data, err := ioutil.ReadAll(r)
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return "", err
 	}
@@ -246,7 +246,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	f, _ := ioutil.TempFile("", "test")
+	f, _ := os.CreateTemp("", "test")
 	f.Write([]byte("this is a file"))
 	f.Seek(0, 0)
 	os.Remove(f.Name())
@@ -307,7 +307,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 		if in, err := s.Get(k, 0, -1); err != nil {
 			t.Fatalf("large not exists")
-		} else if d, err := ioutil.ReadAll(in); err != nil {
+		} else if d, err := io.ReadAll(in); err != nil {
 			t.Fatalf("fail to read large file")
 		} else if len(d) != partSize+part2Size {
 			t.Fatalf("size of large file: %d != %d", len(d), partSize+part2Size)

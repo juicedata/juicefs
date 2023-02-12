@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"sync"
 
@@ -36,7 +36,7 @@ const settingPath = "/tmp/juicefs.memkv.setting.json"
 
 func newMockClient(addr string) (tkvClient, error) {
 	client := &memKV{items: btree.New(2), temp: &kvItem{}}
-	if d, err := ioutil.ReadFile(settingPath); err == nil {
+	if d, err := os.ReadFile(settingPath); err == nil {
 		var buffer map[string][]byte
 		if err = json.Unmarshal(d, &buffer); err == nil {
 			for k, v := range buffer {
@@ -224,7 +224,7 @@ func (c *memKV) txn(f func(*kvTxn) error) error {
 	}
 	if _, ok := tx.buffer["setting"]; ok {
 		d, _ := json.Marshal(tx.buffer)
-		if err := ioutil.WriteFile(settingPath, d, 0644); err != nil {
+		if err := os.WriteFile(settingPath, d, 0644); err != nil {
 			return err
 		}
 	}

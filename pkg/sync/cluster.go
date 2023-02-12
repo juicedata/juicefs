@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -70,7 +70,7 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 func sendStats(addr string) {
@@ -169,7 +169,7 @@ func startManager(tasks <-chan object.Object) (string, error) {
 			http.Error(w, "POST required", http.StatusBadRequest)
 			return
 		}
-		d, err := ioutil.ReadAll(req.Body)
+		d, err := io.ReadAll(req.Body)
 		if err != nil {
 			logger.Errorf("read: %s", err)
 			return

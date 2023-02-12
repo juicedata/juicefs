@@ -18,7 +18,7 @@ package sync
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"os"
 	"reflect"
@@ -341,7 +341,7 @@ func TestSyncLink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get content failed: %s", err)
 	}
-	if c, err := ioutil.ReadAll(content); err != nil || string(c) != "test" {
+	if c, err := io.ReadAll(content); err != nil || string(c) != "test" {
 		t.Fatalf("read content failed: err %s content %s", err, string(c))
 	}
 
@@ -353,7 +353,7 @@ func TestSyncLink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("content failed: %s", err)
 	}
-	if c, err := ioutil.ReadAll(content); err != nil || string(c) != "test" {
+	if c, err := io.ReadAll(content); err != nil || string(c) != "test" {
 		t.Fatalf("read content failed: err %s content %s", err, string(c))
 	}
 
@@ -391,7 +391,7 @@ func TestSyncLinkWithOutFollow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get content error: %s", err)
 	}
-	if c, err := ioutil.ReadAll(content); err != nil || string(c) != "test" {
+	if c, err := io.ReadAll(content); err != nil || string(c) != "test" {
 		t.Fatalf("read content error: %s", err)
 	}
 

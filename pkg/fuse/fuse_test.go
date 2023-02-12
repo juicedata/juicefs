@@ -24,7 +24,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -197,7 +196,7 @@ func StatFS(t *testing.T, mp string) {
 
 func Xattrs(t *testing.T, mp string) {
 	path := filepath.Join(mp, "myfile")
-	ioutil.WriteFile(path, []byte(""), 0644)
+	os.WriteFile(path, []byte(""), 0644)
 
 	const prefix = "user."
 	var value = []byte("test-attr-value")
@@ -224,7 +223,7 @@ func Xattrs(t *testing.T, mp string) {
 
 func Flock(t *testing.T, mp string) {
 	path := filepath.Join(mp, "go-lock.lock")
-	ioutil.WriteFile(path, []byte(""), 0644)
+	os.WriteFile(path, []byte(""), 0644)
 
 	fileLock := flock.New(path)
 	locked, err := fileLock.TryLock()
