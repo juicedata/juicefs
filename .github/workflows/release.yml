@@ -12,7 +12,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.18.x'
+          go-version: 'oldstable'
 
       - name: Set up Java
         uses: actions/setup-java@v3
