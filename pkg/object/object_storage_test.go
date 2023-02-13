@@ -34,7 +34,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 func get(s ObjectStorage, k string, off, limit int64) (string, error) {
