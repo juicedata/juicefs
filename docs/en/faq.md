@@ -63,7 +63,7 @@ No. However, you can set up multiple buckets associated with the same object sto
 
 ### How is the performance of JuiceFS?
 
-JuiceFS is a distributed file system, the latency of metedata is determined by 1 (reading) or 2 (writing) round trip(s) between client and metadata service (usually 1-3 ms). The latency of first byte is determined by the performance of underlying object storage (usually 20-100 ms). Throughput of sequential read/write could be 50MB/s - 2800MiB/s (see [fio benchmark](benchmark/fio.md) for more information), depends on network bandwidth and how the data could be compressed.
+JuiceFS is a distributed file system, the latency of metadata is determined by 1 (reading) or 2 (writing) round trip(s) between client and metadata service (usually 1-3 ms). The latency of first byte is determined by the performance of underlying object storage (usually 20-100 ms). Throughput of sequential read/write could be 50MB/s - 2800MiB/s (see [fio benchmark](benchmark/fio.md) for more information), depends on network bandwidth and how the data could be compressed.
 
 JuiceFS is built with multiple layers of caching (invalidated automatically), once the caching is warmed up, the latency and throughput of JuiceFS could be close to local filesystem (having the overhead of FUSE).
 
@@ -111,7 +111,7 @@ See ["Write Cache in Client"](guide/cache_management.md#writeback) for more info
 
 In addition to mounting, the following methods are also supported:
 
-- Kuberenetes CSI Driver: Use JuiceFS as the storage layer of Kubernetes cluster through the Kubernetes CSI Driver. For details, please refer to ["Use JuiceFS on Kubernetes"](deployment/how_to_use_on_kubernetes.md).
+- Kubernetes CSI Driver: Use JuiceFS as the storage layer of Kubernetes cluster through the Kubernetes CSI Driver. For details, please refer to ["Use JuiceFS on Kubernetes"](deployment/how_to_use_on_kubernetes.md).
 - Hadoop Java SDK: It is convenient to use a Java client compatible with the HDFS interface to access JuiceFS in the Hadoop ecosystem. For details, please refer to ["Use JuiceFS on Hadoop Ecosystem"](deployment/hadoop_java_sdk.md).
 - S3 Gateway: Access JuiceFS through the S3 protocol. For details, please refer to ["Deploy JuiceFS S3 Gateway"](deployment/s3_gateway.md).
 - Docker Volume Plugin: A convenient way to use JuiceFS in Docker, please refer to ["Use JuiceFS on Docker"](deployment/juicefs_on_docker.md).

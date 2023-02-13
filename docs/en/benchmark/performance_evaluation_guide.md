@@ -187,7 +187,7 @@ Based on the bench performance test flows as described above, a total of (1 + 10
 - 808 flush requests: flush is automatically invoked whenever a file is closed
 - 33168 write/read requests: each large file takes 1024 1 MiB IOs on write, while the maximum size of a request at the FUSE level is 128 KiB by default. It means that each application IO is split into 8 FUSE requests, so there are `(1024 * 8 + 100) * 4 = 33168` requests. The read IOs work in a similar way, and so does its counting.
 
-All these values correspond exactly to the results of `profile`. In addition, the test result shows that the average latency for the `write` operations is extreamly low (45 μs). This is because JuiceFS `write` writes to a memory buffer first by default and then calls flush to upload data to the object storage when the file is closed, as expected.
+All these values correspond exactly to the results of `profile`. In addition, the test result shows that the average latency for the `write` operations is extremely low (45 μs). This is because JuiceFS `write` writes to a memory buffer first by default and then calls flush to upload data to the object storage when the file is closed, as expected.
 
 ## Other Test Tool Configuration Examples
 

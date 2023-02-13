@@ -121,7 +121,7 @@ If you maintain the Redis database on your own, it is recommended to read [Redis
 [KeyDB](https://keydb.dev) is an open source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis, and also supports [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication), i.e., the Active Active feature.
 
 :::note
-Same as Redis, the Active Replication is asychronous, which may cause consistency issues. So use with caution!
+Same as Redis, the Active Replication is asynchronous, which may cause consistency issues. So use with caution!
 :::
 
 When being used as metadata storage engine for Juice, KeyDB is used exactly in the same way as Redis. So please refer to the [Redis](#redis) section for usage.

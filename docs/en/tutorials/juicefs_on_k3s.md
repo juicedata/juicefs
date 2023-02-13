@@ -130,7 +130,7 @@ Next, deploy an Nginx Pod using a persistent storage declared by the JuiceFS sto
 
 ### Deployment
 
-Create a configuration file, for example: `depolyment.yaml`
+Create a configuration file, for example: `deployment.yaml`
 
 ```yaml
 apiVersion: v1
@@ -175,10 +175,10 @@ spec:
             claimName: web-pvc
 ```
 
-Depoly it:
+Deploy it:
 
 ```
-sudo kubectl apply -f depolyment.yaml
+sudo kubectl apply -f deployment.yaml
 ```
 
 ### Service
@@ -198,7 +198,7 @@ spec:
       port: 80
 ```
 
-Depoly it:
+Deploy it:
 
 ```shell
 sudo kubectl apply -f service.yaml
@@ -228,7 +228,7 @@ spec:
                   number: 80
 ```
 
-Depoly it:
+Deploy it:
 
 ```shell
 sudo kubectl apply -f ingress.yaml

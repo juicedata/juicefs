@@ -48,5 +48,5 @@ juicefs mount -d "postgres://user:$PG_PASSWD@192.168.1.6:5432/juicefs" /mnt/jfs
 PostgreSQL 官方文档 [High Availability, Load Balancing, and Replication](https://www.postgresql.org/docs/current/different-replication-solutions.html) 对比了几种常用的数据库高可用方案，请根据实际业务需要选择恰当的高可用方案。
 
 :::note 注意
-JuiceFS 使用[事务](https://www.postgresql.org/docs/current/tutorial-transactions.html)保证元数据操作的原子性。由于 PostgreSQL 尚不支持 Muti-Shard (Distributed) 分布式事务，因此请勿将多服务器分布式架构用于 JuiceFS 元数据存储。
+JuiceFS 使用[事务](https://www.postgresql.org/docs/current/tutorial-transactions.html)保证元数据操作的原子性。由于 PostgreSQL 尚不支持 Multi-Shard (Distributed) 分布式事务，因此请勿将多服务器分布式架构用于 JuiceFS 元数据存储。
 :::
