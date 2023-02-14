@@ -27,7 +27,7 @@ description: Ceph 是一套提供对象存储、块存储和文件存储的统�
 
 #### JuiceFS
 
-JuiceFS 主要实现一个 libjfs 库和 FUSE 客户端程序、Java SDK 等，支持对接多种元数据引擎和对象存储，适合在公有云、私有云或混合云环境下部署；
+JuiceFS 主要实现一个 libjfs 库和 FUSE 客户端程序、Java SDK 等，支持对接多种元数据引擎和对象存储，适合在公有云、私有云或混合云环境下部署。
 
 - 元数据：支持多种已有的[数据库实现](../../guide/how_to_set_up_metadata_engine.md)，包括：
   - Redis 及各种兼容 Redis 协议的变种（需要支持事务）；
@@ -58,7 +58,7 @@ JuiceFS 主要实现一个 libjfs 库和 FUSE 客户端程序、Java SDK 等，�
 
 #### 注 1：文件分块
 
-虽然两者都做了大文件的分块，但在实现原理上有本质区别。CephFS 会将文件按 [`object_size`](https://docs.ceph.com/en/latest/cephfs/file-layouts/#reading-layouts-with-getfattr)（默认为 4MiB）拆分，每个分块对应一个 RADOS object。而 JuiceFS 则将文件先按 64MiB Chunk 拆分，每个 Chunk 在写入时根据实际情况进一步拆分成一个或多个逻辑 Slice，每个 Slice 在写入对象存储时再拆分成默认 4MiB 的 Block，Block 与对象存储中 object 一一对应。在处理覆盖写时，CephFS 需要直接修改对应的 objects，流程较为复杂；尤其是冗余策略为 EC 或者开启数据压缩时，往往需要先读取部分 object 内容，在内存中修改后再写入，这个流程会带来很大的性能开销。而 JuiceFS 在覆盖写时将更新数据作为新 objects 写入并修改元数据即可，性能大幅提升。过程中出现的冗余数据会异步完成垃圾回收。
+虽然两者都做了大文件的分块，但在实现原理上有本质区别。CephFS 会将文件按 [`object_size`](https://docs.ceph.com/en/latest/cephfs/file-layouts/#reading-layouts-with-getfattr)（默认为 4MiB）拆分，每个分块对应一个 RADOS object。而 JuiceFS 则将文件先按 64MiB Chunk 拆分，每个 Chunk 在写入时根据实际情况进一步拆分成一个或多个逻辑 Slice，每个 Slice 在写入对象存储时再拆分成默认 4MiB 的 Block，Block 与对象存储中 object 一一对应。在处理覆盖写时，CephFS 需要直接修改对应的 objects，流程较为复杂；尤其是冗余策略为 EC 或者开启数据压缩时，往往需要先读取部分 object 内容，在内存中修改后再写入，这个流程会带来很大的性能开销。而 JuiceFS 在覆盖写时将更新数据作为新 objects 写入并修改元数据即可，性能大幅提升；此外，过程中出现的冗余数据会异步完成垃圾回收。
 
 #### 注 2：数据压缩
 

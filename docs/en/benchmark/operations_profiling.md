@@ -33,7 +33,7 @@ Running the `profile` command on an existing log file enables the **replay mode*
 juicefs profile LOGFILE
 ```
 
-When debugging or analyzing perfomance issues, it is usually more practical to record access log first and then replay it (multiple times). For example:
+When debugging or analyzing performance issues, it is usually more practical to record access log first and then replay it (multiple times). For example:
 
 ```bash
 cat /jfs/.accesslog > /tmp/jfs-oplog

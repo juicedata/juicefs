@@ -793,7 +793,7 @@ Slice{pos: 10M, id: 10, size: 30M, off:   0, len:  6M}
 Slice{pos: 16M, id: 12, size: 10M, off:   0, len: 10M}
 Slice{pos: 26M, id: 11, size: 16M, off:  6M, len: 10M}
 Slice{pos: 36M, id: 10, size: 30M, off: 26M, len:  4M}
-Slice{pos: 40M, id:  0, size: 24M, off:   0, len: 24M} // can be ommited
+Slice{pos: 40M, id:  0, size: 24M, off:   0, len: 24M} // can be omitted
 ```
 
 ### 4.3 Data objects

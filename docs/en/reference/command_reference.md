@@ -682,7 +682,7 @@ limit the number of objects that will be processed (default: -1)
 manager address
 
 `--worker value`<br />
-hosts (seperated by comma) to launch worker
+hosts (separated by comma) to launch worker
 
 `--bwlimit value`<br />
 limit bandwidth in Mbps (0 means unlimited) (default: 0)

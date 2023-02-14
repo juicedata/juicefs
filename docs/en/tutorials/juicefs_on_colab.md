@@ -43,7 +43,7 @@ a reference and with other reference docs provided by `juicefs` to achieve a sim
 You might also want the Colab instance is in the same zone or close to the region where CloudSQL and GCS are deployed,
 to make JuiceFS reaching the best performance. The tutorial should work for a random hosted Colab instance but you might
 notice a slow performance due to the latency between the Colab instance and the CloudSQL/GCS regions. To start Colab
-instaces in a specific region,
+instances in a specific region,
 see [instructions for starting a GCE VM on Colab via GCP Marketplace](https://research.google.com/colaboratory/marketplace.html)
 .
 
@@ -55,7 +55,7 @@ So in order to follow this guide you will need to have these resources ready:
   `juicefs-learning:europe-west1:juicefs-sql-example-1` as the metadata service
 * A GCS bucket created as the object storage service. In this demo we use
   `gs://juicefs-bucket-example-1` as the bucket to store file chunks.
-* An IAM ServiceAccount or an authrized user account that has write access to the posgtes server and GCS buckets
+* An IAM ServiceAccount or an authorized user account that has write access to the Postgres server and GCS buckets
 
 ## Detailed Steps
 
