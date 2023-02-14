@@ -21,7 +21,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 func TestDumpAndLoad(t *testing.T) {

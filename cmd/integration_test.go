@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 const gatewayMeta = "redis://127.0.0.1:6379/14"
