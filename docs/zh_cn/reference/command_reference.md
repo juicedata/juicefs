@@ -172,6 +172,9 @@ RSA 私钥的路径 (PEM)
 `--trash-days value`<br />
 文件被自动清理前在回收站内保留的天数 (默认：1)
 
+`--hash-prefix`<br />
+给每个对象添加 hash 前缀 (默认：false)
+
 `--force`<br />
 强制覆盖当前的格式化配置 (默认：false)
 
