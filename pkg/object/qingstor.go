@@ -23,7 +23,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -111,7 +110,7 @@ func findLen(in io.Reader) (io.Reader, int64, error) {
 			return nil, 0, err
 		}
 	default:
-		d, err := ioutil.ReadAll(in)
+		d, err := io.ReadAll(in)
 		if err != nil {
 			return nil, 0, err
 		}

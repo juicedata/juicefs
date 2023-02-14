@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/url"
 	"os"
@@ -194,7 +193,7 @@ func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if finfo.IsDir() {
-		return ioutil.NopCloser(bytes.NewBuffer([]byte{})), nil
+		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
 
 	if off > 0 {
@@ -208,7 +207,7 @@ func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		if n, err := ff.Read(buf); n == 0 && err != nil {
 			return nil, err
 		} else {
-			return ioutil.NopCloser(bytes.NewBuffer(buf[:n])), nil
+			return io.NopCloser(bytes.NewBuffer(buf[:n])), nil
 		}
 	}
 	return ff, err
@@ -476,7 +475,7 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 
 	var signers []ssh.Signer
 	if privateKeyPath := os.Getenv("SSH_PRIVATE_KEY_PATH"); privateKeyPath != "" {
-		key, err := ioutil.ReadFile(privateKeyPath)
+		key, err := os.ReadFile(privateKeyPath)
 		if err != nil {
 			return nil, fmt.Errorf("unable to read private key, error: %v", err)
 		}
@@ -489,9 +488,9 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 		home := filepath.Join(os.Getenv("HOME"), ".ssh")
 		var algo = []string{"rsa", "dsa", "ecdsa", "ecdsa_sk", "ed25519", "xmss"}
 		for _, a := range algo {
-			key, err := ioutil.ReadFile(filepath.Join(home, "id_"+a))
+			key, err := os.ReadFile(filepath.Join(home, "id_"+a))
 			if err != nil {
-				key, err = ioutil.ReadFile(filepath.Join(home, "id_"+a+"-cert"))
+				key, err = os.ReadFile(filepath.Join(home, "id_"+a+"-cert"))
 			}
 			if err == nil {
 				signer, err := ssh.ParsePrivateKey(key)

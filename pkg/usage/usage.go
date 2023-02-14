@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"time"
@@ -60,7 +60,7 @@ func sendUsage(u usage) error {
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("got %s", resp.Status)
 	}
-	_, err = ioutil.ReadAll(resp.Body)
+	_, err = io.ReadAll(resp.Body)
 	return err
 }
 

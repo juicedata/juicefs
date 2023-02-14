@@ -23,7 +23,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -98,7 +97,7 @@ func (s *nos) Put(key string, in io.Reader) error {
 	case io.ReadSeeker:
 		body = in.(io.ReadSeeker)
 	default:
-		data, err := ioutil.ReadAll(in)
+		data, err := io.ReadAll(in)
 		if err != nil {
 			return err
 		}

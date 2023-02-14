@@ -25,7 +25,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/url"
 	"os"
@@ -61,14 +60,14 @@ func (c *etcdClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 			if limit > 0 && limit < int64(len(data)) {
 				data = data[:limit]
 			}
-			return ioutil.NopCloser(bytes.NewBuffer(data)), nil
+			return io.NopCloser(bytes.NewBuffer(data)), nil
 		}
 	}
 	return nil, os.ErrNotExist
 }
 
 func (c *etcdClient) Put(key string, in io.Reader) error {
-	d, err := ioutil.ReadAll(in)
+	d, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}

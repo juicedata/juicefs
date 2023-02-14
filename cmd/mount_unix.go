@@ -21,7 +21,6 @@ package cmd
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -154,7 +153,7 @@ func mount_flags() []cli.Flag {
 
 func disableUpdatedb() {
 	path := "/etc/updatedb.conf"
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
@@ -172,7 +171,7 @@ func disableUpdatedb() {
 		nd = append(nd, fstype...)
 		nd = append(nd, ' ')
 		nd = append(nd, data[p2:]...)
-		err = ioutil.WriteFile(path, nd, 0644)
+		err = os.WriteFile(path, nd, 0644)
 		if err != nil {
 			logger.Warnf("update %s: %s", path, err)
 		} else {

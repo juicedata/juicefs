@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 	"strconv"
@@ -346,7 +346,7 @@ func readStats(path string) map[string]float64 {
 		return nil
 	}
 	defer f.Close()
-	d, err := ioutil.ReadAll(f)
+	d, err := io.ReadAll(f)
 	if err != nil {
 		logger.Warnf("read %s: %s", path, err)
 		return nil

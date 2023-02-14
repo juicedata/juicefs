@@ -29,7 +29,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -121,7 +120,7 @@ func (u *ufile) parseResp(resp *http.Response, out interface{}) error {
 	defer resp.Body.Close()
 	var data []byte
 	if resp.ContentLength <= 0 || resp.ContentLength > (1<<31) {
-		d, err := ioutil.ReadAll(resp.Body)
+		d, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
 		}
@@ -149,7 +148,7 @@ func copyObj(store ObjectStorage, dst, src string) error {
 		return err
 	}
 	defer in.Close()
-	d, err := ioutil.ReadAll(in)
+	d, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}

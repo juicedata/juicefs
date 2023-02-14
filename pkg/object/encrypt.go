@@ -28,7 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/youmark/pkcs8"
@@ -107,7 +107,7 @@ func ParseRsaPrivateKeyFromPem(enc []byte, passphrase []byte) (*rsa.PrivateKey, 
 }
 
 func ParseRsaPrivateKeyFromPath(path, passphrase string) (*rsa.PrivateKey, error) {
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +235,7 @@ func (e *encrypted) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, err
 	}
 	defer r.Close()
-	ciphertext, err := ioutil.ReadAll(r)
+	ciphertext, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
@@ -251,11 +251,11 @@ func (e *encrypted) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		limit = l - off
 	}
 	data := plain[off : off+limit]
-	return ioutil.NopCloser(bytes.NewBuffer(data)), nil
+	return io.NopCloser(bytes.NewBuffer(data)), nil
 }
 
 func (e *encrypted) Put(key string, in io.Reader) error {
-	plain, err := ioutil.ReadAll(in)
+	plain, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}

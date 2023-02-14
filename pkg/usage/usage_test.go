@@ -19,7 +19,7 @@ package usage
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"testing"
@@ -47,7 +47,7 @@ func TestUsageReport(t *testing.T) {
 	var u usage
 	done := make(chan bool)
 	mux.HandleFunc("/report-usage", func(rw http.ResponseWriter, r *http.Request) {
-		d, _ := ioutil.ReadAll(r.Body)
+		d, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(d, &u)
 		_, _ = rw.Write([]byte("OK"))
 		done <- true

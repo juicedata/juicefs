@@ -21,13 +21,13 @@ package utils
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"syscall"
 )
 
 func MemoryUsage() (virt, rss uint64) {
-	stat, err := ioutil.ReadFile("/proc/self/stat")
+	stat, err := os.ReadFile("/proc/self/stat")
 	if err == nil {
 		stats := bytes.Split(stat, []byte(" "))
 		if len(stats) >= 24 {

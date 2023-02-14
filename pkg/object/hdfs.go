@@ -23,15 +23,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/user"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 
 	"github.com/colinmarc/hdfs/v2"
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
@@ -42,8 +41,8 @@ var supergroup = "supergroup"
 
 type hdfsclient struct {
 	DefaultObjectStorage
-	addr string
-	c    *hdfs.Client
+	addr           string
+	c              *hdfs.Client
 	dfsReplication int
 }
 
@@ -107,7 +106,7 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 	finfo := f.Stat()
 	if finfo.IsDir() {
-		return ioutil.NopCloser(bytes.NewBuffer([]byte{})), nil
+		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
 
 	if off > 0 {

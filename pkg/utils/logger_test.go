@@ -17,7 +17,6 @@
 package utils
 
 import (
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -48,7 +47,7 @@ func TestLogger(t *testing.T) {
 	logger.Warnf("warn level")
 	logger.Error("error level")
 
-	d, _ := ioutil.ReadFile(f.Name())
+	d, _ := os.ReadFile(f.Name())
 	s := string(d)
 	if strings.Contains(s, "info level") || strings.Contains(s, "debug level") {
 		t.Fatalf("info/debug should not be logged: %s", s)
