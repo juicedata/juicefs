@@ -173,7 +173,7 @@ A path to RSA private key (PEM)
 number of days after which removed files will be permanently deleted (default: 1)
 
 `--hash-prefix`<br />
-give each object a hashed prefix (default: false)
+add a hash prefix to name of objects (default: false)
 
 `--force`<br />
 overwrite existing format (default: false)
