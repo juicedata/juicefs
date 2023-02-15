@@ -444,11 +444,12 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	}
 
 	ssl := strings.ToLower(uri.Scheme) == "https"
+	disable100Continue := strings.EqualFold(uri.Query().Get("disable100Continue"), "true")
 	awsConfig := &aws.Config{
 		Region:               aws.String(region),
 		DisableSSL:           aws.Bool(!ssl),
 		HTTPClient:           httpClient,
-		S3Disable100Continue: aws.Bool(true),
+		S3Disable100Continue: aws.Bool(disable100Continue),
 	}
 	if accessKey == "anonymous" {
 		awsConfig.Credentials = credentials.AnonymousCredentials
