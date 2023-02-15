@@ -32,15 +32,17 @@ import (
 
 // Config for clients.
 type Config struct {
-	Strict      bool // update ctime
-	Retries     int
-	CaseInsensi bool
-	ReadOnly    bool
-	NoBGJob     bool // disable background jobs like clean-up, backup, etc.
-	OpenCache   time.Duration
-	Heartbeat   time.Duration
-	MountPoint  string
-	Subdir      string
+	Strict         bool // update ctime
+	Retries        int
+	CaseInsensi    bool
+	ReadOnly       bool
+	NoBGJob        bool // disable background jobs like clean-up, backup, etc.
+	OpenCache      time.Duration
+	OpenCacheLimit uint64        // max number of files to cache (soft limit)
+	OpenCacheKeep  time.Duration // time to keep cache for unused files
+	Heartbeat      time.Duration
+	MountPoint     string
+	Subdir         string
 }
 
 type Format struct {

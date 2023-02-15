@@ -196,6 +196,16 @@ func clientFlags() []cli.Flag {
 			Value: 0.0,
 			Usage: "open files cache timeout in seconds (0 means disable this feature)",
 		},
+		&cli.Float64Flag{
+			Name:  "open-cache-keep",
+			Value: 0.0,
+			Usage: "keep unused files cache for this duration (in seconds)",
+		},
+		&cli.Uint64Flag{
+			Name:  "open-cache-limit",
+			Value: 10000,
+			Usage: "max number of open files to cache (soft limit)",
+		},
 		&cli.StringFlag{
 			Name:  "subdir",
 			Usage: "mount a sub-directory as root",
