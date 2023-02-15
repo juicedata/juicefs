@@ -7,7 +7,7 @@ slug: /hadoop_java_sdk
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK. Various applications in the Hadoop ecosystem can smoothly use JuiceFS to store data without changing the code.
+JuiceFS provides [Hadoop-compatible File System](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK. Various applications in the Hadoop ecosystem can smoothly use JuiceFS to store data without changing the code.
 
 ## Requirements
 
@@ -421,6 +421,7 @@ CREATE TABLE IF NOT EXISTS person
 
 2. Use the following sample code to verify:
 
+<!-- autocorrect: false -->
    ```java
    package demo;
 
@@ -444,6 +445,7 @@ CREATE TABLE IF NOT EXISTS person
        }
    }
    ```
+<!-- autocorrect: true -->
 
 ## Monitoring metrics collection
 
