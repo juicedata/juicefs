@@ -142,11 +142,12 @@ func (s *ks3) Delete(key string) error {
 
 func (s *ks3) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	param := s3.ListObjectsInput{
-		Bucket:    &s.bucket,
-		Prefix:    &prefix,
-		Marker:    &marker,
-		MaxKeys:   &limit,
-		Delimiter: &delimiter,
+		Bucket:       &s.bucket,
+		Prefix:       &prefix,
+		Marker:       &marker,
+		MaxKeys:      &limit,
+		Delimiter:    &delimiter,
+		EncodingType: aws.String("url"),
 	}
 	resp, err := s.s3.ListObjects(&param)
 	if err != nil {
@@ -156,11 +157,19 @@ func (s *ks3) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		objs[i] = &obj{*o.Key, *o.Size, *o.LastModified, strings.HasSuffix(*o.Key, "/")}
+		oKey, err := url.QueryUnescape(*o.Key)
+		if err != nil {
+			return nil, err
+		}
+		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/")}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			objs = append(objs, &obj{*p.Prefix, 0, time.Unix(0, 0), true})
+			prefix, err := url.QueryUnescape(*p.Prefix)
+			if err != nil {
+				return nil, err
+			}
+			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

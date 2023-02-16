@@ -122,14 +122,17 @@ func (c *COS) Delete(key string) error {
 
 func (c *COS) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	param := cos.BucketGetOptions{
-		Prefix:    prefix,
-		Marker:    marker,
-		MaxKeys:   int(limit),
-		Delimiter: delimiter,
+		Prefix:       prefix,
+		Marker:       marker,
+		MaxKeys:      int(limit),
+		Delimiter:    delimiter,
+		EncodingType: "url",
 	}
 	resp, _, err := c.c.Bucket.Get(ctx, &param)
 	for err == nil && len(resp.Contents) == 0 && resp.IsTruncated {
-		param.Marker = resp.NextMarker
+		if param.Marker, err = cos.DecodeURIComponent(resp.NextMarker); err != nil {
+			return nil, err
+		}
 		resp, _, err = c.c.Bucket.Get(ctx, &param)
 	}
 	if err != nil {
@@ -140,11 +143,19 @@ func (c *COS) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
 		t, _ := time.Parse(time.RFC3339, o.LastModified)
-		objs[i] = &obj{o.Key, int64(o.Size), t, strings.HasSuffix(o.Key, "/")}
+		key, err := cos.DecodeURIComponent(o.Key)
+		if err != nil {
+			return nil, err
+		}
+		objs[i] = &obj{key, int64(o.Size), t, strings.HasSuffix(key, "/")}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true})
+			key, err := cos.DecodeURIComponent(p)
+			if err != nil {
+				return nil, err
+			}
+			objs = append(objs, &obj{key, 0, time.Unix(0, 0), true})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

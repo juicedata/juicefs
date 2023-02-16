@@ -175,11 +175,19 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
+		key, err := obs.UrlDecode(o.Key)
+		if err != nil {
+			return nil, err
+		}
+		objs[i] = &obj{key, o.Size, o.LastModified, strings.HasSuffix(key, "/")}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true})
+			prefix, err := obs.UrlDecode(p)
+			if err != nil {
+				return nil, err
+			}
+			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
