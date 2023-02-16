@@ -194,12 +194,12 @@ func clientFlags() []cli.Flag {
 		&cli.Float64Flag{
 			Name:  "open-cache",
 			Value: 0.0,
-			Usage: "open files cache timeout in seconds (0 means disable this feature)",
+			Usage: "The seconds to reuse open file without checking update (0 means disable this feature)",
 		},
 		&cli.Float64Flag{
-			Name:  "open-cache-keep",
+			Name:  "open-cache-timeout",
 			Value: 0.0,
-			Usage: "keep unused files cache for this duration (in seconds)",
+			Usage: "clean unused files cache after this duration (in seconds)",
 		},
 		&cli.Uint64Flag{
 			Name:  "open-cache-limit",
