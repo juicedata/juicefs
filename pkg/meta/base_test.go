@@ -1032,10 +1032,10 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		t.Fatalf("list all slices: %s", st)
 	}
 
-	l.Lock()
-	deletes := len(deleted)
-	l.Unlock()
 	if trash {
+		l.Lock()
+		deletes := len(deleted)
+		l.Unlock()
 		if deletes > 10 {
 			t.Fatalf("deleted slices %d is greater than 10", deletes)
 		}
@@ -1043,10 +1043,11 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 			t.Fatalf("list delayed slices %d is less than 200", len(sliceMap[1]))
 		}
 		m.(engine).doCleanupDelayedSlices(time.Now().Unix() + 1)
-		l.Lock()
-		deletes = len(deleted)
-		l.Unlock()
 	}
+	time.Sleep(time.Second * 3) // wait for all slices deleted
+	l.Lock()
+	deletes := len(deleted)
+	l.Unlock()
 	if deletes < 200 {
 		t.Fatalf("deleted slices %d is less than 200", deletes)
 	}
