@@ -450,7 +450,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		HTTPClient: httpClient,
 	}
 
-	disable100Continue := strings.EqualFold(uri.Query().Get("disable100Continue"), "true")
+	disable100Continue := strings.EqualFold(uri.Query().Get("disable-100-continue"), "true")
 	if disable100Continue {
 		awsConfig.S3Disable100Continue = aws.Bool(true)
 	}
