@@ -386,7 +386,6 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		GetTimeout:    time.Second * time.Duration(c.Int("get-timeout")),
 		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
 		MaxUpload:     c.Int("max-uploads"),
-		MaxDeletes:    c.Int("max-deletes"),
 		MaxRetries:    c.Int("io-retries"),
 		Writeback:     c.Bool("writeback"),
 		Prefetch:      c.Int("prefetch"),

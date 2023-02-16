@@ -1322,13 +1322,14 @@ func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64, force bool) {
 }
 
 func (m *baseMeta) deleteSlices() {
+	var err error
 	for s := range m.dslices {
-		if err := m.newMsg(DeleteSlice, s.Id, s.Size); err == nil {
-			if err = m.en.doDeleteSlice(s.Id, s.Size); err != nil {
-				logger.Errorf("delete slice %d: %s", s.Id, err)
-			}
-		} else {
-			logger.Warnf("delete slice %d (%d bytes): %s", s.Id, s.Size, err)
+		if err = m.newMsg(DeleteSlice, s.Id, s.Size); err != nil {
+			logger.Warnf("Delete data blocks of slice %d (%d bytes): %s", s.Id, s.Size, err)
+			continue
+		}
+		if err = m.en.doDeleteSlice(s.Id, s.Size); err != nil {
+			logger.Errorf("Delete meta entry of slice %d (%d bytes): %s", s.Id, s.Size, err)
 		}
 	}
 }

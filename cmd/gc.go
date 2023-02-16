@@ -77,8 +77,9 @@ func gc(ctx *cli.Context) error {
 	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{
-		Retries: 10,
-		Strict:  true,
+		Retries:    10,
+		Strict:     true,
+		MaxDeletes: ctx.Int("threads"),
 	})
 	format, err := m.Load(true)
 	if err != nil {
@@ -91,7 +92,6 @@ func gc(ctx *cli.Context) error {
 		GetTimeout: time.Second * 60,
 		PutTimeout: time.Second * 60,
 		MaxUpload:  20,
-		MaxDeletes: ctx.Int("threads"),
 		BufferSize: 300 << 20,
 		CacheDir:   "memory",
 	}

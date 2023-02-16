@@ -98,7 +98,6 @@ var defaultConf = Config{
 	CacheChecksum:     CsNone,
 	CacheScanInterval: time.Second * 300,
 	MaxUpload:         1,
-	MaxDeletes:        1,
 	MaxRetries:        10,
 	PutTimeout:        time.Second,
 	GetTimeout:        time.Second * 2,

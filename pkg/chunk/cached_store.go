@@ -530,7 +530,6 @@ type Config struct {
 	AutoCreate        bool
 	Compress          string
 	MaxUpload         int
-	MaxDeletes        int
 	MaxRetries        int
 	UploadLimit       int64 // bytes per second
 	DownloadLimit     int64 // bytes per second
