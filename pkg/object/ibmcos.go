@@ -29,6 +29,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/IBM/ibm-cos-sdk-go/aws"
 	"github.com/IBM/ibm-cos-sdk-go/aws/awserr"
 	"github.com/IBM/ibm-cos-sdk-go/aws/credentials/ibmiam"
@@ -136,10 +138,11 @@ func (s *ibmcos) Delete(key string) error {
 
 func (s *ibmcos) List(prefix, marker string, limit int64) ([]Object, error) {
 	param := s3.ListObjectsInput{
-		Bucket:  &s.bucket,
-		Prefix:  &prefix,
-		Marker:  &marker,
-		MaxKeys: &limit,
+		Bucket:       &s.bucket,
+		Prefix:       &prefix,
+		Marker:       &marker,
+		MaxKeys:      &limit,
+		EncodingType: aws.String("url"),
 	}
 	resp, err := s.s3.ListObjects(&param)
 	if err != nil {
@@ -149,7 +152,11 @@ func (s *ibmcos) List(prefix, marker string, limit int64) ([]Object, error) {
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		objs[i] = &obj{*o.Key, *o.Size, *o.LastModified, strings.HasSuffix(*o.Key, "/")}
+		oKey, err := url.QueryUnescape(*o.Key)
+		if err != nil {
+			return nil, errors.WithMessagef(err, "failed to decode key %s", *o.Key)
+		}
+		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/")}
 	}
 	return objs, nil
 }

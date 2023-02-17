@@ -31,6 +31,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"golang.org/x/net/http/httpproxy"
@@ -173,7 +175,11 @@ func (s *obsClient) List(prefix, marker string, limit int64) ([]Object, error) {
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
+		key, err := obs.UrlDecode(o.Key)
+		if err != nil {
+			return nil, errors.WithMessagef(err, "failed to decode key %s", o.Key)
+		}
+		objs[i] = &obj{key, o.Size, o.LastModified, strings.HasSuffix(key, "/")}
 	}
 	return objs, nil
 }
