@@ -198,7 +198,7 @@ jobs:
           test_file=$(echo ${{matrix.test_file}} | awk -F'-' '{print $1}')
           job_index=$(echo ${{matrix.test_file}} | awk -F'-' '{print $2}')
           job_total=$(echo ${{matrix.test_file}} | awk -F'-' '{print $3}')
-          echo "test file is :$test_file, job_index is $job_index, job_total is $job_total"
+          echo "test file is: $test_file, job_index is $job_index, job_total is $job_total"
           if [ -z "$test_file" ]; then 
             echo "test file is empty, will not run mutate test"
             exit 0
@@ -208,8 +208,8 @@ jobs:
           package_path=$(dirname $test_file)
           echo "package path is :" $package_path
 
-          test_cases=$(TEST_FILE_NAME=$test_file python3 .github/scripts/mutate/parse_test_cases.py)
-          if [ $? -ne 0 ]; then
+          test_cases=$(TEST_FILE_NAME=$test_file python3 .github/scripts/mutate/parse_test_cases.py) || result=$?
+          if [ $result -ne 0 ]; then
             echo "no test cases in test file, will not run mutate test"
             exit 0
           fi
