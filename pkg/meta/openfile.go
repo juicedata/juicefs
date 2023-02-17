@@ -50,11 +50,11 @@ func (o *openfiles) cleanup() {
 		var cnt, deleted int
 		for ino, of := range o.files {
 			cnt++
-			if of.refs <= 0 {
-				unusedFiles[ino] = of
-			}
 			if cnt > 1e3 {
 				break
+			}
+			if of.refs <= 0 {
+				unusedFiles[ino] = of
 			}
 		}
 
@@ -74,7 +74,6 @@ func (o *openfiles) cleanup() {
 
 			if of.lastCheck.Before(candidateOf.lastCheck) {
 				candidateIno = ino
-				candidateOf = of
 			}
 			delete(o.files, candidateIno)
 			deleted++
