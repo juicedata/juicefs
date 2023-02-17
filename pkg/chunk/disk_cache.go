@@ -48,7 +48,7 @@ type cacheKey struct {
 	size uint32
 }
 
-func (k *cacheKey) String() string { return fmt.Sprintf("%d_%d_%d", k.id, k.indx, k.size) }
+func (k cacheKey) String() string { return fmt.Sprintf("%d_%d_%d", k.id, k.indx, k.size) }
 
 type cacheItem struct {
 	size  int32
