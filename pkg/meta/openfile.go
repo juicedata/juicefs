@@ -54,6 +54,11 @@ func (o *openfiles) cleanup() {
 				break
 			}
 			if of.refs <= 0 {
+				if time.Since(of.lastCheck) > o.timeout {
+					delete(o.files, ino)
+					deleted++
+					continue
+				}
 				unusedFiles[ino] = of
 			}
 		}
@@ -61,17 +66,11 @@ func (o *openfiles) cleanup() {
 		var candidateIno Ino
 		var candidateOf *openFile
 		for ino, of := range unusedFiles {
-			if time.Since(of.lastCheck) > o.timeout {
-				delete(o.files, ino)
-				deleted++
-				continue
-			}
 			if candidateIno == 0 {
 				candidateIno = ino
 				candidateOf = of
 				continue
 			}
-
 			if of.lastCheck.Before(candidateOf.lastCheck) {
 				candidateIno = ino
 			}
