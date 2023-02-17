@@ -48,6 +48,8 @@ type cacheKey struct {
 	size uint32
 }
 
+func (k *cacheKey) String() string { return fmt.Sprintf("%d_%d_%d", k.id, k.indx, k.size) }
+
 type cacheItem struct {
 	size  int32
 	atime uint32
@@ -444,7 +446,7 @@ func (cache *cacheStore) cleanup() {
 		}
 	}
 
-	var todel []string
+	var todel []cacheKey
 	var freed int64
 	var cnt int
 	var lastK cacheKey
@@ -464,9 +466,8 @@ func (cache *cacheStore) cleanup() {
 			delete(cache.keys, lastK)
 			freed += int64(lastValue.size + 4096)
 			cache.used -= int64(lastValue.size + 4096)
-			key := cache.getPathFromKey(lastK)
-			todel = append(todel, key)
-			logger.Debugf("remove %s from cache, age: %d", key, now-lastValue.atime)
+			todel = append(todel, lastK)
+			logger.Debugf("remove %s from cache, age: %d", lastK, now-lastValue.atime)
 			cache.m.cacheEvicts.Add(1)
 			cnt = 0
 			if len(cache.keys) < num && cache.used < goal {
@@ -478,8 +479,8 @@ func (cache *cacheStore) cleanup() {
 		logger.Debugf("cleanup cache (%s): %d blocks (%d MB), freed %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, len(todel), freed>>20)
 	}
 	cache.Unlock()
-	for _, key := range todel {
-		_ = os.Remove(cache.cachePath(key))
+	for _, k := range todel {
+		_ = os.Remove(cache.cachePath(cache.getPathFromKey(k)))
 	}
 	cache.Lock()
 }
