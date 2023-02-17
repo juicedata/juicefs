@@ -27,9 +27,6 @@ type openfiles struct {
 }
 
 func newOpenFiles(expire time.Duration, limit uint64, timeout time.Duration) *openfiles {
-	if limit == 0 {
-		limit = 1e4
-	}
 	if timeout == 0 {
 		timeout = 12 * time.Hour
 	}
@@ -53,7 +50,7 @@ func (o *openfiles) cleanup() {
 		o.Lock()
 		for ino, of := range o.files {
 			cnt++
-			if cnt > 1e3 {
+			if len(o.files) <= int(o.limit) || cnt > 1e3 {
 				break
 			}
 			if of.refs <= 0 {
