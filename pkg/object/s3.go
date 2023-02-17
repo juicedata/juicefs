@@ -30,6 +30,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -170,10 +172,11 @@ func (s *s3client) Delete(key string) error {
 
 func (s *s3client) List(prefix, marker string, limit int64) ([]Object, error) {
 	param := s3.ListObjectsInput{
-		Bucket:  &s.bucket,
-		Prefix:  &prefix,
-		Marker:  &marker,
-		MaxKeys: &limit,
+		Bucket:       &s.bucket,
+		Prefix:       &prefix,
+		Marker:       &marker,
+		MaxKeys:      &limit,
+		EncodingType: aws.String("url"),
 	}
 	resp, err := s.s3.ListObjects(&param)
 	if err != nil {
@@ -183,14 +186,18 @@ func (s *s3client) List(prefix, marker string, limit int64) ([]Object, error) {
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
-		if !strings.HasPrefix(*o.Key, prefix) || *o.Key < marker {
-			return nil, fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", *o.Key, prefix, marker)
+		oKey, err := url.QueryUnescape(*o.Key)
+		if err != nil {
+			return nil, errors.WithMessagef(err, "failed to decode key %s", *o.Key)
+		}
+		if !strings.HasPrefix(oKey, prefix) || oKey < marker {
+			return nil, fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, marker)
 		}
 		objs[i] = &obj{
-			*o.Key,
+			oKey,
 			*o.Size,
 			*o.LastModified,
-			strings.HasSuffix(*o.Key, "/"),
+			strings.HasSuffix(oKey, "/"),
 		}
 	}
 	return objs, nil

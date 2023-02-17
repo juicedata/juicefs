@@ -30,6 +30,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
@@ -121,13 +123,16 @@ func (c *COS) Delete(key string) error {
 
 func (c *COS) List(prefix, marker string, limit int64) ([]Object, error) {
 	param := cos.BucketGetOptions{
-		Prefix:  prefix,
-		Marker:  marker,
-		MaxKeys: int(limit),
+		Prefix:       prefix,
+		Marker:       marker,
+		MaxKeys:      int(limit),
+		EncodingType: "url",
 	}
 	resp, _, err := c.c.Bucket.Get(ctx, &param)
 	for err == nil && len(resp.Contents) == 0 && resp.IsTruncated {
-		param.Marker = resp.NextMarker
+		if param.Marker, err = cos.DecodeURIComponent(resp.NextMarker); err != nil {
+			return nil, errors.WithMessagef(err, "failed to decode nextMarker %s", resp.NextMarker)
+		}
 		resp, _, err = c.c.Bucket.Get(ctx, &param)
 	}
 	if err != nil {
@@ -138,7 +143,11 @@ func (c *COS) List(prefix, marker string, limit int64) ([]Object, error) {
 	for i := 0; i < n; i++ {
 		o := resp.Contents[i]
 		t, _ := time.Parse(time.RFC3339, o.LastModified)
-		objs[i] = &obj{o.Key, int64(o.Size), t, strings.HasSuffix(o.Key, "/")}
+		key, err := cos.DecodeURIComponent(o.Key)
+		if err != nil {
+			return nil, errors.WithMessagef(err, "failed to decode key %s", o.Key)
+		}
+		objs[i] = &obj{key, int64(o.Size), t, strings.HasSuffix(key, "/")}
 	}
 	return objs, nil
 }
