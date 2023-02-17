@@ -209,7 +209,7 @@ jobs:
           echo "package path is :" $package_path
 
           test_cases=$(TEST_FILE_NAME=$test_file python3 .github/scripts/mutate/parse_test_cases.py) || result=$?
-          if [ $result -ne 0 ]; then
+          if [ "$result" -ne 0 ]; then
             echo "no test cases in test file, will not run mutate test"
             exit 0
           fi
