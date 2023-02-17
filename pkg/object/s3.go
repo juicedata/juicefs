@@ -31,6 +31,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -188,7 +190,7 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64) ([]Object
 		o := resp.Contents[i]
 		oKey, err := url.QueryUnescape(*o.Key)
 		if err != nil {
-			return nil, err
+			return nil, errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
 		if !strings.HasPrefix(oKey, prefix) || oKey < marker {
 			return nil, fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, marker)
@@ -204,7 +206,7 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64) ([]Object
 		for _, p := range resp.CommonPrefixes {
 			prefix, err := url.QueryUnescape(*p.Prefix)
 			if err != nil {
-				return nil, err
+				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true})
 		}

@@ -82,7 +82,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}()
 
-	key := "测试编码文件" + string('\u001F')
+	key := "测试编码文件" + `{"name":"zhijian"}` + string('\u001F')
 	if err := s.Put(key, bytes.NewReader(nil)); err != nil {
 		t.Logf("PUT testEncodeFile failed: %s", err.Error())
 	} else {

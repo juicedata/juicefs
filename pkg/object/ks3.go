@@ -30,6 +30,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/ks3sdklib/aws-sdk-go/aws"
@@ -159,7 +161,7 @@ func (s *ks3) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 		o := resp.Contents[i]
 		oKey, err := url.QueryUnescape(*o.Key)
 		if err != nil {
-			return nil, err
+			return nil, errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
 		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/")}
 	}
@@ -167,7 +169,7 @@ func (s *ks3) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 		for _, p := range resp.CommonPrefixes {
 			prefix, err := url.QueryUnescape(*p.Prefix)
 			if err != nil {
-				return nil, err
+				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
 			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true})
 		}

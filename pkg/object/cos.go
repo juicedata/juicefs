@@ -31,6 +31,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
@@ -131,7 +133,7 @@ func (c *COS) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 	resp, _, err := c.c.Bucket.Get(ctx, &param)
 	for err == nil && len(resp.Contents) == 0 && resp.IsTruncated {
 		if param.Marker, err = cos.DecodeURIComponent(resp.NextMarker); err != nil {
-			return nil, err
+			return nil, errors.WithMessagef(err, "failed to decode nextMarker %s", resp.NextMarker)
 		}
 		resp, _, err = c.c.Bucket.Get(ctx, &param)
 	}
@@ -145,7 +147,7 @@ func (c *COS) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 		t, _ := time.Parse(time.RFC3339, o.LastModified)
 		key, err := cos.DecodeURIComponent(o.Key)
 		if err != nil {
-			return nil, err
+			return nil, errors.WithMessagef(err, "failed to decode key %s", o.Key)
 		}
 		objs[i] = &obj{key, int64(o.Size), t, strings.HasSuffix(key, "/")}
 	}
@@ -153,7 +155,7 @@ func (c *COS) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 		for _, p := range resp.CommonPrefixes {
 			key, err := cos.DecodeURIComponent(p)
 			if err != nil {
-				return nil, err
+				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", p)
 			}
 			objs = append(objs, &obj{key, 0, time.Unix(0, 0), true})
 		}
