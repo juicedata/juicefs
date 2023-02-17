@@ -45,10 +45,12 @@ func newOpenFiles(expire time.Duration, limit uint64, timeout time.Duration) *op
 
 func (o *openfiles) cleanup() {
 	for {
-		var candidateIno Ino
-		var candidateOf *openFile
+		var (
+			cnt, deleted int
+			candidateIno Ino
+			candidateOf  *openFile
+		)
 		o.Lock()
-		var cnt, deleted int
 		for ino, of := range o.files {
 			cnt++
 			if cnt > 1e3 {
