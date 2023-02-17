@@ -198,7 +198,8 @@ func clientFlags() []cli.Flag {
 		},
 		&cli.Uint64Flag{
 			Name:  "open-cache-limit",
-			Usage: "max number of open files to cache (soft limit)",
+			Value: 10000,
+			Usage: "max number of open files to cache (soft limit, 0 means unlimited)",
 		},
 		&cli.StringFlag{
 			Name:  "subdir",

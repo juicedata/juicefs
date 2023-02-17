@@ -43,20 +43,26 @@ func newOpenFiles(expire time.Duration, limit uint64, timeout time.Duration) *op
 func (o *openfiles) cleanup() {
 	for {
 		var (
-			cnt, deleted int
-			candidateIno Ino
-			candidateOf  *openFile
+			cnt, deleted, todel int
+			candidateIno        Ino
+			candidateOf         *openFile
 		)
 		o.Lock()
+		if o.limit > 0 && len(o.files) > int(o.limit) {
+			todel = len(o.files) - int(o.limit)
+		}
 		for ino, of := range o.files {
 			cnt++
-			if len(o.files) <= int(o.limit) || cnt > 1e3 {
+			if cnt > 1e3 {
 				break
 			}
 			if of.refs <= 0 {
 				if time.Since(of.lastCheck) > o.timeout {
 					delete(o.files, ino)
 					deleted++
+					continue
+				}
+				if todel == 0 || deleted >= todel {
 					continue
 				}
 				if candidateIno == 0 {
