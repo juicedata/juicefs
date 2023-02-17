@@ -38,7 +38,7 @@ Amazon S3
 
 - Amazon c5d.xlarge: 4 vCPUs, 8 GiB Memory, Up to 10 Gigabit Network, 100 GB SSD (local storage for metadata engines)
 - Ubuntu 20.04.1 LTS
-- SSD is formated as ext4 and mounted on `/data`
+- SSD is formatted as ext4 and mounted on `/data`
 
 ### Metadata Engines
 

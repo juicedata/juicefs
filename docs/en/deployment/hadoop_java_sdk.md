@@ -7,7 +7,7 @@ slug: /hadoop_java_sdk
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-JuiceFS provides [Hadoop-compatible FileSystem](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK. Various applications in the Hadoop ecosystem can smoothly use JuiceFS to store data without changing the code.
+JuiceFS provides [Hadoop-compatible File System](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html) by Hadoop Java SDK. Various applications in the Hadoop ecosystem can smoothly use JuiceFS to store data without changing the code.
 
 ## Requirements
 
@@ -140,8 +140,8 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 
 | Configuration                    | Default Value                | Description                                                                                                                                                                                                                                                                                  |
 |----------------------------------|------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | Specify the storage implementation to be used. By default, `jfs://` scheme is used. If you want to use different scheme (e.g. `cfs://`), just modify it to `fs.cfs.impl`. No matter what sheme you use, it is always access the data in JuiceFS.                                             |
-| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         | Specify the storage implementation to be used. By default, `jfs://` scheme is used. If you want to use different scheme (e.g. `cfs://`), just modify it to `fs.AbstractFileSystem.cfs.impl`. No matter what sheme you use, it is always access the data in JuiceFS.                          |
+| `fs.jfs.impl`                    | `io.juicefs.JuiceFileSystem` | Specify the storage implementation to be used. By default, `jfs://` scheme is used. If you want to use different scheme (e.g. `cfs://`), just modify it to `fs.cfs.impl`. No matter what scheme you use, it is always access the data in JuiceFS.                                             |
+| `fs.AbstractFileSystem.jfs.impl` | `io.juicefs.JuiceFS`         | Specify the storage implementation to be used. By default, `jfs://` scheme is used. If you want to use different scheme (e.g. `cfs://`), just modify it to `fs.AbstractFileSystem.cfs.impl`. No matter what scheme you use, it is always access the data in JuiceFS.                          |
 | `juicefs.meta`                   |                              | Specify the metadata engine address of the pre-created JuiceFS file system. You can configure multiple file systems for the client at the same time through the format of `juicefs.{vol_name}.meta`. Refer to ["Multiple file systems configuration"](#multiple-file-systems-configuration). |
 
 #### Cache Configurations
@@ -421,6 +421,7 @@ CREATE TABLE IF NOT EXISTS person
 
 2. Use the following sample code to verify:
 
+<!-- autocorrect: false -->
    ```java
    package demo;
 
@@ -444,6 +445,7 @@ CREATE TABLE IF NOT EXISTS person
        }
    }
    ```
+<!-- autocorrect: true -->
 
 ## Monitoring metrics collection
 

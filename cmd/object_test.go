@@ -151,11 +151,10 @@ func TestJFS(t *testing.T) {
 	}
 	_ = m.Init(format, true)
 	var conf = vfs.Config{
-		Meta: &meta.Config{},
+		Meta: &meta.Config{MaxDeletes: 1},
 		Chunk: &chunk.Config{
 			BlockSize:  format.BlockSize << 10,
 			MaxUpload:  1,
-			MaxDeletes: 1,
 			BufferSize: 100 << 20,
 		},
 		DirEntryTimeout: time.Millisecond * 100,

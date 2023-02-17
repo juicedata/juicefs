@@ -36,7 +36,7 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 ### 3. 数据库
 
-与一般的文件系统不同，JuiceFS 将数据所对应的所有元数据都存储在独立的数据库，存储的数据规模越大性能越出色。目前，JuiceFS 支持 Redis、TiKV、MySQL/MariaDB、PostgreSQL、SQLite 等常见数据库，同时也在持续开发对其他数据库的支持。如果你需要的数据库暂未支持，请提交 [Issuse](https://github.com/juicedata/juicefs/issues) 反馈。
+与一般的文件系统不同，JuiceFS 将数据所对应的所有元数据都存储在独立的数据库，存储的数据规模越大性能越出色。目前，JuiceFS 支持 Redis、TiKV、MySQL/MariaDB、PostgreSQL、SQLite 等常见数据库，同时也在持续开发对其他数据库的支持。如果你需要的数据库暂未支持，请提交 [Issue](https://github.com/juicedata/juicefs/issues) 反馈。
 
 在性能、规模和可靠性等方面，每种数据库都有各自的优缺点，你应该根据实际的场景需要进行选择。
 
@@ -52,7 +52,7 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 > **注意**：为了确保元数据的安全和完整，回收策略请不要选择 `allkeys-lru` 和 `allkey-random`。
 
-Redis 的访问地址可以从控制台的 `Connection Details` 中找到，如果所有计算资源都在 DigitalOcea，则建议优先使用 VPC 私有网络进行连接，这样能最大程度的提升安全性。
+Redis 的访问地址可以从控制台的 `Connection Details` 中找到，如果所有计算资源都在 DigitalOcean，则建议优先使用 VPC 私有网络进行连接，这样能最大程度的提升安全性。
 
 ![](../images/digitalocean-redis-url.png)
 

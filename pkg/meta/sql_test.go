@@ -24,7 +24,7 @@ import (
 )
 
 func TestSQLiteClient(t *testing.T) {
-	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test.db"), &Config{})
+	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test.db"), &Config{MaxDeletes: 2})
 	if err != nil || m.Name() != "sqlite3" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -32,7 +32,7 @@ func TestSQLiteClient(t *testing.T) {
 }
 
 func TestMySQLClient(t *testing.T) {
-	m, err := newSQLMeta("mysql", "root:@/dev", &Config{})
+	m, err := newSQLMeta("mysql", "root:@/dev", &Config{MaxDeletes: 2})
 	if err != nil || m.Name() != "mysql" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -40,7 +40,7 @@ func TestMySQLClient(t *testing.T) {
 }
 
 func TestPostgreSQLClient(t *testing.T) {
-	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", &Config{})
+	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", &Config{MaxDeletes: 2})
 	if err != nil || m.Name() != "postgres" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -48,7 +48,7 @@ func TestPostgreSQLClient(t *testing.T) {
 }
 
 func TestPostgreSQLClientWithSearchPath(t *testing.T) {
-	_, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", &Config{})
+	_, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", &Config{MaxDeletes: 2})
 	if !strings.Contains(err.Error(), "currently, only one schema is supported in search_path") {
 		t.Fatalf("TestPostgreSQLClientWithSearchPath error: %s", err)
 	}

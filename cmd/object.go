@@ -399,7 +399,6 @@ func getDefaultChunkConf(format *meta.Format) *chunk.Config {
 		GetTimeout: time.Minute,
 		PutTimeout: time.Minute,
 		MaxUpload:  50,
-		MaxDeletes: 10,
 		MaxRetries: 10,
 		BufferSize: 300 << 20,
 	}
@@ -413,10 +412,11 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 		metaUrl = endpoint
 	}
 	metaConf := &meta.Config{
-		Retries:   10,
-		Strict:    true,
-		NoBGJob:   true,
-		Heartbeat: time.Second * 10,
+		Retries:    10,
+		Strict:     true,
+		MaxDeletes: 10,
+		NoBGJob:    true,
+		Heartbeat:  time.Second * 10,
 	}
 	metaCli := meta.NewClient(metaUrl, metaConf)
 	format, err := metaCli.Load(true)

@@ -34,7 +34,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 func get(s ObjectStorage, k string, off, limit int64) (string, error) {
@@ -81,6 +81,17 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("delete failed: %s", err)
 		}
 	}()
+
+	key := "测试编码文件" + `{"name":"zhijian"}` + string('\u001F')
+	if err := s.Put(key, bytes.NewReader(nil)); err != nil {
+		t.Logf("PUT testEncodeFile failed: %s", err.Error())
+	} else {
+		if resp, err := s.List("", "测试编码文件", "", 1); err != nil || (len(resp) == 1 && resp[0].Key() != key) {
+			t.Logf("List testEncodeFile Failed %s", err)
+		}
+	}
+	_ = s.Delete(key)
+
 	k := "large"
 	defer s.Delete(k)
 

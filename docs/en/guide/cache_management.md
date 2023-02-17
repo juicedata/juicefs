@@ -39,7 +39,7 @@ There are three kinds of metadata which can be cached in kernel: **attribute**, 
 --dir-entry-cache value  dir entry cache TTL in seconds (default: 1)
 ```
 
-Attribute, entry and direntries are cached for 1 second by default, this speeds up lookup and getattr operations. When clients on multiple nodes are sharing the same file system, the metadata cached in kernel will only expire by TTL. So in edge cases, it's possible that metadata modifications (e.g., `chown`) on node A cannot be seen immediately on node B. Nevertheless, all nodes will eventually be able to see the changes made by A after cache expiration.
+Attribute, entry and directories are cached for 1 second by default, this speeds up lookup and getattr operations. When clients on multiple nodes are sharing the same file system, the metadata cached in kernel will only expire by TTL. So in edge cases, it's possible that metadata modifications (e.g., `chown`) on node A cannot be seen immediately on node B. Nevertheless, all nodes will eventually be able to see the changes made by A after cache expiration.
 
 ### In-memory client metadata cache
 

@@ -9,7 +9,7 @@ pagination_next: introduction/architecture
 
 JuiceFS separates "data" and "metadata" storage, files are split into chunks and stored in [object storage](../guide/how_to_set_up_object_storage.md#supported-object-storage) like Amazon S3, and the corresponding metadata can be stored in various [databases](../guide/how_to_set_up_metadata_engine.md) such as Redis, MySQL, TiKV, SQLite, etc., based on the scenarios and requirements.
 
-JuiceFS provides rich APIs for various forms of data management, analysis, archiving, and backup. It can seamlessly interface with big data, machine learning, artificial intelligence and other application platforms without modifying code, and provide massive, elastic and high-performance storage at low cost. With JuiceFS, you do not need to worry about availability, disaster recovery, monitoring and expansion, and thus maintainence work can be greatly reduced, perfect for DevOps.
+JuiceFS provides rich APIs for various forms of data management, analysis, archiving, and backup. It can seamlessly interface with big data, machine learning, artificial intelligence and other application platforms without modifying code, and provide massive, elastic and high-performance storage at low cost. With JuiceFS, you do not need to worry about availability, disaster recovery, monitoring and expansion, and thus maintenance work can be greatly reduced, perfect for DevOps.
 
 ## Features
 

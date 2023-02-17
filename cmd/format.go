@@ -157,7 +157,7 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 			},
 			&cli.BoolFlag{
 				Name:  "hash-prefix",
-				Usage: "give each object a hashed prefix",
+				Usage: "add a hash prefix to name of objects",
 			},
 			&cli.BoolFlag{
 				Name:  "force",

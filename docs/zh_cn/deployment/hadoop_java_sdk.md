@@ -532,6 +532,7 @@ CREATE TABLE IF NOT EXISTS person
 
 2. 使用以下示例代码验证：
 
+<!-- autocorrect: false -->
    ```java
    package demo;
 
@@ -555,6 +556,7 @@ CREATE TABLE IF NOT EXISTS person
        }
    }
    ```
+<!-- autocorrect: true -->
 
 ## 监控指标收集
 

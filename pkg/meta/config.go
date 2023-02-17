@@ -34,6 +34,7 @@ import (
 type Config struct {
 	Strict         bool // update ctime
 	Retries        int
+	MaxDeletes     int
 	CaseInsensi    bool
 	ReadOnly       bool
 	NoBGJob        bool // disable background jobs like clean-up, backup, etc.

@@ -172,6 +172,9 @@ A path to RSA private key (PEM)
 `--trash-days value`<br />
 number of days after which removed files will be permanently deleted (default: 1)
 
+`--hash-prefix`<br />
+add a hash prefix to name of objects (default: false)
+
 `--force`<br />
 overwrite existing format (default: false)
 
@@ -682,7 +685,7 @@ limit the number of objects that will be processed (default: -1)
 manager address
 
 `--worker value`<br />
-hosts (seperated by comma) to launch worker
+hosts (separated by comma) to launch worker
 
 `--bwlimit value`<br />
 limit bandwidth in Mbps (0 means unlimited) (default: 0)
