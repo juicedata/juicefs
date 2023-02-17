@@ -27,6 +27,12 @@ type openfiles struct {
 }
 
 func newOpenFiles(expire time.Duration, limit uint64, timeout time.Duration) *openfiles {
+	if limit == 0 {
+		limit = 1e4
+	}
+	if timeout == 0 {
+		timeout = 12 * time.Hour
+	}
 	of := &openfiles{
 		expire:  expire,
 		limit:   limit,
@@ -38,66 +44,45 @@ func newOpenFiles(expire time.Duration, limit uint64, timeout time.Duration) *op
 }
 
 func (o *openfiles) cleanup() {
-	limit := uint64(1e4)
-	timeout := time.Hour
-	if o.limit > 0 {
-		limit = o.limit
-	}
-	if o.timeout > 0 {
-		timeout = o.timeout
-	}
-
 	for {
-		expiredFiles := make(map[Ino]struct{})
+		unusedFiles := make(map[Ino]*openFile)
 		o.Lock()
 		var cnt, deleted int
 		for ino, of := range o.files {
 			cnt++
 			if of.refs <= 0 {
-				if time.Since(of.lastCheck) > timeout {
-					delete(o.files, ino)
-					deleted++
-					continue
-				}
-				expiredFiles[ino] = struct{}{}
+				unusedFiles[ino] = of
 			}
-			if deleted > 1e3 {
+			if cnt > 1e3 {
 				break
 			}
 		}
-		for len(expiredFiles) > 0 && uint64(len(o.files)) > limit && deleted <= 1e3 {
-			o.randomExpire(expiredFiles)
+
+		var candidateIno Ino
+		var candidateOf *openFile
+		for ino, of := range unusedFiles {
+			if time.Since(of.lastCheck) > o.timeout {
+				delete(o.files, ino)
+				deleted++
+				continue
+			}
+			if candidateIno == 0 {
+				candidateIno = ino
+				candidateOf = of
+				continue
+			}
+
+			if of.lastCheck.Before(candidateOf.lastCheck) {
+				candidateIno = ino
+				candidateOf = of
+			}
+			delete(o.files, candidateIno)
 			deleted++
+			candidateIno = 0
 		}
 
 		o.Unlock()
 		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-deleted*2)/(cnt+1)))
-	}
-}
-
-func (o *openfiles) randomExpire(expiredFiles map[Ino]struct{}) {
-	var random Ino
-	for ino := range expiredFiles {
-		random = ino
-		break
-	}
-	defer func() {
-		delete(o.files, random)
-		delete(expiredFiles, random)
-	}()
-
-	if len(expiredFiles) == 1 {
-		return
-	}
-
-	for ino := range expiredFiles {
-		if ino == random {
-			continue
-		}
-		if o.files[ino].lastCheck.Before(o.files[random].lastCheck) {
-			random = ino
-		}
-		return
 	}
 }
 

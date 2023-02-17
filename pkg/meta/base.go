@@ -157,7 +157,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		addr:         utils.RemovePassword(addr),
 		conf:         conf,
 		root:         RootInode,
-		of:           newOpenFiles(conf.OpenCache, conf.OpenCacheLimit, conf.OpenCacheTimeout),
+		of:           newOpenFiles(conf.OpenCache, conf.OpenCacheLimit, 12*time.Hour),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
 		maxDeleting:  make(chan struct{}, 100),
