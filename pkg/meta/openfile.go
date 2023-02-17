@@ -20,14 +20,24 @@ type openFile struct {
 
 type openfiles struct {
 	sync.Mutex
-	expire time.Duration
-	files  map[Ino]*openFile
+	expire  time.Duration
+	limit   uint64
+	timeout time.Duration
+	files   map[Ino]*openFile
 }
 
-func newOpenFiles(expire time.Duration) *openfiles {
+func newOpenFiles(expire time.Duration, limit uint64, timeout time.Duration) *openfiles {
+	if limit == 0 {
+		limit = 1e4
+	}
+	if timeout == 0 {
+		timeout = 12 * time.Hour
+	}
 	of := &openfiles{
-		expire: expire,
-		files:  make(map[Ino]*openFile),
+		expire:  expire,
+		limit:   limit,
+		timeout: timeout,
+		files:   make(map[Ino]*openFile),
 	}
 	go of.cleanup()
 	return of
@@ -35,21 +45,38 @@ func newOpenFiles(expire time.Duration) *openfiles {
 
 func (o *openfiles) cleanup() {
 	for {
+		var (
+			cnt, deleted int
+			candidateIno Ino
+			candidateOf  *openFile
+		)
 		o.Lock()
-		cutoff := time.Now().Add(-time.Hour).Add(time.Second * time.Duration(len(o.files)/1e4))
-		var cnt, expired int
 		for ino, of := range o.files {
-			if of.refs <= 0 && of.lastCheck.Before(cutoff) {
-				delete(o.files, ino)
-				expired++
-			}
 			cnt++
 			if cnt > 1e3 {
 				break
 			}
+			if of.refs <= 0 {
+				if time.Since(of.lastCheck) > o.timeout {
+					delete(o.files, ino)
+					deleted++
+					continue
+				}
+				if candidateIno == 0 {
+					candidateIno = ino
+					candidateOf = of
+					continue
+				}
+				if of.lastCheck.Before(candidateOf.lastCheck) {
+					candidateIno = ino
+				}
+				delete(o.files, candidateIno)
+				deleted++
+				candidateIno = 0
+			}
 		}
 		o.Unlock()
-		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-expired*2)/(cnt+1)))
+		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-deleted*2)/(cnt+1)))
 	}
 }
 
