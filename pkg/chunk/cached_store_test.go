@@ -95,7 +95,6 @@ var defaultConf = Config{
 	CacheDir:   filepath.Join(os.TempDir(), "diskCache"),
 	CacheSize:  1,
 	MaxUpload:  1,
-	MaxDeletes: 1,
 	MaxRetries: 10,
 	PutTimeout: time.Second,
 	GetTimeout: time.Second * 2,

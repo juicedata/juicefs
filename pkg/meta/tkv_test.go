@@ -25,7 +25,7 @@ import (
 
 func TestMemKVClient(t *testing.T) {
 	_ = os.Remove(settingPath)
-	m, err := newKVMeta("memkv", "jfs-unit-test", &Config{})
+	m, err := newKVMeta("memkv", "jfs-unit-test", &Config{MaxDeletes: 2})
 	if err != nil || m.Name() != "memkv" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -33,7 +33,7 @@ func TestMemKVClient(t *testing.T) {
 }
 
 func TestTiKVClient(t *testing.T) {
-	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs-unit-test", &Config{})
+	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs-unit-test", &Config{MaxDeletes: 2})
 	if err != nil || m.Name() != "tikv" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -41,7 +41,7 @@ func TestTiKVClient(t *testing.T) {
 }
 
 func TestBadgerClient(t *testing.T) {
-	m, err := newKVMeta("badger", "badger", &Config{})
+	m, err := newKVMeta("badger", "badger", &Config{MaxDeletes: 2})
 	if err != nil || m.Name() != "badger" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -49,7 +49,7 @@ func TestBadgerClient(t *testing.T) {
 }
 
 func TestEtcdClient(t *testing.T) {
-	m, err := newKVMeta("etcd", "localhost:2379", &Config{})
+	m, err := newKVMeta("etcd", "localhost:2379", &Config{MaxDeletes: 2})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
