@@ -350,12 +350,16 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	cfg := &meta.Config{
 		Retries:    c.Int("io-retries"),
 		Strict:     true,
+		MaxDeletes: c.Int("max-deletes"),
 		ReadOnly:   readOnly,
 		NoBGJob:    c.Bool("no-bgjob"),
 		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
 		Heartbeat:  duration(c.String("heartbeat")),
 		MountPoint: mp,
 		Subdir:     c.String("subdir"),
+	}
+	if cfg.MaxDeletes == 0 {
+		logger.Warnf("Deleting object will be disabled since max-deletes is 0")
 	}
 	if cfg.Heartbeat < time.Second {
 		logger.Warnf("heartbeat should not be less than 1 second")
@@ -382,7 +386,6 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		GetTimeout:    time.Second * time.Duration(c.Int("get-timeout")),
 		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
 		MaxUpload:     c.Int("max-uploads"),
-		MaxDeletes:    c.Int("max-deletes"),
 		MaxRetries:    c.Int("io-retries"),
 		Writeback:     c.Bool("writeback"),
 		Prefetch:      c.Int("prefetch"),

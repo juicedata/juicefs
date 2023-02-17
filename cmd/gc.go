@@ -73,17 +73,13 @@ $ juicefs gc redis://localhost --delete`,
 	}
 }
 
-type dSlice struct {
-	id     uint64
-	length uint32
-}
-
 func gc(ctx *cli.Context) error {
 	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{
-		Retries: 10,
-		Strict:  true,
+		Retries:    10,
+		Strict:     true,
+		MaxDeletes: ctx.Int("threads"),
 	})
 	format, err := m.Load(true)
 	if err != nil {
@@ -96,7 +92,6 @@ func gc(ctx *cli.Context) error {
 		GetTimeout: time.Second * 60,
 		PutTimeout: time.Second * 60,
 		MaxUpload:  20,
-		MaxDeletes: ctx.Int("threads"),
 		BufferSize: 300 << 20,
 		CacheDir:   "memory",
 	}
@@ -120,14 +115,14 @@ func gc(ctx *cli.Context) error {
 
 	var wg sync.WaitGroup
 	var delSpin *utils.Bar
-	var sliceChan chan *dSlice // pending delete slices
+	var sliceChan chan meta.Slice // pending delete slices
 
 	if delete || compact {
 		delSpin = progress.AddCountSpinner("Deleted pending")
-		sliceChan = make(chan *dSlice, 10240)
+		sliceChan = make(chan meta.Slice, 10240)
 		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
 			delSpin.Increment()
-			sliceChan <- &dSlice{args[0].(uint64), args[1].(uint32)}
+			sliceChan <- meta.Slice{Id: args[0].(uint64), Size: args[1].(uint32)}
 			return nil
 		})
 		for i := 0; i < threads; i++ {
@@ -135,8 +130,8 @@ func gc(ctx *cli.Context) error {
 			go func() {
 				defer wg.Done()
 				for s := range sliceChan {
-					if err := store.Remove(s.id, int(s.length)); err != nil {
-						logger.Warnf("remove %d_%d: %s", s.id, s.length, err)
+					if err := store.Remove(s.Id, int(s.Size)); err != nil {
+						logger.Warnf("remove %d_%d: %s", s.Id, s.Size, err)
 					}
 				}
 			}()

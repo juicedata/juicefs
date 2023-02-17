@@ -382,12 +382,13 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		}
 
 		metaConf := &meta.Config{
-			Retries:   jConf.IORetries,
-			Strict:    true,
-			ReadOnly:  jConf.ReadOnly,
-			NoBGJob:   jConf.NoBGJob,
-			OpenCache: time.Duration(jConf.OpenCache * 1e9),
-			Heartbeat: time.Second * time.Duration(jConf.Heartbeat),
+			Retries:    jConf.IORetries,
+			Strict:     true,
+			MaxDeletes: jConf.MaxDeletes,
+			ReadOnly:   jConf.ReadOnly,
+			NoBGJob:    jConf.NoBGJob,
+			OpenCache:  time.Duration(jConf.OpenCache * 1e9),
+			Heartbeat:  time.Second * time.Duration(jConf.Heartbeat),
 		}
 		m := meta.NewClient(jConf.MetaURL, metaConf)
 		format, err := m.Load(true)
@@ -453,7 +454,6 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			CacheChecksum:     jConf.CacheChecksum,
 			CacheScanInterval: time.Second * time.Duration(jConf.CacheScanInterval),
 			MaxUpload:         jConf.MaxUploads,
-			MaxDeletes:        jConf.MaxDeletes,
 			MaxRetries:        jConf.IORetries,
 			UploadLimit:       int64(jConf.UploadLimit) * 1e6 / 8,
 			DownloadLimit:     int64(jConf.DownloadLimit) * 1e6 / 8,

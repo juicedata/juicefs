@@ -37,7 +37,7 @@ import (
 )
 
 func TestRedisClient(t *testing.T) {
-	var conf = Config{}
+	var conf = Config{MaxDeletes: 2}
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", &conf)
 	if err != nil || m.Name() != "redis" {
 		t.Fatalf("create meta: %s", err)
@@ -48,7 +48,7 @@ func TestRedisClient(t *testing.T) {
 func TestKeyDB(t *testing.T) {
 	// 127.0.0.1:6378 enable flash, 127.0.0.1:6377 disable flash
 	for _, addr := range []string{"127.0.0.1:6378/10", "127.0.0.1:6377/10"} {
-		m, err := newRedisMeta("redis", addr, &Config{})
+		m, err := newRedisMeta("redis", addr, &Config{MaxDeletes: 2})
 		if err != nil || m.Name() != "redis" {
 			t.Fatalf("create meta: %s", err)
 		}
@@ -88,7 +88,7 @@ func TestKeyDB(t *testing.T) {
 }
 
 func TestRedisCluster(t *testing.T) {
-	var conf = Config{}
+	var conf = Config{MaxDeletes: 2}
 	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", &conf)
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
@@ -1032,10 +1032,10 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		t.Fatalf("list all slices: %s", st)
 	}
 
-	l.Lock()
-	deletes := len(deleted)
-	l.Unlock()
 	if trash {
+		l.Lock()
+		deletes := len(deleted)
+		l.Unlock()
 		if deletes > 10 {
 			t.Fatalf("deleted slices %d is greater than 10", deletes)
 		}
@@ -1043,10 +1043,11 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 			t.Fatalf("list delayed slices %d is less than 200", len(sliceMap[1]))
 		}
 		m.(engine).doCleanupDelayedSlices(time.Now().Unix() + 1)
-		l.Lock()
-		deletes = len(deleted)
-		l.Unlock()
 	}
+	time.Sleep(time.Second * 3) // wait for all slices deleted
+	l.Lock()
+	deletes := len(deleted)
+	l.Unlock()
 	if deletes < 200 {
 		t.Fatalf("deleted slices %d is less than 200", deletes)
 	}
