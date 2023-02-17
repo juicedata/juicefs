@@ -20,21 +20,16 @@ type openFile struct {
 
 type openfiles struct {
 	sync.Mutex
-	expire  time.Duration
-	limit   uint64
-	timeout time.Duration
-	files   map[Ino]*openFile
+	expire time.Duration
+	limit  uint64
+	files  map[Ino]*openFile
 }
 
-func newOpenFiles(expire time.Duration, limit uint64, timeout time.Duration) *openfiles {
-	if timeout == 0 {
-		timeout = 12 * time.Hour
-	}
+func newOpenFiles(expire time.Duration, limit uint64) *openfiles {
 	of := &openfiles{
-		expire:  expire,
-		limit:   limit,
-		timeout: timeout,
-		files:   make(map[Ino]*openFile),
+		expire: expire,
+		limit:  limit,
+		files:  make(map[Ino]*openFile),
 	}
 	go of.cleanup()
 	return of
@@ -57,7 +52,7 @@ func (o *openfiles) cleanup() {
 				break
 			}
 			if of.refs <= 0 {
-				if time.Since(of.lastCheck) > o.timeout {
+				if time.Since(of.lastCheck) > time.Hour*12 {
 					delete(o.files, ino)
 					deleted++
 					continue
