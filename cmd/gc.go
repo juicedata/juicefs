@@ -115,14 +115,14 @@ func gc(ctx *cli.Context) error {
 
 	var wg sync.WaitGroup
 	var delSpin *utils.Bar
-	var sliceChan chan meta.DSlice // pending delete slices
+	var sliceChan chan meta.Slice // pending delete slices
 
 	if delete || compact {
 		delSpin = progress.AddCountSpinner("Deleted pending")
-		sliceChan = make(chan meta.DSlice, 10240)
+		sliceChan = make(chan meta.Slice, 10240)
 		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
 			delSpin.Increment()
-			sliceChan <- meta.DSlice{Id: args[0].(uint64), Size: args[1].(uint32)}
+			sliceChan <- meta.Slice{Id: args[0].(uint64), Size: args[1].(uint32)}
 			return nil
 		})
 		for i := 0; i < threads; i++ {

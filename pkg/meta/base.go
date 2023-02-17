@@ -125,7 +125,7 @@ type baseMeta struct {
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
 	maxDeleting  chan struct{}
-	dslices      chan DSlice
+	dslices      chan Slice // slices to delete
 	symlinks     *sync.Map
 	msgCallbacks *msgCallbacks
 	reloadCb     []func(*Format)
@@ -162,7 +162,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
 		maxDeleting:  make(chan struct{}, 100),
-		dslices:      make(chan DSlice, conf.MaxDeletes*100),
+		dslices:      make(chan Slice, conf.MaxDeletes*10240),
 		symlinks:     &sync.Map{},
 		fsStat:       new(fsStat),
 		msgCallbacks: &msgCallbacks{
@@ -1338,7 +1338,7 @@ func (m *baseMeta) deleteSlice(id uint64, size uint32) {
 	if id == 0 || m.conf.MaxDeletes == 0 {
 		return
 	}
-	m.dslices <- DSlice{id, size}
+	m.dslices <- Slice{Id: id, Size: size}
 }
 
 func (m *baseMeta) toTrash(parent Ino) bool {
