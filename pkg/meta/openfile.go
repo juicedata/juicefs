@@ -45,7 +45,8 @@ func newOpenFiles(expire time.Duration, limit uint64, timeout time.Duration) *op
 
 func (o *openfiles) cleanup() {
 	for {
-		unusedFiles := make(map[Ino]*openFile)
+		var candidateIno Ino
+		var candidateOf *openFile
 		o.Lock()
 		var cnt, deleted int
 		for ino, of := range o.files {
@@ -59,26 +60,19 @@ func (o *openfiles) cleanup() {
 					deleted++
 					continue
 				}
-				unusedFiles[ino] = of
+				if candidateIno == 0 {
+					candidateIno = ino
+					candidateOf = of
+					continue
+				}
+				if of.lastCheck.Before(candidateOf.lastCheck) {
+					candidateIno = ino
+				}
+				delete(o.files, candidateIno)
+				deleted++
+				candidateIno = 0
 			}
 		}
-
-		var candidateIno Ino
-		var candidateOf *openFile
-		for ino, of := range unusedFiles {
-			if candidateIno == 0 {
-				candidateIno = ino
-				candidateOf = of
-				continue
-			}
-			if of.lastCheck.Before(candidateOf.lastCheck) {
-				candidateIno = ino
-			}
-			delete(o.files, candidateIno)
-			deleted++
-			candidateIno = 0
-		}
-
 		o.Unlock()
 		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-deleted*2)/(cnt+1)))
 	}
