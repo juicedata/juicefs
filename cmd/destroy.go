@@ -115,7 +115,7 @@ func destroy(ctx *cli.Context) error {
 		uri = "redis://" + uri
 	}
 	removePassword(uri)
-	m := meta.NewClient(uri, &meta.Config{Retries: 10, Strict: true})
+	m := meta.NewClient(uri, meta.DefaultConf())
 
 	format, err := m.Load(true)
 	if err != nil {

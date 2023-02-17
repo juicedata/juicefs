@@ -92,7 +92,8 @@ func dump(ctx *cli.Context) (err error) {
 			w = fp
 		}
 	}
-	metaConf := &meta.Config{Retries: 10, Strict: true, Subdir: ctx.String("subdir")}
+	metaConf := meta.DefaultConf()
+	metaConf.Subdir = ctx.String("subdir")
 	m := meta.NewClient(metaUri, metaConf)
 	if _, err := m.Load(true); err != nil {
 		return err

@@ -148,12 +148,6 @@ type baseMeta struct {
 }
 
 func newBaseMeta(addr string, conf *Config) *baseMeta {
-	if conf.Retries == 0 {
-		conf.Retries = 10
-	}
-	if conf.Heartbeat == 0 {
-		conf.Heartbeat = 12 * time.Second
-	}
 	return &baseMeta{
 		addr:         utils.RemovePassword(addr),
 		conf:         conf,

@@ -37,8 +37,7 @@ import (
 )
 
 func TestRedisClient(t *testing.T) {
-	var conf = Config{MaxDeletes: 2}
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", &conf)
+	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", DefaultConf())
 	if err != nil || m.Name() != "redis" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -48,7 +47,7 @@ func TestRedisClient(t *testing.T) {
 func TestKeyDB(t *testing.T) {
 	// 127.0.0.1:6378 enable flash, 127.0.0.1:6377 disable flash
 	for _, addr := range []string{"127.0.0.1:6378/10", "127.0.0.1:6377/10"} {
-		m, err := newRedisMeta("redis", addr, &Config{MaxDeletes: 2})
+		m, err := newRedisMeta("redis", addr, DefaultConf())
 		if err != nil || m.Name() != "redis" {
 			t.Fatalf("create meta: %s", err)
 		}
@@ -88,8 +87,7 @@ func TestKeyDB(t *testing.T) {
 }
 
 func TestRedisCluster(t *testing.T) {
-	var conf = Config{MaxDeletes: 2}
-	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", &conf)
+	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", DefaultConf())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}

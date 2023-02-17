@@ -74,7 +74,7 @@ func fsck(ctx *cli.Context) error {
 		logger.Fatalf("Please provide the path to repair with `--path` option")
 	}
 	removePassword(ctx.Args().Get(0))
-	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
+	m := meta.NewClient(ctx.Args().Get(0), nil)
 	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)

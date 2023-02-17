@@ -76,11 +76,9 @@ $ juicefs gc redis://localhost --delete`,
 func gc(ctx *cli.Context) error {
 	setup(ctx, 1)
 	removePassword(ctx.Args().Get(0))
-	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{
-		Retries:    10,
-		Strict:     true,
-		MaxDeletes: ctx.Int("threads"),
-	})
+	metaConf := meta.DefaultConf()
+	metaConf.MaxDeletes = ctx.Int("threads")
+	m := meta.NewClient(ctx.Args().Get(0), metaConf)
 	format, err := m.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)

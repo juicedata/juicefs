@@ -44,6 +44,24 @@ type Config struct {
 	Subdir      string
 }
 
+func DefaultConf() *Config {
+	return &Config{Strict: true, Retries: 10, MaxDeletes: 2, Heartbeat: 12 * time.Second}
+}
+
+func (c *Config) SelfCheck() {
+	if c.MaxDeletes == 0 {
+		logger.Warnf("Deleting object will be disabled since max-deletes is 0")
+	}
+	if c.Heartbeat < time.Second {
+		logger.Warnf("heartbeat should not be less than 1 second")
+		c.Heartbeat = time.Second
+	}
+	if c.Heartbeat > time.Minute*10 {
+		logger.Warnf("heartbeat shouldd not be greater than 10 minutes")
+		c.Heartbeat = time.Minute * 10
+	}
+}
+
 type Format struct {
 	Name             string
 	UUID             string

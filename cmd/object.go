@@ -411,13 +411,9 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 	if metaUrl == "" {
 		metaUrl = endpoint
 	}
-	metaConf := &meta.Config{
-		Retries:    10,
-		Strict:     true,
-		MaxDeletes: 10,
-		NoBGJob:    true,
-		Heartbeat:  time.Second * 10,
-	}
+	metaConf := meta.DefaultConf()
+	metaConf.MaxDeletes = 10
+	metaConf.NoBGJob = true
 	metaCli := meta.NewClient(metaUrl, metaConf)
 	format, err := metaCli.Load(true)
 	if err != nil {

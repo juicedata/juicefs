@@ -631,16 +631,16 @@ func benchmarkAll(b *testing.B, m Meta) {
 }
 
 func BenchmarkRedis(b *testing.B) {
-	m := NewClient(redisAddr, &Config{MaxDeletes: 2})
+	m := NewClient(redisAddr, nil)
 	benchmarkAll(b, m)
 }
 
 func BenchmarkSQL(b *testing.B) {
-	m := NewClient(sqlAddr, &Config{MaxDeletes: 2})
+	m := NewClient(sqlAddr, nil)
 	benchmarkAll(b, m)
 }
 
 func BenchmarkTKV(b *testing.B) {
-	m := NewClient(tkvAddr, &Config{MaxDeletes: 2})
+	m := NewClient(tkvAddr, nil)
 	benchmarkAll(b, m)
 }

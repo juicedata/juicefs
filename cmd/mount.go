@@ -347,29 +347,16 @@ func prepareMp(newCfg *vfs.Config, mp string) (ignore bool) {
 }
 
 func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
-	cfg := &meta.Config{
-		Retries:    c.Int("io-retries"),
-		Strict:     true,
-		MaxDeletes: c.Int("max-deletes"),
-		ReadOnly:   readOnly,
-		NoBGJob:    c.Bool("no-bgjob"),
-		OpenCache:  time.Duration(c.Float64("open-cache") * 1e9),
-		Heartbeat:  duration(c.String("heartbeat")),
-		MountPoint: mp,
-		Subdir:     c.String("subdir"),
-	}
-	if cfg.MaxDeletes == 0 {
-		logger.Warnf("Deleting object will be disabled since max-deletes is 0")
-	}
-	if cfg.Heartbeat < time.Second {
-		logger.Warnf("heartbeat should not be less than 1 second")
-		cfg.Heartbeat = time.Second
-	}
-	if cfg.Heartbeat > time.Minute*10 {
-		logger.Warnf("heartbeat shouldd not be greater than 10 minutes")
-		cfg.Heartbeat = time.Minute * 10
-	}
-	return cfg
+	conf := meta.DefaultConf()
+	conf.Retries = c.Int("io-retries")
+	conf.MaxDeletes = c.Int("max-deletes")
+	conf.ReadOnly = readOnly
+	conf.NoBGJob = c.Bool("no-bgjob")
+	conf.OpenCache = time.Duration(c.Float64("open-cache") * 1e9)
+	conf.Heartbeat = duration(c.String("heartbeat"))
+	conf.MountPoint = mp
+	conf.Subdir = c.String("subdir")
+	return conf
 }
 
 func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {

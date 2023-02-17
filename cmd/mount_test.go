@@ -47,7 +47,7 @@ func Test_exposeMetrics(t *testing.T) {
 	Convey("Test_exposeMetrics", t, func() {
 		Convey("Test_exposeMetrics", func() {
 			addr := "redis://127.0.0.1:6379/12"
-			client := meta.NewClient(addr, &meta.Config{})
+			client := meta.NewClient(addr, nil)
 			format := &meta.Format{
 				Name:      "test",
 				BlockSize: 4096,

@@ -143,7 +143,7 @@ func testFileSystem(t *testing.T, s object.ObjectStorage) {
 }
 
 func TestJFS(t *testing.T) {
-	m := meta.NewClient("memkv://", &meta.Config{})
+	m := meta.NewClient("memkv://", nil)
 	format := &meta.Format{
 		Name:      "test",
 		BlockSize: 4096,
@@ -151,7 +151,7 @@ func TestJFS(t *testing.T) {
 	}
 	_ = m.Init(format, true)
 	var conf = vfs.Config{
-		Meta: &meta.Config{MaxDeletes: 1},
+		Meta: meta.DefaultConf(),
 		Chunk: &chunk.Config{
 			BlockSize:  format.BlockSize << 10,
 			MaxUpload:  1,

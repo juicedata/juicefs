@@ -32,7 +32,7 @@ import (
 func TestUsageReport(t *testing.T) {
 	// invalid addr
 	reportUrl = "http://127.0.0.1/report-usage"
-	m := meta.NewClient("memkv://", &meta.Config{})
+	m := meta.NewClient("memkv://", nil)
 	go ReportUsage(m, "unittest")
 	// wait for it to report to unavailable address, it should not panic.
 	time.Sleep(time.Millisecond * 100)
