@@ -48,7 +48,7 @@ func (o *openfiles) cleanup() {
 		}
 		for ino, of := range o.files {
 			cnt++
-			if cnt > 1e3 {
+			if cnt > 1e3 || todel > 0 && deleted >= todel {
 				break
 			}
 			if of.refs <= 0 {
@@ -57,7 +57,7 @@ func (o *openfiles) cleanup() {
 					deleted++
 					continue
 				}
-				if todel == 0 || deleted >= todel {
+				if todel == 0 {
 					continue
 				}
 				if candidateIno == 0 {
