@@ -25,7 +25,7 @@ import (
 )
 
 func TestFdbClient(t *testing.T) {
-	m, err := newKVMeta("fdb", "/etc/foundationdb/fdb.cluster?prefix=test2", &Config{MaxDeletes: 2})
+	m, err := newKVMeta("fdb", "/etc/foundationdb/fdb.cluster?prefix=test2", DefaultConf())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}

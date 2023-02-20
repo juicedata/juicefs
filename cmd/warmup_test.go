@@ -34,7 +34,7 @@ func TestWarmup(t *testing.T) {
 	if err := os.WriteFile(fmt.Sprintf("%s/f1.txt", testMountPoint), []byte("test"), 0644); err != nil {
 		t.Fatalf("write file failed: %s", err)
 	}
-	m := meta.NewClient(testMeta, &meta.Config{Retries: 10, Strict: true})
+	m := meta.NewClient(testMeta, nil)
 	format, err := m.Load(true)
 	if err != nil {
 		t.Fatalf("load setting err: %s", err)

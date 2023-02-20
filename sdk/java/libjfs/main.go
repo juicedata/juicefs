@@ -381,15 +381,13 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			utils.SetLogLevel(logrus.WarnLevel)
 		}
 
-		metaConf := &meta.Config{
-			Retries:    jConf.IORetries,
-			Strict:     true,
-			MaxDeletes: jConf.MaxDeletes,
-			ReadOnly:   jConf.ReadOnly,
-			NoBGJob:    jConf.NoBGJob,
-			OpenCache:  time.Duration(jConf.OpenCache * 1e9),
-			Heartbeat:  time.Second * time.Duration(jConf.Heartbeat),
-		}
+		metaConf := meta.DefaultConf()
+		metaConf.Retries = jConf.IORetries
+		metaConf.MaxDeletes = jConf.MaxDeletes
+		metaConf.ReadOnly = jConf.ReadOnly
+		metaConf.NoBGJob = jConf.NoBGJob
+		metaConf.OpenCache = time.Duration(jConf.OpenCache * 1e9)
+		metaConf.Heartbeat = time.Second * time.Duration(jConf.Heartbeat)
 		m := meta.NewClient(jConf.MetaURL, metaConf)
 		format, err := m.Load(true)
 		if err != nil {

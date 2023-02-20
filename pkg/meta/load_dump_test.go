@@ -88,7 +88,7 @@ func GbkToUtf8(s []byte) ([]byte, error) {
 }
 
 func testLoad(t *testing.T, uri, fname string) Meta {
-	m := NewClient(uri, &Config{Retries: 10, Strict: true})
+	m := NewClient(uri, nil)
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)
 	}
@@ -161,7 +161,7 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 }
 
 func testLoadSub(t *testing.T, uri, fname string) {
-	m := NewClient(uri, &Config{Retries: 10, Strict: true})
+	m := NewClient(uri, nil)
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)
 	}
@@ -211,7 +211,9 @@ func testLoadDump(t *testing.T, name, addr string) {
 		m := testLoad(t, addr, sampleFile)
 		testDump(t, m, 1, sampleFile, "test.dump")
 		m.Shutdown()
-		m = NewClient(addr, &Config{Retries: 10, Strict: true, Subdir: "d1"})
+		conf := DefaultConf()
+		conf.Subdir = "d1"
+		m = NewClient(addr, conf)
 		_ = m.Chroot(Background, "d1")
 		testDump(t, m, 1, subSampleFile, "test_subdir.dump")
 		testDump(t, m, 0, sampleFile, "test.dump")

@@ -272,7 +272,7 @@ func TestFileSystem(t *testing.T) {
 func createTestFS(t *testing.T) *FileSystem {
 	checkAccessFile = time.Millisecond
 	rotateAccessLog = 500
-	m := meta.NewClient("memkv://", &meta.Config{})
+	m := meta.NewClient("memkv://", nil)
 	format := &meta.Format{
 		Name:      "test",
 		BlockSize: 4096,
@@ -280,7 +280,7 @@ func createTestFS(t *testing.T) *FileSystem {
 	}
 	_ = m.Init(format, true)
 	var conf = vfs.Config{
-		Meta: &meta.Config{MaxDeletes: 2},
+		Meta: meta.DefaultConf(),
 		Chunk: &chunk.Config{
 			BlockSize:  format.BlockSize << 10,
 			MaxUpload:  1,

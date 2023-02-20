@@ -73,7 +73,7 @@ func load(ctx *cli.Context) error {
 			r = fp
 		}
 	}
-	m := meta.NewClient(metaUri, &meta.Config{Retries: 10, Strict: true})
+	m := meta.NewClient(metaUri, nil)
 	if format, err := m.Load(false); err == nil {
 		return fmt.Errorf("Database %s is used by volume %s", utils.RemovePassword(metaUri), format.Name)
 	}

@@ -427,6 +427,11 @@ func NewClient(uri string, conf *Config) Meta {
 	if !ok {
 		logger.Fatalf("Invalid meta driver: %s", driver)
 	}
+	if conf == nil {
+		conf = DefaultConf()
+	} else {
+		conf.SelfCheck()
+	}
 	m, err := f(driver, uri[p+3:], conf)
 	if err != nil {
 		logger.Fatalf("Meta %s is not available: %s", utils.RemovePassword(uri), err)
