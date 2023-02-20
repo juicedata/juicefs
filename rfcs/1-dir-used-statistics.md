@@ -20,11 +20,11 @@ Redis engine stores the counters in hashes.
 
 ```go
 func (m *redisMeta) dirUsedSpaceKey() string {
-	return m.prefix + "dirUsedSpace"
+    return m.prefix + "dirUsedSpace"
 }
  
 func (m *redisMeta) dirUsedInodesKey() string {
-	return m.prefix + "dirUsedInodes"
+    return m.prefix + "dirUsedInodes"
 }
 ```
 
@@ -34,7 +34,7 @@ SQL engine stores the counters in a table.
 
 ```go
 type dirUsage struct {
-	Inode       Ino    `xorm:"pk"`
+    Inode       Ino    `xorm:"pk"`
     UsedSpace   uint64 `xorm:"notnull"`
     UsedInodes  uint64 `xorm:"notnull"`
 }
@@ -46,11 +46,11 @@ TKV engine stores each counter in one key.
 
 ```go
 func (m *kvMeta) dirUsedSpaceKey(inode Ino) []byte {
-	return m.fmtKey("US", inode)
+    return m.fmtKey("US", inode)
 }
 
 func (m *kvMeta) dirUsedInodesKey(inode Ino) []byte {
-	return m.fmtKey("UI", inode)
+    return m.fmtKey("UI", inode)
 }
 ```
 
@@ -87,18 +87,16 @@ Relevant IO operations should call `doIncreDirUsage` asynchronously.
 func (m *baseMeta) Mknod(ctx Context, parent Ino, ...) syscall.Errno {
     ...
     err := m.en.doMknod(ctx, m.checkRoot(parent), ...)
-    if err == 0 {
-        go m.en.doIncreDirUsage(ctx, parent, 1<<12, 1)
-    }
+    ...
+    go m.en.doIncreDirUsage(ctx, parent, 1<<12, 1)
     return err
 }
 
 func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
-	...
-	err := m.en.doUnlink(ctx, m.checkRoot(parent), name)
-    if err == 0 {
-        go m.en.doIncreDirUsage(ctx, parent, -align4K(attr.size), -1)
-    }
+    ...
+    err := m.en.doUnlink(ctx, m.checkRoot(parent), name)
+    ...
+    go m.en.doIncreDirUsage(ctx, parent, -align4K(attr.size), -1)
     return err
 }
 ```
@@ -121,16 +119,16 @@ Now we can fasly recursively calculate the space and inodes usage in a directory
 func (m *baseMeta) fastWalkDir(ctx Context, inode Ino, walkDir func(Context, Ino)) syscall.Errno {
     walkDir(ctx, inode)
     var entries []*Entry
-	st := m.en.doReaddir(ctx, inode, 0, &entries, -1) // disable plus
-	...
+    st := m.en.doReaddir(ctx, inode, 0, &entries, -1) // disable plus
+    ...
     for _, entry := range entries {
-		if ent.Attr.Typ != TypeDirectory {
-			continue
-		}
-		m.fastWalkDir(ctx, entry.Inode, walkFn)
+    	if ent.Attr.Typ != TypeDirectory {
+    		continue
+    	}
+    	m.fastWalkDir(ctx, entry.Inode, walkFn)
         ...
-	}
-	return 0
+    }
+    return 0
 }
 func (m *baseMeta) getDirUsage(ctx Context, root Ino) (space, inodes uint64, err syscall.Errno) {
     m.fastWalkDir(ctx, root, func(_ Context, ino Ino) {
