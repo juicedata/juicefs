@@ -6,7 +6,7 @@ Currently, we have several counters to globally count the used space and inodes,
 
 ## Proposal
 
-This document give a proposal to collect used space and inodes for each directory efficiently and almost immediately. The `efficiently` means this operation cannot affect the performance of normal IO operations like `mknod`, `write` .etc. And the `almost immediately` means this operation cannot be lazy or scheduled, we must update the used space and inodes actively, but there may be a little latency (between several seconds and 1 minute).
+This document give a proposal to efficiently and almost immediately collect used space and inodes for each directory. The "efficiently" means this operation cannot affect the performance of normal IO operations like `mknod`, `write` .etc. And the "almost immediately" means this operation cannot be lazy or scheduled, we must update the used space and inodes actively, but there may be a little latency (between several seconds and 1 minute).
 
 ## Implementation
 
