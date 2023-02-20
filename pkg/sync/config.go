@@ -18,6 +18,7 @@ package sync
 
 import (
 	"os"
+	"strings"
 
 	"github.com/urfave/cli/v2"
 )
@@ -54,11 +55,6 @@ func envList() []string {
 		"ACCESS_KEY",
 		"SECRET_KEY",
 		"SESSION_TOKEN",
-
-		// sync JFS to JFS, but neither has a mount point
-		"myfs",
-		"myfs1",
-		"myfs2",
 
 		"MINIO_ACCESS_KEY",
 		"MINIO_SECRET_KEY",
@@ -156,6 +152,13 @@ func NewConfigFromCli(c *cli.Context) *Config {
 
 	for _, key := range envList() {
 		if os.Getenv(key) != "" {
+			cfg.Env[key] = os.Getenv(key)
+		}
+	}
+	// pass all the variable that contains "JFS"
+	for _, ekv := range os.Environ() {
+		key := strings.Split(ekv, "=")[0]
+		if strings.Contains(key, "JFS") {
 			cfg.Env[key] = os.Getenv(key)
 		}
 	}
