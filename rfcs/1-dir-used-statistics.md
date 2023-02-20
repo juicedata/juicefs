@@ -123,7 +123,7 @@ func (m *baseMeta) fastWalkDir(ctx Context, inode Ino, walkDir func(Context, Ino
     ...
     for _, entry := range entries {
     	if ent.Attr.Typ != TypeDirectory {
-    		continue
+            continue
     	}
     	m.fastWalkDir(ctx, entry.Inode, walkFn)
         ...
