@@ -32,6 +32,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oliverisaac/shellescape"
+
 	"github.com/juicedata/juicefs/pkg/object"
 )
 
@@ -275,8 +277,8 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			for i, s := range printEnv {
 				argsBk[i+1] = s
 			}
-			logger.Debugf("launch worker command args: [ssh, %s]", strings.Join(argsBk, ", "))
-			cmd = exec.Command("ssh", args...)
+			logger.Debugf("launch worker command args: [ssh, %s]", strings.Join(shellescape.EscapeArgs(argsBk), ", "))
+			cmd = exec.Command("ssh", shellescape.EscapeArgs(args)...)
 			stderr, err := cmd.StderrPipe()
 			if err != nil {
 				logger.Errorf("redirect stderr: %s", err)
