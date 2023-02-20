@@ -42,6 +42,14 @@ var (
 	cacheDir   = "raw"
 )
 
+type cacheKey struct {
+	id   uint64
+	indx uint32
+	size uint32
+}
+
+func (k cacheKey) String() string { return fmt.Sprintf("%d_%d_%d", k.id, k.indx, k.size) }
+
 type cacheItem struct {
 	size  int32
 	atime uint32
@@ -59,13 +67,14 @@ type cacheStore struct {
 	mode         os.FileMode
 	capacity     int64
 	freeRatio    float32
+	hashPrefix   bool
 	scanInterval time.Duration
 	pending      chan pendingFile
 	pages        map[string]*Page
 	m            *cacheManager
 
 	used     int64
-	keys     map[string]cacheItem
+	keys     map[cacheKey]cacheItem
 	scanned  bool
 	full     bool
 	checksum string // checksum level
@@ -86,8 +95,9 @@ func newCacheStore(m *cacheManager, dir string, cacheSize int64, pendingPages in
 		capacity:     cacheSize,
 		freeRatio:    config.FreeSpace,
 		checksum:     config.CacheChecksum,
+		hashPrefix:   config.HashPrefix,
 		scanInterval: config.CacheScanInterval,
-		keys:         make(map[string]cacheItem),
+		keys:         make(map[cacheKey]cacheItem),
 		pending:      make(chan pendingFile, pendingPages),
 		pages:        make(map[string]*Page),
 		uploader:     uploader,
@@ -240,15 +250,55 @@ func (cache *cacheStore) createDir(dir string) {
 	}
 }
 
+func (cache *cacheStore) getCacheKey(key string) cacheKey {
+	p := strings.LastIndexByte(key, '/')
+	p++
+	var k cacheKey
+	l := len(key)
+	for p < l {
+		if key[p] == '_' {
+			p++
+			break
+		}
+		k.id *= 10
+		k.id += uint64(key[p] - '0')
+		p++
+	}
+	for p < l {
+		if key[p] == '_' {
+			p++
+			break
+		}
+		k.indx *= 10
+		k.indx += uint32(key[p] - '0')
+		p++
+	}
+	for p < l {
+		k.size *= 10
+		k.size += uint32(key[p] - '0')
+		p++
+	}
+	return k
+}
+
+func (cache *cacheStore) getPathFromKey(k cacheKey) string {
+	if cache.hashPrefix {
+		return fmt.Sprintf("chunks/%02X/%v/%v_%v_%v", k.id%256, k.id/1000/1000, k.id, k.indx, k.size)
+	} else {
+		return fmt.Sprintf("chunks/%v/%v/%v_%v_%v", k.id/1000/1000, k.id/1000, k.id, k.indx, k.size)
+	}
+}
+
 func (cache *cacheStore) remove(key string) {
 	cache.Lock()
 	delete(cache.pages, key)
 	path := cache.cachePath(key)
-	if it, ok := cache.keys[key]; ok {
+	k := cache.getCacheKey(key)
+	if it, ok := cache.keys[k]; ok {
 		if it.size > 0 {
 			cache.used -= int64(it.size + 4096)
 		}
-		delete(cache.keys, key)
+		delete(cache.keys, k)
 	} else if cache.scanned {
 		path = "" // not existed
 	}
@@ -272,22 +322,23 @@ func (cache *cacheStore) load(key string) (ReadCloser, error) {
 	if p, ok := cache.pages[key]; ok {
 		return NewPageReader(p), nil
 	}
-	if cache.scanned && cache.keys[key].atime == 0 {
+	k := cache.getCacheKey(key)
+	if cache.scanned && cache.keys[k].atime == 0 {
 		return nil, errors.New("not cached")
 	}
 	cache.Unlock()
 	f, err := openCacheFile(cache.cachePath(key), parseObjOrigSize(key), cache.checksum)
 	cache.Lock()
 	if err == nil {
-		if it, ok := cache.keys[key]; ok {
+		if it, ok := cache.keys[k]; ok {
 			// update atime
-			cache.keys[key] = cacheItem{it.size, uint32(time.Now().Unix())}
+			cache.keys[k] = cacheItem{it.size, uint32(time.Now().Unix())}
 		}
-	} else if it, ok := cache.keys[key]; ok {
+	} else if it, ok := cache.keys[k]; ok {
 		if it.size > 0 {
 			cache.used -= int64(it.size + 4096)
 		}
-		delete(cache.keys, key)
+		delete(cache.keys, k)
 	}
 	return f, err
 }
@@ -321,17 +372,18 @@ func (cache *cacheStore) flush() {
 }
 
 func (cache *cacheStore) add(key string, size int32, atime uint32) {
+	k := cache.getCacheKey(key)
 	cache.Lock()
 	defer cache.Unlock()
-	it, ok := cache.keys[key]
+	it, ok := cache.keys[k]
 	if ok && it.size > 0 {
 		cache.used -= int64(it.size + 4096)
 	}
 	if atime == 0 {
 		// update size of staging block
-		cache.keys[key] = cacheItem{size, it.atime}
+		cache.keys[k] = cacheItem{size, it.atime}
 	} else {
-		cache.keys[key] = cacheItem{size, atime}
+		cache.keys[k] = cacheItem{size, atime}
 	}
 	if size > 0 {
 		cache.used += int64(size + 4096)
@@ -394,28 +446,28 @@ func (cache *cacheStore) cleanup() {
 		}
 	}
 
-	var todel []string
+	var todel []cacheKey
 	var freed int64
 	var cnt int
-	var lastKey string
+	var lastK cacheKey
 	var lastValue cacheItem
 	var now = uint32(time.Now().Unix())
 	// for each two random keys, then compare the access time, evict the older one
-	for key, value := range cache.keys {
+	for k, value := range cache.keys {
 		if value.size < 0 {
 			continue // staging
 		}
 		if cnt == 0 || lastValue.atime > value.atime {
-			lastKey = key
+			lastK = k
 			lastValue = value
 		}
 		cnt++
 		if cnt > 1 {
-			delete(cache.keys, lastKey)
+			delete(cache.keys, lastK)
 			freed += int64(lastValue.size + 4096)
 			cache.used -= int64(lastValue.size + 4096)
-			todel = append(todel, lastKey)
-			logger.Debugf("remove %s from cache, age: %d", lastKey, now-lastValue.atime)
+			todel = append(todel, lastK)
+			logger.Debugf("remove %s from cache, age: %d", lastK, now-lastValue.atime)
 			cache.m.cacheEvicts.Add(1)
 			cnt = 0
 			if len(cache.keys) < num && cache.used < goal {
@@ -427,8 +479,8 @@ func (cache *cacheStore) cleanup() {
 		logger.Debugf("cleanup cache (%s): %d blocks (%d MB), freed %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, len(todel), freed>>20)
 	}
 	cache.Unlock()
-	for _, key := range todel {
-		_ = os.Remove(cache.cachePath(key))
+	for _, k := range todel {
+		_ = os.Remove(cache.cachePath(cache.getPathFromKey(k)))
 	}
 	cache.Lock()
 }
@@ -447,10 +499,10 @@ func (cache *cacheStore) uploadStaging() {
 		toFree = int64(float64(total)*float64(cache.freeRatio) - math.Min(float64(br), float64(fr)))
 	}
 	var cnt int
-	var lastKey string
+	var lastK cacheKey
 	var lastValue cacheItem
 	// for each two random keys, then compare the access time, upload the older one
-	for key, value := range cache.keys {
+	for k, value := range cache.keys {
 		if value.size > 0 {
 			continue // read cache
 		}
@@ -458,18 +510,19 @@ func (cache *cacheStore) uploadStaging() {
 		// pick the bigger one if they were accessed within the same minute
 		if cnt == 0 || lastValue.atime/60 > value.atime/60 ||
 			lastValue.atime/60 == value.atime/60 && lastValue.size > value.size { // both size are < 0
-			lastKey = key
+			lastK = k
 			lastValue = value
 		}
 		cnt++
 		if cnt > 1 {
 			cache.Unlock()
-			if !cache.uploader(lastKey, cache.stagePath(lastKey), true) {
+			key := cache.getPathFromKey(lastK)
+			if !cache.uploader(key, cache.stagePath(key), true) {
 				logger.Warnf("Upload list is too full")
 				cache.Lock()
 				return
 			}
-			logger.Debugf("upload %s, age: %d", lastKey, uint32(time.Now().Unix())-lastValue.atime)
+			logger.Debugf("upload %s, age: %d", key, uint32(time.Now().Unix())-lastValue.atime)
 			cache.Lock()
 			// the size in keys should be updated
 			toFree -= int64(-lastValue.size + 4096)
@@ -482,8 +535,9 @@ func (cache *cacheStore) uploadStaging() {
 	}
 	if cnt > 0 {
 		cache.Unlock()
-		if cache.uploader(lastKey, cache.stagePath(lastKey), true) {
-			logger.Debugf("upload %s, age: %d", lastKey, uint32(time.Now().Unix())-lastValue.atime)
+		key := cache.getPathFromKey(lastK)
+		if cache.uploader(key, cache.stagePath(key), true) {
+			logger.Debugf("upload %s, age: %d", key, uint32(time.Now().Unix())-lastValue.atime)
 		}
 		cache.Lock()
 	}
@@ -492,7 +546,7 @@ func (cache *cacheStore) uploadStaging() {
 func (cache *cacheStore) scanCached() {
 	cache.Lock()
 	cache.used = 0
-	cache.keys = make(map[string]cacheItem)
+	cache.keys = make(map[cacheKey]cacheItem)
 	cache.scanned = false
 	cache.Unlock()
 
