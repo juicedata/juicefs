@@ -328,6 +328,8 @@ func doSync(c *cli.Context) error {
 	// Windows support `\` and `/` as its separator, Unix only use `/`
 	srcURL := c.Args().Get(0)
 	dstURL := c.Args().Get(1)
+	removePassword(srcURL)
+	removePassword(dstURL)
 	if runtime.GOOS == "windows" {
 		if !strings.Contains(srcURL, "://") {
 			srcURL = strings.Replace(srcURL, "\\", "/", -1)
