@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -43,6 +44,8 @@ const (
 	sliceIdBatch  = 1000
 	minUpdateTime = time.Millisecond * 10
 	nlocks        = 1024
+
+	dirUsageBatchSize = 1000
 )
 
 type engine interface {
@@ -114,6 +117,13 @@ type cchunk struct {
 	slices int
 }
 
+// event to update dir usage
+type dirUsageEvent struct {
+	ino    Ino
+	space  int64
+	inodes int64
+}
+
 type baseMeta struct {
 	sync.Mutex
 	addr string
@@ -135,6 +145,8 @@ type baseMeta struct {
 	umounting    bool
 	sesMu        sync.Mutex
 
+	dirUsageEvents chan *dirUsageEvent
+
 	*fsStat
 
 	freeMu     sync.Mutex
@@ -152,16 +164,17 @@ type baseMeta struct {
 
 func newBaseMeta(addr string, conf *Config) *baseMeta {
 	return &baseMeta{
-		addr:         utils.RemovePassword(addr),
-		conf:         conf,
-		root:         RootInode,
-		of:           newOpenFiles(conf.OpenCache, conf.OpenCacheLimit),
-		removedFiles: make(map[Ino]bool),
-		compacting:   make(map[uint64]bool),
-		maxDeleting:  make(chan struct{}, 100),
-		dslices:      make(chan Slice, conf.MaxDeletes*10240),
-		symlinks:     &sync.Map{},
-		fsStat:       new(fsStat),
+		addr:           utils.RemovePassword(addr),
+		conf:           conf,
+		root:           RootInode,
+		of:             newOpenFiles(conf.OpenCache, conf.OpenCacheLimit),
+		removedFiles:   make(map[Ino]bool),
+		compacting:     make(map[uint64]bool),
+		maxDeleting:    make(chan struct{}, 100),
+		dslices:        make(chan Slice, conf.MaxDeletes*10240),
+		symlinks:       &sync.Map{},
+		fsStat:         new(fsStat),
+		dirUsageEvents: make(chan *dirUsageEvent, dirUsageBatchSize),
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
@@ -230,6 +243,48 @@ func (m *baseMeta) checkRoot(inode Ino) Ino {
 		return m.root
 	default:
 		return inode
+	}
+}
+
+func (m *baseMeta) increDirUsage(ctx Context, ino Ino, space int64, inodes int64) {
+	for i := 0; i < 50; i++ {
+		select {
+		case m.dirUsageEvents <- &dirUsageEvent{ino, space, inodes}:
+			return
+		default:
+			time.Sleep(time.Second * 1)
+		}
+	}
+	logger.Errorf("already tried 50 times, dirUsageEvents channel is full")
+}
+
+func (m *baseMeta) dirUsageBatch() {
+	for {
+		count := 0
+		records := make(map[Ino]*dirUsageEvent)
+		for count <= dirUsageBatchSize {
+			count++
+			e := <-m.dirUsageEvents
+			record, exist := records[e.ino]
+			if !exist {
+				records[e.ino] = e
+			} else {
+				record.space += e.space
+				record.inodes += e.inodes
+			}
+			if len(m.dirUsageEvents) == 0 {
+				break
+			}
+		}
+		for _, record := range records {
+			r := record
+			go func() {
+				err := m.en.doIncreDirUsage(WrapContext(context.TODO()), r.ino, r.space, r.inodes)
+				if err != nil {
+					logger.Errorf("update dir usage failed: %v", err)
+				}
+			}()
+		}
 	}
 }
 
@@ -320,6 +375,7 @@ func (m *baseMeta) NewSession() error {
 		go m.cleanupDeletedFiles()
 		go m.cleanupSlices()
 		go m.cleanupTrash()
+		go m.dirUsageBatch()
 	}
 	return nil
 }
