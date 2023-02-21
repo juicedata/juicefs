@@ -48,7 +48,10 @@ func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		return nil, fmt.Errorf("Invalid endpoint %s: %s", endpoint, err)
 	}
 	ssl := strings.ToLower(uri.Scheme) == "https"
-	region := os.Getenv("MINIO_REGION")
+	region := uri.Query().Get("region")
+	if region == "" {
+		region = os.Getenv("MINIO_REGION")
+	}
 	if region == "" {
 		region = awsDefaultRegion
 	}
