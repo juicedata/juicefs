@@ -311,7 +311,7 @@ func test(store object.ObjectStorage) error {
 
 func format(c *cli.Context) error {
 	setup(c, 2)
-	utils.RemoveMetaPwdFromTitle(c.Args().Get(0))
+	utils.RemoveMetaPwd(c.Args().Get(0))
 	m := meta.NewClient(c.Args().Get(0), nil)
 	name := c.Args().Get(1)
 	validName := regexp.MustCompile(`^[a-z0-9][a-z0-9\-]{1,61}[a-z0-9]$`)

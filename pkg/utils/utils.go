@@ -121,11 +121,11 @@ func removePwdFromTitle(uri, defaultSchema string) {
 	gspt.SetProcTitle(strings.Join(os.Args, " "))
 }
 
-func RemoveObjPwdFromTitle(uri string) {
+func RemoveObjPwd(uri string) {
 	removePwdFromTitle(uri, "file")
 }
 
-func RemoveMetaPwdFromTitle(uri string) {
+func RemoveMetaPwd(uri string) {
 	removePwdFromTitle(uri, "redis")
 }
 

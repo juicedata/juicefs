@@ -52,7 +52,7 @@ func load(ctx *cli.Context) error {
 	setup(ctx, 1)
 	metaUri := ctx.Args().Get(0)
 	src := ctx.Args().Get(1)
-	utils.RemoveMetaPwdFromTitle(metaUri)
+	utils.RemoveMetaPwd(metaUri)
 	var r io.ReadCloser
 	if ctx.Args().Len() == 1 {
 		r = os.Stdin

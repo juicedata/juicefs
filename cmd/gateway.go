@@ -185,7 +185,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 }
 
 func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.FileSystem) {
-	utils.RemoveMetaPwdFromTitle(metaUrl)
+	utils.RemoveMetaPwd(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
 	format, err := metaCli.Load(true)

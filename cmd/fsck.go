@@ -73,7 +73,7 @@ func fsck(ctx *cli.Context) error {
 	if ctx.Bool("repair") && ctx.String("path") == "" {
 		logger.Fatalf("Please provide the path to repair with `--path` option")
 	}
-	utils.RemoveMetaPwdFromTitle(ctx.Args().Get(0))
+	utils.RemoveMetaPwd(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), nil)
 	format, err := m.Load(true)
 	if err != nil {
