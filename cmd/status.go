@@ -89,7 +89,7 @@ func printJson(v interface{}) {
 
 func status(ctx *cli.Context) error {
 	setup(ctx, 1)
-	removePassword(ctx.Args().Get(0))
+	utils.RemoveMetaPwdFromTitle(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), nil)
 	format, err := m.Load(true)
 	if err != nil {

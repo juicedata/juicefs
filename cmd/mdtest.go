@@ -244,7 +244,7 @@ func mdtest(c *cli.Context) error {
 	setup(c, 2)
 	metaUrl := c.Args().Get(0)
 	rootDir := c.Args().Get(1)
-	removePassword(metaUrl)
+	utils.RemoveMetaPwdFromTitle(metaUrl)
 	jfs := initForMdtest(c, "mdtest", metaUrl)
 	runTest(jfs, rootDir, c.Int("threads"), c.Int("dirs"), c.Int("depth"), c.Int("files"), c.Int("write"))
 	return jfs.Meta().CloseSession()

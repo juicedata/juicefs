@@ -40,6 +40,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	osync "github.com/juicedata/juicefs/pkg/sync"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
 )
@@ -310,7 +311,7 @@ func test(store object.ObjectStorage) error {
 
 func format(c *cli.Context) error {
 	setup(c, 2)
-	removePassword(c.Args().Get(0))
+	utils.RemoveMetaPwdFromTitle(c.Args().Get(0))
 	m := meta.NewClient(c.Args().Get(0), nil)
 	name := c.Args().Get(1)
 	validName := regexp.MustCompile(`^[a-z0-9][a-z0-9\-]{1,61}[a-z0-9]$`)
