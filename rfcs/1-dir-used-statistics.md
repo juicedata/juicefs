@@ -45,12 +45,8 @@ type dirUsage struct {
 TKV engine stores each counter in one key.
 
 ```go
-func (m *kvMeta) dirUsedSpaceKey(inode Ino) []byte {
-    return m.fmtKey("US", inode)
-}
-
-func (m *kvMeta) dirUsedInodesKey(inode Ino) []byte {
-    return m.fmtKey("UI", inode)
+func (m *kvMeta) dirUsageKey(inode Ino) []byte {
+    return m.fmtKey("U", inode)
 }
 ```
 
