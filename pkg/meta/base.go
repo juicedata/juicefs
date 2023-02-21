@@ -824,7 +824,11 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if m.checkQuota(4<<10, 1) {
 		return syscall.ENOSPC
 	}
-	return m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)
+	err := m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)
+	if err == 0 {
+		go m.increDirUsage(ctx, parent, align4K(0), 1)
+	}
+	return err
 }
 
 func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -867,7 +871,11 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	defer m.timeit(time.Now())
 	parent = m.checkRoot(parent)
 	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
-	return m.en.doLink(ctx, inode, parent, name, attr)
+	err := m.en.doLink(ctx, inode, parent, name, attr)
+	if err == 0 {
+		go m.increDirUsage(ctx, parent, align4K(attr.Length), 1)
+	}
+	return err
 }
 
 func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
@@ -897,7 +905,20 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	}
 
 	defer m.timeit(time.Now())
-	return m.en.doUnlink(ctx, m.checkRoot(parent), name)
+	var ino Ino
+	var attr Attr
+	if err := m.en.doLookup(ctx, m.checkRoot(parent), name, &ino, &attr); err != 0 {
+		return err
+	}
+	err := m.en.doUnlink(ctx, m.checkRoot(parent), name)
+	if err == 0 {
+		size := uint64(0)
+		if attr.Typ == TypeFile {
+			size = attr.Length
+		}
+		go m.increDirUsage(ctx, parent, -align4K(size), -1)
+	}
+	return err
 }
 
 func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
@@ -915,7 +936,11 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	}
 
 	defer m.timeit(time.Now())
-	return m.en.doRmdir(ctx, m.checkRoot(parent), name)
+	err := m.en.doRmdir(ctx, m.checkRoot(parent), name)
+	if err == 0 {
+		go m.increDirUsage(ctx, parent, -align4K(0), -1)
+	}
+	return err
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -940,7 +965,16 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 
 	defer m.timeit(time.Now())
-	return m.en.doRename(ctx, m.checkRoot(parentSrc), nameSrc, m.checkRoot(parentDst), nameDst, flags, inode, attr)
+	err := m.en.doRename(ctx, m.checkRoot(parentSrc), nameSrc, m.checkRoot(parentDst), nameDst, flags, inode, attr)
+	if err == 0 {
+		size := uint64(0)
+		if attr.Typ == TypeFile {
+			size = attr.Length
+		}
+		go m.increDirUsage(ctx, parentSrc, -align4K(size), -1)
+		go m.increDirUsage(ctx, parentDst, align4K(size), 1)
+	}
+	return err
 }
 
 func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
