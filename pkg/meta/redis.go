@@ -528,6 +528,14 @@ func (m *redisMeta) usedSpaceKey() string {
 	return m.prefix + usedSpace
 }
 
+func (m *redisMeta) dirUsedSpaceKey() string {
+	return m.prefix + "dirUsedSpace"
+}
+
+func (m *redisMeta) dirUsedInodesKey() string {
+	return m.prefix + "dirUsedInodes"
+}
+
 func (m *redisMeta) totalInodesKey() string {
 	return m.prefix + totalInodes
 }

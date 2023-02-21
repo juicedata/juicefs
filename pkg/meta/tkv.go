@@ -181,6 +181,7 @@ All keys:
   SHssssssss         session heartbeat // for legacy client
   SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
+  Uiiiiiiii			 space and inodes usage in directory
 */
 
 func (m *kvMeta) inodeKey(inode Ino) []byte {
@@ -229,6 +230,10 @@ func (m *kvMeta) sessionKey(sid uint64) []byte {
 
 func (m *kvMeta) legacySessionKey(sid uint64) []byte {
 	return m.fmtKey("SH", sid)
+}
+
+func (m *kvMeta) dirUsageKey(inode Ino) []byte {
+	return m.fmtKey("U", inode)
 }
 
 func (m *kvMeta) parseSid(key string) uint64 {
@@ -307,6 +312,18 @@ func (m *kvMeta) packEntry(_type uint8, inode Ino) []byte {
 func (m *kvMeta) parseEntry(buf []byte) (uint8, Ino) {
 	b := utils.FromBuffer(buf)
 	return b.Get8(), Ino(b.Get64())
+}
+
+func (m *kvMeta) packDirUsage(usedSpace, usedInodes uint64) []byte {
+	b := utils.NewBuffer(16)
+	b.Put64(usedSpace)
+	b.Put64(usedInodes)
+	return b.Bytes()
+}
+
+func (m *kvMeta) parseDirUsage(buf []byte) (uint64, uint64) {
+	b := utils.FromBuffer(buf)
+	return b.Get64(), b.Get64()
 }
 
 func (m *kvMeta) get(key []byte) ([]byte, error) {

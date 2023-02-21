@@ -159,6 +159,12 @@ type delfile struct {
 	Expire int64  `xorm:"notnull"`
 }
 
+type dirUsage struct {
+	Inode      Ino    `xorm:"pk notnull"`
+	UsedSpace  uint64 `xorm:"notnull"`
+	UsedInodes uint64 `xorm:"notnull"`
+}
+
 type dbMeta struct {
 	*baseMeta
 	db   *xorm.Engine
