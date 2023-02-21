@@ -321,7 +321,7 @@ func (m *kvMeta) packDirUsage(usedSpace, usedInodes uint64) []byte {
 	return b.Bytes()
 }
 
-func (m *kvMeta) parseDirUsage(buf []byte) (uint64, uint64) {
+func (m *kvMeta) parseDirUsage(buf []byte) (space uint64, inodes uint64) {
 	b := utils.FromBuffer(buf)
 	return b.Get64(), b.Get64()
 }
@@ -1932,6 +1932,41 @@ func (m *kvMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 		ps[m.decodeInode([]byte(k[10:]))] = int(parseCounter(v))
 	}
 	return ps
+}
+
+func (m *kvMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) error {
+	if space == 0 && inodes == 0 {
+		return nil
+	}
+	return m.txn(func(tx *kvTxn) error {
+		key := m.dirUsageKey(ino)
+		rawUsage := tx.get(key)
+		var usedSpace, usedInodes int64
+		if rawUsage != nil {
+			us, ui := m.parseDirUsage(rawUsage)
+			usedSpace, usedInodes = int64(us), int64(ui)
+		}
+		usedSpace += space
+		usedInodes += inodes
+		if usedSpace < 0 || usedInodes < 0 {
+			return fmt.Errorf("dir usage of inode %d is invalid: space %d, inodes %d", ino, usedSpace, usedInodes)
+		}
+		tx.set(key, m.packDirUsage(uint64(usedSpace), uint64(usedInodes)))
+		return nil
+	})
+}
+
+func (m *kvMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	rawUsage, err := m.get(m.dirUsageKey(ino))
+	if err != nil {
+		return
+	}
+	if rawUsage == nil {
+		err = syscall.ENOENT
+		return
+	}
+	space, inodes = m.parseDirUsage(rawUsage)
+	return
 }
 
 func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {

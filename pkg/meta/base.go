@@ -80,8 +80,11 @@ type engine interface {
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
-	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
+
+	doGetParents(ctx Context, inode Ino) map[Ino]int
+	doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) error
+	doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error)
 
 	scanTrashSlices(Context, trashSliceScan) error
 	scanPendingSlices(Context, pendingSliceScan) error

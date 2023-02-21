@@ -2223,6 +2223,31 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
+func (m *redisMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) error {
+	if space != 0 {
+		err := m.rdb.HIncrBy(ctx, m.dirUsedSpaceKey(), strconv.FormatUint(uint64(ino), 16), space).Err()
+		if err != nil {
+			return err
+		}
+	}
+	if inodes != 0 {
+		err := m.rdb.HIncrBy(ctx, m.dirUsedInodesKey(), strconv.FormatUint(uint64(ino), 16), inodes).Err()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *redisMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	space, err = m.rdb.HGet(ctx, m.dirUsedSpaceKey(), strconv.FormatUint(uint64(ino), 16)).Uint64()
+	if err != nil {
+		return
+	}
+	inodes, err = m.rdb.HGet(ctx, m.dirUsedInodesKey(), strconv.FormatUint(uint64(ino), 16)).Uint64()
+	return
+}
+
 // For now only deleted files
 func (m *redisMeta) cleanupLegacies() {
 	for {

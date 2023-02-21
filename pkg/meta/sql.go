@@ -160,9 +160,9 @@ type delfile struct {
 }
 
 type dirUsage struct {
-	Inode      Ino    `xorm:"pk notnull"`
-	UsedSpace  uint64 `xorm:"notnull"`
-	UsedInodes uint64 `xorm:"notnull"`
+	Inode      Ino   `xorm:"pk notnull"`
+	UsedSpace  int64 `xorm:"notnull"`
+	UsedInodes int64 `xorm:"notnull"`
 }
 
 type dbMeta struct {
@@ -281,6 +281,9 @@ func (m *dbMeta) Init(format *Format, force bool) error {
 	}
 	if err := m.syncTable(new(flock), new(plock)); err != nil {
 		return fmt.Errorf("create table flock, plock: %s", err)
+	}
+	if err := m.syncTable(new(dirUsage)); err != nil {
+		return fmt.Errorf("create table dirUsage: %s", err)
 	}
 
 	var s = setting{Name: "format"}
@@ -2235,6 +2238,44 @@ func (m *dbMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 		ps[row.Parent]++
 	}
 	return ps
+}
+
+func (m *dbMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) error {
+	if space == 0 && inodes == 0 {
+		return nil
+	}
+	return m.txn(func(s *xorm.Session) error {
+		dirUsage := dirUsage{Inode: ino}
+		exist, err := s.ForUpdate().Get(&dirUsage)
+		if err != nil {
+			return err
+		}
+		dirUsage.UsedSpace += space
+		dirUsage.UsedInodes += inodes
+		if exist {
+			_, err := s.AllCols().Update(&dirUsage)
+			return err
+		}
+		_, err = s.Insert(&dirUsage)
+		return err
+	})
+}
+
+func (m *dbMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	dirUsage := dirUsage{Inode: ino}
+	if err = m.roTxn(func(s *xorm.Session) error {
+		_, err := s.Get(&dirUsage)
+		return err
+	}); err != nil {
+		return
+	}
+	if dirUsage.UsedSpace < 0 || dirUsage.UsedInodes < 0 {
+		err = fmt.Errorf("dir usage of inode %d is invalid: space %d, inodes %d", ino, dirUsage.UsedSpace, dirUsage.UsedInodes)
+		return
+	}
+	space = uint64(dirUsage.UsedSpace)
+	inodes = uint64(dirUsage.UsedInodes)
+	return
 }
 
 func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
