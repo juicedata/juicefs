@@ -246,6 +246,25 @@ func (m *baseMeta) checkRoot(inode Ino) Ino {
 	}
 }
 
+func (m *baseMeta) countDirUsage(ctx Context, ino Ino) (space, inodes uint64, err syscall.Errno) {
+	var entries []*Entry
+	if err = m.en.doReaddir(ctx, ino, 1, &entries, -1); err != 0 {
+		return
+	}
+	for _, e := range entries {
+		if string(e.Name) == "." || string(e.Name) == ".." {
+			continue
+		}
+		inodes += 1
+		var newSpace uint64
+		if e.Attr.Typ == TypeFile {
+			newSpace = e.Attr.Length
+		}
+		space += uint64(align4K(newSpace))
+	}
+	return
+}
+
 func (m *baseMeta) increDirUsage(ctx Context, ino Ino, space int64, inodes int64) {
 	for i := 0; i < 50; i++ {
 		select {

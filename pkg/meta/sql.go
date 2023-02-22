@@ -2278,7 +2278,12 @@ func (m *dbMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64
 			return nil
 		}
 
-		_, err = s.Insert(&dirUsage{Inode: ino, UsedSpace: space, UsedInodes: inodes})
+		totalSpace, totalInodes, countErr := m.countDirUsage(ctx, ino)
+		if countErr != 0 {
+			return countErr
+		}
+
+		_, err = s.Insert(&dirUsage{Inode: ino, UsedSpace: int64(totalSpace), UsedInodes: int64(totalInodes)})
 		if err == nil || !strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return err
 		}
@@ -2296,7 +2301,21 @@ func (m *dbMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err 
 		return
 	}
 	if dirUsage.UsedSpace < 0 || dirUsage.UsedInodes < 0 {
-		err = fmt.Errorf("dir usage of inode %d is invalid: space %d, inodes %d", ino, dirUsage.UsedSpace, dirUsage.UsedInodes)
+		logger.Warnf(
+			"dir usage of inode %d is invalid: space %d, inodes %d, try to fix",
+			ino, dirUsage.UsedSpace, dirUsage.UsedInodes,
+		)
+		var countErr syscall.Errno
+		space, inodes, countErr = m.countDirUsage(ctx, ino)
+		if countErr != 0 {
+			err = errors.Wrap(countErr, "count dir usage")
+			return
+		}
+		dirUsage.UsedSpace, dirUsage.UsedInodes = int64(space), int64(inodes)
+		err = m.txn(func(s *xorm.Session) error {
+			_, err := s.Where("inode = ?", ino).AllCols().Update(&dirUsage)
+			return err
+		})
 		return
 	}
 	space = uint64(dirUsage.UsedSpace)
