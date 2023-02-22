@@ -881,6 +881,9 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	defer m.timeit(time.Now())
 	parent = m.checkRoot(parent)
 	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
+	if attr == nil {
+		attr = &Attr{}
+	}
 	err := m.en.doLink(ctx, inode, parent, name, attr)
 	if err == 0 {
 		go m.increDirUsage(ctx, parent, align4K(attr.Length), 1)
@@ -975,6 +978,9 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 
 	defer m.timeit(time.Now())
+	if attr == nil {
+		attr = &Attr{}
+	}
 	err := m.en.doRename(ctx, m.checkRoot(parentSrc), nameSrc, m.checkRoot(parentDst), nameDst, flags, inode, attr)
 	if err == 0 {
 		size := uint64(0)
