@@ -122,30 +122,11 @@ func removePwdFromTitle(uri, defaultSchema string) {
 }
 
 func RemoveObjPwd(uri string) {
-	if !strings.Contains(uri, "://") {
-		if IsFilePath(uri) {
-			removePwdFromTitle(uri, "file")
-		} else {
-			removePwdFromTitle(uri, "sftp")
-		}
-		return
-	}
-	removePwdFromTitle(uri, "")
+	removePwdFromTitle(uri, "file")
 }
 
 func RemoveMetaPwd(uri string) {
 	removePwdFromTitle(uri, "redis")
-}
-
-// Check if uri is local file path
-func IsFilePath(uri string) bool {
-	// check drive pattern when running on Windows
-	if runtime.GOOS == "windows" &&
-		len(uri) > 1 && (('a' <= uri[0] && uri[0] <= 'z') ||
-		('A' <= uri[0] && uri[0] <= 'Z')) && uri[1] == ':' {
-		return true
-	}
-	return !strings.Contains(uri, ":")
 }
 
 func GuessMimeType(key string) string {
