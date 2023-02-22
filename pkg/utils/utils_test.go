@@ -85,3 +85,32 @@ func TestTimeout(t *testing.T) {
 		t.Fatalf("slow function should be timeout: %s", err)
 	}
 }
+
+func TestRemovePassword(t *testing.T) {
+	testCase := []struct {
+		uri      string
+		expected string
+	}{
+		{"redis://:password@localhost:6379/0",
+			"redis://:****@localhost:6379/0",
+		},
+		{":password@localhost:6379/0",
+			":****@localhost:6379/0",
+		},
+		{"oss://ak:sk@zhijian-test2.oss-cn-hangzhou.aliyuncs.com",
+			"oss://ak:****@zhijian-test2.oss-cn-hangzhou.aliyuncs.com",
+		},
+		{"/tmp/file",
+			"/tmp/file",
+		},
+		{"file:///tmp/file",
+			"file:///tmp/file",
+		},
+		{"sftp:///tmp/file",
+			"sftp:///tmp/file",
+		},
+	}
+	for _, tc := range testCase {
+		assertEqual(t, RemovePassword(tc.uri), tc.expected)
+	}
+}

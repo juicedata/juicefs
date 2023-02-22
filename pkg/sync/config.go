@@ -17,6 +17,9 @@
 package sync
 
 import (
+	"os"
+	"strings"
+
 	"github.com/urfave/cli/v2"
 )
 
@@ -44,6 +47,72 @@ type Config struct {
 	Quiet       bool
 	CheckAll    bool
 	CheckNew    bool
+	Env         map[string]string
+}
+
+func envList() []string {
+	return []string{
+		"ACCESS_KEY",
+		"SECRET_KEY",
+		"SESSION_TOKEN",
+
+		"MINIO_ACCESS_KEY",
+		"MINIO_SECRET_KEY",
+		"MINIO_REGION",
+
+		"META_PASSWORD",
+		"REDIS_PASSWORD",
+		"SENTINEL_PASSWORD",
+		"SENTINEL_PASSWORD_FOR_OBJ",
+
+		"AZURE_STORAGE_CONNECTION_STRING",
+
+		"BDCLOUD_DEFAULT_REGION",
+		"BDCLOUD_ACCESS_KEY",
+		"BDCLOUD_SECRET_KEY",
+
+		"COS_SECRETID",
+		"COS_SECRETKEY",
+
+		"EOS_ACCESS_KEY",
+		"EOS_SECRET_KEY",
+		"EOS_TOKEN",
+
+		"GOOGLE_CLOUD_PROJECT",
+
+		"HADOOP_USER_NAME",
+		"HADOOP_SUPER_USER",
+		"HADOOP_SUPER_GROUP",
+		"KRB5_CONFIG",
+		"KRB5CCNAME",
+
+		"AWS_REGION",
+		"AWS_DEFAULT_REGION",
+
+		"HWCLOUD_DEFAULT_REGION",
+		"HWCLOUD_ACCESS_KEY",
+		"HWCLOUD_SECRET_KEY",
+
+		"ALICLOUD_REGION_ID",
+		"ALICLOUD_ACCESS_KEY_ID",
+		"ALICLOUD_ACCESS_KEY_SECRET",
+		"SECURITY_TOKEN",
+
+		"QINIU_DOMAIN",
+
+		"SCW_ACCESS_KEY",
+		"SCW_SECRET_KEY",
+
+		"SSH_PRIVATE_KEY_PATH",
+		"SSH_AUTH_SOCK",
+
+		"JFS_RSA_PASSPHRASE",
+		"PYROSCOPE_AUTH_TOKEN",
+		"DISPLAY_PROGRESSBAR",
+		"CGOFUSE_TRACE",
+		"JUICEFS_DEBUG",
+		"JUICEFS_LOGLEVEL",
+	}
 }
 
 func NewConfigFromCli(c *cli.Context) *Config {
@@ -74,10 +143,25 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Quiet:       c.Bool("quiet"),
 		CheckAll:    c.Bool("check-all"),
 		CheckNew:    c.Bool("check-new"),
+		Env:         make(map[string]string),
 	}
 	if cfg.Threads <= 0 {
 		logger.Warnf("threads should be larger than 0, reset it to 1")
 		cfg.Threads = 1
 	}
+
+	for _, key := range envList() {
+		if os.Getenv(key) != "" {
+			cfg.Env[key] = os.Getenv(key)
+		}
+	}
+	// pass all the variable that contains "JFS"
+	for _, ekv := range os.Environ() {
+		key := strings.Split(ekv, "=")[0]
+		if strings.Contains(key, "JFS") {
+			cfg.Env[key] = os.Getenv(key)
+		}
+	}
+
 	return cfg
 }

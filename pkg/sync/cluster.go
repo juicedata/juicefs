@@ -32,6 +32,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oliverisaac/shellescape"
+
 	"github.com/juicedata/juicefs/pkg/object"
 )
 
@@ -244,7 +246,22 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 				return
 			}
 			// launch itself
-			var args = []string{host, rpath}
+			var args = []string{host}
+			// set env
+			var printEnv []string
+			for k, v := range config.Env {
+				args = append(args, fmt.Sprintf("%s=%s", k, v))
+				if strings.Contains(k, "SECRET") ||
+					strings.Contains(k, "TOKEN") ||
+					strings.Contains(k, "PASSWORD") ||
+					strings.Contains(k, "AZURE_STORAGE_CONNECTION_STRING") ||
+					strings.Contains(k, "JFS_RSA_PASSPHRASE") {
+					v = "******"
+				}
+				printEnv = append(printEnv, fmt.Sprintf("%s=%s", k, v))
+			}
+
+			args = append(args, rpath)
 			if strings.HasSuffix(path, "juicefs") {
 				args = append(args, os.Args[1:]...)
 				args = append(args, "--manager", address)
@@ -255,9 +272,13 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			if !config.Verbose && !config.Quiet {
 				args = append(args, "-q")
 			}
-
-			logger.Debugf("launch worker command args: [ssh, %s]", strings.Join(args, ", "))
-			cmd = exec.Command("ssh", args...)
+			var argsBk = make([]string, len(args))
+			copy(argsBk, args)
+			for i, s := range printEnv {
+				argsBk[i+1] = s
+			}
+			logger.Debugf("launch worker command args: [ssh, %s]", strings.Join(shellescape.EscapeArgs(argsBk), ", "))
+			cmd = exec.Command("ssh", shellescape.EscapeArgs(args)...)
 			stderr, err := cmd.StderrPipe()
 			if err != nil {
 				logger.Errorf("redirect stderr: %s", err)
