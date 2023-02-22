@@ -2261,18 +2261,24 @@ func (m *dbMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64
 		return nil
 	}
 	return m.txn(func(s *xorm.Session) error {
-		dirUsage := dirUsage{Inode: ino}
-		exist, err := s.ForUpdate().Get(&dirUsage)
-		if err != nil {
+		table := m.db.GetTableMapper().Obj2Table("dirUsage")
+		usedSpaceColumn := m.db.GetColumnMapper().Obj2Table("UsedSpace")
+		usedInodeColumn := m.db.GetColumnMapper().Obj2Table("UsedInodes")
+		sql := fmt.Sprintf(
+			"update `%s` set `%s` = `%s` + ?, `%s` = `%s` + ? where `inode` = ?",
+			table,
+			usedSpaceColumn, usedSpaceColumn,
+			usedInodeColumn, usedInodeColumn,
+		)
+		_, err := s.Exec(sql, space, inodes, ino)
+		if err != xorm.ErrNotExist {
 			return err
 		}
-		dirUsage.UsedSpace += space
-		dirUsage.UsedInodes += inodes
-		if exist {
-			_, err := s.AllCols().Update(&dirUsage)
+		_, err = s.Insert(&dirUsage{Inode: ino, UsedSpace: space, UsedInodes: inodes})
+		if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return err
 		}
-		_, err = s.Insert(&dirUsage)
+		_, err = s.Exec(sql, space, inodes, ino)
 		return err
 	})
 }
