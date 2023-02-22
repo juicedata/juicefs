@@ -2313,7 +2313,7 @@ func (m *dbMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err 
 		}
 		dirUsage.UsedSpace, dirUsage.UsedInodes = int64(space), int64(inodes)
 		err = m.txn(func(s *xorm.Session) error {
-			_, err := s.Where("inode = ?", ino).AllCols().Update(&dirUsage)
+			_, err := s.AllCols().Update(&dirUsage)
 			return err
 		})
 		return
