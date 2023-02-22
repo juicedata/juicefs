@@ -27,8 +27,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/sync"
 	"github.com/urfave/cli/v2"
@@ -330,8 +328,8 @@ func doSync(c *cli.Context) error {
 	// Windows support `\` and `/` as its separator, Unix only use `/`
 	srcURL := c.Args().Get(0)
 	dstURL := c.Args().Get(1)
-	utils.RemoveObjPwdFromTitle(srcURL)
-	utils.RemoveObjPwdFromTitle(dstURL)
+	removePassword(srcURL)
+	removePassword(dstURL)
 	if runtime.GOOS == "windows" {
 		if !strings.Contains(srcURL, "://") {
 			srcURL = strings.Replace(srcURL, "\\", "/", -1)

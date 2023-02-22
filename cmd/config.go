@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/juicedata/juicefs/pkg/meta"
-	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/urfave/cli/v2"
 )
@@ -126,7 +125,7 @@ func userConfirmed() bool {
 
 func config(ctx *cli.Context) error {
 	setup(ctx, 1)
-	utils.RemoveMetaPwdFromTitle(ctx.Args().Get(0))
+	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), nil)
 
 	format, err := m.Load(false)

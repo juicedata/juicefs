@@ -29,8 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/erikdubbelboer/gspt"
-
 	"github.com/mattn/go-isatty"
 )
 
@@ -101,32 +99,6 @@ func RemovePassword(uri string) string {
 		return uri
 	}
 	return uri[:sp+cp] + ":****" + uri[p:]
-}
-
-func removePwdFromTitle(uri, defaultSchema string) {
-	var uri2 string
-	if strings.Contains(uri, "://") {
-		uri2 = RemovePassword(uri)
-	} else {
-		uri2 = RemovePassword(defaultSchema + "://" + uri)
-	}
-	if uri2 != uri {
-		for i, a := range os.Args {
-			if a == uri {
-				os.Args[i] = uri2
-				break
-			}
-		}
-	}
-	gspt.SetProcTitle(strings.Join(os.Args, " "))
-}
-
-func RemoveObjPwdFromTitle(uri string) {
-	removePwdFromTitle(uri, "file")
-}
-
-func RemoveMetaPwdFromTitle(uri string) {
-	removePwdFromTitle(uri, "redis")
 }
 
 func GuessMimeType(key string) string {

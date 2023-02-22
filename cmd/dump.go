@@ -22,8 +22,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/urfave/cli/v2"
 )
@@ -65,7 +63,7 @@ func dump(ctx *cli.Context) (err error) {
 	setup(ctx, 1)
 	metaUri := ctx.Args().Get(0)
 	dst := ctx.Args().Get(1)
-	utils.RemoveMetaPwdFromTitle(metaUri)
+	removePassword(metaUri)
 	var w io.WriteCloser
 	if ctx.Args().Len() == 1 {
 		w = os.Stdout
