@@ -2270,12 +2270,16 @@ func (m *dbMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64
 			usedSpaceColumn, usedSpaceColumn,
 			usedInodeColumn, usedInodeColumn,
 		)
-		_, err := s.Exec(sql, space, inodes, ino)
-		if err != xorm.ErrNotExist {
+		ret, err := s.Exec(sql, space, inodes, ino)
+		if err != nil {
 			return err
 		}
+		if n, _ := ret.RowsAffected(); n > 0 {
+			return nil
+		}
+
 		_, err = s.Insert(&dirUsage{Inode: ino, UsedSpace: space, UsedInodes: inodes})
-		if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if err == nil || !strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return err
 		}
 		_, err = s.Exec(sql, space, inodes, ino)
