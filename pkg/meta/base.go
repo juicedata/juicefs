@@ -427,14 +427,18 @@ func (m *baseMeta) flushStats() {
 	for {
 		newSpace := atomic.SwapInt64(&m.newSpace, 0)
 		if newSpace != 0 {
-			if _, err := m.en.incrCounter(usedSpace, newSpace); err != nil {
+			if v, err := m.en.incrCounter(usedSpace, newSpace); err == nil {
+				atomic.StoreInt64(&m.usedSpace, v)
+			} else {
 				logger.Warnf("update space stats: %s", err)
 				m.updateStats(newSpace, 0)
 			}
 		}
 		newInodes := atomic.SwapInt64(&m.newInodes, 0)
 		if newInodes != 0 {
-			if _, err := m.en.incrCounter(totalInodes, newInodes); err != nil {
+			if v, err := m.en.incrCounter(totalInodes, newInodes); err == nil {
+				atomic.StoreInt64(&m.usedInodes, v)
+			} else {
 				logger.Warnf("update inodes stats: %s", err)
 				m.updateStats(0, newInodes)
 			}
