@@ -258,6 +258,16 @@ func (m *baseMeta) increDirUsage(ctx Context, ino Ino, space int64, inodes int64
 	logger.Errorf("already tried 50 times, dirUsageEvents channel is full")
 }
 
+func (m *baseMeta) increParentUsage(ctx Context, inode, parent Ino, space int64) {
+	if parent > 0 {
+		m.increDirUsage(ctx, parent, space, 0)
+	} else {
+		for p := range m.en.doGetParents(ctx, inode) {
+			m.increDirUsage(ctx, p, space, 0)
+		}
+	}
+}
+
 func (m *baseMeta) dirUsageBatch() {
 	for {
 		count := 0

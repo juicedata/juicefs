@@ -923,6 +923,9 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 	})
 	if err == nil {
 		m.updateStats(newSpace, 0)
+		if newSpace != 0 {
+			go m.increParentUsage(ctx, inode, 0, newSpace)
+		}
 	}
 	return errno(err)
 }
@@ -1011,6 +1014,9 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	})
 	if err == nil {
 		m.updateStats(newSpace, 0)
+		if newSpace != 0 {
+			go m.increParentUsage(ctx, inode, 0, newSpace)
+		}
 	}
 	return errno(err)
 }
@@ -1759,9 +1765,10 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
 	var needCompact bool
+	var attr Attr
 	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
-		var attr Attr
+		attr = Attr{}
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return syscall.ENOENT
@@ -1793,6 +1800,9 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			go m.compactChunk(inode, indx, false)
 		}
 		m.updateStats(newSpace, 0)
+		if newSpace != 0 {
+			go m.increParentUsage(ctx, inode, attr.Parent, newSpace)
+		}
 	}
 	return errno(err)
 }
@@ -1806,13 +1816,14 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(fout, invalidateAllChunks) }()
+	var sattr, attr Attr
 	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
 		rs := tx.gets(m.inodeKey(fin), m.inodeKey(fout))
 		if rs[0] == nil || rs[1] == nil {
 			return syscall.ENOENT
 		}
-		var sattr Attr
+		sattr = Attr{}
 		m.parseAttr(rs[0], &sattr)
 		if sattr.Typ != TypeFile {
 			return syscall.EINVAL
@@ -1825,7 +1836,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		if offIn+size > sattr.Length {
 			size = sattr.Length - offIn
 		}
-		var attr Attr
+		attr = Attr{}
 		m.parseAttr(rs[1], &attr)
 		if attr.Typ != TypeFile {
 			return syscall.EINVAL
@@ -1914,6 +1925,9 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	})
 	if err == nil {
 		m.updateStats(newSpace, 0)
+		if newSpace != 0 {
+			go m.increParentUsage(ctx, fout, attr.Parent, newSpace)
+		}
 	}
 	return errno(err)
 }

@@ -946,29 +946,30 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
+	var nodeAttr node
 	err := m.txn(func(s *xorm.Session) error {
 		newSpace = 0
-		var n = node{Inode: inode}
-		ok, err := s.ForUpdate().Get(&n)
+		nodeAttr = node{Inode: inode}
+		ok, err := s.ForUpdate().Get(&nodeAttr)
 		if err != nil {
 			return err
 		}
 		if !ok {
 			return syscall.ENOENT
 		}
-		if n.Type != TypeFile {
+		if nodeAttr.Type != TypeFile {
 			return syscall.EPERM
 		}
-		if length == n.Length {
-			m.parseAttr(&n, attr)
+		if length == nodeAttr.Length {
+			m.parseAttr(&nodeAttr, attr)
 			return nil
 		}
-		newSpace = align4K(length) - align4K(n.Length)
+		newSpace = align4K(length) - align4K(nodeAttr.Length)
 		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
 		var zeroChunks []chunk
-		var left, right = n.Length, length
+		var left, right = nodeAttr.Length, length
 		if left > right {
 			right, left = left, right
 		}
@@ -997,18 +998,21 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 				return err
 			}
 		}
-		n.Length = length
+		nodeAttr.Length = length
 		now := time.Now().UnixNano() / 1e3
-		n.Mtime = now
-		n.Ctime = now
-		if _, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: n.Inode}); err != nil {
+		nodeAttr.Mtime = now
+		nodeAttr.Ctime = now
+		if _, err = s.Cols("length", "mtime", "ctime").Update(&nodeAttr, &node{Inode: nodeAttr.Inode}); err != nil {
 			return err
 		}
-		m.parseAttr(&n, attr)
+		m.parseAttr(&nodeAttr, attr)
 		return nil
 	})
 	if err == nil {
 		m.updateStats(newSpace, 0)
+		if newSpace != 0 {
+			go m.increParentUsage(ctx, inode, nodeAttr.Parent, newSpace)
+		}
 	}
 	return errno(err)
 }
@@ -1037,45 +1041,46 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
+	var nodeAttr node
 	err := m.txn(func(s *xorm.Session) error {
 		newSpace = 0
-		var n = node{Inode: inode}
-		ok, err := s.ForUpdate().Get(&n)
+		nodeAttr = node{Inode: inode}
+		ok, err := s.ForUpdate().Get(&nodeAttr)
 		if err != nil {
 			return err
 		}
 		if !ok {
 			return syscall.ENOENT
 		}
-		if n.Type == TypeFIFO {
+		if nodeAttr.Type == TypeFIFO {
 			return syscall.EPIPE
 		}
-		if n.Type != TypeFile {
+		if nodeAttr.Type != TypeFile {
 			return syscall.EPERM
 		}
-		if (n.Flags & FlagImmutable) != 0 {
+		if (nodeAttr.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		if (n.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {
+		if (nodeAttr.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {
 			return syscall.EPERM
 		}
-		length := n.Length
-		if off+size > n.Length {
+		length := nodeAttr.Length
+		if off+size > nodeAttr.Length {
 			if mode&fallocKeepSize == 0 {
 				length = off + size
 			}
 		}
 
-		old := n.Length
-		newSpace = align4K(length) - align4K(n.Length)
+		old := nodeAttr.Length
+		newSpace = align4K(length) - align4K(nodeAttr.Length)
 		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
 		now := time.Now().UnixNano() / 1e3
-		n.Length = length
-		n.Mtime = now
-		n.Ctime = now
-		if _, err := s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode}); err != nil {
+		nodeAttr.Length = length
+		nodeAttr.Mtime = now
+		nodeAttr.Ctime = now
+		if _, err := s.Cols("length", "mtime", "ctime").Update(&nodeAttr, &node{Inode: inode}); err != nil {
 			return err
 		}
 		if mode&(fallocZeroRange|fallocPunchHole) != 0 && off < old {
@@ -1102,6 +1107,9 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	})
 	if err == nil {
 		m.updateStats(newSpace, 0)
+		if newSpace != 0 {
+			go m.increParentUsage(ctx, inode, nodeAttr.Parent, newSpace)
+		}
 	}
 	return errno(err)
 }
@@ -2041,30 +2049,31 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
 	var needCompact bool
+	var nodeAttr node
 	err := m.txn(func(s *xorm.Session) error {
 		newSpace = 0
-		var n = node{Inode: inode}
-		ok, err := s.ForUpdate().Get(&n)
+		nodeAttr = node{Inode: inode}
+		ok, err := s.ForUpdate().Get(&nodeAttr)
 		if err != nil {
 			return err
 		}
 		if !ok {
 			return syscall.ENOENT
 		}
-		if n.Type != TypeFile {
+		if nodeAttr.Type != TypeFile {
 			return syscall.EPERM
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
-		if newleng > n.Length {
-			newSpace = align4K(newleng) - align4K(n.Length)
-			n.Length = newleng
+		if newleng > nodeAttr.Length {
+			newSpace = align4K(newleng) - align4K(nodeAttr.Length)
+			nodeAttr.Length = newleng
 		}
 		if m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
 		now := time.Now().UnixNano() / 1e3
-		n.Mtime = now
-		n.Ctime = now
+		nodeAttr.Mtime = now
+		nodeAttr.Ctime = now
 
 		var ck = chunk{Inode: inode, Indx: indx}
 		ok, err = s.ForUpdate().MustCols("indx").Get(&ck)
@@ -2084,7 +2093,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if err = mustInsert(s, sliceRef{slice.Id, slice.Size, 1}); err != nil {
 			return err
 		}
-		_, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode})
+		_, err = s.Cols("length", "mtime", "ctime").Update(&nodeAttr, &node{Inode: inode})
 		if err == nil {
 			needCompact = (len(ck.Slices)/sliceBytes)%100 == 99
 		}
@@ -2095,6 +2104,9 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			go m.compactChunk(inode, indx, false)
 		}
 		m.updateStats(newSpace, 0)
+		if newSpace != 0 {
+			go m.increParentUsage(ctx, inode, nodeAttr.Parent, newSpace)
+		}
 	}
 	return errno(err)
 }
@@ -2107,11 +2119,12 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		defer f.Unlock()
 	}
 	var newSpace int64
+	var nin, nout node
 	defer func() { m.of.InvalidateChunk(fout, invalidateAllChunks) }()
 	err := m.txn(func(s *xorm.Session) error {
 		newSpace = 0
-		var nin = node{Inode: fin}
-		var nout = node{Inode: fout}
+		nin = node{Inode: fin}
+		nout = node{Inode: fout}
 		err := m.getNodesForUpdate(s, &nin, &nout)
 		if err != nil {
 			return err
@@ -2220,6 +2233,9 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	})
 	if err == nil {
 		m.updateStats(newSpace, 0)
+		if newSpace != 0 {
+			go m.increParentUsage(ctx, fout, nout.Parent, newSpace)
+		}
 	}
 	return errno(err)
 }
