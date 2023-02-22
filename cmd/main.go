@@ -295,12 +295,7 @@ func setup(c *cli.Context, n int) {
 }
 
 func removePassword(uri string) {
-	var uri2 string
-	if strings.Contains(uri, "://") {
-		uri2 = utils.RemovePassword(uri)
-	} else {
-		uri2 = utils.RemovePassword("redis://" + uri)
-	}
+	uri2 := utils.RemovePassword(uri)
 	if uri2 != uri {
 		for i, a := range os.Args {
 			if a == uri {
