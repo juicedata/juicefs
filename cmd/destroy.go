@@ -114,7 +114,7 @@ func destroy(ctx *cli.Context) error {
 	if !strings.Contains(uri, "://") {
 		uri = "redis://" + uri
 	}
-	utils.RemoveMetaPwd(uri)
+	utils.RemovePwdFromProcTitle(uri)
 	m := meta.NewClient(uri, meta.DefaultConf())
 
 	format, err := m.Load(true)

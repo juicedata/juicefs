@@ -193,6 +193,17 @@ func supportHTTPS(name, endpoint string) bool {
 	return true
 }
 
+// Check if uri is local file path
+func isFilePath(uri string) bool {
+	// check drive pattern when running on Windows
+	if runtime.GOOS == "windows" &&
+		len(uri) > 1 && (('a' <= uri[0] && uri[0] <= 'z') ||
+		('A' <= uri[0] && uri[0] <= 'Z')) && uri[1] == ':' {
+		return true
+	}
+	return !strings.Contains(uri, ":")
+}
+
 func extractToken(uri string) (string, string) {
 	if submatch := regexp.MustCompile(`^.*:.*:.*(:.*)@.*$`).FindStringSubmatch(uri); len(submatch) == 2 {
 		return strings.ReplaceAll(uri, submatch[1], ""), strings.TrimLeft(submatch[1], ":")
@@ -202,7 +213,7 @@ func extractToken(uri string) (string, string) {
 
 func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, error) {
 	if !strings.Contains(uri, "://") {
-		if utils.IsFilePath(uri) {
+		if isFilePath(uri) {
 			absPath, err := filepath.Abs(uri)
 			if err != nil {
 				logger.Fatalf("invalid path: %s", err.Error())
@@ -319,8 +330,8 @@ func doSync(c *cli.Context) error {
 	// Windows support `\` and `/` as its separator, Unix only use `/`
 	srcURL := c.Args().Get(0)
 	dstURL := c.Args().Get(1)
-	utils.RemoveObjPwd(srcURL)
-	utils.RemoveObjPwd(dstURL)
+	utils.RemovePwdFromProcTitle(srcURL)
+	utils.RemovePwdFromProcTitle(dstURL)
 	if runtime.GOOS == "windows" {
 		if !strings.Contains(srcURL, "://") {
 			srcURL = strings.Replace(srcURL, "\\", "/", -1)

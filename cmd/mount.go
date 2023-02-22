@@ -608,7 +608,7 @@ func mount(c *cli.Context) error {
 		go checkMountpoint(vfsConf.Format.Name, mp, c.String("log"), false)
 	}
 
-	utils.RemoveMetaPwd(addr)
+	utils.RemovePwdFromProcTitle(addr)
 	err = metaCli.NewSession()
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
