@@ -1948,6 +1948,17 @@ func (m *kvMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
+func (m *kvMeta) doSyncDirUsage(ctx Context, tx *kvTxn, ino Ino) (space, inodes uint64, err error) {
+	key := m.dirUsageKey(ino)
+	space, inodes, countErr := m.countDirUsage(ctx, ino)
+	if countErr != 0 {
+		err = errors.Wrap(countErr, "count dir usage")
+		return
+	}
+	tx.set(key, m.packDirUsage(space, inodes))
+	return
+}
+
 func (m *kvMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) error {
 	if space == 0 && inodes == 0 {
 		return nil
@@ -1955,6 +1966,10 @@ func (m *kvMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64
 	return m.txn(func(tx *kvTxn) error {
 		key := m.dirUsageKey(ino)
 		rawUsage := tx.get(key)
+		if rawUsage == nil {
+			_, _, err := m.doSyncDirUsage(ctx, tx, ino)
+			return err
+		}
 		var usedSpace, usedInodes int64
 		if rawUsage != nil {
 			us, ui := m.parseDirUsage(rawUsage)
@@ -1976,7 +1991,10 @@ func (m *kvMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err 
 		return
 	}
 	if rawUsage == nil {
-		err = syscall.ENOENT
+		err = m.txn(func(tx *kvTxn) error {
+			space, inodes, err = m.doSyncDirUsage(ctx, tx, ino)
+			return err
+		})
 		return
 	}
 	space, inodes = m.parseDirUsage(rawUsage)
