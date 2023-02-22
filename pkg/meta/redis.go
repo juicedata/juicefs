@@ -2238,15 +2238,39 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
+func (m *redisMeta) doSyncDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	spaceKey := m.dirUsedSpaceKey()
+	inodesKey := m.dirUsedInodesKey()
+	field := strconv.FormatUint(uint64(ino), 16)
+	space, inodes, countErr := m.countDirUsage(ctx, ino)
+	if countErr != 0 {
+		err = errors.Wrap(countErr, "count dir usage")
+		return
+	}
+	if err = m.rdb.HSet(ctx, spaceKey, field, space).Err(); err != nil {
+		return
+	}
+	err = m.rdb.HSet(ctx, inodesKey, field, inodes).Err()
+	return
+}
+
 func (m *redisMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) error {
+	spaceKey := m.dirUsedSpaceKey()
+	inodesKey := m.dirUsedInodesKey()
+	field := strconv.FormatUint(uint64(ino), 16)
+	if !m.rdb.HExists(ctx, spaceKey, field).Val() ||
+		!m.rdb.HExists(ctx, inodesKey, field).Val() {
+		_, _, err := m.doSyncDirUsage(ctx, ino)
+		return err
+	}
 	if space != 0 {
-		err := m.rdb.HIncrBy(ctx, m.dirUsedSpaceKey(), strconv.FormatUint(uint64(ino), 16), space).Err()
+		err := m.rdb.HIncrBy(ctx, spaceKey, field, space).Err()
 		if err != nil {
 			return err
 		}
 	}
 	if inodes != 0 {
-		err := m.rdb.HIncrBy(ctx, m.dirUsedInodesKey(), strconv.FormatUint(uint64(ino), 16), inodes).Err()
+		err := m.rdb.HIncrBy(ctx, inodesKey, field, inodes).Err()
 		if err != nil {
 			return err
 		}
@@ -2255,12 +2279,25 @@ func (m *redisMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes in
 }
 
 func (m *redisMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
-	space, err = m.rdb.HGet(ctx, m.dirUsedSpaceKey(), strconv.FormatUint(uint64(ino), 16)).Uint64()
+	spaceKey := m.dirUsedSpaceKey()
+	inodesKey := m.dirUsedInodesKey()
+	field := strconv.FormatUint(uint64(ino), 16)
+	usedSpace, err := m.rdb.HGet(ctx, spaceKey, field).Int64()
 	if err != nil {
 		return
 	}
-	inodes, err = m.rdb.HGet(ctx, m.dirUsedInodesKey(), strconv.FormatUint(uint64(ino), 16)).Uint64()
-	return
+	usedInodes, err := m.rdb.HGet(ctx, inodesKey, field).Int64()
+	if err != nil {
+		return
+	}
+
+	if m.rdb.HExists(ctx, spaceKey, field).Val() &&
+		m.rdb.HExists(ctx, inodesKey, field).Val() &&
+		usedSpace >= 0 && usedInodes >= 0 {
+		return uint64(usedSpace), uint64(usedInodes), nil
+	}
+
+	return m.doSyncDirUsage(ctx, ino)
 }
 
 // For now only deleted files
