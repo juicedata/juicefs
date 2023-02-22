@@ -255,7 +255,11 @@ func (m *baseMeta) increDirUsage(ctx Context, ino Ino, space int64, inodes int64
 			time.Sleep(time.Second * 1)
 		}
 	}
-	logger.Errorf("already tried 50 times, dirUsageEvents channel is full")
+	logger.Warn("already tried 50 times, dirUsageEvents channel is full, try to update dir usage directly")
+	err := m.en.doIncreDirUsage(ctx, ino, space, inodes)
+	if err != nil {
+		logger.Errorf("update dir usage directly failed: %v", err)
+	}
 }
 
 func (m *baseMeta) increParentUsage(ctx Context, inode, parent Ino, space int64) {
