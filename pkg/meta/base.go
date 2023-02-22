@@ -269,6 +269,19 @@ func (m *baseMeta) increParentUsage(ctx Context, inode, parent Ino, space int64)
 }
 
 func (m *baseMeta) dirUsageBatch() {
+	commitChan := make(chan map[Ino]*dirUsageEvent, 16)
+	go func() {
+		for records := range commitChan {
+			for _, r := range records {
+				err := m.en.doIncreDirUsage(WrapContext(context.TODO()), r.ino, r.space, r.inodes)
+				if err != nil {
+					logger.Errorf("update dir usage failed: %v", err)
+				}
+			}
+
+		}
+	}()
+
 	for {
 		count := 0
 		records := make(map[Ino]*dirUsageEvent)
@@ -286,15 +299,7 @@ func (m *baseMeta) dirUsageBatch() {
 				break
 			}
 		}
-		for _, record := range records {
-			r := record
-			go func() {
-				err := m.en.doIncreDirUsage(WrapContext(context.TODO()), r.ino, r.space, r.inodes)
-				if err != nil {
-					logger.Errorf("update dir usage failed: %v", err)
-				}
-			}()
-		}
+		commitChan <- records
 	}
 }
 
