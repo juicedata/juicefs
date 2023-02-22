@@ -75,7 +75,7 @@ $ juicefs gc redis://localhost --delete`,
 
 func gc(ctx *cli.Context) error {
 	setup(ctx, 1)
-	utils.RemovePwdFromProcTitle(ctx.Args().Get(0))
+	utils.RemoveMetaPwd(ctx.Args().Get(0))
 	metaConf := meta.DefaultConf()
 	metaConf.MaxDeletes = ctx.Int("threads")
 	m := meta.NewClient(ctx.Args().Get(0), metaConf)

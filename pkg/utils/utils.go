@@ -103,8 +103,13 @@ func RemovePassword(uri string) string {
 	return uri[:sp+cp] + ":****" + uri[p:]
 }
 
-func RemovePwdFromProcTitle(uri string) {
-	uri2 := RemovePassword(uri)
+func removePwdFromTitle(uri, defaultSchema string) {
+	var uri2 string
+	if strings.Contains(uri, "://") {
+		uri2 = RemovePassword(uri)
+	} else {
+		uri2 = RemovePassword(defaultSchema + "://" + uri)
+	}
 	if uri2 != uri {
 		for i, a := range os.Args {
 			if a == uri {
@@ -114,6 +119,33 @@ func RemovePwdFromProcTitle(uri string) {
 		}
 	}
 	gspt.SetProcTitle(strings.Join(os.Args, " "))
+}
+
+func RemoveObjPwd(uri string) {
+	if !strings.Contains(uri, "://") {
+		if IsFilePath(uri) {
+			removePwdFromTitle(uri, "file")
+		} else {
+			removePwdFromTitle(uri, "sftp")
+		}
+		return
+	}
+	removePwdFromTitle(uri, "")
+}
+
+func RemoveMetaPwd(uri string) {
+	removePwdFromTitle(uri, "redis")
+}
+
+// Check if uri is local file path
+func IsFilePath(uri string) bool {
+	// check drive pattern when running on Windows
+	if runtime.GOOS == "windows" &&
+		len(uri) > 1 && (('a' <= uri[0] && uri[0] <= 'z') ||
+		('A' <= uri[0] && uri[0] <= 'Z')) && uri[1] == ':' {
+		return true
+	}
+	return !strings.Contains(uri, ":")
 }
 
 func GuessMimeType(key string) string {

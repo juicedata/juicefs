@@ -65,7 +65,7 @@ func dump(ctx *cli.Context) (err error) {
 	setup(ctx, 1)
 	metaUri := ctx.Args().Get(0)
 	dst := ctx.Args().Get(1)
-	utils.RemovePwdFromProcTitle(metaUri)
+	utils.RemoveMetaPwd(metaUri)
 	var w io.WriteCloser
 	if ctx.Args().Len() == 1 {
 		w = os.Stdout
