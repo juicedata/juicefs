@@ -948,7 +948,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	defer m.timeit(time.Now())
 	var ino Ino
 	var attr Attr
-	if err := m.en.doLookup(ctx, m.checkRoot(parent), name, &ino, &attr); err != 0 {
+	if err := m.Lookup(ctx, m.checkRoot(parent), name, &ino, &attr); err != 0 {
 		logger.Errorf("unlink: lookup %s/%s: %v", parent, name, err)
 		return err
 	}
