@@ -98,6 +98,7 @@ func testMeta(t *testing.T, m Meta) {
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset meta: %s", err)
 	}
+
 	testMetaClient(t, m)
 	testTruncateAndDelete(t, m)
 	testTrash(t, m)

@@ -368,7 +368,7 @@ func (m *dbMeta) Reset() error {
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &sliceRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
-		&flock{}, &plock{})
+		&flock{}, &plock{}, &dirUsage{})
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
@@ -390,7 +390,7 @@ func (m *dbMeta) doLoad() (data []byte, err error) {
 
 func (m *dbMeta) doNewSession(sinfo []byte) error {
 	// add new table
-	err := m.syncTable(new(session2), new(delslices))
+	err := m.syncTable(new(session2), new(delslices), new(dirUsage))
 	if err != nil {
 		return fmt.Errorf("update table session2, delslices: %s", err)
 	}
@@ -3390,6 +3390,9 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 	if err = m.syncTable(new(flock), new(plock)); err != nil {
 		return fmt.Errorf("create table flock, plock: %s", err)
+	}
+	if err := m.syncTable(new(dirUsage)); err != nil {
+		return fmt.Errorf("create table dirUsage: %s", err)
 	}
 
 	var batch int
