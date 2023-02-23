@@ -1978,7 +1978,9 @@ func (m *kvMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64
 		usedSpace += space
 		usedInodes += inodes
 		if usedSpace < 0 || usedInodes < 0 {
-			return fmt.Errorf("dir usage of inode %d is invalid: space %d, inodes %d", ino, usedSpace, usedInodes)
+			logger.Warnf("dir usage of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
+			_, _, err := m.doSyncDirUsage(ctx, tx, ino)
+			return err
 		}
 		tx.set(key, m.packDirUsage(uint64(usedSpace), uint64(usedInodes)))
 		return nil
