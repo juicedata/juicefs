@@ -1218,7 +1218,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 	return errno(err)
 }
 
-func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno {
 	var trash, inode Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -1226,13 +1226,15 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 	if trash == 0 {
 		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 	}
+	if attr == nil {
+		attr = &Attr{}
+	}
 	var _type uint8
 	var opened bool
-	var attr Attr
 	var newSpace, newInode int64
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		opened = false
-		attr = Attr{}
+		*attr = Attr{}
 		newSpace, newInode = 0, 0
 		buf, err := tx.HGet(ctx, m.entryKey(parent), name).Bytes()
 		if err == redis.Nil && m.conf.CaseInsensi {
@@ -1274,7 +1276,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 			updateParent = true
 		}
 		if rs[1] != nil {
-			m.parseAttr([]byte(rs[1].(string)), &attr)
+			m.parseAttr([]byte(rs[1].(string)), attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
@@ -1302,7 +1304,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
 			if attr.Nlink > 0 {
-				pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
+				pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 				if trash > 0 {
 					pipe.HSet(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name), buf)
 					if attr.Parent == 0 {
@@ -1316,7 +1318,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 				switch _type {
 				case TypeFile:
 					if opened {
-						pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
+						pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 						pipe.SAdd(ctx, m.sustained(m.sid), strconv.Itoa(int(inode)))
 					} else {
 						pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(now.Unix()), Member: m.toDelete(inode, attr.Length)})

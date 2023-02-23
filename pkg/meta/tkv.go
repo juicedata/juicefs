@@ -1146,19 +1146,21 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	return errno(err)
 }
 
-func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
 	}
+	if attr == nil {
+		attr = &Attr{}
+	}
 	var _type uint8
 	var inode Ino
-	var attr Attr
 	var opened bool
 	var newSpace, newInode int64
 	err := m.txn(func(tx *kvTxn) error {
 		opened = false
-		attr = Attr{}
+		*attr = Attr{}
 		newSpace, newInode = 0, 0
 		buf := tx.get(m.entryKey(parent, name))
 		if buf == nil && m.conf.CaseInsensi {
@@ -1186,11 +1188,10 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		attr = Attr{}
 		opened = false
 		now := time.Now()
 		if rs[1] != nil {
-			m.parseAttr(rs[1], &attr)
+			m.parseAttr(rs[1], attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
@@ -1227,7 +1228,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
 		if attr.Nlink > 0 {
-			tx.set(m.inodeKey(inode), m.marshal(&attr))
+			tx.set(m.inodeKey(inode), m.marshal(attr))
 			if trash > 0 {
 				tx.set(m.entryKey(trash, m.trashEntry(parent, inode, name)), buf)
 				if attr.Parent == 0 {
@@ -1241,7 +1242,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			switch _type {
 			case TypeFile:
 				if opened {
-					tx.set(m.inodeKey(inode), m.marshal(&attr))
+					tx.set(m.inodeKey(inode), m.marshal(attr))
 					tx.set(m.sustainedKey(m.sid, inode), []byte{1})
 				} else {
 					tx.set(m.delfileKey(inode, attr.Length), m.packInt64(now.Unix()))

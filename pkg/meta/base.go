@@ -76,7 +76,7 @@ type engine interface {
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
 	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
-	doUnlink(ctx Context, parent Ino, name string) syscall.Errno
+	doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno
 	doRmdir(ctx Context, parent Ino, name string) syscall.Errno
 	doReadlink(ctx Context, inode Ino) ([]byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
@@ -946,13 +946,8 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	}
 
 	defer m.timeit(time.Now())
-	var ino Ino
 	var attr Attr
-	if err := m.Lookup(ctx, m.checkRoot(parent), name, &ino, &attr); err != 0 {
-		logger.Errorf("unlink: lookup %s/%s: %v", parent, name, err)
-		return err
-	}
-	err := m.en.doUnlink(ctx, m.checkRoot(parent), name)
+	err := m.en.doUnlink(ctx, m.checkRoot(parent), name, &attr)
 	if err == 0 {
 		size := uint64(0)
 		if attr.Typ == TypeFile {
@@ -1578,7 +1573,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 				if se.Attr.Typ == TypeDirectory {
 					st = m.en.doRmdir(ctx, e.Inode, string(se.Name))
 				} else {
-					st = m.en.doUnlink(ctx, e.Inode, string(se.Name))
+					st = m.en.doUnlink(ctx, e.Inode, string(se.Name), nil)
 				}
 				if st == 0 {
 					count++
