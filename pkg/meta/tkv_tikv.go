@@ -24,12 +24,14 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	plog "github.com/pingcap/log"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/tikv/client-go/v2/config"
 	tikverr "github.com/tikv/client-go/v2/error"
+	"github.com/tikv/client-go/v2/oracle"
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv"
 	"github.com/tikv/client-go/v2/txnkv/txnutil"
@@ -224,4 +226,13 @@ func (c *tikvClient) reset(prefix []byte) error {
 
 func (c *tikvClient) close() error {
 	return c.client.Close()
+}
+
+func (c *tikvClient) bgJob(arg any) {
+	safePoint, err := c.client.GC(Background, oracle.GoTimeToTS(time.Now().Add(-arg.(time.Duration))))
+	if err == nil {
+		logger.Debugf("TiKV GC returns new safe point: %d (%s)", safePoint, oracle.GetTimeFromTS(safePoint))
+	} else {
+		logger.Warnf("TiKV GC: %s", err)
+	}
 }

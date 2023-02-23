@@ -121,6 +121,8 @@ func (c *fdbClient) shouldRetry(err error) bool {
 	return false
 }
 
+func (c *fdbClient) bgJob(any) {}
+
 func (tx *fdbTxn) get(key []byte) []byte {
 	return tx.Get(fdb.Key(key)).MustGet()
 }

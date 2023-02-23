@@ -202,6 +202,8 @@ func (c *badgerClient) close() error {
 	return c.client.Close()
 }
 
+func (c *badgerClient) bgJob(any) {}
+
 func newBadgerClient(addr string) (tkvClient, error) {
 	opt := badger.DefaultOptions(addr)
 	opt.Logger = utils.GetLogger("badger")

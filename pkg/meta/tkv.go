@@ -25,6 +25,7 @@ import (
 	"io"
 	"math"
 	"math/rand"
+	"os"
 	"runtime"
 	"runtime/debug"
 	"sort"
@@ -57,6 +58,7 @@ type tkvClient interface {
 	reset(prefix []byte) error
 	close() error
 	shouldRetry(err error) bool
+	bgJob(arg any)
 }
 
 type kvTxn struct {
@@ -417,6 +419,25 @@ func (m *kvMeta) doNewSession(sinfo []byte) error {
 		return fmt.Errorf("set session info: %s", err)
 	}
 
+	if !m.conf.NoBGJob && m.Name() == "tikv" {
+		go func() {
+			interval := time.Hour * 6
+			if dur, err := time.ParseDuration(os.Getenv("TIKV_GC_INTERVAL")); err == nil {
+				interval = dur
+				if interval == 0 {
+					return
+				}
+			}
+			for {
+				if ok, err := m.setIfSmall("lastTiKVGC", time.Now().Unix(), int64(interval.Seconds())); err != nil {
+					logger.Warnf("Checking counter lastTiKVGC: %s", err)
+				} else if ok {
+					m.client.bgJob(interval)
+				}
+				utils.SleepWithJitter(interval / 6)
+			}
+		}()
+	}
 	go m.flushStats()
 	return nil
 }
