@@ -265,6 +265,10 @@ func (m *baseMeta) countDirUsage(ctx Context, ino Ino) (space, inodes uint64, er
 	return
 }
 
+func (m *baseMeta) GetDirUsage(ctx Context, inode Ino) (space, inodes uint64, err error) {
+	return m.en.doGetDirUsage(ctx, m.checkRoot(inode))
+}
+
 func (m *baseMeta) increDirUsage(ctx Context, ino Ino, space int64, inodes int64) {
 	for i := 0; i < 50; i++ {
 		select {
