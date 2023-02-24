@@ -22,6 +22,7 @@ package meta
 import (
 	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 )
@@ -121,7 +122,7 @@ func (c *fdbClient) shouldRetry(err error) bool {
 	return false
 }
 
-func (c *fdbClient) bgJob(any) {}
+func (c *fdbClient) gc(time.Time) {}
 
 func (tx *fdbTxn) get(key []byte) []byte {
 	return tx.Get(fdb.Key(key)).MustGet()
