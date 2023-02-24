@@ -58,7 +58,7 @@ type tkvClient interface {
 	reset(prefix []byte) error
 	close() error
 	shouldRetry(err error) bool
-	bgJob(arg any)
+	gc(edge time.Time)
 }
 
 type kvTxn struct {
@@ -419,25 +419,6 @@ func (m *kvMeta) doNewSession(sinfo []byte) error {
 		return fmt.Errorf("set session info: %s", err)
 	}
 
-	if !m.conf.NoBGJob && m.Name() == "tikv" {
-		go func() {
-			interval := time.Hour * 6
-			if dur, err := time.ParseDuration(os.Getenv("TIKV_GC_INTERVAL")); err == nil {
-				interval = dur
-				if interval == 0 {
-					return
-				}
-			}
-			for {
-				if ok, err := m.setIfSmall("lastTiKVGC", time.Now().Unix(), int64(interval.Seconds())); err != nil {
-					logger.Warnf("Checking counter lastTiKVGC: %s", err)
-				} else if ok {
-					m.client.bgJob(interval)
-				}
-				utils.SleepWithJitter(interval / 6)
-			}
-		}()
-	}
 	go m.flushStats()
 	return nil
 }
@@ -1956,6 +1937,19 @@ func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 }
 
 func (m *kvMeta) doCleanupSlices() {
+	if m.Name() == "tikv" {
+		interval := time.Hour * 3
+		if dur, err := time.ParseDuration(os.Getenv("TIKV_GC_INTERVAL")); err == nil {
+			interval = dur
+			if interval > 0 && interval < time.Hour {
+				logger.Warnf("TIKV_GC_INTERVAL (%s) is too short, and is reset to 1h", interval)
+				interval = time.Hour
+			}
+		}
+		if interval != 0 {
+			go m.client.gc(time.Now().Add(-interval))
+		}
+	}
 	klen := 1 + 8 + 4
 	vals, _ := m.scanValues(m.fmtKey("K"), -1, func(k, v []byte) bool {
 		// filter out invalid ones

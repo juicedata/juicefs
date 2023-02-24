@@ -286,7 +286,7 @@ func (c *etcdClient) close() error {
 	return c.client.Close()
 }
 
-func (c *etcdClient) bgJob(any) {}
+func (c *etcdClient) gc(time.Time) {}
 
 func buildTlsConfig(u *url.URL) (*tls.Config, error) {
 	var tsinfo transport.TLSInfo

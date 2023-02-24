@@ -23,6 +23,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/btree"
 )
@@ -271,4 +272,4 @@ func (c *memKV) close() error {
 	return nil
 }
 
-func (c *memKV) bgJob(any) {}
+func (c *memKV) gc(time.Time) {}

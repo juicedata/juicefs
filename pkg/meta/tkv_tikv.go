@@ -228,8 +228,8 @@ func (c *tikvClient) close() error {
 	return c.client.Close()
 }
 
-func (c *tikvClient) bgJob(arg any) {
-	safePoint, err := c.client.GC(Background, oracle.GoTimeToTS(time.Now().Add(-arg.(time.Duration))))
+func (c *tikvClient) gc(edge time.Time) {
+	safePoint, err := c.client.GC(Background, oracle.GoTimeToTS(edge))
 	if err == nil {
 		logger.Debugf("TiKV GC returns new safe point: %d (%s)", safePoint, oracle.GetTimeFromTS(safePoint))
 	} else {
