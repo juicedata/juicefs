@@ -813,6 +813,9 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
+	if attr == nil {
+		attr = &Attr{}
+	}
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
 		var t Attr
