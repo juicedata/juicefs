@@ -1260,6 +1260,27 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 	return 0
 }
 
+func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino) syscall.Errno {
+	var attr Attr
+	for dpath != "" {
+		ps := strings.SplitN(dpath, "/", 2)
+		if ps[0] != "" {
+			r := m.Lookup(ctx, m.root, ps[0], inode, &attr)
+			if r != 0 {
+				return r
+			}
+			if attr.Typ != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+		}
+		if len(ps) == 1 {
+			break
+		}
+		dpath = ps[1]
+	}
+	return 0
+}
+
 func (m *baseMeta) GetFormat() Format {
 	return *m.fmt
 }

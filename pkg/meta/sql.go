@@ -159,6 +159,14 @@ type delfile struct {
 	Expire int64  `xorm:"notnull"`
 }
 
+type dirQuota struct {
+	Inode      Ino   `xorm:"pk"`
+	MaxSpace   int64 `xorm:"notnull"`
+	MaxInodes  int64 `xorm:"notnull"`
+	UsedSpace  int64 `xorm:"notnull"`
+	UsedInodes int64 `xorm:"notnull"`
+}
+
 type dbMeta struct {
 	*baseMeta
 	db   *xorm.Engine
@@ -273,8 +281,8 @@ func (m *dbMeta) Init(format *Format, force bool) error {
 	if err := m.syncTable(new(session2), new(sustained), new(delfile)); err != nil {
 		return fmt.Errorf("create table session2, sustaind, delfile: %s", err)
 	}
-	if err := m.syncTable(new(flock), new(plock)); err != nil {
-		return fmt.Errorf("create table flock, plock: %s", err)
+	if err := m.syncTable(new(flock), new(plock), new(dirQuota)); err != nil {
+		return fmt.Errorf("create table flock, plock, dirQuota: %s", err)
 	}
 
 	var s = setting{Name: "format"}
@@ -359,7 +367,7 @@ func (m *dbMeta) Reset() error {
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &sliceRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
-		&flock{}, &plock{})
+		&flock{}, &plock{}, &dirQuota{})
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
@@ -381,9 +389,9 @@ func (m *dbMeta) doLoad() (data []byte, err error) {
 
 func (m *dbMeta) doNewSession(sinfo []byte) error {
 	// add new table
-	err := m.syncTable(new(session2), new(delslices))
+	err := m.syncTable(new(session2), new(delslices), new(dirQuota))
 	if err != nil {
-		return fmt.Errorf("update table session2, delslices: %s", err)
+		return fmt.Errorf("update table session2, delslices, dirQuota: %s", err)
 	}
 	// add primary key
 	if err = m.syncTable(new(edge), new(chunk), new(xattr), new(sustained)); err != nil {
@@ -2849,6 +2857,93 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
+func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) syscall.Errno {
+	var inode Ino
+	if st := m.resolve(ctx, path, &inode); st != 0 {
+		return st
+	}
+
+	var err error
+	switch cmd {
+	case QuotaSet:
+		err = m.txn(func(s *xorm.Session) error {
+			q := dirQuota{Inode: inode}
+			ok, e := s.ForUpdate().Get(&q)
+			if e != nil {
+				return e
+			}
+			var changed bool
+			if quota.MaxSpace >= 0 && q.MaxSpace != quota.MaxSpace {
+				q.MaxSpace = quota.MaxSpace
+				changed = true
+			}
+			if quota.MaxInodes >= 0 && q.MaxInodes != quota.MaxInodes {
+				q.MaxInodes = quota.MaxInodes
+				changed = true
+			}
+			if !changed {
+				return nil
+			}
+			if ok {
+				_, e = s.Cols("max_space", "max_inodes").Update(&q, &dirQuota{Inode: inode})
+			} else {
+				e = mustInsert(s, &q)
+			}
+			return e
+		})
+	case QuotaGet:
+		err = m.roTxn(func(s *xorm.Session) error {
+			q := dirQuota{Inode: inode}
+			ok, e := s.Get(&q)
+			if e == nil && !ok {
+				e = errors.New("no quota")
+			}
+			if e == nil {
+				quota.MaxSpace = q.MaxSpace
+				quota.MaxInodes = q.MaxInodes
+				quota.UsedSpace = q.UsedSpace
+				quota.UsedInodes = q.UsedInodes
+			}
+			return e
+		})
+	case QuotaDel:
+		err = m.txn(func(s *xorm.Session) error {
+			_, e := s.Delete(&dirQuota{Inode: inode})
+			return e
+		})
+	case QuotaList:
+		err = m.roTxn(func(s *xorm.Session) error {
+			var qs []dirQuota
+			if e := s.Find(&qs); e != nil {
+				return e
+			}
+			if len(qs) == 0 {
+				return nil
+			}
+			quota.MaxSpace = qs[0].MaxSpace
+			quota.MaxInodes = qs[0].MaxInodes
+			quota.UsedSpace = qs[0].UsedSpace
+			quota.UsedInodes = qs[0].UsedInodes
+			cur := quota
+			for _, q := range qs[1:] {
+				cur.Parent = &Quota{
+					MaxSpace:   q.MaxSpace,
+					MaxInodes:  q.MaxInodes,
+					UsedSpace:  q.UsedSpace,
+					UsedInodes: q.UsedInodes,
+				}
+				cur = cur.Parent
+			}
+			return nil
+		})
+	case QuotaCheck:
+		return syscall.ENOTSUP
+	default:
+		logger.Fatalf("Invalid quota command: %d", cmd)
+	}
+	return errno(err)
+}
+
 func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry, error) {
 	e := &DumpedEntry{}
 	n := &node{Inode: inode}
@@ -3293,8 +3388,8 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err = m.syncTable(new(session2), new(sustained), new(delfile)); err != nil {
 		return fmt.Errorf("create table session2, sustaind, delfile: %s", err)
 	}
-	if err = m.syncTable(new(flock), new(plock)); err != nil {
-		return fmt.Errorf("create table flock, plock: %s", err)
+	if err = m.syncTable(new(flock), new(plock), new(dirQuota)); err != nil {
+		return fmt.Errorf("create table flock, plock, dirQuota: %s", err)
 	}
 
 	var batch int

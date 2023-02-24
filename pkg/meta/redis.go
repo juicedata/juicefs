@@ -3085,6 +3085,10 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	}
 }
 
+func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) syscall.Errno {
+	return 0
+}
+
 func (m *redisMeta) checkServerConfig() {
 	rawInfo, err := m.rdb.Info(Background).Result()
 	if err != nil {

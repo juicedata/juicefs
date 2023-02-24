@@ -2453,6 +2453,10 @@ func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
+func (m *kvMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) syscall.Errno {
+	return 0
+}
+
 func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 	if m.snap != nil {
 		return nil

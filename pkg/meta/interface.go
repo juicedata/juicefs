@@ -84,6 +84,14 @@ const (
 	FlagAppend
 )
 
+const (
+	QuotaSet uint8 = iota
+	QuotaGet
+	QuotaDel
+	QuotaList
+	QuotaCheck
+)
+
 const MaxName = 255
 const RootInode Ino = 1
 const TrashInode Ino = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
@@ -248,6 +256,13 @@ type Session struct {
 	Plocks    []Plock `json:",omitempty"`
 }
 
+type Quota struct {
+	MaxSpace, MaxInodes   int64
+	UsedSpace, UsedInodes int64
+	newSpace, newInodes   int64
+	Parent                *Quota
+}
+
 // Meta is a interface for a meta service for file system.
 type Meta interface {
 	// Name of database
@@ -349,6 +364,8 @@ type Meta interface {
 	Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno
 	// Setlk sets a file range lock on given file.
 	Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno
+
+	HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) syscall.Errno
 
 	// Compact all the chunks by merge small slices together
 	CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno
