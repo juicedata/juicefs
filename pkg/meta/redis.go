@@ -1494,8 +1494,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			if rs[3] == nil {
 				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, nameDst)
 				trash = 0
+			} else {
+				m.parseAttr([]byte(rs[3].(string)), &tattr)
 			}
-			m.parseAttr([]byte(rs[3].(string)), &tattr)
 			tattr.Ctime = now.Unix()
 			tattr.Ctimensec = uint32(now.Nanosecond())
 			if exchange {
