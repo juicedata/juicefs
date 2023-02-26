@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -261,6 +262,27 @@ type Quota struct {
 	UsedSpace, UsedInodes int64
 	newSpace, newInodes   int64
 	Parent                *Quota
+}
+
+// Returns true if it will exceed the quota limit
+func (q *Quota) check(space, inodes int64) bool {
+	for i := q; i != nil; i = i.Parent {
+		if space > 0 && i.MaxSpace > 0 && atomic.LoadInt64(&i.UsedSpace)+atomic.LoadInt64(&i.newSpace)+space > i.MaxSpace ||
+			inodes > 0 && i.MaxInodes > 0 && atomic.LoadInt64(&i.UsedInodes)+atomic.LoadInt64(&i.newInodes)+inodes > i.MaxInodes {
+			return true
+		}
+	}
+	return false
+}
+
+func (q *Quota) update(space, inodes int64, selfOnly bool) {
+	for i := q; i != nil; i = i.Parent {
+		atomic.AddInt64(&i.newSpace, space)
+		atomic.AddInt64(&i.newInodes, inodes)
+		if selfOnly {
+			break
+		}
+	}
 }
 
 // Meta is a interface for a meta service for file system.

@@ -3089,6 +3089,10 @@ func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quot
 	return 0
 }
 
+func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) { return nil, nil }
+
+func (m *redisMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error { return nil }
+
 func (m *redisMeta) checkServerConfig() {
 	rawInfo, err := m.rdb.Info(Background).Result()
 	if err != nil {

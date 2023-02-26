@@ -2457,6 +2457,10 @@ func (m *kvMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) 
 	return 0
 }
 
+func (m *kvMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) { return nil, nil }
+
+func (m *kvMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error { return nil }
+
 func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 	if m.snap != nil {
 		return nil

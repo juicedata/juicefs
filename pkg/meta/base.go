@@ -69,6 +69,9 @@ type engine interface {
 	doCleanupDelayedSlices(edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
 
+	doLoadQuotas(ctx Context) (map[Ino]*Quota, error)
+	doFlushQuota(ctx Context, inode Ino, space, inodes int64) error
+
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
 	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno
@@ -124,6 +127,8 @@ type baseMeta struct {
 	of           *openfiles
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
+	dirQuotas    map[Ino]*Quota
+	dirParents   map[Ino]Ino
 	maxDeleting  chan struct{}
 	dslices      chan Slice // slices to delete
 	symlinks     *sync.Map
@@ -155,6 +160,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		of:           newOpenFiles(conf.OpenCache, conf.OpenCacheLimit),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
+		dirParents:   make(map[Ino]Ino),
 		maxDeleting:  make(chan struct{}, 100),
 		dslices:      make(chan Slice, conf.MaxDeletes*10240),
 		symlinks:     &sync.Map{},
@@ -310,6 +316,8 @@ func (m *baseMeta) NewSession() error {
 	}
 	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
+	m.loadQuotas()
+	go m.flushQuotas() // TODO: improve it in Redis?
 	for i := 0; i < m.conf.MaxDeletes; i++ {
 		go m.deleteSlices()
 	}
@@ -372,6 +380,8 @@ func (m *baseMeta) refresh() {
 		} else {
 			logger.Warnf("Get counter %s: %s", totalInodes, err)
 		}
+		// FIXME: in read-only mode, the only quota we care is the one on m.Root
+		m.loadQuotas()
 
 		if m.conf.ReadOnly || m.conf.NoBGJob {
 			continue
@@ -440,6 +450,36 @@ func (m *baseMeta) flushStats() {
 			}
 		}
 		time.Sleep(time.Second)
+	}
+}
+
+func (m *baseMeta) loadQuotas() {
+	quotas, err := m.en.doLoadQuotas(Background)
+	if err == nil {
+		for ino, q := range quotas {
+			logger.Infof("Load quotas got %d -> %+v", ino, q)
+		}
+		// FIXME: need lock
+		m.dirQuotas = quotas
+	} else {
+		logger.Warnf("Load quotas: %s", err)
+	}
+}
+
+func (m *baseMeta) flushQuotas() {
+	for {
+		time.Sleep(time.Second * 3)
+		for inode, quota := range m.dirQuotas {
+			newSpace := atomic.SwapInt64(&quota.newSpace, 0)
+			newInodes := atomic.SwapInt64(&quota.newInodes, 0)
+			if newSpace != 0 || newInodes != 0 {
+				err := m.en.doFlushQuota(Background, inode, newSpace, newInodes)
+				if err != nil {
+					logger.Warnf("Flush quota of inode %d: %s", inode, err)
+					quota.update(newSpace, newInodes, true)
+				}
+			}
+		}
 	}
 }
 
@@ -583,6 +623,9 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 				st = 0
 			}
 		}
+	}
+	if st == 0 && attr.Typ == TypeDirectory {
+		m.dirParents[*inode] = parent
 	}
 	return st
 }
@@ -783,7 +826,11 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 }
 
 func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
-	return m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
+	st := m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
+	if st == 0 {
+		m.dirParents[*inode] = parent
+	}
+	return st
 }
 
 func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
@@ -1262,10 +1309,11 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 
 func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino) syscall.Errno {
 	var attr Attr
+	*inode = RootInode
 	for dpath != "" {
 		ps := strings.SplitN(dpath, "/", 2)
 		if ps[0] != "" {
-			r := m.Lookup(ctx, m.root, ps[0], inode, &attr)
+			r := m.Lookup(ctx, *inode, ps[0], inode, &attr)
 			if r != 0 {
 				return r
 			}

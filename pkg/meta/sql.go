@@ -1859,6 +1859,9 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 				entry.Attr.Typ = n.Type
 			}
 			*entries = append(*entries, entry)
+			if entry.Attr.Typ == TypeDirectory {
+				m.dirParents[entry.Inode] = inode
+			}
 		}
 		return nil
 	}))
@@ -2942,6 +2945,72 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) 
 		logger.Fatalf("Invalid quota command: %d", cmd)
 	}
 	return errno(err)
+}
+
+func (m *dbMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
+	if parent, ok := m.dirParents[inode]; ok {
+		return parent, 0
+	}
+	logger.Warnf("DEBUG: getDirParent of inode %d: cache miss", inode)
+	var attr Attr
+	st := m.doGetAttr(ctx, inode, &attr)
+	return attr.Parent, st
+}
+
+func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
+	var rows []dirQuota
+	err := m.roTxn(func(s *xorm.Session) error {
+		rows = rows[:0]
+		return s.Find(&rows)
+	})
+	if len(rows) == 0 {
+		return nil, nil
+	}
+
+	quotas := make(map[Ino]*Quota)
+	for _, row := range rows {
+		quotas[row.Inode] = &Quota{
+			MaxSpace:   row.MaxSpace,
+			MaxInodes:  row.MaxInodes,
+			UsedSpace:  row.UsedSpace,
+			UsedInodes: row.UsedInodes,
+		}
+	}
+	for ino, quota := range quotas {
+		var inode Ino = ino
+		for inode != RootInode {
+			parent, st := m.getDirParent(ctx, inode)
+			if st != 0 || parent == 0 {
+				logger.Fatalf("Get directory parent of %d: %d %s", inode, parent, st)
+			}
+			if q, ok := quotas[parent]; ok {
+				quota.Parent = q
+				logger.Warnf("DEBUG: parent quota of %d is %d", ino, parent)
+				break
+			} else {
+				inode = parent
+			}
+		}
+	}
+
+	return quotas, err
+}
+
+func (m *dbMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error {
+	return m.txn(func(s *xorm.Session) error {
+		q := dirQuota{Inode: inode}
+		ok, err := s.Get(&q)
+		if err == nil && !ok {
+			logger.Warnf("No quota for inode %d, skip flushing", inode)
+			return nil
+		}
+		if err == nil {
+			q.UsedSpace += space
+			q.UsedInodes += inodes
+			_, err = s.Cols("used_space", "used_inodes").Update(&q, &dirQuota{Inode: inode})
+		}
+		return err
+	})
 }
 
 func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry, error) {
