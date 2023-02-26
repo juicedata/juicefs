@@ -459,11 +459,40 @@ func (m *baseMeta) loadQuotas() {
 		for ino, q := range quotas {
 			logger.Infof("Load quotas got %d -> %+v", ino, q)
 		}
-		// FIXME: need lock
+		// FIXME: need lock; and keep newSpace & newInodes
 		m.dirQuotas = quotas
 	} else {
 		logger.Warnf("Load quotas: %s", err)
 	}
+}
+
+func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
+	if parent, ok := m.dirParents[inode]; ok {
+		return parent, 0
+	}
+	logger.Warnf("DEBUG: getDirParent of inode %d: cache miss", inode)
+	var attr Attr
+	st := m.GetAttr(ctx, inode, &attr)
+	return attr.Parent, st
+}
+
+// inode refers to a directory
+func (m *baseMeta) getDirQuota(ctx Context, inode Ino) *Quota {
+	var q *Quota
+	var st syscall.Errno
+	for {
+		if q = m.dirQuotas[inode]; q != nil {
+			break
+		}
+		if inode == RootInode {
+			break
+		}
+		if inode, st = m.getDirParent(ctx, inode); st != 0 {
+			logger.Warnf("Get directory parent of inode %d: %s", inode, st)
+			break
+		}
+	}
+	return q
 }
 
 func (m *baseMeta) flushQuotas() {
@@ -806,6 +835,9 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 
 	defer m.timeit(time.Now())
 	if m.checkQuota(4<<10, 1) {
+		return syscall.ENOSPC
+	}
+	if q := m.getDirQuota(ctx, parent); q != nil && q.check(4<<10, 1) {
 		return syscall.ENOSPC
 	}
 	return m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)

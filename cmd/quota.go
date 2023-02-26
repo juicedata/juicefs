@@ -105,7 +105,7 @@ func quota(c *cli.Context) error {
 	if cmd == meta.QuotaSet {
 		q.MaxSpace, q.MaxInodes = -1, -1 // negative means no change
 		if c.IsSet("capacity") {
-			q.MaxSpace = int64(c.Uint64("capacity"))
+			q.MaxSpace = int64(c.Uint64("capacity")) << 30
 		}
 		if c.IsSet("inodes") {
 			q.MaxInodes = int64(c.Uint64("inodes"))

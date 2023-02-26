@@ -1241,6 +1241,9 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}, parent)
 	if err == nil {
 		m.updateStats(align4K(0), 1)
+		if q := m.getDirQuota(ctx, parent); q != nil {
+			q.update(align4K(0), 1, false)
+		}
 	}
 	return errno(err)
 }
@@ -2043,6 +2046,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
 	var needCompact bool
+	var quota *Quota
 	err := m.txn(func(s *xorm.Session) error {
 		newSpace = 0
 		var n = node{Inode: inode}
@@ -2062,6 +2066,10 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			n.Length = newleng
 		}
 		if m.checkQuota(newSpace, 0) {
+			return syscall.ENOSPC
+		}
+		// FIXME: check all parent of the file if hardlinked
+		if quota = m.getDirQuota(ctx, n.Parent); quota != nil && quota.check(newSpace, 0) {
 			return syscall.ENOSPC
 		}
 		now := time.Now().UnixNano() / 1e3
@@ -2097,6 +2105,10 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			go m.compactChunk(inode, indx, false)
 		}
 		m.updateStats(newSpace, 0)
+		if quota != nil {
+			quota.update(newSpace, 0, false)
+		}
+
 	}
 	return errno(err)
 }
@@ -2862,8 +2874,10 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 
 func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) syscall.Errno {
 	var inode Ino
-	if st := m.resolve(ctx, path, &inode); st != 0 {
-		return st
+	if cmd != QuotaList {
+		if st := m.resolve(ctx, path, &inode); st != 0 {
+			return st
+		}
 	}
 
 	var err error
@@ -2945,16 +2959,6 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) 
 		logger.Fatalf("Invalid quota command: %d", cmd)
 	}
 	return errno(err)
-}
-
-func (m *dbMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
-	if parent, ok := m.dirParents[inode]; ok {
-		return parent, 0
-	}
-	logger.Warnf("DEBUG: getDirParent of inode %d: cache miss", inode)
-	var attr Attr
-	st := m.doGetAttr(ctx, inode, &attr)
-	return attr.Parent, st
 }
 
 func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
