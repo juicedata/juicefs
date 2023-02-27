@@ -2262,7 +2262,7 @@ func (m *redisMeta) doSyncDirUsage(ctx Context, ino Ino) (space, inodes uint64, 
 func (m *redisMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) error {
 	spaceKey := m.dirUsedSpaceKey()
 	inodesKey := m.dirUsedInodesKey()
-	field := strconv.FormatUint(uint64(ino), 16)
+	field := strconv.FormatUint(uint64(ino), 10)
 	if !m.rdb.HExists(ctx, spaceKey, field).Val() ||
 		!m.rdb.HExists(ctx, inodesKey, field).Val() {
 		_, _, err := m.doSyncDirUsage(ctx, ino)
@@ -2286,7 +2286,7 @@ func (m *redisMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes in
 func (m *redisMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
 	spaceKey := m.dirUsedSpaceKey()
 	inodesKey := m.dirUsedInodesKey()
-	field := strconv.FormatUint(uint64(ino), 16)
+	field := strconv.FormatUint(uint64(ino), 10)
 	usedSpace, errSpace := m.rdb.HGet(ctx, spaceKey, field).Int64()
 	if errSpace != nil && errSpace != redis.Nil {
 		err = errSpace

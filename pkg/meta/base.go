@@ -252,9 +252,6 @@ func (m *baseMeta) countDirUsage(ctx Context, ino Ino) (space, inodes uint64, er
 		return
 	}
 	for _, e := range entries {
-		if string(e.Name) == "." || string(e.Name) == ".." {
-			continue
-		}
 		inodes += 1
 		var newSpace uint64
 		if e.Attr.Typ == TypeFile {
