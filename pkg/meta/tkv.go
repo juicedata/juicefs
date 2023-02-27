@@ -868,13 +868,14 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
+	var t Attr
 	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
-		var t Attr
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return syscall.ENOENT
 		}
+		t = Attr{}
 		m.parseAttr(a, &t)
 		if t.Typ != TypeFile {
 			return syscall.EPERM
@@ -924,7 +925,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 	if err == nil {
 		m.updateStats(newSpace, 0)
 		if newSpace != 0 {
-			go m.increParentUsage(ctx, inode, 0, newSpace)
+			go m.increParentUsage(ctx, inode, t.Parent, newSpace)
 		}
 	}
 	return errno(err)
@@ -954,13 +955,14 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
+	var t Attr
 	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
-		var t Attr
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return syscall.ENOENT
 		}
+		t = Attr{}
 		m.parseAttr(a, &t)
 		if t.Typ == TypeFIFO {
 			return syscall.EPIPE
@@ -1015,7 +1017,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	if err == nil {
 		m.updateStats(newSpace, 0)
 		if newSpace != 0 {
-			go m.increParentUsage(ctx, inode, 0, newSpace)
+			go m.increParentUsage(ctx, inode, t.Parent, newSpace)
 		}
 	}
 	return errno(err)
