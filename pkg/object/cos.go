@@ -93,6 +93,13 @@ func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	var expected = http.StatusOK
+	if params.Range != "" {
+		expected = http.StatusPartialContent
+	}
+	if resp.StatusCode != expected {
+		return nil, fmt.Errorf("expected get object response code: %d, but got %d", expected, resp.StatusCode)
+	}
 	if off == 0 && limit == -1 {
 		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey))
 	}

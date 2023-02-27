@@ -88,13 +88,28 @@ func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	params := &obs.GetObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = key
-	params.RangeStart = off
-	if limit > 0 {
-		params.RangeEnd = off + limit - 1
+	var resp *obs.GetObjectOutput
+	var err error
+	var r string
+	if off > 0 || limit > 0 {
+		if limit > 0 {
+			r = fmt.Sprintf("bytes=%d-%d", off, off+limit-1)
+		} else {
+			r = fmt.Sprintf("bytes=%d-", off)
+		}
+		resp, err = s.c.GetObject(params, obs.WithHeader(obs.HEADER_RANGE, []string{r}))
+	} else {
+		resp, err = s.c.GetObject(params)
 	}
-	resp, err := s.c.GetObject(params)
 	if err != nil {
 		return nil, err
+	}
+	var expected = http.StatusOK
+	if off > 0 || limit > 0 {
+		expected = http.StatusPartialContent
+	}
+	if resp.StatusCode != expected {
+		return nil, fmt.Errorf("expected get object response code: %d, but got %d", expected, resp.StatusCode)
 	}
 	return resp.Body, nil
 }

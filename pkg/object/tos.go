@@ -60,14 +60,26 @@ func (t tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	} else {
 		rangeEnd = 0
 	}
+	var rangeStr string
+	if off == 0 && limit == 1 {
+		rangeStr = "bytes=0-0"
+	}
 	resp, err := t.client.GetObjectV2(context.Background(), &tos.GetObjectV2Input{
 		Bucket:     t.bucket,
 		Key:        key,
 		RangeStart: off,
 		RangeEnd:   rangeEnd,
+		Range:      rangeStr, // When Range and RangeStart & RangeEnd appear together, range is preferred
 	})
 	if err != nil {
 		return nil, err
+	}
+	var expected = http.StatusOK
+	if off > 0 || limit > 0 {
+		expected = http.StatusPartialContent
+	}
+	if resp.StatusCode != expected {
+		return nil, fmt.Errorf("expected get object response code: %d, but got %d", expected, resp.StatusCode)
 	}
 	return resp.Content, nil
 }

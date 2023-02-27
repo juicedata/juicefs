@@ -198,6 +198,13 @@ func (s *RestfulStorage) Get(key string, off, limit int64) (io.ReadCloser, error
 	if resp.StatusCode != 200 && resp.StatusCode != 206 {
 		return nil, parseError(resp)
 	}
+	var expected = http.StatusOK
+	if off > 0 || limit > 0 {
+		expected = http.StatusPartialContent
+	}
+	if resp.StatusCode != expected {
+		return nil, fmt.Errorf("expected get object response code: %d, but got %d", expected, resp.StatusCode)
+	}
 	return resp.Body, nil
 }
 

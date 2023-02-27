@@ -82,6 +82,13 @@ func (q *qingstor) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	var expected = http.StatusOK
+	if off > 0 || limit > 0 {
+		expected = http.StatusPartialContent
+	}
+	if *output.StatusCode != expected {
+		return nil, fmt.Errorf("expected get object response code: %d, but got %d", expected, *output.StatusCode)
+	}
 	return output.Body, nil
 }
 
