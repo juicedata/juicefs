@@ -295,8 +295,10 @@ func (m *baseMeta) mustIncreDirUsage(ctx Context, ino Ino, space int64, inodes i
 }
 
 func (m *baseMeta) increParentUsage(ctx Context, inode, parent Ino, space int64) {
-	if parent > 0 && !m.tryIncreDirUsage(ctx, parent, space, 0) {
-		go m.mustIncreDirUsage(ctx, parent, space, 0)
+	if parent > 0 {
+		if !m.tryIncreDirUsage(ctx, parent, space, 0) {
+			go m.mustIncreDirUsage(ctx, parent, space, 0)
+		}
 	} else {
 		go func() {
 			for p := range m.en.doGetParents(ctx, inode) {
