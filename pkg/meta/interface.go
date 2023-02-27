@@ -371,6 +371,8 @@ type Meta interface {
 	CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno
 	// GetParents returns a map of node parents (> 1 parents if hardlinked)
 	GetParents(ctx Context, inode Ino) map[Ino]int
+	// GetDirUsage returns the space and inodes usage of a directory.
+	GetDirUsage(ctx Context, inode Ino) (space, inodes uint64, err error)
 
 	// GetXattr returns the value of extended attribute for given name.
 	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
@@ -386,8 +388,6 @@ type Meta interface {
 	Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno
 	// Setlk sets a file range lock on given file.
 	Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno
-
-	HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) syscall.Errno
 
 	// Compact all the chunks by merge small slices together
 	CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno
@@ -408,6 +408,8 @@ type Meta interface {
 	OnMsg(mtype uint32, cb MsgCallback)
 	// OnReload register a callback for any change founded after reloaded.
 	OnReload(func(new *Format))
+
+	HandleQuota(ctx Context, cmd uint8, dpath string, quota *Quota) error
 
 	// Dump the tree under root, which may be modified by checkRoot
 	DumpMeta(w io.Writer, root Ino, keepSecret bool) error

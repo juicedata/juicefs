@@ -2872,10 +2872,10 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) syscall.Errno {
+func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quota *Quota) error {
 	var inode Ino
 	if cmd != QuotaList {
-		if st := m.resolve(ctx, path, &inode); st != 0 {
+		if st := m.resolve(ctx, dpath, &inode); st != 0 {
 			return st
 		}
 	}
@@ -2953,12 +2953,10 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) 
 			}
 			return nil
 		})
-	case QuotaCheck:
-		return syscall.ENOTSUP
-	default:
-		logger.Fatalf("Invalid quota command: %d", cmd)
+	default: // TODO: QuotaCheck
+		err = fmt.Errorf("invalid quota command: %d", cmd)
 	}
-	return errno(err)
+	return err
 }
 
 func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {

@@ -453,13 +453,21 @@ func (m *baseMeta) flushStats() {
 	}
 }
 
+func (m *baseMeta) GetDirUsage(ctx Context, inode Ino) (space, inodes uint64, err error) {
+	return 0, 0, nil // TODO
+}
+
 func (m *baseMeta) loadQuotas() {
 	quotas, err := m.en.doLoadQuotas(Background)
 	if err == nil {
 		for ino, q := range quotas {
 			logger.Infof("Load quotas got %d -> %+v", ino, q)
+			if old := m.dirQuotas[ino]; old != nil {
+				q.newSpace = old.newSpace
+				q.newInodes = old.newInodes
+			}
 		}
-		// FIXME: need lock; and keep newSpace & newInodes
+		// FIXME: need lock
 		m.dirQuotas = quotas
 	} else {
 		logger.Warnf("Load quotas: %s", err)
@@ -1345,9 +1353,8 @@ func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino) syscall.Errno 
 	for dpath != "" {
 		ps := strings.SplitN(dpath, "/", 2)
 		if ps[0] != "" {
-			r := m.Lookup(ctx, *inode, ps[0], inode, &attr)
-			if r != 0 {
-				return r
+			if st := m.en.doLookup(ctx, *inode, ps[0], inode, &attr); st != 0 {
+				return st
 			}
 			if attr.Typ != TypeDirectory {
 				return syscall.ENOTDIR

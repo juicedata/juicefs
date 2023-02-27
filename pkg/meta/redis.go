@@ -3085,8 +3085,8 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	}
 }
 
-func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) syscall.Errno {
-	return 0
+func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) error {
+	return nil
 }
 
 func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) { return nil, nil }

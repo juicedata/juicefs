@@ -28,41 +28,43 @@ func cmdQuota() *cli.Command {
 	return &cli.Command{
 		Name:            "quota",
 		Category:        "ADMIN",
-		Usage:           "manage the quota of a dir",
-		ArgsUsage:       "META-URL PATH",
+		Usage:           "Manage directory quotas",
+		ArgsUsage:       "META-URL [PATH]",
 		HideHelpCommand: true,
 		Description: `
 Examples:
 $ juicefs quota set redis://localhost /dir1 --inodes 100
-$ juicefs quota get redis://localhost /dir1`,
+$ juicefs quota get redis://localhost /dir1
+$ juicefs quota del redis://localhost /dir1
+$ juicefs quota ls redis://localhost`,
 		Subcommands: []*cli.Command{
 			{
 				Name:      "set",
-				Usage:     "Set quota for dir",
+				Usage:     "Set quota to a directory",
 				ArgsUsage: "META-URL PATH",
 				Action:    quota,
 			},
 			{
 				Name:      "get",
-				Usage:     "Get quota for dir",
+				Usage:     "Get quota of a directory",
 				ArgsUsage: "META-URL PATH",
 				Action:    quota,
 			},
 			{
 				Name:      "del",
-				Usage:     "Del quota for dir",
+				Usage:     "Delete quota of a directory",
 				ArgsUsage: "META-URL PATH",
 				Action:    quota,
 			},
 			{
 				Name:      "ls",
-				Usage:     "List quotas",
+				Usage:     "List all directory quotas",
 				ArgsUsage: "META-URL",
 				Action:    quota,
 			},
 			{
 				Name:      "check",
-				Usage:     "Check consistency of directory quota",
+				Usage:     "Check quota consistency of a directory",
 				ArgsUsage: "META-URL PATH",
 				Action:    quota,
 			},
@@ -70,18 +72,24 @@ $ juicefs quota get redis://localhost /dir1`,
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{
 				Name:  "capacity",
-				Usage: "hard quota of the volume limiting its usage of space in GiB",
+				Usage: "hard quota of the directory limiting its usage of space in GiB",
 			},
 			&cli.Uint64Flag{
 				Name:  "inodes",
-				Usage: "hard quota of the volume limiting its number of inodes",
+				Usage: "hard quota of the directory limiting its number of inodes",
 			},
 		},
 	}
 }
 
 func quota(c *cli.Context) error {
-	setup(c, 2)
+	var dpath string
+	if c.Command.Name == "ls" {
+		setup(c, 1)
+	} else {
+		setup(c, 2)
+		dpath = c.Args().Get(1)
+	}
 	var cmd uint8
 	switch c.Command.Name {
 	case "set":
@@ -97,10 +105,9 @@ func quota(c *cli.Context) error {
 	default:
 		logger.Fatalf("Invalid quota command: %s", c.Command.Name)
 	}
-
 	removePassword(c.Args().Get(0))
+
 	m := meta.NewClient(c.Args().Get(0), nil)
-	p := c.Args().Get(1)
 	var q meta.Quota
 	if cmd == meta.QuotaSet {
 		q.MaxSpace, q.MaxInodes = -1, -1 // negative means no change
@@ -111,8 +118,8 @@ func quota(c *cli.Context) error {
 			q.MaxInodes = int64(c.Uint64("inodes"))
 		}
 	}
-	if st := m.HandleQuota(meta.Background, cmd, p, &q); st != 0 {
-		return st
+	if err := m.HandleQuota(meta.Background, cmd, dpath, &q); err != nil {
+		return err
 	}
 	// FIXME: need a better way to do print
 	if q.MaxSpace != 0 || q.MaxInodes != 0 {
