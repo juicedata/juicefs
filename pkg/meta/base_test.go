@@ -123,6 +123,7 @@ func testMeta(t *testing.T, m Meta) {
 	base.conf.CaseInsensi = true
 	testCaseIncensi(t, m)
 	testCheckAndRepair(t, m)
+	testDirUsage(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
 }
@@ -1863,5 +1864,158 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 	}
 	if !dirAttr.Full || dirAttr.Nlink != 2 || dirAttr.Parent != d3Inode {
 		t.Fatalf("d4Inode  attr: %+v", *dirAttr)
+	}
+}
+
+func testDirUsage(t *testing.T, m Meta) {
+	testDir := "testDirUsage"
+	var testInode Ino
+
+	// test empty dir
+	if st := m.Mkdir(Background, RootInode, testDir, 0640, 022, 0, &testInode, nil); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	space, inodes, err := m.GetDirUsage(Background, testInode)
+	if err != nil {
+		t.Fatalf("get dir usage: %s", err)
+	}
+	if space != 0 || inodes != 0 {
+		t.Fatalf("test dir usage: %d %d", space, inodes)
+	}
+
+	// test dir with file
+	var fileInode Ino
+	if st := m.Create(Background, testInode, "file", 0640, 022, 0, &fileInode, nil); st != 0 {
+		t.Fatalf("create: %s", st)
+	}
+	time.Sleep(100 * time.Millisecond)
+	space, inodes, err = m.GetDirUsage(Background, testInode)
+	if err != nil {
+		t.Fatalf("get dir usage: %s", err)
+	}
+	if space != uint64(align4K(0)) || inodes != 1 {
+		t.Fatalf("test dir usage: %d %d", space, inodes)
+	}
+
+	// test dir with file and fallocate
+	if st := m.Fallocate(Background, fileInode, 0, 0, 4097); st != 0 {
+		t.Fatalf("fallocate: %s", st)
+	}
+	time.Sleep(100 * time.Millisecond)
+	space, inodes, err = m.GetDirUsage(Background, testInode)
+	if err != nil {
+		t.Fatalf("get dir usage: %s", err)
+	}
+	if space != uint64(align4K(4097)) || inodes != 1 {
+		t.Fatalf("test dir usage: %d %d", space, inodes)
+	}
+
+	// test dir with file and truncate
+	if st := m.Truncate(Background, fileInode, 0, 0, nil); st != 0 {
+		t.Fatalf("truncate: %s", st)
+	}
+	time.Sleep(100 * time.Millisecond)
+	space, inodes, err = m.GetDirUsage(Background, testInode)
+	if err != nil {
+		t.Fatalf("get dir usage: %s", err)
+	}
+	if space != uint64(align4K(0)) || inodes != 1 {
+		t.Fatalf("test dir usage: %d %d", space, inodes)
+	}
+
+	// test dir with file and write
+	if st := m.Write(Background, fileInode, 0, 0, Slice{Id: 1, Size: 1 << 20, Off: 0, Len: 4097}); st != 0 {
+		t.Fatalf("write: %s", st)
+	}
+	time.Sleep(100 * time.Millisecond)
+	space, inodes, err = m.GetDirUsage(Background, testInode)
+	if err != nil {
+		t.Fatalf("get dir usage: %s", err)
+	}
+	if space != uint64(align4K(4097)) || inodes != 1 {
+		t.Fatalf("test dir usage: %d %d", space, inodes)
+	}
+
+	// test dir with file and link
+	if st := m.Link(Background, fileInode, testInode, "file2", nil); st != 0 {
+		t.Fatalf("link: %s", st)
+	}
+	time.Sleep(100 * time.Millisecond)
+	space, inodes, err = m.GetDirUsage(Background, testInode)
+	if err != nil {
+		t.Fatalf("get dir usage: %s", err)
+	}
+	if space != uint64(2*align4K(4097)) || inodes != 2 {
+		t.Fatalf("test dir usage: %d %d", space, inodes)
+	}
+
+	// test dir with subdir
+	var subInode Ino
+	if st := m.Mkdir(Background, testInode, "sub", 0640, 022, 0, &subInode, nil); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	time.Sleep(100 * time.Millisecond)
+	space, inodes, err = m.GetDirUsage(Background, testInode)
+	if err != nil {
+		t.Fatalf("get dir usage: %s", err)
+	}
+	if space != uint64(align4K(0)+2*align4K(4097)) || inodes != 3 {
+		t.Fatalf("test dir usage: %d %d", space, inodes)
+	}
+
+	// test rename
+	if st := m.Rename(Background, testInode, "file2", subInode, "file", 0, nil, nil); st != 0 {
+		t.Fatalf("rename: %s", st)
+	}
+	time.Sleep(100 * time.Millisecond)
+	space, inodes, err = m.GetDirUsage(Background, testInode)
+	if err != nil {
+		t.Fatalf("get dir usage: %s", err)
+	}
+	if space != uint64(align4K(0)+align4K(4097)) || inodes != 2 {
+		t.Fatalf("test dir usage: %d %d", space, inodes)
+	}
+	space, inodes, err = m.GetDirUsage(Background, subInode)
+	if err != nil {
+		t.Fatalf("get subdir usage: %s", err)
+	}
+	if space != uint64(align4K(4097)) || inodes != 1 {
+		t.Fatalf("test subdir usage: %d %d", space, inodes)
+	}
+
+	// test unlink
+	if st := m.Unlink(Background, testInode, "file"); st != 0 {
+		t.Fatalf("unlink: %s", st)
+	}
+	if st := m.Unlink(Background, subInode, "file"); st != 0 {
+		t.Fatalf("unlink: %s", st)
+	}
+	time.Sleep(100 * time.Millisecond)
+	space, inodes, err = m.GetDirUsage(Background, testInode)
+	if err != nil {
+		t.Fatalf("get dir usage: %s", err)
+	}
+	if space != uint64(align4K(0)) || inodes != 1 {
+		t.Fatalf("test dir usage: %d %d", space, inodes)
+	}
+	space, inodes, err = m.GetDirUsage(Background, subInode)
+	if err != nil {
+		t.Fatalf("get subdir usage: %s", err)
+	}
+	if space != 0 || inodes != 0 {
+		t.Fatalf("test subdir usage: %d %d", space, inodes)
+	}
+
+	// test rmdir
+	if st := m.Rmdir(Background, testInode, "sub"); st != 0 {
+		t.Fatalf("rmdir: %s", st)
+	}
+	time.Sleep(100 * time.Millisecond)
+	space, inodes, err = m.GetDirUsage(Background, testInode)
+	if err != nil {
+		t.Fatalf("get dir usage: %s", err)
+	}
+	if space != 0 || inodes != 0 {
+		t.Fatalf("test dir usage: %d %d", space, inodes)
 	}
 }
