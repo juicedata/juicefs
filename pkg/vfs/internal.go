@@ -324,6 +324,18 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			}
 		}
 		_, _ = out.Write([]byte{uint8(st)})
+	case meta.Clone:
+		srcIno := Ino(r.Get64())
+		dstParentIno := Ino(r.Get64())
+		dstName := string(r.Get(int(r.Get8())))
+		uid := r.Get32()
+		gid := r.Get32()
+		umask := r.Get16()
+		cmode := r.Get8()
+		eno := v.Meta.Clone(meta.NewContext(0, uid, []uint32{gid}), srcIno, dstParentIno, dstName, cmode, umask)
+		if eno != 0 {
+			logger.Errorf("clone srcIno: %d  dstParentIno:%d dstName:%s  %v", srcIno, dstParentIno, dstName, eno)
+		}
 	case meta.LegacyInfo:
 		var summary meta.Summary
 		inode := Ino(r.Get64())

@@ -47,6 +47,8 @@ const (
 	FillCache = 1004
 	// InfoV2 is a message to get the internal info for file or directory.
 	InfoV2 = 1005
+	// Clone is a message to clone a file or dir from another.
+	Clone = 1006
 )
 
 const (
@@ -358,6 +360,8 @@ type Meta interface {
 	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
 	// Remove all files and directories recursively.
 	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
+	//Clone a file or directory
+	Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16) syscall.Errno
 	// GetPaths returns all paths of an inode
 	GetPaths(ctx Context, inode Ino) []string
 	// Check integrity of an absolute path and repair it if asked

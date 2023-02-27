@@ -173,6 +173,11 @@ type dbMeta struct {
 	noReadOnlyTxn bool
 }
 
+func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16) syscall.Errno {
+	//TODO implement me
+	panic("implement me")
+}
+
 type dbSnap struct {
 	node    map[Ino]*node
 	symlink map[Ino]*symlink
