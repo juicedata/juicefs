@@ -904,7 +904,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 	if err == nil {
 		m.updateStats(newSpace, 0)
 		if newSpace != 0 {
-			go m.increParentUsage(ctx, inode, attr.Parent, newSpace)
+			m.increParentUsage(ctx, inode, attr.Parent, newSpace)
 		}
 	}
 	return errno(err)
@@ -1000,7 +1000,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 	if err == nil {
 		m.updateStats(newSpace, 0)
 		if newSpace != 0 {
-			go m.increParentUsage(ctx, inode, t.Parent, newSpace)
+			m.increParentUsage(ctx, inode, t.Parent, newSpace)
 		}
 	}
 	return errno(err)
@@ -2087,7 +2087,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		}
 		m.updateStats(newSpace, 0)
 		if newSpace != 0 {
-			go m.increParentUsage(ctx, inode, attr.Parent, newSpace)
+			m.increParentUsage(ctx, inode, attr.Parent, newSpace)
 		}
 	}
 	return errno(err)
@@ -2221,7 +2221,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 	if err == nil {
 		m.updateStats(newSpace, 0)
 		if newSpace != 0 {
-			go m.increParentUsage(ctx, fout, attr.Parent, newSpace)
+			m.increParentUsage(ctx, fout, attr.Parent, newSpace)
 		}
 	}
 	return errno(err)

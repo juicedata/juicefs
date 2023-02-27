@@ -269,7 +269,16 @@ func (m *baseMeta) GetDirUsage(ctx Context, inode Ino) (space, inodes uint64, er
 	return m.en.doGetDirUsage(ctx, m.checkRoot(inode))
 }
 
-func (m *baseMeta) increDirUsage(ctx Context, ino Ino, space int64, inodes int64) {
+func (m *baseMeta) tryIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) bool {
+	select {
+	case m.dirUsageEvents <- &dirUsageEvent{ino, space, inodes}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (m *baseMeta) mustIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) {
 	for i := 0; i < 50; i++ {
 		select {
 		case m.dirUsageEvents <- &dirUsageEvent{ino, space, inodes}:
@@ -286,12 +295,14 @@ func (m *baseMeta) increDirUsage(ctx Context, ino Ino, space int64, inodes int64
 }
 
 func (m *baseMeta) increParentUsage(ctx Context, inode, parent Ino, space int64) {
-	if parent > 0 {
-		m.increDirUsage(ctx, parent, space, 0)
+	if parent > 0 && !m.tryIncreDirUsage(ctx, parent, space, 0) {
+		go m.mustIncreDirUsage(ctx, parent, space, 0)
 	} else {
-		for p := range m.en.doGetParents(ctx, inode) {
-			m.increDirUsage(ctx, p, space, 0)
-		}
+		go func() {
+			for p := range m.en.doGetParents(ctx, inode) {
+				m.mustIncreDirUsage(ctx, p, space, 0)
+			}
+		}()
 	}
 }
 
@@ -871,8 +882,9 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 		return syscall.ENOSPC
 	}
 	err := m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)
-	if err == 0 {
-		go m.increDirUsage(ctx, parent, align4K(0), 1)
+	newSpace := align4K(0)
+	if err == 0 && !m.tryIncreDirUsage(ctx, parent, newSpace, 1) {
+		go m.mustIncreDirUsage(ctx, parent, newSpace, 1)
 	}
 	return err
 }
@@ -921,8 +933,9 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 		attr = &Attr{}
 	}
 	err := m.en.doLink(ctx, inode, parent, name, attr)
-	if err == 0 {
-		go m.increDirUsage(ctx, parent, align4K(attr.Length), 1)
+	newSpace := align4K(attr.Length)
+	if err == 0 && !m.tryIncreDirUsage(ctx, parent, newSpace, 1) {
+		go m.mustIncreDirUsage(ctx, parent, newSpace, 1)
 	}
 	return err
 }
@@ -957,11 +970,13 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var attr Attr
 	err := m.en.doUnlink(ctx, m.checkRoot(parent), name, &attr)
 	if err == 0 {
-		size := uint64(0)
+		newSpace := -align4K(0)
 		if attr.Typ == TypeFile {
-			size = attr.Length
+			newSpace = -align4K(attr.Length)
 		}
-		go m.increDirUsage(ctx, parent, -align4K(size), -1)
+		if !m.tryIncreDirUsage(ctx, parent, newSpace, -1) {
+			go m.mustIncreDirUsage(ctx, parent, newSpace, -1)
+		}
 	}
 	return err
 }
@@ -982,8 +997,9 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 
 	defer m.timeit(time.Now())
 	err := m.en.doRmdir(ctx, m.checkRoot(parent), name)
-	if err == 0 {
-		go m.increDirUsage(ctx, parent, -align4K(0), -1)
+	newSpace := -align4K(0)
+	if err == 0 && !m.tryIncreDirUsage(ctx, parent, newSpace, -1) {
+		go m.mustIncreDirUsage(ctx, parent, newSpace, -1)
 	}
 	return err
 }
@@ -1015,12 +1031,18 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	err := m.en.doRename(ctx, m.checkRoot(parentSrc), nameSrc, m.checkRoot(parentDst), nameDst, flags, inode, attr)
 	if err == 0 {
-		size := uint64(0)
+		diffSpace := align4K(0)
 		if attr.Typ == TypeFile {
-			size = attr.Length
+			diffSpace = align4K(attr.Length)
 		}
-		go m.increDirUsage(ctx, parentSrc, -align4K(size), -1)
-		go m.increDirUsage(ctx, parentDst, align4K(size), 1)
+		if !m.tryIncreDirUsage(ctx, parentSrc, -diffSpace, -1) {
+			go m.mustIncreDirUsage(ctx, parentSrc, -diffSpace, -1)
+
+		}
+		if !m.tryIncreDirUsage(ctx, parentDst, diffSpace, 1) {
+			go m.mustIncreDirUsage(ctx, parentDst, diffSpace, 1)
+
+		}
 	}
 	return err
 }
