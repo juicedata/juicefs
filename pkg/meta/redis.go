@@ -2287,21 +2287,20 @@ func (m *redisMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, e
 	spaceKey := m.dirUsedSpaceKey()
 	inodesKey := m.dirUsedInodesKey()
 	field := strconv.FormatUint(uint64(ino), 16)
-	usedSpace, err := m.rdb.HGet(ctx, spaceKey, field).Int64()
-	if err != nil {
+	usedSpace, errSpace := m.rdb.HGet(ctx, spaceKey, field).Int64()
+	if errSpace != nil && errSpace != redis.Nil {
+		err = errSpace
 		return
 	}
-	usedInodes, err := m.rdb.HGet(ctx, inodesKey, field).Int64()
-	if err != nil {
+	usedInodes, errInodes := m.rdb.HGet(ctx, inodesKey, field).Int64()
+	if errInodes != nil && errSpace != redis.Nil {
+		err = errInodes
 		return
 	}
 
-	if m.rdb.HExists(ctx, spaceKey, field).Val() &&
-		m.rdb.HExists(ctx, inodesKey, field).Val() &&
-		usedSpace >= 0 && usedInodes >= 0 {
+	if errSpace == nil && errInodes == nil && usedSpace >= 0 && usedInodes >= 0 {
 		return uint64(usedSpace), uint64(usedInodes), nil
 	}
-
 	return m.doSyncDirUsage(ctx, ino)
 }
 
