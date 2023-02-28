@@ -181,7 +181,7 @@ All keys:
   SHssssssss         session heartbeat // for legacy client
   SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
-  Uiiiiiiii			 space and inodes usage in directory
+  Uiiiiiiii	         space and inodes usage in directory
 */
 
 func (m *kvMeta) inodeKey(inode Ino) []byte {
@@ -1973,11 +1973,8 @@ func (m *kvMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64
 			_, _, err := m.doSyncDirUsage(ctx, tx, ino)
 			return err
 		}
-		var usedSpace, usedInodes int64
-		if rawUsage != nil {
-			us, ui := m.parseDirUsage(rawUsage)
-			usedSpace, usedInodes = int64(us), int64(ui)
-		}
+		us, ui := m.parseDirUsage(rawUsage)
+		usedSpace, usedInodes := int64(us), int64(ui)
 		usedSpace += space
 		usedInodes += inodes
 		if usedSpace < 0 || usedInodes < 0 {

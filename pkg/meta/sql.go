@@ -2263,36 +2263,49 @@ func (m *dbMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64
 	if space == 0 && inodes == 0 {
 		return nil
 	}
-	return m.txn(func(s *xorm.Session) error {
-		table := m.db.GetTableMapper().Obj2Table("dirUsage")
-		usedSpaceColumn := m.db.GetColumnMapper().Obj2Table("UsedSpace")
-		usedInodeColumn := m.db.GetColumnMapper().Obj2Table("UsedInodes")
-		sql := fmt.Sprintf(
-			"update `%s` set `%s` = `%s` + ?, `%s` = `%s` + ? where `inode` = ?",
-			table,
-			usedSpaceColumn, usedSpaceColumn,
-			usedInodeColumn, usedInodeColumn,
-		)
+
+	table := m.db.GetTableMapper().Obj2Table("dirUsage")
+	usedSpaceColumn := m.db.GetColumnMapper().Obj2Table("UsedSpace")
+	usedInodeColumn := m.db.GetColumnMapper().Obj2Table("UsedInodes")
+	sql := fmt.Sprintf(
+		"update `%s` set `%s` = `%s` + ?, `%s` = `%s` + ? where `inode` = ?",
+		table,
+		usedSpaceColumn, usedSpaceColumn,
+		usedInodeColumn, usedInodeColumn,
+	)
+	var affected int64
+	increFn := func(s *xorm.Session) error {
 		ret, err := s.Exec(sql, space, inodes, ino)
 		if err != nil {
 			return err
 		}
-		if n, _ := ret.RowsAffected(); n > 0 {
-			return nil
-		}
+		affected, _ = ret.RowsAffected()
+		return nil
+	}
 
-		totalSpace, totalInodes, countErr := m.countDirUsage(ctx, ino)
-		if countErr != 0 {
-			return countErr
-		}
+	err := m.txn(increFn)
+	if err != nil {
+		return err
+	}
+	if affected > 0 {
+		return nil
+	}
 
-		_, err = s.Insert(&dirUsage{Inode: ino, UsedSpace: int64(totalSpace), UsedInodes: int64(totalInodes)})
-		if err == nil || !strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return err
-		}
-		_, err = s.Exec(sql, space, inodes, ino)
+	// Insert a new row
+	totalSpace, totalInodes, countErr := m.countDirUsage(ctx, ino)
+	if countErr != 0 {
+		return countErr
+	}
+	err = m.txn(func(s *xorm.Session) error {
+		_, err := s.Insert(&dirUsage{Inode: ino, UsedSpace: int64(totalSpace), UsedInodes: int64(totalInodes)})
 		return err
 	})
+	if err == nil || !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		return err
+	}
+
+	// Retry increment
+	return m.txn(increFn)
 }
 
 func (m *dbMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
