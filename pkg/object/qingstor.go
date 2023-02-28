@@ -167,10 +167,12 @@ func (q *qingstor) List(prefix, marker, delimiter string, limit int64) ([]Object
 	}
 	limit_ := int(limit)
 	input := &qs.ListObjectsInput{
-		Prefix:    &prefix,
-		Marker:    &marker,
-		Limit:     &limit_,
-		Delimiter: &delimiter,
+		Prefix: &prefix,
+		Marker: &marker,
+		Limit:  &limit_,
+	}
+	if delimiter != "" {
+		input.Delimiter = &delimiter
 	}
 	out, err := q.bucket.ListObjects(input)
 	if err != nil {
