@@ -169,6 +169,7 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	input.Prefix = prefix
 	input.MaxKeys = int(limit)
 	input.Delimiter = delimiter
+	input.EncodingType = "url"
 	resp, err := s.c.ListObjects(input)
 	if err != nil {
 		return nil, err
