@@ -2279,8 +2279,8 @@ func (m *dbMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64
 		if err != nil {
 			return err
 		}
-		affected, _ = ret.RowsAffected()
-		return nil
+		affected, err = ret.RowsAffected()
+		return err
 	}
 
 	err := m.txn(increFn)
