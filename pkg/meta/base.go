@@ -17,7 +17,6 @@
 package meta
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -119,7 +118,6 @@ type cchunk struct {
 
 // event to update dir usage
 type dirUsageEvent struct {
-	ino    Ino
 	space  int64
 	inodes int64
 }
@@ -145,7 +143,8 @@ type baseMeta struct {
 	umounting    bool
 	sesMu        sync.Mutex
 
-	dirUsageEvents chan *dirUsageEvent
+	dirUsageLock   sync.Mutex
+	dirUsageEvents map[Ino]dirUsageEvent
 
 	*fsStat
 
@@ -174,7 +173,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		dslices:        make(chan Slice, conf.MaxDeletes*10240),
 		symlinks:       &sync.Map{},
 		fsStat:         new(fsStat),
-		dirUsageEvents: make(chan *dirUsageEvent, dirUsageBatchSize),
+		dirUsageEvents: make(map[Ino]dirUsageEvent),
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
@@ -266,29 +265,30 @@ func (m *baseMeta) GetDirUsage(ctx Context, inode Ino) (space, inodes uint64, er
 	return m.en.doGetDirUsage(ctx, m.checkRoot(inode))
 }
 
+// may cause data race, caller should hold dirUsageLock
+func (m *baseMeta) increDirUsage(ctx Context, ino Ino, space int64, inodes int64) {
+	if inodes == 0 && space == 0 {
+		return
+	}
+	event := m.dirUsageEvents[ino]
+	event.space += space
+	event.inodes += inodes
+	m.dirUsageEvents[ino] = event
+}
+
 func (m *baseMeta) tryIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) bool {
-	select {
-	case m.dirUsageEvents <- &dirUsageEvent{ino, space, inodes}:
-		return true
-	default:
+	if !m.dirUsageLock.TryLock() {
 		return false
 	}
+	m.increDirUsage(ctx, ino, space, inodes)
+	m.dirUsageLock.Unlock()
+	return true
 }
 
 func (m *baseMeta) mustIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) {
-	for i := 0; i < 50; i++ {
-		select {
-		case m.dirUsageEvents <- &dirUsageEvent{ino, space, inodes}:
-			return
-		default:
-			time.Sleep(time.Second * 1)
-		}
-	}
-	logger.Warn("already tried 50 times, dirUsageEvents channel is full, try to update dir usage directly")
-	err := m.en.doIncreDirUsage(ctx, ino, space, inodes)
-	if err != nil {
-		logger.Errorf("update dir usage directly failed: %v", err)
-	}
+	m.dirUsageLock.Lock()
+	m.increDirUsage(ctx, ino, space, inodes)
+	m.dirUsageLock.Unlock()
 }
 
 func (m *baseMeta) increParentUsage(ctx Context, inode, parent Ino, space int64) {
@@ -306,37 +306,22 @@ func (m *baseMeta) increParentUsage(ctx Context, inode, parent Ino, space int64)
 }
 
 func (m *baseMeta) dirUsageBatch() {
-	commitChan := make(chan map[Ino]*dirUsageEvent, 16)
-	go func() {
-		for records := range commitChan {
-			for _, r := range records {
-				err := m.en.doIncreDirUsage(WrapContext(context.TODO()), r.ino, r.space, r.inodes)
-				if err != nil {
-					logger.Errorf("update dir usage failed: %v", err)
-				}
-			}
-
-		}
-	}()
-
 	for {
-		count := 0
-		records := make(map[Ino]*dirUsageEvent)
-		for count <= dirUsageBatchSize {
-			count++
-			e := <-m.dirUsageEvents
-			record, exist := records[e.ino]
-			if !exist {
-				records[e.ino] = e
-			} else {
-				record.space += e.space
-				record.inodes += e.inodes
-			}
-			if len(m.dirUsageEvents) == 0 {
-				break
+		time.Sleep(time.Second * 1)
+		m.dirUsageLock.Lock()
+		if len(m.dirUsageEvents) == 0 {
+			m.dirUsageLock.Unlock()
+			continue
+		}
+		events := m.dirUsageEvents
+		m.dirUsageEvents = make(map[Ino]dirUsageEvent)
+		m.dirUsageLock.Unlock()
+		for ino, e := range events {
+			err := m.en.doIncreDirUsage(Background, ino, e.space, e.inodes)
+			if err != nil {
+				logger.Errorf("update dir usage failed: %v", err)
 			}
 		}
-		commitChan <- records
 	}
 }
 
