@@ -902,10 +902,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		return err
 	}, m.inodeKey(inode))
 	if err == nil {
-		m.updateStats(newSpace, 0)
-		if newSpace != 0 {
-			m.increParentUsage(ctx, inode, attr.Parent, newSpace)
-		}
+		m.updateParentStat(ctx, inode, attr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -998,10 +995,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		return err
 	}, m.inodeKey(inode))
 	if err == nil {
-		m.updateStats(newSpace, 0)
-		if newSpace != 0 {
-			m.increParentUsage(ctx, inode, t.Parent, newSpace)
-		}
+		m.updateParentStat(ctx, inode, t.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -1208,6 +1202,11 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
 			if _type == TypeSymlink {
 				pipe.Set(ctx, m.symKey(ino), path, 0)
+			}
+			if _type == TypeDirectory {
+				field := strconv.FormatUint(uint64(ino), 10)
+				pipe.HSet(ctx, m.dirUsedInodesKey(), field, "0")
+				pipe.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
 			pipe.Incr(ctx, m.totalInodesKey())
@@ -1440,14 +1439,8 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 			}
 
 			field := strconv.FormatUint(uint64(inode), 10)
-			err := pipe.HDel(ctx, m.dirUsedSpaceKey(), field).Err()
-			if err != nil && err != redis.Nil {
-				logger.Warnf("remove dir space usage of ino(%d): %s", inode, err)
-			}
-			err = pipe.HDel(ctx, m.dirUsedInodesKey(), field).Err()
-			if err != nil && err != redis.Nil {
-				logger.Warnf("remove dir inodes usage of ino(%d): %s", inode, err)
-			}
+			pipe.HDel(ctx, m.dirUsedSpaceKey(), field)
+			pipe.HDel(ctx, m.dirUsedInodesKey(), field)
 			return nil
 		})
 		return err
@@ -2095,10 +2088,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		if needCompact {
 			go m.compactChunk(inode, indx, false)
 		}
-		m.updateStats(newSpace, 0)
-		if newSpace != 0 {
-			m.increParentUsage(ctx, inode, attr.Parent, newSpace)
-		}
+		m.updateParentStat(ctx, inode, attr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -2229,10 +2219,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		return err
 	}, m.inodeKey(fout), m.inodeKey(fin))
 	if err == nil {
-		m.updateStats(newSpace, 0)
-		if newSpace != 0 {
-			m.increParentUsage(ctx, fout, attr.Parent, newSpace)
-		}
+		m.updateParentStat(ctx, fout, attr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -2253,47 +2240,48 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
-func (m *redisMeta) doSyncDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
+func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
 	spaceKey := m.dirUsedSpaceKey()
 	inodesKey := m.dirUsedInodesKey()
 	field := strconv.FormatUint(uint64(ino), 16)
-	space, inodes, countErr := m.countDirUsage(ctx, ino)
-	if countErr != 0 {
-		err = errors.Wrap(countErr, "count dir usage")
+	space, inodes, err = m.calcDirStat(ctx, ino)
+	if err != nil {
 		return
 	}
-	if err = m.rdb.HSet(ctx, spaceKey, field, space).Err(); err != nil {
-		return
-	}
-	err = m.rdb.HSet(ctx, inodesKey, field, inodes).Err()
+	err = m.txn(ctx, func(tx *redis.Tx) error {
+		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HSet(ctx, spaceKey, field, space)
+			pipe.HSet(ctx, inodesKey, field, inodes)
+			return nil
+		})
+		return err
+	})
 	return
 }
 
-func (m *redisMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) error {
+func (m *redisMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error {
 	spaceKey := m.dirUsedSpaceKey()
 	inodesKey := m.dirUsedInodesKey()
 	field := strconv.FormatUint(uint64(ino), 10)
-	if !m.rdb.HExists(ctx, spaceKey, field).Val() ||
-		!m.rdb.HExists(ctx, inodesKey, field).Val() {
-		_, _, err := m.doSyncDirUsage(ctx, ino)
+	if !m.rdb.HExists(ctx, spaceKey, field).Val() {
+		_, _, err := m.doSyncDirStat(ctx, ino)
 		return err
 	}
-	if space != 0 {
-		err := m.rdb.HIncrBy(ctx, spaceKey, field, space).Err()
-		if err != nil {
-			return err
-		}
-	}
-	if inodes != 0 {
-		err := m.rdb.HIncrBy(ctx, inodesKey, field, inodes).Err()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return m.txn(ctx, func(tx *redis.Tx) error {
+		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			if space != 0 {
+				pipe.HIncrBy(ctx, spaceKey, field, space)
+			}
+			if inodes != 0 {
+				pipe.HIncrBy(ctx, inodesKey, field, inodes)
+			}
+			return nil
+		})
+		return err
+	})
 }
 
-func (m *redisMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
+func (m *redisMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
 	spaceKey := m.dirUsedSpaceKey()
 	inodesKey := m.dirUsedInodesKey()
 	field := strconv.FormatUint(uint64(ino), 10)
@@ -2311,7 +2299,7 @@ func (m *redisMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, e
 	if errSpace == nil && errInodes == nil && usedSpace >= 0 && usedInodes >= 0 {
 		return uint64(usedSpace), uint64(usedInodes), nil
 	}
-	return m.doSyncDirUsage(ctx, ino)
+	return m.doSyncDirStat(ctx, ino)
 }
 
 // For now only deleted files

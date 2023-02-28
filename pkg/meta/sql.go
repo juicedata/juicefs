@@ -159,7 +159,7 @@ type delfile struct {
 	Expire int64  `xorm:"notnull"`
 }
 
-type dirUsage struct {
+type dirStats struct {
 	Inode      Ino   `xorm:"pk notnull"`
 	UsedSpace  int64 `xorm:"notnull"`
 	UsedInodes int64 `xorm:"notnull"`
@@ -282,8 +282,8 @@ func (m *dbMeta) Init(format *Format, force bool) error {
 	if err := m.syncTable(new(flock), new(plock)); err != nil {
 		return fmt.Errorf("create table flock, plock: %s", err)
 	}
-	if err := m.syncTable(new(dirUsage)); err != nil {
-		return fmt.Errorf("create table dirUsage: %s", err)
+	if err := m.syncTable(new(dirStats)); err != nil {
+		return fmt.Errorf("create table dirStats: %s", err)
 	}
 
 	var s = setting{Name: "format"}
@@ -368,7 +368,7 @@ func (m *dbMeta) Reset() error {
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &sliceRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
-		&flock{}, &plock{}, &dirUsage{})
+		&flock{}, &plock{}, &dirStats{})
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
@@ -390,9 +390,9 @@ func (m *dbMeta) doLoad() (data []byte, err error) {
 
 func (m *dbMeta) doNewSession(sinfo []byte) error {
 	// add new table
-	err := m.syncTable(new(session2), new(delslices), new(dirUsage))
+	err := m.syncTable(new(session2), new(delslices), new(dirStats))
 	if err != nil {
-		return fmt.Errorf("update table session2, delslices: %s", err)
+		return fmt.Errorf("update table session2, delslices, dirstats: %s", err)
 	}
 	// add primary key
 	if err = m.syncTable(new(edge), new(chunk), new(xattr), new(sustained)); err != nil {
@@ -1009,10 +1009,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		return nil
 	})
 	if err == nil {
-		m.updateStats(newSpace, 0)
-		if newSpace != 0 {
-			m.increParentUsage(ctx, inode, nodeAttr.Parent, newSpace)
-		}
+		m.updateParentStat(ctx, inode, nodeAttr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -1106,10 +1103,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		return nil
 	})
 	if err == nil {
-		m.updateStats(newSpace, 0)
-		if newSpace != 0 {
-			m.increParentUsage(ctx, inode, nodeAttr.Parent, newSpace)
-		}
+		m.updateParentStat(ctx, inode, nodeAttr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -1242,6 +1236,11 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 		if _type == TypeSymlink {
 			if err = mustInsert(s, &symlink{Inode: ino, Target: []byte(path)}); err != nil {
+				return err
+			}
+		}
+		if _type == TypeDirectory {
+			if err = mustInsert(s, &dirStats{Inode: ino}); err != nil {
 				return err
 			}
 		}
@@ -1470,7 +1469,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
-		if _, err := s.Delete(&dirUsage{Inode: e.Inode}); err != nil {
+		if _, err := s.Delete(&dirStats{Inode: e.Inode}); err != nil {
 			logger.Warnf("remove dir usage of ino(%d): %s", e.Inode, err)
 		}
 
@@ -2110,10 +2109,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if needCompact {
 			go m.compactChunk(inode, indx, false)
 		}
-		m.updateStats(newSpace, 0)
-		if newSpace != 0 {
-			m.increParentUsage(ctx, inode, nodeAttr.Parent, newSpace)
-		}
+		m.updateParentStat(ctx, inode, nodeAttr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -2239,10 +2235,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		return nil
 	})
 	if err == nil {
-		m.updateStats(newSpace, 0)
-		if newSpace != 0 {
-			m.increParentUsage(ctx, fout, nout.Parent, newSpace)
-		}
+		m.updateParentStat(ctx, fout, nout.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -2263,12 +2256,8 @@ func (m *dbMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
-func (m *dbMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) error {
-	if space == 0 && inodes == 0 {
-		return nil
-	}
-
-	table := m.db.GetTableMapper().Obj2Table("dirUsage")
+func (m *dbMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error {
+	table := m.db.GetTableMapper().Obj2Table("dirStats")
 	usedSpaceColumn := m.db.GetColumnMapper().Obj2Table("UsedSpace")
 	usedInodeColumn := m.db.GetColumnMapper().Obj2Table("UsedInodes")
 	sql := fmt.Sprintf(
@@ -2278,88 +2267,77 @@ func (m *dbMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64
 		usedInodeColumn, usedInodeColumn,
 	)
 	var affected int64
-	increFn := func(s *xorm.Session) error {
+	err := m.txn(func(s *xorm.Session) error {
 		ret, err := s.Exec(sql, space, inodes, ino)
 		if err != nil {
 			return err
 		}
 		affected, err = ret.RowsAffected()
 		return err
+	})
+	if err == nil && affected == 0 {
+		_, _, err = m.doSyncDirStat(ctx, ino)
 	}
-
-	err := m.txn(increFn)
-	if err != nil {
-		return err
-	}
-	if affected > 0 {
-		return nil
-	}
-
-	_, _, err = m.doSyncDirUsage(ctx, ino)
-	if err == nil || !strings.Contains(err.Error(), "UNIQUE constraint failed") {
-		return err
-	}
-
-	// Retry increment
-	return m.txn(increFn)
+	return err
 }
 
-func (m *dbMeta) doSyncDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
-	space, inodes, countErr := m.countDirUsage(ctx, ino)
-	if countErr != 0 {
-		err = errors.Wrap(countErr, "count dir usage")
+func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	space, inodes, err = m.calcDirStat(ctx, ino)
+	if err != nil {
 		return
 	}
 	err = m.txn(func(s *xorm.Session) error {
-		_, err := s.Insert(&dirUsage{Inode: ino, UsedSpace: int64(space), UsedInodes: int64(inodes)})
+		_, err := s.Insert(&dirStats{Inode: ino, UsedSpace: int64(space), UsedInodes: int64(inodes)})
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			// other client synced
+			err = nil
+		}
 		return err
 	})
 	return
 }
 
-func (m *dbMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
-	dirUsage := dirUsage{Inode: ino}
+func (m *dbMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	st := dirStats{Inode: ino}
 	var exist bool
 	if err = m.roTxn(func(s *xorm.Session) error {
-		exist, err = s.Get(&dirUsage)
+		exist, err = s.Get(&st)
 		return err
 	}); err != nil {
 		return
 	}
 
 	if !exist {
-		space, inodes, err = m.doSyncDirUsage(ctx, ino)
-		if err == nil || !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		space, inodes, err = m.doSyncDirStat(ctx, ino)
+		if err == nil {
 			return
 		}
 	}
 
-	if !exist || dirUsage.UsedSpace < 0 || dirUsage.UsedInodes < 0 {
+	if !exist || st.UsedSpace < 0 || st.UsedInodes < 0 {
 		logger.Warnf(
 			"dir usage of inode %d is invalid: space %d, inodes %d, try to fix",
-			ino, dirUsage.UsedSpace, dirUsage.UsedInodes,
+			ino, st.UsedSpace, st.UsedInodes,
 		)
-		var countErr syscall.Errno
-		space, inodes, countErr = m.countDirUsage(ctx, ino)
-		if countErr != 0 {
-			err = errors.Wrap(countErr, "count dir usage")
+		space, inodes, err = m.calcDirStat(ctx, ino)
+		if err != nil {
 			return
 		}
-		dirUsage.UsedSpace, dirUsage.UsedInodes = int64(space), int64(inodes)
-		err = m.txn(func(s *xorm.Session) error {
-			n, err := s.AllCols().Update(&dirUsage)
-			if err != nil {
-				return err
-			}
-			if n != 1 {
+		st.UsedSpace, st.UsedInodes = int64(space), int64(inodes)
+		e := m.txn(func(s *xorm.Session) error {
+			n, err := s.AllCols().Update(&st)
+			if err == nil && n != 1 {
 				err = errors.Errorf("update dir usage of inode %d: %d rows affected", ino, n)
 			}
 			return err
 		})
+		if e != nil {
+			logger.Warn(e)
+		}
 		return
 	}
-	space = uint64(dirUsage.UsedSpace)
-	inodes = uint64(dirUsage.UsedInodes)
+	space = uint64(st.UsedSpace)
+	inodes = uint64(st.UsedInodes)
 	return
 }
 
@@ -3428,8 +3406,8 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err = m.syncTable(new(flock), new(plock)); err != nil {
 		return fmt.Errorf("create table flock, plock: %s", err)
 	}
-	if err := m.syncTable(new(dirUsage)); err != nil {
-		return fmt.Errorf("create table dirUsage: %s", err)
+	if err := m.syncTable(new(dirStats)); err != nil {
+		return fmt.Errorf("create table dirStats: %s", err)
 	}
 
 	var batch int

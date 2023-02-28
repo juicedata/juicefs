@@ -83,8 +83,8 @@ type engine interface {
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
-	doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) error
-	doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error)
+	doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error
+	doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error)
 
 	scanTrashSlices(Context, trashSliceScan) error
 	scanPendingSlices(Context, pendingSliceScan) error
@@ -114,8 +114,8 @@ type cchunk struct {
 	slices int
 }
 
-// event to update dir usage
-type dirUsageEvent struct {
+// stat of dir
+type dirStat struct {
 	space  int64
 	inodes int64
 }
@@ -141,9 +141,8 @@ type baseMeta struct {
 	umounting    bool
 	sesMu        sync.Mutex
 
-	dirUsageLock   sync.Mutex
-	dirUsageEvents map[Ino]dirUsageEvent
-
+	dirStatsLock sync.Mutex
+	dirStats     map[Ino]dirStat
 	*fsStat
 
 	freeMu     sync.Mutex
@@ -161,17 +160,17 @@ type baseMeta struct {
 
 func newBaseMeta(addr string, conf *Config) *baseMeta {
 	return &baseMeta{
-		addr:           utils.RemovePassword(addr),
-		conf:           conf,
-		root:           RootInode,
-		of:             newOpenFiles(conf.OpenCache, conf.OpenCacheLimit),
-		removedFiles:   make(map[Ino]bool),
-		compacting:     make(map[uint64]bool),
-		maxDeleting:    make(chan struct{}, 100),
-		dslices:        make(chan Slice, conf.MaxDeletes*10240),
-		symlinks:       &sync.Map{},
-		fsStat:         new(fsStat),
-		dirUsageEvents: make(map[Ino]dirUsageEvent),
+		addr:         utils.RemovePassword(addr),
+		conf:         conf,
+		root:         RootInode,
+		of:           newOpenFiles(conf.OpenCache, conf.OpenCacheLimit),
+		removedFiles: make(map[Ino]bool),
+		compacting:   make(map[uint64]bool),
+		maxDeleting:  make(chan struct{}, 100),
+		dslices:      make(chan Slice, conf.MaxDeletes*10240),
+		symlinks:     &sync.Map{},
+		fsStat:       new(fsStat),
+		dirStats:     make(map[Ino]dirStat),
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
@@ -243,9 +242,10 @@ func (m *baseMeta) checkRoot(inode Ino) Ino {
 	}
 }
 
-func (m *baseMeta) countDirUsage(ctx Context, ino Ino) (space, inodes uint64, err syscall.Errno) {
+func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
 	var entries []*Entry
-	if err = m.en.doReaddir(ctx, ino, 1, &entries, -1); err != 0 {
+	if eno := m.en.doReaddir(ctx, ino, 1, &entries, -1); eno != 0 {
+		err = errors.Wrap(eno, "calc dir stat")
 		return
 	}
 	for _, e := range entries {
@@ -259,55 +259,61 @@ func (m *baseMeta) countDirUsage(ctx Context, ino Ino) (space, inodes uint64, er
 	return
 }
 
-func (m *baseMeta) GetDirUsage(ctx Context, inode Ino) (space, inodes uint64, err error) {
-	return m.en.doGetDirUsage(ctx, m.checkRoot(inode))
+func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (space, inodes uint64, err error) {
+	return m.en.doGetDirStat(ctx, m.checkRoot(inode))
 }
 
-// may cause data race, caller should hold dirUsageLock
-func (m *baseMeta) increDirUsage(ctx Context, ino Ino, space int64, inodes int64) {
+func (m *baseMeta) updateDirStat(ctx Context, ino Ino, space int64, inodes int64) {
 	if inodes == 0 && space == 0 {
 		return
 	}
-	event := m.dirUsageEvents[ino]
+	m.dirStatsLock.Lock()
+	defer m.dirStatsLock.Unlock()
+	event := m.dirStats[ino]
 	event.space += space
 	event.inodes += inodes
-	m.dirUsageEvents[ino] = event
+	m.dirStats[ino] = event
 }
 
-func (m *baseMeta) mustIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) {
-	m.dirUsageLock.Lock()
-	m.increDirUsage(ctx, ino, space, inodes)
-	m.dirUsageLock.Unlock()
-}
-
-func (m *baseMeta) increParentUsage(ctx Context, inode, parent Ino, space int64) {
+func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, space int64) {
+	if space == 0 {
+		return
+	}
+	m.updateStats(space, 0)
 	if parent > 0 {
-		m.mustIncreDirUsage(ctx, parent, space, 0)
+		m.updateDirStat(ctx, parent, space, 0)
 	} else {
 		go func() {
 			for p := range m.en.doGetParents(ctx, inode) {
-				m.mustIncreDirUsage(ctx, p, space, 0)
+				m.updateDirStat(ctx, p, space, 0)
 			}
 		}()
 	}
 }
 
-func (m *baseMeta) dirUsageBatch() {
+func (m *baseMeta) flushDirStat() {
 	for {
 		time.Sleep(time.Second * 1)
-		m.dirUsageLock.Lock()
-		if len(m.dirUsageEvents) == 0 {
-			m.dirUsageLock.Unlock()
+		m.doFlushDirStat()
+	}
+}
+
+func (m *baseMeta) doFlushDirStat() {
+	m.dirStatsLock.Lock()
+	if len(m.dirStats) == 0 {
+		m.dirStatsLock.Unlock()
+		return
+	}
+	stats := m.dirStats
+	m.dirStats = make(map[Ino]dirStat)
+	m.dirStatsLock.Unlock()
+	for ino, e := range stats {
+		if e.space == 0 && e.inodes == 0 {
 			continue
 		}
-		events := m.dirUsageEvents
-		m.dirUsageEvents = make(map[Ino]dirUsageEvent)
-		m.dirUsageLock.Unlock()
-		for ino, e := range events {
-			err := m.en.doIncreDirUsage(Background, ino, e.space, e.inodes)
-			if err != nil {
-				logger.Errorf("update dir usage failed: %v", err)
-			}
+		err := m.en.doUpdateDirStat(Background, ino, e.space, e.inodes)
+		if err != nil {
+			logger.Errorf("update dir stat failed: %v", err)
 		}
 	}
 }
@@ -399,7 +405,7 @@ func (m *baseMeta) NewSession() error {
 		go m.cleanupDeletedFiles()
 		go m.cleanupSlices()
 		go m.cleanupTrash()
-		go m.dirUsageBatch()
+		go m.flushDirStat()
 	}
 	return nil
 }
@@ -487,6 +493,7 @@ func (m *baseMeta) CloseSession() error {
 	if m.conf.ReadOnly {
 		return nil
 	}
+	m.doFlushDirStat()
 	m.sesMu.Lock()
 	m.umounting = true
 	m.sesMu.Unlock()
@@ -854,7 +861,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}
 	err := m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)
 	if err == 0 {
-		m.mustIncreDirUsage(ctx, parent, align4K(0), 1)
+		m.updateDirStat(ctx, parent, align4K(0), 1)
 	}
 	return err
 }
@@ -904,7 +911,7 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	}
 	err := m.en.doLink(ctx, inode, parent, name, attr)
 	if err == 0 {
-		m.mustIncreDirUsage(ctx, parent, align4K(attr.Length), 1)
+		m.updateDirStat(ctx, parent, align4K(attr.Length), 1)
 	}
 	return err
 }
@@ -943,7 +950,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if attr.Typ == TypeFile {
 			newSpace = -align4K(attr.Length)
 		}
-		m.mustIncreDirUsage(ctx, parent, newSpace, -1)
+		m.updateDirStat(ctx, parent, newSpace, -1)
 	}
 	return err
 }
@@ -965,7 +972,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	defer m.timeit(time.Now())
 	err := m.en.doRmdir(ctx, m.checkRoot(parent), name)
 	if err == 0 {
-		m.mustIncreDirUsage(ctx, parent, -align4K(0), -1)
+		m.updateDirStat(ctx, parent, -align4K(0), -1)
 	}
 	return err
 }
@@ -1001,8 +1008,8 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if attr.Typ == TypeFile {
 			diffSpace = align4K(attr.Length)
 		}
-		m.mustIncreDirUsage(ctx, parentSrc, -diffSpace, -1)
-		m.mustIncreDirUsage(ctx, parentDst, diffSpace, 1)
+		m.updateDirStat(ctx, parentSrc, -diffSpace, -1)
+		m.updateDirStat(ctx, parentDst, diffSpace, 1)
 	}
 	return err
 }

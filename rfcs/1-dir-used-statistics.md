@@ -68,23 +68,23 @@ The are several file types among the children, we should clarify how to deal wit
 | Char device   | 4KiB            | 1           |
 | Socket        | 4KiB            | 1           |
 
-Each meta engine should implement `doIncreDirUsage`.
+Each meta engine should implement `doUpdateDirUsage`.
 
 ```go
 type engine interface {
     ...
-    doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64)
+    doUpdateDirUsage(ctx Context, ino Ino, space int64, inodes int64)
 }
 ```
 
-Relevant IO operations should call `doIncreDirUsage` asynchronously.
+Relevant IO operations should call `doUpdateDirUsage` asynchronously.
 
 ```go
 func (m *baseMeta) Mknod(ctx Context, parent Ino, ...) syscall.Errno {
     ...
     err := m.en.doMknod(ctx, m.checkRoot(parent), ...)
     ...
-    go m.en.doIncreDirUsage(ctx, parent, 1<<12, 1)
+    go m.en.doUpdateDirUsage(ctx, parent, 1<<12, 1)
     return err
 }
 
@@ -92,7 +92,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
     ...
     err := m.en.doUnlink(ctx, m.checkRoot(parent), name)
     ...
-    go m.en.doIncreDirUsage(ctx, parent, -align4K(attr.size), -1)
+    go m.en.doUpdateDirUsage(ctx, parent, -align4K(attr.size), -1)
     return err
 }
 ```

@@ -232,7 +232,7 @@ func (m *kvMeta) legacySessionKey(sid uint64) []byte {
 	return m.fmtKey("SH", sid)
 }
 
-func (m *kvMeta) dirUsageKey(inode Ino) []byte {
+func (m *kvMeta) dirStatKey(inode Ino) []byte {
 	return m.fmtKey("U", inode)
 }
 
@@ -314,14 +314,14 @@ func (m *kvMeta) parseEntry(buf []byte) (uint8, Ino) {
 	return b.Get8(), Ino(b.Get64())
 }
 
-func (m *kvMeta) packDirUsage(usedSpace, usedInodes uint64) []byte {
+func (m *kvMeta) packDirStat(usedSpace, usedInodes uint64) []byte {
 	b := utils.NewBuffer(16)
 	b.Put64(usedSpace)
 	b.Put64(usedInodes)
 	return b.Bytes()
 }
 
-func (m *kvMeta) parseDirUsage(buf []byte) (space uint64, inodes uint64) {
+func (m *kvMeta) parseDirStat(buf []byte) (space uint64, inodes uint64) {
 	b := utils.FromBuffer(buf)
 	return b.Get64(), b.Get64()
 }
@@ -923,10 +923,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		return nil
 	})
 	if err == nil {
-		m.updateStats(newSpace, 0)
-		if newSpace != 0 {
-			m.increParentUsage(ctx, inode, t.Parent, newSpace)
-		}
+		m.updateParentStat(ctx, inode, t.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -1015,10 +1012,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		return nil
 	})
 	if err == nil {
-		m.updateStats(newSpace, 0)
-		if newSpace != 0 {
-			m.increParentUsage(ctx, inode, t.Parent, newSpace)
-		}
+		m.updateParentStat(ctx, inode, t.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -1139,6 +1133,9 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		tx.set(m.inodeKey(ino), m.marshal(attr))
 		if _type == TypeSymlink {
 			tx.set(m.symKey(ino), []byte(path))
+		}
+		if _type == TypeDirectory {
+			tx.set(m.dirStatKey(ino), m.packDirStat(0, 0))
 		}
 		return nil
 	}, parent)
@@ -1335,7 +1332,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
 		tx.delete(m.entryKey(parent, name))
-		tx.delete(m.dirUsageKey(inode))
+		tx.delete(m.dirStatKey(inode))
 		if trash > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
 			tx.set(m.entryKey(trash, m.trashEntry(parent, inode, name)), buf)
@@ -1785,10 +1782,11 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if newleng > attr.Length {
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
+			if m.checkQuota(newSpace, 0) {
+				return syscall.ENOSPC
+			}
 		}
-		if m.checkQuota(newSpace, 0) {
-			return syscall.ENOSPC
-		}
+
 		now := time.Now()
 		attr.Mtime = now.Unix()
 		attr.Mtimensec = uint32(now.Nanosecond())
@@ -1803,10 +1801,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if needCompact {
 			go m.compactChunk(inode, indx, false)
 		}
-		m.updateStats(newSpace, 0)
-		if newSpace != 0 {
-			m.increParentUsage(ctx, inode, attr.Parent, newSpace)
-		}
+		m.updateParentStat(ctx, inode, attr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -1928,10 +1923,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		return nil
 	})
 	if err == nil {
-		m.updateStats(newSpace, 0)
-		if newSpace != 0 {
-			m.increParentUsage(ctx, fout, attr.Parent, newSpace)
-		}
+		m.updateParentStat(ctx, fout, attr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -1952,55 +1944,54 @@ func (m *kvMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
-func (m *kvMeta) doSyncDirUsage(ctx Context, tx *kvTxn, ino Ino) (space, inodes uint64, err error) {
-	key := m.dirUsageKey(ino)
-	space, inodes, countErr := m.countDirUsage(ctx, ino)
-	if countErr != 0 {
-		err = errors.Wrap(countErr, "count dir usage")
+func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	space, inodes, err = m.calcDirStat(ctx, ino)
+	if err != nil {
 		return
 	}
-	tx.set(key, m.packDirUsage(space, inodes))
+	err = m.txn(func(tx *kvTxn) error {
+		tx.set(m.dirStatKey(ino), m.packDirStat(space, inodes))
+		return nil
+	})
 	return
 }
 
-func (m *kvMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64) error {
-	if space == 0 && inodes == 0 {
-		return nil
-	}
-	return m.txn(func(tx *kvTxn) error {
-		key := m.dirUsageKey(ino)
-		rawUsage := tx.get(key)
-		if rawUsage == nil {
-			_, _, err := m.doSyncDirUsage(ctx, tx, ino)
-			return err
+var errEmptyStat = errors.New("empty stat")
+
+func (m *kvMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error {
+	err := m.txn(func(tx *kvTxn) error {
+		key := m.dirStatKey(ino)
+		rawStat := tx.get(key)
+		if rawStat == nil {
+			return errEmptyStat
 		}
-		us, ui := m.parseDirUsage(rawUsage)
+		us, ui := m.parseDirStat(rawStat)
 		usedSpace, usedInodes := int64(us), int64(ui)
 		usedSpace += space
 		usedInodes += inodes
 		if usedSpace < 0 || usedInodes < 0 {
-			logger.Warnf("dir usage of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
-			_, _, err := m.doSyncDirUsage(ctx, tx, ino)
-			return err
+			logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
+			return errEmptyStat
 		}
-		tx.set(key, m.packDirUsage(uint64(usedSpace), uint64(usedInodes)))
+		tx.set(key, m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
 		return nil
 	})
+	if err == errEmptyStat {
+		_, _, err = m.doSyncDirStat(ctx, ino)
+	}
+	return err
 }
 
-func (m *kvMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
-	rawUsage, err := m.get(m.dirUsageKey(ino))
+func (m *kvMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	rawStat, err := m.get(m.dirStatKey(ino))
 	if err != nil {
 		return
 	}
-	if rawUsage == nil {
-		err = m.txn(func(tx *kvTxn) error {
-			space, inodes, err = m.doSyncDirUsage(ctx, tx, ino)
-			return err
-		})
-		return
+	if rawStat != nil {
+		space, inodes = m.parseDirStat(rawStat)
+	} else {
+		space, inodes, err = m.doSyncDirStat(ctx, ino)
 	}
-	space, inodes = m.parseDirUsage(rawUsage)
 	return
 }
 
