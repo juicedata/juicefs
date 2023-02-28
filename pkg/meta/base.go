@@ -43,8 +43,6 @@ const (
 	sliceIdBatch  = 1000
 	minUpdateTime = time.Millisecond * 10
 	nlocks        = 1024
-
-	dirUsageBatchSize = 1000
 )
 
 type engine interface {
