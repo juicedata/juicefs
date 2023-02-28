@@ -77,7 +77,7 @@ type engine interface {
 	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
 	doUnlink(ctx Context, parent Ino, name string) syscall.Errno
-	doRmdir(ctx Context, parent Ino, name string) syscall.Errno
+	doRmdir(ctx Context, parent Ino, name string, inode *Ino) syscall.Errno
 	doReadlink(ctx Context, inode Ino) ([]byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
@@ -127,8 +127,8 @@ type baseMeta struct {
 	of           *openfiles
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
-	dirQuotas    map[Ino]*Quota
-	dirParents   map[Ino]Ino
+	dirQuotas    map[Ino]*Quota // directory inode -> directory quota
+	dirParents   map[Ino]Ino    // directory inode -> parent inode
 	maxDeleting  chan struct{}
 	dslices      chan Slice // slices to delete
 	symlinks     *sync.Map
@@ -136,6 +136,7 @@ type baseMeta struct {
 	reloadCb     []func(*Format)
 	umounting    bool
 	sesMu        sync.Mutex
+	dirMu        sync.Mutex // protect dirParents & dirQuotas
 
 	*fsStat
 
@@ -453,7 +454,7 @@ func (m *baseMeta) flushStats() {
 	}
 }
 
-func (m *baseMeta) GetDirUsage(ctx Context, inode Ino) (space, inodes uint64, err error) {
+func (m *baseMeta) GetDirUsage(ctx Context, inode Ino) (space, inodes int64, err error) {
 	return 0, 0, nil // TODO
 }
 
@@ -475,7 +476,10 @@ func (m *baseMeta) loadQuotas() {
 }
 
 func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
-	if parent, ok := m.dirParents[inode]; ok {
+	m.dirMu.Lock()
+	parent, ok := m.dirParents[inode]
+	m.dirMu.Unlock()
+	if ok {
 		return parent, 0
 	}
 	logger.Warnf("DEBUG: getDirParent of inode %d: cache miss", inode)
@@ -661,8 +665,10 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 			}
 		}
 	}
-	if st == 0 && attr.Typ == TypeDirectory {
+	if st == 0 && attr.Typ == TypeDirectory && !isTrash(parent) {
+		m.dirMu.Lock()
 		m.dirParents[*inode] = parent
+		m.dirMu.Unlock()
 	}
 	return st
 }
@@ -803,6 +809,11 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}
 	if err == 0 {
 		m.of.Update(inode, attr)
+		if attr.Typ == TypeDirectory && inode != RootInode {
+			m.dirMu.Lock()
+			m.dirParents[inode] = attr.Parent
+			m.dirMu.Unlock()
+		}
 	}
 	return err
 }
@@ -868,7 +879,9 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
 	st := m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 	if st == 0 {
+		m.dirMu.Lock()
 		m.dirParents[*inode] = parent
+		m.dirMu.Unlock()
 	}
 	return st
 }
@@ -943,7 +956,14 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	}
 
 	defer m.timeit(time.Now())
-	return m.en.doRmdir(ctx, m.checkRoot(parent), name)
+	var inode Ino
+	st := m.en.doRmdir(ctx, m.checkRoot(parent), name, &inode)
+	if st == 0 && !isTrash(parent) {
+		m.dirMu.Lock()
+		delete(m.dirParents, inode)
+		m.dirMu.Unlock()
+	}
+	return st
 }
 
 func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
@@ -968,7 +988,18 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 
 	defer m.timeit(time.Now())
-	return m.en.doRename(ctx, m.checkRoot(parentSrc), nameSrc, m.checkRoot(parentDst), nameDst, flags, inode, attr)
+	if inode == nil {
+		inode = new(Ino)
+	}
+	st := m.en.doRename(ctx, m.checkRoot(parentSrc), nameSrc, m.checkRoot(parentDst), nameDst, flags, inode, attr)
+	// FIXME: dst exists and is replaced
+	// FIXME: dst exists and is exchanged
+	if st == 0 {
+		m.dirMu.Lock()
+		m.dirParents[*inode] = parentDst
+		m.dirMu.Unlock()
+	}
+	return st
 }
 
 func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
@@ -1060,7 +1091,18 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
-	return m.en.doReaddir(ctx, inode, plus, entries, -1)
+	st := m.en.doReaddir(ctx, inode, plus, entries, -1)
+	if st == 0 && !isTrash(inode) {
+		// FIXME: handle massive entries
+		m.dirMu.Lock()
+		for _, e := range (*entries)[2:] {
+			if e.Attr.Typ == TypeDirectory {
+				m.dirParents[e.Inode] = inode
+			}
+		}
+		m.dirMu.Unlock()
+	}
+	return st
 }
 
 func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
@@ -1546,7 +1588,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 			}
 			for _, se := range subEntries {
 				if se.Attr.Typ == TypeDirectory {
-					st = m.en.doRmdir(ctx, e.Inode, string(se.Name))
+					st = m.en.doRmdir(ctx, e.Inode, string(se.Name), nil)
 				} else {
 					st = m.en.doUnlink(ctx, e.Inode, string(se.Name))
 				}
@@ -1565,7 +1607,7 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 				}
 			}
 			if rmdir {
-				if st = m.en.doRmdir(ctx, TrashInode, string(e.Name)); st != 0 {
+				if st = m.en.doRmdir(ctx, TrashInode, string(e.Name), nil); st != 0 {
 					logger.Warnf("rmdir subTrash %s: %s", e.Name, st)
 				}
 			}

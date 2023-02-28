@@ -1248,7 +1248,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	return errno(err)
 }
 
-func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, inode *Ino) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st

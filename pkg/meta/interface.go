@@ -372,7 +372,7 @@ type Meta interface {
 	// GetParents returns a map of node parents (> 1 parents if hardlinked)
 	GetParents(ctx Context, inode Ino) map[Ino]int
 	// GetDirUsage returns the space and inodes usage of a directory.
-	GetDirUsage(ctx Context, inode Ino) (space, inodes uint64, err error)
+	GetDirUsage(ctx Context, inode Ino) (space, inodes int64, err error)
 
 	// GetXattr returns the value of extended attribute for given name.
 	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno

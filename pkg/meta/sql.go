@@ -1390,7 +1390,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 	return errno(err)
 }
 
-func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, inode *Ino) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -1428,6 +1428,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		}
 		if e.Type != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if inode != nil {
+			*inode = e.Inode
 		}
 		var n = node{Inode: e.Inode}
 		ok, err = s.ForUpdate().Get(&n)
@@ -1862,9 +1865,6 @@ func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 				entry.Attr.Typ = n.Type
 			}
 			*entries = append(*entries, entry)
-			if entry.Attr.Typ == TypeDirectory {
-				m.dirParents[entry.Inode] = inode
-			}
 		}
 		return nil
 	}))
@@ -2889,22 +2889,25 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quota *Quota)
 			if e != nil {
 				return e
 			}
-			var changed bool
-			if quota.MaxSpace >= 0 && q.MaxSpace != quota.MaxSpace {
-				q.MaxSpace = quota.MaxSpace
-				changed = true
+			if quota.MaxSpace < 0 {
+				quota.MaxSpace = q.MaxSpace
 			}
-			if quota.MaxInodes >= 0 && q.MaxInodes != quota.MaxInodes {
-				q.MaxInodes = quota.MaxInodes
-				changed = true
+			if quota.MaxInodes < 0 {
+				quota.MaxInodes = q.MaxInodes
 			}
-			if !changed {
-				return nil
+			if q.MaxSpace == quota.MaxSpace && q.MaxInodes == quota.MaxInodes {
+				return nil // nothing to update
 			}
+			logger.Infof("Update quota of %s from (%d, %d) to (%d, %d)", dpath, q.MaxSpace, q.MaxInodes, quota.MaxSpace, quota.MaxInodes)
+			q.MaxSpace = quota.MaxSpace
+			q.MaxInodes = quota.MaxInodes
 			if ok {
 				_, e = s.Cols("max_space", "max_inodes").Update(&q, &dirQuota{Inode: inode})
 			} else {
-				e = mustInsert(s, &q)
+				q.UsedSpace, q.UsedInodes, e = m.GetDirUsage(ctx, inode)
+				if e == nil {
+					e = mustInsert(s, &q)
+				}
 			}
 			return e
 		})
