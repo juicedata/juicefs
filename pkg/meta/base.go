@@ -127,7 +127,7 @@ type baseMeta struct {
 	of           *openfiles
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
-	dirQuotas    map[Ino]*Quota // directory inode -> directory quota
+	dirQuotas    map[Ino]*Quota // directory inode -> quota
 	dirParents   map[Ino]Ino    // directory inode -> parent inode
 	maxDeleting  chan struct{}
 	dslices      chan Slice // slices to delete
@@ -461,15 +461,17 @@ func (m *baseMeta) GetDirUsage(ctx Context, inode Ino) (space, inodes int64, err
 func (m *baseMeta) loadQuotas() {
 	quotas, err := m.en.doLoadQuotas(Background)
 	if err == nil {
+		m.dirMu.Lock()
 		for ino, q := range quotas {
 			logger.Infof("Load quotas got %d -> %+v", ino, q)
 			if old := m.dirQuotas[ino]; old != nil {
-				q.newSpace = old.newSpace
-				q.newInodes = old.newInodes
+				// FIXME: change may lost if someone gets the reference but has not updated it yet
+				q.newSpace = atomic.SwapInt64(&old.newSpace, 0)
+				q.newInodes = atomic.SwapInt64(&old.newInodes, 0)
 			}
 		}
-		// FIXME: need lock
 		m.dirQuotas = quotas
+		m.dirMu.Unlock()
 	} else {
 		logger.Warnf("Load quotas: %s", err)
 	}
@@ -493,7 +495,11 @@ func (m *baseMeta) getDirQuota(ctx Context, inode Ino) *Quota {
 	var q *Quota
 	var st syscall.Errno
 	for {
-		if q = m.dirQuotas[inode]; q != nil {
+		// FIXME: reduce locking
+		m.dirMu.Lock()
+		q = m.dirQuotas[inode]
+		m.dirMu.Unlock()
+		if q != nil {
 			break
 		}
 		if inode == RootInode {
@@ -508,18 +514,33 @@ func (m *baseMeta) getDirQuota(ctx Context, inode Ino) *Quota {
 }
 
 func (m *baseMeta) flushQuotas() {
+	quotas := make(map[Ino]*Quota)
+	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
-		for inode, quota := range m.dirQuotas {
-			newSpace := atomic.SwapInt64(&quota.newSpace, 0)
-			newInodes := atomic.SwapInt64(&quota.newInodes, 0)
+		m.dirMu.Lock()
+		for ino, q := range m.dirQuotas {
+			newSpace = atomic.SwapInt64(&q.newSpace, 0)
+			newInodes = atomic.SwapInt64(&q.newInodes, 0)
 			if newSpace != 0 || newInodes != 0 {
-				err := m.en.doFlushQuota(Background, inode, newSpace, newInodes)
-				if err != nil {
-					logger.Warnf("Flush quota of inode %d: %s", inode, err)
-					quota.update(newSpace, newInodes, true)
+				quotas[ino] = &Quota{newSpace: newSpace, newInodes: newInodes}
+			}
+		}
+		m.dirMu.Unlock()
+		// FIXME: merge
+		for ino, q := range quotas {
+			if err := m.en.doFlushQuota(Background, ino, q.newSpace, q.newInodes); err != nil {
+				logger.Warnf("Flush quota of inode %d: %s", ino, err)
+				m.dirMu.Lock()
+				cur := m.dirQuotas[ino]
+				m.dirMu.Unlock()
+				if cur != nil {
+					cur.update(q.newSpace, q.newInodes, true)
 				}
 			}
+		}
+		for ino := range quotas {
+			delete(quotas, ino)
 		}
 	}
 }

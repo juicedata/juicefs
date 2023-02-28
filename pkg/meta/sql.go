@@ -2990,7 +2990,6 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 			}
 			if q, ok := quotas[parent]; ok {
 				quota.Parent = q
-				logger.Warnf("DEBUG: parent quota of %d is %d", ino, parent)
 				break
 			} else {
 				inode = parent
