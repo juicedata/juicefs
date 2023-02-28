@@ -1481,6 +1481,9 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, inode *Ino) sysca
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
+		if _, err = s.Delete(&dirQuota{Inode: e.Inode}); err != nil {
+			return err
+		}
 		if trash > 0 {
 			if _, err = s.Cols("ctime", "parent").Update(&n, &node{Inode: n.Inode}); err != nil {
 				return err
@@ -1759,6 +1762,11 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				}
 				if _, err := s.Delete(&edge{Parent: parentDst, Name: de.Name}); err != nil {
 					return err
+				}
+				if de.Type == TypeDirectory {
+					if _, err = s.Delete(&dirQuota{Inode: dino}); err != nil {
+						return err
+					}
 				}
 			}
 			if err = mustInsert(s, &edge{Parent: parentDst, Name: de.Name, Inode: se.Inode, Type: se.Type}); err != nil {
