@@ -1335,6 +1335,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
 		tx.delete(m.entryKey(parent, name))
+		tx.delete(m.dirUsageKey(inode))
 		if trash > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
 			tx.set(m.entryKey(trash, m.trashEntry(parent, inode, name)), buf)

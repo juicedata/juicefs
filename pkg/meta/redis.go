@@ -1438,6 +1438,16 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 				pipe.IncrBy(ctx, m.usedSpaceKey(), -align4K(0))
 				pipe.Decr(ctx, m.totalInodesKey())
 			}
+
+			field := strconv.FormatUint(uint64(inode), 10)
+			err := pipe.HDel(ctx, m.dirUsedSpaceKey(), field).Err()
+			if err != nil && err != redis.Nil {
+				logger.Warnf("remove dir space usage of ino(%d): %s", inode, err)
+			}
+			err = pipe.HDel(ctx, m.dirUsedInodesKey(), field).Err()
+			if err != nil && err != redis.Nil {
+				logger.Warnf("remove dir inodes usage of ino(%d): %s", inode, err)
+			}
 			return nil
 		})
 		return err

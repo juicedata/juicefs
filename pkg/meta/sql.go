@@ -1470,6 +1470,10 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 		if _, err := s.Delete(&edge{Parent: parent, Name: e.Name}); err != nil {
 			return err
 		}
+		if _, err := s.Delete(&dirUsage{Inode: e.Inode}); err != nil {
+			logger.Warnf("remove dir usage of ino(%d): %s", e.Inode, err)
+		}
+
 		if trash > 0 {
 			if _, err = s.Cols("ctime", "parent").Update(&n, &node{Inode: n.Inode}); err != nil {
 				return err
@@ -2291,15 +2295,7 @@ func (m *dbMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64
 		return nil
 	}
 
-	// Insert a new row
-	totalSpace, totalInodes, countErr := m.countDirUsage(ctx, ino)
-	if countErr != 0 {
-		return countErr
-	}
-	err = m.txn(func(s *xorm.Session) error {
-		_, err := s.Insert(&dirUsage{Inode: ino, UsedSpace: int64(totalSpace), UsedInodes: int64(totalInodes)})
-		return err
-	})
+	_, _, err = m.doSyncDirUsage(ctx, ino)
 	if err == nil || !strings.Contains(err.Error(), "UNIQUE constraint failed") {
 		return err
 	}
@@ -2308,15 +2304,37 @@ func (m *dbMeta) doIncreDirUsage(ctx Context, ino Ino, space int64, inodes int64
 	return m.txn(increFn)
 }
 
+func (m *dbMeta) doSyncDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	space, inodes, countErr := m.countDirUsage(ctx, ino)
+	if countErr != 0 {
+		err = errors.Wrap(countErr, "count dir usage")
+		return
+	}
+	err = m.txn(func(s *xorm.Session) error {
+		_, err := s.Insert(&dirUsage{Inode: ino, UsedSpace: int64(space), UsedInodes: int64(inodes)})
+		return err
+	})
+	return
+}
+
 func (m *dbMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err error) {
 	dirUsage := dirUsage{Inode: ino}
+	var exist bool
 	if err = m.roTxn(func(s *xorm.Session) error {
-		_, err := s.Get(&dirUsage)
+		exist, err = s.Get(&dirUsage)
 		return err
 	}); err != nil {
 		return
 	}
-	if dirUsage.UsedSpace < 0 || dirUsage.UsedInodes < 0 {
+
+	if !exist {
+		space, inodes, err = m.doSyncDirUsage(ctx, ino)
+		if err == nil || !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return
+		}
+	}
+
+	if !exist || dirUsage.UsedSpace < 0 || dirUsage.UsedInodes < 0 {
 		logger.Warnf(
 			"dir usage of inode %d is invalid: space %d, inodes %d, try to fix",
 			ino, dirUsage.UsedSpace, dirUsage.UsedInodes,
@@ -2329,7 +2347,13 @@ func (m *dbMeta) doGetDirUsage(ctx Context, ino Ino) (space, inodes uint64, err 
 		}
 		dirUsage.UsedSpace, dirUsage.UsedInodes = int64(space), int64(inodes)
 		err = m.txn(func(s *xorm.Session) error {
-			_, err := s.AllCols().Update(&dirUsage)
+			n, err := s.AllCols().Update(&dirUsage)
+			if err != nil {
+				return err
+			}
+			if n != 1 {
+				err = errors.Errorf("update dir usage of inode %d: %d rows affected", ino, n)
+			}
 			return err
 		})
 		return
