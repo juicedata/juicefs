@@ -877,9 +877,6 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if m.checkQuota(4<<10, 1) {
 		return syscall.ENOSPC
 	}
-	if q := m.getDirQuota(ctx, parent); q != nil && q.check(4<<10, 1) {
-		return syscall.ENOSPC
-	}
 	return m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)
 }
 

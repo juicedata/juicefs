@@ -1118,6 +1118,10 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino) (target []byte, err error) {
 }
 
 func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
+	quota := m.getDirQuota(ctx, parent)
+	if quota != nil && quota.check(4<<10, 1) {
+		return syscall.ENOSPC
+	}
 	var ino Ino
 	var err error
 	if parent == TrashInode {
@@ -1241,8 +1245,8 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}, parent)
 	if err == nil {
 		m.updateStats(align4K(0), 1)
-		if q := m.getDirQuota(ctx, parent); q != nil {
-			q.update(align4K(0), 1, false)
+		if quota != nil {
+			quota.update(align4K(0), 1, false)
 		}
 	}
 	return errno(err)
@@ -1381,11 +1385,24 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		}
 		return err
 	}, parent)
-	if err == nil && trash == 0 {
-		if n.Type == TypeFile && n.Nlink == 0 {
-			m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
+	if err == nil {
+		if trash == 0 {
+			if n.Type == TypeFile && n.Nlink == 0 {
+				m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
+			}
+			m.updateStats(newSpace, newInode)
 		}
-		m.updateStats(newSpace, newInode)
+		// FIXME: quota not checked/updated in 'Link'
+		if n.Nlink > 0 {
+			if n.Type == TypeFile {
+				newSpace, newInode = -align4K(n.Length), -1
+			} else {
+				newSpace, newInode = -align4K(0), -1
+			}
+		}
+		if q := m.getDirQuota(ctx, parent); q != nil {
+			q.update(newSpace, newInode, false)
+		}
 	}
 	return errno(err)
 }
@@ -1484,8 +1501,13 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, inode *Ino) sysca
 		}
 		return err
 	}, parent)
-	if err == nil && trash == 0 {
-		m.updateStats(-align4K(0), -1)
+	if err == nil {
+		if trash == 0 {
+			m.updateStats(-align4K(0), -1)
+		}
+		if q := m.getDirQuota(ctx, parent); q != nil {
+			q.update(-align4K(0), -1, false)
+		}
 	}
 	return errno(err)
 }
@@ -1976,9 +1998,7 @@ func (m *dbMeta) doRefreshSession() error {
 
 func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var n = node{Inode: inode}
-	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
-		newSpace = 0
 		n = node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&n)
 		if err != nil {
@@ -1994,13 +2014,16 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		if err != nil {
 			return err
 		}
-		newSpace = -align4K(n.Length)
 		_, err = s.Delete(&node{Inode: inode})
 		return err
 	})
 	if err == nil {
+		newSpace := -align4K(n.Length)
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, n.Length, false)
+		if q := m.getDirQuota(Background, n.Parent); q != nil {
+			q.update(newSpace, -1, false)
+		}
 	}
 	return err
 }
@@ -2069,6 +2092,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			return syscall.ENOSPC
 		}
 		// FIXME: check all parent of the file if hardlinked
+		// TODO: add check for Truncate, Fallocate, CopyFileRange
 		if quota = m.getDirQuota(ctx, n.Parent); quota != nil && quota.check(newSpace, 0) {
 			return syscall.ENOSPC
 		}
@@ -2105,6 +2129,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			go m.compactChunk(inode, indx, false)
 		}
 		m.updateStats(newSpace, 0)
+		// TODO: add update for Truncate, Fallocate, CopyFileRange
 		if quota != nil {
 			quota.update(newSpace, 0, false)
 		}

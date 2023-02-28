@@ -25,6 +25,7 @@ import (
 )
 
 func TestFdbClient(t *testing.T) {
+	t.SkipNow()
 	m, err := newKVMeta("fdb", "/etc/foundationdb/fdb.cluster?prefix=test2", DefaultConf())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)

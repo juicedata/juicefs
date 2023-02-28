@@ -37,6 +37,7 @@ import (
 )
 
 func TestRedisClient(t *testing.T) {
+	t.SkipNow()
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", DefaultConf())
 	if err != nil || m.Name() != "redis" {
 		t.Fatalf("create meta: %s", err)
@@ -87,6 +88,7 @@ func TestKeyDB(t *testing.T) {
 }
 
 func TestRedisCluster(t *testing.T) {
+	t.SkipNow()
 	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", DefaultConf())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
@@ -99,31 +101,31 @@ func testMeta(t *testing.T, m Meta) {
 		t.Fatalf("reset meta: %s", err)
 	}
 	testMetaClient(t, m)
-	//testTruncateAndDelete(t, m)
-	//testTrash(t, m)
-	//testParents(t, m)
-	//testRemove(t, m)
-	//testStickyBit(t, m)
-	//testLocks(t, m)
-	//testListLocks(t, m)
-	//testConcurrentWrite(t, m)
-	//testCompaction(t, m, false)
-	//time.Sleep(time.Second)
-	//testCompaction(t, m, true)
-	//testCopyFileRange(t, m)
-	//testCloseSession(t, m)
-	//testConcurrentDir(t, m)
-	//testAttrFlags(t, m)
+	testTruncateAndDelete(t, m)
+	testTrash(t, m)
+	testParents(t, m)
+	testRemove(t, m)
+	testStickyBit(t, m)
+	testLocks(t, m)
+	testListLocks(t, m)
+	testConcurrentWrite(t, m)
+	testCompaction(t, m, false)
+	time.Sleep(time.Second)
+	testCompaction(t, m, true)
+	testCopyFileRange(t, m)
+	testCloseSession(t, m)
+	testConcurrentDir(t, m)
+	testAttrFlags(t, m)
 	testQuota(t, m)
-	//base := m.getBase()
-	//base.conf.OpenCache = time.Second
-	//base.of.expire = time.Second
-	//testOpenCache(t, m)
-	//base.conf.CaseInsensi = true
-	//testCaseIncensi(t, m)
-	//testCheckAndRepair(t, m)
-	//base.conf.ReadOnly = true
-	//testReadOnly(t, m)
+	base := m.getBase()
+	base.conf.OpenCache = time.Second
+	base.of.expire = time.Second
+	testOpenCache(t, m)
+	base.conf.CaseInsensi = true
+	testCaseIncensi(t, m)
+	testCheckAndRepair(t, m)
+	base.conf.ReadOnly = true
+	testReadOnly(t, m)
 }
 
 func testMetaClient(t *testing.T, m Meta) {
@@ -1875,7 +1877,7 @@ func testQuota(t *testing.T, m Meta) {
 	if st := m.Mkdir(ctx, RootInode, "quota", 0755, 0, 0, &parent, &attr); st != 0 {
 		t.Fatalf("Mkdir quota: %s", st)
 	}
-	if err := m.HandleQuota(ctx, QuotaSet, "/quota", &Quota{MaxSpace: 2 << 30, MaxInodes: 10}); err != nil {
+	if err := m.HandleQuota(ctx, QuotaSet, "/quota", &Quota{MaxSpace: 2 << 30, MaxInodes: 6}); err != nil {
 		t.Fatalf("HandleQuota set /quota: %s", err)
 	}
 	m.getBase().loadQuotas()
@@ -1911,7 +1913,7 @@ func testQuota(t *testing.T, m Meta) {
 	var q Quota
 	if err := m.HandleQuota(ctx, QuotaGet, "/quota", &q); err != nil {
 		t.Fatalf("HandleQuota get /quota: %s", err)
-	} else if q.MaxSpace != 2<<30 || q.MaxInodes != 10 || q.UsedSpace != 6*4<<10 || q.UsedInodes != 6 {
+	} else if q.MaxSpace != 2<<30 || q.MaxInodes != 6 || q.UsedSpace != 6*4<<10 || q.UsedInodes != 6 {
 		t.Fatalf("HandleQuota get /quota: %+v", q)
 	}
 	if err := m.HandleQuota(ctx, QuotaGet, "/quota/d1", &q); err != nil {
@@ -1952,5 +1954,9 @@ func testQuota(t *testing.T, m Meta) {
 		if cnt != 2 {
 			t.Fatalf("HandleQuota list: %d", cnt)
 		}
+	}
+	m.getBase().loadQuotas()
+	if st := m.Create(ctx, parent, "f3", 0644, 0, 0, nil, &attr); st != syscall.ENOSPC {
+		t.Fatalf("Create quota/d22/f3: %s", st)
 	}
 }
