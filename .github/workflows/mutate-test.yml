@@ -134,7 +134,11 @@ jobs:
 
       - name: Install Packages
         run: |
+          echo "deb https://download.keydb.dev/open-source-dist $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/keydb.list
+          sudo wget -O /etc/apt/trusted.gpg.d/keydb.gpg https://download.keydb.dev/open-source-dist/keyring.gpg
+          sudo apt update
           go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+          sudo apt install -y keydb
           sudo apt install -y g++-multilib
           sudo apt install -y redis-server
           sudo apt install -y libacl1-dev
@@ -162,6 +166,8 @@ jobs:
           sudo service mysql start
           sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
           sudo service postgresql start
+          keydb-server --storage-provider  flash /tmp/ --port 6378 --bind 127.0.0.1 --daemonize yes
+          keydb-server --port 6377 --bind 127.0.0.1 --daemonize yes
           sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
           sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
           sudo sed  -i "s?host.*all.*all.*32.*scram-sha-256?host    all             all             127.0.0.1/32            trust?" /etc/postgresql/*/main/pg_hba.conf
