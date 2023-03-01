@@ -22,7 +22,6 @@ package meta
 import (
 	"fmt"
 	"net/url"
-	"time"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 )
