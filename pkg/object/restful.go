@@ -184,7 +184,9 @@ func (s *RestfulStorage) Head(key string) (Object, error) {
 
 func (s *RestfulStorage) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	headers := make(map[string]string)
+	var isRangeGet bool
 	if off > 0 || limit > 0 {
+		isRangeGet = true
 		if limit > 0 {
 			headers["Range"] = fmt.Sprintf("bytes=%d-%d", off, off+limit-1)
 		} else {
@@ -198,12 +200,8 @@ func (s *RestfulStorage) Get(key string, off, limit int64) (io.ReadCloser, error
 	if resp.StatusCode != 200 && resp.StatusCode != 206 {
 		return nil, parseError(resp)
 	}
-	var expected = http.StatusOK
-	if off > 0 || limit > 0 {
-		expected = http.StatusPartialContent
-	}
-	if resp.StatusCode != expected {
-		return nil, fmt.Errorf("expected get object response code: %d, but got %d", expected, resp.StatusCode)
+	if err = checkGetAPIStatusCode(resp.StatusCode, isRangeGet); err != nil {
+		return nil, err
 	}
 	return resp.Body, nil
 }

@@ -681,11 +681,11 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			return fmt.Errorf("put object failed: %s", err)
 		}
 		defer blob.Delete(key) //nolint:errcheck
-		if s, err := get(blob, key, 0, -1); err != nil && s != string(br) {
-			return fmt.Errorf("get object failed: %s", err)
+		if d, e := get(blob, key, 0, -1); e != nil || d != string(br) {
+			return fmt.Errorf(`failed to get complete object, expect "hello", but got %v, error: %s`, d, e)
 		}
-		if d, e := get(blob, key, 0, 5); d != string(br) {
-			return fmt.Errorf(`get object failed, expect "hello", but got %v, error: %s`, d, e)
+		if d, e := get(blob, key, 0, 5); e != nil || d != string(br) {
+			return fmt.Errorf(`failed to get complete object, expect "hello", but got %v, error: %s`, d, e)
 		}
 		return nil
 	})
@@ -705,28 +705,28 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		defer blob.Delete(key) //nolint:errcheck
 
 		// get first
-		if d, e := get(blob, key, 0, 1); e != nil && d != "h" {
-			return fmt.Errorf(`get object failed, expect "h", but got %q, error: %s`, d, e)
+		if d, e := get(blob, key, 0, 1); e != nil || d != "h" {
+			return fmt.Errorf(`failed to get the first byte of the object, expect "h", but got %q, error: %s`, d, e)
 		}
 		// get last
-		if d, e := get(blob, key, 4, 1); e != nil && d != "o" {
-			return fmt.Errorf(`get object failed, expect "o", but got %q, error: %s`, d, e)
+		if d, e := get(blob, key, 4, 1); e != nil || d != "o" {
+			return fmt.Errorf(`failed to get the last byte of the object, expect "o", but got %q, error: %s`, d, e)
 		}
 		// get last 3
-		if d, e := get(blob, key, 2, 3); e != nil && d != "llo" {
-			return fmt.Errorf(`get object failed, expect "llo", but got %q, error: %s`, d, e)
+		if d, e := get(blob, key, 2, 3); e != nil || d != "llo" {
+			return fmt.Errorf(`failed to get the last three bytes of the object, expect "llo", but got %q, error: %s`, d, e)
 		}
 		// get middle
-		if d, e := get(blob, key, 2, 2); e != nil && d != "ll" {
-			return fmt.Errorf(`get object failed, expect "ll", but got %q, error: %s`, d, e)
+		if d, e := get(blob, key, 2, 2); e != nil || d != "ll" {
+			return fmt.Errorf(`failed to get the intermediate byte of the object, expect "ll", but got %q, error: %s`, d, e)
 		}
 		// get the end out of range
-		if d, e := get(blob, key, 4, 2); d != "o" {
-			return fmt.Errorf(`out-of-range get expect "o", but got %q, error: %s`, d, e)
+		if d, e := get(blob, key, 4, 2); e != nil || d != "o" {
+			return fmt.Errorf(`failed to get object with the end out of range, expect "o", but got %q, error: %s`, d, e)
 		}
 		// get the off out of range
-		if d, e := get(blob, key, 6, 2); d != "" {
-			return fmt.Errorf(`out-of-range get expect "", but got %q, error: %s`, d, e)
+		if d, e := get(blob, key, 6, 2); e != nil || d != "" {
+			return fmt.Errorf(`failed to get object with the offset out of range, expect "", but got %q, error: %s`, d, e)
 		}
 		return nil
 	})

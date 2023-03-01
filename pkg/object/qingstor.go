@@ -69,7 +69,9 @@ func (q *qingstor) Head(key string) (Object, error) {
 
 func (q *qingstor) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	input := &qs.GetObjectInput{}
+	var isRangeGet bool
 	if off > 0 || limit > 0 {
+		isRangeGet = true
 		var r string
 		if limit > 0 {
 			r = fmt.Sprintf("bytes=%d-%d", off, off+limit-1)
@@ -82,12 +84,8 @@ func (q *qingstor) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	var expected = http.StatusOK
-	if off > 0 || limit > 0 {
-		expected = http.StatusPartialContent
-	}
-	if *output.StatusCode != expected {
-		return nil, fmt.Errorf("expected get object response code: %d, but got %d", expected, *output.StatusCode)
+	if err = checkGetAPIStatusCode(*output.StatusCode, isRangeGet); err != nil {
+		return nil, err
 	}
 	return output.Body, nil
 }

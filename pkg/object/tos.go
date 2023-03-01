@@ -55,10 +55,10 @@ func (t tosClient) Create() error {
 
 func (t tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	var rangeEnd int64
+	var isRangeGet bool
 	if limit > 0 {
+		isRangeGet = true
 		rangeEnd = off + limit - 1
-	} else {
-		rangeEnd = 0
 	}
 	var rangeStr string
 	if off == 0 && limit == 1 {
@@ -74,12 +74,8 @@ func (t tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	var expected = http.StatusOK
-	if off > 0 || limit > 0 {
-		expected = http.StatusPartialContent
-	}
-	if resp.StatusCode != expected {
-		return nil, fmt.Errorf("expected get object response code: %d, but got %d", expected, resp.StatusCode)
+	if err = checkGetAPIStatusCode(resp.StatusCode, isRangeGet); err != nil {
+		return nil, err
 	}
 	return resp.Content, nil
 }
