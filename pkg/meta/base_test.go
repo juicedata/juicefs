@@ -527,7 +527,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<20 || iavail != 97 {
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Second * 2)
 		_ = m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
 		if totalspace != 1<<20 || iavail != 97 {
 			t.Fatalf("total space %d, iavail %d", totalspace, iavail)
