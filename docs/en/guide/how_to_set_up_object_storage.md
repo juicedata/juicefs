@@ -246,7 +246,7 @@ Once you have configured the environment variables for passing key information, 
 ```bash
 juicefs format \
     --storage gs \
-    --bucket <bucket> \
+    --bucket <bucket>[.region] \
     ... \
     myjfs
 ```

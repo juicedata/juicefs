@@ -246,7 +246,7 @@ export GOOGLE_APPLICATION_CREDENTIALS="$HOME/service-account-file.json"
 ```bash
 juicefs format \
     --storage gs \
-    --bucket <bucket> \
+    --bucket <bucket>[.region] \
     ... \
     myjfs
 ```
