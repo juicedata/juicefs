@@ -59,6 +59,7 @@ type tkvClient interface {
 	reset(prefix []byte) error
 	close() error
 	shouldRetry(err error) bool
+	gc()
 }
 
 type kvMeta struct {
@@ -1867,6 +1868,9 @@ func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 }
 
 func (m *kvMeta) doCleanupSlices() {
+	if m.Name() == "tikv" {
+		m.client.gc()
+	}
 	klen := 1 + 8 + 4
 	vals, _ := m.scanValues(m.fmtKey("K"), -1, func(k, v []byte) bool {
 		// filter out invalid ones
