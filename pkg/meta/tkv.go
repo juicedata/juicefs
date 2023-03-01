@@ -1080,7 +1080,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		*inode = ino
 	}
 
-	err = m.txn(func(tx *kvTxn) error {
+	return errno(m.txn(func(tx *kvTxn) error {
 		var pattr Attr
 		a := tx.get(m.inodeKey(parent))
 		if a == nil {
@@ -1159,11 +1159,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			tx.set(m.dirStatKey(ino), m.packDirStat(0, 0))
 		}
 		return nil
-	}, parent)
-	if err == nil {
-		m.updateStats(align4K(0), 1)
-	}
-	return errno(err)
+	}, parent))
 }
 
 func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno {

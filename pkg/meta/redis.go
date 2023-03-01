@@ -1130,7 +1130,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		*inode = ino
 	}
 
-	err = m.txn(ctx, func(tx *redis.Tx) error {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		var pattr Attr
 		a, err := tx.Get(ctx, m.inodeKey(parent)).Bytes()
 		if err != nil {
@@ -1221,11 +1221,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			return nil
 		})
 		return err
-	}, m.inodeKey(parent), m.entryKey(parent))
-	if err == nil {
-		m.updateStats(align4K(0), 1)
-	}
-	return errno(err)
+	}, m.inodeKey(parent), m.entryKey(parent)))
 }
 
 func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno {

@@ -839,6 +839,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}
 	err := m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)
 	if err == 0 {
+		m.updateStats(align4K(0), 1)
 		m.updateDirStat(ctx, parent, align4K(0), 1)
 	}
 	return err
