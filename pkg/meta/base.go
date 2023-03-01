@@ -244,7 +244,8 @@ func (m *baseMeta) checkRoot(inode Ino) Ino {
 
 func (m *baseMeta) batchCalcDirStat(ctx Context, stats map[Ino]*dirStat) error {
 	var eg errgroup.Group
-	for ino, stat := range stats {
+	for i, s := range stats {
+		ino, stat := i, s
 		eg.Go(func() error {
 			space, inodes, err := m.calcDirStat(ctx, ino)
 			if err != nil {
