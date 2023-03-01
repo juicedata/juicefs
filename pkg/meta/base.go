@@ -52,6 +52,7 @@ type engine interface {
 	incrCounter(name string, value int64) (int64, error)
 	// Set counter name to value if old <= value - diff.
 	setIfSmall(name string, value, diff int64) (bool, error)
+	flushStats()
 
 	doLoad() ([]byte, error)
 
@@ -398,6 +399,7 @@ func (m *baseMeta) NewSession() error {
 	}
 	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
+	go m.en.flushStats()
 	for i := 0; i < m.conf.MaxDeletes; i++ {
 		go m.deleteSlices()
 	}
@@ -511,30 +513,6 @@ func (m *baseMeta) checkQuota(size, inodes int64) bool {
 func (m *baseMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newSpace, space)
 	atomic.AddInt64(&m.newInodes, inodes)
-}
-
-func (m *baseMeta) flushStats() {
-	for {
-		newSpace := atomic.SwapInt64(&m.newSpace, 0)
-		if newSpace != 0 {
-			if v, err := m.en.incrCounter(usedSpace, newSpace); err == nil {
-				atomic.StoreInt64(&m.usedSpace, v)
-			} else {
-				logger.Warnf("update space stats: %s", err)
-				m.updateStats(newSpace, 0)
-			}
-		}
-		newInodes := atomic.SwapInt64(&m.newInodes, 0)
-		if newInodes != 0 {
-			if v, err := m.en.incrCounter(totalInodes, newInodes); err == nil {
-				atomic.StoreInt64(&m.usedInodes, v)
-			} else {
-				logger.Warnf("update inodes stats: %s", err)
-				m.updateStats(0, newInodes)
-			}
-		}
-		time.Sleep(time.Second)
-	}
 }
 
 func (m *baseMeta) cleanupDeletedFiles() {

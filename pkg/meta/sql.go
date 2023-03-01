@@ -421,8 +421,6 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 			return fmt.Errorf("insert new session %d: %s", m.sid, err)
 		}
 	}
-
-	go m.flushStats()
 	return nil
 }
 
