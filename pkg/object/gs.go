@@ -73,9 +73,6 @@ func (g *gs) Create() error {
 		if err == nil && len(zone) > 2 {
 			g.region = zone[:len(zone)-2]
 		}
-		if g.region == "" {
-			return errors.New("Could not guess region to create bucket")
-		}
 	}
 
 	err := g.client.Bucket(g.bucket).Create(ctx, projectID, &storage.BucketAttrs{

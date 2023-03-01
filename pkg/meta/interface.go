@@ -371,8 +371,8 @@ type Meta interface {
 	CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno
 	// GetParents returns a map of node parents (> 1 parents if hardlinked)
 	GetParents(ctx Context, inode Ino) map[Ino]int
-	// GetDirUsage returns the space and inodes usage of a directory.
-	GetDirUsage(ctx Context, inode Ino) (space, inodes int64, err error)
+	// GetDirStat returns the space and inodes usage of a directory.
+	GetDirStat(ctx Context, inode Ino) (space, inodes uint64, err error)
 
 	// GetXattr returns the value of extended attribute for given name.
 	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
