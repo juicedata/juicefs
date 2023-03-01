@@ -148,8 +148,10 @@ func (s *ks3) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 		Prefix:       &prefix,
 		Marker:       &marker,
 		MaxKeys:      &limit,
-		Delimiter:    &delimiter,
 		EncodingType: aws.String("url"),
+	}
+	if delimiter != "" {
+		param.Delimiter = &delimiter
 	}
 	resp, err := s.s3.ListObjects(&param)
 	if err != nil {
