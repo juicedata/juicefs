@@ -2255,7 +2255,7 @@ func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, e
 			return nil
 		})
 		return err
-	})
+	}, spaceKey, inodesKey)
 	return
 }
 
@@ -2278,7 +2278,7 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes in
 			return nil
 		})
 		return err
-	})
+	}, spaceKey, inodesKey)
 }
 
 func (m *redisMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
