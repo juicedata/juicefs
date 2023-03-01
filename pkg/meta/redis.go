@@ -528,6 +528,14 @@ func (m *redisMeta) usedSpaceKey() string {
 	return m.prefix + usedSpace
 }
 
+func (m *redisMeta) dirUsedSpaceKey() string {
+	return m.prefix + "dirUsedSpace"
+}
+
+func (m *redisMeta) dirUsedInodesKey() string {
+	return m.prefix + "dirUsedInodes"
+}
+
 func (m *redisMeta) totalInodesKey() string {
 	return m.prefix + totalInodes
 }
@@ -805,6 +813,9 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
+	if attr == nil {
+		attr = &Attr{}
+	}
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
 		var t Attr
@@ -891,7 +902,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		return err
 	}, m.inodeKey(inode))
 	if err == nil {
-		m.updateStats(newSpace, 0)
+		m.updateParentStat(ctx, inode, attr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -920,9 +931,10 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
+	var t Attr
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
-		var t Attr
+		t = Attr{}
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
 			return err
@@ -983,7 +995,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		return err
 	}, m.inodeKey(inode))
 	if err == nil {
-		m.updateStats(newSpace, 0)
+		m.updateParentStat(ctx, inode, t.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -1191,6 +1203,11 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			if _type == TypeSymlink {
 				pipe.Set(ctx, m.symKey(ino), path, 0)
 			}
+			if _type == TypeDirectory {
+				field := strconv.FormatUint(uint64(ino), 10)
+				pipe.HSet(ctx, m.dirUsedInodesKey(), field, "0")
+				pipe.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
+			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
 			pipe.Incr(ctx, m.totalInodesKey())
 			return nil
@@ -1203,7 +1220,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 	return errno(err)
 }
 
-func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno {
 	var trash, inode Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -1211,13 +1228,15 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 	if trash == 0 {
 		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 	}
+	if attr == nil {
+		attr = &Attr{}
+	}
 	var _type uint8
 	var opened bool
-	var attr Attr
 	var newSpace, newInode int64
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		opened = false
-		attr = Attr{}
+		*attr = Attr{}
 		newSpace, newInode = 0, 0
 		buf, err := tx.HGet(ctx, m.entryKey(parent), name).Bytes()
 		if err == redis.Nil && m.conf.CaseInsensi {
@@ -1259,7 +1278,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 			updateParent = true
 		}
 		if rs[1] != nil {
-			m.parseAttr([]byte(rs[1].(string)), &attr)
+			m.parseAttr([]byte(rs[1].(string)), attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
@@ -1287,7 +1306,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 				pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			}
 			if attr.Nlink > 0 {
-				pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
+				pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 				if trash > 0 {
 					pipe.HSet(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name), buf)
 					if attr.Parent == 0 {
@@ -1301,7 +1320,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 				switch _type {
 				case TypeFile:
 					if opened {
-						pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
+						pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
 						pipe.SAdd(ctx, m.sustained(m.sid), strconv.Itoa(int(inode)))
 					} else {
 						pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(now.Unix()), Member: m.toDelete(inode, attr.Length)})
@@ -1418,6 +1437,10 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 				pipe.IncrBy(ctx, m.usedSpaceKey(), -align4K(0))
 				pipe.Decr(ctx, m.totalInodesKey())
 			}
+
+			field := strconv.FormatUint(uint64(inode), 10)
+			pipe.HDel(ctx, m.dirUsedSpaceKey(), field)
+			pipe.HDel(ctx, m.dirUsedInodesKey(), field)
 			return nil
 		})
 		return err
@@ -2019,10 +2042,11 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 	}
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
+	var attr Attr
 	var needCompact bool
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
-		var attr Attr
+		attr = Attr{}
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
 			return err
@@ -2065,7 +2089,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		if needCompact {
 			go m.compactChunk(inode, indx, false)
 		}
-		m.updateStats(newSpace, 0)
+		m.updateParentStat(ctx, inode, attr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -2078,6 +2102,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		defer f.Unlock()
 	}
 	var newSpace int64
+	var sattr, attr Attr
 	defer func() { m.of.InvalidateChunk(fout, invalidateAllChunks) }()
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
@@ -2088,7 +2113,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		if rs[0] == nil || rs[1] == nil {
 			return redis.Nil
 		}
-		var sattr Attr
+		sattr = Attr{}
 		m.parseAttr([]byte(rs[0].(string)), &sattr)
 		if sattr.Typ != TypeFile {
 			return syscall.EINVAL
@@ -2101,7 +2126,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		if offIn+size > sattr.Length {
 			size = sattr.Length - offIn
 		}
-		var attr Attr
+		attr = Attr{}
 		m.parseAttr([]byte(rs[1].(string)), &attr)
 		if attr.Typ != TypeFile {
 			return syscall.EINVAL
@@ -2195,7 +2220,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		return err
 	}, m.inodeKey(fout), m.inodeKey(fin))
 	if err == nil {
-		m.updateStats(newSpace, 0)
+		m.updateParentStat(ctx, fout, attr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -2214,6 +2239,68 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 		}
 	}
 	return ps
+}
+
+func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	spaceKey := m.dirUsedSpaceKey()
+	inodesKey := m.dirUsedInodesKey()
+	field := strconv.FormatUint(uint64(ino), 16)
+	space, inodes, err = m.calcDirStat(ctx, ino)
+	if err != nil {
+		return
+	}
+	err = m.txn(ctx, func(tx *redis.Tx) error {
+		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HSet(ctx, spaceKey, field, space)
+			pipe.HSet(ctx, inodesKey, field, inodes)
+			return nil
+		})
+		return err
+	}, spaceKey, inodesKey)
+	return
+}
+
+func (m *redisMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error {
+	spaceKey := m.dirUsedSpaceKey()
+	inodesKey := m.dirUsedInodesKey()
+	field := strconv.FormatUint(uint64(ino), 10)
+	if !m.rdb.HExists(ctx, spaceKey, field).Val() {
+		_, _, err := m.doSyncDirStat(ctx, ino)
+		return err
+	}
+	return m.txn(ctx, func(tx *redis.Tx) error {
+		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			if space != 0 {
+				pipe.HIncrBy(ctx, spaceKey, field, space)
+			}
+			if inodes != 0 {
+				pipe.HIncrBy(ctx, inodesKey, field, inodes)
+			}
+			return nil
+		})
+		return err
+	}, spaceKey, inodesKey)
+}
+
+func (m *redisMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	spaceKey := m.dirUsedSpaceKey()
+	inodesKey := m.dirUsedInodesKey()
+	field := strconv.FormatUint(uint64(ino), 10)
+	usedSpace, errSpace := m.rdb.HGet(ctx, spaceKey, field).Int64()
+	if errSpace != nil && errSpace != redis.Nil {
+		err = errSpace
+		return
+	}
+	usedInodes, errInodes := m.rdb.HGet(ctx, inodesKey, field).Int64()
+	if errInodes != nil && errSpace != redis.Nil {
+		err = errInodes
+		return
+	}
+
+	if errSpace == nil && errInodes == nil && usedSpace >= 0 && usedInodes >= 0 {
+		return uint64(usedSpace), uint64(usedInodes), nil
+	}
+	return m.doSyncDirStat(ctx, ino)
 }
 
 // For now only deleted files

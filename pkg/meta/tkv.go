@@ -181,6 +181,7 @@ All keys:
   SHssssssss         session heartbeat // for legacy client
   SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
+  Uiiiiiiii	         space and inodes usage in directory
 */
 
 func (m *kvMeta) inodeKey(inode Ino) []byte {
@@ -229,6 +230,10 @@ func (m *kvMeta) sessionKey(sid uint64) []byte {
 
 func (m *kvMeta) legacySessionKey(sid uint64) []byte {
 	return m.fmtKey("SH", sid)
+}
+
+func (m *kvMeta) dirStatKey(inode Ino) []byte {
+	return m.fmtKey("U", inode)
 }
 
 func (m *kvMeta) parseSid(key string) uint64 {
@@ -307,6 +312,18 @@ func (m *kvMeta) packEntry(_type uint8, inode Ino) []byte {
 func (m *kvMeta) parseEntry(buf []byte) (uint8, Ino) {
 	b := utils.FromBuffer(buf)
 	return b.Get8(), Ino(b.Get64())
+}
+
+func (m *kvMeta) packDirStat(usedSpace, usedInodes uint64) []byte {
+	b := utils.NewBuffer(16)
+	b.Put64(usedSpace)
+	b.Put64(usedInodes)
+	return b.Bytes()
+}
+
+func (m *kvMeta) parseDirStat(buf []byte) (space uint64, inodes uint64) {
+	b := utils.FromBuffer(buf)
+	return b.Get64(), b.Get64()
 }
 
 func (m *kvMeta) get(key []byte) ([]byte, error) {
@@ -851,13 +868,14 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
+	var t Attr
 	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
-		var t Attr
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return syscall.ENOENT
 		}
+		t = Attr{}
 		m.parseAttr(a, &t)
 		if t.Typ != TypeFile {
 			return syscall.EPERM
@@ -905,7 +923,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		return nil
 	})
 	if err == nil {
-		m.updateStats(newSpace, 0)
+		m.updateParentStat(ctx, inode, t.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -934,13 +952,14 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newSpace int64
+	var t Attr
 	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
-		var t Attr
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return syscall.ENOENT
 		}
+		t = Attr{}
 		m.parseAttr(a, &t)
 		if t.Typ == TypeFIFO {
 			return syscall.EPIPE
@@ -993,7 +1012,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		return nil
 	})
 	if err == nil {
-		m.updateStats(newSpace, 0)
+		m.updateParentStat(ctx, inode, t.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -1115,6 +1134,9 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if _type == TypeSymlink {
 			tx.set(m.symKey(ino), []byte(path))
 		}
+		if _type == TypeDirectory {
+			tx.set(m.dirStatKey(ino), m.packDirStat(0, 0))
+		}
 		return nil
 	}, parent)
 	if err == nil {
@@ -1123,19 +1145,21 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	return errno(err)
 }
 
-func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
 	}
+	if attr == nil {
+		attr = &Attr{}
+	}
 	var _type uint8
 	var inode Ino
-	var attr Attr
 	var opened bool
 	var newSpace, newInode int64
 	err := m.txn(func(tx *kvTxn) error {
 		opened = false
-		attr = Attr{}
+		*attr = Attr{}
 		newSpace, newInode = 0, 0
 		buf := tx.get(m.entryKey(parent, name))
 		if buf == nil && m.conf.CaseInsensi {
@@ -1163,11 +1187,10 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		attr = Attr{}
 		opened = false
 		now := time.Now()
 		if rs[1] != nil {
-			m.parseAttr(rs[1], &attr)
+			m.parseAttr(rs[1], attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
@@ -1204,7 +1227,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
 		if attr.Nlink > 0 {
-			tx.set(m.inodeKey(inode), m.marshal(&attr))
+			tx.set(m.inodeKey(inode), m.marshal(attr))
 			if trash > 0 {
 				tx.set(m.entryKey(trash, m.trashEntry(parent, inode, name)), buf)
 				if attr.Parent == 0 {
@@ -1218,7 +1241,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			switch _type {
 			case TypeFile:
 				if opened {
-					tx.set(m.inodeKey(inode), m.marshal(&attr))
+					tx.set(m.inodeKey(inode), m.marshal(attr))
 					tx.set(m.sustainedKey(m.sid, inode), []byte{1})
 				} else {
 					tx.set(m.delfileKey(inode, attr.Length), m.packInt64(now.Unix()))
@@ -1309,6 +1332,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
 		tx.delete(m.entryKey(parent, name))
+		tx.delete(m.dirStatKey(inode))
 		if trash > 0 {
 			tx.set(m.inodeKey(inode), m.marshal(&attr))
 			tx.set(m.entryKey(trash, m.trashEntry(parent, inode, name)), buf)
@@ -1742,9 +1766,10 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
 	var newSpace int64
 	var needCompact bool
+	var attr Attr
 	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
-		var attr Attr
+		attr = Attr{}
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return syscall.ENOENT
@@ -1757,10 +1782,11 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if newleng > attr.Length {
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
+			if m.checkQuota(newSpace, 0) {
+				return syscall.ENOSPC
+			}
 		}
-		if m.checkQuota(newSpace, 0) {
-			return syscall.ENOSPC
-		}
+
 		now := time.Now()
 		attr.Mtime = now.Unix()
 		attr.Mtimensec = uint32(now.Nanosecond())
@@ -1775,7 +1801,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if needCompact {
 			go m.compactChunk(inode, indx, false)
 		}
-		m.updateStats(newSpace, 0)
+		m.updateParentStat(ctx, inode, attr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -1789,13 +1815,14 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(fout, invalidateAllChunks) }()
+	var sattr, attr Attr
 	err := m.txn(func(tx *kvTxn) error {
 		newSpace = 0
 		rs := tx.gets(m.inodeKey(fin), m.inodeKey(fout))
 		if rs[0] == nil || rs[1] == nil {
 			return syscall.ENOENT
 		}
-		var sattr Attr
+		sattr = Attr{}
 		m.parseAttr(rs[0], &sattr)
 		if sattr.Typ != TypeFile {
 			return syscall.EINVAL
@@ -1808,7 +1835,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		if offIn+size > sattr.Length {
 			size = sattr.Length - offIn
 		}
-		var attr Attr
+		attr = Attr{}
 		m.parseAttr(rs[1], &attr)
 		if attr.Typ != TypeFile {
 			return syscall.EINVAL
@@ -1896,7 +1923,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		return nil
 	})
 	if err == nil {
-		m.updateStats(newSpace, 0)
+		m.updateParentStat(ctx, fout, attr.Parent, newSpace)
 	}
 	return errno(err)
 }
@@ -1915,6 +1942,57 @@ func (m *kvMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 		ps[m.decodeInode([]byte(k[10:]))] = int(parseCounter(v))
 	}
 	return ps
+}
+
+func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	space, inodes, err = m.calcDirStat(ctx, ino)
+	if err != nil {
+		return
+	}
+	err = m.txn(func(tx *kvTxn) error {
+		tx.set(m.dirStatKey(ino), m.packDirStat(space, inodes))
+		return nil
+	})
+	return
+}
+
+var errEmptyStat = errors.New("empty stat")
+
+func (m *kvMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error {
+	err := m.txn(func(tx *kvTxn) error {
+		key := m.dirStatKey(ino)
+		rawStat := tx.get(key)
+		if rawStat == nil {
+			return errEmptyStat
+		}
+		us, ui := m.parseDirStat(rawStat)
+		usedSpace, usedInodes := int64(us), int64(ui)
+		usedSpace += space
+		usedInodes += inodes
+		if usedSpace < 0 || usedInodes < 0 {
+			logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
+			return errEmptyStat
+		}
+		tx.set(key, m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
+		return nil
+	})
+	if err == errEmptyStat {
+		_, _, err = m.doSyncDirStat(ctx, ino)
+	}
+	return err
+}
+
+func (m *kvMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+	rawStat, err := m.get(m.dirStatKey(ino))
+	if err != nil {
+		return
+	}
+	if rawStat != nil {
+		space, inodes = m.parseDirStat(rawStat)
+	} else {
+		space, inodes, err = m.doSyncDirStat(ctx, ino)
+	}
+	return
 }
 
 func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
