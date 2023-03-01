@@ -682,10 +682,10 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		}
 		defer blob.Delete(key) //nolint:errcheck
 		if d, e := get(blob, key, 0, -1); e != nil || d != string(br) {
-			return fmt.Errorf(`failed to get complete object, expect "hello", but got %v, error: %s`, d, e)
+			return fmt.Errorf(`failed to get object, expect "hello", but got %v, error: %s`, d, e)
 		}
 		if d, e := get(blob, key, 0, 5); e != nil || d != string(br) {
-			return fmt.Errorf(`failed to get complete object, expect "hello", but got %v, error: %s`, d, e)
+			return fmt.Errorf(`failed to get object, expect "hello", but got %v, error: %s`, d, e)
 		}
 		return nil
 	})
@@ -718,7 +718,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		}
 		// get middle
 		if d, e := get(blob, key, 2, 2); e != nil || d != "ll" {
-			return fmt.Errorf(`failed to get the intermediate byte of the object, expect "ll", but got %q, error: %s`, d, e)
+			return fmt.Errorf(`failed to get the one byte of the object, expect "ll", but got %q, error: %s`, d, e)
 		}
 		// get the end out of range
 		if d, e := get(blob, key, 4, 2); e != nil || d != "o" {
