@@ -332,3 +332,5 @@ func (c *memKV) reset(prefix []byte) error {
 func (c *memKV) close() error {
 	return nil
 }
+
+func (c *memKV) gc() {}

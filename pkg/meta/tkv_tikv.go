@@ -23,12 +23,14 @@ import (
 	"context"
 	"net/url"
 	"strings"
+	"time"
 
 	plog "github.com/pingcap/log"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/tikv/client-go/v2/config"
 	tikverr "github.com/tikv/client-go/v2/error"
+	"github.com/tikv/client-go/v2/oracle"
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv"
 	"github.com/tikv/client-go/v2/txnkv/txnutil"
@@ -61,20 +63,30 @@ func newTikvClient(addr string) (tkvClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	query := tUrl.Query()
 	config.UpdateGlobal(func(conf *config.Config) {
-		q := tUrl.Query()
 		conf.Security = config.NewSecurity(
-			q.Get("ca"),
-			q.Get("cert"),
-			q.Get("key"),
-			strings.Split(q.Get("verify-cn"), ","))
+			query.Get("ca"),
+			query.Get("cert"),
+			query.Get("key"),
+			strings.Split(query.Get("verify-cn"), ","))
 	})
+	interval := time.Hour * 3
+	if dur, err := time.ParseDuration(query.Get("gc-interval")); err == nil {
+		if dur != 0 && dur < time.Hour {
+			logger.Warnf("TiKV gc-interval (%s) is too short, and is reset to 1h", dur)
+			dur = time.Hour
+		}
+		interval = dur
+	}
+	logger.Infof("TiKV gc interval is set to %s", interval)
+
 	client, err := txnkv.NewClient(strings.Split(tUrl.Host, ","))
 	if err != nil {
 		return nil, err
 	}
 	prefix := strings.TrimLeft(tUrl.Path, "/")
-	return withPrefix(&tikvClient{client.KVStore}, append([]byte(prefix), 0xFD)), nil
+	return withPrefix(&tikvClient{client.KVStore, interval}, append([]byte(prefix), 0xFD)), nil
 }
 
 type tikvTxn struct {
@@ -224,7 +236,8 @@ func (tx *tikvTxn) dels(keys ...[]byte) {
 }
 
 type tikvClient struct {
-	client *tikv.KVStore
+	client     *tikv.KVStore
+	gcInterval time.Duration
 }
 
 func (c *tikvClient) name() string {
@@ -291,4 +304,18 @@ func (c *tikvClient) reset(prefix []byte) error {
 
 func (c *tikvClient) close() error {
 	return c.client.Close()
+}
+
+func (c *tikvClient) gc() {
+	if c.gcInterval == 0 {
+		return
+	}
+	go func() {
+		safePoint, err := c.client.GC(context.Background(), oracle.GoTimeToTS(time.Now().Add(-c.gcInterval)))
+		if err == nil {
+			logger.Debugf("TiKV GC returns new safe point: %d (%s)", safePoint, oracle.GetTimeFromTS(safePoint))
+		} else {
+			logger.Warnf("TiKV GC: %s", err)
+		}
+	}()
 }
