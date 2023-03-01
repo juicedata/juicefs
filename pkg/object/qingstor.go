@@ -84,7 +84,7 @@ func (q *qingstor) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = checkGetAPIStatusCode(*output.StatusCode, isRangeGet); err != nil {
+	if err = utils.CheckGetAPIStatusCode(*output.StatusCode, isRangeGet); err != nil {
 		return nil, err
 	}
 	return output.Body, nil

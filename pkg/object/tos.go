@@ -30,6 +30,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos"
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/codes"
 )
@@ -74,7 +76,7 @@ func (t tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = checkGetAPIStatusCode(resp.StatusCode, isRangeGet); err != nil {
+	if err = utils.CheckGetAPIStatusCode(resp.StatusCode, isRangeGet); err != nil {
 		return nil, err
 	}
 	return resp.Content, nil

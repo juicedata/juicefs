@@ -84,17 +84,6 @@ func (s *obsClient) Head(key string) (Object, error) {
 	}, nil
 }
 
-func checkGetAPIStatusCode(statusCode int, isRangeGet bool) error {
-	var expected = http.StatusOK
-	if isRangeGet {
-		expected = http.StatusPartialContent
-	}
-	if statusCode != expected {
-		return fmt.Errorf("expected get object response code: %d, but got %d", expected, statusCode)
-	}
-	return nil
-}
-
 func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	params := &obs.GetObjectInput{}
 	params.Bucket = s.bucket
@@ -117,7 +106,7 @@ func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = checkGetAPIStatusCode(resp.StatusCode, isRangeGet); err != nil {
+	if err = utils.CheckGetAPIStatusCode(resp.StatusCode, isRangeGet); err != nil {
 		return nil, err
 	}
 	return resp.Body, nil

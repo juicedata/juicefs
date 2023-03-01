@@ -31,6 +31,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
+
 	"github.com/viki-org/dnscache"
 )
 
@@ -200,7 +202,7 @@ func (s *RestfulStorage) Get(key string, off, limit int64) (io.ReadCloser, error
 	if resp.StatusCode != 200 && resp.StatusCode != 206 {
 		return nil, parseError(resp)
 	}
-	if err = checkGetAPIStatusCode(resp.StatusCode, isRangeGet); err != nil {
+	if err = utils.CheckGetAPIStatusCode(resp.StatusCode, isRangeGet); err != nil {
 		return nil, err
 	}
 	return resp.Body, nil

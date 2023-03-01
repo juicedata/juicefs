@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"mime"
 	"net"
+	"net/http"
 	"os"
 	"os/user"
 	"path"
@@ -213,4 +214,15 @@ func LookupGroup(name string) int {
 	}
 	groups[name] = gid
 	return gid
+}
+
+func CheckGetAPIStatusCode(statusCode int, isRangeGet bool) error {
+	var expected = http.StatusOK
+	if isRangeGet {
+		expected = http.StatusPartialContent
+	}
+	if statusCode != expected {
+		return fmt.Errorf("expected get object response code: %d, but got %d", expected, statusCode)
+	}
+	return nil
 }
