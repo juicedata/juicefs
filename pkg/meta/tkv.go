@@ -1956,30 +1956,46 @@ func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err 
 	return
 }
 
-var errEmptyStat = errors.New("empty stat")
-
-func (m *kvMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error {
+func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
+	syncMap := make(map[Ino]*dirStat, 0)
 	err := m.txn(func(tx *kvTxn) error {
-		key := m.dirStatKey(ino)
-		rawStat := tx.get(key)
-		if rawStat == nil {
-			return errEmptyStat
+		for ino, stat := range batch {
+			key := m.dirStatKey(ino)
+			rawStat := tx.get(key)
+			if rawStat == nil {
+				syncMap[ino] = new(dirStat)
+				continue
+			}
+			us, ui := m.parseDirStat(rawStat)
+			usedSpace, usedInodes := int64(us), int64(ui)
+			usedSpace += stat.space
+			usedInodes += stat.inodes
+			if usedSpace < 0 || usedInodes < 0 {
+				logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
+				syncMap[ino] = new(dirStat)
+				continue
+			}
+			tx.set(key, m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
 		}
-		us, ui := m.parseDirStat(rawStat)
-		usedSpace, usedInodes := int64(us), int64(ui)
-		usedSpace += space
-		usedInodes += inodes
-		if usedSpace < 0 || usedInodes < 0 {
-			logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
-			return errEmptyStat
-		}
-		tx.set(key, m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
 		return nil
 	})
-	if err == errEmptyStat {
-		_, _, err = m.doSyncDirStat(ctx, ino)
+	if err != nil {
+		return err
 	}
-	return err
+
+	if len(syncMap) > 0 {
+		if err := m.batchCalcDirStat(ctx, syncMap); err != nil {
+			return err
+		}
+	}
+
+	return m.txn(func(tx *kvTxn) error {
+		for ino, stat := range syncMap {
+			key := m.dirStatKey(ino)
+			tx.set(key, m.packDirStat(uint64(stat.space), uint64(stat.inodes)))
+		}
+		return nil
+	})
 }
 
 func (m *kvMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
