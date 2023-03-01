@@ -42,7 +42,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
@@ -2261,54 +2260,18 @@ func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, e
 	return
 }
 
-func (m *redisMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error {
+func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	spaceKey := m.dirUsedSpaceKey()
 	inodesKey := m.dirUsedInodesKey()
-	field := strconv.FormatUint(uint64(ino), 10)
-	if !m.rdb.HExists(ctx, spaceKey, field).Val() {
-		_, _, err := m.doSyncDirStat(ctx, ino)
-		return err
-	}
-	return m.txn(ctx, func(tx *redis.Tx) error {
-		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			if space != 0 {
-				pipe.HIncrBy(ctx, spaceKey, field, space)
-			}
-			if inodes != 0 {
-				pipe.HIncrBy(ctx, inodesKey, field, inodes)
-			}
-			return nil
-		})
-		return err
-	}, spaceKey, inodesKey)
-}
-
-func (m *redisMeta) doBatchUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
-	spaceKey := m.dirUsedSpaceKey()
-	inodesKey := m.dirUsedInodesKey()
-	nonexist := make(map[Ino]bool, 0)
+	nonexist := make(map[Ino]*dirStat, 0)
 	for ino := range batch {
 		if !m.rdb.HExists(ctx, spaceKey, strconv.FormatUint(uint64(ino), 10)).Val() {
-			nonexist[ino] = true
+			nonexist[ino] = new(dirStat)
 		}
 	}
 
 	if len(nonexist) > 0 {
-		var mu sync.Mutex
-		var eg errgroup.Group
-		for ino := range nonexist {
-			eg.Go(func() error {
-				space, inodes, err := m.calcDirStat(ctx, ino)
-				if err != nil {
-					return err
-				}
-				mu.Lock()
-				batch[ino] = dirStat{space: int64(space), inodes: int64(inodes)}
-				mu.Unlock()
-				return nil
-			})
-		}
-		if err := eg.Wait(); err != nil {
+		if err := m.batchCalcDirStat(ctx, nonexist); err != nil {
 			return err
 		}
 	}
@@ -2317,8 +2280,9 @@ func (m *redisMeta) doBatchUpdateDirStat(ctx Context, batch map[Ino]dirStat) err
 		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			for ino, stat := range batch {
 				field := strconv.FormatUint(uint64(ino), 10)
-				if nonexist[ino] && m.rdb.HExists(ctx, spaceKey, field).Val() {
-					// other sessions has updated the stat
+				if stat, ok := nonexist[ino]; ok {
+					pipe.HSet(ctx, spaceKey, field, stat.space)
+					pipe.HSet(ctx, inodesKey, field, stat.inodes)
 					continue
 				}
 				if stat.space != 0 {

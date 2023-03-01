@@ -2256,7 +2256,7 @@ func (m *dbMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
-func (m *dbMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error {
+func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	table := m.db.GetTableMapper().Obj2Table("dirStats")
 	usedSpaceColumn := m.db.GetColumnMapper().Obj2Table("UsedSpace")
 	usedInodeColumn := m.db.GetColumnMapper().Obj2Table("UsedInodes")
@@ -2266,19 +2266,43 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64
 		usedSpaceColumn, usedSpaceColumn,
 		usedInodeColumn, usedInodeColumn,
 	)
-	var affected int64
+
+	nonexist := make(map[Ino]*dirStat, 0)
 	err := m.txn(func(s *xorm.Session) error {
-		ret, err := s.Exec(sql, space, inodes, ino)
-		if err != nil {
+		for ino, stat := range batch {
+			ret, err := s.Exec(sql, stat.space, stat.inodes, ino)
+			if err != nil {
+				return err
+			}
+			affected, err := ret.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if affected == 0 {
+				nonexist[ino] = new(dirStat)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if len(nonexist) > 0 {
+		if err := m.batchCalcDirStat(ctx, nonexist); err != nil {
 			return err
 		}
-		affected, err = ret.RowsAffected()
-		return err
-	})
-	if err == nil && affected == 0 {
-		_, _, err = m.doSyncDirStat(ctx, ino)
 	}
-	return err
+
+	return m.txn(func(s *xorm.Session) error {
+		for ino, stat := range nonexist {
+			_, err := s.Insert(&dirStats{Inode: ino, UsedSpace: int64(stat.space), UsedInodes: int64(stat.inodes)})
+			if err != nil && !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {

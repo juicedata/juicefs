@@ -83,8 +83,7 @@ type engine interface {
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
-	doBatchUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
-	doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error
+	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
 	doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error)
 
 	scanTrashSlices(Context, trashSliceScan) error
@@ -243,6 +242,21 @@ func (m *baseMeta) checkRoot(inode Ino) Ino {
 	}
 }
 
+func (m *baseMeta) batchCalcDirStat(ctx Context, stats map[Ino]*dirStat) error {
+	var eg errgroup.Group
+	for ino, stat := range stats {
+		eg.Go(func() error {
+			space, inodes, err := m.calcDirStat(ctx, ino)
+			if err != nil {
+				return err
+			}
+			stat.space, stat.inodes = int64(space), int64(inodes)
+			return nil
+		})
+	}
+	return eg.Wait()
+}
+
 func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
 	var entries []*Entry
 	if eno := m.en.doReaddir(ctx, ino, 1, &entries, -1); eno != 0 {
@@ -308,14 +322,9 @@ func (m *baseMeta) doFlushDirStat() {
 	stats := m.dirStats
 	m.dirStats = make(map[Ino]dirStat)
 	m.dirStatsLock.Unlock()
-	for ino, e := range stats {
-		if e.space == 0 && e.inodes == 0 {
-			continue
-		}
-		err := m.en.doUpdateDirStat(Background, ino, e.space, e.inodes)
-		if err != nil {
-			logger.Errorf("update dir stat failed: %v", err)
-		}
+	err := m.en.doUpdateDirStat(Background, stats)
+	if err != nil {
+		logger.Errorf("update dir stat failed: %v", err)
 	}
 }
 
