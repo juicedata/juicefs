@@ -682,17 +682,17 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		}
 		defer blob.Delete(key) //nolint:errcheck
 		if d, e := get(blob, key, 0, -1); e != nil || d != string(br) {
-			return fmt.Errorf(`failed to get object, expect "hello", but got %v, error: %s`, d, e)
+			return fmt.Errorf(`failed to get an object: expect "hello", but got %v, error: %s`, d, e)
 		}
 		if d, e := get(blob, key, 0, 5); e != nil || d != string(br) {
-			return fmt.Errorf(`failed to get object, expect "hello", but got %v, error: %s`, d, e)
+			return fmt.Errorf(`failed to get an object: expect "hello", but got %v, error: %s`, d, e)
 		}
 		return nil
 	})
 
 	runCase("get non-exist", func(blob object.ObjectStorage) error {
 		if _, err := blob.Get("not_exists_file", 0, -1); err == nil {
-			return fmt.Errorf("get not exists object should failed: %s", err)
+			return fmt.Errorf("get not existed object should failed: %s", err)
 		}
 		return nil
 	})
@@ -706,19 +706,19 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 
 		// get first
 		if d, e := get(blob, key, 0, 1); e != nil || d != "h" {
-			return fmt.Errorf(`failed to get the first byte of the object, expect "h", but got %q, error: %s`, d, e)
+			return fmt.Errorf(`failed to get the first byte:, expect "h", but got %q, error: %s`, d, e)
 		}
 		// get last
 		if d, e := get(blob, key, 4, 1); e != nil || d != "o" {
-			return fmt.Errorf(`failed to get the last byte of the object, expect "o", but got %q, error: %s`, d, e)
+			return fmt.Errorf(`failed to get the last byte: expect "o", but got %q, error: %s`, d, e)
 		}
 		// get last 3
 		if d, e := get(blob, key, 2, 3); e != nil || d != "llo" {
-			return fmt.Errorf(`failed to get the last three bytes of the object, expect "llo", but got %q, error: %s`, d, e)
+			return fmt.Errorf(`failed to get the last three bytes: expect "llo", but got %q, error: %s`, d, e)
 		}
 		// get middle
 		if d, e := get(blob, key, 2, 2); e != nil || d != "ll" {
-			return fmt.Errorf(`failed to get the one byte of the object, expect "ll", but got %q, error: %s`, d, e)
+			return fmt.Errorf(`failed to get the one byte: expect "ll", but got %q, error: %s`, d, e)
 		}
 		// get the end out of range
 		if d, e := get(blob, key, 4, 2); e != nil || d != "o" {
@@ -741,7 +741,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			return fmt.Errorf("failed to head object %s", err)
 		} else {
 			if h.Key() != key {
-				return fmt.Errorf("expected get key is test but get %s", h.Key())
+				return fmt.Errorf("expected key 'test' but got %s", h.Key())
 			}
 		}
 		return nil
@@ -760,7 +760,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		}
 
 		if err := blob.Delete(key); err != nil {
-			return fmt.Errorf("delete not exists %v", err)
+			return fmt.Errorf("delete not existed: %v", err)
 		}
 		return nil
 	})

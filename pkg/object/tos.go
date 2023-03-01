@@ -30,8 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos"
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/codes"
 )
@@ -56,27 +54,17 @@ func (t tosClient) Create() error {
 }
 
 func (t tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	var rangeEnd int64
-	var isRangeGet bool
-	if limit > 0 {
-		isRangeGet = true
-		rangeEnd = off + limit - 1
-	}
-	var rangeStr string
-	if off == 0 && limit == 1 {
-		rangeStr = "bytes=0-0"
-	}
+	rangeStr := getRange(off, limit)
 	resp, err := t.client.GetObjectV2(context.Background(), &tos.GetObjectV2Input{
-		Bucket:     t.bucket,
-		Key:        key,
-		RangeStart: off,
-		RangeEnd:   rangeEnd,
-		Range:      rangeStr, // When Range and RangeStart & RangeEnd appear together, range is preferred
+		Bucket: t.bucket,
+		Key:    key,
+		Range:  rangeStr, // When Range and RangeStart & RangeEnd appear together, range is preferred
 	})
 	if err != nil {
 		return nil, err
 	}
-	if err = utils.CheckGetAPIStatusCode(resp.StatusCode, isRangeGet); err != nil {
+	if err = checkGetStatus(resp.StatusCode, rangeStr != ""); err != nil {
+		_ = resp.Content.Close()
 		return nil, err
 	}
 	return resp.Content, nil

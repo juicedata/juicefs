@@ -90,23 +90,17 @@ func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	params.Key = key
 	var resp *obs.GetObjectOutput
 	var err error
-	var r string
-	var isRangeGet bool
-	if off > 0 || limit > 0 {
-		if limit > 0 {
-			r = fmt.Sprintf("bytes=%d-%d", off, off+limit-1)
-		} else {
-			r = fmt.Sprintf("bytes=%d-", off)
-		}
-		isRangeGet = true
-		resp, err = s.c.GetObject(params, obs.WithHeader(obs.HEADER_RANGE, []string{r}))
+	rangeStr := getRange(off, limit)
+	if rangeStr != "" {
+		resp, err = s.c.GetObject(params, obs.WithHeader(obs.HEADER_RANGE, []string{rangeStr}))
 	} else {
 		resp, err = s.c.GetObject(params)
 	}
 	if err != nil {
 		return nil, err
 	}
-	if err = utils.CheckGetAPIStatusCode(resp.StatusCode, isRangeGet); err != nil {
+	if err = checkGetStatus(resp.StatusCode, rangeStr != ""); err != nil {
+		_ = resp.Body.Close()
 		return nil, err
 	}
 	return resp.Body, nil

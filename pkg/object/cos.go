@@ -31,8 +31,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/pkg/errors"
 
 	"github.com/tencentyun/cos-go-sdk-v5"
@@ -81,23 +79,13 @@ func (c *COS) Head(key string) (Object, error) {
 }
 
 func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	params := &cos.ObjectGetOptions{}
-	var isRangeGet bool
-	if off > 0 || limit > 0 {
-		isRangeGet = true
-		var r string
-		if limit > 0 {
-			r = fmt.Sprintf("bytes=%d-%d", off, off+limit-1)
-		} else {
-			r = fmt.Sprintf("bytes=%d-", off)
-		}
-		params.Range = r
-	}
+	params := &cos.ObjectGetOptions{Range: getRange(off, limit)}
 	resp, err := c.c.Object.Get(ctx, key, params)
 	if err != nil {
 		return nil, err
 	}
-	if err = utils.CheckGetAPIStatusCode(resp.StatusCode, isRangeGet); err != nil {
+	if err = checkGetStatus(resp.StatusCode, params.Range != ""); err != nil {
+		_ = resp.Body.Close()
 		return nil, err
 	}
 	if off == 0 && limit == -1 {
