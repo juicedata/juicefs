@@ -2288,7 +2288,7 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err 
 	}
 	err = m.txn(func(s *xorm.Session) error {
 		_, err := s.Insert(&dirStats{Inode: ino, UsedSpace: int64(space), UsedInodes: int64(inodes)})
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			// other client synced
 			err = nil
 		}
