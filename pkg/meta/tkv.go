@@ -25,7 +25,6 @@ import (
 	"io"
 	"math"
 	"math/rand"
-	"os"
 	"runtime"
 	"runtime/debug"
 	"sort"
@@ -58,7 +57,7 @@ type tkvClient interface {
 	reset(prefix []byte) error
 	close() error
 	shouldRetry(err error) bool
-	gc(edge time.Time)
+	gc()
 }
 
 type kvTxn struct {
@@ -1938,17 +1937,7 @@ func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 
 func (m *kvMeta) doCleanupSlices() {
 	if m.Name() == "tikv" {
-		interval := time.Hour * 3
-		if dur, err := time.ParseDuration(os.Getenv("TIKV_GC_INTERVAL")); err == nil {
-			interval = dur
-			if interval > 0 && interval < time.Hour {
-				logger.Warnf("TIKV_GC_INTERVAL (%s) is too short, and is reset to 1h", interval)
-				interval = time.Hour
-			}
-		}
-		if interval != 0 {
-			go m.client.gc(time.Now().Add(-interval))
-		}
+		m.client.gc()
 	}
 	klen := 1 + 8 + 4
 	vals, _ := m.scanValues(m.fmtKey("K"), -1, func(k, v []byte) bool {

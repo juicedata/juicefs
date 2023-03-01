@@ -202,7 +202,7 @@ func (c *badgerClient) close() error {
 	return c.client.Close()
 }
 
-func (c *badgerClient) gc(time.Time) {}
+func (c *badgerClient) gc() {}
 
 func newBadgerClient(addr string) (tkvClient, error) {
 	opt := badger.DefaultOptions(addr)

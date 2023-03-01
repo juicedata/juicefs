@@ -122,7 +122,7 @@ func (c *fdbClient) shouldRetry(err error) bool {
 	return false
 }
 
-func (c *fdbClient) gc(time.Time) {}
+func (c *fdbClient) gc() {}
 
 func (tx *fdbTxn) get(key []byte) []byte {
 	return tx.Get(fdb.Key(key)).MustGet()
