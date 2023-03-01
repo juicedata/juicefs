@@ -42,6 +42,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
@@ -2275,6 +2276,57 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes in
 			}
 			if inodes != 0 {
 				pipe.HIncrBy(ctx, inodesKey, field, inodes)
+			}
+			return nil
+		})
+		return err
+	}, spaceKey, inodesKey)
+}
+
+func (m *redisMeta) doBatchUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
+	spaceKey := m.dirUsedSpaceKey()
+	inodesKey := m.dirUsedInodesKey()
+	nonexist := make(map[Ino]bool, 0)
+	for ino := range batch {
+		if !m.rdb.HExists(ctx, spaceKey, strconv.FormatUint(uint64(ino), 10)).Val() {
+			nonexist[ino] = true
+		}
+	}
+
+	if len(nonexist) > 0 {
+		var mu sync.Mutex
+		var eg errgroup.Group
+		for ino := range nonexist {
+			eg.Go(func() error {
+				space, inodes, err := m.calcDirStat(ctx, ino)
+				if err != nil {
+					return err
+				}
+				mu.Lock()
+				batch[ino] = dirStat{space: int64(space), inodes: int64(inodes)}
+				mu.Unlock()
+				return nil
+			})
+		}
+		if err := eg.Wait(); err != nil {
+			return err
+		}
+	}
+
+	return m.txn(ctx, func(tx *redis.Tx) error {
+		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			for ino, stat := range batch {
+				field := strconv.FormatUint(uint64(ino), 10)
+				if nonexist[ino] && m.rdb.HExists(ctx, spaceKey, field).Val() {
+					// other sessions has updated the stat
+					continue
+				}
+				if stat.space != 0 {
+					tx.HIncrBy(ctx, spaceKey, field, stat.space)
+				}
+				if stat.inodes != 0 {
+					tx.HIncrBy(ctx, inodesKey, field, stat.inodes)
+				}
 			}
 			return nil
 		})

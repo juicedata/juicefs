@@ -83,6 +83,7 @@ type engine interface {
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
+	doBatchUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
 	doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error
 	doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error)
 
