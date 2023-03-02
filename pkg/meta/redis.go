@@ -2264,12 +2264,12 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	spaceKey := m.dirUsedSpaceKey()
 	inodesKey := m.dirUsedInodesKey()
 	nonexist := make(map[Ino]*dirStat, 0)
-	statList := make([]dirStat, 0, len(batch))
+	statList := make([]Ino, 0, len(batch))
 
 	pipeline := m.rdb.Pipeline()
-	for ino, stat := range batch {
+	for ino := range batch {
 		pipeline.HExists(ctx, spaceKey, strconv.FormatUint(uint64(ino), 10))
-		statList = append(statList, stat)
+		statList = append(statList, ino)
 	}
 	rets, err := pipeline.Exec(ctx)
 	if err != nil {
@@ -2280,8 +2280,7 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 			return ret.Err()
 		}
 		if exist, _ := ret.(*redis.BoolCmd).Result(); !exist {
-			ino := statList[i].ino
-			nonexist[ino] = &dirStat{ino: ino}
+			nonexist[statList[i]] = &dirStat{}
 		}
 	}
 
@@ -2291,15 +2290,16 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 		}
 	}
 
-	for _, group := range m.seperateBatch(statList, 1000) {
+	for _, group := range m.seperateBatch(batch, 1000) {
 		_, err := m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-			for _, stat := range group {
-				field := strconv.FormatUint(uint64(stat.ino), 10)
-				if s, ok := nonexist[stat.ino]; ok {
-					pipe.HSetNX(ctx, spaceKey, field, s.space)
-					pipe.HSetNX(ctx, inodesKey, field, s.inodes)
+			for _, ino := range group {
+				field := strconv.FormatUint(uint64(ino), 10)
+				if stat, ok := nonexist[ino]; ok {
+					pipe.HSetNX(ctx, spaceKey, field, stat.space)
+					pipe.HSetNX(ctx, inodesKey, field, stat.inodes)
 					continue
 				}
+				stat := batch[ino]
 				if stat.space != 0 {
 					pipe.HIncrBy(ctx, spaceKey, field, stat.space)
 				}

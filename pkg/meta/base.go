@@ -116,7 +116,6 @@ type cchunk struct {
 
 // stat of dir
 type dirStat struct {
-	ino    Ino
 	space  int64
 	inodes int64
 }
@@ -259,16 +258,20 @@ func (m *baseMeta) batchCalcDirStat(ctx Context, stats map[Ino]*dirStat) error {
 	return eg.Wait()
 }
 
-func (m *baseMeta) seperateBatch(batch []dirStat, size int) [][]dirStat {
-	var groups [][]dirStat
-	for i := 0; i < len(batch); i += size {
-		end := i + size
-		if end > len(batch) {
-			end = len(batch)
-		}
-		groups = append(groups, batch[i:end])
+func (m *baseMeta) seperateBatch(batch map[Ino]dirStat, size int) [][]Ino {
+	var inos []Ino
+	for ino := range batch {
+		inos = append(inos, ino)
 	}
-	return groups
+	var batches [][]Ino
+	for i := 0; i < len(inos); i += size {
+		end := i + size
+		if end > len(inos) {
+			end = len(inos)
+		}
+		batches = append(batches, inos[i:end])
+	}
+	return batches
 }
 
 func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
@@ -299,9 +302,6 @@ func (m *baseMeta) updateDirStat(ctx Context, ino Ino, space int64, inodes int64
 	m.dirStatsLock.Lock()
 	defer m.dirStatsLock.Unlock()
 	stat := m.dirStats[ino]
-	if stat.ino == 0 {
-		stat.ino = ino
-	}
 	stat.space += space
 	stat.inodes += inodes
 	m.dirStats[ino] = stat
