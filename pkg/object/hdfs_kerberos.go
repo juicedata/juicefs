@@ -8,6 +8,7 @@ package object
 
 import (
 	"fmt"
+	"github.com/jcmturner/gokrb5/v8/keytab"
 	"os"
 	"os/user"
 	"strings"
@@ -26,6 +27,23 @@ func getKerberosClient() (*krb.Client, error) {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return nil, err
+	}
+
+	// Trying to authenticate with keytab file first.
+	ktPath := os.Getenv("KRB5_KTNAME")
+	krbPrincipal := os.Getenv("KRB5_PRINCIPAL")
+	if ktPath != "" && krbPrincipal != "" {
+		kt, err := keytab.Load(ktPath)
+		if err != nil {
+			return nil, err
+		}
+		// e.g. KRB5_PRINCIPAL="primary/instance@realm"
+		sp := strings.SplitN(krbPrincipal, "@", 2)
+		if len(sp) != 2 {
+			return nil, fmt.Errorf("unusable kerberos principal: %s", krbPrincipal)
+		}
+		client := krb.NewWithKeytab(sp[0], sp[1], kt, cfg)
+		return client, nil
 	}
 
 	// Determine the ccache location from the environment, falling back to the
