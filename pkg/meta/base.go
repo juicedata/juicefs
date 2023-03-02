@@ -518,11 +518,19 @@ func (m *baseMeta) CloseSession() error {
 	return nil
 }
 
-func (m *baseMeta) checkQuota(size, inodes int64) bool {
-	if size > 0 && m.fmt.Capacity > 0 && atomic.LoadInt64(&m.usedSpace)+atomic.LoadInt64(&m.newSpace)+size > int64(m.fmt.Capacity) {
+func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parent Ino) bool {
+	if space > 0 && m.fmt.Capacity > 0 && atomic.LoadInt64(&m.usedSpace)+atomic.LoadInt64(&m.newSpace)+space > int64(m.fmt.Capacity) {
 		return true
 	}
-	return inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes)
+	if inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes) {
+		return true
+	}
+	if parent == 0 { // FIXME: check all parents of the file
+		logger.Warnf("Quota check is skipped for hardlinked files")
+		return false
+	}
+	q := m.getDirQuota(ctx, parent)
+	return q != nil && q.check(space, inodes)
 }
 
 func (m *baseMeta) updateStats(space int64, inodes int64) {
@@ -974,20 +982,16 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}
 
 	defer m.timeit(time.Now())
-	var space, inodes int64 = align4K(0), 1
-	if m.checkQuota(space, inodes) {
-		return syscall.ENOSPC
-	}
 	parent = m.checkRoot(parent)
-	quota := m.getDirQuota(ctx, parent)
-	if quota != nil && quota.check(space, inodes) {
+	var space, inodes int64 = align4K(0), 1
+	if m.checkQuota(ctx, space, inodes, parent) {
 		return syscall.ENOSPC
 	}
 	err := m.en.doMknod(ctx, parent, name, _type, mode, cumask, rdev, path, inode, attr)
 	if err == 0 {
 		m.updateDirStat(ctx, parent, space, inodes)
-		if quota != nil {
-			quota.update(space, inodes, false)
+		if q := m.getDirQuota(ctx, parent); q != nil {
+			q.update(space, inodes, false)
 		}
 	}
 	return err

@@ -888,7 +888,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			return nil
 		}
 		newSpace = align4K(length) - align4K(t.Length)
-		if newSpace > 0 && m.checkQuota(newSpace, 0) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, t.Parent) {
 			return syscall.ENOSPC
 		}
 		var left, right = t.Length, length
@@ -983,7 +983,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 
 		old := t.Length
 		newSpace = align4K(length) - align4K(t.Length)
-		if newSpace > 0 && m.checkQuota(newSpace, 0) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, t.Parent) {
 			return syscall.ENOSPC
 		}
 		t.Length = length
@@ -1783,7 +1783,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if newleng > attr.Length {
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
-			if m.checkQuota(newSpace, 0) {
+			if m.checkQuota(ctx, newSpace, 0, attr.Parent) {
 				return syscall.ENOSPC
 			}
 		}
@@ -1850,7 +1850,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if m.checkQuota(newSpace, 0) {
+		if m.checkQuota(ctx, newSpace, 0, attr.Parent) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()

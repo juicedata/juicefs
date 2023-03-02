@@ -973,18 +973,8 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			return nil
 		}
 		newSpace = align4K(length) - align4K(nodeAttr.Length)
-		if newSpace > 0 {
-			if m.checkQuota(newSpace, 0) {
-				return syscall.ENOSPC
-			}
-			if nodeAttr.Parent > 0 {
-				if q := m.getDirQuota(ctx, nodeAttr.Parent); q != nil && q.check(newSpace, 0) {
-					return syscall.ENOSPC
-				}
-			} else {
-				// FIXME: check all parents of the file
-				logger.Warnf("Quota check is skipped for hardlinked files")
-			}
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, nodeAttr.Parent) {
+			return syscall.ENOSPC
 		}
 		var zeroChunks []chunk
 		var left, right = nodeAttr.Length, length
@@ -1088,18 +1078,8 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 
 		old := nodeAttr.Length
 		newSpace = align4K(length) - align4K(nodeAttr.Length)
-		if newSpace > 0 {
-			if m.checkQuota(newSpace, 0) {
-				return syscall.ENOSPC
-			}
-			if nodeAttr.Parent > 0 {
-				if q := m.getDirQuota(ctx, nodeAttr.Parent); q != nil && q.check(newSpace, 0) {
-					return syscall.ENOSPC
-				}
-			} else {
-				// FIXME: check all parents of the file
-				logger.Warnf("Quota check is skipped for hardlinked files")
-			}
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, nodeAttr.Parent) {
+			return syscall.ENOSPC
 		}
 		now := time.Now().UnixNano() / 1e3
 		nodeAttr.Length = length
@@ -2114,18 +2094,8 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			newSpace = align4K(newleng) - align4K(nodeAttr.Length)
 			nodeAttr.Length = newleng
 		}
-		if newSpace > 0 {
-			if m.checkQuota(newSpace, 0) {
-				return syscall.ENOSPC
-			}
-			if nodeAttr.Parent > 0 {
-				if q := m.getDirQuota(ctx, nodeAttr.Parent); q != nil && q.check(newSpace, 0) {
-					return syscall.ENOSPC
-				}
-			} else {
-				// FIXME: check all parents of the file
-				logger.Warnf("Quota check is skipped for hardlinked files")
-			}
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, nodeAttr.Parent) {
+			return syscall.ENOSPC
 		}
 		now := time.Now().UnixNano() / 1e3
 		nodeAttr.Mtime = now
@@ -2205,18 +2175,8 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(nout.Length)
 			nout.Length = newleng
 		}
-		if newSpace > 0 {
-			if m.checkQuota(newSpace, 0) {
-				return syscall.ENOSPC
-			}
-			if nout.Parent > 0 {
-				if q := m.getDirQuota(ctx, nout.Parent); q != nil && q.check(newSpace, 0) {
-					return syscall.ENOSPC
-				}
-			} else {
-				// FIXME: check all parents of the file
-				logger.Warnf("Quota check is skipped for hardlinked files")
-			}
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, nout.Parent) {
+			return syscall.ENOSPC
 		}
 		now := time.Now().UnixNano() / 1e3
 		nout.Mtime = now

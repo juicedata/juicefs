@@ -834,7 +834,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			return nil
 		}
 		newSpace = align4K(length) - align4K(t.Length)
-		if newSpace > 0 && m.checkQuota(newSpace, 0) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, t.Parent) {
 			return syscall.ENOSPC
 		}
 		var zeroChunks []uint32
@@ -961,7 +961,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 
 		old := t.Length
 		newSpace = align4K(length) - align4K(old)
-		if newSpace > 0 && m.checkQuota(newSpace, 0) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, t.Parent) {
 			return syscall.ENOSPC
 		}
 		t.Length = length
@@ -2060,7 +2060,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if m.checkQuota(newSpace, 0) {
+		if m.checkQuota(ctx, newSpace, 0, attr.Parent) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
@@ -2140,7 +2140,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if m.checkQuota(newSpace, 0) {
+		if m.checkQuota(ctx, newSpace, 0, attr.Parent) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
