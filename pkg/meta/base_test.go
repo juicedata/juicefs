@@ -87,7 +87,7 @@ func TestKeyDB(t *testing.T) {
 	}
 }
 
-func TestRedisCluster(t *testing.T) { //skip mutate
+func TestRedisCluster(t *testing.T) {
 	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", DefaultConf())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
