@@ -54,19 +54,17 @@ func (t tosClient) Create() error {
 }
 
 func (t tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	var rangeEnd int64
-	if limit > 0 {
-		rangeEnd = off + limit - 1
-	} else {
-		rangeEnd = 0
-	}
+	rangeStr := getRange(off, limit)
 	resp, err := t.client.GetObjectV2(context.Background(), &tos.GetObjectV2Input{
-		Bucket:     t.bucket,
-		Key:        key,
-		RangeStart: off,
-		RangeEnd:   rangeEnd,
+		Bucket: t.bucket,
+		Key:    key,
+		Range:  rangeStr, // When Range and RangeStart & RangeEnd appear together, range is preferred
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err = checkGetStatus(resp.StatusCode, rangeStr != ""); err != nil {
+		_ = resp.Content.Close()
 		return nil, err
 	}
 	return resp.Content, nil

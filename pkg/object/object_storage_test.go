@@ -86,8 +86,10 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put(key, bytes.NewReader(nil)); err != nil {
 		t.Logf("PUT testEncodeFile failed: %s", err.Error())
 	} else {
-		if resp, err := s.List("", "测试编码文件", "", 1); err != nil || (len(resp) == 1 && resp[0].Key() != key) {
-			t.Logf("List testEncodeFile Failed %s", err)
+		if resp, err := s.List("", "测试编码文件", "", 1); err != nil && err != notSupported {
+			t.Logf("List testEncodeFile Failed: %s", err)
+		} else if len(resp) == 1 && resp[0].Key() != key {
+			t.Logf("List testEncodeFile Failed: expect key %s, but got %s", key, resp[0].Key())
 		}
 	}
 	_ = s.Delete(key)
@@ -105,21 +107,34 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 
+	// get all
 	if d, e := get(s, "test", 0, -1); d != "hello" {
 		t.Fatalf("expect hello, but got %v, error: %s", d, e)
 	}
-	if d, e := get(s, "test", 2, -1); d != "llo" {
-		t.Logf("expect llo, but got %v, error: %s", d, e)
+	if d, e := get(s, "test", 0, 5); d != "hello" {
+		t.Fatalf("expect hello, but got %v, error: %s", d, e)
 	}
+	// get first
+	if d, e := get(s, "test", 0, 1); d != "h" {
+		t.Fatalf("expect h, but got %v, error: %s", d, e)
+	}
+	// get last
+	if d, e := get(s, "test", 4, 1); d != "o" {
+		t.Fatalf("expect o, but got %v, error: %s", d, e)
+	}
+	// get last 3
 	if d, e := get(s, "test", 2, 3); d != "llo" {
 		t.Fatalf("expect llo, but got %v, error: %s", d, e)
 	}
+	// get middle
 	if d, e := get(s, "test", 2, 2); d != "ll" {
 		t.Fatalf("expect ll, but got %v, error: %s", d, e)
 	}
+	// get the end out of range
 	if d, e := get(s, "test", 4, 2); d != "o" {
 		t.Logf("out-of-range get: 'o', but got %v, error: %s", len(d), e)
 	}
+	// get the off out of range
 	if d, e := get(s, "test", 6, 2); d != "" {
 		t.Logf("out-of-range get: '', but got %v, error: %s", len(d), e)
 	}
@@ -796,19 +811,20 @@ func TestTOS(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	// schema: S3 AWS_ENDPOINT=xxxxx  AWS_ACCESS_KEY_ID=xxxx  AWS_SECRET_ACCESS_KEY=xxxx
-	envFile := "/tmp/aksk.txt"
-	if _, err := os.Stat(envFile); err == nil {
-		file, _ := os.ReadFile(envFile)
-		for _, line := range strings.Split(strings.TrimSpace(string(file)), "\n") {
-			env := strings.Fields(line)
-			if len(env) <= 1 {
-				continue
-			}
-			for _, e := range env[1:] {
-				envkv := strings.SplitN(e, "=", 2)
-				if err := os.Setenv(envkv[0], envkv[1]); err != nil {
-					logger.Errorf("set env %s=%s error", envkv[0], envkv[1])
+	if envFile := os.Getenv("JUICEFS_ENV_FILE_FOR_TEST"); envFile != "" {
+		// schema: S3 AWS_ENDPOINT=xxxxx  AWS_ACCESS_KEY_ID=xxxx  AWS_SECRET_ACCESS_KEY=xxxx
+		if _, err := os.Stat(envFile); err == nil {
+			file, _ := os.ReadFile(envFile)
+			for _, line := range strings.Split(strings.TrimSpace(string(file)), "\n") {
+				env := strings.Fields(line)
+				if len(env) <= 1 {
+					continue
+				}
+				for _, e := range env[1:] {
+					envkv := strings.SplitN(e, "=", 2)
+					if err := os.Setenv(envkv[0], envkv[1]); err != nil {
+						logger.Errorf("set env %s=%s error", envkv[0], envkv[1])
+					}
 				}
 			}
 		}
