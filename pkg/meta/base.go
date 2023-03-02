@@ -1271,7 +1271,7 @@ func (m *baseMeta) walk(ctx Context, inode Ino, path string, attr *Attr, walkFn 
 	return 0
 }
 
-func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, fullStat bool) (st syscall.Errno) {
+func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, alwaysStat bool) (st syscall.Errno) {
 	var attr Attr
 	var inode = RootInode
 	var parent = RootInode
@@ -1357,8 +1357,8 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					statBroken = true
 				}
 
-				if attrBroken {
-					if repair {
+				if repair {
+					if attrBroken {
 						if !attr.Full {
 							now := time.Now().Unix()
 							attr.Mode = 0644
@@ -1374,19 +1374,19 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 						} else {
 							logger.Errorf("Repair path %s inode %d: %s", path, inode, st1)
 						}
-					} else {
-						logger.Warnf("Path %s (inode %d) can be repaired, please re-run with '--path %s --repair' to fix it", path, inode, path)
 					}
-				}
-
-				if statBroken {
-					if repair {
+					if statBroken || alwaysStat {
 						if _, err := m.en.doGetDirStat(ctx, inode, true); err == nil {
 							logger.Infof("Stat of path %s (inode %d) is successfully synced", path, inode)
 						} else {
 							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, err)
 						}
-					} else {
+					}
+				} else {
+					if attrBroken {
+						logger.Warnf("Path %s (inode %d) can be repaired, please re-run with '--path %s --repair' to fix it", path, inode, path)
+					}
+					if statBroken {
 						logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair' to fix it", path, inode, path)
 					}
 				}
