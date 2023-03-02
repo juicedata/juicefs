@@ -286,6 +286,8 @@ func (c *etcdClient) close() error {
 	return c.client.Close()
 }
 
+func (c *etcdClient) gc() {}
+
 func buildTlsConfig(u *url.URL) (*tls.Config, error) {
 	var tsinfo transport.TLSInfo
 	q := u.Query()
