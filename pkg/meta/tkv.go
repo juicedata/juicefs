@@ -1960,9 +1960,12 @@ func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	syncMap := make(map[Ino]*dirStat, 0)
 	for _, group := range m.groupBatch(batch, 20) {
 		err := m.txn(func(tx *kvTxn) error {
+			keys := make([][]byte, 0, len(group))
 			for _, ino := range group {
-				key := m.dirStatKey(ino)
-				rawStat := tx.get(key)
+				keys = append(keys, m.dirStatKey(ino))
+			}
+			for i, rawStat := range tx.gets(keys...) {
+				ino := group[i]
 				if rawStat == nil {
 					syncMap[ino] = new(dirStat)
 					continue
@@ -1977,7 +1980,7 @@ func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 					syncMap[ino] = new(dirStat)
 					continue
 				}
-				tx.set(key, m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
+				tx.set(keys[i], m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
 			}
 			return nil
 		})
