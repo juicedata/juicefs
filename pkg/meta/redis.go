@@ -2290,7 +2290,7 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 		}
 	}
 
-	for _, group := range m.seperateBatch(batch, 1000) {
+	for _, group := range m.groupBatch(batch, 1000) {
 		_, err := m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 			for _, ino := range group {
 				field := strconv.FormatUint(uint64(ino), 10)

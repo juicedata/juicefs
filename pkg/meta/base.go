@@ -258,7 +258,7 @@ func (m *baseMeta) batchCalcDirStat(ctx Context, stats map[Ino]*dirStat) error {
 	return eg.Wait()
 }
 
-func (m *baseMeta) seperateBatch(batch map[Ino]dirStat, size int) [][]Ino {
+func (m *baseMeta) groupBatch(batch map[Ino]dirStat, size int) [][]Ino {
 	var inos []Ino
 	for ino := range batch {
 		inos = append(inos, ino)

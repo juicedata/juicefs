@@ -2268,24 +2268,28 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	)
 
 	nonexist := make(map[Ino]*dirStat, 0)
-	err := m.txn(func(s *xorm.Session) error {
-		for ino, stat := range batch {
-			ret, err := s.Exec(sql, stat.space, stat.inodes, ino)
-			if err != nil {
-				return err
+
+	for _, group := range m.groupBatch(batch, 1000) {
+		err := m.txn(func(s *xorm.Session) error {
+			for _, ino := range group {
+				stat := batch[ino]
+				ret, err := s.Exec(sql, stat.space, stat.inodes, ino)
+				if err != nil {
+					return err
+				}
+				affected, err := ret.RowsAffected()
+				if err != nil {
+					return err
+				}
+				if affected == 0 {
+					nonexist[ino] = new(dirStat)
+				}
 			}
-			affected, err := ret.RowsAffected()
-			if err != nil {
-				return err
-			}
-			if affected == 0 {
-				nonexist[ino] = new(dirStat)
-			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
-		return nil
-	})
-	if err != nil {
-		return err
 	}
 
 	if len(nonexist) > 0 {
