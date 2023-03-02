@@ -267,8 +267,8 @@ type Quota struct {
 // Returns true if it will exceed the quota limit
 func (q *Quota) check(space, inodes int64) bool {
 	for i := q; i != nil; i = i.Parent {
-		if space > 0 && i.MaxSpace > 0 && atomic.LoadInt64(&i.UsedSpace)+atomic.LoadInt64(&i.newSpace)+space > i.MaxSpace ||
-			inodes > 0 && i.MaxInodes > 0 && atomic.LoadInt64(&i.UsedInodes)+atomic.LoadInt64(&i.newInodes)+inodes > i.MaxInodes {
+		if space > 0 && i.MaxSpace > 0 && i.UsedSpace+atomic.LoadInt64(&i.newSpace)+space > i.MaxSpace ||
+			inodes > 0 && i.MaxInodes > 0 && i.UsedInodes+atomic.LoadInt64(&i.newInodes)+inodes > i.MaxInodes {
 			return true
 		}
 	}
@@ -373,6 +373,8 @@ type Meta interface {
 	GetParents(ctx Context, inode Ino) map[Ino]int
 	// GetDirStat returns the space and inodes usage of a directory.
 	GetDirStat(ctx Context, inode Ino) (space, inodes uint64, err error)
+	// GetDirRecStat returns the space and inodes usage (recursive) of a directory.
+	GetDirRecStat(ctx Context, inode Ino) (space, inodes int64, err error)
 
 	// GetXattr returns the value of extended attribute for given name.
 	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno

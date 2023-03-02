@@ -973,8 +973,18 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			return nil
 		}
 		newSpace = align4K(length) - align4K(nodeAttr.Length)
-		if newSpace > 0 && m.checkQuota(newSpace, 0) {
-			return syscall.ENOSPC
+		if newSpace > 0 {
+			if m.checkQuota(newSpace, 0) {
+				return syscall.ENOSPC
+			}
+			if nodeAttr.Parent > 0 {
+				if q := m.getDirQuota(ctx, nodeAttr.Parent); q != nil && q.check(newSpace, 0) {
+					return syscall.ENOSPC
+				}
+			} else {
+				// FIXME: check all parents of the file
+				logger.Warnf("Quota check is skipped for hardlinked files")
+			}
 		}
 		var zeroChunks []chunk
 		var left, right = nodeAttr.Length, length
@@ -1078,8 +1088,18 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 
 		old := nodeAttr.Length
 		newSpace = align4K(length) - align4K(nodeAttr.Length)
-		if newSpace > 0 && m.checkQuota(newSpace, 0) {
-			return syscall.ENOSPC
+		if newSpace > 0 {
+			if m.checkQuota(newSpace, 0) {
+				return syscall.ENOSPC
+			}
+			if nodeAttr.Parent > 0 {
+				if q := m.getDirQuota(ctx, nodeAttr.Parent); q != nil && q.check(newSpace, 0) {
+					return syscall.ENOSPC
+				}
+			} else {
+				// FIXME: check all parents of the file
+				logger.Warnf("Quota check is skipped for hardlinked files")
+			}
 		}
 		now := time.Now().UnixNano() / 1e3
 		nodeAttr.Length = length
@@ -1129,10 +1149,6 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino) (target []byte, err error) {
 }
 
 func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
-	quota := m.getDirQuota(ctx, parent)
-	if quota != nil && quota.check(4<<10, 1) {
-		return syscall.ENOSPC
-	}
 	var ino Ino
 	var err error
 	if parent == TrashInode {
@@ -1261,9 +1277,6 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}, parent)
 	if err == nil {
 		m.updateStats(align4K(0), 1)
-		if quota != nil {
-			quota.update(align4K(0), 1, false)
-		}
 	}
 	return errno(err)
 }
@@ -1401,24 +1414,11 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) sysc
 		}
 		return err
 	}, parent)
-	if err == nil {
-		if trash == 0 {
-			if n.Type == TypeFile && n.Nlink == 0 {
-				m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
-			}
-			m.updateStats(newSpace, newInode)
+	if err == nil && trash == 0 {
+		if n.Type == TypeFile && n.Nlink == 0 {
+			m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
 		}
-		// FIXME: quota not checked/updated in 'Link'
-		if n.Nlink > 0 {
-			if n.Type == TypeFile {
-				newSpace, newInode = -align4K(n.Length), -1
-			} else {
-				newSpace, newInode = -align4K(0), -1
-			}
-		}
-		if q := m.getDirQuota(ctx, parent); q != nil {
-			q.update(newSpace, newInode, false)
-		}
+		m.updateStats(newSpace, newInode)
 		if attr != nil {
 			m.parseAttr(&n, attr)
 		}
@@ -1527,13 +1527,8 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, inode *Ino) sysca
 		}
 		return err
 	}, parent)
-	if err == nil {
-		if trash == 0 {
-			m.updateStats(-align4K(0), -1)
-		}
-		if q := m.getDirQuota(ctx, parent); q != nil {
-			q.update(-align4K(0), -1, false)
-		}
+	if err == nil && trash == 0 {
+		m.updateStats(-align4K(0), -1)
 	}
 	return errno(err)
 }
@@ -2101,7 +2096,6 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	var newSpace int64
 	var needCompact bool
 	var nodeAttr node
-	var quota *Quota
 	err := m.txn(func(s *xorm.Session) error {
 		newSpace = 0
 		nodeAttr = node{Inode: inode}
@@ -2120,13 +2114,18 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			newSpace = align4K(newleng) - align4K(nodeAttr.Length)
 			nodeAttr.Length = newleng
 		}
-		if m.checkQuota(newSpace, 0) {
-			return syscall.ENOSPC
-		}
-		// FIXME: check all parent of the file if hardlinked
-		// TODO: add check for Truncate, Fallocate, CopyFileRange
-		if quota = m.getDirQuota(ctx, nodeAttr.Parent); quota != nil && quota.check(newSpace, 0) {
-			return syscall.ENOSPC
+		if newSpace > 0 {
+			if m.checkQuota(newSpace, 0) {
+				return syscall.ENOSPC
+			}
+			if nodeAttr.Parent > 0 {
+				if q := m.getDirQuota(ctx, nodeAttr.Parent); q != nil && q.check(newSpace, 0) {
+					return syscall.ENOSPC
+				}
+			} else {
+				// FIXME: check all parents of the file
+				logger.Warnf("Quota check is skipped for hardlinked files")
+			}
 		}
 		now := time.Now().UnixNano() / 1e3
 		nodeAttr.Mtime = now
@@ -2161,10 +2160,6 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			go m.compactChunk(inode, indx, false)
 		}
 		m.updateParentStat(ctx, inode, nodeAttr.Parent, newSpace)
-		// TODO: add update for Truncate, Fallocate, CopyFileRange
-		if quota != nil {
-			quota.update(newSpace, 0, false)
-		}
 	}
 	return errno(err)
 }
@@ -2210,8 +2205,18 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(nout.Length)
 			nout.Length = newleng
 		}
-		if m.checkQuota(newSpace, 0) {
-			return syscall.ENOSPC
+		if newSpace > 0 {
+			if m.checkQuota(newSpace, 0) {
+				return syscall.ENOSPC
+			}
+			if nout.Parent > 0 {
+				if q := m.getDirQuota(ctx, nout.Parent); q != nil && q.check(newSpace, 0) {
+					return syscall.ENOSPC
+				}
+			} else {
+				// FIXME: check all parents of the file
+				logger.Warnf("Quota check is skipped for hardlinked files")
+			}
 		}
 		now := time.Now().UnixNano() / 1e3
 		nout.Mtime = now
@@ -3020,6 +3025,9 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quota *Quota)
 		if st := m.resolve(ctx, dpath, &inode); st != 0 {
 			return st
 		}
+		if isTrash(inode) {
+			return errors.New("no quota for any trash directory")
+		}
 	}
 
 	var err error
@@ -3046,7 +3054,7 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quota *Quota)
 			if ok {
 				_, e = s.Cols("max_space", "max_inodes").Update(&q, &dirQuota{Inode: inode})
 			} else {
-				q.UsedSpace, q.UsedInodes, e = m.GetDirUsage(ctx, inode)
+				q.UsedSpace, q.UsedInodes, e = m.GetDirRecStat(ctx, inode)
 				if e == nil {
 					e = mustInsert(s, &q)
 				}
@@ -3098,7 +3106,7 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quota *Quota)
 			}
 			return nil
 		})
-	default: // TODO: QuotaCheck
+	default: // FIXME: QuotaCheck
 		err = fmt.Errorf("invalid quota command: %d", cmd)
 	}
 	return err
@@ -3145,6 +3153,7 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 func (m *dbMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error {
 	return m.txn(func(s *xorm.Session) error {
 		q := dirQuota{Inode: inode}
+		// FIXME: use Update
 		ok, err := s.Get(&q)
 		if err == nil && !ok {
 			logger.Warnf("No quota for inode %d, skip flushing", inode)
