@@ -1958,29 +1958,32 @@ func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err 
 
 func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	syncMap := make(map[Ino]*dirStat, 0)
-	err := m.txn(func(tx *kvTxn) error {
-		for ino, stat := range batch {
-			key := m.dirStatKey(ino)
-			rawStat := tx.get(key)
-			if rawStat == nil {
-				syncMap[ino] = new(dirStat)
-				continue
+	for _, group := range m.groupBatch(batch, 20) {
+		err := m.txn(func(tx *kvTxn) error {
+			for _, ino := range group {
+				key := m.dirStatKey(ino)
+				rawStat := tx.get(key)
+				if rawStat == nil {
+					syncMap[ino] = new(dirStat)
+					continue
+				}
+				us, ui := m.parseDirStat(rawStat)
+				usedSpace, usedInodes := int64(us), int64(ui)
+				stat := batch[ino]
+				usedSpace += stat.space
+				usedInodes += stat.inodes
+				if usedSpace < 0 || usedInodes < 0 {
+					logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
+					syncMap[ino] = new(dirStat)
+					continue
+				}
+				tx.set(key, m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
 			}
-			us, ui := m.parseDirStat(rawStat)
-			usedSpace, usedInodes := int64(us), int64(ui)
-			usedSpace += stat.space
-			usedInodes += stat.inodes
-			if usedSpace < 0 || usedInodes < 0 {
-				logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
-				syncMap[ino] = new(dirStat)
-				continue
-			}
-			tx.set(key, m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
+			return nil
+		})
+		if err != nil {
+			return err
 		}
-		return nil
-	})
-	if err != nil {
-		return err
 	}
 
 	if len(syncMap) > 0 {
@@ -1992,6 +1995,10 @@ func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	return m.txn(func(tx *kvTxn) error {
 		for ino, stat := range syncMap {
 			key := m.dirStatKey(ino)
+			if tx.exist(key) {
+				// other clients have synced
+				continue
+			}
 			tx.set(key, m.packDirStat(uint64(stat.space), uint64(stat.inodes)))
 		}
 		return nil
