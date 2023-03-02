@@ -70,6 +70,9 @@ func (p *withPrefix) Head(key string) (Object, error) {
 }
 
 func (p *withPrefix) Get(key string, off, limit int64) (io.ReadCloser, error) {
+	if off > 0 && limit < 0 {
+		return nil, fmt.Errorf("invalid range: %d-%d", off, limit)
+	}
 	return p.os.Get(p.prefix+key, off, limit)
 }
 
