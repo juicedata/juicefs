@@ -69,17 +69,16 @@ func (q *qingstor) Head(key string) (Object, error) {
 
 func (q *qingstor) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	input := &qs.GetObjectInput{}
-	if off > 0 || limit > 0 {
-		var r string
-		if limit > 0 {
-			r = fmt.Sprintf("bytes=%d-%d", off, off+limit-1)
-		} else {
-			r = fmt.Sprintf("bytes=%d-", off)
-		}
-		input.Range = &r
+	rangeStr := getRange(off, limit)
+	if rangeStr != "" {
+		input.Range = &rangeStr
 	}
 	output, err := q.bucket.GetObject(key, input)
 	if err != nil {
+		return nil, err
+	}
+	if err = checkGetStatus(*output.StatusCode, rangeStr != ""); err != nil {
+		_ = output.Body.Close()
 		return nil, err
 	}
 	return output.Body, nil
