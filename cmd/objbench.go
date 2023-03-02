@@ -718,7 +718,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		}
 		// get middle
 		if d, e := get(blob, key, 2, 2); e != nil || d != "ll" {
-			return fmt.Errorf(`failed to get the one byte: expect "ll", but got %q, error: %s`, d, e)
+			return fmt.Errorf(`failed to get two bytes: expect "ll", but got %q, error: %s`, d, e)
 		}
 		// get the end out of range
 		if d, e := get(blob, key, 4, 2); e != nil || d != "o" {
