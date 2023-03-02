@@ -3823,7 +3823,7 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 	return eno
 }
 
-func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstName string, dstIno *Ino, smode uint8, cumask uint16, attach bool) syscall.Errno {
+func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) syscall.Errno {
 	// if inode not exist, just ignore it
 	var srcAttr Attr
 	eno := m.doGetAttr(ctx, srcIno, &srcAttr)
@@ -3835,7 +3835,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstNam
 	}
 	srcAttr.Parent = dstParentIno
 	// set dstIno
-	if smode&CLONE_MODE_CPLIKE_ATTR != 0 {
+	if cmode&CLONE_MODE_CPLIKE_ATTR != 0 {
 		srcAttr.Uid = ctx.Uid()
 		srcAttr.Gid = ctx.Gid()
 		srcAttr.Mode &= ^cumask
@@ -3849,7 +3849,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstNam
 			return eno
 		}
 		err = m.txn(ctx, func(tx *redis.Tx) error {
-			eno = m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, smode, cumask, attach)
+			eno = m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach)
 			return errno(eno)
 		}, m.inodeKey(dstParentIno), m.entryKey(dstParentIno), m.inodeKey(srcIno), m.xattrKey(srcIno))
 		if err != nil {
@@ -3859,7 +3859,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstNam
 		for _, entry := range entries {
 			// todo concurrent cloneEntry
 			var dstIno2 Ino
-			if eno = m.cloneEntry(ctx, entry.Inode, *dstIno, string(entry.Name), &dstIno2, smode, cumask, true); eno != 0 {
+			if eno = m.cloneEntry(ctx, entry.Inode, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, true); eno != 0 {
 				return eno
 			}
 			if entry.Attr.Typ == TypeDirectory {
@@ -3875,8 +3875,11 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstNam
 
 	case TypeFile:
 		err = m.txn(ctx, func(tx *redis.Tx) error {
-			// support hardlink
-			eno := m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, smode, cumask, true)
+			// hardlink
+			if srcAttr.Nlink > 1 {
+				srcAttr.Nlink = 1
+			}
+			eno := m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true)
 			if eno != 0 {
 				return eno
 			}
@@ -3915,7 +3918,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstNam
 		}, m.inodeKey(dstParentIno), m.entryKey(dstParentIno), m.inodeKey(srcIno), m.xattrKey(srcIno))
 	case TypeSymlink:
 		err = m.txn(ctx, func(tx *redis.Tx) error {
-			eno := m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, smode, cumask, true)
+			eno := m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true)
 			if eno != 0 {
 				return eno
 			}
@@ -3928,7 +3931,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstNam
 
 	case TypeBlockDev, TypeCharDev, TypeFIFO, TypeSocket:
 		err = m.txn(ctx, func(tx *redis.Tx) error {
-			return m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, smode, cumask, true)
+			return m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true)
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno))
 		return errno(err)
 	}
