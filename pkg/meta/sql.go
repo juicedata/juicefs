@@ -761,6 +761,11 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Full = true
 }
 
+func (m *dbMeta) updateStats(space int64, inodes int64) {
+	atomic.AddInt64(&m.newSpace, space)
+	atomic.AddInt64(&m.newInodes, inodes)
+}
+
 func (m *dbMeta) flushStats() {
 	var inttype = "BIGINT"
 	if m.Name() == "mysql" {

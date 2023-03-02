@@ -427,6 +427,11 @@ func (m *kvMeta) doLoad() ([]byte, error) {
 	return m.get(m.fmtKey("setting"))
 }
 
+func (m *kvMeta) updateStats(space int64, inodes int64) {
+	atomic.AddInt64(&m.newSpace, space)
+	atomic.AddInt64(&m.newInodes, inodes)
+}
+
 func (m *kvMeta) flushStats() {
 	for {
 		if space := atomic.SwapInt64(&m.newSpace, 0); space != 0 {

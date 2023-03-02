@@ -52,6 +52,7 @@ type engine interface {
 	incrCounter(name string, value int64) (int64, error)
 	// Set counter name to value if old <= value - diff.
 	setIfSmall(name string, value, diff int64) (bool, error)
+	updateStats(space int64, inodes int64)
 	flushStats()
 
 	doLoad() ([]byte, error)
@@ -280,7 +281,7 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, space int64)
 	if space == 0 {
 		return
 	}
-	m.updateStats(space, 0)
+	m.en.updateStats(space, 0)
 	if parent > 0 {
 		m.updateDirStat(ctx, parent, space, 0)
 	} else {
@@ -508,11 +509,6 @@ func (m *baseMeta) checkQuota(size, inodes int64) bool {
 		return true
 	}
 	return inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes)
-}
-
-func (m *baseMeta) updateStats(space int64, inodes int64) {
-	atomic.AddInt64(&m.newSpace, space)
-	atomic.AddInt64(&m.newInodes, inodes)
 }
 
 func (m *baseMeta) cleanupDeletedFiles() {
@@ -839,7 +835,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}
 	err := m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)
 	if err == 0 {
-		m.updateStats(align4K(0), 1)
+		m.en.updateStats(align4K(0), 1)
 		m.updateDirStat(ctx, parent, align4K(0), 1)
 	}
 	return err

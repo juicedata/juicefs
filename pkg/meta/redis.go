@@ -289,19 +289,6 @@ func (m *redisMeta) doLoad() ([]byte, error) {
 	return body, err
 }
 
-func (m *redisMeta) flushStats() {
-	for {
-		// redisMeta updates the usage in each transaction
-		if space := atomic.SwapInt64(&m.newSpace, 0); space != 0 {
-			atomic.AddInt64(&m.usedSpace, space)
-		}
-		if inodes := atomic.SwapInt64(&m.newInodes, 0); inodes != 0 {
-			atomic.AddInt64(&m.usedInodes, inodes)
-		}
-		time.Sleep(time.Second)
-	}
-}
-
 func (m *redisMeta) doNewSession(sinfo []byte) error {
 	err := m.rdb.ZAdd(Background, m.allSessions(), redis.Z{
 		Score:  float64(m.expireTime()),
@@ -586,6 +573,14 @@ func (m *redisMeta) parseEntry(buf []byte) (uint8, Ino) {
 	}
 	return buf[0], Ino(binary.BigEndian.Uint64(buf[1:]))
 }
+
+func (m *redisMeta) updateStats(space int64, inodes int64) {
+	atomic.AddInt64(&m.usedSpace, space)
+	atomic.AddInt64(&m.usedInodes, inodes)
+}
+
+// redisMeta updates the usage in each transaction
+func (m *redisMeta) flushStats() {}
 
 func (m *redisMeta) handleLuaResult(op string, res interface{}, err error, returnedIno *int64, returnedAttr *string) syscall.Errno {
 	if err != nil {
