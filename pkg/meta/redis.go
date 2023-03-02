@@ -2264,9 +2264,24 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	spaceKey := m.dirUsedSpaceKey()
 	inodesKey := m.dirUsedInodesKey()
 	nonexist := make(map[Ino]*dirStat, 0)
-	for ino := range batch {
-		if !m.rdb.HExists(ctx, spaceKey, strconv.FormatUint(uint64(ino), 10)).Val() {
-			nonexist[ino] = new(dirStat)
+	statList := make([]dirStat, 0, len(batch))
+
+	pipeline := m.rdb.Pipeline()
+	for ino, stat := range batch {
+		pipeline.HExists(ctx, spaceKey, strconv.FormatUint(uint64(ino), 10))
+		statList = append(statList, stat)
+	}
+	rets, err := pipeline.Exec(ctx)
+	if err != nil {
+		return err
+	}
+	for i, ret := range rets {
+		if ret.Err() != nil {
+			return ret.Err()
+		}
+		if exist, _ := ret.(*redis.BoolCmd).Result(); !exist {
+			ino := statList[i].ino
+			nonexist[ino] = &dirStat{ino: ino}
 		}
 	}
 
@@ -2276,26 +2291,29 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 		}
 	}
 
-	return m.txn(ctx, func(tx *redis.Tx) error {
-		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			for ino, stat := range batch {
-				field := strconv.FormatUint(uint64(ino), 10)
-				if stat, ok := nonexist[ino]; ok {
-					pipe.HSet(ctx, spaceKey, field, stat.space)
-					pipe.HSet(ctx, inodesKey, field, stat.inodes)
+	for _, group := range m.seperateBatch(statList, 1000) {
+		_, err := m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+			for _, stat := range group {
+				field := strconv.FormatUint(uint64(stat.ino), 10)
+				if s, ok := nonexist[stat.ino]; ok {
+					pipe.HSetNX(ctx, spaceKey, field, s.space)
+					pipe.HSetNX(ctx, inodesKey, field, s.inodes)
 					continue
 				}
 				if stat.space != 0 {
-					tx.HIncrBy(ctx, spaceKey, field, stat.space)
+					pipe.HIncrBy(ctx, spaceKey, field, stat.space)
 				}
 				if stat.inodes != 0 {
-					tx.HIncrBy(ctx, inodesKey, field, stat.inodes)
+					pipe.HIncrBy(ctx, inodesKey, field, stat.inodes)
 				}
 			}
 			return nil
 		})
-		return err
-	}, spaceKey, inodesKey)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *redisMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
