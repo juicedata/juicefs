@@ -84,7 +84,8 @@ type engine interface {
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error
-	doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error)
+	// @trySync: try sync dir stat if broken or not existed
+	doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error)
 
 	scanTrashSlices(Context, trashSliceScan) error
 	scanPendingSlices(Context, pendingSliceScan) error
@@ -260,7 +261,11 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (space, inodes uint64, err 
 }
 
 func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (space, inodes uint64, err error) {
-	return m.en.doGetDirStat(ctx, m.checkRoot(inode))
+	stat, err := m.en.doGetDirStat(ctx, m.checkRoot(inode), true)
+	if err != nil {
+		return
+	}
+	return uint64(stat.space), uint64(stat.inodes), nil
 }
 
 func (m *baseMeta) updateDirStat(ctx Context, ino Ino, space int64, inodes int64) {
@@ -1266,7 +1271,7 @@ func (m *baseMeta) walk(ctx Context, inode Ino, path string, attr *Attr, walkFn 
 	return 0
 }
 
-func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool) (st syscall.Errno) {
+func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, fullStat bool) (st syscall.Errno) {
 	var attr Attr
 	var inode = RootInode
 	var parent = RootInode
@@ -1324,38 +1329,66 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool)
 					// TODO
 					continue
 				}
+
+				var attrBroken, statBroken bool
 				if attr.Full {
 					nlink, st := m.countDirNlink(ctx, inode)
+					fmt.Printf("nlink of %s should be %d\n", path, nlink)
 					if st != 0 {
 						logger.Errorf("Count nlink for inode %d: %s", inode, st)
 						continue
 					}
-					if attr.Nlink == nlink {
-						continue
+					if attr.Nlink != nlink {
+						logger.Warnf("nlink of %s should be %d, but got %d", path, nlink, attr.Nlink)
+						attrBroken = true
 					}
-					logger.Warnf("nlink of %s should be %d, but got %d", path, nlink, attr.Nlink)
 				} else {
 					logger.Warnf("attribute of %s is missing", path)
+					attrBroken = true
 				}
 
-				if repair {
-					if !attr.Full {
-						now := time.Now().Unix()
-						attr.Mode = 0644
-						attr.Uid = ctx.Uid()
-						attr.Gid = ctx.Gid()
-						attr.Atime = now
-						attr.Mtime = now
-						attr.Ctime = now
-						attr.Length = 4 << 10
-					}
-					if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 {
-						logger.Infof("Path %s (inode %d) is successfully repaired", path, inode)
+				stat, err := m.en.doGetDirStat(ctx, inode, false)
+				if err != nil {
+					logger.Errorf("get dir stat for inode %d: %v", inode, err)
+					continue
+				}
+				if stat == nil || stat.space < 0 || stat.inodes < 0 {
+					logger.Warnf("usage stat of %s is missing or broken", path)
+					statBroken = true
+				}
+
+				if attrBroken {
+					if repair {
+						if !attr.Full {
+							now := time.Now().Unix()
+							attr.Mode = 0644
+							attr.Uid = ctx.Uid()
+							attr.Gid = ctx.Gid()
+							attr.Atime = now
+							attr.Mtime = now
+							attr.Ctime = now
+							attr.Length = 4 << 10
+						}
+						if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 {
+							logger.Infof("Path %s (inode %d) is successfully repaired", path, inode)
+						} else {
+							logger.Errorf("Repair path %s inode %d: %s", path, inode, st1)
+						}
 					} else {
-						logger.Errorf("Repair path %s inode %d: %s", path, inode, st1)
+						logger.Warnf("Path %s (inode %d) can be repaired, please re-run with '--path %s --repair' to fix it", path, inode, path)
 					}
-				} else {
-					logger.Warnf("Path %s (inode %d) can be repaired, please re-run with '--path %s --repair' to fix it", path, inode, path)
+				}
+
+				if statBroken {
+					if repair {
+						if _, err := m.en.doGetDirStat(ctx, inode, true); err == nil {
+							logger.Infof("Stat of path %s (inode %d) is successfully synced", path, inode)
+						} else {
+							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, err)
+						}
+					} else {
+						logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair' to fix it", path, inode, path)
+					}
 				}
 			}
 		}()

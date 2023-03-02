@@ -64,6 +64,10 @@ $ juicefs fsck redis://localhost --path /d1/d2 --recursive`,
 				Aliases: []string{"r"},
 				Usage:   "recursively check or repair",
 			},
+			&cli.BoolFlag{
+				Name:  "full-stat",
+				Usage: "stat all directory, even if it's existed and not broken",
+			},
 		},
 	}
 }
@@ -84,7 +88,7 @@ func fsck(ctx *cli.Context) error {
 		if !strings.HasPrefix(p, "/") {
 			logger.Fatalf("File path should be the absolute path within JuiceFS")
 		}
-		return m.Check(c, p, ctx.Bool("repair"), ctx.Bool("recursive"))
+		return m.Check(c, p, ctx.Bool("repair"), ctx.Bool("recursive"), ctx.Bool("full-stat"))
 	}
 
 	chunkConf := chunk.Config{

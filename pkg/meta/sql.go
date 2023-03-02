@@ -2276,52 +2276,56 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64
 		return err
 	})
 	if err == nil && affected == 0 {
-		_, _, err = m.doSyncDirStat(ctx, ino)
+		_, err = m.doSyncDirStat(ctx, ino)
 	}
 	return err
 }
 
-func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
-	space, inodes, err = m.calcDirStat(ctx, ino)
+func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
+	space, inodes, err := m.calcDirStat(ctx, ino)
 	if err != nil {
-		return
+		return nil, err
 	}
 	err = m.txn(func(s *xorm.Session) error {
-		_, err := s.Insert(&dirStats{Inode: ino, UsedSpace: int64(space), UsedInodes: int64(inodes)})
+		_, err := s.Insert(&dirStats{ino, int64(space), int64(inodes)})
 		if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			// other client synced
 			err = nil
 		}
 		return err
 	})
-	return
+	if err != nil {
+		return nil, err
+	}
+	return &dirStat{int64(space), int64(inodes)}, nil
 }
 
-func (m *dbMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error) {
 	st := dirStats{Inode: ino}
 	var exist bool
+	var err error
 	if err = m.roTxn(func(s *xorm.Session) error {
 		exist, err = s.Get(&st)
 		return err
 	}); err != nil {
-		return
+		return nil, err
 	}
 
 	if !exist {
-		space, inodes, err = m.doSyncDirStat(ctx, ino)
-		if err == nil {
-			return
+		if !trySync {
+			return nil, nil
 		}
+		return m.doSyncDirStat(ctx, ino)
 	}
 
-	if !exist || st.UsedSpace < 0 || st.UsedInodes < 0 {
+	if trySync && (st.UsedSpace < 0 || st.UsedInodes < 0) {
 		logger.Warnf(
 			"dir usage of inode %d is invalid: space %d, inodes %d, try to fix",
 			ino, st.UsedSpace, st.UsedInodes,
 		)
-		space, inodes, err = m.calcDirStat(ctx, ino)
+		space, inodes, err := m.calcDirStat(ctx, ino)
 		if err != nil {
-			return
+			return nil, err
 		}
 		st.UsedSpace, st.UsedInodes = int64(space), int64(inodes)
 		e := m.txn(func(s *xorm.Session) error {
@@ -2334,11 +2338,8 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err e
 		if e != nil {
 			logger.Warn(e)
 		}
-		return
 	}
-	space = uint64(st.UsedSpace)
-	inodes = uint64(st.UsedInodes)
-	return
+	return &dirStat{st.UsedSpace, st.UsedInodes}, nil
 }
 
 func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {

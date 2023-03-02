@@ -1945,16 +1945,16 @@ func (m *kvMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
-func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
-	space, inodes, err = m.calcDirStat(ctx, ino)
+func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
+	space, inodes, err := m.calcDirStat(ctx, ino)
 	if err != nil {
-		return
+		return nil, err
 	}
 	err = m.txn(func(tx *kvTxn) error {
 		tx.set(m.dirStatKey(ino), m.packDirStat(space, inodes))
 		return nil
 	})
-	return
+	return &dirStat{int64(space), int64(inodes)}, err
 }
 
 var errEmptyStat = errors.New("empty stat")
@@ -1978,22 +1978,24 @@ func (m *kvMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64
 		return nil
 	})
 	if err == errEmptyStat {
-		_, _, err = m.doSyncDirStat(ctx, ino)
+		_, err = m.doSyncDirStat(ctx, ino)
 	}
 	return err
 }
 
-func (m *kvMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+func (m *kvMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error) {
 	rawStat, err := m.get(m.dirStatKey(ino))
 	if err != nil {
-		return
+		return nil, err
 	}
 	if rawStat != nil {
-		space, inodes = m.parseDirStat(rawStat)
-	} else {
-		space, inodes, err = m.doSyncDirStat(ctx, ino)
+		space, inodes := m.parseDirStat(rawStat)
+		return &dirStat{space: int64(space), inodes: int64(inodes)}, nil
 	}
-	return
+	if trySync {
+		return m.doSyncDirStat(ctx, ino)
+	}
+	return nil, nil
 }
 
 func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
