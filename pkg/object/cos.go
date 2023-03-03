@@ -79,18 +79,13 @@ func (c *COS) Head(key string) (Object, error) {
 }
 
 func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	params := &cos.ObjectGetOptions{}
-	if off > 0 || limit > 0 {
-		var r string
-		if limit > 0 {
-			r = fmt.Sprintf("bytes=%d-%d", off, off+limit-1)
-		} else {
-			r = fmt.Sprintf("bytes=%d-", off)
-		}
-		params.Range = r
-	}
+	params := &cos.ObjectGetOptions{Range: getRange(off, limit)}
 	resp, err := c.c.Object.Get(ctx, key, params)
 	if err != nil {
+		return nil, err
+	}
+	if err = checkGetStatus(resp.StatusCode, params.Range != ""); err != nil {
+		_ = resp.Body.Close()
 		return nil, err
 	}
 	if off == 0 && limit == -1 {
