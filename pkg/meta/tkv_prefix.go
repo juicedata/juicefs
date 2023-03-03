@@ -39,10 +39,11 @@ func (tx *prefixTxn) get(key []byte) []byte {
 }
 
 func (tx *prefixTxn) gets(keys ...[]byte) [][]byte {
+	realKeys := make([][]byte, len(keys))
 	for i, key := range keys {
-		keys[i] = tx.realKey(key)
+		realKeys[i] = tx.realKey(key)
 	}
-	return tx.kvTxn.gets(keys...)
+	return tx.kvTxn.gets(realKeys...)
 }
 
 func (tx *prefixTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
