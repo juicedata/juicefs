@@ -1955,37 +1955,62 @@ func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err 
 	if err != nil {
 		return
 	}
-	err = m.txn(func(tx *kvTxn) error {
+
+	if m.conf.ReadOnly {
+		err = syscall.EROFS
+		return
+	}
+	err = m.client.txn(func(tx *kvTxn) error {
 		tx.set(m.dirStatKey(ino), m.packDirStat(space, inodes))
 		return nil
 	})
+	if eno, ok := err.(syscall.Errno); ok && eno == 0 {
+		err = nil
+	}
+	if err != nil && m.shouldRetry(err) {
+		// other clients have synced
+		err = nil
+	}
 	return
 }
 
-var errEmptyStat = errors.New("empty stat")
-
-func (m *kvMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error {
-	err := m.txn(func(tx *kvTxn) error {
-		key := m.dirStatKey(ino)
-		rawStat := tx.get(key)
-		if rawStat == nil {
-			return errEmptyStat
+func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
+	syncMap := make(map[Ino]bool, 0)
+	for _, group := range m.groupBatch(batch, 20) {
+		err := m.txn(func(tx *kvTxn) error {
+			keys := make([][]byte, 0, len(group))
+			for _, ino := range group {
+				keys = append(keys, m.dirStatKey(ino))
+			}
+			for i, rawStat := range tx.gets(keys...) {
+				ino := group[i]
+				if rawStat == nil {
+					syncMap[ino] = true
+					continue
+				}
+				us, ui := m.parseDirStat(rawStat)
+				usedSpace, usedInodes := int64(us), int64(ui)
+				stat := batch[ino]
+				usedSpace += stat.space
+				usedInodes += stat.inodes
+				if usedSpace < 0 || usedInodes < 0 {
+					logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
+					syncMap[ino] = true
+					continue
+				}
+				tx.set(keys[i], m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
+			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
-		us, ui := m.parseDirStat(rawStat)
-		usedSpace, usedInodes := int64(us), int64(ui)
-		usedSpace += space
-		usedInodes += inodes
-		if usedSpace < 0 || usedInodes < 0 {
-			logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
-			return errEmptyStat
-		}
-		tx.set(key, m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
-		return nil
-	})
-	if err == errEmptyStat {
-		_, _, err = m.doSyncDirStat(ctx, ino)
 	}
-	return err
+
+	if len(syncMap) > 0 {
+		m.parallelSyncDirStat(ctx, syncMap).Wait()
+	}
+	return nil
 }
 
 func (m *kvMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
