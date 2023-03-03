@@ -1104,11 +1104,11 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		now := time.Now()
 		if parent != TrashInode {
 			if _type == TypeDirectory {
+				pattr.Nlink++
 				if tx.retry < 10 {
-					pattr.Nlink++
 					updateParent = true
 				} else {
-					logger.Warnf("Skip updating nlink of directory %d to reduce conflic", parent)
+					logger.Warnf("Skip updating nlink of directory %d to reduce conflict", parent)
 				}
 			}
 			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
