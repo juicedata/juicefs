@@ -3078,11 +3078,11 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 		rows = rows[:0]
 		return s.Find(&rows)
 	})
-	if len(rows) == 0 {
-		return nil, nil
+	if err != nil || len(rows) == 0 {
+		return nil, err
 	}
 
-	quotas := make(map[Ino]*Quota)
+	quotas := make(map[Ino]*Quota, len(rows))
 	for _, row := range rows {
 		quotas[row.Inode] = &Quota{
 			MaxSpace:   row.MaxSpace,
@@ -3106,8 +3106,7 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 			}
 		}
 	}
-
-	return quotas, err
+	return quotas, nil
 }
 
 func (m *dbMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error {

@@ -610,7 +610,7 @@ func (m *baseMeta) getDirQuota(ctx Context, inode Ino) *Quota {
 		if q != nil {
 			break
 		}
-		if inode == RootInode {
+		if inode <= RootInode {
 			break
 		}
 		if inode, st = m.getDirParent(ctx, inode); st != 0 {

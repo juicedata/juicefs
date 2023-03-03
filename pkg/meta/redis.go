@@ -48,17 +48,18 @@ import (
 )
 
 /*
-	Node: i$inode -> Attribute{type,mode,uid,gid,atime,mtime,ctime,nlink,length,rdev}
-	Dir:   d$inode -> {name -> {inode,type}}
-	Parent: p$inode -> {parent -> count} // for hard links
-	File:  c$inode_$indx -> [Slice{pos,id,length,off,len}]
-	Symlink: s$inode -> target
-	Xattr: x$inode -> {name -> value}
-	Flock: lockf$inode -> { $sid_$owner -> ltype }
+	Node:       i$inode -> Attribute{type,mode,uid,gid,atime,mtime,ctime,nlink,length,rdev}
+	Dir:        d$inode -> {name -> {inode,type}}
+	Parent:     p$inode -> {parent -> count} // for hard links
+	File:       c$inode_$indx -> [Slice{pos,id,length,off,len}]
+	Symlink:    s$inode -> target
+	Xattr:      x$inode -> {name -> value}
+	Flock:      lockf$inode -> { $sid_$owner -> ltype }
 	POSIX lock: lockp$inode -> { $sid_$owner -> Plock(pid,ltype,start,end) }
-	Sessions: sessions -> [ $sid -> heartbeat ]
-	sustained: session$sid -> [$inode]
-	locked: locked$sid -> { lockf$inode or lockp$inode }
+	Sessions:   sessions -> [ $sid -> heartbeat ]
+	sustained:  session$sid -> [$inode]
+	locked:     locked$sid -> { lockf$inode or lockp$inode }
+	Quota:      qd$inode -> {maxSpace, maxInodes, usedSpace, usedInodes}
 
 	Removed files: delfiles -> [$inode:$length -> seconds]
 	Slices refs: k$sliceId_$size -> refcount
@@ -534,6 +535,10 @@ func (m *redisMeta) dirUsedSpaceKey() string {
 
 func (m *redisMeta) dirUsedInodesKey() string {
 	return m.prefix + "dirUsedInodes"
+}
+
+func (m *redisMeta) dirQuotasKey() string {
+	return m.prefix + "dirQuotas"
 }
 
 func (m *redisMeta) totalInodesKey() string {
@@ -1357,7 +1362,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) s
 	return errno(err)
 }
 
-func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, inode *Ino) syscall.Errno {
+func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parent, &trash); st != 0 {
 		return st
@@ -1377,6 +1382,9 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, inode *Ino) sy
 		typ, inode := m.parseEntry(buf)
 		if typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if pinode != nil {
+			*pinode = inode
 		}
 		if err = tx.Watch(ctx, m.inodeKey(inode), m.entryKey(inode)).Err(); err != nil {
 			return err
@@ -1441,6 +1449,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, inode *Ino) sy
 			field := strconv.FormatUint(uint64(inode), 10)
 			pipe.HDel(ctx, m.dirUsedSpaceKey(), field)
 			pipe.HDel(ctx, m.dirUsedInodesKey(), field)
+			pipe.HDel(ctx, m.dirQuotasKey(), field)
 			return nil
 		})
 		return err
@@ -1678,6 +1687,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 						if tattr.Parent == 0 {
 							pipe.Del(ctx, m.parentKey(dino))
 						}
+					}
+					if dtyp == TypeDirectory {
+						pipe.Del(ctx, m.dirQuotasKey(), dino.String())
 					}
 				}
 			}
@@ -1989,11 +2001,10 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		return err
 	}
 	m.parseAttr(a, &attr)
-	var newSpace int64
+	newSpace := -align4K(attr.Length)
 	_, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(time.Now().Unix()), Member: m.toDelete(inode, attr.Length)})
 		pipe.Del(ctx, m.inodeKey(inode))
-		newSpace = -align4K(attr.Length)
 		pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 		pipe.Decr(ctx, m.totalInodesKey())
 		pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
@@ -2002,6 +2013,9 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	if err == nil {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
+		if q := m.getDirQuota(Background, attr.Parent); q != nil {
+			q.update(newSpace, -1, false)
+		}
 	}
 	return err
 }
@@ -2060,7 +2074,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if m.checkQuota(ctx, newSpace, 0, attr.Parent) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, attr.Parent) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
@@ -2140,7 +2154,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if m.checkQuota(ctx, newSpace, 0, attr.Parent) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, attr.Parent) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
