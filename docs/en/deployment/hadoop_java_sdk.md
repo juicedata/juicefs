@@ -126,11 +126,13 @@ It is recommended to place the JAR file in a fixed location, and the other locat
 
 ### Community Components
 
-| Name   | Installing Paths                     |
-|--------|--------------------------------------|
-| Spark  | `${SPARK_HOME}/jars`                 |
-| Presto | `${PRESTO_HOME}/plugin/hive-hadoop2` |
-| Flink  | `${FLINK_HOME}/lib`                  |
+| Name      | Installing Paths                                                          |
+|-----------|---------------------------------------------------------------------------|
+| Spark     | `${SPARK_HOME}/jars`                                                      |
+| Presto    | `${PRESTO_HOME}/plugin/hive-hadoop2`                                      |
+| Flink     | `${FLINK_HOME}/lib`                                                       |
+| StarRocks | `${StarRocks_HOME}/fe/lib/`, `${StarRocks_HOME}/be/lib/hadoop/common/lib` |
+
 
 ### Client Configurations
 
