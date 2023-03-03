@@ -1950,15 +1950,27 @@ func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err 
 	if err != nil {
 		return
 	}
-	err = m.txn(func(tx *kvTxn) error {
+
+	if m.conf.ReadOnly {
+		err = syscall.EROFS
+		return
+	}
+	err = m.client.txn(func(tx *kvTxn) error {
 		tx.set(m.dirStatKey(ino), m.packDirStat(space, inodes))
 		return nil
 	})
+	if eno, ok := err.(syscall.Errno); ok && eno == 0 {
+		err = nil
+	}
+	if err != nil && m.shouldRetry(err) {
+		// other clients have synced
+		err = nil
+	}
 	return
 }
 
 func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
-	syncMap := make(map[Ino]*dirStat, 0)
+	syncMap := make(map[Ino]bool, 0)
 	for _, group := range m.groupBatch(batch, 20) {
 		err := m.txn(func(tx *kvTxn) error {
 			keys := make([][]byte, 0, len(group))
@@ -1968,7 +1980,7 @@ func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 			for i, rawStat := range tx.gets(keys...) {
 				ino := group[i]
 				if rawStat == nil {
-					syncMap[ino] = new(dirStat)
+					syncMap[ino] = true
 					continue
 				}
 				us, ui := m.parseDirStat(rawStat)
@@ -1978,7 +1990,7 @@ func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 				usedInodes += stat.inodes
 				if usedSpace < 0 || usedInodes < 0 {
 					logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
-					syncMap[ino] = new(dirStat)
+					syncMap[ino] = true
 					continue
 				}
 				tx.set(keys[i], m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
@@ -1991,22 +2003,9 @@ func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	}
 
 	if len(syncMap) > 0 {
-		if err := m.batchCalcDirStat(ctx, syncMap); err != nil {
-			return err
-		}
+		m.parallelSyncDirStat(ctx, syncMap).Wait()
 	}
-
-	return m.txn(func(tx *kvTxn) error {
-		for ino, stat := range syncMap {
-			key := m.dirStatKey(ino)
-			if tx.exist(key) {
-				// other clients have synced
-				continue
-			}
-			tx.set(key, m.packDirStat(uint64(stat.space), uint64(stat.inodes)))
-		}
-		return nil
-	})
+	return nil
 }
 
 func (m *kvMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {

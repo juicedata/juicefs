@@ -2267,7 +2267,7 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 		usedInodeColumn, usedInodeColumn,
 	)
 
-	nonexist := make(map[Ino]*dirStat, 0)
+	nonexist := make(map[Ino]bool, 0)
 
 	for _, group := range m.groupBatch(batch, 1000) {
 		err := m.txn(func(s *xorm.Session) error {
@@ -2282,7 +2282,7 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 					return err
 				}
 				if affected == 0 {
-					nonexist[ino] = new(dirStat)
+					nonexist[ino] = true
 				}
 			}
 			return nil
@@ -2293,20 +2293,9 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	}
 
 	if len(nonexist) > 0 {
-		if err := m.batchCalcDirStat(ctx, nonexist); err != nil {
-			return err
-		}
+		m.parallelSyncDirStat(ctx, nonexist).Wait()
 	}
-
-	return m.txn(func(s *xorm.Session) error {
-		for ino, stat := range nonexist {
-			_, err := s.Insert(&dirStats{Inode: ino, UsedSpace: int64(stat.space), UsedInodes: int64(stat.inodes)})
-			if err != nil && !strings.Contains(err.Error(), "UNIQUE constraint failed") {
-				return err
-			}
-		}
-		return nil
-	})
+	return nil
 }
 
 func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {

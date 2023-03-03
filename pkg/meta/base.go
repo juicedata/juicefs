@@ -85,6 +85,7 @@ type engine interface {
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
 	doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error)
+	doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error)
 
 	scanTrashSlices(Context, trashSliceScan) error
 	scanPendingSlices(Context, pendingSliceScan) error
@@ -242,20 +243,19 @@ func (m *baseMeta) checkRoot(inode Ino) Ino {
 	}
 }
 
-func (m *baseMeta) batchCalcDirStat(ctx Context, stats map[Ino]*dirStat) error {
-	var eg errgroup.Group
-	for i, s := range stats {
-		ino, stat := i, s
-		eg.Go(func() error {
-			space, inodes, err := m.calcDirStat(ctx, ino)
+func (m *baseMeta) parallelSyncDirStat(ctx Context, inos map[Ino]bool) *sync.WaitGroup {
+	var wg sync.WaitGroup
+	for i := range inos {
+		wg.Add(1)
+		go func(ino Ino) {
+			defer wg.Done()
+			_, _, err := m.en.doSyncDirStat(ctx, ino)
 			if err != nil {
-				return err
+				logger.Warnf("sync dir stat for %d: %s", ino, err)
 			}
-			stat.space, stat.inodes = int64(space), int64(inodes)
-			return nil
-		})
+		}(i)
 	}
-	return eg.Wait()
+	return &wg
 }
 
 func (m *baseMeta) groupBatch(batch map[Ino]dirStat, size int) [][]Ino {

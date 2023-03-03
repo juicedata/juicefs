@@ -2242,30 +2242,24 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 }
 
 func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
-	spaceKey := m.dirUsedSpaceKey()
-	inodesKey := m.dirUsedInodesKey()
 	field := strconv.FormatUint(uint64(ino), 16)
 	space, inodes, err = m.calcDirStat(ctx, ino)
 	if err != nil {
 		return
 	}
-	err = m.txn(ctx, func(tx *redis.Tx) error {
-		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.HSet(ctx, spaceKey, field, space)
-			pipe.HSet(ctx, inodesKey, field, inodes)
-			return nil
-		})
-		return err
-	}, spaceKey, inodesKey)
+	_, err = m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.HSetNX(ctx, m.dirUsedSpaceKey(), field, space)
+		pipe.HSetNX(ctx, m.dirUsedInodesKey(), field, inodes)
+		return nil
+	})
 	return
 }
 
 func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	spaceKey := m.dirUsedSpaceKey()
 	inodesKey := m.dirUsedInodesKey()
-	nonexist := make(map[Ino]*dirStat, 0)
+	nonexist := make(map[Ino]bool, 0)
 	statList := make([]Ino, 0, len(batch))
-
 	pipeline := m.rdb.Pipeline()
 	for ino := range batch {
 		pipeline.HExists(ctx, spaceKey, strconv.FormatUint(uint64(ino), 10))
@@ -2280,23 +2274,19 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 			return ret.Err()
 		}
 		if exist, _ := ret.(*redis.BoolCmd).Result(); !exist {
-			nonexist[statList[i]] = &dirStat{}
+			nonexist[statList[i]] = true
 		}
 	}
-
 	if len(nonexist) > 0 {
-		if err := m.batchCalcDirStat(ctx, nonexist); err != nil {
-			return err
-		}
+		wg := m.parallelSyncDirStat(ctx, nonexist)
+		defer wg.Wait()
 	}
 
 	for _, group := range m.groupBatch(batch, 1000) {
 		_, err := m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 			for _, ino := range group {
 				field := strconv.FormatUint(uint64(ino), 10)
-				if stat, ok := nonexist[ino]; ok {
-					pipe.HSetNX(ctx, spaceKey, field, stat.space)
-					pipe.HSetNX(ctx, inodesKey, field, stat.inodes)
+				if nonexist[ino] {
 					continue
 				}
 				stat := batch[ino]
