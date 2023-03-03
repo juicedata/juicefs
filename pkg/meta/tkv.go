@@ -52,7 +52,7 @@ type kvtxn interface {
 
 type tkvClient interface {
 	name() string
-	txn(f func(*kvTxn) error) error
+	txn(f func(*kvTxn) error, retry int) error
 	scan(prefix []byte, handler func(key, value []byte)) error
 	reset(prefix []byte) error
 	close() error
@@ -62,6 +62,7 @@ type tkvClient interface {
 
 type kvTxn struct {
 	kvtxn
+	retry int
 }
 
 func (tx *kvTxn) deleteKeys(prefix []byte) {
@@ -332,7 +333,7 @@ func (m *kvMeta) get(key []byte) ([]byte, error) {
 	err := m.client.txn(func(tx *kvTxn) error {
 		value = tx.get(key)
 		return nil
-	})
+	}, 0)
 	return value, err
 }
 
@@ -344,7 +345,7 @@ func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
 			return true
 		})
 		return nil
-	})
+	}, 0)
 	return keys, err
 }
 
@@ -363,7 +364,7 @@ func (m *kvMeta) scanValues(prefix []byte, limit int, filter func(k, v []byte) b
 			return limit < 0 || c < limit
 		})
 		return nil
-	})
+	}, 0)
 	return values, err
 }
 
@@ -685,7 +686,7 @@ func (m *kvMeta) txn(f func(tx *kvTxn) error, inodes ...Ino) error {
 	}
 	var lastErr error
 	for i := 0; i < 50; i++ {
-		err := m.client.txn(f)
+		err := m.client.txn(f, i)
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
@@ -1103,10 +1104,14 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		now := time.Now()
 		if parent != TrashInode {
 			if _type == TypeDirectory {
-				pattr.Nlink++
-				updateParent = true
+				if tx.retry < 10 {
+					pattr.Nlink++
+					updateParent = true
+				} else {
+					logger.Warnf("Skip updating nlink of directory %d to reduce conflic", parent)
+				}
 			}
-			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
 				pattr.Mtime = now.Unix()
 				pattr.Mtimensec = uint32(now.Nanosecond())
 				pattr.Ctime = now.Unix()
@@ -1660,7 +1665,7 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 			err := m.client.txn(func(tx *kvTxn) error {
 				rs = tx.gets(keys...)
 				return nil
-			})
+			}, 0)
 			if err != nil {
 				return err
 			}
@@ -2110,7 +2115,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 					return c < batch
 				})
 			return nil
-		}); err != nil {
+		}, 0); err != nil {
 			logger.Warnf("Scan delayed slices: %s", err)
 			return count, err
 		}
@@ -2259,7 +2264,7 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 				if s.id > 0 && m.client.txn(func(tx *kvTxn) error {
 					refs = tx.incrBy(m.sliceKey(s.id, s.size), 0)
 					return nil
-				}) == nil && refs < 0 {
+				}, 0) == nil && refs < 0 {
 					m.deleteSlice(s.id, s.size)
 				}
 			}
@@ -2594,7 +2599,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 			e.Symlink = string(l)
 		}
 		return nil
-	})
+	}, 0)
 }
 
 func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {
