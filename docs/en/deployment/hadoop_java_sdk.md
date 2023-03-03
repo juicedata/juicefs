@@ -133,7 +133,6 @@ It is recommended to place the JAR file in a fixed location, and the other locat
 | Flink     | `${FLINK_HOME}/lib`                                                       |
 | StarRocks | `${StarRocks_HOME}/fe/lib/`, `${StarRocks_HOME}/be/lib/hadoop/common/lib` |
 
-
 ### Client Configurations
 
 Please refer to the following table to set the relevant parameters of the JuiceFS file system and write it into the configuration file, which is generally `core-site.xml`.
