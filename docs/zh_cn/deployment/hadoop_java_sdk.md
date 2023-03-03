@@ -128,11 +128,12 @@ make win
 
 ### 社区开源组件
 
-| 名称   | 安装路径                             |
-| ----   | ----                                 |
-| Spark  | `${SPARK_HOME}/jars`                 |
-| Presto | `${PRESTO_HOME}/plugin/hive-hadoop2` |
-| Flink  | `${FLINK_HOME}/lib`                  |
+| 名称        | 安装路径                                                                      |
+|-----------|---------------------------------------------------------------------------|
+| Spark     | `${SPARK_HOME}/jars`                                                      |
+| Presto    | `${PRESTO_HOME}/plugin/hive-hadoop2`                                      |
+| Flink     | `${FLINK_HOME}/lib`                                                       |
+| StarRocks | `${StarRocks_HOME}/fe/lib/`, `${StarRocks_HOME}/be/lib/hadoop/common/lib` |
 
 ### 客户端配置参数
 
