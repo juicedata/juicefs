@@ -1963,7 +1963,7 @@ func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err 
 	err = m.client.txn(func(tx *kvTxn) error {
 		tx.set(m.dirStatKey(ino), m.packDirStat(space, inodes))
 		return nil
-	})
+	}, 0)
 	if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 		err = nil
 	}
