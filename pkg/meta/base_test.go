@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -126,6 +127,8 @@ func testMeta(t *testing.T, m Meta) {
 	testDirStat(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
+	base.conf.ReadOnly = false
+	testClone(t, m)
 }
 
 func testMetaClient(t *testing.T, m Meta) {
@@ -2017,5 +2020,209 @@ func testDirStat(t *testing.T, m Meta) {
 	}
 	if space != 0 || inodes != 0 {
 		t.Fatalf("test dir usage: %d %d", space, inodes)
+	}
+}
+
+func testClone(t *testing.T, m Meta) {
+	if _, ok := m.(*redisMeta); !ok {
+		t.Skipf("skip clone test for %T", m)
+	}
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset: %s", err)
+	}
+	_ = m.Init(&Format{
+		Name:      "test",
+		Storage:   "file",
+		Bucket:    "/tmp/testbucket",
+		BlockSize: 4096,
+	}, false)
+
+	//$ tree .
+	//.
+	//└── dir1
+	//    ├── dir2
+	//    │ ├── dir3
+	//    │ │ └── file3
+	//    │ ├── file2
+	//    │ └── file2Hardlink
+	//    ├── file1
+	//    └── file1Symlink -> file1
+	//
+	var dir1 Ino
+	if eno := m.Mkdir(Background, 1, "dir1", 0777, 022, 0, &dir1, nil); eno != 0 {
+		t.Fatalf("mkdir: %s", eno)
+	}
+	var dir2 Ino
+	if eno := m.Mkdir(Background, dir1, "dir2", 0777, 022, 0, &dir2, nil); eno != 0 {
+		t.Fatalf("mkdir: %s", eno)
+	}
+	var dir3 Ino
+	if eno := m.Mkdir(Background, dir2, "dir3", 0777, 022, 0, &dir3, nil); eno != 0 {
+		t.Fatalf("mkdir: %s", eno)
+	}
+	var file1 Ino
+	if eno := m.Mknod(Background, dir1, "file1", TypeFile, 0777, 022, 0, "", &file1, nil); eno != 0 {
+		t.Fatalf("mknod: %s", eno)
+	}
+	var sliceId uint64
+	if st := m.NewSlice(Background, &sliceId); st != 0 {
+		t.Fatalf("new chunk: %s", st)
+	}
+	if st := m.Write(Background, file1, 0, 0, Slice{sliceId, 200, 0, 200}); st != 0 {
+		t.Fatalf("write file %s", st)
+	}
+
+	var file2 Ino
+	if eno := m.Mknod(Background, dir2, "file2", TypeFile, 0777, 022, 0, "", &file2, nil); eno != 0 {
+		t.Fatalf("mknod: %s", eno)
+	}
+	var sliceId2 uint64
+	if st := m.NewSlice(Background, &sliceId2); st != 0 {
+		t.Fatalf("new chunk: %s", st)
+	}
+	if st := m.Write(Background, file2, 0, 0, Slice{sliceId2, 200, 0, 200}); st != 0 {
+		t.Fatalf("write file %s", st)
+	}
+	var file3 Ino
+	if eno := m.Mknod(Background, dir3, "file3", TypeFile, 0777, 022, 0, "", &file3, nil); eno != 0 {
+		t.Fatalf("mknod: %s", eno)
+	}
+
+	if eno := m.SetXattr(Background, file1, "name", []byte("juicefs"), XattrCreateOrReplace); eno != 0 {
+		t.Fatalf("setxattr: %s", eno)
+	}
+	if eno := m.SetXattr(Background, file1, "name2", []byte("juicefs2"), XattrCreateOrReplace); eno != 0 {
+		t.Fatalf("setxattr: %s", eno)
+	}
+
+	var file1Symlink Ino
+	if eno := m.Symlink(Background, dir1, "file1Symlink", "file1", &file1Symlink, nil); eno != 0 {
+		t.Fatalf("symlink: %s", eno)
+	}
+	if eno := m.Link(Background, file2, dir2, "file2Hardlink", nil); eno != 0 {
+		t.Fatalf("hardlink: %s", eno)
+	}
+
+	cloneDstName := "cloneDir1"
+	if eno := m.Clone(Background, dir1, 1, cloneDstName, 0, 022); eno != 0 {
+		t.Fatalf("clone: %s", eno)
+	}
+	var entries1 []*Entry
+	if eno := m.Readdir(Background, 1, 1, &entries1); eno != 0 {
+		t.Fatalf("readdir: %s", eno)
+	}
+
+	cloneDstIno := entries1[3].Inode
+	cloneDstAttr := entries1[3].Attr
+	if len(entries1) != 4 || string(entries1[3].Name) != cloneDstName {
+		t.Fatalf("clone dst dir not found or name not correct")
+	}
+
+	// check dst parent dir nlink
+	var rootAttr Attr
+	if eno := m.GetAttr(Background, 1, &rootAttr); eno != 0 {
+		t.Fatalf("get rootAttr: %s", eno)
+	}
+	if rootAttr.Nlink != 4 {
+		t.Fatalf("rootDir nlink not correct,nlink: %d", rootAttr.Nlink)
+	}
+
+	// check attr
+	var removedKeys []string
+	checkEntryTree(t, m, dir1, cloneDstIno, func(srcEntry, dstEntry *Entry, dstIno Ino) {
+		checkEntry(t, srcEntry, dstEntry, dstIno)
+		switch m := m.(type) {
+		case *redisMeta:
+			removedKeys = append(removedKeys, m.inodeKey(dstEntry.Inode), m.entryKey(dstEntry.Inode), m.xattrKey(dstEntry.Inode), m.symKey(dstEntry.Inode))
+		}
+	})
+	// check xattr
+	var value []byte
+	if eno := m.GetXattr(Background, file1, "name", &value); eno != 0 {
+		t.Fatalf("getxattr: %s", eno)
+	}
+	if string(value) != "juicefs" {
+		t.Fatalf("xattr not correct: %s", value)
+	}
+	if eno := m.GetXattr(Background, file1, "name2", &value); eno != 0 {
+		t.Fatalf("getxattr: %s", eno)
+	}
+	if string(value) != "juicefs2" {
+		t.Fatalf("xattr not correct: %s", value)
+	}
+	switch m := m.(type) {
+	case *redisMeta:
+		// check slice ref after clone
+		result := m.rdb.HGetAll(Background, m.sliceRefs()).Val()
+		if result[m.sliceKey(sliceId, 200)] != "1" || result[m.sliceKey(sliceId2, 200)] != "2" {
+			t.Fatalf("slice ref not correct: %v", result)
+		}
+
+		// del edge first
+		if err := m.rdb.HDel(Background, m.entryKey(cloneDstAttr.Parent), cloneDstName).Err(); err != nil {
+			t.Fatalf("del edge error: %v", err)
+		}
+		// check remove tree
+		if eno := m.removeEntry(Background, cloneDstIno, cloneDstAttr, cloneDstName); eno != 0 {
+			logger.Errorf("remove tree error rootInode: %v", cloneDstIno)
+		}
+		if exists := m.rdb.Exists(Background, removedKeys...).Val(); exists != 0 {
+			t.Fatalf("has keys not removed: %v", removedKeys)
+		}
+		// check slice ref after remove
+		if result = m.rdb.HGetAll(Background, m.sliceRefs()).Val(); result[m.sliceKey(sliceId, 200)] != "0" ||
+			result[m.sliceKey(sliceId2, 200)] != "0" {
+			t.Fatalf("slice ref not correct after remove entries: %#v", result)
+		}
+		// check remove not exist tree
+		if eno := m.removeEntry(Background, 100000, cloneDstAttr, cloneDstName); eno != 0 {
+			logger.Errorf("remove not exist tree error rootInode: %v", cloneDstIno)
+		}
+	}
+
+}
+
+func checkEntryTree(t *testing.T, m Meta, srcIno, dstIno Ino, walkFunc func(srcEntry, dstEntry *Entry, dstIno Ino)) {
+	var entries1 []*Entry
+	if eno := m.Readdir(Background, srcIno, 1, &entries1); eno != 0 {
+		t.Fatalf("Readdir: %s", eno)
+	}
+
+	var entries2 []*Entry
+	if eno := m.Readdir(Background, dstIno, 1, &entries2); eno != 0 {
+		t.Fatalf("Readdir: %s", eno)
+	}
+	sort.Slice(entries1, func(i, j int) bool { return string(entries1[i].Name) < string(entries1[j].Name) })
+	sort.Slice(entries2, func(i, j int) bool { return string(entries2[i].Name) < string(entries2[j].Name) })
+	for idx, entry := range entries1 {
+		if string(entry.Name) == "." || string(entry.Name) == ".." {
+			continue
+		}
+		if entry.Attr.Typ == TypeDirectory {
+			checkEntryTree(t, m, entry.Inode, entries2[idx].Inode, walkFunc)
+		}
+		walkFunc(entry, entries2[idx], dstIno)
+	}
+}
+
+func checkEntry(t *testing.T, srcEntry, dstEntry *Entry, dstParentIno Ino) {
+	if !bytes.Equal(srcEntry.Name, dstEntry.Name) {
+		t.Fatalf("unmatched name: %s, %s", srcEntry.Name, dstEntry.Name)
+	}
+	srcAttr := srcEntry.Attr
+	dstAttr := dstEntry.Attr
+	if srcAttr.Uid != dstAttr.Uid ||
+		srcAttr.Gid != dstAttr.Gid ||
+		srcAttr.Mode != dstAttr.Mode ||
+		srcAttr.Atime != dstAttr.Atime ||
+		srcAttr.Mtime != dstAttr.Mtime ||
+		srcAttr.Ctime != dstAttr.Ctime ||
+		srcAttr.Length != dstAttr.Length ||
+		srcAttr.Typ != dstAttr.Typ ||
+		srcAttr.Rdev != dstAttr.Rdev ||
+		dstAttr.Parent != dstParentIno ||
+		srcAttr.Typ == TypeFile && dstAttr.Nlink != 1 ||
+		srcAttr.Typ != TypeFile && srcAttr.Nlink != dstAttr.Nlink {
+		t.Fatalf("unmatched attr: %v, %v", srcAttr, dstAttr)
 	}
 }
