@@ -17,18 +17,18 @@
 package cmd
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/urfave/cli/v2"
 )
 
-func cmdCloneFunc() *cli.Command {
+func cmdClone() *cli.Command {
 	return &cli.Command{
 		Name:        "clone",
 		Category:    "TOOL",
-		Description: `This feature is not supported on Windows.`,
-		Action: func(*cli.Context) error {
-			return errors.New("not supported")
+		Description: `This command is not supported on windows.`,
+		Action: func(context *cli.Context) error {
+			return fmt.Errorf("this command is not supported on windows")
 		},
 	}
 }

@@ -26,13 +26,23 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-
 	"github.com/urfave/cli/v2"
 )
 
 func cmdClone() *cli.Command {
-	return cmdCloneFunc()
+	return &cli.Command{
+		Name:   "clone",
+		Action: clone,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "cp",
+				Usage: "create files with current uid,gid,umask (like 'cp')"},
+		},
+		Category:    "TOOL",
+		Description: `This command can clone a file or directory without copying the underlying data.`,
+	}
 }
+
 func clone(ctx *cli.Context) error {
 	setup(ctx, 2)
 	if runtime.GOOS == "windows" {
