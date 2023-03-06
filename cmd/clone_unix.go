@@ -1,3 +1,5 @@
+//go:build !windows
+
 /*
  * JuiceFS, Copyright 2023 Juicedata, Inc.
  *
