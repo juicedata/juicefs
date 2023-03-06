@@ -1301,7 +1301,7 @@ func (m *baseMeta) walk(ctx Context, inode Ino, path string, attr *Attr, walkFn 
 	return 0
 }
 
-func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, alwaysStat bool) (st syscall.Errno) {
+func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool) (st syscall.Errno) {
 	var attr Attr
 	var inode = RootInode
 	var parent = RootInode
@@ -1405,8 +1405,8 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 							logger.Errorf("Repair path %s inode %d: %s", path, inode, st1)
 						}
 					}
-					if statBroken || alwaysStat {
-						if _, err := m.en.doGetDirStat(ctx, inode, true); err == nil {
+					if statBroken || statAll {
+						if _, err := m.en.doSyncDirStat(ctx, inode); err == nil {
 							logger.Infof("Stat of path %s (inode %d) is successfully synced", path, inode)
 						} else {
 							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, err)
