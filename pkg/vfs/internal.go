@@ -394,12 +394,21 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		if r.HasMore() {
 			recursive = r.Get8()
 		}
+		var fast uint8
+		if r.HasMore() {
+			fast = r.Get8()
+		}
 		var raw bool
 		if r.HasMore() {
 			raw = r.Get8() != 0
 		}
 
-		r := meta.GetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
+		var r syscall.Errno
+		if fast == 0 {
+			r = meta.GetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
+		} else {
+			r = meta.FastGetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
+		}
 		if r != 0 {
 			info.Failed = true
 			info.Reason = r.Error()
