@@ -361,7 +361,7 @@ type Meta interface {
 	// Remove all files and directories recursively.
 	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
 	//Clone a file or directory
-	Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16) syscall.Errno
+	Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno
 	// GetPaths returns all paths of an inode
 	GetPaths(ctx Context, inode Ino) []string
 	// Check integrity of an absolute path and repair it if asked

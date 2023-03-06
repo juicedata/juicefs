@@ -76,7 +76,7 @@ type kvMeta struct {
 	snap   map[Ino]*DumpedEntry
 }
 
-func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16) syscall.Errno {
+func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
 	//TODO implement me
 	panic("implement me")
 }

@@ -96,11 +96,21 @@ func clone(ctx *cli.Context) error {
 	wb.Put8(smode)
 	f := openController(srcParent)
 	if f == nil {
-		logger.Errorf("%s is not inside JuiceFS", srcPath)
+		return fmt.Errorf("%s is not inside JuiceFS", srcPath)
 	}
-	_, err = f.Write(wb.Bytes())
-	if err != nil {
-		logger.Fatalf("write message: %s", err)
+	defer f.Close()
+	if _, err = f.Write(wb.Bytes()); err != nil {
+		return fmt.Errorf("write message: %s", err)
+	}
+
+	progress := utils.NewProgress(false)
+	defer progress.Done()
+	bar := progress.AddCountBar("Cloning entries", 0)
+	if errno := readProgress(f, func(count uint64, total uint64) {
+		bar.SetTotal(int64(total))
+		bar.SetCurrent(int64(count))
+	}); errno != 0 {
+		return fmt.Errorf("clone failed: %v", errno)
 	}
 	return nil
 }

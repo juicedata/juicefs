@@ -3757,7 +3757,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	return err
 }
 
-func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16) syscall.Errno {
+func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
 	srcAttr := &Attr{}
 	var eno syscall.Errno
 	if eno = m.doGetAttr(ctx, srcIno, srcAttr); eno != 0 {
@@ -3771,7 +3771,7 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 		if m.rdb.HExists(ctx, m.entryKey(dstParentIno), dstName).Val() {
 			return syscall.EEXIST
 		}
-		eno = m.cloneEntry(ctx, srcIno, dstParentIno, dstName, &dstIno, cmode, cumask, false)
+		eno = m.cloneEntry(ctx, srcIno, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, false)
 		if eno != 0 {
 			cloneEno = eno
 		}
@@ -3815,12 +3815,12 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 			}
 		}
 	} else {
-		cloneEno = m.cloneEntry(ctx, srcIno, dstParentIno, dstName, &dstIno, cmode, cumask, true)
+		cloneEno = m.cloneEntry(ctx, srcIno, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, true)
 	}
 	return cloneEno
 }
 
-func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) syscall.Errno {
+func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, count, total *uint64, attach bool) syscall.Errno {
 	// if inode not exist, just ignore it
 	var srcAttr Attr
 	eno := m.doGetAttr(ctx, srcIno, &srcAttr)
@@ -3845,6 +3845,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstNam
 		if eno != 0 {
 			return eno
 		}
+		atomic.AddUint64(total, uint64(len(entries)))
 		if err = m.txn(ctx, func(tx *redis.Tx) error {
 			return m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, attach)
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno)); err != nil {
@@ -3874,7 +3875,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstNam
 						return
 					default:
 						var dstIno2 Ino
-						if eno := m.cloneEntry(ctx, entry.Inode, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, true); eno != 0 {
+						if eno := m.cloneEntry(ctx, entry.Inode, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true); eno != 0 {
 							errCh <- eno
 							return
 						}
@@ -3952,6 +3953,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstNam
 			return m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, true)
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno))
 	}
+	atomic.AddUint64(count, 1)
 	return errno(err)
 }
 
