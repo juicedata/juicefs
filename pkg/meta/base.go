@@ -417,6 +417,7 @@ func (m *baseMeta) NewSession() error {
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
 		return nil
 	}
+	go m.flushDirStat()
 
 	v, err := m.en.incrCounter("nextSession", 1)
 	if err != nil {
@@ -435,7 +436,6 @@ func (m *baseMeta) NewSession() error {
 		go m.cleanupDeletedFiles()
 		go m.cleanupSlices()
 		go m.cleanupTrash()
-		go m.flushDirStat()
 	}
 	return nil
 }
