@@ -39,10 +39,11 @@ func (tx *prefixTxn) get(key []byte) []byte {
 }
 
 func (tx *prefixTxn) gets(keys ...[]byte) [][]byte {
+	realKeys := make([][]byte, len(keys))
 	for i, key := range keys {
-		keys[i] = tx.realKey(key)
+		realKeys[i] = tx.realKey(key)
 	}
-	return tx.kvTxn.gets(keys...)
+	return tx.kvTxn.gets(realKeys...)
 }
 
 func (tx *prefixTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
@@ -76,10 +77,10 @@ type prefixClient struct {
 	prefix []byte
 }
 
-func (c *prefixClient) txn(f func(*kvTxn) error) error {
+func (c *prefixClient) txn(f func(*kvTxn) error, retry int) error {
 	return c.tkvClient.txn(func(tx *kvTxn) error {
-		return f(&kvTxn{&prefixTxn{tx, c.prefix}})
-	})
+		return f(&kvTxn{&prefixTxn{tx, c.prefix}, retry})
+	}, retry)
 }
 
 func (c *prefixClient) scan(prefix []byte, handler func(key, value []byte)) error {

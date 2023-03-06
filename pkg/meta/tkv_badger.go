@@ -147,7 +147,7 @@ func (c *badgerClient) shouldRetry(err error) bool {
 	return err == badger.ErrConflict
 }
 
-func (c *badgerClient) txn(f func(*kvTxn) error) (err error) {
+func (c *badgerClient) txn(f func(*kvTxn) error, retry int) (err error) {
 	t := c.client.NewTransaction(true)
 	defer t.Discard()
 	defer func() {
@@ -161,7 +161,7 @@ func (c *badgerClient) txn(f func(*kvTxn) error) (err error) {
 		}
 	}()
 	tx := &badgerTxn{t, c.client}
-	err = f(&kvTxn{tx})
+	err = f(&kvTxn{tx, retry})
 	if err != nil {
 		return err
 	}

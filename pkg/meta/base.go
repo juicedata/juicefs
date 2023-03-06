@@ -83,9 +83,10 @@ type engine interface {
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
-	doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error
+	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
 	// @trySync: try sync dir stat if broken or not existed
 	doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error)
+	doSyncDirStat(ctx Context, ino Ino) (*dirStat, error)
 
 	scanTrashSlices(Context, trashSliceScan) error
 	scanPendingSlices(Context, pendingSliceScan) error
@@ -243,6 +244,40 @@ func (m *baseMeta) checkRoot(inode Ino) Ino {
 	}
 }
 
+func (m *baseMeta) parallelSyncDirStat(ctx Context, inos map[Ino]bool) *sync.WaitGroup {
+	var wg sync.WaitGroup
+	for i := range inos {
+		wg.Add(1)
+		go func(ino Ino) {
+			defer wg.Done()
+			_, err := m.en.doSyncDirStat(ctx, ino)
+			if err != nil {
+				logger.Warnf("sync dir stat for %d: %s", ino, err)
+			}
+		}(i)
+	}
+	return &wg
+}
+
+func (m *baseMeta) groupBatch(batch map[Ino]dirStat, size int) [][]Ino {
+	var inos []Ino
+	for ino := range batch {
+		inos = append(inos, ino)
+	}
+	sort.Slice(inos, func(i, j int) bool {
+		return inos[i] < inos[j]
+	})
+	var batches [][]Ino
+	for i := 0; i < len(inos); i += size {
+		end := i + size
+		if end > len(inos) {
+			end = len(inos)
+		}
+		batches = append(batches, inos[i:end])
+	}
+	return batches
+}
+
 func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
 	var entries []*Entry
 	if eno := m.en.doReaddir(ctx, ino, 1, &entries, -1); eno != 0 {
@@ -274,10 +309,10 @@ func (m *baseMeta) updateDirStat(ctx Context, ino Ino, space int64, inodes int64
 	}
 	m.dirStatsLock.Lock()
 	defer m.dirStatsLock.Unlock()
-	event := m.dirStats[ino]
-	event.space += space
-	event.inodes += inodes
-	m.dirStats[ino] = event
+	stat := m.dirStats[ino]
+	stat.space += space
+	stat.inodes += inodes
+	m.dirStats[ino] = stat
 }
 
 func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, space int64) {
@@ -312,14 +347,9 @@ func (m *baseMeta) doFlushDirStat() {
 	stats := m.dirStats
 	m.dirStats = make(map[Ino]dirStat)
 	m.dirStatsLock.Unlock()
-	for ino, e := range stats {
-		if e.space == 0 && e.inodes == 0 {
-			continue
-		}
-		err := m.en.doUpdateDirStat(Background, ino, e.space, e.inodes)
-		if err != nil {
-			logger.Errorf("update dir stat failed: %v", err)
-		}
+	err := m.en.doUpdateDirStat(Background, stats)
+	if err != nil {
+		logger.Errorf("update dir stat failed: %v", err)
 	}
 }
 

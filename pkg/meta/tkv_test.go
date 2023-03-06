@@ -64,7 +64,7 @@ func testTKV(t *testing.T, c tkvClient) {
 		if err := c.txn(func(kt *kvTxn) error {
 			f(kt)
 			return nil
-		}); err != nil {
+		}, 0); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -197,21 +197,21 @@ func testTKV(t *testing.T, c tkvClient) {
 	c.txn(func(tx *kvTxn) error {
 		count = tx.incrBy([]byte("counter"), -1)
 		return nil
-	})
+	}, 0)
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
 	c.txn(func(tx *kvTxn) error {
 		count = tx.incrBy([]byte("counter"), 0)
 		return nil
-	})
+	}, 0)
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
 	c.txn(func(tx *kvTxn) error {
 		count = tx.incrBy([]byte("counter"), 2)
 		return nil
-	})
+	}, 0)
 	if count != 1 {
 		t.Fatalf("counter should be 1, but got %d", count)
 	}

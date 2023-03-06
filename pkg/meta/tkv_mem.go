@@ -199,13 +199,13 @@ func (c *memKV) set(key string, value []byte) {
 	}
 }
 
-func (c *memKV) txn(f func(*kvTxn) error) error {
+func (c *memKV) txn(f func(*kvTxn) error, retry int) error {
 	tx := &memTxn{
 		store:    c,
 		observed: make(map[string]int),
 		buffer:   make(map[string][]byte),
 	}
-	if err := f(&kvTxn{tx}); err != nil {
+	if err := f(&kvTxn{tx, retry}); err != nil {
 		return err
 	}
 
@@ -264,7 +264,7 @@ func (c *memKV) reset(prefix []byte) error {
 		return c.scan(prefix, func(key, value []byte) {
 			kt.delete(key)
 		})
-	})
+	}, 0)
 }
 
 func (c *memKV) close() error {
