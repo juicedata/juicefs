@@ -417,7 +417,6 @@ func (m *baseMeta) NewSession() error {
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
 		return nil
 	}
-	go m.flushDirStat()
 
 	v, err := m.en.incrCounter("nextSession", 1)
 	if err != nil {
@@ -429,6 +428,7 @@ func (m *baseMeta) NewSession() error {
 	}
 	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
+	go m.flushDirStat()
 	for i := 0; i < m.conf.MaxDeletes; i++ {
 		go m.deleteSlices()
 	}
