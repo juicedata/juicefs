@@ -22,7 +22,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func cmdClone() *cli.Command {
+func cmdCloneFunc() *cli.Command {
 	return &cli.Command{
 		Name:        "clone",
 		Category:    "TOOL",
