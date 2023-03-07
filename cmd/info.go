@@ -57,7 +57,11 @@ $ juicefs info -i 100`,
 			&cli.BoolFlag{
 				Name:    "recursive",
 				Aliases: []string{"r"},
-				Usage:   "get summary of directories recursively (NOTE: it may take a long time for huge trees)",
+				Usage:   "get summary of directories recursively (NOTE: it may be inaccurate, use --strict to get accurate result)",
+			},
+			&cli.BoolFlag{
+				Name:  "strict",
+				Usage: "get accurate summary of directories (NOTE: it may take a long time for huge trees)",
 			},
 			&cli.BoolFlag{
 				Name:  "raw",
@@ -73,9 +77,12 @@ func info(ctx *cli.Context) error {
 		logger.Infof("Windows is not supported")
 		return nil
 	}
-	var recursive, raw uint8
+	var recursive, strict, raw uint8
 	if ctx.Bool("recursive") {
 		recursive = 1
+	}
+	if ctx.Bool("strict") {
+		strict = 1
 	}
 	if ctx.Bool("raw") {
 		raw = 1
@@ -108,12 +115,13 @@ func info(ctx *cli.Context) error {
 			continue
 		}
 
-		wb := utils.NewBuffer(8 + 10)
+		wb := utils.NewBuffer(8 + 11)
 		wb.Put32(meta.InfoV2)
-		wb.Put32(10)
+		wb.Put32(11)
 		wb.Put64(inode)
 		wb.Put8(recursive)
 		wb.Put8(raw)
+		wb.Put8(strict)
 		_, err = f.Write(wb.Bytes())
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
