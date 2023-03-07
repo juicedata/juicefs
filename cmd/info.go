@@ -60,8 +60,9 @@ $ juicefs info -i 100`,
 				Usage:   "get summary of directories recursively (NOTE: it may be inaccurate, use --strict to get accurate result)",
 			},
 			&cli.BoolFlag{
-				Name:  "strict",
-				Usage: "get accurate summary of directories (NOTE: it may take a long time for huge trees)",
+				Name:    "strict",
+				Aliases: []string{"s"},
+				Usage:   "get accurate summary of directories (NOTE: it may take a long time for huge trees)",
 			},
 			&cli.BoolFlag{
 				Name:  "raw",
