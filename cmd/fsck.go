@@ -65,9 +65,8 @@ $ juicefs fsck redis://localhost --path /d1/d2 --recursive`,
 				Usage:   "recursively check or repair",
 			},
 			&cli.BoolFlag{
-				Name:    "stat-all",
-				Aliases: []string{"s"},
-				Usage:   "stat all directories, even if they are existed and not broken",
+				Name:  "stat-all",
+				Usage: "stat all directories, even if they are existed and not broken",
 			},
 		},
 	}
