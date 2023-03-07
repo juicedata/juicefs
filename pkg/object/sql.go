@@ -47,7 +47,7 @@ type sqlStore struct {
 
 type blob struct {
 	Id       int64     `xorm:"pk bigserial"`
-	Key      string    `xorm:"notnull unique"`
+	Key      []byte    `xorm:"notnull unique(blob) varbinary(255) "`
 	Size     int64     `xorm:"notnull"`
 	Modified time.Time `xorm:"notnull updated"`
 	Data     []byte    `xorm:"mediumblob"`
@@ -62,7 +62,7 @@ func (s *sqlStore) String() string {
 }
 
 func (s *sqlStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	var b = blob{Key: key}
+	var b = blob{Key: []byte(key)}
 	// TODO: range
 	ok, err := s.db.Get(&b)
 	if err != nil {
@@ -88,7 +88,7 @@ func (s *sqlStore) Put(key string, in io.Reader) error {
 	}
 	var n int64
 	now := time.Now()
-	b := blob{Key: key, Data: d, Size: int64(len(d)), Modified: now}
+	b := blob{Key: []byte(key), Data: d, Size: int64(len(d)), Modified: now}
 	if name := s.db.DriverName(); name == "postgres" || name == "pgx" {
 		var r sql.Result
 		r, err = s.db.Exec("INSERT INTO jfs_blob(key, size,modified, data) VALUES(?, ?, ?,? ) "+
@@ -99,7 +99,7 @@ func (s *sqlStore) Put(key string, in io.Reader) error {
 	} else {
 		n, err = s.db.Insert(&b)
 		if err != nil || n == 0 {
-			n, err = s.db.Update(&b, &blob{Key: key})
+			n, err = s.db.Update(&b, &blob{Key: []byte(key)})
 		}
 	}
 	if err == nil && n == 0 {
@@ -109,7 +109,7 @@ func (s *sqlStore) Put(key string, in io.Reader) error {
 }
 
 func (s *sqlStore) Head(key string) (Object, error) {
-	var b = blob{Key: key}
+	var b = blob{Key: []byte(key)}
 	ok, err := s.db.Cols("key", "modified", "size").Get(&b)
 	if err != nil {
 		return nil, err
@@ -126,7 +126,7 @@ func (s *sqlStore) Head(key string) (Object, error) {
 }
 
 func (s *sqlStore) Delete(key string) error {
-	_, err := s.db.Delete(&blob{Key: key})
+	_, err := s.db.Delete(&blob{Key: []byte(key)})
 	return err
 }
 
@@ -145,12 +145,12 @@ func (s *sqlStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 	}
 	var objs []Object
 	for _, b := range bs {
-		if strings.HasPrefix(b.Key, prefix) {
+		if strings.HasPrefix(string(b.Key), prefix) {
 			objs = append(objs, &obj{
-				key:   b.Key,
+				key:   string(b.Key),
 				size:  b.Size,
 				mtime: b.Modified,
-				isDir: strings.HasSuffix(b.Key, "/"),
+				isDir: strings.HasSuffix(string(b.Key), "/"),
 			})
 		} else {
 			break
