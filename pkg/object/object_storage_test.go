@@ -318,11 +318,19 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			println(len(pending), marker)
 		}
 		part2Size := 1 << 20
+		// ufile: The size of all parts except the last part cannot be less than 4MB,
+		// otherwise it will cause the call to the FinishMultipartUpload API to fail.
+		if _, ok := s.(*withPrefix).os.(*ufile); ok {
+			part2Size = partSize
+		}
 		_, err = s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
 		if err != nil {
 			t.Fatalf("UploadPart 2 failed: %s", err)
 		}
 		part2Size = 2 << 20
+		if _, ok := s.(*withPrefix).os.(*ufile); ok {
+			part2Size = partSize
+		}
 		part2, err := s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
 		if err != nil {
 			t.Fatalf("UploadPart 2 failed: %s", err)
