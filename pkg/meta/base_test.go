@@ -2104,7 +2104,8 @@ func testClone(t *testing.T, m Meta) {
 	}
 
 	cloneDstName := "cloneDir1"
-	if eno := m.Clone(Background, dir1, 1, cloneDstName, 0, 022); eno != 0 {
+	var count, total uint64
+	if eno := m.Clone(Background, dir1, 1, cloneDstName, 0, 022, &count, &total); eno != 0 {
 		t.Fatalf("clone: %s", eno)
 	}
 	var entries1 []*Entry
