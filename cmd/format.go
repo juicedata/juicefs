@@ -308,6 +308,17 @@ func test(store object.ObjectStorage) error {
 	return err
 }
 
+func loadEncrypt(keyPath string) string {
+	if keyPath == "" {
+		return ""
+	}
+	pem, err := os.ReadFile(keyPath)
+	if err != nil {
+		logger.Fatalf("load RSA key from %s: %s", keyPath, err)
+	}
+	return string(pem)
+}
+
 func format(c *cli.Context) error {
 	setup(c, 2)
 	removePassword(c.Args().Get(0))
@@ -326,16 +337,7 @@ func format(c *cli.Context) error {
 	if v := c.Int("shards"); v > 256 {
 		logger.Fatalf("too many shards: %d", v)
 	}
-	loadEncrypt := func(keyPath string) string {
-		if keyPath == "" {
-			return ""
-		}
-		pem, err := os.ReadFile(keyPath)
-		if err != nil {
-			logger.Fatalf("load RSA key from %s: %s", keyPath, err)
-		}
-		return string(pem)
-	}
+
 	var create, encrypted bool
 	format, err := m.Load(false)
 	if err == nil {
