@@ -1366,7 +1366,6 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 				var attrBroken, statBroken bool
 				if attr.Full {
 					nlink, st := m.countDirNlink(ctx, inode)
-					fmt.Printf("nlink of %s should be %d\n", path, nlink)
 					if st != 0 {
 						logger.Errorf("Count nlink for inode %d: %s", inode, st)
 						continue
