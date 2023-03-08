@@ -2,6 +2,12 @@ GOROOT=$(shell go env GOROOT)
 
 all: package
 
+ceph: libjfs-ceph
+	mvn package -B -Dmaven.test.skip=true
+
+libjfs-ceph: ../../pkg/*/*.go libjfs/*.go
+	make -C libjfs ceph
+
 libjfs/libjfs: ../../pkg/*/*.go libjfs/*.go
 	make -C libjfs
 
