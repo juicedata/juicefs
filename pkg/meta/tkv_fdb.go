@@ -59,9 +59,9 @@ func (c *fdbClient) name() string {
 	return "fdb"
 }
 
-func (c *fdbClient) txn(f func(*kvTxn) error) error {
+func (c *fdbClient) txn(f func(*kvTxn) error, retry int) error {
 	_, err := c.client.Transact(func(t fdb.Transaction) (interface{}, error) {
-		e := f(&kvTxn{&fdbTxn{t}})
+		e := f(&kvTxn{&fdbTxn{t}, retry})
 		return nil, e
 	})
 	return err
@@ -120,6 +120,8 @@ func (c *fdbClient) close() error {
 func (c *fdbClient) shouldRetry(err error) bool {
 	return false
 }
+
+func (c *fdbClient) gc() {}
 
 func (tx *fdbTxn) get(key []byte) []byte {
 	return tx.Get(fdb.Key(key)).MustGet()

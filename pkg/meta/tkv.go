@@ -53,15 +53,17 @@ type kvtxn interface {
 
 type tkvClient interface {
 	name() string
-	txn(f func(*kvTxn) error) error
+	txn(f func(*kvTxn) error, retry int) error
 	scan(prefix []byte, handler func(key, value []byte)) error
 	reset(prefix []byte) error
 	close() error
 	shouldRetry(err error) bool
+	gc()
 }
 
 type kvTxn struct {
 	kvtxn
+	retry int
 }
 
 func (tx *kvTxn) deleteKeys(prefix []byte) {
@@ -332,7 +334,7 @@ func (m *kvMeta) get(key []byte) ([]byte, error) {
 	err := m.client.txn(func(tx *kvTxn) error {
 		value = tx.get(key)
 		return nil
-	})
+	}, 0)
 	return value, err
 }
 
@@ -344,7 +346,7 @@ func (m *kvMeta) scanKeys(prefix []byte) ([][]byte, error) {
 			return true
 		})
 		return nil
-	})
+	}, 0)
 	return keys, err
 }
 
@@ -363,7 +365,7 @@ func (m *kvMeta) scanValues(prefix []byte, limit int, filter func(k, v []byte) b
 			return limit < 0 || c < limit
 		})
 		return nil
-	})
+	}, 0)
 	return values, err
 }
 
@@ -710,7 +712,7 @@ func (m *kvMeta) txn(f func(tx *kvTxn) error, inodes ...Ino) error {
 	}
 	var lastErr error
 	for i := 0; i < 50; i++ {
-		err := m.client.txn(f)
+		err := m.client.txn(f, i)
 		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 			err = nil
 		}
@@ -1129,9 +1131,13 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if parent != TrashInode {
 			if _type == TypeDirectory {
 				pattr.Nlink++
-				updateParent = true
+				if tx.retry < 10 {
+					updateParent = true
+				} else {
+					logger.Warnf("Skip updating nlink of directory %d to reduce conflict", parent)
+				}
 			}
-			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
 				pattr.Mtime = now.Unix()
 				pattr.Mtimensec = uint32(now.Nanosecond())
 				pattr.Ctime = now.Unix()
@@ -1681,7 +1687,7 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 			err := m.client.txn(func(tx *kvTxn) error {
 				rs = tx.gets(keys...)
 				return nil
-			})
+			}, 0)
 			if err != nil {
 				return err
 			}
@@ -1971,37 +1977,62 @@ func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err 
 	if err != nil {
 		return
 	}
-	err = m.txn(func(tx *kvTxn) error {
+
+	if m.conf.ReadOnly {
+		err = syscall.EROFS
+		return
+	}
+	err = m.client.txn(func(tx *kvTxn) error {
 		tx.set(m.dirStatKey(ino), m.packDirStat(space, inodes))
 		return nil
-	})
+	}, 0)
+	if eno, ok := err.(syscall.Errno); ok && eno == 0 {
+		err = nil
+	}
+	if err != nil && m.shouldRetry(err) {
+		// other clients have synced
+		err = nil
+	}
 	return
 }
 
-var errEmptyStat = errors.New("empty stat")
-
-func (m *kvMeta) doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error {
-	err := m.txn(func(tx *kvTxn) error {
-		key := m.dirStatKey(ino)
-		rawStat := tx.get(key)
-		if rawStat == nil {
-			return errEmptyStat
+func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
+	syncMap := make(map[Ino]bool, 0)
+	for _, group := range m.groupBatch(batch, 20) {
+		err := m.txn(func(tx *kvTxn) error {
+			keys := make([][]byte, 0, len(group))
+			for _, ino := range group {
+				keys = append(keys, m.dirStatKey(ino))
+			}
+			for i, rawStat := range tx.gets(keys...) {
+				ino := group[i]
+				if rawStat == nil {
+					syncMap[ino] = true
+					continue
+				}
+				us, ui := m.parseDirStat(rawStat)
+				usedSpace, usedInodes := int64(us), int64(ui)
+				stat := batch[ino]
+				usedSpace += stat.space
+				usedInodes += stat.inodes
+				if usedSpace < 0 || usedInodes < 0 {
+					logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
+					syncMap[ino] = true
+					continue
+				}
+				tx.set(keys[i], m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
+			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
-		us, ui := m.parseDirStat(rawStat)
-		usedSpace, usedInodes := int64(us), int64(ui)
-		usedSpace += space
-		usedInodes += inodes
-		if usedSpace < 0 || usedInodes < 0 {
-			logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
-			return errEmptyStat
-		}
-		tx.set(key, m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
-		return nil
-	})
-	if err == errEmptyStat {
-		_, _, err = m.doSyncDirStat(ctx, ino)
 	}
-	return err
+
+	if len(syncMap) > 0 {
+		m.parallelSyncDirStat(ctx, syncMap).Wait()
+	}
+	return nil
 }
 
 func (m *kvMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
@@ -2035,6 +2066,9 @@ func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error)
 }
 
 func (m *kvMeta) doCleanupSlices() {
+	if m.Name() == "tikv" {
+		m.client.gc()
+	}
 	klen := 1 + 8 + 4
 	vals, _ := m.scanValues(m.fmtKey("K"), -1, func(k, v []byte) bool {
 		// filter out invalid ones
@@ -2128,7 +2162,7 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 					return c < batch
 				})
 			return nil
-		}); err != nil {
+		}, 0); err != nil {
 			logger.Warnf("Scan delayed slices: %s", err)
 			return count, err
 		}
@@ -2277,7 +2311,7 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 				if s.id > 0 && m.client.txn(func(tx *kvTxn) error {
 					refs = tx.incrBy(m.sliceKey(s.id, s.size), 0)
 					return nil
-				}) == nil && refs < 0 {
+				}, 0) == nil && refs < 0 {
 					m.deleteSlice(s.id, s.size)
 				}
 			}
@@ -2612,7 +2646,7 @@ func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 			e.Symlink = string(l)
 		}
 		return nil
-	})
+	}, 0)
 }
 
 func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth int, showProgress func(totalIncr, currentIncr int64)) error {

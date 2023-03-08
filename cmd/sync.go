@@ -158,7 +158,7 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 			},
 			&cli.BoolFlag{
 				Name:  "no-https",
-				Usage: "donot use HTTPS",
+				Usage: "do not use HTTPS",
 			},
 			&cli.BoolFlag{
 				Name:  "check-all",
