@@ -812,11 +812,12 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newSpace int64
+	var newLength, newSpace int64
 	if attr == nil {
 		attr = &Attr{}
 	}
 	err := m.txn(ctx, func(tx *redis.Tx) error {
+		newLength = 0
 		newSpace = 0
 		var t Attr
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
@@ -833,6 +834,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			}
 			return nil
 		}
+		newLength = int64(length) - int64(t.Length)
 		newSpace = align4K(length) - align4K(t.Length)
 		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
@@ -902,7 +904,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		return err
 	}, m.inodeKey(inode))
 	if err == nil {
-		m.updateParentStat(ctx, inode, attr.Parent, newSpace)
+		m.updateParentStat(ctx, inode, attr.Parent, newLength, newSpace)
 	}
 	return errno(err)
 }
@@ -930,10 +932,10 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newSpace int64
+	var newLength, newSpace int64
 	var t Attr
 	err := m.txn(ctx, func(tx *redis.Tx) error {
-		newSpace = 0
+		newLength, newSpace = 0, 0
 		t = Attr{}
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
@@ -960,6 +962,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		}
 
 		old := t.Length
+		newLength = int64(length) - int64(old)
 		newSpace = align4K(length) - align4K(old)
 		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
@@ -995,7 +998,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		return err
 	}, m.inodeKey(inode))
 	if err == nil {
-		m.updateParentStat(ctx, inode, t.Parent, newSpace)
+		m.updateParentStat(ctx, inode, t.Parent, newLength, newSpace)
 	}
 	return errno(err)
 }
@@ -2041,11 +2044,11 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
-	var newSpace int64
+	var newLength, newSpace int64
 	var attr Attr
 	var needCompact bool
 	err := m.txn(ctx, func(tx *redis.Tx) error {
-		newSpace = 0
+		newLength, newSpace = 0, 0
 		attr = Attr{}
 		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
@@ -2057,6 +2060,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
 		if newleng > attr.Length {
+			newLength = int64(newleng - attr.Length)
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
@@ -2089,7 +2093,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		if needCompact {
 			go m.compactChunk(inode, indx, false)
 		}
-		m.updateParentStat(ctx, inode, attr.Parent, newSpace)
+		m.updateParentStat(ctx, inode, attr.Parent, newLength, newSpace)
 	}
 	return errno(err)
 }
@@ -2101,11 +2105,11 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		f.Lock()
 		defer f.Unlock()
 	}
-	var newSpace int64
+	var newLength, newSpace int64
 	var sattr, attr Attr
 	defer func() { m.of.InvalidateChunk(fout, invalidateAllChunks) }()
 	err := m.txn(ctx, func(tx *redis.Tx) error {
-		newSpace = 0
+		newLength, newSpace = 0, 0
 		rs, err := tx.MGet(ctx, m.inodeKey(fin), m.inodeKey(fout)).Result()
 		if err != nil {
 			return err
@@ -2137,6 +2141,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 
 		newleng := offOut + size
 		if newleng > attr.Length {
+			newLength = int64(newleng - attr.Length)
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
@@ -2220,7 +2225,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		return err
 	}, m.inodeKey(fout), m.inodeKey(fin))
 	if err == nil {
-		m.updateParentStat(ctx, fout, attr.Parent, newSpace)
+		m.updateParentStat(ctx, fout, attr.Parent, newLength, newSpace)
 	}
 	return errno(err)
 }

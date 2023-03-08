@@ -117,6 +117,7 @@ type cchunk struct {
 
 // stat of dir
 type dirStat struct {
+	length int64
 	space  int64
 	inodes int64
 }
@@ -298,29 +299,27 @@ func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (space, inodes uint64, err
 	return m.en.doGetDirStat(ctx, m.checkRoot(inode))
 }
 
-func (m *baseMeta) updateDirStat(ctx Context, ino Ino, space int64, inodes int64) {
-	if inodes == 0 && space == 0 {
-		return
-	}
+func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int64) {
 	m.dirStatsLock.Lock()
 	defer m.dirStatsLock.Unlock()
 	stat := m.dirStats[ino]
-	stat.space += space
+	stat.length += length
 	stat.inodes += inodes
+	stat.space += space
 	m.dirStats[ino] = stat
 }
 
-func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, space int64) {
+func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, space int64) {
 	if space == 0 {
 		return
 	}
 	m.updateStats(space, 0)
 	if parent > 0 {
-		m.updateDirStat(ctx, parent, space, 0)
+		m.updateDirStat(ctx, parent, length, space, 0)
 	} else {
 		go func() {
 			for p := range m.en.doGetParents(ctx, inode) {
-				m.updateDirStat(ctx, p, space, 0)
+				m.updateDirStat(ctx, p, length, space, 0)
 			}
 		}()
 	}
@@ -891,7 +890,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}
 	err := m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)
 	if err == 0 {
-		m.updateDirStat(ctx, parent, align4K(0), 1)
+		m.updateDirStat(ctx, parent, 0, align4K(0), 1)
 	}
 	return err
 }
@@ -941,7 +940,7 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	}
 	err := m.en.doLink(ctx, inode, parent, name, attr)
 	if err == 0 {
-		m.updateDirStat(ctx, parent, align4K(attr.Length), 1)
+		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
 	}
 	return err
 }
@@ -976,11 +975,11 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	var attr Attr
 	err := m.en.doUnlink(ctx, m.checkRoot(parent), name, &attr)
 	if err == 0 {
-		newSpace := -align4K(0)
+		var diffLength uint64
 		if attr.Typ == TypeFile {
-			newSpace = -align4K(attr.Length)
+			diffLength = attr.Length
 		}
-		m.updateDirStat(ctx, parent, newSpace, -1)
+		m.updateDirStat(ctx, parent, -int64(diffLength), -align4K(diffLength), -1)
 	}
 	return err
 }
@@ -1002,7 +1001,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	defer m.timeit(time.Now())
 	err := m.en.doRmdir(ctx, m.checkRoot(parent), name)
 	if err == 0 {
-		m.updateDirStat(ctx, parent, -align4K(0), -1)
+		m.updateDirStat(ctx, parent, 0, -align4K(0), -1)
 	}
 	return err
 }
@@ -1034,12 +1033,12 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	err := m.en.doRename(ctx, m.checkRoot(parentSrc), nameSrc, m.checkRoot(parentDst), nameDst, flags, inode, attr)
 	if err == 0 {
-		diffSpace := align4K(0)
+		var diffLengh uint64
 		if attr.Typ == TypeFile {
-			diffSpace = align4K(attr.Length)
+			diffLengh = attr.Length
 		}
-		m.updateDirStat(ctx, parentSrc, -diffSpace, -1)
-		m.updateDirStat(ctx, parentDst, diffSpace, 1)
+		m.updateDirStat(ctx, parentSrc, -int64(diffLengh), -align4K(diffLengh), -1)
+		m.updateDirStat(ctx, parentDst, int64(diffLengh), align4K(diffLengh), 1)
 	}
 	return err
 }
