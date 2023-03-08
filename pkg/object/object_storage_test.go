@@ -108,34 +108,34 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 
 	// get all
-	if d, e := get(s, "test", 0, -1); d != "hello" {
+	if d, e := get(s, "test", 0, -1); e != nil || d != "hello" {
 		t.Fatalf("expect hello, but got %v, error: %s", d, e)
 	}
-	if d, e := get(s, "test", 0, 5); d != "hello" {
+	if d, e := get(s, "test", 0, 5); e != nil || d != "hello" {
 		t.Fatalf("expect hello, but got %v, error: %s", d, e)
 	}
 	// get first
-	if d, e := get(s, "test", 0, 1); d != "h" {
+	if d, e := get(s, "test", 0, 1); e != nil || d != "h" {
 		t.Fatalf("expect h, but got %v, error: %s", d, e)
 	}
 	// get last
-	if d, e := get(s, "test", 4, 1); d != "o" {
+	if d, e := get(s, "test", 4, 1); e != nil || d != "o" {
 		t.Fatalf("expect o, but got %v, error: %s", d, e)
 	}
 	// get last 3
-	if d, e := get(s, "test", 2, 3); d != "llo" {
+	if d, e := get(s, "test", 2, 3); e != nil || d != "llo" {
 		t.Fatalf("expect llo, but got %v, error: %s", d, e)
 	}
 	// get middle
-	if d, e := get(s, "test", 2, 2); d != "ll" {
+	if d, e := get(s, "test", 2, 2); e != nil || d != "ll" {
 		t.Fatalf("expect ll, but got %v, error: %s", d, e)
 	}
 	// get the end out of range
-	if d, e := get(s, "test", 4, 2); d != "o" {
+	if d, e := get(s, "test", 4, 2); e != nil || d != "o" {
 		t.Logf("out-of-range get: 'o', but got %v, error: %s", len(d), e)
 	}
 	// get the off out of range
-	if d, e := get(s, "test", 6, 2); d != "" {
+	if d, e := get(s, "test", 6, 2); e != nil || d != "" {
 		t.Logf("out-of-range get: '', but got %v, error: %s", len(d), e)
 	}
 	switch s.(*withPrefix).os.(type) {
