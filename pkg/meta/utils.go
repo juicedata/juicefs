@@ -369,3 +369,50 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool
 	}
 	return 0
 }
+
+func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
+	var attr Attr
+	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
+		return st
+	}
+	if attr.Typ == TypeDirectory {
+		return fastGetSummary(r, ctx, inode, summary, recursive)
+	} else {
+		summary.Files++
+		summary.Length += attr.Length
+		summary.Size += uint64(align4K(attr.Length))
+	}
+	return 0
+}
+
+func fastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
+	space, _, err := r.GetDirStat(ctx, inode)
+	if err != nil {
+		return errno(err)
+	}
+	summary.Size += space
+	summary.Length += space
+	summary.Dirs++
+
+	var entries []*Entry
+	if st := r.Readdir(ctx, inode, 0, &entries); st != 0 {
+		return st
+	}
+	for _, e := range entries {
+		if e.Inode == inode || len(e.Name) == 2 && bytes.Equal(e.Name, []byte("..")) {
+			continue
+		}
+		if e.Attr.Typ == TypeDirectory {
+			if recursive {
+				if st := fastGetSummary(r, ctx, e.Inode, summary, recursive); st != 0 {
+					return st
+				}
+			} else {
+				summary.Dirs++
+			}
+		} else {
+			summary.Files++
+		}
+	}
+	return 0
+}
