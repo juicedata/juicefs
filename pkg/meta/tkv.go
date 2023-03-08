@@ -316,9 +316,9 @@ func (m *kvMeta) parseEntry(buf []byte) (uint8, Ino) {
 	return b.Get8(), Ino(b.Get64())
 }
 
-func (m *kvMeta) packDirStat(fileLength, usedSpace, usedInodes uint64) []byte {
+func (m *kvMeta) packDirStat(dataLength, usedSpace, usedInodes uint64) []byte {
 	b := utils.NewBuffer(24)
-	b.Put64(fileLength)
+	b.Put64(dataLength)
 	b.Put64(usedSpace)
 	b.Put64(usedInodes)
 	return b.Bytes()

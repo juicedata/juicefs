@@ -528,8 +528,8 @@ func (m *redisMeta) usedSpaceKey() string {
 	return m.prefix + usedSpace
 }
 
-func (m *redisMeta) dirFileLengthKey() string {
-	return m.prefix + "dirFileLength"
+func (m *redisMeta) dirDataLengthKey() string {
+	return m.prefix + "dirDataLength"
 }
 
 func (m *redisMeta) dirUsedSpaceKey() string {
@@ -2257,7 +2257,7 @@ func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (length, space, inodes u
 		return
 	}
 	_, err = m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.HSetNX(ctx, m.dirFileLengthKey(), field, length)
+		pipe.HSetNX(ctx, m.dirDataLengthKey(), field, length)
 		pipe.HSetNX(ctx, m.dirUsedSpaceKey(), field, space)
 		pipe.HSetNX(ctx, m.dirUsedInodesKey(), field, inodes)
 		return nil
@@ -2267,7 +2267,7 @@ func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (length, space, inodes u
 
 func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	spaceKey := m.dirUsedSpaceKey()
-	lengthKey := m.dirFileLengthKey()
+	lengthKey := m.dirDataLengthKey()
 	inodesKey := m.dirUsedInodesKey()
 	nonexist := make(map[Ino]bool, 0)
 	statList := make([]Ino, 0, len(batch))
@@ -2322,7 +2322,7 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 
 func (m *redisMeta) doGetDirStat(ctx Context, ino Ino) (length, space, inodes uint64, err error) {
 	field := strconv.FormatUint(uint64(ino), 10)
-	fileLength, errLength := m.rdb.HGet(ctx, m.dirFileLengthKey(), field).Int64()
+	fileLength, errLength := m.rdb.HGet(ctx, m.dirDataLengthKey(), field).Int64()
 	if errLength != nil && errLength != redis.Nil {
 		err = errLength
 		return

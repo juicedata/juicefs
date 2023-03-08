@@ -161,7 +161,7 @@ type delfile struct {
 
 type dirStats struct {
 	Inode      Ino   `xorm:"pk notnull"`
-	FileLength int64 `xorm:"notnull"`
+	DataLength int64 `xorm:"notnull"`
 	UsedSpace  int64 `xorm:"notnull"`
 	UsedInodes int64 `xorm:"notnull"`
 }
@@ -2263,7 +2263,7 @@ func (m *dbMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 
 func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	table := m.db.GetTableMapper().Obj2Table("dirStats")
-	fileLengthColumn := m.db.GetColumnMapper().Obj2Table("FileLength")
+	fileLengthColumn := m.db.GetColumnMapper().Obj2Table("DataLength")
 	usedSpaceColumn := m.db.GetColumnMapper().Obj2Table("UsedSpace")
 	usedInodeColumn := m.db.GetColumnMapper().Obj2Table("UsedInodes")
 	sql := fmt.Sprintf(
@@ -2347,7 +2347,7 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino) (length, space, inodes uint6
 		if err != nil {
 			return
 		}
-		st.FileLength, st.UsedSpace, st.UsedInodes = int64(length), int64(space), int64(inodes)
+		st.DataLength, st.UsedSpace, st.UsedInodes = int64(length), int64(space), int64(inodes)
 		e := m.txn(func(s *xorm.Session) error {
 			n, err := s.AllCols().Update(&st)
 			if err == nil && n != 1 {
@@ -2360,7 +2360,7 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino) (length, space, inodes uint6
 		}
 		return
 	}
-	length = uint64(st.FileLength)
+	length = uint64(st.DataLength)
 	space = uint64(st.UsedSpace)
 	inodes = uint64(st.UsedInodes)
 	return
