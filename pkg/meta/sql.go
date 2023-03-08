@@ -421,8 +421,6 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 			return fmt.Errorf("insert new session %d: %s", m.sid, err)
 		}
 	}
-
-	go m.flushStats()
 	return nil
 }
 
@@ -761,6 +759,11 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Rdev = n.Rdev
 	attr.Parent = n.Parent
 	attr.Full = true
+}
+
+func (m *dbMeta) updateStats(space int64, inodes int64) {
+	atomic.AddInt64(&m.newSpace, space)
+	atomic.AddInt64(&m.newInodes, inodes)
 }
 
 func (m *dbMeta) flushStats() {
@@ -1156,7 +1159,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		*inode = ino
 	}
 
-	err = m.txn(func(s *xorm.Session) error {
+	return errno(m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
 		ok, err := s.ForUpdate().Get(&pn)
 		if err != nil {
@@ -1246,11 +1249,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 		m.parseAttr(&n, attr)
 		return nil
-	}, parent)
-	if err == nil {
-		m.updateStats(align4K(0), 1)
-	}
-	return errno(err)
+	}, parent))
 }
 
 func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno {

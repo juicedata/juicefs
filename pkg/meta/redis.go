@@ -579,6 +579,9 @@ func (m *redisMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.usedInodes, inodes)
 }
 
+// redisMeta updates the usage in each transaction
+func (m *redisMeta) flushStats() {}
+
 func (m *redisMeta) handleLuaResult(op string, res interface{}, err error, returnedIno *int64, returnedAttr *string) syscall.Errno {
 	if err != nil {
 		msg := err.Error()
@@ -1122,7 +1125,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		*inode = ino
 	}
 
-	err = m.txn(ctx, func(tx *redis.Tx) error {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		var pattr Attr
 		a, err := tx.Get(ctx, m.inodeKey(parent)).Bytes()
 		if err != nil {
@@ -1213,11 +1216,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			return nil
 		})
 		return err
-	}, m.inodeKey(parent), m.entryKey(parent))
-	if err == nil {
-		m.updateStats(align4K(0), 1)
-	}
-	return errno(err)
+	}, m.inodeKey(parent), m.entryKey(parent)))
 }
 
 func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno {
