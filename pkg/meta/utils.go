@@ -366,8 +366,10 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool
 		summary.Size += 4096
 	} else {
 		summary.Files++
-		summary.Length += attr.Length
 		summary.Size += uint64(align4K(attr.Length))
+		if attr.Typ == TypeFile {
+			summary.Length += attr.Length
+		}
 	}
 	return 0
 }
@@ -381,8 +383,10 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 		return fastGetSummary(r, ctx, inode, summary, recursive)
 	} else {
 		summary.Files++
-		summary.Length += attr.Length
 		summary.Size += uint64(align4K(attr.Length))
+		if attr.Typ == TypeFile {
+			summary.Length += attr.Length
+		}
 	}
 	return 0
 }
