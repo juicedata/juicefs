@@ -2263,11 +2263,13 @@ func (m *dbMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 
 func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	table := m.db.GetTableMapper().Obj2Table("dirStats")
+	fileLengthColumn := m.db.GetColumnMapper().Obj2Table("FileLength")
 	usedSpaceColumn := m.db.GetColumnMapper().Obj2Table("UsedSpace")
 	usedInodeColumn := m.db.GetColumnMapper().Obj2Table("UsedInodes")
 	sql := fmt.Sprintf(
-		"update `%s` set `%s` = `%s` + ?, `%s` = `%s` + ? where `inode` = ?",
+		"update `%s` set `%s` = `%s` + ?, `%s` = `%s` + ?, `%s` = `%s` + ? where `inode` = ?",
 		table,
+		fileLengthColumn, fileLengthColumn,
 		usedSpaceColumn, usedSpaceColumn,
 		usedInodeColumn, usedInodeColumn,
 	)
@@ -2278,7 +2280,7 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 		err := m.txn(func(s *xorm.Session) error {
 			for _, ino := range group {
 				stat := batch[ino]
-				ret, err := s.Exec(sql, stat.space, stat.inodes, ino)
+				ret, err := s.Exec(sql, stat.length, stat.space, stat.inodes, ino)
 				if err != nil {
 					return err
 				}
@@ -2303,13 +2305,13 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	return nil
 }
 
-func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
-	space, inodes, err = m.calcDirStat(ctx, ino)
+func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (length, space, inodes uint64, err error) {
+	length, space, inodes, err = m.calcDirStat(ctx, ino)
 	if err != nil {
 		return
 	}
 	err = m.txn(func(s *xorm.Session) error {
-		_, err := s.Insert(&dirStats{Inode: ino, UsedSpace: int64(space), UsedInodes: int64(inodes)})
+		_, err := s.Insert(&dirStats{ino, int64(length), int64(space), int64(inodes)})
 		if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			// other client synced
 			err = nil
@@ -2319,7 +2321,7 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err 
 	return
 }
 
-func (m *dbMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+func (m *dbMeta) doGetDirStat(ctx Context, ino Ino) (length, space, inodes uint64, err error) {
 	st := dirStats{Inode: ino}
 	var exist bool
 	if err = m.roTxn(func(s *xorm.Session) error {
@@ -2330,7 +2332,7 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err e
 	}
 
 	if !exist {
-		space, inodes, err = m.doSyncDirStat(ctx, ino)
+		length, space, inodes, err = m.doSyncDirStat(ctx, ino)
 		if err == nil {
 			return
 		}
@@ -2341,11 +2343,11 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err e
 			"dir usage of inode %d is invalid: space %d, inodes %d, try to fix",
 			ino, st.UsedSpace, st.UsedInodes,
 		)
-		space, inodes, err = m.calcDirStat(ctx, ino)
+		length, space, inodes, err = m.calcDirStat(ctx, ino)
 		if err != nil {
 			return
 		}
-		st.UsedSpace, st.UsedInodes = int64(space), int64(inodes)
+		st.FileLength, st.UsedSpace, st.UsedInodes = int64(length), int64(space), int64(inodes)
 		e := m.txn(func(s *xorm.Session) error {
 			n, err := s.AllCols().Update(&st)
 			if err == nil && n != 1 {
@@ -2358,6 +2360,7 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err e
 		}
 		return
 	}
+	length = uint64(st.FileLength)
 	space = uint64(st.UsedSpace)
 	inodes = uint64(st.UsedInodes)
 	return
