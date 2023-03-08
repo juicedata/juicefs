@@ -528,6 +528,10 @@ func (m *redisMeta) usedSpaceKey() string {
 	return m.prefix + usedSpace
 }
 
+func (m *redisMeta) dirFileLengthKey() string {
+	return m.prefix + "dirFileLength"
+}
+
 func (m *redisMeta) dirUsedSpaceKey() string {
 	return m.prefix + "dirUsedSpace"
 }
@@ -2246,13 +2250,14 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
-func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (length, space, inodes uint64, err error) {
 	field := strconv.FormatUint(uint64(ino), 16)
-	space, inodes, err = m.calcDirStat(ctx, ino)
+	length, space, inodes, err = m.calcDirStat(ctx, ino)
 	if err != nil {
 		return
 	}
 	_, err = m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.HSetNX(ctx, m.dirFileLengthKey(), field, length)
 		pipe.HSetNX(ctx, m.dirUsedSpaceKey(), field, space)
 		pipe.HSetNX(ctx, m.dirUsedInodesKey(), field, inodes)
 		return nil
@@ -2262,6 +2267,7 @@ func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, e
 
 func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	spaceKey := m.dirUsedSpaceKey()
+	lengthKey := m.dirFileLengthKey()
 	inodesKey := m.dirUsedInodesKey()
 	nonexist := make(map[Ino]bool, 0)
 	statList := make([]Ino, 0, len(batch))
@@ -2295,6 +2301,9 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 					continue
 				}
 				stat := batch[ino]
+				if stat.length != 0 {
+					pipe.HIncrBy(ctx, lengthKey, field, stat.length)
+				}
 				if stat.space != 0 {
 					pipe.HIncrBy(ctx, spaceKey, field, stat.space)
 				}
@@ -2311,10 +2320,15 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	return nil
 }
 
-func (m *redisMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+func (m *redisMeta) doGetDirStat(ctx Context, ino Ino) (length, space, inodes uint64, err error) {
 	spaceKey := m.dirUsedSpaceKey()
 	inodesKey := m.dirUsedInodesKey()
 	field := strconv.FormatUint(uint64(ino), 10)
+	fileLength, errLength := m.rdb.HGet(ctx, spaceKey, field).Int64()
+	if errLength != nil && errLength != redis.Nil {
+		err = errLength
+		return
+	}
 	usedSpace, errSpace := m.rdb.HGet(ctx, spaceKey, field).Int64()
 	if errSpace != nil && errSpace != redis.Nil {
 		err = errSpace
@@ -2326,8 +2340,9 @@ func (m *redisMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, er
 		return
 	}
 
-	if errSpace == nil && errInodes == nil && usedSpace >= 0 && usedInodes >= 0 {
-		return uint64(usedSpace), uint64(usedInodes), nil
+	if errSpace == nil && errInodes == nil && errLength == nil &&
+		fileLength >= 0 && usedSpace >= 0 && usedInodes >= 0 {
+		return uint64(fileLength), uint64(usedSpace), uint64(usedInodes), nil
 	}
 	return m.doSyncDirStat(ctx, ino)
 }

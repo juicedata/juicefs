@@ -84,8 +84,8 @@ type engine interface {
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
-	doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error)
-	doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error)
+	doGetDirStat(ctx Context, ino Ino) (length, space, inodes uint64, err error)
+	doSyncDirStat(ctx Context, ino Ino) (length, space, inodes uint64, err error)
 
 	scanTrashSlices(Context, trashSliceScan) error
 	scanPendingSlices(Context, pendingSliceScan) error
@@ -250,7 +250,7 @@ func (m *baseMeta) parallelSyncDirStat(ctx Context, inos map[Ino]bool) *sync.Wai
 		wg.Add(1)
 		go func(ino Ino) {
 			defer wg.Done()
-			_, _, err := m.en.doSyncDirStat(ctx, ino)
+			_, _, _, err := m.en.doSyncDirStat(ctx, ino)
 			if err != nil {
 				logger.Warnf("sync dir stat for %d: %s", ino, err)
 			}
@@ -278,7 +278,7 @@ func (m *baseMeta) groupBatch(batch map[Ino]dirStat, size int) [][]Ino {
 	return batches
 }
 
-func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (length, space, inodes uint64, err error) {
 	var entries []*Entry
 	if eno := m.en.doReaddir(ctx, ino, 1, &entries, -1); eno != 0 {
 		err = errors.Wrap(eno, "calc dir stat")
@@ -286,16 +286,17 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (space, inodes uint64, err 
 	}
 	for _, e := range entries {
 		inodes += 1
-		var newSpace uint64
+		var l uint64
 		if e.Attr.Typ == TypeFile {
-			newSpace = e.Attr.Length
+			l = e.Attr.Length
 		}
-		space += uint64(align4K(newSpace))
+		length += l
+		space += uint64(align4K(l))
 	}
 	return
 }
 
-func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (space, inodes uint64, err error) {
+func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (length, space, inodes uint64, err error) {
 	return m.en.doGetDirStat(ctx, m.checkRoot(inode))
 }
 
