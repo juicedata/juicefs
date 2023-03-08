@@ -356,8 +356,10 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool
 				}
 			} else {
 				summary.Files++
-				summary.Length += e.Attr.Length
 				summary.Size += uint64(align4K(e.Attr.Length))
+				if e.Attr.Typ == TypeFile {
+					summary.Length += e.Attr.Length
+				}
 			}
 		}
 		summary.Dirs++
