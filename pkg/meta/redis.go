@@ -2321,20 +2321,18 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 }
 
 func (m *redisMeta) doGetDirStat(ctx Context, ino Ino) (length, space, inodes uint64, err error) {
-	spaceKey := m.dirUsedSpaceKey()
-	inodesKey := m.dirUsedInodesKey()
 	field := strconv.FormatUint(uint64(ino), 10)
-	fileLength, errLength := m.rdb.HGet(ctx, spaceKey, field).Int64()
+	fileLength, errLength := m.rdb.HGet(ctx, m.dirFileLengthKey(), field).Int64()
 	if errLength != nil && errLength != redis.Nil {
 		err = errLength
 		return
 	}
-	usedSpace, errSpace := m.rdb.HGet(ctx, spaceKey, field).Int64()
+	usedSpace, errSpace := m.rdb.HGet(ctx, m.dirUsedSpaceKey(), field).Int64()
 	if errSpace != nil && errSpace != redis.Nil {
 		err = errSpace
 		return
 	}
-	usedInodes, errInodes := m.rdb.HGet(ctx, inodesKey, field).Int64()
+	usedInodes, errInodes := m.rdb.HGet(ctx, m.dirUsedInodesKey(), field).Int64()
 	if errInodes != nil && errSpace != redis.Nil {
 		err = errInodes
 		return
