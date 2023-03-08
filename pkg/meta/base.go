@@ -1379,18 +1379,8 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					attrBroken = true
 				}
 
-				stat, err := m.en.doGetDirStat(ctx, inode, false)
-				if err != nil {
-					logger.Errorf("get dir stat for inode %d: %v", inode, err)
-					continue
-				}
-				if stat == nil || stat.space < 0 || stat.inodes < 0 {
-					logger.Warnf("usage stat of %s is missing or broken", path)
-					statBroken = true
-				}
-
-				if repair {
-					if attrBroken {
+				if attrBroken {
+					if repair {
 						if !attr.Full {
 							now := time.Now().Unix()
 							attr.Mode = 0644
@@ -1406,7 +1396,23 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 						} else {
 							logger.Errorf("Repair path %s inode %d: %s", path, inode, st1)
 						}
+
+					} else {
+						logger.Warnf("Path %s (inode %d) can be repaired, please re-run with '--path %s --repair' to fix it", path, inode, path)
 					}
+				}
+
+				stat, err := m.en.doGetDirStat(ctx, inode, false)
+				if err != nil {
+					logger.Errorf("get dir stat for inode %d: %v", inode, err)
+					continue
+				}
+				if stat == nil || stat.space < 0 || stat.inodes < 0 {
+					logger.Warnf("usage stat of %s is missing or broken", path)
+					statBroken = true
+				}
+
+				if repair {
 					if statBroken || statAll {
 						if _, err := m.en.doSyncDirStat(ctx, inode); err == nil {
 							logger.Infof("Stat of path %s (inode %d) is successfully synced", path, inode)
@@ -1414,13 +1420,8 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, err)
 						}
 					}
-				} else {
-					if attrBroken {
-						logger.Warnf("Path %s (inode %d) can be repaired, please re-run with '--path %s --repair' to fix it", path, inode, path)
-					}
-					if statBroken {
-						logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair' to fix it", path, inode, path)
-					}
+				} else if statBroken {
+					logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair' to fix it", path, inode, path)
 				}
 			}
 		}()
