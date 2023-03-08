@@ -66,16 +66,18 @@ git clone https://github.com/juicedata/juicefs.git
 
 进入目录，执行编译：
 
+```shell
+cd juicefs/sdk/java
+make
+```
+
 :::note 注意
-如果使用 Ceph 的 RADOS 作为 JuiceFS 的存储引擎，需要先安装 `librados-dev` 包并且在[编译 `libjfs.so`](https://github.com/juicedata/juicefs/blob/main/sdk/java/libjfs/Makefile#L38-L39) 时加上 `-tags ceph`。
+如果使用 Ceph 的 RADOS 作为 JuiceFS 的存储引擎，需要先安装 `librados-dev` 包。
 :::
 
 ```shell
 cd juicefs/sdk/java
-```
-
-```shell
-make
+make ceph
 ```
 
 编译完成后，可以在 `sdk/java/target` 目录中找到编译好的 `JAR` 文件，包括两个版本：
