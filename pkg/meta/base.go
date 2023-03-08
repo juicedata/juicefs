@@ -431,6 +431,7 @@ func (m *baseMeta) NewSession() error {
 	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
 	go m.en.flushStats()
+	go m.flushDirStat()
 	for i := 0; i < m.conf.MaxDeletes; i++ {
 		go m.deleteSlices()
 	}
