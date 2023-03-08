@@ -296,11 +296,7 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (space, inodes uint64, err 
 }
 
 func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (space, inodes uint64, err error) {
-	var trySync bool
-	if !m.conf.ReadOnly {
-		trySync = true
-	}
-	stat, err := m.en.doGetDirStat(ctx, m.checkRoot(inode), trySync)
+	stat, err := m.en.doGetDirStat(ctx, m.checkRoot(inode), !m.conf.ReadOnly)
 	if err != nil {
 		return
 	}
