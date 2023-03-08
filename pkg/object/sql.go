@@ -92,7 +92,7 @@ func (s *sqlStore) Put(key string, in io.Reader) error {
 	if name := s.db.DriverName(); name == "postgres" || name == "pgx" {
 		var r sql.Result
 		r, err = s.db.Exec("INSERT INTO jfs_blob(key, size,modified, data) VALUES(?, ?, ?,? ) "+
-			"ON CONFLICT (key) DO UPDATE SET size=?,data=?", key, b.Size, now, d, b.Size, d)
+			"ON CONFLICT (key) DO UPDATE SET size=?,data=?", []byte(key), b.Size, now, d, b.Size, d)
 		if err == nil {
 			n, err = r.RowsAffected()
 		}
@@ -139,7 +139,7 @@ func (s *sqlStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 		return nil, notSupportedDelimiter
 	}
 	var bs []blob
-	err := s.db.Where("`key` >= ?", marker).Limit(int(limit)).Cols("`key`", "size", "modified").OrderBy("`key`").Find(&bs)
+	err := s.db.Where("`key` >= ?", []byte(marker)).Limit(int(limit)).Cols("`key`", "size", "modified").OrderBy("`key`").Find(&bs)
 	if err != nil {
 		return nil, err
 	}
