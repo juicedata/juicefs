@@ -916,14 +916,13 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		key := "multi_test_file"
 		if err := blob.CompleteUpload(key, "notExistsUploadId", []*object.Part{}); err != utils.ENOTSUP {
 			defer blob.Delete(key) //nolint:errcheck
-			partSize := 5 << 20
-			total := 10
-			seed := make([]byte, partSize)
-			rand.Read(seed)
 			upload, err := blob.CreateMultipartUpload(key)
 			if err != nil {
 				return fmt.Errorf("create multipart upload failed: %s", err)
 			}
+			total := 10
+			seed := make([]byte, upload.MinPartSize)
+			rand.Read(seed)
 			parts := make([]*object.Part, total)
 			content := make([][]byte, total)
 			for i := 0; i < total; i++ {
@@ -947,10 +946,20 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 				}()
 			}
 			wg.Wait()
-			// overwrite part
-			if parts[total-1], err = blob.UploadPart(key, upload.UploadID, total, getMockData(seed, total)); err != nil {
+			// overwrite the first part
+			firstPartContent := append(getMockData(seed, 0), getMockData(seed, 0)...)
+			if parts[0], err = blob.UploadPart(key, upload.UploadID, 1, firstPartContent); err != nil {
 				logger.Fatalf("multipart upload error: %v", err)
 			}
+			content[0] = firstPartContent
+
+			// overwrite the last part
+			lastPartContent := []byte("hello")
+			if parts[total-1], err = blob.UploadPart(key, upload.UploadID, total, lastPartContent); err != nil {
+				logger.Fatalf("multipart upload error: %v", err)
+			}
+			content[total-1] = lastPartContent
+
 			if err = blob.CompleteUpload(key, upload.UploadID, parts); err != nil {
 				logger.Fatalf("failed to complete multipart upload: %v", err)
 			}
@@ -962,7 +971,6 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			if err != nil {
 				logger.Fatalf("failed to get multipart upload file: %v", err)
 			}
-			content[total-1] = getMockData(seed, total)
 			if !bytes.Equal(cnt, bytes.Join(content, nil)) {
 				logger.Fatal("the content of the multipart upload file is incorrect")
 			}
