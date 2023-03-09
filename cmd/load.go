@@ -116,7 +116,8 @@ func load(ctx *cli.Context) error {
 		}
 		defer fp.Close()
 		if strings.HasSuffix(src, ".gz") {
-			r, err := gzip.NewReader(fp)
+			var err error
+			r, err = gzip.NewReader(fp)
 			if err != nil {
 				return err
 			}
