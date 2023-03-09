@@ -222,7 +222,7 @@ func testLoadDump(t *testing.T, name, addr string) {
 	})
 }
 
-func TestLoadDump(t *testing.T) {
+func TestLoadDump(t *testing.T) { //skip mutate
 	testLoadDump(t, "redis", "redis://127.0.0.1/10")
 	testLoadDump(t, "redis cluster", "redis://127.0.0.1:7001/10")
 	testLoadDump(t, "sqlite", "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test.db"))
