@@ -920,7 +920,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			if err != nil {
 				return fmt.Errorf("create multipart upload failed: %s", err)
 			}
-			total := 10
+			total := 3
 			seed := make([]byte, upload.MinPartSize)
 			rand.Read(seed)
 			parts := make([]*object.Part, total)

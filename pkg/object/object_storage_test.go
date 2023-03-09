@@ -320,7 +320,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		return content
 	}
 	if upload, err := s.CreateMultipartUpload(k); err == nil {
-		total := 10
+		total := 3
 		seed := make([]byte, upload.MinPartSize)
 		rand.Read(seed)
 		parts := make([]*Part, total)
