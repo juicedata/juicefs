@@ -30,6 +30,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -429,6 +430,33 @@ func (m *kvMeta) doLoad() ([]byte, error) {
 	return m.get(m.fmtKey("setting"))
 }
 
+func (m *kvMeta) updateStats(space int64, inodes int64) {
+	atomic.AddInt64(&m.newSpace, space)
+	atomic.AddInt64(&m.newInodes, inodes)
+}
+
+func (m *kvMeta) flushStats() {
+	for {
+		if space := atomic.SwapInt64(&m.newSpace, 0); space != 0 {
+			if v, err := m.incrCounter(usedSpace, space); err == nil {
+				atomic.StoreInt64(&m.usedSpace, v)
+			} else {
+				logger.Warnf("Update space stats: %s", err)
+				m.updateStats(space, 0)
+			}
+		}
+		if inodes := atomic.SwapInt64(&m.newInodes, 0); inodes != 0 {
+			if v, err := m.incrCounter(totalInodes, inodes); err == nil {
+				atomic.StoreInt64(&m.usedInodes, v)
+			} else {
+				logger.Warnf("Update inodes stats: %s", err)
+				m.updateStats(0, inodes)
+			}
+		}
+		time.Sleep(time.Second)
+	}
+}
+
 func (m *kvMeta) doNewSession(sinfo []byte) error {
 	if err := m.setValue(m.sessionKey(m.sid), m.packInt64(m.expireTime())); err != nil {
 		return fmt.Errorf("set session ID %d: %s", m.sid, err)
@@ -436,8 +464,6 @@ func (m *kvMeta) doNewSession(sinfo []byte) error {
 	if err := m.setValue(m.sessionInfoKey(m.sid), sinfo); err != nil {
 		return fmt.Errorf("set session info: %s", err)
 	}
-
-	go m.flushStats()
 	return nil
 }
 
@@ -1064,7 +1090,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		*inode = ino
 	}
 
-	err = m.txn(func(tx *kvTxn) error {
+	return errno(m.txn(func(tx *kvTxn) error {
 		var pattr Attr
 		a := tx.get(m.inodeKey(parent))
 		if a == nil {
@@ -1147,11 +1173,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			tx.set(m.dirStatKey(ino), m.packDirStat(0, 0, 0))
 		}
 		return nil
-	}, parent)
-	if err == nil {
-		m.updateStats(align4K(0), 1)
-	}
-	return errno(err)
+	}, parent))
 }
 
 func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno {
