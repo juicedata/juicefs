@@ -17,8 +17,7 @@
 package cmd
 
 import (
-	"fmt"
-
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
 
@@ -28,7 +27,7 @@ func cmdClone() *cli.Command {
 		Category:    "TOOL",
 		Description: `This command is not supported on windows.`,
 		Action: func(context *cli.Context) error {
-			return fmt.Errorf("this command is not supported on windows")
+			return utils.ENOTSUP
 		},
 	}
 }
