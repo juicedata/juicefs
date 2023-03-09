@@ -172,6 +172,10 @@ func (p *withPrefix) UploadPart(key string, uploadID string, num int, body []byt
 	return p.os.UploadPart(p.prefix+key, uploadID, num, body)
 }
 
+func (s *withPrefix) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	return s.os.UploadPartCopy(s.prefix+key, uploadID, num, s.prefix+srcKey, off, size)
+}
+
 func (p *withPrefix) AbortUpload(key string, uploadID string) {
 	p.os.AbortUpload(p.prefix+key, uploadID)
 }

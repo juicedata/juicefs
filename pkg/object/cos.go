@@ -179,6 +179,16 @@ func (c *COS) UploadPart(key string, uploadID string, num int, body []byte) (*Pa
 	return &Part{Num: num, ETag: resp.Header.Get("Etag")}, nil
 }
 
+func (c *COS) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	result, _, err := c.c.Object.CopyPart(ctx, key, uploadID, num, c.endpoint+"/"+srcKey, &cos.ObjectCopyPartOptions{
+		XCosCopySourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Part{Num: num, ETag: result.ETag}, nil
+}
+
 func (c *COS) AbortUpload(key string, uploadID string) {
 	_, _ = c.c.Object.AbortMultipartUpload(ctx, key, uploadID)
 }

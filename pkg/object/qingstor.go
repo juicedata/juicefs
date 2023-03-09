@@ -30,6 +30,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/qingstor/qingstor-sdk-go/v4/config"
 	"github.com/qingstor/qingstor-sdk-go/v4/request/errors"
@@ -220,6 +222,20 @@ func (q *qingstor) UploadPart(key string, uploadID string, num int, data []byte)
 		return nil, err
 	}
 	return &Part{Num: num, Size: len(data), ETag: strings.Trim(*r.ETag, "\"")}, nil
+}
+
+func (q *qingstor) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	input := &qs.UploadMultipartInput{
+		UploadID:      &uploadID,
+		PartNumber:    &num,
+		XQSCopySource: aws.String(fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, srcKey)),
+		XQSCopyRange:  aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
+	}
+	r, err := q.bucket.UploadMultipart(key, input)
+	if err != nil {
+		return nil, err
+	}
+	return &Part{Num: num, Size: int(size), ETag: strings.Trim(*r.ETag, "\"")}, nil
 }
 
 func (q *qingstor) AbortUpload(key string, uploadID string) {

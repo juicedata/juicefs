@@ -124,6 +124,10 @@ func (s DefaultObjectStorage) UploadPart(key string, uploadID string, num int, b
 	return nil, notSupported
 }
 
+func (s DefaultObjectStorage) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	return nil, notSupported
+}
+
 func (s DefaultObjectStorage) AbortUpload(key string, uploadID string) {}
 
 func (s DefaultObjectStorage) CompleteUpload(key string, uploadID string, parts []*Part) error {

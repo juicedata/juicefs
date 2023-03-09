@@ -175,6 +175,23 @@ func (t tosClient) UploadPart(key string, uploadID string, num int, body []byte)
 	return &Part{Num: num, ETag: resp.ETag}, nil
 }
 
+func (t tosClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	resp, err := t.client.UploadPartCopyV2(context.Background(), &tos.UploadPartCopyV2Input{
+		Bucket:          t.bucket,
+		Key:             key,
+		UploadID:        uploadID,
+		PartNumber:      num,
+		SrcBucket:       t.bucket,
+		SrcKey:          srcKey,
+		CopySourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1),
+	},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &Part{Num: num, ETag: resp.ETag}, nil
+}
+
 func (t tosClient) AbortUpload(key string, uploadID string) {
 	_, _ = t.client.AbortMultipartUpload(context.Background(), &tos.AbortMultipartUploadInput{
 		Bucket:   t.bucket,

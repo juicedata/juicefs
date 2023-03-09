@@ -155,6 +155,16 @@ func (q *bosclient) UploadPart(key string, uploadID string, num int, data []byte
 	return &Part{Num: num, Size: len(data), ETag: etag}, nil
 }
 
+func (q *bosclient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	result, err := q.c.UploadPartCopy(q.bucket, key, q.bucket, srcKey, uploadID, num,
+		&api.UploadPartCopyArgs{SourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1)})
+
+	if err != nil {
+		return nil, err
+	}
+	return &Part{Num: num, Size: int(size), ETag: result.ETag}, nil
+}
+
 func (q *bosclient) AbortUpload(key string, uploadID string) {
 	_ = q.c.AbortMultipartUpload(q.bucket, key, uploadID)
 }
