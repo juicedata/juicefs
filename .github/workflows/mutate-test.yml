@@ -44,7 +44,7 @@ jobs:
 
       - id: set-matrix
         run: |
-          sudo apt-get install jq
+          sudo .github/scripts/apt_install.sh jq
           if [ "${{github.event_name}}" == "pull_request"  ]; then
             echo github.event.pull_request.base.sha is ${{github.event.pull_request.base.sha}}
             echo github.event.pull_request.head.sha is ${{github.event.pull_request.head.sha}}
@@ -135,12 +135,7 @@ jobs:
       - name: Install Packages
         run: |
           go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
-          sudo apt install -y g++-multilib
-          sudo apt install -y redis-server
-          sudo apt install -y libacl1-dev
-          sudo apt install -y attr
-          sudo apt install python3-tk
-          sudo pip install mysqlclient
+          sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr python3-tk mysqlclient
           
       - name: Download Zip
         run: |

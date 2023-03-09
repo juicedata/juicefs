@@ -109,8 +109,7 @@ jobs:
 
       - name: Pjdfstest
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libtap-harness-archive-perl
+          sudo .github/scripts/apt_install.sh libtap-harness-archive-perl
           cd /tmp/jfs/
           git clone https://github.com/sanwan/pjdfstest.git
           cd pjdfstest

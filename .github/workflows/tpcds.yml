@@ -77,7 +77,7 @@ jobs:
       - name: Set up tpcds-kit
         working-directory: /tmp
         run: |
-          sudo apt-get install gcc make flex bison byacc git
+          sudo .github/scripts/apt_install.sh gcc make flex bison byacc git
           git clone --depth 1 https://github.com/databricks/tpcds-kit.git
           cd tpcds-kit/tools
           make OS=LINUX
@@ -85,14 +85,11 @@ jobs:
       - name: Set up spark-sql-perf
         working-directory: /tmp
         run: |
-          sudo apt-get update
-          sudo apt-get install apt-transport-https curl gnupg -yqq
+          sudo .github/scripts/apt_install.sh apt-transport-https curl gnupg sbt 
           echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | sudo tee /etc/apt/sources.list.d/sbt.list
           echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | sudo tee /etc/apt/sources.list.d/sbt_old.list
           curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | sudo -H gpg --no-default-keyring --keyring gnupg-ring:/etc/apt/trusted.gpg.d/scalasbt-release.gpg --import
           sudo chmod 644 /etc/apt/trusted.gpg.d/scalasbt-release.gpg
-          sudo apt-get update
-          sudo apt-get install sbt
           mkdir ~/.sbt
           cat > ~/.sbt/repositories <<EOF
           [repositories]
