@@ -74,13 +74,14 @@ func load(ctx *cli.Context) error {
 		r = os.Stdin
 		src = "STDIN"
 	} else {
-		var err error
+		var ioErr error
 		var fp io.ReadCloser
 		if ctx.String("encrypt-rsa-key") != "" {
 			passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
 			encryptKey := loadEncrypt(ctx.String("encrypt-rsa-key"))
 			if passphrase == "" {
 				block, _ := pem.Decode([]byte(encryptKey))
+				// nolint:staticcheck
 				if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
 					return fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
 				}
@@ -106,16 +107,16 @@ func load(ctx *cli.Context) error {
 				return err
 			}
 			blob := object.NewEncrypted(fileBlob, encryptor)
-			fp, err = blob.Get(filepath.Base(srcAbsPath), 0, -1)
+			fp, ioErr = blob.Get(filepath.Base(srcAbsPath), 0, -1)
 		} else {
-			fp, err = os.Open(src)
+			fp, ioErr = os.Open(src)
 		}
-		if err != nil {
-			return err
+		if ioErr != nil {
+			return ioErr
 		}
 		defer fp.Close()
 		if strings.HasSuffix(src, ".gz") {
-			r, err = gzip.NewReader(fp)
+			r, err := gzip.NewReader(fp)
 			if err != nil {
 				return err
 			}
