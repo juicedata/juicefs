@@ -3775,7 +3775,6 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 		if eno != 0 {
 			cloneEno = eno
 		}
-		// delete the dst tree if clone failed
 		if eno == 0 {
 			err = m.txn(ctx, func(tx *redis.Tx) error {
 				// check dst edge again
@@ -3787,17 +3786,18 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 					return err
 				}
 				// update parent nlink
-				srcAttrNow := &Attr{}
-				if eno := m.doGetAttr(ctx, srcIno, srcAttrNow); eno != 0 {
+				dstParentAttr := &Attr{}
+				if eno := m.doGetAttr(ctx, dstParentIno, dstParentAttr); eno != 0 {
 					return eno
 				}
-				srcAttrNow.Nlink++
-				return m.rdb.Set(ctx, m.inodeKey(dstParentIno), m.marshal(srcAttrNow), 0).Err()
+				dstParentAttr.Nlink++
+				return m.rdb.Set(ctx, m.inodeKey(dstParentIno), m.marshal(dstParentAttr), 0).Err()
 			}, m.entryKey(dstParentIno))
 			if err != nil {
 				cloneEno = errno(err)
 			}
 		}
+		// delete the dst tree if clone failed
 		if eno != 0 || err != nil {
 			// todo: store dstIno and delete it in the background
 			attr := &Attr{}

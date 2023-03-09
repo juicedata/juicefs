@@ -2039,6 +2039,7 @@ func testClone(t *testing.T, m Meta) {
 
 	//$ tree .
 	//.
+	//├── dir
 	//└── dir1
 	//    ├── dir2
 	//    │ ├── dir3
@@ -2047,9 +2048,12 @@ func testClone(t *testing.T, m Meta) {
 	//    │ └── file2Hardlink
 	//    ├── file1
 	//    └── file1Symlink -> file1
-	//
 	var dir1 Ino
 	if eno := m.Mkdir(Background, 1, "dir1", 0777, 022, 0, &dir1, nil); eno != 0 {
+		t.Fatalf("mkdir: %s", eno)
+	}
+	var dir Ino
+	if eno := m.Mkdir(Background, 1, "dir", 0777, 022, 0, &dir, nil); eno != 0 {
 		t.Fatalf("mkdir: %s", eno)
 	}
 	var dir2 Ino
@@ -2113,18 +2117,18 @@ func testClone(t *testing.T, m Meta) {
 		t.Fatalf("readdir: %s", eno)
 	}
 
-	cloneDstIno := entries1[3].Inode
-	cloneDstAttr := entries1[3].Attr
-	if len(entries1) != 4 || string(entries1[3].Name) != cloneDstName {
+	if len(entries1) != 5 || string(entries1[4].Name) != cloneDstName {
 		t.Fatalf("clone dst dir not found or name not correct")
 	}
+	cloneDstIno := entries1[4].Inode
+	cloneDstAttr := entries1[4].Attr
 
 	// check dst parent dir nlink
 	var rootAttr Attr
 	if eno := m.GetAttr(Background, 1, &rootAttr); eno != 0 {
 		t.Fatalf("get rootAttr: %s", eno)
 	}
-	if rootAttr.Nlink != 4 {
+	if rootAttr.Nlink != 5 {
 		t.Fatalf("rootDir nlink not correct,nlink: %d", rootAttr.Nlink)
 	}
 
