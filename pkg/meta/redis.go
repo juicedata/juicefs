@@ -2241,7 +2241,7 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 }
 
 func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
-	field := strconv.FormatUint(uint64(ino), 16)
+	field := strconv.FormatUint(uint64(ino), 10)
 	space, inodes, err := m.calcDirStat(ctx, ino)
 	if err != nil {
 		return nil, err
