@@ -2304,10 +2304,10 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	return nil
 }
 
-func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (length, space, inodes uint64, err error) {
-	length, space, inodes, err = m.calcDirStat(ctx, ino)
+func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
+	length, space, inodes, err := m.calcDirStat(ctx, ino)
 	if err != nil {
-		return
+		return nil, err
 	}
 	err = m.txn(func(s *xorm.Session) error {
 		_, err := s.Insert(&dirStats{ino, int64(length), int64(space), int64(inodes)})
@@ -2317,34 +2317,37 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (length, space, inodes uint
 		}
 		return err
 	})
-	return
+	if err != nil {
+		return nil, err
+	}
+	return &dirStat{int64(length), int64(space), int64(inodes)}, nil
 }
 
-func (m *dbMeta) doGetDirStat(ctx Context, ino Ino) (length, space, inodes uint64, err error) {
+func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error) {
 	st := dirStats{Inode: ino}
 	var exist bool
+	var err error
 	if err = m.roTxn(func(s *xorm.Session) error {
 		exist, err = s.Get(&st)
 		return err
 	}); err != nil {
-		return
+		return nil, err
 	}
-
 	if !exist {
-		length, space, inodes, err = m.doSyncDirStat(ctx, ino)
-		if err == nil {
-			return
+		if trySync {
+			return m.doSyncDirStat(ctx, ino)
 		}
+		return nil, nil
 	}
 
-	if !exist || st.UsedSpace < 0 || st.UsedInodes < 0 {
+	if trySync && (st.UsedSpace < 0 || st.UsedInodes < 0) {
 		logger.Warnf(
 			"dir usage of inode %d is invalid: space %d, inodes %d, try to fix",
 			ino, st.UsedSpace, st.UsedInodes,
 		)
-		length, space, inodes, err = m.calcDirStat(ctx, ino)
+		length, space, inodes, err := m.calcDirStat(ctx, ino)
 		if err != nil {
-			return
+			return nil, err
 		}
 		st.DataLength, st.UsedSpace, st.UsedInodes = int64(length), int64(space), int64(inodes)
 		e := m.txn(func(s *xorm.Session) error {
@@ -2357,12 +2360,8 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino) (length, space, inodes uint6
 		if e != nil {
 			logger.Warn(e)
 		}
-		return
 	}
-	length = uint64(st.DataLength)
-	space = uint64(st.UsedSpace)
-	inodes = uint64(st.UsedInodes)
-	return
+	return &dirStat{st.DataLength, st.UsedSpace, st.UsedInodes}, nil
 }
 
 func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
