@@ -4,6 +4,18 @@ sidebar_position: 1
 description: JuiceFS is open source software and the code is contributed and maintained by developers worldwide. Learn how to participate in this article.
 ---
 
+## Learn Source Code
+
+Assuming you're already familiar with Go, as well as [JuiceFS architecture](https://juicefs.com/docs/community/architecture), this is the overall code structure:
+
+* [`cmd`](https://github.com/juicedata/juicefs/tree/main/cmd) is the top-level entrance, all JuiceFS functionalities is rooted here, e.g. the `juicefs format` command resides in `cmd/format.go`；
+* [`pkg`](https://github.com/juicedata/juicefs/tree/main/pkg) is actual implementation:
+  * `pkg/fuse/fuse.go` provides abstract FUSE API;
+  * `pkg/vfs` contains actual FUSE implementation, Metadata requests are handled in `pkg/meta`, read requests are handled in `pkg/vfs/reader.go` and write requests are handled by `pkg/vfs/writer.go`;
+  * `pkg/meta/redis.go` is the Redis Metadata Engine, and `pkg/meta/sql.go` is the relational database Metadata Engine;
+  * `pkg/object` contains all object storage integration code;
+* [`sdk/java`](https://github.com/juicedata/juicefs/tree/main/sdk/java) is the Hadoop Java SDK, it uses `sdk/java/libjfs` through JNI.
+
 ## Guidelines
 
 - Before starting work on a feature or bug fix, search GitHub or reach out to us via GitHub or Slack, make sure no one else is already working on it and we'll ask you to open a GitHub issue if necessary.
