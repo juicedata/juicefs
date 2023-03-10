@@ -3542,6 +3542,30 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 		}
 	}
 
+	dirUsedSpace := m.rdb.HGetAll(ctx, m.dirUsedSpaceKey()).Val()
+	dirUsedInodes := m.rdb.HGetAll(ctx, m.dirUsedInodesKey()).Val()
+	dirStats := make([]*DumpedDirStat, 0, len(dirUsedSpace))
+	for k, v := range dirUsedSpace {
+		ino, err := strconv.ParseUint(k, 10, 64)
+		if err != nil {
+			logger.Warnf("invalid dirUsedSpace key: %s", k)
+		}
+		space, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || space < 0 {
+			logger.Warnf("invalid dirUsedSpace value: %s", v)
+			continue
+		}
+		var inodes int64
+		if v, ok := dirUsedInodes[k]; ok {
+			inodes, err = strconv.ParseInt(v, 10, 64)
+			if err != nil || inodes < 0 {
+				logger.Warnf("invalid dirUsedInodes value: %s", v)
+				continue
+			}
+		}
+		dirStats = append(dirStats, &DumpedDirStat{Ino(ino), uint64(space), uint64(inodes)})
+	}
+
 	dm := &DumpedMeta{
 		Setting: *m.fmt,
 		Counters: &DumpedCounters{
@@ -3554,6 +3578,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 		},
 		Sustained: sessions,
 		DelFiles:  dels,
+		DirStats:  dirStats,
 	}
 	if !keepSecret && dm.Setting.SecretKey != "" {
 		dm.Setting.SecretKey = "removed"
@@ -3755,6 +3780,27 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	}
 	if len(slices) > 0 {
 		p.HSet(ctx, m.sliceRefs(), slices)
+	}
+	if _, err = p.Exec(ctx); err != nil {
+		return err
+	}
+
+	dirUsedSpace := make(map[Ino]any)
+	dirUsedInodes := make(map[Ino]any)
+	for _, stat := range dm.DirStats {
+		if len(dirUsedSpace) > 100 {
+			p.HSet(ctx, m.dirUsedSpaceKey(), dirUsedSpace)
+			p.HSet(ctx, m.dirUsedSpaceKey(), dirUsedInodes)
+			tryExec()
+			dirUsedSpace = make(map[Ino]any)
+			dirUsedInodes = make(map[Ino]any)
+		}
+		dirUsedSpace[stat.Inode] = stat.UsedSpace
+		dirUsedInodes[stat.Inode] = stat.UsedInodes
+	}
+	if len(dirUsedSpace) > 0 {
+		p.HSet(ctx, m.dirUsedSpaceKey(), dirUsedSpace)
+		p.HSet(ctx, m.dirUsedSpaceKey(), dirUsedInodes)
 	}
 	if _, err = p.Exec(ctx); err != nil {
 		return err

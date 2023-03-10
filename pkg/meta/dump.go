@@ -48,6 +48,12 @@ type DumpedDelFile struct {
 	Expire int64  `json:"expire"`
 }
 
+type DumpedDirStat struct {
+	Inode      Ino    `json:"inode"`
+	UsedSpace  uint64 `json:"usedSpace"`
+	UsedInodes uint64 `json:"usedInodes"`
+}
+
 type DumpedSustained struct {
 	Sid    uint64 `json:"sid"`
 	Inodes []Ino  `json:"inodes"`
@@ -244,6 +250,7 @@ type DumpedMeta struct {
 	Counters  *DumpedCounters
 	Sustained []*DumpedSustained
 	DelFiles  []*DumpedDelFile
+	DirStats  []*DumpedDirStat
 	FSTree    *DumpedEntry `json:",omitempty"`
 	Trash     *DumpedEntry `json:",omitempty"`
 }
@@ -344,6 +351,8 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 			err = dec.Decode(&dm.Sustained)
 		case "DelFiles":
 			err = dec.Decode(&dm.DelFiles)
+		case "DirStats":
+			err = dec.Decode(&dm.DirStats)
 		case "FSTree":
 			_, err = decodeEntry(dec, 0, counters, parents, refs, bar, load, addChunk)
 		case "Trash":
