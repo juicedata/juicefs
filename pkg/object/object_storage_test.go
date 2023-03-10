@@ -53,7 +53,7 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, error) {
 	r, err := s.List(prefix, marker, "", limit)
 	if !errors.Is(err, notSupported) {
-		return r, nil
+		return r, err
 	}
 	ch, err := s.ListAll(prefix, marker)
 	if err == nil {
