@@ -23,6 +23,8 @@ Assuming you're already familiar with Go, as well as [JuiceFS architecture](http
 - For major feature updates, write a design document to help the community understand your motivation and solution.
 - Find issues with the label ["kind/good-first-issue"](https://github.com/juicedata/juicefs/labels/kind%2Fgood-first-issue) or ["kind/help-wanted"](https://github.com/juicedata/juicefs/labels/kind%2Fhelp-wanted).
 
+Read [internals](./data_structures.md) for important data structure references.
+
 ## Coding Style
 
 - We're following ["Effective Go"](https://go.dev/doc/effective_go) and ["Go Code Review Comments"](https://github.com/golang/go/wiki/CodeReviewComments).
