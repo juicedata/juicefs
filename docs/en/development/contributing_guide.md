@@ -4,7 +4,7 @@ sidebar_position: 1
 description: JuiceFS is open source software and the code is contributed and maintained by developers worldwide. Learn how to participate in this article.
 ---
 
-## Learn Source Code
+## Learn source code
 
 Assuming you're already familiar with Go, as well as [JuiceFS architecture](https://juicefs.com/docs/community/architecture), this is the overall code structure:
 
@@ -12,9 +12,15 @@ Assuming you're already familiar with Go, as well as [JuiceFS architecture](http
 * [`pkg`](https://github.com/juicedata/juicefs/tree/main/pkg) is actual implementation:
   * `pkg/fuse/fuse.go` provides abstract FUSE API;
   * `pkg/vfs` contains actual FUSE implementation, Metadata requests are handled in `pkg/meta`, read requests are handled in `pkg/vfs/reader.go` and write requests are handled by `pkg/vfs/writer.go`;
-  * `pkg/meta/redis.go` is the Redis Metadata Engine, and `pkg/meta/sql.go` is the relational database Metadata Engine;
+  * `pkg/meta` directory is the implementation of all metadata engines, where:
+    * `pkg/meta/interface.go` is the interface definition for all types of metadata engines
+    * `pkg/meta/redis.go` is the interface implementation of Redis database
+    * `pkg/meta/sql.go` is the interface definition and general interface implementation of relational database, and the implementation of specific databases is in a separate file (for example, the implementation of MySQL is in `pkg/meta/sql_mysql.go`)
+    * `pkg/meta/tkv.go` is the interface definition and general interface implementation of the KV database, and the implementation of a specific database is in a separate file (for example, the implementation of TiKV is in `pkg/meta/tkv_tikv.go`)
   * `pkg/object` contains all object storage integration code;
 * [`sdk/java`](https://github.com/juicedata/juicefs/tree/main/sdk/java) is the Hadoop Java SDK, it uses `sdk/java/libjfs` through JNI.
+
+The read and write request processing flow of JuiceFS can be read [here](../introduction/io_processing.md), and the key data structure can be read ["Internals"](./data_structures.md).
 
 ## Guidelines
 
@@ -25,7 +31,7 @@ Assuming you're already familiar with Go, as well as [JuiceFS architecture](http
 
 Read [internals](./data_structures.md) for important data structure references.
 
-## Coding Style
+## Coding style
 
 - We're following ["Effective Go"](https://go.dev/doc/effective_go) and ["Go Code Review Comments"](https://github.com/golang/go/wiki/CodeReviewComments).
 - Use `go fmt` to format your code before committing. You can find information in editor support for Go tools in ["IDEs and Plugins for Go"](https://github.com/golang/go/wiki/IDEsAndTextEditorPlugins).
@@ -36,14 +42,14 @@ Read [internals](./data_structures.md) for important data structure references.
 
 Before you can contribute to JuiceFS, you will need to sign the [Contributor License Agreement](https://cla-assistant.io/juicedata/juicefs). There're a CLA assistant to guide you when you first time submit a pull request.
 
-## What is a Good PR
+## What is a good PR
 
 - Presence of unit tests
 - Adherence to the coding style
 - Adequate in-line comments
 - Explanatory commit message
 
-## Contribution Flow
+## Contribution flow
 
 1. Create a topic branch from where to base the contribution. This is usually `main`.
 1. Make commits of logical units.
