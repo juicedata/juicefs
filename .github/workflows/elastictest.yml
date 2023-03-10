@@ -58,10 +58,8 @@ jobs:
       - name: Install Elasticsearch
         run: |
           wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -
-          sudo apt-get install apt-transport-https
           sudo sh -c 'echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" > /etc/apt/sources.list.d/elastic-7.x.list'
-          sudo apt-get update
-          sudo apt-get install -y elasticsearch
+          sudo .github/scripts/apt_install.sh apt-transport-https elasticsearch
 
       - name: Change Datadir
         run: |
@@ -74,7 +72,7 @@ jobs:
       - name: Esrally Test
         run: |
           sudo pip3 install esrally
-          sudo apt-get install pbzip2
+          sudo .github/scripts/apt_install.sh pbzip2
           esrally race --track=geopoint --target-hosts=127.0.0.1:9200 --pipeline=benchmark-only --report-file=/tmp/report.md
           cat /tmp/report.md
 

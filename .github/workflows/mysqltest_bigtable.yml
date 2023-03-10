@@ -72,7 +72,7 @@ jobs:
       - name: Install Sysbench
         run: |
           curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash
-          sudo apt -y install sysbench
+          sudo .github/scripts/apt_install.sh sysbench
           sudo mysql -uroot -proot -e "create database test;"
           echo "mysql-host=127.0.0.1" >>/tmp/config.cfg
           echo "mysql-port=3306" >>/tmp/config.cfg

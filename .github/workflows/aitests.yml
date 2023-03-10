@@ -78,7 +78,7 @@ jobs:
           conda --version
           python --version
           conda install tensorflow=1.12.0
-          sudo apt-get install libhdf5-dev
+          sudo .github/scripts/apt_install.sh  libhdf5-dev
           pip install h5py
           pip install pillow
 
