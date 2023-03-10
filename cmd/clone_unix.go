@@ -37,8 +37,8 @@ func cmdClone() *cli.Command {
 		Action: clone,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
-				Name:  "cp",
-				Usage: "create files with current uid,gid,umask (like 'cp')"},
+				Name:  "p",
+				Usage: "create files with current uid,gid,umask"},
 		},
 		Category:    "TOOL",
 		Description: `This command can clone a file or directory without copying the underlying data.`,

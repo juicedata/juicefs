@@ -3852,43 +3852,15 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstNam
 			return errno(err)
 		}
 		var countDir uint32
-		var maxConcurrency = 4
-		var errCh = make(chan syscall.Errno, maxConcurrency)
-		var wg sync.WaitGroup
-		step := int(math.Ceil(float64(len(entries)) / float64(maxConcurrency)))
-		for i := 0; i < maxConcurrency; i++ {
-			wg.Add(1)
-			go func(i, step int) {
-				defer wg.Done()
-				startIdx := i * step
-				endIdx := startIdx + step
-				if endIdx > len(entries) {
-					endIdx = len(entries)
-				}
-				if startIdx > len(entries)-1 {
-					return
-				}
-				for _, entry := range entries[startIdx:endIdx] {
-					select {
-					case eno := <-errCh:
-						logger.Errorf("cloneEntry error %v", eno)
-						return
-					default:
-						var dstIno2 Ino
-						if eno := m.cloneEntry(ctx, entry.Inode, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true); eno != 0 {
-							errCh <- eno
-							return
-						}
-						if entry.Attr.Typ == TypeDirectory {
-							atomic.AddUint32(&countDir, 1)
-						}
-					}
-				}
-			}(i, step)
+		for _, entry := range entries {
+			var dstIno2 Ino
+			if eno := m.cloneEntry(ctx, entry.Inode, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true); eno != 0 {
+				return eno
+			}
+			if entry.Attr.Typ == TypeDirectory {
+				countDir++
+			}
 		}
-		wg.Wait()
-		close(errCh)
-
 		// reset nlink
 		if attach {
 			srcAttr.Nlink = countDir + 2
@@ -3965,37 +3937,11 @@ func (m *redisMeta) removeEntry(ctx Context, rootIno Ino, attr *Attr, name strin
 			if eno := m.doReaddir(ctx, rootIno, 1, &entries, -1); eno != 0 {
 				return eno
 			}
-			maxConcurrency := 10
-			var wg sync.WaitGroup
-			var errCh = make(chan syscall.Errno, maxConcurrency)
-			step := int(math.Ceil(float64(len(entries)) / float64(maxConcurrency)))
-			for i := 0; i < maxConcurrency; i++ {
-				wg.Add(1)
-				go func(i int, step int) {
-					defer wg.Done()
-					startIdx := i * step
-					endIdx := startIdx + step
-					if endIdx > len(entries) {
-						endIdx = len(entries)
-					}
-					if startIdx > len(entries)-1 {
-						return
-					}
-					select {
-					case eno := <-errCh:
-						logger.Errorf("removeEntry error: %v", eno)
-						return
-					default:
-						for _, entry := range entries[startIdx:endIdx] {
-							if eno := m.removeEntry(ctx, entry.Inode, entry.Attr, string(entry.Name)); eno != 0 {
-								errCh <- eno
-							}
-						}
-					}
-				}(i, step)
+			for _, entry := range entries {
+				if eno := m.removeEntry(ctx, entry.Inode, entry.Attr, string(entry.Name)); eno != 0 {
+					return eno
+				}
 			}
-			wg.Wait()
-			close(errCh)
 		}
 	case TypeFile:
 		// del chunk
