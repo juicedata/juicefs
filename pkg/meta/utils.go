@@ -376,7 +376,8 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 		return st
 	}
 	if attr.Typ == TypeDirectory {
-		return fastGetSummary(r, ctx, inode, summary, recursive)
+		summary.Dirs++
+		return fastGetSummary(r, ctx, inode, &attr, summary, recursive)
 	} else {
 		summary.Files++
 		summary.Length += attr.Length
@@ -385,14 +386,23 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 	return 0
 }
 
-func fastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
-	space, _, err := r.GetDirStat(ctx, inode)
+func fastGetSummary(r Meta, ctx Context, inode Ino, attr *Attr, summary *Summary, recursive bool) syscall.Errno {
+	space, inodes, err := r.GetDirStat(ctx, inode)
 	if err != nil {
 		return errno(err)
 	}
 	summary.Size += space
 	summary.Length += space
-	summary.Dirs++
+
+	if !attr.Full {
+		if st := r.GetAttr(ctx, inode, attr); st != 0 {
+			return st
+		}
+	}
+	if attr.Nlink == 2 {
+		summary.Files += inodes
+		return 0
+	}
 
 	var entries []*Entry
 	if st := r.Readdir(ctx, inode, 0, &entries); st != 0 {
@@ -403,12 +413,11 @@ func fastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 			continue
 		}
 		if e.Attr.Typ == TypeDirectory {
+			summary.Dirs++
 			if recursive {
-				if st := fastGetSummary(r, ctx, e.Inode, summary, recursive); st != 0 {
+				if st := fastGetSummary(r, ctx, e.Inode, e.Attr, summary, recursive); st != 0 {
 					return st
 				}
-			} else {
-				summary.Dirs++
 			}
 		} else {
 			summary.Files++
