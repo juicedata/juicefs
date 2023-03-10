@@ -135,7 +135,8 @@ jobs:
       - name: Install Packages
         run: |
           go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
-          sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr python3-tk mysqlclient
+          sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr python3-tk
+          sudo pip install mysqlclient
           
       - name: Download Zip
         run: |
