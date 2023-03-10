@@ -110,6 +110,10 @@ func clientFlags() []cli.Flag {
 			Usage: "number of threads to delete objects",
 		},
 		&cli.IntFlag{
+			Name:  "skip-dir-nlink",
+			Usage: "number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never)",
+		},
+		&cli.IntFlag{
 			Name:  "buffer-size",
 			Value: 300,
 			Usage: "total read/write buffering in MB",

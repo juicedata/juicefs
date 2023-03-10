@@ -325,6 +325,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("autoCreate", Boolean.valueOf(getConf(conf, "auto-create-cache-dir", "true")));
     obj.put("maxUploads", Integer.valueOf(getConf(conf, "max-uploads", "20")));
     obj.put("maxDeletes", Integer.valueOf(getConf(conf, "max-deletes", "10")));
+    obj.put("skipDirNlink", Integer.valueOf(getConf(conf, "skip-dir-nlink", "0")));
     obj.put("uploadLimit", Integer.valueOf(getConf(conf, "upload-limit", "0")));
     obj.put("downloadLimit", Integer.valueOf(getConf(conf, "download-limit", "0")));
     obj.put("ioRetries", Integer.valueOf(getConf(conf, "io-retries", "10")));
