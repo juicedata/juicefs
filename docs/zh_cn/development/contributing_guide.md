@@ -18,7 +18,7 @@ description: JuiceFS 是开源软件，代码由全球开发者共同贡献和�
 
 JuiceFS 中的关键数据结构，可以阅读[「内部实现」](./data_structures.md)。
 
-另外，也推荐阅读网易存储团队的工程师写的这几篇博客：[JuiceFS 调研（基于开源版本代码）](https://aspirer.wang/?p=1560)、[JuiceFS 源码阅读-上](https://mp.weixin.qq.com/s/mdqFJLpaJ249rUUEnRiP3Q)、[JuiceFS 源码阅读-中](https://mp.weixin.qq.com/s/CLQbQ-cLLGFsShPKUrCUJg)。
+另外，也推荐阅读网易存储团队的工程师写的这几篇博客：[JuiceFS 调研（基于开源版本代码）](https://aspirer.wang/?p=1560)、[JuiceFS 源码阅读 - 上](https://mp.weixin.qq.com/s/mdqFJLpaJ249rUUEnRiP3Q)、[JuiceFS 源码阅读 - 中](https://mp.weixin.qq.com/s/CLQbQ-cLLGFsShPKUrCUJg)。
 
 ## 基本准则
 
