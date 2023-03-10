@@ -2240,18 +2240,18 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
-func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
 	field := strconv.FormatUint(uint64(ino), 16)
-	space, inodes, err = m.calcDirStat(ctx, ino)
+	space, inodes, err := m.calcDirStat(ctx, ino)
 	if err != nil {
-		return
+		return nil, err
 	}
 	_, err = m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.HSetNX(ctx, m.dirUsedSpaceKey(), field, space)
-		pipe.HSetNX(ctx, m.dirUsedInodesKey(), field, inodes)
+		pipe.HSet(ctx, m.dirUsedSpaceKey(), field, space)
+		pipe.HSet(ctx, m.dirUsedInodesKey(), field, inodes)
 		return nil
 	})
-	return
+	return &dirStat{int64(space), int64(inodes)}, err
 }
 
 func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
@@ -2305,25 +2305,30 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	return nil
 }
 
-func (m *redisMeta) doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+func (m *redisMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error) {
 	spaceKey := m.dirUsedSpaceKey()
 	inodesKey := m.dirUsedInodesKey()
 	field := strconv.FormatUint(uint64(ino), 10)
 	usedSpace, errSpace := m.rdb.HGet(ctx, spaceKey, field).Int64()
 	if errSpace != nil && errSpace != redis.Nil {
-		err = errSpace
-		return
+		return nil, errSpace
 	}
 	usedInodes, errInodes := m.rdb.HGet(ctx, inodesKey, field).Int64()
 	if errInodes != nil && errSpace != redis.Nil {
-		err = errInodes
-		return
+		return nil, errInodes
 	}
 
-	if errSpace == nil && errInodes == nil && usedSpace >= 0 && usedInodes >= 0 {
-		return uint64(usedSpace), uint64(usedInodes), nil
+	if errSpace != redis.Nil && errInodes != redis.Nil {
+		if trySync && (usedSpace < 0 || usedInodes < 0) {
+			return m.doSyncDirStat(ctx, ino)
+		}
+		return &dirStat{space: usedSpace, inodes: usedInodes}, nil
 	}
-	return m.doSyncDirStat(ctx, ino)
+
+	if trySync {
+		return m.doSyncDirStat(ctx, ino)
+	}
+	return nil, nil
 }
 
 // For now only deleted files
