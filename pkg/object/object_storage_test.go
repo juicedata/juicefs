@@ -31,6 +31,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -303,40 +304,75 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("delete non exists: %v", err)
 	}
 
-	if uploader, err := s.CreateMultipartUpload(k); err == nil {
-		partSize := uploader.MinPartSize
-		uploadID := uploader.UploadID
-		defer s.AbortUpload(k, uploadID)
-
-		part1, err := s.UploadPart(k, uploadID, 1, make([]byte, partSize))
-		if err != nil {
-			t.Fatalf("UploadPart 1 failed: %s", err)
+	getMockData := func(seed []byte, idx int) []byte {
+		size := len(seed)
+		if size == 0 {
+			return nil
 		}
-		if pending, marker, err := s.ListUploads(""); err != nil {
-			t.Logf("ListMultipart fail: %s", err.Error())
+		content := make([]byte, size)
+		if idx == 0 {
+			content = seed
 		} else {
-			println(len(pending), marker)
+			i := idx % size
+			copy(content[:size-i], seed[i:size])
+			copy(content[size-i:size], seed[:i])
 		}
-		part2Size := 1 << 20
-		_, err = s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
-		if err != nil {
-			t.Fatalf("UploadPart 2 failed: %s", err)
+		return content
+	}
+	if upload, err := s.CreateMultipartUpload(k); err == nil {
+		total := 3
+		seed := make([]byte, upload.MinPartSize)
+		rand.Read(seed)
+		parts := make([]*Part, total)
+		content := make([][]byte, total)
+		for i := 0; i < total; i++ {
+			content[i] = getMockData(seed, i)
 		}
-		part2Size = 2 << 20
-		part2, err := s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
-		if err != nil {
-			t.Fatalf("UploadPart 2 failed: %s", err)
+		pool := make(chan struct{}, 4)
+		var wg sync.WaitGroup
+		for i := 1; i <= total; i++ {
+			pool <- struct{}{}
+			wg.Add(1)
+			num := i
+			go func() {
+				defer func() {
+					<-pool
+					wg.Done()
+				}()
+				parts[num-1], err = s.UploadPart(k, upload.UploadID, num, content[num-1])
+				if err != nil {
+					t.Fatalf("multipart upload error: %v", err)
+				}
+			}()
 		}
+		wg.Wait()
+		// overwrite the first part
+		firstPartContent := append(getMockData(seed, 0), getMockData(seed, 0)...)
+		if parts[0], err = s.UploadPart(k, upload.UploadID, 1, firstPartContent); err != nil {
+			t.Fatalf("multipart upload error: %v", err)
+		}
+		content[0] = firstPartContent
 
-		if err := s.CompleteUpload(k, uploadID, []*Part{part1, part2}); err != nil {
-			t.Fatalf("CompleteMultipart failed: %s", err.Error())
+		// overwrite the last part
+		lastPartContent := []byte("hello")
+		if parts[total-1], err = s.UploadPart(k, upload.UploadID, total, lastPartContent); err != nil {
+			t.Fatalf("multipart upload error: %v", err)
 		}
-		if in, err := s.Get(k, 0, -1); err != nil {
-			t.Fatalf("large not exists")
-		} else if d, err := io.ReadAll(in); err != nil {
-			t.Fatalf("fail to read large file")
-		} else if len(d) != partSize+part2Size {
-			t.Fatalf("size of large file: %d != %d", len(d), partSize+part2Size)
+		content[total-1] = lastPartContent
+
+		if err = s.CompleteUpload(k, upload.UploadID, parts); err != nil {
+			t.Fatalf("failed to complete multipart upload: %v", err)
+		}
+		r, err := s.Get(k, 0, -1)
+		if err != nil {
+			t.Fatalf("failed to get multipart upload file: %v", err)
+		}
+		cnt, err := io.ReadAll(r)
+		if err != nil {
+			t.Fatalf("failed to get multipart upload file: %v", err)
+		}
+		if !bytes.Equal(cnt, bytes.Join(content, nil)) {
+			t.Fatal("the content of the multipart upload file is incorrect")
 		}
 	} else {
 		t.Logf("%s does not support multipart upload: %s", s, err.Error())

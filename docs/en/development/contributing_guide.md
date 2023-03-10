@@ -1,21 +1,34 @@
 ---
 title: Contributing Guide
 sidebar_position: 1
-description: JuiceFS is open source software and the code is contributed and maintained by developers worldwide. Please refer to this article for participating.
+description: JuiceFS is open source software and the code is contributed and maintained by developers worldwide. Learn how to participate in this article.
 ---
+
+## Learn Source Code
+
+Assuming you're already familiar with Go, as well as [JuiceFS architecture](https://juicefs.com/docs/community/architecture), this is the overall code structure:
+
+* [`cmd`](https://github.com/juicedata/juicefs/tree/main/cmd) is the top-level entrance, all JuiceFS functionalities is rooted here, e.g. the `juicefs format` command resides in `cmd/format.go`；
+* [`pkg`](https://github.com/juicedata/juicefs/tree/main/pkg) is actual implementation:
+  * `pkg/fuse/fuse.go` provides abstract FUSE API;
+  * `pkg/vfs` contains actual FUSE implementation, Metadata requests are handled in `pkg/meta`, read requests are handled in `pkg/vfs/reader.go` and write requests are handled by `pkg/vfs/writer.go`;
+  * `pkg/meta/redis.go` is the Redis Metadata Engine, and `pkg/meta/sql.go` is the relational database Metadata Engine;
+  * `pkg/object` contains all object storage integration code;
+* [`sdk/java`](https://github.com/juicedata/juicefs/tree/main/sdk/java) is the Hadoop Java SDK, it uses `sdk/java/libjfs` through JNI.
 
 ## Guidelines
 
-- Before starting work on a feature or bug fix, please search GitHub or reach out to us via GitHub, Slack etc. The purpose of this step is make sure no one else is already working on it and we'll ask you to open a GitHub issue if necessary.
-- We will use the GitHub issue to discuss the feature and come to agreement. This is to prevent your time being wasted, as well as ours.
-- If it is a major feature update, we highly recommend you also write a design document to help the community understand your motivation and solution.
-- A good way to find a project properly sized for a first time contributor is to search for open issues with the label ["kind/good-first-issue"](https://github.com/juicedata/juicefs/labels/kind%2Fgood-first-issue) or ["kind/help-wanted"](https://github.com/juicedata/juicefs/labels/kind%2Fhelp-wanted).
+- Before starting work on a feature or bug fix, search GitHub or reach out to us via GitHub or Slack, make sure no one else is already working on it and we'll ask you to open a GitHub issue if necessary.
+- Before contributing, use the GitHub issue to discuss the feature and reach an agreement with the core developers.
+- For major feature updates, write a design document to help the community understand your motivation and solution.
+- Find issues with the label ["kind/good-first-issue"](https://github.com/juicedata/juicefs/labels/kind%2Fgood-first-issue) or ["kind/help-wanted"](https://github.com/juicedata/juicefs/labels/kind%2Fhelp-wanted).
+
+Read [internals](./data_structures.md) for important data structure references.
 
 ## Coding Style
 
 - We're following ["Effective Go"](https://go.dev/doc/effective_go) and ["Go Code Review Comments"](https://github.com/golang/go/wiki/CodeReviewComments).
 - Use `go fmt` to format your code before committing. You can find information in editor support for Go tools in ["IDEs and Plugins for Go"](https://github.com/golang/go/wiki/IDEsAndTextEditorPlugins).
-- If you see any code which clearly violates the style guide, please fix it and send a pull request.
 - Every new source file must begin with a license header.
 - Install [pre-commit](https://pre-commit.com) and use it to set up a pre-commit hook for static analysis. Just run `pre-commit install` in the root of the repo.
 
@@ -32,13 +45,9 @@ Before you can contribute to JuiceFS, you will need to sign the [Contributor Lic
 
 ## Contribution Flow
 
-This is a rough outline of what a contributor's workflow looks like:
-
 1. Create a topic branch from where to base the contribution. This is usually `main`.
 1. Make commits of logical units.
 1. Make sure commit messages are in the proper format.
 1. Push changes in a topic branch to a personal fork of the repository.
 1. Submit a pull request to [`juicedata/juicefs`](https://github.com/juicedata/juicefs/compare). The PR should link to one issue which either created by you or others.
 1. The PR must receive approval from at least one maintainer before it be merged.
-
-Happy hacking!
