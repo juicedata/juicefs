@@ -2305,12 +2305,12 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 }
 
 func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
-	length, space, inodes, err := m.calcDirStat(ctx, ino)
+	stat, err := m.calcDirStat(ctx, ino)
 	if err != nil {
 		return nil, err
 	}
 	err = m.txn(func(s *xorm.Session) error {
-		_, err := s.Insert(&dirStats{ino, int64(length), int64(space), int64(inodes)})
+		_, err := s.Insert(&dirStats{ino, stat.length, stat.space, stat.inodes})
 		if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			// other client synced
 			err = nil
@@ -2320,7 +2320,7 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &dirStat{int64(length), int64(space), int64(inodes)}, nil
+	return stat, nil
 }
 
 func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error) {
@@ -2345,11 +2345,11 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, err
 			"dir usage of inode %d is invalid: space %d, inodes %d, try to fix",
 			ino, st.UsedSpace, st.UsedInodes,
 		)
-		length, space, inodes, err := m.calcDirStat(ctx, ino)
+		stat, err := m.calcDirStat(ctx, ino)
 		if err != nil {
 			return nil, err
 		}
-		st.DataLength, st.UsedSpace, st.UsedInodes = int64(length), int64(space), int64(inodes)
+		st.DataLength, st.UsedSpace, st.UsedInodes = stat.length, stat.space, stat.inodes
 		e := m.txn(func(s *xorm.Session) error {
 			n, err := s.AllCols().Update(&st)
 			if err == nil && n != 1 {

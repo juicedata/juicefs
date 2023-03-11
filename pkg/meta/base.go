@@ -281,22 +281,23 @@ func (m *baseMeta) groupBatch(batch map[Ino]dirStat, size int) [][]Ino {
 	return batches
 }
 
-func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (length, space, inodes uint64, err error) {
+func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, error) {
 	var entries []*Entry
 	if eno := m.en.doReaddir(ctx, ino, 1, &entries, -1); eno != 0 {
-		err = errors.Wrap(eno, "calc dir stat")
-		return
+		return nil, errors.Wrap(eno, "calc dir stat")
 	}
+
+	stat := new(dirStat)
 	for _, e := range entries {
-		inodes += 1
+		stat.inodes += 1
 		var l uint64
 		if e.Attr.Typ == TypeFile {
 			l = e.Attr.Length
 		}
-		length += l
-		space += uint64(align4K(l))
+		stat.length += int64(l)
+		stat.space += align4K(l)
 	}
-	return
+	return stat, nil
 }
 
 func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (length, space, inodes uint64, err error) {
@@ -304,10 +305,13 @@ func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (length, space, inodes uin
 	if err != nil {
 		return
 	}
-	if stat != nil {
-		return uint64(stat.length), uint64(stat.space), uint64(stat.inodes), nil
+	if stat == nil {
+		stat, err = m.calcDirStat(ctx, inode)
 	}
-	return m.calcDirStat(ctx, inode)
+	if err != nil {
+		return
+	}
+	return uint64(stat.length), uint64(stat.space), uint64(stat.inodes), nil
 }
 
 func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int64) {

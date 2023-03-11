@@ -2251,17 +2251,17 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 
 func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
 	field := strconv.FormatUint(uint64(ino), 16)
-	length, space, inodes, err := m.calcDirStat(ctx, ino)
+	stat, err := m.calcDirStat(ctx, ino)
 	if err != nil {
 		return nil, err
 	}
 	_, err = m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.HSet(ctx, m.dirDataLengthKey(), field, length)
-		pipe.HSet(ctx, m.dirUsedSpaceKey(), field, space)
-		pipe.HSet(ctx, m.dirUsedInodesKey(), field, inodes)
+		pipe.HSet(ctx, m.dirDataLengthKey(), field, stat.length)
+		pipe.HSet(ctx, m.dirUsedSpaceKey(), field, stat.space)
+		pipe.HSet(ctx, m.dirUsedInodesKey(), field, stat.inodes)
 		return nil
 	})
-	return &dirStat{int64(length), int64(space), int64(inodes)}, err
+	return stat, err
 }
 
 func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {

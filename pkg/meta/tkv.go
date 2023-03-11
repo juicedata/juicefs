@@ -1981,14 +1981,13 @@ func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
 	if m.conf.ReadOnly {
 		return nil, syscall.EROFS
 	}
-	length, space, inodes, err := m.calcDirStat(ctx, ino)
+	stat, err := m.calcDirStat(ctx, ino)
 	if err != nil {
 		return nil, err
 	}
 	err = m.client.txn(func(tx *kvTxn) error {
-		tx.set(m.dirStatKey(ino), m.packDirStat(length, space, inodes))
+		tx.set(m.dirStatKey(ino), m.packDirStat(uint64(stat.length), uint64(stat.space), uint64(stat.inodes)))
 		return nil
-
 	}, 0)
 	if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 		err = nil
@@ -1997,7 +1996,7 @@ func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
 		// other clients have synced
 		err = nil
 	}
-	return &dirStat{int64(length), int64(space), int64(inodes)}, err
+	return stat, err
 }
 
 func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
