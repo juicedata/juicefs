@@ -1134,7 +1134,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if parent != TrashInode {
 			if _type == TypeDirectory {
 				pattr.Nlink++
-				if tx.retry < 10 {
+				if m.conf.SkipDirNlink <= 0 || tx.retry < m.conf.SkipDirNlink {
 					updateParent = true
 				} else {
 					logger.Warnf("Skip updating nlink of directory %d to reduce conflict", parent)

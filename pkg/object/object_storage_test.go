@@ -53,7 +53,7 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, error) {
 	r, err := s.List(prefix, marker, "", limit)
 	if !errors.Is(err, notSupported) {
-		return r, nil
+		return r, err
 	}
 	ch, err := s.ListAll(prefix, marker)
 	if err == nil {
@@ -411,7 +411,7 @@ func TestDisk(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestQingStor(t *testing.T) {
+func TestQingStor(t *testing.T) { //skip mutate
 	if os.Getenv("QY_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -428,7 +428,7 @@ func TestQingStor(t *testing.T) {
 	testStorage(t, s2)
 }
 
-func TestS3(t *testing.T) {
+func TestS3(t *testing.T) { //skip mutate
 	if os.Getenv("AWS_ACCESS_KEY_ID") == "" {
 		t.SkipNow()
 	}
@@ -472,7 +472,7 @@ func TestOVHCompileRegexp(t *testing.T) {
 	}
 }
 
-func TestOSS(t *testing.T) {
+func TestOSS(t *testing.T) { //skip mutate
 	if os.Getenv("ALICLOUD_ACCESS_KEY_ID") == "" {
 		t.SkipNow()
 	}
@@ -482,7 +482,7 @@ func TestOSS(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestUFile(t *testing.T) {
+func TestUFile(t *testing.T) { //skip mutate
 	if os.Getenv("UCLOUD_PUBLIC_KEY") == "" {
 		t.SkipNow()
 	}
@@ -491,7 +491,7 @@ func TestUFile(t *testing.T) {
 	testStorage(t, ufile)
 }
 
-func TestGS(t *testing.T) {
+func TestGS(t *testing.T) { //skip mutate
 	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
 		t.SkipNow()
 	}
@@ -499,7 +499,7 @@ func TestGS(t *testing.T) {
 	testStorage(t, gs)
 }
 
-func TestQiniu(t *testing.T) {
+func TestQiniu(t *testing.T) { //skip mutate
 	if os.Getenv("QINIU_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -511,7 +511,7 @@ func TestQiniu(t *testing.T) {
 	//testStorage(t, qiniu)
 }
 
-func TestKS3(t *testing.T) {
+func TestKS3(t *testing.T) { //skip mutate
 	if os.Getenv("KS3_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -520,7 +520,7 @@ func TestKS3(t *testing.T) {
 	testStorage(t, ks3)
 }
 
-func TestCOS(t *testing.T) {
+func TestCOS(t *testing.T) { //skip mutate
 	if os.Getenv("COS_SECRETID") == "" {
 		t.SkipNow()
 	}
@@ -530,7 +530,7 @@ func TestCOS(t *testing.T) {
 	testStorage(t, cos)
 }
 
-func TestAzure(t *testing.T) {
+func TestAzure(t *testing.T) { //skip mutate
 	if os.Getenv("AZURE_STORAGE_ACCOUNT") == "" {
 		t.SkipNow()
 	}
@@ -540,7 +540,7 @@ func TestAzure(t *testing.T) {
 	testStorage(t, abs)
 }
 
-func TestNOS(t *testing.T) {
+func TestNOS(t *testing.T) { //skip mutate
 	if os.Getenv("NOS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -549,7 +549,7 @@ func TestNOS(t *testing.T) {
 	testStorage(t, nos)
 }
 
-func TestJSS(t *testing.T) {
+func TestJSS(t *testing.T) { //skip mutate
 	if os.Getenv("JSS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -558,7 +558,7 @@ func TestJSS(t *testing.T) {
 	testStorage(t, jss)
 }
 
-func TestSpeedy(t *testing.T) {
+func TestSpeedy(t *testing.T) { //skip mutate
 	if os.Getenv("SPEEDY_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -567,7 +567,7 @@ func TestSpeedy(t *testing.T) {
 	testStorage(t, cos)
 }
 
-func TestB2(t *testing.T) {
+func TestB2(t *testing.T) { //skip mutate
 	if os.Getenv("B2_ACCOUNT_ID") == "" {
 		t.SkipNow()
 	}
@@ -578,7 +578,7 @@ func TestB2(t *testing.T) {
 	testStorage(t, b)
 }
 
-func TestSpace(t *testing.T) {
+func TestSpace(t *testing.T) { //skip mutate
 	if os.Getenv("SPACE_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -586,7 +586,7 @@ func TestSpace(t *testing.T) {
 	testStorage(t, b)
 }
 
-func TestBOS(t *testing.T) {
+func TestBOS(t *testing.T) { //skip mutate
 	if os.Getenv("BDCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -595,7 +595,7 @@ func TestBOS(t *testing.T) {
 	testStorage(t, b)
 }
 
-func TestSftp(t *testing.T) {
+func TestSftp(t *testing.T) { //skip mutate
 	if os.Getenv("SFTP_HOST") == "" {
 		t.SkipNow()
 	}
@@ -603,7 +603,7 @@ func TestSftp(t *testing.T) {
 	testStorage(t, b)
 }
 
-func TestOBS(t *testing.T) {
+func TestOBS(t *testing.T) { //skip mutate
 	if os.Getenv("HWCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -612,7 +612,7 @@ func TestOBS(t *testing.T) {
 	testStorage(t, b)
 }
 
-func TestHDFS(t *testing.T) {
+func TestHDFS(t *testing.T) { //skip mutate
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.SkipNow()
 	}
@@ -620,7 +620,7 @@ func TestHDFS(t *testing.T) {
 	testStorage(t, dfs)
 }
 
-func TestOOS(t *testing.T) {
+func TestOOS(t *testing.T) { //skip mutate
 	if os.Getenv("OOS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -629,7 +629,7 @@ func TestOOS(t *testing.T) {
 	testStorage(t, b)
 }
 
-func TestScw(t *testing.T) {
+func TestScw(t *testing.T) { //skip mutate
 	if os.Getenv("SCW_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -650,7 +650,7 @@ func TestMinIO(t *testing.T) {
 // 	testStorage(t, s)
 // }
 
-func TestTiKV(t *testing.T) {
+func TestTiKV(t *testing.T) { //skip mutate
 	if os.Getenv("TIKV_ADDR") == "" {
 		t.SkipNow()
 	}
@@ -660,6 +660,7 @@ func TestTiKV(t *testing.T) {
 	}
 	testStorage(t, s)
 }
+
 func TestRedis(t *testing.T) {
 	if os.Getenv("REDIS_ADDR") == "" {
 		t.SkipNow()
@@ -676,7 +677,7 @@ func TestRedis(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestSwift(t *testing.T) {
+func TestSwift(t *testing.T) { //skip mutate
 	if os.Getenv("SWIFT_ADDR") == "" {
 		t.SkipNow()
 	}
@@ -687,7 +688,7 @@ func TestSwift(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestWebDAV(t *testing.T) {
+func TestWebDAV(t *testing.T) { //skip mutate
 	if os.Getenv("WEBDAV_TEST_BUCKET") == "" {
 		t.SkipNow()
 	}
@@ -749,7 +750,7 @@ func TestSQLite(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestPG(t *testing.T) {
+func TestPG(t *testing.T) { //skip mutate
 	if os.Getenv("PG_ADDR") == "" {
 		t.SkipNow()
 	}
@@ -760,14 +761,14 @@ func TestPG(t *testing.T) {
 	testStorage(t, s)
 
 }
-func TestPGWithSearchPath(t *testing.T) {
+func TestPGWithSearchPath(t *testing.T) { //skip mutate
 	_, err := newSQLStore("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", "", "")
 	if !strings.Contains(err.Error(), "currently, only one schema is supported in search_path") {
 		t.Fatalf("TestPGWithSearchPath error: %s", err)
 	}
 }
 
-func TestMySQL(t *testing.T) {
+func TestMySQL(t *testing.T) { //skip mutate
 	if os.Getenv("MYSQL_ADDR") == "" {
 		t.SkipNow()
 	}
@@ -787,7 +788,7 @@ func TestNameString(t *testing.T) {
 	}
 }
 
-func TestEtcd(t *testing.T) {
+func TestEtcd(t *testing.T) { //skip mutate
 	if os.Getenv("ETCD_ADDR") == "" {
 		t.SkipNow()
 	}
@@ -803,7 +804,7 @@ func TestEtcd(t *testing.T) {
 //	testStorage(t, s)
 //}
 
-func TestEOS(t *testing.T) {
+func TestEOS(t *testing.T) { //skip mutate
 	if os.Getenv("EOS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
@@ -811,7 +812,7 @@ func TestEOS(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestWASABI(t *testing.T) {
+func TestWASABI(t *testing.T) { //skip mutate
 	if os.Getenv("WASABI_ENDPOINT") == "" {
 		t.SkipNow()
 	}
@@ -819,7 +820,7 @@ func TestWASABI(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestSCS(t *testing.T) {
+func TestSCS(t *testing.T) { //skip mutate
 	if os.Getenv("SCS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
@@ -827,7 +828,7 @@ func TestSCS(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestIBMCOS(t *testing.T) {
+func TestIBMCOS(t *testing.T) { //skip mutate
 	if os.Getenv("IBMCOS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
@@ -835,7 +836,7 @@ func TestIBMCOS(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestTOS(t *testing.T) {
+func TestTOS(t *testing.T) { //skip mutate
 	if os.Getenv("TOS_ENDPOINT") == "" {
 		t.SkipNow()
 	}

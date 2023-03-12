@@ -80,11 +80,10 @@ jobs:
       - name: Install ClickHouse
         shell: bash
         run: |
-          sudo apt-get install -y apt-transport-https ca-certificates dirmngr
+          sudo .github/scripts/apt_install.sh apt-transport-https ca-certificates dirmngr
           echo "deb https://packages.clickhouse.com/deb stable main" | sudo tee /etc/apt/sources.list.d/clickhouse.list
           sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 8919F6BD2B48D754
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive  apt-get install -y  clickhouse-server clickhouse-client
+          sudo DEBIAN_FRONTEND=noninteractive .github/scripts/apt_install.sh clickhouse-server clickhouse-client
 
       - name: Change Datadir
         shell: bash

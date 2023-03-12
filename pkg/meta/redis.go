@@ -2250,7 +2250,7 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 }
 
 func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
-	field := strconv.FormatUint(uint64(ino), 16)
+	field := ino.String()
 	stat, err := m.calcDirStat(ctx, ino)
 	if err != nil {
 		return nil, err
@@ -2272,7 +2272,7 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	statList := make([]Ino, 0, len(batch))
 	pipeline := m.rdb.Pipeline()
 	for ino := range batch {
-		pipeline.HExists(ctx, spaceKey, strconv.FormatUint(uint64(ino), 10))
+		pipeline.HExists(ctx, spaceKey, ino.String())
 		statList = append(statList, ino)
 	}
 	rets, err := pipeline.Exec(ctx)
@@ -2295,7 +2295,7 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	for _, group := range m.groupBatch(batch, 1000) {
 		_, err := m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 			for _, ino := range group {
-				field := strconv.FormatUint(uint64(ino), 10)
+				field := ino.String()
 				if nonexist[ino] {
 					continue
 				}
@@ -2320,7 +2320,7 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 }
 
 func (m *redisMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error) {
-	field := strconv.FormatUint(uint64(ino), 10)
+	field := ino.String()
 	dataLength, errLength := m.rdb.HGet(ctx, m.dirDataLengthKey(), field).Int64()
 	if errLength != nil && errLength != redis.Nil {
 		return nil, errLength
