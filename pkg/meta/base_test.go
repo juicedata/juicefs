@@ -2170,7 +2170,7 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("del edge error: %v", err)
 		}
 		// check remove tree
-		if eno := m.removeEntry(Background, cloneDstIno, cloneDstAttr, cloneDstName); eno != 0 {
+		if eno := m.removeEntry(Background, cloneDstIno, cloneDstAttr, cloneDstName, make(chan struct{}, 10)); eno != 0 {
 			logger.Errorf("remove tree error rootInode: %v", cloneDstIno)
 		}
 		if exists := m.rdb.Exists(Background, removedKeys...).Val(); exists != 0 {
@@ -2182,7 +2182,7 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("slice ref not correct after remove entries: %#v", result)
 		}
 		// check remove not exist tree
-		if eno := m.removeEntry(Background, 100000, cloneDstAttr, cloneDstName); eno != 0 {
+		if eno := m.removeEntry(Background, 100000, cloneDstAttr, cloneDstName, make(chan struct{}, 10)); eno != 0 {
 			logger.Errorf("remove not exist tree error rootInode: %v", cloneDstIno)
 		}
 	}
