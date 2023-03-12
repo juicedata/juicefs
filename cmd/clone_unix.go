@@ -37,8 +37,9 @@ func cmdClone() *cli.Command {
 		Action: clone,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
-				Name:  "p",
-				Usage: "create files with current uid,gid,umask"},
+				Name:    "preserve",
+				Aliases: []string{"p"},
+				Usage:   "preserve the uid, gid, and umask of the file"},
 		},
 		Category:    "TOOL",
 		Description: `This command can clone a file or directory without copying the underlying data.`,
@@ -78,10 +79,10 @@ func clone(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("lookup inode for %s: %s", dstParent, err)
 	}
-	var smode uint8
+	var cmode uint8
 	var umask int
-	if ctx.Bool("cp") {
-		smode |= meta.CLONE_MODE_CPLIKE_ATTR
+	if ctx.Bool("preserve") {
+		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
 		umask = syscall.Umask(0)
 		syscall.Umask(umask)
 	}
@@ -95,7 +96,7 @@ func clone(ctx *cli.Context) error {
 	wb.Put32(uint32(os.Getuid()))
 	wb.Put32(uint32(os.Getgid()))
 	wb.Put16(uint16(umask))
-	wb.Put8(smode)
+	wb.Put8(cmode)
 	f := openController(srcParent)
 	if f == nil {
 		return fmt.Errorf("%s is not inside JuiceFS", srcPath)

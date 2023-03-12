@@ -3831,8 +3831,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, dstParentIno Ino, dstNam
 		return eno
 	}
 	srcAttr.Parent = dstParentIno
-
-	if cmode&CLONE_MODE_CPLIKE_ATTR != 0 {
+	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 		srcAttr.Uid = ctx.Uid()
 		srcAttr.Gid = ctx.Gid()
 		srcAttr.Mode &= ^cumask

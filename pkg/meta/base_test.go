@@ -2109,7 +2109,9 @@ func testClone(t *testing.T, m Meta) {
 
 	cloneDstName := "cloneDir1"
 	var count, total uint64
-	if eno := m.Clone(Background, dir1, 1, cloneDstName, 0, 022, &count, &total); eno != 0 {
+	var cmode uint8
+	cmode |= CLONE_MODE_PRESERVE_ATTR
+	if eno := m.Clone(Background, dir1, 1, cloneDstName, cmode, 022, &count, &total); eno != 0 {
 		t.Fatalf("clone: %s", eno)
 	}
 	var entries1 []*Entry
@@ -2228,6 +2230,6 @@ func checkEntry(t *testing.T, srcEntry, dstEntry *Entry, dstParentIno Ino) {
 		dstAttr.Parent != dstParentIno ||
 		srcAttr.Typ == TypeFile && dstAttr.Nlink != 1 ||
 		srcAttr.Typ != TypeFile && srcAttr.Nlink != dstAttr.Nlink {
-		t.Fatalf("unmatched attr: %v, %v", srcAttr, dstAttr)
+		t.Fatalf("unmatched attr: %#v, %#v", *srcAttr, *dstAttr)
 	}
 }
