@@ -1875,13 +1875,18 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Mkdir(Background, RootInode, testDir, 0640, 022, 0, &testInode, nil); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	length, space, inodes, err := m.GetDirStat(Background, testInode)
-	if err != nil {
-		t.Fatalf("get dir usage: %s", err)
+
+	st, err := m.GetDirStat(Background, testInode)
+	checkResult := func(length, space, inodes int64) {
+		if err != nil {
+			t.Fatalf("get dir usage: %s", err)
+		}
+		expect := dirStat{length, space, inodes}
+		if *st != expect {
+			t.Fatalf("test dir usage: expect %+v, but got %+v", expect, st)
+		}
 	}
-	if length != 0 || space != 0 || inodes != 0 {
-		t.Fatalf("test dir usage: %d %d %d", length, space, inodes)
-	}
+	checkResult(0, 0, 0)
 
 	// test dir with file
 	var fileInode Ino
@@ -1889,65 +1894,40 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("create: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	length, space, inodes, err = m.GetDirStat(Background, testInode)
-	if err != nil {
-		t.Fatalf("get dir usage: %s", err)
-	}
-	if length != 0 || space != uint64(align4K(0)) || inodes != 1 {
-		t.Fatalf("test dir usage: %d %d %d", length, space, inodes)
-	}
+	st, err = m.GetDirStat(Background, testInode)
+	checkResult(0, align4K(0), 1)
 
 	// test dir with file and fallocate
 	if st := m.Fallocate(Background, fileInode, 0, 0, 4097); st != 0 {
 		t.Fatalf("fallocate: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	length, space, inodes, err = m.GetDirStat(Background, testInode)
-	if err != nil {
-		t.Fatalf("get dir usage: %s", err)
-	}
-	if length != 4097 || space != uint64(align4K(4097)) || inodes != 1 {
-		t.Fatalf("test dir usage: %d %d %d", length, space, inodes)
-	}
+	st, err = m.GetDirStat(Background, testInode)
+	checkResult(4097, align4K(4097), 1)
 
 	// test dir with file and truncate
 	if st := m.Truncate(Background, fileInode, 0, 0, nil); st != 0 {
 		t.Fatalf("truncate: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	length, space, inodes, err = m.GetDirStat(Background, testInode)
-	if err != nil {
-		t.Fatalf("get dir usage: %s", err)
-	}
-	if length != 0 || space != uint64(align4K(0)) || inodes != 1 {
-		t.Fatalf("test dir usage: %d %d %d", length, space, inodes)
-	}
+	st, err = m.GetDirStat(Background, testInode)
+	checkResult(0, align4K(0), 1)
 
 	// test dir with file and write
 	if st := m.Write(Background, fileInode, 0, 0, Slice{Id: 1, Size: 1 << 20, Off: 0, Len: 4097}); st != 0 {
 		t.Fatalf("write: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	length, space, inodes, err = m.GetDirStat(Background, testInode)
-	if err != nil {
-		t.Fatalf("get dir usage: %s", err)
-	}
-	if length != 4097 || space != uint64(align4K(4097)) || inodes != 1 {
-		t.Fatalf("test dir usage: %d %d %d", length, space, inodes)
-	}
+	st, err = m.GetDirStat(Background, testInode)
+	checkResult(4097, align4K(4097), 1)
 
 	// test dir with file and link
 	if st := m.Link(Background, fileInode, testInode, "file2", nil); st != 0 {
 		t.Fatalf("link: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	length, space, inodes, err = m.GetDirStat(Background, testInode)
-	if err != nil {
-		t.Fatalf("get dir usage: %s", err)
-	}
-	if length != 2*4097 || space != uint64(2*align4K(4097)) || inodes != 2 {
-		t.Fatalf("test dir usage: %d %d %d", length, space, inodes)
-	}
+	st, err = m.GetDirStat(Background, testInode)
+	checkResult(2*4097, 2*align4K(4097), 2)
 
 	// test dir with subdir
 	var subInode Ino
@@ -1955,33 +1935,18 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("mkdir: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	length, space, inodes, err = m.GetDirStat(Background, testInode)
-	if err != nil {
-		t.Fatalf("get dir usage: %s", err)
-	}
-	if length != 2*4097 || space != uint64(align4K(0)+2*align4K(4097)) || inodes != 3 {
-		t.Fatalf("test dir usage: %d %d %d", length, space, inodes)
-	}
+	st, err = m.GetDirStat(Background, testInode)
+	checkResult(2*4097, align4K(0)+2*align4K(4097), 3)
 
 	// test rename
 	if st := m.Rename(Background, testInode, "file2", subInode, "file", 0, nil, nil); st != 0 {
 		t.Fatalf("rename: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	length, space, inodes, err = m.GetDirStat(Background, testInode)
-	if err != nil {
-		t.Fatalf("get dir usage: %s", err)
-	}
-	if length != 4097 || space != uint64(align4K(0)+align4K(4097)) || inodes != 2 {
-		t.Fatalf("test dir usage: %d %d %d", length, space, inodes)
-	}
-	length, space, inodes, err = m.GetDirStat(Background, subInode)
-	if err != nil {
-		t.Fatalf("get subdir usage: %s", err)
-	}
-	if length != 4097 || space != uint64(align4K(4097)) || inodes != 1 {
-		t.Fatalf("test subdir usage: %d %d", space, inodes)
-	}
+	st, err = m.GetDirStat(Background, testInode)
+	checkResult(4097, align4K(0)+align4K(4097), 2)
+	st, err = m.GetDirStat(Background, subInode)
+	checkResult(4097, align4K(4097), 1)
 
 	// test unlink
 	if st := m.Unlink(Background, testInode, "file"); st != 0 {
@@ -1991,31 +1956,16 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("unlink: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	length, space, inodes, err = m.GetDirStat(Background, testInode)
-	if err != nil {
-		t.Fatalf("get dir usage: %s", err)
-	}
-	if length != 0 || space != uint64(align4K(0)) || inodes != 1 {
-		t.Fatalf("test dir usage: %d %d %d", length, space, inodes)
-	}
-	length, space, inodes, err = m.GetDirStat(Background, subInode)
-	if err != nil {
-		t.Fatalf("get subdir usage: %s", err)
-	}
-	if length != 0 || space != 0 || inodes != 0 {
-		t.Fatalf("test subdir usage: %d %d", space, inodes)
-	}
+	st, err = m.GetDirStat(Background, testInode)
+	checkResult(0, align4K(0), 1)
+	st, err = m.GetDirStat(Background, subInode)
+	checkResult(0, 0, 0)
 
 	// test rmdir
 	if st := m.Rmdir(Background, testInode, "sub"); st != 0 {
 		t.Fatalf("rmdir: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	length, space, inodes, err = m.GetDirStat(Background, testInode)
-	if err != nil {
-		t.Fatalf("get dir usage: %s", err)
-	}
-	if length != 0 || space != 0 || inodes != 0 {
-		t.Fatalf("test dir usage: %d %d %d", length, space, inodes)
-	}
+	st, err = m.GetDirStat(Background, testInode)
+	checkResult(0, 0, 0)
 }

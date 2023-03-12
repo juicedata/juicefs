@@ -300,18 +300,15 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, error) {
 	return stat, nil
 }
 
-func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (length, space, inodes uint64, err error) {
-	stat, err := m.en.doGetDirStat(ctx, m.checkRoot(inode), !m.conf.ReadOnly)
+func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, err error) {
+	stat, err = m.en.doGetDirStat(ctx, m.checkRoot(inode), !m.conf.ReadOnly)
 	if err != nil {
 		return
 	}
 	if stat == nil {
 		stat, err = m.calcDirStat(ctx, inode)
 	}
-	if err != nil {
-		return
-	}
-	return uint64(stat.length), uint64(stat.space), uint64(stat.inodes), nil
+	return
 }
 
 func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int64) {
@@ -1371,7 +1368,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 							attr.Length = 4 << 10
 						}
 						if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 {
-							logger.Infof("Path %s (inode %d) is successfully repaired", path, inode)
+							logger.Debugf("Path %s (inode %d) is successfully repaired", path, inode)
 						} else {
 							logger.Errorf("Repair path %s inode %d: %s", path, inode, st1)
 						}
@@ -1394,7 +1391,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 				if repair {
 					if statBroken || statAll {
 						if _, err := m.en.doSyncDirStat(ctx, inode); err == nil {
-							logger.Infof("Stat of path %s (inode %d) is successfully synced", path, inode)
+							logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
 						} else {
 							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, err)
 						}

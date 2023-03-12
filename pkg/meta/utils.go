@@ -392,12 +392,12 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 }
 
 func fastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
-	length, space, _, err := r.GetDirStat(ctx, inode)
+	stat, err := r.GetDirStat(ctx, inode)
 	if err != nil {
 		return errno(err)
 	}
-	summary.Size += space
-	summary.Length += length
+	summary.Size += uint64(stat.space)
+	summary.Length += uint64(stat.length)
 	summary.Dirs++
 
 	var entries []*Entry

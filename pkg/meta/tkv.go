@@ -317,17 +317,17 @@ func (m *kvMeta) parseEntry(buf []byte) (uint8, Ino) {
 	return b.Get8(), Ino(b.Get64())
 }
 
-func (m *kvMeta) packDirStat(dataLength, usedSpace, usedInodes uint64) []byte {
+func (m *kvMeta) packDirStat(st *dirStat) []byte {
 	b := utils.NewBuffer(24)
-	b.Put64(dataLength)
-	b.Put64(usedSpace)
-	b.Put64(usedInodes)
+	b.Put64(uint64(st.length))
+	b.Put64(uint64(st.space))
+	b.Put64(uint64(st.inodes))
 	return b.Bytes()
 }
 
-func (m *kvMeta) parseDirStat(buf []byte) (length, space, inodes uint64) {
+func (m *kvMeta) parseDirStat(buf []byte) *dirStat {
 	b := utils.FromBuffer(buf)
-	return b.Get64(), b.Get64(), b.Get64()
+	return &dirStat{int64(b.Get64()), int64(b.Get64()), int64(b.Get64())}
 }
 
 func (m *kvMeta) get(key []byte) ([]byte, error) {
@@ -1170,7 +1170,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			tx.set(m.symKey(ino), []byte(path))
 		}
 		if _type == TypeDirectory {
-			tx.set(m.dirStatKey(ino), m.packDirStat(0, 0, 0))
+			tx.set(m.dirStatKey(ino), m.packDirStat(&dirStat{}))
 		}
 		return nil
 	}, parent))
@@ -1986,7 +1986,7 @@ func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
 		return nil, err
 	}
 	err = m.client.txn(func(tx *kvTxn) error {
-		tx.set(m.dirStatKey(ino), m.packDirStat(uint64(stat.length), uint64(stat.space), uint64(stat.inodes)))
+		tx.set(m.dirStatKey(ino), m.packDirStat(stat))
 		return nil
 	}, 0)
 	if eno, ok := err.(syscall.Errno); ok && eno == 0 {
@@ -2013,18 +2013,17 @@ func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 					syncMap[ino] = true
 					continue
 				}
-				fl, us, ui := m.parseDirStat(rawStat)
-				fileLength, usedSpace, usedInodes := int64(fl), int64(us), int64(ui)
+				st := m.parseDirStat(rawStat)
 				stat := batch[ino]
-				fileLength += stat.length
-				usedSpace += stat.space
-				usedInodes += stat.inodes
-				if fileLength < 0 || usedSpace < 0 || usedInodes < 0 {
-					logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
+				st.length += stat.length
+				st.space += stat.space
+				st.inodes += stat.inodes
+				if st.length < 0 || st.space < 0 || st.inodes < 0 {
+					logger.Warnf("dir stat of inode %d is invalid: %+v, try to sync", ino, st)
 					syncMap[ino] = true
 					continue
 				}
-				tx.set(keys[i], m.packDirStat(uint64(fileLength), uint64(usedSpace), uint64(usedInodes)))
+				tx.set(keys[i], m.packDirStat(st))
 			}
 			return nil
 		})
@@ -2045,8 +2044,7 @@ func (m *kvMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, err
 		return nil, err
 	}
 	if rawStat != nil {
-		length, space, inodes := m.parseDirStat(rawStat)
-		return &dirStat{int64(length), int64(space), int64(inodes)}, nil
+		return m.parseDirStat(rawStat), nil
 	}
 	if trySync {
 		return m.doSyncDirStat(ctx, ino)
