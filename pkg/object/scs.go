@@ -35,6 +35,7 @@ import (
 )
 
 type scsClient struct {
+	DefaultObjectStorage
 	bucket string
 	c      *scs.SCS
 	b      scs.Bucket

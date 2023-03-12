@@ -95,9 +95,6 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 	_ = s.Delete(key)
 
-	k := "large"
-	defer s.Delete(k)
-
 	_, err := s.Get("not_exists", 0, -1)
 	if err == nil {
 		t.Fatalf("Get should failed: %s", err)
@@ -319,6 +316,9 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 		return content
 	}
+	k := "large"
+	defer s.Delete(k)
+
 	if upload, err := s.CreateMultipartUpload(k); err == nil {
 		total := 3
 		seed := make([]byte, upload.MinPartSize)
@@ -363,17 +363,40 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		if err = s.CompleteUpload(k, upload.UploadID, parts); err != nil {
 			t.Fatalf("failed to complete multipart upload: %v", err)
 		}
-		r, err := s.Get(k, 0, -1)
-		if err != nil {
-			t.Fatalf("failed to get multipart upload file: %v", err)
+		checkContent := func(key string, content []byte) {
+			r, err := s.Get(key, 0, -1)
+			if err != nil {
+				t.Fatalf("failed to get multipart upload file: %v", err)
+			}
+			cnt, err := io.ReadAll(r)
+			if err != nil {
+				t.Fatalf("failed to get multipart upload file: %v", err)
+			}
+			if !bytes.Equal(cnt, content) {
+				t.Fatal("the content of the multipart upload file is incorrect")
+			}
 		}
-		cnt, err := io.ReadAll(r)
-		if err != nil {
-			t.Fatalf("failed to get multipart upload file: %v", err)
+		checkContent(k, bytes.Join(content, nil))
+
+		var copyUpload *MultipartUpload
+		var dstKey = "dstUploadPartCopyKey"
+		defer s.Delete(dstKey)
+		if copyUpload, err = s.CreateMultipartUpload(dstKey); err != nil {
+			t.Fatalf("failed to create multipart upload: %v", err)
 		}
-		if !bytes.Equal(cnt, bytes.Join(content, nil)) {
-			t.Fatal("the content of the multipart upload file is incorrect")
+		copyParts := make([]*Part, total)
+		var startIdx = 0
+		for i, c := range content {
+			copyParts[i], err = s.UploadPartCopy(dstKey, copyUpload.UploadID, i+1, k, int64(startIdx), int64(len(c)))
+			if err != nil {
+				t.Fatalf("failed to upload part copy: %v", err)
+			}
+			startIdx += len(c)
 		}
+		if err = s.CompleteUpload(dstKey, copyUpload.UploadID, copyParts); err != nil {
+			t.Fatalf("failed to complete multipart upload: %v", err)
+		}
+		checkContent(dstKey, bytes.Join(content, nil))
 	} else {
 		t.Logf("%s does not support multipart upload: %s", s, err.Error())
 	}

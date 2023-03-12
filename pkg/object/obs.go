@@ -239,6 +239,23 @@ func (s *obsClient) UploadPart(key string, uploadID string, num int, body []byte
 	return &Part{Num: num, ETag: resp.ETag}, err
 }
 
+func (s *obsClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	resp, err := s.c.CopyPart(&obs.CopyPartInput{
+		Bucket:               s.bucket,
+		Key:                  key,
+		UploadId:             uploadID,
+		PartNumber:           num,
+		CopySourceBucket:     s.bucket,
+		CopySourceKey:        srcKey,
+		CopySourceRangeStart: off,
+		CopySourceRangeEnd:   off + size - 1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Part{Num: num, ETag: resp.ETag}, err
+}
+
 func (s *obsClient) AbortUpload(key string, uploadID string) {
 	params := &obs.AbortMultipartUploadInput{}
 	params.Bucket = s.bucket

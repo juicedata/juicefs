@@ -207,6 +207,21 @@ func (s *ibmcos) UploadPart(key string, uploadID string, num int, body []byte) (
 	return &Part{Num: num, ETag: *resp.ETag}, nil
 }
 
+func (s *ibmcos) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	resp, err := s.s3.UploadPartCopy(&s3.UploadPartCopyInput{
+		Bucket:          aws.String(s.bucket),
+		CopySource:      aws.String(s.bucket + "/" + srcKey),
+		CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
+		Key:             aws.String(key),
+		PartNumber:      aws.Int64(int64(num)),
+		UploadId:        aws.String(uploadID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Part{Num: num, ETag: *resp.CopyPartResult.ETag}, nil
+}
+
 func (s *ibmcos) AbortUpload(key string, uploadID string) {
 	params := &s3.AbortMultipartUploadInput{
 		Bucket:   &s.bucket,

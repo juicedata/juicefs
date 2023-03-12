@@ -176,6 +176,15 @@ func (o *ossClient) UploadPart(key string, uploadID string, num int, data []byte
 	return &Part{Num: num, ETag: r.ETag}, nil
 }
 
+func (o *ossClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	initMultipartResult := oss.InitiateMultipartUploadResult{Bucket: o.bucket.BucketName, Key: key, UploadID: uploadID}
+	partCopy, err := o.bucket.UploadPartCopy(initMultipartResult, o.bucket.BucketName, srcKey, off, size, num)
+	if o.checkError(err) != nil {
+		return nil, err
+	}
+	return &Part{Num: num, ETag: partCopy.ETag}, nil
+}
+
 func (o *ossClient) AbortUpload(key string, uploadID string) {
 	initResult := oss.InitiateMultipartUploadResult{
 		Key:      key,
