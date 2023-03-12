@@ -317,16 +317,17 @@ func (m *kvMeta) parseEntry(buf []byte) (uint8, Ino) {
 	return b.Get8(), Ino(b.Get64())
 }
 
-func (m *kvMeta) packDirStat(usedSpace, usedInodes uint64) []byte {
-	b := utils.NewBuffer(16)
-	b.Put64(usedSpace)
-	b.Put64(usedInodes)
+func (m *kvMeta) packDirStat(st *dirStat) []byte {
+	b := utils.NewBuffer(24)
+	b.Put64(uint64(st.length))
+	b.Put64(uint64(st.space))
+	b.Put64(uint64(st.inodes))
 	return b.Bytes()
 }
 
-func (m *kvMeta) parseDirStat(buf []byte) (space uint64, inodes uint64) {
+func (m *kvMeta) parseDirStat(buf []byte) *dirStat {
 	b := utils.FromBuffer(buf)
-	return b.Get64(), b.Get64()
+	return &dirStat{int64(b.Get64()), int64(b.Get64()), int64(b.Get64())}
 }
 
 func (m *kvMeta) get(key []byte) ([]byte, error) {
@@ -895,10 +896,10 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newSpace int64
+	var newLength, newSpace int64
 	var t Attr
 	err := m.txn(func(tx *kvTxn) error {
-		newSpace = 0
+		newLength, newSpace = 0, 0
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return syscall.ENOENT
@@ -914,6 +915,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			}
 			return nil
 		}
+		newLength = int64(length) - int64(t.Length)
 		newSpace = align4K(length) - align4K(t.Length)
 		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
@@ -951,7 +953,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		return nil
 	})
 	if err == nil {
-		m.updateParentStat(ctx, inode, t.Parent, newSpace)
+		m.updateParentStat(ctx, inode, t.Parent, newLength, newSpace)
 	}
 	return errno(err)
 }
@@ -979,10 +981,10 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newSpace int64
+	var newLength, newSpace int64
 	var t Attr
 	err := m.txn(func(tx *kvTxn) error {
-		newSpace = 0
+		newLength, newSpace = 0, 0
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return syscall.ENOENT
@@ -1009,6 +1011,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		}
 
 		old := t.Length
+		newLength = int64(length) - int64(t.Length)
 		newSpace = align4K(length) - align4K(t.Length)
 		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
@@ -1040,7 +1043,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		return nil
 	})
 	if err == nil {
-		m.updateParentStat(ctx, inode, t.Parent, newSpace)
+		m.updateParentStat(ctx, inode, t.Parent, newLength, newSpace)
 	}
 	return errno(err)
 }
@@ -1167,7 +1170,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			tx.set(m.symKey(ino), []byte(path))
 		}
 		if _type == TypeDirectory {
-			tx.set(m.dirStatKey(ino), m.packDirStat(0, 0))
+			tx.set(m.dirStatKey(ino), m.packDirStat(&dirStat{}))
 		}
 		return nil
 	}, parent))
@@ -1792,11 +1795,11 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
-	var newSpace int64
+	var newLength, newSpace int64
 	var needCompact bool
 	var attr Attr
 	err := m.txn(func(tx *kvTxn) error {
-		newSpace = 0
+		newLength, newSpace = 0, 0
 		attr = Attr{}
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
@@ -1808,6 +1811,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
 		if newleng > attr.Length {
+			newLength = int64(newleng - attr.Length)
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 			if m.checkQuota(newSpace, 0) {
@@ -1829,14 +1833,14 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if needCompact {
 			go m.compactChunk(inode, indx, false)
 		}
-		m.updateParentStat(ctx, inode, attr.Parent, newSpace)
+		m.updateParentStat(ctx, inode, attr.Parent, newLength, newSpace)
 	}
 	return errno(err)
 }
 
 func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
 	defer m.timeit(time.Now())
-	var newSpace int64
+	var newLength, newSpace int64
 	f := m.of.find(fout)
 	if f != nil {
 		f.Lock()
@@ -1845,7 +1849,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 	defer func() { m.of.InvalidateChunk(fout, invalidateAllChunks) }()
 	var sattr, attr Attr
 	err := m.txn(func(tx *kvTxn) error {
-		newSpace = 0
+		newLength, newSpace = 0, 0
 		rs := tx.gets(m.inodeKey(fin), m.inodeKey(fout))
 		if rs[0] == nil || rs[1] == nil {
 			return syscall.ENOENT
@@ -1874,6 +1878,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 
 		newleng := offOut + size
 		if newleng > attr.Length {
+			newLength = int64(newleng - attr.Length)
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
@@ -1951,7 +1956,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		return nil
 	})
 	if err == nil {
-		m.updateParentStat(ctx, fout, attr.Parent, newSpace)
+		m.updateParentStat(ctx, fout, attr.Parent, newLength, newSpace)
 	}
 	return errno(err)
 }
@@ -1976,14 +1981,13 @@ func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
 	if m.conf.ReadOnly {
 		return nil, syscall.EROFS
 	}
-	space, inodes, err := m.calcDirStat(ctx, ino)
+	stat, err := m.calcDirStat(ctx, ino)
 	if err != nil {
 		return nil, err
 	}
 	err = m.client.txn(func(tx *kvTxn) error {
-		tx.set(m.dirStatKey(ino), m.packDirStat(space, inodes))
+		tx.set(m.dirStatKey(ino), m.packDirStat(stat))
 		return nil
-
 	}, 0)
 	if eno, ok := err.(syscall.Errno); ok && eno == 0 {
 		err = nil
@@ -1992,7 +1996,7 @@ func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
 		// other clients have synced
 		err = nil
 	}
-	return &dirStat{int64(space), int64(inodes)}, err
+	return stat, err
 }
 
 func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
@@ -2009,17 +2013,17 @@ func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 					syncMap[ino] = true
 					continue
 				}
-				us, ui := m.parseDirStat(rawStat)
-				usedSpace, usedInodes := int64(us), int64(ui)
+				st := m.parseDirStat(rawStat)
 				stat := batch[ino]
-				usedSpace += stat.space
-				usedInodes += stat.inodes
-				if usedSpace < 0 || usedInodes < 0 {
-					logger.Warnf("dir stat of inode %d is invalid: space %d, inodes %d, try to sync", ino, usedSpace, usedInodes)
+				st.length += stat.length
+				st.space += stat.space
+				st.inodes += stat.inodes
+				if st.length < 0 || st.space < 0 || st.inodes < 0 {
+					logger.Warnf("dir stat of inode %d is invalid: %+v, try to sync", ino, st)
 					syncMap[ino] = true
 					continue
 				}
-				tx.set(keys[i], m.packDirStat(uint64(usedSpace), uint64(usedInodes)))
+				tx.set(keys[i], m.packDirStat(st))
 			}
 			return nil
 		})
@@ -2040,8 +2044,7 @@ func (m *kvMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, err
 		return nil, err
 	}
 	if rawStat != nil {
-		space, inodes := m.parseDirStat(rawStat)
-		return &dirStat{space: int64(space), inodes: int64(inodes)}, nil
+		return m.parseDirStat(rawStat), nil
 	}
 	if trySync {
 		return m.doSyncDirStat(ctx, ino)

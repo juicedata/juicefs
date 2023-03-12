@@ -161,6 +161,7 @@ type delfile struct {
 
 type dirStats struct {
 	Inode      Ino   `xorm:"pk notnull"`
+	DataLength int64 `xorm:"notnull"`
 	UsedSpace  int64 `xorm:"notnull"`
 	UsedInodes int64 `xorm:"notnull"`
 }
@@ -948,10 +949,10 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newSpace int64
+	var newLength, newSpace int64
 	var nodeAttr node
 	err := m.txn(func(s *xorm.Session) error {
-		newSpace = 0
+		newLength, newSpace = 0, 0
 		nodeAttr = node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&nodeAttr)
 		if err != nil {
@@ -967,6 +968,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			m.parseAttr(&nodeAttr, attr)
 			return nil
 		}
+		newLength = int64(length) - int64(nodeAttr.Length)
 		newSpace = align4K(length) - align4K(nodeAttr.Length)
 		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
@@ -1012,7 +1014,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		return nil
 	})
 	if err == nil {
-		m.updateParentStat(ctx, inode, nodeAttr.Parent, newSpace)
+		m.updateParentStat(ctx, inode, nodeAttr.Parent, newLength, newSpace)
 	}
 	return errno(err)
 }
@@ -1040,10 +1042,10 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
-	var newSpace int64
+	var newLength, newSpace int64
 	var nodeAttr node
 	err := m.txn(func(s *xorm.Session) error {
-		newSpace = 0
+		newLength, newSpace = 0, 0
 		nodeAttr = node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&nodeAttr)
 		if err != nil {
@@ -1072,7 +1074,8 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		}
 
 		old := nodeAttr.Length
-		newSpace = align4K(length) - align4K(nodeAttr.Length)
+		newLength = int64(length) - int64(old)
+		newSpace = align4K(length) - align4K(old)
 		if newSpace > 0 && m.checkQuota(newSpace, 0) {
 			return syscall.ENOSPC
 		}
@@ -1106,7 +1109,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		return nil
 	})
 	if err == nil {
-		m.updateParentStat(ctx, inode, nodeAttr.Parent, newSpace)
+		m.updateParentStat(ctx, inode, nodeAttr.Parent, newLength, newSpace)
 	}
 	return errno(err)
 }
@@ -2052,11 +2055,11 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		defer f.Unlock()
 	}
 	defer func() { m.of.InvalidateChunk(inode, indx) }()
-	var newSpace int64
+	var newLength, newSpace int64
 	var needCompact bool
 	var nodeAttr node
 	err := m.txn(func(s *xorm.Session) error {
-		newSpace = 0
+		newLength, newSpace = 0, 0
 		nodeAttr = node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&nodeAttr)
 		if err != nil {
@@ -2070,6 +2073,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
 		if newleng > nodeAttr.Length {
+			newLength = int64(newleng - nodeAttr.Length)
 			newSpace = align4K(newleng) - align4K(nodeAttr.Length)
 			nodeAttr.Length = newleng
 		}
@@ -2108,7 +2112,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if needCompact {
 			go m.compactChunk(inode, indx, false)
 		}
-		m.updateParentStat(ctx, inode, nodeAttr.Parent, newSpace)
+		m.updateParentStat(ctx, inode, nodeAttr.Parent, newLength, newSpace)
 	}
 	return errno(err)
 }
@@ -2120,11 +2124,11 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		f.Lock()
 		defer f.Unlock()
 	}
-	var newSpace int64
+	var newLength, newSpace int64
 	var nin, nout node
 	defer func() { m.of.InvalidateChunk(fout, invalidateAllChunks) }()
 	err := m.txn(func(s *xorm.Session) error {
-		newSpace = 0
+		newLength, newSpace = 0, 0
 		nin = node{Inode: fin}
 		nout = node{Inode: fout}
 		err := m.getNodesForUpdate(s, &nin, &nout)
@@ -2151,6 +2155,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 
 		newleng := offOut + size
 		if newleng > nout.Length {
+			newLength = int64(newleng - nout.Length)
 			newSpace = align4K(newleng) - align4K(nout.Length)
 			nout.Length = newleng
 		}
@@ -2234,7 +2239,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		return nil
 	})
 	if err == nil {
-		m.updateParentStat(ctx, fout, nout.Parent, newSpace)
+		m.updateParentStat(ctx, fout, nout.Parent, newLength, newSpace)
 	}
 	return errno(err)
 }
@@ -2257,11 +2262,13 @@ func (m *dbMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 
 func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	table := m.db.GetTableMapper().Obj2Table("dirStats")
+	fileLengthColumn := m.db.GetColumnMapper().Obj2Table("DataLength")
 	usedSpaceColumn := m.db.GetColumnMapper().Obj2Table("UsedSpace")
 	usedInodeColumn := m.db.GetColumnMapper().Obj2Table("UsedInodes")
 	sql := fmt.Sprintf(
-		"update `%s` set `%s` = `%s` + ?, `%s` = `%s` + ? where `inode` = ?",
+		"update `%s` set `%s` = `%s` + ?, `%s` = `%s` + ?, `%s` = `%s` + ? where `inode` = ?",
 		table,
+		fileLengthColumn, fileLengthColumn,
 		usedSpaceColumn, usedSpaceColumn,
 		usedInodeColumn, usedInodeColumn,
 	)
@@ -2272,7 +2279,7 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 		err := m.txn(func(s *xorm.Session) error {
 			for _, ino := range group {
 				stat := batch[ino]
-				ret, err := s.Exec(sql, stat.space, stat.inodes, ino)
+				ret, err := s.Exec(sql, stat.length, stat.space, stat.inodes, ino)
 				if err != nil {
 					return err
 				}
@@ -2298,12 +2305,12 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 }
 
 func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
-	space, inodes, err := m.calcDirStat(ctx, ino)
+	stat, err := m.calcDirStat(ctx, ino)
 	if err != nil {
 		return nil, err
 	}
 	err = m.txn(func(s *xorm.Session) error {
-		_, err := s.Insert(&dirStats{ino, int64(space), int64(inodes)})
+		_, err := s.Insert(&dirStats{ino, stat.length, stat.space, stat.inodes})
 		if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			// other client synced
 			err = nil
@@ -2313,7 +2320,7 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &dirStat{int64(space), int64(inodes)}, nil
+	return stat, nil
 }
 
 func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error) {
@@ -2326,12 +2333,11 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, err
 	}); err != nil {
 		return nil, err
 	}
-
 	if !exist {
-		if !trySync {
-			return nil, nil
+		if trySync {
+			return m.doSyncDirStat(ctx, ino)
 		}
-		return m.doSyncDirStat(ctx, ino)
+		return nil, nil
 	}
 
 	if trySync && (st.UsedSpace < 0 || st.UsedInodes < 0) {
@@ -2339,11 +2345,11 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, err
 			"dir usage of inode %d is invalid: space %d, inodes %d, try to fix",
 			ino, st.UsedSpace, st.UsedInodes,
 		)
-		space, inodes, err := m.calcDirStat(ctx, ino)
+		stat, err := m.calcDirStat(ctx, ino)
 		if err != nil {
 			return nil, err
 		}
-		st.UsedSpace, st.UsedInodes = int64(space), int64(inodes)
+		st.DataLength, st.UsedSpace, st.UsedInodes = stat.length, stat.space, stat.inodes
 		e := m.txn(func(s *xorm.Session) error {
 			n, err := s.AllCols().Update(&st)
 			if err == nil && n != 1 {
@@ -2355,7 +2361,7 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, err
 			logger.Warn(e)
 		}
 	}
-	return &dirStat{st.UsedSpace, st.UsedInodes}, nil
+	return &dirStat{st.DataLength, st.UsedSpace, st.UsedInodes}, nil
 }
 
 func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {

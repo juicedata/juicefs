@@ -356,16 +356,20 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool
 				}
 			} else {
 				summary.Files++
-				summary.Length += e.Attr.Length
 				summary.Size += uint64(align4K(e.Attr.Length))
+				if e.Attr.Typ == TypeFile {
+					summary.Length += e.Attr.Length
+				}
 			}
 		}
 		summary.Dirs++
 		summary.Size += 4096
 	} else {
 		summary.Files++
-		summary.Length += attr.Length
 		summary.Size += uint64(align4K(attr.Length))
+		if attr.Typ == TypeFile {
+			summary.Length += attr.Length
+		}
 	}
 	return 0
 }
@@ -380,19 +384,21 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 		return fastGetSummary(r, ctx, inode, summary, recursive)
 	} else {
 		summary.Files++
-		summary.Length += attr.Length
 		summary.Size += uint64(align4K(attr.Length))
+		if attr.Typ == TypeFile {
+			summary.Length += attr.Length
+		}
 	}
 	return 0
 }
 
 func fastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
-	space, inodes, err := r.GetDirStat(ctx, inode)
+	st, err := r.GetDirStat(ctx, inode)
 	if err != nil {
 		return errno(err)
 	}
-	summary.Size += space
-	summary.Length += space
+	summary.Size += uint64(st.space)
+	summary.Length += uint64(st.length)
 
 	var attr Attr
 	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
@@ -403,7 +409,7 @@ func fastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 		return st
 	}
 	if attr.Nlink == 2 {
-		summary.Files += inodes
+		summary.Files += uint64(st.inodes)
 		return 0
 	}
 
