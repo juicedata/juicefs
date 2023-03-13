@@ -86,9 +86,11 @@ func clone(ctx *cli.Context) error {
 		umask = syscall.Umask(0)
 		syscall.Umask(umask)
 	}
-	wb := utils.NewBuffer(4 + 4 + 8 + 8 + 1 + uint32(len(dstName)) + 4 + 4 + 2 + 1)
+	headerSize := 4 + 4
+	contentSize := 8 + 8 + 1 + uint32(len(dstName)) + 4 + 4 + 2 + 1
+	wb := utils.NewBuffer(uint32(headerSize) + contentSize)
 	wb.Put32(meta.Clone)
-	wb.Put32(8 + +8 + 1 + uint32(len(dstName)) + 4 + 4 + 2 + 1)
+	wb.Put32(contentSize)
 	wb.Put64(srcIno)
 	wb.Put64(dstParentIno)
 	wb.Put8(uint8(len(dstName)))
