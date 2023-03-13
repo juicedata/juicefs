@@ -3654,7 +3654,16 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func())
 	} else if attr.Typ == TypeDirectory {
 		attr.Length = 4 << 10
 		dentries := make(map[string]interface{}, batch)
+		var stat dirStat
 		for name, c := range e.Entries {
+			length := uint64(0)
+			if typeFromString(c.Attr.Type) == TypeFile {
+				length = c.Attr.Length
+			}
+			stat.space += align4K(length)
+			stat.length += int64(length)
+			stat.inodes++
+
 			dentries[string(unescape(name))] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)
 			if len(dentries) >= batch {
 				p.HSet(ctx, m.entryKey(inode), dentries)
@@ -3665,6 +3674,10 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func())
 		if len(dentries) > 0 {
 			p.HSet(ctx, m.entryKey(inode), dentries)
 		}
+		field := inode.String()
+		p.HSet(ctx, m.dirDataLengthKey(), field, stat.length)
+		p.HSet(ctx, m.dirUsedSpaceKey(), field, stat.space)
+		p.HSet(ctx, m.dirUsedInodesKey(), field, stat.inodes)
 	} else if attr.Typ == TypeSymlink {
 		symL := unescape(e.Symlink)
 		attr.Length = uint64(len(symL))
