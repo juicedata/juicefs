@@ -2958,9 +2958,19 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) {
 		}
 	} else if attr.Typ == TypeDirectory {
 		attr.Length = 4 << 10
+		var stat dirStat
 		for name, c := range e.Entries {
+			length := uint64(0)
+			if typeFromString(c.Attr.Type) == TypeFile {
+				length = c.Attr.Length
+			}
+			stat.length += int64(length)
+			stat.space += align4K(length)
+			stat.inodes++
+
 			kv <- &pair{m.entryKey(inode, string(unescape(name))), m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)}
 		}
+		kv <- &pair{m.dirStatKey(inode), m.packDirStat(&stat)}
 	} else if attr.Typ == TypeSymlink {
 		symL := unescape(e.Symlink)
 		attr.Length = uint64(len(symL))
