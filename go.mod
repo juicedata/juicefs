@@ -42,7 +42,7 @@ require (
 	github.com/ncw/swift v1.0.53
 	github.com/pingcap/log v1.1.1-0.20221015072633-39906604fb81
 	github.com/pkg/errors v0.9.1
-	github.com/pkg/sftp v1.13.4
+	github.com/pkg/sftp v1.13.5
 	github.com/pkg/xattr v0.4.6
 	github.com/prometheus/client_golang v1.11.1
 	github.com/prometheus/client_model v0.2.0
