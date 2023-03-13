@@ -2,32 +2,57 @@
 title: Internals
 sidebar_position: 4
 slug: /internals
-description: This article introduces the main implementation details of JuiceFS, which is used as a reference for developers to understand and contribute open source code.
 ---
 
-## 1. Introduction
+This article introduces implementation details of JuiceFS, use this as a reference if you'd like to contribute. The content below is based on JuiceFS v1.0.0, metadata version V1.
 
-This article introduces the main implementation details of JuiceFS, which is used as a reference for developers to understand and contribute open source code. The content corresponds to the JuiceFS code version v1.0.0 and the metadata version V1.
+JuiceFS uses FUSE low level API, because this is the same set of APIs used by kernel VFS when interacting with FUSE. If JuiceFS were to use high level API, it'll have to implement the VFS tree within libfuse, and then expose path based API. This method works better for systems that already expose path based APIs (e.g. HDFS, S3). If metadata itself implements file / directory tree based on inode, the inode -> path -> inode conversions will have an impact on performance (this is the reason why FUSE API for HDFS doesn't perform well). JuiceFS Metadata directly implements file tree and API based on inode, so naturally it uses FUSE low level API.
 
-## 2. Keyword Definition
+Before digging into source code, you should read [Data Processing Workflow](../introduction/io_processing.md).
 
-- File system: i.e. JuiceFS Volume, represents a separate namespace. Files can be moved freely within the same filesystem, while data copies are required between different filesystems.
-- Metadata engine: is a component that stores and manages file system metadata, usually served by a database that supports transactions. There are three categories of metadata engines currently supported by JuiceFS.
+## Keyword Definition
+
+High level concepts:
+
+- File system: i.e. JuiceFS Volume, represents a separate namespace. Files can be moved freely within the same file system, while data copies are required between different file systems.
+- Metadata engine: A supported database instance of your choice, that stores and manages file system metadata. There are three categories of metadata engines currently supported by JuiceFS.
   - Redis: Redis and various protocol-compatible services
   - SQL: MySQL, PostgreSQL, SQLite, etc.
   - TKV: TiKV, BadgerDB, etc.
-- Datastore: is a component used to store and manage file system data, usually served by object storage, such as Amazon S3, Aliyun OSS, etc. It can also be served by other storage systems that are compatible with object storage semantics, such as local file systems, Ceph RADOS, TiKV, etc.
+- Datastore: Object storage service that stores and manages file system data, such as Amazon S3, Aliyun OSS, etc. It can also be served by other storage systems that are compatible with object storage semantics, such as local file systems, Ceph RADOS, TiKV, etc.
 - Client: can be in various forms, such as mount process, S3 gateway, WebDAV server, Java SDK, etc.
 - File: refers to all types of files in general in this documentation, including regular files, directory files, link files, device files, etc.
 - Directory: is a special kind of file used to organize the tree structure, and its contents are an index to a set of other files.
 
-## 3. Metadata Structure
+Low level concepts:
+
+- Chunk: Logical concept, file is split into 64M chunks, allowing fast lookups during file reads;
+- Block: A chunk contains one or more blocks (4M by default), block is the basic storage unit in object storage. JuiceFS Client reads multiple blocks concurrently which greatly improves read performance. Apart from this, block is also the basic storage unit on disk cache, so this design improves cache eviction efficiency. Apart from this, block is immutable, all file edits is achieved through new blocks: after file edit, new blocks are uploaded to object storage, and new slices are appended to the slice list in the corresponding file metadata;
+- Slice: Logical concept, basic unit for file writes. Block's purpose is to improve read speed, and slice exists to improve file edits and random writes. All file writes are assigned a new or existing slice, and when file is read, what application sees is the consolidated view of all slices. Learn more at [Data Processing Workflow](../introduction/io_processing.md).
+
+## Learn source code  {#source-code-structure}
+
+Assuming you're already familiar with Go, as well as [JuiceFS architecture](https://juicefs.com/docs/community/architecture), this is the overall code structure:
+
+* [`cmd`](https://github.com/juicedata/juicefs/tree/main/cmd) is the top-level entrance, all JuiceFS functionalities is rooted here, e.g. the `juicefs format` command resides in `cmd/format.go`；
+* [`pkg`](https://github.com/juicedata/juicefs/tree/main/pkg) is actual implementation:
+  * `pkg/fuse/fuse.go` provides abstract FUSE API;
+  * `pkg/vfs` contains actual FUSE implementation, Metadata requests are handled in `pkg/meta`, read requests are handled in `pkg/vfs/reader.go` and write requests are handled by `pkg/vfs/writer.go`;
+  * `pkg/meta` directory is the implementation of all metadata engines, where:
+    * `pkg/meta/interface.go` is the interface definition for all types of metadata engines
+    * `pkg/meta/redis.go` is the interface implementation of Redis database
+    * `pkg/meta/sql.go` is the interface definition and general interface implementation of relational database, and the implementation of specific databases is in a separate file (for example, the implementation of MySQL is in `pkg/meta/sql_mysql.go`)
+    * `pkg/meta/tkv.go` is the interface definition and general interface implementation of the KV database, and the implementation of a specific database is in a separate file (for example, the implementation of TiKV is in `pkg/meta/tkv_tikv.go`)
+  * `pkg/object` contains all object storage integration code;
+* [`sdk/java`](https://github.com/juicedata/juicefs/tree/main/sdk/java) is the Hadoop Java SDK, it uses `sdk/java/libjfs` through JNI.
+
+## Metadata Structure
 
 File systems are usually organized in a tree structure, where nodes represent files and edges represent directory containment relationships. There are more than ten metadata structures in JuiceFS. Most of them are used to maintain the organization of file tree and properties of individual nodes, while the rest are used to manage system configuration, client sessions, asynchronous tasks, etc. All metadata structures are described below.
 
-### 3.1 General Structure
+### General Structure
 
-#### 3.1.1 Setting
+#### Setting
 
 It is created when the `juicefs format` command is executed, and some of its fields can be modified later by the `juicefs config` command. The structure is specified as follows.
 
@@ -77,7 +102,7 @@ type Format struct {
 
 This structure is serialized into JSON format and stored in the metadata engine.
 
-#### 3.1.2 Counter
+#### Counter
 
 Maintains the value of each counter in the system and the start timestamps of some background tasks, specifically
 
@@ -92,7 +117,7 @@ Maintains the value of each counter in the system and the start timestamps of so
 - lastCleanupFiles: timestamp of the last check on the cleanup of residual files
 - lastCleanupTrash: timestamp of the last check on the cleanup of trash
 
-#### 3.1.3 Session
+#### Session
 
 Records the session IDs of clients connected to this file system and their timeouts. Each client sends a heartbeat message to update the timeout, and those who have not updated for a long time will be automatically cleaned up by other clients.
 
@@ -100,7 +125,7 @@ Records the session IDs of clients connected to this file system and their timeo
 Read-only clients cannot write to the metadata engine, so their sessions **will not** be recorded.
 :::
 
-#### 3.1.4 SessionInfo
+#### SessionInfo
 
 Records specific metadata of the client session so that it can be viewed with the `juicefs status` command. This is specified as
 
@@ -115,7 +140,7 @@ type SessionInfo struct {
 
 This structure is serialized into JSON format and stored in the metadata engine.
 
-#### 3.1.5 Node
+#### Node
 
 Records attribute information of each file, as follows
 
@@ -155,7 +180,7 @@ There are a few fields that need clarification.
 
 This structure is usually encoded in binary format and stored in the metadata engine.
 
-#### 3.1.6 Edges
+#### Edges
 
 Records information on each edge in the file tree, as follows
 
@@ -165,7 +190,7 @@ parentInode, name -> type, inode
 
 where parentInode is the inode number of the parent directory, and the others are the name, type, and inode number of the child files, respectively.
 
-#### 3.1.7 LinkParent
+#### LinkParent
 
 Records the parent directory of some files. The parent directory of most files is recorded in the Parent field of the attribute; however, for files that have been created with hard links, there may be more than one parent directory, so the Parent field is set to 0, and all parent inodes are recorded independently, as follows
 
@@ -175,7 +200,7 @@ inode -> parentInode, links
 
 where links is the count of the parentInode, because multiple hard links can be created in the same directory, and these hard links share one inode.
 
-#### 3.1.8 Chunk
+#### Chunk
 
 Records information on each Chunk, as follows
 
@@ -197,7 +222,7 @@ type Slice struct {
 
 This structure is encoded and saved in binary format, taking up 24 bytes.
 
-#### 3.1.9 SliceRef
+#### SliceRef
 
 Records the reference count of a Slice, as follows
 
@@ -207,7 +232,7 @@ sliceId, size -> refs
 
 Since the reference count of most Slices is 1, to reduce the number of related entries in the database, the actual value minus 1 is used as the stored count value in Redis and TKV. In this way, most of the Slices have a refs value of 0, and there is no need to create related entries in the database.
 
-#### 3.1.10 Symlink
+#### Symlink
 
 Records the location of the softlink file, as follows
 
@@ -215,7 +240,7 @@ Records the location of the softlink file, as follows
 inode -> target
 ```
 
-#### 3.1.11 Xattr
+#### Xattr
 
 Records extended attributes (Key-Value pairs) of a file, as follows
 
@@ -223,7 +248,7 @@ Records extended attributes (Key-Value pairs) of a file, as follows
 inode, key -> value
 ```
 
-#### 3.1.12 Flock
+#### Flock
 
 Records BSD locks (flock) of a file, specifically.
 
@@ -233,7 +258,7 @@ inode, sid, owner -> ltype
 
 where `sid` is the client session ID, `owner` is a string of numbers, usually associated with a process, and `ltype` is the lock type, which can be 'R' or 'W'.
 
-#### 3.1.13 Plock
+#### Plock
 
 Record POSIX record locks (fcntl) of a file, specifically
 
@@ -254,7 +279,7 @@ type plockRecord struct {
 
 This structure is encoded and stored in binary format, taking up 24 bytes.
 
-#### 3.1.14 DelFiles
+#### DelFiles
 
 Records the list of files to be cleaned. It is needed as data cleanup of files is an asynchronous and potentially time-consuming operation that can be interrupted by other factors.
 
@@ -264,7 +289,7 @@ inode, length -> expire
 
 where length is the length of the file and expire is the time when the file was deleted.
 
-#### 3.1.15 DelSlices
+#### DelSlices
 
 Records delayed deleted Slices. When the Trash feature is enabled, old Slices deleted by the Slice Compaction will be kept for the same amount of time as the Trash configuration, to be available for data recovery if necessary.
 
@@ -283,7 +308,7 @@ type slice struct {
 
 This structure is encoded and stored in binary format, taking up 12 bytes.
 
-#### 3.1.16 Sustained
+#### Sustained
 
 Records the list of files that need to be kept temporarily during the session. If a file is still open when it is deleted, the data cannot be cleaned up immediately, but needs to be held temporarily until the file is closed.
 
@@ -293,7 +318,7 @@ sid -> []inode
 
 where `sid` is the session ID and the mapped value is the list of temporarily undeleted file inodes.
 
-### 3.2 Redis
+### Redis
 
 The common format of keys in Redis is `${prefix}${JFSKey}`, where
 
@@ -302,19 +327,19 @@ The common format of keys in Redis is `${prefix}${JFSKey}`, where
 
 In Redis Keys, integers (including inode numbers) are represented as decimal strings if not otherwise specified.
 
-#### 3.2.1 Setting
+#### Setting
 
 - Key: `setting`
 - Value Type: String
 - Value: file system formatting information in JSON format
 
-#### 3.2.2 Counter
+#### Counter
 
 - Key: counter name
 - Value Type: String
 - Value: value of the counter, which is actually an integer
 
-#### 3.2.3 Session
+#### Session
 
 - Key: `allSessions`
 - Value Type: Sorted Set
@@ -322,7 +347,7 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Member: session ID
   - Score: timeout point of this session
 
-#### 3.2.4 SessionInfo
+#### SessionInfo
 
 - Key: `sessionInfos`
 - Value Type: Hash
@@ -330,13 +355,13 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Key: session ID
   - Value: session information in JSON format
 
-#### 3.2.5 Node
+#### Node
 
 - Key: `i${inode}`
 - Value Type: String
 - Value: binary encoded file attribute
 
-#### 3.2.6 Edge
+#### Edge
 
 - Key: `d${inode}`
 - Value Type: Hash
@@ -344,7 +369,7 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Key: file name
   - Value: binary encoded file type and inode number
 
-#### 3.2.7 LinkParent
+#### LinkParent
 
 - Key: `p${inode}`
 - Value Type: Hash
@@ -352,13 +377,13 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Key: parent inode
   - Value: count of this parent inode
 
-#### 3.2.8 Chunk
+#### Chunk
 
 - Key: `c${inode}_${index}`
 - Value Type: List
 - Value: list of Slices, each Slice is binary encoded with 24 bytes
 
-#### 3.2.9 SliceRef
+#### SliceRef
 
 - Key: `sliceRef`
 - Value Type: Hash
@@ -366,13 +391,13 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Key: `k${sliceId}_${size}`
   - Value: reference count of this Slice minus 1 (if the reference count is 1, the corresponding entry is generally not created)
 
-#### 3.2.10 Symlink
+#### Symlink
 
 - Key: `s${inode}`
 - Value Type: String
 - Value: path that the symbolic link points to
 
-#### 3.2.11 Xattr
+#### Xattr
 
 - Key: `x${inode}`
 - Value Type: Hash
@@ -380,7 +405,7 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Key: name of the extended attribute
   - Value: value of the extended attribute
 
-#### 3.2.12 Flock
+#### Flock
 
 - Key: `lockf${inode}`
 - Value Type: Hash
@@ -388,7 +413,7 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Key: `${sid}_${owner}`, owner in hexadecimal
   - Value: lock type, can be 'R' or 'W'
 
-#### 3.2.13 Plock
+#### Plock
 
 - Key: `lockp${inode}`
 - Value Type: Hash
@@ -396,7 +421,7 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Key: `${sid}_${owner}`, owner in hexadecimal
   - Value: array of bytes, where every 24 bytes corresponds to a [plockRecord](#3113-plock)
 
-#### 3.2.14 DelFiles
+#### DelFiles
 
 - Key：`delfiles`
 - Value Type: Sorted Set
@@ -404,7 +429,7 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Member: `${inode}:${length}`
   - Score: the timestamp when this file was added to the set
 
-#### 3.2.15 DelSlices
+#### DelSlices
 
 - Key: `delSlices`
 - Value Type: Hash
@@ -412,18 +437,18 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Key: `${sliceId}_${deleted}`
   - Value: array of bytes, where every 12 bytes corresponds to a [slice](#3115-delslices)
 
-#### 3.2.16 Sustained
+#### Sustained
 
 - Key: `session${sid}`
 - Value Type: List
 - Value: list of files temporarily reserved in this session. In List,
   - Member: inode number of the file
 
-### 3.3 SQL
+### SQL
 
 Metadata is stored in different tables by type, and each table is named with `jfs_` followed by its specific structure name to form the table name, e.g. `jfs_node`. Some tables use `Id` with the `bigserial` type as primary keys to ensure that each table has a primary key, and the `Id` columns do not contain actual information.
 
-#### 3.3.1 Setting
+#### Setting
 
 ```go
 type setting struct {
@@ -434,7 +459,7 @@ type setting struct {
 
 There is only one entry in this table with "format" as Name and file system formatting information in JSON as Value.
 
-#### 3.3.2 Counter
+#### Counter
 
 ```go
 type counter struct {
@@ -443,7 +468,7 @@ type counter struct {
 }
 ```
 
-#### 3.3.3 Session
+#### Session
 
 ```go
 type session2 struct {
@@ -453,11 +478,11 @@ type session2 struct {
 }
 ```
 
-#### 3.3.4 SessionInfo
+#### SessionInfo
 
 There is no separate table for this, but it is recorded in the `Info` column of `session2`.
 
-#### 3.3.5 Node
+#### Node
 
 ```go
 type node struct {
@@ -479,7 +504,7 @@ type node struct {
 
 Most of the fields are the same as [Attr](#315-node), but the timestamp precision is lower, i.e., Atime/Mtime/Ctime are in microseconds.
 
-#### 3.3.6 Edge
+#### Edge
 
 ```go
 type edge struct {
@@ -491,11 +516,11 @@ type edge struct {
 }
 ```
 
-#### 3.3.7 LinkParent
+#### LinkParent
 
 There is no separate table for this. All `Parent`s are found based on the `Inode` index in `edge`.
 
-#### 3.3.8 Chunk
+#### Chunk
 
 ```go
 type chunk struct {
@@ -508,7 +533,7 @@ type chunk struct {
 
 Slices are an array of bytes, and each [Slice](#318-chunk) corresponds to 24 bytes.
 
-#### 3.3.9 SliceRef
+#### SliceRef
 
 ```go
 type sliceRef struct {
@@ -518,7 +543,7 @@ type sliceRef struct {
 }
 ```
 
-#### 3.3.10 Symlink
+#### Symlink
 
 ```go
 type symlink struct {
@@ -527,7 +552,7 @@ type symlink struct {
 }
 ```
 
-#### 3.3.11 Xattr
+#### Xattr
 
 ```go
 type xattr struct {
@@ -538,7 +563,7 @@ type xattr struct {
 }
 ```
 
-#### 3.3.12 Flock
+#### Flock
 
 ```go
 type flock struct {
@@ -550,7 +575,7 @@ type flock struct {
 }
 ```
 
-#### 3.3.13 Plock
+#### Plock
 
 ```go
 type plock struct {
@@ -564,7 +589,7 @@ type plock struct {
 
 Records is an array of bytes, and each [plockRecord](#3113-plock) corresponds to 24 bytes.
 
-#### 3.3.14 DelFiles
+#### DelFiles
 
 ```go
 type delfile struct {
@@ -574,7 +599,7 @@ type delfile struct {
 }
 ```
 
-#### 3.3.15 DelSlices
+#### DelSlices
 
 ```go
 type delslices struct {
@@ -586,7 +611,7 @@ type delslices struct {
 
 Slices is an array of bytes, and each [slice](#3115-delslices) corresponds to 12 bytes.
 
-#### 3.3.16 Sustained
+#### Sustained
 
 ```go
 type sustained struct {
@@ -596,7 +621,7 @@ type sustained struct {
 }
 ```
 
-### 3.4 TKV
+### TKV
 
 The common format of keys in TKV (Transactional Key-Value Database) is `${prefix}${JFSKey}`, where
 
@@ -608,49 +633,49 @@ In TKV's Keys, all integers are stored in encoded binary form.
 - inode and counter value occupy 8 bytes and are encoded with **small endian**.
 - SID, sliceId and timestamp occupy 8 bytes and are encoded with **big endian**.
 
-#### 3.4.1 Setting
+#### Setting
 
 ```
 setting -> file system formatting information in JSON format
 ```
 
-#### 3.4.2 Counter
+#### Counter
 
 ```
 C${name} -> counter value
 ```
 
-#### 3.4.3 Session
+#### Session
 
 ```
 SE${sid} -> timestamp
 ```
 
-#### 3.4.4 SessionInfo
+#### SessionInfo
 
 ```
 SI${sid} -> session information in JSON format
 ```
 
-#### 3.4.5 Node
+#### Node
 
 ```
 A${inode}I -> encoded Attr
 ```
 
-#### 3.4.6 Edge
+#### Edge
 
 ```
 A${inode}D${name} -> encoded {type, inode}
 ```
 
-#### 3.4.7 LinkParent
+#### LinkParent
 
 ```
 A${inode}P${parentInode} -> counter value
 ```
 
-#### 3.4.8 Chunk
+#### Chunk
 
 ```
 A${inode}C${index} -> Slices
@@ -658,7 +683,7 @@ A${inode}C${index} -> Slices
 
 where index takes up 4 bytes and is encoded with **big endian**. Slices is an array of bytes, one [Slice](#318-chunk) per 24 bytes.
 
-#### 3.4.9 SliceRef
+#### SliceRef
 
 ```
 K${sliceId}${size} -> counter value
@@ -666,19 +691,19 @@ K${sliceId}${size} -> counter value
 
 where size takes up 4 bytes and is encoded with **big endian**.
 
-#### 3.4.10 Symlink
+#### Symlink
 
 ```
 A${inode}S -> target
 ```
 
-#### 3.4.11 Xattr
+#### Xattr
 
 ```
 A${inode}X${name} -> xattr value
 ```
 
-#### 3.4.12 Flock
+#### Flock
 
 ```
 F${inode} -> flocks
@@ -694,7 +719,7 @@ type flock struct {
 }
 ```
 
-#### 3.4.13 Plock
+#### Plock
 
 ```
 P${inode} -> plocks
@@ -713,7 +738,7 @@ type plock struct {
 
 where size is the length of the records array and every 24 bytes in records corresponds to one [plockRecord](#3113-plock).
 
-#### 3.4.14 DelFiles
+#### DelFiles
 
 ```
 D${inode}${length} -> timestamp
@@ -721,7 +746,7 @@ D${inode}${length} -> timestamp
 
 where length takes up 8 bytes and is encoded with **big endian**.
 
-#### 3.4.15 DelSlices
+#### DelSlices
 
 ```
 L${timestamp}${sliceId} -> slices
@@ -729,7 +754,7 @@ L${timestamp}${sliceId} -> slices
 
 where slices is an array of bytes, and one [slice](#3115-delslices) corresponds to 12 bytes.
 
-#### 3.4.16 Sustained
+#### Sustained
 
 ```
 SS${sid}${inode} -> 1
@@ -737,9 +762,9 @@ SS${sid}${inode} -> 1
 
 Here the Value value is only used as a placeholder.
 
-## 4 File Data Format
+## File Data Format
 
-### 4.1 Finding files by path
+### Finding files by path
 
 According to the design of [Edge](#316-edges), only the direct children of each directory are recorded in the metadata engine. When an application provides a path to access a file, JuiceFS needs to look it up level by level. Now suppose the application wants to open the file `/dir1/dir2/testfile`, then it needs to
 
@@ -750,7 +775,7 @@ According to the design of [Edge](#316-edges), only the direct children of each 
 
 Failure in any of the above steps will result in the file pointed to by that path not being found.
 
-### 4.2 File data splitting
+### File data splitting
 
 From the previous section, we know how to find the file based on its path and get its attributes. The metadata related to the contents of the file can be found based on the inode and size fields in the file properties. Now suppose a file has an inode of 100 and a size of 160 MiB, then the file has `(size-1) / 64 MiB + 1 = 3` Chunks, as follows.
 
@@ -796,9 +821,9 @@ Slice{pos: 36M, id: 10, size: 30M, off: 26M, len:  4M}
 Slice{pos: 40M, id:  0, size: 24M, off:   0, len: 24M} // can be omitted
 ```
 
-### 4.3 Data objects
+### Data objects
 
-#### 4.3.1 Object naming
+#### Object naming
 
 Block is the basic unit for JuiceFS to manage data. Its size is 4 MiB by default, and can be changed only when formatting a file system, within the interval [64 KiB, 16 MiB]. Each Block is an object in the object storage after upload, and is named in the format `${fsname}/chunks/${hash}/${basename}`, where
 
@@ -872,11 +897,11 @@ The empty objectName in the table means a file hole and is read as 0. As you can
 
 It is worth mentioning that the 'size' here is size of the original data in the Block, rather than that of the actual object in object storage. The original data is written directly to object storage by default, so the 'size' is equal to object size. However, when data compression or data encryption is enabled, the size of the actual object will change and may no longer be the same as the 'size'.
 
-#### 4.3.2 Data compression
+#### Data compression
 
 You can configure the compression algorithm (supporting `lz4` and `zstd`) with the `--compress <value>` parameter when formatting a file system, so that all data blocks of this file system will be compressed before uploading to object storage. The object name remains the same as default, and the content is the result of the compression algorithm, without any other meta information. Therefore, the compression algorithm in the [file system formatting Information](#311-setting) is not allowed to be modified, otherwise it will cause the failure of reading existing data.
 
-#### 4.3.3 Data encryption
+#### Data encryption
 
 The RSA private key can be configured to enable [static data encryption](../security/encrypt.md) when formatting a file system with the `--encrypt-rsa-key <value>` parameter, which allows all data blocks of this file system to be encrypted before uploading to the object storage. The object name is still the same as default, while its content becomes a header plus the result of the data encryption algorithm. The header contains a random seed and the symmetric key used for decryption, and the symmetric key itself is encrypted with the RSA private key. Therefore, it is not allowed to modify the RSA private key in the [file system formatting Information](#311-setting), otherwise reading existing data will fail.
 

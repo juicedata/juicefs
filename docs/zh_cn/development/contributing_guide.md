@@ -4,26 +4,6 @@ sidebar_position: 1
 description: JuiceFS 是开源软件，代码由全球开发者共同贡献和维护，您可以参考本文了解参与开发的流程和注意事项。
 ---
 
-## 学习源码 {#learn-source-code}
-
-假定你已经熟悉 Go 语言，充分了解 [JuiceFS 技术架构](https://juicefs.com/docs/zh/community/architecture)，[JuiceFS 源码](https://github.com/juicedata/juicefs)的大体结构如下：
-
-* [`cmd`](https://github.com/juicedata/juicefs/tree/main/cmd) 是代码结构总入口，所有相关功能都能在此找到入口，如 `juicefs format` 命令对应着 `cmd/format.go`；
-* [`pkg`](https://github.com/juicedata/juicefs/tree/main/pkg) 是具体实现，核心逻辑都在其中：
-  * `pkg/fuse/fuse.go` 是 FUSE 实现的入口，提供抽象 FUSE 接口；
-  * `pkg/vfs` 是具体的 FUSE 接口实现，元数据请求会调用 `pkg/meta` 中的实现，读请求会调用 `pkg/vfs/reader.go`，写请求会调用 `pkg/vfs/writer.go`；
-  * `pkg/meta` 目录中是所有元数据引擎的实现，其中：
-    * `pkg/meta/interface.go` 是所有类型元数据引擎的接口定义
-    * `pkg/meta/redis.go` 是 Redis 数据库的接口实现
-    * `pkg/meta/sql.go` 是关系型数据库的接口定义及通用接口实现，特定数据库的实现在单独文件中（如 MySQL 的实现在 `pkg/meta/sql_mysql.go`）
-    * `pkg/meta/tkv.go` 是 KV 类数据库的接口定义及通用接口实现，特定数据库的实现在单独文件中（如 TiKV 的实现在 `pkg/meta/tkv_tikv.go`）
-  * `pkg/object` 是与各种对象存储对接的实现。
-* [`sdk/java`](https://github.com/juicedata/juicefs/tree/main/sdk/java) 是 Hadoop Java SDK 的实现，底层依赖 `sdk/java/libjfs` 这个库（通过 JNI 调用）。
-
-JuiceFS 的读写请求处理流程可以阅读[这里](../introduction/io_processing.md)，关键数据结构可以阅读[「内部实现」](./data_structures.md)。
-
-另外，也可以阅读网易存储团队的工程师写的这几篇博客（注意文章内容可能与最新版本代码有出入，一切请以代码为准）：[JuiceFS 调研（基于开源版本代码）](https://aspirer.wang/?p=1560)、[JuiceFS 源码阅读 - 上](https://mp.weixin.qq.com/s/mdqFJLpaJ249rUUEnRiP3Q)、[JuiceFS 源码阅读 - 中](https://mp.weixin.qq.com/s/CLQbQ-cLLGFsShPKUrCUJg)。
-
 ## 基本准则 {#guidelines}
 
 - 在开始修复功能或错误之前，请先通过 GitHub、Slack 等渠道与我们沟通。此步骤的目的是确保没有其他人已经在处理它，如有必要，我们将要求您创建一个 GitHub issue。

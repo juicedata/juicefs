@@ -75,7 +75,7 @@ JuiceFS does not store the original file in the object storage, but splits it in
 
 When reading the data of the overwritten part, according to the **latest metadata**, it can be read from the **new data block** uploaded during random writing, and the **old data block** may be deleted by the background garbage collection tasks automatically clean up. This shifts complexity from random writes to reads.
 
-Above is just a rough introduction. Read ["JuiceFS Internals"](development/data_structures.md) and ["Data Processing Flow"](introduction/io_processing.md) alongside with source code to learn more.
+Read [JuiceFS Internals](development/data_structures.md) and [Data Processing Flow](introduction/io_processing.md) to learn more.
 
 ### How to copy a large number of small files into JuiceFS quickly?
 
