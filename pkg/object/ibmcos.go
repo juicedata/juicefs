@@ -57,6 +57,13 @@ func (s *ibmcos) Create() error {
 	return err
 }
 
+func (s *ibmcos) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  false,
+	}
+}
+
 func (s *ibmcos) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	params := &s3.GetObjectInput{Bucket: &s.bucket, Key: &key}
 	if off > 0 || limit > 0 {
@@ -208,18 +215,7 @@ func (s *ibmcos) UploadPart(key string, uploadID string, num int, body []byte) (
 }
 
 func (s *ibmcos) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	resp, err := s.s3.UploadPartCopy(&s3.UploadPartCopyInput{
-		Bucket:          aws.String(s.bucket),
-		CopySource:      aws.String(s.bucket + "/" + srcKey),
-		CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
-		Key:             aws.String(key),
-		PartNumber:      aws.Int64(int64(num)),
-		UploadId:        aws.String(uploadID),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &Part{Num: num, ETag: *resp.CopyPartResult.ETag}, nil
+	return nil, notSupported
 }
 
 func (s *ibmcos) AbortUpload(key string, uploadID string) {

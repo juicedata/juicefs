@@ -46,6 +46,13 @@ func (s *scsClient) String() string {
 	return fmt.Sprintf("scs://%s/", s.bucket)
 }
 
+func (s *scsClient) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  false,
+	}
+}
+
 func (s *scsClient) Create() error {
 	err := s.c.PutBucket(s.bucket, scs.ACLPrivate)
 	if err != nil && isExists(err) {

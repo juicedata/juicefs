@@ -43,6 +43,16 @@ func (t tosClient) String() string {
 	return fmt.Sprintf("tos://%s/", t.bucket)
 }
 
+func (t tosClient) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              5 << 20,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func (t tosClient) Create() error {
 	_, err := t.client.CreateBucketV2(context.Background(), &tos.CreateBucketV2Input{Bucket: t.bucket})
 	if e, ok := err.(*tos.TosServerError); ok {

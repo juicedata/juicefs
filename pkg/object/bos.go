@@ -46,6 +46,16 @@ func (q *bosclient) String() string {
 	return fmt.Sprintf("bos://%s/", q.bucket)
 }
 
+func (q *bosclient) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              100 << 10,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func (q *bosclient) Create() error {
 	_, err := q.c.PutBucket(q.bucket)
 	if err != nil && isExists(err) {

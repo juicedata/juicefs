@@ -47,6 +47,16 @@ func (o *ossClient) String() string {
 	return fmt.Sprintf("oss://%s/", o.bucket.BucketName)
 }
 
+func (o *ossClient) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              100 << 10,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func (o *ossClient) Create() error {
 	err := o.bucket.Client.CreateBucket(o.bucket.BucketName)
 	if err != nil && isExists(err) {

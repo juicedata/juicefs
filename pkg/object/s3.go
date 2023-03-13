@@ -64,6 +64,16 @@ func (s *s3client) String() string {
 	return fmt.Sprintf("s3://%s/", s.bucket)
 }
 
+func (s *s3client) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              5 << 20,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func isExists(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, s3.ErrCodeBucketAlreadyExists) || strings.Contains(msg, s3.ErrCodeBucketAlreadyOwnedByYou)

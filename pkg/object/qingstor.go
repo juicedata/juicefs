@@ -46,6 +46,16 @@ func (q *qingstor) String() string {
 	return fmt.Sprintf("qingstor://%s/", *q.bucket.Properties.BucketName)
 }
 
+func (q *qingstor) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              4 << 20,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func (q *qingstor) Create() error {
 	_, err := q.bucket.Put()
 	if err != nil && strings.Contains(err.Error(), "bucket_already_exists") {

@@ -52,6 +52,16 @@ func (s *obsClient) String() string {
 	return fmt.Sprintf("obs://%s/", s.bucket)
 }
 
+func (s *obsClient) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              100 << 10,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func (s *obsClient) Create() error {
 	params := &obs.CreateBucketInput{}
 	params.Bucket = s.bucket
