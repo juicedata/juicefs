@@ -3660,8 +3660,8 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func())
 			if typeFromString(c.Attr.Type) == TypeFile {
 				length = c.Attr.Length
 			}
-			stat.space += align4K(length)
 			stat.length += int64(length)
+			stat.space += align4K(length)
 			stat.inodes++
 
 			dentries[string(unescape(name))] = m.packEntry(typeFromString(c.Attr.Type), c.Attr.Inode)

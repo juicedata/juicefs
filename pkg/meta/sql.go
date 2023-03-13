@@ -3383,7 +3383,16 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}) {
 		}
 	} else if n.Type == TypeDirectory {
 		n.Length = 4 << 10
+		stat := &dirStats{Inode: inode}
 		for name, c := range e.Entries {
+			length := uint64(0)
+			if typeFromString(c.Attr.Type) == TypeFile {
+				length = c.Attr.Length
+			}
+			stat.DataLength += int64(length)
+			stat.UsedSpace += align4K(length)
+			stat.UsedInodes++
+
 			chs[1] <- &edge{
 				Parent: inode,
 				Name:   unescape(name),
@@ -3391,6 +3400,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}) {
 				Type:   typeFromString(c.Attr.Type),
 			}
 		}
+		chs[5] <- stat
 	} else if n.Type == TypeSymlink {
 		symL := unescape(e.Symlink)
 		n.Length = uint64(len(symL))
