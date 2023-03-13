@@ -58,6 +58,16 @@ func (s *ks3) Create() error {
 	return err
 }
 
+func (s *ks3) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              5 << 20,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func (s *ks3) Head(key string) (Object, error) {
 	param := s3.HeadObjectInput{
 		Bucket: &s.bucket,

@@ -112,6 +112,10 @@ func (s DefaultObjectStorage) Create() error {
 	return nil
 }
 
+func (s DefaultObjectStorage) Limits() Limits {
+	return Limits{IsSupportMultipartUpload: false, IsSupportUploadPartCopy: false}
+}
+
 func (s DefaultObjectStorage) Head(key string) (Object, error) {
 	return nil, notSupported
 }
