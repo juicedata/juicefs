@@ -285,6 +285,9 @@ prefetch N blocks in parallel (default: 1)
 `--writeback`<br />
 upload objects in background (default: false), see [Client write data cache](../guide/cache_management.md#writeback)
 
+`--upload-delay value`<br />
+if writeback mode is enabled, delayed duration for uploading objects ("s", "m", "h") (default: 0s)
+
 `--cache-dir value`<br />
 directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `"/var/jfsCache"`), see [Client read data cache](../guide/cache_management.md#client-read-cache)
 
@@ -311,9 +314,6 @@ interval (in seconds) to automatically backup metadata in the object storage (0 
 
 `--heartbeat value`<br />
 interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value (default: "12")
-
-`--upload-delay value`<br />
-delayed duration for uploading objects ("s", "m", "h") (default: 0s)
 
 `--no-bgjob`<br />
 disable background jobs (clean-up, backup, etc.) (default: false)
