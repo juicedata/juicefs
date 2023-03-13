@@ -1,5 +1,3 @@
-//go:build !windows
-
 /*
  * JuiceFS, Copyright 2023 Juicedata, Inc.
  *
@@ -24,7 +22,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -39,7 +36,7 @@ func cmdClone() *cli.Command {
 			&cli.BoolFlag{
 				Name:    "preserve",
 				Aliases: []string{"p"},
-				Usage:   "preserve the uid, gid, and umask of the file"},
+				Usage:   "preserve the uid, gid, and mode of the file"},
 		},
 		Category:    "TOOL",
 		Description: `This command can clone a file or directory without copying the underlying data.`,
@@ -83,8 +80,7 @@ func clone(ctx *cli.Context) error {
 	var umask int
 	if ctx.Bool("preserve") {
 		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
-		umask = syscall.Umask(0)
-		syscall.Umask(umask)
+		umask = utils.GetUmask()
 	}
 	headerSize := 4 + 4
 	contentSize := 8 + 8 + 1 + uint32(len(dstName)) + 4 + 4 + 2 + 1
