@@ -103,11 +103,13 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 
 	ctx := Background
 	var entries []*Entry
-	if st := m.Readdir(ctx, 1, 0, &entries); st != 0 {
+	if st := m.Readdir(ctx, 1, 1, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	} else if len(entries) != 11 {
 		t.Fatalf("entries: %d", len(entries))
 	}
+
+	var expectedStat dirStat
 	for _, entry := range entries {
 		fname := string(entry.Name)
 		if strings.HasPrefix(fname, "GBK") {
@@ -118,7 +120,28 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 		if strings.HasPrefix(fname, "UTF8") && fname != "UTF8果汁数据科技有限公司目录" && fname != "UTF8果汁数据科技有限公司文件" {
 			t.Fatalf("load entries error: %s", fname)
 		}
+		if string(entry.Name) != "." && string(entry.Name) != ".." {
+			var length uint64
+			if entry.Attr.Typ == TypeFile {
+				length = entry.Attr.Length
+			}
+			expectedStat.inodes++
+			expectedStat.length += int64(length)
+			expectedStat.space += align4K(length)
+		}
 	}
+
+	stat, err := m.(engine).doGetDirStat(ctx, 1, false)
+	if err != nil {
+		t.Fatalf("get dir stat: %s", err)
+	}
+	if stat == nil {
+		t.Fatalf("get dir stat: nil")
+	}
+	if *stat != expectedStat {
+		t.Fatalf("expected: %v, but got: %v", expectedStat, *stat)
+	}
+
 	attr := &Attr{}
 	if st := m.GetAttr(ctx, 2, attr); st != 0 {
 		t.Fatalf("getattr: %s", st)
