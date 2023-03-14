@@ -945,7 +945,7 @@ $ juicefs profile /tmp/jfs.alog
 $ juicefs profile /tmp/jfs.alog --interval 0
 ```
 
-### `juicefs stats`
+### `juicefs stats` {#stats}
 
 展示实时的性能统计信息。
 

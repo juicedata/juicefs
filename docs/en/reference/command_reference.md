@@ -942,7 +942,7 @@ $ juicefs profile /tmp/jfs.alog
 $ juicefs profile /tmp/jfs.alog --interval 0
 ```
 
-### `juicefs stats`
+### `juicefs stats` {#stats}
 
 Show runtime statistics.
 

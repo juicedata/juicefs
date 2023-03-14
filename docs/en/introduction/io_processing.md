@@ -11,7 +11,7 @@ Evidently, only one ever growing slice and one final flush is needed when writin
 
 ![](../images/internals-write.png)
 
-Use `juicefs stats` to obtain realtime performance monitoring metrics.
+Use [`juicefs stats`](../reference/command_reference.md#stats) to obtain realtime performance monitoring metrics.
 
 ![](../images/internals-stats.png)
 
