@@ -2029,9 +2029,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		newSpace := -align4K(n.Length)
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, n.Length, false)
-		if q := m.getDirQuota(Background, n.Parent); q != nil {
-			q.update(newSpace, -1, false)
-		}
+		m.updateQuota(Background, n.Parent, newSpace, -1)
 	}
 	return err
 }
@@ -3002,7 +3000,7 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quota *Quota) error {
+func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]*Quota) error {
 	var inode Ino
 	if cmd != QuotaList {
 		if st := m.resolve(ctx, dpath, &inode); st != 0 {
@@ -3016,6 +3014,7 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quota *Quota)
 	var err error
 	switch cmd {
 	case QuotaSet:
+		quota := (*quotas)[0]
 		err = m.txn(func(s *xorm.Session) error {
 			q := dirQuota{Inode: inode}
 			ok, e := s.ForUpdate().Get(&q)
@@ -3045,6 +3044,7 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quota *Quota)
 			return e
 		})
 	case QuotaGet:
+		quota := (*quotas)[0]
 		err = m.roTxn(func(s *xorm.Session) error {
 			q := dirQuota{Inode: inode}
 			ok, e := s.Get(&q)
@@ -3065,6 +3065,7 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quota *Quota)
 			return e
 		})
 	case QuotaList:
+		*quotas = (*quotas)[:0]
 		err = m.roTxn(func(s *xorm.Session) error {
 			var qs []dirQuota
 			if e := s.Find(&qs); e != nil {
@@ -3073,19 +3074,14 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quota *Quota)
 			if len(qs) == 0 {
 				return nil
 			}
-			quota.MaxSpace = qs[0].MaxSpace
-			quota.MaxInodes = qs[0].MaxInodes
-			quota.UsedSpace = qs[0].UsedSpace
-			quota.UsedInodes = qs[0].UsedInodes
-			cur := quota
-			for _, q := range qs[1:] {
-				cur.Parent = &Quota{
+			for _, q := range qs[0:] {
+				quota := &Quota{
 					MaxSpace:   q.MaxSpace,
 					MaxInodes:  q.MaxInodes,
 					UsedSpace:  q.UsedSpace,
 					UsedInodes: q.UsedInodes,
 				}
-				cur = cur.Parent
+				*quotas = append(*quotas, quota)
 			}
 			return nil
 		})
@@ -3112,21 +3108,6 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 			MaxInodes:  row.MaxInodes,
 			UsedSpace:  row.UsedSpace,
 			UsedInodes: row.UsedInodes,
-		}
-	}
-	for ino, quota := range quotas {
-		var inode Ino = ino
-		for inode != RootInode {
-			parent, st := m.getDirParent(ctx, inode)
-			if st != 0 || parent == 0 {
-				logger.Fatalf("Get directory parent of %d: %d %s", inode, parent, st)
-			}
-			if q, ok := quotas[parent]; ok {
-				quota.Parent = q
-				break
-			} else {
-				inode = parent
-			}
 		}
 	}
 	return quotas, nil

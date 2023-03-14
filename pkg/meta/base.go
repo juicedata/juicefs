@@ -335,16 +335,12 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, spac
 	m.en.updateStats(space, 0)
 	if parent > 0 {
 		m.updateDirStat(ctx, parent, length, space, 0)
-		if q := m.getDirQuota(ctx, parent); q != nil {
-			q.update(space, 0, false)
-		}
+		m.updateQuota(ctx, parent, space, 0)
 	} else {
 		go func() {
 			for p := range m.en.doGetParents(ctx, inode) {
 				m.updateDirStat(ctx, p, length, space, 0)
-				if q := m.getDirQuota(ctx, parent); q != nil {
-					q.update(space, 0, false)
-				}
+				m.updateQuota(ctx, parent, space, 0)
 			}
 		}()
 	}
@@ -571,8 +567,7 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parent Ino) bool
 		logger.Warnf("Quota check is skipped for hardlinked files")
 		return false
 	}
-	q := m.getDirQuota(ctx, parent)
-	return q != nil && q.check(space, inodes)
+	return m.exceedQuota(ctx, parent, space, inodes)
 }
 
 func (m *baseMeta) GetDirRecStat(ctx Context, inode Ino) (space, inodes int64, err error) {
@@ -585,13 +580,16 @@ func (m *baseMeta) loadQuotas() {
 		m.dirMu.Lock()
 		for ino, q := range quotas {
 			logger.Infof("Load quotas got %d -> %+v", ino, q)
-			if old := m.dirQuotas[ino]; old != nil {
-				// FIXME: change may lost if someone gets the reference but has not updated it yet
-				q.newSpace = atomic.SwapInt64(&old.newSpace, 0)
-				q.newInodes = atomic.SwapInt64(&old.newInodes, 0)
+			quota := m.dirQuotas[ino]
+			if quota == nil {
+				m.dirQuotas[ino] = q
+				continue
 			}
+			atomic.SwapInt64(&quota.MaxSpace, q.MaxSpace)
+			atomic.SwapInt64(&quota.MaxInodes, q.MaxInodes)
+			atomic.SwapInt64(&quota.UsedSpace, q.UsedSpace)
+			atomic.SwapInt64(&quota.UsedInodes, q.UsedInodes)
 		}
-		m.dirQuotas = quotas
 		m.dirMu.Unlock()
 	} else {
 		logger.Warnf("Load quotas: %s", err)
@@ -608,20 +606,29 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 	logger.Warnf("Get directory parent of inode %d: cache miss", inode)
 	var attr Attr
 	st := m.GetAttr(ctx, inode, &attr)
+	if st == 0 {
+		m.dirMu.Lock()
+		m.dirParents[inode] = attr.Parent
+		m.dirMu.Unlock()
+	}
 	return attr.Parent, st
 }
 
-// inode refers to a directory
-func (m *baseMeta) getDirQuota(ctx Context, inode Ino) *Quota {
+func (m *baseMeta) exceedQuota(ctx Context, inode Ino, space, inodes int64) bool {
 	var q *Quota
 	var st syscall.Errno
 	for {
 		// FIXME: reduce locking
 		m.dirMu.Lock()
 		q = m.dirQuotas[inode]
+		if q == nil {
+			m.dirMu.Unlock()
+			continue
+		}
+		exceed := q.check(space, inodes)
 		m.dirMu.Unlock()
-		if q != nil {
-			break
+		if exceed {
+			return exceed
 		}
 		if inode <= RootInode {
 			break
@@ -631,7 +638,30 @@ func (m *baseMeta) getDirQuota(ctx Context, inode Ino) *Quota {
 			break
 		}
 	}
-	return q
+	return false
+}
+
+func (m *baseMeta) updateQuota(ctx Context, inode Ino, space, inodes int64) {
+	var q *Quota
+	var st syscall.Errno
+	for {
+		// FIXME: reduce locking
+		m.dirMu.Lock()
+		q = m.dirQuotas[inode]
+		if q == nil {
+			m.dirMu.Unlock()
+			continue
+		}
+		q.update(space, inodes)
+		m.dirMu.Unlock()
+		if inode <= RootInode {
+			break
+		}
+		if inode, st = m.getDirParent(ctx, inode); st != 0 {
+			logger.Warnf("Get directory parent of inode %d: %s", inode, st)
+			break
+		}
+	}
 }
 
 func (m *baseMeta) flushQuotas() {
@@ -656,7 +686,7 @@ func (m *baseMeta) flushQuotas() {
 				cur := m.dirQuotas[ino]
 				m.dirMu.Unlock()
 				if cur != nil {
-					cur.update(q.newSpace, q.newInodes, true)
+					cur.update(q.newSpace, q.newInodes)
 				}
 			}
 		}
@@ -1004,9 +1034,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if err == 0 {
 		m.en.updateStats(space, inodes)
 		m.updateDirStat(ctx, parent, 0, space, inodes)
-		if q := m.getDirQuota(ctx, parent); q != nil {
-			q.update(space, inodes, false)
-		}
+		m.updateQuota(ctx, parent, space, inodes)
 	}
 	return err
 }
@@ -1059,23 +1087,18 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 		attr = &Attr{}
 	}
 	parent = m.checkRoot(parent)
-	quota := m.getDirQuota(ctx, parent)
-	if quota != nil {
-		if st := m.GetAttr(ctx, inode, attr); st != 0 {
-			return st
-		}
-		if quota.check(align4K(attr.Length), 1) {
-			return syscall.ENOSPC
-		}
+	if st := m.GetAttr(ctx, inode, attr); st != 0 {
+		return st
+	}
+	if m.checkQuota(ctx, align4K(attr.Length), 1, parent) {
+		return syscall.ENOSPC
 	}
 
 	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 	err := m.en.doLink(ctx, inode, parent, name, attr)
 	if err == 0 {
 		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
-		if quota != nil {
-			quota.update(align4K(attr.Length), 1, false)
-		}
+		m.updateQuota(ctx, parent, align4K(attr.Length), 1)
 	}
 	return err
 }
@@ -1116,9 +1139,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			diffLength = attr.Length
 		}
 		m.updateDirStat(ctx, parent, -int64(diffLength), -align4K(diffLength), -1)
-		if q := m.getDirQuota(ctx, parent); q != nil {
-			q.update(-align4K(diffLength), -1, false)
-		}
+		m.updateQuota(ctx, parent, -align4K(diffLength), -1)
 	}
 	return err
 }
@@ -1148,9 +1169,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			delete(m.dirParents, inode)
 			m.dirMu.Unlock()
 		}
-		if q := m.getDirQuota(ctx, parent); q != nil {
-			q.update(-align4K(0), -1, false)
-		}
+		m.updateQuota(ctx, parent, -align4K(0), -1)
 	}
 	return st
 }
@@ -1187,10 +1206,6 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	parentDst = m.checkRoot(parentDst)
 	var quotaSrc, quotaDst *Quota
 	var space, inodes int64
-	if !isTrash(parentSrc) {
-		quotaSrc = m.getDirQuota(ctx, parentSrc)
-	}
-	quotaDst = m.getDirQuota(ctx, parentDst)
 	if quotaSrc != nil || quotaDst != nil {
 		if st := m.Lookup(ctx, parentSrc, nameSrc, inode, attr); st != 0 {
 			return st
@@ -1221,12 +1236,10 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		m.dirMu.Lock()
 		m.dirParents[*inode] = parentDst
 		m.dirMu.Unlock()
-		if quotaSrc != nil {
-			quotaSrc.update(-space, -inodes, false)
+		if !isTrash(parentSrc) {
+			m.updateQuota(ctx, parentSrc, -space, -inodes)
 		}
-		if quotaDst != nil {
-			quotaDst.update(space, inodes, false)
-		}
+		m.updateQuota(ctx, parentDst, space, inodes)
 		go m.loadQuotas()
 	}
 	return st

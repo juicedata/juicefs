@@ -108,24 +108,24 @@ func quota(c *cli.Context) error {
 	removePassword(c.Args().Get(0))
 
 	m := meta.NewClient(c.Args().Get(0), nil)
-	var q meta.Quota
+	qs := []*meta.Quota{{}}
 	if cmd == meta.QuotaSet {
-		q.MaxSpace, q.MaxInodes = -1, -1 // negative means no change
+		qs[0].MaxSpace, qs[0].MaxInodes = -1, -1 // negative means no change
 		if c.IsSet("capacity") {
-			q.MaxSpace = int64(c.Uint64("capacity")) << 30
+			qs[0].MaxSpace = int64(c.Uint64("capacity")) << 30
 		}
 		if c.IsSet("inodes") {
-			q.MaxInodes = int64(c.Uint64("inodes"))
+			qs[0].MaxInodes = int64(c.Uint64("inodes"))
 		}
 	}
-	if err := m.HandleQuota(meta.Background, cmd, dpath, &q); err != nil {
+	if err := m.HandleQuota(meta.Background, cmd, dpath, &qs); err != nil {
 		return err
 	}
-	// FIXME: need a better way to do print
-	if q.MaxSpace != 0 || q.MaxInodes != 0 {
-		for i := &q; i != nil; i = i.Parent {
-			fmt.Printf("Quota: %+v\n", *i)
-		}
+
+	for _, q := range qs {
+		// FIXME: need a better way to do print
+		fmt.Printf("Quota: %+v\n", *q)
 	}
+
 	return nil
 }

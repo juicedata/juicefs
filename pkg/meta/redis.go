@@ -2019,9 +2019,7 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	if err == nil {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
-		if q := m.getDirQuota(Background, attr.Parent); q != nil {
-			q.update(newSpace, -1, false)
-		}
+		m.updateQuota(Background, attr.Parent, newSpace, -1)
 	}
 	return err
 }
@@ -3230,7 +3228,7 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	}
 }
 
-func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) error {
+func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *[]*Quota) error {
 	return nil
 }
 

@@ -1766,9 +1766,7 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		newSpace := -align4K(attr.Length)
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
-		if q := m.getDirQuota(Background, attr.Parent); q != nil {
-			q.update(newSpace, -1, false)
-		}
+		m.updateQuota(Background, attr.Parent, newSpace, -1)
 	}
 	return err
 }
@@ -2603,7 +2601,7 @@ func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-func (m *kvMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *Quota) error {
+func (m *kvMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *[]*Quota) error {
 	return nil
 }
 

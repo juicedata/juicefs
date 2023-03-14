@@ -261,28 +261,20 @@ type Quota struct {
 	MaxSpace, MaxInodes   int64
 	UsedSpace, UsedInodes int64
 	newSpace, newInodes   int64
-	Parent                *Quota
 }
 
 // Returns true if it will exceed the quota limit
 func (q *Quota) check(space, inodes int64) bool {
-	for i := q; i != nil; i = i.Parent {
-		if space > 0 && i.MaxSpace > 0 && i.UsedSpace+atomic.LoadInt64(&i.newSpace)+space > i.MaxSpace ||
-			inodes > 0 && i.MaxInodes > 0 && i.UsedInodes+atomic.LoadInt64(&i.newInodes)+inodes > i.MaxInodes {
-			return true
-		}
+	if space > 0 && q.MaxSpace > 0 && q.UsedSpace+atomic.LoadInt64(&q.newSpace)+space > q.MaxSpace ||
+		inodes > 0 && q.MaxInodes > 0 && q.UsedInodes+atomic.LoadInt64(&q.newInodes)+inodes > q.MaxInodes {
+		return true
 	}
 	return false
 }
 
-func (q *Quota) update(space, inodes int64, selfOnly bool) {
-	for i := q; i != nil; i = i.Parent {
-		atomic.AddInt64(&i.newSpace, space)
-		atomic.AddInt64(&i.newInodes, inodes)
-		if selfOnly {
-			break
-		}
-	}
+func (q *Quota) update(space, inodes int64) {
+	atomic.AddInt64(&q.newSpace, space)
+	atomic.AddInt64(&q.newInodes, inodes)
 }
 
 // Meta is a interface for a meta service for file system.
@@ -411,7 +403,7 @@ type Meta interface {
 	// OnReload register a callback for any change founded after reloaded.
 	OnReload(func(new *Format))
 
-	HandleQuota(ctx Context, cmd uint8, dpath string, quota *Quota) error
+	HandleQuota(ctx Context, cmd uint8, dpath string, quota *[]*Quota) error
 
 	// Dump the tree under root, which may be modified by checkRoot
 	DumpMeta(w io.Writer, root Ino, keepSecret bool) error
