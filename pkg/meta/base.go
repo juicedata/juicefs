@@ -454,6 +454,7 @@ func (m *baseMeta) NewSession() error {
 
 	m.loadQuotas()
 	go m.en.flushStats()
+	go m.flushDirStat()
 	go m.flushQuotas() // TODO: improve it in Redis?
 	for i := 0; i < m.conf.MaxDeletes; i++ {
 		go m.deleteSlices()
@@ -572,35 +573,6 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parent Ino) bool
 	}
 	q := m.getDirQuota(ctx, parent)
 	return q != nil && q.check(space, inodes)
-}
-
-func (m *baseMeta) updateStats(space int64, inodes int64) {
-	atomic.AddInt64(&m.newSpace, space)
-	atomic.AddInt64(&m.newInodes, inodes)
-}
-
-func (m *baseMeta) flushStats() {
-	for {
-		newSpace := atomic.SwapInt64(&m.newSpace, 0)
-		if newSpace != 0 {
-			if v, err := m.en.incrCounter(usedSpace, newSpace); err == nil {
-				atomic.StoreInt64(&m.usedSpace, v)
-			} else {
-				logger.Warnf("update space stats: %s", err)
-				m.updateStats(newSpace, 0)
-			}
-		}
-		newInodes := atomic.SwapInt64(&m.newInodes, 0)
-		if newInodes != 0 {
-			if v, err := m.en.incrCounter(totalInodes, newInodes); err == nil {
-				atomic.StoreInt64(&m.usedInodes, v)
-			} else {
-				logger.Warnf("update inodes stats: %s", err)
-				m.updateStats(0, newInodes)
-			}
-		}
-		time.Sleep(time.Second)
-	}
 }
 
 func (m *baseMeta) GetDirRecStat(ctx Context, inode Ino) (space, inodes int64, err error) {
