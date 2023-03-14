@@ -75,7 +75,7 @@ JuiceFS 不将原始文件存入对象存储，而是将其按照某个大小（
 
 当读取被覆盖部分的数据时，根据**最新的元数据**，从随机写时上传的**新数据块**读取即可，同时**旧数据块**可能会被后台运行的垃圾回收任务自动清理。这样就将随机写的复杂度转移到读的复杂度上。
 
-这个只是很粗略的实现逻辑介绍，详见[「内部实现」](development/internals.md)与[「读写请求处理流程」](introduction/io_processing.md)。
+详见[「内部实现」](development/internals.md)与[「读写请求处理流程」](introduction/io_processing.md)。
 
 ### 怎么快速地拷贝大量小文件到 JuiceFS？
 
