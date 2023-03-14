@@ -38,6 +38,13 @@ func (s *oos) String() string {
 	return fmt.Sprintf("oos://%s/", s.s3client.bucket)
 }
 
+func (s *oos) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  false,
+	}
+}
+
 func (s *oos) Create() error {
 	_, err := s.List("", "", "", 1)
 	if err != nil {

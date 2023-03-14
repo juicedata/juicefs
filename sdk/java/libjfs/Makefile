@@ -41,6 +41,13 @@ default: libjfs
 	mkdir -p target
 	gzip -c $(LIBFILE) > target/$(LIBFILE).gz
 
+ceph: libjfs-ceph
+	mkdir -p target
+	gzip -c $(LIBFILE) > target/$(LIBFILE).gz
+
+libjfs-ceph: *.go ../../../pkg/*/*.go
+	go build -tags ceph -buildmode=c-shared -ldflags="$(LDFLAGS)" -o $(LIBFILE) .
+
 libjfs: *.go ../../../pkg/*/*.go
 	go build -buildmode=c-shared -ldflags="$(LDFLAGS)" -o $(LIBFILE) .
 

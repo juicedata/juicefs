@@ -46,6 +46,16 @@ func (q *bosclient) String() string {
 	return fmt.Sprintf("bos://%s/", q.bucket)
 }
 
+func (q *bosclient) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              100 << 10,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func (q *bosclient) Create() error {
 	_, err := q.c.PutBucket(q.bucket)
 	if err != nil && isExists(err) {
@@ -153,6 +163,16 @@ func (q *bosclient) UploadPart(key string, uploadID string, num int, data []byte
 		return nil, err
 	}
 	return &Part{Num: num, Size: len(data), ETag: etag}, nil
+}
+
+func (q *bosclient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	result, err := q.c.UploadPartCopy(q.bucket, key, q.bucket, srcKey, uploadID, num,
+		&api.UploadPartCopyArgs{SourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1)})
+
+	if err != nil {
+		return nil, err
+	}
+	return &Part{Num: num, Size: int(size), ETag: result.ETag}, nil
 }
 
 func (q *bosclient) AbortUpload(key string, uploadID string) {

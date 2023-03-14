@@ -24,8 +24,12 @@ import (
 	"testing"
 )
 
+<<<<<<< HEAD
 func TestFdbClient(t *testing.T) {
 	t.SkipNow()
+=======
+func TestFdbClient(t *testing.T) { //skip mutate
+>>>>>>> main
 	m, err := newKVMeta("fdb", "/etc/foundationdb/fdb.cluster?prefix=test2", DefaultConf())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
@@ -33,7 +37,7 @@ func TestFdbClient(t *testing.T) {
 	testMeta(t, m)
 }
 
-func TestFdb(t *testing.T) {
+func TestFdb(t *testing.T) { //skip mutate
 	c, err := newFdbClient("/etc/foundationdb/fdb.cluster?prefix=test1")
 	if err != nil {
 		t.Fatal(err)

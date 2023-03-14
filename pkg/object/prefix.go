@@ -51,6 +51,10 @@ func (p *withPrefix) String() string {
 	return fmt.Sprintf("%s%s", p.os, p.prefix)
 }
 
+func (p *withPrefix) Limits() Limits {
+	return p.os.Limits()
+}
+
 func (p *withPrefix) Create() error {
 	return p.os.Create()
 }
@@ -170,6 +174,10 @@ func (p *withPrefix) CreateMultipartUpload(key string) (*MultipartUpload, error)
 
 func (p *withPrefix) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
 	return p.os.UploadPart(p.prefix+key, uploadID, num, body)
+}
+
+func (s *withPrefix) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	return s.os.UploadPartCopy(s.prefix+key, uploadID, num, s.prefix+srcKey, off, size)
 }
 
 func (p *withPrefix) AbortUpload(key string, uploadID string) {

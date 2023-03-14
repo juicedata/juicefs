@@ -17,7 +17,7 @@ require (
 	github.com/billziss-gh/cgofuse v1.5.0
 	github.com/ceph/go-ceph v0.4.0
 	github.com/colinmarc/hdfs/v2 v2.3.0
-	github.com/dgraph-io/badger/v3 v3.2103.2
+	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/erikdubbelboer/gspt v0.0.0-20210805194459-ce36a5128377
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/goccy/go-json v0.10.0
@@ -42,7 +42,7 @@ require (
 	github.com/ncw/swift v1.0.53
 	github.com/pingcap/log v1.1.1-0.20221015072633-39906604fb81
 	github.com/pkg/errors v0.9.1
-	github.com/pkg/sftp v1.13.4
+	github.com/pkg/sftp v1.13.5
 	github.com/pkg/xattr v0.4.6
 	github.com/prometheus/client_golang v1.11.1
 	github.com/prometheus/client_model v0.2.0
@@ -68,7 +68,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
-	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
+	golang.org/x/sys v0.0.0-20221010170243-090e33056c14
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 	golang.org/x/text v0.3.8
 	google.golang.org/api v0.70.0
@@ -108,7 +108,7 @@ require (
 	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548 // indirect
 	github.com/dchest/siphash v1.2.1 // indirect
 	github.com/deckarep/golang-set v1.8.0 // indirect
-	github.com/dgraph-io/ristretto v0.1.0 // indirect
+	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect

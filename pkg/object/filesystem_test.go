@@ -49,7 +49,7 @@ func TestDisk2(t *testing.T) {
 	testFileSystem(t, s)
 }
 
-func TestSftp2(t *testing.T) {
+func TestSftp2(t *testing.T) { //skip mutate
 	if os.Getenv("SFTP_HOST") == "" {
 		t.SkipNow()
 	}
@@ -57,7 +57,7 @@ func TestSftp2(t *testing.T) {
 	testFileSystem(t, sftp)
 }
 
-func TestHDFS2(t *testing.T) {
+func TestHDFS2(t *testing.T) { //skip mutate
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.Skip()
 	}

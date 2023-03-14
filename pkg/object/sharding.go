@@ -35,6 +35,12 @@ func (s *sharded) String() string {
 	return fmt.Sprintf("shard%d://%s", len(s.stores), s.stores[0])
 }
 
+func (s *sharded) Limits() Limits {
+	l := s.stores[0].Limits()
+	l.IsSupportUploadPartCopy = false
+	return l
+}
+
 func (s *sharded) Create() error {
 	for _, o := range s.stores {
 		if err := o.Create(); err != nil {

@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -197,7 +196,7 @@ func (j *juiceFS) Head(key string) (object.Object, error) {
 }
 
 func (j *juiceFS) List(prefix, marker, delimiter string, limit int64) ([]object.Object, error) {
-	return nil, errors.New("not supported")
+	return nil, utils.ENOTSUP
 }
 
 // walk recursively descends path, calling w.

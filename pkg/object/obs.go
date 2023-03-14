@@ -52,6 +52,16 @@ func (s *obsClient) String() string {
 	return fmt.Sprintf("obs://%s/", s.bucket)
 }
 
+func (s *obsClient) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              100 << 10,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func (s *obsClient) Create() error {
 	params := &obs.CreateBucketInput{}
 	params.Bucket = s.bucket
@@ -233,6 +243,23 @@ func (s *obsClient) UploadPart(key string, uploadID string, num int, body []byte
 	if err == nil && s.checkEtag && strings.Trim(resp.ETag, "\"") != obs.Hex(sum[:]) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum[:]))
 	}
+	if err != nil {
+		return nil, err
+	}
+	return &Part{Num: num, ETag: resp.ETag}, err
+}
+
+func (s *obsClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	resp, err := s.c.CopyPart(&obs.CopyPartInput{
+		Bucket:               s.bucket,
+		Key:                  key,
+		UploadId:             uploadID,
+		PartNumber:           num,
+		CopySourceBucket:     s.bucket,
+		CopySourceKey:        srcKey,
+		CopySourceRangeStart: off,
+		CopySourceRangeEnd:   off + size - 1,
+	})
 	if err != nil {
 		return nil, err
 	}

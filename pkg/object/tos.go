@@ -43,6 +43,16 @@ func (t tosClient) String() string {
 	return fmt.Sprintf("tos://%s/", t.bucket)
 }
 
+func (t tosClient) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              5 << 20,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func (t tosClient) Create() error {
 	_, err := t.client.CreateBucketV2(context.Background(), &tos.CreateBucketV2Input{Bucket: t.bucket})
 	if e, ok := err.(*tos.TosServerError); ok {
@@ -169,6 +179,23 @@ func (t tosClient) UploadPart(key string, uploadID string, num int, body []byte)
 		},
 		Content: bytes.NewReader(body),
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &Part{Num: num, ETag: resp.ETag}, nil
+}
+
+func (t tosClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	resp, err := t.client.UploadPartCopyV2(context.Background(), &tos.UploadPartCopyV2Input{
+		Bucket:          t.bucket,
+		Key:             key,
+		UploadID:        uploadID,
+		PartNumber:      num,
+		SrcBucket:       t.bucket,
+		SrcKey:          srcKey,
+		CopySourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1),
+	},
+	)
 	if err != nil {
 		return nil, err
 	}
