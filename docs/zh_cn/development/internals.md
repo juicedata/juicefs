@@ -330,7 +330,7 @@ Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
 
 在 Redis 的 Keys 中，如无特殊说明整数（包括 inode 号）都以十进制字符串表示。
 
-#### Setting
+#### Setting {#redis-setting}
 
 - Key：`setting`
 - Value Type：String
@@ -358,13 +358,13 @@ Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
   - Key：会话 ID
   - Value：JSON 格式的会话信息
 
-#### Node
+#### Node {#redis-node}
 
 - Key：`i${inode}`
 - Value Type：String
 - Value：二进制编码的文件属性
 
-#### Edge
+#### Edge {#redis-edge}
 
 - Key：`d${inode}`
 - Value Type：Hash
@@ -380,7 +380,7 @@ Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
   - Key：父目录 inode
   - Value：此父目录 inode 的计数
 
-#### Chunk
+#### Chunk {#redis-chunk}
 
 - Key：`c${inode}_${index}`
 - Value Type：list
@@ -432,13 +432,13 @@ Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
   - Member：`${inode}:${length}`
   - Score：此文件加入集合的时间点
 
-#### DelSlices
+#### DelSlices {#redis-delslices}
 
 - Key：`delSlices`
 - Value Type：Hash
 - Value：所有待清理的 Slices。在 Hash 中：
   - Key：`${sliceId}_${deleted}`
-  - Value：字节数组，其中每 12 字节对应一个 [slice](#3115-delslices)
+  - Value：字节数组，其中每 12 字节对应一个 [slice](#delslices)
 
 #### Sustained
 
@@ -451,7 +451,7 @@ Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
 
 元数据按类型存储在不同的表中，每张表命名时以 `jfs_` 开头，跟上其具体的结构体名称组成表名，如 `jfs_node`。部分表中加入了 `bigserial` 类型的 `Id` 列作为主键，其仅用来确保每张表中都有主键，并不包含实际信息。
 
-#### Setting
+#### Setting {#sql-setting}
 
 ```go
 type setting struct {
@@ -485,7 +485,7 @@ type session2 struct {
 
 没有独立的表，而是记在 `session2` 的 `Info` 列中。
 
-#### Node
+#### Node {#sql-node}
 
 ```go
 type node struct {
@@ -505,9 +505,9 @@ type node struct {
 }
 ```
 
-大部分字段与 [Attr](#315-node) 相同，但时间戳使用了较低精度，其中 Atime/Mtime/Ctime 的单位为微秒。
+大部分字段与 [Attr](#node) 相同，但时间戳使用了较低精度，其中 Atime/Mtime/Ctime 的单位为微秒。
 
-#### Edge
+#### Edge {#sql-edge}
 
 ```go
 type edge struct {
@@ -523,7 +523,7 @@ type edge struct {
 
 没有独立的表，而是根据 `edge` 中的 `Inode` 索引找到所有 `Parent`。
 
-#### Chunk
+#### Chunk {#sql-chunk}
 
 ```go
 type chunk struct {
@@ -534,7 +534,7 @@ type chunk struct {
 }
 ```
 
-Slices 是一段字节数组，每 24 字节对应一个 [Slice](#318-chunk)。
+Slices 是一段字节数组，每 24 字节对应一个 [Slice](#chunk)。
 
 #### SliceRef
 
@@ -602,7 +602,7 @@ type delfile struct {
 }
 ```
 
-#### DelSlices
+#### DelSlices {#sql-delslices}
 
 ```go
 type delslices struct {
@@ -612,7 +612,7 @@ type delslices struct {
 }
 ```
 
-Slices 是一段字节数组，每 12 字节对应一个 [slice](#3115-delslices)。
+Slices 是一段字节数组，每 12 字节对应一个 [slice](#delslices)。
 
 #### Sustained
 
@@ -636,7 +636,7 @@ TKV（Transactional Key-Value Database）中 Key 的通用格式为 `${prefix}${
 - inode 和 counter value 占 8 个字节，使用**小端**编码
 - SID、sliceId 和 timestamp 占 8 个字节，使用**大端**编码
 
-#### Setting
+#### Setting {#tkv-setting}
 
 ```
 setting -> JSON 格式的文件系统格式化信息
@@ -660,13 +660,13 @@ SE${sid} -> timestamp
 SI${sid} -> JSON 格式的会话信息
 ```
 
-#### Node
+#### Node {#tkv-node}
 
 ```
 A${inode}I -> encoded Attr
 ```
 
-#### Edge
+#### Edge {#tkv-edge}
 
 ```
 A${inode}D${name} -> encoded {type, inode}
@@ -678,13 +678,13 @@ A${inode}D${name} -> encoded {type, inode}
 A${inode}P${parentInode} -> counter value
 ```
 
-#### Chunk
+#### Chunk {#tkv-chunk}
 
 ```
 A${inode}C${index} -> Slices
 ```
 
-其中 index 占 4 个字节，使用**大端**编码。Slices 是一段字节数组，每 24 字节对应一个 [Slice](#318-chunk)。
+其中 index 占 4 个字节，使用**大端**编码。Slices 是一段字节数组，每 24 字节对应一个 [Slice](#chunk)。
 
 #### SliceRef
 
@@ -749,13 +749,13 @@ D${inode}${length} -> timestamp
 
 其中 length 占 8 个字节，使用**大端**编码。
 
-#### DelSlices
+#### DelSlices {#tkv-delslices}
 
 ```
 L${timestamp}${sliceId} -> slices
 ```
 
-其中 slices 是一段字节数组，每 12 字节对应一个 [slice](#3115-delslices)。
+其中 slices 是一段字节数组，每 12 字节对应一个 [slice](#delslices)。
 
 #### Sustained
 
@@ -769,12 +769,12 @@ SS${sid}${inode} -> 1
 
 ### 根据路径查找文件
 
-根据 [Edge](#316-edge) 的设计，元数据引擎中只记录了每个目录的直接子节点。当应用提供一个路径来访问文件时，JuiceFS 需要逐级查找。现在假设应用想打开文件 `/dir1/dir2/testfile`，则需要：
+根据 [Edge](#edge) 的设计，元数据引擎中只记录了每个目录的直接子节点。当应用提供一个路径来访问文件时，JuiceFS 需要逐级查找。现在假设应用想打开文件 `/dir1/dir2/testfile`，则需要：
 
 1. 在根目录（Inode 号固定为 1）的 Edge 结构中搜寻 name 为 "dir1" 的 entry，得到其 inode 号 N1
 2. 在 N1 的 Edge 结构中搜寻 name 为 "dir2" 的 entry，得到其 inode 号 N2
 3. 在 N2 的 Edge 结构中搜寻 name 为 "testfile" 的 entry，得到其 inode 号 N3
-4. 根据 N3 搜寻其对应的 [Node](#315-node) 结构，得到该文件的相关属性
+4. 根据 N3 搜寻其对应的 [Node](#node) 结构，得到该文件的相关属性
 
 在以上步骤中，任何一步搜寻失败都会导致该路径指向的文件未找到。
 
@@ -787,7 +787,7 @@ SS${sid}${inode} -> 1
 Chunk: |<---        Chunk 0        --->|<---        Chunk 1        --->|<-- Chunk 2 -->|
 ```
 
-在单机 Redis 中，这意味着有 3 个 [Chunk Keys](#318-chunk)，分别为 `c100_0`， `c100_1` 和 `c100_2`，每个 Key 对应一个 Slices 列表。这些 Slices 主要在数据写入时生成，可能互相之间有覆盖，也可能未完全填充满 Chunk。因此，在使用前需要顺序遍历这个 Slices 列表，并重新构建出最新版的数据分布，做到：
+在单机 Redis 中，这意味着有 3 个 [Chunk Keys](#chunk)，分别为 `c100_0`， `c100_1` 和 `c100_2`，每个 Key 对应一个 Slices 列表。这些 Slices 主要在数据写入时生成，可能互相之间有覆盖，也可能未完全填充满 Chunk。因此，在使用前需要顺序遍历这个 Slices 列表，并重新构建出最新版的数据分布，做到：
 
 1. 有多个 Slice 覆盖的部分以最后加入的 Slice 为准
 2. 没有被 Slice 覆盖的部分自动补零，用 sliceId = 0 来表示
@@ -838,7 +838,7 @@ Block 是 JuiceFS 管理数据的基本单元，其大小默认为 4 MiB，且�
   - index 是该对象在所属 Slice 中的序号，默认一个 Slice 最多能拆成 16 个 Blocks，因此其取值范围为 [0, 16)
   - size 是该 Block 的大小，默认情况下其取值范围为 (0, 4 MiB]
 
-目前使用的 hash 算法有两种，以 basename 中的 sliceId 为参数，根据文件系统格式化时的 [HashPrefix](#311-setting) 配置选择：
+目前使用的 hash 算法有两种，以 basename 中的 sliceId 为参数，根据文件系统格式化时的 [HashPrefix](#setting) 配置选择：
 
 ```go
 func hash(sliceId int) string {
@@ -902,11 +902,11 @@ objects:
 
 #### 数据压缩
 
-在文件系统格式化时可以通过 `--compress <value>` 参数配置压缩算法（支持 LZ4 和 zstd），使得此文件系统的所有数据 Block 会经过压缩后再上传到对象存储。此时对象名称仍与默认配置相同，且内容为原始数据经压缩算法后的结果，不携带任何其它元信息。因此，文件[文统格式化信息](#311-setting)中的压缩算法不允许修改，否则会导致读取已有数据失败。
+在文件系统格式化时可以通过 `--compress <value>` 参数配置压缩算法（支持 LZ4 和 zstd），使得此文件系统的所有数据 Block 会经过压缩后再上传到对象存储。此时对象名称仍与默认配置相同，且内容为原始数据经压缩算法后的结果，不携带任何其它元信息。因此，文件[文统格式化信息](#setting)中的压缩算法不允许修改，否则会导致读取已有数据失败。
 
 #### 数据加密
 
-在文件系统格式化时可以通过 `--encrypt-rsa-key <value>` 参数配置 RSA 私钥以开启[静态数据加密](../security/encrypt.md)功能，使得此文件系统的所有数据 Block 会经过加密后再上传到对象存储。此时对象名称仍与默认配置相同，内容为一段 header 加上数据经加密算法后的结果。这段 header 里记录了用来解密的对称密钥以及随机种子，而对称密钥本身又经过 RSA 私钥加密。因此，文件[文统格式化信息](#311-setting)中的 RSA 私钥目前不允许修改，否则会导致读取已有数据失败。
+在文件系统格式化时可以通过 `--encrypt-rsa-key <value>` 参数配置 RSA 私钥以开启[静态数据加密](../security/encrypt.md)功能，使得此文件系统的所有数据 Block 会经过加密后再上传到对象存储。此时对象名称仍与默认配置相同，内容为一段 header 加上数据经加密算法后的结果。这段 header 里记录了用来解密的对称密钥以及随机种子，而对称密钥本身又经过 RSA 私钥加密。因此，文件[文统格式化信息](#setting)中的 RSA 私钥目前不允许修改，否则会导致读取已有数据失败。
 
 :::note 备注
 若同时开启压缩和加密，原始数据会先压缩再加密后上传到对象存储。

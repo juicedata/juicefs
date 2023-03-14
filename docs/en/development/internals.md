@@ -327,7 +327,7 @@ The common format of keys in Redis is `${prefix}${JFSKey}`, where
 
 In Redis Keys, integers (including inode numbers) are represented as decimal strings if not otherwise specified.
 
-#### Setting
+#### Setting {#redis-setting}
 
 - Key: `setting`
 - Value Type: String
@@ -355,13 +355,13 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Key: session ID
   - Value: session information in JSON format
 
-#### Node
+#### Node {#redis-node}
 
 - Key: `i${inode}`
 - Value Type: String
 - Value: binary encoded file attribute
 
-#### Edge
+#### Edge {#redis-edge}
 
 - Key: `d${inode}`
 - Value Type: Hash
@@ -377,7 +377,7 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Key: parent inode
   - Value: count of this parent inode
 
-#### Chunk
+#### Chunk {#redis-chunk}
 
 - Key: `c${inode}_${index}`
 - Value Type: List
@@ -413,13 +413,13 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Key: `${sid}_${owner}`, owner in hexadecimal
   - Value: lock type, can be 'R' or 'W'
 
-#### Plock
+#### Plock {#redis-plock}
 
 - Key: `lockp${inode}`
 - Value Type: Hash
 - Value: all plocks of this file. In Hash,
   - Key: `${sid}_${owner}`, owner in hexadecimal
-  - Value: array of bytes, where every 24 bytes corresponds to a [plockRecord](#3113-plock)
+  - Value: array of bytes, where every 24 bytes corresponds to a [plockRecord](#plock)
 
 #### DelFiles
 
@@ -429,13 +429,13 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
   - Member: `${inode}:${length}`
   - Score: the timestamp when this file was added to the set
 
-#### DelSlices
+#### DelSlices {#redis-delslices}
 
 - Key: `delSlices`
 - Value Type: Hash
 - Value: all Slices to be cleaned. In Hash,
   - Key: `${sliceId}_${deleted}`
-  - Value: array of bytes, where every 12 bytes corresponds to a [slice](#3115-delslices)
+  - Value: array of bytes, where every 12 bytes corresponds to a [slice](#delslices)
 
 #### Sustained
 
@@ -448,7 +448,7 @@ In Redis Keys, integers (including inode numbers) are represented as decimal str
 
 Metadata is stored in different tables by type, and each table is named with `jfs_` followed by its specific structure name to form the table name, e.g. `jfs_node`. Some tables use `Id` with the `bigserial` type as primary keys to ensure that each table has a primary key, and the `Id` columns do not contain actual information.
 
-#### Setting
+#### Setting {#sql-setting}
 
 ```go
 type setting struct {
@@ -482,7 +482,7 @@ type session2 struct {
 
 There is no separate table for this, but it is recorded in the `Info` column of `session2`.
 
-#### Node
+#### Node {#sql-node}
 
 ```go
 type node struct {
@@ -502,9 +502,9 @@ type node struct {
 }
 ```
 
-Most of the fields are the same as [Attr](#315-node), but the timestamp precision is lower, i.e., Atime/Mtime/Ctime are in microseconds.
+Most of the fields are the same as [Attr](#node), but the timestamp precision is lower, i.e., Atime/Mtime/Ctime are in microseconds.
 
-#### Edge
+#### Edge {#sql-edge}
 
 ```go
 type edge struct {
@@ -520,7 +520,7 @@ type edge struct {
 
 There is no separate table for this. All `Parent`s are found based on the `Inode` index in `edge`.
 
-#### Chunk
+#### Chunk {#sql-chunk}
 
 ```go
 type chunk struct {
@@ -531,7 +531,7 @@ type chunk struct {
 }
 ```
 
-Slices are an array of bytes, and each [Slice](#318-chunk) corresponds to 24 bytes.
+Slices are an array of bytes, and each [Slice](#chunk) corresponds to 24 bytes.
 
 #### SliceRef
 
@@ -575,7 +575,7 @@ type flock struct {
 }
 ```
 
-#### Plock
+#### Plock {#sql-plock}
 
 ```go
 type plock struct {
@@ -587,7 +587,7 @@ type plock struct {
 }
 ```
 
-Records is an array of bytes, and each [plockRecord](#3113-plock) corresponds to 24 bytes.
+Records is an array of bytes, and each [plockRecord](#plock) corresponds to 24 bytes.
 
 #### DelFiles
 
@@ -599,7 +599,7 @@ type delfile struct {
 }
 ```
 
-#### DelSlices
+#### DelSlices {#sql-delslices}
 
 ```go
 type delslices struct {
@@ -609,7 +609,7 @@ type delslices struct {
 }
 ```
 
-Slices is an array of bytes, and each [slice](#3115-delslices) corresponds to 12 bytes.
+Slices is an array of bytes, and each [slice](#delslices) corresponds to 12 bytes.
 
 #### Sustained
 
@@ -633,7 +633,7 @@ In TKV's Keys, all integers are stored in encoded binary form.
 - inode and counter value occupy 8 bytes and are encoded with **small endian**.
 - SID, sliceId and timestamp occupy 8 bytes and are encoded with **big endian**.
 
-#### Setting
+#### Setting {#tkv-setting}
 
 ```
 setting -> file system formatting information in JSON format
@@ -657,13 +657,13 @@ SE${sid} -> timestamp
 SI${sid} -> session information in JSON format
 ```
 
-#### Node
+#### Node {#tkv-node}
 
 ```
 A${inode}I -> encoded Attr
 ```
 
-#### Edge
+#### Edge {#tkv-edge}
 
 ```
 A${inode}D${name} -> encoded {type, inode}
@@ -675,13 +675,13 @@ A${inode}D${name} -> encoded {type, inode}
 A${inode}P${parentInode} -> counter value
 ```
 
-#### Chunk
+#### Chunk {#tkv-chunk}
 
 ```
 A${inode}C${index} -> Slices
 ```
 
-where index takes up 4 bytes and is encoded with **big endian**. Slices is an array of bytes, one [Slice](#318-chunk) per 24 bytes.
+where index takes up 4 bytes and is encoded with **big endian**. Slices is an array of bytes, one [Slice](#chunk) per 24 bytes.
 
 #### SliceRef
 
@@ -719,7 +719,7 @@ type flock struct {
 }
 ```
 
-#### Plock
+#### Plock {tkv-plock}
 
 ```
 P${inode} -> plocks
@@ -736,7 +736,7 @@ type plock struct {
 }
 ```
 
-where size is the length of the records array and every 24 bytes in records corresponds to one [plockRecord](#3113-plock).
+where size is the length of the records array and every 24 bytes in records corresponds to one [plockRecord](#plock).
 
 #### DelFiles
 
@@ -746,13 +746,13 @@ D${inode}${length} -> timestamp
 
 where length takes up 8 bytes and is encoded with **big endian**.
 
-#### DelSlices
+#### DelSlices {#tkv-delslices}
 
 ```
 L${timestamp}${sliceId} -> slices
 ```
 
-where slices is an array of bytes, and one [slice](#3115-delslices) corresponds to 12 bytes.
+where slices is an array of bytes, and one [slice](#delslices) corresponds to 12 bytes.
 
 #### Sustained
 
@@ -766,12 +766,12 @@ Here the Value value is only used as a placeholder.
 
 ### Finding files by path
 
-According to the design of [Edge](#316-edges), only the direct children of each directory are recorded in the metadata engine. When an application provides a path to access a file, JuiceFS needs to look it up level by level. Now suppose the application wants to open the file `/dir1/dir2/testfile`, then it needs to
+According to the design of [Edge](#edges), only the direct children of each directory are recorded in the metadata engine. When an application provides a path to access a file, JuiceFS needs to look it up level by level. Now suppose the application wants to open the file `/dir1/dir2/testfile`, then it needs to
 
 1. search for the entry with name "dir1" in the Edge structure of the root directory (inode number is fixed to 1) and get its inode number N1
 2. search for the entry with the name "dir2" in the Edge structure of N1 and get its inode number N2
 3. search for the entry with the name "testfile" in the Edge structure of N2, and get its inode number N3
-4. search for the [Node](#315-node) structure corresponding to N3 to get the attributes of the file
+4. search for the [Node](#node) structure corresponding to N3 to get the attributes of the file
 
 Failure in any of the above steps will result in the file pointed to by that path not being found.
 
@@ -784,7 +784,7 @@ From the previous section, we know how to find the file based on its path and ge
 Chunk: |<---        Chunk 0        --->|<---        Chunk 1        --->|<-- Chunk 2 -->|
 ```
 
-In standalone Redis, this means that there are 3 [Chunk Keys](#318-chunk), i.e.,`c100_0`, `c100_1` and `c100_2`, each corresponding to a list of Slices. These Slices are mainly generated when the data is written and may overwrite each other or may not fill the Chunk completely, so you need to traverse this list of Slices sequentially and reconstruct the latest version of the data distribution before using it, so that
+In standalone Redis, this means that there are 3 [Chunk Keys](#chunk), i.e.,`c100_0`, `c100_1` and `c100_2`, each corresponding to a list of Slices. These Slices are mainly generated when the data is written and may overwrite each other or may not fill the Chunk completely, so you need to traverse this list of Slices sequentially and reconstruct the latest version of the data distribution before using it, so that
 
 1. the part covered by more than one Slice is based on the last added Slice
 2. the part that is not covered by Slice is automatically zeroed, and is represented by sliceId = 0
@@ -835,7 +835,7 @@ Block is the basic unit for JuiceFS to manage data. Its size is 4 MiB by default
   - index is the index of the object in the Slice it belongs to, by default a Slice can be split into at most 16 Blocks, so its value range is [0, 16)
   - size is the size of the Block, and by default it takes the value of (0, 4 MiB]
 
-Currently there are two hash algorithms, and both use the sliceId in basename as the parameter. Which algorithm will be chosen to use follows the [HashPrefix](#311-setting) of the file system.
+Currently there are two hash algorithms, and both use the sliceId in basename as the parameter. Which algorithm will be chosen to use follows the [HashPrefix](#setting) of the file system.
 
 ```go
 func hash(sliceId int) string {
@@ -899,11 +899,11 @@ It is worth mentioning that the 'size' here is size of the original data in the 
 
 #### Data compression
 
-You can configure the compression algorithm (supporting `lz4` and `zstd`) with the `--compress <value>` parameter when formatting a file system, so that all data blocks of this file system will be compressed before uploading to object storage. The object name remains the same as default, and the content is the result of the compression algorithm, without any other meta information. Therefore, the compression algorithm in the [file system formatting Information](#311-setting) is not allowed to be modified, otherwise it will cause the failure of reading existing data.
+You can configure the compression algorithm (supporting `lz4` and `zstd`) with the `--compress <value>` parameter when formatting a file system, so that all data blocks of this file system will be compressed before uploading to object storage. The object name remains the same as default, and the content is the result of the compression algorithm, without any other meta information. Therefore, the compression algorithm in the [file system formatting Information](#setting) is not allowed to be modified, otherwise it will cause the failure of reading existing data.
 
 #### Data encryption
 
-The RSA private key can be configured to enable [static data encryption](../security/encrypt.md) when formatting a file system with the `--encrypt-rsa-key <value>` parameter, which allows all data blocks of this file system to be encrypted before uploading to the object storage. The object name is still the same as default, while its content becomes a header plus the result of the data encryption algorithm. The header contains a random seed and the symmetric key used for decryption, and the symmetric key itself is encrypted with the RSA private key. Therefore, it is not allowed to modify the RSA private key in the [file system formatting Information](#311-setting), otherwise reading existing data will fail.
+The RSA private key can be configured to enable [static data encryption](../security/encrypt.md) when formatting a file system with the `--encrypt-rsa-key <value>` parameter, which allows all data blocks of this file system to be encrypted before uploading to the object storage. The object name is still the same as default, while its content becomes a header plus the result of the data encryption algorithm. The header contains a random seed and the symmetric key used for decryption, and the symmetric key itself is encrypted with the RSA private key. Therefore, it is not allowed to modify the RSA private key in the [file system formatting Information](#setting), otherwise reading existing data will fail.
 
 :::note
 If both compression and encryption are enabled, the original data will be compressed and then encrypted before uploading to the object storage.
