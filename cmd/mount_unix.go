@@ -19,12 +19,23 @@
 
 package cmd
 
+// #include <sys/sysmacros.h>
+// #include <sys/types.h>
+// // makedev is a macro, so a wrapper is needed
+// dev_t Makedev(unsigned int maj, unsigned int min) {
+//   return makedev(maj, min);
+// }
+import "C"
+
 import (
+	"bufio"
 	"bytes"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +43,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
 
@@ -147,6 +159,10 @@ func mount_flags() []cli.Flag {
 			Name:  "update-fstab",
 			Usage: "add / update entry in /etc/fstab, will create a symlink at /sbin/mount.juicefs if not existing",
 		},
+		&cli.BoolFlag{
+			Name:  "grant-access",
+			Usage: "grant access to the /dev/fuse device (used in unprivileged containers)",
+		},
 	}
 	return append(selfFlags, cacheFlags(1.0)...)
 }
@@ -184,7 +200,13 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 	if os.Getuid() == 0 && os.Getpid() != 1 {
 		disableUpdatedb()
 	}
-
+	if c.Bool("grant-access") {
+		ensureFuseDev()
+		err := grantAccess()
+		if err != nil {
+			logger.Error("fail to grant access to /dev/fuse: ", err)
+		}
+	}
 	conf := v.Conf
 	conf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
 	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
@@ -194,4 +216,61 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 	if err != nil {
 		logger.Fatalf("fuse: %s", err)
 	}
+}
+
+// ensureFuseDev ensures /dev/fuse exists. If not, it will create one
+func ensureFuseDev() {
+	if _, err := os.Open("/dev/fuse"); os.IsNotExist(err) {
+		// 10, 229 according to https://www.kernel.org/doc/Documentation/admin-guide/devices.txt
+		fuse := C.Makedev(10, 229)
+		syscall.Mknod("/dev/fuse", 0o666|syscall.S_IFCHR, int(fuse))
+	}
+}
+
+// grantAccess appends 'c 10:229 rwm' to devices.allow
+func grantAccess() error {
+	pid := os.Getpid()
+	cgroupPath := fmt.Sprintf("/proc/%d/cgroup", pid)
+	cgroupFile, err := os.Open(cgroupPath)
+	if err != nil {
+		return err
+	}
+
+	// TODO: encapsulate these logic with chaos-daemon StressChaos part
+	cgroupScanner := bufio.NewScanner(cgroupFile)
+	var deviceCgroupPath string
+	for cgroupScanner.Scan() {
+		if err := cgroupScanner.Err(); err != nil {
+			return err
+		}
+		var (
+			text  = cgroupScanner.Text()
+			parts = strings.SplitN(text, ":", 3)
+		)
+		if len(parts) < 3 {
+			return errors.Errorf("invalid cgroup entry: %q", text)
+		}
+
+		if parts[1] == "devices" {
+			deviceCgroupPath = parts[2]
+		}
+	}
+
+	if len(deviceCgroupPath) == 0 {
+		return errors.Errorf("fail to find device cgroup")
+	}
+
+	deviceCgroupPath = "/sys/fs/cgroup/devices" + deviceCgroupPath + "/devices.allow"
+	f, err := os.OpenFile(deviceCgroupPath, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	// 10, 229 according to https://www.kernel.org/doc/Documentation/admin-guide/devices.txt
+	content := "c 10:229 rwm"
+	_, err = f.WriteString(content)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
