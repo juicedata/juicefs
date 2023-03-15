@@ -3810,8 +3810,8 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
 				return eno
 			}
-			rmConcurrent := make(chan struct{}, 10)
-			if eno := m.removeEntry(ctx, dstIno, attr, dstName, rmConcurrent); eno != 0 {
+			rmConcurrent := make(chan int, 10)
+			if eno := m.emptyDir(ctx, dstIno, nil, rmConcurrent); eno != 0 {
 				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
 				return eno
 			}
@@ -3901,7 +3901,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 		}
 		wg.Wait()
 		// reset nlink
-		if attach && countDir != srcNlink-2 {
+		if attach && countDir+2 != srcNlink {
 			var dstAttr Attr
 			if eno := m.doGetAttr(ctx, *dstIno, &dstAttr); eno != 0 {
 				return eno
@@ -3976,108 +3976,6 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno))
 	}
 	atomic.AddUint64(count, 1)
-	return errno(err)
-}
-
-func (m *redisMeta) removeEntry(ctx Context, rootIno Ino, attr *Attr, name string, concurrent chan struct{}) syscall.Errno {
-	switch attr.Typ {
-	case TypeDirectory:
-		if attr.Typ == TypeDirectory {
-			var entries []*Entry
-			if eno := m.doReaddir(ctx, rootIno, 1, &entries, -1); eno != 0 {
-				return eno
-			}
-			var dirs int
-			for i, e := range entries {
-				if e.Attr.Typ == TypeDirectory {
-					entries[dirs], entries[i] = entries[i], entries[dirs]
-					dirs++
-				}
-			}
-			var wg sync.WaitGroup
-			var status syscall.Errno
-			for i, entry := range entries {
-				if entry.Attr.Typ == TypeDirectory {
-					select {
-					case concurrent <- struct{}{}:
-						wg.Add(1)
-						go func(rootIno Ino, attr *Attr, name string) {
-							defer wg.Done()
-							eno := m.removeEntry(ctx, rootIno, attr, name, concurrent)
-							if eno != 0 && eno != syscall.ENOENT {
-								status = eno
-							}
-							<-concurrent
-						}(entry.Inode, entry.Attr, string(entry.Name))
-					default:
-						if eno := m.removeEntry(ctx, entry.Inode, entry.Attr, string(entry.Name), concurrent); eno != 0 {
-							return eno
-						}
-					}
-				} else {
-					if eno := m.removeEntry(ctx, entry.Inode, entry.Attr, string(entry.Name), concurrent); eno != 0 {
-						return eno
-					}
-				}
-				entries[i] = nil // release memory
-			}
-			wg.Wait()
-			if status != 0 {
-				return status
-			}
-		}
-	case TypeFile:
-		// del chunk
-		if attr.Length != 0 {
-			vals, err := m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-				for i := 0; i < int(math.Ceil(float64(attr.Length)/float64(ChunkSize))); i++ {
-					pipe.LRange(ctx, m.chunkKey(rootIno, uint32(i)), 0, -1)
-				}
-				return nil
-			})
-			if err != nil {
-				return errno(err)
-			}
-
-			// update slice ref
-			if _, err = m.rdb.TxPipelined(ctx, func(txPipe redis.Pipeliner) error {
-				for i, v := range vals {
-					sv := v.(*redis.StringSliceCmd).Val()
-					ss := readSlices(sv)
-					if ss == nil {
-						return syscall.EIO
-					}
-					for _, s := range ss {
-						if s.id > 0 {
-							txPipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.id, s.size), -1)
-						}
-					}
-					txPipe.Del(ctx, m.chunkKey(rootIno, uint32(i)))
-				}
-				return nil
-			}); err != nil {
-				return errno(err)
-			}
-		}
-	case TypeSymlink:
-		if err := m.rdb.Del(ctx, m.symKey(rootIno)).Err(); err != nil {
-			return errno(err)
-		}
-	}
-
-	//del xattr
-	if err := m.rdb.Del(ctx, m.xattrKey(rootIno)).Err(); err != nil {
-		return errno(err)
-	}
-
-	// del common key
-	err := m.txn(ctx, func(tx *redis.Tx) error {
-		// del node
-		tx.Del(ctx, m.inodeKey(rootIno))
-		// del edge
-		tx.HDel(ctx, m.entryKey(attr.Parent), name)
-		return nil
-	}, m.inodeKey(rootIno))
 	return errno(err)
 }
 

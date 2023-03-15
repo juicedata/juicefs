@@ -2024,7 +2024,10 @@ func testDirStat(t *testing.T, m Meta) {
 }
 
 func testClone(t *testing.T, m Meta) {
-	if _, ok := m.(*redisMeta); !ok {
+	switch m.(type) {
+	case *redisMeta:
+	case *dbMeta:
+	default:
 		t.Skipf("skip clone test for %T", m)
 	}
 	if err := m.Reset(); err != nil {
@@ -2119,11 +2122,21 @@ func testClone(t *testing.T, m Meta) {
 		t.Fatalf("readdir: %s", eno)
 	}
 
-	if len(entries1) != 5 || string(entries1[4].Name) != cloneDstName {
+	if len(entries1) != 5 {
 		t.Fatalf("clone dst dir not found or name not correct")
 	}
-	cloneDstIno := entries1[4].Inode
-	cloneDstAttr := entries1[4].Attr
+	var idx int
+	for i, ent := range entries1 {
+		if string(ent.Name) == cloneDstName {
+			idx = i
+			break
+		}
+	}
+	if idx == 0 {
+		t.Fatalf("clone dst dir not found or name not correct")
+	}
+	cloneDstIno := entries1[idx].Inode
+	cloneDstAttr := entries1[idx].Attr
 
 	// check dst parent dir nlink
 	var rootAttr Attr
@@ -2135,12 +2148,14 @@ func testClone(t *testing.T, m Meta) {
 	}
 
 	// check attr
-	var removedKeys []string
+	var removedItem []interface{}
 	checkEntryTree(t, m, dir1, cloneDstIno, func(srcEntry, dstEntry *Entry, dstIno Ino) {
 		checkEntry(t, srcEntry, dstEntry, dstIno)
 		switch m := m.(type) {
 		case *redisMeta:
-			removedKeys = append(removedKeys, m.inodeKey(dstEntry.Inode), m.entryKey(dstEntry.Inode), m.xattrKey(dstEntry.Inode), m.symKey(dstEntry.Inode))
+			removedItem = append(removedItem, m.inodeKey(dstEntry.Inode), m.entryKey(dstEntry.Inode), m.xattrKey(dstEntry.Inode), m.symKey(dstEntry.Inode))
+		case *dbMeta:
+			removedItem = append(removedItem, &node{Inode: dstEntry.Inode}, &edge{Inode: dstEntry.Inode}, &xattr{Inode: dstEntry.Inode}, &symlink{Inode: dstEntry.Inode})
 		}
 	})
 	// check xattr
@@ -2170,11 +2185,15 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("del edge error: %v", err)
 		}
 		// check remove tree
-		if eno := m.removeEntry(Background, cloneDstIno, cloneDstAttr, cloneDstName, make(chan struct{}, 10)); eno != 0 {
+		if eno := m.emptyDir(Background, cloneDstIno, nil, make(chan int, 10)); eno != 0 {
 			logger.Errorf("remove tree error rootInode: %v", cloneDstIno)
 		}
-		if exists := m.rdb.Exists(Background, removedKeys...).Val(); exists != 0 {
-			t.Fatalf("has keys not removed: %v", removedKeys)
+		removedKeysStr := make([]string, len(removedItem))
+		for i, key := range removedItem {
+			removedKeysStr[i] = key.(string)
+		}
+		if exists := m.rdb.Exists(Background, removedKeysStr...).Val(); exists != 0 {
+			t.Fatalf("has keys not removed: %v", removedItem)
 		}
 		// check slice ref after remove
 		if result = m.rdb.HGetAll(Background, m.sliceRefs()).Val(); result[m.sliceKey(sliceId, 200)] != "0" ||
@@ -2182,7 +2201,41 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("slice ref not correct after remove entries: %#v", result)
 		}
 		// check remove not exist tree
-		if eno := m.removeEntry(Background, 100000, cloneDstAttr, cloneDstName, make(chan struct{}, 10)); eno != 0 {
+		if eno := m.emptyDir(Background, 100000, nil, make(chan int, 10)); eno != 0 {
+			logger.Errorf("remove not exist tree error rootInode: %v", cloneDstIno)
+		}
+	case *dbMeta:
+		// check slice ref after clone
+		sli := sliceRef{Id: sliceId, Size: 200}
+		if exist, err := m.db.Get(&sli); err != nil || !exist {
+			t.Fatalf("get slice ref error: %v", err)
+		}
+		if sli.Refs != 2 {
+			t.Fatalf("slice ref not correct: %v, expect 2,but got %d", sli, sli.Refs)
+		}
+
+		if n, err := m.db.Delete(&edge{Parent: cloneDstAttr.Parent, Name: []byte(cloneDstName)}); err != nil || n != 1 {
+			t.Fatalf("del edge error: %v", err)
+		}
+
+		// check remove tree
+		if eno := m.emptyDir(Background, cloneDstIno, nil, make(chan int, 10)); eno != 0 {
+			logger.Errorf("remove tree error rootInode: %v", cloneDstIno)
+		}
+
+		if exists, err := m.db.Exist(removedItem...); err != nil || exists {
+			t.Fatalf("has keys not removed: %v", removedItem)
+		}
+		// check slice ref after remove
+		sli = sliceRef{Id: sliceId, Size: 200}
+		if exist, err := m.db.Get(&sli); err != nil || !exist {
+			t.Fatalf("get slice ref error: %v", err)
+		}
+		if sli.Refs != 1 {
+			t.Fatalf("slice ref not correct: %v, expect 1,but got %d", sli, sli.Refs)
+		}
+		// check remove not exist tree
+		if eno := m.emptyDir(Background, 100000, nil, make(chan int, 10)); eno != 0 {
 			logger.Errorf("remove not exist tree error rootInode: %v", cloneDstIno)
 		}
 	}
@@ -2218,18 +2271,18 @@ func checkEntry(t *testing.T, srcEntry, dstEntry *Entry, dstParentIno Ino) {
 	}
 	srcAttr := srcEntry.Attr
 	dstAttr := dstEntry.Attr
-	if srcAttr.Uid != dstAttr.Uid ||
-		srcAttr.Gid != dstAttr.Gid ||
-		srcAttr.Mode != dstAttr.Mode ||
-		srcAttr.Atime != dstAttr.Atime ||
-		srcAttr.Mtime != dstAttr.Mtime ||
-		srcAttr.Ctime != dstAttr.Ctime ||
-		srcAttr.Length != dstAttr.Length ||
-		srcAttr.Typ != dstAttr.Typ ||
-		srcAttr.Rdev != dstAttr.Rdev ||
-		dstAttr.Parent != dstParentIno ||
-		srcAttr.Typ == TypeFile && dstAttr.Nlink != 1 ||
-		srcAttr.Typ != TypeFile && srcAttr.Nlink != dstAttr.Nlink {
+	if dstAttr.Parent != dstParentIno {
+		t.Fatalf("unmatched parent: %d, %d", dstAttr.Parent, dstParentIno)
+	}
+	if srcAttr.Typ == TypeFile && dstAttr.Nlink != 1 || srcAttr.Typ != TypeFile && srcAttr.Nlink != dstAttr.Nlink {
+		t.Fatalf("nlink not correct: srcType:%d,srcNlink:%d,dstType:%d,dstNlink:%d", srcAttr.Typ, srcAttr.Nlink, dstAttr.Typ, dstAttr.Nlink)
+	}
+
+	srcAttr.Nlink = 0
+	dstAttr.Nlink = 0
+	srcAttr.Parent = 0
+	dstAttr.Parent = 0
+	if *srcAttr != *dstAttr {
 		t.Fatalf("unmatched attr: %#v, %#v", *srcAttr, *dstAttr)
 	}
 }
