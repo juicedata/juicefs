@@ -2024,12 +2024,6 @@ func testDirStat(t *testing.T, m Meta) {
 }
 
 func testClone(t *testing.T, m Meta) {
-	switch m.(type) {
-	case *redisMeta:
-	case *dbMeta:
-	default:
-		t.Skipf("skip clone test for %T", m)
-	}
 	if err := m.Reset(); err != nil {
 		t.Fatalf("reset: %s", err)
 	}
@@ -2156,6 +2150,8 @@ func testClone(t *testing.T, m Meta) {
 			removedItem = append(removedItem, m.inodeKey(dstEntry.Inode), m.entryKey(dstEntry.Inode), m.xattrKey(dstEntry.Inode), m.symKey(dstEntry.Inode))
 		case *dbMeta:
 			removedItem = append(removedItem, &node{Inode: dstEntry.Inode}, &edge{Inode: dstEntry.Inode}, &xattr{Inode: dstEntry.Inode}, &symlink{Inode: dstEntry.Inode})
+		case *kvMeta:
+			removedItem = append(removedItem, m.inodeKey(dstEntry.Inode), m.entryKey(dstEntry.Inode, string(dstEntry.Name)), m.xattrKey(dstEntry.Inode, ""), m.symKey(dstEntry.Inode))
 		}
 	})
 	// check xattr
@@ -2206,12 +2202,19 @@ func testClone(t *testing.T, m Meta) {
 		}
 	case *dbMeta:
 		// check slice ref after clone
-		sli := sliceRef{Id: sliceId, Size: 200}
-		if exist, err := m.db.Get(&sli); err != nil || !exist {
+		sliRef1 := sliceRef{Id: sliceId, Size: 200}
+		if exist, err := m.db.Get(&sliRef1); err != nil || !exist {
 			t.Fatalf("get slice ref error: %v", err)
 		}
-		if sli.Refs != 2 {
-			t.Fatalf("slice ref not correct: %v, expect 2,but got %d", sli, sli.Refs)
+		if sliRef1.Refs != 2 {
+			t.Fatalf("slice ref not correct: %v, expect 2,but got %d", sliRef1, sliRef1.Refs)
+		}
+		sliRef2 := sliceRef{Id: sliceId2, Size: 200}
+		if exist, err := m.db.Get(&sliRef2); err != nil || !exist {
+			t.Fatalf("get slice ref error: %v", err)
+		}
+		if sliRef2.Refs != 3 {
+			t.Fatalf("slice ref not correct: %v, expect 2,but got %d", sliRef2, sliRef2.Refs)
 		}
 
 		if n, err := m.db.Delete(&edge{Parent: cloneDstAttr.Parent, Name: []byte(cloneDstName)}); err != nil || n != 1 {
@@ -2227,12 +2230,61 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("has keys not removed: %v", removedItem)
 		}
 		// check slice ref after remove
-		sli = sliceRef{Id: sliceId, Size: 200}
-		if exist, err := m.db.Get(&sli); err != nil || !exist {
+		sliRef1 = sliceRef{Id: sliceId, Size: 200}
+		if exist, err := m.db.Get(&sliRef1); err != nil || !exist {
 			t.Fatalf("get slice ref error: %v", err)
 		}
-		if sli.Refs != 1 {
-			t.Fatalf("slice ref not correct: %v, expect 1,but got %d", sli, sli.Refs)
+		if sliRef1.Refs != 1 {
+			t.Fatalf("slice ref not correct: %v, expect 2,but got %d", sliRef1, sliRef1.Refs)
+		}
+		sliRef2 = sliceRef{Id: sliceId2, Size: 200}
+		if exist, err := m.db.Get(&sliRef2); err != nil || !exist {
+			t.Fatalf("get slice ref error: %v", err)
+		}
+		if sliRef2.Refs != 1 {
+			t.Fatalf("slice ref not correct: %v, expect 2,but got %d", sliRef2, sliRef2.Refs)
+		}
+		// check remove not exist tree
+		if eno := m.emptyDir(Background, 100000, nil, make(chan int, 10)); eno != 0 {
+			logger.Errorf("remove not exist tree error rootInode: %v", cloneDstIno)
+		}
+	case *kvMeta:
+		// check slice ref after clone
+		var sliRef1, sliRef2 int64
+		m.txn(func(tx *kvTxn) error {
+			sliRef1 = tx.incrBy(m.sliceKey(sliceId, 200), 0)
+			sliRef2 = tx.incrBy(m.sliceKey(sliceId2, 200), 0)
+			return nil
+		})
+		if sliRef1 != 1 || sliRef2 != 2 {
+			t.Fatalf("slice ref not correct: sliRef1:%d sliRef2:%d", sliRef1, sliRef2)
+		}
+
+		// del edge first
+		if err := m.deleteKeys(m.entryKey(cloneDstAttr.Parent, cloneDstName)); err != nil {
+			t.Fatalf("del edge error: %v", err)
+		}
+		// check remove tree
+		if eno := m.emptyDir(Background, cloneDstIno, nil, make(chan int, 10)); eno != 0 {
+			logger.Errorf("remove tree error rootInode: %v", cloneDstIno)
+		}
+
+		m.txn(func(tx *kvTxn) error {
+			for _, key := range removedItem {
+				if tx.exist([]byte(key.(string))) {
+					t.Fatalf("has keys not removed: %v", removedItem)
+				}
+			}
+			return nil
+		})
+		// check slice ref after remove
+		m.txn(func(tx *kvTxn) error {
+			sliRef1 = tx.incrBy(m.sliceKey(sliceId, 200), 0)
+			sliRef2 = tx.incrBy(m.sliceKey(sliceId2, 200), 0)
+			return nil
+		})
+		if sliRef1 != 0 || sliRef2 != 0 {
+			t.Fatalf("slice ref not correct: sliRef1:%d sliRef2:%d", sliRef1, sliRef2)
 		}
 		// check remove not exist tree
 		if eno := m.emptyDir(Background, 100000, nil, make(chan int, 10)); eno != 0 {
