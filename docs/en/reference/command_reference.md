@@ -995,9 +995,9 @@ juicefs status redis://localhost
 
 ### `juicefs warmup` {#warmup}
 
-Download data to local cache in advance, to achieve better performance on application's first read.
+Download data to local cache in advance, to achieve better performance on application's first read. You can specify a mount point path to recursively warm-up all files under this path. You can also specify a file through the `--file` option to only warm-up the files contained in it.
 
-You can specify a mount point path to recursively warm-up all files under this path. You can also specify a file through the `--file` option to only warm-up the files contained in it.
+If the files needing warming up resides in many different directories, you should specify their names in a text file, and pass to the `warmup` command using the `--file` option, allowing `juicefs warmup` to download concurrently, which is significantly faster than calling `juicefs warmup` multiple times, each with a single file.
 
 #### Synopsis
 
@@ -1011,7 +1011,7 @@ juicefs warmup [command options] [PATH ...]
 file containing a list of paths (each line is a file path)
 
 `--threads value, -p value`<br />
-number of concurrent workers (default: 50)
+number of concurrent workers, default to 50. Reduce this number in low bandwidth environment to avoid download timeouts
 
 `--background, -b`<br />
 run in background (default: false)
