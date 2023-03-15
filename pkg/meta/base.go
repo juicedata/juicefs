@@ -336,12 +336,12 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, spac
 	m.en.updateStats(space, 0)
 	if parent > 0 {
 		m.updateDirStat(ctx, parent, length, space, 0)
-		m.updateQuota(ctx, parent, space, 0)
+		m.updateDirQuota(ctx, parent, space, 0)
 	} else {
 		go func() {
 			for p := range m.en.doGetParents(ctx, inode) {
 				m.updateDirStat(ctx, p, length, space, 0)
-				m.updateQuota(ctx, parent, space, 0)
+				m.updateDirQuota(ctx, parent, space, 0)
 			}
 		}()
 	}
@@ -568,7 +568,7 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parent Ino) bool
 		logger.Warnf("Quota check is skipped for hardlinked files")
 		return false
 	}
-	return m.exceedQuota(ctx, parent, space, inodes)
+	return m.checkDirQuota(ctx, parent, space, inodes)
 }
 
 func (m *baseMeta) GetDirRecStat(ctx Context, inode Ino) (space, inodes int64, err error) {
@@ -615,7 +615,7 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 	return attr.Parent, st
 }
 
-func (m *baseMeta) exceedQuota(ctx Context, inode Ino, space, inodes int64) bool {
+func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {
 	var q *Quota
 	var st syscall.Errno
 	for {
@@ -640,7 +640,7 @@ func (m *baseMeta) exceedQuota(ctx Context, inode Ino, space, inodes int64) bool
 	return false
 }
 
-func (m *baseMeta) updateQuota(ctx Context, inode Ino, space, inodes int64) {
+func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 	var q *Quota
 	var st syscall.Errno
 	for {
@@ -1031,7 +1031,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	if err == 0 {
 		m.en.updateStats(space, inodes)
 		m.updateDirStat(ctx, parent, 0, space, inodes)
-		m.updateQuota(ctx, parent, space, inodes)
+		m.updateDirQuota(ctx, parent, space, inodes)
 	}
 	return err
 }
@@ -1095,7 +1095,7 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	err := m.en.doLink(ctx, inode, parent, name, attr)
 	if err == 0 {
 		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
-		m.updateQuota(ctx, parent, align4K(attr.Length), 1)
+		m.updateDirQuota(ctx, parent, align4K(attr.Length), 1)
 	}
 	return err
 }
@@ -1136,7 +1136,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 			diffLength = attr.Length
 		}
 		m.updateDirStat(ctx, parent, -int64(diffLength), -align4K(diffLength), -1)
-		m.updateQuota(ctx, parent, -align4K(diffLength), -1)
+		m.updateDirQuota(ctx, parent, -align4K(diffLength), -1)
 	}
 	return err
 }
@@ -1166,7 +1166,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 			delete(m.dirParents, inode)
 			m.dirMu.Unlock()
 		}
-		m.updateQuota(ctx, parent, -align4K(0), -1)
+		m.updateDirQuota(ctx, parent, -align4K(0), -1)
 	}
 	return st
 }
@@ -1234,9 +1234,9 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		m.dirParents[*inode] = parentDst
 		m.dirMu.Unlock()
 		if !isTrash(parentSrc) {
-			m.updateQuota(ctx, parentSrc, -space, -inodes)
+			m.updateDirQuota(ctx, parentSrc, -space, -inodes)
 		}
-		m.updateQuota(ctx, parentDst, space, inodes)
+		m.updateDirQuota(ctx, parentDst, space, inodes)
 		go m.loadQuotas()
 	}
 	return st

@@ -2029,7 +2029,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		newSpace := -align4K(n.Length)
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, n.Length, false)
-		m.updateQuota(Background, n.Parent, newSpace, -1)
+		m.updateDirQuota(Background, n.Parent, newSpace, -1)
 	}
 	return err
 }

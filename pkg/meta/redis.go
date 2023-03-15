@@ -2019,7 +2019,7 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	if err == nil {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
-		m.updateQuota(Background, attr.Parent, newSpace, -1)
+		m.updateDirQuota(Background, attr.Parent, newSpace, -1)
 	}
 	return err
 }
