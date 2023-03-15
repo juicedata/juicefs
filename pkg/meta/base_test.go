@@ -2054,7 +2054,7 @@ func testQuota(t *testing.T, m Meta) {
 	if err := m.HandleQuota(ctx, QuotaList, "", &quotas); err != nil {
 		t.Fatalf("HandleQuota list: %s", err)
 	} else {
-		if len(quotas) != 3 {
+		if len(quotas) != 2 {
 			t.Fatalf("HandleQuota list: %d", len(quotas))
 		}
 	}

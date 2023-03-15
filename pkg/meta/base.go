@@ -177,6 +177,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		of:           newOpenFiles(conf.OpenCache, conf.OpenCacheLimit),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
+		dirQuotas:    make(map[Ino]*Quota),
 		dirParents:   make(map[Ino]Ino),
 		maxDeleting:  make(chan struct{}, 100),
 		dslices:      make(chan Slice, conf.MaxDeletes*10240),
@@ -630,6 +631,7 @@ func (m *baseMeta) exceedQuota(ctx Context, inode Ino, space, inodes int64) bool
 		q = m.dirQuotas[inode]
 		if q != nil {
 			if exceed := q.check(space, inodes); exceed {
+				m.dirMu.Unlock()
 				return exceed
 			}
 		}
