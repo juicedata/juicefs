@@ -150,7 +150,7 @@ type baseMeta struct {
 	reloadCb     []func(*Format)
 	umounting    bool
 	sesMu        sync.Mutex
-	dirMu        sync.Mutex // protect dirParents & dirQuotas
+	dirMu        sync.RWMutex // protect dirParents & dirQuotas
 
 	dirStatsLock sync.Mutex
 	dirStats     map[Ino]dirStat
@@ -598,9 +598,9 @@ func (m *baseMeta) loadQuotas() {
 }
 
 func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
-	m.dirMu.Lock()
+	m.dirMu.RLock()
 	parent, ok := m.dirParents[inode]
-	m.dirMu.Unlock()
+	m.dirMu.RUnlock()
 	if ok {
 		return parent, 0
 	}
@@ -620,15 +620,15 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bo
 	var st syscall.Errno
 	for {
 		// FIXME: reduce locking
-		m.dirMu.Lock()
+		m.dirMu.RLock()
 		q = m.dirQuotas[inode]
 		if q != nil {
 			if exceed := q.check(space, inodes); exceed {
-				m.dirMu.Unlock()
+				m.dirMu.RUnlock()
 				return exceed
 			}
 		}
-		m.dirMu.Unlock()
+		m.dirMu.RUnlock()
 		if inode <= RootInode {
 			break
 		}
@@ -645,12 +645,12 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 	var st syscall.Errno
 	for {
 		// FIXME: reduce locking
-		m.dirMu.Lock()
+		m.dirMu.RLock()
 		q = m.dirQuotas[inode]
 		if q != nil {
 			q.update(space, inodes)
 		}
-		m.dirMu.Unlock()
+		m.dirMu.RUnlock()
 		if inode <= RootInode {
 			break
 		}
@@ -666,7 +666,7 @@ func (m *baseMeta) flushQuotas() {
 	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
-		m.dirMu.Lock()
+		m.dirMu.RLock()
 		for ino, q := range m.dirQuotas {
 			newSpace = atomic.SwapInt64(&q.newSpace, 0)
 			newInodes = atomic.SwapInt64(&q.newInodes, 0)
@@ -674,14 +674,14 @@ func (m *baseMeta) flushQuotas() {
 				quotas[ino] = &Quota{newSpace: newSpace, newInodes: newInodes}
 			}
 		}
-		m.dirMu.Unlock()
+		m.dirMu.RUnlock()
 		// FIXME: merge
 		for ino, q := range quotas {
 			if err := m.en.doFlushQuota(Background, ino, q.newSpace, q.newInodes); err != nil {
 				logger.Warnf("Flush quota of inode %d: %s", ino, err)
-				m.dirMu.Lock()
+				m.dirMu.RLock()
 				cur := m.dirQuotas[ino]
-				m.dirMu.Unlock()
+				m.dirMu.RUnlock()
 				if cur != nil {
 					cur.update(q.newSpace, q.newInodes)
 				}
