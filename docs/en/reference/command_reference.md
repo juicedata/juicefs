@@ -123,7 +123,7 @@ source /etc/bash_completion.d/juicefs
 
 ### `juicefs format` {#format}
 
-Format a volume. It's the first step for initializing a new file system volume.
+Create a file system, if a volume already exists with the same META-URL, this command will skip the creation step. To adjust volume settings afterwards, use [`juicefs config`](#config).
 
 #### Synopsis
 

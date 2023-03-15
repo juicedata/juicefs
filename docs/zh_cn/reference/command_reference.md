@@ -123,7 +123,7 @@ source /etc/bash_completion.d/juicefs
 
 ### `juicefs format` {#format}
 
-格式化文件系统；这是使用新文件系统的第一步。
+创建文件系统，如果对应的 META-URL 文件系统已经存在，则不会再次进行格式化。如果文件系统创建后需要调整配置，请使用 [`juicefs config`](#config)。
 
 #### 使用
 
@@ -1077,7 +1077,7 @@ juicefs load [command options] META-URL [FILE]
 juicefs load redis://localhost/1 meta-dump
 ```
 
-### `juicefs config`
+### `juicefs config` {#config}
 
 修改指定文件系统的配置项。
 
@@ -1090,7 +1090,7 @@ juicefs config [command options] META-URL
 #### 选项
 
 `--capacity value`<br />
-容量配额；单位为 GiB
+容量配额，单位为 GiB。注意更新该设置以后，客户端未必能立刻生效，可能需要等待最多 1 分钟（详见[代码](https://github.com/juicedata/juicefs/blob/v0.17.1/pkg/meta/redis.go#L2067-L2082)）
 
 `--inodes value`<br />
 文件数配额
