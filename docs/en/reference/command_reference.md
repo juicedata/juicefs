@@ -1089,7 +1089,6 @@ juicefs config [command options] META-URL
 `--capacity value`<br />
 limit for space in GiB
 
-
 `--inodes value`<br />
 limit for number of inodes
 
