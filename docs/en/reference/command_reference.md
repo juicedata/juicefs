@@ -1074,9 +1074,9 @@ When the FILE is not provided, STDIN will be used instead.
 juicefs load redis://localhost/1 meta-dump
 ```
 
-### `juicefs config`
+### `juicefs config` {#config}
 
-Change config of a volume.
+Change config of a volume. Some settings might not take effect immediately, clients might have to wait for at most 1 minute for changes to apply (see [code here](https://github.com/juicedata/juicefs/blob/v0.17.1/pkg/meta/redis.go#L2067-L2082))
 
 #### Synopsis
 
@@ -1088,6 +1088,7 @@ juicefs config [command options] META-URL
 
 `--capacity value`<br />
 limit for space in GiB
+
 
 `--inodes value`<br />
 limit for number of inodes

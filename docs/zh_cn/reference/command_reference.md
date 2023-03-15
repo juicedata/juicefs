@@ -1079,7 +1079,7 @@ juicefs load redis://localhost/1 meta-dump
 
 ### `juicefs config` {#config}
 
-修改指定文件系统的配置项。
+修改指定文件系统的配置项。注意更新某些设置以后，客户端未必能立刻生效，可能需要等待最多 1 分钟（详见[代码](https://github.com/juicedata/juicefs/blob/v0.17.1/pkg/meta/redis.go#L2067-L2082)）
 
 #### 使用
 
@@ -1090,7 +1090,7 @@ juicefs config [command options] META-URL
 #### 选项
 
 `--capacity value`<br />
-容量配额，单位为 GiB。注意更新该设置以后，客户端未必能立刻生效，可能需要等待最多 1 分钟（详见[代码](https://github.com/juicedata/juicefs/blob/v0.17.1/pkg/meta/redis.go#L2067-L2082)）
+容量配额，单位为 GiB
 
 `--inodes value`<br />
 文件数配额
