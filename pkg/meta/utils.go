@@ -332,43 +332,49 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, count *uint64) s
 }
 
 func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
-	var attr Attr
-	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
-		return st
-	}
-	if attr.Typ == TypeDirectory {
-		var entries []*Entry
-		if st := r.Readdir(ctx, inode, 1, &entries); st != 0 {
-			return st
+	const batchSize = 100
+	dirs := []Ino{inode}
+	for len(dirs) > 0 {
+		entriesList := make([][]*Entry, len(dirs))
+		var wg sync.WaitGroup
+		var errno uintptr
+		for i := range dirs {
+			wg.Add(1)
+			go func(ino Ino, entries *[]*Entry) {
+				defer wg.Done()
+				st := r.Readdir(ctx, ino, 1, entries)
+				if st == syscall.ENOENT {
+					st = 0
+				}
+				if st != 0 {
+					atomic.StoreUintptr(&errno, uintptr(st))
+				}
+			}(dirs[i], &entriesList[i])
 		}
-		for _, e := range entries {
-			if e.Inode == inode || len(e.Name) == 2 && bytes.Equal(e.Name, []byte("..")) {
-				continue
-			}
-			if e.Attr.Typ == TypeDirectory {
-				if recursive {
-					if st := GetSummary(r, ctx, e.Inode, summary, recursive); st != 0 {
-						return st
+		wg.Wait()
+		if errno != 0 {
+			return syscall.Errno(errno)
+		}
+		dirs = dirs[:0]
+		for _, entries := range entriesList {
+			for _, e := range entries {
+				if bytes.Equal(e.Name, []byte(".")) || bytes.Equal(e.Name, []byte("..")) {
+					continue
+				}
+				if e.Attr.Typ == TypeDirectory {
+					summary.Dirs++
+					summary.Size += uint64(align4K(0))
+					if recursive {
+						dirs = append(dirs, e.Inode)
 					}
 				} else {
-					summary.Dirs++
-					summary.Size += 4096
-				}
-			} else {
-				summary.Files++
-				summary.Size += uint64(align4K(e.Attr.Length))
-				if e.Attr.Typ == TypeFile {
-					summary.Length += e.Attr.Length
+					summary.Files++
+					summary.Size += uint64(align4K(e.Attr.Length))
+					if e.Attr.Typ == TypeFile {
+						summary.Length += e.Attr.Length
+					}
 				}
 			}
-		}
-		summary.Dirs++
-		summary.Size += 4096
-	} else {
-		summary.Files++
-		summary.Size += uint64(align4K(attr.Length))
-		if attr.Typ == TypeFile {
-			summary.Length += attr.Length
 		}
 	}
 	return 0
