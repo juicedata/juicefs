@@ -31,6 +31,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -332,28 +333,25 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, count *uint64) s
 }
 
 func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
-	const batchSize = 100
+	const concurrency = 1000
 	dirs := []Ino{inode}
 	for len(dirs) > 0 {
 		entriesList := make([][]*Entry, len(dirs))
-		var wg sync.WaitGroup
-		var errno uintptr
+		var eg errgroup.Group
+		eg.SetLimit(concurrency)
 		for i := range dirs {
-			wg.Add(1)
-			go func(ino Ino, entries *[]*Entry) {
-				defer wg.Done()
+			ino := dirs[i]
+			entries := &entriesList[i]
+			eg.Go(func() error {
 				st := r.Readdir(ctx, ino, 1, entries)
-				if st == syscall.ENOENT {
-					st = 0
+				if st == 0 || st == syscall.ENOENT {
+					return nil
 				}
-				if st != 0 {
-					atomic.StoreUintptr(&errno, uintptr(st))
-				}
-			}(dirs[i], &entriesList[i])
+				return st
+			})
 		}
-		wg.Wait()
-		if errno != 0 {
-			return syscall.Errno(errno)
+		if err := eg.Wait(); err != nil {
+			return err.(syscall.Errno)
 		}
 		dirs = dirs[:0]
 		for _, entries := range entriesList {
