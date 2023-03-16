@@ -21,6 +21,10 @@ slug: /faq
 
 不同类型的 JuiceFS 客户端获取日志的方式也不同，详情请参考[「客户端日志」](administration/fault_diagnosis_and_analysis.md#客户端日志)文档。
 
+### JuiceFS 社区版的配置文件在哪儿？
+
+与 JuiceFS 云服务不同，JuiceFS 社区版客户端没有 auth 命令，也没有相应的配置文件。文件系统相关的信息比如对象存储的 AK/SK 密钥、文件系统的 UUID 和名称等信息均保存在元数据引擎（存储元数据的数据库）中。
+
 ### JuiceFS 是否可以直接读取对象存储中已有的文件？
 
 不可以，JuiceFS 是一个用户态文件系统，虽然它通常使用对象存储作为数据存储层，但它并不是一般意义上的对象存储访问工具。可以查看[技术架构](introduction/architecture.md)文档了解详情。

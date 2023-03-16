@@ -21,6 +21,10 @@ First unmount JuiceFS volume, then re-mount the volume with newer version client
 
 Different types of JuiceFS clients have different ways to obtain logs. For details, please refer to ["Client log"](administration/fault_diagnosis_and_analysis.md#client-log) document.
 
+### Where is the configuration file for JuiceFS Community Edition?
+
+Unlike JuiceFS cloud service, JuiceFS community edition client does not have the auth command, nor does it have the corresponding configuration file. File system related information such as the AK/SK key of the object storage, the UUID and name of the file system, etc. are all stored in the metadata engine (the database that stores metadata).
+
 ### Can JuiceFS directly read files that already exist in object storage?
 
 JuiceFS cannot directly read files that already exist in object storage. Although JuiceFS typically uses object storage as the data storage layer, it is not a tool for accessing object storage in the traditional sense. You can refer to the [technical architecture](introduction/architecture.md) documentation for more details.
