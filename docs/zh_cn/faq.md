@@ -25,7 +25,7 @@ slug: /faq
 
 不可以，JuiceFS 是一个用户态文件系统，虽然它通常使用对象存储作为数据存储层，但它并不是一般意义上的对象存储访问工具。可以查看[技术架构](introduction/architecture.md)文档了解详情。
 
-如果你希望把对象存储 Bucket 中已有数据迁移到 JuiceFS，可以使用 [JuiceFS Sync](guide/sync.md)。
+如果你希望把对象存储 Bucket 中已有数据迁移到 JuiceFS，可以使用 [`juiceFS sync`](guide/sync.md)。
 
 ### 如何将多台服务器组合成一个 JuiceFS 文件系统来使用？
 
