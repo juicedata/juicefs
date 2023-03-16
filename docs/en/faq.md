@@ -27,7 +27,7 @@ JuiceFS cannot directly read files that already exist in object storage. Althoug
 
 If you want to migrate existing data in an object storage bucket to JuiceFS, you can use [`JuiceFS Sync`](guide/sync.md).
 
-### I have four servers and I would like to know if it is possible to utilize JuiceFS to merge them into a singular, independent file system for practical use?
+### How can I combine multiple servers into a single JuiceFS file system for use?
 
 No, while JuiceFS supports using local disks or SFTP as the underlying storage, it does not interfere with the logical structure management of the underlying storage. If you wish to consolidate storage space from multiple servers, you may consider using MinIO or Ceph to create an object storage cluster, and then create a JuiceFS file system on top of it.
 
