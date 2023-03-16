@@ -16,33 +16,31 @@ JuiceFS 支持[多种元数据存储引擎](../guide/how_to_set_up_metadata_engi
 
 ### 元数据备份
 
-使用 JuiceFS 客户端提供的 `dump` 命令可以将元数据导出到文件，例如：
+使用 JuiceFS 客户端提供的 `dump` 命令可以将元数据导出到 JSON 文件，例如：
 
 ```bash
 juicefs dump redis://192.168.1.6:6379/1 meta.dump
 ```
 
-该命令默认从根目录 `/` 开始，深度遍历目录树下所有文件，将每个文件的元数据信息按 JSON 格式写入到文件。
+上例中 `meta.dump` 是导出的 JSON 文件，你可以随意调整它的文件名和扩展名。
+
+`dump` 命令默认从根目录 `/` 开始，深度遍历目录树下所有文件，将每个文件的元数据信息按 JSON 格式写入到文件。但出于安全性的考虑，对象存储的 `Secret Key` 信息不会被导出到 JSON 文件。
 
 :::note 注意
-`juicefs dump` 仅保证单个文件自身的完整性，不提供全局时间点快照的功能，如在 dump 过程中业务仍在写入，最终结果会包含不同时间点的信息。
+`juicefs dump` 仅保证单个文件自身的完整性，不提供全局时间点快照的功能，如果在 dump 过程中业务仍在写入，最终结果会包含不同时间点的信息。
 :::
 
-Redis、MySQL 等数据库都有其自带的备份工具，如 [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data) 和 [mysqldump](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html) 等，使用它们作为 JuiceFS 元数据存储，你仍然有必要用各个数据库自身的备份工具定期备份元数据。
+`juicefs dump` 的价值在于它能将完整的元数据信息以统一的 JSON 格式导出，便于管理和保存，而且不同的元数据存储引擎都可以识别并导入。
 
-`juicefs dump` 的价值在于它能将完整的元数据信息以统一的 JSON 格式导出，便于管理和保存，而且不同的元数据存储引擎都可以识别并导入。在实际应用中，`dump` 命令于数据库自带的备份工具应该共同使用，相辅相成。
+在实际应用中，`dump` 命令与数据库自带的备份工具应该共同使用，相辅相成。比如，Redis 有 [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data)， MySQL 有 [mysqldump](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html) 等。
 
 :::note 注意
 以上讨论的仅为元数据备份，完整的文件系统备份方案还应至少包含对象存储数据的备份，如异地容灾、回收站、多版本等。
 :::
 
-### 元数据恢复
+### 元数据恢复与迁移
 
-:::tip 特别提示
-JSON 备份只能恢复到 `新创建的数据库` 或 `空数据库` 中。
-:::
-
-使用 JuiceFS 客户端提供的 `load` 命令可以将已备份的 JSON 文件中的元数据导入到一个新的**空数据库**中，例如：
+通过 `dump` 命令导出的 JSON 文件仅支持恢复到**新创建的**或**空的数据库**中，使用 `load` 命令恢复。比如，把备份恢复到一个全新的 Redis 数据库中：
 
 ```bash
 juicefs load redis://192.168.1.6:6379/1 meta.dump
@@ -50,30 +48,32 @@ juicefs load redis://192.168.1.6:6379/1 meta.dump
 
 该命令会自动处理因包含不同时间点文件而产生的冲突问题，并重新计算文件系统的统计信息（空间使用量，inode 计数器等），最后在数据库中生成一份全局一致的元数据。另外，如果你想自定义某些元数据（请务必小心），可以尝试在 load 前手动修改 JSON 文件。
 
-:::note 注意
-为了保证对象存储 SecretKey 与 SessionToken 的安全性，`juicefs dump` 得到的备份文件中的 SecretKey 与 SessionToken 会被改写为“removed”，所以在对其执行 `juicefs load` 恢复到元数据引擎后，需要使用 `juicefs config --secret-key xxxxx META-URL` 来重新设置 SecretKey。
-:::
+因为 `dump` 命令导出的 JSON 格式数据是统一且通用的，所有元数据引擎都能识别和导入。因此，你不但可以把备份恢复到原有类型的数据库中，还可以恢复到其它数据库，从而实现元数据引擎的迁移。
 
-### 元数据迁移
+例如，你可以从 Redis 数据库中导出元数据备份，然后把它恢复到全新的 MySQL 数据库中。
 
-:::tip 特别提示
-元数据迁移操作要求目标数据库是 `新创建的` 或 `空数据库`。
-:::
-
-得益于 JSON 格式的通用性，JuiceFS 支持的所有元数据存储引擎都能识别，因此可以将元数据信息从一种引擎中导出为 JSON 备份，然后再导入到另外一种引擎，从而实现元数据在不同类型引擎间的迁移。例如：
+*从 Redis 导出元数据备份：*
 
 ```bash
 juicefs dump redis://192.168.1.6:6379/1 meta.dump
 ```
 
+*将元数据恢复到一个全新的 MySQL 数据库：*
+
 ```bash
 juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs meta.dump
 ```
 
-也可以通过系统的 Pipe 直接迁移：
+另外，也可以通过系统的 Pipe 直接迁移：
 
 ```bash
 juicefs dump redis://192.168.1.6:6379/1 | juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs
+```
+
+需要注意的是，由于 dump 导出的备份中排除了对象存储的 API 访问密钥，不论恢复还迁移元数据，完成操作后都需要使用 `juicefs config` 命令把文件系统关联的对象存储的 `Secret Key` 再添加回去，例如：
+
+```bash
+juicefs config --secret-key xxxxx mysql://user:password@(192.168.1.6:3306)/juicefs
 ```
 
 :::caution 风险提示
