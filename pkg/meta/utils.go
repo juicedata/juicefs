@@ -333,6 +333,21 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, count *uint64) s
 }
 
 func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
+	var attr Attr
+	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
+		return st
+	}
+	if attr.Typ != TypeDirectory {
+		summary.Files++
+		summary.Size += uint64(align4K(attr.Length))
+		if attr.Typ == TypeFile {
+			summary.Length += attr.Length
+		}
+		return 0
+	}
+	summary.Dirs++
+	summary.Size += uint64(align4K(0))
+
 	const concurrency = 1000
 	dirs := []Ino{inode}
 	for len(dirs) > 0 {
@@ -383,57 +398,63 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
 		return st
 	}
-	if attr.Typ == TypeDirectory {
-		summary.Dirs++
-		return fastGetSummary(r, ctx, inode, summary, recursive)
-	} else {
+	if attr.Typ != TypeDirectory {
 		summary.Files++
 		summary.Size += uint64(align4K(attr.Length))
 		if attr.Typ == TypeFile {
 			summary.Length += attr.Length
 		}
-	}
-	return 0
-}
-
-func fastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
-	st, err := r.GetDirStat(ctx, inode)
-	if err != nil {
-		return errno(err)
-	}
-	summary.Size += uint64(st.space)
-	summary.Length += uint64(st.length)
-
-	var attr Attr
-	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
-		if st == syscall.ENOENT {
-			// directory is removed, ignore it
-			return 0
-		}
-		return st
-	}
-	if attr.Nlink == 2 {
-		summary.Files += uint64(st.inodes)
 		return 0
 	}
-
-	var entries []*Entry
-	if st := r.Readdir(ctx, inode, 0, &entries); st != 0 {
-		return st
-	}
-	for _, e := range entries {
-		if e.Inode == inode || len(e.Name) == 2 && bytes.Equal(e.Name, []byte("..")) {
-			continue
-		}
-		if e.Attr.Typ == TypeDirectory {
-			summary.Dirs++
-			if recursive {
-				if st := fastGetSummary(r, ctx, e.Inode, summary, recursive); st != 0 {
+	const concurrency = 1000
+	dirs := []Ino{inode}
+	for len(dirs) > 0 {
+		entriesList := make([][]*Entry, len(dirs))
+		dirStats := make([]dirStat, len(dirs))
+		var eg errgroup.Group
+		eg.SetLimit(concurrency)
+		for i := range dirs {
+			ino := dirs[i]
+			entries := &entriesList[i]
+			stat := &dirStats[i]
+			eg.Go(func() error {
+				st := r.Readdir(ctx, ino, 0, entries)
+				if st == syscall.ENOENT {
+					st = 0
+				}
+				if st != 0 {
 					return st
 				}
+				s, err := r.GetDirStat(ctx, ino)
+				if err != nil {
+					return err
+				}
+				*stat = *s
+				return nil
+			})
+		}
+		if err := eg.Wait(); err != nil {
+			return errno(err)
+		}
+		dirs = dirs[:0]
+		for _, entries := range entriesList {
+			for _, e := range entries {
+				if bytes.Equal(e.Name, []byte(".")) || bytes.Equal(e.Name, []byte("..")) {
+					continue
+				}
+				if e.Attr.Typ == TypeDirectory {
+					summary.Dirs++
+					if recursive {
+						dirs = append(dirs, e.Inode)
+					}
+				} else {
+					summary.Files++
+				}
 			}
-		} else {
-			summary.Files++
+		}
+		for _, stat := range dirStats {
+			summary.Size += uint64(stat.space)
+			summary.Length += uint64(stat.length)
 		}
 	}
 	return 0
