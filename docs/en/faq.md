@@ -25,7 +25,7 @@ Different types of JuiceFS clients have different ways to obtain logs. For detai
 
 JuiceFS cannot directly read files that already exist in object storage. Although JuiceFS typically uses object storage as the data storage layer, it is not a tool for accessing object storage in the traditional sense. You can refer to the [technical architecture](introduction/architecture.md) documentation for more details.
 
-If you want to migrate existing data in an object storage bucket to JuiceFS, you can use [JuiceFS Sync](guide/sync.md).
+If you want to migrate existing data in an object storage bucket to JuiceFS, you can use [`JuiceFS Sync`](guide/sync.md).
 
 ### I have four servers and I would like to know if it is possible to utilize JuiceFS to merge them into a singular, independent file system for practical use?
 
