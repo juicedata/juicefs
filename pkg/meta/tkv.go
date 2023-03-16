@@ -3023,12 +3023,14 @@ func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 	var dstIno Ino
 	var err error
 	var cloneEno syscall.Errno
-	concurrent := make(chan struct{}, 1)
+	concurrent := make(chan struct{}, 4)
 	if srcAttr.Typ == TypeDirectory {
 		// check dst edge
-		if err := m.txn(func(txn *kvTxn) error {
-			if txn.exist(m.entryKey(dstParentIno, dstName)) {
-				return syscall.EEXIST
+		if err := m.txn(func(tx *kvTxn) error {
+			if buf := tx.get(m.entryKey(dstParentIno, dstName)); buf != nil {
+				if _, foundIno := m.parseEntry(buf); foundIno != 0 {
+					return syscall.EEXIST
+				}
 			}
 			return nil
 		}); err != nil {
@@ -3042,8 +3044,10 @@ func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 		if eno == 0 {
 			err = m.txn(func(tx *kvTxn) error {
 				// check dst edge again
-				if tx.exist(m.entryKey(dstParentIno, dstName)) {
-					return syscall.EEXIST
+				if buf := tx.get(m.entryKey(dstParentIno, dstName)); buf != nil {
+					if _, foundIno := m.parseEntry(buf); foundIno != 0 {
+						return syscall.EEXIST
+					}
 				}
 				tx.set(m.entryKey(dstParentIno, dstName), m.packEntry(TypeDirectory, dstIno))
 				// update parent nlink
@@ -3264,8 +3268,10 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr Attr
 		return syscall.EPERM
 	}
 
-	if tx.exist(m.entryKey(dstParentIno, dstName)) {
-		return syscall.EEXIST
+	if buf := tx.get(m.entryKey(dstParentIno, dstName)); buf != nil {
+		if _, foundIno := m.parseEntry(buf); foundIno != 0 {
+			return syscall.EEXIST
+		}
 	}
 
 	tx.set(m.inodeKey(*dstIno), m.marshal(&srcAttr))
