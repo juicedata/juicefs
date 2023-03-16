@@ -21,6 +21,16 @@ First unmount JuiceFS volume, then re-mount the volume with newer version client
 
 Different types of JuiceFS clients have different ways to obtain logs. For details, please refer to ["Client log"](administration/fault_diagnosis_and_analysis.md#client-log) document.
 
+### Can JuiceFS directly read files that already exist in object storage?
+
+JuiceFS cannot directly read files that already exist in object storage. Although JuiceFS typically uses object storage as the data storage layer, it is not a tool for accessing object storage in the traditional sense. You can refer to the [technical architecture](introduction/architecture.md) documentation for more details.
+
+If you want to migrate existing data in an object storage bucket to JuiceFS, you can use [`JuiceFS Sync`](guide/sync.md).
+
+### How can I combine multiple servers into a single JuiceFS file system for use?
+
+No, while JuiceFS supports using local disks or SFTP as the underlying storage, it does not interfere with the logical structure management of the underlying storage. If you wish to consolidate storage space from multiple servers, you may consider using MinIO or Ceph to create an object storage cluster, and then create a JuiceFS file system on top of it.
+
 ## Metadata Related Questions
 
 ### Does support Redis in Sentinel or Cluster-mode as the metadata engine for JuiceFS?
