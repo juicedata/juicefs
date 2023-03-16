@@ -359,10 +359,10 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool
 			entries := &entriesList[i]
 			eg.Go(func() error {
 				st := r.Readdir(ctx, ino, 1, entries)
-				if st == 0 || st == syscall.ENOENT {
-					return nil
+				if st != 0 && st != syscall.ENOENT {
+					return st
 				}
-				return st
+				return nil
 			})
 		}
 		if err := eg.Wait(); err != nil {
@@ -406,6 +406,8 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 		}
 		return 0
 	}
+	summary.Dirs++
+
 	const concurrency = 1000
 	dirs := []Ino{inode}
 	for len(dirs) > 0 {
@@ -418,18 +420,22 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 			entries := &entriesList[i]
 			stat := &dirStats[i]
 			eg.Go(func() error {
-				st := r.Readdir(ctx, ino, 0, entries)
-				if st == syscall.ENOENT {
-					st = 0
-				}
-				if st != 0 {
-					return st
-				}
 				s, err := r.GetDirStat(ctx, ino)
 				if err != nil {
 					return err
 				}
 				*stat = *s
+				var attr Attr
+				if st := r.GetAttr(ctx, ino, &attr); st != 0 && st != syscall.ENOENT {
+					return st
+				}
+				if attr.Nlink == 2 {
+					// leaf dir, no need to read entries
+					return nil
+				}
+				if st := r.Readdir(ctx, ino, 0, entries); st != 0 && st != syscall.ENOENT {
+					return st
+				}
 				return nil
 			})
 		}
@@ -437,7 +443,15 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 			return errno(err)
 		}
 		dirs = dirs[:0]
-		for _, entries := range entriesList {
+		for i, entries := range entriesList {
+			stat := dirStats[i]
+			summary.Size += uint64(stat.space)
+			summary.Length += uint64(stat.length)
+			if entries == nil {
+				// leaf dir
+				summary.Files += uint64(stat.inodes)
+				continue
+			}
 			for _, e := range entries {
 				if bytes.Equal(e.Name, []byte(".")) || bytes.Equal(e.Name, []byte("..")) {
 					continue
@@ -451,10 +465,6 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 					summary.Files++
 				}
 			}
-		}
-		for _, stat := range dirStats {
-			summary.Size += uint64(stat.space)
-			summary.Length += uint64(stat.length)
 		}
 	}
 	return 0
