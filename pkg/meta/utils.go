@@ -348,7 +348,7 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool
 	summary.Dirs++
 	summary.Size += uint64(align4K(0))
 
-	const concurrency = 1000
+	const concurrency = 50
 	dirs := []Ino{inode}
 	for len(dirs) > 0 {
 		entriesList := make([][]*Entry, len(dirs))
@@ -408,7 +408,7 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 	}
 	summary.Dirs++
 
-	const concurrency = 1000
+	const concurrency = 50
 	dirs := []Ino{inode}
 	for len(dirs) > 0 {
 		entriesList := make([][]*Entry, len(dirs))
