@@ -2155,13 +2155,18 @@ func testClone(t *testing.T, m Meta) {
 	})
 	// check xattr
 	var value []byte
-	if eno := m.GetXattr(Background, file1, "name", &value); eno != 0 {
+	var file1Cloned Ino
+	if eno := m.Lookup(Background, cloneDstIno, "file1", &file1Cloned, &Attr{}); eno != 0 {
+		t.Fatalf("lookup file1Cloned: %s", eno)
+	}
+	if eno := m.GetXattr(Background, file1Cloned, "name", &value); eno != 0 {
 		t.Fatalf("getxattr: %s", eno)
 	}
 	if string(value) != "juicefs" {
 		t.Fatalf("xattr not correct: %s", value)
 	}
-	if eno := m.GetXattr(Background, file1, "name2", &value); eno != 0 {
+
+	if eno := m.GetXattr(Background, file1Cloned, "name2", &value); eno != 0 {
 		t.Fatalf("getxattr: %s", eno)
 	}
 	if string(value) != "juicefs2" {

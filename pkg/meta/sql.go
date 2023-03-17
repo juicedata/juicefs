@@ -3800,7 +3800,7 @@ func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNod
 	}
 
 	srcNode.Inode = *dstIno
-	if err := mustInsert(s, &srcNode); err != nil {
+	if err := mustInsert(s, srcNode); err != nil {
 		return err
 	}
 

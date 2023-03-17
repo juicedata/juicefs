@@ -3204,10 +3204,17 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 					if v, ok := vals[string(m.chunkKey(srcIno, indx))]; ok {
 						ss := readSliceBuf(v)
 						tx.set(m.chunkKey(*dstIno, indx), v)
+						sliIds := make([]uint64, 0, len(ss))
+						sliKeys := make([][]byte, 0, len(ss))
 						for _, s := range ss {
 							if s.id > 0 {
-								tx.incrBy(m.sliceKey(s.id, s.size), 1)
+								sliIds = append(sliIds, s.id)
+								sliKeys = append(sliKeys, m.sliceKey(s.id, s.size))
 							}
+						}
+						sliVal := tx.gets(sliKeys...)
+						for i := range sliIds {
+							tx.set(sliKeys[i], packCounter(parseCounter(sliVal[i])+1))
 						}
 					}
 				}
@@ -3283,7 +3290,7 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Att
 
 	// copy xattr
 	tx.scan(m.xattrKey(srcIno, ""), nextKey(m.xattrKey(srcIno, "")), false, func(k, v []byte) bool {
-		tx.set(m.xattrKey(*dstIno, string(k)), v)
+		tx.set(m.xattrKey(*dstIno, string(k[10:])), v)
 		return true
 	})
 
