@@ -3055,6 +3055,11 @@ func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 					}
 				}
 				tx.set(m.entryKey(dstParentIno, dstName), m.packEntry(TypeDirectory, dstIno))
+
+				newSpace := align4K(0)
+				m.updateStats(newSpace, 1)
+				m.updateDirStat(ctx, srcAttr.Parent, newSpace, 1)
+
 				// update parent nlink
 				dstParentAttr := &Attr{}
 				if eno := m.doGetAttr(ctx, dstParentIno, dstParentAttr); eno != 0 {
@@ -3103,6 +3108,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 				return eno
 			}
 			srcNlink = srcAttr.Nlink
+			tx.set(m.dirStatKey(*dstIno), m.packDirStat(0, 0))
 			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach)
 		}, srcIno); err != nil {
 			return errno(err)
@@ -3193,6 +3199,9 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			}
 			// copy chunks
 			if srcAttr.Length != 0 {
+				if m.checkQuota(int64(srcAttr.Length), 0) {
+					return syscall.ENOSPC
+				}
 				vals := make(map[string][]byte)
 				tx.scan(m.chunkKey(srcIno, 0), m.chunkKey(srcIno, uint32(srcAttr.Length/ChunkSize)+1),
 					false, func(k, v []byte) bool {
@@ -3219,6 +3228,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 					}
 				}
 			}
+			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length))
 			return nil
 		}, srcIno)
 	case TypeSymlink:
@@ -3249,6 +3259,9 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 }
 
 func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Attr, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
+	if m.checkQuota(4<<10, 1) {
+		return syscall.ENOSPC
+	}
 	srcAttr.Parent = dstParentIno
 	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 		srcAttr.Uid = ctx.Uid()
@@ -3297,6 +3310,9 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Att
 	if attach {
 		// set edge
 		tx.set(m.entryKey(dstParentIno, dstName), m.packEntry(srcAttr.Typ, *dstIno))
+		newSpace := align4K(0)
+		m.updateStats(newSpace, 1)
+		m.updateDirStat(ctx, srcAttr.Parent, newSpace, 1)
 	}
 	return nil
 }

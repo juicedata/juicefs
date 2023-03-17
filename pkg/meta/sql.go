@@ -3550,6 +3550,11 @@ func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 				if err = mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: dstIno, Type: TypeDirectory}); err != nil {
 					return err
 				}
+
+				newSpace := align4K(0)
+				m.updateStats(newSpace, 1)
+				m.updateDirStat(ctx, srcAttr.Parent, newSpace, 1)
+
 				// update parent nlink
 				dstParentAttr := &Attr{}
 				if eno := m.doGetAttr(ctx, dstParentIno, dstParentAttr); eno != 0 {
@@ -3601,6 +3606,9 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 				return syscall.ENOENT
 			}
 			srcNlink = srcNode.Nlink
+			if err = mustInsert(s, &dirStats{Inode: *dstIno}); err != nil {
+				return err
+			}
 			return m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, attach)
 		}); err != nil {
 			return errno(err)
@@ -3693,6 +3701,9 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			}
 			// copy chunks
 			if srcNode.Length != 0 {
+				if m.checkQuota(int64(srcNode.Length), 0) {
+					return syscall.ENOSPC
+				}
 				var cs []chunk
 				if err = s.Where("inode = ?", srcIno).ForUpdate().Find(&cs); err != nil {
 					return err
@@ -3758,6 +3769,9 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 }
 
 func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNode *node, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
+	if m.checkQuota(4<<10, 1) {
+		return syscall.ENOSPC
+	}
 	srcNode.Parent = dstParentIno
 	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 		srcNode.Uid = ctx.Uid()
@@ -3824,6 +3838,9 @@ func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNod
 		if err := mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: *dstIno, Type: srcNode.Type}); err != nil {
 			return err
 		}
+		newSpace := align4K(0)
+		m.updateStats(newSpace, 1)
+		m.updateDirStat(ctx, srcNode.Parent, newSpace, 1)
 	}
 	return nil
 }

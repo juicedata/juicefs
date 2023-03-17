@@ -3790,6 +3790,13 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 				if err = tx.HSet(ctx, m.entryKey(dstParentIno), dstName, m.packEntry(TypeDirectory, dstIno)).Err(); err != nil {
 					return err
 				}
+
+				newSpace := align4K(0)
+				tx.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+				tx.Incr(ctx, m.totalInodesKey())
+				m.updateStats(newSpace, 1)
+				m.updateDirStat(ctx, srcAttr.Parent, newSpace, 1)
+
 				// update parent nlink
 				dstParentAttr := &Attr{}
 				if eno := m.doGetAttr(ctx, dstParentIno, dstParentAttr); eno != 0 {
@@ -3837,6 +3844,9 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 				return eno
 			}
 			srcNlink = srcAttr.Nlink
+			field := strconv.FormatUint(uint64(*dstIno), 10)
+			tx.HSet(ctx, m.dirUsedInodesKey(), field, "0")
+			tx.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
 			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach)
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno)); err != nil {
 			return errno(err)
@@ -3924,6 +3934,9 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 			}
 			// copy chunks
 			if srcAttr.Length != 0 {
+				if m.checkQuota(int64(srcAttr.Length), 0) {
+					return syscall.ENOSPC
+				}
 				p := tx.Pipeline()
 				for i := 0; i < int(math.Ceil(float64(srcAttr.Length)/float64(ChunkSize))); i++ {
 					p.LRange(ctx, m.chunkKey(srcIno, uint32(i)), 0, -1)
@@ -3952,6 +3965,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 					return errno(err)
 				}
 			}
+			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length))
 			return nil
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno))
 	case TypeSymlink:
@@ -3984,6 +3998,9 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 }
 
 func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAttr *Attr, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
+	if m.checkQuota(4<<10, 1) {
+		return syscall.ENOSPC
+	}
 	srcAttr.Parent = dstParentIno
 	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 		srcAttr.Uid = ctx.Uid()
@@ -4042,6 +4059,11 @@ func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAtt
 		if err := tx.HSet(ctx, m.entryKey(dstParentIno), dstName, m.packEntry(srcAttr.Typ, *dstIno)).Err(); err != nil {
 			return err
 		}
+		newSpace := align4K(0)
+		tx.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+		tx.Incr(ctx, m.totalInodesKey())
+		m.updateStats(newSpace, 1)
+		m.updateDirStat(ctx, srcAttr.Parent, newSpace, 1)
 	}
 	return nil
 }
