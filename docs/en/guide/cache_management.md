@@ -51,9 +51,7 @@ When a JuiceFS client `open()` a file, the attributes of the file are automatica
 
 When doing `read()` on a file, the chunk and slice information of the file is automatically cached in the client memory. Reading the chunk again during the cache lifetime will return the slice information from the in-memory cache immediately (check ["How JuiceFS Stores Files"](../introduction/architecture.md#how-juicefs-store-files) to know what chunk and slice are).
 
-When the [`--open-cache`](../reference/command_reference.md#mount) option is used to set a cache time, the cache will automatically expire when the cached file attributes change.
-
-To ensure consistency, `--open-cache` is disabled by default, and every time you open a file, the client need to directly access the metadata engine. However, if the file is rarely modified, or in a read-only scenario (such as AI model training), it is recommended to set `--open-cache` according to the situation to further improve the read performance.
+When the `--open-cache` option is used to set a cache time, for the same mount point, the cache will be automatically invalidated when the cached file attributes change. However, the cache cannot be automatically invalidated for different mount points, so in order to ensure strong consistency, `--open-cache` is disabled by default, and every time you open a file, the client need to directly access the metadata engine. If the file is rarely modified, or in a read-only scenario (such as AI model training), it is recommended to set `--open-cache` according to the situation to further improve the read performance.
 
 ## Data cache
 
