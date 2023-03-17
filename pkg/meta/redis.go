@@ -579,6 +579,21 @@ func (m *redisMeta) sliceRefs() string {
 	return m.prefix + "sliceRef"
 }
 
+func (m *redisMeta) packQuota(space, inodes uint64) []byte {
+	wb := utils.NewBuffer(16)
+	wb.Put64(space)
+	wb.Put64(inodes)
+	return wb.Bytes()
+}
+
+func (m *redisMeta) parseQuota(buf []byte) (space uint64, inodes uint64) {
+	if len(buf) != 16 {
+		panic("invalid quota")
+	}
+	rb := utils.ReadBuffer(buf)
+	return rb.Get64(), rb.Get64()
+}
+
 func (m *redisMeta) packEntry(_type uint8, inode Ino) []byte {
 	wb := utils.NewBuffer(9)
 	wb.Put8(_type)
@@ -3252,85 +3267,113 @@ func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]
 			return errors.New("no quota for any trash directory")
 		}
 	}
-	var err error
 
-	// var err error
-	// switch cmd {
-	// case QuotaSet:
-	// 	quota := (*quotas)[0]
-	// 	err = m.txn(func(s *xorm.Session) error {
-	// 		q := dirQuota{Inode: inode}
-	// 		ok, e := s.ForUpdate().Get(&q)
-	// 		if e != nil {
-	// 			return e
-	// 		}
-	// 		if quota.MaxSpace < 0 {
-	// 			quota.MaxSpace = q.MaxSpace
-	// 		}
-	// 		if quota.MaxInodes < 0 {
-	// 			quota.MaxInodes = q.MaxInodes
-	// 		}
-	// 		if q.MaxSpace == quota.MaxSpace && q.MaxInodes == quota.MaxInodes {
-	// 			return nil // nothing to update
-	// 		}
-	// 		logger.Infof("Update quota of %s from (%d, %d) to (%d, %d)", dpath, q.MaxSpace, q.MaxInodes, quota.MaxSpace, quota.MaxInodes)
-	// 		q.MaxSpace = quota.MaxSpace
-	// 		q.MaxInodes = quota.MaxInodes
-	// 		if ok {
-	// 			_, e = s.Cols("max_space", "max_inodes").Update(&q, &dirQuota{Inode: inode})
-	// 		} else {
-	// 			q.UsedSpace, q.UsedInodes, e = m.GetDirRecStat(ctx, inode)
-	// 			if e == nil {
-	// 				e = mustInsert(s, &q)
-	// 			}
-	// 		}
-	// 		return e
-	// 	})
-	// case QuotaGet:
-	// 	quota := (*quotas)[0]
-	// 	err = m.roTxn(func(s *xorm.Session) error {
-	// 		q := dirQuota{Inode: inode}
-	// 		ok, e := s.Get(&q)
-	// 		if e == nil && !ok {
-	// 			e = errors.New("no quota")
-	// 		}
-	// 		if e == nil {
-	// 			quota.MaxSpace = q.MaxSpace
-	// 			quota.MaxInodes = q.MaxInodes
-	// 			quota.UsedSpace = q.UsedSpace
-	// 			quota.UsedInodes = q.UsedInodes
-	// 		}
-	// 		return e
-	// 	})
-	// case QuotaDel:
-	// 	err = m.txn(func(s *xorm.Session) error {
-	// 		_, e := s.Delete(&dirQuota{Inode: inode})
-	// 		return e
-	// 	})
-	// case QuotaList:
-	// 	*quotas = (*quotas)[:0]
-	// 	err = m.roTxn(func(s *xorm.Session) error {
-	// 		var qs []dirQuota
-	// 		if e := s.Find(&qs); e != nil {
-	// 			return e
-	// 		}
-	// 		if len(qs) == 0 {
-	// 			return nil
-	// 		}
-	// 		for _, q := range qs[0:] {
-	// 			quota := &Quota{
-	// 				MaxSpace:   q.MaxSpace,
-	// 				MaxInodes:  q.MaxInodes,
-	// 				UsedSpace:  q.UsedSpace,
-	// 				UsedInodes: q.UsedInodes,
-	// 			}
-	// 			*quotas = append(*quotas, quota)
-	// 		}
-	// 		return nil
-	// 	})
-	// default: // FIXME: QuotaCheck
-	// 	err = fmt.Errorf("invalid quota command: %d", cmd)
-	// }
+	var err error
+	field := inode.String()
+	switch cmd {
+	case QuotaSet:
+		quota := (*quotas)[0]
+		err = m.txn(ctx, func(tx *redis.Tx) error {
+			rawQ, err := tx.HGet(ctx, m.dirQuotasKey(), field).Bytes()
+			if err != nil && err != redis.Nil {
+				return err
+			}
+			var maxSpace, maxInodes uint64
+			if len(rawQ) == 16 {
+				maxSpace, maxInodes = m.parseQuota(rawQ)
+			}
+			if quota.MaxSpace < 0 && err == nil {
+				quota.MaxSpace = int64(maxSpace)
+			}
+			if quota.MaxInodes < 0 && err == nil {
+				quota.MaxInodes = int64(maxInodes)
+			}
+
+			if maxSpace == uint64(quota.MaxSpace) && maxInodes == uint64(quota.MaxInodes) || quota.MaxSpace < 0 && quota.MaxInodes < 0 {
+				return nil // nothing to update
+			}
+			_, err = tx.HSet(ctx, m.dirQuotasKey(), field, m.packQuota(maxSpace, maxInodes)).Result()
+			return err
+		}, m.dirQuotasKey())
+	case QuotaGet:
+		quota := (*quotas)[0]
+		rawQ, err := m.rdb.HGet(ctx, m.dirQuotasKey(), field).Bytes()
+		if err != nil {
+			if err == redis.Nil {
+				err = errors.New("no quota")
+			}
+			return err
+		}
+		if len(rawQ) != 16 {
+			return errors.New("invalid quota")
+		}
+		maxSpace, maxInodes := m.parseQuota(rawQ)
+		quota.MaxSpace, quota.MaxInodes = int64(maxSpace), int64(maxInodes)
+		usedSpace, err := m.rdb.HGet(ctx, m.dirRecUsedSpaceKey(), field).Int64()
+		if err != nil && err != redis.Nil {
+			return err
+		}
+		if err != redis.Nil {
+			quota.UsedSpace = usedSpace
+		}
+		usedInodes, err := m.rdb.HGet(ctx, m.dirRecUsedInodesKey(), field).Int64()
+		if err != nil && err != redis.Nil {
+			return err
+		}
+		if err != redis.Nil {
+			quota.UsedInodes = usedInodes
+		}
+		err = nil
+	case QuotaDel:
+		_, err = m.rdb.TxPipelined(ctx, func(pipeline redis.Pipeliner) error {
+			pipeline.HDel(ctx, m.dirQuotasKey(), field)
+			pipeline.HDel(ctx, m.dirRecUsedSpaceKey(), field)
+			pipeline.HDel(ctx, m.dirRecUsedInodesKey(), field)
+			return nil
+		})
+	case QuotaList:
+		*quotas = (*quotas)[:0]
+		err = m.hscan(ctx, m.dirQuotasKey(), func(keys []string) error {
+			for i := 0; i < len(keys); i += 2 {
+				key, val := keys[i], []byte(keys[i+1])
+				inode, err := strconv.ParseUint(key, 10, 64)
+				if err != nil {
+					logger.Errorf("invalid inode: %s", key)
+					continue
+				}
+				if len(val) != 16 {
+					logger.Errorf("invalid quota: %s=%s", key, val)
+					continue
+				}
+
+				maxSpace, maxInodes := m.parseQuota(val)
+				usedSpace, err := m.rdb.HGet(ctx, m.dirRecUsedSpaceKey(), key).Int64()
+				if err != nil && err != redis.Nil {
+					return err
+				}
+				if err == redis.Nil {
+					usedSpace = 0
+				}
+				usedInodes, err := m.rdb.HGet(ctx, m.dirRecUsedInodesKey(), key).Int64()
+				if err != nil && err != redis.Nil {
+					return err
+				}
+				if err == redis.Nil {
+					usedInodes = 0
+				}
+				*quotas = append(*quotas, &Quota{
+					Inode:      Ino(inode),
+					MaxSpace:   int64(maxSpace),
+					MaxInodes:  int64(maxInodes),
+					UsedSpace:  usedSpace,
+					UsedInodes: usedInodes,
+				})
+			}
+			return nil
+		})
+	default: // FIXME: QuotaCheck
+		err = fmt.Errorf("invalid quota command: %d", cmd)
+	}
 	return err
 }
 
