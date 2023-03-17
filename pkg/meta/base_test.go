@@ -2032,7 +2032,10 @@ func testClone(t *testing.T, m Meta) {
 		Bucket:    "/tmp/testbucket",
 		BlockSize: 4096,
 	}, false)
-
+	if err := m.NewSession(); err != nil {
+		t.Fatalf("new session: %s", err)
+	}
+	defer m.CloseSession()
 	//$ tree .
 	//.
 	//├── dir
@@ -2172,14 +2175,28 @@ func testClone(t *testing.T, m Meta) {
 	if string(value) != "juicefs2" {
 		t.Fatalf("xattr not correct: %s", value)
 	}
+	// check slice ref after clone
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
+		t.Fatalf("should not delete slice")
+		return nil
+	})
+	if eno := m.Remove(Background, 1, "dir1", nil); eno != 0 {
+		t.Fatalf("Rmdir: %s", eno)
+	}
+
+	var sli1del, sli2del bool
+	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
+		if args[0].(uint64) == sliceId {
+			sli1del = true
+		}
+		if args[0].(uint64) == sliceId2 {
+			sli2del = true
+		}
+		return nil
+	})
+	// check remove tree
 	switch m := m.(type) {
 	case *redisMeta:
-		// check slice ref after clone
-		result := m.rdb.HGetAll(Background, m.sliceRefs()).Val()
-		if result[m.sliceKey(sliceId, 200)] != "1" || result[m.sliceKey(sliceId2, 200)] != "2" {
-			t.Fatalf("slice ref not correct: %v", result)
-		}
-
 		// del edge first
 		if err := m.rdb.HDel(Background, m.entryKey(cloneDstAttr.Parent), cloneDstName).Err(); err != nil {
 			t.Fatalf("del edge error: %v", err)
@@ -2196,32 +2213,7 @@ func testClone(t *testing.T, m Meta) {
 		if exists := m.rdb.Exists(Background, removedKeysStr...).Val(); exists != 0 {
 			t.Fatalf("has keys not removed: %v", removedItem)
 		}
-		// check slice ref after remove
-		if result = m.rdb.HGetAll(Background, m.sliceRefs()).Val(); result[m.sliceKey(sliceId, 200)] != "0" ||
-			result[m.sliceKey(sliceId2, 200)] != "0" {
-			t.Fatalf("slice ref not correct after remove entries: %#v", result)
-		}
-		// check remove not exist tree
-		if eno := m.emptyDir(Background, 100000, true, nil, make(chan int, 10)); eno != 0 {
-			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
-		}
 	case *dbMeta:
-		// check slice ref after clone
-		sliRef1 := sliceRef{Id: sliceId, Size: 200}
-		if exist, err := m.db.Get(&sliRef1); err != nil || !exist {
-			t.Fatalf("get slice ref error: %v", err)
-		}
-		if sliRef1.Refs != 2 {
-			t.Fatalf("slice ref not correct: %v, expect 2,but got %d", sliRef1, sliRef1.Refs)
-		}
-		sliRef2 := sliceRef{Id: sliceId2, Size: 200}
-		if exist, err := m.db.Get(&sliRef2); err != nil || !exist {
-			t.Fatalf("get slice ref error: %v", err)
-		}
-		if sliRef2.Refs != 3 {
-			t.Fatalf("slice ref not correct: %v, expect 3,but got %d", sliRef2, sliRef2.Refs)
-		}
-
 		if n, err := m.db.Delete(&edge{Parent: cloneDstAttr.Parent, Name: []byte(cloneDstName)}); err != nil || n != 1 {
 			t.Fatalf("del edge error: %v", err)
 		}
@@ -2233,37 +2225,7 @@ func testClone(t *testing.T, m Meta) {
 		if exists, err := m.db.Exist(removedItem...); err != nil || exists {
 			t.Fatalf("has keys not removed: %v", removedItem)
 		}
-		// check slice ref after remove
-		sliRef1 = sliceRef{Id: sliceId, Size: 200}
-		if exist, err := m.db.Get(&sliRef1); err != nil || !exist {
-			t.Fatalf("get slice ref error: %v", err)
-		}
-		if sliRef1.Refs != 1 {
-			t.Fatalf("slice ref not correct: %v, expect 1,but got %d", sliRef1, sliRef1.Refs)
-		}
-		sliRef2 = sliceRef{Id: sliceId2, Size: 200}
-		if exist, err := m.db.Get(&sliRef2); err != nil || !exist {
-			t.Fatalf("get slice ref error: %v", err)
-		}
-		if sliRef2.Refs != 1 {
-			t.Fatalf("slice ref not correct: %v, expect 1,but got %d", sliRef2, sliRef2.Refs)
-		}
-		// check remove not exist tree
-		if eno := m.emptyDir(Background, 100000, true, nil, make(chan int, 10)); eno != 0 {
-			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
-		}
 	case *kvMeta:
-		// check slice ref after clone
-		var sliRef1, sliRef2 int64
-		m.txn(func(tx *kvTxn) error {
-			sliRef1 = tx.incrBy(m.sliceKey(sliceId, 200), 0)
-			sliRef2 = tx.incrBy(m.sliceKey(sliceId2, 200), 0)
-			return nil
-		})
-		if sliRef1 != 1 || sliRef2 != 2 {
-			t.Fatalf("slice ref not correct: sliRef1:%d sliRef2:%d", sliRef1, sliRef2)
-		}
-
 		// del edge first
 		if err := m.deleteKeys(m.entryKey(cloneDstAttr.Parent, cloneDstName)); err != nil {
 			t.Fatalf("del edge error: %v", err)
@@ -2283,19 +2245,10 @@ func testClone(t *testing.T, m Meta) {
 			}
 			return nil
 		})
-		// check slice ref after remove
-		m.txn(func(tx *kvTxn) error {
-			sliRef1 = tx.incrBy(m.sliceKey(sliceId, 200), 0)
-			sliRef2 = tx.incrBy(m.sliceKey(sliceId2, 200), 0)
-			return nil
-		})
-		if sliRef1 != 0 || sliRef2 != 0 {
-			t.Fatalf("slice ref not correct: sliRef1:%d sliRef2:%d", sliRef1, sliRef2)
-		}
-		// check remove not exist tree
-		if eno := m.emptyDir(Background, 100000, true, nil, make(chan int, 10)); eno != 0 {
-			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
-		}
+	}
+	time.Sleep(1 * time.Second)
+	if !sli1del || !sli2del {
+		t.Fatalf("slice should be deleted")
 	}
 
 }
