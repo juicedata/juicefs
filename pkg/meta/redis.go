@@ -3333,53 +3333,70 @@ func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]
 		})
 	case QuotaList:
 		*quotas = (*quotas)[:0]
-		err = m.hscan(ctx, m.dirQuotasKey(), func(keys []string) error {
-			for i := 0; i < len(keys); i += 2 {
-				key, val := keys[i], []byte(keys[i+1])
-				inode, err := strconv.ParseUint(key, 10, 64)
-				if err != nil {
-					logger.Errorf("invalid inode: %s", key)
-					continue
-				}
-				if len(val) != 16 {
-					logger.Errorf("invalid quota: %s=%s", key, val)
-					continue
-				}
-
-				maxSpace, maxInodes := m.parseQuota(val)
-				usedSpace, err := m.rdb.HGet(ctx, m.dirRecUsedSpaceKey(), key).Int64()
-				if err != nil && err != redis.Nil {
-					return err
-				}
-				if err == redis.Nil {
-					usedSpace = 0
-				}
-				usedInodes, err := m.rdb.HGet(ctx, m.dirRecUsedInodesKey(), key).Int64()
-				if err != nil && err != redis.Nil {
-					return err
-				}
-				if err == redis.Nil {
-					usedInodes = 0
-				}
-				*quotas = append(*quotas, &Quota{
-					Inode:      Ino(inode),
-					MaxSpace:   int64(maxSpace),
-					MaxInodes:  int64(maxInodes),
-					UsedSpace:  usedSpace,
-					UsedInodes: usedInodes,
-				})
-			}
-			return nil
-		})
+		quotaMap, err := m.doLoadQuotas(ctx)
+		if err != nil {
+			return err
+		}
+		for _, quota := range quotaMap {
+			*quotas = append(*quotas, quota)
+		}
 	default: // FIXME: QuotaCheck
 		err = fmt.Errorf("invalid quota command: %d", cmd)
 	}
 	return err
 }
 
-func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) { return nil, nil }
+func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
+	quotas := make(map[Ino]*Quota)
+	return quotas, m.hscan(ctx, m.dirQuotasKey(), func(keys []string) error {
+		for i := 0; i < len(keys); i += 2 {
+			key, val := keys[i], []byte(keys[i+1])
+			inode, err := strconv.ParseUint(key, 10, 64)
+			if err != nil {
+				logger.Errorf("invalid inode: %s", key)
+				continue
+			}
+			if len(val) != 16 {
+				logger.Errorf("invalid quota: %s=%s", key, val)
+				continue
+			}
 
-func (m *redisMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error { return nil }
+			maxSpace, maxInodes := m.parseQuota(val)
+			usedSpace, err := m.rdb.HGet(ctx, m.dirRecUsedSpaceKey(), key).Int64()
+			if err != nil && err != redis.Nil {
+				return err
+			}
+			if err == redis.Nil {
+				usedSpace = 0
+			}
+			usedInodes, err := m.rdb.HGet(ctx, m.dirRecUsedInodesKey(), key).Int64()
+			if err != nil && err != redis.Nil {
+				return err
+			}
+			if err == redis.Nil {
+				usedInodes = 0
+			}
+			quotas[Ino(inode)] = &Quota{
+				Inode:      Ino(inode),
+				MaxSpace:   int64(maxSpace),
+				MaxInodes:  int64(maxInodes),
+				UsedSpace:  usedSpace,
+				UsedInodes: usedInodes,
+			}
+		}
+		return nil
+	})
+}
+
+func (m *redisMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error {
+	field := strconv.FormatUint(uint64(inode), 10)
+	_, err := m.rdb.Pipelined(ctx, func(p redis.Pipeliner) error {
+		p.HIncrBy(ctx, m.dirRecUsedSpaceKey(), field, space)
+		p.HIncrBy(ctx, m.dirRecUsedInodesKey(), field, inodes)
+		return nil
+	})
+	return err
+}
 
 func (m *redisMeta) checkServerConfig() {
 	rawInfo, err := m.rdb.Info(Background).Result()
