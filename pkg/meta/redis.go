@@ -541,6 +541,16 @@ func (m *redisMeta) dirUsedInodesKey() string {
 	return m.prefix + "dirUsedInodes"
 }
 
+// dirRecUsedSpaceKey returns the key of the recursively used space of dir
+func (m *redisMeta) dirRecUsedSpaceKey() string {
+	return m.prefix + "dirRecUsedSpace"
+}
+
+// dirRecUsedInodesKey returns the key of the recursively used inodes of dir
+func (m *redisMeta) dirRecUsedInodesKey() string {
+	return m.prefix + "dirRecUsedInodes"
+}
+
 func (m *redisMeta) dirQuotasKey() string {
 	return m.prefix + "dirQuotas"
 }
@@ -1456,6 +1466,8 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino) s
 			pipe.HDel(ctx, m.dirUsedSpaceKey(), field)
 			pipe.HDel(ctx, m.dirUsedInodesKey(), field)
 			pipe.HDel(ctx, m.dirQuotasKey(), field)
+			pipe.HDel(ctx, m.dirRecUsedSpaceKey(), field)
+			pipe.HDel(ctx, m.dirRecUsedInodesKey(), field)
 			return nil
 		})
 		return err
@@ -1696,6 +1708,8 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 					}
 					if dtyp == TypeDirectory {
 						pipe.Del(ctx, m.dirQuotasKey(), dino.String())
+						pipe.Del(ctx, m.dirRecUsedSpaceKey(), dino.String())
+						pipe.Del(ctx, m.dirRecUsedInodesKey(), dino.String())
 					}
 				}
 			}
@@ -3228,8 +3242,96 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	}
 }
 
-func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *[]*Quota) error {
-	return nil
+func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]*Quota) error {
+	var inode Ino
+	if cmd != QuotaList {
+		if st := m.resolve(ctx, dpath, &inode); st != 0 {
+			return st
+		}
+		if isTrash(inode) {
+			return errors.New("no quota for any trash directory")
+		}
+	}
+	var err error
+
+	// var err error
+	// switch cmd {
+	// case QuotaSet:
+	// 	quota := (*quotas)[0]
+	// 	err = m.txn(func(s *xorm.Session) error {
+	// 		q := dirQuota{Inode: inode}
+	// 		ok, e := s.ForUpdate().Get(&q)
+	// 		if e != nil {
+	// 			return e
+	// 		}
+	// 		if quota.MaxSpace < 0 {
+	// 			quota.MaxSpace = q.MaxSpace
+	// 		}
+	// 		if quota.MaxInodes < 0 {
+	// 			quota.MaxInodes = q.MaxInodes
+	// 		}
+	// 		if q.MaxSpace == quota.MaxSpace && q.MaxInodes == quota.MaxInodes {
+	// 			return nil // nothing to update
+	// 		}
+	// 		logger.Infof("Update quota of %s from (%d, %d) to (%d, %d)", dpath, q.MaxSpace, q.MaxInodes, quota.MaxSpace, quota.MaxInodes)
+	// 		q.MaxSpace = quota.MaxSpace
+	// 		q.MaxInodes = quota.MaxInodes
+	// 		if ok {
+	// 			_, e = s.Cols("max_space", "max_inodes").Update(&q, &dirQuota{Inode: inode})
+	// 		} else {
+	// 			q.UsedSpace, q.UsedInodes, e = m.GetDirRecStat(ctx, inode)
+	// 			if e == nil {
+	// 				e = mustInsert(s, &q)
+	// 			}
+	// 		}
+	// 		return e
+	// 	})
+	// case QuotaGet:
+	// 	quota := (*quotas)[0]
+	// 	err = m.roTxn(func(s *xorm.Session) error {
+	// 		q := dirQuota{Inode: inode}
+	// 		ok, e := s.Get(&q)
+	// 		if e == nil && !ok {
+	// 			e = errors.New("no quota")
+	// 		}
+	// 		if e == nil {
+	// 			quota.MaxSpace = q.MaxSpace
+	// 			quota.MaxInodes = q.MaxInodes
+	// 			quota.UsedSpace = q.UsedSpace
+	// 			quota.UsedInodes = q.UsedInodes
+	// 		}
+	// 		return e
+	// 	})
+	// case QuotaDel:
+	// 	err = m.txn(func(s *xorm.Session) error {
+	// 		_, e := s.Delete(&dirQuota{Inode: inode})
+	// 		return e
+	// 	})
+	// case QuotaList:
+	// 	*quotas = (*quotas)[:0]
+	// 	err = m.roTxn(func(s *xorm.Session) error {
+	// 		var qs []dirQuota
+	// 		if e := s.Find(&qs); e != nil {
+	// 			return e
+	// 		}
+	// 		if len(qs) == 0 {
+	// 			return nil
+	// 		}
+	// 		for _, q := range qs[0:] {
+	// 			quota := &Quota{
+	// 				MaxSpace:   q.MaxSpace,
+	// 				MaxInodes:  q.MaxInodes,
+	// 				UsedSpace:  q.UsedSpace,
+	// 				UsedInodes: q.UsedInodes,
+	// 			}
+	// 			*quotas = append(*quotas, quota)
+	// 		}
+	// 		return nil
+	// 	})
+	// default: // FIXME: QuotaCheck
+	// 	err = fmt.Errorf("invalid quota command: %d", cmd)
+	// }
+	return err
 }
 
 func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) { return nil, nil }
