@@ -247,7 +247,7 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 	return ls
 }
 
-func (m *baseMeta) emptyDir(ctx Context, inode Ino, count *uint64, concurrent chan int) syscall.Errno {
+func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *uint64, concurrent chan int) syscall.Errno {
 	if st := m.Access(ctx, inode, 3, nil); st != 0 {
 		return st
 	}
@@ -276,14 +276,14 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, count *uint64, concurrent ch
 					wg.Add(1)
 					go func(child Ino, name string) {
 						defer wg.Done()
-						e := m.emptyEntry(ctx, inode, name, child, count, concurrent)
+						e := m.emptyEntry(ctx, inode, name, child, skipCheckTrash, count, concurrent)
 						if e != 0 && e != syscall.ENOENT {
 							status = e
 						}
 						<-concurrent
 					}(e.Inode, string(e.Name))
 				default:
-					if st := m.emptyEntry(ctx, inode, string(e.Name), e.Inode, count, concurrent); st != 0 && st != syscall.ENOENT {
+					if st := m.emptyEntry(ctx, inode, string(e.Name), e.Inode, skipCheckTrash, count, concurrent); st != 0 && st != syscall.ENOENT {
 						return st
 					}
 				}
@@ -291,7 +291,7 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, count *uint64, concurrent ch
 				if count != nil {
 					atomic.AddUint64(count, 1)
 				}
-				if st := m.Unlink(ctx, inode, string(e.Name)); st != 0 && st != syscall.ENOENT {
+				if st := m.Unlink(ctx, inode, string(e.Name), skipCheckTrash); st != 0 && st != syscall.ENOENT {
 					return st
 				}
 			}
@@ -307,12 +307,12 @@ func (m *baseMeta) emptyDir(ctx Context, inode Ino, count *uint64, concurrent ch
 	}
 }
 
-func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, count *uint64, concurrent chan int) syscall.Errno {
-	st := m.emptyDir(ctx, inode, count, concurrent)
+func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, skipCheckTrash bool, count *uint64, concurrent chan int) syscall.Errno {
+	st := m.emptyDir(ctx, inode, skipCheckTrash, count, concurrent)
 	if st == 0 && !isTrash(inode) {
-		st = m.Rmdir(ctx, parent, name)
+		st = m.Rmdir(ctx, parent, name, skipCheckTrash)
 		if st == syscall.ENOTEMPTY {
-			st = m.emptyEntry(ctx, parent, name, inode, count, concurrent)
+			st = m.emptyEntry(ctx, parent, name, inode, skipCheckTrash, count, concurrent)
 		} else if count != nil {
 			atomic.AddUint64(count, 1)
 		}
@@ -337,7 +337,7 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, count *uint64) s
 		return m.Unlink(ctx, parent, name)
 	}
 	concurrent := make(chan int, 50)
-	return m.emptyEntry(ctx, parent, name, inode, count, concurrent)
+	return m.emptyEntry(ctx, parent, name, inode, false, count, concurrent)
 }
 
 func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {

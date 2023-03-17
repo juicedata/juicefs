@@ -73,8 +73,8 @@ type engine interface {
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
 	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
-	doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno
-	doRmdir(ctx Context, parent Ino, name string) syscall.Errno
+	doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno
+	doRmdir(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno
 	doReadlink(ctx Context, inode Ino) ([]byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
@@ -934,7 +934,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 	return 0
 }
 
-func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
 	if parent == RootInode && name == TrashName || isTrash(parent) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
@@ -944,7 +944,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 
 	defer m.timeit(time.Now())
 	var attr Attr
-	err := m.en.doUnlink(ctx, m.checkRoot(parent), name, &attr)
+	err := m.en.doUnlink(ctx, m.checkRoot(parent), name, &attr, skipCheckTrash...)
 	if err == 0 {
 		newSpace := -align4K(0)
 		if attr.Typ == TypeFile {
@@ -955,7 +955,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	return err
 }
 
-func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
 	if name == "." {
 		return syscall.EINVAL
 	}
@@ -970,7 +970,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	}
 
 	defer m.timeit(time.Now())
-	err := m.en.doRmdir(ctx, m.checkRoot(parent), name)
+	err := m.en.doRmdir(ctx, m.checkRoot(parent), name, skipCheckTrash...)
 	if err == 0 {
 		m.updateDirStat(ctx, parent, -align4K(0), -1)
 	}

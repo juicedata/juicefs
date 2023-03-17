@@ -1146,11 +1146,14 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	return errno(err)
 }
 
-func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno {
+func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
-	if st := m.checkTrash(parent, &trash); st != 0 {
-		return st
+	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
+		if st := m.checkTrash(parent, &trash); st != 0 {
+			return st
+		}
 	}
+
 	if attr == nil {
 		attr = &Attr{}
 	}
@@ -1272,10 +1275,12 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) sysc
 	return errno(err)
 }
 
-func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
-	if st := m.checkTrash(parent, &trash); st != 0 {
-		return st
+	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
+		if st := m.checkTrash(parent, &trash); st != 0 {
+			return st
+		}
 	}
 	err := m.txn(func(tx *kvTxn) error {
 		buf := tx.get(m.entryKey(parent, name))
@@ -3076,7 +3081,7 @@ func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 				return eno
 			}
 			rmConcurrent := make(chan int, 10)
-			if eno := m.emptyDir(ctx, dstIno, nil, rmConcurrent); eno != 0 {
+			if eno := m.emptyDir(ctx, dstIno, true, nil, rmConcurrent); eno != 0 {
 				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
 				return eno
 			}

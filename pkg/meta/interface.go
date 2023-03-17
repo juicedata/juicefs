@@ -307,9 +307,9 @@ type Meta interface {
 	Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno
 	// Unlink removes a file entry from a directory.
 	// The file will be deleted if it's not linked by any entries and not open by any sessions.
-	Unlink(ctx Context, parent Ino, name string) syscall.Errno
+	Unlink(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno
 	// Rmdir removes an empty sub-directory.
-	Rmdir(ctx Context, parent Ino, name string) syscall.Errno
+	Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno
 	// Rename move an entry from a source directory to another with given name.
 	// The targeted entry will be overwrited if it's a file or empty directory.
 	// For Hadoop, the target should not be overwritten.

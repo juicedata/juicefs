@@ -1221,10 +1221,12 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 	return errno(err)
 }
 
-func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno {
+func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash, inode Ino
-	if st := m.checkTrash(parent, &trash); st != 0 {
-		return st
+	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
+		if st := m.checkTrash(parent, &trash); st != 0 {
+			return st
+		}
 	}
 	if trash == 0 {
 		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
@@ -1358,10 +1360,12 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) s
 	return errno(err)
 }
 
-func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
-	if st := m.checkTrash(parent, &trash); st != 0 {
-		return st
+	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
+		if st := m.checkTrash(parent, &trash); st != 0 {
+			return st
+		}
 	}
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		buf, err := tx.HGet(ctx, m.entryKey(parent), name).Bytes()
@@ -3811,7 +3815,7 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 				return eno
 			}
 			rmConcurrent := make(chan int, 10)
-			if eno := m.emptyDir(ctx, dstIno, nil, rmConcurrent); eno != 0 {
+			if eno := m.emptyDir(ctx, dstIno, true, nil, rmConcurrent); eno != 0 {
 				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
 				return eno
 			}

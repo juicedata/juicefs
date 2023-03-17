@@ -125,10 +125,9 @@ func testMeta(t *testing.T, m Meta) {
 	testCaseIncensi(t, m)
 	testCheckAndRepair(t, m)
 	testDirStat(t, m)
+	testClone(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
-	base.conf.ReadOnly = false
-	testClone(t, m)
 }
 
 func testMetaClient(t *testing.T, m Meta) {
@@ -2181,7 +2180,7 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("del edge error: %v", err)
 		}
 		// check remove tree
-		if eno := m.emptyDir(Background, cloneDstIno, nil, make(chan int, 10)); eno != 0 {
+		if eno := m.emptyDir(Background, cloneDstIno, true, nil, make(chan int, 10)); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
 		time.Sleep(1 * time.Second)
@@ -2198,7 +2197,7 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("slice ref not correct after remove entries: %#v", result)
 		}
 		// check remove not exist tree
-		if eno := m.emptyDir(Background, 100000, nil, make(chan int, 10)); eno != 0 {
+		if eno := m.emptyDir(Background, 100000, true, nil, make(chan int, 10)); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
 	case *dbMeta:
@@ -2222,7 +2221,7 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("del edge error: %v", err)
 		}
 		// check remove tree
-		if eno := m.emptyDir(Background, cloneDstIno, nil, make(chan int, 10)); eno != 0 {
+		if eno := m.emptyDir(Background, cloneDstIno, true, nil, make(chan int, 10)); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
 		time.Sleep(1 * time.Second)
@@ -2245,7 +2244,7 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("slice ref not correct: %v, expect 1,but got %d", sliRef2, sliRef2.Refs)
 		}
 		// check remove not exist tree
-		if eno := m.emptyDir(Background, 100000, nil, make(chan int, 10)); eno != 0 {
+		if eno := m.emptyDir(Background, 100000, true, nil, make(chan int, 10)); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
 	case *kvMeta:
@@ -2265,7 +2264,7 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("del edge error: %v", err)
 		}
 		// check remove tree
-		if eno := m.emptyDir(Background, cloneDstIno, nil, make(chan int, 10)); eno != 0 {
+		if eno := m.emptyDir(Background, cloneDstIno, true, nil, make(chan int, 10)); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
 		time.Sleep(1 * time.Second)
@@ -2289,7 +2288,7 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("slice ref not correct: sliRef1:%d sliRef2:%d", sliRef1, sliRef2)
 		}
 		// check remove not exist tree
-		if eno := m.emptyDir(Background, 100000, nil, make(chan int, 10)); eno != 0 {
+		if eno := m.emptyDir(Background, 100000, true, nil, make(chan int, 10)); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
 	}
