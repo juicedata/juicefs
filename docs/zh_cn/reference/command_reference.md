@@ -1033,7 +1033,7 @@ $ cat /tmp/filelist
 $ juicefs warmup -f /tmp/filelist
 ```
 
-### `juicefs dump`
+### `juicefs dump` {#dump}
 
 将元数据导出到一个 JSON 文件中。
 
@@ -1059,7 +1059,7 @@ $ juicefs dump redis://localhost meta-dump
 $ juicefs dump redis://localhost sub-meta-dump --subdir /dir/in/jfs
 ```
 
-### `juicefs load`
+### `juicefs load` {#load}
 
 从之前导出的 JSON 文件中加载元数据。
 
@@ -1077,7 +1077,7 @@ juicefs load [command options] META-URL [FILE]
 juicefs load redis://localhost/1 meta-dump
 ```
 
-### `juicefs config`
+### `juicefs config` {#config}
 
 修改指定文件系统的配置项。
 
