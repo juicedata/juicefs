@@ -1030,7 +1030,7 @@ $ cat /tmp/filelist
 $ juicefs warmup -f /tmp/filelist
 ```
 
-### `juicefs dump`
+### `juicefs dump` {#dump}
 
 Dump metadata into a JSON file.
 
@@ -1056,7 +1056,7 @@ $ juicefs dump redis://localhost meta-dump
 $ juicefs dump redis://localhost sub-meta-dump --subdir /dir/in/jfs
 ```
 
-### `juicefs load`
+### `juicefs load` {#load}
 
 Load metadata from a previously dumped JSON file.
 
@@ -1074,7 +1074,7 @@ When the FILE is not provided, STDIN will be used instead.
 juicefs load redis://localhost/1 meta-dump
 ```
 
-### `juicefs config`
+### `juicefs config` {#config}
 
 Change config of a volume.
 
