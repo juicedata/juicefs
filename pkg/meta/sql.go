@@ -3601,7 +3601,7 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 				return syscall.ENOENT
 			}
 			srcNlink = srcNode.Nlink
-			return m.mkNodeWithAttr(ctx, s, srcIno, srcNode, dstParentIno, dstName, dstIno, cmode, cumask, attach)
+			return m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, attach)
 		}); err != nil {
 			return errno(err)
 		}
@@ -3688,7 +3688,7 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			if !ok {
 				return syscall.ENOENT
 			}
-			if err := m.mkNodeWithAttr(ctx, s, srcIno, srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
+			if err := m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
 				return err
 			}
 			// copy chunks
@@ -3727,7 +3727,7 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			if !ok {
 				return syscall.ENOENT
 			}
-			if err := m.mkNodeWithAttr(ctx, s, srcIno, srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
+			if err := m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
 				return err
 			}
 			sym := symlink{Inode: srcIno}
@@ -3750,14 +3750,14 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			if !ok {
 				return syscall.ENOENT
 			}
-			return m.mkNodeWithAttr(ctx, s, srcIno, srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true)
+			return m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true)
 		})
 	}
 	atomic.AddUint64(count, 1)
 	return errno(err)
 }
 
-func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNode node, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
+func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNode *node, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
 	srcNode.Parent = dstParentIno
 	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 		srcNode.Uid = ctx.Uid()

@@ -3103,7 +3103,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 				return eno
 			}
 			srcNlink = srcAttr.Nlink
-			return m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach)
+			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach)
 		}, srcIno); err != nil {
 			return errno(err)
 		}
@@ -3188,7 +3188,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
 				return eno
 			}
-			if err := m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
+			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
 				return err
 			}
 			// copy chunks
@@ -3220,7 +3220,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
 				return eno
 			}
-			if err := m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
+			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
 				return err
 			}
 			path := tx.get(m.symKey(srcIno))
@@ -3234,14 +3234,14 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
 				return eno
 			}
-			return m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true)
+			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true)
 		}, srcIno)
 	}
 	atomic.AddUint64(count, 1)
 	return errno(err)
 }
 
-func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr Attr, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
+func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Attr, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
 	srcAttr.Parent = dstParentIno
 	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 		srcAttr.Uid = ctx.Uid()
@@ -3279,7 +3279,7 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr Attr
 		}
 	}
 
-	tx.set(m.inodeKey(*dstIno), m.marshal(&srcAttr))
+	tx.set(m.inodeKey(*dstIno), m.marshal(srcAttr))
 
 	// copy xattr
 	tx.scan(m.xattrKey(srcIno, ""), nextKey(m.xattrKey(srcIno, "")), false, func(k, v []byte) bool {

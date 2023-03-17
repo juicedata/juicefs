@@ -83,7 +83,7 @@ func clone(ctx *cli.Context) error {
 		umask = utils.GetUmask()
 	}
 	headerSize := 4 + 4
-	contentSize := 8 + 8 + 1 + uint32(len(dstName)) + 4 + 4 + 2 + 1
+	contentSize := 8 + 8 + 1 + uint32(len(dstName)) + 2 + 1
 	wb := utils.NewBuffer(uint32(headerSize) + contentSize)
 	wb.Put32(meta.Clone)
 	wb.Put32(contentSize)
@@ -91,8 +91,6 @@ func clone(ctx *cli.Context) error {
 	wb.Put64(dstParentIno)
 	wb.Put8(uint8(len(dstName)))
 	wb.Put([]byte(dstName))
-	wb.Put32(uint32(os.Getuid()))
-	wb.Put32(uint32(os.Getgid()))
 	wb.Put16(uint16(umask))
 	wb.Put8(cmode)
 	f := openController(srcParent)

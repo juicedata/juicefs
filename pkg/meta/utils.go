@@ -52,10 +52,7 @@ const (
 	// clone mode
 	CLONE_MODE_CAN_OVERWRITE      = 0x01
 	CLONE_MODE_PRESERVE_ATTR      = 0x02
-	CLONE_MODE_FORCE_REMOVAL      = 0x04
 	CLONE_MODE_PRESERVE_HARDLINKS = 0x08
-	CLONE_MODE_HDFS               = 0x10
-	CLONE_MODE_DELETE             = 0x80
 )
 
 type msgCallbacks struct {

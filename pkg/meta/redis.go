@@ -3837,7 +3837,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 				return eno
 			}
 			srcNlink = srcAttr.Nlink
-			return m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach)
+			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach)
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno)); err != nil {
 			return errno(err)
 		}
@@ -3919,7 +3919,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
 				return eno
 			}
-			if err := m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
+			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
 				return err
 			}
 			// copy chunks
@@ -3960,7 +3960,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
 				return eno
 			}
-			if err := m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
+			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
 				return err
 			}
 			path, err := m.rdb.Get(ctx, m.symKey(srcIno)).Result()
@@ -3976,14 +3976,14 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
 				return eno
 			}
-			return m.mkNodeWithAttr(ctx, tx, srcIno, srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true)
+			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true)
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno))
 	}
 	atomic.AddUint64(count, 1)
 	return errno(err)
 }
 
-func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAttr Attr, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
+func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAttr *Attr, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
 	srcAttr.Parent = dstParentIno
 	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 		srcAttr.Uid = ctx.Uid()
@@ -4022,7 +4022,7 @@ func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAtt
 		return syscall.EEXIST
 	}
 
-	if err = tx.Set(ctx, m.inodeKey(*dstIno), m.marshal(&srcAttr), 0).Err(); err != nil {
+	if err = tx.Set(ctx, m.inodeKey(*dstIno), m.marshal(srcAttr), 0).Err(); err != nil {
 		return err
 	}
 
