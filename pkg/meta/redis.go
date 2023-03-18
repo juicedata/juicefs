@@ -3900,10 +3900,13 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 				return eno
 			}
 			srcNlink = srcAttr.Nlink
+			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach); err != nil {
+				return err
+			}
 			field := strconv.FormatUint(uint64(*dstIno), 10)
 			tx.HSet(ctx, m.dirUsedInodesKey(), field, "0")
 			tx.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
-			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach)
+			return nil
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno)); err != nil {
 			return errno(err)
 		}

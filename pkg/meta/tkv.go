@@ -3177,12 +3177,15 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 				return eno
 			}
 			srcNlink = srcAttr.Nlink
+			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach); err != nil {
+				return err
+			}
 			tx.set(m.dirStatKey(*dstIno), m.packDirStat(&dirStat{
 				length: int64(srcAttr.Length),
 				space:  int64(srcAttr.Length),
 				inodes: int64(1),
 			}))
-			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach)
+			return nil
 		}, srcIno); err != nil {
 			return errno(err)
 		}

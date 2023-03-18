@@ -3639,10 +3639,10 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 				return syscall.ENOENT
 			}
 			srcNlink = srcNode.Nlink
-			if err = mustInsert(s, &dirStats{Inode: *dstIno}); err != nil {
+			if err := m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, attach); err != nil {
 				return err
 			}
-			return m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, attach)
+			return mustInsert(s, &dirStats{Inode: *dstIno})
 		}); err != nil {
 			return errno(err)
 		}
