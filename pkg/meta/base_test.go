@@ -2098,6 +2098,13 @@ func testClone(t *testing.T, m Meta) {
 		t.Fatalf("setxattr: %s", eno)
 	}
 
+	if eno := m.SetXattr(Background, dir1, "name", []byte("juicefs"), XattrCreateOrReplace); eno != 0 {
+		t.Fatalf("setxattr: %s", eno)
+	}
+	if eno := m.SetXattr(Background, dir1, "name2", []byte("juicefs2"), XattrCreateOrReplace); eno != 0 {
+		t.Fatalf("setxattr: %s", eno)
+	}
+
 	var file1Symlink Ino
 	if eno := m.Symlink(Background, dir1, "file1Symlink", "file1", &file1Symlink, nil); eno != 0 {
 		t.Fatalf("symlink: %s", eno)
@@ -2146,7 +2153,8 @@ func testClone(t *testing.T, m Meta) {
 	// check attr
 	var removedItem []interface{}
 	checkEntryTree(t, m, dir1, cloneDstIno, func(srcEntry, dstEntry *Entry, dstIno Ino) {
-		checkEntry(t, srcEntry, dstEntry, dstIno)
+		checkEntry(t, m, srcEntry, dstEntry, dstIno)
+
 		switch m := m.(type) {
 		case *redisMeta:
 			removedItem = append(removedItem, m.inodeKey(dstEntry.Inode), m.entryKey(dstEntry.Inode), m.xattrKey(dstEntry.Inode), m.symKey(dstEntry.Inode))
@@ -2156,25 +2164,6 @@ func testClone(t *testing.T, m Meta) {
 			removedItem = append(removedItem, m.inodeKey(dstEntry.Inode), m.entryKey(dstEntry.Inode, string(dstEntry.Name)), m.xattrKey(dstEntry.Inode, ""), m.symKey(dstEntry.Inode))
 		}
 	})
-	// check xattr
-	var value []byte
-	var file1Cloned Ino
-	if eno := m.Lookup(Background, cloneDstIno, "file1", &file1Cloned, &Attr{}); eno != 0 {
-		t.Fatalf("lookup file1Cloned: %s", eno)
-	}
-	if eno := m.GetXattr(Background, file1Cloned, "name", &value); eno != 0 {
-		t.Fatalf("getxattr: %s", eno)
-	}
-	if string(value) != "juicefs" {
-		t.Fatalf("xattr not correct: %s", value)
-	}
-
-	if eno := m.GetXattr(Background, file1Cloned, "name2", &value); eno != 0 {
-		t.Fatalf("getxattr: %s", eno)
-	}
-	if string(value) != "juicefs2" {
-		t.Fatalf("xattr not correct: %s", value)
-	}
 	// check slice ref after clone
 	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		t.Fatalf("should not delete slice")
@@ -2276,7 +2265,7 @@ func checkEntryTree(t *testing.T, m Meta, srcIno, dstIno Ino, walkFunc func(srcE
 	}
 }
 
-func checkEntry(t *testing.T, srcEntry, dstEntry *Entry, dstParentIno Ino) {
+func checkEntry(t *testing.T, m Meta, srcEntry, dstEntry *Entry, dstParentIno Ino) {
 	if !bytes.Equal(srcEntry.Name, dstEntry.Name) {
 		t.Fatalf("unmatched name: %s, %s", srcEntry.Name, dstEntry.Name)
 	}
@@ -2295,5 +2284,27 @@ func checkEntry(t *testing.T, srcEntry, dstEntry *Entry, dstParentIno Ino) {
 	dstAttr.Parent = 0
 	if *srcAttr != *dstAttr {
 		t.Fatalf("unmatched attr: %#v, %#v", *srcAttr, *dstAttr)
+	}
+
+	// check xattr
+	var value1 []byte
+	if eno := m.ListXattr(Background, srcEntry.Inode, &value1); eno != 0 {
+		t.Fatalf("list xattr: %s", eno)
+	}
+	keys := bytes.Split(value1, []byte{0})
+	for _, key := range keys {
+		if key == nil || len(key) == 0 {
+			continue
+		}
+		var v1, v2 []byte
+		if eno := m.GetXattr(Background, srcEntry.Inode, string(key), &v1); eno != 0 {
+			t.Fatalf("get xattr: %s", eno)
+		}
+		if eno := m.GetXattr(Background, dstEntry.Inode, string(key), &v2); eno != 0 {
+			t.Fatalf("get xattr: %s", eno)
+		}
+		if !bytes.Equal(v1, v2) {
+			t.Fatalf("xattr not equal")
+		}
 	}
 }
