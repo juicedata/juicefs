@@ -3586,7 +3586,7 @@ func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 
 				newSpace := align4K(0)
 				m.updateStats(newSpace, 1)
-				m.updateDirStat(ctx, srcAttr.Parent, newSpace, 1)
+				m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
 
 				// update parent nlink
 				dstParentAttr := &Attr{}
@@ -3758,6 +3758,7 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 					}
 				}
 			}
+			m.updateParentStat(ctx, *dstIno, srcNode.Parent, int64(srcNode.Length), int64(srcNode.Length))
 			return nil
 		})
 
@@ -3873,7 +3874,7 @@ func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNod
 		}
 		newSpace := align4K(0)
 		m.updateStats(newSpace, 1)
-		m.updateDirStat(ctx, srcNode.Parent, newSpace, 1)
+		m.updateDirStat(ctx, srcNode.Parent, 0, newSpace, 1)
 	}
 	return nil
 }

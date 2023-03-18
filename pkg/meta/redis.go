@@ -3851,7 +3851,7 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 				tx.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 				tx.Incr(ctx, m.totalInodesKey())
 				m.updateStats(newSpace, 1)
-				m.updateDirStat(ctx, srcAttr.Parent, newSpace, 1)
+				m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
 
 				// update parent nlink
 				dstParentAttr := &Attr{}
@@ -4021,7 +4021,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 					return errno(err)
 				}
 			}
-			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length))
+			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length), int64(srcAttr.Length))
 			return nil
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno))
 	case TypeSymlink:
@@ -4119,7 +4119,7 @@ func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAtt
 		tx.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 		tx.Incr(ctx, m.totalInodesKey())
 		m.updateStats(newSpace, 1)
-		m.updateDirStat(ctx, srcAttr.Parent, newSpace, 1)
+		m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
 	}
 	return nil
 }

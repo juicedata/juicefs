@@ -3127,7 +3127,7 @@ func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 
 				newSpace := align4K(0)
 				m.updateStats(newSpace, 1)
-				m.updateDirStat(ctx, srcAttr.Parent, newSpace, 1)
+				m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
 
 				// update parent nlink
 				dstParentAttr := &Attr{}
@@ -3177,7 +3177,11 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 				return eno
 			}
 			srcNlink = srcAttr.Nlink
-			tx.set(m.dirStatKey(*dstIno), m.packDirStat(0, 0))
+			tx.set(m.dirStatKey(*dstIno), m.packDirStat(&dirStat{
+				length: int64(srcAttr.Length),
+				space:  int64(srcAttr.Length),
+				inodes: int64(1),
+			}))
 			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach)
 		}, srcIno); err != nil {
 			return errno(err)
@@ -3297,7 +3301,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 					}
 				}
 			}
-			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length))
+			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length), int64(srcAttr.Length))
 			return nil
 		}, srcIno)
 	case TypeSymlink:
@@ -3381,7 +3385,7 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Att
 		tx.set(m.entryKey(dstParentIno, dstName), m.packEntry(srcAttr.Typ, *dstIno))
 		newSpace := align4K(0)
 		m.updateStats(newSpace, 1)
-		m.updateDirStat(ctx, srcAttr.Parent, newSpace, 1)
+		m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
 	}
 	return nil
 }
