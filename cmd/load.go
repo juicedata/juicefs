@@ -18,10 +18,15 @@ package cmd
 
 import (
 	"compress/gzip"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/juicedata/juicefs/pkg/object"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -30,9 +35,20 @@ import (
 
 func cmdLoad() *cli.Command {
 	return &cli.Command{
-		Name:      "load",
-		Action:    load,
-		Category:  "ADMIN",
+		Name:     "load",
+		Action:   load,
+		Category: "ADMIN",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "encrypt-rsa-key",
+				Usage: "a path to RSA private key (PEM)",
+			},
+			&cli.StringFlag{
+				Name:  "encrypt-algo",
+				Usage: "encrypt algorithm (aes256gcm-rsa, chacha20-rsa)",
+				Value: object.AES256GCM_RSA,
+			},
+		},
 		Usage:     "Load metadata from a previously dumped JSON file",
 		ArgsUsage: "META-URL [FILE]",
 		Description: `
@@ -58,12 +74,49 @@ func load(ctx *cli.Context) error {
 		r = os.Stdin
 		src = "STDIN"
 	} else {
-		fp, err := os.Open(src)
-		if err != nil {
-			return err
+		var ioErr error
+		var fp io.ReadCloser
+		if ctx.String("encrypt-rsa-key") != "" {
+			passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
+			encryptKey := loadEncrypt(ctx.String("encrypt-rsa-key"))
+			if passphrase == "" {
+				block, _ := pem.Decode([]byte(encryptKey))
+				// nolint:staticcheck
+				if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
+					return fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
+				}
+			}
+			privKey, err := object.ParseRsaPrivateKeyFromPem([]byte(encryptKey), []byte(passphrase))
+			if err != nil {
+				return fmt.Errorf("parse rsa: %s", err)
+			}
+			encryptor, err := object.NewDataEncryptor(object.NewRSAEncryptor(privKey), ctx.String("encrypt-algo"))
+			if err != nil {
+				return err
+			}
+			if _, err := os.Stat(src); err != nil {
+				return fmt.Errorf("failed to stat %s: %s", src, err)
+			}
+			var srcAbsPath string
+			srcAbsPath, err = filepath.Abs(src)
+			if err != nil {
+				return fmt.Errorf("failed to get absolute path of %s: %s", src, err)
+			}
+			fileBlob, err := object.CreateStorage("file", strings.TrimRight(src, filepath.Base(srcAbsPath)), "", "", "")
+			if err != nil {
+				return err
+			}
+			blob := object.NewEncrypted(fileBlob, encryptor)
+			fp, ioErr = blob.Get(filepath.Base(srcAbsPath), 0, -1)
+		} else {
+			fp, ioErr = os.Open(src)
+		}
+		if ioErr != nil {
+			return ioErr
 		}
 		defer fp.Close()
 		if strings.HasSuffix(src, ".gz") {
+			var err error
 			r, err = gzip.NewReader(fp)
 			if err != nil {
 				return err

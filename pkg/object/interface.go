@@ -60,11 +60,21 @@ type PendingPart struct {
 	Created  time.Time
 }
 
+type Limits struct {
+	IsSupportMultipartUpload bool
+	IsSupportUploadPartCopy  bool
+	MinPartSize              int
+	MaxPartSize              int
+	MaxPartCount             int
+}
+
 // ObjectStorage is the interface for object storage.
 // all of these API should be idempotent.
 type ObjectStorage interface {
 	// Description of the object storage.
 	String() string
+	// Limits of the object storage.
+	Limits() Limits
 	// Create the bucket if not existed.
 	Create() error
 	// Get the data for the given object specified by key.
@@ -85,6 +95,8 @@ type ObjectStorage interface {
 	CreateMultipartUpload(key string) (*MultipartUpload, error)
 	// UploadPart upload a part of an object.
 	UploadPart(key string, uploadID string, num int, body []byte) (*Part, error)
+	// UploadPartCopy Uploads a part by copying data from an existing object as data source.
+	UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error)
 	// AbortUpload abort a multipart upload.
 	AbortUpload(key string, uploadID string)
 	// CompleteUpload finish an multipart upload.

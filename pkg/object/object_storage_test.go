@@ -31,6 +31,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,7 +53,7 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, error) {
 	r, err := s.List(prefix, marker, "", limit)
 	if !errors.Is(err, notSupported) {
-		return r, nil
+		return r, err
 	}
 	ch, err := s.ListAll(prefix, marker)
 	if err == nil {
@@ -86,14 +87,13 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put(key, bytes.NewReader(nil)); err != nil {
 		t.Logf("PUT testEncodeFile failed: %s", err.Error())
 	} else {
-		if resp, err := s.List("", "测试编码文件", "", 1); err != nil || (len(resp) == 1 && resp[0].Key() != key) {
-			t.Logf("List testEncodeFile Failed %s", err)
+		if resp, err := s.List("", "测试编码文件", "", 1); err != nil && err != notSupported {
+			t.Logf("List testEncodeFile Failed: %s", err)
+		} else if len(resp) == 1 && resp[0].Key() != key {
+			t.Logf("List testEncodeFile Failed: expect key %s, but got %s", key, resp[0].Key())
 		}
 	}
 	_ = s.Delete(key)
-
-	k := "large"
-	defer s.Delete(k)
 
 	_, err := s.Get("not_exists", 0, -1)
 	if err == nil {
@@ -105,22 +105,35 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 
-	if d, e := get(s, "test", 0, -1); d != "hello" {
+	// get all
+	if d, e := get(s, "test", 0, -1); e != nil || d != "hello" {
 		t.Fatalf("expect hello, but got %v, error: %s", d, e)
 	}
-	if d, e := get(s, "test", 2, -1); d != "llo" {
-		t.Logf("expect llo, but got %v, error: %s", d, e)
+	if d, e := get(s, "test", 0, 5); e != nil || d != "hello" {
+		t.Fatalf("expect hello, but got %v, error: %s", d, e)
 	}
-	if d, e := get(s, "test", 2, 3); d != "llo" {
+	// get first
+	if d, e := get(s, "test", 0, 1); e != nil || d != "h" {
+		t.Fatalf("expect h, but got %v, error: %s", d, e)
+	}
+	// get last
+	if d, e := get(s, "test", 4, 1); e != nil || d != "o" {
+		t.Fatalf("expect o, but got %v, error: %s", d, e)
+	}
+	// get last 3
+	if d, e := get(s, "test", 2, 3); e != nil || d != "llo" {
 		t.Fatalf("expect llo, but got %v, error: %s", d, e)
 	}
-	if d, e := get(s, "test", 2, 2); d != "ll" {
+	// get middle
+	if d, e := get(s, "test", 2, 2); e != nil || d != "ll" {
 		t.Fatalf("expect ll, but got %v, error: %s", d, e)
 	}
-	if d, e := get(s, "test", 4, 2); d != "o" {
+	// get the end out of range
+	if d, e := get(s, "test", 4, 2); e != nil || d != "o" {
 		t.Logf("out-of-range get: 'o', but got %v, error: %s", len(d), e)
 	}
-	if d, e := get(s, "test", 6, 2); d != "" {
+	// get the off out of range
+	if d, e := get(s, "test", 6, 2); e != nil || d != "" {
 		t.Logf("out-of-range get: '', but got %v, error: %s", len(d), e)
 	}
 	switch s.(*withPrefix).os.(type) {
@@ -288,41 +301,102 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("delete non exists: %v", err)
 	}
 
-	if uploader, err := s.CreateMultipartUpload(k); err == nil {
-		partSize := uploader.MinPartSize
-		uploadID := uploader.UploadID
-		defer s.AbortUpload(k, uploadID)
-
-		part1, err := s.UploadPart(k, uploadID, 1, make([]byte, partSize))
-		if err != nil {
-			t.Fatalf("UploadPart 1 failed: %s", err)
+	getMockData := func(seed []byte, idx int) []byte {
+		size := len(seed)
+		if size == 0 {
+			return nil
 		}
-		if pending, marker, err := s.ListUploads(""); err != nil {
-			t.Logf("ListMultipart fail: %s", err.Error())
+		content := make([]byte, size)
+		if idx == 0 {
+			content = seed
 		} else {
-			println(len(pending), marker)
+			i := idx % size
+			copy(content[:size-i], seed[i:size])
+			copy(content[size-i:size], seed[:i])
 		}
-		part2Size := 1 << 20
-		_, err = s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
-		if err != nil {
-			t.Fatalf("UploadPart 2 failed: %s", err)
-		}
-		part2Size = 2 << 20
-		part2, err := s.UploadPart(k, uploadID, 2, make([]byte, part2Size))
-		if err != nil {
-			t.Fatalf("UploadPart 2 failed: %s", err)
-		}
+		return content
+	}
+	k := "large"
+	defer s.Delete(k)
 
-		if err := s.CompleteUpload(k, uploadID, []*Part{part1, part2}); err != nil {
-			t.Fatalf("CompleteMultipart failed: %s", err.Error())
+	if upload, err := s.CreateMultipartUpload(k); err == nil {
+		total := 3
+		seed := make([]byte, upload.MinPartSize)
+		rand.Read(seed)
+		parts := make([]*Part, total)
+		content := make([][]byte, total)
+		for i := 0; i < total; i++ {
+			content[i] = getMockData(seed, i)
 		}
-		if in, err := s.Get(k, 0, -1); err != nil {
-			t.Fatalf("large not exists")
-		} else if d, err := io.ReadAll(in); err != nil {
-			t.Fatalf("fail to read large file")
-		} else if len(d) != partSize+part2Size {
-			t.Fatalf("size of large file: %d != %d", len(d), partSize+part2Size)
+		pool := make(chan struct{}, 4)
+		var wg sync.WaitGroup
+		for i := 1; i <= total; i++ {
+			pool <- struct{}{}
+			wg.Add(1)
+			num := i
+			go func() {
+				defer func() {
+					<-pool
+					wg.Done()
+				}()
+				parts[num-1], err = s.UploadPart(k, upload.UploadID, num, content[num-1])
+				if err != nil {
+					t.Fatalf("multipart upload error: %v", err)
+				}
+			}()
 		}
+		wg.Wait()
+		// overwrite the first part
+		firstPartContent := append(getMockData(seed, 0), getMockData(seed, 0)...)
+		if parts[0], err = s.UploadPart(k, upload.UploadID, 1, firstPartContent); err != nil {
+			t.Fatalf("multipart upload error: %v", err)
+		}
+		content[0] = firstPartContent
+
+		// overwrite the last part
+		lastPartContent := []byte("hello")
+		if parts[total-1], err = s.UploadPart(k, upload.UploadID, total, lastPartContent); err != nil {
+			t.Fatalf("multipart upload error: %v", err)
+		}
+		content[total-1] = lastPartContent
+
+		if err = s.CompleteUpload(k, upload.UploadID, parts); err != nil {
+			t.Fatalf("failed to complete multipart upload: %v", err)
+		}
+		checkContent := func(key string, content []byte) {
+			r, err := s.Get(key, 0, -1)
+			if err != nil {
+				t.Fatalf("failed to get multipart upload file: %v", err)
+			}
+			cnt, err := io.ReadAll(r)
+			if err != nil {
+				t.Fatalf("failed to get multipart upload file: %v", err)
+			}
+			if !bytes.Equal(cnt, content) {
+				t.Fatal("the content of the multipart upload file is incorrect")
+			}
+		}
+		checkContent(k, bytes.Join(content, nil))
+
+		var copyUpload *MultipartUpload
+		var dstKey = "dstUploadPartCopyKey"
+		defer s.Delete(dstKey)
+		if copyUpload, err = s.CreateMultipartUpload(dstKey); err != nil {
+			t.Fatalf("failed to create multipart upload: %v", err)
+		}
+		copyParts := make([]*Part, total)
+		var startIdx = 0
+		for i, c := range content {
+			copyParts[i], err = s.UploadPartCopy(dstKey, copyUpload.UploadID, i+1, k, int64(startIdx), int64(len(c)))
+			if err != nil {
+				t.Fatalf("failed to upload part copy: %v", err)
+			}
+			startIdx += len(c)
+		}
+		if err = s.CompleteUpload(dstKey, copyUpload.UploadID, copyParts); err != nil {
+			t.Fatalf("failed to complete multipart upload: %v", err)
+		}
+		checkContent(dstKey, bytes.Join(content, nil))
 	} else {
 		t.Logf("%s does not support multipart upload: %s", s, err.Error())
 	}
@@ -360,7 +434,7 @@ func TestDisk(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestQingStor(t *testing.T) {
+func TestQingStor(t *testing.T) { //skip mutate
 	if os.Getenv("QY_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -377,7 +451,7 @@ func TestQingStor(t *testing.T) {
 	testStorage(t, s2)
 }
 
-func TestS3(t *testing.T) {
+func TestS3(t *testing.T) { //skip mutate
 	if os.Getenv("AWS_ACCESS_KEY_ID") == "" {
 		t.SkipNow()
 	}
@@ -421,7 +495,7 @@ func TestOVHCompileRegexp(t *testing.T) {
 	}
 }
 
-func TestOSS(t *testing.T) {
+func TestOSS(t *testing.T) { //skip mutate
 	if os.Getenv("ALICLOUD_ACCESS_KEY_ID") == "" {
 		t.SkipNow()
 	}
@@ -431,7 +505,7 @@ func TestOSS(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestUFile(t *testing.T) {
+func TestUFile(t *testing.T) { //skip mutate
 	if os.Getenv("UCLOUD_PUBLIC_KEY") == "" {
 		t.SkipNow()
 	}
@@ -440,7 +514,7 @@ func TestUFile(t *testing.T) {
 	testStorage(t, ufile)
 }
 
-func TestGS(t *testing.T) {
+func TestGS(t *testing.T) { //skip mutate
 	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
 		t.SkipNow()
 	}
@@ -448,7 +522,7 @@ func TestGS(t *testing.T) {
 	testStorage(t, gs)
 }
 
-func TestQiniu(t *testing.T) {
+func TestQiniu(t *testing.T) { //skip mutate
 	if os.Getenv("QINIU_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -460,7 +534,7 @@ func TestQiniu(t *testing.T) {
 	//testStorage(t, qiniu)
 }
 
-func TestKS3(t *testing.T) {
+func TestKS3(t *testing.T) { //skip mutate
 	if os.Getenv("KS3_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -469,7 +543,7 @@ func TestKS3(t *testing.T) {
 	testStorage(t, ks3)
 }
 
-func TestCOS(t *testing.T) {
+func TestCOS(t *testing.T) { //skip mutate
 	if os.Getenv("COS_SECRETID") == "" {
 		t.SkipNow()
 	}
@@ -479,7 +553,7 @@ func TestCOS(t *testing.T) {
 	testStorage(t, cos)
 }
 
-func TestAzure(t *testing.T) {
+func TestAzure(t *testing.T) { //skip mutate
 	if os.Getenv("AZURE_STORAGE_ACCOUNT") == "" {
 		t.SkipNow()
 	}
@@ -489,7 +563,7 @@ func TestAzure(t *testing.T) {
 	testStorage(t, abs)
 }
 
-func TestNOS(t *testing.T) {
+func TestNOS(t *testing.T) { //skip mutate
 	if os.Getenv("NOS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -498,7 +572,7 @@ func TestNOS(t *testing.T) {
 	testStorage(t, nos)
 }
 
-func TestJSS(t *testing.T) {
+func TestJSS(t *testing.T) { //skip mutate
 	if os.Getenv("JSS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -507,7 +581,7 @@ func TestJSS(t *testing.T) {
 	testStorage(t, jss)
 }
 
-func TestSpeedy(t *testing.T) {
+func TestSpeedy(t *testing.T) { //skip mutate
 	if os.Getenv("SPEEDY_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -516,7 +590,7 @@ func TestSpeedy(t *testing.T) {
 	testStorage(t, cos)
 }
 
-func TestB2(t *testing.T) {
+func TestB2(t *testing.T) { //skip mutate
 	if os.Getenv("B2_ACCOUNT_ID") == "" {
 		t.SkipNow()
 	}
@@ -527,7 +601,7 @@ func TestB2(t *testing.T) {
 	testStorage(t, b)
 }
 
-func TestSpace(t *testing.T) {
+func TestSpace(t *testing.T) { //skip mutate
 	if os.Getenv("SPACE_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -535,7 +609,7 @@ func TestSpace(t *testing.T) {
 	testStorage(t, b)
 }
 
-func TestBOS(t *testing.T) {
+func TestBOS(t *testing.T) { //skip mutate
 	if os.Getenv("BDCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -544,7 +618,7 @@ func TestBOS(t *testing.T) {
 	testStorage(t, b)
 }
 
-func TestSftp(t *testing.T) {
+func TestSftp(t *testing.T) { //skip mutate
 	if os.Getenv("SFTP_HOST") == "" {
 		t.SkipNow()
 	}
@@ -552,7 +626,7 @@ func TestSftp(t *testing.T) {
 	testStorage(t, b)
 }
 
-func TestOBS(t *testing.T) {
+func TestOBS(t *testing.T) { //skip mutate
 	if os.Getenv("HWCLOUD_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -561,7 +635,7 @@ func TestOBS(t *testing.T) {
 	testStorage(t, b)
 }
 
-func TestHDFS(t *testing.T) {
+func TestHDFS(t *testing.T) { //skip mutate
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.SkipNow()
 	}
@@ -569,7 +643,7 @@ func TestHDFS(t *testing.T) {
 	testStorage(t, dfs)
 }
 
-func TestOOS(t *testing.T) {
+func TestOOS(t *testing.T) { //skip mutate
 	if os.Getenv("OOS_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -578,7 +652,7 @@ func TestOOS(t *testing.T) {
 	testStorage(t, b)
 }
 
-func TestScw(t *testing.T) {
+func TestScw(t *testing.T) { //skip mutate
 	if os.Getenv("SCW_ACCESS_KEY") == "" {
 		t.SkipNow()
 	}
@@ -599,7 +673,7 @@ func TestMinIO(t *testing.T) {
 // 	testStorage(t, s)
 // }
 
-func TestTiKV(t *testing.T) {
+func TestTiKV(t *testing.T) { //skip mutate
 	if os.Getenv("TIKV_ADDR") == "" {
 		t.SkipNow()
 	}
@@ -609,6 +683,7 @@ func TestTiKV(t *testing.T) {
 	}
 	testStorage(t, s)
 }
+
 func TestRedis(t *testing.T) {
 	if os.Getenv("REDIS_ADDR") == "" {
 		t.SkipNow()
@@ -625,7 +700,7 @@ func TestRedis(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestSwift(t *testing.T) {
+func TestSwift(t *testing.T) { //skip mutate
 	if os.Getenv("SWIFT_ADDR") == "" {
 		t.SkipNow()
 	}
@@ -636,7 +711,7 @@ func TestSwift(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestWebDAV(t *testing.T) {
+func TestWebDAV(t *testing.T) { //skip mutate
 	if os.Getenv("WEBDAV_TEST_BUCKET") == "" {
 		t.SkipNow()
 	}
@@ -698,7 +773,7 @@ func TestSQLite(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestPG(t *testing.T) {
+func TestPG(t *testing.T) { //skip mutate
 	if os.Getenv("PG_ADDR") == "" {
 		t.SkipNow()
 	}
@@ -709,14 +784,14 @@ func TestPG(t *testing.T) {
 	testStorage(t, s)
 
 }
-func TestPGWithSearchPath(t *testing.T) {
+func TestPGWithSearchPath(t *testing.T) { //skip mutate
 	_, err := newSQLStore("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", "", "")
 	if !strings.Contains(err.Error(), "currently, only one schema is supported in search_path") {
 		t.Fatalf("TestPGWithSearchPath error: %s", err)
 	}
 }
 
-func TestMySQL(t *testing.T) {
+func TestMySQL(t *testing.T) { //skip mutate
 	if os.Getenv("MYSQL_ADDR") == "" {
 		t.SkipNow()
 	}
@@ -736,7 +811,7 @@ func TestNameString(t *testing.T) {
 	}
 }
 
-func TestEtcd(t *testing.T) {
+func TestEtcd(t *testing.T) { //skip mutate
 	if os.Getenv("ETCD_ADDR") == "" {
 		t.SkipNow()
 	}
@@ -752,7 +827,7 @@ func TestEtcd(t *testing.T) {
 //	testStorage(t, s)
 //}
 
-func TestEOS(t *testing.T) {
+func TestEOS(t *testing.T) { //skip mutate
 	if os.Getenv("EOS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
@@ -760,7 +835,7 @@ func TestEOS(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestWASABI(t *testing.T) {
+func TestWASABI(t *testing.T) { //skip mutate
 	if os.Getenv("WASABI_ENDPOINT") == "" {
 		t.SkipNow()
 	}
@@ -768,7 +843,7 @@ func TestWASABI(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestSCS(t *testing.T) {
+func TestSCS(t *testing.T) { //skip mutate
 	if os.Getenv("SCS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
@@ -776,7 +851,7 @@ func TestSCS(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestIBMCOS(t *testing.T) {
+func TestIBMCOS(t *testing.T) { //skip mutate
 	if os.Getenv("IBMCOS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
@@ -784,7 +859,7 @@ func TestIBMCOS(t *testing.T) {
 	testStorage(t, s)
 }
 
-func TestTOS(t *testing.T) {
+func TestTOS(t *testing.T) { //skip mutate
 	if os.Getenv("TOS_ENDPOINT") == "" {
 		t.SkipNow()
 	}
@@ -796,19 +871,20 @@ func TestTOS(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	// schema: S3 AWS_ENDPOINT=xxxxx  AWS_ACCESS_KEY_ID=xxxx  AWS_SECRET_ACCESS_KEY=xxxx
-	envFile := "/tmp/aksk.txt"
-	if _, err := os.Stat(envFile); err == nil {
-		file, _ := os.ReadFile(envFile)
-		for _, line := range strings.Split(strings.TrimSpace(string(file)), "\n") {
-			env := strings.Fields(line)
-			if len(env) <= 1 {
-				continue
-			}
-			for _, e := range env[1:] {
-				envkv := strings.SplitN(e, "=", 2)
-				if err := os.Setenv(envkv[0], envkv[1]); err != nil {
-					logger.Errorf("set env %s=%s error", envkv[0], envkv[1])
+	if envFile := os.Getenv("JUICEFS_ENV_FILE_FOR_TEST"); envFile != "" {
+		// schema: S3 AWS_ENDPOINT=xxxxx  AWS_ACCESS_KEY_ID=xxxx  AWS_SECRET_ACCESS_KEY=xxxx
+		if _, err := os.Stat(envFile); err == nil {
+			file, _ := os.ReadFile(envFile)
+			for _, line := range strings.Split(strings.TrimSpace(string(file)), "\n") {
+				env := strings.Fields(line)
+				if len(env) <= 1 {
+					continue
+				}
+				for _, e := range env[1:] {
+					envkv := strings.SplitN(e, "=", 2)
+					if err := os.Setenv(envkv[0], envkv[1]); err != nil {
+						logger.Errorf("set env %s=%s error", envkv[0], envkv[1])
+					}
 				}
 			}
 		}

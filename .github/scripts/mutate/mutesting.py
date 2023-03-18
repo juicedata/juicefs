@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 import glob
+import json
 import os
 import sys
 from tkinter import Tcl
@@ -57,3 +58,7 @@ if __name__ == '__main__':
     total = int(os.environ['JOB_TOTAL'])
     stats = do_mutate_test(mutation_dir, index, total)
     print(stats)
+    stat_result_file = os.environ['STAT_RESULT_FILE']
+    print(f'stat result file is {stat_result_file}', file=sys.stderr)
+    with open(stat_result_file, "w") as f:
+        json.dump(stats, f)

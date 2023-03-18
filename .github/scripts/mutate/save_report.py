@@ -46,12 +46,9 @@ def save_report(job_name, report):
 
 if __name__ == "__main__":
     job_name = os.environ.get('JOB_NAME')
-    report_file = os.environ.get('REPORT_FILE')
-    print(f'save report for {job_name}, report file is {report_file}')
-    with open(report_file) as f:
-        lines = f.readlines()
-        print(f'last line: {lines[-1]}')
-        save_report(job_name, eval(lines[-1]))
-    
-
+    stat_result_file = os.environ.get('STAT_RESULT_FILE')
+    print(f'save report for {job_name}, stat result file is {stat_result_file}')
+    with open(stat_result_file) as f:
+        report = json.load(f)
+        save_report(job_name, report)
 

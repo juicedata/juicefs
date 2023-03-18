@@ -564,8 +564,8 @@ func (bm *benchMarkObj) chtimes(key string, startKey int) error {
 
 func listAll(s object.ObjectStorage, prefix, marker string, limit int64) ([]object.Object, error) {
 	r, err := s.List(prefix, marker, "", limit)
-	if err == nil {
-		return r, nil
+	if !errors.Is(err, utils.ENOTSUP) {
+		return r, err
 	}
 	ch, err := s.ListAll(prefix, marker)
 	if err == nil {
@@ -593,6 +593,9 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			r = nspt
 		} else if err != nil {
 			r = err.Error()
+			if len(r) > 45 {
+				r = r[:45] + "..."
+			}
 			if colorful {
 				r = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, RED, r, RESET_SEQ)
 			}
@@ -678,15 +681,18 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			return fmt.Errorf("put object failed: %s", err)
 		}
 		defer blob.Delete(key) //nolint:errcheck
-		if s, err := get(blob, key, 0, -1); err != nil && s != string(br) {
-			return fmt.Errorf("get object failed: %s", err)
+		if d, e := get(blob, key, 0, -1); e != nil || d != string(br) {
+			return fmt.Errorf(`failed to get an object: expect "hello", but got %v, error: %s`, d, e)
+		}
+		if d, e := get(blob, key, 0, 5); e != nil || d != string(br) {
+			return fmt.Errorf(`failed to get an object: expect "hello", but got %v, error: %s`, d, e)
 		}
 		return nil
 	})
 
 	runCase("get non-exist", func(blob object.ObjectStorage) error {
 		if _, err := blob.Get("not_exists_file", 0, -1); err == nil {
-			return fmt.Errorf("get not exists object should failed: %s", err)
+			return fmt.Errorf("get not existed object should failed: %s", err)
 		}
 		return nil
 	})
@@ -697,23 +703,30 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			return fmt.Errorf("put object failed: %s", err)
 		}
 		defer blob.Delete(key) //nolint:errcheck
-		if d, e := get(blob, key, 0, -1); d != "hello" {
-			return fmt.Errorf("expect hello, but got %v, error: %s", d, e)
+
+		// get first
+		if d, e := get(blob, key, 0, 1); e != nil || d != "h" {
+			return fmt.Errorf(`failed to get the first byte:, expect "h", but got %q, error: %s`, d, e)
 		}
-		if d, e := get(blob, key, 2, -1); d != "llo" {
-			logger.Errorf("expect llo, but got %v, error: %s", d, e)
+		// get last
+		if d, e := get(blob, key, 4, 1); e != nil || d != "o" {
+			return fmt.Errorf(`failed to get the last byte: expect "o", but got %q, error: %s`, d, e)
 		}
-		if d, e := get(blob, key, 2, 3); d != "llo" {
-			return fmt.Errorf("expect llo, but got %v, error: %s", d, e)
+		// get last 3
+		if d, e := get(blob, key, 2, 3); e != nil || d != "llo" {
+			return fmt.Errorf(`failed to get the last three bytes: expect "llo", but got %q, error: %s`, d, e)
 		}
-		if d, e := get(blob, key, 2, 2); d != "ll" {
-			return fmt.Errorf("expect ll, but got %v, error: %s", d, e)
+		// get middle
+		if d, e := get(blob, key, 2, 2); e != nil || d != "ll" {
+			return fmt.Errorf(`failed to get two bytes: expect "ll", but got %q, error: %s`, d, e)
 		}
-		if d, e := get(blob, key, 4, 2); d != "o" {
-			return fmt.Errorf("out-of-range get: 'o', but got %v, error: %s", len(d), e)
+		// get the end out of range
+		if d, e := get(blob, key, 4, 2); e != nil || d != "o" {
+			return fmt.Errorf(`failed to get object with the end out of range, expect "o", but got %q, error: %s`, d, e)
 		}
-		if d, e := get(blob, key, 6, 2); d != "" {
-			return fmt.Errorf("out-of-range get: '', but got %v, error: %s", len(d), e)
+		// get the off out of range
+		if d, e := get(blob, key, 6, 2); e != nil || d != "" {
+			return fmt.Errorf(`failed to get object with the offset out of range, expect "", but got %q, error: %s`, d, e)
 		}
 		return nil
 	})
@@ -728,7 +741,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			return fmt.Errorf("failed to head object %s", err)
 		} else {
 			if h.Key() != key {
-				return fmt.Errorf("expected get key is test but get %s", h.Key())
+				return fmt.Errorf("expected key 'test' but got %s", h.Key())
 			}
 		}
 		return nil
@@ -747,7 +760,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		}
 
 		if err := blob.Delete(key); err != nil {
-			return fmt.Errorf("delete not exists %v", err)
+			return fmt.Errorf("delete not existed: %v", err)
 		}
 		return nil
 	})
@@ -852,6 +865,21 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		return nil
 	})
 
+	runCase("special key", func(blob object.ObjectStorage) error {
+		key := "测试编码文件" + `{"name":"juicefs"}` + string('\u001F')
+		defer blob.Delete(key) //nolint:errcheck
+		if err := blob.Put(key, bytes.NewReader(nil)); err != nil {
+			return fmt.Errorf("put encode file failed: %s", err)
+		} else {
+			if resp, err := blob.List("", "测试编码文件", "", 1); err != nil && err != utils.ENOTSUP {
+				return fmt.Errorf("list encode file failed %s", err)
+			} else if len(resp) == 1 && resp[0].Key() != key {
+				return fmt.Errorf("list encode file failed: expect key %s, but got %s", key, resp[0].Key())
+			}
+		}
+		return nil
+	})
+
 	runCase("put a big object", func(blob object.ObjectStorage) error {
 		fsize := 256 << 20
 		buffL := 4 << 20
@@ -888,14 +916,13 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		key := "multi_test_file"
 		if err := blob.CompleteUpload(key, "notExistsUploadId", []*object.Part{}); err != utils.ENOTSUP {
 			defer blob.Delete(key) //nolint:errcheck
-			partSize := 5 << 20
-			total := 10
-			seed := make([]byte, partSize)
-			rand.Read(seed)
 			upload, err := blob.CreateMultipartUpload(key)
 			if err != nil {
 				return fmt.Errorf("create multipart upload failed: %s", err)
 			}
+			total := 3
+			seed := make([]byte, upload.MinPartSize)
+			rand.Read(seed)
 			parts := make([]*object.Part, total)
 			content := make([][]byte, total)
 			for i := 0; i < total; i++ {
@@ -919,10 +946,20 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 				}()
 			}
 			wg.Wait()
-			// overwrite part
-			if parts[total-1], err = blob.UploadPart(key, upload.UploadID, total, getMockData(seed, total)); err != nil {
+			// overwrite the first part
+			firstPartContent := append(getMockData(seed, 0), getMockData(seed, 0)...)
+			if parts[0], err = blob.UploadPart(key, upload.UploadID, 1, firstPartContent); err != nil {
 				logger.Fatalf("multipart upload error: %v", err)
 			}
+			content[0] = firstPartContent
+
+			// overwrite the last part
+			lastPartContent := []byte("hello")
+			if parts[total-1], err = blob.UploadPart(key, upload.UploadID, total, lastPartContent); err != nil {
+				logger.Fatalf("multipart upload error: %v", err)
+			}
+			content[total-1] = lastPartContent
+
 			if err = blob.CompleteUpload(key, upload.UploadID, parts); err != nil {
 				logger.Fatalf("failed to complete multipart upload: %v", err)
 			}
@@ -934,7 +971,6 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			if err != nil {
 				logger.Fatalf("failed to get multipart upload file: %v", err)
 			}
-			content[total-1] = getMockData(seed, total)
 			if !bytes.Equal(cnt, bytes.Join(content, nil)) {
 				logger.Fatal("the content of the multipart upload file is incorrect")
 			}

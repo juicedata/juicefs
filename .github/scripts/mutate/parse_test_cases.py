@@ -11,6 +11,8 @@ def parse_test_cases(test_file_path):
         for line in lines:
             # func TestXattr2(t *testing.T) {
             if re.search('^func\s+Test.+', line.strip()):
+                if 'skip mutate' in line:
+                    continue
                 name = line.strip().split(' ')[1].split('(')[0]
                 test_cases.append(name)
     return test_cases

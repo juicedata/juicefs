@@ -77,10 +77,10 @@ type prefixClient struct {
 	prefix []byte
 }
 
-func (c *prefixClient) txn(f func(*kvTxn) error) error {
+func (c *prefixClient) txn(f func(*kvTxn) error, retry int) error {
 	return c.tkvClient.txn(func(tx *kvTxn) error {
-		return f(&kvTxn{&prefixTxn{tx, c.prefix}})
-	})
+		return f(&kvTxn{&prefixTxn{tx, c.prefix}, retry})
+	}, retry)
 }
 
 func (c *prefixClient) scan(prefix []byte, handler func(key, value []byte)) error {

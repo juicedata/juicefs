@@ -30,7 +30,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
-//mutate_test_job_number: 5
+// mutate_test_job_number: 5
 func TestFileStat(t *testing.T) {
 	attr := meta.Attr{
 		Typ:   meta.TypeDirectory,
@@ -218,7 +218,7 @@ func TestFileSystem(t *testing.T) {
 		t.Fatalf("follow symlink: %s %+v", e, fi)
 	}
 
-	if s, e := d.Summary(ctx); e != 0 || s.Dirs != 2 || s.Files != 2 || s.Length != 8 || s.Size != 16<<10 {
+	if s, e := d.Summary(ctx); e != 0 || s.Dirs != 2 || s.Files != 2 || s.Length != 7 || s.Size != 16<<10 {
 		t.Fatalf("summary: %s %+v", e, s)
 	}
 	if e := fs.Delete(ctx, "/d"); e == 0 || !IsNotEmpty(e) {

@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
+// disable_mutate_test
+//
 //nolint:errcheck
-//disable_mutate_test
 package meta
 
 import (
@@ -35,7 +36,7 @@ func TestMemKVClient(t *testing.T) {
 	testMeta(t, m)
 }
 
-func TestTiKVClient(t *testing.T) {
+func TestTiKVClient(t *testing.T) { //skip mutate
 	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs-unit-test", DefaultConf())
 	if err != nil || m.Name() != "tikv" {
 		t.Fatalf("create meta: %s", err)
@@ -51,7 +52,7 @@ func TestBadgerClient(t *testing.T) {
 	testMeta(t, m)
 }
 
-func TestEtcdClient(t *testing.T) {
+func TestEtcdClient(t *testing.T) { //skip mutate
 	m, err := newKVMeta("etcd", "localhost:2379", DefaultConf())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
@@ -64,7 +65,7 @@ func testTKV(t *testing.T, c tkvClient) {
 		if err := c.txn(func(kt *kvTxn) error {
 			f(kt)
 			return nil
-		}); err != nil {
+		}, 0); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -197,21 +198,21 @@ func testTKV(t *testing.T, c tkvClient) {
 	c.txn(func(tx *kvTxn) error {
 		count = tx.incrBy([]byte("counter"), -1)
 		return nil
-	})
+	}, 0)
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
 	c.txn(func(tx *kvTxn) error {
 		count = tx.incrBy([]byte("counter"), 0)
 		return nil
-	})
+	}, 0)
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
 	c.txn(func(tx *kvTxn) error {
 		count = tx.incrBy([]byte("counter"), 2)
 		return nil
-	})
+	}, 0)
 	if count != 1 {
 		t.Fatalf("counter should be 1, but got %d", count)
 	}
@@ -264,7 +265,7 @@ func TestBadgerKV(t *testing.T) {
 	testTKV(t, c)
 }
 
-func TestEtcd(t *testing.T) {
+func TestEtcd(t *testing.T) { //skip mutate
 	c, err := newEtcdClient("localhost:2379/jfs")
 	if err != nil {
 		t.Fatal(err)

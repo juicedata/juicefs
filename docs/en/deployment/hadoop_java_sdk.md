@@ -64,16 +64,18 @@ git clone https://github.com/juicedata/juicefs.git
 
 Enter the directory and compile:
 
+```shell
+cd juicefs/sdk/java
+make
+```
+
 :::note
-If Ceph RADOS is used to store data, you need to install `librados-dev` first and [build `libjfs.so`](https://github.com/juicedata/juicefs/blob/main/sdk/java/libjfs/Makefile#L38-L39) with `-tags ceph`.
+If Ceph RADOS is used to store data, you need to install `librados-dev` first and [build `libjfs.so`]`.
 :::
 
 ```shell
 cd juicefs/sdk/java
-```
-
-```shell
-make
+make ceph
 ```
 
 After the compilation, you can find the compiled `JAR` file in the `sdk/java/target` directory, including two versions:
@@ -126,11 +128,12 @@ It is recommended to place the JAR file in a fixed location, and the other locat
 
 ### Community Components
 
-| Name   | Installing Paths                     |
-|--------|--------------------------------------|
-| Spark  | `${SPARK_HOME}/jars`                 |
-| Presto | `${PRESTO_HOME}/plugin/hive-hadoop2` |
-| Flink  | `${FLINK_HOME}/lib`                  |
+| Name      | Installing Paths                                                          |
+|-----------|---------------------------------------------------------------------------|
+| Spark     | `${SPARK_HOME}/jars`                                                      |
+| Presto    | `${PRESTO_HOME}/plugin/hive-hadoop2`                                      |
+| Flink     | `${FLINK_HOME}/lib`                                                       |
+| StarRocks | `${StarRocks_HOME}/fe/lib/`, `${StarRocks_HOME}/be/lib/hadoop/common/lib` |
 
 ### Client Configurations
 

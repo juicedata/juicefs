@@ -350,6 +350,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf := meta.DefaultConf()
 	conf.Retries = c.Int("io-retries")
 	conf.MaxDeletes = c.Int("max-deletes")
+	conf.SkipDirNlink = c.Int("skip-dir-nlink")
 	conf.ReadOnly = readOnly
 	conf.NoBGJob = c.Bool("no-bgjob")
 	conf.OpenCache = time.Duration(c.Float64("open-cache") * 1e9)

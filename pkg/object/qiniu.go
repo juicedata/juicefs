@@ -49,6 +49,13 @@ func (q *qiniu) String() string {
 	return fmt.Sprintf("qiniu://%s/", q.bucket)
 }
 
+func (q *qiniu) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: false,
+		IsSupportUploadPartCopy:  false,
+	}
+}
+
 func (q *qiniu) download(key string, off, limit int64) (io.ReadCloser, error) {
 	deadline := time.Now().Add(time.Second * 3600).Unix()
 	url := storage.MakePrivateURL(q.cred, os.Getenv("QINIU_DOMAIN"), key, deadline)

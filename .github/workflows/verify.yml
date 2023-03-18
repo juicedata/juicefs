@@ -46,8 +46,7 @@ jobs:
       
     - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install g++-multilib gcc-mingw-w64
+        sudo .github/scripts/apt_install.sh g++-multilib gcc-mingw-w64
 
     - name: Build linux target
       run: make
@@ -63,8 +62,7 @@ jobs:
 
     - name: build ceph
       run: |
-        sudo apt-get update
-        sudo apt-get install librados-dev
+        sudo .github/scripts/apt_install.sh librados-dev
         make juicefs.ceph
 
     - name: build fdb

@@ -112,6 +112,10 @@ func (s DefaultObjectStorage) Create() error {
 	return nil
 }
 
+func (s DefaultObjectStorage) Limits() Limits {
+	return Limits{IsSupportMultipartUpload: false, IsSupportUploadPartCopy: false}
+}
+
 func (s DefaultObjectStorage) Head(key string) (Object, error) {
 	return nil, notSupported
 }
@@ -121,6 +125,10 @@ func (s DefaultObjectStorage) CreateMultipartUpload(key string) (*MultipartUploa
 }
 
 func (s DefaultObjectStorage) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
+	return nil, notSupported
+}
+
+func (s DefaultObjectStorage) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
 	return nil, notSupported
 }
 

@@ -444,8 +444,9 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 					}
 					e.Entries[n.(string)] = &DumpedEntry{
 						Attr: &DumpedAttr{
-							Inode: child.Attr.Inode,
-							Type:  child.Attr.Type,
+							Inode:  child.Attr.Inode,
+							Type:   child.Attr.Type,
+							Length: child.Attr.Length,
 						},
 					}
 				}

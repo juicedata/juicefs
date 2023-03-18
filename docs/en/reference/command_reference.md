@@ -285,6 +285,9 @@ prefetch N blocks in parallel (default: 1)
 `--writeback`<br />
 upload objects in background (default: false), see [Client write data cache](../guide/cache_management.md#writeback)
 
+`--upload-delay value`<br />
+if writeback mode is enabled, delayed duration for uploading objects ("s", "m", "h") (default: 0s)
+
 `--cache-dir value`<br />
 directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `"/var/jfsCache"`), see [Client read data cache](../guide/cache_management.md#client-read-cache)
 
@@ -311,9 +314,6 @@ interval (in seconds) to automatically backup metadata in the object storage (0 
 
 `--heartbeat value`<br />
 interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value (default: "12")
-
-`--upload-delay value`<br />
-delayed duration for uploading objects ("s", "m", "h") (default: 0s)
 
 `--no-bgjob`<br />
 disable background jobs (clean-up, backup, etc.) (default: false)
@@ -855,8 +855,6 @@ $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  h
 
 ### `juicefs gc` {#gc}
 
-用来处理「对象泄漏」，以及因为覆盖写而产生的碎片数据的命令。详见[「状态检查 & 维护」](../administration/status_check_and_maintenance.md#gc)。
-
 Deal with leaked objects, and garbage fragments produced by file overwrites. See [Status Check & Maintenance](../administration/status_check_and_maintenance.md#gc).
 
 #### Synopsis
@@ -1032,7 +1030,7 @@ $ cat /tmp/filelist
 $ juicefs warmup -f /tmp/filelist
 ```
 
-### `juicefs dump`
+### `juicefs dump` {#dump}
 
 Dump metadata into a JSON file.
 
@@ -1058,7 +1056,7 @@ $ juicefs dump redis://localhost meta-dump
 $ juicefs dump redis://localhost sub-meta-dump --subdir /dir/in/jfs
 ```
 
-### `juicefs load`
+### `juicefs load` {#load}
 
 Load metadata from a previously dumped JSON file.
 
@@ -1076,7 +1074,7 @@ When the FILE is not provided, STDIN will be used instead.
 juicefs load redis://localhost/1 meta-dump
 ```
 
-### `juicefs config`
+### `juicefs config` {#config}
 
 Change config of a volume.
 

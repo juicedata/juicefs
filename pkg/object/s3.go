@@ -64,6 +64,16 @@ func (s *s3client) String() string {
 	return fmt.Sprintf("s3://%s/", s.bucket)
 }
 
+func (s *s3client) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              5 << 20,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func isExists(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, s3.ErrCodeBucketAlreadyExists) || strings.Contains(msg, s3.ErrCodeBucketAlreadyOwnedByYou)
@@ -247,6 +257,21 @@ func (s *s3client) UploadPart(key string, uploadID string, num int, body []byte)
 		return nil, err
 	}
 	return &Part{Num: num, ETag: *resp.ETag}, nil
+}
+
+func (s *s3client) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	resp, err := s.s3.UploadPartCopy(&s3.UploadPartCopyInput{
+		Bucket:          aws.String(s.bucket),
+		CopySource:      aws.String(s.bucket + "/" + srcKey),
+		CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
+		Key:             aws.String(key),
+		PartNumber:      aws.Int64(int64(num)),
+		UploadId:        aws.String(uploadID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Part{Num: num, ETag: *resp.CopyPartResult.ETag}, nil
 }
 
 func (s *s3client) AbortUpload(key string, uploadID string) {

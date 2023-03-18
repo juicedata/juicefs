@@ -38,6 +38,13 @@ func (s *space) String() string {
 	return fmt.Sprintf("space://%s/", s.s3client.bucket)
 }
 
+func (s *space) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  false,
+	}
+}
+
 func newSpace(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)

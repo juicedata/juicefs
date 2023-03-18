@@ -52,6 +52,8 @@ type engine interface {
 	incrCounter(name string, value int64) (int64, error)
 	// Set counter name to value if old <= value - diff.
 	setIfSmall(name string, value, diff int64) (bool, error)
+	updateStats(space int64, inodes int64)
+	flushStats()
 
 	doLoad() ([]byte, error)
 
@@ -83,8 +85,10 @@ type engine interface {
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
-	doUpdateDirStat(ctx Context, ino Ino, space int64, inodes int64) error
-	doGetDirStat(ctx Context, ino Ino) (space, inodes uint64, err error)
+	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
+	// @trySync: try sync dir stat if broken or not existed
+	doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error)
+	doSyncDirStat(ctx Context, ino Ino) (*dirStat, error)
 
 	scanTrashSlices(Context, trashSliceScan) error
 	scanPendingSlices(Context, pendingSliceScan) error
@@ -116,6 +120,7 @@ type cchunk struct {
 
 // stat of dir
 type dirStat struct {
+	length int64
 	space  int64
 	inodes int64
 }
@@ -242,50 +247,91 @@ func (m *baseMeta) checkRoot(inode Ino) Ino {
 	}
 }
 
-func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (space, inodes uint64, err error) {
+func (m *baseMeta) parallelSyncDirStat(ctx Context, inos map[Ino]bool) *sync.WaitGroup {
+	var wg sync.WaitGroup
+	for i := range inos {
+		wg.Add(1)
+		go func(ino Ino) {
+			defer wg.Done()
+			_, err := m.en.doSyncDirStat(ctx, ino)
+			if err != nil {
+				logger.Warnf("sync dir stat for %d: %s", ino, err)
+			}
+		}(i)
+	}
+	return &wg
+}
+
+func (m *baseMeta) groupBatch(batch map[Ino]dirStat, size int) [][]Ino {
+	var inos []Ino
+	for ino := range batch {
+		inos = append(inos, ino)
+	}
+	sort.Slice(inos, func(i, j int) bool {
+		return inos[i] < inos[j]
+	})
+	var batches [][]Ino
+	for i := 0; i < len(inos); i += size {
+		end := i + size
+		if end > len(inos) {
+			end = len(inos)
+		}
+		batches = append(batches, inos[i:end])
+	}
+	return batches
+}
+
+func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, error) {
 	var entries []*Entry
 	if eno := m.en.doReaddir(ctx, ino, 1, &entries, -1); eno != 0 {
-		err = errors.Wrap(eno, "calc dir stat")
+		return nil, errors.Wrap(eno, "calc dir stat")
+	}
+
+	stat := new(dirStat)
+	for _, e := range entries {
+		stat.inodes += 1
+		var l uint64
+		if e.Attr.Typ == TypeFile {
+			l = e.Attr.Length
+		}
+		stat.length += int64(l)
+		stat.space += align4K(l)
+	}
+	return stat, nil
+}
+
+func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, err error) {
+	stat, err = m.en.doGetDirStat(ctx, m.checkRoot(inode), !m.conf.ReadOnly)
+	if err != nil {
 		return
 	}
-	for _, e := range entries {
-		inodes += 1
-		var newSpace uint64
-		if e.Attr.Typ == TypeFile {
-			newSpace = e.Attr.Length
-		}
-		space += uint64(align4K(newSpace))
+	if stat == nil {
+		stat, err = m.calcDirStat(ctx, inode)
 	}
 	return
 }
 
-func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (space, inodes uint64, err error) {
-	return m.en.doGetDirStat(ctx, m.checkRoot(inode))
-}
-
-func (m *baseMeta) updateDirStat(ctx Context, ino Ino, space int64, inodes int64) {
-	if inodes == 0 && space == 0 {
-		return
-	}
+func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int64) {
 	m.dirStatsLock.Lock()
 	defer m.dirStatsLock.Unlock()
-	event := m.dirStats[ino]
-	event.space += space
-	event.inodes += inodes
-	m.dirStats[ino] = event
+	stat := m.dirStats[ino]
+	stat.length += length
+	stat.inodes += inodes
+	stat.space += space
+	m.dirStats[ino] = stat
 }
 
-func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, space int64) {
+func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, space int64) {
 	if space == 0 {
 		return
 	}
-	m.updateStats(space, 0)
+	m.en.updateStats(space, 0)
 	if parent > 0 {
-		m.updateDirStat(ctx, parent, space, 0)
+		m.updateDirStat(ctx, parent, length, space, 0)
 	} else {
 		go func() {
 			for p := range m.en.doGetParents(ctx, inode) {
-				m.updateDirStat(ctx, p, space, 0)
+				m.updateDirStat(ctx, p, length, space, 0)
 			}
 		}()
 	}
@@ -307,14 +353,9 @@ func (m *baseMeta) doFlushDirStat() {
 	stats := m.dirStats
 	m.dirStats = make(map[Ino]dirStat)
 	m.dirStatsLock.Unlock()
-	for ino, e := range stats {
-		if e.space == 0 && e.inodes == 0 {
-			continue
-		}
-		err := m.en.doUpdateDirStat(Background, ino, e.space, e.inodes)
-		if err != nil {
-			logger.Errorf("update dir stat failed: %v", err)
-		}
+	err := m.en.doUpdateDirStat(Background, stats)
+	if err != nil {
+		logger.Errorf("update dir stat failed: %v", err)
 	}
 }
 
@@ -398,6 +439,8 @@ func (m *baseMeta) NewSession() error {
 	}
 	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
+	go m.en.flushStats()
+	go m.flushDirStat()
 	for i := 0; i < m.conf.MaxDeletes; i++ {
 		go m.deleteSlices()
 	}
@@ -405,7 +448,6 @@ func (m *baseMeta) NewSession() error {
 		go m.cleanupDeletedFiles()
 		go m.cleanupSlices()
 		go m.cleanupTrash()
-		go m.flushDirStat()
 	}
 	return nil
 }
@@ -506,35 +548,6 @@ func (m *baseMeta) checkQuota(size, inodes int64) bool {
 		return true
 	}
 	return inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes)
-}
-
-func (m *baseMeta) updateStats(space int64, inodes int64) {
-	atomic.AddInt64(&m.newSpace, space)
-	atomic.AddInt64(&m.newInodes, inodes)
-}
-
-func (m *baseMeta) flushStats() {
-	for {
-		newSpace := atomic.SwapInt64(&m.newSpace, 0)
-		if newSpace != 0 {
-			if v, err := m.en.incrCounter(usedSpace, newSpace); err == nil {
-				atomic.StoreInt64(&m.usedSpace, v)
-			} else {
-				logger.Warnf("update space stats: %s", err)
-				m.updateStats(newSpace, 0)
-			}
-		}
-		newInodes := atomic.SwapInt64(&m.newInodes, 0)
-		if newInodes != 0 {
-			if v, err := m.en.incrCounter(totalInodes, newInodes); err == nil {
-				atomic.StoreInt64(&m.usedInodes, v)
-			} else {
-				logger.Warnf("update inodes stats: %s", err)
-				m.updateStats(0, newInodes)
-			}
-		}
-		time.Sleep(time.Second)
-	}
 }
 
 func (m *baseMeta) cleanupDeletedFiles() {
@@ -861,7 +874,8 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}
 	err := m.en.doMknod(ctx, m.checkRoot(parent), name, _type, mode, cumask, rdev, path, inode, attr)
 	if err == 0 {
-		m.updateDirStat(ctx, parent, align4K(0), 1)
+		m.en.updateStats(align4K(0), 1)
+		m.updateDirStat(ctx, parent, 0, align4K(0), 1)
 	}
 	return err
 }
@@ -911,7 +925,7 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	}
 	err := m.en.doLink(ctx, inode, parent, name, attr)
 	if err == 0 {
-		m.updateDirStat(ctx, parent, align4K(attr.Length), 1)
+		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
 	}
 	return err
 }
@@ -946,11 +960,11 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 	var attr Attr
 	err := m.en.doUnlink(ctx, m.checkRoot(parent), name, &attr, skipCheckTrash...)
 	if err == 0 {
-		newSpace := -align4K(0)
+		var diffLength uint64
 		if attr.Typ == TypeFile {
-			newSpace = -align4K(attr.Length)
+			diffLength = attr.Length
 		}
-		m.updateDirStat(ctx, parent, newSpace, -1)
+		m.updateDirStat(ctx, parent, -int64(diffLength), -align4K(diffLength), -1)
 	}
 	return err
 }
@@ -972,7 +986,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 	defer m.timeit(time.Now())
 	err := m.en.doRmdir(ctx, m.checkRoot(parent), name, skipCheckTrash...)
 	if err == 0 {
-		m.updateDirStat(ctx, parent, -align4K(0), -1)
+		m.updateDirStat(ctx, parent, 0, -align4K(0), -1)
 	}
 	return err
 }
@@ -1004,12 +1018,12 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	err := m.en.doRename(ctx, m.checkRoot(parentSrc), nameSrc, m.checkRoot(parentDst), nameDst, flags, inode, attr)
 	if err == 0 {
-		diffSpace := align4K(0)
+		var diffLengh uint64
 		if attr.Typ == TypeFile {
-			diffSpace = align4K(attr.Length)
+			diffLengh = attr.Length
 		}
-		m.updateDirStat(ctx, parentSrc, -diffSpace, -1)
-		m.updateDirStat(ctx, parentDst, diffSpace, 1)
+		m.updateDirStat(ctx, parentSrc, -int64(diffLengh), -align4K(diffLengh), -1)
+		m.updateDirStat(ctx, parentDst, int64(diffLengh), align4K(diffLengh), 1)
 	}
 	return err
 }
@@ -1266,7 +1280,7 @@ func (m *baseMeta) walk(ctx Context, inode Ino, path string, attr *Attr, walkFn 
 	return 0
 }
 
-func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool) (st syscall.Errno) {
+func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool) (st syscall.Errno) {
 	var attr Attr
 	var inode = RootInode
 	var parent = RootInode
@@ -1324,38 +1338,66 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool)
 					// TODO
 					continue
 				}
+
+				var attrBroken, statBroken bool
 				if attr.Full {
 					nlink, st := m.countDirNlink(ctx, inode)
 					if st != 0 {
 						logger.Errorf("Count nlink for inode %d: %s", inode, st)
 						continue
 					}
-					if attr.Nlink == nlink {
-						continue
+					if attr.Nlink != nlink {
+						logger.Warnf("nlink of %s should be %d, but got %d", path, nlink, attr.Nlink)
+						attrBroken = true
 					}
-					logger.Warnf("nlink of %s should be %d, but got %d", path, nlink, attr.Nlink)
 				} else {
 					logger.Warnf("attribute of %s is missing", path)
+					attrBroken = true
+				}
+
+				if attrBroken {
+					if repair {
+						if !attr.Full {
+							now := time.Now().Unix()
+							attr.Mode = 0644
+							attr.Uid = ctx.Uid()
+							attr.Gid = ctx.Gid()
+							attr.Atime = now
+							attr.Mtime = now
+							attr.Ctime = now
+							attr.Length = 4 << 10
+						}
+						if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 {
+							logger.Debugf("Path %s (inode %d) is successfully repaired", path, inode)
+						} else {
+							logger.Errorf("Repair path %s inode %d: %s", path, inode, st1)
+						}
+
+					} else {
+						logger.Warnf("Path %s (inode %d) can be repaired, please re-run with '--path %s --repair' to fix it", path, inode, path)
+					}
+				}
+
+				stat, err := m.en.doGetDirStat(ctx, inode, false)
+				if err != nil {
+					logger.Errorf("get dir stat for inode %d: %v", inode, err)
+					continue
+				}
+				if stat == nil || stat.space < 0 || stat.inodes < 0 {
+					logger.Warnf("usage stat of %s is missing or broken", path)
+					statBroken = true
 				}
 
 				if repair {
-					if !attr.Full {
-						now := time.Now().Unix()
-						attr.Mode = 0644
-						attr.Uid = ctx.Uid()
-						attr.Gid = ctx.Gid()
-						attr.Atime = now
-						attr.Mtime = now
-						attr.Ctime = now
-						attr.Length = 4 << 10
+					if statBroken || statAll {
+						if _, err := m.en.doSyncDirStat(ctx, inode); err == nil {
+							logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
+						} else {
+							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, err)
+						}
 					}
-					if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 {
-						logger.Infof("Path %s (inode %d) is successfully repaired", path, inode)
-					} else {
-						logger.Errorf("Repair path %s inode %d: %s", path, inode, st1)
-					}
-				} else {
-					logger.Warnf("Path %s (inode %d) can be repaired, please re-run with '--path %s --repair' to fix it", path, inode, path)
+				} else if statBroken {
+					logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair' to fix it", path, inode, path)
 				}
 			}
 		}()

@@ -55,6 +55,16 @@ func (c *COS) Create() error {
 	return err
 }
 
+func (c *COS) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              1 << 20,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func (c *COS) Head(key string) (Object, error) {
 	resp, err := c.c.Object.Head(ctx, key, nil)
 	if err != nil {
@@ -79,18 +89,13 @@ func (c *COS) Head(key string) (Object, error) {
 }
 
 func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	params := &cos.ObjectGetOptions{}
-	if off > 0 || limit > 0 {
-		var r string
-		if limit > 0 {
-			r = fmt.Sprintf("bytes=%d-%d", off, off+limit-1)
-		} else {
-			r = fmt.Sprintf("bytes=%d-", off)
-		}
-		params.Range = r
-	}
+	params := &cos.ObjectGetOptions{Range: getRange(off, limit)}
 	resp, err := c.c.Object.Get(ctx, key, params)
 	if err != nil {
+		return nil, err
+	}
+	if err = checkGetStatus(resp.StatusCode, params.Range != ""); err != nil {
+		_ = resp.Body.Close()
 		return nil, err
 	}
 	if off == 0 && limit == -1 {
@@ -182,6 +187,16 @@ func (c *COS) UploadPart(key string, uploadID string, num int, body []byte) (*Pa
 		return nil, err
 	}
 	return &Part{Num: num, ETag: resp.Header.Get("Etag")}, nil
+}
+
+func (c *COS) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	result, _, err := c.c.Object.CopyPart(ctx, key, uploadID, num, c.endpoint+"/"+srcKey, &cos.ObjectCopyPartOptions{
+		XCosCopySourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Part{Num: num, ETag: result.ETag}, nil
 }
 
 func (c *COS) AbortUpload(key string, uploadID string) {

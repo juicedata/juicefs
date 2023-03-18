@@ -47,6 +47,16 @@ func (o *ossClient) String() string {
 	return fmt.Sprintf("oss://%s/", o.bucket.BucketName)
 }
 
+func (o *ossClient) Limits() Limits {
+	return Limits{
+		IsSupportMultipartUpload: true,
+		IsSupportUploadPartCopy:  true,
+		MinPartSize:              100 << 10,
+		MaxPartSize:              5 << 30,
+		MaxPartCount:             10000,
+	}
+}
+
 func (o *ossClient) Create() error {
 	err := o.bucket.Client.CreateBucket(o.bucket.BucketName)
 	if err != nil && isExists(err) {
@@ -174,6 +184,15 @@ func (o *ossClient) UploadPart(key string, uploadID string, num int, data []byte
 		return nil, err
 	}
 	return &Part{Num: num, ETag: r.ETag}, nil
+}
+
+func (o *ossClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	initMultipartResult := oss.InitiateMultipartUploadResult{Bucket: o.bucket.BucketName, Key: key, UploadID: uploadID}
+	partCopy, err := o.bucket.UploadPartCopy(initMultipartResult, o.bucket.BucketName, srcKey, off, size, num)
+	if o.checkError(err) != nil {
+		return nil, err
+	}
+	return &Part{Num: num, ETag: partCopy.ETag}, nil
 }
 
 func (o *ossClient) AbortUpload(key string, uploadID string) {

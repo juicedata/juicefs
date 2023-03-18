@@ -35,6 +35,7 @@ type Config struct {
 	Strict         bool // update ctime
 	Retries        int
 	MaxDeletes     int
+	SkipDirNlink   int
 	CaseInsensi    bool
 	ReadOnly       bool
 	NoBGJob        bool // disable background jobs like clean-up, backup, etc.
