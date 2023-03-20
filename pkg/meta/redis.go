@@ -2251,19 +2251,29 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
-func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
+func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	field := ino.String()
-	stat, err := m.calcDirStat(ctx, ino)
-	if err != nil {
-		return nil, err
+	stat, st := m.calcDirStat(ctx, ino)
+	if st != 0 {
+		return nil, st
 	}
-	_, err = m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.HSet(ctx, m.dirDataLengthKey(), field, stat.length)
-		pipe.HSet(ctx, m.dirUsedSpaceKey(), field, stat.space)
-		pipe.HSet(ctx, m.dirUsedInodesKey(), field, stat.inodes)
-		return nil
-	})
-	return stat, err
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		n, err := tx.Exists(ctx, m.inodeKey(ino)).Result()
+		if err != nil {
+			return err
+		}
+		if n <= 0 {
+			return syscall.ENOENT
+		}
+		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HSet(ctx, m.dirDataLengthKey(), field, stat.length)
+			pipe.HSet(ctx, m.dirUsedSpaceKey(), field, stat.space)
+			pipe.HSet(ctx, m.dirUsedInodesKey(), field, stat.inodes)
+			return nil
+		})
+		return err
+	}, m.inodeKey(ino))
+	return stat, errno(err)
 }
 
 func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
