@@ -36,7 +36,7 @@ func TestMemKVClient(t *testing.T) {
 	testMeta(t, m)
 }
 
-func TestTiKVClient(t *testing.T) {
+func TestTiKVClient(t *testing.T) { //skip mutate
 	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs-unit-test", DefaultConf())
 	if err != nil || m.Name() != "tikv" {
 		t.Fatalf("create meta: %s", err)
@@ -44,7 +44,7 @@ func TestTiKVClient(t *testing.T) {
 	testMeta(t, m)
 }
 
-func TestBadgerClient(t *testing.T) {
+func TestBadgerClient(t *testing.T) { //skip mutate
 	m, err := newKVMeta("badger", "badger", DefaultConf())
 	if err != nil || m.Name() != "badger" {
 		t.Fatalf("create meta: %s", err)
@@ -52,7 +52,7 @@ func TestBadgerClient(t *testing.T) {
 	testMeta(t, m)
 }
 
-func TestEtcdClient(t *testing.T) {
+func TestEtcdClient(t *testing.T) { //skip mutate
 	m, err := newKVMeta("etcd", "localhost:2379", DefaultConf())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
