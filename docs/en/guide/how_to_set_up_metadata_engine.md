@@ -26,6 +26,17 @@ However, based on the feedback from community users, we have noticed that a high
 While using the JuiceFS file system - no matter which database you choose to store metadata, please **ensure the safety of the metadata**! Once the metadata is damaged or lost, the corresponding data will accordingly be damaged or lost, and the entire file system can even be damaged in the worse cases. For production environments, you should always choose a database with high availability, and at the same time, it is recommended to ["backup metadata"](../administration/metadata_dump_load.md) periodically.
 :::
 
+### The storage usage of metadata
+
+When planning a large-scale file system, it is necessary to fully consider the expected storage capacity requirements of each component. Although the storage usage of metadata in JuiceFS may be negligible compared to data storage, considering the importance of metadata in the entire file system, it is necessary to make advance planning for metadata storage to avoid affecting business operations due to insufficient resources.
+
+Since the metadata of a file is only a very small fragment of information, its space usage is affected by factors such as database type, data type, and table structure design, and cannot accurately measure the space occupied by each file in a certain metadata engine. In practice, we usually evaluate the space required for each file's metadata based on the file's increment and the change in the database storage space.
+
+Therefore, the metadata storage usage of JuiceFS can be roughly calculated according to the database type:
+
+- **Key-Value Database**: 300 Bytes/file
+- **SQL Database**: 600 Bytes/file
+
 ## Redis
 
 [Redis](https://redis.io) is an open source (BSD license) memory-based Key-Value storage system, often used as a database, cache, and message broker.
