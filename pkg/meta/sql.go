@@ -3551,6 +3551,8 @@ func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 	if eno = m.doGetAttr(ctx, srcIno, srcAttr); eno != 0 {
 		return eno
 	}
+	// total should start from 1
+	*total = 1
 	var dstIno Ino
 	var err error
 	var cloneEno syscall.Errno
@@ -3618,8 +3620,12 @@ func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 				return eno
 			}
 			return errno(m.txn(func(s *xorm.Session) error {
-				s.Delete(&node{Inode: dstIno})
-				s.Delete(&xattr{Inode: dstIno})
+				if _, err := s.Delete(&node{Inode: dstIno}); err != nil {
+					return err
+				}
+				if _, err := s.Delete(&xattr{Inode: dstIno}); err != nil {
+					return err
+				}
 				return nil
 			}))
 		}
@@ -3633,9 +3639,8 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 	var err error
 	switch srcType {
 	case TypeDirectory:
-		var srcNlink uint32
+		srcNode := node{Inode: srcIno}
 		if err = m.txn(func(s *xorm.Session) error {
-			srcNode := node{Inode: srcIno}
 			ok, err := s.ForUpdate().Get(&srcNode)
 			if err != nil {
 				return err
@@ -3643,10 +3648,14 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			if !ok {
 				return syscall.ENOENT
 			}
-			srcNlink = srcNode.Nlink
 			if err := m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, attach); err != nil {
 				return err
 			}
+			return m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, attach)
+		}); err != nil {
+			return errno(err)
+		}
+		if err := m.txn(func(s *xorm.Session) error {
 			return mustInsert(s, &dirStats{Inode: *dstIno})
 		}); err != nil {
 			return errno(err)
@@ -3713,20 +3722,16 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 		}
 		wg.Wait()
 		// reset nlink
-		if attach && countDir+2 != srcNlink {
-			var dstAttr Attr
-			if eno := m.doGetAttr(ctx, *dstIno, &dstAttr); eno != 0 {
-				return eno
-			}
-			dstAttr.Nlink = countDir + 2
+		if attach && countDir+2 != srcNode.Nlink {
+			srcNode.Nlink = countDir + 2
 			err = m.txn(func(s *xorm.Session) error {
-				_, err := s.Cols("nlink").Update(&node{Nlink: dstAttr.Nlink}, &node{Inode: *dstIno})
+				_, err := s.Cols("nlink").Update(&node{Nlink: srcNode.Nlink}, &node{Inode: *dstIno})
 				return err
 			})
 		}
 	case TypeFile:
+		srcNode := node{Inode: srcIno}
 		err = m.txn(func(s *xorm.Session) error {
-			srcNode := node{Inode: srcIno}
 			ok, err := s.ForUpdate().Get(&srcNode)
 			if err != nil {
 				return err
@@ -3763,10 +3768,11 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 					}
 				}
 			}
-			m.updateParentStat(ctx, *dstIno, srcNode.Parent, int64(srcNode.Length), align4K(srcNode.Length))
 			return nil
 		})
-
+		if err == nil {
+			m.updateParentStat(ctx, *dstIno, srcNode.Parent, int64(srcNode.Length), align4K(srcNode.Length))
+		}
 	case TypeSymlink:
 		err = m.txn(func(s *xorm.Session) error {
 			srcNode := node{Inode: srcIno}
@@ -3790,7 +3796,7 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			return mustInsert(s, &sym)
 		})
 
-	case TypeBlockDev, TypeCharDev, TypeFIFO, TypeSocket:
+	default:
 		err = m.txn(func(s *xorm.Session) error {
 			srcNode := node{Inode: srcIno}
 			ok, err := s.ForUpdate().Get(&srcNode)
@@ -3803,6 +3809,9 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			return m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true)
 		})
 	}
+	newSpace := align4K(0)
+	m.updateStats(newSpace, 1)
+	m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
 	atomic.AddUint64(count, 1)
 	return errno(err)
 }
@@ -3877,9 +3886,6 @@ func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNod
 		if err := mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: *dstIno, Type: srcNode.Type}); err != nil {
 			return err
 		}
-		newSpace := align4K(0)
-		m.updateStats(newSpace, 1)
-		m.updateDirStat(ctx, srcNode.Parent, 0, newSpace, 1)
 	}
 	return nil
 }

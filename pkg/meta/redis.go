@@ -3823,6 +3823,8 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 	if eno = m.doGetAttr(ctx, srcIno, srcAttr); eno != 0 {
 		return eno
 	}
+	// total should start from 1
+	*total = 1
 	var dstIno Ino
 	var err error
 	var cloneEno syscall.Errno
@@ -3899,23 +3901,19 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 	var err error
 	switch srcType {
 	case TypeDirectory:
-		var srcNlink uint32
+		var srcAttr Attr
 		if err = m.txn(ctx, func(tx *redis.Tx) error {
-			var srcAttr Attr
 			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
 				return eno
 			}
-			srcNlink = srcAttr.Nlink
-			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach); err != nil {
-				return err
-			}
-			field := strconv.FormatUint(uint64(*dstIno), 10)
-			tx.HSet(ctx, m.dirUsedInodesKey(), field, "0")
-			tx.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
-			return nil
+			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach)
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno)); err != nil {
 			return errno(err)
 		}
+		field := strconv.FormatUint(uint64(*dstIno), 10)
+		m.rdb.HSet(ctx, m.dirUsedInodesKey(), field, "0")
+		m.rdb.HSet(ctx, m.dirDataLengthKey(), field, "0")
+		m.rdb.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
 		var entries []*Entry
 		eno := m.doReaddir(ctx, srcIno, 0, &entries, -1)
 		if eno != 0 {
@@ -3980,17 +3978,13 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 		}
 		wg.Wait()
 		// reset nlink
-		if attach && countDir+2 != srcNlink {
-			var dstAttr Attr
-			if eno := m.doGetAttr(ctx, *dstIno, &dstAttr); eno != 0 {
-				return eno
-			}
-			dstAttr.Nlink = countDir + 2
-			err = m.rdb.Set(ctx, m.inodeKey(*dstIno), m.marshal(&dstAttr), 0).Err()
+		if attach && countDir+2 != srcAttr.Nlink {
+			srcAttr.Nlink = countDir + 2
+			err = m.rdb.Set(ctx, m.inodeKey(*dstIno), m.marshal(&srcAttr), 0).Err()
 		}
 	case TypeFile:
+		var srcAttr Attr
 		err = m.txn(ctx, func(tx *redis.Tx) error {
-			var srcAttr Attr
 			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
 				return eno
 			}
@@ -4030,9 +4024,11 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 					return errno(err)
 				}
 			}
-			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length), align4K(srcAttr.Length))
 			return nil
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno))
+		if err == nil {
+			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length), align4K(srcAttr.Length))
+		}
 	case TypeSymlink:
 		err = m.txn(ctx, func(tx *redis.Tx) error {
 			var srcAttr Attr
@@ -4042,14 +4038,15 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
 				return err
 			}
-			path, err := m.rdb.Get(ctx, m.symKey(srcIno)).Result()
+			path, err := tx.Get(ctx, m.symKey(srcIno)).Result()
 			if err != nil {
 				return err
 			}
-			return m.rdb.Set(ctx, m.symKey(*dstIno), path, 0).Err()
+			tx.Set(ctx, m.symKey(*dstIno), path, 0)
+			return nil
 		}, m.symKey(srcIno))
 
-	case TypeBlockDev, TypeCharDev, TypeFIFO, TypeSocket:
+	default:
 		err = m.txn(ctx, func(tx *redis.Tx) error {
 			var srcAttr Attr
 			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
@@ -4058,6 +4055,9 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true)
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno))
 	}
+	newSpace := align4K(0)
+	m.updateStats(newSpace, 1)
+	m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
 	atomic.AddUint64(count, 1)
 	return errno(err)
 }
@@ -4104,31 +4104,23 @@ func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAtt
 		return syscall.EEXIST
 	}
 
-	if err = tx.Set(ctx, m.inodeKey(*dstIno), m.marshal(srcAttr), 0).Err(); err != nil {
-		return err
-	}
-
 	// copy xattr
 	srcXattr, err := tx.HGetAll(ctx, m.xattrKey(srcIno)).Result()
 	if err != nil {
 		return err
 	}
-	if len(srcXattr) > 0 {
-		if err = tx.HMSet(ctx, m.xattrKey(*dstIno), srcXattr).Err(); err != nil {
-			return err
-		}
-	}
 
-	if attach {
-		// set edge
-		if err := tx.HSet(ctx, m.entryKey(dstParentIno), dstName, m.packEntry(srcAttr.Typ, *dstIno)).Err(); err != nil {
-			return err
+	_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.Set(ctx, m.inodeKey(*dstIno), m.marshal(srcAttr), 0)
+		if len(srcXattr) > 0 {
+			pipe.HMSet(ctx, m.xattrKey(*dstIno), srcXattr)
 		}
-		newSpace := align4K(0)
-		tx.IncrBy(ctx, m.usedSpaceKey(), newSpace)
-		tx.Incr(ctx, m.totalInodesKey())
-		m.updateStats(newSpace, 1)
-		m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
-	}
-	return nil
+		if attach {
+			tx.HSet(ctx, m.entryKey(dstParentIno), dstName, m.packEntry(srcAttr.Typ, *dstIno))
+			tx.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
+			tx.Incr(ctx, m.totalInodesKey())
+		}
+		return nil
+	})
+	return err
 }

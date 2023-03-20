@@ -30,16 +30,28 @@ import (
 
 func cmdClone() *cli.Command {
 	return &cli.Command{
-		Name:   "clone",
-		Action: clone,
+		Name:      "clone",
+		Action:    clone,
+		Usage:     "clone a file or directory without copying the underlying data",
+		ArgsUsage: "SRC DST",
+		Category:  "TOOL",
+		Description: `
+This command can clone a file or directory without copying the underlying data,similar to the cp command but very fast.
+Examples:
+# Clone a file
+$ juicefs clone /mnt/jfs/file1 /mnt/jfs/file2
+
+# Clone a directory
+$ juicefs clone /mnt/jfs/dir1 /mnt/jfs/dir2
+
+# Clone with preserving the uid, gid, and mode of the file
+$ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "preserve",
 				Aliases: []string{"p"},
 				Usage:   "preserve the uid, gid, and mode of the file"},
 		},
-		Category:    "TOOL",
-		Description: `This command can clone a file or directory without copying the underlying data.`,
 	}
 }
 
@@ -63,12 +75,14 @@ func clone(ctx *cli.Context) error {
 	if strings.HasSuffix(dst, "/") {
 		dst = filepath.Join(dst, filepath.Base(srcPath))
 	}
-	if _, err := os.Stat(dst); err == nil || !os.IsNotExist(err) {
+	if _, err := os.Stat(dst); err == nil {
 		return fmt.Errorf("%s already exists", dst)
+	} else if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("stat %s: %s", dst, err)
 	}
 	dstAbsPath, err := filepath.Abs(dst)
 	if err != nil {
-		return fmt.Errorf("abs of %s: %s", dstAbsPath, err)
+		return fmt.Errorf("abs of %s: %s", dst, err)
 	}
 	dstParent := filepath.Dir(dstAbsPath)
 	dstName := filepath.Base(dstAbsPath)

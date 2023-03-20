@@ -3094,6 +3094,8 @@ func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 	if eno = m.doGetAttr(ctx, srcIno, srcAttr); eno != 0 {
 		return eno
 	}
+	// total should start from 1
+	*total = 1
 	var dstIno Ino
 	var err error
 	var cloneEno syscall.Errno
@@ -3175,13 +3177,11 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 	var err error
 	switch srcType {
 	case TypeDirectory:
-		var srcNlink uint32
+		var srcAttr Attr
 		if err = m.txn(func(tx *kvTxn) error {
-			var srcAttr Attr
 			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
 				return eno
 			}
-			srcNlink = srcAttr.Nlink
 			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach); err != nil {
 				return err
 			}
@@ -3258,14 +3258,10 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 		}
 		wg.Wait()
 		// reset nlink
-		if attach && countDir+2 != srcNlink {
+		if attach && countDir+2 != srcAttr.Nlink {
 			err = m.txn(func(tx *kvTxn) error {
-				var dstAttr Attr
-				if eno := m.doGetAttr(ctx, *dstIno, &dstAttr); eno != 0 {
-					return eno
-				}
-				dstAttr.Nlink = countDir + 2
-				tx.set(m.inodeKey(*dstIno), m.marshal(&dstAttr))
+				srcAttr.Nlink = countDir + 2
+				tx.set(m.inodeKey(*dstIno), m.marshal(&srcAttr))
 				return nil
 			}, *dstIno)
 		}
@@ -3326,7 +3322,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			return nil
 		}, srcIno)
 
-	case TypeBlockDev, TypeCharDev, TypeFIFO, TypeSocket:
+	default:
 		err = m.txn(func(tx *kvTxn) error {
 			var srcAttr Attr
 			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
