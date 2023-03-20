@@ -335,6 +335,25 @@ func (m *kvMeta) parseDirStat(buf []byte) *dirStat {
 	return &dirStat{int64(b.Get64()), int64(b.Get64()), int64(b.Get64())}
 }
 
+func (m *kvMeta) packDirQuota(q *Quota) []byte {
+	b := utils.NewBuffer(32)
+	b.Put64(uint64(q.MaxSpace))
+	b.Put64(uint64(q.MaxInodes))
+	b.Put64(uint64(q.UsedSpace))
+	b.Put64(uint64(q.UsedInodes))
+	return b.Bytes()
+}
+
+func (m *kvMeta) parseDirQuota(buf []byte) *Quota {
+	b := utils.FromBuffer(buf)
+	return &Quota{
+		MaxSpace:   int64(b.Get64()),
+		MaxInodes:  int64(b.Get64()),
+		UsedSpace:  int64(b.Get64()),
+		UsedInodes: int64(b.Get64()),
+	}
+}
+
 func (m *kvMeta) get(key []byte) ([]byte, error) {
 	var value []byte
 	err := m.client.txn(func(tx *kvTxn) error {
@@ -2601,13 +2620,109 @@ func (m *kvMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-func (m *kvMeta) HandleQuota(ctx Context, cmd uint8, path string, quota *[]*Quota) error {
-	return nil
+func (m *kvMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]*Quota) error {
+	var inode Ino
+	if cmd != QuotaList {
+		if st := m.resolve(ctx, dpath, &inode); st != 0 {
+			return st
+		}
+		if isTrash(inode) {
+			return errors.New("no quota for any trash directory")
+		}
+	}
+
+	var err error
+	switch cmd {
+	case QuotaSet:
+		quota := (*quotas)[0]
+		err = m.txn(func(tx *kvTxn) error {
+			rawQ := tx.get(m.dirQuotaKey(inode))
+			var q Quota
+			if len(rawQ) == 32 {
+				q = *m.parseDirQuota(rawQ)
+			}
+			if quota.MaxSpace < 0 {
+				quota.MaxSpace = q.MaxSpace
+			}
+			if quota.MaxInodes < 0 {
+				quota.MaxInodes = q.MaxInodes
+			}
+			if q.MaxSpace == quota.MaxSpace && q.MaxInodes == quota.MaxInodes {
+				return nil // nothing to update
+			}
+			logger.Infof("Update quota of %s from (%d, %d) to (%d, %d)", dpath, q.MaxSpace, q.MaxInodes, quota.MaxSpace, quota.MaxInodes)
+			q.MaxSpace = quota.MaxSpace
+			q.MaxInodes = quota.MaxInodes
+			tx.set(m.dirQuotaKey(inode), m.packDirQuota(&q))
+			return nil
+		}, inode)
+	case QuotaGet:
+		quota := (*quotas)[0]
+		var rawQ []byte
+		rawQ, err = m.get(m.dirQuotaKey(inode))
+		// rawQ, err = m.rdb.HGet(ctx, m.dirQuotasKey(), field).Bytes()
+		if err != nil {
+			return err
+		}
+		if len(rawQ) == 0 {
+			err = errors.New("no quota")
+			break
+		}
+		q := m.parseDirQuota(rawQ)
+		quota.MaxSpace = q.MaxSpace
+		quota.MaxInodes = q.MaxInodes
+		quota.UsedSpace = q.UsedSpace
+		quota.UsedInodes = q.UsedInodes
+	case QuotaDel:
+		err = m.txn(func(tx *kvTxn) error {
+			tx.delete(m.dirQuotaKey(inode))
+			return nil
+		})
+	case QuotaList:
+		*quotas = (*quotas)[:0]
+		quotaMap, err := m.doLoadQuotas(ctx)
+		if err != nil {
+			return err
+		}
+		for _, quota := range quotaMap {
+			*quotas = append(*quotas, quota)
+		}
+	default: // FIXME: QuotaCheck
+		err = fmt.Errorf("invalid quota command: %d", cmd)
+	}
+	return err
 }
 
-func (m *kvMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) { return nil, nil }
+func (m *kvMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
+	pairs, err := m.scanValues(m.fmtKey("QD"), -1, nil)
+	if err != nil {
+		return nil, err
+	}
+	quotaMap := make(map[Ino]*Quota, len(pairs))
+	for k, v := range pairs {
+		inode := m.decodeInode([]byte(k[2:])) // skip "QD"
+		quota := m.parseDirQuota(v)
+		quota.Inode = inode
+		quotaMap[inode] = quota
+	}
+	return quotaMap, nil
+}
 
-func (m *kvMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error { return nil }
+func (m *kvMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error {
+	key := m.dirQuotaKey(inode)
+	return m.txn(func(tx *kvTxn) error {
+		rawQ := tx.get(key)
+		if len(rawQ) == 0 {
+			logger.Warnf("No quota for inode %d, skip flushing", inode)
+			return nil
+		}
+		q := m.parseDirQuota(rawQ)
+		q.UsedSpace += space
+		q.UsedInodes += inodes
+		tx.set(key, m.packDirQuota(q))
+		return nil
+	}, inode)
+}
 
 func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {
 	if m.snap != nil {
