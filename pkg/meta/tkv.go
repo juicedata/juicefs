@@ -3127,7 +3127,7 @@ func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 
 				newSpace := align4K(0)
 				m.updateStats(newSpace, 1)
-				m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
+				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
 
 				// update parent nlink
 				dstParentAttr := &Attr{}
@@ -3275,7 +3275,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			}
 			// copy chunks
 			if srcAttr.Length != 0 {
-				if m.checkQuota(int64(srcAttr.Length), 0) {
+				if m.checkQuota(align4K(srcAttr.Length), 0) {
 					return syscall.ENOSPC
 				}
 				vals := make(map[string][]byte)
@@ -3304,7 +3304,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 					}
 				}
 			}
-			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length), int64(srcAttr.Length))
+			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length), align4K(srcAttr.Length))
 			return nil
 		}, srcIno)
 	case TypeSymlink:

@@ -3851,7 +3851,7 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 				tx.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 				tx.Incr(ctx, m.totalInodesKey())
 				m.updateStats(newSpace, 1)
-				m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
+				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
 
 				// update parent nlink
 				dstParentAttr := &Attr{}
@@ -3993,7 +3993,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 			}
 			// copy chunks
 			if srcAttr.Length != 0 {
-				if m.checkQuota(int64(srcAttr.Length), 0) {
+				if m.checkQuota(align4K(srcAttr.Length), 0) {
 					return syscall.ENOSPC
 				}
 				p := tx.Pipeline()
@@ -4024,7 +4024,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 					return errno(err)
 				}
 			}
-			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length), int64(srcAttr.Length))
+			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length), align4K(srcAttr.Length))
 			return nil
 		}, m.inodeKey(srcIno), m.xattrKey(srcIno))
 	case TypeSymlink:
