@@ -1216,6 +1216,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			if _type == TypeDirectory {
 				field := strconv.FormatUint(uint64(ino), 10)
 				pipe.HSet(ctx, m.dirUsedInodesKey(), field, "0")
+				pipe.HSet(ctx, m.dirDataLengthKey(), field, "0")
 				pipe.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
@@ -1445,6 +1446,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string) syscall.Errno 
 			}
 
 			field := strconv.FormatUint(uint64(inode), 10)
+			pipe.HDel(ctx, m.dirDataLengthKey(), field)
 			pipe.HDel(ctx, m.dirUsedSpaceKey(), field)
 			pipe.HDel(ctx, m.dirUsedInodesKey(), field)
 			return nil
