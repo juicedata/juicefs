@@ -3617,6 +3617,11 @@ func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
 				return eno
 			}
+			return errno(m.txn(func(s *xorm.Session) error {
+				s.Delete(&node{Inode: dstIno})
+				s.Delete(&xattr{Inode: dstIno})
+				return nil
+			}))
 		}
 	} else {
 		cloneEno = m.cloneEntry(ctx, srcIno, srcAttr.Typ, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, true, concurrent)

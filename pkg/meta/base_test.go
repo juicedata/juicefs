@@ -2109,9 +2109,9 @@ func testClone(t *testing.T, m Meta) {
 		case *redisMeta:
 			removedItem = append(removedItem, m.inodeKey(dstEntry.Inode), m.entryKey(dstEntry.Inode), m.xattrKey(dstEntry.Inode), m.symKey(dstEntry.Inode))
 		case *dbMeta:
-			removedItem = append(removedItem, &node{Inode: dstEntry.Inode}, &edge{Inode: dstEntry.Inode}, &xattr{Inode: dstEntry.Inode}, &symlink{Inode: dstEntry.Inode})
+			removedItem = append(removedItem, &node{Inode: dstEntry.Inode}, &edge{Inode: dstEntry.Inode, Parent: dstEntry.Attr.Parent}, &xattr{Inode: dstEntry.Inode}, &symlink{Inode: dstEntry.Inode})
 		case *kvMeta:
-			removedItem = append(removedItem, m.inodeKey(dstEntry.Inode), m.entryKey(dstEntry.Inode, string(dstEntry.Name)), m.xattrKey(dstEntry.Inode, ""), m.symKey(dstEntry.Inode))
+			removedItem = append(removedItem, m.inodeKey(dstEntry.Inode), m.entryKey(dstEntry.Attr.Parent, string(dstEntry.Name)), m.symKey(dstEntry.Inode))
 		}
 	})
 	// check slice ref after clone
@@ -2177,9 +2177,7 @@ func testClone(t *testing.T, m Meta) {
 		m.txn(func(tx *kvTxn) error {
 			for _, key := range removedItem {
 				if buf := tx.get(key.([]byte)); buf != nil {
-					if _, foundIno := m.parseEntry(buf); foundIno != 0 {
-						t.Fatalf("has keys not removed: %v", removedItem)
-					}
+					t.Fatalf("has keys not removed: %v", removedItem)
 				}
 			}
 			return nil

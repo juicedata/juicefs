@@ -3882,6 +3882,12 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
 				return eno
 			}
+
+			return errno(m.txn(ctx, func(tx *redis.Tx) error {
+				tx.Del(ctx, m.inodeKey(dstIno))
+				tx.Del(ctx, m.xattrKey(dstIno))
+				return nil
+			}, m.inodeKey(dstIno), m.xattrKey(dstIno)))
 		}
 	} else {
 		cloneEno = m.cloneEntry(ctx, srcIno, srcAttr.Typ, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, true, concurrent)
