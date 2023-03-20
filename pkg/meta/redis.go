@@ -3292,7 +3292,7 @@ func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]
 			if maxSpace == uint64(quota.MaxSpace) && maxInodes == uint64(quota.MaxInodes) || quota.MaxSpace < 0 && quota.MaxInodes < 0 {
 				return nil // nothing to update
 			}
-			_, err = tx.HSet(ctx, m.dirQuotasKey(), field, m.packQuota(maxSpace, maxInodes)).Result()
+			_, err = tx.HSet(ctx, m.dirQuotasKey(), field, m.packQuota(uint64(quota.MaxSpace), uint64(quota.MaxInodes))).Result()
 			return err
 		}, m.dirQuotasKey())
 	case QuotaGet:
@@ -3360,7 +3360,6 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 				logger.Errorf("invalid quota: %s=%s", key, val)
 				continue
 			}
-
 			maxSpace, maxInodes := m.parseQuota(val)
 			usedSpace, err := m.rdb.HGet(ctx, m.dirRecUsedSpaceKey(), key).Int64()
 			if err != nil && err != redis.Nil {
