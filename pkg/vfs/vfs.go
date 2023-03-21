@@ -927,6 +927,7 @@ type VFS struct {
 	handlersGause  prometheus.GaugeFunc
 	usedBufferSize prometheus.GaugeFunc
 	storeCacheSize prometheus.GaugeFunc
+	readBufferUsed prometheus.GaugeFunc
 	registry       *prometheus.Registry
 }
 
@@ -955,7 +956,7 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	}
 
 	go v.cleanupModified()
-	initVFSMetrics(v, writer, registerer)
+	initVFSMetrics(v, writer, reader, registerer)
 	return v
 }
 
@@ -992,7 +993,7 @@ func (v *VFS) cleanupModified() {
 	}
 }
 
-func initVFSMetrics(v *VFS, writer DataWriter, registerer prometheus.Registerer) {
+func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer prometheus.Registerer) {
 	if registerer == nil {
 		return
 	}
@@ -1022,9 +1023,19 @@ func initVFSMetrics(v *VFS, writer DataWriter, registerer prometheus.Registerer)
 		}
 		return 0.0
 	})
+	v.readBufferUsed = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "used_read_buffer_size_bytes",
+		Help: "size of currently used buffer for read",
+	}, func() float64 {
+		if dr, ok := reader.(*dataReader); ok {
+			return float64(dr.readBufferUsed())
+		}
+		return 0.0
+	})
 	_ = registerer.Register(v.handlersGause)
 	_ = registerer.Register(v.usedBufferSize)
 	_ = registerer.Register(v.storeCacheSize)
+	_ = registerer.Register(v.readBufferUsed)
 }
 
 func InitMetrics(registerer prometheus.Registerer) {
