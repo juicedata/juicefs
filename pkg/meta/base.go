@@ -153,7 +153,8 @@ type baseMeta struct {
 	dirStats     map[Ino]dirStat
 	*fsStat
 
-	dirMu      sync.RWMutex   // protect dirParents & dirQuotas
+	parentMu   sync.Mutex     // protect dirParents
+	quotaMu    sync.RWMutex   // protect dirQuotas
 	dirParents map[Ino]Ino    // directory inode -> parent inode
 	dirQuotas  map[Ino]*Quota // directory inode -> quota
 
@@ -579,7 +580,7 @@ func (m *baseMeta) GetDirRecStat(ctx Context, inode Ino) (space, inodes int64, e
 func (m *baseMeta) loadQuotas() {
 	quotas, err := m.en.doLoadQuotas(Background)
 	if err == nil {
-		m.dirMu.Lock()
+		m.quotaMu.Lock()
 		for ino := range m.dirQuotas {
 			if _, ok := quotas[ino]; !ok {
 				logger.Infof("Quota for inode %d is deleted", ino)
@@ -592,7 +593,7 @@ func (m *baseMeta) loadQuotas() {
 				m.dirQuotas[ino] = q
 			}
 		}
-		m.dirMu.Unlock()
+		m.quotaMu.Unlock()
 
 		// skip lock since I'm the only one updating the m.dirQuotas
 		for ino, q := range quotas {
@@ -608,9 +609,9 @@ func (m *baseMeta) loadQuotas() {
 }
 
 func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
-	m.dirMu.RLock()
+	m.parentMu.Lock()
 	parent, ok := m.dirParents[inode]
-	m.dirMu.RUnlock()
+	m.parentMu.Unlock()
 	if ok {
 		return parent, 0
 	}
@@ -625,9 +626,9 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bo
 	var st syscall.Errno
 	for {
 		// FIXME: reduce locking
-		m.dirMu.RLock()
+		m.quotaMu.RLock()
 		q = m.dirQuotas[inode]
-		m.dirMu.RUnlock()
+		m.quotaMu.RUnlock()
 		if q != nil && q.check(space, inodes) {
 			return true
 		}
@@ -647,9 +648,9 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 	var st syscall.Errno
 	for {
 		// FIXME: reduce locking
-		m.dirMu.RLock()
+		m.quotaMu.RLock()
 		q = m.dirQuotas[inode]
-		m.dirMu.RUnlock()
+		m.quotaMu.RUnlock()
 		if q != nil {
 			q.update(space, inodes)
 		}
@@ -668,7 +669,7 @@ func (m *baseMeta) flushQuotas() {
 	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
-		m.dirMu.RLock()
+		m.quotaMu.RLock()
 		for ino, q := range m.dirQuotas {
 			newSpace = atomic.SwapInt64(&q.newSpace, 0)
 			newInodes = atomic.SwapInt64(&q.newInodes, 0)
@@ -676,14 +677,14 @@ func (m *baseMeta) flushQuotas() {
 				quotas[ino] = &Quota{newSpace: newSpace, newInodes: newInodes}
 			}
 		}
-		m.dirMu.RUnlock()
+		m.quotaMu.RUnlock()
 		// FIXME: merge
 		for ino, q := range quotas {
 			if err := m.en.doFlushQuota(Background, ino, q.newSpace, q.newInodes); err != nil {
 				logger.Warnf("Flush quota of inode %d: %s", ino, err)
-				m.dirMu.RLock()
+				m.quotaMu.RLock()
 				cur := m.dirQuotas[ino]
-				m.dirMu.RUnlock()
+				m.quotaMu.RUnlock()
 				if cur != nil {
 					cur.update(q.newSpace, q.newInodes)
 				}
@@ -837,9 +838,9 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		}
 	}
 	if st == 0 && attr.Typ == TypeDirectory && !isTrash(parent) {
-		m.dirMu.Lock()
+		m.parentMu.Lock()
 		m.dirParents[*inode] = parent
-		m.dirMu.Unlock()
+		m.parentMu.Unlock()
 	}
 	return st
 }
@@ -981,9 +982,9 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	if err == 0 {
 		m.of.Update(inode, attr)
 		if attr.Typ == TypeDirectory && inode != RootInode {
-			m.dirMu.Lock()
+			m.parentMu.Lock()
 			m.dirParents[inode] = attr.Parent
-			m.dirMu.Unlock()
+			m.parentMu.Unlock()
 		}
 	}
 	return err
@@ -1055,9 +1056,9 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
 	st := m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 	if st == 0 {
-		m.dirMu.Lock()
+		m.parentMu.Lock()
 		m.dirParents[*inode] = parent
-		m.dirMu.Unlock()
+		m.parentMu.Unlock()
 	}
 	return st
 }
@@ -1164,9 +1165,9 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	if st == 0 {
 		m.updateDirStat(ctx, parent, 0, -align4K(0), -1)
 		if !isTrash(parent) {
-			m.dirMu.Lock()
+			m.parentMu.Lock()
 			delete(m.dirParents, inode)
-			m.dirMu.Unlock()
+			m.parentMu.Unlock()
 		}
 		m.updateDirQuota(ctx, parent, -align4K(0), -1)
 	}
@@ -1232,9 +1233,9 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		// FIXME: dst exists and is replaced or exchanged
 		m.updateDirStat(ctx, parentSrc, -int64(diffLengh), -align4K(diffLengh), -1)
 		m.updateDirStat(ctx, parentDst, int64(diffLengh), align4K(diffLengh), 1)
-		m.dirMu.Lock()
+		m.parentMu.Lock()
 		m.dirParents[*inode] = parentDst
-		m.dirMu.Unlock()
+		m.parentMu.Unlock()
 		if !isTrash(parentSrc) {
 			m.updateDirQuota(ctx, parentSrc, -space, -inodes)
 		}
