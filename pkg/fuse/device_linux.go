@@ -98,7 +98,7 @@ func grantAccess() error {
 		}
 
 		if (parts[0] == "c" || parts[0] == "a") && (parts[1] == "10:229" || parts[1] == "*:*") && parts[2] == "rwm" {
-			logger.Debug("fuse is already allowed")
+			logger.Debug("/dev/fuse is already granted")
 			// fuse is already allowed
 			return nil
 		}
@@ -114,5 +114,6 @@ func grantAccess() error {
 	if err != nil {
 		return errors.Wrapf(err, "write %s to %s", content, deviceAllowPath)
 	}
+	logger.Debug("/dev/fuse is granted")
 	return nil
 }
