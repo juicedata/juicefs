@@ -112,6 +112,14 @@ var (
 	failed  = "failed"
 )
 
+type warnError struct {
+	e error
+}
+
+func (w warnError) Error() string {
+	return w.e.Error()
+}
+
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
 	for _, name := range []string{"big-object-size", "small-object-size", "block-size", "small-objects", "threads"} {
@@ -592,12 +600,16 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		if err := fn(blob); err == utils.ENOTSUP {
 			r = nspt
 		} else if err != nil {
+			color := RED
+			if _, ok := err.(warnError); ok {
+				color = YELLOW
+			}
 			r = err.Error()
 			if len(r) > 45 {
 				r = r[:45] + "..."
 			}
 			if colorful {
-				r = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, RED, r, RESET_SEQ)
+				r = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, color, r, RESET_SEQ)
 			}
 			logger.Debug(err.Error())
 		}
@@ -722,11 +734,11 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		}
 		// get the end out of range
 		if d, e := get(blob, key, 4, 2); e != nil || d != "o" {
-			return fmt.Errorf(`failed to get object with the end out of range, expect "o", but got %q, error: %s`, d, e)
+			return warnError{e: fmt.Errorf(`failed to get object with the end out of range, expect "o", but got %q, error: %s`, d, e)}
 		}
 		// get the off out of range
 		if d, e := get(blob, key, 6, 2); e != nil || d != "" {
-			return fmt.Errorf(`failed to get object with the offset out of range, expect "", but got %q, error: %s`, d, e)
+			return warnError{e: fmt.Errorf(`failed to get object with the offset out of range, expect "", but got %q, error: %s`, d, e)}
 		}
 		return nil
 	})
@@ -912,7 +924,13 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		return nil
 	})
 
-	runCase("multipart upload", func(blob object.ObjectStorage) error {
+	runCase("multipart upload", func(blob object.ObjectStorage) (warnErr error) {
+		defer func() {
+			if warnErr != nil && warnErr != utils.ENOTSUP {
+				warnErr = warnError{e: warnErr}
+			}
+		}()
+
 		key := "multi_test_file"
 		if err := blob.CompleteUpload(key, "notExistsUploadId", []*object.Part{}); err != utils.ENOTSUP {
 			defer blob.Delete(key) //nolint:errcheck
@@ -931,6 +949,9 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			pool := make(chan struct{}, 4)
 			var wg sync.WaitGroup
 			for i := 1; i <= total; i++ {
+				if warnErr != nil {
+					return warnErr
+				}
 				pool <- struct{}{}
 				wg.Add(1)
 				num := i
@@ -941,45 +962,53 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 					}()
 					parts[num-1], err = blob.UploadPart(key, upload.UploadID, num, content[num-1])
 					if err != nil {
-						logger.Fatalf("multipart upload error: %v", err)
+						warnErr = fmt.Errorf("multipart upload error: %v", err)
 					}
 				}()
 			}
 			wg.Wait()
+			if warnErr != nil {
+				return warnErr
+			}
 			// overwrite the first part
 			firstPartContent := append(getMockData(seed, 0), getMockData(seed, 0)...)
 			if parts[0], err = blob.UploadPart(key, upload.UploadID, 1, firstPartContent); err != nil {
-				logger.Fatalf("multipart upload error: %v", err)
+				return fmt.Errorf("multipart upload error: %v", err)
 			}
 			content[0] = firstPartContent
 
 			// overwrite the last part
 			lastPartContent := []byte("hello")
 			if parts[total-1], err = blob.UploadPart(key, upload.UploadID, total, lastPartContent); err != nil {
-				logger.Fatalf("multipart upload error: %v", err)
+				return fmt.Errorf("multipart upload error: %v", err)
 			}
 			content[total-1] = lastPartContent
 
 			if err = blob.CompleteUpload(key, upload.UploadID, parts); err != nil {
-				logger.Fatalf("failed to complete multipart upload: %v", err)
+				return fmt.Errorf("failed to complete multipart upload: %v", err)
 			}
 			r, err := blob.Get(key, 0, -1)
 			if err != nil {
-				logger.Fatalf("failed to get multipart upload file: %v", err)
+				return fmt.Errorf("failed to get multipart upload file: %v", err)
 			}
 			cnt, err := io.ReadAll(r)
 			if err != nil {
-				logger.Fatalf("failed to get multipart upload file: %v", err)
+				return fmt.Errorf("failed to get multipart upload file: %v", err)
 			}
 			if !bytes.Equal(cnt, bytes.Join(content, nil)) {
-				logger.Fatal("the content of the multipart upload file is incorrect")
+				return fmt.Errorf("the content of the multipart upload file is incorrect")
 			}
 			return nil
 		}
 		return utils.ENOTSUP
 	})
 
-	funFSCase("change owner/group", func() error {
+	funFSCase("change owner/group", func() (warnErr error) {
+		defer func() {
+			if warnErr != nil {
+				warnErr = warnError{e: warnErr}
+			}
+		}()
 		if (strings.HasPrefix(blob.String(), "file://") || strings.HasPrefix(blob.String(), "jfs://")) && os.Getuid() != 0 {
 			return errors.New("root required")
 		}
@@ -999,7 +1028,12 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		return nil
 	})
 
-	funFSCase("change permission", func() error {
+	funFSCase("change permission", func() (warnErr error) {
+		defer func() {
+			if warnErr != nil {
+				warnErr = warnError{e: warnErr}
+			}
+		}()
 		if err := fi.Chmod(key, 0777); err != nil {
 			return err
 		}
@@ -1013,7 +1047,12 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		return nil
 	})
 
-	funFSCase("change mtime", func() error {
+	funFSCase("change mtime", func() (warnErr error) {
+		defer func() {
+			if warnErr != nil {
+				warnErr = warnError{e: warnErr}
+			}
+		}()
 		mtime := time.Now().Add(-10 * time.Minute)
 		if err := fi.Chtimes(key, mtime); err != nil {
 			return fmt.Errorf("failed to chtimes %s", err)
