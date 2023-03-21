@@ -2304,23 +2304,27 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	return nil
 }
 
-func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
-	stat, err := m.calcDirStat(ctx, ino)
-	if err != nil {
-		return nil, err
+func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
+	stat, st := m.calcDirStat(ctx, ino)
+	if st != 0 {
+		return nil, st
 	}
-	err = m.txn(func(s *xorm.Session) error {
-		_, err := s.Insert(&dirStats{ino, stat.length, stat.space, stat.inodes})
+	err := m.txn(func(s *xorm.Session) error {
+		exist, err := s.Exist(&node{Inode: ino})
+		if err != nil {
+			return err
+		}
+		if !exist {
+			return syscall.ENOENT
+		}
+		_, err = s.Insert(&dirStats{ino, stat.length, stat.space, stat.inodes})
 		if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			// other client synced
 			err = nil
 		}
 		return err
 	})
-	if err != nil {
-		return nil, err
-	}
-	return stat, nil
+	return stat, errno(err)
 }
 
 func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error) {
@@ -2345,9 +2349,9 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, err
 			"dir usage of inode %d is invalid: space %d, inodes %d, try to fix",
 			ino, st.UsedSpace, st.UsedInodes,
 		)
-		stat, err := m.calcDirStat(ctx, ino)
-		if err != nil {
-			return nil, err
+		stat, eno := m.calcDirStat(ctx, ino)
+		if eno != 0 {
+			return nil, eno
 		}
 		st.DataLength, st.UsedSpace, st.UsedInodes = stat.length, stat.space, stat.inodes
 		e := m.txn(func(s *xorm.Session) error {
