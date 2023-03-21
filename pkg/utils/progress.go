@@ -88,6 +88,7 @@ func NewProgress(quiet bool) *Progress {
 
 func (p *Progress) AddCountBar(name string, total int64) *Bar {
 	startTime := time.Now()
+	var speedMsg, usedMsg string
 	b := p.Progress.AddBar(0, // disable triggerComplete
 		mpb.PrependDecorators(
 			decor.Name(name+": ", decor.WCSyncWidth),
@@ -96,23 +97,27 @@ func (p *Progress) AddCountBar(name string, total int64) *Bar {
 		mpb.AppendDecorators(
 			decor.OnComplete(decor.AverageSpeed(0, " %.1f/s", decor.WCSyncWidthR), ""),
 			decor.Any(func(s decor.Statistics) string {
-				var msg string
 				if s.Completed {
+					if speedMsg != "" {
+						return speedMsg
+					}
 					speed := float64(s.Current) / time.Since(startTime).Seconds()
-					msg = fmt.Sprintf(" %.1f/s", speed)
+					speedMsg = fmt.Sprintf(" %.1f/s", speed)
 				}
-				return msg
+				return speedMsg
 			}, decor.WCSyncWidthR),
 			decor.OnComplete(decor.Name(" ETA: ", decor.WCSyncWidthR), ""),
 			decor.OnComplete(
 				decor.AverageETA(decor.ET_STYLE_GO, decor.WCSyncWidthR), "",
 			),
 			decor.Any(func(s decor.Statistics) string {
-				var msg string
 				if s.Completed {
-					msg = " used: " + (time.Since(startTime)).String()
+					if usedMsg != "" {
+						return usedMsg
+					}
+					usedMsg = " used: " + (time.Since(startTime)).String()
 				}
-				return msg
+				return usedMsg
 			}, decor.WCSyncWidthR),
 		),
 	)
