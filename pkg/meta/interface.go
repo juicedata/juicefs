@@ -266,9 +266,17 @@ type Quota struct {
 
 // Returns true if it will exceed the quota limit
 func (q *Quota) check(space, inodes int64) bool {
-	if space > 0 && q.MaxSpace > 0 && q.UsedSpace+atomic.LoadInt64(&q.newSpace)+space > q.MaxSpace ||
-		inodes > 0 && q.MaxInodes > 0 && q.UsedInodes+atomic.LoadInt64(&q.newInodes)+inodes > q.MaxInodes {
-		return true
+	if space > 0 {
+		max := atomic.LoadInt64(&q.MaxSpace)
+		if max > 0 && atomic.LoadInt64(&q.UsedSpace)+atomic.LoadInt64(&q.newSpace)+space > max {
+			return true
+		}
+	}
+	if inodes > 0 {
+		max := atomic.LoadInt64(&q.MaxInodes)
+		if max > 0 && atomic.LoadInt64(&q.UsedInodes)+atomic.LoadInt64(&q.newInodes)+inodes > max {
+			return true
+		}
 	}
 	return false
 }

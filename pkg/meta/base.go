@@ -580,19 +580,28 @@ func (m *baseMeta) loadQuotas() {
 	quotas, err := m.en.doLoadQuotas(Background)
 	if err == nil {
 		m.dirMu.Lock()
-		for ino, q := range quotas {
-			logger.Infof("Load quotas got %d -> %+v", ino, q)
-			quota := m.dirQuotas[ino]
-			if quota == nil {
-				m.dirQuotas[ino] = q
-				continue
+		for ino := range m.dirQuotas {
+			if _, ok := quotas[ino]; !ok {
+				logger.Infof("Quota for inode %d is deleted", ino)
+				delete(m.dirQuotas, ino)
 			}
+		}
+		for ino, q := range quotas {
+			logger.Debugf("Load quotas got %d -> %+v", ino, q)
+			if _, ok := m.dirQuotas[ino]; !ok {
+				m.dirQuotas[ino] = q
+			}
+		}
+		m.dirMu.Unlock()
+
+		// skip lock since I'm the only one updating the m.dirQuotas
+		for ino, q := range quotas {
+			quota := m.dirQuotas[ino]
 			atomic.SwapInt64(&quota.MaxSpace, q.MaxSpace)
 			atomic.SwapInt64(&quota.MaxInodes, q.MaxInodes)
 			atomic.SwapInt64(&quota.UsedSpace, q.UsedSpace)
 			atomic.SwapInt64(&quota.UsedInodes, q.UsedInodes)
 		}
-		m.dirMu.Unlock()
 	} else {
 		logger.Warnf("Load quotas: %s", err)
 	}
@@ -605,14 +614,9 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 	if ok {
 		return parent, 0
 	}
-	logger.Warnf("Get directory parent of inode %d: cache miss", inode)
+	logger.Debugf("Get directory parent of inode %d: cache miss", inode)
 	var attr Attr
 	st := m.GetAttr(ctx, inode, &attr)
-	if st == 0 {
-		m.dirMu.Lock()
-		m.dirParents[inode] = attr.Parent
-		m.dirMu.Unlock()
-	}
 	return attr.Parent, st
 }
 
@@ -623,13 +627,10 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bo
 		// FIXME: reduce locking
 		m.dirMu.RLock()
 		q = m.dirQuotas[inode]
-		if q != nil {
-			if exceed := q.check(space, inodes); exceed {
-				m.dirMu.RUnlock()
-				return exceed
-			}
-		}
 		m.dirMu.RUnlock()
+		if q != nil && q.check(space, inodes) {
+			return true
+		}
 		if inode <= RootInode {
 			break
 		}
@@ -648,10 +649,10 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 		// FIXME: reduce locking
 		m.dirMu.RLock()
 		q = m.dirQuotas[inode]
+		m.dirMu.RUnlock()
 		if q != nil {
 			q.update(space, inodes)
 		}
-		m.dirMu.RUnlock()
 		if inode <= RootInode {
 			break
 		}
