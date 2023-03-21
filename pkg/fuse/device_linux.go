@@ -24,6 +24,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path"
 	"strings"
 	"syscall"
 
@@ -49,9 +50,10 @@ func grantAccess() error {
 	if err != nil {
 		return errors.Wrapf(err, "open %s", cgroupPath)
 	}
+	defer cgroupFile.Close()
 
 	cgroupScanner := bufio.NewScanner(cgroupFile)
-	var deviceCgroupPath string
+	var deviceCgroup string
 	for cgroupScanner.Scan() {
 		if err := cgroupScanner.Err(); err != nil {
 			return errors.Wrap(err, "read cgroup file")
@@ -65,24 +67,52 @@ func grantAccess() error {
 		}
 
 		if parts[1] == "devices" {
-			deviceCgroupPath = parts[2]
+			deviceCgroup = parts[2]
 		}
 	}
 
-	if len(deviceCgroupPath) == 0 {
+	if len(deviceCgroup) == 0 {
 		return errors.Errorf("fail to find device cgroup")
 	}
 
-	deviceCgroupPath = "/sys/fs/cgroup/devices" + deviceCgroupPath + "/devices.allow"
-	f, err := os.OpenFile(deviceCgroupPath, os.O_WRONLY, 0)
+	deviceListPath := path.Join("/sys/fs/cgroup/devices" + deviceCgroup + "/devices.list")
+	deviceAllowPath := "/sys/fs/cgroup/devices" + deviceCgroup + "/devices.allow"
+
+	// check if fuse is already allowed
+	deviceListFile, err := os.OpenFile(deviceListPath, os.O_RDONLY, 0)
 	if err != nil {
-		return errors.Wrapf(err, "open %s", deviceCgroupPath)
+		return errors.Wrapf(err, "open %s", deviceListPath)
+	}
+	defer deviceListFile.Close()
+	deviceListScanner := bufio.NewScanner(deviceListFile)
+	for deviceListScanner.Scan() {
+		if err := deviceListScanner.Err(); err != nil {
+			return errors.Wrap(err, "read device list file")
+		}
+		var (
+			text  = deviceListScanner.Text()
+			parts = strings.SplitN(text, " ", 3)
+		)
+		if len(parts) < 3 {
+			return errors.Errorf("invalid device list entry: %q", text)
+		}
+
+		if (parts[0] == "c" || parts[0] == "a") && (parts[1] == "10:229" || parts[1] == "*:*") && parts[2] == "rwm" {
+			logger.Debug("fuse is already allowed")
+			// fuse is already allowed
+			return nil
+		}
+	}
+
+	f, err := os.OpenFile(deviceAllowPath, os.O_WRONLY, 0)
+	if err != nil {
+		return errors.Wrapf(err, "open %s", deviceAllowPath)
 	}
 	// 10, 229 according to https://www.kernel.org/doc/Documentation/admin-guide/devices.txt
 	content := "c 10:229 rwm"
 	_, err = f.WriteString(content)
 	if err != nil {
-		return errors.Wrapf(err, "write %s to %s", content, deviceCgroupPath)
+		return errors.Wrapf(err, "write %s to %s", content, deviceAllowPath)
 	}
 	return nil
 }
