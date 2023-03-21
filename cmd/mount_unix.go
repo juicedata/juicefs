@@ -184,6 +184,7 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 	if os.Getuid() == 0 && os.Getpid() != 1 {
 		disableUpdatedb()
 	}
+
 	conf := v.Conf
 	conf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
 	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
