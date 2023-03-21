@@ -811,8 +811,10 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	var khash = fnv.New32()
 	_, _ = khash.Write([]byte(keys[0]))
 	h := uint(khash.Sum32())
+
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
+
 	m.txLock(h)
 	defer m.txUnlock(h)
 	// TODO: enable retry for some of idempodent transactions
@@ -3273,28 +3275,26 @@ func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]
 	switch cmd {
 	case QuotaSet:
 		quota := (*quotas)[0]
-		err = m.txn(ctx, func(tx *redis.Tx) error {
-			rawQ, err := tx.HGet(ctx, m.dirQuotasKey(), field).Bytes()
-			if err != nil && err != redis.Nil {
-				return err
-			}
-			var maxSpace, maxInodes uint64
-			if len(rawQ) == 16 {
-				maxSpace, maxInodes = m.parseQuota(rawQ)
-			}
-			if quota.MaxSpace < 0 && err == nil {
-				quota.MaxSpace = int64(maxSpace)
-			}
-			if quota.MaxInodes < 0 && err == nil {
-				quota.MaxInodes = int64(maxInodes)
-			}
-
-			if maxSpace == uint64(quota.MaxSpace) && maxInodes == uint64(quota.MaxInodes) || quota.MaxSpace < 0 && quota.MaxInodes < 0 {
-				return nil // nothing to update
-			}
-			_, err = tx.HSet(ctx, m.dirQuotasKey(), field, m.packQuota(uint64(quota.MaxSpace), uint64(quota.MaxInodes))).Result()
+		rawQ, err := m.rdb.HGet(ctx, m.dirQuotasKey(), field).Bytes()
+		if err != nil && err != redis.Nil {
 			return err
-		})
+		}
+		var maxSpace, maxInodes uint64
+		if len(rawQ) == 16 {
+			maxSpace, maxInodes = m.parseQuota(rawQ)
+		}
+		if quota.MaxSpace < 0 && err == nil {
+			quota.MaxSpace = int64(maxSpace)
+		}
+		if quota.MaxInodes < 0 && err == nil {
+			quota.MaxInodes = int64(maxInodes)
+		}
+
+		if maxSpace == uint64(quota.MaxSpace) && maxInodes == uint64(quota.MaxInodes) || quota.MaxSpace < 0 && quota.MaxInodes < 0 {
+			return nil // nothing to update
+		}
+		_, err = m.rdb.HSet(ctx, m.dirQuotasKey(), field, m.packQuota(uint64(quota.MaxSpace), uint64(quota.MaxInodes))).Result()
+		return err
 	case QuotaGet:
 		quota := (*quotas)[0]
 		var rawQ []byte
