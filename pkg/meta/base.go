@@ -1240,7 +1240,6 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			m.updateDirQuota(ctx, parentSrc, -space, -inodes)
 		}
 		m.updateDirQuota(ctx, parentDst, space, inodes)
-		go m.loadQuotas()
 	}
 	return st
 }
