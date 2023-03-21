@@ -29,31 +29,31 @@ func cmdQuota() *cli.Command {
 		Name:            "quota",
 		Category:        "ADMIN",
 		Usage:           "Manage directory quotas",
-		ArgsUsage:       "META-URL [PATH]",
+		ArgsUsage:       "META-URL",
 		HideHelpCommand: true,
 		Description: `
 Examples:
-$ juicefs quota set redis://localhost /dir1 --inodes 100
-$ juicefs quota get redis://localhost /dir1
-$ juicefs quota del redis://localhost /dir1
+$ juicefs quota set redis://localhost --path /dir1 --capacity 1 --inodes 100
+$ juicefs quota get redis://localhost --path /dir1
+$ juicefs quota del redis://localhost --path /dir1
 $ juicefs quota ls redis://localhost`,
 		Subcommands: []*cli.Command{
 			{
 				Name:      "set",
 				Usage:     "Set quota to a directory",
-				ArgsUsage: "META-URL PATH",
+				ArgsUsage: "META-URL",
 				Action:    quota,
 			},
 			{
 				Name:      "get",
 				Usage:     "Get quota of a directory",
-				ArgsUsage: "META-URL PATH",
+				ArgsUsage: "META-URL",
 				Action:    quota,
 			},
 			{
 				Name:      "del",
 				Usage:     "Delete quota of a directory",
-				ArgsUsage: "META-URL PATH",
+				ArgsUsage: "META-URL",
 				Action:    quota,
 			},
 			{
@@ -65,11 +65,15 @@ $ juicefs quota ls redis://localhost`,
 			{
 				Name:      "check",
 				Usage:     "Check quota consistency of a directory",
-				ArgsUsage: "META-URL PATH",
+				ArgsUsage: "META-URL",
 				Action:    quota,
 			},
 		},
 		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "path",
+				Usage: "full path of the directory within the volume",
+			},
 			&cli.Uint64Flag{
 				Name:  "capacity",
 				Usage: "hard quota of the directory limiting its usage of space in GiB",
@@ -83,13 +87,7 @@ $ juicefs quota ls redis://localhost`,
 }
 
 func quota(c *cli.Context) error {
-	var dpath string
-	if c.Command.Name == "ls" {
-		setup(c, 1)
-	} else {
-		setup(c, 2)
-		dpath = c.Args().Get(1)
-	}
+	setup(c, 1)
 	var cmd uint8
 	switch c.Command.Name {
 	case "set":
@@ -104,6 +102,10 @@ func quota(c *cli.Context) error {
 		cmd = meta.QuotaCheck
 	default:
 		logger.Fatalf("Invalid quota command: %s", c.Command.Name)
+	}
+	dpath := c.String("path")
+	if dpath == "" && cmd != meta.QuotaList {
+		logger.Fatalf("Please specify the directory with `--path <dir>` option")
 	}
 	removePassword(c.Args().Get(0))
 

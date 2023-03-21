@@ -141,8 +141,6 @@ type baseMeta struct {
 	of           *openfiles
 	removedFiles map[Ino]bool
 	compacting   map[uint64]bool
-	dirQuotas    map[Ino]*Quota // directory inode -> quota
-	dirParents   map[Ino]Ino    // directory inode -> parent inode
 	maxDeleting  chan struct{}
 	dslices      chan Slice // slices to delete
 	symlinks     *sync.Map
@@ -150,11 +148,14 @@ type baseMeta struct {
 	reloadCb     []func(*Format)
 	umounting    bool
 	sesMu        sync.Mutex
-	dirMu        sync.RWMutex // protect dirParents & dirQuotas
 
 	dirStatsLock sync.Mutex
 	dirStats     map[Ino]dirStat
 	*fsStat
+
+	dirMu      sync.RWMutex   // protect dirParents & dirQuotas
+	dirParents map[Ino]Ino    // directory inode -> parent inode
+	dirQuotas  map[Ino]*Quota // directory inode -> quota
 
 	freeMu     sync.Mutex
 	freeInodes freeID
@@ -177,13 +178,13 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		of:           newOpenFiles(conf.OpenCache, conf.OpenCacheLimit),
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
-		dirQuotas:    make(map[Ino]*Quota),
-		dirParents:   make(map[Ino]Ino),
 		maxDeleting:  make(chan struct{}, 100),
 		dslices:      make(chan Slice, conf.MaxDeletes*10240),
 		symlinks:     &sync.Map{},
 		fsStat:       new(fsStat),
 		dirStats:     make(map[Ino]dirStat),
+		dirParents:   make(map[Ino]Ino),
+		dirQuotas:    make(map[Ino]*Quota),
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
@@ -1331,18 +1332,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
-	st := m.en.doReaddir(ctx, inode, plus, entries, -1)
-	if st == 0 && !isTrash(inode) {
-		// FIXME: handle massive entries
-		m.dirMu.Lock()
-		for _, e := range (*entries)[2:] {
-			if e.Attr.Typ == TypeDirectory {
-				m.dirParents[e.Inode] = inode
-			}
-		}
-		m.dirMu.Unlock()
-	}
-	return st
+	return m.en.doReaddir(ctx, inode, plus, entries, -1)
 }
 
 func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
