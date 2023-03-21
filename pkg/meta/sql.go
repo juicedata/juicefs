@@ -3577,29 +3577,37 @@ func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 		if eno == 0 {
 			err = m.txn(func(s *xorm.Session) error {
 				// check dst edge again
-				if exist, err = s.ForUpdate().Get(&edge{Parent: dstParentIno, Name: []byte(dstName)}); err != nil {
+				if exist, err = s.Get(&edge{Parent: dstParentIno, Name: []byte(dstName)}); err != nil {
 					return errno(err)
 				} else if exist {
 					return syscall.EEXIST
 				}
+
 				if err = mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: dstIno, Type: TypeDirectory}); err != nil {
+					if utils.IsDuplicateEntryErr(err) {
+						return syscall.EEXIST
+					}
 					return err
 				}
 
+				// update parent nlink
+				var n = node{Inode: dstParentIno}
+				ok, err := s.ForUpdate().Get(&n)
+				if err == nil {
+					if ok {
+						_, err = s.Cols("nlink").Update(&node{Nlink: n.Nlink + 1}, &node{Inode: dstParentIno})
+					} else {
+						err = syscall.ENOENT
+					}
+				}
+				return err
+			}, dstParentIno)
+			if err != nil {
+				cloneEno = errno(err)
+			} else {
 				newSpace := align4K(0)
 				m.updateStats(newSpace, 1)
 				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
-
-				// update parent nlink
-				dstParentAttr := &Attr{}
-				if eno := m.doGetAttr(ctx, dstParentIno, dstParentAttr); eno != 0 {
-					return eno
-				}
-				_, err := s.Cols("nlink").Update(&node{Nlink: dstParentAttr.Nlink + 1}, &node{Inode: dstParentIno})
-				return err
-			})
-			if err != nil {
-				cloneEno = errno(err)
 			}
 		}
 		// delete the dst tree if clone failed
@@ -3641,15 +3649,12 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 	case TypeDirectory:
 		srcNode := node{Inode: srcIno}
 		if err = m.txn(func(s *xorm.Session) error {
-			ok, err := s.ForUpdate().Get(&srcNode)
+			ok, err := s.Get(&srcNode)
 			if err != nil {
 				return err
 			}
 			if !ok {
 				return syscall.ENOENT
-			}
-			if err := m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, attach); err != nil {
-				return err
 			}
 			return m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, attach)
 		}); err != nil {
@@ -3661,8 +3666,7 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			return errno(err)
 		}
 		var entries []*Entry
-		eno := m.doReaddir(ctx, srcIno, 0, &entries, -1)
-		if eno != 0 {
+		if eno := m.doReaddir(ctx, srcIno, 0, &entries, -1); eno != 0 {
 			return eno
 		}
 		atomic.AddUint64(total, uint64(len(entries)))
@@ -3732,7 +3736,7 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 	case TypeFile:
 		srcNode := node{Inode: srcIno}
 		err = m.txn(func(s *xorm.Session) error {
-			ok, err := s.ForUpdate().Get(&srcNode)
+			ok, err := s.Get(&srcNode)
 			if err != nil {
 				return err
 			}
@@ -3776,7 +3780,7 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 	case TypeSymlink:
 		err = m.txn(func(s *xorm.Session) error {
 			srcNode := node{Inode: srcIno}
-			ok, err := s.ForUpdate().Get(&srcNode)
+			ok, err := s.Get(&srcNode)
 			if err != nil {
 				return err
 			}
@@ -3787,7 +3791,7 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 				return err
 			}
 			sym := symlink{Inode: srcIno}
-			if exists, err := s.ForUpdate().Get(&sym); err != nil {
+			if exists, err := s.Get(&sym); err != nil {
 				return err
 			} else if !exists {
 				return syscall.ENOENT
@@ -3799,7 +3803,7 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 	default:
 		err = m.txn(func(s *xorm.Session) error {
 			srcNode := node{Inode: srcIno}
-			ok, err := s.ForUpdate().Get(&srcNode)
+			ok, err := s.Get(&srcNode)
 			if err != nil {
 				return err
 			}
@@ -3855,7 +3859,7 @@ func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNod
 		return syscall.EPERM
 	}
 
-	if exist, err := s.ForUpdate().Get(&edge{Parent: dstParentIno, Name: []byte(dstName)}); err != nil {
+	if exist, err := s.Get(&edge{Parent: dstParentIno, Name: []byte(dstName)}); err != nil {
 		return err
 	} else if exist {
 		return syscall.EEXIST
@@ -3883,9 +3887,7 @@ func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNod
 
 	if attach {
 		// set edge
-		if err := mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: *dstIno, Type: srcNode.Type}); err != nil {
-			return err
-		}
+		return mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: *dstIno, Type: srcNode.Type})
 	}
 	return nil
 }

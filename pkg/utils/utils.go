@@ -29,6 +29,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/mattn/go-sqlite3"
+
 	"github.com/mattn/go-isatty"
 )
 
@@ -213,4 +217,17 @@ func LookupGroup(name string) int {
 	}
 	groups[name] = gid
 	return gid
+}
+
+func IsDuplicateEntryErr(err error) bool {
+	switch e := err.(type) {
+	case *mysql.MySQLError:
+		return e.Number == 1062
+	case *pgconn.PgError:
+		return e.Code == "23505"
+	case sqlite3.Error:
+		return e.Code == sqlite3.ErrConstraint
+	default:
+		return false
+	}
 }
