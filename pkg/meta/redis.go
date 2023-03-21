@@ -808,15 +808,13 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 			panic(fmt.Sprintf("Invalid key %s not starts with prefix %s", k, m.prefix))
 		}
 	}
+	var khash = fnv.New32()
+	_, _ = khash.Write([]byte(keys[0]))
+	h := uint(khash.Sum32())
 	start := time.Now()
 	defer func() { m.txDist.Observe(time.Since(start).Seconds()) }()
-	if len(keys) > 0 {
-		var khash = fnv.New32()
-		_, _ = khash.Write([]byte(keys[0]))
-		h := uint(khash.Sum32())
-		m.txLock(h)
-		defer m.txUnlock(h)
-	}
+	m.txLock(h)
+	defer m.txUnlock(h)
 	// TODO: enable retry for some of idempodent transactions
 	var retryOnFailture = false
 	var lastErr error
