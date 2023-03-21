@@ -517,7 +517,6 @@ func (m *baseMeta) refresh() {
 		} else {
 			logger.Warnf("Get counter %s: %s", totalInodes, err)
 		}
-		// FIXME: in read-only mode, the only quota we care is the one on m.Root
 		m.loadQuotas()
 
 		if m.conf.ReadOnly || m.conf.NoBGJob {
@@ -574,7 +573,7 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parent Ino) bool
 }
 
 func (m *baseMeta) GetDirRecStat(ctx Context, inode Ino) (space, inodes int64, err error) {
-	return 0, 0, nil // TODO
+	return 0, 0, nil // FIXME: use FastGetSummary
 }
 
 func (m *baseMeta) loadQuotas() {
@@ -621,11 +620,31 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 	return attr.Parent, st
 }
 
+func (m *baseMeta) hasDirQuota(ctx Context, inode Ino) bool {
+	var q *Quota
+	var st syscall.Errno
+	for {
+		m.quotaMu.RLock()
+		q = m.dirQuotas[inode]
+		m.quotaMu.RUnlock()
+		if q != nil {
+			return true
+		}
+		if inode <= RootInode {
+			break
+		}
+		if inode, st = m.getDirParent(ctx, inode); st != 0 {
+			logger.Warnf("Get directory parent of inode %d: %s", inode, st)
+			break
+		}
+	}
+	return false
+}
+
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {
 	var q *Quota
 	var st syscall.Errno
 	for {
-		// FIXME: reduce locking
 		m.quotaMu.RLock()
 		q = m.dirQuotas[inode]
 		m.quotaMu.RUnlock()
@@ -647,7 +666,6 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 	var q *Quota
 	var st syscall.Errno
 	for {
-		// FIXME: reduce locking
 		m.quotaMu.RLock()
 		q = m.dirQuotas[inode]
 		m.quotaMu.RUnlock()
@@ -981,7 +999,7 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}
 	if err == 0 {
 		m.of.Update(inode, attr)
-		if attr.Typ == TypeDirectory && inode != RootInode {
+		if attr.Typ == TypeDirectory && inode != RootInode && !isTrash(attr.Parent) {
 			m.parentMu.Lock()
 			m.dirParents[inode] = attr.Parent
 			m.parentMu.Unlock()
@@ -1163,12 +1181,12 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	var inode Ino
 	st := m.en.doRmdir(ctx, parent, name, &inode)
 	if st == 0 {
-		m.updateDirStat(ctx, parent, 0, -align4K(0), -1)
 		if !isTrash(parent) {
 			m.parentMu.Lock()
 			delete(m.dirParents, inode)
 			m.parentMu.Unlock()
 		}
+		m.updateDirStat(ctx, parent, 0, -align4K(0), -1)
 		m.updateDirQuota(ctx, parent, -align4K(0), -1)
 	}
 	return st
@@ -1204,9 +1222,10 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
-	var quotaSrc, quotaDst *Quota
+	quotaSrc := !isTrash(parentSrc) && m.hasDirQuota(ctx, parentSrc)
+	quotaDst := m.hasDirQuota(ctx, parentDst)
 	var space, inodes int64
-	if quotaSrc != nil || quotaDst != nil {
+	if quotaSrc || quotaDst {
 		if st := m.Lookup(ctx, parentSrc, nameSrc, inode, attr); st != 0 {
 			return st
 		}
@@ -1220,26 +1239,29 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			space, inodes = align4K(attr.Length), 1
 		}
 		// FIXME: dst exists and is replaced or exchanged
-		if quotaDst != nil && quotaDst.check(space, inodes) {
+		if quotaDst && m.checkDirQuota(ctx, parentDst, space, inodes) {
 			return syscall.ENOSPC
 		}
 	}
 	st := m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, attr)
 	if st == 0 {
 		var diffLengh uint64
-		if attr.Typ == TypeFile {
+		if attr.Typ == TypeDirectory {
+			m.parentMu.Lock()
+			m.dirParents[*inode] = parentDst
+			m.parentMu.Unlock()
+		} else if attr.Typ == TypeFile {
 			diffLengh = attr.Length
 		}
 		// FIXME: dst exists and is replaced or exchanged
 		m.updateDirStat(ctx, parentSrc, -int64(diffLengh), -align4K(diffLengh), -1)
 		m.updateDirStat(ctx, parentDst, int64(diffLengh), align4K(diffLengh), 1)
-		m.parentMu.Lock()
-		m.dirParents[*inode] = parentDst
-		m.parentMu.Unlock()
-		if !isTrash(parentSrc) {
+		if quotaSrc {
 			m.updateDirQuota(ctx, parentSrc, -space, -inodes)
 		}
-		m.updateDirQuota(ctx, parentDst, space, inodes)
+		if quotaDst {
+			m.updateDirQuota(ctx, parentDst, space, inodes)
+		}
 	}
 	return st
 }
