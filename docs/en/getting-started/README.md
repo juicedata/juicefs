@@ -149,6 +149,7 @@ If the `myjfs.db` file already exists, delete it first and then execute the foll
 :::
 
 ```shell
+# Replace relevant options with the actual object storage being used
 juicefs format --storage s3 \
     --bucket https://myjfs.s3.us-west-1.amazonaws.com \
     --access-key ABCDEFGHIJKLMNopqXYZ \
@@ -162,10 +163,6 @@ The command above creates a file system using the same database name and file sy
 - `--bucket`: Used to set the Endpoint address of the object storage.
 - `--access-key`: Used to set the Object Storage Access Key ID.
 - `--secret-key`: Used to set the Object Storage Access Key Secret.
-
-:::note
-Please replace the information in the above command with your own object storage information.
-:::
 
 You can mount the file system once it is created.
 
