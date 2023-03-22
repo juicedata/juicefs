@@ -34,6 +34,7 @@ import (
 	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 func cmdObjbench() *cli.Command {
@@ -112,13 +113,7 @@ var (
 	failed  = "failed"
 )
 
-type warnError struct {
-	e error
-}
-
-func (w warnError) Error() string {
-	return w.e.Error()
-}
+type warning error
 
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
@@ -601,7 +596,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			r = nspt
 		} else if err != nil {
 			color := RED
-			if _, ok := err.(warnError); ok {
+			if _, ok := err.(warning); ok {
 				color = YELLOW
 			}
 			r = err.Error()
@@ -656,7 +651,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 				return fmt.Errorf("put object failed: %s", err)
 			}
 			defer blob.Delete(key) //nolint:errcheck
-			return fn()
+			return warning(fn())
 		})
 	}
 
@@ -734,11 +729,11 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		}
 		// get the end out of range
 		if d, e := get(blob, key, 4, 2); e != nil || d != "o" {
-			return warnError{e: fmt.Errorf(`failed to get object with the end out of range, expect "o", but got %q, error: %s`, d, e)}
+			return warning(fmt.Errorf(`failed to get object with the end out of range, expect "o", but got %q, error: %s`, d, e))
 		}
 		// get the off out of range
 		if d, e := get(blob, key, 6, 2); e != nil || d != "" {
-			return warnError{e: fmt.Errorf(`failed to get object with the offset out of range, expect "", but got %q, error: %s`, d, e)}
+			return warning(fmt.Errorf(`failed to get object with the offset out of range, expect "", but got %q, error: %s`, d, e))
 		}
 		return nil
 	})
@@ -924,15 +919,13 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		return nil
 	})
 
-	runCase("multipart upload", func(blob object.ObjectStorage) (warnErr error) {
+	runCase("multipart upload", func(blob object.ObjectStorage) (err error) {
 		defer func() {
-			if warnErr != nil && warnErr != utils.ENOTSUP {
-				warnErr = warnError{e: warnErr}
-			}
+			err = warning(err)
 		}()
 
 		key := "multi_test_file"
-		if err := blob.CompleteUpload(key, "notExistsUploadId", []*object.Part{}); err != utils.ENOTSUP {
+		if err = blob.CompleteUpload(key, "notExistsUploadId", []*object.Part{}); err != utils.ENOTSUP {
 			defer blob.Delete(key) //nolint:errcheck
 			upload, err := blob.CreateMultipartUpload(key)
 			if err != nil {
@@ -946,29 +939,22 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			for i := 0; i < total; i++ {
 				content[i] = getMockData(seed, i)
 			}
-			pool := make(chan struct{}, 4)
-			var wg sync.WaitGroup
+			var eg errgroup.Group
+			eg.SetLimit(4)
 			for i := 1; i <= total; i++ {
-				if warnErr != nil {
-					return warnErr
-				}
-				pool <- struct{}{}
-				wg.Add(1)
 				num := i
-				go func() {
-					defer func() {
-						<-pool
-						wg.Done()
-					}()
+				eg.Go(func() error {
+					var err error
 					parts[num-1], err = blob.UploadPart(key, upload.UploadID, num, content[num-1])
 					if err != nil {
-						warnErr = fmt.Errorf("multipart upload error: %v", err)
+						err = fmt.Errorf("multipart upload error: %s", err)
 					}
-				}()
+					return err
+				})
 			}
-			wg.Wait()
-			if warnErr != nil {
-				return warnErr
+			err = eg.Wait()
+			if err != nil {
+				return err
 			}
 			// overwrite the first part
 			firstPartContent := append(getMockData(seed, 0), getMockData(seed, 0)...)
@@ -1003,12 +989,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		return utils.ENOTSUP
 	})
 
-	funFSCase("change owner/group", func() (warnErr error) {
-		defer func() {
-			if warnErr != nil {
-				warnErr = warnError{e: warnErr}
-			}
-		}()
+	funFSCase("change owner/group", func() error {
 		if (strings.HasPrefix(blob.String(), "file://") || strings.HasPrefix(blob.String(), "jfs://")) && os.Getuid() != 0 {
 			return errors.New("root required")
 		}
@@ -1028,12 +1009,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		return nil
 	})
 
-	funFSCase("change permission", func() (warnErr error) {
-		defer func() {
-			if warnErr != nil {
-				warnErr = warnError{e: warnErr}
-			}
-		}()
+	funFSCase("change permission", func() error {
 		if err := fi.Chmod(key, 0777); err != nil {
 			return err
 		}
@@ -1047,12 +1023,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		return nil
 	})
 
-	funFSCase("change mtime", func() (warnErr error) {
-		defer func() {
-			if warnErr != nil {
-				warnErr = warnError{e: warnErr}
-			}
-		}()
+	funFSCase("change mtime", func() error {
 		mtime := time.Now().Add(-10 * time.Minute)
 		if err := fi.Chtimes(key, mtime); err != nil {
 			return fmt.Errorf("failed to chtimes %s", err)
