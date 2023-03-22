@@ -70,6 +70,8 @@ type engine interface {
 	doCleanupSlices()
 	doCleanupDelayedSlices(edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
+	doFindDetachedNodes(t time.Time) []Ino
+	doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
@@ -448,6 +450,7 @@ func (m *baseMeta) NewSession() error {
 		go m.cleanupDeletedFiles()
 		go m.cleanupSlices()
 		go m.cleanupTrash()
+		go m.cleanupDetachedNodes()
 	}
 	return nil
 }
@@ -1566,6 +1569,17 @@ func (m *baseMeta) cleanupTrash() {
 		} else if ok {
 			go m.doCleanupTrash(false)
 			go m.cleanupDelayedSlices()
+		}
+	}
+}
+
+func (m *baseMeta) cleanupDetachedNodes() {
+	for {
+		utils.SleepWithJitter(time.Hour * 24)
+		for _, inode := range m.en.doFindDetachedNodes(time.Now()) {
+			if eno := m.en.doCleanupDetachedNode(Background, inode); eno != 0 {
+				logger.Errorf("cleanupDetachedNode: remove detached tree (%d) error: %s", inode, eno)
+			}
 		}
 	}
 }

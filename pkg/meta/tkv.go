@@ -185,6 +185,7 @@ All keys:
   SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
   Uiiiiiiii	         data length, space and inodes usage in directory
+  Niiiiiiii	         detached inodes
 */
 
 func (m *kvMeta) inodeKey(inode Ino) []byte {
@@ -237,6 +238,10 @@ func (m *kvMeta) legacySessionKey(sid uint64) []byte {
 
 func (m *kvMeta) dirStatKey(inode Ino) []byte {
 	return m.fmtKey("U", inode)
+}
+
+func (m *kvMeta) detachedKey(inode Ino) []byte {
+	return m.fmtKey("N", inode)
 }
 
 func (m *kvMeta) parseSid(key string) uint64 {
@@ -3145,27 +3150,10 @@ func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 			}
 		}
 		// delete the dst tree if clone failed
-		if eno != 0 || err != nil {
-			// todo: store dstIno and delete it in the background
-			attr := &Attr{}
-			eno := m.doGetAttr(ctx, dstIno, attr)
-			if eno == syscall.ENOENT {
-				return cloneEno
+		if cloneEno != 0 {
+			if eno := m.doCleanupDetachedNode(ctx, dstIno); eno != 0 {
+				logger.Errorf("doCleanupDetachedNode: remove detached tree (%d) error: %s", dstIno, eno)
 			}
-			if eno != 0 {
-				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
-				return eno
-			}
-			rmConcurrent := make(chan int, 10)
-			if eno := m.emptyDir(ctx, dstIno, true, nil, rmConcurrent); eno != 0 {
-				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
-				return eno
-			}
-			return errno(m.txn(func(tx *kvTxn) error {
-				tx.delete(m.inodeKey(dstIno))
-				tx.deleteKeys(m.xattrKey(dstIno, ""))
-				return nil
-			}))
 		}
 	} else {
 		cloneEno = m.cloneEntry(ctx, srcIno, srcAttr.Typ, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, true, concurrent)
@@ -3376,6 +3364,7 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Att
 		}
 	}
 
+	tx.set(m.detachedKey(*dstIno), m.packInt64(time.Now().Unix()))
 	tx.set(m.inodeKey(*dstIno), m.marshal(srcAttr))
 
 	// copy xattr
@@ -3392,4 +3381,43 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Att
 		m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
 	}
 	return nil
+}
+
+func (m *kvMeta) doFindDetachedNodes(t time.Time) []Ino {
+	var detachedNodes []Ino
+	klen := 1 + 8 + 8
+	vals, err := m.scanValues(m.fmtKey("N"), -1, func(k, v []byte) bool {
+		// filter out invalid ones
+		return len(k) == klen && len(v) == 8 && m.parseInt64(v) < t.Unix()
+	})
+	if err != nil {
+		logger.Errorf("Scan detached nodes error: %s", err)
+		return detachedNodes
+	}
+	for k := range vals {
+		detachedNodes = append(detachedNodes, m.decodeInode(utils.FromBuffer([]byte(k)[1:]).Get(8)))
+	}
+	return detachedNodes
+}
+
+func (m *kvMeta) doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno {
+	buf, err := m.get(m.inodeKey(detachedNode))
+	if err != nil {
+		return errno(err)
+	}
+	if buf != nil {
+		rmConcurrent := make(chan int, 10)
+		if eno := m.emptyDir(ctx, detachedNode, true, nil, rmConcurrent); eno != 0 {
+			logger.Errorf("clone: remove tree error rootInode %v", detachedNode)
+			return eno
+		}
+		if err := m.txn(func(tx *kvTxn) error {
+			tx.delete(m.inodeKey(detachedNode))
+			tx.deleteKeys(m.xattrKey(detachedNode, ""))
+			return nil
+		}); err != nil {
+			return errno(err)
+		}
+	}
+	return errno(m.deleteKeys(m.detachedKey(detachedNode)))
 }
