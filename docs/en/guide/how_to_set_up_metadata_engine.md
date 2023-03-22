@@ -16,7 +16,7 @@ JuiceFS is a decoupled structure that separates data and metadata. Metadata can 
 
 ## Redis
 
-JuiceFS requires Redis version 4.0 and above. Redis Cluster is also supported, but in order to avoid transactions across different redis instances, JuiceFS puts all metadata for one file system on a single redis instance.
+JuiceFS requires Redis version 4.0 and above. Redis Cluster is also supported, but in order to avoid transactions across different Redis instances, JuiceFS puts all metadata for one file system on a single Redis instance.
 
 To ensure metadata security, JuiceFS requires [`maxmemory-policy noeviction`](https://redis.io/docs/reference/eviction/), otherwise it will try to set it to `noeviction` when starting JuiceFS, and will print a warning log if it fails. Refer to [Redis Best practices](../administration/metadata/redis_best_practices.md) for more.
 
