@@ -3262,7 +3262,7 @@ func (m *redisMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.E
 	}
 }
 
-func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]*Quota) error {
+func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota) error {
 	var inode Ino
 	if cmd != QuotaList {
 		if st := m.resolve(ctx, dpath, &inode); st != 0 {
@@ -3277,7 +3277,7 @@ func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]
 	field := inode.String()
 	switch cmd {
 	case QuotaSet:
-		quota := (*quotas)[0]
+		quota := quotas[dpath]
 		err = m.txn(ctx, func(tx *redis.Tx) error {
 			rawQ, e := tx.HGet(ctx, m.dirQuotaKey(), field).Bytes()
 			if e != nil && e != redis.Nil {
@@ -3315,7 +3315,7 @@ func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]
 			return e
 		}, m.dirQuotaKey())
 	case QuotaGet:
-		quota := (*quotas)[0]
+		var quota Quota
 		err = m.txn(ctx, func(tx *redis.Tx) error {
 			rawQ, e := tx.HGet(ctx, m.dirQuotaKey(), field).Bytes()
 			if e == redis.Nil {
@@ -3334,6 +3334,9 @@ func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]
 			quota.UsedInodes, e = tx.HGet(ctx, m.dirQuotaUsedInodesKey(), field).Int64()
 			return e
 		})
+		if err == nil {
+			quotas[dpath] = &quota
+		}
 	case QuotaDel:
 		_, err = m.rdb.TxPipelined(ctx, func(pipeline redis.Pipeliner) error {
 			pipeline.HDel(ctx, m.dirQuotaKey(), field)
@@ -3342,12 +3345,17 @@ func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]
 			return nil
 		})
 	case QuotaList:
-		*quotas = (*quotas)[:0]
 		var quotaMap map[Ino]*Quota
 		quotaMap, err = m.doLoadQuotas(ctx)
 		if err == nil {
-			for _, quota := range quotaMap {
-				*quotas = append(*quotas, quota)
+			var p string
+			for ino, quota := range quotaMap {
+				if ps := m.GetPaths(ctx, ino); len(ps) > 0 {
+					p = ps[0]
+				} else {
+					p = fmt.Sprintf("inode:%d", ino)
+				}
+				quotas[p] = quota
 			}
 		}
 	default: // FIXME: QuotaCheck

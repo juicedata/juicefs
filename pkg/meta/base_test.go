@@ -1982,15 +1982,17 @@ func testQuota(t *testing.T, m Meta) {
 	if st := m.Mkdir(ctx, RootInode, "quota", 0755, 0, 0, &parent, &attr); st != 0 {
 		t.Fatalf("Mkdir quota: %s", st)
 	}
-	if err := m.HandleQuota(ctx, QuotaSet, "/quota", &[]*Quota{{MaxSpace: 2 << 30, MaxInodes: 6}}); err != nil {
-		t.Fatalf("HandleQuota set /quota: %s", err)
+	p := "/quota"
+	if err := m.HandleQuota(ctx, QuotaSet, p, map[string]*Quota{p: {MaxSpace: 2 << 30, MaxInodes: 6}}); err != nil {
+		t.Fatalf("HandleQuota set %s: %s", p, err)
 	}
 	m.getBase().loadQuotas()
 	if st := m.Mkdir(ctx, parent, "d1", 0755, 0, 0, &inode, &attr); st != 0 {
 		t.Fatalf("Mkdir quota/d1: %s", st)
 	}
-	if err := m.HandleQuota(ctx, QuotaSet, "/quota/d1", &[]*Quota{{MaxSpace: 1 << 30, MaxInodes: 5}}); err != nil {
-		t.Fatalf("HandleQuota /quota/d1: %s", err)
+	p = "/quota/d1"
+	if err := m.HandleQuota(ctx, QuotaSet, p, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 5}}); err != nil {
+		t.Fatalf("HandleQuota %s: %s", p, err)
 	}
 	m.getBase().loadQuotas()
 	if st := m.Create(ctx, inode, "f1", 0644, 0, 0, nil, &attr); st != 0 {
@@ -2002,8 +2004,9 @@ func testQuota(t *testing.T, m Meta) {
 	if st := m.Mkdir(ctx, parent, "d22", 0755, 0, 0, &inode, &attr); st != 0 {
 		t.Fatalf("Mkdir quota/d2/d22: %s", st)
 	}
-	if err := m.HandleQuota(ctx, QuotaSet, "/quota/d2/d22", &[]*Quota{{MaxSpace: 1 << 30, MaxInodes: 5}}); err != nil {
-		t.Fatalf("HandleQuota /quota/d2/d22: %s", err)
+	p = "/quota/d2/d22"
+	if err := m.HandleQuota(ctx, QuotaSet, p, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 5}}); err != nil {
+		t.Fatalf("HandleQuota %s: %s", p, err)
 	}
 	m.getBase().loadQuotas()
 	// parent -> d2, inode -> d22
@@ -2015,29 +2018,34 @@ func testQuota(t *testing.T, m Meta) {
 	}
 	time.Sleep(time.Second * 5)
 
-	var q Quota
-	if err := m.HandleQuota(ctx, QuotaGet, "/quota", &[]*Quota{&q}); err != nil {
-		t.Fatalf("HandleQuota get /quota: %s", err)
-	} else if q.MaxSpace != 2<<30 || q.MaxInodes != 6 || q.UsedSpace != 6*4<<10 || q.UsedInodes != 6 {
-		t.Fatalf("HandleQuota get /quota: %+v", q)
+	qs := make(map[string]*Quota)
+	p = "/quota"
+	if err := m.HandleQuota(ctx, QuotaGet, p, qs); err != nil {
+		t.Fatalf("HandleQuota get %s: %s", p, err)
+	} else if q := qs[p]; q.MaxSpace != 2<<30 || q.MaxInodes != 6 || q.UsedSpace != 6*4<<10 || q.UsedInodes != 6 {
+		t.Fatalf("HandleQuota get %s: %+v", p, q)
 	}
-	if err := m.HandleQuota(ctx, QuotaGet, "/quota/d1", &[]*Quota{&q}); err != nil {
-		t.Fatalf("HandleQuota get /quota/d1: %s", err)
-	} else if q.MaxSpace != 1<<30 || q.MaxInodes != 5 || q.UsedSpace != 4<<10 || q.UsedInodes != 1 {
-		t.Fatalf("HandleQuota get /quota/d1: %+v", q)
+	delete(qs, p)
+	p = "/quota/d1"
+	if err := m.HandleQuota(ctx, QuotaGet, p, qs); err != nil {
+		t.Fatalf("HandleQuota get %s: %s", p, err)
+	} else if q := qs[p]; q.MaxSpace != 1<<30 || q.MaxInodes != 5 || q.UsedSpace != 4<<10 || q.UsedInodes != 1 {
+		t.Fatalf("HandleQuota get %s: %+v", p, q)
 	}
-	if err := m.HandleQuota(ctx, QuotaGet, "/quota/d2/d22", &[]*Quota{&q}); err != nil {
-		t.Fatalf("HandleQuota get /quota/d2/d22: %s", err)
-	} else if q.MaxSpace != 1<<30 || q.MaxInodes != 5 || q.UsedSpace != 4<<10 || q.UsedInodes != 1 {
-		t.Fatalf("HandleQuota get /quota/d2/d22: %+v", q)
+	delete(qs, p)
+	p = "/quota/d2/d22"
+	if err := m.HandleQuota(ctx, QuotaGet, p, qs); err != nil {
+		t.Fatalf("HandleQuota get %s: %s", p, err)
+	} else if q := qs[p]; q.MaxSpace != 1<<30 || q.MaxInodes != 5 || q.UsedSpace != 4<<10 || q.UsedInodes != 1 {
+		t.Fatalf("HandleQuota get %s: %+v", p, q)
 	}
+	delete(qs, p)
 
-	quotas := []*Quota{}
-	if err := m.HandleQuota(ctx, QuotaList, "", &quotas); err != nil {
+	if err := m.HandleQuota(ctx, QuotaList, "", qs); err != nil {
 		t.Fatalf("HandleQuota list: %s", err)
 	} else {
-		if len(quotas) != 3 {
-			t.Fatalf("HandleQuota list: %d", len(quotas))
+		if len(qs) != 3 {
+			t.Fatalf("HandleQuota list bad result: %d", len(qs))
 		}
 	}
 
@@ -2048,12 +2056,12 @@ func testQuota(t *testing.T, m Meta) {
 		t.Fatalf("HandleQuota del /quota/d2: %s", err)
 	}
 
-	quotas = quotas[:0]
-	if err := m.HandleQuota(ctx, QuotaList, "", &quotas); err != nil {
+	qs = make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaList, "", qs); err != nil {
 		t.Fatalf("HandleQuota list: %s", err)
 	} else {
-		if len(quotas) != 2 {
-			t.Fatalf("HandleQuota list: %d", len(quotas))
+		if len(qs) != 2 {
+			t.Fatalf("HandleQuota list bad result: %d", len(qs))
 		}
 	}
 	m.getBase().loadQuotas()

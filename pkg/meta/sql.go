@@ -3000,7 +3000,7 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]*Quota) error {
+func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota) error {
 	var inode Ino
 	if cmd != QuotaList {
 		if st := m.resolve(ctx, dpath, &inode); st != 0 {
@@ -3014,7 +3014,7 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]*Qu
 	var err error
 	switch cmd {
 	case QuotaSet:
-		quota := (*quotas)[0]
+		quota := quotas[dpath]
 		err = m.txn(func(s *xorm.Session) error {
 			q := dirQuota{Inode: inode}
 			ok, e := s.ForUpdate().Get(&q)
@@ -3043,7 +3043,7 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]*Qu
 			return e
 		})
 	case QuotaGet:
-		quota := (*quotas)[0]
+		var quota Quota
 		err = m.roTxn(func(s *xorm.Session) error {
 			q := dirQuota{Inode: inode}
 			ok, e := s.Get(&q)
@@ -3058,18 +3058,26 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]*Qu
 			}
 			return e
 		})
+		if err == nil {
+			quotas[dpath] = &quota
+		}
 	case QuotaDel:
 		err = m.txn(func(s *xorm.Session) error {
 			_, e := s.Delete(&dirQuota{Inode: inode})
 			return e
 		})
 	case QuotaList:
-		*quotas = (*quotas)[:0]
 		var quotaMap map[Ino]*Quota
 		quotaMap, err = m.doLoadQuotas(ctx)
 		if err == nil {
-			for _, quota := range quotaMap {
-				*quotas = append(*quotas, quota)
+			var p string
+			for ino, quota := range quotaMap {
+				if ps := m.GetPaths(ctx, ino); len(ps) > 0 {
+					p = ps[0]
+				} else {
+					p = fmt.Sprintf("inode:%d", ino)
+				}
+				quotas[p] = quota
 			}
 		}
 	default: // FIXME: QuotaCheck
