@@ -2715,7 +2715,6 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	for k, v := range pairs {
 		inode := m.decodeInode([]byte(k[2:])) // skip "QD"
 		quota := m.parseQuota(v)
-		quota.Inode = inode
 		quotas[inode] = quota
 	}
 	return quotas, nil

@@ -3380,7 +3380,6 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 				return err
 			}
 			quotas[Ino(inode)] = &Quota{
-				Inode:      Ino(inode),
 				MaxSpace:   int64(maxSpace),
 				MaxInodes:  int64(maxInodes),
 				UsedSpace:  usedSpace,

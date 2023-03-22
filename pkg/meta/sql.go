@@ -3051,7 +3051,6 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]*Qu
 				e = errors.New("no quota")
 			}
 			if e == nil {
-				quota.Inode = q.Inode
 				quota.MaxSpace = q.MaxSpace
 				quota.MaxInodes = q.MaxInodes
 				quota.UsedSpace = q.UsedSpace
@@ -3092,7 +3091,6 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	quotas := make(map[Ino]*Quota, len(rows))
 	for _, row := range rows {
 		quotas[row.Inode] = &Quota{
-			Inode:      row.Inode,
 			MaxSpace:   row.MaxSpace,
 			MaxInodes:  row.MaxInodes,
 			UsedSpace:  row.UsedSpace,

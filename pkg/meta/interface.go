@@ -258,7 +258,6 @@ type Session struct {
 }
 
 type Quota struct {
-	Inode                 Ino
 	MaxSpace, MaxInodes   int64
 	UsedSpace, UsedInodes int64
 	newSpace, newInodes   int64
