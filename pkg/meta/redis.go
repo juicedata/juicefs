@@ -1729,9 +1729,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 					}
 					if dtyp == TypeDirectory {
 						field := dino.String()
-						pipe.Del(ctx, m.dirQuotaKey(), field)
-						pipe.Del(ctx, m.dirQuotaUsedSpaceKey(), field)
-						pipe.Del(ctx, m.dirQuotaUsedInodesKey(), field)
+						pipe.HDel(ctx, m.dirQuotaKey(), field)
+						pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
+						pipe.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
 					}
 				}
 			}
