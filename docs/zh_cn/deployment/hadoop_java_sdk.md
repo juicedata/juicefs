@@ -35,6 +35,14 @@ JuiceFS 默认使用本地的「用户／UID」及「用户组／GID」映射，
 
 根据计算任务（如 Spark executor）的读写负载，JuiceFS Hadoop Java SDK 可能需要额外使用 4 * [`juicefs.memory-size`](#io-配置) 的堆外内存用来加速读写性能。默认情况下，建议为计算任务至少配置 1.2GB 的堆外内存。
 
+### 5. JDK 版本
+
+JuiceFS Hadoop Java SDK jar 文件默认使用 JDK1.8 编译，如果需要在高版本的 JRE 运行环境中使用， 需增 JVM 参数中增加
+
+```shell
+--add-exports=java.base/sun.nio.ch=ALL-UNNAMED
+```
+
 ## 安装与编译客户端
 
 ### 安装预编译客户端
@@ -134,6 +142,7 @@ make win
 |-----------|---------------------------------------------------------------------------|
 | Spark     | `${SPARK_HOME}/jars`                                                      |
 | Presto    | `${PRESTO_HOME}/plugin/hive-hadoop2`                                      |
+| Trino     | `${TRINO_HOME}/plugin/hive`                                               |
 | Flink     | `${FLINK_HOME}/lib`                                                       |
 | StarRocks | `${StarRocks_HOME}/fe/lib/`, `${StarRocks_HOME}/be/lib/hadoop/common/lib` |
 
