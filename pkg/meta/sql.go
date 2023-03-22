@@ -3030,7 +3030,6 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]*Qu
 			if q.MaxSpace == quota.MaxSpace && q.MaxInodes == quota.MaxInodes {
 				return nil // nothing to update
 			}
-			logger.Infof("Update quota of %s from (%d, %d) to (%d, %d)", dpath, q.MaxSpace, q.MaxInodes, quota.MaxSpace, quota.MaxInodes)
 			q.MaxSpace = quota.MaxSpace
 			q.MaxInodes = quota.MaxInodes
 			if ok {
@@ -3067,26 +3066,13 @@ func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas *[]*Qu
 		})
 	case QuotaList:
 		*quotas = (*quotas)[:0]
-		err = m.roTxn(func(s *xorm.Session) error {
-			var qs []dirQuota
-			if e := s.Find(&qs); e != nil {
-				return e
-			}
-			if len(qs) == 0 {
-				return nil
-			}
-			for _, q := range qs[0:] {
-				quota := &Quota{
-					Inode:      q.Inode,
-					MaxSpace:   q.MaxSpace,
-					MaxInodes:  q.MaxInodes,
-					UsedSpace:  q.UsedSpace,
-					UsedInodes: q.UsedInodes,
-				}
+		var quotaMap map[Ino]*Quota
+		quotaMap, err = m.doLoadQuotas(ctx)
+		if err == nil {
+			for _, quota := range quotaMap {
 				*quotas = append(*quotas, quota)
 			}
-			return nil
-		})
+		}
 	default: // FIXME: QuotaCheck
 		err = fmt.Errorf("invalid quota command: %d", cmd)
 	}
@@ -3106,6 +3092,7 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	quotas := make(map[Ino]*Quota, len(rows))
 	for _, row := range rows {
 		quotas[row.Inode] = &Quota{
+			Inode:      row.Inode,
 			MaxSpace:   row.MaxSpace,
 			MaxInodes:  row.MaxInodes,
 			UsedSpace:  row.UsedSpace,
