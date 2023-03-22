@@ -97,10 +97,7 @@ func (p *Progress) AddCountBar(name string, total int64) *Bar {
 		mpb.AppendDecorators(
 			decor.OnComplete(decor.AverageSpeed(0, " %.1f/s", decor.WCSyncWidthR), ""),
 			decor.Any(func(s decor.Statistics) string {
-				if s.Completed {
-					if speedMsg != "" {
-						return speedMsg
-					}
+				if s.Completed && speedMsg == "" {
 					speed := float64(s.Current) / time.Since(startTime).Seconds()
 					speedMsg = fmt.Sprintf(" %.1f/s", speed)
 				}
@@ -111,10 +108,7 @@ func (p *Progress) AddCountBar(name string, total int64) *Bar {
 				decor.AverageETA(decor.ET_STYLE_GO, decor.WCSyncWidthR), "",
 			),
 			decor.Any(func(s decor.Statistics) string {
-				if s.Completed {
-					if usedMsg != "" {
-						return usedMsg
-					}
+				if s.Completed && usedMsg == "" {
 					usedMsg = " used: " + (time.Since(startTime)).String()
 				}
 				return usedMsg
