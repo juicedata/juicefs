@@ -123,7 +123,7 @@ source /etc/bash_completion.d/juicefs
 
 ### `juicefs format` {#format}
 
-Format a volume. It's the first step for initializing a new file system volume.
+Create a file system, if a volume already exists with the same `META-URL`, this command will skip the creation step. To adjust volume settings afterwards, use [`juicefs config`](#config).
 
 #### Synopsis
 
@@ -840,6 +840,9 @@ size of each big object in MiB (default: 1024)
 `--small-object-size value`<br />
 size of each small object in KiB (default: 128)
 
+`--small-objects value`<br />
+number of small objects (default: 100)
+
 `--skip-functional-tests`<br />
 skip functional tests (default: false)
 
@@ -942,7 +945,7 @@ $ juicefs profile /tmp/jfs.alog
 $ juicefs profile /tmp/jfs.alog --interval 0
 ```
 
-### `juicefs stats`
+### `juicefs stats` {#stats}
 
 Show runtime statistics.
 
@@ -995,9 +998,9 @@ juicefs status redis://localhost
 
 ### `juicefs warmup` {#warmup}
 
-Download data to local cache in advance, to achieve better performance on application's first read.
+Download data to local cache in advance, to achieve better performance on application's first read. You can specify a mount point path to recursively warm-up all files under this path. You can also specify a file through the `--file` option to only warm-up the files contained in it.
 
-You can specify a mount point path to recursively warm-up all files under this path. You can also specify a file through the `--file` option to only warm-up the files contained in it.
+If the files needing warming up resides in many different directories, you should specify their names in a text file, and pass to the `warmup` command using the `--file` option, allowing `juicefs warmup` to download concurrently, which is significantly faster than calling `juicefs warmup` multiple times, each with a single file.
 
 #### Synopsis
 
@@ -1011,7 +1014,7 @@ juicefs warmup [command options] [PATH ...]
 file containing a list of paths (each line is a file path)
 
 `--threads value, -p value`<br />
-number of concurrent workers (default: 50)
+number of concurrent workers, default to 50. Reduce this number in low bandwidth environment to avoid download timeouts
 
 `--background, -b`<br />
 run in background (default: false)
@@ -1076,7 +1079,7 @@ juicefs load redis://localhost/1 meta-dump
 
 ### `juicefs config` {#config}
 
-Change config of a volume.
+Change config of a volume. Note that after updating some settings, the client may not take effect immediately, and it needs to wait for a certain period of time. The specific waiting time can be controlled by the [`--heartbeat`](#mount) option.
 
 #### Synopsis
 

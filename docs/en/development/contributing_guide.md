@@ -4,24 +4,6 @@ sidebar_position: 1
 description: JuiceFS is open source software and the code is contributed and maintained by developers worldwide. Learn how to participate in this article.
 ---
 
-## Learn source code
-
-Assuming you're already familiar with Go, as well as [JuiceFS architecture](https://juicefs.com/docs/community/architecture), this is the overall code structure:
-
-* [`cmd`](https://github.com/juicedata/juicefs/tree/main/cmd) is the top-level entrance, all JuiceFS functionalities is rooted here, e.g. the `juicefs format` command resides in `cmd/format.go`；
-* [`pkg`](https://github.com/juicedata/juicefs/tree/main/pkg) is actual implementation:
-  * `pkg/fuse/fuse.go` provides abstract FUSE API;
-  * `pkg/vfs` contains actual FUSE implementation, Metadata requests are handled in `pkg/meta`, read requests are handled in `pkg/vfs/reader.go` and write requests are handled by `pkg/vfs/writer.go`;
-  * `pkg/meta` directory is the implementation of all metadata engines, where:
-    * `pkg/meta/interface.go` is the interface definition for all types of metadata engines
-    * `pkg/meta/redis.go` is the interface implementation of Redis database
-    * `pkg/meta/sql.go` is the interface definition and general interface implementation of relational database, and the implementation of specific databases is in a separate file (for example, the implementation of MySQL is in `pkg/meta/sql_mysql.go`)
-    * `pkg/meta/tkv.go` is the interface definition and general interface implementation of the KV database, and the implementation of a specific database is in a separate file (for example, the implementation of TiKV is in `pkg/meta/tkv_tikv.go`)
-  * `pkg/object` contains all object storage integration code;
-* [`sdk/java`](https://github.com/juicedata/juicefs/tree/main/sdk/java) is the Hadoop Java SDK, it uses `sdk/java/libjfs` through JNI.
-
-The read and write request processing flow of JuiceFS can be read [here](../introduction/io_processing.md), and the key data structure can be read ["Internals"](./data_structures.md).
-
 ## Guidelines
 
 - Before starting work on a feature or bug fix, search GitHub or reach out to us via GitHub or Slack, make sure no one else is already working on it and we'll ask you to open a GitHub issue if necessary.
@@ -29,7 +11,7 @@ The read and write request processing flow of JuiceFS can be read [here](../intr
 - For major feature updates, write a design document to help the community understand your motivation and solution.
 - Find issues with the label ["kind/good-first-issue"](https://github.com/juicedata/juicefs/labels/kind%2Fgood-first-issue) or ["kind/help-wanted"](https://github.com/juicedata/juicefs/labels/kind%2Fhelp-wanted).
 
-Read [internals](./data_structures.md) for important data structure references.
+Read [internals](./internals.md) for important data structure references.
 
 ## Coding style
 
