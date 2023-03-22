@@ -44,7 +44,7 @@ func TestTiKVClient(t *testing.T) { //skip mutate
 	testMeta(t, m)
 }
 
-func TestBadgerClient(t *testing.T) { //skip mutate
+func TestBadgerClient(t *testing.T) {
 	m, err := newKVMeta("badger", "badger", DefaultConf())
 	if err != nil || m.Name() != "badger" {
 		t.Fatalf("create meta: %s", err)
