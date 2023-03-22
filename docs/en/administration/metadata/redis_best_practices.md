@@ -44,7 +44,7 @@ Among them, `used_memory_rss` is the total memory size actually used by Redis, w
 
 **A stable release of Redis Sentinel is shipped since Redis 2.8**. Redis Sentinel version 1, shipped with Redis 2.6, is deprecated and should not be used.
 
-Before start using redis sentinel, learn the [fundamentals](https://redis.io/docs/manual/sentinel#fundamental-things-to-know-about-sentinel-before-deploying):
+Before start using Redis sentinel, learn the [fundamentals](https://redis.io/docs/manual/sentinel#fundamental-things-to-know-about-sentinel-before-deploying):
 
 1. You need at least three Sentinel instances for a robust deployment.
 2. The three Sentinel instances should be placed into computers or virtual machines that are believed to fail in an independent way. So for example different physical servers or Virtual Machines executed on different availability zones.
