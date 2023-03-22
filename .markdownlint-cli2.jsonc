@@ -29,7 +29,8 @@
         "kbd",
         "p",
         "span",
-        "sup"
+        "sup",
+        "iframe"
       ]
     },
     "fenced-code-language": false,

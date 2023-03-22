@@ -121,7 +121,9 @@ Enabling client write cache can improve performance when writing large amount of
 
 Client write cache is disabled by default, data writes will be held in the [read/write buffer](#buffer-size) (in memory), and is uploaded to object storage when a chunk is filled full, or forced by application with `close()`/`fsync()` calls. To ensure data security, client will not commit file writes to the Metadata Service until data is uploaded to object storage.
 
-You can see how the default "upload first, then commit" write process will not perform well when writing large amount of small files. After the client write cache is enabled, the write process becomes "commit first, then upload asynchronously", file writes will not be blocked by data uploads, instead it will be written to the local cache directory and committed to the metadata service, and then returned immediately. The file data in the cache directory will be asynchronously uploaded to the object storage in the background.
+You can see how the default "upload first, then commit" write process will not perform well when writing large amount of small files. After the client write cache is enabled, the write process becomes "commit first, then upload asynchronously", file writes will not be blocked by data uploads, instead it will be written to the local cache directory and committed to the metadata service, and then returned immediately. The file data in the cache directory will be asynchronously uploaded to the object storage.
+
+If you need to use JuiceFS as a temporary storage, which doesn't require persistence and distributed access, use [`--upload-delay`](../reference/command_reference.md#mount) to delay data upload, this saves the upload process if files are deleted during the delay. Meanwhile, compared with a local disk, JuiceFS uploads files automatically when the cache directory is running out of space, which keeps the applications away from unexpected failures.
 
 Add `--writeback` to the mount command to enable client write cache, but this mode comes with some risks and caveats:
 

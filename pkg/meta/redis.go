@@ -1217,6 +1217,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			if _type == TypeDirectory {
 				field := strconv.FormatUint(uint64(ino), 10)
 				pipe.HSet(ctx, m.dirUsedInodesKey(), field, "0")
+				pipe.HSet(ctx, m.dirDataLengthKey(), field, "0")
 				pipe.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
@@ -1450,6 +1451,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, skipCheckTrash
 			}
 
 			field := strconv.FormatUint(uint64(inode), 10)
+			pipe.HDel(ctx, m.dirDataLengthKey(), field)
 			pipe.HDel(ctx, m.dirUsedSpaceKey(), field)
 			pipe.HDel(ctx, m.dirUsedInodesKey(), field)
 			return nil
@@ -2254,19 +2256,29 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
-func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
+func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	field := ino.String()
-	stat, err := m.calcDirStat(ctx, ino)
-	if err != nil {
-		return nil, err
+	stat, st := m.calcDirStat(ctx, ino)
+	if st != 0 {
+		return nil, st
 	}
-	_, err = m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.HSet(ctx, m.dirDataLengthKey(), field, stat.length)
-		pipe.HSet(ctx, m.dirUsedSpaceKey(), field, stat.space)
-		pipe.HSet(ctx, m.dirUsedInodesKey(), field, stat.inodes)
-		return nil
-	})
-	return stat, err
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		n, err := tx.Exists(ctx, m.inodeKey(ino)).Result()
+		if err != nil {
+			return err
+		}
+		if n <= 0 {
+			return syscall.ENOENT
+		}
+		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HSet(ctx, m.dirDataLengthKey(), field, stat.length)
+			pipe.HSet(ctx, m.dirUsedSpaceKey(), field, stat.space)
+			pipe.HSet(ctx, m.dirUsedInodesKey(), field, stat.inodes)
+			return nil
+		})
+		return err
+	}, m.inodeKey(ino))
+	return stat, errno(err)
 }
 
 func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
