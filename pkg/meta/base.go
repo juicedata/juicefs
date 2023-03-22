@@ -91,7 +91,7 @@ type engine interface {
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
 	// @trySync: try sync dir stat if broken or not existed
 	doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error)
-	doSyncDirStat(ctx Context, ino Ino) (*dirStat, error)
+	doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno)
 
 	scanTrashSlices(Context, trashSliceScan) error
 	scanPendingSlices(Context, pendingSliceScan) error
@@ -263,9 +263,9 @@ func (m *baseMeta) parallelSyncDirStat(ctx Context, inos map[Ino]bool) *sync.Wai
 		wg.Add(1)
 		go func(ino Ino) {
 			defer wg.Done()
-			_, err := m.en.doSyncDirStat(ctx, ino)
-			if err != nil {
-				logger.Warnf("sync dir stat for %d: %s", ino, err)
+			_, st := m.en.doSyncDirStat(ctx, ino)
+			if st != 0 {
+				logger.Warnf("sync dir stat for %d: %s", ino, st)
 			}
 		}(i)
 	}
@@ -291,10 +291,10 @@ func (m *baseMeta) groupBatch(batch map[Ino]dirStat, size int) [][]Ino {
 	return batches
 }
 
-func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, error) {
+func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	var entries []*Entry
 	if eno := m.en.doReaddir(ctx, ino, 1, &entries, -1); eno != 0 {
-		return nil, errors.Wrap(eno, "calc dir stat")
+		return nil, eno
 	}
 
 	stat := new(dirStat)
@@ -307,7 +307,7 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, error) {
 		stat.length += int64(l)
 		stat.space += align4K(l)
 	}
-	return stat, nil
+	return stat, 0
 }
 
 func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, err error) {
@@ -1628,7 +1628,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 
 				if repair {
 					if statBroken || statAll {
-						if _, err := m.en.doSyncDirStat(ctx, inode); err == nil {
+						if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 {
 							logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
 						} else {
 							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, err)

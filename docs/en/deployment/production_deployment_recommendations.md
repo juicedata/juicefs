@@ -28,7 +28,7 @@ Note in particular that this feature will be turned off when the number of files
 The time required to back up metadata depends on the specific metadata engine, and different metadata engines will have different performance.
 :::
 
-For a detailed description of automatic metadata backups, please refer to this [documentation](. /administration/metadata_dump_load.md#Automatic Backup), or you can back up metadata manually. In addition, please also follow the O&M recommendations of the metadata engine you are using to back up your data regularly.
+For a detailed description of automatic metadata backups, please refer to this [documentation](../administration/metadata_dump_load.md#backup-automatically), or you can back up metadata manually. In addition, please also follow the O&M recommendations of the metadata engine you are using to back up your data regularly.
 
 ## Trash
 

@@ -123,7 +123,7 @@ source /etc/bash_completion.d/juicefs
 
 ### `juicefs format` {#format}
 
-格式化文件系统；这是使用新文件系统的第一步。
+创建文件系统，如果 `META-URL` 中已经存在一个文件系统，则不会再次进行格式化。如果文件系统创建后需要调整配置，请使用 [`juicefs config`](#config)。
 
 #### 使用
 
@@ -310,7 +310,7 @@ Consul 注册中心地址 (默认："127.0.0.1:8500")
 自动备份元数据到对象存储的间隔时间；单位秒 (0 表示不备份) (默认：3600)
 
 `--heartbeat value`<br />
-发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认：12)
+发送心跳的间隔（单位秒），建议所有客户端使用相同的心跳值 (默认：12)
 
 `--upload-delay value`<br />
 数据上传到对象存储的延迟时间，支持秒分时精度，对应格式分别为 ("s", "m", "h")，默认为 0 秒。如果在等待的时间内数据被应用删除，则无需再上传到对象存储，既提升了性能也节省了成本，如果数据只是临时落盘，之后会迅速删除，考虑用该选项进行优化。
@@ -841,7 +841,7 @@ juicefs objbench [command options] BUCKET
 每个小文件的大小（以 KiB 为单位）（默认值：128）
 
 `--small-objects value`<br />
-小文件的数量（以 KiB 为单位）（默认值：100）
+小文件的数量（默认值：100）
 
 `--skip-functional-tests`<br />
 跳过功能测试（默认值：false）
@@ -945,7 +945,7 @@ $ juicefs profile /tmp/jfs.alog
 $ juicefs profile /tmp/jfs.alog --interval 0
 ```
 
-### `juicefs stats`
+### `juicefs stats` {#stats}
 
 展示实时的性能统计信息。
 
@@ -998,9 +998,9 @@ juicefs status redis://localhost
 
 ### `juicefs warmup` {#warmup}
 
-缓存预热是一种主动缓存手段，它可以将高频使用的数据预先缓存到本地，从而提升文件的读取效率。
+将文件提前下载到缓存，提升后续本地访问的速度。可以指定某个挂载点路径，递归对这个路径下的所有文件进行缓存预热；也可以通过 `--file` 选项指定文本文件，在文本文件中指定需要预热的文件名。
 
-可以指定某个挂载点路径，递归对这个路径下的所有文件进行缓存预热；也可以通过 `--file` 选项指定一个文件，仅对其中包含的文件进行缓存预热。
+如果需要预热的文件分布在许多不同的目录，推荐将这些文件名保存到文本文件中并用 `--file` 参数传给预热命令，这样做能利用 `warmup` 的并发功能，速度会显著优于多次调用 `juicefs warmup`，在每次调用里传入单个文件。
 
 #### 使用
 
@@ -1014,10 +1014,10 @@ juicefs warmup [command options] [PATH ...]
 指定一个包含一组路径的文件（每一行为一个文件路径）
 
 `--threads value, -p value`<br />
-并发的工作线程数 (默认：50)
+并发的工作线程数，默认 50。如果带宽不足导致下载失败，需要减少并发度，控制下载速度
 
 `--background, -b`<br />
-后台运行 (默认：false)
+后台运行（默认：false）
 
 #### 示例
 
@@ -1033,7 +1033,7 @@ $ cat /tmp/filelist
 $ juicefs warmup -f /tmp/filelist
 ```
 
-### `juicefs dump`
+### `juicefs dump` {#dump}
 
 将元数据导出到一个 JSON 文件中。
 
@@ -1059,7 +1059,7 @@ $ juicefs dump redis://localhost meta-dump
 $ juicefs dump redis://localhost sub-meta-dump --subdir /dir/in/jfs
 ```
 
-### `juicefs load`
+### `juicefs load` {#load}
 
 从之前导出的 JSON 文件中加载元数据。
 
@@ -1077,9 +1077,9 @@ juicefs load [command options] META-URL [FILE]
 juicefs load redis://localhost/1 meta-dump
 ```
 
-### `juicefs config`
+### `juicefs config` {#config}
 
-修改指定文件系统的配置项。
+修改指定文件系统的配置项。注意更新某些设置以后，客户端未必能立刻生效，需要等待一定时间，具体的等待时间可以通过 [`--heartbeat`](#mount) 选项控制。
 
 #### 使用
 
@@ -1090,7 +1090,7 @@ juicefs config [command options] META-URL
 #### 选项
 
 `--capacity value`<br />
-容量配额；单位为 GiB
+容量配额，单位为 GiB
 
 `--inodes value`<br />
 文件数配额

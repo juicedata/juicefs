@@ -51,7 +51,7 @@ When a JuiceFS client `open()` a file, the attributes of the file are automatica
 
 When doing `read()` on a file, the chunk and slice information of the file is automatically cached in the client memory. Reading the chunk again during the cache lifetime will return the slice information from the in-memory cache immediately (check ["How JuiceFS Stores Files"](../introduction/architecture.md#how-juicefs-store-files) to know what chunk and slice are).
 
-To ensure consistency, `--open-cache` is disabled by default, and every time you open a file, the client need to directly access the metadata engine. However, if the file is rarely modified, or in a read-only scenario (such as AI model training), it is recommended to set `--open-cache` according to the situation to further improve the read performance.
+When the `--open-cache` option is used to set a cache time, for the same mount point, the cache will be automatically invalidated when the cached file attributes change. However, the cache cannot be automatically invalidated for different mount points, so in order to ensure strong consistency, `--open-cache` is disabled by default, and every time you open a file, the client need to directly access the metadata engine. If the file is rarely modified, or in a read-only scenario (such as AI model training), it is recommended to set `--open-cache` according to the situation to further improve the read performance.
 
 ## Data cache
 
@@ -121,7 +121,9 @@ Enabling client write cache can improve performance when writing large amount of
 
 Client write cache is disabled by default, data writes will be held in the [read/write buffer](#buffer-size) (in memory), and is uploaded to object storage when a chunk is filled full, or forced by application with `close()`/`fsync()` calls. To ensure data security, client will not commit file writes to the Metadata Service until data is uploaded to object storage.
 
-You can see how the default "upload first, then commit" write process will not perform well when writing large amount of small files. After the client write cache is enabled, the write process becomes "commit first, then upload asynchronously", file writes will not be blocked by data uploads, instead it will be written to the local cache directory and committed to the metadata service, and then returned immediately. The file data in the cache directory will be asynchronously uploaded to the object storage in the background.
+You can see how the default "upload first, then commit" write process will not perform well when writing large amount of small files. After the client write cache is enabled, the write process becomes "commit first, then upload asynchronously", file writes will not be blocked by data uploads, instead it will be written to the local cache directory and committed to the metadata service, and then returned immediately. The file data in the cache directory will be asynchronously uploaded to the object storage.
+
+If you need to use JuiceFS as a temporary storage, which doesn't require persistence and distributed access, use [`--upload-delay`](../reference/command_reference.md#mount) to delay data upload, this saves the upload process if files are deleted during the delay. Meanwhile, compared with a local disk, JuiceFS uploads files automatically when the cache directory is running out of space, which keeps the applications away from unexpected failures.
 
 Add `--writeback` to the mount command to enable client write cache, but this mode comes with some risks and caveats:
 

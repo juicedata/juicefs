@@ -2013,26 +2013,26 @@ func (m *kvMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 	return ps
 }
 
-func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, error) {
+func (m *kvMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	if m.conf.ReadOnly {
 		return nil, syscall.EROFS
 	}
-	stat, err := m.calcDirStat(ctx, ino)
-	if err != nil {
-		return nil, err
+	stat, st := m.calcDirStat(ctx, ino)
+	if st != 0 {
+		return nil, st
 	}
-	err = m.client.txn(func(tx *kvTxn) error {
+	err := m.client.txn(func(tx *kvTxn) error {
+		if tx.get(m.inodeKey(ino)) == nil {
+			return syscall.ENOENT
+		}
 		tx.set(m.dirStatKey(ino), m.packDirStat(stat))
 		return nil
 	}, 0)
-	if eno, ok := err.(syscall.Errno); ok && eno == 0 {
-		err = nil
-	}
 	if err != nil && m.shouldRetry(err) {
 		// other clients have synced
 		err = nil
 	}
-	return stat, err
+	return stat, errno(err)
 }
 
 func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
