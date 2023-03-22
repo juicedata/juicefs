@@ -87,8 +87,10 @@ func info(ctx *cli.Context) error {
 	if ctx.Bool("raw") {
 		raw = 1
 	}
+	progress := utils.NewProgress(false)
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)
+		dspin := progress.AddDoubleSpinner(path)
 		var d string
 		var inode uint64
 		var err error
@@ -126,6 +128,13 @@ func info(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
 		}
+		if errno := readProgress(f, func(count, size uint64) {
+			dspin.SetCurrent(int64(count), int64(size))
+		}); errno != 0 {
+			logger.Errorf("failed to get info: %s", syscall.Errno(errno))
+		}
+		dspin.Done()
+
 		var resp vfs.InfoResponse
 		err = resp.Decode(f)
 		_ = f.Close()
@@ -219,7 +228,7 @@ func info(ctx *cli.Context) error {
 			printResult(results, 0, false)
 		}
 	}
-
+	progress.Done()
 	return nil
 }
 

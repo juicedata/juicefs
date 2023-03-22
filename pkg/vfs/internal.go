@@ -403,12 +403,19 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			strict = r.Get8() != 0
 		}
 
+		done := make(chan struct{})
 		var r syscall.Errno
-		if strict {
-			r = meta.GetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
-		} else {
-			r = meta.FastGetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
-		}
+		go func() {
+			if strict {
+				r = meta.GetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
+			} else {
+				r = meta.FastGetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
+			}
+			close(done)
+		}()
+		writeProgress(&info.Summary.Files, &info.Summary.Size, out, done)
+		_, _ = out.Write([]byte{uint8(r)})
+		time.Sleep(time.Millisecond * 300) // wait for completing progress
 		if r != 0 {
 			info.Failed = true
 			info.Reason = r.Error()
