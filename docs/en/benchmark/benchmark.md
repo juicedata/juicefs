@@ -5,6 +5,8 @@ slug: .
 description: This article describes benchmarking the file system using FIO, mdtest, and the bench command that comes with JuiceFS.
 ---
 
+Redis is used as Metadata Engine in this benchmark. Under this test condition, JuiceFS performs 10x better than [Amazon EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse).
+
 ## Basic benchmark
 
 JuiceFS provides a subcommand `bench` to run a few basic benchmarks to evaluate how it works in your environment:

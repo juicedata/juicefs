@@ -16,9 +16,9 @@ JuiceFS 采用数据和元数据分离的存储架构，元数据可以存储在
 
 ## Redis
 
-JuiceFS 要求使用 4.0 及以上版本的 Redis，使用低版本的 Redis 将会报错。JuiceFS 也支持使用 Redis Cluster 作为元数据引擎，但为了避免在 Redis 集群中执行跨节点事务，同一个文件系统的元数据总会坐落于单个 Redis 实例中。
+JuiceFS 要求使用 4.0 及以上版本的 Redis。JuiceFS 也支持使用 Redis Cluster 作为元数据引擎，但为了避免在 Redis 集群中执行跨节点事务，同一个文件系统的元数据总会坐落于单个 Redis 实例中。
 
-为了保证元数据安全，JuiceFS 要求 Redis 的淘汰策略（`maxmemory_policy`）设置为不淘汰（`noeviction`），否则在启动 JuiceFS 的时候将会尝试将其设置为 `noeviction`，如果设置失败将会打印告警日志。如果你使用自行维护的 Redis 数据库，参考 [Redis 最佳实践](../administration/metadata/redis_best_practices.md)。
+为了保证元数据安全，JuiceFS 需要 [`maxmemory-policy noeviction`](https://redis.io/docs/reference/eviction/)，否则在启动 JuiceFS 的时候将会尝试将其设置为 `noeviction`，如果设置失败将会打印告警日志。更多可以参考 [Redis 最佳实践](../administration/metadata/redis_best_practices.md)。
 
 ### 创建文件系统
 
@@ -457,7 +457,7 @@ etcd://[user:password@]<addr>[,<addr>...]/<prefix>
 
 其中 `user` 和 `password` 是当 etcd 开启了用户认证时需要。`prefix` 是一个用户自定义的字符串，当多个文件系统或者应用共用一个 etcd 集群时，设置前缀可以避免混淆和冲突。示例如下：
 
-```bash
+```shell
 juicefs format etcd://user:password@192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs pics
 ```
 
@@ -475,7 +475,7 @@ juicefs format etcd://user:password@192.168.1.6:2379,192.168.1.7:2379,192.168.1.
 
 例子：
 
-```bash
+```shell
 juicefs format \
     --storage s3 \
     ... \

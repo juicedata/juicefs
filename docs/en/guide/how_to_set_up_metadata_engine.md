@@ -16,13 +16,9 @@ JuiceFS is a decoupled structure that separates data and metadata. Metadata can 
 
 ## Redis
 
-[Redis](https://redis.io) is an open source (BSD license) memory-based Key-Value storage system, often used as a database, cache, and message broker.
+JuiceFS requires Redis version 4.0 and above. Redis Cluster is also supported, but in order to avoid transactions across different redis instances, JuiceFS puts all metadata for one file system on a single redis instance.
 
-:::note
-JuiceFS requires Redis version 4.0 and above, and using a lower version of Redis will result in an error.
-
-To ensure metadata security, JuiceFS requires Redis' `maxmemory_policy` to be set to `noeviction`, otherwise it will try to set it to `noeviction` when starting JuiceFS, and will print a warning log if it fails to do so.
-:::
+To ensure metadata security, JuiceFS requires [`maxmemory-policy noeviction`](https://redis.io/docs/reference/eviction/), otherwise it will try to set it to `noeviction` when starting JuiceFS, and will print a warning log if it fails. Refer to [Redis Best practices](../administration/metadata/redis_best_practices.md) for more.
 
 ### Create a file system
 
@@ -51,7 +47,8 @@ Where `[]` enclosed are optional and the rest are mandatory.
 - `<username>` is introduced after Redis 6.0 and can be ignored if there is no username, but the `:` colon in front of the password needs to be kept, e.g. `redis://:<password>@<host>:6379/1`.
 - The default port number on which Redis listens is `6379`, which can be left blank if the default port number is not changed, e.g. `redis://:<password>@<host>/1`.
 - Redis supports multiple [logical databases](https://redis.io/commands/select), please replace `<db>` with the actual database number used.
-- If you need to connect to Redis Sentinel, the format of the metadata URL will be slightly different, please refer to the ["Redis Best Practices"](../administration/metadata/redis_best_practices.md#high-availability) document for details.
+- If you need to connect to Redis Sentinel, the format will be slightly different, refer to [Redis Best Practices](../administration/metadata/redis_best_practices.md#high-availability) for details.
+- If username / password contains special characters, use single quote to avoid unexpected shell interpretations, or use the `REDIS_PASSWORD` environment.
 
 For example, the following command will create a JuiceFS file system named `pics`, using the database No. `1` in Redis to store metadata:
 
@@ -79,30 +76,20 @@ juicefs format \
     pics
 ```
 
-:::note
-
-1. When a Redis username or password contains special characters, you need to replace them with `%xx` by [URL encode](https://www.w3schools.com/tags/ref_urlencode.ASP), for example `@` with `%40`, or pass the password using an environment variable.
-2. You can also use the standard URL syntax when passing database passwords using environment variables, e.g., `"redis://:@192.168.1.6:6379/1"` which preserves the `:` and `@` separators between the username and password.
-:::
-
 ### Mount a file system
+
+If you need to share the same file system across multiple nodes, ensure that all nodes has access to the Metadata Engine.
 
 ```shell
 juicefs mount -d "redis://:mypassword@192.168.1.6:6379/1" /mnt/jfs
 ```
 
-Passing passwords with the `META_PASSWORD` or `REDIS_PASSWORD` environment variables is also supported when mounting file systems.
+Passing passwords with the `META_PASSWORD` or `REDIS_PASSWORD` environment variables is also supported.
 
 ```shell
 export META_PASSWORD=mypassword
 juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
-
-:::tip
-If you need to share the same file system on multiple servers, you must ensure that each server has access to the database where the metadata is stored.
-:::
-
-If you maintain the Redis database on your own, it is recommended to read [Redis Best Practices](../administration/metadata/redis_best_practices.md).
 
 ## KeyDB
 
@@ -470,13 +457,13 @@ etcd://[user:password@]<addr>[,<addr>...]/<prefix>
 
 Where `user` and `password` are required when etcd enables user authentication. The `prefix` is a user-defined string. When multiple file systems or applications share an etcd cluster, setting the prefix can avoid confusion and conflict. An example is as follows:
 
-```bash
+```shell
 juicefs format etcd://user:password@192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs pics
 ```
 
 ### Set up TLS
 
-If you need to enable TLS, you can set the TLS configuration item by adding the query parameter after the metadata URL. Currently supported configuration items:
+If you need to enable TLS, set the TLS configuration item by adding the query parameter after the metadata URL, use absolute path for certificate files to avoid file not found error.
 
 | Name                   | Value                 |
 |------------------------|-----------------------|
@@ -488,7 +475,7 @@ If you need to enable TLS, you can set the TLS configuration item by adding the 
 
 For example:
 
-```bash
+```shell
 juicefs format \
     --storage s3 \
     ... \
