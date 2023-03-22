@@ -12,7 +12,7 @@ import TabItem from '@theme/TabItem';
 
 在终端输入 `juicefs` 并执行，你就会看到所有可用的命令。另外，你可以在每个命令后面添加 `-h/--help` 标记获得该命令的详细帮助信息。
 
-```bash
+```shell
 NAME:
    juicefs - A POSIX file system built on Redis and object storage.
 
@@ -183,7 +183,7 @@ RSA 私钥的路径 (PEM)
 
 #### 示例
 
-```bash
+```shell
 # 创建一个简单的测试卷（数据将存储在本地目录中）
 $ juicefs format sqlite3://myjfs.db myjfs
 
@@ -320,7 +320,7 @@ Consul 注册中心地址 (默认："127.0.0.1:8500")
 
 #### 示例
 
-```bash
+```shell
 # 前台挂载
 $ juicefs mount redis://localhost /mnt/jfs
 
@@ -359,7 +359,7 @@ juicefs umount [command options] MOUNTPOINT
 
 #### 示例
 
-```bash
+```shell
 juicefs umount /mnt/jfs
 ```
 
@@ -482,13 +482,13 @@ Consul 注册中心地址 (默认："127.0.0.1:8500")
 
 #### 示例
 
-```bash
+```shell
 export MINIO_ROOT_USER=admin
 export MINIO_ROOT_PASSWORD=12345678
 juicefs gateway redis://localhost localhost:9000
 ```
 
-### JuiceFS WebDAV
+### `juicefs webdav`
 
 启动一个 WebDAV 服务。
 
@@ -607,7 +607,7 @@ Consul 注册中心地址 (默认："127.0.0.1:8500")
 
 #### 示例
 
-```bash
+```shell
 juicefs webdav redis://localhost localhost:9007
 ```
 
@@ -701,7 +701,7 @@ juicefs sync [command options] SRC DST
 
 #### 示例
 
-```bash
+```shell
 # 从 OSS 同步到 S3
 $ juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-east-2.amazonaws.com
 
@@ -733,7 +733,7 @@ juicefs rmr PATH ...
 
 #### 示例
 
-```bash
+```shell
 juicefs rmr /mnt/jfs/foo
 ```
 
@@ -760,7 +760,7 @@ juicefs info [command options] PATH or INODE
 
 #### 示例
 
-```bash
+```shell
 # 检查路径
 $ juicefs info /mnt/jfs/foo
 
@@ -800,7 +800,7 @@ juicefs bench [command options] PATH
 
 #### 示例
 
-```bash
+```shell
 # 使用4个线程运行基准测试
 $ juicefs bench /mnt/jfs -p 4
 
@@ -851,7 +851,7 @@ juicefs objbench [command options] BUCKET
 
 #### 示例
 
-```bash
+```shell
 # 测试 S3 对象存储的基准性能
 $ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
 ```
@@ -879,7 +879,7 @@ juicefs gc [command options] META-URL
 
 #### 示例
 
-```bash
+```shell
 # 只检查，没有更改的能力
 $ juicefs gc redis://localhost
 
@@ -902,7 +902,7 @@ juicefs fsck [command options] META-URL
 
 #### 示例
 
-```bash
+```shell
 juicefs fsck redis://localhost
 ```
 
@@ -932,7 +932,7 @@ juicefs profile [command options] MOUNTPOINT/LOGFILE
 
 #### 示例
 
-```bash
+```shell
 # 监控实时操作
 $ juicefs profile /mnt/jfs
 
@@ -968,7 +968,7 @@ juicefs stats [command options] MOUNTPOINT
 
 #### 示例
 
-```bash
+```shell
 $ juicefs stats /mnt/jfs
 
 # 更多的指标
@@ -992,7 +992,7 @@ juicefs status [command options] META-URL
 
 #### 示例
 
-```bash
+```shell
 juicefs status redis://localhost
 ```
 
@@ -1021,7 +1021,7 @@ juicefs warmup [command options] [PATH ...]
 
 #### 示例
 
-```bash
+```shell
 # 预热目录中的所有文件
 $ juicefs warmup /mnt/jfs/datadir
 
@@ -1035,47 +1035,60 @@ $ juicefs warmup -f /tmp/filelist
 
 ### `juicefs dump` {#dump}
 
-将元数据导出到一个 JSON 文件中。
+导出元数据。阅读[「元数据备份」](../administration/metadata_dump_load.md)以了解更多。
 
 #### 使用
 
 ```
 juicefs dump [command options] META-URL [FILE]
-```
 
-如果没有指定导出文件路径，会导出到标准输出。
+# 导出元数据至 meta-dump.json
+juicefs dump redis://localhost meta-dump.json
+
+# 只导出卷的一个子树
+juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
+```
 
 #### 选项
 
-`--subdir value`<br />
+`META-URL`<br />
+用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。
+
+`FILE`<br />
+导入文件路径，如果不指定，则会导出到标准输出。
+
+`--subdir=path`<br />
 只导出一个子目录。
 
-#### 示例
-
-```bash
-$ juicefs dump redis://localhost meta-dump
-
-# 只导出卷的一个子树
-$ juicefs dump redis://localhost sub-meta-dump --subdir /dir/in/jfs
-```
+`--keep-secret-key=false`<br />
+导出对象存储认证信息，默认为 false。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。
 
 ### `juicefs load` {#load}
 
-从之前导出的 JSON 文件中加载元数据。
+将元数据导入一个空的文件系统。阅读[「元数据恢复与迁移」](../administration/metadata_dump_load.md#recovery-and-migration)以了解更多。
 
 #### 使用
 
-```
+```shell
 juicefs load [command options] META-URL [FILE]
+
+# 将元数据备份 meta-dump.json 导入文件系统
+juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 ```
 
-如果没有指定导入文件路径，会从标准输入导入。
+#### 选项
 
-#### 示例
+`META-URL`<br />
+用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。
 
-```bash
-juicefs load redis://localhost/1 meta-dump
-```
+`FILE`<br />
+导入文件路径，如果不指定，则会从标准输入导入。
+
+`--encrypt-rsa-key=path`<br />
+加密所使用的 RSA 私钥文件。
+
+`--encrypt-algo=aes256gcm-rsa`<br />
+加密算法，默认 aes256gcm-rsa。
 
 ### `juicefs config` {#config}
 
@@ -1124,7 +1137,7 @@ juicefs config [command options] META-URL
 
 #### 示例
 
-```bash
+```shell
 # 显示当前配置
 $ juicefs config redis://localhost
 
@@ -1155,7 +1168,7 @@ juicefs destroy [command options] META-URL UUID
 
 #### 示例
 
-```bash
+```shell
 juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 ```
 
@@ -1188,7 +1201,7 @@ profile 指标采样秒数 (默认：30)
 
 #### 示例
 
-```bash
+```shell
 # 收集并展示挂载点 /mnt/jfs 的各类信息
 $ juicefs debug /mnt/jfs
 
