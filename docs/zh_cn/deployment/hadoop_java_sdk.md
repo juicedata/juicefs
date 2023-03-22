@@ -37,7 +37,7 @@ JuiceFS 默认使用本地的「用户／UID」及「用户组／GID」映射，
 
 ### 5. JDK 版本
 
-JuiceFS Hadoop Java SDK jar 文件默认使用 JDK1.8 编译，如果需要在高版本的 JRE 运行环境中使用， 需增 JVM 参数中增加
+JuiceFS Hadoop Java SDK JAR 文件默认使用 JDK1.8 编译，如果需要在高版本的 JRE 运行环境中使用， 需增 JVM 参数中增加
 
 ```shell
 --add-exports=java.base/sun.nio.ch=ALL-UNNAMED

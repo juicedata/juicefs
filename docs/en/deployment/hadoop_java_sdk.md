@@ -35,7 +35,7 @@ Depending on the read and write load of computing tasks (such as Spark executor)
 
 ### 5. JDK version
 
-JuiceFS Hadoop Java SDK jar was compiled with JDK1.8, bellow JVM conf may need to be added if the JRE was higher:
+JuiceFS Hadoop Java SDK JAR was compiled with JDK1.8, bellow JVM conf may need to be added if the JRE was higher:
 
 ```shell
 --add-exports=java.base/sun.nio.ch=ALL-UNNAMED
