@@ -18,7 +18,7 @@ As mentioned in [JuiceFS Technical Architecture](../introduction/architecture.md
 
 Metadata is crucially important to a file system as it contains all the detailed information of each file, such as name, size, permissions and location. Especially, for the file system where data and metadata are stored separately, the read and write performance of metadata directly determines the file system performance, and the engine that stores metadata is the most fundamental determinant of performance and reliability.
 
-The metadata storage of JuiceFS uses a multi-engine design. In order to create an ultra-high-performance cloud-native file system, JuiceFS first supports [Redis](https://redis.io), an in-memory Key-Value database, which makes JuiceFS ten times more powerful than Amazon [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) performance. Test results can be seen [here](../benchmark/benchmark.md).
+The metadata storage of JuiceFS uses a multi-engine design. In order to create an ultra-high-performance cloud-native file system, JuiceFS first supports [Redis](https://redis.io), an in-memory Key-Value database, which makes JuiceFS ten times more powerful than [Amazon EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) performance. Test results can be seen [here](../benchmark/benchmark.md).
 
 However, based on the feedback from community users, we have noticed that a high-performance file system is not urgently required in many application scenarios. Sometimes users just want to find a convenient tool to migrate data on the cloud with high reliability, or to mount the object storage locally to use on a small scale. Therefore, JuiceFS has successively opened up support for more databases such as MySQL/MariaDB and SQLite. The comparison of performance can be found [here](../benchmark/metadata_engines_benchmark.md)).
 
@@ -26,18 +26,18 @@ However, based on the feedback from community users, we have noticed that a high
 While using the JuiceFS file system - no matter which database you choose to store metadata, please **ensure the safety of the metadata**! Once the metadata is damaged or lost, the corresponding data will accordingly be damaged or lost, and the entire file system can even be damaged in the worse cases. For production environments, you should always choose a database with high availability, and at the same time, it is recommended to ["backup metadata"](../administration/metadata_dump_load.md) periodically.
 :::
 
-### The storage usage of metadata
+### The storage usage of metadata {#storage-usage}
 
 When planning a large-scale file system, it is necessary to fully consider the expected storage capacity requirements of each component. Although the storage usage of metadata in JuiceFS may be negligible compared to data storage, considering the importance of metadata in the entire file system, it is necessary to make advance planning for metadata storage to avoid affecting business operations due to insufficient resources.
 
-Since the metadata of a file is only a very small fragment of information, its space usage is affected by factors such as database type, data type, and table structure design, and cannot accurately measure the space occupied by each file in a certain metadata engine. In practice, we usually evaluate the space required for each file's metadata based on the file's increment and the change in the database storage space.
+Since the metadata of a file is only a very small fragment of information, its space usage is affected by factors such as database type, data type, and table structure design, and cannot accurately measure the space occupied by each file in a certain metadata engine. In practice, we usually evaluate the space required for each file's metadata based on total number of files and the usage of database storage space.
 
 Therefore, the metadata storage usage of JuiceFS can be roughly calculated according to the database type:
 
-- **Key-Value Database**: 300 Bytes/file
-- **SQL Database**: 600 Bytes/file
+- **Key-Value Database** (e.g. Redis, TiKV): 300 bytes/file
+- **Relational Database** (e.g. MySQL, PostgreSQL): 600 bytes/file
 
-When you need to migrate between two types of metadata engines, you can use this method to estimate the required storage space. For example, if you want to migrate the metadata engine from a SQL database (MySQL) to a key-value database (Redis), and the current usage of MySQL is 30GB, then the target Redis needs to prepare at least 15GB or more of memory. The reverse is also true.
+When you need to migrate between two types of metadata engines, you can use this method to estimate the required storage space. For example, if you want to migrate the metadata engine from a relational database (MySQL) to a key-value database (Redis), and the current usage of MySQL is 30GB, then the target Redis needs to prepare at least 15GB or more of memory. The reverse is also true.
 
 ## Redis
 
