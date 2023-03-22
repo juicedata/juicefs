@@ -772,14 +772,23 @@ func TestInternalFile(t *testing.T) {
 	}
 	off += uint64(len(buf))
 	buf = make([]byte, 1024*10)
+	if n, e = readControl(buf, &off); e != 0 {
+		t.Fatalf("read progress bar: %s %d", e, n)
+	} else if buf[0] != 0 {
+		t.Fatalf("info v2 st: %s", syscall.Errno(buf[0]))
+	} else {
+		off += uint64(n)
+	}
+
 	var infoResp InfoResponse
 	if n, e = readControl(buf, &off); e != 0 {
-		t.Fatalf("read result: %s %d", e, n)
+		t.Fatalf("read response: %s %d", e, n)
 	} else if infoResp.Decode(bytes.NewBuffer(buf[:n])) != nil {
 		t.Fatalf("info v2 result: %s", string(buf[:n]))
 	} else {
 		off += uint64(n)
 	}
+
 	// fill
 	buf = make([]byte, 4+4+8+1+1+2+1)
 	w = utils.FromBuffer(buf)
