@@ -709,7 +709,7 @@ func TestInternalFile(t *testing.T) {
 	readControl := func(resp []byte, off *uint64) (int, syscall.Errno) {
 		for {
 			if n, errno := v.Read(ctx, fe.Inode, resp, *off, fh); n == 0 {
-				time.Sleep(time.Millisecond * 300)
+				time.Sleep(time.Millisecond * 200)
 			} else if n%17 == 0 {
 				*off += uint64(n)
 				continue
