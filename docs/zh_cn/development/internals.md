@@ -49,9 +49,9 @@ slug: /internals
 
 ## FUSE 接口实现 {#fuse-interface-implementation}
 
-JuiceFS 基于 [FUSE](https://en.wikipedia.org/wiki/Filesystem_in_Userspace)（Filesystem in Userspace）实现了一个用户态文件系统，FUSE 接口在 Linux 系统中的实现库 [libfuse](https://github.com/libfuse/libfuse) 提供两种 API：high-level API 和 low-level API，其中 high-level API 基于文件名和路径，low-level API 基于 inode。
+JuiceFS 基于 [FUSE](https://en.wikipedia.org/wiki/Filesystem_in_Userspace)（Filesystem in Userspace）实现了一个用户态文件系统，FUSE 接口在 Linux 系统中的实现库 [`libfuse`](https://github.com/libfuse/libfuse) 提供两种 API：high-level API 和 low-level API，其中 high-level API 基于文件名和路径，low-level API 基于 inode。
 
-JuiceFS 基于 low-level API 实现（事实上 JuiceFS 不依赖 libfuse，而是 [go-fuse](https://github.com/hanwen/go-fuse)），这是因为内核的 VFS 跟 FUSE 库交互就使用 low-level API。如果使用 high-level API 的话，其实是在 libfuse 内部做了 VFS 树的模拟，然后对外暴露基于路径的 API，这种模式适合元数据本身是基于路径提供的 API 的系统，比如 HDFS 或者 S3 之类。而如果元数据本身也是基于 inode 的目录树，这种 inode → path → inode 的反复转换就会影响性能（所以 HDFS 的 FUSE 接口实现性能都不好）。JuiceFS 的元数据是按照 inode 组织的，也直接提供基于 inode 的 API，那么使用 FUSE 的 low-level API 就非常简单和自然，性能也很好。
+JuiceFS 基于 low-level API 实现（事实上 JuiceFS 不依赖 `libfuse`，而是 [`go-fuse`](https://github.com/hanwen/go-fuse)），这是因为内核的 VFS 跟 FUSE 库交互就使用 low-level API。如果使用 high-level API 的话，其实是在 `libfuse` 内部做了 VFS 树的模拟，然后对外暴露基于路径的 API，这种模式适合元数据本身是基于路径提供的 API 的系统，比如 HDFS 或者 S3 之类。而如果元数据本身也是基于 inode 的目录树，这种 inode → path → inode 的反复转换就会影响性能（所以 HDFS 的 FUSE 接口实现性能都不好）。JuiceFS 的元数据是按照 inode 组织的，也直接提供基于 inode 的 API，那么使用 FUSE 的 low-level API 就非常简单和自然，性能也很好。
 
 ## 元数据结构
 
