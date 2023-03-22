@@ -5,6 +5,8 @@ slug: .
 description: 本文介绍使用 FIO、mdtest 以及 JuiceFS 自带的 bench 命令对文件系统进行性能测试。
 ---
 
+本章介绍的测试中使用 [Redis](https://redis.io) 作为元数据存储引擎。在该测试条件下，JuiceFS 拥有十倍于 Amazon [EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 的性能表现。
+
 ### 基础测试
 
 JuiceFS 提供了 `bench`  子命令来运行一些基本的基准测试，用以评估 JuiceFS 在当前环境的运行情况：

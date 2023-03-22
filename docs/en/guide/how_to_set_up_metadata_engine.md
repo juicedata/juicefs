@@ -8,23 +8,11 @@ description: JuiceFS supports Redis, TiKV, PostgreSQL, MySQL and other databases
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::tip Version Tips
-The environment variable `META_PASSWORD` used in this document is a new feature in JuiceFS v1.0, and not applied to old clients. Please [upgrade the clients](../administration/upgrade.md) before using it if you are using the old ones.
+:::tip
+`META_PASSWORD` is supported from JuiceFS v1.0. You should [upgrade](../administration/upgrade.md) if you're still using older versions.
 :::
 
-As mentioned in [JuiceFS Technical Architecture](../introduction/architecture.md) and [How JuiceFS Store Files](../introduction/architecture.md#how-juicefs-store-files), JuiceFS is designed to store data and metadata separately. Generally, data is stored in the cloud storage based on object storage, and metadata corresponding to the data is stored in an independent database. The database that supports storing metadata is referred to "Metadata Storage Engine".
-
-## Metadata Storage Engine
-
-Metadata is crucially important to a file system as it contains all the detailed information of each file, such as name, size, permissions and location. Especially, for the file system where data and metadata are stored separately, the read and write performance of metadata directly determines the file system performance, and the engine that stores metadata is the most fundamental determinant of performance and reliability.
-
-The metadata storage of JuiceFS uses a multi-engine design. In order to create an ultra-high-performance cloud-native file system, JuiceFS first supports [Redis](https://redis.io), an in-memory Key-Value database, which makes JuiceFS ten times more powerful than Amazon [EFS](https://aws.amazon.com/efs) and [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) performance. Test results can be seen [here](../benchmark/benchmark.md).
-
-However, based on the feedback from community users, we have noticed that a high-performance file system is not urgently required in many application scenarios. Sometimes users just want to find a convenient tool to migrate data on the cloud with high reliability, or to mount the object storage locally to use on a small scale. Therefore, JuiceFS has successively opened up support for more databases such as MySQL/MariaDB and SQLite. The comparison of performance can be found [here](../benchmark/metadata_engines_benchmark.md)).
-
-:::caution
-While using the JuiceFS file system - no matter which database you choose to store metadata, please **ensure the safety of the metadata**! Once the metadata is damaged or lost, the corresponding data will accordingly be damaged or lost, and the entire file system can even be damaged in the worse cases. For production environments, you should always choose a database with high availability, and at the same time, it is recommended to ["backup metadata"](../administration/metadata_dump_load.md) periodically.
-:::
+JuiceFS is a decoupled structure that separates data and metadata. Metadata can be stored in any supported database (called Metadata Engine). Many databases are supported and they all comes with different performance and intended scenarios, refer to [our docs](../benchmark/metadata_engines_benchmark.md) for comparison.
 
 ## Redis
 
