@@ -3317,7 +3317,7 @@ func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map
 				}
 			}
 			_, e = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(quota.MaxSpace, quota.MaxInodes)).Err()
+				pipe.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(quota.MaxSpace, quota.MaxInodes))
 				if create {
 					pipe.HSet(ctx, m.dirQuotaUsedSpaceKey(), field, usedSpace)
 					pipe.HSet(ctx, m.dirQuotaUsedInodesKey(), field, usedInodes)
