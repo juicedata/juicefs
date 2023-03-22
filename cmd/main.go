@@ -76,6 +76,7 @@ func Main(args []string) error {
 			cmdRmr(),
 			cmdSync(),
 			cmdDebug(),
+			cmdClone(),
 		},
 	}
 

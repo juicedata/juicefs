@@ -50,3 +50,5 @@ func GetSysInfo() (string, error) {
 	}
 	return string(sysInfo), nil
 }
+
+func GetUmask() int { return 0 }

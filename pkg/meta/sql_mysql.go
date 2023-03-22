@@ -20,9 +20,17 @@
 package meta
 
 import (
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 )
 
+func isMySQLDuplicateEntryErr(err error) bool {
+	if e, ok := err.(*mysql.MySQLError); ok {
+		return e.Number == 1062
+	}
+	return false
+}
+
 func init() {
+	dupErrorCheckers = append(dupErrorCheckers, isMySQLDuplicateEntryErr)
 	Register("mysql", newSQLMeta)
 }

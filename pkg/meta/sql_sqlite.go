@@ -23,7 +23,15 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
+func isSQLiteDuplicateEntryErr(err error) bool {
+	if e, ok := err.(sqlite3.Error); ok {
+		return e.Code == sqlite3.ErrConstraint
+	}
+	return false
+}
+
 func init() {
 	errBusy = sqlite3.ErrBusy
+	dupErrorCheckers = append(dupErrorCheckers, isSQLiteDuplicateEntryErr)
 	Register("sqlite3", newSQLMeta)
 }
