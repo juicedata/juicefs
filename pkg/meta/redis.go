@@ -63,6 +63,10 @@ import (
 	Removed files: delfiles -> [$inode:$length -> seconds]
 	Slices refs: k$sliceId_$size -> refcount
 
+	Dir data length: dirDataLength -> { $inode -> length }
+	Dir used space: dirUsedSpace -> { $inode -> usedSpace }
+	Dir used inodes: dirUsedInodes -> { $inode -> usedInodes }
+
 	Redis features:
 	  Sorted Set: 1.2+
 	  Hash Set: 4.0+
