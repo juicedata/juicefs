@@ -3328,32 +3328,36 @@ func (m *redisMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map
 		}, m.dirQuotaKey())
 	case QuotaGet:
 		var quota Quota
-		err = m.txn(ctx, func(tx *redis.Tx) error {
-			rawQ, e := tx.HGet(ctx, m.dirQuotaKey(), field).Bytes()
-			if e == redis.Nil {
-				e = errors.New("no quota")
-			} else if e == nil && len(rawQ) != 16 {
-				e = fmt.Errorf("invalid quota value: %v", rawQ)
-			}
-			if e != nil {
-				return e
-			}
-			quota.MaxSpace, quota.MaxInodes = m.parseQuota(rawQ)
-			quota.UsedSpace, e = tx.HGet(ctx, m.dirQuotaUsedSpaceKey(), field).Int64()
-			if e != nil && e != redis.Nil {
-				return e
-			}
-			quota.UsedInodes, e = tx.HGet(ctx, m.dirQuotaUsedInodesKey(), field).Int64()
-			return e
+		var cmds []redis.Cmder
+		cmds, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HGet(ctx, m.dirQuotaKey(), field)
+			pipe.HGet(ctx, m.dirQuotaUsedSpaceKey(), field)
+			pipe.HGet(ctx, m.dirQuotaUsedInodesKey(), field)
+			return nil
 		})
-		if err == nil {
-			quotas[dpath] = &quota
+		if err == redis.Nil {
+			err = errors.New("no quota")
 		}
+		if err != nil {
+			return err
+		}
+		rawQ, _ := cmds[0].(*redis.StringCmd).Bytes()
+		if len(rawQ) != 16 {
+			return fmt.Errorf("invalid quota value: %v", rawQ)
+		}
+		quota.MaxSpace, quota.MaxInodes = m.parseQuota(rawQ)
+		if quota.UsedSpace, err = cmds[1].(*redis.StringCmd).Int64(); err != nil {
+			return err
+		}
+		if quota.UsedInodes, err = cmds[2].(*redis.StringCmd).Int64(); err != nil {
+			return err
+		}
+		quotas[dpath] = &quota
 	case QuotaDel:
-		_, err = m.rdb.TxPipelined(ctx, func(pipeline redis.Pipeliner) error {
-			pipeline.HDel(ctx, m.dirQuotaKey(), field)
-			pipeline.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
-			pipeline.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
+		_, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.HDel(ctx, m.dirQuotaKey(), field)
+			pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
+			pipe.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
 			return nil
 		})
 	case QuotaList:
