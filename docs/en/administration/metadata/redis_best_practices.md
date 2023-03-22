@@ -8,17 +8,7 @@ import Badge from '@site/src/components/Badge';
 
 # Redis Best Practices
 
-Redis is a key component in JuiceFS architecture. It stores all file system metadata and serve metadata operation from client. If any problem occurs to Redis (e.g., unavailable service, losing data), it will directly reduce the read/write speed or cause data damage, and further affect user experience.
-
-:::tip
-It's highly recommended to use Redis service managed by public cloud provider if possible. See ["Recommended Managed Redis Service"](#recommended-managed-redis-service) for more information.
-:::
-
-If you insist to operate Redis yourself in production environment, please keep in mind that JuiceFS requires Redis version 4.0 and above. Moreover, it's recommended to pick an [official stable version](https://redis.io/download). Please read the following contents before deploying Redis.
-
-:::note
-Part of the content in this article comes from the Redis official website. If there is any inconsistency, please refer to the official Redis document.
-:::
+To ensure metadata service performance, we recommend use Redis service managed by public cloud provider, see [Recommended Managed Redis Service](#recommended-managed-redis-service).
 
 ## Memory usage
 
@@ -54,7 +44,7 @@ Among them, `used_memory_rss` is the total memory size actually used by Redis, w
 
 **A stable release of Redis Sentinel is shipped since Redis 2.8**. Redis Sentinel version 1, shipped with Redis 2.6, is deprecated and should not be used.
 
-There're some [fundamental things](https://redis.io/docs/manual/sentinel#fundamental-things-to-know-about-sentinel-before-deploying) to know about before using it:
+Before start using redis sentinel, learn the [fundamentals](https://redis.io/docs/manual/sentinel#fundamental-things-to-know-about-sentinel-before-deploying):
 
 1. You need at least three Sentinel instances for a robust deployment.
 2. The three Sentinel instances should be placed into computers or virtual machines that are believed to fail in an independent way. So for example different physical servers or Virtual Machines executed on different availability zones.
@@ -62,11 +52,11 @@ There're some [fundamental things](https://redis.io/docs/manual/sentinel#fundame
 4. There is no HA setup which is safe if you don't test from time to time in development environments, or even better if you can, in production environments, if they work. You may have a misconfiguration that will become apparent only when it's too late (at 3am when your master stops working).
 5. **Sentinel, Docker, or other forms of Network Address Translation or Port Mapping should be mixed with care**: Docker performs port remapping, breaking Sentinel auto discovery of other Sentinel processes and the list of replicas for a master.
 
-Please read the [official documentation](https://redis.io/docs/manual/sentinel) for more information.
+Read the [official documentation](https://redis.io/docs/manual/sentinel) for more information.
 
 Once Redis servers and Sentinels are deployed, `META-URL` can be specified as `redis[s]://[[USER]:PASSWORD@]MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`, for example:
 
-```bash
+```shell
 ./juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2 ~/jfs
 ```
 
@@ -74,11 +64,9 @@ Once Redis servers and Sentinels are deployed, `META-URL` can be specified as `r
 For JuiceFS v0.16+, the `PASSWORD` in the URL will be used to connect Redis server, and the password for Sentinel should be provided using the environment variable `SENTINEL_PASSWORD`. For early versions of JuiceFS, the `PASSWORD` is used for both Redis server and Sentinel, which can be overwritten by the environment variables `SENTINEL_PASSWORD` and `REDIS_PASSWORD`.
 :::
 
-:::tip
-Since JuiceFS v1.0.0, it is supported to only connect Redis replica nodes when mounting file systems to reduce the load on Redis master node. In order to enable this feature, you must mount the JuiceFS file system in read-only mode (that is, set the `--read-only` mount option), and connect to the metadata engine through Redis Sentinel. Finally, you need to add `?route-read=replica` to the end of the metadata URL. For example: `redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2?route-read=replica`.
+Since JuiceFS v1.0.0, it is supported to use Redis replica when mounting file systems, to reduce the load on Redis master. In order to achieve this, you must mount the JuiceFS file system in read-only mode (that is, set the `--read-only` mount option), and connect to the metadata engine through Redis Sentinel. Finally, you need to add `?route-read=replica` to the end of the metadata URL. For example: `redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2?route-read=replica`.
 
 It should be noted that since the data of the Redis master node is asynchronously replicated to the replica nodes, the read metadata may not be the latest.
-:::
 
 ### Cluster mode {#cluster-mode}
 
