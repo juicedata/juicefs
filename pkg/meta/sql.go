@@ -3549,6 +3549,19 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	})
 }
 
+type checkDupError func(error) bool
+
+var dupErrorCheckers []checkDupError
+
+func isDuplicateEntryErr(err error) bool {
+	for _, check := range dupErrorCheckers {
+		if check(err) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
 	srcAttr := &Attr{}
 	var eno syscall.Errno
@@ -3588,7 +3601,7 @@ func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 				}
 
 				if err = mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: dstIno, Type: TypeDirectory}); err != nil {
-					if utils.IsDuplicateEntryErr(err) {
+					if isDuplicateEntryErr(err) {
 						return syscall.EEXIST
 					}
 					return err

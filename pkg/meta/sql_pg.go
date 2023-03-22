@@ -20,9 +20,17 @@
 package meta
 
 import (
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
+func isPGDuplicateEntryErr(err error) bool {
+	if e, ok := err.(*pgconn.PgError); ok {
+		return e.Code == "23505"
+	}
+	return false
+}
+
 func init() {
+	dupErrorCheckers = append(dupErrorCheckers, isPGDuplicateEntryErr)
 	Register("postgres", newSQLMeta)
 }
