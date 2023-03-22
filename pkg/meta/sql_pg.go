@@ -21,6 +21,7 @@ package meta
 
 import (
 	"github.com/jackc/pgx/v5/pgconn"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func isPGDuplicateEntryErr(err error) bool {
