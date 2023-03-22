@@ -16,6 +16,7 @@ slug: /metadata_dump_load
 JuiceFS 支持[多种元数据存储引擎](../guide/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 [`dump`](../reference/command_reference.md#dump) 命令允许将所有元数据以统一格式写入到 JSON 文件进行备份。同时，JuiceFS 也提供了 [`load`](../reference/command_reference.md#load) 命令，允许将备份恢复或迁移到任意元数据存储引擎。
 
 :::note 注意
+
 * `juicefs dump` 不提供全局时间点快照的功能，如果在导出过程中业务仍在写入，最终结果会包含不同时间点的信息，对于特定应用（比如数据库），这可能意味着导出文件不可用。如果对一致性有更高要求，可能需要在导出前确保应用停写。
 * 对大规模文件系统，如果直接在线上环境进行导出，可能影响业务稳定性。
 :::

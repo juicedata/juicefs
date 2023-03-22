@@ -16,6 +16,7 @@ slug: /metadata_dump_load
 JuiceFS supports [multiple metadata storage engines](../guide/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine.
 
 :::note
+
 * `juicefs dump` does not provide snapshot consistency. If files are modified during the export, the final backup file will contain information from different points in time, which might prove unusable for some applications (like databases). If you have higher standards for consistency, you should suspend all writes to the system before exporting.
 * For large scale file systems, dumping directly from online database may prove risks to system reliability, use with caution.
 :::
