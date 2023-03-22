@@ -1055,7 +1055,7 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。
 
 `FILE`<br />
-导入文件路径，如果不指定，则会导出到标准输出。
+导入文件路径，如果不指定，则会导出到标准输出。如果文件名以 `.gz` 结尾，将会自动压缩。
 
 `--subdir=path`<br />
 只导出一个子目录。
@@ -1082,7 +1082,7 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。
 
 `FILE`<br />
-导入文件路径，如果不指定，则会从标准输入导入。
+导入文件路径，如果不指定，则会从标准输入导入。如果文件以 `.gz` 结尾，将会自动解压。
 
 `--encrypt-rsa-key=path`<br />
 加密所使用的 RSA 私钥文件。

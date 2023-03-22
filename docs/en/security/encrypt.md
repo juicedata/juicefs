@@ -36,7 +36,7 @@ juicefs format --storage s3 \
   "rediss://myredis.ap-southeast-1.amazonaws.com:6379/1" myjfs
 ```
 
-## Data Encryption At Rest
+## Data Encryption At Rest {#at-rest}
 
 JuiceFS supports Data Encryption At Rest. All data will be encrypted first before being uploaded to object storage. This allows JuiceFS to effectively prevent data leakage.
 

@@ -36,7 +36,7 @@ juicefs format --storage s3 \
   "rediss://myredis.ap-southeast-1.amazonaws.com:6379/1" myjfs
 ```
 
-## 静态数据加密
+## 静态数据加密 {#at-rest}
 
 JuiceFS 提供静态数据加密支持，即先加密，再上传。所有存入 JuiceFS 的文件都会在本地完成加密后再上传到对象存储，这可以在对象存储本身被破坏时有效地防止数据泄露。
 
