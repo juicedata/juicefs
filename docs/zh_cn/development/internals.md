@@ -4,13 +4,11 @@ sidebar_position: 3
 slug: /internals
 ---
 
-本文介绍 JuiceFS 的实现细节，用来为开发者了解和贡献开源代码作参考。其中内容对应的 JuiceFS 代码版本为 v1.0.0，元数据版本为 V1。
-
-JuiceFS 使用 FUSE 的 low level API，这是因为内核的 VFS 跟 FUSE 库交互就使用 low level API。如果使用 high level API 的话，其实是在 libfuse 内部做了 VFS 树的模拟，然后对外暴露基于路径的 API，这种模式适合元数据本身是基于路径提供的 API 的系统，比如 HDFS 或者 S3 之类。而如果元数据本身也是基于 inode 的目录树，这种 inode -> path -> inode 的反复转换就会影响性能（所以 HDFS 的 FUSE 接口实现性能都不好）。JuiceFS 的元数据是按照 inode 组织的，也直接提供基于 inode 的 API，那么使用 FUSE 的 low level API 就非常简单和自然，性能也很好。
+本文介绍 JuiceFS 的实现细节，用来为开发者了解和贡献开源代码作参考。其中内容对应的 JuiceFS 代码版本为 v1.0.0，元数据版本为 v1。
 
 在深入学习源码前，我们还推荐阅读：
 
-* [JuiceFS 读写请求处理流程](../introduction/io_processing.md)。
+* [JuiceFS 读写请求处理流程](../introduction/io_processing.md)
 * 网易存储团队的工程师写的这几篇博客（注意文章内容可能与最新版本代码有出入，一切请以代码为准）：[JuiceFS 调研（基于开源版本代码）](https://aspirer.wang/?p=1560)、[JuiceFS 源码阅读 - 上](https://mp.weixin.qq.com/s/mdqFJLpaJ249rUUEnRiP3Q)、[JuiceFS 源码阅读 - 中](https://mp.weixin.qq.com/s/CLQbQ-cLLGFsShPKUrCUJg)。
 
 ## 关键词定义
@@ -29,9 +27,9 @@ JuiceFS 使用 FUSE 的 low level API，这是因为内核的 VFS 跟 FUSE 库�
 
 底层概念（详见 [JuiceFS 读写请求处理流程](../introduction/io_processing.md)）：
 
-- Chunk：对文件分割的逻辑单位，大小 64M。Chunk 的存在让 JuiceFS 在读取大文件时能快速定位，提升读取性能；
+- Chunk：对文件分割的逻辑单位，大小 64MiB。Chunk 的存在让 JuiceFS 在读取大文件时能快速定位，提升读取性能；
 - Slice：数据写入的逻辑单位，每一次写入都会分配一个已有或新的 Slice，而在元数据中则在 Chunk 下维护着 Chunk Slice 列表。
-- Block：文件分割后的实际最小存储单位，默认大小 4M。一个 Chunk 包含一个或多个 Slice，而一个 Slice 又包含一个或多个 Block。
+- Block：文件分割后的实际最小存储单位，默认大小 4MiB。一个 Chunk 包含一个或多个 Slice，而一个 Slice 又包含一个或多个 Block。
 
 ## 代码结构 {#source-code-structure}
 
@@ -48,6 +46,12 @@ JuiceFS 使用 FUSE 的 low level API，这是因为内核的 VFS 跟 FUSE 库�
     * `pkg/meta/tkv.go` 是 KV 类数据库的接口定义及通用接口实现，特定数据库的实现在单独文件中（如 TiKV 的实现在 `pkg/meta/tkv_tikv.go`）
   * `pkg/object` 是与各种对象存储对接的实现。
 * [`sdk/java`](https://github.com/juicedata/juicefs/tree/main/sdk/java) 是 Hadoop Java SDK 的实现，底层依赖 `sdk/java/libjfs` 这个库（通过 JNI 调用）。
+
+## FUSE 接口实现 {#fuse-interface-implementation}
+
+JuiceFS 基于 [FUSE](https://en.wikipedia.org/wiki/Filesystem_in_Userspace)（Filesystem in Userspace）实现了一个用户态文件系统，FUSE 接口在 Linux 系统中的实现库 [libfuse](https://github.com/libfuse/libfuse) 提供两种 API：high-level API 和 low-level API，其中 high-level API 基于文件名和路径，low-level API 基于 inode。
+
+JuiceFS 基于 low-level API 实现（事实上 JuiceFS 不依赖 libfuse，而是 [go-fuse](https://github.com/hanwen/go-fuse)），这是因为内核的 VFS 跟 FUSE 库交互就使用 low-level API。如果使用 high-level API 的话，其实是在 libfuse 内部做了 VFS 树的模拟，然后对外暴露基于路径的 API，这种模式适合元数据本身是基于路径提供的 API 的系统，比如 HDFS 或者 S3 之类。而如果元数据本身也是基于 inode 的目录树，这种 inode → path → inode 的反复转换就会影响性能（所以 HDFS 的 FUSE 接口实现性能都不好）。JuiceFS 的元数据是按照 inode 组织的，也直接提供基于 inode 的 API，那么使用 FUSE 的 low-level API 就非常简单和自然，性能也很好。
 
 ## 元数据结构
 

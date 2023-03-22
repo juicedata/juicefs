@@ -4,9 +4,7 @@ sidebar_position: 4
 slug: /internals
 ---
 
-This article introduces implementation details of JuiceFS, use this as a reference if you'd like to contribute. The content below is based on JuiceFS v1.0.0, metadata version V1.
-
-JuiceFS uses FUSE low level API, because this is the same set of APIs used by kernel VFS when interacting with FUSE. If JuiceFS were to use high level API, it'll have to implement the VFS tree within libfuse, and then expose path based API. This method works better for systems that already expose path based APIs (e.g. HDFS, S3). If metadata itself implements file / directory tree based on inode, the inode -> path -> inode conversions will have an impact on performance (this is the reason why FUSE API for HDFS doesn't perform well). JuiceFS Metadata directly implements file tree and API based on inode, so naturally it uses FUSE low level API.
+This article introduces implementation details of JuiceFS, use this as a reference if you'd like to contribute. The content below is based on JuiceFS v1.0.0, metadata version v1.
 
 Before digging into source code, you should read [Data Processing Workflow](../introduction/io_processing.md).
 
@@ -24,11 +22,11 @@ High level concepts:
 - File: refers to all types of files in general in this documentation, including regular files, directory files, link files, device files, etc.
 - Directory: is a special kind of file used to organize the tree structure, and its contents are an index to a set of other files.
 
-Low level concepts:
+Low level concepts (learn more at [Data Processing Workflow](../introduction/io_processing.md)):
 
-- Chunk: Logical concept, file is split into 64M chunks, allowing fast lookups during file reads;
-- Block: A chunk contains one or more blocks (4M by default), block is the basic storage unit in object storage. JuiceFS Client reads multiple blocks concurrently which greatly improves read performance. Apart from this, block is also the basic storage unit on disk cache, so this design improves cache eviction efficiency. Apart from this, block is immutable, all file edits is achieved through new blocks: after file edit, new blocks are uploaded to object storage, and new slices are appended to the slice list in the corresponding file metadata;
-- Slice: Logical concept, basic unit for file writes. Block's purpose is to improve read speed, and slice exists to improve file edits and random writes. All file writes are assigned a new or existing slice, and when file is read, what application sees is the consolidated view of all slices. Learn more at [Data Processing Workflow](../introduction/io_processing.md).
+- Chunk: Logical concept, file is split into 64MiB chunks, allowing fast lookups during file reads;
+- Slice: Logical concept, basic unit for file writes. Block's purpose is to improve read speed, and slice exists to improve file edits and random writes. All file writes are assigned a new or existing slice, and when file is read, what application sees is the consolidated view of all slices.
+- Block: A chunk contains one or more blocks (4MiB by default), block is the basic storage unit in object storage. JuiceFS Client reads multiple blocks concurrently which greatly improves read performance. Apart from this, block is also the basic storage unit on disk cache, so this design improves cache eviction efficiency. Apart from this, block is immutable, all file edits is achieved through new blocks: after file edit, new blocks are uploaded to object storage, and new slices are appended to the slice list in the corresponding file metadata;
 
 ## Learn source code  {#source-code-structure}
 
@@ -45,6 +43,12 @@ Assuming you're already familiar with Go, as well as [JuiceFS architecture](http
     * `pkg/meta/tkv.go` is the interface definition and general interface implementation of the KV database, and the implementation of a specific database is in a separate file (for example, the implementation of TiKV is in `pkg/meta/tkv_tikv.go`)
   * `pkg/object` contains all object storage integration code;
 * [`sdk/java`](https://github.com/juicedata/juicefs/tree/main/sdk/java) is the Hadoop Java SDK, it uses `sdk/java/libjfs` through JNI.
+
+## FUSE interface implementation {#fuse-interface-implementation}
+
+JuiceFS implements a userspace file system based on [FUSE](https://en.wikipedia.org/wiki/Filesystem_in_Userspace) (Filesystem in Userspace), and the implementation library [libfuse](https://github.com/libfuse/libfuse) provides two APIs: high-level API and low-level API, where the high-level API is based on file name and path, and the low-level API is based on inode.
+
+JuiceFS is implemented based on low-level API (in fact JuiceFS does not depend on libfuse, but [go-fuse](https://github.com/hanwen/go-fuse)), because this is the same set of APIs used by kernel VFS when interacting with FUSE. If JuiceFS were to use high level API, it'll have to implement the VFS tree within libfuse, and then expose path based API. This method works better for systems that already expose path based APIs (e.g. HDFS, S3). If metadata itself implements file / directory tree based on inode, the inode -> path -> inode conversions will have an impact on performance (this is the reason why FUSE API for HDFS doesn't perform well). JuiceFS Metadata directly implements file tree and API based on inode, so naturally it uses FUSE low level API.
 
 ## Metadata Structure
 

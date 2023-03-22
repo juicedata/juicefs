@@ -5,7 +5,7 @@ slug: /internals/io_processing
 description: 本文分别介绍 JuiceFS 的读和写的流程，更进一步的介绍 JuiceFS 读写分块技术在操作系统上的实现过程。
 ---
 
-## 写入流程
+## 写入流程 {#workflow-of-write}
 
 JuiceFS 对大文件会做多级拆分（[JuiceFS 如何存储文件](../introduction/architecture.md#how-juicefs-store-files)），以提高读写效率。在处理写请求时，JuiceFS 先将数据写入 Client 的内存缓冲区，并在其中按 Chunk/Slice 的形式进行管理。Chunk 是根据文件内 offset 按 64 MiB 大小拆分的连续逻辑单元，不同 Chunk 之间完全隔离。每个 Chunk 内会根据应用写请求的实际情况进一步拆分成 Slice；当新的写请求与已有的 Slice 连续或有重叠时，会直接在该 Slice 上进行更新，否则就创建新的 Slice。Slice 是启动数据持久化的逻辑单元，其在 flush 时会先将数据按照默认 4 MiB 大小拆分成一个或多个连续的 Block，并作为最小单元上传到对象存储；然后再更新一次元数据，写入新的 Slice 信息。
 
@@ -34,15 +34,15 @@ JuiceFS 对大文件会做多级拆分（[JuiceFS 如何存储文件](../introdu
 
 缓冲区中的数据只有在被持久化后才能释放，因此当写入并发较大时，如果缓冲区大小不足（默认 300MiB，通过 [`--buffer-size`](../reference/command_reference.md#mount) 调节），或者对象存储性能不佳，读写缓冲区将持续被占用而导致写阻塞。缓冲区大小可以在指标图的 usage.buf 一列中看到。当使用量超过阈值时，JuiceFS Client 会主动为 Write 添加约 10ms 等待时间以减缓写入速度；若已用量超过阈值两倍，则会导致写入暂停直至缓冲区得到释放。因此，在观察到 Write 时延上升以及 Buffer 长时间超过阈值时，通常需要尝试设置更大的 `--buffer-size`。另外，增大上传并发度（[`--max-uploads`](../reference/command_reference.md#mount)，默认 20）也能提升写入到对象存储的带宽，从而加快缓冲区的释放。
 
-### 随机写
+### 随机写 {#random-write}
 
 JuiceFS 支持随机写，包括通过 mmap 等进行的随机写。
 
 要知道，Block 是一个不可变对象，这也是因为大部分对象存储服务并不支持修改对象，只能重新上传覆盖。因此发生覆盖写、大文件随机写时，并不会将 Block 重新下载、修改、重新上传（这样会带来严重的读写放大！），而是在新分配或者已有 Slice 中进行写入，以新 Block 的形式上传至对象存储，然后修改对应文件的元数据，在 Chunk 的 Slice 列表中追加新 Slice。后续读取文件时，其实在读取通过合并 Slice 得到的视图。
 
-因此相较于顺序写来说，大文件随机写的情况更复杂：每个 Chunk 内可能存在多个不连续的 Slice，使得一方面数据对象难以达到 4 MiB 大小，另一方面元数据需要多次更新。因此，JuiceFS 在大文件随机写有明显的性能下降。当一个 Chunk 内已写入的 Slice 过多时，会触发碎片清理（Compaction）来尝试合并与清理这些 Slice，来提升读性能。碎片清理以后台任务形式发生，除了系统自动运行，还能通过 [`juicefs gc`](../reference/command_reference.md#gc) 命令手动触发。
+因此相较于顺序写来说，大文件随机写的情况更复杂：每个 Chunk 内可能存在多个不连续的 Slice，使得一方面数据对象难以达到 4 MiB 大小，另一方面元数据需要多次更新。因此，JuiceFS 在大文件随机写有明显的性能下降。当一个 Chunk 内已写入的 Slice 过多时，会触发碎片清理（Compaction）来尝试合并与清理这些 Slice，来提升读性能。碎片清理以后台任务形式发生，除了系统自动运行，还能通过 [`juicefs gc`](../administration/status_check_and_maintenance.md#gc) 命令手动触发。
 
-### 客户端写缓存
+### 客户端写缓存 {#client-write-cache}
 
 客户端写缓存，也称为「回写模式」。
 
@@ -50,12 +50,12 @@ JuiceFS 支持随机写，包括通过 mmap 等进行的随机写。
 
 更详细的介绍请见[「客户端写缓存」](../guide/cache_management.md#writeback)。
 
-## 读取流程
+## 读取流程 {#workflow-of-read}
 
-JuiceFS 支持包括基于 mmap 的随机读，在处理读请求会通过对象存储的 `GetObject` 接口指定读取的范围（比如 [S3 API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html) 支持 `Range` 参数），与此同时异步地进行预读（通过 [`--prefetch`](../reference/command_reference.md#mount) 参数控制预读并发度），预读会将整个对象存储块下载到本地缓存目录，以备后用（如指标图中的第 2 阶段，blockcache 有很高的写入带宽）。显然，在顺序读时，这些提前获取的数据都会被后续的请求访问到，缓存命中率非常高，因此也能充分发挥出对象存储的读取性能。数据流如下图所示：
+JuiceFS 支持顺序读和随机读（包括基于 mmap 的随机读），在处理读请求时会通过对象存储的 `GetObject` 接口完整读取 Block 对应的对象，也有可能仅仅读取对象中一定范围的数据（比如通过 [S3 API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html) 的 `Range` 参数限定读取范围）。与此同时异步地进行预读（通过 [`--prefetch`](../reference/command_reference.md#mount) 参数控制预读并发度），预读会将整个对象存储块下载到本地缓存目录，以备后用（如指标图中的第 2 阶段，blockcache 有很高的写入带宽）。显然，在顺序读时，这些提前获取的数据都会被后续的请求访问到，缓存命中率非常高，因此也能充分发挥出对象存储的读取性能。数据流如下图所示：
 
 ![](../images/internals-read.png)
 
-但是对于大文件随机读场景，预读的用途可能不大，反而容易因为读放大和本地缓存的频繁写入与驱逐使，得系统资源的实际利用率降低，此时可以考虑用 `--prefetch=0` 禁用预读。考虑到此类场景下，一般的缓存策略很难有足够高的收益，可考虑尽可能提升缓存的整体容量，达到能几乎完全缓存所需数据的效果；或者直接禁用缓存（`--cache-size=0`），并尽可能提高对象存储的读取性能。
+但是对于大文件随机读场景，预读的用途可能不大，反而容易因为读放大和本地缓存的频繁写入与驱逐使得系统资源的实际利用率降低，此时可以考虑用 `--prefetch=0` 禁用预读。考虑到此类场景下，一般的缓存策略很难有足够高的收益，可考虑尽可能提升缓存的整体容量，达到能几乎完全缓存所需数据的效果；或者直接禁用缓存（`--cache-size=0`），并尽可能提高对象存储的读取性能。
 
 小文件的读取则比较简单，通常就是在一次请求里读取完整个文件。由于小文件写入时会直接被缓存起来，因此类似 `juicefs bench` 这种写入后不久就读取的访问模式，基本都会在本地缓存目录命中，性能非常可观。

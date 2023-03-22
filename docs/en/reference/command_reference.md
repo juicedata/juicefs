@@ -123,7 +123,7 @@ source /etc/bash_completion.d/juicefs
 
 ### `juicefs format` {#format}
 
-Create a file system, if a volume already exists with the same META-URL, this command will skip the creation step. To adjust volume settings afterwards, use [`juicefs config`](#config).
+Create a file system, if a volume already exists with the same `META-URL`, this command will skip the creation step. To adjust volume settings afterwards, use [`juicefs config`](#config).
 
 #### Synopsis
 
@@ -840,6 +840,9 @@ size of each big object in MiB (default: 1024)
 `--small-object-size value`<br />
 size of each small object in KiB (default: 128)
 
+`--small-objects value`<br />
+number of small objects (default: 100)
+
 `--skip-functional-tests`<br />
 skip functional tests (default: false)
 
@@ -1076,7 +1079,7 @@ juicefs load redis://localhost/1 meta-dump
 
 ### `juicefs config` {#config}
 
-Change config of a volume. Some settings might not take effect immediately, clients might have to wait for at most 1 minute for changes to apply (see [code here](https://github.com/juicedata/juicefs/blob/v0.17.1/pkg/meta/redis.go#L2067-L2082))
+Change config of a volume. Note that after updating some settings, the client may not take effect immediately, and it needs to wait for a certain period of time. The specific waiting time can be controlled by the [`--heartbeat`](#mount) option.
 
 #### Synopsis
 
