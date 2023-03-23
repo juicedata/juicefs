@@ -3912,7 +3912,7 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			}
 			// copy chunks
 			if srcNode.Length != 0 {
-				if m.checkQuota(align4K(srcNode.Length), 0) {
+				if m.checkQuota(ctx, align4K(srcNode.Length), 0, dstParentIno) {
 					return syscall.ENOSPC
 				}
 				var cs []chunk
@@ -3985,7 +3985,7 @@ func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 }
 
 func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNode *node, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
-	if m.checkQuota(4<<10, 1) {
+	if m.checkQuota(ctx, align4K(0), 1, dstParentIno) {
 		return syscall.ENOSPC
 	}
 	srcNode.Parent = dstParentIno

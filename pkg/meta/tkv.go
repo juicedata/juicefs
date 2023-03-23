@@ -3424,7 +3424,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 			}
 			// copy chunks
 			if srcAttr.Length != 0 {
-				if m.checkQuota(align4K(srcAttr.Length), 0) {
+				if m.checkQuota(ctx, align4K(srcAttr.Length), 0, dstParentIno) {
 					return syscall.ENOSPC
 				}
 				vals := make(map[string][]byte)
@@ -3484,7 +3484,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 }
 
 func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Attr, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
-	if m.checkQuota(4<<10, 1) {
+	if m.checkQuota(ctx, align4K(0), 1, dstParentIno) {
 		return syscall.ENOSPC
 	}
 	srcAttr.Parent = dstParentIno

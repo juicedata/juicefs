@@ -4205,7 +4205,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 			}
 			// copy chunks
 			if srcAttr.Length != 0 {
-				if m.checkQuota(align4K(srcAttr.Length), 0) {
+				if m.checkQuota(ctx, align4K(srcAttr.Length), 0, dstParentIno) {
 					return syscall.ENOSPC
 				}
 				p := tx.Pipeline()
@@ -4275,7 +4275,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 }
 
 func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAttr *Attr, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
-	if m.checkQuota(4<<10, 1) {
+	if m.checkQuota(ctx, align4K(0), 1, dstParentIno) {
 		return syscall.ENOSPC
 	}
 	srcAttr.Parent = dstParentIno
