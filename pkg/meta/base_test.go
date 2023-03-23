@@ -537,7 +537,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		}
 	}
 	var summary Summary
-	if st := GetSummary(m, ctx, parent, &summary, false); st != 0 {
+	if st := m.GetSummary(ctx, parent, &summary, false); st != 0 {
 		t.Fatalf("summary: %s", st)
 	}
 	expected := Summary{Length: 0, Size: 4096, Files: 0, Dirs: 1}
@@ -545,14 +545,14 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("summary %+v not equal to expected: %+v", summary, expected)
 	}
 	summary = Summary{}
-	if st := GetSummary(m, ctx, 1, &summary, true); st != 0 {
+	if st := m.GetSummary(ctx, 1, &summary, true); st != 0 {
 		t.Fatalf("summary: %s", st)
 	}
 	expected = Summary{Length: 400, Size: 20480, Files: 3, Dirs: 2}
 	if summary != expected {
 		t.Fatalf("summary %+v not equal to expected: %+v", summary, expected)
 	}
-	if st := GetSummary(m, ctx, inode, &summary, true); st != 0 {
+	if st := m.GetSummary(ctx, inode, &summary, true); st != 0 {
 		t.Fatalf("summary: %s", st)
 	}
 	expected = Summary{Length: 600, Size: 24576, Files: 4, Dirs: 2}
