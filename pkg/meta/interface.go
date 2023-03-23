@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -84,6 +85,14 @@ const (
 const (
 	FlagImmutable = 1 << iota
 	FlagAppend
+)
+
+const (
+	QuotaSet uint8 = iota
+	QuotaGet
+	QuotaDel
+	QuotaList
+	QuotaCheck
 )
 
 const MaxName = 255
@@ -250,6 +259,34 @@ type Session struct {
 	Plocks    []Plock `json:",omitempty"`
 }
 
+type Quota struct {
+	MaxSpace, MaxInodes   int64
+	UsedSpace, UsedInodes int64
+	newSpace, newInodes   int64
+}
+
+// Returns true if it will exceed the quota limit
+func (q *Quota) check(space, inodes int64) bool {
+	if space > 0 {
+		max := atomic.LoadInt64(&q.MaxSpace)
+		if max > 0 && atomic.LoadInt64(&q.UsedSpace)+atomic.LoadInt64(&q.newSpace)+space > max {
+			return true
+		}
+	}
+	if inodes > 0 {
+		max := atomic.LoadInt64(&q.MaxInodes)
+		if max > 0 && atomic.LoadInt64(&q.UsedInodes)+atomic.LoadInt64(&q.newInodes)+inodes > max {
+			return true
+		}
+	}
+	return false
+}
+
+func (q *Quota) update(space, inodes int64) {
+	atomic.AddInt64(&q.newSpace, space)
+	atomic.AddInt64(&q.newInodes, inodes)
+}
+
 // Meta is a interface for a meta service for file system.
 type Meta interface {
 	// Name of database
@@ -340,6 +377,8 @@ type Meta interface {
 	GetParents(ctx Context, inode Ino) map[Ino]int
 	// GetDirStat returns the space and inodes usage of a directory.
 	GetDirStat(ctx Context, inode Ino) (st *dirStat, err error)
+	// GetDirRecStat returns the space and inodes usage (recursive) of a directory.
+	GetDirRecStat(ctx Context, inode Ino) (space, inodes int64, err error)
 
 	// GetXattr returns the value of extended attribute for given name.
 	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
@@ -377,6 +416,8 @@ type Meta interface {
 	OnMsg(mtype uint32, cb MsgCallback)
 	// OnReload register a callback for any change founded after reloaded.
 	OnReload(func(new *Format))
+
+	HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota) error
 
 	// Dump the tree under root, which may be modified by checkRoot
 	DumpMeta(w io.Writer, root Ino, keepSecret bool) error

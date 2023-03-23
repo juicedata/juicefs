@@ -14,6 +14,17 @@ import TabItem from '@theme/TabItem';
 
 JuiceFS is a decoupled structure that separates data and metadata. Metadata can be stored in any supported database (called Metadata Engine). Many databases are supported and they all comes with different performance and intended scenarios, refer to [our docs](../benchmark/metadata_engines_benchmark.md) for comparison.
 
+## The storage usage of metadata {#storage-usage}
+
+The storage space required for metadata is related to the length of the file name, the type and length of the file, and extended attributes. It is difficult to accurately estimate the metadata storage space requirements of a file system. For simplicity, we can approximate based on the storage space required for a single small file without extended attributes.
+
+- **Key-Value Database** (e.g. Redis, TiKV): 300 bytes/file
+- **Relational Database** (e.g. SQLite, MySQL, PostgreSQL): 600 bytes/file
+
+When the average file is larger (over 64MB), or the file is frequently modified and has a lot of fragments, or there are many extended attributes, or the average file name is long (over 50 bytes), more storage space is needed.
+
+When you need to migrate between two types of metadata engines, you can use this method to estimate the required storage space. For example, if you want to migrate the metadata engine from a relational database (MySQL) to a key-value database (Redis), and the current usage of MySQL is 30GB, then the target Redis needs to prepare at least 15GB or more of memory. The reverse is also true.
+
 ## Redis
 
 JuiceFS requires Redis version 4.0 and above. Redis Cluster is also supported, but in order to avoid transactions across different Redis instances, JuiceFS puts all metadata for one file system on a single Redis instance.

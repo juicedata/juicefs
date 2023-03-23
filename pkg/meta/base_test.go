@@ -117,6 +117,7 @@ func testMeta(t *testing.T, m Meta) {
 	testCloseSession(t, m)
 	testConcurrentDir(t, m)
 	testAttrFlags(t, m)
+	testQuota(t, m)
 	base := m.getBase()
 	base.conf.OpenCache = time.Second
 	base.of.expire = time.Second
@@ -2254,5 +2255,104 @@ func checkEntry(t *testing.T, m Meta, srcEntry, dstEntry *Entry, dstParentIno In
 		if !bytes.Equal(v1, v2) {
 			t.Fatalf("xattr not equal")
 		}
+	}
+}
+
+func testQuota(t *testing.T, m Meta) {
+	if err := m.NewSession(); err != nil {
+		t.Fatalf("New session: %s", err)
+	}
+	defer m.CloseSession()
+	ctx := Background
+	var inode, parent Ino
+	var attr Attr
+	if st := m.Mkdir(ctx, RootInode, "quota", 0755, 0, 0, &parent, &attr); st != 0 {
+		t.Fatalf("Mkdir quota: %s", st)
+	}
+	p := "/quota"
+	if err := m.HandleQuota(ctx, QuotaSet, p, map[string]*Quota{p: {MaxSpace: 2 << 30, MaxInodes: 6}}); err != nil {
+		t.Fatalf("HandleQuota set %s: %s", p, err)
+	}
+	m.getBase().loadQuotas()
+	if st := m.Mkdir(ctx, parent, "d1", 0755, 0, 0, &inode, &attr); st != 0 {
+		t.Fatalf("Mkdir quota/d1: %s", st)
+	}
+	p = "/quota/d1"
+	if err := m.HandleQuota(ctx, QuotaSet, p, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 5}}); err != nil {
+		t.Fatalf("HandleQuota %s: %s", p, err)
+	}
+	m.getBase().loadQuotas()
+	if st := m.Create(ctx, inode, "f1", 0644, 0, 0, nil, &attr); st != 0 {
+		t.Fatalf("Create quota/d1/f1: %s", st)
+	}
+	if st := m.Mkdir(ctx, parent, "d2", 0755, 0, 0, &parent, &attr); st != 0 {
+		t.Fatalf("Mkdir quota/d2: %s", st)
+	}
+	if st := m.Mkdir(ctx, parent, "d22", 0755, 0, 0, &inode, &attr); st != 0 {
+		t.Fatalf("Mkdir quota/d2/d22: %s", st)
+	}
+	p = "/quota/d2/d22"
+	if err := m.HandleQuota(ctx, QuotaSet, p, map[string]*Quota{p: {MaxSpace: 1 << 30, MaxInodes: 5}}); err != nil {
+		t.Fatalf("HandleQuota %s: %s", p, err)
+	}
+	m.getBase().loadQuotas()
+	// parent -> d2, inode -> d22
+	if st := m.Create(ctx, parent, "f2", 0644, 0, 0, nil, &attr); st != 0 {
+		t.Fatalf("Create quota/d2/f2: %s", st)
+	}
+	if st := m.Create(ctx, inode, "f22", 0644, 0, 0, nil, &attr); st != 0 {
+		t.Fatalf("Create quota/d22/f22: %s", st)
+	}
+	time.Sleep(time.Second * 5)
+
+	qs := make(map[string]*Quota)
+	p = "/quota"
+	if err := m.HandleQuota(ctx, QuotaGet, p, qs); err != nil {
+		t.Fatalf("HandleQuota get %s: %s", p, err)
+	} else if q := qs[p]; q.MaxSpace != 2<<30 || q.MaxInodes != 6 || q.UsedSpace != 6*4<<10 || q.UsedInodes != 6 {
+		t.Fatalf("HandleQuota get %s: %+v", p, q)
+	}
+	delete(qs, p)
+	p = "/quota/d1"
+	if err := m.HandleQuota(ctx, QuotaGet, p, qs); err != nil {
+		t.Fatalf("HandleQuota get %s: %s", p, err)
+	} else if q := qs[p]; q.MaxSpace != 1<<30 || q.MaxInodes != 5 || q.UsedSpace != 4<<10 || q.UsedInodes != 1 {
+		t.Fatalf("HandleQuota get %s: %+v", p, q)
+	}
+	delete(qs, p)
+	p = "/quota/d2/d22"
+	if err := m.HandleQuota(ctx, QuotaGet, p, qs); err != nil {
+		t.Fatalf("HandleQuota get %s: %s", p, err)
+	} else if q := qs[p]; q.MaxSpace != 1<<30 || q.MaxInodes != 5 || q.UsedSpace != 4<<10 || q.UsedInodes != 1 {
+		t.Fatalf("HandleQuota get %s: %+v", p, q)
+	}
+	delete(qs, p)
+
+	if err := m.HandleQuota(ctx, QuotaList, "", qs); err != nil {
+		t.Fatalf("HandleQuota list: %s", err)
+	} else {
+		if len(qs) != 3 {
+			t.Fatalf("HandleQuota list bad result: %d", len(qs))
+		}
+	}
+
+	if err := m.HandleQuota(ctx, QuotaDel, "/quota/d1", nil); err != nil {
+		t.Fatalf("HandleQuota del /quota/d1: %s", err)
+	}
+	if err := m.HandleQuota(ctx, QuotaDel, "/quota/d2", nil); err != nil {
+		t.Fatalf("HandleQuota del /quota/d2: %s", err)
+	}
+
+	qs = make(map[string]*Quota)
+	if err := m.HandleQuota(ctx, QuotaList, "", qs); err != nil {
+		t.Fatalf("HandleQuota list: %s", err)
+	} else {
+		if len(qs) != 2 {
+			t.Fatalf("HandleQuota list bad result: %d", len(qs))
+		}
+	}
+	m.getBase().loadQuotas()
+	if st := m.Create(ctx, parent, "f3", 0644, 0, 0, nil, &attr); st != syscall.ENOSPC {
+		t.Fatalf("Create quota/d22/f3: %s", st)
 	}
 }
