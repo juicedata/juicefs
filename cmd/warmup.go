@@ -178,13 +178,16 @@ func warmup(ctx *cli.Context) error {
 
 	// find mount point
 	first := paths[0]
-	controller := openController(first)
-	if controller == nil {
-		logger.Fatalf("open control file for %s", first)
+	mp, err := findMountpoint(first)
+	if err != nil {
+		return err
+	}
+	controller, err := openController(mp)
+	if err != nil {
+		return fmt.Errorf("open control file for %s", first)
 	}
 	defer controller.Close()
 
-	mp := first
 	for ; mp != "/"; mp = filepath.Dir(mp) {
 		inode, err := utils.GetFileInode(mp)
 		if err != nil {
