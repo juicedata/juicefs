@@ -75,8 +75,8 @@ type engine interface {
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
 	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
-	doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno
-	doRmdir(ctx Context, parent Ino, name string) syscall.Errno
+	doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno
+	doRmdir(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno
 	doReadlink(ctx Context, inode Ino) ([]byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
@@ -88,7 +88,7 @@ type engine interface {
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
 	// @trySync: try sync dir stat if broken or not existed
 	doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error)
-	doSyncDirStat(ctx Context, ino Ino) (*dirStat, error)
+	doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno)
 
 	scanTrashSlices(Context, trashSliceScan) error
 	scanPendingSlices(Context, pendingSliceScan) error
@@ -253,9 +253,9 @@ func (m *baseMeta) parallelSyncDirStat(ctx Context, inos map[Ino]bool) *sync.Wai
 		wg.Add(1)
 		go func(ino Ino) {
 			defer wg.Done()
-			_, err := m.en.doSyncDirStat(ctx, ino)
-			if err != nil {
-				logger.Warnf("sync dir stat for %d: %s", ino, err)
+			_, st := m.en.doSyncDirStat(ctx, ino)
+			if st != 0 {
+				logger.Warnf("sync dir stat for %d: %s", ino, st)
 			}
 		}(i)
 	}
@@ -281,10 +281,10 @@ func (m *baseMeta) groupBatch(batch map[Ino]dirStat, size int) [][]Ino {
 	return batches
 }
 
-func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, error) {
+func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	var entries []*Entry
 	if eno := m.en.doReaddir(ctx, ino, 1, &entries, -1); eno != 0 {
-		return nil, errors.Wrap(eno, "calc dir stat")
+		return nil, eno
 	}
 
 	stat := new(dirStat)
@@ -297,7 +297,7 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, error) {
 		stat.length += int64(l)
 		stat.space += align4K(l)
 	}
-	return stat, nil
+	return stat, 0
 }
 
 func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, err error) {
@@ -948,7 +948,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 	return 0
 }
 
-func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
 	if parent == RootInode && name == TrashName || isTrash(parent) && ctx.Uid() != 0 {
 		return syscall.EPERM
 	}
@@ -958,7 +958,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 
 	defer m.timeit(time.Now())
 	var attr Attr
-	err := m.en.doUnlink(ctx, m.checkRoot(parent), name, &attr)
+	err := m.en.doUnlink(ctx, m.checkRoot(parent), name, &attr, skipCheckTrash...)
 	if err == 0 {
 		var diffLength uint64
 		if attr.Typ == TypeFile {
@@ -969,7 +969,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string) syscall.Errno {
 	return err
 }
 
-func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
+func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
 	if name == "." {
 		return syscall.EINVAL
 	}
@@ -984,7 +984,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string) syscall.Errno {
 	}
 
 	defer m.timeit(time.Now())
-	err := m.en.doRmdir(ctx, m.checkRoot(parent), name)
+	err := m.en.doRmdir(ctx, m.checkRoot(parent), name, skipCheckTrash...)
 	if err == 0 {
 		m.updateDirStat(ctx, parent, 0, -align4K(0), -1)
 	}
@@ -1390,7 +1390,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 
 				if repair {
 					if statBroken || statAll {
-						if _, err := m.en.doSyncDirStat(ctx, inode); err == nil {
+						if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 {
 							logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
 						} else {
 							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, err)

@@ -95,8 +95,8 @@ juicefs format \
 2021/12/16 16:37:14.593450 juicefs[22290] <INFO>: Volume is formatted as {Name:myjfs UUID:4ad0bb86-6ef5-4861-9ce2-a16ac5dea81b Storage:oss Bucket:https://myjfs AccessKey:ABCDEFGHIJKLMNopqXYZ SecretKey:removed BlockSize:4096 Compression:none Shards:0 Partitions:0 Capacity:0 Inodes:0 EncryptKey:}
 ```
 
-:::info 说明
-文件系统一经创建，相关的信息包括名称、对象存储、访问密钥等信息会完整的记录到数据库中。在当前的示例中，文件系统的信息被记录在 Redis 数据库中，因此在任何一台计算机上，只要拥有数据库地址、用户名和密码信息，就可以挂载读写该文件系统。
+:::info
+文件系统创建完毕以后，包含对象存储密钥等信息会完整的记录到数据库中。JuiceFS 客户端只要拥有数据库地址、用户名和密码信息，就可以挂载读写该文件系统。也正因此，JuiceFS 客户端没有本地配置文件（作为对比，JuiceFS 云服务用 [`juicefs auth`](https://juicefs.com/docs/zh/cloud/reference/commands_reference/#auth) 命令进行认证、获取配置文件）。
 :::
 
 ### 5. 挂载文件系统

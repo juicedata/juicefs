@@ -384,6 +384,7 @@ func bench(ctx *cli.Context) error {
 	result = append(result, []string{"ITEM", "VALUE", "COST"})
 	if b := bm.big; b != nil {
 		cost := b.run("write")
+		b.wbar.Done()
 		line := make([]string, 3)
 		line[0] = "Write big file"
 		line[1], line[2] = bm.colorize("bigwr", float64((b.fsize>>20)*b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
@@ -393,6 +394,7 @@ func bench(ctx *cli.Context) error {
 		dropCaches()
 
 		cost = b.run("read")
+		b.rbar.Done()
 		line = make([]string, 3)
 		line[0] = "Read big file"
 		line[1], line[2] = bm.colorize("bigrd", float64((b.fsize>>20)*b.fcount*bm.threads)/cost, cost/float64(b.fcount), 2)
@@ -402,6 +404,7 @@ func bench(ctx *cli.Context) error {
 	}
 	if s := bm.small; s != nil {
 		cost := s.run("write")
+		s.wbar.Done()
 		line := make([]string, 3)
 		line[0] = "Write small file"
 		line[1], line[2] = bm.colorize("smallwr", float64(s.fcount*bm.threads)/cost, cost*1000/float64(s.fcount), 1)
@@ -411,6 +414,7 @@ func bench(ctx *cli.Context) error {
 		dropCaches()
 
 		cost = s.run("read")
+		s.rbar.Done()
 		line = make([]string, 3)
 		line[0] = "Read small file"
 		line[1], line[2] = bm.colorize("smallrd", float64(s.fcount*bm.threads)/cost, cost*1000/float64(s.fcount), 1)
@@ -420,6 +424,7 @@ func bench(ctx *cli.Context) error {
 		dropCaches()
 
 		cost = s.run("stat")
+		s.sbar.Done()
 		line = make([]string, 3)
 		line[0] = "Stat file"
 		line[1], line[2] = bm.colorize("stat", float64(s.fcount*bm.threads)/cost, cost*1000/float64(s.fcount), 1)

@@ -8,17 +8,7 @@ import Badge from '@site/src/components/Badge';
 
 # Redis 最佳实践
 
-当采用 Redis 作为 JuiceFS 元数据存储引擎时，即由 Redis 负责存储所有元数据并响应客户端对元数据的操作。若 Redis 出现连接不稳定、服务不可用或元数据丢失等问题，可能会导致读写速度慢或数据损坏等情况。
-
-:::tip 建议
-如果条件允许，强烈建议使用云平台提供的 Redis 托管服务，详情查看[「推荐的 Redis 托管服务」](#推荐的-redis-托管服务)。
-:::
-
-对于自主维护的 Redis 数据库，JuiceFS 要求其版本为 4.0 及以上版本，并推荐使用较新的[官方稳定版本](https://redis.io/download)。另外，在部署 Redis 前还建议您提前了解以下几个方面。
-
-:::note 注意
-本文部分内容来自 Redis 官网，若有不一致的表述，请以 Redis 官方文档为准。
-:::
+为保证元数据服务稳定，我们建议使用云平台提供的 Redis 托管服务，详情查看[「推荐的 Redis 托管服务」](#推荐的-redis-托管服务)。
 
 ## 内存使用量
 
@@ -54,7 +44,7 @@ used_memory_dataset_perc: 70.12%
 
 **Redis 2.8 开始提供稳定版本的 Redis 哨兵**。Redis 2.6 提供的第一版 Redis 哨兵已被弃用，不建议使用。
 
-在使用 Redis 哨兵之前，您需要了解一些[基础知识](https://redis.io/docs/manual/sentinel#fundamental-things-to-know-about-sentinel-before-deploying)：
+在使用 Redis 哨兵之前，先了解一些[基础知识](https://redis.io/docs/manual/sentinel#fundamental-things-to-know-about-sentinel-before-deploying)：
 
 1. 您至少需要三个哨兵实例才能进行稳健的部署。
 2. 这三个哨兵实例应放置在彼此独立的计算机或虚拟机中。例如，分别位于不同的可用区域上的不同物理服务器或虚拟机上。
@@ -74,11 +64,9 @@ juicefs mount redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2 ~/jfs
 对于 JuiceFS v0.16 及以上版本，URL 中提供的密码会用于连接 Redis 服务器，哨兵的密码需要用环境变量 `SENTINEL_PASSWORD` 指定。对于更早的版本，URL 中的密码会同时用于连接 Redis 服务器和哨兵，也可以通过环境变量 `SENTINEL_PASSWORD` 和 `REDIS_PASSWORD` 来覆盖。
 :::
 
-:::tip 提示
 自 JuiceFS v1.0.0 版本开始，支持在挂载文件系统时仅连接 Redis 的副本节点，以降低 Redis 主节点的负载。为了开启这个特性，必须以只读模式挂载 JuiceFS 文件系统（即设置 `--read-only` 挂载选项），并通过 Redis 哨兵连接元数据引擎，最后需要在元数据 URL 末尾加上 `?route-read=replica`，例如：`redis://:password@masterName,1.2.3.4,1.2.5.6:26379/2?route-read=replica`。
 
 需要注意由于 Redis 主节点的数据是异步复制到副本节点，因此有可能读到的元数据不是最新的。
-:::
 
 ### 集群模式 {#cluster-mode}
 
@@ -112,15 +100,13 @@ Redis 提供了不同范围的[持久性](https://redis.io/docs/manual/persisten
 
 默认策略「每秒 fsync」是不错的选择（fsync 是使用后台线程执行的，当没有 fsync 正在进行时，主线程会努力执行写入），**但你可能丢失最近一秒钟的写入**。
 
-磁盘可能会损坏，虚拟机可能会消失，即使采用 RBD+AOF 模式，**依然需要定期备份 Redis 数据**。
-
 Redis 对数据备份非常友好，因为您可以在数据库运行时复制 RDB 文件，RDB 一旦生成就永远不会被修改，当它被生成时，它使用一个临时名称，并且只有在新快照完成时才使用 `rename` 原子地重命名到其最终目的地。您还可以复制 AOF 文件以创建备份。
 
 更多信息请阅读[官方文档](https://redis.io/docs/manual/persistence)。
 
 ## 备份 Redis 数据
 
-磁盘会损坏、云实例会消失，**请务必备份数据库！**
+磁盘可能会损坏，虚拟机可能出意外，即使采用 RBD+AOF 模式，**依然需要定期备份 Redis 数据**。
 
 默认情况下，Redis 将数据集的快照保存在磁盘上，名为 `dump.rdb` 的二进制文件中。你可以根据需要，将 Redis 配置为当数据集至少发生 M 次变化时，每 N 秒保存一次，也可以手动调用 [`SAVE`](https://redis.io/commands/save) 或 [`BGSAVE`](https://redis.io/commands/bgsave) 命令。
 

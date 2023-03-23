@@ -434,6 +434,11 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	if err := syscall.Setpriority(syscall.PRIO_PROCESS, os.Getpid(), -19); err != nil {
 		logger.Warnf("setpriority: %s", err)
 	}
+	err := grantAccess()
+	if err != nil {
+		logger.Warnf("grant access to /dev/fuse: %s", err)
+	}
+	ensureFuseDev()
 
 	conf := v.Conf
 	imp := newFileSystem(conf, v)

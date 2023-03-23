@@ -2,7 +2,7 @@
 // +build !nomysql
 
 /*
- * JuiceFS, Copyright 2020 Juicedata, Inc.
+ * JuiceFS, Copyright 2022 Juicedata, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,20 +17,14 @@
  * limitations under the License.
  */
 
-package meta
+package object
 
 import (
-	"github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql"
 )
 
-func isMySQLDuplicateEntryErr(err error) bool {
-	if e, ok := err.(*mysql.MySQLError); ok {
-		return e.Number == 1062
-	}
-	return false
-}
-
 func init() {
-	dupErrorCheckers = append(dupErrorCheckers, isMySQLDuplicateEntryErr)
-	Register("mysql", newSQLMeta)
+	Register("mysql", func(addr, user, pass, token string) (ObjectStorage, error) {
+		return newSQLStore("mysql", removeScheme(addr), user, pass)
+	})
 }
