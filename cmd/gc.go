@@ -52,7 +52,7 @@ $ juicefs gc redis://localhost
 # Trigger compaction of all slices
 $ juicefs gc redis://localhost --compact
 
-# Delete leaked objects and delayed deleted slices or files
+# Delete leaked objects or metadata and delayed deleted slices or files
 $ juicefs gc redis://localhost --delete`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
@@ -61,7 +61,7 @@ $ juicefs gc redis://localhost --delete`,
 			},
 			&cli.BoolFlag{
 				Name:  "delete",
-				Usage: "delete leaked objects and delayed deleted slices or files",
+				Usage: "delete leaked objects or metadata and delayed deleted slices or files",
 			},
 			&cli.IntFlag{
 				Name:    "threads",
@@ -144,6 +144,10 @@ func gc(ctx *cli.Context) error {
 		cleanTrashSpin := progress.AddCountSpinner("Cleaned trash")
 		m.CleanupTrashBefore(c, edge, cleanTrashSpin.Increment)
 		cleanTrashSpin.Done()
+
+		cleanDetachedNodeSpin := progress.AddCountSpinner("Cleaned detached nodes")
+		m.CleanupDetachedNodesBefore(c, time.Now().Add(-time.Hour*24), cleanDetachedNodeSpin.Increment)
+		cleanDetachedNodeSpin.Done()
 	}
 
 	err = m.ScanDeletedObject(

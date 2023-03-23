@@ -450,7 +450,6 @@ func (m *baseMeta) NewSession() error {
 		go m.cleanupDeletedFiles()
 		go m.cleanupSlices()
 		go m.cleanupTrash()
-		go m.cleanupDetachedNodes()
 	}
 	return nil
 }
@@ -1573,12 +1572,13 @@ func (m *baseMeta) cleanupTrash() {
 	}
 }
 
-func (m *baseMeta) cleanupDetachedNodes() {
-	for {
-		utils.SleepWithJitter(time.Hour * 24)
-		for _, inode := range m.en.doFindDetachedNodes(time.Now()) {
-			if eno := m.en.doCleanupDetachedNode(Background, inode); eno != 0 {
-				logger.Errorf("cleanupDetachedNode: remove detached tree (%d) error: %s", inode, eno)
+func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func()) {
+	for _, inode := range m.en.doFindDetachedNodes(edge) {
+		if eno := m.en.doCleanupDetachedNode(Background, inode); eno != 0 {
+			logger.Errorf("cleanupDetachedNode: remove detached tree (%d) error: %s", inode, eno)
+		} else {
+			if increProgress != nil {
+				increProgress()
 			}
 		}
 	}

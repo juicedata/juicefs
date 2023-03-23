@@ -278,6 +278,8 @@ type Meta interface {
 	CleanStaleSessions()
 	// CleanupTrashBefore deletes all files in trash before the given time.
 	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func())
+	// CleanupDetachedNodesBefore deletes all detached nodes before the given time.
+	CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func())
 
 	// StatFS returns summary statistics of a volume.
 	StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno
