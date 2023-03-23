@@ -406,7 +406,10 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 
 	for {
 		if err = m.txn(func(s *xorm.Session) error {
-			return mustInsert(s, &session2{m.sid, m.expireTime(), sinfo})
+			if err = mustInsert(s, &session2{m.sid, m.expireTime(), sinfo}); err != nil && isDuplicateEntryErr(err) {
+				return nil
+			}
+			return err
 		}); err == nil {
 			break
 		}
