@@ -2322,7 +2322,7 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 			return syscall.ENOENT
 		}
 		_, err = s.Insert(&dirStats{ino, stat.length, stat.space, stat.inodes})
-		if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if err != nil && isDuplicateEntryErr(err) {
 			// other client synced
 			err = nil
 		}
