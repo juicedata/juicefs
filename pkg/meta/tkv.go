@@ -3093,75 +3093,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 	})
 }
 
-func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
-	srcAttr := &Attr{}
-	var eno syscall.Errno
-	if eno = m.doGetAttr(ctx, srcIno, srcAttr); eno != 0 {
-		return eno
-	}
-	// total should start from 1
-	*total = 1
-	var dstIno Ino
-	var err error
-	var cloneEno syscall.Errno
-	concurrent := make(chan struct{}, 4)
-	if srcAttr.Typ == TypeDirectory {
-		// check dst edge
-		if err := m.txn(func(tx *kvTxn) error {
-			if buf := tx.get(m.entryKey(dstParentIno, dstName)); buf != nil {
-				if _, foundIno := m.parseEntry(buf); foundIno != 0 {
-					return syscall.EEXIST
-				}
-			}
-			return nil
-		}); err != nil {
-			return errno(err)
-		}
-
-		eno = m.cloneEntry(ctx, srcIno, TypeDirectory, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, false, concurrent)
-		if eno != 0 {
-			cloneEno = eno
-		}
-		if eno == 0 {
-			err = m.txn(func(tx *kvTxn) error {
-				// check dst edge again
-				if buf := tx.get(m.entryKey(dstParentIno, dstName)); buf != nil {
-					if _, foundIno := m.parseEntry(buf); foundIno != 0 {
-						return syscall.EEXIST
-					}
-				}
-				tx.set(m.entryKey(dstParentIno, dstName), m.packEntry(TypeDirectory, dstIno))
-
-				newSpace := align4K(0)
-				m.updateStats(newSpace, 1)
-				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
-
-				// update parent nlink
-				dstParentAttr := &Attr{}
-				if eno := m.doGetAttr(ctx, dstParentIno, dstParentAttr); eno != 0 {
-					return eno
-				}
-				dstParentAttr.Nlink++
-				tx.set(m.inodeKey(dstParentIno), m.marshal(dstParentAttr))
-				return nil
-			}, dstParentIno)
-			if err != nil {
-				cloneEno = errno(err)
-			}
-		}
-		// delete the dst tree if clone failed
-		if cloneEno != 0 {
-			if eno := m.doCleanupDetachedNode(ctx, dstIno); eno != 0 {
-				logger.Errorf("doCleanupDetachedNode: remove detached tree (%d) error: %s", dstIno, eno)
-			}
-		}
-	} else {
-		cloneEno = m.cloneEntry(ctx, srcIno, srcAttr.Typ, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, true, concurrent)
-	}
-	return cloneEno
-}
-
-func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, count, total *uint64, attach bool, concurrent chan struct{}) syscall.Errno {
+func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, count, total *uint64, attach bool, concurrent chan struct{}) syscall.Errno {
 	var err error
 	switch srcType {
 	case TypeDirectory:
@@ -3215,7 +3147,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 					go func(srcIno Ino, dstName string) {
 						defer wg.Done()
 						var dstIno2 Ino
-						eno := m.cloneEntry(ctx, srcIno, TypeDirectory, *dstIno, dstName, &dstIno2, cmode, cumask, count, total, true, concurrent)
+						eno := m.en.doCloneEntry(ctx, srcIno, TypeDirectory, *dstIno, dstName, &dstIno2, cmode, cumask, count, total, true, concurrent)
 						if eno == 0 {
 							atomic.AddUint32(&countDir, 1)
 						}
@@ -3226,7 +3158,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 					}(entry.Inode, string(entry.Name))
 				default:
 					var dstIno2 Ino
-					if eno := m.cloneEntry(ctx, entry.Inode, TypeDirectory, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true, concurrent); eno != 0 {
+					if eno := m.doCloneEntry(ctx, entry.Inode, TypeDirectory, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true, concurrent); eno != 0 {
 						return eno
 					} else {
 						atomic.AddUint32(&countDir, 1)
@@ -3235,7 +3167,7 @@ func (m *kvMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno
 
 			} else {
 				var dstIno2 Ino
-				if eno := m.cloneEntry(ctx, entry.Inode, entry.Attr.Typ, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true, concurrent); eno != 0 {
+				if eno := m.en.doCloneEntry(ctx, entry.Inode, entry.Attr.Typ, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true, concurrent); eno != 0 {
 					return eno
 				}
 			}
@@ -3381,6 +3313,32 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Att
 		m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
 	}
 	return nil
+}
+
+func (m *kvMeta) doCheckEdgeExist(ctx Context, parent Ino, name string) (exist bool, err error) {
+	err = m.txn(func(tx *kvTxn) error {
+		if buf := tx.get(m.entryKey(parent, name)); buf != nil {
+			if _, foundIno := m.parseEntry(buf); foundIno != 0 {
+				exist = true
+			}
+		}
+		return nil
+	})
+	return
+}
+
+func (m *kvMeta) doAttachDirNode(ctx Context, dstParentIno Ino, dstIno Ino, dstName string) syscall.Errno {
+	return errno(m.txn(func(tx *kvTxn) error {
+		tx.set(m.entryKey(dstParentIno, dstName), m.packEntry(TypeDirectory, dstIno))
+		// update parent nlink
+		dstParentAttr := &Attr{}
+		if eno := m.doGetAttr(ctx, dstParentIno, dstParentAttr); eno != 0 {
+			return eno
+		}
+		dstParentAttr.Nlink++
+		tx.set(m.inodeKey(dstParentIno), m.marshal(dstParentAttr))
+		return nil
+	}, dstParentIno))
 }
 
 func (m *kvMeta) doFindDetachedNodes(t time.Time) []Ino {

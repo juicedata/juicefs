@@ -3838,69 +3838,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	return err
 }
 
-func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
-	srcAttr := &Attr{}
-	var eno syscall.Errno
-	if eno = m.doGetAttr(ctx, srcIno, srcAttr); eno != 0 {
-		return eno
-	}
-	// total should start from 1
-	*total = 1
-	var dstIno Ino
-	var err error
-	var cloneEno syscall.Errno
-	concurrent := make(chan struct{}, 4)
-	if srcAttr.Typ == TypeDirectory {
-		// check dst edge
-		if m.rdb.HExists(ctx, m.entryKey(dstParentIno), dstName).Val() {
-			return syscall.EEXIST
-		}
-		eno = m.cloneEntry(ctx, srcIno, TypeDirectory, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, false, concurrent)
-		if eno != 0 {
-			cloneEno = eno
-		}
-		if eno == 0 {
-			err = m.txn(ctx, func(tx *redis.Tx) error {
-				// check dst edge again
-				if tx.HExists(ctx, m.entryKey(dstParentIno), dstName).Val() {
-					// fixme: maybe return os.ErrExist rather than syscall.errno
-					return syscall.EEXIST
-				}
-				if err = tx.HSet(ctx, m.entryKey(dstParentIno), dstName, m.packEntry(TypeDirectory, dstIno)).Err(); err != nil {
-					return err
-				}
-
-				newSpace := align4K(0)
-				tx.IncrBy(ctx, m.usedSpaceKey(), newSpace)
-				tx.Incr(ctx, m.totalInodesKey())
-				m.updateStats(newSpace, 1)
-				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
-
-				// update parent nlink
-				dstParentAttr := &Attr{}
-				if eno := m.doGetAttr(ctx, dstParentIno, dstParentAttr); eno != 0 {
-					return eno
-				}
-				dstParentAttr.Nlink++
-				return m.rdb.Set(ctx, m.inodeKey(dstParentIno), m.marshal(dstParentAttr), 0).Err()
-			}, m.entryKey(dstParentIno))
-			if err != nil {
-				cloneEno = errno(err)
-			}
-		}
-		// delete the dst tree if clone failed
-		if cloneEno != 0 {
-			if eno := m.doCleanupDetachedNode(ctx, dstIno); eno != 0 {
-				logger.Errorf("doCleanupDetachedNode: remove detached tree (%d) error: %s", dstIno, eno)
-			}
-		}
-	} else {
-		cloneEno = m.cloneEntry(ctx, srcIno, srcAttr.Typ, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, true, concurrent)
-	}
-	return cloneEno
-}
-
-func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, count, total *uint64, attach bool, concurrent chan struct{}) syscall.Errno {
+func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, count, total *uint64, attach bool, concurrent chan struct{}) syscall.Errno {
 	var err error
 	switch srcType {
 	case TypeDirectory:
@@ -3950,7 +3888,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 					go func(srcIno Ino, dstName string) {
 						defer wg.Done()
 						var dstIno2 Ino
-						eno := m.cloneEntry(ctx, srcIno, TypeDirectory, *dstIno, dstName, &dstIno2, cmode, cumask, count, total, true, concurrent)
+						eno := m.en.doCloneEntry(ctx, srcIno, TypeDirectory, *dstIno, dstName, &dstIno2, cmode, cumask, count, total, true, concurrent)
 						if eno == 0 {
 							atomic.AddUint32(&countDir, 1)
 						}
@@ -3961,7 +3899,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 					}(entry.Inode, string(entry.Name))
 				default:
 					var dstIno2 Ino
-					if eno := m.cloneEntry(ctx, entry.Inode, TypeDirectory, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true, concurrent); eno != 0 {
+					if eno := m.en.doCloneEntry(ctx, entry.Inode, TypeDirectory, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true, concurrent); eno != 0 {
 						return eno
 					} else {
 						atomic.AddUint32(&countDir, 1)
@@ -3970,7 +3908,7 @@ func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParent
 
 			} else {
 				var dstIno2 Ino
-				if eno := m.cloneEntry(ctx, entry.Inode, entry.Attr.Typ, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true, concurrent); eno != 0 {
+				if eno := m.en.doCloneEntry(ctx, entry.Inode, entry.Attr.Typ, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true, concurrent); eno != 0 {
 					return eno
 				}
 			}
@@ -4129,6 +4067,30 @@ func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAtt
 		return nil
 	})
 	return err
+}
+
+func (m *redisMeta) doCheckEdgeExist(ctx Context, parent Ino, name string) (exist bool, err error) {
+	return m.rdb.HExists(ctx, m.entryKey(parent), name).Result()
+}
+
+func (m *redisMeta) doAttachDirNode(ctx Context, dstParentIno Ino, dstIno Ino, dstName string) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		if err := tx.HSet(ctx, m.entryKey(dstParentIno), dstName, m.packEntry(TypeDirectory, dstIno)).Err(); err != nil {
+			return err
+		}
+
+		newSpace := align4K(0)
+		tx.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+		tx.Incr(ctx, m.totalInodesKey())
+
+		// update parent nlink
+		dstParentAttr := &Attr{}
+		if eno := m.doGetAttr(ctx, dstParentIno, dstParentAttr); eno != 0 {
+			return eno
+		}
+		dstParentAttr.Nlink++
+		return m.rdb.Set(ctx, m.inodeKey(dstParentIno), m.marshal(dstParentAttr), 0).Err()
+	}, m.entryKey(dstParentIno)))
 }
 
 func (m *redisMeta) doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno {

@@ -71,6 +71,8 @@ type engine interface {
 	doCleanupDelayedSlices(edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
 	doFindDetachedNodes(t time.Time) []Ino
+	doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, count, total *uint64, attach bool, concurrent chan struct{}) syscall.Errno
+	doAttachDirNode(ctx Context, dstParentIno Ino, dstIno Ino, dstName string) syscall.Errno
 	doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
@@ -85,6 +87,7 @@ type engine interface {
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
+	doCheckEdgeExist(ctx Context, parent Ino, name string) (bool, error)
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
@@ -1731,4 +1734,59 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 		})
 	}
 	return eg.Wait()
+}
+
+func (m *baseMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
+	srcAttr := &Attr{}
+	var eno syscall.Errno
+	if eno = m.en.doGetAttr(ctx, srcIno, srcAttr); eno != 0 {
+		return eno
+	}
+	// total should start from 1
+	*total = 1
+	var dstIno Ino
+	var err error
+	var cloneEno syscall.Errno
+	concurrent := make(chan struct{}, 4)
+	if srcAttr.Typ == TypeDirectory {
+		// check dst edge
+		var edgeExist bool
+		edgeExist, err = m.en.doCheckEdgeExist(ctx, dstParentIno, dstName)
+		if err != nil {
+			return errno(err)
+		}
+		if edgeExist {
+			return syscall.EEXIST
+		}
+
+		eno = m.en.doCloneEntry(ctx, srcIno, TypeDirectory, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, false, concurrent)
+		if eno != 0 {
+			cloneEno = eno
+		}
+		if eno == 0 {
+			edgeExist, err = m.en.doCheckEdgeExist(ctx, dstParentIno, dstName)
+			if err != nil {
+				return errno(err)
+			}
+			if edgeExist {
+				return syscall.EEXIST
+			}
+			if eno := m.en.doAttachDirNode(ctx, dstParentIno, dstIno, dstName); eno != 0 {
+				cloneEno = eno
+			} else {
+				newSpace := align4K(0)
+				m.en.updateStats(newSpace, 1)
+				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
+			}
+		}
+		// delete the dst tree if clone failed
+		if cloneEno != 0 {
+			if eno = m.en.doCleanupDetachedNode(ctx, dstIno); eno != 0 {
+				logger.Errorf("doCleanupDetachedNode: remove detached tree (%d) error: %s", dstIno, eno)
+			}
+		}
+	} else {
+		cloneEno = m.en.doCloneEntry(ctx, srcIno, srcAttr.Typ, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, true, concurrent)
+	}
+	return cloneEno
 }
