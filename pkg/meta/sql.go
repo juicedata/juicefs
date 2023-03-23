@@ -377,7 +377,7 @@ func (m *dbMeta) Reset() error {
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &sliceRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
-		&flock{}, &plock{}, &dirStats{})
+		&flock{}, &plock{}, &dirStats{}, &detachedNode{})
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
