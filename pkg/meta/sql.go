@@ -406,7 +406,10 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 
 	for {
 		if err = m.txn(func(s *xorm.Session) error {
-			return mustInsert(s, &session2{m.sid, m.expireTime(), sinfo})
+			if err = mustInsert(s, &session2{m.sid, m.expireTime(), sinfo}); err != nil && isDuplicateEntryErr(err) {
+				return nil
+			}
+			return err
 		}); err == nil {
 			break
 		}
@@ -2322,7 +2325,7 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 			return syscall.ENOENT
 		}
 		_, err = s.Insert(&dirStats{ino, stat.length, stat.space, stat.inodes})
-		if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if err != nil && isDuplicateEntryErr(err) {
 			// other client synced
 			err = nil
 		}
