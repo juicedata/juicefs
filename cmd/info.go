@@ -111,9 +111,15 @@ func info(ctx *cli.Context) error {
 		if inode < uint64(meta.RootInode) {
 			logger.Fatalf("inode number shouldn't be less than %d", meta.RootInode)
 		}
-		f := openController(d)
-		if f == nil {
-			logger.Errorf("%s is not inside JuiceFS", path)
+		mp, err := findMountpoint(d)
+		if err != nil {
+			logger.Errorf("find mountpoint: %s", err)
+			continue
+		}
+		var f *os.File
+		f, err = openController(mp)
+		if err != nil {
+			logger.Errorf("open controller: %s", err)
 			continue
 		}
 
@@ -244,21 +250,25 @@ func ltypeToString(t uint32) string {
 }
 
 func legacyInfo(d, path string, inode uint64, recursive, raw uint8) {
-	f := openController(d)
-	defer f.Close()
-	if f == nil {
-		logger.Errorf("%s is not inside JuiceFS", path)
-		// continue to next path
+	mp, err := findMountpoint(d)
+	if err != nil {
+		logger.Errorf("find mountpoint: %s", err)
 		return
 	}
-
+	var f *os.File
+	f, err = openController(mp)
+	if err != nil {
+		logger.Errorf("open controller: %s", err)
+		return
+	}
+	defer f.Close()
 	wb := utils.NewBuffer(8 + 10)
 	wb.Put32(meta.LegacyInfo)
 	wb.Put32(10)
 	wb.Put64(inode)
 	wb.Put8(recursive)
 	wb.Put8(raw)
-	_, err := f.Write(wb.Bytes())
+	_, err = f.Write(wb.Bytes())
 	if err != nil {
 		logger.Fatalf("write message: %s", err)
 	}

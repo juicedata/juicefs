@@ -42,25 +42,8 @@ $ juicefs rmr /mnt/jfs/foo`,
 	}
 }
 
-func openController(mp string) *os.File {
-	st, err := os.Stat(mp)
-	if err != nil {
-		logger.Fatal(err)
-	}
-	if !st.IsDir() {
-		mp = filepath.Dir(mp)
-	}
-	for ; mp != "/"; mp = filepath.Dir(mp) {
-		f, err := os.OpenFile(filepath.Join(mp, ".control"), os.O_RDWR, 0)
-		if err == nil {
-			return f
-		}
-		if !os.IsNotExist(err) {
-			logger.Fatal(err)
-		}
-	}
-	logger.Fatalf("Path %s is not inside JuiceFS", mp)
-	panic("unreachable")
+func openController(mp string) (*os.File, error) {
+	return os.OpenFile(filepath.Join(mp, ".control"), os.O_RDWR, 0)
 }
 
 func rmr(ctx *cli.Context) error {
@@ -84,9 +67,16 @@ func rmr(ctx *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("lookup inode for %s: %s", d, err)
 		}
-		f := openController(d)
-		if f == nil {
-			logger.Errorf("%s is not inside JuiceFS", path)
+		var mp string
+		mp, err = findMountpoint(d)
+		if err != nil {
+			logger.Errorf("find mountpoint for %s: %s", d, err)
+			continue
+		}
+		var f *os.File
+		f, err = openController(mp)
+		if err != nil {
+			logger.Errorf("open controller: %s", err)
 			continue
 		}
 		wb := utils.NewBuffer(8 + 8 + 1 + uint32(len(name)))

@@ -66,7 +66,6 @@ func clone(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("abs of %s: %s", srcPath, err)
 	}
-	srcParent := filepath.Dir(srcAbsPath)
 	srcIno, err := utils.GetFileInode(srcPath)
 	if err != nil {
 		return fmt.Errorf("lookup inode for %s: %s", srcPath, err)
@@ -124,9 +123,10 @@ func clone(ctx *cli.Context) error {
 	wb.Put([]byte(dstName))
 	wb.Put16(uint16(umask))
 	wb.Put8(cmode)
-	f := openController(srcParent)
-	if f == nil {
-		return fmt.Errorf("%s is not inside JuiceFS", srcPath)
+	var f *os.File
+	f, err = openController(srcMp)
+	if err == nil {
+		return err
 	}
 	defer f.Close()
 	if _, err = f.Write(wb.Bytes()); err != nil {
@@ -151,7 +151,7 @@ func findMountpoint(dir string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("get inode of %s: %s", dir, err)
 		}
-		if inode == 1 {
+		if inode == uint64(meta.RootInode) {
 			return dir, nil
 		}
 		dir = filepath.Dir(dir)
