@@ -406,14 +406,11 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 
 	for {
 		if err = m.txn(func(s *xorm.Session) error {
-			if err = mustInsert(s, &session2{m.sid, m.expireTime(), sinfo}); err != nil && isDuplicateEntryErr(err) {
-				return nil
-			}
-			return err
+			return mustInsert(s, &session2{m.sid, m.expireTime(), sinfo})
 		}); err == nil {
 			break
 		}
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if isDuplicateEntryErr(err) {
 			logger.Warnf("session id %d is already used", m.sid)
 			if v, e := m.incrCounter("nextSession", 1); e == nil {
 				m.sid = uint64(v)
