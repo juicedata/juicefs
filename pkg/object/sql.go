@@ -30,9 +30,6 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
 	"xorm.io/xorm/log"
@@ -213,16 +210,4 @@ func removeScheme(addr string) string {
 		addr = addr[p+3:]
 	}
 	return addr
-}
-
-func init() {
-	Register("sqlite3", func(addr, user, pass, token string) (ObjectStorage, error) {
-		return newSQLStore("sqlite3", removeScheme(addr), user, pass)
-	})
-	Register("mysql", func(addr, user, pass, token string) (ObjectStorage, error) {
-		return newSQLStore("mysql", removeScheme(addr), user, pass)
-	})
-	Register("postgres", func(addr, user, pass, token string) (ObjectStorage, error) {
-		return newSQLStore("postgres", removeScheme(addr), user, pass)
-	})
 }

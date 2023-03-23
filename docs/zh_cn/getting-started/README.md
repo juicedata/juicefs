@@ -149,6 +149,7 @@ JuiceFS 支持几乎所有的对象存储服务，查看「[JuiceFS 支持的存
 :::
 
 ```shell
+# 使用你自己所使用的对象存储信息替换下方相关参数
 juicefs format --storage oss \
     --bucket https://myjfs.oss-cn-shanghai.aliyuncs.com \
     --access-key ABCDEFGHIJKLMNopqXYZ \
@@ -163,17 +164,13 @@ juicefs format --storage oss \
 - `--access-key`：设置对象存储 API 访问密钥 Access Key ID；
 - `--secret-key`：设置对象存储 API 访问密钥 Access Key Secret。
 
-:::note 注意
-请使用你自己的对象存储信息替换上述命令中的信息。
-:::
-
 创建完成即可进行挂载：
 
 ```shell
 juicefs mount sqlite3://myjfs.db ~/jfs
 ```
 
-可以看到，挂载命令与使用本地存储时完全一样，因为 JuiceFS 已经把对象存储相关的信息写入了 `myjfs.db` 数据库，挂载时无需重复提供。
+挂载命令与使用本地存储时完全一样，这是因为创建文件系统时，对象存储相关的信息已经写入了 `myjfs.db` 数据库，因此客户端不需要额外提供对象存储认证信息，也没有本地配置文件（作为对比，JuiceFS 云服务用 [`juicefs auth`](https://juicefs.com/docs/zh/cloud/reference/commands_reference/#auth) 命令进行认证、获取配置文件）。
 
 相比使用本地磁盘，SQLite 和对象存储的组合实用价值更高。从应用的角度看，这种形式等同于将容量几乎无限的对象存储接入到了本地计算机，让你可以像使用本地磁盘那样使用云存储。
 

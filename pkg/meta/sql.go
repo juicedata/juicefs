@@ -414,7 +414,10 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 
 	for {
 		if err = m.txn(func(s *xorm.Session) error {
-			return mustInsert(s, &session2{m.sid, m.expireTime(), sinfo})
+			if err = mustInsert(s, &session2{m.sid, m.expireTime(), sinfo}); err != nil && isDuplicateEntryErr(err) {
+				return nil
+			}
+			return err
 		}); err == nil {
 			break
 		}
@@ -1263,10 +1266,12 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	}, parent))
 }
 
-func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) syscall.Errno {
+func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
-	if st := m.checkTrash(parent, &trash); st != 0 {
-		return st
+	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
+		if st := m.checkTrash(parent, &trash); st != 0 {
+			return st
+		}
 	}
 	var n node
 	var opened bool
@@ -1408,10 +1413,12 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr) sysc
 	return errno(err)
 }
 
-func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, inode *Ino) syscall.Errno {
+func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skipCheckTrash ...bool) syscall.Errno {
 	var trash Ino
-	if st := m.checkTrash(parent, &trash); st != 0 {
-		return st
+	if !(len(skipCheckTrash) == 1 && skipCheckTrash[0]) {
+		if st := m.checkTrash(parent, &trash); st != 0 {
+			return st
+		}
 	}
 	err := m.txn(func(s *xorm.Session) error {
 		var pn = node{Inode: parent}
@@ -1447,8 +1454,8 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, inode *Ino) sysca
 		if e.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if inode != nil {
-			*inode = e.Inode
+		if pinode != nil {
+			*pinode = e.Inode
 		}
 		var n = node{Inode: e.Inode}
 		ok, err = s.ForUpdate().Get(&n)
@@ -2336,7 +2343,7 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 			return syscall.ENOENT
 		}
 		_, err = s.Insert(&dirStats{ino, stat.length, stat.space, stat.inodes})
-		if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if err != nil && isDuplicateEntryErr(err) {
 			// other client synced
 			err = nil
 		}
@@ -3687,4 +3694,364 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 		}
 		return nil
 	})
+}
+
+type checkDupError func(error) bool
+
+var dupErrorCheckers []checkDupError
+
+func isDuplicateEntryErr(err error) bool {
+	for _, check := range dupErrorCheckers {
+		if check(err) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
+	srcAttr := &Attr{}
+	var eno syscall.Errno
+	if eno = m.doGetAttr(ctx, srcIno, srcAttr); eno != 0 {
+		return eno
+	}
+	// total should start from 1
+	*total = 1
+	var dstIno Ino
+	var err error
+	var cloneEno syscall.Errno
+	concurrent := make(chan struct{}, 4)
+	if srcAttr.Typ == TypeDirectory {
+		// check dst edge
+		var exist bool
+		if err := m.roTxn(func(s *xorm.Session) error {
+			exist, err = s.Get(&edge{Parent: dstParentIno, Name: []byte(dstName)})
+			return err
+		}); err != nil {
+			return errno(err)
+		}
+		if exist {
+			return syscall.EEXIST
+		}
+
+		eno = m.cloneEntry(ctx, srcIno, TypeDirectory, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, false, concurrent)
+		if eno != 0 {
+			cloneEno = eno
+		}
+		if eno == 0 {
+			err = m.txn(func(s *xorm.Session) error {
+				// check dst edge again
+				if exist, err = s.Get(&edge{Parent: dstParentIno, Name: []byte(dstName)}); err != nil {
+					return errno(err)
+				} else if exist {
+					return syscall.EEXIST
+				}
+
+				if err = mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: dstIno, Type: TypeDirectory}); err != nil {
+					if isDuplicateEntryErr(err) {
+						return syscall.EEXIST
+					}
+					return err
+				}
+
+				// update parent nlink
+				var n = node{Inode: dstParentIno}
+				ok, err := s.ForUpdate().Get(&n)
+				if err == nil {
+					if ok {
+						_, err = s.Cols("nlink").Update(&node{Nlink: n.Nlink + 1}, &node{Inode: dstParentIno})
+					} else {
+						err = syscall.ENOENT
+					}
+				}
+				return err
+			}, dstParentIno)
+			if err != nil {
+				cloneEno = errno(err)
+			} else {
+				newSpace := align4K(0)
+				m.updateStats(newSpace, 1)
+				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
+			}
+		}
+		// delete the dst tree if clone failed
+		if eno != 0 || err != nil {
+			// todo: store dstIno and delete it in the background
+			attr := &Attr{}
+			eno := m.doGetAttr(ctx, dstIno, attr)
+			if eno == syscall.ENOENT {
+				return cloneEno
+			}
+			if eno != 0 {
+				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
+				return eno
+			}
+			rmConcurrent := make(chan int, 10)
+			if eno := m.emptyDir(ctx, dstIno, true, nil, rmConcurrent); eno != 0 {
+				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
+				return eno
+			}
+			return errno(m.txn(func(s *xorm.Session) error {
+				if _, err := s.Delete(&node{Inode: dstIno}); err != nil {
+					return err
+				}
+				if _, err := s.Delete(&xattr{Inode: dstIno}); err != nil {
+					return err
+				}
+				return nil
+			}))
+		}
+	} else {
+		cloneEno = m.cloneEntry(ctx, srcIno, srcAttr.Typ, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, true, concurrent)
+	}
+	return cloneEno
+}
+
+func (m *dbMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, count, total *uint64, attach bool, concurrent chan struct{}) syscall.Errno {
+	var err error
+	switch srcType {
+	case TypeDirectory:
+		srcNode := node{Inode: srcIno}
+		if err = m.txn(func(s *xorm.Session) error {
+			ok, err := s.Get(&srcNode)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			return m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, attach)
+		}); err != nil {
+			return errno(err)
+		}
+		if err := m.txn(func(s *xorm.Session) error {
+			return mustInsert(s, &dirStats{Inode: *dstIno})
+		}); err != nil {
+			return errno(err)
+		}
+		var entries []*Entry
+		if eno := m.doReaddir(ctx, srcIno, 0, &entries, -1); eno != 0 {
+			return eno
+		}
+		atomic.AddUint64(total, uint64(len(entries)))
+		// try directories first to increase parallel
+		var dirs int
+		for i, e := range entries {
+			if e.Attr.Typ == TypeDirectory {
+				entries[dirs], entries[i] = entries[i], entries[dirs]
+				dirs++
+			}
+		}
+
+		var wg sync.WaitGroup
+		var countDir uint32
+		var errCh = make(chan syscall.Errno, cap(concurrent))
+		for i, entry := range entries {
+			select {
+			case eno := <-errCh:
+				errCh <- eno
+				return eno
+			default:
+			}
+			if entry.Attr.Typ == TypeDirectory {
+				select {
+				case concurrent <- struct{}{}:
+					wg.Add(1)
+					go func(srcIno Ino, dstName string) {
+						defer wg.Done()
+						var dstIno2 Ino
+						eno := m.cloneEntry(ctx, srcIno, TypeDirectory, *dstIno, dstName, &dstIno2, cmode, cumask, count, total, true, concurrent)
+						if eno == 0 {
+							atomic.AddUint32(&countDir, 1)
+						}
+						if eno != 0 && eno != syscall.ENOENT {
+							errCh <- eno
+						}
+						<-concurrent
+					}(entry.Inode, string(entry.Name))
+				default:
+					var dstIno2 Ino
+					if eno := m.cloneEntry(ctx, entry.Inode, TypeDirectory, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true, concurrent); eno != 0 {
+						return eno
+					} else {
+						atomic.AddUint32(&countDir, 1)
+					}
+				}
+			} else {
+				var dstIno2 Ino
+				if eno := m.cloneEntry(ctx, entry.Inode, entry.Attr.Typ, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true, concurrent); eno != 0 {
+					return eno
+				}
+			}
+			if ctx.Canceled() {
+				return syscall.EINTR
+			}
+			entries[i] = nil // release memory
+		}
+		wg.Wait()
+		// reset nlink
+		if attach && countDir+2 != srcNode.Nlink {
+			srcNode.Nlink = countDir + 2
+			err = m.txn(func(s *xorm.Session) error {
+				_, err := s.Cols("nlink").Update(&node{Nlink: srcNode.Nlink}, &node{Inode: *dstIno})
+				return err
+			})
+		}
+	case TypeFile:
+		srcNode := node{Inode: srcIno}
+		err = m.txn(func(s *xorm.Session) error {
+			ok, err := s.Get(&srcNode)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			if err := m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
+				return err
+			}
+			// copy chunks
+			if srcNode.Length != 0 {
+				if m.checkQuota(align4K(srcNode.Length), 0) {
+					return syscall.ENOSPC
+				}
+				var cs []chunk
+				if err = s.Where("inode = ?", srcIno).ForUpdate().Find(&cs); err != nil {
+					return err
+				}
+				for i := range cs {
+					cs[i].Id = 0
+					cs[i].Inode = *dstIno
+				}
+				if err := mustInsert(s, cs); err != nil {
+					return err
+				}
+				for _, c := range cs {
+					for _, sli := range readSliceBuf(c.Slices) {
+						if sli.id > 0 {
+							if _, err := s.Exec("update jfs_chunk_ref set refs=refs+1 where chunkid = ? AND size = ?", sli.id, sli.size); err != nil {
+								return err
+							}
+						}
+					}
+				}
+			}
+			return nil
+		})
+		if err == nil {
+			m.updateParentStat(ctx, *dstIno, srcNode.Parent, int64(srcNode.Length), align4K(srcNode.Length))
+		}
+	case TypeSymlink:
+		err = m.txn(func(s *xorm.Session) error {
+			srcNode := node{Inode: srcIno}
+			ok, err := s.Get(&srcNode)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			if err := m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
+				return err
+			}
+			sym := symlink{Inode: srcIno}
+			if exists, err := s.Get(&sym); err != nil {
+				return err
+			} else if !exists {
+				return syscall.ENOENT
+			}
+			sym.Inode = *dstIno
+			return mustInsert(s, &sym)
+		})
+
+	default:
+		err = m.txn(func(s *xorm.Session) error {
+			srcNode := node{Inode: srcIno}
+			ok, err := s.Get(&srcNode)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
+			return m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true)
+		})
+	}
+	newSpace := align4K(0)
+	m.updateStats(newSpace, 1)
+	m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
+	atomic.AddUint64(count, 1)
+	return errno(err)
+}
+
+func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNode *node, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
+	if m.checkQuota(4<<10, 1) {
+		return syscall.ENOSPC
+	}
+	srcNode.Parent = dstParentIno
+	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+		srcNode.Uid = ctx.Uid()
+		srcNode.Gid = ctx.Gid()
+		srcNode.Mode &= ^cumask
+	}
+
+	// hardlink: update nlink and parent
+	if srcNode.Type == TypeFile && srcNode.Nlink > 1 {
+		srcNode.Nlink = 1
+	}
+
+	var ino Ino
+	ino, err := m.nextInode()
+	if err != nil {
+		return err
+	}
+	if dstIno != nil {
+		*dstIno = ino
+	}
+
+	var pattr Attr
+	var n = node{Inode: dstParentIno}
+	if exist, err := s.Get(&n); exist {
+		m.parseAttr(&n, &pattr)
+	} else if err == nil {
+		return syscall.ENOENT
+	}
+	if pattr.Typ != TypeDirectory {
+		return syscall.ENOTDIR
+	}
+	if (pattr.Flags & FlagImmutable) != 0 {
+		return syscall.EPERM
+	}
+
+	if exist, err := s.Get(&edge{Parent: dstParentIno, Name: []byte(dstName)}); err != nil {
+		return err
+	} else if exist {
+		return syscall.EEXIST
+	}
+
+	srcNode.Inode = *dstIno
+	if err := mustInsert(s, srcNode); err != nil {
+		return err
+	}
+
+	// copy xattr
+	var xs []xattr
+	if err = s.Where("inode = ?", srcIno).Find(&xs, &xattr{Inode: srcIno}); err != nil {
+		return err
+	}
+	if len(xs) > 0 {
+		for i := range xs {
+			xs[i].Id = 0
+			xs[i].Inode = *dstIno
+		}
+		if err := mustInsert(s, &xs); err != nil {
+			return err
+		}
+	}
+
+	if attach {
+		// set edge
+		return mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: *dstIno, Type: srcNode.Type})
+	}
+	return nil
 }

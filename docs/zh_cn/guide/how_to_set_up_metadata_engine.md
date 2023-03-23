@@ -8,33 +8,28 @@ description: JuiceFS 支持 Redis、TiKV、PostgreSQL、MySQL 等多种数据库
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::tip 版本提示
-本文档使用的环境变量 `META_PASSWORD` 是 JuiceFS v1.0 新增功能，旧版客户端需要[升级](../administration/upgrade.md)后才能使用。
+:::tip
+`META_PASSWORD` 是 JuiceFS v1.0 新增功能，旧版客户端需要[升级](../administration/upgrade.md)后才能使用。
 :::
 
-通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md)，你会了解到 JuiceFS 被设计成了一种将数据和元数据独立存储的架构，通常来说，数据被存储在以对象存储为主的云存储中，而数据所对应的元数据则被存储在独立的数据库中，我们把这些支持存储元数据的数据库称为“元数据存储引擎”。
+JuiceFS 采用数据和元数据分离的存储架构，元数据可以存储在任意支持的数据库中，称为「元数据存储引擎」。JuiceFS 支持众多元数据存储引擎，各个数据库性能、易用性、场景均有区别，具体性能对比可参考[该文档](../benchmark/metadata_engines_benchmark.md)。
 
-## 元数据与存储引擎
+## 元数据存储用量 {#storage-usage}
 
-**元数据**至关重要，它记录着每一个文件的详细信息，名称、大小、权限、位置等等。特别是这种数据与元数据分离存储的文件系统，元数据的读写性能决定了文件系统实际的性能表现，而存储元数据的引擎是性能和可靠性最根本的决定因素。
+元数据所需的存储空间跟文件名的长度、文件的类型和长度以及扩展属性等相关，无法准确地估计一个文件系统的元数据存空间需求。简单起见，我们可以根据没有扩展属性的单个小文件所需的存储空间来做近似：
 
-JuiceFS 的元数据存储采用了多引擎设计。为了打造一个超高性能的云原生文件系统，JuiceFS 最先支持的是运行在内存上的键值数据库—— [Redis](https://redis.io)，这使得 JuiceFS 拥有十倍于 Amazon [EFS](https://aws.amazon.com/efs) 和 [S3FS](https://github.com/s3fs-fuse/s3fs-fuse) 的性能表现，[查看测试结果](../benchmark/benchmark.md)。
+- **键值（Key-Value）数据库**（如 Redis、TiKV）：300 字节／文件
+- **关系型数据库**（如 SQLite、MySQL、PostgreSQL）：600 字节／文件
 
-通过与社区用户积极互动，我们发现很多应用场景并不绝对依赖高性能，有时用户只是想临时找到一个方便的工具在云上可靠的迁移数据，或者只是想更简单的把对象存储挂载到本地小规模地使用。因此，JuiceFS 陆续开放了对 PostgreSQL、MySQL、MariaDB、TiKV 等更多数据库的支持（性能对比数据可参考[这里](../benchmark/metadata_engines_benchmark.md)）。
+当平均文件更大（超过 64MB），或者文件被频繁修改导致有很多碎片，或者有很多扩展属性，或者平均文件名很长（超过 50 字节），都会导致需要更多的存储空间。
 
-:::caution 特别提示
-不论采用哪种数据库存储元数据，**务必确保元数据的安全**。元数据一旦损坏或丢失，将导致对应数据彻底损坏或丢失，甚至损毁整个文件系统。对于生产环境，应该始终选择具有高可用能力的数据库，与此同时，建议定期[「备份元数据」](../administration/metadata_dump_load.md)。
-:::
+当你需要在两种类型的元数据引擎之间迁移时，就可以据此来估算所需的存储空间。例如，假设你希望将元数据引擎从一个关系型数据库（MySQL）迁移到键值数据库（Redis），如果当前 MySQL 的用量为 30GB，那么目标 Redis 至少需要准备 15GB 以上的内存。反之亦然。
 
 ## Redis
 
-[Redis](https://redis.io) 是基于内存的键值存储系统，在 BSD 协议下开源，可用于数据库、缓存和消息代理。
+JuiceFS 要求使用 4.0 及以上版本的 Redis。JuiceFS 也支持使用 Redis Cluster 作为元数据引擎，但为了避免在 Redis 集群中执行跨节点事务，同一个文件系统的元数据总会坐落于单个 Redis 实例中。
 
-:::note 注意
-JuiceFS 要求使用 4.0 及以上版本的 Redis，使用低版本的 Redis 将会报错。
-
-为了保证元数据安全，JuiceFS 要求 Redis 的淘汰策略（`maxmemory_policy`）设置为不淘汰（`noeviction`），否则在启动 JuiceFS 的时候将会尝试将其设置为 `noeviction`，如果设置失败将会打印告警日志。
-:::
+为了保证元数据安全，JuiceFS 需要 [`maxmemory-policy noeviction`](https://redis.io/docs/reference/eviction/)，否则在启动 JuiceFS 的时候将会尝试将其设置为 `noeviction`，如果设置失败将会打印告警日志。更多可以参考 [Redis 最佳实践](../administration/metadata/redis_best_practices.md)。
 
 ### 创建文件系统
 
@@ -63,7 +58,8 @@ unix://[<username>:<password>@]<socket-file-path>?db=<db>
 - `<username>` 是 Redis 6.0 之后引入的，如果没有用户名可以忽略，但密码前面的 `:` 冒号需要保留，如 `redis://:<password>@<host>:6379/1`。
 - Redis 监听的默认端口号为 `6379`，如果没有改变默认端口号可以不用填写，如 `redis://:<password>@<host>/1`，否则需要显式指定端口号。
 - Redis 支持多个[逻辑数据库](https://redis.io/commands/select)，请将 `<db>` 替换为实际使用的数据库编号。
-- 如果需要连接 Redis 哨兵（Sentinel），元数据 URL 的格式会稍有不同，具体请参考[「Redis 最佳实践」](../administration/metadata/redis_best_practices.md#数据可用性)文档。
+- 如果需要连接 Redis 哨兵（Sentinel），元数据 URL 的格式会稍有不同，具体请参考[「Redis 最佳实践」](../administration/metadata/redis_best_practices.md#数据可用性)。
+- 如果 Redis 的用户名或者密码中包含特殊字符，需要使用单引号进行封闭，避免 shell 进行解释。或者使用环境变量 `REDIS_PASSWORD` 进行传递。
 
 例如，创建名为 `pics` 的文件系统，使用 Redis 的 `1` 号数据库存储元数据：
 
@@ -91,13 +87,9 @@ juicefs format \
     pics
 ```
 
-:::note 说明
-
-1. 当 Redis 的用户名或者密码中包含特殊字符时需要将特殊字符通过 [URL encode](https://www.w3schools.com/tags/ref_urlencode.ASP) 的方式替换为 `%xx` 的格式，例如 `@` 替换为 `%40`，或者使用环境变量的方式传递密码。
-2. 使用环境变量传递数据库密码也可以采用标准的 URL 格式，如：`"redis://:@192.168.1.6:6379/1"` 保留了用户名和密码之间的 `:` 以及 `@` 分隔符。
-:::
-
 ### 挂载文件系统
+
+如果需要在多台服务器上共享同一个文件系统，必须确保每台服务器都能访问到存储元数据的数据库。
 
 ```shell
 juicefs mount -d "redis://:mypassword@192.168.1.6:6379/1" /mnt/jfs
@@ -109,12 +101,6 @@ juicefs mount -d "redis://:mypassword@192.168.1.6:6379/1" /mnt/jfs
 export META_PASSWORD=mypassword
 juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
-
-:::tip 提示
-如果需要在多台服务器上共享同一个文件系统，必须确保每台服务器都能访问到存储元数据的数据库。
-:::
-
-如果你自己维护 Redis 数据库，建议阅读 [Redis 最佳实践](../administration/metadata/redis_best_practices.md)。
 
 ## KeyDB
 
@@ -482,13 +468,13 @@ etcd://[user:password@]<addr>[,<addr>...]/<prefix>
 
 其中 `user` 和 `password` 是当 etcd 开启了用户认证时需要。`prefix` 是一个用户自定义的字符串，当多个文件系统或者应用共用一个 etcd 集群时，设置前缀可以避免混淆和冲突。示例如下：
 
-```bash
+```shell
 juicefs format etcd://user:password@192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs pics
 ```
 
 ### 设置 TLS
 
-如果需要开启 TLS，可以通过在元数据 URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
+如果需要开启 TLS，可以通过在元数据 URL 后以添加 query 参数的形式设置 TLS 的配置项，注意证书文件请使用绝对路径，避免后台挂载时找不到文件。
 
 | 配置项               | 值           |
 |----------------------|--------------|
@@ -500,7 +486,7 @@ juicefs format etcd://user:password@192.168.1.6:2379,192.168.1.7:2379,192.168.1.
 
 例子：
 
-```bash
+```shell
 juicefs format \
     --storage s3 \
     ... \
@@ -513,10 +499,6 @@ juicefs format \
 ```shell
 juicefs mount -d "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs" /mnt/jfs
 ```
-
-:::note 注意
-挂载到后台时，证书的路径需要使用绝对路径。
-:::
 
 ## FoundationDB
 

@@ -42,6 +42,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [使用 AWS Cloudformation 在 Amazon EMR 中一分钟配置 JuiceFS](https://aws.amazon.com/cn/blogs/china/use-aws-cloudformation-to-configure-juicefs-in-amazon-emr-in-one-minute)
 - [使用 JuiceFS 在云上优化 Kylin 4.0 的存储性能](https://juicefs.com/blog/cn/posts/optimize-kylin-on-juicefs)
 - [ClickHouse 存算分离架构探索](https://juicefs.com/blog/cn/posts/clickhouse-disaggregated-storage-and-compute-practice)
+- [存算分离实践：JuiceFS 在中国电信日均 PB 级数据场景的应用](https://juicefs.com/zh-cn/blog/user-stories/applicatio-of-juicefs-in-china-telecoms-daily-average-pb-data-scenario)
 
 ## 云原生 & Kubernetes
 
@@ -51,6 +52,8 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [使用 KubeSphere 应用商店 5 分钟内快速部署 JuiceFS](https://juicefs.com/zh-cn/blog/solutions/kubesphere-with-juicefs)，2021-11-19，尹珉@杭州数跑科技 & 朱唯唯@Juicedata
 - [JuiceFS CSI Driver 的最佳实践](https://juicefs.com/zh-cn/blog/engineering/csi-driver-best-practices)，2021-11-08，朱唯唯
 - [JuiceFS CSI Driver v0.10 全新架构解读](https://juicefs.com/zh-cn/blog/engineering/juicefs-csi-driver-v010)，2021-07-28，朱唯唯
+- [JuiceFS 在火山引擎边缘计算的应用实践](https://juicefs.com/zh-cn/blog/user-stories/how-juicefs-accelerates-edge-rendering-performance-in-volcengine)，2023-02-17
+，何兰州
 
 ## 数据共享
 

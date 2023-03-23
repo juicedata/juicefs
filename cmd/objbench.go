@@ -34,6 +34,7 @@ import (
 	osync "github.com/juicedata/juicefs/pkg/sync"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 func cmdObjbench() *cli.Command {
@@ -111,6 +112,8 @@ var (
 	skipped = "skipped"
 	failed  = "failed"
 )
+
+type warning error
 
 func objbench(ctx *cli.Context) error {
 	setup(ctx, 1)
@@ -592,12 +595,16 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		if err := fn(blob); err == utils.ENOTSUP {
 			r = nspt
 		} else if err != nil {
+			color := RED
+			if _, ok := err.(warning); ok {
+				color = YELLOW
+			}
 			r = err.Error()
 			if len(r) > 45 {
 				r = r[:45] + "..."
 			}
 			if colorful {
-				r = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, RED, r, RESET_SEQ)
+				r = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, color, r, RESET_SEQ)
 			}
 			logger.Debug(err.Error())
 		}
@@ -644,7 +651,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 				return fmt.Errorf("put object failed: %s", err)
 			}
 			defer blob.Delete(key) //nolint:errcheck
-			return fn()
+			return warning(fn())
 		})
 	}
 
@@ -722,11 +729,11 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		}
 		// get the end out of range
 		if d, e := get(blob, key, 4, 2); e != nil || d != "o" {
-			return fmt.Errorf(`failed to get object with the end out of range, expect "o", but got %q, error: %s`, d, e)
+			return warning(fmt.Errorf(`failed to get object with the end out of range, expect "o", but got %q, error: %s`, d, e))
 		}
 		// get the off out of range
 		if d, e := get(blob, key, 6, 2); e != nil || d != "" {
-			return fmt.Errorf(`failed to get object with the offset out of range, expect "", but got %q, error: %s`, d, e)
+			return warning(fmt.Errorf(`failed to get object with the offset out of range, expect "", but got %q, error: %s`, d, e))
 		}
 		return nil
 	})
@@ -912,9 +919,13 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		return nil
 	})
 
-	runCase("multipart upload", func(blob object.ObjectStorage) error {
+	runCase("multipart upload", func(blob object.ObjectStorage) (err error) {
+		defer func() {
+			err = warning(err)
+		}()
+
 		key := "multi_test_file"
-		if err := blob.CompleteUpload(key, "notExistsUploadId", []*object.Part{}); err != utils.ENOTSUP {
+		if err = blob.CompleteUpload(key, "notExistsUploadId", []*object.Part{}); err != utils.ENOTSUP {
 			defer blob.Delete(key) //nolint:errcheck
 			upload, err := blob.CreateMultipartUpload(key)
 			if err != nil {
@@ -928,51 +939,50 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			for i := 0; i < total; i++ {
 				content[i] = getMockData(seed, i)
 			}
-			pool := make(chan struct{}, 4)
-			var wg sync.WaitGroup
+			var eg errgroup.Group
+			eg.SetLimit(4)
 			for i := 1; i <= total; i++ {
-				pool <- struct{}{}
-				wg.Add(1)
 				num := i
-				go func() {
-					defer func() {
-						<-pool
-						wg.Done()
-					}()
+				eg.Go(func() error {
+					var err error
 					parts[num-1], err = blob.UploadPart(key, upload.UploadID, num, content[num-1])
 					if err != nil {
-						logger.Fatalf("multipart upload error: %v", err)
+						err = fmt.Errorf("multipart upload error: %s", err)
 					}
-				}()
+					return err
+				})
 			}
-			wg.Wait()
+			err = eg.Wait()
+			if err != nil {
+				return err
+			}
 			// overwrite the first part
 			firstPartContent := append(getMockData(seed, 0), getMockData(seed, 0)...)
 			if parts[0], err = blob.UploadPart(key, upload.UploadID, 1, firstPartContent); err != nil {
-				logger.Fatalf("multipart upload error: %v", err)
+				return fmt.Errorf("multipart upload error: %v", err)
 			}
 			content[0] = firstPartContent
 
 			// overwrite the last part
 			lastPartContent := []byte("hello")
 			if parts[total-1], err = blob.UploadPart(key, upload.UploadID, total, lastPartContent); err != nil {
-				logger.Fatalf("multipart upload error: %v", err)
+				return fmt.Errorf("multipart upload error: %v", err)
 			}
 			content[total-1] = lastPartContent
 
 			if err = blob.CompleteUpload(key, upload.UploadID, parts); err != nil {
-				logger.Fatalf("failed to complete multipart upload: %v", err)
+				return fmt.Errorf("failed to complete multipart upload: %v", err)
 			}
 			r, err := blob.Get(key, 0, -1)
 			if err != nil {
-				logger.Fatalf("failed to get multipart upload file: %v", err)
+				return fmt.Errorf("failed to get multipart upload file: %v", err)
 			}
 			cnt, err := io.ReadAll(r)
 			if err != nil {
-				logger.Fatalf("failed to get multipart upload file: %v", err)
+				return fmt.Errorf("failed to get multipart upload file: %v", err)
 			}
 			if !bytes.Equal(cnt, bytes.Join(content, nil)) {
-				logger.Fatal("the content of the multipart upload file is incorrect")
+				return fmt.Errorf("the content of the multipart upload file is incorrect")
 			}
 			return nil
 		}

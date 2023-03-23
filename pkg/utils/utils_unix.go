@@ -59,3 +59,9 @@ func GetKernelInfo() (string, error) {
 	result := strings.Join(append(tmp[:1], tmp[2:]...), " ")
 	return result, nil
 }
+
+func GetUmask() int {
+	umask := syscall.Umask(0)
+	syscall.Umask(umask)
+	return umask
+}

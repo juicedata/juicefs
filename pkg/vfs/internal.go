@@ -185,25 +185,25 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 	return w.Bytes()
 }
 
-func writeProgress(count, bytes *uint64, out io.Writer, done chan struct{}) {
+func writeProgress(item1, item2 *uint64, out io.Writer, done chan struct{}) {
 	wb := utils.NewBuffer(17)
 	wb.Put8(meta.CPROGRESS)
-	if bytes == nil {
-		bytes = new(uint64)
+	if item2 == nil {
+		item2 = new(uint64)
 	}
 	ticker := time.NewTicker(time.Millisecond * 300)
 	for {
 		select {
 		case <-ticker.C:
-			wb.Put64(atomic.LoadUint64(count))
-			wb.Put64(atomic.LoadUint64(bytes))
+			wb.Put64(atomic.LoadUint64(item1))
+			wb.Put64(atomic.LoadUint64(item2))
 			_, _ = out.Write(wb.Bytes())
 			wb.Seek(1)
 		case <-done:
 			ticker.Stop()
-			if *count > 0 || *bytes > 0 {
-				wb.Put64(atomic.LoadUint64(count))
-				wb.Put64(atomic.LoadUint64(bytes))
+			if *item1 > 0 || *item2 > 0 {
+				wb.Put64(atomic.LoadUint64(item1))
+				wb.Put64(atomic.LoadUint64(item2))
 				_, _ = out.Write(wb.Bytes())
 			}
 			return
@@ -324,6 +324,25 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			}
 		}
 		_, _ = out.Write([]byte{uint8(st)})
+	case meta.Clone:
+		done := make(chan struct{})
+		srcIno := Ino(r.Get64())
+		dstParentIno := Ino(r.Get64())
+		dstName := string(r.Get(int(r.Get8())))
+		umask := r.Get16()
+		cmode := r.Get8()
+		var count, total uint64
+		var eno syscall.Errno
+		go func() {
+			if eno = v.Meta.Clone(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), srcIno, dstParentIno, dstName, cmode, umask, &count, &total); eno != 0 {
+				logger.Errorf("clone failed srcIno:%d,dstParentIno:%d,dstName:%s,cmode:%d,umask:%d,eno:%v", srcIno, dstParentIno, dstName, cmode, umask, eno)
+			}
+			close(done)
+		}()
+
+		writeProgress(&count, &total, out, done)
+		_, _ = out.Write([]byte{uint8(eno)})
+
 	case meta.LegacyInfo:
 		var summary meta.Summary
 		inode := Ino(r.Get64())
@@ -403,12 +422,19 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			strict = r.Get8() != 0
 		}
 
+		done := make(chan struct{})
 		var r syscall.Errno
-		if strict {
-			r = meta.GetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
-		} else {
-			r = meta.FastGetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
-		}
+		go func() {
+			if strict {
+				r = meta.GetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
+			} else {
+				r = meta.FastGetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
+			}
+			close(done)
+		}()
+		writeProgress(&info.Summary.Files, &info.Summary.Size, out, done)
+		_, _ = out.Write([]byte{uint8(r)})
+		time.Sleep(time.Millisecond * 300) // wait for completing progress
 		if r != 0 {
 			info.Failed = true
 			info.Reason = r.Error()
