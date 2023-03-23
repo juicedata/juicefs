@@ -28,14 +28,12 @@ While using the JuiceFS file system - no matter which database you choose to sto
 
 ### The storage usage of metadata {#storage-usage}
 
-When planning a large-scale file system, it is necessary to fully consider the expected storage capacity requirements of each component. Although the storage usage of metadata in JuiceFS may be negligible compared to data storage, considering the importance of metadata in the entire file system, it is necessary to make advance planning for metadata storage to avoid affecting business operations due to insufficient resources.
-
-Since the metadata of a file is only a very small fragment of information, its space usage is affected by factors such as database type, data type, and table structure design, and cannot accurately measure the space occupied by each file in a certain metadata engine. In practice, we usually evaluate the space required for each file's metadata based on total number of files and the usage of database storage space.
-
-Therefore, the metadata storage usage of JuiceFS can be roughly calculated according to the database type:
+The storage space required for metadata is related to the length of the file name, the type and length of the file, and extended attributes. It is difficult to accurately estimate the metadata storage space requirements of a file system. For simplicity, we can approximate based on the storage space required for a single small file without extended attributes.
 
 - **Key-Value Database** (e.g. Redis, TiKV): 300 bytes/file
-- **Relational Database** (e.g. MySQL, PostgreSQL): 600 bytes/file
+- **Relational Database** (e.g. SQLite, MySQL, PostgreSQL): 600 bytes/file
+
+When the average file is larger (over 64MB), or the file is frequently modified and has a lot of fragments, or there are many extended attributes, or the average file name is long (over 50 bytes), more storage space is needed.
 
 When you need to migrate between two types of metadata engines, you can use this method to estimate the required storage space. For example, if you want to migrate the metadata engine from a relational database (MySQL) to a key-value database (Redis), and the current usage of MySQL is 30GB, then the target Redis needs to prepare at least 15GB or more of memory. The reverse is also true.
 
