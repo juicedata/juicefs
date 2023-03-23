@@ -60,16 +60,16 @@ import (
 	Sessions:   sessions -> [ $sid -> heartbeat ]
 	sustained:  session$sid -> [$inode]
 	locked:     locked$sid -> { lockf$inode or lockp$inode }
-	Quota:              dirQuota -> { $inode -> {maxSpace, maxInodes} }
-	Quota used space:   dirQuotaUsedSpace -> { $inode -> usedSpace }
-	Quota used inodes:  dirQuotaUsedInodes -> { $inode -> usedInodes}
 
 	Removed files: delfiles -> [$inode:$length -> seconds]
 	Slices refs: k$sliceId_$size -> refcount
 
-	Dir data length: dirDataLength -> { $inode -> length }
-	Dir used space: dirUsedSpace -> { $inode -> usedSpace }
-	Dir used inodes: dirUsedInodes -> { $inode -> usedInodes }
+	Dir data length:   dirDataLength -> { $inode -> length }
+	Dir used space:    dirUsedSpace -> { $inode -> usedSpace }
+	Dir used inodes:   dirUsedInodes -> { $inode -> usedInodes }
+	Quota:             dirQuota -> { $inode -> {maxSpace, maxInodes} }
+	Quota used space:  dirQuotaUsedSpace -> { $inode -> usedSpace }
+	Quota used inodes: dirQuotaUsedInodes -> { $inode -> usedInodes }
 
 	Redis features:
 	  Sorted Set: 1.2+
