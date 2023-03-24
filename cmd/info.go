@@ -111,7 +111,7 @@ func info(ctx *cli.Context) error {
 		if inode < uint64(meta.RootInode) {
 			logger.Fatalf("inode number shouldn't be less than %d", meta.RootInode)
 		}
-		f, err := findAndOpenControlFile(d)
+		f, err := openController(d)
 		if err != nil {
 			logger.Errorf("open control file for: %s", err)
 			continue
@@ -244,7 +244,7 @@ func ltypeToString(t uint32) string {
 }
 
 func legacyInfo(d, path string, inode uint64, recursive, raw uint8) {
-	f, err := findAndOpenControlFile(d)
+	f, err := openController(d)
 	if err != nil {
 		logger.Errorf("open control file for: %s", err)
 		return

@@ -42,7 +42,7 @@ $ juicefs rmr /mnt/jfs/foo`,
 	}
 }
 
-func findAndOpenControlFile(path string) (*os.File, error) {
+func openController(path string) (*os.File, error) {
 	mp, err := findMountpoint(path)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func rmr(ctx *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("lookup inode for %s: %s", d, err)
 		}
-		f, err := findAndOpenControlFile(d)
+		f, err := openController(d)
 		if err != nil {
 			logger.Errorf("open control file for: %s", err)
 			continue

@@ -123,7 +123,7 @@ func clone(ctx *cli.Context) error {
 	wb.Put([]byte(dstName))
 	wb.Put16(uint16(umask))
 	wb.Put8(cmode)
-	f, err := findAndOpenControlFile(srcMp)
+	f, err := openController(srcMp)
 	if err == nil {
 		return err
 	}
