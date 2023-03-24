@@ -335,7 +335,7 @@ func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int
 }
 
 func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, space int64) {
-	if space == 0 {
+	if length == 0 && space == 0 {
 		return
 	}
 	m.en.updateStats(space, 0)
