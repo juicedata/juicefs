@@ -1403,9 +1403,9 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
 		}
 		m.updateStats(newSpace, newInode)
-		if attr != nil {
-			m.parseAttr(&n, attr)
-		}
+	}
+	if err == nil && attr != nil {
+		m.parseAttr(&n, attr)
 	}
 	return errno(err)
 }
