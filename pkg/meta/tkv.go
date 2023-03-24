@@ -2079,18 +2079,18 @@ func (m *kvMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	return nil
 }
 
-func (m *kvMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error) {
+func (m *kvMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, syscall.Errno) {
 	rawStat, err := m.get(m.dirStatKey(ino))
 	if err != nil {
-		return nil, err
+		return nil, errno(err)
 	}
 	if rawStat != nil {
-		return m.parseDirStat(rawStat), nil
+		return m.parseDirStat(rawStat), 0
 	}
 	if trySync {
 		return m.doSyncDirStat(ctx, ino)
 	}
-	return nil, nil
+	return nil, 0
 }
 
 func (m *kvMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {

@@ -427,8 +427,8 @@ func (m *baseMeta) FastGetSummary(ctx Context, inode Ino, summary *Summary, recu
 			entries := &entriesList[i]
 			stat := &dirStats[i]
 			eg.Go(func() error {
-				s, err := m.GetDirStat(ctx, ino)
-				if err != nil {
+				s, st := m.GetDirStat(ctx, ino)
+				if st != 0 {
 					return err
 				}
 				*stat = *s
