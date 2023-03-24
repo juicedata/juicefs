@@ -1,13 +1,11 @@
 ---
-sidebar_label: Hadoop 使用 JuiceFS
+title: 在 Hadoop 生态使用 JuiceFS
 sidebar_position: 5
 slug: /hadoop_java_sdk
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
-
-# 在 Hadoop 生态使用 JuiceFS 存储
 
 JuiceFS 提供与 HDFS 接口[高度兼容](https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html)的 Java 客户端，Hadoop 生态中的各种应用都可以在不改变代码的情况下，平滑地使用 JuiceFS 存储数据。
 
@@ -35,13 +33,15 @@ JuiceFS 默认使用本地的「用户／UID」及「用户组／GID」映射，
 
 根据计算任务（如 Spark executor）的读写负载，JuiceFS Hadoop Java SDK 可能需要额外使用 4 * [`juicefs.memory-size`](#io-配置) 的堆外内存用来加速读写性能。默认情况下，建议为计算任务至少配置 1.2GB 的堆外内存。
 
-### 5. JDK 版本
+### 5. Java 运行时版本
 
-JuiceFS Hadoop Java SDK JAR 文件默认使用 JDK1.8 编译，如果需要在高版本的 JRE 运行环境中使用， 需增 JVM 参数中增加
+JuiceFS Hadoop Java SDK 默认使用 JDK 8 编译，如果需要在高版本的 Java 运行时中使用（如 Java 17），需在 JVM 参数中增加以下选项以允许使用反射 API：
 
 ```shell
 --add-exports=java.base/sun.nio.ch=ALL-UNNAMED
 ```
+
+更多关于以上选项的说明请参考[官方文档](https://docs.oracle.com/en/java/javase/17/migrate/migrating-jdk-8-later-jdk-releases.html#GUID-7BB28E4D-99B3-4078-BDC4-FC24180CE82B)。
 
 ## 安装与编译客户端
 
