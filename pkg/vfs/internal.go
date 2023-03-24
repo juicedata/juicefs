@@ -261,6 +261,10 @@ type InfoResponse struct {
 	FLocks  []meta.FLockItem
 }
 
+type SummaryReponse struct {
+	Tree meta.TreeSummary
+}
+
 type chunkSlice struct {
 	ChunkIndex uint64
 	meta.Slice
@@ -281,6 +285,36 @@ func (r *InfoResponse) Encode() []byte {
 }
 
 func (r *InfoResponse) Decode(reader io.Reader) error {
+	sizeBuf := make([]byte, 4)
+	n := 0
+	for n == 0 {
+		i, err := reader.Read(sizeBuf[n:])
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if i == 1 && sizeBuf[0] == byte(syscall.EINVAL&0xff) {
+			return syscall.EINVAL
+		}
+		n += i
+	}
+
+	size := utils.ReadBuffer(sizeBuf).Get32()
+	respBuf := make([]byte, size)
+	if _, err := io.ReadFull(reader, respBuf); err != nil {
+		return err
+	}
+	return json.Unmarshal(respBuf, r)
+}
+
+func (r *SummaryReponse) Encode() []byte {
+	resp, _ := json.Marshal(r)
+	buffer := utils.NewBuffer(4 + uint32(len(resp)))
+	buffer.Put32(uint32(len(resp)))
+	buffer.Put(resp)
+	return buffer.Bytes()
+}
+
+func (r *SummaryReponse) Decode(reader io.Reader) error {
 	sizeBuf := make([]byte, 4)
 	n := 0
 	for n == 0 {
@@ -464,6 +498,39 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			info.Reason = err.Error()
 		}
 		_, _ = out.Write(info.Encode())
+	case meta.OpSummary:
+		inode := Ino(r.Get64())
+		tree := meta.TreeSummary{
+			Inode: inode,
+			Path:  ".",
+		}
+
+		var depth uint8 = 3
+		if r.HasMore() {
+			depth = r.Get8()
+		}
+		var topN uint8 = 10
+		if r.HasMore() {
+			topN = r.Get8()
+		}
+		var dirOnly bool
+		if r.HasMore() {
+			dirOnly = r.Get8() != 0
+		}
+
+		done := make(chan struct{})
+		var r syscall.Errno
+		go func() {
+			r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, dirOnly)
+			close(done)
+		}()
+		writeProgress(&tree.Files, &tree.Size, out, done)
+		_, _ = out.Write([]byte{uint8(r)})
+		time.Sleep(time.Millisecond * 300) // wait for completing progress
+		if r != 0 {
+			return
+		}
+		_, _ = out.Write((&SummaryReponse{tree}).Encode())
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()

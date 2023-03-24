@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/url"
+	"path"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -473,6 +474,100 @@ func (m *baseMeta) FastGetSummary(ctx Context, inode Ino, summary *Summary, recu
 				}
 			}
 		}
+	}
+	return 0
+}
+
+func (t *TreeSummary) visitRoot(visit func(*TreeSummary)) {
+	for tree := t; tree != nil; tree = tree.parent {
+		visit(tree)
+	}
+}
+
+func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, dirOnly bool) syscall.Errno {
+	var attr Attr
+	if st := m.GetAttr(ctx, root.Inode, &attr); st != 0 {
+		return st
+	}
+	if attr.Typ != TypeDirectory {
+		root.Files++
+		root.Size += uint64(align4K(attr.Length))
+		if attr.Typ == TypeFile {
+			root.Length += attr.Length
+		}
+		return 0
+	}
+	root.Dirs++
+	root.Size += uint64(align4K(0))
+
+	const concurrency = 50
+	trees := []*TreeSummary{root}
+	for len(trees) > 0 {
+		entriesList := make([][]*Entry, len(trees))
+		dirStats := make([]dirStat, len(trees))
+		var eg errgroup.Group
+		eg.SetLimit(concurrency)
+		for i := range trees {
+			tree := trees[i]
+			entries := &entriesList[i]
+			stat := &dirStats[i]
+			eg.Go(func() error {
+				s, err := m.GetDirStat(ctx, tree.Inode)
+				if err != nil {
+					return err
+				}
+				*stat = *s
+				var attr Attr
+				if st := m.GetAttr(ctx, tree.Inode, &attr); st != 0 && st != syscall.ENOENT {
+					return st
+				}
+				if attr.Nlink == 2 {
+					// leaf dir, no need to read entries
+					return nil
+				}
+				if st := m.Readdir(ctx, tree.Inode, 0, entries); st != 0 && st != syscall.ENOENT {
+					return st
+				}
+				return nil
+			})
+		}
+		if err := eg.Wait(); err != nil {
+			return errno(err)
+		}
+		var newTrees []*TreeSummary
+		for i, entries := range entriesList {
+			stat := dirStats[i]
+			tree := trees[i]
+			tree.visitRoot(func(t *TreeSummary) {
+				t.Size += uint64(stat.space)
+				t.Length += uint64(stat.length)
+			})
+			if entries == nil {
+				// leaf dir
+				tree.visitRoot(func(t *TreeSummary) {
+					t.Files += uint64(stat.inodes)
+				})
+				continue
+			}
+			for _, e := range entries {
+				if bytes.Equal(e.Name, []byte(".")) || bytes.Equal(e.Name, []byte("..")) {
+					continue
+				}
+				if e.Attr.Typ == TypeDirectory {
+					tree.visitRoot(func(t *TreeSummary) { t.Dirs++ })
+
+					newTrees = append(newTrees, &TreeSummary{
+						Inode:  e.Inode,
+						Path:   path.Join(tree.Path, string(e.Name)),
+						Type:   TypeDirectory,
+						parent: tree,
+					})
+				} else {
+					tree.visitRoot(func(t *TreeSummary) { t.Files++ })
+				}
+			}
+		}
+		trees = newTrees
 	}
 	return 0
 }
