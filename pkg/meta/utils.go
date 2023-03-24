@@ -413,6 +413,7 @@ func (m *baseMeta) FastGetSummary(ctx Context, inode Ino, summary *Summary, recu
 		return 0
 	}
 	summary.Dirs++
+	summary.Size += uint64(align4K(0))
 
 	const concurrency = 50
 	dirs := []Ino{inode}
