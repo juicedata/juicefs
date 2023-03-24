@@ -497,6 +497,7 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 		}
 		return 0
 	}
+	root.Type = TypeDirectory
 	root.Dirs++
 	root.Size += uint64(align4K(0))
 
@@ -555,17 +556,18 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 				}
 				if e.Attr.Typ == TypeDirectory {
 					tree.visitRoot(func(t *TreeSummary) { t.Dirs++ })
-
-					newTrees = append(newTrees, &TreeSummary{
+					newTree := &TreeSummary{
 						Inode:  e.Inode,
 						Path:   path.Join(tree.Path, string(e.Name)),
 						Type:   TypeDirectory,
 						parent: tree,
-					})
+					}
+					tree.Children = append(tree.Children, newTree)
 				} else {
 					tree.visitRoot(func(t *TreeSummary) { t.Files++ })
 				}
 			}
+			newTrees = append(newTrees, tree.Children...)
 		}
 		trees = newTrees
 	}
