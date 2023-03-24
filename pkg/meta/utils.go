@@ -429,7 +429,7 @@ func (m *baseMeta) FastGetSummary(ctx Context, inode Ino, summary *Summary, recu
 			eg.Go(func() error {
 				s, st := m.GetDirStat(ctx, ino)
 				if st != 0 {
-					return err
+					return st
 				}
 				*stat = *s
 				var attr Attr
