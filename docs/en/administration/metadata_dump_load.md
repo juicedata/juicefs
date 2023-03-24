@@ -11,9 +11,9 @@ slug: /metadata_dump_load
 - JuiceFS v1.0.4 starts to support importing an encrypted backup.
 :::
 
-## Metadata backup {#backup}
+JuiceFS supports [multiple metadata engines](../guide/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine.
 
-JuiceFS supports [multiple metadata storage engines](../guide/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine.
+## Metadata backup {#backup}
 
 :::note
 
@@ -78,13 +78,13 @@ JuiceFS periodically cleans up backups according to the following rules.
 
 ## Metadata recovery and migration {#recovery-and-migration}
 
-Use the [`load`](../reference/command_reference.md#load) command to restore the metadata dump file into an empty file system, for example:
+Use the [`load`](../reference/command_reference.md#load) command to restore the metadata dump file into an empty database, for example:
 
 ```shell
 juicefs load redis://192.168.1.6:6379 meta-dump.json
 ```
 
-Once imported, JuiceFS will recalculate the file system statistics including space usage, inode counters, and eventually generates a globally consistent metadata in the database. If you're a developer, you can even try to manually modify the backup file before loading.
+Once imported, JuiceFS will recalculate the file system statistics including space usage, inode counters, and eventually generates a globally consistent metadata in the database. If you have a deep understanding of the metadata design of JuiceFS, you can also modify the metadata backup file before restoring to debug.
 
 The dump file is written in an uniform format, which can be recognized and imported by all metadata engines, making it easy to migrate to other types of metadata engines.
 
@@ -114,22 +114,19 @@ Note that since the API access key for object storage is excluded by default fro
 juicefs config --secret-key xxxxx mysql://user:password@(192.168.1.6:3306)/juicefs
 ```
 
-### Encrypted File Systems
+### Encrypted file system {#encrypted-file-system}
 
-For [encrypted file systems](../security/encrypt.md), all data is encrypted before uploading to the object storage, including automatic metadata backups. This is different from the `dump` command, which only output metadata in plain text, so loading dump data produced by automatic backup and `dump` command is a little different.
+For [encrypted file system](../security/encrypt.md), all data is encrypted before uploading to the object storage, including automatic metadata backups. This is different from the `dump` command, which only output metadata in plain text.
 
-Backup file produced by the `dump` command is always in plain text, so you just need to specify the RSA passphrase using the `JFS_RSA_PASSPHRASE` variable:
-
-```shell
-export JFS_RSA_PASSPHRASE=xxxxxx
-juicefs load redis://192.168.1.6:6379/1 meta.dump
-```
-
-For encrypted file systems, files produced by the automatic backup are also encrypted as well, so when loading from backups, you'll also need to specify the RSA private key and encryption algorithm.
+For an encrypted file system, it is necessary to additionally set the `JFS_RSA_PASSPHRASE` environment variable and specify the RSA private key and encryption algorithm when restoring the automatically backed-up metadata:
 
 ```shell
 export JFS_RSA_PASSPHRASE=xxxxxx
-juicefs load --encrypt-rsa-key my-private.pem --encrypt-algo aes256gcm-rsa redis://192.168.1.6:6379/1 dump-2023-03-16-090750.json.gz
+juicefs load \
+  --encrypt-rsa-key my-private.pem \
+  --encrypt-algo aes256gcm-rsa \
+  redis://192.168.1.6:6379/1 \
+  dump-2023-03-16-090750.json.gz
 ```
 
 ## Metadata inspection {#inspection}

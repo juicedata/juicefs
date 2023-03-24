@@ -8,7 +8,7 @@ JuiceFS provides data encryption from two aspects:
 1. Data Encryption In Transit
 2. Data Encryption At Rest
 
-## Data Encryption In Transit
+## Data Encryption In Transit {#in-transit}
 
 Running JuiceFS generally involves the network connection between database and object storage, which is determined by the architecture of JuiceFS. As long as the servers support encryption connections, JuiceFS can be accessed through the encrypted channel.
 

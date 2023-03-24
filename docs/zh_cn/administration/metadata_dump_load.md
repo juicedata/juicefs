@@ -8,12 +8,12 @@ slug: /metadata_dump_load
 
 - JuiceFS v0.15.2 开始支持元数据手动备份、恢复和引擎间迁移。
 - JuiceFS v1.0.0 开始支持元数据自动备份
-- JuiceFS v1.0.4 开始支持通过 load 恢复加密的元数据备份
+- JuiceFS v1.0.4 开始支持通过 `load` 命令恢复加密的元数据备份
 :::
 
-## 元数据备份 {#backup}
+JuiceFS 支持[多种元数据引擎](../guide/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 [`dump`](../reference/command_reference.md#dump) 命令允许将所有元数据以统一格式写入到 JSON 文件进行备份。同时，JuiceFS 也提供了 [`load`](../reference/command_reference.md#load) 命令，允许将备份恢复或迁移到任意元数据存储引擎。
 
-JuiceFS 支持[多种元数据存储引擎](../guide/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 [`dump`](../reference/command_reference.md#dump) 命令允许将所有元数据以统一格式写入到 JSON 文件进行备份。同时，JuiceFS 也提供了 [`load`](../reference/command_reference.md#load) 命令，允许将备份恢复或迁移到任意元数据存储引擎。
+## 元数据备份 {#backup}
 
 :::note 注意
 
@@ -78,13 +78,13 @@ JuiceFS 会按照以下规则定期清理备份：
 
 ## 元数据恢复与迁移 {#recovery-and-migration}
 
-使用 [`load`](../reference/command_reference.md#load) 命令可以将 `dump` 命令导出的元数据恢复到一个空文件系统中，比如：
+使用 [`load`](../reference/command_reference.md#load) 命令可以将 `dump` 命令导出的元数据恢复到一个空数据库中，比如：
 
 ```shell
 juicefs load redis://192.168.1.6:6379/1 meta-dump.json
 ```
 
-导入元数据时，JuiceFS 会重新计算文件系统的统计信息，包括空间使用量，inode 计数器等，最后在数据库中生成一份全局一致的元数据。如果你是开发者，还可以在恢复前对元数据备份文件进行篡改，以此来进行调试。
+导入元数据时，JuiceFS 会重新计算文件系统的统计信息，包括空间使用量、inode 计数器等，最后在数据库中生成一份全局一致的元数据。如果你对 JuiceFS 的元数据设计有深入理解，还可以在恢复前对元数据备份文件进行修改，以此来进行调试。
 
 `dump` 命令导出的 JSON 格式数据是统一且通用的，所有元数据引擎都能识别和导入。因此，你不但可以把备份恢复到原有类型的数据库中，还可以恢复到其它数据库，从而实现元数据引擎的迁移。
 
@@ -114,22 +114,19 @@ juicefs dump redis://192.168.1.6:6379/1 | juicefs load mysql://user:password@(19
 juicefs config --secret-key xxxxx mysql://user:password@(192.168.1.6:3306)/juicefs
 ```
 
-### 加密文件系统注意事项
+### 加密文件系统 {#encrypted-file-system}
 
-对于[加密的文件系统](../security/encrypt.md)，所有文件都会在本地加密后才上传到后端对象存储，包括元数据自动备份文件，也会加密后才上传至对象存储。这与 `dump` 命令不同，`dump` 导出的元数据永远是明文的。因此用这两个方式产生的元数据备份文件，在执行导入时的操作略有不同。
+对于[加密的文件系统](../security/encrypt.md)，所有文件都会在本地加密后才上传到后端对象存储，包括元数据自动备份文件，也会加密后才上传至对象存储。这与 `dump` 命令不同，`dump` 导出的元数据永远是明文的。
 
-`dump` 命令导出的是明文备份，在执行恢复时只需要通过 `JFS_RSA_PASSPHRASE` 环境变量正确设置 RSA 证书的 `Passphrase` 即可：
-
-```shell
-export JFS_RSA_PASSPHRASE=xxxxxx
-juicefs load redis://192.168.1.6:6379/1 meta.dump.json
-```
-
-对于加密文件系统，自动备份所产生的文件也会是加密的，因此在恢复时还需要额外指定 RSA 私钥和加密算法。
+对于加密文件系统，在恢复自动备份的元数据时需要额外设置 `JFS_RSA_PASSPHRASE` 环境变量，以及指定 RSA 私钥和加密算法：
 
 ```shell
 export JFS_RSA_PASSPHRASE=xxxxxx
-juicefs load --encrypt-rsa-key my-private.pem --encrypt-algo aes256gcm-rsa redis://192.168.1.6:6379/1 dump-2023-03-16-090750.json.gz
+juicefs load \
+  --encrypt-rsa-key my-private.pem \
+  --encrypt-algo aes256gcm-rsa \
+  redis://192.168.1.6:6379/1 \
+  dump-2023-03-16-090750.json.gz
 ```
 
 ## 元数据检视 {#inspection}

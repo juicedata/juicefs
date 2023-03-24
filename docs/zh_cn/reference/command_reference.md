@@ -488,7 +488,7 @@ export MINIO_ROOT_PASSWORD=12345678
 juicefs gateway redis://localhost localhost:9000
 ```
 
-### `juicefs webdav`
+### `juicefs webdav` {#webdav}
 
 启动一个 WebDAV 服务。
 
@@ -1035,33 +1035,33 @@ $ juicefs warmup -f /tmp/filelist
 
 ### `juicefs dump` {#dump}
 
-导出元数据。阅读[「元数据备份」](../administration/metadata_dump_load.md)以了解更多。
+导出元数据。阅读[「元数据备份」](../administration/metadata_dump_load.md#backup)以了解更多。
 
 #### 使用
 
-```
+```shell
 juicefs dump [command options] META-URL [FILE]
 
 # 导出元数据至 meta-dump.json
 juicefs dump redis://localhost meta-dump.json
 
-# 只导出卷的一个子树
+# 只导出文件系统的一个子目录的元数据
 juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 ```
 
 #### 选项
 
 `META-URL`<br />
-用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。
+用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。
 
 `FILE`<br />
-导入文件路径，如果不指定，则会导出到标准输出。如果文件名以 `.gz` 结尾，将会自动压缩。
+导出文件路径，如果不指定，则会导出到标准输出。如果文件名以 `.gz` 结尾，将会自动压缩。
 
-`--subdir=path`<br />
-只导出一个子目录。
+`--subdir value`<br />
+只导出指定子目录的元数据。
 
-`--keep-secret-key=false`<br />
-导出对象存储认证信息，默认为 false。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。
+`--keep-secret-key`<br />
+导出对象存储认证信息，默认为 `false`。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。
 
 ### `juicefs load` {#load}
 
@@ -1072,23 +1072,23 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 ```shell
 juicefs load [command options] META-URL [FILE]
 
-# 将元数据备份 meta-dump.json 导入文件系统
+# 将元数据备份文件 meta-dump.json 导入数据库
 juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 ```
 
 #### 选项
 
 `META-URL`<br />
-用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。
+用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。
 
 `FILE`<br />
-导入文件路径，如果不指定，则会从标准输入导入。如果文件以 `.gz` 结尾，将会自动解压。
+导入文件路径，如果不指定，则会从标准输入导入。如果文件名以 `.gz` 结尾，将会自动解压。
 
-`--encrypt-rsa-key=path`<br />
-加密所使用的 RSA 私钥文件。
+`--encrypt-rsa-key value`<br />
+加密所使用的 RSA 私钥文件路径。
 
-`--encrypt-algo=aes256gcm-rsa`<br />
-加密算法，默认 aes256gcm-rsa。
+`--encrypt-algo value`<br />
+加密算法，默认为 `aes256gcm-rsa`。
 
 ### `juicefs config` {#config}
 
