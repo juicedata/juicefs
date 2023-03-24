@@ -33,6 +33,16 @@ If you want to use JuiceFS in a distributed environment, when creating a file sy
 
 Depending on the read and write load of computing tasks (such as Spark executor), JuiceFS Hadoop Java SDK may require an additional 4 * [`juicefs.memory-size`](#io-configurations) off-heap memory to speed up read and write performance. By default, it is recommended to configure at least 1.2GB of off-heap memory for compute tasks.
 
+### 5. Java runtime version
+
+JuiceFS Hadoop Java SDK is compiled with JDK 8 by default. If it needs to be used in a higher version of Java runtime (such as Java 17), the following options need to be added to the JVM parameters to allow the use of reflection API:
+
+```shell
+--add-exports=java.base/sun.nio.ch=ALL-UNNAMED
+```
+
+For more information on the above option, please refer to [official documentation](https://docs.oracle.com/en/java/javase/17/migrate/migrating-jdk-8-later-jdk-releases.html#GUID-7BB28E4D-99B3-4078-BDC4-FC24180CE82B).
+
 ## Install and compile the client
 
 ### Install the pre-compiled client
@@ -132,6 +142,7 @@ It is recommended to place the JAR file in a fixed location, and the other locat
 |-----------|---------------------------------------------------------------------------|
 | Spark     | `${SPARK_HOME}/jars`                                                      |
 | Presto    | `${PRESTO_HOME}/plugin/hive-hadoop2`                                      |
+| Trino     | `${TRINO_HOME}/plugin/hive`                                               |
 | Flink     | `${FLINK_HOME}/lib`                                                       |
 | StarRocks | `${StarRocks_HOME}/fe/lib/`, `${StarRocks_HOME}/be/lib/hadoop/common/lib` |
 
