@@ -111,15 +111,9 @@ func info(ctx *cli.Context) error {
 		if inode < uint64(meta.RootInode) {
 			logger.Fatalf("inode number shouldn't be less than %d", meta.RootInode)
 		}
-		mp, err := findMountpoint(d)
+		f, err := findAndOpenControlFile(d)
 		if err != nil {
-			logger.Errorf("find mountpoint: %s", err)
-			continue
-		}
-		var f *os.File
-		f, err = openController(mp)
-		if err != nil {
-			logger.Errorf("open controller: %s", err)
+			logger.Errorf("open control file for: %s", err)
 			continue
 		}
 
@@ -250,15 +244,9 @@ func ltypeToString(t uint32) string {
 }
 
 func legacyInfo(d, path string, inode uint64, recursive, raw uint8) {
-	mp, err := findMountpoint(d)
+	f, err := findAndOpenControlFile(d)
 	if err != nil {
-		logger.Errorf("find mountpoint: %s", err)
-		return
-	}
-	var f *os.File
-	f, err = openController(mp)
-	if err != nil {
-		logger.Errorf("open controller: %s", err)
+		logger.Errorf("open control file for: %s", err)
 		return
 	}
 	defer f.Close()

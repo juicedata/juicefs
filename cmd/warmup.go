@@ -182,21 +182,11 @@ func warmup(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	controller, err := openController(mp)
+	controller, err := findAndOpenControlFile(mp)
 	if err != nil {
-		return fmt.Errorf("open control file for %s", first)
+		return fmt.Errorf("open control file for: %s", first)
 	}
 	defer controller.Close()
-
-	for ; mp != "/"; mp = filepath.Dir(mp) {
-		inode, err := utils.GetFileInode(mp)
-		if err != nil {
-			logger.Fatalf("lookup inode for %s: %s", mp, err)
-		}
-		if inode == uint64(meta.RootInode) {
-			break
-		}
-	}
 
 	threads := ctx.Uint("threads")
 	if threads == 0 {

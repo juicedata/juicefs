@@ -96,7 +96,7 @@ func clone(ctx *cli.Context) error {
 		return fmt.Errorf("the clone DST path should be at the same mount point as the SRC path")
 	}
 
-	if strings.HasPrefix(strings.TrimLeft(dstAbsPath, dstMp), strings.TrimLeft(srcAbsPath, srcMp)) {
+	if strings.HasPrefix(dstAbsPath, srcAbsPath) {
 		return fmt.Errorf("the clone DST path should not be under the SRC path")
 	}
 
@@ -123,8 +123,7 @@ func clone(ctx *cli.Context) error {
 	wb.Put([]byte(dstName))
 	wb.Put16(uint16(umask))
 	wb.Put8(cmode)
-	var f *os.File
-	f, err = openController(srcMp)
+	f, err := findAndOpenControlFile(srcMp)
 	if err == nil {
 		return err
 	}
