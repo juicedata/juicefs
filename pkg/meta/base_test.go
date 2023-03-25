@@ -1879,14 +1879,14 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("mkdir: %s", st)
 	}
 
-	st, err := m.GetDirStat(Background, testInode)
+	stat, st := m.GetDirStat(Background, testInode)
 	checkResult := func(length, space, inodes int64) {
-		if err != nil {
-			t.Fatalf("get dir usage: %s", err)
+		if st != 0 {
+			t.Fatalf("get dir usage: %s", st)
 		}
 		expect := dirStat{length, space, inodes}
-		if *st != expect {
-			t.Fatalf("test dir usage: expect %+v, but got %+v", expect, st)
+		if *stat != expect {
+			t.Fatalf("test dir usage: expect %+v, but got %+v", expect, stat)
 		}
 	}
 	checkResult(0, 0, 0)
@@ -1897,7 +1897,7 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("create: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	st, err = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(0, align4K(0), 1)
 
 	// test dir with file and fallocate
@@ -1905,7 +1905,7 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("fallocate: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	st, err = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(4097, align4K(4097), 1)
 
 	// test dir with file and truncate
@@ -1913,7 +1913,7 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("truncate: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	st, err = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(0, align4K(0), 1)
 
 	// test dir with file and write
@@ -1921,7 +1921,7 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("write: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	st, err = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(4097, align4K(4097), 1)
 
 	// test dir with file and link
@@ -1929,7 +1929,7 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("link: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	st, err = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(2*4097, 2*align4K(4097), 2)
 
 	// test dir with subdir
@@ -1938,7 +1938,7 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("mkdir: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	st, err = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(2*4097, align4K(0)+2*align4K(4097), 3)
 
 	// test rename
@@ -1946,9 +1946,9 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("rename: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	st, err = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(4097, align4K(0)+align4K(4097), 2)
-	st, err = m.GetDirStat(Background, subInode)
+	stat, st = m.GetDirStat(Background, subInode)
 	checkResult(4097, align4K(4097), 1)
 
 	// test unlink
@@ -1959,9 +1959,9 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("unlink: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	st, err = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(0, align4K(0), 1)
-	st, err = m.GetDirStat(Background, subInode)
+	stat, st = m.GetDirStat(Background, subInode)
 	checkResult(0, 0, 0)
 
 	// test rmdir
@@ -1969,7 +1969,7 @@ func testDirStat(t *testing.T, m Meta) {
 		t.Fatalf("rmdir: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	st, err = m.GetDirStat(Background, testInode)
+	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(0, 0, 0)
 }
 

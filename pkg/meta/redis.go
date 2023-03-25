@@ -2388,31 +2388,31 @@ func (m *redisMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 	return nil
 }
 
-func (m *redisMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error) {
+func (m *redisMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, syscall.Errno) {
 	field := ino.String()
 	dataLength, errLength := m.rdb.HGet(ctx, m.dirDataLengthKey(), field).Int64()
 	if errLength != nil && errLength != redis.Nil {
-		return nil, errLength
+		return nil, errno(errLength)
 	}
 	usedSpace, errSpace := m.rdb.HGet(ctx, m.dirUsedSpaceKey(), field).Int64()
 	if errSpace != nil && errSpace != redis.Nil {
-		return nil, errSpace
+		return nil, errno(errSpace)
 	}
 	usedInodes, errInodes := m.rdb.HGet(ctx, m.dirUsedInodesKey(), field).Int64()
 	if errInodes != nil && errSpace != redis.Nil {
-		return nil, errInodes
+		return nil, errno(errInodes)
 	}
 	if errLength != redis.Nil && errSpace != redis.Nil && errInodes != redis.Nil {
 		if trySync && (dataLength < 0 || usedSpace < 0 || usedInodes < 0) {
 			return m.doSyncDirStat(ctx, ino)
 		}
-		return &dirStat{dataLength, usedSpace, usedInodes}, nil
+		return &dirStat{dataLength, usedSpace, usedInodes}, 0
 	}
 
 	if trySync {
 		return m.doSyncDirStat(ctx, ino)
 	}
-	return nil, nil
+	return nil, 0
 }
 
 // For now only deleted files

@@ -93,7 +93,7 @@ type engine interface {
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
 	// @trySync: try sync dir stat if broken or not existed
-	doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error)
+	doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, syscall.Errno)
 	doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno)
 
 	scanTrashSlices(Context, trashSliceScan) error
@@ -313,13 +313,13 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	return stat, 0
 }
 
-func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, err error) {
-	stat, err = m.en.doGetDirStat(ctx, m.checkRoot(inode), !m.conf.ReadOnly)
-	if err != nil {
+func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall.Errno) {
+	stat, st = m.en.doGetDirStat(ctx, m.checkRoot(inode), !m.conf.ReadOnly)
+	if st != 0 {
 		return
 	}
 	if stat == nil {
-		stat, err = m.calcDirStat(ctx, inode)
+		stat, st = m.calcDirStat(ctx, inode)
 	}
 	return
 }
@@ -1693,9 +1693,9 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					}
 				}
 
-				stat, err := m.en.doGetDirStat(ctx, inode, false)
-				if err != nil {
-					logger.Errorf("get dir stat for inode %d: %v", inode, err)
+				stat, st := m.en.doGetDirStat(ctx, inode, false)
+				if st != 0 {
+					logger.Errorf("get dir stat for inode %d: %v", inode, st)
 					continue
 				}
 				if stat == nil || stat.space < 0 || stat.inodes < 0 {
@@ -1708,7 +1708,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 						if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 {
 							logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
 						} else {
-							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, err)
+							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, st)
 						}
 					}
 				} else if statBroken {

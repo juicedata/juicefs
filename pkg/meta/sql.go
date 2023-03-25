@@ -2349,7 +2349,7 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	return stat, errno(err)
 }
 
-func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error) {
+func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, syscall.Errno) {
 	st := dirStats{Inode: ino}
 	var exist bool
 	var err error
@@ -2357,13 +2357,13 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, err
 		exist, err = s.Get(&st)
 		return err
 	}); err != nil {
-		return nil, err
+		return nil, errno(err)
 	}
 	if !exist {
 		if trySync {
 			return m.doSyncDirStat(ctx, ino)
 		}
-		return nil, nil
+		return nil, 0
 	}
 
 	if trySync && (st.UsedSpace < 0 || st.UsedInodes < 0) {
@@ -2387,7 +2387,7 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, err
 			logger.Warn(e)
 		}
 	}
-	return &dirStat{st.DataLength, st.UsedSpace, st.UsedInodes}, nil
+	return &dirStat{st.DataLength, st.UsedSpace, st.UsedInodes}, 0
 }
 
 func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {

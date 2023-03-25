@@ -131,9 +131,9 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 		}
 	}
 
-	stat, err := m.(engine).doGetDirStat(ctx, 1, false)
-	if err != nil {
-		t.Fatalf("get dir stat: %s", err)
+	stat, st := m.(engine).doGetDirStat(ctx, 1, false)
+	if st != 0 {
+		t.Fatalf("get dir stat: %s", st)
 	}
 	if stat == nil {
 		t.Fatalf("get dir stat: nil")
