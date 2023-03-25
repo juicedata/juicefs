@@ -113,7 +113,7 @@ func info(ctx *cli.Context) error {
 		}
 		f, err := openController(d)
 		if err != nil {
-			logger.Errorf("open control file for: %s", err)
+			logger.Errorf("Open control file for %s: %s", d, err)
 			continue
 		}
 
@@ -246,7 +246,7 @@ func ltypeToString(t uint32) string {
 func legacyInfo(d, path string, inode uint64, recursive, raw uint8) {
 	f, err := openController(d)
 	if err != nil {
-		logger.Errorf("open control file for: %s", err)
+		logger.Errorf("Open control file for %s: %s", d, err)
 		return
 	}
 	defer f.Close()

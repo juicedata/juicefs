@@ -184,7 +184,7 @@ func warmup(ctx *cli.Context) error {
 	}
 	controller, err := openController(mp)
 	if err != nil {
-		return fmt.Errorf("open control file for: %s", first)
+		return fmt.Errorf("open control file for %s: %s", first, err)
 	}
 	defer controller.Close()
 

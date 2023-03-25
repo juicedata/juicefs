@@ -73,7 +73,7 @@ func rmr(ctx *cli.Context) error {
 		}
 		f, err := openController(d)
 		if err != nil {
-			logger.Errorf("open control file for: %s", err)
+			logger.Errorf("Open control file for %s: %s", d, err)
 			continue
 		}
 		wb := utils.NewBuffer(8 + 8 + 1 + uint32(len(name)))

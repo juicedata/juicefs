@@ -95,7 +95,6 @@ func clone(ctx *cli.Context) error {
 	if srcMp != dstMp {
 		return fmt.Errorf("the clone DST path should be at the same mount point as the SRC path")
 	}
-
 	if strings.HasPrefix(dstAbsPath, srcAbsPath) {
 		return fmt.Errorf("the clone DST path should not be under the SRC path")
 	}
@@ -143,20 +142,16 @@ func clone(ctx *cli.Context) error {
 	}
 	return nil
 }
-func findMountpoint(dir string) (string, error) {
-	odir := dir
-	for dir != "" {
-		inode, err := utils.GetFileInode(dir)
+
+func findMountpoint(fpath string) (string, error) {
+	for p := fpath; p != "/"; p = filepath.Dir(p) {
+		inode, err := utils.GetFileInode(p)
 		if err != nil {
-			return "", fmt.Errorf("get inode of %s: %s", dir, err)
+			return "", fmt.Errorf("get inode of %s: %s", p, err)
 		}
 		if inode == uint64(meta.RootInode) {
-			return dir, nil
-		}
-		dir = filepath.Dir(dir)
-		if dir == "/" {
-			return "", fmt.Errorf("%s is not inside JuiceFS", odir)
+			return p, nil
 		}
 	}
-	return "", fmt.Errorf("%s is not inside JuiceFS", odir)
+	return "", fmt.Errorf("%s is not inside JuiceFS", fpath)
 }
