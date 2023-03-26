@@ -503,6 +503,8 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 
 	const concurrency = 50
 	trees := []*TreeSummary{root}
+	depth++ // root is counted as 1
+
 	for len(trees) > 0 {
 		entriesList := make([][]*Entry, len(trees))
 		dirStats := make([]dirStat, len(trees))
@@ -568,6 +570,29 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 				}
 			}
 			newTrees = append(newTrees, tree.Children...)
+			if depth > 0 {
+				depth--
+				// children are not iterated at this time, so we sort and omit them after iteration
+				defer func() {
+					sort.Slice(tree.Children, func(i, j int) bool {
+						return tree.Children[i].Size > tree.Children[j].Size
+					})
+					if len(tree.Children) > int(topN) {
+						omitChild := &TreeSummary{
+							Path: path.Join(tree.Path, "..."),
+						}
+						for _, child := range tree.Children[topN:] {
+							omitChild.Size += child.Size
+							omitChild.Length += child.Length
+							omitChild.Files += child.Files
+							omitChild.Dirs += child.Dirs
+						}
+						tree.Children = append(tree.Children[:topN], omitChild)
+					}
+				}()
+			} else {
+				tree.Children = nil
+			}
 		}
 		trees = newTrees
 	}
