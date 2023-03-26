@@ -1297,21 +1297,33 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
-	quotaSrc := !isTrash(parentSrc) && m.hasDirQuota(ctx, parentSrc)
-	quotaDst := m.hasDirQuota(ctx, parentDst)
+	var quotaSrc bool = !isTrash(parentSrc) && m.hasDirQuota(ctx, parentSrc)
+	var quotaDst bool
+	if parentSrc == parentDst {
+		quotaDst = quotaSrc
+	} else {
+		quotaDst = m.hasDirQuota(ctx, parentDst)
+	}
 	var space, inodes int64
-	if quotaSrc || quotaDst {
+	if parentSrc != parentDst && (quotaSrc || quotaDst) {
 		if st := m.Lookup(ctx, parentSrc, nameSrc, inode, attr); st != 0 {
 			return st
 		}
 		if attr.Typ == TypeDirectory {
-			var sum Summary
-			logger.Debugf("Start to get summary of inode %d", *inode)
-			if st := m.FastGetSummary(ctx, *inode, &sum, true); st != 0 {
-				logger.Warnf("Get summary of inode %d: %s", *inode, st)
-				return st
+			m.quotaMu.RLock()
+			q := m.dirQuotas[*inode]
+			m.quotaMu.RUnlock()
+			if q != nil {
+				space, inodes = q.UsedSpace+align4K(0), q.UsedInodes+1
+			} else {
+				var sum Summary
+				logger.Debugf("Start to get summary of inode %d", *inode)
+				if st := m.FastGetSummary(ctx, *inode, &sum, true); st != 0 {
+					logger.Warnf("Get summary of inode %d: %s", *inode, st)
+					return st
+				}
+				space, inodes = int64(sum.Size), int64(sum.Dirs+sum.Files)
 			}
-			space, inodes = int64(sum.Size), int64(sum.Dirs+sum.Files)
 		} else {
 			space, inodes = align4K(attr.Length), 1
 		}
@@ -1330,14 +1342,16 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		} else if attr.Typ == TypeFile {
 			diffLengh = attr.Length
 		}
-		// FIXME: dst exists and is replaced or exchanged
-		m.updateDirStat(ctx, parentSrc, -int64(diffLengh), -align4K(diffLengh), -1)
-		m.updateDirStat(ctx, parentDst, int64(diffLengh), align4K(diffLengh), 1)
-		if quotaSrc {
-			m.updateDirQuota(ctx, parentSrc, -space, -inodes)
-		}
-		if quotaDst {
-			m.updateDirQuota(ctx, parentDst, space, inodes)
+		if parentSrc != parentDst {
+			// FIXME: dst exists and is replaced or exchanged
+			m.updateDirStat(ctx, parentSrc, -int64(diffLengh), -align4K(diffLengh), -1)
+			m.updateDirStat(ctx, parentDst, int64(diffLengh), align4K(diffLengh), 1)
+			if quotaSrc {
+				m.updateDirQuota(ctx, parentSrc, -space, -inodes)
+			}
+			if quotaDst {
+				m.updateDirQuota(ctx, parentDst, space, inodes)
+			}
 		}
 	}
 	return st
