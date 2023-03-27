@@ -2518,9 +2518,13 @@ func (m *redisMeta) cleanupLeakedChunks(delete bool) {
 			rs = append(rs, p.Exists(ctx, m.inodeKey(Ino(ino))))
 		}
 		if len(rs) > 0 {
-			_, err := p.Exec(ctx)
+			cmds, err := p.Exec(ctx)
 			if err != nil {
-				logger.Errorf("check inodes: %s", err)
+				for _, c := range cmds {
+					if c.Err() != nil {
+						logger.Errorf("Check inodes with command %s: %s", c.String(), c.Err())
+					}
+				}
 				return err
 			}
 			for i, rr := range rs {
@@ -2862,7 +2866,11 @@ func (m *redisMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar)
 		}
 		cmds, err := p.Exec(ctx)
 		if err != nil {
-			logger.Warnf("list slices: %s", err)
+			for _, c := range cmds {
+				if c.Err() != nil {
+					logger.Warnf("Scan chunks with command %s: %s", c.String(), c.Err())
+				}
+			}
 			return err
 		}
 		for i, cmd := range cmds {
@@ -2999,7 +3007,11 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 		}
 		cmds, err := p.Exec(ctx)
 		if err != nil {
-			logger.Warnf("list slices: %s", err)
+			for _, c := range cmds {
+				if c.Err() != nil {
+					logger.Warnf("List slices with command %s: %s", c.String(), c.Err())
+				}
+			}
 			return err
 		}
 		for _, cmd := range cmds {
