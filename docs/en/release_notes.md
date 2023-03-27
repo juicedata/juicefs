@@ -28,7 +28,7 @@ JuiceFS v1.0.0 Beta3 has changed the table schema to support encoding other than
 Table schema upgrades are optional, and they are required only if you need to use non-UTF-8 characters. In addition, database performance may degrade when upgrading SQL table schemas, affecting running services.
 :::
 
-**MySQL/MariaDB**
+##### MySQL/MariaDB
 
 ```sql
 alter table jfs_edge
@@ -37,7 +37,7 @@ alter table jfs_symlink
     modify target varbinary(4096) not null;
 ```
 
-**PostgreSQL**
+##### PostgreSQL
 
 ```sql
 alter table jfs_edge
@@ -46,7 +46,7 @@ alter table jfs_symlink
     alter column target type bytea using target::bytea;
 ```
 
-**SQLite**
+##### SQLite
 
 SQLite does not support modifying columns, but you can migrate columns by `dump` and `load` commands, refer to [JuiceFS Metadata Backup and Recovery](administration/metadata_dump_load.md) for details.
 

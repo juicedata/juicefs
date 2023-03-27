@@ -28,7 +28,7 @@ JuiceFS v1.0.0 Beta3 改进了 SQL 引擎对非 UTF-8 字符集的支持。对�
 调整 SQL 表结构时数据库性能可能会下降，影响正在运行的服务。
 :::
 
-**MySQL/MariaDB**
+##### MySQL/MariaDB
 
 ```sql
 alter table jfs_edge
@@ -37,7 +37,7 @@ alter table jfs_symlink
     modify target varbinary(4096) not null;
 ```
 
-**PostgreSQL**
+##### PostgreSQL
 
 ```sql
 alter table jfs_edge
@@ -46,7 +46,7 @@ alter table jfs_symlink
     alter column target type bytea using target::bytea;
 ```
 
-**SQLite**
+##### SQLite
 
 由于 SQLite 不支持修改字段，可以通过 dump 和 load 命令进行迁移，详情参考：[JuiceFS 元数据备份和恢复](administration/metadata_dump_load.md)。
 
