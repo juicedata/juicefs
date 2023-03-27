@@ -140,7 +140,7 @@ func (m *memStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 			if delimiter != "" {
 				remainString := strings.TrimPrefix(k, prefix)
 				pos := strings.Index(remainString, delimiter)
-				if pos != -1 && pos != len(remainString) {
+				if pos != -1 && pos != (len(remainString) - 1) {
 					commonPrefix := remainString[0:pos + 1]
 					if _, ok := commonPrefixsMap[commonPrefix]; ok {
 						continue

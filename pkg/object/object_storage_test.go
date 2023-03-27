@@ -754,7 +754,7 @@ func TestEncrypted(t *testing.T) {
 	testStorage(t, es)
 }
 
-func TestMarsharl(t *testing.T) { //skip mutate
+func TestMarsharl(t *testing.T) {
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.SkipNow()
 	}
