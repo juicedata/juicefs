@@ -53,6 +53,22 @@ func cmdSummary() *cli.Command {
 				Aliases: []string{"i"},
 				Usage:   "use inode instead of path (current dir should be inside JuiceFS)",
 			},
+			&cli.UintFlag{
+				Name:    "depth",
+				Aliases: []string{"d"},
+				Value:   3,
+				Usage:   "depth of tree to show (zero means only show root)",
+			},
+			&cli.UintFlag{
+				Name:    "top",
+				Aliases: []string{"t"},
+				Value:   10,
+				Usage:   "show top N entries",
+			},
+			&cli.BoolFlag{
+				Name:  "strict",
+				Usage: "show accurate summary, including directories and files (may be slow)",
+			},
 		},
 	}
 }
@@ -67,6 +83,27 @@ func summary(ctx *cli.Context) error {
 	depth = 3
 	topN = 10
 	dirOnly = 1
+
+	if ctx.IsSet("depth") {
+		d := ctx.Uint("depth")
+		if d > 10 {
+			logger.Warn("depth should be less than 11")
+			d = 10
+		}
+		depth = uint8(d)
+	}
+	if ctx.IsSet("top") {
+		t := ctx.Uint("top")
+		if t > 100 {
+			logger.Warn("top should be less than 101")
+			t = 100
+		}
+		topN = uint8(t)
+	}
+	if ctx.Bool("strict") {
+		dirOnly = 0
+	}
+
 	progress := utils.NewProgress(depth > 4 || topN > 100) // only show progress for slow summary
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)
@@ -126,31 +163,45 @@ func summary(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("summary: %s", err)
 		}
-		results := [][]string{{"Path", "Type", "Length", "Size", "Files", "Dirs"}}
-		renderTree(&results, &resp.Tree)
+		var results [][]string
+		if dirOnly == 0 {
+			results = [][]string{{"Path", "Type", "Length", "Size", "Files", "Dirs"}}
+		} else {
+			results = [][]string{{"Path", "Length", "Size", "Files", "Dirs"}}
+		}
+		renderTree(&results, &resp.Tree, dirOnly > 0)
 		printResult(results, 0, false)
 	}
 	progress.Done()
 	return nil
 }
 
-func renderTree(results *[][]string, tree *meta.TreeSummary) {
+func renderTree(results *[][]string, tree *meta.TreeSummary, dirOnly bool) {
 	if tree == nil {
 		return
 	}
-	*results = append(
-		*results,
-		[]string{
+	var result []string
+	if dirOnly {
+		result = []string{
+			tree.Path,
+			humanize.IBytes(uint64(tree.Length)),
+			humanize.IBytes(uint64(tree.Size)),
+			strconv.FormatUint(tree.Files, 10),
+			strconv.FormatUint(tree.Dirs, 10),
+		}
+	} else {
+		result = []string{
 			tree.Path,
 			typeToString(tree.Type),
 			humanize.IBytes(uint64(tree.Length)),
 			humanize.IBytes(uint64(tree.Size)),
 			strconv.FormatUint(tree.Files, 10),
 			strconv.FormatUint(tree.Dirs, 10),
-		},
-	)
+		}
+	}
+	*results = append(*results, result)
 	for _, child := range tree.Children {
-		renderTree(results, child)
+		renderTree(results, child, dirOnly)
 	}
 }
 
