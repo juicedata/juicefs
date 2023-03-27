@@ -4,17 +4,15 @@
 For all versions, please see [GitHub Releases](https://github.com/juicedata/juicefs/releases).
 :::
 
-## Version Number
+## Version number {#version-number}
 
-JuiceFS Community Edition uses semantic versioning to label its releases. Each version number consists of three numbers in the format `x.y.z`, representing the major version number (x), the minor version number (y), and the patch number (z).
+JuiceFS Community Edition uses [semantic versioning](https://semver.org) to label its releases. Each version number consists of three numbers in the format `x.y.z`, representing the major version number (x), the minor version number (y), and the patch number (z).
 
-1. **Major version number (x)**: When the major version number is greater than or equal to `1`, it indicates that the version is suitable for production environments. When the major version number changes, it indicates that this version may have added major features, architectural changes, or data format changes that are not backward compatible. For example, `v0.8.3` -> `v1.0.0` means production-ready. `v1.0.0` -> `v2.0.0` represents an architectural or functional change.
+1. **Major version number (x)**: When the major version number is greater than or equal to `1`, it indicates that the version is suitable for production environments. When the major version number changes, it indicates that this version may have added major features, architectural changes, or data format changes that are not backward compatible. For example, `v0.8.3` → `v1.0.0` means production-ready, `v1.0.0` → `v2.0.0` represents an architectural or functional change.
+2. **Minor version number (y)**: The minor version number indicates that the version adds some new features, performance optimizations, bug fixes, etc. that can be backward compatible. For example, `v1.0.0` → `v1.1.0`.
+3. **Patch version number (z)**: The patch version number indicates a minor update or bug fix for the software, which is only some minor changes or fixes to existing features and will not affect the compatibility of the softwares. For example, `v1.0.3` → `v1.0.4`.
 
-2. **Minor version number (y)**: The minor version number indicates that the version adds some new features, performance optimizations, bug fixes, etc. that can be backward compatible. For example, `v1.0.0` -> `v1.1.0`.
-
-3. **Patch version number (z)**: The patch version number indicates a minor update or bug fix for the software, which is only some minor changes or fixes to existing features and will not affect the compatibility of the softwares. For example, `v1.0.3` -> `v1.0.4`.
-
-## Changes
+## Changes {#changes}
 
 ### JuiceFS v1.0.0 Beta3
 
