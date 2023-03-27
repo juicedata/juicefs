@@ -485,13 +485,56 @@ func (t *TreeSummary) visitRoot(visit func(*TreeSummary)) {
 }
 
 func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, dirOnly bool) syscall.Errno {
+	var st syscall.Errno
 	if dirOnly {
-		return m.fastGetTreeSummary(ctx, root, depth, topN, dirOnly)
+		st = m.fastGetTreeSummary(ctx, root)
+	} else {
+		st = m.getTreeSummary(ctx, root)
 	}
-	return m.getTreeSummary(ctx, root, depth, topN, dirOnly)
+	if st != 0 {
+		return st
+	}
+	trees := []*TreeSummary{root}
+	for len(trees) > 0 {
+		var newTrees []*TreeSummary
+		for _, tree := range trees {
+			for _, child := range tree.Children {
+				if child.Type == TypeDirectory {
+					newTrees = append(newTrees, child)
+				}
+			}
+		}
+		if depth > 0 {
+			depth--
+			for _, tree := range trees {
+				sort.Slice(tree.Children, func(i, j int) bool {
+					return tree.Children[i].Size > tree.Children[j].Size
+				})
+				if len(tree.Children) > int(topN) {
+					omitChild := &TreeSummary{
+						Path: path.Join(tree.Path, "..."),
+						Type: TypeDirectory,
+					}
+					for _, child := range tree.Children[topN:] {
+						omitChild.Size += child.Size
+						omitChild.Length += child.Length
+						omitChild.Files += child.Files
+						omitChild.Dirs += child.Dirs
+					}
+					tree.Children = append(tree.Children[:topN], omitChild)
+				}
+			}
+		} else {
+			for _, tree := range trees {
+				tree.Children = nil
+			}
+		}
+		trees = newTrees
+	}
+	return st
 }
 
-func (m *baseMeta) getTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, dirOnly bool) syscall.Errno {
+func (m *baseMeta) getTreeSummary(ctx Context, root *TreeSummary) syscall.Errno {
 	var attr Attr
 	if st := m.GetAttr(ctx, root.Inode, &attr); st != 0 {
 		return st
@@ -567,43 +610,12 @@ func (m *baseMeta) getTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 			}
 			newTrees = append(newTrees, tree.Children...)
 		}
-		if depth > 0 {
-			depth--
-			// children are not iterated at this time, so we sort and omit them after iteration
-			defer func(trees []*TreeSummary) {
-				for _, tree := range trees {
-					if tree.Type != TypeDirectory {
-						continue
-					}
-					sort.Slice(tree.Children, func(i, j int) bool {
-						return tree.Children[i].Size > tree.Children[j].Size
-					})
-					if len(tree.Children) > int(topN) {
-						omitChild := &TreeSummary{
-							Path: path.Join(tree.Path, "..."),
-							Type: TypeDirectory,
-						}
-						for _, child := range tree.Children[topN:] {
-							omitChild.Size += child.Size
-							omitChild.Length += child.Length
-							omitChild.Files += child.Files
-							omitChild.Dirs += child.Dirs
-						}
-						tree.Children = append(tree.Children[:topN], omitChild)
-					}
-				}
-			}(trees)
-		} else {
-			for _, tree := range trees {
-				tree.Children = nil
-			}
-		}
 		trees = newTrees
 	}
 	return 0
 }
 
-func (m *baseMeta) fastGetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, dirOnly bool) syscall.Errno {
+func (m *baseMeta) fastGetTreeSummary(ctx Context, root *TreeSummary) syscall.Errno {
 	var attr Attr
 	if st := m.GetAttr(ctx, root.Inode, &attr); st != 0 {
 		return st
@@ -687,34 +699,6 @@ func (m *baseMeta) fastGetTreeSummary(ctx Context, root *TreeSummary, depth, top
 				}
 			}
 			newTrees = append(newTrees, tree.Children...)
-		}
-		if depth > 0 {
-			depth--
-			// children are not iterated at this time, so we sort and omit them after iteration
-			defer func(trees []*TreeSummary) {
-				for _, tree := range trees {
-					sort.Slice(tree.Children, func(i, j int) bool {
-						return tree.Children[i].Size > tree.Children[j].Size
-					})
-					if len(tree.Children) > int(topN) {
-						omitChild := &TreeSummary{
-							Path: path.Join(tree.Path, "..."),
-							Type: TypeDirectory,
-						}
-						for _, child := range tree.Children[topN:] {
-							omitChild.Size += child.Size
-							omitChild.Length += child.Length
-							omitChild.Files += child.Files
-							omitChild.Dirs += child.Dirs
-						}
-						tree.Children = append(tree.Children[:topN], omitChild)
-					}
-				}
-			}(trees)
-		} else {
-			for _, tree := range trees {
-				tree.Children = nil
-			}
 		}
 		trees = newTrees
 	}

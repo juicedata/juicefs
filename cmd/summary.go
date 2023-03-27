@@ -63,7 +63,7 @@ func cmdSummary() *cli.Command {
 				Name:    "top",
 				Aliases: []string{"t"},
 				Value:   10,
-				Usage:   "show top N entries",
+				Usage:   "show top N entries (sort by size)",
 			},
 			&cli.BoolFlag{
 				Name:  "strict",
