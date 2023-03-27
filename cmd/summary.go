@@ -128,7 +128,7 @@ func summary(ctx *cli.Context) error {
 		}
 		results := [][]string{{"Path", "Type", "Length", "Size", "Files", "Dirs"}}
 		renderTree(&results, &resp.Tree)
-		printResult(results, -1, false)
+		printResult(results, 0, false)
 	}
 	progress.Done()
 	return nil
