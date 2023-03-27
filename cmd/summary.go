@@ -41,12 +41,22 @@ func cmdSummary() *cli.Command {
  It is used to show tree summary of target directory.
  
  Examples:
- $ Show a path
+ # Show with path
  $ juicefs summary /mnt/jfs/foo
  
- # Show an inode
+ # Show with inode
  $ cd /mnt/jfs
- $ juicefs summary -i 100`,
+ $ juicefs summary -i 100
+ 
+ # Show max depth of 5
+ $ juicefs summary -d 5 /mnt/jfs/foo
+
+ # Show top 20 entries
+ $ juicefs summary -t 20 /mnt/jfs/foo
+
+ # Show accurate result
+ $ juicefs summary --strict /mnt/jfs/foo
+ `,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "inode",
