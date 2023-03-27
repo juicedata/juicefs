@@ -571,15 +571,16 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 		}
 		if depth > 0 {
 			depth--
-			for _, t := range trees {
-				// children are not iterated at this time, so we sort and omit them after iteration
-				defer func(tree *TreeSummary) {
+			// children are not iterated at this time, so we sort and omit them after iteration
+			defer func(trees []*TreeSummary) {
+				for _, tree := range trees {
 					sort.Slice(tree.Children, func(i, j int) bool {
 						return tree.Children[i].Size > tree.Children[j].Size
 					})
 					if len(tree.Children) > int(topN) {
 						omitChild := &TreeSummary{
 							Path: path.Join(tree.Path, "..."),
+							Type: TypeDirectory,
 						}
 						for _, child := range tree.Children[topN:] {
 							omitChild.Size += child.Size
@@ -589,8 +590,8 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 						}
 						tree.Children = append(tree.Children[:topN], omitChild)
 					}
-				}(t)
-			}
+				}
+			}(trees)
 		} else {
 			for _, tree := range trees {
 				tree.Children = nil
