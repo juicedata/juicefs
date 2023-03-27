@@ -71,6 +71,9 @@ type engine interface {
 	doCleanupDelayedSlices(edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
 
+	doGetQuota(ctx Context, inode Ino) (*Quota, error)
+	doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error
+	doDelQuota(ctx Context, inode Ino) error
 	doLoadQuotas(ctx Context) (map[Ino]*Quota, error)
 	doFlushQuota(ctx Context, inode Ino, space, inodes int64) error
 
@@ -90,7 +93,7 @@ type engine interface {
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
 	// @trySync: try sync dir stat if broken or not existed
-	doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error)
+	doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, syscall.Errno)
 	doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno)
 
 	scanTrashSlices(Context, trashSliceScan) error
@@ -310,13 +313,13 @@ func (m *baseMeta) calcDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	return stat, 0
 }
 
-func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, err error) {
-	stat, err = m.en.doGetDirStat(ctx, m.checkRoot(inode), !m.conf.ReadOnly)
-	if err != nil {
+func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall.Errno) {
+	stat, st = m.en.doGetDirStat(ctx, m.checkRoot(inode), !m.conf.ReadOnly)
+	if st != 0 {
 		return
 	}
 	if stat == nil {
-		stat, err = m.calcDirStat(ctx, inode)
+		stat, st = m.calcDirStat(ctx, inode)
 	}
 	return
 }
@@ -332,7 +335,7 @@ func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int
 }
 
 func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, space int64) {
-	if space == 0 {
+	if length == 0 && space == 0 {
 		return
 	}
 	m.en.updateStats(space, 0)
@@ -572,10 +575,6 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parent Ino) bool
 	return m.checkDirQuota(ctx, parent, space, inodes)
 }
 
-func (m *baseMeta) GetDirRecStat(ctx Context, inode Ino) (space, inodes int64, err error) {
-	return 0, 0, nil // FIXME: use FastGetSummary
-}
-
 func (m *baseMeta) loadQuotas() {
 	quotas, err := m.en.doLoadQuotas(Background)
 	if err == nil {
@@ -712,6 +711,82 @@ func (m *baseMeta) flushQuotas() {
 			delete(quotas, ino)
 		}
 	}
+}
+
+func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota) error {
+	var inode Ino
+	if cmd != QuotaList {
+		if st := m.resolve(ctx, dpath, &inode); st != 0 {
+			return st
+		}
+		if isTrash(inode) {
+			return errors.New("no quota for any trash directory")
+		}
+	}
+
+	switch cmd {
+	case QuotaSet:
+		q, err := m.en.doGetQuota(ctx, inode)
+		if err != nil {
+			return err
+		}
+		quota := quotas[dpath]
+		if q == nil {
+			var sum Summary
+			if st := m.FastGetSummary(ctx, inode, &sum, true); st != 0 {
+				return st
+			}
+			quota.UsedSpace = int64(sum.Size) - align4K(0)
+			quota.UsedInodes = int64(sum.Dirs+sum.Files) - 1
+			if quota.MaxSpace < 0 {
+				quota.MaxSpace = 0
+			}
+			if quota.MaxInodes < 0 {
+				quota.MaxInodes = 0
+			}
+			return m.en.doSetQuota(ctx, inode, quota, true)
+		} else {
+			quota.UsedSpace, quota.UsedInodes = q.UsedSpace, q.UsedInodes
+			if quota.MaxSpace < 0 {
+				quota.MaxSpace = q.MaxSpace
+			}
+			if quota.MaxInodes < 0 {
+				quota.MaxInodes = q.MaxInodes
+			}
+			if quota.MaxSpace == q.MaxSpace && quota.MaxInodes == q.MaxInodes {
+				return nil // nothing to update
+			}
+			return m.en.doSetQuota(ctx, inode, quota, false)
+		}
+	case QuotaGet:
+		q, err := m.en.doGetQuota(ctx, inode)
+		if err != nil {
+			return err
+		}
+		if q == nil {
+			return fmt.Errorf("no quota for inode %d path %s", inode, dpath)
+		}
+		quotas[dpath] = q
+	case QuotaDel:
+		return m.en.doDelQuota(ctx, inode)
+	case QuotaList:
+		quotaMap, err := m.en.doLoadQuotas(ctx)
+		if err != nil {
+			return err
+		}
+		var p string
+		for ino, quota := range quotaMap {
+			if ps := m.GetPaths(ctx, ino); len(ps) > 0 {
+				p = ps[0]
+			} else {
+				p = fmt.Sprintf("inode:%d", ino)
+			}
+			quotas[p] = quota
+		}
+	default: // FIXME: QuotaCheck
+		return fmt.Errorf("invalid quota command: %d", cmd)
+	}
+	return nil
 }
 
 func (m *baseMeta) cleanupDeletedFiles() {
@@ -1222,18 +1297,32 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
-	quotaSrc := !isTrash(parentSrc) && m.hasDirQuota(ctx, parentSrc)
-	quotaDst := m.hasDirQuota(ctx, parentDst)
+	var quotaSrc bool = !isTrash(parentSrc) && m.hasDirQuota(ctx, parentSrc)
+	var quotaDst bool
+	if parentSrc == parentDst {
+		quotaDst = quotaSrc
+	} else {
+		quotaDst = m.hasDirQuota(ctx, parentDst)
+	}
 	var space, inodes int64
-	if quotaSrc || quotaDst {
+	if parentSrc != parentDst && (quotaSrc || quotaDst) {
 		if st := m.Lookup(ctx, parentSrc, nameSrc, inode, attr); st != 0 {
 			return st
 		}
-		var err error
 		if attr.Typ == TypeDirectory {
-			space, inodes, err = m.GetDirRecStat(ctx, *inode)
-			if err != nil {
-				return errno(err)
+			m.quotaMu.RLock()
+			q := m.dirQuotas[*inode]
+			m.quotaMu.RUnlock()
+			if q != nil {
+				space, inodes = q.UsedSpace+align4K(0), q.UsedInodes+1
+			} else {
+				var sum Summary
+				logger.Debugf("Start to get summary of inode %d", *inode)
+				if st := m.FastGetSummary(ctx, *inode, &sum, true); st != 0 {
+					logger.Warnf("Get summary of inode %d: %s", *inode, st)
+					return st
+				}
+				space, inodes = int64(sum.Size), int64(sum.Dirs+sum.Files)
 			}
 		} else {
 			space, inodes = align4K(attr.Length), 1
@@ -1253,14 +1342,16 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		} else if attr.Typ == TypeFile {
 			diffLengh = attr.Length
 		}
-		// FIXME: dst exists and is replaced or exchanged
-		m.updateDirStat(ctx, parentSrc, -int64(diffLengh), -align4K(diffLengh), -1)
-		m.updateDirStat(ctx, parentDst, int64(diffLengh), align4K(diffLengh), 1)
-		if quotaSrc {
-			m.updateDirQuota(ctx, parentSrc, -space, -inodes)
-		}
-		if quotaDst {
-			m.updateDirQuota(ctx, parentDst, space, inodes)
+		if parentSrc != parentDst {
+			// FIXME: dst exists and is replaced or exchanged
+			m.updateDirStat(ctx, parentSrc, -int64(diffLengh), -align4K(diffLengh), -1)
+			m.updateDirStat(ctx, parentDst, int64(diffLengh), align4K(diffLengh), 1)
+			if quotaSrc {
+				m.updateDirQuota(ctx, parentSrc, -space, -inodes)
+			}
+			if quotaDst {
+				m.updateDirQuota(ctx, parentDst, space, inodes)
+			}
 		}
 	}
 	return st
@@ -1616,9 +1707,9 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					}
 				}
 
-				stat, err := m.en.doGetDirStat(ctx, inode, false)
-				if err != nil {
-					logger.Errorf("get dir stat for inode %d: %v", inode, err)
+				stat, st := m.en.doGetDirStat(ctx, inode, false)
+				if st != 0 {
+					logger.Errorf("get dir stat for inode %d: %v", inode, st)
 					continue
 				}
 				if stat == nil || stat.space < 0 || stat.inodes < 0 {
@@ -1631,7 +1722,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 						if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 {
 							logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
 						} else {
-							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, err)
+							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, st)
 						}
 					}
 				} else if statBroken {

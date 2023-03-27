@@ -1403,9 +1403,9 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			m.fileDeleted(opened, isTrash(parent), n.Inode, n.Length)
 		}
 		m.updateStats(newSpace, newInode)
-		if attr != nil {
-			m.parseAttr(&n, attr)
-		}
+	}
+	if err == nil && attr != nil {
+		m.parseAttr(&n, attr)
 	}
 	return errno(err)
 }
@@ -2349,7 +2349,7 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 	return stat, errno(err)
 }
 
-func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, error) {
+func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, syscall.Errno) {
 	st := dirStats{Inode: ino}
 	var exist bool
 	var err error
@@ -2357,13 +2357,13 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, err
 		exist, err = s.Get(&st)
 		return err
 	}); err != nil {
-		return nil, err
+		return nil, errno(err)
 	}
 	if !exist {
 		if trySync {
 			return m.doSyncDirStat(ctx, ino)
 		}
-		return nil, nil
+		return nil, 0
 	}
 
 	if trySync && (st.UsedSpace < 0 || st.UsedInodes < 0) {
@@ -2387,7 +2387,7 @@ func (m *dbMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, err
 			logger.Warn(e)
 		}
 	}
-	return &dirStat{st.DataLength, st.UsedSpace, st.UsedInodes}, nil
+	return &dirStat{st.DataLength, st.UsedSpace, st.UsedInodes}, 0
 }
 
 func (m *dbMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
@@ -3008,90 +3008,51 @@ func (m *dbMeta) doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}))
 }
 
-func (m *dbMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota) error {
-	var inode Ino
-	if cmd != QuotaList {
-		if st := m.resolve(ctx, dpath, &inode); st != 0 {
-			return st
+func (m *dbMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
+	var quota *Quota
+	return quota, m.roTxn(func(s *xorm.Session) error {
+		q := dirQuota{Inode: inode}
+		ok, e := s.Get(&q)
+		if e == nil && ok {
+			quota = &Quota{
+				MaxSpace:   q.MaxSpace,
+				MaxInodes:  q.MaxInodes,
+				UsedSpace:  q.UsedSpace,
+				UsedInodes: q.UsedInodes}
 		}
-		if isTrash(inode) {
-			return errors.New("no quota for any trash directory")
-		}
-	}
+		return e
+	})
+}
 
-	var err error
-	switch cmd {
-	case QuotaSet:
-		quota := quotas[dpath]
-		err = m.txn(func(s *xorm.Session) error {
-			q := dirQuota{Inode: inode}
-			ok, e := s.ForUpdate().Get(&q)
-			if e != nil {
-				return e
-			}
-			if quota.MaxSpace < 0 {
-				quota.MaxSpace = q.MaxSpace
-			}
-			if quota.MaxInodes < 0 {
-				quota.MaxInodes = q.MaxInodes
-			}
-			if q.MaxSpace == quota.MaxSpace && q.MaxInodes == quota.MaxInodes {
-				return nil // nothing to update
-			}
-			q.MaxSpace = quota.MaxSpace
-			q.MaxInodes = quota.MaxInodes
-			if ok {
-				_, e = s.Cols("max_space", "max_inodes").Update(&q, &dirQuota{Inode: inode})
+func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error {
+	return m.txn(func(s *xorm.Session) error {
+		q := dirQuota{Inode: inode}
+		ok, e := s.ForUpdate().Get(&q)
+		if e != nil {
+			return e
+		}
+		q.MaxSpace, q.MaxInodes = quota.MaxSpace, quota.MaxInodes
+		if ok {
+			if create {
+				q.UsedSpace, q.UsedInodes = quota.UsedSpace, quota.UsedInodes
+				_, e = s.Cols("max_space", "max_inodes", "used_space", "used_inodes").Update(&q, &dirQuota{Inode: inode})
 			} else {
-				q.UsedSpace, q.UsedInodes, e = m.GetDirRecStat(ctx, inode)
-				if e == nil {
-					e = mustInsert(s, &q)
-				}
+				quota.UsedSpace, quota.UsedInodes = q.UsedSpace, q.UsedInodes
+				_, e = s.Cols("max_space", "max_inodes").Update(&q, &dirQuota{Inode: inode})
 			}
-			return e
-		})
-	case QuotaGet:
-		var quota Quota
-		err = m.roTxn(func(s *xorm.Session) error {
-			q := dirQuota{Inode: inode}
-			ok, e := s.Get(&q)
-			if e == nil && !ok {
-				e = errors.New("no quota")
-			}
-			if e == nil {
-				quota.MaxSpace = q.MaxSpace
-				quota.MaxInodes = q.MaxInodes
-				quota.UsedSpace = q.UsedSpace
-				quota.UsedInodes = q.UsedInodes
-			}
-			return e
-		})
-		if err == nil {
-			quotas[dpath] = &quota
+		} else {
+			q.UsedSpace, q.UsedInodes = quota.UsedSpace, quota.UsedInodes
+			e = mustInsert(s, &q)
 		}
-	case QuotaDel:
-		err = m.txn(func(s *xorm.Session) error {
-			_, e := s.Delete(&dirQuota{Inode: inode})
-			return e
-		})
-	case QuotaList:
-		var quotaMap map[Ino]*Quota
-		quotaMap, err = m.doLoadQuotas(ctx)
-		if err == nil {
-			var p string
-			for ino, quota := range quotaMap {
-				if ps := m.GetPaths(ctx, ino); len(ps) > 0 {
-					p = ps[0]
-				} else {
-					p = fmt.Sprintf("inode:%d", ino)
-				}
-				quotas[p] = quota
-			}
-		}
-	default: // FIXME: QuotaCheck
-		err = fmt.Errorf("invalid quota command: %d", cmd)
-	}
-	return err
+		return e
+	})
+}
+
+func (m *dbMeta) doDelQuota(ctx Context, inode Ino) error {
+	return m.txn(func(s *xorm.Session) error {
+		_, e := s.Delete(&dirQuota{Inode: inode})
+		return e
+	})
 }
 
 func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {

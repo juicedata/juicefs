@@ -128,9 +128,9 @@ func summary(ctx *cli.Context) error {
 		if inode < uint64(meta.RootInode) {
 			logger.Fatalf("inode number shouldn't be less than %d", meta.RootInode)
 		}
-		f := openController(d)
-		if f == nil {
-			logger.Errorf("%s is not inside JuiceFS", path)
+		f, err := openController(d)
+		if err != nil {
+			logger.Fatalf("open controller: %s", err)
 			continue
 		}
 		headerLen := uint32(8)

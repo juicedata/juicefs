@@ -428,9 +428,9 @@ func (m *baseMeta) FastGetSummary(ctx Context, inode Ino, summary *Summary, recu
 			entries := &entriesList[i]
 			stat := &dirStats[i]
 			eg.Go(func() error {
-				s, err := m.GetDirStat(ctx, ino)
-				if err != nil {
-					return err
+				s, st := m.GetDirStat(ctx, ino)
+				if st != 0 {
+					return st
 				}
 				*stat = *s
 				var attr Attr
@@ -644,9 +644,9 @@ func (m *baseMeta) fastGetTreeSummary(ctx Context, root *TreeSummary) syscall.Er
 			entries := &entriesList[i]
 			stat := &dirStats[i]
 			eg.Go(func() error {
-				s, err := m.GetDirStat(ctx, tree.Inode)
-				if err != nil {
-					return err
+				s, st := m.GetDirStat(ctx, tree.Inode)
+				if st != 0 {
+					return st
 				}
 				*stat = *s
 				var attr Attr
