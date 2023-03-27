@@ -61,6 +61,10 @@ Where `[]` enclosed are optional and the rest are mandatory.
 - If you need to connect to Redis Sentinel, the format will be slightly different, refer to [Redis Best Practices](../administration/metadata/redis_best_practices.md#high-availability) for details.
 - If username / password contains special characters, use single quote to avoid unexpected shell interpretations, or use the `REDIS_PASSWORD` environment.
 
+:::tip
+A Redis instance can, by default, create a total of 16 logical databases, with each of these databases eligible for the creation of a singular JuiceFS file system. Thus, under ordinary circumstances, a single Redis instance may be utilized to form up to 16 JuiceFS file systems. However, it is crucial to note that the logical databases intended for use with JuiceFS must not be shared with other applications, as doing so could lead to data inconsistencies.
+:::
+
 For example, the following command will create a JuiceFS file system named `pics`, using the database No. `1` in Redis to store metadata:
 
 ```shell
