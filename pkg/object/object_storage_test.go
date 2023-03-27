@@ -250,7 +250,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			}
 		}
 	}
-	
+
 	if obs, err := s.List("a/", "", "/", 10); err != nil {
 		if !(errors.Is(err, notSupportedDelimiter) || errors.Is(err, notSupported)) {
 			t.Fatalf("list with delimiter: %s", err)
