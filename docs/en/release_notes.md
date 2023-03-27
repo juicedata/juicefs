@@ -8,7 +8,7 @@ For all versions, please see [GitHub Releases](https://github.com/juicedata/juic
 
 JuiceFS Community Edition uses semantic versioning to label its releases. Each version number consists of three numbers in the format `x.y.z`, representing the major version number (x), the minor version number (y), and the patch number (z).
 
-1. **Major version number (x)**: The major version number indicates that this version is ready for the production environment. When the major version number changes, it indicates that this version may have added major features, architectural changes, or data format changes that are not backward compatible. For example, `v0.8.3` -> `v1.0.0` means production-ready. `v1.0.0` -> `v2.0.0` represents an architectural or functional change.
+1. **Major version number (x)**: When the major version number is greater than or equal to `1`, it indicates that the version is suitable for production environments. When the major version number changes, it indicates that this version may have added major features, architectural changes, or data format changes that are not backward compatible. For example, `v0.8.3` -> `v1.0.0` means production-ready. `v1.0.0` -> `v2.0.0` represents an architectural or functional change.
 
 2. **Minor version number (y)**: The minor version number indicates that the version adds some new features, performance optimizations, bug fixes, etc. that can be backward compatible. For example, `v1.0.0` -> `v1.1.0`.
 
