@@ -139,9 +139,8 @@ func (m *memStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 			o := m.objects[k]
 			if delimiter != "" {
 				remainString := strings.TrimPrefix(k, prefix)
-				pos := strings.Index(remainString, delimiter)
-				if pos != -1 && pos != (len(remainString) - 1) {
-					commonPrefix := remainString[0:pos + 1]
+				if pos := strings.Index(remainString, delimiter);pos != -1 {
+					commonPrefix := remainString[0 : pos + 1]
 					if _, ok := commonPrefixsMap[commonPrefix]; ok {
 						continue
 					}
@@ -152,9 +151,9 @@ func (m *memStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 							time.Unix(0, 0),
 							strings.HasSuffix(commonPrefix, "/"),
 						},
-						"",
-						"",
-						0,
+						o.owner,
+						o.group,
+						o.mode,
 						false,
 					}
 					objs = append(objs, f)
