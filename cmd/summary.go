@@ -114,7 +114,7 @@ func summary(ctx *cli.Context) error {
 		dirOnly = 0
 	}
 
-	progress := utils.NewProgress(depth > 4 || topN > 100) // only show progress for slow summary
+	progress := utils.NewProgress(false)
 	for i := 0; i < ctx.Args().Len(); i++ {
 		path := ctx.Args().Get(i)
 		dspin := progress.AddDoubleSpinner(path)
