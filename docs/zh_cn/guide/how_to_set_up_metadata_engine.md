@@ -395,8 +395,8 @@ juicefs format badger://$HOME/badger-data myjfs
 juicefs mount -d badger://$HOME/badger-data /mnt/jfs
 ```
 
-:::note 注意
-由于 BadgerDB 是单机数据库，在不做特殊共享设置的情况下，只能供本机使用，不支持多主机共享挂载。另外，BadgerDB 只允许单进程访问，文件系统挂载时无法执行 `gc`、`fsck` 操作。
+:::tip
+BadgerDB 只允许单进程访问，如果需要执行 `gc`、`fsck`、`dump`、`load` 等操作，需要先卸载文件系统。
 :::
 
 ## TiKV
