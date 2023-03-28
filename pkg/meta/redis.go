@@ -4296,8 +4296,7 @@ func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAtt
 			tx.HSet(ctx, m.entryKey(dstParentIno), dstName, m.packEntry(srcAttr.Typ, *dstIno))
 			tx.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
 			tx.Incr(ctx, m.totalInodesKey())
-		}
-		if !attach {
+		} else {
 			pipe.ZAdd(ctx, m.detachedNodes(), redis.Z{Member: dstIno.String(), Score: float64(time.Now().Unix())})
 		}
 		return nil

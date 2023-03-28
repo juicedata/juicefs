@@ -4024,28 +4024,26 @@ func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {
 	return detachedNodes
 }
 
-func (m *dbMeta) doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno {
-	exist, err := m.db.Exist(&node{Inode: detachedNode})
+func (m *dbMeta) doCleanupDetachedNode(ctx Context, detachedIno Ino) syscall.Errno {
+	exist, err := m.db.Exist(&node{Inode: detachedIno})
 	if err != nil {
 		return errno(err)
 	}
 	if exist {
 		rmConcurrent := make(chan int, 10)
-		if eno := m.emptyDir(ctx, detachedNode, true, nil, rmConcurrent); eno != 0 {
+		if eno := m.emptyDir(ctx, detachedIno, true, nil, rmConcurrent); eno != 0 {
 			return eno
 		}
 		if err := m.txn(func(s *xorm.Session) error {
-			if _, err := s.Delete(&node{Inode: detachedNode}); err != nil {
+			if _, err := s.Delete(&node{Inode: detachedIno}); err != nil {
 				return err
 			}
-			if _, err := s.Delete(&xattr{Inode: detachedNode}); err != nil {
-				return err
-			}
-			return nil
+			_, err = s.Delete(&xattr{Inode: detachedIno})
+			return err
 		}); err != nil {
 			return errno(err)
 		}
 	}
-	_, err = m.db.Delete(&node{Inode: detachedNode})
+	_, err = m.db.Delete(&detachedNode{Inode: detachedIno})
 	return errno(err)
 }

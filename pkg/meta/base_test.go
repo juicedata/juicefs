@@ -2146,11 +2146,11 @@ func testClone(t *testing.T, m Meta) {
 		if eno := m.doCleanupDetachedNode(Background, cloneDstIno); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
-		time.Sleep(1 * time.Second)
 		removedKeysStr := make([]string, len(removedItem))
 		for i, key := range removedItem {
 			removedKeysStr[i] = key.(string)
 		}
+		removedKeysStr = append(removedKeysStr, m.detachedNodes())
 		if exists := m.rdb.Exists(Background, removedKeysStr...).Val(); exists != 0 {
 			t.Fatalf("has keys not removed: %v", removedItem)
 		}
@@ -2159,15 +2159,6 @@ func testClone(t *testing.T, m Meta) {
 		m.rdb.ZAdd(Background, m.detachedNodes(), redis.Z{Member: dNode2.String(), Score: float64(time.Now().Add(-5 * time.Minute).Unix())}).Err()
 		m.rdb.ZAdd(Background, m.detachedNodes(), redis.Z{Member: dNode3.String(), Score: float64(time.Now().Add(-48 * time.Hour).Unix())}).Err()
 		m.rdb.ZAdd(Background, m.detachedNodes(), redis.Z{Member: dNode4.String(), Score: float64(time.Now().Add(-48 * time.Hour).Unix())}).Err()
-
-		nodes := m.doFindDetachedNodes(time.Now())
-		if len(nodes) != 4 {
-			t.Fatalf("find detached nodes error: %v", nodes)
-		}
-		nodes = m.doFindDetachedNodes(time.Now().Add(-24 * time.Hour))
-		if len(nodes) != 2 {
-			t.Fatalf("find detached nodes error: %v", nodes)
-		}
 	case *dbMeta:
 		if n, err := m.db.Delete(&edge{Parent: cloneDstAttr.Parent, Name: []byte(cloneDstName)}); err != nil || n != 1 {
 			t.Fatalf("del edge error: %v", err)
@@ -2176,6 +2167,7 @@ func testClone(t *testing.T, m Meta) {
 		if eno := m.doCleanupDetachedNode(Background, cloneDstIno); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
+		removedItem = append(removedItem, &detachedNode{Inode: cloneDstIno})
 		time.Sleep(1 * time.Second)
 		if exists, err := m.db.Exist(removedItem...); err != nil || exists {
 			t.Fatalf("has keys not removed: %v", removedItem)
@@ -2188,14 +2180,6 @@ func testClone(t *testing.T, m Meta) {
 				&detachedNode{Inode: dNode4, Added: time.Now().Add(-48 * time.Hour).Unix()},
 			)
 		})
-		nodes := m.doFindDetachedNodes(time.Now())
-		if len(nodes) != 4 {
-			t.Fatalf("find detached nodes error: %v", nodes)
-		}
-		nodes = m.doFindDetachedNodes(time.Now().Add(-24 * time.Hour))
-		if len(nodes) != 2 {
-			t.Fatalf("find detached nodes error: %v", nodes)
-		}
 	case *kvMeta:
 		// del edge first
 		if err := m.deleteKeys(m.entryKey(cloneDstAttr.Parent, cloneDstName)); err != nil {
@@ -2205,7 +2189,7 @@ func testClone(t *testing.T, m Meta) {
 		if eno := m.doCleanupDetachedNode(Background, cloneDstIno); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
-		time.Sleep(1 * time.Second)
+		removedItem = append(removedItem, m.detachedKey(cloneDstIno))
 		m.txn(func(tx *kvTxn) error {
 			for _, key := range removedItem {
 				if buf := tx.get(key.([]byte)); buf != nil {
@@ -2218,18 +2202,19 @@ func testClone(t *testing.T, m Meta) {
 			tx.set(m.detachedKey(dNode4), m.packInt64(time.Now().Add(-48*time.Hour).Unix()))
 			return nil
 		})
-		nodes := m.doFindDetachedNodes(time.Now())
-		if len(nodes) != 4 {
-			t.Fatalf("find detached nodes error: %v", nodes)
-		}
-		nodes = m.doFindDetachedNodes(time.Now().Add(-24 * time.Hour))
-		if len(nodes) != 2 {
-			t.Fatalf("find detached nodes error: %v", nodes)
-		}
+
 	}
 	time.Sleep(1 * time.Second)
 	if !sli1del || !sli2del {
 		t.Fatalf("slice should be deleted")
+	}
+	nodes := m.(engine).doFindDetachedNodes(time.Now())
+	if len(nodes) != 4 {
+		t.Fatalf("find detached nodes error: %v", nodes)
+	}
+	nodes = m.(engine).doFindDetachedNodes(time.Now().Add(-24 * time.Hour))
+	if len(nodes) != 2 {
+		t.Fatalf("find detached nodes error: %v", nodes)
 	}
 
 }
