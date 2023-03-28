@@ -186,7 +186,7 @@ All keys:
   SSssssssssiiiiiiii sustained inode
   Uiiiiiiii          data length, space and inodes usage in directory
   QDiiiiiiii         directory quota
-  Niiiiiiii	         detached inodes
+  Niiiiiiii	     detached inodes
 */
 
 func (m *kvMeta) inodeKey(inode Ino) []byte {
