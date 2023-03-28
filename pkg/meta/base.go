@@ -821,8 +821,63 @@ func (m *baseMeta) cleanupSlices() {
 
 func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64, subdir bool) syscall.Errno {
 	defer m.timeit(time.Now())
+	if st := m.statRootFs(ctx, totalspace, availspace, iused, iavail); st != 0 {
+		return st
+	}
 	if m.root == RootInode || !subdir {
-		return m.statRootFs(ctx, totalspace, availspace, iused, iavail)
+		return 0
+	}
+	var usage *Quota
+	var leftSpace, leftInodes int64 = -1, -1
+	var attr Attr
+	for root := m.root; root >= RootInode; root = attr.Parent {
+		if st := m.GetAttr(ctx, root, &attr); st != 0 {
+			return st
+		}
+		if root == RootInode {
+			attr.Parent = 0
+		}
+		q, err := m.en.doGetQuota(ctx, root)
+		if err != nil {
+			return errno(err)
+		}
+		if q == nil {
+			continue
+		}
+		if usage == nil {
+			usage = q
+		}
+		if q.MaxSpace > 0 {
+			ls := q.MaxSpace - q.UsedSpace
+			if ls < 0 {
+				logger.Errorf("invalid quota for inode %d: %+v", root, *q)
+				return syscall.EINVAL
+			}
+			if leftSpace < 0 || ls < leftSpace {
+				leftSpace = ls
+			}
+		}
+		if q.MaxInodes > 0 {
+			li := q.MaxInodes - q.UsedInodes
+			if li < 0 {
+				logger.Errorf("invalid quota for inode %d: %+v", root, *q)
+				return syscall.EINVAL
+			}
+			if leftInodes < 0 || li < leftInodes {
+				leftInodes = li
+			}
+		}
+	}
+	if usage == nil {
+		return 0
+	}
+	if leftSpace >= 0 {
+		*totalspace = uint64(usage.UsedSpace + leftSpace)
+		*availspace = uint64(leftSpace)
+	}
+	if leftInodes >= 0 {
+		*iused = uint64(usage.UsedInodes)
+		*iavail = uint64(leftInodes)
 	}
 	return 0
 }
