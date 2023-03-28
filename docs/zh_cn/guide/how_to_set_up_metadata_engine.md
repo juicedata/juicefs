@@ -61,8 +61,8 @@ unix://[<username>:<password>@]<socket-file-path>?db=<db>
 - 如果需要连接 Redis 哨兵（Sentinel），元数据 URL 的格式会稍有不同，具体请参考[「Redis 最佳实践」](../administration/metadata/redis_best_practices.md#数据可用性)。
 - 如果 Redis 的用户名或者密码中包含特殊字符，需要使用单引号进行封闭，避免 shell 进行解释。或者使用环境变量 `REDIS_PASSWORD` 进行传递。
 
-:::tip
-一个 Redis 实例默认可以创建 16 个逻辑数据库，而一个逻辑数据可以创建一个 JuiceFS 文件系统。也就是说，在默认情况下，你可以使用一个 Redis 实例创建 16 个 JuiceFS 文件系统。需要注意，用于 JuiceFS 的逻辑数据库不要和其他应用共享，否则可能会造成数据混乱。
+:::tip 提示
+一个 Redis 实例默认可以创建 16 个逻辑数据库，而一个逻辑数据库可以创建一个 JuiceFS 文件系统。也就是说，在默认情况下，你可以使用一个 Redis 实例创建 16 个 JuiceFS 文件系统。需要注意，用于 JuiceFS 的逻辑数据库不要和其他应用共享，否则可能会造成数据混乱。
 :::
 
 例如，创建名为 `pics` 的文件系统，使用 Redis 的 `1` 号数据库存储元数据：
