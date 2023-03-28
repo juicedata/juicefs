@@ -267,7 +267,7 @@ func (m *baseMeta) parallelSyncDirStat(ctx Context, inos map[Ino]bool) *sync.Wai
 		go func(ino Ino) {
 			defer wg.Done()
 			_, st := m.en.doSyncDirStat(ctx, ino)
-			if st != 0 {
+			if st != 0 && st != syscall.ENOENT {
 				logger.Warnf("sync dir stat for %d: %s", ino, st)
 			}
 		}(i)
