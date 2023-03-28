@@ -4025,6 +4025,7 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 		if eno != 0 {
 			cloneEno = eno
 		}
+		newSpace := align4K(0)
 		if eno == 0 {
 			err = m.txn(ctx, func(tx *redis.Tx) error {
 				// check dst edge again
@@ -4035,12 +4036,8 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 				if err = tx.HSet(ctx, m.entryKey(dstParentIno), dstName, m.packEntry(TypeDirectory, dstIno)).Err(); err != nil {
 					return err
 				}
-
-				newSpace := align4K(0)
 				tx.IncrBy(ctx, m.usedSpaceKey(), newSpace)
 				tx.Incr(ctx, m.totalInodesKey())
-				m.updateStats(newSpace, 1)
-				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
 
 				// update parent nlink
 				dstParentAttr := &Attr{}
@@ -4052,6 +4049,9 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 			}, m.entryKey(dstParentIno))
 			if err != nil {
 				cloneEno = errno(err)
+			} else {
+				m.updateStats(newSpace, 1)
+				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
 			}
 		}
 		// delete the dst tree if clone failed
