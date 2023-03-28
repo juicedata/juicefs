@@ -3220,11 +3220,6 @@ func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 					}
 				}
 				tx.set(m.entryKey(dstParentIno, dstName), m.packEntry(TypeDirectory, dstIno))
-
-				newSpace := align4K(0)
-				m.updateStats(newSpace, 1)
-				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
-
 				// update parent nlink
 				dstParentAttr := &Attr{}
 				if eno := m.doGetAttr(ctx, dstParentIno, dstParentAttr); eno != 0 {
@@ -3236,6 +3231,10 @@ func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 			}, dstParentIno)
 			if err != nil {
 				cloneEno = errno(err)
+			} else {
+				newSpace := align4K(0)
+				m.updateStats(newSpace, 1)
+				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
 			}
 		}
 		// delete the dst tree if clone failed
