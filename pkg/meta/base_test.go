@@ -515,7 +515,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 
 	var totalspace, availspace, iused, iavail uint64
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail); st != 0 {
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<50 || iavail != 10<<20 {
@@ -526,12 +526,12 @@ func testMetaClient(t *testing.T, m Meta) {
 	if err = m.Init(format, false); err != nil {
 		t.Fatalf("set quota failed: %s", err)
 	}
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail); st != 0 {
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<20 || iavail != 97 {
 		time.Sleep(time.Millisecond * 100)
-		_ = m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
+		_ = m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false)
 		if totalspace != 1<<20 || iavail != 97 {
 			t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 		}

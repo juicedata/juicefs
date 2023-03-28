@@ -231,7 +231,7 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 	go func() {
 		for {
 			var totalSpace, availSpace, iused, iavail uint64
-			err := m.StatFS(Background, &totalSpace, &availSpace, &iused, &iavail)
+			err := m.StatFS(Background, &totalSpace, &availSpace, &iused, &iavail, false)
 			if err == 0 {
 				m.usedSpaceG.Set(float64(totalSpace - availSpace))
 				m.usedInodesG.Set(float64(iused))
@@ -819,8 +819,15 @@ func (m *baseMeta) cleanupSlices() {
 	}
 }
 
-func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
+func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64, subdir bool) syscall.Errno {
 	defer m.timeit(time.Now())
+	if m.root == RootInode || !subdir {
+		return m.statRootFs(ctx, totalspace, availspace, iused, iavail)
+	}
+	return 0
+}
+
+func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	var used, inodes int64
 	var err error
 	err = utils.WithTimeout(func() error {
