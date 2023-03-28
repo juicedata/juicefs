@@ -73,7 +73,7 @@ Then, create a dashboard using [`grafana_template.json`](https://github.com/juic
 
 There are different ways to collect monitoring metrics depending on how JuiceFS is deployed, which are described below.
 
-### Mount point
+### Mount point {#stats-file}
 
 When the JuiceFS file system is mounted via the [`juicefs mount`](../reference/command_reference.md#mount) command, you can collect monitoring metrics via the address `http://localhost:9567/metrics`, or you can customize it via the `--metrics` option. For example:
 

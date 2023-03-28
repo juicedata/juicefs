@@ -73,7 +73,7 @@ scrape_configs:
 
 根据部署 JuiceFS 的方式不同可以有不同的收集监控指标的方法，下面分别介绍。
 
-### 挂载点
+### 挂载点 {#stats-file}
 
 当通过 [`juicefs mount`](../reference/command_reference.md#mount) 命令挂载 JuiceFS 文件系统后，可以通过 `http://localhost:9567/metrics` 这个地址收集监控指标，你也可以通过 `--metrics` 选项自定义。如：
 

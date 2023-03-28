@@ -90,7 +90,7 @@ The meaning of each column is:
 - `OK`: Indicate the current operation is successful or not. If it is unsuccessful, specific failure information will be output.
 - `<0.000010>`: The time (in seconds) that the current operation takes.
 
-You can debug and analyze performance issues with access log, or try using `juicefs profile <mount-point>` to see real-time statistics. Run `juicefs profile -h` or refer to [Operations Profiling](../benchmark/operations_profiling.md) for details.
+Access logs tend to get very large and difficult for human to process directly, use [`juicefs profile`](#profile) to quickly visualize performance data based on these logs.
 
 Different JuiceFS clients obtain access log in different ways, which are described below.
 
@@ -114,7 +114,7 @@ Please refer to [CSI Driver documentation](https://juicefs.com/docs/csi/troubles
 
 ```bash
 kubectl -n kube-system exec juicefs-chaos-k8s-002-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373 -- cat /jfs/pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373/.accesslog
-````
+```
 
 ### S3 Gateway
 
@@ -124,7 +124,75 @@ You need to add the [`--access-log` option](../reference/command_reference.md#ju
 
 You need to add the `juicefs.access-log` configuration item in the [client configurations](../deployment/hadoop_java_sdk.md#other-configurations) of the JuiceFS Hadoop Java SDK to specify the path of the access log output, and the access log is not output by default.
 
-## Runtime information
+## Real-Time Performance Monitoring {#performance-monitor}
+
+JuiceFS provides the `profile` and `stats` subcommands to visualize real-time performance data, the `profile` command is based on the [file system access log](#access-log), while the `stats` command uses [Real-time statistics](../administration/monitoring.md).
+
+### `juicefs profile` {#profile}
+
+[`juicefs profile`](../reference/command_reference.md#profile) will collect data from [file system access log](#access-log), run `juicefs profile MOUNTPOINT` to see real-time performance data on all file system operations:
+
+![](../images/juicefs-profiling.gif)
+
+Apart from real-time mode, this command also provides a play-back mode, which performs the same visualization on existing access log files:
+
+```shell
+# Collect access logs in advance
+cat /jfs/.accesslog > /tmp/jfs-oplog
+
+# After performance issue is reproduced, re-play this log file to find system bottleneck
+juicefs profile -f /tmp/jfs-oplog
+```
+
+If the replay speed is too fast, pause anytime using <kbd>Enter/Return</kbd>, and continue by pressing it again. If too slow, use `--interval 0` and it will replay the whole log file as fast as possible, and directly show the final result.
+
+If you're only interested in a certain user or process, you can set filters:
+
+```bash
+juicefs profile /tmp/jfs-oplog --uid 12345
+```
+
+### `juicefs stats` {#stats}
+
+The `stats` command reads JuiceFS Client internal metrics data, and output performance data in a format similar to `dstat`:
+
+![](../images/juicefs_stats_watcher.png)
+
+Metrics description:
+
+#### `usage`
+
+- `cpu`: CPU usage of the process.
+- `mem`: Physical memory used by the process.
+- `buf`: Current [buffer size](../guide/cache.md#buffer-size), if this value is constantly close to (or even exceeds) the configured [`--buffer-size`](../reference/commands_reference.md#cache-options), you should increase buffer size or decrease application workload.
+- `cache`: internal metric, ignore this.
+
+#### `fuse`
+
+- `ops`/`lat`: operations processed by FUSE per second, and their average latency (in milliseconds).
+- `read`/`write`: read/write bandwidth usage of FUSE.
+
+#### `meta`
+
+- `ops`/`lat`: metadata operations processed per second, and their average latency (in milliseconds). Please note that, operations returned directly from cache are not counted in, in order to show a more accurate latency of clients actually interacting with metadata engine.
+- `txn`/`lat`: write transactions per second processed by the metadata engine and their average latency (in milliseconds). Read-only requests such as `getattr` are only counted as ops but not txn.
+- `retry`: write transactions per second that the metadata engine retries.
+
+#### `blockcache`
+
+`blockcache` stands for local cache data, if read requests are already handled by kernel page cache, they won't be counted into the `blockcache` read metric. If there's consistent `blockcache` read traffic while you are conducting repeated read on a fixed file, this means read requests never enter page cache, and you should probably troubleshoot in this direction (e.g. not enough memory).
+
+- `read`/`write`: read/write bandwidth of client local data cache
+
+#### `object`
+
+`object` stands for object storage related metrics, when cache is enabled, penetration to object storage will significantly hinder read performance, use these metrics to check if data has been fully cached. On the other hand, you can also compare `object.get` and `fuse.read` traffic to get a rough idea of the current [read amplification](./troubleshooting.md#read-amplification) status.
+
+- `get`/`get_c`/`lat`: bandwidth, requests per second, and their average latency (in milliseconds) for object storage processing read requests.
+- `put`/`put_c`/`lat`: bandwidth, requests per second, and their average latency (in milliseconds) for object storage processing write requests.
+- `del_c`/`lat`: delete requests per second the object storage can process, and the average latency (in milliseconds).
+
+## Acquire runtime information using pprof
 
 By default, JuiceFS clients will listen to a TCP port locally via [pprof](https://pkg.go.dev/net/http/pprof) to get runtime information such as Goroutine stack information, CPU performance statistics, memory allocation statistics. You can see the specific port number that the current JuiceFS client is listening on by using the system command (e.g. `lsof`):
 

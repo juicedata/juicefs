@@ -45,7 +45,7 @@ $ juicefs stats /mnt/jfs
 # More metrics
 $ juicefs stats /mnt/jfs -l 1
 
-Details: https://juicefs.com/docs/community/stats_watcher`,
+Details: https://juicefs.com/docs/community/fault_diagnosis_and_analysis#stats`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "schema",

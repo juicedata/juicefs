@@ -130,9 +130,9 @@ Finally clean up the test files.
 
 The next two performance observation and analysis tools are essential tools for testing, using, and tuning JuiceFS.
 
-### JuiceFS Stats
+### `juicefs stats`
 
-JuiceFS `stats` is a tool for real-time statistics of JuiceFS performance metrics, similar to the `dstat` command on Linux systems. It can display changes of metrics for JuiceFS clients in real-time (see [documentation](stats_watcher.md) for details). For this,  create a new session and execute the following command when the command `juicefs bench` is running,
+[`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) is a tool for real-time statistics of JuiceFS performance metrics, similar to the `dstat` command on Linux systems. It can display changes of metrics for JuiceFS clients in real-time. For this, create a new session and execute the following command when the `juicefs bench` is running:
 
 ```bash
 juicefs stats /mnt/jfs --verbosity 1
@@ -140,32 +140,13 @@ juicefs stats /mnt/jfs --verbosity 1
 
 The results are shown below, which would be easier to understand when combing with the `bench` performance test flows described above.
 
-![stats](../images/bench-guide-stats.png)
+![](../images/bench-guide-stats.png)
 
-The meaning of indicators is as follows:
+Learn the meaning of indicators in [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#).
 
-- `usage`
-  - `cpu`: the CPU usage of JuiceFS process
-  - `mem`: the physical memory usage of JuiceFS process
-  - `buf`: internal read/write buffer size of JuiceFS process, limited by mount option `--buffer-size`
-  - `cache`: internal metric, can be simply ignored
-- `fuse`
-  - `ops`/`lat`: requests per second processed by the FUSE interface and their average latency (in milliseconds)
-  - `read`/`write`: bandwidth of the FUSE interface to handle read and write requests per second
-- `meta`
-  - `ops`/`lat`: requests per second processed by the metadata engine and their average latency (in milliseconds). Please note that some requests that can be processed directly in the cache are not included in the statistics, in order to better reflect the time spent by the client interacting with the metadata engine.
-  - `txn`/`lat`: **write transactions** per second processed by the metadata engine and their average latency (in milliseconds). Read-only requests such as `getattr` are only counted as ops but not txn.
-  - `retry`: **write transactions** per second that the metadata engine retries
-- `blockcache`
-  - `read`/`write`: read/write traffic per second for the local data cache of the client
-- `object`
-  - `get`/`get_c`/`lat`: bandwidth, requests per second, and their average latency (in milliseconds) for object storage processing **read requests**
-  - `put`/`put_c`/`lat`: bandwidth, requests per second, and their average latency (in milliseconds) for object storage processing **write requests**
-  - `del_c`/`lat`: **delete requests** per second the object storage can process, and the average latency (in milliseconds)
+### `juicefs profile`
 
-### JuiceFS Profile
-
-JuiceFS `profile` is used to output all access logs of the JuiceFS client in real time, including information about each request. It can also be used to play back and count JuiceFS access logs, and visualize the JuiceFS running status (see [documentation](operations_profiling.md) for details). To run the JuiceFS profile, execute the following command in another session while the `juicefs bench` command is running.
+[`juicefs profile`](../administration/fault_diagnosis_and_analysis.md#profile) is used to output all access logs of the JuiceFS client in real time, including information about each request. It can also be used to play back and count JuiceFS access logs, and visualize the JuiceFS running status. To run the JuiceFS profile, execute the following command in another session while the `juicefs bench` command is running.
 
 ```bash
 cat /mnt/jfs/.accesslog > access.log

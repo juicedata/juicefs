@@ -906,7 +906,7 @@ juicefs fsck [command options] META-URL
 juicefs fsck redis://localhost
 ```
 
-### `juicefs profile`
+### `juicefs profile` {#profile}
 
 分析[访问日志](../administration/fault_diagnosis_and_analysis.md#access-log)。
 

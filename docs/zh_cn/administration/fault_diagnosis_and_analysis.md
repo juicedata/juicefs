@@ -8,7 +8,7 @@ description: 本文介绍 JuiceFS FUSE、CSI Driver、Hadoop Java SDK S3 gateway
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## 客户端日志
+## 客户端日志 {#client-log}
 
 JuiceFS 客户端在运行过程中会输出日志用于故障诊断，日志等级从低到高分别是：DEBUG、INFO、WARNING、ERROR、FATAL，默认只输出 INFO 级别以上的日志。如果需要输出 DEBUG 级别的日志，需要在运行 JuiceFS 客户端时显式开启，如加上 `--debug` 选项。
 
@@ -69,11 +69,11 @@ S3 网关仅支持在前台运行，因此客户端日志会直接输出到终�
 
 使用 JuiceFS Hadoop Java SDK 的应用进程（如 Spark executor）的日志中会包含 JuiceFS 客户端日志，因为和应用自身产生的日志混杂在一起，需要通过特定关键词来过滤筛选（如 `juicefs`，注意这里忽略了大小写）。
 
-## 访问日志 {#access-log}
+## 文件系统访问日志 {#access-log}
 
 每个 JuiceFS 客户端都有一个访问日志，其中详细记录了文件系统上的所有操作，如操作类型、用户 ID、用户组 ID、文件 inode 及其花费的时间。访问日志可以有多种用途，如性能分析、审计、故障诊断。
 
-### 访问日志格式
+### 日志格式
 
 访问日志的示例格式如下：
 
@@ -90,7 +90,7 @@ S3 网关仅支持在前台运行，因此客户端日志会直接输出到终�
 - `OK`：当前操作是否成功，如果不成功会输出具体的失败信息。
 - `<0.000010>`：当前操作花费的时间（以秒为单位）
 
-你可以通过访问日志调试和分析性能问题，或者尝试使用 `juicefs profile <mount-point>` 查看实时统计信息。运行 `juicefs profile -h` 或[点此](../benchmark/operations_profiling.md)了解该子命令的更多信息。
+访问日志量很大，直接阅读难以把握系统性能情况，推荐使用 [`juicefs profile`](#profile) 直接基于日志进行性能可视化分析。
 
 不同 JuiceFS 客户端获取访问日志的方式不同，以下分别介绍。
 
@@ -124,7 +124,75 @@ kubectl -n kube-system exec juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-53079943
 
 需要在 JuiceFS Hadoop Java SDK 的[客户端配置](../deployment/hadoop_java_sdk.md#其它配置)中新增 `juicefs.access-log` 配置项，指定访问日志输出的路径，默认不输出访问日志。
 
-## 运行时信息
+## 实时性能监控 {#performance-monitor}
+
+JuiceFS 客户端提供 `profile` 和 `stats` 两个子命令来对性能数据进行可视化呈现。其中，`profile` 命令通过读取[「文件系统请求日志」](#access-log)进行汇总输出，而 `stats` 则依赖[客户端监控数据](../administration/monitoring.md)。
+
+### `juicefs profile` {#profile}
+
+[`juicefs profile`](../reference/command_reference.md#profile) 会对[「文件系统访问日志」](#access-log)进行汇总，运行 `juicefs profile MOUNTPOINT`，便能看到根据访问日志统计的各个文件系统调用的耗时：
+
+![](../images/juicefs-profiling.gif)
+
+除了对挂载点进行实时分析，该命令还提供回放模式，实时模式下会现场读取挂载点下的文件系统访问日志来进行计算，而回放模式则可以对预先收集的日志进行回放分析：
+
+```shell
+# 预先收集日志
+cat /jfs/.accesslog > /tmp/jfs-oplog
+
+# 性能问题复现后，重放日志，分析各调用耗时，找出性能瓶颈
+juicefs profile /tmp/jfs-oplog
+```
+
+如果认为回放日志的速度太快，可以用 <kbd>Enter/Return</kbd> 暂停/继续回放。如果太慢，则设置 `--interval 0` 来立即回放完整个日志文件并显示整体统计结果。
+
+如果只对某个用户或进程感兴趣，可以通过指定其 ID 来过滤掉其他用户或进程。例如：
+
+```bash
+juicefs profile /tmp/jfs-oplog --uid 12345
+```
+
+### `juicefs stats` {#stats}
+
+[`stats`](../reference/command_reference.md#stats) 命令通过读取 JuiceFS 客户端的性能数据，以类似 Linux `dstat` 工具的形式实时打印各个指标的每秒变化情况：
+
+![](../images/juicefs_stats_watcher.png)
+
+各个板块指标介绍：
+
+#### `usage`
+
+- `cpu`：进程的 CPU 使用率。
+- `mem`：进程的物理内存使用量。
+- `buf`：进程已使用的[读写缓冲区](../guide/cache_management.md#buffer-size)大小，如果该数值逼近甚至超过客户端所设置的 [`--buffer-size`](../reference/command_reference.md#mount)，说明读写缓冲区空间不足，需要视情况扩大，或者降低应用读写负载。
+- `cache`: 内部指标，无需关注。
+
+#### `fuse`
+
+- `ops`/`lat`：通过 FUSE 接口处理的每秒请求数及其平均时延，单位为毫秒。
+- `read`/`write`：通过 FUSE 接口处理的读写带宽。
+
+#### `meta`
+
+- `ops`/`lat`：每秒处理的元数据请求数和平均时延，单位为毫秒。注意部分能在缓存中直接处理的元数据请求未列入统计，以更好地体现客户端与元数据引擎交互的耗时。
+- `txn`/`lat`: 元数据引擎每秒处理的写事务个数及其平均时延（单位为毫秒）。只读请求如 `getattr` 只会计入 ops 而不会计入 txn。
+- `retry`: 元数据引擎每秒重试写事务的次数。
+
+#### `blockcache`
+
+`blockcache` 代表本地数据缓存，如果读请求已经被内核缓存，那么流量将不会体现在 `blockcache` 相关指标下。因此如果反复读取相同文件，却发现持续产生 `blockcache` 流量，说明文件始终未能被内核页缓存收录，考虑往该方向排查（比如内存吃紧，不足以缓存更多文件）。
+
+- `read`/`write`：客户端本地数据缓存的每秒读写流量。
+
+#### `object`
+
+`object` 代表与对象存储相关指标，在缓存场景下，读请求穿透到对象存储，将会明显降低读性能，可以用该指标来断定数据是否完整缓存。另一方面，通过对比 GET 请求流量和 FUSE 读流量的关系，也能初步判断[读放大](./troubleshooting.md#read-amplification)的情况。
+
+- `get`/`get_c`/`lat`: 对象存储每秒处理读请求的带宽值，请求个数及其平均时延（单位为毫秒）。
+- `put`/`put_c`/`lat`: 对象存储每秒处理写请求的带宽值，请求个数及其平均时延（单位为毫秒）。
+- `del_c`/`lat`: 对象存储每秒处理删除请求的个数和平均时延（单位为毫秒）。
+
+## 用 pprof 获取运行时信息
 
 JuiceFS 客户端默认会通过 [pprof](https://pkg.go.dev/net/http/pprof) 在本地监听一个 TCP 端口用以获取运行时信息，如 Goroutine 堆栈信息、CPU 性能统计、内存分配统计。你可以通过系统命令（如 `lsof`）查看当前 JuiceFS 客户端监听的具体端口号：
 

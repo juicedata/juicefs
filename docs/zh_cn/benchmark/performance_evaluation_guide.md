@@ -130,9 +130,9 @@ juicefs objbench \
 
 接下来介绍两个性能观测和分析工具，是 JuiceFS 测试、使用、调优过程中必备的利器。
 
-### JuiceFS Stats
+### `juicefs stats`
 
-JuiceFS `stats` 是一个实时统计 JuiceFS 性能指标的工具，类似 Linux 系统的 `dstat` 命令，可以实时显示 JuiceFS 客户端的指标变化（详细说明和使用方法见[文档](./stats_watcher.md)）。执行 `juicefs bench` 时，在另一个会话中执行以下命令：
+[`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) 是一个实时统计 JuiceFS 性能指标的工具，类似 Linux 系统的 `dstat` 命令，可以实时显示 JuiceFS 客户端的指标变化。执行 `juicefs bench` 时，在另一个会话中执行以下命令：
 
 ```bash
 juicefs stats /mnt/jfs --verbosity 1
@@ -140,32 +140,13 @@ juicefs stats /mnt/jfs --verbosity 1
 
 结果如下，可以将其与上述基准测试流程对照来看，更易理解：
 
-![stats](../images/bench-guide-stats.png)
+![](../images/bench-guide-stats.png)
 
-其中各项指标具体含义如下：
+其中各项指标具体含义参考 [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats)。
 
-- `usage`
-  - `cpu`: JuiceFS 进程消耗的 CPU
-  - `mem`: JuiceFS 进程占用的物理内存
-  - `buf`: JuiceFS 进程内部的读写 buffer 大小，受挂载选项 `--buffer-size` 限制
-  - `cache`: 内部指标，可不关注
-- `fuse`
-  - `ops`/`lat`: FUSE 接口每秒处理的请求个数及其平均时延（单位为毫秒）
-  - `read`/`write`: FUSE 接口每秒处理读写请求的带宽值
-- `meta`
-  - `ops`/`lat`: 元数据引擎每秒处理的请求个数及其平均时延（单位为毫秒）。请注意部分能在缓存中直接处理的请求未列入统计，以更好地体现客户端与元数据引擎交互的耗时。
-  - `txn`/`lat`: 元数据引擎每秒处理的**写事务**个数及其平均时延（单位为毫秒）。只读请求如 `getattr` 只会计入 ops 而不会计入 txn。
-  - `retry`: 元数据引擎每秒重试**写事务**的次数
-- `blockcache`
-  - `read`/`write`: 客户端本地数据缓存的每秒读写流量
-- `object`
-  - `get`/`get_c`/`lat`: 对象存储每秒处理**读请求**的带宽值，请求个数及其平均时延（单位为毫秒）
-  - `put`/`put_c`/`lat`: 对象存储每秒处理**写请求**的带宽值，请求个数及其平均时延（单位为毫秒）
-  - `del_c`/`lat`: 对象存储每秒处理**删除请求**的个数和平均时延（单位为毫秒）
+### `juicefs profile`
 
-### JuiceFS Profile
-
-JuiceFS `profile` 一方面用来实时输出 JuiceFS 客户端的所有访问日志，包含每个请求的信息。同时，它也可以用来回放、统计 JuiceFS 访问日志，方便用户直观了解 JuiceFS 的运行情况（详细的说明和使用方法见[文档](./operations_profiling.md)）。执行 `juicefs bench` 时，在另一个会话中执行以下命令：
+[`juicefs profile`](../administration/fault_diagnosis_and_analysis.md#profile) 可以基于访问日志进行性能数据统计，来直观了解 JuiceFS 的运行情况。执行 `juicefs bench` 时，在另一个会话中执行以下命令：
 
 ```bash
 cat /mnt/jfs/.accesslog > access.log
@@ -179,7 +160,7 @@ juicefs profile access.log --interval 0
 
 其中 `--interval` 参数设置访问日志的采样间隔，设为 0 时用于快速重放一个指定的日志文件，生成统计信息，如下图所示：
 
-![profile](../images/bench-guide-profile.png)
+![](../images/bench-guide-profile.png)
 
 从之前基准测试流程描述可知，本次测试过程一共创建了 (1 + 100) * 4 = 404 个文件，每个文件都经历了「创建 → 写入 → 关闭 → 打开 → 读取 → 关闭 → 删除」的过程，因此一共有：
 

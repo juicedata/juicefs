@@ -54,7 +54,7 @@ $ juicefs profile /tmp/jfs.alog
 # Analyze an access log and print the total statistics immediately
 $ juicefs profile /tmp/jfs.alog --interval 0
 
-Details: https://juicefs.com/docs/community/operations_profiling`,
+Details: https://juicefs.com/docs/community/fault_diagnosis_and_analysis#profile`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "uid",
