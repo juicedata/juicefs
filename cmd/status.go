@@ -113,7 +113,7 @@ func status(ctx *cli.Context) error {
 
 	stat := &statistic{}
 	var totalSpace uint64
-	if err = m.StatFS(meta.Background, &totalSpace, &stat.AvailableSpace, &stat.UsedInodes, &stat.AvailableInodes); err != syscall.Errno(0) {
+	if err = m.StatFS(meta.Background, &totalSpace, &stat.AvailableSpace, &stat.UsedInodes, &stat.AvailableInodes, false); err != syscall.Errno(0) {
 		logger.Fatalf("stat fs: %s", err)
 	}
 	stat.UsedSpace = totalSpace - stat.AvailableSpace
