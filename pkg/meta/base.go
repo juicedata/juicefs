@@ -1813,7 +1813,7 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 			if attr.Typ != TypeDirectory {
 				return syscall.ENOTDIR
 			}
-			m.root = inode
+			m.chroot(inode)
 		}
 		if len(ps) == 1 {
 			break
@@ -1821,6 +1821,10 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 		subdir = ps[1]
 	}
 	return 0
+}
+
+func (m *baseMeta) chroot(inode Ino) {
+	m.root = inode
 }
 
 func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino) syscall.Errno {

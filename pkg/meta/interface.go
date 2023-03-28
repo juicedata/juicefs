@@ -409,6 +409,8 @@ type Meta interface {
 	Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool) syscall.Errno
 	// Change root to a directory specified by subdir
 	Chroot(ctx Context, subdir string) syscall.Errno
+	// chroot set the root directory by inode
+	chroot(inode Ino)
 	// Get a copy of the current format
 	GetFormat() Format
 

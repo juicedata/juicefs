@@ -536,6 +536,94 @@ func testMetaClient(t *testing.T, m Meta) {
 			t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 		}
 	}
+	// test StatFS with subdir and quota
+	var subIno Ino
+	if st := m.Mkdir(ctx, 1, "subdir", 0755, 0, 0, &subIno, nil); st != 0 {
+		t.Fatalf("mkdir subdir: %s", st)
+	}
+	if st := m.Chroot(ctx, "subdir"); st != 0 {
+		t.Fatalf("chroot: %s", st)
+	}
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<20 || iavail != 96 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
+	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", map[string]*Quota{
+		"/subdir": {
+			MaxSpace:  0,
+			MaxInodes: 0,
+		},
+	}); err != nil {
+		t.Fatalf("set quota: %s", err)
+	}
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<20 || iavail != 96 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
+	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", map[string]*Quota{
+		"/subdir": {
+			MaxSpace:  1 << 10,
+			MaxInodes: 0,
+		},
+	}); err != nil {
+		t.Fatalf("set quota: %s", err)
+	}
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<10 || iavail != 96 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
+	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", map[string]*Quota{
+		"/subdir": {
+			MaxSpace:  0,
+			MaxInodes: 10,
+		},
+	}); err != nil {
+		t.Fatalf("set quota: %s", err)
+	}
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<20 || iavail != 10 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
+	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", map[string]*Quota{
+		"/subdir": {
+			MaxSpace:  1 << 10,
+			MaxInodes: 10,
+		},
+	}); err != nil {
+		t.Fatalf("set quota: %s", err)
+	}
+
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<10 || iavail != 10 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<20 || iavail != 96 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
+	m.chroot(RootInode)
+	if st := m.Rmdir(ctx, 1, "subdir"); st != 0 {
+		t.Fatalf("rmdir subdir: %s", st)
+	}
+
 	var summary Summary
 	if st := m.GetSummary(ctx, parent, &summary, false); st != 0 {
 		t.Fatalf("summary: %s", st)
