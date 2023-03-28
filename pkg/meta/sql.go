@@ -166,6 +166,11 @@ type dirStats struct {
 	UsedInodes int64 `xorm:"notnull"`
 }
 
+type detachedNode struct {
+	Inode Ino   `xorm:"pk notnull"`
+	Added int64 `xorm:"notnull"`
+}
+
 type dirQuota struct {
 	Inode      Ino   `xorm:"pk"`
 	MaxSpace   int64 `xorm:"notnull"`
@@ -294,6 +299,9 @@ func (m *dbMeta) Init(format *Format, force bool) error {
 	if err := m.syncTable(new(dirStats)); err != nil {
 		return fmt.Errorf("create table dirStats: %s", err)
 	}
+	if err := m.syncTable(new(detachedNode)); err != nil {
+		return fmt.Errorf("create table detachedNode: %s", err)
+	}
 
 	var s = setting{Name: "format"}
 	var ok bool
@@ -377,7 +385,7 @@ func (m *dbMeta) Reset() error {
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &sliceRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
-		&flock{}, &plock{}, &dirStats{}, &dirQuota{})
+		&flock{}, &plock{}, &dirStats{}, &dirQuota{}, &detachedNode{})
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
@@ -399,9 +407,9 @@ func (m *dbMeta) doLoad() (data []byte, err error) {
 
 func (m *dbMeta) doNewSession(sinfo []byte) error {
 	// add new table
-	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(dirQuota))
+	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(detachedNode), new(dirQuota))
 	if err != nil {
-		return fmt.Errorf("update table session2, delslices, dirstats, dirQuota: %s", err)
+		return fmt.Errorf("update table session2, delslices, dirstats, detachedNode, dirQuota: %s", err)
 	}
 	// add primary key
 	if err = m.syncTable(new(edge), new(chunk), new(xattr), new(sustained)); err != nil {
@@ -3555,7 +3563,9 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err := m.syncTable(new(dirStats)); err != nil {
 		return fmt.Errorf("create table dirStats: %s", err)
 	}
-
+	if err := m.syncTable(new(detachedNode)); err != nil {
+		return fmt.Errorf("create table detachedNode: %s", err)
+	}
 	var batch int
 	switch m.Name() {
 	case "sqlite3":
@@ -3714,14 +3724,17 @@ func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 
 				// update parent nlink
 				var n = node{Inode: dstParentIno}
-				ok, err := s.ForUpdate().Get(&n)
-				if err == nil {
-					if ok {
-						_, err = s.Cols("nlink").Update(&node{Nlink: n.Nlink + 1}, &node{Inode: dstParentIno})
-					} else {
-						err = syscall.ENOENT
-					}
+				var ok bool
+				ok, err = s.ForUpdate().Get(&n)
+				if ok {
+					_, err = s.Cols("nlink").Update(&node{Nlink: n.Nlink + 1}, &node{Inode: dstParentIno})
+				} else {
+					err = syscall.ENOENT
 				}
+				if err != nil {
+					return err
+				}
+				_, err = s.Delete(&detachedNode{Inode: dstIno})
 				return err
 			}, dstParentIno)
 			if err != nil {
@@ -3733,31 +3746,10 @@ func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 			}
 		}
 		// delete the dst tree if clone failed
-		if eno != 0 || err != nil {
-			// todo: store dstIno and delete it in the background
-			attr := &Attr{}
-			eno := m.doGetAttr(ctx, dstIno, attr)
-			if eno == syscall.ENOENT {
-				return cloneEno
+		if cloneEno != 0 {
+			if eno = m.doCleanupDetachedNode(ctx, dstIno); eno != 0 {
+				logger.Errorf("doCleanupDetachedNode: remove detached tree (%d) error: %s", dstIno, eno)
 			}
-			if eno != 0 {
-				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
-				return eno
-			}
-			rmConcurrent := make(chan int, 10)
-			if eno := m.emptyDir(ctx, dstIno, true, nil, rmConcurrent); eno != 0 {
-				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
-				return eno
-			}
-			return errno(m.txn(func(s *xorm.Session) error {
-				if _, err := s.Delete(&node{Inode: dstIno}); err != nil {
-					return err
-				}
-				if _, err := s.Delete(&xattr{Inode: dstIno}); err != nil {
-					return err
-				}
-				return nil
-			}))
 		}
 	} else {
 		cloneEno = m.cloneEntry(ctx, srcIno, srcAttr.Typ, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, true, concurrent)
@@ -4011,5 +4003,47 @@ func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNod
 		// set edge
 		return mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: *dstIno, Type: srcNode.Type})
 	}
-	return nil
+	return mustInsert(s, &detachedNode{Inode: *dstIno, Added: time.Now().Unix()})
+}
+
+func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {
+	var detachedNodes []Ino
+	if err := m.roTxn(func(s *xorm.Session) error {
+		var nodes []detachedNode
+		err := s.Where("added < ?", t.Unix()).Find(&nodes)
+		if err != nil {
+			return err
+		}
+		for _, n := range nodes {
+			detachedNodes = append(detachedNodes, n.Inode)
+		}
+		return nil
+	}); err != nil {
+		logger.Errorf("Scan detached nodes error: %s", err)
+	}
+	return detachedNodes
+}
+
+func (m *dbMeta) doCleanupDetachedNode(ctx Context, detachedIno Ino) syscall.Errno {
+	exist, err := m.db.Exist(&node{Inode: detachedIno})
+	if err != nil {
+		return errno(err)
+	}
+	if exist {
+		rmConcurrent := make(chan int, 10)
+		if eno := m.emptyDir(ctx, detachedIno, true, nil, rmConcurrent); eno != 0 {
+			return eno
+		}
+		if err := m.txn(func(s *xorm.Session) error {
+			if _, err := s.Delete(&node{Inode: detachedIno}); err != nil {
+				return err
+			}
+			_, err = s.Delete(&xattr{Inode: detachedIno})
+			return err
+		}); err != nil {
+			return errno(err)
+		}
+	}
+	_, err = m.db.Delete(&detachedNode{Inode: detachedIno})
+	return errno(err)
 }

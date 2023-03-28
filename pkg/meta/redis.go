@@ -63,6 +63,7 @@ import (
 	locked:     locked$sid -> { lockf$inode or lockp$inode }
 
 	Removed files: delfiles -> [$inode:$length -> seconds]
+	detached nodes: detachedNodes -> [$inode -> seconds]
 	Slices refs: k$sliceId_$size -> refcount
 
 	Dir data length:   dirDataLength -> { $inode -> length }
@@ -576,6 +577,10 @@ func (m *redisMeta) totalInodesKey() string {
 
 func (m *redisMeta) delfiles() string {
 	return m.prefix + "delfiles"
+}
+
+func (m *redisMeta) detachedNodes() string {
+	return m.prefix + "detachedNodes"
 }
 
 func (r *redisMeta) delSlices() string {
@@ -4045,7 +4050,10 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 					return eno
 				}
 				dstParentAttr.Nlink++
-				return m.rdb.Set(ctx, m.inodeKey(dstParentIno), m.marshal(dstParentAttr), 0).Err()
+				if err = tx.Set(ctx, m.inodeKey(dstParentIno), m.marshal(dstParentAttr), 0).Err(); err != nil {
+					return err
+				}
+				return tx.ZRem(ctx, m.detachedNodes(), dstIno.String()).Err()
 			}, m.entryKey(dstParentIno))
 			if err != nil {
 				cloneEno = errno(err)
@@ -4055,28 +4063,10 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 			}
 		}
 		// delete the dst tree if clone failed
-		if eno != 0 || err != nil {
-			// todo: store dstIno and delete it in the background
-			attr := &Attr{}
-			eno := m.doGetAttr(ctx, dstIno, attr)
-			if eno == syscall.ENOENT {
-				return cloneEno
+		if cloneEno != 0 {
+			if eno := m.doCleanupDetachedNode(ctx, dstIno); eno != 0 {
+				logger.Errorf("doCleanupDetachedNode: remove detached tree (%d) error: %s", dstIno, eno)
 			}
-			if eno != 0 {
-				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
-				return eno
-			}
-			rmConcurrent := make(chan int, 10)
-			if eno := m.emptyDir(ctx, dstIno, true, nil, rmConcurrent); eno != 0 {
-				logger.Errorf("clone: remove tree error rootInode %v", dstIno)
-				return eno
-			}
-
-			return errno(m.txn(ctx, func(tx *redis.Tx) error {
-				tx.Del(ctx, m.inodeKey(dstIno))
-				tx.Del(ctx, m.xattrKey(dstIno))
-				return nil
-			}, m.inodeKey(dstIno), m.xattrKey(dstIno)))
 		}
 	} else {
 		cloneEno = m.cloneEntry(ctx, srcIno, srcAttr.Typ, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, true, concurrent)
@@ -4306,8 +4296,44 @@ func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAtt
 			tx.HSet(ctx, m.entryKey(dstParentIno), dstName, m.packEntry(srcAttr.Typ, *dstIno))
 			tx.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
 			tx.Incr(ctx, m.totalInodesKey())
+		} else {
+			pipe.ZAdd(ctx, m.detachedNodes(), redis.Z{Member: dstIno.String(), Score: float64(time.Now().Unix())})
 		}
 		return nil
 	})
 	return err
+}
+
+func (m *redisMeta) doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno {
+	exists, err := m.rdb.Exists(ctx, m.inodeKey(detachedNode)).Result()
+	if err != nil {
+		return errno(err)
+	}
+	if exists == 1 {
+		rmConcurrent := make(chan int, 10)
+		if eno := m.emptyDir(ctx, detachedNode, true, nil, rmConcurrent); eno != 0 {
+			return eno
+		}
+		if err := m.txn(ctx, func(tx *redis.Tx) error {
+			tx.Del(ctx, m.inodeKey(detachedNode))
+			tx.Del(ctx, m.xattrKey(detachedNode))
+			return nil
+		}, m.inodeKey(detachedNode), m.xattrKey(detachedNode)); err != nil {
+			return errno(err)
+		}
+	}
+	return errno(m.rdb.ZRem(ctx, m.detachedNodes(), detachedNode.String()).Err())
+}
+
+func (m *redisMeta) doFindDetachedNodes(t time.Time) []Ino {
+	var detachedInos []Ino
+	detachedNodes, err := m.rdb.ZRangeByScore(Background, m.detachedNodes(), &redis.ZRangeBy{Max: strconv.FormatInt(t.Unix(), 10)}).Result()
+	if err != nil {
+		logger.Errorf("Scan detached nodes error: %s", err)
+	}
+	for _, node := range detachedNodes {
+		inode, _ := strconv.ParseUint(node, 10, 64)
+		detachedInos = append(detachedInos, Ino(inode))
+	}
+	return detachedInos
 }

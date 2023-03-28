@@ -70,6 +70,8 @@ type engine interface {
 	doCleanupSlices()
 	doCleanupDelayedSlices(edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
+	doFindDetachedNodes(t time.Time) []Ino
+	doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno
 
 	doGetQuota(ctx Context, inode Ino) (*Quota, error)
 	doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error
@@ -1973,6 +1975,18 @@ func (m *baseMeta) cleanupTrash() {
 		} else if ok {
 			go m.doCleanupTrash(false)
 			go m.cleanupDelayedSlices()
+		}
+	}
+}
+
+func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func()) {
+	for _, inode := range m.en.doFindDetachedNodes(edge) {
+		if eno := m.en.doCleanupDetachedNode(Background, inode); eno != 0 {
+			logger.Errorf("cleanupDetachedNode: remove detached tree (%d) error: %s", inode, eno)
+		} else {
+			if increProgress != nil {
+				increProgress()
+			}
 		}
 	}
 }
