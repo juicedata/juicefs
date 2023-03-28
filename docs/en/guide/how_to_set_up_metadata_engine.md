@@ -399,8 +399,8 @@ The database path needs to be specified when mounting the file system.
 juicefs mount -d badger://$HOME/badger-data /mnt/jfs
 ```
 
-:::note
-Since BadgerDB is a standalone database, it can only be used locally and does not support multi-host shared mounts. In addition, only one process is allowed to access BadgerDB at the same time, and `gc` and `fsck` operations cannot be performed when the file system is mounted.
+:::tip
+BadgerDB only allows single-process access. If you need to perform operations like `gc`, `fsck`, `dump`, and `load`, you need to unmount the file system first.
 :::
 
 ## TiKV
