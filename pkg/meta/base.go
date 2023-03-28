@@ -828,7 +828,6 @@ func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *ui
 		return 0
 	}
 	var usage *Quota
-	var leftSpace, leftInodes int64 = -1, -1
 	var attr Attr
 	for root := m.root; root >= RootInode; root = attr.Parent {
 		if st := m.GetAttr(ctx, root, &attr); st != 0 {
@@ -852,8 +851,8 @@ func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *ui
 			if ls < 0 {
 				ls = 0
 			}
-			if leftSpace < 0 || ls < leftSpace {
-				leftSpace = ls
+			if uint64(ls) < *availspace {
+				*availspace = uint64(ls)
 			}
 		}
 		if q.MaxInodes > 0 {
@@ -861,22 +860,16 @@ func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *ui
 			if li < 0 {
 				li = 0
 			}
-			if leftInodes < 0 || li < leftInodes {
-				leftInodes = li
+			if uint64(li) < *iavail {
+				*iavail = uint64(li)
 			}
 		}
 	}
 	if usage == nil {
 		return 0
 	}
-	if leftSpace >= 0 {
-		*totalspace = uint64(usage.UsedSpace + leftSpace)
-		*availspace = uint64(leftSpace)
-	}
-	if leftInodes >= 0 {
-		*iused = uint64(usage.UsedInodes)
-		*iavail = uint64(leftInodes)
-	}
+	*totalspace = uint64(usage.UsedSpace) + *availspace
+	*iused = uint64(usage.UsedInodes)
 	return 0
 }
 
