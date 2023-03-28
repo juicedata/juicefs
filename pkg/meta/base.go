@@ -848,22 +848,12 @@ func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *ui
 			usage = q
 		}
 		if q.MaxSpace > 0 {
-			ls := q.MaxSpace - q.UsedSpace
-			if ls < 0 {
-				logger.Errorf("invalid quota for inode %d: %+v", root, *q)
-				return syscall.EINVAL
-			}
-			if leftSpace < 0 || ls < leftSpace {
+			if ls := q.MaxSpace - q.UsedSpace; ls > 0 && (leftSpace < 0 || ls < leftSpace) {
 				leftSpace = ls
 			}
 		}
 		if q.MaxInodes > 0 {
-			li := q.MaxInodes - q.UsedInodes
-			if li < 0 {
-				logger.Errorf("invalid quota for inode %d: %+v", root, *q)
-				return syscall.EINVAL
-			}
-			if leftInodes < 0 || li < leftInodes {
+			if li := q.MaxInodes - q.UsedInodes; li > 0 && (leftInodes < 0 || li < leftInodes) {
 				leftInodes = li
 			}
 		}
