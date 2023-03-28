@@ -338,9 +338,9 @@ func (m *baseMeta) Remove(ctx Context, parent Ino, name string, count *uint64) s
 	return m.emptyEntry(ctx, parent, name, inode, false, count, concurrent)
 }
 
-func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
+func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
 	var attr Attr
-	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
+	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
 		return st
 	}
 	if attr.Typ != TypeDirectory {
@@ -364,7 +364,7 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool
 			ino := dirs[i]
 			entries := &entriesList[i]
 			eg.Go(func() error {
-				st := r.Readdir(ctx, ino, 1, entries)
+				st := m.Readdir(ctx, ino, 1, entries)
 				if st != 0 && st != syscall.ENOENT {
 					return st
 				}
@@ -399,9 +399,9 @@ func GetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool
 	return 0
 }
 
-func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
+func (m *baseMeta) FastGetSummary(ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno {
 	var attr Attr
-	if st := r.GetAttr(ctx, inode, &attr); st != 0 {
+	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
 		return st
 	}
 	if attr.Typ != TypeDirectory {
@@ -413,6 +413,7 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 		return 0
 	}
 	summary.Dirs++
+	summary.Size += uint64(align4K(0))
 
 	const concurrency = 50
 	dirs := []Ino{inode}
@@ -426,20 +427,20 @@ func FastGetSummary(r Meta, ctx Context, inode Ino, summary *Summary, recursive 
 			entries := &entriesList[i]
 			stat := &dirStats[i]
 			eg.Go(func() error {
-				s, err := r.GetDirStat(ctx, ino)
-				if err != nil {
-					return err
+				s, st := m.GetDirStat(ctx, ino)
+				if st != 0 {
+					return st
 				}
 				*stat = *s
 				var attr Attr
-				if st := r.GetAttr(ctx, ino, &attr); st != 0 && st != syscall.ENOENT {
+				if st := m.GetAttr(ctx, ino, &attr); st != 0 && st != syscall.ENOENT {
 					return st
 				}
 				if attr.Nlink == 2 {
 					// leaf dir, no need to read entries
 					return nil
 				}
-				if st := r.Readdir(ctx, ino, 0, entries); st != 0 && st != syscall.ENOENT {
+				if st := m.Readdir(ctx, ino, 0, entries); st != 0 && st != syscall.ENOENT {
 					return st
 				}
 				return nil

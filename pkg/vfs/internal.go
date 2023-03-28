@@ -356,7 +356,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		}
 
 		wb := utils.NewBuffer(4)
-		r := meta.GetSummary(v.Meta, ctx, inode, &summary, recursive != 0)
+		r := v.Meta.GetSummary(ctx, inode, &summary, recursive != 0)
 		if r != 0 {
 			msg := r.Error()
 			wb.Put32(uint32(len(msg)))
@@ -426,9 +426,9 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		var r syscall.Errno
 		go func() {
 			if strict {
-				r = meta.GetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
+				r = v.Meta.GetSummary(ctx, inode, &info.Summary, recursive != 0)
 			} else {
-				r = meta.FastGetSummary(v.Meta, ctx, inode, &info.Summary, recursive != 0)
+				r = v.Meta.FastGetSummary(ctx, inode, &info.Summary, recursive != 0)
 			}
 			close(done)
 		}()

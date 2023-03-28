@@ -55,6 +55,7 @@ func Main(args []string) error {
 		Commands: []*cli.Command{
 			cmdFormat(),
 			cmdConfig(),
+			cmdQuota(),
 			cmdDestroy(),
 			cmdGC(),
 			cmdFsck(),

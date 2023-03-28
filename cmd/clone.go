@@ -66,7 +66,6 @@ func clone(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("abs of %s: %s", srcPath, err)
 	}
-	srcParent := filepath.Dir(srcAbsPath)
 	srcIno, err := utils.GetFileInode(srcPath)
 	if err != nil {
 		return fmt.Errorf("lookup inode for %s: %s", srcPath, err)
@@ -84,6 +83,22 @@ func clone(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("abs of %s: %s", dst, err)
 	}
+
+	srcMp, err := findMountpoint(srcAbsPath)
+	if err != nil {
+		return err
+	}
+	dstMp, err := findMountpoint(filepath.Dir(dstAbsPath))
+	if err != nil {
+		return err
+	}
+	if srcMp != dstMp {
+		return fmt.Errorf("the clone DST path should be at the same mount point as the SRC path")
+	}
+	if strings.HasPrefix(dstAbsPath, srcAbsPath) {
+		return fmt.Errorf("the clone DST path should not be under the SRC path")
+	}
+
 	dstParent := filepath.Dir(dstAbsPath)
 	dstName := filepath.Base(dstAbsPath)
 	dstParentIno, err := utils.GetFileInode(dstParent)
@@ -107,9 +122,9 @@ func clone(ctx *cli.Context) error {
 	wb.Put([]byte(dstName))
 	wb.Put16(uint16(umask))
 	wb.Put8(cmode)
-	f := openController(srcParent)
-	if f == nil {
-		return fmt.Errorf("%s is not inside JuiceFS", srcPath)
+	f, err := openController(srcMp)
+	if err == nil {
+		return err
 	}
 	defer f.Close()
 	if _, err = f.Write(wb.Bytes()); err != nil {
@@ -126,4 +141,17 @@ func clone(ctx *cli.Context) error {
 		return fmt.Errorf("clone failed: %v", errno)
 	}
 	return nil
+}
+
+func findMountpoint(fpath string) (string, error) {
+	for p := fpath; p != "/"; p = filepath.Dir(p) {
+		inode, err := utils.GetFileInode(p)
+		if err != nil {
+			return "", fmt.Errorf("get inode of %s: %s", p, err)
+		}
+		if inode == uint64(meta.RootInode) {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("%s is not inside JuiceFS", fpath)
 }

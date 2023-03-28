@@ -703,6 +703,11 @@ func NewDataReader(conf *Config, m meta.Meta, store chunk.ChunkStore) DataReader
 	return r
 }
 
+func (r *dataReader) readBufferUsed() int64 {
+	used := atomic.LoadInt64(&readBufferUsed)
+	return used
+}
+
 func (r *dataReader) checkReadBuffer() {
 	for {
 		r.Lock()

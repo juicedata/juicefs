@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -84,6 +85,14 @@ const (
 const (
 	FlagImmutable = 1 << iota
 	FlagAppend
+)
+
+const (
+	QuotaSet uint8 = iota
+	QuotaGet
+	QuotaDel
+	QuotaList
+	QuotaCheck
 )
 
 const MaxName = 255
@@ -250,6 +259,34 @@ type Session struct {
 	Plocks    []Plock `json:",omitempty"`
 }
 
+type Quota struct {
+	MaxSpace, MaxInodes   int64
+	UsedSpace, UsedInodes int64
+	newSpace, newInodes   int64
+}
+
+// Returns true if it will exceed the quota limit
+func (q *Quota) check(space, inodes int64) bool {
+	if space > 0 {
+		max := atomic.LoadInt64(&q.MaxSpace)
+		if max > 0 && atomic.LoadInt64(&q.UsedSpace)+atomic.LoadInt64(&q.newSpace)+space > max {
+			return true
+		}
+	}
+	if inodes > 0 {
+		max := atomic.LoadInt64(&q.MaxInodes)
+		if max > 0 && atomic.LoadInt64(&q.UsedInodes)+atomic.LoadInt64(&q.newInodes)+inodes > max {
+			return true
+		}
+	}
+	return false
+}
+
+func (q *Quota) update(space, inodes int64) {
+	atomic.AddInt64(&q.newSpace, space)
+	atomic.AddInt64(&q.newInodes, inodes)
+}
+
 // Meta is a interface for a meta service for file system.
 type Meta interface {
 	// Name of database
@@ -339,7 +376,7 @@ type Meta interface {
 	// GetParents returns a map of node parents (> 1 parents if hardlinked)
 	GetParents(ctx Context, inode Ino) map[Ino]int
 	// GetDirStat returns the space and inodes usage of a directory.
-	GetDirStat(ctx Context, inode Ino) (st *dirStat, err error)
+	GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall.Errno)
 
 	// GetXattr returns the value of extended attribute for given name.
 	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
@@ -362,7 +399,11 @@ type Meta interface {
 	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
 	// Remove all files and directories recursively.
 	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
-	//Clone a file or directory
+	// Get summary of a node; for a directory it will accumulate all its child nodes
+	GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno
+	// Get summary of a node; for a directory it will use recorded dirStats
+	FastGetSummary(ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno
+	// Clone a file or directory
 	Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno
 	// GetPaths returns all paths of an inode
 	GetPaths(ctx Context, inode Ino) []string
@@ -377,6 +418,8 @@ type Meta interface {
 	OnMsg(mtype uint32, cb MsgCallback)
 	// OnReload register a callback for any change founded after reloaded.
 	OnReload(func(new *Format))
+
+	HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota) error
 
 	// Dump the tree under root, which may be modified by checkRoot
 	DumpMeta(w io.Writer, root Ino, keepSecret bool) error
