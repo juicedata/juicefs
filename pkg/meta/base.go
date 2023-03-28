@@ -848,12 +848,20 @@ func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *ui
 			usage = q
 		}
 		if q.MaxSpace > 0 {
-			if ls := q.MaxSpace - q.UsedSpace; ls > 0 && (leftSpace < 0 || ls < leftSpace) {
+			ls := q.MaxSpace - q.UsedSpace
+			if ls < 0 {
+				ls = 0
+			}
+			if leftSpace < 0 || ls < leftSpace {
 				leftSpace = ls
 			}
 		}
 		if q.MaxInodes > 0 {
-			if li := q.MaxInodes - q.UsedInodes; li > 0 && (leftInodes < 0 || li < leftInodes) {
+			li := q.MaxInodes - q.UsedInodes
+			if li < 0 {
+				li = 0
+			}
+			if leftInodes < 0 || li < leftInodes {
 				leftInodes = li
 			}
 		}
