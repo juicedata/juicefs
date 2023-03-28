@@ -562,7 +562,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
-	if totalspace != 1<<20 || iavail != 96 {
+	if totalspace != 1<<20-4*uint64(align4K(0)) || iavail != 96 {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
@@ -592,7 +592,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
-	if totalspace != 1<<20 || iavail != 10 {
+	if totalspace != 1<<20-4*uint64(align4K(0)) || iavail != 10 {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
