@@ -8,7 +8,7 @@ JuiceFS provides data encryption from two aspects:
 1. Data Encryption In Transit
 2. Data Encryption At Rest
 
-## Data Encryption In Transit
+## Data Encryption In Transit {#in-transit}
 
 Running JuiceFS generally involves the network connection between database and object storage, which is determined by the architecture of JuiceFS. As long as the servers support encryption connections, JuiceFS can be accessed through the encrypted channel.
 
@@ -36,7 +36,7 @@ juicefs format --storage s3 \
   "rediss://myredis.ap-southeast-1.amazonaws.com:6379/1" myjfs
 ```
 
-## Data Encryption At Rest
+## Data Encryption At Rest {#at-rest}
 
 JuiceFS supports Data Encryption At Rest. All data will be encrypted first before being uploaded to object storage. This allows JuiceFS to effectively prevent data leakage.
 

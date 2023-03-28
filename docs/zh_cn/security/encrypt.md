@@ -8,7 +8,7 @@ sidebar_position: 1
 1. 传输加密
 2. 静态数据加密
 
-## 传输加密
+## 传输加密 {#in-transit}
 
 JuiceFS 的架构决定了它的运行通常涉及与数据库和对象存储之间的网络连接，只要这些服务支持加密连接，JuiceFS 就可以通过其提供的加密通道进行访问。
 
@@ -36,7 +36,7 @@ juicefs format --storage s3 \
   "rediss://myredis.ap-southeast-1.amazonaws.com:6379/1" myjfs
 ```
 
-## 静态数据加密
+## 静态数据加密 {#at-rest}
 
 JuiceFS 提供静态数据加密支持，即先加密，再上传。所有存入 JuiceFS 的文件都会在本地完成加密后再上传到对象存储，这可以在对象存储本身被破坏时有效地防止数据泄露。
 
