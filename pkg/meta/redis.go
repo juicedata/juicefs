@@ -4053,7 +4053,10 @@ func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string,
 					return eno
 				}
 				dstParentAttr.Nlink++
-				return m.rdb.Set(ctx, m.inodeKey(dstParentIno), m.marshal(dstParentAttr), 0).Err()
+				if err = tx.Set(ctx, m.inodeKey(dstParentIno), m.marshal(dstParentAttr), 0).Err(); err != nil {
+					return err
+				}
+				return tx.ZRem(ctx, m.detachedNodes(), dstIno.String()).Err()
 			}, m.entryKey(dstParentIno))
 			if err != nil {
 				cloneEno = errno(err)
@@ -4286,9 +4289,6 @@ func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAtt
 
 	_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		pipe.Set(ctx, m.inodeKey(*dstIno), m.marshal(srcAttr), 0)
-		if !attach {
-			pipe.ZAdd(ctx, m.detachedNodes(), redis.Z{Member: dstIno.String(), Score: float64(time.Now().Unix())})
-		}
 		if len(srcXattr) > 0 {
 			pipe.HMSet(ctx, m.xattrKey(*dstIno), srcXattr)
 		}
@@ -4296,6 +4296,9 @@ func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAtt
 			tx.HSet(ctx, m.entryKey(dstParentIno), dstName, m.packEntry(srcAttr.Typ, *dstIno))
 			tx.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
 			tx.Incr(ctx, m.totalInodesKey())
+		}
+		if !attach {
+			pipe.ZAdd(ctx, m.detachedNodes(), redis.Z{Member: dstIno.String(), Score: float64(time.Now().Unix())})
 		}
 		return nil
 	})
@@ -4325,7 +4328,7 @@ func (m *redisMeta) doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall
 
 func (m *redisMeta) doFindDetachedNodes(t time.Time) []Ino {
 	var detachedInos []Ino
-	detachedNodes, err := m.rdb.ZRangeByScore(Background, m.detachedNodes(), &redis.ZRangeBy{Max: strconv.FormatInt(t.Add(-time.Hour*24).Unix(), 10)}).Result()
+	detachedNodes, err := m.rdb.ZRangeByScore(Background, m.detachedNodes(), &redis.ZRangeBy{Max: strconv.FormatInt(t.Unix(), 10)}).Result()
 	if err != nil {
 		logger.Errorf("Scan detached nodes error: %s", err)
 	}

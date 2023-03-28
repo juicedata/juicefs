@@ -3724,14 +3724,17 @@ func (m *dbMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 
 				// update parent nlink
 				var n = node{Inode: dstParentIno}
-				ok, err := s.ForUpdate().Get(&n)
-				if err == nil {
-					if ok {
-						_, err = s.Cols("nlink").Update(&node{Nlink: n.Nlink + 1}, &node{Inode: dstParentIno})
-					} else {
-						err = syscall.ENOENT
-					}
+				var ok bool
+				ok, err = s.ForUpdate().Get(&n)
+				if ok {
+					_, err = s.Cols("nlink").Update(&node{Nlink: n.Nlink + 1}, &node{Inode: dstParentIno})
+				} else {
+					err = syscall.ENOENT
 				}
+				if err != nil {
+					return err
+				}
+				_, err = s.Delete(&detachedNode{Inode: dstIno})
 				return err
 			}, dstParentIno)
 			if err != nil {
@@ -3996,21 +3999,18 @@ func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNod
 		}
 	}
 
-	if !attach {
-		return mustInsert(s, &detachedNode{Inode: *dstIno, Added: time.Now().Unix()})
-	}
 	if attach {
 		// set edge
 		return mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: *dstIno, Type: srcNode.Type})
 	}
-	return nil
+	return mustInsert(s, &detachedNode{Inode: *dstIno, Added: time.Now().Unix()})
 }
 
 func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {
 	var detachedNodes []Ino
 	if err := m.roTxn(func(s *xorm.Session) error {
 		var nodes []detachedNode
-		err := s.Where("added < ?", t).Find(&nodes)
+		err := s.Where("added < ?", t.Unix()).Find(&nodes)
 		if err != nil {
 			return err
 		}

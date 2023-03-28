@@ -3237,6 +3237,7 @@ func (m *kvMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cm
 				}
 				dstParentAttr.Nlink++
 				tx.set(m.inodeKey(dstParentIno), m.marshal(dstParentAttr))
+				tx.delete(m.detachedKey(dstIno))
 				return nil
 			}, dstParentIno)
 			if err != nil {
@@ -3458,7 +3459,6 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Att
 		}
 	}
 
-	tx.set(m.detachedKey(*dstIno), m.packInt64(time.Now().Unix()))
 	tx.set(m.inodeKey(*dstIno), m.marshal(srcAttr))
 
 	// copy xattr
@@ -3474,15 +3474,16 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Att
 		m.updateStats(newSpace, 1)
 		m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
 	}
+	if !attach {
+		tx.set(m.detachedKey(*dstIno), m.packInt64(time.Now().Unix()))
+	}
 	return nil
 }
 
 func (m *kvMeta) doFindDetachedNodes(t time.Time) []Ino {
 	var detachedNodes []Ino
-	klen := 1 + 8 + 8
 	vals, err := m.scanValues(m.fmtKey("N"), -1, func(k, v []byte) bool {
-		// filter out invalid ones
-		return len(k) == klen && len(v) == 8 && m.parseInt64(v) < t.Unix()
+		return m.parseInt64(v) < t.Unix()
 	})
 	if err != nil {
 		logger.Errorf("Scan detached nodes error: %s", err)
