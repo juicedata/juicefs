@@ -395,7 +395,7 @@ juicefs format badger://$HOME/badger-data myjfs
 juicefs mount -d badger://$HOME/badger-data /mnt/jfs
 ```
 
-:::tip
+:::tip 提示
 BadgerDB 只允许单进程访问，如果需要执行 `gc`、`fsck`、`dump`、`load` 等操作，需要先卸载文件系统。
 :::
 
