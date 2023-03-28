@@ -402,7 +402,7 @@ func (m *kvMeta) doNewSession(sinfo []byte) error {
 }
 
 func (m *kvMeta) doRefreshSession() error {
-	return m.txn(func(tx *kvTxn) error {
+	return m.txn(func(tx kvTxn) error {
 		buf := tx.get(m.sessionKey(m.sid))
 		if buf == nil {
 			logger.Warnf("Session %d was stale and cleaned up, but now it comes back again", m.sid)
