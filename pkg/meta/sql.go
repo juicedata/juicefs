@@ -167,8 +167,8 @@ type dirStats struct {
 }
 
 type detachedNode struct {
-	Inode  Ino   `xorm:"pk notnull"`
-	Expire int64 `xorm:"notnull"`
+	Inode Ino   `xorm:"pk notnull"`
+	Added int64 `xorm:"notnull"`
 }
 
 type dirQuota struct {
@@ -3997,7 +3997,7 @@ func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNod
 	}
 
 	if !attach {
-		return mustInsert(s, &detachedNode{Inode: *dstIno, Expire: time.Now().Unix()})
+		return mustInsert(s, &detachedNode{Inode: *dstIno, Added: time.Now().Unix()})
 	}
 	if attach {
 		// set edge
@@ -4010,7 +4010,7 @@ func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {
 	var detachedNodes []Ino
 	if err := m.roTxn(func(s *xorm.Session) error {
 		var nodes []detachedNode
-		err := s.Where("expire < ?", t).Find(&nodes)
+		err := s.Where("added < ?", t).Find(&nodes)
 		if err != nil {
 			return err
 		}

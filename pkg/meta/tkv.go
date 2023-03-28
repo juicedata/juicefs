@@ -184,9 +184,9 @@ All keys:
   SHssssssss         session heartbeat // for legacy client
   SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
-  Niiiiiiii	         detached inodes
   Uiiiiiiii          data length, space and inodes usage in directory
   QDiiiiiiii         directory quota
+  Niiiiiiii	         detached inodes
 */
 
 func (m *kvMeta) inodeKey(inode Ino) []byte {
