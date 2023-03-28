@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -44,25 +43,16 @@ func cmdSummary() *cli.Command {
  # Show with path
  $ juicefs summary /mnt/jfs/foo
  
- # Show with inode
- $ cd /mnt/jfs
- $ juicefs summary -i 100
- 
  # Show max depth of 5
- $ juicefs summary -d 5 /mnt/jfs/foo
+ $ juicefs summary --depth 5 /mnt/jfs/foo
 
  # Show top 20 entries
- $ juicefs summary -t 20 /mnt/jfs/foo
+ $ juicefs summary --top 20 /mnt/jfs/foo
 
  # Show accurate result
  $ juicefs summary --strict /mnt/jfs/foo
  `,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:    "inode",
-				Aliases: []string{"i"},
-				Usage:   "use inode instead of path (current dir should be inside JuiceFS)",
-			},
 			&cli.UintFlag{
 				Name:    "depth",
 				Aliases: []string{"d"},
@@ -115,73 +105,61 @@ func summary(ctx *cli.Context) error {
 	}
 
 	progress := utils.NewProgress(false)
-	for i := 0; i < ctx.Args().Len(); i++ {
-		path := ctx.Args().Get(i)
-		dspin := progress.AddDoubleSpinner(path)
-		var d string
-		var inode uint64
-		var err error
-		if ctx.Bool("inode") {
-			inode, err = strconv.ParseUint(path, 10, 64)
-			d, _ = os.Getwd()
-		} else {
-			d, err = filepath.Abs(path)
-			if err != nil {
-				logger.Fatalf("abs of %s: %s", path, err)
-			}
-			inode, err = utils.GetFileInode(d)
-		}
-		if err != nil {
-			logger.Errorf("lookup inode for %s: %s", path, err)
-			continue
-		}
-		if inode < uint64(meta.RootInode) {
-			logger.Fatalf("inode number shouldn't be less than %d", meta.RootInode)
-		}
-		f, err := openController(d)
-		if err != nil {
-			logger.Fatalf("open controller: %s", err)
-			continue
-		}
-		headerLen := uint32(8)
-		contentLen := uint32(8 + 1 + 1 + 1)
-		wb := utils.NewBuffer(headerLen + contentLen)
-		wb.Put32(meta.OpSummary)
-		wb.Put32(contentLen)
-		wb.Put64(inode)
-		wb.Put8(depth)
-		wb.Put8(topN)
-		wb.Put8(dirOnly)
-		_, err = f.Write(wb.Bytes())
-		if err != nil {
-			logger.Fatalf("write message: %s", err)
-		}
-		if errno := readProgress(f, func(count, size uint64) {
-			dspin.SetCurrent(int64(count), int64(size))
-		}); errno != 0 {
-			logger.Errorf("failed to get info: %s", syscall.Errno(errno))
-		}
-		dspin.Done()
-
-		var resp vfs.SummaryReponse
-		err = resp.Decode(f)
-		_ = f.Close()
-		if err == syscall.EINVAL {
-			logger.Fatalf("summary is not supported, please upgrade and mount again")
-		}
-
-		if err != nil {
-			logger.Fatalf("summary: %s", err)
-		}
-		var results [][]string
-		if dirOnly == 0 {
-			results = [][]string{{"Path", "Type", "Length", "Size", "Files", "Dirs"}}
-		} else {
-			results = [][]string{{"Path", "Length", "Size", "Files", "Dirs"}}
-		}
-		renderTree(&results, &resp.Tree, dirOnly > 0)
-		printResult(results, 0, false)
+	path := ctx.Args().Get(0)
+	dspin := progress.AddDoubleSpinner(path)
+	d, err := filepath.Abs(path)
+	if err != nil {
+		logger.Fatalf("abs of %s: %s", path, err)
 	}
+	inode, err := utils.GetFileInode(d)
+	if err != nil {
+		logger.Fatalf("lookup inode for %s: %s", path, err)
+	}
+	if inode < uint64(meta.RootInode) {
+		logger.Fatalf("inode number shouldn't be less than %d", meta.RootInode)
+	}
+	f, err := openController(d)
+	if err != nil {
+		logger.Fatalf("open controller: %s", err)
+	}
+	headerLen := uint32(8)
+	contentLen := uint32(8 + 1 + 1 + 1)
+	wb := utils.NewBuffer(headerLen + contentLen)
+	wb.Put32(meta.OpSummary)
+	wb.Put32(contentLen)
+	wb.Put64(inode)
+	wb.Put8(depth)
+	wb.Put8(topN)
+	wb.Put8(dirOnly)
+	_, err = f.Write(wb.Bytes())
+	if err != nil {
+		logger.Fatalf("write message: %s", err)
+	}
+	if errno := readProgress(f, func(count, size uint64) {
+		dspin.SetCurrent(int64(count), int64(size))
+	}); errno != 0 {
+		logger.Errorf("failed to get info: %s", syscall.Errno(errno))
+	}
+	dspin.Done()
+
+	var resp vfs.SummaryReponse
+	err = resp.Decode(f)
+	_ = f.Close()
+	if err == syscall.EINVAL {
+		logger.Fatalf("summary is not supported, please upgrade and mount again")
+	}
+
+	if err != nil {
+		logger.Fatalf("summary: %s", err)
+	}
+	var results [][]string
+	if dirOnly == 0 {
+		results = [][]string{{"Path", "Type", "Length", "Size", "Files", "Dirs"}}
+	} else {
+		results = [][]string{{"Path", "Length", "Size", "Files", "Dirs"}}
+	}
+	renderTree(&results, &resp.Tree, dirOnly > 0)
+	printResult(results, 0, false)
 	progress.Done()
 	return nil
 }
