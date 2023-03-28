@@ -158,6 +158,7 @@
         "StarRocks",
         "ThriftServer",
         "TiKV",
+        "Trino",
         "UID",
         "UUID",
         "Ubuntu",

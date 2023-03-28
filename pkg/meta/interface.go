@@ -376,9 +376,7 @@ type Meta interface {
 	// GetParents returns a map of node parents (> 1 parents if hardlinked)
 	GetParents(ctx Context, inode Ino) map[Ino]int
 	// GetDirStat returns the space and inodes usage of a directory.
-	GetDirStat(ctx Context, inode Ino) (st *dirStat, err error)
-	// GetDirRecStat returns the space and inodes usage (recursive) of a directory.
-	GetDirRecStat(ctx Context, inode Ino) (space, inodes int64, err error)
+	GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall.Errno)
 
 	// GetXattr returns the value of extended attribute for given name.
 	GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno
@@ -401,7 +399,11 @@ type Meta interface {
 	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
 	// Remove all files and directories recursively.
 	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
-	//Clone a file or directory
+	// Get summary of a node; for a directory it will accumulate all its child nodes
+	GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno
+	// Get summary of a node; for a directory it will use recorded dirStats
+	FastGetSummary(ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno
+	// Clone a file or directory
 	Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno
 	// GetPaths returns all paths of an inode
 	GetPaths(ctx Context, inode Ino) []string

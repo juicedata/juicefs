@@ -129,16 +129,39 @@ func (m *memStore) Delete(key string) error {
 }
 
 func (m *memStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	if delimiter != "" {
-		return nil, notSupportedDelimiter
-	}
 	m.Lock()
 	defer m.Unlock()
 
 	objs := make([]Object, 0)
+	commonPrefixsMap := make(map[string]bool, 0)
 	for k := range m.objects {
 		if strings.HasPrefix(k, prefix) && k > marker {
 			o := m.objects[k]
+			if delimiter != "" {
+				remainString := strings.TrimPrefix(k, prefix)
+				if pos := strings.Index(remainString, delimiter); pos != -1 {
+					commonPrefix := remainString[0 : pos+1]
+					if _, ok := commonPrefixsMap[commonPrefix]; ok {
+						continue
+					}
+					f := &file{
+						obj{
+							prefix + commonPrefix,
+							0,
+							time.Unix(0, 0),
+							strings.HasSuffix(commonPrefix, "/"),
+						},
+						o.owner,
+						o.group,
+						o.mode,
+						false,
+					}
+					objs = append(objs, f)
+					commonPrefixsMap[commonPrefix] = true
+					continue
+				}
+			}
+
 			f := &file{
 				obj{
 					k,
