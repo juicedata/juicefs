@@ -85,7 +85,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put(key, bytes.NewReader(nil)); err != nil {
 		t.Logf("PUT testEncodeFile failed: %s", err.Error())
 	} else {
-		if resp, err := s.List("", "测试编码文件", "", 1); err != nil && err != notSupported {
+		if resp, err := s.List("", "测试编码文件", 1); err != nil && err != notSupported {
 			t.Logf("List testEncodeFile Failed: %s", err)
 		} else if len(resp) == 1 && resp[0].Key() != key {
 			t.Logf("List testEncodeFile Failed: expect key %s, but got %s", key, resp[0].Key())
