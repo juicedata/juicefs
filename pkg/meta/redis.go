@@ -2226,19 +2226,18 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 
-		p := tx.Pipeline()
+		var vals [][]string
 		for i := offIn / ChunkSize; i <= (offIn+size)/ChunkSize; i++ {
-			p.LRange(ctx, m.chunkKey(fin, uint32(i)), 0, 1000000)
-		}
-		vals, err := p.Exec(ctx)
-		if err != nil {
-			return err
+			val, err := tx.LRange(ctx, m.chunkKey(fin, uint32(i)), 0, 1000000).Result()
+			if err != nil {
+				return err
+			}
+			vals = append(vals, val)
 		}
 
 		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 			coff := offIn / ChunkSize * ChunkSize
-			for _, v := range vals {
-				sv := v.(*redis.StringSliceCmd).Val()
+			for _, sv := range vals {
 				// Add a zero chunk for hole
 				ss := readSlices(sv)
 				if ss == nil {
@@ -2597,8 +2596,8 @@ func (m *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 		todel = todel[:0]
 		rs = rs[:0]
 		vals, err := tx.LRange(ctx, key, 0, 1000000).Result()
-		if err == redis.Nil {
-			return nil
+		if err != nil || len(vals) == 0 {
+			return err
 		}
 		slices := readSlices(vals)
 		if slices == nil {
