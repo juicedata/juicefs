@@ -463,7 +463,11 @@ func (m *baseMeta) NewSession() error {
 	if m.conf.MaxDeletes > 0 {
 		m.dslices = make(chan Slice, m.conf.MaxDeletes*10240)
 		for i := 0; i < m.conf.MaxDeletes; i++ {
-			go m.deleteSlices()
+			go func() {
+				for s := range m.dslices {
+					m.deleteSlice_(s.Id, s.Size)
+				}
+			}()
 		}
 	}
 	if !m.conf.NoBGJob {
@@ -1906,12 +1910,6 @@ func (m *baseMeta) deleteSlice_(id uint64, size uint32) {
 	}
 	if err := m.en.doDeleteSlice(id, size); err != nil {
 		logger.Errorf("Delete meta entry of slice %d (%d bytes): %s", id, size, err)
-	}
-}
-
-func (m *baseMeta) deleteSlices() {
-	for s := range m.dslices {
-		m.deleteSlice_(s.Id, s.Size)
 	}
 }
 
