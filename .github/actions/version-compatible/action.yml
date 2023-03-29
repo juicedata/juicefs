@@ -114,7 +114,7 @@ runs:
                       "format") 
                           ./mc admin user remove minio juicedata || true
                           ./mc admin user add minio juicedata juicedata
-                          ./mc admin policy set minio consoleAdmin user=juicedata  
+                          ./mc admin policy attach minio consoleAdmin --user juicedata  
                           sudo ./$jfs_bin format --trash-days 0 --storage minio --bucket  ${{ inputs.bucket }} --access-key juicedata --secret-key juicedata  ${{ inputs.meta_url }} juicefs-version-compatible
                           echo "format finished" 
                           ;;
@@ -170,7 +170,7 @@ runs:
                           encrypt=$(echo $command | awk -F: '{print $1}'| xargs | awk -F_ '{print $2}')
                           ./mc admin user remove minio juicedata || true
                           ./mc admin user add minio juicedata juicedata1
-                          ./mc admin policy set minio consoleAdmin user=juicedata  
+                          ./mc admin policy attach minio consoleAdmin --user juicedata  
                           if [ -n "$encrypt" ]; then
                             sudo ./$jfs_bin config ${{inputs.meta_url}} --secret-key juicedata1 --encrypt-secret
                           else
