@@ -769,7 +769,7 @@ $ cd /mnt/jfs
 $ juicefs info -i 100
 ```
 
-### `juicefs bench`
+### `juicefs bench` {#bench}
 
 对指定的路径做基准测试，包括对大文件和小文件的读/写/获取属性操作。
 
@@ -808,7 +808,7 @@ $ juicefs bench /mnt/jfs -p 4
 $ juicefs bench /mnt/jfs --big-file-size 0
 ```
 
-### `juicefs objbench`
+### `juicefs objbench` {#objbench}
 
 测试对象存储接口的正确性与基本性能
 
@@ -1159,7 +1159,7 @@ juicefs destroy [command options] META-URL UUID
 juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 ```
 
-### `juicefs debug`
+### `juicefs debug` {#debug}
 
 从运行环境、系统日志等多个维度收集和展示信息，帮助更好地定位错误
 

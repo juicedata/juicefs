@@ -6,7 +6,7 @@ description: This article describes how to visualize JuiceFS status monitoring w
 
 As a distributed file system hosting massive data storage, it is important for users to directly view the status changes of the entire system in terms of capacity, files, CPU load, disk IO, cache, etc. JuiceFS provides real-time status data externally through the Prometheus-oriented API to achieve the visualization of JuiceFS monitoring with ease, and you only need to expose it to your own Prometheus Server to visualize time series data with tools like Grafana.
 
-## Get started
+## Getting started {#getting-started}
 
 It is assumed here that Prometheus Server, Grafana and JuiceFS clients are all running on the same host, in which
 
@@ -69,11 +69,11 @@ Then, create a dashboard using [`grafana_template.json`](https://github.com/juic
 
 ![](../images/grafana-dashboard.jpg)
 
-## Collecting monitoring metrics
+## Collecting monitoring metrics {#collecting-metrics}
 
 There are different ways to collect monitoring metrics depending on how JuiceFS is deployed, which are described below.
 
-### Mount point {#stats-file}
+### Mount point {#mount-point}
 
 When the JuiceFS file system is mounted via the [`juicefs mount`](../reference/command_reference.md#mount) command, you can collect monitoring metrics via the address `http://localhost:9567/metrics`, or you can customize it via the `--metrics` option. For example:
 
@@ -274,7 +274,7 @@ For each instance registered to Consul, its `serviceName` is `juicefs`, and the 
 
 The meta of each instance contains two aspects: `hostname` and `mountpoint`. When `mountpoint` is `s3gateway`, it means that the instance is an S3 gateway.
 
-## Visualize monitoring metrics
+## Visualize monitoring metrics {#visualize-metrics}
 
 ### Grafana dashboard template
 
@@ -289,6 +289,6 @@ A sample Grafana dashboard looks like this:
 
 ![JuiceFS Grafana dashboard](../images/grafana_dashboard.png)
 
-## Monitoring metrics reference
+## Monitoring metrics reference {#metrics-reference}
 
 Please refer to the ["JuiceFS Metrics"](../reference/p8s_metrics.md) document.

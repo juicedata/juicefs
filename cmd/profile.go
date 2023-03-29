@@ -47,12 +47,12 @@ Examples:
 $ juicefs profile /mnt/jfs
 
 # Replay an access log
-$ cat /mnt/jfs/.accesslog > /tmp/jfs.alog
+$ cat /mnt/jfs/.accesslog > /tmp/juicefs.accesslog
 # Press Ctrl-C to stop the "cat" command after some time
-$ juicefs profile /tmp/jfs.alog
+$ juicefs profile /tmp/juicefs.accesslog
 
 # Analyze an access log and print the total statistics immediately
-$ juicefs profile /tmp/jfs.alog --interval 0
+$ juicefs profile /tmp/juicefs.accesslog --interval 0
 
 Details: https://juicefs.com/docs/community/fault_diagnosis_and_analysis#profile`,
 		Flags: []cli.Flag{

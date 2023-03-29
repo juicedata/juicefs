@@ -2,7 +2,7 @@
 title: 问题排查方法
 sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
-description: 本文介绍 JuiceFS FUSE、CSI Driver、Hadoop Java SDK S3 gateway、S3 gateway 等客户端在各类操作系统中的日志获取和解读方法。
+description: 本文介绍 JuiceFS 挂载点、CSI 驱动、Hadoop Java SDK、S3 网关等客户端的问题排查方法。
 ---
 
 import Tabs from '@theme/Tabs';
@@ -130,31 +130,31 @@ JuiceFS 客户端提供 `profile` 和 `stats` 两个子命令来对性能数据�
 
 ### `juicefs profile` {#profile}
 
-[`juicefs profile`](../reference/command_reference.md#profile) 会对[「文件系统访问日志」](#access-log)进行汇总，运行 `juicefs profile MOUNTPOINT`，便能看到根据访问日志统计的各个文件系统调用的耗时：
+[`juicefs profile`](../reference/command_reference.md#profile) 会对[「文件系统访问日志」](#access-log)进行汇总，运行 `juicefs profile MOUNTPOINT` 命令，便能看到根据最新访问日志获取的各个文件系统操作的实时统计信息：
 
 ![](../images/juicefs-profiling.gif)
 
-除了对挂载点进行实时分析，该命令还提供回放模式，实时模式下会现场读取挂载点下的文件系统访问日志来进行计算，而回放模式则可以对预先收集的日志进行回放分析：
+除了对挂载点进行实时分析，该命令还提供回放模式，可以对预先收集的日志进行回放分析：
 
 ```shell
 # 预先收集日志
-cat /jfs/.accesslog > /tmp/jfs-oplog
+cat /jfs/.accesslog > /tmp/juicefs.accesslog
 
 # 性能问题复现后，重放日志，分析各调用耗时，找出性能瓶颈
-juicefs profile /tmp/jfs-oplog
+juicefs profile /tmp/juicefs.accesslog
 ```
 
-如果认为回放日志的速度太快，可以用 <kbd>Enter/Return</kbd> 暂停/继续回放。如果太慢，则设置 `--interval 0` 来立即回放完整个日志文件并显示整体统计结果。
+如果认为回放日志的速度太快，可以用 <kbd>Enter/Return</kbd> 暂停／继续回放。如果太慢，则设置 `--interval 0` 来立即回放整个日志文件并直接显示统计结果。
 
 如果只对某个用户或进程感兴趣，可以通过指定其 ID 来过滤掉其他用户或进程。例如：
 
 ```bash
-juicefs profile /tmp/jfs-oplog --uid 12345
+juicefs profile /tmp/juicefs.accesslog --uid 12345
 ```
 
 ### `juicefs stats` {#stats}
 
-[`stats`](../reference/command_reference.md#stats) 命令通过读取 JuiceFS 客户端的性能数据，以类似 Linux `dstat` 工具的形式实时打印各个指标的每秒变化情况：
+[`juicefs stats`](../reference/command_reference.md#stats) 命令通过读取 JuiceFS 客户端的监控数据，以类似 Linux `dstat` 工具的形式实时打印各个指标的每秒变化情况：
 
 ![](../images/juicefs_stats_watcher.png)
 
@@ -165,7 +165,7 @@ juicefs profile /tmp/jfs-oplog --uid 12345
 - `cpu`：进程的 CPU 使用率。
 - `mem`：进程的物理内存使用量。
 - `buf`：进程已使用的[读写缓冲区](../guide/cache_management.md#buffer-size)大小，如果该数值逼近甚至超过客户端所设置的 [`--buffer-size`](../reference/command_reference.md#mount)，说明读写缓冲区空间不足，需要视情况扩大，或者降低应用读写负载。
-- `cache`: 内部指标，无需关注。
+- `cache`：内部指标，无需关注。
 
 #### `fuse`
 
@@ -175,8 +175,8 @@ juicefs profile /tmp/jfs-oplog --uid 12345
 #### `meta`
 
 - `ops`/`lat`：每秒处理的元数据请求数和平均时延，单位为毫秒。注意部分能在缓存中直接处理的元数据请求未列入统计，以更好地体现客户端与元数据引擎交互的耗时。
-- `txn`/`lat`: 元数据引擎每秒处理的写事务个数及其平均时延（单位为毫秒）。只读请求如 `getattr` 只会计入 ops 而不会计入 txn。
-- `retry`: 元数据引擎每秒重试写事务的次数。
+- `txn`/`lat`：元数据引擎每秒处理的写事务个数及其平均时延，单位为毫秒。只读请求如 `getattr` 只会计入 `ops` 而不会计入 `txn`。
+- `retry`：元数据引擎每秒重试写事务的次数。
 
 #### `blockcache`
 
@@ -188,15 +188,15 @@ juicefs profile /tmp/jfs-oplog --uid 12345
 
 `object` 代表与对象存储相关指标，在缓存场景下，读请求穿透到对象存储，将会明显降低读性能，可以用该指标来断定数据是否完整缓存。另一方面，通过对比 GET 请求流量和 FUSE 读流量的关系，也能初步判断[读放大](./troubleshooting.md#read-amplification)的情况。
 
-- `get`/`get_c`/`lat`: 对象存储每秒处理读请求的带宽值，请求个数及其平均时延（单位为毫秒）。
-- `put`/`put_c`/`lat`: 对象存储每秒处理写请求的带宽值，请求个数及其平均时延（单位为毫秒）。
-- `del_c`/`lat`: 对象存储每秒处理删除请求的个数和平均时延（单位为毫秒）。
+- `get`/`get_c`/`lat`：对象存储每秒处理读请求的带宽值，请求个数及其平均时延（单位为毫秒）。
+- `put`/`put_c`/`lat`：对象存储每秒处理写请求的带宽值，请求个数及其平均时延（单位为毫秒）。
+- `del_c`/`lat`：对象存储每秒处理删除请求的个数和平均时延（单位为毫秒）。
 
-## 用 pprof 获取运行时信息
+## 用 pprof 获取运行时信息 {#runtime-information}
 
 JuiceFS 客户端默认会通过 [pprof](https://pkg.go.dev/net/http/pprof) 在本地监听一个 TCP 端口用以获取运行时信息，如 Goroutine 堆栈信息、CPU 性能统计、内存分配统计。你可以通过系统命令（如 `lsof`）查看当前 JuiceFS 客户端监听的具体端口号：
 
-:::note 注意
+:::tip 提示
 如果 JuiceFS 是通过 root 用户挂载，那么需要在 `lsof` 命令前加上 `sudo`。
 :::
 
@@ -204,10 +204,12 @@ JuiceFS 客户端默认会通过 [pprof](https://pkg.go.dev/net/http/pprof) 在�
 lsof -i -nP | grep LISTEN | grep juicefs
 ```
 
-```output
-juicefs   32666 user    8u  IPv4 0x44992f0610d9870b      0t0  TCP 127.0.0.1:6061 (LISTEN)
-juicefs   32666 user    9u  IPv4 0x44992f0619bf91cb      0t0  TCP 127.0.0.1:6071 (LISTEN)
-juicefs   32666 user   15u  IPv4 0x44992f062886fc5b      0t0  TCP 127.0.0.1:9567 (LISTEN)
+```shell
+# pprof 监听端口
+juicefs   19371 user    6u  IPv4 0xa2f1748ad05b5427      0t0  TCP 127.0.0.1:6061 (LISTEN)
+
+# Prometheus API 监听端口
+juicefs   19371 user   11u  IPv4 0xa2f1748ad05cbde7      0t0  TCP 127.0.0.1:9567 (LISTEN)
 ```
 
 默认 pprof 监听的端口号范围是从 6060 开始至 6099 结束，因此上面示例中对应的实际端口号是 6061。在获取到监听端口号以后就可以通过 `http://localhost:<port>/debug/pprof` 地址查看所有可供查询的运行时信息，一些重要的运行时信息如下：
@@ -237,7 +239,7 @@ curl 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pb.gz
 juicefs debug /mnt/jfs
 ```
 
-关于 `juicefs debug` 命令的更多信息，请查看[命令参考](https://juicefs.com/docs/zh/community/command_reference#juicefs-debug)。
+关于 `juicefs debug` 命令的更多信息，请查看[命令参考](../reference/command_reference.md#debug)。
 :::
 
 如果你安装了 `go` 命令，那么可以通过 `go tool pprof` 命令直接分析，例如分析 CPU 性能统计：
@@ -277,9 +279,9 @@ Showing top 10 nodes out of 192
 go tool pprof -pdf 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pdf
 ```
 
-关于 pprof 的更多信息，请查看[官方文档](https://github.com/google/pprof/blob/master/doc/README.md)。
+关于 pprof 的更多信息，请查看[官方文档](https://github.com/google/pprof/blob/main/doc/README.md)。
 
-### 使用 Pyroscope 进行性能剖析
+### 使用 Pyroscope 进行性能剖析 {#use-pyroscope}
 
 ![Pyroscope](../images/pyroscope.png)
 
