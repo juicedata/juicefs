@@ -4273,7 +4273,7 @@ func (m *redisMeta) doFindDetachedNodes(t time.Time) []Ino {
 	return detachedInos
 }
 
-func (m *redisMeta) doCheckEdgeExist(ctx Context, parent Ino, name string) (exist bool, err error) {
+func (m *redisMeta) doEdgeExist(ctx Context, parent Ino, name string) (exist bool, err error) {
 	return m.rdb.HExists(ctx, m.entryKey(parent), name).Result()
 }
 
@@ -4293,40 +4293,9 @@ func (m *redisMeta) doAttachDirNode(ctx Context, dstParentIno Ino, dstIno Ino, d
 			return eno
 		}
 		dstParentAttr.Nlink++
-		return m.rdb.Set(ctx, m.inodeKey(dstParentIno), m.marshal(dstParentAttr), 0).Err()
+		if err := tx.Set(ctx, m.inodeKey(dstParentIno), m.marshal(dstParentAttr), 0).Err(); err != nil {
+			return err
+		}
+		return tx.ZRem(ctx, m.detachedNodes(), dstIno.String()).Err()
 	}, m.entryKey(dstParentIno)))
-}
-
-func (m *redisMeta) doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno {
-	exists, err := m.rdb.Exists(ctx, m.inodeKey(detachedNode)).Result()
-	if err != nil {
-		return errno(err)
-	}
-	if exists == 1 {
-		rmConcurrent := make(chan int, 10)
-		if eno := m.emptyDir(ctx, detachedNode, true, nil, rmConcurrent); eno != 0 {
-			return eno
-		}
-		if err := m.txn(ctx, func(tx *redis.Tx) error {
-			tx.Del(ctx, m.inodeKey(detachedNode))
-			tx.Del(ctx, m.xattrKey(detachedNode))
-			return nil
-		}, m.inodeKey(detachedNode), m.xattrKey(detachedNode)); err != nil {
-			return errno(err)
-		}
-	}
-	return errno(m.rdb.ZRem(ctx, m.detachedNodes(), detachedNode.String()).Err())
-}
-
-func (m *redisMeta) doFindDetachedNodes(t time.Time) []Ino {
-	var detachedInos []Ino
-	detachedNodes, err := m.rdb.ZRangeByScore(Background, m.detachedNodes(), &redis.ZRangeBy{Max: strconv.FormatInt(t.Add(-time.Hour*24).Unix(), 10)}).Result()
-	if err != nil {
-		logger.Errorf("Scan detached nodes error: %s", err)
-	}
-	for _, node := range detachedNodes {
-		inode, _ := strconv.ParseUint(node, 10, 64)
-		detachedInos = append(detachedInos, Ino(inode))
-	}
-	return detachedInos
 }

@@ -3968,7 +3968,7 @@ func (m *dbMeta) doCleanupDetachedNode(ctx Context, detachedIno Ino) syscall.Err
 	return errno(err)
 }
 
-func (m *dbMeta) doCheckEdgeExist(ctx Context, parent Ino, name string) (exist bool, err error) {
+func (m *dbMeta) doEdgeExist(ctx Context, parent Ino, name string) (exist bool, err error) {
 	err = m.roTxn(func(s *xorm.Session) error {
 		exist, err = s.Get(&edge{Parent: parent, Name: []byte(name)})
 		return err
@@ -3994,50 +3994,7 @@ func (m *dbMeta) doAttachDirNode(ctx Context, dstParentIno Ino, dstIno Ino, dstN
 			}
 			return err
 		}
+		_, err = s.Delete(&detachedNode{Inode: dstIno})
 		return err
 	}, dstParentIno))
-}
-
-func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {
-	var detachedNodes []Ino
-	if err := m.roTxn(func(s *xorm.Session) error {
-		var nodes []detachedNode
-		err := s.Where("expire < ?", t).Find(&nodes)
-		if err != nil {
-			return err
-		}
-		for _, n := range nodes {
-			detachedNodes = append(detachedNodes, n.Inode)
-		}
-		return nil
-	}); err != nil {
-		logger.Errorf("Scan detached nodes error: %s", err)
-	}
-	return detachedNodes
-}
-
-func (m *dbMeta) doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno {
-	exist, err := m.db.Exist(&node{Inode: detachedNode})
-	if err != nil {
-		return errno(err)
-	}
-	if exist {
-		rmConcurrent := make(chan int, 10)
-		if eno := m.emptyDir(ctx, detachedNode, true, nil, rmConcurrent); eno != 0 {
-			return eno
-		}
-		if err := m.txn(func(s *xorm.Session) error {
-			if _, err := s.Delete(&node{Inode: detachedNode}); err != nil {
-				return err
-			}
-			if _, err := s.Delete(&xattr{Inode: detachedNode}); err != nil {
-				return err
-			}
-			return nil
-		}); err != nil {
-			return errno(err)
-		}
-	}
-	_, err = m.db.Delete(&node{Inode: detachedNode})
-	return errno(err)
 }

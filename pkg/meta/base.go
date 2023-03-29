@@ -93,7 +93,7 @@ type engine interface {
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
-	doCheckEdgeExist(ctx Context, parent Ino, name string) (bool, error)
+	doEdgeExist(ctx Context, parent Ino, name string) (bool, error)
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
@@ -2158,7 +2158,7 @@ func (m *baseMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, 
 	if srcAttr.Typ == TypeDirectory {
 		// check dst edge
 		var edgeExist bool
-		edgeExist, err = m.en.doCheckEdgeExist(ctx, dstParentIno, dstName)
+		edgeExist, err = m.en.doEdgeExist(ctx, dstParentIno, dstName)
 		if err != nil {
 			return errno(err)
 		}
@@ -2171,7 +2171,7 @@ func (m *baseMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, 
 			cloneEno = eno
 		}
 		if eno == 0 {
-			edgeExist, err = m.en.doCheckEdgeExist(ctx, dstParentIno, dstName)
+			edgeExist, err = m.en.doEdgeExist(ctx, dstParentIno, dstName)
 			if err != nil {
 				return errno(err)
 			}

@@ -3404,8 +3404,7 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Att
 		newSpace := align4K(0)
 		m.updateStats(newSpace, 1)
 		m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
-	}
-	if !attach {
+	} else {
 		tx.set(m.detachedKey(*dstIno), m.packInt64(time.Now().Unix()))
 	}
 	return nil
@@ -3448,7 +3447,7 @@ func (m *kvMeta) doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Er
 	return errno(m.deleteKeys(m.detachedKey(detachedNode)))
 }
 
-func (m *kvMeta) doCheckEdgeExist(ctx Context, parent Ino, name string) (exist bool, err error) {
+func (m *kvMeta) doEdgeExist(ctx Context, parent Ino, name string) (exist bool, err error) {
 	err = m.txn(func(tx *kvTxn) error {
 		if buf := tx.get(m.entryKey(parent, name)); buf != nil {
 			if _, foundIno := m.parseEntry(buf); foundIno != 0 {
@@ -3470,45 +3469,7 @@ func (m *kvMeta) doAttachDirNode(ctx Context, dstParentIno Ino, dstIno Ino, dstN
 		}
 		dstParentAttr.Nlink++
 		tx.set(m.inodeKey(dstParentIno), m.marshal(dstParentAttr))
+		tx.delete(m.detachedKey(dstIno))
 		return nil
 	}, dstParentIno))
-}
-
-func (m *kvMeta) doFindDetachedNodes(t time.Time) []Ino {
-	var detachedNodes []Ino
-	klen := 1 + 8 + 8
-	vals, err := m.scanValues(m.fmtKey("N"), -1, func(k, v []byte) bool {
-		// filter out invalid ones
-		return len(k) == klen && len(v) == 8 && m.parseInt64(v) < t.Unix()
-	})
-	if err != nil {
-		logger.Errorf("Scan detached nodes error: %s", err)
-		return detachedNodes
-	}
-	for k := range vals {
-		detachedNodes = append(detachedNodes, m.decodeInode(utils.FromBuffer([]byte(k)[1:]).Get(8)))
-	}
-	return detachedNodes
-}
-
-func (m *kvMeta) doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno {
-	buf, err := m.get(m.inodeKey(detachedNode))
-	if err != nil {
-		return errno(err)
-	}
-	if buf != nil {
-		rmConcurrent := make(chan int, 10)
-		if eno := m.emptyDir(ctx, detachedNode, true, nil, rmConcurrent); eno != 0 {
-			logger.Errorf("clone: remove tree error rootInode %v", detachedNode)
-			return eno
-		}
-		if err := m.txn(func(tx *kvTxn) error {
-			tx.delete(m.inodeKey(detachedNode))
-			tx.deleteKeys(m.xattrKey(detachedNode, ""))
-			return nil
-		}); err != nil {
-			return errno(err)
-		}
-	}
-	return errno(m.deleteKeys(m.detachedKey(detachedNode)))
 }
