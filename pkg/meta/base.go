@@ -137,7 +137,6 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
 		maxDeleting:  make(chan struct{}, 100),
-		dslices:      make(chan Slice, conf.MaxDeletes*10240),
 		symlinks:     &sync.Map{},
 		fsStat:       new(fsStat),
 		msgCallbacks: &msgCallbacks{
@@ -290,8 +289,15 @@ func (m *baseMeta) NewSession() error {
 	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
 	go m.refreshSession()
-	for i := 0; i < m.conf.MaxDeletes; i++ {
-		go m.deleteSlices()
+	if m.conf.MaxDeletes > 0 {
+		m.dslices = make(chan Slice, m.conf.MaxDeletes*10240)
+		for i := 0; i < m.conf.MaxDeletes; i++ {
+			go func() {
+				for s := range m.dslices {
+					m.deleteSlice_(s.Id, s.Size)
+				}
+			}()
+		}
 	}
 	if !m.conf.NoBGJob {
 		go m.cleanupDeletedFiles()
@@ -997,16 +1003,13 @@ func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64, force bool) {
 	}()
 }
 
-func (m *baseMeta) deleteSlices() {
-	var err error
-	for s := range m.dslices {
-		if err = m.newMsg(DeleteSlice, s.Id, s.Size); err != nil {
-			logger.Warnf("Delete data blocks of slice %d (%d bytes): %s", s.Id, s.Size, err)
-			continue
-		}
-		if err = m.en.doDeleteSlice(s.Id, s.Size); err != nil {
-			logger.Errorf("Delete meta entry of slice %d (%d bytes): %s", s.Id, s.Size, err)
-		}
+func (m *baseMeta) deleteSlice_(id uint64, size uint32) {
+	if err := m.newMsg(DeleteSlice, id, size); err != nil {
+		logger.Warnf("Delete data blocks of slice %d (%d bytes): %s", id, size, err)
+		return
+	}
+	if err := m.en.doDeleteSlice(id, size); err != nil {
+		logger.Errorf("Delete meta entry of slice %d (%d bytes): %s", id, size, err)
 	}
 }
 
@@ -1014,7 +1017,11 @@ func (m *baseMeta) deleteSlice(id uint64, size uint32) {
 	if id == 0 || m.conf.MaxDeletes == 0 {
 		return
 	}
-	m.dslices <- Slice{Id: id, Size: size}
+	if m.dslices != nil {
+		m.dslices <- Slice{Id: id, Size: size}
+	} else {
+		m.deleteSlice_(id, size)
+	}
 }
 
 func (m *baseMeta) toTrash(parent Ino) bool {
