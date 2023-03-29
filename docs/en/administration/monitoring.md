@@ -131,9 +131,9 @@ scrape_configs:
         action: replace
 ```
 
-### Hadoop
+### Hadoop Java SDK {#hadoop}
 
-The [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) supports reporting monitoring metrics to [Pushgateway](https://github.com/prometheus/pushgateway) and [Graphite](https://graphiteapp.org).
+[JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) supports reporting monitoring metrics to [Pushgateway](https://github.com/prometheus/pushgateway) and [Graphite](https://graphiteapp.org).
 
 #### Pushgateway
 
