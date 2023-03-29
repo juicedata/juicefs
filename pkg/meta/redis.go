@@ -132,6 +132,8 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 				return nil, fmt.Errorf("get certificate error certFile:%s keyFile:%s error:%s", certFile, keyFile, err)
 			}
 			opt.TLSConfig.Certificates = []tls.Certificate{cert}
+		}
+		if caCertFile != "" {
 			caCert, err := os.ReadFile(caCertFile)
 			if err != nil {
 				return nil, fmt.Errorf("read ca cert file error path:%s error:%s", caCertFile, err)
