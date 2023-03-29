@@ -95,58 +95,7 @@ cat /jfs/.stats
 
 ### Kubernetes
 
-The [JuiceFS CSI Driver](../deployment/how_to_use_on_kubernetes.md) will provide monitoring metrics on the `9567` port of the mount pod by default, or you can customize it by adding the `metrics` option to the `mountOptions` (please refer to the [CSI Driver documentation](https://juicefs.com/docs/csi/examples/mount-options) for how to modify `mountOptions`), e.g.:
-
-```yaml
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: juicefs-pv
-  labels:
-    juicefs-name: ten-pb-fs
-spec:
-  ...
-  mountOptions:
-    - metrics=0.0.0.0:9567
-```
-
-Add a crawl job to `prometheus.yml` to collect monitoring metrics:
-
-```yaml
-scrape_configs:
-  - job_name: 'juicefs'
-    kubernetes_sd_configs:
-    - role: pod
-    relabel_configs:
-    - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
-      action: keep
-      regex: juicefs-mount
-    - source_labels: [__address__]
-      action: replace
-      regex: ([^:]+)(:\d+)?
-      replacement: $1:9567
-      target_label: __address__
-    - source_labels: [__meta_kubernetes_pod_node_name]
-      target_label: node
-      action: replace
-```
-
-Here, it is assumed that the Prometheus server is running inside Kubernetes cluster. If your Prometheus server is running outside Kubernetes cluster, make sure Kubernetes cluster nodes are reachable by Prometheus server. Please refer to [this issue](https://github.com/prometheus/prometheus/issues/4633) to add the `api_server` and `tls_config` client auth to the above configuration as follows:
-
-```yaml
-scrape_configs:
-  - job_name: 'juicefs'
-    kubernetes_sd_configs:
-    - api_server: <Kubernetes API Server>
-      role: pod
-      tls_config:
-        ca_file: <...>
-        cert_file: <...>
-        key_file: <...>
-        insecure_skip_verify: false
-    relabel_configs:
-    ...
-```
+See [CSI Driver documentation](https://juicefs.com/docs/csi/administration/going-production#monitoring).
 
 ### S3 Gateway
 

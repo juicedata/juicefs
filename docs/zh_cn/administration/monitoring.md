@@ -95,58 +95,7 @@ cat /jfs/.stats
 
 ### Kubernetes
 
-[JuiceFS CSI 驱动](../deployment/how_to_use_on_kubernetes.md)默认会在 mount pod 的 `9567` 端口提供监控指标，也可以通过在 `mountOptions` 中添加 `metrics` 选项自定义（关于如何修改 `mountOptions` 请参考 [CSI 驱动文档](https://juicefs.com/docs/zh/csi/examples/mount-options)），如：
-
-```yaml
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: juicefs-pv
-  labels:
-    juicefs-name: ten-pb-fs
-spec:
-  ...
-  mountOptions:
-    - metrics=0.0.0.0:9567
-```
-
-新增一个抓取任务到 `prometheus.yml` 来收集监控指标：
-
-```yaml
-scrape_configs:
-  - job_name: 'juicefs'
-    kubernetes_sd_configs:
-    - role: pod
-    relabel_configs:
-    - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
-      action: keep
-      regex: juicefs-mount
-    - source_labels: [__address__]
-      action: replace
-      regex: ([^:]+)(:\d+)?
-      replacement: $1:9567
-      target_label: __address__
-    - source_labels: [__meta_kubernetes_pod_node_name]
-      target_label: node
-      action: replace
-```
-
-这里假设 Prometheus 服务运行在 Kubernetes 集群中，如果你的 Prometheus 服务运行在 Kubernetes 集群之外，请确保 Prometheus 服务可以访问 Kubernetes 节点，请参考[这个 issue](https://github.com/prometheus/prometheus/issues/4633) 添加 `api_server` 和 `tls_config` 配置到以上文件：
-
-```yaml
-scrape_configs:
-  - job_name: 'juicefs'
-    kubernetes_sd_configs:
-    - api_server: <Kubernetes API Server>
-      role: pod
-      tls_config:
-        ca_file: <...>
-        cert_file: <...>
-        key_file: <...>
-        insecure_skip_verify: false
-    relabel_configs:
-    ...
-```
+参考 [CSI 驱动文档](https://juicefs.com/docs/zh/csi/administration/going-production#monitoring)。
 
 ### S3 网关
 
