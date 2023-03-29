@@ -3290,9 +3290,6 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentI
 			}
 			// copy chunks
 			if srcAttr.Length != 0 {
-				if m.checkQuota(ctx, align4K(srcAttr.Length), 0, dstParentIno) {
-					return syscall.ENOSPC
-				}
 				vals := make(map[string][]byte)
 				tx.scan(m.chunkKey(srcIno, 0), m.chunkKey(srcIno, uint32(srcAttr.Length/ChunkSize)+1),
 					false, func(k, v []byte) bool {
@@ -3350,9 +3347,6 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentI
 }
 
 func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Attr, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
-	if m.checkQuota(ctx, align4K(0), 1, dstParentIno) {
-		return syscall.ENOSPC
-	}
 	srcAttr.Parent = dstParentIno
 	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 		srcAttr.Uid = ctx.Uid()

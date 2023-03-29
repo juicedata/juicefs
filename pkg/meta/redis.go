@@ -4105,9 +4105,6 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstPare
 			}
 			// copy chunks
 			if srcAttr.Length != 0 {
-				if m.checkQuota(ctx, align4K(srcAttr.Length), 0, dstParentIno) {
-					return syscall.ENOSPC
-				}
 				p := tx.Pipeline()
 				for i := 0; i < int(math.Ceil(float64(srcAttr.Length)/float64(ChunkSize))); i++ {
 					p.LRange(ctx, m.chunkKey(srcIno, uint32(i)), 0, -1)
@@ -4175,9 +4172,6 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstPare
 }
 
 func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAttr *Attr, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
-	if m.checkQuota(ctx, align4K(0), 1, dstParentIno) {
-		return syscall.ENOSPC
-	}
 	srcAttr.Parent = dstParentIno
 	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 		srcAttr.Uid = ctx.Uid()
