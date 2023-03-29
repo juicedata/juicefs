@@ -3188,26 +3188,105 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 }
 
 func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, count, total *uint64, attach bool, concurrent chan struct{}) syscall.Errno {
-	var err error
-	switch srcType {
-	case TypeDirectory:
-		var srcAttr Attr
-		if err = m.txn(func(tx *kvTxn) error {
-			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
-				return eno
-			}
-			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach); err != nil {
-				return err
-			}
+	var srcAttr Attr
+	if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
+		return eno
+	}
+	ino, err := m.nextInode()
+	if err != nil {
+		return errno(err)
+	}
+	if dstIno != nil {
+		*dstIno = ino
+	}
+	if err = m.txn(func(tx *kvTxn) error {
+		srcAttr.Parent = dstParentIno
+		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+			srcAttr.Uid = ctx.Uid()
+			srcAttr.Gid = ctx.Gid()
+			srcAttr.Mode &= ^cumask
+		}
+
+		// hardlink: update nlink and parent
+		if srcAttr.Typ == TypeFile && srcAttr.Nlink > 1 {
+			srcAttr.Nlink = 1
+		}
+
+		var pattr Attr
+		a := tx.get(m.inodeKey(dstParentIno))
+		m.parseAttr(a, &pattr)
+		if pattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if (pattr.Flags & FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+
+		if exist, err := m.doEdgeExist(ctx, dstParentIno, dstName); err != nil {
+			return err
+		} else if exist {
+			return syscall.EEXIST
+		}
+
+		tx.set(m.inodeKey(*dstIno), m.marshal(&srcAttr))
+
+		// copy xattr
+		tx.scan(m.xattrKey(srcIno, ""), nextKey(m.xattrKey(srcIno, "")), false, func(k, v []byte) bool {
+			tx.set(m.xattrKey(*dstIno, string(k[10:])), v)
+			return true
+		})
+
+		if attach {
+			// set edge
+			tx.set(m.entryKey(dstParentIno, dstName), m.packEntry(srcAttr.Typ, *dstIno))
+		} else {
+			tx.set(m.detachedKey(*dstIno), m.packInt64(time.Now().Unix()))
+		}
+
+		switch srcAttr.Typ {
+		case TypeDirectory:
 			tx.set(m.dirStatKey(*dstIno), m.packDirStat(&dirStat{
 				length: int64(srcAttr.Length),
 				space:  int64(srcAttr.Length),
 				inodes: int64(1),
 			}))
-			return nil
-		}, srcIno); err != nil {
-			return errno(err)
+		case TypeFile:
+			if srcAttr.Length != 0 {
+				vals := make(map[string][]byte)
+				tx.scan(m.chunkKey(srcIno, 0), m.chunkKey(srcIno, uint32(srcAttr.Length/ChunkSize)+1),
+					false, func(k, v []byte) bool {
+						vals[string(k)] = v
+						return true
+					})
+
+				for indx := uint32(0); indx <= uint32(srcAttr.Length/ChunkSize); indx++ {
+					if v, ok := vals[string(m.chunkKey(srcIno, indx))]; ok {
+						ss := readSliceBuf(v)
+						tx.set(m.chunkKey(*dstIno, indx), v)
+						sliIds := make([]uint64, 0, len(ss))
+						sliKeys := make([][]byte, 0, len(ss))
+						for _, s := range ss {
+							if s.id > 0 {
+								sliIds = append(sliIds, s.id)
+								sliKeys = append(sliKeys, m.sliceKey(s.id, s.size))
+							}
+						}
+						sliVal := tx.gets(sliKeys...)
+						for i := range sliIds {
+							tx.set(sliKeys[i], packCounter(parseCounter(sliVal[i])+1))
+						}
+					}
+				}
+			}
+		case TypeSymlink:
+			tx.set(m.symKey(*dstIno), tx.get(m.symKey(srcIno)))
 		}
+		return nil
+	}, srcIno); err != nil {
+		return errno(err)
+	}
+
+	if srcAttr.Typ == TypeDirectory {
 		var entries []*Entry
 		eno := m.doReaddir(ctx, srcIno, 0, &entries, -1)
 		if eno != 0 {
@@ -3232,7 +3311,6 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentI
 				errCh <- eno
 				return eno
 			default:
-
 			}
 			if entry.Attr.Typ == TypeDirectory {
 				select {
@@ -3273,135 +3351,28 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentI
 		wg.Wait()
 		// reset nlink
 		if attach && countDir+2 != srcAttr.Nlink {
-			err = m.txn(func(tx *kvTxn) error {
+			if err = m.txn(func(tx *kvTxn) error {
 				srcAttr.Nlink = countDir + 2
 				tx.set(m.inodeKey(*dstIno), m.marshal(&srcAttr))
 				return nil
-			}, *dstIno)
-		}
-	case TypeFile:
-		err = m.txn(func(tx *kvTxn) error {
-			var srcAttr Attr
-			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
-				return eno
+			}, *dstIno); err != nil {
+				return errno(err)
 			}
-			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
-				return err
-			}
-			// copy chunks
-			if srcAttr.Length != 0 {
-				vals := make(map[string][]byte)
-				tx.scan(m.chunkKey(srcIno, 0), m.chunkKey(srcIno, uint32(srcAttr.Length/ChunkSize)+1),
-					false, func(k, v []byte) bool {
-						vals[string(k)] = v
-						return true
-					})
-
-				for indx := uint32(0); indx <= uint32(srcAttr.Length/ChunkSize); indx++ {
-					if v, ok := vals[string(m.chunkKey(srcIno, indx))]; ok {
-						ss := readSliceBuf(v)
-						tx.set(m.chunkKey(*dstIno, indx), v)
-						sliIds := make([]uint64, 0, len(ss))
-						sliKeys := make([][]byte, 0, len(ss))
-						for _, s := range ss {
-							if s.id > 0 {
-								sliIds = append(sliIds, s.id)
-								sliKeys = append(sliKeys, m.sliceKey(s.id, s.size))
-							}
-						}
-						sliVal := tx.gets(sliKeys...)
-						for i := range sliIds {
-							tx.set(sliKeys[i], packCounter(parseCounter(sliVal[i])+1))
-						}
-					}
-				}
-			}
-			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length), align4K(srcAttr.Length))
-			return nil
-		}, srcIno)
-	case TypeSymlink:
-		err = m.txn(func(tx *kvTxn) error {
-			var srcAttr Attr
-			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
-				return eno
-			}
-			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
-				return err
-			}
-			path := tx.get(m.symKey(srcIno))
-			tx.set(m.symKey(*dstIno), path)
-			return nil
-		}, srcIno)
-
-	default:
-		err = m.txn(func(tx *kvTxn) error {
-			var srcAttr Attr
-			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
-				return eno
-			}
-			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true)
-		}, srcIno)
-	}
-	atomic.AddUint64(count, 1)
-	return errno(err)
-}
-
-func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Attr, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
-	srcAttr.Parent = dstParentIno
-	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
-		srcAttr.Uid = ctx.Uid()
-		srcAttr.Gid = ctx.Gid()
-		srcAttr.Mode &= ^cumask
-	}
-
-	// hardlink: update nlink and parent
-	if srcAttr.Typ == TypeFile && srcAttr.Nlink > 1 {
-		srcAttr.Nlink = 1
-	}
-
-	var ino Ino
-	ino, err := m.nextInode()
-	if err != nil {
-		return err
-	}
-	if dstIno != nil {
-		*dstIno = ino
-	}
-
-	var pattr Attr
-	a := tx.get(m.inodeKey(dstParentIno))
-	m.parseAttr(a, &pattr)
-	if pattr.Typ != TypeDirectory {
-		return syscall.ENOTDIR
-	}
-	if (pattr.Flags & FlagImmutable) != 0 {
-		return syscall.EPERM
-	}
-
-	if buf := tx.get(m.entryKey(dstParentIno, dstName)); buf != nil {
-		if _, foundIno := m.parseEntry(buf); foundIno != 0 {
-			return syscall.EEXIST
 		}
 	}
 
-	tx.set(m.inodeKey(*dstIno), m.marshal(srcAttr))
-
-	// copy xattr
-	tx.scan(m.xattrKey(srcIno, ""), nextKey(m.xattrKey(srcIno, "")), false, func(k, v []byte) bool {
-		tx.set(m.xattrKey(*dstIno, string(k[10:])), v)
-		return true
-	})
+	//fixme: dont update quota
+	if srcAttr.Typ == TypeFile {
+		m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length), align4K(srcAttr.Length))
+	}
 
 	if attach {
-		// set edge
-		tx.set(m.entryKey(dstParentIno, dstName), m.packEntry(srcAttr.Typ, *dstIno))
 		newSpace := align4K(0)
 		m.updateStats(newSpace, 1)
 		m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
-	} else {
-		tx.set(m.detachedKey(*dstIno), m.packInt64(time.Now().Unix()))
 	}
-	return nil
+	atomic.AddUint64(count, 1)
+	return 0
 }
 
 func (m *kvMeta) doFindDetachedNodes(t time.Time) []Ino {

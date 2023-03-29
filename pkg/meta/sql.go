@@ -3678,27 +3678,125 @@ func isDuplicateEntryErr(err error) bool {
 }
 
 func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, count, total *uint64, attach bool, concurrent chan struct{}) syscall.Errno {
-	var err error
-	switch srcType {
-	case TypeDirectory:
-		srcNode := node{Inode: srcIno}
-		if err = m.txn(func(s *xorm.Session) error {
-			ok, err := s.Get(&srcNode)
-			if err != nil {
+	srcNode := node{Inode: srcIno}
+	ok, err := m.db.Get(&srcNode)
+	if err != nil {
+		return errno(err)
+	}
+	if !ok {
+		return syscall.ENOENT
+	}
+	ino, err := m.nextInode()
+	if err != nil {
+		return errno(err)
+	}
+	if dstIno != nil {
+		*dstIno = ino
+	}
+
+	if err = m.txn(func(s *xorm.Session) error {
+		srcNode.Parent = dstParentIno
+		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+			srcNode.Uid = ctx.Uid()
+			srcNode.Gid = ctx.Gid()
+			srcNode.Mode &= ^cumask
+		}
+
+		// hardlink: update nlink and parent
+		if srcNode.Type == TypeFile && srcNode.Nlink > 1 {
+			srcNode.Nlink = 1
+		}
+
+		var pattr Attr
+		var n = node{Inode: dstParentIno}
+		if exist, err := s.Get(&n); exist {
+			m.parseAttr(&n, &pattr)
+		} else if err == nil {
+			return syscall.ENOENT
+		}
+		if pattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if (pattr.Flags & FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+
+		if exist, err := m.doEdgeExist(ctx, dstParentIno, dstName); err != nil {
+			return err
+		} else if exist {
+			return syscall.EEXIST
+		}
+
+		// copy xattr
+		var xs []xattr
+		if err = s.Where("inode = ?", srcIno).Find(&xs, &xattr{Inode: srcIno}); err != nil {
+			return err
+		}
+		if len(xs) > 0 {
+			for i := range xs {
+				xs[i].Id = 0
+				xs[i].Inode = *dstIno
+			}
+			if err := mustInsert(s, &xs); err != nil {
 				return err
 			}
-			if !ok {
+		}
+
+		srcNode.Inode = *dstIno
+		if attach {
+			// set edge
+			err = mustInsert(s, &srcNode, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: *dstIno, Type: srcNode.Type})
+		} else {
+			err = mustInsert(s, &srcNode, &detachedNode{Inode: *dstIno, Added: time.Now().Unix()})
+		}
+		if err != nil {
+			return errno(err)
+		}
+		switch srcType {
+		case TypeDirectory:
+			if err := mustInsert(s, &dirStats{Inode: *dstIno}); err != nil {
+				return errno(err)
+			}
+		case TypeFile:
+			// copy chunks
+			if srcNode.Length != 0 {
+				var cs []chunk
+				if err = s.Where("inode = ?", srcIno).ForUpdate().Find(&cs); err != nil {
+					return err
+				}
+				for i := range cs {
+					cs[i].Id = 0
+					cs[i].Inode = *dstIno
+				}
+				if err := mustInsert(s, cs); err != nil {
+					return err
+				}
+				for _, c := range cs {
+					for _, sli := range readSliceBuf(c.Slices) {
+						if sli.id > 0 {
+							if _, err := s.Exec("update jfs_chunk_ref set refs=refs+1 where chunkid = ? AND size = ?", sli.id, sli.size); err != nil {
+								return err
+							}
+						}
+					}
+				}
+			}
+		case TypeSymlink:
+			sym := symlink{Inode: srcIno}
+			if exists, err := s.Get(&sym); err != nil {
+				return err
+			} else if !exists {
 				return syscall.ENOENT
 			}
-			return m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, attach)
-		}); err != nil {
-			return errno(err)
+			sym.Inode = *dstIno
+			return mustInsert(s, &sym)
 		}
-		if err := m.txn(func(s *xorm.Session) error {
-			return mustInsert(s, &dirStats{Inode: *dstIno})
-		}); err != nil {
-			return errno(err)
-		}
+		return nil
+	}); err != nil {
+		return errno(err)
+	}
+
+	if srcNode.Type == TypeDirectory {
 		var entries []*Entry
 		if eno := m.doReaddir(ctx, srcIno, 0, &entries, -1); eno != 0 {
 			return eno
@@ -3762,162 +3860,26 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentI
 		// reset nlink
 		if attach && countDir+2 != srcNode.Nlink {
 			srcNode.Nlink = countDir + 2
-			err = m.txn(func(s *xorm.Session) error {
+			if err = m.txn(func(s *xorm.Session) error {
 				_, err := s.Cols("nlink").Update(&node{Nlink: srcNode.Nlink}, &node{Inode: *dstIno})
 				return err
-			})
-		}
-	case TypeFile:
-		srcNode := node{Inode: srcIno}
-		err = m.txn(func(s *xorm.Session) error {
-			ok, err := s.Get(&srcNode)
-			if err != nil {
-				return err
+			}); err != nil {
+				return errno(err)
 			}
-			if !ok {
-				return syscall.ENOENT
-			}
-			if err := m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
-				return err
-			}
-			// copy chunks
-			if srcNode.Length != 0 {
-				var cs []chunk
-				if err = s.Where("inode = ?", srcIno).ForUpdate().Find(&cs); err != nil {
-					return err
-				}
-				for i := range cs {
-					cs[i].Id = 0
-					cs[i].Inode = *dstIno
-				}
-				if err := mustInsert(s, cs); err != nil {
-					return err
-				}
-				for _, c := range cs {
-					for _, sli := range readSliceBuf(c.Slices) {
-						if sli.id > 0 {
-							if _, err := s.Exec("update jfs_chunk_ref set refs=refs+1 where chunkid = ? AND size = ?", sli.id, sli.size); err != nil {
-								return err
-							}
-						}
-					}
-				}
-			}
-			return nil
-		})
-		if err == nil {
-			m.updateParentStat(ctx, *dstIno, srcNode.Parent, int64(srcNode.Length), align4K(srcNode.Length))
-		}
-	case TypeSymlink:
-		err = m.txn(func(s *xorm.Session) error {
-			srcNode := node{Inode: srcIno}
-			ok, err := s.Get(&srcNode)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return syscall.ENOENT
-			}
-			if err := m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
-				return err
-			}
-			sym := symlink{Inode: srcIno}
-			if exists, err := s.Get(&sym); err != nil {
-				return err
-			} else if !exists {
-				return syscall.ENOENT
-			}
-			sym.Inode = *dstIno
-			return mustInsert(s, &sym)
-		})
-
-	default:
-		err = m.txn(func(s *xorm.Session) error {
-			srcNode := node{Inode: srcIno}
-			ok, err := s.Get(&srcNode)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return syscall.ENOENT
-			}
-			return m.mkNodeWithAttr(ctx, s, srcIno, &srcNode, dstParentIno, dstName, dstIno, cmode, cumask, true)
-		})
-	}
-	newSpace := align4K(0)
-	m.updateStats(newSpace, 1)
-	m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
-	atomic.AddUint64(count, 1)
-	return errno(err)
-}
-
-func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNode *node, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
-	srcNode.Parent = dstParentIno
-	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
-		srcNode.Uid = ctx.Uid()
-		srcNode.Gid = ctx.Gid()
-		srcNode.Mode &= ^cumask
-	}
-
-	// hardlink: update nlink and parent
-	if srcNode.Type == TypeFile && srcNode.Nlink > 1 {
-		srcNode.Nlink = 1
-	}
-
-	var ino Ino
-	ino, err := m.nextInode()
-	if err != nil {
-		return err
-	}
-	if dstIno != nil {
-		*dstIno = ino
-	}
-
-	var pattr Attr
-	var n = node{Inode: dstParentIno}
-	if exist, err := s.Get(&n); exist {
-		m.parseAttr(&n, &pattr)
-	} else if err == nil {
-		return syscall.ENOENT
-	}
-	if pattr.Typ != TypeDirectory {
-		return syscall.ENOTDIR
-	}
-	if (pattr.Flags & FlagImmutable) != 0 {
-		return syscall.EPERM
-	}
-
-	if exist, err := s.Get(&edge{Parent: dstParentIno, Name: []byte(dstName)}); err != nil {
-		return err
-	} else if exist {
-		return syscall.EEXIST
-	}
-
-	srcNode.Inode = *dstIno
-	if err := mustInsert(s, srcNode); err != nil {
-		return err
-	}
-
-	// copy xattr
-	var xs []xattr
-	if err = s.Where("inode = ?", srcIno).Find(&xs, &xattr{Inode: srcIno}); err != nil {
-		return err
-	}
-	if len(xs) > 0 {
-		for i := range xs {
-			xs[i].Id = 0
-			xs[i].Inode = *dstIno
-		}
-		if err := mustInsert(s, &xs); err != nil {
-			return err
 		}
 	}
 
+	//fixme: dont update quota
+	if srcNode.Type == TypeFile {
+		m.updateParentStat(ctx, *dstIno, srcNode.Parent, int64(srcNode.Length), align4K(srcNode.Length))
+	}
 	if attach {
-		// set edge
-		return mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: *dstIno, Type: srcNode.Type})
+		newSpace := align4K(0)
+		m.updateStats(newSpace, 1)
+		m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
 	}
-	return mustInsert(s, &detachedNode{Inode: *dstIno, Added: time.Now().Unix()})
+	atomic.AddUint64(count, 1)
+	return 0
 }
 
 func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {
@@ -3962,12 +3924,8 @@ func (m *dbMeta) doCleanupDetachedNode(ctx Context, detachedIno Ino) syscall.Err
 	return errno(err)
 }
 
-func (m *dbMeta) doEdgeExist(ctx Context, parent Ino, name string) (exist bool, err error) {
-	err = m.roTxn(func(s *xorm.Session) error {
-		exist, err = s.Get(&edge{Parent: parent, Name: []byte(name)})
-		return err
-	})
-	return
+func (m *dbMeta) doEdgeExist(ctx Context, parent Ino, name string) (bool, error) {
+	return m.db.Get(&edge{Parent: parent, Name: []byte(name)})
 }
 
 func (m *dbMeta) doAttachDirNode(ctx Context, dstParentIno Ino, dstIno Ino, dstName string) syscall.Errno {
@@ -3981,6 +3939,9 @@ func (m *dbMeta) doAttachDirNode(ctx Context, dstParentIno Ino, dstIno Ino, dstN
 			} else {
 				err = syscall.ENOENT
 			}
+		}
+		if err != nil {
+			return err
 		}
 		if err := mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: dstIno, Type: TypeDirectory}); err != nil {
 			if isDuplicateEntryErr(err) {
