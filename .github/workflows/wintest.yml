@@ -3,6 +3,7 @@ name: "test jfs on windows"
 on:
   push:
     branches:
+      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
@@ -10,6 +11,7 @@ on:
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
+      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
@@ -88,16 +90,16 @@ jobs:
           scoop install redis
           scoop install minio@2021-12-10T23-03-39Z
           scoop install runasti
-          curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o redis-service.exe
-          echo  "<service>"   >> redis-service.xml
-          echo  "<id>redisredis</id>"  >> redis-service.xml
-          echo  "<name>redisredis</name>"  >> redis-service.xml
-          echo  "<description>redisredis</description>"  >> redis-service.xml
-          echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\redis-server.exe</executable>"  >> redis-service.xml
-          echo  "<logmode>rotate</logmode>"  >> redis-service.xml
-          echo  "</service>"  >> redis-service.xml
-          .\redis-service.exe install
-          net start redisredis
+          # curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o redis-service.exe
+          # echo  "<service>"   >> redis-service.xml
+          # echo  "<id>redisredis</id>"  >> redis-service.xml
+          # echo  "<name>redisredis</name>"  >> redis-service.xml
+          # echo  "<description>redisredis</description>"  >> redis-service.xml
+          # echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\redis-server.exe</executable>"  >> redis-service.xml
+          # echo  "<logmode>rotate</logmode>"  >> redis-service.xml
+          # echo  "</service>"  >> redis-service.xml
+          # .\redis-service.exe install
+          # net start redisredis
           curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o minio-service.exe
           mkdir "C:\tmp"
           echo  "<service>"   >> minio-service.xml
@@ -126,7 +128,7 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          ./juicefs.exe format --storage minio --bucket http://127.0.0.1:9000/pics --access-key minioadmin --secret-key minioadmin redis://127.0.0.1:6379/1 pics
+          ./juicefs.exe format --storage minio --bucket http://127.0.0.1:9000/pics --access-key minioadmin --secret-key minioadmin sqlite3://test.db pics
 
       - name: Juicefs Mount
         run: |
@@ -137,7 +139,7 @@ jobs:
           echo  "<name>jfs</name>"  >> juicefs-service.xml
           echo  "<description>jfs</description>"  >> juicefs-service.xml
           echo  "<executable>$PWD\juicefs.exe</executable>"  >> juicefs-service.xml
-          echo  "<arguments>mount redis://127.0.0.1:6379/1 Z: --no-usage-report</arguments>"  >> juicefs-service.xml
+          echo  "<arguments>mount sqlite3://test.db Z: --no-usage-report</arguments>"  >> juicefs-service.xml
           echo  "<logmode>rotate</logmode>"  >> juicefs-service.xml
           echo  "</service>"  >> juicefs-service.xml
           .\juicefs-service.exe install
