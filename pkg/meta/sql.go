@@ -167,8 +167,8 @@ type dirStats struct {
 }
 
 type detachedNode struct {
-	Inode  Ino   `xorm:"pk notnull"`
-	Expire int64 `xorm:"notnull"`
+	Inode Ino   `xorm:"pk notnull"`
+	Added int64 `xorm:"notnull"`
 }
 
 type dirQuota struct {
@@ -385,7 +385,7 @@ func (m *dbMeta) Reset() error {
 		&node{}, &edge{}, &symlink{}, &xattr{},
 		&chunk{}, &sliceRef{}, &delslices{},
 		&session{}, &session2{}, &sustained{}, &delfile{},
-		&flock{}, &plock{}, &dirStats{},&detachedNode{}, &dirQuota{})
+		&flock{}, &plock{}, &dirStats{}, &dirQuota{}, &detachedNode{})
 }
 
 func (m *dbMeta) doLoad() (data []byte, err error) {
@@ -407,9 +407,9 @@ func (m *dbMeta) doLoad() (data []byte, err error) {
 
 func (m *dbMeta) doNewSession(sinfo []byte) error {
 	// add new table
-	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(dirQuota))
+	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(detachedNode), new(dirQuota))
 	if err != nil {
-		return fmt.Errorf("update table session2, delslices, dirstats, dirQuota: %s", err)
+		return fmt.Errorf("update table session2, delslices, dirstats, detachedNode, dirQuota: %s", err)
 	}
 	// add primary key
 	if err = m.syncTable(new(edge), new(chunk), new(xattr), new(sustained)); err != nil {
@@ -3919,14 +3919,53 @@ func (m *dbMeta) mkNodeWithAttr(ctx Context, s *xorm.Session, srcIno Ino, srcNod
 		}
 	}
 
-	if !attach {
-		return mustInsert(s, &detachedNode{Inode: *dstIno, Expire: time.Now().Unix()})
-	}
 	if attach {
 		// set edge
 		return mustInsert(s, &edge{Parent: dstParentIno, Name: []byte(dstName), Inode: *dstIno, Type: srcNode.Type})
 	}
-	return nil
+	return mustInsert(s, &detachedNode{Inode: *dstIno, Added: time.Now().Unix()})
+}
+
+func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {
+	var detachedNodes []Ino
+	if err := m.roTxn(func(s *xorm.Session) error {
+		var nodes []detachedNode
+		err := s.Where("added < ?", t.Unix()).Find(&nodes)
+		if err != nil {
+			return err
+		}
+		for _, n := range nodes {
+			detachedNodes = append(detachedNodes, n.Inode)
+		}
+		return nil
+	}); err != nil {
+		logger.Errorf("Scan detached nodes error: %s", err)
+	}
+	return detachedNodes
+}
+
+func (m *dbMeta) doCleanupDetachedNode(ctx Context, detachedIno Ino) syscall.Errno {
+	exist, err := m.db.Exist(&node{Inode: detachedIno})
+	if err != nil {
+		return errno(err)
+	}
+	if exist {
+		rmConcurrent := make(chan int, 10)
+		if eno := m.emptyDir(ctx, detachedIno, true, nil, rmConcurrent); eno != 0 {
+			return eno
+		}
+		if err := m.txn(func(s *xorm.Session) error {
+			if _, err := s.Delete(&node{Inode: detachedIno}); err != nil {
+				return err
+			}
+			_, err = s.Delete(&xattr{Inode: detachedIno})
+			return err
+		}); err != nil {
+			return errno(err)
+		}
+	}
+	_, err = m.db.Delete(&detachedNode{Inode: detachedIno})
+	return errno(err)
 }
 
 func (m *dbMeta) doCheckEdgeExist(ctx Context, parent Ino, name string) (exist bool, err error) {

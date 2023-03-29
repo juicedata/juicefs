@@ -184,8 +184,8 @@ All keys:
   SHssssssss         session heartbeat // for legacy client
   SIssssssss         session info
   SSssssssssiiiiiiii sustained inode
-  Uiiiiiiii	         data length, space and inodes usage in directory
-  Niiiiiiii	         detached inodes
+  Uiiiiiiii          data length, space and inodes usage in directory
+  Niiiiiiii          detached inde
   QDiiiiiiii         directory quota
 */
 
@@ -3390,7 +3390,6 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Att
 		}
 	}
 
-	tx.set(m.detachedKey(*dstIno), m.packInt64(time.Now().Unix()))
 	tx.set(m.inodeKey(*dstIno), m.marshal(srcAttr))
 
 	// copy xattr
@@ -3406,7 +3405,47 @@ func (m *kvMeta) mkNodeWithAttr(ctx Context, tx *kvTxn, srcIno Ino, srcAttr *Att
 		m.updateStats(newSpace, 1)
 		m.updateDirStat(ctx, srcAttr.Parent, 0, newSpace, 1)
 	}
+	if !attach {
+		tx.set(m.detachedKey(*dstIno), m.packInt64(time.Now().Unix()))
+	}
 	return nil
+}
+
+func (m *kvMeta) doFindDetachedNodes(t time.Time) []Ino {
+	var detachedNodes []Ino
+	vals, err := m.scanValues(m.fmtKey("N"), -1, func(k, v []byte) bool {
+		return m.parseInt64(v) < t.Unix()
+	})
+	if err != nil {
+		logger.Errorf("Scan detached nodes error: %s", err)
+		return detachedNodes
+	}
+	for k := range vals {
+		detachedNodes = append(detachedNodes, m.decodeInode(utils.FromBuffer([]byte(k)[1:]).Get(8)))
+	}
+	return detachedNodes
+}
+
+func (m *kvMeta) doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno {
+	buf, err := m.get(m.inodeKey(detachedNode))
+	if err != nil {
+		return errno(err)
+	}
+	if buf != nil {
+		rmConcurrent := make(chan int, 10)
+		if eno := m.emptyDir(ctx, detachedNode, true, nil, rmConcurrent); eno != 0 {
+			logger.Errorf("clone: remove tree error rootInode %v", detachedNode)
+			return eno
+		}
+		if err := m.txn(func(tx *kvTxn) error {
+			tx.delete(m.inodeKey(detachedNode))
+			tx.deleteKeys(m.xattrKey(detachedNode, ""))
+			return nil
+		}); err != nil {
+			return errno(err)
+		}
+	}
+	return errno(m.deleteKeys(m.detachedKey(detachedNode)))
 }
 
 func (m *kvMeta) doCheckEdgeExist(ctx Context, parent Ino, name string) (exist bool, err error) {

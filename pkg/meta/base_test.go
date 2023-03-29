@@ -515,7 +515,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 
 	var totalspace, availspace, iused, iavail uint64
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail); st != 0 {
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<50 || iavail != 10<<20 {
@@ -526,16 +526,104 @@ func testMetaClient(t *testing.T, m Meta) {
 	if err = m.Init(format, false); err != nil {
 		t.Fatalf("set quota failed: %s", err)
 	}
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail); st != 0 {
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<20 || iavail != 97 {
 		time.Sleep(time.Millisecond * 100)
-		_ = m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail)
+		_ = m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false)
 		if totalspace != 1<<20 || iavail != 97 {
 			t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 		}
 	}
+	// test StatFS with subdir and quota
+	var subIno Ino
+	if st := m.Mkdir(ctx, 1, "subdir", 0755, 0, 0, &subIno, nil); st != 0 {
+		t.Fatalf("mkdir subdir: %s", st)
+	}
+	if st := m.Chroot(ctx, "subdir"); st != 0 {
+		t.Fatalf("chroot: %s", st)
+	}
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<20 || iavail != 96 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
+	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", map[string]*Quota{
+		"/subdir": {
+			MaxSpace:  0,
+			MaxInodes: 0,
+		},
+	}); err != nil {
+		t.Fatalf("set quota: %s", err)
+	}
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<20-4*uint64(align4K(0)) || iavail != 96 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
+	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", map[string]*Quota{
+		"/subdir": {
+			MaxSpace:  1 << 10,
+			MaxInodes: 0,
+		},
+	}); err != nil {
+		t.Fatalf("set quota: %s", err)
+	}
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<10 || iavail != 96 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
+	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", map[string]*Quota{
+		"/subdir": {
+			MaxSpace:  0,
+			MaxInodes: 10,
+		},
+	}); err != nil {
+		t.Fatalf("set quota: %s", err)
+	}
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<20-4*uint64(align4K(0)) || iavail != 10 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
+	if err := m.HandleQuota(ctx, QuotaSet, "/subdir", map[string]*Quota{
+		"/subdir": {
+			MaxSpace:  1 << 10,
+			MaxInodes: 10,
+		},
+	}); err != nil {
+		t.Fatalf("set quota: %s", err)
+	}
+
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<10 || iavail != 10 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
+	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<20 || iavail != 96 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
+	m.chroot(RootInode)
+	if st := m.Rmdir(ctx, 1, "subdir"); st != 0 {
+		t.Fatalf("rmdir subdir: %s", st)
+	}
+
 	var summary Summary
 	if st := m.GetSummary(ctx, parent, &summary, false); st != 0 {
 		t.Fatalf("summary: %s", st)
@@ -2135,6 +2223,7 @@ func testClone(t *testing.T, m Meta) {
 		return nil
 	})
 	// check remove tree
+	var dNode1, dNode2, dNode3, dNode4 Ino = 101, 102, 103, 104
 	switch m := m.(type) {
 	case *redisMeta:
 		// del edge first
@@ -2142,51 +2231,78 @@ func testClone(t *testing.T, m Meta) {
 			t.Fatalf("del edge error: %v", err)
 		}
 		// check remove tree
-		if eno := m.emptyDir(Background, cloneDstIno, true, nil, make(chan int, 10)); eno != 0 {
+		if eno := m.doCleanupDetachedNode(Background, cloneDstIno); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
-		time.Sleep(1 * time.Second)
 		removedKeysStr := make([]string, len(removedItem))
 		for i, key := range removedItem {
 			removedKeysStr[i] = key.(string)
 		}
+		removedKeysStr = append(removedKeysStr, m.detachedNodes())
 		if exists := m.rdb.Exists(Background, removedKeysStr...).Val(); exists != 0 {
 			t.Fatalf("has keys not removed: %v", removedItem)
 		}
+		// check detached node
+		m.rdb.ZAdd(Background, m.detachedNodes(), redis.Z{Member: dNode1.String(), Score: float64(time.Now().Add(-1 * time.Minute).Unix())}).Err()
+		m.rdb.ZAdd(Background, m.detachedNodes(), redis.Z{Member: dNode2.String(), Score: float64(time.Now().Add(-5 * time.Minute).Unix())}).Err()
+		m.rdb.ZAdd(Background, m.detachedNodes(), redis.Z{Member: dNode3.String(), Score: float64(time.Now().Add(-48 * time.Hour).Unix())}).Err()
+		m.rdb.ZAdd(Background, m.detachedNodes(), redis.Z{Member: dNode4.String(), Score: float64(time.Now().Add(-48 * time.Hour).Unix())}).Err()
 	case *dbMeta:
 		if n, err := m.db.Delete(&edge{Parent: cloneDstAttr.Parent, Name: []byte(cloneDstName)}); err != nil || n != 1 {
 			t.Fatalf("del edge error: %v", err)
 		}
 		// check remove tree
-		if eno := m.emptyDir(Background, cloneDstIno, true, nil, make(chan int, 10)); eno != 0 {
+		if eno := m.doCleanupDetachedNode(Background, cloneDstIno); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
+		removedItem = append(removedItem, &detachedNode{Inode: cloneDstIno})
 		time.Sleep(1 * time.Second)
 		if exists, err := m.db.Exist(removedItem...); err != nil || exists {
 			t.Fatalf("has keys not removed: %v", removedItem)
 		}
+		m.txn(func(s *xorm.Session) error {
+			return mustInsert(s,
+				&detachedNode{Inode: dNode1, Added: time.Now().Add(-1 * time.Minute).Unix()},
+				&detachedNode{Inode: dNode2, Added: time.Now().Add(-5 * time.Minute).Unix()},
+				&detachedNode{Inode: dNode3, Added: time.Now().Add(-48 * time.Hour).Unix()},
+				&detachedNode{Inode: dNode4, Added: time.Now().Add(-48 * time.Hour).Unix()},
+			)
+		})
 	case *kvMeta:
 		// del edge first
 		if err := m.deleteKeys(m.entryKey(cloneDstAttr.Parent, cloneDstName)); err != nil {
 			t.Fatalf("del edge error: %v", err)
 		}
 		// check remove tree
-		if eno := m.emptyDir(Background, cloneDstIno, true, nil, make(chan int, 10)); eno != 0 {
+		if eno := m.doCleanupDetachedNode(Background, cloneDstIno); eno != 0 {
 			t.Fatalf("remove tree error rootInode: %v", cloneDstIno)
 		}
-		time.Sleep(1 * time.Second)
+		removedItem = append(removedItem, m.detachedKey(cloneDstIno))
 		m.txn(func(tx *kvTxn) error {
 			for _, key := range removedItem {
 				if buf := tx.get(key.([]byte)); buf != nil {
 					t.Fatalf("has keys not removed: %v", removedItem)
 				}
 			}
+			tx.set(m.detachedKey(dNode1), m.packInt64(time.Now().Add(-1*time.Minute).Unix()))
+			tx.set(m.detachedKey(dNode2), m.packInt64(time.Now().Add(-5*time.Minute).Unix()))
+			tx.set(m.detachedKey(dNode3), m.packInt64(time.Now().Add(-48*time.Hour).Unix()))
+			tx.set(m.detachedKey(dNode4), m.packInt64(time.Now().Add(-48*time.Hour).Unix()))
 			return nil
 		})
+
 	}
 	time.Sleep(1 * time.Second)
 	if !sli1del || !sli2del {
 		t.Fatalf("slice should be deleted")
+	}
+	nodes := m.(engine).doFindDetachedNodes(time.Now())
+	if len(nodes) != 4 {
+		t.Fatalf("find detached nodes error: %v", nodes)
+	}
+	nodes = m.(engine).doFindDetachedNodes(time.Now().Add(-24 * time.Hour))
+	if len(nodes) != 2 {
+		t.Fatalf("find detached nodes error: %v", nodes)
 	}
 
 }

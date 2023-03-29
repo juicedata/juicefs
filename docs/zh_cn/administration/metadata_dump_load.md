@@ -8,35 +8,34 @@ slug: /metadata_dump_load
 
 - JuiceFS v0.15.2 开始支持元数据手动备份、恢复和引擎间迁移。
 - JuiceFS v1.0.0 开始支持元数据自动备份
+- JuiceFS v1.0.4 开始支持通过 `load` 命令恢复加密的元数据备份
 :::
+
+JuiceFS 支持[多种元数据引擎](../guide/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 [`dump`](../reference/command_reference.md#dump) 命令允许将所有元数据以统一格式写入到 JSON 文件进行备份。同时，JuiceFS 也提供了 [`load`](../reference/command_reference.md#load) 命令，允许将备份恢复或迁移到任意元数据存储引擎。
 
 ## 元数据备份 {#backup}
 
-JuiceFS 支持[多种元数据存储引擎](../guide/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 `dump` 命令允许将所有元数据以统一格式写入到 [JSON](https://www.json.org/json-en.html) 文件进行备份。同时，JuiceFS 也提供了 `load` 命令，允许将备份恢复或迁移到任意元数据存储引擎。命令的详细信息请参考[这里](../reference/command_reference.md#dump)。
+:::note 注意
+
+* `juicefs dump` 不提供全局时间点快照的功能，如果在导出过程中业务仍在写入，最终结果会包含不同时间点的信息，对于特定应用（比如数据库），这可能意味着导出文件不可用。如果对一致性有更高要求，可能需要在导出前确保应用停写。
+* 对大规模文件系统，如果直接在线上环境进行导出，可能影响业务稳定性。
+:::
 
 ### 手动备份 {#backup-manually}
 
 使用 JuiceFS 客户端提供的 `dump` 命令可以将元数据导出到 JSON 文件，例如：
 
-```bash
+```shell
 juicefs dump redis://192.168.1.6:6379/1 meta-dump.json
 ```
 
 上例中 `meta-dump.json` 是导出的 JSON 文件，你可以随意调整它的文件名和扩展名。特别地，如果文件的扩展名为 `.gz`（如 `meta-dump.json.gz`），将会使用 Gzip 算法对导出的数据进行压缩。
 
-`dump` 命令默认从根目录 `/` 开始，深度遍历目录树下所有文件，将每个文件的元数据信息按 JSON 格式写入到文件。但出于安全性的考虑，对象存储的 Secret Key 信息不会被导出到 JSON 文件（可以通过 `--keep-secret-key` 选项保留）。
-
-:::note 注意
-`juicefs dump` 仅保证单个文件自身的完整性，不提供全局时间点快照的功能，如果在导出过程中业务仍在写入，最终结果会包含不同时间点的信息。
-:::
+`dump` 命令默认从根目录 `/` 开始，深度遍历目录树下所有文件，将每个文件的元数据信息按 JSON 格式进行输出。出于数据安全的考虑，对象存储的认证信息不会被导出，但可以通过 `--keep-secret-key` 选项保留。
 
 `juicefs dump` 的价值在于它能将完整的元数据信息以统一的 JSON 格式导出，便于管理和保存，而且不同的元数据存储引擎都可以识别并导入。
 
 在实际应用中，`dump` 命令与数据库自带的备份工具应该共同使用，相辅相成。比如，Redis 有 [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data)，MySQL 有 [`mysqldump`](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html) 等。
-
-:::note 注意
-以上讨论的仅为元数据备份，完整的文件系统备份方案还应至少包含对象存储数据的备份，如异地容灾、回收站、多版本等。
-:::
 
 ### 自动备份 {#backup-automatically}
 
@@ -79,60 +78,63 @@ JuiceFS 会按照以下规则定期清理备份：
 
 ## 元数据恢复与迁移 {#recovery-and-migration}
 
-使用 [`load`](../reference/command_reference.md#load) 命令可以将 `dump` 命令导出的元数据恢复到数据库中，请注意 `load` 命令仅支持恢复到**新创建的或空的数据库**中。比如，把备份恢复到一个全新的 Redis 数据库中：
+使用 [`load`](../reference/command_reference.md#load) 命令可以将 `dump` 命令导出的元数据恢复到一个空数据库中，比如：
 
-:::tip 提示
-如果元数据备份文件采用 Gzip 压缩（即文件的扩展名为 `.gz`），使用时需要先用 `gzip -d` 命令解压。
-:::
-
-```bash
+```shell
 juicefs load redis://192.168.1.6:6379/1 meta-dump.json
 ```
 
-该命令会自动处理因包含不同时间点文件而产生的冲突问题，并重新计算文件系统的统计信息（空间使用量，inode 计数器等），最后在数据库中生成一份全局一致的元数据。另外，如果你想自定义某些元数据（请务必小心），可以尝试在恢复前手动修改 JSON 文件。
+导入元数据时，JuiceFS 会重新计算文件系统的统计信息，包括空间使用量、inode 计数器等，最后在数据库中生成一份全局一致的元数据。如果你对 JuiceFS 的元数据设计有深入理解，还可以在恢复前对元数据备份文件进行修改，以此来进行调试。
 
-因为 `dump` 命令导出的 JSON 格式数据是统一且通用的，所有元数据引擎都能识别和导入。因此，你不但可以把备份恢复到原有类型的数据库中，还可以恢复到其它数据库，从而实现元数据引擎的迁移。
+`dump` 命令导出的 JSON 格式数据是统一且通用的，所有元数据引擎都能识别和导入。因此，你不但可以把备份恢复到原有类型的数据库中，还可以恢复到其它数据库，从而实现元数据引擎的迁移。
 
-例如，你可以从 Redis 数据库中导出元数据备份，然后把它恢复到全新的 MySQL 数据库中。
+例如将元数据从 Redis 迁移到 MySQL：
 
 1. 从 Redis 导出元数据备份：
 
-   ```bash
+   ```shell
    juicefs dump redis://192.168.1.6:6379/1 meta-dump.json
    ```
 
 1. 将元数据恢复到一个全新的 MySQL 数据库：
 
-   ```bash
+   ```shell
    juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs meta-dump.json
    ```
 
 另外，也可以通过系统的管道直接迁移：
 
-```bash
+```shell
 juicefs dump redis://192.168.1.6:6379/1 | juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs
 ```
 
-需要注意的是，由于 `dump` 导出的备份中默认排除了对象存储的 API 访问密钥，不论恢复还是迁移元数据，完成操作后都需要使用 [`juicefs config`](../reference/command_reference.md#config) 命令把文件系统关联的对象存储的 Secret Key 再添加回去，例如：
+需要注意的是，由于 `dump` 导出的备份中默认排除了对象存储的 API 访问密钥，不论恢复还是迁移元数据，完成操作后都需要使用 [`juicefs config`](../reference/command_reference.md#config) 命令把文件系统关联的对象存储的认证信息再添加回去，例如：
 
-```bash
+```shell
 juicefs config --secret-key xxxxx mysql://user:password@(192.168.1.6:3306)/juicefs
 ```
 
-:::caution 风险提示
-为确保迁移前后文件系统内容一致，需要在迁移过程中停止业务写入。另外，由于迁移后仍使用原来的对象存储，在新的元数据引擎上线前，请确保旧的引擎已经下线或仅有对象存储的只读权限，否则可能造成文件系统损坏。
-:::
+### 加密文件系统 {#encrypted-file-system}
+
+对于[加密的文件系统](../security/encrypt.md)，所有文件都会在本地加密后才上传到后端对象存储，包括元数据自动备份文件，也会加密后才上传至对象存储。这与 `dump` 命令不同，`dump` 导出的元数据永远是明文的。
+
+对于加密文件系统，在恢复自动备份的元数据时需要额外设置 `JFS_RSA_PASSPHRASE` 环境变量，以及指定 RSA 私钥和加密算法：
+
+```shell
+export JFS_RSA_PASSPHRASE=xxxxxx
+juicefs load \
+  --encrypt-rsa-key my-private.pem \
+  --encrypt-algo aes256gcm-rsa \
+  redis://192.168.1.6:6379/1 \
+  dump-2023-03-16-090750.json.gz
+```
 
 ## 元数据检视 {#inspection}
 
-除了可以导出完整的元数据信息，`dump` 命令还支持导出特定子目录中的元数据。因为导出的 JSON 内容可以让用户非常直观地查看到指定目录树下所有文件的内部信息，因此常被用来辅助排查问题。例如：
+除了可以导出完整的元数据信息，`dump` 命令还支持导出特定子目录中的元数据。可以直观地查看到指定目录树下所有文件的内部信息，因此常被用来辅助排查问题。
 
-```bash
+```shell
 juicefs dump redis://192.168.1.6:6379/1 meta-dump.json --subdir /path/in/juicefs
 ```
 
 另外，也可以使用 `jq` 等工具对导出文件进行分析。
-
-:::note 注意
-为保证服务稳定，请不要在线上环境导出过于大的目录。
-:::

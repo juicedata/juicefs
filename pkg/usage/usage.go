@@ -80,7 +80,7 @@ func ReportUsage(m meta.Meta, version string) {
 	var start = time.Now()
 	for {
 		var totalSpace, availSpace, iused, iavail uint64
-		_ = m.StatFS(ctx, &totalSpace, &availSpace, &iused, &iavail)
+		_ = m.StatFS(ctx, &totalSpace, &availSpace, &iused, &iavail, false)
 		u.Uptime = int64(time.Since(start).Seconds())
 		u.UsedSpace = int64(totalSpace - availSpace)
 		u.UsedInodes = int64(iused)

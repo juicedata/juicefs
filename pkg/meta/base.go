@@ -70,9 +70,9 @@ type engine interface {
 	doCleanupSlices()
 	doCleanupDelayedSlices(edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
-	doFindDetachedNodes(t time.Time) []Ino
 	doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, count, total *uint64, attach bool, concurrent chan struct{}) syscall.Errno
 	doAttachDirNode(ctx Context, dstParentIno Ino, dstIno Ino, dstName string) syscall.Errno
+	doFindDetachedNodes(t time.Time) []Ino
 	doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno
 
 	doGetQuota(ctx Context, inode Ino) (*Quota, error)
@@ -236,7 +236,7 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 	go func() {
 		for {
 			var totalSpace, availSpace, iused, iavail uint64
-			err := m.StatFS(Background, &totalSpace, &availSpace, &iused, &iavail)
+			err := m.StatFS(Background, &totalSpace, &availSpace, &iused, &iavail, false)
 			if err == 0 {
 				m.usedSpaceG.Set(float64(totalSpace - availSpace))
 				m.usedInodesG.Set(float64(iused))
@@ -272,7 +272,7 @@ func (m *baseMeta) parallelSyncDirStat(ctx Context, inos map[Ino]bool) *sync.Wai
 		go func(ino Ino) {
 			defer wg.Done()
 			_, st := m.en.doSyncDirStat(ctx, ino)
-			if st != 0 {
+			if st != 0 && st != syscall.ENOENT {
 				logger.Warnf("sync dir stat for %d: %s", ino, st)
 			}
 		}(i)
@@ -824,8 +824,61 @@ func (m *baseMeta) cleanupSlices() {
 	}
 }
 
-func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
+func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64, subdir bool) syscall.Errno {
 	defer m.timeit(time.Now())
+	if st := m.statRootFs(ctx, totalspace, availspace, iused, iavail); st != 0 {
+		return st
+	}
+	if m.root == RootInode || !subdir {
+		return 0
+	}
+	var usage *Quota
+	var attr Attr
+	for root := m.root; root >= RootInode; root = attr.Parent {
+		if st := m.GetAttr(ctx, root, &attr); st != 0 {
+			return st
+		}
+		if root == RootInode {
+			attr.Parent = 0
+		}
+		q, err := m.en.doGetQuota(ctx, root)
+		if err != nil {
+			return errno(err)
+		}
+		if q == nil {
+			continue
+		}
+		if usage == nil {
+			usage = q
+		}
+		if q.MaxSpace > 0 {
+			ls := q.MaxSpace - q.UsedSpace
+			if ls < 0 {
+				ls = 0
+			}
+			if uint64(ls) < *availspace {
+				*availspace = uint64(ls)
+			}
+		}
+		if q.MaxInodes > 0 {
+			li := q.MaxInodes - q.UsedInodes
+			if li < 0 {
+				li = 0
+			}
+			if uint64(li) < *iavail {
+				*iavail = uint64(li)
+			}
+		}
+	}
+	if usage == nil {
+		return 0
+	}
+	*totalspace = uint64(usage.UsedSpace) + *availspace
+	*iused = uint64(usage.UsedInodes)
+	return 0
+}
+
+func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	var used, inodes int64
 	var err error
 	err = utils.WithTimeout(func() error {
@@ -1756,7 +1809,7 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 			if attr.Typ != TypeDirectory {
 				return syscall.ENOTDIR
 			}
-			m.root = inode
+			m.chroot(inode)
 		}
 		if len(ps) == 1 {
 			break
@@ -1764,6 +1817,10 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 		subdir = ps[1]
 	}
 	return 0
+}
+
+func (m *baseMeta) chroot(inode Ino) {
+	m.root = inode
 }
 
 func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino) syscall.Errno {
