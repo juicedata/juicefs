@@ -1961,7 +1961,7 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) s
 		return 0
 	}
 	defer m.timeit(time.Now())
-	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, 1000000).Result()
+	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, -1).Result()
 	if err != nil {
 		return errno(err)
 	}
@@ -2088,19 +2088,18 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 
-		p := tx.Pipeline()
+		var vals [][]string
 		for i := offIn / ChunkSize; i <= (offIn+size)/ChunkSize; i++ {
-			p.LRange(ctx, m.chunkKey(fin, uint32(i)), 0, 1000000)
-		}
-		vals, err := p.Exec(ctx)
-		if err != nil {
-			return err
+			val, err := tx.LRange(ctx, m.chunkKey(fin, uint32(i)), 0, -1).Result()
+			if err != nil {
+				return err
+			}
+			vals = append(vals, val)
 		}
 
 		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 			coff := offIn / ChunkSize * ChunkSize
-			for _, v := range vals {
-				sv := v.(*redis.StringSliceCmd).Val()
+			for _, sv := range vals {
 				// Add a zero chunk for hole
 				ss := readSlices(sv)
 				if ss == nil {
@@ -2347,9 +2346,9 @@ func (m *redisMeta) deleteChunk(inode Ino, indx uint32) error {
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		todel = todel[:0]
 		rs = rs[:0]
-		vals, err := tx.LRange(ctx, key, 0, 1000000).Result()
-		if err == redis.Nil {
-			return nil
+		vals, err := tx.LRange(ctx, key, 0, -1).Result()
+		if err != nil || len(vals) == 0 {
+			return err
 		}
 		slices := readSlices(vals)
 		if slices == nil {
@@ -2762,7 +2761,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 	p := m.rdb.Pipeline()
 	err := m.scan(ctx, "c*_*", func(keys []string) error {
 		for _, key := range keys {
-			_ = p.LRange(ctx, key, 0, 100000000)
+			_ = p.LRange(ctx, key, 0, -1)
 		}
 		cmds, err := p.Exec(ctx)
 		if err != nil {
@@ -2932,7 +2931,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 			xr[i] = p.HGetAll(ctx, m.xattrKey(inode))
 			switch e.Attr.Type {
 			case "regular":
-				cr[i] = p.LRange(ctx, m.chunkKey(inode, 0), 0, 1000000)
+				cr[i] = p.LRange(ctx, m.chunkKey(inode, 0), 0, -1)
 			case "directory":
 				dr[i] = p.HGetAll(ctx, m.entryKey(inode))
 			case "symlink":
@@ -3039,7 +3038,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 			}
 			for i := range cr {
 				c := lcs[i]
-				cr[i] = p.LRange(ctx, m.chunkKey(c.inode, c.indx), 0, 1000000)
+				cr[i] = p.LRange(ctx, m.chunkKey(c.inode, c.indx), 0, -1)
 			}
 			if _, err := p.Exec(ctx); err != nil {
 				return err
