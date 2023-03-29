@@ -101,6 +101,27 @@ func (d *filestore) Head(key string) (Object, error) {
 	}, nil
 }
 
+type LimitedReadSeekCloser struct {
+	io.LimitedReader
+}
+
+func (lc *LimitedReadSeekCloser) Seek(offset int64, whence int) (ret int64, err error) {
+	if whence == io.SeekEnd {
+		whence = io.SeekStart
+		offset = lc.N + offset
+	}
+	if r, ok := lc.R.(io.Seeker); ok {
+		return r.Seek(offset, whence)
+	}
+	return 0, nil
+}
+func (lc *LimitedReadSeekCloser) Close() error {
+	if r, ok := lc.R.(io.ReadCloser); ok {
+		return r.Close()
+	}
+	return nil
+}
+
 func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	p := d.path(key)
 
@@ -126,13 +147,7 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		}
 	}
 	if limit > 0 {
-		defer f.Close()
-		buf := make([]byte, limit)
-		if n, err := f.Read(buf); err != nil {
-			return nil, err
-		} else {
-			return io.NopCloser(bytes.NewBuffer(buf[:n])), nil
-		}
+		return &LimitedReadSeekCloser{LimitedReader: io.LimitedReader{R: f, N: limit}}, nil
 	}
 	return f, nil
 }
