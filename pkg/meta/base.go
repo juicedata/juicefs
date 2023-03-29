@@ -70,8 +70,9 @@ type engine interface {
 	doCleanupSlices()
 	doCleanupDelayedSlices(edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
-	doCloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, count, total *uint64, attach bool, concurrent chan struct{}) syscall.Errno
-	doAttachDirNode(ctx Context, dstParentIno Ino, dstIno Ino, dstName string) syscall.Errno
+
+	doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, attr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno
+	doAttachDirNode(ctx Context, parent Ino, dstIno Ino, name string) syscall.Errno
 	doFindDetachedNodes(t time.Time) []Ino
 	doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno
 
@@ -93,7 +94,6 @@ type engine interface {
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
-	doEdgeExist(ctx Context, parent Ino, name string) (bool, error)
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
@@ -2143,57 +2143,122 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 	return eg.Wait()
 }
 
-func (m *baseMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
+func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
 	srcAttr := &Attr{}
 	var eno syscall.Errno
 	if eno = m.en.doGetAttr(ctx, srcIno, srcAttr); eno != 0 {
 		return eno
 	}
-	// total should start from 1
-	*total = 1
-	var dstIno Ino
-	var err error
-	var cloneEno syscall.Errno
+	if m.Lookup(ctx, parent, name, nil, nil) == 0 {
+		return syscall.EEXIST
+	}
+	var sum Summary
+	eno = m.FastGetSummary(ctx, srcIno, &sum, true)
+	if eno != 0 {
+		return eno
+	}
+	if m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), parent) {
+		return syscall.ENOSPC
+	}
+	*total = sum.Dirs + sum.Files
 	concurrent := make(chan struct{}, 4)
 	if srcAttr.Typ == TypeDirectory {
-		// check dst edge
-		var edgeExist bool
-		edgeExist, err = m.en.doEdgeExist(ctx, dstParentIno, dstName)
-		if err != nil {
-			return errno(err)
-		}
-		if edgeExist {
-			return syscall.EEXIST
-		}
-
-		eno = m.en.doCloneEntry(ctx, srcIno, TypeDirectory, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, false, concurrent)
-		if eno != 0 {
-			cloneEno = eno
-		}
+		var dstIno Ino
+		eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
 		if eno == 0 {
-			edgeExist, err = m.en.doEdgeExist(ctx, dstParentIno, dstName)
-			if err != nil {
-				return errno(err)
-			}
-			if edgeExist {
-				return syscall.EEXIST
-			}
-			if eno := m.en.doAttachDirNode(ctx, dstParentIno, dstIno, dstName); eno != 0 {
-				cloneEno = eno
-			} else {
-				newSpace := align4K(0)
-				m.en.updateStats(newSpace, 1)
-				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
-			}
+			eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
 		}
-		// delete the dst tree if clone failed
-		if cloneEno != 0 {
-			if eno = m.en.doCleanupDetachedNode(ctx, dstIno); eno != 0 {
-				logger.Errorf("doCleanupDetachedNode: remove detached tree (%d) error: %s", dstIno, eno)
+		if eno != 0 && dstIno != 0 {
+			if eno := m.en.doCleanupDetachedNode(ctx, dstIno); eno != 0 {
+				logger.Errorf("remove detached tree (%d): %s", dstIno, eno)
 			}
 		}
 	} else {
-		cloneEno = m.en.doCloneEntry(ctx, srcIno, srcAttr.Typ, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, true, concurrent)
+		eno = m.cloneEntry(ctx, srcIno, parent, name, nil, cmode, cumask, count, true, concurrent)
 	}
-	return cloneEno
+	if eno == 0 {
+		m.updateDirStat(ctx, parent, int64(srcAttr.Length), align4K(srcAttr.Length), 1)
+		m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
+	}
+	return eno
+}
+
+func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, dstIno *Ino, cmode uint8, cumask uint16, count *uint64, top bool, concurrent chan struct{}) syscall.Errno {
+	ino, err := m.nextInode()
+	if err != nil {
+		return errno(err)
+	}
+	if dstIno != nil {
+		*dstIno = ino
+	}
+	var srcAttr Attr
+	eno := m.en.doCloneEntry(ctx, srcIno, parent, name, ino, &srcAttr, cmode, cumask, top)
+	if eno != 0 {
+		return eno
+	}
+	atomic.AddUint64(count, 1)
+	if srcAttr.Typ != TypeDirectory {
+		return 0
+	}
+
+	var entries []*Entry
+	eno = m.en.doReaddir(ctx, srcIno, 0, &entries, -1)
+	if eno != 0 && eno != syscall.ENOENT {
+		return eno
+	}
+	// try directories first to increase parallel
+	var dirs int
+	for i, e := range entries {
+		if e.Attr.Typ == TypeDirectory {
+			entries[dirs], entries[i] = entries[i], entries[dirs]
+			dirs++
+		}
+	}
+
+	var wg sync.WaitGroup
+	var skipped uint32
+	var errCh = make(chan syscall.Errno, cap(concurrent))
+	cloneChild := func(e *Entry) syscall.Errno {
+		eno := m.cloneEntry(ctx, e.Inode, ino, string(e.Name), nil, cmode, cumask, count, false, concurrent)
+		if eno == syscall.ENOENT {
+			logger.Warnf("ignore deleted %s in dir %d", string(e.Name), srcIno)
+			if e.Attr.Typ == TypeDirectory {
+				atomic.AddUint32(&skipped, 1)
+			}
+			eno = 0
+		}
+		return eno
+	}
+	for i, entry := range entries {
+		select {
+		case eno := <-errCh:
+			return eno
+		case concurrent <- struct{}{}:
+			wg.Add(1)
+			go func(e *Entry) {
+				defer wg.Done()
+				eno := cloneChild(e)
+				if eno != 0 {
+					errCh <- eno
+				}
+				<-concurrent
+			}(entry)
+		default:
+			if eno := cloneChild(entry); eno != 0 {
+				return eno
+			}
+		}
+		if ctx.Canceled() {
+			return syscall.EINTR
+		}
+		entries[i] = nil // release memory
+	}
+	wg.Wait()
+	if skipped > 0 {
+		srcAttr.Nlink -= skipped
+		if eno := m.en.doRepair(ctx, ino, &srcAttr); eno != 0 {
+			logger.Warnf("fix nlink of %d: %s", ino, eno)
+		}
+	}
+	return 0
 }

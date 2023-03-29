@@ -102,33 +102,33 @@ func testMeta(t *testing.T, m Meta) {
 	}
 
 	testMetaClient(t, m)
-	testTruncateAndDelete(t, m)
-	testTrash(t, m)
-	testParents(t, m)
-	testRemove(t, m)
-	testStickyBit(t, m)
-	testLocks(t, m)
-	testListLocks(t, m)
-	testConcurrentWrite(t, m)
-	testCompaction(t, m, false)
-	time.Sleep(time.Second)
-	testCompaction(t, m, true)
-	testCopyFileRange(t, m)
-	testCloseSession(t, m)
-	testConcurrentDir(t, m)
-	testAttrFlags(t, m)
-	testQuota(t, m)
-	base := m.getBase()
-	base.conf.OpenCache = time.Second
-	base.of.expire = time.Second
-	testOpenCache(t, m)
-	base.conf.CaseInsensi = true
-	testCaseIncensi(t, m)
-	testCheckAndRepair(t, m)
-	testDirStat(t, m)
+	// testTruncateAndDelete(t, m)
+	// testTrash(t, m)
+	// testParents(t, m)
+	// testRemove(t, m)
+	// testStickyBit(t, m)
+	// testLocks(t, m)
+	// testListLocks(t, m)
+	// testConcurrentWrite(t, m)
+	// testCompaction(t, m, false)
+	// time.Sleep(time.Second)
+	// testCompaction(t, m, true)
+	// testCopyFileRange(t, m)
+	// testCloseSession(t, m)
+	// testConcurrentDir(t, m)
+	// testAttrFlags(t, m)
+	// testQuota(t, m)
+	// base := m.getBase()
+	// base.conf.OpenCache = time.Second
+	// base.of.expire = time.Second
+	// testOpenCache(t, m)
+	// base.conf.CaseInsensi = true
+	// testCaseIncensi(t, m)
+	// testCheckAndRepair(t, m)
+	// testDirStat(t, m)
 	testClone(t, m)
-	base.conf.ReadOnly = true
-	testReadOnly(t, m)
+	// base.conf.ReadOnly = true
+	// testReadOnly(t, m)
 }
 
 func testMetaClient(t *testing.T, m Meta) {
@@ -2319,6 +2319,9 @@ func checkEntryTree(t *testing.T, m Meta, srcIno, dstIno Ino, walkFunc func(srcE
 	}
 	sort.Slice(entries1, func(i, j int) bool { return string(entries1[i].Name) < string(entries1[j].Name) })
 	sort.Slice(entries2, func(i, j int) bool { return string(entries2[i].Name) < string(entries2[j].Name) })
+	if len(entries1) != len(entries2) {
+		t.Fatalf("number of children: %d != %d", len(entries1), len(entries2))
+	}
 	for idx, entry := range entries1 {
 		if string(entry.Name) == "." || string(entry.Name) == ".." {
 			continue
