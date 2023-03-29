@@ -6,7 +6,7 @@ description: 本文介绍如何搭配 Prometheus、Grafana 等第三方工具可
 
 作为承载海量数据存储的分布式文件系统，用户通常需要直观地了解整个系统的容量、文件数量、CPU 负载、磁盘 IO、缓存等指标的变化。JuiceFS 通过 Prometheus 兼容的 API 对外提供实时的状态数据，只需将其添加到用户自建的 Prometheus Server 建立时序数据，然后通过 Grafana 等工具即可轻松实现 JuiceFS 文件系统的可视化监控。
 
-## 快速上手
+## 快速上手 {#getting-started}
 
 这里假设你搭建的 Prometheus Server、Grafana 与 JuiceFS 客户端都运行在相同的主机上。其中：
 
@@ -69,11 +69,11 @@ scrape_configs:
 
 ![](../images/grafana-dashboard.jpg)
 
-## 收集监控指标
+## 收集监控指标 {#collecting-metrics}
 
 根据部署 JuiceFS 的方式不同可以有不同的收集监控指标的方法，下面分别介绍。
 
-### 挂载点
+### 挂载点 {#mount-point}
 
 当通过 [`juicefs mount`](../reference/command_reference.md#mount) 命令挂载 JuiceFS 文件系统后，可以通过 `http://localhost:9567/metrics` 这个地址收集监控指标，你也可以通过 `--metrics` 选项自定义。如：
 
@@ -274,7 +274,7 @@ juicefs mount --consul 1.2.3.4:8500 ...
 
 每个 instance 的 meta 都包含了 `hostname` 与 `mountpoint` 两个维度，其中 `mountpoint` 为 `s3gateway` 代表该实例为 S3 网关。
 
-## 可视化监控指标
+## 可视化监控指标 {#visualize-metrics}
 
 ### Grafana 仪表盘模板
 
@@ -289,6 +289,6 @@ Grafana 仪表盘示例效果如下图：
 
 ![JuiceFS Grafana dashboard](../images/grafana_dashboard.png)
 
-## 监控指标索引
+## 监控指标索引 {#metrics-reference}
 
 请参考[「JuiceFS 监控指标」](../reference/p8s_metrics.md)文档

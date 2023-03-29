@@ -19,7 +19,7 @@ slug: /faq
 
 ### JuiceFS 的日志在哪里？
 
-不同类型的 JuiceFS 客户端获取日志的方式也不同，详情请参考[「客户端日志」](administration/fault_diagnosis_and_analysis.md#客户端日志)文档。
+不同类型的 JuiceFS 客户端获取日志的方式也不同，详情请参考[「客户端日志」](administration/fault_diagnosis_and_analysis.md#client-log)文档。
 
 ### JuiceFS 是否可以直接读取对象存储中已有的文件？
 

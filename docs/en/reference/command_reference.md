@@ -769,7 +769,7 @@ $ cd /mnt/jfs
 $ juicefs info -i 100
 ```
 
-### `juicefs bench`
+### `juicefs bench` {#bench}
 
 Run benchmark, including read/write/stat for big and small files.
 
@@ -808,7 +808,7 @@ $ juicefs bench /mnt/jfs -p 4
 $ juicefs bench /mnt/jfs --big-file-size 0
 ```
 
-### `juicefs objbench`
+### `juicefs objbench` {#objbench}
 
 Run basic benchmarks on the target object storage to test if it works as expected.
 
@@ -906,7 +906,7 @@ juicefs fsck [command options] META-URL
 juicefs fsck redis://localhost
 ```
 
-### `juicefs profile`
+### `juicefs profile` {#profile}
 
 Analyze [access log](../administration/fault_diagnosis_and_analysis.md#access-log).
 
@@ -1172,7 +1172,7 @@ skip sanity check and force destroy the volume (default: false)
 juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 ```
 
-### `juicefs debug`
+### `juicefs debug` {#debug}
 
 It collects and displays information from multiple dimensions such as the operating environment and system logs to help better locate errors
 

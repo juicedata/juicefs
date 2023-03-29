@@ -144,16 +144,7 @@ JuiceFS 提供一个性能测试的子命令来帮助你了解它在你的环境
 
 ### 性能分析
 
-在文件系统的根目录有一个叫做 `.accesslog` 的虚拟文件，它提供了所有文件系统操作的细节，以及所消耗的时间，比如：
-
-```bash
-$ cat /jfs/.accesslog
-2021.01.15 08:26:11.003330 [uid:0,gid:0,pid:4403] write (17669,8666,4993160): OK <0.000010>
-2021.01.15 08:26:11.003473 [uid:0,gid:0,pid:4403] write (17675,198,997439): OK <0.000014>
-2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
-```
-
-每一行的最后一个数字是该操作所消耗的时间，单位是秒。你可以直接利用它来分析各种性能问题，或者尝试 `juicefs profile /jfs` 命令实时监控统计信息。欲进一步了解此子命令请运行 `juicefs profile -h` 或参阅[这里](https://juicefs.com/docs/zh/community/operations_profiling)。
+如遇性能问题，查看[「实时性能监控」](https://juicefs.com/docs/zh/community/fault_diagnosis_and_analysis#performance-monitor)。
 
 ## 支持的对象存储
 
