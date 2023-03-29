@@ -90,28 +90,28 @@ jobs:
           scoop install redis
           scoop install minio@2021-12-10T23-03-39Z
           scoop install runasti
-          # curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o redis-service.exe
-          # echo  "<service>"   >> redis-service.xml
-          # echo  "<id>redisredis</id>"  >> redis-service.xml
-          # echo  "<name>redisredis</name>"  >> redis-service.xml
-          # echo  "<description>redisredis</description>"  >> redis-service.xml
-          # echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\redis-server.exe</executable>"  >> redis-service.xml
-          # echo  "<logmode>rotate</logmode>"  >> redis-service.xml
-          # echo  "</service>"  >> redis-service.xml
-          # .\redis-service.exe install
-          # net start redisredis
-          # curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o minio-service.exe
-          # mkdir "C:\tmp"
-          # echo  "<service>"   >> minio-service.xml
-          # echo  "<id>MinIO</id>"  >> minio-service.xml
-          # echo  "<name>MinIO</name>"  >> minio-service.xml
-          # echo  "<description>MinIO</description>"  >> minio-service.xml
-          # echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\minio.exe</executable>"  >> minio-service.xml
-          # echo  "<arguments>server C:\tmp</arguments>"  >> minio-service.xml
-          # echo  "<logmode>rotate</logmode>"  >> minio-service.xml
-          # echo  "</service>"  >> minio-service.xml
-          # .\minio-service.exe install
-          # net start MinIO
+          curl  https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-x64.exe -o redis-service.exe
+          echo  "<service>"   >> redis-service.xml
+          echo  "<id>redisredis</id>"  >> redis-service.xml
+          echo  "<name>redisredis</name>"  >> redis-service.xml
+          echo  "<description>redisredis</description>"  >> redis-service.xml
+          echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\redis-server.exe</executable>"  >> redis-service.xml
+          echo  "<logmode>rotate</logmode>"  >> redis-service.xml
+          echo  "</service>"  >> redis-service.xml
+          .\redis-service.exe install
+          net start redisredis
+          curl  https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-x64.exe -o minio-service.exe
+          mkdir "C:\tmp"
+          echo  "<service>"   >> minio-service.xml
+          echo  "<id>MinIO</id>"  >> minio-service.xml
+          echo  "<name>MinIO</name>"  >> minio-service.xml
+          echo  "<description>MinIO</description>"  >> minio-service.xml
+          echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\minio.exe</executable>"  >> minio-service.xml
+          echo  "<arguments>server C:\tmp</arguments>"  >> minio-service.xml
+          echo  "<logmode>rotate</logmode>"  >> minio-service.xml
+          echo  "</service>"  >> minio-service.xml
+          .\minio-service.exe install
+          net start MinIO
 
       - uses: actions/cache@v3
         with:
@@ -133,7 +133,7 @@ jobs:
       - name: Juicefs Mount
         run: |
           echo "C:\Program Files (x86)\WinFsp\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o juicefs-service.exe
+          curl  https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-x64.exe -o juicefs-service.exe
           echo  "<service>"   >> juicefs-service.xml
           echo  "<id>jfs</id>"  >> juicefs-service.xml
           echo  "<name>jfs</name>"  >> juicefs-service.xml
