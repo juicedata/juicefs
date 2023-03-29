@@ -90,7 +90,7 @@ jobs:
           scoop install redis
           scoop install minio@2021-12-10T23-03-39Z
           scoop install runasti
-          curl  https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-x64.exe -o redis-service.exe
+          curl  https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-net461.exe -o redis-service.exe
           echo  "<service>"   >> redis-service.xml
           echo  "<id>redisredis</id>"  >> redis-service.xml
           echo  "<name>redisredis</name>"  >> redis-service.xml
@@ -100,7 +100,7 @@ jobs:
           echo  "</service>"  >> redis-service.xml
           .\redis-service.exe install
           net start redisredis
-          curl  https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-x64.exe -o minio-service.exe
+          curl  https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-net461.exe -o minio-service.exe
           mkdir "C:\tmp"
           echo  "<service>"   >> minio-service.xml
           echo  "<id>MinIO</id>"  >> minio-service.xml
@@ -133,7 +133,7 @@ jobs:
       - name: Juicefs Mount
         run: |
           echo "C:\Program Files (x86)\WinFsp\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          curl  https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-x64.exe -o juicefs-service.exe
+          curl  https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-net461.exe -o juicefs-service.exe
           echo  "<service>"   >> juicefs-service.xml
           echo  "<id>jfs</id>"  >> juicefs-service.xml
           echo  "<name>jfs</name>"  >> juicefs-service.xml
