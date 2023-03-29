@@ -23,6 +23,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -114,6 +115,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	skipVerify := query.pop("insecure-skip-verify")
 	certFile := query.pop("tls-cert-file")
 	keyFile := query.pop("tls-key-file")
+	caCertFile := query.pop("tls-ca-cert-file")
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
@@ -130,6 +132,13 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 				return nil, fmt.Errorf("get certificate error certFile:%s keyFile:%s error:%s", certFile, keyFile, err)
 			}
 			opt.TLSConfig.Certificates = []tls.Certificate{cert}
+			caCert, err := os.ReadFile(caCertFile)
+			if err != nil {
+				return nil, fmt.Errorf("read ca cert file error path:%s error:%s", caCertFile, err)
+			}
+			caCertPool := x509.NewCertPool()
+			caCertPool.AppendCertsFromPEM(caCert)
+			opt.TLSConfig.RootCAs = caCertPool
 		}
 	}
 	if opt.Password == "" {
