@@ -100,18 +100,18 @@ jobs:
           # echo  "</service>"  >> redis-service.xml
           # .\redis-service.exe install
           # net start redisredis
-          curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o minio-service.exe
-          mkdir "C:\tmp"
-          echo  "<service>"   >> minio-service.xml
-          echo  "<id>MinIO</id>"  >> minio-service.xml
-          echo  "<name>MinIO</name>"  >> minio-service.xml
-          echo  "<description>MinIO</description>"  >> minio-service.xml
-          echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\minio.exe</executable>"  >> minio-service.xml
-          echo  "<arguments>server C:\tmp</arguments>"  >> minio-service.xml
-          echo  "<logmode>rotate</logmode>"  >> minio-service.xml
-          echo  "</service>"  >> minio-service.xml
-          .\minio-service.exe install
-          net start MinIO
+          # curl  https://repo.jenkins-ci.org/releases/com/sun/winsw/winsw/2.9.0/winsw-2.9.0-net4.exe -o minio-service.exe
+          # mkdir "C:\tmp"
+          # echo  "<service>"   >> minio-service.xml
+          # echo  "<id>MinIO</id>"  >> minio-service.xml
+          # echo  "<name>MinIO</name>"  >> minio-service.xml
+          # echo  "<description>MinIO</description>"  >> minio-service.xml
+          # echo  "<executable>C:\Users\$env:USERNAME\scoop\shims\minio.exe</executable>"  >> minio-service.xml
+          # echo  "<arguments>server C:\tmp</arguments>"  >> minio-service.xml
+          # echo  "<logmode>rotate</logmode>"  >> minio-service.xml
+          # echo  "</service>"  >> minio-service.xml
+          # .\minio-service.exe install
+          # net start MinIO
 
       - uses: actions/cache@v3
         with:
@@ -128,7 +128,7 @@ jobs:
 
       - name: Juicefs Format
         run: |
-          ./juicefs.exe format --storage minio --bucket http://127.0.0.1:9000/pics --access-key minioadmin --secret-key minioadmin sqlite3://test.db pics
+          ./juicefs.exe format sqlite3://test.db pics
 
       - name: Juicefs Mount
         run: |
