@@ -504,7 +504,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		data, err := json.Marshal(resp)
 		if err != nil {
 			logger.Errorf("marshal summary response: %v", err)
-			_, _ = out.Write([]byte{uint8(syscall.EIO)})
+			_, _ = out.Write([]byte{byte(syscall.EIO & 0xff)})
 			return
 		}
 		head := binary.BigEndian.AppendUint32([]byte{meta.CDATA}, uint32(len(data)))
