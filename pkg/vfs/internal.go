@@ -18,6 +18,7 @@ package vfs
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -262,7 +263,8 @@ type InfoResponse struct {
 }
 
 type SummaryReponse struct {
-	Tree meta.TreeSummary
+	Errno syscall.Errno
+	Tree  meta.TreeSummary
 }
 
 type chunkSlice struct {
@@ -285,36 +287,6 @@ func (r *InfoResponse) Encode() []byte {
 }
 
 func (r *InfoResponse) Decode(reader io.Reader) error {
-	sizeBuf := make([]byte, 4)
-	n := 0
-	for n == 0 {
-		i, err := reader.Read(sizeBuf[n:])
-		if err != nil && err != io.EOF {
-			return err
-		}
-		if i == 1 && sizeBuf[0] == byte(syscall.EINVAL&0xff) {
-			return syscall.EINVAL
-		}
-		n += i
-	}
-
-	size := utils.ReadBuffer(sizeBuf).Get32()
-	respBuf := make([]byte, size)
-	if _, err := io.ReadFull(reader, respBuf); err != nil {
-		return err
-	}
-	return json.Unmarshal(respBuf, r)
-}
-
-func (r *SummaryReponse) Encode() []byte {
-	resp, _ := json.Marshal(r)
-	buffer := utils.NewBuffer(4 + uint32(len(resp)))
-	buffer.Put32(uint32(len(resp)))
-	buffer.Put(resp)
-	return buffer.Bytes()
-}
-
-func (r *SummaryReponse) Decode(reader io.Reader) error {
 	sizeBuf := make([]byte, 4)
 	n := 0
 	for n == 0 {
@@ -525,12 +497,18 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			close(done)
 		}()
 		writeProgress(&tree.Files, &tree.Size, out, done)
-		_, _ = out.Write([]byte{uint8(r)})
-		time.Sleep(time.Millisecond * 300) // wait for completing progress
+		resp := &SummaryReponse{Tree: tree}
 		if r != 0 {
+			resp.Errno = r
+		}
+		data, err := json.Marshal(resp)
+		if err != nil {
+			logger.Errorf("marshal summary response: %v", err)
+			_, _ = out.Write([]byte{uint8(syscall.EIO)})
 			return
 		}
-		_, _ = out.Write((&SummaryReponse{tree}).Encode())
+		head := binary.BigEndian.AppendUint32([]byte{meta.CDATA}, uint32(len(data)))
+		_, _ = out.Write(append(head, data...))
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()

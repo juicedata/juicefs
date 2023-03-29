@@ -86,7 +86,7 @@ func rmr(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
 		}
-		if errno := readProgress(f, func(count, bytes uint64) {
+		if _, errno := readProgress(f, func(count, bytes uint64) {
 			spin.SetCurrent(int64(count))
 		}); errno != 0 {
 			logger.Fatalf("RMR %s: %s", path, errno)

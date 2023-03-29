@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -135,22 +136,25 @@ func summary(ctx *cli.Context) error {
 	if err != nil {
 		logger.Fatalf("write message: %s", err)
 	}
-	if errno := readProgress(f, func(count, size uint64) {
+	data, errno := readProgress(f, func(count, size uint64) {
 		dspin.SetCurrent(int64(count), int64(size))
-	}); errno != 0 {
+	})
+	if errno == syscall.EINVAL {
+		logger.Fatalf("summary is not supported, please upgrade and mount again")
+	}
+	if errno != 0 {
 		logger.Errorf("failed to get info: %s", syscall.Errno(errno))
 	}
 	dspin.Done()
 
 	var resp vfs.SummaryReponse
-	err = resp.Decode(f)
+	err = json.Unmarshal(data, &resp)
 	_ = f.Close()
-	if err == syscall.EINVAL {
-		logger.Fatalf("summary is not supported, please upgrade and mount again")
-	}
-
 	if err != nil {
 		logger.Fatalf("summary: %s", err)
+	}
+	if resp.Errno != 0 {
+		logger.Fatalf("summary: %s", syscall.Errno(resp.Errno))
 	}
 	var results [][]string
 	if dirOnly == 0 {

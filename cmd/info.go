@@ -128,7 +128,7 @@ func info(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
 		}
-		if errno := readProgress(f, func(count, size uint64) {
+		if _, errno := readProgress(f, func(count, size uint64) {
 			dspin.SetCurrent(int64(count), int64(size))
 		}); errno != 0 {
 			logger.Errorf("failed to get info: %s", syscall.Errno(errno))

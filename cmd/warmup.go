@@ -89,8 +89,8 @@ func readControl(cf *os.File, resp []byte) int {
 	}
 }
 
-func readProgress(cf *os.File, showProgress func(uint64, uint64)) (errno syscall.Errno) {
-	var resp = make([]byte, 1024)
+func readProgress(cf *os.File, showProgress func(uint64, uint64)) (data []byte, errno syscall.Errno) {
+	var resp = make([]byte, 2<<16)
 END:
 	for {
 		n := readControl(cf, resp)
@@ -101,6 +101,14 @@ END:
 			} else if off+17 <= n && resp[off] == meta.CPROGRESS {
 				showProgress(binary.BigEndian.Uint64(resp[off+1:off+9]), binary.BigEndian.Uint64(resp[off+9:off+17]))
 				off += 17
+			} else if off+5 < n && resp[off] == meta.CDATA {
+				size := binary.BigEndian.Uint32(resp[off+1 : off+5])
+				if off+5+int(size) > n {
+					logger.Errorf("Bad response off %d n %d: %v", off, n, resp)
+					break
+				}
+				data = append(data, resp[off+5:off+5+int(size)]...)
+				break END
 			} else {
 				logger.Errorf("Bad response off %d n %d: %v", off, n, resp)
 				break
@@ -134,7 +142,7 @@ func sendCommand(cf *os.File, batch []string, threads uint, background bool, dsp
 		logger.Infof("Warm-up cache for %d paths in background", len(batch))
 		return
 	}
-	if errno := readProgress(cf, func(count, bytes uint64) {
+	if _, errno := readProgress(cf, func(count, bytes uint64) {
 		dspin.SetCurrent(int64(count), int64(bytes))
 	}); errno != 0 {
 		logger.Fatalf("Warm up failed: %s", errno)
