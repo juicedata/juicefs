@@ -50,18 +50,25 @@ scrape_configs:
 
 访问 `http://localhost:9090` 即可看到 Prometheus 的界面。
 
-## 通过 Grafana 进行数据可视化
+## 通过 Grafana 进行数据可视化 {#grafana}
 
 新建 Data Source：
 
 - **Name**: 为了便于识别，可以填写文件系统的名称。
-- **URL**: Prometheus 的数据接口，默认为 `http://localhost:9090`
+- **URL**: Prometheus 的数据接口，默认为 `http://localhost:9090`。
 
 ![](../images/grafana-data-source.jpg)
 
-然后，使用 [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json) 创建一个仪表盘。进入新建的仪表盘即可看到文件系统的可视化图表了：
+JuiceFS 提供一些 Grafana 的仪表盘模板，将模板导入以后就可以展示收集上来的监控指标。目前提供的仪表盘模板有：
 
-![](../images/grafana-dashboard.jpg)
+| 模板名称                                                                                                        | 说明                                                   |
+| ----                                                                                                            | ----                                                   |
+| [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json)         | 用于展示自挂载点、S3 网关（非 Kubernetes 部署）及 Hadoop Java SDK 收集的指标 |
+| [`grafana_template_k8s.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json) | 用于展示自 Kubernetes CSI 驱动、S3 网关（Kubernetes 部署）收集的指标               |
+
+Grafana 仪表盘如下图：
+
+![](../images/grafana_dashboard.png)
 
 ## 为不同的 JuiceFS 客户端收集监控指标 {#collect-metrics}
 
@@ -194,21 +201,6 @@ juicefs mount --consul 1.2.3.4:8500 ...
 注册到 Consul 上的每个实例，其 `serviceName` 都为 `juicefs`，`serviceId` 的格式为 `<IP>:<mount-point>`，例如：`127.0.0.1:/tmp/jfs`。
 
 每个 instance 的 meta 都包含了 `hostname` 与 `mountpoint` 两个维度，其中 `mountpoint` 为 `s3gateway` 代表该实例为 S3 网关。
-
-## 可视化监控指标
-
-### Grafana 仪表盘模板
-
-JuiceFS 提供一些 Grafana 的仪表盘模板，将模板导入以后就可以展示收集上来的监控指标。目前提供的仪表盘模板有：
-
-| 模板名称                                                                                                        | 说明                                                   |
-| ----                                                                                                            | ----                                                   |
-| [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json)         | 用于展示自挂载点、S3 网关（非 Kubernetes 部署）及 Hadoop Java SDK 收集的指标 |
-| [`grafana_template_k8s.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json) | 用于展示自 Kubernetes CSI 驱动、S3 网关（Kubernetes 部署）收集的指标               |
-
-Grafana 仪表盘示例效果如下图：
-
-![](../images/grafana_dashboard.png)
 
 ## 监控指标索引
 

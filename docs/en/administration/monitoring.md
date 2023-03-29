@@ -50,18 +50,25 @@ Start the service:
 
 Visit `http://localhost:9090` to see the Prometheus interface.
 
-### Grafana visualization
+### Grafana visualization {#grafana}
 
 Create a new Data Source:
 
 - **Name**: For identification purposes, you can fill it in with the name of the file system.
-- **URL**: Data interface for Prometheus, which defaults to `http://localhost:9090`
+- **URL**: Data interface for Prometheus, which defaults to `http://localhost:9090`.
 
 ![](../images/grafana-data-source.jpg)
 
-Then, create a dashboard using [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json), and you will see a visual chart of the file system when visiting the dashboard.
+JuiceFS provides some dashboard templates for Grafana, which can be imported to show the collected metrics in Prometheus:
 
-![](../images/grafana-dashboard.jpg)
+| Name                                                                                                            | Description                                                                                             |
+| ----                                                                                                            | -----------                                                                                             |
+| [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json)         | For show metrics collected from mount point, S3 gateway (non-Kubernetes deployment) and Hadoop Java SDK |
+| [`grafana_template_k8s.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json) | For show metrics collected from Kubernetes CSI Driver and S3 gateway (Kubernetes deployment)            |
+
+Our Grafana dashboard looks like this:
+
+![](../images/grafana_dashboard.png)
 
 ## Collecting metrics data for other types of clients {#collect-metrics}
 
@@ -194,21 +201,6 @@ When the Consul address is configured, the configuration of the `--metrics` opti
 For each instance registered to Consul, its `serviceName` is `juicefs`, and the format of `serviceId` is `<IP>:<mount-point>`, for example: `127.0.0.1:/tmp/jfs`.
 
 The meta of each instance contains two aspects: `hostname` and `mountpoint`. When `mountpoint` is `s3gateway`, it means that the instance is an S3 gateway.
-
-## Visualize monitoring metrics
-
-### Grafana dashboard template
-
-JuiceFS provides some dashboard templates for Grafana, which can be imported to show the collected metrics in Prometheus. The dashboard templates currently available are:
-
-| Name                                                                                                            | Description                                                                                             |
-| ----                                                                                                            | -----------                                                                                             |
-| [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json)         | For show metrics collected from mount point, S3 gateway (non-Kubernetes deployment) and Hadoop Java SDK |
-| [`grafana_template_k8s.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json) | For show metrics collected from Kubernetes CSI Driver and S3 gateway (Kubernetes deployment)            |
-
-A sample Grafana dashboard looks like this:
-
-![](../images/grafana_dashboard.png)
 
 ## Monitoring metrics reference
 
