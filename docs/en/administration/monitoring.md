@@ -4,24 +4,18 @@ sidebar_position: 3
 description: This article describes how to visualize JuiceFS status monitoring with third-party tools such as Prometheus, Grafana, etc.
 ---
 
-As a distributed file system hosting massive data storage, it is important for users to directly view the status changes of the entire system in terms of capacity, files, CPU load, disk IO, cache, etc. JuiceFS provides real-time status data externally through the Prometheus-oriented API to achieve the visualization of JuiceFS monitoring with ease, and you only need to expose it to your own Prometheus Server to visualize time series data with tools like Grafana.
+JuiceFS Client exposes performance data using metrics API, configure your Prometheus instance to scrape data, and then visualize using Grafana.
 
-## Get started
+- **Prometheus Server**: Scrapes and stores the time series data of various metrics. Refer to its [official documentation](https://prometheus.io/docs/introduction/first_steps).
+- **Grafana**: Loads and visualizes the time series data from Prometheus. Refer to its [official documentation](https://grafana.com/docs/grafana/latest/installation).
 
-It is assumed here that Prometheus Server, Grafana and JuiceFS clients are all running on the same host, in which
+### Add scrape config
 
-- **Prometheus Server**: Scrapes and stores the time series data of various metrics. For installation, please refer to the [official documentation](https://prometheus.io/docs/introduction/first_steps).
-- **Grafana**: Loads and visualizes the time series data from Prometheus. For installation, please refer to the [official documentation](https://grafana.com/docs/grafana/latest/installation).
-
-### Ⅰ. Access to real-time data
-
-JuiceFS outputs metrics data via a [Prometheus](https://prometheus.io)-oriented API. After the file system is mounted, the real-time monitoring data output from the client can be obtained from the default address `http://localhost:9567/metrics`.
+After JuiceFS is mounted on a host, you can access its metrics API using `http://localhost:9567/metrics`, other types of JuiceFS Client (S3 Gateway, Hadoop SDK) is slightly different in this regard, see [Collecting metrics data for other types of clients](#collect-metrics).
 
 ![](../images/prometheus-client-data.jpg)
 
-### Ⅱ. Add API to Prometheus Server
-
-Edit the [configuration file](https://prometheus.io/docs/prometheus/latest/configuration/configuration) of Prometheus, add a new job and point it to the API address of JuiceFS, e.g.
+Edit [`prometheus.yml`](https://prometheus.io/docs/prometheus/latest/configuration/configuration) to add a new scrape config:
 
 ```yaml {20-22}
 global:
@@ -48,7 +42,7 @@ scrape_configs:
       - targets: ["localhost:9567"]
 ```
 
-Assuming a configuration file named `prometheus.yml`, load this configuration to start the service:
+Start the service:
 
 ```shell
 ./prometheus --config.file=prometheus.yml
@@ -56,9 +50,9 @@ Assuming a configuration file named `prometheus.yml`, load this configuration to
 
 Visit `http://localhost:9090` to see the Prometheus interface.
 
-### Ⅲ. Visualize Prometheus data via Grafana
+### Grafana visualization
 
-As shown in the figure below, a new Data Source is created.
+Create a new Data Source:
 
 - **Name**: For identification purposes, you can fill it in with the name of the file system.
 - **URL**: Data interface for Prometheus, which defaults to `http://localhost:9090`
@@ -69,9 +63,9 @@ Then, create a dashboard using [`grafana_template.json`](https://github.com/juic
 
 ![](../images/grafana-dashboard.jpg)
 
-## Collecting monitoring metrics
+## Collecting metrics data for other types of clients {#collect-metrics}
 
-There are different ways to collect monitoring metrics depending on how JuiceFS is deployed, which are described below.
+For different types of JuiceFS Client, metrics data is handled slightly differently.
 
 ### Mount point
 
@@ -214,8 +208,8 @@ JuiceFS provides some dashboard templates for Grafana, which can be imported to 
 
 A sample Grafana dashboard looks like this:
 
-![JuiceFS Grafana dashboard](../images/grafana_dashboard.png)
+![](../images/grafana_dashboard.png)
 
 ## Monitoring metrics reference
 
-Please refer to the ["JuiceFS Metrics"](../reference/p8s_metrics.md) document.
+Refer to [JuiceFS Metrics](../reference/p8s_metrics.md).

@@ -4,24 +4,18 @@ sidebar_position: 3
 description: 本文介绍如何搭配 Prometheus、Grafana 等第三方工具可视化 JuiceFS 状态监控。
 ---
 
-作为承载海量数据存储的分布式文件系统，用户通常需要直观地了解整个系统的容量、文件数量、CPU 负载、磁盘 IO、缓存等指标的变化。JuiceFS 通过 Prometheus 兼容的 API 对外提供实时的状态数据，只需将其添加到用户自建的 Prometheus Server 建立时序数据，然后通过 Grafana 等工具即可轻松实现 JuiceFS 文件系统的可视化监控。
+JuiceFS 通过 Metrics API 对外提供实时的状态数据，用户自行对 Prometheus 配置数据抓取，然后通过 Grafana 等工具即可轻松实现可视化监控。其中：
 
-## 快速上手
+- **Prometheus Server**：收集并保存各种指标的时序数据，参考[官方文档](https://prometheus.io/docs/introduction/first_steps)。
+- **Grafana**：从 Prometheus 读取并可视化展现时序数据，参考[官方文档](https://grafana.com/docs/grafana/latest/installation)。
 
-这里假设你搭建的 Prometheus Server、Grafana 与 JuiceFS 客户端都运行在相同的主机上。其中：
+## 在 Prometheus 中添加抓取配置
 
-- **Prometheus Server**：用于收集并保存各种指标的时序数据，安装方法请参考[官方文档](https://prometheus.io/docs/introduction/first_steps)。
-- **Grafana**：用于从 Prometheus 读取并可视化展现时序数据，安装方法请参考[官方文档](https://grafana.com/docs/grafana/latest/installation)。
-
-### Ⅰ. 获得实时数据
-
-JuiceFS 通过 [Prometheus](https://prometheus.io) 类型的 API 对外提供数据。文件系统挂载后，默认可以通过 `http://localhost:9567/metrics` 地址获得客户端输出的实时监控数据。
+在宿主机挂载 JuiceFS 后，默认可以通过 `http://localhost:9567/metrics` 地址获得客户端输出的实时监控数据。其他不同类型的 JuiceFS 客户端（S3 网关、Hadoop SDK）的监控数据略有区别，详见[「收集监控指标」](#collect-metrics)。
 
 ![](../images/prometheus-client-data.jpg)
 
-### Ⅱ. 添加 API 到 Prometheus Server
-
-编辑 Prometheus 的[配置文件](https://prometheus.io/docs/prometheus/latest/configuration/configuration)，添加一个新 job 并指向 JuiceFS 的 API 地址，例如：
+在 [`prometheus.yml`](https://prometheus.io/docs/prometheus/latest/configuration/configuration) 中添加抓取配置，指向 JuiceFS 客户端的 Metrics API 地址：
 
 ```yaml {20-22}
 global:
@@ -48,7 +42,7 @@ scrape_configs:
       - targets: ["localhost:9567"]
 ```
 
-假设配置文件名为 `prometheus.yml`，加载该配置启动服务：
+启动服务：
 
 ```shell
 ./prometheus --config.file=prometheus.yml
@@ -56,9 +50,9 @@ scrape_configs:
 
 访问 `http://localhost:9090` 即可看到 Prometheus 的界面。
 
-### Ⅲ. 通过 Grafana 展现 Prometheus 的数据
+## 通过 Grafana 进行数据可视化
 
-如下图所示，新建 Data Source：
+新建 Data Source：
 
 - **Name**: 为了便于识别，可以填写文件系统的名称。
 - **URL**: Prometheus 的数据接口，默认为 `http://localhost:9090`
@@ -69,11 +63,11 @@ scrape_configs:
 
 ![](../images/grafana-dashboard.jpg)
 
-## 收集监控指标
+## 为不同的 JuiceFS 客户端收集监控指标 {#collect-metrics}
 
 根据部署 JuiceFS 的方式不同可以有不同的收集监控指标的方法，下面分别介绍。
 
-### 挂载点
+### 宿主机挂载点
 
 当通过 [`juicefs mount`](../reference/command_reference.md#mount) 命令挂载 JuiceFS 文件系统后，可以通过 `http://localhost:9567/metrics` 这个地址收集监控指标，你也可以通过 `--metrics` 选项自定义。如：
 
@@ -130,7 +124,7 @@ scrape_configs:
         action: replace
 ```
 
-### Hadoop
+### Hadoop Java SDK
 
 [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) 支持把监控指标上报到 [Pushgateway](https://github.com/prometheus/pushgateway) 或者 [Graphite](https://graphiteapp.org)。
 
@@ -214,8 +208,8 @@ JuiceFS 提供一些 Grafana 的仪表盘模板，将模板导入以后就可以
 
 Grafana 仪表盘示例效果如下图：
 
-![JuiceFS Grafana dashboard](../images/grafana_dashboard.png)
+![](../images/grafana_dashboard.png)
 
 ## 监控指标索引
 
-请参考[「JuiceFS 监控指标」](../reference/p8s_metrics.md)文档
+参考[「JuiceFS 监控指标」](../reference/p8s_metrics.md)。
