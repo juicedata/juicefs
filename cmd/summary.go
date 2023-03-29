@@ -150,11 +150,11 @@ func summary(ctx *cli.Context) error {
 	var resp vfs.SummaryReponse
 	err = json.Unmarshal(data, &resp)
 	_ = f.Close()
+	if err == nil && resp.Errno != 0 {
+		err = resp.Errno
+	}
 	if err != nil {
 		logger.Fatalf("summary: %s", err)
-	}
-	if resp.Errno != 0 {
-		logger.Fatalf("summary: %s", syscall.Errno(resp.Errno))
 	}
 	var results [][]string
 	if dirOnly == 0 {
