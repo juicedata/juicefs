@@ -124,6 +124,9 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 func (o *ossClient) Put(key string, in io.Reader) error {
 	if ins, ok := in.(io.ReadSeeker); ok {
 		option := oss.Meta(checksumAlgr, generateChecksum(ins))
+		if limitedIn, ok := in.(*LimitedReadSeekCloser); ok {
+			in = &io.LimitedReader{R: limitedIn.R, N: limitedIn.N}
+		}
 		return o.checkError(o.bucket.PutObject(key, in, option))
 	}
 	return o.checkError(o.bucket.PutObject(key, in))

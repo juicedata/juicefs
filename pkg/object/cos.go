@@ -112,6 +112,9 @@ func (c *COS) Put(key string, in io.Reader) error {
 		})
 		options = &cos.ObjectPutOptions{ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{XCosMetaXXX: &header}}
 	}
+	if limitedIn, ok := in.(*LimitedReadSeekCloser); ok {
+		in = &io.LimitedReader{R: limitedIn.R, N: limitedIn.N}
+	}
 	_, err := c.c.Object.Put(ctx, key, in, options)
 	return err
 }

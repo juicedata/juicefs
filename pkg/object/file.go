@@ -101,8 +101,10 @@ func (d *filestore) Head(key string) (Object, error) {
 	}, nil
 }
 
-type LimitedReadSeekCloser struct {
-	io.LimitedReader
+type LimitedReadSeekCloser io.LimitedReader
+
+func (lc *LimitedReadSeekCloser) Read(p []byte) (n int, err error) {
+	return lc.R.Read(p)
 }
 
 func (lc *LimitedReadSeekCloser) Seek(offset int64, whence int) (ret int64, err error) {
@@ -147,7 +149,7 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		}
 	}
 	if limit > 0 {
-		return &LimitedReadSeekCloser{LimitedReader: io.LimitedReader{R: f, N: limit}}, nil
+		return &LimitedReadSeekCloser{R: f, N: limit}, nil
 	}
 	return f, nil
 }
