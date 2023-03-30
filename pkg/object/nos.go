@@ -93,7 +93,7 @@ func (s *nos) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 func (s *nos) Put(key string, in io.Reader) error {
 	var body io.ReadSeeker
-	switch body.(type) {
+	switch in.(type) {
 	case io.ReadSeeker:
 		body = in.(io.ReadSeeker)
 	default:
