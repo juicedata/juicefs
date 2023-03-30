@@ -106,6 +106,31 @@ export META_PASSWORD=mypassword
 juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
 
+### Using mTLS
+
+:::note
+The support of JuiceFS for Redis mTLS feature has been merged into the main branch. If you need to use this feature, please [compile the client manually](../getting-started/installation.md#manually-compiling)。
+:::
+
+If Redis server has enabled mTLS feature, it is necessary to provide client certificate, private key, and CA certificate that issued the client certificate to connect. In JuiceFS, mTLS can be used in the following way:
+
+```shell
+juicefs format --storage s3 \
+    ... \
+    "rediss://192.168.1.6:6379/1?tls-cert-file=certs/client.crt&tls-key-file=certs/client.key&tls-ca-cert-file=certs/ca.crt"
+    pics
+```
+
+In the code mentioned above, we use the `rediss://` protocol header to enable mTLS functionality, and then use the following options to specify the path of the client certificate:
+
+- `tls-cert-file`: The path of the client certificate.
+- `tls-key-file`: The path of the private key.
+- `tls-ca-cert-file`: The path of the CA certificate. It is optional. If it is not specified, the system CA certificate will be used.
+
+When specifying options in a URL, start with the `?` symbol and use the `&` symbol to separate multiple options, for example: `?tls-cert-file=client.crt&tls-key-file=client.key`.
+
+In the above example, `certs` is just a directory name. Replace it with your actual certificate directory when using it, which can be a relative or absolute path.
+
 ## KeyDB
 
 [KeyDB](https://keydb.dev) is an open source fork of Redis, developed to stay aligned with the Redis community. KeyDB implements multi-threading support, better memory utilization, and greater throughput on top of Redis, and also supports [Active Replication](https://github.com/JohnSully/KeyDB/wiki/Active-Replication), i.e., the Active Active feature.
