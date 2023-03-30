@@ -3215,8 +3215,19 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			if pattr.Typ != TypeDirectory {
 				return syscall.ENOTDIR
 			}
+			if (pattr.Flags & FlagImmutable) != 0 {
+				return syscall.EPERM
+			}
 			if tx.get(m.entryKey(parent, name)) != nil {
 				return syscall.EEXIST
+			}
+			if attr.Typ != TypeDirectory {
+				now := time.Now()
+				pattr.Mtime = now.Unix()
+				pattr.Mtimensec = uint32(now.Nanosecond())
+				pattr.Ctime = now.Unix()
+				pattr.Ctimensec = uint32(now.Nanosecond())
+				tx.set(m.inodeKey(parent), m.marshal(&pattr))
 			}
 		}
 
@@ -3292,6 +3303,7 @@ func (m *kvMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 	if eno := m.emptyDir(ctx, ino, true, nil, rmConcurrent); eno != 0 {
 		return eno
 	}
+	m.updateStats(-align4K(0), -1)
 	return errno(m.txn(func(tx *kvTxn) error {
 		tx.delete(m.inodeKey(ino))
 		tx.deleteKeys(m.xattrKey(ino, ""))
@@ -3307,14 +3319,26 @@ func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 		if a == nil {
 			return syscall.ENOENT
 		}
+		var pattr Attr
+		m.parseAttr(a, &pattr)
+		if pattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if (pattr.Flags & FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
 		if tx.get(m.entryKey(parent, name)) != nil {
 			return syscall.EEXIST
 		}
-		var pattr Attr
-		m.parseAttr(a, &pattr)
+
 		pattr.Nlink++
-		tx.set(m.entryKey(parent, name), m.packEntry(TypeDirectory, inode))
+		now := time.Now()
+		pattr.Mtime = now.Unix()
+		pattr.Mtimensec = uint32(now.Nanosecond())
+		pattr.Ctime = now.Unix()
+		pattr.Ctimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(parent), m.marshal(&pattr))
+		tx.set(m.entryKey(parent, name), m.packEntry(TypeDirectory, inode))
 		tx.delete(m.detachedKey(inode))
 		return nil
 	}, parent))

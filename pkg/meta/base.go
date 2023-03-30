@@ -2144,12 +2144,30 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 }
 
 func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
-	srcAttr := &Attr{}
+	if isTrash(parent) {
+		return syscall.EPERM
+	}
+	if parent == RootInode && name == TrashName {
+		return syscall.EPERM
+	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	if name == "" {
+		return syscall.ENOENT
+	}
+
+	defer m.timeit(time.Now())
+	parent = m.checkRoot(parent)
+
+	var attr Attr
 	var eno syscall.Errno
-	if eno = m.en.doGetAttr(ctx, srcIno, srcAttr); eno != 0 {
+	if eno = m.en.doGetAttr(ctx, srcIno, &attr); eno != 0 {
 		return eno
 	}
-	if m.Lookup(ctx, parent, name, nil, nil) == 0 {
+	var dstIno Ino
+	var _a Attr
+	if m.en.doLookup(ctx, parent, name, &dstIno, &_a) == 0 {
 		return syscall.EEXIST
 	}
 	var sum Summary
@@ -2162,8 +2180,7 @@ func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uin
 	}
 	*total = sum.Dirs + sum.Files
 	concurrent := make(chan struct{}, 4)
-	if srcAttr.Typ == TypeDirectory {
-		var dstIno Ino
+	if attr.Typ == TypeDirectory {
 		eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
 		if eno == 0 {
 			eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
@@ -2177,7 +2194,7 @@ func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uin
 		eno = m.cloneEntry(ctx, srcIno, parent, name, nil, cmode, cumask, count, true, concurrent)
 	}
 	if eno == 0 {
-		m.updateDirStat(ctx, parent, int64(srcAttr.Length), align4K(srcAttr.Length), 1)
+		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
 		m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
 	}
 	return eno
@@ -2191,19 +2208,23 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	if dstIno != nil {
 		*dstIno = ino
 	}
-	var srcAttr Attr
-	eno := m.en.doCloneEntry(ctx, srcIno, parent, name, ino, &srcAttr, cmode, cumask, top)
+	var attr Attr
+	eno := m.en.doCloneEntry(ctx, srcIno, parent, name, ino, &attr, cmode, cumask, top)
 	if eno != 0 {
 		return eno
 	}
+	m.en.updateStats(align4K(attr.Length), 1)
 	atomic.AddUint64(count, 1)
-	if srcAttr.Typ != TypeDirectory {
+	if attr.Typ != TypeDirectory {
 		return 0
 	}
 
 	var entries []*Entry
 	eno = m.en.doReaddir(ctx, srcIno, 0, &entries, -1)
-	if eno != 0 && eno != syscall.ENOENT {
+	if eno == syscall.ENOENT {
+		eno = 0 // empty dir
+	}
+	if eno != 0 {
 		return eno
 	}
 	// try directories first to increase parallel
@@ -2229,10 +2250,13 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		}
 		return eno
 	}
+LOOP:
 	for i, entry := range entries {
 		select {
-		case eno := <-errCh:
-			return eno
+		case e := <-errCh:
+			eno = e
+			ctx.Cancel()
+			break LOOP
 		case concurrent <- struct{}{}:
 			wg.Add(1)
 			go func(e *Entry) {
@@ -2244,21 +2268,29 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				<-concurrent
 			}(entry)
 		default:
-			if eno := cloneChild(entry); eno != 0 {
-				return eno
+			if e := cloneChild(entry); e != 0 {
+				eno = e
+				break LOOP
 			}
 		}
-		if ctx.Canceled() {
-			return syscall.EINTR
-		}
 		entries[i] = nil // release memory
+		if ctx.Canceled() {
+			eno = syscall.EINTR
+			break
+		}
 	}
 	wg.Wait()
-	if skipped > 0 {
-		srcAttr.Nlink -= skipped
-		if eno := m.en.doRepair(ctx, ino, &srcAttr); eno != 0 {
+	if eno == 0 {
+		select {
+		case eno = <-errCh:
+		default:
+		}
+	}
+	if eno == 0 && skipped > 0 {
+		attr.Nlink -= skipped
+		if eno := m.en.doRepair(ctx, ino, &attr); eno != 0 {
 			logger.Warnf("fix nlink of %d: %s", ino, eno)
 		}
 	}
-	return 0
+	return eno
 }

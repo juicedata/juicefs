@@ -3714,6 +3714,14 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			if (pattr.Flags & FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
+			if n.Type != TypeDirectory {
+				now := time.Now().UnixNano() / 1e3
+				pn.Mtime = now
+				pn.Ctime = now
+				if _, err = s.Cols("nlink", "mtime", "ctime").Update(&pn, &node{Inode: parent}); err != nil {
+					return err
+				}
+			}
 		}
 
 		m.parseAttr(&n, attr)
@@ -3721,6 +3729,9 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: time.Now().Unix()})
 		} else {
 			err = mustInsert(s, &n, &edge{Parent: parent, Name: []byte(name), Inode: ino, Type: n.Type})
+			if isDuplicateEntryErr(err) {
+				return syscall.EEXIST
+			}
 		}
 		if err != nil {
 			return err
@@ -3813,6 +3824,7 @@ func (m *dbMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 	if eno := m.emptyDir(ctx, ino, true, nil, rmConcurrent); eno != 0 {
 		return eno
 	}
+	m.updateStats(-align4K(0), -1)
 	return errno(m.txn(func(s *xorm.Session) error {
 		if _, err := s.Delete(&node{Inode: ino}); err != nil {
 			return err
@@ -3839,7 +3851,11 @@ func (m *dbMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 		if !ok {
 			return syscall.ENOENT
 		}
-		if _, err = s.Cols("nlink").Update(&node{Nlink: n.Nlink + 1}, &node{Inode: parent}); err != nil {
+		n.Nlink++
+		now := time.Now().UnixNano() / 1e3
+		n.Mtime = now
+		n.Ctime = now
+		if _, err = s.Cols("nlink", "mtime", "ctime").Update(&n, &node{Inode: parent}); err != nil {
 			return err
 		}
 		if err := mustInsert(s, &edge{Parent: parent, Name: []byte(name), Inode: inode, Type: TypeDirectory}); err != nil {

@@ -1269,7 +1269,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				pipe.Set(ctx, m.symKey(ino), path, 0)
 			}
 			if _type == TypeDirectory {
-				field := strconv.FormatUint(uint64(ino), 10)
+				field := ino.String()
 				pipe.HSet(ctx, m.dirUsedInodesKey(), field, "0")
 				pipe.HSet(ctx, m.dirDataLengthKey(), field, "0")
 				pipe.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
@@ -4030,8 +4030,8 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 			return err
 		}
 
+		var pattr Attr
 		if top {
-			var pattr Attr
 			if a, err := tx.Get(ctx, m.inodeKey(parent)).Bytes(); err != nil {
 				return err
 			} else {
@@ -4052,6 +4052,8 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 
 		_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
 			p.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
+			p.IncrBy(ctx, m.usedSpaceKey(), align4K(attr.Length))
+			p.Incr(ctx, m.totalInodesKey())
 			if len(srcXattr) > 0 {
 				p.HMSet(ctx, m.xattrKey(ino), srcXattr)
 			}
@@ -4059,14 +4061,20 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 				p.ZAdd(ctx, m.detachedNodes(), redis.Z{Member: ino.String(), Score: float64(time.Now().Unix())})
 			} else {
 				p.HSet(ctx, m.entryKey(parent), name, m.packEntry(attr.Typ, ino))
-				p.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
-				p.Incr(ctx, m.totalInodesKey())
+				if top {
+					now := time.Now()
+					pattr.Mtime = now.Unix()
+					pattr.Mtimensec = uint32(now.Nanosecond())
+					pattr.Ctime = now.Unix()
+					pattr.Ctimensec = uint32(now.Nanosecond())
+					p.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
+				}
 			}
 
 			switch attr.Typ {
 			case TypeDirectory:
-				sfield := strconv.FormatUint(uint64(srcIno), 10)
-				field := strconv.FormatUint(uint64(ino), 10)
+				sfield := srcIno.String()
+				field := ino.String()
 				if v, err := tx.HGet(ctx, m.dirUsedInodesKey(), sfield).Result(); err == nil {
 					p.HSet(ctx, m.dirUsedInodesKey(), field, v)
 					p.HSet(ctx, m.dirDataLengthKey(), field, tx.HGet(ctx, m.dirDataLengthKey(), sfield).Val())
@@ -4119,15 +4127,18 @@ func (m *redisMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 	if eno := m.emptyDir(ctx, ino, true, nil, rmConcurrent); eno != 0 {
 		return eno
 	}
+	m.updateStats(-align4K(0), -1)
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		_, err := tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
 			p.Del(ctx, m.inodeKey(ino))
 			p.Del(ctx, m.xattrKey(ino))
-			field := strconv.FormatUint(uint64(ino), 10)
-			p.HDel(ctx, m.dirUsedInodesKey(), field, "0")
-			p.HDel(ctx, m.dirDataLengthKey(), field, "0")
-			p.HDel(ctx, m.dirUsedSpaceKey(), field, "0")
-			p.ZRem(ctx, m.detachedNodes(), ino.String())
+			p.DecrBy(ctx, m.usedSpaceKey(), align4K(0))
+			p.Decr(ctx, m.totalInodesKey())
+			field := ino.String()
+			p.HDel(ctx, m.dirUsedInodesKey(), field)
+			p.HDel(ctx, m.dirDataLengthKey(), field)
+			p.HDel(ctx, m.dirUsedSpaceKey(), field)
+			p.ZRem(ctx, m.detachedNodes(), field)
 			return nil
 		})
 		return err
@@ -4156,16 +4167,24 @@ func (m *redisMeta) doAttachDirNode(ctx Context, parent Ino, dstIno Ino, name st
 			return err
 		}
 		m.parseAttr(a, &pattr)
+		if pattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if (pattr.Flags & FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
 		if tx.HExists(ctx, m.entryKey(parent), name).Val() {
 			return syscall.EEXIST
 		}
 
 		_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
 			p.HSet(ctx, m.entryKey(parent), name, m.packEntry(TypeDirectory, dstIno))
-			newSpace := align4K(0)
-			p.IncrBy(ctx, m.usedSpaceKey(), newSpace)
-			p.Incr(ctx, m.totalInodesKey())
 			pattr.Nlink++
+			now := time.Now()
+			pattr.Mtime = now.Unix()
+			pattr.Mtimensec = uint32(now.Nanosecond())
+			pattr.Ctime = now.Unix()
+			pattr.Ctimensec = uint32(now.Nanosecond())
 			p.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 			p.ZRem(ctx, m.detachedNodes(), dstIno.String())
 			return nil
