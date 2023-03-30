@@ -3687,6 +3687,7 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		if !ok {
 			return syscall.ENOENT
 		}
+		n.Inode = ino
 		n.Parent = parent
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			n.Uid = ctx.Uid()
@@ -3715,7 +3716,15 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			}
 		}
 
-		// copy xattr
+		m.parseAttr(&n, attr)
+		if top && n.Type == TypeDirectory {
+			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: time.Now().Unix()})
+		} else {
+			err = mustInsert(s, &n, &edge{Parent: parent, Name: []byte(name), Inode: ino, Type: n.Type})
+		}
+		if err != nil {
+			return err
+		}
 		var xs []xattr
 		if err = s.Where("inode = ?", srcIno).Find(&xs, &xattr{Inode: srcIno}); err != nil {
 			return err
@@ -3728,16 +3737,6 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			if err := mustInsert(s, &xs); err != nil {
 				return err
 			}
-		}
-
-		n.Inode = ino
-		if top && n.Type == TypeDirectory {
-			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: time.Now().Unix()})
-		} else {
-			err = mustInsert(s, &n, &edge{Parent: parent, Name: []byte(name), Inode: ino, Type: n.Type})
-		}
-		if err != nil {
-			return err
 		}
 		switch n.Type {
 		case TypeDirectory:
