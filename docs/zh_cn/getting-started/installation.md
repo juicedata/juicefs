@@ -205,7 +205,7 @@ CMD [ "juicefs" ]
 
 在 Windows 系统中编译 JuiceFS 客户端，需要安装 [Go](https://golang.org) 1.18+ 和 GCC 5.4+。
 
-由于 GCC 没有原生 Windows 客户端，因此需要使用第三方提供的版本，可以使用 [MinGW-w64 的预编译版本](https://www.mingw-w64.org/downloads/) 或 [Cygwin](https://www.cygwin.com)，这里以 MinGW-w64 为例介绍。
+由于 GCC 没有原生 Windows 客户端，因此需要使用第三方提供的版本，可以使用 [MinGW-w64 的预编译版本](https://www.mingw-w64.org/downloads) 或 [Cygwin](https://www.cygwin.com)，这里以 MinGW-w64 为例介绍。
 
 下载 MinGW-w64 并将其 `bin` 目录添加到系统环境变量。
 
