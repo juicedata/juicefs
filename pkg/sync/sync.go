@@ -331,7 +331,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 		var in io.Reader
 		downer := newParallelDownloader(src, key, size, 10<<20, concurrent)
 		defer downer.Close()
-		if strings.HasPrefix(dst.String(), "file://") || strings.HasPrefix(dst.String(), "hdfs://") || strings.HasPrefix(dst.String(), "sftp://") {
+		if strings.HasPrefix(dst.String(), "file://") || strings.HasPrefix(dst.String(), "hdfs://") || strings.HasPrefix(dst.String(), "sftp://") || strings.HasPrefix(dst.String(), "jfs://") {
 			in = downer
 		} else {
 			var f *os.File

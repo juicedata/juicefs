@@ -101,10 +101,10 @@ func (d *filestore) Head(key string) (Object, error) {
 	}, nil
 }
 
-type LimitedReadSeekCloser io.LimitedReader
-
-func (lc *LimitedReadSeekCloser) Read(p []byte) (n int, err error) {
-	return lc.R.Read(p)
+type LimitedReadSeekCloser struct {
+	Size int64
+	*io.LimitedReader
+	io.Closer
 }
 
 func (lc *LimitedReadSeekCloser) Seek(offset int64, whence int) (ret int64, err error) {
@@ -112,16 +112,14 @@ func (lc *LimitedReadSeekCloser) Seek(offset int64, whence int) (ret int64, err 
 		whence = io.SeekStart
 		offset = lc.N + offset
 	}
+	var curr int64
 	if r, ok := lc.R.(io.Seeker); ok {
-		return r.Seek(offset, whence)
+		if curr, err = r.Seek(offset, whence); err != nil {
+			return 0, err
+		}
 	}
-	return 0, nil
-}
-func (lc *LimitedReadSeekCloser) Close() error {
-	if r, ok := lc.R.(io.ReadCloser); ok {
-		return r.Close()
-	}
-	return nil
+	lc.N = lc.Size - curr
+	return curr, nil
 }
 
 func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -149,7 +147,7 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		}
 	}
 	if limit > 0 {
-		return &LimitedReadSeekCloser{R: f, N: limit}, nil
+		return &LimitedReadSeekCloser{limit, &io.LimitedReader{R: f, N: limit}, f}, nil
 	}
 	return f, nil
 }
