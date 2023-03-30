@@ -133,11 +133,11 @@ func (s *RestfulStorage) request(method, key string, body io.Reader, headers map
 	if err != nil {
 		return nil, err
 	}
-	if f, ok := body.(*os.File); ok {
-		st, err := f.Stat()
-		if err == nil {
-			req.ContentLength = st.Size()
-		}
+	_, vlen, err := findLen(body)
+	if err != nil {
+		return nil, err
+	} else {
+		req.ContentLength = vlen
 	}
 	now := time.Now().UTC().Format(http.TimeFormat)
 	req.Header.Add("Date", now)
