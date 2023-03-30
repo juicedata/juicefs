@@ -205,7 +205,7 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 
 Compiling the JuiceFS client on Windows requires [Go](https://golang.org) 1.18+ and GCC 5.4+.
 
-Since GCC does not have a native Windows client, the version provided by a third party, either [the pre-compiled versions of MinGW-w64](https://www.mingw-w64.org/downloads) or [Cygwin](https://www.cygwin.com) is needed. Here is an example of using MinGW-w64.
+Since GCC does not have a native Windows client, use [pre-compiled MinGW-w64](https://www.mingw-w64.org/downloads) or [Cygwin](https://www.cygwin.com) instead. Take MinGW-w64 for example:
 
 Download MinGW-w64 and add its `bin` directory to the system environment variables.
 
