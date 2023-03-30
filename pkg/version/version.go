@@ -29,8 +29,8 @@ var (
 	ver          = Semver{
 		major:      1,
 		minor:      0,
-		patch:      3,
-		preRelease: "",
+		patch:      0,
+		preRelease: "alpha4",
 		build:      fmt.Sprintf("%s.%s", revisionDate, revision),
 	}
 )
