@@ -140,7 +140,6 @@ juicefs format \
 | [百度云 BOS](#百度-bos)                     | `bos`      |
 | [火山引擎 TOS](#火山引擎-tos)               | `tos`      |
 | [金山云 KS3](#金山云-ks3)                   | `ks3`      |
-| [网易云 NOS](#网易云-nos)                   | `nos`      |
 | [青云 QingStor](#青云-qingstor)             | `qingstor` |
 | [七牛云 Kodo](#七牛云-kodo)                 | `qiniu`    |
 | [新浪云 SCS](#新浪云-scs)                   | `scs`      |
@@ -592,20 +591,6 @@ juicefs format \
 ```bash
 juicefs format \
     --storage ks3 \
-    --bucket https://<bucket>.<endpoint> \
-    ... \
-    myjfs
-```
-
-## 网易云 NOS
-
-使用网易云 NOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.163yun.com/help/documents/55485278220111872) 了解如何创建 Access Key 和 Secret Key。
-
-网易云 NOS 为每个区域都提供了公网和内网 [endpoint 链接](https://www.163yun.com/help/documents/67078583131230208)，你可以根据实际的场景选用。例如：
-
-```bash
-juicefs format \
-    --storage nos \
     --bucket https://<bucket>.<endpoint> \
     ... \
     myjfs

@@ -140,7 +140,6 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Baidu Object Storage](#baidu-object-storage)               | `bos`      |
 | [Volcano Engine TOS](#volcano-engine-tos)                   | `tos`      |
 | [Kingsoft Cloud KS3](#kingsoft-cloud-ks3)                   | `ks3`      |
-| [NetEase Object Storage](#netease-object-storage)           | `nos`      |
 | [QingStor](#qingstor)                                       | `qingstor` |
 | [Qiniu](#qiniu)                                             | `qiniu`    |
 | [Sina Cloud Storage](#sina-cloud-storage)                   | `scs`      |
@@ -592,20 +591,6 @@ KS3 provides [multiple endpoints](https://docs.ksyun.com/documents/6761) for eac
 ```bash
 juicefs format \
     --storage ks3 \
-    --bucket https://<bucket>.<endpoint> \
-    ... \
-    myjfs
-```
-
-## NetEase Object Storage
-
-Please follow [this document](https://www.163yun.com/help/documents/55485278220111872) to learn how to get access key and secret key.
-
-NOS provides [multiple endpoints](https://www.163yun.com/help/documents/67078583131230208) for each region, depending on your network (e.g. public or internal). Please choose an appropriate endpoint. For example:
-
-```bash
-juicefs format \
-    --storage nos \
     --bucket https://<bucket>.<endpoint> \
     ... \
     myjfs
