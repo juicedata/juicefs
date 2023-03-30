@@ -103,17 +103,12 @@ func (s *nos) Put(key string, in io.Reader) error {
 		}
 		body = bytes.NewReader(data)
 	}
-	_, vlen, err := findLen(body)
-	if err != nil {
-		return err
-	}
 	params := &model.PutObjectRequest{
-		Bucket:   s.bucket,
-		Object:   key,
-		Body:     body,
-		Metadata: &model.ObjectMetadata{ContentLength: vlen},
+		Bucket: s.bucket,
+		Object: key,
+		Body:   body,
 	}
-	_, err = s.client.PutObjectByStream(params)
+	_, err := s.client.PutObjectByStream(params)
 	return err
 }
 
