@@ -3303,7 +3303,7 @@ func (m *kvMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 
 func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string) syscall.Errno {
 	return errno(m.txn(func(tx *kvTxn) error {
-		a := tx.get(m.inodeKey(inode))
+		a := tx.get(m.inodeKey(parent))
 		if a == nil {
 			return syscall.ENOENT
 		}
