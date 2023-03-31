@@ -2152,6 +2152,14 @@ func testClone(t *testing.T, m Meta) {
 		t.Fatalf("hardlink: %s", eno)
 	}
 
+	var attr Attr
+	attr.Mtime = 1
+	m.SetAttr(Background, 1, SetAttrMtime, 0, &attr)
+	var totalspace, availspace, iused, iavail, space, iused2 uint64
+	m.StatFS(Background, &totalspace, &availspace, &iused, &iavail, false)
+	space = totalspace - availspace
+	iused2 = iused
+
 	cloneDstName := "cloneDir1"
 	var count, total uint64
 	var cmode uint8
@@ -2187,6 +2195,16 @@ func testClone(t *testing.T, m Meta) {
 	}
 	if rootAttr.Nlink != 5 {
 		t.Fatalf("rootDir nlink not correct,nlink: %d", rootAttr.Nlink)
+	}
+	if rootAttr.Mtime == 1 {
+		t.Fatalf("mtime of rootDir is not updated")
+	}
+	m.StatFS(Background, &totalspace, &availspace, &iused, &iavail, false)
+	if totalspace-availspace-space != 32768 {
+		t.Fatalf("added space: %d", totalspace-availspace-space)
+	}
+	if iused-iused2 != 8 {
+		t.Fatalf("added inodes: %d", iused-iused2)
 	}
 
 	// check attr
@@ -2319,6 +2337,9 @@ func checkEntryTree(t *testing.T, m Meta, srcIno, dstIno Ino, walkFunc func(srcE
 	}
 	sort.Slice(entries1, func(i, j int) bool { return string(entries1[i].Name) < string(entries1[j].Name) })
 	sort.Slice(entries2, func(i, j int) bool { return string(entries2[i].Name) < string(entries2[j].Name) })
+	if len(entries1) != len(entries2) {
+		t.Fatalf("number of children: %d != %d", len(entries1), len(entries2))
+	}
 	for idx, entry := range entries1 {
 		if string(entry.Name) == "." || string(entry.Name) == ".." {
 			continue
