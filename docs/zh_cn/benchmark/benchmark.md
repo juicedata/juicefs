@@ -31,16 +31,4 @@ JuiceFS 提供了 `bench`  子命令来运行一些基本的基准测试，用�
 
 ### 分析测试结果
 
-假定在 JuiceFS 的根目录下有一个名为 `.accesslog` 的文件，它保存了所有操作对应的时间，例如：
-
-```shell
-cat /jfs/.accesslog
-```
-
-```output
-2021.01.15 08:26:11.003330 [uid:0,gid:0,pid:4403] write (17669,8666,4993160): OK <0.000010>
-2021.01.15 08:26:11.003473 [uid:0,gid:0,pid:4403] write (17675,198,997439): OK <0.000014>
-2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
-```
-
-每行最后一个数表示当前操作所消耗的时间（单位：秒）。你可以直接参考这些数值来调试和分析性能问题，也可以试试 `./juicefs profile /jfs` 命令来实时监测性能统计数据。你也可以运行 `./juicefs profile -h` 或者参考[这里](../benchmark/operations_profiling.md)了解这个子命令。
+如遇性能问题，阅读[「实时性能监控」](../administration/fault_diagnosis_and_analysis.md#performance-monitor)了解如何排查。

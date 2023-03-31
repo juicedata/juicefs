@@ -74,7 +74,7 @@ Our Grafana dashboard looks like this:
 
 For different types of JuiceFS Client, metrics data is handled slightly differently.
 
-### Mount point
+### Mount point {#mount-point}
 
 When the JuiceFS file system is mounted via the [`juicefs mount`](../reference/command_reference.md#mount) command, you can collect monitoring metrics via the address `http://localhost:9567/metrics`, or you can customize it via the `--metrics` option. For example:
 

@@ -23,12 +23,12 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"io"
-	"math"
 	"math/rand"
 	"net"
 	"net/url"
@@ -114,6 +114,7 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	skipVerify := query.pop("insecure-skip-verify")
 	certFile := query.pop("tls-cert-file")
 	keyFile := query.pop("tls-key-file")
+	caCertFile := query.pop("tls-ca-cert-file")
 	u.RawQuery = values.Encode()
 
 	hosts := u.Host
@@ -130,6 +131,15 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 				return nil, fmt.Errorf("get certificate error certFile:%s keyFile:%s error:%s", certFile, keyFile, err)
 			}
 			opt.TLSConfig.Certificates = []tls.Certificate{cert}
+		}
+		if caCertFile != "" {
+			caCert, err := os.ReadFile(caCertFile)
+			if err != nil {
+				return nil, fmt.Errorf("read ca cert file error path:%s error:%s", caCertFile, err)
+			}
+			caCertPool := x509.NewCertPool()
+			caCertPool.AppendCertsFromPEM(caCert)
+			opt.TLSConfig.RootCAs = caCertPool
 		}
 	}
 	if opt.Password == "" {
@@ -1270,7 +1280,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				pipe.Set(ctx, m.symKey(ino), path, 0)
 			}
 			if _type == TypeDirectory {
-				field := strconv.FormatUint(uint64(ino), 10)
+				field := ino.String()
 				pipe.HSet(ctx, m.dirUsedInodesKey(), field, "0")
 				pipe.HSet(ctx, m.dirDataLengthKey(), field, "0")
 				pipe.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
@@ -4008,331 +4018,187 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	return err
 }
 
-func (m *redisMeta) Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
-	srcAttr := &Attr{}
-	var eno syscall.Errno
-	if eno = m.doGetAttr(ctx, srcIno, srcAttr); eno != 0 {
-		return eno
-	}
-	// total should start from 1
-	*total = 1
-	var dstIno Ino
-	var err error
-	var cloneEno syscall.Errno
-	concurrent := make(chan struct{}, 4)
-	if srcAttr.Typ == TypeDirectory {
-		// check dst edge
-		if m.rdb.HExists(ctx, m.entryKey(dstParentIno), dstName).Val() {
-			return syscall.EEXIST
+func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, attr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		a, err := tx.Get(ctx, m.inodeKey(srcIno)).Bytes()
+		if err != nil {
+			return err
 		}
-		eno = m.cloneEntry(ctx, srcIno, TypeDirectory, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, false, concurrent)
-		if eno != 0 {
-			cloneEno = eno
+		m.parseAttr(a, attr)
+		attr.Parent = parent
+		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
+			attr.Uid = ctx.Uid()
+			attr.Gid = ctx.Gid()
+			attr.Mode &= ^cumask
 		}
-		newSpace := align4K(0)
-		if eno == 0 {
-			err = m.txn(ctx, func(tx *redis.Tx) error {
-				// check dst edge again
-				if tx.HExists(ctx, m.entryKey(dstParentIno), dstName).Val() {
-					// fixme: maybe return os.ErrExist rather than syscall.errno
-					return syscall.EEXIST
-				}
-				if err = tx.HSet(ctx, m.entryKey(dstParentIno), dstName, m.packEntry(TypeDirectory, dstIno)).Err(); err != nil {
-					return err
-				}
-				tx.IncrBy(ctx, m.usedSpaceKey(), newSpace)
-				tx.Incr(ctx, m.totalInodesKey())
-
-				// update parent nlink
-				dstParentAttr := &Attr{}
-				if eno := m.doGetAttr(ctx, dstParentIno, dstParentAttr); eno != 0 {
-					return eno
-				}
-				dstParentAttr.Nlink++
-				if err = tx.Set(ctx, m.inodeKey(dstParentIno), m.marshal(dstParentAttr), 0).Err(); err != nil {
-					return err
-				}
-				return tx.ZRem(ctx, m.detachedNodes(), dstIno.String()).Err()
-			}, m.entryKey(dstParentIno))
-			if err != nil {
-				cloneEno = errno(err)
-			} else {
-				m.updateStats(newSpace, 1)
-				m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
-			}
+		// TODO: preserve hardlink
+		if attr.Typ == TypeFile && attr.Nlink > 1 {
+			attr.Nlink = 1
 		}
-		// delete the dst tree if clone failed
-		if cloneEno != 0 {
-			if eno := m.doCleanupDetachedNode(ctx, dstIno); eno != 0 {
-				logger.Errorf("doCleanupDetachedNode: remove detached tree (%d) error: %s", dstIno, eno)
-			}
-		}
-	} else {
-		cloneEno = m.cloneEntry(ctx, srcIno, srcAttr.Typ, dstParentIno, dstName, &dstIno, cmode, cumask, count, total, true, concurrent)
-	}
-	return cloneEno
-}
-
-func (m *redisMeta) cloneEntry(ctx Context, srcIno Ino, srcType uint8, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, count, total *uint64, attach bool, concurrent chan struct{}) syscall.Errno {
-	var err error
-	switch srcType {
-	case TypeDirectory:
-		var srcAttr Attr
-		if err = m.txn(ctx, func(tx *redis.Tx) error {
-			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
-				return eno
-			}
-			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, attach)
-		}, m.inodeKey(srcIno), m.xattrKey(srcIno)); err != nil {
-			return errno(err)
-		}
-		field := strconv.FormatUint(uint64(*dstIno), 10)
-		m.rdb.HSet(ctx, m.dirUsedInodesKey(), field, "0")
-		m.rdb.HSet(ctx, m.dirDataLengthKey(), field, "0")
-		m.rdb.HSet(ctx, m.dirUsedSpaceKey(), field, "0")
-		var entries []*Entry
-		eno := m.doReaddir(ctx, srcIno, 0, &entries, -1)
-		if eno != 0 {
-			return eno
-		}
-		atomic.AddUint64(total, uint64(len(entries)))
-		// try directories first to increase parallel
-		var dirs int
-		for i, e := range entries {
-			if e.Attr.Typ == TypeDirectory {
-				entries[dirs], entries[i] = entries[i], entries[dirs]
-				dirs++
-			}
+		srcXattr, err := tx.HGetAll(ctx, m.xattrKey(srcIno)).Result()
+		if err != nil {
+			return err
 		}
 
-		var wg sync.WaitGroup
-		var countDir uint32
-		var errCh = make(chan syscall.Errno, cap(concurrent))
-		for i, entry := range entries {
-			select {
-			case eno := <-errCh:
-				errCh <- eno
-				return eno
-			default:
-
-			}
-			if entry.Attr.Typ == TypeDirectory {
-				select {
-				case concurrent <- struct{}{}:
-					wg.Add(1)
-					go func(srcIno Ino, dstName string) {
-						defer wg.Done()
-						var dstIno2 Ino
-						eno := m.cloneEntry(ctx, srcIno, TypeDirectory, *dstIno, dstName, &dstIno2, cmode, cumask, count, total, true, concurrent)
-						if eno == 0 {
-							atomic.AddUint32(&countDir, 1)
-						}
-						if eno != 0 && eno != syscall.ENOENT {
-							errCh <- eno
-						}
-						<-concurrent
-					}(entry.Inode, string(entry.Name))
-				default:
-					var dstIno2 Ino
-					if eno := m.cloneEntry(ctx, entry.Inode, TypeDirectory, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true, concurrent); eno != 0 {
-						return eno
-					} else {
-						atomic.AddUint32(&countDir, 1)
-					}
-				}
-
-			} else {
-				var dstIno2 Ino
-				if eno := m.cloneEntry(ctx, entry.Inode, entry.Attr.Typ, *dstIno, string(entry.Name), &dstIno2, cmode, cumask, count, total, true, concurrent); eno != 0 {
-					return eno
-				}
-			}
-			if ctx.Canceled() {
-				return syscall.EINTR
-			}
-			entries[i] = nil // release memory
-		}
-		wg.Wait()
-		// reset nlink
-		if attach && countDir+2 != srcAttr.Nlink {
-			srcAttr.Nlink = countDir + 2
-			err = m.rdb.Set(ctx, m.inodeKey(*dstIno), m.marshal(&srcAttr), 0).Err()
-		}
-	case TypeFile:
-		var srcAttr Attr
-		err = m.txn(ctx, func(tx *redis.Tx) error {
-			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
-				return eno
-			}
-			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
+		var pattr Attr
+		if top {
+			if a, err := tx.Get(ctx, m.inodeKey(parent)).Bytes(); err != nil {
 				return err
+			} else {
+				m.parseAttr(a, &pattr)
 			}
-			// copy chunks
-			if srcAttr.Length != 0 {
-				if m.checkQuota(ctx, align4K(srcAttr.Length), 0, dstParentIno) {
-					return syscall.ENOSPC
-				}
-				p := tx.Pipeline()
-				for i := 0; i < int(math.Ceil(float64(srcAttr.Length)/float64(ChunkSize))); i++ {
-					p.LRange(ctx, m.chunkKey(srcIno, uint32(i)), 0, -1)
-				}
-				vals, err := p.Exec(ctx)
-				if err != nil {
-					return errno(err)
-				}
+			if pattr.Typ != TypeDirectory {
+				return syscall.ENOTDIR
+			}
+			if (pattr.Flags & FlagImmutable) != 0 {
+				return syscall.EPERM
+			}
+			if exist, err := tx.HExists(ctx, m.entryKey(parent), name).Result(); err != nil {
+				return err
+			} else if exist {
+				return syscall.EEXIST
+			}
+		}
 
-				if _, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-					for i, v := range vals {
-						sv := v.(*redis.StringSliceCmd).Val()
+		_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
+			p.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
+			p.IncrBy(ctx, m.usedSpaceKey(), align4K(attr.Length))
+			p.Incr(ctx, m.totalInodesKey())
+			if len(srcXattr) > 0 {
+				p.HMSet(ctx, m.xattrKey(ino), srcXattr)
+			}
+			if top && attr.Typ == TypeDirectory {
+				p.ZAdd(ctx, m.detachedNodes(), redis.Z{Member: ino.String(), Score: float64(time.Now().Unix())})
+			} else {
+				p.HSet(ctx, m.entryKey(parent), name, m.packEntry(attr.Typ, ino))
+				if top {
+					now := time.Now()
+					pattr.Mtime = now.Unix()
+					pattr.Mtimensec = uint32(now.Nanosecond())
+					pattr.Ctime = now.Unix()
+					pattr.Ctimensec = uint32(now.Nanosecond())
+					p.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
+				}
+			}
+
+			switch attr.Typ {
+			case TypeDirectory:
+				sfield := srcIno.String()
+				field := ino.String()
+				if v, err := tx.HGet(ctx, m.dirUsedInodesKey(), sfield).Result(); err == nil {
+					p.HSet(ctx, m.dirUsedInodesKey(), field, v)
+					p.HSet(ctx, m.dirDataLengthKey(), field, tx.HGet(ctx, m.dirDataLengthKey(), sfield).Val())
+					p.HSet(ctx, m.dirUsedSpaceKey(), field, tx.HGet(ctx, m.dirUsedSpaceKey(), sfield).Val())
+				}
+			case TypeFile:
+				// copy chunks
+				if attr.Length != 0 {
+					var vals [][]string
+					for i := 0; i <= int(attr.Length/ChunkSize); i++ {
+						val, err := tx.LRange(ctx, m.chunkKey(srcIno, uint32(i)), 0, -1).Result()
+						if err != nil {
+							return err
+						}
+						vals = append(vals, val)
+					}
+
+					for i, sv := range vals {
 						ss := readSlices(sv)
 						if ss == nil {
 							return syscall.EIO
 						}
-						pipe.RPush(ctx, m.chunkKey(*dstIno, uint32(i)), sv)
+						p.RPush(ctx, m.chunkKey(ino, uint32(i)), sv)
 						for _, s := range ss {
 							if s.id > 0 {
-								pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.id, s.size), 1)
+								p.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.id, s.size), 1)
 							}
 						}
 					}
-					return nil
-				}); err != nil {
-					return errno(err)
 				}
+			case TypeSymlink:
+				path, err := tx.Get(ctx, m.symKey(srcIno)).Result()
+				if err != nil {
+					return err
+				}
+				p.Set(ctx, m.symKey(ino), path, 0)
 			}
 			return nil
-		}, m.inodeKey(srcIno), m.xattrKey(srcIno))
-		if err == nil {
-			m.updateParentStat(ctx, *dstIno, srcAttr.Parent, int64(srcAttr.Length), align4K(srcAttr.Length))
-		}
-	case TypeSymlink:
-		err = m.txn(ctx, func(tx *redis.Tx) error {
-			var srcAttr Attr
-			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
-				return eno
-			}
-			if err := m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true); err != nil {
-				return err
-			}
-			path, err := tx.Get(ctx, m.symKey(srcIno)).Result()
-			if err != nil {
-				return err
-			}
-			tx.Set(ctx, m.symKey(*dstIno), path, 0)
-			return nil
-		}, m.symKey(srcIno))
-
-	default:
-		err = m.txn(ctx, func(tx *redis.Tx) error {
-			var srcAttr Attr
-			if eno := m.doGetAttr(ctx, srcIno, &srcAttr); eno != 0 {
-				return eno
-			}
-			return m.mkNodeWithAttr(ctx, tx, srcIno, &srcAttr, dstParentIno, dstName, dstIno, cmode, cumask, true)
-		}, m.inodeKey(srcIno), m.xattrKey(srcIno))
-	}
-	newSpace := align4K(0)
-	m.updateStats(newSpace, 1)
-	m.updateDirStat(ctx, dstParentIno, 0, newSpace, 1)
-	atomic.AddUint64(count, 1)
-	return errno(err)
+		})
+		return err
+	}, m.inodeKey(srcIno), m.xattrKey(srcIno)))
 }
 
-func (m *redisMeta) mkNodeWithAttr(ctx Context, tx *redis.Tx, srcIno Ino, srcAttr *Attr, dstParentIno Ino, dstName string, dstIno *Ino, cmode uint8, cumask uint16, attach bool) error {
-	if m.checkQuota(ctx, align4K(0), 1, dstParentIno) {
-		return syscall.ENOSPC
-	}
-	srcAttr.Parent = dstParentIno
-	if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
-		srcAttr.Uid = ctx.Uid()
-		srcAttr.Gid = ctx.Gid()
-		srcAttr.Mode &= ^cumask
-	}
-
-	// hardlink: update nlink and parent
-	if srcAttr.Typ == TypeFile && srcAttr.Nlink > 1 {
-		srcAttr.Nlink = 1
-	}
-
-	var ino Ino
-	ino, err := m.nextInode()
-	if err != nil {
-		return err
-	}
-	if dstIno != nil {
-		*dstIno = ino
-	}
-
-	var pattr Attr
-	a, err := tx.Get(ctx, m.inodeKey(dstParentIno)).Bytes()
-	if err != nil {
-		return err
-	}
-	m.parseAttr(a, &pattr)
-	if pattr.Typ != TypeDirectory {
-		return syscall.ENOTDIR
-	}
-	if (pattr.Flags & FlagImmutable) != 0 {
-		return syscall.EPERM
-	}
-
-	if tx.HExists(ctx, m.entryKey(dstParentIno), dstName).Val() {
-		return syscall.EEXIST
-	}
-
-	// copy xattr
-	srcXattr, err := tx.HGetAll(ctx, m.xattrKey(srcIno)).Result()
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.Set(ctx, m.inodeKey(*dstIno), m.marshal(srcAttr), 0)
-		if len(srcXattr) > 0 {
-			pipe.HMSet(ctx, m.xattrKey(*dstIno), srcXattr)
-		}
-		if attach {
-			tx.HSet(ctx, m.entryKey(dstParentIno), dstName, m.packEntry(srcAttr.Typ, *dstIno))
-			tx.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
-			tx.Incr(ctx, m.totalInodesKey())
-		} else {
-			pipe.ZAdd(ctx, m.detachedNodes(), redis.Z{Member: dstIno.String(), Score: float64(time.Now().Unix())})
-		}
-		return nil
-	})
-	return err
-}
-
-func (m *redisMeta) doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno {
-	exists, err := m.rdb.Exists(ctx, m.inodeKey(detachedNode)).Result()
-	if err != nil {
+func (m *redisMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
+	exists, err := m.rdb.Exists(ctx, m.inodeKey(ino)).Result()
+	if err != nil || exists == 0 {
 		return errno(err)
 	}
-	if exists == 1 {
-		rmConcurrent := make(chan int, 10)
-		if eno := m.emptyDir(ctx, detachedNode, true, nil, rmConcurrent); eno != 0 {
-			return eno
-		}
-		if err := m.txn(ctx, func(tx *redis.Tx) error {
-			tx.Del(ctx, m.inodeKey(detachedNode))
-			tx.Del(ctx, m.xattrKey(detachedNode))
-			return nil
-		}, m.inodeKey(detachedNode), m.xattrKey(detachedNode)); err != nil {
-			return errno(err)
-		}
+	rmConcurrent := make(chan int, 10)
+	if eno := m.emptyDir(ctx, ino, true, nil, rmConcurrent); eno != 0 {
+		return eno
 	}
-	return errno(m.rdb.ZRem(ctx, m.detachedNodes(), detachedNode.String()).Err())
+	m.updateStats(-align4K(0), -1)
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		_, err := tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
+			p.Del(ctx, m.inodeKey(ino))
+			p.Del(ctx, m.xattrKey(ino))
+			p.DecrBy(ctx, m.usedSpaceKey(), align4K(0))
+			p.Decr(ctx, m.totalInodesKey())
+			field := ino.String()
+			p.HDel(ctx, m.dirUsedInodesKey(), field)
+			p.HDel(ctx, m.dirDataLengthKey(), field)
+			p.HDel(ctx, m.dirUsedSpaceKey(), field)
+			p.ZRem(ctx, m.detachedNodes(), field)
+			return nil
+		})
+		return err
+	}, m.inodeKey(ino), m.xattrKey(ino)))
 }
 
 func (m *redisMeta) doFindDetachedNodes(t time.Time) []Ino {
-	var detachedInos []Ino
-	detachedNodes, err := m.rdb.ZRangeByScore(Background, m.detachedNodes(), &redis.ZRangeBy{Max: strconv.FormatInt(t.Unix(), 10)}).Result()
+	var inodes []Ino
+	vals, err := m.rdb.ZRangeByScore(Background, m.detachedNodes(), &redis.ZRangeBy{Max: strconv.FormatInt(t.Unix(), 10)}).Result()
 	if err != nil {
 		logger.Errorf("Scan detached nodes error: %s", err)
+		return nil
 	}
-	for _, node := range detachedNodes {
+	for _, node := range vals {
 		inode, _ := strconv.ParseUint(node, 10, 64)
-		detachedInos = append(detachedInos, Ino(inode))
+		inodes = append(inodes, Ino(inode))
 	}
-	return detachedInos
+	return inodes
+}
+
+func (m *redisMeta) doAttachDirNode(ctx Context, parent Ino, dstIno Ino, name string) syscall.Errno {
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		var pattr Attr
+		a, err := tx.Get(ctx, m.inodeKey(parent)).Bytes()
+		if err != nil {
+			return err
+		}
+		m.parseAttr(a, &pattr)
+		if pattr.Typ != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if (pattr.Flags & FlagImmutable) != 0 {
+			return syscall.EPERM
+		}
+		if tx.HExists(ctx, m.entryKey(parent), name).Val() {
+			return syscall.EEXIST
+		}
+
+		_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
+			p.HSet(ctx, m.entryKey(parent), name, m.packEntry(TypeDirectory, dstIno))
+			pattr.Nlink++
+			now := time.Now()
+			pattr.Mtime = now.Unix()
+			pattr.Mtimensec = uint32(now.Nanosecond())
+			pattr.Ctime = now.Unix()
+			pattr.Ctimensec = uint32(now.Nanosecond())
+			p.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
+			p.ZRem(ctx, m.detachedNodes(), dstIno.String())
+			return nil
+		})
+		return err
+	}, m.inodeKey(parent), m.entryKey(parent)))
 }

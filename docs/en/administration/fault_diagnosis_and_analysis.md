@@ -2,13 +2,13 @@
 title: Troubleshooting Methods
 sidebar_position: 5
 slug: /fault_diagnosis_and_analysis
-description: This article describes how to view and interpret logs in various operating systems for JuiceFS FUSE, CSI Driver, Hadoop Java SDK S3 gateway, S3 gateway clients.
+description: This article introduces troubleshooting methods for JuiceFS mount point, CSI Driver, Hadoop Java SDK, S3 Gateway, and other clients.
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## Client log
+## Client log {#client-log}
 
 JuiceFS client will output logs for troubleshooting while running. The level of logs in terms of fatality follows DEBUG < INFO < WARNING < ERROR < FATAL. Since DEBUG logs are not printed by default, you need to explicitly enable it if needed, e.g. by adding the `--debug` option when running the JuiceFS client.
 
@@ -90,7 +90,7 @@ The meaning of each column is:
 - `OK`: Indicate the current operation is successful or not. If it is unsuccessful, specific failure information will be output.
 - `<0.000010>`: The time (in seconds) that the current operation takes.
 
-You can debug and analyze performance issues with access log, or try using `juicefs profile <mount-point>` to see real-time statistics. Run `juicefs profile -h` or refer to [Operations Profiling](../benchmark/operations_profiling.md) for details.
+Access logs tend to get very large and difficult for human to process directly, use [`juicefs profile`](#profile) to quickly visualize performance data based on these logs.
 
 Different JuiceFS clients obtain access log in different ways, which are described below.
 
@@ -114,7 +114,7 @@ Please refer to [CSI Driver documentation](https://juicefs.com/docs/csi/troubles
 
 ```bash
 kubectl -n kube-system exec juicefs-chaos-k8s-002-pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373 -- cat /jfs/pvc-d4b8fb4f-2c0b-48e8-a2dc-530799435373/.accesslog
-````
+```
 
 ### S3 Gateway
 
@@ -124,11 +124,79 @@ You need to add the [`--access-log` option](../reference/command_reference.md#ju
 
 You need to add the `juicefs.access-log` configuration item in the [client configurations](../deployment/hadoop_java_sdk.md#other-configurations) of the JuiceFS Hadoop Java SDK to specify the path of the access log output, and the access log is not output by default.
 
-## Runtime information
+## Real-time performance monitoring {#performance-monitor}
+
+JuiceFS provides the `profile` and `stats` subcommands to visualize real-time performance data, the `profile` command is based on the [file system access log](#access-log), while the `stats` command uses [Real-time statistics](../administration/monitoring.md).
+
+### `juicefs profile` {#profile}
+
+[`juicefs profile`](../reference/command_reference.md#profile) will collect data from [file system access log](#access-log), run the `juicefs profile MOUNTPOINT` command, you can see the real-time statistics of each file system operation based on the latest access log:
+
+![](../images/juicefs-profiling.gif)
+
+Apart from real-time mode, this command also provides a play-back mode, which performs the same visualization on existing access log files:
+
+```shell
+# Collect access logs in advance
+cat /jfs/.accesslog > /tmp/juicefs.accesslog
+
+# After performance issue is reproduced, re-play this log file to find system bottleneck
+juicefs profile -f /tmp/juicefs.accesslog
+```
+
+If the replay speed is too fast, pause anytime using <kbd>Enter/Return</kbd>, and continue by pressing it again. If too slow, use `--interval 0` and it will replay the whole log file as fast as possible, and directly show the final result.
+
+If you're only interested in a certain user or process, you can set filters:
+
+```bash
+juicefs profile /tmp/juicefs.accesslog --uid 12345
+```
+
+### `juicefs stats` {#stats}
+
+The [`juicefs stats`](../reference/command_reference.md#stats) command reads JuiceFS Client internal metrics data, and output performance data in a format similar to `dstat`:
+
+![](../images/juicefs_stats_watcher.png)
+
+Metrics description:
+
+#### `usage`
+
+- `cpu`: CPU usage of the process.
+- `mem`: Physical memory used by the process.
+- `buf`: Current [buffer size](../guide/cache_management.md#buffer-size), if this value is constantly close to (or even exceeds) the configured [`--buffer-size`](../reference/command_reference.md#mount), you should increase buffer size or decrease application workload.
+- `cache`: Internal metric, ignore this.
+
+#### `fuse`
+
+- `ops`/`lat`: Operations processed by FUSE per second, and their average latency (in milliseconds).
+- `read`/`write`: Read/write bandwidth usage of FUSE.
+
+#### `meta`
+
+- `ops`/`lat`: Metadata operations processed per second, and their average latency (in milliseconds). Please note that, operations returned directly from cache are not counted in, in order to show a more accurate latency of clients actually interacting with metadata engine.
+- `txn`/`lat`: Write transactions per second processed by the metadata engine and their average latency (in milliseconds). Read-only requests such as `getattr` are only counted as `ops` but not `txn`.
+- `retry`: Write transactions per second that the metadata engine retries.
+
+#### `blockcache`
+
+The `blockcache` stands for local cache data, if read requests are already handled by kernel page cache, they won't be counted into the `blockcache` read metric. If there's consistent `blockcache` read traffic while you are conducting repeated read on a fixed file, this means read requests never enter page cache, and you should probably troubleshoot in this direction (e.g. not enough memory).
+
+- `read`/`write`: Read/write bandwidth of client local data cache
+
+#### `object`
+
+The `object` stands for object storage related metrics, when cache is enabled, penetration to object storage will significantly hinder read performance, use these metrics to check if data has been fully cached. On the other hand, you can also compare `object.get` and `fuse.read` traffic to get a rough idea of the current [read amplification](./troubleshooting.md#read-amplification) status.
+
+- `get`/`get_c`/`lat`: Bandwidth, requests per second, and their average latency (in milliseconds) for object storage processing read requests.
+- `put`/`put_c`/`lat`: Bandwidth, requests per second, and their average latency (in milliseconds) for object storage processing write requests.
+- `del_c`/`lat`: Delete requests per second the object storage can process, and the average latency (in milliseconds).
+
+## Get runtime information using pprof {#runtime-information}
 
 By default, JuiceFS clients will listen to a TCP port locally via [pprof](https://pkg.go.dev/net/http/pprof) to get runtime information such as Goroutine stack information, CPU performance statistics, memory allocation statistics. You can see the specific port number that the current JuiceFS client is listening on by using the system command (e.g. `lsof`):
 
-:::note
+:::tip
 If you mount JuiceFS as the root user, you need to add `sudo` before the `lsof` command.
 :::
 
@@ -136,10 +204,12 @@ If you mount JuiceFS as the root user, you need to add `sudo` before the `lsof` 
 lsof -i -nP | grep LISTEN | grep juicefs
 ```
 
-```output
-juicefs   32666 user    8u  IPv4 0x44992f0610d9870b      0t0  TCP 127.0.0.1:6061 (LISTEN)
-juicefs   32666 user    9u  IPv4 0x44992f0619bf91cb      0t0  TCP 127.0.0.1:6071 (LISTEN)
-juicefs   32666 user   15u  IPv4 0x44992f062886fc5b      0t0  TCP 127.0.0.1:9567 (LISTEN)
+```shell
+# pprof listen prot
+juicefs   19371 user    6u  IPv4 0xa2f1748ad05b5427      0t0  TCP 127.0.0.1:6061 (LISTEN)
+
+# Prometheus API listen port
+juicefs   19371 user   11u  IPv4 0xa2f1748ad05cbde7      0t0  TCP 127.0.0.1:9567 (LISTEN)
 ```
 
 By default, pprof listens on port numbers ranging from 6060 to 6099. That's why the actual port number in the above example is 6061. Once you get the listening port number, you can view all the available runtime information by accessing `http://localhost:<port>/debug/pprof`, and some important runtime information will be shown as follows:
@@ -147,17 +217,6 @@ By default, pprof listens on port numbers ranging from 6060 to 6099. That's why 
 - Goroutine stack information: `http://localhost:<port>/debug/pprof/goroutine?debug=1`
 - CPU performance statistics: `http://localhost:<port>/debug/pprof/profile?seconds=30`
 - Memory allocation statistics: `http://localhost:<port>/debug/pprof/heap`
--
-
-:::tip
-You can also use the debug command to automatically collect these runtime information and save it locally. By default, it is saved to the debug directory under the current directory, for example:
-
-```bash
-juicefs debug /mnt/jfs
-```
-
-For more information about the debug command, see [command reference](https://juicefs.com/docs/community/command_reference#juicefs-debug)
-:::
 
 To make it easier to analyze this runtime information, you can save it locally, e.g.:
 
@@ -166,11 +225,22 @@ curl 'http://localhost:<port>/debug/pprof/goroutine?debug=1' > juicefs.goroutine
 ```
 
 ```bash
-$ curl 'http://localhost:<port>/debug/pprof/profile?seconds=30' > juicefs.cpu.pb.gz
+curl 'http://localhost:<port>/debug/pprof/profile?seconds=30' > juicefs.cpu.pb.gz
+```
 
 ```bash
-$ curl 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pb.gz
+curl 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pb.gz
 ```
+
+:::tip
+You can also use the `juicefs debug` command to automatically collect these runtime information and save it locally. By default, it is saved to the `debug` directory under the current directory, for example:
+
+```bash
+juicefs debug /mnt/jfs
+```
+
+For more information about the `juicefs debug` command, see [command reference](../reference/command_reference.md#debug).
+:::
 
 If you have the `go` command installed, you can analyze it directly with the `go tool pprof` command. For example to analyze CPU performance statistics:
 
@@ -209,9 +279,9 @@ The export to visual chart function relies on [Graphviz](https://graphviz.org), 
 go tool pprof -pdf 'http://localhost:<port>/debug/pprof/heap' > juicefs.heap.pdf
 ```
 
-For more information about pprof, please see the [official documentation](https://github.com/google/pprof/blob/master/doc/README.md).
+For more information about pprof, please see the [official documentation](https://github.com/google/pprof/blob/main/doc/README.md).
 
-### Profiling with the Pyroscope
+### Profiling with the Pyroscope {#use-pyroscope}
 
 ![Pyroscope](../images/pyroscope.png)
 

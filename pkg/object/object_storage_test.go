@@ -589,15 +589,6 @@ func TestAzure(t *testing.T) { //skip mutate
 	testStorage(t, abs)
 }
 
-func TestNOS(t *testing.T) { //skip mutate
-	if os.Getenv("NOS_ACCESS_KEY") == "" {
-		t.SkipNow()
-	}
-	nos, _ := newNOS(os.Getenv("NOS_ENDPOINT"),
-		os.Getenv("NOS_ACCESS_KEY"), os.Getenv("NOS_SECRET_KEY"), "")
-	testStorage(t, nos)
-}
-
 func TestJSS(t *testing.T) { //skip mutate
 	if os.Getenv("JSS_ACCESS_KEY") == "" {
 		t.SkipNow()
