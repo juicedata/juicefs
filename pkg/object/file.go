@@ -124,15 +124,9 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
 
-	if off > 0 {
-		if _, err := f.Seek(off, 0); err != nil {
-			_ = f.Close()
-			return nil, err
-		}
-	}
 	if limit > 0 {
 		return &SectionReaderCloser{
-			SectionReader: io.NewSectionReader(f, 0, limit),
+			SectionReader: io.NewSectionReader(f, off, limit),
 			Closer:        f,
 		}, nil
 	}

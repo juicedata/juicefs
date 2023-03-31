@@ -78,14 +78,9 @@ func (u *up) Get(key string, off, limit int64) (io.ReadCloser, error) {
 }
 
 func (u *up) Put(key string, in io.Reader) error {
-	body, vlen, err := findLen(in)
-	if err != nil {
-		return err
-	}
 	return u.c.Put(&upyun.PutObjectConfig{
-		Path:    "/" + key,
-		Reader:  body,
-		Headers: map[string]string{"Content-Length": fmt.Sprint(vlen)},
+		Path:   "/" + key,
+		Reader: in,
 	})
 }
 

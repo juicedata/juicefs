@@ -81,9 +81,6 @@ func (t tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 }
 
 func (t tosClient) Put(key string, in io.Reader) error {
-	if sectionReader, ok := in.(*SectionReaderCloser); ok {
-		in = &io.LimitedReader{R: sectionReader.SectionReader, N: sectionReader.SectionReader.Size()}
-	}
 	_, err := t.client.PutObjectV2(context.Background(), &tos.PutObjectV2Input{
 		PutObjectBasicInput: tos.PutObjectBasicInput{
 			Bucket: t.bucket,

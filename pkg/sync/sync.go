@@ -334,6 +334,7 @@ func isStreamWrite(obj object.ObjectStorage) bool {
 		strings.HasPrefix(obj.String(), "ceph://") ||
 		strings.HasPrefix(obj.String(), "swift://") ||
 		strings.HasPrefix(obj.String(), "webdav://") ||
+		strings.HasPrefix(obj.String(), "upyun://") ||
 		strings.HasPrefix(obj.String(), "jfs://")
 }
 
@@ -348,12 +349,12 @@ func isReadInMem(obj object.ObjectStorage) bool {
 }
 
 func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
-	if size > maxBlock && !strings.HasPrefix(src.String(), "file://") && !strings.HasPrefix(src.String(), "hdfs://") && !strings.HasPrefix(src.String(), "sftp://") {
+	if size > maxBlock && !isReadInMem(dst) && !strings.HasPrefix(src.String(), "file://") && !strings.HasPrefix(src.String(), "hdfs://") && !strings.HasPrefix(src.String(), "sftp://") {
 		var err error
 		var in io.Reader
 		downer := newParallelDownloader(src, key, size, 10<<20, concurrent)
 		defer downer.Close()
-		if isStreamWrite(dst) || isReadInMem(dst) {
+		if isStreamWrite(dst) {
 			in = downer
 		} else {
 			var f *os.File
