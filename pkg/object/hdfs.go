@@ -93,11 +93,6 @@ func (h *hdfsclient) Head(key string) (Object, error) {
 	return f, nil
 }
 
-type withCloser struct {
-	io.Reader
-	io.Closer
-}
-
 func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	f, err := h.c.Open(h.path(key))
 	if err != nil {
