@@ -517,12 +517,11 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 							continue
 						}
 						child := &TreeSummary{
-							Path:   path.Join(tree.Path, string(e.Name)),
-							Inode:  e.Inode,
-							Type:   e.Attr.Typ,
-							Size:   uint64(align4K(e.Attr.Length)),
-							Length: e.Attr.Length,
-							Files:  1,
+							Path:  path.Join(tree.Path, string(e.Name)),
+							Inode: e.Inode,
+							Type:  e.Attr.Typ,
+							Size:  uint64(align4K(e.Attr.Length)),
+							Files: 1,
 						}
 						tree.Children = append(tree.Children, child)
 					}
@@ -537,7 +536,6 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 					}
 					for _, child := range tree.Children[topN:] {
 						omitChild.Size += child.Size
-						omitChild.Length += child.Length
 						omitChild.Files += child.Files
 						omitChild.Dirs += child.Dirs
 					}
@@ -562,9 +560,6 @@ func (m *baseMeta) getTreeSummary(ctx Context, root *TreeSummary) syscall.Errno 
 	if attr.Typ != TypeDirectory {
 		root.Files++
 		root.Size += uint64(align4K(attr.Length))
-		if attr.Typ == TypeFile {
-			root.Length += attr.Length
-		}
 		return 0
 	}
 	root.Type = TypeDirectory
@@ -611,7 +606,6 @@ func (m *baseMeta) getTreeSummary(ctx Context, root *TreeSummary) syscall.Errno 
 				} else {
 					tree.visitRoot(func(t *TreeSummary) {
 						t.Size += uint64(align4K(e.Attr.Length))
-						t.Length += e.Attr.Length
 						t.Files++
 					})
 				}
@@ -623,7 +617,6 @@ func (m *baseMeta) getTreeSummary(ctx Context, root *TreeSummary) syscall.Errno 
 				}
 				if e.Attr.Typ != TypeDirectory {
 					newTree.Size = uint64(align4K(e.Attr.Length))
-					newTree.Length = e.Attr.Length
 					newTree.Files = 1
 				}
 				tree.Children = append(tree.Children, newTree)
@@ -643,9 +636,6 @@ func (m *baseMeta) fastGetTreeSummary(ctx Context, root *TreeSummary) syscall.Er
 	if attr.Typ != TypeDirectory {
 		root.Files++
 		root.Size += uint64(align4K(attr.Length))
-		if attr.Typ == TypeFile {
-			root.Length += attr.Length
-		}
 		return 0
 	}
 	root.Type = TypeDirectory
@@ -692,7 +682,6 @@ func (m *baseMeta) fastGetTreeSummary(ctx Context, root *TreeSummary) syscall.Er
 			tree := trees[i]
 			tree.visitRoot(func(t *TreeSummary) {
 				t.Size += uint64(stat.space)
-				t.Length += uint64(stat.length)
 			})
 			if entries == nil {
 				// leaf dir

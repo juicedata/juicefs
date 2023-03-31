@@ -237,7 +237,6 @@ type TreeSummary struct {
 	Inode    Ino
 	Path     string
 	Type     uint8
-	Length   uint64
 	Size     uint64
 	Files    uint64
 	Dirs     uint64
