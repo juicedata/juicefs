@@ -325,13 +325,22 @@ func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, erro
 	return equal, err
 }
 
+var streamRead = map[string]struct{}{"file": {}, "hdfs": {}, "sftp": {}}
+var streamWrite = map[string]struct{}{"file": {}, "hdfs": {}, "sftp": {}, "gs": {}, "wasb": {}, "ceph": {}, "swift": {}, "webdav": {}, "upyun": {}, "jfs": {}}
+var readInMem = map[string]struct{}{"mem": {}, "etcd": {}, "redis": {}, "tikv": {}, "mysql": {}, "postgres": {}, "sqlite3": {}}
+
+func inMap(obj object.ObjectStorage, m map[string]struct{}) bool {
+	_, ok := m[strings.Split(obj.String(), "://")[0]]
+	return ok
+}
+
 func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
-	if size > maxBlock && !strings.HasPrefix(src.String(), "file://") && !strings.HasPrefix(src.String(), "hdfs://") {
+	if size > maxBlock && !inMap(dst, readInMem) && !inMap(src, streamRead) {
 		var err error
 		var in io.Reader
 		downer := newParallelDownloader(src, key, size, 10<<20, concurrent)
 		defer downer.Close()
-		if strings.HasPrefix(dst.String(), "file://") || strings.HasPrefix(dst.String(), "hdfs://") {
+		if inMap(dst, streamWrite) {
 			in = downer
 		} else {
 			var f *os.File
@@ -374,7 +383,7 @@ SINGLE:
 	if size == 0 {
 		in = io.NopCloser(bytes.NewReader(nil))
 	} else {
-		in, err = src.Get(key, 0, -1)
+		in, err = src.Get(key, 0, size)
 		if err != nil {
 			if _, e := src.Head(key); os.IsNotExist(e) {
 				logger.Debugf("Head src %s: %s", key, err)
@@ -475,8 +484,15 @@ func copyData(src, dst object.ObjectStorage, key string, size int64) error {
 		var upload *object.MultipartUpload
 		if upload, err = dst.CreateMultipartUpload(key); err == nil {
 			err = doCopyMultiple(src, dst, key, size, upload)
-		} else { // fallback
+		} else if err == utils.ENOTSUP {
 			err = try(3, func() error { return doCopySingle(src, dst, key, size) })
+		} else { // other error retry
+			if err = try(2, func() error {
+				upload, err = dst.CreateMultipartUpload(key)
+				return err
+			}); err == nil {
+				err = doCopyMultiple(src, dst, key, size, upload)
+			}
 		}
 	}
 	if err == nil {
