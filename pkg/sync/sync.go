@@ -325,36 +325,22 @@ func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, erro
 	return equal, err
 }
 
-func isStreamWrite(obj object.ObjectStorage) bool {
-	return strings.HasPrefix(obj.String(), "file://") ||
-		strings.HasPrefix(obj.String(), "hdfs://") ||
-		strings.HasPrefix(obj.String(), "sftp://") ||
-		strings.HasPrefix(obj.String(), "gs://") ||
-		strings.HasPrefix(obj.String(), "wasb://") ||
-		strings.HasPrefix(obj.String(), "ceph://") ||
-		strings.HasPrefix(obj.String(), "swift://") ||
-		strings.HasPrefix(obj.String(), "webdav://") ||
-		strings.HasPrefix(obj.String(), "upyun://") ||
-		strings.HasPrefix(obj.String(), "jfs://")
-}
+var streamRead = map[string]struct{}{"file": {}, "hdfs": {}, "sftp": {}}
+var streamWrite = map[string]struct{}{"file": {}, "hdfs": {}, "sftp": {}, "gs": {}, "wasb": {}, "ceph": {}, "swift": {}, "webdav": {}, "upyun": {}, "jfs": {}}
+var readInMem = map[string]struct{}{"mem": {}, "etcd": {}, "redis": {}, "tikv": {}, "mysql": {}, "postgres": {}, "sqlite3": {}}
 
-func isReadInMem(obj object.ObjectStorage) bool {
-	return strings.HasPrefix(obj.String(), "mem://") ||
-		strings.HasPrefix(obj.String(), "etcd://") ||
-		strings.HasPrefix(obj.String(), "redis://") ||
-		strings.HasPrefix(obj.String(), "tikv://") ||
-		strings.HasPrefix(obj.String(), "mysql://") ||
-		strings.HasPrefix(obj.String(), "postgres://") ||
-		strings.HasPrefix(obj.String(), "sqlite3://")
+func inMap(obj object.ObjectStorage, m map[string]struct{}) bool {
+	_, ok := m[strings.Split(obj.String(), "://")[0]]
+	return ok
 }
 
 func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
-	if size > maxBlock && !isReadInMem(dst) && !strings.HasPrefix(src.String(), "file://") && !strings.HasPrefix(src.String(), "hdfs://") && !strings.HasPrefix(src.String(), "sftp://") {
+	if size > maxBlock && !inMap(dst, readInMem) && !inMap(src, streamRead) {
 		var err error
 		var in io.Reader
 		downer := newParallelDownloader(src, key, size, 10<<20, concurrent)
 		defer downer.Close()
-		if isStreamWrite(dst) {
+		if inMap(dst, streamWrite) {
 			in = downer
 		} else {
 			var f *os.File
