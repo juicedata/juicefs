@@ -149,6 +149,11 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 	if attr.Nlink != 1 || attr.Length != 24 {
 		t.Fatalf("nlink: %d, length: %d", attr.Nlink, attr.Length)
 	}
+
+	if attr.Flags != 128 {
+		t.Fatalf("expect the flags euqal 128, but actual is: %d", attr.Flags)
+	}
+
 	var slices []Slice
 	if st := m.Read(ctx, 2, 0, &slices); st != 0 {
 		t.Fatalf("read chunk: %s", st)
