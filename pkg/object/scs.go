@@ -90,6 +90,9 @@ func (s *scsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 }
 
 func (s *scsClient) Put(key string, in io.Reader) error {
+	if sectionReader, ok := in.(*SectionReaderCloser); ok {
+		in = &io.LimitedReader{R: sectionReader.SectionReader, N: sectionReader.SectionReader.Size()}
+	}
 	return s.b.Put(key, map[string]string{}, in)
 }
 

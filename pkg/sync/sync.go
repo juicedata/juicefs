@@ -325,13 +325,35 @@ func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, erro
 	return equal, err
 }
 
+func isStreamWrite(obj object.ObjectStorage) bool {
+	return strings.HasPrefix(obj.String(), "file://") ||
+		strings.HasPrefix(obj.String(), "hdfs://") ||
+		strings.HasPrefix(obj.String(), "sftp://") ||
+		strings.HasPrefix(obj.String(), "gs://") ||
+		strings.HasPrefix(obj.String(), "wasb://") ||
+		strings.HasPrefix(obj.String(), "ceph://") ||
+		strings.HasPrefix(obj.String(), "swift://") ||
+		strings.HasPrefix(obj.String(), "webdav://") ||
+		strings.HasPrefix(obj.String(), "jfs://")
+}
+
+func isReadInMem(obj object.ObjectStorage) bool {
+	return strings.HasPrefix(obj.String(), "mem://") ||
+		strings.HasPrefix(obj.String(), "etcd://") ||
+		strings.HasPrefix(obj.String(), "redis://") ||
+		strings.HasPrefix(obj.String(), "tikv://") ||
+		strings.HasPrefix(obj.String(), "mysql://") ||
+		strings.HasPrefix(obj.String(), "postgres://") ||
+		strings.HasPrefix(obj.String(), "sqlite3://")
+}
+
 func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
-	if size > maxBlock && !strings.HasPrefix(src.String(), "file://") && !strings.HasPrefix(src.String(), "hdfs://") {
+	if size > maxBlock && !strings.HasPrefix(src.String(), "file://") && !strings.HasPrefix(src.String(), "hdfs://") && !strings.HasPrefix(src.String(), "sftp://") {
 		var err error
 		var in io.Reader
 		downer := newParallelDownloader(src, key, size, 10<<20, concurrent)
 		defer downer.Close()
-		if strings.HasPrefix(dst.String(), "file://") || strings.HasPrefix(dst.String(), "hdfs://") || strings.HasPrefix(dst.String(), "sftp://") || strings.HasPrefix(dst.String(), "jfs://") {
+		if isStreamWrite(dst) || isReadInMem(dst) {
 			in = downer
 		} else {
 			var f *os.File
@@ -475,8 +497,15 @@ func copyData(src, dst object.ObjectStorage, key string, size int64) error {
 		var upload *object.MultipartUpload
 		if upload, err = dst.CreateMultipartUpload(key); err == nil {
 			err = doCopyMultiple(src, dst, key, size, upload)
-		} else { // fallback
+		} else if err == utils.ENOTSUP {
 			err = try(3, func() error { return doCopySingle(src, dst, key, size) })
+		} else { // other error retry
+			if err = try(2, func() error {
+				upload, err = dst.CreateMultipartUpload(key)
+				return err
+			}); err == nil {
+				err = doCopyMultiple(src, dst, key, size, upload)
+			}
 		}
 	}
 	if err == nil {

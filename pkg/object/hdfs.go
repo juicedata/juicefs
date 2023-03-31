@@ -116,7 +116,10 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		}
 	}
 	if limit > 0 {
-		return withCloser{io.LimitReader(f, limit), f}, nil
+		return &SectionReaderCloser{
+			SectionReader: io.NewSectionReader(f, 0, limit),
+			Closer:        f,
+		}, nil
 	}
 	return f, nil
 }

@@ -101,25 +101,9 @@ func (d *filestore) Head(key string) (Object, error) {
 	}, nil
 }
 
-type LimitedReadSeekCloser struct {
-	Size int64
-	*io.LimitedReader
+type SectionReaderCloser struct {
+	*io.SectionReader
 	io.Closer
-}
-
-func (lc *LimitedReadSeekCloser) Seek(offset int64, whence int) (ret int64, err error) {
-	if whence == io.SeekEnd {
-		whence = io.SeekStart
-		offset = lc.N + offset
-	}
-	var curr int64
-	if r, ok := lc.R.(io.Seeker); ok {
-		if curr, err = r.Seek(offset, whence); err != nil {
-			return 0, err
-		}
-	}
-	lc.N = lc.Size - curr
-	return curr, nil
 }
 
 func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -147,7 +131,10 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		}
 	}
 	if limit > 0 {
-		return &LimitedReadSeekCloser{limit, &io.LimitedReader{R: f, N: limit}, f}, nil
+		return &SectionReaderCloser{
+			SectionReader: io.NewSectionReader(f, 0, limit),
+			Closer:        f,
+		}, nil
 	}
 	return f, nil
 }
