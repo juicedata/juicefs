@@ -301,7 +301,7 @@ func test(store object.ObjectStorage) error {
 	for i := 0; i < nRetry; i++ {
 		err = doTesting(store, key, data)
 		if err == nil {
-			return nil
+			break
 		}
 		time.Sleep(time.Second * time.Duration(i*3+1))
 	}
