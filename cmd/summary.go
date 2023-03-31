@@ -18,9 +18,11 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/dustin/go-humanize"
@@ -70,6 +72,10 @@ func cmdSummary() *cli.Command {
 				Name:  "strict",
 				Usage: "show accurate summary, including directories and files (may be slow)",
 			},
+			&cli.BoolFlag{
+				Name:  "csv",
+				Usage: "print summary in csv format",
+			},
 		},
 	}
 }
@@ -105,7 +111,8 @@ func summary(ctx *cli.Context) error {
 		strict = 1
 	}
 
-	progress := utils.NewProgress(false)
+	csv := ctx.Bool("csv")
+	progress := utils.NewProgress(csv)
 	path := ctx.Args().Get(0)
 	dspin := progress.AddDoubleSpinner(path)
 	d, err := filepath.Abs(path)
@@ -158,23 +165,40 @@ func summary(ctx *cli.Context) error {
 		logger.Fatalf("summary: %s", err)
 	}
 	results := [][]string{{"PATH", "SIZE", "DIRS", "FILES"}}
-	renderTree(&results, &resp.Tree)
-	printResult(results, 0, false)
+	renderTree(&results, &resp.Tree, csv)
+	if csv {
+		printCSVResult(results)
+	} else {
+		printResult(results, 0, false)
+	}
 	return nil
 }
 
-func renderTree(results *[][]string, tree *meta.TreeSummary) {
+func printCSVResult(results [][]string) {
+	for _, r := range results {
+		fmt.Println(strings.Join(r, ","))
+	}
+}
+
+func renderTree(results *[][]string, tree *meta.TreeSummary, csv bool) {
 	if tree == nil {
 		return
 	}
+	var size string
+	if csv {
+		size = strconv.FormatUint(tree.Size, 10)
+	} else {
+		size = humanize.IBytes(uint64(tree.Size))
+	}
+
 	result := []string{
 		tree.Path,
-		humanize.IBytes(uint64(tree.Size)),
+		size,
 		strconv.FormatUint(tree.Dirs, 10),
 		strconv.FormatUint(tree.Files, 10),
 	}
 	*results = append(*results, result)
 	for _, child := range tree.Children {
-		renderTree(results, child)
+		renderTree(results, child, csv)
 	}
 }
