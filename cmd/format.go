@@ -305,6 +305,9 @@ func test(store object.ObjectStorage) error {
 		}
 		time.Sleep(time.Second * time.Duration(i*3+1))
 	}
+	if err == nil {
+		_ = store.Delete("testing/")
+	}
 	return err
 }
 
@@ -446,9 +449,9 @@ func format(c *cli.Context) error {
 					if o == nil {
 						logger.Warnf("List storage %s failed", blob)
 						break
-					} else if o.IsDir() {
+					} else if o.IsDir() || o.Size() == 0 {
 						continue
-					} else if !strings.HasPrefix(o.Key(), "testing/") {
+					} else if o.Key() != "testing" && !strings.HasPrefix(o.Key(), "testing/") {
 						logger.Fatalf("Storage %s is not empty; please clean it up or pick another volume name", blob)
 					}
 				}
