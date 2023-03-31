@@ -106,22 +106,24 @@ export META_PASSWORD=mypassword
 juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 ```
 
-### 使用 mTLS 双向认证
+### 设置 TLS
+
+JuiceFS 同时支持 Redis 的 TLS 单向加密认证和 mTLS 双向加密认证连接。通过 TLS 或 mTLS 连接到 Redis 时均使用 `rediss://` 协议头，但是在使用 TLS 单向加密认证时，不需要指定客户端证书和私钥。
 
 :::note
-JuiceFS 对 Redis mTLS 功能的支持已合并到 main 分支，如需使用该功能请[手动编译客户端](../getting-started/installation.md#手动编译客户端)。
+JuiceFS 对 Redis mTLS 功能的支持尚未正式发布，如需使用可以使用 main 分支[手动编译客户端](../getting-started/installation.md#手动编译客户端)。
 :::
 
-如果 Redis 服务端开启了 mTLS 功能，需要提供客户端证书和私钥，以及签发客户端证书的 CA 证书进行连接。在 JuiceFS 中，可以通过以下方式使用 mTLS：
+当通过 mTLS 连接 Redis 时，需要提供客户端证书和私钥，以及签发客户端证书的 CA 证书进行连接。在 JuiceFS 中，可以通过以下方式设置 mTLS 需要的客户端证书：
 
 ```shell
 juicefs format --storage s3 \
     ... \
-    "rediss://192.168.1.6:6379/1?tls-cert-file=certs/client.crt&tls-key-file=certs/client.key&tls-ca-cert-file=certs/ca.crt"
+    "rediss://192.168.1.6:6379/1?tls-cert-file=/etc/certs/client.crt&tls-key-file=/etc/certs/client.key&tls-ca-cert-file=/etc/certs/ca.crt"
     pics
 ```
 
-在面的代码中，我们使用 `rediss://` 协议头来开启 mTLS 功能，然后使用以下选项来指定客户端证书的路径：
+上面的示例代码使用 `rediss://` 协议头来开启 mTLS 功能，然后使用以下选项来指定客户端证书的路径：
 
 - `tls-cert-file` 指定客户端证书的路径
 - `tls-key-file` 指定客户端密钥的路径
@@ -129,7 +131,7 @@ juicefs format --storage s3 \
 
 在 URL 指定选项时，以 `?` 符号开头，使用 `&` 符号来分隔多个选项，例如：`?tls-cert-file=client.crt&tls-key-file=client.key`。
 
-上例中的 `certs` 只是一个目录，实际使用时请替换为你的证书目录，可以使用相对路径或绝对路径。
+上例中的 `/etc/certs` 只是一个目录，实际使用时请替换为你的证书目录，可以使用相对路径或绝对路径。
 
 ## KeyDB
 

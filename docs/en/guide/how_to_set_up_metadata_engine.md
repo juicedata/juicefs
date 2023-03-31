@@ -108,8 +108,10 @@ juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 
 ### Using mTLS
 
+JuiceFS supports both TLS server-side encryption authentication and mTLS mutual encryption authentication connections to Redis. When connecting to Redis via TLS or mTLS, use the `rediss://` protocol header. However, when using TLS server-side encryption authentication, it is not necessary to specify the client certificate and private key.
+
 :::note
-The support of JuiceFS for Redis mTLS feature has been merged into the main branch. If you need to use this feature, please [compile the client manually](../getting-started/installation.md#manually-compiling)。
+The support of JuiceFS for Redis mTLS feature has not been officially released yet. If you need to use it, you can use the main branch [manually compile the client](../getting-started/installation.md#manually-compiling).
 :::
 
 If Redis server has enabled mTLS feature, it is necessary to provide client certificate, private key, and CA certificate that issued the client certificate to connect. In JuiceFS, mTLS can be used in the following way:
@@ -117,7 +119,7 @@ If Redis server has enabled mTLS feature, it is necessary to provide client cert
 ```shell
 juicefs format --storage s3 \
     ... \
-    "rediss://192.168.1.6:6379/1?tls-cert-file=certs/client.crt&tls-key-file=certs/client.key&tls-ca-cert-file=certs/ca.crt"
+    "rediss://192.168.1.6:6379/1?tls-cert-file=/etc/certs/client.crt&tls-key-file=/etc/certs/client.key&tls-ca-cert-file=/etc/certs/ca.crt"
     pics
 ```
 
@@ -129,7 +131,7 @@ In the code mentioned above, we use the `rediss://` protocol header to enable mT
 
 When specifying options in a URL, start with the `?` symbol and use the `&` symbol to separate multiple options, for example: `?tls-cert-file=client.crt&tls-key-file=client.key`.
 
-In the above example, `certs` is just a directory name. Replace it with your actual certificate directory when using it, which can be a relative or absolute path.
+In the above example, `/etc/certs` is just a directory name. Replace it with your actual certificate directory when using it, which can be a relative or absolute path.
 
 ## KeyDB
 
