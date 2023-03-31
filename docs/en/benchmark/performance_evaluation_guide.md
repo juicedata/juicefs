@@ -32,9 +32,9 @@ An example of the basic usage of the JuiceFS built-in `bench` tool is shown belo
 
 JuiceFS v1.0+ has Trash enabled by default, which means the benchmark tools will create and delete temporary files in the file system. These files will eventually be dumped to the `.trash` folder which consumes storage space. To avoid this, you can disable the Trash before benchmarking by running `juicefs config META-URL --trash-days 0`. See [trash](../security/trash.md) for details.
 
-### JuiceFS Bench
+### `juicefs bench`
 
-The JuiceFS [`bench`](../reference/command_reference.md#juicefs-bench) command can help you do a quick performance test on a standalone machine. With the test results, it is easy to evaluate if your environment configuration and JuiceFS performance are normal. Assuming you have mounted JuiceFS to `/mnt/jfs` on your server, execute the following command for this test (the `-p` option is recommended to set to the number of CPU cores on the server). If you need help with initializing or mounting JuiceFS, please refer to the [Quick Start Guide](../getting-started/README.md))
+The [`juicefs bench`](../reference/command_reference.md#bench) command can help you do a quick performance test on a standalone machine. With the test results, it is easy to evaluate if your environment configuration and JuiceFS performance are normal. Assuming you have mounted JuiceFS to `/mnt/jfs` on your server, execute the following command for this test (the `-p` option is recommended to set to the number of CPU cores on the server). If you need help with initializing or mounting JuiceFS, please refer to the [Quick Start Guide](../getting-started/README.md))
 
 ```bash
 juicefs bench /mnt/jfs -p 4
@@ -44,7 +44,7 @@ The test results will show each performance indicator in green, yellow or red. I
 
 ![bench](../images/bench-guide-bench.png)
 
-The detailed JuiceFS `bench` performance test flows are shown below (The logic behind is very simple. Please take a look at the [source code](https://github.com/juicedata/juicefs/blob/main/cmd/bench.go) if you are interested).
+The detailed `juicefs bench` performance test flows are shown below (The logic behind is very simple. Please take a look at the [source code](https://github.com/juicedata/juicefs/blob/main/cmd/bench.go) if you are interested).
 
 1. N concurrent `write`, each to a large file of 1 GiB with IO size of 1 MiB
 2. N concurrent `read`, each from the large file of 1 GiB previously written, with IO size of 1 MiB
@@ -75,9 +75,9 @@ Prices refer to [AWS US East, Ohio Region](https://aws.amazon.com/ebs/pricing/?n
 The data above is from [AWS official documentation](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html), and the performance metrics are their maximum values. The actual performance of EBS is related to its volume capacity and instance type of mounted EC2. In general, the larger the volume and the higher the specification of EC2, the better the EBS performance will be, but not exceeding the maximum value mentioned above.
 :::
 
-### JuiceFS Objbench
+### `juicefs objbench`
 
-JuiceFS provides the [`objbench`](../reference/command_reference.md#juicefs-objbench) subcommand to run some tests on object storage to evaluate how well it performs as a backend storage for JuiceFS. Take testing Amazon S3 as an example:
+The [`juicefs objbench`](../reference/command_reference.md#objbench) command can run some tests on object storage to evaluate how well it performs as a backend storage for JuiceFS. Take testing Amazon S3 as an example:
 
 ```bash
 juicefs objbench \
@@ -130,9 +130,9 @@ Finally clean up the test files.
 
 The next two performance observation and analysis tools are essential tools for testing, using, and tuning JuiceFS.
 
-### JuiceFS Stats
+### `juicefs stats`
 
-JuiceFS `stats` is a tool for real-time statistics of JuiceFS performance metrics, similar to the `dstat` command on Linux systems. It can display changes of metrics for JuiceFS clients in real-time (see [documentation](stats_watcher.md) for details). For this,  create a new session and execute the following command when the command `juicefs bench` is running,
+The [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) command is a tool for real-time statistics of JuiceFS performance metrics, similar to the `dstat` command on Linux systems. It can display changes of metrics for JuiceFS clients in real-time. For this, create a new session and execute the following command when the `juicefs bench` is running:
 
 ```bash
 juicefs stats /mnt/jfs --verbosity 1
@@ -140,54 +140,35 @@ juicefs stats /mnt/jfs --verbosity 1
 
 The results are shown below, which would be easier to understand when combing with the `bench` performance test flows described above.
 
-![stats](../images/bench-guide-stats.png)
+![](../images/bench-guide-stats.png)
 
-The meaning of indicators is as follows:
+Learn the meaning of indicators in [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats).
 
-- `usage`
-  - `cpu`: the CPU usage of JuiceFS process
-  - `mem`: the physical memory usage of JuiceFS process
-  - `buf`: internal read/write buffer size of JuiceFS process, limited by mount option `--buffer-size`
-  - `cache`: internal metric, can be simply ignored
-- `fuse`
-  - `ops`/`lat`: requests per second processed by the FUSE interface and their average latency (in milliseconds)
-  - `read`/`write`: bandwidth of the FUSE interface to handle read and write requests per second
-- `meta`
-  - `ops`/`lat`: requests per second processed by the metadata engine and their average latency (in milliseconds). Please note that some requests that can be processed directly in the cache are not included in the statistics, in order to better reflect the time spent by the client interacting with the metadata engine.
-  - `txn`/`lat`: **write transactions** per second processed by the metadata engine and their average latency (in milliseconds). Read-only requests such as `getattr` are only counted as ops but not txn.
-  - `retry`: **write transactions** per second that the metadata engine retries
-- `blockcache`
-  - `read`/`write`: read/write traffic per second for the local data cache of the client
-- `object`
-  - `get`/`get_c`/`lat`: bandwidth, requests per second, and their average latency (in milliseconds) for object storage processing **read requests**
-  - `put`/`put_c`/`lat`: bandwidth, requests per second, and their average latency (in milliseconds) for object storage processing **write requests**
-  - `del_c`/`lat`: **delete requests** per second the object storage can process, and the average latency (in milliseconds)
+### `juicefs profile`
 
-### JuiceFS Profile
-
-JuiceFS `profile` is used to output all access logs of the JuiceFS client in real time, including information about each request. It can also be used to play back and count JuiceFS access logs, and visualize the JuiceFS running status (see [documentation](operations_profiling.md) for details). To run the JuiceFS profile, execute the following command in another session while the `juicefs bench` command is running.
+The [`juicefs profile`](../administration/fault_diagnosis_and_analysis.md#profile) command is used to output all [access logs](../administration/fault_diagnosis_and_analysis.md#access-log) of the JuiceFS client in real time, including information about each request. It can also be used to play back and count JuiceFS access logs, and visualize the JuiceFS running status. To run the JuiceFS profile, execute the following command in another session while the `juicefs bench` command is running.
 
 ```bash
-cat /mnt/jfs/.accesslog > access.log
+cat /mnt/jfs/.accesslog > juicefs.accesslog
 ```
 
-`.accessslog` is a virtual file for JuiceFS access logs. It does not produce any data until it is read (e.g. by executing `cat`). Press <kbd>Ctrl</kbd>-<kbd>C</kbd> to terminate the `cat` command and run the following one.
+The `.accessslog` is a virtual file for JuiceFS access logs. It does not produce any data until it is read (e.g. by executing `cat`). Press <kbd>Ctrl</kbd> + <kbd>C</kbd> to terminate the `cat` command and run the following one.
 
 ```bash
-juicefs profile access.log --interval 0
+juicefs profile juicefs.accesslog --interval 0
 ```
 
 The `---interval` parameter sets the sampling interval for accessing the log. 0 means quickly replay the log file to generate statistics, as shown in the following figure.
 
 ![profile](../images/bench-guide-profile.png)
 
-Based on the bench performance test flows as described above, a total of (1 + 100) * 4 = 404 files were created during this test, and each file went through the process of "Create → Write → Close → Open → Read → Close → Delete". So there are a total of:
+Based on the bench performance test flows as described above, a total of `(1 + 100) * 4 = 404` files were created during this test, and each file went through the process of "Create → Write → Close → Open → Read → Close → Delete". So there are a total of:
 
-- 404 create, open and unlink requests
-- 808 flush requests: flush is automatically invoked whenever a file is closed
-- 33168 write/read requests: each large file takes 1024 1 MiB IOs on write, while the maximum size of a request at the FUSE level is 128 KiB by default. It means that each application IO is split into 8 FUSE requests, so there are `(1024 * 8 + 100) * 4 = 33168` requests. The read IOs work in a similar way, and so does its counting.
+- 404 `create`, `open` and `unlink` requests
+- 808 `flush` requests: `flush` is automatically invoked whenever a file is closed
+- 33168 `write`/`read` requests: each large file takes 1024 1 MiB IOs on write, while the maximum size of a request at the FUSE level is 128 KiB by default. It means that each application IO is split into 8 FUSE requests, so there are `(1024 * 8 + 100) * 4 = 33168` requests. The read IOs work in a similar way, and so does its counting.
 
-All these values correspond exactly to the results of `profile`. In addition, the test result shows that the average latency for the `write` operations is extremely low (45 μs). This is because JuiceFS `write` writes to a memory buffer first by default and then calls flush to upload data to the object storage when the file is closed, as expected.
+All these values correspond exactly to the results of `profile`. In addition, the test result shows that the average latency for the `write` operations is extremely low (45 μs). This is because JuiceFS `write` writes to a memory buffer first by default and then calls `flush` to upload data to the object storage when the file is closed, as expected.
 
 ## Other Test Tool Configuration Examples
 

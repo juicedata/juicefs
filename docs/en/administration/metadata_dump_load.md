@@ -6,37 +6,36 @@ slug: /metadata_dump_load
 
 :::tip
 
-- JuiceFS v0.15.2 started to support manual backup, recovery and inter-engine migration of metadata.
-- JuiceFS v1.0.0 starts to support automatic metadata backup
+- JuiceFS v0.15.2 started to support manual backup, recovery and migrate metadata across different metadata engines.
+- JuiceFS v1.0.0 starts to support automatic metadata backup.
+- JuiceFS v1.0.4 starts to support importing an encrypted backup.
 :::
+
+JuiceFS supports [multiple metadata engines](../guide/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine.
 
 ## Metadata backup {#backup}
 
-JuiceFS supports [multiple metadata storage engines](../guide/how_to_set_up_metadata_engine.md), and each engine has a different data management format internally. To facilitate management, JuiceFS provides `dump` command which allows to write all metadata in a uniform format to [JSON](https://www.json.org/json-en.html) file for backup. Also, JuiceFS provides `load` command which allows to restore or migrate backups to any metadata storage engine. For more information on the command, please refer to [here](../reference/command_reference.md#dump).
+:::note
+
+* `juicefs dump` does not provide snapshot consistency. If files are modified during the export, the final backup file will contain information from different points in time, which might prove unusable for some applications (like databases). If you have higher standards for consistency, you should suspend all writes to the system before exporting.
+* For large scale file systems, dumping directly from online database may prove risks to system reliability, use with caution.
+:::
 
 ### Manual backup {#backup-manually}
 
 Using the `dump` command provided by JuiceFS client, you can export metadata to a JSON file, for example:
 
-```bash
+```shell
 juicefs dump redis://192.168.1.6:6379 meta-dump.json
 ```
 
 The JSON file exported by using the `dump` command provided by the JuiceFS client can have any filename and extension that you prefer, as shown in the example above. In particular, if the file extension is `.gz` (e.g. `meta-dump.json.gz`), the exported data will be compressed using the Gzip algorithm.
 
-By default, the `dump` command starts from the root directory `/` and iterates deeply through all the files in the directory tree, and writes the metadata information of each file to a file in JSON format. However, for security reasons, the Secret Key information of the object storage will not be exported to the JSON file (it can be preserved through the `--keep-secret-key` option).
-
-:::note
-`juicefs dump` only guarantees the integrity of individual files and does not provide a global point-in-time snapshot. If transactions are being written during the dump process, the final exported files will contain information from different points in time.
-:::
+By default, the `dump` command starts from the root directory `/` and iterates recursively through all the files in the directory tree, and writes the metadata of each file to a JSON output. The object storage credentials will be omitted for data security, but it can be preserved using the `--keep-secret-key` option.
 
 The value of `juicefs dump` is that it can export complete metadata information in a uniform JSON format for easy management and preservation, and it can be recognized and imported by different metadata storage engines.
 
 In practice, the `dump` command should be used in conjunction with the backup tool that comes with the database to complement each other, such as [Redis RDB](https://redis.io/topics/persistence#backing-up-redis-data) and [`mysqldump`](https://dev.mysql.com/doc/mysql-backup-excerpt/5.7/en/mysqldump-sql-format.html), etc.
-
-:::note
-The above discussion is for metadata backup only. A complete file system backup solution should also include object storage data backup at least, such as offsite disaster recovery, recycle bin, multiple versions, etc.
-:::
 
 ### Automatic backup {#backup-automatically}
 
@@ -79,60 +78,63 @@ JuiceFS periodically cleans up backups according to the following rules.
 
 ## Metadata recovery and migration {#recovery-and-migration}
 
-Use the [`load`](../reference/command_reference.md#load) command to restore the metadata exported by the `dump` command to the database, please note that the `load` command only supports restoring to **newly created or empty database**. For example, to restore a backup to a brand new Redis database:
+Use the [`load`](../reference/command_reference.md#load) command to restore the metadata dump file into an empty database, for example:
 
-:::tip
-If the metadata backup file is compressed by Gzip (that is, the file extension is `.gz`), you need to use the `gzip -d` command to decompress it first.
-:::
-
-```bash
+```shell
 juicefs load redis://192.168.1.6:6379 meta-dump.json
 ```
 
-This command automatically handles conflicts due to the inclusion of files from different points in time, recalculates the file system statistics (space usage, inode counters, etc.), and finally generates a globally consistent metadata in the database. Alternatively, if you want to customize some of the metadata (be careful), you can try to manually modify the JSON file before loading.
+Once imported, JuiceFS will recalculate the file system statistics including space usage, inode counters, and eventually generates a globally consistent metadata in the database. If you have a deep understanding of the metadata design of JuiceFS, you can also modify the metadata backup file before restoring to debug.
 
-The JSON format data exported by the `dump` command is unified and generic, and can be recognized and imported by all metadata engines. Therefore, you can not only restore backups to the same type of database, but also to other databases, thus achieving the migration of metadata engines.
+The dump file is written in an uniform format, which can be recognized and imported by all metadata engines, making it easy to migrate to other types of metadata engines.
 
-For instance, you can export the metadata backup from a Redis database and restore it to a brand new MySQL database.
+For instance, to migrate from a Redis database to MySQL:
 
 1. Exporting metadata backup from Redis:
 
-   ```bash
+   ```shell
    juicefs dump redis://192.168.1.6:6379 meta-dump.json
    ```
 
 1. Restoring metadata to a new MySQL database:
 
-   ```bash
+   ```shell
    juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs meta-dump.json
    ```
 
 It is also possible to migrate directly through the system's pipe:
 
-```bash
+```shell
 juicefs dump redis://192.168.1.6:6379 | juicefs load mysql://user:password@(192.168.1.6:3306)/juicefs
 ```
 
-It is important to note that since the API access key for object storage is excluded by default from the backup exported by `dump`, whether restoring or migrating metadata, you need to use the [`juicefs config`](../reference/command_reference.md#config) command to add the Secret Key associated with the file system back to the object storage after completing the operation. For example:
+Note that since the API access key for object storage is excluded by default from the backup, when loading metadata, you need to use the [`juicefs config`](../reference/command_reference.md#config) command to reconfigure the object storage credentials. For example:
 
-```bash
+```shell
 juicefs config --secret-key xxxxx mysql://user:password@(192.168.1.6:3306)/juicefs
 ```
 
-:::caution
-To ensure consistency of the file system content before and after migration, you need to stop transaction writing during the migration process. Also, since the original object storage is still used after migration, make sure that the old engine is offline or has read-only access to the object storage before the new metadata engine comes online; otherwise it may cause file system corruption.
-:::
+### Encrypted file system {#encrypted-file-system}
+
+For [encrypted file system](../security/encrypt.md), all data is encrypted before uploading to the object storage, including automatic metadata backups. This is different from the `dump` command, which only output metadata in plain text.
+
+For an encrypted file system, it is necessary to additionally set the `JFS_RSA_PASSPHRASE` environment variable and specify the RSA private key and encryption algorithm when restoring the automatically backed-up metadata:
+
+```shell
+export JFS_RSA_PASSPHRASE=xxxxxx
+juicefs load \
+  --encrypt-rsa-key my-private.pem \
+  --encrypt-algo aes256gcm-rsa \
+  redis://192.168.1.6:6379/1 \
+  dump-2023-03-16-090750.json.gz
+```
 
 ## Metadata inspection {#inspection}
 
-In addition to exporting complete metadata information, the `dump` command also supports exporting metadata in specific subdirectories. The exported JSON content is often used to help troubleshoot problems because it allows users to view the internal information of all the files under a given directory tree intuitively. For example.
+In addition to completely exporting metadata, you can also export specific subdirectories. You can intuitively inspect the metadata in the directory tree.
 
-```bash
+```shell
 juicefs dump redis://192.168.1.6:6379 meta-dump.json --subdir /path/in/juicefs
 ```
 
-Moreover, you can use tools like `jq` to analyze the exported file.
-
-:::note
-Please don't dump a directory that is too big in an online system as it may slow down the server.
-:::
+Using tools like `jq` to analyze the exported file is also an option.

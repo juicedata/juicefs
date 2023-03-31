@@ -488,7 +488,7 @@ export MINIO_ROOT_PASSWORD=12345678
 juicefs gateway redis://localhost localhost:9000
 ```
 
-### `juicefs webdav`
+### `juicefs webdav` {#webdav}
 
 Start a WebDAV server.
 
@@ -769,7 +769,7 @@ $ cd /mnt/jfs
 $ juicefs info -i 100
 ```
 
-### `juicefs bench`
+### `juicefs bench` {#bench}
 
 Run benchmark, including read/write/stat for big and small files.
 
@@ -808,7 +808,7 @@ $ juicefs bench /mnt/jfs -p 4
 $ juicefs bench /mnt/jfs --big-file-size 0
 ```
 
-### `juicefs objbench`
+### `juicefs objbench` {#objbench}
 
 Run basic benchmarks on the target object storage to test if it works as expected.
 
@@ -906,7 +906,7 @@ juicefs fsck [command options] META-URL
 juicefs fsck redis://localhost
 ```
 
-### `juicefs profile`
+### `juicefs profile` {#profile}
 
 Analyze [access log](../administration/fault_diagnosis_and_analysis.md#access-log).
 
@@ -1035,47 +1035,60 @@ $ juicefs warmup -f /tmp/filelist
 
 ### `juicefs dump` {#dump}
 
-Dump metadata into a JSON file.
+Dump metadata into a JSON file. Refer to ["Metadata backup"](../administration/metadata_dump_load.md#backup) for more information.
 
 #### Synopsis
 
-```
+```shell
 juicefs dump [command options] META-URL [FILE]
-```
 
-When the FILE is not provided, STDOUT will be used instead.
+# Export metadata to meta-dump.json
+juicefs dump redis://localhost meta-dump.json
+
+# Export metadata for only one subdirectory of the file system
+juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
+```
 
 #### Options
 
+`META-URL`<br />
+Database URL for metadata storage, see ["Metadata Engines Supported by JuiceFS"](../guide/how_to_set_up_metadata_engine.md) for details.
+
+`FILE`<br />
+Export file path, if not specified, it will be exported to standard output. If the filename ends with `.gz`, it will be automatically compressed.
+
 `--subdir value`<br />
-only dump a sub-directory.
+Only export metadata for the specified subdirectory.
 
-#### Examples
-
-```bash
-$ juicefs dump redis://localhost meta-dump
-
-# Dump only a subtree of the volume
-$ juicefs dump redis://localhost sub-meta-dump --subdir /dir/in/jfs
-```
+`--keep-secret-key`<br />
+Export object storage authentication information, the default is `false`. Since it is exported in plain text, pay attention to data security when using it. If the export file does not contain object storage authentication information, you need to use [`juicefs config`](#config) to reconfigure object storage authentication information after the subsequent import is completed.
 
 ### `juicefs load` {#load}
 
-Load metadata from a previously dumped JSON file.
+Load metadata from a previously dumped JSON file. Read ["Metadata recovery and migration"](../administration/metadata_dump_load.md#recovery-and-migration) to learn more.
 
 #### Synopsis
 
-```
+```shell
 juicefs load [command options] META-URL [FILE]
+
+# Import the metadata backup file meta-dump.json to the database
+juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 ```
 
-When the FILE is not provided, STDIN will be used instead.
+#### Options
 
-#### Examples
+`META-URL`<br />
+Database URL for metadata storage, see ["Metadata Engines Supported by JuiceFS"](../guide/how_to_set_up_metadata_engine.md) for details.
 
-```bash
-juicefs load redis://localhost/1 meta-dump
-```
+`FILE`<br />
+Import file path, if not specified, it will be imported from standard input. If the filename ends with `.gz`, it will be automatically decompressed.
+
+`--encrypt-rsa-key value`<br />
+The path to the RSA private key file used for encryption.
+
+`--encrypt-alg value`<br />
+Encryption algorithm, the default is `aes256gcm-rsa`.
 
 ### `juicefs config` {#config}
 
@@ -1159,7 +1172,7 @@ skip sanity check and force destroy the volume (default: false)
 juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 ```
 
-### `juicefs debug`
+### `juicefs debug` {#debug}
 
 It collects and displays information from multiple dimensions such as the operating environment and system logs to help better locate errors
 

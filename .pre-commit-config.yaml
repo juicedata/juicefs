@@ -7,6 +7,6 @@ repos:
       - id: end-of-file-fixer
       - id: trailing-whitespace
   - repo: https://github.com/golangci/golangci-lint
-    rev: v1.33.0
+    rev: v1.52.2
     hooks:
       - id: golangci-lint

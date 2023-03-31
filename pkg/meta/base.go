@@ -71,6 +71,11 @@ type engine interface {
 	doCleanupDelayedSlices(edge int64) (int, error)
 	doDeleteSlice(id uint64, size uint32) error
 
+	doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, ino Ino, attr *Attr, cmode uint8, cumask uint16, top bool) syscall.Errno
+	doAttachDirNode(ctx Context, parent Ino, dstIno Ino, name string) syscall.Errno
+	doFindDetachedNodes(t time.Time) []Ino
+	doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno
+
 	doGetQuota(ctx Context, inode Ino) (*Quota, error)
 	doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error
 	doDelQuota(ctx Context, inode Ino) error
@@ -183,7 +188,6 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		removedFiles: make(map[Ino]bool),
 		compacting:   make(map[uint64]bool),
 		maxDeleting:  make(chan struct{}, 100),
-		dslices:      make(chan Slice, conf.MaxDeletes*10240),
 		symlinks:     &sync.Map{},
 		fsStat:       new(fsStat),
 		dirStats:     make(map[Ino]dirStat),
@@ -231,7 +235,7 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 	go func() {
 		for {
 			var totalSpace, availSpace, iused, iavail uint64
-			err := m.StatFS(Background, &totalSpace, &availSpace, &iused, &iavail)
+			err := m.StatFS(Background, &totalSpace, &availSpace, &iused, &iavail, false)
 			if err == 0 {
 				m.usedSpaceG.Set(float64(totalSpace - availSpace))
 				m.usedInodesG.Set(float64(iused))
@@ -267,7 +271,7 @@ func (m *baseMeta) parallelSyncDirStat(ctx Context, inos map[Ino]bool) *sync.Wai
 		go func(ino Ino) {
 			defer wg.Done()
 			_, st := m.en.doSyncDirStat(ctx, ino)
-			if st != 0 {
+			if st != 0 && st != syscall.ENOENT {
 				logger.Warnf("sync dir stat for %d: %s", ino, st)
 			}
 		}(i)
@@ -458,8 +462,16 @@ func (m *baseMeta) NewSession() error {
 	go m.en.flushStats()
 	go m.flushDirStat()
 	go m.flushQuotas() // TODO: improve it in Redis?
-	for i := 0; i < m.conf.MaxDeletes; i++ {
-		go m.deleteSlices()
+
+	if m.conf.MaxDeletes > 0 {
+		m.dslices = make(chan Slice, m.conf.MaxDeletes*10240)
+		for i := 0; i < m.conf.MaxDeletes; i++ {
+			go func() {
+				for s := range m.dslices {
+					m.deleteSlice_(s.Id, s.Size)
+				}
+			}()
+		}
 	}
 	if !m.conf.NoBGJob {
 		go m.cleanupDeletedFiles()
@@ -819,8 +831,61 @@ func (m *baseMeta) cleanupSlices() {
 	}
 }
 
-func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
+func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64, subdir bool) syscall.Errno {
 	defer m.timeit(time.Now())
+	if st := m.statRootFs(ctx, totalspace, availspace, iused, iavail); st != 0 {
+		return st
+	}
+	if m.root == RootInode || !subdir {
+		return 0
+	}
+	var usage *Quota
+	var attr Attr
+	for root := m.root; root >= RootInode; root = attr.Parent {
+		if st := m.GetAttr(ctx, root, &attr); st != 0 {
+			return st
+		}
+		if root == RootInode {
+			attr.Parent = 0
+		}
+		q, err := m.en.doGetQuota(ctx, root)
+		if err != nil {
+			return errno(err)
+		}
+		if q == nil {
+			continue
+		}
+		if usage == nil {
+			usage = q
+		}
+		if q.MaxSpace > 0 {
+			ls := q.MaxSpace - q.UsedSpace
+			if ls < 0 {
+				ls = 0
+			}
+			if uint64(ls) < *availspace {
+				*availspace = uint64(ls)
+			}
+		}
+		if q.MaxInodes > 0 {
+			li := q.MaxInodes - q.UsedInodes
+			if li < 0 {
+				li = 0
+			}
+			if uint64(li) < *iavail {
+				*iavail = uint64(li)
+			}
+		}
+	}
+	if usage == nil {
+		return 0
+	}
+	*totalspace = uint64(usage.UsedSpace) + *availspace
+	*iused = uint64(usage.UsedInodes)
+	return 0
+}
+
+func (m *baseMeta) statRootFs(ctx Context, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	var used, inodes int64
 	var err error
 	err = utils.WithTimeout(func() error {
@@ -1751,7 +1816,7 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 			if attr.Typ != TypeDirectory {
 				return syscall.ENOTDIR
 			}
-			m.root = inode
+			m.chroot(inode)
 		}
 		if len(ps) == 1 {
 			break
@@ -1759,6 +1824,10 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 		subdir = ps[1]
 	}
 	return 0
+}
+
+func (m *baseMeta) chroot(inode Ino) {
+	m.root = inode
 }
 
 func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino) syscall.Errno {
@@ -1837,16 +1906,13 @@ func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64, force bool) {
 	}()
 }
 
-func (m *baseMeta) deleteSlices() {
-	var err error
-	for s := range m.dslices {
-		if err = m.newMsg(DeleteSlice, s.Id, s.Size); err != nil {
-			logger.Warnf("Delete data blocks of slice %d (%d bytes): %s", s.Id, s.Size, err)
-			continue
-		}
-		if err = m.en.doDeleteSlice(s.Id, s.Size); err != nil {
-			logger.Errorf("Delete meta entry of slice %d (%d bytes): %s", s.Id, s.Size, err)
-		}
+func (m *baseMeta) deleteSlice_(id uint64, size uint32) {
+	if err := m.newMsg(DeleteSlice, id, size); err != nil {
+		logger.Warnf("Delete data blocks of slice %d (%d bytes): %s", id, size, err)
+		return
+	}
+	if err := m.en.doDeleteSlice(id, size); err != nil {
+		logger.Errorf("Delete meta entry of slice %d (%d bytes): %s", id, size, err)
 	}
 }
 
@@ -1854,7 +1920,11 @@ func (m *baseMeta) deleteSlice(id uint64, size uint32) {
 	if id == 0 || m.conf.MaxDeletes == 0 {
 		return
 	}
-	m.dslices <- Slice{Id: id, Size: size}
+	if m.dslices != nil {
+		m.dslices <- Slice{Id: id, Size: size}
+	} else {
+		m.deleteSlice_(id, size)
+	}
 }
 
 func (m *baseMeta) toTrash(parent Ino) bool {
@@ -1916,6 +1986,18 @@ func (m *baseMeta) cleanupTrash() {
 		} else if ok {
 			go m.doCleanupTrash(false)
 			go m.cleanupDelayedSlices()
+		}
+	}
+}
+
+func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func()) {
+	for _, inode := range m.en.doFindDetachedNodes(edge) {
+		if eno := m.en.doCleanupDetachedNode(Background, inode); eno != 0 {
+			logger.Errorf("cleanupDetachedNode: remove detached tree (%d) error: %s", inode, eno)
+		} else {
+			if increProgress != nil {
+				increProgress()
+			}
 		}
 	}
 }
@@ -2067,4 +2149,156 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 		})
 	}
 	return eg.Wait()
+}
+
+func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno {
+	if isTrash(parent) {
+		return syscall.EPERM
+	}
+	if parent == RootInode && name == TrashName {
+		return syscall.EPERM
+	}
+	if m.conf.ReadOnly {
+		return syscall.EROFS
+	}
+	if name == "" {
+		return syscall.ENOENT
+	}
+
+	defer m.timeit(time.Now())
+	parent = m.checkRoot(parent)
+
+	var attr Attr
+	var eno syscall.Errno
+	if eno = m.en.doGetAttr(ctx, srcIno, &attr); eno != 0 {
+		return eno
+	}
+	var dstIno Ino
+	var _a Attr
+	if m.en.doLookup(ctx, parent, name, &dstIno, &_a) == 0 {
+		return syscall.EEXIST
+	}
+	var sum Summary
+	eno = m.FastGetSummary(ctx, srcIno, &sum, true)
+	if eno != 0 {
+		return eno
+	}
+	if m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), parent) {
+		return syscall.ENOSPC
+	}
+	*total = sum.Dirs + sum.Files
+	concurrent := make(chan struct{}, 4)
+	if attr.Typ == TypeDirectory {
+		eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
+		if eno == 0 {
+			eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
+		}
+		if eno != 0 && dstIno != 0 {
+			if eno := m.en.doCleanupDetachedNode(ctx, dstIno); eno != 0 {
+				logger.Errorf("remove detached tree (%d): %s", dstIno, eno)
+			}
+		}
+	} else {
+		eno = m.cloneEntry(ctx, srcIno, parent, name, nil, cmode, cumask, count, true, concurrent)
+	}
+	if eno == 0 {
+		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
+		m.updateDirQuota(ctx, parent, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files))
+	}
+	return eno
+}
+
+func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, dstIno *Ino, cmode uint8, cumask uint16, count *uint64, top bool, concurrent chan struct{}) syscall.Errno {
+	ino, err := m.nextInode()
+	if err != nil {
+		return errno(err)
+	}
+	if dstIno != nil {
+		*dstIno = ino
+	}
+	var attr Attr
+	eno := m.en.doCloneEntry(ctx, srcIno, parent, name, ino, &attr, cmode, cumask, top)
+	if eno != 0 {
+		return eno
+	}
+	m.en.updateStats(align4K(attr.Length), 1)
+	atomic.AddUint64(count, 1)
+	if attr.Typ != TypeDirectory {
+		return 0
+	}
+
+	var entries []*Entry
+	eno = m.en.doReaddir(ctx, srcIno, 0, &entries, -1)
+	if eno == syscall.ENOENT {
+		eno = 0 // empty dir
+	}
+	if eno != 0 {
+		return eno
+	}
+	// try directories first to increase parallel
+	var dirs int
+	for i, e := range entries {
+		if e.Attr.Typ == TypeDirectory {
+			entries[dirs], entries[i] = entries[i], entries[dirs]
+			dirs++
+		}
+	}
+
+	var wg sync.WaitGroup
+	var skipped uint32
+	var errCh = make(chan syscall.Errno, cap(concurrent))
+	cloneChild := func(e *Entry) syscall.Errno {
+		eno := m.cloneEntry(ctx, e.Inode, ino, string(e.Name), nil, cmode, cumask, count, false, concurrent)
+		if eno == syscall.ENOENT {
+			logger.Warnf("ignore deleted %s in dir %d", string(e.Name), srcIno)
+			if e.Attr.Typ == TypeDirectory {
+				atomic.AddUint32(&skipped, 1)
+			}
+			eno = 0
+		}
+		return eno
+	}
+LOOP:
+	for i, entry := range entries {
+		select {
+		case e := <-errCh:
+			eno = e
+			ctx.Cancel()
+			break LOOP
+		case concurrent <- struct{}{}:
+			wg.Add(1)
+			go func(e *Entry) {
+				defer wg.Done()
+				eno := cloneChild(e)
+				if eno != 0 {
+					errCh <- eno
+				}
+				<-concurrent
+			}(entry)
+		default:
+			if e := cloneChild(entry); e != 0 {
+				eno = e
+				break LOOP
+			}
+		}
+		entries[i] = nil // release memory
+		if ctx.Canceled() {
+			eno = syscall.EINTR
+			break
+		}
+	}
+	wg.Wait()
+	if eno == 0 {
+		select {
+		case eno = <-errCh:
+		default:
+		}
+	}
+	if eno == 0 && skipped > 0 {
+		attr.Nlink -= skipped
+		if eno := m.en.doRepair(ctx, ino, &attr); eno != 0 {
+			logger.Warnf("fix nlink of %d: %s", ino, eno)
+		}
+	}
+	return eno
 }

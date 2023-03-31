@@ -32,9 +32,9 @@ slug: /performance_evaluation_guide
 
 JuiceFS v1.0+ 默认启用了回收站，基准测试会在文件系统中创建和删除临时文件，这些文件最终会被转存到回收站 `.trash` 占用存储空间，为了避免这种情况，可以在基准测试之前关闭回收站 `juicefs config META-URL --trash-days 0`，详情参考[回收站](../security/trash.md)。
 
-### JuiceFS Bench
+### `juicefs bench`
 
-JuiceFS [`bench`](../reference/command_reference.md#juicefs-bench) 命令可以帮助你快速完成单机性能测试，通过测试结果判断环境配置和性能表现是否正常。假设你已经把 JuiceFS 挂载到了测试机器的 `/mnt/jfs` 位置（如果在 JuiceFS 初始化、挂载方面需要帮助，请参考[快速上手指南](../getting-started/README.md)），执行以下命令即可（推荐 `-p` 参数设置为测试机器的 CPU 核数）：
+[`juicefs bench`](../reference/command_reference.md#bench) 命令可以帮助你快速完成单机性能测试，通过测试结果判断环境配置和性能表现是否正常。假设你已经把 JuiceFS 挂载到了测试机器的 `/mnt/jfs` 位置（如果在 JuiceFS 初始化、挂载方面需要帮助，请参考[快速上手指南](../getting-started/README.md)），执行以下命令即可（推荐 `-p` 参数设置为测试机器的 CPU 核数）：
 
 ```bash
 juicefs bench /mnt/jfs -p 4
@@ -44,7 +44,7 @@ juicefs bench /mnt/jfs -p 4
 
 ![bench](../images/bench-guide-bench.png)
 
-JuiceFS `bench` 基准性能测试的具体流程如下（它的实现逻辑非常简单，有兴趣了解细节的可以直接看[源码](https://github.com/juicedata/juicefs/blob/main/cmd/bench.go))：
+`juicefs bench` 基准性能测试的具体流程如下（它的实现逻辑非常简单，有兴趣了解细节的可以直接看[源码](https://github.com/juicedata/juicefs/blob/main/cmd/bench.go))：
 
 1. N 并发各写 1 个 1 GiB 的大文件，IO 大小为 1 MiB
 2. N 并发各读 1 个之前写的 1 GiB 的大文件，IO 大小为 1 MiB
@@ -75,9 +75,9 @@ Amazon EFS 的性能与容量线性相关（[参考官方文档](https://docs.aw
 以上数据来自 [AWS 官方文档](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html)，性能指标为最大值，EBS 的实际性能与卷容量和挂载 EC2 实例类型相关，总的来说是越大容量，搭配约高配置的 EC2，得到的 EBS 性能越好，但不超过上面提到的最大值。
 :::
 
-### JuiceFS Objbench
+### `juicefs objbench`
 
-JuiceFS 提供了 [`objbench`](../reference/command_reference.md#juicefs-objbench) 子命令来运行一些关于对象存储的测试，用以评估其作为 JuiceFS 的后端存储时的运行情况。以测试 Amazon S3 为例：
+[`juicefs objbench`](../reference/command_reference.md#objbench) 命令可以运行一些关于对象存储的测试，用以评估其作为 JuiceFS 的后端存储时的运行情况。以测试 Amazon S3 为例：
 
 ```bash
 juicefs objbench \
@@ -130,9 +130,9 @@ juicefs objbench \
 
 接下来介绍两个性能观测和分析工具，是 JuiceFS 测试、使用、调优过程中必备的利器。
 
-### JuiceFS Stats
+### `juicefs stats`
 
-JuiceFS `stats` 是一个实时统计 JuiceFS 性能指标的工具，类似 Linux 系统的 `dstat` 命令，可以实时显示 JuiceFS 客户端的指标变化（详细说明和使用方法见[文档](./stats_watcher.md)）。执行 `juicefs bench` 时，在另一个会话中执行以下命令：
+[`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) 命令是一个实时统计 JuiceFS 性能指标的工具，类似 Linux 系统的 `dstat` 命令，可以实时显示 JuiceFS 客户端的指标变化。执行 `juicefs bench` 时，在另一个会话中执行以下命令：
 
 ```bash
 juicefs stats /mnt/jfs --verbosity 1
@@ -140,54 +140,35 @@ juicefs stats /mnt/jfs --verbosity 1
 
 结果如下，可以将其与上述基准测试流程对照来看，更易理解：
 
-![stats](../images/bench-guide-stats.png)
+![](../images/bench-guide-stats.png)
 
-其中各项指标具体含义如下：
+其中各项指标具体含义参考 [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats)。
 
-- `usage`
-  - `cpu`: JuiceFS 进程消耗的 CPU
-  - `mem`: JuiceFS 进程占用的物理内存
-  - `buf`: JuiceFS 进程内部的读写 buffer 大小，受挂载选项 `--buffer-size` 限制
-  - `cache`: 内部指标，可不关注
-- `fuse`
-  - `ops`/`lat`: FUSE 接口每秒处理的请求个数及其平均时延（单位为毫秒）
-  - `read`/`write`: FUSE 接口每秒处理读写请求的带宽值
-- `meta`
-  - `ops`/`lat`: 元数据引擎每秒处理的请求个数及其平均时延（单位为毫秒）。请注意部分能在缓存中直接处理的请求未列入统计，以更好地体现客户端与元数据引擎交互的耗时。
-  - `txn`/`lat`: 元数据引擎每秒处理的**写事务**个数及其平均时延（单位为毫秒）。只读请求如 `getattr` 只会计入 ops 而不会计入 txn。
-  - `retry`: 元数据引擎每秒重试**写事务**的次数
-- `blockcache`
-  - `read`/`write`: 客户端本地数据缓存的每秒读写流量
-- `object`
-  - `get`/`get_c`/`lat`: 对象存储每秒处理**读请求**的带宽值，请求个数及其平均时延（单位为毫秒）
-  - `put`/`put_c`/`lat`: 对象存储每秒处理**写请求**的带宽值，请求个数及其平均时延（单位为毫秒）
-  - `del_c`/`lat`: 对象存储每秒处理**删除请求**的个数和平均时延（单位为毫秒）
+### `juicefs profile`
 
-### JuiceFS Profile
-
-JuiceFS `profile` 一方面用来实时输出 JuiceFS 客户端的所有访问日志，包含每个请求的信息。同时，它也可以用来回放、统计 JuiceFS 访问日志，方便用户直观了解 JuiceFS 的运行情况（详细的说明和使用方法见[文档](./operations_profiling.md)）。执行 `juicefs bench` 时，在另一个会话中执行以下命令：
+[`juicefs profile`](../administration/fault_diagnosis_and_analysis.md#profile) 命令可以基于[访问日志](../administration/fault_diagnosis_and_analysis.md#access-log)进行性能数据统计，来直观了解 JuiceFS 的运行情况。执行 `juicefs bench` 时，在另一个会话中执行以下命令：
 
 ```bash
-cat /mnt/jfs/.accesslog > access.log
+cat /mnt/jfs/.accesslog > juicefs.accesslog
 ```
 
-其中 `.accesslog` 是一个虚拟文件，它平时不会产生任何数据，只有在读取（如执行 `cat`）时才会有 JuiceFS 的访问日志输出。结束后使用 <kbd>Ctrl-C</kbd> 结束 `cat` 命令，并运行：
+其中 `.accesslog` 是一个虚拟文件，它平时不会产生任何数据，只有在读取（如执行 `cat`）时才会有 JuiceFS 的访问日志输出。结束后使用 <kbd>Ctrl</kbd> + <kbd>C</kbd> 结束 `cat` 命令，并运行：
 
 ```bash
-juicefs profile access.log --interval 0
+juicefs profile juicefs.accesslog --interval 0
 ```
 
 其中 `--interval` 参数设置访问日志的采样间隔，设为 0 时用于快速重放一个指定的日志文件，生成统计信息，如下图所示：
 
-![profile](../images/bench-guide-profile.png)
+![](../images/bench-guide-profile.png)
 
-从之前基准测试流程描述可知，本次测试过程一共创建了 (1 + 100) * 4 = 404 个文件，每个文件都经历了「创建 → 写入 → 关闭 → 打开 → 读取 → 关闭 → 删除」的过程，因此一共有：
+从之前基准测试流程描述可知，本次测试过程一共创建了 `(1 + 100) * 4 = 404` 个文件，每个文件都经历了「创建 → 写入 → 关闭 → 打开 → 读取 → 关闭 → 删除」的过程，因此一共有：
 
-- 404 次 create，open 和 unlink 请求
-- 808 次 flush 请求：每当文件关闭时会自动调用一次 flush
-- 33168 次 write/read 请求：每个大文件写入了 1024 个 1 MiB IO，而在 FUSE 层请求的默认最大值为 128 KiB，也就是说每个应用 IO 会被拆分成 8 个 FUSE 请求，因此一共有 (1024 *8 + 100)* 4 = 33168 个请求。读 IO 与之类似，计数也相同。
+- 404 次 `create`，`open` 和 `unlink` 请求
+- 808 次 `flush` 请求：每当文件关闭时会自动调用一次 `flush`
+- 33168 次 `write`/`read` 请求：每个大文件写入了 1024 个 1 MiB IO，而在 FUSE 层请求的默认最大值为 128 KiB，也就是说每个应用 IO 会被拆分成 8 个 FUSE 请求，因此一共有 `(1024 * 8 + 100) * 4 = 33168` 个请求。读 IO 与之类似，计数也相同。
 
-以上这些值均能与 `profile` 的结果完全对应上。另外，结果中还显示 write 的平均时延非常小（45 微秒），而主要耗时点在 flush。这是因为 JuiceFS 的 write 默认先写入内存缓冲区，在文件关闭时再调用 flush 上传数据到对象存储，与预期吻合。
+以上这些值均能与 `profile` 的结果完全对应上。另外，结果中还显示 `write` 的平均时延非常小（45 微秒），而主要耗时点在 `flush`。这是因为 JuiceFS 的 `write` 默认先写入内存缓冲区，在文件关闭时再调用 `flush` 上传数据到对象存储，与预期吻合。
 
 ## 其他测试工具配置示例
 

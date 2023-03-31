@@ -142,16 +142,7 @@ The result shows that JuiceFS can provide significantly more metadata IOPS than 
 
 ### Analyze performance
 
-There is a virtual file called `.accesslog` in the root of JuiceFS to show all the details of file system operations and the time they take, for example:
-
-```bash
-$ cat /jfs/.accesslog
-2021.01.15 08:26:11.003330 [uid:0,gid:0,pid:4403] write (17669,8666,4993160): OK <0.000010>
-2021.01.15 08:26:11.003473 [uid:0,gid:0,pid:4403] write (17675,198,997439): OK <0.000014>
-2021.01.15 08:26:11.003616 [uid:0,gid:0,pid:4403] write (17666,390,951582): OK <0.000006>
-```
-
-The last number on each line is the time (in seconds) that the current operation takes. You can directly use this to debug and analyze performance issues, or try `juicefs profile /jfs` to monitor real time statistics. Please run `juicefs profile -h` or refer to [here](https://juicefs.com/docs/community/operations_profiling) to learn more about this subcommand.
+See [Real-Time Performance Monitoring](https://juicefs.com/docs/community/fault_diagnosis_and_analysis#performance-monitor) if you encountered performance issues.
 
 ## Supported Object Storage
 

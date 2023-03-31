@@ -61,6 +61,10 @@ Where `[]` enclosed are optional and the rest are mandatory.
 - If you need to connect to Redis Sentinel, the format will be slightly different, refer to [Redis Best Practices](../administration/metadata/redis_best_practices.md#high-availability) for details.
 - If username / password contains special characters, use single quote to avoid unexpected shell interpretations, or use the `REDIS_PASSWORD` environment.
 
+:::tip
+A Redis instance can, by default, create a total of 16 logical databases, with each of these databases eligible for the creation of a singular JuiceFS file system. Thus, under ordinary circumstances, a single Redis instance may be utilized to form up to 16 JuiceFS file systems. However, it is crucial to note that the logical databases intended for use with JuiceFS must not be shared with other applications, as doing so could lead to data inconsistencies.
+:::
+
 For example, the following command will create a JuiceFS file system named `pics`, using the database No. `1` in Redis to store metadata:
 
 ```shell
@@ -395,8 +399,8 @@ The database path needs to be specified when mounting the file system.
 juicefs mount -d badger://$HOME/badger-data /mnt/jfs
 ```
 
-:::note
-Since BadgerDB is a standalone database, it can only be used locally and does not support multi-host shared mounts. In addition, only one process is allowed to access BadgerDB at the same time, and `gc` and `fsck` operations cannot be performed when the file system is mounted.
+:::tip
+BadgerDB only allows single-process access. If you need to perform operations like `gc`, `fsck`, `dump`, and `load`, you need to unmount the file system first.
 :::
 
 ## TiKV

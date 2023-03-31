@@ -225,6 +225,14 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put("a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
+	defer s.Delete("a/b/c/d/e/f")
+	if err := s.Put("a/b/c/d/e/f", bytes.NewReader(br)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
+
+	if err := s.Put("a1", bytes.NewReader(br)); err != nil {
+		t.Fatalf("PUT failed: %s", err.Error())
+	}
 	if obs, err := s.List("", "", "/", 10); err != nil {
 		if !(errors.Is(err, notSupportedDelimiter) || errors.Is(err, notSupported)) {
 			t.Fatalf("list with delimiter: %s", err)
@@ -236,6 +244,24 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("list with delimiter should return five results but got %d", len(obs))
 		}
 		keys := []string{"a/", "a1", "b/", "c/", "test"}
+		for i, o := range obs {
+			if o.Key() != keys[i] {
+				t.Fatalf("should get key %s but got %s", keys[i], o.Key())
+			}
+		}
+	}
+
+	if obs, err := s.List("a/", "", "/", 10); err != nil {
+		if !(errors.Is(err, notSupportedDelimiter) || errors.Is(err, notSupported)) {
+			t.Fatalf("list with delimiter: %s", err)
+		} else {
+			t.Logf("list api error: %s", err)
+		}
+	} else {
+		if len(obs) != 3 {
+			t.Fatalf("list with delimiter should return three results but got %d", len(obs))
+		}
+		keys := []string{"a/a", "a/a1", "a/b/"}
 		for i, o := range obs {
 			if o.Key() != keys[i] {
 				t.Fatalf("should get key %s but got %s", keys[i], o.Key())
@@ -561,15 +587,6 @@ func TestAzure(t *testing.T) { //skip mutate
 	abs, _ := newWasb(os.Getenv("AZURE_ENDPOINT"),
 		os.Getenv("AZURE_STORAGE_ACCOUNT"), os.Getenv("AZURE_STORAGE_KEY"), "")
 	testStorage(t, abs)
-}
-
-func TestNOS(t *testing.T) { //skip mutate
-	if os.Getenv("NOS_ACCESS_KEY") == "" {
-		t.SkipNow()
-	}
-	nos, _ := newNOS(os.Getenv("NOS_ENDPOINT"),
-		os.Getenv("NOS_ACCESS_KEY"), os.Getenv("NOS_SECRET_KEY"), "")
-	testStorage(t, nos)
 }
 
 func TestJSS(t *testing.T) { //skip mutate

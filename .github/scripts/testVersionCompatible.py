@@ -185,7 +185,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             output = subprocess.check_output('mc admin user list myminio'.split())
             if not output:
                 run_cmd('mc admin user add myminio juicedata 12345678')
-                run_cmd('mc admin policy set myminio consoleAdmin user=juicedata')
+                run_cmd('mc admin policy attach myminio consoleAdmin --user juicedata')
             options.extend(['--access-key', 'juicedata'])
             options.extend(['--secret-key', '12345678'])
             if version.parse('-'.join(juicefs.split('-')[1:])) <= version.parse('1.0.0-rc1'):
