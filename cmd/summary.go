@@ -83,7 +83,7 @@ func summary(ctx *cli.Context) error {
 	var depth, topN, strict uint8
 	depth = 2
 	topN = 10
-	strict = 1
+	strict = 0
 
 	if ctx.IsSet("depth") {
 		d := ctx.Uint("depth")
@@ -102,7 +102,7 @@ func summary(ctx *cli.Context) error {
 		topN = uint8(t)
 	}
 	if ctx.Bool("strict") {
-		strict = 0
+		strict = 1
 	}
 
 	progress := utils.NewProgress(false)

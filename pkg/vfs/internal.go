@@ -485,15 +485,15 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		if r.HasMore() {
 			topN = r.Get8()
 		}
-		var dirOnly bool
+		var strict bool
 		if r.HasMore() {
-			dirOnly = r.Get8() != 0
+			strict = r.Get8() != 0
 		}
 
 		done := make(chan struct{})
 		var r syscall.Errno
 		go func() {
-			r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, dirOnly)
+			r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, strict)
 			close(done)
 		}()
 		writeProgress(&tree.Files, &tree.Size, out, done)

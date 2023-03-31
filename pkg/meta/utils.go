@@ -484,12 +484,12 @@ func (t *TreeSummary) visitRoot(visit func(*TreeSummary)) {
 	}
 }
 
-func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, dirOnly bool) syscall.Errno {
+func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool) syscall.Errno {
 	var st syscall.Errno
-	if dirOnly {
-		st = m.fastGetTreeSummary(ctx, root)
-	} else {
+	if strict {
 		st = m.getTreeSummary(ctx, root)
+	} else {
+		st = m.fastGetTreeSummary(ctx, root)
 	}
 	if st != 0 {
 		return st
@@ -507,6 +507,26 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 		if depth > 0 {
 			depth--
 			for _, tree := range trees {
+				if !strict && tree.Type == TypeDirectory {
+					var entries []*Entry
+					if st := m.Readdir(ctx, tree.Inode, 1, &entries); st != 0 {
+						return st
+					}
+					for _, e := range entries {
+						if e.Attr.Typ == TypeDirectory {
+							continue
+						}
+						child := &TreeSummary{
+							Path:   path.Join(tree.Path, string(e.Name)),
+							Inode:  e.Inode,
+							Type:   e.Attr.Typ,
+							Size:   uint64(align4K(e.Attr.Length)),
+							Length: e.Attr.Length,
+							Files:  1,
+						}
+						tree.Children = append(tree.Children, child)
+					}
+				}
 				sort.Slice(tree.Children, func(i, j int) bool {
 					return tree.Children[i].Size > tree.Children[j].Size
 				})
