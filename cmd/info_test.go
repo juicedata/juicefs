@@ -51,7 +51,7 @@ func TestInfo(t *testing.T) {
 				}
 			}
 
-			if err = Main([]string{"", "info", fmt.Sprintf("%s/dir1", testMountPoint)}); err != nil {
+			if err = Main([]string{"", "info", fmt.Sprintf("%s/dir1", testMountPoint), "--strict"}); err != nil {
 				t.Fatalf("info failed: %s", err)
 			}
 			content, err := os.ReadFile(tmpFile.Name())
