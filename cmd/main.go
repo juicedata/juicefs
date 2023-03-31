@@ -23,6 +23,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/erikdubbelboer/gspt"
@@ -36,6 +37,7 @@ import (
 
 var logger = utils.GetLogger("juicefs")
 var debugAgent string
+var debugAgentOnce sync.Once
 
 func Main(args []string) error {
 	// we have to call this because gspt removes all arguments
@@ -263,12 +265,12 @@ func setup(c *cli.Context, n int) {
 	}
 
 	if !c.Bool("no-agent") {
-		go func() {
+		go debugAgentOnce.Do(func() {
 			for port := 6060; port < 6100; port++ {
 				debugAgent = fmt.Sprintf("127.0.0.1:%d", port)
 				_ = http.ListenAndServe(debugAgent, nil)
 			}
-		}()
+		})
 	}
 
 	if c.IsSet("pyroscope") {
