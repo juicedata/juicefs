@@ -5,7 +5,7 @@ slug: /p8s_metrics
 ---
 
 :::tip
-Please see the ["Monitoring"](../administration/monitoring.md) documentation to learn how to collect and display JuiceFS monitoring metrics.
+Please see the ["Monitoring and Data Visualization"](../administration/monitoring.md) documentation to learn how to collect and display JuiceFS monitoring metrics.
 :::
 
 ## Global labels

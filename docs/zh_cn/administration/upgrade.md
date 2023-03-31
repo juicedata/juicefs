@@ -27,7 +27,7 @@ JuiceFS 客户端只有一个二进制程序，升级新版只需用新版程序
 
 与[挂载点](#挂载点)一样，升级 S3 网关也是使用新版程序替换旧版程序即可。
 
-如果是[通过 Kubernetes 部署](../deployment/s3_gateway.md#在-kubernetes-中部署-s3-网关)，则需要根据具体部署的方式来升级，以下详细介绍。
+如果是[通过 Kubernetes 部署](../deployment/s3_gateway.md#deploy-in-kubernetes)，则需要根据具体部署的方式来升级，以下详细介绍。
 
 ### 通过 kubectl 升级
 

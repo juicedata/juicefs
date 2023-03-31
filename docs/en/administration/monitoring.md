@@ -1,21 +1,18 @@
 ---
 title: Monitoring and Data Visualization
 sidebar_position: 3
-description: This article describes how to visualize JuiceFS status monitoring with third-party tools such as Prometheus, Grafana, etc.
+description: This article describes how to collect and visualize JuiceFS metrics with third-party tools such as Prometheus, Grafana, etc.
 ---
 
-JuiceFS Client exposes performance data using metrics API, configure your Prometheus instance to scrape data, and then visualize using Grafana.
+The JuiceFS client exposes real-time metrics in [Prometheus](https://prometheus.io) format through the monitoring API. Users configure Prometheus to scrape metrics data, and then use tools such as [Grafana](https://grafana.com) to realize data visualization.
 
-- **Prometheus Server**: Scrapes and stores the time series data of various metrics. Refer to its [official documentation](https://prometheus.io/docs/introduction/first_steps).
-- **Grafana**: Loads and visualizes the time series data from Prometheus. Refer to its [official documentation](https://grafana.com/docs/grafana/latest/installation).
+## Add scrape config in Prometheus {#add-scrape-config}
 
-### Add scrape config
-
-After JuiceFS is mounted on a host, you can access its metrics API using `http://localhost:9567/metrics`, other types of JuiceFS Client (S3 Gateway, Hadoop SDK) is slightly different in this regard, see [Collecting metrics data for other types of clients](#collect-metrics).
+After JuiceFS is mounted on a host, you can access its metrics using `http://localhost:9567/metrics`, other types of JuiceFS Client (CSI Driver, S3 Gateway, Hadoop SDK) is slightly different in this regard, see [Collecting metrics data](#collect-metrics).
 
 ![](../images/prometheus-client-data.jpg)
 
-Edit [`prometheus.yml`](https://prometheus.io/docs/prometheus/latest/configuration/configuration) to add a new scrape config:
+Here, taking collect metrics of the mount point as an example, edit [`prometheus.yml`](https://prometheus.io/docs/prometheus/latest/configuration/configuration) to add a new scrape config (`scrape_configs`):
 
 ```yaml {20-22}
 global:
@@ -42,7 +39,7 @@ scrape_configs:
       - targets: ["localhost:9567"]
 ```
 
-Start the service:
+Start the Prometheus service:
 
 ```shell
 ./prometheus --config.file=prometheus.yml
@@ -50,9 +47,9 @@ Start the service:
 
 Visit `http://localhost:9090` to see the Prometheus interface.
 
-### Grafana visualization {#grafana}
+## Visualizing metrics using Grafana {#grafana}
 
-Create a new Data Source:
+Create a new Prometheus-type data source in Grafana:
 
 - **Name**: For identification purposes, you can fill it in with the name of the file system.
 - **URL**: Data interface for Prometheus, which defaults to `http://localhost:9090`.
@@ -62,7 +59,7 @@ Create a new Data Source:
 JuiceFS provides some dashboard templates for Grafana, which can be imported to show the collected metrics in Prometheus:
 
 | Name                                                                                                            | Description                                                                                             |
-| ----                                                                                                            | -----------                                                                                             |
+|-----------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
 | [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json)         | For show metrics collected from mount point, S3 gateway (non-Kubernetes deployment) and Hadoop Java SDK |
 | [`grafana_template_k8s.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json) | For show metrics collected from Kubernetes CSI Driver and S3 gateway (Kubernetes deployment)            |
 
@@ -70,7 +67,7 @@ Our Grafana dashboard looks like this:
 
 ![](../images/grafana_dashboard.png)
 
-## Collecting metrics data for other types of clients {#collect-metrics}
+## Collecting metrics data {#collect-metrics}
 
 For different types of JuiceFS Client, metrics data is handled slightly differently.
 
@@ -94,11 +91,15 @@ In addition, the root directory of each JuiceFS file system has a hidden file ca
 cat /jfs/.stats
 ```
 
-### Kubernetes
+:::tip
+If you want to view the metrics in real-time, you can use the [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) command.
+:::
+
+### Kubernetes {#kubernetes}
 
 See [CSI Driver documentation](https://juicefs.com/docs/csi/administration/going-production#monitoring).
 
-### S3 Gateway
+### S3 Gateway {#s3-gateway}
 
 :::note
 This feature needs to run JuiceFS client version 0.17.1 and above.
@@ -110,9 +111,9 @@ The [JuiceFS S3 Gateway](../deployment/s3_gateway.md) will provide monitoring me
 juicefs gateway --metrics localhost:9567 ...
 ```
 
-If you are deploying JuiceFS S3 Gateway in Kubernetes, you can refer to the Prometheus configuration in the [Kubernetes](#kubernetes) section to collect monitoring metrics (the difference is mainly in the regular expression for the label `__meta_kubernetes_pod_label_app_kubernetes_io_name`), e.g.:
+If you are deploying JuiceFS S3 Gateway [in Kubernetes](../deployment/s3_gateway.md#deploy-in-kubernetes), you can refer to the Prometheus configuration in the [Kubernetes](#kubernetes) section to collect monitoring metrics (the difference is mainly in the regular expression for the label `__meta_kubernetes_pod_label_app_kubernetes_io_name`), e.g.:
 
-```yaml
+```yaml {6-8}
 scrape_configs:
   - job_name: 'juicefs-s3-gateway'
     kubernetes_sd_configs:
@@ -131,7 +132,7 @@ scrape_configs:
         action: replace
 ```
 
-#### Collected via Prometheus Operator
+#### Collected via Prometheus Operator {#prometheus-operator}
 
 [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) enables users to quickly deploy and manage Prometheus in Kubernetes. With the `ServiceMonitor` CRD provided by Prometheus Operator, scrape configuration can be automatically generated. For example (assuming that the `Service` of the JuiceFS S3 Gateway is deployed in the `kube-system` namespace):
 
@@ -150,6 +151,8 @@ spec:
   endpoints:
     - port: metrics
 ```
+
+For more information on Prometheus Operator, please refer to the [official documentation](https://prometheus-operator.dev/docs/user-guides/getting-started).
 
 ### Hadoop Java SDK {#hadoop}
 
@@ -204,7 +207,7 @@ At the same time, the frequency of reporting metrics can be modified through the
 
 For all configurations supported by JuiceFS Hadoop Java SDK, please refer to [documentation](../deployment/hadoop_java_sdk.md#client-configurations).
 
-### Use Consul as registration center
+### Use Consul as registration center {#use-consul}
 
 :::note
 This feature needs to run JuiceFS client version 1.0.0 and above.
@@ -218,10 +221,12 @@ juicefs mount --consul 1.2.3.4:8500 ...
 
 When the Consul address is configured, the configuration of the `--metrics` option is not needed, and JuiceFS will automatically configure metrics URL according to its own network and port conditions. If `--metrics` is set at the same time, it will first try to listen on the configured metrics URL.
 
-For each instance registered to Consul, its `serviceName` is `juicefs`, and the format of `serviceId` is `<IP>:<mount-point>`, for example: `127.0.0.1:/tmp/jfs`.
+For each service registered to Consul, the [service name](https://developer.hashicorp.com/consul/docs/services/configuration/services-configuration-reference#name) is always `juicefs`, and the format of [service ID](https://developer.hashicorp.com/consul/docs/services/configuration/services-configuration-reference#id) is `<IP>:<mount-point>`, for example: `127.0.0.1:/tmp/jfs`.
 
-The meta of each instance contains two aspects: `hostname` and `mountpoint`. When `mountpoint` is `s3gateway`, it means that the instance is an S3 gateway.
+The [`meta`](https://developer.hashicorp.com/consul/docs/services/configuration/services-configuration-reference#meta) of each service contains two keys `hostname` and `mountpoint`, the corresponding values ​​represent the host name and path of the mount point respectively. In particular, the `mountpoint` value for the S3 Gateway is always `s3gateway`.
 
-## Monitoring metrics reference
+After successfully registering with Consul, you need to add a new [`consul_sd_config`](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#consul_sd_config) configuration to `prometheus.yml` and fill in the `services` with `juicefs`.
+
+## Monitoring metrics reference {#metrics-reference}
 
 Refer to [JuiceFS Metrics](../reference/p8s_metrics.md).
