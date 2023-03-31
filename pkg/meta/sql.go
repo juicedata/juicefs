@@ -3477,6 +3477,7 @@ func (m *dbMeta) loadEntry(e *DumpedEntry, chs []chan interface{}) {
 	attr := e.Attr
 	n := &node{
 		Inode:  inode,
+		Flags:  attr.Flags,
 		Type:   typeFromString(attr.Type),
 		Mode:   attr.Mode,
 		Uid:    attr.Uid,
