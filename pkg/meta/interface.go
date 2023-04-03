@@ -415,9 +415,7 @@ type Meta interface {
 	// Remove all files and directories recursively.
 	Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno
 	// Get summary of a node; for a directory it will accumulate all its child nodes
-	GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno
-	// Get summary of a node; for a directory it will use recorded dirStats
-	FastGetSummary(ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno
+	GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool) syscall.Errno
 	// GetTreeSummary returns a summary in tree structure
 	GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool) syscall.Errno
 	// Clone a file or directory

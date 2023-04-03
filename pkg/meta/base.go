@@ -745,7 +745,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 		quota := quotas[dpath]
 		if q == nil {
 			var sum Summary
-			if st := m.FastGetSummary(ctx, inode, &sum, true); st != 0 {
+			if st := m.GetSummary(ctx, inode, &sum, true, false); st != 0 {
 				return st
 			}
 			quota.UsedSpace = int64(sum.Size) - align4K(0)
@@ -1383,7 +1383,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			} else {
 				var sum Summary
 				logger.Debugf("Start to get summary of inode %d", *inode)
-				if st := m.FastGetSummary(ctx, *inode, &sum, true); st != 0 {
+				if st := m.GetSummary(ctx, *inode, &sum, true, false); st != 0 {
 					logger.Warnf("Get summary of inode %d: %s", *inode, st)
 					return st
 				}
@@ -2179,7 +2179,7 @@ func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uin
 		return syscall.EEXIST
 	}
 	var sum Summary
-	eno = m.FastGetSummary(ctx, srcIno, &sum, true)
+	eno = m.GetSummary(ctx, srcIno, &sum, true, false)
 	if eno != 0 {
 		return eno
 	}

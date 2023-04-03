@@ -362,7 +362,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		}
 
 		wb := utils.NewBuffer(4)
-		r := v.Meta.GetSummary(ctx, inode, &summary, recursive != 0)
+		r := v.Meta.GetSummary(ctx, inode, &summary, recursive != 0, true)
 		if r != 0 {
 			msg := r.Error()
 			wb.Put32(uint32(len(msg)))
@@ -431,11 +431,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		done := make(chan struct{})
 		var r syscall.Errno
 		go func() {
-			if strict {
-				r = v.Meta.GetSummary(ctx, inode, &info.Summary, recursive != 0)
-			} else {
-				r = v.Meta.FastGetSummary(ctx, inode, &info.Summary, recursive != 0)
-			}
+			r = v.Meta.GetSummary(ctx, inode, &info.Summary, recursive != 0, strict)
 			close(done)
 		}()
 		writeProgress(&info.Summary.Files, &info.Summary.Size, out, done)
