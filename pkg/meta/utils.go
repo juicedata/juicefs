@@ -566,17 +566,17 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 						t.Files++
 					})
 				}
-				newTree := &TreeSummary{
+				child := &TreeSummary{
 					Inode:  e.Inode,
 					Path:   path.Join(tree.Path, string(e.Name)),
 					Type:   e.Attr.Typ,
 					parent: tree,
 				}
 				if e.Attr.Typ != TypeDirectory {
-					newTree.Size = uint64(align4K(e.Attr.Length))
-					newTree.Files = 1
+					child.Size = uint64(align4K(e.Attr.Length))
+					child.Files = 1
 				}
-				tree.Children = append(tree.Children, newTree)
+				tree.Children = append(tree.Children, child)
 			}
 			newTrees = append(newTrees, tree.Children...)
 		}
