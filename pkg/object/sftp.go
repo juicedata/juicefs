@@ -273,6 +273,31 @@ func (f *sftpStore) Chown(key string, owner, group string) error {
 	return c.sftpClient.Chown(f.path(key), uid, gid)
 }
 
+func (f *sftpStore) Symlink(oldName, newName string) error {
+	c, err := f.getSftpConnection()
+	if err != nil {
+		return err
+	}
+	defer f.putSftpConnection(&c, err)
+	p := f.path(newName)
+	err = c.sftpClient.Symlink(oldName, p)
+	if err != nil && os.IsNotExist(err) {
+		_ = c.sftpClient.MkdirAll(filepath.Dir(p))
+		err = c.sftpClient.Symlink(oldName, p)
+	}
+	return err
+}
+
+func (f *sftpStore) Readlink(name string) (string, error) {
+	c, err := f.getSftpConnection()
+	if err != nil {
+		return "", err
+	}
+	defer f.putSftpConnection(&c, err)
+	c.sftpClient.ReadLink(f.path(name))
+	return "", nil
+}
+
 func (f *sftpStore) Delete(key string) error {
 	c, err := f.getSftpConnection()
 	if err != nil {
