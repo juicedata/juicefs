@@ -24,6 +24,7 @@ import jnr.ffi.LibraryLoader;
 import jnr.ffi.Memory;
 import jnr.ffi.Pointer;
 import jnr.ffi.Runtime;
+import jnr.ffi.annotations.Delegate;
 import jnr.ffi.annotations.In;
 import jnr.ffi.annotations.Out;
 import org.apache.commons.logging.Log;
@@ -108,6 +109,11 @@ public class JuiceFileSystemImpl extends FileSystem {
   private String[] storageIds;
   private Random random = new Random();
 
+  /*
+    go call back
+  */
+  private static Libjfs.LogCallBack callBack;
+
   public static interface Libjfs {
     long jfs_init(String name, String jsonConf, String user, String group, String superuser, String supergroup);
 
@@ -168,6 +174,51 @@ public class JuiceFileSystemImpl extends FileSystem {
     int jfs_listXattr(long pid, long h, String path, Pointer buf, int size);
 
     int jfs_removeXattr(long pid, long h, String path, String name);
+
+    void jfs_set_callback(LogCallBack callBack);
+
+    interface LogCallBack {
+      @Delegate
+      void call(String msg);
+    }
+  }
+
+  static class LogCallBackImpl implements Libjfs.LogCallBack {
+    Libjfs lib;
+
+    public LogCallBackImpl(Libjfs lib) {
+      this.lib = lib;
+    }
+
+    @Override
+    public void call(String msg){
+      try {
+        // 2022/12/20 14:48:30.808303 juicefs[80976] <ERROR>: error msg [main.go:357]
+        msg = msg.trim();
+        String[] items = msg.split("\\s+", 5);
+        if (items.length > 4) {
+          switch (items[3]) {
+            case "<DEBUG>:":
+              LOG.debug(msg);
+              break;
+            case "<INFO>:":
+              LOG.info(msg);
+              break;
+            case "<WARNING>:":
+              LOG.warn(msg);
+              break;
+            case "<ERROR>:":
+              LOG.error(msg);
+              break;
+          }
+        }
+      } catch (Throwable ignored){}
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+      lib.jfs_set_callback(null);
+    }
   }
 
   static int EPERM = -0x01;
@@ -298,6 +349,14 @@ public class JuiceFileSystemImpl extends FileSystem {
     refreshCache(conf);
 
     lib = loadLibrary();
+
+    synchronized (JuiceFileSystemImpl.class) {
+      if (callBack == null) {
+        callBack = new LogCallBackImpl(lib);
+        lib.jfs_set_callback(callBack);
+      }
+    }
+
     JSONObject obj = new JSONObject();
     String[] keys = new String[]{"meta",};
     for (String key : keys) {

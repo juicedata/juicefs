@@ -24,6 +24,8 @@ package main
 // #include <sys/stat.h>
 // #include <fcntl.h>
 // #include <utime.h>
+// #include <stdlib.h>
+// void jfs_callback(const char *msg);
 import "C"
 import (
 	"bytes"
@@ -141,6 +143,44 @@ type wrapper struct {
 	user       string
 	superuser  string
 	supergroup string
+}
+
+type logWriter struct {
+	buf chan string
+}
+
+func (w *logWriter) Write(p []byte) (int, error) {
+	select {
+	case w.buf <- string(p):
+		_, _ = os.Stderr.Write(p)
+		return len(p), nil
+	default:
+		return os.Stderr.Write(p)
+	}
+}
+
+func newLogWriter() *logWriter {
+	w := &logWriter{
+		buf: make(chan string, 10),
+	}
+	go func() {
+		for l := range w.buf {
+			cmsg := C.CString(l)
+			C.jfs_callback(cmsg)
+			C.free(unsafe.Pointer(cmsg))
+		}
+	}()
+	return w
+}
+
+//export jfs_set_logger
+func jfs_set_logger(cb unsafe.Pointer) {
+	utils.DisableLogColor()
+	if cb != nil {
+		utils.SetOutput(newLogWriter())
+	} else {
+		utils.SetOutput(os.Stderr)
+	}
 }
 
 func (w *wrapper) withPid(pid int) meta.Context {
