@@ -205,7 +205,7 @@ CMD [ "juicefs" ]
 
 在 Windows 系统编译 JuiceFS 客户端需要安装以下依赖：
 
-- [WinFsp](https://github.com/winfsp/winfsp) 
+- [WinFsp](https://github.com/winfsp/winfsp)
 - [Go](https://golang.org) 1.18+
 - GCC 5.4+
 

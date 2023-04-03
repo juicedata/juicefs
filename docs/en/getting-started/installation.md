@@ -205,7 +205,7 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 
 To compile the JuiceFS client on Windows system, the following dependencies need to be installed:
 
-- [WinFsp](https://github.com/winfsp/winfsp) 
+- [WinFsp](https://github.com/winfsp/winfsp)
 - [Go](https://golang.org) 1.18+
 - GCC 5.4+
 
