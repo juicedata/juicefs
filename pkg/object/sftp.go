@@ -173,7 +173,7 @@ func (f *sftpStore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return fileInfo(key, info), nil
+	return fileInfo(nil, key, info), nil
 }
 
 func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -300,14 +300,21 @@ func sortFIsByName(fis []os.FileInfo) {
 	})
 }
 
-func fileInfo(key string, fi os.FileInfo) Object {
+func fileInfo(c *sftp.Client, key string, fi os.FileInfo) Object {
 	owner, group := getOwnerGroup(fi)
+	size := fi.Size()
+	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
+	if isSymlink && c != nil {
+		if fi, err := c.Stat(key); err == nil {
+			size = fi.Size()
+		}
+	}
 	f := &file{
-		obj{key, fi.Size(), fi.ModTime(), fi.IsDir()},
+		obj{key, size, fi.ModTime(), fi.IsDir()},
 		owner,
 		group,
 		fi.Mode(),
-		!fi.Mode().IsDir() && !fi.Mode().IsRegular(),
+		isSymlink,
 	}
 	if fi.IsDir() {
 		if key != "" && !strings.HasSuffix(key, "/") {
@@ -330,7 +337,7 @@ func (f *sftpStore) doFind(c *sftp.Client, path, marker string, out chan Object)
 		p := path + fi.Name()
 		key := p[len(f.root):]
 		if key > marker {
-			out <- fileInfo(key, fi)
+			out <- fileInfo(c, key, fi)
 		}
 		if fi.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
 			f.doFind(c, p+dirSuffix, marker, out)
@@ -346,7 +353,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan Object) {
 			return
 		}
 		if marker == "" {
-			out <- fileInfo(path[len(f.root):], fi)
+			out <- fileInfo(nil, path[len(f.root):], fi)
 		}
 		f.doFind(c, path, marker, out)
 	} else {
@@ -373,7 +380,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan Object) {
 			prefix := path[len(f.root):]
 			if strings.HasPrefix(key, prefix) {
 				if key > marker || marker == "" {
-					out <- fileInfo(key, fi)
+					out <- fileInfo(c, key, fi)
 				}
 				if fi.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
 					f.doFind(c, p+dirSuffix, marker, out)
