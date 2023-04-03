@@ -580,7 +580,7 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 			}
 			newTrees = append(newTrees, tree.Children...)
 		}
-		// the children are not iterated at this time, so we sort and omit them before returning
+		// the size of children is unknown at this time, so we sort and omit them before returning
 		defer func() {
 			for _, tree := range trees {
 				if tree.Type != TypeDirectory {
