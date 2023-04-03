@@ -326,15 +326,14 @@ func sortFIsByName(fis []os.FileInfo) {
 
 func fileInfo(c *sftp.Client, key string, fi os.FileInfo) Object {
 	owner, group := getOwnerGroup(fi)
-	size := fi.Size()
 	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
 	if isSymlink && c != nil {
-		if fi, err := c.Stat(key); err == nil {
-			size = fi.Size()
+		if fi2, err := c.Stat(key); err == nil {
+			fi = fi2
 		}
 	}
 	f := &file{
-		obj{key, size, fi.ModTime(), fi.IsDir()},
+		obj{key, fi.Size(), fi.ModTime(), fi.IsDir()},
 		owner,
 		group,
 		fi.Mode(),
