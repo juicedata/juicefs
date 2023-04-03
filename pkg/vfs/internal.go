@@ -18,7 +18,6 @@ package vfs
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -503,8 +502,11 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			_, _ = out.Write([]byte{byte(syscall.EIO & 0xff)})
 			return
 		}
-		head := binary.BigEndian.AppendUint32([]byte{meta.CDATA}, uint32(len(data)))
-		_, _ = out.Write(append(head, data...))
+		w := utils.NewBuffer(uint32(1 + 4 + len(data)))
+		w.Put8(meta.CDATA)
+		w.Put32(uint32(len(data)))
+		w.Put(data)
+		_, _ = out.Write(w.Bytes())
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()
