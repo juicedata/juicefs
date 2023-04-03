@@ -150,7 +150,7 @@ $ mc ls juicefs/jfs
 [2021-10-20 11:59:10 CST]  11MiB work-4997565.svg
 ```
 
-## 在 Kubernetes 中部署 S3 网关
+## 在 Kubernetes 中部署 S3 网关 {#deploy-in-kubernetes}
 
 ### 通过 kubectl 部署
 

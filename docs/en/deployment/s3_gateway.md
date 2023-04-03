@@ -150,7 +150,7 @@ $ mc ls juicefs/jfs
 [2021-10-20 11:59:10 CST]  11MiB work-4997565.svg
 ```
 
-## Deploy JuiceFS S3 Gateway in Kubernetes
+## Deploy JuiceFS S3 Gateway in Kubernetes {#deploy-in-kubernetes}
 
 ### Install via kubectl
 

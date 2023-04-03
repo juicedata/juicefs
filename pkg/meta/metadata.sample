@@ -66,7 +66,7 @@
         }
       },
       "f1": {
-        "attr": {"inode":2,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746580,"mtime":1623746661,"ctime":1623746661,"atimensec":219686000,"mtimensec":219686000,"ctimensec":219686000,"nlink":1,"length":24},
+        "attr": {"inode":2,"flags":128,"type":"regular","mode":420,"uid":501,"gid":20,"atime":1623746580,"mtime":1623746661,"ctime":1623746661,"atimensec":219686000,"mtimensec":219686000,"ctimensec":219686000,"nlink":1,"length":24},
         "xattrs": [{"name":"k","value":"v"}],
         "chunks": [{"index":0,"slices":[{"id":1,"size":6,"len":6},{"id":2,"size":12,"len":12},{"id":4,"size":24,"len":24}]}]
       },

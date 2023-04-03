@@ -55,6 +55,7 @@ type DumpedSustained struct {
 
 type DumpedAttr struct {
 	Inode     Ino    `json:"inode"`
+	Flags     uint8  `json:"flags,omitempty"`
 	Type      string `json:"type"`
 	Mode      uint16 `json:"mode"`
 	Uid       uint32 `json:"uid"`
@@ -265,6 +266,7 @@ func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 
 func dumpAttr(a *Attr, d *DumpedAttr) {
 	d.Type = typeToString(a.Typ)
+	d.Flags = a.Flags
 	d.Mode = a.Mode
 	d.Uid = a.Uid
 	d.Gid = a.Gid
@@ -285,7 +287,7 @@ func dumpAttr(a *Attr, d *DumpedAttr) {
 
 func loadAttr(d *DumpedAttr) *Attr {
 	return &Attr{
-		// Flags:     0,
+		Flags:     d.Flags,
 		Typ:       typeFromString(d.Type),
 		Mode:      d.Mode,
 		Uid:       d.Uid,

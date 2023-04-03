@@ -101,6 +101,11 @@ func (d *filestore) Head(key string) (Object, error) {
 	}, nil
 }
 
+type SectionReaderCloser struct {
+	*io.SectionReader
+	io.Closer
+}
+
 func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	p := d.path(key)
 
@@ -119,20 +124,11 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
 
-	if off > 0 {
-		if _, err := f.Seek(off, 0); err != nil {
-			_ = f.Close()
-			return nil, err
-		}
-	}
 	if limit > 0 {
-		defer f.Close()
-		buf := make([]byte, limit)
-		if n, err := f.Read(buf); err != nil {
-			return nil, err
-		} else {
-			return io.NopCloser(bytes.NewBuffer(buf[:n])), nil
-		}
+		return &SectionReaderCloser{
+			SectionReader: io.NewSectionReader(f, off, limit),
+			Closer:        f,
+		}, nil
 	}
 	return f, nil
 }

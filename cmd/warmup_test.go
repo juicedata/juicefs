@@ -27,7 +27,6 @@ import (
 )
 
 func TestWarmup(t *testing.T) {
-	t.Skipf("this test is not stable, skip it")
 	mountTemp(t, nil, nil, nil)
 	defer umountTemp(t)
 

@@ -27,7 +27,6 @@ import (
 )
 
 func TestInfo(t *testing.T) {
-	t.Skipf("this test is not stable, skip it")
 	Convey("TestInfo", t, func() {
 		Convey("TestInfo", func() {
 			tmpFile, err := os.CreateTemp("/tmp", "")
@@ -52,7 +51,7 @@ func TestInfo(t *testing.T) {
 				}
 			}
 
-			if err = Main([]string{"", "info", fmt.Sprintf("%s/dir1", testMountPoint)}); err != nil {
+			if err = Main([]string{"", "info", fmt.Sprintf("%s/dir1", testMountPoint), "--strict"}); err != nil {
 				t.Fatalf("info failed: %s", err)
 			}
 			content, err := os.ReadFile(tmpFile.Name())

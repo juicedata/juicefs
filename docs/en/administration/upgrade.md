@@ -27,7 +27,7 @@ Please refer to [official documentation](https://juicefs.com/docs/csi/upgrade-cs
 
 Like [mount point](#mount-point), upgrading S3 Gateway is to replace the old version with the new version.
 
-If it is [deployed through Kubernetes](../deployment/s3_gateway.md#deploy-juicefs-s3-gateway-in-kubernetes), you need to upgrade according to the specific deployment method, which is described in detail below.
+If it is [deployed through Kubernetes](../deployment/s3_gateway.md#deploy-in-kubernetes), you need to upgrade according to the specific deployment method, which is described in detail below.
 
 ### Upgrade via kubectl
 

@@ -196,19 +196,11 @@ func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
 
-	if off > 0 {
-		if _, err := ff.Seek(off, 0); err != nil {
-			_ = ff.Close()
-			return nil, err
-		}
-	}
 	if limit > 0 {
-		buf := make([]byte, limit)
-		if n, err := ff.Read(buf); n == 0 && err != nil {
-			return nil, err
-		} else {
-			return io.NopCloser(bytes.NewBuffer(buf[:n])), nil
-		}
+		return &SectionReaderCloser{
+			SectionReader: io.NewSectionReader(ff, off, limit),
+			Closer:        ff,
+		}, nil
 	}
 	return ff, err
 }
