@@ -368,7 +368,7 @@ func (m *baseMeta) getSummary(ctx Context, inode Ino, summary *Summary, strict b
 		err = m.en.doReaddir(ctx, inode, 1, &entries, -1)
 	} else {
 		var st *dirStat
-		st, err = m.en.doGetDirStat(ctx, inode, true)
+		st, err = m.GetDirStat(ctx, inode)
 		if err != 0 {
 			return err
 		}
