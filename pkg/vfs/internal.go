@@ -497,11 +497,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			close(done)
 		}()
 		writeProgress(&tree.Files, &tree.Size, out, done)
-		resp := &SummaryReponse{Tree: tree}
-		if r != 0 {
-			resp.Errno = r
-		}
-		data, err := json.Marshal(resp)
+		data, err := json.Marshal(&SummaryReponse{r, tree})
 		if err != nil {
 			logger.Errorf("marshal summary response: %v", err)
 			_, _ = out.Write([]byte{byte(syscall.EIO & 0xff)})
