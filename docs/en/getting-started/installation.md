@@ -203,11 +203,15 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 
 ### Compiling on Windows
 
-Compiling the JuiceFS client on Windows requires [Go](https://golang.org) 1.18+ and GCC 5.4+.
+To compile the JuiceFS client on Windows system, the following dependencies need to be installed:
 
-Since GCC does not have a native Windows client, use [pre-compiled MinGW-w64](https://www.mingw-w64.org/downloads) or [Cygwin](https://www.cygwin.com) instead. Take MinGW-w64 for example:
+- [WinFsp](https://github.com/winfsp/winfsp) 
+- [Go](https://golang.org) 1.18+
+- GCC 5.4+
 
-Download MinGW-w64 and add its `bin` directory to the system environment variables.
+Among them, WinFsp and Go can be downloaded and installed directly. GCC needs to use a version provided by a third party, which can use [MinGW-w64](https://www.mingw-w64.org) or [Cygwin](https://www.cygwin.com). Here we take MinGW-w64 as an example.
+
+On the [MinGW-w64 download page](https://www.mingw-w64.org/downloads), select a precompiled version for Windows, such as [mingw-builds-binaries](https://github.com/niXman/mingw-builds-binaries/releases). After downloading, extract it to the root directory of the `C` drive, then find PATH in the system environment variable settings and add the `C:\mingw64\bin` directory. After restarting the system, execute the `gcc -v` command in the command prompt or PowerShell. If you can see version information, it means that MingGW-w64 is successfully installed, and you can start compiling.
 
 1. Clone and enter the project directory
 
@@ -242,6 +246,8 @@ Download MinGW-w64 and add its `bin` directory to the system environment variabl
    ```shell
    go build -ldflags="-s -w" -o juicefs.exe .
    ```
+
+The compiled `juicefs.exe` binary program is located in the current directory. For convenience, it can be moved to the `C:\Windows\System32` directory, so that the `juicefs.exe` command can be used directly anywhere.
 
 ### Cross-compiling Windows clients on Linux
 
