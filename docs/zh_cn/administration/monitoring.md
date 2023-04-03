@@ -1,27 +1,18 @@
 ---
 title: 监控与数据可视化
 sidebar_position: 3
-description: 本文介绍如何搭配 Prometheus、Grafana 等第三方工具可视化 JuiceFS 状态监控。
+description: 本文介绍如何使用 Prometheus、Grafana 等第三方工具收集及可视化 JuiceFS 监控指标。
 ---
 
-作为承载海量数据存储的分布式文件系统，用户通常需要直观地了解整个系统的容量、文件数量、CPU 负载、磁盘 IO、缓存等指标的变化。JuiceFS 通过 Prometheus 兼容的 API 对外提供实时的状态数据，只需将其添加到用户自建的 Prometheus Server 建立时序数据，然后通过 Grafana 等工具即可轻松实现 JuiceFS 文件系统的可视化监控。
+JuiceFS 客户端通过监控 API 对外暴露 [Prometheus](https://prometheus.io) 格式的实时监控指标，用户自行配置 Prometheus 抓取监控数据，然后通过 [Grafana](https://grafana.com) 等工具即可实现数据可视化。
 
-## 快速上手 {#getting-started}
+## 在 Prometheus 中添加抓取配置 {#add-scrape-config}
 
-这里假设你搭建的 Prometheus Server、Grafana 与 JuiceFS 客户端都运行在相同的主机上。其中：
-
-- **Prometheus Server**：用于收集并保存各种指标的时序数据，安装方法请参考[官方文档](https://prometheus.io/docs/introduction/first_steps)。
-- **Grafana**：用于从 Prometheus 读取并可视化展现时序数据，安装方法请参考[官方文档](https://grafana.com/docs/grafana/latest/installation)。
-
-### Ⅰ. 获得实时数据
-
-JuiceFS 通过 [Prometheus](https://prometheus.io) 类型的 API 对外提供数据。文件系统挂载后，默认可以通过 `http://localhost:9567/metrics` 地址获得客户端输出的实时监控数据。
+在宿主机挂载 JuiceFS 后，默认可以通过 `http://localhost:9567/metrics` 地址获得客户端输出的实时指标数据。其他不同类型的 JuiceFS 客户端（CSI 驱动、S3 网关、Hadoop SDK）收集指标数据的方式略有区别，详见[「收集监控指标」](#collect-metrics)。
 
 ![](../images/prometheus-client-data.jpg)
 
-### Ⅱ. 添加 API 到 Prometheus Server
-
-编辑 Prometheus 的[配置文件](https://prometheus.io/docs/prometheus/latest/configuration/configuration)，添加一个新 job 并指向 JuiceFS 的 API 地址，例如：
+这里以收集挂载点的监控指标为例，在 [`prometheus.yml`](https://prometheus.io/docs/prometheus/latest/configuration/configuration) 中添加抓取配置（`scrape_configs`），指向 JuiceFS 客户端的监控 API 地址：
 
 ```yaml {20-22}
 global:
@@ -48,7 +39,7 @@ scrape_configs:
       - targets: ["localhost:9567"]
 ```
 
-假设配置文件名为 `prometheus.yml`，加载该配置启动服务：
+启动 Prometheus 服务：
 
 ```shell
 ./prometheus --config.file=prometheus.yml
@@ -56,24 +47,31 @@ scrape_configs:
 
 访问 `http://localhost:9090` 即可看到 Prometheus 的界面。
 
-### Ⅲ. 通过 Grafana 展现 Prometheus 的数据
+## 通过 Grafana 进行数据可视化 {#grafana}
 
-如下图所示，新建 Data Source：
+在 Grafana 中新建 Prometheus 类型的数据源：
 
-- **Name**: 为了便于识别，可以填写文件系统的名称。
-- **URL**: Prometheus 的数据接口，默认为 `http://localhost:9090`
+- **Name**：为了便于识别，可以填写文件系统的名称。
+- **URL**：Prometheus 的数据接口，默认为 `http://localhost:9090`。
 
 ![](../images/grafana-data-source.jpg)
 
-然后，使用 [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json) 创建一个仪表盘。进入新建的仪表盘即可看到文件系统的可视化图表了：
+JuiceFS 提供一些 Grafana 的仪表盘模板，将模板导入以后就可以展示收集上来的监控指标。目前提供的仪表盘模板有：
 
-![](../images/grafana-dashboard.jpg)
+| 模板名称                                                                                                        | 说明                                                                         |
+|-----------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json)         | 用于展示自挂载点、S3 网关（非 Kubernetes 部署）及 Hadoop Java SDK 收集的指标 |
+| [`grafana_template_k8s.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json) | 用于展示自 Kubernetes CSI 驱动、S3 网关（Kubernetes 部署）收集的指标         |
 
-## 收集监控指标 {#collecting-metrics}
+Grafana 仪表盘如下图：
 
-根据部署 JuiceFS 的方式不同可以有不同的收集监控指标的方法，下面分别介绍。
+![](../images/grafana_dashboard.png)
 
-### 挂载点 {#mount-point}
+## 收集监控指标 {#collect-metrics}
+
+根据部署 JuiceFS 方式的不同可以有不同的收集监控指标的方法，下面分别介绍。
+
+### 宿主机挂载点 {#mount-point}
 
 当通过 [`juicefs mount`](../reference/command_reference.md#mount) 命令挂载 JuiceFS 文件系统后，可以通过 `http://localhost:9567/metrics` 这个地址收集监控指标，你也可以通过 `--metrics` 选项自定义。如：
 
@@ -93,62 +91,15 @@ curl http://localhost:9567/metrics
 cat /jfs/.stats
 ```
 
-### Kubernetes
+:::tip 提示
+如果想要实时查看监控指标，可以使用 [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) 命令。
+:::
 
-[JuiceFS CSI 驱动](../deployment/how_to_use_on_kubernetes.md)默认会在 mount pod 的 `9567` 端口提供监控指标，也可以通过在 `mountOptions` 中添加 `metrics` 选项自定义（关于如何修改 `mountOptions` 请参考 [CSI 驱动文档](https://juicefs.com/docs/zh/csi/examples/mount-options)），如：
+### Kubernetes {#kubernetes}
 
-```yaml
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: juicefs-pv
-  labels:
-    juicefs-name: ten-pb-fs
-spec:
-  ...
-  mountOptions:
-    - metrics=0.0.0.0:9567
-```
+参考 [CSI 驱动文档](https://juicefs.com/docs/zh/csi/administration/going-production#monitoring)。
 
-新增一个抓取任务到 `prometheus.yml` 来收集监控指标：
-
-```yaml
-scrape_configs:
-  - job_name: 'juicefs'
-    kubernetes_sd_configs:
-    - role: pod
-    relabel_configs:
-    - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
-      action: keep
-      regex: juicefs-mount
-    - source_labels: [__address__]
-      action: replace
-      regex: ([^:]+)(:\d+)?
-      replacement: $1:9567
-      target_label: __address__
-    - source_labels: [__meta_kubernetes_pod_node_name]
-      target_label: node
-      action: replace
-```
-
-这里假设 Prometheus 服务运行在 Kubernetes 集群中，如果你的 Prometheus 服务运行在 Kubernetes 集群之外，请确保 Prometheus 服务可以访问 Kubernetes 节点，请参考[这个 issue](https://github.com/prometheus/prometheus/issues/4633) 添加 `api_server` 和 `tls_config` 配置到以上文件：
-
-```yaml
-scrape_configs:
-  - job_name: 'juicefs'
-    kubernetes_sd_configs:
-    - api_server: <Kubernetes API Server>
-      role: pod
-      tls_config:
-        ca_file: <...>
-        cert_file: <...>
-        key_file: <...>
-        insecure_skip_verify: false
-    relabel_configs:
-    ...
-```
-
-### S3 网关
+### S3 网关 {#s3-gateway}
 
 :::note 注意
 该特性需要运行 0.17.1 及以上版本 JuiceFS 客户端
@@ -160,9 +111,9 @@ scrape_configs:
 juicefs gateway --metrics localhost:9567 ...
 ```
 
-如果你是在 Kubernetes 中部署 JuiceFS S3 网关，可以参考 [Kubernetes](#kubernetes) 小节的 Prometheus 配置来收集监控指标（区别主要在于 `__meta_kubernetes_pod_label_app_kubernetes_io_name` 这个标签的正则表达式），例如：
+如果你是[在 Kubernetes 中部署](../deployment/s3_gateway.md#deploy-in-kubernetes) JuiceFS S3 网关，可以参考 [Kubernetes](#kubernetes) 小节的 Prometheus 配置来收集监控指标（区别主要在于 `__meta_kubernetes_pod_label_app_kubernetes_io_name` 这个标签的正则表达式），例如：
 
-```yaml
+```yaml {6-8}
 scrape_configs:
   - job_name: 'juicefs-s3-gateway'
     kubernetes_sd_configs:
@@ -181,7 +132,7 @@ scrape_configs:
         action: replace
 ```
 
-#### 通过 Prometheus Operator 收集
+#### 通过 Prometheus Operator 收集 {#prometheus-operator}
 
 [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) 让用户在 Kubernetes 环境中能够快速部署和管理 Prometheus，借助 Prometheus Operator 提供的 `ServiceMonitor` CRD 可以自动生成抓取配置。例如（假设 JuiceFS S3 网关的 `Service` 部署在 `kube-system` 名字空间）：
 
@@ -201,9 +152,9 @@ spec:
     - port: metrics
 ```
 
-有关 Prometheus Operator 的更多信息，请查看[官方文档](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/user-guides/getting-started.md)。
+有关 Prometheus Operator 的更多信息，请查看[官方文档](https://prometheus-operator.dev/docs/user-guides/getting-started)。
 
-### Hadoop
+### Hadoop Java SDK {#hadoop}
 
 [JuiceFS Hadoop Java SDK](../deployment/hadoop_java_sdk.md) 支持把监控指标上报到 [Pushgateway](https://github.com/prometheus/pushgateway) 或者 [Graphite](https://graphiteapp.org)。
 
@@ -256,7 +207,7 @@ curl -X PUT http://host:9091/api/v1/admin/wipe
 
 JuiceFS Hadoop Java SDK 支持的所有配置参数请参考[文档](../deployment/hadoop_java_sdk.md#客户端配置参数)。
 
-### 使用 Consul 作为注册中心
+### 使用 Consul 作为注册中心 {#use-consul}
 
 :::note 注意
 该特性需要运行 1.0.0 及以上版本 JuiceFS 客户端
@@ -270,25 +221,12 @@ juicefs mount --consul 1.2.3.4:8500 ...
 
 当配置了 Consul 地址以后，`--metrics` 选项不再需要配置，JuiceFS 将会根据自身网络与端口情况自动配置监控指标 URL。如果同时设置了 `--metrics`，则会优先尝试监听配置的 URL。
 
-注册到 Consul 上的每个实例，其 `serviceName` 都为 `juicefs`，`serviceId` 的格式为 `<IP>:<mount-point>`，例如：`127.0.0.1:/tmp/jfs`。
+注册到 Consul 上的每个服务，其[服务名](https://developer.hashicorp.com/consul/docs/services/configuration/services-configuration-reference#name)都为 `juicefs`，[服务 ID](https://developer.hashicorp.com/consul/docs/services/configuration/services-configuration-reference#id) 的格式为 `<IP>:<mount-point>`，例如：`127.0.0.1:/tmp/jfs`。
 
-每个 instance 的 meta 都包含了 `hostname` 与 `mountpoint` 两个维度，其中 `mountpoint` 为 `s3gateway` 代表该实例为 S3 网关。
+每个服务的 [`meta`](https://developer.hashicorp.com/consul/docs/services/configuration/services-configuration-reference#meta) 都包含 `hostname` 与 `mountpoint` 两个 key，对应的值分别表示挂载点所在的主机名和挂载点路径。特别地，S3 网关的 `mountpoint` 值总是为 `s3gateway`。
 
-## 可视化监控指标 {#visualize-metrics}
-
-### Grafana 仪表盘模板
-
-JuiceFS 提供一些 Grafana 的仪表盘模板，将模板导入以后就可以展示收集上来的监控指标。目前提供的仪表盘模板有：
-
-| 模板名称                                                                                                        | 说明                                                   |
-| ----                                                                                                            | ----                                                   |
-| [`grafana_template.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template.json)         | 用于展示自挂载点、S3 网关（非 Kubernetes 部署）及 Hadoop Java SDK 收集的指标 |
-| [`grafana_template_k8s.json`](https://github.com/juicedata/juicefs/blob/main/docs/en/grafana_template_k8s.json) | 用于展示自 Kubernetes CSI 驱动、S3 网关（Kubernetes 部署）收集的指标               |
-
-Grafana 仪表盘示例效果如下图：
-
-![JuiceFS Grafana dashboard](../images/grafana_dashboard.png)
+成功注册到 Consul 上以后，需要在 `prometheus.yml` 中新增 [`consul_sd_config`](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#consul_sd_config) 配置，在 `services` 中填写 `juicefs`。
 
 ## 监控指标索引 {#metrics-reference}
 
-请参考[「JuiceFS 监控指标」](../reference/p8s_metrics.md)文档
+参考[「JuiceFS 监控指标」](../reference/p8s_metrics.md)。
