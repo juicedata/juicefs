@@ -432,12 +432,6 @@ func (m *baseMeta) getSummary(ctx Context, inode Ino, summary *Summary, strict b
 	return err
 }
 
-func (t *TreeSummary) visitRoot(visit func(*TreeSummary)) {
-	for tree := t; tree != nil; tree = tree.parent {
-		visit(tree)
-	}
-}
-
 func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool) syscall.Errno {
 	var attr Attr
 	if st := m.GetAttr(ctx, root.Inode, &attr); st != 0 {
@@ -477,10 +471,9 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 	var err syscall.Errno
 	for i, e := range entries {
 		child := &TreeSummary{
-			Inode:  e.Inode,
-			Path:   path.Join(tree.Path, string(e.Name)),
-			Type:   e.Attr.Typ,
-			parent: tree,
+			Inode: e.Inode,
+			Path:  path.Join(tree.Path, string(e.Name)),
+			Type:  e.Attr.Typ,
 		}
 		tree.Children[i] = child
 		if e.Attr.Typ != TypeDirectory {

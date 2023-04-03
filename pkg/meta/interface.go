@@ -241,8 +241,6 @@ type TreeSummary struct {
 	Files    uint64
 	Dirs     uint64
 	Children []*TreeSummary `json:",omitempty"`
-
-	parent *TreeSummary `json:"-"`
 }
 
 type SessionInfo struct {
