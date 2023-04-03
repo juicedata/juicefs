@@ -507,14 +507,18 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 					continue
 				}
 				var summary Summary
+				var st syscall.Errno
 				if strict {
-					if st := m.GetSummary(ctx, tree.Inode, &summary, true); st != 0 && st != syscall.ENOENT {
-						return st
-					}
+					st = m.GetSummary(ctx, tree.Inode, &summary, true)
 				} else {
-					if st := m.FastGetSummary(ctx, tree.Inode, &summary, true); st != 0 && st != syscall.ENOENT {
-						return st
-					}
+					st = m.FastGetSummary(ctx, tree.Inode, &summary, true)
+				}
+				if st == syscall.ENOENT {
+					// ignored ENOENT
+					continue
+				}
+				if st != 0 {
+					return st
 				}
 				tree.visitRoot(func(t *TreeSummary) {
 					t.Files += summary.Files
