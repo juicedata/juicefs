@@ -655,7 +655,7 @@ func (m *baseMeta) fastGetTreeSummary(ctx Context, root *TreeSummary) syscall.Er
 			stat := &dirStats[i]
 			eg.Go(func() error {
 				s, st := m.GetDirStat(ctx, tree.Inode)
-				if st != 0 {
+				if st != 0 && st != syscall.ENOENT {
 					return st
 				}
 				*stat = *s
@@ -663,8 +663,8 @@ func (m *baseMeta) fastGetTreeSummary(ctx Context, root *TreeSummary) syscall.Er
 				if st := m.GetAttr(ctx, tree.Inode, &attr); st != 0 && st != syscall.ENOENT {
 					return st
 				}
-				if attr.Nlink == 2 {
-					// leaf dir, no need to read entries
+				if attr.Nlink == 2 || attr.Nlink == 0 {
+					// leaf dir or removed dir, no need to read entries
 					return nil
 				}
 				if st := m.Readdir(ctx, tree.Inode, 0, entries); st != 0 && st != syscall.ENOENT {
