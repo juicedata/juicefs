@@ -38,7 +38,7 @@ func cmdSummary() *cli.Command {
 		Action:    summary,
 		Category:  "INSPECTOR",
 		Usage:     "Show tree summary of a directory",
-		ArgsUsage: "PATH/INODE",
+		ArgsUsage: "PATH",
 		Description: `
  It is used to show tree summary of target directory.
  
@@ -91,22 +91,18 @@ func summary(ctx *cli.Context) error {
 	topN = 10
 	strict = 0
 
-	if ctx.IsSet("depth") {
-		d := ctx.Uint("depth")
-		if d > 10 {
-			logger.Warn("depth should be less than 11")
-			d = 10
-		}
-		depth = uint8(d)
+	d := ctx.Uint("depth")
+	if d > 10 {
+		logger.Warn("depth should be less than 11")
+		d = 10
 	}
-	if ctx.IsSet("entries") {
-		t := ctx.Uint("entries")
-		if t > 100 {
-			logger.Warn("top should be less than 101")
-			t = 100
-		}
-		topN = uint8(t)
+	depth = uint8(d)
+	e := ctx.Uint("entries")
+	if e > 100 {
+		logger.Warn("entries should be less than 101")
+		e = 100
 	}
+	topN = uint8(e)
 	if ctx.Bool("strict") {
 		strict = 1
 	}
@@ -115,18 +111,18 @@ func summary(ctx *cli.Context) error {
 	progress := utils.NewProgress(csv)
 	path := ctx.Args().Get(0)
 	dspin := progress.AddDoubleSpinner(path)
-	d, err := filepath.Abs(path)
+	dpath, err := filepath.Abs(path)
 	if err != nil {
 		logger.Fatalf("abs of %s: %s", path, err)
 	}
-	inode, err := utils.GetFileInode(d)
+	inode, err := utils.GetFileInode(dpath)
 	if err != nil {
 		logger.Fatalf("lookup inode for %s: %s", path, err)
 	}
 	if inode < uint64(meta.RootInode) {
 		logger.Fatalf("inode number shouldn't be less than %d", meta.RootInode)
 	}
-	f, err := openController(d)
+	f, err := openController(dpath)
 	if err != nil {
 		logger.Fatalf("open controller: %s", err)
 	}
