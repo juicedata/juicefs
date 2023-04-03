@@ -86,25 +86,19 @@ func summary(ctx *cli.Context) error {
 		logger.Infof("Windows is not supported")
 		return nil
 	}
-	var depth, topN, strict uint8
-	depth = 2
-	topN = 10
-	strict = 0
-
-	d := ctx.Uint("depth")
-	if d > 10 {
-		logger.Warn("depth should be less than 11")
-		d = 10
-	}
-	depth = uint8(d)
-	e := ctx.Uint("entries")
-	if e > 100 {
-		logger.Warn("entries should be less than 101")
-		e = 100
-	}
-	topN = uint8(e)
+	var strict uint8
 	if ctx.Bool("strict") {
 		strict = 1
+	}
+	depth := ctx.Uint("depth")
+	if depth > 10 {
+		logger.Warn("depth should be less than 11")
+		depth = 10
+	}
+	topN := ctx.Uint("entries")
+	if topN > 100 {
+		logger.Warn("entries should be less than 101")
+		topN = 100
 	}
 
 	csv := ctx.Bool("csv")
@@ -132,8 +126,8 @@ func summary(ctx *cli.Context) error {
 	wb.Put32(meta.OpSummary)
 	wb.Put32(contentLen)
 	wb.Put64(inode)
-	wb.Put8(depth)
-	wb.Put8(topN)
+	wb.Put8(uint8(depth))
+	wb.Put8(uint8(topN))
 	wb.Put8(strict)
 	_, err = f.Write(wb.Bytes())
 	if err != nil {
