@@ -50,6 +50,8 @@ const (
 	InfoV2 = 1005
 	// Clone is a message to clone a file or dir from another.
 	Clone = 1006
+	// OpSummary is a message to get tree summary of directories.
+	OpSummary = 1007
 )
 
 const (
@@ -111,6 +113,7 @@ type internalNode struct {
 
 // Type of control messages
 const CPROGRESS = 0xFE // 16 bytes: progress increment
+const CDATA = 0xFF     // 4 bytes: data length
 
 // MsgCallback is a callback for messages from meta service.
 type MsgCallback func(...interface{}) error
@@ -228,6 +231,18 @@ type Summary struct {
 	Size   uint64
 	Files  uint64
 	Dirs   uint64
+}
+
+type TreeSummary struct {
+	Inode    Ino
+	Path     string
+	Type     uint8
+	Size     uint64
+	Files    uint64
+	Dirs     uint64
+	Children []*TreeSummary `json:",omitempty"`
+
+	parent *TreeSummary `json:"-"`
 }
 
 type SessionInfo struct {
@@ -403,6 +418,8 @@ type Meta interface {
 	GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno
 	// Get summary of a node; for a directory it will use recorded dirStats
 	FastGetSummary(ctx Context, inode Ino, summary *Summary, recursive bool) syscall.Errno
+	// GetTreeSummary returns a summary in tree structure
+	GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool) syscall.Errno
 	// Clone a file or directory
 	Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno
 	// GetPaths returns all paths of an inode

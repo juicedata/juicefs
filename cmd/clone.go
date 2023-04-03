@@ -134,7 +134,7 @@ func clone(ctx *cli.Context) error {
 	progress := utils.NewProgress(false)
 	defer progress.Done()
 	bar := progress.AddCountBar("Cloning entries", 0)
-	if errno := readProgress(f, func(count uint64, total uint64) {
+	if _, errno := readProgress(f, func(count uint64, total uint64) {
 		bar.SetTotal(int64(total))
 		bar.SetCurrent(int64(count))
 	}); errno != 0 {

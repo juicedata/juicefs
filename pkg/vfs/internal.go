@@ -18,6 +18,7 @@ package vfs
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -261,6 +262,11 @@ type InfoResponse struct {
 	FLocks  []meta.FLockItem
 }
 
+type SummaryReponse struct {
+	Errno syscall.Errno
+	Tree  meta.TreeSummary
+}
+
 type chunkSlice struct {
 	ChunkIndex uint64
 	meta.Slice
@@ -464,6 +470,41 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			info.Reason = err.Error()
 		}
 		_, _ = out.Write(info.Encode())
+	case meta.OpSummary:
+		inode := Ino(r.Get64())
+		tree := meta.TreeSummary{
+			Inode: inode,
+			Path:  ".",
+		}
+
+		var depth uint8 = 3
+		if r.HasMore() {
+			depth = r.Get8()
+		}
+		var topN uint8 = 10
+		if r.HasMore() {
+			topN = r.Get8()
+		}
+		var strict bool
+		if r.HasMore() {
+			strict = r.Get8() != 0
+		}
+
+		done := make(chan struct{})
+		var r syscall.Errno
+		go func() {
+			r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, strict)
+			close(done)
+		}()
+		writeProgress(&tree.Files, &tree.Size, out, done)
+		data, err := json.Marshal(&SummaryReponse{r, tree})
+		if err != nil {
+			logger.Errorf("marshal summary response: %v", err)
+			_, _ = out.Write([]byte{byte(syscall.EIO & 0xff)})
+			return
+		}
+		head := binary.BigEndian.AppendUint32([]byte{meta.CDATA}, uint32(len(data)))
+		_, _ = out.Write(append(head, data...))
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()

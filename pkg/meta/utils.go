@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/url"
+	"path"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -473,6 +474,136 @@ func (m *baseMeta) FastGetSummary(ctx Context, inode Ino, summary *Summary, recu
 				}
 			}
 		}
+	}
+	return 0
+}
+
+func (t *TreeSummary) visitRoot(visit func(*TreeSummary)) {
+	for tree := t; tree != nil; tree = tree.parent {
+		visit(tree)
+	}
+}
+
+func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool) syscall.Errno {
+	var attr Attr
+	if st := m.GetAttr(ctx, root.Inode, &attr); st != 0 {
+		return st
+	}
+	if attr.Typ != TypeDirectory {
+		root.Files++
+		root.Size += uint64(align4K(attr.Length))
+		return 0
+	}
+	root.Type = TypeDirectory
+	root.Dirs++
+	root.Size += uint64(align4K(0))
+
+	const concurrency = 50
+	trees := []*TreeSummary{root}
+	for len(trees) > 0 {
+		if depth <= 0 {
+			for _, tree := range trees {
+				if tree.Type != TypeDirectory {
+					continue
+				}
+				var summary Summary
+				var st syscall.Errno
+				if strict {
+					st = m.GetSummary(ctx, tree.Inode, &summary, true)
+				} else {
+					st = m.FastGetSummary(ctx, tree.Inode, &summary, true)
+				}
+				if st == syscall.ENOENT {
+					// ignored ENOENT
+					continue
+				}
+				if st != 0 {
+					return st
+				}
+				tree.visitRoot(func(t *TreeSummary) {
+					t.Files += summary.Files
+					t.Dirs += summary.Dirs
+					t.Size += summary.Size
+				})
+			}
+			break
+		}
+		depth--
+		entriesList := make([][]*Entry, len(trees))
+		var eg errgroup.Group
+		eg.SetLimit(concurrency)
+		for i := range trees {
+			tree := trees[i]
+			if tree.Type != TypeDirectory {
+				continue
+			}
+			entries := &entriesList[i]
+			eg.Go(func() error {
+				if st := m.en.doReaddir(ctx, tree.Inode, 1, entries, -1); st != 0 && st != syscall.ENOENT {
+					return st
+				}
+				return nil
+			})
+		}
+		if err := eg.Wait(); err != nil {
+			return errno(err)
+		}
+		var newTrees []*TreeSummary
+		for i, entries := range entriesList {
+			tree := trees[i]
+			if tree.Type != TypeDirectory {
+				continue
+			}
+			for _, e := range entries {
+				if e.Attr.Typ == TypeDirectory {
+					tree.visitRoot(func(t *TreeSummary) {
+						t.Size += uint64(align4K(0))
+						t.Dirs++
+					})
+				} else {
+					tree.visitRoot(func(t *TreeSummary) {
+						t.Size += uint64(align4K(e.Attr.Length))
+						t.Files++
+					})
+				}
+				child := &TreeSummary{
+					Inode:  e.Inode,
+					Path:   path.Join(tree.Path, string(e.Name)),
+					Type:   e.Attr.Typ,
+					parent: tree,
+				}
+				if e.Attr.Typ != TypeDirectory {
+					child.Size = uint64(align4K(e.Attr.Length))
+					child.Files = 1
+				}
+				tree.Children = append(tree.Children, child)
+			}
+			newTrees = append(newTrees, tree.Children...)
+		}
+		// the size of children is unknown at this time, so we sort and omit them before returning
+		defer func(ts []*TreeSummary) {
+			for _, tree := range ts {
+				if tree.Type != TypeDirectory {
+					continue
+				}
+				sort.Slice(tree.Children, func(i, j int) bool {
+					return tree.Children[i].Size > tree.Children[j].Size
+				})
+				if len(tree.Children) > int(topN) {
+					omitChild := &TreeSummary{
+						Path: path.Join(tree.Path, "..."),
+						Type: TypeDirectory,
+					}
+					for _, child := range tree.Children[topN:] {
+						omitChild.Size += child.Size
+						omitChild.Files += child.Files
+						omitChild.Dirs += child.Dirs
+					}
+					tree.Children = append(tree.Children[:topN], omitChild)
+				}
+			}
+		}(trees)
+		trees = newTrees
 	}
 	return 0
 }
