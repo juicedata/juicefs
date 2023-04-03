@@ -138,21 +138,34 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		_ = s.Put("b-", bytes.NewReader([]byte{}))
 		_ = s.Put("b0", bytes.NewReader(make([]byte, 10)))
 		_ = s.Put("xyz/ol1/p.txt", bytes.NewReader([]byte{}))
-		_ = ss.Symlink("b0", "b1")
+
+		err = ss.Symlink("../b0", "bb/b1")
+		if err != nil {
+			t.Fatalf("symlink: %s", err)
+		}
+		if target, err := ss.Readlink("bb/b1"); err != nil {
+			t.Fatalf("readlink: %s", err)
+		} else if target != "../b0" {
+			t.Fatalf("target should be ../b0, but got %s", target)
+		}
+		if fi, err := s.Head("bb/b1"); err != nil || fi.Size() != 10 {
+			t.Fatalf("size of symlink: %s, %d != %d", err, fi.Size(), 10)
+		}
 		_ = ss.Symlink("./xyz/ol1/", "a")
 		_ = ss.Symlink("./xyz/notExist/", "b")
+
 		objs, err = listAll(s, "", "", 100)
 		if err != nil {
 			t.Fatalf("listall failed: %s", err)
 		}
-		expectedKeys = []string{"", "a-", "a/", "a/p.txt", "a0", "b", "b-", "b0", "b1", "x/", "x/x.txt", "xy.txt", "xyz/", "xyz/ol1/", "xyz/ol1/p.txt", "xyz/xyz.txt"}
+		expectedKeys = []string{"", "a-", "a/", "a/p.txt", "a0", "b", "b-", "b0", "bb/", "bb/b1", "x/", "x/x.txt", "xy.txt", "xyz/", "xyz/ol1/", "xyz/ol1/p.txt", "xyz/xyz.txt"}
 		if err = testKeysEqual(objs, expectedKeys); err != nil {
 			t.Fatalf("testKeysEqual fail: %s", err)
 		}
 		if objs[2].Size() != 0 {
 			t.Fatalf("size of target(dir) should be 0")
 		}
-		if objs[8].Size() != 10 {
+		if objs[9].Size() != 10 {
 			t.Fatalf("size of target(file) should be 10")
 		}
 	}

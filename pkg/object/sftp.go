@@ -294,8 +294,7 @@ func (f *sftpStore) Readlink(name string) (string, error) {
 		return "", err
 	}
 	defer f.putSftpConnection(&c, err)
-	c.sftpClient.ReadLink(f.path(name))
-	return "", nil
+	return c.sftpClient.ReadLink(f.path(name))
 }
 
 func (f *sftpStore) Delete(key string) error {
