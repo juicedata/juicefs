@@ -579,7 +579,7 @@ func (m *baseMeta) getTreeSummary(ctx Context, root *TreeSummary) syscall.Errno 
 			}
 			entries := &entriesList[i]
 			eg.Go(func() error {
-				if st := m.Readdir(ctx, tree.Inode, 1, entries); st != 0 && st != syscall.ENOENT {
+				if st := m.en.doReaddir(ctx, tree.Inode, 1, entries, -1); st != 0 && st != syscall.ENOENT {
 					return st
 				}
 				return nil
@@ -595,9 +595,6 @@ func (m *baseMeta) getTreeSummary(ctx Context, root *TreeSummary) syscall.Errno 
 				continue
 			}
 			for _, e := range entries {
-				if bytes.Equal(e.Name, []byte(".")) || bytes.Equal(e.Name, []byte("..")) {
-					continue
-				}
 				if e.Attr.Typ == TypeDirectory {
 					tree.visitRoot(func(t *TreeSummary) {
 						t.Size += uint64(align4K(0))
@@ -667,7 +664,7 @@ func (m *baseMeta) fastGetTreeSummary(ctx Context, root *TreeSummary) syscall.Er
 					// leaf dir or removed dir, no need to read entries
 					return nil
 				}
-				if st := m.Readdir(ctx, tree.Inode, 0, entries); st != 0 && st != syscall.ENOENT {
+				if st := m.en.doReaddir(ctx, tree.Inode, 0, entries, -1); st != 0 && st != syscall.ENOENT {
 					return st
 				}
 				return nil
@@ -691,9 +688,6 @@ func (m *baseMeta) fastGetTreeSummary(ctx Context, root *TreeSummary) syscall.Er
 				continue
 			}
 			for _, e := range entries {
-				if bytes.Equal(e.Name, []byte(".")) || bytes.Equal(e.Name, []byte("..")) {
-					continue
-				}
 				if e.Attr.Typ == TypeDirectory {
 					tree.visitRoot(func(t *TreeSummary) { t.Dirs++ })
 					newTree := &TreeSummary{
