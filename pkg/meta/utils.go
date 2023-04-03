@@ -342,7 +342,7 @@ func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
 		return st
 	}
-	if !recursive || attr.Typ != TypeDirectory {
+	if attr.Typ != TypeDirectory {
 		if attr.Typ == TypeDirectory {
 			summary.Dirs++
 		} else {
@@ -354,14 +354,14 @@ func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 		}
 		return 0
 	}
+	summary.Dirs++
+	summary.Size += uint64(align4K(0))
 	concurrent := make(chan struct{}, 50)
 	inode = m.checkRoot(inode)
-	return m.getSummary(ctx, inode, summary, strict, concurrent)
+	return m.getDirSummary(ctx, inode, summary, recursive, strict, concurrent)
 }
 
-func (m *baseMeta) getSummary(ctx Context, inode Ino, summary *Summary, strict bool, concurrent chan struct{}) syscall.Errno {
-	atomic.AddUint64(&summary.Dirs, 1)
-	atomic.AddUint64(&summary.Size, uint64(align4K(0)))
+func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool, concurrent chan struct{}) syscall.Errno {
 	var entries []*Entry
 	var err syscall.Errno
 	if strict {
@@ -391,8 +391,13 @@ func (m *baseMeta) getSummary(ctx Context, inode Ino, summary *Summary, strict b
 	var wg sync.WaitGroup
 	var errCh = make(chan syscall.Errno, 1)
 	for _, e := range entries {
-		if e.Attr.Typ != TypeDirectory {
+		if e.Attr.Typ == TypeDirectory {
+			atomic.AddUint64(&summary.Dirs, 1)
+			atomic.AddUint64(&summary.Size, uint64(align4K(0)))
+		} else {
 			atomic.AddUint64(&summary.Files, 1)
+		}
+		if e.Attr.Typ != TypeDirectory || !recursive {
 			if strict {
 				atomic.AddUint64(&summary.Size, uint64(align4K(e.Attr.Length)))
 				if e.Attr.Typ == TypeFile {
@@ -409,7 +414,7 @@ func (m *baseMeta) getSummary(ctx Context, inode Ino, summary *Summary, strict b
 			wg.Add(1)
 			go func(e *Entry) {
 				defer wg.Done()
-				err := m.getSummary(ctx, e.Inode, summary, strict, concurrent)
+				err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent)
 				<-concurrent
 				if err != 0 && err != syscall.ENOENT {
 					select {
@@ -419,7 +424,7 @@ func (m *baseMeta) getSummary(ctx Context, inode Ino, summary *Summary, strict b
 				}
 			}(e)
 		default:
-			if err := m.getSummary(ctx, e.Inode, summary, strict, concurrent); err != 0 && err != syscall.ENOENT {
+			if err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent); err != 0 && err != syscall.ENOENT {
 				return err
 			}
 		}
@@ -451,7 +456,7 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN uint8, strict bool, concurrent chan struct{}) syscall.Errno {
 	if depth <= 0 {
 		var summary Summary
-		err := m.getSummary(ctx, tree.Inode, &summary, strict, concurrent)
+		err := m.getDirSummary(ctx, tree.Inode, &summary, true, strict, concurrent)
 		if err == 0 {
 			tree.Type = TypeDirectory
 			tree.Dirs = summary.Dirs + 1
