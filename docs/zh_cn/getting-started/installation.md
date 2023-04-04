@@ -203,11 +203,15 @@ CMD [ "juicefs" ]
 
 ### 在 Windows 下编译
 
-在 Windows 系统中编译 JuiceFS 客户端，需要安装 [Go](https://golang.org) 1.18+ 和 GCC 5.4+。
+在 Windows 系统编译 JuiceFS 客户端需要安装以下依赖：
 
-由于 GCC 没有原生 Windows 客户端，因此需要使用第三方提供的版本，可以使用 [MinGW-w64 的预编译版本](https://www.mingw-w64.org/downloads) 或 [Cygwin](https://www.cygwin.com)，这里以 MinGW-w64 为例介绍。
+- [WinFsp](https://github.com/winfsp/winfsp)
+- [Go](https://golang.org) 1.18+
+- GCC 5.4+
 
-下载 MinGW-w64 并将其 `bin` 目录添加到系统环境变量。
+其中，WinFsp 和 Go 直接下载安装即可。GCC 需要使用第三方提供的版本，可以使用 [MinGW-w64](https://www.mingw-w64.org) 或 [Cygwin](https://www.cygwin.com)，这里以 MinGW-w64 为例介绍。
+
+在 [MinGW-w64 的下载页面](https://www.mingw-w64.org/downloads) 选择一个适用于 Windows 的预编译版本，比如 [mingw-builds-binaries](https://github.com/niXman/mingw-builds-binaries/releases)。下载完成后，将其解压到 `C` 盘根目录，然后在系统环境变量设置中找到 PATH 并添加 `C:\mingw64\bin` 目录，重启系统后在命令行或 PowerShell 中执行 `gcc -v` 命令，如果能看到版本信息则说明 MingGW-w64 安装成功，接下来就可以开始编译了。
 
 1. 克隆并进入项目目录
 
@@ -242,6 +246,8 @@ CMD [ "juicefs" ]
    ```shell
    go build -ldflags="-s -w" -o juicefs.exe .
    ```
+
+编译好的 `juicefs.exe` 二进制程序位于当前目录。为了方便使用，可以将其移动到 `C:\Windows\System32` 目录下，这样就可以在任何地方直接使用 `juicefs.exe` 命令了。
 
 ### 在 Linux 中交叉编译 Windows 客户端
 
