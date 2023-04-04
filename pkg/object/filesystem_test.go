@@ -53,7 +53,10 @@ func TestSftp2(t *testing.T) { //skip mutate
 	if os.Getenv("SFTP_HOST") == "" {
 		t.SkipNow()
 	}
-	sftp, _ := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PASS"), "")
+	sftp, err := newSftp(os.Getenv("SFTP_HOST"), os.Getenv("SFTP_USER"), os.Getenv("SFTP_PPASS"), "")
+	if err != nil {
+		t.Fatalf("sftp: %s", err)
+	}
 	testFileSystem(t, sftp)
 }
 
@@ -151,8 +154,10 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		if fi, err := s.Head("bb/b1"); err != nil || fi.Size() != 10 {
 			t.Fatalf("size of symlink: %s, %d != %d", err, fi.Size(), 10)
 		}
-		_ = ss.Symlink("./xyz/ol1/", "a")
-		_ = ss.Symlink("./xyz/notExist/", "b")
+		if err = ss.Symlink("xyz/ol1/", "a"); err != nil {
+			t.Fatalf("symlink: a: %s", err)
+		}
+		_ = ss.Symlink("xyz/notExist/", "b")
 
 		objs, err = listAll(s, "", "", 100)
 		if err != nil {
