@@ -41,9 +41,7 @@ The following are points to note when using the data sharding function:
 
 - The `--shards` option accepts an integer between 0 and 256, indicating how many Buckets the files will be scattered into. The default value is 0, indicating that the data sharding function is not enabled.
 - Only multiple buckets under the same object storage can be used.
-- The API Key for accessing object storage must have the permission to create buckets.
 - The integer wildcard `%d` needs to be used to specify the buckets, for example, `"http://192.168.1.18:9000/myjfs-%d"`. Buckets can be created in advance in this format, or automatically created by the JuiceFS client when creating a file system.
-- If pre-created buckets are used for shards, the designated buckets must be empty.
 - The data sharding is set at the time of creation and cannot be modified after creation. You cannot increase or decrease the number of buckets, nor cancel the shards function.
 
 For example, the following command creates a file system with 4 shards.
