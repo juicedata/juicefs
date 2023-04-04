@@ -33,6 +33,28 @@ juicefs format --storage s3 \
 
 When executing the `juicefs format` or `juicefs mount` command, you can set some special options in the form of URL parameters in the `--bucket` option, such as `tls-insecure-skip-verify=true` in `https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` is to skip the certificate verification of HTTPS requests.
 
+## Enable data sharding
+
+When creating a file system, multiple buckets can be defined as the underlying storage of the file system through the [--shards](../reference/command_reference.md#format) option. In this way, the system will distribute the files to multiple buckets based on the hashed value of the file name. Data sharding technology can distribute the load of concurrent writing of large-scale data to multiple buckets, thereby improving the writing performance.
+
+The following are points to note when using the data sharding function:
+
+- The `--shards` option accepts an integer between 0 and 256, indicating how many Buckets the files will be scattered into. The default value is 0, indicating that the data sharding function is not enabled.
+- Only multiple buckets under the same object storage can be used.
+- The integer wildcard `%d` needs to be used to specify the buckets, for example, `"http://192.168.1.18:9000/myjfs-%d"`. Buckets can be created in advance in this format, or automatically created by the JuiceFS client when creating a file system.
+- The data sharding is set at the time of creation and cannot be modified after creation. You cannot increase or decrease the number of buckets, nor cancel the shards function.
+
+For example, the following command creates a file system with 4 shards.
+
+```shell
+juicefs format --storage s3 \
+    --shards 4 \
+    --bucket "https://myjfs-%d.s3.us-east-2.amazonaws.com" \
+    ...
+```
+
+After executing the above command, the JuiceFS client will create 4 buckets named `myjfs-0`, `myjfs-1`, `myjfs-2`, and `myjfs-3`.
+
 ## Access Key and Secret Key
 
 In general, object storages are authenticated with Access Key ID and Access Key Secret. For JuiceFS file system, they are provided by options `--access-key` and `--secret-key` (or AK, SK for short).

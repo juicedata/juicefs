@@ -33,6 +33,28 @@ juicefs format --storage s3 \
 
 在执行 `juicefs format` 或 `juicefs mount` 命令时，可以在 `--bucket` 选项中以 URL 参数的形式设置一些特别的选项，比如 `https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` 中的 `tls-insecure-skip-verify=true` 即为跳过 HTTPS 请求的证书验证环节。
 
+## 配置数据分片（Sharding）
+
+创建文件系统时，可以通过 [--shards](../reference/command_reference.md#format) 选项定义多个 Bucket 作为文件系统的底层存储。这样一来，系统会根据文件名哈希值将文件分散到多个 Bucket 中。数据分片技术可以将大规模数据并发写的负载分散到多个 Bucket 中，从而提高写入性能。
+
+启用数据分片功能需要注意以下事项：
+
+- 只能使用同一种对象存储下的多个 bucket
+- `--shards` 选项接受一个 0～256 之间的整数，表示将文件分散到多少个 Bucket 中。默认值为 0，表示不启用数据分片功能。
+- 需要使用整型数字通配符 `%d` 或许 `%x` 之类指定用户生成 bucket的 endpoint 的字符串，例如 `"http://192.168.1.18:9000/myjfs-%d"`，可以按照这样的格式预先创建 bucket，也可以在创建文件系统时由 JuiceFS 客户端自动创建；
+- 数据分片在创建时设定，创建完毕不允许修改。不可增加或减少 bucket，也不可以取消 shards 功能。
+
+例如，以下命令创建了一个数据分片为 4 的文件系统：
+
+```shell
+juicefs format --storage s3 \
+    --shards 4 \
+    --bucket "https://myjfs-%d.s3.us-east-2.amazonaws.com" \
+    ...
+```
+
+执行上述命令后，JuiceFS 客户端会创建 4 个 bucket，分别为 `myjfs-0`、`myjfs-1`、`myjfs-2` 和 `myjfs-3`。
+
 ## Access Key 和 Secret Key
 
 一般而言，对象存储通过 Access Key ID 和 Access Key Secret 验证用户身份，对应到 JuiceFS 文件系统就是 `--access-key` 和 `--secret-key` 这两个选项（或者简称为 AK、SK）。
