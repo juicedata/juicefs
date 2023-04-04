@@ -30,6 +30,7 @@ import org.apache.hadoop.security.UserGroupInformation;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.security.PrivilegedExceptionAction;
@@ -52,6 +53,7 @@ public class JuiceFileSystemTest extends TestCase {
     cfg.set(FS_TRASH_INTERVAL_KEY, "6");
     cfg.set(FS_TRASH_CHECKPOINT_INTERVAL_KEY, "2");
     cfg.set("juicefs.access-log", "/tmp/jfs.access.log");
+    cfg.set("juicefs.discover-nodes-url", "jfs:///etc/nodes");
     fs = FileSystem.newInstance(cfg);
     fs.delete(new Path("/hello"));
     FSDataOutputStream out = fs.create(new Path("/hello"), true);
@@ -107,6 +109,8 @@ public class JuiceFileSystemTest extends TestCase {
     String[] storageIds = locations[0].getStorageIds();
     assertNotNull(storageIds);
     assertEquals(names.length, storageIds.length);
+
+    assertEquals(InetAddress.getLocalHost().getHostName() + ":50010", names[0]);
   }
 
   public void testReadWrite() throws Exception {
