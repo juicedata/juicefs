@@ -310,12 +310,10 @@ func (c *tikvClient) gc() {
 	if c.gcInterval == 0 {
 		return
 	}
-	go func() {
-		safePoint, err := c.client.GC(context.Background(), oracle.GoTimeToTS(time.Now().Add(-c.gcInterval)))
-		if err == nil {
-			logger.Debugf("TiKV GC returns new safe point: %d (%s)", safePoint, oracle.GetTimeFromTS(safePoint))
-		} else {
-			logger.Warnf("TiKV GC: %s", err)
-		}
-	}()
+	safePoint, err := c.client.GC(context.Background(), oracle.GoTimeToTS(time.Now().Add(-c.gcInterval)))
+	if err == nil {
+		logger.Debugf("TiKV GC returns new safe point: %d (%s)", safePoint, oracle.GetTimeFromTS(safePoint))
+	} else {
+		logger.Warnf("TiKV GC: %s", err)
+	}
 }
