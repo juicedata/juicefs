@@ -59,6 +59,9 @@ jobs:
           echo "hello juicefs" > /jfs/inner_sym_target
           cd /jfs
           ln -s inner_sym_target inner_sym_link 
+          mkdir etc
+          chmod 777 etc
+          echo `hostname` > etc/nodes
 
       - name: Make SDK
         run: |

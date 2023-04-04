@@ -16,12 +16,13 @@
 
 package io.juicefs.utils;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import io.juicefs.JuiceFileSystem;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -30,25 +31,46 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class FsNodesFetcher extends NodesFetcher {
-  private static final Log LOG = LogFactory.getLog(FsNodesFetcher.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FsNodesFetcher.class);
 
-  public FsNodesFetcher(String jfsName) {
+  private FileSystem jfs;
+  private Configuration conf;
+
+  public FsNodesFetcher(String jfsName, FileSystem jfs) {
     super(jfsName);
+    this.jfs = jfs;
+    this.conf = jfs.getConf();
   }
 
   @Override
   public List<String> fetchNodes(String uri) {
+    FileSystem fs;
+
     Path path = new Path(uri);
-    try {
-      FileSystem fs = path.getFileSystem(new Configuration());
-      if (!fs.exists(path)) return null;
-      FSDataInputStream inputStream = fs.open(path);
-      List<String> res = new BufferedReader(new InputStreamReader(inputStream))
-              .lines().collect(Collectors.toList());
-      inputStream.close();
-      return res;
-    } catch (Throwable e) {
-      LOG.warn(e.getMessage());
+    String scheme = path.toUri().getScheme();
+    if (scheme == null) {
+      scheme = FileSystem.getDefaultUri(conf).getScheme();
+    }
+    if (scheme != null) {
+      try {
+        String classStr = conf.getTrimmed("fs." + scheme + ".impl");
+        if (JuiceFileSystem.class.getName().equals(classStr)) {
+          fs = jfs;
+        } else {
+          fs = path.getFileSystem(conf);
+        }
+        if (!fs.exists(path)) {
+          return null;
+        }
+        FSDataInputStream inputStream = fs.open(path);
+        List<String> res = new BufferedReader(new InputStreamReader(inputStream))
+            .lines().collect(Collectors.toList());
+        inputStream.close();
+        return res;
+      } catch (Exception e) {
+        LOG.warn("fetch nodes from {} failed", uri, e);
+        return null;
+      }
     }
     return null;
   }

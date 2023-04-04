@@ -16,19 +16,22 @@
 
 package io.juicefs.utils;
 
+import org.apache.hadoop.fs.FileSystem;
+
 public class NodesFetcherBuilder {
-  public static NodesFetcher buildFetcher(String urls, String jfsName) {
+  public static NodesFetcher buildFetcher(String urls, String jfsName, FileSystem jfs) {
     NodesFetcher fetcher;
-    if (urls.contains("cluster/nodes") || "yarn".equals(urls.toLowerCase().trim())) {
+    if ((urls.startsWith("http") && urls.contains("cluster/nodes"))
+        || "yarn".equals(urls.toLowerCase().trim())) {
       fetcher = new YarnNodesFetcher(jfsName);
-    } else if (urls.contains("service/presto")) {
+    } else if (urls.startsWith("http") && urls.contains("service/presto")) {
       fetcher = new PrestoNodesFetcher(jfsName);
-    } else if (urls.contains("/json")) {
+    }  else if (urls.startsWith("http") && urls.contains("/json")) {
       fetcher = new SparkNodesFetcher(jfsName);
-    } else if (urls.contains("api/v1/applications")) {
+    } else if (urls.startsWith("http") && urls.contains("api/v1/applications")) {
       fetcher = new SparkThriftNodesFetcher(jfsName);
     } else {
-      fetcher = new FsNodesFetcher(jfsName);
+      fetcher = new FsNodesFetcher(jfsName, jfs);
     }
     return fetcher;
   }

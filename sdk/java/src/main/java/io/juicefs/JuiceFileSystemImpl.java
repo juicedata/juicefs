@@ -27,8 +27,6 @@ import jnr.ffi.Runtime;
 import jnr.ffi.annotations.Delegate;
 import jnr.ffi.annotations.In;
 import jnr.ffi.annotations.Out;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
@@ -46,6 +44,8 @@ import org.apache.hadoop.util.DirectBufferPool;
 import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.util.VersionInfo;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -75,7 +75,7 @@ import java.util.zip.ZipEntry;
 @InterfaceStability.Stable
 public class JuiceFileSystemImpl extends FileSystem {
 
-  public static final Log LOG = LogFactory.getLog(JuiceFileSystemImpl.class);
+  public static final Logger LOG = LoggerFactory.getLogger(JuiceFileSystemImpl.class);
 
   private Path workingDir;
   private String name;
@@ -345,11 +345,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     String supergroup = getConf(conf, "supergroup", conf.get("dfs.permissions.superusergroup", "supergroup"));
     String mountpoint = getConf(conf, "mountpoint", "");
 
-    initCache(conf);
-    refreshCache(conf);
-
     lib = loadLibrary();
-
     synchronized (JuiceFileSystemImpl.class) {
       if (callBack == null) {
         callBack = new LogCallBackImpl(lib);
@@ -406,6 +402,10 @@ public class JuiceFileSystemImpl extends FileSystem {
     if (handle <= 0) {
       throw new IOException("JuiceFS initialized failed for jfs://" + name);
     }
+
+    initCache(conf);
+    refreshCache(conf);
+
     homeDirPrefix = conf.get("dfs.user.home.dir.prefix", "/user");
     this.workingDir = getHomeDirectory();
 
@@ -679,31 +679,28 @@ public class JuiceFileSystemImpl extends FileSystem {
 
   private void initCache(Configuration conf) {
     try {
-      List<String> nodes = Arrays.asList(getConf(conf, "nodes", "localhost").split(","));
-      if (nodes.size() == 1 && "localhost".equals(nodes.get(0))) {
-        String urls = getConf(conf, "discover-nodes-url", null);
-        if (urls != null) {
-          List<String> newNodes = discoverNodes(urls);
-          Map<String, String> newCachedHosts = new HashMap<>();
-          for (String newNode : newNodes) {
-            try {
-              newCachedHosts.put(InetAddress.getByName(newNode).getHostAddress(), newNode);
-            } catch (UnknownHostException e) {
-              LOG.warn("unknown host: " + newNode);
-            }
+      String urls = getConf(conf, "discover-nodes-url", null);
+      if (urls != null) {
+        List<String> newNodes = discoverNodes(urls);
+        Map<String, String> newCachedHosts = new HashMap<>();
+        for (String newNode : newNodes) {
+          try {
+            newCachedHosts.put(InetAddress.getByName(newNode).getHostAddress(), newNode);
+          } catch (UnknownHostException e) {
+            LOG.warn("unknown host: " + newNode);
           }
+        }
 
-          // if newCachedHosts are not changed, skip
-          if (!newCachedHosts.equals(cachedHosts)) {
-            List<String> ips = new ArrayList<>(newCachedHosts.keySet());
-            LOG.debug("update nodes to: " + String.join(",", ips));
-            this.hash = new ConsistentHash<>(100, ips);
-            this.cachedHosts = newCachedHosts;
-          }
+        // if newCachedHosts are not changed, skip
+        if (!newCachedHosts.equals(cachedHosts)) {
+          List<String> ips = new ArrayList<>(newCachedHosts.keySet());
+          LOG.debug("update nodes to: " + String.join(",", ips));
+          this.hash = new ConsistentHash<>(100, ips);
+          this.cachedHosts = newCachedHosts;
         }
       }
     } catch (Throwable e) {
-      LOG.warn(e);
+      LOG.warn("failed to discover nodes", e);
     }
   }
 
@@ -719,13 +716,14 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   private List<String> discoverNodes(String urls) {
-    NodesFetcher fetcher = NodesFetcherBuilder.buildFetcher(urls, name);
+    LOG.debug("fetching nodes from {}", urls);
+    NodesFetcher fetcher = NodesFetcherBuilder.buildFetcher(urls, name, this);
     List<String> fetched = fetcher.fetchNodes(urls);
-    if (fetched == null || fetched.isEmpty()) {
-      return Collections.singletonList("localhost");
-    } else {
-      return fetched;
+    if (fetched == null) {
+      fetched = new ArrayList<>();
     }
+    LOG.debug("fetched nodes: {}", fetched);
+    return fetched;
   }
 
   private BlockLocation makeLocation(long code, long start, long len) {
