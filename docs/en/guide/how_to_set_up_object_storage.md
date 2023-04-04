@@ -35,7 +35,7 @@ When executing the `juicefs format` or `juicefs mount` command, you can set some
 
 ## Enable data sharding
 
-When creating a file system, multiple buckets can be defined as the underlying storage of the file system through the `--shards` option. In this way, the system will distribute the files to multiple buckets based on the hashed value of the file name. Data sharding technology can distribute the load of concurrent writing of large-scale data to multiple buckets, thereby improving the writing performance.
+When creating a file system, multiple buckets can be defined as the underlying storage of the file system through the [--shards](../reference/command_reference.md#format) option. In this way, the system will distribute the files to multiple buckets based on the hashed value of the file name. Data sharding technology can distribute the load of concurrent writing of large-scale data to multiple buckets, thereby improving the writing performance.
 
 The following are points to note when using the data sharding function:
 

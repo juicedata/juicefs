@@ -35,7 +35,7 @@ juicefs format --storage s3 \
 
 ## 配置数据分片（Sharding）
 
-创建文件系统时，可以通过 `--shards` 选项定义多个 Bucket 作为文件系统的底层存储。这样一来，系统会根据文件名哈希值将文件分散到多个 Bucket 中。数据分片技术可以将大规模数据并发写的负载分散到多个 Bucket 中，从而提高写入性能。
+创建文件系统时，可以通过 [--shards](../reference/command_reference.md#format) 选项定义多个 Bucket 作为文件系统的底层存储。这样一来，系统会根据文件名哈希值将文件分散到多个 Bucket 中。数据分片技术可以将大规模数据并发写的负载分散到多个 Bucket 中，从而提高写入性能。
 
 启用数据分片功能需要注意以下事项：
 
