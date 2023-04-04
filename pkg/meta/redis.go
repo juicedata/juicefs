@@ -909,7 +909,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		}
 		newLength = int64(length) - int64(t.Length)
 		newSpace = align4K(length) - align4K(t.Length)
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, t.Parent) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, t.Parent)...) {
 			return syscall.ENOSPC
 		}
 		var zeroChunks []uint32
@@ -1037,7 +1037,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		old := t.Length
 		newLength = int64(length) - int64(old)
 		newSpace = align4K(length) - align4K(old)
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, t.Parent) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, t.Parent)...) {
 			return syscall.ENOSPC
 		}
 		t.Length = length
@@ -2151,7 +2151,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, attr.Parent) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, attr.Parent)...) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
@@ -2232,7 +2232,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, attr.Parent) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, fout, attr.Parent)...) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
@@ -2314,6 +2314,25 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 		m.updateParentStat(ctx, fout, attr.Parent, newLength, newSpace)
 	}
 	return errno(err)
+}
+
+func (m *redisMeta) getParents(ctx Context, tx *redis.Tx, inode, parent Ino) []Ino {
+	if parent > 0 {
+		return []Ino{parent}
+	}
+	vals, err := tx.HGetAll(ctx, m.parentKey(inode)).Result()
+	if err != nil {
+		logger.Warnf("Scan parent key of inode %d: %s", inode, err)
+		return nil
+	}
+	ps := make([]Ino, 0, len(vals))
+	for k, v := range vals {
+		if n, _ := strconv.Atoi(v); n > 0 {
+			ino, _ := strconv.ParseUint(k, 10, 64)
+			ps = append(ps, Ino(ino))
+		}
+	}
+	return ps
 }
 
 func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {

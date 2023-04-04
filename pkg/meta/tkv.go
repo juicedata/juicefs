@@ -946,7 +946,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		}
 		newLength = int64(length) - int64(t.Length)
 		newSpace = align4K(length) - align4K(t.Length)
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, t.Parent) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, t.Parent)...) {
 			return syscall.ENOSPC
 		}
 		var left, right = t.Length, length
@@ -1042,7 +1042,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		old := t.Length
 		newLength = int64(length) - int64(t.Length)
 		newSpace = align4K(length) - align4K(t.Length)
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, t.Parent) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, t.Parent)...) {
 			return syscall.ENOSPC
 		}
 		t.Length = length
@@ -1855,7 +1855,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, attr.Parent) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, attr.Parent)...) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
@@ -1921,7 +1921,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, attr.Parent) {
+		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(tx, fout, attr.Parent)...) {
 			return syscall.ENOSPC
 		}
 		now := time.Now()
@@ -1998,6 +1998,21 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		m.updateParentStat(ctx, fout, attr.Parent, newLength, newSpace)
 	}
 	return errno(err)
+}
+
+func (m *kvMeta) getParents(tx *kvTxn, inode, parent Ino) []Ino {
+	if parent > 0 {
+		return []Ino{parent}
+	}
+	var ps []Ino
+	prefix := m.fmtKey("A", inode, "P")
+	tx.scan(prefix, nextKey(prefix), false, func(k, v []byte) bool {
+		if len(k) == 1+8+1+8 && parseCounter(v) > 0 {
+			ps = append(ps, m.decodeInode([]byte(k[10:])))
+		}
+		return true
+	})
+	return ps
 }
 
 func (m *kvMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
