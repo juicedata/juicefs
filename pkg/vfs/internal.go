@@ -361,7 +361,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		}
 
 		wb := utils.NewBuffer(4)
-		r := v.Meta.GetSummary(ctx, inode, &summary, recursive != 0)
+		r := v.Meta.GetSummary(ctx, inode, &summary, recursive != 0, true)
 		if r != 0 {
 			msg := r.Error()
 			wb.Put32(uint32(len(msg)))
@@ -430,11 +430,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		done := make(chan struct{})
 		var r syscall.Errno
 		go func() {
-			if strict {
-				r = v.Meta.GetSummary(ctx, inode, &info.Summary, recursive != 0)
-			} else {
-				r = v.Meta.FastGetSummary(ctx, inode, &info.Summary, recursive != 0)
-			}
+			r = v.Meta.GetSummary(ctx, inode, &info.Summary, recursive != 0, strict)
 			close(done)
 		}()
 		writeProgress(&info.Summary.Files, &info.Summary.Size, out, done)
@@ -490,12 +486,17 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		}
 
 		done := make(chan struct{})
+		var files, size uint64
 		var r syscall.Errno
 		go func() {
-			r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, strict)
+			r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, strict,
+				func(count, bytes uint64) {
+					atomic.AddUint64(&files, count)
+					atomic.AddUint64(&size, bytes)
+				})
 			close(done)
 		}()
-		writeProgress(&tree.Files, &tree.Size, out, done)
+		writeProgress(&files, &size, out, done)
 		data, err := json.Marshal(&SummaryReponse{r, tree})
 		if err != nil {
 			logger.Errorf("marshal summary response: %v", err)
