@@ -436,7 +436,7 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	}
 	err := grantAccess()
 	if err != nil {
-		logger.Warnf("grant access to /dev/fuse: %s", err)
+		logger.Debugf("grant access to /dev/fuse: %s", err)
 	}
 	ensureFuseDev()
 
