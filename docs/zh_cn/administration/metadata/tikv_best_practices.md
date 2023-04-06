@@ -64,7 +64,7 @@ enable-compaction-filter = false
 
 TiKV 默认通过 [compaction-filter](https://docs.pingcap.com/zh/tidb/dev/garbage-collection-configuration#gc-in-compaction-filter-%E6%9C%BA%E5%88%B6) 进行垃圾回收，由 RocksDB 的 Compaction 过程来进行 GC，而不再使用一个单独的 GC worker 线程。这样做的好处是避免了 GC 引起的额外磁盘读取，以及避免清理掉的旧版本残留大量删除标记影响顺序扫描性能。
 
-由于此回收模式依赖 RocksDB compaction，所以设置`safe-point`之后垃圾并不会被及时回收，需要后续持续写入触发 compaction 才能进行 GC。如果您需要主动触发 GC，可以通过 [`tikv-cli`](https://docs.pingcap.com/zh/tidb/dev/tikv-control) 工具主动进行集群 compaction，从而触发全局 GC。
+由于此回收模式依赖 RocksDB compaction，所以设置`safe-point`之后垃圾并不会被及时回收，需要后续持续写入触发 compaction 才能进行 GC。如果您需要主动触发 GC，可以通过 [`tikv-ctl`](https://docs.pingcap.com/zh/tidb/dev/tikv-control) 工具主动进行集群 compaction，从而触发全局 GC。
 
 ```bash
 > tikv-ctl --pd 127.0.0.1:2379 compact-cluster -b -c default,lock,write
