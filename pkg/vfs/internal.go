@@ -487,12 +487,17 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		}
 
 		done := make(chan struct{})
+		var files, size uint64
 		var r syscall.Errno
 		go func() {
-			r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, strict)
+			r = v.Meta.GetTreeSummary(ctx, &tree, depth, topN, strict,
+				func(count, bytes uint64) {
+					atomic.AddUint64(&files, count)
+					atomic.AddUint64(&size, bytes)
+				})
 			close(done)
 		}()
-		writeProgress(&tree.Files, &tree.Size, out, done)
+		writeProgress(&files, &size, out, done)
 		data, err := json.Marshal(&SummaryReponse{r, tree})
 		if err != nil {
 			logger.Errorf("marshal summary response: %v", err)

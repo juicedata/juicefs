@@ -358,10 +358,10 @@ func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 	summary.Size += uint64(align4K(0))
 	concurrent := make(chan struct{}, 50)
 	inode = m.checkRoot(inode)
-	return m.getDirSummary(ctx, inode, summary, recursive, strict, concurrent)
+	return m.getDirSummary(ctx, inode, summary, recursive, strict, concurrent, nil)
 }
 
-func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool, concurrent chan struct{}) syscall.Errno {
+func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool, concurrent chan struct{}, updateProgress func(count uint64, bytes uint64)) syscall.Errno {
 	var entries []*Entry
 	var err syscall.Errno
 	if strict {
@@ -374,6 +374,9 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 		}
 		atomic.AddUint64(&summary.Size, uint64(st.space))
 		atomic.AddUint64(&summary.Length, uint64(st.length))
+		if updateProgress != nil {
+			updateProgress(uint64(st.inodes), uint64(st.space))
+		}
 		var attr Attr
 		err = m.en.doGetAttr(ctx, inode, &attr)
 		if err == 0 {
@@ -393,17 +396,19 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 	for _, e := range entries {
 		if e.Attr.Typ == TypeDirectory {
 			atomic.AddUint64(&summary.Dirs, 1)
-			atomic.AddUint64(&summary.Size, uint64(align4K(0)))
 		} else {
 			atomic.AddUint64(&summary.Files, 1)
 		}
-		if e.Attr.Typ != TypeDirectory || !recursive {
-			if strict {
-				atomic.AddUint64(&summary.Size, uint64(align4K(e.Attr.Length)))
-				if e.Attr.Typ == TypeFile {
-					atomic.AddUint64(&summary.Length, e.Attr.Length)
-				}
+		if strict {
+			atomic.AddUint64(&summary.Size, uint64(align4K(e.Attr.Length)))
+			if e.Attr.Typ == TypeFile {
+				atomic.AddUint64(&summary.Length, e.Attr.Length)
 			}
+			if updateProgress != nil {
+				updateProgress(1, uint64(align4K(e.Attr.Length)))
+			}
+		}
+		if e.Attr.Typ != TypeDirectory || !recursive {
 			continue
 		}
 		select {
@@ -414,7 +419,7 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 			wg.Add(1)
 			go func(e *Entry) {
 				defer wg.Done()
-				err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent)
+				err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent, updateProgress)
 				<-concurrent
 				if err != 0 && err != syscall.ENOENT {
 					select {
@@ -424,7 +429,7 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 				}
 			}(e)
 		default:
-			if err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent); err != 0 && err != syscall.ENOENT {
+			if err := m.getDirSummary(ctx, e.Inode, summary, recursive, strict, concurrent, updateProgress); err != 0 && err != syscall.ENOENT {
 				return err
 			}
 		}
@@ -437,7 +442,8 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 	return err
 }
 
-func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool) syscall.Errno {
+func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool,
+	updateProgress func(count uint64, bytes uint64)) syscall.Errno {
 	var attr Attr
 	if st := m.GetAttr(ctx, root.Inode, &attr); st != 0 {
 		return st
@@ -447,21 +453,22 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 		root.Size += uint64(align4K(attr.Length))
 		return 0
 	}
-
+	root.Dirs++
+	root.Size += uint64(align4K(0))
 	concurrent := make(chan struct{}, 50)
 	root.Inode = m.checkRoot(root.Inode)
-	return m.getTreeSummary(ctx, root, depth, topN, strict, concurrent)
+	return m.getTreeSummary(ctx, root, depth, topN, strict, concurrent, updateProgress)
 }
 
-func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN uint8, strict bool, concurrent chan struct{}) syscall.Errno {
+func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN uint8, strict bool, concurrent chan struct{},
+	updateProgress func(count uint64, bytes uint64)) syscall.Errno {
 	if depth <= 0 {
 		var summary Summary
-		err := m.getDirSummary(ctx, tree.Inode, &summary, true, strict, concurrent)
+		err := m.getDirSummary(ctx, tree.Inode, &summary, true, strict, concurrent, updateProgress)
 		if err == 0 {
-			tree.Type = TypeDirectory
-			tree.Dirs = summary.Dirs + 1
-			tree.Files = summary.Files
-			tree.Size = summary.Size + uint64(align4K(0))
+			tree.Dirs += summary.Dirs
+			tree.Files += summary.Files
+			tree.Size += summary.Size
 		}
 		return err
 	}
@@ -479,13 +486,17 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 			Inode: e.Inode,
 			Path:  path.Join(tree.Path, string(e.Name)),
 			Type:  e.Attr.Typ,
+			Size:  uint64(align4K(e.Attr.Length)),
 		}
 		tree.Children[i] = child
+		if updateProgress != nil {
+			updateProgress(1, uint64(align4K(e.Attr.Length)))
+		}
 		if e.Attr.Typ != TypeDirectory {
 			child.Files++
-			child.Size += uint64(align4K(e.Attr.Length))
 			continue
 		}
+		child.Dirs++
 		select {
 		case err = <-errCh:
 			// TODO: cancel context
@@ -494,7 +505,7 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				err := m.getTreeSummary(ctx, child, depth-1, topN, strict, concurrent)
+				err := m.getTreeSummary(ctx, child, depth-1, topN, strict, concurrent, updateProgress)
 				<-concurrent
 				if err != 0 && err != syscall.ENOENT {
 					select {
@@ -504,7 +515,7 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 				}
 			}()
 		default:
-			if err = m.getTreeSummary(ctx, child, depth-1, topN, strict, concurrent); err != 0 && err != syscall.ENOENT {
+			if err = m.getTreeSummary(ctx, child, depth-1, topN, strict, concurrent, updateProgress); err != 0 && err != syscall.ENOENT {
 				return err
 			}
 		}

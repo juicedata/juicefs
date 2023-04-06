@@ -415,7 +415,7 @@ type Meta interface {
 	// Get summary of a node; for a directory it will accumulate all its child nodes
 	GetSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool) syscall.Errno
 	// GetTreeSummary returns a summary in tree structure
-	GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool) syscall.Errno
+	GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool, updateProgress func(count uint64, bytes uint64)) syscall.Errno
 	// Clone a file or directory
 	Clone(ctx Context, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, count, total *uint64) syscall.Errno
 	// GetPaths returns all paths of an inode
