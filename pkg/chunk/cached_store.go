@@ -439,11 +439,8 @@ func (s *wSlice) upload(indx int) {
 						defer func() { <-s.store.currentUpload }()
 						if err = s.store.upload(key, block, nil); err == nil {
 							s.store.bcache.uploaded(key, blen)
-							if os.Remove(stagingPath) == nil {
-								if m, ok := s.store.bcache.(*cacheManager); ok {
-									m.stageBlocks.Sub(1)
-									m.stageBlockBytes.Sub(float64(blen))
-								}
+							if err := s.store.bcache.removeStage(key); err != nil {
+								logger.Warnf("failed to remove stage %s in upload", stagingPath)
 							}
 						} else { // add to delay list and wait for later scanning
 							s.store.addDelayedStaging(key, stagingPath, time.Now(), false)
@@ -602,6 +599,7 @@ type cachedStore struct {
 	objectReqsHistogram *prometheus.HistogramVec
 	objectReqErrors     prometheus.Counter
 	objectDataBytes     *prometheus.CounterVec
+	stageBlockDelay     prometheus.Counter
 }
 
 func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bool) (err error) {
@@ -786,6 +784,10 @@ func (store *cachedStore) initMetrics() {
 		Name: "object_request_data_bytes",
 		Help: "Object requests size in bytes.",
 	}, []string{"method"})
+	store.stageBlockDelay = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "staging_block_delay_seconds",
+		Help: "Total seconds of delay for staging blocks",
+	})
 }
 
 func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
@@ -800,6 +802,7 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(store.objectReqsHistogram)
 	reg.MustRegister(store.objectReqErrors)
 	reg.MustRegister(store.objectDataBytes)
+	reg.MustRegister(store.stageBlockDelay)
 	reg.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "blockcache_blocks",
@@ -865,17 +868,12 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		return
 	}
 
-	if m, ok := store.bcache.(*cacheManager); ok {
-		m.stageBlockDelay.Add(time.Since(item.ts).Seconds())
-	}
+	store.stageBlockDelay.Add(time.Since(item.ts).Seconds())
 	if err = store.upload(key, block, nil); err == nil {
 		store.bcache.uploaded(key, blen)
 		store.removePending(key)
-		if os.Remove(stagingPath) == nil {
-			if m, ok := store.bcache.(*cacheManager); ok {
-				m.stageBlocks.Sub(1)
-				m.stageBlockBytes.Sub(float64(blen))
-			}
+		if err := store.bcache.removeStage(key); err != nil {
+			logger.Warnf("failed to remove stage %s, in upload staging file", stagingPath)
 		}
 	} else {
 		item.uploading = false

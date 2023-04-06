@@ -31,6 +31,60 @@ func TestNewCacheStore(t *testing.T) {
 	}
 }
 
+func TestMetrics(t *testing.T) {
+	m := newCacheManager(&defaultConf, nil, nil)
+	metrics := m.(*cacheManager).metrics
+	s := m.(*cacheManager).stores[0]
+	content := []byte("helloworld")
+	p := NewPage(content)
+	s.cache("test", p, true)
+	// Waiting for the cache to be flushed
+	time.Sleep(time.Millisecond * 100)
+	if ToFloat64(metrics.cacheWrites) != 1.0 {
+		t.Fatalf("expect the cacheWrites is 1")
+	}
+
+	if ToFloat64(metrics.cacheWriteBytes) != float64(len(content)) {
+		t.Fatalf("expect the cacheWriteBytes is %d", len(content))
+	}
+
+	if ToFloat64(metrics.stageBlocks) != 0.0 {
+		t.Fatalf("expect the stageBlocks is %d", len(content))
+	}
+
+	if ToFloat64(metrics.stageBlockBytes) != 0.0 {
+		t.Fatalf("expect the stageBlockBytes is %d", len(content))
+	}
+
+	stagingPath, err := m.stage("stage", content, false)
+	if err != nil {
+		t.Fatalf("stage failed: %s", err)
+	}
+	if ToFloat64(metrics.stageBlocks) != 1.0 {
+		t.Fatalf("expect the stageBlocks is %d", len(content))
+	}
+
+	if ToFloat64(metrics.stageBlockBytes) != float64(len(content)) {
+		t.Fatalf("expect the stageBlockBytes is %d", len(content))
+	}
+	err = m.removeStage("stage")
+	if err != nil {
+		t.Fatalf("faild to remove stage")
+	}
+
+	if ToFloat64(metrics.stageBlocks) != 0.0 {
+		t.Fatalf("expect the stageBlocks is %d", len(content))
+	}
+
+	if ToFloat64(metrics.stageBlockBytes) != 0.0 {
+		t.Fatalf("expect the stageBlockBytes is %d", len(content))
+	}
+
+	if _, err := os.Stat(stagingPath); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("expect the stageingPath %s not exists", stagingPath)
+	}
+}
+
 func TestChecksum(t *testing.T) {
 	m := newCacheManager(&defaultConf, nil, nil)
 	s := m.(*cacheManager).stores[0]
