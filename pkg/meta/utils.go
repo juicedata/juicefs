@@ -448,6 +448,9 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 	if st := m.GetAttr(ctx, root.Inode, &attr); st != 0 {
 		return st
 	}
+	if updateProgress != nil {
+		updateProgress(1, uint64(align4K(0)))
+	}
 	if attr.Typ != TypeDirectory {
 		root.Files++
 		root.Size += uint64(align4K(attr.Length))
