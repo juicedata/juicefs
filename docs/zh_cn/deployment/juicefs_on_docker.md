@@ -18,7 +18,7 @@ docker run -d --name nginx \
 
 ## 卷插件
 
-在 Docker 中，插件也是一个个容器镜像，JuiceFS 卷插件镜像中内置了 [JuiceFS 社区版](../introduction/README.md)以及 [JuiceFS 云服务](https://juicefs.com/docs/zh/cloud/)客户端，安装以后，便能够运行卷插件，在 Docker 中创建 JuiceFS Volume。
+在 Docker 中，插件也是一个个容器镜像，JuiceFS 卷插件镜像中内置了 [JuiceFS 社区版](../introduction/README.md)以及 [JuiceFS 云服务](https://juicefs.com/docs/zh/cloud)客户端，安装以后，便能够运行卷插件，在 Docker 中创建 JuiceFS Volume。
 
 通过下面的命令安装插件，按照提示为 FUSE 提供必要的权限。
 
@@ -31,7 +31,7 @@ docker plugin install juicedata/juicefs
 请将以下命令中的 `<VOLUME_NAME>`、`<META_URL>`、`<STORAGE_TYPE>`、`<BUCKET_NAME>`、`<ACCESS_KEY>`、`<SECRET_KEY>` 替换成你自己的文件系统配置。
 
 ```shell
-docker volume create -d juicefs \
+docker volume create -d juicedata/juicefs \
   -o name=<VOLUME_NAME> \
   -o metaurl=<META_URL> \
   -o storage=<STORAGE_TYPE> \
@@ -44,7 +44,7 @@ docker volume create -d juicefs \
 对于已经预先创建好的文件系统，在用其创建卷插件时，只需指定文件系统名称和数据库地址，例如：
 
 ```shell
-docker volume create -d juicefs \
+docker volume create -d juicedata/juicefs \
   -o name=<VOLUME_NAME> \
   -o metaurl=<META_URL> \
   jfsvolume
@@ -72,7 +72,7 @@ docker plugin enable juicedata/juicefs
 docker plugin rm juicedata/juicefs
 ```
 
-## 通过 Docker Compose 挂载
+### 通过 Docker Compose 挂载
 
 下面是使用 `docker-compose` 挂载 JuiceFS 文件系统的例子：
 
@@ -101,6 +101,7 @@ volumes:
 配置文件撰写完毕，可以通过下方命令创建和管理：
 
 ```shell
+# 启动服务
 docker-compose up
 
 # 关闭服务并从 Docker 中卸载 JuiceFS 文件系统
@@ -143,7 +144,7 @@ docker-compose down --volumes
 
 ### 使用 Mount Pod 容器镜像
 
-[`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) 是 [CSI 驱动](https://juicefs.com/docs/zh/csi/introduction/)中负责挂载 JuiceFS 文件系统的容器镜像，里面同时包含社区版和云服务客户端，程序路径分别为：
+[`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) 是 [CSI 驱动](https://juicefs.com/docs/zh/csi/introduction)中负责挂载 JuiceFS 文件系统的容器镜像，里面同时包含社区版和云服务客户端，程序路径分别为：
 
 - 社区版：`/usr/local/bin/juicefs`
 - 云服务：`/usr/bin/juicefs`

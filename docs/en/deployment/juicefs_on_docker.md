@@ -18,12 +18,12 @@ If you wish to control mount points using Docker, so that different application 
 
 ## Docker Volume Plugin {#docker-volume-plugin}
 
-Every Docker plugin itself is a docker image, and JuiceFS Docker volume plugin is packed with [JuiceFS Community Edition](https://juicefs.com/docs/community/introduction/) as well as [JuiceFS Cloud Service](./introduction/readme.md) clients, after installation, you'll be able to run this plugin, and create JuiceFS Volume inside docker.
+Every Docker plugin itself is a Docker image, and JuiceFS Docker volume plugin is packed with [JuiceFS Community Edition](https://juicefs.com/docs/community/introduction) as well as [JuiceFS Cloud Service](./introduction/readme.md) clients, after installation, you'll be able to run this plugin, and create JuiceFS Volume inside Docker.
 
 Install the plugin with the following command, grant permissions when asked.
 
 ```shell
-docker plugin install juicedata/juicefs --alias juicefs
+docker plugin install juicedata/juicefs
 ```
 
 ### Create a Storage Volume
@@ -31,7 +31,7 @@ docker plugin install juicedata/juicefs --alias juicefs
 In the following command, replace `<VOLUME_NAME>`, `<META_URL>`, `<STORAGE_TYPE>`, `<BUCKET_NAME>`, `<ACCESS_KEY>`, `<SECRET_KEY>` accordingly.
 
 ```shell
-docker volume create -d juicefs \
+docker volume create -d juicedata/juicefs \
   -o name=<VOLUME_NAME> \
   -o metaurl=<META_URL> \
   -o storage=<STORAGE_TYPE> \
@@ -44,7 +44,7 @@ docker volume create -d juicefs \
 To use Docker volume plugin with existing JuiceFS volumes, simply specify the file system name and database address, e.g.
 
 ```shell
-docker volume create -d juicefs \
+docker volume create -d juicedata/juicefs \
   -o name=<VOLUME_NAME> \
   -o metaurl=<META_URL> \
   jfsvolume
@@ -143,10 +143,10 @@ Mounting JuiceFS in a Docker container usually serves two purposes, one is to pr
 
 ### Using mount pod image
 
-[`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) is the docker image used to mount JuiceFS in [JuiceFS CSI Driver](https://juicefs.com/docs/csi/introduction/). This image contains both JuiceFS Community Edition and Cloud Service client executables, their respective path:
+[`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) is the Docker image used to mount JuiceFS in [JuiceFS CSI Driver](https://juicefs.com/docs/csi/introduction). This image contains both JuiceFS Community Edition and Cloud Service client executables, their respective path:
 
 - Community Edition: `/usr/local/bin/juicefs`
-- Cloud Service：`/usr/bin/juicefs`
+- Cloud Service:`/usr/bin/juicefs`
 
 The following image tags are provided:
 
