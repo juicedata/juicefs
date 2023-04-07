@@ -332,7 +332,7 @@ type Meta interface {
 	CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func())
 
 	// StatFS returns summary statistics of a volume.
-	StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64, subdir bool) syscall.Errno
+	StatFS(ctx Context, ino Ino, totalspace, availspace, iused, iavail *uint64) syscall.Errno
 	// Access checks the access permission on given inode.
 	Access(ctx Context, inode Ino, modemask uint8, attr *Attr) syscall.Errno
 	// Lookup returns the inode and attributes for the given entry in a directory.

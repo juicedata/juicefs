@@ -43,7 +43,7 @@ type Statfs struct {
 
 func (v *VFS) StatFS(ctx Context, ino Ino) (st *Statfs, err syscall.Errno) {
 	var totalspace, availspace, iused, iavail uint64
-	_ = v.Meta.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true)
+	_ = v.Meta.StatFS(ctx, ino, &totalspace, &availspace, &iused, &iavail)
 	st = new(Statfs)
 	st.Total = totalspace
 	st.Avail = availspace
