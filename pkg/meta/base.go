@@ -235,7 +235,7 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 	go func() {
 		for {
 			var totalSpace, availSpace, iused, iavail uint64
-			err := m.StatFS(Background, &totalSpace, &availSpace, &iused, &iavail, false)
+			err := m.StatFS(Background, m.root, &totalSpace, &availSpace, &iused, &iavail)
 			if err == 0 {
 				m.usedSpaceG.Set(float64(totalSpace - availSpace))
 				m.usedInodesG.Set(float64(iused))
@@ -832,17 +832,18 @@ func (m *baseMeta) cleanupSlices() {
 	}
 }
 
-func (m *baseMeta) StatFS(ctx Context, totalspace, availspace, iused, iavail *uint64, subdir bool) syscall.Errno {
+func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	defer m.timeit(time.Now())
 	if st := m.statRootFs(ctx, totalspace, availspace, iused, iavail); st != 0 {
 		return st
 	}
-	if m.root == RootInode || !subdir {
+	ino = m.checkRoot(ino)
+	if ino == RootInode {
 		return 0
 	}
 	var usage *Quota
 	var attr Attr
-	for root := m.root; root >= RootInode; root = attr.Parent {
+	for root := ino; root >= RootInode; root = attr.Parent {
 		if st := m.GetAttr(ctx, root, &attr); st != 0 {
 			return st
 		}

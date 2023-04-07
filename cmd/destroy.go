@@ -143,7 +143,7 @@ func destroy(ctx *cli.Context) error {
 			logger.Fatalf("%d sessions are active, please disconnect them first:\n%s", num, printSessions(ss))
 		}
 		var totalSpace, availSpace, iused, iavail uint64
-		_ = m.StatFS(meta.Background, &totalSpace, &availSpace, &iused, &iavail, false)
+		_ = m.StatFS(meta.Background, meta.RootInode, &totalSpace, &availSpace, &iused, &iavail)
 
 		fmt.Printf(" volume name: %s\n", format.Name)
 		fmt.Printf(" volume UUID: %s\n", format.UUID)

@@ -234,7 +234,7 @@ func config(ctx *cli.Context) error {
 		}
 		if quota {
 			var totalSpace, availSpace, iused, iavail uint64
-			_ = m.StatFS(meta.Background, &totalSpace, &availSpace, &iused, &iavail, false)
+			_ = m.StatFS(meta.Background, meta.RootInode, &totalSpace, &availSpace, &iused, &iavail)
 			usedSpace := totalSpace - availSpace
 			if format.Capacity > 0 && usedSpace >= format.Capacity ||
 				format.Inodes > 0 && iused >= format.Inodes {

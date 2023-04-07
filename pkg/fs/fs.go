@@ -342,7 +342,7 @@ func (fs *FileSystem) StatFS(ctx meta.Context) (totalspace uint64, availspace ui
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "StatFS (): (%d,%d)", totalspace, availspace) }()
 	var iused, iavail uint64
-	_ = fs.m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false)
+	_ = fs.m.StatFS(ctx, meta.RootInode, &totalspace, &availspace, &iused, &iavail)
 	return
 }
 

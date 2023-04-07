@@ -89,7 +89,7 @@ func (j *juice) Statfs(path string, stat *fuse.Statfs_t) int {
 	ctx := j.newContext()
 	// defer trace(path)(stat)
 	var totalspace, availspace, iused, iavail uint64
-	j.fs.Meta().StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true)
+	j.fs.Meta().StatFS(ctx, meta.RootInode, &totalspace, &availspace, &iused, &iavail)
 	var bsize uint64 = 4096
 	blocks := totalspace / bsize
 	bavail := availspace / bsize

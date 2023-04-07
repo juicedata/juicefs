@@ -515,7 +515,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 
 	var totalspace, availspace, iused, iavail uint64
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false); st != 0 {
+	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<50 || iavail != 10<<20 {
@@ -526,12 +526,12 @@ func testMetaClient(t *testing.T, m Meta) {
 	if err = m.Init(format, false); err != nil {
 		t.Fatalf("set quota failed: %s", err)
 	}
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false); st != 0 {
+	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<20 || iavail != 97 {
 		time.Sleep(time.Millisecond * 100)
-		_ = m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false)
+		_ = m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail)
 		if totalspace != 1<<20 || iavail != 97 {
 			t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 		}
@@ -544,7 +544,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Chroot(ctx, "subdir"); st != 0 {
 		t.Fatalf("chroot: %s", st)
 	}
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<20 || iavail != 96 {
@@ -559,7 +559,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}); err != nil {
 		t.Fatalf("set quota: %s", err)
 	}
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<20-4*uint64(align4K(0)) || iavail != 96 {
@@ -574,7 +574,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}); err != nil {
 		t.Fatalf("set quota: %s", err)
 	}
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<10 || iavail != 96 {
@@ -589,7 +589,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	}); err != nil {
 		t.Fatalf("set quota: %s", err)
 	}
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<20-4*uint64(align4K(0)) || iavail != 10 {
@@ -605,21 +605,28 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("set quota: %s", err)
 	}
 
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, true); st != 0 {
+	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<10 || iavail != 10 {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
 
-	if st := m.StatFS(ctx, &totalspace, &availspace, &iused, &iavail, false); st != 0 {
+	m.chroot(RootInode)
+	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
 		t.Fatalf("statfs: %s", st)
 	}
 	if totalspace != 1<<20 || iavail != 96 {
 		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
 	}
+	// statfs subdir directly
+	if st := m.StatFS(ctx, subIno, &totalspace, &availspace, &iused, &iavail); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<10 || iavail != 10 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
 
-	m.chroot(RootInode)
 	if st := m.Rmdir(ctx, 1, "subdir"); st != 0 {
 		t.Fatalf("rmdir subdir: %s", st)
 	}
@@ -2156,7 +2163,7 @@ func testClone(t *testing.T, m Meta) {
 	attr.Mtime = 1
 	m.SetAttr(Background, 1, SetAttrMtime, 0, &attr)
 	var totalspace, availspace, iused, iavail, space, iused2 uint64
-	m.StatFS(Background, &totalspace, &availspace, &iused, &iavail, false)
+	m.StatFS(Background, RootInode, &totalspace, &availspace, &iused, &iavail)
 	space = totalspace - availspace
 	iused2 = iused
 
@@ -2199,7 +2206,7 @@ func testClone(t *testing.T, m Meta) {
 	if rootAttr.Mtime == 1 {
 		t.Fatalf("mtime of rootDir is not updated")
 	}
-	m.StatFS(Background, &totalspace, &availspace, &iused, &iavail, false)
+	m.StatFS(Background, RootInode, &totalspace, &availspace, &iused, &iavail)
 	if totalspace-availspace-space != 32768 {
 		t.Fatalf("added space: %d", totalspace-availspace-space)
 	}
