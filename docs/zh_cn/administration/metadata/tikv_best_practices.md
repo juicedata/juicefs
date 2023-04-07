@@ -71,4 +71,5 @@ TiKV 默认通过 [compaction-filter](https://docs.pingcap.com/zh/tidb/dev/garba
 ```
 
 ## 元数据备份
+
 对于大规模文件系统，需要调高 [tikv_gc_life_time](https://docs.pingcap.com/zh/tidb/stable/dev-guide-timeouts-in-tidb#gc-%E8%B6%85%E6%97%B6) 参数，否则可能会因为 `GC life time is shorter than transaction duration` 导致备份失败。
