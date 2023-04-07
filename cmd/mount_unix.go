@@ -162,12 +162,16 @@ func disableUpdatedb() {
 
 	// obtain exclusive and not block flock
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		return
+		if err == syscall.EAGAIN {
+			return
+		}
+	} else {
+		defer func() {
+			// release flock
+			_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+		}()
 	}
-	defer func() {
-		// release flock
-		_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
-	}()
+
 	data, err := io.ReadAll(file)
 	if err != nil {
 		return
