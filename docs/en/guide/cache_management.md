@@ -77,7 +77,7 @@ Repeated reads of the same file in JuiceFS can be extremely fast, with latencies
 
 ### Kernel writeback-cache mode
 
-Starting with [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports the ["writeback-cache mode"]( https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt). In this mode, kernel will merge high frequency random small writes (10-100 bytes), which significantly improves write performance.
+Starting with [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports the ["writeback-cache mode"]( https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt). In this mode, kernel will merge high frequency random small writes (10-100 bytes), which significantly improves write performance. However, the side effect is that it will turn sequential writing into random writing, seriously reducing the performance of sequential writing. Please consider whether the usage scenario matches before turning it on.
 
 To enable writeback-cache mode, use the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option when you [mount JuiceFS](../reference/command_reference.md#mount). Note that writeback-cache mode is not the same as [Client write data cache](#writeback), the former is a kernel implementation while the latter happens inside the JuiceFS Client, they are meant for different scenarios, read the corresponding section for more.
 

@@ -77,7 +77,7 @@ JuiceFS 客户端会跟踪所有最近被打开的文件，要重复打开相同
 
 ### 内核回写模式 {#fuse-writeback-cache}
 
-从 Linux 内核 3.15 开始，FUSE 支持[内核回写（writeback-cache）](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)模式，内核会把高频随机小 IO（例如 10-100 字节）的写请求合并起来，显著提升随机写入的性能。
+从 Linux 内核 3.15 开始，FUSE 支持[内核回写（writeback-cache）](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)模式，内核会把高频随机小 IO（例如 10-100 字节）的写请求合并起来，显著提升随机写入的性能。但其副作用是会将顺序写变为随机写，严重降低顺序写的性能。开启前请考虑使用场景是否匹配。
 
 在挂载命令通过 [`-o writeback_cache`](../reference/fuse_mount_options.md) 选项来开启内核回写模式。注意，内核回写与[「客户端写缓存」](#writeback)并不一样，前者是内核中的实现，后者则发生在 JuiceFS 客户端，二者适用场景也不一样，详读对应章节以了解。
 
