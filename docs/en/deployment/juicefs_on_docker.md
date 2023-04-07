@@ -41,7 +41,7 @@ docker volume create -d juicedata/juicefs \
   jfsvolume
 ```
 
-To use Docker volume plugin with existing JuiceFS volumes, simply specify the file system name and database address, e.g.
+To use Docker volume plugin with existing JuiceFS volumes, simply specify the file system name and database address:
 
 ```shell
 docker volume create -d juicedata/juicefs \
