@@ -19,6 +19,7 @@ JuiceFS supports [multiple metadata engines](../guide/how_to_set_up_metadata_eng
 
 * `juicefs dump` does not provide snapshot consistency. If files are modified during the export, the final backup file will contain information from different points in time, which might prove unusable for some applications (like databases). If you have higher standards for consistency, you should suspend all writes to the system before exporting.
 * For large scale file systems, dumping directly from online database may prove risks to system reliability, use with caution.
+* For large file systems and when the metadata engine is TiKV, need to increase [tikv_gc_life_time](https://docs.pingcap.com/tidb/stable/dev-guide-timeouts-in-tidb#gc-timeout) parameters, otherwise, backup may fail because `GC life time is shorter than transaction duration`.
 :::
 
 ### Manual backup {#backup-manually}
