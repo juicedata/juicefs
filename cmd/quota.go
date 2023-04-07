@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
 
 	"github.com/urfave/cli/v2"
@@ -35,8 +36,8 @@ func cmdQuota() *cli.Command {
 Examples:
 $ juicefs quota set redis://localhost --path /dir1 --capacity 1 --inodes 100
 $ juicefs quota get redis://localhost --path /dir1
-$ juicefs quota del redis://localhost --path /dir1
-$ juicefs quota ls redis://localhost`,
+$ juicefs quota list redis://localhost
+$ juicefs quota delete redis://localhost --path /dir1`,
 		Subcommands: []*cli.Command{
 			{
 				Name:      "set",
@@ -51,13 +52,15 @@ $ juicefs quota ls redis://localhost`,
 				Action:    quota,
 			},
 			{
-				Name:      "del",
+				Name:      "delete",
+				Aliases:   []string{"del"},
 				Usage:     "Delete quota of a directory",
 				ArgsUsage: "META-URL",
 				Action:    quota,
 			},
 			{
-				Name:      "ls",
+				Name:      "list",
+				Aliases:   []string{"ls"},
 				Usage:     "List all directory quotas",
 				ArgsUsage: "META-URL",
 				Action:    quota,
@@ -94,9 +97,9 @@ func quota(c *cli.Context) error {
 		cmd = meta.QuotaSet
 	case "get":
 		cmd = meta.QuotaGet
-	case "del":
+	case "delete":
 		cmd = meta.QuotaDel
-	case "ls":
+	case "list":
 		cmd = meta.QuotaList
 	case "check":
 		cmd = meta.QuotaCheck
@@ -123,11 +126,39 @@ func quota(c *cli.Context) error {
 	}
 	if err := m.HandleQuota(meta.Background, cmd, dpath, qs); err != nil {
 		return err
+	} else if len(qs) == 0 {
+		return nil
 	}
 
+	result := make([][]string, 1, len(qs)+1)
+	result[0] = []string{"Path", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
 	for p, q := range qs {
-		// FIXME: need a better way to do print
-		fmt.Printf("%s: %+v\n", p, *q)
+		if q.UsedSpace < 0 {
+			logger.Warnf("Used space of %s is negative (%d), please run `juicefs quota check` to fix it", p, q.UsedSpace)
+			q.UsedSpace = 0
+		}
+		if q.UsedInodes < 0 {
+			logger.Warnf("Used inodes of %s is negative (%d), please run `juicefs quota check` to fix it", p, q.UsedInodes)
+			q.UsedInodes = 0
+		}
+		used := humanize.IBytes(uint64(q.UsedSpace))
+		var size, usedR string
+		if q.MaxSpace > 0 {
+			size = humanize.IBytes(uint64(q.MaxSpace))
+			usedR = fmt.Sprintf("%d%%", q.UsedSpace*100/q.MaxSpace)
+		} else {
+			size = "unlimited"
+		}
+		iused := humanize.Comma(q.MaxInodes)
+		var itotal, iusedR string
+		if q.MaxInodes > 0 {
+			itotal = humanize.Comma(q.MaxInodes)
+			iusedR = fmt.Sprintf("%d%%", q.UsedInodes*100/q.MaxInodes)
+		} else {
+			itotal = "unlimited"
+		}
+		result = append(result, []string{p, size, used, usedR, itotal, iused, iusedR})
 	}
+	printResult(result, 0, false)
 	return nil
 }
