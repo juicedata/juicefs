@@ -21,6 +21,7 @@ package cmd
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -153,7 +154,25 @@ func mount_flags() []cli.Flag {
 
 func disableUpdatedb() {
 	path := "/etc/updatedb.conf"
-	data, err := os.ReadFile(path)
+	file, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	// obtain exclusive and not block flock
+	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		if err == syscall.EAGAIN {
+			return
+		}
+	} else {
+		defer func() {
+			// release flock
+			_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+		}()
+	}
+
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return
 	}
@@ -181,7 +200,7 @@ func disableUpdatedb() {
 }
 
 func mount_main(v *vfs.VFS, c *cli.Context) {
-	if os.Getuid() == 0 && os.Getpid() != 1 {
+	if os.Getuid() == 0 {
 		disableUpdatedb()
 	}
 
