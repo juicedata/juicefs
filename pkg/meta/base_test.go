@@ -613,6 +613,20 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 
 	m.chroot(RootInode)
+	if st := m.StatFS(ctx, RootInode, &totalspace, &availspace, &iused, &iavail); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<20 || iavail != 96 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+	// statfs subdir directly
+	if st := m.StatFS(ctx, subIno, &totalspace, &availspace, &iused, &iavail); st != 0 {
+		t.Fatalf("statfs: %s", st)
+	}
+	if totalspace != 1<<10 || iavail != 10 {
+		t.Fatalf("total space %d, iavail %d", totalspace, iavail)
+	}
+
 	if st := m.Rmdir(ctx, 1, "subdir"); st != 0 {
 		t.Fatalf("rmdir subdir: %s", st)
 	}
