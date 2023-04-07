@@ -19,7 +19,6 @@ JuiceFS 支持[多种元数据引擎](../guide/how_to_set_up_metadata_engine.md)
 
 * `juicefs dump` 不提供全局时间点快照的功能，如果在导出过程中业务仍在写入，最终结果会包含不同时间点的信息，对于特定应用（比如数据库），这可能意味着导出文件不可用。如果对一致性有更高要求，可能需要在导出前确保应用停写。
 * 对大规模文件系统，如果直接在线上环境进行导出，可能影响业务稳定性。
-* 对于大规模文件系统且当元数据引擎为 TiKV 时，需要调高 [tikv_gc_life_time](https://docs.pingcap.com/zh/tidb/stable/dev-guide-timeouts-in-tidb#gc-%E8%B6%85%E6%97%B6) 参数，否则可能会因为 `GC life time is shorter than transaction duration` 导致备份失败。
 :::
 
 ### 手动备份 {#backup-manually}
