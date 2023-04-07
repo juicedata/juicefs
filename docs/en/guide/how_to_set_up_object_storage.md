@@ -145,7 +145,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | Name                                                        | Value      |
 |-------------------------------------------------------------|------------|
 | [Amazon S3](#amazon-s3)                                     | `s3`       |
-| [Google Cloud Storage](#google-cloud-storage)               | `gs`       |
+| [Google Cloud Storage](#google)               | `gs`       |
 | [Azure Blob Storage](#azure-blob-storage)                   | `wasb`     |
 | [Backblaze B2](#backblaze-b2)                               | `b2`       |
 | [IBM Cloud Object Storage](#ibm-cloud-object-storage)       | `ibmcos`   |
@@ -246,7 +246,7 @@ juicefs format \
 The format of the option `--bucket` for all S3 compatible object storage services is `https://<bucket>.<endpoint>` or `https://<endpoint>/<bucket>`. The default `region` is `us-east-1`. When a different `region` is required, it can be set manually via the environment variable `AWS_REGION` or `AWS_DEFAULT_REGION`.
 :::
 
-## Google Cloud Storage
+## Google Cloud Storage {#google}
 
 Google Cloud uses [IAM](https://cloud.google.com/iam/docs/overview) to manage permissions for accessing resources. Through authorizing [service accounts](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-gcloud), you can have a fine-grained control of the access rights of cloud servers and object storage.
 

@@ -143,7 +143,7 @@ docker-compose down --volumes
 
 ### 使用 Mount Pod 容器镜像
 
-[`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) 是 JuiceFS 官方维护的客户端镜像，同时也是 [CSI 驱动](https://juicefs.com/docs/zh/csi/introduction/)中负责挂载 JuiceFS 文件系统的容器镜像，里面同时打包了社区版和云服务客户端，程序路径分别为：
+[`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) 是 [CSI 驱动](https://juicefs.com/docs/zh/csi/introduction/)中负责挂载 JuiceFS 文件系统的容器镜像，里面同时包含社区版和云服务客户端，程序路径分别为：
 
 - 社区版：`/usr/local/bin/juicefs`
 - 云服务：`/usr/bin/juicefs`

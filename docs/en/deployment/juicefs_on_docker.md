@@ -32,83 +32,123 @@ In the following command, replace `<VOLUME_NAME>`, `<META_URL>`, `<STORAGE_TYPE>
 
 ```shell
 docker volume create -d juicefs \
-    -o name=<VOLUME_NAME> \
-    -o metaurl=<META_URL> \
-    -o storage=<STORAGE_TYPE> \
-    -o bucket=<BUCKET_NAME> \
-    -o access-key=<ACCESS_KEY> \
-    -o secret-key=<SECRET_KEY> \
-    jfsvolume
+  -o name=<VOLUME_NAME> \
+  -o metaurl=<META_URL> \
+  -o storage=<STORAGE_TYPE> \
+  -o bucket=<BUCKET_NAME> \
+  -o access-key=<ACCESS_KEY> \
+  -o secret-key=<SECRET_KEY> \
+  jfsvolume
 ```
 
 To use Docker volume plugin with existing JuiceFS volumes, simply specify the file system name and database address, e.g.
 
 ```shell
 docker volume create -d juicefs \
-    -o name=<VOLUME_NAME> \
-    -o metaurl=<META_URL> \
-    jfsvolume
+  -o name=<VOLUME_NAME> \
+  -o metaurl=<META_URL> \
+  jfsvolume
 ```
 
-### Using Storage Volumes
-
-Mounted volumes when creating containers.
+### Usage and management
 
 ```shell
+# Mount the volume in container
 docker run -it -v jfsvolume:/opt busybox ls /opt
-```
 
-### Delete a storage volume
-
-```shell
+# After a volume has been unmounted, delete using the following command
+# Deleting a volume only remove the relevant resources from Docker, which doesn't affect data stored in JuiceFS
 docker volume rm jfsvolume
+
+# Disable the volume plugin
+docker plugin disable juicedata/juicefs
+
+# Upgrade plugin (need to disable first)
+docker plugin upgrade juicedata/juicefs
+docker plugin enable juicedata/juicefs
+
+# Uninstall
+docker plugin rm juicedata/juicefs
 ```
 
-### Upgrade and Uninstall Volume Plugin
+### Using Docker Compose
 
-Plugins need to be deactivated before upgrading or uninstalling the Docker volume plugin.
+Example for creating and mounting JuiceFS volume with `docker-compose`:
 
-```shell
-docker plugin disable juicefs
+```yaml
+version: '3'
+services:
+busybox:
+  image: busybox
+  command: "ls /jfs"
+  volumes:
+    - jfsvolume:/jfs
+volumes:
+  jfsvolume:
+    driver: juicedata/juicefs
+    driver_opts:
+      name: ${VOL_NAME}
+      metaurl: ${META_URL}
+      storage: ${STORAGE_TYPE}
+      bucket: ${BUCKET}
+      access-key: ${ACCESS_KEY}
+      secret-key: ${SECRET_KEY}
+      # Pass extra environment variables using env
+      # env: FOO=bar,SPAM=egg
 ```
 
-Upgrade plugin:
+Common management commands:
 
 ```shell
-docker plugin upgrade juicefs
-docker plugin enable juicefs
-```
+# Start the service
+docker-compose up
 
-Uninstall the plugin:
-
-```shell
-docker plugin rm juicefs
+# Shut down the service and remove Docker volumes
+docker-compose down --volumes
 ```
 
 ### Troubleshooting
 
-#### Plugin log
+If JuiceFS Docker volume plugin is not working properly, upgrade to the [latest version](https://hub.docker.com/r/juicedata/juicefs/tags), and then check logs to debug.
 
-Check plugin log within the Docker daemon log:
+* Collect JuiceFS Client logs, which is inside the Docker volume plugin container itself:
 
-```shell
-journalctl -f -u docker | grep "plugin="
-```
+  ```shell
+  # locate the docker plugins runtime directory, your environment may differ from below example
+  # container directories will be printed, directory name is container ID
+  ls /run/docker/plugins/runtime-root/plugins.moby
 
-To learn more about the JuiceFS volume plugin, visit [`juicedata/docker-volume-juicefs`](https://github.com/juicedata/docker-volume-juicefs).
+  # print plugin container info
+  # if container list is empty, that means plugin container didn't start properly
+  # read the next step to continue debugging
+  runc --root /run/docker/plugins/runtime-root/plugins.moby list
+
+  # collect log inside plugin container
+  runc --root /run/docker/plugins/runtime-root/plugins.moby exec 452d2c0cf3fd45e73a93a2f2b00d03ed28dd2bc0c58669cca9d4039e8866f99f cat /var/log/juicefs.log
+  ```
+
+  If it is found that the container doesn't exist (`ls` found that the directory is empty), or that `juicefs.log` doesn't exist, this usually indicates a bad mount, check plugin logs to further debug.
+
+* Collect plugin log, for example under systemd:
+
+  ```shell
+  journalctl -f -u docker | grep "plugin="
+  ```
+
+  `juicefs` is called to perform the actual mount inside the plugin container, if any error occurs, it will be shown in the Docker daemon logs, same when there's error with the volume plugin itself.
 
 ## Mount JuiceFS in a Container {#mount-juicefs-in-docker}
 
 Mounting JuiceFS in a Docker container usually serves two purposes, one is to provide storage for the applications in the container, and the other is to map the JuiceFS storage mounted in the container to the host. To do this, you can use the official pre-built images of JuiceFS or write your own Dockerfile to package the JuiceFS client into a system image that meets your needs.
 
-### Using pre-built images
+### Using mount pod image
 
-[`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) is the official client image maintained by JuiceFS, in which both the community version and the cloud service client are packaged, and the program paths are:
+[`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) is the docker image used to mount JuiceFS in [JuiceFS CSI Driver](https://juicefs.com/docs/csi/introduction/). This image contains both JuiceFS Community Edition and Cloud Service client executables, their respective path:
 
 - Community Edition: `/usr/local/bin/juicefs`
 - Cloud Service：`/usr/bin/juicefs`
 
-The mirror provides the following image tags.
+The following image tags are provided:
 
 - `latest` - Latest stable version of the client included
 - `nightly` - Latest development branch client included
@@ -229,9 +269,3 @@ If you need to destroy the container, you can execute the down command.
 ```shell
 docker compose down
 ```
-
-#### Notes
-
-- The current example uses SQLite which is a standalone database, the database file will be saved in `$HOME/juicefs/db/` directory, please keep the database files safe.
-- If you need to use another database, just adjust the value of `METADATA_URL` in the `.env` file, for example, set Reids as the metadata store: `METADATA_URL=redis://192.168.1.11/1`.
-- The JuiceFS client automatically backs up metadata every hour, and the backed up data is exported in JSON format and uploaded to the `meta` directory of the object storage. In case of database failure, the latest backup can be used for recovery.
