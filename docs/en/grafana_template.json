@@ -683,7 +683,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Transcations",
+      "title": "Transactions",
       "tooltip": {
         "shared": false,
         "sort": 0,
@@ -780,7 +780,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Transcation Latency",
+      "title": "Transaction Latency",
       "tooltip": {
         "shared": false,
         "sort": 0,
