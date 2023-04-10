@@ -90,7 +90,7 @@ type engine interface {
 	doRmdir(ctx Context, parent Ino, name string, inode *Ino, skipCheckTrash ...bool) syscall.Errno
 	doReadlink(ctx Context, inode Ino) ([]byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
-	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
+	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
@@ -1394,30 +1394,45 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		} else {
 			space, inodes = align4K(attr.Length), 1
 		}
-		// FIXME: dst exists and is replaced or exchanged
+		// TODO: dst exists and is replaced or exchanged
 		if quotaDst && m.checkDirQuota(ctx, parentDst, space, inodes) {
 			return syscall.ENOSPC
 		}
 	}
-	st := m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, attr)
+	tinode := new(Ino)
+	tattr := new(Attr)
+	st := m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, tinode, attr, tattr)
 	if st == 0 {
-		var diffLengh uint64
+		var diffLength uint64
 		if attr.Typ == TypeDirectory {
 			m.parentMu.Lock()
 			m.dirParents[*inode] = parentDst
 			m.parentMu.Unlock()
 		} else if attr.Typ == TypeFile {
-			diffLengh = attr.Length
+			diffLength = attr.Length
 		}
 		if parentSrc != parentDst {
-			// FIXME: dst exists and is replaced or exchanged
-			m.updateDirStat(ctx, parentSrc, -int64(diffLengh), -align4K(diffLengh), -1)
-			m.updateDirStat(ctx, parentDst, int64(diffLengh), align4K(diffLengh), 1)
+			m.updateDirStat(ctx, parentSrc, -int64(diffLength), -align4K(diffLength), -1)
+			m.updateDirStat(ctx, parentDst, int64(diffLength), align4K(diffLength), 1)
 			if quotaSrc {
 				m.updateDirQuota(ctx, parentSrc, -space, -inodes)
 			}
 			if quotaDst {
 				m.updateDirQuota(ctx, parentDst, space, inodes)
+			}
+		}
+		if *tinode > 0 && flags != RenameExchange {
+			diffLength = 0
+			if tattr.Typ == TypeDirectory {
+				m.parentMu.Lock()
+				delete(m.dirParents, *tinode)
+				m.parentMu.Unlock()
+			} else if attr.Typ == TypeFile {
+				diffLength = tattr.Length
+			}
+			m.updateDirStat(ctx, parentDst, -int64(diffLength), -align4K(diffLength), -1)
+			if quotaDst {
+				m.updateDirQuota(ctx, parentDst, -align4K(diffLength), -1)
 			}
 		}
 	}
