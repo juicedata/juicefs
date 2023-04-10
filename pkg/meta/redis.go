@@ -307,6 +307,7 @@ func (m *redisMeta) Reset() error {
 			return m.rdb.Del(Background, keys...).Err()
 		})
 	}
+	m.of = newOpenFiles(m.conf.OpenCache, m.conf.OpenCacheLimit)
 	return m.rdb.FlushDB(Background).Err()
 }
 
