@@ -21,8 +21,6 @@ import (
 	"runtime"
 	"sync"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type memItem struct {
@@ -36,33 +34,14 @@ type memcache struct {
 	used     int64
 	pages    map[string]memItem
 
-	cacheWrites     prometheus.Counter
-	cacheEvicts     prometheus.Counter
-	cacheWriteBytes prometheus.Counter
+	metrics *cacheManagerMetrics
 }
 
-func newMemStore(config *Config, reg prometheus.Registerer) *memcache {
+func newMemStore(config *Config, metrics *cacheManagerMetrics) *memcache {
 	c := &memcache{
 		capacity: config.CacheSize << 20,
 		pages:    make(map[string]memItem),
-
-		cacheWrites: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "blockcache_writes",
-			Help: "written cached block",
-		}),
-		cacheEvicts: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "blockcache_evicts",
-			Help: "evicted cache blocks",
-		}),
-		cacheWriteBytes: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "blockcache_write_bytes",
-			Help: "write bytes of cached block",
-		}),
-	}
-	if reg != nil {
-		reg.MustRegister(c.cacheWrites)
-		reg.MustRegister(c.cacheWriteBytes)
-		reg.MustRegister(c.cacheEvicts)
+		metrics:  metrics,
 	}
 	runtime.SetFinalizer(c, func(c *memcache) {
 		for _, p := range c.pages {
@@ -71,6 +50,10 @@ func newMemStore(config *Config, reg prometheus.Registerer) *memcache {
 		c.pages = nil
 	})
 	return c
+}
+
+func (c *memcache) removeStage(key string) error {
+	return nil
 }
 
 func (c *memcache) usedMemory() int64 {
@@ -95,8 +78,8 @@ func (c *memcache) cache(key string, p *Page, force bool) {
 		return
 	}
 	size := int64(cap(p.Data))
-	c.cacheWrites.Add(1)
-	c.cacheWriteBytes.Add(float64(size))
+	c.metrics.cacheWrites.Add(1)
+	c.metrics.cacheWriteBytes.Add(float64(size))
 	p.Acquire()
 	c.pages[key] = memItem{time.Now(), p}
 	c.used += size
@@ -146,7 +129,7 @@ func (c *memcache) cleanup() {
 		cnt++
 		if cnt > 1 {
 			logger.Debugf("remove %s from cache, age: %d", lastKey, now.Sub(lastValue.atime))
-			c.cacheEvicts.Add(1)
+			c.metrics.cacheEvicts.Add(1)
 			c.delete(lastKey, lastValue.page)
 			cnt = 0
 			if c.used < c.capacity {
