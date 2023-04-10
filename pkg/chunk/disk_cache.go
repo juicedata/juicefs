@@ -71,7 +71,7 @@ type cacheStore struct {
 	scanInterval time.Duration
 	pending      chan pendingFile
 	pages        map[string]*Page
-	m            *CacheManagerMetrics
+	m            *cacheManagerMetrics
 
 	used     int64
 	keys     map[cacheKey]cacheItem
@@ -81,7 +81,7 @@ type cacheStore struct {
 	uploader func(key, path string, force bool) bool
 }
 
-func newCacheStore(m *CacheManagerMetrics, dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
+func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
 	if config.CacheMode == 0 {
 		config.CacheMode = 0600 // only owner can read/write cache
 	}
@@ -165,6 +165,11 @@ func (cache *cacheStore) removeStage(key string) error {
 			cache.m.stageBlocks.Sub(1)
 			cache.m.stageBlockBytes.Sub(float64(size))
 		}
+	}
+
+	// ignore ENOENT error
+	if err != nil && os.IsNotExist(err) {
+		return nil
 	}
 	return err
 }
@@ -641,7 +646,7 @@ func (cache *cacheStore) scanStaging() {
 
 type cacheManager struct {
 	stores  []*cacheStore
-	metrics *CacheManagerMetrics
+	metrics *cacheManagerMetrics
 }
 
 func keyHash(s string) uint32 {

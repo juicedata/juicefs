@@ -19,7 +19,7 @@ package chunk
 import "github.com/prometheus/client_golang/prometheus"
 
 // CacheManager Metrics
-type CacheManagerMetrics struct {
+type cacheManagerMetrics struct {
 	cacheDrops      prometheus.Counter
 	cacheWrites     prometheus.Counter
 	cacheEvicts     prometheus.Counter
@@ -29,14 +29,14 @@ type CacheManagerMetrics struct {
 	stageBlockBytes prometheus.Gauge
 }
 
-func newCacheManagerMetrics(reg prometheus.Registerer) *CacheManagerMetrics {
-	metrics := &CacheManagerMetrics{}
+func newCacheManagerMetrics(reg prometheus.Registerer) *cacheManagerMetrics {
+	metrics := &cacheManagerMetrics{}
 	metrics.initMetrics()
 	metrics.registerMetrics(reg)
 	return metrics
 }
 
-func (c *CacheManagerMetrics) registerMetrics(reg prometheus.Registerer) {
+func (c *cacheManagerMetrics) registerMetrics(reg prometheus.Registerer) {
 	if reg != nil {
 		reg.MustRegister(c.cacheDrops)
 		reg.MustRegister(c.cacheWrites)
@@ -48,7 +48,7 @@ func (c *CacheManagerMetrics) registerMetrics(reg prometheus.Registerer) {
 	}
 }
 
-func (c *CacheManagerMetrics) initMetrics() {
+func (c *cacheManagerMetrics) initMetrics() {
 	c.cacheDrops = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "blockcache_drops",
 		Help: "dropped block",

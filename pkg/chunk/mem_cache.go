@@ -34,10 +34,10 @@ type memcache struct {
 	used     int64
 	pages    map[string]memItem
 
-	metrics *CacheManagerMetrics
+	metrics *cacheManagerMetrics
 }
 
-func newMemStore(config *Config, metrics *CacheManagerMetrics) *memcache {
+func newMemStore(config *Config, metrics *cacheManagerMetrics) *memcache {
 	c := &memcache{
 		capacity: config.CacheSize << 20,
 		pages:    make(map[string]memItem),

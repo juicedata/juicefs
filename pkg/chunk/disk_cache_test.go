@@ -17,12 +17,56 @@
 package chunk
 
 import (
+	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
+
+// Copy from https://github.com/prometheus/client_golang/blob/v1.14.0/prometheus/testutil/testutil.go
+func toFloat64(c prometheus.Collector) float64 {
+	var (
+		m      prometheus.Metric
+		mCount int
+		mChan  = make(chan prometheus.Metric)
+		done   = make(chan struct{})
+	)
+
+	go func() {
+		for m = range mChan {
+			mCount++
+		}
+		close(done)
+	}()
+
+	c.Collect(mChan)
+	close(mChan)
+	<-done
+
+	if mCount != 1 {
+		panic(fmt.Errorf("collected %d metrics instead of exactly 1", mCount))
+	}
+
+	pb := &dto.Metric{}
+	if err := m.Write(pb); err != nil {
+		panic(fmt.Errorf("error happened while collecting metrics: %w", err))
+	}
+	if pb.Gauge != nil {
+		return pb.Gauge.GetValue()
+	}
+	if pb.Counter != nil {
+		return pb.Counter.GetValue()
+	}
+	if pb.Untyped != nil {
+		return pb.Untyped.GetValue()
+	}
+	panic(fmt.Errorf("collected a non-gauge/counter/untyped metric: %s", pb))
+}
 
 func TestNewCacheStore(t *testing.T) {
 	s := newCacheStore(nil, defaultConf.CacheDir, 1<<30, 1, &defaultConf, nil)
@@ -40,19 +84,19 @@ func TestMetrics(t *testing.T) {
 	s.cache("test", p, true)
 	// Waiting for the cache to be flushed
 	time.Sleep(time.Millisecond * 100)
-	if ToFloat64(metrics.cacheWrites) != 1.0 {
+	if toFloat64(metrics.cacheWrites) != 1.0 {
 		t.Fatalf("expect the cacheWrites is 1")
 	}
 
-	if ToFloat64(metrics.cacheWriteBytes) != float64(len(content)) {
+	if toFloat64(metrics.cacheWriteBytes) != float64(len(content)) {
 		t.Fatalf("expect the cacheWriteBytes is %d", len(content))
 	}
 
-	if ToFloat64(metrics.stageBlocks) != 0.0 {
+	if toFloat64(metrics.stageBlocks) != 0.0 {
 		t.Fatalf("expect the stageBlocks is %d", len(content))
 	}
 
-	if ToFloat64(metrics.stageBlockBytes) != 0.0 {
+	if toFloat64(metrics.stageBlockBytes) != 0.0 {
 		t.Fatalf("expect the stageBlockBytes is %d", len(content))
 	}
 
@@ -60,11 +104,11 @@ func TestMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stage failed: %s", err)
 	}
-	if ToFloat64(metrics.stageBlocks) != 1.0 {
+	if toFloat64(metrics.stageBlocks) != 1.0 {
 		t.Fatalf("expect the stageBlocks is %d", len(content))
 	}
 
-	if ToFloat64(metrics.stageBlockBytes) != float64(len(content)) {
+	if toFloat64(metrics.stageBlockBytes) != float64(len(content)) {
 		t.Fatalf("expect the stageBlockBytes is %d", len(content))
 	}
 	err = m.removeStage("stage")
@@ -72,11 +116,11 @@ func TestMetrics(t *testing.T) {
 		t.Fatalf("faild to remove stage")
 	}
 
-	if ToFloat64(metrics.stageBlocks) != 0.0 {
+	if toFloat64(metrics.stageBlocks) != 0.0 {
 		t.Fatalf("expect the stageBlocks is %d", len(content))
 	}
 
-	if ToFloat64(metrics.stageBlockBytes) != 0.0 {
+	if toFloat64(metrics.stageBlockBytes) != 0.0 {
 		t.Fatalf("expect the stageBlockBytes is %d", len(content))
 	}
 
