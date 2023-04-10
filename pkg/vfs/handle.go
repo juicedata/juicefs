@@ -166,7 +166,14 @@ func (v *VFS) newHandle(inode Ino) *handle {
 func (v *VFS) findAllHandles(inode Ino) []*handle {
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
-	return v.handles[inode]
+	hs := v.handles[inode]
+	if len(hs) <= 1 {
+		return hs
+	}
+	// copy hs so it will not be modified by releaseHandle
+	hs2 := make([]*handle, len(hs))
+	copy(hs2, hs)
+	return hs2
 }
 
 func (v *VFS) findHandle(inode Ino, fh uint64) *handle {

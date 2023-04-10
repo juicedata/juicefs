@@ -19,6 +19,7 @@ package vfs
 import (
 	"encoding/json"
 	"runtime"
+	"sort"
 	"sync"
 	"syscall"
 	"time"
@@ -438,6 +439,7 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Att
 		return
 	}
 	hs := v.findAllHandles(ino)
+	sort.Slice(hs, func(i, j int) bool { return hs[i].fh < hs[j].fh })
 	for _, h := range hs {
 		if !h.Wlock(ctx) {
 			err = syscall.EINTR
