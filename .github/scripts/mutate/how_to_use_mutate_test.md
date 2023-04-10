@@ -51,4 +51,4 @@ if the mutants of the target source file is more than 200, we will use 4 github 
 you can customize it in your test file with adding "//mutate_test_job_number: number", eg: //mutate_test_job_number: 8
 
 # how to disable muate test for a specific go file?
-add //disable_mutate_test in the *_test.go file to disable the mutate test.
+add //mutate:disable in the *_test.go file to disable the mutate test.
