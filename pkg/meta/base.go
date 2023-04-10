@@ -46,6 +46,7 @@ const (
 )
 
 type engine interface {
+	enType() string
 	// Get the value of counter name.
 	getCounter(name string) (int64, error)
 	// Increase counter name by value. Do not use this if value is 0, use getCounter instead.
@@ -80,7 +81,7 @@ type engine interface {
 	doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error
 	doDelQuota(ctx Context, inode Ino) error
 	doLoadQuotas(ctx Context) (map[Ino]*Quota, error)
-	doFlushQuota(ctx Context, inode Ino, space, inodes int64) error
+	doFlushQuotas(ctx Context, quotas map[Ino]*Quota, inodes []Ino) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
@@ -695,10 +696,10 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 }
 
 func (m *baseMeta) flushQuotas() {
-	quotas := make(map[Ino]*Quota)
 	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
+		quotas := make(map[Ino]*Quota)
 		m.quotaMu.RLock()
 		for ino, q := range m.dirQuotas {
 			newSpace = atomic.SwapInt64(&q.newSpace, 0)
@@ -708,20 +709,35 @@ func (m *baseMeta) flushQuotas() {
 			}
 		}
 		m.quotaMu.RUnlock()
-		// FIXME: merge
-		for ino, q := range quotas {
-			if err := m.en.doFlushQuota(Background, ino, q.newSpace, q.newInodes); err != nil {
-				logger.Warnf("Flush quota of inode %d: %s", ino, err)
-				m.quotaMu.RLock()
-				cur := m.dirQuotas[ino]
-				m.quotaMu.RUnlock()
-				if cur != nil {
-					cur.update(q.newSpace, q.newInodes)
-				}
-			}
-		}
+
+		inodes := make([]Ino, 0, len(quotas))
 		for ino := range quotas {
-			delete(quotas, ino)
+			inodes = append(inodes, ino)
+		}
+		batch := 1000
+		if m.en.enType() == "tkv" {
+			batch = 20
+		}
+		if len(inodes) > batch {
+			sort.Slice(inodes, func(i, j int) bool {
+				return inodes[i] < inodes[j]
+			})
+		}
+		for i := 0; i < len(inodes); i += batch {
+			end := i + batch
+			if end > len(inodes) {
+				end = len(inodes)
+			}
+			if err := m.en.doFlushQuotas(Background, quotas, inodes[i:end]); err != nil {
+				logger.Warnf("Flush quotas: %s", err)
+				m.quotaMu.RLock()
+				for _, ino := range inodes[i:end] {
+					if cur := m.dirQuotas[ino]; cur != nil {
+						cur.update(quotas[ino].newSpace, quotas[ino].newInodes)
+					}
+				}
+				m.quotaMu.RUnlock()
+			}
 		}
 	}
 }
