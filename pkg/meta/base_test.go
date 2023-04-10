@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// disable_mutate_test
+//mutate:disable
 //
 //nolint:errcheck
 package meta

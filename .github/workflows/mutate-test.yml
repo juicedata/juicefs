@@ -56,8 +56,8 @@ jobs:
             for test_file_name in "${changed_file_array[@]}"
             do
               echo "test_file_name is $test_file_name"
-              if grep -q "//disable_mutate_test" $test_file_name; then
-                echo "found disable_mutate_test in $test_file_name" 
+              if grep -q "//mutate:disable" $test_file_name; then
+                echo "found //mutate:disable in $test_file_name" 
                 continue
               fi
               source_file_name=${test_file_name%"_test.go"}.go
