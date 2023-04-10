@@ -126,7 +126,9 @@ func testMeta(t *testing.T, m Meta) {
 	testCaseIncensi(t, m)
 	testCheckAndRepair(t, m)
 	testDirStat(t, m)
-	testClone(t, m)
+	for i := 0; i < 10; i++ {
+		testClone(t, m)
+	}
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
 }
@@ -2206,6 +2208,7 @@ func testClone(t *testing.T, m Meta) {
 	if rootAttr.Mtime == 1 {
 		t.Fatalf("mtime of rootDir is not updated")
 	}
+	time.Sleep(5 * time.Second)
 	m.StatFS(Background, RootInode, &totalspace, &availspace, &iused, &iavail)
 	if totalspace-availspace-space != 32768 {
 		t.Fatalf("added space: %d", totalspace-availspace-space)
