@@ -462,7 +462,7 @@ func (m *baseMeta) NewSession() error {
 	m.loadQuotas()
 	go m.en.flushStats()
 	go m.flushDirStat()
-	go m.flushQuotas() // TODO: improve it in Redis?
+	go m.flushQuotas()
 
 	if m.conf.MaxDeletes > 0 {
 		m.dslices = make(chan Slice, m.conf.MaxDeletes*10240)
@@ -696,10 +696,11 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 }
 
 func (m *baseMeta) flushQuotas() {
+	quotas := make(map[Ino]*Quota, 8)
+	inodes := make([]Ino, 0, 8)
 	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
-		quotas := make(map[Ino]*Quota)
 		m.quotaMu.RLock()
 		for ino, q := range m.dirQuotas {
 			newSpace = atomic.SwapInt64(&q.newSpace, 0)
@@ -710,7 +711,6 @@ func (m *baseMeta) flushQuotas() {
 		}
 		m.quotaMu.RUnlock()
 
-		inodes := make([]Ino, 0, len(quotas))
 		for ino := range quotas {
 			inodes = append(inodes, ino)
 		}
@@ -718,15 +718,16 @@ func (m *baseMeta) flushQuotas() {
 		if m.en.enType() == "tkv" {
 			batch = 20
 		}
-		if len(inodes) > batch {
+		size := len(inodes)
+		if size > batch {
 			sort.Slice(inodes, func(i, j int) bool {
 				return inodes[i] < inodes[j]
 			})
 		}
-		for i := 0; i < len(inodes); i += batch {
+		for i := 0; i < size; i += batch {
 			end := i + batch
-			if end > len(inodes) {
-				end = len(inodes)
+			if end > size {
+				end = size
 			}
 			if err := m.en.doFlushQuotas(Background, quotas, inodes[i:end]); err != nil {
 				logger.Warnf("Flush quotas: %s", err)
@@ -739,6 +740,11 @@ func (m *baseMeta) flushQuotas() {
 				m.quotaMu.RUnlock()
 			}
 		}
+
+		for ino := range quotas {
+			delete(quotas, ino)
+		}
+		inodes = inodes[:0]
 	}
 }
 
