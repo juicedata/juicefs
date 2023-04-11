@@ -986,8 +986,8 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		}
 		newLength = int64(length) - int64(nodeAttr.Length)
 		newSpace = align4K(length) - align4K(nodeAttr.Length)
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+			return err
 		}
 		var zeroChunks []chunk
 		var left, right = nodeAttr.Length, length
@@ -1092,8 +1092,8 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		old := nodeAttr.Length
 		newLength = int64(length) - int64(old)
 		newSpace = align4K(length) - align4K(old)
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+			return err
 		}
 		now := time.Now().UnixNano() / 1e3
 		nodeAttr.Length = length
@@ -2111,8 +2111,8 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			newSpace = align4K(newleng) - align4K(nodeAttr.Length)
 			nodeAttr.Length = newleng
 		}
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+			return err
 		}
 		now := time.Now().UnixNano() / 1e3
 		nodeAttr.Mtime = now
@@ -2193,8 +2193,8 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(nout.Length)
 			nout.Length = newleng
 		}
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(s, fout, nout.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, fout, nout.Parent)...); err != 0 {
+			return err
 		}
 		now := time.Now().UnixNano() / 1e3
 		nout.Mtime = now

@@ -573,19 +573,22 @@ func (m *baseMeta) CloseSession() error {
 	return nil
 }
 
-func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) bool {
+func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {
+	if space <= 0 && inodes <= 0 {
+		return 0
+	}
 	if space > 0 && m.fmt.Capacity > 0 && atomic.LoadInt64(&m.usedSpace)+atomic.LoadInt64(&m.newSpace)+space > int64(m.fmt.Capacity) {
-		return true
+		return syscall.ENOSPC
 	}
 	if inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes) {
-		return true
+		return syscall.ENOSPC
 	}
 	for _, ino := range parents {
 		if m.checkDirQuota(ctx, ino, space, inodes) {
-			return true
+			return syscall.EDQUOT
 		}
 	}
-	return false
+	return 0
 }
 
 func (m *baseMeta) loadQuotas() {
@@ -1187,8 +1190,8 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	defer m.timeit(time.Now())
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
-	if m.checkQuota(ctx, space, inodes, parent) {
-		return syscall.ENOSPC
+	if err := m.checkQuota(ctx, space, inodes, parent); err != 0 {
+		return err
 	}
 	err := m.en.doMknod(ctx, parent, name, _type, mode, cumask, rdev, path, inode, attr)
 	if err == 0 {
@@ -1250,8 +1253,8 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
 		return st
 	}
-	if m.checkQuota(ctx, align4K(attr.Length), 1, parent) {
-		return syscall.ENOSPC
+	if err := m.checkQuota(ctx, align4K(attr.Length), 1, parent); err != 0 {
+		return err
 	}
 
 	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
@@ -1396,7 +1399,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		// TODO: dst exists and is replaced or exchanged
 		if quotaDst && m.checkDirQuota(ctx, parentDst, space, inodes) {
-			return syscall.ENOSPC
+			return syscall.EDQUOT
 		}
 	}
 	tinode := new(Ino)
@@ -2200,8 +2203,8 @@ func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uin
 	if eno != 0 {
 		return eno
 	}
-	if m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), parent) {
-		return syscall.ENOSPC
+	if err := m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), parent); err != 0 {
+		return err
 	}
 	*total = sum.Dirs + sum.Files
 	concurrent := make(chan struct{}, 4)
