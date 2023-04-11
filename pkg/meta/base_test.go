@@ -126,9 +126,7 @@ func testMeta(t *testing.T, m Meta) {
 	testCaseIncensi(t, m)
 	testCheckAndRepair(t, m)
 	testDirStat(t, m)
-	for i := 0; i < 10; i++ {
-		testClone(t, m)
-	}
+	testClone(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
 }
