@@ -69,11 +69,12 @@ func GetLocalIp(address string) (string, error) {
 	return ip, nil
 }
 
-func FindLocalIP() (string, error) {
+func FindLocalIPs() ([]string, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+	var ips []string
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 {
 			continue // interface down
@@ -83,7 +84,7 @@ func FindLocalIP() (string, error) {
 		}
 		addrs, err := iface.Addrs()
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		for _, addr := range addrs {
 			var ip net.IP
@@ -100,10 +101,13 @@ func FindLocalIP() (string, error) {
 			if ip == nil {
 				continue // not an ipv4 address
 			}
-			return ip.String(), nil
+			ips = append(ips, ip.String())
 		}
 	}
-	return "", errors.New("are you connected to the network?")
+	if len(ips) == 0 {
+		err = errors.New("are you connected to the network?")
+	}
+	return ips, err
 }
 
 func WithTimeout(f func() error, timeout time.Duration) error {

@@ -149,10 +149,11 @@ func startManager(tasks <-chan object.Object) (string, error) {
 		logger.Debugf("receive stats %+v from %s", r, req.RemoteAddr)
 		_, _ = w.Write([]byte("OK"))
 	})
-	ip, err := utils.FindLocalIP()
+	ips, err := utils.FindLocalIPs()
 	if err != nil {
-		return "", fmt.Errorf("find local ip: %s", err)
+		return "", fmt.Errorf("find local ips: %s", err)
 	}
+	ip := ips[0]
 	l, err := net.Listen("tcp", ip+":")
 	if err != nil {
 		return "", fmt.Errorf("listen: %s", err)
