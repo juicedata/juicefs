@@ -195,6 +195,10 @@ func clientFlags() []cli.Flag {
 			Name:  "no-bgjob",
 			Usage: "disable background jobs (clean-up, backup, etc.)",
 		},
+		&cli.BoolFlag{
+			Name:  "single-mode",
+			Usage: "enable single node mode, which skips the heartbeat and metadata synchronization",
+		},
 		&cli.Float64Flag{
 			Name:  "open-cache",
 			Value: 0.0,

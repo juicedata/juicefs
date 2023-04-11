@@ -353,6 +353,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.SkipDirNlink = c.Int("skip-dir-nlink")
 	conf.ReadOnly = readOnly
 	conf.NoBGJob = c.Bool("no-bgjob")
+	conf.SingleMode = c.Bool("single-mode")
 	conf.OpenCache = time.Duration(c.Float64("open-cache") * 1e9)
 	conf.OpenCacheLimit = c.Uint64("open-cache-limit")
 	conf.Heartbeat = duration(c.String("heartbeat"))

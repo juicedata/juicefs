@@ -106,6 +106,7 @@ type engine interface {
 	scanPendingFiles(Context, pendingFileScan) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
+	ListSessions() ([]*Session, error)
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -442,6 +443,13 @@ func (m *baseMeta) newSessionInfo() []byte {
 }
 
 func (m *baseMeta) NewSession() error {
+	if m.conf.SingleMode {
+		if sessions, err := m.en.ListSessions(); err != nil {
+			logger.Warnf("List sessions: %s", err)
+		} else if len(sessions) > 0 {
+			logger.Warnf("Single mode is enabled but there are %d sessions already, run `juicefs status` to find them", len(sessions))
+		}
+	}
 	go m.refresh()
 	if m.conf.ReadOnly {
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
@@ -499,7 +507,7 @@ func (m *baseMeta) refresh() {
 			m.sesMu.Unlock()
 			return
 		}
-		if !m.conf.ReadOnly {
+		if !m.conf.ReadOnly && !m.conf.SingleMode {
 			if err := m.en.doRefreshSession(); err != nil {
 				logger.Errorf("Refresh session %d: %s", m.sid, err)
 			}
@@ -534,7 +542,7 @@ func (m *baseMeta) refresh() {
 		}
 		m.loadQuotas()
 
-		if m.conf.ReadOnly || m.conf.NoBGJob {
+		if m.conf.ReadOnly || m.conf.NoBGJob || m.conf.SingleMode {
 			continue
 		}
 		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64((m.conf.Heartbeat * 9 / 10).Seconds())); err != nil {
@@ -807,18 +815,22 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 func (m *baseMeta) cleanupDeletedFiles() {
 	for {
 		utils.SleepWithJitter(time.Minute)
-		if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Minute.Seconds())*9/10); err != nil {
-			logger.Warnf("checking counter lastCleanupFiles: %s", err)
-		} else if ok {
-			files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 10000)
-			if err != nil {
-				logger.Warnf("scan deleted files: %s", err)
+		if !m.conf.SingleMode {
+			if ok, err := m.en.setIfSmall("lastCleanupFiles", time.Now().Unix(), int64(time.Minute.Seconds())*9/10); err != nil {
+				logger.Warnf("Checking counter lastCleanupFiles: %s", err)
+				continue
+			} else if !ok {
 				continue
 			}
-			for inode, length := range files {
-				logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
-				m.en.doDeleteFileData(inode, length)
-			}
+		}
+		files, err := m.en.doFindDeletedFiles(time.Now().Add(-time.Hour).Unix(), 10000)
+		if err != nil {
+			logger.Warnf("Scan deleted files: %s", err)
+			continue
+		}
+		for inode, length := range files {
+			logger.Debugf("Cleanup chunks of inode %d with %d bytes", inode, length)
+			m.en.doDeleteFileData(inode, length)
 		}
 	}
 }
@@ -826,11 +838,15 @@ func (m *baseMeta) cleanupDeletedFiles() {
 func (m *baseMeta) cleanupSlices() {
 	for {
 		utils.SleepWithJitter(time.Hour)
-		if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
-			logger.Warnf("checking counter nextCleanupSlices: %s", err)
-		} else if ok {
-			m.en.doCleanupSlices()
+		if !m.conf.SingleMode {
+			if ok, err := m.en.setIfSmall("nextCleanupSlices", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
+				logger.Warnf("Checking counter nextCleanupSlices: %s", err)
+				continue
+			} else if !ok {
+				continue
+			}
 		}
+		m.en.doCleanupSlices()
 	}
 }
 
@@ -2000,12 +2016,16 @@ func (m *baseMeta) cleanupTrash() {
 			}
 			continue
 		}
-		if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
-			logger.Warnf("checking counter lastCleanupTrash: %s", err)
-		} else if ok {
-			go m.doCleanupTrash(false)
-			go m.cleanupDelayedSlices()
+		if !m.conf.SingleMode {
+			if ok, err := m.en.setIfSmall("lastCleanupTrash", time.Now().Unix(), int64(time.Hour.Seconds())*9/10); err != nil {
+				logger.Warnf("Checking counter lastCleanupTrash: %s", err)
+				continue
+			} else if !ok {
+				continue
+			}
 		}
+		go m.doCleanupTrash(false)
+		go m.cleanupDelayedSlices()
 	}
 }
 
