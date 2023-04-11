@@ -251,10 +251,6 @@ func (m *redisMeta) Name() string {
 	return "redis"
 }
 
-func (m *redisMeta) enType() string {
-	return "redis"
-}
-
 func (m *redisMeta) Init(format *Format, force bool) error {
 	ctx := Background
 	body, err := m.rdb.Get(ctx, m.setting()).Bytes()
@@ -3435,12 +3431,12 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	})
 }
 
-func (m *redisMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota, inodes []Ino) error {
+func (m *redisMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		for _, inode := range inodes {
-			field := inode.String()
-			pipe.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, quotas[inode].newSpace)
-			pipe.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, quotas[inode].newInodes)
+		for ino, q := range quotas {
+			field := ino.String()
+			pipe.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, q.newSpace)
+			pipe.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, q.newInodes)
 		}
 		return nil
 	})

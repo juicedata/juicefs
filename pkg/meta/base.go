@@ -46,7 +46,6 @@ const (
 )
 
 type engine interface {
-	enType() string
 	// Get the value of counter name.
 	getCounter(name string) (int64, error)
 	// Increase counter name by value. Do not use this if value is 0, use getCounter instead.
@@ -81,7 +80,7 @@ type engine interface {
 	doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error
 	doDelQuota(ctx Context, inode Ino) error
 	doLoadQuotas(ctx Context) (map[Ino]*Quota, error)
-	doFlushQuotas(ctx Context, quotas map[Ino]*Quota, inodes []Ino) error
+	doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
@@ -697,7 +696,6 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 
 func (m *baseMeta) flushQuotas() {
 	quotas := make(map[Ino]*Quota, 8)
-	inodes := make([]Ino, 0, 8)
 	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
@@ -711,40 +709,19 @@ func (m *baseMeta) flushQuotas() {
 		}
 		m.quotaMu.RUnlock()
 
-		for ino := range quotas {
-			inodes = append(inodes, ino)
-		}
-		batch := 1000
-		if m.en.enType() == "tkv" {
-			batch = 20
-		}
-		size := len(inodes)
-		if size > batch {
-			sort.Slice(inodes, func(i, j int) bool {
-				return inodes[i] < inodes[j]
-			})
-		}
-		for i := 0; i < size; i += batch {
-			end := i + batch
-			if end > size {
-				end = size
-			}
-			if err := m.en.doFlushQuotas(Background, quotas, inodes[i:end]); err != nil {
-				logger.Warnf("Flush quotas: %s", err)
-				m.quotaMu.RLock()
-				for _, ino := range inodes[i:end] {
-					if cur := m.dirQuotas[ino]; cur != nil {
-						cur.update(quotas[ino].newSpace, quotas[ino].newInodes)
-					}
+		if err := m.en.doFlushQuotas(Background, quotas); err != nil {
+			logger.Warnf("Flush quotas: %s", err)
+			m.quotaMu.RLock()
+			for ino, q := range quotas {
+				if cur := m.dirQuotas[ino]; cur != nil {
+					cur.update(q.newSpace, q.newInodes)
 				}
-				m.quotaMu.RUnlock()
 			}
+			m.quotaMu.RUnlock()
 		}
-
 		for ino := range quotas {
 			delete(quotas, ino)
 		}
-		inodes = inodes[:0]
 	}
 }
 

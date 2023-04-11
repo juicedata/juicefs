@@ -262,10 +262,6 @@ func (m *dbMeta) Name() string {
 	return name
 }
 
-func (m *dbMeta) enType() string {
-	return "sql"
-}
-
 func (m *dbMeta) doDeleteSlice(id uint64, size uint32) error {
 	return m.txn(func(s *xorm.Session) error {
 		_, err := s.Exec("delete from jfs_chunk_ref where chunkid=?", id)
@@ -3109,11 +3105,11 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	return quotas, nil
 }
 
-func (m *dbMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota, inodes []Ino) error {
+func (m *dbMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	return m.txn(func(s *xorm.Session) error {
-		for _, inode := range inodes {
+		for ino, q := range quotas {
 			_, err := s.Exec("update jfs_dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?",
-				quotas[inode].newSpace, quotas[inode].newInodes, inode)
+				q.newSpace, q.newInodes, ino)
 			if err != nil {
 				return err
 			}
