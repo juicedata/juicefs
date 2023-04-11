@@ -85,6 +85,7 @@ const (
 	ENOTDIR   = -0x14
 	EINVAL    = -0x16
 	ENOSPC    = -0x1c
+	EDQUOT    = -0x45
 	EROFS     = -0x1e
 	ENOTEMPTY = -0x27
 	ENODATA   = -0x3d
@@ -122,6 +123,8 @@ func errno(err error) int {
 		return EINVAL
 	case syscall.ENOSPC:
 		return ENOSPC
+	case syscall.EDQUOT:
+		return EDQUOT
 	case syscall.EROFS:
 		return EROFS
 	case syscall.ENOTEMPTY:
