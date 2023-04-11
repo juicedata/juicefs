@@ -80,7 +80,7 @@ type engine interface {
 	doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error
 	doDelQuota(ctx Context, inode Ino) error
 	doLoadQuotas(ctx Context) (map[Ino]*Quota, error)
-	doFlushQuota(ctx Context, inode Ino, space, inodes int64) error
+	doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
@@ -461,7 +461,7 @@ func (m *baseMeta) NewSession() error {
 	m.loadQuotas()
 	go m.en.flushStats()
 	go m.flushDirStat()
-	go m.flushQuotas() // TODO: improve it in Redis?
+	go m.flushQuotas()
 
 	if m.conf.MaxDeletes > 0 {
 		m.dslices = make(chan Slice, m.conf.MaxDeletes*10240)
@@ -711,17 +711,16 @@ func (m *baseMeta) flushQuotas() {
 			}
 		}
 		m.quotaMu.RUnlock()
-		// FIXME: merge
-		for ino, q := range quotas {
-			if err := m.en.doFlushQuota(Background, ino, q.newSpace, q.newInodes); err != nil {
-				logger.Warnf("Flush quota of inode %d: %s", ino, err)
-				m.quotaMu.RLock()
-				cur := m.dirQuotas[ino]
-				m.quotaMu.RUnlock()
-				if cur != nil {
+
+		if err := m.en.doFlushQuotas(Background, quotas); err != nil {
+			logger.Warnf("Flush quotas: %s", err)
+			m.quotaMu.RLock()
+			for ino, q := range quotas {
+				if cur := m.dirQuotas[ino]; cur != nil {
 					cur.update(q.newSpace, q.newInodes)
 				}
 			}
+			m.quotaMu.RUnlock()
 		}
 		for ino := range quotas {
 			delete(quotas, ino)

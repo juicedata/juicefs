@@ -3109,21 +3109,16 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	return quotas, nil
 }
 
-func (m *dbMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error {
+func (m *dbMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	return m.txn(func(s *xorm.Session) error {
-		q := dirQuota{Inode: inode}
-		// FIXME: use Update
-		ok, err := s.Get(&q)
-		if err == nil && !ok {
-			logger.Warnf("No quota for inode %d, skip flushing", inode)
-			return nil
+		for ino, q := range quotas {
+			_, err := s.Exec("update jfs_dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?",
+				q.newSpace, q.newInodes, ino)
+			if err != nil {
+				return err
+			}
 		}
-		if err == nil {
-			q.UsedSpace += space
-			q.UsedInodes += inodes
-			_, err = s.Cols("used_space", "used_inodes").Update(&q, &dirQuota{Inode: inode})
-		}
-		return err
+		return nil
 	})
 }
 

@@ -2695,23 +2695,29 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	return quotas, nil
 }
 
-func (m *kvMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error {
-	key := m.dirQuotaKey(inode)
+func (m *kvMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	return m.txn(func(tx *kvTxn) error {
-		rawQ := tx.get(key)
-		if len(rawQ) == 0 {
-			logger.Warnf("No quota for inode %d, skip flushing", inode)
-			return nil
+		keys := make([][]byte, 0, len(quotas))
+		qs := make([]*Quota, 0, len(quotas))
+		for ino, q := range quotas {
+			keys = append(keys, m.dirQuotaKey(ino))
+			qs = append(qs, q)
 		}
-		if len(rawQ) != 32 {
-			return fmt.Errorf("invalid quota value: %v", rawQ)
+		for i, v := range tx.gets(keys...) {
+			if len(v) == 0 {
+				continue
+			}
+			if len(v) != 32 {
+				logger.Errorf("Invalid quota value: %v", v)
+				continue
+			}
+			q := m.parseQuota(v)
+			q.UsedSpace += qs[i].newSpace
+			q.UsedInodes += qs[i].newInodes
+			tx.set(keys[i], m.packQuota(q))
 		}
-		q := m.parseQuota(rawQ)
-		q.UsedSpace += space
-		q.UsedInodes += inodes
-		tx.set(key, m.packQuota(q))
 		return nil
-	}, inode)
+	})
 }
 
 func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {

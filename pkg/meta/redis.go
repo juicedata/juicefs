@@ -3436,11 +3436,13 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	})
 }
 
-func (m *redisMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error {
-	field := inode.String()
-	_, err := m.rdb.Pipelined(ctx, func(p redis.Pipeliner) error {
-		p.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, space)
-		p.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, inodes)
+func (m *redisMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
+	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		for ino, q := range quotas {
+			field := ino.String()
+			pipe.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, q.newSpace)
+			pipe.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, q.newInodes)
+		}
 		return nil
 	})
 	return err
