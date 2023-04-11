@@ -16,6 +16,7 @@
 package io.juicefs;
 
 import com.kenai.jffi.internal.StubLoader;
+import io.juicefs.exception.QuotaExceededException;
 import io.juicefs.metrics.JuiceFSInstrumentation;
 import io.juicefs.utils.ConsistentHash;
 import io.juicefs.utils.NodesFetcher;
@@ -275,7 +276,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     } else if (errno == ENOSPACE) {
       return new IOException("No space");
     } else if (errno == EDQUOT) {
-      return new IOException("Quota exceeded");
+      return new QuotaExceededException("Quota exceeded");
     } else if (errno == EROFS) {
       return new IOException("Read-only Filesystem");
     } else if (errno == EIO) {
