@@ -695,7 +695,7 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 }
 
 func (m *baseMeta) flushQuotas() {
-	quotas := make(map[Ino]*Quota, 8)
+	quotas := make(map[Ino]*Quota)
 	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
