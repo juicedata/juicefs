@@ -429,9 +429,15 @@ func (m *baseMeta) newSessionInfo() []byte {
 		logger.Warnf("Failed to get hostname: %s", err)
 		host = ""
 	}
+	ip, err := utils.FindLocalIP()
+	if err != nil {
+		logger.Warnf("Failed to get local IP: %s", err)
+		ip = ""
+	}
 	buf, err := json.Marshal(&SessionInfo{
 		Version:    version.Version(),
 		HostName:   host,
+		IPAddr:     ip,
 		MountPoint: m.conf.MountPoint,
 		ProcessID:  os.Getpid(),
 	})

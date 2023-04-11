@@ -246,6 +246,7 @@ type TreeSummary struct {
 type SessionInfo struct {
 	Version    string
 	HostName   string
+	IPAddr     string
 	MountPoint string
 	ProcessID  int
 }
