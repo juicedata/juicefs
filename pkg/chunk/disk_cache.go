@@ -157,21 +157,12 @@ func (cache *cacheStore) refreshCacheKeys() {
 	}
 }
 func (cache *cacheStore) removeStage(key string) error {
-	stagingPath := cache.stagePath(key)
-	fi, err := os.Stat(stagingPath)
-	if err == nil {
-		size := fi.Size()
-		if err = os.Remove(stagingPath); err == nil {
-			cache.m.stageBlocks.Sub(1)
-			cache.m.stageBlockBytes.Sub(float64(size))
-		}
+	if err := os.RemoveAll(cache.stagePath(key)); err != nil {
+		return err
 	}
-
-	// ignore ENOENT error
-	if err != nil && os.IsNotExist(err) {
-		return nil
-	}
-	return err
+	cache.m.stageBlocks.Sub(1)
+	cache.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
+	return nil
 }
 
 func (cache *cacheStore) cache(key string, p *Page, force bool) {
@@ -626,13 +617,14 @@ func (cache *cacheStore) scanStaging() {
 					logger.Warnf("Ignore invalid file in staging: %s", path)
 					return nil
 				}
-				if parseObjOrigSize(key) == 0 {
+				origSize := parseObjOrigSize(key)
+				if origSize == 0 {
 					logger.Warnf("Ignore file with zero size: %s", path)
 					return nil
 				}
 				logger.Debugf("Found staging block: %s", path)
 				cache.m.stageBlocks.Add(1)
-				cache.m.stageBlockBytes.Add(float64(fi.Size()))
+				cache.m.stageBlockBytes.Add(float64(origSize))
 				cache.uploader(key, path, false)
 				count++
 			}
