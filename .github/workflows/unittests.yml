@@ -18,9 +18,19 @@ on:
       - '**.md'
       - '.github/**'
   workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
 
 jobs:
   unittests:
+    strategy:
+      fail-fast: true
+      matrix:
+        test: [ 'test.pkg', 'test.cmd', 'test.fdb' ]
     timeout-minutes: 60
     runs-on: ubuntu-20.04
     env:
@@ -102,35 +112,49 @@ jobs:
           for i in {2222,3306,5432,8020,9000,9007,4500} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
           sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
 
-
       - name: Unit Test
         timeout-minutes: 30
         run: |
           sudo chmod 777 /var/jfsCache
-          make test
+          test=${{matrix.test}}'
+          make $test
           cat cov1.out >> coverage.txt
           cat cov2.out >> coverage.txt
-          make test.fdb
           cat cov3.out >> coverage.txt
           sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
           sudo ./juicefs gc localhost
           sudo ./juicefs fsck localhost
-
 
       - name: Code Coverage
         uses: codecov/codecov-action@v3
         with:
           files: ./coverage.txt
 
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        timeout-minutes: 120
+        uses: lhotari/action-upterm@v1
+
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [unittests]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
 
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
-      - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
-        timeout-minutes: 120
-        uses: lhotari/action-upterm@v1
+      - name: Success
+        if: ${{ success() }}
+        run: echo "All Done"
