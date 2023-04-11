@@ -118,9 +118,9 @@ jobs:
           sudo chmod 777 /var/jfsCache
           test=${{matrix.test}}
           make $test
-          cat cov1.out >> coverage.txt
-          cat cov2.out >> coverage.txt
-          cat cov3.out >> coverage.txt
+          cat cov*.out >> coverage.txt
+          # cat cov2.out >> coverage.txt
+          # cat cov3.out >> coverage.txt
           sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
           sudo ./juicefs gc localhost
           sudo ./juicefs fsck localhost
