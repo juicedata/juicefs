@@ -99,8 +99,8 @@ func TestMetrics(t *testing.T) {
 	if toFloat64(metrics.stageBlockBytes) != 0.0 {
 		t.Fatalf("expect the stageBlockBytes is %d", len(content))
 	}
-
-	stagingPath, err := m.stage("stage", content, false)
+	key := fmt.Sprintf("chunks/0/5/5000_2_%d", len(content))
+	stagingPath, err := m.stage(key, content, false)
 	if err != nil {
 		t.Fatalf("stage failed: %s", err)
 	}
@@ -111,7 +111,7 @@ func TestMetrics(t *testing.T) {
 	if toFloat64(metrics.stageBlockBytes) != float64(len(content)) {
 		t.Fatalf("expect the stageBlockBytes is %d", len(content))
 	}
-	err = m.removeStage("stage")
+	err = m.removeStage(key)
 	if err != nil {
 		t.Fatalf("faild to remove stage")
 	}
