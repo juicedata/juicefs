@@ -116,7 +116,7 @@ jobs:
         timeout-minutes: 30
         run: |
           sudo chmod 777 /var/jfsCache
-          test=${{matrix.test}}'
+          test=${{matrix.test}}
           make $test
           cat cov1.out >> coverage.txt
           cat cov2.out >> coverage.txt
