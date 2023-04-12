@@ -2204,7 +2204,6 @@ func testClone(t *testing.T, m Meta) {
 		if totalspace-availspace-space != 32768 {
 			t.Fatalf("added space: %d", totalspace-availspace-space)
 		}
-		t.Fatalf("added space: %d", totalspace-availspace-space)
 	}
 	if iused-iused2 != 8 {
 		t.Fatalf("added inodes: %d", iused-iused2)
