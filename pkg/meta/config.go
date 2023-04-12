@@ -54,7 +54,7 @@ func (c *Config) SelfCheck() {
 	if c.MaxDeletes == 0 {
 		logger.Warnf("Deleting object will be disabled since max-deletes is 0")
 	}
-	if c.Heartbeat < time.Second {
+	if c.Heartbeat != 0 && c.Heartbeat < time.Second {
 		logger.Warnf("heartbeat should not be less than 1 second")
 		c.Heartbeat = time.Second
 	}

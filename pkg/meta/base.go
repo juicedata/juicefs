@@ -482,7 +482,11 @@ func (m *baseMeta) NewSession() error {
 }
 
 func (m *baseMeta) expireTime() int64 {
-	return time.Now().Add(5 * m.conf.Heartbeat).Unix()
+	if m.conf.Heartbeat > 0 {
+		return time.Now().Add(m.conf.Heartbeat * 5).Unix()
+	} else {
+		return time.Now().Add(time.Hour * 24 * 365).Unix()
+	}
 }
 
 func (m *baseMeta) OnReload(fn func(f *Format)) {
@@ -493,13 +497,17 @@ func (m *baseMeta) OnReload(fn func(f *Format)) {
 
 func (m *baseMeta) refresh() {
 	for {
-		utils.SleepWithJitter(m.conf.Heartbeat)
+		if m.conf.Heartbeat > 0 {
+			utils.SleepWithJitter(m.conf.Heartbeat)
+		} else { // use default value
+			utils.SleepWithJitter(time.Second * 12)
+		}
 		m.sesMu.Lock()
 		if m.umounting {
 			m.sesMu.Unlock()
 			return
 		}
-		if !m.conf.ReadOnly {
+		if !m.conf.ReadOnly && m.conf.Heartbeat > 0 {
 			if err := m.en.doRefreshSession(); err != nil {
 				logger.Errorf("Refresh session %d: %s", m.sid, err)
 			}
@@ -534,7 +542,7 @@ func (m *baseMeta) refresh() {
 		}
 		m.loadQuotas()
 
-		if m.conf.ReadOnly || m.conf.NoBGJob {
+		if m.conf.ReadOnly || m.conf.NoBGJob || m.conf.Heartbeat == 0 {
 			continue
 		}
 		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64((m.conf.Heartbeat * 9 / 10).Seconds())); err != nil {
