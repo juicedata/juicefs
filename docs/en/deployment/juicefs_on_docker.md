@@ -139,4 +139,4 @@ If JuiceFS Docker volume plugin is not working properly, upgrade to the [latest 
 
 ## Mount JuiceFS in a Container {#mount-juicefs-in-docker}
 
-Mounting JuiceFS in a Docker container usually serves two purposes, one is to provide storage for the applications in the container, and the other is to map the mount point inside container to the host. To do so, you can use the officially maintained images or build your own image for customization. See [Customize Container Image](https://juicefs.com/docs/csi/guide/custom-image/).
+Mounting JuiceFS in a Docker container usually serves two purposes, one is to provide storage for the applications in the container, and the other is to map the mount point inside container to the host. To do so, you can use the officially maintained images or build your own image for customization. See [Customize Container Image](https://juicefs.com/docs/csi/guide/custom-image).

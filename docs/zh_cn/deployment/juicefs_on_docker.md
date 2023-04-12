@@ -140,4 +140,4 @@ docker-compose down --volumes
 
 ## 在 Docker 容器中挂载 JuiceFS {#mount-juicefs-in-docker}
 
-在 Docker 容器中挂载 JuiceFS 通常有两种作用，一种是为容器中的应用提供存储，另一种是把容器中挂载的 JuiceFS 存储映射给主机读写使用。为此，可以使用 JuiceFS 官方维护的镜像，也可以自己编写 Dockerfile 将 JuiceFS 客户端打包进镜像中。详见[「定制容器镜像」](https://juicefs.com/docs/zh/csi/guide/custom-image/)。
+在 Docker 容器中挂载 JuiceFS 通常有两种作用，一种是为容器中的应用提供存储，另一种是把容器中挂载的 JuiceFS 存储映射给主机读写使用。为此，可以使用 JuiceFS 官方维护的镜像，也可以自己编写 Dockerfile 将 JuiceFS 客户端打包进镜像中。详见[「定制容器镜像」](https://juicefs.com/docs/zh/csi/guide/custom-image)。
