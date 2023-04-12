@@ -138,13 +138,14 @@ make win
 
 ### 社区开源组件
 
-| 名称        | 安装路径                                                                      |
-|-----------|---------------------------------------------------------------------------|
-| Spark     | `${SPARK_HOME}/jars`                                                      |
-| Presto    | `${PRESTO_HOME}/plugin/hive-hadoop2`                                      |
-| Trino     | `${TRINO_HOME}/plugin/hive`                                               |
-| Flink     | `${FLINK_HOME}/lib`                                                       |
-| StarRocks | `${StarRocks_HOME}/fe/lib/`, `${StarRocks_HOME}/be/lib/hadoop/common/lib` |
+| 名称        | 安装路径                                                                                    |
+|-----------|-----------------------------------------------------------------------------------------|
+| Hadoop    | `${HADOOP_HOME}/share/hadoop/common/lib/`, `${HADOOP_HOME}/share/hadoop/mapreduce/lib/` |
+| Spark     | `${SPARK_HOME}/jars`                                                                    |
+| Presto    | `${PRESTO_HOME}/plugin/hive-hadoop2`                                                    |
+| Trino     | `${TRINO_HOME}/plugin/hive`                                                             |
+| Flink     | `${FLINK_HOME}/lib`                                                                     |
+| StarRocks | `${StarRocks_HOME}/fe/lib/`, `${StarRocks_HOME}/be/lib/hadoop/common/lib`               |
 
 ### 客户端配置参数
 
