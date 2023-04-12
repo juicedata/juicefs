@@ -18,7 +18,7 @@ JuiceFS 文件系统为用户提供多种访问方式，FUSE 是其中较为常�
 
    ```
    # <file system>       <mount point>   <type>      <options>           <dump>  <pass>
-   redis://localhost:6379/1    /jfs      juicefs     _netdev,allow_other   0       0
+   redis://localhost:6379/1    /jfs      juicefs     _netdev,writeback_cache   0       0
    ```
 
 ## default_permissions
