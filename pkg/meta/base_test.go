@@ -1362,8 +1362,8 @@ func testCloseSession(t *testing.T, m Meta) {
 	if err != nil {
 		t.Fatalf("get session: %s", err)
 	}
-	var empty SessionInfo
-	if s.SessionInfo != empty {
+	if s.SessionInfo.Version != "" || s.SessionInfo.HostName != "" || s.SessionInfo.IPAddrs != nil ||
+		s.SessionInfo.MountPoint != "" || s.SessionInfo.ProcessID != 0 {
 		t.Fatalf("incorrect session info %+v", s.SessionInfo)
 	}
 	if len(s.Flocks) != 0 || len(s.Plocks) != 0 || len(s.Sustained) != 0 {

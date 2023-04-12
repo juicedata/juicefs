@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -35,6 +34,7 @@ import (
 	"github.com/oliverisaac/shellescape"
 
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 // Stat has the counters to represent the progress.
@@ -97,43 +97,6 @@ func sendStats(addr string) {
 	}
 }
 
-func findLocalIP() (string, error) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return "", err
-	}
-	for _, iface := range ifaces {
-		if iface.Flags&net.FlagUp == 0 {
-			continue // interface down
-		}
-		if iface.Flags&net.FlagLoopback != 0 {
-			continue // loopback interface
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			return "", err
-		}
-		for _, addr := range addrs {
-			var ip net.IP
-			switch v := addr.(type) {
-			case *net.IPNet:
-				ip = v.IP
-			case *net.IPAddr:
-				ip = v.IP
-			}
-			if ip == nil || ip.IsLoopback() {
-				continue
-			}
-			ip = ip.To4()
-			if ip == nil {
-				continue // not an ipv4 address
-			}
-			return ip.String(), nil
-		}
-	}
-	return "", errors.New("are you connected to the network?")
-}
-
 func startManager(tasks <-chan object.Object) (string, error) {
 	http.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
 		var objs []object.Object
@@ -186,9 +149,19 @@ func startManager(tasks <-chan object.Object) (string, error) {
 		logger.Debugf("receive stats %+v from %s", r, req.RemoteAddr)
 		_, _ = w.Write([]byte("OK"))
 	})
-	ip, err := findLocalIP()
+	ips, err := utils.FindLocalIPs()
 	if err != nil {
-		return "", fmt.Errorf("find local ip: %s", err)
+		return "", fmt.Errorf("find local ips: %s", err)
+	}
+	var ip string
+	for _, i := range ips {
+		if i = i.To4(); i != nil {
+			ip = i.String()
+			break
+		}
+	}
+	if ip == "" {
+		return "", fmt.Errorf("no local ip found")
 	}
 	l, err := net.Listen("tcp", ip+":")
 	if err != nil {

@@ -68,6 +68,39 @@ func GetLocalIp(address string) (string, error) {
 	return ip, nil
 }
 
+func FindLocalIPs() ([]net.IP, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	var ips []net.IP
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue // interface down
+		}
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue // loopback interface
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if len(ip) > 0 && !ip.IsLoopback() {
+				ips = append(ips, ip)
+			}
+		}
+	}
+	return ips, nil
+}
+
 func WithTimeout(f func() error, timeout time.Duration) error {
 	var done = make(chan int, 1)
 	var t = time.NewTimer(timeout)

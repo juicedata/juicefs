@@ -427,11 +427,23 @@ func (m *baseMeta) newSessionInfo() []byte {
 	host, err := os.Hostname()
 	if err != nil {
 		logger.Warnf("Failed to get hostname: %s", err)
-		host = ""
+	}
+	ips, err := utils.FindLocalIPs()
+	if err != nil {
+		logger.Warnf("Failed to get local IP: %s", err)
+	}
+	addrs := make([]string, 0, len(ips))
+	for _, i := range ips {
+		if ip := i.String(); ip[0] == '?' {
+			logger.Warnf("Invalid IP address: %s", ip)
+		} else {
+			addrs = append(addrs, ip)
+		}
 	}
 	buf, err := json.Marshal(&SessionInfo{
 		Version:    version.Version(),
 		HostName:   host,
+		IPAddrs:    addrs,
 		MountPoint: m.conf.MountPoint,
 		ProcessID:  os.Getpid(),
 	})

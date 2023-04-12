@@ -246,6 +246,7 @@ type TreeSummary struct {
 type SessionInfo struct {
 	Version    string
 	HostName   string
+	IPAddrs    []string `json:",omitempty"`
 	MountPoint string
 	ProcessID  int
 }
