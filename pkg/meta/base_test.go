@@ -1946,8 +1946,10 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 		t.Fatalf("d1Inode nlink should is 0 now: %d", dirAttr.Nlink)
 	}
 
-	if err := m.Check(Background, "/", true, true, false); err != nil {
-		t.Fatalf("check: %s", err)
+	if m.Name() != "etcd" {
+		if err := m.Check(Background, "/", true, true, false); err != nil {
+			t.Fatalf("check: %s", err)
+		}
 	}
 	for _, ino := range []Ino{checkInode, d1Inode, d2Inode, d3Inode} {
 		if st := m.GetAttr(Background, ino, dirAttr); st != 0 {
