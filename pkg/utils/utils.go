@@ -17,7 +17,6 @@
 package utils
 
 import (
-	"errors"
 	"fmt"
 	"mime"
 	"net"
@@ -69,12 +68,12 @@ func GetLocalIp(address string) (string, error) {
 	return ip, nil
 }
 
-func FindLocalIPs() ([]string, error) {
+func FindLocalIPs() ([]net.IP, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, err
 	}
-	var ips []string
+	var ips []net.IP
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 {
 			continue // interface down
@@ -84,7 +83,7 @@ func FindLocalIPs() ([]string, error) {
 		}
 		addrs, err := iface.Addrs()
 		if err != nil {
-			return nil, err
+			continue
 		}
 		for _, addr := range addrs {
 			var ip net.IP
@@ -94,18 +93,10 @@ func FindLocalIPs() ([]string, error) {
 			case *net.IPAddr:
 				ip = v.IP
 			}
-			if ip == nil || ip.IsLoopback() {
-				continue
+			if len(ip) > 0 && !ip.IsLoopback() {
+				ips = append(ips, ip)
 			}
-			ip = ip.To4()
-			if ip == nil {
-				continue // not an ipv4 address
-			}
-			ips = append(ips, ip.String())
 		}
-	}
-	if len(ips) == 0 {
-		err = errors.New("are you connected to the network?")
 	}
 	return ips, err
 }

@@ -153,7 +153,16 @@ func startManager(tasks <-chan object.Object) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("find local ips: %s", err)
 	}
-	ip := ips[0]
+	var ip string
+	for _, i := range ips {
+		if i = i.To4(); i != nil {
+			ip = i.String()
+			break
+		}
+	}
+	if ip == "" {
+		return "", fmt.Errorf("no local ip found")
+	}
 	l, err := net.Listen("tcp", ip+":")
 	if err != nil {
 		return "", fmt.Errorf("listen: %s", err)
