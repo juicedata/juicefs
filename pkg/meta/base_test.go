@@ -2081,7 +2081,7 @@ func testClone(t *testing.T, m Meta) {
 	//    ├── file1
 	//    └── file1Symlink -> file1
 	var cloneDir Ino
-	if eno := m.Mkdir(Background, 1, "cloneDir", 0777, 022, 0, &cloneDir, nil); eno != 0 {
+	if eno := m.Mkdir(Background, RootInode, "cloneDir", 0777, 022, 0, &cloneDir, nil); eno != 0 {
 		t.Fatalf("mkdir: %s", eno)
 	}
 	var dir1 Ino
