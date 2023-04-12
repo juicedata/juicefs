@@ -1660,7 +1660,6 @@ func (m *baseMeta) GetPaths(ctx Context, inode Ino) []string {
 func (m *baseMeta) countDirNlink(ctx Context, inode Ino) (uint32, syscall.Errno) {
 	var entries []*Entry
 	if st := m.en.doReaddir(ctx, inode, 0, &entries, -1); st != 0 {
-		logger.Errorf("readdir inode %d: %s", inode, st)
 		return 0, st
 	}
 	var dirCounter uint32 = 2
@@ -1678,7 +1677,7 @@ func (m *baseMeta) walk(ctx Context, inode Ino, path string, attr *Attr, walkFn 
 	walkFn(ctx, inode, path, attr)
 	var entries []*Entry
 	st := m.en.doReaddir(ctx, inode, 1, &entries, -1)
-	if st != 0 {
+	if st != 0 && st != syscall.ENOENT {
 		logger.Errorf("list %s: %s", path, st)
 		return st
 	}
@@ -1721,7 +1720,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 		attr.Parent = parent
 	}
 
-	var done = true
+	var hasError bool
 	type node struct {
 		inode Ino
 		path  string
@@ -1734,7 +1733,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 			if st := m.walk(ctx, inode, fpath, &attr, func(ctx Context, inode Ino, path string, attr *Attr) {
 				nodes <- &node{inode, path, attr}
 			}); st != 0 {
-				done = false
+				hasError = true
 				logger.Errorf("Walk %s: %s", fpath, st)
 			}
 		} else {
@@ -1759,8 +1758,11 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 				var attrBroken, statBroken bool
 				if attr.Full {
 					nlink, st := m.countDirNlink(ctx, inode)
+					if st == syscall.ENOENT {
+						continue
+					}
 					if st != 0 {
-						done = false
+						hasError = true
 						logger.Errorf("Count nlink for inode %d: %s", inode, st)
 						continue
 					}
@@ -1785,20 +1787,24 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 							attr.Ctime = now
 							attr.Length = 4 << 10
 						}
-						if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 {
+						if st1 := m.en.doRepair(ctx, inode, attr); st1 == 0 || st1 == syscall.ENOENT {
 							logger.Debugf("Path %s (inode %d) is successfully repaired", path, inode)
 						} else {
-							done = false
+							hasError = true
 							logger.Errorf("Repair path %s inode %d: %s", path, inode, st1)
 						}
 					} else {
 						logger.Warnf("Path %s (inode %d) can be repaired, please re-run with '--path %s --repair' to fix it", path, inode, path)
+						hasError = true
 					}
 				}
 
 				stat, st := m.en.doGetDirStat(ctx, inode, false)
+				if st == syscall.ENOENT {
+					continue
+				}
 				if st != 0 {
-					done = false
+					hasError = true
 					logger.Errorf("get dir stat for inode %d: %v", inode, st)
 					continue
 				}
@@ -1809,25 +1815,25 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 
 				if repair {
 					if statBroken || statAll {
-						if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 {
+						if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 || st == syscall.ENOENT {
 							logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
 						} else {
-							done = false
+							hasError = true
 							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, st)
 						}
 					}
 				} else if statBroken {
 					logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair' to fix it", path, inode, path)
+					hasError = true
 				}
 			}
 		}()
 	}
 	wg.Wait()
-	if done {
-		return nil
-	} else {
+	if hasError {
 		return errors.New("some errors occurred, please check the log of fsck")
 	}
+	return nil
 }
 
 func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
