@@ -157,12 +157,16 @@ func (cache *cacheStore) refreshCacheKeys() {
 	}
 }
 func (cache *cacheStore) removeStage(key string) error {
-	if err := os.RemoveAll(cache.stagePath(key)); err != nil {
-		return err
+	var err error
+	if err = os.Remove(cache.stagePath(key)); err == nil {
+		cache.m.stageBlocks.Sub(1)
+		cache.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
 	}
-	cache.m.stageBlocks.Sub(1)
-	cache.m.stageBlockBytes.Sub(float64(parseObjOrigSize(key)))
-	return nil
+	// ignore ENOENT error
+	if err != nil && os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
 
 func (cache *cacheStore) cache(key string, p *Page, force bool) {
