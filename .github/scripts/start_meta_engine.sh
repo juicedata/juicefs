@@ -13,15 +13,15 @@ start_meta_engine(){
         cd tcli && make
         sudo cp bin/tcli /usr/local/bin
         cd -
-        # sudo echo "13.224.167.111 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
-        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-        source /home/runner/.bash_profile
-        source /home/runner/.profile
+        echo 'head -1' > /tmp/head.txt
         # retry because of: https://github.com/pingcap/tiup/issues/2057
         for i in {1..30}; do
-            tiup playground --mode tikv-slim &  
-            sleep 10
-            pgrep pd-server && break || true  
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.bash_profile
+          source /home/runner/.profile
+          tiup playground --mode tikv-slim &
+          sleep 10
+          lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt && break || true
         done
         pgrep pd-server
     elif [ "$meta" == "badger" ]; then
