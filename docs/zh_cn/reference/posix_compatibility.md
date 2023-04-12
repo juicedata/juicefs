@@ -71,7 +71,7 @@ POSIX 记录锁分为**传统锁**和 **OFD 锁**（Open file description locks�
    cd /opt/ltp
    ```
 
-   测试配置文件在 `runtest` 目录下；为方便测试，删去了 `fs` 和 `syscalls` 中部分压力测试和与文件系统不想关的条目（参见[附录](#附录)，修改后保存到文件 `fs-jfs` 和 `syscalls-jfs`），然后执行命令：
+   测试配置文件在 `runtest` 目录下；为方便测试，删去了 `fs` 和 `syscalls` 中部分压力测试和与文件系统不相关的条目（参见[附录](#附录)，修改后保存到文件 `fs-jfs` 和 `syscalls-jfs`），然后执行命令：
 
    ```bash
    ./runltp -d /mnt/jfs -f fs_bind,fs_perms_simple,fsx,io,smoketest,fs-jfs,syscalls-jfs

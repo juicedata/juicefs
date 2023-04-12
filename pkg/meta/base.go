@@ -80,7 +80,7 @@ type engine interface {
 	doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error
 	doDelQuota(ctx Context, inode Ino) error
 	doLoadQuotas(ctx Context) (map[Ino]*Quota, error)
-	doFlushQuota(ctx Context, inode Ino, space, inodes int64) error
+	doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
@@ -90,7 +90,7 @@ type engine interface {
 	doRmdir(ctx Context, parent Ino, name string, inode *Ino, skipCheckTrash ...bool) syscall.Errno
 	doReadlink(ctx Context, inode Ino) ([]byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
-	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno
+	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
@@ -461,7 +461,7 @@ func (m *baseMeta) NewSession() error {
 	m.loadQuotas()
 	go m.en.flushStats()
 	go m.flushDirStat()
-	go m.flushQuotas() // TODO: improve it in Redis?
+	go m.flushQuotas()
 
 	if m.conf.MaxDeletes > 0 {
 		m.dslices = make(chan Slice, m.conf.MaxDeletes*10240)
@@ -573,19 +573,22 @@ func (m *baseMeta) CloseSession() error {
 	return nil
 }
 
-func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) bool {
+func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {
+	if space <= 0 && inodes <= 0 {
+		return 0
+	}
 	if space > 0 && m.fmt.Capacity > 0 && atomic.LoadInt64(&m.usedSpace)+atomic.LoadInt64(&m.newSpace)+space > int64(m.fmt.Capacity) {
-		return true
+		return syscall.ENOSPC
 	}
 	if inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes) {
-		return true
+		return syscall.ENOSPC
 	}
 	for _, ino := range parents {
 		if m.checkDirQuota(ctx, ino, space, inodes) {
-			return true
+			return syscall.EDQUOT
 		}
 	}
-	return false
+	return 0
 }
 
 func (m *baseMeta) loadQuotas() {
@@ -708,17 +711,16 @@ func (m *baseMeta) flushQuotas() {
 			}
 		}
 		m.quotaMu.RUnlock()
-		// FIXME: merge
-		for ino, q := range quotas {
-			if err := m.en.doFlushQuota(Background, ino, q.newSpace, q.newInodes); err != nil {
-				logger.Warnf("Flush quota of inode %d: %s", ino, err)
-				m.quotaMu.RLock()
-				cur := m.dirQuotas[ino]
-				m.quotaMu.RUnlock()
-				if cur != nil {
+
+		if err := m.en.doFlushQuotas(Background, quotas); err != nil {
+			logger.Warnf("Flush quotas: %s", err)
+			m.quotaMu.RLock()
+			for ino, q := range quotas {
+				if cur := m.dirQuotas[ino]; cur != nil {
 					cur.update(q.newSpace, q.newInodes)
 				}
 			}
+			m.quotaMu.RUnlock()
 		}
 		for ino := range quotas {
 			delete(quotas, ino)
@@ -1187,8 +1189,8 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 	defer m.timeit(time.Now())
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
-	if m.checkQuota(ctx, space, inodes, parent) {
-		return syscall.ENOSPC
+	if err := m.checkQuota(ctx, space, inodes, parent); err != 0 {
+		return err
 	}
 	err := m.en.doMknod(ctx, parent, name, _type, mode, cumask, rdev, path, inode, attr)
 	if err == 0 {
@@ -1250,8 +1252,8 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
 		return st
 	}
-	if m.checkQuota(ctx, align4K(attr.Length), 1, parent) {
-		return syscall.ENOSPC
+	if err := m.checkQuota(ctx, align4K(attr.Length), 1, parent); err != 0 {
+		return err
 	}
 
 	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
@@ -1394,30 +1396,45 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		} else {
 			space, inodes = align4K(attr.Length), 1
 		}
-		// FIXME: dst exists and is replaced or exchanged
+		// TODO: dst exists and is replaced or exchanged
 		if quotaDst && m.checkDirQuota(ctx, parentDst, space, inodes) {
-			return syscall.ENOSPC
+			return syscall.EDQUOT
 		}
 	}
-	st := m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, attr)
+	tinode := new(Ino)
+	tattr := new(Attr)
+	st := m.en.doRename(ctx, parentSrc, nameSrc, parentDst, nameDst, flags, inode, tinode, attr, tattr)
 	if st == 0 {
-		var diffLengh uint64
+		var diffLength uint64
 		if attr.Typ == TypeDirectory {
 			m.parentMu.Lock()
 			m.dirParents[*inode] = parentDst
 			m.parentMu.Unlock()
 		} else if attr.Typ == TypeFile {
-			diffLengh = attr.Length
+			diffLength = attr.Length
 		}
 		if parentSrc != parentDst {
-			// FIXME: dst exists and is replaced or exchanged
-			m.updateDirStat(ctx, parentSrc, -int64(diffLengh), -align4K(diffLengh), -1)
-			m.updateDirStat(ctx, parentDst, int64(diffLengh), align4K(diffLengh), 1)
+			m.updateDirStat(ctx, parentSrc, -int64(diffLength), -align4K(diffLength), -1)
+			m.updateDirStat(ctx, parentDst, int64(diffLength), align4K(diffLength), 1)
 			if quotaSrc {
 				m.updateDirQuota(ctx, parentSrc, -space, -inodes)
 			}
 			if quotaDst {
 				m.updateDirQuota(ctx, parentDst, space, inodes)
+			}
+		}
+		if *tinode > 0 && flags != RenameExchange {
+			diffLength = 0
+			if tattr.Typ == TypeDirectory {
+				m.parentMu.Lock()
+				delete(m.dirParents, *tinode)
+				m.parentMu.Unlock()
+			} else if attr.Typ == TypeFile {
+				diffLength = tattr.Length
+			}
+			m.updateDirStat(ctx, parentDst, -int64(diffLength), -align4K(diffLength), -1)
+			if quotaDst {
+				m.updateDirQuota(ctx, parentDst, -align4K(diffLength), -1)
 			}
 		}
 	}
@@ -2185,8 +2202,8 @@ func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uin
 	if eno != 0 {
 		return eno
 	}
-	if m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), parent) {
-		return syscall.ENOSPC
+	if err := m.checkQuota(ctx, int64(sum.Size), int64(sum.Dirs)+int64(sum.Files), parent); err != 0 {
+		return err
 	}
 	*total = sum.Dirs + sum.Files
 	concurrent := make(chan struct{}, 4)

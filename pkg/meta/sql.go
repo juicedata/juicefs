@@ -986,8 +986,8 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		}
 		newLength = int64(length) - int64(nodeAttr.Length)
 		newSpace = align4K(length) - align4K(nodeAttr.Length)
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+			return err
 		}
 		var zeroChunks []chunk
 		var left, right = nodeAttr.Length, length
@@ -1092,8 +1092,8 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		old := nodeAttr.Length
 		newLength = int64(length) - int64(old)
 		newSpace = align4K(length) - align4K(old)
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+			return err
 		}
 		now := time.Now().UnixNano() / 1e3
 		nodeAttr.Length = length
@@ -1542,7 +1542,7 @@ func (m *dbMeta) getNodesForUpdate(s *xorm.Session, nodes ...*node) error {
 	return nil
 }
 
-func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parentDst, &trash); st != 0 {
 		return st
@@ -1709,6 +1709,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			*inode = sn.Inode
 		}
 		m.parseAttr(&sn, attr)
+		if dino > 0 {
+			*tInode = dino
+			m.parseAttr(&dn, tAttr)
+		}
 
 		if exchange {
 			if _, err := s.Cols("inode", "type").Update(&de, &edge{Parent: parentSrc, Name: se.Name}); err != nil {
@@ -2107,8 +2111,8 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			newSpace = align4K(newleng) - align4K(nodeAttr.Length)
 			nodeAttr.Length = newleng
 		}
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
+			return err
 		}
 		now := time.Now().UnixNano() / 1e3
 		nodeAttr.Mtime = now
@@ -2189,8 +2193,8 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(nout.Length)
 			nout.Length = newleng
 		}
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(s, fout, nout.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, fout, nout.Parent)...); err != 0 {
+			return err
 		}
 		now := time.Now().UnixNano() / 1e3
 		nout.Mtime = now
@@ -3105,21 +3109,16 @@ func (m *dbMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	return quotas, nil
 }
 
-func (m *dbMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error {
+func (m *dbMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	return m.txn(func(s *xorm.Session) error {
-		q := dirQuota{Inode: inode}
-		// FIXME: use Update
-		ok, err := s.Get(&q)
-		if err == nil && !ok {
-			logger.Warnf("No quota for inode %d, skip flushing", inode)
-			return nil
+		for ino, q := range quotas {
+			_, err := s.Exec("update jfs_dir_quota set used_space=used_space+?, used_inodes=used_inodes+? where inode=?",
+				q.newSpace, q.newInodes, ino)
+			if err != nil {
+				return err
+			}
 		}
-		if err == nil {
-			q.UsedSpace += space
-			q.UsedInodes += inodes
-			_, err = s.Cols("used_space", "used_inodes").Update(&q, &dirQuota{Inode: inode})
-		}
-		return err
+		return nil
 	})
 }
 

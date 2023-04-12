@@ -71,7 +71,7 @@ type cacheStore struct {
 	scanInterval time.Duration
 	pending      chan pendingFile
 	pages        map[string]*Page
-	m            *cacheManager
+	m            *cacheManagerMetrics
 
 	used     int64
 	keys     map[cacheKey]cacheItem
@@ -81,7 +81,7 @@ type cacheStore struct {
 	uploader func(key, path string, force bool) bool
 }
 
-func newCacheStore(m *cacheManager, dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
+func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
 	if config.CacheMode == 0 {
 		config.CacheMode = 0600 // only owner can read/write cache
 	}
@@ -155,6 +155,23 @@ func (cache *cacheStore) refreshCacheKeys() {
 			cache.scanCached()
 		}
 	}
+}
+func (cache *cacheStore) removeStage(key string) error {
+	stagingPath := cache.stagePath(key)
+	fi, err := os.Stat(stagingPath)
+	if err == nil {
+		size := fi.Size()
+		if err = os.Remove(stagingPath); err == nil {
+			cache.m.stageBlocks.Sub(1)
+			cache.m.stageBlockBytes.Sub(float64(size))
+		}
+	}
+
+	// ignore ENOENT error
+	if err != nil && os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
 
 func (cache *cacheStore) cache(key string, p *Page, force bool) {
@@ -305,14 +322,7 @@ func (cache *cacheStore) remove(key string) {
 	cache.Unlock()
 	if path != "" {
 		_ = os.Remove(path)
-		stagingPath := cache.stagePath(key)
-		if fi, err := os.Stat(stagingPath); err == nil {
-			size := fi.Size()
-			if err = os.Remove(stagingPath); err == nil {
-				cache.m.stageBlocks.Sub(1)
-				cache.m.stageBlockBytes.Sub(float64(size))
-			}
-		}
+		_ = cache.removeStage(key)
 	}
 }
 
@@ -635,16 +645,8 @@ func (cache *cacheStore) scanStaging() {
 }
 
 type cacheManager struct {
-	stores []*cacheStore
-
-	cacheDrops      prometheus.Counter
-	cacheWrites     prometheus.Counter
-	cacheEvicts     prometheus.Counter
-	cacheWriteBytes prometheus.Counter
-	cacheWriteHist  prometheus.Histogram
-	stageBlocks     prometheus.Gauge
-	stageBlockBytes prometheus.Gauge
-	stageBlockDelay prometheus.Counter
+	stores  []*cacheStore
+	metrics *cacheManagerMetrics
 }
 
 func keyHash(s string) uint32 {
@@ -698,14 +700,16 @@ type CacheManager interface {
 	load(key string) (ReadCloser, error)
 	uploaded(key string, size int)
 	stage(key string, data []byte, keepCache bool) (string, error)
+	removeStage(key string) error
 	stagePath(key string) string
 	stats() (int64, int64)
 	usedMemory() int64
 }
 
 func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(key, path string, force bool) bool) CacheManager {
+	metrics := newCacheManagerMetrics(reg)
 	if config.CacheDir == "memory" || config.CacheSize == 0 {
-		return newMemStore(config, reg)
+		return newMemStore(config, metrics)
 	}
 	var dirs []string
 	for _, d := range utils.SplitDir(config.CacheDir) {
@@ -722,65 +726,26 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 	}
 	if len(dirs) == 0 {
 		logger.Warnf("No cache dir existed")
-		return newMemStore(config, reg)
+		return newMemStore(config, metrics)
 	}
 	sort.Strings(dirs)
 	dirCacheSize := config.CacheSize << 20
 	dirCacheSize /= int64(len(dirs))
 	m := &cacheManager{
-		stores: make([]*cacheStore, len(dirs)),
-
-		cacheDrops: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "blockcache_drops",
-			Help: "dropped block",
-		}),
-		cacheWrites: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "blockcache_writes",
-			Help: "written cached block",
-		}),
-		cacheEvicts: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "blockcache_evicts",
-			Help: "evicted cache blocks",
-		}),
-		cacheWriteBytes: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "blockcache_write_bytes",
-			Help: "write bytes of cached block",
-		}),
-		cacheWriteHist: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Name:    "blockcache_write_hist_seconds",
-			Help:    "write cached block latency distribution",
-			Buckets: prometheus.ExponentialBuckets(0.00001, 2, 20),
-		}),
-		stageBlocks: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "staging_blocks",
-			Help: "Number of blocks in the staging path.",
-		}),
-		stageBlockBytes: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "staging_block_bytes",
-			Help: "Total bytes of blocks in the staging path.",
-		}),
-		stageBlockDelay: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "staging_block_delay_seconds",
-			Help: "Total seconds of delay for staging blocks",
-		}),
-	}
-	if reg != nil {
-		reg.MustRegister(m.cacheWrites)
-		reg.MustRegister(m.cacheWriteBytes)
-		reg.MustRegister(m.cacheDrops)
-		reg.MustRegister(m.cacheEvicts)
-		reg.MustRegister(m.cacheWriteHist)
-		reg.MustRegister(m.stageBlocks)
-		reg.MustRegister(m.stageBlockBytes)
-		reg.MustRegister(m.stageBlockDelay)
+		stores:  make([]*cacheStore, len(dirs)),
+		metrics: metrics,
 	}
 
 	// 20% of buffer could be used for pending pages
 	pendingPages := config.BufferSize * 2 / 10 / config.BlockSize / len(dirs)
 	for i, d := range dirs {
-		m.stores[i] = newCacheStore(m, strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, pendingPages, config, uploader)
+		m.stores[i] = newCacheStore(metrics, strings.TrimSpace(d)+string(filepath.Separator), dirCacheSize, pendingPages, config, uploader)
 	}
 	return m
+}
+
+func (m *cacheManager) removeStage(key string) error {
+	return m.getStore(key).removeStage(key)
 }
 
 func (m *cacheManager) getStore(key string) *cacheStore {

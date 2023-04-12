@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-//mutate:disable
 //
+//mutate:disable
 //nolint:errcheck
 package meta
 
@@ -2492,7 +2492,7 @@ func testQuota(t *testing.T, m Meta) {
 		}
 	}
 	m.getBase().loadQuotas()
-	if st := m.Create(ctx, parent, "f3", 0644, 0, 0, nil, &attr); st != syscall.ENOSPC {
+	if st := m.Create(ctx, parent, "f3", 0644, 0, 0, nil, &attr); st != syscall.EDQUOT {
 		t.Fatalf("Create quota/d22/f3: %s", st)
 	}
 }

@@ -8,17 +8,17 @@ JuiceFS provides several access methods, FUSE is the common one, which is the wa
 
 This guide describes the common FUSE mount options for JuiceFS, with two ways to add mount options:
 
-1. Manually execute [`juicefs mount`](../reference/command_reference.md#mount) command, specified by the `-o` option, with multiple options separated by commas.
+1. Run [`juicefs mount`](../reference/command_reference.md#mount), and use `-o` to specify multiple options separated by commas.
 
    ```bash
    juicefs mount -d -o allow_other,writeback_cache sqlite3://myjfs.db ~/jfs
    ```
 
-2. Linux distributions define automounting via `/etc/fstab` by adding options directly to the `options` field, with multiple options separated by commas.
+2. When writing `/etc/fstab` items, add FUSE options directly to the `options` field, with multiple options separated by commas.
 
    ```
    # <file system>       <mount point>   <type>      <options>           <dump>  <pass>
-   redis://localhost:6379/1    /jfs      juicefs     _netdev,allow_other   0       0
+   redis://localhost:6379/1    /jfs      juicefs     _netdev,writeback_cache   0       0
    ```
 
 ## default_permissions

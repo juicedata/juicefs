@@ -946,8 +946,8 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		}
 		newLength = int64(length) - int64(t.Length)
 		newSpace = align4K(length) - align4K(t.Length)
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, t.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, t.Parent)...); err != 0 {
+			return err
 		}
 		var left, right = t.Length, length
 		if left > right {
@@ -1042,8 +1042,8 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		old := t.Length
 		newLength = int64(length) - int64(t.Length)
 		newSpace = align4K(length) - align4K(t.Length)
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, t.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, t.Parent)...); err != 0 {
+			return err
 		}
 		t.Length = length
 		now := time.Now()
@@ -1417,7 +1417,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 	return errno(err)
 }
 
-func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
 	var trash Ino
 	if st := m.checkTrash(parentDst, &trash); st != 0 {
 		return st
@@ -1569,6 +1569,10 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		if attr != nil {
 			*attr = iattr
+		}
+		if dino > 0 {
+			*tInode = dino
+			*tAttr = tattr
 		}
 
 		if exchange { // dino > 0
@@ -1855,8 +1859,8 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, attr.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, attr.Parent)...); err != 0 {
+			return err
 		}
 		now := time.Now()
 		attr.Mtime = now.Unix()
@@ -1921,8 +1925,8 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(tx, fout, attr.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(tx, fout, attr.Parent)...); err != 0 {
+			return err
 		}
 		now := time.Now()
 		attr.Mtime = now.Unix()
@@ -2691,23 +2695,29 @@ func (m *kvMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	return quotas, nil
 }
 
-func (m *kvMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error {
-	key := m.dirQuotaKey(inode)
+func (m *kvMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
 	return m.txn(func(tx *kvTxn) error {
-		rawQ := tx.get(key)
-		if len(rawQ) == 0 {
-			logger.Warnf("No quota for inode %d, skip flushing", inode)
-			return nil
+		keys := make([][]byte, 0, len(quotas))
+		qs := make([]*Quota, 0, len(quotas))
+		for ino, q := range quotas {
+			keys = append(keys, m.dirQuotaKey(ino))
+			qs = append(qs, q)
 		}
-		if len(rawQ) != 32 {
-			return fmt.Errorf("invalid quota value: %v", rawQ)
+		for i, v := range tx.gets(keys...) {
+			if len(v) == 0 {
+				continue
+			}
+			if len(v) != 32 {
+				logger.Errorf("Invalid quota value: %v", v)
+				continue
+			}
+			q := m.parseQuota(v)
+			q.UsedSpace += qs[i].newSpace
+			q.UsedInodes += qs[i].newInodes
+			tx.set(keys[i], m.packQuota(q))
 		}
-		q := m.parseQuota(rawQ)
-		q.UsedSpace += space
-		q.UsedInodes += inodes
-		tx.set(key, m.packQuota(q))
 		return nil
-	}, inode)
+	})
 }
 
 func (m *kvMeta) dumpEntry(inode Ino, e *DumpedEntry) error {

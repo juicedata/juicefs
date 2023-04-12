@@ -909,8 +909,8 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		}
 		newLength = int64(length) - int64(t.Length)
 		newSpace = align4K(length) - align4K(t.Length)
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, t.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
+			return err
 		}
 		var zeroChunks []uint32
 		var left, right = t.Length, length
@@ -1037,8 +1037,8 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		old := t.Length
 		newLength = int64(length) - int64(old)
 		newSpace = align4K(length) - align4K(old)
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, t.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, t.Parent)...); err != 0 {
+			return err
 		}
 		t.Length = length
 		now := time.Now()
@@ -1535,7 +1535,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, s
 	return errno(err)
 }
 
-func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tInode *Ino, attr, tAttr *Attr) syscall.Errno {
 	exchange := flags == RenameExchange
 	var opened bool
 	var trash, dino Ino
@@ -1714,6 +1714,11 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if attr != nil {
 			*attr = iattr
 		}
+		if dino > 0 {
+			*tInode = dino
+			*tAttr = tattr
+		}
+
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			if exchange { // dbuf, tattr are valid
 				pipe.HSet(ctx, m.entryKey(parentSrc), nameSrc, dbuf)
@@ -2151,8 +2156,8 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, attr.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, attr.Parent)...); err != 0 {
+			return err
 		}
 		now := time.Now()
 		attr.Mtime = now.Unix()
@@ -2232,8 +2237,8 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			newSpace = align4K(newleng) - align4K(attr.Length)
 			attr.Length = newleng
 		}
-		if newSpace > 0 && m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, fout, attr.Parent)...) {
-			return syscall.ENOSPC
+		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, fout, attr.Parent)...); err != 0 {
+			return err
 		}
 		now := time.Now()
 		attr.Mtime = now.Unix()
@@ -3431,11 +3436,13 @@ func (m *redisMeta) doLoadQuotas(ctx Context) (map[Ino]*Quota, error) {
 	})
 }
 
-func (m *redisMeta) doFlushQuota(ctx Context, inode Ino, space, inodes int64) error {
-	field := inode.String()
-	_, err := m.rdb.Pipelined(ctx, func(p redis.Pipeliner) error {
-		p.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, space)
-		p.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, inodes)
+func (m *redisMeta) doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error {
+	_, err := m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		for ino, q := range quotas {
+			field := ino.String()
+			pipe.HIncrBy(ctx, m.dirQuotaUsedSpaceKey(), field, q.newSpace)
+			pipe.HIncrBy(ctx, m.dirQuotaUsedInodesKey(), field, q.newInodes)
+		}
 		return nil
 	})
 	return err
