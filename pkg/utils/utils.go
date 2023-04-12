@@ -98,7 +98,7 @@ func FindLocalIPs() ([]net.IP, error) {
 			}
 		}
 	}
-	return ips, err
+	return ips, nil
 }
 
 func WithTimeout(f func() error, timeout time.Duration) error {
