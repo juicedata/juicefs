@@ -110,16 +110,7 @@ jobs:
           export MINIO_ROOT_USER=minioadmin
           export MINIO_ROOT_PASSWORD=minioadmin
           ./juicefs format $meta_url $volume --trash-days 0
-          if [[ "$meta_url" == badger* ]]; then
-            ./juicefs gateway $meta_url localhost:8080 --no-usage-report /tmp/access1.log &
-          else
-            ./juicefs gateway $meta_url localhost:8080 --access-log /tmp/access1.log &
-            #./juicefs gateway $meta_url localhost:9000 --access-log /tmp/access1.log &
-            #./juicefs gateway $meta_url localhost:9001 --access-log /tmp/access2.log &
-            #sudo cp .github/workflows/resources/load-balancer.conf /etc/nginx/conf.d/load-balancer.conf
-            #sudo rm /etc/nginx/sites-enabled/default
-            #sudo systemctl restart nginx
-          fi
+          ./juicefs gateway $meta_url localhost:8080 --no-usage-report --access-log /tmp/access1.log &
         
       - name: Sync with multiple process
         shell: bash
