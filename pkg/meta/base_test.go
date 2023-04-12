@@ -1950,20 +1950,20 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 		if err := m.Check(Background, "/", true, true, false); err != nil {
 			t.Fatalf("check: %s", err)
 		}
-	}
-	for _, ino := range []Ino{checkInode, d1Inode, d2Inode, d3Inode} {
-		if st := m.GetAttr(Background, ino, dirAttr); st != 0 {
+		for _, ino := range []Ino{checkInode, d1Inode, d2Inode, d3Inode} {
+			if st := m.GetAttr(Background, ino, dirAttr); st != 0 {
+				t.Fatalf("getattr: %s", st)
+			}
+			if !dirAttr.Full || dirAttr.Nlink != 3 {
+				t.Fatalf("nlink should is 3 now: %d", dirAttr.Nlink)
+			}
+		}
+		if st := m.GetAttr(Background, d4Inode, dirAttr); st != 0 {
 			t.Fatalf("getattr: %s", st)
 		}
-		if !dirAttr.Full || dirAttr.Nlink != 3 {
-			t.Fatalf("nlink should is 3 now: %d", dirAttr.Nlink)
+		if !dirAttr.Full || dirAttr.Nlink != 2 || dirAttr.Parent != d3Inode {
+			t.Fatalf("d4Inode  attr: %+v", *dirAttr)
 		}
-	}
-	if st := m.GetAttr(Background, d4Inode, dirAttr); st != 0 {
-		t.Fatalf("getattr: %s", st)
-	}
-	if !dirAttr.Full || dirAttr.Nlink != 2 || dirAttr.Parent != d3Inode {
-		t.Fatalf("d4Inode  attr: %+v", *dirAttr)
 	}
 }
 
