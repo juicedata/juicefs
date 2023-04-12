@@ -16,17 +16,31 @@ docker run -d --name nginx \
 
 如果你对挂载管理有着更高的要求，比如希望通过 Docker 来管理挂载点，方便不同的应用容器使用不同的 JuiceFS 文件系统，还可以通过[卷插件](https://github.com/juicedata/docker-volume-juicefs)（Docker volume plugin）与 Docker 引擎集成。
 
-## 卷插件
+## 卷插件 {#volume-plugin}
 
-在 Docker 中，插件也是一个个容器镜像，JuiceFS 卷插件镜像中内置了 [JuiceFS 社区版](../introduction/README.md)以及 [JuiceFS 企业版](https://juicefs.com/docs/zh/cloud)客户端，安装以后，便能够运行卷插件，在 Docker 中创建 JuiceFS Volume。
+在 Docker 中，插件也是一个容器镜像，JuiceFS 卷插件镜像中内置了 [JuiceFS 社区版](../introduction/README.md)以及 [JuiceFS 企业版](https://juicefs.com/docs/zh/cloud)客户端，安装以后，便能够运行卷插件，在 Docker 中创建 JuiceFS Volume。
 
-通过下面的命令安装插件，按照提示为 FUSE 提供必要的权限。
+通过下面的命令安装插件，按照提示为 FUSE 提供必要的权限：
 
 ```shell
 docker plugin install juicedata/juicefs
 ```
 
-### 创建存储卷
+你可以使用以下命令管理卷插件：
+
+```shell
+# 停用插件
+docker plugin disable juicedata/juicefs
+
+# 升级插件（需先停用）
+docker plugin upgrade juicedata/juicefs
+docker plugin enable juicedata/juicefs
+
+# 卸载插件
+docker plugin rm juicedata/juicefs
+```
+
+### 创建存储卷 {#create-volume}
 
 请将以下命令中的 `<VOLUME_NAME>`、`<META_URL>`、`<STORAGE_TYPE>`、`<BUCKET_NAME>`、`<ACCESS_KEY>`、`<SECRET_KEY>` 替换成你自己的文件系统配置。
 
@@ -50,9 +64,9 @@ docker volume create -d juicedata/juicefs \
   jfsvolume
 ```
 
-如果需要在认证、挂载文件系统时传入额外的环境变量（比如 [Google Cloud Platform](../guide/how_to_set_up_object_storage.md#google)），可以对上方命令追加类似 `-o env=FOO=bar,SPAM=egg` 的参数。
+如果需要在挂载文件系统时传入额外的环境变量（比如 [Google 云](../guide/how_to_set_up_object_storage.md#google-cloud)），可以对上方命令追加类似 `-o env=FOO=bar,SPAM=egg` 的参数。
 
-### 使用和管理
+### 使用和管理 {#usage-and-management}
 
 ```shell
 # 创建容器时挂载卷
@@ -60,19 +74,9 @@ docker run -it -v jfsvolume:/opt busybox ls /opt
 
 # 卸载后，可以操作删除存储卷，注意这仅仅是删除 Docker 中的对应资源，并不影响 JuiceFS 中存储的数据
 docker volume rm jfsvolume
-
-# 停用插件
-docker plugin disable juicedata/juicefs
-
-# 升级插件（需先停用）
-docker plugin upgrade juicedata/juicefs
-docker plugin enable juicedata/juicefs
-
-# 卸载
-docker plugin rm juicedata/juicefs
 ```
 
-### 通过 Docker Compose 挂载
+### 通过 Docker Compose 挂载 {#using-docker-compose}
 
 下面是使用 `docker-compose` 挂载 JuiceFS 文件系统的例子：
 
@@ -108,9 +112,9 @@ docker-compose up
 docker-compose down --volumes
 ```
 
-### 排查
+### 排查 {#troubleshooting}
 
-无法正常工作时，推荐先升级 [Docker volume plugin](https://hub.docker.com/r/juicedata/juicefs/tags)，然后根据问题情况查看日志。
+无法正常工作时，推荐先[升级卷插件](#volume-plugin)，然后根据问题情况查看日志。
 
 * 收集 JuiceFS 客户端日志，日志位于 Docker volume plugin 容器内，需要进入容器采集：
 
