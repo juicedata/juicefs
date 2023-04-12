@@ -2069,7 +2069,7 @@ func testDirStat(t *testing.T, m Meta) {
 }
 
 func testClone(t *testing.T, m Meta) {
-	//$ tree .
+	//$ tree cloneDir
 	//.
 	//├── dir
 	//└── dir1
