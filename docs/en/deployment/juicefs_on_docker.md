@@ -18,7 +18,7 @@ If you wish to control mount points using Docker, so that different application 
 
 ## Docker Volume Plugin {#docker-volume-plugin}
 
-Every Docker plugin itself is a Docker image, and JuiceFS Docker volume plugin is packed with [JuiceFS Community Edition](https://juicefs.com/docs/community/introduction) as well as [JuiceFS Cloud Service](../introduction/README.md) clients, after installation, you'll be able to run this plugin, and create JuiceFS Volume inside Docker.
+Every Docker plugin itself is a Docker image, and JuiceFS Docker volume plugin is packed with [JuiceFS Community Edition](https://juicefs.com/docs/community/introduction) as well as [JuiceFS Enterprise Edition](../introduction/README.md) clients, after installation, you'll be able to run this plugin, and create JuiceFS Volume inside Docker.
 
 Install the plugin with the following command, grant permissions when asked.
 

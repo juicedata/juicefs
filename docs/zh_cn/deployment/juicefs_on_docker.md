@@ -18,7 +18,7 @@ docker run -d --name nginx \
 
 ## 卷插件
 
-在 Docker 中，插件也是一个个容器镜像，JuiceFS 卷插件镜像中内置了 [JuiceFS 社区版](../introduction/README.md)以及 [JuiceFS 云服务](https://juicefs.com/docs/zh/cloud)客户端，安装以后，便能够运行卷插件，在 Docker 中创建 JuiceFS Volume。
+在 Docker 中，插件也是一个个容器镜像，JuiceFS 卷插件镜像中内置了 [JuiceFS 社区版](../introduction/README.md)以及 [JuiceFS 企业版](https://juicefs.com/docs/zh/cloud)客户端，安装以后，便能够运行卷插件，在 Docker 中创建 JuiceFS Volume。
 
 通过下面的命令安装插件，按照提示为 FUSE 提供必要的权限。
 
