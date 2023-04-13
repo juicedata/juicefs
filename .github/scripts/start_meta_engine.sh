@@ -26,7 +26,7 @@ install_tikv(){
   source /home/runner/.profile
   tiup playground --mode tikv-slim &
   pid=$!
-  sleep 10
+  sleep 20
   echo 'head -1' > /tmp/head.txt
   lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt
   ret=$?
@@ -52,7 +52,9 @@ start_meta_engine(){
         cd tcli && make
         sudo cp bin/tcli /usr/local/bin
         cd -
+        set -x
         retry install_tikv
+        set +x
 
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
