@@ -1,5 +1,44 @@
 #!/bin/bash
 
+retry(){
+  local n=0
+  local max=10
+  local delay=5
+
+  while true; do
+    "$@" && break || {
+      if [[ $n -lt $max ]]; then
+        ((n++))
+        echo "Command failed. Attempt $n/$max:"
+        sleep $delay;
+      else
+        echo "The command has failed after $n attempts."
+        return 1
+      fi
+    }
+  done
+}
+
+install_tikv(){
+  # retry because of: https://github.com/pingcap/tiup/issues/2057
+  curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+  source /home/runner/.bash_profile
+  source /home/runner/.profile
+  tiup playground --mode tikv-slim &
+  pid=$!
+  sleep 10
+  echo 'head -1' > /tmp/head.txt
+  lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt
+  ret=$?
+  if [ $ret -eq 0 ]; then
+    echo "TiKV is running."
+  else
+    echo "TiKV failed to start."
+    kill -9 $pid
+  fi
+  rm -rf /tmp/head.txt
+  return $ret
+}
 
 start_meta_engine(){
     meta=$1
@@ -13,17 +52,8 @@ start_meta_engine(){
         cd tcli && make
         sudo cp bin/tcli /usr/local/bin
         cd -
-        echo 'head -1' > /tmp/head.txt
-        # retry because of: https://github.com/pingcap/tiup/issues/2057
-        for i in {1..30}; do
-          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-          source /home/runner/.bash_profile
-          source /home/runner/.profile
-          tiup playground --mode tikv-slim &
-          sleep 10
-          lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt && break || true
-        done
-        pgrep pd-server
+        retry install_tikv
+
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
     elif [ "$meta" == "mariadb" ]; then
