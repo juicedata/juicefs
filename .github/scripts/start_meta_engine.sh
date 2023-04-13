@@ -46,7 +46,7 @@ install_tidb(){
   # retry because of: https://github.com/pingcap/tiup/issues/2057
   tiup playground 5.4.0 &
   pid=$!
-  sleep 20
+  sleep 60
   lsof -i:4000 && pgrep pd-server && mysql -h127.0.0.1 -P4000 -uroot -e "select version();"
   ret=$?
   if [ $ret -eq 0 ]; then
