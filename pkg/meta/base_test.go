@@ -1910,8 +1910,8 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 	dirAttr.Nlink = 0
 	setAttr(t, m, d4Inode, dirAttr)
 
-	if err := m.Check(Background, "/check", false, false, false); err != nil {
-		t.Fatalf("check: %s", err)
+	if err := m.Check(Background, "/check", false, false, false); err == nil {
+		t.Fatal("check should fail")
 	}
 	if st := m.GetAttr(Background, checkInode, dirAttr); st != 0 {
 		t.Fatalf("getattr: %s", st)
