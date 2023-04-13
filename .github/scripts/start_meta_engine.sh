@@ -40,6 +40,24 @@ install_tikv(){
   return $ret
 }
 
+install_tidb(){
+  curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+  source /home/runner/.profile
+  # retry because of: https://github.com/pingcap/tiup/issues/2057
+  tiup playground 5.4.0 &
+  pid=$!
+  sleep 20
+  lsof -i:4000 && pgrep pd-server && mysql -h127.0.0.1 -P4000 -uroot -e "select version();"
+  ret=$?
+  if [ $ret -eq 0 ]; then
+      echo "TiDB is running."
+    else
+      echo "TiDB failed to start."
+      kill -9 $pid
+  fi
+  return $ret
+}
+
 start_meta_engine(){
     meta=$1
     storage=$2
@@ -62,17 +80,9 @@ start_meta_engine(){
         docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
         sleep 10
     elif [ "$meta" == "tidb" ]; then
-        # sudo echo "13.224.167.19 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
-        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-        source /home/runner/.profile
-        # retry because of: https://github.com/pingcap/tiup/issues/2057
-        for i in {1..30}; do
-            tiup playground 5.4.0 &
-            sleep 10
-            pgrep pd-server && break || true  
-        done
-        pgrep pd-server
-        sleep 60
+        set -x
+        retry install_tidb
+        set +x
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
     elif [ "$meta" == "etcd" ]; then
         sudo apt install etcd
