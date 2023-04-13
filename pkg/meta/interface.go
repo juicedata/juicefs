@@ -422,7 +422,7 @@ type Meta interface {
 	// GetPaths returns all paths of an inode
 	GetPaths(ctx Context, inode Ino) []string
 	// Check integrity of an absolute path and repair it if asked
-	Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool) syscall.Errno
+	Check(ctx Context, fpath string, repair bool, recursive bool, statAll bool) error
 	// Change root to a directory specified by subdir
 	Chroot(ctx Context, subdir string) syscall.Errno
 	// chroot set the root directory by inode
