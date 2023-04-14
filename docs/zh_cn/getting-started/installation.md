@@ -65,6 +65,21 @@ curl -sSL https://d.juicefs.com/install | sh -
 如果终端提示 `command not found`，可能是因为 `/usr/local/bin` 不在你的系统 `PATH` 环境变量中，可以执行 `echo $PATH` 查看系统设置了哪些可执行路径，根据返回结果选择一个恰当的路径，调整并重新执行第 4 步的安装命令。
 :::
 
+#### Ubuntu PPA
+
+JuiceFS 也提供 [PPA](https://launchpad.net/~juicefs) 仓库，可以方便地在 Ubuntu 系统上安装最新版的客户端。请根据你的 CPU 架构选择对应的 PPA 仓库。
+
+- **x86 架构**：`ppa:juicefs/ppa`
+- **ARM 架构**：`ppa:juicefs/arm64`
+
+以 x86 架构的 Ubuntu 22.04 系统为例，执行以下命令。
+
+```shell
+sudo add-apt-repository ppa:juicefs/ppa
+sudo apt-get update
+sudo apt-get install juicefs
+```
+
 ### Windows 系统
 
 在 Windows 系统使用 JuiceFS 的方法有两种：
