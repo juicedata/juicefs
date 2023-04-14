@@ -67,7 +67,7 @@ If the terminal prompts `command not found`, it is probably because `/usr/local/
 
 #### Ubuntu PPA
 
-JuiceFS also provides a [PPA](https://launchpad.net/~juicefs) repository, which makes it easy to install the latest version of the client on Ubuntu systems. Please choose the corresponding PPA repository based on your CPU architecture.
+JuiceFS also provides a [PPA](https://launchpad.net/~juicefs) repository, which makes it easy to install the latest version of the client on Ubuntu systems. Choose the corresponding PPA repository based on your CPU architecture:
 
 - **x86 architecture**：`ppa:juicefs/ppa`
 - **ARM architecture**：`ppa:juicefs/arm64`
