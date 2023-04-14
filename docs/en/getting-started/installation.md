@@ -65,6 +65,21 @@ After completing the above 4 steps, execute the `juicefs` command in the termina
 If the terminal prompts `command not found`, it is probably because `/usr/local/bin` is not in your system's `PATH` environment variable. You can check which executable paths are set by running `echo $PATH`, then select an appropriate path based on the return result, adjust and re-execute the installation command following the above step 4.
 :::
 
+#### Ubuntu PPA
+
+JuiceFS also provides a [PPA](https://launchpad.net/~juicefs) repository, which makes it easy to install the latest version of the client on Ubuntu systems. Choose the corresponding PPA repository based on your CPU architecture:
+
+- **x86 architecture**：`ppa:juicefs/ppa`
+- **ARM architecture**：`ppa:juicefs/arm64`
+
+For example, using the Ubuntu 22.04 system with x86 architecture, execute the following command.
+
+```shell
+sudo add-apt-repository ppa:juicefs/ppa
+sudo apt-get update
+sudo apt-get install juicefs
+```
+
 ### Windows
 
 There are two ways to use JuiceFS on Windows systems.
