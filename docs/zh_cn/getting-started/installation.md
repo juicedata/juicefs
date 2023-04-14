@@ -67,7 +67,7 @@ curl -sSL https://d.juicefs.com/install | sh -
 
 #### Ubuntu PPA
 
-JuiceFS 也提供 [PPA](https://launchpad.net/~juicefs) 仓库，可以方便地在 Ubuntu 系统上安装最新版的客户端。请根据你的 CPU 架构选择对应的 PPA 仓库。
+JuiceFS 也提供 [PPA](https://launchpad.net/~juicefs) 仓库，可以方便地在 Ubuntu 系统上安装最新版的客户端。根据你的 CPU 架构选择对应的 PPA 仓库：
 
 - **x86 架构**：`ppa:juicefs/ppa`
 - **ARM 架构**：`ppa:juicefs/arm64`
