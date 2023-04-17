@@ -71,14 +71,14 @@ release:
 		juicedata/golang-cross:latest release --rm-dist
 
 test:
-	go test -v -cover -count=1 -timeout=12m ./pkg/... -coverprofile=cov1.out
+	go test -v -cover -count=1 -timeout=12m ./pkg/... -coverprofile=cov.out
 	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword GOMAXPROCS=8 go test -v -count=1 -cover -timeout=8m ./cmd/... -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...
 
 test.pkg:
-	go test -v -cover -count=1 -timeout=12m ./pkg/... -coverprofile=cov1.out
+	go test -v -cover -count=1 -timeout=12m ./pkg/... -coverprofile=cov.out
 
 test.cmd:
-	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword GOMAXPROCS=8 go test -v -count=1 -cover -timeout=8m ./cmd/... -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...
+	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword GOMAXPROCS=8 go test -v -count=1 -cover -timeout=8m ./cmd/... -coverprofile=cov.out -coverpkg=./pkg/...,./cmd/...
 	
 test.fdb:
-	go test -v -cover -count=1 -timeout=4m ./pkg/meta/ -tags fdb -run=TestFdb -coverprofile=cov3.out
+	go test -v -cover -count=1 -timeout=4m ./pkg/meta/ -tags fdb -run=TestFdb -coverprofile=cov.out
