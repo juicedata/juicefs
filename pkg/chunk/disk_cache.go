@@ -73,12 +73,14 @@ type cacheStore struct {
 	pages        map[string]*Page
 	m            *cacheManagerMetrics
 
-	used     int64
-	keys     map[cacheKey]cacheItem
-	scanned  bool
-	full     bool
-	checksum string // checksum level
-	uploader func(key, path string, force bool) bool
+	used      int64
+	keys      map[cacheKey]cacheItem
+	scanned   bool
+	stageFull bool
+	rawFull   bool
+	eviction  bool
+	checksum  string // checksum level
+	uploader  func(key, path string, force bool) bool
 }
 
 func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
@@ -94,6 +96,7 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 		mode:         config.CacheMode,
 		capacity:     cacheSize,
 		freeRatio:    config.FreeSpace,
+		eviction:     config.CacheEviction,
 		checksum:     config.CacheChecksum,
 		hashPrefix:   config.HashPrefix,
 		scanInterval: config.CacheScanInterval,
@@ -128,17 +131,18 @@ func (cache *cacheStore) stats() (int64, int64) {
 func (cache *cacheStore) checkFreeSpace() {
 	for {
 		br, fr := cache.curFreeRatio()
-		cache.full = br < cache.freeRatio/2 || fr < cache.freeRatio/2
-		if br < cache.freeRatio || fr < cache.freeRatio {
+		cache.stageFull = br < cache.freeRatio/2 || fr < cache.freeRatio/2
+		cache.rawFull = br < cache.freeRatio || fr < cache.freeRatio
+		if cache.rawFull && cache.eviction {
 			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
 			cache.Lock()
 			cache.cleanup()
 			cache.Unlock()
-
 			br, fr = cache.curFreeRatio()
-			if br < cache.freeRatio || fr < cache.freeRatio {
-				cache.uploadStaging()
-			}
+			cache.rawFull = br < cache.freeRatio || fr < cache.freeRatio
+		}
+		if cache.rawFull {
+			cache.uploadStaging()
 		}
 		time.Sleep(time.Second)
 	}
@@ -171,6 +175,11 @@ func (cache *cacheStore) removeStage(key string) error {
 
 func (cache *cacheStore) cache(key string, p *Page, force bool) {
 	if cache.capacity == 0 {
+		return
+	}
+	if cache.rawFull && !cache.eviction {
+		logger.Debugf("Caching directory is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
+		cache.m.cacheDrops.Add(1)
 		return
 	}
 	cache.Lock()
@@ -394,7 +403,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 		cache.used += int64(size + 4096)
 	}
 
-	if cache.used > cache.capacity {
+	if cache.used > cache.capacity && cache.eviction {
 		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20)
 		cache.cleanup()
 	}
@@ -402,8 +411,8 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 
 func (cache *cacheStore) stage(key string, data []byte, keepCache bool) (string, error) {
 	stagingPath := cache.stagePath(key)
-	if cache.full {
-		return stagingPath, errors.New("Space not enough on device")
+	if cache.stageFull {
+		return stagingPath, errors.New("space not enough on device")
 	}
 	err := cache.flushPage(stagingPath, data)
 	if err == nil {

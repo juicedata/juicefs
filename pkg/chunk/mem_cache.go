@@ -33,6 +33,7 @@ type memcache struct {
 	capacity int64
 	used     int64
 	pages    map[string]memItem
+	eviction bool
 
 	metrics *cacheManagerMetrics
 }
@@ -41,6 +42,7 @@ func newMemStore(config *Config, metrics *cacheManagerMetrics) *memcache {
 	c := &memcache{
 		capacity: config.CacheSize << 20,
 		pages:    make(map[string]memItem),
+		eviction: config.CacheEviction,
 		metrics:  metrics,
 	}
 	runtime.SetFinalizer(c, func(c *memcache) {
@@ -74,6 +76,11 @@ func (c *memcache) cache(key string, p *Page, force bool) {
 	}
 	c.Lock()
 	defer c.Unlock()
+	if c.used > c.capacity && !c.eviction {
+		logger.Debugf("Caching is full, drop %s (%d bytes)", key, len(p.Data))
+		c.metrics.cacheDrops.Add(1)
+		return
+	}
 	if _, ok := c.pages[key]; ok {
 		return
 	}

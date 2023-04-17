@@ -537,6 +537,7 @@ type Config struct {
 	GetTimeout        time.Duration
 	PutTimeout        time.Duration
 	CacheFullBlock    bool
+	CacheEviction     bool
 	BufferSize        int
 	Readahead         int
 	Prefetch          int
