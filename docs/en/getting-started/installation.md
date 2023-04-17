@@ -85,6 +85,7 @@ sudo apt-get install juicefs
 There are two ways to use JuiceFS on Windows systems.
 
 1. [Using pre-compiled Windows client](#pre-compiled-windows-client)
+2. [Using Scoop](#scoop)
 2. [Using Linux client in WSL](#using-linux-client-in-wsl)
 
 #### Pre-compiled Windows client
@@ -106,6 +107,14 @@ The Windows client of JuiceFS is also a standalone binary. Once downloaded and u
    To make it easier to use, it is recommended to create a folder named `juicefs` in the root directory of the `C:\` disk, and extract `juicefs.exe` to that folder. Then add `C:\juicefs` to the environment variables of your system, and restart the system to let the settings take effect. Lastly, you can run `juicefs` commands directly using the "Command Prompt" or "PowerShell" terminal that comes with your system.
 
    ![Windows ENV path](../images/windows-path-en.png)
+
+#### Using Scoop {#scoop}
+
+If you have [Scoop](https://scoop.sh) installed in your Windows system, you can use the following command to install the latest version of JuiceFS client:
+
+```shell
+scoop install juicefs
+```
 
 #### Using Linux client in WSL
 

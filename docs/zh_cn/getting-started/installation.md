@@ -82,10 +82,11 @@ sudo apt-get install juicefs
 
 ### Windows 系统
 
-在 Windows 系统使用 JuiceFS 的方法有两种：
+在 Windows 系统安装 JuiceFS 有以下几种方法：
 
 1. [使用预编译的 Windows 客户端](#预编译的-windows-客户端)
-2. [在 WSL 中使用 Linux 版客户端](#在-wsl-中使用-linux-版客户端)
+2. [使用 Scoop 安装](#scoop)
+3. [在 WSL 中使用 Linux 版客户端](#在-wsl-中使用-linux-版客户端)
 
 #### 预编译的 Windows 客户端
 
@@ -106,6 +107,14 @@ JuiceFS 的 Windows 客户端也是一个独立的二进制程序，下载解压
    为了便于使用，可以在 `C:\` 盘根目录创建一个名为 `juicefs` 的文件夹，把 `juicefs.exe` 解压到该文件夹中。然后将 `C:\juicefs` 文件夹路径添加到系统的环境变量，重启系统让设置生效以后，可直接使用使用系统自带的「命令提示符」或「PowerShell」等终端程序运行 `juicefs` 命令。
 
    ![Windows ENV path](../images/windows-path.png)
+
+#### 使用 Scoop 安装 {#scoop}
+
+如果你的 Windows 系统中安装了 [Scoop](https://scoop.sh)，可以使用以下命令安装最新版的 JuiceFS 客户端：
+
+```shell
+scoop install juicefs
+```
 
 #### 在 WSL 中使用 Linux 版客户端
 
