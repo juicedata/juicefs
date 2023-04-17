@@ -2071,20 +2071,7 @@ func testDirStat(t *testing.T, m Meta) {
 }
 
 func testClone(t *testing.T, m Meta) {
-	if err := m.Reset(); err != nil {
-		t.Fatalf("reset: %s", err)
-	}
-	_ = m.Init(&Format{
-		Name:      "test",
-		Storage:   "file",
-		Bucket:    "/tmp/testbucket",
-		BlockSize: 4096,
-	}, false)
-	if err := m.NewSession(); err != nil {
-		t.Fatalf("new session: %s", err)
-	}
-	defer m.CloseSession()
-	//$ tree .
+	//$ tree cloneDir
 	//.
 	//├── dir
 	//└── dir1
@@ -2095,12 +2082,16 @@ func testClone(t *testing.T, m Meta) {
 	//    │ └── file2Hardlink
 	//    ├── file1
 	//    └── file1Symlink -> file1
+	var cloneDir Ino
+	if eno := m.Mkdir(Background, RootInode, "cloneDir", 0777, 022, 0, &cloneDir, nil); eno != 0 {
+		t.Fatalf("mkdir: %s", eno)
+	}
 	var dir1 Ino
-	if eno := m.Mkdir(Background, 1, "dir1", 0777, 022, 0, &dir1, nil); eno != 0 {
+	if eno := m.Mkdir(Background, cloneDir, "dir1", 0777, 022, 0, &dir1, nil); eno != 0 {
 		t.Fatalf("mkdir: %s", eno)
 	}
 	var dir Ino
-	if eno := m.Mkdir(Background, 1, "dir", 0777, 022, 0, &dir, nil); eno != 0 {
+	if eno := m.Mkdir(Background, cloneDir, "dir", 0777, 022, 0, &dir, nil); eno != 0 {
 		t.Fatalf("mkdir: %s", eno)
 	}
 	var dir2 Ino
@@ -2163,7 +2154,7 @@ func testClone(t *testing.T, m Meta) {
 
 	var attr Attr
 	attr.Mtime = 1
-	m.SetAttr(Background, 1, SetAttrMtime, 0, &attr)
+	m.SetAttr(Background, cloneDir, SetAttrMtime, 0, &attr)
 	var totalspace, availspace, iused, iavail, space, iused2 uint64
 	m.StatFS(Background, RootInode, &totalspace, &availspace, &iused, &iavail)
 	space = totalspace - availspace
@@ -2173,11 +2164,11 @@ func testClone(t *testing.T, m Meta) {
 	var count, total uint64
 	var cmode uint8
 	cmode |= CLONE_MODE_PRESERVE_ATTR
-	if eno := m.Clone(Background, dir1, 1, cloneDstName, cmode, 022, &count, &total); eno != 0 {
+	if eno := m.Clone(Background, dir1, cloneDir, cloneDstName, cmode, 022, &count, &total); eno != 0 {
 		t.Fatalf("clone: %s", eno)
 	}
 	var entries1 []*Entry
-	if eno := m.Readdir(Background, 1, 1, &entries1); eno != 0 {
+	if eno := m.Readdir(Background, cloneDir, 1, &entries1); eno != 0 {
 		t.Fatalf("readdir: %s", eno)
 	}
 
@@ -2199,7 +2190,7 @@ func testClone(t *testing.T, m Meta) {
 
 	// check dst parent dir nlink
 	var rootAttr Attr
-	if eno := m.GetAttr(Background, 1, &rootAttr); eno != 0 {
+	if eno := m.GetAttr(Background, cloneDir, &rootAttr); eno != 0 {
 		t.Fatalf("get rootAttr: %s", eno)
 	}
 	if rootAttr.Nlink != 5 {
@@ -2208,9 +2199,13 @@ func testClone(t *testing.T, m Meta) {
 	if rootAttr.Mtime == 1 {
 		t.Fatalf("mtime of rootDir is not updated")
 	}
-	m.StatFS(Background, RootInode, &totalspace, &availspace, &iused, &iavail)
+	m.StatFS(Background, cloneDir, &totalspace, &availspace, &iused, &iavail)
 	if totalspace-availspace-space != 32768 {
-		t.Fatalf("added space: %d", totalspace-availspace-space)
+		time.Sleep(time.Second * 2)
+		m.StatFS(Background, cloneDir, &totalspace, &availspace, &iused, &iavail)
+		if totalspace-availspace-space != 32768 {
+			t.Fatalf("added space: %d", totalspace-availspace-space)
+		}
 	}
 	if iused-iused2 != 8 {
 		t.Fatalf("added inodes: %d", iused-iused2)
@@ -2235,7 +2230,7 @@ func testClone(t *testing.T, m Meta) {
 		t.Fatalf("should not delete slice")
 		return nil
 	})
-	if eno := m.Remove(Background, 1, "dir1", nil); eno != 0 {
+	if eno := m.Remove(Background, cloneDir, "dir1", nil); eno != 0 {
 		t.Fatalf("Rmdir: %s", eno)
 	}
 
