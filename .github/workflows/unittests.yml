@@ -16,6 +16,7 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - '.github/**'
   workflow_dispatch:
 
 jobs:
@@ -130,6 +131,6 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Setup upterm session
-        if: ${{ always() }}
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
         timeout-minutes: 120
         uses: lhotari/action-upterm@v1
