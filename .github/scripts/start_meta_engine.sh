@@ -70,9 +70,7 @@ start_meta_engine(){
         cd tcli && make
         sudo cp bin/tcli /usr/local/bin
         cd -
-        set -x
         retry install_tikv
-        set +x
 
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
@@ -80,9 +78,7 @@ start_meta_engine(){
         docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
         sleep 10
     elif [ "$meta" == "tidb" ]; then
-        set -x
         retry install_tidb
-        set +x
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
     elif [ "$meta" == "etcd" ]; then
         sudo apt install etcd
