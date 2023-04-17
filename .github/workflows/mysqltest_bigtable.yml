@@ -68,6 +68,7 @@ jobs:
           mysql -uroot -proot  -e "show variables like 'log_error';"
           mysql -uroot -proot -e "set global log_error_verbosity=3;"
           mysql -uroot -proot  -e "show variables like 'log_error_verbosity';"
+          mysql -uroot -proot -e "set global max_prepared_stmt_count=500000;"
 
       - name: Install Sysbench
         run: |
