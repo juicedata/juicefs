@@ -2,7 +2,7 @@
 
 retry(){
   local n=0
-  local max=10
+  local max=5
   local delay=5
 
   while true; do
@@ -26,7 +26,7 @@ install_tikv(){
   source /home/runner/.profile
   tiup playground --mode tikv-slim &
   pid=$!
-  sleep 20
+  sleep 60
   echo 'head -1' > /tmp/head.txt
   lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt
   ret=$?
