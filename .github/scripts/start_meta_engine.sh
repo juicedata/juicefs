@@ -1,5 +1,62 @@
 #!/bin/bash
 
+retry(){
+  local n=0
+  local max=5
+  local delay=5
+
+  while true; do
+    "$@" && break || {
+      if [[ $n -lt $max ]]; then
+        ((n++))
+        echo "Command failed. Attempt $n/$max:"
+        sleep $delay;
+      else
+        echo "The command has failed after $n attempts."
+        return 1
+      fi
+    }
+  done
+}
+
+install_tikv(){
+  # retry because of: https://github.com/pingcap/tiup/issues/2057
+  curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+  source /home/runner/.bash_profile
+  source /home/runner/.profile
+  tiup playground --mode tikv-slim &
+  pid=$!
+  sleep 60
+  echo 'head -1' > /tmp/head.txt
+  lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt
+  ret=$?
+  if [ $ret -eq 0 ]; then
+    echo "TiKV is running."
+  else
+    echo "TiKV failed to start."
+    kill -9 $pid
+  fi
+  rm -rf /tmp/head.txt
+  return $ret
+}
+
+install_tidb(){
+  curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+  source /home/runner/.profile
+  # retry because of: https://github.com/pingcap/tiup/issues/2057
+  tiup playground 5.4.0 &
+  pid=$!
+  sleep 60
+  lsof -i:4000 && pgrep pd-server && mysql -h127.0.0.1 -P4000 -uroot -e "select version();"
+  ret=$?
+  if [ $ret -eq 0 ]; then
+      echo "TiDB is running."
+    else
+      echo "TiDB failed to start."
+      kill -9 $pid
+  fi
+  return $ret
+}
 
 start_meta_engine(){
     meta=$1
@@ -13,34 +70,15 @@ start_meta_engine(){
         cd tcli && make
         sudo cp bin/tcli /usr/local/bin
         cd -
-        # sudo echo "13.224.167.111 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
-        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-        source /home/runner/.bash_profile
-        source /home/runner/.profile
-        # retry because of: https://github.com/pingcap/tiup/issues/2057
-        for i in {1..30}; do
-            tiup playground --mode tikv-slim &  
-            sleep 10
-            pgrep pd-server && break || true  
-        done
-        pgrep pd-server
+        retry install_tikv
+
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
     elif [ "$meta" == "mariadb" ]; then
         docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
         sleep 10
     elif [ "$meta" == "tidb" ]; then
-        # sudo echo "13.224.167.19 tiup-mirrors.pingcap.com" | sudo tee -a /etc/hosts
-        curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-        source /home/runner/.profile
-        # retry because of: https://github.com/pingcap/tiup/issues/2057
-        for i in {1..30}; do
-            tiup playground 5.4.0 &
-            sleep 10
-            pgrep pd-server && break || true  
-        done
-        pgrep pd-server
-        sleep 60
+        retry install_tidb
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
     elif [ "$meta" == "etcd" ]; then
         sudo apt install etcd
