@@ -78,7 +78,7 @@ type cacheStore struct {
 	scanned   bool
 	stageFull bool
 	rawFull   bool
-	eviction  bool
+	eviction  string
 	checksum  string // checksum level
 	uploader  func(key, path string, force bool) bool
 }
@@ -133,7 +133,7 @@ func (cache *cacheStore) checkFreeSpace() {
 		br, fr := cache.curFreeRatio()
 		cache.stageFull = br < cache.freeRatio/2 || fr < cache.freeRatio/2
 		cache.rawFull = br < cache.freeRatio || fr < cache.freeRatio
-		if cache.rawFull && cache.eviction {
+		if cache.rawFull && cache.eviction != "none" {
 			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
 			cache.Lock()
 			cache.cleanup()
@@ -177,7 +177,7 @@ func (cache *cacheStore) cache(key string, p *Page, force bool) {
 	if cache.capacity == 0 {
 		return
 	}
-	if cache.rawFull && !cache.eviction {
+	if cache.rawFull && cache.eviction == "none" {
 		logger.Debugf("Caching directory is full (%s), drop %s (%d bytes)", cache.dir, key, len(p.Data))
 		cache.m.cacheDrops.Add(1)
 		return
@@ -403,7 +403,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 		cache.used += int64(size + 4096)
 	}
 
-	if cache.used > cache.capacity && cache.eviction {
+	if cache.used > cache.capacity && cache.eviction != "none" {
 		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20)
 		cache.cleanup()
 	}

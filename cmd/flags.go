@@ -167,14 +167,15 @@ func clientFlags() []cli.Flag {
 			Name:  "cache-partial-only",
 			Usage: "cache only random/small read",
 		},
-		&cli.BoolFlag{
-			Name:  "cache-no-eviction",
-			Usage: "disable cache eviction, dropping new blocks when cache is full",
-		},
 		&cli.StringFlag{
 			Name:  "verify-cache-checksum",
 			Value: "full",
 			Usage: "checksum level (none, full, shrink, extend)",
+		},
+		&cli.StringFlag{
+			Name:  "cache-eviction",
+			Value: "2-random",
+			Usage: "cache eviction policy (none or 2-random)",
 		},
 		&cli.StringFlag{
 			Name:  "cache-scan-interval",

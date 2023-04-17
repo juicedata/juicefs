@@ -33,7 +33,7 @@ type memcache struct {
 	capacity int64
 	used     int64
 	pages    map[string]memItem
-	eviction bool
+	eviction string
 
 	metrics *cacheManagerMetrics
 }
@@ -76,7 +76,7 @@ func (c *memcache) cache(key string, p *Page, force bool) {
 	}
 	c.Lock()
 	defer c.Unlock()
-	if c.used > c.capacity && !c.eviction {
+	if c.used > c.capacity && c.eviction == "none" {
 		logger.Debugf("Caching is full, drop %s (%d bytes)", key, len(p.Data))
 		c.metrics.cacheDrops.Add(1)
 		return
