@@ -122,7 +122,6 @@ jobs:
       - name: Unit Test
         timeout-minutes: 30
         run: |
-          sudo chmod 777 /var/jfsCache
           test=${{matrix.test}}
           make $test
           # cat cov*.out >> coverage.txt
