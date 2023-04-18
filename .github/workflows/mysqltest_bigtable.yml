@@ -68,6 +68,7 @@ jobs:
           mysql -uroot -proot  -e "show variables like 'log_error';"
           mysql -uroot -proot -e "set global log_error_verbosity=3;"
           mysql -uroot -proot  -e "show variables like 'log_error_verbosity';"
+          mysql -uroot -proot -e "set global max_prepared_stmt_count=500000;"
 
       - name: Install Sysbench
         run: |
@@ -86,21 +87,18 @@ jobs:
         run: |
           if [ "${{matrix.size}}" == "big"]; then
             echo "threads=4" >>/tmp/config.cfg
-            TABLE_SIZE=1000000
-            sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=$TABLE_SIZE prepare
-            sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=4 --time=300 --table-size=$TABLE_SIZE run
-            sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=4 --time=300 --table-size=$TABLE_SIZE run
-            sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=4 --time=600 --table-size=$TABLE_SIZE run
-            sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=4 --table-size=$TABLE_SIZE cleanup
+            TABLE_SIZE=500000
+            tables=4
           else
             echo "threads=64" >>/tmp/config.cfg
-            sudo mysql -uroot -proot  -e "use mysql;set global max_prepared_stmt_count = 100000;"
-            sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 prepare
-            sudo sysbench --config-file=/tmp/config.cfg oltp_read_only --tables=64 --time=300 --table-size=100000 run
-            sudo sysbench --config-file=/tmp/config.cfg oltp_write_only --tables=64 --time=300 --table-size=100000 run
-            sudo sysbench --config-file=/tmp/config.cfg oltp_read_write --tables=64 --time=600 --table-size=100000 run
-            sudo sysbench --config-file=/tmp/config.cfg oltp_point_select --tables=64 --table-size=100000 cleanup
+            TABLE_SIZE=100000
+            tables=32
           fi
+          for item in oltp_point_select oltp_read_only oltp_write_only oltp_read_write oltp_point_select; do
+              sudo sysbench --config-file=/tmp/config.cfg $item --tables=$tables --time=300 --table-size=$TABLE_SIZE prepare
+              sudo sysbench --config-file=/tmp/config.cfg $item --tables=$tables --time=300 --table-size=$TABLE_SIZE run
+              sudo sysbench --config-file=/tmp/config.cfg $item --tables=$tables --time=300 --table-size=$TABLE_SIZE cleanup
+          done
 
       - name: Log
         if: ${{ always() }}
