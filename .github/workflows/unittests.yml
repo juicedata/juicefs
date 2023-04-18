@@ -59,7 +59,8 @@ jobs:
           sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr
           sudo mkdir -p /home/travis/.m2/
 
-      - uses: vishnudxb/redis-cluster@1.0.5
+      - if: matrix.test == 'test.pkg'
+        uses: vishnudxb/redis-cluster@1.0.5
         with:
             master1-port: 7000
             master2-port: 7001
@@ -67,7 +68,6 @@ jobs:
             slave1-port: 7003
             slave2-port: 7004
             slave3-port: 7005
-        if: "${{matrix.test}}" == "test.pkg"
 
       - name: Download Zip
         run: |
