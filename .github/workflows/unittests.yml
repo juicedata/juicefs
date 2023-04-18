@@ -62,7 +62,7 @@ jobs:
       - name: Download Zip
         run: |
           test=${{matrix.test}}
-          if [ $test=="test.pkg" ];then
+          if [ "$test" == "test.pkg" ];then
             wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
             wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
             wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
@@ -71,7 +71,7 @@ jobs:
             tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2/
             cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
             tar -zxf /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz -C /home/travis/.m2/
-           elif [ $test=="test.fdb" ];then
+           elif [ "$test" == "test.fdb" ];then
             wget -O /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
             wget -O /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
           fi
