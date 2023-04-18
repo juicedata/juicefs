@@ -18,19 +18,9 @@ on:
       - '**.md'
       - '.github/**'
   workflow_dispatch:
-    inputs:
-      debug:
-        type: boolean
-        description: "Run the build with tmate debugging enabled"
-        required: false
-        default: false
 
 jobs:
   unittests:
-    strategy:
-      fail-fast: true
-      matrix:
-        test: [ 'test.pkg', 'test.cmd', 'test.fdb' ]
     timeout-minutes: 60
     runs-on: ubuntu-20.04
     env:
@@ -61,107 +51,86 @@ jobs:
 
       - name: Download Zip
         run: |
-          test=${{matrix.test}}
-          if [ $test=="test.pkg" ];then
-            wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
-            wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
-            wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
-            wget -O /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz  https://github.com/etcd-io/etcd/releases/download/v3.5.2/etcd-v3.5.2-linux-amd64.tar.gz
-            unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2/
-            tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2/
-            cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
-            tar -zxf /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz -C /home/travis/.m2/
-           elif [ $test=="test.fdb" ];then
-            wget -O /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-            wget -O /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
-          fi
+          wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
+          wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
+          wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
+          wget -O /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz  https://github.com/etcd-io/etcd/releases/download/v3.5.2/etcd-v3.5.2-linux-amd64.tar.gz
+          wget -O /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+          wget -O /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
+          unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2/
+          tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2/
+          cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
+          tar -zxf /home/travis/.m2/etcd-v3.5.2-linux-amd64.tar.gz -C /home/travis/.m2/
+
+
       - name: Prepare Database
         run: |
-          test=${{matrix.test}}
-          if [ $test=="test.pkg" ];then 
-            sudo service mysql start
-            sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
-            sudo service postgresql start
-            echo "deb https://download.keydb.dev/open-source-dist $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/keydb.list
-            sudo wget -O /etc/apt/trusted.gpg.d/keydb.gpg https://download.keydb.dev/open-source-dist/keyring.gpg
-            sudo .github/scripts/apt_install.sh keydb
-            keydb-server --storage-provider  flash /tmp/ --port 6378 --bind 127.0.0.1 --daemonize yes
-            keydb-server --port 6377 --bind 127.0.0.1 --daemonize yes
-            sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
-            sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
-            sudo sed  -i "s?host.*all.*all.*32.*scram-sha-256?host    all             all             127.0.0.1/32            trust?" /etc/postgresql/*/main/pg_hba.conf
-            sudo sed  -i "s?host.*all.*all.*128.*scram-sha-256?host    all             all             ::1/128                 trust?" /etc/postgresql/*/main/pg_hba.conf
-            cat /etc/postgresql/*/main/pg_hba.conf
-            sudo service postgresql restart
-            psql -c "create user runner superuser;" -U postgres
-            sudo service postgresql restart
-            sudo mysql -e "create database dev;"
-            psql -c 'create database test;' -U postgres
-            bash /home/travis/.m2/install.sh
-            source /home/runner/.bash_profile
-            tiup -v
-            nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
-            docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
-            go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
-            nohup /home/travis/.m2/rclone-v1.57.0-linux-amd64/rclone serve webdav local --addr 127.0.0.1:9007 >> rclone.log 2>&1 &
-            #sudo chmod 777 /usr/share/apache*/conf/settings.xml
-            #sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/share/apache*/conf/settings.xml
-            docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
-            make
-            sudo make -C fstests setup
-            chmod +x .github/scripts/setup-hdfs.sh
-            sudo lsof -i :8020 || true
-            ./.github/scripts/setup-hdfs.sh
-            for i in {2222,3306,5432,8020,9000,9007} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
-            sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
-          elif [ $test=="test.fdb" ];then
-            sudo dpkg -i /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb
-            for i in {4500} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
-          fi
+          sudo service mysql start
+          sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
+          sudo service postgresql start
+          echo "deb https://download.keydb.dev/open-source-dist $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/keydb.list
+          sudo wget -O /etc/apt/trusted.gpg.d/keydb.gpg https://download.keydb.dev/open-source-dist/keyring.gpg
+          sudo .github/scripts/apt_install.sh keydb
+          keydb-server --storage-provider  flash /tmp/ --port 6378 --bind 127.0.0.1 --daemonize yes
+          keydb-server --port 6377 --bind 127.0.0.1 --daemonize yes
+          sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?host.*all.*all.*32.*scram-sha-256?host    all             all             127.0.0.1/32            trust?" /etc/postgresql/*/main/pg_hba.conf
+          sudo sed  -i "s?host.*all.*all.*128.*scram-sha-256?host    all             all             ::1/128                 trust?" /etc/postgresql/*/main/pg_hba.conf
+          cat /etc/postgresql/*/main/pg_hba.conf
+          sudo service postgresql restart
+          psql -c "create user runner superuser;" -U postgres
+          sudo service postgresql restart
+          sudo mysql -e "create database dev;"
+          psql -c 'create database test;' -U postgres
+          bash /home/travis/.m2/install.sh
+          source /home/runner/.bash_profile
+          tiup -v
+          nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
+          sudo dpkg -i /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb
+          docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
+          go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
+          nohup /home/travis/.m2/rclone-v1.57.0-linux-amd64/rclone serve webdav local --addr 127.0.0.1:9007 >> rclone.log 2>&1 &
+          #sudo chmod 777 /usr/share/apache*/conf/settings.xml
+          #sudo sed -i "s?</settings>?<localRepository>/home/travis/.m2/repository</localRepository></settings>?" /usr/share/apache*/conf/settings.xml
+          docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
+          make
+          sudo make -C fstests setup
+          chmod +x .github/scripts/setup-hdfs.sh
+          sudo lsof -i :8020 || true
+          ./.github/scripts/setup-hdfs.sh
+          for i in {2222,3306,5432,8020,9000,9007,4500} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+          sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
+
+
       - name: Unit Test
         timeout-minutes: 30
         run: |
           sudo chmod 777 /var/jfsCache
-          test=${{matrix.test}}
-          make $test
-#          cat cov*.out >> coverage.txt
-          # cat cov2.out >> coverage.txt
-          # cat cov3.out >> coverage.txt
+          make test
+          cat cov1.out >> coverage.txt
+          cat cov2.out >> coverage.txt
+          make test.fdb
+          cat cov3.out >> coverage.txt
           sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
           sudo ./juicefs gc localhost
           sudo ./juicefs fsck localhost
 
+
       - name: Code Coverage
         uses: codecov/codecov-action@v3
         with:
-          files: ./cov.out
+          files: ./coverage.txt
 
-      - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
-        timeout-minutes: 120
-        uses: lhotari/action-upterm@v1
-
-
-  success-all-test:
-    runs-on: ubuntu-latest
-    needs: [unittests]
-    if: always()
-    steps:
-      - uses: technote-space/workflow-conclusion-action@v3
-      - uses: actions/checkout@v3
-
-      - name: Check Failure
-        if: env.WORKFLOW_CONCLUSION == 'failure'
-        run: exit 1
 
       - name: Send Slack Notification
-        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        if: ${{ failure() }}
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
-      - name: Success
-        if: ${{ success() }}
-        run: echo "All Done"
-
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        timeout-minutes: 120
+        uses: lhotari/action-upterm@v1
