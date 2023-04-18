@@ -64,7 +64,7 @@ jobs:
         with:
           redis-version: '6.x'
 
-      - if: matrix.test == 'test.pkg'
+      - if: matrix.test == 'test.meta' || matrix.test == 'test.object'
         name: Install redis-cluster
         uses: vishnudxb/redis-cluster@1.0.5
         with:
