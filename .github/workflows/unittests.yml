@@ -45,7 +45,6 @@ jobs:
       WEBDAV_TEST_BUCKET: 127.0.0.1:9007
       TIKV_ADDR: 127.0.0.1
       REDIS_ADDR: redis://127.0.0.1:6379/13
-      ETCD_ADDR: 127.0.0.1:3379
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -86,6 +85,9 @@ jobs:
             # rclone downloaded to start the webdav service
             wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
             unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2/
+            
+            # use tikv as etcd  
+            
           elif [ "$test" == "test.cmd" ];then
             # litmus is used to test webdav
             wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
@@ -129,24 +131,6 @@ jobs:
             source /home/runner/.bash_profile
             tiup -v
             nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
-            
-            # etcd
-            docker run  \
-            -p 3379:2379 \
-            -p 3380:2380 \
-            --mount type=bind,source=/tmp/etcd-data.tmp,destination=/etcd-data \
-            --name etcd-gcr-v3.4.25 \
-            gcr.io/etcd-development/etcd:v3.4.25 \
-            /usr/local/bin/etcd \
-            --name s1 \
-            --data-dir /etcd-data \
-            --listen-client-urls http://0.0.0.0:2379 \
-            --advertise-client-urls http://0.0.0.0:2379 \
-            --listen-peer-urls http://0.0.0.0:2380 \
-            --initial-advertise-peer-urls http://0.0.0.0:2380 \
-            --initial-cluster s1=http://0.0.0.0:2380 \
-            --initial-cluster-token tkn \
-            --initial-cluster-state new
             
             # minio
             docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
