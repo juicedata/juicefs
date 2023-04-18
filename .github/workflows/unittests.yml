@@ -78,7 +78,7 @@ jobs:
       - name: Prepare Database
         run: |
           test=${{matrix.test}}
-          if [ $test=="test.pkg" ];then 
+          if [ "$test" == "test.pkg" ]; then 
             sudo service mysql start
             sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
             sudo service postgresql start
@@ -114,17 +114,18 @@ jobs:
             ./.github/scripts/setup-hdfs.sh
             for i in {2222,3306,5432,8020,9000,9007} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
             sudo lsof -i :2379;if [ $? != 0 ];then echo "tikv is not ready";cat output.log;exit 1; fi
-          elif [ $test=="test.fdb" ];then
+          elif [ "$test" == "test.fdb" ]; then
             sudo dpkg -i /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb
             for i in {4500} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
           fi
+          
       - name: Unit Test
         timeout-minutes: 30
         run: |
           sudo chmod 777 /var/jfsCache
           test=${{matrix.test}}
           make $test
-#          cat cov*.out >> coverage.txt
+          # cat cov*.out >> coverage.txt
           # cat cov2.out >> coverage.txt
           # cat cov3.out >> coverage.txt
           sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
