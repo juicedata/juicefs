@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        test: [ 'test.pkg', 'test.cmd', 'test.fdb' ]
+        test: [ 'test.pkg','test.meta','test.object', 'test.cmd', 'test.fdb' ]
     timeout-minutes: 60
     runs-on: ubuntu-20.04
     env:
@@ -78,7 +78,7 @@ jobs:
       - name: Download Zip
         run: |
           test=${{matrix.test}}
-          if [ "$test" == "test.pkg" ];then
+          if [ "$test" == "test.meta" ] || [ "$test" == "test.object" ]; then
             # tikv
             wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
             
@@ -101,7 +101,7 @@ jobs:
       - name: Prepare Database
         run: |
           test=${{matrix.test}}
-          if [ "$test" == "test.pkg" ]; then
+          if [ "$test" == "test.meta" ] || [ "$test" == "test.object" ]; then
             # mysql
             sudo service mysql start
             sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
