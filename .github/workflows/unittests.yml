@@ -67,7 +67,7 @@ jobs:
             slave1-port: 7003
             slave2-port: 7004
             slave3-port: 7005
-        if: ${{ "${{matrix.test}}" == "test.pkg"}}
+        if: matrix.test == "test.pkg"
 
       - name: Download Zip
         run: |
