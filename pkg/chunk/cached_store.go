@@ -522,6 +522,7 @@ type Config struct {
 	CacheMode         os.FileMode
 	CacheSize         int64
 	CacheChecksum     string
+	CacheEviction     string
 	CacheScanInterval time.Duration
 	FreeSpace         float32
 	AutoCreate        bool
@@ -573,6 +574,12 @@ func (c *Config) SelfCheck(uuid string) {
 			logger.Warnf("verify-cache-checksum should be one of %v", cs)
 			c.CacheChecksum = CsFull
 		}
+	}
+	if c.CacheEviction == "" {
+		c.CacheEviction = "2-random"
+	} else if c.CacheEviction != "2-random" && c.CacheEviction != "none" {
+		logger.Warnf("cache-eviction should be one of [2-random, none]")
+		c.CacheEviction = "2-random"
 	}
 }
 

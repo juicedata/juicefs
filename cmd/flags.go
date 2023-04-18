@@ -173,6 +173,11 @@ func clientFlags() []cli.Flag {
 			Usage: "checksum level (none, full, shrink, extend)",
 		},
 		&cli.StringFlag{
+			Name:  "cache-eviction",
+			Value: "2-random",
+			Usage: "cache eviction policy (none or 2-random)",
+		},
+		&cli.StringFlag{
 			Name:  "cache-scan-interval",
 			Value: "3600",
 			Usage: "interval (in seconds) to scan cache-dir to rebuild in-memory index",
