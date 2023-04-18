@@ -59,6 +59,16 @@ jobs:
           sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr
           sudo mkdir -p /home/travis/.m2/
 
+      - uses: vishnudxb/redis-cluster@1.0.5
+        with:
+            master1-port: 7000
+            master2-port: 7001
+            master3-port: 7002
+            slave1-port: 7003
+            slave2-port: 7004
+            slave3-port: 7005
+        if: ${{ "${{matrix.test}}" == "test.pkg"}}
+
       - name: Download Zip
         run: |
           test=${{matrix.test}}
@@ -80,12 +90,6 @@ jobs:
         run: |
           test=${{matrix.test}}
           if [ "$test" == "test.pkg" ]; then
-            # start redis-cluster
-            redis-server .github/workflows/resources/redis-cluster/node1/redis.conf &
-            redis-server .github/workflows/resources/redis-cluster/node2/redis.conf &
-            redis-server .github/workflows/resources/redis-cluster/node3/redis.conf &
-            sleep 1
-            echo yes | redis-cli --cluster create 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003
             sudo service mysql start
             sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
             sudo service postgresql start
