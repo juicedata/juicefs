@@ -109,6 +109,10 @@ jobs:
             docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
             make
             sudo make -C fstests setup
+            sudo make -C fstests all
+            sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
+            sudo ./juicefs gc localhost
+            sudo ./juicefs fsck localhost
             chmod +x .github/scripts/setup-hdfs.sh
             sudo lsof -i :8020 || true
             ./.github/scripts/setup-hdfs.sh
@@ -124,13 +128,6 @@ jobs:
         run: |
           test=${{matrix.test}}
           make $test
-          # cat cov*.out >> coverage.txt
-          # cat cov2.out >> coverage.txt
-          # cat cov3.out >> coverage.txt
-          sudo ./juicefs umount /jfs || sudo lsof /jfs && sudo ./juicefs umount --force /jfs || true
-          sudo ./juicefs gc localhost
-          sudo ./juicefs fsck localhost
-
       - name: Code Coverage
         uses: codecov/codecov-action@v3
         with:
