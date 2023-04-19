@@ -133,8 +133,6 @@ func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 	if eno != 0 {
 		return toError(eno)
 	}
-	buf := bufPool.Get().(*[]byte)
-	defer bufPool.Put(buf)
 	defer func() {
 		if err != nil {
 			if e := j.jfs.Delete(ctx, tmp); e != 0 {
@@ -142,6 +140,8 @@ func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 			}
 		}
 	}()
+	buf := bufPool.Get().(*[]byte)
+	defer bufPool.Put(buf)
 	_, err = io.CopyBuffer(&jFile{f, 0}, in, *buf)
 	if err != nil {
 		return
