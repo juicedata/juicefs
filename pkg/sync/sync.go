@@ -188,6 +188,7 @@ func try(n int, f func() error) (err error) {
 		if err == nil {
 			return
 		}
+		logger.Debugf("Try %d failed: %s", i+1, err)
 		time.Sleep(time.Second * time.Duration(i*i))
 	}
 	return
