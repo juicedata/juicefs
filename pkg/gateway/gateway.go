@@ -196,7 +196,10 @@ func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 }
 
 func (n *jfsObjects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, err error) {
-	if !n.isValidBucketName(bucket) {
+	if !n.gConf.MultiBucket && bucket != n.conf.Format.Name {
+		return bi, minio.BucketNotFound{Bucket: bucket}
+	}
+	if s3utils.CheckValidBucketNameStrict(bucket) != nil {
 		return bi, minio.BucketNameInvalid{Bucket: bucket}
 	}
 	fi, eno := n.fs.Stat(mctx, n.path(bucket))
