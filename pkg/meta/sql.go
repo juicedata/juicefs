@@ -867,7 +867,7 @@ func clearSUGIDSQL(ctx Context, cur *node, set *Attr) {
 }
 
 func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("SetAttr", time.Now())
 	inode = m.checkRoot(inode)
 	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 	return errno(m.txn(func(s *xorm.Session) error {
@@ -958,7 +958,7 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 }
 
 func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("Truncate", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -1051,7 +1051,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	if size == 0 {
 		return syscall.EINVAL
 	}
-	defer m.timeit(time.Now())
+	defer m.timeit("Fallocate", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -2060,7 +2060,7 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) sysc
 		*slices = ss
 		return 0
 	}
-	defer m.timeit(time.Now())
+	defer m.timeit("Read", time.Now())
 	var c = chunk{Inode: inode, Indx: indx}
 	err := m.roTxn(func(s *xorm.Session) error {
 		_, err := s.MustCols("indx").Get(&c)
@@ -2082,7 +2082,7 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) sysc
 }
 
 func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("Write", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -2152,7 +2152,7 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 }
 
 func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("CopyFileRange", time.Now())
 	f := m.of.find(fout)
 	if f != nil {
 		f.Lock()
@@ -2962,7 +2962,7 @@ func (m *dbMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 }
 
 func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("GetXattr", time.Now())
 	inode = m.checkRoot(inode)
 	return errno(m.roTxn(func(s *xorm.Session) error {
 		var x = xattr{Inode: inode, Name: name}
@@ -2979,7 +2979,7 @@ func (m *dbMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 }
 
 func (m *dbMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("ListXattr", time.Now())
 	inode = m.checkRoot(inode)
 	return errno(m.roTxn(func(s *xorm.Session) error {
 		var xs []xattr
