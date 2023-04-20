@@ -147,11 +147,14 @@ func jfsToObjectErr(ctx context.Context, err error, params ...string) error {
 }
 
 // isValidBucketName verifies whether a bucket name is valid.
-func (n *jfsObjects) isValidBucketName(bucket string) bool {
+func (n *jfsObjects) isValidBucketName(bucket string) error {
 	if !n.gConf.MultiBucket && bucket != n.conf.Format.Name {
-		return false
+		return minio.BucketNotFound{Bucket: bucket}
 	}
-	return s3utils.CheckValidBucketNameStrict(bucket) == nil
+	if s3utils.CheckValidBucketNameStrict(bucket) != nil {
+		return minio.BucketNameInvalid{Bucket: bucket}
+	}
+	return nil
 }
 
 func (n *jfsObjects) path(p ...string) string {
@@ -174,8 +177,8 @@ func (n *jfsObjects) ppath(bucket, uploadID, part string) string {
 }
 
 func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
-	if !n.isValidBucketName(bucket) {
-		return minio.BucketNameInvalid{Bucket: bucket}
+	if err := n.isValidBucketName(bucket); err != nil {
+		return err
 	}
 	if !n.gConf.MultiBucket {
 		return minio.BucketNotEmpty{Bucket: bucket}
@@ -185,8 +188,8 @@ func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 }
 
 func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, options minio.BucketOptions) error {
-	if !n.isValidBucketName(bucket) {
-		return minio.BucketNameInvalid{Bucket: bucket}
+	if err := n.isValidBucketName(bucket); err != nil {
+		return err
 	}
 	if !n.gConf.MultiBucket {
 		return nil
@@ -196,8 +199,8 @@ func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 }
 
 func (n *jfsObjects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, err error) {
-	if !n.isValidBucketName(bucket) {
-		return bi, minio.BucketNameInvalid{Bucket: bucket}
+	if err := n.isValidBucketName(bucket); err != nil {
+		return bi, err
 	}
 	fi, eno := n.fs.Stat(mctx, n.path(bucket))
 	if eno == 0 {
@@ -241,7 +244,7 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 
 	for _, entry := range entries {
 		// Ignore all reserved bucket names and invalid bucket names.
-		if isReservedOrInvalidBucket(entry.Name(), false) || !n.isValidBucketName(entry.Name()) {
+		if isReservedOrInvalidBucket(entry.Name(), false) || n.isValidBucketName(entry.Name()) != nil {
 			continue
 		}
 		if entry.IsDir() {
@@ -316,8 +319,8 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 }
 
 func (n *jfsObjects) checkBucket(ctx context.Context, bucket string) error {
-	if !n.isValidBucketName(bucket) {
-		return minio.BucketNameInvalid{Bucket: bucket}
+	if err := n.isValidBucketName(bucket); err != nil {
+		return err
 	}
 	if _, eno := n.fs.Stat(mctx, n.path(bucket)); eno != 0 {
 		return jfsToObjectErr(ctx, eno, bucket)
@@ -358,8 +361,8 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 // ListObjectsV2 lists all blobs in JFS bucket filtered by prefix
 func (n *jfsObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int,
 	fetchOwner bool, startAfter string) (loi minio.ListObjectsV2Info, err error) {
-	if !n.isValidBucketName(bucket) {
-		return minio.ListObjectsV2Info{}, minio.BucketNameInvalid{Bucket: bucket}
+	if err := n.isValidBucketName(bucket); err != nil {
+		return minio.ListObjectsV2Info{}, err
 	}
 	// fetchOwner is not supported and unused.
 	marker := continuationToken
@@ -832,8 +835,8 @@ func (n *jfsObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 
 func (n *jfsObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int,
 	startOffset int64, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (result minio.PartInfo, err error) {
-	if !n.isValidBucketName(srcBucket) {
-		err = minio.BucketNameInvalid{Bucket: srcBucket}
+	if err2 := n.isValidBucketName(srcBucket); err2 != nil {
+		err = err2
 		return
 	}
 	if err = n.checkUploadIDExists(ctx, dstBucket, dstObject, uploadID); err != nil {
