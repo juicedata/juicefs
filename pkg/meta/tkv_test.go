@@ -52,7 +52,7 @@ func TestBadgerClient(t *testing.T) {
 }
 
 func TestEtcdClient(t *testing.T) { //skip mutate
-	m, err := newKVMeta("etcd", "localhost:2379", DefaultConf())
+	m, err := newKVMeta("etcd", os.Getenv("ETCD_ADDR"), DefaultConf())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -265,7 +265,7 @@ func TestBadgerKV(t *testing.T) {
 }
 
 func TestEtcd(t *testing.T) { //skip mutate
-	c, err := newEtcdClient("localhost:2379/jfs")
+	c, err := newEtcdClient(fmt.Sprintf("%s/jfs", os.Getenv("ETCD_ADDR")))
 	if err != nil {
 		t.Fatal(err)
 	}
