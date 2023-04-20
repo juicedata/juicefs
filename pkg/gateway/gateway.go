@@ -148,11 +148,11 @@ func jfsToObjectErr(ctx context.Context, err error, params ...string) error {
 
 // isValidBucketName verifies whether a bucket name is valid.
 func (n *jfsObjects) isValidBucketName(bucket string) error {
-	if !n.gConf.MultiBucket && bucket != n.conf.Format.Name {
-		return minio.BucketNotFound{Bucket: bucket}
-	}
 	if s3utils.CheckValidBucketNameStrict(bucket) != nil {
 		return minio.BucketNameInvalid{Bucket: bucket}
+	}
+	if !n.gConf.MultiBucket && bucket != n.conf.Format.Name {
+		return minio.BucketNotFound{Bucket: bucket}
 	}
 	return nil
 }
