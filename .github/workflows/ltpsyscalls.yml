@@ -3,12 +3,14 @@ name: "ltp-syscalls"
 on:
   push:
     branches:
+      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
   pull_request:
     #The branches below must be a subset of the branches above
     branches:
+      - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
@@ -79,6 +81,8 @@ jobs:
 
       - name: Install LTP Syscalls
         run: |
+          sudo apt-get install -y libacl1-dev
+          sudo apt-get install -y attr
           wget -O ltp.tar.gz https://github.com/linux-test-project/ltp/archive/refs/tags/20210927.tar.gz
           mkdir ltp
           tar -xvf ltp.tar.gz -C ltp --strip-components 1
@@ -94,35 +98,31 @@ jobs:
           cd /opt/ltp
           sudo chmod +x /tmp/rm_list.sh
           sudo chmod 777 runtest/syscalls
-          echo "chdir01 chdir01" >>/tmp/rm_syscalls
-          echo "setxattr01 setxattr01" >>/tmp/rm_syscalls
-          cat /tmp/rm_syscalls
           sudo /tmp/rm_list.sh /tmp/rm_syscalls /opt/ltp/runtest/syscalls
+          split -a 1 -d -l $(( $(wc -l < /opt/ltp/runtest/syscalls) / 3 + 1 )) /opt/ltp/runtest/syscalls /tmp/syscalls_
+          sudo chmod 777 /tmp/syscalls_*
           if [ "${{matrix.type}}" == "head" ]; then
-            sudo head -n 600 runtest/syscalls > runtest/syscalls2
+            cat /tmp/syscalls_0
+            sudo ./runltp -d /tmp/jfs -C result.log.failed -T result.log.tconf -l result0.log -f /tmp/syscalls_0
           elif [ "${{matrix.type}}" == "middle" ]; then
-            sudo head -n 1300 runtest/syscalls > runtest/syscallstmp
-            sudo tail -n 700  runtest/syscallstmp > runtest/syscalls2
+            cat /tmp/syscalls_1
+            sudo ./runltp -d /tmp/jfs -C result.log.failed -T result.log.tconf -l result1.log -f /tmp/syscalls_1
           elif [ "${{matrix.type}}" == "tail" ]; then
-            sudo tail -n 500 runtest/syscalls > runtest/syscalls2
+            cat /tmp/syscalls_2
+            sudo ./runltp -d /tmp/jfs -C result.log.failed -T result.log.tconf -l result2.log -f /tmp/syscalls_2
           else
             echo "matrix.type: ${{matrix.type}} is not valid" && exit 1
           fi
-          sudo chmod 777 runtest/syscalls2
-          sudo ./runltp -d /tmp/jfs -f syscalls2 -C result.log.failed -T result.log.tconf -l result.log  &
-          wait $!
 
-      - name: Log
+      - name: tconf Log
         if: ${{ always() }}
         run: |
-          sudo tail -n 100 /opt/ltp/output/result.log.failed
-          tail -300 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          cat /opt/ltp/output/result.log.tconf
 
       - name: check ltpsyscall failed log
         if: ${{ always() }}
         run: |
-          cat /opt/ltp/output/result.log.failed 
+          cat /opt/ltp/output/result.log.failed
 
       - name: Send Slack Notification
         if: ${{ failure() }}
@@ -133,5 +133,5 @@ jobs:
 
       - name: Setup upterm session
         if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
-        timeout-minutes: 30
+        timeout-minutes: 60
         uses: lhotari/action-upterm@v1

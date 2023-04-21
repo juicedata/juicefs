@@ -1,10 +1,8 @@
 #!/bin/bash
-IFS=$'\n\n'
-
 LIST=`cat $1`
 
-
 for LINE in $LIST; do
-      sudo sed -i "s!^$LINE.*!!g" $2
+      # should remove empty line and comment line
+      sed -i -e "\!^${LINE}.*!d" -e "\!^#!d" -e "\!^\s*\$!d" $2
 done
 

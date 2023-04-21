@@ -62,7 +62,6 @@ move_pages10 move_pages10
 move_pages11 move_pages11
 move_pages12 move_pages12
 msgctl05 msgctl05
-msgstress03 msgstress03
 msgstress04 msgstress04
 openat201 openat201
 openat202 openat202
@@ -137,17 +136,13 @@ timerfd04 timerfd04
 perf_event_open02 perf_event_open02
 statx07 statx07
 io_uring02 io_uring02
-creat09 creat09
+# not supported
+ioctl_loop05 ioctl_loop05
 fcntl17 fcntl17
 fcntl17_64 fcntl17_64
-finit_module02 finit_module02
-ioctl_loop05 ioctl_loop05
-ioctl_ns07 ioctl_ns07
-kill11 kill11
-mkdir02 mkdir02
 setxattr03 setxattr03
-quotactl08 quotactl08
-statx04 statx04
-chdir01 chdir01
-sync01 sync01
-fanotify15 fanotify15
+getxattr05 getxattr05
+# not stable
+finit_module02 finit_module02
+msgstress03 msgstress03
+kill11 kill11
