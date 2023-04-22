@@ -933,4 +933,5 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		return fmt.Errorf("Failed to handle %d objects", n)
 	}
 	return nil
+
 }
