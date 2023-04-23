@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"runtime"
 	"sort"
@@ -39,6 +40,9 @@ import (
 )
 
 func TestRedisClient(t *testing.T) {
+	if os.Getenv("skip_slow") == "true" {
+		t.Skipf("skip slow test")
+	}
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", DefaultConf())
 	if err != nil || m.Name() != "redis" {
 		t.Fatalf("create meta: %s", err)
@@ -89,6 +93,9 @@ func TestKeyDB(t *testing.T) { //skip mutate
 }
 
 func TestRedisCluster(t *testing.T) { //skip mutate
+	if os.Getenv("skip_slow") == "true" {
+		t.Skipf("skip slow test")
+	}
 	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", DefaultConf())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)

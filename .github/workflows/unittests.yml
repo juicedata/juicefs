@@ -28,9 +28,9 @@ on:
 jobs:
   unittests:
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        test: [ 'test.pkg', 'test.cmd', 'test.fdb' ]
+        test: [ 'test.meta.part1','test.meta.part2','test.pkg','test.cmd', 'test.fdb' ]
     timeout-minutes: 60
     runs-on: ubuntu-20.04
     env:
@@ -46,6 +46,8 @@ jobs:
       TIKV_ADDR: 127.0.0.1
       REDIS_ADDR: redis://127.0.0.1:6379/13
       ETCD_ADDR: 127.0.0.1:3379
+      MYSQL_ADDR: (127.0.0.1:3306)/dev
+      MYSQL_USER: root
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -65,7 +67,7 @@ jobs:
         with:
           redis-version: '6.x'
 
-      - if: matrix.test == 'test.pkg'
+      - if: matrix.test == 'test.meta.part1'
         name: Install redis-cluster
         uses: vishnudxb/redis-cluster@1.0.5
         with:
@@ -76,45 +78,17 @@ jobs:
             slave2-port: 7004
             slave3-port: 7005
 
-      - name: Download Zip
-        run: |
-          test=${{matrix.test}}
-          if [ "$test" == "test.pkg" ];then
-            # tikv
-            wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
-            
-            # rclone downloaded to start the webdav service
-            wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
-            unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2/
-            
-          elif [ "$test" == "test.cmd" ];then
-            # litmus is used to test webdav
-            wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
-            tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2/
-            cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
-          elif [ "$test" == "test.fdb" ];then
-            # foundationdb
-            wget -O /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-            wget -O /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
-          fi
       - name: Prepare Database
         run: |
           test=${{matrix.test}}
-          if [ "$test" == "test.pkg" ]; then
+          if [ "$test" == "test.meta.part1" ];then
             # mysql
             sudo service mysql start
             sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
             sudo mysql -e "create database dev;"
-            sudo service postgresql start
-            
-            # keydb
-            echo "deb https://download.keydb.dev/open-source-dist $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/keydb.list
-            sudo wget -O /etc/apt/trusted.gpg.d/keydb.gpg https://download.keydb.dev/open-source-dist/keyring.gpg
-            sudo .github/scripts/apt_install.sh keydb
-            keydb-server --storage-provider  flash /tmp/ --port 6378 --bind 127.0.0.1 --daemonize yes
-            keydb-server --port 6377 --bind 127.0.0.1 --daemonize yes
             
             # postgres
+            sudo service postgresql start
             sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
             sudo sed  -i "s?local.*all.*postgres.*peer?local   all             postgres                                trust?" /etc/postgresql/*/main/pg_hba.conf
             sudo sed  -i "s?host.*all.*all.*32.*scram-sha-256?host    all             all             127.0.0.1/32            trust?" /etc/postgresql/*/main/pg_hba.conf
@@ -124,12 +98,59 @@ jobs:
             psql -c "create user runner superuser;" -U postgres
             sudo service postgresql restart
             psql -c 'create database test;' -U postgres
-            
+          
+            for i in {3306,5432} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+          elif [ "$test" == "test.cmd" ];then
+            # minio
+            docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
+          
+            # mc
+            go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
+          
+            # litmus is used to test webdav
+            wget -O /home/travis/.m2/litmus-0.13.tar.gz http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
+            tar -zxvf /home/travis/.m2/litmus-0.13.tar.gz -C /home/travis/.m2/
+            cd  /home/travis/.m2/litmus-0.13/ && ./configure && make && cd -
+          
+          elif [ "$test" == "test.fdb" ];then
+            # foundationdb
+            wget -O /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+            wget -O /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
+            sudo dpkg -i /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb
+            for i in {4500,} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+          else
+            # mysql
+            sudo service mysql start
+            sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
+            sudo mysql -e "create database dev;"
+          
             # tikv
+            wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
             bash /home/travis/.m2/install.sh
             source /home/runner/.bash_profile
             tiup -v
             nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
+            
+            # minio
+            docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
+          
+            # mc
+            go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
+          
+            # keydb
+            echo "deb https://download.keydb.dev/open-source-dist $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/keydb.list
+            sudo wget -O /etc/apt/trusted.gpg.d/keydb.gpg https://download.keydb.dev/open-source-dist/keyring.gpg
+            sudo .github/scripts/apt_install.sh keydb
+            keydb-server --storage-provider  flash /tmp/ --port 6378 --bind 127.0.0.1 --daemonize yes
+            keydb-server --port 6377 --bind 127.0.0.1 --daemonize yes
+          
+            # webdav
+            wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
+            unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2/
+            nohup /home/travis/.m2/rclone-v1.57.0-linux-amd64/rclone serve webdav local --addr 127.0.0.1:9007 >> rclone.log 2>&1 &
+          
+            # sftp
+            docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
             
             # etcd
             docker run -d \
@@ -144,30 +165,14 @@ jobs:
             --initial-advertise-peer-urls http://0.0.0.0:2380 \
             --initial-cluster node1=http://0.0.0.0:2380
             
-            # minio
-            docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
-            
-            # mc
-            go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
-            
-            # webdav
-            nohup /home/travis/.m2/rclone-v1.57.0-linux-amd64/rclone serve webdav local --addr 127.0.0.1:9007 >> rclone.log 2>&1 &
-           
-            # sftp
-            docker run -d --name sftp -p 2222:22  juicedata/ci-sftp
-            
             # hdfs
             chmod +x .github/scripts/setup-hdfs.sh
             sudo lsof -i :8020 || true
             ./.github/scripts/setup-hdfs.sh
           
-            for i in {2222,3306,5432,8020,9000,9007,2379} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
-          elif [ "$test" == "test.fdb" ]; then
-            # foundationdb
-            sudo dpkg -i /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb
-            for i in {4500,} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+            for i in {2222,8020,9000,9007,2379} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
           fi
-          
+
       - name: Unit Test
         timeout-minutes: 30
         run: |

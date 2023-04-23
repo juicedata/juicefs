@@ -70,15 +70,16 @@ release:
 		-w /go/src/github.com/juicedata/juicefs \
 		juicedata/golang-cross:latest release --rm-dist
 
-test:
-	go test -v -cover -count=1 -timeout=12m ./pkg/... -coverprofile=cov.out
-	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword GOMAXPROCS=8 go test -v -count=1 -cover -timeout=8m ./cmd/... -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...
+test.meta.part1:
+	go test -v -cover -run='TestRedisCluster|TestRedisClient|TestPostgreSQLClient|TestMySQLClient|TestLoadDumpSlow' -count=1  -failfast -timeout=12m ./pkg/meta/... -coverprofile=cov.out
+
+test.meta.part2:
+	skip_slow=true go test -v -cover -count=1  -failfast -timeout=12m ./pkg/meta/... -coverprofile=cov.out
 
 test.pkg:
-	go test -v -cover -count=1 -timeout=12m ./pkg/... -coverprofile=cov.out
+	go test -v -cover -count=1  -failfast -timeout=12m $$(go list ./pkg/... | grep -v /meta) -coverprofile=cov.out
 
 test.cmd:
-	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword GOMAXPROCS=8 go test -v -count=1 -cover -timeout=8m ./cmd/... -coverprofile=cov.out -coverpkg=./pkg/...,./cmd/...
-	
+	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword GOMAXPROCS=8 go test -v -count=1 -failfast -cover -timeout=8m ./cmd/... -coverprofile=cov.out -coverpkg=./pkg/...,./cmd/...
 test.fdb:
-	go test -v -cover -count=1 -timeout=4m ./pkg/meta/ -tags fdb -run=TestFdb -coverprofile=cov.out
+	go test -v -cover -count=1  -failfast -timeout=4m ./pkg/meta/ -tags fdb -run=TestFdb -coverprofile=cov.out
