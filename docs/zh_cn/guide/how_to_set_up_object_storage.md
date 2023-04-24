@@ -184,6 +184,7 @@ juicefs format \
 | [PostgreSQL](#postgresql)                   | `postgres` |
 | [本地磁盘](#本地磁盘)                       | `file`     |
 | [SFTP/SSH](#sftp)                           | `sftp`     |
+| [Dummy](#dummy)                             | `dummy`     |
 
 ## Amazon S3
 
@@ -1143,3 +1144,13 @@ juicefs format  \
 - `--bucket` 用来设置服务器的地址及存储路径，格式为 `<IP/Domain>:[port]:<Path>`。注意，地址中不要包含协议头，目录名应该以 `/` 结尾，端口号为可选项默认为 `22`，例如 `192.168.1.11:22:myjfs/`。
 - `--access-key` 用来设置远程服务器的用户名
 - `--secret-key` 用来设置远程服务器的密码
+
+## Dummy {#dummy}
+
+一个 Dummy object storage 后端实现，什么都不做，上传的数据会被丢掉，下载会直接返回错误。仅用作开发测试使用，比如 debug 和后端 object storage 无关的功能时，比如本地缓存等。
+
+```shell
+juicefs format \
+    --storage dummy \
+    redis://localhost:6379/1 myjfs
+```

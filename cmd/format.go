@@ -439,7 +439,7 @@ func format(c *cli.Context) error {
 		logger.Fatalf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
-	if os.Getenv("JFS_NO_CHECK_OBJECT_STORAGE") == "" {
+	if os.Getenv("JFS_NO_CHECK_OBJECT_STORAGE") == "" && format.Storage != "dummy" {
 		if err := test(blob); err != nil {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}

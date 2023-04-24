@@ -184,6 +184,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [PostgreSQL](#postgresql)                                   | `postgres` |
 | [Local disk](#local-disk)                                   | `file`     |
 | [SFTP/SSH](#sftp)                                           | `sftp`     |
+| [Dummy](#dummy)                                             | `dummy`     |
 
 ## Amazon S3
 
@@ -1147,3 +1148,13 @@ juicefs format  \
 - `--bucket` is used to set the server address and storage path in the format `<IP/Domain>:[port]:<Path>`. Note that the address should not contain a protocol header, the directory name should end with `/`, and the port number is optionally defaulted to `22`, e.g. `192.168.1.11:22:myjfs/`.
 - `--access-key` set the username of the remote server
 - `--secret-key` set the password of the remote server
+
+## Dummy {#dummy}
+
+A Dummy object storage implementation, it does nothing, that means it discards all uploaded data, and download always returns error. It's useful for developers to debug/develop non-object storage related functions like local disk cache.
+
+```shell
+juicefs format \
+    --storage dummy \
+    redis://localhost:6379/1 myjfs
+```
