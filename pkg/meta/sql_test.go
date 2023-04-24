@@ -33,9 +33,6 @@ func TestSQLiteClient(t *testing.T) {
 }
 
 func TestMySQLClient(t *testing.T) { //skip mutate
-	if os.Getenv("skip_slow") == "true" {
-		t.Skipf("skip slow test")
-	}
 	m, err := newSQLMeta("mysql", "root:@/dev", DefaultConf())
 	if err != nil || m.Name() != "mysql" {
 		t.Fatalf("create meta: %s", err)
@@ -44,8 +41,8 @@ func TestMySQLClient(t *testing.T) { //skip mutate
 }
 
 func TestPostgreSQLClient(t *testing.T) { //skip mutate
-	if os.Getenv("skip_slow") == "true" {
-		t.Skipf("skip slow test")
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
 	}
 	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", DefaultConf())
 	if err != nil || m.Name() != "postgres" {

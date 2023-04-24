@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test: [ 'test.meta.part1','test.meta.part2','test.pkg','test.cmd', 'test.fdb' ]
+        test: [ 'test.meta.core','test.meta.non-core','test.pkg','test.cmd', 'test.fdb' ]
     timeout-minutes: 60
     runs-on: ubuntu-20.04
     env:
@@ -59,15 +59,10 @@ jobs:
 
       - name: Install Packages
         run: |
-          sudo .github/scripts/apt_install.sh g++-multilib libacl1-dev attr
+          sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr
           sudo mkdir -p /home/travis/.m2/
 
-      - name: Install redis
-        uses: shogo82148/actions-setup-redis@v1
-        with:
-          redis-version: '6.x'
-
-      - if: matrix.test == 'test.meta.part1'
+      - if: matrix.test == 'test.meta.non-core'
         name: Install redis-cluster
         uses: vishnudxb/redis-cluster@1.0.5
         with:
@@ -81,12 +76,23 @@ jobs:
       - name: Prepare Database
         run: |
           test=${{matrix.test}}
-          if [ "$test" == "test.meta.part1" ];then
+          if [ "$test" == "test.meta.core" ];then
+            # tikv
+            wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
+            bash /home/travis/.m2/install.sh
+            source /home/runner/.bash_profile
+            tiup -v
+            nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
+            sleep 30
+            
             # mysql
             sudo service mysql start
             sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
             sudo mysql -e "create database dev;"
-            
+         
+            for i in {2379,3306} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+          
+          elif [ "$test" == "test.meta.non-core" ];then
             # postgres
             sudo service postgresql start
             sudo chmod 777 /etc/postgresql/*/main/pg_hba.conf
@@ -99,7 +105,25 @@ jobs:
             sudo service postgresql restart
             psql -c 'create database test;' -U postgres
           
-            for i in {3306,5432} ; do echo "lsof port:"$i;sudo lsof -i :$i;if [ $? != 0 ];then sleep 5; else continue; fi;sudo lsof -i :$i; if [ $? != 0 ];then echo "service not ready, port:"$i; exit 1;fi; done
+            # etcd
+            docker run -d \
+            -p 3379:2379 \
+            -p 3380:2380 \
+            --name etcd_3_5_7 \
+            quay.io/coreos/etcd:v3.5.7 \
+            /usr/local/bin/etcd --data-dir=/etcd-data --name node1 \
+            --listen-client-urls http://0.0.0.0:2379 \
+            --advertise-client-urls http://0.0.0.0:2379 \
+            --listen-peer-urls http://0.0.0.0:2380 \
+            --initial-advertise-peer-urls http://0.0.0.0:2380 \
+            --initial-cluster node1=http://0.0.0.0:2380
+            # keydb
+            echo "deb https://download.keydb.dev/open-source-dist $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/keydb.list
+            sudo wget -O /etc/apt/trusted.gpg.d/keydb.gpg https://download.keydb.dev/open-source-dist/keyring.gpg
+            sudo .github/scripts/apt_install.sh keydb
+            keydb-server --storage-provider  flash /tmp/ --port 6378 --bind 127.0.0.1 --daemonize yes
+            keydb-server --port 6377 --bind 127.0.0.1 --daemonize yes
+          
           elif [ "$test" == "test.cmd" ];then
             # minio
             docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
@@ -136,13 +160,6 @@ jobs:
           
             # mc
             go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
-          
-            # keydb
-            echo "deb https://download.keydb.dev/open-source-dist $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/keydb.list
-            sudo wget -O /etc/apt/trusted.gpg.d/keydb.gpg https://download.keydb.dev/open-source-dist/keyring.gpg
-            sudo .github/scripts/apt_install.sh keydb
-            keydb-server --storage-provider  flash /tmp/ --port 6378 --bind 127.0.0.1 --daemonize yes
-            keydb-server --port 6377 --bind 127.0.0.1 --daemonize yes
           
             # webdav
             wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip

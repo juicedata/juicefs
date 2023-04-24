@@ -40,9 +40,6 @@ import (
 )
 
 func TestRedisClient(t *testing.T) {
-	if os.Getenv("skip_slow") == "true" {
-		t.Skipf("skip slow test")
-	}
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", DefaultConf())
 	if err != nil || m.Name() != "redis" {
 		t.Fatalf("create meta: %s", err)
@@ -51,6 +48,9 @@ func TestRedisClient(t *testing.T) {
 }
 
 func TestKeyDB(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
 	// 127.0.0.1:6378 enable flash, 127.0.0.1:6377 disable flash
 	for _, addr := range []string{"127.0.0.1:6378/10", "127.0.0.1:6377/10"} {
 		m, err := newRedisMeta("redis", addr, DefaultConf())
@@ -93,8 +93,8 @@ func TestKeyDB(t *testing.T) { //skip mutate
 }
 
 func TestRedisCluster(t *testing.T) { //skip mutate
-	if os.Getenv("skip_slow") == "true" {
-		t.Skipf("skip slow test")
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
 	}
 	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", DefaultConf())
 	if err != nil {

@@ -70,11 +70,11 @@ release:
 		-w /go/src/github.com/juicedata/juicefs \
 		juicedata/golang-cross:latest release --rm-dist
 
-test.meta.part1:
-	go test -v -cover -run='TestRedisCluster|TestRedisClient|TestPostgreSQLClient|TestMySQLClient|TestLoadDumpSlow' -count=1  -failfast -timeout=12m ./pkg/meta/... -coverprofile=cov.out
+test.meta.core:
+	SKIP_NON_CORE=true go test -v -cover -count=1  -failfast -timeout=12m ./pkg/meta/... -coverprofile=cov.out
 
-test.meta.part2:
-	skip_slow=true go test -v -cover -count=1  -failfast -timeout=12m ./pkg/meta/... -coverprofile=cov.out
+test.meta.non-core:
+	go test -v -cover -run='TestRedisCluster|TestPostgreSQLClient|TestLoadDumpSlow|TestEtcdClient|TestKeyDB' -count=1  -failfast -timeout=12m ./pkg/meta/... -coverprofile=cov.out
 
 test.pkg:
 	go test -v -cover -count=1  -failfast -timeout=12m $$(go list ./pkg/... | grep -v /meta) -coverprofile=cov.out
