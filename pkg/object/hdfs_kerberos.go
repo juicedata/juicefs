@@ -29,20 +29,22 @@ func getKerberosClient() (*krb.Client, error) {
 		return nil, err
 	}
 
-	// Trying to authenticate with keytab file first.
-	ktPath := os.Getenv("KRB5_KTNAME")
-	krbPrincipal := os.Getenv("KRB5_PRINCIPAL")
-	if ktPath != "" && krbPrincipal != "" {
-		kt, err := keytab.Load(ktPath)
+	// Try to authenticate with keytab file first.
+	keytabPath := os.Getenv("KRB5KEYTAB")
+	principal := os.Getenv("KRB5PRINCIPAL")
+	if keytabPath != "" && principal != "" {
+		kt, err := keytab.Load(keytabPath)
 		if err != nil {
 			return nil, err
 		}
-		// e.g. KRB5_PRINCIPAL="primary/instance@realm"
-		sp := strings.SplitN(krbPrincipal, "@", 2)
+		// e.g. KRB5PRINCIPAL="primary/instance@realm"
+		sp := strings.Split(principal, "@")
 		if len(sp) != 2 {
-			return nil, fmt.Errorf("unusable kerberos principal: %s", krbPrincipal)
+			return nil, fmt.Errorf("unusable kerberos principal: %s", principal)
 		}
-		client := krb.NewWithKeytab(sp[0], sp[1], kt, cfg)
+		username, realm := sp[0], sp[1]
+		logger.Infof("username: %s, realm: %s", username, realm)
+		client := krb.NewWithKeytab(username, realm, kt, cfg)
 		return client, nil
 	}
 
