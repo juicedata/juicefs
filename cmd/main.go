@@ -285,14 +285,16 @@ func setup(c *cli.Context, n int) {
 }
 
 func removePassword(uri string) {
+	args := make([]string, len(os.Args))
+	copy(args, os.Args)
 	uri2 := utils.RemovePassword(uri)
 	if uri2 != uri {
 		for i, a := range os.Args {
 			if a == uri {
-				os.Args[i] = uri2
+				args[i] = uri2
 				break
 			}
 		}
 	}
-	gspt.SetProcTitle(strings.Join(os.Args, " "))
+	gspt.SetProcTitle(strings.Join(args, " "))
 }
