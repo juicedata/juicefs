@@ -44,6 +44,7 @@ type Config struct {
 	Heartbeat      time.Duration
 	MountPoint     string
 	Subdir         string
+	AtimeMode      string
 }
 
 func DefaultConf() *Config {

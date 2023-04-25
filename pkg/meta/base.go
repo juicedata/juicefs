@@ -107,6 +107,7 @@ type engine interface {
 	scanPendingFiles(Context, pendingFileScan) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
+	touchAtime(ctx Context, inode Ino) syscall.Errno
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -1561,7 +1562,14 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 	return 0
 }
 
-func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
+func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) (rerr syscall.Errno) {
+	defer func() {
+		if rerr == 0 {
+			if err := m.en.touchAtime(ctx, inode); err != 0 {
+				logger.Warnf("readdir %v update atime: %s", inode, err)
+			}
+		}
+	}()
 	inode = m.checkRoot(inode)
 	var attr Attr
 	if err := m.GetAttr(ctx, inode, &attr); err != 0 {

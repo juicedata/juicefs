@@ -358,6 +358,13 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.Heartbeat = duration(c.String("heartbeat"))
 	conf.MountPoint = mp
 	conf.Subdir = c.String("subdir")
+
+	atimeMode := c.String("atime-mode")
+	if atimeMode != meta.RelAtime && atimeMode != meta.StrictAtime && atimeMode != meta.NoAtime {
+		logger.Warnf("unknown atime-mode \"%s\", changed to %s", atimeMode, meta.NoAtime)
+		atimeMode = meta.NoAtime
+	}
+	conf.AtimeMode = atimeMode
 	return conf
 }
 

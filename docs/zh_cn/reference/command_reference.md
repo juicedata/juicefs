@@ -318,6 +318,9 @@ Consul 注册中心地址 (默认："127.0.0.1:8500")
 `--no-bgjob`<br />
 禁用后台作业（清理、备份等）（默认：false）
 
+`--atime-mode value`<br />
+控制如何更新 atime，支持 3 种模式，`noatime`，`relatime`，`strictatime`，默认使用 `noatime`
+
 #### 示例
 
 ```shell

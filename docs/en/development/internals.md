@@ -173,7 +173,10 @@ type Attr struct {
 
 There are a few fields that need clarification.
 
-- Atime/Atimensec: set only when the file is created and when `SetAttr` is actively called, while accessing and modifying the file usually does not affect the Atime value
+- Atime/Atimensec: currently support three modes
+  - noatime: set only when the file is created and when `SetAttr` is actively called, while accessing and modifying the file usually does not affect the Atime value, this is the default behavior
+  - relatime: update  inode access times relative to modify or change time.  Access time is only updated if the previous access time was earlier than the current modify or change time, or the file's last access time is always updated if it  is more than 1 day old
+  - strictatime: always update atime on access
 - Nlink
   - Directory file: initial value is 2 ('.' and '..'), add 1 for each subdirectory
   - Other files: initial value is 1, add 1 for each hard link created
