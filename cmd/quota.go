@@ -44,12 +44,6 @@ $ juicefs quota delete redis://localhost --path /dir1`,
 				Usage:     "Set quota to a directory",
 				ArgsUsage: "META-URL",
 				Action:    quota,
-				Flags: []cli.Flag{
-					&cli.BoolFlag{
-						Name:  "strict",
-						Usage: "calculate total usage of directory in strict mode (NOTE: may be slow for huge directory)",
-					},
-				},
 			},
 			{
 				Name:      "get",
@@ -76,16 +70,6 @@ $ juicefs quota delete redis://localhost --path /dir1`,
 				Usage:     "Check quota consistency of a directory",
 				ArgsUsage: "META-URL",
 				Action:    quota,
-				Flags: []cli.Flag{
-					&cli.BoolFlag{
-						Name:  "repair",
-						Usage: "repair inconsistent quota",
-					},
-					&cli.BoolFlag{
-						Name:  "strict",
-						Usage: "calculate total usage of directory in strict mode (NOTE: may be slow for huge directory)",
-					},
-				},
 			},
 		},
 		Flags: []cli.Flag{
@@ -100,6 +84,14 @@ $ juicefs quota delete redis://localhost --path /dir1`,
 			&cli.Uint64Flag{
 				Name:  "inodes",
 				Usage: "hard quota of the directory limiting its number of inodes",
+			},
+			&cli.BoolFlag{
+				Name:  "repair",
+				Usage: "repair inconsistent quota",
+			},
+			&cli.BoolFlag{
+				Name:  "strict",
+				Usage: "calculate total usage of directory in strict mode (NOTE: may be slow for huge directory)",
 			},
 		},
 	}

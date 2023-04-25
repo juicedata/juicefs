@@ -831,8 +831,9 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 		if st := m.GetSummary(ctx, inode, &sum, true, strict); st != 0 {
 			return st
 		}
-		usedInodes := int64(sum.Dirs + sum.Files)
-		if q.UsedInodes == usedInodes && q.UsedSpace == int64(sum.Size) {
+		usedInodes := int64(sum.Dirs+sum.Files) - 1
+		usedSpace := int64(sum.Size) - align4K(0) // quota ignore root dir
+		if q.UsedInodes == usedInodes && q.UsedSpace == usedSpace {
 			logger.Infof("quota of %s is consistent", dpath)
 			quotas[dpath] = q
 			return nil
@@ -840,14 +841,14 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 		logger.Errorf(
 			"%s: quota(%s, %s) != summary(%s, %s)", dpath,
 			humanize.Comma(q.UsedInodes), humanize.IBytes(uint64(q.UsedSpace)),
-			humanize.Comma(usedInodes), humanize.IBytes(sum.Size),
+			humanize.Comma(usedInodes), humanize.IBytes(uint64(usedSpace)),
 		)
 		if repair {
 			q.UsedInodes = usedInodes
-			q.UsedSpace = int64(sum.Size)
+			q.UsedSpace = usedSpace
 			quotas[dpath] = q
 			logger.Info("reparing...")
-			return m.en.doSetQuota(ctx, inode, q, true)
+			return m.en.doSetQuota(ctx, inode, q, false)
 		}
 		return fmt.Errorf("quota of %s is inconsistent, please repair it with --repair flag", dpath)
 	default:
