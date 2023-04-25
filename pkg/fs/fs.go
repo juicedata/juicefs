@@ -40,9 +40,6 @@ import (
 
 var logger = utils.GetLogger("juicefs")
 
-var checkAccessFile = time.Minute
-var rotateAccessLog int64 = 300 << 20 // 300 MiB
-
 type Ino = meta.Ino
 type Attr = meta.Attr
 type LogContext = vfs.LogContext
@@ -136,7 +133,8 @@ type FileSystem struct {
 	cacheM  sync.Mutex
 	entries map[Ino]map[string]*entryCache
 	attrs   map[Ino]*attrCache
-
+	checkAccessFile time.Duration
+	rotateAccessLog int64
 	logBuffer chan string
 
 	readSizeHistogram     prometheus.Histogram
@@ -168,6 +166,9 @@ func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSyst
 		writer:  vfs.NewDataWriter(conf, m, d, reader),
 		entries: make(map[meta.Ino]map[string]*entryCache),
 		attrs:   make(map[meta.Ino]*attrCache),
+		checkAccessFile: time.Minute,
+		rotateAccessLog: 300 << 20, // 300 MiB
+
 
 		readSizeHistogram: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name:    "sdk_read_size_bytes",
@@ -299,16 +300,16 @@ func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 			logger.Errorf("write access log: %s", err)
 			break
 		}
-		if lastcheck.Add(checkAccessFile).After(time.Now()) {
+		if lastcheck.Add(fs.checkAccessFile).After(time.Now()) {
 			continue
 		}
 		lastcheck = time.Now()
 		var fi os.FileInfo
 		fi, err = f.Stat()
-		if err == nil && fi.Size() > rotateAccessLog {
+		if err == nil && fi.Size() > fs.rotateAccessLog {
 			_ = f.Close()
 			fi, err = os.Stat(path)
-			if err == nil && fi.Size() > rotateAccessLog {
+			if err == nil && fi.Size() > fs.rotateAccessLog {
 				tmp := fmt.Sprintf("%s.%p", path, fs)
 				if os.Rename(path, tmp) == nil {
 					for i := 6; i > 0; i-- {
@@ -317,7 +318,7 @@ func (fs *FileSystem) flushLog(f *os.File, logBuffer chan string, path string) {
 					_ = os.Rename(tmp, path+".1")
 				} else {
 					fi, err = os.Stat(path)
-					if err == nil && fi.Size() > rotateAccessLog*7 {
+					if err == nil && fi.Size() > fs.rotateAccessLog*7 {
 						logger.Infof("can't rename %s, truncate it", path)
 						_ = os.Truncate(path, 0)
 					}
