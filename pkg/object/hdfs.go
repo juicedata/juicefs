@@ -44,6 +44,7 @@ type hdfsclient struct {
 	addr           string
 	c              *hdfs.Client
 	dfsReplication int
+        basePath       string
 }
 
 func (h *hdfsclient) String() string {
@@ -51,7 +52,7 @@ func (h *hdfsclient) String() string {
 }
 
 func (h *hdfsclient) path(key string) string {
-	return "/" + key
+        return h.basePath + key
 }
 
 func (h *hdfsclient) Head(key string) (Object, error) {
@@ -311,9 +312,16 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("Problem loading configuration: %s", err)
 	}
 
+        basePath := "/"
 	options := hdfs.ClientOptionsFromConf(conf)
 	if addr != "" {
-		options.Addresses = strings.Split(addr, ",")
+               // nn1.example.com:8020,nn2.example.com:8020/user/juicefs
+               sp := strings.SplitN(addr, "/", 2)
+               if len(sp) > 1 {
+                       basePath = basePath + strings.TrimRight(sp[1], "/") + "/"
+               }
+               options.Addresses = strings.Split(sp[0], ",")
+               logger.Infof("HDFS Addresses: %s, basePath: %s", sp[0], basePath)
 	}
 
 	if options.KerberosClient != nil {
@@ -353,7 +361,7 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		}
 	}
 
-	return &hdfsclient{addr: addr, c: c, dfsReplication: replication}, nil
+	return &hdfsclient{addr: addr, c: c, dfsReplication: replication, basePath: basePath}, nil
 }
 
 func init() {
