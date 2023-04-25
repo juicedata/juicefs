@@ -268,15 +268,28 @@ func testMetaClient(t *testing.T, m Meta) {
 	if attr.Gid != ctx2.Gid() {
 		t.Fatalf("inherit gid: %d != %d", attr.Gid, ctx2.Gid())
 	}
-	if runtime.GOOS == "linux" && attr.Mode&02000 == 0 {
-		t.Fatalf("not inherit sgid")
+	if runtime.GOOS == "linux" {
+		if attr.Mode&02000 == 0 {
+			t.Fatalf("not inherit sgid")
+		}
+		if st := m.Mknod(ctx2, p1, "f1", TypeFile, 02777, 022, 0, "", &dummyInode, attr); st != 0 {
+			t.Fatalf("create f1: %s", st)
+		} else if attr.Mode&02010 != 02010 {
+			t.Fatalf("sgid should not be cleared")
+		}
+		if st := m.Mknod(ctx3, p1, "f2", TypeFile, 02777, 022, 0, "", &dummyInode, attr); st != 0 {
+			t.Fatalf("create f2: %s", st)
+		} else if attr.Mode&02010 != 00010 {
+			t.Fatalf("sgid should be cleared")
+		}
+
 	}
 	if st := m.Resolve(ctx2, 1, "/d1/d2", nil, nil); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve /d1/d2: %s", st)
 	}
-	m.Rmdir(ctx2, p1, "d2")
-	m.Rmdir(ctx2, 1, "d1")
-
+	if st := m.Remove(ctx, 1, "d1", nil); st != 0 {
+		t.Fatalf("Remove d1: %s", st)
+	}
 	attr.Atime = 2
 	attr.Mtime = 2
 	attr.Uid = 1

@@ -1241,10 +1241,22 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		n.Atime = now
 		n.Mtime = now
 		n.Ctime = now
-		if pn.Mode&02000 != 0 || ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+		if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
 			n.Gid = pn.Gid
-			if _type == TypeDirectory && runtime.GOOS == "linux" {
-				n.Mode |= pn.Mode & 02000
+		} else if runtime.GOOS == "linux" && pn.Mode&02000 != 0 {
+			n.Gid = pn.Gid
+			if _type == TypeDirectory {
+				n.Mode |= 02000
+			} else if n.Mode&02010 == 02010 {
+				var found bool
+				for _, gid := range ctx.Gids() {
+					if gid == pn.Gid {
+						found = true
+					}
+				}
+				if !found {
+					n.Mode &= ^uint16(02000)
+				}
 			}
 		}
 
