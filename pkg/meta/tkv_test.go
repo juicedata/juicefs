@@ -52,6 +52,9 @@ func TestBadgerClient(t *testing.T) {
 }
 
 func TestEtcdClient(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
 	m, err := newKVMeta("etcd", os.Getenv("ETCD_ADDR"), DefaultConf())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
@@ -265,6 +268,9 @@ func TestBadgerKV(t *testing.T) {
 }
 
 func TestEtcd(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
 	c, err := newEtcdClient(fmt.Sprintf("%s/jfs", os.Getenv("ETCD_ADDR")))
 	if err != nil {
 		t.Fatal(err)
