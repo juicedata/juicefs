@@ -1247,7 +1247,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			n.Gid = pn.Gid
 			if _type == TypeDirectory {
 				n.Mode |= 02000
-			} else if n.Mode&02010 == 02010 {
+			} else if n.Mode&02010 == 02010 && ctx.Uid() != 0 {
 				var found bool
 				for _, gid := range ctx.Gids() {
 					if gid == pn.Gid {
