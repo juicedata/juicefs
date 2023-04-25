@@ -31,6 +31,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/pkg/errors"
@@ -748,7 +749,7 @@ func (m *baseMeta) flushQuotas() {
 	}
 }
 
-func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota) error {
+func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool) error {
 	var inode Ino
 	if cmd != QuotaList {
 		if st := m.resolve(ctx, dpath, &inode); st != 0 {
@@ -768,7 +769,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 		quota := quotas[dpath]
 		if q == nil {
 			var sum Summary
-			if st := m.GetSummary(ctx, inode, &sum, true, false); st != 0 {
+			if st := m.GetSummary(ctx, inode, &sum, true, strict); st != 0 {
 				return st
 			}
 			quota.UsedSpace = int64(sum.Size) - align4K(0)
@@ -818,7 +819,38 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 			}
 			quotas[p] = quota
 		}
-	default: // FIXME: QuotaCheck
+	case QuotaCheck:
+		q, err := m.en.doGetQuota(ctx, inode)
+		if err != nil {
+			return err
+		}
+		if q == nil {
+			return fmt.Errorf("no quota for inode %d path %s", inode, dpath)
+		}
+		var sum Summary
+		if st := m.GetSummary(ctx, inode, &sum, true, strict); st != 0 {
+			return st
+		}
+		usedInodes := int64(sum.Dirs + sum.Files)
+		if q.UsedInodes == usedInodes && q.UsedSpace == int64(sum.Size) {
+			logger.Infof("quota of %s is consistent", dpath)
+			quotas[dpath] = q
+			return nil
+		}
+		logger.Errorf(
+			"%s: quota(%d, %s) != summary(%d, %s)", dpath,
+			q.UsedInodes, humanize.IBytes(uint64(q.UsedSpace)),
+			usedInodes, humanize.IBytes(sum.Size),
+		)
+		if repair {
+			q.UsedInodes = usedInodes
+			q.UsedSpace = int64(sum.Size)
+			quotas[dpath] = q
+			logger.Info("reparing...")
+			return m.en.doSetQuota(ctx, inode, q, true)
+		}
+		return fmt.Errorf("quota of %s is inconsistent, please repair it with --repair flag", dpath)
+	default:
 		return fmt.Errorf("invalid quota command: %d", cmd)
 	}
 	return nil

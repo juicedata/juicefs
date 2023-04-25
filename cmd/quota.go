@@ -44,6 +44,12 @@ $ juicefs quota delete redis://localhost --path /dir1`,
 				Usage:     "Set quota to a directory",
 				ArgsUsage: "META-URL",
 				Action:    quota,
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "strict",
+						Usage: "calculate total usage of directory in strict mode (NOTE: may be slow for huge directory)",
+					},
+				},
 			},
 			{
 				Name:      "get",
@@ -70,6 +76,16 @@ $ juicefs quota delete redis://localhost --path /dir1`,
 				Usage:     "Check quota consistency of a directory",
 				ArgsUsage: "META-URL",
 				Action:    quota,
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "repair",
+						Usage: "repair inconsistent quota",
+					},
+					&cli.BoolFlag{
+						Name:  "strict",
+						Usage: "calculate total usage of directory in strict mode (NOTE: may be slow for huge directory)",
+					},
+				},
 			},
 		},
 		Flags: []cli.Flag{
@@ -114,7 +130,9 @@ func quota(c *cli.Context) error {
 
 	m := meta.NewClient(c.Args().Get(0), nil)
 	qs := make(map[string]*meta.Quota)
+	var strict, repair bool
 	if cmd == meta.QuotaSet {
+		strict = c.Bool("strict")
 		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
 		if c.IsSet("capacity") {
 			q.MaxSpace = int64(c.Uint64("capacity")) << 30
@@ -124,7 +142,11 @@ func quota(c *cli.Context) error {
 		}
 		qs[dpath] = q
 	}
-	if err := m.HandleQuota(meta.Background, cmd, dpath, qs); err != nil {
+	if cmd == meta.QuotaCheck {
+		strict = c.Bool("strict")
+		repair = c.Bool("repair")
+	}
+	if err := m.HandleQuota(meta.Background, cmd, dpath, qs, strict, repair); err != nil {
 		return err
 	} else if len(qs) == 0 {
 		return nil
