@@ -838,9 +838,9 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 			return nil
 		}
 		logger.Errorf(
-			"%s: quota(%d, %s) != summary(%d, %s)", dpath,
-			q.UsedInodes, humanize.IBytes(uint64(q.UsedSpace)),
-			usedInodes, humanize.IBytes(sum.Size),
+			"%s: quota(%s, %s) != summary(%s, %s)", dpath,
+			humanize.Comma(q.UsedInodes), humanize.IBytes(uint64(q.UsedSpace)),
+			humanize.Comma(usedInodes), humanize.IBytes(sum.Size),
 		)
 		if repair {
 			q.UsedInodes = usedInodes
