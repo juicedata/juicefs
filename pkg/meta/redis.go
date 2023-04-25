@@ -755,7 +755,7 @@ func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 	if len(m.shaResolve) == 0 || m.conf.CaseInsensi || m.prefix != "" {
 		return syscall.ENOTSUP
 	}
-	defer m.timeit(time.Now())
+	defer m.timeit("Resolve", time.Now())
 	parent = m.checkRoot(parent)
 	args := []string{parent.String(), path,
 		strconv.FormatUint(uint64(ctx.Uid()), 10),
@@ -878,7 +878,7 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 }
 
 func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("Truncate", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -998,7 +998,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 	if size == 0 {
 		return syscall.EINVAL
 	}
-	defer m.timeit(time.Now())
+	defer m.timeit("Fallocate", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -1077,7 +1077,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 }
 
 func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("SetAttr", time.Now())
 	inode = m.checkRoot(inode)
 	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
@@ -1263,10 +1263,22 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
-		if pattr.Mode&02000 != 0 || ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+		if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
 			attr.Gid = pattr.Gid
-			if _type == TypeDirectory && runtime.GOOS == "linux" {
-				attr.Mode |= pattr.Mode & 02000
+		} else if runtime.GOOS == "linux" && pattr.Mode&02000 != 0 {
+			attr.Gid = pattr.Gid
+			if _type == TypeDirectory {
+				attr.Mode |= 02000
+			} else if attr.Mode&02010 == 02010 {
+				var found bool
+				for _, gid := range ctx.Gids() {
+					if gid == pattr.Gid {
+						found = true
+					}
+				}
+				if !found {
+					attr.Mode &= ^uint16(02000)
+				}
 			}
 		}
 
@@ -2111,7 +2123,7 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) s
 		*slices = ss
 		return 0
 	}
-	defer m.timeit(time.Now())
+	defer m.timeit("Read", time.Now())
 	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, -1).Result()
 	if err != nil {
 		return errno(err)
@@ -2129,7 +2141,7 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) s
 }
 
 func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("Write", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -2191,7 +2203,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 }
 
 func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("CopyFileRange", time.Now())
 	f := m.of.find(fout)
 	if f != nil {
 		f.Lock()
@@ -3281,7 +3293,7 @@ func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 }
 
 func (m *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("GetXattr", time.Now())
 	inode = m.checkRoot(inode)
 	var err error
 	*vbuff, err = m.rdb.HGet(ctx, m.xattrKey(inode), name).Bytes()
@@ -3292,7 +3304,7 @@ func (m *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte)
 }
 
 func (m *redisMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("ListXattr", time.Now())
 	inode = m.checkRoot(inode)
 	vals, err := m.rdb.HKeys(ctx, m.xattrKey(inode)).Result()
 	if err != nil {

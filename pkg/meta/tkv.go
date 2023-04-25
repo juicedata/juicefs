@@ -843,7 +843,7 @@ func (m *kvMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 }
 
 func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("SetAttr", time.Now())
 	inode = m.checkRoot(inode)
 	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 	return errno(m.txn(func(tx *kvTxn) error {
@@ -918,7 +918,7 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 }
 
 func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("Truncate", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -1003,7 +1003,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	if size == 0 {
 		return syscall.EINVAL
 	}
-	defer m.timeit(time.Now())
+	defer m.timeit("Fallocate", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -1183,10 +1183,22 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
-		if pattr.Mode&02000 != 0 || ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
+		if ctx.Value(CtxKey("behavior")) == "Hadoop" || runtime.GOOS == "darwin" {
 			attr.Gid = pattr.Gid
-			if _type == TypeDirectory && runtime.GOOS == "linux" {
-				attr.Mode |= pattr.Mode & 02000
+		} else if runtime.GOOS == "linux" && pattr.Mode&02000 != 0 {
+			attr.Gid = pattr.Gid
+			if _type == TypeDirectory {
+				attr.Mode |= 02000
+			} else if attr.Mode&02010 == 02010 {
+				var found bool
+				for _, gid := range ctx.Gids() {
+					if gid == pattr.Gid {
+						found = true
+					}
+				}
+				if !found {
+					attr.Mode &= ^uint16(02000)
+				}
 			}
 		}
 
@@ -1814,7 +1826,7 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) sysc
 		*slices = ss
 		return 0
 	}
-	defer m.timeit(time.Now())
+	defer m.timeit("Read", time.Now())
 	val, err := m.get(m.chunkKey(inode, indx))
 	if err != nil {
 		return errno(err)
@@ -1832,7 +1844,7 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) sysc
 }
 
 func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("Write", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
 		f.Lock()
@@ -1882,7 +1894,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 }
 
 func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("CopyFileRange", time.Now())
 	var newLength, newSpace int64
 	f := m.of.find(fout)
 	if f != nil {
@@ -2588,7 +2600,7 @@ func (m *kvMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 }
 
 func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("GetXattr", time.Now())
 	inode = m.checkRoot(inode)
 	buf, err := m.get(m.xattrKey(inode, name))
 	if err != nil {
@@ -2602,7 +2614,7 @@ func (m *kvMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) sy
 }
 
 func (m *kvMeta) ListXattr(ctx Context, inode Ino, names *[]byte) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("ListXattr", time.Now())
 	inode = m.checkRoot(inode)
 	keys, err := m.scanKeys(m.xattrKey(inode, ""))
 	if err != nil {

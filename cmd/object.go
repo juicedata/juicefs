@@ -118,7 +118,7 @@ var bufPool = sync.Pool{
 	},
 }
 
-func (j *juiceFS) Put(key string, in io.Reader) error {
+func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 	p := j.path(key)
 	if strings.HasSuffix(p, "/") {
 		eno := j.jfs.MkdirAll(ctx, p, 0755)
@@ -131,24 +131,28 @@ func (j *juiceFS) Put(key string, in io.Reader) error {
 		f, eno = j.jfs.Create(ctx, tmp, 0755)
 	}
 	if eno != 0 {
-		return eno
+		return toError(eno)
 	}
+	defer func() {
+		if err != nil {
+			if e := j.jfs.Delete(ctx, tmp); e != 0 {
+				logger.Warnf("Failed to delete %s: %s", tmp, e)
+			}
+		}
+	}()
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
-	_, err := io.CopyBuffer(&jFile{f, 0}, in, *buf)
+	_, err = io.CopyBuffer(&jFile{f, 0}, in, *buf)
 	if err != nil {
-		_ = j.jfs.Delete(ctx, tmp)
-		return err
+		return
 	}
 	eno = f.Close(ctx)
 	if eno != 0 {
-		_ = j.jfs.Delete(ctx, tmp)
-		return eno
+		return toError(eno)
 	}
 	eno = j.jfs.Rename(ctx, tmp, p, 0)
 	if eno != 0 {
-		_ = j.jfs.Delete(ctx, tmp)
-		return eno
+		return toError(eno)
 	}
 	return nil
 }

@@ -174,7 +174,7 @@ type baseMeta struct {
 	usedInodesG prometheus.Gauge
 	txDist      prometheus.Histogram
 	txRestart   prometheus.Counter
-	opDist      prometheus.Histogram
+	opDist      *prometheus.HistogramVec
 
 	en engine
 }
@@ -214,11 +214,11 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 			Name: "transaction_restart",
 			Help: "The number of times a transaction is restarted.",
 		}),
-		opDist: prometheus.NewHistogram(prometheus.HistogramOpts{
+		opDist: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "meta_ops_durations_histogram_seconds",
 			Help:    "Operation latency distributions.",
 			Buckets: prometheus.ExponentialBuckets(0.0001, 1.5, 30),
-		}),
+		}, []string{"method"}),
 	}
 }
 
@@ -245,8 +245,8 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 	}()
 }
 
-func (m *baseMeta) timeit(start time.Time) {
-	m.opDist.Observe(time.Since(start).Seconds())
+func (m *baseMeta) timeit(method string, start time.Time) {
+	m.opDist.WithLabelValues(method).Observe(time.Since(start).Seconds())
 }
 
 func (m *baseMeta) getBase() *baseMeta {
@@ -855,7 +855,7 @@ func (m *baseMeta) cleanupSlices() {
 }
 
 func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
-	defer m.timeit(time.Now())
+	defer m.timeit("StatFS", time.Now())
 	if st := m.statRootFs(ctx, totalspace, availspace, iused, iavail); st != 0 {
 		return st
 	}
@@ -978,7 +978,7 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 	if inode == nil || attr == nil {
 		return syscall.EINVAL // bad request
 	}
-	defer m.timeit(time.Now())
+	defer m.timeit("Lookup", time.Now())
 	parent = m.checkRoot(parent)
 	if name == ".." {
 		if parent == m.root {
@@ -1144,7 +1144,7 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	if m.conf.OpenCache > 0 && m.of.Check(inode, attr) {
 		return 0
 	}
-	defer m.timeit(time.Now())
+	defer m.timeit("GetAttr", time.Now())
 	var err syscall.Errno
 	if inode == RootInode {
 		e := utils.WithTimeout(func() error {
@@ -1206,7 +1206,7 @@ func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 		return syscall.ENOENT
 	}
 
-	defer m.timeit(time.Now())
+	defer m.timeit("Mknod", time.Now())
 	parent = m.checkRoot(parent)
 	var space, inodes int64 = align4K(0), 1
 	if err := m.checkQuota(ctx, space, inodes, parent); err != 0 {
@@ -1264,7 +1264,7 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 		return syscall.ENOENT
 	}
 
-	defer m.timeit(time.Now())
+	defer m.timeit("Link", time.Now())
 	if attr == nil {
 		attr = &Attr{}
 	}
@@ -1290,7 +1290,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 		*path = target.([]byte)
 		return 0
 	}
-	defer m.timeit(time.Now())
+	defer m.timeit("ReadLink", time.Now())
 	target, err := m.en.doReadlink(ctx, inode)
 	if err != nil {
 		return errno(err)
@@ -1311,7 +1311,7 @@ func (m *baseMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 		return syscall.EROFS
 	}
 
-	defer m.timeit(time.Now())
+	defer m.timeit("Unlink", time.Now())
 	parent = m.checkRoot(parent)
 	var attr Attr
 	err := m.en.doUnlink(ctx, parent, name, &attr, skipCheckTrash...)
@@ -1340,7 +1340,7 @@ func (m *baseMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 		return syscall.EROFS
 	}
 
-	defer m.timeit(time.Now())
+	defer m.timeit("Rmdir", time.Now())
 	parent = m.checkRoot(parent)
 	var inode Ino
 	st := m.en.doRmdir(ctx, parent, name, &inode, skipCheckTrash...)
@@ -1377,7 +1377,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		return syscall.EINVAL
 	}
 
-	defer m.timeit(time.Now())
+	defer m.timeit("Rename", time.Now())
 	if inode == nil {
 		inode = new(Ino)
 	}
@@ -1534,7 +1534,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	if err := m.GetAttr(ctx, inode, &attr); err != 0 {
 		return err
 	}
-	defer m.timeit(time.Now())
+	defer m.timeit("Readdir", time.Now())
 	if inode == m.root {
 		attr.Parent = m.root
 	}
@@ -1561,7 +1561,7 @@ func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, f
 		return syscall.EINVAL
 	}
 
-	defer m.timeit(time.Now())
+	defer m.timeit("SetXattr", time.Now())
 	return m.en.doSetXattr(ctx, m.checkRoot(inode), name, value, flags)
 }
 
@@ -1573,7 +1573,7 @@ func (m *baseMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 		return syscall.EINVAL
 	}
 
-	defer m.timeit(time.Now())
+	defer m.timeit("RemoveXattr", time.Now())
 	return m.en.doRemoveXattr(ctx, m.checkRoot(inode), name)
 }
 
@@ -2221,7 +2221,7 @@ func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uin
 		return syscall.ENOENT
 	}
 
-	defer m.timeit(time.Now())
+	defer m.timeit("Clone", time.Now())
 	parent = m.checkRoot(parent)
 
 	var attr Attr

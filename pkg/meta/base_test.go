@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"runtime"
 	"sort"
@@ -47,6 +48,9 @@ func TestRedisClient(t *testing.T) {
 }
 
 func TestKeyDB(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
 	// 127.0.0.1:6378 enable flash, 127.0.0.1:6377 disable flash
 	for _, addr := range []string{"127.0.0.1:6378/10", "127.0.0.1:6377/10"} {
 		m, err := newRedisMeta("redis", addr, DefaultConf())
@@ -89,6 +93,9 @@ func TestKeyDB(t *testing.T) { //skip mutate
 }
 
 func TestRedisCluster(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
 	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", DefaultConf())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
@@ -261,15 +268,28 @@ func testMetaClient(t *testing.T, m Meta) {
 	if attr.Gid != ctx2.Gid() {
 		t.Fatalf("inherit gid: %d != %d", attr.Gid, ctx2.Gid())
 	}
-	if runtime.GOOS == "linux" && attr.Mode&02000 == 0 {
-		t.Fatalf("not inherit sgid")
+	if runtime.GOOS == "linux" {
+		if attr.Mode&02000 == 0 {
+			t.Fatalf("not inherit sgid")
+		}
+		if st := m.Mknod(ctx2, p1, "f1", TypeFile, 02777, 022, 0, "", &dummyInode, attr); st != 0 {
+			t.Fatalf("create f1: %s", st)
+		} else if attr.Mode&02010 != 02010 {
+			t.Fatalf("sgid should not be cleared")
+		}
+		if st := m.Mknod(ctx3, p1, "f2", TypeFile, 02777, 022, 0, "", &dummyInode, attr); st != 0 {
+			t.Fatalf("create f2: %s", st)
+		} else if attr.Mode&02010 != 00010 {
+			t.Fatalf("sgid should be cleared")
+		}
+
 	}
 	if st := m.Resolve(ctx2, 1, "/d1/d2", nil, nil); st != 0 && st != syscall.ENOTSUP {
 		t.Fatalf("resolve /d1/d2: %s", st)
 	}
-	m.Rmdir(ctx2, p1, "d2")
-	m.Rmdir(ctx2, 1, "d1")
-
+	if st := m.Remove(ctx, 1, "d1", nil); st != 0 {
+		t.Fatalf("Remove d1: %s", st)
+	}
 	attr.Atime = 2
 	attr.Mtime = 2
 	attr.Uid = 1
