@@ -838,7 +838,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 			quotas[dpath] = q
 			return nil
 		}
-		logger.Errorf(
+		logger.Warnf(
 			"%s: quota(%s, %s) != summary(%s, %s)", dpath,
 			humanize.Comma(q.UsedInodes), humanize.IBytes(uint64(q.UsedSpace)),
 			humanize.Comma(usedInodes), humanize.IBytes(uint64(usedSpace)),
@@ -848,7 +848,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 			q.UsedSpace = usedSpace
 			quotas[dpath] = q
 			logger.Info("reparing...")
-			return m.en.doSetQuota(ctx, inode, q, false)
+			return m.en.doSetQuota(ctx, inode, q, true)
 		}
 		return fmt.Errorf("quota of %s is inconsistent, please repair it with --repair flag", dpath)
 	default:
