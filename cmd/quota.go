@@ -149,7 +149,7 @@ func quota(c *cli.Context) error {
 		} else {
 			size = "unlimited"
 		}
-		iused := humanize.Comma(q.MaxInodes)
+		iused := humanize.Comma(q.UsedInodes)
 		var itotal, iusedR string
 		if q.MaxInodes > 0 {
 			itotal = humanize.Comma(q.MaxInodes)
