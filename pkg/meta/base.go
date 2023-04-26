@@ -847,7 +847,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 			q.UsedInodes = usedInodes
 			q.UsedSpace = usedSpace
 			quotas[dpath] = q
-			logger.Info("reparing...")
+			logger.Info("repairing...")
 			return m.en.doSetQuota(ctx, inode, q, true)
 		}
 		return fmt.Errorf("quota of %s is inconsistent, please repair it with --repair flag", dpath)
