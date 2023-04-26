@@ -899,6 +899,8 @@ JuiceFS will try to load configurations for HDFS client based on `$HADOOP_CONF_D
 
 For HA cluster, the addresses of NameNodes can be specified together like this: `--bucket=namenode1:port,namenode2:port`.
 
+By default, data is stored on the subdirectory of `/`. You can specify `--bucket` including the path like `--bucket=namenode1:port,namenode2:port/user/juicefs`
+
 ## Apache Ozone
 
 Apache Ozone is a scalable, redundant, and distributed object storage for Hadoop. It supports S3-compatible interface, so we could set `--storage` to `s3` directly.
