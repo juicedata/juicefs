@@ -449,7 +449,7 @@ func unescape(original string) string {
 	}
 }
 
-func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
+func newSftp(endpoint, username, pass, token, storageClass string) (ObjectStorage, error) {
 	idx := strings.LastIndex(endpoint, ":")
 	host, port, err := net.SplitHostPort(endpoint[:idx])
 	if err != nil && strings.Contains(err.Error(), "missing port") {

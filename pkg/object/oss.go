@@ -39,8 +39,9 @@ import (
 const ossDefaultRegionID = "cn-hangzhou"
 
 type ossClient struct {
-	client *oss.Client
-	bucket *oss.Bucket
+	client       *oss.Client
+	bucket       *oss.Bucket
+	storageClass string
 }
 
 func (o *ossClient) String() string {
@@ -58,7 +59,11 @@ func (o *ossClient) Limits() Limits {
 }
 
 func (o *ossClient) Create() error {
-	err := o.bucket.Client.CreateBucket(o.bucket.BucketName)
+	var option []oss.Option
+	if o.storageClass != "" {
+		option = append(option, oss.StorageClass(oss.StorageClassType(o.storageClass)))
+	}
+	err := o.bucket.Client.CreateBucket(o.bucket.BucketName, option...)
 	if err != nil && isExists(err) {
 		err = nil
 	}
@@ -122,11 +127,14 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 }
 
 func (o *ossClient) Put(key string, in io.Reader) error {
+	var option []oss.Option
 	if ins, ok := in.(io.ReadSeeker); ok {
-		option := oss.Meta(checksumAlgr, generateChecksum(ins))
-		return o.checkError(o.bucket.PutObject(key, in, option))
+		option = append(option, oss.Meta(checksumAlgr, generateChecksum(ins)))
 	}
-	return o.checkError(o.bucket.PutObject(key, in))
+	if o.storageClass != "" {
+		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.storageClass)))
+	}
+	return o.checkError(o.bucket.PutObject(key, in, option...))
 }
 
 func (o *ossClient) Copy(dst, src string) error {
@@ -350,7 +358,7 @@ func autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken string) (st
 	return fmt.Sprintf("https://%s.aliyuncs.com", bucketLocation), nil
 }
 
-func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func newOSS(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -411,7 +419,7 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		return nil, fmt.Errorf("Cannot create bucket %s: %s", bucketName, err)
 	}
 
-	o := &ossClient{client: client, bucket: bucket}
+	o := &ossClient{client: client, bucket: bucket, storageClass: storageClass}
 	if token != "" && refresh {
 		go func() {
 			for {

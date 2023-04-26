@@ -49,7 +49,7 @@ func (s *eos) Limits() Limits {
 	}
 }
 
-func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func newEos(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -87,7 +87,7 @@ func newEos(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		return nil, fmt.Errorf("aws session: %s", err)
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &eos{s3client{bucket, s3.New(ses), ses}}, nil
+	return &eos{s3client{bucket, storageClass, s3.New(ses), ses}}, nil
 }
 
 func init() {

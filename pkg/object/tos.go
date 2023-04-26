@@ -251,7 +251,7 @@ func (t tosClient) Copy(dst, src string) error {
 	return err
 }
 
-func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func newTOS(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}

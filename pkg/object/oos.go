@@ -64,7 +64,7 @@ func (s *oos) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 	return objs, err
 }
 
-func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func newOOS(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -93,7 +93,7 @@ func newOOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		return nil, fmt.Errorf("OOS session: %s", err)
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &oos{s3client{bucket, s3.New(ses), ses}}, nil
+	return &oos{s3client{bucket, storageClass, s3.New(ses), ses}}, nil
 }
 
 func init() {

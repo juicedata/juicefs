@@ -24,7 +24,7 @@ import (
 )
 
 func init() {
-	Register("mysql", func(addr, user, pass, token string) (ObjectStorage, error) {
+	Register("mysql", func(addr, user, pass, token, storageClass string) (ObjectStorage, error) {
 		return newSQLStore("mysql", removeScheme(addr), user, pass)
 	})
 }

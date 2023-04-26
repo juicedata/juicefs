@@ -32,9 +32,10 @@ import (
 
 type wasb struct {
 	DefaultObjectStorage
-	container *azblob.ContainerClient
-	cName     string
-	marker    string
+	container    *azblob.ContainerClient
+	StorageClass string
+	cName        string
+	marker       string
 }
 
 func (b *wasb) String() string {
@@ -160,7 +161,7 @@ func autoWasbEndpoint(containerName, accountName, scheme string, credential *azb
 	return endpoint, nil
 }
 
-func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, error) {
+func newWasb(endpoint, accountName, accountKey, token, storageClass string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}

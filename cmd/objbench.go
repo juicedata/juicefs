@@ -132,7 +132,7 @@ func objbench(ctx *cli.Context) error {
 	if token == "" {
 		token = os.Getenv("SESSION_TOKEN")
 	}
-	blobOrigin, err := object.CreateStorage(strings.ToLower(ctx.String("storage")), ctx.Args().First(), ak, sk, token)
+	blobOrigin, err := object.CreateStorage(strings.ToLower(ctx.String("storage")), ctx.Args().First(), ak, sk, token, "")
 	if err != nil {
 		logger.Fatalf("create storage failed: %v", err)
 	}

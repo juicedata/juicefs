@@ -118,7 +118,7 @@ func (s *swiftOSS) Head(key string) (Object, error) {
 	}, err
 }
 
-func newSwiftOSS(endpoint, username, apiKey, token string) (ObjectStorage, error) {
+func newSwiftOSS(endpoint, username, apiKey, token, storageClass string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}

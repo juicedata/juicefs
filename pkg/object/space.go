@@ -45,7 +45,7 @@ func (s *space) Limits() Limits {
 	}
 }
 
-func newSpace(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func newSpace(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -70,7 +70,7 @@ func newSpace(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		return nil, fmt.Errorf("aws session: %s", err)
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &space{s3client{bucket, s3.New(ses), ses}}, nil
+	return &space{s3client{bucket, storageClass, s3.New(ses), ses}}, nil
 }
 
 func init() {

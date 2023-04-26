@@ -403,7 +403,7 @@ func (d *filestore) Chown(path string, owner, group string) error {
 	return os.Chown(p, uid, gid)
 }
 
-func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
+func newDisk(root, accesskey, secretkey, token, storageClass string) (ObjectStorage, error) {
 	// For Windows, the path looks like /C:/a/b/c/
 	if runtime.GOOS == "windows" && strings.HasPrefix(root, "/") {
 		root = root[1:]

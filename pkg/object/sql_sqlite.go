@@ -24,7 +24,7 @@ import (
 )
 
 func init() {
-	Register("sqlite3", func(addr, user, pass, token string) (ObjectStorage, error) {
+	Register("sqlite3", func(addr, user, pass, token, storageClass string) (ObjectStorage, error) {
 		return newSQLStore("sqlite3", removeScheme(addr), user, pass)
 	})
 }

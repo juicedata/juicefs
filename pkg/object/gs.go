@@ -163,7 +163,7 @@ func (g *gs) List(prefix, marker, delimiter string, limit int64) ([]Object, erro
 	return objs, nil
 }
 
-func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func newGS(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("gs://%s", endpoint)
 	}

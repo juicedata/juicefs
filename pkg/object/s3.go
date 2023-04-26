@@ -55,9 +55,10 @@ var disableSha256Func = func(r *request.Request) {
 }
 
 type s3client struct {
-	bucket string
-	s3     *s3.S3
-	ses    *session.Session
+	bucket       string
+	storageClass string
+	s3           *s3.S3
+	ses          *session.Session
 }
 
 func (s *s3client) String() string {
@@ -153,6 +154,9 @@ func (s *s3client) Put(key string, in io.Reader) error {
 		Body:        body,
 		ContentType: &mimeType,
 		Metadata:    map[string]*string{checksumAlgr: &checksum},
+	}
+	if s.storageClass != "" {
+		params.StorageClass = aws.String(s.storageClass)
 	}
 	_, err := s.s3.PutObject(params)
 	return err
@@ -390,7 +394,7 @@ func parseRegion(endpoint string) string {
 var oracleCompileRegexp = `.*\.compat.objectstorage\.(.*)\.oraclecloud\.com`
 var OVHCompileRegexp = `^s3\.(\w*)(\.\w*)?\.cloud\.ovh\.net$`
 
-func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func newS3(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		if len(strings.Split(endpoint, ".")) > 1 && !strings.HasSuffix(endpoint, ".amazonaws.com") {
 			endpoint = fmt.Sprintf("http://%s", endpoint)
@@ -507,7 +511,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		return nil, fmt.Errorf("Fail to create aws session: %s", err)
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &s3client{bucketName, s3.New(ses), ses}, nil
+	return &s3client{bucketName, storageClass, s3.New(ses), ses}, nil
 }
 
 func init() {

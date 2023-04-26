@@ -74,6 +74,10 @@ Details: https://juicefs.com/docs/community/administration/sync
 Supported storage systems: https://juicefs.com/docs/community/how_to_setup_object_storage#supported-object-storage`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
+				Name:  "storage-class",
+				Usage: "object storage class type",
+			},
+			&cli.StringFlag{
 				Name:    "start",
 				Aliases: []string{"s"},
 				Usage:   "the first `KEY` to sync",
@@ -238,7 +242,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 				user = parts[0]
 				pass = parts[1]
 			}
-			return object.CreateStorage("sftp", uri, user, pass, "")
+			return object.CreateStorage("sftp", uri, user, pass, "", conf.StorageClass)
 		}
 	}
 	uri, token := extractToken(uri)
@@ -280,7 +284,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		endpoint += u.Path
 	}
 
-	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, token)
+	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, token, conf.StorageClass)
 	if err != nil {
 		return nil, fmt.Errorf("create %s %s: %s", name, endpoint, err)
 	}

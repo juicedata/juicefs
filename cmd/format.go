@@ -142,6 +142,10 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 				Usage: "session token for object storage",
 			},
 			&cli.StringFlag{
+				Name:  "storage-class",
+				Usage: "object storage class type",
+			},
+			&cli.StringFlag{
 				Name:  "encrypt-rsa-key",
 				Usage: "a path to RSA private key (PEM)",
 			},
@@ -211,9 +215,9 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	}
 
 	if format.Shards > 1 {
-		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.Shards)
+		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.StorageClass, format.Shards)
 	} else {
-		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken)
+		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.StorageClass)
 	}
 	if err != nil {
 		return nil, err
@@ -392,6 +396,7 @@ func format(c *cli.Context) error {
 			Name:         name,
 			UUID:         uuid.New().String(),
 			Storage:      c.String("storage"),
+			StorageClass: c.String("storage-class"),
 			Bucket:       c.String("bucket"),
 			AccessKey:    c.String("access-key"),
 			SecretKey:    c.String("secret-key"),

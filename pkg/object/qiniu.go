@@ -180,7 +180,7 @@ func (q *qiniu) List(prefix, marker, delimiter string, limit int64) ([]Object, e
 	return objs, nil
 }
 
-func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+func newQiniu(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -215,7 +215,7 @@ func newQiniu(endpoint, accessKey, secretKey, token string) (ObjectStorage, erro
 		return nil, fmt.Errorf("aws session: %s", err)
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	s3client := s3client{bucket, s3.New(ses), ses}
+	s3client := s3client{bucket, storageClass, s3.New(ses), ses}
 
 	cfg := storage.Config{
 		UseHTTPS: uri.Scheme == "https",

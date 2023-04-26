@@ -131,7 +131,7 @@ func (u *up) List(prefix, marker, delimiter string, limit int64) ([]Object, erro
 	return nil, u.err
 }
 
-func newUpyun(endpoint, user, passwd, token string) (ObjectStorage, error) {
+func newUpyun(endpoint, user, passwd, token, storageClass string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
