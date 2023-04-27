@@ -2679,10 +2679,11 @@ func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) e
 			tx.set(m.dirQuotaKey(inode), m.packQuota(quota))
 		} else {
 			buf := tx.get(m.dirQuotaKey(inode))
-			if len(buf) == 32 {
-				q := m.parseQuota(buf)
-				quota.UsedSpace, quota.UsedInodes = q.UsedSpace, q.UsedInodes
+			if len(buf) != 32 {
+				return fmt.Errorf("invalid quota value: %v", buf)
 			}
+			q := m.parseQuota(buf)
+			quota.UsedSpace, quota.UsedInodes = q.UsedSpace, q.UsedInodes
 			tx.set(m.dirQuotaKey(inode), m.packQuota(quota))
 		}
 		return nil
