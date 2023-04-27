@@ -3019,6 +3019,19 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		sessions = append(sessions, &DumpedSustained{k, v})
 	}
 
+	pairs, err := m.scanValues(m.fmtKey("QD"), -1, func(k, v []byte) bool {
+		return len(k) == 10 && len(v) == 32
+	})
+	if err != nil {
+		return err
+	}
+	quotas := make(map[Ino]*DumpedQuota, len(pairs))
+	for k, v := range pairs {
+		inode := m.decodeInode([]byte(k[2:]))
+		quota := m.parseQuota(v)
+		quotas[inode] = &DumpedQuota{quota.MaxSpace, quota.MaxInodes}
+	}
+
 	dm := DumpedMeta{
 		Setting: *m.fmt,
 		Counters: &DumpedCounters{
@@ -3031,6 +3044,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		},
 		Sustained: sessions,
 		DelFiles:  dels,
+		Quotas:    quotas,
 	}
 	if !keepSecret && dm.Setting.SecretKey != "" {
 		dm.Setting.SecretKey = "removed"
