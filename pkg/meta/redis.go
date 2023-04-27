@@ -25,6 +25,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
@@ -3508,6 +3509,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 		var sr = make([]*redis.StringCmd, len(es))
 		var cr = make([]*redis.StringSliceCmd, len(es))
 		var dr = make([]*redis.MapStringStringCmd, len(es))
+		var qr = make([]*redis.StringCmd, len(es))
 		for i, e := range es {
 			inode := e.Attr.Inode
 			ar[i] = p.Get(ctx, m.inodeKey(inode))
@@ -3517,6 +3519,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				cr[i] = p.LRange(ctx, m.chunkKey(inode, 0), 0, -1)
 			case "directory":
 				dr[i] = p.HGetAll(ctx, m.entryKey(inode))
+				qr[i] = p.HGet(ctx, m.dirQuotaKey(), e.Attr.Inode.String())
 			case "symlink":
 				sr[i] = p.Get(ctx, m.symKey(inode))
 			}
@@ -3604,6 +3607,19 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					ce.Attr.Type = typeToString(t)
 					e.Entries[name] = ce
 				}
+				buf, err := qr[i].Bytes()
+				if err != nil {
+					if err == redis.Nil {
+						continue
+					}
+					return errors.Wrap(err, fmt.Sprintf("get quota for %d", inode))
+				}
+				if len(buf) != 16 {
+					return fmt.Errorf("invalid quota value of %d: %s", inode, hex.EncodeToString(buf))
+				}
+				e.Quota = new(DumpedQuota)
+				e.Quota.MaxSpace, e.Quota.MaxInodes = m.parseQuota(buf)
+
 			case TypeSymlink:
 				if e.Symlink, err = sr[i].Result(); err != nil {
 					if err != redis.Nil {
