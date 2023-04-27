@@ -370,7 +370,7 @@ func format(c *cli.Context) error {
 					logger.Warnf("decrypt secrets: %s", err)
 				}
 				format.SecretKey = c.String(flag)
-			case "session-key":
+			case "session-token":
 				encrypted = format.KeyEncrypted
 				if err := format.Decrypt(); err != nil && strings.Contains(err.Error(), "secret was removed") {
 					logger.Warnf("decrypt secrets: %s", err)

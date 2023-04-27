@@ -270,8 +270,6 @@ func TestFileSystem(t *testing.T) {
 }
 
 func createTestFS(t *testing.T) *FileSystem {
-	checkAccessFile = time.Millisecond
-	rotateAccessLog = 500
 	m := meta.NewClient("memkv://", nil)
 	format := &meta.Format{
 		Name:      "test",
@@ -294,6 +292,8 @@ func createTestFS(t *testing.T) *FileSystem {
 	objStore, _ := object.CreateStorage("mem", "", "", "", "")
 	store := chunk.NewCachedStore(objStore, *conf.Chunk, nil)
 	jfs, err := NewFileSystem(&conf, m, store)
+	jfs.checkAccessFile = time.Millisecond
+	jfs.rotateAccessLog = 500
 	if err != nil {
 		t.Fatalf("initialize  failed: %s", err)
 	}

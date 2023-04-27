@@ -85,6 +85,14 @@ $ juicefs quota delete redis://localhost --path /dir1`,
 				Name:  "inodes",
 				Usage: "hard quota of the directory limiting its number of inodes",
 			},
+			&cli.BoolFlag{
+				Name:  "repair",
+				Usage: "repair inconsistent quota",
+			},
+			&cli.BoolFlag{
+				Name:  "strict",
+				Usage: "calculate total usage of directory in strict mode (NOTE: may be slow for huge directory)",
+			},
 		},
 	}
 }
@@ -114,7 +122,9 @@ func quota(c *cli.Context) error {
 
 	m := meta.NewClient(c.Args().Get(0), nil)
 	qs := make(map[string]*meta.Quota)
+	var strict, repair bool
 	if cmd == meta.QuotaSet {
+		strict = c.Bool("strict")
 		q := &meta.Quota{MaxSpace: -1, MaxInodes: -1} // negative means no change
 		if c.IsSet("capacity") {
 			q.MaxSpace = int64(c.Uint64("capacity")) << 30
@@ -124,7 +134,11 @@ func quota(c *cli.Context) error {
 		}
 		qs[dpath] = q
 	}
-	if err := m.HandleQuota(meta.Background, cmd, dpath, qs); err != nil {
+	if cmd == meta.QuotaCheck {
+		strict = c.Bool("strict")
+		repair = c.Bool("repair")
+	}
+	if err := m.HandleQuota(meta.Background, cmd, dpath, qs, strict, repair); err != nil {
 		return err
 	} else if len(qs) == 0 {
 		return nil
@@ -149,7 +163,7 @@ func quota(c *cli.Context) error {
 		} else {
 			size = "unlimited"
 		}
-		iused := humanize.Comma(q.MaxInodes)
+		iused := humanize.Comma(q.UsedInodes)
 		var itotal, iusedR string
 		if q.MaxInodes > 0 {
 			itotal = humanize.Comma(q.MaxInodes)
