@@ -230,7 +230,7 @@ func (c *ceph) ListAll(prefix, marker string) (<-chan Object, error) {
 	return objs, err
 }
 
-func newCeph(endpoint, cluster, user, token, storageClass string) (ObjectStorage, error) {
+func newCeph(endpoint, cluster, user, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("ceph://%s", endpoint)
 	}

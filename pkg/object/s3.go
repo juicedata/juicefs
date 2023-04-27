@@ -156,7 +156,7 @@ func (s *s3client) Put(key string, in io.Reader) error {
 		Metadata:    map[string]*string{checksumAlgr: &checksum},
 	}
 	if s.storageClass != "" {
-		params.StorageClass = aws.String(s.storageClass)
+		params.SetStorageClass(s.storageClass)
 	}
 	_, err := s.s3.PutObject(params)
 	return err
@@ -168,6 +168,9 @@ func (s *s3client) Copy(dst, src string) error {
 		Bucket:     &s.bucket,
 		Key:        &dst,
 		CopySource: &src,
+	}
+	if s.storageClass != "" {
+		params.SetStorageClass(s.storageClass)
 	}
 	_, err := s.s3.CopyObject(params)
 	return err
@@ -239,6 +242,9 @@ func (s *s3client) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	params := &s3.CreateMultipartUploadInput{
 		Bucket: &s.bucket,
 		Key:    &key,
+	}
+	if s.storageClass != "" {
+		params.SetStorageClass(s.storageClass)
 	}
 	resp, err := s.s3.CreateMultipartUpload(params)
 	if err != nil {
@@ -325,6 +331,10 @@ func (s *s3client) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
+func (s *s3client) SetStorageClass(sc string) {
+	s.storageClass = sc
+}
+
 func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {
 	awsConfig := &aws.Config{
 		HTTPClient: httpClient,
@@ -394,7 +404,7 @@ func parseRegion(endpoint string) string {
 var oracleCompileRegexp = `.*\.compat.objectstorage\.(.*)\.oraclecloud\.com`
 var OVHCompileRegexp = `^s3\.(\w*)(\.\w*)?\.cloud\.ovh\.net$`
 
-func newS3(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
+func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		if len(strings.Split(endpoint, ".")) > 1 && !strings.HasSuffix(endpoint, ".amazonaws.com") {
 			endpoint = fmt.Sprintf("http://%s", endpoint)
@@ -511,7 +521,7 @@ func newS3(endpoint, accessKey, secretKey, token, storageClass string) (ObjectSt
 		return nil, fmt.Errorf("Fail to create aws session: %s", err)
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &s3client{bucketName, storageClass, s3.New(ses), ses}, nil
+	return &s3client{bucket: bucketName, s3: s3.New(ses), ses: ses}, nil
 }
 
 func init() {

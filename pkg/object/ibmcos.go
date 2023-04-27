@@ -41,8 +41,9 @@ import (
 )
 
 type ibmcos struct {
-	bucket string
-	s3     *s3.S3
+	bucket       string
+	s3           *s3.S3
+	storageClass string
 }
 
 func (s *ibmcos) String() string {
@@ -50,7 +51,14 @@ func (s *ibmcos) String() string {
 }
 
 func (s *ibmcos) Create() error {
-	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
+	input := &s3.CreateBucketInput{Bucket: &s.bucket}
+	// https://cloud.ibm.com/docs/cloud-object-storage?topic=cloud-object-storage-classes&code=go
+	if s.storageClass != "" {
+		input.CreateBucketConfiguration = &s3.CreateBucketConfiguration{
+			LocationConstraint: &s.storageClass,
+		}
+	}
+	_, err := s.s3.CreateBucket(input)
 	if err != nil && isExists(err) {
 		err = nil
 	}
@@ -100,6 +108,9 @@ func (s *ibmcos) Put(key string, in io.Reader) error {
 		Body:        body,
 		ContentType: &mimeType,
 	}
+	if s.storageClass != "" {
+		params.SetStorageClass(s.storageClass)
+	}
 	_, err := s.s3.PutObject(params)
 	return err
 }
@@ -110,6 +121,9 @@ func (s *ibmcos) Copy(dst, src string) error {
 		Bucket:     &s.bucket,
 		Key:        &dst,
 		CopySource: &src,
+	}
+	if s.storageClass != "" {
+		params.SetStorageClass(s.storageClass)
 	}
 	_, err := s.s3.CopyObject(params)
 	return err
@@ -191,6 +205,9 @@ func (s *ibmcos) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
+	if s.storageClass != "" {
+		params.SetStorageClass(s.storageClass)
+	}
 	resp, err := s.s3.CreateMultipartUpload(params)
 	if err != nil {
 		return nil, err
@@ -265,7 +282,11 @@ func (s *ibmcos) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func newIBMCOS(endpoint, apiKey, serviceInstanceID, token, storageClass string) (ObjectStorage, error) {
+func (s *ibmcos) SetStorageClass(sc string) {
+	s.storageClass = sc
+}
+
+func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -283,7 +304,7 @@ func newIBMCOS(endpoint, apiKey, serviceInstanceID, token, storageClass string) 
 		WithS3ForcePathStyle(true)
 	sess := session.Must(session.NewSession())
 	client := s3.New(sess, conf)
-	return &ibmcos{bucket, client}, nil
+	return &ibmcos{bucket: bucket, s3: client}, nil
 }
 
 func init() {

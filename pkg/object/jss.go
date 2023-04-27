@@ -45,11 +45,14 @@ func (j *jss) Copy(dst, src string) error {
 		Key:        &dst,
 		CopySource: &src,
 	}
+	if j.storageClass != "" {
+		params.SetStorageClass(j.storageClass)
+	}
 	_, err := j.s3client.s3.CopyObject(params)
 	return err
 }
 
-func newJSS(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
+func newJSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -74,7 +77,7 @@ func newJSS(endpoint, accessKey, secretKey, token, storageClass string) (ObjectS
 		return nil, err
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &jss{s3client{bucket, storageClass, s3.New(ses), ses}}, nil
+	return &jss{s3client{bucket: bucket, s3: s3.New(ses), ses: ses}}, nil
 }
 
 func init() {

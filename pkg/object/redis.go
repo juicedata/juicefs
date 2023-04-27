@@ -179,7 +179,7 @@ func (t *redisStore) Head(key string) (Object, error) {
 	}, err
 }
 
-func newRedis(uri, user, passwd, token, storageClass string) (ObjectStorage, error) {
+func newRedis(uri, user, passwd, token string) (ObjectStorage, error) {
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, fmt.Errorf("url parse %s: %s", uri, err)

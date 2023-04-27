@@ -38,8 +38,9 @@ const bosDefaultRegion = "bj"
 
 type bosclient struct {
 	DefaultObjectStorage
-	bucket string
-	c      *bos.Client
+	bucket       string
+	storageClass string
+	c            *bos.Client
 }
 
 func (q *bosclient) String() string {
@@ -60,6 +61,9 @@ func (q *bosclient) Create() error {
 	_, err := q.c.PutBucket(q.bucket)
 	if err != nil && isExists(err) {
 		err = nil
+	}
+	if q.storageClass != "" && err == nil {
+		err = q.c.PutBucketStorageclass(q.bucket, q.storageClass)
 	}
 	return err
 }
@@ -106,7 +110,11 @@ func (q *bosclient) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	_, err = q.c.BasicPutObject(q.bucket, key, body)
+	args := new(api.PutObjectArgs)
+	if q.storageClass != "" {
+		args.StorageClass = q.storageClass
+	}
+	_, err = q.c.PutObject(q.bucket, key, body, args)
 	return err
 }
 
@@ -149,7 +157,11 @@ func (q *bosclient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 }
 
 func (q *bosclient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	r, err := q.c.BasicInitiateMultipartUpload(q.bucket, key)
+	args := new(api.InitiateMultipartUploadArgs)
+	if q.storageClass != "" {
+		args.StorageClass = q.storageClass
+	}
+	r, err := q.c.InitiateMultipartUpload(q.bucket, key, "", args)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +238,7 @@ func autoBOSEndpoint(bucketName, accessKey, secretKey string) (string, error) {
 	}
 }
 
-func newBOS(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
+func newBOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}

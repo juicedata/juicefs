@@ -269,7 +269,7 @@ func (w *webdav) ListAll(prefix, marker string) (<-chan Object, error) {
 	return listed, nil
 }
 
-func newWebDAV(endpoint, user, passwd, token, storageClass string) (ObjectStorage, error) {
+func newWebDAV(endpoint, user, passwd, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}

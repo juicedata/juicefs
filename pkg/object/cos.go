@@ -39,8 +39,9 @@ import (
 const cosChecksumKey = "x-cos-meta-" + checksumAlgr
 
 type COS struct {
-	c        *cos.Client
-	endpoint string
+	c            *cos.Client
+	endpoint     string
+	storageClass string
 }
 
 func (c *COS) String() string {
@@ -105,14 +106,17 @@ func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 }
 
 func (c *COS) Put(key string, in io.Reader) error {
-	var options *cos.ObjectPutOptions
+	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
 		header := http.Header(map[string][]string{
 			cosChecksumKey: {generateChecksum(ins)},
 		})
-		options = &cos.ObjectPutOptions{ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{XCosMetaXXX: &header}}
+		options.XCosMetaXXX = &header
 	}
-	_, err := c.c.Object.Put(ctx, key, in, options)
+	if c.storageClass != "" {
+		options.XCosStorageClass = c.storageClass
+	}
+	_, err := c.c.Object.Put(ctx, key, in, &options)
 	return err
 }
 
@@ -174,7 +178,11 @@ func (c *COS) ListAll(prefix, marker string) (<-chan Object, error) {
 }
 
 func (c *COS) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	resp, _, err := c.c.Object.InitiateMultipartUpload(ctx, key, nil)
+	var options cos.InitiateMultipartUploadOptions
+	if c.storageClass != "" {
+		options.XCosStorageClass = c.storageClass
+	}
+	resp, _, err := c.c.Object.InitiateMultipartUpload(ctx, key, &options)
 	if err != nil {
 		return nil, err
 	}
@@ -228,6 +236,10 @@ func (c *COS) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, result.NextKeyMarker, nil
 }
 
+func (c *COS) SetStorageClass(sc string) {
+	c.storageClass = sc
+}
+
 func autoCOSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {
 	client := cos.NewClient(nil, &http.Client{
 		Transport: &cos.AuthorizationTransport{
@@ -252,7 +264,7 @@ func autoCOSEndpoint(bucketName, accessKey, secretKey, token string) (string, er
 	return "", fmt.Errorf("bucket %q doesnot exist", bucketName)
 }
 
-func newCOS(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
+func newCOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -287,7 +299,7 @@ func newCOS(endpoint, accessKey, secretKey, token, storageClass string) (ObjectS
 		},
 	})
 	client.UserAgent = UserAgent
-	return &COS{client, uri.Host}, nil
+	return &COS{c: client, endpoint: uri.Host}, nil
 }
 
 func init() {

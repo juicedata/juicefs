@@ -32,7 +32,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/ks3sdklib/aws-sdk-go/aws"
 	"github.com/ks3sdklib/aws-sdk-go/aws/awserr"
@@ -41,9 +40,9 @@ import (
 )
 
 type ks3 struct {
-	bucket string
-	s3     *s3.S3
-	ses    *session.Session
+	bucket       string
+	s3           *s3.S3
+	storageClass string
 }
 
 func (s *ks3) String() string {
@@ -51,7 +50,11 @@ func (s *ks3) String() string {
 }
 
 func (s *ks3) Create() error {
-	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
+	input := &s3.CreateBucketInput{Bucket: &s.bucket}
+	if s.storageClass != "" {
+		input.BucketType = aws.String(s.storageClass)
+	}
+	_, err := s.s3.CreateBucket(input)
 	if err != nil && isExists(err) {
 		err = nil
 	}
@@ -136,6 +139,9 @@ func (s *ks3) Copy(dst, src string) error {
 		Key:        &dst,
 		CopySource: &src,
 	}
+	if s.storageClass != "" {
+		params.StorageClass = aws.String(s.storageClass)
+	}
 	_, err := s.s3.CopyObject(params)
 	return err
 }
@@ -198,6 +204,9 @@ func (s *ks3) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	params := &s3.CreateMultipartUploadInput{
 		Bucket: &s.bucket,
 		Key:    &key,
+	}
+	if s.storageClass != "" {
+		params.StorageClass = aws.String(s.storageClass)
 	}
 	resp, err := s.s3.CreateMultipartUpload(params)
 	if err != nil {
@@ -284,6 +293,10 @@ func (s *ks3) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
+func (s *ks3) SetStorageClass(sc string) {
+	s.storageClass = sc
+}
+
 var ks3Regions = map[string]string{
 	"cn-beijing":   "BEIJING",
 	"cn-shanghai":  "SHANGHAI",
@@ -297,7 +310,7 @@ var ks3Regions = map[string]string{
 	"sgp":          "SINGAPORE",
 }
 
-func newKS3(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
+func newKS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -337,7 +350,7 @@ func newKS3(endpoint, accessKey, secretKey, token, storageClass string) (ObjectS
 		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, token),
 	}
 
-	return &ks3{bucket, s3.New(awsConfig), nil}, nil
+	return &ks3{bucket: bucket, s3: s3.New(awsConfig)}, nil
 }
 
 func init() {

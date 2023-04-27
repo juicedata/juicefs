@@ -105,7 +105,7 @@ func (s *speedy) List(prefix, marker, delimiter string, limit int64) ([]Object, 
 	return objs, nil
 }
 
-func newSpeedy(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
+func newSpeedy(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}

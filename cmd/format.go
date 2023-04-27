@@ -215,15 +215,17 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 	}
 
 	if format.Shards > 1 {
-		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.StorageClass, format.Shards)
+		blob, err = object.NewSharded(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.Shards)
 	} else {
-		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken, format.StorageClass)
+		blob, err = object.CreateStorage(strings.ToLower(format.Storage), format.Bucket, format.AccessKey, format.SecretKey, format.SessionToken)
 	}
 	if err != nil {
 		return nil, err
 	}
 	blob = object.WithPrefix(blob, format.Name+"/")
-
+	if os, ok := blob.(object.SupportStorageClass); ok {
+		os.SetStorageClass(format.StorageClass)
+	}
 	if format.EncryptKey != "" {
 		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
 		if passphrase == "" {

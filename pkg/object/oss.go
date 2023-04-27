@@ -138,7 +138,11 @@ func (o *ossClient) Put(key string, in io.Reader) error {
 }
 
 func (o *ossClient) Copy(dst, src string) error {
-	_, err := o.bucket.CopyObject(src, dst)
+	var option []oss.Option
+	if o.storageClass != "" {
+		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.storageClass)))
+	}
+	_, err := o.bucket.CopyObject(src, dst, option...)
 	return o.checkError(err)
 }
 
@@ -175,7 +179,11 @@ func (o *ossClient) ListAll(prefix, marker string) (<-chan Object, error) {
 }
 
 func (o *ossClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	r, err := o.bucket.InitiateMultipartUpload(key)
+	var option []oss.Option
+	if o.storageClass != "" {
+		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.storageClass)))
+	}
+	r, err := o.bucket.InitiateMultipartUpload(key, option...)
 	if o.checkError(err) != nil {
 		return nil, err
 	}
@@ -235,6 +243,10 @@ func (o *ossClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 		parts[i] = &PendingPart{u.Key, u.UploadID, u.Initiated}
 	}
 	return parts, result.NextKeyMarker, nil
+}
+
+func (o *ossClient) SetStorageClass(sc string) {
+	o.storageClass = sc
 }
 
 type stsCred struct {
@@ -358,7 +370,7 @@ func autoOSSEndpoint(bucketName, accessKey, secretKey, securityToken string) (st
 	return fmt.Sprintf("https://%s.aliyuncs.com", bucketLocation), nil
 }
 
-func newOSS(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
+func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -419,7 +431,7 @@ func newOSS(endpoint, accessKey, secretKey, token, storageClass string) (ObjectS
 		return nil, fmt.Errorf("Cannot create bucket %s: %s", bucketName, err)
 	}
 
-	o := &ossClient{client: client, bucket: bucket, storageClass: storageClass}
+	o := &ossClient{client: client, bucket: bucket}
 	if token != "" && refresh {
 		go func() {
 			for {

@@ -190,7 +190,7 @@ func (m *memStore) ListAll(prefix, marker string) (<-chan Object, error) {
 	return nil, notSupported
 }
 
-func newMem(endpoint, accesskey, secretkey, token, storageClass string) (ObjectStorage, error) {
+func newMem(endpoint, accesskey, secretkey, token string) (ObjectStorage, error) {
 	store := &memStore{name: endpoint}
 	store.objects = make(map[string]*mobj)
 	return store, nil

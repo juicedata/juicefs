@@ -73,6 +73,14 @@ func (s *sharded) Delete(key string) error {
 	return s.pick(key).Delete(key)
 }
 
+func (s *sharded) SetStorageClass(sc string) {
+	for _, o := range s.stores {
+		if os, ok := o.(SupportStorageClass); ok {
+			os.SetStorageClass(sc)
+		}
+	}
+}
+
 const maxResults = 10000
 
 // ListAll on all the keys that starts at marker from object storage.
@@ -196,7 +204,7 @@ func (s *sharded) CompleteUpload(key string, uploadID string, parts []*Part) err
 	return s.pick(key).CompleteUpload(key, uploadID, parts)
 }
 
-func NewSharded(name, endpoint, ak, sk, token, storageClass string, shards int) (ObjectStorage, error) {
+func NewSharded(name, endpoint, ak, sk, token string, shards int) (ObjectStorage, error) {
 	stores := make([]ObjectStorage, shards)
 	var err error
 	for i := range stores {
@@ -204,7 +212,7 @@ func NewSharded(name, endpoint, ak, sk, token, storageClass string, shards int) 
 		if strings.HasSuffix(ep, "%!(EXTRA int=0)") {
 			return nil, fmt.Errorf("can not generate different endpoint using %s", endpoint)
 		}
-		stores[i], err = CreateStorage(name, ep, ak, sk, token, storageClass)
+		stores[i], err = CreateStorage(name, ep, ak, sk, token)
 		if err != nil {
 			return nil, err
 		}

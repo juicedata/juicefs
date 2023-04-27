@@ -112,7 +112,7 @@ func (t *tikv) List(prefix, marker, delimiter string, limit int64) ([]Object, er
 	return objs, nil
 }
 
-func newTiKV(endpoint, accesskey, secretkey, token, storageClass string) (ObjectStorage, error) {
+func newTiKV(endpoint, accesskey, secretkey, token string) (ObjectStorage, error) {
 	var plvl string // TiKV (PingCap) uses uber-zap logging, make it less verbose
 	switch logger.Level {
 	case logrus.TraceLevel:

@@ -242,7 +242,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 				user = parts[0]
 				pass = parts[1]
 			}
-			return object.CreateStorage("sftp", uri, user, pass, "", conf.StorageClass)
+			return object.CreateStorage("sftp", uri, user, pass, "")
 		}
 	}
 	uri, token := extractToken(uri)
@@ -284,7 +284,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		endpoint += u.Path
 	}
 
-	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, token, conf.StorageClass)
+	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, token)
 	if err != nil {
 		return nil, fmt.Errorf("create %s %s: %s", name, endpoint, err)
 	}
@@ -352,6 +352,9 @@ func doSync(c *cli.Context) error {
 	dst, err := createSyncStorage(dstURL, config)
 	if err != nil {
 		return err
+	}
+	if os, ok := dst.(object.SupportStorageClass); ok {
+		os.SetStorageClass(config.StorageClass)
 	}
 	return sync.Sync(src, dst, config)
 }

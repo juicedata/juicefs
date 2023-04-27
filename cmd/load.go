@@ -102,7 +102,7 @@ func load(ctx *cli.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to get absolute path of %s: %s", src, err)
 			}
-			fileBlob, err := object.CreateStorage("file", strings.TrimRight(src, filepath.Base(srcAbsPath)), "", "", "", "")
+			fileBlob, err := object.CreateStorage("file", strings.TrimRight(src, filepath.Base(srcAbsPath)), "", "", "")
 			if err != nil {
 				return err
 			}

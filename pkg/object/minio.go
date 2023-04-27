@@ -49,7 +49,7 @@ func (m *minio) Limits() Limits {
 	}
 }
 
-func newMinio(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
+func newMinio(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
@@ -96,7 +96,7 @@ func newMinio(endpoint, accessKey, secretKey, token, storageClass string) (Objec
 		bucket = bucket[len("minio/"):]
 	}
 	bucket = strings.Split(bucket, "/")[0]
-	return &minio{s3client{bucket, storageClass, s3.New(ses), ses}}, nil
+	return &minio{s3client{bucket: bucket, s3: s3.New(ses), ses: ses}}, nil
 }
 
 func init() {

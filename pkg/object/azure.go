@@ -33,7 +33,7 @@ import (
 type wasb struct {
 	DefaultObjectStorage
 	container    *azblob.ContainerClient
-	StorageClass string
+	storageClass string
 	cName        string
 	marker       string
 }
@@ -76,7 +76,11 @@ func (b *wasb) Get(key string, off, limit int64) (io.ReadCloser, error) {
 }
 
 func (b *wasb) Put(key string, data io.Reader) error {
-	_, err := b.container.NewBlockBlobClient(key).UploadStreamToBlockBlob(ctx, data, azblob.UploadStreamToBlockBlobOptions{})
+	options := azblob.UploadStreamToBlockBlobOptions{}
+	if b.storageClass != "" {
+		options.AccessTier = azblob.AccessTier(b.storageClass).ToPtr()
+	}
+	_, err := b.container.NewBlockBlobClient(key).UploadStreamToBlockBlob(ctx, data, options)
 	return err
 }
 
@@ -135,6 +139,10 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64) ([]Object, er
 	return objs, nil
 }
 
+func (b *wasb) SetStorageClass(sc string) {
+	b.storageClass = sc
+}
+
 func autoWasbEndpoint(containerName, accountName, scheme string, credential *azblob.SharedKeyCredential) (string, error) {
 	baseURLs := []string{"blob.core.windows.net", "blob.core.chinacloudapi.cn"}
 	endpoint := ""
@@ -161,7 +169,7 @@ func autoWasbEndpoint(containerName, accountName, scheme string, credential *azb
 	return endpoint, nil
 }
 
-func newWasb(endpoint, accountName, accountKey, token, storageClass string) (ObjectStorage, error) {
+func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -198,7 +206,6 @@ func newWasb(endpoint, accountName, accountKey, token, storageClass string) (Obj
 	if err != nil {
 		return nil, err
 	}
-
 	return &wasb{container: &client, cName: containerName}, nil
 }
 

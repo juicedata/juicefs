@@ -49,7 +49,7 @@ func (s *scw) Limits() Limits {
 	}
 }
 
-func newScw(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
+func newScw(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
@@ -84,7 +84,7 @@ func newScw(endpoint, accessKey, secretKey, token, storageClass string) (ObjectS
 		return nil, fmt.Errorf("aws session: %s", err)
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &scw{s3client{bucket, storageClass, s3.New(ses), ses}}, nil
+	return &scw{s3client{bucket: bucket, s3: s3.New(ses), ses: ses}}, nil
 }
 
 func init() {

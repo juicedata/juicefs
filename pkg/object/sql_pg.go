@@ -24,7 +24,7 @@ import (
 )
 
 func init() {
-	Register("postgres", func(addr, user, pass, token, storageClass string) (ObjectStorage, error) {
+	Register("postgres", func(addr, user, pass, token string) (ObjectStorage, error) {
 		return newSQLStore("postgres", removeScheme(addr), user, pass)
 	})
 }

@@ -409,7 +409,7 @@ func getDefaultChunkConf(format *meta.Format) *chunk.Config {
 	return chunkConf
 }
 
-func newJFS(endpoint, accessKey, secretKey, token, storageClass string) (object.ObjectStorage, error) {
+func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage, error) {
 	metaUrl := os.Getenv(endpoint)
 	if metaUrl == "" {
 		metaUrl = endpoint

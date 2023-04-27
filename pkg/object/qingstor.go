@@ -39,7 +39,8 @@ import (
 )
 
 type qingstor struct {
-	bucket *qs.Bucket
+	bucket       *qs.Bucket
+	storageClass string
 }
 
 func (q *qingstor) String() string {
@@ -142,6 +143,9 @@ func (q *qingstor) Put(key string, in io.Reader) error {
 		ContentLength: &vlen,
 		ContentType:   &mimeType,
 	}
+	if q.storageClass != "" {
+		input.XQSStorageClass = &q.storageClass
+	}
 	out, err := q.bucket.PutObject(key, input)
 	if err != nil {
 		return err
@@ -156,6 +160,9 @@ func (q *qingstor) Copy(dst, src string) error {
 	source := fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, src)
 	input := &qs.PutObjectInput{
 		XQSCopySource: &source,
+	}
+	if q.storageClass != "" {
+		input.XQSStorageClass = &q.storageClass
 	}
 	out, err := q.bucket.PutObject(dst, input)
 	if err != nil {
@@ -214,7 +221,11 @@ func (q *qingstor) ListAll(prefix, marker string) (<-chan Object, error) {
 }
 
 func (q *qingstor) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	r, err := q.bucket.InitiateMultipartUpload(key, nil)
+	var input qs.InitiateMultipartUploadInput
+	if q.storageClass != "" {
+		input.XQSStorageClass = &q.storageClass
+	}
+	r, err := q.bucket.InitiateMultipartUpload(key, &input)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +301,11 @@ func (q *qingstor) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func newQingStor(endpoint, accessKey, secretKey, token, storageClass string) (ObjectStorage, error) {
+func (q *qingstor) SetStorageClass(sc string) {
+	q.storageClass = sc
+}
+
+func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
 	}
