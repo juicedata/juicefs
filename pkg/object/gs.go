@@ -77,9 +77,8 @@ func (g *gs) Create() error {
 	}
 
 	err := g.client.Bucket(g.bucket).Create(ctx, projectID, &storage.BucketAttrs{
-		Name:         g.bucket,
-		StorageClass: "regional",
-		Location:     g.region,
+		Name:     g.bucket,
+		Location: g.region,
 	})
 	if err != nil && strings.Contains(err.Error(), "You already own this bucket") {
 		return nil
