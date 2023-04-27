@@ -3164,6 +3164,20 @@ func (m *dbMeta) dumpEntry(s *xorm.Session, inode Ino, typ uint8) (*DumpedEntry,
 		e.Xattrs = xattrs
 	}
 
+	if attr.Typ == TypeDirectory {
+		quota := dirQuota{Inode: inode}
+		exist, err := s.Get(&quota)
+		if err != nil {
+			logger.Warnf("get quota of %d: %v", inode, err)
+		} else if exist {
+			e.Quota = &DumpedQuota{
+				MaxSpace:  quota.MaxSpace,
+				MaxInodes: quota.MaxInodes,
+			}
+			fmt.Printf("%d: %v\n", inode, e.Quota)
+		}
+	}
+
 	if attr.Typ == TypeFile {
 		for indx := uint32(0); uint64(indx)*ChunkSize < attr.Length; indx++ {
 			c := &chunk{Inode: inode, Indx: indx}
@@ -3218,6 +3232,19 @@ func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEnt
 		}
 		sort.Slice(xattrs, func(i, j int) bool { return xattrs[i].Name < xattrs[j].Name })
 		e.Xattrs = xattrs
+	}
+	if attr.Typ == TypeDirectory {
+		quota := dirQuota{Inode: inode}
+		exist, err := s.Get(&quota)
+		if err != nil {
+			logger.Warnf("get quota of %d: %v", inode, err)
+		} else if exist {
+			e.Quota = &DumpedQuota{
+				MaxSpace:  quota.MaxSpace,
+				MaxInodes: quota.MaxInodes,
+			}
+			fmt.Printf("%d: %v\n", inode, e.Quota)
+		}
 	}
 
 	if attr.Typ == TypeFile {
