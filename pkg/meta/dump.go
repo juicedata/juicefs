@@ -103,7 +103,6 @@ type DumpedEntry struct {
 	Xattrs  []*DumpedXattr          `json:"xattrs,omitempty"`
 	Chunks  []*DumpedChunk          `json:"chunks,omitempty"`
 	Entries map[string]*DumpedEntry `json:"entries,omitempty"`
-	Quota   *DumpedQuota
 }
 
 var CHARS = []byte("0123456789ABCDEF")
@@ -241,13 +240,6 @@ func (de *DumpedEntry) writeJsonWithOutEntry(bw *bufio.Writer, depth int) error 
 			return err
 		}
 		write(fmt.Sprintf(",\n%s\"xattrs\": %s", fieldPrefix, data))
-	}
-	if de.Quota != nil {
-		quota, err := json.Marshal(de.Quota)
-		if err != nil {
-			return err
-		}
-		write(fmt.Sprintf(",\n%s\"quota\": %s", fieldPrefix, string(quota)))
 	}
 	write(fmt.Sprintf(",\n%s\"entries\": {", fieldPrefix))
 	return nil
