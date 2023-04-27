@@ -3509,7 +3509,6 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 		var sr = make([]*redis.StringCmd, len(es))
 		var cr = make([]*redis.StringSliceCmd, len(es))
 		var dr = make([]*redis.MapStringStringCmd, len(es))
-		var qr = make([]*redis.StringCmd, len(es))
 		for i, e := range es {
 			inode := e.Attr.Inode
 			ar[i] = p.Get(ctx, m.inodeKey(inode))
@@ -3519,7 +3518,6 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 				cr[i] = p.LRange(ctx, m.chunkKey(inode, 0), 0, -1)
 			case "directory":
 				dr[i] = p.HGetAll(ctx, m.entryKey(inode))
-				qr[i] = p.HGet(ctx, m.dirQuotaKey(), e.Attr.Inode.String())
 			case "symlink":
 				sr[i] = p.Get(ctx, m.symKey(inode))
 			}
@@ -3607,19 +3605,6 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					ce.Attr.Type = typeToString(t)
 					e.Entries[name] = ce
 				}
-				buf, err := qr[i].Bytes()
-				if err != nil {
-					if err == redis.Nil {
-						continue
-					}
-					return errors.Wrap(err, fmt.Sprintf("get quota for %d", inode))
-				}
-				if len(buf) != 16 {
-					return fmt.Errorf("invalid quota value of %d: %s", inode, hex.EncodeToString(buf))
-				}
-				e.Quota = new(DumpedQuota)
-				e.Quota.MaxSpace, e.Quota.MaxInodes = m.parseQuota(buf)
-
 			case TypeSymlink:
 				if e.Symlink, err = sr[i].Result(); err != nil {
 					if err != redis.Nil {
@@ -3816,6 +3801,21 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 			sessions = append(sessions, &DumpedSustained{sid, inodes})
 		}
 	}
+	quotas := make(map[Ino]*DumpedQuota)
+	for k, v := range m.rdb.HGetAll(ctx, m.dirQuotaKey()).Val() {
+		inode, err := strconv.ParseUint(k, 10, 64)
+		if err != nil {
+			logger.Warnf("parse inode: %s: %v", k, err)
+			continue
+		}
+		if len(v) != 16 {
+			logger.Warnf("invalid quota string: %s", hex.EncodeToString([]byte(v)))
+			continue
+		}
+		var quota DumpedQuota
+		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
+		quotas[Ino(inode)] = &quota
+	}
 
 	dm := &DumpedMeta{
 		Setting: *m.fmt,
@@ -3829,6 +3829,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 		},
 		Sustained: sessions,
 		DelFiles:  dels,
+		Quotas:    quotas,
 	}
 	if !keepSecret && dm.Setting.SecretKey != "" {
 		dm.Setting.SecretKey = "removed"

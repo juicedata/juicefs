@@ -258,6 +258,7 @@ type DumpedMeta struct {
 	Counters  *DumpedCounters
 	Sustained []*DumpedSustained
 	DelFiles  []*DumpedDelFile
+	Quotas    map[Ino]*DumpedQuota
 	FSTree    *DumpedEntry `json:",omitempty"`
 	Trash     *DumpedEntry `json:",omitempty"`
 }
