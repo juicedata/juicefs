@@ -206,6 +206,7 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 	if err != nil {
 		return nil, err
 	}
+
 	return &wasb{container: &client, cName: containerName}, nil
 }
 

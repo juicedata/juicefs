@@ -30,10 +30,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/enum"
-
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos"
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/codes"
+	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/enum"
 )
 
 type tosClient struct {
