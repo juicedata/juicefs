@@ -3387,7 +3387,8 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	progress := utils.NewProgress(false)
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
-
+	var dumpedQuotas map[Ino]*DumpedQuota
+	defer m.loadDumpedQuotas(Background, dumpedQuotas)
 	return m.roTxn(func(s *xorm.Session) error {
 		if root == RootInode {
 			defer func() { m.snap = nil }()
@@ -3456,9 +3457,9 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		if err := s.Find(&qs); err != nil {
 			return err
 		}
-		quotas := make(map[Ino]*DumpedQuota, len(qs))
+		dumpedQuotas = make(map[Ino]*DumpedQuota, len(qs))
 		for _, q := range qs {
-			quotas[q.Inode] = &DumpedQuota{q.MaxSpace, q.MaxInodes}
+			dumpedQuotas[q.Inode] = &DumpedQuota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes}
 		}
 
 		dm := DumpedMeta{
@@ -3466,7 +3467,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 			Counters:  counters,
 			Sustained: sessions,
 			DelFiles:  dels,
-			Quotas:    quotas,
+			Quotas:    dumpedQuotas,
 		}
 		if !keepSecret && dm.Setting.SecretKey != "" {
 			dm.Setting.SecretKey = "removed"
@@ -3692,6 +3693,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}); err != nil {
 		return err
 	}
+
 	// update nlinks and parents for hardlinks
 	return m.txn(func(s *xorm.Session) error {
 		for i, ps := range parents {

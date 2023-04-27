@@ -3029,7 +3029,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	for k, v := range pairs {
 		inode := m.decodeInode([]byte(k[2:]))
 		quota := m.parseQuota(v)
-		quotas[inode] = &DumpedQuota{quota.MaxSpace, quota.MaxInodes}
+		quotas[inode] = &DumpedQuota{quota.MaxSpace, quota.MaxInodes, quota.UsedSpace, quota.UsedInodes}
 	}
 
 	dm := DumpedMeta{
@@ -3215,6 +3215,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 
 	// update nlinks and parents for hardlinks
 	st := make(map[Ino]int64)
+	defer m.loadDumpedQuotas(Background, dm.Quotas)
 	return m.txn(func(tx *kvTxn) error {
 		for i, ps := range parents {
 			if len(ps) > 1 {

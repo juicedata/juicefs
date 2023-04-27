@@ -91,8 +91,10 @@ type DumpedXattr struct {
 }
 
 type DumpedQuota struct {
-	MaxSpace  int64 `json:"maxSpace"`
-	MaxInodes int64 `json:"maxInodes"`
+	MaxSpace   int64 `json:"maxSpace"`
+	MaxInodes  int64 `json:"maxInodes"`
+	UsedSpace  int64 `json:"usedSpace"`
+	UsedInodes int64 `json:"usedInodes"`
 }
 
 type DumpedEntry struct {
@@ -270,6 +272,16 @@ func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 	return bw, nil
 }
 
+func (m *baseMeta) loadDumpedQuotas(ctx Context, quotas map[Ino]*DumpedQuota) {
+	// update quota
+	for inode, q := range quotas {
+		if err := m.en.doSetQuota(ctx, inode, &Quota{q.MaxSpace, q.MaxSpace, q.UsedSpace, q.UsedInodes, 0, 0}, true); err != nil {
+			logger.Warnf("reset quota of %d: %s", inode, err)
+			continue
+		}
+	}
+}
+
 func dumpAttr(a *Attr, d *DumpedAttr) {
 	d.Type = typeToString(a.Typ)
 	d.Flags = a.Flags
@@ -352,6 +364,8 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 			err = dec.Decode(&dm.Sustained)
 		case "DelFiles":
 			err = dec.Decode(&dm.DelFiles)
+		case "Quotas":
+			err = dec.Decode(&dm.Quotas)
 		case "FSTree":
 			_, err = decodeEntry(dec, 0, counters, parents, refs, bar, load, addChunk)
 		case "Trash":
