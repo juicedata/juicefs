@@ -3395,11 +3395,14 @@ func (m *kvMeta) touchAtime(_ctx Context, ino Ino) syscall.Errno {
 
 	return errno(m.txn(func(tx *kvTxn) error {
 		var attr Attr
-		a := tx.get(m.inodeKey(ino))
-		if a == nil {
-			return syscall.ENOENT
+		cached := m.of.Check(ino, &attr)
+		if !cached {
+			a := tx.get(m.inodeKey(ino))
+			if a == nil {
+				return syscall.ENOENT
+			}
+			m.parseAttr(a, &attr)
 		}
-		m.parseAttr(a, &attr)
 
 		now := time.Now()
 		if !m.atimeNeedsUpdate(&attr, now) {
@@ -3408,6 +3411,10 @@ func (m *kvMeta) touchAtime(_ctx Context, ino Ino) syscall.Errno {
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(ino), m.marshal(&attr))
+
+		if cached {
+			m.of.Update(ino, &attr)
+		}
 		return nil
 	}))
 }

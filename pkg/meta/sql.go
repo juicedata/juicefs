@@ -3916,12 +3916,15 @@ func (m *dbMeta) touchAtime(ctx Context, ino Ino) syscall.Errno {
 	return errno(m.txn(func(s *xorm.Session) error {
 		var cur = node{Inode: ino}
 		var attr = Attr{}
-		ok, err := s.ForUpdate().Get(&cur)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return syscall.ENOENT
+		cached := m.of.Check(ino, &attr)
+		if !cached {
+			ok, err := s.ForUpdate().Get(&cur)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return syscall.ENOENT
+			}
 		}
 
 		now := time.Now()
@@ -3930,7 +3933,11 @@ func (m *dbMeta) touchAtime(ctx Context, ino Ino) syscall.Errno {
 			return nil
 		}
 		cur.Atime = now.Unix()*1e6 + int64(now.Nanosecond())/1e3
-		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime").Update(&cur, &node{Inode: ino})
+		_, err := s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime").Update(&cur, &node{Inode: ino})
+
+		if cached {
+			m.of.Update(ino, &attr)
+		}
 		return err
 	}))
 }

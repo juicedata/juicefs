@@ -4256,11 +4256,14 @@ func (m *redisMeta) touchAtime(ctx Context, ino Ino) syscall.Errno {
 
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
 		var attr Attr
-		a, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
-		if err != nil {
-			return err
+		cached := m.of.Check(ino, &attr)
+		if !cached {
+			a, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
+			if err != nil {
+				return err
+			}
+			m.parseAttr(a, &attr)
 		}
-		m.parseAttr(a, &attr)
 
 		now := time.Now()
 		if !m.atimeNeedsUpdate(&attr, now) {
@@ -4268,10 +4271,14 @@ func (m *redisMeta) touchAtime(ctx Context, ino Ino) syscall.Errno {
 		}
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
-		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(ino), m.marshal(&attr), 0)
 			return nil
 		})
+
+		if cached {
+			m.of.Update(ino, &attr)
+		}
 		return err
 	}, m.inodeKey(ino)))
 }
