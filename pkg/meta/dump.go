@@ -93,8 +93,8 @@ type DumpedXattr struct {
 type DumpedQuota struct {
 	MaxSpace   int64 `json:"maxSpace"`
 	MaxInodes  int64 `json:"maxInodes"`
-	UsedSpace  int64 `json:"usedSpace"`
-	UsedInodes int64 `json:"usedInodes"`
+	UsedSpace  int64 `json:"-"`
+	UsedInodes int64 `json:"-"`
 }
 
 type DumpedEntry struct {

@@ -3814,16 +3814,6 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 		}
 		var quota DumpedQuota
 		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
-		quota.UsedSpace, err = m.rdb.HGet(ctx, m.dirQuotaUsedSpaceKey(), k).Int64()
-		if err != nil {
-			logger.Warnf("parse used space: %s=%s, %v", k, v, err)
-			continue
-		}
-		quota.UsedInodes, err = m.rdb.HGet(ctx, m.dirQuotaUsedInodesKey(), k).Int64()
-		if err != nil {
-			logger.Warnf("parse used inodes: %s=%s, %v", k, v, err)
-			continue
-		}
 		quotas[Ino(inode)] = &quota
 	}
 

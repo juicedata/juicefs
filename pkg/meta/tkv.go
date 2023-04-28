@@ -3030,7 +3030,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	for k, v := range pairs {
 		inode := m.decodeInode([]byte(k[2:]))
 		quota := m.parseQuota(v)
-		quotas[inode] = &DumpedQuota{quota.MaxSpace, quota.MaxInodes, quota.UsedSpace, quota.UsedInodes}
+		quotas[inode] = &DumpedQuota{quota.MaxSpace, quota.MaxInodes, 0, 0}
 	}
 
 	dm := DumpedMeta{
