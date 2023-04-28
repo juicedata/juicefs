@@ -185,6 +185,12 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		fopt.MaxRetryBackoff = opt.MaxRetryBackoff
 		fopt.ReadTimeout = opt.ReadTimeout
 		fopt.WriteTimeout = opt.WriteTimeout
+		fopt.PoolSize = opt.PoolSize               // default: GOMAXPROCS * 10
+		fopt.PoolTimeout = opt.PoolTimeout         // default: ReadTimeout + 1 second.
+		fopt.MinIdleConns = opt.MinIdleConns       // disable by default
+		fopt.MaxIdleConns = opt.MaxIdleConns       // disable by default
+		fopt.ConnMaxIdleTime = opt.ConnMaxIdleTime // default: 30 minutes
+		fopt.ConnMaxLifetime = opt.ConnMaxLifetime // disable by default
 		if conf.ReadOnly {
 			// NOTE: RouteByLatency and RouteRandomly are not supported since they require cluster client
 			fopt.ReplicaOnly = routeRead == "replica"
@@ -212,6 +218,12 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			copt.MaxRetryBackoff = opt.MaxRetryBackoff
 			copt.ReadTimeout = opt.ReadTimeout
 			copt.WriteTimeout = opt.WriteTimeout
+			copt.PoolSize = opt.PoolSize               // default: GOMAXPROCS * 10
+			copt.PoolTimeout = opt.PoolTimeout         // default: ReadTimeout + 1 second.
+			copt.MinIdleConns = opt.MinIdleConns       // disable by default
+			copt.MaxIdleConns = opt.MaxIdleConns       // disable by default
+			copt.ConnMaxIdleTime = opt.ConnMaxIdleTime // default: 30 minutes
+			copt.ConnMaxLifetime = opt.ConnMaxLifetime // disable by default
 			if conf.ReadOnly {
 				switch routeRead {
 				case "random":
