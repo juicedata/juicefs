@@ -428,7 +428,7 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 
 				var newPs []Ino
 				for ps := []Ino{parent}; len(ps) > 0; ps = newPs {
-					newPs = newPs[:0]
+					newPs = nil
 					for _, p := range ps {
 						if q := quotas[p]; q != nil {
 							q.UsedSpace += align4K(e.Attr.Length)
