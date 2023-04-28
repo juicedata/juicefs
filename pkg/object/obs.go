@@ -42,11 +42,11 @@ import (
 const obsDefaultRegion = "cn-north-1"
 
 type obsClient struct {
-	bucket       string
-	region       string
-	checkEtag    bool
-	storageClass string
-	c            *obs.ObsClient
+	bucket    string
+	region    string
+	checkEtag bool
+	sc        string
+	c         *obs.ObsClient
 }
 
 func (s *obsClient) String() string {
@@ -68,7 +68,7 @@ func (s *obsClient) Create() error {
 	params.Bucket = s.bucket
 	params.Location = s.region
 	params.AvailableZone = "3az"
-	params.StorageClass = obs.StorageClassType(s.storageClass)
+	params.StorageClass = obs.StorageClassType(s.sc)
 	_, err := s.c.CreateBucket(params)
 	if err != nil && isExists(err) {
 		err = nil
@@ -155,7 +155,7 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 	params.ContentLength = vlen
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	params.ContentType = mimeType
-	params.StorageClass = obs.StorageClassType(s.storageClass)
+	params.StorageClass = obs.StorageClassType(s.sc)
 	resp, err := s.c.PutObject(params)
 	if err == nil && s.checkEtag && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
@@ -169,7 +169,7 @@ func (s *obsClient) Copy(dst, src string) error {
 	params.Key = dst
 	params.CopySourceBucket = s.bucket
 	params.CopySourceKey = src
-	params.StorageClass = obs.StorageClassType(s.storageClass)
+	params.StorageClass = obs.StorageClassType(s.sc)
 	_, err := s.c.CopyObject(params)
 	return err
 }
@@ -226,7 +226,7 @@ func (s *obsClient) CreateMultipartUpload(key string) (*MultipartUpload, error) 
 	params := &obs.InitiateMultipartUploadInput{}
 	params.Bucket = s.bucket
 	params.Key = key
-	params.StorageClass = obs.StorageClassType(s.storageClass)
+	params.StorageClass = obs.StorageClassType(s.sc)
 	resp, err := s.c.InitiateMultipartUpload(params)
 	if err != nil {
 		return nil, err
@@ -313,7 +313,7 @@ func (s *obsClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 }
 
 func (s *obsClient) SetStorageClass(sc string) {
-	s.storageClass = sc
+	s.sc = sc
 }
 
 func autoOBSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {

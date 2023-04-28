@@ -143,7 +143,7 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 			},
 			&cli.StringFlag{
 				Name:  "storage-class",
-				Usage: "object storage class type",
+				Usage: "the default storage class",
 			},
 			&cli.StringFlag{
 				Name:  "encrypt-rsa-key",
@@ -223,8 +223,10 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 		return nil, err
 	}
 	blob = object.WithPrefix(blob, format.Name+"/")
-	if os, ok := blob.(object.SupportStorageClass); ok {
-		os.SetStorageClass(format.StorageClass)
+	if format.StorageClass != "" {
+		if os, ok := blob.(object.SupportStorageClass); ok {
+			os.SetStorageClass(format.StorageClass)
+		}
 	}
 	if format.EncryptKey != "" {
 		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")

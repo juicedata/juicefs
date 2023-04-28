@@ -32,10 +32,10 @@ import (
 
 type wasb struct {
 	DefaultObjectStorage
-	container    *azblob.ContainerClient
-	storageClass string
-	cName        string
-	marker       string
+	container *azblob.ContainerClient
+	sc        string
+	cName     string
+	marker    string
 }
 
 func (b *wasb) String() string {
@@ -77,8 +77,8 @@ func (b *wasb) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 func (b *wasb) Put(key string, data io.Reader) error {
 	options := azblob.UploadStreamToBlockBlobOptions{}
-	if b.storageClass != "" {
-		options.AccessTier = azblob.AccessTier(b.storageClass).ToPtr()
+	if b.sc != "" {
+		options.AccessTier = azblob.AccessTier(b.sc).ToPtr()
 	}
 	_, err := b.container.NewBlockBlobClient(key).UploadStreamToBlockBlob(ctx, data, options)
 	return err
@@ -140,7 +140,7 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64) ([]Object, er
 }
 
 func (b *wasb) SetStorageClass(sc string) {
-	b.storageClass = sc
+	b.sc = sc
 }
 
 func autoWasbEndpoint(containerName, accountName, scheme string, credential *azblob.SharedKeyCredential) (string, error) {

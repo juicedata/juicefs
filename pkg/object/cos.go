@@ -39,9 +39,9 @@ import (
 const cosChecksumKey = "x-cos-meta-" + checksumAlgr
 
 type COS struct {
-	c            *cos.Client
-	endpoint     string
-	storageClass string
+	c        *cos.Client
+	endpoint string
+	sc       string
 }
 
 func (c *COS) String() string {
@@ -113,8 +113,8 @@ func (c *COS) Put(key string, in io.Reader) error {
 		})
 		options.XCosMetaXXX = &header
 	}
-	if c.storageClass != "" {
-		options.XCosStorageClass = c.storageClass
+	if c.sc != "" {
+		options.XCosStorageClass = c.sc
 	}
 	_, err := c.c.Object.Put(ctx, key, in, &options)
 	return err
@@ -179,8 +179,8 @@ func (c *COS) ListAll(prefix, marker string) (<-chan Object, error) {
 
 func (c *COS) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	var options cos.InitiateMultipartUploadOptions
-	if c.storageClass != "" {
-		options.XCosStorageClass = c.storageClass
+	if c.sc != "" {
+		options.XCosStorageClass = c.sc
 	}
 	resp, _, err := c.c.Object.InitiateMultipartUpload(ctx, key, &options)
 	if err != nil {
@@ -237,7 +237,7 @@ func (c *COS) ListUploads(marker string) ([]*PendingPart, string, error) {
 }
 
 func (c *COS) SetStorageClass(sc string) {
-	c.storageClass = sc
+	c.sc = sc
 }
 
 func autoCOSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {

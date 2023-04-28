@@ -36,9 +36,9 @@ import (
 )
 
 type tosClient struct {
-	bucket       string
-	storageClass string
-	client       *tos.ClientV2
+	bucket string
+	sc     string
+	client *tos.ClientV2
 }
 
 func (t *tosClient) String() string {
@@ -56,7 +56,7 @@ func (t *tosClient) Limits() Limits {
 }
 
 func (t *tosClient) Create() error {
-	_, err := t.client.CreateBucketV2(context.Background(), &tos.CreateBucketV2Input{Bucket: t.bucket, StorageClass: enum.StorageClassType(t.storageClass)})
+	_, err := t.client.CreateBucketV2(context.Background(), &tos.CreateBucketV2Input{Bucket: t.bucket, StorageClass: enum.StorageClassType(t.sc)})
 	if e, ok := err.(*tos.TosServerError); ok {
 		if e.Code == codes.BucketAlreadyOwnedByYou || e.Code == codes.BucketAlreadyExists {
 			return nil
@@ -87,7 +87,7 @@ func (t *tosClient) Put(key string, in io.Reader) error {
 		PutObjectBasicInput: tos.PutObjectBasicInput{
 			Bucket:       t.bucket,
 			Key:          key,
-			StorageClass: enum.StorageClassType(t.storageClass),
+			StorageClass: enum.StorageClassType(t.sc),
 		},
 		Content: in,
 	})
@@ -165,7 +165,7 @@ func (t *tosClient) CreateMultipartUpload(key string) (*MultipartUpload, error) 
 	resp, err := t.client.CreateMultipartUploadV2(context.Background(), &tos.CreateMultipartUploadV2Input{
 		Bucket:       t.bucket,
 		Key:          key,
-		StorageClass: enum.StorageClassType(t.storageClass),
+		StorageClass: enum.StorageClassType(t.sc),
 	})
 	if err != nil {
 		return nil, err
@@ -251,13 +251,13 @@ func (t *tosClient) Copy(dst, src string) error {
 		Bucket:       t.bucket,
 		SrcKey:       src,
 		Key:          dst,
-		StorageClass: enum.StorageClassType(t.storageClass),
+		StorageClass: enum.StorageClassType(t.sc),
 	})
 	return err
 }
 
 func (t *tosClient) SetStorageClass(sc string) {
-	t.storageClass = sc
+	t.sc = sc
 }
 
 func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

@@ -39,8 +39,8 @@ import (
 )
 
 type qingstor struct {
-	bucket       *qs.Bucket
-	storageClass string
+	bucket *qs.Bucket
+	sc     string
 }
 
 func (q *qingstor) String() string {
@@ -143,8 +143,8 @@ func (q *qingstor) Put(key string, in io.Reader) error {
 		ContentLength: &vlen,
 		ContentType:   &mimeType,
 	}
-	if q.storageClass != "" {
-		input.XQSStorageClass = &q.storageClass
+	if q.sc != "" {
+		input.XQSStorageClass = &q.sc
 	}
 	out, err := q.bucket.PutObject(key, input)
 	if err != nil {
@@ -161,8 +161,8 @@ func (q *qingstor) Copy(dst, src string) error {
 	input := &qs.PutObjectInput{
 		XQSCopySource: &source,
 	}
-	if q.storageClass != "" {
-		input.XQSStorageClass = &q.storageClass
+	if q.sc != "" {
+		input.XQSStorageClass = &q.sc
 	}
 	out, err := q.bucket.PutObject(dst, input)
 	if err != nil {
@@ -222,8 +222,8 @@ func (q *qingstor) ListAll(prefix, marker string) (<-chan Object, error) {
 
 func (q *qingstor) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	var input qs.InitiateMultipartUploadInput
-	if q.storageClass != "" {
-		input.XQSStorageClass = &q.storageClass
+	if q.sc != "" {
+		input.XQSStorageClass = &q.sc
 	}
 	r, err := q.bucket.InitiateMultipartUpload(key, &input)
 	if err != nil {
@@ -302,7 +302,7 @@ func (q *qingstor) ListUploads(marker string) ([]*PendingPart, string, error) {
 }
 
 func (q *qingstor) SetStorageClass(sc string) {
-	q.storageClass = sc
+	q.sc = sc
 }
 
 func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

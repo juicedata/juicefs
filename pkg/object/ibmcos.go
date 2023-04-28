@@ -41,9 +41,9 @@ import (
 )
 
 type ibmcos struct {
-	bucket       string
-	s3           *s3.S3
-	storageClass string
+	bucket string
+	s3     *s3.S3
+	sc     string
 }
 
 func (s *ibmcos) String() string {
@@ -53,9 +53,9 @@ func (s *ibmcos) String() string {
 func (s *ibmcos) Create() error {
 	input := &s3.CreateBucketInput{Bucket: &s.bucket}
 	// https://cloud.ibm.com/docs/cloud-object-storage?topic=cloud-object-storage-classes&code=go
-	if s.storageClass != "" {
+	if s.sc != "" {
 		input.CreateBucketConfiguration = &s3.CreateBucketConfiguration{
-			LocationConstraint: &s.storageClass,
+			LocationConstraint: &s.sc,
 		}
 	}
 	_, err := s.s3.CreateBucket(input)
@@ -108,8 +108,8 @@ func (s *ibmcos) Put(key string, in io.Reader) error {
 		Body:        body,
 		ContentType: &mimeType,
 	}
-	if s.storageClass != "" {
-		params.SetStorageClass(s.storageClass)
+	if s.sc != "" {
+		params.SetStorageClass(s.sc)
 	}
 	_, err := s.s3.PutObject(params)
 	return err
@@ -122,8 +122,8 @@ func (s *ibmcos) Copy(dst, src string) error {
 		Key:        &dst,
 		CopySource: &src,
 	}
-	if s.storageClass != "" {
-		params.SetStorageClass(s.storageClass)
+	if s.sc != "" {
+		params.SetStorageClass(s.sc)
 	}
 	_, err := s.s3.CopyObject(params)
 	return err
@@ -205,8 +205,8 @@ func (s *ibmcos) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
-	if s.storageClass != "" {
-		params.SetStorageClass(s.storageClass)
+	if s.sc != "" {
+		params.SetStorageClass(s.sc)
 	}
 	resp, err := s.s3.CreateMultipartUpload(params)
 	if err != nil {
@@ -283,7 +283,7 @@ func (s *ibmcos) ListUploads(marker string) ([]*PendingPart, string, error) {
 }
 
 func (s *ibmcos) SetStorageClass(sc string) {
-	s.storageClass = sc
+	s.sc = sc
 }
 
 func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage, error) {

@@ -40,9 +40,9 @@ import (
 )
 
 type ks3 struct {
-	bucket       string
-	s3           *s3.S3
-	storageClass string
+	bucket string
+	s3     *s3.S3
+	sc     string
 }
 
 func (s *ks3) String() string {
@@ -51,8 +51,8 @@ func (s *ks3) String() string {
 
 func (s *ks3) Create() error {
 	input := &s3.CreateBucketInput{Bucket: &s.bucket}
-	if s.storageClass != "" {
-		input.BucketType = aws.String(s.storageClass)
+	if s.sc != "" {
+		input.BucketType = aws.String(s.sc)
 	}
 	_, err := s.s3.CreateBucket(input)
 	if err != nil && isExists(err) {
@@ -139,8 +139,8 @@ func (s *ks3) Copy(dst, src string) error {
 		Key:        &dst,
 		CopySource: &src,
 	}
-	if s.storageClass != "" {
-		params.StorageClass = aws.String(s.storageClass)
+	if s.sc != "" {
+		params.StorageClass = aws.String(s.sc)
 	}
 	_, err := s.s3.CopyObject(params)
 	return err
@@ -205,8 +205,8 @@ func (s *ks3) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
-	if s.storageClass != "" {
-		params.StorageClass = aws.String(s.storageClass)
+	if s.sc != "" {
+		params.StorageClass = aws.String(s.sc)
 	}
 	resp, err := s.s3.CreateMultipartUpload(params)
 	if err != nil {
@@ -294,7 +294,7 @@ func (s *ks3) ListUploads(marker string) ([]*PendingPart, string, error) {
 }
 
 func (s *ks3) SetStorageClass(sc string) {
-	s.storageClass = sc
+	s.sc = sc
 }
 
 var ks3Regions = map[string]string{

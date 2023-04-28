@@ -86,7 +86,7 @@ func clientFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "storage-class",
-			Usage: "object storage class type",
+			Usage: "the storage class for data written by current client",
 		},
 		&cli.IntFlag{
 			Name:  "get-timeout",

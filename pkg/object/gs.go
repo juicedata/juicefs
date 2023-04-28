@@ -38,11 +38,11 @@ import (
 
 type gs struct {
 	DefaultObjectStorage
-	client       *storage.Client
-	bucket       string
-	region       string
-	pageToken    string
-	storageClass string
+	client    *storage.Client
+	bucket    string
+	region    string
+	pageToken string
+	sc        string
 }
 
 func (g *gs) String() string {
@@ -78,7 +78,7 @@ func (g *gs) Create() error {
 
 	err := g.client.Bucket(g.bucket).Create(ctx, projectID, &storage.BucketAttrs{
 		Name:         g.bucket,
-		StorageClass: g.storageClass,
+		StorageClass: g.sc,
 		Location:     g.region,
 	})
 	if err != nil && strings.Contains(err.Error(), "You already own this bucket") {
@@ -114,7 +114,7 @@ func (g *gs) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 func (g *gs) Put(key string, data io.Reader) error {
 	writer := g.client.Bucket(g.bucket).Object(key).NewWriter(ctx)
-	writer.StorageClass = g.storageClass
+	writer.StorageClass = g.sc
 	_, err := io.Copy(writer, data)
 	if err != nil {
 		return err
@@ -166,7 +166,7 @@ func (g *gs) List(prefix, marker, delimiter string, limit int64) ([]Object, erro
 }
 
 func (g *gs) SetStorageClass(sc string) {
-	g.storageClass = sc
+	g.sc = sc
 }
 
 func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

@@ -39,9 +39,9 @@ import (
 const ossDefaultRegionID = "cn-hangzhou"
 
 type ossClient struct {
-	client       *oss.Client
-	bucket       *oss.Bucket
-	storageClass string
+	client *oss.Client
+	bucket *oss.Bucket
+	sc     string
 }
 
 func (o *ossClient) String() string {
@@ -60,8 +60,8 @@ func (o *ossClient) Limits() Limits {
 
 func (o *ossClient) Create() error {
 	var option []oss.Option
-	if o.storageClass != "" {
-		option = append(option, oss.StorageClass(oss.StorageClassType(o.storageClass)))
+	if o.sc != "" {
+		option = append(option, oss.StorageClass(oss.StorageClassType(o.sc)))
 	}
 	err := o.bucket.Client.CreateBucket(o.bucket.BucketName, option...)
 	if err != nil && isExists(err) {
@@ -131,16 +131,16 @@ func (o *ossClient) Put(key string, in io.Reader) error {
 	if ins, ok := in.(io.ReadSeeker); ok {
 		option = append(option, oss.Meta(checksumAlgr, generateChecksum(ins)))
 	}
-	if o.storageClass != "" {
-		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.storageClass)))
+	if o.sc != "" {
+		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.sc)))
 	}
 	return o.checkError(o.bucket.PutObject(key, in, option...))
 }
 
 func (o *ossClient) Copy(dst, src string) error {
 	var option []oss.Option
-	if o.storageClass != "" {
-		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.storageClass)))
+	if o.sc != "" {
+		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.sc)))
 	}
 	_, err := o.bucket.CopyObject(src, dst, option...)
 	return o.checkError(err)
@@ -180,8 +180,8 @@ func (o *ossClient) ListAll(prefix, marker string) (<-chan Object, error) {
 
 func (o *ossClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	var option []oss.Option
-	if o.storageClass != "" {
-		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.storageClass)))
+	if o.sc != "" {
+		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.sc)))
 	}
 	r, err := o.bucket.InitiateMultipartUpload(key, option...)
 	if o.checkError(err) != nil {
@@ -246,7 +246,7 @@ func (o *ossClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 }
 
 func (o *ossClient) SetStorageClass(sc string) {
-	o.storageClass = sc
+	o.sc = sc
 }
 
 type stsCred struct {

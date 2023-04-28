@@ -55,10 +55,10 @@ var disableSha256Func = func(r *request.Request) {
 }
 
 type s3client struct {
-	bucket       string
-	storageClass string
-	s3           *s3.S3
-	ses          *session.Session
+	bucket string
+	sc     string
+	s3     *s3.S3
+	ses    *session.Session
 }
 
 func (s *s3client) String() string {
@@ -155,8 +155,8 @@ func (s *s3client) Put(key string, in io.Reader) error {
 		ContentType: &mimeType,
 		Metadata:    map[string]*string{checksumAlgr: &checksum},
 	}
-	if s.storageClass != "" {
-		params.SetStorageClass(s.storageClass)
+	if s.sc != "" {
+		params.SetStorageClass(s.sc)
 	}
 	_, err := s.s3.PutObject(params)
 	return err
@@ -169,8 +169,8 @@ func (s *s3client) Copy(dst, src string) error {
 		Key:        &dst,
 		CopySource: &src,
 	}
-	if s.storageClass != "" {
-		params.SetStorageClass(s.storageClass)
+	if s.sc != "" {
+		params.SetStorageClass(s.sc)
 	}
 	_, err := s.s3.CopyObject(params)
 	return err
@@ -243,8 +243,8 @@ func (s *s3client) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
-	if s.storageClass != "" {
-		params.SetStorageClass(s.storageClass)
+	if s.sc != "" {
+		params.SetStorageClass(s.sc)
 	}
 	resp, err := s.s3.CreateMultipartUpload(params)
 	if err != nil {
@@ -332,7 +332,7 @@ func (s *s3client) ListUploads(marker string) ([]*PendingPart, string, error) {
 }
 
 func (s *s3client) SetStorageClass(sc string) {
-	s.storageClass = sc
+	s.sc = sc
 }
 
 func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {

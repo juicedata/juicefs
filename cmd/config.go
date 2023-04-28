@@ -77,7 +77,7 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 			},
 			&cli.StringFlag{
 				Name:  "storage-class",
-				Usage: "object storage class type",
+				Usage: "the default storage class for data written in future",
 			},
 			&cli.BoolFlag{
 				Name:  "encrypt-secret",

@@ -45,8 +45,8 @@ func (j *jss) Copy(dst, src string) error {
 		Key:        &dst,
 		CopySource: &src,
 	}
-	if j.storageClass != "" {
-		params.SetStorageClass(j.storageClass)
+	if j.sc != "" {
+		params.SetStorageClass(j.sc)
 	}
 	_, err := j.s3client.s3.CopyObject(params)
 	return err

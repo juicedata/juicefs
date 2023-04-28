@@ -75,7 +75,7 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "storage-class",
-				Usage: "object storage class type",
+				Usage: "the storage class for destination",
 			},
 			&cli.StringFlag{
 				Name:    "start",
