@@ -252,9 +252,9 @@ type DumpedMeta struct {
 	Counters  *DumpedCounters
 	Sustained []*DumpedSustained
 	DelFiles  []*DumpedDelFile
-	Quotas    map[Ino]*DumpedQuota
-	FSTree    *DumpedEntry `json:",omitempty"`
-	Trash     *DumpedEntry `json:",omitempty"`
+	Quotas    map[Ino]*DumpedQuota `json:",omitempty"`
+	FSTree    *DumpedEntry         `json:",omitempty"`
+	Trash     *DumpedEntry         `json:",omitempty"`
 }
 
 func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
