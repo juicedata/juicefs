@@ -23,7 +23,7 @@ from cmptree import *
 import random
 
 @seed(random.randint(10000, 1000000))
-@hypothesis.settings(max_examples=100, stateful_step_count=20, deadline=None, report_multiple_bugs=False, phases=[Phase.explicit, Phase.reuse, Phase.generate, Phase.target, Phase.shrink ])
+@hypothesis.settings(max_examples=100, stateful_step_count=30, deadline=None, phases=[Phase.explicit, Phase.reuse, Phase.generate, Phase.target, Phase.shrink ])
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']

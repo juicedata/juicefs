@@ -21,7 +21,7 @@ jobs:
         meta: ['redis', 'mysql', 'tikv']
         storage: ['minio']
         include:
-          - old_juicefs_version: 'release-1.0'
+          - old_juicefs_version: 'main'
             meta: 'fdb'
             storage: 'minio'
           - old_juicefs_version: 'release-1.0'
@@ -84,7 +84,7 @@ jobs:
           wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
           chmod +x mc
           sudo mv mc /usr/local/bin
-          sudo apt install redis-tools
+          sudo .github/scripts/apt_install.sh redis-tools
           sudo pip install hypothesis
           sudo pip install minio
           sudo pip install xattr
