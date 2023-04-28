@@ -367,9 +367,9 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 		case "Quotas":
 			err = dec.Decode(&dm.Quotas)
 		case "FSTree":
-			_, err = decodeEntry(dec, 0, counters, parents, refs, bar, load, addChunk)
+			_, err = decodeEntry(dec, 0, counters, parents, dm.Quotas, refs, bar, load, addChunk)
 		case "Trash":
-			_, err = decodeEntry(dec, 1, counters, parents, refs, bar, load, addChunk)
+			_, err = decodeEntry(dec, 1, counters, parents, dm.Quotas, refs, bar, load, addChunk)
 		}
 		if err != nil {
 			err = fmt.Errorf("load %v: %s", name, err)
@@ -383,7 +383,7 @@ func loadEntries(r io.Reader, load func(*DumpedEntry), addChunk func(*chunkKey))
 	return
 }
 
-func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[Ino][]Ino,
+func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[Ino][]Ino, quotas map[Ino]*DumpedQuota,
 	refs map[chunkKey]int64, bar *utils.Bar, load func(*DumpedEntry), addChunk func(*chunkKey)) (*DumpedEntry, error) {
 	if _, err := dec.Token(); err != nil {
 		return nil, err
@@ -425,6 +425,21 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 						}
 					}
 				}
+
+				var newPs []Ino
+				for ps := []Ino{parent}; len(ps) > 0; ps = newPs {
+					fmt.Println(ps)
+					newPs = newPs[:0]
+					for _, p := range ps {
+						if q := quotas[p]; q != nil {
+							q.UsedSpace += align4K(e.Attr.Length)
+							q.UsedInodes += 1
+						}
+						if p > 1 {
+							newPs = append(newPs, parents[p]...)
+						}
+					}
+				}
 			}
 		case "chunks":
 			err = dec.Decode(&e.Chunks)
@@ -457,7 +472,7 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 						break
 					}
 					var child *DumpedEntry
-					child, err = decodeEntry(dec, e.Attr.Inode, cs, parents, refs, bar, load, addChunk)
+					child, err = decodeEntry(dec, e.Attr.Inode, cs, parents, quotas, refs, bar, load, addChunk)
 					if err != nil {
 						break
 					}
