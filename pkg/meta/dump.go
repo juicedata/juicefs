@@ -275,7 +275,7 @@ func (dm *DumpedMeta) writeJsonWithOutTree(w io.Writer) (*bufio.Writer, error) {
 func (m *baseMeta) loadDumpedQuotas(ctx Context, quotas map[Ino]*DumpedQuota) {
 	// update quota
 	for inode, q := range quotas {
-		if err := m.en.doSetQuota(ctx, inode, &Quota{q.MaxSpace, q.MaxSpace, q.UsedSpace, q.UsedInodes, 0, 0}, true); err != nil {
+		if err := m.en.doSetQuota(ctx, inode, &Quota{q.MaxSpace, q.MaxInodes, q.UsedSpace, q.UsedInodes, 0, 0}, true); err != nil {
 			logger.Warnf("reset quota of %d: %s", inode, err)
 			continue
 		}
@@ -428,7 +428,6 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 
 				var newPs []Ino
 				for ps := []Ino{parent}; len(ps) > 0; ps = newPs {
-					fmt.Println(ps)
 					newPs = newPs[:0]
 					for _, p := range ps {
 						if q := quotas[p]; q != nil {
