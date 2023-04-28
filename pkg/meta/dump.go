@@ -426,18 +426,16 @@ func decodeEntry(dec *json.Decoder, parent Ino, cs *DumpedCounters, parents map[
 					}
 				}
 
-				var newPs []Ino
-				for ps := []Ino{parent}; len(ps) > 0; ps = newPs {
-					newPs = nil
-					for _, p := range ps {
-						if q := quotas[p]; q != nil {
-							q.UsedSpace += align4K(e.Attr.Length)
-							q.UsedInodes += 1
-						}
-						if p > 1 {
-							newPs = append(newPs, parents[p]...)
-						}
+				p := parent
+				for {
+					if q := quotas[p]; q != nil {
+						q.UsedSpace += align4K(e.Attr.Length)
+						q.UsedInodes += 1
 					}
+					if p <= 1 || len(parents[p]) == 0 {
+						break
+					}
+					p = parents[p][0]
 				}
 			}
 		case "chunks":
