@@ -3497,7 +3497,7 @@ func (m *redisMeta) checkServerConfig() {
 	start := time.Now()
 	_, err = m.rdb.Ping(Background).Result()
 	if err != nil {
-		logger.Errorf("Ping error: %s", err.Error())
+		logger.Errorf("Ping redis: %s", err.Error())
 		return
 	}
 	logger.Infof("Ping redis latency: %s", time.Since(start))
