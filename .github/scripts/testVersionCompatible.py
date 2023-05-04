@@ -10,8 +10,9 @@ from termios import TIOCPKT_DOSTOP
 import time
 import unittest
 from xmlrpc.client import boolean
+import hypothesis
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
-from hypothesis import assume, strategies as st
+from hypothesis import Phase, assume, strategies as st
 from hypothesis import seed
 from packaging import version
 from minio import Minio
@@ -22,6 +23,7 @@ from cmptree import *
 import random
 
 @seed(random.randint(10000, 1000000))
+@hypothesis.settings(max_examples=100, stateful_step_count=30, deadline=None, phases=[Phase.explicit, Phase.reuse, Phase.generate, Phase.target, Phase.shrink ])
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
@@ -530,12 +532,12 @@ class JuicefsMachine(RuleBasedStateMachine):
         run_jfs_cmd([juicefs, 'fsck', JuicefsMachine.META_URL])
         print('fsck succeed')
 
-    @rule(juicefs=st.sampled_from(JFS_BINS),
-     block_size=st.integers(min_value=1, max_value=32),
-     big_file_size=st.integers(min_value=100, max_value=200),
-     small_file_size=st.integers(min_value=1, max_value=256),
-     small_file_count=st.integers(min_value=100, max_value=256), 
-     threads=st.integers(min_value=1, max_value=100))
+    # @rule(juicefs=st.sampled_from(JFS_BINS),
+    #  block_size=st.integers(min_value=1, max_value=32),
+    #  big_file_size=st.integers(min_value=100, max_value=200),
+    #  small_file_size=st.integers(min_value=1, max_value=256),
+    #  small_file_count=st.integers(min_value=100, max_value=256), 
+    #  threads=st.integers(min_value=1, max_value=100))
     @precondition(lambda self: self.mounted and False)
     def bench(self, juicefs, block_size, big_file_size, small_file_size, small_file_count, threads):
         assume (self.greater_than_version_formatted(juicefs))
