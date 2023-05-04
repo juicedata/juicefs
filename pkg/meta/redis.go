@@ -2128,7 +2128,7 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) s
 	return 0
 }
 
-func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
+func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno {
 	defer m.timeit("Write", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
@@ -2159,11 +2159,10 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(ctx, tx, inode, attr.Parent)...); err != 0 {
 			return err
 		}
-		now := time.Now()
-		attr.Mtime = now.Unix()
-		attr.Mtimensec = uint32(now.Nanosecond())
-		attr.Ctime = now.Unix()
-		attr.Ctimensec = uint32(now.Nanosecond())
+		attr.Mtime = mtime.Unix()
+		attr.Mtimensec = uint32(mtime.Nanosecond())
+		attr.Ctime = mtime.Unix()
+		attr.Ctimensec = uint32(mtime.Nanosecond())
 
 		var rpush *redis.IntCmd
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {

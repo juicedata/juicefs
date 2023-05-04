@@ -45,6 +45,7 @@ type DataWriter interface {
 	Flush(ctx meta.Context, inode Ino) syscall.Errno
 	GetLength(inode Ino) uint64
 	Truncate(inode Ino, length uint64)
+	UpdateMtime(inode Ino, mtime time.Time)
 }
 
 type sliceWriter struct {
@@ -198,7 +199,7 @@ func (c *chunkWriter) commitThread() {
 
 		if err == 0 {
 			var ss = meta.Slice{Id: s.id, Size: s.length, Off: s.soff, Len: s.slen}
-			err = f.w.m.Write(meta.Background, f.inode, c.indx, s.off, ss)
+			err = f.w.m.Write(meta.Background, f.inode, c.indx, s.off, ss, s.lastMod)
 			f.w.reader.Invalidate(f.inode, uint64(c.indx)*meta.ChunkSize+uint64(s.off), uint64(ss.Len))
 		}
 
@@ -336,6 +337,16 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 	return f.err
 }
 
+func (f *fileWriter) updateMtime(t time.Time) {
+	f.Lock()
+	defer f.Unlock()
+	for _, c := range f.chunks {
+		for _, s := range c.slices {
+			s.lastMod = t
+		}
+	}
+}
+
 func (f *fileWriter) flush(ctx meta.Context, writeback bool) syscall.Errno {
 	s := time.Now()
 	f.Lock()
@@ -449,7 +460,7 @@ func (w *dataWriter) flushAll() {
 			for i, c := range f.chunks {
 				hs := len(c.slices) / 2
 				for j, s := range c.slices {
-					if !s.freezed && (now.Sub(s.started) > flushDuration || now.Sub(s.lastMod) > time.Second ||
+					if !s.freezed && (now.Sub(s.started) > flushDuration || now.Sub(s.lastMod) > time.Second && now.Sub(s.started) > time.Second ||
 						tooMany && i%2 == lastBit && j <= hs) {
 						s.freezed = true
 						go s.flushData()
@@ -519,5 +530,12 @@ func (w *dataWriter) Truncate(inode Ino, len uint64) {
 	f := w.find(inode)
 	if f != nil {
 		f.Truncate(len)
+	}
+}
+
+func (w *dataWriter) UpdateMtime(inode Ino, mtime time.Time) {
+	f := w.find(inode)
+	if f != nil {
+		f.updateMtime(mtime)
 	}
 }

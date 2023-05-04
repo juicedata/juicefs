@@ -434,7 +434,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("write chunk: %s", st)
 	}
 	var s = Slice{Id: sliceId, Size: 100, Len: 100}
-	if st := m.Write(ctx, inode, 0, 100, s); st != 0 {
+	if st := m.Write(ctx, inode, 0, 100, s, time.Now()); st != 0 {
 		t.Fatalf("write end: %s", st)
 	}
 	var slices []Slice
@@ -1073,11 +1073,11 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	// random write
 	var sliceId uint64
 	m.NewSlice(ctx, &sliceId)
-	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Id: sliceId, Size: 64 << 20, Len: 64 << 20})
+	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Id: sliceId, Size: 64 << 20, Len: 64 << 20}, time.Now())
 	m.NewSlice(ctx, &sliceId)
-	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{Id: sliceId, Size: 8, Len: 8})
+	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{Id: sliceId, Size: 8, Len: 8}, time.Now())
 	m.NewSlice(ctx, &sliceId)
-	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{Id: sliceId, Size: 8, Len: 8})
+	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{Id: sliceId, Size: 8, Len: 8}, time.Now())
 	var cs1 []Slice
 	_ = m.Read(ctx, inode, 1, &cs1)
 	if len(cs1) != 5 {
@@ -1097,7 +1097,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	for i := 0; i < 200; i++ {
 		var sliceId uint64
 		m.NewSlice(ctx, &sliceId)
-		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Id: sliceId, Size: size, Len: size}); st != 0 {
+		if st := m.Write(ctx, inode, 0, uint32(i)*size, Slice{Id: sliceId, Size: size, Len: size}, time.Now()); st != 0 {
 			t.Fatalf("write %d: %s", i, st)
 		}
 		time.Sleep(time.Millisecond)
@@ -1180,7 +1180,7 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 				var sliceId uint64
 				m.NewSlice(ctx, &sliceId)
 				var slice = Slice{Id: sliceId, Size: 100, Len: 100}
-				st := m.Write(ctx, inode, indx, 0, slice)
+				st := m.Write(ctx, inode, indx, 0, slice, time.Now())
 				if st != 0 {
 					errno = st
 					break
@@ -1218,7 +1218,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	if st := m.NewSlice(ctx, &sliceId); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(ctx, inode, 0, 100, Slice{sliceId, 100, 0, 100}); st != 0 {
+	if st := m.Write(ctx, inode, 0, 100, Slice{sliceId, 100, 0, 100}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	if st := m.Truncate(ctx, inode, 0, 200<<20, attr); st != 0 {
@@ -1277,10 +1277,10 @@ func testCopyFileRange(t *testing.T, m Meta) {
 		t.Fatalf("create file %s", st)
 	}
 	defer m.Unlink(ctx, 1, "fout")
-	m.Write(ctx, iin, 0, 100, Slice{10, 200, 0, 100})
-	m.Write(ctx, iin, 1, 100<<10, Slice{11, 40 << 20, 0, 40 << 20})
-	m.Write(ctx, iin, 3, 0, Slice{12, 63 << 20, 10 << 20, 30 << 20})
-	m.Write(ctx, iout, 2, 10<<20, Slice{13, 50 << 20, 10 << 20, 30 << 20})
+	m.Write(ctx, iin, 0, 100, Slice{10, 200, 0, 100}, time.Now())
+	m.Write(ctx, iin, 1, 100<<10, Slice{11, 40 << 20, 0, 40 << 20}, time.Now())
+	m.Write(ctx, iin, 3, 0, Slice{12, 63 << 20, 10 << 20, 30 << 20}, time.Now())
+	m.Write(ctx, iout, 2, 10<<20, Slice{13, 50 << 20, 10 << 20, 30 << 20}, time.Now())
 	var copied uint64
 	if st := m.CopyFileRange(ctx, iin, 150, iout, 30<<20, 200<<20, 0, &copied); st != 0 {
 		t.Fatalf("copy file range: %s", st)
@@ -2014,7 +2014,7 @@ func testDirStat(t *testing.T, m Meta) {
 	checkResult(0, align4K(0), 1)
 
 	// test dir with file and write
-	if st := m.Write(Background, fileInode, 0, 0, Slice{Id: 1, Size: 1 << 20, Off: 0, Len: 4097}); st != 0 {
+	if st := m.Write(Background, fileInode, 0, 0, Slice{Id: 1, Size: 1 << 20, Off: 0, Len: 4097}, time.Now()); st != 0 {
 		t.Fatalf("write: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)
@@ -2110,7 +2110,7 @@ func testClone(t *testing.T, m Meta) {
 	if st := m.NewSlice(Background, &sliceId); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(Background, file1, 0, 0, Slice{sliceId, 200, 0, 200}); st != 0 {
+	if st := m.Write(Background, file1, 0, 0, Slice{sliceId, 200, 0, 200}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 
@@ -2122,7 +2122,7 @@ func testClone(t *testing.T, m Meta) {
 	if st := m.NewSlice(Background, &sliceId2); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(Background, file2, 0, 0, Slice{sliceId2, 200, 0, 200}); st != 0 {
+	if st := m.Write(Background, file2, 0, 0, Slice{sliceId2, 200, 0, 200}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	var file3 Ino
