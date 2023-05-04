@@ -1,6 +1,16 @@
 name: "version-compatible-test-hypo"
 
 on:
+  push:
+    branches: 
+      - main
+    paths:
+      - 'version_compatible_hypo.yml'
+  pull_request:
+    branches: 
+      - main
+    paths:
+      - 'version_compatible_hypo.yml'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:
