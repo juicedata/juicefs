@@ -3495,8 +3495,12 @@ func (m *redisMeta) checkServerConfig() {
 		}
 	}
 	start := time.Now()
-	_ = m.rdb.Ping(Background)
-	logger.Infof("Ping redis: %s", time.Since(start))
+	_, err = m.rdb.Ping(Background).Result()
+	if err != nil {
+		logger.Errorf("Ping redis: %s", err.Error())
+		return
+	}
+	logger.Infof("Ping redis latency: %s", time.Since(start))
 }
 
 var entryPool = sync.Pool{
