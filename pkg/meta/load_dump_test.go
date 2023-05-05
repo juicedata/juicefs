@@ -143,6 +143,28 @@ func testLoad(t *testing.T, uri, fname string) Meta {
 		t.Fatalf("expected: %v, but got: %v", expectedStat, *stat)
 	}
 
+	var summary Summary
+	if st = m.GetSummary(ctx, 1, &summary, true, true); st != 0 {
+		t.Fatalf("get summary: %s", st)
+	}
+	expectedQuota := Quota{
+		MaxInodes:  100,
+		MaxSpace:   1 << 30,
+		UsedSpace:  int64(summary.Size) - align4K(0),
+		UsedInodes: int64(summary.Dirs+summary.Files) - 1,
+	}
+
+	quota, err := m.(engine).doGetQuota(ctx, 1)
+	if err != nil {
+		t.Fatalf("get quota: %s", err)
+	}
+	if quota == nil {
+		t.Fatalf("get quota: nil")
+	}
+	if *quota != expectedQuota {
+		t.Fatalf("expected: %v, but got: %v", expectedQuota, *quota)
+	}
+
 	attr := &Attr{}
 	if st := m.GetAttr(ctx, 2, attr); st != 0 {
 		t.Fatalf("getattr: %s", st)
