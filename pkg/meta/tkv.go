@@ -1862,10 +1862,11 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, attr.Parent)...); err != 0 {
 			return err
 		}
+		now := time.Now()
 		attr.Mtime = mtime.Unix()
 		attr.Mtimensec = uint32(mtime.Nanosecond())
-		attr.Ctime = mtime.Unix()
-		attr.Ctimensec = uint32(mtime.Nanosecond())
+		attr.Ctime = now.Unix()
+		attr.Ctimensec = uint32(now.Nanosecond())
 		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len))
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
 		needCompact = (len(val)/sliceBytes)%100 == 99

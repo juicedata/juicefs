@@ -2114,9 +2114,8 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
 			return err
 		}
-		now := mtime.UnixNano() / 1e3
-		nodeAttr.Mtime = now
-		nodeAttr.Ctime = now
+		nodeAttr.Mtime = mtime.UnixNano() / 1e3
+		nodeAttr.Ctime = time.Now().UnixNano() / 1e3
 
 		var ck = chunk{Inode: inode, Indx: indx}
 		ok, err = s.ForUpdate().MustCols("indx").Get(&ck)
