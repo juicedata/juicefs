@@ -25,6 +25,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
@@ -3816,6 +3817,21 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 			sessions = append(sessions, &DumpedSustained{sid, inodes})
 		}
 	}
+	quotas := make(map[Ino]*DumpedQuota)
+	for k, v := range m.rdb.HGetAll(ctx, m.dirQuotaKey()).Val() {
+		inode, err := strconv.ParseUint(k, 10, 64)
+		if err != nil {
+			logger.Warnf("parse inode: %s: %v", k, err)
+			continue
+		}
+		if len(v) != 16 {
+			logger.Warnf("invalid quota string: %s", hex.EncodeToString([]byte(v)))
+			continue
+		}
+		var quota DumpedQuota
+		quota.MaxSpace, quota.MaxInodes = m.parseQuota([]byte(v))
+		quotas[Ino(inode)] = &quota
+	}
 
 	dm := &DumpedMeta{
 		Setting: *m.fmt,
@@ -3829,6 +3845,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 		},
 		Sustained: sessions,
 		DelFiles:  dels,
+		Quotas:    quotas,
 	}
 	if !keepSecret && dm.Setting.SecretKey != "" {
 		dm.Setting.SecretKey = "removed"
@@ -4002,6 +4019,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 	if err != nil {
 		return err
 	}
+	m.loadDumpedQuotas(ctx, dm.Quotas)
 	format, _ := json.MarshalIndent(dm.Setting, "", "")
 	p.Set(ctx, m.setting(), format, 0)
 	cs := make(map[string]interface{})

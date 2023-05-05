@@ -3084,7 +3084,7 @@ func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) e
 				quota.UsedSpace, quota.UsedInodes = q.UsedSpace, q.UsedInodes
 				_, e = s.Cols("max_space", "max_inodes").Update(&q, &dirQuota{Inode: inode})
 			}
-		} else {
+		} else if create {
 			q.UsedSpace, q.UsedInodes = quota.UsedSpace, quota.UsedInodes
 			e = mustInsert(s, &q)
 		}
@@ -3387,7 +3387,6 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	progress := utils.NewProgress(false)
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
-
 	return m.roTxn(func(s *xorm.Session) error {
 		if root == RootInode {
 			defer func() { m.snap = nil }()
@@ -3452,11 +3451,21 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 			sessions = append(sessions, &DumpedSustained{k, v})
 		}
 
+		var qs []dirQuota
+		if err := s.Find(&qs); err != nil {
+			return err
+		}
+		dumpedQuotas := make(map[Ino]*DumpedQuota, len(qs))
+		for _, q := range qs {
+			dumpedQuotas[q.Inode] = &DumpedQuota{q.MaxSpace, q.MaxInodes, 0, 0}
+		}
+
 		dm := DumpedMeta{
 			Setting:   *m.fmt,
 			Counters:  counters,
 			Sustained: sessions,
 			DelFiles:  dels,
+			Quotas:    dumpedQuotas,
 		}
 		if !keepSecret && dm.Setting.SecretKey != "" {
 			dm.Setting.SecretKey = "removed"
@@ -3653,6 +3662,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	if err != nil {
 		return err
 	}
+	m.loadDumpedQuotas(Background, dm.Quotas)
 	format, _ := json.MarshalIndent(dm.Setting, "", "")
 	chs[5] <- &setting{"format", string(format)}
 	chs[5] <- &counter{usedSpace, counters.UsedSpace}
@@ -3682,6 +3692,7 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}); err != nil {
 		return err
 	}
+
 	// update nlinks and parents for hardlinks
 	return m.txn(func(s *xorm.Session) error {
 		for i, ps := range parents {

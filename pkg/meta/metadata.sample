@@ -28,6 +28,12 @@
       "expire": 1637664458
     }
   ],
+  "Quotas": {
+    "1": {
+      "maxSpace": 1073741824,
+      "maxInodes": 100
+    }
+  },
   "FSTree": {
     "attr": {"inode":1,"type":"directory","mode":511,"uid":0,"gid":0,"atime":1623745101,"mtime":1638437879,"ctime":1638437879,"nlink":5,"length":0},
     "xattrs": [{"name":"lastBackup","value":"2021-11-23T18:29:54+08:00"}],
