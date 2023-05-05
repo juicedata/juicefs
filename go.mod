@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/compute v1.5.0
 	cloud.google.com/go/storage v1.21.0
 	github.com/Arvintian/scs-go-sdk v1.1.0
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.3.0
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.4.0
 	github.com/DataDog/zstd v1.5.0
 	github.com/IBM/ibm-cos-sdk-go v1.8.0
 	github.com/agiledragon/gomonkey/v2 v2.6.0
@@ -80,8 +80,8 @@ require (
 	cloud.google.com/go v0.100.2 // indirect
 	cloud.google.com/go/iam v0.1.1 // indirect
 	git.apache.org/thrift.git v0.13.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.21.1 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/internal v0.8.3 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.23.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v0.9.2 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/VividCortex/ewma v1.2.0 // indirect
@@ -206,7 +206,6 @@ require (
 	github.com/smartystreets/assertions v1.2.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/stathat/consistent v1.0.0 // indirect
-	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/tidwall/gjson v1.9.3 // indirect
 	github.com/tidwall/match v1.1.1 // indirect

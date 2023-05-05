@@ -50,11 +50,7 @@ func (s *ks3) String() string {
 }
 
 func (s *ks3) Create() error {
-	input := &s3.CreateBucketInput{Bucket: &s.bucket}
-	if s.sc != "" {
-		input.BucketType = aws.String(s.sc)
-	}
-	_, err := s.s3.CreateBucket(input)
+	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
 	if err != nil && isExists(err) {
 		err = nil
 	}
@@ -85,11 +81,18 @@ func (s *ks3) Head(key string) (Object, error) {
 		return nil, err
 	}
 
+	var sc string
+	if val, ok := r.Metadata["X-Amz-Storage-Class"]; ok {
+		sc = *val
+	} else {
+		sc = "STANDARD"
+	}
 	return &obj{
 		key,
 		*r.ContentLength,
 		*r.LastModified,
 		strings.HasSuffix(key, "/"),
+		sc,
 	}, nil
 }
 
@@ -128,6 +131,9 @@ func (s *ks3) Put(key string, in io.Reader) error {
 		Key:         &key,
 		Body:        body,
 		ContentType: &mimeType,
+	}
+	if s.sc != "" {
+		params.StorageClass = aws.String(s.sc)
 	}
 	_, err := s.s3.PutObject(params)
 	return err
@@ -181,7 +187,7 @@ func (s *ks3) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
-		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/")}
+		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -189,7 +195,7 @@ func (s *ks3) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 			if err != nil {
 				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true})
+			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

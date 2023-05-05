@@ -35,6 +35,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+
+	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/enum"
+
+	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
+
+	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+
 	"github.com/redis/go-redis/v9"
 )
 
@@ -68,8 +76,46 @@ func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, err
 	return nil, err
 }
 
+func setStorageClass(o ObjectStorage) string {
+	switch s := o.(type) {
+	case *wasb:
+		s.sc = string(azblob.AccessTierCool)
+		return s.sc
+	case *bosclient:
+		s.sc = "STANDARD_IA"
+		return s.sc
+	case *COS:
+		s.sc = "STANDARD_IA"
+		return s.sc
+	case *ks3:
+		s.sc = "STANDARD_IA"
+		return s.sc
+	case *gs:
+		s.sc = "NEARLINE"
+		return s.sc
+	case *obsClient:
+		s.sc = string(obs.StorageClassWarm)
+		return s.sc
+	case *ossClient:
+		s.sc = string(oss.StorageIA)
+		return s.sc
+	case *qingstor:
+		s.sc = "STANDARD_IA"
+		return s.sc
+	case *s3client:
+		s.sc = "STANDARD_IA"
+		return s.sc
+	case *tosClient:
+		s.sc = string(enum.StorageClassIa)
+		return s.sc
+	default:
+		return ""
+	}
+}
+
 // nolint:errcheck
 func testStorage(t *testing.T, s ObjectStorage) {
+	sc := setStorageClass(s)
 	if err := s.Create(); err != nil {
 		t.Fatalf("Can't create bucket %s: %s", s, err)
 	}
@@ -294,6 +340,9 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			if objs[i].Key() != sortedKeys[i] {
 				t.Fatal("The result for list4 is incorrect")
 			}
+			if sc != "" && objs[i].StorageClass() != sc {
+				t.Fatal("storage class is not correct")
+			}
 		}
 	}
 
@@ -316,8 +365,10 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatal("err should be os.ErrNotExist")
 	}
 
-	if _, err := s.Head("test"); err != nil {
+	if o, err := s.Head("test"); err != nil {
 		t.Fatalf("check exists failed: %s", err.Error())
+	} else if sc != "" && o.StorageClass() != sc {
+		t.Fatalf("storage class should be %s but got %s", sc, o.StorageClass())
 	}
 
 	if err := s.Delete("test"); err != nil {
@@ -389,6 +440,11 @@ func testStorage(t *testing.T, s ObjectStorage) {
 
 		if err = s.CompleteUpload(k, upload.UploadID, parts); err != nil {
 			t.Fatalf("failed to complete multipart upload: %v", err)
+		}
+		if meta, err := s.Head(k); err != nil {
+			t.Fatalf("failed to head object: %v", err)
+		} else if sc != "" && meta.StorageClass() != sc {
+			t.Fatalf("storage class should be %s but got %s", sc, meta.StorageClass())
 		}
 		checkContent := func(key string, content []byte) {
 			r, err := s.Get(key, 0, -1)
@@ -545,6 +601,7 @@ func TestGS(t *testing.T) { //skip mutate
 	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
 		t.SkipNow()
 	}
+	//export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
 	gs, _ := newGS(os.Getenv("GOOGLE_ENDPOINT"), "", "", "")
 	testStorage(t, gs)
 }
@@ -890,16 +947,11 @@ func TestTOS(t *testing.T) { //skip mutate
 
 func TestMain(m *testing.M) {
 	if envFile := os.Getenv("JUICEFS_ENV_FILE_FOR_TEST"); envFile != "" {
-		// schema: S3 AWS_ENDPOINT=xxxxx  AWS_ACCESS_KEY_ID=xxxx  AWS_SECRET_ACCESS_KEY=xxxx
+		// schema: S3 AWS_ENDPOINT=xxxxx
 		if _, err := os.Stat(envFile); err == nil {
 			file, _ := os.ReadFile(envFile)
 			for _, line := range strings.Split(strings.TrimSpace(string(file)), "\n") {
-				env := strings.Fields(line)
-				if len(env) <= 1 {
-					continue
-				}
-				for _, e := range env[1:] {
-					envkv := strings.SplitN(e, "=", 2)
+				if envkv := strings.SplitN(line, "=", 2); len(envkv) == 2 {
 					if err := os.Setenv(envkv[0], envkv[1]); err != nil {
 						logger.Errorf("set env %s=%s error", envkv[0], envkv[1])
 					}

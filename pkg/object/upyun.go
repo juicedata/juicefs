@@ -58,6 +58,7 @@ func (u *up) Head(key string) (Object, error) {
 		info.Size,
 		info.Time,
 		strings.HasSuffix(key, "/"),
+		"",
 	}, nil
 }
 
@@ -121,7 +122,7 @@ func (u *up) List(prefix, marker, delimiter string, limit int64) ([]Object, erro
 		}
 		key := prefix + "/" + fi.Name
 		if !fi.IsDir && key > marker {
-			objs = append(objs, &obj{key, fi.Size, fi.Time, strings.HasSuffix(key, "/")})
+			objs = append(objs, &obj{key, fi.Size, fi.Time, strings.HasSuffix(key, "/"), ""})
 		}
 	}
 	if len(objs) > 0 {

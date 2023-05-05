@@ -87,6 +87,7 @@ func (c *etcdClient) Head(key string) (Object, error) {
 				int64(len(p.Value)),
 				time.Now(),
 				strings.HasSuffix(key, "/"),
+				"",
 			}, nil
 		}
 	}
@@ -138,6 +139,7 @@ func (c *etcdClient) List(prefix, marker, delimiter string, limit int64) ([]Obje
 			int64(len(kv.Value)),
 			time.Now(),
 			strings.HasSuffix(k, "/"),
+			"",
 		})
 	}
 	return objs, nil

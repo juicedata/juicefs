@@ -158,7 +158,7 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 						}
 					}
 					// FIXME: mtime
-					objs <- &obj{keyList[start:end][idx], size, now, strings.HasSuffix(keyList[start:end][idx], "/")}
+					objs <- &obj{keyList[start:end][idx], size, now, strings.HasSuffix(keyList[start:end][idx], "/"), ""}
 				}
 			}
 		}
@@ -176,6 +176,7 @@ func (t *redisStore) Head(key string) (Object, error) {
 		int64(len(data)),
 		time.Now(),
 		strings.HasSuffix(key, "/"),
+		"",
 	}, err
 }
 

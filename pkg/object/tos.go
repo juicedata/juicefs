@@ -118,6 +118,7 @@ func (t *tosClient) Head(key string) (Object, error) {
 		head.ContentLength,
 		head.LastModified,
 		strings.HasSuffix(key, "/"),
+		string(head.StorageClass),
 	}, err
 }
 
@@ -146,11 +147,12 @@ func (t *tosClient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 			o.Size,
 			o.LastModified,
 			strings.HasSuffix(o.Key, "/"),
+			string(o.StorageClass),
 		}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
-			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true})
+			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

@@ -60,6 +60,7 @@ func (w *webdav) Head(key string) (Object, error) {
 		info.Size(),
 		info.ModTime(),
 		info.IsDir(),
+		"",
 	}, nil
 }
 
@@ -262,6 +263,7 @@ func (w *webdav) ListAll(prefix, marker string) (<-chan Object, error) {
 				info.Size(),
 				info.ModTime(),
 				false,
+				"",
 			}
 			return nil
 		})
