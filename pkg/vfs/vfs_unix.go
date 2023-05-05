@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -178,6 +179,10 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gi
 	if set&meta.SetAttrMtime != 0 {
 		attr.Mtime = mtime
 		attr.Mtimensec = mtimensec
+		v.writer.UpdateMtime(ino, time.Unix(mtime, int64(mtimensec)))
+	}
+	if set&meta.SetAttrMtimeNow != 0 {
+		v.writer.UpdateMtime(ino, time.Now())
 	}
 	err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
 	if err == 0 {

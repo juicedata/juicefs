@@ -2153,7 +2153,7 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) s
 	return 0
 }
 
-func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
+func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno {
 	defer m.timeit("Write", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
@@ -2185,8 +2185,8 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			return err
 		}
 		now := time.Now()
-		attr.Mtime = now.Unix()
-		attr.Mtimensec = uint32(now.Nanosecond())
+		attr.Mtime = mtime.Unix()
+		attr.Mtimensec = uint32(mtime.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 

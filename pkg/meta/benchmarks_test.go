@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/sirupsen/logrus"
@@ -536,7 +537,7 @@ func benchWrite(b *testing.B, m Meta) {
 		if err := m.NewSlice(ctx, &sliceId); err != 0 {
 			b.Fatalf("newchunk: %s", err)
 		}
-		if err := m.Write(ctx, inode, 0, offset, Slice{Id: sliceId, Size: step, Len: step}); err != 0 {
+		if err := m.Write(ctx, inode, 0, offset, Slice{Id: sliceId, Size: step, Len: step}, time.Now()); err != 0 {
 			b.Fatalf("write: %s", err)
 		}
 		offset += step
@@ -562,7 +563,7 @@ func benchRead(b *testing.B, m Meta, n int) {
 		if err := m.NewSlice(ctx, &sliceId); err != 0 {
 			b.Fatalf("newchunk: %s", err)
 		}
-		if err := m.Write(ctx, inode, 0, uint32(j)*step, Slice{Id: sliceId, Size: step, Len: step}); err != 0 {
+		if err := m.Write(ctx, inode, 0, uint32(j)*step, Slice{Id: sliceId, Size: step, Len: step}, time.Now()); err != 0 {
 			b.Fatalf("write: %s", err)
 		}
 	}

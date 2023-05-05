@@ -382,7 +382,7 @@ type Meta interface {
 	// NewSlice returns an id for new slice.
 	NewSlice(ctx Context, id *uint64) syscall.Errno
 	// Write put a slice of data on top of the given chunk.
-	Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno
+	Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno
 	// InvalidateChunkCache invalidate chunk cache
 	InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno
 	// CopyFileRange copies part of a file to another one.

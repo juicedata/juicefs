@@ -2093,7 +2093,7 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) sysc
 	return 0
 }
 
-func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
+func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno {
 	defer m.timeit("Write", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
@@ -2126,9 +2126,8 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(s, inode, nodeAttr.Parent)...); err != 0 {
 			return err
 		}
-		now := time.Now().UnixNano() / 1e3
-		nodeAttr.Mtime = now
-		nodeAttr.Ctime = now
+		nodeAttr.Mtime = mtime.UnixNano() / 1e3
+		nodeAttr.Ctime = time.Now().UnixNano() / 1e3
 
 		var ck = chunk{Inode: inode, Indx: indx}
 		ok, err = s.ForUpdate().MustCols("indx").Get(&ck)

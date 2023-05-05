@@ -1843,7 +1843,7 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) sysc
 	return 0
 }
 
-func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice) syscall.Errno {
+func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno {
 	defer m.timeit("Write", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
@@ -1875,8 +1875,8 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 			return err
 		}
 		now := time.Now()
-		attr.Mtime = now.Unix()
-		attr.Mtimensec = uint32(now.Nanosecond())
+		attr.Mtime = mtime.Unix()
+		attr.Mtimensec = uint32(mtime.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
 		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len))

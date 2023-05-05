@@ -70,7 +70,7 @@ func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, 
 				if bytes < (indx+1)*meta.ChunkSize {
 					size = bytes - indx*meta.ChunkSize
 				}
-				if st := m.Write(ctx, f.Inode(), uint32(indx), 0, meta.Slice{Id: id, Size: uint32(size), Len: uint32(size)}); st != 0 {
+				if st := m.Write(ctx, f.Inode(), uint32(indx), 0, meta.Slice{Id: id, Size: uint32(size), Len: uint32(size)}, time.Now()); st != 0 {
 					return fmt.Errorf("writeend %s: %s", fn, st)
 				}
 			}
