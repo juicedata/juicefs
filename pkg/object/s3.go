@@ -56,6 +56,7 @@ var disableSha256Func = func(r *request.Request) {
 
 type s3client struct {
 	bucket string
+	sc     string
 	s3     *s3.S3
 	ses    *session.Session
 }
@@ -102,11 +103,18 @@ func (s *s3client) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
+	var sc string
+	if r.StorageClass != nil {
+		sc = *r.StorageClass
+	} else {
+		sc = "STANDARD"
+	}
 	return &obj{
 		key,
 		*r.ContentLength,
 		*r.LastModified,
 		strings.HasSuffix(key, "/"),
+		sc,
 	}, nil
 }
 
@@ -154,6 +162,9 @@ func (s *s3client) Put(key string, in io.Reader) error {
 		ContentType: &mimeType,
 		Metadata:    map[string]*string{checksumAlgr: &checksum},
 	}
+	if s.sc != "" {
+		params.SetStorageClass(s.sc)
+	}
 	_, err := s.s3.PutObject(params)
 	return err
 }
@@ -164,6 +175,9 @@ func (s *s3client) Copy(dst, src string) error {
 		Bucket:     &s.bucket,
 		Key:        &dst,
 		CopySource: &src,
+	}
+	if s.sc != "" {
+		params.SetStorageClass(s.sc)
 	}
 	_, err := s.s3.CopyObject(params)
 	return err
@@ -212,6 +226,7 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64) ([]Object
 			*o.Size,
 			*o.LastModified,
 			strings.HasSuffix(oKey, "/"),
+			*o.StorageClass,
 		}
 	}
 	if delimiter != "" {
@@ -220,7 +235,7 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64) ([]Object
 			if err != nil {
 				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true})
+			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -235,6 +250,9 @@ func (s *s3client) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	params := &s3.CreateMultipartUploadInput{
 		Bucket: &s.bucket,
 		Key:    &key,
+	}
+	if s.sc != "" {
+		params.SetStorageClass(s.sc)
 	}
 	resp, err := s.s3.CreateMultipartUpload(params)
 	if err != nil {
@@ -319,6 +337,10 @@ func (s *s3client) ListUploads(marker string) ([]*PendingPart, string, error) {
 		nextMarker = *result.NextKeyMarker
 	}
 	return parts, nextMarker, nil
+}
+
+func (s *s3client) SetStorageClass(sc string) {
+	s.sc = sc
 }
 
 func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {
@@ -507,7 +529,7 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 		return nil, fmt.Errorf("Fail to create aws session: %s", err)
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &s3client{bucketName, s3.New(ses), ses}, nil
+	return &s3client{bucket: bucketName, s3: s3.New(ses), ses: ses}, nil
 }
 
 func init() {

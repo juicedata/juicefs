@@ -41,6 +41,7 @@ const ossDefaultRegionID = "cn-hangzhou"
 type ossClient struct {
 	client *oss.Client
 	bucket *oss.Bucket
+	sc     string
 }
 
 func (o *ossClient) String() string {
@@ -58,7 +59,11 @@ func (o *ossClient) Limits() Limits {
 }
 
 func (o *ossClient) Create() error {
-	err := o.bucket.Client.CreateBucket(o.bucket.BucketName)
+	var option []oss.Option
+	if o.sc != "" {
+		option = append(option, oss.StorageClass(oss.StorageClassType(o.sc)))
+	}
+	err := o.bucket.Client.CreateBucket(o.bucket.BucketName, option...)
 	if err != nil && isExists(err) {
 		err = nil
 	}
@@ -78,7 +83,13 @@ func (o *ossClient) checkError(err error) error {
 }
 
 func (o *ossClient) Head(key string) (Object, error) {
-	r, err := o.bucket.GetObjectMeta(key)
+	var r http.Header
+	var err error
+	if o.sc != "" {
+		r, err = o.bucket.GetObjectDetailedMeta(key)
+	} else {
+		r, err = o.bucket.GetObjectMeta(key)
+	}
 	if o.checkError(err) != nil {
 		if e, ok := err.(oss.ServiceError); ok && e.StatusCode == http.StatusNotFound {
 			err = os.ErrNotExist
@@ -98,6 +109,7 @@ func (o *ossClient) Head(key string) (Object, error) {
 		size,
 		mtime,
 		strings.HasSuffix(key, "/"),
+		r.Get(oss.HTTPHeaderOssStorageClass),
 	}, nil
 }
 
@@ -122,15 +134,22 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 }
 
 func (o *ossClient) Put(key string, in io.Reader) error {
+	var option []oss.Option
 	if ins, ok := in.(io.ReadSeeker); ok {
-		option := oss.Meta(checksumAlgr, generateChecksum(ins))
-		return o.checkError(o.bucket.PutObject(key, in, option))
+		option = append(option, oss.Meta(checksumAlgr, generateChecksum(ins)))
 	}
-	return o.checkError(o.bucket.PutObject(key, in))
+	if o.sc != "" {
+		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.sc)))
+	}
+	return o.checkError(o.bucket.PutObject(key, in, option...))
 }
 
 func (o *ossClient) Copy(dst, src string) error {
-	_, err := o.bucket.CopyObject(src, dst)
+	var option []oss.Option
+	if o.sc != "" {
+		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.sc)))
+	}
+	_, err := o.bucket.CopyObject(src, dst, option...)
 	return o.checkError(err)
 }
 
@@ -151,11 +170,11 @@ func (o *ossClient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
 		o := result.Objects[i]
-		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/")}
+		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/"), o.StorageClass}
 	}
 	if delimiter != "" {
 		for _, o := range result.CommonPrefixes {
-			objs = append(objs, &obj{o, 0, time.Unix(0, 0), true})
+			objs = append(objs, &obj{o, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -167,7 +186,11 @@ func (o *ossClient) ListAll(prefix, marker string) (<-chan Object, error) {
 }
 
 func (o *ossClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	r, err := o.bucket.InitiateMultipartUpload(key)
+	var option []oss.Option
+	if o.sc != "" {
+		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.sc)))
+	}
+	r, err := o.bucket.InitiateMultipartUpload(key, option...)
 	if o.checkError(err) != nil {
 		return nil, err
 	}
@@ -227,6 +250,10 @@ func (o *ossClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 		parts[i] = &PendingPart{u.Key, u.UploadID, u.Initiated}
 	}
 	return parts, result.NextKeyMarker, nil
+}
+
+func (o *ossClient) SetStorageClass(sc string) {
+	o.sc = sc
 }
 
 type stsCred struct {

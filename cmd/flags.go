@@ -84,6 +84,10 @@ func clientFlags() []cli.Flag {
 			Name:  "bucket",
 			Usage: "customized endpoint to access object store",
 		},
+		&cli.StringFlag{
+			Name:  "storage-class",
+			Usage: "the storage class for data written by current client",
+		},
 		&cli.IntFlag{
 			Name:  "get-timeout",
 			Value: 60,

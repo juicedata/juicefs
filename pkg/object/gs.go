@@ -42,6 +42,7 @@ type gs struct {
 	bucket    string
 	region    string
 	pageToken string
+	sc        string
 }
 
 func (g *gs) String() string {
@@ -76,8 +77,9 @@ func (g *gs) Create() error {
 	}
 
 	err := g.client.Bucket(g.bucket).Create(ctx, projectID, &storage.BucketAttrs{
-		Name:     g.bucket,
-		Location: g.region,
+		Name:         g.bucket,
+		StorageClass: g.sc,
+		Location:     g.region,
 	})
 	if err != nil && strings.Contains(err.Error(), "You already own this bucket") {
 		return nil
@@ -99,6 +101,7 @@ func (g *gs) Head(key string) (Object, error) {
 		attrs.Size,
 		attrs.Updated,
 		strings.HasSuffix(key, "/"),
+		attrs.StorageClass,
 	}, nil
 }
 
@@ -112,6 +115,7 @@ func (g *gs) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 func (g *gs) Put(key string, data io.Reader) error {
 	writer := g.client.Bucket(g.bucket).Object(key).NewWriter(ctx)
+	writer.StorageClass = g.sc
 	_, err := io.Copy(writer, data)
 	if err != nil {
 		return err
@@ -151,15 +155,19 @@ func (g *gs) List(prefix, marker, delimiter string, limit int64) ([]Object, erro
 	for i := 0; i < n; i++ {
 		item := entries[i]
 		if delimiter != "" && item.Prefix != "" {
-			objs[i] = &obj{item.Prefix, 0, time.Unix(0, 0), true}
+			objs[i] = &obj{item.Prefix, 0, time.Unix(0, 0), true, item.StorageClass}
 		} else {
-			objs[i] = &obj{item.Name, item.Size, item.Updated, strings.HasSuffix(item.Name, "/")}
+			objs[i] = &obj{item.Name, item.Size, item.Updated, strings.HasSuffix(item.Name, "/"), item.StorageClass}
 		}
 	}
 	if delimiter != "" {
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
 	return objs, nil
+}
+
+func (g *gs) SetStorageClass(sc string) {
+	g.sc = sc
 }
 
 func newGS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {

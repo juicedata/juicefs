@@ -45,6 +45,7 @@ type obsClient struct {
 	bucket    string
 	region    string
 	checkEtag bool
+	sc        string
 	c         *obs.ObsClient
 }
 
@@ -67,6 +68,7 @@ func (s *obsClient) Create() error {
 	params.Bucket = s.bucket
 	params.Location = s.region
 	params.AvailableZone = "3az"
+	params.StorageClass = obs.StorageClassType(s.sc)
 	_, err := s.c.CreateBucket(params)
 	if err != nil && isExists(err) {
 		err = nil
@@ -91,6 +93,7 @@ func (s *obsClient) Head(key string) (Object, error) {
 		r.ContentLength,
 		r.LastModified,
 		strings.HasSuffix(key, "/"),
+		string(r.StorageClass),
 	}, nil
 }
 
@@ -153,6 +156,7 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 	params.ContentLength = vlen
 	params.ContentMD5 = base64.StdEncoding.EncodeToString(sum[:])
 	params.ContentType = mimeType
+	params.StorageClass = obs.StorageClassType(s.sc)
 	resp, err := s.c.PutObject(params)
 	if err == nil && s.checkEtag && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
@@ -166,6 +170,7 @@ func (s *obsClient) Copy(dst, src string) error {
 	params.Key = dst
 	params.CopySourceBucket = s.bucket
 	params.CopySourceKey = src
+	params.StorageClass = obs.StorageClassType(s.sc)
 	_, err := s.c.CopyObject(params)
 	return err
 }
@@ -199,7 +204,7 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed to decode key %s", o.Key)
 		}
-		objs[i] = &obj{key, o.Size, o.LastModified, strings.HasSuffix(key, "/")}
+		objs[i] = &obj{key, o.Size, o.LastModified, strings.HasSuffix(key, "/"), string(o.StorageClass)}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -207,7 +212,7 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 			if err != nil {
 				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", p)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true})
+			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -222,6 +227,7 @@ func (s *obsClient) CreateMultipartUpload(key string) (*MultipartUpload, error) 
 	params := &obs.InitiateMultipartUploadInput{}
 	params.Bucket = s.bucket
 	params.Key = key
+	params.StorageClass = obs.StorageClassType(s.sc)
 	resp, err := s.c.InitiateMultipartUpload(params)
 	if err != nil {
 		return nil, err
@@ -305,6 +311,10 @@ func (s *obsClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 		nextMarker = result.NextKeyMarker
 	}
 	return parts, nextMarker, nil
+}
+
+func (s *obsClient) SetStorageClass(sc string) {
+	s.sc = sc
 }
 
 func autoOBSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {

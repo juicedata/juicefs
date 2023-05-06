@@ -74,6 +74,10 @@ Details: https://juicefs.com/docs/community/administration/sync
 Supported storage systems: https://juicefs.com/docs/community/how_to_setup_object_storage#supported-object-storage`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
+				Name:  "storage-class",
+				Usage: "the storage class for destination",
+			},
+			&cli.StringFlag{
 				Name:    "start",
 				Aliases: []string{"s"},
 				Usage:   "the first `KEY` to sync",
@@ -348,6 +352,9 @@ func doSync(c *cli.Context) error {
 	dst, err := createSyncStorage(dstURL, config)
 	if err != nil {
 		return err
+	}
+	if os, ok := dst.(object.SupportStorageClass); ok {
+		os.SetStorageClass(config.StorageClass)
 	}
 	return sync.Sync(src, dst, config)
 }

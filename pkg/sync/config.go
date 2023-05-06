@@ -24,30 +24,31 @@ import (
 )
 
 type Config struct {
-	Start       string
-	End         string
-	Threads     int
-	HTTPPort    int
-	Update      bool
-	ForceUpdate bool
-	Perms       bool
-	Dry         bool
-	DeleteSrc   bool
-	DeleteDst   bool
-	Dirs        bool
-	Exclude     []string
-	Include     []string
-	Links       bool
-	Limit       int64
-	Manager     string
-	Workers     []string
-	BWLimit     int
-	NoHTTPS     bool
-	Verbose     bool
-	Quiet       bool
-	CheckAll    bool
-	CheckNew    bool
-	Env         map[string]string
+	StorageClass string
+	Start        string
+	End          string
+	Threads      int
+	HTTPPort     int
+	Update       bool
+	ForceUpdate  bool
+	Perms        bool
+	Dry          bool
+	DeleteSrc    bool
+	DeleteDst    bool
+	Dirs         bool
+	Exclude      []string
+	Include      []string
+	Links        bool
+	Limit        int64
+	Manager      string
+	Workers      []string
+	BWLimit      int
+	NoHTTPS      bool
+	Verbose      bool
+	Quiet        bool
+	CheckAll     bool
+	CheckNew     bool
+	Env          map[string]string
 }
 
 func envList() []string {

@@ -43,6 +43,7 @@ import (
 type ibmcos struct {
 	bucket string
 	s3     *s3.S3
+	sc     string
 }
 
 func (s *ibmcos) String() string {
@@ -50,7 +51,14 @@ func (s *ibmcos) String() string {
 }
 
 func (s *ibmcos) Create() error {
-	_, err := s.s3.CreateBucket(&s3.CreateBucketInput{Bucket: &s.bucket})
+	input := &s3.CreateBucketInput{Bucket: &s.bucket}
+	// https://cloud.ibm.com/docs/cloud-object-storage?topic=cloud-object-storage-classes&code=go
+	if s.sc != "" {
+		input.CreateBucketConfiguration = &s3.CreateBucketConfiguration{
+			LocationConstraint: &s.sc,
+		}
+	}
+	_, err := s.s3.CreateBucket(input)
 	if err != nil && isExists(err) {
 		err = nil
 	}
@@ -100,6 +108,9 @@ func (s *ibmcos) Put(key string, in io.Reader) error {
 		Body:        body,
 		ContentType: &mimeType,
 	}
+	if s.sc != "" {
+		params.SetStorageClass(s.sc)
+	}
 	_, err := s.s3.PutObject(params)
 	return err
 }
@@ -110,6 +121,9 @@ func (s *ibmcos) Copy(dst, src string) error {
 		Bucket:     &s.bucket,
 		Key:        &dst,
 		CopySource: &src,
+	}
+	if s.sc != "" {
+		params.SetStorageClass(s.sc)
 	}
 	_, err := s.s3.CopyObject(params)
 	return err
@@ -132,6 +146,7 @@ func (s *ibmcos) Head(key string) (Object, error) {
 		*r.ContentLength,
 		*r.LastModified,
 		strings.HasSuffix(key, "/"),
+		*r.StorageClass,
 	}, nil
 }
 
@@ -167,7 +182,7 @@ func (s *ibmcos) List(prefix, marker, delimiter string, limit int64) ([]Object, 
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed to decode key %s", *o.Key)
 		}
-		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/")}
+		objs[i] = &obj{oKey, *o.Size, *o.LastModified, strings.HasSuffix(oKey, "/"), *o.StorageClass}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -175,7 +190,7 @@ func (s *ibmcos) List(prefix, marker, delimiter string, limit int64) ([]Object, 
 			if err != nil {
 				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", *p.Prefix)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true})
+			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -190,6 +205,9 @@ func (s *ibmcos) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	params := &s3.CreateMultipartUploadInput{
 		Bucket: &s.bucket,
 		Key:    &key,
+	}
+	if s.sc != "" {
+		params.SetStorageClass(s.sc)
 	}
 	resp, err := s.s3.CreateMultipartUpload(params)
 	if err != nil {
@@ -265,6 +283,10 @@ func (s *ibmcos) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
+func (s *ibmcos) SetStorageClass(sc string) {
+	s.sc = sc
+}
+
 func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage, error) {
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("https://%s", endpoint)
@@ -283,7 +305,7 @@ func newIBMCOS(endpoint, apiKey, serviceInstanceID, token string) (ObjectStorage
 		WithS3ForcePathStyle(true)
 	sess := session.Must(session.NewSession())
 	client := s3.New(sess, conf)
-	return &ibmcos{bucket, client}, nil
+	return &ibmcos{bucket: bucket, s3: client}, nil
 }
 
 func init() {

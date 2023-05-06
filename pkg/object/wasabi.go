@@ -66,7 +66,7 @@ func newWasabi(endpoint, accessKey, secretKey, token string) (ObjectStorage, err
 		return nil, fmt.Errorf("aws session: %s", err)
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &wasabi{s3client{bucket, s3.New(ses), ses}}, nil
+	return &wasabi{s3client{bucket: bucket, s3: s3.New(ses), ses: ses}}, nil
 }
 
 func init() {

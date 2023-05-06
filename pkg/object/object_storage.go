@@ -44,6 +44,10 @@ type SupportSymlink interface {
 	Readlink(name string) (string, error)
 }
 
+type SupportStorageClass interface {
+	SetStorageClass(sc string)
+}
+
 type File interface {
 	Object
 	Owner() string

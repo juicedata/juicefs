@@ -45,6 +45,9 @@ func (j *jss) Copy(dst, src string) error {
 		Key:        &dst,
 		CopySource: &src,
 	}
+	if j.sc != "" {
+		params.SetStorageClass(j.sc)
+	}
 	_, err := j.s3client.s3.CopyObject(params)
 	return err
 }
@@ -74,7 +77,7 @@ func newJSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		return nil, err
 	}
 	ses.Handlers.Build.PushFront(disableSha256Func)
-	return &jss{s3client{bucket, s3.New(ses), ses}}, nil
+	return &jss{s3client{bucket: bucket, s3: s3.New(ses), ses: ses}}, nil
 }
 
 func init() {

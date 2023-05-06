@@ -41,6 +41,7 @@ const cosChecksumKey = "x-cos-meta-" + checksumAlgr
 type COS struct {
 	c        *cos.Client
 	endpoint string
+	sc       string
 }
 
 func (c *COS) String() string {
@@ -84,8 +85,15 @@ func (c *COS) Head(key string) (Object, error) {
 	if val, ok := header["Last-Modified"]; ok {
 		mtime, _ = time.Parse(time.RFC1123, val[0])
 	}
-
-	return &obj{key, size, mtime, strings.HasSuffix(key, "/")}, nil
+	var sc string
+	if val, ok := header["X-Cos-Storage-Class"]; ok {
+		sc = val[0]
+	} else {
+		// https://cloud.tencent.com/document/product/436/7745
+		// This header is returned only if the object is not STANDARD storage class.
+		sc = "STANDARD"
+	}
+	return &obj{key, size, mtime, strings.HasSuffix(key, "/"), sc}, nil
 }
 
 func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -105,20 +113,30 @@ func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 }
 
 func (c *COS) Put(key string, in io.Reader) error {
-	var options *cos.ObjectPutOptions
+	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
 		header := http.Header(map[string][]string{
 			cosChecksumKey: {generateChecksum(ins)},
 		})
-		options = &cos.ObjectPutOptions{ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{XCosMetaXXX: &header}}
+		options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{XCosMetaXXX: &header}
 	}
-	_, err := c.c.Object.Put(ctx, key, in, options)
+	if c.sc != "" {
+		if options.ObjectPutHeaderOptions == nil {
+			options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{}
+		}
+		options.ObjectPutHeaderOptions.XCosStorageClass = c.sc
+	}
+	_, err := c.c.Object.Put(ctx, key, in, &options)
 	return err
 }
 
 func (c *COS) Copy(dst, src string) error {
+	var opt cos.ObjectCopyOptions
+	if c.sc != "" {
+		opt.ObjectCopyHeaderOptions = &cos.ObjectCopyHeaderOptions{XCosStorageClass: c.sc}
+	}
 	source := fmt.Sprintf("%s/%s", c.endpoint, src)
-	_, _, err := c.c.Object.Copy(ctx, dst, source, nil)
+	_, _, err := c.c.Object.Copy(ctx, dst, source, &opt)
 	return err
 }
 
@@ -154,7 +172,7 @@ func (c *COS) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed to decode key %s", o.Key)
 		}
-		objs[i] = &obj{key, int64(o.Size), t, strings.HasSuffix(key, "/")}
+		objs[i] = &obj{key, int64(o.Size), t, strings.HasSuffix(key, "/"), o.StorageClass}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -162,7 +180,7 @@ func (c *COS) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 			if err != nil {
 				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", p)
 			}
-			objs = append(objs, &obj{key, 0, time.Unix(0, 0), true})
+			objs = append(objs, &obj{key, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -174,7 +192,11 @@ func (c *COS) ListAll(prefix, marker string) (<-chan Object, error) {
 }
 
 func (c *COS) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	resp, _, err := c.c.Object.InitiateMultipartUpload(ctx, key, nil)
+	var options cos.InitiateMultipartUploadOptions
+	if c.sc != "" {
+		options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{XCosStorageClass: c.sc}
+	}
+	resp, _, err := c.c.Object.InitiateMultipartUpload(ctx, key, &options)
 	if err != nil {
 		return nil, err
 	}
@@ -226,6 +248,10 @@ func (c *COS) ListUploads(marker string) ([]*PendingPart, string, error) {
 		parts[i] = &PendingPart{u.Key, u.UploadID, t}
 	}
 	return parts, result.NextKeyMarker, nil
+}
+
+func (c *COS) SetStorageClass(sc string) {
+	c.sc = sc
 }
 
 func autoCOSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {
@@ -287,7 +313,7 @@ func newCOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		},
 	})
 	client.UserAgent = UserAgent
-	return &COS{client, uri.Host}, nil
+	return &COS{c: client, endpoint: uri.Host}, nil
 }
 
 func init() {

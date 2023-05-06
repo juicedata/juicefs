@@ -33,6 +33,12 @@ func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 	return &withPrefix{os, prefix}
 }
 
+func (s *withPrefix) SetStorageClass(sc string) {
+	if o, ok := s.os.(SupportStorageClass); ok {
+		o.SetStorageClass(sc)
+	}
+}
+
 func (s *withPrefix) Symlink(oldName, newName string) error {
 	if w, ok := s.os.(SupportSymlink); ok {
 		return w.Symlink(oldName, s.prefix+newName)

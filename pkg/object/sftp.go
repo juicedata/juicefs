@@ -329,7 +329,7 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo) Object 
 		}
 	}
 	ff := &file{
-		obj{key, fi.Size(), fi.ModTime(), fi.IsDir()},
+		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
 		owner,
 		group,
 		fi.Mode(),

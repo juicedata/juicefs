@@ -73,6 +73,14 @@ func (s *sharded) Delete(key string) error {
 	return s.pick(key).Delete(key)
 }
 
+func (s *sharded) SetStorageClass(sc string) {
+	for _, o := range s.stores {
+		if os, ok := o.(SupportStorageClass); ok {
+			os.SetStorageClass(sc)
+		}
+	}
+}
+
 const maxResults = 10000
 
 // ListAll on all the keys that starts at marker from object storage.

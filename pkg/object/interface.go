@@ -27,6 +27,7 @@ type Object interface {
 	Mtime() time.Time
 	IsDir() bool
 	IsSymlink() bool
+	StorageClass() string
 }
 
 type obj struct {
@@ -34,13 +35,15 @@ type obj struct {
 	size  int64
 	mtime time.Time
 	isDir bool
+	sc    string
 }
 
-func (o *obj) Key() string      { return o.key }
-func (o *obj) Size() int64      { return o.size }
-func (o *obj) Mtime() time.Time { return o.mtime }
-func (o *obj) IsDir() bool      { return o.isDir }
-func (o *obj) IsSymlink() bool  { return false }
+func (o *obj) Key() string          { return o.key }
+func (o *obj) Size() int64          { return o.size }
+func (o *obj) Mtime() time.Time     { return o.mtime }
+func (o *obj) IsDir() bool          { return o.isDir }
+func (o *obj) IsSymlink() bool      { return false }
+func (o *obj) StorageClass() string { return o.sc }
 
 type MultipartUpload struct {
 	MinPartSize int

@@ -39,6 +39,7 @@ const bosDefaultRegion = "bj"
 type bosclient struct {
 	DefaultObjectStorage
 	bucket string
+	sc     string
 	c      *bos.Client
 }
 
@@ -58,6 +59,11 @@ func (q *bosclient) Limits() Limits {
 
 func (q *bosclient) Create() error {
 	_, err := q.c.PutBucket(q.bucket)
+	if err == nil && q.sc != "" {
+		if err := q.c.PutBucketStorageclass(q.bucket, q.sc); err != nil {
+			logger.Warnf("failed to set storage class: %v", err)
+		}
+	}
 	if err != nil && isExists(err) {
 		err = nil
 	}
@@ -78,6 +84,7 @@ func (q *bosclient) Head(key string) (Object, error) {
 		r.ContentLength,
 		mtime,
 		strings.HasSuffix(key, "/"),
+		r.StorageClass,
 	}, nil
 }
 
@@ -106,7 +113,11 @@ func (q *bosclient) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	_, err = q.c.BasicPutObject(q.bucket, key, body)
+	args := new(api.PutObjectArgs)
+	if q.sc != "" {
+		args.StorageClass = q.sc
+	}
+	_, err = q.c.PutObject(q.bucket, key, body, args)
 	return err
 }
 
@@ -137,11 +148,11 @@ func (q *bosclient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	for i := 0; i < n; i++ {
 		k := out.Contents[i]
 		mod, _ := time.Parse("2006-01-02T15:04:05Z", k.LastModified)
-		objs[i] = &obj{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/")}
+		objs[i] = &obj{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/"), k.StorageClass}
 	}
 	if delimiter != "" {
 		for _, p := range out.CommonPrefixes {
-			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true})
+			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -149,7 +160,11 @@ func (q *bosclient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 }
 
 func (q *bosclient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	r, err := q.c.BasicInitiateMultipartUpload(q.bucket, key)
+	args := new(api.InitiateMultipartUploadArgs)
+	if q.sc != "" {
+		args.StorageClass = q.sc
+	}
+	r, err := q.c.InitiateMultipartUpload(q.bucket, key, "", args)
 	if err != nil {
 		return nil, err
 	}

@@ -184,6 +184,9 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 		if c.IsSet("storage") {
 			format.Storage = c.String("storage")
 		}
+		if c.IsSet("storage-class") {
+			format.StorageClass = c.String("storage-class")
+		}
 	}
 }
 
@@ -434,8 +437,8 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 			patch(new)
 		}
 		old := &holder.fmt
-		if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken {
-			logger.Infof("found new configuration: storage=%s bucket=%s ak=%s", new.Storage, new.Bucket, new.AccessKey)
+		if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken || new.StorageClass != old.StorageClass {
+			logger.Infof("found new configuration: storage=%s bucket=%s ak=%s storageClass=%s", new.Storage, new.Bucket, new.AccessKey, new.StorageClass)
 
 			newBlob, err := createStorage(*new)
 			if err != nil {

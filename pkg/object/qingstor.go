@@ -40,6 +40,7 @@ import (
 
 type qingstor struct {
 	bucket *qs.Bucket
+	sc     string
 }
 
 func (q *qingstor) String() string {
@@ -76,6 +77,7 @@ func (q *qingstor) Head(key string) (Object, error) {
 		*r.ContentLength,
 		*r.LastModified,
 		strings.HasSuffix(key, "/"),
+		*r.XQSStorageClass,
 	}, nil
 }
 
@@ -142,6 +144,9 @@ func (q *qingstor) Put(key string, in io.Reader) error {
 		ContentLength: &vlen,
 		ContentType:   &mimeType,
 	}
+	if q.sc != "" {
+		input.XQSStorageClass = &q.sc
+	}
 	out, err := q.bucket.PutObject(key, input)
 	if err != nil {
 		return err
@@ -156,6 +161,9 @@ func (q *qingstor) Copy(dst, src string) error {
 	source := fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, src)
 	input := &qs.PutObjectInput{
 		XQSCopySource: &source,
+	}
+	if q.sc != "" {
+		input.XQSStorageClass = &q.sc
 	}
 	out, err := q.bucket.PutObject(dst, input)
 	if err != nil {
@@ -198,11 +206,12 @@ func (q *qingstor) List(prefix, marker, delimiter string, limit int64) ([]Object
 			*k.Size,
 			time.Unix(int64(*k.Modified), 0),
 			strings.HasSuffix(*k.Key, "/"),
+			*k.StorageClass,
 		}
 	}
 	if delimiter != "" {
 		for _, p := range out.CommonPrefixes {
-			objs = append(objs, &obj{*p, 0, time.Unix(0, 0), true})
+			objs = append(objs, &obj{*p, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}
@@ -214,7 +223,11 @@ func (q *qingstor) ListAll(prefix, marker string) (<-chan Object, error) {
 }
 
 func (q *qingstor) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	r, err := q.bucket.InitiateMultipartUpload(key, nil)
+	var input qs.InitiateMultipartUploadInput
+	if q.sc != "" {
+		input.XQSStorageClass = &q.sc
+	}
+	r, err := q.bucket.InitiateMultipartUpload(key, &input)
 	if err != nil {
 		return nil, err
 	}
@@ -288,6 +301,10 @@ func (q *qingstor) ListUploads(marker string) ([]*PendingPart, string, error) {
 		nextMarker = *result.NextKeyMarker
 	}
 	return parts, nextMarker, nil
+}
+
+func (q *qingstor) SetStorageClass(sc string) {
+	q.sc = sc
 }
 
 func newQingStor(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
