@@ -621,6 +621,7 @@ func mount(c *cli.Context) error {
 
 	installHandler(mp)
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
+	v.UpdateFormat = updateFormat(c)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	mount_main(v, c)
 	err = metaCli.CloseSession()
