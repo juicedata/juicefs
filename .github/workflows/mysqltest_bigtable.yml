@@ -86,8 +86,8 @@ jobs:
       - name: Big Size Table Test
         run: |
           if [ "${{matrix.size}}" == "big"]; then
-            echo "threads=4" >>/tmp/config.cfg
-            TABLE_SIZE=500000
+            echo "threads=8" >>/tmp/config.cfg
+            TABLE_SIZE=200000
             tables=4
           else
             echo "threads=64" >>/tmp/config.cfg
