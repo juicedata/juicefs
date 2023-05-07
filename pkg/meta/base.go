@@ -1495,10 +1495,19 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	return st
 }
 
-func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
+func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr syscall.Errno) {
 	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
 	}
+
+	defer func() {
+		if rerr == 0 {
+			if err := m.en.touchAtime(ctx, inode, attr); err != 0 {
+				logger.Warnf("open %v update atime: %s", inode, err)
+			}
+		}
+	}()
+
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
 		return 0
 	}

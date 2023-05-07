@@ -875,6 +875,9 @@ func TestAtime(t *testing.T) {
 	if fe, e := v.GetAttr(ctx, de.Inode, 0); e != 0 || fe.Attr.Atime != 1234 || fe.Attr.Atimensec != 5678 {
 		t.Fatalf("getattr after readdir d1: %s atime: %v, atimensec %v", e, fe.Attr.Atime, fe.Attr.Atimensec)
 	}
+	if fe, _, e := v.Open(ctx, fe.Inode, syscall.O_RDWR); e != 0 || fe.Attr.Atime != 1234 || fe.Attr.Atimensec != 5678 {
+		t.Fatalf("open f1: %s atime: %v, atimensec %v", e, fe.Attr.Atime, fe.Attr.Atimensec)
+	}
 
 	// set relatime
 	v.Conf.Meta.AtimeMode = meta.RelAtime
@@ -993,5 +996,11 @@ func TestAtime(t *testing.T) {
 	}
 	if fe, e := v.GetAttr(ctx, de.Inode, 0); e != 0 || fe.Attr.Atime < now.Unix() {
 		t.Fatalf("getattr after readdir d2: %s atime: %v, now %v", e, fe.Attr.Atime, now.Unix())
+	}
+	now = time.Now()
+	time.Sleep(time.Second)
+	// update atime on open
+	if fe, _, e := v.Open(ctx, fe.Inode, syscall.O_RDWR); e != 0 || fe.Attr.Atime < now.Unix() {
+		t.Fatalf("open f1: %s atime: %v, atimensec %v", e, fe.Attr.Atime, fe.Attr.Atimensec)
 	}
 }
