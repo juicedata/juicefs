@@ -2116,7 +2116,7 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rerr syscall.Errno) {
 	defer func() {
 		if rerr == 0 {
-			if err := m.touchAtime(ctx, inode); err != 0 {
+			if err := m.touchAtime(ctx, inode, nil); err != 0 {
 				logger.Warnf("read %v update atime: %s", inode, err)
 			}
 		}
@@ -4249,35 +4249,38 @@ func (m *redisMeta) doAttachDirNode(ctx Context, parent Ino, dstIno Ino, name st
 }
 
 // caller makes sure inode is not special inode.
-func (m *redisMeta) touchAtime(ctx Context, ino Ino) syscall.Errno {
+func (m *redisMeta) touchAtime(ctx Context, ino Ino, cur *Attr) syscall.Errno {
 	if (m.conf.AtimeMode != StrictAtime && m.conf.AtimeMode != RelAtime) || m.conf.ReadOnly {
 		return 0
 	}
 
+	attr := &Attr{}
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
-		var attr Attr
-		cached := m.of.Check(ino, &attr)
-		if !cached {
-			a, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
-			if err != nil {
-				return err
+		if cur == nil {
+			if !m.of.Check(ino, attr) {
+				a, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
+				if err != nil {
+					return err
+				}
+				m.parseAttr(a, attr)
 			}
-			m.parseAttr(a, &attr)
+		} else {
+			attr = cur
 		}
 
 		now := time.Now()
-		if !m.atimeNeedsUpdate(&attr, now) {
+		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
 		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.Set(ctx, m.inodeKey(ino), m.marshal(&attr), 0)
+			pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
 			return nil
 		})
 
-		if cached {
-			m.of.Update(ino, &attr)
+		if m.of.IsOpen(ino) {
+			m.of.Update(ino, attr)
 		}
 		return err
 	}, m.inodeKey(ino)))
