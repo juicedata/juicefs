@@ -75,7 +75,16 @@ func TestAtimeNeedsUpdate(t *testing.T) {
 	}
 
 	m.conf.AtimeMode = StrictAtime
+	time.Sleep(2 * time.Second)
 	if !m.atimeNeedsUpdate(attr, time.Now()) {
 		t.Fatal("atime not updated for strictatime")
+	}
+
+	now := time.Now()
+	attr.Atime = now.Unix()
+	attr.Atimensec = uint32(now.Nanosecond())
+	time.Sleep(time.Millisecond)
+	if m.atimeNeedsUpdate(attr, time.Now()) {
+		t.Fatal("atime updated for strictatime when < 1s")
 	}
 }

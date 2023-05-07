@@ -564,7 +564,9 @@ func (m *baseMeta) atimeNeedsUpdate(attr *Attr, now time.Time) bool {
 		return true
 	}
 
-	return m.conf.AtimeMode == StrictAtime && !now.Equal(time.Unix(attr.Atime, int64(attr.Atimensec)))
+	atime := time.Unix(attr.Atime, int64(attr.Atimensec))
+	// update atime only for > 1 second accesses
+	return (m.conf.AtimeMode == StrictAtime) && (now.Sub(atime) > time.Second)
 }
 
 // With relative atime, only update atime if the previous atime is earlier than either the ctime or
