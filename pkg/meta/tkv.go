@@ -3388,24 +3388,50 @@ func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 	}, parent))
 }
 
-func (m *kvMeta) touchAtime(_ctx Context, ino Ino, cur *Attr) syscall.Errno {
+func (m *kvMeta) touchAtime(_ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno) {
 	if (m.conf.AtimeMode != StrictAtime && m.conf.AtimeMode != RelAtime) || m.conf.ReadOnly {
 		return 0
 	}
 
-	attr := &Attr{}
-	return errno(m.txn(func(tx *kvTxn) error {
-		if cur == nil {
-			if !m.of.Check(ino, attr) {
-				a := tx.get(m.inodeKey(ino))
-				if a == nil {
-					return syscall.ENOENT
-				}
-				m.parseAttr(a, attr)
-			}
-		} else {
-			attr = cur
+	var attr *Attr
+	newAttr := &Attr{}
+	if cur != nil {
+		attr = cur
+	} else if m.of.Check(ino, newAttr) {
+		attr = newAttr
+	}
+
+	updated := false
+	defer func() {
+		if rerr == 0 && m.of.IsOpen(ino) && updated {
+			m.of.Update(ino, attr)
 		}
+	}()
+
+	now := time.Now()
+
+	// Already got attr, update atime without transaction
+	if attr != nil {
+		if !m.atimeNeedsUpdate(attr, now) {
+			return 0
+		}
+		attr.Atime = now.Unix()
+		attr.Atimensec = uint32(now.Nanosecond())
+		updated = true
+		return errno(m.client.txn(func(tx *kvTxn) error {
+			tx.set(m.inodeKey(ino), m.marshal(attr))
+			return nil
+		}, 0))
+	}
+
+	// Should get attr first, do it in transaction
+	return errno(m.txn(func(tx *kvTxn) error {
+		attr = newAttr
+		a := tx.get(m.inodeKey(ino))
+		if a == nil {
+			return syscall.ENOENT
+		}
+		m.parseAttr(a, attr)
 
 		now := time.Now()
 		if !m.atimeNeedsUpdate(attr, now) {
@@ -3414,10 +3440,7 @@ func (m *kvMeta) touchAtime(_ctx Context, ino Ino, cur *Attr) syscall.Errno {
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(ino), m.marshal(attr))
-
-		if m.of.IsOpen(ino) {
-			m.of.Update(ino, attr)
-		}
+		updated = true
 		return nil
 	}))
 }

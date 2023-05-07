@@ -4249,39 +4249,58 @@ func (m *redisMeta) doAttachDirNode(ctx Context, parent Ino, dstIno Ino, name st
 }
 
 // caller makes sure inode is not special inode.
-func (m *redisMeta) touchAtime(ctx Context, ino Ino, cur *Attr) syscall.Errno {
+func (m *redisMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno) {
 	if (m.conf.AtimeMode != StrictAtime && m.conf.AtimeMode != RelAtime) || m.conf.ReadOnly {
 		return 0
 	}
 
-	attr := &Attr{}
-	return errno(m.txn(ctx, func(tx *redis.Tx) error {
-		if cur == nil {
-			if !m.of.Check(ino, attr) {
-				a, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
-				if err != nil {
-					return err
-				}
-				m.parseAttr(a, attr)
-			}
-		} else {
-			attr = cur
-		}
+	var attr *Attr
+	newAttr := &Attr{}
+	if cur != nil {
+		attr = cur
+	} else if m.of.Check(ino, newAttr) {
+		attr = newAttr
+	}
 
-		now := time.Now()
+	updated := false
+	defer func() {
+		if rerr == 0 && m.of.IsOpen(ino) && updated {
+			m.of.Update(ino, attr)
+		}
+	}()
+
+	now := time.Now()
+
+	// Already got attr, update atime without transaction
+	if attr != nil {
+		if !m.atimeNeedsUpdate(attr, now) {
+			return 0
+		}
+		attr.Atime = now.Unix()
+		attr.Atimensec = uint32(now.Nanosecond())
+		updated = true
+		return errno(m.rdb.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0).Err())
+	}
+
+	// Should get attr first, do it in transaction
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		attr = newAttr
+		a, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
+		if err != nil {
+			return err
+		}
+		m.parseAttr(a, attr)
+
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
-		_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
 			return nil
 		})
-
-		if m.of.IsOpen(ino) {
-			m.of.Update(ino, attr)
-		}
+		updated = true
 		return err
 	}, m.inodeKey(ino)))
 }

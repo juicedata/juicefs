@@ -3908,40 +3908,60 @@ func (m *dbMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 	}, parent))
 }
 
-func (m *dbMeta) touchAtime(ctx Context, ino Ino, cur *Attr) syscall.Errno {
+func (m *dbMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno) {
 	if (m.conf.AtimeMode != StrictAtime && m.conf.AtimeMode != RelAtime) || m.conf.ReadOnly {
 		return 0
 	}
 
-	attr := &Attr{}
+	var curNode = node{Inode: ino}
+	var attr *Attr
+	newAttr := &Attr{}
+	if cur != nil {
+		attr = cur
+	} else if m.of.Check(ino, newAttr) {
+		attr = newAttr
+	}
+
+	updated := false
+	defer func() {
+		if rerr == 0 && m.of.IsOpen(ino) && updated {
+			m.of.Update(ino, attr)
+		}
+	}()
+
+	now := time.Now()
+
+	// Already got attr, update atime without transaction
+	if attr != nil {
+		if !m.atimeNeedsUpdate(attr, now) {
+			return 0
+		}
+		curNode.Atime = now.Unix()*1e6 + int64(now.Nanosecond())/1e3
+		s := m.db.NewSession()
+		defer s.Close()
+		_, err := s.Cols("atime").Update(&curNode, &node{Inode: ino})
+		updated = true
+		return errno(err)
+	}
+
+	// Should get attr first, do it in transaction
 	return errno(m.txn(func(s *xorm.Session) error {
-		var curNode = node{Inode: ino}
-		if cur == nil {
-			cached := m.of.Check(ino, attr)
-			if !cached {
-				ok, err := s.ForUpdate().Get(&curNode)
-				if err != nil {
-					return err
-				}
-				if !ok {
-					return syscall.ENOENT
-				}
-			}
-		} else {
-			attr = cur
+		attr = newAttr
+		ok, err := s.ForUpdate().Get(&curNode)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
 		}
 
-		now := time.Now()
 		m.parseAttr(&curNode, attr)
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		curNode.Atime = now.Unix()*1e6 + int64(now.Nanosecond())/1e3
-		_, err := s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime").Update(&curNode, &node{Inode: ino})
-
-		if m.of.IsOpen(ino) {
-			m.of.Update(ino, attr)
-		}
+		_, err = s.Cols("atime").Update(&curNode, &node{Inode: ino})
+		updated = true
 		return err
 	}))
 }
