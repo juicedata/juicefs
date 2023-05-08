@@ -47,7 +47,11 @@ func openController(path string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return os.OpenFile(filepath.Join(mp, ".control"), os.O_RDWR, 0)
+	fp, err := os.OpenFile(filepath.Join(mp, ".jfs.control"), os.O_RDWR, 0)
+	if os.IsNotExist(err) {
+		fp, err = os.OpenFile(filepath.Join(mp, ".control"), os.O_RDWR, 0)
+	}
+	return fp, err
 }
 
 func rmr(ctx *cli.Context) error {

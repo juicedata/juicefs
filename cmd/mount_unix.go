@@ -141,6 +141,10 @@ func mount_flags() []cli.Flag {
 			Usage: "enable ioctl (support GETFLAGS/SETFLAGS only)",
 		},
 		&cli.BoolFlag{
+			Name:  "prefix-internal",
+			Usage: "add '.jfs' prefix to all internal files",
+		},
+		&cli.BoolFlag{
 			Name:  "force",
 			Usage: "force to mount even if the mount point is already mounted by the same filesystem",
 		},

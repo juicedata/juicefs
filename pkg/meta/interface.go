@@ -100,7 +100,7 @@ const (
 const MaxName = 255
 const RootInode Ino = 1
 const TrashInode Ino = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
-const TrashName = ".trash"
+var TrashName = ".trash"
 
 func isTrash(ino Ino) bool {
 	return ino >= TrashInode

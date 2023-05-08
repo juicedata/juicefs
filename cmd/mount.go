@@ -26,7 +26,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -252,12 +251,13 @@ func expandPathForEmbedded(addr string) string {
 
 func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chunkConf *chunk.Config) *vfs.Config {
 	cfg := &vfs.Config{
-		Meta:       metaConf,
-		Format:     *format,
-		Version:    version.Version(),
-		Chunk:      chunkConf,
-		BackupMeta: duration(c.String("backup-meta")),
-		Port:       &vfs.Port{DebugAgent: debugAgent, PyroscopeAddr: c.String("pyroscope")},
+		Meta:           metaConf,
+		Format:         *format,
+		Version:        version.Version(),
+		Chunk:          chunkConf,
+		BackupMeta:     duration(c.String("backup-meta")),
+		Port:           &vfs.Port{DebugAgent: debugAgent, PyroscopeAddr: c.String("pyroscope")},
+		PrefixInternal: c.Bool("prefix-internal"),
 	}
 	if cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
 		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)
@@ -299,6 +299,14 @@ func configEqual(a, b *vfs.Config) bool {
 	return eq
 }
 
+func readConfig(mp string) ([]byte, error) {
+	contents, err := os.ReadFile(filepath.Join(mp, ".jfs.config"))
+	if os.IsNotExist(err) {
+		contents, err = os.ReadFile(filepath.Join(mp, ".config"))
+	}
+	return contents, err
+}
+
 func prepareMp(newCfg *vfs.Config, mp string) (ignore bool) {
 	fi, err := os.Stat(mp)
 	if err != nil {
@@ -328,7 +336,7 @@ func prepareMp(newCfg *vfs.Config, mp string) (ignore bool) {
 		return
 	}
 
-	contents, err := os.ReadFile(path.Join(mp, ".config"))
+	contents, err := readConfig(mp)
 	if err != nil {
 		// failed to read juicefs config, continue to mount
 		return
