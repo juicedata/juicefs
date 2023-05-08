@@ -409,6 +409,9 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 			h.data = collectMetrics(v.registry)
 		case configInode:
 			v.Conf.Format = v.Meta.GetFormat()
+			if v.UpdateFormat != nil {
+				v.UpdateFormat(&v.Conf.Format)
+			}
 			v.Conf.Format.RemoveSecret()
 			h.data, _ = json.MarshalIndent(v.Conf, "", " ")
 			entry.Attr.Length = uint64(len(h.data))
@@ -917,6 +920,7 @@ type VFS struct {
 	Meta            meta.Meta
 	Store           chunk.ChunkStore
 	InvalidateEntry func(parent meta.Ino, name string) syscall.Errno
+	UpdateFormat    func(*meta.Format)
 	reader          DataReader
 	writer          DataWriter
 
