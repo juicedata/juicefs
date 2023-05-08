@@ -20,7 +20,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -346,7 +346,11 @@ func profile(ctx *cli.Context) error {
 		if inode != uint64(meta.RootInode) {
 			logger.Fatalf("Path %s is not a mount point!", logPath)
 		}
-		logPath = path.Join(logPath, ".accesslog")
+		if _, err = os.Stat(filepath.Join(logPath, ".jfs.accesslog")); err == nil {
+			logPath = filepath.Join(logPath, ".jfs.accesslog")
+		} else {
+			logPath = filepath.Join(logPath, ".accesslog")
+		}
 	} else { // log file to be replayed
 		replay = true
 	}

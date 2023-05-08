@@ -341,13 +341,7 @@ func bench(ctx *cli.Context) error {
 			logger.Fatalf("Failed to create %s: %s", bm.tmpdir, err)
 		}
 	}
-	var statsPath string
-	for mp := filepath.Dir(bm.tmpdir); mp != "/"; mp = filepath.Dir(mp) {
-		if _, err := os.Stat(filepath.Join(mp, ".stats")); err == nil {
-			statsPath = filepath.Join(mp, ".stats")
-			break
-		}
-	}
+	mp, _ := findMountpoint(bm.tmpdir)
 	dropCaches := func() {
 		if os.Getenv("SKIP_DROP_CACHES") != "true" {
 			if err := exec.Command(purgeArgs[0], purgeArgs[1:]...).Run(); err != nil {
@@ -377,8 +371,8 @@ func bench(ctx *cli.Context) error {
 
 	/* --- Run Benchmark --- */
 	var stats map[string]float64
-	if statsPath != "" {
-		stats = readStats(statsPath)
+	if mp != "" {
+		stats = readStats(mp)
 	}
 	var result [][]string
 	result = append(result, []string{"ITEM", "VALUE", "COST"})
@@ -444,7 +438,7 @@ func bench(ctx *cli.Context) error {
 	fmt.Printf("BlockSize: %d MiB, BigFileSize: %d MiB, SmallFileSize: %d KiB, SmallFileCount: %d, NumThreads: %d\n",
 		ctx.Uint("block-size"), ctx.Uint("big-file-size"), ctx.Uint("small-file-size"), ctx.Uint("small-file-count"), ctx.Uint("threads"))
 	if stats != nil {
-		stats2 := readStats(statsPath)
+		stats2 := readStats(mp)
 		diff := func(item string) float64 {
 			return stats2["juicefs_"+item] - stats["juicefs_"+item]
 		}

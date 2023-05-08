@@ -60,6 +60,7 @@ type Config struct {
 	BackupMeta      time.Duration
 	FastResolve     bool   `json:",omitempty"`
 	AccessLog       string `json:",omitempty"`
+	PrefixInternal  bool
 	HideInternal    bool
 }
 
@@ -79,7 +80,7 @@ var (
 func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
 	var inode Ino
 	var attr = &Attr{}
-	if parent == rootID || name == ".control" {
+	if parent == rootID || name == internalNodes[0].name { // 0 is the control file
 		n := getInternalNodeByName(name)
 		if n != nil {
 			entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
@@ -955,6 +956,12 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	n.attr.Length = uint64(len(data))
 	if conf.Meta.Subdir != "" { // don't show trash directory
 		internalNodes = internalNodes[:len(internalNodes)-1]
+	}
+	if conf.PrefixInternal {
+		for _, n := range internalNodes {
+			n.name = ".jfs" + n.name
+		}
+		meta.TrashName = ".jfs" + meta.TrashName
 	}
 
 	go v.cleanupModified()

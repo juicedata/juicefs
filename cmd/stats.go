@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -89,7 +89,7 @@ const (
 type statsWatcher struct {
 	colorful bool
 	interval uint
-	path     string
+	mp       string
 	header   string
 	sections []*section
 }
@@ -339,16 +339,19 @@ func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
 	}
 }
 
-func readStats(path string) map[string]float64 {
-	f, err := os.Open(path)
+func readStats(mp string) map[string]float64 {
+	f, err := os.Open(filepath.Join(mp, ".jfs.stats"))
+	if os.IsNotExist(err) {
+		f, err = os.Open(filepath.Join(mp, ".stats"))
+	}
 	if err != nil {
-		logger.Warnf("open %s: %s", path, err)
+		logger.Warnf("open stats file under mount point %s: %s", mp, err)
 		return nil
 	}
 	defer f.Close()
 	d, err := io.ReadAll(f)
 	if err != nil {
-		logger.Warnf("read %s: %s", path, err)
+		logger.Warnf("read stats file under mount point %s: %s", mp, err)
 		return nil
 	}
 	stats := make(map[string]float64)
@@ -379,7 +382,7 @@ func stats(ctx *cli.Context) error {
 	watcher := &statsWatcher{
 		colorful: !ctx.Bool("no-color") && utils.SupportANSIColor(os.Stdout.Fd()),
 		interval: ctx.Uint("interval"),
-		path:     path.Join(mp, ".stats"),
+		mp:       mp,
 	}
 	watcher.buildSchema(ctx.String("schema"), ctx.Uint("verbosity"))
 	watcher.formatHeader()
@@ -388,7 +391,7 @@ func stats(ctx *cli.Context) error {
 	var start, last, current map[string]float64
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-	current = readStats(watcher.path)
+	current = readStats(watcher.mp)
 	start = current
 	last = current
 	for {
@@ -404,6 +407,6 @@ func stats(ctx *cli.Context) error {
 		last = current
 		tick++
 		<-ticker.C
-		current = readStats(watcher.path)
+		current = readStats(watcher.mp)
 	}
 }
