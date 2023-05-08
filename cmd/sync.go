@@ -139,6 +139,15 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 				Usage: "don't exclude Key matching PATTERN, need to be used with \"--exclude\" option",
 			},
 			&cli.BoolFlag{
+				Name:    "existing",
+				Aliases: []string{"ignore-non-existing"},
+				Usage:   "skip creating new files on destination",
+			},
+			&cli.BoolFlag{
+				Name:  "ignore-existing",
+				Usage: "skip updating files that already exist on destination",
+			},
+			&cli.BoolFlag{
 				Name:    "links",
 				Aliases: []string{"l"},
 				Usage:   "copy symlinks as symlinks",
