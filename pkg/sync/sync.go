@@ -733,6 +733,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 			if config.IgnoreExisting {
 				skipped.Increment()
 				handled.Increment()
+				dstobj = nil
 				continue
 			}
 			if config.ForceUpdate ||
