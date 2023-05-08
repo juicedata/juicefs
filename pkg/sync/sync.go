@@ -723,8 +723,18 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 
 		// FIXME: there is a race when source is modified during coping
 		if dstobj == nil || obj.Key() < dstobj.Key() {
+			if config.Existing {
+				skipped.Increment()
+				handled.Increment()
+				continue
+			}
 			tasks <- obj
 		} else { // obj.key == dstobj.key
+			if config.IgnoreExisting {
+				skipped.Increment()
+				handled.Increment()
+				continue
+			}
 			if config.ForceUpdate ||
 				(config.Update && obj.Mtime().Unix() > dstobj.Mtime().Unix()) ||
 				(!config.Update && obj.Size() != dstobj.Size()) {

@@ -24,31 +24,33 @@ import (
 )
 
 type Config struct {
-	StorageClass string
-	Start        string
-	End          string
-	Threads      int
-	HTTPPort     int
-	Update       bool
-	ForceUpdate  bool
-	Perms        bool
-	Dry          bool
-	DeleteSrc    bool
-	DeleteDst    bool
-	Dirs         bool
-	Exclude      []string
-	Include      []string
-	Links        bool
-	Limit        int64
-	Manager      string
-	Workers      []string
-	BWLimit      int
-	NoHTTPS      bool
-	Verbose      bool
-	Quiet        bool
-	CheckAll     bool
-	CheckNew     bool
-	Env          map[string]string
+	StorageClass   string
+	Start          string
+	End            string
+	Threads        int
+	HTTPPort       int
+	Update         bool
+	ForceUpdate    bool
+	Perms          bool
+	Dry            bool
+	DeleteSrc      bool
+	DeleteDst      bool
+	Dirs           bool
+	Exclude        []string
+	Include        []string
+	Existing       bool
+	IgnoreExisting bool
+	Links          bool
+	Limit          int64
+	Manager        string
+	Workers        []string
+	BWLimit        int
+	NoHTTPS        bool
+	Verbose        bool
+	Quiet          bool
+	CheckAll       bool
+	CheckNew       bool
+	Env            map[string]string
 }
 
 func envList() []string {
@@ -122,29 +124,31 @@ func NewConfigFromCli(c *cli.Context) *Config {
 	}
 
 	cfg := &Config{
-		Start:       c.String("start"),
-		End:         c.String("end"),
-		Threads:     c.Int("threads"),
-		Update:      c.Bool("update"),
-		ForceUpdate: c.Bool("force-update"),
-		Perms:       c.Bool("perms"),
-		Dirs:        c.Bool("dirs"),
-		Dry:         c.Bool("dry"),
-		DeleteSrc:   c.Bool("delete-src"),
-		DeleteDst:   c.Bool("delete-dst"),
-		Exclude:     c.StringSlice("exclude"),
-		Include:     c.StringSlice("include"),
-		Links:       c.Bool("links"),
-		Limit:       c.Int64("limit"),
-		Workers:     c.StringSlice("worker"),
-		Manager:     c.String("manager"),
-		BWLimit:     c.Int("bwlimit"),
-		NoHTTPS:     c.Bool("no-https"),
-		Verbose:     c.Bool("verbose"),
-		Quiet:       c.Bool("quiet"),
-		CheckAll:    c.Bool("check-all"),
-		CheckNew:    c.Bool("check-new"),
-		Env:         make(map[string]string),
+		Start:          c.String("start"),
+		End:            c.String("end"),
+		Threads:        c.Int("threads"),
+		Update:         c.Bool("update"),
+		ForceUpdate:    c.Bool("force-update"),
+		Perms:          c.Bool("perms"),
+		Dirs:           c.Bool("dirs"),
+		Dry:            c.Bool("dry"),
+		DeleteSrc:      c.Bool("delete-src"),
+		DeleteDst:      c.Bool("delete-dst"),
+		Exclude:        c.StringSlice("exclude"),
+		Include:        c.StringSlice("include"),
+		Existing:       c.Bool("existing"),
+		IgnoreExisting: c.Bool("ignore-existing"),
+		Links:          c.Bool("links"),
+		Limit:          c.Int64("limit"),
+		Workers:        c.StringSlice("worker"),
+		Manager:        c.String("manager"),
+		BWLimit:        c.Int("bwlimit"),
+		NoHTTPS:        c.Bool("no-https"),
+		Verbose:        c.Bool("verbose"),
+		Quiet:          c.Bool("quiet"),
+		CheckAll:       c.Bool("check-all"),
+		CheckNew:       c.Bool("check-new"),
+		Env:            make(map[string]string),
 	}
 	if cfg.Threads <= 0 {
 		logger.Warnf("threads should be larger than 0, reset it to 1")
