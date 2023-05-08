@@ -100,10 +100,7 @@ func umount(ctx *cli.Context) error {
 	setup(ctx, 1)
 	mp := ctx.Args().Get(0)
 	if ctx.Bool("flush") {
-		raw, err := os.ReadFile(filepath.Join(mp, ".jfs.config"))
-		if os.IsNotExist(err) {
-			raw, err = os.ReadFile(filepath.Join(mp, ".config"))
-		}
+		raw, err := readConfig(mp)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return fmt.Errorf("not a JuiceFS mount point")

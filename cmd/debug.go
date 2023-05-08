@@ -210,10 +210,7 @@ func copyLogFile(logPath, retLogPath string, limit uint64, requireRootPrivileges
 }
 
 func getPprofPort(pid, amp string, requireRootPrivileges bool) (int, error) {
-	content, err := os.ReadFile(filepath.Join(amp, ".jfs.config"))
-	if os.IsNotExist(err) {
-		content, err = os.ReadFile(filepath.Join(amp, ".config"))
-	}
+	content, err := readConfig(amp)
 	if err != nil {
 		logger.Warnf("failed to read config file: %v", err)
 	}
@@ -517,7 +514,7 @@ func collectSysInfo(ctx *cli.Context, currDir string) error {
 func collectSpecialFile(ctx *cli.Context, amp string, currDir string, requireRootPrivileges bool, wg *sync.WaitGroup) error {
 	prefixed := true
 	configName := ".jfs.config"
-	if _, err := os.Stat(filepath.Join(amp, configName)); os.IsNotExist(err) {
+	if !utils.Exists(filepath.Join(amp, configName)) {
 		configName = ".config"
 		prefixed = false
 	}
@@ -527,7 +524,7 @@ func collectSpecialFile(ctx *cli.Context, amp string, currDir string, requireRoo
 
 	statsName := ".jfs.stats"
 	if !prefixed {
-		statsName = ".stats"
+		statsName = statsName[4:]
 	}
 	stats := ctx.Uint64("stats-sec")
 	wg.Add(1)

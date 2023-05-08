@@ -346,8 +346,8 @@ func profile(ctx *cli.Context) error {
 		if inode != uint64(meta.RootInode) {
 			logger.Fatalf("Path %s is not a mount point!", logPath)
 		}
-		if _, err = os.Stat(filepath.Join(logPath, ".jfs.accesslog")); err == nil {
-			logPath = filepath.Join(logPath, ".jfs.accesslog")
+		if p := filepath.Join(logPath, ".jfs.accesslog"); utils.Exists(p) {
+			logPath = p
 		} else {
 			logPath = filepath.Join(logPath, ".accesslog")
 		}

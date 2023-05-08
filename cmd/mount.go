@@ -299,6 +299,14 @@ func configEqual(a, b *vfs.Config) bool {
 	return eq
 }
 
+func readConfig(mp string) ([]byte, error) {
+	contents, err := os.ReadFile(filepath.Join(mp, ".jfs.config"))
+	if os.IsNotExist(err) {
+		contents, err = os.ReadFile(filepath.Join(mp, ".config"))
+	}
+	return contents, err
+}
+
 func prepareMp(newCfg *vfs.Config, mp string) (ignore bool) {
 	fi, err := os.Stat(mp)
 	if err != nil {
@@ -328,10 +336,7 @@ func prepareMp(newCfg *vfs.Config, mp string) (ignore bool) {
 		return
 	}
 
-	contents, err := os.ReadFile(filepath.Join(mp, ".jfs.config"))
-	if os.IsNotExist(err) {
-		contents, err = os.ReadFile(filepath.Join(mp, ".config"))
-	}
+	contents, err := readConfig(mp)
 	if err != nil {
 		// failed to read juicefs config, continue to mount
 		return
