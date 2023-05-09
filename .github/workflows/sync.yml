@@ -78,7 +78,39 @@ jobs:
             done < .github/workflows/resources/sync-options.txt
 
           done
+      - name: Test Sync existing&ignore-existing flag
+        run: |
+          rm -rf /tmp/src_dir /tmp/rsync_dir
+          mkdir -p /tmp/src_dir/d1
+          mkdir -p /tmp/jfs_sync_dir/d1
+          echo abc > /tmp/src_dir/file1
+          echo 1234 > /tmp/jfs_sync_dir/file1
+          echo abcde > /tmp/src_dir/d1/d1file1
+          echo 123456 > /tmp/jfs_sync_dir/d1/d1file1
+          cp -rf /tmp/jfs_sync_dir/ /tmp/rsync_dir
+          
+          mkdir /tmp/src_dir/no-exist-dir
+          echo 1111 > /tmp/src_dir/no-exist-dir/f1
+          echo 123456 > /tmp/src_dir/d1/no-exist-file
 
+          juicefs sync /tmp/src_dir /tmp/jfs_sync_dir --existing -u
+          rsync -r /tmp/src_dir/ /tmp/rsync_dir --existing
+          diff -ur /tmp/jfs_sync_dir /tmp/rsync_dir
+          
+          rm -rf /tmp/src_dir /tmp/rsync_dir
+          mkdir -p /tmp/src_dir/d1
+          mkdir -p /tmp/jfs_sync_dir/d1
+          echo abc > /tmp/src_dir/file1
+          echo 1234 > /tmp/jfs_sync_dir/file1
+          echo abcde > /tmp/src_dir/d1/d1file1
+          echo 123456 > /tmp/jfs_sync_dir/d1/d1file1
+          echo abc > /tmp/src_dir/file2
+          echo abcde > /tmp/src_dir/d1/d1file2
+          cp -rf /tmp/jfs_sync_dir/ /tmp/rsync_dir
+          
+          juicefs sync /tmp/src_dir /tmp/jfs_sync_dir --ignore-existing -u
+          rsync -r /tmp/src_dir/ /tmp/rsync_dir --ignore-existing
+          diff -ur /tmp/jfs_sync_dir /tmp/rsync_dir
       - name: Log
         if: ${{ always() }}
         run: |
