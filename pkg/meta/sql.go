@@ -2062,7 +2062,14 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	return err
 }
 
-func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) syscall.Errno {
+func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rerr syscall.Errno) {
+	defer func() {
+		if rerr == 0 {
+			if err := m.touchAtime(ctx, inode, nil); err != 0 {
+				logger.Warnf("read %v update atime: %s", inode, err)
+			}
+		}
+	}()
 	f := m.of.find(inode)
 	if f != nil {
 		f.RLock()
@@ -3909,4 +3916,53 @@ func (m *dbMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 		_, err = s.Delete(&detachedNode{Inode: inode})
 		return err
 	}, parent))
+}
+
+func (m *dbMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno) {
+	if (m.conf.AtimeMode != StrictAtime && m.conf.AtimeMode != RelAtime) || m.conf.ReadOnly {
+		return 0
+	}
+
+	var curNode = node{Inode: ino}
+	var attr *Attr
+	newAttr := &Attr{}
+	if cur != nil {
+		attr = cur
+	} else if m.of.Check(ino, newAttr) {
+		attr = newAttr
+	}
+
+	now := time.Now()
+	if attr != nil && !m.atimeNeedsUpdate(attr, now) {
+		return 0
+	}
+
+	updated := false
+	defer func() {
+		if rerr == 0 && m.of.IsOpen(ino) && updated {
+			m.of.Update(ino, attr)
+		}
+	}()
+
+	return errno(m.txn(func(s *xorm.Session) error {
+		if attr == nil {
+			attr = newAttr
+		}
+		ok, err := s.ForUpdate().Get(&curNode)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+		m.parseAttr(&curNode, attr)
+
+		if !m.atimeNeedsUpdate(attr, now) {
+			return nil
+		}
+		curNode.Atime = now.Unix()*1e6 + int64(now.Nanosecond())/1e3
+		_, err = s.Cols("atime").Update(&curNode, &node{Inode: ino})
+		updated = true
+		return err
+	}))
 }

@@ -53,6 +53,11 @@ const (
 	CLONE_MODE_CAN_OVERWRITE      = 0x01
 	CLONE_MODE_PRESERVE_ATTR      = 0x02
 	CLONE_MODE_PRESERVE_HARDLINKS = 0x08
+
+	// atime mode
+	NoAtime     = "noatime"
+	RelAtime    = "relatime"
+	StrictAtime = "strictatime"
 )
 
 type msgCallbacks struct {
@@ -552,4 +557,33 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 		tree.Children = append(tree.Children[:topN], omitChild)
 	}
 	return 0
+}
+
+func (m *baseMeta) atimeNeedsUpdate(attr *Attr, now time.Time) bool {
+	if m.conf.AtimeMode == RelAtime && relatimeNeedUpdate(attr, now) {
+		return true
+	}
+
+	atime := time.Unix(attr.Atime, int64(attr.Atimensec))
+	// update atime only for > 1 second accesses
+	return (m.conf.AtimeMode == StrictAtime) && (now.Sub(atime) > time.Second)
+}
+
+// With relative atime, only update atime if the previous atime is earlier than either the ctime or
+// mtime or if at least a day has passed since the last atime update.
+func relatimeNeedUpdate(attr *Attr, now time.Time) bool {
+	atime := time.Unix(attr.Atime, int64(attr.Atimensec))
+
+	// Is mtime younger than atime? If yes, update atime
+	if time.Unix(attr.Mtime, int64(attr.Mtimensec)).After(atime) {
+		return true
+	}
+
+	// Is ctime younger than atime? If yes, update atime
+	if time.Unix(attr.Ctime, int64(attr.Ctimensec)).After(atime) {
+		return true
+	}
+
+	// Is the previous atime value older than a day? If yes, update atime
+	return now.Sub(atime) > 24*time.Hour
 }

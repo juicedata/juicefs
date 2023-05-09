@@ -107,6 +107,7 @@ type engine interface {
 	scanPendingFiles(Context, pendingFileScan) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
+	touchAtime(ctx Context, inode Ino, attr *Attr) syscall.Errno
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -1494,10 +1495,19 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	return st
 }
 
-func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
+func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr syscall.Errno) {
 	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
 	}
+
+	defer func() {
+		if rerr == 0 {
+			if err := m.en.touchAtime(ctx, inode, attr); err != 0 {
+				logger.Warnf("open %v update atime: %s", inode, err)
+			}
+		}
+	}()
+
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
 		return 0
 	}
@@ -1561,9 +1571,16 @@ func (m *baseMeta) Close(ctx Context, inode Ino) syscall.Errno {
 	return 0
 }
 
-func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) syscall.Errno {
-	inode = m.checkRoot(inode)
+func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry) (rerr syscall.Errno) {
 	var attr Attr
+	defer func() {
+		if rerr == 0 {
+			if err := m.en.touchAtime(ctx, inode, &attr); err != 0 {
+				logger.Warnf("readdir %v update atime: %s", inode, err)
+			}
+		}
+	}()
+	inode = m.checkRoot(inode)
 	if err := m.GetAttr(ctx, inode, &attr); err != 0 {
 		return err
 	}

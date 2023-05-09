@@ -318,6 +318,9 @@ interval (in seconds) to send heartbeat; it's recommended that all clients use t
 `--no-bgjob`<br />
 disable background jobs (clean-up, backup, etc.) (default: false)
 
+`--atime-mode value`<br />
+control atime behavior, support 3 modes, `noatime`, `relatime`, `strictatime`, default to `noatime`
+
 #### Examples
 
 ```bash

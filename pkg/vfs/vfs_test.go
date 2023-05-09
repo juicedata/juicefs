@@ -830,3 +830,177 @@ func TestInternalFile(t *testing.T) {
 		t.Fatalf("result: %s", string(resp[:n]))
 	}
 }
+
+func TestAtime(t *testing.T) {
+	v, _ := createTestVFS()
+	ctx := NewLogContext(meta.NewContext(10, 1, []uint32{2}))
+
+	// noatime by default
+	fe, fh, e := v.Create(ctx, 1, "f1", 0755, 0, syscall.O_RDWR)
+	if e != 0 {
+		t.Fatalf("create file: %s", e)
+	}
+	if e = v.Write(ctx, fe.Inode, []byte("hello"), 0, fh); e != 0 {
+		t.Fatalf("write file: %s", e)
+	}
+	if fe2, e := v.SetAttr(ctx, fe.Inode, meta.SetAttrAtime, 0, 0, 0, 0, 1234, 0, 5678, 0, 0); e != 0 {
+		t.Fatalf("setattr f1: %s", e)
+	} else if fe2.Attr.Atime != 1234 || fe2.Attr.Atimensec != 5678 {
+		t.Fatalf("setattr f1: %+v", fe2.Attr)
+	}
+	var buf = make([]byte, 4096)
+	if _, e := v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
+		t.Fatalf("read file: %s", e)
+	}
+	if fe, e := v.GetAttr(ctx, fe.Inode, 0); e != 0 || fe.Attr.Atime != 1234 || fe.Attr.Atimensec != 5678 {
+		t.Fatalf("getattr after read f1: %s atime: %v, atimensec %v", e, fe.Attr.Atime, fe.Attr.Atimensec)
+	}
+	de, e := v.Mkdir(ctx, 1, "d1", 0755, 0)
+	if e != 0 {
+		t.Fatalf("mkdir d1: %s", e)
+	}
+	if de2, e := v.SetAttr(ctx, de.Inode, meta.SetAttrAtime, 0, 0, 0, 0, 1234, 0, 5678, 0, 0); e != 0 {
+		t.Fatalf("setattr d1: %s", e)
+	} else if de2.Attr.Atime != 1234 || de2.Attr.Atimensec != 5678 {
+		t.Fatalf("setattr d1: %+v", de2.Attr)
+	}
+	fh, e = v.Opendir(ctx, de.Inode)
+	if e != 0 {
+		t.Fatalf("opendir d1: %s", e)
+	}
+	_, _, e = v.Readdir(ctx, de.Inode, 1024, 0, fh, false)
+	if e != 0 {
+		t.Fatalf("readdir d1: %s", e)
+	}
+	if fe, e := v.GetAttr(ctx, de.Inode, 0); e != 0 || fe.Attr.Atime != 1234 || fe.Attr.Atimensec != 5678 {
+		t.Fatalf("getattr after readdir d1: %s atime: %v, atimensec %v", e, fe.Attr.Atime, fe.Attr.Atimensec)
+	}
+	if fe, _, e := v.Open(ctx, fe.Inode, syscall.O_RDWR); e != 0 || fe.Attr.Atime != 1234 || fe.Attr.Atimensec != 5678 {
+		t.Fatalf("open f1: %s atime: %v, atimensec %v", e, fe.Attr.Atime, fe.Attr.Atimensec)
+	}
+
+	// set relatime
+	v.Conf.Meta.AtimeMode = meta.RelAtime
+	fe, fh, e = v.Create(ctx, 1, "f2", 0755, 0, syscall.O_RDWR)
+	if e != 0 {
+		t.Fatalf("create file: %s", e)
+	}
+	if e = v.Write(ctx, fe.Inode, []byte("hello"), 0, fh); e != 0 {
+		t.Fatalf("write file: %s", e)
+	}
+	if fe2, e := v.SetAttr(ctx, fe.Inode, meta.SetAttrAtime, 0, 0, 0, 0, 1234, 0, 5678, 0, 0); e != 0 {
+		t.Fatalf("setattr f2: %s", e)
+	} else if fe2.Attr.Atime != 1234 || fe2.Attr.Atimensec != 5678 {
+		t.Fatalf("setattr f2: %+v", fe2.Attr)
+	}
+	if _, e := v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
+		t.Fatalf("read file: %s", e)
+	}
+	// older than 24h, update atime on read
+	if fe, e := v.GetAttr(ctx, fe.Inode, 0); e != 0 || fe.Attr.Atime == 1234 {
+		t.Fatalf("getattr after read f2: %s atime: %v, atimensec %v", e, fe.Attr.Atime, fe.Attr.Atimensec)
+	}
+
+	de, e = v.Mkdir(ctx, 1, "d2", 0755, 0)
+	if e != 0 {
+		t.Fatalf("mkdir d2: %s", e)
+	}
+	if de2, e := v.SetAttr(ctx, de.Inode, meta.SetAttrAtime, 0, 0, 0, 0, 1234, 0, 5678, 0, 0); e != 0 {
+		t.Fatalf("setattr d2: %s", e)
+	} else if de2.Attr.Atime != 1234 || de2.Attr.Atimensec != 5678 {
+		t.Fatalf("setattr d2: %+v", de2.Attr)
+	}
+	dfh, e := v.Opendir(ctx, de.Inode)
+	if e != 0 {
+		t.Fatalf("opendir d2: %s", e)
+	}
+	_, _, e = v.Readdir(ctx, de.Inode, 1024, 0, dfh, false)
+	if e != 0 {
+		t.Fatalf("readdir d2: %s", e)
+	}
+	// update atime on readdir
+	if fe, e := v.GetAttr(ctx, de.Inode, 0); e != 0 || fe.Attr.Atime == 1234 {
+		t.Fatalf("getattr after readdir d2: %s atime: %v, atimensec %v", e, fe.Attr.Atime, fe.Attr.Atimensec)
+	}
+
+	now := time.Now()
+	if fe2, e := v.SetAttr(ctx, fe.Inode, meta.SetAttrMtime, 0, 0, 0, 0, 0, now.Unix(), 0, uint32(now.Nanosecond()), 0); e != 0 {
+		t.Fatalf("setattr f2: %s", e)
+	} else if fe2.Attr.Mtime != now.Unix() || fe2.Attr.Mtimensec != uint32(now.Nanosecond()) {
+		t.Fatalf("setattr f2: %+v", fe2.Attr)
+	}
+	time.Sleep(time.Second)
+	if _, e := v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
+		t.Fatalf("read file: %s", e)
+	}
+	// mtime > atime, update atime on read
+	if fe, e := v.GetAttr(ctx, fe.Inode, 0); e != 0 || fe.Attr.Atime < now.Unix() {
+		t.Fatalf("getattr after read f2: %s atime: %v, now %v", e, fe.Attr.Atime, now.Unix())
+	}
+
+	now = time.Now()
+	if de2, e := v.SetAttr(ctx, de.Inode, meta.SetAttrMtime, 0, 0, 0, 0, 0, now.Unix(), 0, uint32(now.Nanosecond()), 0); e != 0 {
+		t.Fatalf("setattr d2: %s", e)
+	} else if de2.Attr.Mtime != now.Unix() || de2.Attr.Mtimensec != uint32(now.Nanosecond()) {
+		t.Fatalf("setattr d2: %+v", de2.Attr)
+	}
+	time.Sleep(time.Second)
+	_, _, e = v.Readdir(ctx, de.Inode, 1024, 0, dfh, false)
+	if e != 0 {
+		t.Fatalf("readdir d2: %s", e)
+	}
+	// mtime > atime, update atime on readdir
+	if fe, e := v.GetAttr(ctx, de.Inode, 0); e != 0 || fe.Attr.Atime < now.Unix() {
+		t.Fatalf("getattr after readdir d2: %s atime: %v, now %v", e, fe.Attr.Atime, now.Unix())
+	}
+
+	// set strictatime
+	v.Conf.Meta.AtimeMode = meta.StrictAtime
+	fe, fh, e = v.Create(ctx, 1, "f3", 0755, 0, syscall.O_RDWR)
+	if e != 0 {
+		t.Fatalf("create file: %s", e)
+	}
+	if e = v.Write(ctx, fe.Inode, []byte("hello"), 0, fh); e != 0 {
+		t.Fatalf("write file: %s", e)
+	}
+	if fe2, e := v.SetAttr(ctx, fe.Inode, meta.SetAttrAtime, 0, 0, 0, 0, 1234, 0, 5678, 0, 0); e != 0 {
+		t.Fatalf("setattr f3: %s", e)
+	} else if fe2.Attr.Atime != 1234 || fe2.Attr.Atimensec != 5678 {
+		t.Fatalf("setattr f3: %+v", fe2.Attr)
+	}
+	if _, e := v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
+		t.Fatalf("read file: %s", e)
+	}
+	// always update atime on read
+	if fe, e := v.GetAttr(ctx, fe.Inode, 0); e != 0 || fe.Attr.Atime == 1234 {
+		t.Fatalf("getattr after read f3: %s atime: %v, atimensec %v", e, fe.Attr.Atime, fe.Attr.Atimensec)
+	}
+	_, _, e = v.Readdir(ctx, de.Inode, 1024, 0, dfh, false)
+	if e != 0 {
+		t.Fatalf("readdir d2: %s", e)
+	}
+	if fe, e := v.GetAttr(ctx, de.Inode, 0); e != 0 || fe.Attr.Atime == 1234 {
+		t.Fatalf("getattr after readdir d2: %s atime: %v, now %v", e, fe.Attr.Atime, now.Unix())
+	}
+	now = time.Now()
+	time.Sleep(time.Second)
+	if _, e := v.Read(ctx, fe.Inode, buf, 0, fh); e != 0 {
+		t.Fatalf("read file: %s", e)
+	}
+	if fe, e := v.GetAttr(ctx, fe.Inode, 0); e != 0 || fe.Attr.Atime < now.Unix() {
+		t.Fatalf("getattr after access f3: %s atime: %v, now %v", e, fe.Attr.Atime, now.Unix())
+	}
+	_, _, e = v.Readdir(ctx, de.Inode, 1024, 0, dfh, false)
+	if e != 0 {
+		t.Fatalf("readdir d2: %s", e)
+	}
+	if fe, e := v.GetAttr(ctx, de.Inode, 0); e != 0 || fe.Attr.Atime < now.Unix() {
+		t.Fatalf("getattr after readdir d2: %s atime: %v, now %v", e, fe.Attr.Atime, now.Unix())
+	}
+	now = time.Now()
+	time.Sleep(time.Second)
+	// update atime on open
+	if fe, _, e := v.Open(ctx, fe.Inode, syscall.O_RDWR); e != 0 || fe.Attr.Atime < now.Unix() {
+		t.Fatalf("open f1: %s atime: %v, atimensec %v", e, fe.Attr.Atime, fe.Attr.Atimensec)
+	}
+}

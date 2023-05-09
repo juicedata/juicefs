@@ -218,6 +218,11 @@ func clientFlags() []cli.Flag {
 			Name:  "subdir",
 			Usage: "mount a sub-directory as root",
 		},
+		&cli.StringFlag{
+			Name:  "atime-mode",
+			Value: "noatime",
+			Usage: "when to update atime, supported mode includes: noatime, relatime, strictatime",
+		},
 	}
 }
 
