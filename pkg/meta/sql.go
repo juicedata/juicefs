@@ -3922,6 +3922,11 @@ func (m *dbMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno
 		attr = newAttr
 	}
 
+	now := time.Now()
+	if attr != nil && !m.atimeNeedsUpdate(attr, now) {
+		return 0
+	}
+
 	updated := false
 	defer func() {
 		if rerr == 0 && m.of.IsOpen(ino) && updated {
@@ -3929,24 +3934,10 @@ func (m *dbMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno
 		}
 	}()
 
-	now := time.Now()
-
-	// Already got attr, update atime without transaction
-	if attr != nil {
-		if !m.atimeNeedsUpdate(attr, now) {
-			return 0
-		}
-		curNode.Atime = now.Unix()*1e6 + int64(now.Nanosecond())/1e3
-		s := m.db.NewSession()
-		defer s.Close()
-		_, err := s.Cols("atime").Update(&curNode, &node{Inode: ino})
-		updated = true
-		return errno(err)
-	}
-
-	// Should get attr first, do it in transaction
 	return errno(m.txn(func(s *xorm.Session) error {
-		attr = newAttr
+		if attr == nil {
+			attr = newAttr
+		}
 		ok, err := s.ForUpdate().Get(&curNode)
 		if err != nil {
 			return err
@@ -3954,8 +3945,8 @@ func (m *dbMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno
 		if !ok {
 			return syscall.ENOENT
 		}
-
 		m.parseAttr(&curNode, attr)
+
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}

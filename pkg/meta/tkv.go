@@ -3401,6 +3401,11 @@ func (m *kvMeta) touchAtime(_ctx Context, ino Ino, cur *Attr) (rerr syscall.Errn
 		attr = newAttr
 	}
 
+	now := time.Now()
+	if attr != nil && !m.atimeNeedsUpdate(attr, now) {
+		return 0
+	}
+
 	updated := false
 	defer func() {
 		if rerr == 0 && m.of.IsOpen(ino) && updated {
@@ -3408,32 +3413,16 @@ func (m *kvMeta) touchAtime(_ctx Context, ino Ino, cur *Attr) (rerr syscall.Errn
 		}
 	}()
 
-	now := time.Now()
-
-	// Already got attr, update atime without transaction
-	if attr != nil {
-		if !m.atimeNeedsUpdate(attr, now) {
-			return 0
+	return errno(m.client.txn(func(tx *kvTxn) error {
+		if attr == nil {
+			attr = newAttr
 		}
-		attr.Atime = now.Unix()
-		attr.Atimensec = uint32(now.Nanosecond())
-		updated = true
-		return errno(m.client.txn(func(tx *kvTxn) error {
-			tx.set(m.inodeKey(ino), m.marshal(attr))
-			return nil
-		}, 0))
-	}
-
-	// Should get attr first, do it in transaction
-	return errno(m.txn(func(tx *kvTxn) error {
-		attr = newAttr
 		a := tx.get(m.inodeKey(ino))
 		if a == nil {
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, attr)
 
-		now := time.Now()
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
@@ -3442,5 +3431,5 @@ func (m *kvMeta) touchAtime(_ctx Context, ino Ino, cur *Attr) (rerr syscall.Errn
 		tx.set(m.inodeKey(ino), m.marshal(attr))
 		updated = true
 		return nil
-	}))
+	}, 0))
 }

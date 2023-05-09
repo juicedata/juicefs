@@ -4262,6 +4262,11 @@ func (m *redisMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Er
 		attr = newAttr
 	}
 
+	now := time.Now()
+	if attr != nil && !m.atimeNeedsUpdate(attr, now) {
+		return 0
+	}
+
 	updated := false
 	defer func() {
 		if rerr == 0 && m.of.IsOpen(ino) && updated {
@@ -4269,22 +4274,10 @@ func (m *redisMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Er
 		}
 	}()
 
-	now := time.Now()
-
-	// Already got attr, update atime without transaction
-	if attr != nil {
-		if !m.atimeNeedsUpdate(attr, now) {
-			return 0
-		}
-		attr.Atime = now.Unix()
-		attr.Atimensec = uint32(now.Nanosecond())
-		updated = true
-		return errno(m.rdb.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0).Err())
-	}
-
-	// Should get attr first, do it in transaction
 	return errno(m.txn(ctx, func(tx *redis.Tx) error {
-		attr = newAttr
+		if attr == nil {
+			attr = newAttr
+		}
 		a, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
 		if err != nil {
 			return err
