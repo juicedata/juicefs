@@ -192,6 +192,7 @@ jobs:
           # COVERAGE_FILE=mutest-cov.out TEST_FILE_NAME="$test_file" PACKAGE_PATH="$package_path" go-mutesting $source_file --debug --exec=.github/scripts/mutate/mutest.sh  --do-not-remove-tmp-folder --blacklist $black_list_file 
           if [ $? != 0 ]; then echo "run mutesting.py failed" && exit 1; fi
           
+          [[ -z "${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} " ]] && echo "<WARNING>: MYSQL_PASSWORD is empty" && exit 0
           export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
           JOB_NAME=${{matrix.test_file}} JOB_URL=${{steps.jobs.outputs.html_url}}  STAT_RESULT_FILE=stat_result.log python3 .github/scripts/mutate/save_report.py
 
@@ -218,6 +219,7 @@ jobs:
 
       - name: Generate mutate report
         run: |
+          [[ -z "${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} " ]] && echo "<WARNING>: MYSQL_PASSWORD is empty" && exit 0
           export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
           mutate_report=$(python3 .github/scripts/mutate/query_report.py)
           echo "mutate_report is $mutate_report"
