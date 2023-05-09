@@ -93,8 +93,8 @@ jobs:
           echo 1111 > /tmp/src_dir/no-exist-dir/f1
           echo 123456 > /tmp/src_dir/d1/no-exist-file
 
-          ./juicefs sync /tmp/src_dir /tmp/jfs_sync_dir --existing -u
-          rsync -r /tmp/src_dir/ /tmp/rsync_dir --existing
+          ./juicefs sync /tmp/src_dir /tmp/jfs_sync_dir --existing
+          rsync -r /tmp/src_dir/ /tmp/rsync_dir --existing --size-only
           diff -ur /tmp/jfs_sync_dir /tmp/rsync_dir
           
           rm -rf /tmp/src_dir /tmp/rsync_dir
@@ -108,8 +108,8 @@ jobs:
           echo abcde > /tmp/src_dir/d1/d1file2
           cp -rf /tmp/jfs_sync_dir/ /tmp/rsync_dir
           
-          ./juicefs sync /tmp/src_dir /tmp/jfs_sync_dir --ignore-existing -u
-          rsync -r /tmp/src_dir/ /tmp/rsync_dir --ignore-existing
+          ./juicefs sync /tmp/src_dir /tmp/jfs_sync_dir --ignore-existing 
+          rsync -r /tmp/src_dir/ /tmp/rsync_dir --ignore-existing --size-only
           diff -ur /tmp/jfs_sync_dir /tmp/rsync_dir
       - name: Log
         if: ${{ always() }}
