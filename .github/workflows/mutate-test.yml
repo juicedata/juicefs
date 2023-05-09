@@ -193,6 +193,7 @@ jobs:
           if [ $? != 0 ]; then echo "run mutesting.py failed" && exit 1; fi
           
           export MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} 
+          [[ -z "$MYSQL_PASSWORD" ]] && echo "<FATAL>: MYSQL_PASSWORD is empty" && exit 1
           JOB_NAME=${{matrix.test_file}} JOB_URL=${{steps.jobs.outputs.html_url}}  STAT_RESULT_FILE=stat_result.log python3 .github/scripts/mutate/save_report.py
 
       - name: Setup upterm session
