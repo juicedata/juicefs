@@ -29,6 +29,13 @@ jobs:
   build-matrix:
     runs-on: ubuntu-20.04
     steps:
+      - name: Check if event is from forked repo
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.owner.login }}" != "${{ github.repository_owner }}" ]; then
+            echo "This is a pull request from a forked repository"
+            exit 0
+          fi
+          
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
