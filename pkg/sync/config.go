@@ -124,6 +124,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 	}
 
 	cfg := &Config{
+		StorageClass:   c.String("storage-class"),
 		Start:          c.String("start"),
 		End:            c.String("end"),
 		Threads:        c.Int("threads"),
