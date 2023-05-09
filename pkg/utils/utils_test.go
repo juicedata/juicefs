@@ -113,5 +113,4 @@ func TestRemovePassword(t *testing.T) {
 	for _, tc := range testCase {
 		assertEqual(t, RemovePassword(tc.uri), tc.expected)
 	}
-
 }

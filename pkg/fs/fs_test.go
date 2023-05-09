@@ -298,5 +298,4 @@ func createTestFS(t *testing.T) *FileSystem {
 		t.Fatalf("initialize  failed: %s", err)
 	}
 	return jfs
-
 }
