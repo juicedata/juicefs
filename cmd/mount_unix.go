@@ -23,9 +23,12 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"os/user"
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -129,6 +132,10 @@ func mount_flags() []cli.Flag {
 			Usage: "path of log file when running in background",
 		},
 		&cli.StringFlag{
+			Name:  "root-squash",
+			Usage: "map local root user (uid = 0) to another one in filesystem",
+		},
+		&cli.StringFlag{
 			Name:  "o",
 			Usage: "other FUSE options",
 		},
@@ -203,11 +210,47 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 	if os.Getuid() == 0 {
 		disableUpdatedb()
 	}
-
 	conf := v.Conf
 	conf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
 	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
 	conf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
+	rootSquash := c.String("root-squash")
+	if rootSquash != "" {
+		ss := strings.Split(strings.TrimSpace(rootSquash), ":")
+		if len(ss) != 2 {
+			logger.Fatalf("invalid root-squash format: %s", rootSquash)
+		}
+		var uid, gid uint32 = 65534, 65534
+		if u, err := user.Lookup("nobody"); err == nil {
+			nobody, err := strconv.ParseUint(u.Uid, 10, 32)
+			if err != nil {
+				logger.Fatalf("invalid uid: %s", u.Uid)
+			}
+			uid = uint32(nobody)
+		}
+		if g, err := user.LookupGroup("nogroup"); err == nil {
+			nogroup, err := strconv.ParseUint(g.Gid, 10, 32)
+			if err != nil {
+				logger.Fatalf("invalid gid: %s", g.Gid)
+			}
+			gid = uint32(nogroup)
+		}
+		if ss[0] != "" {
+			u, err := strconv.ParseUint(ss[0], 10, 32)
+			if err != nil {
+				logger.Fatalf("invalid uid: %s", ss[0])
+			}
+			uid = uint32(u)
+		}
+		if ss[1] != "" {
+			g, err := strconv.ParseUint(ss[1], 10, 32)
+			if err != nil {
+				logger.Fatalf("invalid gid: %s", ss[1])
+			}
+			gid = uint32(g)
+		}
+		conf.RootSquash = &vfs.RootSquash{Uid: uid, Gid: gid}
+	}
 	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Meta.MountPoint)
 	err := fuse.Serve(v, c.String("o"), c.Bool("enable-xattr"), c.Bool("enable-ioctl"))
 	if err != nil {

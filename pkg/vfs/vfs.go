@@ -61,6 +61,12 @@ type Config struct {
 	FastResolve     bool   `json:",omitempty"`
 	AccessLog       string `json:",omitempty"`
 	HideInternal    bool
+	RootSquash      *RootSquash `json:",omitempty"`
+}
+
+type RootSquash struct {
+	Uid uint32
+	Gid uint32
 }
 
 var (

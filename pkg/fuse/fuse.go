@@ -81,7 +81,7 @@ func (fs *fileSystem) replyEntry(ctx *fuseContext, out *fuse.EntryOut, e *meta.E
 }
 
 func (fs *fileSystem) Lookup(cancel <-chan struct{}, header *fuse.InHeader, name string, out *fuse.EntryOut) (status fuse.Status) {
-	ctx := newContext(cancel, header)
+	ctx := fs.newContext(cancel, header)
 	defer releaseContext(ctx)
 	entry, err := fs.v.Lookup(ctx, Ino(header.NodeId), name)
 	if err != 0 {
@@ -91,7 +91,7 @@ func (fs *fileSystem) Lookup(cancel <-chan struct{}, header *fuse.InHeader, name
 }
 
 func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *fuse.AttrOut) (code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	var opened uint8
 	if in.Fh() != 0 {
@@ -106,7 +106,7 @@ func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *f
 }
 
 func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fuse.AttrOut) (code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	var opened uint8
 	if in.Fh != 0 {
@@ -121,7 +121,7 @@ func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *f
 }
 
 func (fs *fileSystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name string, out *fuse.EntryOut) (code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entry, err := fs.v.Mknod(ctx, Ino(in.NodeId), name, uint16(in.Mode), getUmask(in), in.Rdev)
 	if err != 0 {
@@ -131,7 +131,7 @@ func (fs *fileSystem) Mknod(cancel <-chan struct{}, in *fuse.MknodIn, name strin
 }
 
 func (fs *fileSystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name string, out *fuse.EntryOut) (code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entry, err := fs.v.Mkdir(ctx, Ino(in.NodeId), name, uint16(in.Mode), uint16(in.Umask))
 	if err != 0 {
@@ -141,28 +141,28 @@ func (fs *fileSystem) Mkdir(cancel <-chan struct{}, in *fuse.MkdirIn, name strin
 }
 
 func (fs *fileSystem) Unlink(cancel <-chan struct{}, header *fuse.InHeader, name string) (code fuse.Status) {
-	ctx := newContext(cancel, header)
+	ctx := fs.newContext(cancel, header)
 	defer releaseContext(ctx)
 	err := fs.v.Unlink(ctx, Ino(header.NodeId), name)
 	return fuse.Status(err)
 }
 
 func (fs *fileSystem) Rmdir(cancel <-chan struct{}, header *fuse.InHeader, name string) (code fuse.Status) {
-	ctx := newContext(cancel, header)
+	ctx := fs.newContext(cancel, header)
 	defer releaseContext(ctx)
 	err := fs.v.Rmdir(ctx, Ino(header.NodeId), name)
 	return fuse.Status(err)
 }
 
 func (fs *fileSystem) Rename(cancel <-chan struct{}, in *fuse.RenameIn, oldName string, newName string) (code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := fs.v.Rename(ctx, Ino(in.NodeId), oldName, Ino(in.Newdir), newName, in.Flags)
 	return fuse.Status(err)
 }
 
 func (fs *fileSystem) Link(cancel <-chan struct{}, in *fuse.LinkIn, name string, out *fuse.EntryOut) (code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entry, err := fs.v.Link(ctx, Ino(in.Oldnodeid), Ino(in.NodeId), name)
 	if err != 0 {
@@ -172,7 +172,7 @@ func (fs *fileSystem) Link(cancel <-chan struct{}, in *fuse.LinkIn, name string,
 }
 
 func (fs *fileSystem) Symlink(cancel <-chan struct{}, header *fuse.InHeader, target string, name string, out *fuse.EntryOut) (code fuse.Status) {
-	ctx := newContext(cancel, header)
+	ctx := fs.newContext(cancel, header)
 	defer releaseContext(ctx)
 	entry, err := fs.v.Symlink(ctx, target, Ino(header.NodeId), name)
 	if err != 0 {
@@ -182,14 +182,14 @@ func (fs *fileSystem) Symlink(cancel <-chan struct{}, header *fuse.InHeader, tar
 }
 
 func (fs *fileSystem) Readlink(cancel <-chan struct{}, header *fuse.InHeader) (out []byte, code fuse.Status) {
-	ctx := newContext(cancel, header)
+	ctx := fs.newContext(cancel, header)
 	defer releaseContext(ctx)
 	path, err := fs.v.Readlink(ctx, Ino(header.NodeId))
 	return path, fuse.Status(err)
 }
 
 func (fs *fileSystem) GetXAttr(cancel <-chan struct{}, header *fuse.InHeader, attr string, dest []byte) (sz uint32, code fuse.Status) {
-	ctx := newContext(cancel, header)
+	ctx := fs.newContext(cancel, header)
 	defer releaseContext(ctx)
 	value, err := fs.v.GetXattr(ctx, Ino(header.NodeId), attr, uint32(len(dest)))
 	if err != 0 {
@@ -200,7 +200,7 @@ func (fs *fileSystem) GetXAttr(cancel <-chan struct{}, header *fuse.InHeader, at
 }
 
 func (fs *fileSystem) ListXAttr(cancel <-chan struct{}, header *fuse.InHeader, dest []byte) (uint32, fuse.Status) {
-	ctx := newContext(cancel, header)
+	ctx := fs.newContext(cancel, header)
 	defer releaseContext(ctx)
 	data, err := fs.v.ListXattr(ctx, Ino(header.NodeId), len(dest))
 	if err != 0 {
@@ -211,21 +211,21 @@ func (fs *fileSystem) ListXAttr(cancel <-chan struct{}, header *fuse.InHeader, d
 }
 
 func (fs *fileSystem) SetXAttr(cancel <-chan struct{}, in *fuse.SetXAttrIn, attr string, data []byte) fuse.Status {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := fs.v.SetXattr(ctx, Ino(in.NodeId), attr, data, in.Flags)
 	return fuse.Status(err)
 }
 
 func (fs *fileSystem) RemoveXAttr(cancel <-chan struct{}, header *fuse.InHeader, attr string) (code fuse.Status) {
-	ctx := newContext(cancel, header)
+	ctx := fs.newContext(cancel, header)
 	defer releaseContext(ctx)
 	err := fs.v.RemoveXattr(ctx, Ino(header.NodeId), attr)
 	return fuse.Status(err)
 }
 
 func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name string, out *fuse.CreateOut) (code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entry, fh, err := fs.v.Create(ctx, Ino(in.NodeId), name, uint16(in.Mode), 0, in.Flags)
 	if err != 0 {
@@ -236,7 +236,7 @@ func (fs *fileSystem) Create(cancel <-chan struct{}, in *fuse.CreateIn, name str
 }
 
 func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entry, fh, err := fs.v.Open(ctx, Ino(in.NodeId), in.Flags)
 	if err != 0 {
@@ -252,7 +252,7 @@ func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Op
 }
 
 func (fs *fileSystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (fuse.ReadResult, fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	n, err := fs.v.Read(ctx, Ino(in.NodeId), buf, in.Offset, in.Fh)
 	if err != 0 {
@@ -262,13 +262,13 @@ func (fs *fileSystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) 
 }
 
 func (fs *fileSystem) Release(cancel <-chan struct{}, in *fuse.ReleaseIn) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	fs.v.Release(ctx, Ino(in.NodeId), in.Fh)
 }
 
 func (fs *fileSystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte) (written uint32, code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := fs.v.Write(ctx, Ino(in.NodeId), data, in.Offset, in.Fh)
 	if err != 0 {
@@ -278,28 +278,28 @@ func (fs *fileSystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byt
 }
 
 func (fs *fileSystem) Flush(cancel <-chan struct{}, in *fuse.FlushIn) fuse.Status {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := fs.v.Flush(ctx, Ino(in.NodeId), in.Fh, in.LockOwner)
 	return fuse.Status(err)
 }
 
 func (fs *fileSystem) Fsync(cancel <-chan struct{}, in *fuse.FsyncIn) (code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := fs.v.Fsync(ctx, Ino(in.NodeId), int(in.FsyncFlags), in.Fh)
 	return fuse.Status(err)
 }
 
 func (fs *fileSystem) Fallocate(cancel <-chan struct{}, in *fuse.FallocateIn) (code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := fs.v.Fallocate(ctx, Ino(in.NodeId), uint8(in.Mode), int64(in.Offset), int64(in.Length), in.Fh)
 	return fuse.Status(err)
 }
 
 func (fs *fileSystem) CopyFileRange(cancel <-chan struct{}, in *fuse.CopyFileRangeIn) (written uint32, code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	copied, err := fs.v.CopyFileRange(ctx, Ino(in.NodeId), in.FhIn, in.OffIn, Ino(in.NodeIdOut), in.FhOut, in.OffOut, in.Len, uint32(in.Flags))
 	if err != 0 {
@@ -309,7 +309,7 @@ func (fs *fileSystem) CopyFileRange(cancel <-chan struct{}, in *fuse.CopyFileRan
 }
 
 func (fs *fileSystem) GetLk(cancel <-chan struct{}, in *fuse.LkIn, out *fuse.LkOut) (code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	l := in.Lk
 	err := fs.v.Getlk(ctx, Ino(in.NodeId), in.Fh, in.Owner, &l.Start, &l.End, &l.Typ, &l.Pid)
@@ -331,7 +331,7 @@ func (fs *fileSystem) setLk(cancel <-chan struct{}, in *fuse.LkIn, block bool) (
 	if in.LkFlags&fuse.FUSE_LK_FLOCK != 0 {
 		return fs.Flock(cancel, in, block)
 	}
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	l := in.Lk
 	err := fs.v.Setlk(ctx, Ino(in.NodeId), in.Fh, in.Owner, l.Start, l.End, l.Typ, l.Pid, block)
@@ -339,14 +339,14 @@ func (fs *fileSystem) setLk(cancel <-chan struct{}, in *fuse.LkIn, block bool) (
 }
 
 func (fs *fileSystem) Flock(cancel <-chan struct{}, in *fuse.LkIn, block bool) (code fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	err := fs.v.Flock(ctx, Ino(in.NodeId), in.Fh, in.Owner, in.Lk.Typ, block)
 	return fuse.Status(err)
 }
 
 func (fs *fileSystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	fh, err := fs.v.Opendir(ctx, Ino(in.NodeId))
 	out.Fh = fh
@@ -354,7 +354,7 @@ func (fs *fileSystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse
 }
 
 func (fs *fileSystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entries, _, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, false)
 	var de fuse.DirEntry
@@ -370,7 +370,7 @@ func (fs *fileSystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse
 }
 
 func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse.DirEntryList) fuse.Status {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	entries, readAt, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, true)
 	ctx.start = readAt
@@ -396,13 +396,13 @@ func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *
 var cancelReleaseDir = make(chan struct{})
 
 func (fs *fileSystem) ReleaseDir(in *fuse.ReleaseIn) {
-	ctx := newContext(cancelReleaseDir, &in.InHeader)
+	ctx := fs.newContext(cancelReleaseDir, &in.InHeader)
 	defer releaseContext(ctx)
 	fs.v.Releasedir(ctx, Ino(in.NodeId), in.Fh)
 }
 
 func (fs *fileSystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fuse.StatfsOut) (code fuse.Status) {
-	ctx := newContext(cancel, in)
+	ctx := fs.newContext(cancel, in)
 	defer releaseContext(ctx)
 	st, err := fs.v.StatFS(ctx, Ino(in.NodeId))
 	if err != 0 {
@@ -423,7 +423,7 @@ func (fs *fileSystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fus
 }
 
 func (fs *fileSystem) Ioctl(cancel <-chan struct{}, in *fuse.IoctlIn, out *fuse.IoctlOut, bufIn, bufOut []byte) (status fuse.Status) {
-	ctx := newContext(cancel, &in.InHeader)
+	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
 	out.Result = int32(fs.v.Ioctl(ctx, Ino(in.NodeId), in.Cmd, in.Arg, bufIn, bufOut))
 	return 0
