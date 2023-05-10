@@ -24,10 +24,10 @@ function run_command() {
       retries=$((retries + 1))
       echo "WARNING: $cmd failed with return code $ret. Retrying ($retries/$MAX_RETRIES)..."
       # If the error message indicates missing packages, retry with --fix-missing
-      if [[ $cmd == "apt update"* ]] && grep -q 'Failed to fetch' /tmp/install.log; then
-        retry_cmd="apt update -y --fix-missing"
-      elif [[ $cmd == "apt install"* ]] &&  grep -q 'Unable to fetch some archives' /tmp/install.log; then
-        retry_cmd="apt install -y --fix-missing $package_name"
+      if [[ $cmd == "apt-get update"* ]] && grep -q 'Failed to fetch' /tmp/install.log; then
+        retry_cmd="apt-get update -y --fix-missing"
+      elif [[ $cmd == "apt-get install"* ]] &&  grep -q 'Unable to fetch some archives' /tmp/install.log; then
+        retry_cmd="apt-get install -y --fix-missing $package_name"
       fi
     else
       # If we've exhausted all retries, exit with an error
@@ -37,8 +37,8 @@ function run_command() {
   done
 }
 
-# Run apt update and check the return code
-run_command "apt update -y" 
+# Run apt-get update and check the return code
+run_command "apt-get update -y" 
 package_name=$@
-# Run apt install and check the return code
-run_command "apt install -y $package_name"
+# Run apt-get install and check the return code
+run_command "apt-get install -y $package_name"
