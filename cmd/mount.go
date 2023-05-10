@@ -186,6 +186,12 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 		if c.IsSet("storage-class") {
 			format.StorageClass = c.String("storage-class")
 		}
+		if c.IsSet("upload-limit") {
+			format.UploadLimit = c.Int64("upload-limit")
+		}
+		if c.IsSet("download-limit") {
+			format.DownloadLimit = c.Int64("download-limit")
+		}
 	}
 }
 
@@ -403,6 +409,12 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheEviction:     c.String("cache-eviction"),
 		CacheScanInterval: duration(c.String("cache-scan-interval")),
 		AutoCreate:        true,
+	}
+	if chunkConf.UploadLimit == 0 {
+		chunkConf.UploadLimit = format.UploadLimit * 1e6 / 8
+	}
+	if chunkConf.DownloadLimit == 0 {
+		chunkConf.DownloadLimit = format.DownloadLimit * 1e6 / 8
 	}
 	chunkConf.SelfCheck(format.UUID)
 	return chunkConf
@@ -627,6 +639,10 @@ func mount(c *cli.Context) error {
 		logger.Fatalf("new session: %s", err)
 	}
 
+	metaCli.OnReload(func(fmt *meta.Format) {
+		updateFormat(c)(fmt)
+		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+	})
 	installHandler(mp)
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
 	v.UpdateFormat = updateFormat(c)

@@ -82,6 +82,8 @@ type Format struct {
 	EncryptKey       string `json:",omitempty"`
 	EncryptAlgo      string `json:",omitempty"`
 	KeyEncrypted     bool   `json:",omitempty"`
+	UploadLimit      int64  `json:",omitempty"` // Mbps
+	DownloadLimit    int64  `json:",omitempty"` // Mbps
 	TrashDays        int
 	MetaVersion      int    `json:",omitempty"`
 	MinClientVersion string `json:",omitempty"`

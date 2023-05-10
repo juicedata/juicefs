@@ -528,6 +528,15 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			return nil
 		}
 
+		m.OnReload(func(fmt *meta.Format) {
+			if jConf.UploadLimit > 0 {
+				fmt.UploadLimit = int64(jConf.UploadLimit)
+			}
+			if jConf.DownloadLimit > 0 {
+				fmt.DownloadLimit = int64(jConf.DownloadLimit)
+			}
+			store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+		})
 		conf := &vfs.Config{
 			Meta:            metaConf,
 			Format:          *format,
