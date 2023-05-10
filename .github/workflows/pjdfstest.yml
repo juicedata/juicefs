@@ -54,6 +54,8 @@ jobs:
       matrix:
         # [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badger', 'mariadb', 'fdb']
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
+        mount-options: [ '--no-usage-report', '--no-usage-report --non-default-permission' ]
+    
     runs-on: ubuntu-20.04
 
     steps:
@@ -100,7 +102,7 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           # sudo mkdir /var/jfs
           # sudo chmod 777 /var/jfs
-          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report &
+          sudo ./juicefs mount -d $meta_url /tmp/jfs ${{matrix.mount-options}}) &
           sleep 5
           if [ ! -f /tmp/jfs/.accesslog ]; then
             echo "<FATAL>: mount failed"
