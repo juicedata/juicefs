@@ -314,11 +314,36 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("Problem loading configuration: %s", err)
 	}
 
+	rpcAddr := addr
+	// addr can be hdfs://nameservice e.g. hdfs://example, hdfs://example/user/juicefs
+	// convert the nameservice as a comma separated list of host:port by referencing hadoop conf
+	if strings.HasPrefix(addr, "hdfs://") {
+		sp := strings.SplitN(addr[len("hdfs://"):], "/", 2)
+		nameservice := sp[0]
+
+		var nns []string
+		confParam := "dfs.namenode.rpc-address." + nameservice
+		for key, value := range conf {
+			if key == confParam ||
+				strings.HasPrefix(key, confParam + "." ) {
+				nns = append(nns, value)
+			}
+		}
+		if len(nns) <= 0 {
+			return nil, fmt.Errorf("invalid nameservice: %s", nameservice)
+		}
+		// e.g. nn1.example.com:8020,nn2.example.com:8020, nn1.example.com:8020,nn2.example.com:8020/user/juicefs
+		rpcAddr = strings.Join(nns, ",")
+		if len(sp) > 1 {
+			rpcAddr = rpcAddr + "/" + sp[1]
+		}
+	}
+
 	basePath := "/"
 	options := hdfs.ClientOptionsFromConf(conf)
-	if addr != "" {
+	if rpcAddr != "" {
 		// nn1.example.com:8020,nn2.example.com:8020/user/juicefs
-		sp := strings.SplitN(addr, "/", 2)
+		sp := strings.SplitN(rpcAddr, "/", 2)
 		if len(sp) > 1 {
 			basePath = basePath + strings.TrimRight(sp[1], "/") + "/"
 		}
@@ -347,7 +372,7 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 
 	c, err := hdfs.NewClient(options)
 	if err != nil {
-		return nil, fmt.Errorf("new HDFS client %s: %s", addr, err)
+		return nil, fmt.Errorf("new HDFS client %s: %s", rpcAddr, err)
 	}
 	if os.Getenv("HADOOP_SUPER_USER") != "" {
 		superuser = os.Getenv("HADOOP_SUPER_USER")
@@ -363,7 +388,7 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		}
 	}
 
-	return &hdfsclient{addr: addr, c: c, dfsReplication: replication, basePath: basePath}, nil
+	return &hdfsclient{addr: rpcAddr, c: c, dfsReplication: replication, basePath: basePath}, nil
 }
 
 func init() {
