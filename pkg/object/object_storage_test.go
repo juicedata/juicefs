@@ -122,7 +122,8 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Create(); err != nil {
 		t.Fatalf("err should be nil when creating a bucket with the same name")
 	}
-	s = WithPrefix(s, "unit-test/")
+	prefix := "unit-test/"
+	s = WithPrefix(s, prefix)
 	defer func() {
 		if err := s.Delete("test"); err != nil {
 			t.Fatalf("delete failed: %s", err)
@@ -366,6 +367,17 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 
 	if o, err := s.Head("test"); err != nil {
+		t.Fatalf("check exists failed: %s", err.Error())
+	} else if sc != "" && o.StorageClass() != sc {
+		t.Fatalf("storage class should be %s but got %s", sc, o.StorageClass())
+	}
+
+	dstKey := "test-copy"
+	defer s.Delete(dstKey)
+	if err = s.Copy(fmt.Sprintf("%s%s", prefix, dstKey), fmt.Sprintf("%stest", prefix)); err != nil && err != notSupported {
+		t.Fatalf("copy failed: %s", err.Error())
+	}
+	if o, err := s.Head(dstKey); err != nil {
 		t.Fatalf("check exists failed: %s", err.Error())
 	} else if sc != "" && o.StorageClass() != sc {
 		t.Fatalf("storage class should be %s but got %s", sc, o.StorageClass())

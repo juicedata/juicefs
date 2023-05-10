@@ -69,6 +69,10 @@ func (s *sharded) Put(key string, body io.Reader) error {
 	return s.pick(key).Put(key, body)
 }
 
+func (s *sharded) Copy(dst, src string) error {
+	return notSupported
+}
+
 func (s *sharded) Delete(key string) error {
 	return s.pick(key).Delete(key)
 }

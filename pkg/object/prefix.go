@@ -117,6 +117,10 @@ func (p *withPrefix) Put(key string, in io.Reader) error {
 	return p.os.Put(p.prefix+key, in)
 }
 
+func (p *withPrefix) Copy(dst, src string) error {
+	return p.os.Copy(dst, src)
+}
+
 func (p *withPrefix) Delete(key string) error {
 	return p.os.Delete(p.prefix + key)
 }
