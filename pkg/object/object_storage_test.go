@@ -374,13 +374,16 @@ func testStorage(t *testing.T, s ObjectStorage) {
 
 	dstKey := "test-copy"
 	defer s.Delete(dstKey)
-	if err = s.Copy(fmt.Sprintf("%s%s", prefix, dstKey), fmt.Sprintf("%stest", prefix)); err != nil && err != notSupported {
+	err = s.Copy(fmt.Sprintf("%s%s", prefix, dstKey), fmt.Sprintf("%stest", prefix))
+	if err != nil && err != notSupported {
 		t.Fatalf("copy failed: %s", err.Error())
 	}
-	if o, err := s.Head(dstKey); err != nil {
-		t.Fatalf("check exists failed: %s", err.Error())
-	} else if sc != "" && o.StorageClass() != sc {
-		t.Fatalf("storage class should be %s but got %s", sc, o.StorageClass())
+	if err == nil {
+		if o, err := s.Head(dstKey); err != nil {
+			t.Fatalf("check exists failed: %s", err.Error())
+		} else if sc != "" && o.StorageClass() != sc {
+			t.Fatalf("storage class should be %s but got %s", sc, o.StorageClass())
+		}
 	}
 
 	if err := s.Delete("test"); err != nil {
