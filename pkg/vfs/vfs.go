@@ -49,20 +49,21 @@ type Port struct {
 }
 
 type Config struct {
-	Meta            *meta.Config
-	Format          meta.Format
-	Chunk           *chunk.Config
-	Port            *Port
-	Version         string
-	AttrTimeout     time.Duration
-	DirEntryTimeout time.Duration
-	EntryTimeout    time.Duration
-	BackupMeta      time.Duration
-	FastResolve     bool   `json:",omitempty"`
-	AccessLog       string `json:",omitempty"`
-	PrefixInternal  bool
-	HideInternal    bool
-	RootSquash      *RootSquash `json:",omitempty"`
+	Meta                 *meta.Config
+	Format               meta.Format
+	Chunk                *chunk.Config
+	Port                 *Port
+	Version              string
+	AttrTimeout          time.Duration
+	DirEntryTimeout      time.Duration
+	EntryTimeout         time.Duration
+	BackupMeta           time.Duration
+	FastResolve          bool   `json:",omitempty"`
+	AccessLog            string `json:",omitempty"`
+	PrefixInternal       bool
+	HideInternal         bool
+	RootSquash           *RootSquash `json:",omitempty"`
+	NonDefaultPermission bool        `json:",omitempty"`
 }
 
 type RootSquash struct {

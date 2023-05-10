@@ -468,7 +468,9 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 			opt.Options = append(opt.Options, strings.TrimSpace(n))
 		}
 	}
-	opt.Options = append(opt.Options, "default_permissions")
+	if !conf.NonDefaultPermission {
+		opt.Options = append(opt.Options, "default_permissions")
+	}
 	if runtime.GOOS == "darwin" {
 		opt.Options = append(opt.Options, "fssubtype=juicefs")
 		opt.Options = append(opt.Options, "volname="+conf.Format.Name)
