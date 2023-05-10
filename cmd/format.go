@@ -156,12 +156,10 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 			},
 			&cli.Int64Flag{
 				Name:  "upload-limit",
-				Value: 0,
 				Usage: "default bandwidth limit of the volume for upload in Mbps",
 			},
 			&cli.Int64Flag{
 				Name:  "download-limit",
-				Value: 0,
 				Usage: "default bandwidth limit of the volume for download in Mbps",
 			},
 			&cli.IntFlag{

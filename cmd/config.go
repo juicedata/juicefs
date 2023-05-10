@@ -85,12 +85,10 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 			},
 			&cli.Int64Flag{
 				Name:  "upload-limit",
-				Value: 0,
 				Usage: "default bandwidth limit of the volume for upload in Mbps",
 			},
 			&cli.Int64Flag{
 				Name:  "download-limit",
-				Value: 0,
 				Usage: "default bandwidth limit of the volume for download in Mbps",
 			},
 			&cli.IntFlag{
