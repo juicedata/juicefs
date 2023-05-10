@@ -2065,9 +2065,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rerr syscall.Errno) {
 	defer func() {
 		if rerr == 0 {
-			if err := m.touchAtime(ctx, inode, nil); err != 0 {
-				logger.Warnf("read %v update atime: %s", inode, err)
-			}
+			m.touchAtime(ctx, inode, nil)
 		}
 	}()
 	f := m.of.find(inode)
@@ -3918,36 +3916,10 @@ func (m *dbMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 	}, parent))
 }
 
-func (m *dbMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno) {
-	if (m.conf.AtimeMode != StrictAtime && m.conf.AtimeMode != RelAtime) || m.conf.ReadOnly {
-		return 0
-	}
-
-	var curNode = node{Inode: ino}
-	var attr *Attr
-	newAttr := &Attr{}
-	if cur != nil {
-		attr = cur
-	} else if m.of.Check(ino, newAttr) {
-		attr = newAttr
-	}
-
-	now := time.Now()
-	if attr != nil && !m.atimeNeedsUpdate(attr, now) {
-		return 0
-	}
-
-	updated := false
-	defer func() {
-		if rerr == 0 && m.of.IsOpen(ino) && updated {
-			m.of.Update(ino, attr)
-		}
-	}()
-
-	return errno(m.txn(func(s *xorm.Session) error {
-		if attr == nil {
-			attr = newAttr
-		}
+func (m *dbMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time) (bool, error) {
+	var updated bool
+	err := m.txn(func(s *xorm.Session) error {
+		curNode := node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&curNode)
 		if err != nil {
 			return err
@@ -3956,13 +3928,16 @@ func (m *dbMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno
 			return syscall.ENOENT
 		}
 		m.parseAttr(&curNode, attr)
-
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		curNode.Atime = now.Unix()*1e6 + int64(now.Nanosecond())/1e3
-		_, err = s.Cols("atime").Update(&curNode, &node{Inode: ino})
-		updated = true
+		attr.Atime = curNode.Atime / 1e6
+		attr.Atimensec = uint32(curNode.Atime % 1e6 * 1000)
+		if _, err = s.Cols("atime").Update(&curNode, &node{Inode: inode}); err == nil {
+			updated = true
+		}
 		return err
-	}))
+	})
+	return updated, err
 }

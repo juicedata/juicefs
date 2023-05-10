@@ -2129,9 +2129,7 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rerr syscall.Errno) {
 	defer func() {
 		if rerr == 0 {
-			if err := m.touchAtime(ctx, inode, nil); err != 0 {
-				logger.Warnf("read %v update atime: %s", inode, err)
-			}
+			m.touchAtime(ctx, inode, nil)
 		}
 	}()
 	f := m.of.find(inode)
@@ -4282,52 +4280,23 @@ func (m *redisMeta) doAttachDirNode(ctx Context, parent Ino, dstIno Ino, name st
 	}, m.inodeKey(parent), m.entryKey(parent)))
 }
 
-// caller makes sure inode is not special inode.
-func (m *redisMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno) {
-	if (m.conf.AtimeMode != StrictAtime && m.conf.AtimeMode != RelAtime) || m.conf.ReadOnly {
-		return 0
-	}
-
-	var attr *Attr
-	newAttr := &Attr{}
-	if cur != nil {
-		attr = cur
-	} else if m.of.Check(ino, newAttr) {
-		attr = newAttr
-	}
-
-	now := time.Now()
-	if attr != nil && !m.atimeNeedsUpdate(attr, now) {
-		return 0
-	}
-
-	updated := false
-	defer func() {
-		if rerr == 0 && m.of.IsOpen(ino) && updated {
-			m.of.Update(ino, attr)
-		}
-	}()
-
-	return errno(m.txn(ctx, func(tx *redis.Tx) error {
-		if attr == nil {
-			attr = newAttr
-		}
-		a, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
+func (m *redisMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time) (bool, error) {
+	var updated bool
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
 			return err
 		}
 		m.parseAttr(a, attr)
-
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
-		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
-			return nil
-		})
-		updated = true
+		if err = tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err(); err == nil {
+			updated = true
+		}
 		return err
-	}, m.inodeKey(ino)))
+	}, m.inodeKey(inode))
+	return updated, err
 }

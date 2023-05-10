@@ -1819,9 +1819,7 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rerr syscall.Errno) {
 	defer func() {
 		if rerr == 0 {
-			if err := m.touchAtime(ctx, inode, nil); err != 0 {
-				logger.Warnf("read %v update atime: %s", inode, err)
-			}
+			m.touchAtime(ctx, inode, nil)
 		}
 	}()
 	f := m.of.find(inode)
@@ -3404,48 +3402,22 @@ func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 	}, parent))
 }
 
-func (m *kvMeta) touchAtime(_ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno) {
-	if (m.conf.AtimeMode != StrictAtime && m.conf.AtimeMode != RelAtime) || m.conf.ReadOnly {
-		return 0
-	}
-
-	var attr *Attr
-	newAttr := &Attr{}
-	if cur != nil {
-		attr = cur
-	} else if m.of.Check(ino, newAttr) {
-		attr = newAttr
-	}
-
-	now := time.Now()
-	if attr != nil && !m.atimeNeedsUpdate(attr, now) {
-		return 0
-	}
-
-	updated := false
-	defer func() {
-		if rerr == 0 && m.of.IsOpen(ino) && updated {
-			m.of.Update(ino, attr)
-		}
-	}()
-
-	return errno(m.client.txn(func(tx *kvTxn) error {
-		if attr == nil {
-			attr = newAttr
-		}
-		a := tx.get(m.inodeKey(ino))
+func (m *kvMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time) (bool, error) {
+	var updated bool
+	err := m.txn(func(tx *kvTxn) error {
+		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, attr)
-
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
-		tx.set(m.inodeKey(ino), m.marshal(attr))
+		tx.set(m.inodeKey(inode), m.marshal(attr))
 		updated = true
 		return nil
-	}, 0))
+	})
+	return updated, err
 }
