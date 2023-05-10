@@ -270,44 +270,46 @@ func freeHandle(fd int) {
 }
 
 type javaConf struct {
-	MetaURL           string  `json:"meta"`
-	Bucket            string  `json:"bucket"`
-	ReadOnly          bool    `json:"readOnly"`
-	NoBGJob           bool    `json:"noBGJob"`
-	OpenCache         float64 `json:"openCache"`
-	BackupMeta        int64   `json:"backupMeta"`
-	Heartbeat         int     `json:"heartbeat"`
-	CacheDir          string  `json:"cacheDir"`
-	CacheSize         int64   `json:"cacheSize"`
-	FreeSpace         string  `json:"freeSpace"`
-	AutoCreate        bool    `json:"autoCreate"`
-	CacheFullBlock    bool    `json:"cacheFullBlock"`
-	CacheChecksum     string  `json:"cacheChecksum"`
-	CacheEviction     string  `json:"cacheEviction"`
-	CacheScanInterval int     `json:"cacheScanInterval"`
-	Writeback         bool    `json:"writeback"`
-	MemorySize        int     `json:"memorySize"`
-	Prefetch          int     `json:"prefetch"`
-	Readahead         int     `json:"readahead"`
-	UploadLimit       int     `json:"uploadLimit"`
-	DownloadLimit     int     `json:"downloadLimit"`
-	MaxUploads        int     `json:"maxUploads"`
-	MaxDeletes        int     `json:"maxDeletes"`
-	SkipDirNlink      int     `json:"skipDirNlink"`
-	IORetries         int     `json:"ioRetries"`
-	GetTimeout        int     `json:"getTimeout"`
-	PutTimeout        int     `json:"putTimeout"`
-	FastResolve       bool    `json:"fastResolve"`
-	AttrTimeout       float64 `json:"attrTimeout"`
-	EntryTimeout      float64 `json:"entryTimeout"`
-	DirEntryTimeout   float64 `json:"dirEntryTimeout"`
-	Debug             bool    `json:"debug"`
-	NoUsageReport     bool    `json:"noUsageReport"`
-	AccessLog         string  `json:"accessLog"`
-	PushGateway       string  `json:"pushGateway"`
-	PushInterval      int     `json:"pushInterval"`
-	PushAuth          string  `json:"pushAuth"`
-	PushGraphite      string  `json:"pushGraphite"`
+	MetaURL             string  `json:"meta"`
+	Bucket              string  `json:"bucket"`
+	ReadOnly            bool    `json:"readOnly"`
+	NoBGJob             bool    `json:"noBGJob"`
+	OpenCache           float64 `json:"openCache"`
+	BackupMeta          int64   `json:"backupMeta"`
+	Heartbeat           int     `json:"heartbeat"`
+	CacheDir            string  `json:"cacheDir"`
+	CacheSize           int64   `json:"cacheSize"`
+	FreeSpace           string  `json:"freeSpace"`
+	AutoCreate          bool    `json:"autoCreate"`
+	CacheFullBlock      bool    `json:"cacheFullBlock"`
+	CacheChecksum       string  `json:"cacheChecksum"`
+	CacheEviction       string  `json:"cacheEviction"`
+	CacheScanInterval   int     `json:"cacheScanInterval"`
+	Writeback           bool    `json:"writeback"`
+	MemorySize          int     `json:"memorySize"`
+	Prefetch            int     `json:"prefetch"`
+	Readahead           int     `json:"readahead"`
+	UploadLimit         int     `json:"uploadLimit"`
+	DownloadLimit       int     `json:"downloadLimit"`
+	MaxUploads          int     `json:"maxUploads"`
+	MaxDeletes          int     `json:"maxDeletes"`
+	SkipDirNlink        int     `json:"skipDirNlink"`
+	IORetries           int     `json:"ioRetries"`
+	GetTimeout          int     `json:"getTimeout"`
+	PutTimeout          int     `json:"putTimeout"`
+	FastResolve         bool    `json:"fastResolve"`
+	AttrTimeout         float64 `json:"attrTimeout"`
+	EntryTimeout        float64 `json:"entryTimeout"`
+	DirEntryTimeout     float64 `json:"dirEntryTimeout"`
+	Debug               bool    `json:"debug"`
+	NoUsageReport       bool    `json:"noUsageReport"`
+	AccessLog           string  `json:"accessLog"`
+	PushGateway         string  `json:"pushGateway"`
+	PushInterval        int     `json:"pushInterval"`
+	PushAuth            string  `json:"pushAuth"`
+	PushGraphite        string  `json:"pushGraphite"`
+	MetaPoolSize        int     `json:"metaPoolSize"`
+	MetaPoolIdleTimeout int     `json:"metaPoolIdleTimeout"`
 }
 
 func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.FileSystem) uintptr {
@@ -434,6 +436,8 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		metaConf.NoBGJob = jConf.NoBGJob
 		metaConf.OpenCache = time.Duration(jConf.OpenCache * 1e9)
 		metaConf.Heartbeat = time.Second * time.Duration(jConf.Heartbeat)
+		metaConf.MetaPoolSize = jConf.MetaPoolSize
+		metaConf.MetaPoolIdleTimeout = time.Minute * time.Duration(jConf.MetaPoolIdleTimeout)
 		m := meta.NewClient(jConf.MetaURL, metaConf)
 		format, err := m.Load(true)
 		if err != nil {

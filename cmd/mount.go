@@ -369,6 +369,8 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.Heartbeat = duration(c.String("heartbeat"))
 	conf.MountPoint = mp
 	conf.Subdir = c.String("subdir")
+	conf.MetaPoolSize = c.Int("meta-pool-size")
+	conf.MetaPoolIdleTimeout = time.Minute * time.Duration(c.Float64("meta-pool-idle-timeout"))
 
 	atimeMode := c.String("atime-mode")
 	if atimeMode != meta.RelAtime && atimeMode != meta.StrictAtime && atimeMode != meta.NoAtime {

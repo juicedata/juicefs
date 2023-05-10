@@ -223,6 +223,16 @@ func clientFlags() []cli.Flag {
 			Value: "noatime",
 			Usage: "when to update atime, supported mode includes: noatime, relatime, strictatime",
 		},
+		&cli.IntFlag{
+			Name:  "meta-pool-size",
+			Value: 0,
+			Usage: "redis meta pool size",
+		},
+		&cli.Float64Flag{
+			Name:  "meta-pool-idle-timeout",
+			Value: 0.0,
+			Usage: "redis meta pool idle timeout",
+		},
 	}
 }
 

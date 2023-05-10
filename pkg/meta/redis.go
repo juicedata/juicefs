@@ -153,6 +153,13 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	if opt.MaxRetries == 0 {
 		opt.MaxRetries = -1 // Redis use -1 to disable retries
 	}
+	if conf.MetaPoolSize > 0 {
+		opt.PoolSize = conf.MetaPoolSize
+	}
+	if conf.MetaPoolIdleTimeout > 0 {
+		opt.ConnMaxIdleTime = conf.MetaPoolIdleTimeout
+	}
+
 	opt.MinRetryBackoff = minRetryBackoff
 	opt.MaxRetryBackoff = maxRetryBackoff
 	opt.ReadTimeout = readTimeout

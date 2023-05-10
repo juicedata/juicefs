@@ -402,6 +402,9 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
     obj.put("freeSpace", getConf(conf, "free-space", "0.1"));
     obj.put("accessLog", getConf(conf, "access-log", ""));
+    obj.put("metaPoolSize", Integer.valueOf(getConf(conf, "meta-pool-size", "0")));
+    obj.put("metaPoolIdleTimeout", Integer.valueOf(getConf(conf, "meta-pool-idle-timeout", "0")));
+
     String jsonConf = obj.toString(2);
     handle = lib.jfs_init(name, jsonConf, user, group, superuser, supergroup);
     if (handle <= 0) {
