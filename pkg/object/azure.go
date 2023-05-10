@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
@@ -50,8 +51,10 @@ func (b *wasb) String() string {
 
 func (b *wasb) Create() error {
 	_, err := b.container.Create(ctx, nil)
-	if err != nil && strings.Contains(err.Error(), string(bloberror.ContainerAlreadyExists)) {
-		return nil
+	if err != nil {
+		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.ContainerAlreadyExists) {
+			return nil
+		}
 	}
 	return err
 }
@@ -59,7 +62,7 @@ func (b *wasb) Create() error {
 func (b *wasb) Head(key string) (Object, error) {
 	properties, err := b.container.NewBlobClient(key).GetProperties(ctx, nil)
 	if err != nil {
-		if strings.Contains(err.Error(), string(bloberror.BlobNotFound)) {
+		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.BlobNotFound) {
 			err = os.ErrNotExist
 		}
 		return nil, err
@@ -117,8 +120,10 @@ func (b *wasb) Copy(dst, src string) error {
 
 func (b *wasb) Delete(key string) error {
 	_, err := b.container.NewBlobClient(key).Delete(ctx, nil)
-	if err != nil && strings.Contains(err.Error(), string(bloberror.BlobNotFound)) {
-		err = nil
+	if err != nil {
+		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.BlobNotFound) {
+			err = nil
+		}
 	}
 	return err
 }
