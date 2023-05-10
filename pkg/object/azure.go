@@ -26,11 +26,13 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
 )
 
 type wasb struct {
@@ -105,7 +107,11 @@ func (b *wasb) Copy(dst, src string) error {
 	if b.sc != "" {
 		options.Tier = str2Tier(b.sc)
 	}
-	_, err := dstCli.CopyFromURL(ctx, srcCli.URL(), options)
+	srcSASUrl, err := srcCli.GetSASURL(sas.BlobPermissions{Read: true}, time.Now().Add(10*time.Second), nil)
+	if err != nil {
+		return err
+	}
+	_, err = dstCli.CopyFromURL(ctx, srcSASUrl, options)
 	return err
 }
 
