@@ -216,10 +216,6 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 	conf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
 	rootSquash := c.String("root-squash")
 	if rootSquash != "" {
-		ss := strings.Split(strings.TrimSpace(rootSquash), ":")
-		if len(ss) != 2 {
-			logger.Fatalf("invalid root-squash format: %s", rootSquash)
-		}
 		var uid, gid uint32 = 65534, 65534
 		if u, err := user.Lookup("nobody"); err == nil {
 			nobody, err := strconv.ParseUint(u.Uid, 10, 32)
@@ -235,6 +231,8 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 			}
 			gid = uint32(nogroup)
 		}
+
+		ss := strings.SplitN(strings.TrimSpace(rootSquash), ":", 2)
 		if ss[0] != "" {
 			u, err := strconv.ParseUint(ss[0], 10, 32)
 			if err != nil {
@@ -242,7 +240,7 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 			}
 			uid = uint32(u)
 		}
-		if ss[1] != "" {
+		if len(ss) == 2 && ss[1] != "" {
 			g, err := strconv.ParseUint(ss[1], 10, 32)
 			if err != nil {
 				logger.Fatalf("invalid gid: %s", ss[1])
