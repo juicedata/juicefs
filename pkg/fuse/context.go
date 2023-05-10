@@ -51,13 +51,17 @@ var contextPool = sync.Pool{
 	},
 }
 
-func newContext(cancel <-chan struct{}, header *fuse.InHeader) *fuseContext {
+func (fs *fileSystem) newContext(cancel <-chan struct{}, header *fuse.InHeader) *fuseContext {
 	ctx := contextPool.Get().(*fuseContext)
 	ctx.Context = context.Background()
 	ctx.start = time.Now()
 	ctx.canceled = false
 	ctx.cancel = cancel
 	ctx.header = header
+	if header.Uid == 0 && fs.conf.RootSquash != nil {
+		ctx.header.Uid = fs.conf.RootSquash.Uid
+		ctx.header.Gid = fs.conf.RootSquash.Gid
+	}
 	return ctx
 }
 

@@ -62,6 +62,12 @@ type Config struct {
 	AccessLog       string `json:",omitempty"`
 	PrefixInternal  bool
 	HideInternal    bool
+	RootSquash      *RootSquash `json:",omitempty"`
+}
+
+type RootSquash struct {
+	Uid uint32
+	Gid uint32
 }
 
 var (
