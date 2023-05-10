@@ -40,4 +40,5 @@ type ChunkStore interface {
 	Remove(id uint64, length int) error
 	FillCache(id uint64, length uint32) error
 	UsedMemory() int64
+	UpdateLimit(upload, download int64)
 }

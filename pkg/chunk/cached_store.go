@@ -978,4 +978,25 @@ func (store *cachedStore) UsedMemory() int64 {
 	return store.bcache.usedMemory()
 }
 
+func (store *cachedStore) UpdateLimit(upload, download int64) {
+	if upload = upload * 1e6 / 8; upload != store.conf.UploadLimit {
+		logger.Infof("Upload limit changed from %d to %d", store.conf.UploadLimit, upload)
+		store.conf.UploadLimit = upload
+		if upload > 0 {
+			store.upLimit = ratelimit.NewBucketWithRate(float64(upload)*0.85, upload)
+		} else {
+			store.upLimit = nil
+		}
+	}
+	if download = download * 1e6 / 8; download != store.conf.DownloadLimit {
+		logger.Infof("Download limit changed from %d to %d", store.conf.DownloadLimit, download)
+		store.conf.DownloadLimit = download
+		if download > 0 {
+			store.downLimit = ratelimit.NewBucketWithRate(float64(download)*0.85, download)
+		} else {
+			store.downLimit = nil
+		}
+	}
+}
+
 var _ ChunkStore = &cachedStore{}

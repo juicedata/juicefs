@@ -124,15 +124,12 @@ func clientFlags() []cli.Flag {
 		},
 		&cli.Int64Flag{
 			Name:  "upload-limit",
-			Value: 0,
 			Usage: "bandwidth limit for upload in Mbps",
 		},
 		&cli.Int64Flag{
 			Name:  "download-limit",
-			Value: 0,
 			Usage: "bandwidth limit for download in Mbps",
 		},
-
 		&cli.IntFlag{
 			Name:  "prefetch",
 			Value: 1,
