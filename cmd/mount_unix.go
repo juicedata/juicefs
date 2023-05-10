@@ -133,7 +133,7 @@ func mount_flags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "root-squash",
-			Usage: "map local root user (uid = 0) to another one in filesystem",
+			Usage: "mapping local root user (uid = 0) to another one specified as <uid>:<gid>",
 		},
 		&cli.StringFlag{
 			Name:  "o",
