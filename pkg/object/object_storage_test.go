@@ -35,7 +35,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/enum"
 
@@ -79,7 +79,7 @@ func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, err
 func setStorageClass(o ObjectStorage) string {
 	switch s := o.(type) {
 	case *wasb:
-		s.sc = string(azblob.AccessTierCool)
+		s.sc = string(blob2.AccessTierCool)
 		return s.sc
 	case *bosclient:
 		s.sc = "STANDARD_IA"
