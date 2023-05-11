@@ -1095,13 +1095,13 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	m.NewSlice(ctx, &sliceId)
 	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Id: sliceId, Size: 64 << 20, Len: 64 << 20}, time.Now())
 	m.NewSlice(ctx, &sliceId)
-	_ = m.Write(ctx, inode, 1, uint32(30<<20), Slice{Id: sliceId, Size: 8, Len: 8}, time.Now())
+	_ = m.Write(ctx, inode, 1, uint32(0), Slice{Id: sliceId, Size: 8, Len: 8}, time.Now())
 	m.NewSlice(ctx, &sliceId)
 	_ = m.Write(ctx, inode, 1, uint32(40<<20), Slice{Id: sliceId, Size: 8, Len: 8}, time.Now())
 	var cs1 []Slice
 	_ = m.Read(ctx, inode, 1, &cs1)
-	if len(cs1) != 5 {
-		t.Fatalf("expect 5 slices, but got %+v", cs1)
+	if len(cs1) != 4 {
+		t.Fatalf("expect 4 slices, but got %+v", cs1)
 	}
 	if c, ok := m.(compactor); ok {
 		c.compactChunk(inode, 1, true)
