@@ -2804,21 +2804,26 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 
 func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	// avoid too many or duplicated compaction
-	if !force {
-		m.Lock()
-		k := uint64(inode) + (uint64(indx) << 32)
-		if len(m.compacting) > 10 || m.compacting[k] {
+	k := uint64(inode) + (uint64(indx) << 32)
+	m.Lock()
+	if force {
+		for m.compacting[k] {
 			m.Unlock()
-			return
+			time.Sleep(time.Millisecond * 10)
+			m.Lock()
 		}
-		m.compacting[k] = true
+	} else if len(m.compacting) > 10 || m.compacting[k] {
 		m.Unlock()
+		return
+	} else {
+		m.compacting[k] = true
 		defer func() {
 			m.Lock()
 			delete(m.compacting, k)
 			m.Unlock()
 		}()
 	}
+	m.Unlock()
 
 	var ctx = Background
 	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, 1000).Result()
