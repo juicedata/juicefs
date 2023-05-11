@@ -447,7 +447,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 	case syscall.O_RDWR:
 		perm = MODE_MASK_R | MODE_MASK_W
 	}
-	if err = v.Access(ctx, ino, int(perm)); err != 0 {
+	if err = v.Meta.Access(ctx, ino, perm, nil); err != 0 {
 		return
 	}
 	var attr = &Attr{}
