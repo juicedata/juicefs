@@ -18,3 +18,8 @@ package vfs
 
 const O_ACCMODE = 0xff
 const F_UNLCK = 0x01
+
+func (v *VFS) Access(ctx Context, ino Ino, mask int) (err syscall.Errno) {
+	err = v.Meta.Access(ctx, ino, uint8(mask), nil)
+	return
+}

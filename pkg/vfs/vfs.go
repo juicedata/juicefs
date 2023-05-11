@@ -85,6 +85,9 @@ var (
 )
 
 func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, err syscall.Errno) {
+	if err = v.Meta.Access(ctx, parent, MODE_MASK_X, nil); err != 0 {
+		return
+	}
 	var inode Ino
 	var attr = &Attr{}
 	if parent == rootID || name == internalNodes[0].name { // 0 is the control file
@@ -115,6 +118,9 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 }
 
 func (v *VFS) GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, err syscall.Errno) {
+	if err = v.Meta.Access(ctx, ino, MODE_MASK_R, nil); err != 0 {
+		return
+	}
 	if IsSpecialNode(ino) && getInternalNode(ino) != nil {
 		n := getInternalNode(ino)
 		entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
@@ -153,6 +159,9 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 	defer func() {
 		logit(ctx, "mknod (%d,%s,%s:0%04o,0x%08X): %s%s", parent, name, smode(mode), mode, rdev, strerr(err), (*Entry)(entry))
 	}()
+	if err = v.Meta.Access(ctx, parent, MODE_MASK_W, nil); err != 0 {
+		return
+	}
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
@@ -178,6 +187,9 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 
 func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 	defer func() { logit(ctx, "unlink (%d,%s): %s", parent, name, strerr(err)) }()
+	if err = v.Meta.Access(ctx, parent, MODE_MASK_W, nil); err != 0 {
+		return
+	}
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EPERM
 		return
@@ -194,6 +206,9 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 	defer func() {
 		logit(ctx, "mkdir (%d,%s,%s:0%04o): %s%s", parent, name, smode(mode), mode, strerr(err), (*Entry)(entry))
 	}()
+	if err = v.Meta.Access(ctx, parent, MODE_MASK_W, nil); err != 0 {
+		return
+	}
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
@@ -214,6 +229,9 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 
 func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 	defer func() { logit(ctx, "rmdir (%d,%s): %s", parent, name, strerr(err)) }()
+	if err = v.Meta.Access(ctx, parent, MODE_MASK_W, nil); err != 0 {
+		return
+	}
 	if len(name) > maxName {
 		err = syscall.ENAMETOOLONG
 		return
@@ -226,6 +244,9 @@ func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry 
 	defer func() {
 		logit(ctx, "symlink (%d,%s,%s): %s%s", parent, name, path, strerr(err), (*Entry)(entry))
 	}()
+	if err = v.Meta.Access(ctx, parent, MODE_MASK_W, nil); err != 0 {
+		return
+	}
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
@@ -254,6 +275,12 @@ func (v *VFS) Rename(ctx Context, parent Ino, name string, newparent Ino, newnam
 	defer func() {
 		logit(ctx, "rename (%d,%s,%d,%s,%d): %s", parent, name, newparent, newname, flags, strerr(err))
 	}()
+	if err = v.Meta.Access(ctx, parent, MODE_MASK_W, nil); err != 0 {
+		return
+	}
+	if err = v.Meta.Access(ctx, newparent, MODE_MASK_W, nil); err != 0 {
+		return
+	}
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EPERM
 		return
@@ -275,6 +302,9 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 	defer func() {
 		logit(ctx, "link (%d,%d,%s): %s%s", ino, newparent, newname, strerr(err), (*Entry)(entry))
 	}()
+	if err = v.Meta.Access(ctx, newparent, MODE_MASK_W, nil); err != 0 {
+		return
+	}
 	if IsSpecialNode(ino) {
 		err = syscall.EPERM
 		return
@@ -298,6 +328,9 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 
 func (v *VFS) Opendir(ctx Context, ino Ino) (fh uint64, err syscall.Errno) {
 	defer func() { logit(ctx, "opendir (%d): %s [fh:%d]", ino, strerr(err), fh) }()
+	if err = v.Meta.Access(ctx, ino, MODE_MASK_R, nil); err != 0 {
+		return
+	}
 	fh = v.newHandle(ino).fh
 	return
 }
@@ -314,6 +347,12 @@ func (v *VFS) UpdateLength(inode Ino, attr *meta.Attr) {
 
 func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plus bool) (entries []*meta.Entry, readAt time.Time, err syscall.Errno) {
 	defer func() { logit(ctx, "readdir (%d,%d,%d): %s (%d)", ino, size, off, strerr(err), len(entries)) }()
+	if plus {
+		if err = v.Meta.Access(ctx, ino, MODE_MASK_X, nil); err != 0 {
+			return
+		}
+	}
+
 	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
@@ -365,6 +404,9 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 	defer func() {
 		logit(ctx, "create (%d,%s,%s:0%04o): %s%s [fh:%d]", parent, name, smode(mode), mode, strerr(err), (*Entry)(entry), fh)
 	}()
+	if err = v.Meta.Access(ctx, parent, MODE_MASK_W, nil); err != 0 {
+		return
+	}
 	if parent == rootID && IsSpecialName(name) {
 		err = syscall.EEXIST
 		return
@@ -396,6 +438,18 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 			logit(ctx, "open (%d): %s", ino, strerr(err))
 		}
 	}()
+	var perm uint8 = 0
+	switch flags & O_ACCMODE {
+	case syscall.O_RDONLY:
+		perm = MODE_MASK_R
+	case syscall.O_WRONLY:
+		perm = MODE_MASK_W
+	case syscall.O_RDWR:
+		perm = MODE_MASK_R | MODE_MASK_W
+	}
+	if err = v.Access(ctx, ino, int(perm)); err != 0 {
+		return
+	}
 	var attr = &Attr{}
 	if IsSpecialNode(ino) {
 		if ino != controlInode && (flags&O_ACCMODE) != syscall.O_RDONLY {
@@ -437,6 +491,9 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 
 func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Attr) (err syscall.Errno) {
 	// defer func() { logit(ctx, "truncate (%d,%d): %s", ino, size, strerr(err)) }()
+	if err = v.Meta.Access(ctx, ino, MODE_MASK_W, nil); err != 0 {
+		return
+	}
 	if IsSpecialNode(ino) {
 		err = syscall.EPERM
 		return
@@ -644,6 +701,9 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 
 func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh uint64) (err syscall.Errno) {
 	defer func() { logit(ctx, "fallocate (%d,%d,%d,%d): %s", ino, mode, off, length, strerr(err)) }()
+	if err = v.Meta.Access(ctx, ino, MODE_MASK_W, nil); err != 0 {
+		return
+	}
 	if off < 0 || length <= 0 {
 		err = syscall.EINVAL
 		return
@@ -820,6 +880,9 @@ const (
 
 func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags uint32) (err syscall.Errno) {
 	defer func() { logit(ctx, "setxattr (%d,%s,%d,%d): %s", ino, name, len(value), flags, strerr(err)) }()
+	if err = v.Meta.Access(ctx, ino, MODE_MASK_W, nil); err != 0 {
+		return
+	}
 	if IsSpecialNode(ino) {
 		err = syscall.EPERM
 		return
@@ -854,7 +917,9 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 
 func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []byte, err syscall.Errno) {
 	defer func() { logit(ctx, "getxattr (%d,%s,%d): %s (%d)", ino, name, size, strerr(err), len(value)) }()
-
+	if err = v.Meta.Access(ctx, ino, MODE_MASK_R, nil); err != 0 {
+		return
+	}
 	if IsSpecialNode(ino) {
 		err = meta.ENOATTR
 		return
@@ -884,6 +949,9 @@ func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []
 
 func (v *VFS) ListXattr(ctx Context, ino Ino, size int) (data []byte, err syscall.Errno) {
 	defer func() { logit(ctx, "listxattr (%d,%d): %s (%d)", ino, size, strerr(err), len(data)) }()
+	if err = v.Meta.Access(ctx, ino, MODE_MASK_R, nil); err != 0 {
+		return
+	}
 	if IsSpecialNode(ino) {
 		err = meta.ENOATTR
 		return
@@ -897,6 +965,9 @@ func (v *VFS) ListXattr(ctx Context, ino Ino, size int) (data []byte, err syscal
 
 func (v *VFS) RemoveXattr(ctx Context, ino Ino, name string) (err syscall.Errno) {
 	defer func() { logit(ctx, "removexattr (%d,%s): %s", ino, name, strerr(err)) }()
+	if err = v.Meta.Access(ctx, ino, MODE_MASK_W, nil); err != 0 {
+		return
+	}
 	if IsSpecialNode(ino) {
 		err = syscall.EPERM
 		return

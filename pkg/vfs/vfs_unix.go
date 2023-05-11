@@ -43,6 +43,9 @@ type Statfs struct {
 }
 
 func (v *VFS) StatFS(ctx Context, ino Ino) (st *Statfs, err syscall.Errno) {
+	if st := v.Meta.Access(ctx, ino, MODE_MASK_R&MODE_MASK_X, nil); st != 0 {
+		return nil, st
+	}
 	var totalspace, availspace, iused, iavail uint64
 	_ = v.Meta.StatFS(ctx, ino, &totalspace, &availspace, &iused, &iavail)
 	st = new(Statfs)
@@ -142,6 +145,9 @@ func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64)
 }
 
 func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gid uint32, atime, mtime int64, atimensec, mtimensec uint32, size uint64) (entry *meta.Entry, err syscall.Errno) {
+	if st := v.Meta.Access(ctx, ino, MODE_MASK_W, nil); st != 0 {
+		return nil, st
+	}
 	str := setattrStr(set, mode, uid, gid, atime, mtime, size)
 	defer func() {
 		logit(ctx, "setattr (%d,0x%X,[%s]): %s%s", ino, set, str, strerr(err), (*Entry)(entry))
