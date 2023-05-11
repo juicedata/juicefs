@@ -770,6 +770,9 @@ func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 	}
 	defer m.timeit("Resolve", time.Now())
 	parent = m.checkRoot(parent)
+	if st := m.Access(ctx, parent, 1, nil); st != 0 {
+		return st
+	}
 	args := []string{parent.String(), path,
 		strconv.FormatUint(uint64(ctx.Uid()), 10),
 		strconv.FormatUint(uint64(ctx.Gid()), 10)}
