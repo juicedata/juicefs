@@ -2815,14 +2815,15 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else if len(m.compacting) > 10 || m.compacting[k] {
 		m.Unlock()
 		return
+	} else {
+		m.compacting[k] = true
+		defer func() {
+			m.Lock()
+			delete(m.compacting, k)
+			m.Unlock()
+		}()
 	}
-	m.compacting[k] = true
 	m.Unlock()
-	defer func() {
-		m.Lock()
-		delete(m.compacting, k)
-		m.Unlock()
-	}()
 
 	var ctx = Background
 	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, 1000).Result()
