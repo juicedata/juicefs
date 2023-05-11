@@ -367,6 +367,7 @@ public class JuiceFileSystemImpl extends FileSystem {
       obj.put(key, Boolean.valueOf(getConf(conf, key, "false")));
     }
     obj.put("bucket", getConf(conf, "bucket", ""));
+    obj.put("storageClass", getConf(conf, "storage-class", ""));
     obj.put("readOnly", Boolean.valueOf(getConf(conf, "read-only", "false")));
     obj.put("noBGJob", Boolean.valueOf(getConf(conf, "no-bgjob", "false")));
     obj.put("cacheDir", getConf(conf, "cache-dir", "memory"));
@@ -579,7 +580,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     LibraryLoader<Libjfs> libjfsLibraryLoader = LibraryLoader.create(Libjfs.class);
     libjfsLibraryLoader.failImmediately();
 
-    int soVer = 7;
+    int soVer = 8;
     String osId = "so";
     String archId = "amd64";
     String resourceFormat = "libjfs-%s.%s.gz";
