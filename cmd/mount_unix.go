@@ -136,8 +136,9 @@ func mount_flags() []cli.Flag {
 			Usage: "mapping local root user (uid = 0) to another one specified as <uid>:<gid>",
 		},
 		&cli.BoolFlag{
-			Name:  "non-default-permission",
-			Usage: "disable `default_permissions` option, only for testing",
+			Name:   "non-default-permission",
+			Usage:  "disable `default_permissions` option, only for testing",
+			Hidden: true,
 		},
 		&cli.StringFlag{
 			Name:  "o",
