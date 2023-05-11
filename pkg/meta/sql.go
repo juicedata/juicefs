@@ -1130,15 +1130,49 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	return errno(err)
 }
 
-func (m *dbMeta) doReadlink(ctx Context, inode Ino) (target []byte, err error) {
-	err = m.roTxn(func(s *xorm.Session) error {
-		var l = symlink{Inode: inode}
-		ok, err := s.Get(&l)
-		if err == nil && ok {
-			target = []byte(l.Target)
+func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {
+	if noatime {
+		err = m.roTxn(func(s *xorm.Session) error {
+			var l = symlink{Inode: inode}
+			ok, err := s.Get(&l)
+			if err == nil && ok {
+				target = l.Target
+			}
+			return err
+		})
+		return
+	}
+
+	attr := &Attr{}
+	now := time.Now()
+	err = m.txn(func(s *xorm.Session) error {
+		nodeAttr := node{Inode: inode}
+		ok, e := s.ForUpdate().Get(&nodeAttr)
+		if e != nil {
+			return e
 		}
-		return err
+		if !ok {
+			return syscall.ENOENT
+		}
+		l := symlink{Inode: inode}
+		ok, e = s.Get(&l)
+		if e != nil {
+			return e
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+		m.parseAttr(&nodeAttr, attr)
+		target = l.Target
+		if !m.atimeNeedsUpdate(attr, now) {
+			return nil
+		}
+		nodeAttr.Atime = now.Unix()*1e6 + int64(now.Nanosecond())/1e3
+		attr.Atime = now.Unix()
+		_, e = s.Cols("atime").Update(&nodeAttr, &node{Inode: inode})
+		return e
 	})
+	atime = attr.Atime
 	return
 }
 

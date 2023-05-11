@@ -1169,8 +1169,33 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 	}, m.inodeKey(inode)))
 }
 
-func (m *redisMeta) doReadlink(ctx Context, inode Ino) ([]byte, error) {
-	return m.rdb.Get(ctx, m.symKey(inode)).Bytes()
+func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {
+	if noatime {
+		target, err = m.rdb.Get(ctx, m.symKey(inode)).Bytes()
+		return
+	}
+
+	attr := &Attr{}
+	now := time.Now()
+	err = m.txn(ctx, func(tx *redis.Tx) error {
+		rs, e := tx.MGet(ctx, m.inodeKey(inode), m.symKey(inode)).Result()
+		if e != nil {
+			return e
+		}
+		if rs[0] == nil || rs[1] == nil {
+			return redis.Nil
+		}
+		m.parseAttr([]byte(rs[0].(string)), attr)
+		target = []byte(rs[1].(string))
+		if !m.atimeNeedsUpdate(attr, now) {
+			return nil
+		}
+		attr.Atime = now.Unix()
+		attr.Atimensec = uint32(now.Nanosecond())
+		return tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err()
+	}, m.inodeKey(inode))
+	atime = attr.Atime
+	return
 }
 
 func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
