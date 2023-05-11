@@ -2599,22 +2599,26 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 }
 
 func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
-	if !force {
-		// avoid too many or duplicated compaction
-		m.Lock()
-		k := uint64(inode) + (uint64(indx) << 32)
-		if len(m.compacting) > 10 || m.compacting[k] {
+	// avoid too many or duplicated compaction
+	k := uint64(inode) + (uint64(indx) << 32)
+	m.Lock()
+	if force {
+		for m.compacting[k] {
 			m.Unlock()
-			return
-		}
-		m.compacting[k] = true
-		m.Unlock()
-		defer func() {
+			time.Sleep(time.Millisecond * 10)
 			m.Lock()
-			delete(m.compacting, k)
-			m.Unlock()
-		}()
+		}
+	} else if len(m.compacting) > 10 || m.compacting[k] {
+		m.Unlock()
+		return
 	}
+	m.compacting[k] = true
+	m.Unlock()
+	defer func() {
+		m.Lock()
+		delete(m.compacting, k)
+		m.Unlock()
+	}()
 
 	var c = chunk{Inode: inode, Indx: indx}
 	err := m.roTxn(func(s *xorm.Session) error {
