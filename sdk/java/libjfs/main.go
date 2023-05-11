@@ -510,6 +510,12 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			BufferSize:        jConf.MemorySize << 20,
 			Readahead:         jConf.Readahead << 20,
 		}
+		if chunkConf.UploadLimit == 0 {
+			chunkConf.UploadLimit = format.UploadLimit * 1e6 / 8
+		}
+		if chunkConf.DownloadLimit == 0 {
+			chunkConf.DownloadLimit = format.DownloadLimit * 1e6 / 8
+		}
 		chunkConf.SelfCheck(format.UUID)
 		store := chunk.NewCachedStore(blob, chunkConf, registerer)
 		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
