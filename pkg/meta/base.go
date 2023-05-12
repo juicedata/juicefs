@@ -1523,6 +1523,19 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr 
 	if attr != nil && !attr.Full {
 		err = m.GetAttr(ctx, inode, attr)
 	}
+	var mmask uint8 = 0
+	switch flags & syscall.O_ACCMODE {
+	case syscall.O_RDONLY:
+		mmask = 0b100
+	case syscall.O_WRONLY:
+		mmask = 0b010
+	case syscall.O_RDWR:
+		mmask = 0b110
+	}
+	if rerr = m.doAccess(ctx, inode, attr, mmask); rerr != 0 {
+		return
+	}
+
 	if attr.Flags&FlagImmutable != 0 {
 		if flags&(syscall.O_WRONLY|syscall.O_RDWR) != 0 {
 			return syscall.EPERM
