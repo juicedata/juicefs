@@ -1165,6 +1165,13 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 			return err
 		}
 	}
+	if st := m.doAccess(ctx, inode, attr, mmask); st != 0 {
+		return st
+	}
+	return 0
+}
+
+func (m *baseMeta) doAccess(ctx Context, inode Ino, attr *Attr, mmask uint8) syscall.Errno {
 	mode := accessMode(attr, ctx.Uid(), ctx.Gids())
 	if mode&mmask != mmask {
 		logger.Debugf("Access inode %d %o, mode %o, request mode %o", inode, attr.Mode, mode, mmask)
