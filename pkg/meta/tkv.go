@@ -945,6 +945,9 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if t.Typ != TypeFile {
 			return syscall.EPERM
 		}
+		if st := m.doAccess(ctx, inode, &t, MODE_MASK_W); st != 0 {
+			return st
+		}
 		if length == t.Length {
 			if attr != nil {
 				*attr = t

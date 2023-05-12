@@ -974,6 +974,9 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newLength, newSpace int64
 	var nodeAttr node
+	if attr == nil {
+		attr = &Attr{}
+	}
 	err := m.txn(func(s *xorm.Session) error {
 		newLength, newSpace = 0, 0
 		nodeAttr = node{Inode: inode}
@@ -987,8 +990,11 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if nodeAttr.Type != TypeFile {
 			return syscall.EPERM
 		}
+		m.parseAttr(&nodeAttr, attr)
+		if st := m.doAccess(ctx, inode, attr, MODE_MASK_W); st != 0 {
+			return st
+		}
 		if length == nodeAttr.Length {
-			m.parseAttr(&nodeAttr, attr)
 			return nil
 		}
 		newLength = int64(length) - int64(nodeAttr.Length)

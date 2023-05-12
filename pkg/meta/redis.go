@@ -922,6 +922,9 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		if t.Typ != TypeFile {
 			return syscall.EPERM
 		}
+		if st := m.doAccess(ctx, inode, &t, MODE_MASK_W); st != 0 {
+			return st
+		}
 		if length == t.Length {
 			if attr != nil {
 				*attr = t
@@ -1044,6 +1047,9 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		}
 		if (t.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
+		}
+		if st := m.doAccess(ctx, inode, &t, MODE_MASK_W); st != 0 {
+			return st
 		}
 		if (t.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {
 			return syscall.EPERM
