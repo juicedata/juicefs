@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -89,7 +90,7 @@ type engine interface {
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
 	doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno
 	doRmdir(ctx Context, parent Ino, name string, inode *Ino, skipCheckTrash ...bool) syscall.Errno
-	doReadlink(ctx Context, inode Ino) ([]byte, error)
+	doReadlink(ctx Context, inode Ino, noatime bool) (int64, []byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
@@ -1320,12 +1321,23 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 }
 
 func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
+	noatime := m.conf.AtimeMode == NoAtime || m.conf.ReadOnly
 	if target, ok := m.symlinks.Load(inode); ok {
-		*path = target.([]byte)
-		return 0
+		if noatime {
+			*path = target.([]byte)
+			return 0
+		} else {
+			buf := target.([]byte)
+			// ctime and mtime are ignored since symlink can't be modified
+			attr := &Attr{Atime: int64(binary.BigEndian.Uint64(buf[:8]))}
+			if !m.atimeNeedsUpdate(attr, time.Now()) {
+				*path = buf[8:]
+				return 0
+			}
+		}
 	}
 	defer m.timeit("ReadLink", time.Now())
-	target, err := m.en.doReadlink(ctx, inode)
+	atime, target, err := m.en.doReadlink(ctx, inode, noatime)
 	if err != nil {
 		return errno(err)
 	}
@@ -1333,7 +1345,14 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 		return syscall.ENOENT
 	}
 	*path = target
-	m.symlinks.Store(inode, target)
+	if noatime {
+		m.symlinks.Store(inode, target)
+	} else {
+		buf := make([]byte, 8+len(target))
+		binary.BigEndian.PutUint64(buf[:8], uint64(atime))
+		copy(buf[8:], target)
+		m.symlinks.Store(inode, buf)
+	}
 	return 0
 }
 
@@ -1497,7 +1516,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 
 // caller makes sure inode is not special inode.
 func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
-	if (m.conf.AtimeMode == NoAtime) || m.conf.ReadOnly {
+	if m.conf.AtimeMode == NoAtime || m.conf.ReadOnly {
 		return
 	}
 

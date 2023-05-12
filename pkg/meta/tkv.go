@@ -1077,8 +1077,31 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	return errno(err)
 }
 
-func (m *kvMeta) doReadlink(ctx Context, inode Ino) ([]byte, error) {
-	return m.get(m.symKey(inode))
+func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {
+	if noatime {
+		target, err = m.get(m.symKey(inode))
+		return
+	}
+
+	attr := &Attr{}
+	now := time.Now()
+	err = m.txn(func(tx *kvTxn) error {
+		rs := tx.gets(m.inodeKey(inode), m.symKey(inode))
+		if rs[0] == nil || rs[1] == nil {
+			return syscall.ENOENT
+		}
+		m.parseAttr(rs[0], attr)
+		target = rs[1]
+		if !m.atimeNeedsUpdate(attr, now) {
+			return nil
+		}
+		attr.Atime = now.Unix()
+		attr.Atimensec = uint32(now.Nanosecond())
+		tx.set(m.inodeKey(inode), m.marshal(attr))
+		return nil
+	})
+	atime = attr.Atime
+	return
 }
 
 func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
