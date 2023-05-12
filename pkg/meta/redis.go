@@ -724,11 +724,7 @@ func (m *redisMeta) handleLuaResult(op string, res interface{}, err error, retur
 }
 
 func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	var pattr Attr
-	if st := m.doGetAttr(ctx, parent, &pattr); st != 0 {
-		return st
-	}
-	if st := m.doAccess(ctx, parent, &pattr, MODE_MASK_X); st != 0 {
+	if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
 		return st
 	}
 
@@ -922,7 +918,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		if t.Typ != TypeFile {
 			return syscall.EPERM
 		}
-		if st := m.doAccess(ctx, inode, &t, MODE_MASK_W); st != 0 {
+		if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
 			return st
 		}
 		if length == t.Length {
@@ -1048,7 +1044,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		if (t.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		if st := m.doAccess(ctx, inode, &t, MODE_MASK_W); st != 0 {
+		if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
 			return st
 		}
 		if (t.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {
@@ -1241,7 +1237,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.doAccess(ctx, parent, &pattr, MODE_MASK_W); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
 		}
 		if (pattr.Flags & FlagImmutable) != 0 {
@@ -1388,7 +1384,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.doAccess(ctx, parent, &pattr, MODE_MASK_W); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
 		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
@@ -1522,7 +1518,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, s
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.doAccess(ctx, parent, &pattr, MODE_MASK_W); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
 		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
@@ -1664,14 +1660,14 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if sattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.doAccess(ctx, parentSrc, &sattr, MODE_MASK_W|MODE_MASK_X); st != 0 {
+		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &sattr); st != 0 {
 			return st
 		}
 		m.parseAttr([]byte(rs[1].(string)), &dattr)
 		if dattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.doAccess(ctx, parentDst, &dattr, MODE_MASK_W|MODE_MASK_X); st != 0 {
+		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
 			return st
 		}
 		m.parseAttr([]byte(rs[2].(string)), &iattr)
@@ -1877,7 +1873,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.doAccess(ctx, parent, &pattr, MODE_MASK_W); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
 		}
 		if pattr.Flags&FlagImmutable != 0 {
@@ -1934,15 +1930,11 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 }
 
 func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
-	var attr Attr
-	if st := m.doGetAttr(ctx, inode, &attr); st != 0 {
-		return st
-	}
 	var mmask uint8 = MODE_MASK_R
 	if plus != 0 {
 		mmask |= MODE_MASK_X
 	}
-	if st := m.doAccess(ctx, inode, &attr, mmask); st != 0 {
+	if st := m.Access(ctx, inode, mmask, nil); st != 0 {
 		return st
 	}
 	var stop = errors.New("stop")

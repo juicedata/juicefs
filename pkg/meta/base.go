@@ -904,7 +904,7 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 			return st
 		}
 		if root == ino {
-			if st := m.doAccess(ctx, root, &attr, MODE_MASK_R|MODE_MASK_X); st != 0 {
+			if st := m.Access(ctx, root, MODE_MASK_R|MODE_MASK_X, &attr); st != 0 {
 				return st
 			}
 		}
@@ -1170,13 +1170,6 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 			return err
 		}
 	}
-	if st := m.doAccess(ctx, inode, attr, mmask); st != 0 {
-		return st
-	}
-	return 0
-}
-
-func (m *baseMeta) doAccess(ctx Context, inode Ino, attr *Attr, mmask uint8) syscall.Errno {
 	mode := accessMode(attr, ctx.Uid(), ctx.Gids())
 	if mode&mmask != mmask {
 		logger.Debugf("Access inode %d %o, mode %o, request mode %o", inode, attr.Mode, mode, mmask)
@@ -1537,7 +1530,7 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr 
 	case syscall.O_RDWR:
 		mmask = MODE_MASK_R | MODE_MASK_W
 	}
-	if rerr = m.doAccess(ctx, inode, attr, mmask); rerr != 0 {
+	if rerr = m.Access(ctx, inode, mmask, attr); rerr != 0 {
 		return
 	}
 
