@@ -61,30 +61,29 @@ func TestAtimeNeedsUpdate(t *testing.T) {
 	attr := &Attr{
 		Atime: 1000,
 	}
-	if m.atimeNeedsUpdate(attr, time.Now()) {
+	now := time.Now()
+	if m.atimeNeedsUpdate(attr, now) {
 		t.Fatal("atime updated for noatime")
 	}
 
 	m.conf.AtimeMode = RelAtime
-	if !m.atimeNeedsUpdate(attr, time.Now()) {
+	if !m.atimeNeedsUpdate(attr, now) {
 		t.Fatal("atime not updated for relatime")
 	}
-	attr.Atime = time.Now().Unix()
-	if m.atimeNeedsUpdate(attr, time.Now()) {
+	attr.Atime = now.Unix()
+	if m.atimeNeedsUpdate(attr, now) {
 		t.Fatal("atime updated for relatime")
 	}
 
 	m.conf.AtimeMode = StrictAtime
-	time.Sleep(2 * time.Second)
-	if !m.atimeNeedsUpdate(attr, time.Now()) {
+	attr.Atime = now.Unix() - 2
+	if !m.atimeNeedsUpdate(attr, now) {
 		t.Fatal("atime not updated for strictatime")
 	}
 
-	now := time.Now()
-	attr.Atime = now.Unix()
+	attr.Atime = now.Unix() - 1
 	attr.Atimensec = uint32(now.Nanosecond())
-	time.Sleep(time.Millisecond)
-	if m.atimeNeedsUpdate(attr, time.Now()) {
+	if m.atimeNeedsUpdate(attr, now) {
 		t.Fatal("atime updated for strictatime when < 1s")
 	}
 }
