@@ -445,7 +445,7 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Att
 		v.reader.Truncate(ino, uint64(size))
 		v.invalidateLength(ino)
 	}
-	return 0
+	return err
 }
 
 func (v *VFS) ReleaseHandler(ino Ino, fh uint64) {
