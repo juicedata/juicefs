@@ -104,7 +104,8 @@ func (c *b2client) Copy(dst, src string) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.bucket.CopyFile(f.ID, dst, "", backblaze.FileMetaDirectiveCopy)
+	// destinationBucketId must be set,otherwise it will return 400 Bad destinationBucketId
+	_, err = c.bucket.CopyFile(f.ID, dst, c.bucket.ID, backblaze.FileMetaDirectiveCopy)
 	return err
 }
 
@@ -171,6 +172,8 @@ func newB2(endpoint, keyID, applicationKey, token string) (ObjectStorage, error)
 	bucket, err := client.Bucket(name)
 	if err != nil {
 		logger.Warnf("access bucket %s: %s", name, err)
+	}
+	if err == nil && bucket == nil {
 		bucket, err = client.CreateBucket(name, "allPrivate")
 		if err != nil {
 			return nil, fmt.Errorf("create bucket %s: %s", name, err)
