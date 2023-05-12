@@ -569,17 +569,7 @@ func (m *baseMeta) atimeNeedsUpdate(attr *Attr, now time.Time) bool {
 // mtime or if at least a day has passed since the last atime update.
 func relatimeNeedUpdate(attr *Attr, now time.Time) bool {
 	atime := time.Unix(attr.Atime, int64(attr.Atimensec))
-
-	// Is mtime younger than atime? If yes, update atime
-	if time.Unix(attr.Mtime, int64(attr.Mtimensec)).After(atime) {
-		return true
-	}
-
-	// Is ctime younger than atime? If yes, update atime
-	if time.Unix(attr.Ctime, int64(attr.Ctimensec)).After(atime) {
-		return true
-	}
-
-	// Is the previous atime value older than a day? If yes, update atime
-	return now.Sub(atime) > 24*time.Hour
+	mtime := time.Unix(attr.Mtime, int64(attr.Mtimensec))
+	ctime := time.Unix(attr.Ctime, int64(attr.Ctimensec))
+	return mtime.After(atime) || ctime.After(atime) || now.Sub(atime) > 24*time.Hour
 }
