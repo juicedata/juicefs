@@ -1516,7 +1516,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 
 // caller makes sure inode is not special inode.
 func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
-	if (m.conf.AtimeMode == NoAtime) || m.conf.ReadOnly {
+	if m.conf.AtimeMode == NoAtime || m.conf.ReadOnly {
 		return
 	}
 

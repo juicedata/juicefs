@@ -560,13 +560,9 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 }
 
 func (m *baseMeta) atimeNeedsUpdate(attr *Attr, now time.Time) bool {
-	if m.conf.AtimeMode == RelAtime && relatimeNeedUpdate(attr, now) {
-		return true
-	}
-
-	atime := time.Unix(attr.Atime, int64(attr.Atimensec))
-	// update atime only for > 1 second accesses
-	return (m.conf.AtimeMode == StrictAtime) && (now.Sub(atime) > time.Second)
+	return relatimeNeedUpdate(attr, now) ||
+		// update atime only for > 1 second accesses
+		m.conf.AtimeMode == StrictAtime && now.Sub(time.Unix(attr.Atime, int64(attr.Atimensec))) > time.Second
 }
 
 // With relative atime, only update atime if the previous atime is earlier than either the ctime or
