@@ -96,6 +96,7 @@ type engine interface {
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
+	doTouchAtime(ctx Context, inode Ino, attr *Attr, ts time.Time) (bool, error)
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
@@ -108,7 +109,6 @@ type engine interface {
 	scanPendingFiles(Context, pendingFileScan) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
-	touchAtime(ctx Context, inode Ino, attr *Attr) syscall.Errno
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -1514,19 +1514,38 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	return st
 }
 
+// caller makes sure inode is not special inode.
+func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
+	if (m.conf.AtimeMode == NoAtime) || m.conf.ReadOnly {
+		return
+	}
+
+	if attr == nil {
+		attr = new(Attr)
+		m.of.Check(inode, attr)
+	}
+	now := time.Now()
+	if attr.Full && !m.atimeNeedsUpdate(attr, now) {
+		return
+	}
+
+	updated, err := m.en.doTouchAtime(ctx, inode, attr, now)
+	if updated {
+		m.of.Update(inode, attr)
+	} else if err != nil {
+		logger.Warnf("Update atime of inode %d: %s", inode, err)
+	}
+}
+
 func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr syscall.Errno) {
 	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
 	}
-
 	defer func() {
 		if rerr == 0 {
-			if err := m.en.touchAtime(ctx, inode, attr); err != 0 {
-				logger.Warnf("open %v update atime: %s", inode, err)
-			}
+			m.touchAtime(ctx, inode, attr)
 		}
 	}()
-
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
 		return 0
 	}
@@ -1594,9 +1613,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	var attr Attr
 	defer func() {
 		if rerr == 0 {
-			if err := m.en.touchAtime(ctx, inode, &attr); err != 0 {
-				logger.Warnf("readdir %v update atime: %s", inode, err)
-			}
+			m.touchAtime(ctx, inode, &attr)
 		}
 	}()
 	inode = m.checkRoot(inode)
