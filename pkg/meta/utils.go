@@ -60,6 +60,12 @@ const (
 	StrictAtime = "strictatime"
 )
 
+const (
+	MODE_MASK_R = 0b100
+	MODE_MASK_W = 0b010
+	MODE_MASK_X = 0b001
+)
+
 type msgCallbacks struct {
 	sync.Mutex
 	callbacks map[uint32]MsgCallback

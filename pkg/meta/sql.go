@@ -807,6 +807,13 @@ func (m *dbMeta) flushStats() {
 
 func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.roTxn(func(s *xorm.Session) error {
+		var pattr Attr
+		if st := m.doGetAttr(ctx, parent, &pattr); st != 0 {
+			return st
+		}
+		if st := m.doAccess(ctx, parent, &pattr, MODE_MASK_X); st != 0 {
+			return st
+		}
 		s = s.Table(&edge{})
 		nn := namedNode{node: node{Parent: parent}, Name: []byte(name)}
 		var exist bool
@@ -1190,6 +1197,11 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		var pattr Attr
+		m.parseAttr(&pn, &pattr)
+		if st := m.doAccess(ctx, parent, &pattr, MODE_MASK_W); st != 0 {
+			return st
+		}
 		if (pn.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
@@ -1306,6 +1318,11 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		}
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		var pattr Attr
+		m.parseAttr(&pn, &pattr)
+		if st := m.doAccess(ctx, parent, &pattr, MODE_MASK_W); st != 0 {
+			return st
 		}
 		if (pn.Flags&FlagAppend) != 0 || (pn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
@@ -1448,6 +1465,11 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		}
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		var pattr Attr
+		m.parseAttr(&pn, &pattr)
+		if st := m.doAccess(ctx, parent, &pattr, MODE_MASK_W); st != 0 {
+			return st
 		}
 		if pn.Flags&FlagImmutable != 0 || pn.Flags&FlagAppend != 0 {
 			return syscall.EPERM
@@ -1610,6 +1632,11 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if !ok {
 			return syscall.ENOENT
 		}
+		var sattr Attr
+		m.parseAttr(&sn, &sattr)
+		if st := m.doAccess(ctx, parentSrc, &sattr, MODE_MASK_W|MODE_MASK_X); st != 0 {
+			return st
+		}
 		if (sn.Flags&FlagAppend) != 0 || (sn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
@@ -1642,6 +1669,13 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if !ok { // corrupt entry
 				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, de.Name)
 				trash = 0
+			}
+			if ok {
+				var dattr Attr
+				m.parseAttr(&dn, &dattr)
+				if st := m.doAccess(ctx, parentDst, &dattr, MODE_MASK_W|MODE_MASK_X); st != 0 {
+					return st
+				}
 			}
 			if (dn.Flags&FlagAppend) != 0 || (dn.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
@@ -1838,6 +1872,11 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		var pattr Attr
+		m.parseAttr(&pn, &pattr)
+		if st := m.doAccess(ctx, parent, &pattr, MODE_MASK_W); st != 0 {
+			return st
+		}
 		if pn.Flags&FlagImmutable != 0 {
 			return syscall.EPERM
 		}
@@ -1896,6 +1935,17 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	return errno(m.roTxn(func(s *xorm.Session) error {
+		var attr Attr
+		if st := m.doGetAttr(ctx, inode, &attr); st != 0 {
+			return st
+		}
+		var mmask uint8 = MODE_MASK_R
+		if plus != 0 {
+			mmask |= MODE_MASK_X
+		}
+		if st := m.doAccess(ctx, inode, &attr, mmask); st != 0 {
+			return st
+		}
 		s = s.Table(&edge{})
 		if plus != 0 {
 			s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")

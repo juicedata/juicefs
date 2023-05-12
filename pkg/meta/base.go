@@ -903,6 +903,11 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 		if st := m.GetAttr(ctx, root, &attr); st != 0 {
 			return st
 		}
+		if root == ino {
+			if st := m.doAccess(ctx, root, &attr, MODE_MASK_R|MODE_MASK_X); st != 0 {
+				return st
+			}
+		}
 		if root == RootInode {
 			attr.Parent = 0
 		}
@@ -1526,11 +1531,11 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr 
 	var mmask uint8 = 0
 	switch flags & syscall.O_ACCMODE {
 	case syscall.O_RDONLY:
-		mmask = 0b100
+		mmask = MODE_MASK_R
 	case syscall.O_WRONLY:
-		mmask = 0b010
+		mmask = MODE_MASK_W
 	case syscall.O_RDWR:
-		mmask = 0b110
+		mmask = MODE_MASK_R | MODE_MASK_W
 	}
 	if rerr = m.doAccess(ctx, inode, attr, mmask); rerr != 0 {
 		return
