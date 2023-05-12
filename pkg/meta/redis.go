@@ -1114,6 +1114,12 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			return err
 		}
 		m.parseAttr(a, &cur)
+		if st := m.Access(ctx, inode, MODE_MASK_W, &cur); st != 0 {
+			if st == syscall.EACCES && cur.Uid == 0 {
+				st = syscall.EPERM
+			}
+			return st
+		}
 		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 			attr.Mode |= (cur.Mode & 06000)
 		}
