@@ -12,7 +12,7 @@ require (
 	github.com/agiledragon/gomonkey/v2 v2.6.0
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.7+incompatible
 	github.com/aws/aws-sdk-go v1.44.204
-	github.com/baidubce/bce-sdk-go v0.9.111
+	github.com/baidubce/bce-sdk-go v0.9.150
 	github.com/billziss-gh/cgofuse v1.5.0
 	github.com/ceph/go-ceph v0.18.0
 	github.com/colinmarc/hdfs/v2 v2.3.0

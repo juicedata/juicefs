@@ -122,7 +122,11 @@ func (q *bosclient) Put(key string, in io.Reader) error {
 }
 
 func (q *bosclient) Copy(dst, src string) error {
-	_, err := q.c.BasicCopyObject(q.bucket, dst, q.bucket, src)
+	var args *api.CopyObjectArgs
+	if q.sc != "" {
+		args = &api.CopyObjectArgs{ObjectMeta: api.ObjectMeta{StorageClass: q.sc}}
+	}
+	_, err := q.c.CopyObject(q.bucket, dst, q.bucket, src, args)
 	return err
 }
 
