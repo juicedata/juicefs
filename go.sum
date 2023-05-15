@@ -615,8 +615,8 @@ github.com/juicedata/minio v0.0.0-20221113011458-8866d5c9df8c h1:w+4eiZLSLd6aQcy
 github.com/juicedata/minio v0.0.0-20221113011458-8866d5c9df8c/go.mod h1:8oMBmyEWA8aYwMwO7eUNOjvVNOhDeqDlio2RSv6T/4Q=
 github.com/juicedata/mpb/v7 v7.0.4-0.20220719014258-68df1356cfba h1:YSCPvyONPDp/ivKgRanFpNEHh3N5/0UsKmwbbKQIuGE=
 github.com/juicedata/mpb/v7 v7.0.4-0.20220719014258-68df1356cfba/go.mod h1:NXGsfPGx6G2JssqvEcULtDqUrxuuYs4llpv8W6ZUpzk=
-github.com/juju/ratelimit v1.0.1 h1:+7AIFJVQ0EQgq/K9+0Krm7m530Du7tIz0METWzN0RgY=
-github.com/juju/ratelimit v1.0.1/go.mod h1:qapgC/Gy+xNh9UxzV13HGGl/6UXNN+ct+vwSgWNm/qk=
+github.com/juju/ratelimit v1.0.2 h1:sRxmtRiajbvrcLQT7S+JbqU0ntsb9W2yhSdNN8tWfaI=
+github.com/juju/ratelimit v1.0.2/go.mod h1:qapgC/Gy+xNh9UxzV13HGGl/6UXNN+ct+vwSgWNm/qk=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
 github.com/julienschmidt/httprouter v1.3.0/go.mod h1:JR6WtHb+2LUe8TCKY3cZOxFyyO8IZAc4RVcycCCAKdM=
 github.com/kisielk/errcheck v1.1.0/go.mod h1:EZBBE59ingxPouuu3KfxchcWSUPOHkagtvWXihfKN4Q=
