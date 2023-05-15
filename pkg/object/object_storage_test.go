@@ -616,7 +616,6 @@ func TestGS(t *testing.T) { //skip mutate
 	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
 		t.SkipNow()
 	}
-	//export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
 	gs, _ := newGS(os.Getenv("GOOGLE_ENDPOINT"), "", "", "")
 	testStorage(t, gs)
 }
