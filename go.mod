@@ -57,7 +57,7 @@ require (
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.41
 	github.com/tikv/client-go/v2 v2.0.4
 	github.com/upyun/go-sdk/v3 v3.0.4
-	github.com/urfave/cli/v2 v2.4.0
+	github.com/urfave/cli/v2 v2.25.3
 	github.com/vbauerster/mpb/v7 v7.0.3
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
 	github.com/volcengine/ve-tos-golang-sdk/v2 v2.5.3
@@ -78,6 +78,8 @@ require (
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
 	xorm.io/xorm v1.0.7
 )
+
+require github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 
 require (
 	cloud.google.com/go v0.102.1 // indirect
@@ -106,7 +108,7 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548 // indirect
 	github.com/dchest/siphash v1.2.1 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
