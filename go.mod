@@ -30,7 +30,7 @@ require (
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
 	github.com/jackc/pgx/v5 v5.3.1
-	github.com/jcmturner/gokrb5/v8 v8.4.2
+	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
 	github.com/juju/ratelimit v1.0.2
 	github.com/ks3sdklib/aws-sdk-go v1.2.2
@@ -80,7 +80,6 @@ require (
 )
 
 require (
-	github.com/pyroscope-io/godeltaprof v0.1.0 // indirect
 	cloud.google.com/go v0.102.1 // indirect
 	cloud.google.com/go/iam v0.3.0 // indirect
 	git.apache.org/thrift.git v0.13.0 // indirect
@@ -146,7 +145,7 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.5.4 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
-	github.com/hashicorp/go-uuid v1.0.2 // indirect
+	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/serf v0.9.7 // indirect
@@ -156,7 +155,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
-	github.com/jcmturner/gofork v1.0.0 // indirect
+	github.com/jcmturner/gofork v1.7.6 // indirect
 	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
@@ -198,6 +197,7 @@ require (
 	github.com/pingcap/kvproto v0.0.0-20221129023506-621ec37aac7a // indirect
 	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
+	github.com/pyroscope-io/godeltaprof v0.1.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rjeczalik/notify v0.9.2 // indirect
