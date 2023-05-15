@@ -180,7 +180,7 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gi
 					meta.WrapContext(ctx, ctx.Pid(), ctx.Uid(), append([]uint32{ctx.Gid()}, groups...)),
 					time.Now().Add(-ctx.Duration()),
 				)
-				logger.Tracef("lookup groups for user(%d): %v", ctx.Uid(), groups)
+				logger.Debugf("lookup groups for user(%d): %v", ctx.Uid(), groups)
 			} else {
 				logger.Debugf("lookup groups for user(%d): %s", ctx.Uid(), err.Error())
 			}
