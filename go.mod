@@ -56,7 +56,7 @@ require (
 	github.com/studio-b12/gowebdav v0.0.0-20220128162035-c7b1ff8a5e62
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.41
 	github.com/tikv/client-go/v2 v2.0.4
-	github.com/upyun/go-sdk/v3 v3.0.2
+	github.com/upyun/go-sdk/v3 v3.0.4
 	github.com/urfave/cli/v2 v2.4.0
 	github.com/vbauerster/mpb/v7 v7.0.3
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
