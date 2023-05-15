@@ -47,7 +47,7 @@ require (
 	github.com/prometheus/client_golang v1.11.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.26.0
-	github.com/pyroscope-io/client v0.2.1
+	github.com/pyroscope-io/client v0.7.0
 	github.com/qingstor/qingstor-sdk-go/v4 v4.4.0
 	github.com/qiniu/go-sdk/v7 v7.15.0
 	github.com/redis/go-redis/v9 v9.0.2
@@ -80,6 +80,7 @@ require (
 )
 
 require (
+	github.com/pyroscope-io/godeltaprof v0.1.0 // indirect
 	cloud.google.com/go v0.102.1 // indirect
 	cloud.google.com/go/iam v0.3.0 // indirect
 	git.apache.org/thrift.git v0.13.0 // indirect
