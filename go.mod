@@ -48,7 +48,7 @@ require (
 	github.com/prometheus/common v0.26.0
 	github.com/pyroscope-io/client v0.2.1
 	github.com/qingstor/qingstor-sdk-go/v4 v4.4.0
-	github.com/qiniu/go-sdk/v7 v7.11.1
+	github.com/qiniu/go-sdk/v7 v7.15.0
 	github.com/redis/go-redis/v9 v9.0.2
 	github.com/sirupsen/logrus v1.9.0
 	github.com/smartystreets/goconvey v1.7.2
@@ -64,7 +64,7 @@ require (
 	go.etcd.io/etcd v3.3.27+incompatible
 	go.etcd.io/etcd/client/v3 v3.5.2
 	go.uber.org/automaxprocs v1.5.1
-	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
+	golang.org/x/crypto v0.1.0
 	golang.org/x/net v0.7.0
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
 	golang.org/x/sys v0.5.0
