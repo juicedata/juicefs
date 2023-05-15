@@ -68,8 +68,8 @@ gitea.com/davies/xorm v1.0.8-0.20220528043536-552d84d1b34a h1:awR9qREIs6qSnKr/cm
 gitea.com/davies/xorm v1.0.8-0.20220528043536-552d84d1b34a/go.mod h1:uF9EtbhODq5kNWxMbnBEj8hRRZnlcNSz2t2N7HW/+A4=
 gitea.com/xorm/sqlfiddle v0.0.0-20180821085327-62ce714f951a h1:lSA0F4e9A2NcQSqGqTOXqu2aRi/XEQxDCBwM8yJtE6s=
 gitea.com/xorm/sqlfiddle v0.0.0-20180821085327-62ce714f951a/go.mod h1:EXuID2Zs0pAQhH8yz+DNjUbjppKQzKFAn28TMYPB6IU=
-github.com/Arvintian/scs-go-sdk v1.1.0 h1:vqVOfoMD6XSr7eG1a2M9oSiQwhDZYKKdH2rrZRPx6So=
-github.com/Arvintian/scs-go-sdk v1.1.0/go.mod h1:DMIkwn27iuTIo9o7INj3L/bcA7bW6QwljWC3ZpxjkXw=
+github.com/Arvintian/scs-go-sdk v1.2.0 h1:gNsTzUFtNikHjDnRJlItj+0q7aOZqkOweYs7sJBNw1g=
+github.com/Arvintian/scs-go-sdk v1.2.0/go.mod h1:DMIkwn27iuTIo9o7INj3L/bcA7bW6QwljWC3ZpxjkXw=
 github.com/Azure/azure-sdk-for-go v32.4.0+incompatible/go.mod h1:9XXNKU+eRnpl9moKnB4QOLf1HestfXbmab5FXxiDBjc=
 github.com/Azure/azure-sdk-for-go v32.6.0+incompatible h1:PgaVceWF5idtJajyt1rzq1cep6eRPJ8+8hs4GnNzTo0=
 github.com/Azure/azure-sdk-for-go v32.6.0+incompatible/go.mod h1:9XXNKU+eRnpl9moKnB4QOLf1HestfXbmab5FXxiDBjc=

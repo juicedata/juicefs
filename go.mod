@@ -5,7 +5,7 @@ go 1.18
 require (
 	cloud.google.com/go/compute v1.7.0
 	cloud.google.com/go/storage v1.26.0
-	github.com/Arvintian/scs-go-sdk v1.1.0
+	github.com/Arvintian/scs-go-sdk v1.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.0.0
 	github.com/DataDog/zstd v1.5.0
 	github.com/IBM/ibm-cos-sdk-go v1.10.0
