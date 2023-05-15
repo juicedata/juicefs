@@ -53,7 +53,7 @@ require (
 	github.com/redis/go-redis/v9 v9.0.2
 	github.com/sirupsen/logrus v1.9.0
 	github.com/smartystreets/goconvey v1.7.2
-	github.com/studio-b12/gowebdav v0.0.0-20220128162035-c7b1ff8a5e62
+	github.com/studio-b12/gowebdav v0.0.0-20230203202212-3282f94193f2
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.41
 	github.com/tikv/client-go/v2 v2.0.4
 	github.com/upyun/go-sdk/v3 v3.0.4
