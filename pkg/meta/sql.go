@@ -896,9 +896,6 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 				return syscall.EPERM
 			}
 			if cur.Gid != attr.Gid {
-				if ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
-					return syscall.EPERM
-				}
 				cur.Gid = attr.Gid
 				changed = true
 			}
