@@ -126,7 +126,11 @@ func (g *gs) Put(key string, data io.Reader) error {
 func (g *gs) Copy(dst, src string) error {
 	srcObj := g.client.Bucket(g.bucket).Object(src)
 	dstObj := g.client.Bucket(g.bucket).Object(dst)
-	_, err := dstObj.CopierFrom(srcObj).Run(ctx)
+	copier := dstObj.CopierFrom(srcObj)
+	if g.sc != "" {
+		copier.StorageClass = g.sc
+	}
+	_, err := copier.Run(ctx)
 	return err
 }
 
