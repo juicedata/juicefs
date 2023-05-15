@@ -11,7 +11,7 @@ require (
 	github.com/IBM/ibm-cos-sdk-go v1.10.0
 	github.com/agiledragon/gomonkey/v2 v2.6.0
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.7+incompatible
-	github.com/aws/aws-sdk-go v1.44.204
+	github.com/aws/aws-sdk-go v1.44.262
 	github.com/baidubce/bce-sdk-go v0.9.150
 	github.com/billziss-gh/cgofuse v1.5.0
 	github.com/ceph/go-ceph v0.18.0
