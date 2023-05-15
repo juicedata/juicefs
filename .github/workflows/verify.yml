@@ -56,7 +56,7 @@ jobs:
     - name: build lite
       run: | 
         make juicefs.lite
-        ./juicefs version
+        ./juicefs.lite version
 
     - name: build windows
       run: make juicefs.exe
@@ -68,11 +68,11 @@ jobs:
       run: |
         sudo .github/scripts/apt_install.sh librados-dev
         make juicefs.ceph
-        ./juicefs version
+        ./juicefs.ceph version
 
     - name: build fdb
       run: |
         wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
         sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
         make juicefs.fdb
-        ./juicefs version
+        ./juicefs.fdb version
