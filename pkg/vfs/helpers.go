@@ -123,11 +123,11 @@ func LogContextWith(ctx meta.Context, start time.Time) Context {
 func lookupGids(uid uint32) ([]uint32, error) {
 	u, err := user.LookupId(strconv.FormatUint(uint64(uid), 10))
 	if err != nil {
-		return nil, errors.Wrapf(err, "lookup uid %d: %s", uid)
+		return nil, errors.Wrapf(err, "lookup uid %d", uid)
 	}
 	gs, err := u.GroupIds()
 	if err != nil {
-		return nil, errors.Wrapf(err, "lookup groups for uid %d: %s", uid)
+		return nil, errors.Wrapf(err, "lookup groups for uid %d", uid)
 	}
 	var groups []uint32
 	for _, g := range gs {
