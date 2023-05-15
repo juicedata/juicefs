@@ -882,6 +882,9 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		if !ok {
 			return syscall.ENOENT
 		}
+		var curAttr Attr
+		m.parseAttr(&cur, &curAttr)
+		permCheck := m.Access(ctx, inode, MODE_MASK_W, &curAttr)
 		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 			attr.Mode |= (cur.Mode & 06000)
 		}
@@ -933,6 +936,12 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		m.parseAttr(&cur, attr)
 		if !changed {
 			return nil
+		}
+		if permCheck != 0 {
+			if permCheck == syscall.EACCES && cur.Uid == 0 {
+				permCheck = syscall.EPERM
+			}
+			return permCheck
 		}
 		cur.Ctime = now
 		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime").Update(&cur, &node{Inode: inode})

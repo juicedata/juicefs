@@ -856,6 +856,7 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, &cur)
+		permCheck := m.Access(ctx, inode, MODE_MASK_W, &cur)
 		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 			attr.Mode |= (cur.Mode & 06000)
 		}
@@ -911,6 +912,12 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		if !changed {
 			*attr = cur
 			return nil
+		}
+		if permCheck != 0 {
+			if permCheck == syscall.EACCES && cur.Uid == 0 {
+				permCheck = syscall.EPERM
+			}
+			return permCheck
 		}
 		cur.Ctime = now.Unix()
 		cur.Ctimensec = uint32(now.Nanosecond())
