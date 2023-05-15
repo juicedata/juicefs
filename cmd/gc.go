@@ -136,7 +136,7 @@ func gc(ctx *cli.Context) error {
 		}
 	}
 
-	c := meta.WrapContext(ctx.Context)
+	c := meta.WrapStdContext(ctx.Context)
 	delayedFileSpin := progress.AddDoubleSpinner("Delfiles")
 	cleanedFileSpin := progress.AddDoubleSpinner("Cleaned delfiles")
 	edge := time.Now().Add(-time.Duration(format.TrashDays) * 24 * time.Hour)

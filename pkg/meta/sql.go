@@ -882,8 +882,6 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		if !ok {
 			return syscall.ENOENT
 		}
-		ownedByRoot := cur.Uid == 0 && cur.Gid == 0
-		isOwner := ctx.Uid() == 0 || ctx.Uid() == cur.Uid
 
 		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 			attr.Mode |= (cur.Mode & 06000)
@@ -893,13 +891,26 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 			clearSUGIDSQL(ctx, &cur, attr)
 			changed = true
 		}
-		if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
-			cur.Uid = attr.Uid
-			changed = true
+		if set&SetAttrGID != 0 {
+			if ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
+				return syscall.EPERM
+			}
+			if cur.Gid != attr.Gid {
+				if ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
+					return syscall.EPERM
+				}
+				cur.Gid = attr.Gid
+				changed = true
+			}
 		}
-		if set&SetAttrGID != 0 && cur.Gid != attr.Gid {
-			cur.Gid = attr.Gid
-			changed = true
+		if set&SetAttrUID != 0 {
+			if ctx.Uid() != 0 {
+				return syscall.EPERM
+			}
+			if cur.Uid != attr.Uid {
+				cur.Uid = attr.Uid
+				changed = true
+			}
 		}
 		if set&SetAttrMode != 0 {
 			if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
@@ -936,12 +947,6 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		m.parseAttr(&cur, attr)
 		if !changed {
 			return nil
-		}
-		if !isOwner {
-			if ownedByRoot {
-				return syscall.EPERM
-			}
-			return syscall.EACCES
 		}
 		cur.Ctime = now
 		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime").Update(&cur, &node{Inode: inode})

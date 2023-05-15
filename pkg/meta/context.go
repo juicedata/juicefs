@@ -40,7 +40,7 @@ type Context interface {
 	Canceled() bool
 }
 
-var Background Context = WrapContext(context.Background())
+var Background Context = WrapStdContext(context.Background())
 
 type wrapContext struct {
 	context.Context
@@ -79,14 +79,23 @@ func (c *wrapContext) WithValue(k, v interface{}) {
 }
 
 func NewContext(pid, uid uint32, gids []uint32) Context {
-	return wrap(context.Background(), pid, uid, gids)
+	return WrapContext(context.Background(), pid, uid, gids)
 }
 
-func WrapContext(ctx context.Context) Context {
-	return wrap(ctx, 0, 0, []uint32{0})
+func WrapStdContext(ctx context.Context) Context {
+	return WrapContext(ctx, 0, 0, []uint32{0})
 }
 
-func wrap(ctx context.Context, pid, uid uint32, gids []uint32) Context {
+func WrapContext(ctx context.Context, pid, uid uint32, gids []uint32) Context {
 	c, cancel := context.WithCancel(ctx)
 	return &wrapContext{c, cancel, pid, uid, gids}
+}
+
+func containsGid(ctx Context, gid uint32) bool {
+	for _, g := range ctx.Gids() {
+		if g == gid {
+			return true
+		}
+	}
+	return false
 }

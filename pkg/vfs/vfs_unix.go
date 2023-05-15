@@ -173,6 +173,17 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gi
 		attr.Uid = uid
 	}
 	if set&meta.SetAttrGID != 0 {
+		if ctx.Uid() != 0 {
+			groups, err := lookupGids(ctx.Uid())
+			if err == nil {
+				ctx = LogContextWith(
+					meta.WrapContext(ctx, ctx.Uid(), ctx.Gid(), append(ctx.Gids(), groups...)),
+					time.Now().Add(-ctx.Duration()),
+				)
+			} else {
+				logger.Debugf("lookup groups for user(%d): %s", ctx.Uid(), err.Error())
+			}
+		}
 		attr.Gid = gid
 	}
 	if set&meta.SetAttrAtime != 0 {

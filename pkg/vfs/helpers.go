@@ -18,10 +18,13 @@ package vfs
 
 import (
 	"fmt"
+	"os/user"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -109,5 +112,30 @@ func (ctx *logContext) Duration() time.Duration {
 
 // NewLogContext creates an LogContext starting from now.
 func NewLogContext(ctx meta.Context) LogContext {
-	return &logContext{ctx, time.Now()}
+	return LogContextWith(ctx, time.Now())
+}
+
+// NewLogContextWith creates an LogContext starting from the given time.
+func LogContextWith(ctx meta.Context, start time.Time) Context {
+	return &logContext{ctx, start}
+}
+
+func lookupGids(uid uint32) ([]uint32, error) {
+	u, err := user.LookupId(strconv.FormatUint(uint64(uid), 10))
+	if err != nil {
+		return nil, errors.Wrapf(err, "lookup uid %d: %s", uid)
+	}
+	gs, err := u.GroupIds()
+	if err != nil {
+		return nil, errors.Wrapf(err, "lookup groups for uid %d: %s", uid)
+	}
+	var groups []uint32
+	for _, g := range gs {
+		gid, err := strconv.ParseUint(g, 10, 32)
+		if err != nil {
+			return nil, errors.Wrapf(err, "parse gid %s", g)
+		}
+		groups = append(groups, uint32(gid))
+	}
+	return groups, nil
 }
