@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path"
@@ -175,12 +176,12 @@ func waitWritebackComplete(stagingDir string) error {
 
 func fileSizeInDir(dir string) (uint64, error) {
 	var size uint64
-	err := filepath.Walk(dir, func(name string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			size += uint64(info.Size())
+	err := filepath.WalkDir(dir, func(name string, d fs.DirEntry, err error) error {
+		if d != nil && !d.IsDir() {
+			fi, _ := d.Info()
+			if fi != nil {
+				size += uint64(fi.Size())
+			}
 		}
 		return nil
 	})
