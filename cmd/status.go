@@ -125,7 +125,7 @@ func status(ctx *cli.Context) error {
 		trashSlicesSpinner := progress.AddDoubleSpinner("Trash Slices")
 		pendingDeletedSlicesSpinner := progress.AddDoubleSpinner("Pending Deleted Slices")
 		err = m.ScanDeletedObject(
-			meta.WrapStdContext(ctx.Context),
+			meta.WrapContext(ctx.Context),
 			func(ss []meta.Slice, _ int64) (bool, error) {
 				for _, s := range ss {
 					trashSlicesSpinner.IncrInt64(int64(s.Size))
