@@ -19,7 +19,7 @@ package fuse
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"runtime"
 	"strconv"
@@ -71,7 +71,7 @@ func findProcessGroups(pid, gid uint32) []uint32 {
 		return []uint32{gid}
 	}
 	defer f.Close()
-	buf, err := ioutil.ReadAll(f)
+	buf, err := io.ReadAll(f)
 	if err != nil {
 		return []uint32{gid}
 	}
