@@ -125,6 +125,7 @@ func testMeta(t *testing.T, m Meta) {
 	testConcurrentDir(t, m)
 	testAttrFlags(t, m)
 	testQuota(t, m)
+	testAtime(t, m)
 	base := m.getBase()
 	base.conf.OpenCache = time.Second
 	base.of.expire = time.Second
@@ -2515,5 +2516,122 @@ func testQuota(t *testing.T, m Meta) {
 	m.getBase().loadQuotas()
 	if st := m.Create(ctx, parent, "f3", 0644, 0, 0, nil, &attr); st != syscall.EDQUOT {
 		t.Fatalf("Create quota/d22/f3: %s", st)
+	}
+}
+
+func testAtime(t *testing.T, m Meta) {
+	ctx := Background
+	var inode, parent Ino
+	var attr Attr
+	if st := m.Mkdir(ctx, RootInode, "atime", 0755, 0, 0, &parent, &attr); st != 0 {
+		t.Fatalf("Mkdir atime: %s", st)
+	}
+
+	// open, read, read atime < mtime, read recent, readdir, readlink
+	testFn := func(name string) (ret [6]bool) {
+		fname := "f-" + name
+		if st := m.Create(ctx, parent, fname, 0644, 0, 0, &inode, &attr); st != 0 {
+			t.Fatalf("Create atime/%s: %s", fname, st)
+		}
+		// atime < ctime
+		attr.Atime, attr.Atimensec = 1234, 5678
+		if st := m.SetAttr(ctx, inode, SetAttrAtime, 0, &attr); st != 0 {
+			t.Fatalf("Setattr atime/%s: %s", fname, st)
+		}
+		if st := m.Open(ctx, inode, 0, &attr); st != 0 {
+			t.Fatalf("Open atime/%s: %s", fname, st)
+		}
+		defer m.Close(ctx, inode)
+		ret[0] = attr.Atime != 1234
+
+		attr.Atime, attr.Atimensec = 1234, 5678
+		if st := m.SetAttr(ctx, inode, SetAttrAtime, 0, &attr); st != 0 {
+			t.Fatalf("Setattr atime/%s: %s", fname, st)
+		}
+		var slices []Slice
+		if st := m.Read(ctx, inode, 0, &slices); st != 0 {
+			t.Fatalf("Read atime/%s: %s", fname, st)
+		}
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+			t.Fatalf("Getattr after read atime/%s: %s", fname, st)
+		}
+		ret[1] = attr.Atime != 1234
+
+		// atime < mtime
+		now := time.Now()
+		attr.Atime = now.Unix() - 2
+		attr.Mtime = now.Unix()
+		if st := m.SetAttr(ctx, inode, SetAttrAtime|SetAttrMtime, 0, &attr); st != 0 {
+			t.Fatalf("Setattr atime/%s: %s", fname, st)
+		}
+		if st := m.Read(ctx, inode, 0, &slices); st != 0 {
+			t.Fatalf("Read atime/%s: %s", fname, st)
+		}
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+			t.Fatalf("Getattr after read atime/%s: %s", fname, st)
+		}
+		ret[2] = attr.Atime >= now.Unix()
+
+		// atime = ctime = mtime, atime = now
+		if st := m.SetAttr(ctx, inode, SetAttrAtimeNow|SetAttrMtimeNow, 0, &attr); st != 0 {
+			t.Fatalf("Setattr atime/%s: %s", fname, st)
+		}
+		time.Sleep(time.Second * 2)
+		now = time.Now()
+		if st := m.Read(ctx, inode, 0, &slices); st != 0 {
+			t.Fatalf("Read atime/%s: %s", fname, st)
+		}
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+			t.Fatalf("Getattr after read atime/%s: %s", fname, st)
+		}
+		ret[3] = attr.Atime >= now.Unix()
+
+		// readdir
+		fname = "d-" + name
+		if st := m.Mkdir(ctx, parent, fname, 0755, 0, 0, &inode, &attr); st != 0 {
+			t.Fatalf("Mkdir atime/%s: %s", fname, st)
+		}
+		attr.Atime, attr.Atimensec = 1234, 5678
+		if st := m.SetAttr(ctx, inode, SetAttrAtime, 0, &attr); st != 0 {
+			t.Fatalf("Setattr atime/%s: %s", fname, st)
+		}
+		var entries []*Entry
+		if st := m.Readdir(ctx, inode, 0, &entries); st != 0 {
+			t.Fatalf("Readdir atime/%s: %s", fname, st)
+		}
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+			t.Fatalf("Getattr after readdir atime/%s: %s", fname, st)
+		}
+		ret[4] = attr.Atime != 1234
+
+		// readlink
+		fname = "l-" + name
+		if st := m.Symlink(ctx, parent, fname, "f-"+name, &inode, &attr); st != 0 {
+			t.Fatalf("Symlink atime/%s: %s", fname, st)
+		}
+		attr.Atime, attr.Atimensec = 1234, 5678
+		if st := m.SetAttr(ctx, inode, SetAttrAtime, 0, &attr); st != 0 {
+			t.Fatalf("Setattr atime/%s: %s", fname, st)
+		}
+		var target []byte
+		if st := m.ReadLink(ctx, inode, &target); st != 0 {
+			t.Fatalf("Readlink atime/%s: %s", fname, st)
+		}
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+			t.Fatalf("Getattr after readlink atime/%s: %s", fname, st)
+		}
+		ret[5] = attr.Atime != 1234
+		return
+	}
+
+	for name, exp := range map[string][6]bool{
+		RelAtime:    {true, true, true, false, true, true},
+		StrictAtime: {true, true, true, true, true, true},
+		NoAtime:     {false, false, false, false, false, false},
+	} {
+		m.getBase().conf.AtimeMode = name
+		if ret := testFn(name); ret != exp {
+			t.Fatalf("Test %s: expected %v, got %v", name, exp, ret)
+		}
 	}
 }

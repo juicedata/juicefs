@@ -1119,8 +1119,31 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	return errno(err)
 }
 
-func (m *kvMeta) doReadlink(ctx Context, inode Ino) ([]byte, error) {
-	return m.get(m.symKey(inode))
+func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {
+	if noatime {
+		target, err = m.get(m.symKey(inode))
+		return
+	}
+
+	attr := &Attr{}
+	now := time.Now()
+	err = m.txn(func(tx *kvTxn) error {
+		rs := tx.gets(m.inodeKey(inode), m.symKey(inode))
+		if rs[0] == nil || rs[1] == nil {
+			return syscall.ENOENT
+		}
+		m.parseAttr(rs[0], attr)
+		target = rs[1]
+		if !m.atimeNeedsUpdate(attr, now) {
+			return nil
+		}
+		attr.Atime = now.Unix()
+		attr.Atimensec = uint32(now.Nanosecond())
+		tx.set(m.inodeKey(inode), m.marshal(attr))
+		return nil
+	})
+	atime = attr.Atime
+	return
 }
 
 func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
@@ -1892,9 +1915,7 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rerr syscall.Errno) {
 	defer func() {
 		if rerr == 0 {
-			if err := m.touchAtime(ctx, inode, nil); err != 0 {
-				logger.Warnf("read %v update atime: %s", inode, err)
-			}
+			m.touchAtime(ctx, inode, nil)
 		}
 	}()
 	f := m.of.find(inode)
@@ -2356,22 +2377,27 @@ func (m *kvMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 }
 
 func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
-	if !force {
-		// avoid too many or duplicated compaction
-		m.Lock()
-		k := uint64(inode) + (uint64(indx) << 32)
-		if len(m.compacting) > 10 || m.compacting[k] {
+	// avoid too many or duplicated compaction
+	k := uint64(inode) + (uint64(indx) << 32)
+	m.Lock()
+	if force {
+		for m.compacting[k] {
 			m.Unlock()
-			return
+			time.Sleep(time.Millisecond * 10)
+			m.Lock()
 		}
-		m.compacting[k] = true
+	} else if len(m.compacting) > 10 || m.compacting[k] {
 		m.Unlock()
+		return
+	} else {
+		m.compacting[k] = true
 		defer func() {
 			m.Lock()
 			delete(m.compacting, k)
 			m.Unlock()
 		}()
 	}
+	m.Unlock()
 
 	buf, err := m.get(m.chunkKey(inode, indx))
 	if err != nil {
@@ -3477,48 +3503,22 @@ func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 	}, parent))
 }
 
-func (m *kvMeta) touchAtime(_ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno) {
-	if (m.conf.AtimeMode != StrictAtime && m.conf.AtimeMode != RelAtime) || m.conf.ReadOnly {
-		return 0
-	}
-
-	var attr *Attr
-	newAttr := &Attr{}
-	if cur != nil {
-		attr = cur
-	} else if m.of.Check(ino, newAttr) {
-		attr = newAttr
-	}
-
-	now := time.Now()
-	if attr != nil && !m.atimeNeedsUpdate(attr, now) {
-		return 0
-	}
-
-	updated := false
-	defer func() {
-		if rerr == 0 && m.of.IsOpen(ino) && updated {
-			m.of.Update(ino, attr)
-		}
-	}()
-
-	return errno(m.client.txn(func(tx *kvTxn) error {
-		if attr == nil {
-			attr = newAttr
-		}
-		a := tx.get(m.inodeKey(ino))
+func (m *kvMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time) (bool, error) {
+	var updated bool
+	err := m.txn(func(tx *kvTxn) error {
+		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, attr)
-
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		attr.Atime = now.Unix()
 		attr.Atimensec = uint32(now.Nanosecond())
-		tx.set(m.inodeKey(ino), m.marshal(attr))
+		tx.set(m.inodeKey(inode), m.marshal(attr))
 		updated = true
 		return nil
-	}, 0))
+	})
+	return updated, err
 }

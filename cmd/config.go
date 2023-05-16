@@ -83,6 +83,14 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 				Name:  "encrypt-secret",
 				Usage: "encrypt the secret key if it was previously stored in plain format",
 			},
+			&cli.Int64Flag{
+				Name:  "upload-limit",
+				Usage: "default bandwidth limit of the volume for upload in Mbps",
+			},
+			&cli.Int64Flag{
+				Name:  "download-limit",
+				Usage: "default bandwidth limit of the volume for download in Mbps",
+			},
 			&cli.IntFlag{
 				Name:  "trash-days",
 				Usage: "number of days after which removed files will be permanently deleted",
@@ -196,6 +204,16 @@ func config(ctx *cli.Context) error {
 				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.StorageClass, new))
 				format.StorageClass = new
 				storage = true
+			}
+		case "upload-limit":
+			if new := ctx.Int64(flag); new != format.UploadLimit {
+				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.UploadLimit, new))
+				format.UploadLimit = new
+			}
+		case "download-limit":
+			if new := ctx.Int64(flag); new != format.DownloadLimit {
+				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.DownloadLimit, new))
+				format.DownloadLimit = new
 			}
 		case "trash-days":
 			if new := ctx.Int(flag); new != format.TrashDays {

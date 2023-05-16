@@ -84,6 +84,8 @@ type ObjectStorage interface {
 	Get(key string, off, limit int64) (io.ReadCloser, error)
 	// Put data read from a reader to an object specified by key.
 	Put(key string, in io.Reader) error
+	// Copy an object from src to dst.
+	Copy(dst, src string) error
 	// Delete a object.
 	Delete(key string) error
 

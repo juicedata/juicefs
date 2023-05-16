@@ -272,6 +272,7 @@ func freeHandle(fd int) {
 type javaConf struct {
 	MetaURL           string  `json:"meta"`
 	Bucket            string  `json:"bucket"`
+	StorageClass      string  `json:"storageClass"`
 	ReadOnly          bool    `json:"readOnly"`
 	NoBGJob           bool    `json:"noBGJob"`
 	OpenCache         float64 `json:"openCache"`
@@ -468,12 +469,12 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			go metric.UpdateMetrics(m, registerer)
 		}
 
-		if jConf.Bucket != "" {
-			format.Bucket = jConf.Bucket
-		}
 		blob, err := cmd.NewReloadableStorage(format, m, func(f *meta.Format) {
 			if jConf.Bucket != "" {
 				format.Bucket = jConf.Bucket
+			}
+			if jConf.StorageClass != "" {
+				format.StorageClass = jConf.StorageClass
 			}
 		})
 		if err != nil {
@@ -510,6 +511,12 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			BufferSize:        jConf.MemorySize << 20,
 			Readahead:         jConf.Readahead << 20,
 		}
+		if chunkConf.UploadLimit == 0 {
+			chunkConf.UploadLimit = format.UploadLimit * 1e6 / 8
+		}
+		if chunkConf.DownloadLimit == 0 {
+			chunkConf.DownloadLimit = format.DownloadLimit * 1e6 / 8
+		}
 		chunkConf.SelfCheck(format.UUID)
 		store := chunk.NewCachedStore(blob, chunkConf, registerer)
 		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
@@ -528,6 +535,15 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			return nil
 		}
 
+		m.OnReload(func(fmt *meta.Format) {
+			if jConf.UploadLimit > 0 {
+				fmt.UploadLimit = int64(jConf.UploadLimit)
+			}
+			if jConf.DownloadLimit > 0 {
+				fmt.DownloadLimit = int64(jConf.DownloadLimit)
+			}
+			store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+		})
 		conf := &vfs.Config{
 			Meta:            metaConf,
 			Format:          *format,

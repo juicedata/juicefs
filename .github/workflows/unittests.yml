@@ -254,10 +254,10 @@ jobs:
         run: |
           test=${{matrix.test}}
           make $test
-      - name: Code Coverage
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./cov.out
+      # - name: Code Coverage
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     files: ./cov.out
 
       - name: Setup upterm session
         if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}

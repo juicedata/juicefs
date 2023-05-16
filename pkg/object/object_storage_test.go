@@ -35,7 +35,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/enum"
 
@@ -79,7 +79,7 @@ func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, err
 func setStorageClass(o ObjectStorage) string {
 	switch s := o.(type) {
 	case *wasb:
-		s.sc = string(azblob.AccessTierCool)
+		s.sc = string(blob2.AccessTierCool)
 		return s.sc
 	case *bosclient:
 		s.sc = "STANDARD_IA"
@@ -122,7 +122,8 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Create(); err != nil {
 		t.Fatalf("err should be nil when creating a bucket with the same name")
 	}
-	s = WithPrefix(s, "unit-test/")
+	prefix := "unit-test/"
+	s = WithPrefix(s, prefix)
 	defer func() {
 		if err := s.Delete("test"); err != nil {
 			t.Fatalf("delete failed: %s", err)
@@ -371,6 +372,20 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("storage class should be %s but got %s", sc, o.StorageClass())
 	}
 
+	dstKey := "test-copy"
+	defer s.Delete(dstKey)
+	err = s.Copy(fmt.Sprintf("%s%s", prefix, dstKey), fmt.Sprintf("%stest", prefix))
+	if err != nil && err != notSupported {
+		t.Fatalf("copy failed: %s", err.Error())
+	}
+	if err == nil {
+		if o, err := s.Head(dstKey); err != nil {
+			t.Fatalf("check exists failed: %s", err.Error())
+		} else if sc != "" && o.StorageClass() != sc {
+			t.Fatalf("storage class should be %s but got %s", sc, o.StorageClass())
+		}
+	}
+
 	if err := s.Delete("test"); err != nil {
 		t.Fatalf("delete failed: %s", err)
 	}
@@ -601,7 +616,6 @@ func TestGS(t *testing.T) { //skip mutate
 	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
 		t.SkipNow()
 	}
-	//export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
 	gs, _ := newGS(os.Getenv("GOOGLE_ENDPOINT"), "", "", "")
 	testStorage(t, gs)
 }

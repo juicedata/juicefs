@@ -124,6 +124,10 @@ func (s DefaultObjectStorage) Head(key string) (Object, error) {
 	return nil, notSupported
 }
 
+func (s DefaultObjectStorage) Copy(dst, src string) error {
+	return notSupported
+}
+
 func (s DefaultObjectStorage) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	return nil, notSupported
 }

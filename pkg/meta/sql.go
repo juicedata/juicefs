@@ -1177,15 +1177,49 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 	return errno(err)
 }
 
-func (m *dbMeta) doReadlink(ctx Context, inode Ino) (target []byte, err error) {
-	err = m.roTxn(func(s *xorm.Session) error {
-		var l = symlink{Inode: inode}
-		ok, err := s.Get(&l)
-		if err == nil && ok {
-			target = []byte(l.Target)
+func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {
+	if noatime {
+		err = m.roTxn(func(s *xorm.Session) error {
+			var l = symlink{Inode: inode}
+			ok, err := s.Get(&l)
+			if err == nil && ok {
+				target = l.Target
+			}
+			return err
+		})
+		return
+	}
+
+	attr := &Attr{}
+	now := time.Now()
+	err = m.txn(func(s *xorm.Session) error {
+		nodeAttr := node{Inode: inode}
+		ok, e := s.ForUpdate().Get(&nodeAttr)
+		if e != nil {
+			return e
 		}
-		return err
+		if !ok {
+			return syscall.ENOENT
+		}
+		l := symlink{Inode: inode}
+		ok, e = s.Get(&l)
+		if e != nil {
+			return e
+		}
+		if !ok {
+			return syscall.ENOENT
+		}
+		m.parseAttr(&nodeAttr, attr)
+		target = l.Target
+		if !m.atimeNeedsUpdate(attr, now) {
+			return nil
+		}
+		nodeAttr.Atime = now.Unix()*1e6 + int64(now.Nanosecond())/1e3
+		attr.Atime = now.Unix()
+		_, e = s.Cols("atime").Update(&nodeAttr, &node{Inode: inode})
+		return e
 	})
+	atime = attr.Atime
 	return
 }
 
@@ -2164,9 +2198,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rerr syscall.Errno) {
 	defer func() {
 		if rerr == 0 {
-			if err := m.touchAtime(ctx, inode, nil); err != 0 {
-				logger.Warnf("read %v update atime: %s", inode, err)
-			}
+			m.touchAtime(ctx, inode, nil)
 		}
 	}()
 	f := m.of.find(inode)
@@ -2698,22 +2730,27 @@ func (m *dbMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 }
 
 func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
-	if !force {
-		// avoid too many or duplicated compaction
-		m.Lock()
-		k := uint64(inode) + (uint64(indx) << 32)
-		if len(m.compacting) > 10 || m.compacting[k] {
+	// avoid too many or duplicated compaction
+	k := uint64(inode) + (uint64(indx) << 32)
+	m.Lock()
+	if force {
+		for m.compacting[k] {
 			m.Unlock()
-			return
+			time.Sleep(time.Millisecond * 10)
+			m.Lock()
 		}
-		m.compacting[k] = true
+	} else if len(m.compacting) > 10 || m.compacting[k] {
 		m.Unlock()
+		return
+	} else {
+		m.compacting[k] = true
 		defer func() {
 			m.Lock()
 			delete(m.compacting, k)
 			m.Unlock()
 		}()
 	}
+	m.Unlock()
 
 	var c = chunk{Inode: inode, Indx: indx}
 	err := m.roTxn(func(s *xorm.Session) error {
@@ -4017,36 +4054,10 @@ func (m *dbMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 	}, parent))
 }
 
-func (m *dbMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno) {
-	if (m.conf.AtimeMode != StrictAtime && m.conf.AtimeMode != RelAtime) || m.conf.ReadOnly {
-		return 0
-	}
-
-	var curNode = node{Inode: ino}
-	var attr *Attr
-	newAttr := &Attr{}
-	if cur != nil {
-		attr = cur
-	} else if m.of.Check(ino, newAttr) {
-		attr = newAttr
-	}
-
-	now := time.Now()
-	if attr != nil && !m.atimeNeedsUpdate(attr, now) {
-		return 0
-	}
-
-	updated := false
-	defer func() {
-		if rerr == 0 && m.of.IsOpen(ino) && updated {
-			m.of.Update(ino, attr)
-		}
-	}()
-
-	return errno(m.txn(func(s *xorm.Session) error {
-		if attr == nil {
-			attr = newAttr
-		}
+func (m *dbMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time) (bool, error) {
+	var updated bool
+	err := m.txn(func(s *xorm.Session) error {
+		curNode := node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&curNode)
 		if err != nil {
 			return err
@@ -4055,13 +4066,16 @@ func (m *dbMeta) touchAtime(ctx Context, ino Ino, cur *Attr) (rerr syscall.Errno
 			return syscall.ENOENT
 		}
 		m.parseAttr(&curNode, attr)
-
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
 		}
 		curNode.Atime = now.Unix()*1e6 + int64(now.Nanosecond())/1e3
-		_, err = s.Cols("atime").Update(&curNode, &node{Inode: ino})
-		updated = true
+		attr.Atime = curNode.Atime / 1e6
+		attr.Atimensec = uint32(curNode.Atime % 1e6 * 1000)
+		if _, err = s.Cols("atime").Update(&curNode, &node{Inode: inode}); err == nil {
+			updated = true
+		}
 		return err
-	}))
+	})
+	return updated, err
 }

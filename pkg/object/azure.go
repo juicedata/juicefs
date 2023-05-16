@@ -26,13 +26,20 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
 )
 
 type wasb struct {
 	DefaultObjectStorage
-	container *azblob.ContainerClient
+	container *container.Client
+	azblobCli *azblob.Client
 	sc        string
 	cName     string
 	marker    string
@@ -44,20 +51,18 @@ func (b *wasb) String() string {
 
 func (b *wasb) Create() error {
 	_, err := b.container.Create(ctx, nil)
-	if err != nil && strings.Contains(err.Error(), string(azblob.StorageErrorCodeContainerAlreadyExists)) {
-		return nil
+	if err != nil {
+		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.ContainerAlreadyExists) {
+			return nil
+		}
 	}
 	return err
 }
 
 func (b *wasb) Head(key string) (Object, error) {
-	client, err := b.container.NewBlobClient(key)
+	properties, err := b.container.NewBlobClient(key).GetProperties(ctx, nil)
 	if err != nil {
-		return nil, err
-	}
-	properties, err := client.GetProperties(ctx, &azblob.BlobGetPropertiesOptions{})
-	if err != nil {
-		if strings.Contains(err.Error(), string(azblob.StorageErrorCodeBlobNotFound)) {
+		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.BlobNotFound) {
 			err = os.ErrNotExist
 		}
 		return nil, err
@@ -73,56 +78,52 @@ func (b *wasb) Head(key string) (Object, error) {
 }
 
 func (b *wasb) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	client, err := b.container.NewBlockBlobClient(key)
+	download, err := b.container.NewBlobClient(key).DownloadStream(ctx, &azblob.DownloadStreamOptions{Range: blob2.HTTPRange{Offset: off, Count: limit}})
 	if err != nil {
 		return nil, err
 	}
-	download, err := client.Download(ctx, &azblob.BlobDownloadOptions{Offset: &off, Count: &limit})
-	if err != nil {
-		return nil, err
+	return download.Body, err
+}
+
+func str2Tier(tier string) *blob2.AccessTier {
+	for _, v := range blob2.PossibleAccessTierValues() {
+		if string(v) == tier {
+			return &v
+		}
 	}
-	return download.RawResponse.Body, err
+	return nil
 }
 
 func (b *wasb) Put(key string, data io.Reader) error {
-	client, err := b.container.NewBlockBlobClient(key)
-	if err != nil {
-		return err
-	}
 	options := azblob.UploadStreamOptions{}
 	if b.sc != "" {
-		options.AccessTier = azblob.AccessTier(b.sc).ToPtr()
+		options.AccessTier = str2Tier(b.sc)
 	}
-	_, err = client.UploadStream(ctx, data, options)
+	_, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
 	return err
 }
 
 func (b *wasb) Copy(dst, src string) error {
-	dstCli, err := b.container.NewBlockBlobClient(dst)
-	if err != nil {
-		return err
-	}
-	srcCli, err := b.container.NewBlockBlobClient(src)
-	if err != nil {
-		return err
-	}
-	options := &azblob.BlockBlobCopyFromURLOptions{}
+	dstCli := b.container.NewBlobClient(dst)
+	srcCli := b.container.NewBlobClient(src)
+	options := &blob2.CopyFromURLOptions{}
 	if b.sc != "" {
-		options.Tier = azblob.AccessTier(b.sc).ToPtr()
+		options.Tier = str2Tier(b.sc)
 	}
-	_, err = dstCli.CopyFromURL(ctx, srcCli.URL(),
-		options)
+	srcSASUrl, err := srcCli.GetSASURL(sas.BlobPermissions{Read: true}, time.Now().Add(10*time.Second), nil)
+	if err != nil {
+		return err
+	}
+	_, err = dstCli.CopyFromURL(ctx, srcSASUrl, options)
 	return err
 }
 
 func (b *wasb) Delete(key string) error {
-	client, err := b.container.NewBlockBlobClient(key)
+	_, err := b.container.NewBlobClient(key).Delete(ctx, nil)
 	if err != nil {
-		return err
-	}
-	_, err = client.Delete(ctx, &azblob.BlobDeleteOptions{})
-	if err != nil && strings.Contains(err.Error(), string(azblob.StorageErrorCodeBlobNotFound)) {
-		err = nil
+		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.BlobNotFound) {
+			err = nil
+		}
 	}
 	return err
 }
@@ -141,22 +142,24 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64) ([]Object, er
 	}
 
 	limit32 := int32(limit)
-	pager := b.container.ListBlobsFlat(&azblob.ContainerListBlobsFlatOptions{Prefix: &prefix, Marker: &marker, MaxResults: &(limit32)})
-	if pager.Err() != nil {
-		return nil, pager.Err()
+
+	pager := b.azblobCli.NewListBlobsFlatPager(b.cName, &azblob.ListBlobsFlatOptions{Prefix: &prefix, Marker: &marker, MaxResults: &(limit32)})
+	page, err := pager.NextPage(ctx)
+	if err != nil {
+		return nil, err
 	}
-	if pager.NextPage(ctx) {
-		b.marker = *pager.PageResponse().NextMarker
+	if pager.More() {
+		b.marker = *page.NextMarker
 	} else {
 		b.marker = ""
 	}
 	var n int
-	if pager.PageResponse().Segment != nil {
-		n = len(pager.PageResponse().Segment.BlobItems)
+	if page.Segment != nil {
+		n = len(page.Segment.BlobItems)
 	}
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
-		blob := pager.PageResponse().Segment.BlobItems[i]
+		blob := page.Segment.BlobItems[i]
 		mtime := blob.Properties.LastModified
 		objs[i] = &obj{
 			*blob.Name,
@@ -181,11 +184,11 @@ func autoWasbEndpoint(containerName, accountName, scheme string, credential *azb
 			logger.Debugf("Attempt to resolve domain name %s failed: %s", baseURL, err)
 			continue
 		}
-		client, err := azblob.NewContainerClientWithSharedKey(fmt.Sprintf("%s://%s.%s/%s", scheme, accountName, baseURL, containerName), credential, nil)
+		client, err := azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("%s://%s.%s", scheme, accountName, baseURL), credential, nil)
 		if err != nil {
 			return "", err
 		}
-		if _, err = client.GetProperties(ctx, nil); err != nil {
+		if _, err = client.ServiceClient().GetProperties(ctx, nil); err != nil {
 			logger.Debugf("Try to get containers properties at %s failed: %s", baseURL, err)
 			continue
 		}
@@ -211,11 +214,11 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 	containerName := hostParts[0]
 	// Connection string support: DefaultEndpointsProtocol=[http|https];AccountName=***;AccountKey=***;EndpointSuffix=[core.windows.net|core.chinacloudapi.cn]
 	if connString := os.Getenv("AZURE_STORAGE_CONNECTION_STRING"); connString != "" {
-		var client *azblob.ContainerClient
-		if client, err = azblob.NewContainerClientFromConnectionString(connString, containerName, nil); err != nil {
+		var client *azblob.Client
+		if client, err = azblob.NewClientFromConnectionString(connString, nil); err != nil {
 			return nil, err
 		}
-		return &wasb{container: client, cName: containerName}, nil
+		return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName}, nil
 	}
 
 	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
@@ -232,12 +235,11 @@ func newWasb(endpoint, accountName, accountKey, token string) (ObjectStorage, er
 		return nil, fmt.Errorf("Unable to get endpoint of container %s: %s", containerName, err)
 	}
 
-	client, err := azblob.NewContainerClientWithSharedKey(fmt.Sprintf("%s://%s.%s/%s", uri.Scheme, accountName, domain, containerName), credential, nil)
+	client, err := azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("%s://%s.%s", uri.Scheme, accountName, domain), credential, nil)
 	if err != nil {
 		return nil, err
 	}
-
-	return &wasb{container: client, cName: containerName}, nil
+	return &wasb{container: client.ServiceClient().NewContainerClient(containerName), azblobCli: client, cName: containerName}, nil
 }
 
 func init() {

@@ -22,6 +22,7 @@ import (
 	"hash/crc32"
 	"hash/fnv"
 	"io"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
@@ -569,7 +570,11 @@ func (cache *cacheStore) scanCached() {
 
 	cachePrefix := filepath.Join(cache.dir, cacheDir)
 	logger.Debugf("Scan %s to find cached blocks", cachePrefix)
-	_ = filepath.Walk(cachePrefix, func(path string, fi os.FileInfo, err error) error {
+	_ = filepath.WalkDir(cachePrefix, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		fi, _ := d.Info()
 		if fi != nil {
 			if fi.IsDir() || strings.HasSuffix(path, ".tmp") {
 				if fi.ModTime().Before(oneMinAgo) {
@@ -612,7 +617,11 @@ func (cache *cacheStore) scanStaging() {
 	var count int
 	stagingPrefix := filepath.Join(cache.dir, stagingDir)
 	logger.Debugf("Scan %s to find staging blocks", stagingPrefix)
-	_ = filepath.Walk(stagingPrefix, func(path string, fi os.FileInfo, err error) error {
+	_ = filepath.WalkDir(stagingPrefix, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // ignore it
+		}
+		fi, _ := d.Info()
 		if fi != nil {
 			if fi.IsDir() || strings.HasSuffix(path, ".tmp") {
 				if fi.ModTime().Before(oneMinAgo) {

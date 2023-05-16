@@ -49,6 +49,8 @@ func (q *qiniu) String() string {
 	return fmt.Sprintf("qiniu://%s/", q.bucket)
 }
 
+func (q *qiniu) SetStorageClass(_ string) {}
+
 func (q *qiniu) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: false,

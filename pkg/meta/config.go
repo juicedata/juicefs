@@ -48,7 +48,7 @@ type Config struct {
 }
 
 func DefaultConf() *Config {
-	return &Config{Strict: true, Retries: 10, MaxDeletes: 2, Heartbeat: 12 * time.Second}
+	return &Config{Strict: true, Retries: 10, MaxDeletes: 2, Heartbeat: 12 * time.Second, AtimeMode: NoAtime}
 }
 
 func (c *Config) SelfCheck() {
@@ -83,6 +83,8 @@ type Format struct {
 	EncryptKey       string `json:",omitempty"`
 	EncryptAlgo      string `json:",omitempty"`
 	KeyEncrypted     bool   `json:",omitempty"`
+	UploadLimit      int64  `json:",omitempty"` // Mbps
+	DownloadLimit    int64  `json:",omitempty"` // Mbps
 	TrashDays        int
 	MetaVersion      int    `json:",omitempty"`
 	MinClientVersion string `json:",omitempty"`

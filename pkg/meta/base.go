@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -89,12 +90,13 @@ type engine interface {
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
 	doUnlink(ctx Context, parent Ino, name string, attr *Attr, skipCheckTrash ...bool) syscall.Errno
 	doRmdir(ctx Context, parent Ino, name string, inode *Ino, skipCheckTrash ...bool) syscall.Errno
-	doReadlink(ctx Context, inode Ino) ([]byte, error)
+	doReadlink(ctx Context, inode Ino, noatime bool) (int64, []byte, error)
 	doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno
 	doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode, tinode *Ino, attr, tattr *Attr) syscall.Errno
 	doSetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno
 	doRemoveXattr(ctx Context, inode Ino, name string) syscall.Errno
 	doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno
+	doTouchAtime(ctx Context, inode Ino, attr *Attr, ts time.Time) (bool, error)
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
@@ -107,7 +109,6 @@ type engine interface {
 	scanPendingFiles(Context, pendingFileScan) error
 
 	GetSession(sid uint64, detail bool) (*Session, error)
-	touchAtime(ctx Context, inode Ino, attr *Attr) syscall.Errno
 }
 
 type trashSliceScan func(ss []Slice, ts int64) (clean bool, err error)
@@ -1325,12 +1326,23 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 }
 
 func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
+	noatime := m.conf.AtimeMode == NoAtime || m.conf.ReadOnly
 	if target, ok := m.symlinks.Load(inode); ok {
-		*path = target.([]byte)
-		return 0
+		if noatime {
+			*path = target.([]byte)
+			return 0
+		} else {
+			buf := target.([]byte)
+			// ctime and mtime are ignored since symlink can't be modified
+			attr := &Attr{Atime: int64(binary.BigEndian.Uint64(buf[:8]))}
+			if !m.atimeNeedsUpdate(attr, time.Now()) {
+				*path = buf[8:]
+				return 0
+			}
+		}
 	}
 	defer m.timeit("ReadLink", time.Now())
-	target, err := m.en.doReadlink(ctx, inode)
+	atime, target, err := m.en.doReadlink(ctx, inode, noatime)
 	if err != nil {
 		return errno(err)
 	}
@@ -1338,7 +1350,14 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 		return syscall.ENOENT
 	}
 	*path = target
-	m.symlinks.Store(inode, target)
+	if noatime {
+		m.symlinks.Store(inode, target)
+	} else {
+		buf := make([]byte, 8+len(target))
+		binary.BigEndian.PutUint64(buf[:8], uint64(atime))
+		copy(buf[8:], target)
+		m.symlinks.Store(inode, buf)
+	}
 	return 0
 }
 
@@ -1500,19 +1519,38 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	return st
 }
 
+// caller makes sure inode is not special inode.
+func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
+	if m.conf.AtimeMode == NoAtime || m.conf.ReadOnly {
+		return
+	}
+
+	if attr == nil {
+		attr = new(Attr)
+		m.of.Check(inode, attr)
+	}
+	now := time.Now()
+	if attr.Full && !m.atimeNeedsUpdate(attr, now) {
+		return
+	}
+
+	updated, err := m.en.doTouchAtime(ctx, inode, attr, now)
+	if updated {
+		m.of.Update(inode, attr)
+	} else if err != nil {
+		logger.Warnf("Update atime of inode %d: %s", inode, err)
+	}
+}
+
 func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr syscall.Errno) {
 	if m.conf.ReadOnly && flags&(syscall.O_WRONLY|syscall.O_RDWR|syscall.O_TRUNC|syscall.O_APPEND) != 0 {
 		return syscall.EROFS
 	}
-
 	defer func() {
 		if rerr == 0 {
-			if err := m.en.touchAtime(ctx, inode, attr); err != 0 {
-				logger.Warnf("open %v update atime: %s", inode, err)
-			}
+			m.touchAtime(ctx, inode, attr)
 		}
 	}()
-
 	if m.conf.OpenCache > 0 && m.of.OpenCheck(inode, attr) {
 		return 0
 	}
@@ -1593,9 +1631,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	var attr Attr
 	defer func() {
 		if rerr == 0 {
-			if err := m.en.touchAtime(ctx, inode, &attr); err != 0 {
-				logger.Warnf("readdir %v update atime: %s", inode, err)
-			}
+			m.touchAtime(ctx, inode, &attr)
 		}
 	}()
 	inode = m.checkRoot(inode)
