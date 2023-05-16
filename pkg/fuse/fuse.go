@@ -348,7 +348,7 @@ func (fs *fileSystem) Flock(cancel <-chan struct{}, in *fuse.LkIn, block bool) (
 func (fs *fileSystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	fh, err := fs.v.Opendir(ctx, Ino(in.NodeId))
+	fh, err := fs.v.Opendir(ctx, Ino(in.NodeId), in.Flags)
 	out.Fh = fh
 	return fuse.Status(err)
 }

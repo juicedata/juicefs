@@ -595,7 +595,7 @@ func TestInternalFile(t *testing.T) {
 	v, _ := createTestVFS()
 	ctx := NewLogContext(meta.Background)
 	// list internal files
-	fh, _ := v.Opendir(ctx, 1)
+	fh, _ := v.Opendir(ctx, 1, 0)
 	entries, _, e := v.Readdir(ctx, 1, 1024, 0, fh, true)
 	if e != 0 {
 		t.Fatalf("readdir 1: %s", e)
@@ -864,7 +864,7 @@ func TestAtime(t *testing.T) {
 	} else if de2.Attr.Atime != 1234 || de2.Attr.Atimensec != 5678 {
 		t.Fatalf("setattr d1: %+v", de2.Attr)
 	}
-	fh, e = v.Opendir(ctx, de.Inode)
+	fh, e = v.Opendir(ctx, de.Inode, 0)
 	if e != 0 {
 		t.Fatalf("opendir d1: %s", e)
 	}
@@ -910,7 +910,7 @@ func TestAtime(t *testing.T) {
 	} else if de2.Attr.Atime != 1234 || de2.Attr.Atimensec != 5678 {
 		t.Fatalf("setattr d2: %+v", de2.Attr)
 	}
-	dfh, e := v.Opendir(ctx, de.Inode)
+	dfh, e := v.Opendir(ctx, de.Inode, 0)
 	if e != 0 {
 		t.Fatalf("opendir d2: %s", e)
 	}

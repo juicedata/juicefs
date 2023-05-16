@@ -296,8 +296,20 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 	return
 }
 
-func (v *VFS) Opendir(ctx Context, ino Ino) (fh uint64, err syscall.Errno) {
+func (v *VFS) Opendir(ctx Context, ino Ino, flags uint32) (fh uint64, err syscall.Errno) {
 	defer func() { logit(ctx, "opendir (%d): %s [fh:%d]", ino, strerr(err), fh) }()
+	var mmask uint8 = 0
+	switch flags & syscall.O_ACCMODE {
+	case syscall.O_RDONLY:
+		mmask = MODE_MASK_R
+	case syscall.O_WRONLY:
+		mmask = MODE_MASK_W
+	case syscall.O_RDWR:
+		mmask = MODE_MASK_R | MODE_MASK_W
+	}
+	if err = v.Meta.Access(ctx, ino, mmask, nil); err != 0 {
+		return
+	}
 	fh = v.newHandle(ino).fh
 	return
 }
