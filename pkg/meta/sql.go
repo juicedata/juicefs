@@ -896,15 +896,18 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 				return syscall.EPERM
 			}
 			if cur.Gid != attr.Gid {
+				if ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
+					return syscall.EPERM
+				}
 				cur.Gid = attr.Gid
 				changed = true
 			}
 		}
 		if set&SetAttrUID != 0 {
-			if ctx.Uid() != 0 {
-				return syscall.EPERM
-			}
 			if cur.Uid != attr.Uid {
+				if ctx.Uid() != 0 {
+					return syscall.EPERM
+				}
 				cur.Uid = attr.Uid
 				changed = true
 			}
@@ -916,6 +919,9 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 				}
 			}
 			if attr.Mode != cur.Mode {
+				if ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
+					return syscall.EPERM
+				}
 				cur.Mode = attr.Mode
 				changed = true
 			}
