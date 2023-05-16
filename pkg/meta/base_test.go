@@ -1227,7 +1227,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	var inode Ino
 	var attr = &Attr{}
 	m.Unlink(ctx, 1, "f")
-	if st := m.Truncate(ctx, 1, 0, 4<<10, attr); st != syscall.EPERM {
+	if st := m.Truncate(ctx, 1, 0, 4<<10, attr, false); st != syscall.EPERM {
 		t.Fatalf("truncate dir %s", st)
 	}
 	if st := m.Create(ctx, 1, "f", 0650, 022, 0, &inode, attr); st != 0 {
@@ -1241,13 +1241,13 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	if st := m.Write(ctx, inode, 0, 100, Slice{sliceId, 100, 0, 100}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
-	if st := m.Truncate(ctx, inode, 0, 200<<20, attr); st != 0 {
+	if st := m.Truncate(ctx, inode, 0, 200<<20, attr, false); st != 0 {
 		t.Fatalf("truncate file %s", st)
 	}
-	if st := m.Truncate(ctx, inode, 0, (10<<40)+10, attr); st != 0 {
+	if st := m.Truncate(ctx, inode, 0, (10<<40)+10, attr, false); st != 0 {
 		t.Fatalf("truncate file %s", st)
 	}
-	if st := m.Truncate(ctx, inode, 0, (300<<20)+10, attr); st != 0 {
+	if st := m.Truncate(ctx, inode, 0, (300<<20)+10, attr, false); st != 0 {
 		t.Fatalf("truncate file %s", st)
 	}
 	var total int64
@@ -2026,7 +2026,7 @@ func testDirStat(t *testing.T, m Meta) {
 	checkResult(4097, align4K(4097), 1)
 
 	// test dir with file and truncate
-	if st := m.Truncate(Background, fileInode, 0, 0, nil); st != 0 {
+	if st := m.Truncate(Background, fileInode, 0, 0, nil, false); st != 0 {
 		t.Fatalf("truncate: %s", st)
 	}
 	time.Sleep(1100 * time.Millisecond)

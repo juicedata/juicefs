@@ -130,12 +130,12 @@ type FileSystem struct {
 	writer vfs.DataWriter
 	m      meta.Meta
 
-	cacheM  sync.Mutex
-	entries map[Ino]map[string]*entryCache
-	attrs   map[Ino]*attrCache
+	cacheM          sync.Mutex
+	entries         map[Ino]map[string]*entryCache
+	attrs           map[Ino]*attrCache
 	checkAccessFile time.Duration
 	rotateAccessLog int64
-	logBuffer chan string
+	logBuffer       chan string
 
 	readSizeHistogram     prometheus.Histogram
 	writtenSizeHistogram  prometheus.Histogram
@@ -160,15 +160,14 @@ type File struct {
 func NewFileSystem(conf *vfs.Config, m meta.Meta, d chunk.ChunkStore) (*FileSystem, error) {
 	reader := vfs.NewDataReader(conf, m, d)
 	fs := &FileSystem{
-		m:       m,
-		conf:    conf,
-		reader:  reader,
-		writer:  vfs.NewDataWriter(conf, m, d, reader),
-		entries: make(map[meta.Ino]map[string]*entryCache),
-		attrs:   make(map[meta.Ino]*attrCache),
+		m:               m,
+		conf:            conf,
+		reader:          reader,
+		writer:          vfs.NewDataWriter(conf, m, d, reader),
+		entries:         make(map[meta.Ino]map[string]*entryCache),
+		attrs:           make(map[meta.Ino]*attrCache),
 		checkAccessFile: time.Minute,
 		rotateAccessLog: 300 << 20, // 300 MiB
-
 
 		readSizeHistogram: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name:    "sdk_read_size_bytes",
@@ -574,7 +573,7 @@ func (fs *FileSystem) Truncate(ctx meta.Context, path string, length uint64) (er
 	if err != 0 {
 		return
 	}
-	err = fs.m.Truncate(ctx, fi.inode, 0, length, nil)
+	err = fs.m.Truncate(ctx, fi.inode, 0, length, nil, false)
 	return
 }
 

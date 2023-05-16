@@ -977,7 +977,7 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 	return err
 }
 
-func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
+func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
 	defer m.timeit("Truncate", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
@@ -1004,8 +1004,10 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			return syscall.EPERM
 		}
 		m.parseAttr(&nodeAttr, attr)
-		if st := m.Access(ctx, inode, MODE_MASK_W, attr); st != 0 {
-			return st
+		if !skipPermCheck {
+			if st := m.Access(ctx, inode, MODE_MASK_W, attr); st != 0 {
+				return st
+			}
 		}
 		if length == nodeAttr.Length {
 			return nil

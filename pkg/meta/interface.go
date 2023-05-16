@@ -347,7 +347,7 @@ type Meta interface {
 	// SetAttr updates the attributes for given node.
 	SetAttr(ctx Context, inode Ino, set uint16, sggidclearmode uint8, attr *Attr) syscall.Errno
 	// Truncate changes the length for given file.
-	Truncate(ctx Context, inode Ino, flags uint8, attrlength uint64, attr *Attr) syscall.Errno
+	Truncate(ctx Context, inode Ino, flags uint8, attrlength uint64, attr *Attr, skipPermCheck bool) syscall.Errno
 	// Fallocate preallocate given space for given file.
 	Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64) syscall.Errno
 	// ReadLink returns the target of a symlink.

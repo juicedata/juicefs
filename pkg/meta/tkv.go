@@ -937,7 +937,7 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 	}))
 }
 
-func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
+func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
 	defer m.timeit("Truncate", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
@@ -958,8 +958,10 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if t.Typ != TypeFile {
 			return syscall.EPERM
 		}
-		if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
-			return st
+		if !skipPermCheck {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
+				return st
+			}
 		}
 		if length == t.Length {
 			if attr != nil {

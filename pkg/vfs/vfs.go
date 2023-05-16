@@ -447,7 +447,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 	return
 }
 
-func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Attr) (err syscall.Errno) {
+func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) (err syscall.Errno) {
 	// defer func() { logit(ctx, "truncate (%d,%d): %s", ino, size, strerr(err)) }()
 	if IsSpecialNode(ino) {
 		err = syscall.EPERM
@@ -461,17 +461,35 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Att
 		err = syscall.EFBIG
 		return
 	}
-	hs := v.findAllHandles(ino)
-	sort.Slice(hs, func(i, j int) bool { return hs[i].fh < hs[j].fh })
-	for _, h := range hs {
+	if fh == 0 {
+		hs := v.findAllHandles(ino)
+		sort.Slice(hs, func(i, j int) bool { return hs[i].fh < hs[j].fh })
+		for _, h := range hs {
+			if !h.Wlock(ctx) {
+				err = syscall.EINTR
+				return
+			}
+			defer func(h *handle) { h.Wunlock() }(h)
+		}
+		_ = v.writer.Flush(ctx, ino)
+		err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr, false)
+	} else {
+		h := v.findHandle(ino, fh)
+		if h == nil {
+			err = syscall.EBADF
+			return
+		}
+		if h.writer == nil {
+			err = syscall.EACCES
+		}
 		if !h.Wlock(ctx) {
 			err = syscall.EINTR
 			return
 		}
 		defer func(h *handle) { h.Wunlock() }(h)
+		_ = h.writer.Flush(ctx)
+		err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr, true)
 	}
-	_ = v.writer.Flush(ctx, ino)
-	err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr)
 	if err == 0 {
 		v.writer.Truncate(ino, uint64(size))
 		v.reader.Truncate(ino, uint64(size))

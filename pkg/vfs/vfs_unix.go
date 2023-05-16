@@ -144,7 +144,7 @@ func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64)
 	return r
 }
 
-func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gid uint32, atime, mtime int64, atimensec, mtimensec uint32, size uint64) (entry *meta.Entry, err syscall.Errno) {
+func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid uint32, atime, mtime int64, atimensec, mtimensec uint32, size uint64) (entry *meta.Entry, err syscall.Errno) {
 	str := setattrStr(set, mode, uid, gid, atime, mtime, size)
 	defer func() {
 		logit(ctx, "setattr (%d,0x%X,[%s]): %s%s", ino, set, str, strerr(err), (*Entry)(entry))
@@ -161,7 +161,7 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, opened uint8, mode, uid, gi
 	err = syscall.EINVAL
 	var attr = &Attr{}
 	if set&meta.SetAttrSize != 0 {
-		err = v.Truncate(ctx, ino, int64(size), opened, attr)
+		err = v.Truncate(ctx, ino, int64(size), fh, attr)
 		if err != 0 {
 			return
 		}
