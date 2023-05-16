@@ -1621,6 +1621,16 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if (spn.Flags&FlagAppend) != 0 || (spn.Flags&FlagImmutable) != 0 || (dpn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
+		var spattr, dpattr Attr
+		m.parseAttr(&spn, &spattr)
+		m.parseAttr(&dpn, &dpattr)
+		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &spattr); st != 0 {
+			return st
+		}
+		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); st != 0 {
+			return st
+		}
+
 		var se = edge{Parent: parentSrc, Name: []byte(nameSrc)}
 		ok, err := s.ForUpdate().Get(&se)
 		if err != nil {
@@ -1653,9 +1663,12 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		var sattr Attr
 		m.parseAttr(&sn, &sattr)
-		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &sattr); st != 0 {
-			return st
+		if parentSrc != parentDst && spattr.Mode&0o1000 != 0 && ctx.Uid() != 0 {
+			if ctx.Uid() != sattr.Uid && (ctx.Uid() != spattr.Uid || sattr.Typ == TypeDirectory) {
+				return syscall.EACCES
+			}
 		}
+
 		if (sn.Flags&FlagAppend) != 0 || (sn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
