@@ -45,6 +45,8 @@ type fuseContext struct {
 	cancel   <-chan struct{}
 }
 
+var gidcache = newGidCache(time.Minute * 5)
+
 var contextPool = sync.Pool{
 	New: func() interface{} {
 		return &fuseContext{}
@@ -78,7 +80,7 @@ func (c *fuseContext) Gid() uint32 {
 }
 
 func (c *fuseContext) Gids() []uint32 {
-	return []uint32{c.header.Gid}
+	return gidcache.get(c.Pid(), c.Gid())
 }
 
 func (c *fuseContext) Pid() uint32 {

@@ -1123,15 +1123,18 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 				return syscall.EPERM
 			}
 			if cur.Gid != attr.Gid {
+				if ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
+					return syscall.EPERM
+				}
 				cur.Gid = attr.Gid
 				changed = true
 			}
 		}
 		if set&SetAttrUID != 0 {
-			if ctx.Uid() != 0 {
-				return syscall.EPERM
-			}
 			if cur.Uid != attr.Uid {
+				if ctx.Uid() != 0 {
+					return syscall.EPERM
+				}
 				cur.Uid = attr.Uid
 				changed = true
 			}
