@@ -919,7 +919,8 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 				}
 			}
 			if attr.Mode != cur.Mode {
-				if ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
+				if ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
+					(cur.Mode&01777 != attr.Mode&01777 || attr.Mode&02000 > cur.Mode&02000 || attr.Mode&04000 > cur.Mode&04000) {
 					return syscall.EPERM
 				}
 				cur.Mode = attr.Mode
