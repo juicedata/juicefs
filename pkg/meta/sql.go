@@ -927,21 +927,39 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 				changed = true
 			}
 		}
+		var curAttr Attr
+		m.parseAttr(&cur, &curAttr)
 		now := time.Now().UnixNano() / 1e3
-		if set&SetAttrAtime != 0 {
+		if set&SetAttrAtimeNow != 0 || (set&SetAttrAtime) != 0 && attr.Atime < 0 {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.Uid() != cur.Uid && st != 0 {
+				return syscall.EACCES
+			}
+			cur.Atime = now
+			changed = true
+		} else if set&SetAttrAtime != 0 && cur.Atime != attr.Atime {
+			if cur.Uid == 0 && ctx.Uid() != 0 {
+				return syscall.EPERM
+			}
+			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.Uid() != cur.Uid && st != 0 {
+				return syscall.EACCES
+			}
 			cur.Atime = attr.Atime*1e6 + int64(attr.Atimensec)/1e3
 			changed = true
 		}
-		if set&SetAttrAtimeNow != 0 {
-			cur.Atime = now
-			changed = true
-		}
-		if set&SetAttrMtime != 0 {
-			cur.Mtime = attr.Mtime*1e6 + int64(attr.Mtimensec)/1e3
-			changed = true
-		}
-		if set&SetAttrMtimeNow != 0 {
+		if set&SetAttrMtimeNow != 0 || (set&SetAttrMtime) != 0 && attr.Mtime < 0 {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.Uid() != cur.Uid && st != 0 {
+				return syscall.EACCES
+			}
 			cur.Mtime = now
+			changed = true
+		} else if set&SetAttrMtime != 0 && cur.Mtime != attr.Mtime {
+			if cur.Uid == 0 && ctx.Uid() != 0 {
+				return syscall.EPERM
+			}
+			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.Uid() != cur.Uid && st != 0 {
+				return syscall.EACCES
+			}
+			cur.Mtime = attr.Mtime*1e6 + int64(attr.Mtimensec)/1e3
 			changed = true
 		}
 		if set&SetAttrFlag != 0 {

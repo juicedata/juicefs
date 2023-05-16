@@ -1157,24 +1157,40 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			}
 		}
 		now := time.Now()
-		if set&SetAttrAtime != 0 && (cur.Atime != attr.Atime || cur.Atimensec != attr.Atimensec) {
+		if set&SetAttrAtimeNow != 0 || (set&SetAttrAtime) != 0 && attr.Atime < 0 {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.Uid() != cur.Uid && st != 0 {
+				return syscall.EACCES
+			}
+			cur.Atime = now.Unix()
+			cur.Atimensec = uint32(now.Nanosecond())
+			changed = true
+		} else if set&SetAttrAtime != 0 && (cur.Atime != attr.Atime || cur.Atimensec != attr.Atimensec) {
+			if cur.Uid == 0 && ctx.Uid() != 0 {
+				return syscall.EPERM
+			}
+			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.Uid() != cur.Uid && st != 0 {
+				return syscall.EACCES
+			}
 			cur.Atime = attr.Atime
 			cur.Atimensec = attr.Atimensec
 			changed = true
 		}
-		if set&SetAttrAtimeNow != 0 {
-			cur.Atime = now.Unix()
-			cur.Atimensec = uint32(now.Nanosecond())
-			changed = true
-		}
-		if set&SetAttrMtime != 0 && (cur.Mtime != attr.Mtime || cur.Mtimensec != attr.Mtimensec) {
-			cur.Mtime = attr.Mtime
-			cur.Mtimensec = attr.Mtimensec
-			changed = true
-		}
-		if set&SetAttrMtimeNow != 0 {
+		if set&SetAttrMtimeNow != 0 || (set&SetAttrMtime) != 0 && attr.Mtime < 0 {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.Uid() != cur.Uid && st != 0 {
+				return syscall.EACCES
+			}
 			cur.Mtime = now.Unix()
 			cur.Mtimensec = uint32(now.Nanosecond())
+			changed = true
+		} else if set&SetAttrMtime != 0 && (cur.Mtime != attr.Mtime || cur.Mtimensec != attr.Mtimensec) {
+			if cur.Uid == 0 && ctx.Uid() != 0 {
+				return syscall.EPERM
+			}
+			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.Uid() != cur.Uid && st != 0 {
+				return syscall.EACCES
+			}
+			cur.Mtime = attr.Mtime
+			cur.Mtimensec = attr.Mtimensec
 			changed = true
 		}
 		if set&SetAttrFlag != 0 {

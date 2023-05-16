@@ -147,7 +147,7 @@ func setattrStr(set int, mode, uid, gid uint32, atime, mtime int64, size uint64)
 func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid uint32, atime, mtime int64, atimensec, mtimensec uint32, size uint64) (entry *meta.Entry, err syscall.Errno) {
 	str := setattrStr(set, mode, uid, gid, atime, mtime, size)
 	defer func() {
-		logit(ctx, "setattr (%d,0x%X,[%s]): %s%s", ino, set, str, strerr(err), (*Entry)(entry))
+		logit(ctx, "setattr (%d[%d],0x%X,[%s]): %s%s", ino, fh, set, str, strerr(err), (*Entry)(entry))
 	}()
 	if IsSpecialNode(ino) {
 		n := getInternalNode(ino)
@@ -182,13 +182,15 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid u
 	if set&meta.SetAttrMtime != 0 {
 		attr.Mtime = mtime
 		attr.Mtimensec = mtimensec
-		v.writer.UpdateMtime(ino, time.Unix(mtime, int64(mtimensec)))
-	}
-	if set&meta.SetAttrMtimeNow != 0 {
-		v.writer.UpdateMtime(ino, time.Now())
 	}
 	err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
 	if err == 0 {
+		if set&meta.SetAttrMtime != 0 {
+			v.writer.UpdateMtime(ino, time.Unix(mtime, int64(mtimensec)))
+		}
+		if set&meta.SetAttrMtimeNow != 0 {
+			v.writer.UpdateMtime(ino, time.Now())
+		}
 		v.UpdateLength(ino, attr)
 		entry = &meta.Entry{Inode: ino, Attr: attr}
 	}
