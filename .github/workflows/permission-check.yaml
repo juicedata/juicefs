@@ -1,4 +1,4 @@
-name: "pjdfstest"
+name: "permission-check"
 
 on:
   push:
@@ -36,7 +36,7 @@ jobs:
           echo "github.event_name is ${{github.event_name}}"
           echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
           if [ "${{github.event_name}}" == "schedule"  ]; then
-            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "badger", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3", "redis", "tikv"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "pull_request"  ]; then
             echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
@@ -52,11 +52,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # [ 'sqlite3', 'redis', 'mysql', 'tikv', 'tidb', 'postgres', 'badger', 'mariadb', 'fdb']
+        # [ 'sqlite3', 'redis', tikv']
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     
     runs-on: ubuntu-20.04
-
     steps:
       - uses: shogo82148/actions-setup-perl@v1
         with:
@@ -101,7 +100,7 @@ jobs:
           meta_url=$(get_meta_url ${{matrix.meta}})
           # sudo mkdir /var/jfs
           # sudo chmod 777 /var/jfs
-          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report &
+          sudo ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --attr-cache 0 --entry-cache 0 --dir-entry-cache 0 --non-default-permission &
           sleep 5
           if [ ! -f /tmp/jfs/.accesslog ]; then
             echo "<FATAL>: mount failed"
@@ -112,7 +111,7 @@ jobs:
         run: |
           sudo .github/scripts/apt_install.sh libtap-harness-archive-perl
           cd /tmp/jfs/
-          git clone https://github.com/sanwan/pjdfstest.git
+          git clone https://github.com/hexilee/pjdfstest.git
           cd pjdfstest
           autoreconf -ifs
           ./configure
