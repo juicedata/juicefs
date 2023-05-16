@@ -1146,6 +1146,9 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 				}
 			}
 			if attr.Mode != cur.Mode {
+				if ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
+					return syscall.EPERM
+				}
 				cur.Mode = attr.Mode
 				changed = true
 			}
