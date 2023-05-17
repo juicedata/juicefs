@@ -66,9 +66,7 @@ func (fs *fileSystem) newContext(cancel <-chan struct{}, header *fuse.InHeader) 
 		ctx.header.Uid = fs.conf.RootSquash.Uid
 		ctx.header.Gid = fs.conf.RootSquash.Gid
 	}
-	if fs.conf.RootSquash != nil || fs.conf.NonDefaultPermission {
-		ctx.enableGidCache = true
-	}
+	ctx.enableGidCache = fs.conf.RootSquash != nil || fs.conf.NonDefaultPermission
 	return ctx
 }
 
