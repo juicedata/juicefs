@@ -724,10 +724,11 @@ func (m *redisMeta) handleLuaResult(op string, res interface{}, err error, retur
 }
 
 func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
-		return st
+	if m.conf.StrictPermCheck {
+		if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
+			return st
+		}
 	}
-
 	var foundIno Ino
 	var foundType uint8
 	var encodedAttr []byte
@@ -1126,7 +1127,7 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 				return syscall.EPERM
 			}
 			if cur.Gid != attr.Gid {
-				if ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
+				if m.conf.StrictPermCheck && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
 					return syscall.EPERM
 				}
 				dirtyAttr.Gid = attr.Gid
@@ -1990,13 +1991,16 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 }
 
 func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
-	var mmask uint8 = MODE_MASK_R
-	if plus != 0 {
-		mmask |= MODE_MASK_X
+	if m.conf.StrictPermCheck {
+		var mmask uint8 = MODE_MASK_R
+		if plus != 0 {
+			mmask |= MODE_MASK_X
+		}
+		if st := m.Access(ctx, inode, mmask, nil); st != 0 {
+			return st
+		}
 	}
-	if st := m.Access(ctx, inode, mmask, nil); st != 0 {
-		return st
-	}
+
 	var stop = errors.New("stop")
 	err := m.hscan(ctx, m.entryKey(inode), func(keys []string) error {
 		newEntries := make([]Entry, len(keys)/2)

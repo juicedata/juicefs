@@ -807,8 +807,10 @@ func (m *dbMeta) flushStats() {
 
 func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.roTxn(func(s *xorm.Session) error {
-		if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
-			return st
+		if m.conf.StrictPermCheck {
+			if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
+				return st
+			}
 		}
 		s = s.Table(&edge{})
 		nn := namedNode{node: node{Parent: parent}, Name: []byte(name)}
@@ -897,7 +899,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 				return syscall.EPERM
 			}
 			if cur.Gid != attr.Gid {
-				if ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
+				if m.conf.StrictPermCheck && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
 					return syscall.EPERM
 				}
 				dirtyNode.Gid = attr.Gid
@@ -2017,12 +2019,14 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	return errno(m.roTxn(func(s *xorm.Session) error {
-		var mmask uint8 = MODE_MASK_R
-		if plus != 0 {
-			mmask |= MODE_MASK_X
-		}
-		if st := m.Access(ctx, inode, mmask, nil); st != 0 {
-			return st
+		if m.conf.StrictPermCheck {
+			var mmask uint8 = MODE_MASK_R
+			if plus != 0 {
+				mmask |= MODE_MASK_X
+			}
+			if st := m.Access(ctx, inode, mmask, nil); st != 0 {
+				return st
+			}
 		}
 		s = s.Table(&edge{})
 		if plus != 0 {
