@@ -17,12 +17,12 @@
 package cmd
 
 import (
+	"encoding/csv"
 	"encoding/json"
-	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"syscall"
 
 	"github.com/dustin/go-humanize"
@@ -165,8 +165,15 @@ func summary(ctx *cli.Context) error {
 }
 
 func printCSVResult(results [][]string) {
+	w := csv.NewWriter(os.Stdout)
 	for _, r := range results {
-		fmt.Println(strings.Join(r, ","))
+		if err := w.Write(r); err != nil {
+			logger.Fatalln("error writing record to csv:", err)
+		}
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
+		logger.Fatal(err)
 	}
 }
 
