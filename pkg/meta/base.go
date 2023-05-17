@@ -1560,7 +1560,7 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr 
 		err = m.GetAttr(ctx, inode, attr)
 	}
 	var mmask uint8 = 0
-	switch flags & syscall.O_ACCMODE {
+	switch flags & 0x3 {
 	case syscall.O_RDONLY:
 		mmask = MODE_MASK_R
 	case syscall.O_WRONLY:
