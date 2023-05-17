@@ -1554,17 +1554,19 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr 
 	if attr != nil && !attr.Full {
 		err = m.GetAttr(ctx, inode, attr)
 	}
-	var mmask uint8 = 0
-	switch flags & (syscall.O_RDONLY | syscall.O_WRONLY | syscall.O_RDWR) {
-	case syscall.O_RDONLY:
-		mmask = MODE_MASK_R
-	case syscall.O_WRONLY:
-		mmask = MODE_MASK_W
-	case syscall.O_RDWR:
-		mmask = MODE_MASK_R | MODE_MASK_W
-	}
-	if rerr = m.Access(ctx, inode, mmask, attr); rerr != 0 {
-		return
+	if ctx.CheckPermission() {
+		var mmask uint8 = 0
+		switch flags & (syscall.O_RDONLY | syscall.O_WRONLY | syscall.O_RDWR) {
+		case syscall.O_RDONLY:
+			mmask = MODE_MASK_R
+		case syscall.O_WRONLY:
+			mmask = MODE_MASK_W
+		case syscall.O_RDWR:
+			mmask = MODE_MASK_R | MODE_MASK_W
+		}
+		if rerr = m.Access(ctx, inode, mmask, attr); rerr != 0 {
+			return
+		}
 	}
 
 	if attr.Flags&FlagImmutable != 0 {
