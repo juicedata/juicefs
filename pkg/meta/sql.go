@@ -882,13 +882,14 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		if !ok {
 			return syscall.ENOENT
 		}
+		dirtyNode := cur
 
 		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 			attr.Mode |= (cur.Mode & 06000)
 		}
 		var changed bool
 		if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
-			clearSUGIDSQL(ctx, &cur, attr)
+			clearSUGIDSQL(ctx, &dirtyNode, attr)
 			changed = true
 		}
 		if set&SetAttrGID != 0 {
@@ -899,7 +900,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 				if ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
 					return syscall.EPERM
 				}
-				cur.Gid = attr.Gid
+				dirtyNode.Gid = attr.Gid
 				changed = true
 			}
 		}
@@ -908,7 +909,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 				if ctx.Uid() != 0 {
 					return syscall.EPERM
 				}
-				cur.Uid = attr.Uid
+				dirtyNode.Uid = attr.Uid
 				changed = true
 			}
 		}
@@ -923,7 +924,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 					(cur.Mode&01777 != attr.Mode&01777 || attr.Mode&02000 > cur.Mode&02000 || attr.Mode&04000 > cur.Mode&04000) {
 					return syscall.EPERM
 				}
-				cur.Mode = attr.Mode
+				dirtyNode.Mode = attr.Mode
 				changed = true
 			}
 		}
@@ -934,7 +935,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
-			cur.Atime = now
+			dirtyNode.Atime = now
 			changed = true
 		} else if set&SetAttrAtime != 0 && cur.Atime != attr.Atime {
 			if cur.Uid == 0 && ctx.Uid() != 0 {
@@ -943,14 +944,14 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
-			cur.Atime = attr.Atime*1e6 + int64(attr.Atimensec)/1e3
+			dirtyNode.Atime = attr.Atime*1e6 + int64(attr.Atimensec)/1e3
 			changed = true
 		}
 		if set&SetAttrMtimeNow != 0 || (set&SetAttrMtime) != 0 && attr.Mtime < 0 {
 			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
-			cur.Mtime = now
+			dirtyNode.Mtime = now
 			changed = true
 		} else if set&SetAttrMtime != 0 && cur.Mtime != attr.Mtime {
 			if cur.Uid == 0 && ctx.Uid() != 0 {
@@ -959,21 +960,21 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
-			cur.Mtime = attr.Mtime*1e6 + int64(attr.Mtimensec)/1e3
+			dirtyNode.Mtime = attr.Mtime*1e6 + int64(attr.Mtimensec)/1e3
 			changed = true
 		}
 		if set&SetAttrFlag != 0 {
-			cur.Flags = attr.Flags
+			dirtyNode.Flags = attr.Flags
 			changed = true
 		}
-		m.parseAttr(&cur, attr)
 		if !changed {
+			m.parseAttr(&cur, attr)
 			return nil
 		}
-		cur.Ctime = now
-		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime").Update(&cur, &node{Inode: inode})
+		dirtyNode.Ctime = now
+		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime").Update(&dirtyNode, &node{Inode: inode})
 		if err == nil {
-			m.parseAttr(&cur, attr)
+			m.parseAttr(&dirtyNode, attr)
 		}
 		return err
 	}))

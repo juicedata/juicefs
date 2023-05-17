@@ -1112,12 +1112,13 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			return err
 		}
 		m.parseAttr(a, &cur)
+		dirtyAttr := cur
 		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 			attr.Mode |= (cur.Mode & 06000)
 		}
 		var changed bool
 		if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
-			clearSUGID(ctx, &cur, attr)
+			clearSUGID(ctx, &dirtyAttr, attr)
 			changed = true
 		}
 		if set&SetAttrGID != 0 {
@@ -1128,7 +1129,7 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 				if ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
 					return syscall.EPERM
 				}
-				cur.Gid = attr.Gid
+				dirtyAttr.Gid = attr.Gid
 				changed = true
 			}
 		}
@@ -1137,7 +1138,7 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 				if ctx.Uid() != 0 {
 					return syscall.EPERM
 				}
-				cur.Uid = attr.Uid
+				dirtyAttr.Uid = attr.Uid
 				changed = true
 			}
 		}
@@ -1152,7 +1153,7 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 					(cur.Mode&01777 != attr.Mode&01777 || attr.Mode&02000 > cur.Mode&02000 || attr.Mode&04000 > cur.Mode&04000) {
 					return syscall.EPERM
 				}
-				cur.Mode = attr.Mode
+				dirtyAttr.Mode = attr.Mode
 				changed = true
 			}
 		}
@@ -1161,8 +1162,8 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
-			cur.Atime = now.Unix()
-			cur.Atimensec = uint32(now.Nanosecond())
+			dirtyAttr.Atime = now.Unix()
+			dirtyAttr.Atimensec = uint32(now.Nanosecond())
 			changed = true
 		} else if set&SetAttrAtime != 0 && (cur.Atime != attr.Atime || cur.Atimensec != attr.Atimensec) {
 			if cur.Uid == 0 && ctx.Uid() != 0 {
@@ -1171,16 +1172,16 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
-			cur.Atime = attr.Atime
-			cur.Atimensec = attr.Atimensec
+			dirtyAttr.Atime = attr.Atime
+			dirtyAttr.Atimensec = attr.Atimensec
 			changed = true
 		}
 		if set&SetAttrMtimeNow != 0 || (set&SetAttrMtime) != 0 && attr.Mtime < 0 {
 			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
-			cur.Mtime = now.Unix()
-			cur.Mtimensec = uint32(now.Nanosecond())
+			dirtyAttr.Mtime = now.Unix()
+			dirtyAttr.Mtimensec = uint32(now.Nanosecond())
 			changed = true
 		} else if set&SetAttrMtime != 0 && (cur.Mtime != attr.Mtime || cur.Mtimensec != attr.Mtimensec) {
 			if cur.Uid == 0 && ctx.Uid() != 0 {
@@ -1189,26 +1190,26 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
-			cur.Mtime = attr.Mtime
-			cur.Mtimensec = attr.Mtimensec
+			dirtyAttr.Mtime = attr.Mtime
+			dirtyAttr.Mtimensec = attr.Mtimensec
 			changed = true
 		}
 		if set&SetAttrFlag != 0 {
-			cur.Flags = attr.Flags
+			dirtyAttr.Flags = attr.Flags
 			changed = true
 		}
 		if !changed {
 			*attr = cur
 			return nil
 		}
-		cur.Ctime = now.Unix()
-		cur.Ctimensec = uint32(now.Nanosecond())
+		dirtyAttr.Ctime = now.Unix()
+		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&cur), 0)
+			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&dirtyAttr), 0)
 			return nil
 		})
 		if err == nil {
-			*attr = cur
+			*attr = dirtyAttr
 		}
 		return err
 	}, m.inodeKey(inode)))
