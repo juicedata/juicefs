@@ -904,11 +904,6 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 		if st := m.GetAttr(ctx, root, &attr); st != 0 {
 			return st
 		}
-		if root == ino {
-			if st := m.Access(ctx, root, MODE_MASK_R|MODE_MASK_X, &attr); st != 0 {
-				return st
-			}
-		}
 		if root == RootInode {
 			attr.Parent = 0
 		}
