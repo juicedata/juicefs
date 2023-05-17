@@ -149,16 +149,19 @@ func TestDownload(t *testing.T) {
 			res := make([]byte, 1)
 			pr.key = "notExist"
 			n, err := pr.Read(res)
+			logger.Infof("test download not exist file:n: %d, err: %v", n, err)
 			if !os.IsNotExist(err) || n != 0 {
 				t.Fatalf("err should be ErrNotExist or n should equal 0")
 			}
 		}},
 	}
 
-	for _, c := range tcases {
-		content := make([]byte, c.config.fsize)
-		rand.Read(content)
-		_ = a.Put(key, bytes.NewReader(content))
-		c.tfunc(t, newParallelDownloader(a, key, c.config.fsize, c.blockSize, make(chan int, c.concurrent)), content)
+	for i := 0; i < 20; i++ {
+		for _, c := range tcases {
+			content := make([]byte, c.config.fsize)
+			rand.Read(content)
+			_ = a.Put(key, bytes.NewReader(content))
+			c.tfunc(t, newParallelDownloader(a, key, c.config.fsize, c.blockSize, make(chan int, c.concurrent)), content)
+		}
 	}
 }
