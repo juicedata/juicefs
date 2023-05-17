@@ -28,32 +28,12 @@ on:
         default: false
 
 jobs:
-  build-matrix:
-    runs-on: ubuntu-20.04
-    steps:
-      - id: set-matrix
-        run: |
-          echo "github.event_name is ${{github.event_name}}"
-          echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
-          if [ "${{github.event_name}}" == "schedule"  ]; then
-            echo 'meta_matrix=["sqlite3", "redis", "tikv"]' >> $GITHUB_OUTPUT
-          elif [ "${{github.event_name}}" == "pull_request"  ]; then
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
-          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
-          else
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
-          fi
-    outputs:
-      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
-
   pjdfstest:
     needs: build-matrix
     strategy:
       fail-fast: false
       matrix:
-        # [ 'sqlite3', 'redis', tikv']
-        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
+        meta: [ 'sqlite3', 'redis', badger']
     
     runs-on: ubuntu-20.04
     steps:
@@ -68,13 +48,7 @@ jobs:
 
       - name: Set Variable
         id: vars
-        run: |
-          if [ "${{matrix.meta}}" == "fdb" ]; then
-            echo "target=juicefs.fdb" >> $GITHUB_OUTPUT
-          else
-            echo "target=juicefs" >> $GITHUB_OUTPUT
-          fi
-
+        run: echo "target=juicefs" >> $GITHUB_OUTPUT
       - name: Build
         uses: ./.github/actions/build
         with: 
