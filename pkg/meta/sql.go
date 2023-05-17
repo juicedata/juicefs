@@ -1686,7 +1686,6 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); st != 0 {
 			return st
 		}
-
 		var se = edge{Parent: parentSrc, Name: []byte(nameSrc)}
 		ok, err := s.ForUpdate().Get(&se)
 		if err != nil {
@@ -1724,11 +1723,13 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				return syscall.EACCES
 			}
 		}
-
 		if (sn.Flags&FlagAppend) != 0 || (sn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
 
+		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); st != 0 {
+			return st
+		}
 		var de = edge{Parent: parentDst, Name: []byte(nameDst)}
 		ok, err = s.ForUpdate().Get(&de)
 		if err != nil {
@@ -1757,13 +1758,6 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if !ok { // corrupt entry
 				logger.Warnf("no attribute for inode %d (%d, %s)", dino, parentDst, de.Name)
 				trash = 0
-			}
-			if ok {
-				var dattr Attr
-				m.parseAttr(&dn, &dattr)
-				if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
-					return st
-				}
 			}
 			if (dn.Flags&FlagAppend) != 0 || (dn.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
