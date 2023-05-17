@@ -724,7 +724,7 @@ func (m *redisMeta) handleLuaResult(op string, res interface{}, err error, retur
 }
 
 func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	if m.conf.StrictPermCheck {
+	if ctx.CheckPermission() {
 		if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
 			return st
 		}
@@ -1123,11 +1123,11 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			changed = true
 		}
 		if set&SetAttrGID != 0 {
-			if ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
+			if ctx.CheckPermission() && ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
 				return syscall.EPERM
 			}
 			if cur.Gid != attr.Gid {
-				if m.conf.StrictPermCheck && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
+				if ctx.CheckPermission() && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
 					return syscall.EPERM
 				}
 				dirtyAttr.Gid = attr.Gid
@@ -1136,7 +1136,7 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 		}
 		if set&SetAttrUID != 0 {
 			if cur.Uid != attr.Uid {
-				if ctx.Uid() != 0 {
+				if ctx.CheckPermission() && ctx.Uid() != 0 {
 					return syscall.EPERM
 				}
 				dirtyAttr.Uid = attr.Uid
@@ -1150,7 +1150,7 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 				}
 			}
 			if attr.Mode != cur.Mode {
-				if ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
+				if ctx.CheckPermission() && ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
 					(cur.Mode&01777 != attr.Mode&01777 || attr.Mode&02000 > cur.Mode&02000 || attr.Mode&04000 > cur.Mode&04000) {
 					return syscall.EPERM
 				}
@@ -1160,17 +1160,17 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 		}
 		now := time.Now()
 		if set&SetAttrAtimeNow != 0 || (set&SetAttrAtime) != 0 && attr.Atime < 0 {
-			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.Uid() != cur.Uid && st != 0 {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
 			dirtyAttr.Atime = now.Unix()
 			dirtyAttr.Atimensec = uint32(now.Nanosecond())
 			changed = true
 		} else if set&SetAttrAtime != 0 && (cur.Atime != attr.Atime || cur.Atimensec != attr.Atimensec) {
-			if cur.Uid == 0 && ctx.Uid() != 0 {
+			if ctx.CheckPermission() && cur.Uid == 0 && ctx.Uid() != 0 {
 				return syscall.EPERM
 			}
-			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.Uid() != cur.Uid && st != 0 {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
 			dirtyAttr.Atime = attr.Atime
@@ -1178,17 +1178,17 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			changed = true
 		}
 		if set&SetAttrMtimeNow != 0 || (set&SetAttrMtime) != 0 && attr.Mtime < 0 {
-			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.Uid() != cur.Uid && st != 0 {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
 			dirtyAttr.Mtime = now.Unix()
 			dirtyAttr.Mtimensec = uint32(now.Nanosecond())
 			changed = true
 		} else if set&SetAttrMtime != 0 && (cur.Mtime != attr.Mtime || cur.Mtimensec != attr.Mtimensec) {
-			if cur.Uid == 0 && ctx.Uid() != 0 {
+			if ctx.CheckPermission() && cur.Uid == 0 && ctx.Uid() != 0 {
 				return syscall.EPERM
 			}
-			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.Uid() != cur.Uid && st != 0 {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
 			dirtyAttr.Mtime = attr.Mtime
@@ -1457,7 +1457,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		}
 		if rs[1] != nil {
 			m.parseAttr([]byte(rs[1].(string)), attr)
-			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
+			if ctx.CheckPermission() && ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
 			if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
@@ -1596,7 +1596,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, s
 		}
 		if rs[1] != nil {
 			m.parseAttr([]byte(rs[1].(string)), &attr)
-			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
+			if ctx.CheckPermission() && ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
 			if trash > 0 {
@@ -1730,10 +1730,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if (sattr.Flags&FlagAppend) != 0 || (sattr.Flags&FlagImmutable) != 0 || (dattr.Flags&FlagImmutable) != 0 || (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		if parentSrc != parentDst && sattr.Mode&0o1000 != 0 && ctx.Uid() != 0 {
-			if ctx.Uid() != iattr.Uid && (ctx.Uid() != sattr.Uid || iattr.Typ == TypeDirectory) {
-				return syscall.EACCES
-			}
+		if ctx.CheckPermission() && parentSrc != parentDst && sattr.Mode&0o1000 != 0 && ctx.Uid() != 0 &&
+			ctx.Uid() != iattr.Uid && (ctx.Uid() != sattr.Uid || iattr.Typ == TypeDirectory) {
+			return syscall.EACCES
 		}
 
 		var supdate, dupdate bool
@@ -1787,7 +1786,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 					}
 				}
 			}
-			if ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
+			if ctx.CheckPermission() && ctx.Uid() != 0 && dattr.Mode&01000 != 0 && ctx.Uid() != dattr.Uid && ctx.Uid() != tattr.Uid {
 				return syscall.EACCES
 			}
 		} else {
@@ -1795,7 +1794,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				return syscall.ENOENT
 			}
 		}
-		if ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
+		if ctx.CheckPermission() && ctx.Uid() != 0 && sattr.Mode&01000 != 0 && ctx.Uid() != sattr.Uid && ctx.Uid() != iattr.Uid {
 			return syscall.EACCES
 		}
 
@@ -1934,7 +1933,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		if pattr.Flags&FlagImmutable != 0 {
@@ -1991,7 +1990,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 }
 
 func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
-	if m.conf.StrictPermCheck {
+	if ctx.CheckPermission() {
 		var mmask uint8 = MODE_MASK_R
 		if plus != 0 {
 			mmask |= MODE_MASK_X

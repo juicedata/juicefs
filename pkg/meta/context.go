@@ -38,6 +38,7 @@ type Context interface {
 	WithValue(k, v interface{})
 	Cancel()
 	Canceled() bool
+	CheckPermission() bool
 }
 
 var Background Context = WrapContext(context.Background())
@@ -76,6 +77,10 @@ func (c *wrapContext) Canceled() bool {
 
 func (c *wrapContext) WithValue(k, v interface{}) {
 	c.Context = context.WithValue(c.Context, k, v)
+}
+
+func (c *wrapContext) CheckPermission() bool {
+	return false
 }
 
 func NewContext(pid, uid uint32, gids []uint32) Context {

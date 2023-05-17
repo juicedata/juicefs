@@ -32,20 +32,19 @@ import (
 
 // Config for clients.
 type Config struct {
-	Strict          bool // update ctime
-	Retries         int
-	MaxDeletes      int
-	SkipDirNlink    int
-	CaseInsensi     bool
-	ReadOnly        bool
-	NoBGJob         bool // disable background jobs like clean-up, backup, etc.
-	OpenCache       time.Duration
-	OpenCacheLimit  uint64 // max number of files to cache (soft limit)
-	Heartbeat       time.Duration
-	MountPoint      string
-	Subdir          string
-	AtimeMode       string
-	StrictPermCheck bool `json:",omitempty"`
+	Strict         bool // update ctime
+	Retries        int
+	MaxDeletes     int
+	SkipDirNlink   int
+	CaseInsensi    bool
+	ReadOnly       bool
+	NoBGJob        bool // disable background jobs like clean-up, backup, etc.
+	OpenCache      time.Duration
+	OpenCacheLimit uint64 // max number of files to cache (soft limit)
+	Heartbeat      time.Duration
+	MountPoint     string
+	Subdir         string
+	AtimeMode      string
 }
 
 func DefaultConf() *Config {

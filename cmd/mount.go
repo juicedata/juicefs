@@ -590,7 +590,6 @@ func mount(c *cli.Context) error {
 
 	metaConf := getMetaConf(c, mp, c.Bool("read-only") || utils.StringContains(strings.Split(c.String("o"), ","), "ro"))
 	metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
-	metaConf.StrictPermCheck = c.IsSet("root-squash") || c.Bool("non-default-permission")
 	metaCli := meta.NewClient(addr, metaConf)
 	format, err := metaCli.Load(true)
 	if err != nil {

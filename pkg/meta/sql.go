@@ -807,7 +807,7 @@ func (m *dbMeta) flushStats() {
 
 func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.roTxn(func(s *xorm.Session) error {
-		if m.conf.StrictPermCheck {
+		if ctx.CheckPermission() {
 			if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
 				return st
 			}
@@ -895,11 +895,11 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 			changed = true
 		}
 		if set&SetAttrGID != 0 {
-			if ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
+			if ctx.CheckPermission() && ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
 				return syscall.EPERM
 			}
 			if cur.Gid != attr.Gid {
-				if m.conf.StrictPermCheck && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
+				if ctx.CheckPermission() && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
 					return syscall.EPERM
 				}
 				dirtyNode.Gid = attr.Gid
@@ -908,7 +908,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		}
 		if set&SetAttrUID != 0 {
 			if cur.Uid != attr.Uid {
-				if ctx.Uid() != 0 {
+				if ctx.CheckPermission() && ctx.Uid() != 0 {
 					return syscall.EPERM
 				}
 				dirtyNode.Uid = attr.Uid
@@ -922,7 +922,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 				}
 			}
 			if attr.Mode != cur.Mode {
-				if ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
+				if ctx.CheckPermission() && ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
 					(cur.Mode&01777 != attr.Mode&01777 || attr.Mode&02000 > cur.Mode&02000 || attr.Mode&04000 > cur.Mode&04000) {
 					return syscall.EPERM
 				}
@@ -934,32 +934,32 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		m.parseAttr(&cur, &curAttr)
 		now := time.Now().UnixNano() / 1e3
 		if set&SetAttrAtimeNow != 0 || (set&SetAttrAtime) != 0 && attr.Atime < 0 {
-			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.Uid() != cur.Uid && st != 0 {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
 			dirtyNode.Atime = now
 			changed = true
 		} else if set&SetAttrAtime != 0 && cur.Atime != attr.Atime {
-			if cur.Uid == 0 && ctx.Uid() != 0 {
+			if ctx.CheckPermission() && cur.Uid == 0 && ctx.Uid() != 0 {
 				return syscall.EPERM
 			}
-			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.Uid() != cur.Uid && st != 0 {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
 			dirtyNode.Atime = attr.Atime*1e6 + int64(attr.Atimensec)/1e3
 			changed = true
 		}
 		if set&SetAttrMtimeNow != 0 || (set&SetAttrMtime) != 0 && attr.Mtime < 0 {
-			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.Uid() != cur.Uid && st != 0 {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
 			dirtyNode.Mtime = now
 			changed = true
 		} else if set&SetAttrMtime != 0 && cur.Mtime != attr.Mtime {
-			if cur.Uid == 0 && ctx.Uid() != 0 {
+			if ctx.CheckPermission() && cur.Uid == 0 && ctx.Uid() != 0 {
 				return syscall.EPERM
 			}
-			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.Uid() != cur.Uid && st != 0 {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
 				return syscall.EACCES
 			}
 			dirtyNode.Mtime = attr.Mtime*1e6 + int64(attr.Mtimensec)/1e3
@@ -1431,7 +1431,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		}
 		now := time.Now().UnixNano() / 1e3
 		if ok {
-			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+			if ctx.CheckPermission() && ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
 				return syscall.EACCES
 			}
 			if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
@@ -1587,7 +1587,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		}
 		now := time.Now().UnixNano() / 1e3
 		if ok {
-			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+			if ctx.CheckPermission() && ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
 				return syscall.EACCES
 			}
 			if trash > 0 {
@@ -1720,10 +1720,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		}
 		var sattr Attr
 		m.parseAttr(&sn, &sattr)
-		if parentSrc != parentDst && spattr.Mode&0o1000 != 0 && ctx.Uid() != 0 {
-			if ctx.Uid() != sattr.Uid && (ctx.Uid() != spattr.Uid || sattr.Typ == TypeDirectory) {
-				return syscall.EACCES
-			}
+		if ctx.CheckPermission() && parentSrc != parentDst && spattr.Mode&0o1000 != 0 && ctx.Uid() != 0 &&
+			ctx.Uid() != sattr.Uid && (ctx.Uid() != spattr.Uid || sattr.Typ == TypeDirectory) {
+			return syscall.EACCES
 		}
 		if (sn.Flags&FlagAppend) != 0 || (sn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
@@ -1802,7 +1801,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 					}
 				}
 			}
-			if ctx.Uid() != 0 && dpn.Mode&01000 != 0 && ctx.Uid() != dpn.Uid && ctx.Uid() != dn.Uid {
+			if ctx.CheckPermission() && ctx.Uid() != 0 && dpn.Mode&01000 != 0 && ctx.Uid() != dpn.Uid && ctx.Uid() != dn.Uid {
 				return syscall.EACCES
 			}
 		} else {
@@ -1810,7 +1809,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				return syscall.ENOENT
 			}
 		}
-		if ctx.Uid() != 0 && spn.Mode&01000 != 0 && ctx.Uid() != spn.Uid && ctx.Uid() != sn.Uid {
+		if ctx.CheckPermission() && ctx.Uid() != 0 && spn.Mode&01000 != 0 && ctx.Uid() != spn.Uid && ctx.Uid() != sn.Uid {
 			return syscall.EACCES
 		}
 
@@ -2019,7 +2018,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	return errno(m.roTxn(func(s *xorm.Session) error {
-		if m.conf.StrictPermCheck {
+		if ctx.CheckPermission() {
 			var mmask uint8 = MODE_MASK_R
 			if plus != 0 {
 				mmask |= MODE_MASK_X
