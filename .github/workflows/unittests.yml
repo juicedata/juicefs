@@ -91,18 +91,9 @@ jobs:
             sudo mysql -e "create database dev;"
             
             for i in {2379,3306}; do
-            echo "lsof port:"$i
-            sudo lsof -i :$i
-            if [ $? != 0 ]; then
-              sleep 5
-            else
-              continue
-            fi
-            sudo lsof -i :$i
-              if [ $? != 0 ]; then
-            echo "service not ready, port:"$i
-              exit 1
-            fi
+              echo "lsof port:"$i
+              sudo lsof -i :$i && continue || sleep 5
+              sudo lsof -i :$i || echo "service not ready, port:"$i && exit 1
             done
             ;;
             "test.meta.non-core")
@@ -139,18 +130,9 @@ jobs:
               
               for i in {3379,6377,6378}; do
                 echo "lsof port:"$i
-                sudo lsof -i :$i
-                if [ $? != 0 ]; then
-                  sleep 5
-                else
-                  continue
-                fi
-                sudo lsof -i :$i
-                if [ $? != 0 ]; then
-                  echo "service not ready, port:"$i
-                exit 1
-              fi
-            done
+                sudo lsof -i :$i && continue || sleep 5
+                sudo lsof -i :$i || echo "service not ready, port:"$i && exit 1
+              done
             ;;
             "test.cmd")
               # minio
@@ -171,17 +153,8 @@ jobs:
               sudo dpkg -i /home/travis/.m2/foundationdb-clients_6.3.23-1_amd64.deb /home/travis/.m2/foundationdb-server_6.3.23-1_amd64.deb
               for i in {4500,}; do
                 echo "lsof port:"$i
-                sudo lsof -i :$i
-                if [ $? != 0 ]; then
-                  sleep 5
-                else
-                  continue
-                fi
-                sudo lsof -i :$i
-                if [ $? != 0 ]; then
-                  echo "service not ready, port:"$i
-                  exit 1
-                fi
+                sudo lsof -i :$i && continue || sleep 5
+                sudo lsof -i :$i || echo "service not ready, port:"$i && exit 1
               done
               ;;
             "test.pkg")
@@ -226,22 +199,12 @@ jobs:
               
               # hdfs
               chmod +x .github/scripts/setup-hdfs.sh
-              sudo lsof -i :8020 || true
               ./.github/scripts/setup-hdfs.sh
-            
+              
               for i in {2222,8020,9000,9007,2379}; do
                 echo "lsof port:"$i
-                sudo lsof -i :$i
-                if [ $? != 0 ]; then
-                  sleep 5
-                else
-                  continue
-                fi
-                sudo lsof -i :$i
-                if [ $? != 0 ]; then
-                  echo "service not ready, port:"$i
-                  exit 1
-                fi
+                sudo lsof -i :$i && continue || sleep 5
+                sudo lsof -i :$i || echo "service not ready, port:"$i && exit 1
               done
               ;;
             *)
