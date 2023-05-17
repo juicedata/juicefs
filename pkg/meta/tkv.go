@@ -1813,7 +1813,7 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		if plus != 0 {
 			mmask |= MODE_MASK_X
 		}
-		if st := m.Access(ctx, inode, mmask, nil); ctx.CheckPermission() && st != 0 {
+		if st := m.Access(ctx, inode, mmask, nil); st != 0 {
 			return st
 		}
 	}
