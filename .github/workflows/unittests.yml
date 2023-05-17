@@ -93,7 +93,7 @@ jobs:
             for i in {2379,3306}; do
               echo "lsof port:"$i
               sudo lsof -i :$i && continue || sleep 5
-              sudo lsof -i :$i || echo "service not ready, port:"$i && exit 1
+              sudo lsof -i :$i || ( echo "service not ready, port:"$i && exit 1 )
             done
             ;;
             "test.meta.non-core")
@@ -131,7 +131,7 @@ jobs:
               for i in {3379,6377,6378}; do
                 echo "lsof port:"$i
                 sudo lsof -i :$i && continue || sleep 5
-                sudo lsof -i :$i || echo "service not ready, port:"$i && exit 1
+                sudo lsof -i :$i || ( echo "service not ready, port:"$i && exit 1 )
               done
             ;;
             "test.cmd")
@@ -154,7 +154,7 @@ jobs:
               for i in {4500,}; do
                 echo "lsof port:"$i
                 sudo lsof -i :$i && continue || sleep 5
-                sudo lsof -i :$i || echo "service not ready, port:"$i && exit 1
+                sudo lsof -i :$i || ( echo "service not ready, port:"$i && exit 1 )
               done
               ;;
             "test.pkg")
@@ -204,7 +204,7 @@ jobs:
               for i in {2222,8020,9000,9007,2379}; do
                 echo "lsof port:"$i
                 sudo lsof -i :$i && continue || sleep 5
-                sudo lsof -i :$i || echo "service not ready, port:"$i && exit 1
+                sudo lsof -i :$i || ( echo "service not ready, port:"$i && exit 1 )
               done
               ;;
             *)
