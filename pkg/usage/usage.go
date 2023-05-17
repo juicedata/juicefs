@@ -88,6 +88,6 @@ func ReportUsage(m meta.Meta, version string) {
 		if err := sendUsage(u); err != nil {
 			logger.Debugf("send usage: %s", err)
 		}
-		time.Sleep(time.Minute * 10)
+		time.Sleep(time.Hour)
 	}
 }
