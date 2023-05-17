@@ -29,7 +29,6 @@ on:
 
 jobs:
   pjdfstest:
-    needs: build-matrix
     strategy:
       fail-fast: false
       matrix:
