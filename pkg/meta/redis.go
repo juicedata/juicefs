@@ -919,7 +919,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		if t.Typ != TypeFile {
 			return syscall.EPERM
 		}
-		if !skipPermCheck {
+		if ctx.CheckPermission() && !skipPermCheck {
 			if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
 				return st
 			}
@@ -1047,7 +1047,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		if (t.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
+		if st := m.Access(ctx, inode, MODE_MASK_W, &t); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		if (t.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {
@@ -1293,7 +1293,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		if (pattr.Flags & FlagImmutable) != 0 {
@@ -1440,7 +1440,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
@@ -1574,7 +1574,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, s
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
@@ -1716,14 +1716,14 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if sattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &sattr); st != 0 {
+		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &sattr); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		m.parseAttr([]byte(rs[1].(string)), &dattr)
 		if dattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
+		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		m.parseAttr([]byte(rs[2].(string)), &iattr)
@@ -1995,7 +1995,7 @@ func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*En
 		if plus != 0 {
 			mmask |= MODE_MASK_X
 		}
-		if st := m.Access(ctx, inode, mmask, nil); st != 0 {
+		if st := m.Access(ctx, inode, mmask, nil); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 	}

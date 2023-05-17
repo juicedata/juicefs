@@ -977,7 +977,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if t.Typ != TypeFile {
 			return syscall.EPERM
 		}
-		if !skipPermCheck {
+		if ctx.CheckPermission() && !skipPermCheck {
 			if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
 				return st
 			}
@@ -1196,7 +1196,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		if (pattr.Flags & FlagImmutable) != 0 {
@@ -1329,7 +1329,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
@@ -1453,7 +1453,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
@@ -1547,14 +1547,14 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if sattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &sattr); st != 0 {
+		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &sattr); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		m.parseAttr(rs[1], &dattr)
 		if dattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
+		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		m.parseAttr(rs[2], &iattr)
@@ -1758,7 +1758,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 		if pattr.Flags&FlagImmutable != 0 {
@@ -1813,7 +1813,7 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		if plus != 0 {
 			mmask |= MODE_MASK_X
 		}
-		if st := m.Access(ctx, inode, mmask, nil); st != 0 {
+		if st := m.Access(ctx, inode, mmask, nil); ctx.CheckPermission() && st != 0 {
 			return st
 		}
 	}
