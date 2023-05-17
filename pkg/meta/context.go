@@ -80,7 +80,7 @@ func (c *wrapContext) WithValue(k, v interface{}) {
 }
 
 func (c *wrapContext) CheckPermission() bool {
-	return false
+	return true
 }
 
 func NewContext(pid, uid uint32, gids []uint32) Context {
