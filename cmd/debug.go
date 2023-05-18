@@ -468,11 +468,7 @@ func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDi
 		logger.Warnf("Collecting log currently only support Linux/macOS")
 		return nil
 	}
-	matched, err := regexp.MatchString(`.*\s-d\s.*`, cmd)
-	if err != nil {
-		return fmt.Errorf("failed to match cmd: %v", err)
-	}
-	if !matched {
+	if !(strings.Contains(cmd, "-d") || strings.Contains(cmd, "--background")) {
 		logger.Warnf("The juicefs mount by foreground, the log will not be collected")
 		return nil
 	}
@@ -488,11 +484,7 @@ func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDi
 }
 
 func collectSysInfo(ctx *cli.Context, currDir string) error {
-	sysInfo, err := utils.GetSysInfo()
-	if err != nil {
-		return err
-	}
-
+	sysInfo := utils.GetSysInfo()
 	result := fmt.Sprintf(`Platform: 
 %s %s
 %s`, runtime.GOOS, runtime.GOARCH, sysInfo)

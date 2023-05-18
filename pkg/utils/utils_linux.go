@@ -18,7 +18,6 @@ package utils
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -47,29 +46,22 @@ func GetKernelVersion() (major, minor int) {
 	return
 }
 
-func GetSysInfo() (string, error) {
+func GetSysInfo() string {
 	var (
 		kernel    []byte
 		osVersion []byte
 		err       error
 	)
 
-	procPath := "/proc/version"
-	if _, err := os.Stat(procPath); err == nil {
-		kernel, err = exec.Command("cat", procPath).Output()
-		if err != nil {
-			return "", fmt.Errorf("failed to execute command `cat %s`: %s", procPath, err)
-		}
-	}
+	kernel, _ = exec.Command("cat", "/proc/version").Output()
 
-	osVersion, err = exec.Command("lsb_release", "-a").Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to execute command `lsb_release`: %s", err)
+	if osVersion, err = exec.Command("lsb_release", "-a").Output(); err != nil {
+		osVersion, _ = exec.Command("cat", "/etc/os-release").Output()
 	}
 
 	return fmt.Sprintf(`
 Kernel: 
 %s
 OS: 
-%s`, kernel, osVersion), nil
+%s`, kernel, osVersion)
 }
