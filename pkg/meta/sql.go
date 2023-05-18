@@ -1426,7 +1426,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		}
 		now := time.Now().UnixNano() / 1e3
 		if ok {
-			if ctx.CheckPermission() && ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
 				return syscall.EACCES
 			}
 			if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
@@ -1582,7 +1582,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		}
 		now := time.Now().UnixNano() / 1e3
 		if ok {
-			if ctx.CheckPermission() && ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
+			if ctx.Uid() != 0 && pn.Mode&01000 != 0 && ctx.Uid() != pn.Uid && ctx.Uid() != n.Uid {
 				return syscall.EACCES
 			}
 			if trash > 0 {
@@ -1803,6 +1803,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			if exchange {
 				return syscall.ENOENT
 			}
+		}
+		if ctx.Uid() != 0 && spn.Mode&01000 != 0 && ctx.Uid() != spn.Uid && ctx.Uid() != sn.Uid {
+			return syscall.EACCES
 		}
 
 		if parentSrc != parentDst {

@@ -704,7 +704,7 @@ func testStickyBit(t *testing.T, m Meta) {
 	// file
 	m.Create(ctxA, sticky, "f", 0777, 0, 0, &inode, attr)
 	m.Create(ctxA, normal, "f", 0777, 0, 0, &inode, attr)
-	ctxB := NewContext(1, 2, []uint32{1})
+	ctxB := NewContext(1, 2, []uint32{2})
 	if e := m.Unlink(ctxB, sticky, "f"); e != syscall.EACCES {
 		t.Fatalf("unlink f: %s", e)
 	}
