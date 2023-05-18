@@ -156,7 +156,7 @@ func TestDownload(t *testing.T) {
 		}},
 	}
 
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 100; i++ {
 		for _, c := range tcases {
 			content := make([]byte, c.config.fsize)
 			rand.Read(content)
