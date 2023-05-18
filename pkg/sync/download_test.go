@@ -45,6 +45,7 @@ func TestDownload(t *testing.T) {
 
 	tcases := []tcase{
 		{config: config{fsize: 1110, concurrent: 4, blockSize: 300}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+			defer pr.Close()
 			res, err := io.ReadAll(pr)
 			if err != nil {
 				t.Fatal(err)
@@ -55,6 +56,7 @@ func TestDownload(t *testing.T) {
 		}},
 
 		{config: config{fsize: 97340326, concurrent: 4, blockSize: 5 << 20}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+			defer pr.Close()
 			res, err := io.ReadAll(pr)
 			if err != nil {
 				t.Fatal(err)
@@ -65,6 +67,7 @@ func TestDownload(t *testing.T) {
 		}},
 
 		{config: config{fsize: 1110, concurrent: 5, blockSize: 300}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+			defer pr.Close()
 			res, err := io.ReadAll(pr)
 			if err != nil {
 				t.Fatal(err)
@@ -75,6 +78,7 @@ func TestDownload(t *testing.T) {
 		}},
 
 		{config: config{fsize: 1, concurrent: 5, blockSize: 10}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+			defer pr.Close()
 			res := make([]byte, 1)
 			n, err := pr.Read(res)
 			if err != nil || n != 1 || res[0] != content[0] {
@@ -87,6 +91,7 @@ func TestDownload(t *testing.T) {
 		}},
 
 		{config: config{fsize: 2, concurrent: 5, blockSize: 10}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+			defer pr.Close()
 			res := make([]byte, 1)
 			n, err := pr.Read(res)
 			if err != nil || n != 1 || res[0] != content[0] {
@@ -103,6 +108,7 @@ func TestDownload(t *testing.T) {
 		}},
 
 		{config: config{fsize: 2, concurrent: 1, blockSize: 10}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+			defer pr.Close()
 			res := make([]byte, 1)
 			n, err := pr.Read(res)
 
@@ -120,6 +126,7 @@ func TestDownload(t *testing.T) {
 		}},
 
 		{config: config{fsize: 1000, concurrent: 3, blockSize: 5}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+			defer pr.Close()
 			res := make([]byte, 20)
 			n, err := io.ReadFull(pr, res)
 
@@ -139,6 +146,7 @@ func TestDownload(t *testing.T) {
 		}},
 
 		{config: config{fsize: 0, concurrent: 5, blockSize: 10}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+			defer pr.Close()
 			res := make([]byte, 1)
 			n, err := pr.Read(res)
 			if err != io.EOF || n != 0 {
@@ -147,6 +155,7 @@ func TestDownload(t *testing.T) {
 		}},
 
 		{config: config{fsize: 100, concurrent: 5, blockSize: 10}, tfunc: func(t *testing.T, pr *parallelDownloader, content []byte) {
+			defer pr.Close()
 			res := make([]byte, 1)
 			pr.key = "notExist"
 			n, err := pr.Read(res)
