@@ -256,7 +256,7 @@ func updateLocks(ls []plockRecord, nl plockRecord) []plockRecord {
 }
 
 func (m *baseMeta) emptyDir(ctx Context, inode Ino, skipCheckTrash bool, count *uint64, concurrent chan int) syscall.Errno {
-	if st := m.Access(ctx, inode, 3, nil); st != 0 {
+	if st := m.Access(ctx, inode, MODE_MASK_W|MODE_MASK_X, nil); st != 0 {
 		return st
 	}
 	for {
@@ -330,12 +330,12 @@ func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, s
 
 func (m *baseMeta) Remove(ctx Context, parent Ino, name string, count *uint64) syscall.Errno {
 	parent = m.checkRoot(parent)
-	if st := m.Access(ctx, parent, 3, nil); st != 0 {
+	if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, nil); st != 0 {
 		return st
 	}
 	var inode Ino
 	var attr Attr
-	if st := m.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
+	if st := m.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
 		return st
 	}
 	if attr.Typ != TypeDirectory {

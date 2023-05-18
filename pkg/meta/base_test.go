@@ -188,19 +188,19 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Rmdir(ctx, parent, ".."); st != syscall.ENOTEMPTY {
 		t.Fatalf("unlink d..: %s", st)
 	}
-	if st := m.Lookup(ctx, 1, "d", &parent, attr); st != 0 {
+	if st := m.Lookup(ctx, 1, "d", &parent, attr, true); st != 0 {
 		t.Fatalf("lookup d: %s", st)
 	}
-	if st := m.Lookup(ctx, 1, "d", &parent, nil); st != syscall.EINVAL {
+	if st := m.Lookup(ctx, 1, "d", &parent, nil, true); st != syscall.EINVAL {
 		t.Fatalf("lookup d: %s", st)
 	}
-	if st := m.Lookup(ctx, 1, "..", &inode, attr); st != 0 || inode != 1 {
+	if st := m.Lookup(ctx, 1, "..", &inode, attr, true); st != 0 || inode != 1 {
 		t.Fatalf("lookup ..: %s", st)
 	}
-	if st := m.Lookup(ctx, parent, ".", &inode, attr); st != 0 || inode != parent {
+	if st := m.Lookup(ctx, parent, ".", &inode, attr, true); st != 0 || inode != parent {
 		t.Fatalf("lookup .: %s", st)
 	}
-	if st := m.Lookup(ctx, parent, "..", &inode, attr); st != 0 || inode != 1 {
+	if st := m.Lookup(ctx, parent, "..", &inode, attr, true); st != 0 || inode != 1 {
 		t.Fatalf("lookup ..: %s", st)
 	}
 	if attr.Nlink != 3 {
@@ -214,10 +214,10 @@ func testMetaClient(t *testing.T, m Meta) {
 	}
 	_ = m.Close(ctx, inode)
 	var tino Ino
-	if st := m.Lookup(ctx, inode, ".", &tino, attr); st != 0 {
+	if st := m.Lookup(ctx, inode, ".", &tino, attr, true); st != 0 {
 		t.Fatalf("lookup /d/f/.: %s", st)
 	}
-	if st := m.Lookup(ctx, inode, "..", &tino, attr); st != syscall.ENOTDIR {
+	if st := m.Lookup(ctx, inode, "..", &tino, attr, true); st != syscall.ENOTDIR {
 		t.Fatalf("lookup /d/f/..: %s", st)
 	}
 	defer m.Unlink(ctx, parent, "f")
@@ -233,7 +233,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Mknod(ctx, parent, "f", TypeFile, 0650, 022, 0, "", &inode, attr); st != syscall.EEXIST {
 		t.Fatalf("create f: %s", st)
 	}
-	if st := m.Lookup(ctx, parent, "f", &inode, attr); st != 0 {
+	if st := m.Lookup(ctx, parent, "f", &inode, attr, true); st != 0 {
 		t.Fatalf("lookup f: %s", st)
 	}
 	if st := m.Resolve(ctx, 1, "d/f", &inode, attr); st != 0 && st != syscall.ENOTSUP {
@@ -390,7 +390,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	} else if attr.Typ != TypeDirectory {
 		t.Fatalf("after exchange d5 <-> d4/f6 type %d expect %d", attr.Typ, TypeDirectory)
 	}
-	if st := m.Lookup(ctx, 1, "d5", &inode, attr); st != 0 || attr.Parent != 1 {
+	if st := m.Lookup(ctx, 1, "d5", &inode, attr, true); st != 0 || attr.Parent != 1 {
 		t.Fatalf("lookup d5 after exchange: %s; parent %d expect 1", st, attr.Parent)
 	} else if attr.Typ != TypeFile {
 		t.Fatalf("after exchange d5 <-> d4/f6 type %d expect %d", attr.Typ, TypeFile)
@@ -404,7 +404,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "d5"); st != 0 {
 		t.Fatalf("rmdir d6 : %s", st)
 	}
-	if st := m.Lookup(ctx, 1, "f", &inode, attr); st != 0 {
+	if st := m.Lookup(ctx, 1, "f", &inode, attr, true); st != 0 {
 		t.Fatalf("lookup f: %s", st)
 	}
 	if st := m.Link(ctx, inode, 1, "f3", attr); st != 0 {
@@ -437,7 +437,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.ReadLink(ctx, parent, &target1); st != syscall.ENOENT {
 		t.Fatalf("readlink d: %s", st)
 	}
-	if st := m.Lookup(ctx, 1, "f", &inode, attr); st != 0 {
+	if st := m.Lookup(ctx, 1, "f", &inode, attr, true); st != 0 {
 		t.Fatalf("lookup f: %s", st)
 	}
 
@@ -1026,7 +1026,7 @@ func testCaseIncensi(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "Foo", 0755, 0, syscall.O_EXCL, &inode, attr); st != syscall.EEXIST {
 		t.Fatalf("create should fail with EEXIST")
 	}
-	if st := m.Lookup(ctx, 1, "Foo", &inode, attr); st != 0 {
+	if st := m.Lookup(ctx, 1, "Foo", &inode, attr, true); st != 0 {
 		t.Fatalf("lookup Foo should be OK")
 	}
 	if st := m.Rename(ctx, 1, "Foo", 1, "bar", 0, &inode, attr); st != 0 {
@@ -1038,7 +1038,7 @@ func testCaseIncensi(t *testing.T, m Meta) {
 	if st := m.Resolve(ctx, 1, "/Foo", &inode, attr); st != syscall.ENOTSUP {
 		t.Fatalf("resolve with case insensitive should be ENOTSUP")
 	}
-	if st := m.Lookup(ctx, 1, "Bar", &inode, attr); st != 0 {
+	if st := m.Lookup(ctx, 1, "Bar", &inode, attr, true); st != 0 {
 		t.Fatalf("lookup Bar should be OK")
 	}
 	if st := m.Link(ctx, inode, 1, "foo", attr); st != syscall.EEXIST {
@@ -1432,7 +1432,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f1 -> d: %s", st)
 	}
-	if st := m.Lookup(ctx, TrashInode+1, fmt.Sprintf("1-%d-d", parent), &inode, attr); st != 0 || attr.Parent != TrashInode+1 {
+	if st := m.Lookup(ctx, TrashInode+1, fmt.Sprintf("1-%d-d", parent), &inode, attr, true); st != 0 || attr.Parent != TrashInode+1 {
 		t.Fatalf("lookup subTrash/d: %s, attr %+v", st, attr)
 	}
 	if st := m.Rename(ctx, 1, "f2", TrashInode, "td", 0, &inode, attr); st != syscall.EPERM {
@@ -1455,7 +1455,7 @@ func testTrash(t *testing.T, m Meta) {
 		t.Fatalf("unlink %s: %s", lname, st)
 	}
 	tname := fmt.Sprintf("1-%d-%s", inode, lname)[:MaxName]
-	if st := m.Lookup(ctx, TrashInode+1, tname, &inode, attr); st != 0 || attr.Parent != TrashInode+1 {
+	if st := m.Lookup(ctx, TrashInode+1, tname, &inode, attr, true); st != 0 || attr.Parent != TrashInode+1 {
 		t.Fatalf("lookup subTrash/%s: %s, attr %+v", tname, st, attr)
 	}
 	var entries []*Entry
@@ -1538,7 +1538,7 @@ func testParents(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f2", 1, "l1", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> l1: %s", st)
 	}
-	if st := m.Lookup(ctx, parent, "l2", &inode, attr); st != 0 {
+	if st := m.Lookup(ctx, parent, "l2", &inode, attr, true); st != 0 {
 		t.Fatalf("lookup d/l2: %s", st)
 	}
 	if attr.Parent != 0 {
@@ -1635,7 +1635,7 @@ func testConcurrentDir(t *testing.T, m Meta) {
 			if st := m.Mkdir(ctx, 1, "d1", 0640, 022, 0, &d1, attr); st != 0 && st != syscall.EEXIST {
 				panic(fmt.Errorf("mkdir d1: %s", st))
 			} else if st == syscall.EEXIST {
-				st = m.Lookup(ctx, 1, "d1", &d1, attr)
+				st = m.Lookup(ctx, 1, "d1", &d1, attr, true)
 				if st != 0 {
 					panic(fmt.Errorf("lookup d1: %s", st))
 				}
@@ -1643,7 +1643,7 @@ func testConcurrentDir(t *testing.T, m Meta) {
 			if st := m.Mkdir(ctx, 1, "d2", 0640, 022, 0, &d2, attr); st != 0 && st != syscall.EEXIST {
 				panic(fmt.Errorf("mkdir d2: %s", st))
 			} else if st == syscall.EEXIST {
-				st = m.Lookup(ctx, 1, "d2", &d2, attr)
+				st = m.Lookup(ctx, 1, "d2", &d2, attr, true)
 				if st != 0 {
 					panic(fmt.Errorf("lookup d2: %s", st))
 				}
@@ -1668,7 +1668,7 @@ func testConcurrentDir(t *testing.T, m Meta) {
 			defer g.Done()
 			var d2 Ino
 			var attr = new(Attr)
-			st := m.Lookup(ctx, 1, "d2", &d2, attr)
+			st := m.Lookup(ctx, 1, "d2", &d2, attr, true)
 			if st != 0 {
 				panic(fmt.Errorf("lookup d2: %s", st))
 			}

@@ -301,7 +301,7 @@ func benchLookup(b *testing.B, m Meta) {
 	var attr Attr
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := m.Lookup(ctx, parent, "file", &inode, &attr); err != 0 {
+		if err := m.Lookup(ctx, parent, "file", &inode, &attr, false); err != 0 {
 			b.Fatalf("lookup: %s", err)
 		}
 	}

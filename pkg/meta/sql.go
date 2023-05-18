@@ -938,7 +938,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			return syscall.EPERM
 		}
 		m.parseAttr(&nodeAttr, attr)
-		if ctx.CheckPermission() && !skipPermCheck {
+		if !skipPermCheck {
 			if st := m.Access(ctx, inode, MODE_MASK_W, attr); st != 0 {
 				return st
 			}
@@ -1188,7 +1188,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 		var pattr Attr
 		m.parseAttr(&pn, &pattr)
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); ctx.CheckPermission() && st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
 		}
 		if (pn.Flags & FlagImmutable) != 0 {
@@ -1310,7 +1310,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		}
 		var pattr Attr
 		m.parseAttr(&pn, &pattr)
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); ctx.CheckPermission() && st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
 		}
 		if (pn.Flags&FlagAppend) != 0 || (pn.Flags&FlagImmutable) != 0 {
@@ -1457,7 +1457,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		}
 		var pattr Attr
 		m.parseAttr(&pn, &pattr)
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); ctx.CheckPermission() && st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
 		}
 		if pn.Flags&FlagImmutable != 0 || pn.Flags&FlagAppend != 0 {
@@ -1594,10 +1594,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		var spattr, dpattr Attr
 		m.parseAttr(&spn, &spattr)
 		m.parseAttr(&dpn, &dpattr)
-		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &spattr); ctx.CheckPermission() && st != 0 {
+		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &spattr); st != 0 {
 			return st
 		}
-		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); ctx.CheckPermission() && st != 0 {
+		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); st != 0 {
 			return st
 		}
 		var se = edge{Parent: parentSrc, Name: []byte(nameSrc)}
@@ -1640,7 +1640,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return syscall.EPERM
 		}
 
-		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); ctx.CheckPermission() && st != 0 {
+		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); st != 0 {
 			return st
 		}
 		var de = edge{Parent: parentDst, Name: []byte(nameDst)}
@@ -1869,7 +1869,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		}
 		var pattr Attr
 		m.parseAttr(&pn, &pattr)
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); ctx.CheckPermission() && st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
 		}
 		if pn.Flags&FlagImmutable != 0 {

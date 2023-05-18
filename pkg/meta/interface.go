@@ -337,7 +337,7 @@ type Meta interface {
 	// Access checks the access permission on given inode.
 	Access(ctx Context, inode Ino, modemask uint8, attr *Attr) syscall.Errno
 	// Lookup returns the inode and attributes for the given entry in a directory.
-	Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
+	Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr, checkPerm bool) syscall.Errno
 	// Resolve fetches the inode and attributes for an entry identified by the given path.
 	// ENOTSUP will be returned if there's no natural implementation for this operation or
 	// if there are any symlink following involved.

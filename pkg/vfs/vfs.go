@@ -107,7 +107,7 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	err = v.Meta.Lookup(ctx, parent, name, &inode, attr)
+	err = v.Meta.Lookup(ctx, parent, name, &inode, attr, true)
 	if err == 0 {
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
