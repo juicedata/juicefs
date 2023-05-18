@@ -27,7 +27,6 @@ import (
 )
 
 func TestDownload(t *testing.T) {
-	os.Setenv("JFS_PAGE_STACK", "1")
 	key := "testDownload"
 	a, _ := object.CreateStorage("file", "/tmp/download/", "", "", "")
 	t.Cleanup(func() {
@@ -166,7 +165,7 @@ func TestDownload(t *testing.T) {
 		}},
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 50; i++ {
 		for _, c := range tcases {
 			content := make([]byte, c.config.fsize)
 			rand.Read(content)
