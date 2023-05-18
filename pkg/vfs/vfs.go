@@ -463,17 +463,17 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) 
 		err = syscall.EFBIG
 		return
 	}
-	if fh == 0 {
-		hs := v.findAllHandles(ino)
-		sort.Slice(hs, func(i, j int) bool { return hs[i].fh < hs[j].fh })
-		for _, h := range hs {
-			if !h.Wlock(ctx) {
-				err = syscall.EINTR
-				return
-			}
-			defer func(h *handle) { h.Wunlock() }(h)
+	hs := v.findAllHandles(ino)
+	sort.Slice(hs, func(i, j int) bool { return hs[i].fh < hs[j].fh })
+	for _, h := range hs {
+		if !h.Wlock(ctx) {
+			err = syscall.EINTR
+			return
 		}
-		_ = v.writer.Flush(ctx, ino)
+		defer func(h *handle) { h.Wunlock() }(h)
+	}
+	_ = v.writer.Flush(ctx, ino)
+	if fh == 0 {
 		err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr, false)
 	} else {
 		h := v.findHandle(ino, fh)
@@ -483,13 +483,8 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) 
 		}
 		if h.writer == nil {
 			err = syscall.EACCES
-		}
-		if !h.Wlock(ctx) {
-			err = syscall.EINTR
 			return
 		}
-		defer func(h *handle) { h.Wunlock() }(h)
-		_ = h.writer.Flush(ctx)
 		err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr, true)
 	}
 	if err == 0 {

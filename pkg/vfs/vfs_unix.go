@@ -43,9 +43,6 @@ type Statfs struct {
 }
 
 func (v *VFS) StatFS(ctx Context, ino Ino) (st *Statfs, err syscall.Errno) {
-	if st := v.Meta.Access(ctx, ino, MODE_MASK_R&MODE_MASK_X, nil); st != 0 {
-		return nil, st
-	}
 	var totalspace, availspace, iused, iavail uint64
 	_ = v.Meta.StatFS(ctx, ino, &totalspace, &availspace, &iused, &iavail)
 	st = new(Statfs)

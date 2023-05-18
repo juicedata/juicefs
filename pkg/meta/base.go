@@ -898,6 +898,11 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 	if ino == RootInode {
 		return 0
 	}
+	if ctx.CheckPermission() {
+		if st := m.Access(ctx, ino, MODE_MASK_R&MODE_MASK_X, nil); st != 0 {
+			return st
+		}
+	}
 	var usage *Quota
 	var attr Attr
 	for root := ino; root >= RootInode; root = attr.Parent {
