@@ -45,17 +45,21 @@ JuiceFS 客户端可以控制这些内核元数据缓存：文件属性（attrib
 
 让以上元数据默认在内核中缓存 1 秒，能显著提高 `lookup` 和 `getattr` 的性能。**对于单个挂载点而言，内核元数据缓存能够主动失效。但对于多个挂载点访问、修改同一文件的情况，只有发起修改的客户端能享受到内核元数据缓存主动失效，其他客户端就只能等待缓存自然过期。**
 
-需要注意，`--entry-cache` 和 `--dir-entry-cache` 都负责缓存「（inode，name）→ 文件」这个信息，只对 `lookup` 调用有加速效果。这里的 `dir-entry` 含义也不同于[「目录项」](https://www.kernel.org/doc/html/latest/filesystems/ext4/directory.html)的概念，他并不用来描述「一个目录下包含哪些文件」，而是和 `entry` 一样，都是文件，只不过对文件是否目录类型做了区分。可想而知，读取目录下文件列表（ls）的操作，不会受到 `--direntrycacheto` 的影响。简而言之，不要把 `dir-entry` 想象成 map 结构，它仅仅是目录类型的文件。
+需要注意，`entry` 缓存是随着文件访问逐渐建立起来的，不是一个完整列表，因此不能被 `readdir` 调用或者 `ls` 命令使用，而只对 `lookup` 调用有加速效果。这里的 `direntry` 含义也不等同于[「目录项」](https://www.kernel.org/doc/html/latest/filesystems/ext4/directory.html)的概念，他并不用来描述「一个目录下包含哪些文件」，而是和 `entry` 一样，都是文件，只不过对文件是否目录类型做了区分。
 
-以上元数据缓存项同时还存在于[客户端内存](#metadata-cache-in-client-memory)中，相当于组成了「内核 → 客户端内存」的多级缓存。考虑到客户端内存中的元数据缓存会默认保留 5 分钟，并且支持主动失效（下方小节中详细介绍），一般不建议将上述内核元数据的缓存时间进一步提高。只有在需要 `lookup` 大量文件的场景下（比如对于大型 Git 仓库运行 `git status`），希望尽可能避免请求穿透到用户态，获得极致性能，才考虑进一步增大内核元数据的缓存时间。在实际场景中，也很少需要对 `--entrycacheto` 和 `--direntrycacheto` 进行区分设置，如果确实要精细化调优，在目录极少变动、而文件频繁变动的场景，可以令 `--direntrycacheto` 大于 `--entrycacheto`。
+在实际场景中，也很少需要对 `--entry-cache` 和 `--dir-entry-cache` 进行区分设置，如果确实要精细化调优，在目录极少变动、而文件频繁变动的场景，可以令 `--dir-entry-cache` 大于 `--entry-cache`。
 
 ### 客户端内存元数据缓存 {#metadata-cache-in-client-memory}
 
-JuiceFS 客户端在 `open()` 操作即打开一个文件时，其文件属性（attribute）会被自动缓存在客户端内存中。如果在挂载文件系统时设置了 [`--open-cache`](../reference/command_reference.md#mount) 选项且值大于 0，只要缓存尚未超时失效，随后执行的 `getattr()` 和 `open()` 操作会从内存缓存中立即返回结果。
+JuiceFS 客户端在 `open` 操作即打开一个文件时，其文件属性会被自动缓存在客户端内存中，客户端内存中的文件属性缓存，不仅包含内核元数据中的 attribute 比如文件大小、修改时间信息，还包含 JuiceFS 特有的属性，如文件和 chunk、slice 的对应关系。
 
-执行 `read()` 操作即读取一个文件时，文件的 chunk 和 slice 信息会被自动缓存在客户端内存。在缓存有效期内，再次读取 chunk 会从内存缓存中立即返回 slice 信息（查阅[「JuiceFS 如何存储文件」](../introduction/architecture.md#how-juicefs-store-files)以了解 chunk 和 slice 是什么）。
+为保证「关闭再打开（close-to-open）」一致性，`open` 操作默认需要直接访问元数据引擎，不会利用缓存。也就是说，客户端 A 的修改在客户端 B 不一定能立即看到。但是，一旦这个文件在 A 写入完成并关闭，之后在任何一个客户端重新打开该文件都可以保证能访问到最新写入的数据，不论是否在同一个节点。文件的属性缓存也不一定要通过 `open` 操作建立，比如 `tail -f` 会不断查询文件属性，在这种情况下无需重新打开文件，也能获得最新文件变动。
 
-使用 `--open-cache` 选项设置了缓存时间以后，对于同一个挂载点，当缓存的文件属性发生变化时，缓存会自动失效。但是对于不同的挂载点缓存无法自动失效，因此为了保证强一致性，`--open-cache` 默认关闭，每次打开文件都需直接访问元数据引擎。如果文件很少发生修改，或者只读场景下（例如 AI 模型训练），则推荐根据情况设置 `--open-cache`，进一步提高读性能。
+如果要利用上客户端内存的元数据缓存，需要设置 [`--open-cache`](../reference/command_reference.md#mount)，指定缓存的有效时长。在缓存有效期间执行的 `getattr` 和 `open` 操作会从内存缓存中立即返回 [slice 信息](../introduction/architecture.md#how-juicefs-store-files)。
+
+使用 `--open-cache` 选项设置了缓存时间以后，文件系统就不再满足 close-to-open 一致性了，与内核元数据类似，只有发起修改的客户端能享受到客户端内存元数据缓存主动失效，其他客户端就只能等待缓存自然过期。因此为了保证文件系统语义，`--open-cache` 默认关闭，每次打开文件都需直接访问元数据引擎。如果文件很少发生修改，或者只读场景下（例如 AI 模型训练），则推荐根据情况设置 `--open-cache`，进一步提高读性能。
+
+作为对比，JuiceFS 商业版提供更丰富的客户端内存的元数据缓存功能，并且支持主动失效，阅读[商业版文档](https://juicefs.com/docs/zh/cloud/guide/cache/#metadata-cache-in-client-memory)以了解。
 
 ## 数据缓存
 
