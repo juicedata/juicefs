@@ -2478,3 +2478,69 @@ LOOP:
 	}
 	return eno
 }
+
+func (m *baseMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) syscall.Errno {
+	var cur Attr
+	inode = m.checkRoot(inode)
+	if st := m.en.doGetAttr(ctx, inode, &cur); st != 0 {
+		return st
+	}
+	if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
+		attr.Mode |= (cur.Mode & 06000)
+	}
+	if set&SetAttrGID != 0 {
+		if ctx.CheckPermission() && ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
+			return syscall.EPERM
+		}
+		if cur.Gid != attr.Gid {
+			if ctx.CheckPermission() && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
+				return syscall.EPERM
+			}
+		}
+	}
+	if set&SetAttrUID != 0 {
+		if cur.Uid != attr.Uid {
+			if ctx.CheckPermission() && ctx.Uid() != 0 {
+				return syscall.EPERM
+			}
+		}
+	}
+	if set&SetAttrMode != 0 {
+		if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
+			if ctx.Gid() != cur.Gid {
+				attr.Mode &= 05777
+			}
+		}
+		if attr.Mode != cur.Mode {
+			if ctx.CheckPermission() && ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
+				(cur.Mode&01777 != attr.Mode&01777 || attr.Mode&02000 > cur.Mode&02000 || attr.Mode&04000 > cur.Mode&04000) {
+				return syscall.EPERM
+			}
+		}
+	}
+	if set&SetAttrAtimeNow != 0 || (set&SetAttrAtime) != 0 && attr.Atime < 0 {
+		if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
+			return syscall.EACCES
+		}
+	} else if set&SetAttrAtime != 0 && (cur.Atime != attr.Atime || cur.Atimensec != attr.Atimensec) {
+		if ctx.CheckPermission() && cur.Uid == 0 && ctx.Uid() != 0 {
+			return syscall.EPERM
+		}
+		if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
+			return syscall.EACCES
+		}
+	}
+	if set&SetAttrMtimeNow != 0 || (set&SetAttrMtime) != 0 && attr.Mtime < 0 {
+		if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
+			return syscall.EACCES
+		}
+	} else if set&SetAttrMtime != 0 && (cur.Mtime != attr.Mtime || cur.Mtimensec != attr.Mtimensec) {
+		if ctx.CheckPermission() && cur.Uid == 0 && ctx.Uid() != 0 {
+			return syscall.EPERM
+		}
+		if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
+			return syscall.EACCES
+		}
+	}
+	return 0
+}

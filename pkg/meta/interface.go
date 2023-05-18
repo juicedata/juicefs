@@ -346,6 +346,8 @@ type Meta interface {
 	GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	// SetAttr updates the attributes for given node.
 	SetAttr(ctx Context, inode Ino, set uint16, sggidclearmode uint8, attr *Attr) syscall.Errno
+	// Check setting attr is allowed or not
+	CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) syscall.Errno
 	// Truncate changes the length for given file.
 	Truncate(ctx Context, inode Ino, flags uint8, attrlength uint64, attr *Attr, skipPermCheck bool) syscall.Errno
 	// Fallocate preallocate given space for given file.
