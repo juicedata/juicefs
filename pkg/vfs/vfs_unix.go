@@ -180,17 +180,20 @@ func (v *VFS) SetAttr(ctx Context, ino Ino, set int, fh uint64, mode, uid, gid u
 		attr.Mtime = mtime
 		attr.Mtimensec = mtimensec
 	}
-	if ctx.CheckPermission() {
-		if err = v.Meta.CheckSetAttr(ctx, ino, uint16(set), *attr); err != 0 {
-			return
+	if set&meta.SetAttrMtime != 0 || set&meta.SetAttrMtimeNow != 0 {
+		if ctx.CheckPermission() {
+			if err = v.Meta.CheckSetAttr(ctx, ino, uint16(set), *attr); err != 0 {
+				return
+			}
+		}
+		if set&meta.SetAttrMtime != 0 {
+			v.writer.UpdateMtime(ino, time.Unix(mtime, int64(mtimensec)))
+		}
+		if set&meta.SetAttrMtimeNow != 0 {
+			v.writer.UpdateMtime(ino, time.Now())
 		}
 	}
-	if set&meta.SetAttrMtime != 0 {
-		v.writer.UpdateMtime(ino, time.Unix(mtime, int64(mtimensec)))
-	}
-	if set&meta.SetAttrMtimeNow != 0 {
-		v.writer.UpdateMtime(ino, time.Now())
-	}
+
 	err = v.Meta.SetAttr(ctx, ino, uint16(set), 0, attr)
 	if err == 0 {
 		v.UpdateLength(ino, attr)
