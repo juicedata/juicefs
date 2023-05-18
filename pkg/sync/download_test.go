@@ -27,6 +27,7 @@ import (
 )
 
 func TestDownload(t *testing.T) {
+	os.Setenv("JFS_PAGE_STACK", "1")
 	key := "testDownload"
 	a, _ := object.CreateStorage("file", "/tmp/download/", "", "", "")
 	t.Cleanup(func() {
