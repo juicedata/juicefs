@@ -724,11 +724,6 @@ func (m *redisMeta) handleLuaResult(op string, res interface{}, err error, retur
 }
 
 func (m *redisMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	if ctx.CheckPermission() {
-		if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
-			return st
-		}
-	}
 	var foundIno Ino
 	var foundType uint8
 	var encodedAttr []byte
@@ -1990,16 +1985,6 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 }
 
 func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
-	if ctx.CheckPermission() {
-		var mmask uint8 = MODE_MASK_R
-		if plus != 0 {
-			mmask |= MODE_MASK_X
-		}
-		if st := m.Access(ctx, inode, mmask, nil); st != 0 {
-			return st
-		}
-	}
-
 	var stop = errors.New("stop")
 	err := m.hscan(ctx, m.entryKey(inode), func(keys []string) error {
 		newEntries := make([]Entry, len(keys)/2)

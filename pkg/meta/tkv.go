@@ -813,11 +813,6 @@ func (m *kvMeta) deleteKeys(keys ...[]byte) error {
 }
 
 func (m *kvMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
-	if ctx.CheckPermission() {
-		if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
-			return st
-		}
-	}
 	buf, err := m.get(m.entryKey(parent, name))
 	if err != nil {
 		return errno(err)
@@ -1808,15 +1803,6 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	// TODO: handle big directory
-	if ctx.CheckPermission() {
-		var mmask uint8 = MODE_MASK_R
-		if plus != 0 {
-			mmask |= MODE_MASK_X
-		}
-		if st := m.Access(ctx, inode, mmask, nil); st != 0 {
-			return st
-		}
-	}
 	vals, err := m.scanValues(m.entryKey(inode, ""), limit, nil)
 	if err != nil {
 		return errno(err)

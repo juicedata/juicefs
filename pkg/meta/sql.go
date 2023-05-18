@@ -807,11 +807,6 @@ func (m *dbMeta) flushStats() {
 
 func (m *dbMeta) doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.roTxn(func(s *xorm.Session) error {
-		if ctx.CheckPermission() {
-			if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
-				return st
-			}
-		}
 		s = s.Table(&edge{})
 		nn := namedNode{node: node{Parent: parent}, Name: []byte(name)}
 		var exist bool
@@ -2018,15 +2013,6 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 func (m *dbMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
 	return errno(m.roTxn(func(s *xorm.Session) error {
-		if ctx.CheckPermission() {
-			var mmask uint8 = MODE_MASK_R
-			if plus != 0 {
-				mmask |= MODE_MASK_X
-			}
-			if st := m.Access(ctx, inode, mmask, nil); st != 0 {
-				return st
-			}
-		}
 		s = s.Table(&edge{})
 		if plus != 0 {
 			s = s.Join("INNER", &node{}, "jfs_edge.inode=jfs_node.inode")

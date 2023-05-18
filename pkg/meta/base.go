@@ -1020,6 +1020,11 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 	}
 	defer m.timeit("Lookup", time.Now())
 	parent = m.checkRoot(parent)
+	if ctx.CheckPermission() {
+		if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
+			return st
+		}
+	}
 	if name == ".." {
 		if parent == m.root {
 			name = "."
@@ -1641,6 +1646,15 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		return err
 	}
 	defer m.timeit("Readdir", time.Now())
+	if ctx.CheckPermission() {
+		var mmask uint8 = MODE_MASK_R
+		if plus != 0 {
+			mmask |= MODE_MASK_X
+		}
+		if st := m.Access(ctx, inode, mmask, &attr); st != 0 {
+			return st
+		}
+	}
 	if inode == m.root {
 		attr.Parent = m.root
 	}
