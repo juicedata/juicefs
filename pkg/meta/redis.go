@@ -1108,104 +1108,22 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			return err
 		}
 		m.parseAttr(a, &cur)
-		dirtyAttr := cur
-		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
-			attr.Mode |= (cur.Mode & 06000)
-		}
-		var changed bool
-		if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
-			clearSUGID(ctx, &dirtyAttr, attr)
-			changed = true
-		}
-		if set&SetAttrGID != 0 {
-			if ctx.CheckPermission() && ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
-				return syscall.EPERM
-			}
-			if cur.Gid != attr.Gid {
-				if ctx.CheckPermission() && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
-					return syscall.EPERM
-				}
-				dirtyAttr.Gid = attr.Gid
-				changed = true
-			}
-		}
-		if set&SetAttrUID != 0 {
-			if cur.Uid != attr.Uid {
-				if ctx.CheckPermission() && ctx.Uid() != 0 {
-					return syscall.EPERM
-				}
-				dirtyAttr.Uid = attr.Uid
-				changed = true
-			}
-		}
-		if set&SetAttrMode != 0 {
-			if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
-				if ctx.Gid() != cur.Gid {
-					attr.Mode &= 05777
-				}
-			}
-			if attr.Mode != cur.Mode {
-				if ctx.CheckPermission() && ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
-					(cur.Mode&01777 != attr.Mode&01777 || attr.Mode&02000 > cur.Mode&02000 || attr.Mode&04000 > cur.Mode&04000) {
-					return syscall.EPERM
-				}
-				dirtyAttr.Mode = attr.Mode
-				changed = true
-			}
-		}
 		now := time.Now()
-		if set&SetAttrAtimeNow != 0 || (set&SetAttrAtime) != 0 && attr.Atime < 0 {
-			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
-				return syscall.EACCES
-			}
-			dirtyAttr.Atime = now.Unix()
-			dirtyAttr.Atimensec = uint32(now.Nanosecond())
-			changed = true
-		} else if set&SetAttrAtime != 0 && (cur.Atime != attr.Atime || cur.Atimensec != attr.Atimensec) {
-			if ctx.CheckPermission() && cur.Uid == 0 && ctx.Uid() != 0 {
-				return syscall.EPERM
-			}
-			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
-				return syscall.EACCES
-			}
-			dirtyAttr.Atime = attr.Atime
-			dirtyAttr.Atimensec = attr.Atimensec
-			changed = true
+		dirtyAttr, st := m.setAttr(ctx, inode, set, &cur, attr, now)
+		if st != 0 {
+			return st
 		}
-		if set&SetAttrMtimeNow != 0 || (set&SetAttrMtime) != 0 && attr.Mtime < 0 {
-			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
-				return syscall.EACCES
-			}
-			dirtyAttr.Mtime = now.Unix()
-			dirtyAttr.Mtimensec = uint32(now.Nanosecond())
-			changed = true
-		} else if set&SetAttrMtime != 0 && (cur.Mtime != attr.Mtime || cur.Mtimensec != attr.Mtimensec) {
-			if ctx.CheckPermission() && cur.Uid == 0 && ctx.Uid() != 0 {
-				return syscall.EPERM
-			}
-			if st := m.Access(ctx, inode, MODE_MASK_W, &cur); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
-				return syscall.EACCES
-			}
-			dirtyAttr.Mtime = attr.Mtime
-			dirtyAttr.Mtimensec = attr.Mtimensec
-			changed = true
-		}
-		if set&SetAttrFlag != 0 {
-			dirtyAttr.Flags = attr.Flags
-			changed = true
-		}
-		if !changed {
-			*attr = cur
+		if dirtyAttr == nil {
 			return nil
 		}
 		dirtyAttr.Ctime = now.Unix()
 		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&dirtyAttr), 0)
+			pipe.Set(ctx, m.inodeKey(inode), m.marshal(dirtyAttr), 0)
 			return nil
 		})
 		if err == nil {
-			*attr = dirtyAttr
+			*attr = *dirtyAttr
 		}
 		return err
 	}, m.inodeKey(inode)))

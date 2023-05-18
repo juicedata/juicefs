@@ -778,6 +778,24 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Full = true
 }
 
+func (m *dbMeta) parseNode(attr *Attr, n *node) {
+	if attr == nil || n == nil {
+		return
+	}
+	n.Type = attr.Typ
+	n.Mode = attr.Mode
+	n.Flags = attr.Flags
+	n.Uid = attr.Uid
+	n.Gid = attr.Gid
+	n.Atime = attr.Atime*1e6 + int64(attr.Atimensec)/1000
+	n.Mtime = attr.Mtime*1e6 + int64(attr.Mtimensec)/1000
+	n.Ctime = attr.Ctime*1e6 + int64(attr.Ctimensec)/1000
+	n.Nlink = attr.Nlink
+	n.Length = attr.Length
+	n.Rdev = attr.Rdev
+	n.Parent = attr.Parent
+}
+
 func (m *dbMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newSpace, space)
 	atomic.AddInt64(&m.newInodes, inodes)
@@ -879,96 +897,19 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		if !ok {
 			return syscall.ENOENT
 		}
-		dirtyNode := cur
-
-		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
-			attr.Mode |= (cur.Mode & 06000)
-		}
-		var changed bool
-		if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
-			clearSUGIDSQL(ctx, &dirtyNode, attr)
-			changed = true
-		}
-		if set&SetAttrGID != 0 {
-			if ctx.CheckPermission() && ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
-				return syscall.EPERM
-			}
-			if cur.Gid != attr.Gid {
-				if ctx.CheckPermission() && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
-					return syscall.EPERM
-				}
-				dirtyNode.Gid = attr.Gid
-				changed = true
-			}
-		}
-		if set&SetAttrUID != 0 {
-			if cur.Uid != attr.Uid {
-				if ctx.CheckPermission() && ctx.Uid() != 0 {
-					return syscall.EPERM
-				}
-				dirtyNode.Uid = attr.Uid
-				changed = true
-			}
-		}
-		if set&SetAttrMode != 0 {
-			if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
-				if ctx.Gid() != cur.Gid {
-					attr.Mode &= 05777
-				}
-			}
-			if attr.Mode != cur.Mode {
-				if ctx.CheckPermission() && ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
-					(cur.Mode&01777 != attr.Mode&01777 || attr.Mode&02000 > cur.Mode&02000 || attr.Mode&04000 > cur.Mode&04000) {
-					return syscall.EPERM
-				}
-				dirtyNode.Mode = attr.Mode
-				changed = true
-			}
-		}
 		var curAttr Attr
 		m.parseAttr(&cur, &curAttr)
-		now := time.Now().UnixNano() / 1e3
-		if set&SetAttrAtimeNow != 0 || (set&SetAttrAtime) != 0 && attr.Atime < 0 {
-			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
-				return syscall.EACCES
-			}
-			dirtyNode.Atime = now
-			changed = true
-		} else if set&SetAttrAtime != 0 && cur.Atime != attr.Atime {
-			if ctx.CheckPermission() && cur.Uid == 0 && ctx.Uid() != 0 {
-				return syscall.EPERM
-			}
-			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
-				return syscall.EACCES
-			}
-			dirtyNode.Atime = attr.Atime*1e6 + int64(attr.Atimensec)/1e3
-			changed = true
+		now := time.Now()
+		dirtyAttr, st := m.setAttr(ctx, inode, set, &curAttr, attr, now)
+		if st != 0 {
+			return st
 		}
-		if set&SetAttrMtimeNow != 0 || (set&SetAttrMtime) != 0 && attr.Mtime < 0 {
-			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
-				return syscall.EACCES
-			}
-			dirtyNode.Mtime = now
-			changed = true
-		} else if set&SetAttrMtime != 0 && cur.Mtime != attr.Mtime {
-			if ctx.CheckPermission() && cur.Uid == 0 && ctx.Uid() != 0 {
-				return syscall.EPERM
-			}
-			if st := m.Access(ctx, inode, MODE_MASK_W, &curAttr); ctx.CheckPermission() && ctx.Uid() != cur.Uid && st != 0 {
-				return syscall.EACCES
-			}
-			dirtyNode.Mtime = attr.Mtime*1e6 + int64(attr.Mtimensec)/1e3
-			changed = true
-		}
-		if set&SetAttrFlag != 0 {
-			dirtyNode.Flags = attr.Flags
-			changed = true
-		}
-		if !changed {
-			m.parseAttr(&cur, attr)
+		if dirtyAttr == nil {
 			return nil
 		}
-		dirtyNode.Ctime = now
+		var dirtyNode node
+		m.parseNode(dirtyAttr, &dirtyNode)
+		dirtyNode.Ctime = now.UnixNano() / 1e3
 		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime").Update(&dirtyNode, &node{Inode: inode})
 		if err == nil {
 			m.parseAttr(&dirtyNode, attr)
