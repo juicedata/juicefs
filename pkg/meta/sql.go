@@ -876,7 +876,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		var curAttr Attr
 		m.parseAttr(&cur, &curAttr)
 		now := time.Now()
-		dirtyAttr, st := m.setAttr(ctx, inode, set, &curAttr, attr, now)
+		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &curAttr, attr, now)
 		if st != 0 {
 			return st
 		}

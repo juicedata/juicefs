@@ -854,7 +854,7 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		}
 		m.parseAttr(a, &cur)
 		now := time.Now()
-		dirtyAttr, st := m.setAttr(ctx, inode, set, &cur, attr, now)
+		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now)
 		if st != 0 {
 			return st
 		}

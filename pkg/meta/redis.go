@@ -1109,7 +1109,7 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 		}
 		m.parseAttr(a, &cur)
 		now := time.Now()
-		dirtyAttr, st := m.setAttr(ctx, inode, set, &cur, attr, now)
+		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now)
 		if st != 0 {
 			return st
 		}
