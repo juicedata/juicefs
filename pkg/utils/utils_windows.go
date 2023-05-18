@@ -17,7 +17,6 @@
 package utils
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 
@@ -43,12 +42,9 @@ func GetKernelVersion() (major, minor int) { return }
 
 func GetDev(fpath string) int { return -1 }
 
-func GetSysInfo() (string, error) {
-	sysInfo, err := exec.Command("systeminfo").Output()
-	if err != nil {
-		return "", fmt.Errorf("Failed to execute command `systeminfo`: %s", err)
-	}
-	return string(sysInfo), nil
+func GetSysInfo() string {
+	sysInfo, _ := exec.Command("systeminfo").Output()
+	return string(sysInfo)
 }
 
 func GetUmask() int { return 0 }
