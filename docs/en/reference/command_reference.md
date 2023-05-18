@@ -70,10 +70,6 @@ If the command option is of boolean type, such as `--debug`, there is no need to
 
 ## Auto Completion
 
-:::note
-This feature requires JuiceFS >= 0.15.2. It is implemented based on `github.com/urfave/cli/v2`. You can find more information [here](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling).
-:::
-
 To enable commands completion, simply source the script provided within [`hack/autocomplete`](https://github.com/juicedata/juicefs/tree/main/hack/autocomplete) directory. For example:
 
 <Tabs groupId="juicefs-cli-autocomplete">
@@ -299,6 +295,9 @@ min free space ratio (default: 0.1), if [Client write data cache](../guide/cache
 
 `--cache-partial-only`<br />
 cache random/small read only (default: false), see [Client read data cache](../guide/cache_management.md#client-read-cache)
+
+`--verify-cache-checksum value`<br />
+Checksum level for cache data. After enabled, checksum will be calculated on divided parts of the cache blocks and stored on disks, which are used for verification during reads. The following strategies are supported:<br/><ul><li>`none`: Disable checksum verification, if local cache data is tampered, bad data will be read;</li><li>`full` (default): Perform verification when reading the full block, use this for sequential read scenarios;</li><li>`shrink`: Perform verification on parts that's fully included within the read range, use this for random read scenarios;</li><li>`extend`: Perform verification on parts that fully include the read range, this causes read amplifications and is only used for random read scenarios demanding absolute data integrity.</li></ul>
 
 `--read-only`<br />
 allow lookup/read operations only (default: false)

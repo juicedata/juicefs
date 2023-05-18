@@ -49,17 +49,17 @@ JuiceFS 客户端可以控制这些内核元数据缓存：文件属性（attrib
 
 在实际场景中，也很少需要对 `--entry-cache` 和 `--dir-entry-cache` 进行区分设置，如果确实要精细化调优，在目录极少变动、而文件频繁变动的场景，可以令 `--dir-entry-cache` 大于 `--entry-cache`。
 
-### 客户端内存元数据缓存 {#metadata-cache-in-client-memory}
+### 客户端内存元数据缓存 {#client-memory-metadata-cache}
 
-JuiceFS 客户端在 `open` 操作即打开一个文件时，其文件属性会被自动缓存在客户端内存中，客户端内存中的文件属性缓存，不仅包含内核元数据中的 attribute 比如文件大小、修改时间信息，还包含 JuiceFS 特有的属性，如文件和 chunk、slice 的对应关系。
+JuiceFS 客户端在 `open` 操作即打开一个文件时，其文件属性会被自动缓存在客户端内存中，这里的属性缓存，不仅包含内核元数据中的文件属性比如文件大小、修改时间信息，还包含 JuiceFS 特有的属性，如[文件和 chunk、slice 的对应关系](../introduction/architecture.md#how-juicefs-store-files)。
 
 为保证「关闭再打开（close-to-open）」一致性，`open` 操作默认需要直接访问元数据引擎，不会利用缓存。也就是说，客户端 A 的修改在客户端 B 不一定能立即看到。但是，一旦这个文件在 A 写入完成并关闭，之后在任何一个客户端重新打开该文件都可以保证能访问到最新写入的数据，不论是否在同一个节点。文件的属性缓存也不一定要通过 `open` 操作建立，比如 `tail -f` 会不断查询文件属性，在这种情况下无需重新打开文件，也能获得最新文件变动。
 
-如果要利用上客户端内存的元数据缓存，需要设置 [`--open-cache`](../reference/command_reference.md#mount)，指定缓存的有效时长。在缓存有效期间执行的 `getattr` 和 `open` 操作会从内存缓存中立即返回 [slice 信息](../introduction/architecture.md#how-juicefs-store-files)。
+如果要利用上客户端内存的元数据缓存，需要设置 [`--open-cache`](../reference/command_reference.md#mount)，指定缓存的有效时长。在缓存有效期间执行的 `getattr` 和 `open` 操作会从内存缓存中立即返回 slice 信息。有了这些信息，就能省去每次打开文件都重新访问元数据服务的开销。
 
-使用 `--open-cache` 选项设置了缓存时间以后，文件系统就不再满足 close-to-open 一致性了，与内核元数据类似，只有发起修改的客户端能享受到客户端内存元数据缓存主动失效，其他客户端就只能等待缓存自然过期。因此为了保证文件系统语义，`--open-cache` 默认关闭，每次打开文件都需直接访问元数据引擎。如果文件很少发生修改，或者只读场景下（例如 AI 模型训练），则推荐根据情况设置 `--open-cache`，进一步提高读性能。
+使用 `--open-cache` 选项设置了缓存时间以后，文件系统就不再满足 close-to-open 一致性了，不过与内核元数据类似，发起修改的客户端同样能享受到客户端内存元数据缓存主动失效，其他客户端就只能等待缓存自然过期。因此为了保证文件系统语义，`--open-cache` 默认关闭。如果文件很少发生修改，或者只读场景下（例如 AI 模型训练），则推荐根据情况设置 `--open-cache`，进一步提高读性能。
 
-作为对比，JuiceFS 商业版提供更丰富的客户端内存的元数据缓存功能，并且支持主动失效，阅读[商业版文档](https://juicefs.com/docs/zh/cloud/guide/cache/#metadata-cache-in-client-memory)以了解。
+作为对比，JuiceFS 商业版提供更丰富的客户端内存的元数据缓存功能，并且支持主动失效，阅读[商业版文档](https://juicefs.com/docs/zh/cloud/guide/cache/#client-memory-metadata-cache)以了解。
 
 ## 数据缓存
 
@@ -77,7 +77,7 @@ JuiceFS 对数据也提供多种缓存机制来提高性能，包括内核中的
 
 ### 内核页缓存 {#kernel-data-cache}
 
-在 JuiceFS 0.15.2 及以上，对于已经读过的文件，内核会为其建立页缓存（Page Cache），下次再打开的时候，如果文件没有被更新，就可以直接从内核页缓存读取，获得最好的性能。
+对于已经读过的文件，内核会为其建立页缓存（Page Cache），下次再打开的时候，如果文件没有被更新，就可以直接从内核页缓存读取，获得最好的性能。
 
 JuiceFS 客户端会跟踪所有最近被打开的文件，要重复打开相同文件时，它会根据该文件是否被修改决定是否可以使用内核页数据，如果文件被修改过，则对应的页缓存也将在再次打开时失效，这样保证了客户端能够读到最新的数据。
 

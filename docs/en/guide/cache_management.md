@@ -14,44 +14,52 @@ Data caching will effectively improve the performance of random reads. For appli
 Meanwhile, cache improve performance only when application needs to repeatedly read files, so if you know for sure you're in a scenario where data is only accessed once (e.g. data cleansing during ETL), you can safely turn off cache to prevent overhead.
 :::
 
-## Data consistency
+## Consistency {#consistency}
 
-JuiceFS provides a "close-to-open" consistency guarantee, which means that when two or more clients read and write the same file at the same time, the changes made by client A may not be immediately visible to client B. However, once the file is closed by client A, any client re-opened it afterwards is guaranteed to see the latest data, no matter it is on the same node with A or not.
+Distributed systems often need to make tradeoffs between cache and consistency. Due to the decoupled architecture of JuiceFS, think consistency problems in terms of metadata, file data (in object storage), and file data local cache.
 
-"Close-to-open" is the minimum consistency guarantee provided by JuiceFS, and in some cases it may not be necessary to reopen the file to access the latest written data. For example:
+For [metadata](#metadata-cache), the default configuration offers a "close-to-open" consistency guarantee, i.e. after a client have modified and closed a file, other clients will see the latest state when they open this file again. Also, default mount option uses 1s of kernel metadata cache which provides decent performance for the usual cases. If your scenario demands higher level of cache performance, learn how to tune cache settings in below sections.
 
-* Multiple applications use the same JuiceFS client to access the same file (where file changes are immediately visible)
-* View the latest data on different nodes with the `tail -f` command (require use Linux)
+As for object storage, JuiceFS clients split files into data blocks (default 4MiB), each is assigned an unique ID and uploaded to object storage. Subsequent modifications on the file are carried out on new data blocks, and the original blocks remain unchanged. This guarantees consistency of the object storage data, because once the file is modified, clients will then read from the new data blocks, while the stale ones which will be deleted through [Trash](../security/trash.md) or compaction.
 
-As for object storage, JuiceFS divides files into data blocks (default 4MiB), assigns unique IDs and saves them on object storage. Any modification operation of the file will generate a new data block, and the original block remains unchanged, including the cached data on the local disk. So don't worry about the consistency of the data cache, because once the file is modified, JuiceFS will read the new data block from the object storage, and will not read the data block (which will be deleted later) corresponding to the overwritten part of the file.
+[Local file data cache](#client-read-cache) is object storage blocks downloaded into local disks. So consistency depends on the reliability of the disks, if data are tempered, clients will read bad data. To resolve this concern, choose an appropriate [`--verify-cache-checksum`](../reference/command_reference.md#mount) strategy to ensure data integrity.
 
 ## Metadata cache {#metadata-cache}
 
-JuiceFS supports caching metadata both in kernel and in client memory (i.e. JuiceFS processes) to improve metadata access performance.
+As a userspace filesystem, JuiceFS metadata cache is both managed as kernel cache (via FUSE API), and maintained in client memory space.
 
-### Kernel metadata cache {#kernel-metadata-cache}
+### Metadata Cache in Kernel {#kernel-metadata-cache}
 
-There are three kinds of metadata which can be cached in kernel: **attribute**, **entry** and **directory**. The TTL of them can be specified by the following [mount options](../reference/command_reference.md#mount):
+JuiceFS Client controls these kinds of metadata as kernel cache: attribute (file name, size, permission, mtime, etc.), entry (inode, name, and type. The word entry and direntry is used in parameter names, to further distinguish between file and directory.). Use the following parameters to control TTL through FUSE:
 
 ```
---attr-cache value       attributes cache TTL in seconds (default: 1)
---entry-cache value      file entry cache TTL in seconds (default: 1)
---dir-entry-cache value  dir entry cache TTL in seconds (default: 1)
+# File attribute cache TTL in seconds, default to 1, improves getattr performance
+--attr-cache=1
+
+# File entry cache TTL in seconds, default to 1, improves lookup performance
+--entry-cache=1
+
+# Directory entry cache TTL in seconds, default to 1, improves lookup performance
+--dir-entry-cache=1
 ```
 
-Attribute, entry and directories are cached for 1 second by default, this speeds up lookup and getattr operations. When clients on multiple nodes are sharing the same file system, the metadata cached in kernel will only expire by TTL. So in edge cases, it's possible that metadata modifications (e.g., `chown`) on node A cannot be seen immediately on node B. Nevertheless, all nodes will eventually be able to see the changes made by A after cache expiration.
+Caching these metadata in kernel for 1 second really speeds up `lookup` and `getattr` calls. **For a single mount point, kernel cache is automatically invalidated upon modification. But when different mount points access and modify the same file, active kernel cache invalidation is only effective on the client initiating the modifications, other clients can only wait for expiration.**
 
-### In-memory client metadata cache
+Do note that `entry` cache is gradually built upon file access and may not contain a complete file list under directory, so `readdir` calls or `ls` command cannot utilize this cache, that's why `entry` cache only improves `lookup` performance. The meaning of `direntry` here is different from [kernel directory entry](https://www.kernel.org/doc/html/latest/filesystems/ext4/directory.html), `direntry` does not tell you the files under a directory, but rather, it's the same concept as `entry`, just distinguished based on whether it's a directory.
 
-:::note
-This feature requires JuiceFS >= 0.15.2
-:::
+Real world scenarios scarcely require setting different values for `--entry-cache` and `--dir-entry-cache`, these options exist for theoretical possibilities like when directories seldomly change while files change a lot, in that situation, you can use a higher `--dir-entry-cache` than `--entry-cache`.
 
-When a JuiceFS client `open()` a file, the attributes of the file are automatically cached in client memory. If the [`--open-cache`](../reference/command_reference.md#mount) option is set to a value greater than 0 when mounting the file system, subsequent `getattr()` and `open()` operations will return the result from the in-memory cache immediately, as long as the cache has not expired.
+### Metadata Cache in Client Memory {#client-memory-metadata-cache}
 
-When doing `read()` on a file, the chunk and slice information of the file is automatically cached in the client memory. Reading the chunk again during the cache lifetime will return the slice information from the in-memory cache immediately (check ["How JuiceFS Stores Files"](../introduction/architecture.md#how-juicefs-store-files) to know what chunk and slice are).
+When JuiceFS Client `open` a file, its file attributes are cached in client memory, this attribute cache includes not only the kernel cached file attributes like size, mtime, but also information specific to JuiceFS like [the relationship between file and its chunks and slices](../introduction/architecture.md#how-juicefs-store-files).
 
-When the `--open-cache` option is used to set a cache time, for the same mount point, the cache will be automatically invalidated when the cached file attributes change. However, the cache cannot be automatically invalidated for different mount points, so in order to ensure strong consistency, `--open-cache` is disabled by default, and every time you open a file, the client need to directly access the metadata engine. If the file is rarely modified, or in a read-only scenario (such as AI model training), it is recommended to set `--open-cache` according to the situation to further improve the read performance.
+To maintain the default close-to-open consistency, `open` calls will always query metadata service, bypassing local cache, modifications done by client A isn't guaranteed available immediately for client B, but once A is done and closes file, all other clients (across different nodes) will see the latest state. File attribute cache isn't necessarily obtained through `open`, for example `tail -f` will periodically query attributes, in this case, latest state is fetched without reopening the file.
+
+To utilize the memory metadata cache, use [`--open-cache`](../reference/command_reference.md#mount) to specify its TTL, so that before cache expiration, `getattr` and `open` calls directly uses the slice information in client memory. These cached information avoids the overhead of querying metadata service on every call.
+
+With `--open-cache` enabled, JuiceFS no longer operates under close-to-open consistency, but similar to kernel metadata cache, the client initiating the modifications can also actively invalidate client memory metadata cache, other clients can only wait for expiration. That's why in order to maintain semantics, `--open-cache` is disabled by default. For read intensive (or read-only) scenarios, such as AI model training, it is recommended to set `--open-cache` according to the situation to further improve the read performance.
+
+In comparison, JuiceFS Enterprise Edition provides richer functionalities around memory metadata cache (supports active invalidation). Read [Enterprise Edition documentation](https://juicefs.com/docs/cloud/guide/cache/#client-memory-metadata-cache) for more.
 
 ## Data cache
 
@@ -69,7 +77,7 @@ The `--buffer-size` also controls the data upload size for each `flush` operatio
 
 ### Kernel page cache
 
-From JuiceFS 0.15.2 and above, kernel will build page cache for opened files. If this file is not updated (i.e. `mtime` doesn't change) afterwards, it will be read directly from the page cache to achieve the best performance.
+Kernel will build page cache for opened files. If this file is not updated (i.e. `mtime` doesn't change) afterwards, it will be read directly from the page cache to achieve the best performance.
 
 JuiceFS Client tracks a list of recently opened files. If file is opened again, client will check if file has been modified to decide whether the kernel page cache is valid, if file is already modified, all relevant page cache is invalidated on the next open, this ensures that the client can always read the latest data.
 
@@ -77,11 +85,11 @@ Repeated reads of the same file in JuiceFS can be extremely fast, with latencies
 
 ### Kernel writeback-cache mode
 
-Starting with [Linux kernel 3.15](https://github.com/torvalds/linux/commit/4d99ff8f12e), FUSE supports the ["writeback-cache mode"]( https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt). In this mode, kernel will merge high frequency random small writes (10-100 bytes), which significantly improves write performance. However, the side effect is that it will turn sequential writing into random writing, seriously reducing the performance of sequential writing. Please consider whether the usage scenario matches before turning it on.
+Starting from Linux kernel 3.15, FUSE supports [writeback-cache](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt) mode, the kernel will consolidate high-frequency random small (10-100 bytes) write requests to significantly improve its performance, but this comes with a side effect: sequential writes are also turned into random writes, hence sequential write performance is hindered, so only use it on intensive random write scenarios.
 
-To enable writeback-cache mode, use the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option when you [mount JuiceFS](../reference/command_reference.md#mount). Note that writeback-cache mode is not the same as [Client write data cache](#writeback), the former is a kernel implementation while the latter happens inside the JuiceFS Client, they are meant for different scenarios, read the corresponding section for more.
+To enable writeback-cache mode, use the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option when you [mount JuiceFS](../reference/command_reference.md#mount). Note that writeback-cache mode is not the same as [Client write data cache](#writeback), the former is a kernel implementation while the latter happens inside the JuiceFS Client, read the corresponding section to learn their intended scenarios.
 
-### Client read data cache {#client-read-cache}
+### Read Cache in Client {#client-read-cache}
 
 The client will perform prefetch and cache automatically to improve sequence read performance according to the read mode in the application. Data will be cached in local file system, which can be any local storage device like HDD, SSD or even memory.
 
