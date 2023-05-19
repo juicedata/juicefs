@@ -127,26 +127,26 @@ func prepareParent(m Meta, name string, inode *Ino) error {
 }
 
 func benchMkdir(b *testing.B, m Meta) {
-	var parent Ino
+	var parent, inode Ino
 	if err := prepareParent(m, "benchMkdir", &parent); err != nil {
 		b.Fatal(err)
 	}
 	ctx := Background
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := m.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0755, 0, 0, nil, nil); err != 0 {
+		if err := m.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0755, 0, 0, &inode, nil); err != 0 {
 			b.Fatalf("mkdir: %s", err)
 		}
 	}
 }
 
 func benchMvdir(b *testing.B, m Meta) { // rename dir
-	var parent Ino
+	var parent, inode Ino
 	if err := prepareParent(m, "benchMvdir", &parent); err != nil {
 		b.Fatal(err)
 	}
 	ctx := Background
-	if err := m.Mkdir(ctx, parent, "d0", 0755, 0, 0, nil, nil); err != 0 {
+	if err := m.Mkdir(ctx, parent, "d0", 0755, 0, 0, &inode, nil); err != 0 {
 		b.Fatalf("mkdir: %s", err)
 	}
 	b.ResetTimer()
@@ -158,7 +158,7 @@ func benchMvdir(b *testing.B, m Meta) { // rename dir
 }
 
 func benchRmdir(b *testing.B, m Meta) {
-	var parent Ino
+	var parent, inode Ino
 	if err := prepareParent(m, "benchRmdir", &parent); err != nil {
 		b.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func benchRmdir(b *testing.B, m Meta) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
-		if err := m.Mkdir(ctx, parent, "dir", 0755, 0, 0, nil, nil); err != 0 {
+		if err := m.Mkdir(ctx, parent, "dir", 0755, 0, 0, &inode, nil); err != 0 {
 			b.Fatalf("mkdir: %s", err)
 		}
 		b.StartTimer()
