@@ -1310,7 +1310,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		}
 		var pattr Attr
 		m.parseAttr(&pn, &pattr)
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
 		if (pn.Flags&FlagAppend) != 0 || (pn.Flags&FlagImmutable) != 0 {
@@ -1457,7 +1457,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		}
 		var pattr Attr
 		m.parseAttr(&pn, &pattr)
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
 		if pn.Flags&FlagImmutable != 0 || pn.Flags&FlagAppend != 0 {

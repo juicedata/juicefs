@@ -1242,7 +1242,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
@@ -1366,7 +1366,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
 			return st
 		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
