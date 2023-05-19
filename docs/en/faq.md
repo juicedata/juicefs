@@ -109,7 +109,7 @@ See ["Read Cache in Client"](guide/cache_management.md#client-read-cache) for mo
 
 ### When my update will be visible to other clients?
 
-All the metadata updates are immediately visible to all others. JuiceFS guarantees close-to-open consistency, see ["Consistency"](guide/cache_management.md#data-consistency) for more information.
+All the metadata updates are immediately visible to all others. JuiceFS guarantees close-to-open consistency, see ["Consistency"](guide/cache_management.md#consistency) for more information.
 
 The new data written by `write()` will be buffered in kernel or client, visible to other processes on the same machine, not visible to other machines.
 
