@@ -3773,6 +3773,11 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		if !ok {
 			return syscall.ENOENT
 		}
+		var attr Attr
+		m.parseAttr(&n, &attr)
+		if eno := m.Access(ctx, srcIno, MODE_MASK_R, &attr); eno != 0 {
+			return eno
+		}
 		n.Inode = ino
 		n.Parent = parent
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
@@ -3800,6 +3805,9 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			if (pattr.Flags & FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
+			if eno := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); eno != 0 {
+				return eno
+			}
 			if n.Type != TypeDirectory {
 				now := time.Now().UnixNano() / 1e3
 				pn.Mtime = now
@@ -3810,7 +3818,6 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			}
 		}
 
-		m.parseAttr(&n, attr)
 		if top && n.Type == TypeDirectory {
 			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: time.Now().Unix()})
 		} else {

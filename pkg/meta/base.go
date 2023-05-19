@@ -2346,10 +2346,18 @@ func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uin
 	if eno = m.en.doGetAttr(ctx, srcIno, &attr); eno != 0 {
 		return eno
 	}
+	if eno = m.Access(ctx, srcIno, MODE_MASK_R, &attr); eno != 0 {
+		return eno
+	}
+	if eno = m.Access(ctx, parent, MODE_MASK_X|MODE_MASK_W, nil); eno != 0 {
+		return eno
+	}
 	var dstIno Ino
 	var _a Attr
-	if m.en.doLookup(ctx, parent, name, &dstIno, &_a) == 0 {
+	if eno = m.en.doLookup(ctx, parent, name, &dstIno, &_a); eno == 0 {
 		return syscall.EEXIST
+	} else if eno != syscall.ENOENT {
+		return eno
 	}
 	var sum Summary
 	eno = m.GetSummary(ctx, srcIno, &sum, true, false)
@@ -2399,7 +2407,9 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	if attr.Typ != TypeDirectory {
 		return 0
 	}
-
+	if eno = m.Access(ctx, srcIno, MODE_MASK_R|MODE_MASK_X, &attr); eno != 0 {
+		return eno
+	}
 	var entries []*Entry
 	eno = m.en.doReaddir(ctx, srcIno, 0, &entries, -1)
 	if eno == syscall.ENOENT {

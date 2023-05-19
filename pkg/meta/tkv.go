@@ -3259,6 +3259,9 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, attr)
+		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
+			return eno
+		}
 		attr.Parent = parent
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			attr.Uid = ctx.Uid()
@@ -3285,6 +3288,9 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			}
 			if tx.get(m.entryKey(parent, name)) != nil {
 				return syscall.EEXIST
+			}
+			if eno := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); eno != 0 {
+				return eno
 			}
 			if attr.Typ != TypeDirectory {
 				now := time.Now()
