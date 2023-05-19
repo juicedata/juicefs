@@ -2508,14 +2508,12 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 			changed = true
 		}
 	}
-	if set&SetAttrUID != 0 {
-		if cur.Uid != attr.Uid {
-			if ctx.Uid() != 0 {
-				return nil, syscall.EPERM
-			}
-			dirtyAttr.Uid = attr.Uid
-			changed = true
+	if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
+		if ctx.Uid() != 0 {
+			return nil, syscall.EPERM
 		}
+		dirtyAttr.Uid = attr.Uid
+		changed = true
 	}
 	if set&SetAttrMode != 0 {
 		if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {

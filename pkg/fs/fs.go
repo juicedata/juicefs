@@ -821,9 +821,6 @@ func (f *File) Chmod(ctx meta.Context, mode uint16) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Chmod").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { f.fs.log(l, "Chmod (%s,%o): %s", f.path, mode, errstr(err)) }()
-	if ctx.Uid() != 0 && ctx.Uid() != f.info.attr.Uid {
-		return syscall.EACCES
-	}
 	var attr = Attr{Mode: mode}
 	err = f.fs.m.SetAttr(ctx, f.inode, meta.SetAttrMode, 0, &attr)
 	f.fs.invalidateAttr(f.inode)
@@ -836,27 +833,9 @@ func (f *File) Chown(ctx meta.Context, uid uint32, gid uint32) (err syscall.Errn
 	defer func() { f.fs.log(l, "Chown (%s,%d,%d): %s", f.path, uid, gid, errstr(err)) }()
 	var flag uint16
 	if uid != uint32(f.info.Uid()) {
-		if ctx.Uid() != 0 {
-			return syscall.EACCES
-		}
 		flag |= meta.SetAttrUID
 	}
 	if gid != uint32(f.info.Gid()) {
-		if ctx.Uid() != 0 {
-			if ctx.Uid() != uint32(f.info.Uid()) {
-				return syscall.EACCES
-			}
-			var found = false
-			for _, g := range ctx.Gids() {
-				if gid == g {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return syscall.EACCES
-			}
-		}
 		flag |= meta.SetAttrGID
 	}
 	var attr = Attr{Uid: uid, Gid: gid}
