@@ -70,10 +70,6 @@ COPYRIGHT:
 
 ## 自动补全
 
-:::note 注意
-此特性需要使用 0.15.2 及以上版本的 JuiceFS。它基于 `github.com/urfave/cli/v2` 实现，更多信息请参见[这里](https://github.com/urfave/cli/blob/master/docs/v2/manual.md#enabling)。
-:::
-
 通过加载 [`hack/autocomplete`](https://github.com/juicedata/juicefs/tree/main/hack/autocomplete) 目录下的对应脚本可以启用命令的自动补全，例如：
 
 <Tabs groupId="juicefs-cli-autocomplete">
@@ -296,6 +292,9 @@ Consul 注册中心地址 (默认："127.0.0.1:8500")
 
 `--cache-partial-only`<br />
 仅缓存随机小块读 (默认：false)。阅读[「缓存」](../guide/cache_management.md)了解更多
+
+`--verify-cache-checksum value`<br />
+缓存数据一致性检查级别，启用 Checksum 校验后，生成缓存文件时会对数据切分做 Checksum 并记录于文件末尾，供读缓存时进行校验。支持以下级别：<br/><ul><li>`none`：禁用一致性检查，如果本地数据被篡改，将会读到错误数据；</li><li>`full`（默认）：读完整数据块时才校验，适合顺序读场景；</li><li>`shrink`：对读范围内的切片数据进行校验，校验范围不包含读边界所在的切片（可以理解为开区间），适合随机读场景；</li><li>`extend`：对读范围内的切片数据进行校验，校验范围同时包含读边界所在的切片（可以理解为闭区间），因此将带来一定程度的读放大，适合对正确性有极致要求的随机读场景。</li></ul>
 
 `--read-only`<br />
 只读模式 (默认：false)
