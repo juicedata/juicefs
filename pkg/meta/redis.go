@@ -2077,6 +2077,7 @@ func (m *redisMeta) doCleanStaleSession(sid uint64) error {
 
 func (m *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 	vals, err := m.rdb.ZRangeByScore(Background, m.allSessions(), &redis.ZRangeBy{
+		Min:   "-inf",
 		Max:   strconv.FormatInt(time.Now().Unix(), 10),
 		Count: int64(limit)}).Result()
 	if err != nil {
@@ -2093,6 +2094,7 @@ func (m *redisMeta) doFindStaleSessions(limit int) ([]uint64, error) {
 
 	// check clients with version before 1.0-beta3 as well
 	vals, err = m.rdb.ZRangeByScore(Background, legacySessions, &redis.ZRangeBy{
+		Min:   "-inf",
 		Max:   strconv.FormatInt(time.Now().Add(time.Minute*-5).Unix(), 10),
 		Count: int64(limit)}).Result()
 	if err != nil {
@@ -2522,7 +2524,7 @@ func (m *redisMeta) doGetDirStat(ctx Context, ino Ino, trySync bool) (*dirStat, 
 func (m *redisMeta) cleanupLegacies() {
 	for {
 		utils.SleepWithJitter(time.Minute)
-		rng := &redis.ZRangeBy{Max: strconv.FormatInt(time.Now().Add(-time.Hour).Unix(), 10), Count: 1000}
+		rng := &redis.ZRangeBy{Min: "-inf", Max: strconv.FormatInt(time.Now().Add(-time.Hour).Unix(), 10), Count: 1000}
 		vals, err := m.rdb.ZRangeByScore(Background, m.delfiles(), rng).Result()
 		if err != nil {
 			continue
@@ -2548,7 +2550,7 @@ func (m *redisMeta) cleanupLegacies() {
 }
 
 func (m *redisMeta) doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) {
-	rng := &redis.ZRangeBy{Max: strconv.FormatInt(ts, 10), Count: int64(limit)}
+	rng := &redis.ZRangeBy{Min: "-inf", Max: strconv.FormatInt(ts, 10), Count: int64(limit)}
 	vals, err := m.rdb.ZRangeByScore(Background, m.delfiles(), rng).Result()
 	if err != nil {
 		return nil, err
@@ -4264,7 +4266,7 @@ func (m *redisMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 
 func (m *redisMeta) doFindDetachedNodes(t time.Time) []Ino {
 	var inodes []Ino
-	vals, err := m.rdb.ZRangeByScore(Background, m.detachedNodes(), &redis.ZRangeBy{Max: strconv.FormatInt(t.Unix(), 10)}).Result()
+	vals, err := m.rdb.ZRangeByScore(Background, m.detachedNodes(), &redis.ZRangeBy{Min: "-inf", Max: strconv.FormatInt(t.Unix(), 10)}).Result()
 	if err != nil {
 		logger.Errorf("Scan detached nodes error: %s", err)
 		return nil
