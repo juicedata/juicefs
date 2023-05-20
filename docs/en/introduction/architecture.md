@@ -32,7 +32,7 @@ The strong consistency and high performance of JuiceFS is ascribed to its specia
 
 Each file stored in JuiceFS is split into one or more **"Chunk"**(s) with the size limit of 64 MiB. Each Chunk is composed of one or more **"Slice"**(s). The purpose of Chunk is to divide large files and improve performance, while Slice exists to further optimize different kinds of write operations, they are both internal logical concept within JuiceFS. The length of the slice varies depending on how the file is written. Each slice is then divided into **"Block"**(s) (size limit to 4 MiB by default).
 
-![](../images/juicefs-storage-format-new.png)
+![](../images/data-structure-diagram.svg)
 
 Blocks will be eventually stored in object storage as the basic storage unit, that's why you cannot find the original files directly in the object storage, instead there's only a `chunks` directory and a bunch of numbered directories and files in the bucket, don't panic, this is exactly how JuiceFS formats and stores data. At the same time, file and its relationship with Chunks, Slices, and Blocks will be stored in metadata engines. This decoupled design is what makes JuiceFS a high-performance file system.
 
