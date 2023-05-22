@@ -99,8 +99,6 @@ func (f *Format) update(old *Format, force bool) error {
 		switch {
 		case f.Name != old.Name:
 			args = []interface{}{"name", old.Name, f.Name}
-		case f.Storage != old.Storage:
-			args = []interface{}{"storage", old.Storage, f.Storage}
 		case f.BlockSize != old.BlockSize:
 			args = []interface{}{"block size", old.BlockSize, f.BlockSize}
 		case f.Compression != old.Compression:
