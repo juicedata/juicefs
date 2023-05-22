@@ -73,9 +73,9 @@ type node struct {
 	Atime     int64  `xorm:"notnull"`
 	Mtime     int64  `xorm:"notnull"`
 	Ctime     int64  `xorm:"notnull"`
-	Atimensec int16  `xorm:"notnull"`
-	Mtimensec int16  `xorm:"notnull"`
-	Ctimensec int16  `xorm:"notnull"`
+	Atimensec int16  `xorm:"notnull default 0"`
+	Mtimensec int16  `xorm:"notnull default 0"`
+	Ctimensec int16  `xorm:"notnull default 0"`
 	Nlink     uint32 `xorm:"notnull"`
 	Length    uint64 `xorm:"notnull"`
 	Rdev      uint32
