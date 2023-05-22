@@ -60,6 +60,10 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 				Usage: "hard quota of the volume limiting its number of inodes",
 			},
 			&cli.StringFlag{
+				Name:  "storage",
+				Usage: "object storage type (e.g. s3, gcs, oss, cos)",
+			},
+			&cli.StringFlag{
 				Name:  "bucket",
 				Usage: "the bucket URL of object storage to store data",
 			},
@@ -165,6 +169,12 @@ func config(ctx *cli.Context) error {
 				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.Inodes, new))
 				format.Inodes = new
 				quota = true
+			}
+		case "storage":
+			if new := ctx.String(flag); new != format.Storage {
+				msg.WriteString(fmt.Sprintf("%10s: %s -> %s\n", flag, format.Storage, new))
+				format.Storage = new
+				storage = true
 			}
 		case "bucket":
 			if new := ctx.String(flag); new != format.Bucket {
