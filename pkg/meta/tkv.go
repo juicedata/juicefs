@@ -866,7 +866,7 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		tx.set(m.inodeKey(inode), m.marshal(dirtyAttr))
 		*attr = *dirtyAttr
 		return nil
-	}))
+	}, inode))
 }
 
 func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
@@ -937,7 +937,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			*attr = t
 		}
 		return nil
-	})
+	}, inode)
 	if err == nil {
 		m.updateParentStat(ctx, inode, t.Parent, newLength, newSpace)
 	}
@@ -1027,7 +1027,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 			}
 		}
 		return nil
-	})
+	}, inode)
 	if err == nil {
 		m.updateParentStat(ctx, inode, t.Parent, newLength, newSpace)
 	}
@@ -1056,7 +1056,7 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 		attr.Atimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		return nil
-	})
+	}, inode)
 	atime = attr.Atime
 	return
 }
@@ -1650,7 +1650,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			tx.set(m.inodeKey(parentDst), m.marshal(&dattr))
 		}
 		return nil
-	}, parentSrc)
+	}, parentDst)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 			m.fileDeleted(opened, false, dino, tattr.Length)
@@ -1808,7 +1808,7 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		tx.delete(m.inodeKey(inode))
 		tx.delete(m.sustainedKey(sid, inode))
 		return nil
-	})
+	}, inode)
 	if err == nil {
 		newSpace := -align4K(attr.Length)
 		m.updateStats(newSpace, -1)
@@ -2016,7 +2016,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		tx.set(m.inodeKey(fout), m.marshal(&attr))
 		*copied = size
 		return nil
-	})
+	}, fout)
 	if err == nil {
 		m.updateParentStat(ctx, fout, attr.Parent, newLength, newSpace)
 	}
@@ -3347,7 +3347,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			tx.set(m.symKey(ino), tx.get(m.symKey(srcIno)))
 		}
 		return nil
-	}))
+	}, srcIno))
 }
 
 func (m *kvMeta) doFindDetachedNodes(t time.Time) []Ino {
@@ -3381,7 +3381,7 @@ func (m *kvMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 		tx.delete(m.dirStatKey(ino))
 		tx.delete(m.detachedKey(ino))
 		return nil
-	}))
+	}, ino))
 }
 
 func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string) syscall.Errno {
@@ -3431,6 +3431,6 @@ func (m *kvMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		updated = true
 		return nil
-	})
+	}, inode)
 	return updated, err
 }
