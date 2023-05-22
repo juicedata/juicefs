@@ -35,31 +35,31 @@ Here's how you can set up your systemd configuration file:
 
 1. Create the file `/etc/systemd/system/juicefs.mount` and add the following content:
 
-```conf
-[Unit]
-Description=Juicefs
-Before=docker.service
+    ```conf
+    [Unit]
+    Description=Juicefs
+    Before=docker.service
 
-[Mount]
-Environment="ALICLOUD_ACCESS_KEY_ID=mykey" "ALICLOUD_ACCESS_KEY_SECRET=mysecret" "META_PASSWORD=mypassword"
-What=mysql://juicefs@(mysql.host:3306)/juicefs
-Where=/juicefs
-Type=juicefs
-Options=_netdev,allow_other,writeback_cache
+    [Mount]
+    Environment="ALICLOUD_ACCESS_KEY_ID=mykey" "ALICLOUD_ACCESS_KEY_SECRET=mysecret" "META_PASSWORD=mypassword"
+    What=mysql://juicefs@(mysql.host:3306)/juicefs
+    Where=/juicefs
+    Type=juicefs
+    Options=_netdev,allow_other,writeback_cache
 
-[Install]
-WantedBy=remote-fs.target
-WantedBy=multi-user.target
-```
+    [Install]
+    WantedBy=remote-fs.target
+    WantedBy=multi-user.target
+    ```
 
-Feel free to modify the options and environments according to your needs.
+    Feel free to modify the options and environments according to your needs.
 
 2. Enable and start the JuiceFS mount using the following commands:
 
-```sh
-systemctl enable juicefs.mount
-systemctl start juicefs.mount
-```
+    ```sh
+    systemctl enable juicefs.mount
+    systemctl start juicefs.mount
+    ```
 
 After completing these steps, you will be able to access `/juicefs` and store your files there.
 
