@@ -34,7 +34,7 @@ JuiceFS 采用多引擎设计，目前已支持 Redis、TiKV、MySQL/MariaDB、P
 
 写入以后，文件会还可能发生修改，那么新的写入就会产生新的 Slice，叠加在已有的 Slice 之上。如果一个文件在各个区域被反复修改，那么就会产生大量的 Slice。读文件被读取的时候，按照下方架构图中的堆叠 Slice 模型，不难想象，读取文件需要查找「当前读取范围内最新产生的 Slices」，那么显而易见，堆叠的大量 Slice 将会显著影响读性能，因此 JuiceFS 会在后台任务运行碎片合并，将这一系列 Slice 合并为一。
 
-Slice 是完全为了优化写入性能而产生的数据结构，实际存储时会对文件拆分为 64M 的 「Chunk」，用分而治之的方式让大文件拥有更好的读性能。Chunk 中会引用一或多个 Slices，[在引用关系中标记各个 Slice 的有效数据偏移范围](../development/internals.md#sliceref)。
+Slice 是完全为了优化写入性能而产生的数据结构，实际存储时会对文件拆分为 64M 的「Chunk」，用分而治之的方式让大文件拥有更好的读性能。Chunk 中会引用一或多个 Slices，[在引用关系中标记各个 Slice 的有效数据偏移范围](../development/internals.md#sliceref)。
 
 上边介绍的 Chunk、Slice，其实都是逻辑数据结构，实际落地成为物理数据，则是对 Slice 进行进一步拆分成一个个「Block」（默认最大 4M），作为实际上的最小存储单元上传至对象存储。Block 同时也是磁盘缓存的最小存储单元。
 
