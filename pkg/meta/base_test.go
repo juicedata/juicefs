@@ -1854,15 +1854,19 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 	case *dbMeta:
 		err = m.txn(func(s *xorm.Session) error {
 			_, err = s.ID(inode).AllCols().Update(&node{
-				Inode:  inode,
-				Type:   attr.Typ,
-				Flags:  attr.Flags,
-				Mode:   attr.Mode,
-				Uid:    attr.Uid,
-				Gid:    attr.Gid,
-				Mtime:  attr.Mtime * 1e6,
-				Ctime:  attr.Ctime * 1e6,
-				Atime:  attr.Atime * 1e6,
+				Inode:     inode,
+				Type:      attr.Typ,
+				Flags:     attr.Flags,
+				Mode:      attr.Mode,
+				Uid:       attr.Uid,
+				Gid:       attr.Gid,
+				Atime:     attr.Atime*1e6 + int64(attr.Atimensec)/1e3,
+				Mtime:     attr.Mtime*1e6 + int64(attr.Mtimensec)/1e3,
+				Ctime:     attr.Ctime*1e6 + int64(attr.Ctimensec)/1e3,
+				Atimensec: int16(attr.Atimensec % 1e3),
+				Mtimensec: int16(attr.Mtimensec % 1e3),
+				Ctimensec: int16(attr.Ctimensec % 1e3),
+
 				Nlink:  attr.Nlink,
 				Length: attr.Length,
 				Rdev:   attr.Rdev,
