@@ -3,18 +3,15 @@ title: 存储配额
 sidebar_position: 5
 ---
 
-JuiceFS v0.14.2 开始支持文件系统级别的存储配额，该功能包括：
-
-- 限制文件系统的总可用容量
-- 限制文件系统的 inode 总数
+JuiceFS 同时支持文件系统总配额和子目录配额，均可用于限制可用容量和可用 inode 数量。
 
 :::tip 提示
-存储限额设置会保存在元数据引擎中以供所有挂载点读取，每个挂载点的客户端也会缓存自己的已用容量和 inodes 数，每秒向元数据引擎同步一次。与此同时，客户端每 10 秒会从元数据引擎读取最新的用量值，从而实现用量信息在每个挂载点之间同步，但这种信息同步机制并不能保证用量数据被精确统计。
+存储限额设置会保存在元数据引擎中以供所有挂载点读取，每个挂载点的客户端也会缓存自己的已用容量和 inodes 数，周期性地向元数据引擎同步。与此同时，客户端也会周期性地从元数据引擎读取最新的用量值，从而实现用量信息在每个挂载点之间同步，但这种信息同步机制并不能保证用量数据被精确统计，可能会存在十秒级误差。
 :::
 
-## 查看文件系统的基本信息
+## 文件系统配额
 
-以 Linux 环境为例，使用系统自带的 `df` 命令可以看到，一个 JuiceFS 类型的文件系统默认的容量标识为 `1.0P` ：
+JuiceFS v0.14.2 开始支持文件系统级别的存储配额。以 Linux 环境为例，使用系统自带的 `df` 命令可以看到，一个 JuiceFS 类型的文件系统默认的容量标识为 `1.0P` ：
 
 ```shell
 $ df -Th | grep juicefs
@@ -46,7 +43,7 @@ $ juicefs config $METAURL
 }
 ```
 
-## 限制总容量
+### 限制总容量
 
 可以在创建文件系统时通过 `--capacity` 设置容量限额，单位 GiB，例如创建一个可用容量为 100 GiB 文件系统的：
 
@@ -74,7 +71,7 @@ $ df -Th | grep juicefs
 JuiceFS:ujfs   fuse.juicefs  100G  682M  100G    1% /mnt
 ```
 
-## 限制 inode 总量
+### 限制 inode 总量
 
 在 Linux 系统中，每个文件（文件夹也是文件的一种）不论大小都有一个 inode，因此限制 inode 数量等同于限制文件数量。
 
@@ -99,7 +96,7 @@ $ juicefs config $METAURL --inodes 100
     inodes: 0 -> 100
 ```
 
-## 组合使用
+### 组合使用
 
 你可以结合 `--capacity` 和 `--inodes` 更灵活的设置文件系统的容量限额，比如，创建一个文件系统，限制总容量为 100TiB 且仅允许存储 100000 文件：
 
@@ -125,3 +122,99 @@ juicefs config $METAURL --inodes 100000
 :::tip 提示
 客户端每 60 秒从元数据引擎读取一次最新的存储限额设置来更新本地的设置，这个时间频率可能会造成其他挂载点最长需要 60 秒才能完成限额设置的更新。
 :::
+
+## 目录配额
+
+JuiceFS v1.1.0 开始支持目录级别的存储配额，可以使用 `juicefs quota` 子命令进行目录配额管理和查询。
+
+### 限制目录容量
+
+可以使用 `juicefs quota set $METAURL --path $DIR --capacity $N` 设置目录容量限额，单位 GiB。例如给目录`/test`设置 1GiB 的容量配额：
+
+```shell
+$ juicefs quota set $METAURL --path /test --capacity 1
++-------+---------+---------+------+-----------+-------+-------+
+|  Path |   Size  |   Used  | Use% |   Inodes  | IUsed | IUse% |
++-------+---------+---------+------+-----------+-------+-------+
+| /test | 1.0 GiB | 1.6 MiB |   0% | unlimited |   314 |       |
++-------+---------+---------+------+-----------+-------+-------+
+```
+设置成功后可以看到有一个表格告诉我们被限制目录，配额大小，当前用量等信息。
+
+:::tip 提示
+`quota` 子命令的使用无需本地挂载，期望输入的目录路径为相对 JuiceFS 根目录的路径而非本地挂载路径。给大目录设置配额可能需要等待较长时间，因为需要计算目录当前用量。
+:::
+
+如果需要查询某个目录的配额和当前用量，可以使用 `juicefs quota get $METAURL --path $DIR` 命令：
+
+```shell
+$ juicefs quota get $METAURL --path /test
++-------+---------+---------+------+-----------+-------+-------+
+|  Path |   Size  |   Used  | Use% |   Inodes  | IUsed | IUse% |
++-------+---------+---------+------+-----------+-------+-------+
+| /test | 1.0 GiB | 1.6 MiB |   0% | unlimited |   314 |       |
++-------+---------+---------+------+-----------+-------+-------+
+```
+
+也可以使用 `juicefs quota ls $METAURL` 命令列出所有的目录配额。
+
+### 限制目录 inode 总量
+
+可以使用 `juicefs quota set $METAURL --path $DIR --inodes $N` 设置目录 inode 限额，单位为个。例如给目录`/test`设置 400 个 inode 的配额：
+
+```shell
+$ juicefs quota set $METAURL --path /test --inodes 400
++-------+---------+---------+------+--------+-------+-------+
+|  Path |   Size  |   Used  | Use% | Inodes | IUsed | IUse% |
++-------+---------+---------+------+--------+-------+-------+
+| /test | 1.0 GiB | 1.6 MiB |   0% |    400 |   314 |   78% |
++-------+---------+---------+------+--------+-------+-------+
+```
+
+### 组合使用
+
+可以结合 `--capacity` 和 `--inodes` 更灵活地设置目录的容量限额。比如，给一个目录设置 10GiB 和 1000 个 inode 的配额：
+
+```shell
+$ juicefs quota set $METAURL --path $DIR --capacity 10 --inodes 1000
+```
+
+另外，我们也可以不限制目录的容量和 inode 数，只通过 quota 统计目录的当前用量：
+
+```shell
+$ juicefs quota set $METAURL --path $DIR --capacity 0 --inodes 0
++-------+-----------+---------+------+-----------+-------+-------+
+|  Path |    Size   |   Used  | Use% |   Inodes  | IUsed | IUse% |
++-------+-----------+---------+------+-----------+-------+-------+
+| /test | unlimited | 1.6 MiB |      | unlimited |   314 |       |
++-------+-----------+---------+------+-----------+-------+-------+
+```
+
+### 子目录挂载
+
+JuiceFS 支持使用 `--subdir` [参数](../reference/command_reference.md#mount)挂载任意子目录。
+如果挂载的子目录设置了目录配额，则可以使用系统自带的 `df` 命令查看目录配额和当前使用量。
+比如文件系统配额为 1PiB 和 10M 个 inode，而`/test` 目录的配额为 1GiB 和 400 个 inode，但使用根目录挂载时 `df` 命令的输出为：
+
+```shell
+$ df -h
+Filesystem      Size  Used Avail Use% Mounted on
+...
+JuiceFS:myjfs   1.0P  1.6M  1.0P   1% /mnt/jfs
+$ df -i -h
+Filesystem     Inodes IUsed IFree IUse% Mounted on
+...
+JuiceFS:myjfs     11M   315   10M    1% /mnt/jfs
+```
+
+而使用 `/test` 子目录挂载时，`df` 命令的输出为:
+```shell
+$ df -h
+Filesystem      Size  Used Avail Use% Mounted on
+...
+JuiceFS:myjfs   1.0G  1.6M 1023M   1% /mnt/jfs
+$ df -i -h
+Filesystem     Inodes IUsed IFree IUse% Mounted on
+...
+JuiceFS:myjfs     400   314    86   79% /mnt/jfs
+```
