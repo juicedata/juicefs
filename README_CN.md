@@ -36,7 +36,7 @@ JuiceFS 可以简单便捷的将海量云存储直接接入已投入生产环境
 
 ## 架构
 
-阅读[架构](https://juicefs.com/docs/zh/community/architecture/)以了解。
+阅读[架构](https://juicefs.com/docs/zh/community/architecture)以了解。
 
 ## 开始使用
 

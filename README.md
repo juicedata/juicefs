@@ -34,7 +34,7 @@ With JuiceFS, massive cloud storage can be directly connected to big data, machi
 
 ## Architecture
 
-See [architecture](https://juicefs.com/docs/community/architecture/).
+See [architecture](https://juicefs.com/docs/community/architecture).
 
 ## Getting Started
 
