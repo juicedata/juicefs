@@ -194,7 +194,7 @@ $ juicefs quota set $METAURL --path $DIR --capacity 0 --inodes 0
 
 JuiceFS 支持使用 `--subdir` [参数](../reference/command_reference.md#mount)挂载任意子目录。
 如果挂载的子目录设置了目录配额，则可以使用系统自带的 `df` 命令查看目录配额和当前使用量。
-比如文件系统配额为 1PiB 和 10M 个 inode，而`/test` 目录的配额为 1GiB 和 400 个 inode，但使用根目录挂载时 `df` 命令的输出为：
+比如文件系统配额为 1PiB 和 10M 个 inode，而`/test` 目录的配额为 1GiB 和 400 个 inode。使用根目录挂载时 `df` 命令的输出为：
 
 ```shell
 $ df -h
