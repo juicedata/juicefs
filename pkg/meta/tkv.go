@@ -853,71 +853,23 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, &cur)
-		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
-			attr.Mode |= (cur.Mode & 06000)
-		}
-		var changed bool
-		if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
-			clearSUGID(ctx, &cur, attr)
-			changed = true
-		}
-		if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
-			cur.Uid = attr.Uid
-			changed = true
-		}
-		if set&SetAttrGID != 0 && cur.Gid != attr.Gid {
-			cur.Gid = attr.Gid
-			changed = true
-		}
-		if set&SetAttrMode != 0 {
-			if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
-				if ctx.Gid() != cur.Gid {
-					attr.Mode &= 05777
-				}
-			}
-			if attr.Mode != cur.Mode {
-				cur.Mode = attr.Mode
-				changed = true
-			}
-		}
 		now := time.Now()
-		if set&SetAttrAtime != 0 && (cur.Atime != attr.Atime || cur.Atimensec != attr.Atimensec) {
-			cur.Atime = attr.Atime
-			cur.Atimensec = attr.Atimensec
-			changed = true
+		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now)
+		if st != 0 {
+			return st
 		}
-		if set&SetAttrAtimeNow != 0 {
-			cur.Atime = now.Unix()
-			cur.Atimensec = uint32(now.Nanosecond())
-			changed = true
-		}
-		if set&SetAttrMtime != 0 && (cur.Mtime != attr.Mtime || cur.Mtimensec != attr.Mtimensec) {
-			cur.Mtime = attr.Mtime
-			cur.Mtimensec = attr.Mtimensec
-			changed = true
-		}
-		if set&SetAttrMtimeNow != 0 {
-			cur.Mtime = now.Unix()
-			cur.Mtimensec = uint32(now.Nanosecond())
-			changed = true
-		}
-		if set&SetAttrFlag != 0 {
-			cur.Flags = attr.Flags
-			changed = true
-		}
-		if !changed {
-			*attr = cur
+		if dirtyAttr == nil {
 			return nil
 		}
-		cur.Ctime = now.Unix()
-		cur.Ctimensec = uint32(now.Nanosecond())
-		tx.set(m.inodeKey(inode), m.marshal(&cur))
-		*attr = cur
+		dirtyAttr.Ctime = now.Unix()
+		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
+		tx.set(m.inodeKey(inode), m.marshal(dirtyAttr))
+		*attr = *dirtyAttr
 		return nil
 	}))
 }
 
-func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
+func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
 	defer m.timeit("Truncate", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
@@ -937,6 +889,11 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		m.parseAttr(a, &t)
 		if t.Typ != TypeFile {
 			return syscall.EPERM
+		}
+		if !skipPermCheck {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
+				return st
+			}
 		}
 		if length == t.Length {
 			if attr != nil {
@@ -1152,6 +1109,9 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+			return st
+		}
 		if (pattr.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
@@ -1282,6 +1242,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+			return st
+		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
@@ -1403,6 +1366,9 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+			return st
+		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
@@ -1494,13 +1460,23 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if sattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &sattr); st != 0 {
+			return st
+		}
 		m.parseAttr(rs[1], &dattr)
 		if dattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
+			return st
+		}
 		m.parseAttr(rs[2], &iattr)
 		if (sattr.Flags&FlagAppend) != 0 || (sattr.Flags&FlagImmutable) != 0 || (dattr.Flags&FlagImmutable) != 0 || (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
+		}
+		if parentSrc != parentDst && sattr.Mode&0o1000 != 0 && ctx.Uid() != 0 &&
+			ctx.Uid() != iattr.Uid && (ctx.Uid() != sattr.Uid || iattr.Typ == TypeDirectory) {
+			return syscall.EACCES
 		}
 
 		dbuf := tx.get(m.entryKey(parentDst, nameDst))
@@ -1694,6 +1670,9 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		m.parseAttr(rs[0], &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+			return st
 		}
 		if pattr.Flags&FlagImmutable != 0 {
 			return syscall.EPERM
@@ -3280,6 +3259,9 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, attr)
+		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
+			return eno
+		}
 		attr.Parent = parent
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			attr.Uid = ctx.Uid()
@@ -3306,6 +3288,9 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			}
 			if tx.get(m.entryKey(parent, name)) != nil {
 				return syscall.EEXIST
+			}
+			if eno := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); eno != 0 {
+				return eno
 			}
 			if attr.Typ != TypeDirectory {
 				now := time.Now()

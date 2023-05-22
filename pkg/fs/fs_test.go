@@ -85,7 +85,7 @@ func TestFileSystem(t *testing.T) {
 		t.Fatalf("name: %s", f.Name())
 	}
 	_ = f.Close(ctx)
-	f, err = fs.Open(ctx, "/hello", mMaskR|mMaskW)
+	f, err = fs.Open(ctx, "/hello", meta.MODE_MASK_R|meta.MODE_MASK_W)
 	if err != 0 {
 		t.Fatalf("open %s", err)
 	}
@@ -180,7 +180,7 @@ func TestFileSystem(t *testing.T) {
 		t.Fatalf("delete /sym: %s", err)
 	}
 
-	if _, e := fs.Open(meta.NewContext(2, 2, []uint32{3}), "/hello", mMaskW); e == 0 || e != syscall.EACCES {
+	if _, e := fs.Open(meta.NewContext(2, 2, []uint32{3}), "/hello", meta.MODE_MASK_W); e == 0 || e != syscall.EACCES {
 		t.Fatalf("open without permission: %s", e)
 	}
 

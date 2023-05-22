@@ -43,7 +43,11 @@ type fuseContext struct {
 	header   *fuse.InHeader
 	canceled bool
 	cancel   <-chan struct{}
+
+	checkPermission bool
 }
+
+var gidcache = newGidCache(time.Minute * 5)
 
 var contextPool = sync.Pool{
 	New: func() interface{} {
@@ -58,7 +62,9 @@ func (fs *fileSystem) newContext(cancel <-chan struct{}, header *fuse.InHeader) 
 	ctx.canceled = false
 	ctx.cancel = cancel
 	ctx.header = header
+	ctx.checkPermission = fs.conf.NonDefaultPermission && header.Uid != 0
 	if header.Uid == 0 && fs.conf.RootSquash != nil {
+		ctx.checkPermission = true
 		ctx.header.Uid = fs.conf.RootSquash.Uid
 		ctx.header.Gid = fs.conf.RootSquash.Gid
 	}
@@ -78,6 +84,9 @@ func (c *fuseContext) Gid() uint32 {
 }
 
 func (c *fuseContext) Gids() []uint32 {
+	if c.checkPermission {
+		return gidcache.get(c.Pid(), c.Gid())
+	}
 	return []uint32{c.header.Gid}
 }
 
@@ -91,6 +100,10 @@ func (c *fuseContext) Duration() time.Duration {
 
 func (c *fuseContext) Cancel() {
 	c.canceled = true
+}
+
+func (c *fuseContext) CheckPermission() bool {
+	return c.checkPermission
 }
 
 func (c *fuseContext) Canceled() bool {

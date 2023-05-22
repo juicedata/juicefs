@@ -778,6 +778,24 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Full = true
 }
 
+func (m *dbMeta) parseNode(attr *Attr, n *node) {
+	if attr == nil || n == nil {
+		return
+	}
+	n.Type = attr.Typ
+	n.Mode = attr.Mode
+	n.Flags = attr.Flags
+	n.Uid = attr.Uid
+	n.Gid = attr.Gid
+	n.Atime = attr.Atime*1e6 + int64(attr.Atimensec)/1000
+	n.Mtime = attr.Mtime*1e6 + int64(attr.Mtimensec)/1000
+	n.Ctime = attr.Ctime*1e6 + int64(attr.Ctimensec)/1000
+	n.Nlink = attr.Nlink
+	n.Length = attr.Length
+	n.Rdev = attr.Rdev
+	n.Parent = attr.Parent
+}
+
 func (m *dbMeta) updateStats(space int64, inodes int64) {
 	atomic.AddInt64(&m.newSpace, space)
 	atomic.AddInt64(&m.newInodes, inodes)
@@ -842,30 +860,6 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}))
 }
 
-func clearSUGIDSQL(ctx Context, cur *node, set *Attr) {
-	switch runtime.GOOS {
-	case "darwin":
-		if ctx.Uid() != 0 {
-			// clear SUID and SGID
-			cur.Mode &= 01777
-			set.Mode &= 01777
-		}
-	case "linux":
-		// same as ext
-		if cur.Type != TypeDirectory {
-			if ctx.Uid() != 0 || (cur.Mode>>3)&1 != 0 {
-				// clear SUID and SGID
-				cur.Mode &= 01777
-				set.Mode &= 01777
-			} else {
-				// keep SGID if the file is non-group-executable
-				cur.Mode &= 03777
-				set.Mode &= 03777
-			}
-		}
-	}
-}
-
 func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	defer m.timeit("SetAttr", time.Now())
 	inode = m.checkRoot(inode)
@@ -879,62 +873,22 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		if !ok {
 			return syscall.ENOENT
 		}
-		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
-			attr.Mode |= (cur.Mode & 06000)
+		var curAttr Attr
+		m.parseAttr(&cur, &curAttr)
+		now := time.Now()
+		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &curAttr, attr, now)
+		if st != 0 {
+			return st
 		}
-		var changed bool
-		if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
-			clearSUGIDSQL(ctx, &cur, attr)
-			changed = true
-		}
-		if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
-			cur.Uid = attr.Uid
-			changed = true
-		}
-		if set&SetAttrGID != 0 && cur.Gid != attr.Gid {
-			cur.Gid = attr.Gid
-			changed = true
-		}
-		if set&SetAttrMode != 0 {
-			if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
-				if ctx.Gid() != cur.Gid {
-					attr.Mode &= 05777
-				}
-			}
-			if attr.Mode != cur.Mode {
-				cur.Mode = attr.Mode
-				changed = true
-			}
-		}
-		now := time.Now().UnixNano() / 1e3
-		if set&SetAttrAtime != 0 {
-			cur.Atime = attr.Atime*1e6 + int64(attr.Atimensec)/1e3
-			changed = true
-		}
-		if set&SetAttrAtimeNow != 0 {
-			cur.Atime = now
-			changed = true
-		}
-		if set&SetAttrMtime != 0 {
-			cur.Mtime = attr.Mtime*1e6 + int64(attr.Mtimensec)/1e3
-			changed = true
-		}
-		if set&SetAttrMtimeNow != 0 {
-			cur.Mtime = now
-			changed = true
-		}
-		if set&SetAttrFlag != 0 {
-			cur.Flags = attr.Flags
-			changed = true
-		}
-		m.parseAttr(&cur, attr)
-		if !changed {
+		if dirtyAttr == nil {
 			return nil
 		}
-		cur.Ctime = now
-		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime").Update(&cur, &node{Inode: inode})
+		var dirtyNode node
+		m.parseNode(dirtyAttr, &dirtyNode)
+		dirtyNode.Ctime = now.UnixNano() / 1e3
+		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime").Update(&dirtyNode, &node{Inode: inode})
 		if err == nil {
-			m.parseAttr(&cur, attr)
+			m.parseAttr(&dirtyNode, attr)
 		}
 		return err
 	}))
@@ -957,7 +911,7 @@ func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte
 	return err
 }
 
-func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
+func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
 	defer m.timeit("Truncate", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
@@ -967,6 +921,9 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 	defer func() { m.of.InvalidateChunk(inode, invalidateAllChunks) }()
 	var newLength, newSpace int64
 	var nodeAttr node
+	if attr == nil {
+		attr = &Attr{}
+	}
 	err := m.txn(func(s *xorm.Session) error {
 		newLength, newSpace = 0, 0
 		nodeAttr = node{Inode: inode}
@@ -980,8 +937,13 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if nodeAttr.Type != TypeFile {
 			return syscall.EPERM
 		}
+		m.parseAttr(&nodeAttr, attr)
+		if !skipPermCheck {
+			if st := m.Access(ctx, inode, MODE_MASK_W, attr); st != 0 {
+				return st
+			}
+		}
 		if length == nodeAttr.Length {
-			m.parseAttr(&nodeAttr, attr)
 			return nil
 		}
 		newLength = int64(length) - int64(nodeAttr.Length)
@@ -1224,6 +1186,11 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		var pattr Attr
+		m.parseAttr(&pn, &pattr)
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+			return st
+		}
 		if (pn.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
@@ -1340,6 +1307,11 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		}
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		var pattr Attr
+		m.parseAttr(&pn, &pattr)
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+			return st
 		}
 		if (pn.Flags&FlagAppend) != 0 || (pn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
@@ -1483,6 +1455,11 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		var pattr Attr
+		m.parseAttr(&pn, &pattr)
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+			return st
+		}
 		if pn.Flags&FlagImmutable != 0 || pn.Flags&FlagAppend != 0 {
 			return syscall.EPERM
 		}
@@ -1614,6 +1591,15 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if (spn.Flags&FlagAppend) != 0 || (spn.Flags&FlagImmutable) != 0 || (dpn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
+		var spattr, dpattr Attr
+		m.parseAttr(&spn, &spattr)
+		m.parseAttr(&dpn, &dpattr)
+		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &spattr); st != 0 {
+			return st
+		}
+		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); st != 0 {
+			return st
+		}
 		var se = edge{Parent: parentSrc, Name: []byte(nameSrc)}
 		ok, err := s.ForUpdate().Get(&se)
 		if err != nil {
@@ -1644,10 +1630,19 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if !ok {
 			return syscall.ENOENT
 		}
+		var sattr Attr
+		m.parseAttr(&sn, &sattr)
+		if parentSrc != parentDst && spattr.Mode&0o1000 != 0 && ctx.Uid() != 0 &&
+			ctx.Uid() != sattr.Uid && (ctx.Uid() != spattr.Uid || sattr.Typ == TypeDirectory) {
+			return syscall.EACCES
+		}
 		if (sn.Flags&FlagAppend) != 0 || (sn.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
 
+		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dpattr); st != 0 {
+			return st
+		}
 		var de = edge{Parent: parentDst, Name: []byte(nameDst)}
 		ok, err = s.ForUpdate().Get(&de)
 		if err != nil {
@@ -1871,6 +1866,11 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		}
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		var pattr Attr
+		m.parseAttr(&pn, &pattr)
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+			return st
 		}
 		if pn.Flags&FlagImmutable != 0 {
 			return syscall.EPERM
@@ -3773,6 +3773,10 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		if !ok {
 			return syscall.ENOENT
 		}
+		m.parseAttr(&n, attr)
+		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
+			return eno
+		}
 		n.Inode = ino
 		n.Parent = parent
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
@@ -3800,6 +3804,9 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			if (pattr.Flags & FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
+			if eno := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); eno != 0 {
+				return eno
+			}
 			if n.Type != TypeDirectory {
 				now := time.Now().UnixNano() / 1e3
 				pn.Mtime = now
@@ -3809,7 +3816,6 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				}
 			}
 		}
-
 		m.parseAttr(&n, attr)
 		if top && n.Type == TypeDirectory {
 			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: time.Now().Unix()})

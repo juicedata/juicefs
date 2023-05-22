@@ -108,11 +108,7 @@ func (fs *fileSystem) GetAttr(cancel <-chan struct{}, in *fuse.GetAttrIn, out *f
 func (fs *fileSystem) SetAttr(cancel <-chan struct{}, in *fuse.SetAttrIn, out *fuse.AttrOut) (code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	var opened uint8
-	if in.Fh != 0 {
-		opened = 1
-	}
-	entry, err := fs.v.SetAttr(ctx, Ino(in.NodeId), int(in.Valid), opened, in.Mode, in.Uid, in.Gid, int64(in.Atime), int64(in.Mtime), in.Atimensec, in.Mtimensec, in.Size)
+	entry, err := fs.v.SetAttr(ctx, Ino(in.NodeId), int(in.Valid), in.Fh, in.Mode, in.Uid, in.Gid, int64(in.Atime), int64(in.Mtime), in.Atimensec, in.Mtimensec, in.Size)
 	if err != 0 {
 		return fuse.Status(err)
 	}
@@ -348,7 +344,7 @@ func (fs *fileSystem) Flock(cancel <-chan struct{}, in *fuse.LkIn, block bool) (
 func (fs *fileSystem) OpenDir(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.OpenOut) (status fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	fh, err := fs.v.Opendir(ctx, Ino(in.NodeId))
+	fh, err := fs.v.Opendir(ctx, Ino(in.NodeId), in.Flags)
 	out.Fh = fh
 	return fuse.Status(err)
 }
@@ -468,7 +464,9 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 			opt.Options = append(opt.Options, strings.TrimSpace(n))
 		}
 	}
-	opt.Options = append(opt.Options, "default_permissions")
+	if !conf.NonDefaultPermission {
+		opt.Options = append(opt.Options, "default_permissions")
+	}
 	if runtime.GOOS == "darwin" {
 		opt.Options = append(opt.Options, "fssubtype=juicefs")
 		opt.Options = append(opt.Options, "volname="+conf.Format.Name)
