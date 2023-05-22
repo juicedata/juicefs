@@ -44,7 +44,10 @@ func recover(ctx *cli.Context) error {
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
 	for i := 0; i+1 < ctx.NArg(); i++ {
 		path := ctx.Args().Get(i + 1)
-		doRecover(m, path, ctx.Bool("move-to-original"), ctx.Int("threads"))
+		err := doRecover(m, path, ctx.Bool("move-to-original"), ctx.Int("threads"))
+		if err != 0 {
+			logger.Errorf("recover %s: %s", path, err)
+		}
 	}
 	return nil
 }
@@ -54,7 +57,7 @@ func doRecover(m meta.Meta, path string, move bool, threads int) syscall.Errno {
 	ctx := meta.Background
 	var parent meta.Ino
 	var attr meta.Attr
-	err := m.Lookup(ctx, meta.TrashInode, path, &parent, &attr)
+	err := m.Lookup(ctx, meta.TrashInode, path, &parent, &attr, false)
 	if err != 0 {
 		return err
 	}
@@ -79,9 +82,10 @@ func doRecover(m meta.Meta, path string, move bool, threads int) syscall.Errno {
 	}
 
 	todo := make(chan *meta.Entry, 1000)
-	p := utils.NewProgress(false, true)
+	p := utils.NewProgress(false)
 	recovered := p.AddCountBar("recovered", int64(len(entries)))
-	skipped := p.AddCountBar("skipped", int64(len(entries)))
+	skipped := p.AddCountSpinner("skipped")
+	failed := p.AddCountSpinner("failed")
 	var wg sync.WaitGroup
 	for i := 0; i < threads; i++ {
 		wg.Add(1)
@@ -91,8 +95,13 @@ func doRecover(m meta.Meta, path string, move bool, threads int) syscall.Errno {
 				ps := bytes.SplitN(e.Name, []byte("-"), 3)
 				dst, _ := strconv.Atoi(string(ps[0]))
 				if move || parents[meta.Ino(dst)] {
-					m.Rename(ctx, parent, string(e.Name), meta.Ino(dst), string(ps[2]), 0, nil, nil)
-					recovered.Increment()
+					err = m.Rename(ctx, parent, string(e.Name), meta.Ino(dst), string(ps[2]), 0, nil, nil)
+					if err != 0 {
+						logger.Warnf("recover %s: %s", string(e.Name), err)
+						failed.Increment()
+					} else {
+						recovered.Increment()
+					}
 				} else {
 					skipped.Increment()
 				}
@@ -105,6 +114,8 @@ func doRecover(m meta.Meta, path string, move bool, threads int) syscall.Errno {
 	}
 	close(todo)
 	wg.Wait()
+	failed.Done()
+	skipped.Done()
 	recovered.Done()
 	p.Done()
 	logger.Infof("recovered %d files in %s", recovered.Current(), path)
