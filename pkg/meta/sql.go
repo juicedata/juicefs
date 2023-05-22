@@ -64,19 +64,22 @@ type edge struct {
 }
 
 type node struct {
-	Inode  Ino    `xorm:"pk"`
-	Type   uint8  `xorm:"notnull"`
-	Flags  uint8  `xorm:"notnull"`
-	Mode   uint16 `xorm:"notnull"`
-	Uid    uint32 `xorm:"notnull"`
-	Gid    uint32 `xorm:"notnull"`
-	Atime  int64  `xorm:"notnull"`
-	Mtime  int64  `xorm:"notnull"`
-	Ctime  int64  `xorm:"notnull"`
-	Nlink  uint32 `xorm:"notnull"`
-	Length uint64 `xorm:"notnull"`
-	Rdev   uint32
-	Parent Ino
+	Inode     Ino    `xorm:"pk"`
+	Type      uint8  `xorm:"notnull"`
+	Flags     uint8  `xorm:"notnull"`
+	Mode      uint16 `xorm:"notnull"`
+	Uid       uint32 `xorm:"notnull"`
+	Gid       uint32 `xorm:"notnull"`
+	Atime     int64  `xorm:"notnull"`
+	Mtime     int64  `xorm:"notnull"`
+	Ctime     int64  `xorm:"notnull"`
+	Atimensec int16  `xorm:"notnull"`
+	Mtimensec int16  `xorm:"notnull"`
+	Ctimensec int16  `xorm:"notnull"`
+	Nlink     uint32 `xorm:"notnull"`
+	Length    uint64 `xorm:"notnull"`
+	Rdev      uint32
+	Parent    Ino
 }
 
 type namedNode struct {
