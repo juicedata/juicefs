@@ -28,15 +28,21 @@ JuiceFS supports a variety of common databases as metadata engine, like Redis, T
 
 ## How JuiceFS Stores Files {#how-juicefs-store-files}
 
-The strong consistency and high performance of JuiceFS is ascribed to its special file management model. Traditional file systems use local disks to store both file data and metadata, while JuiceFS formats data first and then stores them in object storage, with the corresponding metadata being stored in the metadata engine such as Redis.
+Traditional file systems use local disks to store both file data and metadata, JuiceFS formats data first and then stores them in object storage, with the corresponding metadata being stored in the metadata engine.
 
-Each file stored in JuiceFS is split into one or more **"Chunk"**(s) with the size limit of 64 MiB. Each Chunk is composed of one or more **"Slice"**(s). The purpose of Chunk is to divide large files and improve performance, while Slice exists to further optimize different kinds of write operations, they are both internal logical concept within JuiceFS. The length of the slice varies depending on how the file is written. Each slice is then divided into **"Block"**(s) (size limit to 4 MiB by default).
+"Slice" is the data structure designed for writes, with a maximum size of 64M. Every `flush` operation creates a new slice, so if a file is written via a single `flush`, then it'll contain just a single slice. `flush` can be explicitly invoked by user, but if not, JuiceFS Client will automatically carry out `flush` to avoid buffer being written to full.
 
 ![](../images/data-structure-diagram.svg)
 
-Blocks will be eventually stored in object storage as the basic storage unit, that's why you cannot find the original files directly in the object storage, instead there's only a `chunks` directory and a bunch of numbered directories and files in the bucket, don't panic, this is exactly how JuiceFS formats and stores data. At the same time, file and its relationship with Chunks, Slices, and Blocks will be stored in metadata engines. This decoupled design is what makes JuiceFS a high-performance file system.
+After creation, file may be edited, then new writes will form new slices, stacked on top of existing slices. If file is changed on multiple regions again and again, then a large number of slices will be created. When file is read, imagine using the below diagram, you can see how JuiceFS Client will have to look for "every slice that contains the latest file data" in order to perform a correct read, and too many slices will affect read performance. That's why JuiceFS performs compaction in the background, which will merge overlapping slices into one.
+
+Slice is a data structure solely aimed to improve write performance, files are further divided into 64M "Chunk"s, so that large files may enjoy better read performance, through a divide-and-conquer strategy. One chunk will reference one or more slices, and [mark the valid data offsets in the reference relationship](../development/internals.md#sliceref).
+
+Chunk and slice are all logical data structures, when it comes to physical storage, slice is further divided into "Block"s (use a default max size of 4M), the most basic storage unit in the system, and uploaded to object storage. Block is also the basic storage unit in disk cache.
 
 ![](../images/how-juicefs-stores-files-new.png)
+
+Hence, you cannot find the original files directly in the object storage, instead there's only a `chunks` folder and a bunch of numbered directories and files in the bucket, don't panic, this is exactly how JuiceFS formats and stores data. At the same time, file and its relationship with chunks, slices, blocks will be stored in the metadata engine. This decoupled design is what makes JuiceFS a high-performance file system.
 
 Some other technical aspects of JuiceFS storage design:
 
