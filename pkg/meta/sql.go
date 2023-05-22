@@ -418,8 +418,8 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 		return fmt.Errorf("update table session2, delslices, dirstats, detachedNode, dirQuota: %s", err)
 	}
 	// add primary key
-	if err = m.syncTable(new(edge), new(chunk), new(xattr), new(sustained)); err != nil {
-		return fmt.Errorf("update table edge, chunk, xattr, sustained: %s", err)
+	if err = m.syncTable(new(node), new(edge), new(chunk), new(xattr), new(sustained)); err != nil {
+		return fmt.Errorf("update table node, edge, chunk, xattr, sustained: %s", err)
 	}
 	// update the owner from uint64 to int64
 	if err = m.syncTable(new(flock), new(plock)); err != nil {
