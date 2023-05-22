@@ -498,7 +498,7 @@ func (j *juice) Opendir(path string) (e int, fh uint64) {
 		e = -fuse.ENOENT
 		return
 	}
-	fh, errno := j.vfs.Opendir(ctx, f.Inode())
+	fh, errno := j.vfs.Opendir(ctx, f.Inode(), 0)
 	if errno == 0 {
 		j.Lock()
 		j.handlers[fh] = f.Inode()

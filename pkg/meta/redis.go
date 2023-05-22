@@ -890,7 +890,7 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 	return lastErr
 }
 
-func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr) syscall.Errno {
+func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
 	defer m.timeit("Truncate", time.Now())
 	f := m.of.find(inode)
 	if f != nil {
@@ -913,6 +913,11 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		m.parseAttr(a, &t)
 		if t.Typ != TypeFile {
 			return syscall.EPERM
+		}
+		if !skipPermCheck {
+			if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
+				return st
+			}
 		}
 		if length == t.Length {
 			if attr != nil {
@@ -1037,6 +1042,9 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		if (t.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
+		if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
+			return st
+		}
 		if (t.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {
 			return syscall.EPERM
 		}
@@ -1100,70 +1108,22 @@ func (m *redisMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode u
 			return err
 		}
 		m.parseAttr(a, &cur)
-		if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
-			attr.Mode |= (cur.Mode & 06000)
-		}
-		var changed bool
-		if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
-			clearSUGID(ctx, &cur, attr)
-			changed = true
-		}
-		if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
-			cur.Uid = attr.Uid
-			changed = true
-		}
-		if set&SetAttrGID != 0 && cur.Gid != attr.Gid {
-			cur.Gid = attr.Gid
-			changed = true
-		}
-		if set&SetAttrMode != 0 {
-			if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
-				if ctx.Gid() != cur.Gid {
-					attr.Mode &= 05777
-				}
-			}
-			if attr.Mode != cur.Mode {
-				cur.Mode = attr.Mode
-				changed = true
-			}
-		}
 		now := time.Now()
-		if set&SetAttrAtime != 0 && (cur.Atime != attr.Atime || cur.Atimensec != attr.Atimensec) {
-			cur.Atime = attr.Atime
-			cur.Atimensec = attr.Atimensec
-			changed = true
+		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now)
+		if st != 0 {
+			return st
 		}
-		if set&SetAttrAtimeNow != 0 {
-			cur.Atime = now.Unix()
-			cur.Atimensec = uint32(now.Nanosecond())
-			changed = true
-		}
-		if set&SetAttrMtime != 0 && (cur.Mtime != attr.Mtime || cur.Mtimensec != attr.Mtimensec) {
-			cur.Mtime = attr.Mtime
-			cur.Mtimensec = attr.Mtimensec
-			changed = true
-		}
-		if set&SetAttrMtimeNow != 0 {
-			cur.Mtime = now.Unix()
-			cur.Mtimensec = uint32(now.Nanosecond())
-			changed = true
-		}
-		if set&SetAttrFlag != 0 {
-			cur.Flags = attr.Flags
-			changed = true
-		}
-		if !changed {
-			*attr = cur
+		if dirtyAttr == nil {
 			return nil
 		}
-		cur.Ctime = now.Unix()
-		cur.Ctimensec = uint32(now.Nanosecond())
+		dirtyAttr.Ctime = now.Unix()
+		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&cur), 0)
+			pipe.Set(ctx, m.inodeKey(inode), m.marshal(dirtyAttr), 0)
 			return nil
 		})
 		if err == nil {
-			*attr = cur
+			*attr = *dirtyAttr
 		}
 		return err
 	}, m.inodeKey(inode)))
@@ -1245,6 +1205,9 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		m.parseAttr(a, &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+			return st
 		}
 		if (pattr.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM
@@ -1390,6 +1353,9 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+			return st
+		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
@@ -1520,6 +1486,9 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, s
 		m.parseAttr([]byte(rs[0].(string)), &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if st := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); st != 0 {
+			return st
 		}
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
@@ -1660,13 +1629,23 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if sattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &sattr); st != 0 {
+			return st
+		}
 		m.parseAttr([]byte(rs[1].(string)), &dattr)
 		if dattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
+			return st
+		}
 		m.parseAttr([]byte(rs[2].(string)), &iattr)
 		if (sattr.Flags&FlagAppend) != 0 || (sattr.Flags&FlagImmutable) != 0 || (dattr.Flags&FlagImmutable) != 0 || (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
+		}
+		if parentSrc != parentDst && sattr.Mode&0o1000 != 0 && ctx.Uid() != 0 &&
+			ctx.Uid() != iattr.Uid && (ctx.Uid() != sattr.Uid || iattr.Typ == TypeDirectory) {
+			return syscall.EACCES
 		}
 
 		var supdate, dupdate bool
@@ -1866,6 +1845,9 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		m.parseAttr([]byte(rs[0].(string)), &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
+			return st
 		}
 		if pattr.Flags&FlagImmutable != 0 {
 			return syscall.EPERM
@@ -4134,6 +4116,9 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 			return err
 		}
 		m.parseAttr(a, attr)
+		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
+			return eno
+		}
 		attr.Parent = parent
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			attr.Uid = ctx.Uid()
@@ -4166,6 +4151,9 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 				return err
 			} else if exist {
 				return syscall.EEXIST
+			}
+			if eno := m.Access(ctx, parent, MODE_MASK_W|MODE_MASK_X, &pattr); eno != 0 {
+				return eno
 			}
 		}
 

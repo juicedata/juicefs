@@ -76,7 +76,7 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 
 func TestVFSBasic(t *testing.T) {
 	v, _ := createTestVFS()
-	ctx := NewLogContext(meta.NewContext(10, 1, []uint32{2}))
+	ctx := NewLogContext(meta.NewContext(10, 1, []uint32{2, 3}))
 
 	if st, e := v.StatFS(ctx, 1); e != 0 {
 		t.Fatalf("statfs 1: %s", e)
@@ -110,9 +110,9 @@ func TestVFSBasic(t *testing.T) {
 	if _, e := v.SetAttr(ctx, fe.Inode, meta.SetAttrMtimeNow|meta.SetAttrAtimeNow, 0, 0, 0, 0, 0, 0, 0, 0, 0); e != 0 {
 		t.Fatalf("setattr d1/f2 mtimeNow: %s", e)
 	}
-	if fe2, e := v.SetAttr(ctx, fe.Inode, meta.SetAttrMode|meta.SetAttrUID|meta.SetAttrGID|meta.SetAttrAtime|meta.SetAttrMtime|meta.SetAttrSize, 0, 0755, 2, 3, 1234, 1234, 5678, 5678, 1024); e != 0 {
+	if fe2, e := v.SetAttr(ctx, fe.Inode, meta.SetAttrMode|meta.SetAttrUID|meta.SetAttrGID|meta.SetAttrAtime|meta.SetAttrMtime|meta.SetAttrSize, 0, 0755, 1, 3, 1234, 1234, 5678, 5678, 1024); e != 0 {
 		t.Fatalf("setattr d1/f1: %s %d %d", e, fe2.Attr.Gid, fe2.Attr.Length)
-	} else if fe2.Attr.Mode != 0755 || fe2.Attr.Uid != 2 || fe2.Attr.Gid != 3 || fe2.Attr.Atime != 1234 || fe2.Attr.Atimensec != 5678 || fe2.Attr.Mtime != 1234 || fe2.Attr.Mtimensec != 5678 || fe2.Attr.Length != 1024 {
+	} else if fe2.Attr.Mode != 0755 || fe2.Attr.Uid != 1 || fe2.Attr.Gid != 3 || fe2.Attr.Atime != 1234 || fe2.Attr.Atimensec != 5678 || fe2.Attr.Mtime != 1234 || fe2.Attr.Mtimensec != 5678 || fe2.Attr.Length != 1024 {
 		t.Fatalf("setattr d1/f1: %+v", fe2.Attr)
 	}
 	if e := v.Access(ctx, fe.Inode, unix.X_OK); e != 0 {
@@ -595,7 +595,7 @@ func TestInternalFile(t *testing.T) {
 	v, _ := createTestVFS()
 	ctx := NewLogContext(meta.Background)
 	// list internal files
-	fh, _ := v.Opendir(ctx, 1)
+	fh, _ := v.Opendir(ctx, 1, 0)
 	entries, _, e := v.Readdir(ctx, 1, 1024, 0, fh, true)
 	if e != 0 {
 		t.Fatalf("readdir 1: %s", e)

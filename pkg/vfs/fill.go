@@ -125,7 +125,7 @@ func (v *VFS) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscal
 				return err
 			}
 		}
-		if err = v.Meta.Lookup(ctx, parent, name, inode, attr); err != 0 {
+		if err = v.Meta.Lookup(ctx, parent, name, inode, attr, false); err != 0 {
 			return err
 		}
 		if attr.Typ == meta.TypeSymlink {

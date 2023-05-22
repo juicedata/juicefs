@@ -898,6 +898,9 @@ func (m *baseMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 	if ino == RootInode {
 		return 0
 	}
+	if st := m.Access(ctx, ino, MODE_MASK_R&MODE_MASK_X, nil); st != 0 {
+		return st
+	}
 	var usage *Quota
 	var attr Attr
 	for root := ino; root >= RootInode; root = attr.Parent {
@@ -1009,12 +1012,17 @@ func (m *baseMeta) resolveCase(ctx Context, parent Ino, name string) *Entry {
 	return nil
 }
 
-func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno {
+func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr, checkPerm bool) syscall.Errno {
 	if inode == nil || attr == nil {
 		return syscall.EINVAL // bad request
 	}
 	defer m.timeit("Lookup", time.Now())
 	parent = m.checkRoot(parent)
+	if checkPerm {
+		if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
+			return st
+		}
+	}
 	if name == ".." {
 		if parent == m.root {
 			name = "."
@@ -1155,6 +1163,9 @@ func (r *baseMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, att
 
 func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) syscall.Errno {
 	if ctx.Uid() == 0 {
+		return 0
+	}
+	if !ctx.CheckPermission() {
 		return 0
 	}
 	if attr == nil || !attr.Full {
@@ -1448,7 +1459,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	var space, inodes int64
 	if parentSrc != parentDst && (quotaSrc || quotaDst) {
-		if st := m.Lookup(ctx, parentSrc, nameSrc, inode, attr); st != 0 {
+		if st := m.Lookup(ctx, parentSrc, nameSrc, inode, attr, false); st != 0 {
 			return st
 		}
 		if attr.Typ == TypeDirectory {
@@ -1554,6 +1565,19 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr 
 	if attr != nil && !attr.Full {
 		err = m.GetAttr(ctx, inode, attr)
 	}
+	var mmask uint8 = 0
+	switch flags & (syscall.O_RDONLY | syscall.O_WRONLY | syscall.O_RDWR) {
+	case syscall.O_RDONLY:
+		mmask = MODE_MASK_R
+	case syscall.O_WRONLY:
+		mmask = MODE_MASK_W
+	case syscall.O_RDWR:
+		mmask = MODE_MASK_R | MODE_MASK_W
+	}
+	if rerr = m.Access(ctx, inode, mmask, attr); rerr != 0 {
+		return
+	}
+
 	if attr.Flags&FlagImmutable != 0 {
 		if flags&(syscall.O_WRONLY|syscall.O_RDWR) != 0 {
 			return syscall.EPERM
@@ -1621,6 +1645,13 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		return err
 	}
 	defer m.timeit("Readdir", time.Now())
+	var mmask uint8 = MODE_MASK_R
+	if plus != 0 {
+		mmask |= MODE_MASK_X
+	}
+	if st := m.Access(ctx, inode, mmask, &attr); st != 0 {
+		return st
+	}
 	if inode == m.root {
 		attr.Parent = m.root
 	}
@@ -1808,7 +1839,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 	})
 	for i, name := range ps {
 		parent = inode
-		if st := m.Lookup(ctx, parent, name, &inode, &attr); st != 0 {
+		if st := m.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
 			logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
 			return st
 		}
@@ -1948,7 +1979,7 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 		if ps[0] != "" {
 			var attr Attr
 			var inode Ino
-			r := m.Lookup(ctx, m.root, ps[0], &inode, &attr)
+			r := m.Lookup(ctx, m.root, ps[0], &inode, &attr, true)
 			if r == syscall.ENOENT {
 				r = m.Mkdir(ctx, m.root, ps[0], 0777, 0, 0, &inode, &attr)
 			}
@@ -2315,10 +2346,18 @@ func (m *baseMeta) Clone(ctx Context, srcIno, parent Ino, name string, cmode uin
 	if eno = m.en.doGetAttr(ctx, srcIno, &attr); eno != 0 {
 		return eno
 	}
+	if eno = m.Access(ctx, srcIno, MODE_MASK_R, &attr); eno != 0 {
+		return eno
+	}
+	if eno = m.Access(ctx, parent, MODE_MASK_X|MODE_MASK_W, nil); eno != 0 {
+		return eno
+	}
 	var dstIno Ino
 	var _a Attr
-	if m.en.doLookup(ctx, parent, name, &dstIno, &_a) == 0 {
+	if eno = m.en.doLookup(ctx, parent, name, &dstIno, &_a); eno == 0 {
 		return syscall.EEXIST
+	} else if eno != syscall.ENOENT {
+		return eno
 	}
 	var sum Summary
 	eno = m.GetSummary(ctx, srcIno, &sum, true, false)
@@ -2368,7 +2407,9 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	if attr.Typ != TypeDirectory {
 		return 0
 	}
-
+	if eno = m.Access(ctx, srcIno, MODE_MASK_R|MODE_MASK_X, &attr); eno != 0 {
+		return eno
+	}
 	var entries []*Entry
 	eno = m.en.doReaddir(ctx, srcIno, 0, &entries, -1)
 	if eno == syscall.ENOENT {
@@ -2443,4 +2484,105 @@ LOOP:
 		}
 	}
 	return eno
+}
+
+func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr, now time.Time) (*Attr, syscall.Errno) {
+	dirtyAttr := *cur
+	if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
+		attr.Mode |= (cur.Mode & 06000)
+	}
+	var changed bool
+	if (cur.Mode&06000) != 0 && (set&(SetAttrUID|SetAttrGID)) != 0 {
+		clearSUGID(ctx, &dirtyAttr, attr)
+		changed = true
+	}
+	if set&SetAttrGID != 0 {
+		if ctx.Uid() != 0 && ctx.Uid() != cur.Uid {
+			return nil, syscall.EPERM
+		}
+		if cur.Gid != attr.Gid {
+			if ctx.CheckPermission() && ctx.Uid() != 0 && !containsGid(ctx, attr.Gid) {
+				return nil, syscall.EPERM
+			}
+			dirtyAttr.Gid = attr.Gid
+			changed = true
+		}
+	}
+	if set&SetAttrUID != 0 && cur.Uid != attr.Uid {
+		if ctx.Uid() != 0 {
+			return nil, syscall.EPERM
+		}
+		dirtyAttr.Uid = attr.Uid
+		changed = true
+	}
+	if set&SetAttrMode != 0 {
+		if ctx.Uid() != 0 && (attr.Mode&02000) != 0 {
+			if ctx.Gid() != cur.Gid {
+				attr.Mode &= 05777
+			}
+		}
+		if attr.Mode != cur.Mode {
+			if ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
+				(cur.Mode&01777 != attr.Mode&01777 || attr.Mode&02000 > cur.Mode&02000 || attr.Mode&04000 > cur.Mode&04000) {
+				return nil, syscall.EPERM
+			}
+			dirtyAttr.Mode = attr.Mode
+			changed = true
+		}
+	}
+	if set&SetAttrAtimeNow != 0 || (set&SetAttrAtime) != 0 && attr.Atime < 0 {
+		if st := m.Access(ctx, inode, MODE_MASK_W, cur); ctx.Uid() != cur.Uid && st != 0 {
+			return nil, syscall.EACCES
+		}
+		dirtyAttr.Atime = now.Unix()
+		dirtyAttr.Atimensec = uint32(now.Nanosecond())
+		changed = true
+	} else if set&SetAttrAtime != 0 && (cur.Atime != attr.Atime || cur.Atimensec != attr.Atimensec) {
+		if cur.Uid == 0 && ctx.Uid() != 0 {
+			return nil, syscall.EPERM
+		}
+		if st := m.Access(ctx, inode, MODE_MASK_W, cur); ctx.Uid() != cur.Uid && st != 0 {
+			return nil, syscall.EACCES
+		}
+		dirtyAttr.Atime = attr.Atime
+		dirtyAttr.Atimensec = attr.Atimensec
+		changed = true
+	}
+	if set&SetAttrMtimeNow != 0 || (set&SetAttrMtime) != 0 && attr.Mtime < 0 {
+		if st := m.Access(ctx, inode, MODE_MASK_W, cur); ctx.Uid() != cur.Uid && st != 0 {
+			return nil, syscall.EACCES
+		}
+		dirtyAttr.Mtime = now.Unix()
+		dirtyAttr.Mtimensec = uint32(now.Nanosecond())
+		changed = true
+	} else if set&SetAttrMtime != 0 && (cur.Mtime != attr.Mtime || cur.Mtimensec != attr.Mtimensec) {
+		if cur.Uid == 0 && ctx.Uid() != 0 {
+			return nil, syscall.EPERM
+		}
+		if st := m.Access(ctx, inode, MODE_MASK_W, cur); ctx.Uid() != cur.Uid && st != 0 {
+			return nil, syscall.EACCES
+		}
+		dirtyAttr.Mtime = attr.Mtime
+		dirtyAttr.Mtimensec = attr.Mtimensec
+		changed = true
+	}
+	if set&SetAttrFlag != 0 {
+		dirtyAttr.Flags = attr.Flags
+		changed = true
+	}
+	if !changed {
+		*attr = *cur
+		return nil, 0
+	}
+	return &dirtyAttr, 0
+}
+
+func (m *baseMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) syscall.Errno {
+	var cur Attr
+	inode = m.checkRoot(inode)
+	if st := m.en.doGetAttr(ctx, inode, &cur); st != 0 {
+		return st
+	}
+	_, st := m.mergeAttr(ctx, inode, set, &cur, &attr, time.Now())
+	return st
 }

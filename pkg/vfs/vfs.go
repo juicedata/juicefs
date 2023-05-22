@@ -49,20 +49,21 @@ type Port struct {
 }
 
 type Config struct {
-	Meta            *meta.Config
-	Format          meta.Format
-	Chunk           *chunk.Config
-	Port            *Port
-	Version         string
-	AttrTimeout     time.Duration
-	DirEntryTimeout time.Duration
-	EntryTimeout    time.Duration
-	BackupMeta      time.Duration
-	FastResolve     bool   `json:",omitempty"`
-	AccessLog       string `json:",omitempty"`
-	PrefixInternal  bool
-	HideInternal    bool
-	RootSquash      *RootSquash `json:",omitempty"`
+	Meta                 *meta.Config
+	Format               meta.Format
+	Chunk                *chunk.Config
+	Port                 *Port
+	Version              string
+	AttrTimeout          time.Duration
+	DirEntryTimeout      time.Duration
+	EntryTimeout         time.Duration
+	BackupMeta           time.Duration
+	FastResolve          bool   `json:",omitempty"`
+	AccessLog            string `json:",omitempty"`
+	PrefixInternal       bool
+	HideInternal         bool
+	RootSquash           *RootSquash `json:",omitempty"`
+	NonDefaultPermission bool        `json:",omitempty"`
 }
 
 type RootSquash struct {
@@ -106,7 +107,7 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 		err = syscall.ENAMETOOLONG
 		return
 	}
-	err = v.Meta.Lookup(ctx, parent, name, &inode, attr)
+	err = v.Meta.Lookup(ctx, parent, name, &inode, attr, true)
 	if err == 0 {
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 	}
@@ -295,8 +296,22 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 	return
 }
 
-func (v *VFS) Opendir(ctx Context, ino Ino) (fh uint64, err syscall.Errno) {
+func (v *VFS) Opendir(ctx Context, ino Ino, flags uint32) (fh uint64, err syscall.Errno) {
 	defer func() { logit(ctx, "opendir (%d): %s [fh:%d]", ino, strerr(err), fh) }()
+	if ctx.CheckPermission() {
+		var mmask uint8 = 0
+		switch flags & (syscall.O_RDONLY | syscall.O_WRONLY | syscall.O_RDWR) {
+		case syscall.O_RDONLY:
+			mmask = MODE_MASK_R
+		case syscall.O_WRONLY:
+			mmask = MODE_MASK_W
+		case syscall.O_RDWR:
+			mmask = MODE_MASK_R | MODE_MASK_W
+		}
+		if err = v.Meta.Access(ctx, ino, mmask, nil); err != 0 {
+			return
+		}
+	}
 	fh = v.newHandle(ino).fh
 	return
 }
@@ -434,7 +449,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 	return
 }
 
-func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Attr) (err syscall.Errno) {
+func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) (err syscall.Errno) {
 	// defer func() { logit(ctx, "truncate (%d,%d): %s", ino, size, strerr(err)) }()
 	if IsSpecialNode(ino) {
 		err = syscall.EPERM
@@ -458,7 +473,20 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, opened uint8, attr *Att
 		defer func(h *handle) { h.Wunlock() }(h)
 	}
 	_ = v.writer.Flush(ctx, ino)
-	err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr)
+	if fh == 0 {
+		err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr, false)
+	} else {
+		h := v.findHandle(ino, fh)
+		if h == nil {
+			err = syscall.EBADF
+			return
+		}
+		if h.writer == nil {
+			err = syscall.EACCES
+			return
+		}
+		err = v.Meta.Truncate(ctx, ino, 0, uint64(size), attr, true)
+	}
 	if err == 0 {
 		v.writer.Truncate(ino, uint64(size))
 		v.reader.Truncate(ino, uint64(size))
@@ -853,7 +881,6 @@ func (v *VFS) SetXattr(ctx Context, ino Ino, name string, value []byte, flags ui
 
 func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []byte, err syscall.Errno) {
 	defer func() { logit(ctx, "getxattr (%d,%s,%d): %s (%d)", ino, name, size, strerr(err), len(value)) }()
-
 	if IsSpecialNode(ino) {
 		err = meta.ENOATTR
 		return

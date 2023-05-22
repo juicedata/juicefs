@@ -133,7 +133,12 @@ func mount_flags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "root-squash",
-			Usage: "map local root user (uid = 0) to another one in filesystem",
+			Usage: "mapping local root user (uid = 0) to another one specified as <uid>:<gid>",
+		},
+		&cli.BoolFlag{
+			Name:   "non-default-permission",
+			Usage:  "disable `default_permissions` option, only for testing",
+			Hidden: true,
 		},
 		&cli.StringFlag{
 			Name:  "o",
@@ -218,6 +223,7 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 	conf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
 	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
 	conf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
+	conf.NonDefaultPermission = c.Bool("non-default-permission")
 	rootSquash := c.String("root-squash")
 	if rootSquash != "" {
 		var uid, gid uint32 = 65534, 65534
