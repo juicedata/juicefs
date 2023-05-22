@@ -70,6 +70,7 @@ $ juicefs debug --out-dir=/var/log --limit=1000 /mnt/jfs
 			&cli.Uint64Flag{
 				Name:  "limit",
 				Usage: "the number of last entries to be collected",
+				Value: 5000,
 			},
 			&cli.Uint64Flag{
 				Name:  "stats-sec",
@@ -126,7 +127,7 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to execute command `%s`: %v", strings.Join(psArgs, " "), err)
 	}
-
+	var find bool
 	lines := strings.Split(string(ret), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := lines[i]
@@ -137,9 +138,12 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 		cmdFields := fields[7:]
 		for _, arg := range cmdFields {
 			if mp == arg {
+				if find {
+					return "", "", "", fmt.Errorf("find more than one mount process for %s", mp)
+				}
 				cmd = strings.Join(fields[7:], " ")
 				uid, pid = strings.TrimSpace(fields[0]), strings.TrimSpace(fields[1])
-				break
+				find = true
 			}
 		}
 	}
@@ -193,20 +197,6 @@ func closeFile(file *os.File) {
 	if err := file.Close(); err != nil {
 		logger.Fatalf("failed to close file %s: %v", file.Name(), err)
 	}
-}
-
-func copyLogFile(logPath, retLogPath string, limit uint64, requireRootPrivileges bool) error {
-	var copyArgs []string
-	if requireRootPrivileges {
-		copyArgs = append(copyArgs, "sudo")
-	}
-	copyArgs = append(copyArgs, "/bin/sh", "-c")
-	if limit > 0 {
-		copyArgs = append(copyArgs, fmt.Sprintf("tail -n %d %s > %s", limit, logPath, retLogPath))
-	} else {
-		copyArgs = append(copyArgs, fmt.Sprintf("cat %s > %s", logPath, retLogPath))
-	}
-	return exec.Command(copyArgs[0], copyArgs[1:]...).Run()
 }
 
 func getPprofPort(pid, amp string, requireRootPrivileges bool) (int, error) {
@@ -424,6 +414,7 @@ func collectPprof(ctx *cli.Context, cmd string, pid string, amp string, requireR
 		return fmt.Errorf("failed to get pprof port: %v", err)
 	}
 	baseUrl := fmt.Sprintf("http://localhost:%d/debug/pprof/", port)
+	logger.Infof("The pprof base url: %s", baseUrl)
 	trace := ctx.Uint64("trace-sec")
 	profile := ctx.Uint64("profile-sec")
 	metrics := map[string]metricItem{
@@ -479,8 +470,13 @@ func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDi
 	limit := ctx.Uint64("limit")
 	retLogPath := filepath.Join(currDir, "juicefs.log")
 
-	logger.Infof("Log %s is being collected", logPath)
-	return copyLogFile(logPath, retLogPath, limit, requireRootPrivileges)
+	var copyArgs []string
+	if requireRootPrivileges {
+		copyArgs = append(copyArgs, "sudo")
+	}
+	copyArgs = append(copyArgs, "/bin/sh", "-c", fmt.Sprintf("tail -n %d %s > %s", limit, logPath, retLogPath))
+	logger.Infof("The last %d lines of %s will be collected", limit, logPath)
+	return exec.Command(copyArgs[0], copyArgs[1:]...).Run()
 }
 
 func collectSysInfo(ctx *cli.Context, currDir string) error {
