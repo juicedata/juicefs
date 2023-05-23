@@ -120,7 +120,7 @@ juicefs config $METAURL --inodes 100000
 ```
 
 :::tip 提示
-客户端每 60 秒从元数据引擎读取一次最新的存储限额设置来更新本地的设置，这个时间频率可能会造成其他挂载点最长需要 60 秒才能完成限额设置的更新。
+客户端每 60 秒从元数据引擎读取一次最新的文件系统存储限额设置来更新本地的设置，这个时间频率可能会造成其他挂载点最长需要 60 秒才能完成限额设置的更新。
 :::
 
 ## 目录配额
@@ -188,7 +188,7 @@ $ juicefs quota set $METAURL --path /test --capacity 10 --inodes 1000
 另外，我们也可以不限制目录的容量和 inode 数，只通过 quota 统计目录的当前用量：
 
 ```shell
-$ juicefs quota set $METAURL --path $DIR --capacity 0 --inodes 0
+$ juicefs quota set $METAURL --path /test --capacity 0 --inodes 0
 +-------+-----------+---------+------+-----------+-------+-------+
 |  Path |    Size   |   Used  | Use% |   Inodes  | IUsed | IUse% |
 +-------+-----------+---------+------+-----------+-------+-------+
@@ -224,4 +224,39 @@ $ df -i -h
 Filesystem     Inodes IUsed IFree IUse% Mounted on
 ...
 JuiceFS:myjfs     400   314    86   79% /mnt/jfs
+```
+
+### 用量检查与修复
+
+由于目录用量的更新是滞后且异步的，在异常情况下可能会发生丢失（比如客户端意外退出）。我们可以使用 `juicefs quota check $METAURL --path $DIR` 命令进行检查或修复：
+
+```shell
+$ juicefs quota check $METAURL --path /test
+2023/05/23 15:40:12.704576 juicefs[1638846] <INFO>: quota of /test is consistent [base.go:839]
++-------+--------+---------+------+--------+-------+-------+
+|  Path |  Size  |   Used  | Use% | Inodes | IUsed | IUse% |
++-------+--------+---------+------+--------+-------+-------+
+| /test | 10 GiB | 1.6 MiB |   0% |  1,000 |   314 |   31% |
++-------+--------+---------+------+--------+-------+-------+
+```
+
+目录用量正确时会输出当前的目录配额用量；失败时候则会输出错误日志：
+
+```shell
+$ juicefs quota check $METAURL --path /test
+2023/05/23 15:48:17.494604 juicefs[1639997] <WARNING>: /test: quota(314, 4.0 KiB) != summary(314, 1.6 MiB) [base.go:843]
+2023/05/23 15:48:17.494644 juicefs[1639997] <FATAL>: quota of /test is inconsistent, please repair it with --repair flag [main.go:31]
+```
+
+这时我们可以使用 `--repair` 参数来修复目录用量：
+
+```shell
+$ juicefs quota check $METAURL --path /test --repair
+2023/05/23 15:50:08.737086 juicefs[1640281] <WARNING>: /test: quota(314, 4.0 KiB) != summary(314, 1.6 MiB) [base.go:843]
+2023/05/23 15:50:08.737123 juicefs[1640281] <INFO>: repairing... [base.go:852]
++-------+--------+---------+------+--------+-------+-------+
+|  Path |  Size  |   Used  | Use% | Inodes | IUsed | IUse% |
++-------+--------+---------+------+--------+-------+-------+
+| /test | 10 GiB | 1.6 MiB |   0% |  1,000 |   314 |   31% |
++-------+--------+---------+------+--------+-------+-------+
 ```
