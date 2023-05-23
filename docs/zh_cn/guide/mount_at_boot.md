@@ -29,7 +29,7 @@ sudo chkconfig --add netfs
 
 ### 使用 systemd.mount 实现自动挂载
 
-基于安全考虑，JuiceFS 将命令行中的一些选项隐藏在环境变量中，所以像数据库访问密码、S3访问密钥和密钥等设置不能直接应用于 `/etc/fstab` 文件。在这种情况下，你可以使用 systemd 来挂载 JuiceFS 实例。
+基于安全考虑，JuiceFS 将命令行中的一些选项隐藏在环境变量中，所以像数据库访问密码、S3 访问密钥和密钥等设置不能直接应用于 `/etc/fstab` 文件。在这种情况下，你可以使用 systemd 来挂载 JuiceFS 实例。
 
 以下是如何设置 systemd 配置文件的步骤：
 
@@ -54,7 +54,7 @@ sudo chkconfig --add netfs
 
     你可以根据需要更改环境变量、挂载选项等。
 
-2. 使用以下命令启用和启动JuiceFS挂载：
+2. 使用以下命令启用和启动 JuiceFS 挂载：
 
     ```sh
     ln -s /usr/local/bin/juicefs /sbin/mount.juicefs
