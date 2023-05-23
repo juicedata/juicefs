@@ -213,7 +213,7 @@ Filesystem     Inodes IUsed IFree IUse% Mounted on
 JuiceFS:myjfs     11M   315   10M    1% /mnt/jfs
 ```
 
-而使用 `/test` 子目录挂载时，`df` 命令的输出为:
+而使用 `/test` 子目录挂载时，`df` 命令的输出为：
 
 ```shell
 $ df -h
