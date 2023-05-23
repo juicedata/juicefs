@@ -30,17 +30,17 @@ JuiceFS 采用多引擎设计，目前已支持 Redis、TiKV、MySQL/MariaDB、P
 
 与传统文件系统只能使用本地磁盘存储数据和对应的元数据的模式不同，JuiceFS 会将数据格式化以后存储在对象存储，同时会将文件的元数据存储在元数据引擎。在 JuiceFS 中，Chunk、Slice、Block 是三个重要的概念：
 
-「Slice」是 JuiceFS 中负责处理写入的数据结构，最长不超 64M。每次 `flush` 都会产生一个新的 Slice，如果用一次 `flush` 调用就写入了完整文件，那么该文件也将仅包含一个 Slice。`flush` 既可以被用户显式调用，就算不显式调用，JuiceFS 客户端也会自动 `flush`，防止缓冲区被写满。
+文件首先被切分为一或多个 64M 的「Chunk」，方便根据 offset 来定位，让 JuiceFS 面对大文件也有优秀的性能。只要文件总长度没有变化，不论经历多少修改写入，文件的 Chunk 切分都是固定的。Chunk 的存在是为了优化查找定位，实际的文件写入则在「Slice」上进行。
 
-写入以后，文件会还可能发生修改，那么新的写入就会产生新的 Slice，叠加在已有的 Slice 之上。如果一个文件在各个区域被反复修改，那么就会产生大量的 Slice。读文件被读取的时候，按照下方架构图中的堆叠 Slice 模型，不难想象，读取文件需要查找「当前读取范围内最新产生的 Slices」，那么显而易见，堆叠的大量 Slice 将会显著影响读性能，因此 JuiceFS 会在后台任务运行碎片合并，将这一系列 Slice 合并为一。
+「Slice」是 JuiceFS 中负责处理写入的数据结构，最长不超 64M。文件连续的数据写入会产生 Slice，而调用 `flush` 则会将这些 Slice 持久化。如果一次连续写、一次 `flush` 调用就写入了完整文件，那么该文件也将仅包含一个 Slice。`flush` 可以被用户显式调用，就算不调用，JuiceFS 客户端也会自动 `flush`，防止缓冲区被写满。
 
-Slice 是完全为了优化写入性能而产生的数据结构，实际存储时会对文件拆分为 64M 的「Chunk」，用分而治之的方式让大文件拥有更好的读性能。Chunk 中会引用一或多个 Slices，[在引用关系中标记各个 Slice 的有效数据偏移范围](../development/internals.md#sliceref)。
+写入以后，文件会还可能发生修改，那么新的写入就会产生新的 Slice，叠加在已有的 Slice 之上。Chunk 中会引用一或多个 Slice，[在引用关系中标记各个 Slice 的有效数据偏移范围](../development/internals.md#sliceref)。如果一个文件在各个区域被反复修改，那么就会产生大量的 Slice。文件被读取的时候，按照下方架构图中的堆叠 Slice 模型，不难想象，读取文件需要查找「当前读取范围内最新产生的 Slices」，那么显而易见，堆叠的大量 Slice 将会显著影响读性能，因此 JuiceFS 会在后台任务运行碎片合并，将这一系列 Slice 合并为一。
 
 上边介绍的 Chunk、Slice，其实都是逻辑数据结构，实际落地成为物理数据，则是对 Slice 进行进一步拆分成一个个「Block」（默认最大 4M），作为实际上的最小存储单元上传至对象存储。Block 同时也是磁盘缓存的最小存储单元。
 
 ![](../images/data-structure-diagram.svg)
 
-因此，你会发现在对象存储平台的文件浏览器中找不到存入 JuiceFS 的源文件，存储桶中只有一个 `chunks` 目录和一堆数字编号的目录和文件，不必惊慌，这正是经过 JuiceFS 拆分存储的数据块。与此同时，文件与 Chunks、Slices、Blocks 的对应关系等元数据信息存储在元数据引擎中。正是这样的分离设计，让 JuiceFS 文件系统得以高性能运作。
+因此，你会发现在对象存储平台的文件浏览器中找不到存入 JuiceFS 的源文件，存储桶中只有一个 `chunks` 目录和一堆数字编号的目录和文件，不必惊慌，这正是经过 JuiceFS 拆分存储的数据块。与此同时，文件与 Chunk、Slice、Block 的对应关系等元数据信息存储在元数据引擎中。正是这样的分离设计，让 JuiceFS 文件系统得以高性能运作。
 
 ![](../images/how-juicefs-stores-files-new.png)
 

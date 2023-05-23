@@ -36,7 +36,23 @@ JuiceFS 可以简单便捷的将海量云存储直接接入已投入生产环境
 
 ## 架构
 
-阅读[架构](https://juicefs.com/docs/zh/community/architecture)以了解。
+JuiceFS 由三个部分组成：
+
+1. **JuiceFS 客户端**：协调对象存储和元数据存储引擎，以及 POSIX、Hadoop、Kubernetes、S3 Gateway 等文件系统接口的实现；
+2. **数据存储**：存储数据本身，支持本地磁盘、对象存储；
+3. **元数据引擎**：存储数据对应的元数据，支持 Redis、MySQL、SQLite 等多种引擎；
+
+![JuiceFS Architecture](docs/zh_cn/images/juicefs-arch-new.png)
+
+JuiceFS 依靠 Redis 来存储文件的元数据。Redis 是基于内存的高性能的键值数据存储，非常适合存储元数据。与此同时，所有数据将通过 JuiceFS 客户端存储到对象存储中。[了解详情](https://juicefs.com/docs/zh/community/architecture)
+
+![](docs/zh_cn/images/data-structure-diagram.svg)
+
+任何存入 JuiceFS 的文件都会被拆分成固定大小的 **"Chunk"**，默认的容量上限是 64 MiB。每个 Chunk 由一个或多个 **"Slice"** 组成，Slice 的长度不固定，取决于文件写入的方式。每个 Slice 又会被进一步拆分成固定大小的 **"Block"**，默认为 4 MiB。最后，这些 Block 会被存储到对象存储。与此同时，JuiceFS 会将每个文件以及它的 Chunks、Slices、Blocks 等元数据信息存储在元数据引擎中。[了解详情](https://juicefs.com/docs/zh/community/architecture#%E5%A6%82%E4%BD%95%E5%AD%98%E5%82%A8%E6%96%87%E4%BB%B6)
+
+![How JuiceFS stores your files](docs/zh_cn/images/how-juicefs-stores-files-new.png)
+
+使用 JuiceFS，文件最终会被拆分成 Chunks、Slices 和 Blocks 存储在对象存储。因此，你会发现在对象存储平台的文件浏览器中找不到存入 JuiceFS 的源文件，存储桶中只有一个 chunks 目录和一堆数字编号的目录和文件。不要惊慌，这正是 JuiceFS 高性能运作的秘诀！
 
 ## 开始使用
 
