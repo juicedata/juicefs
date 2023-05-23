@@ -22,7 +22,7 @@ JuiceFS 文件系统由三个部分组成：JuiceFS 客户端（Client）、数�
 **元数据引擎（Metadata Engine）**：用于存储文件元数据（metadata），包含以下内容：
 
 - 常规文件系统的元数据：文件名、文件大小、权限信息、创建修改时间、目录结构、文件属性、符号链接、文件锁等。
-- JuiceFS 独有的元数据：文件的 chunk 及 slice 映射关系、客户端 session 等。
+- 文件数据的索引：文件的数据分配和引用计数、客户端会话等。
 
 JuiceFS 采用多引擎设计，目前已支持 Redis、TiKV、MySQL/MariaDB、PostgreSQL、SQLite 等作为元数据服务引擎，也将陆续实现更多元数据存储引擎。欢迎[提交 Issue](https://github.com/juicedata/juicefs/issues) 反馈你的需求。
 
