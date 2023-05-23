@@ -5,7 +5,7 @@ slug: /architecture
 decription: 本文介绍 JuiceFS 的技术架构以及由此带来的技术优势，同时介绍 JuiceFS 的文件存储原理。
 ---
 
-JuiceFS 文件系统由三个部分组成：JuiceFS客户端（Client）、数据存储（Data Storage）和元数据引擎（Metadata Engine）。
+JuiceFS 文件系统由三个部分组成：JuiceFS 客户端（Client）、数据存储（Data Storage）和元数据引擎（Metadata Engine）。
 
 ![](../images/juicefs-arch-new.png)
 
