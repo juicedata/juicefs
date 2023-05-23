@@ -123,7 +123,7 @@ func clone(ctx *cli.Context) error {
 	wb.Put16(uint16(umask))
 	wb.Put8(cmode)
 	f, err := openController(srcMp)
-	if err == nil {
+	if err != nil {
 		return err
 	}
 	defer f.Close()
