@@ -18,7 +18,7 @@ Meanwhile, cache improve performance only when application needs to repeatedly r
 
 Distributed systems often need to make tradeoffs between cache and consistency. Due to the decoupled architecture of JuiceFS, think consistency problems in terms of metadata, file data (in object storage), and file data local cache.
 
-For [metadata](#metadata-cache), the default configuration offers a "close-to-open" consistency guarantee, i.e. after a client have modified and closed a file, other clients will see the latest state when they open this file again. Also, default mount option uses 1s of kernel metadata cache which provides decent performance for the usual cases. If your scenario demands higher level of cache performance, learn how to tune cache settings in below sections.
+For [metadata](#metadata-cache), the default configuration offers a "close-to-open" consistency guarantee, i.e. after a client modified and closed a file, other clients will see the latest state when they open this file again. Also, default mount option uses 1s of kernel metadata cache which provides decent performance for the usual cases. If your scenario demands higher level of cache performance, learn how to tune cache settings in below sections.
 
 As for object storage, JuiceFS clients split files into data blocks (default 4MiB), each is assigned an unique ID and uploaded to object storage. Subsequent modifications on the file are carried out on new data blocks, and the original blocks remain unchanged. This guarantees consistency of the object storage data, because once the file is modified, clients will then read from the new data blocks, while the stale ones which will be deleted through [Trash](../security/trash.md) or compaction.
 
@@ -30,7 +30,7 @@ As a userspace filesystem, JuiceFS metadata cache is both managed as kernel cach
 
 ### Metadata Cache in Kernel {#kernel-metadata-cache}
 
-JuiceFS Client controls these kinds of metadata as kernel cache: attribute (file name, size, permission, mtime, etc.), entry (inode, name, and type. The word entry and direntry is used in parameter names, to further distinguish between file and directory.). Use the following parameters to control TTL through FUSE:
+JuiceFS Client controls these kinds of metadata as kernel cache: attribute (file name, size, permission, mtime, etc.), entry (inode, name, and type. The word "entry" and "dir-entry" is used in parameter names, to further distinguish between file and directory). Use the following parameters to control TTL through FUSE:
 
 ```
 # File attribute cache TTL in seconds, default to 1, improves getattr performance
@@ -51,13 +51,13 @@ Real world scenarios scarcely require setting different values for `--entry-cach
 
 ### Metadata Cache in Client Memory {#client-memory-metadata-cache}
 
-When JuiceFS Client `open` a file, its file attributes are cached in client memory, this attribute cache includes not only the kernel cached file attributes like size, mtime, but also information specific to JuiceFS like [the relationship between file and its chunks and slices](../introduction/architecture.md#how-juicefs-store-files).
+When JuiceFS Client `open` a file, its file attributes are cached in client memory, this attribute cache includes not only the kernel cached file attributes like size, mtime, but also information specific to JuiceFS like [the relationship between file and chunks and slices](../introduction/architecture.md#how-juicefs-store-files).
 
-To maintain the default close-to-open consistency, `open` calls will always query metadata service, bypassing local cache, modifications done by client A isn't guaranteed available immediately for client B, but once A is done and closes file, all other clients (across different nodes) will see the latest state. File attribute cache isn't necessarily obtained through `open`, for example `tail -f` will periodically query attributes, in this case, latest state is fetched without reopening the file.
+To maintain the default close-to-open consistency, `open` calls will always query metadata service, bypassing local cache, modifications done by client A isn't guaranteed available immediately for client B, but once A closes file, all other clients (across different nodes) will see the latest state. File attribute cache isn't necessarily obtained through `open`, for example `tail -f` will periodically query attributes, in this case, latest state is fetched without reopening the file.
 
 To utilize the memory metadata cache, use [`--open-cache`](../reference/command_reference.md#mount) to specify its TTL, so that before cache expiration, `getattr` and `open` calls directly uses the slice information in client memory. These cached information avoids the overhead of querying metadata service on every call.
 
-With `--open-cache` enabled, JuiceFS no longer operates under close-to-open consistency, but similar to kernel metadata cache, the client initiating the modifications can also actively invalidate client memory metadata cache, other clients can only wait for expiration. That's why in order to maintain semantics, `--open-cache` is disabled by default. For read intensive (or read-only) scenarios, such as AI model training, it is recommended to set `--open-cache` according to the situation to further improve the read performance.
+With `--open-cache` enabled, JuiceFS no longer operates under close-to-open consistency, but similar to kernel metadata cache, the client initiating the modifications can also actively invalidate client memory metadata cache, while other clients can only wait for expiration. That's why in order to maintain semantics, `--open-cache` is disabled by default. For read intensive (or read-only) scenarios, such as AI model training, it is recommended to set `--open-cache` according to the situation to further improve the read performance.
 
 In comparison, JuiceFS Enterprise Edition provides richer functionalities around memory metadata cache (supports active invalidation). Read [Enterprise Edition documentation](https://juicefs.com/docs/cloud/guide/cache/#client-memory-metadata-cache) for more.
 
