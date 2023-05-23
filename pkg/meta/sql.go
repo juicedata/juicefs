@@ -906,7 +906,7 @@ func (m *dbMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 			m.parseAttr(&dirtyNode, attr)
 		}
 		return err
-	}))
+	}, inode))
 }
 
 func (m *dbMeta) appendSlice(s *xorm.Session, inode Ino, indx uint32, buf []byte) error {
@@ -1007,7 +1007,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		}
 		m.parseAttr(&nodeAttr, attr)
 		return nil
-	})
+	}, inode)
 	if err == nil {
 		m.updateParentStat(ctx, inode, nodeAttr.Parent, newLength, newSpace)
 	}
@@ -1104,7 +1104,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 			}
 		}
 		return nil
-	})
+	}, inode)
 	if err == nil {
 		m.updateParentStat(ctx, inode, nodeAttr.Parent, newLength, newSpace)
 	}
@@ -1153,7 +1153,7 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 		attr.Atime = now.Unix()
 		_, e = s.Cols("atime", "atimensec").Update(&nodeAttr, &node{Inode: inode})
 		return e
-	})
+	}, inode)
 	atime = attr.Atime
 	return
 }
@@ -2121,7 +2121,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		}
 		_, err = s.Delete(&node{Inode: inode})
 		return err
-	})
+	}, inode)
 	if err == nil {
 		newSpace := -align4K(n.Length)
 		m.updateStats(newSpace, -1)
@@ -2361,7 +2361,7 @@ func (m *dbMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		}
 		*copied = size
 		return nil
-	})
+	}, fout)
 	if err == nil {
 		m.updateParentStat(ctx, fout, nout.Parent, newLength, newSpace)
 	}
@@ -3936,7 +3936,7 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			return mustInsert(s, &sym)
 		}
 		return nil
-	}))
+	}, srcIno))
 }
 
 func (m *dbMeta) doFindDetachedNodes(t time.Time) []Ino {
@@ -3977,7 +3977,7 @@ func (m *dbMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 		}
 		_, err = s.Delete(&detachedNode{Inode: ino})
 		return err
-	}))
+	}, ino))
 }
 
 func (m *dbMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string) syscall.Errno {
@@ -4034,6 +4034,6 @@ func (m *dbMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 			updated = true
 		}
 		return err
-	})
+	}, inode)
 	return updated, err
 }
