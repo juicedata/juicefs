@@ -32,9 +32,9 @@ JuiceFS 采用多引擎设计，目前已支持 Redis、TiKV、MySQL/MariaDB、P
 
 文件首先被切分为一或多个 64M 的「Chunk」，方便根据 offset 来定位，让 JuiceFS 面对大文件也有优秀的性能。只要文件总长度没有变化，不论经历多少修改写入，文件的 Chunk 切分都是固定的。Chunk 的存在是为了优化查找定位，实际的文件写入则在「Slice」上进行。
 
-「Slice」是 JuiceFS 中负责处理写入的数据结构，最长不超 64M。一个 Slice 代表一次连续写入，隶属于某个 Chunk（[在引用关系中标记各个 Slice 的有效数据偏移范围](../development/internals.md#sliceref)），并且不能跨越 Chunk 边界。应用的顺序写通常会在一个 Chunk 中只有一个 Slice，而随机写或者缓慢的追加写则会在一个 Chunk 中产生多个 Slice。这多个 Slice 可以是连续的，也可以重叠，或者中间有间隔。调用 `flush` 则会将这些 Slice 持久化。`flush` 可以被用户显式调用，就算不调用，JuiceFS 客户端也会自动在恰当的时机进行 `flush`，防止缓冲区被写满。
+「Slice」是 JuiceFS 中负责处理写入的数据结构，最长不超 64M。一个 Slice 代表一次连续写入，隶属于某个 Chunk，并且不能跨越 Chunk 边界。应用的顺序写通常会在一个 Chunk 中只有一个 Slice，而随机写或者缓慢的追加写则会在一个 Chunk 中产生多个 Slice。这多个 Slice 可以是连续的，也可以重叠，或者中间有间隔。调用 `flush` 则会将这些 Slice 持久化。`flush` 可以被用户显式调用，就算不调用，JuiceFS 客户端也会自动在恰当的时机进行 `flush`，防止缓冲区被写满。
 
-如果一个文件在各个区域被反复修改，那么就会产生大量的 Slice。文件被读取的时候，按照下方架构图中的堆叠 Slice 模型，不难想象，读取文件需要查找「当前读取范围内最新写入的 Slices」，那么显而易见，堆叠的大量 Slice 将会显著影响读性能，因此 JuiceFS 会在后台任务运行碎片合并，将这一系列 Slice 合并为一。
+如果一个文件在各个区域被反复修改，那么就会产生大量重叠的 Slice，这也是为什么在 Chunk 与 Slice 的引用关系中，[标记了各个 Slice 的有效数据偏移范围](../development/internals.md#sliceref)。文件被读取的时候，按照下方架构图中的堆叠 Slice 模型，不难想象，读取文件需要查找「当前读取范围内最新写入的 Slices」，那么显而易见，堆叠的大量 Slice 将会显著影响读性能，因此 JuiceFS 会在后台任务运行碎片合并，将这一系列 Slice 合并为一。
 
 上边介绍的 Chunk、Slice，其实都是逻辑数据结构，实际持久化到对象存储时，为了能够尽快写入，会对 Slice 进行进一步拆分成一个个「Block」（默认最大 4M），多线程并发写入以提升写性能。因此 Block 也是对象存储和磁盘缓存的最小存储单元。
 
