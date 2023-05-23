@@ -29,7 +29,7 @@ sudo chkconfig --add netfs
 
 ### Automating Mounting with systemd.mount
 
-If you're using JuiceFS and need to apply settings like database access password, S3 access key, and secret key, which are hidden from the command line using environment variables, it may not be easy to configure them in the `/etc/fstab` file. In such cases, you can utilize systemd to mount your JuiceFS instance.
+If you're using JuiceFS and need to apply settings like database access password, S3 access key, and secret key, which are hidden from the command line using environment variables for security reason, it may not be easy to configure them in the `/etc/fstab` file. In such cases, you can utilize systemd to mount your JuiceFS instance.
 
 Here's how you can set up your systemd configuration file:
 
@@ -57,6 +57,7 @@ Here's how you can set up your systemd configuration file:
 2. Enable and start the JuiceFS mount using the following commands:
 
     ```sh
+    ln -s /usr/local/bin/juicefs /sbin/mount.juicefs
     systemctl enable juicefs.mount
     systemctl start juicefs.mount
     ```
