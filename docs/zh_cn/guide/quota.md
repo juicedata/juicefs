@@ -139,6 +139,7 @@ $ juicefs quota set $METAURL --path /test --capacity 1
 | /test | 1.0 GiB | 1.6 MiB |   0% | unlimited |   314 |       |
 +-------+---------+---------+------+-----------+-------+-------+
 ```
+
 设置成功后可以看到有一个表格告诉我们被限制目录，配额大小，当前用量等信息。
 
 :::tip 提示
@@ -173,10 +174,15 @@ $ juicefs quota set $METAURL --path /test --inodes 400
 
 ### 组合使用
 
-可以结合 `--capacity` 和 `--inodes` 更灵活地设置目录的容量限额。比如，给一个目录设置 10GiB 和 1000 个 inode 的配额：
+可以结合 `--capacity` 和 `--inodes` 更灵活地设置目录的容量限额。比如，给`/test`目录设置 10GiB 和 1000 个 inode 的配额：
 
 ```shell
-$ juicefs quota set $METAURL --path $DIR --capacity 10 --inodes 1000
+$ juicefs quota set $METAURL --path /test --capacity 10 --inodes 1000
++-------+--------+---------+------+--------+-------+-------+
+|  Path |  Size  |   Used  | Use% | Inodes | IUsed | IUse% |
++-------+--------+---------+------+--------+-------+-------+
+| /test | 10 GiB | 1.6 MiB |   0% |  1,000 |   314 |   31% |
++-------+--------+---------+------+--------+-------+-------+
 ```
 
 另外，我们也可以不限制目录的容量和 inode 数，只通过 quota 统计目录的当前用量：
@@ -192,7 +198,7 @@ $ juicefs quota set $METAURL --path $DIR --capacity 0 --inodes 0
 
 ### 子目录挂载
 
-JuiceFS 支持使用 `--subdir` [参数](../reference/command_reference.md#mount)挂载任意子目录。
+JuiceFS 支持使用 [`--subdir`](../reference/command_reference.md#mount) 挂载任意子目录。
 如果挂载的子目录设置了目录配额，则可以使用系统自带的 `df` 命令查看目录配额和当前使用量。
 比如文件系统配额为 1PiB 和 10M 个 inode，而`/test` 目录的配额为 1GiB 和 400 个 inode。使用根目录挂载时 `df` 命令的输出为：
 
@@ -208,6 +214,7 @@ JuiceFS:myjfs     11M   315   10M    1% /mnt/jfs
 ```
 
 而使用 `/test` 子目录挂载时，`df` 命令的输出为:
+
 ```shell
 $ df -h
 Filesystem      Size  Used Avail Use% Mounted on
