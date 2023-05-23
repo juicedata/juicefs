@@ -27,6 +27,43 @@ sudo chkconfig --add netfs
 
 :::
 
+### Automating Mounting with systemd.mount
+
+If you're using JuiceFS and need to apply settings like database access password, S3 access key, and secret key, which are hidden from the command line using environment variables for security reason, it may not be easy to configure them in the `/etc/fstab` file. In such cases, you can utilize systemd to mount your JuiceFS instance.
+
+Here's how you can set up your systemd configuration file:
+
+1. Create the file `/etc/systemd/system/juicefs.mount` and add the following content:
+
+    ```conf
+    [Unit]
+    Description=Juicefs
+    Before=docker.service
+
+    [Mount]
+    Environment="ALICLOUD_ACCESS_KEY_ID=mykey" "ALICLOUD_ACCESS_KEY_SECRET=mysecret" "META_PASSWORD=mypassword"
+    What=mysql://juicefs@(mysql.host:3306)/juicefs
+    Where=/juicefs
+    Type=juicefs
+    Options=_netdev,allow_other,writeback_cache
+
+    [Install]
+    WantedBy=remote-fs.target
+    WantedBy=multi-user.target
+    ```
+
+    Feel free to modify the options and environments according to your needs.
+
+2. Enable and start the JuiceFS mount using the following commands:
+
+    ```sh
+    ln -s /usr/local/bin/juicefs /sbin/mount.juicefs
+    systemctl enable juicefs.mount
+    systemctl start juicefs.mount
+    ```
+
+After completing these steps, you will be able to access `/juicefs` and store your files there.
+
 ## macOS
 
 Create a file named `io.juicefs.<NAME>.plist` under `~/Library/LaunchAgents`. Replace `<NAME>` with JuiceFS file system name. Add following contents to the file (again, replace `NAME`, `PATH-TO-JUICEFS`, `META-URL`, `MOUNTPOINT` and `MOUNT-OPTIONS` with appropriate value):

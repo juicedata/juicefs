@@ -27,6 +27,43 @@ sudo chkconfig --add netfs
 
 :::
 
+### 使用 systemd.mount 实现自动挂载
+
+基于安全考虑，JuiceFS 将命令行中的一些选项隐藏在环境变量中，所以像数据库访问密码、S3 访问密钥和密钥等设置不能直接应用于 `/etc/fstab` 文件。在这种情况下，你可以使用 systemd 来挂载 JuiceFS 实例。
+
+以下是如何设置 systemd 配置文件的步骤：
+
+1. 创建文件 `/etc/systemd/system/juicefs.mount`，并添加以下内容：
+
+    ```conf
+    [Unit]
+    Description=Juicefs
+    Before=docker.service
+
+    [Mount]
+    Environment="ALICLOUD_ACCESS_KEY_ID=mykey" "ALICLOUD_ACCESS_KEY_SECRET=mysecret" "META_PASSWORD=mypassword"
+    What=mysql://juicefs@(mysql.host:3306)/juicefs
+    Where=/juicefs
+    Type=juicefs
+    Options=_netdev,allow_other,writeback_cache
+
+    [Install]
+    WantedBy=remote-fs.target
+    WantedBy=multi-user.target
+    ```
+
+    你可以根据需要更改环境变量、挂载选项等。
+
+2. 使用以下命令启用和启动 JuiceFS 挂载：
+
+    ```sh
+    ln -s /usr/local/bin/juicefs /sbin/mount.juicefs
+    systemctl enable juicefs.mount
+    systemctl start juicefs.mount
+    ```
+
+完成这些步骤后，就可以访问 `/juicefs` 目录来存取文件了。
+
 ## macOS
 
 在 `~/Library/LaunchAgents` 下创建名为 `io.juicefs.<NAME>.plist` 的文件。替换 `<NAME>` 为 JuiceFS 文件系统的名字。添加如下内容到文件中（再次替换 `NAME`、`PATH-TO-JUICEFS`、`META-URL`、`MOUNTPOINT` 和 `MOUNT-OPTIONS` 为适当的值）：
