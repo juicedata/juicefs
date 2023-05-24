@@ -2,7 +2,7 @@
 title: 技术架构
 sidebar_position: 2
 slug: /architecture
-decription: 本文介绍 JuiceFS 的技术架构以及由此带来的技术优势，同时介绍 JuiceFS 的文件存储原理。
+description: 本文介绍 JuiceFS 的技术架构以及由此带来的技术优势，同时介绍 JuiceFS 的文件存储原理。
 ---
 
 JuiceFS 文件系统由三个部分组成：JuiceFS 客户端（Client）、数据存储（Data Storage）和元数据引擎（Metadata Engine）。
@@ -26,7 +26,7 @@ JuiceFS 文件系统由三个部分组成：JuiceFS 客户端（Client）、数�
 
 JuiceFS 采用多引擎设计，目前已支持 Redis、TiKV、MySQL/MariaDB、PostgreSQL、SQLite 等作为元数据服务引擎，也将陆续实现更多元数据存储引擎。欢迎[提交 Issue](https://github.com/juicedata/juicefs/issues) 反馈你的需求。
 
-## 数据存储：JuiceFS 如何存储文件 {#how-juicefs-store-files}
+## JuiceFS 如何存储文件 {#how-juicefs-store-files}
 
 与传统文件系统只能使用本地磁盘存储数据和对应的元数据的模式不同，JuiceFS 会将数据格式化以后存储在对象存储，同时会将文件的元数据存储在元数据引擎。在 JuiceFS 中，Chunk、Slice、Block 是三个重要的概念：
 
