@@ -265,7 +265,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		Port:           &vfs.Port{DebugAgent: debugAgent, PyroscopeAddr: c.String("pyroscope")},
 		PrefixInternal: c.Bool("prefix-internal"),
 	}
-	if cfg.BackupMeta > 0 && cfg.BackupMeta < time.Second*30 {
+	if cfg.BackupMeta > 0 && cfg.BackupMeta < time.Second*10 {
 		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)
 	}
 	return cfg
