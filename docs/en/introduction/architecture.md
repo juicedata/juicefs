@@ -17,7 +17,7 @@ The JuiceFS file system consists of three parts:
 - With **S3 Gateway**, applications using S3 as the storage layer can directly access JuiceFS file system, and tools such as AWS CLI, s3cmd, and MinIO client are also allowed to be used to access to the JuiceFS file system at the same time.
 - With **WebDAV Server**, files in JuiceFS can be operated directly using HTTP protocol.
 
-**Data Storage**: File data will be split into chunks and stored in object storage, you can use object storage provided by public cloud services, or self-hosted, JuiceFS supports virtually all types of object storage, including typical self-hosted ones like OpenStack Swift, Ceph, and MinIO.
+**Data Storage**: File data will be split and stored in object storage, JuiceFS supports virtually all types of object storage, including typical self-hosted ones like OpenStack Swift, Ceph, and MinIO.
 
 **Metadata Engine**: Metadata Engine stores file metadata, which contains:
 
