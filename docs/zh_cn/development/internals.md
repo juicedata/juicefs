@@ -393,7 +393,7 @@ Redis 中 Key 的通用格式为 `${prefix}${JFSKey}`，其中：
 - Value Type：list
 - Value：Slices 列表，每个 Slice 均以二进制编码，各占 24 个字节
 
-#### SliceRef
+#### SliceRef {#sliceref}
 
 - Key：`sliceRef`
 - Value Type：Hash
