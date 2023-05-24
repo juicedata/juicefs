@@ -1356,6 +1356,7 @@ func testCloseSession(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink f: %s", st)
 	}
+	time.Sleep(10 * time.Millisecond)
 	sid := m.getBase().sid
 	s, err := m.GetSession(sid, true)
 	if err != nil {
