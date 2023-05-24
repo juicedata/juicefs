@@ -229,7 +229,7 @@ type Slice struct {
 
 This structure is encoded and saved in binary format, taking up 24 bytes.
 
-#### SliceRef
+#### SliceRef {#sliceref}
 
 Records the reference count of a Slice, as follows
 

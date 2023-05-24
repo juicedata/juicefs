@@ -1438,7 +1438,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		})
 
 		return err
-	}, m.entryKey(parent), m.inodeKey(parent))
+	}, m.inodeKey(parent), m.entryKey(parent))
 	if err == nil && trash == 0 {
 		if _type == TypeFile && attr.Nlink == 0 {
 			m.fileDeleted(opened, isTrash(parent), inode, attr.Length)
@@ -1822,7 +1822,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return nil
 		})
 		return err
-	}, m.entryKey(parentSrc), m.inodeKey(parentSrc), m.entryKey(parentDst), m.inodeKey(parentDst))
+	}, m.inodeKey(parentSrc), m.entryKey(parentSrc), m.inodeKey(parentDst), m.entryKey(parentDst))
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 			m.fileDeleted(opened, false, dino, tattr.Length)
@@ -1899,7 +1899,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 			*attr = iattr
 		}
 		return err
-	}, m.inodeKey(inode), m.entryKey(parent), m.inodeKey(parent)))
+	}, m.inodeKey(parent), m.entryKey(parent), m.inodeKey(inode)))
 }
 
 func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
@@ -3321,7 +3321,7 @@ func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 			}
 		}
 		return tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err()
-	}, m.entryKey(inode), m.inodeKey(inode)))
+	}, m.inodeKey(inode), m.entryKey(inode)))
 }
 
 func (m *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {

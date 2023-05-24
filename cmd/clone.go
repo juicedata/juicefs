@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -95,7 +96,7 @@ func clone(ctx *cli.Context) error {
 	if srcMp != dstMp {
 		return fmt.Errorf("the clone DST path should be at the same mount point as the SRC path")
 	}
-	if strings.HasPrefix(dstAbsPath, srcAbsPath) {
+	if strings.HasPrefix(dstAbsPath, path.Clean(srcAbsPath)+"/") {
 		return fmt.Errorf("the clone DST path should not be under the SRC path")
 	}
 
@@ -123,7 +124,7 @@ func clone(ctx *cli.Context) error {
 	wb.Put16(uint16(umask))
 	wb.Put8(cmode)
 	f, err := openController(srcMp)
-	if err == nil {
+	if err != nil {
 		return err
 	}
 	defer f.Close()

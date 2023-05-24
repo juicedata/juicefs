@@ -35,7 +35,7 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 		return errno(m.txn(func(s *xorm.Session) error {
 			_, err := s.Delete(&flock{Inode: inode, Owner: owner, Sid: m.sid})
 			return err
-		}))
+		}, inode))
 	}
 	var err syscall.Errno
 	for {

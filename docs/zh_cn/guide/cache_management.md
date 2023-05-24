@@ -45,7 +45,7 @@ JuiceFS 客户端可以控制这些内核元数据缓存：文件属性（attrib
 
 让以上元数据默认在内核中缓存 1 秒，能显著提高 `lookup` 和 `getattr` 的性能。**对于单个挂载点而言，内核元数据缓存能够主动失效。但对于多个挂载点访问、修改同一文件的情况，只有发起修改的客户端能享受到内核元数据缓存主动失效，其他客户端就只能等待缓存自然过期。**
 
-需要注意，`entry` 缓存是随着文件访问逐渐建立起来的，不是一个完整列表，因此不能被 `readdir` 调用或者 `ls` 命令使用，而只对 `lookup` 调用有加速效果。这里的 `direntry` 含义也不等同于[「目录项」](https://www.kernel.org/doc/html/latest/filesystems/ext4/directory.html)的概念，他并不用来描述「一个目录下包含哪些文件」，而是和 `entry` 一样，都是文件，只不过对文件是否目录类型做了区分。
+需要注意，`entry` 缓存是随着文件访问逐渐建立起来的，不是一个完整列表，因此不能被 `readdir` 调用或者 `ls` 命令使用，而只对 `lookup` 调用有加速效果。这里的 `dir-entry` 含义也不等同于[「目录项」](https://www.kernel.org/doc/html/latest/filesystems/ext4/directory.html)的概念，他并不用来描述「一个目录下包含哪些文件」，而是和 `entry` 一样，都是文件，只不过对文件是否目录类型做了区分。
 
 在实际场景中，也很少需要对 `--entry-cache` 和 `--dir-entry-cache` 进行区分设置，如果确实要精细化调优，在目录极少变动、而文件频繁变动的场景，可以令 `--dir-entry-cache` 大于 `--entry-cache`。
 
