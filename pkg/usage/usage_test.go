@@ -33,12 +33,12 @@ func TestUsageReport(t *testing.T) {
 	// invalid addr
 	reportUrl = "http://127.0.0.1/report-usage"
 	m := meta.NewClient("memkv://", nil)
-	format := &meta.Format{
-		Name:      "test",
-		BlockSize: 4096,
-		Capacity:  1 << 30,
-	}
-	_ = m.Init(format, true)
+	//format := &meta.Format{
+	//	Name:      "test",
+	//	BlockSize: 4096,
+	//	Capacity:  1 << 30,
+	//}
+	//_ = m.Init(format, true)
 	go ReportUsage(m, "unittest")
 	// wait for it to report to unavailable address, it should not panic.
 	time.Sleep(time.Millisecond * 100)
