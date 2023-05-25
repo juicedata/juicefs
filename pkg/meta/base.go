@@ -360,8 +360,12 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, spac
 }
 
 func (m *baseMeta) flushDirStat() {
+	period := 1 * time.Second
+	if m.conf.DirStatFlushPeriod != 0 {
+		period = m.conf.DirStatFlushPeriod
+	}
 	for {
-		time.Sleep(time.Second * 1)
+		time.Sleep(period)
 		m.doFlushDirStat()
 	}
 }

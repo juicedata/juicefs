@@ -22,10 +22,13 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSQLiteClient(t *testing.T) {
-	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test.db"), DefaultConf())
+	conf := DefaultConf()
+	conf.DirStatFlushPeriod = 500 * time.Millisecond
+	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test.db"), conf)
 	if err != nil || m.Name() != "sqlite3" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -33,7 +36,9 @@ func TestSQLiteClient(t *testing.T) {
 }
 
 func TestMySQLClient(t *testing.T) { //skip mutate
-	m, err := newSQLMeta("mysql", "root:@/dev", DefaultConf())
+	conf := DefaultConf()
+	conf.DirStatFlushPeriod = 500 * time.Millisecond
+	m, err := newSQLMeta("mysql", "root:@/dev", conf)
 	if err != nil || m.Name() != "mysql" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -44,7 +49,9 @@ func TestPostgreSQLClient(t *testing.T) { //skip mutate
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
-	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", DefaultConf())
+	conf := DefaultConf()
+	conf.DirStatFlushPeriod = 500 * time.Millisecond
+	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", conf)
 	if err != nil || m.Name() != "postgres" {
 		t.Fatalf("create meta: %s", err)
 	}
