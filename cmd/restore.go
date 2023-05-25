@@ -117,5 +117,4 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 	restored.Done()
 	p.Done()
 	logger.Infof("restored %d files in %s", restored.Current(), hour)
-	return
 }
