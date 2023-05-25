@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -95,7 +96,7 @@ func clone(ctx *cli.Context) error {
 	if srcMp != dstMp {
 		return fmt.Errorf("the clone DST path should be at the same mount point as the SRC path")
 	}
-	if strings.HasPrefix(dstAbsPath, srcAbsPath) {
+	if strings.HasPrefix(dstAbsPath, path.Clean(srcAbsPath)+"/") {
 		return fmt.Errorf("the clone DST path should not be under the SRC path")
 	}
 
@@ -106,10 +107,9 @@ func clone(ctx *cli.Context) error {
 		return fmt.Errorf("lookup inode for %s: %s", dstParent, err)
 	}
 	var cmode uint8
-	var umask int
+	umask := utils.GetUmask()
 	if ctx.Bool("preserve") {
 		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
-		umask = utils.GetUmask()
 	}
 	headerSize := 4 + 4
 	contentSize := 8 + 8 + 1 + uint32(len(dstName)) + 2 + 1
@@ -123,7 +123,7 @@ func clone(ctx *cli.Context) error {
 	wb.Put16(uint16(umask))
 	wb.Put8(cmode)
 	f, err := openController(srcMp)
-	if err == nil {
+	if err != nil {
 		return err
 	}
 	defer f.Close()

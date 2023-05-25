@@ -315,10 +315,20 @@ interval (in seconds) to automatically backup metadata in the object storage (0 
 interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value (default: "12")
 
 `--no-bgjob`<br />
-disable background jobs (clean-up, backup, etc.) (default: false)
+Disable background jobs, default to false, which means clients by default carry out background jobs, including:
+
+* Clean up expired files in Trash (look for `cleanupDeletedFiles`, `cleanupTrash` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))
+* Delete slices that's not referenced (look for `cleanupSlices` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))
+* Clean up stale client sessions (look for `CleanStaleSessions` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))
+
+Note that compaction isn't affected by this option, it happens automatically with file reads and writes, client will check if compaction is in need, and run in background (take Redis for example, look for `compactChunk` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go)).
 
 `--atime-mode value`<br />
-control atime behavior, support 3 modes, `noatime`, `relatime`, `strictatime`, default to `noatime`
+Control atime (last time the file was accessed) behavior, support the following modes:
+
+* `noatime` (default), set when the file is created or when `SetAttr` is explicitly called. Accessing and modifying the file will not affect atime, tracking atime comes at a performance cost, so this is the default behavior
+* `relatime` update inode access times relative to mtime (last time when the file data was modified) or ctime (last time when file metadata was changed). Only update atime if atime was earlier than the current mtime or ctime, or the file's atime is more than 1 day old
+* `strictatime`, always update atime on access
 
 #### Examples
 

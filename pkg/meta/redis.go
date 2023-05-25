@@ -846,6 +846,24 @@ func (m *redisMeta) shouldRetry(err error, retryOnFailure bool) bool {
 	return true
 }
 
+// errNo is an alias to syscall.Errno to disable retry in Redis Cluster
+type errNo uintptr
+
+func (e errNo) Error() string {
+	return syscall.Errno(e).Error()
+}
+
+// replaceErrno replace returned syscall.Errno as errNo
+func replaceErrno(txf func(tx *redis.Tx) error) func(tx *redis.Tx) error {
+	return func(tx *redis.Tx) error {
+		err := txf(tx)
+		if eno, ok := err.(syscall.Errno); ok {
+			err = errNo(eno)
+		}
+		return err
+	}
+}
+
 func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...string) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
@@ -871,9 +889,13 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 		if ctx.Canceled() {
 			return syscall.EINTR
 		}
-		err := m.rdb.Watch(ctx, txf, keys...)
-		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
-			err = nil
+		err := m.rdb.Watch(ctx, replaceErrno(txf), keys...)
+		if eno, ok := err.(errNo); ok {
+			if eno == 0 {
+				err = nil
+			} else {
+				err = syscall.Errno(eno)
+			}
 		}
 		if err != nil && m.shouldRetry(err, retryOnFailture) {
 			m.txRestart.Add(1)
@@ -1438,7 +1460,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		})
 
 		return err
-	}, m.entryKey(parent), m.inodeKey(parent))
+	}, m.inodeKey(parent), m.entryKey(parent))
 	if err == nil && trash == 0 {
 		if _type == TypeFile && attr.Nlink == 0 {
 			m.fileDeleted(opened, isTrash(parent), inode, attr.Length)
@@ -1822,7 +1844,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return nil
 		})
 		return err
-	}, m.entryKey(parentSrc), m.inodeKey(parentSrc), m.entryKey(parentDst), m.inodeKey(parentDst))
+	}, m.inodeKey(parentSrc), m.entryKey(parentSrc), m.inodeKey(parentDst), m.entryKey(parentDst))
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 			m.fileDeleted(opened, false, dino, tattr.Length)
@@ -1899,7 +1921,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 			*attr = iattr
 		}
 		return err
-	}, m.inodeKey(inode), m.entryKey(parent), m.inodeKey(parent)))
+	}, m.inodeKey(parent), m.entryKey(parent), m.inodeKey(inode)))
 }
 
 func (m *redisMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry, limit int) syscall.Errno {
@@ -3321,7 +3343,7 @@ func (m *redisMeta) doRepair(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 			}
 		}
 		return tx.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0).Err()
-	}, m.entryKey(inode), m.inodeKey(inode)))
+	}, m.inodeKey(inode), m.entryKey(inode)))
 }
 
 func (m *redisMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) syscall.Errno {
@@ -4120,10 +4142,17 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 			return eno
 		}
 		attr.Parent = parent
+		now := time.Now()
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			attr.Uid = ctx.Uid()
 			attr.Gid = ctx.Gid()
 			attr.Mode &= ^cumask
+			attr.Atime = now.Unix()
+			attr.Mtime = now.Unix()
+			attr.Ctime = now.Unix()
+			attr.Atimensec = uint32(now.Nanosecond())
+			attr.Mtimensec = uint32(now.Nanosecond())
+			attr.Ctimensec = uint32(now.Nanosecond())
 		}
 		// TODO: preserve hardlink
 		if attr.Typ == TypeFile && attr.Nlink > 1 {

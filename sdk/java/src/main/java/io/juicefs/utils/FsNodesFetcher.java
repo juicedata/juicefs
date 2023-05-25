@@ -26,7 +26,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.URI;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -47,14 +49,20 @@ public class FsNodesFetcher extends NodesFetcher {
     FileSystem fs;
 
     Path path = new Path(uri);
-    String scheme = path.toUri().getScheme();
+    URI toUri = path.toUri();
+    URI defaultUri = FileSystem.getDefaultUri(conf);
+    String scheme = toUri.getScheme();
     if (scheme == null) {
-      scheme = FileSystem.getDefaultUri(conf).getScheme();
+      scheme = defaultUri.getScheme();
+    }
+    String authority = toUri.getAuthority();
+    if (authority == null) {
+      authority = defaultUri.getAuthority();
     }
     if (scheme != null) {
       try {
         String classStr = conf.getTrimmed("fs." + scheme + ".impl");
-        if (JuiceFileSystem.class.getName().equals(classStr)) {
+        if (JuiceFileSystem.class.getName().equals(classStr) && Objects.equals(authority, jfs.getUri().getAuthority())) {
           fs = jfs;
         } else {
           fs = path.getFileSystem(conf);

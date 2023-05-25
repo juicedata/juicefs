@@ -1854,15 +1854,19 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 	case *dbMeta:
 		err = m.txn(func(s *xorm.Session) error {
 			_, err = s.ID(inode).AllCols().Update(&node{
-				Inode:  inode,
-				Type:   attr.Typ,
-				Flags:  attr.Flags,
-				Mode:   attr.Mode,
-				Uid:    attr.Uid,
-				Gid:    attr.Gid,
-				Mtime:  attr.Mtime * 1e6,
-				Ctime:  attr.Ctime * 1e6,
-				Atime:  attr.Atime * 1e6,
+				Inode:     inode,
+				Type:      attr.Typ,
+				Flags:     attr.Flags,
+				Mode:      attr.Mode,
+				Uid:       attr.Uid,
+				Gid:       attr.Gid,
+				Atime:     attr.Atime*1e6 + int64(attr.Atimensec)/1e3,
+				Mtime:     attr.Mtime*1e6 + int64(attr.Mtimensec)/1e3,
+				Ctime:     attr.Ctime*1e6 + int64(attr.Ctimensec)/1e3,
+				Atimensec: int16(attr.Atimensec % 1e3),
+				Mtimensec: int16(attr.Mtimensec % 1e3),
+				Ctimensec: int16(attr.Ctimensec % 1e3),
+
 				Nlink:  attr.Nlink,
 				Length: attr.Length,
 				Rdev:   attr.Rdev,
@@ -2231,7 +2235,20 @@ func testClone(t *testing.T, m Meta) {
 	if iused-iused2 != 8 {
 		t.Fatalf("added inodes: %d", iused-iused2)
 	}
-
+	if eno := m.Clone(Background, dir1, cloneDir, "no_preserve", 0, 022, &count, &total); eno != 0 {
+		t.Fatalf("clone: %s", eno)
+	}
+	var d2 Ino
+	var noPreserveAttr = new(Attr)
+	m.Lookup(Background, cloneDir, "no_preserve", &d2, noPreserveAttr, true)
+	var cloneSrcAttr = new(Attr)
+	m.GetAttr(Background, cloneDir, cloneSrcAttr)
+	if noPreserveAttr.Mtimensec == cloneSrcAttr.Mtimensec {
+		t.Fatalf("clone: should not preserve mtime")
+	}
+	if eno := m.Remove(Background, cloneDir, "no_preserve", nil); eno != 0 {
+		t.Fatalf("Rmdir: %s", eno)
+	}
 	// check attr
 	var removedItem []interface{}
 	checkEntryTree(t, m, dir1, cloneDstIno, func(srcEntry, dstEntry *Entry, dstIno Ino) {

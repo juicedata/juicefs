@@ -315,10 +315,20 @@ Consul 注册中心地址 (默认："127.0.0.1:8500")
 数据上传到对象存储的延迟时间，支持秒分时精度，对应格式分别为 ("s", "m", "h")，默认为 0 秒。如果在等待的时间内数据被应用删除，则无需再上传到对象存储，既提升了性能也节省了成本，如果数据只是临时落盘，之后会迅速删除，考虑用该选项进行优化。
 
 `--no-bgjob`<br />
-禁用后台作业（清理、备份等）（默认：false）
+禁用后台任务，默认为 false，也就是说客户端会默认运行后台任务。后台任务包含：
+
+* 清理回收站中过期的文件（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupDeletedFiles` 和 `cleanupTrash`）
+* 清理引用计数为 0 的 Slice（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupSlices`）
+* 清理过期的客户端会话（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `CleanStaleSessions`）
+
+特别地，碎片合并（Compaction）不受该选项的影响，而是随着文件读写操作，自动判断是否需要合并，然后异步执行（以 Redis 为例，在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go) 中搜索 `compactChunk`）
 
 `--atime-mode value`<br />
-控制如何更新 atime，支持 3 种模式，`noatime`，`relatime`，`strictatime`，默认使用 `noatime`
+控制如何更新 atime（文件最后被访问的时间）。支持以下模式：
+
+* `noatime`（默认），仅在文件创建和主动调用 `SetAttr` 时设置，平时访问与修改文件不影响 atime 值。考虑到更新 atime 需要运行额外的事务，对性能有影响，因此默认关闭
+* `relatime`，仅在 mtime（文件内容修改时间）或 ctime（文件元数据修改时间）比 atime 新，或者 atime 超过 24 小时没有更新时进行更新
+* `strictatime`，持续更新 atime
 
 #### 示例
 

@@ -866,7 +866,7 @@ func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint
 		tx.set(m.inodeKey(inode), m.marshal(dirtyAttr))
 		*attr = *dirtyAttr
 		return nil
-	}))
+	}, inode))
 }
 
 func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
@@ -937,7 +937,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 			*attr = t
 		}
 		return nil
-	})
+	}, inode)
 	if err == nil {
 		m.updateParentStat(ctx, inode, t.Parent, newLength, newSpace)
 	}
@@ -1027,7 +1027,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 			}
 		}
 		return nil
-	})
+	}, inode)
 	if err == nil {
 		m.updateParentStat(ctx, inode, t.Parent, newLength, newSpace)
 	}
@@ -1056,7 +1056,7 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 		attr.Atimensec = uint32(now.Nanosecond())
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		return nil
-	})
+	}, inode)
 	atime = attr.Atime
 	return
 }
@@ -1275,7 +1275,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 
 		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 		var updateParent bool
-		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1392,12 +1392,21 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 			trash = 0
 		}
 		pattr.Nlink--
-		pattr.Mtime = now.Unix()
-		pattr.Mtimensec = uint32(now.Nanosecond())
-		pattr.Ctime = now.Unix()
-		pattr.Ctimensec = uint32(now.Nanosecond())
+		var updateParent bool
+		if m.conf.SkipDirNlink <= 0 || tx.retry < m.conf.SkipDirNlink {
+			updateParent = true
+		} else {
+			logger.Warnf("Skip updating nlink of directory %d to reduce conflict", parent)
+		}
+		if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+			pattr.Mtime = now.Unix()
+			pattr.Mtimensec = uint32(now.Nanosecond())
+			pattr.Ctime = now.Unix()
+			pattr.Ctimensec = uint32(now.Nanosecond())
+			updateParent = true
+		}
 
-		if !isTrash(parent) {
+		if !isTrash(parent) && updateParent {
 			tx.set(m.inodeKey(parent), m.marshal(&pattr))
 		}
 		tx.delete(m.entryKey(parent, name))
@@ -1510,7 +1519,11 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 						tattr.Parent = parentSrc
 						dattr.Nlink--
 						sattr.Nlink++
-						supdate, dupdate = true, true
+						if m.conf.SkipDirNlink <= 0 || tx.retry < m.conf.SkipDirNlink {
+							supdate, dupdate = true, true
+						} else {
+							logger.Warnf("Skip updating nlink of directory %d,%d to reduce conflict", parentSrc, parentDst)
+						}
 					} else if tattr.Parent > 0 {
 						tattr.Parent = parentSrc
 					}
@@ -1554,19 +1567,23 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				iattr.Parent = parentDst
 				sattr.Nlink--
 				dattr.Nlink++
-				supdate, dupdate = true, true
+				if m.conf.SkipDirNlink <= 0 || tx.retry < m.conf.SkipDirNlink {
+					supdate, dupdate = true, true
+				} else {
+					logger.Warnf("Skip updating nlink of directory %d,%d to reduce conflict", parentSrc, parentDst)
+				}
 			} else if iattr.Parent > 0 {
 				iattr.Parent = parentDst
 			}
 		}
-		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime {
+		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
 			sattr.Mtime = now.Unix()
 			sattr.Mtimensec = uint32(now.Nanosecond())
 			sattr.Ctime = now.Unix()
 			sattr.Ctimensec = uint32(now.Nanosecond())
 			supdate = true
 		}
-		if dupdate || now.Sub(time.Unix(dattr.Mtime, int64(dattr.Mtimensec))) >= minUpdateTime {
+		if dupdate || now.Sub(time.Unix(dattr.Mtime, int64(dattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
 			dattr.Mtime = now.Unix()
 			dattr.Mtimensec = uint32(now.Nanosecond())
 			dattr.Ctime = now.Unix()
@@ -1691,7 +1708,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 		var updateParent bool
 		now := time.Now()
-		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1808,7 +1825,7 @@ func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		tx.delete(m.inodeKey(inode))
 		tx.delete(m.sustainedKey(sid, inode))
 		return nil
-	})
+	}, inode)
 	if err == nil {
 		newSpace := -align4K(attr.Length)
 		m.updateStats(newSpace, -1)
@@ -2016,7 +2033,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		tx.set(m.inodeKey(fout), m.marshal(&attr))
 		*copied = size
 		return nil
-	})
+	}, fout)
 	if err == nil {
 		m.updateParentStat(ctx, fout, attr.Parent, newLength, newSpace)
 	}
@@ -3263,10 +3280,17 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			return eno
 		}
 		attr.Parent = parent
+		now := time.Now()
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			attr.Uid = ctx.Uid()
 			attr.Gid = ctx.Gid()
 			attr.Mode &= ^cumask
+			attr.Atime = now.Unix()
+			attr.Mtime = now.Unix()
+			attr.Ctime = now.Unix()
+			attr.Atimensec = uint32(now.Nanosecond())
+			attr.Mtimensec = uint32(now.Nanosecond())
+			attr.Ctimensec = uint32(now.Nanosecond())
 		}
 		// TODO: preserve hardlink
 		if attr.Typ == TypeFile && attr.Nlink > 1 {
@@ -3347,7 +3371,7 @@ func (m *kvMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			tx.set(m.symKey(ino), tx.get(m.symKey(srcIno)))
 		}
 		return nil
-	}))
+	}, srcIno))
 }
 
 func (m *kvMeta) doFindDetachedNodes(t time.Time) []Ino {
@@ -3381,7 +3405,7 @@ func (m *kvMeta) doCleanupDetachedNode(ctx Context, ino Ino) syscall.Errno {
 		tx.delete(m.dirStatKey(ino))
 		tx.delete(m.detachedKey(ino))
 		return nil
-	}))
+	}, ino))
 }
 
 func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string) syscall.Errno {
@@ -3431,6 +3455,6 @@ func (m *kvMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 		tx.set(m.inodeKey(inode), m.marshal(attr))
 		updated = true
 		return nil
-	})
+	}, inode)
 	return updated, err
 }
