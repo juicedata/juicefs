@@ -33,7 +33,6 @@ type mapping struct {
 	sync.Mutex
 	salt      string
 	local     bool
-	mask      uint32
 	usernames map[string]uint32
 	userIDs   map[uint32]string
 	groups    map[string]uint32
@@ -56,11 +55,7 @@ func (m *mapping) genGuid(name string) uint32 {
 	digest := md5.Sum([]byte(m.salt + name + m.salt))
 	a := binary.LittleEndian.Uint64(digest[0:8])
 	b := binary.LittleEndian.Uint64(digest[8:16])
-	id := uint32(a ^ b)
-	if m.mask > 0 {
-		id &= m.mask
-	}
-	return id
+	return uint32(a ^ b)
 }
 
 func (m *mapping) lookupUser(name string) uint32 {
