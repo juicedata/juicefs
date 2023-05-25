@@ -326,6 +326,10 @@ func getOrCreate(name, user, group, superuser, supergroup string, f func() *fs.F
 		if jfs == nil {
 			return 0
 		}
+		switch jfs.Meta().Name() {
+		case "mysql", "postgres", "sqlite3":
+			m.mask = 0x7FFFFFFF // limit generated uid to int32
+		}
 		logger.Infof("JuiceFileSystem created for user:%s group:%s", user, group)
 	}
 	w := &wrapper{jfs, nil, m, user, superuser, supergroup}
