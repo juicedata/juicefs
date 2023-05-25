@@ -2,7 +2,7 @@
 set -e
 
 
-test_clone_preserve_guid_with_file()
+test_clone_preserve_with_file()
 {
     prepare_test
     ./juicefs format sqlite3://test.db myjfs
@@ -10,11 +10,12 @@ test_clone_preserve_guid_with_file()
     id -u juicefs  && sudo userdel juicefs
     sudo useradd -u 1101 juicefs
     sudo -u juicefs touch /jfs/test
-    sudo -u juicefs chmod 654 /jfs/test
-    check_guid_after_clone 1101 1101 654
+    sudo -u juicefs chmod 777 /jfs/test
+    check_guid_after_clone true
+    check_guid_after_clone false
 }
 
-test_clone_preserve_guid_with_dir()
+test_clone_preserve_with_dir()
 {
     prepare_test
     ./juicefs format sqlite3://test.db myjfs
@@ -22,8 +23,9 @@ test_clone_preserve_guid_with_dir()
     id -u juicefs  && sudo userdel juicefs
     sudo useradd -u 1101 juicefs
     sudo -u juicefs mkdir /jfs/test
-    sudo -u juicefs chmod 654 /jfs/test
-    check_guid_after_clone 1101 1101 654
+    sudo -u juicefs chmod 777 /jfs/test
+    check_guid_after_clone true
+    check_guid_after_clone false
 }
 
 test_clone()
@@ -39,27 +41,22 @@ test_clone()
 }
 
 check_guid_after_clone(){
-    expected_uid=$1
-    expected_gid=$2
-    expected_mode=$3
-    ./juicefs clone /jfs/test /jfs/test1
-    uid=$(stat -c %u /jfs/test1)
-    gid=$(stat -c %g /jfs/test1)
-    mode=$(stat -c %a /jfs/test1)
-    if [[ $uid != 0 ]] || [[ $gid != 0 ]] || [[ "$mode" != "755" ]]; then
-        echo "uid or gid or mode should not be preserved, uid: $uid, gid: $gid, mode: $mode"
-        echo "expected_uid: 0, expected_gid: 0, expected_mode: 755"
-        exit 1
-    fi
+    is_preserve=$1
+    echo "check_guid_after_clone, is_preserve: $is_preserve"
+    [[ "$is_preserve" == "true" ]] && preserve="--preserve" || preserve=""
+    rm /jfs/test1 -rf
+    rm /jfs/test2 -rf
+    ./juicefs clone /jfs/test /jfs/test1 $preserve
+    cp /jfs/test /jfs/test2 -rf $preserve
+    uid1=$(stat -c %u /jfs/test1)
+    gid1=$(stat -c %g /jfs/test1)
+    mode1=$(stat -c %a /jfs/test1)
+    uid2=$(stat -c %u /jfs/test2)
+    gid2=$(stat -c %g /jfs/test2)
+    mode2=$(stat -c %a /jfs/test2)
 
-    rm /jfs/test1 -rf 
-    ./juicefs clone /jfs/test /jfs/test1 --preserve
-    uid=$(stat -c %u /jfs/test1)
-    gid=$(stat -c %g /jfs/test1)
-    mode=$(stat -c %a /jfs/test1)
-    if [[ $uid != "$expected_gid" ]] || [[ $gid != "$expected_gid" ]] || [[ "$mode" != "$expected_mode" ]]; then
-        echo "uid or gid should be preserved: uid: $uid, gid: $gid, mode: $mode"
-        echo "expected_uid: $expected_uid, expected_gid: $expected_gid, expected_mode: $expected_mode"
+    if [[ "$uid1" != "$uid2" ]] || [[ "$gid1" != "$gid2" ]] || [[ "$mode1" != "$mode2" ]]; then
+        echo "clone does not same as cp: uid1: $uid1, uid2: $uid2, gid1: $gid1, gid2: $gid2, mode1: $mode1, mode2: $mode2"
         exit 1
     fi
 }
