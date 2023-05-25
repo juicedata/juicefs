@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"strconv"
 	"sync"
-	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -14,19 +13,19 @@ import (
 
 func cmdRecover() *cli.Command {
 	return &cli.Command{
-		Name:      "recover",
-		Action:    recover,
+		Name:      "restore",
+		Action:    restore,
 		Category:  "ADMIN",
-		Usage:     "recover files from trash",
+		Usage:     "restore files from trash",
 		ArgsUsage: "META HOUR ...",
 		Description: `
-Rebuild the tree structure for trash files, and move them back to original directories.
+Rebuild the tree structure for trash files, and put them back to original directories.
 
 Examples:
-$ juicefs recover redis://localhost/1 2023-10-10-01`,
+$ juicefs restore redis://localhost/1 2023-05-10-01`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
-				Name:  "move-to-original",
+				Name:  "put-back",
 				Usage: "move the recovered files into original directory",
 			},
 			&cli.IntFlag{
@@ -38,33 +37,32 @@ $ juicefs recover redis://localhost/1 2023-10-10-01`,
 	}
 }
 
-func recover(ctx *cli.Context) error {
-	setup(ctx, 1)
+func restore(ctx *cli.Context) error {
+	setup(ctx, 2)
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
-	for i := 0; i+1 < ctx.NArg(); i++ {
-		path := ctx.Args().Get(i + 1)
-		err := doRecover(m, path, ctx.Bool("move-to-original"), ctx.Int("threads"))
-		if err != 0 {
-			logger.Errorf("recover %s: %s", path, err)
-		}
+	for i := 1; i < ctx.NArg(); i++ {
+		hour := ctx.Args().Get(i)
+		doRestore(m, hour, ctx.Bool("put-back"), ctx.Int("threads"))
 	}
 	return nil
 }
 
-func doRecover(m meta.Meta, path string, move bool, threads int) syscall.Errno {
-	logger.Infof("recover files in %s", path)
+func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
+	logger.Infof("restore files in %s ...", hour)
 	ctx := meta.Background
 	var parent meta.Ino
 	var attr meta.Attr
-	err := m.Lookup(ctx, meta.TrashInode, path, &parent, &attr, false)
+	err := m.Lookup(ctx, meta.TrashInode, hour, &parent, &attr, false)
 	if err != 0 {
-		return err
+		logger.Errorf("lookup %s: %s", hour, err)
+		return
 	}
 	var entries []*meta.Entry
 	err = m.Readdir(meta.Background, parent, 0, &entries)
 	if err != 0 {
-		return err
+		logger.Errorf("list %s: %s", hour, err)
+		return
 	}
 	entries = entries[2:]
 	// to avoid conflict
@@ -73,7 +71,7 @@ func doRecover(m meta.Meta, path string, move bool, threads int) syscall.Errno {
 	})
 
 	var parents = make(map[meta.Ino]bool)
-	if !move {
+	if !putBack {
 		for _, e := range entries {
 			if e.Attr.Typ == meta.TypeDirectory {
 				parents[e.Inode] = true
@@ -83,7 +81,7 @@ func doRecover(m meta.Meta, path string, move bool, threads int) syscall.Errno {
 
 	todo := make(chan *meta.Entry, 1000)
 	p := utils.NewProgress(false)
-	recovered := p.AddCountBar("recovered", int64(len(entries)))
+	restored := p.AddCountBar("restored", int64(len(entries)))
 	skipped := p.AddCountSpinner("skipped")
 	failed := p.AddCountSpinner("failed")
 	var wg sync.WaitGroup
@@ -94,13 +92,13 @@ func doRecover(m meta.Meta, path string, move bool, threads int) syscall.Errno {
 			for e := range todo {
 				ps := bytes.SplitN(e.Name, []byte("-"), 3)
 				dst, _ := strconv.Atoi(string(ps[0]))
-				if move || parents[meta.Ino(dst)] {
+				if putBack || parents[meta.Ino(dst)] {
 					err = m.Rename(ctx, parent, string(e.Name), meta.Ino(dst), string(ps[2]), 0, nil, nil)
 					if err != 0 {
-						logger.Warnf("recover %s: %s", string(e.Name), err)
+						logger.Warnf("restore %s: %s", string(e.Name), err)
 						failed.Increment()
 					} else {
-						recovered.Increment()
+						restored.Increment()
 					}
 				} else {
 					skipped.Increment()
@@ -116,8 +114,8 @@ func doRecover(m meta.Meta, path string, move bool, threads int) syscall.Errno {
 	wg.Wait()
 	failed.Done()
 	skipped.Done()
-	recovered.Done()
+	restored.Done()
 	p.Done()
-	logger.Infof("recovered %d files in %s", recovered.Current(), path)
-	return 0
+	logger.Infof("restored %d files in %s", restored.Current(), hour)
+	return
 }
