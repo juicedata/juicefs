@@ -22,13 +22,10 @@ import (
 	"path"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestSQLiteClient(t *testing.T) {
-	conf := DefaultConf()
-	conf.DirStatFlushPeriod = 500 * time.Millisecond
-	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test.db"), conf)
+	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test.db"), testConfig())
 	if err != nil || m.Name() != "sqlite3" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -36,9 +33,7 @@ func TestSQLiteClient(t *testing.T) {
 }
 
 func TestMySQLClient(t *testing.T) { //skip mutate
-	conf := DefaultConf()
-	conf.DirStatFlushPeriod = 500 * time.Millisecond
-	m, err := newSQLMeta("mysql", "root:@/dev", conf)
+	m, err := newSQLMeta("mysql", "root:@/dev", testConfig())
 	if err != nil || m.Name() != "mysql" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -49,9 +44,7 @@ func TestPostgreSQLClient(t *testing.T) { //skip mutate
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
-	conf := DefaultConf()
-	conf.DirStatFlushPeriod = 500 * time.Millisecond
-	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", conf)
+	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", testConfig())
 	if err != nil || m.Name() != "postgres" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -59,7 +52,7 @@ func TestPostgreSQLClient(t *testing.T) { //skip mutate
 }
 
 func TestPostgreSQLClientWithSearchPath(t *testing.T) { //skip mutate
-	_, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", DefaultConf())
+	_, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable&search_path=juicefs,public", testConfig())
 	if !strings.Contains(err.Error(), "currently, only one schema is supported in search_path") {
 		t.Fatalf("TestPostgreSQLClientWithSearchPath error: %s", err)
 	}
