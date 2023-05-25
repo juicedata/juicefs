@@ -46,7 +46,7 @@ func testConfig() *Config {
 }
 
 func TestRedisClient(t *testing.T) {
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", DefaultConf())
+	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", testConfig())
 	if err != nil || m.Name() != "redis" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -59,7 +59,7 @@ func TestKeyDB(t *testing.T) { //skip mutate
 	}
 	// 127.0.0.1:6378 enable flash, 127.0.0.1:6377 disable flash
 	for _, addr := range []string{"127.0.0.1:6378/10", "127.0.0.1:6377/10"} {
-		m, err := newRedisMeta("redis", addr, DefaultConf())
+		m, err := newRedisMeta("redis", addr, testConfig())
 		if err != nil || m.Name() != "redis" {
 			t.Fatalf("create meta: %s", err)
 		}
