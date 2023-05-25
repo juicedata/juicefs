@@ -107,10 +107,9 @@ func clone(ctx *cli.Context) error {
 		return fmt.Errorf("lookup inode for %s: %s", dstParent, err)
 	}
 	var cmode uint8
-	var umask int
+	umask := utils.GetUmask()
 	if ctx.Bool("preserve") {
 		cmode |= meta.CLONE_MODE_PRESERVE_ATTR
-		umask = utils.GetUmask()
 	}
 	headerSize := 4 + 4
 	contentSize := 8 + 8 + 1 + uint32(len(dstName)) + 2 + 1

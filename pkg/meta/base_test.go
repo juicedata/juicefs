@@ -1356,13 +1356,13 @@ func testCloseSession(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink f: %s", st)
 	}
+	time.Sleep(10 * time.Millisecond)
 	sid := m.getBase().sid
 	s, err := m.GetSession(sid, true)
 	if err != nil {
 		t.Fatalf("get session: %s", err)
 	} else {
-		// if len(s.Flocks) != 1 || len(s.Plocks) != 1 || len(s.Sustained) != 1 {
-		if len(s.Flocks) != 1 || len(s.Plocks) != 1 {
+		if len(s.Flocks) != 1 || len(s.Plocks) != 1 || len(s.Sustained) != 1 {
 			t.Fatalf("incorrect session: flock %d plock %d sustained %d", len(s.Flocks), len(s.Plocks), len(s.Sustained))
 		}
 	}
@@ -2235,7 +2235,20 @@ func testClone(t *testing.T, m Meta) {
 	if iused-iused2 != 8 {
 		t.Fatalf("added inodes: %d", iused-iused2)
 	}
-
+	if eno := m.Clone(Background, dir1, cloneDir, "no_preserve", 0, 022, &count, &total); eno != 0 {
+		t.Fatalf("clone: %s", eno)
+	}
+	var d2 Ino
+	var noPreserveAttr = new(Attr)
+	m.Lookup(Background, cloneDir, "no_preserve", &d2, noPreserveAttr, true)
+	var cloneSrcAttr = new(Attr)
+	m.GetAttr(Background, cloneDir, cloneSrcAttr)
+	if noPreserveAttr.Mtimensec == cloneSrcAttr.Mtimensec {
+		t.Fatalf("clone: should not preserve mtime")
+	}
+	if eno := m.Remove(Background, cloneDir, "no_preserve", nil); eno != 0 {
+		t.Fatalf("Rmdir: %s", eno)
+	}
 	// check attr
 	var removedItem []interface{}
 	checkEntryTree(t, m, dir1, cloneDstIno, func(srcEntry, dstEntry *Entry, dstIno Ino) {

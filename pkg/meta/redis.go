@@ -846,6 +846,24 @@ func (m *redisMeta) shouldRetry(err error, retryOnFailure bool) bool {
 	return true
 }
 
+// errNo is an alias to syscall.Errno to disable retry in Redis Cluster
+type errNo uintptr
+
+func (e errNo) Error() string {
+	return syscall.Errno(e).Error()
+}
+
+// replaceErrno replace returned syscall.Errno as errNo
+func replaceErrno(txf func(tx *redis.Tx) error) func(tx *redis.Tx) error {
+	return func(tx *redis.Tx) error {
+		err := txf(tx)
+		if eno, ok := err.(syscall.Errno); ok {
+			err = errNo(eno)
+		}
+		return err
+	}
+}
+
 func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...string) error {
 	if m.conf.ReadOnly {
 		return syscall.EROFS
@@ -871,9 +889,13 @@ func (m *redisMeta) txn(ctx Context, txf func(tx *redis.Tx) error, keys ...strin
 		if ctx.Canceled() {
 			return syscall.EINTR
 		}
-		err := m.rdb.Watch(ctx, txf, keys...)
-		if eno, ok := err.(syscall.Errno); ok && eno == 0 {
-			err = nil
+		err := m.rdb.Watch(ctx, replaceErrno(txf), keys...)
+		if eno, ok := err.(errNo); ok {
+			if eno == 0 {
+				err = nil
+			} else {
+				err = syscall.Errno(eno)
+			}
 		}
 		if err != nil && m.shouldRetry(err, retryOnFailture) {
 			m.txRestart.Add(1)
@@ -4120,10 +4142,17 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 			return eno
 		}
 		attr.Parent = parent
+		now := time.Now()
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
 			attr.Uid = ctx.Uid()
 			attr.Gid = ctx.Gid()
 			attr.Mode &= ^cumask
+			attr.Atime = now.Unix()
+			attr.Mtime = now.Unix()
+			attr.Ctime = now.Unix()
+			attr.Atimensec = uint32(now.Nanosecond())
+			attr.Mtimensec = uint32(now.Nanosecond())
+			attr.Ctimensec = uint32(now.Nanosecond())
 		}
 		// TODO: preserve hardlink
 		if attr.Typ == TypeFile && attr.Nlink > 1 {

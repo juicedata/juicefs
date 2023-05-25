@@ -176,10 +176,7 @@ type Attr struct {
 
 其中几个需要说明的字段：
 
-- Atime/Atimensec：目前支持三种模式
-  - noatime: 仅在文件创建和主动调用 `SetAttr` 时设置，平时访问与修改文件不影响 Atime 值，这是默认行为
-  - relatime: Mtime 或者 Ctime 比 Atime 新时，或者 Atime 超过 24 小时没有更新时更新 Atime
-  - strictatime: 一直更新 Atime
+- Atime/Atimensec：参考 [`--atime-mode`](../reference/command_reference.md#mount)
 - Nlink：
   - 目录文件：初始值为 2（'.' 和 '..'），每有一个子目录 Nlink 值加 1
   - 其他文件：初始值为 1，每创建一个硬链接 Nlink 值加 1
