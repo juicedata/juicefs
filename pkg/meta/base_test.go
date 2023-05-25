@@ -1356,13 +1356,13 @@ func testCloseSession(t *testing.T, m Meta) {
 	if st := m.Unlink(ctx, 1, "f"); st != 0 {
 		t.Fatalf("unlink f: %s", st)
 	}
+	time.Sleep(10 * time.Millisecond)
 	sid := m.getBase().sid
 	s, err := m.GetSession(sid, true)
 	if err != nil {
 		t.Fatalf("get session: %s", err)
 	} else {
-		// if len(s.Flocks) != 1 || len(s.Plocks) != 1 || len(s.Sustained) != 1 {
-		if len(s.Flocks) != 1 || len(s.Plocks) != 1 {
+		if len(s.Flocks) != 1 || len(s.Plocks) != 1 || len(s.Sustained) != 1 {
 			t.Fatalf("incorrect session: flock %d plock %d sustained %d", len(s.Flocks), len(s.Plocks), len(s.Sustained))
 		}
 	}
