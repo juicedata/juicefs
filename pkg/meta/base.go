@@ -2179,7 +2179,7 @@ func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, incre
 	}
 }
 
-func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func()) {
+func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int)) {
 	logger.Debugf("cleanup trash: started")
 	now := time.Now()
 	var st syscall.Errno
@@ -2218,15 +2218,12 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 				entries = entries[1:]
 			}
 			for _, se := range subEntries {
-				if se.Attr.Typ == TypeDirectory {
-					st = m.en.doRmdir(ctx, e.Inode, string(se.Name), nil)
-				} else {
-					st = m.en.doUnlink(ctx, e.Inode, string(se.Name), nil)
-				}
+				var c uint64
+				st = m.Remove(ctx, e.Inode, string(se.Name), &c)
 				if st == 0 {
-					count++
+					count += int(c)
 					if increProgress != nil {
-						increProgress()
+						increProgress(int(c))
 					}
 				} else {
 					logger.Warnf("delete from trash %s/%s: %s", e.Name, se.Name, st)

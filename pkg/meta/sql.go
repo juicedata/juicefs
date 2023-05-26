@@ -1604,6 +1604,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	var dino Ino
 	var dn node
 	var newSpace, newInode int64
+	lockParent := parentSrc
+	if isTrash(lockParent) {
+		lockParent = parentDst
+	}
 	err := m.txn(func(s *xorm.Session) error {
 		opened = false
 		dino = 0
@@ -1879,7 +1883,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 		}
 		return err
-	}, parentSrc)
+	}, lockParent)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dn.Type == TypeFile && dn.Nlink == 0 {
 			m.fileDeleted(opened, false, dino, dn.Length)

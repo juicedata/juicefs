@@ -1583,6 +1583,11 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 	var dtyp uint8
 	var tattr Attr
 	var newSpace, newInode int64
+	keys := []string{m.inodeKey(parentSrc), m.entryKey(parentSrc), m.inodeKey(parentDst), m.entryKey(parentDst)}
+	if isTrash(parentSrc) {
+		// lock the parentDst
+		keys[0], keys[2] = keys[2], keys[0]
+	}
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		opened = false
 		dino, dtyp = 0, 0
@@ -1844,7 +1849,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return nil
 		})
 		return err
-	}, m.inodeKey(parentSrc), m.entryKey(parentSrc), m.inodeKey(parentDst), m.entryKey(parentDst))
+	}, keys...)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 			m.fileDeleted(opened, false, dino, tattr.Length)
