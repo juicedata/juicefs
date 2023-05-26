@@ -30,6 +30,7 @@ import (
 
 // nolint:errcheck
 func TestUsageReport(t *testing.T) {
+	panic("not implemented")
 	// invalid addr
 	reportUrl = "http://127.0.0.1/report-usage"
 	m := meta.NewClient("memkv://", nil)
