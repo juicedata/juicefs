@@ -171,10 +171,6 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 				Name:  "no-update",
 				Usage: "don't update existing volume",
 			},
-			&cli.BoolFlag{
-				Name:  "no-dir-stats",
-				Usage: "disable dir stats, fast summary and dir quota won't work",
-			},
 		},
 	}
 }
@@ -394,8 +390,6 @@ func format(c *cli.Context) error {
 				format.HashPrefix = c.Bool(flag)
 			case "storage":
 				format.Storage = c.String(flag)
-			case "no-dir-stats":
-				logger.Warnf("Flag %s is ignored, please use `juicefs config --dir-stats=%t` to update it", flag, !c.Bool(flag))
 			case "encrypt-rsa-key", "encrypt-algo":
 				logger.Warnf("Flag %s is ignored since it cannot be updated", flag)
 			}
@@ -420,7 +414,7 @@ func format(c *cli.Context) error {
 			BlockSize:      fixObjectSize(c.Int("block-size")),
 			Compression:    c.String("compress"),
 			TrashDays:      c.Int("trash-days"),
-			EnableDirStats: !c.Bool("no-dir-stats"),
+			EnableDirStats: true,
 			MetaVersion:    meta.MaxVersion,
 		}
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
