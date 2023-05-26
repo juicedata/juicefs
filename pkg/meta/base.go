@@ -332,7 +332,7 @@ func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall
 }
 
 func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int64) {
-	if !m.GetFormat().EnableDirStats {
+	if !m.GetFormat().DirStats {
 		return
 	}
 	m.dirStatsLock.Lock()
@@ -349,7 +349,7 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, spac
 		return
 	}
 	m.en.updateStats(space, 0)
-	if !m.GetFormat().EnableDirStats {
+	if !m.GetFormat().DirStats {
 		return
 	}
 	if parent > 0 {
@@ -377,7 +377,7 @@ func (m *baseMeta) flushDirStat() {
 }
 
 func (m *baseMeta) doFlushDirStat() {
-	if !m.GetFormat().EnableDirStats {
+	if !m.GetFormat().DirStats {
 		return
 	}
 	m.dirStatsLock.Lock()
@@ -619,7 +619,7 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) 
 	if inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes) {
 		return syscall.ENOSPC
 	}
-	if !m.GetFormat().EnableDirStats {
+	if !m.GetFormat().DirStats {
 		return 0
 	}
 	for _, ino := range parents {
@@ -675,7 +675,7 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 }
 
 func (m *baseMeta) hasDirQuota(ctx Context, inode Ino) bool {
-	if !m.GetFormat().EnableDirStats {
+	if !m.GetFormat().DirStats {
 		return false
 	}
 	var q *Quota
@@ -699,7 +699,7 @@ func (m *baseMeta) hasDirQuota(ctx Context, inode Ino) bool {
 }
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {
-	if !m.GetFormat().EnableDirStats {
+	if !m.GetFormat().DirStats {
 		return false
 	}
 	var q *Quota
@@ -723,7 +723,7 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bo
 }
 
 func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
-	if !m.GetFormat().EnableDirStats {
+	if !m.GetFormat().DirStats {
 		return
 	}
 	var q *Quota
@@ -750,7 +750,7 @@ func (m *baseMeta) flushQuotas() {
 	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
-		if !m.GetFormat().EnableDirStats {
+		if !m.GetFormat().DirStats {
 			continue
 		}
 		m.quotaMu.RLock()

@@ -160,7 +160,7 @@ func config(ctx *cli.Context) error {
 	var quota, storage, trash, clientVer bool
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
-	originDirStats := format.EnableDirStats
+	originDirStats := format.DirStats
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
 		case "capacity":
@@ -240,9 +240,9 @@ func config(ctx *cli.Context) error {
 				trash = true
 			}
 		case "dir-stats":
-			if new := ctx.Bool(flag); new != format.EnableDirStats {
-				msg.WriteString(fmt.Sprintf("%10s: %t -> %t\n", flag, format.EnableDirStats, new))
-				format.EnableDirStats = new
+			if new := ctx.Bool(flag); new != format.DirStats {
+				msg.WriteString(fmt.Sprintf("%10s: %t -> %t\n", flag, format.DirStats, new))
+				format.DirStats = new
 			}
 		case "min-client-version":
 			if new := ctx.String(flag); new != format.MinClientVersion {
@@ -299,7 +299,7 @@ func config(ctx *cli.Context) error {
 				return fmt.Errorf("Aborted.")
 			}
 		}
-		if originDirStats && !format.EnableDirStats {
+		if originDirStats && !format.DirStats {
 			warn("The current dir stats will be deleted.")
 			if !yes && !userConfirmed() {
 				return fmt.Errorf("Aborted.")

@@ -90,7 +90,7 @@ type Format struct {
 	MetaVersion      int    `json:",omitempty"`
 	MinClientVersion string `json:",omitempty"`
 	MaxClientVersion string `json:",omitempty"`
-	EnableDirStats   bool   `json:",omitempty"`
+	DirStats         bool   `json:",omitempty"`
 }
 
 func (f *Format) update(old *Format, force bool) error {

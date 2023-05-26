@@ -322,14 +322,14 @@ func (m *dbMeta) Init(format *Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("json: %s", err)
 		}
-		if old.EnableDirStats && !format.EnableDirStats {
+		if old.DirStats && !format.DirStats {
 			// remove dir stats
 			_, err = m.db.Where("TRUE").Delete(new(dirStats))
 			if err != nil {
 				return errors.Wrap(err, "drop table dirStats")
 			}
 		}
-		if !old.EnableDirStats && format.EnableDirStats {
+		if !old.DirStats && format.DirStats {
 			// re-caculate quota usage
 			var quotas []*dirQuota
 			err := m.db.Cols("inode", "used_space", "used_inodes").ForUpdate().Find(&quotas)
