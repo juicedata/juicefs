@@ -28,7 +28,7 @@ import (
 )
 
 func cmdWebDav() *cli.Command {
-	selfFlags := addCategories("WEBDAV", []cli.Flag{
+	selfFlags := []cli.Flag{
 		&cli.StringFlag{
 			Name:  "cert-file",
 			Usage: "certificate file for https",
@@ -49,10 +49,10 @@ func cmdWebDav() *cli.Command {
 			Name:  "access-log",
 			Usage: "path for JuiceFS access log",
 		},
-	})
+	}
 	compoundFlags := [][]cli.Flag{
-		clientFlags(0),
 		selfFlags,
+		clientFlags(0),
 		shareInfoFlags(),
 	}
 
