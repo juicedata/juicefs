@@ -160,7 +160,6 @@ func config(ctx *cli.Context) error {
 	var quota, storage, trash, clientVer bool
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
-	originDirStats := format.DirStats
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
 		case "capacity":
