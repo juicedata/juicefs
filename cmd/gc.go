@@ -142,7 +142,7 @@ func gc(ctx *cli.Context) error {
 	edge := time.Now().Add(-time.Duration(format.TrashDays) * 24 * time.Hour)
 	if delete {
 		cleanTrashSpin := progress.AddCountSpinner("Cleaned trash")
-		m.CleanupTrashBefore(c, edge, cleanTrashSpin.Increment)
+		m.CleanupTrashBefore(c, edge, cleanTrashSpin.IncrBy)
 		cleanTrashSpin.Done()
 
 		cleanDetachedNodeSpin := progress.AddCountSpinner("Cleaned detached nodes")

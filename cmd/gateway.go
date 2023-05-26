@@ -66,9 +66,8 @@ func cmdGateway() *cli.Command {
 	}
 
 	compoundFlags := [][]cli.Flag{
-		clientFlags(),
-		cacheFlags(0),
 		selfFlags,
+		clientFlags(0),
 		shareInfoFlags(),
 	}
 

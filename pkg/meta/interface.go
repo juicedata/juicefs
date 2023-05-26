@@ -328,7 +328,7 @@ type Meta interface {
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
 	CleanStaleSessions()
 	// CleanupTrashBefore deletes all files in trash before the given time.
-	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func())
+	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int))
 	// CleanupDetachedNodesBefore deletes all detached nodes before the given time.
 	CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func())
 

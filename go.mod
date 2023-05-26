@@ -256,3 +256,5 @@ replace google.golang.org/grpc v1.43.0 => google.golang.org/grpc v1.29.0
 replace xorm.io/xorm v1.0.7 => gitea.com/davies/xorm v1.0.8-0.20220528043536-552d84d1b34a
 
 replace github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible => github.com/juicedata/huaweicloud-sdk-go-obs v3.22.12-0.20230228031208-386e87b5c091+incompatible
+
+replace github.com/urfave/cli/v2 v2.25.3 => github.com/juicedata/cli/v2 v2.25.4-0.20230526060834-c3f0144e310e

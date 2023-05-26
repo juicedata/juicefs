@@ -154,14 +154,6 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 				Usage: "encrypt algorithm (aes256gcm-rsa, chacha20-rsa)",
 				Value: object.AES256GCM_RSA,
 			},
-			&cli.Int64Flag{
-				Name:  "upload-limit",
-				Usage: "default bandwidth limit of the volume for upload in Mbps",
-			},
-			&cli.Int64Flag{
-				Name:  "download-limit",
-				Usage: "default bandwidth limit of the volume for download in Mbps",
-			},
 			&cli.IntFlag{
 				Name:  "trash-days",
 				Value: 1,
@@ -390,10 +382,6 @@ func format(c *cli.Context) error {
 					logger.Warnf("decrypt secrets: %s", err)
 				}
 				format.SessionToken = c.String(flag)
-			case "upload-limit":
-				format.UploadLimit = c.Int64("upload-limit")
-			case "download-limit":
-				format.DownloadLimit = c.Int64("download-limit")
 			case "trash-days":
 				format.TrashDays = c.Int(flag)
 			case "block-size":
@@ -431,8 +419,6 @@ func format(c *cli.Context) error {
 			Inodes:         c.Uint64("inodes"),
 			BlockSize:      fixObjectSize(c.Int("block-size")),
 			Compression:    c.String("compress"),
-			UploadLimit:    c.Int64("upload-limit"),
-			DownloadLimit:  c.Int64("download-limit"),
 			TrashDays:      c.Int("trash-days"),
 			EnableDirStats: !c.Bool("no-dir-stats"),
 			MetaVersion:    meta.MaxVersion,
