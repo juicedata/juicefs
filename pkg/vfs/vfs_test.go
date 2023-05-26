@@ -48,6 +48,7 @@ func createTestVFS() (*VFS, object.ObjectStorage) {
 		Storage:     "mem",
 		BlockSize:   4096,
 		Compression: "lz4",
+		DirStats:    true,
 	}
 	err := m.Init(format, true)
 	if err != nil {
