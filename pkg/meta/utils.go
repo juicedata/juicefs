@@ -365,6 +365,9 @@ func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 		}
 		return 0
 	}
+	if !m.GetFormat().EnableDirStats {
+		strict = true
+	}
 	summary.Dirs++
 	summary.Size += uint64(align4K(0))
 	concurrent := make(chan struct{}, 50)
@@ -466,6 +469,9 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 		root.Files++
 		root.Size += uint64(align4K(attr.Length))
 		return 0
+	}
+	if !m.GetFormat().EnableDirStats {
+		strict = true
 	}
 	root.Dirs++
 	root.Size += uint64(align4K(0))
