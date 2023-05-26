@@ -447,14 +447,16 @@ func (m *kvMeta) Init(format *Format, force bool) error {
 				quota.UsedSpace = int64(sum.Size) - align4K(0)
 				quota.UsedInodes = int64(sum.Dirs+sum.Files) - 1
 			}
-			err = m.txn(func(tx *kvTxn) error {
-				for ino, quota := range quotas {
-					tx.set(m.dirQuotaKey(ino), m.packQuota(quota))
+			if len(quotas) != 0 {
+				err = m.txn(func(tx *kvTxn) error {
+					for ino, quota := range quotas {
+						tx.set(m.dirQuotaKey(ino), m.packQuota(quota))
+					}
+					return nil
+				})
+				if err != nil {
+					return errors.Wrap(err, "update quotas")
 				}
-				return nil
-			})
-			if err != nil {
-				return errors.Wrap(err, "update quotas")
 			}
 		}
 		if err = format.update(&old, force); err != nil {

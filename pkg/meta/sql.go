@@ -324,7 +324,7 @@ func (m *dbMeta) Init(format *Format, force bool) error {
 		}
 		if old.EnableDirStats && !format.EnableDirStats {
 			// remove dir stats
-			err = m.db.DropTables(new(dirStats))
+			_, err = m.db.Where("TRUE").Delete(new(dirStats))
 			if err != nil {
 				return errors.Wrap(err, "drop table dirStats")
 			}
@@ -345,9 +345,11 @@ func (m *dbMeta) Init(format *Format, force bool) error {
 				quota.UsedSpace = int64(sum.Size) - align4K(0)
 				quota.UsedInodes = int64(sum.Dirs+sum.Files) - 1
 			}
-			_, err = m.db.Cols("used_space", "used_inodes").Update(&quotas)
-			if err != nil {
-				return errors.Wrap(err, "update quotas")
+			for _, quota := range quotas {
+				_, err = m.db.Where("inode = ?", quota.Inode).Cols("used_space", "used_inodes").Update(quota)
+				if err != nil {
+					return errors.Wrap(err, "update quota")
+				}
 			}
 		}
 		if err = format.update(&old, force); err != nil {

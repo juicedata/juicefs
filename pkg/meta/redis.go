@@ -303,15 +303,17 @@ func (m *redisMeta) Init(format *Format, force bool) error {
 				usages[i].UsedSpace = int64(sum.Size) - align4K(0)
 				usages[i].UsedInodes = int64(sum.Dirs+sum.Files) - 1
 			}
-			_, err = m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-				for i, ino := range inodes {
-					pipe.HSet(ctx, m.dirUsedInodesKey(), ino, usages[i].UsedInodes)
-					pipe.HSet(ctx, m.dirUsedSpaceKey(), ino, usages[i].UsedSpace)
+			if len(inodes) != 0 {
+				_, err = m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+					for i, ino := range inodes {
+						pipe.HSet(ctx, m.dirUsedInodesKey(), ino, usages[i].UsedInodes)
+						pipe.HSet(ctx, m.dirUsedSpaceKey(), ino, usages[i].UsedSpace)
+					}
+					return nil
+				})
+				if err != nil {
+					return errors.Wrap(err, "update dir stats")
 				}
-				return nil
-			})
-			if err != nil {
-				return errors.Wrap(err, "update dir stats")
 			}
 		}
 		if err = format.update(&old, force); err != nil {
