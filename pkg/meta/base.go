@@ -377,6 +377,9 @@ func (m *baseMeta) flushDirStat() {
 }
 
 func (m *baseMeta) doFlushDirStat() {
+	if !m.GetFormat().EnableDirStats {
+		return
+	}
 	m.dirStatsLock.Lock()
 	if len(m.dirStats) == 0 {
 		m.dirStatsLock.Unlock()
@@ -747,6 +750,9 @@ func (m *baseMeta) flushQuotas() {
 	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
+		if !m.GetFormat().EnableDirStats {
+			continue
+		}
 		m.quotaMu.RLock()
 		for ino, q := range m.dirQuotas {
 			newSpace = atomic.SwapInt64(&q.newSpace, 0)
