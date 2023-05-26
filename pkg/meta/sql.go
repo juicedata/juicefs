@@ -1215,7 +1215,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			return syscall.EPERM
 		}
 		var e = edge{Parent: parent, Name: []byte(name)}
-		ok, err = s.ForUpdate().Get(&e)
+		ok, err = s.Get(&e)
 		if err != nil {
 			return err
 		}
@@ -1231,7 +1231,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if foundIno != 0 {
 			if _type == TypeFile || _type == TypeDirectory {
 				foundNode := node{Inode: foundIno}
-				ok, err = s.ForUpdate().Get(&foundNode)
+				ok, err = s.Get(&foundNode)
 				if err != nil {
 					return err
 				} else if ok {
@@ -1340,7 +1340,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			return syscall.EPERM
 		}
 		var e = edge{Parent: parent, Name: []byte(name)}
-		ok, err = s.ForUpdate().Get(&e)
+		ok, err = s.Get(&e)
 		if err != nil {
 			return err
 		}
@@ -1490,7 +1490,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 			return syscall.EPERM
 		}
 		var e = edge{Parent: parent, Name: []byte(name)}
-		ok, err = s.ForUpdate().Get(&e)
+		ok, err = s.Get(&e)
 		if err != nil {
 			return err
 		}
@@ -1516,7 +1516,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		if err != nil {
 			return err
 		}
-		exist, err := s.ForUpdate().Exist(&edge{Parent: e.Inode})
+		exist, err := s.Exist(&edge{Parent: e.Inode})
 		if err != nil {
 			return err
 		}
@@ -1630,7 +1630,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return st
 		}
 		var se = edge{Parent: parentSrc, Name: []byte(nameSrc)}
-		ok, err := s.ForUpdate().Get(&se)
+		ok, err := s.Get(&se)
 		if err != nil {
 			return err
 		}
@@ -1652,7 +1652,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return nil
 		}
 		var sn = node{Inode: se.Inode}
-		ok, err = s.ForUpdate().Get(&sn)
+		ok, err = s.Get(&sn)
 		if err != nil {
 			return err
 		}
@@ -1673,7 +1673,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			return st
 		}
 		var de = edge{Parent: parentDst, Name: []byte(nameDst)}
-		ok, err = s.ForUpdate().Get(&de)
+		ok, err = s.Get(&de)
 		if err != nil {
 			return err
 		}
@@ -1719,7 +1719,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				}
 			} else {
 				if de.Type == TypeDirectory {
-					exist, err := s.ForUpdate().Exist(&edge{Parent: de.Inode})
+					exist, err := s.Exist(&edge{Parent: de.Inode})
 					if err != nil {
 						return err
 					}
@@ -1911,7 +1911,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 			return syscall.EPERM
 		}
 		var e = edge{Parent: parent, Name: []byte(name)}
-		ok, err = s.ForUpdate().Get(&e)
+		ok, err = s.Get(&e)
 		if err != nil {
 			return err
 		}
