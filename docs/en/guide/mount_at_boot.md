@@ -4,8 +4,6 @@ sidebar_position: 2
 slug: /mount_juicefs_at_boot_time
 ---
 
-# Mount JuiceFS at Boot Time
-
 After JuiceFS has been successfully mounted, follow this guide to set up auto-mount on boot.
 
 ## Linux

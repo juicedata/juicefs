@@ -4,8 +4,6 @@ sidebar_position: 2
 slug: /mount_juicefs_at_boot_time
 ---
 
-# 启动时自动挂载 JuiceFS
-
 在确认挂载成功，可以正常使用以后，可以参考本节内容设置开机自动挂载。
 
 ## Linux
