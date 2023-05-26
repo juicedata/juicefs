@@ -345,13 +345,13 @@ func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int
 }
 
 func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, space int64) {
-	if !m.GetFormat().EnableDirStats {
-		return
-	}
 	if length == 0 && space == 0 {
 		return
 	}
 	m.en.updateStats(space, 0)
+	if !m.GetFormat().EnableDirStats {
+		return
+	}
 	if parent > 0 {
 		m.updateDirStat(ctx, parent, length, space, 0)
 		m.updateDirQuota(ctx, parent, space, 0)
