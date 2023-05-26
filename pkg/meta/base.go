@@ -332,6 +332,9 @@ func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall
 }
 
 func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int64) {
+	if !m.GetFormat().EnableDirStats {
+		return
+	}
 	m.dirStatsLock.Lock()
 	defer m.dirStatsLock.Unlock()
 	stat := m.dirStats[ino]
@@ -342,6 +345,9 @@ func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int
 }
 
 func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, space int64) {
+	if !m.GetFormat().EnableDirStats {
+		return
+	}
 	if length == 0 && space == 0 {
 		return
 	}
@@ -610,6 +616,9 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) 
 	if inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes) {
 		return syscall.ENOSPC
 	}
+	if !m.GetFormat().EnableDirStats {
+		return 0
+	}
 	for _, ino := range parents {
 		if m.checkDirQuota(ctx, ino, space, inodes) {
 			return syscall.EDQUOT
@@ -663,6 +672,9 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 }
 
 func (m *baseMeta) hasDirQuota(ctx Context, inode Ino) bool {
+	if !m.GetFormat().EnableDirStats {
+		return false
+	}
 	var q *Quota
 	var st syscall.Errno
 	for {
@@ -684,6 +696,9 @@ func (m *baseMeta) hasDirQuota(ctx Context, inode Ino) bool {
 }
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {
+	if !m.GetFormat().EnableDirStats {
+		return false
+	}
 	var q *Quota
 	var st syscall.Errno
 	for {
@@ -705,6 +720,9 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bo
 }
 
 func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
+	if !m.GetFormat().EnableDirStats {
+		return
+	}
 	var q *Quota
 	var st syscall.Errno
 	for {
