@@ -57,25 +57,32 @@ func globalFlags() []cli.Flag {
 	}
 }
 
-func clientFlags() []cli.Flag {
-	var defaultCacheDir = "/var/jfsCache"
-	switch runtime.GOOS {
-	case "linux":
-		if os.Getuid() == 0 {
-			break
-		}
-		fallthrough
-	case "darwin":
-		fallthrough
-	case "windows":
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			logger.Fatalf("%v", err)
-			return nil
-		}
-		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
+func addCategory(f cli.Flag, cat string) {
+	switch ff := f.(type) {
+	case *cli.StringFlag:
+		ff.Category = cat
+	case *cli.BoolFlag:
+		ff.Category = cat
+	case *cli.IntFlag:
+		ff.Category = cat
+	case *cli.Int64Flag:
+		ff.Category = cat
+	case *cli.Float64Flag:
+		ff.Category = cat
+	default:
+		panic(f)
 	}
-	return []cli.Flag{
+}
+
+func addCategories(cat string, flags []cli.Flag) []cli.Flag {
+	for _, f := range flags {
+		addCategory(f, cat)
+	}
+	return flags
+}
+
+func storageFlags() []cli.Flag {
+	return addCategories("DATA", []cli.Flag{
 		&cli.StringFlag{
 			Name:  "storage",
 			Usage: "customized storage type (e.g. s3, gcs, oss, cos) to access object store",
@@ -113,16 +120,6 @@ func clientFlags() []cli.Flag {
 			Value: 10,
 			Usage: "number of threads to delete objects",
 		},
-		&cli.IntFlag{
-			Name:  "skip-dir-nlink",
-			Value: 20,
-			Usage: "number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never)",
-		},
-		&cli.IntFlag{
-			Name:  "buffer-size",
-			Value: 300,
-			Usage: "total read/write buffering in MB",
-		},
 		&cli.Int64Flag{
 			Name:  "upload-limit",
 			Usage: "bandwidth limit for upload in Mbps",
@@ -130,6 +127,33 @@ func clientFlags() []cli.Flag {
 		&cli.Int64Flag{
 			Name:  "download-limit",
 			Usage: "bandwidth limit for download in Mbps",
+		},
+	})
+}
+
+func dataCacheFlags() []cli.Flag {
+	var defaultCacheDir = "/var/jfsCache"
+	switch runtime.GOOS {
+	case "linux":
+		if os.Getuid() == 0 {
+			break
+		}
+		fallthrough
+	case "darwin":
+		fallthrough
+	case "windows":
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			logger.Fatalf("%v", err)
+			return nil
+		}
+		defaultCacheDir = path.Join(homeDir, ".juicefs", "cache")
+	}
+	return addCategories("DATA CACHE", []cli.Flag{
+		&cli.IntFlag{
+			Name:  "buffer-size",
+			Value: 300,
+			Usage: "total read/write buffering in MB",
 		},
 		&cli.IntFlag{
 			Name:  "prefetch",
@@ -184,6 +208,15 @@ func clientFlags() []cli.Flag {
 			Value: "3600",
 			Usage: "interval (in seconds) to scan cache-dir to rebuild in-memory index",
 		},
+	})
+}
+
+func metaFlags() []cli.Flag {
+	return addCategories("META", []cli.Flag{
+		&cli.StringFlag{
+			Name:  "subdir",
+			Usage: "mount a sub-directory as root",
+		},
 		&cli.StringFlag{
 			Name:  "backup-meta",
 			Value: "3600",
@@ -202,30 +235,30 @@ func clientFlags() []cli.Flag {
 			Name:  "no-bgjob",
 			Usage: "disable background jobs (clean-up, backup, etc.)",
 		},
-		&cli.Float64Flag{
-			Name:  "open-cache",
-			Value: 0.0,
-			Usage: "The seconds to reuse open file without checking update (0 means disable this feature)",
-		},
-		&cli.Uint64Flag{
-			Name:  "open-cache-limit",
-			Value: 10000,
-			Usage: "max number of open files to cache (soft limit, 0 means unlimited)",
-		},
-		&cli.StringFlag{
-			Name:  "subdir",
-			Usage: "mount a sub-directory as root",
-		},
 		&cli.StringFlag{
 			Name:  "atime-mode",
 			Value: "noatime",
 			Usage: "when to update atime, supported mode includes: noatime, relatime, strictatime",
 		},
-	}
+		&cli.IntFlag{
+			Name:  "skip-dir-nlink",
+			Value: 20,
+			Usage: "number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never)",
+		},
+	})
+}
+
+func clientFlags(defaultEntryCache float64) []cli.Flag {
+	return expandFlags([][]cli.Flag{
+		metaFlags(),
+		metaCacheFlags(defaultEntryCache),
+		storageFlags(),
+		dataCacheFlags(),
+	})
 }
 
 func shareInfoFlags() []cli.Flag {
-	return []cli.Flag{
+	return addCategories("METRICS", []cli.Flag{
 		&cli.StringFlag{
 			Name:  "metrics",
 			Value: "127.0.0.1:9567",
@@ -240,11 +273,11 @@ func shareInfoFlags() []cli.Flag {
 			Name:  "no-usage-report",
 			Usage: "do not send usage report",
 		},
-	}
+	})
 }
 
-func cacheFlags(defaultEntryCache float64) []cli.Flag {
-	return []cli.Flag{
+func metaCacheFlags(defaultEntryCache float64) []cli.Flag {
+	return addCategories("META CACHE", []cli.Flag{
 		&cli.Float64Flag{
 			Name:  "attr-cache",
 			Value: 1.0,
@@ -260,7 +293,17 @@ func cacheFlags(defaultEntryCache float64) []cli.Flag {
 			Value: 1.0,
 			Usage: "dir entry cache timeout in seconds",
 		},
-	}
+		&cli.Float64Flag{
+			Name:  "open-cache",
+			Value: 0.0,
+			Usage: "The seconds to reuse open file without checking update (0 means disable this feature)",
+		},
+		&cli.IntFlag{
+			Name:  "open-cache-limit",
+			Value: 10000,
+			Usage: "max number of open files to cache (soft limit, 0 means unlimited)",
+		},
+	})
 }
 
 func expandFlags(compoundFlags [][]cli.Flag) []cli.Flag {

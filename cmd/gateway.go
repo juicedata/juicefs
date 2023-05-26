@@ -41,7 +41,7 @@ import (
 )
 
 func cmdGateway() *cli.Command {
-	selfFlags := []cli.Flag{
+	selfFlags := addCategories("GATEWAYS", []cli.Flag{
 		&cli.StringFlag{
 			Name:  "access-log",
 			Usage: "path for JuiceFS access log",
@@ -63,11 +63,10 @@ func cmdGateway() *cli.Command {
 			Value: "022",
 			Usage: "umask for new files and directories in octal",
 		},
-	}
+	})
 
 	compoundFlags := [][]cli.Flag{
-		clientFlags(),
-		cacheFlags(0),
+		clientFlags(0),
 		selfFlags,
 		shareInfoFlags(),
 	}

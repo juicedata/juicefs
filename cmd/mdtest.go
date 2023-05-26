@@ -143,7 +143,7 @@ func runTest(jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes 
 }
 
 func cmdMdtest() *cli.Command {
-	selfFlags := []cli.Flag{
+	selfFlags := addCategories("MDTEST", []cli.Flag{
 		&cli.IntFlag{
 			Name:  "threads",
 			Value: 1,
@@ -173,12 +173,11 @@ func cmdMdtest() *cli.Command {
 			Name:  "access-log",
 			Usage: "path for JuiceFS access log",
 		},
-	}
+	})
 	compoundFlags := [][]cli.Flag{
-		clientFlags(),
-		cacheFlags(0),
-		shareInfoFlags(),
+		clientFlags(0),
 		selfFlags,
+		shareInfoFlags(),
 	}
 
 	return &cli.Command{
