@@ -425,22 +425,23 @@ func (m *kvMeta) Init(format *Format, force bool) error {
 				return nil
 			}, 0)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "scan dir stats")
 			}
 			err = m.deleteKeys(keys...)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "delete dir stats")
 			}
 		}
 		if !old.EnableDirStats && format.EnableDirStats {
 			// re-caculate quota usage
 			quotas, err := m.doLoadQuotas(Background)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "load quotas")
 			}
 			for ino, quota := range quotas {
 				var sum Summary
 				if st := m.GetSummary(Background, ino, &sum, true, true); st != 0 {
+					logger.Error("GetSummary: ", st)
 					return st
 				}
 				quota.UsedSpace = int64(sum.Size) - align4K(0)
@@ -453,11 +454,11 @@ func (m *kvMeta) Init(format *Format, force bool) error {
 				return nil
 			})
 			if err != nil {
-				return err
+				return errors.Wrap(err, "update quotas")
 			}
 		}
 		if err = format.update(&old, force); err != nil {
-			return err
+			return errors.Wrap(err, "update format")
 		}
 	}
 

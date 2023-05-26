@@ -280,23 +280,24 @@ func (m *redisMeta) Init(format *Format, force bool) error {
 			// remove dir stats
 			err := m.rdb.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey()).Err()
 			if err != nil {
-				return err
+				return errors.Wrap(err, "remove dir stats")
 			}
 		}
 		if !old.EnableDirStats && format.EnableDirStats {
 			// re-caculate quota usage
 			inodes, err := m.rdb.HKeys(ctx, m.dirQuotaKey()).Result()
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "get dir quota")
 			}
 			usages := make([]Quota, len(inodes))
 			for i, ino := range inodes {
 				ino, err := strconv.ParseUint(ino, 10, 64)
 				if err != nil {
-					return err
+					return errors.Wrapf(err, "parse ino %s", ino)
 				}
 				var sum Summary
 				if st := m.GetSummary(ctx, Ino(ino), &sum, true, true); st != 0 {
+					logger.Error("GetSummary: ", st)
 					return st
 				}
 				usages[i].UsedSpace = int64(sum.Size) - align4K(0)
@@ -310,11 +311,11 @@ func (m *redisMeta) Init(format *Format, force bool) error {
 				return nil
 			})
 			if err != nil {
-				return err
+				return errors.Wrap(err, "update dir stats")
 			}
 		}
 		if err = format.update(&old, force); err != nil {
-			return err
+			return errors.Wrap(err, "update format")
 		}
 	}
 
