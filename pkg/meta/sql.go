@@ -323,33 +323,19 @@ func (m *dbMeta) Init(format *Format, force bool) error {
 			return fmt.Errorf("json: %s", err)
 		}
 		if old.DirStats && !format.DirStats {
-			// remove dir stats
-			_, err = m.db.Where("TRUE").Delete(new(dirStats))
+			qs, err := m.doLoadQuotas(Background)
 			if err != nil {
-				return errors.Wrap(err, "drop table dirStats")
+				return errors.Wrap(err, "load quotas")
+			}
+			if len(qs) != 0 {
+				return fmt.Errorf("cannot disable dir stats when there are still %d quotas", len(qs))
 			}
 		}
 		if !old.DirStats && format.DirStats {
-			// re-caculate quota usage
-			var quotas []*dirQuota
-			err := m.db.Cols("inode", "used_space", "used_inodes").ForUpdate().Find(&quotas)
+			// remove dir stats as they are outdated
+			_, err = m.db.Where("TRUE").Delete(new(dirStats))
 			if err != nil {
-				return errors.Wrap(err, "find all quotas")
-			}
-			for _, quota := range quotas {
-				var sum Summary
-				if st := m.GetSummary(Background, quota.Inode, &sum, true, true); st != 0 {
-					logger.Error("GetSummary: ", st)
-					return st
-				}
-				quota.UsedSpace = int64(sum.Size) - align4K(0)
-				quota.UsedInodes = int64(sum.Dirs+sum.Files) - 1
-			}
-			for _, quota := range quotas {
-				_, err = m.db.Where("inode = ?", quota.Inode).Cols("used_space", "used_inodes").Update(quota)
-				if err != nil {
-					return errors.Wrap(err, "update quota")
-				}
+				return errors.Wrap(err, "drop table dirStats")
 			}
 		}
 		if err = format.update(&old, force); err != nil {

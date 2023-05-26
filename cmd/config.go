@@ -299,12 +299,6 @@ func config(ctx *cli.Context) error {
 				return fmt.Errorf("Aborted.")
 			}
 		}
-		if originDirStats && !format.DirStats {
-			warn("The current dir stats will be deleted.")
-			if !yes && !userConfirmed() {
-				return fmt.Errorf("Aborted.")
-			}
-		}
 		if clientVer && format.CheckVersion() != nil {
 			warn("Clients with the same version of this will be rejected after modification.")
 			if !yes && !userConfirmed() {

@@ -412,7 +412,16 @@ func (m *kvMeta) Init(format *Format, force bool) error {
 			return fmt.Errorf("json: %s", err)
 		}
 		if old.DirStats && !format.DirStats {
-			// remove dir stats
+			qs, err := m.doLoadQuotas(Background)
+			if err != nil {
+				return errors.Wrap(err, "load quotas")
+			}
+			if len(qs) != 0 {
+				return fmt.Errorf("cannot disable dir stats when there are still %d quotas", len(qs))
+			}
+		}
+		if !old.DirStats && format.DirStats {
+			// remove dir stats as they are outdated
 			var keys [][]byte
 			prefix := m.fmtKey("U")
 			err := m.client.txn(func(tx *kvTxn) error {
@@ -430,33 +439,6 @@ func (m *kvMeta) Init(format *Format, force bool) error {
 			err = m.deleteKeys(keys...)
 			if err != nil {
 				return errors.Wrap(err, "delete dir stats")
-			}
-		}
-		if !old.DirStats && format.DirStats {
-			// re-caculate quota usage
-			quotas, err := m.doLoadQuotas(Background)
-			if err != nil {
-				return errors.Wrap(err, "load quotas")
-			}
-			for ino, quota := range quotas {
-				var sum Summary
-				if st := m.GetSummary(Background, ino, &sum, true, true); st != 0 {
-					logger.Error("GetSummary: ", st)
-					return st
-				}
-				quota.UsedSpace = int64(sum.Size) - align4K(0)
-				quota.UsedInodes = int64(sum.Dirs+sum.Files) - 1
-			}
-			if len(quotas) != 0 {
-				err = m.txn(func(tx *kvTxn) error {
-					for ino, quota := range quotas {
-						tx.set(m.dirQuotaKey(ino), m.packQuota(quota))
-					}
-					return nil
-				})
-				if err != nil {
-					return errors.Wrap(err, "update quotas")
-				}
 			}
 		}
 		if err = format.update(&old, force); err != nil {
