@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"math/rand"
+	"os"
 	"strconv"
 	"sync"
 
@@ -11,7 +13,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func cmdRecover() *cli.Command {
+func cmdRestore() *cli.Command {
 	return &cli.Command{
 		Name:      "restore",
 		Action:    restore,
@@ -39,8 +41,15 @@ $ juicefs restore redis://localhost/1 2023-05-10-01`,
 
 func restore(ctx *cli.Context) error {
 	setup(ctx, 2)
+	if os.Getuid() != 0 {
+		return fmt.Errorf("only root can restore files from trash")
+	}
 	removePassword(ctx.Args().Get(0))
 	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
+	_, err := m.Load(true)
+	if err != nil {
+		return err
+	}
 	for i := 1; i < ctx.NArg(); i++ {
 		hour := ctx.Args().Get(i)
 		doRestore(m, hour, ctx.Bool("put-back"), ctx.Int("threads"))
@@ -93,7 +102,7 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 				ps := bytes.SplitN(e.Name, []byte("-"), 3)
 				dst, _ := strconv.Atoi(string(ps[0]))
 				if putBack || parents[meta.Ino(dst)] {
-					err = m.Rename(ctx, parent, string(e.Name), meta.Ino(dst), string(ps[2]), 0, nil, nil)
+					err = m.Rename(ctx, parent, string(e.Name), meta.Ino(dst), string(ps[2]), meta.RenameNoReplace, nil, nil)
 					if err != 0 {
 						logger.Warnf("restore %s: %s", string(e.Name), err)
 						failed.Increment()
