@@ -365,7 +365,7 @@ func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 		}
 		return 0
 	}
-	if !m.GetFormat().EnableDirStats {
+	if !m.GetFormat().DirStats {
 		strict = true
 	}
 	summary.Dirs++
@@ -470,7 +470,7 @@ func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 		root.Size += uint64(align4K(attr.Length))
 		return 0
 	}
-	if !m.GetFormat().EnableDirStats {
+	if !m.GetFormat().DirStats {
 		strict = true
 	}
 	root.Dirs++

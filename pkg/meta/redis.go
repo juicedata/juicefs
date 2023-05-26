@@ -276,14 +276,14 @@ func (m *redisMeta) Init(format *Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("existing format is broken: %s", err)
 		}
-		if old.EnableDirStats && !format.EnableDirStats {
+		if old.DirStats && !format.DirStats {
 			// remove dir stats
 			err := m.rdb.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey()).Err()
 			if err != nil {
 				return errors.Wrap(err, "remove dir stats")
 			}
 		}
-		if !old.EnableDirStats && format.EnableDirStats {
+		if !old.DirStats && format.DirStats {
 			// re-caculate quota usage
 			inodes, err := m.rdb.HKeys(ctx, m.dirQuotaKey()).Result()
 			if err != nil {

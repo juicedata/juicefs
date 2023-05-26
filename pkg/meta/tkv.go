@@ -411,7 +411,7 @@ func (m *kvMeta) Init(format *Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("json: %s", err)
 		}
-		if old.EnableDirStats && !format.EnableDirStats {
+		if old.DirStats && !format.DirStats {
 			// remove dir stats
 			var keys [][]byte
 			prefix := m.fmtKey("U")
@@ -432,7 +432,7 @@ func (m *kvMeta) Init(format *Format, force bool) error {
 				return errors.Wrap(err, "delete dir stats")
 			}
 		}
-		if !old.EnableDirStats && format.EnableDirStats {
+		if !old.DirStats && format.DirStats {
 			// re-caculate quota usage
 			quotas, err := m.doLoadQuotas(Background)
 			if err != nil {

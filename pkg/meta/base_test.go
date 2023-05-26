@@ -2000,7 +2000,7 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 
 func testDirStat(t *testing.T, m Meta) {
 	format := m.GetFormat()
-	format.EnableDirStats = true
+	format.DirStats = true
 	if err := m.Init(&format, false); err != nil {
 		t.Fatalf("Init: %s", err)
 	}
@@ -2454,7 +2454,7 @@ func testQuota(t *testing.T, m Meta) {
 	}
 	defer m.CloseSession()
 	format := m.GetFormat()
-	format.EnableDirStats = true
+	format.DirStats = true
 	if err := m.Init(&format, false); err != nil {
 		t.Fatalf("Init: %s", err)
 	}
