@@ -1999,9 +1999,14 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 }
 
 func testDirStat(t *testing.T, m Meta) {
+	format := m.GetFormat()
+	format.EnableDirStats = true
+	if err := m.Init(&format, false); err != nil {
+		t.Fatalf("Init: %s", err)
+	}
+
 	testDir := "testDirStat"
 	var testInode Ino
-
 	// test empty dir
 	if st := m.Mkdir(Background, RootInode, testDir, 0640, 022, 0, &testInode, nil); st != 0 {
 		t.Fatalf("mkdir: %s", st)
@@ -2448,6 +2453,11 @@ func testQuota(t *testing.T, m Meta) {
 		t.Fatalf("New session: %s", err)
 	}
 	defer m.CloseSession()
+	format := m.GetFormat()
+	format.EnableDirStats = true
+	if err := m.Init(&format, false); err != nil {
+		t.Fatalf("Init: %s", err)
+	}
 	ctx := Background
 	var inode, parent Ino
 	var attr Attr
