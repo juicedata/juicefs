@@ -264,7 +264,7 @@ func (m *redisMeta) Name() string {
 	return "redis"
 }
 
-func (m *redisMeta) Init(format *Format, force bool) error {
+func (m *redisMeta) doInit(format *Format, force bool) error {
 	ctx := Background
 	body, err := m.rdb.Get(ctx, m.setting()).Bytes()
 	if err != nil && err != redis.Nil {

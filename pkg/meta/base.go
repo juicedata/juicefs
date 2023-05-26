@@ -63,6 +63,7 @@ type engine interface {
 	doRefreshSession() error
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
+	doInit(format *Format, force bool) error
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
 	compactChunk(inode Ino, indx uint32, force bool)
@@ -779,6 +780,10 @@ func (m *baseMeta) flushQuotas() {
 	}
 }
 
+func (m *baseMeta) Init(format *Format, force bool) error {
+	return m.en.doInit(format, force)
+}
+
 func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool) error {
 	var inode Ino
 	if cmd != QuotaList {
@@ -792,6 +797,13 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 
 	switch cmd {
 	case QuotaSet:
+		format := m.GetFormat()
+		if !format.DirStats {
+			format.DirStats = true
+			if err := m.en.doInit(&format, false); err != nil {
+				return err
+			}
+		}
 		q, err := m.en.doGetQuota(ctx, inode)
 		if err != nil {
 			return err
