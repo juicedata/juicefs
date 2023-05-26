@@ -287,13 +287,13 @@ func (m *redisMeta) Init(format *Format, force bool) error {
 			// re-caculate quota usage
 			inodes, err := m.rdb.HKeys(ctx, m.dirQuotaKey()).Result()
 			if err != nil {
-				return errors.Wrapf(err, "get dir quota")
+				return errors.Wrap(err, "get dir quota")
 			}
 			usages := make([]Quota, len(inodes))
 			for i, ino := range inodes {
 				ino, err := strconv.ParseUint(ino, 10, 64)
 				if err != nil {
-					return errors.Wrapf(err, "parse ino %s", ino)
+					return errors.Wrapf(err, "parse ino %d", ino)
 				}
 				var sum Summary
 				if st := m.GetSummary(ctx, Ino(ino), &sum, true, true); st != 0 {
