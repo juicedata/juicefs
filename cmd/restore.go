@@ -45,7 +45,7 @@ func restore(ctx *cli.Context) error {
 		return fmt.Errorf("only root can restore files from trash")
 	}
 	removePassword(ctx.Args().Get(0))
-	m := meta.NewClient(ctx.Args().Get(0), &meta.Config{Retries: 10, Strict: true})
+	m := meta.NewClient(ctx.Args().Get(0), nil)
 	_, err := m.Load(true)
 	if err != nil {
 		return err
