@@ -411,6 +411,51 @@ func (m *kvMeta) Init(format *Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("json: %s", err)
 		}
+		if old.EnableDirStats && !format.EnableDirStats {
+			// remove dir stats
+			var keys [][]byte
+			prefix := m.fmtKey("U")
+			err := m.client.txn(func(tx *kvTxn) error {
+				tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
+					if len(k) == 9 {
+						keys = append(keys, k)
+					}
+					return true
+				})
+				return nil
+			}, 0)
+			if err != nil {
+				return err
+			}
+			err = m.deleteKeys(keys...)
+			if err != nil {
+				return err
+			}
+		}
+		if !old.EnableDirStats && format.EnableDirStats {
+			// re-caculate quota usage
+			quotas, err := m.doLoadQuotas(Background)
+			if err != nil {
+				return err
+			}
+			for ino, quota := range quotas {
+				var sum Summary
+				if st := m.GetSummary(Background, ino, &sum, true, true); st != 0 {
+					return st
+				}
+				quota.UsedSpace = int64(sum.Size) - align4K(0)
+				quota.UsedInodes = int64(sum.Dirs+sum.Files) - 1
+			}
+			err = m.txn(func(tx *kvTxn) error {
+				for ino, quota := range quotas {
+					tx.set(m.dirQuotaKey(ino), m.packQuota(quota))
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
 		if err = format.update(&old, force); err != nil {
 			return err
 		}

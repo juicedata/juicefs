@@ -179,6 +179,10 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 				Name:  "no-update",
 				Usage: "don't update existing volume",
 			},
+			&cli.BoolFlag{
+				Name:  "no-dir-stats",
+				Usage: "disable dir stats, fast summary and dir quota won't work",
+			},
 		},
 	}
 }
@@ -402,6 +406,8 @@ func format(c *cli.Context) error {
 				format.HashPrefix = c.Bool(flag)
 			case "storage":
 				format.Storage = c.String(flag)
+			case "no-dir-stats":
+				logger.Warnf("Flag %s is ignored, please use `juicefs config --dir-stats=%t` to update it", flag, !c.Bool(flag))
 			case "encrypt-rsa-key", "encrypt-algo":
 				logger.Warnf("Flag %s is ignored since it cannot be updated", flag)
 			}
@@ -409,26 +415,27 @@ func format(c *cli.Context) error {
 	} else if strings.HasPrefix(err.Error(), "database is not formatted") {
 		create = true
 		format = &meta.Format{
-			Name:          name,
-			UUID:          uuid.New().String(),
-			Storage:       c.String("storage"),
-			StorageClass:  c.String("storage-class"),
-			Bucket:        c.String("bucket"),
-			AccessKey:     c.String("access-key"),
-			SecretKey:     c.String("secret-key"),
-			SessionToken:  c.String("session-token"),
-			EncryptKey:    loadEncrypt(c.String("encrypt-rsa-key")),
-			EncryptAlgo:   c.String("encrypt-algo"),
-			Shards:        c.Int("shards"),
-			HashPrefix:    c.Bool("hash-prefix"),
-			Capacity:      c.Uint64("capacity") << 30,
-			Inodes:        c.Uint64("inodes"),
-			BlockSize:     fixObjectSize(c.Int("block-size")),
-			Compression:   c.String("compress"),
-			UploadLimit:   c.Int64("upload-limit"),
-			DownloadLimit: c.Int64("download-limit"),
-			TrashDays:     c.Int("trash-days"),
-			MetaVersion:   meta.MaxVersion,
+			Name:           name,
+			UUID:           uuid.New().String(),
+			Storage:        c.String("storage"),
+			StorageClass:   c.String("storage-class"),
+			Bucket:         c.String("bucket"),
+			AccessKey:      c.String("access-key"),
+			SecretKey:      c.String("secret-key"),
+			SessionToken:   c.String("session-token"),
+			EncryptKey:     loadEncrypt(c.String("encrypt-rsa-key")),
+			EncryptAlgo:    c.String("encrypt-algo"),
+			Shards:         c.Int("shards"),
+			HashPrefix:     c.Bool("hash-prefix"),
+			Capacity:       c.Uint64("capacity") << 30,
+			Inodes:         c.Uint64("inodes"),
+			BlockSize:      fixObjectSize(c.Int("block-size")),
+			Compression:    c.String("compress"),
+			UploadLimit:    c.Int64("upload-limit"),
+			DownloadLimit:  c.Int64("download-limit"),
+			TrashDays:      c.Int("trash-days"),
+			EnableDirStats: !c.Bool("no-dir-stats"),
+			MetaVersion:    meta.MaxVersion,
 		}
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")

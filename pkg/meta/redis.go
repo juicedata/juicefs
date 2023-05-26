@@ -276,6 +276,43 @@ func (m *redisMeta) Init(format *Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("existing format is broken: %s", err)
 		}
+		if old.EnableDirStats && !format.EnableDirStats {
+			// remove dir stats
+			err := m.rdb.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey()).Err()
+			if err != nil {
+				return err
+			}
+		}
+		if !old.EnableDirStats && format.EnableDirStats {
+			// re-caculate quota usage
+			inodes, err := m.rdb.HKeys(ctx, m.dirQuotaKey()).Result()
+			if err != nil {
+				return err
+			}
+			usages := make([]Quota, len(inodes))
+			for i, ino := range inodes {
+				ino, err := strconv.ParseUint(ino, 10, 64)
+				if err != nil {
+					return err
+				}
+				var sum Summary
+				if st := m.GetSummary(ctx, Ino(ino), &sum, true, true); st != 0 {
+					return st
+				}
+				usages[i].UsedSpace = int64(sum.Size) - align4K(0)
+				usages[i].UsedInodes = int64(sum.Dirs+sum.Files) - 1
+			}
+			_, err = m.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+				for i, ino := range inodes {
+					pipe.HSet(ctx, m.dirUsedInodesKey(), ino, usages[i].UsedInodes)
+					pipe.HSet(ctx, m.dirUsedSpaceKey(), ino, usages[i].UsedSpace)
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
 		if err = format.update(&old, force); err != nil {
 			return err
 		}

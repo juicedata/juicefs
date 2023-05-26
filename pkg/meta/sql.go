@@ -322,6 +322,33 @@ func (m *dbMeta) Init(format *Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("json: %s", err)
 		}
+		if old.EnableDirStats && !format.EnableDirStats {
+			// remove dir stats
+			err = m.db.DropTables(new(dirStats))
+			if err != nil {
+				return err
+			}
+		}
+		if !old.EnableDirStats && format.EnableDirStats {
+			// re-caculate quota usage
+			var quotas []*dirQuota
+			err := m.db.Cols("inode", "used_space", "used_inodes").ForUpdate().Find(&quotas)
+			if err != nil {
+				return err
+			}
+			for _, quota := range quotas {
+				var sum Summary
+				if st := m.GetSummary(Background, quota.Inode, &sum, true, true); st != 0 {
+					return st
+				}
+				quota.UsedSpace = int64(sum.Size) - align4K(0)
+				quota.UsedInodes = int64(sum.Dirs+sum.Files) - 1
+			}
+			_, err = m.db.Cols("used_space", "used_inodes").Update(&quotas)
+			if err != nil {
+				return err
+			}
+		}
 		if err = format.update(&old, force); err != nil {
 			return err
 		}

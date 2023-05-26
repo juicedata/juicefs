@@ -108,6 +108,10 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 				Usage: "maximum client version allowed to connect",
 			},
 			&cli.BoolFlag{
+				Name:  "dir-stats",
+				Usage: "enable dir stats, which is necessary for fast summary and dir quota",
+			},
+			&cli.BoolFlag{
 				Name:    "yes",
 				Aliases: []string{"y"},
 				Usage:   "automatically answer 'yes' to all prompts and run non-interactively",
@@ -156,6 +160,7 @@ func config(ctx *cli.Context) error {
 	var quota, storage, trash, clientVer bool
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
+	originDirStats := format.EnableDirStats
 	for _, flag := range ctx.LocalFlagNames() {
 		switch flag {
 		case "capacity":
@@ -234,6 +239,11 @@ func config(ctx *cli.Context) error {
 				format.TrashDays = new
 				trash = true
 			}
+		case "dir-stats":
+			if new := ctx.Bool(flag); new != format.EnableDirStats {
+				msg.WriteString(fmt.Sprintf("%10s: %t -> %t\n", flag, format.EnableDirStats, new))
+				format.EnableDirStats = new
+			}
 		case "min-client-version":
 			if new := ctx.String(flag); new != format.MinClientVersion {
 				if version.Parse(new) == nil {
@@ -285,6 +295,12 @@ func config(ctx *cli.Context) error {
 		}
 		if trash && format.TrashDays == 0 {
 			warn("The current trash will be emptied and future removed files will purged immediately.")
+			if !yes && !userConfirmed() {
+				return fmt.Errorf("Aborted.")
+			}
+		}
+		if originDirStats && !format.EnableDirStats {
+			warn("The current dir stats will be deleted.")
 			if !yes && !userConfirmed() {
 				return fmt.Errorf("Aborted.")
 			}
