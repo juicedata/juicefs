@@ -108,7 +108,7 @@ type FileSystem interface {
 }
 
 var notSupported = utils.ENOTSUP
-var notSupportedDelimiter = errors.New("not supported delimiter")
+var NotSupportDelimiter = errors.New("not supported delimiter")
 
 type DefaultObjectStorage struct{}
 

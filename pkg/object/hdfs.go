@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/fs"
 	"math/rand"
 	"os"
 	"os/user"
@@ -55,12 +56,7 @@ func (h *hdfsclient) path(key string) string {
 	return h.basePath + key
 }
 
-func (h *hdfsclient) Head(key string) (Object, error) {
-	info, err := h.c.Stat(h.path(key))
-	if err != nil {
-		return nil, err
-	}
-
+func (h *hdfsclient) toObj(key string, info os.FileInfo) *file {
 	hinfo := info.(*hdfs.FileInfo)
 	f := &file{
 		obj{
@@ -92,7 +88,16 @@ func (h *hdfsclient) Head(key string) (Object, error) {
 			f.key += "/"
 		}
 	}
-	return f, nil
+	return f
+}
+
+func (h *hdfsclient) Head(key string) (Object, error) {
+	info, err := h.c.Stat(h.path(key))
+	if err != nil {
+		return nil, err
+	}
+
+	return h.toObj(key, info), nil
 }
 
 func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -171,7 +176,53 @@ func (h *hdfsclient) Delete(key string) error {
 }
 
 func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	return nil, notSupported
+	if delimiter != "/" {
+		return nil, notSupported
+	}
+	root := h.path(prefix)
+	if !strings.HasSuffix(root, "/") {
+		root = filepath.Dir(root)
+	}
+
+	file, err := h.c.Open(root)
+	var infos []os.FileInfo
+	if file != nil {
+		infos, err = file.Readdir(0)
+	}
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	// make sure they are ordered in full path
+	infoMap := make(map[string]fs.FileInfo)
+	names := make([]string, len(infos))
+	for i, info := range infos {
+		if info.IsDir() {
+			names[i] = info.Name() + "/"
+		} else {
+			names[i] = info.Name()
+		}
+		infoMap[names[i]] = info
+	}
+	sort.Strings(names)
+
+	var objs []Object
+	for _, name := range names {
+		key := filepath.Join(root, name)[len(h.basePath):]
+		if !strings.HasPrefix(key, prefix) || key <= marker {
+			continue
+		}
+		info := infoMap[name]
+		f := h.toObj(key, info)
+		objs = append(objs, f)
+		if len(objs) >= int(limit) {
+			break
+		}
+	}
+	return objs, nil
 }
 
 func (h *hdfsclient) walk(path string, walkFn filepath.WalkFunc) error {
@@ -251,35 +302,10 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 				}
 				return nil
 			}
-			hinfo := info.(*hdfs.FileInfo)
-			f := &file{
-				obj{
-					key,
-					info.Size(),
-					info.ModTime(),
-					info.IsDir(),
-					"",
-				},
-				hinfo.Owner(),
-				hinfo.OwnerGroup(),
-				info.Mode(),
-				false,
-			}
-			if f.owner == superuser {
-				f.owner = "root"
-			}
-			if f.group == supergroup {
-				f.group = "root"
-			}
-			// stickybit from HDFS is different than golang
-			if f.mode&01000 != 0 {
-				f.mode &= ^os.FileMode(01000)
-				f.mode |= os.ModeSticky
-			}
+			f := h.toObj(key, info)
 			if info.IsDir() {
-				f.size = 0
 				if path != root || !strings.HasSuffix(root, "/") {
-					f.key += "/"
+					f.key = key + "/"
 				}
 			}
 			listed <- f
@@ -325,7 +351,7 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		confParam := "dfs.namenode.rpc-address." + nameservice
 		for key, value := range conf {
 			if key == confParam ||
-				strings.HasPrefix(key, confParam + "." ) {
+				strings.HasPrefix(key, confParam+".") {
 				nns = append(nns, value)
 			}
 		}

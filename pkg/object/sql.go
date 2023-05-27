@@ -134,7 +134,7 @@ func (s *sqlStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 	}
 	// todo
 	if delimiter != "" {
-		return nil, notSupportedDelimiter
+		return nil, NotSupportDelimiter
 	}
 	var bs []blob
 	err := s.db.Where("`key` >= ?", []byte(marker)).Limit(int(limit)).Cols("`key`", "size", "modified").OrderBy("`key`").Find(&bs)

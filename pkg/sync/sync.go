@@ -47,6 +47,7 @@ const (
 
 var (
 	handled                  *utils.Bar
+	pending                  *utils.Bar
 	copied, copiedBytes      *utils.Bar
 	checkedBytes             *utils.Bar
 	deleted, skipped, failed *utils.Bar
@@ -72,22 +73,22 @@ func formatSize(bytes int64) string {
 }
 
 // ListAll on all the keys that starts at marker from object storage.
-func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Object, error) {
+func ListAll(store object.ObjectStorage, prefix, start, end string) (<-chan object.Object, error) {
 	startTime := time.Now()
-	logger.Debugf("Iterating objects from %s start %q", store, start)
+	logger.Debugf("Iterating objects from %s with prefix %s start %q", store, prefix, start)
 
 	out := make(chan object.Object, maxResults*10)
 
 	// As the result of object storage's List method doesn't include the marker key,
 	// we try List the marker key separately.
-	if start != "" {
+	if start != "" && strings.HasPrefix(start, prefix) {
 		if obj, err := store.Head(start); err == nil {
 			logger.Debugf("Found start key: %s from %s in %s", start, store, time.Since(startTime))
 			out <- obj
 		}
 	}
 
-	if ch, err := store.ListAll("", start); err == nil {
+	if ch, err := store.ListAll(prefix, start); err == nil {
 		if end == "" {
 			go func() {
 				for obj := range ch {
@@ -114,7 +115,7 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Objec
 
 	marker := start
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	objs, err := store.List("", marker, "", maxResults)
+	objs, err := store.List(prefix, marker, "", maxResults)
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err
@@ -149,13 +150,13 @@ func ListAll(store object.ObjectStorage, start, end string) (<-chan object.Objec
 			marker = lastkey
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
-			objs, err = store.List("", marker, "", maxResults)
+			objs, err = store.List(prefix, marker, "", maxResults)
 			count := 0
 			for err != nil && count < 3 {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
-				objs, err = store.List("", marker, "", maxResults)
+				objs, err = store.List(prefix, marker, "", maxResults)
 				count++
 			}
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
@@ -639,44 +640,36 @@ func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, config *Con
 	return false
 }
 
-func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) error {
+func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, background bool, config *Config) error {
 	start, end := config.Start, config.End
-	logger.Infof("Syncing from %s to %s", src, dst)
-	if start != "" {
-		logger.Infof("first key: %q", start)
-	}
-	if end != "" {
-		logger.Infof("last key: %q", end)
-	}
 	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
 
-	srckeys, err := ListAll(src, start, end)
+	srckeys, err := ListAll(src, prefix, start, end)
 	if err != nil {
 		return fmt.Errorf("list %s: %s", src, err)
 	}
 
-	dstkeys, err := ListAll(dst, start, end)
+	dstkeys, err := ListAll(dst, prefix, start, end)
 	if err != nil {
 		return fmt.Errorf("list %s: %s", dst, err)
 	}
-	if len(config.Exclude) > 0 {
-		rules := parseIncludeRules(os.Args)
-		if runtime.GOOS == "windows" && (strings.HasPrefix(src.String(), "file:") || strings.HasPrefix(dst.String(), "file:")) {
-			for _, r := range rules {
-				r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
-			}
-		}
-		if len(rules) > 0 {
-			srckeys = filter(srckeys, rules)
-			dstkeys = filter(dstkeys, rules)
-		}
+
+	if background {
+		go func() {
+			defer close(tasks)
+			produce(tasks, src, dst, srckeys, dstkeys, config)
+		}()
+	} else {
+		produce(tasks, src, dst, srckeys, dstkeys, config)
 	}
-	go produce(tasks, src, dst, srckeys, dstkeys, config)
 	return nil
 }
 
 func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys, dstkeys <-chan object.Object, config *Config) {
-	defer close(tasks)
+	if len(config.rules) > 0 {
+		srckeys = filter(srckeys, config.rules)
+		dstkeys = filter(dstkeys, config.rules)
+	}
 	var dstobj object.Object
 	for obj := range srckeys {
 		if obj == nil {
@@ -865,6 +858,98 @@ func matchKey(rules []rule, key string) bool {
 	return true
 }
 
+func listAllCommonPrefix(store object.ObjectStorage) ([]object.Object, error) {
+	var total []object.Object
+	var marker string
+	for {
+		objs, err := store.List("", marker, "/", 5000)
+		if err != nil {
+			return nil, err
+		}
+		if len(objs) == 0 {
+			break
+		}
+		total = append(total, objs...)
+		marker = total[len(total)-1].Key()
+	}
+	return total, nil
+}
+
+func parallelProduce(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) error {
+	srcCP, err := listAllCommonPrefix(src)
+	if err == utils.ENOTSUP || err == object.NotSupportDelimiter {
+		return startProducer(tasks, src, dst, "", true, config)
+	} else if err != nil {
+		return fmt.Errorf("list %s with delimiter: %s", src, err)
+	}
+
+	dstCP, err := listAllCommonPrefix(dst)
+	if err == utils.ENOTSUP || err == object.NotSupportDelimiter {
+		return startProducer(tasks, src, dst, "", true, config)
+	} else if err != nil {
+		return fmt.Errorf("list %s with delimiter: %s", dst, err)
+	}
+
+	commonPrefix := make(chan object.Object, 100)
+	var mu sync.Mutex
+	found := make(map[string]bool)
+	filterOutCP := func(prefix []object.Object, keys chan object.Object) {
+		defer close(keys)
+		for _, o := range prefix {
+			if strings.HasSuffix(o.Key(), "/") {
+				mu.Lock()
+				existed := found[o.Key()]
+				found[o.Key()] = true
+				mu.Unlock()
+				if !existed {
+					commonPrefix <- o
+				}
+			} else {
+				keys <- o
+			}
+		}
+	}
+	srckeys := make(chan object.Object, 1000)
+	dstkeys := make(chan object.Object, 1000)
+	go filterOutCP(srcCP, srckeys)
+	go filterOutCP(dstCP, dstkeys)
+
+	var wg sync.WaitGroup
+	for i := 0; i < config.ListThreads; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for c := range commonPrefix {
+				if len(config.rules) > 0 && !matchKey(config.rules, c.Key()) {
+					logger.Infof("exclude prefix %s", c.Key())
+					continue
+				}
+				if config.Start != "" && c.Key() < config.Start {
+					logger.Infof("ingore prefix %s", c.Key())
+					continue
+				}
+				if config.End != "" && c.Key() > config.End {
+					logger.Infof("ignore prefix %s", c.Key())
+					continue
+				}
+				err := startProducer(tasks, src, dst, c.Key(), false, config)
+				if err != nil {
+					logger.Fatalf("list prefix %s: %s", c.Key(), err)
+				}
+			}
+		}()
+	}
+	// sync returned objects
+	produce(tasks, src, dst, srckeys, dstkeys, config)
+	// consume all the keys from dst
+	for range dstkeys {
+	}
+	close(commonPrefix)
+	wg.Wait()
+	close(tasks)
+	return nil
+}
+
 // Sync syncs all the keys between to object storage
 func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if strings.HasPrefix(src.String(), "file://") && strings.HasPrefix(dst.String(), "file://") {
@@ -895,12 +980,20 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "")
 	handled = progress.AddCountBar("Scanned objects", 0)
+	pending = progress.AddCountSpinner("Pending objects")
 	copied = progress.AddCountSpinner("Copied objects")
 	copiedBytes = progress.AddByteSpinner("Copied objects")
 	checkedBytes = progress.AddByteSpinner("Checked objects")
 	deleted = progress.AddCountSpinner("Deleted objects")
 	skipped = progress.AddCountSpinner("Skipped objects")
 	failed = progress.AddCountSpinner("Failed objects")
+	go func() {
+		for {
+			pending.SetCurrent(int64(len(tasks)))
+			time.Sleep(time.Millisecond * 100)
+		}
+	}()
+
 	for i := 0; i < config.Threads; i++ {
 		wg.Add(1)
 		go func() {
@@ -909,8 +1002,30 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}()
 	}
 
+	if len(config.Exclude) > 0 {
+		rules := parseIncludeRules(os.Args)
+		if runtime.GOOS == "windows" && (strings.HasPrefix(src.String(), "file:") || strings.HasPrefix(dst.String(), "file:")) {
+			for _, r := range rules {
+				r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
+			}
+		}
+		config.rules = rules
+	}
+
 	if config.Manager == "" {
-		err := startProducer(tasks, src, dst, config)
+		logger.Infof("Syncing from %s to %s", src, dst)
+		if config.Start != "" {
+			logger.Infof("first key: %q", config.Start)
+		}
+		if config.End != "" {
+			logger.Infof("last key: %q", config.End)
+		}
+		var err error
+		if config.ListThreads > 1 {
+			err = parallelProduce(tasks, src, dst, config)
+		} else {
+			err = startProducer(tasks, src, dst, "", true, config)
+		}
 		if err != nil {
 			return err
 		}
@@ -932,6 +1047,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	wg.Wait()
+	pending.SetCurrent(0)
 	progress.Done()
 
 	if config.Manager == "" {

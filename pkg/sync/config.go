@@ -44,6 +44,7 @@ type Config struct {
 	Limit          int64
 	Manager        string
 	Workers        []string
+	ListThreads    int
 	BWLimit        int
 	NoHTTPS        bool
 	Verbose        bool
@@ -51,6 +52,8 @@ type Config struct {
 	CheckAll       bool
 	CheckNew       bool
 	Env            map[string]string
+
+	rules []rule
 }
 
 func envList() []string {
@@ -128,6 +131,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Start:          c.String("start"),
 		End:            c.String("end"),
 		Threads:        c.Int("threads"),
+		ListThreads:    c.Int("list-threads"),
 		Update:         c.Bool("update"),
 		ForceUpdate:    c.Bool("force-update"),
 		Perms:          c.Bool("perms"),

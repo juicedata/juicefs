@@ -282,7 +282,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 	if obs, err := s.List("", "", "/", 10); err != nil {
-		if !(errors.Is(err, notSupportedDelimiter) || errors.Is(err, notSupported)) {
+		if !(errors.Is(err, NotSupportDelimiter) || errors.Is(err, notSupported)) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
 			t.Logf("list api error: %s", err)
@@ -300,7 +300,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 
 	if obs, err := s.List("a/", "", "/", 10); err != nil {
-		if !(errors.Is(err, notSupportedDelimiter) || errors.Is(err, notSupported)) {
+		if !(errors.Is(err, NotSupportDelimiter) || errors.Is(err, notSupported)) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
 			t.Logf("list api error: %s", err)

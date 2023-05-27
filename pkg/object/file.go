@@ -75,12 +75,7 @@ func (d *filestore) path(key string) string {
 	return d.root + key
 }
 
-func (d *filestore) Head(key string) (Object, error) {
-	p := d.path(key)
-	fi, err := os.Stat(p)
-	if err != nil {
-		return nil, err
-	}
+func (d *filestore) toFile(key string, fi fs.FileInfo) *file {
 	size := fi.Size()
 	var isSymlink bool
 	if fi.IsDir() {
@@ -99,7 +94,16 @@ func (d *filestore) Head(key string) (Object, error) {
 		group,
 		fi.Mode(),
 		isSymlink,
-	}, nil
+	}
+}
+
+func (d *filestore) Head(key string) (Object, error) {
+	p := d.path(key)
+	fi, err := os.Stat(p)
+	if err != nil {
+		return nil, err
+	}
+	return d.toFile(key, fi), nil
 }
 
 type SectionReaderCloser struct {
@@ -318,7 +322,39 @@ func readDirSorted(dirname string) ([]*mEntry, error) {
 }
 
 func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	return nil, notSupported
+	if delimiter != "/" {
+		return nil, notSupported
+	}
+	var root string = d.root + prefix
+	if !strings.HasSuffix(root, dirSuffix) {
+		root = path.Dir(root)
+	}
+	entries, err := readDirSorted(root)
+	if err != nil {
+		return nil, err
+	}
+	var objs []Object
+	for _, e := range entries {
+		p := filepath.Join(root, e.Name())
+		if e.IsDir() {
+			p = filepath.ToSlash(p + "/")
+		}
+		key := p[len(d.root):]
+		if !strings.HasPrefix(key, prefix) || key <= marker {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			logger.Warnf("stat %s: %s", p, err)
+			continue
+		}
+		f := d.toFile(key, info)
+		objs = append(objs, f)
+		if len(objs) == int(limit) {
+			break
+		}
+	}
+	return objs, nil
 }
 
 type WalkFunc func(path string, info fs.FileInfo, isSymlink bool, err error) error
@@ -363,23 +399,7 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 				}
 				return nil
 			}
-			owner, group := getOwnerGroup(info)
-			f := &file{
-				obj{
-					key,
-					info.Size(),
-					info.ModTime(),
-					info.IsDir(),
-					"",
-				},
-				owner,
-				group,
-				info.Mode(),
-				isSymlink,
-			}
-			if info.IsDir() {
-				f.size = 0
-			}
+			f := d.toFile(key, info)
 			listed <- f
 			return nil
 		})

@@ -44,7 +44,7 @@ func TestIterator(t *testing.T) {
 	m.Put("aa", bytes.NewReader([]byte("a")))
 	m.Put("c", bytes.NewReader([]byte("a")))
 
-	ch, _ := ListAll(m, "a", "b")
+	ch, _ := ListAll(m, "", "a", "b")
 	keys := collectAll(ch)
 	if len(keys) != 3 {
 		t.Fatalf("length should be 3, but got %d", len(keys))
@@ -56,7 +56,7 @@ func TestIterator(t *testing.T) {
 	// Single object
 	s, _ := object.CreateStorage("mem", "", "", "", "")
 	s.Put("a", bytes.NewReader([]byte("a")))
-	ch, _ = ListAll(s, "", "")
+	ch, _ = ListAll(s, "", "", "")
 	keys = collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{"a"}) {
 		t.Fatalf("result wrong: %s", keys)
@@ -75,7 +75,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 
 	// Simulate command line prefix in SRC or DST
 	s = object.WithPrefix(s, "abc")
-	ch, _ := ListAll(s, "", "")
+	ch, _ := ListAll(s, "", "", "")
 	keys := collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{""}) {
 		t.Fatalf("result wrong: %s", keys)

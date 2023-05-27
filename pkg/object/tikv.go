@@ -91,7 +91,7 @@ func (t *tikv) Delete(key string) error {
 
 func (t *tikv) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if delimiter != "" {
-		return nil, notSupportedDelimiter
+		return nil, NotSupportDelimiter
 	}
 	if marker == "" {
 		marker = prefix
