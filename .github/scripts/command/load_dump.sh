@@ -47,7 +47,7 @@ test_dump_without_keep_secret()
     ./juicefs dump sqlite3://test.db dump.json
     ./juicefs load sqlite3://test2.db dump.json
     ./juicefs mount -d sqlite3://test2.db /jfs2 && echo "mount should fail" && exit 1 || true
-    juicefs config --secret-key minioadmin sqlite3://test2.db
+    ./juicefs config --secret-key minioadmin sqlite3://test2.db
     ./juicefs mount -d sqlite3://test2.db /jfs2
     echo "hello" > /jfs2/hello.txt
     cat /jfs2/hello.txt | grep hello
