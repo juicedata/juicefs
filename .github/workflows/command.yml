@@ -1,0 +1,66 @@
+name: "command-test"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/**'
+  schedule:
+    - cron:  '30 20 * * *'
+
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  command_test:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Build 
+        uses: ./.github/actions/build
+
+      - name: Test Load & Dump
+        run: |
+          sudo .github/scripts/command/load_dump.sh
+
+      - name: Test Clone
+          sudo .github/scripts/command/clone.sh
+
+      - name: Log
+        if: ${{ failure() }}
+        run: |
+          echo "juicefs log"
+          sudo tail -n 1000 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1
+
+      - name: Send Slack Notification
+        if: ${{ failure() }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
+
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
