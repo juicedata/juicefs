@@ -44,6 +44,7 @@ jobs:
           sudo .github/scripts/command/load_dump.sh
 
       - name: Test Clone
+        run: |
           sudo .github/scripts/command/clone.sh
 
       - name: Log
