@@ -102,7 +102,7 @@ prepare_test(){
     umount /jfs2 || true
     rm -rf test.db test2.db || true
     rm -rf /var/jfs/myjfs || true
-    mc rm --force --recursive myminio/test
+    mc rm --force --recursive myminio/test || true
 }
 
 do_dump_load(){
