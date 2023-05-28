@@ -1,8 +1,6 @@
 #!/bin/bash
 set -e
 
-[[ -z $META_URL1 ]]
-
 if ! docker ps | grep -q minio; then
     docker run -d -p 9000:9000 --name minio \
             -e "MINIO_ACCESS_KEY=minioadmin" \
@@ -13,6 +11,7 @@ if ! docker ps | grep -q minio; then
 fi
 [[ ! -f /usr/local/bin/mc ]] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc && chmod +x /usr/local/bin/mc
 mc alias set myminio http://localhost:9000 minioadmin minioadmin
+python3 -c "import xattr" || sudo pip install xattr
 
 test_dump_load_with_iflag(){
     prepare_test
