@@ -29,10 +29,6 @@ test_dump_load_with_iflag(){
     cat /jfs2/hello.txt | grep world
 }
 
-test_xxx(){
-    echo xxxx && exit 1
-}
-
 test_dump_with_keep_secret()
 {
     prepare_test
