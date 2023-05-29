@@ -50,72 +50,49 @@ $ juicefs config redis://localhost --trash-days 7
 
 # Limit client version that is allowed to connect
 $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version 1.1.0`,
-		Flags: []cli.Flag{
-			&cli.Uint64Flag{
-				Name:  "capacity",
-				Usage: "hard quota of the volume limiting its usage of space in GiB",
-			},
-			&cli.Uint64Flag{
-				Name:  "inodes",
-				Usage: "hard quota of the volume limiting its number of inodes",
-			},
-			&cli.StringFlag{
-				Name:  "storage",
-				Usage: "object storage type (e.g. s3, gcs, oss, cos)",
-			},
-			&cli.StringFlag{
-				Name:  "bucket",
-				Usage: "the bucket URL of object storage to store data",
-			},
-			&cli.StringFlag{
-				Name:  "access-key",
-				Usage: "access key for object storage",
-			},
-			&cli.StringFlag{
-				Name:  "secret-key",
-				Usage: "secret key for object storage",
-			},
-			&cli.StringFlag{
-				Name:  "session-token",
-				Usage: "session token for object storage",
-			},
-			&cli.StringFlag{
-				Name:  "storage-class",
-				Usage: "the default storage class for data written in future",
-			},
-			&cli.BoolFlag{
-				Name:  "encrypt-secret",
-				Usage: "encrypt the secret key if it was previously stored in plain format",
-			},
-			&cli.Int64Flag{
-				Name:  "upload-limit",
-				Usage: "default bandwidth limit of the volume for upload in Mbps",
-			},
-			&cli.Int64Flag{
-				Name:  "download-limit",
-				Usage: "default bandwidth limit of the volume for download in Mbps",
-			},
-			&cli.IntFlag{
-				Name:  "trash-days",
-				Usage: "number of days after which removed files will be permanently deleted",
-			},
-			&cli.StringFlag{
-				Name:  "min-client-version",
-				Usage: "minimum client version allowed to connect",
-			},
-			&cli.StringFlag{
-				Name:  "max-client-version",
-				Usage: "maximum client version allowed to connect",
-			},
-			&cli.BoolFlag{
-				Name:    "yes",
-				Aliases: []string{"y"},
-				Usage:   "automatically answer 'yes' to all prompts and run non-interactively",
-			},
-			&cli.BoolFlag{
-				Name:  "force",
-				Usage: "skip sanity check and force update the configurations",
-			},
+		Flags: expandFlags(
+			formatStorageFlags(),
+			formatManagementFlags(),
+			configManagementFlags(),
+			configFlags()),
+	}
+}
+
+func configManagementFlags() []cli.Flag {
+	return addCategories("MANAGEMENT", []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "encrypt-secret",
+			Usage: "encrypt the secret key if it was previously stored in plain format",
+		},
+		&cli.StringFlag{
+			Name:  "min-client-version",
+			Usage: "minimum client version allowed to connect",
+		},
+		&cli.StringFlag{
+			Name:  "max-client-version",
+			Usage: "maximum client version allowed to connect",
+		},
+		&cli.Int64Flag{
+			Name:  "upload-limit",
+			Usage: "default bandwidth limit of the volume for upload in Mbps",
+		},
+		&cli.Int64Flag{
+			Name:  "download-limit",
+			Usage: "default bandwidth limit of the volume for download in Mbps",
+		},
+	})
+}
+
+func configFlags() []cli.Flag {
+	return []cli.Flag{
+		&cli.BoolFlag{
+			Name:    "yes",
+			Aliases: []string{"y"},
+			Usage:   "automatically answer 'yes' to all prompts and run non-interactively",
+		},
+		&cli.BoolFlag{
+			Name:  "force",
+			Usage: "skip sanity check and force update the configurations",
 		},
 	}
 }
