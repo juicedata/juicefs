@@ -212,7 +212,7 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Obje
 	var objs []Object
 	for _, name := range names {
 		key := (dir + dirSuffix + name)[len(h.basePath):]
-		if !strings.HasPrefix(key, prefix) || key <= marker {
+		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
 		f := h.toFile(key, entryMap[name])
@@ -295,7 +295,7 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 				return err
 			}
 			key := path[len(h.basePath):]
-			if !strings.HasPrefix(key, prefix) || key <= marker {
+			if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
 					return filepath.SkipDir
 				}

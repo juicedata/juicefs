@@ -163,8 +163,8 @@ func TestSync(t *testing.T) {
 		t.FailNow()
 	}
 
-	if !deepEqualWithOutMtime(aObjs[3], bObjs[len(bObjs)-1]) {
-		t.FailNow()
+	if !deepEqualWithOutMtime(aObjs[4], bObjs[len(bObjs)-1]) {
+		t.Fatalf("expect %+v but got %+v", aObjs[3], bObjs[len(bObjs)-1])
 	}
 	// Test --force-update option
 	config.ForceUpdate = true

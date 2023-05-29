@@ -224,7 +224,7 @@ func (j *juiceFS) List(prefix, marker, delimiter string, limit int64) ([]object.
 	var objs []object.Object
 	for _, e := range entries {
 		key := dir + e.name
-		if !strings.HasPrefix(key, prefix) || key <= marker {
+		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
 		f := &jObj{key, e.fi}
@@ -368,7 +368,7 @@ func (d *juiceFS) ListAll(prefix, marker string) (<-chan object.Object, error) {
 			}
 
 			key := path
-			if !strings.HasPrefix(key, prefix) || key <= marker {
+			if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
 					return skipDir
 				}

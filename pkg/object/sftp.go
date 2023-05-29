@@ -427,7 +427,7 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	var objs []Object
 	for _, o := range entries {
 		key := o.Key()
-		if !strings.HasPrefix(key, prefix) || key <= marker {
+		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
 		objs = append(objs, o)
