@@ -731,8 +731,8 @@ func (m *baseMeta) flushQuotas() {
 		time.Sleep(time.Second * 3)
 		m.quotaMu.RLock()
 		for ino, q := range m.dirQuotas {
-			newSpace = atomic.SwapInt64(&q.newSpace, 0)
-			newInodes = atomic.SwapInt64(&q.newInodes, 0)
+			newSpace = atomic.LoadInt64(&q.newSpace)
+			newInodes = atomic.LoadInt64(&q.newInodes)
 			if newSpace != 0 || newInodes != 0 {
 				quotas[ino] = &Quota{newSpace: newSpace, newInodes: newInodes}
 			}
@@ -741,11 +741,17 @@ func (m *baseMeta) flushQuotas() {
 
 		if err := m.en.doFlushQuotas(Background, quotas); err != nil {
 			logger.Warnf("Flush quotas: %s", err)
+		} else {
 			m.quotaMu.RLock()
-			for ino, q := range quotas {
-				if cur := m.dirQuotas[ino]; cur != nil {
-					cur.update(q.newSpace, q.newInodes)
+			for ino, snap := range quotas {
+				q := m.dirQuotas[ino]
+				if q == nil {
+					continue
 				}
+				atomic.AddInt64(&q.newSpace, -snap.newSpace)
+				atomic.AddInt64(&q.UsedSpace, snap.newSpace)
+				atomic.AddInt64(&q.newInodes, -snap.newInodes)
+				atomic.AddInt64(&q.UsedInodes, snap.newInodes)
 			}
 			m.quotaMu.RUnlock()
 		}
