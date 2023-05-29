@@ -326,7 +326,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	}
 	var dir string = d.root + prefix
 	if !strings.HasSuffix(dir, dirSuffix) {
-		dir = path.Dir(dir)
+		dir = path.Dir(dir) + dirSuffix
 	}
 	entries, err := readDirSorted(dir)
 	if err != nil {
