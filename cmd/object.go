@@ -368,7 +368,7 @@ func (d *juiceFS) ListAll(prefix, marker string) (<-chan object.Object, error) {
 			}
 
 			key := path
-			if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
+			if !strings.HasPrefix(key, prefix) || key <= marker {
 				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
 					return skipDir
 				}

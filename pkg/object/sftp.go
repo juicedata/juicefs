@@ -389,7 +389,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan Object) {
 			key := o.Key()
 			p := f.root + o.Key()
 			if strings.HasPrefix(p, path) {
-				if key > marker || marker == "" {
+				if key > marker {
 					out <- o
 				}
 				if o.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {

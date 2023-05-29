@@ -640,7 +640,7 @@ func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, config *Con
 	return false
 }
 
-func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, background bool, config *Config) error {
+func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, prefix string, background bool, config *Config) error {
 	start, end := config.Start, config.End
 	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
 
@@ -862,7 +862,7 @@ func listAllCommonPrefix(store object.ObjectStorage) ([]object.Object, error) {
 	var total []object.Object
 	var marker string
 	for {
-		objs, err := store.List("", marker, "/", 5000)
+		objs, err := store.List("", marker, "/", maxResults)
 		if err != nil {
 			return nil, err
 		}
@@ -870,61 +870,77 @@ func listAllCommonPrefix(store object.ObjectStorage) ([]object.Object, error) {
 			break
 		}
 		total = append(total, objs...)
-		marker = total[len(total)-1].Key()
+		marker = objs[len(objs)-1].Key()
 	}
 	return total, nil
 }
 
-func parallelProduce(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) error {
+func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) error {
+	if config.ListThreads <= 1 {
+		return startSingleProducer(tasks, src, dst, "", true, config)
+	}
 	srcCP, err := listAllCommonPrefix(src)
 	if err == utils.ENOTSUP {
-		return startProducer(tasks, src, dst, "", true, config)
+		return startSingleProducer(tasks, src, dst, "", true, config)
 	} else if err != nil {
 		return fmt.Errorf("list %s with delimiter: %s", src, err)
 	}
 
 	dstCP, err := listAllCommonPrefix(dst)
 	if err == utils.ENOTSUP {
-		return startProducer(tasks, src, dst, "", true, config)
+		return startSingleProducer(tasks, src, dst, "", true, config)
 	} else if err != nil {
 		return fmt.Errorf("list %s with delimiter: %s", dst, err)
 	}
 
-	commonPrefix := make(chan object.Object, 100)
-	var mu sync.Mutex
-	found := make(map[string]bool)
-	filterOutCP := func(prefix []object.Object, keys chan object.Object) {
-		defer close(keys)
-		for _, o := range prefix {
+	defer close(tasks)
+	commonPrefix := make(chan object.Object, 1000)
+	srckeys := make(chan object.Object, 1000)
+	go func() {
+		defer close(srckeys)
+		for _, o := range srcCP {
 			if strings.HasSuffix(o.Key(), "/") {
-				mu.Lock()
-				existed := found[o.Key()]
-				found[o.Key()] = true
-				mu.Unlock()
-				if !existed {
+				commonPrefix <- o
+			} else {
+				srckeys <- o
+			}
+		}
+	}()
+	dstkeys := make(chan object.Object, 1000)
+	go func() {
+		defer close(dstkeys)
+		for _, o := range dstCP {
+			if strings.HasSuffix(o.Key(), "/") {
+				if config.DeleteDst {
 					commonPrefix <- o
 				}
 			} else {
-				keys <- o
+				dstkeys <- o
 			}
 		}
-	}
-	srckeys := make(chan object.Object, 1000)
-	dstkeys := make(chan object.Object, 1000)
-	go filterOutCP(srcCP, srckeys)
-	go filterOutCP(dstCP, dstkeys)
+	}()
 
+	var mu sync.Mutex
+	processing := make(map[string]bool)
 	var wg sync.WaitGroup
 	for i := 0; i < config.ListThreads; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for c := range commonPrefix {
+				mu.Lock()
+				if processing[c.Key()] {
+					mu.Unlock()
+					continue
+				}
+				processing[c.Key()] = true
+				mu.Unlock()
+
 				if len(config.rules) > 0 && !matchKey(config.rules, c.Key()) {
 					logger.Infof("exclude prefix %s", c.Key())
 					continue
 				}
-				if config.Start != "" && c.Key() < config.Start {
+				if c.Key() < config.Start {
 					logger.Infof("ingore prefix %s", c.Key())
 					continue
 				}
@@ -932,13 +948,14 @@ func parallelProduce(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 					logger.Infof("ignore prefix %s", c.Key())
 					continue
 				}
-				err := startProducer(tasks, src, dst, c.Key(), false, config)
+				err := startSingleProducer(tasks, src, dst, c.Key(), false, config)
 				if err != nil {
 					logger.Fatalf("list prefix %s: %s", c.Key(), err)
 				}
 			}
 		}()
 	}
+
 	// sync returned objects
 	produce(tasks, src, dst, srckeys, dstkeys, config)
 	// consume all the keys from dst
@@ -946,7 +963,6 @@ func parallelProduce(tasks chan<- object.Object, src, dst object.ObjectStorage, 
 	}
 	close(commonPrefix)
 	wg.Wait()
-	close(tasks)
 	return nil
 }
 
@@ -1020,12 +1036,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		if config.End != "" {
 			logger.Infof("last key: %q", config.End)
 		}
-		var err error
-		if config.ListThreads > 1 {
-			err = parallelProduce(tasks, src, dst, config)
-		} else {
-			err = startProducer(tasks, src, dst, "", true, config)
-		}
+		err := startProducer(tasks, src, dst, config)
 		if err != nil {
 			return err
 		}

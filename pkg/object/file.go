@@ -395,7 +395,7 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 			}
 
 			key := path[len(d.root):]
-			if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
+			if !strings.HasPrefix(key, prefix) || key <= marker {
 				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
 					return filepath.SkipDir
 				}

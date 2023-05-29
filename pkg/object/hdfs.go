@@ -93,6 +93,9 @@ func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
 	}
 	if info.IsDir() {
 		f.size = 0
+		if !strings.HasSuffix(f.key, "/") && f.key != "" {
+			f.key += "/"
+		}
 	}
 	return f
 }
@@ -291,8 +294,8 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 				}
 				return err
 			}
-			key := path[1:]
-			if !strings.HasPrefix(key, prefix) || key < marker {
+			key := path[len(h.basePath):]
+			if !strings.HasPrefix(key, prefix) || key <= marker {
 				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
 					return filepath.SkipDir
 				}
