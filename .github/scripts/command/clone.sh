@@ -10,9 +10,11 @@ test_clone_preserve_with_file()
     id -u juicefs  && sudo userdel juicefs
     sudo useradd -u 1101 juicefs
     sudo -u juicefs touch /jfs/test
-    sudo -u juicefs chmod 777 /jfs/test
-    check_guid_after_clone true
-    check_guid_after_clone false
+    for mode in 777 755 644; do
+        sudo -u juicefs chmod $mode /jfs/test
+        check_guid_after_clone true
+        check_guid_after_clone false
+    done
 }
 
 test_clone_preserve_with_dir()
@@ -23,9 +25,11 @@ test_clone_preserve_with_dir()
     id -u juicefs  && sudo userdel juicefs
     sudo useradd -u 1101 juicefs
     sudo -u juicefs mkdir /jfs/test
-    sudo -u juicefs chmod 777 /jfs/test
-    check_guid_after_clone true
-    check_guid_after_clone false
+    for mode in 777 755 644; do
+        sudo -u juicefs chmod $mode /jfs/test
+        check_guid_after_clone true
+        check_guid_after_clone false
+    done
 }
 
 test_clone()
