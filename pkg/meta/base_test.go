@@ -46,7 +46,7 @@ func testConfig() *Config {
 }
 
 func testFormat() *Format {
-	return &Format{Name: "test", DirStats: true, TrashDays: 1}
+	return &Format{Name: "test", DirStats: true}
 }
 
 func TestRedisClient(t *testing.T) {
@@ -1069,16 +1069,16 @@ type compactor interface {
 
 func testCompaction(t *testing.T, m Meta, trash bool) {
 	if trash {
-		_ = m.Init(testFormat(), false)
-	} else {
 		format := testFormat()
-		format.TrashDays = 0
+		format.TrashDays = 1
 		_ = m.Init(format, false)
 		defer func() {
 			if err := m.Init(testFormat(), false); err != nil {
-				t.Errorf("init: %v", err)
+				t.Fatalf("init: %v", err)
 			}
 		}()
+	} else {
+		_ = m.Init(testFormat(), false)
 	}
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
@@ -1402,9 +1402,16 @@ func testCloseSession(t *testing.T, m Meta) {
 }
 
 func testTrash(t *testing.T, m Meta) {
-	if err := m.Init(testFormat(), false); err != nil {
-		t.Fatalf("init: %s", err)
+	format := testFormat()
+	format.TrashDays = 1
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init: %v", err)
 	}
+	defer func() {
+		if err := m.Init(testFormat(), false); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+	}()
 	ctx := Background
 	var inode, parent Ino
 	var attr = &Attr{}
