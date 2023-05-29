@@ -375,7 +375,7 @@ func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool, concurrent chan struct{}, updateProgress func(count uint64, bytes uint64)) syscall.Errno {
 	var entries []*Entry
 	var err syscall.Errno
-	if strict || !m.fmt.DirStats {
+	if strict || !m.GetFormat().DirStats {
 		err = m.en.doReaddir(ctx, inode, 1, &entries, -1)
 	} else {
 		var st *dirStat

@@ -2068,6 +2068,13 @@ func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino) syscall.Errno 
 }
 
 func (m *baseMeta) GetFormat() Format {
+	if m.fmt == nil {
+		var err error
+		m.fmt, err = m.Load(false)
+		if err != nil {
+			logger.Fatalf("Load format: %s", err)
+		}
+	}
 	return *m.fmt
 }
 
