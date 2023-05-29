@@ -1322,8 +1322,8 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
 		return st
 	}
-	if err := m.checkQuota(ctx, align4K(attr.Length), 1, parent); err != 0 {
-		return err
+	if m.checkDirQuota(ctx, parent, align4K(attr.Length), 1) {
+		return syscall.EDQUOT
 	}
 
 	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
