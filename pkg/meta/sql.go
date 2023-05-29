@@ -3823,28 +3823,27 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		if !ok {
 			return syscall.ENOENT
 		}
-		m.parseAttr(&n, attr)
-		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
-			return eno
-		}
 		n.Inode = ino
 		n.Parent = parent
 		now := time.Now()
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
-			attr.Uid = ctx.Uid()
-			attr.Gid = ctx.Gid()
-			attr.Mode &= ^cumask
-			attr.Atime = now.Unix()
-			attr.Mtime = now.Unix()
-			attr.Ctime = now.Unix()
-			attr.Atimensec = uint32(now.Nanosecond())
-			attr.Mtimensec = uint32(now.Nanosecond())
-			attr.Ctimensec = uint32(now.Nanosecond())
+			n.Uid = ctx.Uid()
+			n.Gid = ctx.Gid()
+			n.Mode &= ^cumask
+			n.Atime = now.UnixNano() / 1e3
+			n.Mtime = now.UnixNano() / 1e3
+			n.Ctime = now.UnixNano() / 1e3
+			n.Atimensec = int16(now.UnixNano() % 1e3)
+			n.Mtimensec = int16(now.UnixNano() % 1e3)
+			n.Ctimensec = int16(now.UnixNano() % 1e3)
 		}
-		m.parseNode(attr, &n)
 		// TODO: preserve hardlink
 		if n.Type == TypeFile && n.Nlink > 1 {
 			n.Nlink = 1
+		}
+		m.parseAttr(&n, attr)
+		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
+			return eno
 		}
 
 		if top {
