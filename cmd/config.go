@@ -158,7 +158,8 @@ func config(ctx *cli.Context) error {
 		return nil
 	}
 
-	var quota, storage, trash, clientVer, dirStats bool
+	originDirStats := format.DirStats
+	var quota, storage, trash, clientVer bool
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
 	for _, flag := range ctx.LocalFlagNames() {
@@ -242,7 +243,7 @@ func config(ctx *cli.Context) error {
 		case "dir-stats":
 			if new := ctx.Bool(flag); new != format.DirStats {
 				msg.WriteString(fmt.Sprintf("%10s: %t -> %t\n", flag, format.DirStats, new))
-				dirStats = new
+				format.DirStats = new
 			}
 		case "min-client-version":
 			if new := ctx.String(flag); new != format.MinClientVersion {
@@ -299,14 +300,18 @@ func config(ctx *cli.Context) error {
 				return fmt.Errorf("Aborted.")
 			}
 		}
-		if dirStats {
-			var qs map[string]*meta.Quota
+		if originDirStats && !format.DirStats {
+			qs := make(map[string]*meta.Quota)
 			err := m.HandleQuota(meta.Background, meta.QuotaList, "", qs, false, false)
 			if err != nil {
 				return errors.Wrap(err, "list quotas")
 			}
 			if len(qs) != 0 {
-				return fmt.Errorf("cannot disable dir stats when there are still %d quotas", len(qs))
+				paths := make([]string, 0, len(qs))
+				for path := range qs {
+					paths = append(paths, path)
+				}
+				return fmt.Errorf("cannot disable dir stats when there are still %d dir quotas: %v", len(qs), paths)
 			}
 		}
 		if clientVer && format.CheckVersion() != nil {
