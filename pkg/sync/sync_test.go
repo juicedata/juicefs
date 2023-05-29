@@ -136,17 +136,18 @@ func TestSync(t *testing.T) {
 		t.Fatalf("should copy 0 keys, but got %d", c)
 	}
 
-	// Now a: {"a1", "a2", "abc","c1","c2"}, b: {"a1", "ba"}
+	// Now a: {"a1", "a2", "abc", "c1", "c2"}, b: {"a1", "a2", "ba"}
 	// Copy "ba" from b to a
 	os.Args = []string{}
 	config.Exclude = nil
+	config.rules = nil
 	if err := Sync(b, a, config); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
 	if c := copied.Current(); c != 1 {
 		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
-	// Now a: {"a1", "a2", "abc","c1","c2","ba"}, b: {"a1", "ba"}
+	// Now a: {"a1", "a2", "abc", "ba", "c1", "c2"}, b: {"a1", "a2", "ba"}
 	aRes, _ := a.ListAll("", "")
 	bRes, _ := b.ListAll("", "")
 
@@ -162,7 +163,7 @@ func TestSync(t *testing.T) {
 		t.FailNow()
 	}
 
-	if !deepEqualWithOutMtime(aObjs[4], bObjs[len(bObjs)-1]) {
+	if !deepEqualWithOutMtime(aObjs[3], bObjs[len(bObjs)-1]) {
 		t.FailNow()
 	}
 	// Test --force-update option
