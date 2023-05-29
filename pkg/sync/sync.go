@@ -877,14 +877,14 @@ func listAllCommonPrefix(store object.ObjectStorage) ([]object.Object, error) {
 
 func parallelProduce(tasks chan<- object.Object, src, dst object.ObjectStorage, config *Config) error {
 	srcCP, err := listAllCommonPrefix(src)
-	if err == utils.ENOTSUP || err == object.NotSupportDelimiter {
+	if err == utils.ENOTSUP {
 		return startProducer(tasks, src, dst, "", true, config)
 	} else if err != nil {
 		return fmt.Errorf("list %s with delimiter: %s", src, err)
 	}
 
 	dstCP, err := listAllCommonPrefix(dst)
-	if err == utils.ENOTSUP || err == object.NotSupportDelimiter {
+	if err == utils.ENOTSUP {
 		return startProducer(tasks, src, dst, "", true, config)
 	} else if err != nil {
 		return fmt.Errorf("list %s with delimiter: %s", dst, err)

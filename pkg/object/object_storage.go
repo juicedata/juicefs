@@ -18,7 +18,6 @@ package object
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -108,7 +107,6 @@ type FileSystem interface {
 }
 
 var notSupported = utils.ENOTSUP
-var NotSupportDelimiter = errors.New("not supported delimiter")
 
 type DefaultObjectStorage struct{}
 

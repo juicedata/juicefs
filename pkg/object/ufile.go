@@ -202,7 +202,7 @@ type uFileListObjectsOutput struct {
 func (u *ufile) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if delimiter != "" {
 		// TODO: or US3?
-		return nil, NotSupportDelimiter
+		return nil, notSupported
 	}
 	query := url.Values{}
 	query.Add("list", "")
