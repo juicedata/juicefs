@@ -2137,24 +2137,29 @@ func (m *redisMeta) doRefreshSession() error {
 func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var attr Attr
 	var ctx = Background
-	a, err := m.rdb.Get(ctx, m.inodeKey(inode)).Bytes()
-	if err == redis.Nil {
-		return nil
-	}
-	if err != nil {
+	var newSpace int64
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		newSpace = 0
+		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
+		if err == redis.Nil {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		m.parseAttr(a, &attr)
+		newSpace = -align4K(attr.Length)
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(time.Now().Unix()), Member: m.toDelete(inode, attr.Length)})
+			pipe.Del(ctx, m.inodeKey(inode))
+			pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+			pipe.Decr(ctx, m.totalInodesKey())
+			pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
+			return nil
+		})
 		return err
-	}
-	m.parseAttr(a, &attr)
-	newSpace := -align4K(attr.Length)
-	_, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(time.Now().Unix()), Member: m.toDelete(inode, attr.Length)})
-		pipe.Del(ctx, m.inodeKey(inode))
-		pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
-		pipe.Decr(ctx, m.totalInodesKey())
-		pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
-		return nil
-	})
-	if err == nil {
+	}, m.inodeKey(inode))
+	if err == nil && newSpace < 0 {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
 		m.updateDirQuota(Background, attr.Parent, newSpace, -1)

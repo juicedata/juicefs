@@ -2107,7 +2107,9 @@ func (m *dbMeta) doRefreshSession() error {
 
 func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var n = node{Inode: inode}
+	var newSpace int64
 	err := m.txn(func(s *xorm.Session) error {
+		newSpace = 0
 		n = node{Inode: inode}
 		ok, err := s.ForUpdate().Get(&n)
 		if err != nil {
@@ -2116,6 +2118,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		if !ok {
 			return nil
 		}
+		newSpace = -align4K(n.Length)
 		if err = mustInsert(s, &delfile{inode, n.Length, time.Now().Unix()}); err != nil {
 			return err
 		}
@@ -2126,8 +2129,7 @@ func (m *dbMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		_, err = s.Delete(&node{Inode: inode})
 		return err
 	}, inode)
-	if err == nil {
-		newSpace := -align4K(n.Length)
+	if err == nil && newSpace < 0 {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, n.Length, false)
 		m.updateDirQuota(Background, n.Parent, newSpace, -1)
