@@ -411,15 +411,6 @@ func (m *kvMeta) doInit(format *Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("json: %s", err)
 		}
-		if old.DirStats && !format.DirStats {
-			qs, err := m.doLoadQuotas(Background)
-			if err != nil {
-				return errors.Wrap(err, "load quotas")
-			}
-			if len(qs) != 0 {
-				return fmt.Errorf("cannot disable dir stats when there are still %d quotas", len(qs))
-			}
-		}
 		if !old.DirStats && format.DirStats {
 			// remove dir stats as they are outdated
 			var keys [][]byte
