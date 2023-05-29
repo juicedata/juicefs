@@ -77,7 +77,6 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 			syncActionFlags(),
 			syncStorageFlags(),
 			clusterFlags(),
-			checksumFlags(),
 			[]cli.Flag{
 				&cli.IntFlag{
 					Name:   "http-port",
@@ -163,6 +162,14 @@ func syncActionFlags() []cli.Flag {
 			Usage:   "delete extraneous objects from destination",
 		},
 		&cli.BoolFlag{
+			Name:  "check-all",
+			Usage: "verify integrity of all files in source and destination",
+		},
+		&cli.BoolFlag{
+			Name:  "check-new",
+			Usage: "verify integrity of newly copied files",
+		},
+		&cli.BoolFlag{
 			Name:  "dry",
 			Usage: "don't copy file",
 		},
@@ -201,19 +208,6 @@ func clusterFlags() []cli.Flag {
 		&cli.StringSliceFlag{
 			Name:  "worker",
 			Usage: "hosts (separated by comma) to launch worker",
-		},
-	})
-}
-
-func checksumFlags() []cli.Flag {
-	return addCategories("CHECKSUM", []cli.Flag{
-		&cli.BoolFlag{
-			Name:  "check-all",
-			Usage: "verify integrity of all files in source and destination",
-		},
-		&cli.BoolFlag{
-			Name:  "check-new",
-			Usage: "verify integrity of newly copied files",
 		},
 	})
 }
