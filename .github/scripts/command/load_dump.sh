@@ -73,7 +73,7 @@ test_load_encrypted_meta_backup()
     ./juicefs mount -d sqlite3://test.db /jfs
     python3 .github/scripts/fsrand.py -c 1000 /jfs/fsrand -v -a
     umount /jfs
-    ./juicefs mount -d --backup-meta 10s sqlite3://test.db /jfs
+    SKIP_BACKUP_META_CHECK=true ./juicefs mount -d --backup-meta 10s sqlite3://test.db /jfs
     sleep 10s
     backup_file=$(ls -l /var/jfs/myjfs/meta/ |tail -1 | awk '{print $NF}')
     backup_path=/var/jfs/myjfs/meta/$backup_file
