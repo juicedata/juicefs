@@ -1819,19 +1819,21 @@ func (m *kvMeta) doReaddir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 
 func (m *kvMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var attr Attr
+	var newSpace int64
 	err := m.txn(func(tx *kvTxn) error {
+		newSpace = 0
 		a := tx.get(m.inodeKey(inode))
 		if a == nil {
 			return nil
 		}
+		newSpace = -align4K(attr.Length)
 		m.parseAttr(a, &attr)
 		tx.set(m.delfileKey(inode, attr.Length), m.packInt64(time.Now().Unix()))
 		tx.delete(m.inodeKey(inode))
 		tx.delete(m.sustainedKey(sid, inode))
 		return nil
 	}, inode)
-	if err == nil {
-		newSpace := -align4K(attr.Length)
+	if err == nil && newSpace < 0 {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
 		m.updateDirQuota(Background, attr.Parent, newSpace, -1)
