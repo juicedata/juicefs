@@ -52,8 +52,8 @@ import (
 
 func cmdMount() *cli.Command {
 	compoundFlags := [][]cli.Flag{
+		clientFlags(1.0),
 		mount_flags(),
-		clientFlags(),
 		shareInfoFlags(),
 	}
 	return &cli.Command{

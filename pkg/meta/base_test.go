@@ -39,8 +39,14 @@ import (
 	"xorm.io/xorm"
 )
 
+func testConfig() *Config {
+	conf := DefaultConf()
+	conf.DirStatFlushPeriod = 100 * time.Millisecond
+	return conf
+}
+
 func TestRedisClient(t *testing.T) {
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", DefaultConf())
+	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", testConfig())
 	if err != nil || m.Name() != "redis" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -53,7 +59,7 @@ func TestKeyDB(t *testing.T) { //skip mutate
 	}
 	// 127.0.0.1:6378 enable flash, 127.0.0.1:6377 disable flash
 	for _, addr := range []string{"127.0.0.1:6378/10", "127.0.0.1:6377/10"} {
-		m, err := newRedisMeta("redis", addr, DefaultConf())
+		m, err := newRedisMeta("redis", addr, testConfig())
 		if err != nil || m.Name() != "redis" {
 			t.Fatalf("create meta: %s", err)
 		}
@@ -96,7 +102,7 @@ func TestRedisCluster(t *testing.T) { //skip mutate
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
-	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", DefaultConf())
+	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", testConfig())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -2018,7 +2024,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Create(Background, testInode, "file", 0640, 022, 0, &fileInode, nil); st != 0 {
 		t.Fatalf("create: %s", st)
 	}
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(0, align4K(0), 1)
 
@@ -2026,7 +2032,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Fallocate(Background, fileInode, 0, 0, 4097); st != 0 {
 		t.Fatalf("fallocate: %s", st)
 	}
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(4097, align4K(4097), 1)
 
@@ -2034,7 +2040,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Truncate(Background, fileInode, 0, 0, nil, false); st != 0 {
 		t.Fatalf("truncate: %s", st)
 	}
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(0, align4K(0), 1)
 
@@ -2042,7 +2048,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Write(Background, fileInode, 0, 0, Slice{Id: 1, Size: 1 << 20, Off: 0, Len: 4097}, time.Now()); st != 0 {
 		t.Fatalf("write: %s", st)
 	}
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(4097, align4K(4097), 1)
 
@@ -2050,7 +2056,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Link(Background, fileInode, testInode, "file2", nil); st != 0 {
 		t.Fatalf("link: %s", st)
 	}
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(2*4097, 2*align4K(4097), 2)
 
@@ -2059,7 +2065,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Mkdir(Background, testInode, "sub", 0640, 022, 0, &subInode, nil); st != 0 {
 		t.Fatalf("mkdir: %s", st)
 	}
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(2*4097, align4K(0)+2*align4K(4097), 3)
 
@@ -2067,7 +2073,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Rename(Background, testInode, "file2", subInode, "file", 0, nil, nil); st != 0 {
 		t.Fatalf("rename: %s", st)
 	}
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(4097, align4K(0)+align4K(4097), 2)
 	stat, st = m.GetDirStat(Background, subInode)
@@ -2080,7 +2086,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Unlink(Background, subInode, "file"); st != 0 {
 		t.Fatalf("unlink: %s", st)
 	}
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(0, align4K(0), 1)
 	stat, st = m.GetDirStat(Background, subInode)
@@ -2090,7 +2096,7 @@ func testDirStat(t *testing.T, m Meta) {
 	if st := m.Rmdir(Background, testInode, "sub"); st != 0 {
 		t.Fatalf("rmdir: %s", st)
 	}
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	stat, st = m.GetDirStat(Background, testInode)
 	checkResult(0, 0, 0)
 }

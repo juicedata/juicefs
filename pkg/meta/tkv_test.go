@@ -28,7 +28,7 @@ import (
 
 func TestMemKVClient(t *testing.T) {
 	_ = os.Remove(settingPath)
-	m, err := newKVMeta("memkv", "jfs-unit-test", DefaultConf())
+	m, err := newKVMeta("memkv", "jfs-unit-test", testConfig())
 	if err != nil || m.Name() != "memkv" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -36,7 +36,7 @@ func TestMemKVClient(t *testing.T) {
 }
 
 func TestTiKVClient(t *testing.T) { //skip mutate
-	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs-unit-test", DefaultConf())
+	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs-unit-test", testConfig())
 	if err != nil || m.Name() != "tikv" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -44,7 +44,7 @@ func TestTiKVClient(t *testing.T) { //skip mutate
 }
 
 func TestBadgerClient(t *testing.T) {
-	m, err := newKVMeta("badger", "badger", DefaultConf())
+	m, err := newKVMeta("badger", "badger", testConfig())
 	if err != nil || m.Name() != "badger" {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -55,7 +55,7 @@ func TestEtcdClient(t *testing.T) { //skip mutate
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
-	m, err := newKVMeta("etcd", os.Getenv("ETCD_ADDR"), DefaultConf())
+	m, err := newKVMeta("etcd", os.Getenv("ETCD_ADDR"), testConfig())
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}

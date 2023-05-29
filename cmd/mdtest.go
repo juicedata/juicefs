@@ -175,10 +175,9 @@ func cmdMdtest() *cli.Command {
 		},
 	}
 	compoundFlags := [][]cli.Flag{
-		clientFlags(),
-		cacheFlags(0),
-		shareInfoFlags(),
 		selfFlags,
+		clientFlags(0),
+		shareInfoFlags(),
 	}
 
 	return &cli.Command{

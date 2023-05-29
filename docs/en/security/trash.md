@@ -79,6 +79,8 @@ When JuiceFS Client is started by a non-root user, add the `-o allow_root` optio
 
 Recover/Purge files in trash are only available for root users, simply use `mv` command to recover a file, or use `rm` to permanently delete a file. Normal users, however, can only recover a file by reading its content and write it to a new file.
 
+With JuiceFS 1.1, you can rebuild the tree structure for all files under given hour in trash, then restore a single directory using `mv` or all of them by using `--put-back`, which move all the files and directories to the place they were deleted (will not overwrite new created files).
+
 JuiceFS Client is in charge of periodically checking trash and expire old entries (run every hour by default), so you need at least one active client mounted (without [`--no-bgjob`](../reference/command_reference.md#mount)). If you wish to quickly free up object storage, you can manually delete files in the `.trash` directory using the `rm` command.
 
 Furthermore, garbage blocks created by file overwrites are not visible to users, if you must force delete them, you'll have to temporarily disable trash (setting [`--trash-days 0`](#configure)), and then manually run garbage collection using [`juicefs gc`](../reference/command_reference.md#gc). Remember to re-enable trash after done.

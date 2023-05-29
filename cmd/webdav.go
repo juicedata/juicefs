@@ -51,9 +51,8 @@ func cmdWebDav() *cli.Command {
 		},
 	}
 	compoundFlags := [][]cli.Flag{
-		clientFlags(),
 		selfFlags,
-		cacheFlags(0),
+		clientFlags(0),
 		shareInfoFlags(),
 	}
 

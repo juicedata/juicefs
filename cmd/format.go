@@ -154,14 +154,6 @@ Details: https://juicefs.com/docs/community/quick_start_guide`,
 				Usage: "encrypt algorithm (aes256gcm-rsa, chacha20-rsa)",
 				Value: object.AES256GCM_RSA,
 			},
-			&cli.Int64Flag{
-				Name:  "upload-limit",
-				Usage: "default bandwidth limit of the volume for upload in Mbps",
-			},
-			&cli.Int64Flag{
-				Name:  "download-limit",
-				Usage: "default bandwidth limit of the volume for download in Mbps",
-			},
 			&cli.IntFlag{
 				Name:  "trash-days",
 				Value: 1,
@@ -386,10 +378,6 @@ func format(c *cli.Context) error {
 					logger.Warnf("decrypt secrets: %s", err)
 				}
 				format.SessionToken = c.String(flag)
-			case "upload-limit":
-				format.UploadLimit = c.Int64("upload-limit")
-			case "download-limit":
-				format.DownloadLimit = c.Int64("download-limit")
 			case "trash-days":
 				format.TrashDays = c.Int(flag)
 			case "block-size":
@@ -409,26 +397,24 @@ func format(c *cli.Context) error {
 	} else if strings.HasPrefix(err.Error(), "database is not formatted") {
 		create = true
 		format = &meta.Format{
-			Name:          name,
-			UUID:          uuid.New().String(),
-			Storage:       c.String("storage"),
-			StorageClass:  c.String("storage-class"),
-			Bucket:        c.String("bucket"),
-			AccessKey:     c.String("access-key"),
-			SecretKey:     c.String("secret-key"),
-			SessionToken:  c.String("session-token"),
-			EncryptKey:    loadEncrypt(c.String("encrypt-rsa-key")),
-			EncryptAlgo:   c.String("encrypt-algo"),
-			Shards:        c.Int("shards"),
-			HashPrefix:    c.Bool("hash-prefix"),
-			Capacity:      c.Uint64("capacity") << 30,
-			Inodes:        c.Uint64("inodes"),
-			BlockSize:     fixObjectSize(c.Int("block-size")),
-			Compression:   c.String("compress"),
-			UploadLimit:   c.Int64("upload-limit"),
-			DownloadLimit: c.Int64("download-limit"),
-			TrashDays:     c.Int("trash-days"),
-			MetaVersion:   meta.MaxVersion,
+			Name:         name,
+			UUID:         uuid.New().String(),
+			Storage:      c.String("storage"),
+			StorageClass: c.String("storage-class"),
+			Bucket:       c.String("bucket"),
+			AccessKey:    c.String("access-key"),
+			SecretKey:    c.String("secret-key"),
+			SessionToken: c.String("session-token"),
+			EncryptKey:   loadEncrypt(c.String("encrypt-rsa-key")),
+			EncryptAlgo:  c.String("encrypt-algo"),
+			Shards:       c.Int("shards"),
+			HashPrefix:   c.Bool("hash-prefix"),
+			Capacity:     c.Uint64("capacity") << 30,
+			Inodes:       c.Uint64("inodes"),
+			BlockSize:    fixObjectSize(c.Int("block-size")),
+			Compression:  c.String("compress"),
+			TrashDays:    c.Int("trash-days"),
+			MetaVersion:  meta.MaxVersion,
 		}
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
