@@ -325,12 +325,12 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		confParam := "dfs.namenode.rpc-address." + nameservice
 		for key, value := range conf {
 			if key == confParam ||
-				strings.HasPrefix(key, confParam + "." ) {
+				strings.HasPrefix(key, confParam+".") {
 				nns = append(nns, value)
 			}
 		}
-		if len(nns) <= 0 {
-			return nil, fmt.Errorf("invalid nameservice: %s", nameservice)
+		if len(nns) == 0 {
+			nns = append(nns, nameservice)
 		}
 		// e.g. nn1.example.com:8020,nn2.example.com:8020, nn1.example.com:8020,nn2.example.com:8020/user/juicefs
 		rpcAddr = strings.Join(nns, ",")
