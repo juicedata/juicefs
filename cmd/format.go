@@ -191,10 +191,6 @@ func formatManagementFlags() []cli.Flag {
 			Value: 1,
 			Usage: "number of days after which removed files will be permanently deleted",
 		},
-		&cli.BoolFlag{
-			Name:  "dir-stats",
-			Usage: "enable dir stats, which is necessary for fast summary and dir quota",
-		},
 	})
 }
 

@@ -81,6 +81,10 @@ func configManagementFlags() []cli.Flag {
 			Name:  "download-limit",
 			Usage: "default bandwidth limit of the volume for download in Mbps",
 		},
+		&cli.BoolFlag{
+			Name:  "dir-stats",
+			Usage: "enable dir stats, which is necessary for fast summary and dir quota",
+		},
 	})
 }
 
