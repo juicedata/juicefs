@@ -174,12 +174,6 @@ func cmdMdtest() *cli.Command {
 			Usage: "path for JuiceFS access log",
 		},
 	}
-	compoundFlags := [][]cli.Flag{
-		selfFlags,
-		clientFlags(0),
-		shareInfoFlags(),
-	}
-
 	return &cli.Command{
 		Name:      "mdtest",
 		Action:    mdtest,
@@ -190,7 +184,7 @@ func cmdMdtest() *cli.Command {
 		Description: `
 Examples:
 $ juicefs mdtest redis://localhost /test1`,
-		Flags: expandFlags(compoundFlags),
+		Flags: expandFlags(selfFlags, clientFlags(0), shareInfoFlags()),
 	}
 }
 

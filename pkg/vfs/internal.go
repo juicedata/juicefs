@@ -340,8 +340,8 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		}()
 		writeProgress(&count, nil, out, done)
 		if st == 0 && v.InvalidateEntry != nil {
-			if st = v.InvalidateEntry(inode, name); st != 0 {
-				logger.Errorf("Invalidate entry %d/%s: %s", inode, name, st)
+			if st := v.InvalidateEntry(inode, name); st != 0 {
+				logger.Warnf("Invalidate entry %d/%s: %s", inode, name, st)
 			}
 		}
 		_, _ = out.Write([]byte{uint8(st)})
@@ -486,6 +486,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		tree := meta.TreeSummary{
 			Inode: inode,
 			Path:  ".",
+			Type:  meta.TypeDirectory,
 		}
 
 		var depth uint8 = 3
