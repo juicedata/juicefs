@@ -2068,9 +2068,6 @@ func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino) syscall.Errno 
 }
 
 func (m *baseMeta) GetFormat() Format {
-	if m.fmt == nil {
-		return Format{}
-	}
 	return *m.fmt
 }
 
