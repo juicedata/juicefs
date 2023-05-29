@@ -7,7 +7,7 @@ description: 本文介绍 JuiceFS 的技术架构以及由此带来的技术优�
 
 JuiceFS 文件系统由三个部分组成：
 
-![](../images/juicefs-arch-new.png)
+![](../images/juicefs-arch.svg)
 
 **JuiceFS 客户端（Client）**：所有文件读写，以及碎片合并、回收站文件过期删除等后台任务，均在客户端中发生。客户端需要同时与对象存储和元数据引擎打交道。客户端支持多种接入方式：
 
@@ -42,7 +42,7 @@ JuiceFS 采用多引擎设计，目前已支持 Redis、TiKV、MySQL/MariaDB、P
 
 因此，你会发现在对象存储平台的文件浏览器中找不到存入 JuiceFS 的源文件，存储桶中只有一个 `chunks` 目录和一堆数字编号的目录和文件，不必惊慌，这正是经过 JuiceFS 拆分存储的数据块。与此同时，文件与 Chunk、Slice、Block 的对应关系等元数据信息存储在元数据引擎中。正是这样的分离设计，让 JuiceFS 文件系统得以高性能运作。
 
-![](../images/how-juicefs-stores-files-new.png)
+![](../images/how-juicefs-stores-files.svg)
 
 JuiceFS 的存储设计，还有着以下技术特点：
 
