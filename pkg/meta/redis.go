@@ -2140,7 +2140,7 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var newSpace int64
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		newSpace = 0
-		a, err := m.rdb.Get(ctx, m.inodeKey(inode)).Bytes()
+		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err == redis.Nil {
 			return nil
 		}
@@ -2149,7 +2149,7 @@ func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 		}
 		m.parseAttr(a, &attr)
 		newSpace = -align4K(attr.Length)
-		_, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(time.Now().Unix()), Member: m.toDelete(inode, attr.Length)})
 			pipe.Del(ctx, m.inodeKey(inode))
 			pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
