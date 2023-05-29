@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/dustin/go-humanize"
@@ -188,8 +189,13 @@ func renderTree(results *[][]string, tree *meta.TreeSummary, csv bool) {
 		size = humanize.IBytes(uint64(tree.Size))
 	}
 
+	path := tree.Path
+	if tree.Type == meta.TypeDirectory && !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
+
 	result := []string{
-		tree.Path,
+		path,
 		size,
 		strconv.FormatUint(tree.Dirs, 10),
 		strconv.FormatUint(tree.Files, 10),

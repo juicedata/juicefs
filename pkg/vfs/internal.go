@@ -486,6 +486,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		tree := meta.TreeSummary{
 			Inode: inode,
 			Path:  ".",
+			Type:  meta.TypeDirectory,
 		}
 
 		var depth uint8 = 3
