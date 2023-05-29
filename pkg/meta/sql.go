@@ -3875,7 +3875,7 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				}
 			}
 		}
-		m.parseAttr(&n, attr)
+		m.parseNode(attr, &n)
 		if top && n.Type == TypeDirectory {
 			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: time.Now().Unix()})
 		} else {
