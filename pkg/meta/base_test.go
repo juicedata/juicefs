@@ -45,6 +45,10 @@ func testConfig() *Config {
 	return conf
 }
 
+func testFormat() *Format {
+	return &Format{Name: "test", DirStats: true, TrashDays: 1}
+}
+
 func TestRedisClient(t *testing.T) {
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", testConfig())
 	if err != nil || m.Name() != "redis" {
@@ -153,7 +157,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("getattr root: %s", st)
 	}
 
-	if err := m.Init(&Format{Name: "test", DirStats: true}, true); err != nil {
+	if err := m.Init(testFormat(), true); err != nil {
 		t.Fatalf("initialize failed: %s", err)
 	}
 	if err := m.Init(&Format{Name: "test2"}, false); err == nil { // not allowed
@@ -1065,9 +1069,16 @@ type compactor interface {
 
 func testCompaction(t *testing.T, m Meta, trash bool) {
 	if trash {
-		_ = m.Init(&Format{Name: "test", DirStats: true, TrashDays: 1}, false)
+		_ = m.Init(testFormat(), false)
 	} else {
-		_ = m.Init(&Format{Name: "test", DirStats: true}, false)
+		format := testFormat()
+		format.TrashDays = 0
+		_ = m.Init(format, false)
+		defer func() {
+			if err := m.Init(testFormat(), false); err != nil {
+				t.Errorf("init: %v", err)
+			}
+		}()
 	}
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
@@ -1391,7 +1402,7 @@ func testCloseSession(t *testing.T, m Meta) {
 }
 
 func testTrash(t *testing.T, m Meta) {
-	if err := m.Init(&Format{Name: "test", DirStats: true, TrashDays: 1}, false); err != nil {
+	if err := m.Init(testFormat(), false); err != nil {
 		t.Fatalf("init: %s", err)
 	}
 	ctx := Background
