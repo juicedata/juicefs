@@ -264,7 +264,7 @@ func (m *redisMeta) Name() string {
 	return "redis"
 }
 
-func (m *redisMeta) Init(format *Format, force bool) error {
+func (m *redisMeta) doInit(format *Format, force bool) error {
 	ctx := Background
 	body, err := m.rdb.Get(ctx, m.setting()).Bytes()
 	if err != nil && err != redis.Nil {
@@ -276,8 +276,15 @@ func (m *redisMeta) Init(format *Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("existing format is broken: %s", err)
 		}
+		if !old.DirStats && format.DirStats {
+			// remove dir stats as they are outdated
+			err := m.rdb.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey()).Err()
+			if err != nil {
+				return errors.Wrap(err, "remove dir stats")
+			}
+		}
 		if err = format.update(&old, force); err != nil {
-			return err
+			return errors.Wrap(err, "update format")
 		}
 	}
 

@@ -148,6 +148,7 @@ func TestJFS(t *testing.T) {
 		Name:      "test",
 		BlockSize: 4096,
 		Capacity:  1 << 30,
+		DirStats:  true,
 	}
 	_ = m.Init(format, true)
 	var conf = vfs.Config{

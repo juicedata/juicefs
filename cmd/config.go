@@ -25,6 +25,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
 
@@ -80,6 +81,10 @@ func configManagementFlags() []cli.Flag {
 			Name:  "download-limit",
 			Usage: "default bandwidth limit of the volume for download in Mbps",
 		},
+		&cli.BoolFlag{
+			Name:  "dir-stats",
+			Usage: "enable dir stats, which is necessary for fast summary and dir quota",
+		},
 	})
 }
 
@@ -130,6 +135,7 @@ func config(ctx *cli.Context) error {
 		return nil
 	}
 
+	originDirStats := format.DirStats
 	var quota, storage, trash, clientVer bool
 	var msg strings.Builder
 	encrypted := format.KeyEncrypted
@@ -211,6 +217,11 @@ func config(ctx *cli.Context) error {
 				format.TrashDays = new
 				trash = true
 			}
+		case "dir-stats":
+			if new := ctx.Bool(flag); new != format.DirStats {
+				msg.WriteString(fmt.Sprintf("%10s: %t -> %t\n", flag, format.DirStats, new))
+				format.DirStats = new
+			}
 		case "min-client-version":
 			if new := ctx.String(flag); new != format.MinClientVersion {
 				if version.Parse(new) == nil {
@@ -264,6 +275,20 @@ func config(ctx *cli.Context) error {
 			warn("The current trash will be emptied and future removed files will purged immediately.")
 			if !yes && !userConfirmed() {
 				return fmt.Errorf("Aborted.")
+			}
+		}
+		if originDirStats && !format.DirStats {
+			qs := make(map[string]*meta.Quota)
+			err := m.HandleQuota(meta.Background, meta.QuotaList, "", qs, false, false)
+			if err != nil {
+				return errors.Wrap(err, "list quotas")
+			}
+			if len(qs) != 0 {
+				paths := make([]string, 0, len(qs))
+				for path := range qs {
+					paths = append(paths, path)
+				}
+				return fmt.Errorf("cannot disable dir stats when there are still %d dir quotas: %v", len(qs), paths)
 			}
 		}
 		if clientVer && format.CheckVersion() != nil {

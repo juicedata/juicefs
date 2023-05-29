@@ -399,7 +399,7 @@ func (m *kvMeta) scanValues(prefix []byte, limit int, filter func(k, v []byte) b
 	return values, err
 }
 
-func (m *kvMeta) Init(format *Format, force bool) error {
+func (m *kvMeta) doInit(format *Format, force bool) error {
 	body, err := m.get(m.fmtKey("setting"))
 	if err != nil {
 		return err
@@ -411,8 +411,29 @@ func (m *kvMeta) Init(format *Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("json: %s", err)
 		}
+		if !old.DirStats && format.DirStats {
+			// remove dir stats as they are outdated
+			var keys [][]byte
+			prefix := m.fmtKey("U")
+			err := m.client.txn(func(tx *kvTxn) error {
+				tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
+					if len(k) == 9 {
+						keys = append(keys, k)
+					}
+					return true
+				})
+				return nil
+			}, 0)
+			if err != nil {
+				return errors.Wrap(err, "scan dir stats")
+			}
+			err = m.deleteKeys(keys...)
+			if err != nil {
+				return errors.Wrap(err, "delete dir stats")
+			}
+		}
 		if err = format.update(&old, force); err != nil {
-			return err
+			return errors.Wrap(err, "update format")
 		}
 	}
 

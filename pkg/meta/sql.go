@@ -280,7 +280,7 @@ func (m *dbMeta) syncTable(beans ...interface{}) error {
 	return err
 }
 
-func (m *dbMeta) Init(format *Format, force bool) error {
+func (m *dbMeta) doInit(format *Format, force bool) error {
 	if err := m.syncTable(new(setting), new(counter)); err != nil {
 		return fmt.Errorf("create table setting, counter: %s", err)
 	}
@@ -322,8 +322,15 @@ func (m *dbMeta) Init(format *Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("json: %s", err)
 		}
+		if !old.DirStats && format.DirStats {
+			// remove dir stats as they are outdated
+			_, err = m.db.Where("TRUE").Delete(new(dirStats))
+			if err != nil {
+				return errors.Wrap(err, "drop table dirStats")
+			}
+		}
 		if err = format.update(&old, force); err != nil {
-			return err
+			return errors.Wrap(err, "update format")
 		}
 	}
 
