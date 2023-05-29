@@ -56,7 +56,16 @@ func (h *hdfsclient) path(key string) string {
 	return h.basePath + key
 }
 
-func (h *hdfsclient) toObj(key string, info os.FileInfo) *file {
+func (h *hdfsclient) Head(key string) (Object, error) {
+	info, err := h.c.Stat(h.path(key))
+	if err != nil {
+		return nil, err
+	}
+
+	return h.toFile(key, info), nil
+}
+
+func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
 	hinfo := info.(*hdfs.FileInfo)
 	f := &file{
 		obj{
@@ -84,20 +93,8 @@ func (h *hdfsclient) toObj(key string, info os.FileInfo) *file {
 	}
 	if info.IsDir() {
 		f.size = 0
-		if !strings.HasSuffix(f.key, "/") {
-			f.key += "/"
-		}
 	}
 	return f
-}
-
-func (h *hdfsclient) Head(key string) (Object, error) {
-	info, err := h.c.Stat(h.path(key))
-	if err != nil {
-		return nil, err
-	}
-
-	return h.toObj(key, info), nil
 }
 
 func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -179,15 +176,15 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Obje
 	if delimiter != "/" {
 		return nil, notSupported
 	}
-	root := h.path(prefix)
-	if !strings.HasSuffix(root, "/") {
-		root = filepath.Dir(root)
+	dir := h.path(prefix)
+	if !strings.HasSuffix(dir, "/") {
+		dir = filepath.Dir(dir)
 	}
 
-	file, err := h.c.Open(root)
-	var infos []os.FileInfo
+	file, err := h.c.Open(dir)
+	var entries []os.FileInfo
 	if file != nil {
-		infos, err = file.Readdir(0)
+		entries, err = file.Readdir(0)
 	}
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -197,26 +194,25 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Obje
 	}
 
 	// make sure they are ordered in full path
-	infoMap := make(map[string]fs.FileInfo)
-	names := make([]string, len(infos))
-	for i, info := range infos {
+	entryMap := make(map[string]fs.FileInfo)
+	names := make([]string, len(entries))
+	for i, info := range entries {
 		if info.IsDir() {
 			names[i] = info.Name() + "/"
 		} else {
 			names[i] = info.Name()
 		}
-		infoMap[names[i]] = info
+		entryMap[names[i]] = info
 	}
 	sort.Strings(names)
 
 	var objs []Object
 	for _, name := range names {
-		key := filepath.Join(root, name)[len(h.basePath):]
+		key := (dir + dirSuffix + name)[len(h.basePath):]
 		if !strings.HasPrefix(key, prefix) || key <= marker {
 			continue
 		}
-		info := infoMap[name]
-		f := h.toObj(key, info)
+		f := h.toFile(key, entryMap[name])
 		objs = append(objs, f)
 		if len(objs) >= int(limit) {
 			break
@@ -302,12 +298,12 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 				}
 				return nil
 			}
-			f := h.toObj(key, info)
 			if info.IsDir() {
 				if path != root || !strings.HasSuffix(root, "/") {
-					f.key = key + "/"
+					key += "/"
 				}
 			}
+			f := h.toFile(key, info)
 			listed <- f
 			return nil
 		})

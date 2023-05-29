@@ -420,13 +420,12 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		logger.Errorf("readdir %s: %s", dir, err)
 		return nil, err
 	}
 
-	obs := f.sortByName(c.sftpClient, dir, infos)
+	entries := f.sortByName(c.sftpClient, dir, infos)
 	var objs []Object
-	for _, o := range obs {
+	for _, o := range entries {
 		key := o.Key()
 		if !strings.HasPrefix(key, prefix) || key <= marker {
 			continue

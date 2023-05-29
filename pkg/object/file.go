@@ -75,9 +75,17 @@ func (d *filestore) path(key string) string {
 	return d.root + key
 }
 
-func (d *filestore) toFile(key string, fi fs.FileInfo) *file {
+func (d *filestore) Head(key string) (Object, error) {
+	p := d.path(key)
+	fi, err := os.Stat(p)
+	if err != nil {
+		return nil, err
+	}
+	return d.toFile(key, fi, false), nil
+}
+
+func (d *filestore) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 	size := fi.Size()
-	var isSymlink bool
 	if fi.IsDir() {
 		size = 0
 	}
@@ -95,15 +103,6 @@ func (d *filestore) toFile(key string, fi fs.FileInfo) *file {
 		fi.Mode(),
 		isSymlink,
 	}
-}
-
-func (d *filestore) Head(key string) (Object, error) {
-	p := d.path(key)
-	fi, err := os.Stat(p)
-	if err != nil {
-		return nil, err
-	}
-	return d.toFile(key, fi), nil
 }
 
 type SectionReaderCloser struct {
@@ -325,17 +324,20 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	if delimiter != "/" {
 		return nil, notSupported
 	}
-	var root string = d.root + prefix
-	if !strings.HasSuffix(root, dirSuffix) {
-		root = path.Dir(root)
+	var dir string = d.root + prefix
+	if !strings.HasSuffix(dir, dirSuffix) {
+		dir = path.Dir(dir)
 	}
-	entries, err := readDirSorted(root)
+	entries, err := readDirSorted(dir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	var objs []Object
 	for _, e := range entries {
-		p := filepath.Join(root, e.Name())
+		p := filepath.Join(dir, e.Name())
 		if e.IsDir() {
 			p = filepath.ToSlash(p + "/")
 		}
@@ -348,7 +350,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 			logger.Warnf("stat %s: %s", p, err)
 			continue
 		}
-		f := d.toFile(key, info)
+		f := d.toFile(key, info, e.isSymlink)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break
@@ -399,7 +401,7 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 				}
 				return nil
 			}
-			f := d.toFile(key, info)
+			f := d.toFile(key, info, isSymlink)
 			listed <- f
 			return nil
 		})
