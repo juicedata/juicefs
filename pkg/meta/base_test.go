@@ -700,7 +700,6 @@ func testMetaClient(t *testing.T, m Meta) {
 }
 
 func testStickyBit(t *testing.T, m Meta) {
-	_ = m.Init(&Format{Name: "test", DirStats: true}, false)
 	ctx := Background
 	var sticky, normal, inode Ino
 	var attr = &Attr{}
@@ -767,7 +766,6 @@ func testStickyBit(t *testing.T, m Meta) {
 }
 
 func testListLocks(t *testing.T, m Meta) {
-	_ = m.Init(&Format{Name: "test", DirStats: true}, false)
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -842,7 +840,6 @@ func testListLocks(t *testing.T, m Meta) {
 }
 
 func testLocks(t *testing.T, m Meta) {
-	_ = m.Init(&Format{Name: "test", DirStats: true}, false)
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -979,7 +976,6 @@ func testLocks(t *testing.T, m Meta) {
 }
 
 func testRemove(t *testing.T, m Meta) {
-	_ = m.Init(&Format{Name: "test", DirStats: true}, false)
 	ctx := Background
 	var inode, parent Ino
 	var attr = &Attr{}
@@ -1021,7 +1017,6 @@ func testRemove(t *testing.T, m Meta) {
 }
 
 func testCaseIncensi(t *testing.T, m Meta) {
-	_ = m.Init(&Format{Name: "test", DirStats: true}, false)
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -1186,7 +1181,6 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 	m.OnMsg(CompactChunk, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(&Format{Name: "test", DirStats: true}, false)
 
 	ctx := Background
 	var inode Ino
@@ -1289,7 +1283,6 @@ func testCopyFileRange(t *testing.T, m Meta) {
 	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(&Format{Name: "test", DirStats: true}, false)
 
 	ctx := Background
 	var iin, iout Ino
@@ -1339,7 +1332,6 @@ func testCopyFileRange(t *testing.T, m Meta) {
 }
 
 func testCloseSession(t *testing.T, m Meta) {
-	_ = m.Init(&Format{Name: "test", DirStats: true}, false)
 	if err := m.NewSession(); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
@@ -1495,9 +1487,6 @@ func testTrash(t *testing.T, m Meta) {
 }
 
 func testParents(t *testing.T, m Meta) {
-	if err := m.Init(&Format{Name: "test", DirStats: true}, false); err != nil {
-		t.Fatalf("init: %s", err)
-	}
 	ctx := Background
 	var inode, parent Ino
 	var attr = &Attr{}
@@ -1999,12 +1988,6 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 }
 
 func testDirStat(t *testing.T, m Meta) {
-	format := m.GetFormat()
-	format.DirStats = true
-	if err := m.Init(&format, false); err != nil {
-		t.Fatalf("Init: %s", err)
-	}
-
 	testDir := "testDirStat"
 	var testInode Ino
 	// test empty dir
@@ -2453,11 +2436,6 @@ func testQuota(t *testing.T, m Meta) {
 		t.Fatalf("New session: %s", err)
 	}
 	defer m.CloseSession()
-	format := m.GetFormat()
-	format.DirStats = true
-	if err := m.Init(&format, false); err != nil {
-		t.Fatalf("Init: %s", err)
-	}
 	ctx := Background
 	var inode, parent Ino
 	var attr Attr
