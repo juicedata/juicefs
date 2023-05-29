@@ -1887,13 +1887,17 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	err := m.txn(func(tx *kvTxn) error {
 		newLength, newSpace = 0, 0
 		attr = Attr{}
-		a := tx.get(m.inodeKey(inode))
-		if a == nil {
+		rs := tx.gets(m.inodeKey(inode), m.chunkKey(inode, indx))
+		if rs[0] == nil {
 			return syscall.ENOENT
 		}
-		m.parseAttr(a, &attr)
+		m.parseAttr(rs[0], &attr)
 		if attr.Typ != TypeFile {
 			return syscall.EPERM
+		}
+		if len(rs[1])%sliceBytes != 0 {
+			logger.Errorf("Invalid chunk value for inode %d indx %d: %d", inode, indx, len(rs[1]))
+			return syscall.EIO
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
 		if newleng > attr.Length {
@@ -1909,8 +1913,16 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		attr.Mtimensec = uint32(mtime.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
-		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len))
+		val := marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len)
+		for i := 0; i < len(rs[1]); i += sliceBytes {
+			if bytes.Equal(rs[1][i:i+sliceBytes], val) {
+				logger.Warnf("Write same slice for inode %d indx %d sliceId %d", inode, indx, slice.Id)
+				return nil
+			}
+		}
+		val = append(rs[1], val...)
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
+		tx.set(m.chunkKey(inode, indx), val)
 		needCompact = (len(val)/sliceBytes)%100 == 99
 		return nil
 	}, inode)
