@@ -314,7 +314,6 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("Problem loading configuration: %s", err)
 	}
 
-	//rpcAddr := addr
 	// addr can be hdfs://nameservice e.g. hdfs://example, hdfs://example/user/juicefs
 	// convert the nameservice as a comma separated list of host:port by referencing hadoop conf
 	rpcAddr, basePath := parseAddr(addr, conf)
