@@ -48,7 +48,7 @@ type hdfsclient struct {
 }
 
 func (h *hdfsclient) String() string {
-	return fmt.Sprintf("hdfs://%s/", h.addr)
+	return fmt.Sprintf("hdfs://%s%s", h.addr, h.basePath)
 }
 
 func (h *hdfsclient) path(key string) string {
@@ -358,7 +358,7 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		}
 	}
 
-	return &hdfsclient{addr: strings.TrimSuffix(strings.Join(rpcAddr, ",")+basePath, "/"), c: c, dfsReplication: replication, basePath: basePath}, nil
+	return &hdfsclient{addr: strings.Join(rpcAddr, ","), c: c, dfsReplication: replication, basePath: basePath}, nil
 }
 
 // addr can be hdfs://nameservice e.g. hdfs://example, hdfs://example/user/juicefs
