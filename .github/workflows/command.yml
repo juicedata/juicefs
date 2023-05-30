@@ -41,11 +41,11 @@ jobs:
 
       - name: Test Quota with sqlite3
         run: |
-          META=sqlite3 sudo .github/scripts/command/quota.sh 
+          sudo META=sqlite3 .github/scripts/command/quota.sh 
 
       - name: Test Quota with redis
         run: |
-          META=redis sudo .github/scripts/command/quota.sh 
+          sudo META=redis .github/scripts/command/quota.sh 
 
       - name: Test Load & Dump
         run: |
@@ -70,7 +70,7 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
       - name: Setup upterm session
-        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
-        if: failure()
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
