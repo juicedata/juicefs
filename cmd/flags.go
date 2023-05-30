@@ -67,7 +67,11 @@ func addCategory(f cli.Flag, cat string) {
 		ff.Category = cat
 	case *cli.Int64Flag:
 		ff.Category = cat
+	case *cli.Uint64Flag:
+		ff.Category = cat
 	case *cli.Float64Flag:
+		ff.Category = cat
+	case *cli.StringSliceFlag:
 		ff.Category = cat
 	default:
 		panic(f)
@@ -82,7 +86,7 @@ func addCategories(cat string, flags []cli.Flag) []cli.Flag {
 }
 
 func storageFlags() []cli.Flag {
-	return addCategories("DATA", []cli.Flag{
+	return addCategories("DATA STORAGE", []cli.Flag{
 		&cli.StringFlag{
 			Name:  "storage",
 			Usage: "customized storage type (e.g. s3, gcs, oss, cos) to access object store",
@@ -249,12 +253,12 @@ func metaFlags() []cli.Flag {
 }
 
 func clientFlags(defaultEntryCache float64) []cli.Flag {
-	return expandFlags([][]cli.Flag{
+	return expandFlags(
 		metaFlags(),
 		metaCacheFlags(defaultEntryCache),
 		storageFlags(),
 		dataCacheFlags(),
-	})
+	)
 }
 
 func shareInfoFlags() []cli.Flag {
@@ -306,7 +310,7 @@ func metaCacheFlags(defaultEntryCache float64) []cli.Flag {
 	})
 }
 
-func expandFlags(compoundFlags [][]cli.Flag) []cli.Flag {
+func expandFlags(compoundFlags ...[]cli.Flag) []cli.Flag {
 	var flags []cli.Flag
 	for _, flag := range compoundFlags {
 		flags = append(flags, flag...)

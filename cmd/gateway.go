@@ -65,12 +65,6 @@ func cmdGateway() *cli.Command {
 		},
 	}
 
-	compoundFlags := [][]cli.Flag{
-		selfFlags,
-		clientFlags(0),
-		shareInfoFlags(),
-	}
-
 	return &cli.Command{
 		Name:      "gateway",
 		Action:    gateway,
@@ -88,7 +82,7 @@ $ export MINIO_ROOT_PASSWORD=12345678
 $ juicefs gateway redis://localhost localhost:9000
 
 Details: https://juicefs.com/docs/community/s3_gateway`,
-		Flags: expandFlags(compoundFlags),
+		Flags: expandFlags(selfFlags, clientFlags(0), shareInfoFlags()),
 	}
 }
 

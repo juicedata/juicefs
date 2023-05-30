@@ -51,6 +51,7 @@ func format(url string) {
 		Storage:   "file",
 		Bucket:    os.TempDir() + "/",
 		BlockSize: 4096,
+		DirStats:  true,
 	}
 	err := m.Init(format, true)
 	if err != nil {

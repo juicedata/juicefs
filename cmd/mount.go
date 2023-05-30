@@ -51,11 +51,6 @@ import (
 )
 
 func cmdMount() *cli.Command {
-	compoundFlags := [][]cli.Flag{
-		clientFlags(1.0),
-		mount_flags(),
-		shareInfoFlags(),
-	}
 	return &cli.Command{
 		Name:      "mount",
 		Action:    mount,
@@ -85,7 +80,7 @@ $ juicefs mount redis://localhost /mnt/jfs -d --read-only
 
 # Disable metadata backup
 $ juicefs mount redis://localhost /mnt/jfs --backup-meta 0`,
-		Flags: expandFlags(compoundFlags),
+		Flags: expandFlags(mount_flags(), clientFlags(1.0), shareInfoFlags()),
 	}
 }
 
