@@ -895,7 +895,14 @@ juicefs format \
 
 JuiceFS 会尝试基于 `$HADOOP_CONF_DIR` 或 `$HADOOP_HOME` 为 HDFS 客户端加载配置。如果 `--bucket` 选项留空，将使用在 Hadoop 配置中找到的默认 HDFS。
 
-对于 HA 群集，可以像下面这样一起指定 NameNodes 的地址：`--bucket=namenode1:port,namenode2:port`。
+bucket 参数支持格式如下：
+
+- `[hdfs://]namenode:port[/path]`
+
+对于 HA 集群，bucket 参数可以：
+
+- `[hdfs://]namenode1:port,namenode2:port[/path]`
+- `[hdfs://]nameservice[/path]`
 
 ## Apache Ozone
 

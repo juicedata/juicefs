@@ -52,6 +52,7 @@ func Test_exposeMetrics(t *testing.T) {
 				Name:      "test",
 				BlockSize: 4096,
 				Capacity:  1 << 30,
+				DirStats:  true,
 			}
 			_ = client.Init(format, true)
 			var appCtx *cli.Context

@@ -399,7 +399,7 @@ func (m *kvMeta) scanValues(prefix []byte, limit int, filter func(k, v []byte) b
 	return values, err
 }
 
-func (m *kvMeta) Init(format *Format, force bool) error {
+func (m *kvMeta) doInit(format *Format, force bool) error {
 	body, err := m.get(m.fmtKey("setting"))
 	if err != nil {
 		return err
@@ -411,8 +411,29 @@ func (m *kvMeta) Init(format *Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("json: %s", err)
 		}
+		if !old.DirStats && format.DirStats {
+			// remove dir stats as they are outdated
+			var keys [][]byte
+			prefix := m.fmtKey("U")
+			err := m.client.txn(func(tx *kvTxn) error {
+				tx.scan(prefix, nextKey(prefix), true, func(k, v []byte) bool {
+					if len(k) == 9 {
+						keys = append(keys, k)
+					}
+					return true
+				})
+				return nil
+			}, 0)
+			if err != nil {
+				return errors.Wrap(err, "scan dir stats")
+			}
+			err = m.deleteKeys(keys...)
+			if err != nil {
+				return errors.Wrap(err, "delete dir stats")
+			}
+		}
 		if err = format.update(&old, force); err != nil {
-			return err
+			return errors.Wrap(err, "update format")
 		}
 	}
 
@@ -1233,7 +1254,11 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		if _type == TypeDirectory {
 			return syscall.EPERM
 		}
-		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
+		keys := [][]byte{m.inodeKey(parent), m.inodeKey(inode)}
+		if trash > 0 {
+			keys = append(keys, m.entryKey(trash, m.trashEntry(parent, inode, name)))
+		}
+		rs := tx.gets(keys...)
 		if rs[0] == nil {
 			return syscall.ENOENT
 		}
@@ -1257,6 +1282,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			}
 			if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
+			}
+			if trash > 0 && attr.Nlink > 1 && rs[2] != nil {
+				trash = 0
 			}
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
@@ -1887,13 +1915,17 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	err := m.txn(func(tx *kvTxn) error {
 		newLength, newSpace = 0, 0
 		attr = Attr{}
-		a := tx.get(m.inodeKey(inode))
-		if a == nil {
+		rs := tx.gets(m.inodeKey(inode), m.chunkKey(inode, indx))
+		if rs[0] == nil {
 			return syscall.ENOENT
 		}
-		m.parseAttr(a, &attr)
+		m.parseAttr(rs[0], &attr)
 		if attr.Typ != TypeFile {
 			return syscall.EPERM
+		}
+		if len(rs[1])%sliceBytes != 0 {
+			logger.Errorf("Invalid chunk value for inode %d indx %d: %d", inode, indx, len(rs[1]))
+			return syscall.EIO
 		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
 		if newleng > attr.Length {
@@ -1909,8 +1941,16 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		attr.Mtimensec = uint32(mtime.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
-		val := tx.append(m.chunkKey(inode, indx), marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len))
+		val := marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len)
+		for i := 0; i < len(rs[1]); i += sliceBytes {
+			if bytes.Equal(rs[1][i:i+sliceBytes], val) {
+				logger.Warnf("Write same slice for inode %d indx %d sliceId %d", inode, indx, slice.Id)
+				return nil
+			}
+		}
+		val = append(rs[1], val...)
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
+		tx.set(m.chunkKey(inode, indx), val)
 		needCompact = (len(val)/sliceBytes)%100 == 99
 		return nil
 	}, inode)

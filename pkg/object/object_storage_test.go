@@ -35,6 +35,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colinmarc/hdfs/v2/hadoopconf"
+
 	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/enum"
@@ -741,6 +743,32 @@ func TestOBS(t *testing.T) { //skip mutate
 }
 
 func TestHDFS(t *testing.T) { //skip mutate
+	conf := make(hadoopconf.HadoopConf)
+	conf["dfs.namenode.rpc-address.ns.namenode1"] = "hadoop01:8020"
+	conf["dfs.namenode.rpc-address.ns.namenode2"] = "hadoop02:8020"
+
+	checkAddr := func(addr string, expected []string, base string) {
+		addresses, basePath := parseHDFSAddr(addr, conf)
+		if !reflect.DeepEqual(addresses, expected) {
+			t.Fatalf("expected addrs is %+v but got %+v from %s", expected, addresses, addr)
+		}
+		if basePath != base {
+			t.Fatalf("expected path is %s but got %s from %s", base, basePath, addr)
+		}
+	}
+
+	checkAddr("hadoop01:8020", []string{"hadoop01:8020"}, "/")
+	checkAddr("hdfs://hadoop01:8020/", []string{"hadoop01:8020"}, "/")
+	checkAddr("hadoop01:8020/user/juicefs/", []string{"hadoop01:8020"}, "/user/juicefs/")
+	checkAddr("hadoop01:8020/user/juicefs", []string{"hadoop01:8020"}, "/user/juicefs/")
+	checkAddr("hdfs://hadoop01:8020/user/juicefs/", []string{"hadoop01:8020"}, "/user/juicefs/")
+
+	// for HA
+	checkAddr("hadoop01:8020,hadoop02:8020", []string{"hadoop01:8020", "hadoop02:8020"}, "/")
+	checkAddr("hadoop01:8020,hadoop02:8020/user/juicefs/", []string{"hadoop01:8020", "hadoop02:8020"}, "/user/juicefs/")
+	checkAddr("hdfs://ns/user/juicefs", []string{"hadoop01:8020", "hadoop02:8020"}, "/user/juicefs/")
+	checkAddr("ns/user/juicefs/", []string{"hadoop01:8020", "hadoop02:8020"}, "/user/juicefs/")
+
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.SkipNow()
 	}

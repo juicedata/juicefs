@@ -45,6 +45,10 @@ func testConfig() *Config {
 	return conf
 }
 
+func testFormat() *Format {
+	return &Format{Name: "test", DirStats: true}
+}
+
 func TestRedisClient(t *testing.T) {
 	m, err := newRedisMeta("redis", "127.0.0.1:6379/10", testConfig())
 	if err != nil || m.Name() != "redis" {
@@ -153,7 +157,7 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("getattr root: %s", st)
 	}
 
-	if err := m.Init(&Format{Name: "test"}, true); err != nil {
+	if err := m.Init(testFormat(), true); err != nil {
 		t.Fatalf("initialize failed: %s", err)
 	}
 	if err := m.Init(&Format{Name: "test2"}, false); err == nil { // not allowed
@@ -700,7 +704,6 @@ func testMetaClient(t *testing.T, m Meta) {
 }
 
 func testStickyBit(t *testing.T, m Meta) {
-	_ = m.Init(&Format{Name: "test"}, false)
 	ctx := Background
 	var sticky, normal, inode Ino
 	var attr = &Attr{}
@@ -767,7 +770,6 @@ func testStickyBit(t *testing.T, m Meta) {
 }
 
 func testListLocks(t *testing.T, m Meta) {
-	_ = m.Init(&Format{Name: "test"}, false)
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -842,7 +844,6 @@ func testListLocks(t *testing.T, m Meta) {
 }
 
 func testLocks(t *testing.T, m Meta) {
-	_ = m.Init(&Format{Name: "test"}, false)
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -979,7 +980,6 @@ func testLocks(t *testing.T, m Meta) {
 }
 
 func testRemove(t *testing.T, m Meta) {
-	_ = m.Init(&Format{Name: "test"}, false)
 	ctx := Background
 	var inode, parent Ino
 	var attr = &Attr{}
@@ -1021,7 +1021,6 @@ func testRemove(t *testing.T, m Meta) {
 }
 
 func testCaseIncensi(t *testing.T, m Meta) {
-	_ = m.Init(&Format{Name: "test"}, false)
 	ctx := Background
 	var inode Ino
 	var attr = &Attr{}
@@ -1070,9 +1069,16 @@ type compactor interface {
 
 func testCompaction(t *testing.T, m Meta, trash bool) {
 	if trash {
-		_ = m.Init(&Format{Name: "test", TrashDays: 1}, false)
+		format := testFormat()
+		format.TrashDays = 1
+		_ = m.Init(format, false)
+		defer func() {
+			if err := m.Init(testFormat(), false); err != nil {
+				t.Fatalf("init: %v", err)
+			}
+		}()
 	} else {
-		_ = m.Init(&Format{Name: "test"}, false)
+		_ = m.Init(testFormat(), false)
 	}
 	var l sync.Mutex
 	deleted := make(map[uint64]int)
@@ -1186,7 +1192,6 @@ func testConcurrentWrite(t *testing.T, m Meta) {
 	m.OnMsg(CompactChunk, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(&Format{Name: "test"}, false)
 
 	ctx := Background
 	var inode Ino
@@ -1289,7 +1294,6 @@ func testCopyFileRange(t *testing.T, m Meta) {
 	m.OnMsg(DeleteSlice, func(args ...interface{}) error {
 		return nil
 	})
-	_ = m.Init(&Format{Name: "test"}, false)
 
 	ctx := Background
 	var iin, iout Ino
@@ -1339,7 +1343,6 @@ func testCopyFileRange(t *testing.T, m Meta) {
 }
 
 func testCloseSession(t *testing.T, m Meta) {
-	_ = m.Init(&Format{Name: "test"}, false)
 	if err := m.NewSession(); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
@@ -1399,9 +1402,16 @@ func testCloseSession(t *testing.T, m Meta) {
 }
 
 func testTrash(t *testing.T, m Meta) {
-	if err := m.Init(&Format{Name: "test", TrashDays: 1}, false); err != nil {
-		t.Fatalf("init: %s", err)
+	format := testFormat()
+	format.TrashDays = 1
+	if err := m.Init(format, false); err != nil {
+		t.Fatalf("init: %v", err)
 	}
+	defer func() {
+		if err := m.Init(testFormat(), false); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+	}()
 	ctx := Background
 	var inode, parent Ino
 	var attr = &Attr{}
@@ -1450,6 +1460,26 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f2", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> d: %s", st)
 	}
+	if st := m.Link(ctx, inode, 1, "l", attr); st != 0 || attr.Nlink != 2 {
+		t.Fatalf("link d -> l1: %s", st)
+	}
+	if st := m.Unlink(ctx, 1, "l"); st != 0 {
+		t.Fatalf("unlink l: %s", st)
+	}
+	// hardlink goes to the trash
+	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Nlink != 2 {
+		t.Fatalf("getattr d(%d): %s, attr %+v", inode, st, attr)
+	}
+	if st := m.Link(ctx, inode, 1, "l", attr); st != 0 || attr.Nlink != 3 {
+		t.Fatalf("link d -> l1: %s", st)
+	}
+	if st := m.Unlink(ctx, 1, "l"); st != 0 {
+		t.Fatalf("unlink l: %s", st)
+	}
+	// hardlink is deleted directly
+	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Nlink != 2 {
+		t.Fatalf("getattr d(%d): %s, attr %+v", inode, st, attr)
+	}
 	if st := m.Unlink(ctx, 1, "d"); st != 0 {
 		t.Fatalf("unlink d: %s", st)
 	}
@@ -1475,7 +1505,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	}
-	if len(entries) != 8 {
+	if len(entries) != 9 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	ctx2 := NewContext(1000, 1, []uint32{1})
@@ -1495,9 +1525,6 @@ func testTrash(t *testing.T, m Meta) {
 }
 
 func testParents(t *testing.T, m Meta) {
-	if err := m.Init(&Format{Name: "test"}, false); err != nil {
-		t.Fatalf("init: %s", err)
-	}
 	ctx := Background
 	var inode, parent Ino
 	var attr = &Attr{}
@@ -2001,7 +2028,6 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 func testDirStat(t *testing.T, m Meta) {
 	testDir := "testDirStat"
 	var testInode Ino
-
 	// test empty dir
 	if st := m.Mkdir(Background, RootInode, testDir, 0640, 022, 0, &testInode, nil); st != 0 {
 		t.Fatalf("mkdir: %s", st)

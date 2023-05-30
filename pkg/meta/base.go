@@ -63,6 +63,7 @@ type engine interface {
 	doRefreshSession() error
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
+	doInit(format *Format, force bool) error
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
 	compactChunk(inode Ino, indx uint32, force bool)
@@ -332,6 +333,9 @@ func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall
 }
 
 func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int64) {
+	if !m.GetFormat().DirStats {
+		return
+	}
 	m.dirStatsLock.Lock()
 	defer m.dirStatsLock.Unlock()
 	stat := m.dirStats[ino]
@@ -346,6 +350,9 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, spac
 		return
 	}
 	m.en.updateStats(space, 0)
+	if !m.GetFormat().DirStats {
+		return
+	}
 	if parent > 0 {
 		m.updateDirStat(ctx, parent, length, space, 0)
 		m.updateDirQuota(ctx, parent, space, 0)
@@ -371,6 +378,9 @@ func (m *baseMeta) flushDirStat() {
 }
 
 func (m *baseMeta) doFlushDirStat() {
+	if !m.GetFormat().DirStats {
+		return
+	}
 	m.dirStatsLock.Lock()
 	if len(m.dirStats) == 0 {
 		m.dirStatsLock.Unlock()
@@ -610,6 +620,9 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) 
 	if inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes) {
 		return syscall.ENOSPC
 	}
+	if !m.GetFormat().DirStats {
+		return 0
+	}
 	for _, ino := range parents {
 		if m.checkDirQuota(ctx, ino, space, inodes) {
 			return syscall.EDQUOT
@@ -663,6 +676,9 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 }
 
 func (m *baseMeta) hasDirQuota(ctx Context, inode Ino) bool {
+	if !m.GetFormat().DirStats {
+		return false
+	}
 	var q *Quota
 	var st syscall.Errno
 	for {
@@ -684,6 +700,9 @@ func (m *baseMeta) hasDirQuota(ctx Context, inode Ino) bool {
 }
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {
+	if !m.GetFormat().DirStats {
+		return false
+	}
 	var q *Quota
 	var st syscall.Errno
 	for {
@@ -705,6 +724,9 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bo
 }
 
 func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
+	if !m.GetFormat().DirStats {
+		return
+	}
 	var q *Quota
 	var st syscall.Errno
 	for {
@@ -729,10 +751,13 @@ func (m *baseMeta) flushQuotas() {
 	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
+		if !m.GetFormat().DirStats {
+			continue
+		}
 		m.quotaMu.RLock()
 		for ino, q := range m.dirQuotas {
-			newSpace = atomic.SwapInt64(&q.newSpace, 0)
-			newInodes = atomic.SwapInt64(&q.newInodes, 0)
+			newSpace = atomic.LoadInt64(&q.newSpace)
+			newInodes = atomic.LoadInt64(&q.newInodes)
 			if newSpace != 0 || newInodes != 0 {
 				quotas[ino] = &Quota{newSpace: newSpace, newInodes: newInodes}
 			}
@@ -741,11 +766,17 @@ func (m *baseMeta) flushQuotas() {
 
 		if err := m.en.doFlushQuotas(Background, quotas); err != nil {
 			logger.Warnf("Flush quotas: %s", err)
+		} else {
 			m.quotaMu.RLock()
-			for ino, q := range quotas {
-				if cur := m.dirQuotas[ino]; cur != nil {
-					cur.update(q.newSpace, q.newInodes)
+			for ino, snap := range quotas {
+				q := m.dirQuotas[ino]
+				if q == nil {
+					continue
 				}
+				atomic.AddInt64(&q.newSpace, -snap.newSpace)
+				atomic.AddInt64(&q.UsedSpace, snap.newSpace)
+				atomic.AddInt64(&q.newInodes, -snap.newInodes)
+				atomic.AddInt64(&q.UsedInodes, snap.newInodes)
 			}
 			m.quotaMu.RUnlock()
 		}
@@ -753,6 +784,10 @@ func (m *baseMeta) flushQuotas() {
 			delete(quotas, ino)
 		}
 	}
+}
+
+func (m *baseMeta) Init(format *Format, force bool) error {
+	return m.en.doInit(format, force)
 }
 
 func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool) error {
@@ -768,6 +803,16 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 
 	switch cmd {
 	case QuotaSet:
+		format, err := m.Load(false)
+		if err != nil {
+			return errors.Wrap(err, "load format")
+		}
+		if !format.DirStats {
+			format.DirStats = true
+			if err := m.en.doInit(format, false); err != nil {
+				return err
+			}
+		}
 		q, err := m.en.doGetQuota(ctx, inode)
 		if err != nil {
 			return err
@@ -1322,8 +1367,8 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
 		return st
 	}
-	if err := m.checkQuota(ctx, align4K(attr.Length), 1, parent); err != 0 {
-		return err
+	if m.checkDirQuota(ctx, parent, align4K(attr.Length), 1) {
+		return syscall.EDQUOT
 	}
 
 	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
@@ -1954,6 +1999,19 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					statBroken = true
 				}
 
+				if !repair && statAll {
+					s, st := m.calcDirStat(ctx, inode)
+					if st != 0 {
+						hasError = true
+						logger.Errorf("calc dir stat for inode %d: %v", inode, st)
+						continue
+					}
+					if stat.space != s.space || stat.inodes != s.inodes {
+						logger.Warnf("usage stat of %s should be %v, but got %v", path, s, stat)
+						statBroken = true
+					}
+				}
+
 				if repair {
 					if statBroken || statAll {
 						if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 || st == syscall.ENOENT {
@@ -1964,7 +2022,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 						}
 					}
 				} else if statBroken {
-					logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair' to fix it", path, inode, path)
+					logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair --sync-dir-stat' to fix it", path, inode, path)
 					hasError = true
 				}
 			}
@@ -2029,6 +2087,13 @@ func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino) syscall.Errno 
 }
 
 func (m *baseMeta) GetFormat() Format {
+	if m.fmt == nil {
+		var err error
+		m.fmt, err = m.Load(false)
+		if err != nil {
+			logger.Fatalf("Load format: %s", err)
+		}
+	}
 	return *m.fmt
 }
 
