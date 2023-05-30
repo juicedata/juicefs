@@ -321,13 +321,9 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 
 	options := hdfs.ClientOptionsFromConf(conf)
 	if addr != "" {
-		// nn1.example.com:8020,nn2.example.com:8020/user/juicefs
-		sp := strings.SplitN(addr, "/", 2)
-		if len(sp) > 1 {
-			basePath = basePath + strings.TrimRight(sp[1], "/") + "/"
-		}
 		options.Addresses = rpcAddr
-		logger.Infof("HDFS Addresses: %s, basePath: %s", sp[0], basePath)
+		logger.Infof("HDFS Addresses: %s, basePath: %s", rpcAddr, basePath)
+
 	}
 
 	if options.KerberosClient != nil {
@@ -367,7 +363,7 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		}
 	}
 
-	return &hdfsclient{addr: addr, c: c, dfsReplication: replication, basePath: basePath}, nil
+	return &hdfsclient{addr: strings.TrimSuffix(strings.Join(rpcAddr, ",")+basePath, "/"), c: c, dfsReplication: replication, basePath: basePath}, nil
 }
 
 func parseAddr(addr string, conf hadoopconf.HadoopConf) (rpcAddresses []string, basePath string) {
