@@ -897,9 +897,14 @@ When `--access-key` is not specified on formatting, JuiceFS will use the current
 
 JuiceFS will try to load configurations for HDFS client based on `$HADOOP_CONF_DIR` or `$HADOOP_HOME`. If an empty value is provided to `--bucket`, the default HDFS found in Hadoop configurations will be used.
 
-For HA cluster, the addresses of NameNodes can be specified together like this: `--bucket=namenode1:port,namenode2:port`.
+bucket format:
 
-By default, data is stored on the subdirectory of `/`. You can specify `--bucket` including the path like `--bucket=namenode1:port,namenode2:port/user/juicefs`
+- `[hdfs://]namenode:port[/path]`
+
+for HA cluster:
+
+- `[hdfs://]namenode1:port,namenode2:port[/path]`
+- `[hdfs://]nameservice[/path]`
 
 ## Apache Ozone
 
