@@ -341,6 +341,9 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 		if e.IsDir() {
 			p = filepath.ToSlash(p + "/")
 		}
+		if len(p) < len(d.root) {
+			continue
+		}
 		key := p[len(d.root):]
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
