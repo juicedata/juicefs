@@ -350,10 +350,11 @@ func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File
 	_, task := trace.NewTask(context.TODO(), "Open")
 	defer task.End()
 	l := vfs.NewLogContext(ctx)
+	var attr *Attr
 	if flags != 0 {
-		defer func() { fs.log(l, "Open (%s,%d): %s", path, flags, errstr(err)) }()
+		defer func() { fs.log(l, "Open (%s,%d): %s %p", path, flags, errstr(err), attr) }()
 	} else {
-		defer func() { fs.log(l, "Lookup (%s): %s", path, errstr(err)) }()
+		defer func() { fs.log(l, "Lookup (%s): %s %p", path, errstr(err), attr) }()
 	}
 	var fi *FileStat
 	fi, err = fs.resolve(ctx, path, true)
@@ -384,6 +385,7 @@ func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File
 	f.info = fi
 	f.fs = fs
 	f.flags = flags
+	attr = fi.attr
 	return
 }
 
@@ -742,7 +744,8 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 			continue
 		}
 		if parent == meta.RootInode && i == len(ss)-1 && vfs.IsSpecialName(name) {
-			inode, attr := vfs.GetInternalNodeByName(name)
+			inode, a := vfs.GetInternalNodeByName(name)
+			*attr = *a
 			fi = AttrToFileInfo(inode, attr)
 			parent = inode
 			break
@@ -757,17 +760,12 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 		}
 
 		var inode Ino
-		var resolved bool
-
 		err = fs.lookup(ctx, parent, name, &inode, attr)
-		if i == len(ss)-1 {
-			resolved = true
-		}
 		if err != 0 {
 			return
 		}
 		fi = AttrToFileInfo(inode, attr)
-		if (!resolved || followLastSymlink) && fi.IsSymlink() {
+		if (i != len(ss)-1 || followLastSymlink) && fi.IsSymlink() {
 			var buf []byte
 			err = fs.m.ReadLink(ctx, inode, &buf)
 			if err != 0 {
@@ -783,7 +781,8 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 				return
 			}
 			inode = fi.Inode()
-			attr = fi.attr
+			// don't use the returned attr
+			*attr = *fi.attr
 		}
 		fi.name = name
 		parent = inode
@@ -976,7 +975,9 @@ func (f *File) Pread(ctx meta.Context, b []byte, offset int64) (n int, err error
 	_, task := trace.NewTask(context.TODO(), "Pread")
 	defer task.End()
 	l := vfs.NewLogContext(ctx)
-	defer func() { f.fs.log(l, "Pread (%s,%d,%d): (%d,%s)", f.path, len(b), offset, n, errstr(err)) }()
+	defer func() {
+		f.fs.log(l, "Pread (%s,%d,%d): (%d,%s) %p", f.path, len(b), offset, n, errstr(err), f.info.attr)
+	}()
 	f.Lock()
 	defer f.Unlock()
 	n, err = f.pread(ctx, b, offset)
@@ -1082,7 +1083,7 @@ func (f *File) Fsync(ctx meta.Context) (err syscall.Errno) {
 
 func (f *File) Close(ctx meta.Context) (err syscall.Errno) {
 	l := vfs.NewLogContext(ctx)
-	defer func() { f.fs.log(l, "Close (%s): %s", f.path, errstr(err)) }()
+	defer func() { f.fs.log(l, "Close (%s): %s %p", f.path, errstr(err), f.info.attr) }()
 	f.Lock()
 	defer f.Unlock()
 	if f.flags != 0 && !f.info.IsDir() {
