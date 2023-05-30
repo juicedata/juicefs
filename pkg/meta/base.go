@@ -2015,7 +2015,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 				if repair {
 					if statBroken || statAll {
 						if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 || st == syscall.ENOENT {
-							logger.Infof("Stat of path %s (inode %d) is successfully synced", path, inode)
+							logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
 						} else {
 							hasError = true
 							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, st)
