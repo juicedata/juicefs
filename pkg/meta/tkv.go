@@ -1115,7 +1115,11 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 		if _type == TypeDirectory {
 			return syscall.EPERM
 		}
-		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
+		keys := [][]byte{m.inodeKey(parent), m.inodeKey(inode)}
+		if trash > 0 {
+			keys = append(keys, m.entryKey(trash, m.trashEntry(parent, inode, name)))
+		}
+		rs := tx.gets(keys...)
 		if rs[0] == nil {
 			return syscall.ENOENT
 		}
@@ -1129,6 +1133,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno {
 			m.parseAttr(rs[1], &attr)
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
+			}
+			if trash > 0 && attr.Nlink > 1 && rs[2] != nil {
+				trash = 0
 			}
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())

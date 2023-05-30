@@ -1248,6 +1248,10 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string) syscall.Errno
 			if ctx.Uid() != 0 && pattr.Mode&01000 != 0 && ctx.Uid() != pattr.Uid && ctx.Uid() != attr.Uid {
 				return syscall.EACCES
 			}
+			if trash > 0 && attr.Nlink > 1 && tx.HExists(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name)).Val() {
+				trash = 0
+				defer func() { m.of.InvalidateChunk(inode, 0xFFFFFFFE) }()
+			}
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
 			if trash == 0 {
