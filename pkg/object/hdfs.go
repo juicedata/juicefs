@@ -314,15 +314,11 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("Problem loading configuration: %s", err)
 	}
 
-	// addr can be hdfs://nameservice e.g. hdfs://example, hdfs://example/user/juicefs
-	// convert the nameservice as a comma separated list of host:port by referencing hadoop conf
-	rpcAddr, basePath := parseAddr(addr, conf)
-
+	rpcAddr, basePath := parseHDFSAddr(addr, conf)
 	options := hdfs.ClientOptionsFromConf(conf)
 	if addr != "" {
 		options.Addresses = rpcAddr
 		logger.Infof("HDFS Addresses: %s, basePath: %s", rpcAddr, basePath)
-
 	}
 
 	if options.KerberosClient != nil {
@@ -365,9 +361,10 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 	return &hdfsclient{addr: strings.TrimSuffix(strings.Join(rpcAddr, ",")+basePath, "/"), c: c, dfsReplication: replication, basePath: basePath}, nil
 }
 
-func parseAddr(addr string, conf hadoopconf.HadoopConf) (rpcAddresses []string, basePath string) {
+// addr can be hdfs://nameservice e.g. hdfs://example, hdfs://example/user/juicefs
+// convert the nameservice as a comma separated list of host:port by referencing hadoop conf
+func parseHDFSAddr(addr string, conf hadoopconf.HadoopConf) (rpcAddresses []string, basePath string) {
 	addr = strings.TrimPrefix(addr, "hdfs://")
-
 	sp := strings.SplitN(addr, "/", 2)
 	authority := sp[0]
 
@@ -375,8 +372,7 @@ func parseAddr(addr string, conf hadoopconf.HadoopConf) (rpcAddresses []string, 
 	var nns []string
 	confParam := "dfs.namenode.rpc-address." + authority
 	for key, value := range conf {
-		if key == confParam ||
-			strings.HasPrefix(key, confParam+".") {
+		if key == confParam || strings.HasPrefix(key, confParam+".") {
 			nns = append(nns, value)
 		}
 	}
@@ -386,8 +382,8 @@ func parseAddr(addr string, conf hadoopconf.HadoopConf) (rpcAddresses []string, 
 		rpcAddresses = strings.Split(authority, ",")
 	}
 	basePath = "/"
-	if len(sp) > 1 {
-		basePath = basePath + strings.TrimRight(sp[1], "/") + "/"
+	if len(sp) > 1 && len(sp[1]) > 0 {
+		basePath += strings.TrimRight(sp[1], "/") + "/"
 	}
 	return
 }
