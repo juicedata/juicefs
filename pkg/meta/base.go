@@ -1999,7 +1999,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					statBroken = true
 				}
 
-				if statAll {
+				if !repair && statAll {
 					s, st := m.calcDirStat(ctx, inode)
 					if st != 0 {
 						hasError = true
