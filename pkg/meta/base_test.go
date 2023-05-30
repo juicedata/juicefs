@@ -1197,6 +1197,26 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f2", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> d: %s", st)
 	}
+	if st := m.Link(ctx, inode, 1, "l", attr); st != 0 || attr.Nlink != 2 {
+		t.Fatalf("link d -> l1: %s", st)
+	}
+	if st := m.Unlink(ctx, 1, "l"); st != 0 {
+		t.Fatalf("unlink l: %s", st)
+	}
+	// hardlink goes to the trash
+	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Nlink != 2 {
+		t.Fatalf("getattr d(%d): %s, attr %+v", inode, st, attr)
+	}
+	if st := m.Link(ctx, inode, 1, "l", attr); st != 0 || attr.Nlink != 3 {
+		t.Fatalf("link d -> l1: %s", st)
+	}
+	if st := m.Unlink(ctx, 1, "l"); st != 0 {
+		t.Fatalf("unlink l: %s", st)
+	}
+	// hardlink is deleted directly
+	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Nlink != 2 {
+		t.Fatalf("getattr d(%d): %s, attr %+v", inode, st, attr)
+	}
 	if st := m.Unlink(ctx, 1, "d"); st != 0 {
 		t.Fatalf("unlink d: %s", st)
 	}
@@ -1222,7 +1242,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	}
-	if len(entries) != 8 {
+	if len(entries) != 9 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	ctx2 := NewContext(1000, 1, []uint32{1})
