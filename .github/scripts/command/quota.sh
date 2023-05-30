@@ -44,7 +44,7 @@ test_total_inodes(){
     for i in {1..1000}; do
         echo $i | tee /jfs/test$i
     done
-    sleep 6s
+    sleep 12s
     echo a | tee /jfs/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
     grep "No space left on device" error.log
     ./juicefs config $META_URL --inodes 2000
