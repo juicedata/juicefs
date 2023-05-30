@@ -5,12 +5,14 @@ set -e
 umount_jfs()
 {
     mp=$1
-    [[ -z "$mp" ]] && mp=/jfs
+    meta_url=$2
+    [[ -z "$mp" ]] && echo "mount point is empty" && exit 1
+    [[ -z "$meta_url" ]] && echo "meta url is empty" && exit 1
     [[ ! -f $mp/.config ]] && echo "$mp/.config not found, $mp is not juicefs mount point" && return
-    pid=$(./juicefs status sqlite3://test.db | jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID')
+    pid=$(./juicefs status $meta_url | jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID')
     echo "umount  $mp, pid $pid"
     umount -l $mp
-    wait_mount_process_killed 20
+    wait_mount_process_killed $pid 20
 }
 
 wait_mount_process_killed()
@@ -18,6 +20,7 @@ wait_mount_process_killed()
     pid=$1
     wait_seconds=$2
     [[ -z "$pid" ]] && echo "pid is empty" && exit 1
+    [[ -z "$wait_seconds" ]] && echo "wait_seconds is empty" && exit 1
     echo "wait mount process $pid exit in $wait_seconds seconds"
     for i in $(seq 1 $wait_seconds); do
         count=$(ps -ef | grep "juicefs mount" | awk '{print $2}'| grep ^$pid$ | wc -l)

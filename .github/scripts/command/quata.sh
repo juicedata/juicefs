@@ -1,6 +1,11 @@
 #!/bin/bash
 set -ex
-[[ -z "$META_URL" ]] && META_URL=sqlite3://test.db
+[[ -z "$META" ]] && META=tikv
+
+source .github/scripts/start_meta_engine.sh
+start_meta_engine $META
+META_URL=$(get_meta_url $META)
+
 source .github/scripts/common/common.sh
 
 test_total_capacity()
@@ -138,7 +143,7 @@ test_sub_dir(){
     mkdir -p /jfs/d
     ./juicefs quota set $META_URL --path /d --inodes 1000 --capacity 1
     sleep 6s
-    umount_jfs /jfs 
+    umount_jfs /jfs $META_URL
     ./juicefs mount -d $META_URL --subdir /d /jfs --heartbeat 2
     size=$(df -h /jfs | grep "JuiceFS" | awk '{print $2}')
     [[ $size != "1.0G" ]] && echo "size should be 1.0G" && exit 1 || true
@@ -167,7 +172,7 @@ test_dump_load(){
     ./juicefs quota set $META_URL --path /d --inodes 1000 --capacity 1
     sleep 6s
     ./juicefs dump $META_URL > dump.json
-    umount_jfs /jfs 
+    umount_jfs /jfs $META_URL
     rm -rf test.db
     ./juicefs load $META_URL dump.json
     ./juicefs mount $META_URL /jfs -d --heartbeat 5
@@ -178,10 +183,10 @@ test_dump_load(){
     rm /jfs/d/test1 -rf
     sleep 3s
     for i in {1..1000}; do
-        echo $i | tee /jfs/test$i
+        echo $i | tee /jfs/d/test$i
     done
     sleep 3s
-    echo a | tee /jfs/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
+    echo a | tee /jfs/d/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
     grep "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
     ./juicefs quota check $META_URL --path /d --strict
 }
@@ -222,7 +227,7 @@ test_check_and_repair_quota(){
 
 prepare_test()
 {
-    umount_jfs /jfs
+    umount_jfs /jfs $META_URL
     rm -rf test.db
     rm -rf /var/jfs/myjfs
     # mc rm --force --recursive myminio/test

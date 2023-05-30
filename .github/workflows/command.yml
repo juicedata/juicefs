@@ -39,6 +39,14 @@ jobs:
       - name: Build 
         uses: ./.github/actions/build
 
+      - name: Test Quota with sqlite3
+        run: |
+          META=sqlite3 sudo .github/scripts/command/quota.sh 
+
+      - name: Test Quota with redis
+        run: |
+          META=redis sudo .github/scripts/command/quota.sh 
+
       - name: Test Load & Dump
         run: |
           sudo .github/scripts/command/load_dump.sh
