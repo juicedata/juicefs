@@ -897,13 +897,12 @@ JuiceFS 会尝试基于 `$HADOOP_CONF_DIR` 或 `$HADOOP_HOME` 为 HDFS 客户端
 
 bucket 参数支持格式如下：
 
-- [hdfs://]namenode:port[/path]
+- `[hdfs://]namenode:port[/path]`
 
 对于 HA 集群，bucket 参数可以：
 
-- [hdfs://]namenode1:port,namenode2:port[/path]
-- [hdfs://]nameservice[/path]
-
+- `[hdfs://]namenode1:port,namenode2:port[/path]`
+- `[hdfs://]nameservice[/path]`
 
 ## Apache Ozone
 

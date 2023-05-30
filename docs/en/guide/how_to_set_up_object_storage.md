@@ -899,12 +899,12 @@ JuiceFS will try to load configurations for HDFS client based on `$HADOOP_CONF_D
 
 bucket format:
 
-- [hdfs://]namenode:port[/path]
+- `[hdfs://]namenode:port[/path]`
 
 for HA cluster:
 
-- [hdfs://]namenode1:port,namenode2:port[/path]
-- [hdfs://]nameservice[/path]
+- `[hdfs://]namenode1:port,namenode2:port[/path]`
+- `[hdfs://]nameservice[/path]`
 
 ## Apache Ozone
 
