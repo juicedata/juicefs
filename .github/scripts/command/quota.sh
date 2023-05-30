@@ -14,25 +14,25 @@ test_total_capacity()
     ./juicefs format $META_URL myjfs --capacity 1
     ./juicefs mount -d $META_URL /jfs --heartbeat 5 --debug
     dd if=/dev/zero of=/jfs/test1 bs=1G count=1
-    sleep 6s
+    sleep 10s
     echo a | tee -a /jfs/test1 2>error.log && echo "echo should fail on out of space" && exit 1 || true
     grep "No space left on device" error.log
     ./juicefs config $META_URL --capacity 2
-    sleep 6s
+    sleep 10s
     dd if=/dev/zero of=/jfs/test2 bs=1G count=1
-    sleep 6s
+    sleep 10s
     echo a | tee -a /jfs/test2 2>error.log && echo "echo should fail on out of space" && exit 1 || true
     grep "No space left on device" error.log
 
     rm /jfs/test1 -rf
-    sleep 6s
+    sleep 10s
     echo a | tee -a /jfs/test3 2>error.log && echo "echo should fail on out of space" && exit 1 || true
 
     ./juicefs rmr /jfs/.trash
-    sleep 6s
+    sleep 10s
     echo a | tee -a /jfs/test3 
 
-    sleep 6s
+    sleep 10s
     ln /jfs/test2 /jfs/test4
     ln /jfs/test2 /jfs/test5
 }
@@ -173,7 +173,7 @@ test_dump_load(){
     sleep 6s
     ./juicefs dump $META_URL > dump.json
     umount_jfs /jfs $META_URL
-    rm -rf test.db
+    python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json
     ./juicefs mount $META_URL /jfs -d --heartbeat 5
     dd if=/dev/zero of=/jfs/d/test1 bs=1G count=1
@@ -228,7 +228,7 @@ test_check_and_repair_quota(){
 prepare_test()
 {
     umount_jfs /jfs $META_URL
-    rm -rf test.db
+    python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs
     # mc rm --force --recursive myminio/test
 }
