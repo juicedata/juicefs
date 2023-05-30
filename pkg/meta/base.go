@@ -1999,6 +1999,19 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					statBroken = true
 				}
 
+				if !repair && statAll {
+					s, st := m.calcDirStat(ctx, inode)
+					if st != 0 {
+						hasError = true
+						logger.Errorf("calc dir stat for inode %d: %v", inode, st)
+						continue
+					}
+					if stat.space != s.space || stat.inodes != s.inodes {
+						logger.Warnf("usage stat of %s should be %v, but got %v", path, s, stat)
+						statBroken = true
+					}
+				}
+
 				if repair {
 					if statBroken || statAll {
 						if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 || st == syscall.ENOENT {
@@ -2009,7 +2022,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 						}
 					}
 				} else if statBroken {
-					logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair' to fix it", path, inode, path)
+					logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair --sync-dir-stat' to fix it", path, inode, path)
 					hasError = true
 				}
 			}

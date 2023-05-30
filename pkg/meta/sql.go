@@ -2479,10 +2479,10 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 		if !exist {
 			return syscall.ENOENT
 		}
-		_, err = s.Insert(&dirStats{ino, stat.length, stat.space, stat.inodes})
+		stats := &dirStats{ino, stat.length, stat.space, stat.inodes}
+		_, err = s.Insert(stats)
 		if err != nil && isDuplicateEntryErr(err) {
-			// other client synced
-			err = nil
+			_, err = s.Cols("data_length", "used_space", "used_inodes").Update(stats)
 		}
 		return err
 	})
