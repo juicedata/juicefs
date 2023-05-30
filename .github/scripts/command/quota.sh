@@ -2,9 +2,11 @@
 set -ex
 [[ -z "$META" ]] && META=tikv
 
+python3 -c "import minio" || sudo pip install minio 
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
+
 
 source .github/scripts/common/common.sh
 
