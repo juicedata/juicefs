@@ -3850,7 +3850,6 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 			attr.Mtimensec = uint32(now.Nanosecond())
 			attr.Ctimensec = uint32(now.Nanosecond())
 		}
-		m.parseNode(attr, &n)
 		// TODO: preserve hardlink
 		if n.Type == TypeFile && n.Nlink > 1 {
 			n.Nlink = 1
@@ -3885,6 +3884,7 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				}
 			}
 		}
+		m.parseAttr(&n, attr)
 		if top && n.Type == TypeDirectory {
 			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: time.Now().Unix()})
 		} else {
