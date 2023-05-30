@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/colinmarc/hdfs/v2/hadoopconf"
 	"io"
 	"math"
 	"os"
@@ -728,8 +729,39 @@ func TestHDFS(t *testing.T) { //skip mutate
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.SkipNow()
 	}
+
+	conf := make(hadoopconf.HadoopConf)
+	conf["dfs.namenode.rpc-address.ns.namenode1"] = "hadoop01:8020"
+	conf["dfs.namenode.rpc-address.ns.namenode2"] = "hadoop02:8020"
+
+	addresses, basePath := parseAddr("hadoop01:8020", conf)
+	checkResult(t, addresses, basePath, []string{"hadoop01:8020"}, "/")
+	addresses, basePath = parseAddr("hadoop01:8020/user/juicefs/", conf)
+	checkResult(t, addresses, basePath, []string{"hadoop01:8020"}, "/user/juicefs/")
+	addresses, basePath = parseAddr("hdfs://hadoop01:8020/user/juicefs/", conf)
+	checkResult(t, addresses, basePath, []string{"hadoop01:8020"}, "/user/juicefs/")
+
+	// for HA
+	addresses, basePath = parseAddr("hadoop01:8020,hadoop02:8020", conf)
+	checkResult(t, addresses, basePath, []string{"hadoop01:8020", "hadoop02:8020"}, "/")
+	addresses, basePath = parseAddr("hadoop01:8020,hadoop02:8020/user/juicefs/", conf)
+	checkResult(t, addresses, basePath, []string{"hadoop01:8020", "hadoop02:8020"}, "/user/juicefs/")
+	addresses, basePath = parseAddr("hdfs://ns/user/juicefs", conf)
+	checkResult(t, addresses, basePath, []string{"hadoop01:8020", "hadoop02:8020"}, "/user/juicefs/")
+	addresses, basePath = parseAddr("ns/user/juicefs/", conf)
+	checkResult(t, addresses, basePath, []string{"hadoop01:8020", "hadoop02:8020"}, "/user/juicefs/")
+
 	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "", "")
 	testStorage(t, dfs)
+}
+
+func checkResult(t *testing.T, addresses []string, basePath string, expected []string, expectedBasePath string) {
+	if !reflect.DeepEqual(addresses, expected) {
+		t.Fatalf("parseAddr for HDFS failed: %v", addresses)
+	}
+	if basePath != expectedBasePath {
+		t.Fatalf("parseAddr for HDFS failed: %v", basePath)
+	}
 }
 
 func TestOOS(t *testing.T) { //skip mutate
