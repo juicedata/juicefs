@@ -28,12 +28,14 @@ test_dump_load_with_iflag(){
     echo "hello" > /jfs/hello.txt
     chattr +i /jfs/hello.txt
     ./juicefs dump $META_URL dump.json
-    ./juicefs load sqlite3://test2.db dump.json
-    ./juicefs mount -d sqlite3://test2.db /jfs2 --enable-ioctl
-    echo "hello" > /jfs2/hello.txt && echo "write should fail" && exit 1 || true
-    chattr -i /jfs2/hello.txt
-    echo "world" > /jfs2/hello.txt
-    cat /jfs2/hello.txt | grep world
+    umount_jfs /jfs $META_URL
+    python3 .github/scripts/flush_meta.py $META_URL
+    ./juicefs load $META_URL dump.json
+    ./juicefs mount -d $META_URL /jfs --enable-ioctl
+    echo "hello" > /jfs/hello.txt && echo "write should fail" && exit 1 || true
+    chattr -i /jfs/hello.txt
+    echo "world" > /jfs/hello.txt
+    cat /jfs/hello.txt | grep world
 }
 
 test_dump_with_keep_secret()
@@ -41,10 +43,11 @@ test_dump_with_keep_secret()
     prepare_test
     ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
     ./juicefs dump --keep-secret-key $META_URL dump.json
-    ./juicefs load sqlite3://test2.db dump.json
-    ./juicefs mount -d sqlite3://test2.db /jfs2
-    echo "hello" > /jfs2/hello.txt
-    cat /jfs2/hello.txt | grep hello
+    python3 .github/scripts/flush_meta.py $META_URL
+    ./juicefs load $META_URL dump.json
+    ./juicefs mount -d $META_URL /jfs
+    echo "hello" > /jfs/hello.txt
+    cat /jfs/hello.txt | grep hello
 }
 
 test_dump_without_keep_secret()
@@ -52,12 +55,13 @@ test_dump_without_keep_secret()
     prepare_test
     ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
     ./juicefs dump $META_URL dump.json
-    ./juicefs load sqlite3://test2.db dump.json
-    ./juicefs mount -d sqlite3://test2.db /jfs2 && echo "mount should fail" && exit 1 || true
-    ./juicefs config --secret-key minioadmin sqlite3://test2.db
-    ./juicefs mount -d sqlite3://test2.db /jfs2
-    echo "hello" > /jfs2/hello.txt
-    cat /jfs2/hello.txt | grep hello
+    python3 .github/scripts/flush_meta.py $META_URL
+    ./juicefs load $META_URL dump.json
+    ./juicefs mount -d $META_URL /jfs && echo "mount should fail" && exit 1 || true
+    ./juicefs config --secret-key minioadmin $META_URL
+    ./juicefs mount -d $META_URL /jfs
+    echo "hello" > /jfs/hello.txt
+    cat /jfs/hello.txt | grep hello
 }
 
 test_dump_load()
@@ -86,53 +90,34 @@ test_load_encrypted_meta_backup()
     backup_file=$(ls -l /var/jfs/myjfs/meta/ |tail -1 | awk '{print $NF}')
     backup_path=/var/jfs/myjfs/meta/$backup_file
     ls -l $backup_path
+
     ./juicefs load sqlite3://test2.db $backup_path --encrypt-rsa-key my-priv-key.pem --encrypt-algo aes256gcm-rsa
     ./juicefs mount -d sqlite3://test2.db /jfs2
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
-
-    ./juicefs umount /jfs
-    ./juicefs umount /jfs2
-
-    uuid=$(./juicefs status $META_URL | grep UUID | cut -d '"' -f 4) 
-    ./juicefs destroy --force $META_URL $uuid
-
-    uuid=$(./juicefs status sqlite3://test2.db | grep UUID | cut -d '"' -f 4) 
-    ./juicefs destroy --force sqlite3://test2.db $uuid
+    umount_jfs /jfs2 sqlite3://test2.db
+    rm test2.db -rf
 }
 
 prepare_test(){
-    umount /jfs || true
-    umount /jfs2 || true
-    rm -rf test.db test2.db || true
+    umount_jfs /jfs $META_URL
+    umount_jfs /jfs2 sqlite3://test2.db
+    python3 .github/scripts/flush_meta.py $META_URL
+    rm test2.db -rf 
     rm -rf /var/jfs/myjfs || true
     mc rm --force --recursive myminio/test || true
 }
 
 do_dump_load(){
     dump_file=$1
-    umount /jfs || true
-    umount /jfs2 || true
-    rm -rf test.db test2.db
-    [[ -d /var/jfs1/myjfs ]] && rm -rf /var/jfs1/myjfs
-    ./juicefs format $META_URL myjfs --bucket /var/jfs1
+    ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     python3 .github/scripts/fsrand.py -c 1000 /jfs/fsrand -v -a
-    ./juicefs dump   $META_URL $dump_file
+    ./juicefs dump  $META_URL $dump_file
 
-    [[ -d /var/jfs1/myjfs ]] && rm -rf /var/jfs2/myjfs
-    # ./juicefs format sqlite3://test2.db myjfs --bucket /var/jfs2
-    ./juicefs load   sqlite3://test2.db $dump_file   
+    ./juicefs load  sqlite3://test2.db $dump_file   
     ./juicefs mount -d sqlite3://test2.db /jfs2
 
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
-    ./juicefs umount /jfs
-    ./juicefs umount /jfs2
-
-    uuid=$(./juicefs status $META_URL | grep UUID | cut -d '"' -f 4) 
-    ./juicefs destroy --force $META_URL $uuid
-
-    uuid=$(./juicefs status sqlite3://test2.db | grep UUID | cut -d '"' -f 4) 
-    ./juicefs destroy --force sqlite3://test2.db $uuid
 }
 
 function_names=$(sed -nE '/^test_[^ ()]+ *\(\)/ { s/^\s*//; s/ *\(\).*//; p; }' "$0")
