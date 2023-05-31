@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+python3 -c "import minio" || sudo pip install minio 
+source .github/scripts/common/common.sh
+
+[[ -z "$META" ]] && META=sqlite3
+source .github/scripts/start_meta_engine.sh
+start_meta_engine $META
+META_URL=$(get_meta_url $META)
+
 if ! docker ps | grep -q minio; then
     docker run -d -p 9000:9000 --name minio \
             -e "MINIO_ACCESS_KEY=minioadmin" \

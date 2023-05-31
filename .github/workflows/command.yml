@@ -29,6 +29,10 @@ on:
 
 jobs:
   command_test:
+    strategy:
+      fail-fast: false
+      matrix:
+        meta: [ 'sqlite3', 'redis', 'tikv']
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -41,23 +45,15 @@ jobs:
 
       - name: Test Quota with tikv
         run: |
-          sudo META=tikv .github/scripts/command/quota.sh 
-
-      - name: Test Quota with sqlite3
-        run: |
-          sudo META=sqlite3 .github/scripts/command/quota.sh 
-
-      - name: Test Quota with redis
-        run: |
-          sudo META=redis .github/scripts/command/quota.sh 
+          sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
 
       - name: Test Load & Dump
         run: |
-          sudo .github/scripts/command/load_dump.sh
+          sudo META=${{matrix.meta}} .github/scripts/command/load_dump.sh
 
       - name: Test Clone
         run: |
-          sudo .github/scripts/command/clone.sh
+          sudo META=${{matrix.meta}} .github/scripts/command/clone.sh
 
       - name: Log
         if: ${{ failure() }}

@@ -1,12 +1,18 @@
 #!/bin/bash
 set -e
+python3 -c "import minio" || sudo pip install minio 
+source .github/scripts/common/common.sh
 
+[[ -z "$META" ]] && META=sqlite3
+source .github/scripts/start_meta_engine.sh
+start_meta_engine $META
+META_URL=$(get_meta_url $META)
 
 test_clone_preserve_with_file()
 {
     prepare_test
-    ./juicefs format sqlite3://test.db myjfs
-    ./juicefs mount -d sqlite3://test.db /jfs
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
     id -u juicefs  && sudo userdel juicefs
     sudo useradd -u 1101 juicefs
     sudo -u juicefs touch /jfs/test
@@ -20,8 +26,8 @@ test_clone_preserve_with_file()
 test_clone_preserve_with_dir()
 {
     prepare_test
-    ./juicefs format sqlite3://test.db myjfs
-    ./juicefs mount -d sqlite3://test.db /jfs
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
     id -u juicefs  && sudo userdel juicefs
     sudo useradd -u 1101 juicefs
     sudo -u juicefs mkdir /jfs/test
@@ -35,8 +41,8 @@ test_clone_preserve_with_dir()
 test_clone()
 {
     prepare_test
-    ./juicefs format sqlite3://test.db myjfs
-    ./juicefs mount -d sqlite3://test.db /jfs
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
     [[ ! -d /jfs/juicefs ]] && git clone https://github.com/juicedata/juicefs.git /jfs/juicefs
     rm -rf /jfs/juicefs1
     ./juicefs clone /jfs/juicefs /jfs/juicefs1
@@ -67,11 +73,9 @@ check_guid_after_clone(){
 
 prepare_test()
 {
-    umount /jfs && sleep 3s || true
-    umount /jfs2 && sleep 3s || true
-    rm -rf test.db test2.db || true
+    umount_jfs /jfs $META_URL
+    python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs || true
-    # mc rm --force --recursive myminio/test
 }
 
 function_names=$(sed -nE '/^test_[^ ()]+ *\(\)/ { s/^\s*//; s/ *\(\).*//; p; }' "$0")
