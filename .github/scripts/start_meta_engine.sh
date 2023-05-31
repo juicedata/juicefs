@@ -32,7 +32,7 @@ install_tikv(){
     exit 1
   fi
   
-  $tiup playground --mode tikv-slim &
+  $tiup playground --mode tikv-slim 2>&1 > tikv.log &
   pid=$!
   sleep 60
   echo 'head -1' > /tmp/head.txt
@@ -60,7 +60,7 @@ install_tidb(){
     exit 1
   fi
   
-  $tiup playground 5.4.0 &
+  $tiup playground 5.4.0 2>&1 > tidb.log &
   pid=$!
   sleep 60
   lsof -i:4000 && pgrep pd-server && mysql -h127.0.0.1 -P4000 -uroot -e "select version();"

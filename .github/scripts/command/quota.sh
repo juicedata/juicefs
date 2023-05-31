@@ -58,7 +58,6 @@ test_total_inodes(){
     echo a | tee /jfs/test2001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
 }
 
-
 wait_until()
 {   
     key=$1
@@ -232,7 +231,6 @@ prepare_test()
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs
-    # mc rm --force --recursive myminio/test
 }
 
 function_names=$(sed -nE '/^test_[^ ()]+ *\(\)/ { s/^\s*//; s/ *\(\).*//; p; }' "$0")
