@@ -553,7 +553,7 @@ func (m *baseMeta) getTreeSummary(ctx Context, tree *TreeSummary, depth, topN ui
 	if len(tree.Children) > int(topN) {
 		omitChild := &TreeSummary{
 			Path: path.Join(tree.Path, "..."),
-			Type: TypeDirectory,
+			Type: TypeFile,
 		}
 		for _, child := range tree.Children[topN:] {
 			omitChild.Size += child.Size
