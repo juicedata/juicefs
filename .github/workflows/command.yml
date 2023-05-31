@@ -39,18 +39,20 @@ jobs:
       - name: Build 
         uses: ./.github/actions/build
 
-      - name: Test Quota with sqlite3
+      - name: Test Quota with tikv
+        if: always()
         run: |
-          exit 1
+          sudo META=tikv .github/scripts/command/quota.sh 
+
+      - name: Test Quota with sqlite3
+        if: always()
+        run: |
           sudo META=sqlite3 .github/scripts/command/quota.sh 
 
       - name: Test Quota with redis
+        if: always()
         run: |
           sudo META=redis .github/scripts/command/quota.sh 
-
-      - name: Test Quota with tikv
-        run: |
-          META=tikv .github/scripts/command/quota.sh 
 
       - name: Test Load & Dump
         run: |

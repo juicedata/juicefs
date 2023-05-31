@@ -21,9 +21,11 @@ retry(){
 
 install_tikv(){
   # retry because of: https://github.com/pingcap/tiup/issues/2057
-  curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-  source /home/runner/.bash_profile
-  source /home/runner/.profile
+  curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh > log.txt
+  cat log.txt
+  profile=$(cat log.txt | grep "Shell profile" | awk '{print $3}')
+  echo profile is $profile
+  source $profile
   tiup playground --mode tikv-slim &
   pid=$!
   sleep 60
