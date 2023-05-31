@@ -211,10 +211,11 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Obje
 
 	var objs []Object
 	for _, name := range names {
-		if len(dir)+len(name) < len(h.basePath) {
+		p := dir + name
+		if !strings.HasPrefix(p, h.basePath) {
 			continue
 		}
-		key := (dir + name)[len(h.basePath):]
+		key := p[len(h.basePath):]
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}

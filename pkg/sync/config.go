@@ -45,6 +45,7 @@ type Config struct {
 	Manager        string
 	Workers        []string
 	ListThreads    int
+	ListDepth      int
 	BWLimit        int
 	NoHTTPS        bool
 	Verbose        bool
@@ -53,7 +54,8 @@ type Config struct {
 	CheckNew       bool
 	Env            map[string]string
 
-	rules []rule
+	rules          []rule
+	concurrentList chan int
 }
 
 func envList() []string {
@@ -132,6 +134,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		End:            c.String("end"),
 		Threads:        c.Int("threads"),
 		ListThreads:    c.Int("list-threads"),
+		ListDepth:      c.Int("list-depth"),
 		Update:         c.Bool("update"),
 		ForceUpdate:    c.Bool("force-update"),
 		Perms:          c.Bool("perms"),
