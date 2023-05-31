@@ -41,7 +41,6 @@ jobs:
 
       - name: Test Quota with tikv
         run: |
-          exit 1
           sudo META=tikv .github/scripts/command/quota.sh 
 
       - name: Test Quota with sqlite3

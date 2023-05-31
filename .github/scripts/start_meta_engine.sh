@@ -21,11 +21,17 @@ retry(){
 
 install_tikv(){
   # retry because of: https://github.com/pingcap/tiup/issues/2057
-  curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh > log.txt
-  cat log.txt
-  profile=$(cat log.txt | grep "Shell profile" | awk '{print $3}')
-  echo profile is $profile
-  source $profile
+  curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+  user=$(whoami)
+  if [ "$user" == "root" ]; then
+    source /root/.bashrc
+  elif [ "$user" == "runner" ]; then
+    source /home/runner/.bash_profile
+  else
+    echo "Unknown user $user"
+    exit 1
+  fi
+  
   tiup playground --mode tikv-slim &
   pid=$!
   sleep 60
@@ -44,9 +50,17 @@ install_tikv(){
 
 install_tidb(){
   curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-  source /home/runner/.profile
-  # retry because of: https://github.com/pingcap/tiup/issues/2057
-  tiup playground 5.4.0 &
+  user=$(whoami)
+  if [ "$user" == "root" ]; then
+    source /root/.bashrc
+  elif [ "$user" == "runner" ]; then
+    source /home/runner/.bash_profile
+  else
+    echo "Unknown user $user"
+    exit 1
+  fi
+  
+  $tiup playground 5.4.0 &
   pid=$!
   sleep 60
   lsof -i:4000 && pgrep pd-server && mysql -h127.0.0.1 -P4000 -uroot -e "select version();"
