@@ -1379,6 +1379,11 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
+			if trash > 0 && n.Nlink > 1 {
+				if o, e := s.Get(&edge{Parent: trash, Name: []byte(m.trashEntry(parent, e.Inode, string(e.Name))), Inode: e.Inode, Type: e.Type}); e == nil && o {
+					trash = 0
+				}
+			}
 			n.Ctime = now / 1e3
 			n.Ctimensec = int16(now % 1e3)
 			if trash == 0 {
@@ -2474,10 +2479,10 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 		if !exist {
 			return syscall.ENOENT
 		}
-		_, err = s.Insert(&dirStats{ino, stat.length, stat.space, stat.inodes})
+		stats := &dirStats{ino, stat.length, stat.space, stat.inodes}
+		_, err = s.Insert(stats)
 		if err != nil && isDuplicateEntryErr(err) {
-			// other client synced
-			err = nil
+			_, err = s.Cols("data_length", "used_space", "used_inodes").Update(stats)
 		}
 		return err
 	})
