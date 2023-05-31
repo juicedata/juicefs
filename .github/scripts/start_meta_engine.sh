@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e 
 retry(){
   local n=0
   local max=5
