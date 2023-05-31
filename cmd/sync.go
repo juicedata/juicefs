@@ -332,7 +332,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		}
 	}
 	switch name {
-	case "file":
+	case "file", "hdfs":
 	case "minio":
 		if strings.Count(u.Path, "/") > 1 {
 			// skip bucket name

@@ -377,6 +377,7 @@ func parseHDFSAddr(addr string, conf hadoopconf.HadoopConf) (rpcAddresses []stri
 		}
 	}
 	if len(nns) > 0 {
+		sort.Strings(nns)
 		rpcAddresses = nns
 	} else {
 		rpcAddresses = strings.Split(authority, ",")
