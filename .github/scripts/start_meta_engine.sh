@@ -24,15 +24,15 @@ install_tikv(){
   curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
   user=$(whoami)
   if [ "$user" == "root" ]; then
-    source /root/.bashrc
+    tiup=/root/.tiup/bin/tiup
   elif [ "$user" == "runner" ]; then
-    source /home/runner/.bash_profile
+    tiup=/home/runner/.tiup/bin/tiup
   else
     echo "Unknown user $user"
     exit 1
   fi
   
-  tiup playground --mode tikv-slim &
+  $tiup playground --mode tikv-slim &
   pid=$!
   sleep 60
   echo 'head -1' > /tmp/head.txt
@@ -52,9 +52,9 @@ install_tidb(){
   curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
   user=$(whoami)
   if [ "$user" == "root" ]; then
-    source /root/.bashrc
+    tiup=/root/.tiup/bin/tiup
   elif [ "$user" == "runner" ]; then
-    source /home/runner/.bash_profile
+    tiup=/home/runner/.tiup/bin/tiup
   else
     echo "Unknown user $user"
     exit 1
