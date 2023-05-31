@@ -733,6 +733,7 @@ func TestHDFS(t *testing.T) { //skip mutate
 
 	checkAddr := func(addr string, expected []string, base string) {
 		addresses, basePath := parseHDFSAddr(addr, conf)
+		sort.Strings(addresses)
 		if !reflect.DeepEqual(addresses, expected) {
 			t.Fatalf("expected addrs is %+v but got %+v from %s", expected, addresses, addr)
 		}
