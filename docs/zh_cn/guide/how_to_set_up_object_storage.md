@@ -904,7 +904,7 @@ bucket 参数支持格式如下：
 - `[hdfs://]namenode1:port,namenode2:port[/path]`
 - `[hdfs://]nameservice[/path]`
 
-对于启用 kerberos 的 HDFS， 可以通过 `KRB5KEYTAB` 和 `KRB5PRINCIPAL` 环境变量来指定 keytab 和 principal。
+对于启用 Kerberos 的 HDFS， 可以通过 `KRB5KEYTAB` 和 `KRB5PRINCIPAL` 环境变量来指定 keytab 和 principal。
 
 ```bash
 

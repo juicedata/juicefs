@@ -906,7 +906,7 @@ for HA cluster:
 - `[hdfs://]namenode1:port,namenode2:port[/path]`
 - `[hdfs://]nameservice[/path]`
 
-For HDFS which enable kerberos, `KRB5KEYTAB` and `KRB5PRINCIPAL` environment var can be used to set keytab and principal.
+For HDFS which enable Kerberos, `KRB5KEYTAB` and `KRB5PRINCIPAL` environment var can be used to set keytab and principal.
 
 ## Apache Ozone
 
