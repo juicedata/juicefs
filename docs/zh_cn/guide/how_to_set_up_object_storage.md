@@ -904,6 +904,10 @@ bucket 参数支持格式如下：
 - `[hdfs://]namenode1:port,namenode2:port[/path]`
 - `[hdfs://]nameservice[/path]`
 
+对于启用 kerberos 的 HDFS， 可以通过 `KRB5KEYTAB` 和 `KRB5PRINCIPAL` 环境变量来指定 keytab 和 principal。
+
+```bash
+
 ## Apache Ozone
 
 Apache Ozone 是 Hadoop 的分布式对象存储系统，提供了 S3 兼容的 API。所以可以通过 S3 兼容的模式作为对象存储供 JuiceFS 使用。例如：

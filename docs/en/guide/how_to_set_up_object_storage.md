@@ -906,6 +906,8 @@ for HA cluster:
 - `[hdfs://]namenode1:port,namenode2:port[/path]`
 - `[hdfs://]nameservice[/path]`
 
+For HDFS which enable kerberos, `KRB5KEYTAB` and `KRB5PRINCIPAL` environment var can be used to set keytab and principal.
+
 ## Apache Ozone
 
 Apache Ozone is a scalable, redundant, and distributed object storage for Hadoop. It supports S3-compatible interface, so we could set `--storage` to `s3` directly.
