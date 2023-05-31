@@ -82,7 +82,7 @@ start_meta_engine(){
     elif [ "$meta" == "redis" ]; then
         sudo apt-get install -y redis-tools redis-server
     elif [ "$meta" == "tikv" ]; then
-        git clone https://github.com/c4pt0r/tcli
+        [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
         cd tcli && make
         sudo cp bin/tcli /usr/local/bin
         cd -
