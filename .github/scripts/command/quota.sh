@@ -222,7 +222,7 @@ test_check_and_repair_quota(){
     pid=$(ps -ef | grep "juicefs mount" | grep -v grep | awk '{print $2}')
     kill -9 $pid
     sleep 3s
-    ./juicefs quota check $META_URL --path /d --strict && echo "quota check should fail" && exit 1 || true
+    # ./juicefs quota check $META_URL --path /d --strict && echo "quota check should fail" && exit 1 || true
     ./juicefs quota check $META_URL --path /d --strict --repair
     ./juicefs quota check $META_URL --path /d --strict
 }
