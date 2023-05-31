@@ -113,7 +113,7 @@ func genNextKey(key string) string {
 
 func (c *etcdClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if delimiter != "" {
-		return nil, notSupportedDelimiter
+		return nil, notSupported
 	}
 	if marker == "" {
 		marker = prefix

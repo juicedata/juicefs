@@ -81,8 +81,11 @@ func (d *filestore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
+	return d.toFile(key, fi, false), nil
+}
+
+func (d *filestore) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 	size := fi.Size()
-	var isSymlink bool
 	if fi.IsDir() {
 		size = 0
 	}
@@ -99,7 +102,7 @@ func (d *filestore) Head(key string) (Object, error) {
 		group,
 		fi.Mode(),
 		isSymlink,
-	}, nil
+	}
 }
 
 type SectionReaderCloser struct {
@@ -318,7 +321,45 @@ func readDirSorted(dirname string) ([]*mEntry, error) {
 }
 
 func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	return nil, notSupported
+	if delimiter != "/" {
+		return nil, notSupported
+	}
+	var dir string = d.root + prefix
+	if !strings.HasSuffix(dir, dirSuffix) {
+		dir = path.Dir(dir) + dirSuffix
+	}
+	entries, err := readDirSorted(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var objs []Object
+	for _, e := range entries {
+		p := filepath.Join(dir, e.Name())
+		if e.IsDir() {
+			p = filepath.ToSlash(p + "/")
+		}
+		if !strings.HasPrefix(p, d.root) {
+			continue
+		}
+		key := p[len(d.root):]
+		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			logger.Warnf("stat %s: %s", p, err)
+			continue
+		}
+		f := d.toFile(key, info, e.isSymlink)
+		objs = append(objs, f)
+		if len(objs) == int(limit) {
+			break
+		}
+	}
+	return objs, nil
 }
 
 type WalkFunc func(path string, info fs.FileInfo, isSymlink bool, err error) error
@@ -363,23 +404,7 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 				}
 				return nil
 			}
-			owner, group := getOwnerGroup(info)
-			f := &file{
-				obj{
-					key,
-					info.Size(),
-					info.ModTime(),
-					info.IsDir(),
-					"",
-				},
-				owner,
-				group,
-				info.Mode(),
-				isSymlink,
-			}
-			if info.IsDir() {
-				f.size = 0
-			}
+			f := d.toFile(key, info, isSymlink)
 			listed <- f
 			return nil
 		})

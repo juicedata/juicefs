@@ -185,6 +185,16 @@ func syncStorageFlags() []cli.Flag {
 			Value:   10,
 			Usage:   "number of concurrent threads",
 		},
+		&cli.IntFlag{
+			Name:  "list-threads",
+			Value: 1,
+			Usage: "number of threads to list objects",
+		},
+		&cli.IntFlag{
+			Name:  "list-depth",
+			Value: 1,
+			Usage: "list the top N level of directories in parallel",
+		},
 		&cli.BoolFlag{
 			Name:  "no-https",
 			Usage: "donot use HTTPS",

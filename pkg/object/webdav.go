@@ -255,7 +255,7 @@ func (w *webdav) ListAll(prefix, marker string) (<-chan Object, error) {
 				}
 				return nil
 			}
-			if !strings.HasPrefix(path, prefix) || path <= marker {
+			if !strings.HasPrefix(path, prefix) || (marker != "" && path <= marker) {
 				return nil
 			}
 			listed <- &obj{
