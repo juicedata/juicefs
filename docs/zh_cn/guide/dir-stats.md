@@ -98,7 +98,7 @@ $ ./juicefs summary /mnt/jfs/pjdfstest/
 +------------------+---------+------+-------+
 |       PATH       |   SIZE  | DIRS | FILES |
 +------------------+---------+------+-------+
-| ./               | 1.6 MiB |   37 |   278 |
+| /                | 1.6 MiB |   37 |   278 |
 | tests/           | 1.1 MiB |   18 |   240 |
 | tests/open/      | 112 KiB |    1 |    26 |
 | tests/rename/    | 112 KiB |    1 |    25 |
@@ -110,7 +110,7 @@ $ ./juicefs summary /mnt/jfs/pjdfstest/
 | tests/chflags/   |  64 KiB |    1 |    14 |
 | tests/chmod/     |  60 KiB |    1 |    14 |
 | tests/chown/     |  60 KiB |    1 |    11 |
-| tests/.../       | 328 KiB |    7 |    71 |
+| tests/...        | 328 KiB |    7 |    71 |
 | .git/            | 432 KiB |   17 |    26 |
 | .git/objects/    | 252 KiB |    3 |     2 |
 | .git/hooks/      |  64 KiB |    1 |    13 |
@@ -122,7 +122,7 @@ $ ./juicefs summary /mnt/jfs/pjdfstest/
 | .git/description | 4.0 KiB |    0 |     1 |
 | .git/HEAD        | 4.0 KiB |    0 |     1 |
 | .git/config      | 4.0 KiB |    0 |     1 |
-| .git/.../        | 4.0 KiB |    0 |     1 |
+| .git/...         | 4.0 KiB |    0 |     1 |
 | pjdfstest.c      |  40 KiB |    0 |     1 |
 | travis/          |  12 KiB |    1 |     2 |
 | travis/build.sh  | 4.0 KiB |    0 |     1 |
@@ -133,7 +133,7 @@ $ ./juicefs summary /mnt/jfs/pjdfstest/
 | NEWS             | 4.0 KiB |    0 |     1 |
 | README           | 4.0 KiB |    0 |     1 |
 | configure.ac     | 4.0 KiB |    0 |     1 |
-| .../             |  12 KiB |    0 |     3 |
+| ...              |  12 KiB |    0 |     3 |
 +------------------+---------+------+-------+
 ```
 
