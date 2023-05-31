@@ -2250,7 +2250,7 @@ func testClone(t *testing.T, m Meta) {
 	var noPreserveAttr = new(Attr)
 	m.Lookup(Background, cloneDir, "no_preserve", &d2, noPreserveAttr, true)
 	var cloneSrcAttr = new(Attr)
-	m.GetAttr(Background, cloneDir, cloneSrcAttr)
+	m.GetAttr(Background, dir1, cloneSrcAttr)
 	if noPreserveAttr.Mtimensec == cloneSrcAttr.Mtimensec {
 		t.Fatalf("clone: should not preserve mtime")
 	}
