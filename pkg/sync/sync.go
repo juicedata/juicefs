@@ -870,6 +870,9 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 		defer close(srckeys)
 		for _, o := range total {
 			if strings.HasSuffix(o.Key(), "/") {
+				if _, ok := o.(object.File); ok {
+					srckeys <- o
+				}
 				if cp != nil {
 					cp <- o
 				}
