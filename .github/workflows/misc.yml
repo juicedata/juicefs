@@ -56,8 +56,6 @@ jobs:
         run: | 
           wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
           chmod +x mc 
-          sudo apt install redis-tools
-          sudo apt install fio
 
       - name: Test mount process exit on reformat
         run: |
