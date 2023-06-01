@@ -717,6 +717,8 @@ func (fs *FileSystem) lookup(ctx meta.Context, parent Ino, name string, inode *I
 func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool) (fi *FileStat, err syscall.Errno) {
 	var inode Ino
 	var attr = &Attr{}
+	l := vfs.NewLogContext(ctx)
+	fs.log(l, "alloc attr for %s (%p,%+v)", p, attr, *attr)
 
 	if fs.conf.FastResolve {
 		err = fs.m.Resolve(ctx, 1, p, &inode, attr)

@@ -731,7 +731,7 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Ctimensec = uint32(n.Ctime % 1e6 * 1000)
 	attr.Nlink = n.Nlink
 	attr.Length = n.Length
-	attr.Rdev = n.Rdev
+	attr.Rdev = uint32(n.Inode)
 	attr.Parent = n.Parent
 	attr.Full = true
 }
