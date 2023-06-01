@@ -42,6 +42,10 @@ func globalFlags() []cli.Flag {
 			Name:  "trace",
 			Usage: "enable trace log",
 		},
+		&cli.StringFlag{
+			Name:  "log-level",
+			Usage: "set log level (trace, debug, info, warn, error, fatal, panic)",
+		},
 		&cli.BoolFlag{
 			Name:  "no-agent",
 			Usage: "disable pprof (:6060) agent",
