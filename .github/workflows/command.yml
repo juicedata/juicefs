@@ -43,7 +43,7 @@ jobs:
       - name: Build 
         uses: ./.github/actions/build
 
-      - name: Test Quota with tikv
+      - name: Test Quota
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
 

@@ -43,17 +43,21 @@ test_total_inodes(){
     prepare_test
     ./juicefs format $META_URL myjfs --inodes 1000
     ./juicefs mount -d $META_URL /jfs --heartbeat 5
+    set +x
     for i in {1..1000}; do
         echo $i | tee /jfs/test$i
     done
+    set -x
     sleep 12s
     echo a | tee /jfs/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
     grep "No space left on device" error.log
     ./juicefs config $META_URL --inodes 2000
     sleep 6s
+    set +x
     for i in {1001..2000}; do
         echo $i | tee /jfs/test$i
     done
+    set -x
     sleep 6s
     echo a | tee /jfs/test2001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
 }
@@ -115,18 +119,22 @@ test_dir_inodes(){
     mkdir -p /jfs/d
     ./juicefs quota set $META_URL --path /d --inodes 1000
     sleep 6s
+    set +x
     for i in {1..1000}; do
         echo $i > /jfs/d/test$i
     done
+    set -x
     sleep 3s
     echo a | tee /jfs/d/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
     grep "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
     rm -rf error.log
     ./juicefs quota set $META_URL --path /d --inodes 2000
     sleep 6s
+    set +x
     for i in {1001..2000}; do
         echo $i | tee  /jfs/d/test$i
     done
+    set -x
     sleep 3s
     echo a | tee  /jfs/d/test2001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
     grep "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
@@ -156,9 +164,11 @@ test_sub_dir(){
     grep "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
     rm /jfs/test1 -rf
     sleep 3s
+    set +x
     for i in {1..1000}; do
         echo $i | tee /jfs/test$i
     done
+    set -x
     sleep 3s
     echo $i | tee /jfs/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
     grep "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
@@ -183,9 +193,11 @@ test_dump_load(){
     grep "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
     rm /jfs/d/test1 -rf
     sleep 3s
+    set +x
     for i in {1..1000}; do
         echo $i | tee /jfs/d/test$i
     done
+    set -x
     sleep 3s
     echo a | tee /jfs/d/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
     grep "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
