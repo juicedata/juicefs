@@ -2467,6 +2467,9 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 }
 
 func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
+	if m.conf.ReadOnly {
+		return nil, syscall.EROFS
+	}
 	stat, st := m.calcDirStat(ctx, ino)
 	if st != 0 {
 		return nil, st
@@ -2479,10 +2482,10 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 		if !exist {
 			return syscall.ENOENT
 		}
-		stats := &dirStats{ino, stat.length, stat.space, stat.inodes}
-		_, err = s.Insert(stats)
+		record := &dirStats{ino, stat.length, stat.space, stat.inodes}
+		_, err = s.Insert(record)
 		if err != nil && isDuplicateEntryErr(err) {
-			_, err = s.Cols("data_length", "used_space", "used_inodes").Update(stats)
+			_, err = s.Where("inode = ?", ino).Cols("data_length", "used_space", "used_inodes").Update(record)
 		}
 		return err
 	})
