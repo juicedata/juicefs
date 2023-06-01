@@ -17,7 +17,8 @@
 package vfs
 
 import (
-	"bytes"
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"log"
 	"reflect"
@@ -724,6 +725,38 @@ func TestInternalFile(t *testing.T) {
 		}
 	}
 
+	readData := func(resp []byte, fileOff *uint64) ([]byte, syscall.Errno) {
+		var off uint64
+		for {
+			n, errno := v.Read(ctx, fe.Inode, resp, *fileOff, fh)
+			if errno != 0 {
+				return nil, errno
+			}
+			if n == 0 {
+				time.Sleep(time.Millisecond * 200)
+				continue
+			}
+			*fileOff += uint64(n)
+			for {
+				if n == 1 {
+					return nil, syscall.Errno(resp[off])
+				} else if off+17 <= uint64(n) && resp[off] == meta.CPROGRESS {
+					off += 17
+				} else if off+5 < uint64(n) && resp[off] == meta.CDATA {
+					size := binary.BigEndian.Uint32(resp[off+1 : off+5])
+					if off+5+uint64(size) > uint64(n) {
+						logger.Errorf("Bad response off %d n %d: %v", off, n, resp)
+						return nil, syscall.EIO
+					}
+					return resp[off+5 : off+5+uint64(size)], 0
+				} else {
+					logger.Errorf("Bad response off %d n %d: %v", off, n, resp)
+					return nil, syscall.EIO
+				}
+			}
+		}
+	}
+
 	// rmr
 	buf = make([]byte, 4+4+8+1+4)
 	w := utils.FromBuffer(buf)
@@ -773,21 +806,17 @@ func TestInternalFile(t *testing.T) {
 	}
 	off += uint64(len(buf))
 	buf = make([]byte, 1024*10)
-	if n, e = readControl(buf, &off); e != 0 {
+	data, e := readData(buf, &off)
+	if e != 0 {
 		t.Fatalf("read progress bar: %s %d", e, n)
-	} else if buf[0] != 0 {
-		t.Fatalf("info v2 st: %s", syscall.Errno(buf[0]))
-	} else {
-		off += uint64(n)
 	}
 
 	var infoResp InfoResponse
-	if n, e = readControl(buf, &off); e != 0 {
-		t.Fatalf("read response: %s %d", e, n)
-	} else if infoResp.Decode(bytes.NewBuffer(buf[:n])) != nil {
-		t.Fatalf("info v2 result: %s", string(buf[:n]))
-	} else {
-		off += uint64(n)
+	if e := json.Unmarshal(data, &infoResp); e != nil {
+		t.Fatalf("unmarshal info v2: %s", e)
+	}
+	if infoResp.Failed && infoResp.Reason != "" {
+		t.Fatalf("info v2 result: %s", infoResp.Reason)
 	}
 
 	// fill

@@ -293,28 +293,6 @@ type chunkObj struct {
 	Size, Off, Len uint32
 }
 
-func (r *InfoResponse) Decode(reader io.Reader) error {
-	sizeBuf := make([]byte, 4)
-	n := 0
-	for n == 0 {
-		i, err := reader.Read(sizeBuf[n:])
-		if err != nil && err != io.EOF {
-			return err
-		}
-		if i == 1 && sizeBuf[0] == byte(syscall.EINVAL&0xff) {
-			return syscall.EINVAL
-		}
-		n += i
-	}
-
-	size := utils.ReadBuffer(sizeBuf).Get32()
-	respBuf := make([]byte, size)
-	if _, err := io.ReadFull(reader, respBuf); err != nil {
-		return err
-	}
-	return json.Unmarshal(respBuf, r)
-}
-
 func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, out io.Writer) {
 	switch cmd {
 	case meta.Rmr:
