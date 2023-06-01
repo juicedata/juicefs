@@ -201,7 +201,39 @@ func (j *juiceFS) Head(key string) (object.Object, error) {
 }
 
 func (j *juiceFS) List(prefix, marker, delimiter string, limit int64) ([]object.Object, error) {
-	return nil, utils.ENOTSUP
+	if delimiter != "/" {
+		return nil, utils.ENOTSUP
+	}
+	var dir string
+	if strings.HasSuffix(prefix, dirSuffix) {
+		dir = prefix
+	} else {
+		// If the root is not ends with `/`, we'll list the directory root resides.
+		dir = path.Dir(prefix) + dirSuffix
+	}
+	if dir == "./" {
+		dir = ""
+	}
+	entries, err := j.readDirSorted(j.path(dir))
+	if err != 0 {
+		if err == syscall.ENOENT {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var objs []object.Object
+	for _, e := range entries {
+		key := dir + e.name
+		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
+			continue
+		}
+		f := &jObj{key, e.fi}
+		objs = append(objs, f)
+		if len(objs) == int(limit) {
+			break
+		}
+	}
+	return objs, nil
 }
 
 // walk recursively descends path, calling w.

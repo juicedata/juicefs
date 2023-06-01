@@ -1,6 +1,6 @@
 ---
 title: 启动时自动挂载 JuiceFS
-sidebar_position: 2
+sidebar_position: 3
 slug: /mount_juicefs_at_boot_time
 ---
 

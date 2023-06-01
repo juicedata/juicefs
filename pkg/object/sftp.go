@@ -389,7 +389,7 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan Object) {
 			key := o.Key()
 			p := f.root + o.Key()
 			if strings.HasPrefix(p, path) {
-				if key > marker || marker == "" {
+				if key > marker {
 					out <- o
 				}
 				if o.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
@@ -401,7 +401,41 @@ func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan Object) {
 }
 
 func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	return nil, notSupported
+	if delimiter != "/" {
+		return nil, notSupported
+	}
+
+	c, err := f.getSftpConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer f.putSftpConnection(&c, nil)
+
+	dir := f.path(prefix)
+	if !strings.HasSuffix(dir, "/") {
+		dir = filepath.Dir(dir) + dirSuffix
+	}
+	infos, err := c.sftpClient.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	entries := f.sortByName(c.sftpClient, dir, infos)
+	var objs []Object
+	for _, o := range entries {
+		key := o.Key()
+		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
+			continue
+		}
+		objs = append(objs, o)
+		if len(objs) == int(limit) {
+			break
+		}
+	}
+	return objs, nil
 }
 
 func (f *sftpStore) ListAll(prefix, marker string) (<-chan Object, error) {
@@ -419,7 +453,7 @@ func (f *sftpStore) ListAll(prefix, marker string) (<-chan Object, error) {
 	return listed, nil
 }
 
-func SshInteractive(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
+func sshInteractive(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
 	if len(questions) == 0 {
 		fmt.Print(user, instruction)
 	} else {
@@ -440,6 +474,7 @@ func SshInteractive(user, instruction string, questions []string, echos []bool) 
 	}
 	return answers, nil
 }
+
 func unescape(original string) string {
 	if escaped, err := url.QueryUnescape(original); err != nil {
 		logger.Warnf("unescape(%s) error: %s", original, err)
@@ -479,7 +514,7 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 		pass = unescape(pass)
 		auth = append(auth, ssh.Password(pass))
 	} else {
-		auth = append(auth, ssh.KeyboardInteractive(SshInteractive))
+		auth = append(auth, ssh.KeyboardInteractive(sshInteractive))
 	}
 
 	var signers []ssh.Signer

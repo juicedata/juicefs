@@ -2244,7 +2244,9 @@ func testClone(t *testing.T, m Meta) {
 	}
 	cloneDstIno := entries1[idx].Inode
 	cloneDstAttr := entries1[idx].Attr
-
+	if cloneDstAttr.Mode != 0755 {
+		t.Fatalf("mode should be 0755 %o", cloneDstAttr.Mode)
+	}
 	// check dst parent dir nlink
 	var rootAttr Attr
 	if eno := m.GetAttr(Background, cloneDir, &rootAttr); eno != 0 {
@@ -2274,7 +2276,7 @@ func testClone(t *testing.T, m Meta) {
 	var noPreserveAttr = new(Attr)
 	m.Lookup(Background, cloneDir, "no_preserve", &d2, noPreserveAttr, true)
 	var cloneSrcAttr = new(Attr)
-	m.GetAttr(Background, cloneDir, cloneSrcAttr)
+	m.GetAttr(Background, dir1, cloneSrcAttr)
 	if noPreserveAttr.Mtimensec == cloneSrcAttr.Mtimensec {
 		t.Fatalf("clone: should not preserve mtime")
 	}

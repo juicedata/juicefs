@@ -55,7 +55,7 @@ func (s *speedy) String() string {
 
 func (s *speedy) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if delimiter != "" {
-		return nil, notSupportedDelimiter
+		return nil, notSupported
 	}
 	uri, _ := url.ParseRequestURI(s.endpoint)
 
