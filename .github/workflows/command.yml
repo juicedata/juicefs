@@ -43,6 +43,14 @@ jobs:
       - name: Build 
         uses: ./.github/actions/build
 
+      - name: Test info
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/info.sh 
+
+      - name: Test Sync
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
+
       - name: Test Quota
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
@@ -70,7 +78,7 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
       - name: Setup upterm session
-        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
-        if: failure()
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1

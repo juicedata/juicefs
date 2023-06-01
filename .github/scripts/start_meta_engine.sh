@@ -145,21 +145,21 @@ start_meta_engine(){
 get_meta_url(){
     meta=$1
     if [ "$meta" == "postgres" ]; then
-        meta_url="postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable" 
+        meta_url="postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable" 
     elif [ "$meta" == "mysql" ]; then
-        meta_url="mysql://root:root@(127.0.0.1)/sync_test"
+        meta_url="mysql://root:root@(127.0.0.1)/test"
     elif [ "$meta" == "redis" ]; then
         meta_url="redis://127.0.0.1:6379/1"
     elif [ "$meta" == "sqlite3" ]; then
-        meta_url="sqlite3://sync-test.db"
+        meta_url="sqlite3://test.db"
     elif [ "$meta" == "tikv" ]; then
-        meta_url="tikv://127.0.0.1:2379/load_test"
+        meta_url="tikv://127.0.0.1:2379/test"
     elif [ "$meta" == "badger" ]; then
-        meta_url="badger:///tmp/load_test"
+        meta_url="badger:///tmp/test"
     elif [ "$meta" == "mariadb" ]; then
-        meta_url="mysql://root:root@(127.0.0.1)/load_test"
+        meta_url="mysql://root:root@(127.0.0.1)/test"
     elif [ "$meta" == "tidb" ]; then
-        meta_url="mysql://root:@(127.0.0.1:4000)/load_test"
+        meta_url="mysql://root:@(127.0.0.1:4000)/test"
     elif [ "$meta" == "etcd" ]; then
         meta_url="etcd://localhost:2379/jfs"
     elif [ "$meta" == "fdb" ]; then
