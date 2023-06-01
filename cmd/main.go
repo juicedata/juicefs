@@ -249,14 +249,31 @@ func setup(c *cli.Context, n int) {
 		os.Exit(1)
 	}
 
-	if c.Bool("trace") {
+	switch c.String("log-level") {
+	case "trace":
 		utils.SetLogLevel(logrus.TraceLevel)
-	} else if c.Bool("verbose") {
+	case "debug":
 		utils.SetLogLevel(logrus.DebugLevel)
-	} else if c.Bool("quiet") {
-		utils.SetLogLevel(logrus.WarnLevel)
-	} else {
+	case "info":
 		utils.SetLogLevel(logrus.InfoLevel)
+	case "warn":
+		utils.SetLogLevel(logrus.WarnLevel)
+	case "error":
+		utils.SetLogLevel(logrus.ErrorLevel)
+	case "fatal":
+		utils.SetLogLevel(logrus.FatalLevel)
+	case "panic":
+		utils.SetLogLevel(logrus.PanicLevel)
+	default:
+		if c.Bool("trace") {
+			utils.SetLogLevel(logrus.TraceLevel)
+		} else if c.Bool("verbose") {
+			utils.SetLogLevel(logrus.DebugLevel)
+		} else if c.Bool("quiet") {
+			utils.SetLogLevel(logrus.WarnLevel)
+		} else {
+			utils.SetLogLevel(logrus.InfoLevel)
+		}
 	}
 	if c.Bool("no-color") {
 		utils.DisableLogColor()
