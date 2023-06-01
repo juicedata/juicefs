@@ -2439,6 +2439,9 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 }
 
 func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
+	if m.conf.ReadOnly {
+		return nil, syscall.EROFS
+	}
 	field := ino.String()
 	stat, st := m.calcDirStat(ctx, ino)
 	if st != 0 {
