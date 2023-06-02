@@ -444,11 +444,6 @@ func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
 	if runtime.GOOS == "windows" && strings.HasPrefix(root, "/") {
 		root = root[1:]
 	}
-	var err error
-	root, err = filepath.Abs(root)
-	if err != nil {
-		return nil, err
-	}
 	if strings.HasSuffix(root, dirSuffix) {
 		logger.Debugf("Ensure directory %s", root)
 		if err := os.MkdirAll(root, 0755); err != nil {

@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"os"
 	"os/user"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -135,7 +136,15 @@ func objbench(ctx *cli.Context) error {
 	if token == "" {
 		token = os.Getenv("SESSION_TOKEN")
 	}
-	blobOrigin, err := object.CreateStorage(strings.ToLower(ctx.String("storage")), ctx.Args().First(), ak, sk, token)
+	endpoint := ctx.Args().First()
+	storageType := strings.ToLower(ctx.String("storage"))
+	if storageType == "file" {
+		var err error
+		if endpoint, err = filepath.Abs(endpoint); err != nil {
+			logger.Fatalf("invalid path: %s", err)
+		}
+	}
+	blobOrigin, err := object.CreateStorage(storageType, endpoint, ak, sk, token)
 	if err != nil {
 		logger.Fatalf("create storage failed: %v", err)
 	}
