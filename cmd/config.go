@@ -53,6 +53,16 @@ $ juicefs config redis://localhost --trash-days 7
 $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version 1.1.0`,
 		Flags: expandFlags(
 			formatStorageFlags(),
+			addCategories("DATA STORAGE", []cli.Flag{
+				&cli.Int64Flag{
+					Name:  "upload-limit",
+					Usage: "default bandwidth limit of the volume for upload in Mbps",
+				},
+				&cli.Int64Flag{
+					Name:  "download-limit",
+					Usage: "default bandwidth limit of the volume for download in Mbps",
+				},
+			}),
 			formatManagementFlags(),
 			configManagementFlags(),
 			configFlags()),
@@ -72,14 +82,6 @@ func configManagementFlags() []cli.Flag {
 		&cli.StringFlag{
 			Name:  "max-client-version",
 			Usage: "maximum client version allowed to connect",
-		},
-		&cli.Int64Flag{
-			Name:  "upload-limit",
-			Usage: "default bandwidth limit of the volume for upload in Mbps",
-		},
-		&cli.Int64Flag{
-			Name:  "download-limit",
-			Usage: "default bandwidth limit of the volume for download in Mbps",
 		},
 		&cli.BoolFlag{
 			Name:  "dir-stats",

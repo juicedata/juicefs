@@ -2485,7 +2485,7 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 		record := &dirStats{ino, stat.length, stat.space, stat.inodes}
 		_, err = s.Insert(record)
 		if err != nil && isDuplicateEntryErr(err) {
-			_, err = s.Where("inode = ?", ino).Cols("data_length", "used_space", "used_inodes").Update(record)
+			_, err = s.Cols("data_length", "used_space", "used_inodes").Update(record, &dirStats{Inode: ino})
 		}
 		return err
 	})
