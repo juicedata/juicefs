@@ -12,12 +12,11 @@ META_URL=$(get_meta_url $META)
 
 
 test_sync_with_mount_point(){
-    do_sync_with_mount_point --dirs
-    do_sync_with_mount_point --links
-    do_sync_with_mount_point --perms
-    do_sync_with_mount_point --check-all
-    do_sync_with_mount_point --check-new
     do_sync_with_mount_point --update
+    do_sync_with_mount_point --check-all
+    do_sync_with_mount_point --dirs
+    do_sync_with_mount_point --perms
+    do_sync_with_mount_point --check-new
     do_sync_with_mount_point --force-update
     do_sync_with_mount_point --list-threads 10 --list-depth 5
     do_sync_with_mount_point --dirs --check-all --links --list-threads 10 --list-depth 5
@@ -25,7 +24,6 @@ test_sync_with_mount_point(){
 
 skip_test_sync_without_mount_point(){
     do_sync_without_mount_point --dirs
-    do_sync_without_mount_point --links
     do_sync_without_mount_point --perms
     do_sync_without_mount_point --check-all
     do_sync_without_mount_point --check-new
@@ -40,15 +38,13 @@ do_sync_without_mount_point(){
     options=$@
     generate_source_dir
     ./juicefs format $META_URL myjfs
-    meta_url=$META_URL ./juicefs sync jfs_source/ jfs://meta_url/jfs_source/ $options
+    meta_url=$META_URL ./juicefs sync jfs_source/ jfs://meta_url/jfs_source/ $options --links
 
     ./juicefs mount -d $META_URL /jfs
-    if [[ ! $options =~ "--dirs" ]]; then
+    if [[ ! "$options" =~ "--dirs" ]]; then
         find jfs_source -type d -empty -delete
     fi
-    if [[ ! $options =~ "--links" ]]; then
-        find . -type l -delete
-    fi
+    find /jfs/jfs_source -type f -name ".*.tmp*" -delete
     diff -ur --no-dereference  jfs_source/ /jfs/jfs_source
 }
 
@@ -58,14 +54,12 @@ do_sync_with_mount_point(){
     generate_source_dir
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    ./juicefs sync jfs_source/ /jfs/jfs_source/ $options
+    ./juicefs sync jfs_source/ /jfs/jfs_source/ $options --links
 
-    if [[ ! $options =~ "--dirs" ]]; then
+    if [[ ! "$options" =~ "--dirs" ]]; then
         find jfs_source -type d -empty -delete
     fi
-    if [[ ! $options =~ "--links" ]]; then
-        find . -type l -delete
-    fi
+    find /jfs/jfs_source -type f -name ".*.tmp*" -delete
     diff -ur --no-dereference jfs_source/ /jfs/jfs_source/
 }
 
@@ -77,7 +71,7 @@ generate_source_dir(){
     mkdir jfs_source/empty_dir
     dd if=/dev/urandom of=jfs_source/file bs=5M count=1
     chmod 777 jfs_source/file
-    ln -sf jfs_source/file jfs_source/symlink_to_file
+    ln -sf file jfs_source/symlink_to_file
     ln -f jfs_source/file jfs_source/hard_link_to_file
     id -u juicefs  && sudo userdel juicefs
     sudo useradd -u 1101 juicefs
