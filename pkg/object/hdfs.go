@@ -180,8 +180,18 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Obje
 		return nil, notSupported
 	}
 	dir := h.path(prefix)
+	var objs []Object
 	if !strings.HasSuffix(dir, "/") {
 		dir = filepath.Dir(dir) + dirSuffix
+	} else if marker == "" {
+		obj, err := h.Head(prefix)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		objs = append(objs, obj)
 	}
 
 	file, err := h.c.Open(dir)
@@ -209,7 +219,6 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Obje
 	}
 	sort.Strings(names)
 
-	var objs []Object
 	for _, name := range names {
 		p := dir + name
 		if !strings.HasPrefix(p, h.basePath) {

@@ -325,8 +325,18 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 		return nil, notSupported
 	}
 	var dir string = d.root + prefix
+	var objs []Object
 	if !strings.HasSuffix(dir, dirSuffix) {
 		dir = path.Dir(dir) + dirSuffix
+	} else if marker == "" {
+		obj, err := d.Head(prefix)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		objs = append(objs, obj)
 	}
 	entries, err := readDirSorted(dir)
 	if err != nil {
@@ -335,7 +345,6 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 		}
 		return nil, err
 	}
-	var objs []Object
 	for _, e := range entries {
 		p := filepath.Join(dir, e.Name())
 		if e.IsDir() {
