@@ -43,6 +43,10 @@ jobs:
       - name: Build 
         uses: ./.github/actions/build
 
+      - name: Test Quota
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
+
       - name: Test info
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/info.sh 
@@ -50,10 +54,6 @@ jobs:
       - name: Test Sync
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
-
-      # - name: Test Quota
-      #   run: |
-      #     sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
 
       - name: Test Load & Dump
         run: |
