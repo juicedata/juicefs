@@ -13,7 +13,7 @@ test_sync_dir_stat()
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    ./juicefs mdtest $META_URL /d --depth 10 --dirs 2 --files 2 --threads 10 & 
+    ./juicefs mdtest $META_URL /d --depth 15 --dirs 2 --files 100 --threads 10 & 
     pid=$!
     sleep 15s
     kill -9 $pid
