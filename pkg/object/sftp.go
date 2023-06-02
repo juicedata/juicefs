@@ -411,9 +411,19 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	}
 	defer f.putSftpConnection(&c, nil)
 
+	var objs []Object
 	dir := f.path(prefix)
 	if !strings.HasSuffix(dir, "/") {
 		dir = filepath.Dir(dir) + dirSuffix
+	} else if marker == "" {
+		obj, err := f.Head(prefix)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		objs = append(objs, obj)
 	}
 	infos, err := c.sftpClient.ReadDir(dir)
 	if err != nil {
@@ -424,7 +434,6 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	}
 
 	entries := f.sortByName(c.sftpClient, dir, infos)
-	var objs []Object
 	for _, o := range entries {
 		key := o.Key()
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
