@@ -487,20 +487,20 @@ func (m *kvMeta) updateStats(space int64, inodes int64) {
 
 func (m *kvMeta) flushStats() {
 	for {
-		if space := atomic.SwapInt64(&m.newSpace, 0); space != 0 {
+		if space := atomic.LoadInt64(&m.newSpace); space != 0 {
 			if v, err := m.incrCounter(usedSpace, space); err == nil {
+				atomic.AddInt64(&m.newSpace, -space)
 				atomic.StoreInt64(&m.usedSpace, v)
 			} else {
 				logger.Warnf("Update space stats: %s", err)
-				m.updateStats(space, 0)
 			}
 		}
 		if inodes := atomic.SwapInt64(&m.newInodes, 0); inodes != 0 {
 			if v, err := m.incrCounter(totalInodes, inodes); err == nil {
+				atomic.AddInt64(&m.newInodes, -inodes)
 				atomic.StoreInt64(&m.usedInodes, v)
 			} else {
 				logger.Warnf("Update inodes stats: %s", err)
-				m.updateStats(0, inodes)
 			}
 		}
 		time.Sleep(time.Second)
