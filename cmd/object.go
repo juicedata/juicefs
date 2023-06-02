@@ -204,26 +204,29 @@ func (j *juiceFS) List(prefix, marker, delimiter string, limit int64) ([]object.
 	if delimiter != "/" {
 		return nil, utils.ENOTSUP
 	}
-	var dir string
-	if strings.HasSuffix(prefix, dirSuffix) {
-		dir = prefix
-	} else {
-		// If the root is not ends with `/`, we'll list the directory root resides.
-		dir = path.Dir(prefix) + dirSuffix
+	dir := j.path(prefix)
+	var objs []object.Object
+	if !strings.HasSuffix(dir, dirSuffix) {
+		dir = path.Dir(dir) + dirSuffix
+	} else if marker == "" {
+		obj, err := j.Head(prefix)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		objs = append(objs, obj)
 	}
-	if dir == "./" {
-		dir = ""
-	}
-	entries, err := j.readDirSorted(j.path(dir))
+	entries, err := j.readDirSorted(dir)
 	if err != 0 {
 		if err == syscall.ENOENT {
 			return nil, nil
 		}
 		return nil, err
 	}
-	var objs []object.Object
 	for _, e := range entries {
-		key := dir + e.name
+		key := dir[1:] + e.name
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
