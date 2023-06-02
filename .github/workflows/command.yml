@@ -47,9 +47,9 @@ jobs:
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
 
-      - name: Test info
+      - name: Test fsck
         run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/info.sh 
+          sudo META=${{matrix.meta}} .github/scripts/command/fsck.sh 
 
       - name: Test Sync
         run: |
@@ -71,8 +71,8 @@ jobs:
           grep "<FATAL>:" /var/log/juicefs.log && exit 1
           
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
-        # if: failure()
+        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 

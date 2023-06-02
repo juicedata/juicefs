@@ -62,26 +62,6 @@ test_total_inodes(){
     echo a | tee /jfs/test2001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
 }
 
-wait_until()
-{   
-    key=$1
-    value=$2
-    echo "wait until $key becomes $value"
-    wait_seconds=15
-    for i in $(seq 1 $wait_seconds); do
-        if [ "$key" == "ifree" ]; then
-            expect_value=$(df -ih /jfs | grep JuiceFS | awk '{print $4}')
-        elif [ "$key" == "avail_size" ]; then
-            expect_value=$(df h /jfs | grep JuiceFS | awk '{print $4}')
-        fi
-        if [ "$expect_value" == "$value" ]; then
-            echo "$key becomes $value" && return 0
-        fi
-        echo "wait until $key becomes $value" && sleep 1s
-    done
-    echo "wait until $key becomes $value failed after $wait_seconds seconds" && exit 1
-}
-
 test_dir_capacity(){
     prepare_test
     ./juicefs format $META_URL myjfs
@@ -243,6 +223,26 @@ prepare_test()
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     rm -rf /var/jfs/myjfs
+}
+
+wait_until()
+{   
+    key=$1
+    value=$2
+    echo "wait until $key becomes $value"
+    wait_seconds=15
+    for i in $(seq 1 $wait_seconds); do
+        if [ "$key" == "ifree" ]; then
+            expect_value=$(df -ih /jfs | grep JuiceFS | awk '{print $4}')
+        elif [ "$key" == "avail_size" ]; then
+            expect_value=$(df h /jfs | grep JuiceFS | awk '{print $4}')
+        fi
+        if [ "$expect_value" == "$value" ]; then
+            echo "$key becomes $value" && return 0
+        fi
+        echo "wait until $key becomes $value" && sleep 1s
+    done
+    echo "wait until $key becomes $value failed after $wait_seconds seconds" && exit 1
 }
 
 function_names=$(sed -nE '/^test_[^ ()]+ *\(\)/ { s/^\s*//; s/ *\(\).*//; p; }' "$0")

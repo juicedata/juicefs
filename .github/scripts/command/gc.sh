@@ -37,23 +37,6 @@ test_gc_trash_files(){
     ./juicefs status --more $META_URL
 }
 
-skip_test_delete_compact(){
-    prepare_test
-    ./juicefs format $META_URL myjfs --trash-days 1
-    ./juicefs mount -d $META_URL /jfs
-    fio --name=abc --rw=randwrite --refill_buffers --size=2G --bs=256k --directory=/jfs
-    redis-cli save
-    # don't skip files when gc compact
-    export JFS_SKIPPED_TIME=1
-    ./juicefs gc --compact --delete $META_URL
-    container_id=$(docker ps -a | grep redis | awk '{print $1}')
-    sudo killall -9 redis-server
-    sudo docker restart $container_id
-    sleep 3
-    ./juicefs fsck $meta
-}
-          
-
 prepare_test()
 {
     umount_jfs /jfs $META_URL
