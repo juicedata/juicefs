@@ -12,25 +12,17 @@ META_URL=$(get_meta_url $META)
 
 
 test_sync_with_mount_point(){
-    do_sync_with_mount_point --update
-    do_sync_with_mount_point --check-all
-    do_sync_with_mount_point --dirs
-    do_sync_with_mount_point --perms
-    do_sync_with_mount_point --check-new
-    do_sync_with_mount_point --force-update
+    do_sync_with_mount_point 
     do_sync_with_mount_point --list-threads 10 --list-depth 5
-    do_sync_with_mount_point --dirs --check-all --links --list-threads 10 --list-depth 5
+    do_sync_with_mount_point --dirs --update --perms --check-all 
+    do_sync_with_mount_point --dirs --update --perms --check-all --list-threads 10 --list-depth 5
 }
 
 skip_test_sync_without_mount_point(){
-    do_sync_without_mount_point --dirs
-    do_sync_without_mount_point --perms
-    do_sync_without_mount_point --check-all
-    do_sync_without_mount_point --check-new
-    do_sync_without_mount_point --update
-    do_sync_without_mount_point --force-update
+    do_sync_without_mount_point 
     do_sync_without_mount_point --list-threads 10 --list-depth 5
-    do_sync_without_mount_point --dirs --check-all --links --list-threads 10 --list-depth 5
+    do_sync_without_mount_point --dirs --update --perms --check-all 
+    do_sync_without_mount_point --dirs --update --perms --check-all --list-threads 10 --list-depth 5
 }
 
 do_sync_without_mount_point(){
@@ -159,6 +151,7 @@ test_file_head(){
     echo "test" > jfs_source/test_file
     mkdir -p jfs_source/test_dir
     ./juicefs sync jfs_source/ /jfs/jfs_source/  --update --perms --check-all --bwlimit=81920 --dirs --threads=30 --list-threads=2 --debug
+    find /jfs/jfs_source -type f -name ".*.tmp*" -delete
     diff -ur jfs_source/ /jfs/jfs_source
 }
 

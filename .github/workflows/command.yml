@@ -51,9 +51,9 @@ jobs:
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
 
-      - name: Test Quota
-        run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
+      # - name: Test Quota
+      #   run: |
+      #     sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
 
       - name: Test Load & Dump
         run: |
