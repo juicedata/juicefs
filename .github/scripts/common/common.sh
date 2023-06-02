@@ -10,7 +10,7 @@ umount_jfs()
     [[ -z "$meta_url" ]] && echo "meta url is empty" && exit 1
     [[ ! -f $mp/.config ]] && echo "$mp/.config not found, $mp is not juicefs mount point" && return
     ls -l $mp/.config
-    pid=$(./juicefs status $meta_url 2>/dev/null | grep -v "get timestamp too slow" |tee status.log| jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID')
+    pid=$(./juicefs status --log-level error $meta_url 2>/dev/null |tee status.log| jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID')
     echo "umount  $mp, pid $pid"
     [[ -z "$pid" ]] && echo "pid is empty" && return
     umount -l $mp
