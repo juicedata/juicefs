@@ -827,8 +827,8 @@ func (m *dbMeta) flushStats() {
 		inttype = "SIGNED"
 	}
 	for {
-		newSpace := atomic.SwapInt64(&m.newSpace, 0)
-		newInodes := atomic.SwapInt64(&m.newInodes, 0)
+		newSpace := atomic.LoadInt64(&m.newSpace)
+		newInodes := atomic.LoadInt64(&m.newInodes)
 		if newSpace != 0 || newInodes != 0 {
 			err := m.txn(func(s *xorm.Session) error {
 				_, err := s.Exec(fmt.Sprintf("UPDATE jfs_counter SET value=value+ CAST((CASE name WHEN 'usedSpace' THEN %d ELSE %d END) AS %s) WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes, inttype))
@@ -836,7 +836,12 @@ func (m *dbMeta) flushStats() {
 			})
 			if err != nil && !strings.Contains(err.Error(), "attempt to write a readonly database") {
 				logger.Warnf("update stats: %s", err)
-				m.updateStats(newSpace, newInodes)
+			}
+			if err == nil {
+				atomic.AddInt64(&m.newSpace, -newSpace)
+				atomic.AddInt64(&m.usedSpace, newSpace)
+				atomic.AddInt64(&m.newInodes, -newInodes)
+				atomic.AddInt64(&m.usedInodes, newInodes)
 			}
 		}
 		time.Sleep(time.Second)
