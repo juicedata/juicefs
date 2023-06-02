@@ -8,6 +8,21 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
 
+test_fix_nlink(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    mkdir /jfs/a
+    mkdir /jfs/a/b
+    touch /jfs/a/c
+    ./juicefs fsck $META_URL --path / -r
+    sqlite3 test.db "update jfs_node set nlink=100 where inode=2"
+    sqlite3 test.db "select nlink from jfs_node where inode=2"
+    ./juicefs fsck $META_URL --path / -r && exit 1 || true
+    ./juicefs fsck $META_URL --path / -r --repair
+    ./juicefs fsck $META_URL --path / -r
+}
+
 test_sync_dir_stat()
 {
     prepare_test
