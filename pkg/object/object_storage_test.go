@@ -290,7 +290,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Logf("list with delimiter is not supported")
 		}
 	} else {
-		switch s.(type) {
+		switch s.(*withPrefix).os.(type) {
 		case FileSystem:
 			if len(obs) == 0 || obs[0].Key() != "" {
 				t.Fatalf("list should return itself")
@@ -332,7 +332,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Logf("list with delimiter is not supported")
 		}
 	} else {
-		switch s.(type) {
+		switch s.(*withPrefix).os.(type) {
 		case FileSystem:
 			if len(obs) == 0 || obs[0].Key() != "a/" {
 				t.Fatalf("list should return itself")
