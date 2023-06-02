@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -ex
 python3 -c "import minio" || sudo pip install minio 
 python3 -c "import hypothesis" || sudo pip install hypothesis
 source .github/scripts/common/common.sh
@@ -10,13 +10,78 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
 
-test_sync_without_mount_point(){
+
+test_sync_with_mount_point(){
+    do_sync_with_mount_point --dirs
+    do_sync_with_mount_point --links
+    do_sync_with_mount_point --perms
+    do_sync_with_mount_point --check-all
+    do_sync_with_mount_point --check-new
+    do_sync_with_mount_point --update
+    do_sync_with_mount_point --force-update
+    do_sync_with_mount_point --list-threads 10 --list-depth 5
+    do_sync_with_mount_point --dirs --check-all --links --list-threads 10 --list-depth 5
+}
+
+skip_test_sync_without_mount_point(){
+    do_sync_without_mount_point --dirs
+    do_sync_without_mount_point --links
+    do_sync_without_mount_point --perms
+    do_sync_without_mount_point --check-all
+    do_sync_without_mount_point --check-new
+    do_sync_without_mount_point --update
+    do_sync_without_mount_point --force-update
+    do_sync_without_mount_point --list-threads 10 --list-depth 5
+    do_sync_without_mount_point --dirs --check-all --links --list-threads 10 --list-depth 5
+}
+
+do_sync_without_mount_point(){
     prepare_test
-    [[ ! -d jfs_source ]] && git clone https://github.com/juicedata/juicefs.git jfs_source
+    options=$@
+    generate_source_dir
     ./juicefs format $META_URL myjfs
-    meta_url=$META_URL ./juicefs sync jfs_source/ jfs://meta_url/jfs_source/ --dirs # --list-threads 10 --list-depth 5
+    meta_url=$META_URL ./juicefs sync jfs_source/ jfs://meta_url/jfs_source/ $options
+
     ./juicefs mount -d $META_URL /jfs
-    diff -ur jfs_source/ /jfs/jfs_source
+    if [[ ! $options =~ "--dirs" ]]; then
+        find jfs_source -type d -empty -delete
+    fi
+    if [[ ! $options =~ "--links" ]]; then
+        find . -type l -delete
+    fi
+    diff -ur --no-dereference  jfs_source/ /jfs/jfs_source
+}
+
+do_sync_with_mount_point(){
+    prepare_test
+    options=$@
+    generate_source_dir
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    ./juicefs sync jfs_source/ /jfs/jfs_source/ $options
+
+    if [[ ! $options =~ "--dirs" ]]; then
+        find jfs_source -type d -empty -delete
+    fi
+    if [[ ! $options =~ "--links" ]]; then
+        find . -type l -delete
+    fi
+    diff -ur --no-dereference jfs_source/ /jfs/jfs_source/
+}
+
+
+generate_source_dir(){
+    [[ ! -d jfs_source ]] && git clone https://github.com/juicedata/juicefs.git jfs_source
+    [[ -d jfs_source/empty_dir ]] && rm jfs_source/empty_dir -rf
+    chmod 777 jfs_source
+    mkdir jfs_source/empty_dir
+    dd if=/dev/urandom of=jfs_source/file bs=5M count=1
+    chmod 777 jfs_source/file
+    ln -sf jfs_source/file jfs_source/symlink_to_file
+    ln -f jfs_source/file jfs_source/hard_link_to_file
+    id -u juicefs  && sudo userdel juicefs
+    sudo useradd -u 1101 juicefs
+    sudo -u juicefs touch jfs_source/file2
 }
 
 test_sync_randomly(){
