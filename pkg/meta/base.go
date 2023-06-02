@@ -1883,22 +1883,29 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 	var inode = RootInode
 	var parent = RootInode
 	attr.Typ = TypeDirectory
-	ps := strings.FieldsFunc(fpath, func(r rune) bool {
-		return r == '/'
-	})
-	for i, name := range ps {
-		parent = inode
-		if st := m.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
-			logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
+	if fpath == "/" {
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
+			logger.Errorf("GetAttr inode %d: %s", inode, st)
 			return st
 		}
-		if !attr.Full && i < len(ps)-1 {
-			// missing attribute
-			p := "/" + path.Join(ps[:i+1]...)
-			if attr.Typ != TypeDirectory { // TODO: determine file size?
-				logger.Warnf("Attribute of %s (inode %d type %d) is missing and cannot be auto-repaired, please repair it manually or remove it", p, inode, attr.Typ)
-			} else {
-				logger.Warnf("Attribute of %s (inode %d) is missing, please re-run with '--path %s --repair' to fix it", p, inode, p)
+	} else {
+		ps := strings.FieldsFunc(fpath, func(r rune) bool {
+			return r == '/'
+		})
+		for i, name := range ps {
+			parent = inode
+			if st := m.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
+				logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
+				return st
+			}
+			if !attr.Full && i < len(ps)-1 {
+				// missing attribute
+				p := "/" + path.Join(ps[:i+1]...)
+				if attr.Typ != TypeDirectory { // TODO: determine file size?
+					logger.Warnf("Attribute of %s (inode %d type %d) is missing and cannot be auto-repaired, please repair it manually or remove it", p, inode, attr.Typ)
+				} else {
+					logger.Warnf("Attribute of %s (inode %d) is missing, please re-run with '--path %s --repair' to fix it", p, inode, p)
+				}
 			}
 		}
 	}
