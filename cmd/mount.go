@@ -603,7 +603,7 @@ func mount(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 
-	if c.Bool("update-fstab") && runtime.GOOS == "linux" && !calledViaMount(os.Args) && !insideContainer() {
+	if c.Bool("update-fstab") && !calledViaMount(os.Args) && !insideContainer() {
 		if os.Getuid() != 0 {
 			logger.Warnf("--update-fstab should be used with root")
 		} else {
@@ -612,6 +612,8 @@ func mount(c *cli.Context) error {
 			}
 			if err := updateFstab(c); err != nil {
 				logger.Warnf("failed to update fstab: %s", err)
+			} else {
+				logger.Infof("Successfully updated fstab, you can mount with `mount %s`", mp)
 			}
 		}
 	}
