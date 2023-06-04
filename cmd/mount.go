@@ -613,7 +613,7 @@ func mount(c *cli.Context) error {
 			if err := updateFstab(c); err != nil {
 				logger.Warnf("failed to update fstab: %s", err)
 			} else {
-				logger.Infof("Successfully updated fstab, you can mount with `mount %s`", mp)
+				logger.Infof("Successfully updated fstab, now you can mount with `mount %s`", mp)
 			}
 		}
 	}
