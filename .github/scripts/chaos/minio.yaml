@@ -19,6 +19,10 @@ spec:
       containers:
       - name: minio
         image: minio/minio
+        resources:
+          limits:
+            memory: "200Mi"
+            cpu: "1"
         env:
         - name: MINIO_ROOT_USER
           value: minioadmin
