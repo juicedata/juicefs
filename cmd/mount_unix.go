@@ -165,10 +165,12 @@ func mount_flags() []cli.Flag {
 			Name:  "force",
 			Usage: "force to mount even if the mount point is already mounted by the same filesystem",
 		},
-		&cli.BoolFlag{
+	}
+	if runtime.GOOS == "linux" {
+		selfFlags = append(selfFlags, &cli.BoolFlag{
 			Name:  "update-fstab",
 			Usage: "add / update entry in /etc/fstab, will create a symlink at /sbin/mount.juicefs if not existing",
-		},
+		})
 	}
 	return append(selfFlags, fuseFlags()...)
 }

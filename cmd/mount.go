@@ -604,15 +604,19 @@ func mount(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 
-	if c.Bool("update-fstab") && runtime.GOOS == "linux" && !calledViaMount(os.Args) && !insideContainer() {
+	if c.Bool("update-fstab") && !calledViaMount(os.Args) && !insideContainer() {
 		if os.Getuid() != 0 {
 			logger.Warnf("--update-fstab should be used with root")
 		} else {
-			if err := tryToInstallMountExec(); err != nil {
-				logger.Warnf("failed to create /sbin/mount.juicefs: %s", err)
+			var e1, e2 error
+			if e1 = tryToInstallMountExec(); e1 != nil {
+				logger.Warnf("failed to create /sbin/mount.juicefs: %s", e1)
 			}
-			if err := updateFstab(c); err != nil {
-				logger.Warnf("failed to update fstab: %s", err)
+			if e2 = updateFstab(c); e2 != nil {
+				logger.Warnf("failed to update fstab: %s", e2)
+			}
+			if e1 == nil && e2 == nil {
+				logger.Infof("Successfully updated fstab, now you can mount with `mount %s`", mp)
 			}
 		}
 	}
