@@ -634,7 +634,7 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) 
 }
 
 func (m *baseMeta) loadQuotas() {
-	if !m.fmt.DirStats {
+	if !m.GetFormat().DirStats {
 		return
 	}
 	quotas, err := m.en.doLoadQuotas(Background)
