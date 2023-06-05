@@ -20,11 +20,10 @@ jobs:
       fail-fast: false
       matrix:
         meta: ['redis']
-        fio_job : ['big-file-sequential-read', 'big-file-sequential-write', 'big-file-multi-read-1', 'big-file-multi-read-4', 'big-file-multi-read-16', 
-          'big-file-multi-write-1', 'big-file-multi-write-4', 'big-file-multi-write-16', 'big-file-rand-read-4k', 'big-file-rand-read-256k', 
-          'big-file-random-write-16k', 'big-file-random-write-256k', 'small-file-seq-read-4k', 'small-file-seq-read-256k', 
-          'small-file-seq-write-4k', 'small-file-seq-write-256k', 'small-file-multi-read-1', 'small-file-multi-read-4', 
-          'small-file-multi-read-16', 'small-file-multi-write-1', 'small-file-multi-write-4', 'small-file-multi-write-16'] 
+        fio_job : ['big-file-sequential-read', 'big-file-sequential-write',  'big-file-multi-read-4', 
+          'big-file-multi-write-4', 'big-file-rand-read-256k', 'big-file-random-write-256k', 
+          'small-file-seq-read-256k', 'small-file-seq-write-256k', 'small-file-multi-read-4', 
+          'small-file-multi-write-4'] 
 
     steps:
       - name: Checkout
@@ -44,7 +43,7 @@ jobs:
 
       - name: Install tools
         run: |
-          sudo apt install fio
+          sudo .github/scripts/apt_install.sh fio
           wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc
           chmod +x mc 
 
