@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-
+python3 -c "import xattr" || sudo pip install xattr 
 sudo dpkg -s redis-tools || sudo .github/scripts/apt_install.sh redis-tools
 sudo dpkg -s attr || sudo .github/scripts/apt_install.sh fio
 
