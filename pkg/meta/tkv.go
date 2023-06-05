@@ -495,7 +495,7 @@ func (m *kvMeta) flushStats() {
 				logger.Warnf("Update space stats: %s", err)
 			}
 		}
-		if inodes := atomic.SwapInt64(&m.newInodes, 0); inodes != 0 {
+		if inodes := atomic.LoadInt64(&m.newInodes); inodes != 0 {
 			if v, err := m.incrCounter(totalInodes, inodes); err == nil {
 				atomic.AddInt64(&m.newInodes, -inodes)
 				atomic.StoreInt64(&m.usedInodes, v)
