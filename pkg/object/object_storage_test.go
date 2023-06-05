@@ -41,8 +41,6 @@ import (
 
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/enum"
 
-	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
-
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 
 	"github.com/redis/go-redis/v9"
@@ -96,7 +94,7 @@ func setStorageClass(o ObjectStorage) string {
 		s.sc = "NEARLINE"
 		return s.sc
 	case *obsClient:
-		s.sc = string(obs.StorageClassWarm)
+		s.sc = "STANDARD_IA"
 		return s.sc
 	case *ossClient:
 		s.sc = string(oss.StorageIA)
