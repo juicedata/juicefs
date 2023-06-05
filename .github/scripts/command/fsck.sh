@@ -9,12 +9,18 @@ start_meta_engine $META
 META_URL=$(get_meta_url $META)
 
 test_fix_nlink(){
+    if [[ "$META" == "sqlite3" ]]; then
+        do_fix_nlink_sqlite3
+    fi
+}
+do_fix_nlink_sqlite3(){
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     mkdir /jfs/a
     mkdir /jfs/a/b
     touch /jfs/a/c
+    sleep 4s # to wait dir stat update
     ./juicefs fsck $META_URL --path / -r
     sqlite3 test.db "update jfs_node set nlink=100 where inode=2"
     sqlite3 test.db "select nlink from jfs_node where inode=2"
