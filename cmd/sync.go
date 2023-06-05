@@ -331,6 +331,14 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 	if err != nil {
 		return nil, fmt.Errorf("create %s %s: %s", name, endpoint, err)
 	}
+
+	if conf.Links {
+		if _, ok := store.(object.SupportSymlink); !ok {
+			logger.Warnf("storage %s does not support symlink, ignore it", uri)
+			conf.Links = false
+		}
+	}
+
 	if conf.Perms {
 		if _, ok := store.(object.FileSystem); !ok {
 			logger.Warnf("%s is not a file system, can not preserve permissions", store)
@@ -356,12 +364,6 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		}
 	}
 
-	if conf.Links {
-		if _, ok := store.(object.SupportSymlink); !ok {
-			logger.Warnf("storage %s does not support symlink, ignore it", uri)
-			conf.Links = false
-		}
-	}
 	return store, nil
 }
 
