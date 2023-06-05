@@ -21,7 +21,10 @@ spec:
         image: minio/minio
         resources:
           limits:
-            memory: "200Mi"
+            memory: "500Mi"
+            cpu: "500m"
+          limits:
+            memory: "100Mi"
             cpu: "100m"
         env:
         - name: MINIO_ROOT_USER
