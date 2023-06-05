@@ -1393,7 +1393,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			n.Ctimensec = int16(now % 1e3)
 			if trash == 0 {
 				n.Nlink--
-				if n.Type == TypeFile && n.Nlink == 0 {
+				if n.Type == TypeFile && n.Nlink == 0 && m.sid > 0 {
 					opened = m.of.IsOpen(e.Inode)
 				}
 			} else if n.Parent > 0 {
