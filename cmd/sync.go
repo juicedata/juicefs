@@ -304,10 +304,6 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		secretKey, _ = user.Password()
 	}
 	name := strings.ToLower(u.Scheme)
-	if conf.Links && name != "file" {
-		logger.Warnf("storage %s does not support symlink, ignore it", uri)
-		conf.Links = false
-	}
 
 	var endpoint string
 	if name == "file" {
@@ -357,6 +353,13 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 	default:
 		if len(u.Path) > 1 {
 			store = object.WithPrefix(store, u.Path[1:])
+		}
+	}
+
+	if conf.Links {
+		if _, ok := store.(object.SupportSymlink); !ok {
+			logger.Warnf("storage %s does not support symlink, ignore it", uri)
+			conf.Links = false
 		}
 	}
 	return store, nil
