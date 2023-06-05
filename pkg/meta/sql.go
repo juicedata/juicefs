@@ -43,7 +43,7 @@ import (
 	"xorm.io/xorm/names"
 )
 
-const MaxFieldsCountOfTable = 13 // node table
+const MaxFieldsCountOfTable = 16 // node table
 
 type setting struct {
 	Name  string `xorm:"pk"`
