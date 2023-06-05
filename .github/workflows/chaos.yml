@@ -130,11 +130,13 @@ jobs:
 
       - name: Verify 
         run: |
-          if [ "${{github.event_name}}" == "schedule"  ]; then
-            sleep 1200
-          else
-            sleep 600
-          fi
+          for i in {1..1200}; do 
+            if kubectl get pods --all-namespaces | grep dynamic-ce | grep -i "Completed"; then
+              echo "dynamic-ce is completed in $i seconds"
+              break
+            fi
+            sleep 1
+          done
           kubectl get pods --all-namespaces
           apps=("dynamic-ce" "juicefs-csi-node" "juicefs-csi-controller" "juicefs-chart-testing-control-plane-pvc"  "redis" "minio")
           for app in ${apps[@]}; do
