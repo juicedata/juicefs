@@ -623,7 +623,7 @@ func benchmarkData(b *testing.B, m Meta) {
 
 func benchmarkAll(b *testing.B, m Meta) {
 	_ = m.Init(&Format{Name: "benchmarkAll", DirStats: true}, true)
-	_ = m.NewSession()
+	_ = m.NewSession(false)
 	benchmarkDir(b, m)
 	benchmarkFile(b, m)
 	benchmarkXattr(b, m)

@@ -534,22 +534,20 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			id := args[1].(uint64)
 			return vfs.Compact(chunkConf, store, slices, id)
 		})
-		if !jConf.NoSession {
-			err = m.NewSession()
-			if err != nil {
-				logger.Errorf("new session: %s", err)
-				return nil
-			}
-			m.OnReload(func(fmt *meta.Format) {
-				if jConf.UploadLimit > 0 {
-					fmt.UploadLimit = int64(jConf.UploadLimit)
-				}
-				if jConf.DownloadLimit > 0 {
-					fmt.DownloadLimit = int64(jConf.DownloadLimit)
-				}
-				store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
-			})
+		err = m.NewSession(!jConf.NoSession)
+		if err != nil {
+			logger.Errorf("new session: %s", err)
+			return nil
 		}
+		m.OnReload(func(fmt *meta.Format) {
+			if jConf.UploadLimit > 0 {
+				fmt.UploadLimit = int64(jConf.UploadLimit)
+			}
+			if jConf.DownloadLimit > 0 {
+				fmt.DownloadLimit = int64(jConf.DownloadLimit)
+			}
+			store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+		})
 
 		conf := &vfs.Config{
 			Meta:            metaConf,

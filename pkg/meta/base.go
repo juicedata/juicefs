@@ -470,22 +470,24 @@ func (m *baseMeta) newSessionInfo() []byte {
 	return buf
 }
 
-func (m *baseMeta) NewSession() error {
+func (m *baseMeta) NewSession(record bool) error {
 	go m.refresh()
 	if m.conf.ReadOnly {
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
 		return nil
 	}
 
-	v, err := m.en.incrCounter("nextSession", 1)
-	if err != nil {
-		return fmt.Errorf("get session ID: %s", err)
+	if record {
+		v, err := m.en.incrCounter("nextSession", 1)
+		if err != nil {
+			return fmt.Errorf("get session ID: %s", err)
+		}
+		m.sid = uint64(v)
+		if err = m.en.doNewSession(m.newSessionInfo()); err != nil {
+			return fmt.Errorf("create session: %s", err)
+		}
+		logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 	}
-	m.sid = uint64(v)
-	if err = m.en.doNewSession(m.newSessionInfo()); err != nil {
-		return fmt.Errorf("create session: %s", err)
-	}
-	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
 	m.loadQuotas()
 	go m.en.flushStats()
@@ -536,7 +538,7 @@ func (m *baseMeta) refresh() {
 			m.sesMu.Unlock()
 			return
 		}
-		if !m.conf.ReadOnly && m.conf.Heartbeat > 0 {
+		if !m.conf.ReadOnly && m.conf.Heartbeat > 0 && m.sid > 0 {
 			if err := m.en.doRefreshSession(); err != nil {
 				logger.Errorf("Refresh session %d: %s", m.sid, err)
 			}
@@ -632,6 +634,9 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) 
 }
 
 func (m *baseMeta) loadQuotas() {
+	if !m.fmt.DirStats {
+		return
+	}
 	quotas, err := m.en.doLoadQuotas(Background)
 	if err == nil {
 		m.quotaMu.Lock()

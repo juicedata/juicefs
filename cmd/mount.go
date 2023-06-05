@@ -640,7 +640,7 @@ func mount(c *cli.Context) error {
 	}
 
 	removePassword(addr)
-	err = metaCli.NewSession()
+	err = metaCli.NewSession(true)
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}
