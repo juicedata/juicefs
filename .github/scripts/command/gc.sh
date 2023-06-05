@@ -2,8 +2,9 @@
 #!/bin/bash
 set -e
 
-sudo dpkg -s redis-tools || sudo apt install redis-tools
-sudo dpkg -s attr || sudo apt install fio
+
+sudo dpkg -s redis-tools || sudo .github/scripts/apt_install.sh redis-tools
+sudo dpkg -s attr || sudo .github/scripts/apt_install.sh fio
 
 source .github/scripts/common/common.sh
 
