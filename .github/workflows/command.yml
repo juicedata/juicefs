@@ -68,11 +68,11 @@ jobs:
           sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
 
       - name: Log
-        if: ${{ failure() }}
+        if: ${{ always() }}
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           
       - name: Setup upterm session
         # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
