@@ -139,7 +139,7 @@ jobs:
           apps=("dynamic-ce" "juicefs-csi-node" "juicefs-csi-controller" "juicefs-chart-testing-control-plane-pvc"  "redis" "minio")
           for app in ${apps[@]}; do
             echo app is $app
-            kubectl get pods --all-namespaces | grep $app | grep Running
+            kubectl get pods --all-namespaces | grep $app | grep -i "Running\|Completed"
             if [ $? != 0 ]; then
               echo status of $app is not expected.
               exit 1
