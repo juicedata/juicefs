@@ -43,6 +43,10 @@ jobs:
       - name: Build 
         uses: ./.github/actions/build
 
+      - name: Test Quota
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
+          
       - name: Test Clone
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/clone.sh
@@ -59,10 +63,6 @@ jobs:
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/load_dump.sh
 
-      - name: Test Quota
-        run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
-          
       - name: Test Sync
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
@@ -75,8 +75,8 @@ jobs:
           grep "<FATAL>:" /var/log/juicefs.log && exit 1
           
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
-        # if: failure()
+        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
