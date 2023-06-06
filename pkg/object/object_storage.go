@@ -203,9 +203,18 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 			conds[c] = sync.NewCond(&ms[c])
 			go func(c int) {
 				for i := c; i < len(entries); i += concurrent {
-					if entries[i].Key() != prefix {
-						children[i], _ = store.List(entries[i].Key(), "\x00", "/", 0) // exclude itself, will be retried
+					key := entries[i].Key()
+					if !entries[i].IsDir() || key == prefix {
+						continue
 					}
+					if end != "" && key >= end {
+						break
+					}
+					if key < start && !strings.HasPrefix(start, key) {
+						continue
+					}
+
+					children[i], _ = store.List(key, "\x00", "/", 1e9) // exclude itself, will be retried
 					ms[c].Lock()
 					ready[c] = true
 					conds[c].Signal()
@@ -221,15 +230,6 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 		}
 
 		for i, e := range entries {
-			c := i % concurrent
-			ms[c].Lock()
-			for !ready[c] {
-				conds[c].Wait()
-			}
-			ready[c] = false
-			conds[c].Signal()
-			ms[c].Unlock()
-
 			if end != "" && e.Key() >= end {
 				return nil
 			}
@@ -239,6 +239,15 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 				continue
 			}
 			if e.IsDir() && e.Key() != prefix {
+				c := i % concurrent
+				ms[c].Lock()
+				for !ready[c] {
+					conds[c].Wait()
+				}
+				ready[c] = false
+				conds[c].Signal()
+				ms[c].Unlock()
+
 				err = walk(e.Key(), children[i])
 				children[i] = nil
 				if err != nil {
