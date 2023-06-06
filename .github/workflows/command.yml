@@ -1,0 +1,125 @@
+name: "command-test"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/**'
+  schedule:
+    - cron:  '30 20 * * *'
+
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  build-matrix:
+    runs-on: ubuntu-20.04
+    steps:
+      - id: set-matrix
+        run: |
+          echo "github.event_name is ${{github.event_name}}"
+          echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
+          if [ "${{github.event_name}}" == "schedule"  ]; then
+            echo 'meta_matrix=["sqlite3", "redis", "tikv"]' >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" == "pull_request"  ]; then
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+          else
+            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+          fi
+    outputs:
+      meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
+
+  command_test:
+    needs: [build-matrix]
+    strategy:
+      fail-fast: false
+      matrix:
+        # meta: [ 'sqlite3', 'redis', 'tikv']
+        meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Build 
+        uses: ./.github/actions/build
+
+      - name: Test Quota
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
+          
+      - name: Test Clone
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/clone.sh
+
+      - name: Test fsck
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/fsck.sh 
+  
+      - name: Test Gc
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/gc.sh
+  
+      - name: Test Load & Dump
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/load_dump.sh
+
+      - name: Test Sync
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
+
+      - name: Log
+        if: ${{ always() }}
+        run: |
+          echo "juicefs log"
+          sudo tail -n 1000 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          
+      - name: Setup upterm session
+        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [command_test]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Send Slack Notification
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: ${{ success() }}
+        run: echo "All Done"

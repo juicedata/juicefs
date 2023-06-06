@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e 
 retry(){
   local n=0
   local max=5
@@ -22,9 +22,17 @@ retry(){
 install_tikv(){
   # retry because of: https://github.com/pingcap/tiup/issues/2057
   curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-  source /home/runner/.bash_profile
-  source /home/runner/.profile
-  tiup playground --mode tikv-slim &
+  user=$(whoami)
+  if [ "$user" == "root" ]; then
+    tiup=/root/.tiup/bin/tiup
+  elif [ "$user" == "runner" ]; then
+    tiup=/home/runner/.tiup/bin/tiup
+  else
+    echo "Unknown user $user"
+    exit 1
+  fi
+  
+  $tiup playground --mode tikv-slim 2>&1 > tikv.log &
   pid=$!
   sleep 60
   echo 'head -1' > /tmp/head.txt
@@ -42,9 +50,17 @@ install_tikv(){
 
 install_tidb(){
   curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-  source /home/runner/.profile
-  # retry because of: https://github.com/pingcap/tiup/issues/2057
-  tiup playground 5.4.0 &
+  user=$(whoami)
+  if [ "$user" == "root" ]; then
+    tiup=/root/.tiup/bin/tiup
+  elif [ "$user" == "runner" ]; then
+    tiup=/home/runner/.tiup/bin/tiup
+  else
+    echo "Unknown user $user"
+    exit 1
+  fi
+  
+  $tiup playground 5.4.0 2>&1 > tidb.log &
   pid=$!
   sleep 60
   lsof -i:4000 && pgrep pd-server && mysql -h127.0.0.1 -P4000 -uroot -e "select version();"
@@ -66,7 +82,7 @@ start_meta_engine(){
     elif [ "$meta" == "redis" ]; then
         sudo apt-get install -y redis-tools redis-server
     elif [ "$meta" == "tikv" ]; then
-        git clone https://github.com/c4pt0r/tcli
+        [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
         cd tcli && make
         sudo cp bin/tcli /usr/local/bin
         cd -
@@ -129,21 +145,21 @@ start_meta_engine(){
 get_meta_url(){
     meta=$1
     if [ "$meta" == "postgres" ]; then
-        meta_url="postgres://postgres:postgres@127.0.0.1:5432/sync_test?sslmode=disable" 
+        meta_url="postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable" 
     elif [ "$meta" == "mysql" ]; then
-        meta_url="mysql://root:root@(127.0.0.1)/sync_test"
+        meta_url="mysql://root:root@(127.0.0.1)/test"
     elif [ "$meta" == "redis" ]; then
         meta_url="redis://127.0.0.1:6379/1"
     elif [ "$meta" == "sqlite3" ]; then
-        meta_url="sqlite3://sync-test.db"
+        meta_url="sqlite3://test.db"
     elif [ "$meta" == "tikv" ]; then
-        meta_url="tikv://127.0.0.1:2379/load_test"
+        meta_url="tikv://127.0.0.1:2379/test"
     elif [ "$meta" == "badger" ]; then
-        meta_url="badger:///tmp/load_test"
+        meta_url="badger:///tmp/test"
     elif [ "$meta" == "mariadb" ]; then
-        meta_url="mysql://root:root@(127.0.0.1)/load_test"
+        meta_url="mysql://root:root@(127.0.0.1)/test"
     elif [ "$meta" == "tidb" ]; then
-        meta_url="mysql://root:@(127.0.0.1:4000)/load_test"
+        meta_url="mysql://root:@(127.0.0.1:4000)/test"
     elif [ "$meta" == "etcd" ]; then
         meta_url="etcd://localhost:2379/jfs"
     elif [ "$meta" == "fdb" ]; then
