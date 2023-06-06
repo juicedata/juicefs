@@ -1000,14 +1000,20 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "")
 	handled = progress.AddCountBar("Scanned objects", 0)
+	skipped = progress.AddCountSpinner("Skipped objects")
 	pending = progress.AddCountSpinner("Pending objects")
 	copied = progress.AddCountSpinner("Copied objects")
 	copiedBytes = progress.AddByteSpinner("Copied bytes")
-	checked = progress.AddCountSpinner("Checked objects")
-	checkedBytes = progress.AddByteSpinner("Checked bytes")
-	deleted = progress.AddCountSpinner("Deleted objects")
-	skipped = progress.AddCountSpinner("Skipped objects")
-	failed = progress.AddCountSpinner("Failed objects")
+	if config.CheckAll || config.CheckNew {
+		checked = progress.AddCountSpinner("Checked objects")
+		checkedBytes = progress.AddByteSpinner("Checked bytes")
+	}
+	if config.DeleteSrc || config.DeleteDst {
+		deleted = progress.AddCountSpinner("Deleted objects")
+	}
+	if !config.Dry {
+		failed = progress.AddCountSpinner("Failed objects")
+	}
 	go func() {
 		for {
 			pending.SetCurrent(int64(len(tasks)))
@@ -1069,14 +1075,25 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	progress.Done()
 
 	if config.Manager == "" {
-		logger.Infof("Found: %d, copied: %d (%s), checked: %s, deleted: %d, skipped: %d, failed: %d",
-			handled.Current(), copied.Current(), formatSize(copiedBytes.Current()), formatSize(checkedBytes.Current()),
-			deleted.Current(), skipped.Current(), failed.Current())
+		msg := fmt.Sprintf("Found: %d, skipped: %d, copied: %d (%s)",
+			handled.Current(), skipped.Current(), copied.Current(), formatSize(copiedBytes.Current()))
+		if checked != nil {
+			msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
+		}
+		if deleted != nil {
+			msg += fmt.Sprintf(", deleted: %d", deleted.Current())
+		}
+		if failed != nil {
+			msg += fmt.Sprintf(", failed: %d", failed.Current())
+		}
+		logger.Info(msg)
 	} else {
 		sendStats(config.Manager)
 	}
-	if n := failed.Current(); n > 0 {
-		return fmt.Errorf("Failed to handle %d objects", n)
+	if failed != nil {
+		if n := failed.Current(); n > 0 {
+			return fmt.Errorf("Failed to handle %d objects", n)
+		}
 	}
 	return nil
 }
