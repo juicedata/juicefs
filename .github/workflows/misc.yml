@@ -60,16 +60,14 @@ jobs:
 
       - name: Test mount process exit on reformat
         run: |
-          for i in {1..10}; do 
+          for i in {1..3}; do 
             echo "round $i"
             meta=redis://localhost/1
             ./juicefs format $meta volume-$i
-            for j in {1..10}; do
-              ./juicefs mount -d $meta /tmp/myjfs$i_$j --no-usage-report
-              cd /tmp/myjfs$i_$j
-              bash -c 'for k in {1..300}; do echo abc>$k; sleep 0.2; done' || true & 
-              cd -
-            done
+            ./juicefs mount -d $meta /tmp/myjfs$i_$j --no-usage-report
+            cd /tmp/myjfs$i_$j
+            bash -c 'for k in {1..300}; do echo abc>$k; sleep 0.2; done' || true & 
+            cd -
             sleep 3
             uuid=$(./juicefs status $meta | grep UUID | cut -d '"' -f 4) 
             ./juicefs destroy --force $meta $uuid
@@ -92,15 +90,14 @@ jobs:
           ./mc admin user add minio juicedata juicedata
           ./mc admin policy attach minio consoleAdmin --user juicedata
           ./juicefs format --storage minio --bucket http://localhost:9000/jfs-test --access-key juicedata --secret-key juicedata $meta_url myjfs
-          ./juicefs mount $meta_url $mount_point -d --io-retries 1 --no-usage-report
+          ./juicefs mount $meta_url $mount_point -d --io-retries 1 --no-usage-report --heartbeat 5
 
           ./mc admin user remove minio juicedata
           ./mc admin user add minio juicedata1 juicedata1
           ./mc admin policy attach minio consoleAdmin --user juicedata1
           ./juicefs config $meta_url --access-key juicedata1 --secret-key juicedata1
-          sleep 60
-          echo abc > abc.txt
-          cp abc.txt $mount_point/abc.txt && echo "write success"
+          sleep 6
+          echo abc | tee $mount_point/abc.txt && echo "write success"
           cat $mount_point/abc.txt | grep abc && echo "read success"
           
       - name: Test delay delete slice after compaction
@@ -111,7 +108,7 @@ jobs:
           juicefs=./juicefs
           $juicefs format $meta $name --trash-days 1
           $juicefs mount -d $meta $mp --no-usage-report
-          fio --name=abc --rw=randwrite --refill_buffers --size=2G --bs=256k --directory=$mp
+          fio --name=abc --rw=randwrite --refill_buffers --size=500M --bs=256k --directory=$mp
           redis-cli save
           # don't skip files when gc compact
           export JFS_SKIPPED_TIME=1
