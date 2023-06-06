@@ -23,12 +23,8 @@ spec:
         - mountPath: /data
           name: redis-data
         resources:
-          limits:
-            memory: "500Mi"
-            cpu: "500m"
-          limits:
-            memory: "100Mi"
-            cpu: "100m"
+          requests:
+            memory: 100m
         ports:
         - containerPort: 6379
       volumes:
