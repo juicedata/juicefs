@@ -180,17 +180,11 @@ func (w *webdav) List(prefix, marker, delimiter string, limit int64) ([]Object, 
 		return nil, notSupported
 	}
 
-	if !strings.HasPrefix(prefix, dirSuffix) {
-		prefix = dirSuffix + prefix
-	}
-	if marker != "" && !strings.HasPrefix(marker, dirSuffix) {
-		marker = dirSuffix + marker
-	}
-	root := prefix
+	root := "/" + prefix
 	var objs []Object
-	if !strings.HasSuffix(prefix, dirSuffix) {
+	if !strings.HasSuffix(root, dirSuffix) {
 		// If the root is not ends with `/`, we'll list the directory root resides.
-		root = path.Dir(prefix)
+		root = path.Dir(root)
 		if !strings.HasSuffix(root, dirSuffix) {
 			root += dirSuffix
 		}

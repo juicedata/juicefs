@@ -263,7 +263,10 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	var dir string = d.root + prefix
 	var objs []Object
 	if !strings.HasSuffix(dir, dirSuffix) {
-		dir = path.Dir(dir) + dirSuffix
+		dir = path.Dir(dir)
+		if !strings.HasSuffix(dir, dirSuffix) {
+			dir += dirSuffix
+		}
 	} else if marker == "" {
 		obj, err := d.Head(prefix)
 		if err != nil {

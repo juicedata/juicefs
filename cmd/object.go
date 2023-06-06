@@ -206,7 +206,10 @@ func (j *juiceFS) List(prefix, marker, delimiter string, limit int64) ([]object.
 	dir := j.path(prefix)
 	var objs []object.Object
 	if !strings.HasSuffix(dir, dirSuffix) {
-		dir = path.Dir(dir) + dirSuffix
+		dir = path.Dir(dir)
+		if !strings.HasSuffix(dir, dirSuffix) {
+			dir += dirSuffix
+		}
 	} else if marker == "" {
 		obj, err := j.Head(prefix)
 		if err != nil {

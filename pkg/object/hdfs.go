@@ -181,8 +181,11 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Obje
 	}
 	dir := h.path(prefix)
 	var objs []Object
-	if !strings.HasSuffix(dir, "/") {
-		dir = filepath.Dir(dir) + dirSuffix
+	if !strings.HasSuffix(dir, dirSuffix) {
+		dir = filepath.Dir(dir)
+		if !strings.HasSuffix(dir, dirSuffix) {
+			dir += dirSuffix
+		}
 	} else if marker == "" {
 		obj, err := h.Head(prefix)
 		if err != nil {

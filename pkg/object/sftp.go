@@ -358,7 +358,10 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	var objs []Object
 	dir := f.path(prefix)
 	if !strings.HasSuffix(dir, "/") {
-		dir = filepath.Dir(dir) + dirSuffix
+		dir = filepath.Dir(dir)
+		if !strings.HasSuffix(dir, dirSuffix) {
+			dir += dirSuffix
+		}
 	} else if marker == "" {
 		obj, err := f.Head(prefix)
 		if err != nil {
