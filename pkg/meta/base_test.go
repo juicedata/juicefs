@@ -170,7 +170,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if format.Name != "test" {
 		t.Fatalf("load got volume name %s, expected %s", format.Name, "test")
 	}
-	if err = m.NewSession(); err != nil {
+	if err = m.NewSession(true); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
 	defer m.CloseSession()
@@ -1343,7 +1343,7 @@ func testCopyFileRange(t *testing.T, m Meta) {
 }
 
 func testCloseSession(t *testing.T, m Meta) {
-	if err := m.NewSession(); err != nil {
+	if err := m.NewSession(true); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
 
@@ -1628,7 +1628,7 @@ func testOpenCache(t *testing.T, m Meta) {
 
 func testReadOnly(t *testing.T, m Meta) {
 	ctx := Background
-	if err := m.NewSession(); err != nil {
+	if err := m.NewSession(true); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
 	defer m.CloseSession()
@@ -2472,7 +2472,7 @@ func checkEntry(t *testing.T, m Meta, srcEntry, dstEntry *Entry, dstParentIno In
 }
 
 func testQuota(t *testing.T, m Meta) {
-	if err := m.NewSession(); err != nil {
+	if err := m.NewSession(true); err != nil {
 		t.Fatalf("New session: %s", err)
 	}
 	defer m.CloseSession()

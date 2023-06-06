@@ -100,7 +100,7 @@ func mount(url, mp string) {
 		Chunk:  &chunkConf,
 	}
 
-	err = m.NewSession()
+	err = m.NewSession(true)
 	if err != nil {
 		log.Fatalf("new session: %s", err)
 	}

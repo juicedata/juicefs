@@ -1413,7 +1413,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			attr.Ctimensec = uint32(now.Nanosecond())
 			if trash == 0 {
 				attr.Nlink--
-				if _type == TypeFile && attr.Nlink == 0 {
+				if _type == TypeFile && attr.Nlink == 0 && m.sid > 0 {
 					opened = m.of.IsOpen(inode)
 				}
 			} else if attr.Parent > 0 {
