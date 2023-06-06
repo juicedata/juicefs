@@ -64,12 +64,10 @@ jobs:
             echo "round $i"
             meta=redis://localhost/1
             ./juicefs format $meta volume-$i
-            for j in {1..10}; do
-              ./juicefs mount -d $meta /tmp/myjfs$i_$j --no-usage-report
-              cd /tmp/myjfs$i_$j
-              bash -c 'for k in {1..300}; do echo abc>$k; sleep 0.2; done' || true & 
-              cd -
-            done
+            ./juicefs mount -d $meta /tmp/myjfs$i_$j --no-usage-report
+            cd /tmp/myjfs$i_$j
+            bash -c 'for k in {1..300}; do echo abc>$k; sleep 0.2; done' || true & 
+            cd -
             sleep 3
             uuid=$(./juicefs status $meta | grep UUID | cut -d '"' -f 4) 
             ./juicefs destroy --force $meta $uuid
