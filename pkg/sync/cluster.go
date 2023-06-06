@@ -41,6 +41,7 @@ import (
 type Stat struct {
 	Copied       int64 // the number of copied files
 	CopiedBytes  int64 // total amount of copied data in bytes
+	Checked      int64 // the number of checked files
 	CheckedBytes int64 // total amount of checked data in bytes
 	Deleted      int64 // the number of deleted files
 	Skipped      int64 // the number of files skipped
@@ -50,6 +51,7 @@ type Stat struct {
 func updateStats(r *Stat) {
 	copied.IncrInt64(r.Copied)
 	copiedBytes.IncrInt64(r.CopiedBytes)
+	checked.IncrInt64(r.Checked)
 	checkedBytes.IncrInt64(r.CheckedBytes)
 	deleted.IncrInt64(r.Deleted)
 	skipped.IncrInt64(r.Skipped)
@@ -79,6 +81,7 @@ func sendStats(addr string) {
 	var r Stat
 	r.Copied = copied.Current()
 	r.CopiedBytes = copiedBytes.Current()
+	r.Checked = checked.Current()
 	r.CheckedBytes = checkedBytes.Current()
 	r.Deleted = deleted.Current()
 	r.Skipped = skipped.Current()
@@ -90,6 +93,7 @@ func sendStats(addr string) {
 	} else {
 		copied.IncrInt64(-r.Copied)
 		copiedBytes.IncrInt64(-r.CopiedBytes)
+		checked.IncrInt64(-r.Checked)
 		checkedBytes.IncrInt64(-r.CheckedBytes)
 		deleted.IncrInt64(-r.Deleted)
 		skipped.IncrInt64(-r.Skipped)
