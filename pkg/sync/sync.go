@@ -116,6 +116,9 @@ func ListAll(store object.ObjectStorage, prefix, start, end string) (<-chan obje
 	marker := start
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
 	objs, err := store.List(prefix, marker, "", maxResults)
+	if err == utils.ENOTSUP {
+		return object.ListAllWithDelimitor(store, prefix, start, end)
+	}
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err

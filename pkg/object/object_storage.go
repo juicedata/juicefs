@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -178,4 +179,83 @@ var bufPool = sync.Pool{
 		buf := make([]byte, 32<<10)
 		return &buf
 	},
+}
+
+func ListAllWithDelimitor(store ObjectStorage, prefix, start, end string) (<-chan Object, error) {
+	listed := make(chan Object, 10240)
+	var walk func(string, []Object) error
+	walk = func(prefix string, entries []Object) error {
+		var err error
+		if entries == nil {
+			entries, err = store.List(prefix, "", "/", 1e9)
+			if err != nil {
+				logger.Errorf("list %s: %s", prefix, err)
+				return err
+			}
+		}
+
+		var concurrent = 10
+		ms := make([]sync.Mutex, concurrent)
+		conds := make([]*sync.Cond, concurrent)
+		ready := make([]bool, concurrent)
+		children := make([][]Object, len(entries))
+		for c := 0; c < concurrent; c++ {
+			conds[c] = sync.NewCond(&ms[c])
+			if c < len(entries) {
+				go func(c int) {
+					for i := c; i < len(entries); i += concurrent {
+						if entries[i].Key() != prefix {
+							children[i], _ = store.List(entries[i].Key(), "\x00", "/", 0) // exclude itself, will be retried
+						}
+						ms[c].Lock()
+						ready[c] = true
+						conds[c].Signal()
+						ms[c].Unlock()
+
+						ms[c].Lock()
+						for ready[c] {
+							conds[c].Wait()
+						}
+						ms[c].Unlock()
+					}
+				}(c)
+			}
+		}
+
+		for i, e := range entries {
+			c := i % concurrent
+			ms[c].Lock()
+			for !ready[c] {
+				conds[c].Wait()
+			}
+			ready[c] = false
+			conds[c].Signal()
+			ms[c].Unlock()
+
+			if end != "" && e.Key() >= end {
+				return nil
+			}
+			if e.Key() > start || start == "" && e.Key() == "" {
+				listed <- e
+			} else if !strings.HasPrefix(start, e.Key()) {
+				continue
+			}
+			if e.IsDir() && e.Key() != prefix {
+				err = walk(e.Key(), children[i])
+				if err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+
+	func() {
+		defer close(listed)
+		err := walk(prefix, nil)
+		if err != nil {
+			listed <- nil
+		}
+	}()
+	return listed, nil
 }

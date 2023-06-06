@@ -148,23 +148,27 @@ func TestSync(t *testing.T) {
 		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
 	// Now a: {"a1", "a2", "abc", "ba", "c1", "c2"}, b: {"a1", "a2", "ba"}
-	aRes, _ := a.ListAll("", "")
-	bRes, _ := b.ListAll("", "")
+	aRes, _ := ListAll(a, "", "", "")
+	bRes, _ := ListAll(b, "", "", "")
 
 	var aObjs, bObjs []object.Object
 	for obj := range aRes {
+		logger.Infof("a %s", obj.Key())
 		aObjs = append(aObjs, obj)
 	}
 	for obj := range bRes {
+		logger.Infof("b %s", obj.Key())
 		bObjs = append(bObjs, obj)
 	}
 
+	// a1
 	if !deepEqualWithOutMtime(aObjs[1], bObjs[1]) {
 		t.FailNow()
 	}
 
+	// ba
 	if !deepEqualWithOutMtime(aObjs[4], bObjs[len(bObjs)-1]) {
-		t.Fatalf("expect %+v but got %+v", aObjs[3], bObjs[len(bObjs)-1])
+		t.Fatalf("expect %+v but got %+v", aObjs[4], bObjs[len(bObjs)-1])
 	}
 	// Test --force-update option
 	config.ForceUpdate = true
@@ -249,7 +253,7 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 			t.Fatalf("sync: %s", err)
 		}
 
-		bRes, _ := b.ListAll("", "")
+		bRes, _ := ListAll(b, "", "", "")
 		var bKeys []string
 		for obj := range bRes {
 			bKeys = append(bKeys, obj.Key())
@@ -481,7 +485,7 @@ func TestLimits(t *testing.T) {
 			t.Fatalf("sync: %s", err)
 		}
 
-		all, err := tcase.dst.ListAll("", "")
+		all, err := ListAll(tcase.dst, "", "", "")
 		if err != nil {
 			t.Fatalf("list all b: %s", err)
 		}

@@ -64,6 +64,9 @@ func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, err
 		return r, err
 	}
 	ch, err := s.ListAll(prefix, marker)
+	if err == notSupported {
+		ch, err = ListAllWithDelimitor(s, prefix, marker, "")
+	}
 	if err == nil {
 		objs := make([]Object, 0)
 		for obj := range ch {
@@ -197,7 +200,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 				t.Fatalf("First object size should be 0, but got %d", objs[0].Size())
 			}
 			if objs[1].Key() != "test" {
-				t.Fatalf("First key should be test, but got %s", objs[1].Key())
+				t.Fatalf("Second key should be test, but got %s", objs[1].Key())
 			}
 			if !strings.Contains(s.String(), "encrypted") && objs[1].Size() != 5 {
 				t.Fatalf("Size of first key shold be 5, but got %v", objs[1].Size())
