@@ -40,7 +40,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
-var skipDir syscall.Errno = 100000
 var dirSuffix = "/"
 
 func toError(eno syscall.Errno) error {
