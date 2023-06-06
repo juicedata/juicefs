@@ -181,7 +181,7 @@ var bufPool = sync.Pool{
 	},
 }
 
-func ListAllWithDelimitor(store ObjectStorage, prefix, start, end string) (<-chan Object, error) {
+func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-chan Object, error) {
 	listed := make(chan Object, 10240)
 	var walk func(string, []Object) error
 	walk = func(prefix string, entries []Object) error {
@@ -201,25 +201,23 @@ func ListAllWithDelimitor(store ObjectStorage, prefix, start, end string) (<-cha
 		children := make([][]Object, len(entries))
 		for c := 0; c < concurrent; c++ {
 			conds[c] = sync.NewCond(&ms[c])
-			if c < len(entries) {
-				go func(c int) {
-					for i := c; i < len(entries); i += concurrent {
-						if entries[i].Key() != prefix {
-							children[i], _ = store.List(entries[i].Key(), "\x00", "/", 0) // exclude itself, will be retried
-						}
-						ms[c].Lock()
-						ready[c] = true
-						conds[c].Signal()
-						ms[c].Unlock()
-
-						ms[c].Lock()
-						for ready[c] {
-							conds[c].Wait()
-						}
-						ms[c].Unlock()
+			go func(c int) {
+				for i := c; i < len(entries); i += concurrent {
+					if entries[i].Key() != prefix {
+						children[i], _ = store.List(entries[i].Key(), "\x00", "/", 0) // exclude itself, will be retried
 					}
-				}(c)
-			}
+					ms[c].Lock()
+					ready[c] = true
+					conds[c].Signal()
+					ms[c].Unlock()
+
+					ms[c].Lock()
+					for ready[c] {
+						conds[c].Wait()
+					}
+					ms[c].Unlock()
+				}
+			}(c)
 		}
 
 		for i, e := range entries {
@@ -242,6 +240,7 @@ func ListAllWithDelimitor(store ObjectStorage, prefix, start, end string) (<-cha
 			}
 			if e.IsDir() && e.Key() != prefix {
 				err = walk(e.Key(), children[i])
+				children[i] = nil
 				if err != nil {
 					return err
 				}
@@ -250,7 +249,7 @@ func ListAllWithDelimitor(store ObjectStorage, prefix, start, end string) (<-cha
 		return nil
 	}
 
-	func() {
+	go func() {
 		defer close(listed)
 		err := walk(prefix, nil)
 		if err != nil {

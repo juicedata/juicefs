@@ -65,7 +65,7 @@ func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, err
 	}
 	ch, err := s.ListAll(prefix, marker)
 	if err == notSupported {
-		ch, err = ListAllWithDelimitor(s, prefix, marker, "")
+		ch, err = ListAllWithDelimiter(s, prefix, marker, "")
 	}
 	if err == nil {
 		objs := make([]Object, 0)
