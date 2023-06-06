@@ -153,20 +153,16 @@ func TestSync(t *testing.T) {
 
 	var aObjs, bObjs []object.Object
 	for obj := range aRes {
-		logger.Infof("a %s", obj.Key())
 		aObjs = append(aObjs, obj)
 	}
 	for obj := range bRes {
-		logger.Infof("b %s", obj.Key())
 		bObjs = append(bObjs, obj)
 	}
 
-	// a1
 	if !deepEqualWithOutMtime(aObjs[1], bObjs[1]) {
 		t.FailNow()
 	}
 
-	// ba
 	if !deepEqualWithOutMtime(aObjs[4], bObjs[len(bObjs)-1]) {
 		t.Fatalf("expect %+v but got %+v", aObjs[4], bObjs[len(bObjs)-1])
 	}

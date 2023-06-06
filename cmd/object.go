@@ -239,58 +239,6 @@ func (j *juiceFS) List(prefix, marker, delimiter string, limit int64) ([]object.
 	return objs, nil
 }
 
-// walk recursively descends path, calling w.
-func (j *juiceFS) walk(path string, info *fs.FileStat, isSymlink bool, walkFn WalkFunc) syscall.Errno {
-	err := walkFn(path, info, isSymlink, 0)
-	if err != 0 {
-		if info.IsDir() && err == skipDir {
-			return 0
-		}
-		return err
-	}
-
-	if !info.IsDir() {
-		return 0
-	}
-
-	entries, err := j.readDirSorted(path)
-	if err != 0 {
-		return walkFn(path, info, isSymlink, err)
-	}
-
-	for _, e := range entries {
-		p := path + e.name
-		err = j.walk(p, e.fi, e.isSymlink, walkFn)
-		if err != 0 && err != skipDir && err != syscall.ENOENT {
-			return err
-		}
-	}
-	return 0
-}
-
-func (j *juiceFS) walkRoot(root string, walkFn WalkFunc) syscall.Errno {
-	var err syscall.Errno
-	var lstat, info *fs.FileStat
-	lstat, err = j.jfs.Lstat(ctx, root)
-	if err != 0 {
-		err = walkFn(root, nil, false, err)
-	} else {
-		isSymlink := lstat.IsSymlink()
-		info, err = j.jfs.Stat(ctx, root)
-		if err != 0 {
-			// root is a broken link
-			err = walkFn(root, lstat, isSymlink, 0)
-		} else {
-			err = j.walk(root, info, isSymlink, walkFn)
-		}
-	}
-
-	if err == skipDir {
-		return 0
-	}
-	return err
-}
-
 type mEntry struct {
 	fi        *fs.FileStat
 	name      string
@@ -332,58 +280,6 @@ func (j *juiceFS) readDirSorted(dirname string) ([]*mEntry, syscall.Errno) {
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].name < mEntries[j].name })
 	return mEntries, err
-}
-
-type WalkFunc func(path string, info *fs.FileStat, isSymlink bool, err syscall.Errno) syscall.Errno
-
-func (d *juiceFS) ListAll(prefix, marker string) (<-chan object.Object, error) {
-	listed := make(chan object.Object, 10240)
-	var walkRoot string
-	if strings.HasSuffix(prefix, dirSuffix) {
-		walkRoot = prefix
-	} else {
-		// If the root is not ends with `/`, we'll list the directory root resides.
-		walkRoot = path.Dir(prefix) + dirSuffix
-	}
-	if walkRoot == "./" {
-		walkRoot = ""
-	}
-	go func() {
-		_ = d.walkRoot(dirSuffix+walkRoot, func(path string, info *fs.FileStat, isSymlink bool, err syscall.Errno) syscall.Errno {
-			if len(path) > 0 {
-				path = path[1:]
-			}
-			if err != 0 {
-				if err == syscall.ENOENT {
-					logger.Warnf("skip not exist file or directory: %s", path)
-					return 0
-				}
-				listed <- nil
-				logger.Errorf("list %s: %s", path, err)
-				return 0
-			}
-
-			if !strings.HasPrefix(path, prefix) {
-				if info.IsDir() && path != walkRoot {
-					return skipDir
-				}
-				return 0
-			}
-
-			key := path
-			if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
-				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
-					return skipDir
-				}
-				return 0
-			}
-			f := &jObj{key, info}
-			listed <- f
-			return 0
-		})
-		close(listed)
-	}()
-	return listed, nil
 }
 
 func (j *juiceFS) Chtimes(key string, mtime time.Time) error {

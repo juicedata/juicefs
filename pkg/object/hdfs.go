@@ -237,10 +237,6 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Obje
 	return objs, nil
 }
 
-func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
-	return nil, notSupported
-}
-
 func (h *hdfsclient) Chtimes(key string, mtime time.Time) error {
 	return h.c.Chtimes(h.path(key), mtime, mtime)
 }

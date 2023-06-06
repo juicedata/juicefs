@@ -189,10 +189,6 @@ func (m *memStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 	return objs, nil
 }
 
-func (m *memStore) ListAll(prefix, marker string) (<-chan Object, error) {
-	return nil, notSupported
-}
-
 func newMem(endpoint, accesskey, secretkey, token string) (ObjectStorage, error) {
 	store := &memStore{name: endpoint}
 	store.objects = make(map[string]*mobj)

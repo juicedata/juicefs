@@ -307,10 +307,6 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	return objs, nil
 }
 
-func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
-	return nil, notSupported
-}
-
 func (d *filestore) Chtimes(path string, mtime time.Time) error {
 	p := d.path(path)
 	return os.Chtimes(p, mtime, mtime)

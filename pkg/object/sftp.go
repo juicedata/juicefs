@@ -391,10 +391,6 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	return objs, nil
 }
 
-func (f *sftpStore) ListAll(prefix, marker string) (<-chan Object, error) {
-	return nil, notSupported
-}
-
 func sshInteractive(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
 	if len(questions) == 0 {
 		fmt.Print(user, instruction)
