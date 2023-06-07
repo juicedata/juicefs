@@ -136,10 +136,6 @@ func (s *scsClient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	return objs, nil
 }
 
-func (s *scsClient) ListAll(prefix, marker string) (<-chan Object, error) {
-	return nil, notSupported
-}
-
 func (s *scsClient) CreateMultipartUpload(key string) (*MultipartUpload, error) {
 	mu, err := s.b.InitiateMultipartUpload(key, map[string]string{})
 	if err != nil {

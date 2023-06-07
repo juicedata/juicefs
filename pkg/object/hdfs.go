@@ -181,8 +181,11 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Obje
 	}
 	dir := h.path(prefix)
 	var objs []Object
-	if !strings.HasSuffix(dir, "/") {
-		dir = filepath.Dir(dir) + dirSuffix
+	if !strings.HasSuffix(dir, dirSuffix) {
+		dir = filepath.Dir(dir)
+		if !strings.HasSuffix(dir, dirSuffix) {
+			dir += dirSuffix
+		}
 	} else if marker == "" {
 		obj, err := h.Head(prefix)
 		if err != nil {
@@ -235,97 +238,6 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Obje
 		}
 	}
 	return objs, nil
-}
-
-func (h *hdfsclient) walk(path string, walkFn filepath.WalkFunc) error {
-	file, err := h.c.Open(path)
-	var info os.FileInfo
-	if file != nil {
-		info = file.Stat()
-	}
-
-	err = walkFn(path, info, err)
-	if err != nil {
-		if info != nil && info.IsDir() && err == filepath.SkipDir {
-			return nil
-		}
-
-		return err
-	}
-
-	if info == nil || !info.IsDir() {
-		return nil
-	}
-
-	infos, err := file.Readdir(0)
-	if err != nil {
-		return walkFn(path, info, err)
-	}
-
-	// make sure they are ordered in full path
-	names := make([]string, len(infos))
-	for i, info := range infos {
-		if info.IsDir() {
-			names[i] = info.Name() + "/"
-		} else {
-			names[i] = info.Name()
-		}
-	}
-	sort.Strings(names)
-
-	for _, name := range names {
-		name = strings.TrimSuffix(name, "/")
-		err = h.walk(filepath.ToSlash(filepath.Join(path, name)), walkFn)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
-	listed := make(chan Object, 10240)
-	root := h.path(prefix)
-	_, err := h.c.Stat(root)
-	if err != nil && err.(*os.PathError).Err == os.ErrNotExist || !strings.HasSuffix(prefix, "/") {
-		root = filepath.Dir(root)
-	}
-	_, err = h.c.Stat(root)
-	if err != nil && err.(*os.PathError).Err == os.ErrNotExist {
-		close(listed)
-		return listed, nil // return empty list
-	}
-	go func() {
-		_ = h.walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				if err == io.EOF {
-					err = nil // ignore
-				} else {
-					logger.Errorf("list %s: %s", path, err)
-					listed <- nil
-				}
-				return err
-			}
-			key := path[len(h.basePath):]
-			if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
-				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if info.IsDir() {
-				if path != root || !strings.HasSuffix(root, "/") {
-					key += "/"
-				}
-			}
-			f := h.toFile(key, info)
-			listed <- f
-			return nil
-		})
-		close(listed)
-	}()
-	return listed, nil
 }
 
 func (h *hdfsclient) Chtimes(key string, mtime time.Time) error {

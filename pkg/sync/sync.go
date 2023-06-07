@@ -89,19 +89,9 @@ func ListAll(store object.ObjectStorage, prefix, start, end string) (<-chan obje
 	}
 
 	if ch, err := store.ListAll(prefix, start); err == nil {
-		if end == "" {
-			go func() {
-				for obj := range ch {
-					out <- obj
-				}
-				close(out)
-			}()
-			return out, nil
-		}
-
 		go func() {
 			for obj := range ch {
-				if obj != nil && obj.Key() > end {
+				if obj != nil && end != "" && obj.Key() > end {
 					break
 				}
 				out <- obj
@@ -116,6 +106,9 @@ func ListAll(store object.ObjectStorage, prefix, start, end string) (<-chan obje
 	marker := start
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
 	objs, err := store.List(prefix, marker, "", maxResults)
+	if err == utils.ENOTSUP {
+		return object.ListAllWithDelimiter(store, prefix, start, end)
+	}
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err

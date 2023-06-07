@@ -99,12 +99,16 @@ func ListAll(store ObjectStorage, prefix, marker string) (<-chan Object, error) 
 	out := make(chan Object, maxResults)
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
 	objs, err := store.List(prefix, marker, "", maxResults)
+	if err == notSupported {
+		return ListAllWithDelimiter(store, prefix, marker, "")
+	}
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
 		return nil, err
 	}
 	logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
 	go func() {
+		defer close(out)
 		lastkey := ""
 		first := true
 	END:
@@ -139,7 +143,6 @@ func ListAll(store ObjectStorage, prefix, marker string) (<-chan Object, error) 
 			}
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
 		}
-		close(out)
 	}()
 	return out, nil
 }
