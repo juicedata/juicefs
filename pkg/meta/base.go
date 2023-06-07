@@ -1725,7 +1725,11 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
-	return m.en.doReaddir(ctx, inode, plus, entries, -1)
+	st := m.en.doReaddir(ctx, inode, plus, entries, -1)
+	if st == syscall.ENOENT && inode == TrashInode {
+		st = 0
+	}
+	return st
 }
 
 func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
