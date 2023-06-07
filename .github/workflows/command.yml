@@ -40,7 +40,7 @@ jobs:
           elif [ "${{github.event_name}}" == "pull_request"  ]; then
             echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           elif [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
-            echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3", "redis", "tikv"]' >> $GITHUB_OUTPUT
           else
             echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           fi
@@ -65,26 +65,32 @@ jobs:
         uses: ./.github/actions/build
 
       - name: Test Quota
+        timeout-minutes: 30
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
           
       - name: Test Clone
+        timeout-minutes: 30
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/clone.sh
 
       - name: Test fsck
+        timeout-minutes: 30
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/fsck.sh 
   
       - name: Test Gc
+        timeout-minutes: 30
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/gc.sh
   
       - name: Test Load & Dump
+        timeout-minutes: 30
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/load_dump.sh
 
       - name: Test Sync
+        timeout-minutes: 30
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
 

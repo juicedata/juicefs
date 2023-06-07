@@ -1246,7 +1246,7 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}
 	defer m.timeit("GetAttr", time.Now())
 	var err syscall.Errno
-	if inode == RootInode {
+	if inode == RootInode || inode == TrashInode {
 		// doGetAttr could overwrite the `attr` after timeout
 		var a Attr
 		e := utils.WithTimeout(func() error {
@@ -1261,6 +1261,11 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 			attr.Mode = 0777
 			attr.Nlink = 2
 			attr.Length = 4 << 10
+			if inode == TrashInode {
+				attr.Mode = 0555
+			}
+			attr.Parent = RootInode
+			attr.Full = true
 		}
 	} else {
 		err = m.en.doGetAttr(ctx, inode, attr)
@@ -1725,7 +1730,11 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
-	return m.en.doReaddir(ctx, inode, plus, entries, -1)
+	st := m.en.doReaddir(ctx, inode, plus, entries, -1)
+	if st == syscall.ENOENT && inode == TrashInode {
+		st = 0
+	}
+	return st
 }
 
 func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {

@@ -344,62 +344,6 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo) Object 
 	return ff
 }
 
-func (f *sftpStore) doFind(c *sftp.Client, path, marker string, out chan Object) {
-	infos, err := c.ReadDir(path)
-	if err != nil {
-		logger.Errorf("readdir %s: %s", path, err)
-		return
-	}
-
-	obs := f.sortByName(c, path, infos)
-	for _, o := range obs {
-		key := o.Key()
-		if key > marker {
-			out <- o
-		}
-		if o.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
-			f.doFind(c, f.root+key, marker, out)
-		}
-	}
-}
-
-func (f *sftpStore) find(c *sftp.Client, path, marker string, out chan Object) {
-	if strings.HasSuffix(path, dirSuffix) {
-		fi, err := c.Stat(path)
-		if err != nil {
-			logger.Errorf("Stat %s error: %q", path, err)
-			return
-		}
-		if marker == "" {
-			out <- f.fileInfo(nil, path[len(f.root):], fi)
-		}
-		f.doFind(c, path, marker, out)
-	} else {
-		// As files or dirs in the same directory of file `path` resides
-		// may have prefix `path`, we should list the directory.
-		dir := filepath.Dir(path) + dirSuffix
-		infos, err := c.ReadDir(dir)
-		if err != nil {
-			logger.Errorf("readdir %s: %s", dir, err)
-			return
-		}
-
-		obs := f.sortByName(c, dir, infos)
-		for _, o := range obs {
-			key := o.Key()
-			p := f.root + o.Key()
-			if strings.HasPrefix(p, path) {
-				if key > marker {
-					out <- o
-				}
-				if o.IsDir() && (key > marker || strings.HasPrefix(marker, key)) {
-					f.doFind(c, p, marker, out)
-				}
-			}
-		}
-	}
-}
-
 func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if delimiter != "/" {
 		return nil, notSupported
@@ -414,7 +358,10 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	var objs []Object
 	dir := f.path(prefix)
 	if !strings.HasSuffix(dir, "/") {
-		dir = filepath.Dir(dir) + dirSuffix
+		dir = filepath.Dir(dir)
+		if !strings.HasSuffix(dir, dirSuffix) {
+			dir += dirSuffix
+		}
 	} else if marker == "" {
 		obj, err := f.Head(prefix)
 		if err != nil {
@@ -445,21 +392,6 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 		}
 	}
 	return objs, nil
-}
-
-func (f *sftpStore) ListAll(prefix, marker string) (<-chan Object, error) {
-	c, err := f.getSftpConnection()
-	if err != nil {
-		return nil, err
-	}
-	listed := make(chan Object, 10240)
-	go func() {
-		defer f.putSftpConnection(&c, nil)
-
-		f.find(c.sftpClient, f.path(prefix), marker, listed)
-		close(listed)
-	}()
-	return listed, nil
 }
 
 func sshInteractive(user, instruction string, questions []string, echos []bool) (answers []string, err error) {

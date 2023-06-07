@@ -181,6 +181,97 @@ var bufPool = sync.Pool{
 	},
 }
 
+func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-chan Object, error) {
+	entries, err := store.List(prefix, "", "/", 1e9)
+	if err != nil {
+		logger.Errorf("list %s: %s", prefix, err)
+		return nil, err
+	}
+
+	listed := make(chan Object, 10240)
+	var walk func(string, []Object) error
+	walk = func(prefix string, entries []Object) error {
+		var err error
+		var concurrent = 10
+		ms := make([]sync.Mutex, concurrent)
+		conds := make([]*utils.Cond, concurrent)
+		ready := make([]bool, concurrent)
+		children := make([][]Object, len(entries))
+		for c := 0; c < concurrent; c++ {
+			conds[c] = utils.NewCond(&ms[c])
+			go func(c int) {
+				for i := c; i < len(entries); i += concurrent {
+					key := entries[i].Key()
+					if !entries[i].IsDir() || key == prefix {
+						continue
+					}
+					if end != "" && key >= end {
+						break
+					}
+					if key < start && !strings.HasPrefix(start, key) {
+						continue
+					}
+
+					children[i], err = store.List(key, "\x00", "/", 1e9) // exclude itself
+					ms[c].Lock()
+					ready[c] = true
+					conds[c].Signal()
+					ms[c].Unlock()
+
+					ms[c].Lock()
+					for ready[c] {
+						conds[c].WaitWithTimeout(time.Second)
+						if err != nil {
+							return
+						}
+					}
+					ms[c].Unlock()
+				}
+			}(c)
+		}
+
+		for i, e := range entries {
+			if end != "" && e.Key() >= end {
+				return nil
+			}
+			if e.Key() >= start {
+				listed <- e
+			} else if !strings.HasPrefix(start, e.Key()) {
+				continue
+			}
+			if e.IsDir() && e.Key() != prefix {
+				c := i % concurrent
+				ms[c].Lock()
+				for !ready[c] {
+					conds[c].Wait()
+				}
+				ready[c] = false
+				conds[c].Signal()
+				ms[c].Unlock()
+				if err != nil {
+					return err
+				}
+
+				err = walk(e.Key(), children[i])
+				if err != nil {
+					return err
+				}
+				children[i] = nil
+			}
+		}
+		return nil
+	}
+
+	go func() {
+		defer close(listed)
+		err := walk(prefix, entries)
+		if err != nil {
+			listed <- nil
+		}
+	}()
+	return listed, nil
+}
+
 func init() {
 	ReqIDCache = reqIDCache{cache: make(map[string]reqItem)}
 	go ReqIDCache.Clean()
