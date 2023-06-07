@@ -196,11 +196,11 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 
 		var concurrent = 10
 		ms := make([]sync.Mutex, concurrent)
-		conds := make([]*sync.Cond, concurrent)
+		conds := make([]*utils.Cond, concurrent)
 		ready := make([]bool, concurrent)
 		children := make([][]Object, len(entries))
 		for c := 0; c < concurrent; c++ {
-			conds[c] = sync.NewCond(&ms[c])
+			conds[c] = utils.NewCond(&ms[c])
 			go func(c int) {
 				for i := c; i < len(entries); i += concurrent {
 					key := entries[i].Key()
@@ -225,7 +225,10 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 
 					ms[c].Lock()
 					for ready[c] {
-						conds[c].Wait()
+						conds[c].WaitWithTimeout(time.Second)
+						if err != nil {
+							return
+						}
 					}
 					ms[c].Unlock()
 				}
