@@ -3,7 +3,7 @@ name: "integrationtests"
 on:
   push:
     branches:
-      - ‘main’
+      - 'main'
       - 'release-*'
     paths-ignore:
       - 'docs/**'

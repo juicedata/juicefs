@@ -98,9 +98,9 @@ test_sync_include_exclude_option(){
             rm jfs_sync_dir/ -rf && mkdir jfs_sync_dir/
             ./juicefs sync $source_dir jfs_sync_dir/ $jfs_option --list-threads 2
             set -u noglob
-            printf ’juicefs sync %s %s %s\n‘ "$source_dir"  "jfs_sync_dir/" "$jfs_option" 
-            printf ’rsync %s %s %s\n‘ "$source_dir" "rsync_dir/"  "$rsync_option" 
-            printf ‘diff between juicefs sync and rsync:\n’
+            printf 'juicefs sync %s %s %s\n' "$source_dir"  "jfs_sync_dir/" "$jfs_option" 
+            printf 'rsync %s %s %s\n' "$source_dir" "rsync_dir/"  "$rsync_option" 
+            printf 'diff between juicefs sync and rsync:\n'
             diff -ur jfs_sync_dir rsync_dir
         done < .github/workflows/resources/sync-options.txt
     done
