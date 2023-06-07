@@ -84,11 +84,13 @@ TiKV 默认通过 [compaction-filter](https://docs.pingcap.com/zh/tidb/dev/garba
 
 |组件|CPU|内存|本地存储|网络|实例数量(最低要求)|
 |PD|4 核+|8 GB+|SAS, 200 GB+|千兆网卡|1|
-|TiKV|8 核+|32 GB+|SSD, 200 GB+	|千兆网卡|3|
+|TiKV|8 核+|32 GB+|SSD, 200 GB+|千兆网卡|3|
 
 :::note 说明
+
 + 如进行性能相关的测试，避免采用低性能存储和网络硬件配置，防止对测试结果的正确性产生干扰。
 + TiKV 的 SSD 盘推荐使用 NVME 接口以保证读写更快。
+
 :::
 
 + **生产环境**
@@ -170,14 +172,14 @@ swap 用硬盘来承接到达一定阀值的内存访问，由 `vm.swappiness` �
 
 #### I/O 调度算法
 
-1. noop(no operation)
+##### noop(no operation)
 
 noop 调度算法是内核中最简单的 IO 调度算法。noop 调度算法将 IO 请求放入到一个 FIFO 队列中，然后逐个执行这些 IO 请求，当然对于一些在磁盘上连续的 IO 请求，noop 调度会适当做一些合并。这个调度算法特别适合那些不希望调度器重新组织 IO 请求顺序的应用，因为内核的 I/O 调度操作会导致性能损失。NVMe SSD 这种高速 I/O 设备可以直接将请求下发给硬件，从而获取更好的性能。
 
-2. CFQ(Completely Fair Queuing)
+##### CFQ(Completely Fair Queuing)
 
 CFQ 尝试提供由发起 I/O 进程决定的公平的 I/O 调度，该算法为每一个进程分配一个时间窗口，在该时间窗口内，允许进程发出 IO 请求。通过时间窗口在不同进程间的移动，保证了对于所有进程而言都有公平的发出 IO 请求的机会，假如少数进程存在大量密集的 I/O 请求的情况，会出现明显的 I/O 性能下降。
 
-3. deadline
+##### deadline
 
 deadline 调度算法主要针对 I/O 请求的延时，每个 I/O 请求都被附加一个最后执行期限。读请求和写请求被分成了两个队列，默认优先处理读 IO，除非写快到 deadline 时才调度。当系统中存在的 I/O 请求进程数量比较少时，与 CFQ 算法相比，deadline 算法可以提供较高的 I/O 吞吐率。
