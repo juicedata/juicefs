@@ -179,6 +179,20 @@ $ juicefs info -r ./mnt
    path: /
 ```
 
+默认情况下 `juicefs info -r` 中 `fast` 模式下运行，它的目录用量不一定精准。如果你怀疑其统计结果，可以使用 `--strict` 选项查看精准用量：
+
+```shell
+$ juicefs info -r ./mnt --strict
+
+./mnt :
+  inode: 1
+  files: 33
+   dirs: 4
+ length: 80.29 MiB (84191037 Bytes)
+   size: 80.34 MiB (84242432 Bytes)
+   path: /
+```
+
 ### 使用 inode 检查元数据
 
 还可以通过 inode 来反向查找文件路径及数据块的信息，但需要先进入挂载点：
@@ -294,3 +308,25 @@ Scanned slices bytes: 36.81 MiB (38597789 Bytes)
 从结果可以看到，`juicefs fsck` 扫描发现文件系统中因为丢失了数据块致使一个文件损坏。
 
 虽然结果表明后端存储中的文件已经损坏，但还是有必要去挂载点查验一下文件是否可以访问，因为 JuiceFS 会在本地缓存最近访问过的文件数据，文件损坏之前的版本如果已经缓存在本地，则可以将缓存的文件数据块重新上传以避免丢失数据。你可以在缓存目录（即 `--cache-dir` 选项对应的路径）中根据 `juicefs fsck` 命令输出的数据块路径查找是否存在缓存数据，例如上面例子中丢失的数据块路径为 `0/1/1063_0_2693747`。
+
+### 强制同步目录用量
+
+在[目录用量统计](../guide/dir-stats.md)中我们介绍了这个新功能。虽然 fsck 默认会发现以及修复明显损坏的目录用量统计，但目录用量仍有可能不精准。我们可以使用 `--sync-dir-stat` 选项来强制检查或修复目录用量：
+
+```bash
+$ juicefs fsck redis://localhost --path /d --sync-dir-stat
+2023/06/07 15:59:14.080820 juicefs[228395] <INFO>: Meta address: redis://localhost [interface.go:494]
+2023/06/07 15:59:14.082555 juicefs[228395] <INFO>: Ping redis latency: 49.904µs [redis.go:3569]
+2023/06/07 15:59:14.083412 juicefs[228395] <WARNING>: usage stat of /d should be &{1073741824 1073741824 1}, but got &{0 0 0} [base.go:2026]
+2023/06/07 15:59:14.083443 juicefs[228395] <WARNING>: Stat of path /d (inode 10701) should be synced, please re-run with '--path /d --repair --sync-dir-stat' to fix it [base.go:2041]
+2023/06/07 15:59:14.083473 juicefs[228395] <FATAL>: some errors occurred, please check the log of fsck [main.go:31]
+
+$ juicefs fsck redis://localhost --path /d --repair --sync-dir-stat
+2023/06/07 16:00:43.043851 juicefs[228487] <INFO>: Meta address: redis://localhost [interface.go:494]
+2023/06/07 16:00:43.051556 juicefs[228487] <INFO>: Ping redis latency: 577.29µs [redis.go:3569]
+
+# 成功修复
+$ juicefs fsck redis://localhost --path /d --sync-dir-stat
+2023/06/07 16:01:08.401972 juicefs[228547] <INFO>: Meta address: redis://localhost [interface.go:494]
+2023/06/07 16:01:08.404041 juicefs[228547] <INFO>: Ping redis latency: 85.566µs [redis.go:3569]
+```
