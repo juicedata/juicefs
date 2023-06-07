@@ -73,7 +73,7 @@ juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1
 - Flocks：被这个会话加锁的文件的 BSD 锁信息
 - Plocks：被这个会话加锁的文件的 POSIX 锁信息
 
-通过 `--more, -m` 选型扫描 trash 中的文件和 slice，以及已删除待清理的文件和 slice：
+通过 `--more, -m` 选项扫描 trash 中的文件和 slice，以及延迟删除的文件和 slice：
 
 ```shell
 juicefs status -m redis://xxx.cache.amazonaws.com:6379/1
@@ -179,7 +179,7 @@ $ juicefs info -r ./mnt
    path: /
 ```
 
-默认情况下 `juicefs info -r` 在 `fast` 模式下运行，它的目录用量不一定精准。如果你怀疑其统计结果，可以使用 `--strict` 选项查看精准用量：
+默认情况下 `juicefs info -r` 在 `fast` 模式下运行，它结果中的目录用量不一定精准。如果你怀疑其准确性，可以使用 `--strict` 选项查看精准用量：
 
 ```shell
 $ juicefs info -r ./mnt --strict
@@ -255,7 +255,7 @@ $ juicefs summary /mnt/jfs/
 +---------------------------+---------+------+-------+
 ```
 
-可以使用 `--depth value, -d value` 和 `--entries value, -e value` 控制目录层级和每层的最大数量：
+可以使用 `--depth value, -d value` 和 `--entries value, -e value` 选项控制目录层级和每层显示的最大数量：
 
 ```bash
 $ juicefs summary /mnt/jfs/ -d 3 -e 3
@@ -336,7 +336,7 @@ roa/assets/,28672,2,5
 roa/...,110592,6,15
 ```
 
-默认情况下 `juicefs summary` 在 `fast` 模式下运行，它的目录用量不一定精准。如果你怀疑其统计结果，可以使用 `--strict` 选项查看精准用量。
+默认情况下 `juicefs summary` 在 `fast` 模式下运行，它结果中的目录用量不一定精准。如果你怀疑其准确性，可以使用 `--strict` 选项查看精准用量。
 
 ## gc {#gc}
 
@@ -433,7 +433,7 @@ Scanned slices bytes: 36.81 MiB (38597789 Bytes)
 
 ### 强制同步目录用量
 
-在[目录用量统计](../guide/dir-stats.md)中我们介绍了这个新功能。虽然 fsck 默认会发现以及修复明显损坏的目录用量统计，但目录用量仍有可能不精准。我们可以使用 `--sync-dir-stat` 选项来强制检查或修复目录用量：
+在[目录用量统计](../guide/dir-stats.md)中我们介绍了这个新功能。虽然 fsck 默认会发现以及修复明显损坏的目录用量，但目录用量仍有可能不精准。我们可以使用 `--sync-dir-stat` 选项来强制检查或修复目录用量：
 
 ```bash
 $ juicefs fsck redis://localhost --path /d --sync-dir-stat
