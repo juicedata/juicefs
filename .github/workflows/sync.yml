@@ -69,7 +69,7 @@ jobs:
               rsync -a $source_dir rsync_dir/ $rsync_option
               test -d jfs_sync_dir/ && rm jfs_sync_dir/ -rf 
               mkdir jfs_sync_dir/
-              ./juicefs sync $source_dir jfs_sync_dir/ $jfs_option
+              ./juicefs sync $source_dir jfs_sync_dir/ $jfs_option --list-threads 2
               set -u noglob
               printf ’juicefs sync %s %s %s\n‘ "$source_dir"  "jfs_sync_dir/" "$jfs_option" 
               printf ’rsync %s %s %s\n‘ "$source_dir" "rsync_dir/"  "$rsync_option" 
@@ -198,10 +198,10 @@ jobs:
           ./juicefs format --trash-days 0 $meta_url sync-test
           ./juicefs mount --no-usage-report $meta_url $mount_point -d
           mkdir $mount_point/jfs_source/
-          ./juicefs sync jfs_source/ $mount_point/jfs_source/  -u=true --perms=true --check-all=true --bwlimit=81920 --dirs=true --threads=30 --debug  
+          ./juicefs sync jfs_source/ $mount_point/jfs_source/  --update --perms --check-all --bwlimit=81920 --dirs --threads=30 --list-threads=3 --debug
           echo "test" > jfs_source/test_file
           mkdir jfs_source/test_dir
-          ./juicefs sync jfs_source/ $mount_point/jfs_source/  -u=true --perms=true --check-all=true --bwlimit=81920 --dirs=true --threads=30 --debug  
+          ./juicefs sync jfs_source/ $mount_point/jfs_source/  --update --perms --check-all --bwlimit=81920 --dirs --threads=30 --list-threads=2 --debug
           diff -ur jfs_source/ $mount_point/jfs_source
 
       - name: Log

@@ -51,11 +51,6 @@ import (
 )
 
 func cmdMount() *cli.Command {
-	compoundFlags := [][]cli.Flag{
-		mount_flags(),
-		clientFlags(),
-		shareInfoFlags(),
-	}
 	return &cli.Command{
 		Name:      "mount",
 		Action:    mount,
@@ -85,7 +80,7 @@ $ juicefs mount redis://localhost /mnt/jfs -d --read-only
 
 # Disable metadata backup
 $ juicefs mount redis://localhost /mnt/jfs --backup-meta 0`,
-		Flags: expandFlags(compoundFlags),
+		Flags: expandFlags(mount_flags(), clientFlags(1.0), shareInfoFlags()),
 	}
 }
 
@@ -265,7 +260,8 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		Port:           &vfs.Port{DebugAgent: debugAgent, PyroscopeAddr: c.String("pyroscope")},
 		PrefixInternal: c.Bool("prefix-internal"),
 	}
-	if cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
+	skip_check := os.Getenv("SKIP_BACKUP_META_CHECK") == "true"
+	if !skip_check && cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
 		logger.Fatalf("backup-meta should not be less than 5 minutes: %s", cfg.BackupMeta)
 	}
 	return cfg
@@ -608,15 +604,19 @@ func mount(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 
-	if c.Bool("update-fstab") && runtime.GOOS == "linux" && !calledViaMount(os.Args) && !insideContainer() {
+	if c.Bool("update-fstab") && !calledViaMount(os.Args) && !insideContainer() {
 		if os.Getuid() != 0 {
 			logger.Warnf("--update-fstab should be used with root")
 		} else {
-			if err := tryToInstallMountExec(); err != nil {
-				logger.Warnf("failed to create /sbin/mount.juicefs: %s", err)
+			var e1, e2 error
+			if e1 = tryToInstallMountExec(); e1 != nil {
+				logger.Warnf("failed to create /sbin/mount.juicefs: %s", e1)
 			}
-			if err := updateFstab(c); err != nil {
-				logger.Warnf("failed to update fstab: %s", err)
+			if e2 = updateFstab(c); e2 != nil {
+				logger.Warnf("failed to update fstab: %s", e2)
+			}
+			if e1 == nil && e2 == nil {
+				logger.Infof("Successfully updated fstab, now you can mount with `mount %s`", mp)
 			}
 		}
 	}
@@ -641,7 +641,7 @@ func mount(c *cli.Context) error {
 	}
 
 	removePassword(addr)
-	err = metaCli.NewSession()
+	err = metaCli.NewSession(true)
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}

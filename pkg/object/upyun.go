@@ -100,7 +100,7 @@ func (u *up) Copy(dst, src string) error {
 
 func (u *up) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
 	if delimiter != "" {
-		return nil, notSupportedDelimiter
+		return nil, notSupported
 	}
 	if u.listing == nil {
 		listing := make(chan *upyun.FileInfo, limit)

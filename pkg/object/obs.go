@@ -88,12 +88,21 @@ func (s *obsClient) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
+	var sc string
+	switch r.StorageClass {
+	case "":
+		sc = string(obs.StorageClassStandard)
+	case obs.StorageClassWarm:
+		sc = string("STANDARD_IA")
+	default:
+		sc = string(r.StorageClass)
+	}
 	return &obj{
 		key,
 		r.ContentLength,
 		r.LastModified,
 		strings.HasSuffix(key, "/"),
-		string(r.StorageClass),
+		sc,
 	}, nil
 }
 

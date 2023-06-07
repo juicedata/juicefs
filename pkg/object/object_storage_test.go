@@ -35,11 +35,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colinmarc/hdfs/v2/hadoopconf"
+
 	blob2 "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 
 	"github.com/volcengine/ve-tos-golang-sdk/v2/tos/enum"
-
-	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 
@@ -59,11 +59,7 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 }
 
 func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, error) {
-	r, err := s.List(prefix, marker, "", limit)
-	if !errors.Is(err, notSupported) {
-		return r, err
-	}
-	ch, err := s.ListAll(prefix, marker)
+	ch, err := ListAll(s, prefix, marker)
 	if err == nil {
 		objs := make([]Object, 0)
 		for obj := range ch {
@@ -94,7 +90,7 @@ func setStorageClass(o ObjectStorage) string {
 		s.sc = "NEARLINE"
 		return s.sc
 	case *obsClient:
-		s.sc = string(obs.StorageClassWarm)
+		s.sc = "STANDARD_IA"
 		return s.sc
 	case *ossClient:
 		s.sc = string(oss.StorageIA)
@@ -197,7 +193,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 				t.Fatalf("First object size should be 0, but got %d", objs[0].Size())
 			}
 			if objs[1].Key() != "test" {
-				t.Fatalf("First key should be test, but got %s", objs[1].Key())
+				t.Fatalf("Second key should be test, but got %s", objs[1].Key())
 			}
 			if !strings.Contains(s.String(), "encrypted") && objs[1].Size() != 5 {
 				t.Fatalf("Size of first key shold be 5, but got %v", objs[1].Size())
@@ -282,12 +278,20 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
 	if obs, err := s.List("", "", "/", 10); err != nil {
-		if !(errors.Is(err, notSupportedDelimiter) || errors.Is(err, notSupported)) {
+		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
-			t.Logf("list api error: %s", err)
+			t.Logf("list with delimiter is not supported")
 		}
 	} else {
+		switch s.(*withPrefix).os.(type) {
+		case FileSystem:
+			if len(obs) == 0 || obs[0].Key() != "" {
+				t.Fatalf("list should return itself")
+			} else {
+				obs = obs[1:] // ignore itself
+			}
+		}
 		if len(obs) != 5 {
 			t.Fatalf("list with delimiter should return five results but got %d", len(obs))
 		}
@@ -299,13 +303,37 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, err := s.List("a/", "", "/", 10); err != nil {
-		if !(errors.Is(err, notSupportedDelimiter) || errors.Is(err, notSupported)) {
+	if obs, err := s.List("a", "", "/", 10); err != nil {
+		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
-		} else {
-			t.Logf("list api error: %s", err)
 		}
 	} else {
+		if len(obs) != 2 {
+			t.Fatalf("list with delimiter should return three results but got %d", len(obs))
+		}
+		keys := []string{"a/", "a1"}
+		for i, o := range obs {
+			if o.Key() != keys[i] {
+				t.Fatalf("should get key %s but got %s", keys[i], o.Key())
+			}
+		}
+	}
+
+	if obs, err := s.List("a/", "", "/", 10); err != nil {
+		if !errors.Is(err, notSupported) {
+			t.Fatalf("list with delimiter: %s", err)
+		} else {
+			t.Logf("list with delimiter is not supported")
+		}
+	} else {
+		switch s.(*withPrefix).os.(type) {
+		case FileSystem:
+			if len(obs) == 0 || obs[0].Key() != "a/" {
+				t.Fatalf("list should return itself")
+			} else {
+				obs = obs[1:] // ignore itself
+			}
+		}
 		if len(obs) != 3 {
 			t.Fatalf("list with delimiter should return three results but got %d", len(obs))
 		}
@@ -725,6 +753,33 @@ func TestOBS(t *testing.T) { //skip mutate
 }
 
 func TestHDFS(t *testing.T) { //skip mutate
+	conf := make(hadoopconf.HadoopConf)
+	conf["dfs.namenode.rpc-address.ns.namenode1"] = "hadoop01:8020"
+	conf["dfs.namenode.rpc-address.ns.namenode2"] = "hadoop02:8020"
+
+	checkAddr := func(addr string, expected []string, base string) {
+		addresses, basePath := parseHDFSAddr(addr, conf)
+		sort.Strings(addresses)
+		if !reflect.DeepEqual(addresses, expected) {
+			t.Fatalf("expected addrs is %+v but got %+v from %s", expected, addresses, addr)
+		}
+		if basePath != base {
+			t.Fatalf("expected path is %s but got %s from %s", base, basePath, addr)
+		}
+	}
+
+	checkAddr("hadoop01:8020", []string{"hadoop01:8020"}, "/")
+	checkAddr("hdfs://hadoop01:8020/", []string{"hadoop01:8020"}, "/")
+	checkAddr("hadoop01:8020/user/juicefs/", []string{"hadoop01:8020"}, "/user/juicefs/")
+	checkAddr("hadoop01:8020/user/juicefs", []string{"hadoop01:8020"}, "/user/juicefs/")
+	checkAddr("hdfs://hadoop01:8020/user/juicefs/", []string{"hadoop01:8020"}, "/user/juicefs/")
+
+	// for HA
+	checkAddr("hadoop01:8020,hadoop02:8020", []string{"hadoop01:8020", "hadoop02:8020"}, "/")
+	checkAddr("hadoop01:8020,hadoop02:8020/user/juicefs/", []string{"hadoop01:8020", "hadoop02:8020"}, "/user/juicefs/")
+	checkAddr("hdfs://ns/user/juicefs", []string{"hadoop01:8020", "hadoop02:8020"}, "/user/juicefs/")
+	checkAddr("ns/user/juicefs/", []string{"hadoop01:8020", "hadoop02:8020"}, "/user/juicefs/")
+
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.SkipNow()
 	}

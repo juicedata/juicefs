@@ -264,7 +264,7 @@ func (m *redisMeta) Name() string {
 	return "redis"
 }
 
-func (m *redisMeta) Init(format *Format, force bool) error {
+func (m *redisMeta) doInit(format *Format, force bool) error {
 	ctx := Background
 	body, err := m.rdb.Get(ctx, m.setting()).Bytes()
 	if err != nil && err != redis.Nil {
@@ -276,8 +276,15 @@ func (m *redisMeta) Init(format *Format, force bool) error {
 		if err != nil {
 			return fmt.Errorf("existing format is broken: %s", err)
 		}
+		if !old.DirStats && format.DirStats {
+			// remove dir stats as they are outdated
+			err := m.rdb.Del(ctx, m.dirUsedInodesKey(), m.dirUsedSpaceKey()).Err()
+			if err != nil {
+				return errors.Wrap(err, "remove dir stats")
+			}
+		}
 		if err = format.update(&old, force); err != nil {
-			return err
+			return errors.Wrap(err, "update format")
 		}
 	}
 
@@ -1398,11 +1405,15 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 			if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
+			if trash > 0 && attr.Nlink > 1 && tx.HExists(ctx, m.entryKey(trash), m.trashEntry(parent, inode, name)).Val() {
+				trash = 0
+				defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
+			}
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
 			if trash == 0 {
 				attr.Nlink--
-				if _type == TypeFile && attr.Nlink == 0 {
+				if _type == TypeFile && attr.Nlink == 0 && m.sid > 0 {
 					opened = m.of.IsOpen(inode)
 				}
 			} else if attr.Parent > 0 {
@@ -1583,6 +1594,11 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 	var dtyp uint8
 	var tattr Attr
 	var newSpace, newInode int64
+	keys := []string{m.inodeKey(parentSrc), m.entryKey(parentSrc), m.inodeKey(parentDst), m.entryKey(parentDst)}
+	if isTrash(parentSrc) {
+		// lock the parentDst
+		keys[0], keys[2] = keys[2], keys[0]
+	}
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		opened = false
 		dino, dtyp = 0, 0
@@ -1844,7 +1860,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return nil
 		})
 		return err
-	}, m.inodeKey(parentSrc), m.entryKey(parentSrc), m.inodeKey(parentDst), m.entryKey(parentDst))
+	}, keys...)
 	if err == nil && !exchange && trash == 0 {
 		if dino > 0 && dtyp == TypeFile && tattr.Nlink == 0 {
 			m.fileDeleted(opened, false, dino, tattr.Length)
@@ -2132,24 +2148,29 @@ func (m *redisMeta) doRefreshSession() error {
 func (m *redisMeta) doDeleteSustainedInode(sid uint64, inode Ino) error {
 	var attr Attr
 	var ctx = Background
-	a, err := m.rdb.Get(ctx, m.inodeKey(inode)).Bytes()
-	if err == redis.Nil {
-		return nil
-	}
-	if err != nil {
+	var newSpace int64
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		newSpace = 0
+		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
+		if err == redis.Nil {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		m.parseAttr(a, &attr)
+		newSpace = -align4K(attr.Length)
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(time.Now().Unix()), Member: m.toDelete(inode, attr.Length)})
+			pipe.Del(ctx, m.inodeKey(inode))
+			pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
+			pipe.Decr(ctx, m.totalInodesKey())
+			pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
+			return nil
+		})
 		return err
-	}
-	m.parseAttr(a, &attr)
-	newSpace := -align4K(attr.Length)
-	_, err = m.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.ZAdd(ctx, m.delfiles(), redis.Z{Score: float64(time.Now().Unix()), Member: m.toDelete(inode, attr.Length)})
-		pipe.Del(ctx, m.inodeKey(inode))
-		pipe.IncrBy(ctx, m.usedSpaceKey(), newSpace)
-		pipe.Decr(ctx, m.totalInodesKey())
-		pipe.SRem(ctx, m.sustained(sid), strconv.Itoa(int(inode)))
-		return nil
-	})
-	if err == nil {
+	}, m.inodeKey(inode))
+	if err == nil && newSpace < 0 {
 		m.updateStats(newSpace, -1)
 		m.tryDeleteFileData(inode, attr.Length, false)
 		m.updateDirQuota(Background, attr.Parent, newSpace, -1)
@@ -2418,6 +2439,9 @@ func (m *redisMeta) doGetParents(ctx Context, inode Ino) map[Ino]int {
 }
 
 func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
+	if m.conf.ReadOnly {
+		return nil, syscall.EROFS
+	}
 	field := ino.String()
 	stat, st := m.calcDirStat(ctx, ino)
 	if st != 0 {

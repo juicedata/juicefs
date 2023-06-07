@@ -142,7 +142,7 @@ func gc(ctx *cli.Context) error {
 	edge := time.Now().Add(-time.Duration(format.TrashDays) * 24 * time.Hour)
 	if delete {
 		cleanTrashSpin := progress.AddCountSpinner("Cleaned trash")
-		m.CleanupTrashBefore(c, edge, cleanTrashSpin.Increment)
+		m.CleanupTrashBefore(c, edge, cleanTrashSpin.IncrBy)
 		cleanTrashSpin.Done()
 
 		cleanDetachedNodeSpin := progress.AddCountSpinner("Cleaned detached nodes")
@@ -232,7 +232,7 @@ func gc(ctx *cli.Context) error {
 
 	// Scan all objects to find leaked ones
 	blob = object.WithPrefix(blob, "chunks/")
-	objs, err := osync.ListAll(blob, "", "")
+	objs, err := osync.ListAll(blob, "", "", "")
 	if err != nil {
 		logger.Fatalf("list all blocks: %s", err)
 	}

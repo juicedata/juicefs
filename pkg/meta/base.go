@@ -63,6 +63,7 @@ type engine interface {
 	doRefreshSession() error
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
+	doInit(format *Format, force bool) error
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
 	compactChunk(inode Ino, indx uint32, force bool)
@@ -332,6 +333,9 @@ func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall
 }
 
 func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int64) {
+	if !m.GetFormat().DirStats {
+		return
+	}
 	m.dirStatsLock.Lock()
 	defer m.dirStatsLock.Unlock()
 	stat := m.dirStats[ino]
@@ -346,6 +350,9 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, spac
 		return
 	}
 	m.en.updateStats(space, 0)
+	if !m.GetFormat().DirStats {
+		return
+	}
 	if parent > 0 {
 		m.updateDirStat(ctx, parent, length, space, 0)
 		m.updateDirQuota(ctx, parent, space, 0)
@@ -371,6 +378,9 @@ func (m *baseMeta) flushDirStat() {
 }
 
 func (m *baseMeta) doFlushDirStat() {
+	if !m.GetFormat().DirStats {
+		return
+	}
 	m.dirStatsLock.Lock()
 	if len(m.dirStats) == 0 {
 		m.dirStatsLock.Unlock()
@@ -460,22 +470,24 @@ func (m *baseMeta) newSessionInfo() []byte {
 	return buf
 }
 
-func (m *baseMeta) NewSession() error {
+func (m *baseMeta) NewSession(record bool) error {
 	go m.refresh()
 	if m.conf.ReadOnly {
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
 		return nil
 	}
 
-	v, err := m.en.incrCounter("nextSession", 1)
-	if err != nil {
-		return fmt.Errorf("get session ID: %s", err)
+	if record {
+		v, err := m.en.incrCounter("nextSession", 1)
+		if err != nil {
+			return fmt.Errorf("get session ID: %s", err)
+		}
+		m.sid = uint64(v)
+		if err = m.en.doNewSession(m.newSessionInfo()); err != nil {
+			return fmt.Errorf("create session: %s", err)
+		}
+		logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 	}
-	m.sid = uint64(v)
-	if err = m.en.doNewSession(m.newSessionInfo()); err != nil {
-		return fmt.Errorf("create session: %s", err)
-	}
-	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
 	m.loadQuotas()
 	go m.en.flushStats()
@@ -526,7 +538,7 @@ func (m *baseMeta) refresh() {
 			m.sesMu.Unlock()
 			return
 		}
-		if !m.conf.ReadOnly && m.conf.Heartbeat > 0 {
+		if !m.conf.ReadOnly && m.conf.Heartbeat > 0 && m.sid > 0 {
 			if err := m.en.doRefreshSession(); err != nil {
 				logger.Errorf("Refresh session %d: %s", m.sid, err)
 			}
@@ -610,6 +622,9 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) 
 	if inodes > 0 && m.fmt.Inodes > 0 && atomic.LoadInt64(&m.usedInodes)+atomic.LoadInt64(&m.newInodes)+inodes > int64(m.fmt.Inodes) {
 		return syscall.ENOSPC
 	}
+	if !m.GetFormat().DirStats {
+		return 0
+	}
 	for _, ino := range parents {
 		if m.checkDirQuota(ctx, ino, space, inodes) {
 			return syscall.EDQUOT
@@ -619,6 +634,9 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) 
 }
 
 func (m *baseMeta) loadQuotas() {
+	if !m.GetFormat().DirStats {
+		return
+	}
 	quotas, err := m.en.doLoadQuotas(Background)
 	if err == nil {
 		m.quotaMu.Lock()
@@ -663,6 +681,9 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 }
 
 func (m *baseMeta) hasDirQuota(ctx Context, inode Ino) bool {
+	if !m.GetFormat().DirStats {
+		return false
+	}
 	var q *Quota
 	var st syscall.Errno
 	for {
@@ -684,6 +705,9 @@ func (m *baseMeta) hasDirQuota(ctx Context, inode Ino) bool {
 }
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {
+	if !m.GetFormat().DirStats {
+		return false
+	}
 	var q *Quota
 	var st syscall.Errno
 	for {
@@ -705,6 +729,9 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bo
 }
 
 func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
+	if !m.GetFormat().DirStats {
+		return
+	}
 	var q *Quota
 	var st syscall.Errno
 	for {
@@ -729,10 +756,13 @@ func (m *baseMeta) flushQuotas() {
 	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
+		if !m.GetFormat().DirStats {
+			continue
+		}
 		m.quotaMu.RLock()
 		for ino, q := range m.dirQuotas {
-			newSpace = atomic.SwapInt64(&q.newSpace, 0)
-			newInodes = atomic.SwapInt64(&q.newInodes, 0)
+			newSpace = atomic.LoadInt64(&q.newSpace)
+			newInodes = atomic.LoadInt64(&q.newInodes)
 			if newSpace != 0 || newInodes != 0 {
 				quotas[ino] = &Quota{newSpace: newSpace, newInodes: newInodes}
 			}
@@ -741,11 +771,17 @@ func (m *baseMeta) flushQuotas() {
 
 		if err := m.en.doFlushQuotas(Background, quotas); err != nil {
 			logger.Warnf("Flush quotas: %s", err)
+		} else {
 			m.quotaMu.RLock()
-			for ino, q := range quotas {
-				if cur := m.dirQuotas[ino]; cur != nil {
-					cur.update(q.newSpace, q.newInodes)
+			for ino, snap := range quotas {
+				q := m.dirQuotas[ino]
+				if q == nil {
+					continue
 				}
+				atomic.AddInt64(&q.newSpace, -snap.newSpace)
+				atomic.AddInt64(&q.UsedSpace, snap.newSpace)
+				atomic.AddInt64(&q.newInodes, -snap.newInodes)
+				atomic.AddInt64(&q.UsedInodes, snap.newInodes)
 			}
 			m.quotaMu.RUnlock()
 		}
@@ -753,6 +789,10 @@ func (m *baseMeta) flushQuotas() {
 			delete(quotas, ino)
 		}
 	}
+}
+
+func (m *baseMeta) Init(format *Format, force bool) error {
+	return m.en.doInit(format, force)
 }
 
 func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[string]*Quota, strict, repair bool) error {
@@ -768,6 +808,16 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 
 	switch cmd {
 	case QuotaSet:
+		format, err := m.Load(false)
+		if err != nil {
+			return errors.Wrap(err, "load format")
+		}
+		if !format.DirStats {
+			format.DirStats = true
+			if err := m.en.doInit(format, false); err != nil {
+				return err
+			}
+		}
 		q, err := m.en.doGetQuota(ctx, inode)
 		if err != nil {
 			return err
@@ -1196,17 +1246,26 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}
 	defer m.timeit("GetAttr", time.Now())
 	var err syscall.Errno
-	if inode == RootInode {
+	if inode == RootInode || inode == TrashInode {
+		// doGetAttr could overwrite the `attr` after timeout
+		var a Attr
 		e := utils.WithTimeout(func() error {
-			err = m.en.doGetAttr(ctx, inode, attr)
+			err = m.en.doGetAttr(ctx, inode, &a)
 			return nil
 		}, time.Millisecond*300)
-		if e != nil || err != 0 {
+		if e == nil && err == 0 {
+			*attr = a
+		} else {
 			err = 0
 			attr.Typ = TypeDirectory
 			attr.Mode = 0777
 			attr.Nlink = 2
 			attr.Length = 4 << 10
+			if inode == TrashInode {
+				attr.Mode = 0555
+			}
+			attr.Parent = RootInode
+			attr.Full = true
 		}
 	} else {
 		err = m.en.doGetAttr(ctx, inode, attr)
@@ -1322,8 +1381,8 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
 		return st
 	}
-	if err := m.checkQuota(ctx, align4K(attr.Length), 1, parent); err != 0 {
-		return err
+	if m.checkDirQuota(ctx, parent, align4K(attr.Length), 1) {
+		return syscall.EDQUOT
 	}
 
 	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
@@ -1671,7 +1730,11 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
-	return m.en.doReaddir(ctx, inode, plus, entries, -1)
+	st := m.en.doReaddir(ctx, inode, plus, entries, -1)
+	if st == syscall.ENOENT && inode == TrashInode {
+		st = 0
+	}
+	return st
 }
 
 func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
@@ -1838,22 +1901,29 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 	var inode = RootInode
 	var parent = RootInode
 	attr.Typ = TypeDirectory
-	ps := strings.FieldsFunc(fpath, func(r rune) bool {
-		return r == '/'
-	})
-	for i, name := range ps {
-		parent = inode
-		if st := m.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
-			logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
+	if fpath == "/" {
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
+			logger.Errorf("GetAttr inode %d: %s", inode, st)
 			return st
 		}
-		if !attr.Full && i < len(ps)-1 {
-			// missing attribute
-			p := "/" + path.Join(ps[:i+1]...)
-			if attr.Typ != TypeDirectory { // TODO: determine file size?
-				logger.Warnf("Attribute of %s (inode %d type %d) is missing and cannot be auto-repaired, please repair it manually or remove it", p, inode, attr.Typ)
-			} else {
-				logger.Warnf("Attribute of %s (inode %d) is missing, please re-run with '--path %s --repair' to fix it", p, inode, p)
+	} else {
+		ps := strings.FieldsFunc(fpath, func(r rune) bool {
+			return r == '/'
+		})
+		for i, name := range ps {
+			parent = inode
+			if st := m.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
+				logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
+				return st
+			}
+			if !attr.Full && i < len(ps)-1 {
+				// missing attribute
+				p := "/" + path.Join(ps[:i+1]...)
+				if attr.Typ != TypeDirectory { // TODO: determine file size?
+					logger.Warnf("Attribute of %s (inode %d type %d) is missing and cannot be auto-repaired, please repair it manually or remove it", p, inode, attr.Typ)
+				} else {
+					logger.Warnf("Attribute of %s (inode %d) is missing, please re-run with '--path %s --repair' to fix it", p, inode, p)
+				}
 			}
 		}
 	}
@@ -1954,6 +2024,19 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					statBroken = true
 				}
 
+				if !repair && statAll {
+					s, st := m.calcDirStat(ctx, inode)
+					if st != 0 {
+						hasError = true
+						logger.Errorf("calc dir stat for inode %d: %v", inode, st)
+						continue
+					}
+					if stat.space != s.space || stat.inodes != s.inodes {
+						logger.Warnf("usage stat of %s should be %v, but got %v", path, s, stat)
+						statBroken = true
+					}
+				}
+
 				if repair {
 					if statBroken || statAll {
 						if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 || st == syscall.ENOENT {
@@ -1964,7 +2047,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 						}
 					}
 				} else if statBroken {
-					logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair' to fix it", path, inode, path)
+					logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair --sync-dir-stat' to fix it", path, inode, path)
 					hasError = true
 				}
 			}
@@ -2029,6 +2112,13 @@ func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino) syscall.Errno 
 }
 
 func (m *baseMeta) GetFormat() Format {
+	if m.fmt == nil {
+		var err error
+		m.fmt, err = m.Load(false)
+		if err != nil {
+			logger.Fatalf("Load format: %s", err)
+		}
+	}
 	return *m.fmt
 }
 
@@ -2179,7 +2269,7 @@ func (m *baseMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, incre
 	}
 }
 
-func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func()) {
+func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int)) {
 	logger.Debugf("cleanup trash: started")
 	now := time.Now()
 	var st syscall.Errno
@@ -2218,15 +2308,12 @@ func (m *baseMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 				entries = entries[1:]
 			}
 			for _, se := range subEntries {
-				if se.Attr.Typ == TypeDirectory {
-					st = m.en.doRmdir(ctx, e.Inode, string(se.Name), nil)
-				} else {
-					st = m.en.doUnlink(ctx, e.Inode, string(se.Name), nil)
-				}
+				var c uint64
+				st = m.Remove(ctx, e.Inode, string(se.Name), &c)
 				if st == 0 {
-					count++
+					count += int(c)
 					if increProgress != nil {
-						increProgress()
+						increProgress(int(c))
 					}
 				} else {
 					logger.Warnf("delete from trash %s/%s: %s", e.Name, se.Name, st)

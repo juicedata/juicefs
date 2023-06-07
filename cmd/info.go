@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -128,29 +130,27 @@ func info(ctx *cli.Context) error {
 		if err != nil {
 			logger.Fatalf("write message: %s", err)
 		}
-		if _, errno := readProgress(f, func(count, size uint64) {
+		data, errno := readProgress(f, func(count, size uint64) {
 			dspin.SetCurrent(int64(count), int64(size))
-		}); errno != 0 {
+		})
+		if errno == syscall.EINVAL {
+			legacyInfo(d, path, inode, recursive, raw)
+			continue
+		} else if errno != 0 {
 			logger.Errorf("failed to get info: %s", syscall.Errno(errno))
 		}
 		dspin.Done()
+		progress.Done()
 
 		var resp vfs.InfoResponse
-		err = resp.Decode(f)
+		err = json.Unmarshal(data, &resp)
 		_ = f.Close()
-		if err == syscall.EINVAL {
-			legacyInfo(d, path, inode, recursive, raw)
-			continue
+		if err == nil && resp.Failed {
+			err = errors.New(resp.Reason)
 		}
-
 		if err != nil {
-			logger.Fatalf("read info: %s", err)
+			logger.Fatalf("info: %s", err)
 		}
-
-		if resp.Failed {
-			logger.Fatalf("failed to get info: %s", resp.Reason)
-		}
-
 		fmt.Println(path, ":")
 		fmt.Printf("  inode: %d\n", resp.Ino)
 		fmt.Printf("  files: %d\n", resp.Summary.Files)

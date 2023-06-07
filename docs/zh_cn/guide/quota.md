@@ -1,6 +1,6 @@
 ---
 title: 存储配额
-sidebar_position: 5
+sidebar_position: 6
 ---
 
 JuiceFS 同时支持文件系统总配额和子目录配额，均可用于限制可用容量和可用 inode 数量。文件系统配额和目录配额均是硬限制，

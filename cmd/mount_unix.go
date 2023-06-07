@@ -100,6 +100,36 @@ func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
 	return err
 }
 
+func fuseFlags() []cli.Flag {
+	return addCategories("FUSE", []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "enable-xattr",
+			Usage: "enable extended attributes (xattr)",
+		},
+		&cli.BoolFlag{
+			Name:  "enable-ioctl",
+			Usage: "enable ioctl (support GETFLAGS/SETFLAGS only)",
+		},
+		&cli.StringFlag{
+			Name:  "root-squash",
+			Usage: "mapping local root user (uid = 0) to another one specified as <uid>:<gid>",
+		},
+		&cli.BoolFlag{
+			Name:  "prefix-internal",
+			Usage: "add '.jfs' prefix to all internal files",
+		},
+		&cli.BoolFlag{
+			Name:   "non-default-permission",
+			Usage:  "disable `default_permissions` option, only for testing",
+			Hidden: true,
+		},
+		&cli.StringFlag{
+			Name:  "o",
+			Usage: "other FUSE options",
+		},
+	})
+}
+
 func mount_flags() []cli.Flag {
 	var defaultLogDir = "/var/log"
 	switch runtime.GOOS {
@@ -131,41 +161,18 @@ func mount_flags() []cli.Flag {
 			Value: path.Join(defaultLogDir, "juicefs.log"),
 			Usage: "path of log file when running in background",
 		},
-		&cli.StringFlag{
-			Name:  "root-squash",
-			Usage: "mapping local root user (uid = 0) to another one specified as <uid>:<gid>",
-		},
-		&cli.BoolFlag{
-			Name:   "non-default-permission",
-			Usage:  "disable `default_permissions` option, only for testing",
-			Hidden: true,
-		},
-		&cli.StringFlag{
-			Name:  "o",
-			Usage: "other FUSE options",
-		},
-		&cli.BoolFlag{
-			Name:  "enable-xattr",
-			Usage: "enable extended attributes (xattr)",
-		},
-		&cli.BoolFlag{
-			Name:  "enable-ioctl",
-			Usage: "enable ioctl (support GETFLAGS/SETFLAGS only)",
-		},
-		&cli.BoolFlag{
-			Name:  "prefix-internal",
-			Usage: "add '.jfs' prefix to all internal files",
-		},
 		&cli.BoolFlag{
 			Name:  "force",
 			Usage: "force to mount even if the mount point is already mounted by the same filesystem",
 		},
-		&cli.BoolFlag{
+	}
+	if runtime.GOOS == "linux" {
+		selfFlags = append(selfFlags, &cli.BoolFlag{
 			Name:  "update-fstab",
 			Usage: "add / update entry in /etc/fstab, will create a symlink from /sbin/mount.juicefs to JuiceFS executable if not existing",
-		},
+		})
 	}
-	return append(selfFlags, cacheFlags(1.0)...)
+	return append(selfFlags, fuseFlags()...)
 }
 
 func disableUpdatedb() {

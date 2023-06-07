@@ -701,7 +701,7 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 			parent = inode
 			break
 		}
-		if i > 0 {
+		if parent > 1 {
 			if (name == "." || name == "..") && attr.Typ != meta.TypeDirectory {
 				return nil, syscall.ENOTDIR
 			}

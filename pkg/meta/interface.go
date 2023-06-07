@@ -314,7 +314,7 @@ type Meta interface {
 	// Load loads the existing setting of a formatted volume from meta service.
 	Load(checkVersion bool) (*Format, error)
 	// NewSession creates a new client session.
-	NewSession() error
+	NewSession(record bool) error
 	// CloseSession does cleanup and close the session.
 	CloseSession() error
 	// GetSession retrieves information of session with sid
@@ -328,7 +328,7 @@ type Meta interface {
 	// CleanStaleSessions cleans up sessions not active for more than 5 minutes
 	CleanStaleSessions()
 	// CleanupTrashBefore deletes all files in trash before the given time.
-	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func())
+	CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int))
 	// CleanupDetachedNodesBefore deletes all detached nodes before the given time.
 	CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func())
 

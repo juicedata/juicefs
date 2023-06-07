@@ -174,13 +174,6 @@ func cmdMdtest() *cli.Command {
 			Usage: "path for JuiceFS access log",
 		},
 	}
-	compoundFlags := [][]cli.Flag{
-		clientFlags(),
-		cacheFlags(0),
-		shareInfoFlags(),
-		selfFlags,
-	}
-
 	return &cli.Command{
 		Name:      "mdtest",
 		Action:    mdtest,
@@ -191,7 +184,7 @@ func cmdMdtest() *cli.Command {
 		Description: `
 Examples:
 $ juicefs mdtest redis://localhost /test1`,
-		Flags: expandFlags(compoundFlags),
+		Flags: expandFlags(selfFlags, clientFlags(0), shareInfoFlags()),
 	}
 }
 
@@ -217,7 +210,7 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(m, store, chunkConf)
 
-	err = m.NewSession()
+	err = m.NewSession(true)
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}

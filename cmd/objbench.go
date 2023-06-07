@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"os"
 	"os/user"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -135,7 +136,15 @@ func objbench(ctx *cli.Context) error {
 	if token == "" {
 		token = os.Getenv("SESSION_TOKEN")
 	}
-	blobOrigin, err := object.CreateStorage(strings.ToLower(ctx.String("storage")), ctx.Args().First(), ak, sk, token)
+	endpoint := ctx.Args().First()
+	storageType := strings.ToLower(ctx.String("storage"))
+	if storageType == "file" {
+		var err error
+		if endpoint, err = filepath.Abs(endpoint); err != nil {
+			logger.Fatalf("invalid path: %s", err)
+		}
+	}
+	blobOrigin, err := object.CreateStorage(storageType, endpoint, ak, sk, token)
 	if err != nil {
 		logger.Fatalf("create storage failed: %v", err)
 	}
@@ -560,7 +569,7 @@ func (bm *benchMarkObj) head(key string, startKey int) error {
 }
 
 func (bm *benchMarkObj) list(key string, startKey int) error {
-	result, err := osync.ListAll(bm.blob, "", "")
+	result, err := osync.ListAll(bm.blob, "", "", "")
 	for range result {
 	}
 	return err
@@ -579,11 +588,7 @@ func (bm *benchMarkObj) chtimes(key string, startKey int) error {
 }
 
 func listAll(s object.ObjectStorage, prefix, marker string, limit int64) ([]object.Object, error) {
-	r, err := s.List(prefix, marker, "", limit)
-	if !errors.Is(err, utils.ENOTSUP) {
-		return r, err
-	}
-	ch, err := s.ListAll(prefix, marker)
+	ch, err := object.ListAll(s, prefix, marker)
 	if err == nil {
 		objs := make([]object.Object, 0)
 		for obj := range ch {

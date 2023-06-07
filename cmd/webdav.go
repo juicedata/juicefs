@@ -50,12 +50,6 @@ func cmdWebDav() *cli.Command {
 			Usage: "path for JuiceFS access log",
 		},
 	}
-	compoundFlags := [][]cli.Flag{
-		clientFlags(),
-		selfFlags,
-		cacheFlags(0),
-		shareInfoFlags(),
-	}
 
 	return &cli.Command{
 		Name:      "webdav",
@@ -68,7 +62,7 @@ Examples:
 $ export WEBDAV_USER=root
 $ export WEBDAV_PASSWORD=1234
 $ juicefs webdav redis://localhost localhost:9007`,
-		Flags: expandFlags(compoundFlags),
+		Flags: expandFlags(selfFlags, clientFlags(0), shareInfoFlags()),
 	}
 }
 

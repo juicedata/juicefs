@@ -7,7 +7,7 @@ description: This article introduces the technical architecture of JuiceFS and i
 
 The JuiceFS file system consists of three parts:
 
-![](../images/juicefs-arch-new.png)
+![](../images/juicefs-arch.svg)
 
 **JuiceFS Client**: All file I/O happens in JuiceFS Client, this even includes background jobs like data compaction and trash file expiration. So obviously, JuiceFS Client talk to both object storage and metadata service. A variety of implementations are supported:
 
@@ -41,7 +41,8 @@ Chunk and slice are all logical data structures, when it comes to physical stora
 ![](../images/data-structure-diagram.svg)
 
 Hence, you cannot find the original files directly in the object storage, instead there's only a `chunks` folder and a bunch of numbered directories and files in the bucket, don't panic, this is exactly how JuiceFS formats and stores data. At the same time, file and its relationship with chunks, slices, blocks will be stored in the metadata engine. This decoupled design is what makes JuiceFS a high-performance file system.
-![](../images/how-juicefs-stores-files-new.png)
+
+![](../images/how-juicefs-stores-files.svg)
 
 Some other technical aspects of JuiceFS storage design:
 

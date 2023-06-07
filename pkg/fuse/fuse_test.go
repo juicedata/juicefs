@@ -51,6 +51,7 @@ func format(url string) {
 		Storage:   "file",
 		Bucket:    os.TempDir() + "/",
 		BlockSize: 4096,
+		DirStats:  true,
 	}
 	err := m.Init(format, true)
 	if err != nil {
@@ -99,7 +100,7 @@ func mount(url, mp string) {
 		Chunk:  &chunkConf,
 	}
 
-	err = m.NewSession()
+	err = m.NewSession(true)
 	if err != nil {
 		log.Fatalf("new session: %s", err)
 	}

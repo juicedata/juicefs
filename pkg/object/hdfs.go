@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/fs"
 	"math/rand"
 	"os"
 	"os/user"
@@ -48,7 +49,7 @@ type hdfsclient struct {
 }
 
 func (h *hdfsclient) String() string {
-	return fmt.Sprintf("hdfs://%s/", h.addr)
+	return fmt.Sprintf("hdfs://%s%s", h.addr, h.basePath)
 }
 
 func (h *hdfsclient) path(key string) string {
@@ -61,6 +62,10 @@ func (h *hdfsclient) Head(key string) (Object, error) {
 		return nil, err
 	}
 
+	return h.toFile(key, info), nil
+}
+
+func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
 	hinfo := info.(*hdfs.FileInfo)
 	f := &file{
 		obj{
@@ -88,11 +93,11 @@ func (h *hdfsclient) Head(key string) (Object, error) {
 	}
 	if info.IsDir() {
 		f.size = 0
-		if !strings.HasSuffix(f.key, "/") {
+		if !strings.HasSuffix(f.key, "/") && f.key != "" {
 			f.key += "/"
 		}
 	}
-	return f, nil
+	return f
 }
 
 func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -171,123 +176,68 @@ func (h *hdfsclient) Delete(key string) error {
 }
 
 func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	return nil, notSupported
-}
-
-func (h *hdfsclient) walk(path string, walkFn filepath.WalkFunc) error {
-	file, err := h.c.Open(path)
-	var info os.FileInfo
-	if file != nil {
-		info = file.Stat()
+	if delimiter != "/" {
+		return nil, notSupported
 	}
-
-	err = walkFn(path, info, err)
-	if err != nil {
-		if info != nil && info.IsDir() && err == filepath.SkipDir {
-			return nil
+	dir := h.path(prefix)
+	var objs []Object
+	if !strings.HasSuffix(dir, dirSuffix) {
+		dir = filepath.Dir(dir)
+		if !strings.HasSuffix(dir, dirSuffix) {
+			dir += dirSuffix
 		}
-
-		return err
+	} else if marker == "" {
+		obj, err := h.Head(prefix)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		objs = append(objs, obj)
 	}
 
-	if info == nil || !info.IsDir() {
-		return nil
+	file, err := h.c.Open(dir)
+	var entries []os.FileInfo
+	if file != nil {
+		entries, err = file.Readdir(0)
 	}
-
-	infos, err := file.Readdir(0)
 	if err != nil {
-		return walkFn(path, info, err)
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
 
 	// make sure they are ordered in full path
-	names := make([]string, len(infos))
-	for i, info := range infos {
+	entryMap := make(map[string]fs.FileInfo)
+	names := make([]string, len(entries))
+	for i, info := range entries {
 		if info.IsDir() {
 			names[i] = info.Name() + "/"
 		} else {
 			names[i] = info.Name()
 		}
+		entryMap[names[i]] = info
 	}
 	sort.Strings(names)
 
 	for _, name := range names {
-		name = strings.TrimSuffix(name, "/")
-		err = h.walk(filepath.ToSlash(filepath.Join(path, name)), walkFn)
-		if err != nil {
-			return err
+		p := dir + name
+		if !strings.HasPrefix(p, h.basePath) {
+			continue
+		}
+		key := p[len(h.basePath):]
+		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
+			continue
+		}
+		f := h.toFile(key, entryMap[name])
+		objs = append(objs, f)
+		if len(objs) >= int(limit) {
+			break
 		}
 	}
-
-	return nil
-}
-
-func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
-	listed := make(chan Object, 10240)
-	root := h.path(prefix)
-	_, err := h.c.Stat(root)
-	if err != nil && err.(*os.PathError).Err == os.ErrNotExist || !strings.HasSuffix(prefix, "/") {
-		root = filepath.Dir(root)
-	}
-	_, err = h.c.Stat(root)
-	if err != nil && err.(*os.PathError).Err == os.ErrNotExist {
-		close(listed)
-		return listed, nil // return empty list
-	}
-	go func() {
-		_ = h.walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				if err == io.EOF {
-					err = nil // ignore
-				} else {
-					logger.Errorf("list %s: %s", path, err)
-					listed <- nil
-				}
-				return err
-			}
-			key := path[1:]
-			if !strings.HasPrefix(key, prefix) || key < marker {
-				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			hinfo := info.(*hdfs.FileInfo)
-			f := &file{
-				obj{
-					key,
-					info.Size(),
-					info.ModTime(),
-					info.IsDir(),
-					"",
-				},
-				hinfo.Owner(),
-				hinfo.OwnerGroup(),
-				info.Mode(),
-				false,
-			}
-			if f.owner == superuser {
-				f.owner = "root"
-			}
-			if f.group == supergroup {
-				f.group = "root"
-			}
-			// stickybit from HDFS is different than golang
-			if f.mode&01000 != 0 {
-				f.mode &= ^os.FileMode(01000)
-				f.mode |= os.ModeSticky
-			}
-			if info.IsDir() {
-				f.size = 0
-				if path != root || !strings.HasSuffix(root, "/") {
-					f.key += "/"
-				}
-			}
-			listed <- f
-			return nil
-		})
-		close(listed)
-	}()
-	return listed, nil
+	return objs, nil
 }
 
 func (h *hdfsclient) Chtimes(key string, mtime time.Time) error {
@@ -314,41 +264,11 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("Problem loading configuration: %s", err)
 	}
 
-	rpcAddr := addr
-	// addr can be hdfs://nameservice e.g. hdfs://example, hdfs://example/user/juicefs
-	// convert the nameservice as a comma separated list of host:port by referencing hadoop conf
-	if strings.HasPrefix(addr, "hdfs://") {
-		sp := strings.SplitN(addr[len("hdfs://"):], "/", 2)
-		nameservice := sp[0]
-
-		var nns []string
-		confParam := "dfs.namenode.rpc-address." + nameservice
-		for key, value := range conf {
-			if key == confParam ||
-				strings.HasPrefix(key, confParam + "." ) {
-				nns = append(nns, value)
-			}
-		}
-		if len(nns) <= 0 {
-			return nil, fmt.Errorf("invalid nameservice: %s", nameservice)
-		}
-		// e.g. nn1.example.com:8020,nn2.example.com:8020, nn1.example.com:8020,nn2.example.com:8020/user/juicefs
-		rpcAddr = strings.Join(nns, ",")
-		if len(sp) > 1 {
-			rpcAddr = rpcAddr + "/" + sp[1]
-		}
-	}
-
-	basePath := "/"
+	rpcAddr, basePath := parseHDFSAddr(addr, conf)
 	options := hdfs.ClientOptionsFromConf(conf)
-	if rpcAddr != "" {
-		// nn1.example.com:8020,nn2.example.com:8020/user/juicefs
-		sp := strings.SplitN(rpcAddr, "/", 2)
-		if len(sp) > 1 {
-			basePath = basePath + strings.TrimRight(sp[1], "/") + "/"
-		}
-		options.Addresses = strings.Split(sp[0], ",")
-		logger.Infof("HDFS Addresses: %s, basePath: %s", sp[0], basePath)
+	if addr != "" {
+		options.Addresses = rpcAddr
+		logger.Infof("HDFS Addresses: %s, basePath: %s", rpcAddr, basePath)
 	}
 
 	if options.KerberosClient != nil {
@@ -381,14 +301,41 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		supergroup = os.Getenv("HADOOP_SUPER_GROUP")
 	}
 
-	var replication int = 3
+	var replication = 3
 	if replication_conf, found := conf["dfs.replication"]; found {
 		if x, err := strconv.Atoi(replication_conf); err == nil {
 			replication = x
 		}
 	}
 
-	return &hdfsclient{addr: rpcAddr, c: c, dfsReplication: replication, basePath: basePath}, nil
+	return &hdfsclient{addr: strings.Join(rpcAddr, ","), c: c, dfsReplication: replication, basePath: basePath}, nil
+}
+
+// addr can be hdfs://nameservice e.g. hdfs://example, hdfs://example/user/juicefs
+// convert the nameservice as a comma separated list of host:port by referencing hadoop conf
+func parseHDFSAddr(addr string, conf hadoopconf.HadoopConf) (rpcAddresses []string, basePath string) {
+	addr = strings.TrimPrefix(addr, "hdfs://")
+	sp := strings.SplitN(addr, "/", 2)
+	authority := sp[0]
+
+	// check if it is a nameservice
+	var nns []string
+	confParam := "dfs.namenode.rpc-address." + authority
+	for key, value := range conf {
+		if key == confParam || strings.HasPrefix(key, confParam+".") {
+			nns = append(nns, value)
+		}
+	}
+	if len(nns) > 0 {
+		rpcAddresses = nns
+	} else {
+		rpcAddresses = strings.Split(authority, ",")
+	}
+	basePath = "/"
+	if len(sp) > 1 && len(sp[1]) > 0 {
+		basePath += strings.TrimRight(sp[1], "/") + "/"
+	}
+	return
 }
 
 func init() {

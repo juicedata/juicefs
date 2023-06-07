@@ -45,22 +45,6 @@ import (
 )
 
 func cmdFormat() *cli.Command {
-	var defaultBucket = "/var/jfs"
-	switch runtime.GOOS {
-	case "linux":
-		if os.Getuid() == 0 {
-			break
-		}
-		fallthrough
-	case "darwin":
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			logger.Fatalf("%v", err)
-		}
-		defaultBucket = path.Join(homeDir, ".juicefs", "local")
-	case "windows":
-		defaultBucket = path.Join("C:/jfs/local")
-	}
 	return &cli.Command{
 		Name:      "format",
 		Action:    format,
@@ -93,94 +77,121 @@ $ juicefs format sqlite3://myjfs.db myjfs --inode 1000000 --capacity 102400
 $ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
 
 Details: https://juicefs.com/docs/community/quick_start_guide`,
-		Flags: []cli.Flag{
-			&cli.IntFlag{
-				Name:  "block-size",
-				Value: 4096,
-				Usage: "size of block in KiB",
-			},
-			&cli.Uint64Flag{
-				Name:  "capacity",
-				Value: 0,
-				Usage: "hard quota of the volume limiting its usage of space in GiB",
-			},
-			&cli.Uint64Flag{
-				Name:  "inodes",
-				Value: 0,
-				Usage: "hard quota of the volume limiting its number of inodes",
-			},
-			&cli.StringFlag{
-				Name:  "compress",
-				Value: "none",
-				Usage: "compression algorithm (lz4, zstd, none)",
-			},
-			&cli.IntFlag{
-				Name:  "shards",
-				Value: 0,
-				Usage: "store the blocks into N buckets by hash of key",
-			},
-			&cli.StringFlag{
-				Name:  "storage",
-				Value: "file",
-				Usage: "object storage type (e.g. s3, gcs, oss, cos)",
-			},
-			&cli.StringFlag{
-				Name:  "bucket",
-				Value: defaultBucket,
-				Usage: "the bucket URL of object storage to store data",
-			},
-			&cli.StringFlag{
-				Name:  "access-key",
-				Usage: "access key for object storage (env ACCESS_KEY)",
-			},
-			&cli.StringFlag{
-				Name:  "secret-key",
-				Usage: "secret key for object storage (env SECRET_KEY)",
-			},
-			&cli.StringFlag{
-				Name:  "session-token",
-				Usage: "session token for object storage",
-			},
-			&cli.StringFlag{
-				Name:  "storage-class",
-				Usage: "the default storage class",
-			},
-			&cli.StringFlag{
-				Name:  "encrypt-rsa-key",
-				Usage: "a path to RSA private key (PEM)",
-			},
-			&cli.StringFlag{
-				Name:  "encrypt-algo",
-				Usage: "encrypt algorithm (aes256gcm-rsa, chacha20-rsa)",
-				Value: object.AES256GCM_RSA,
-			},
-			&cli.Int64Flag{
-				Name:  "upload-limit",
-				Usage: "default bandwidth limit of the volume for upload in Mbps",
-			},
-			&cli.Int64Flag{
-				Name:  "download-limit",
-				Usage: "default bandwidth limit of the volume for download in Mbps",
-			},
-			&cli.IntFlag{
-				Name:  "trash-days",
-				Value: 1,
-				Usage: "number of days after which removed files will be permanently deleted",
-			},
-			&cli.BoolFlag{
-				Name:  "hash-prefix",
-				Usage: "add a hash prefix to name of objects",
-			},
-			&cli.BoolFlag{
-				Name:  "force",
-				Usage: "overwrite existing format",
-			},
-			&cli.BoolFlag{
-				Name:  "no-update",
-				Usage: "don't update existing volume",
-			},
-		},
+		Flags: expandFlags(
+			formatStorageFlags(),
+			formatFlags(),
+			formatManagementFlags(),
+			[]cli.Flag{
+				&cli.BoolFlag{
+					Name:  "force",
+					Usage: "overwrite existing format",
+				},
+				&cli.BoolFlag{
+					Name:  "no-update",
+					Usage: "don't update existing volume",
+				},
+			}),
 	}
+}
+
+func formatStorageFlags() []cli.Flag {
+	var defaultBucket = "/var/jfs"
+	switch runtime.GOOS {
+	case "linux":
+		if os.Getuid() == 0 {
+			break
+		}
+		fallthrough
+	case "darwin":
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			logger.Fatalf("%v", err)
+		}
+		defaultBucket = path.Join(homeDir, ".juicefs", "local")
+	case "windows":
+		defaultBucket = path.Join("C:/jfs/local")
+	}
+	return addCategories("DATA STORAGE", []cli.Flag{
+		&cli.StringFlag{
+			Name:  "storage",
+			Value: "file",
+			Usage: "object storage type (e.g. s3, gcs, oss, cos)",
+		},
+		&cli.StringFlag{
+			Name:  "bucket",
+			Value: defaultBucket,
+			Usage: "the bucket URL of object storage to store data",
+		},
+		&cli.StringFlag{
+			Name:  "access-key",
+			Usage: "access key for object storage (env ACCESS_KEY)",
+		},
+		&cli.StringFlag{
+			Name:  "secret-key",
+			Usage: "secret key for object storage (env SECRET_KEY)",
+		},
+		&cli.StringFlag{
+			Name:  "session-token",
+			Usage: "session token for object storage",
+		},
+		&cli.StringFlag{
+			Name:  "storage-class",
+			Usage: "the default storage class",
+		},
+	})
+}
+
+func formatFlags() []cli.Flag {
+	return addCategories("DATA FORMAT", []cli.Flag{
+		&cli.IntFlag{
+			Name:  "block-size",
+			Value: 4096,
+			Usage: "size of block in KiB",
+		},
+		&cli.StringFlag{
+			Name:  "compress",
+			Value: "none",
+			Usage: "compression algorithm (lz4, zstd, none)",
+		},
+		&cli.StringFlag{
+			Name:  "encrypt-rsa-key",
+			Usage: "a path to RSA private key (PEM)",
+		},
+		&cli.StringFlag{
+			Name:  "encrypt-algo",
+			Usage: "encrypt algorithm (aes256gcm-rsa, chacha20-rsa)",
+			Value: object.AES256GCM_RSA,
+		},
+		&cli.BoolFlag{
+			Name:  "hash-prefix",
+			Usage: "add a hash prefix to name of objects",
+		},
+		&cli.IntFlag{
+			Name:  "shards",
+			Value: 0,
+			Usage: "store the blocks into N buckets by hash of key",
+		},
+	})
+}
+
+func formatManagementFlags() []cli.Flag {
+	return addCategories("MANAGEMENT", []cli.Flag{
+		&cli.Uint64Flag{
+			Name:  "capacity",
+			Value: 0,
+			Usage: "hard quota of the volume limiting its usage of space in GiB",
+		},
+		&cli.Uint64Flag{
+			Name:  "inodes",
+			Value: 0,
+			Usage: "hard quota of the volume limiting its number of inodes",
+		},
+		&cli.IntFlag{
+			Name:  "trash-days",
+			Value: 1,
+			Usage: "number of days after which removed files will be permanently deleted",
+		},
+	})
 }
 
 func fixObjectSize(s int) int {
@@ -386,10 +397,6 @@ func format(c *cli.Context) error {
 					logger.Warnf("decrypt secrets: %s", err)
 				}
 				format.SessionToken = c.String(flag)
-			case "upload-limit":
-				format.UploadLimit = c.Int64("upload-limit")
-			case "download-limit":
-				format.DownloadLimit = c.Int64("download-limit")
 			case "trash-days":
 				format.TrashDays = c.Int(flag)
 			case "block-size":
@@ -409,26 +416,25 @@ func format(c *cli.Context) error {
 	} else if strings.HasPrefix(err.Error(), "database is not formatted") {
 		create = true
 		format = &meta.Format{
-			Name:          name,
-			UUID:          uuid.New().String(),
-			Storage:       c.String("storage"),
-			StorageClass:  c.String("storage-class"),
-			Bucket:        c.String("bucket"),
-			AccessKey:     c.String("access-key"),
-			SecretKey:     c.String("secret-key"),
-			SessionToken:  c.String("session-token"),
-			EncryptKey:    loadEncrypt(c.String("encrypt-rsa-key")),
-			EncryptAlgo:   c.String("encrypt-algo"),
-			Shards:        c.Int("shards"),
-			HashPrefix:    c.Bool("hash-prefix"),
-			Capacity:      c.Uint64("capacity") << 30,
-			Inodes:        c.Uint64("inodes"),
-			BlockSize:     fixObjectSize(c.Int("block-size")),
-			Compression:   c.String("compress"),
-			UploadLimit:   c.Int64("upload-limit"),
-			DownloadLimit: c.Int64("download-limit"),
-			TrashDays:     c.Int("trash-days"),
-			MetaVersion:   meta.MaxVersion,
+			Name:         name,
+			UUID:         uuid.New().String(),
+			Storage:      c.String("storage"),
+			StorageClass: c.String("storage-class"),
+			Bucket:       c.String("bucket"),
+			AccessKey:    c.String("access-key"),
+			SecretKey:    c.String("secret-key"),
+			SessionToken: c.String("session-token"),
+			EncryptKey:   loadEncrypt(c.String("encrypt-rsa-key")),
+			EncryptAlgo:  c.String("encrypt-algo"),
+			Shards:       c.Int("shards"),
+			HashPrefix:   c.Bool("hash-prefix"),
+			Capacity:     c.Uint64("capacity") << 30,
+			Inodes:       c.Uint64("inodes"),
+			BlockSize:    fixObjectSize(c.Int("block-size")),
+			Compression:  c.String("compress"),
+			TrashDays:    c.Int("trash-days"),
+			DirStats:     true,
+			MetaVersion:  meta.MaxVersion,
 		}
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
@@ -467,7 +473,7 @@ func format(c *cli.Context) error {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
 		if create {
-			if objs, err := osync.ListAll(blob, "", ""); err == nil {
+			if objs, err := osync.ListAll(blob, "", "", ""); err == nil {
 				for o := range objs {
 					if o == nil {
 						logger.Warnf("List storage %s failed", blob)
