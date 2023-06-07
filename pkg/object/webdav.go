@@ -188,15 +188,6 @@ func (w *webdav) List(prefix, marker, delimiter string, limit int64) ([]Object, 
 		if !strings.HasSuffix(root, dirSuffix) {
 			root += dirSuffix
 		}
-	} else if marker == "" {
-		obj, err := w.Head(prefix)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil, nil
-			}
-			return nil, err
-		}
-		objs = append(objs, obj)
 	}
 
 	infos, err := w.c.ReadDir(root)
