@@ -193,71 +193,73 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 	walk = func(prefix string, entries []Object) error {
 		var err error
 		var concurrent = 10
-		ms := make([]sync.Mutex, concurrent)
+		mu := make([]sync.Mutex, concurrent)
 		conds := make([]*utils.Cond, concurrent)
 		ready := make([]bool, concurrent)
 		children := make([][]Object, len(entries))
 		for c := 0; c < concurrent; c++ {
-			conds[c] = utils.NewCond(&ms[c])
+			conds[c] = utils.NewCond(&mu[c])
 			go func(c int) {
 				for i := c; i < len(entries); i += concurrent {
 					key := entries[i].Key()
-					if !entries[i].IsDir() || key == prefix {
-						continue
-					}
 					if end != "" && key >= end {
 						break
 					}
 					if key < start && !strings.HasPrefix(start, key) {
 						continue
 					}
+					if !entries[i].IsDir() || key == prefix {
+						continue
+					}
 
 					children[i], err = store.List(key, "\x00", "/", 1e9) // exclude itself
-					ms[c].Lock()
+					mu[c].Lock()
 					ready[c] = true
 					conds[c].Signal()
-					ms[c].Unlock()
-
-					ms[c].Lock()
 					for ready[c] {
 						conds[c].WaitWithTimeout(time.Second)
 						if err != nil {
+							mu[c].Unlock()
 							return
 						}
 					}
-					ms[c].Unlock()
+					mu[c].Unlock()
 				}
 			}(c)
 		}
 
 		for i, e := range entries {
-			if end != "" && e.Key() >= end {
+			key := e.Key()
+			if end != "" && key >= end {
 				return nil
 			}
-			if e.Key() >= start {
+			if key >= start {
 				listed <- e
-			} else if !strings.HasPrefix(start, e.Key()) {
+			} else if !strings.HasPrefix(start, key) {
 				continue
 			}
-			if e.IsDir() && e.Key() != prefix {
-				c := i % concurrent
-				ms[c].Lock()
-				for !ready[c] {
-					conds[c].Wait()
-				}
-				ready[c] = false
-				conds[c].Signal()
-				ms[c].Unlock()
-				if err != nil {
-					return err
-				}
-
-				err = walk(e.Key(), children[i])
-				if err != nil {
-					return err
-				}
-				children[i] = nil
+			if !e.IsDir() || key == prefix {
+				continue
 			}
+
+			c := i % concurrent
+			mu[c].Lock()
+			for !ready[c] {
+				conds[c].WaitWithTimeout(time.Millisecond * 10)
+				if err != nil {
+					mu[c].Unlock()
+					return err
+				}
+			}
+			ready[c] = false
+			conds[c].Signal()
+			mu[c].Unlock()
+
+			err = walk(key, children[i])
+			if err != nil {
+				return err
+			}
+			children[i] = nil
 		}
 		return nil
 	}
