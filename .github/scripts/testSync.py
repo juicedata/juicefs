@@ -6,7 +6,7 @@ import os
 
 JFS_SOURCE_DIR='/Users/chengzhou/Documents/juicefs/pkg/'
 JFS_SOURCE_DIR='jfs_source/pkg/'
-MOUNT_POINT='/jfs'
+MOUNT_POINT='/jfs/'
 JFS_BIN='./juicefs-1.0.0-beta1'
 JFS_BIN='./juicefs-1.0.0-beta2'
 JFS_BIN='./juicefs-1.0.0-beta3'
