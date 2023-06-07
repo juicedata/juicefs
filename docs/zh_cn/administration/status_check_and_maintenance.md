@@ -9,9 +9,9 @@ JuiceFS 提供了一系列检查和维护文件系统的工具，不但可以帮
 
 ## status
 
-`juicefs status` 命令用来查看一个 JuiceFS 文件系统的基本信息以及所有活跃的会话状态（包括挂载、SDK 访问、S3 网关、WebDAV 连接）。
+`juicefs status` 命令用来查看一个 JuiceFS 文件系统的基本信息，所有活跃的会话状态（包括挂载、SDK 访问、S3 网关、WebDAV 连接）以及统计信息。
 
-文件系统的基本信息中包括名称、UUID、存储类型、对象存储 Bucket、回收站状态等。
+文件系统的基本信息中包括名称、UUID、存储类型、对象存储 Bucket、回收站状态等；统计信息默认有文件系统的配额与用量。
 
 ```shell
 juicefs status redis://xxx.cache.amazonaws.com:6379/1
@@ -40,7 +40,13 @@ juicefs status redis://xxx.cache.amazonaws.com:6379/1
       "MountPoint": "/home/herald/mnt",
       "ProcessID": 2869146
     }
-  ]
+  ],
+  "Statistic": {
+    "UsedSpace": 4886528,
+    "AvailableSpace": 1125899901956096,
+    "UsedInodes": 643,
+    "AvailableInodes": 10485760,
+  }
 }
 ```
 
@@ -67,6 +73,52 @@ juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1
 - Flocks：被这个会话加锁的文件的 BSD 锁信息
 - Plocks：被这个会话加锁的文件的 POSIX 锁信息
 
+
+通过 `--more, -m` 选型扫描 trash 中的文件和 slice，以及已删除待清理的文件和 slice：
+
+```shell
+juicefs status -m redis://xxx.cache.amazonaws.com:6379/1
+```
+
+```json
+{
+  "Setting": {
+    "Name": "myjfs",
+    "UUID": "6b0452fc-0502-404c-b163-c9ab577ec766",
+    "Storage": "s3",
+    "Bucket": "https://xxx.s3.amazonaws.com",
+    "AccessKey": "xxx",
+    "SecretKey": "removed",
+    "BlockSize": 4096,
+    "Compression": "none",
+    "TrashDays": 1,
+    "MetaVersion": 1
+  },
+  "Sessions": [
+    {
+      "Sid": 2,
+      "Heartbeat": "2021-08-23T16:47:59+08:00",
+      "Version": "1.0.0+2022-08-08.cf0c269",
+      "Hostname": "ubuntu-s-1vcpu-1gb-sgp1-01",
+      "MountPoint": "/home/herald/mnt",
+      "ProcessID": 2869146
+    }
+  ],
+  "Statistic": {
+    "UsedSpace": 4886528,
+    "AvailableSpace": 1125899901956096,
+    "UsedInodes": 643,
+    "AvailableInodes": 10485760,
+    "TrashFileCount": 277,
+    "TrashFileSize": 1152597,
+    "PendingDeletedFileCount": 156,
+    "PendingDeletedFileSize": 1313577,
+    "TrashSliceCount": 581,
+    "TrashSliceSize": 1845292,
+    "PendingDeletedSliceCount": 1378,
+    "PendingDeletedSliceSize": 26245344,
+  }
+```
 ## info
 
 `juicefs info` 用于检查指定文件或目录的元数据信息，其中包括该文件对应的每个 block 在对象存储上的对象路径。
