@@ -212,7 +212,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 						continue
 					}
 
-					children[i], _ = store.List(key, "\x00", "/", 1e9) // exclude itself, will be retried
+					children[i], err = store.List(key, "\x00", "/", 1e9) // exclude itself
 					ms[c].Lock()
 					ready[c] = true
 					conds[c].Signal()
@@ -248,12 +248,15 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 				ready[c] = false
 				conds[c].Signal()
 				ms[c].Unlock()
-
-				err = walk(e.Key(), children[i])
-				children[i] = nil
 				if err != nil {
 					return err
 				}
+
+				err = walk(e.Key(), children[i])
+				if err != nil {
+					return err
+				}
+				children[i] = nil
 			}
 		}
 		return nil
