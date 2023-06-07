@@ -179,7 +179,7 @@ $ juicefs info -r ./mnt
    path: /
 ```
 
-默认情况下 `juicefs info -r` 中 `fast` 模式下运行，它的目录用量不一定精准。如果你怀疑其统计结果，可以使用 `--strict` 选项查看精准用量：
+默认情况下 `juicefs info -r` 在 `fast` 模式下运行，它的目录用量不一定精准。如果你怀疑其统计结果，可以使用 `--strict` 选项查看精准用量：
 
 ```shell
 $ juicefs info -r ./mnt --strict
@@ -215,6 +215,128 @@ objects:
 |          0 | myjfs/chunks/0/0/80_0_807955 | 807955 |      0 | 807955 |
 +------------+------------------------------+--------+--------+--------+
 ```
+
+## summary
+
+JuiceFS 1.1.0 之后支持 `summary` 子命令，可以递归列出目录树和各层的使用量：
+
+```bash
+$ juicefs summary /mnt/jfs/
++---------------------------+---------+------+-------+
+|            PATH           |   SIZE  | DIRS | FILES |
++---------------------------+---------+------+-------+
+| /                         | 1.0 GiB |  100 |   445 |
+| d/                        | 1.0 GiB |    1 |     1 |
+| d/test1                   | 1.0 GiB |    0 |     1 |
+| pjdfstest/                | 2.8 MiB |   39 |   304 |
+| pjdfstest/tests/          | 1.1 MiB |   18 |   240 |
+| pjdfstest/autom4te.cache/ | 692 KiB |    1 |     7 |
+| pjdfstest/.git/           | 432 KiB |   17 |    26 |
+| pjdfstest/configure       | 176 KiB |    0 |     1 |
+| pjdfstest/config.log      |  84 KiB |    0 |     1 |
+| pjdfstest/pjdfstest.o     |  80 KiB |    0 |     1 |
+| pjdfstest/pjdfstest       |  68 KiB |    0 |     1 |
+| pjdfstest/aclocal.m4      |  44 KiB |    0 |     1 |
+| pjdfstest/pjdfstest.c     |  40 KiB |    0 |     1 |
+| pjdfstest/config.status   |  36 KiB |    0 |     1 |
+| pjdfstest/...             | 164 KiB |    2 |    24 |
+| roa/                      | 2.3 MiB |   59 |   140 |
+| roa/.git/                 | 1.4 MiB |   17 |    26 |
+| roa/roa/                  | 252 KiB |    9 |    30 |
+| roa/integration/          | 148 KiB |   13 |    22 |
+| roa/roa-core/             | 124 KiB |    4 |    17 |
+| roa/Cargo.lock            |  84 KiB |    0 |     1 |
+| roa/roa-async-std/        |  36 KiB |    2 |     6 |
+| roa/.github/              |  32 KiB |    2 |     6 |
+| roa/examples/             |  32 KiB |    1 |     7 |
+| roa/roa-diesel/           |  32 KiB |    2 |     5 |
+| roa/assets/               |  28 KiB |    2 |     5 |
+| roa/...                   | 108 KiB |    6 |    15 |
++---------------------------+---------+------+-------+
+```
+
+可以使用 `--depth value, -d value` 和 `--entries value, -e value` 控制目录层级和每层的最大数量：
+
+```bash
+$ juicefs summary /mnt/jfs/ -d 3 -e 3
++------------------------------------+---------+------+-------+
+|                PATH                |   SIZE  | DIRS | FILES |
++------------------------------------+---------+------+-------+
+| /                                  | 1.0 GiB |  100 |   445 |
+| d/                                 | 1.0 GiB |    1 |     1 |
+| d/test1                            | 1.0 GiB |    0 |     1 |
+| pjdfstest/                         | 2.8 MiB |   39 |   304 |
+| pjdfstest/tests/                   | 1.1 MiB |   18 |   240 |
+| pjdfstest/tests/open/              | 112 KiB |    1 |    26 |
+| pjdfstest/tests/rename/            | 112 KiB |    1 |    25 |
+| pjdfstest/tests/link/              |  76 KiB |    1 |    18 |
+| pjdfstest/tests/...                | 776 KiB |   14 |   171 |
+| pjdfstest/autom4te.cache/          | 692 KiB |    1 |     7 |
+| pjdfstest/autom4te.cache/output.0  | 180 KiB |    0 |     1 |
+| pjdfstest/autom4te.cache/output.1  | 180 KiB |    0 |     1 |
+| pjdfstest/autom4te.cache/output.2  | 180 KiB |    0 |     1 |
+| pjdfstest/autom4te.cache/...       | 148 KiB |    0 |     4 |
+| pjdfstest/.git/                    | 432 KiB |   17 |    26 |
+| pjdfstest/.git/objects/            | 252 KiB |    3 |     2 |
+| pjdfstest/.git/hooks/              |  64 KiB |    1 |    13 |
+| pjdfstest/.git/logs/               |  32 KiB |    5 |     3 |
+| pjdfstest/.git/...                 |  80 KiB |    7 |     8 |
+| pjdfstest/...                      | 692 KiB |    2 |    31 |
+| roa/                               | 2.3 MiB |   59 |   140 |
+| roa/.git/                          | 1.4 MiB |   17 |    26 |
+| roa/.git/objects/                  | 1.3 MiB |    3 |     2 |
+| roa/.git/hooks/                    |  64 KiB |    1 |    13 |
+| roa/.git/logs/                     |  32 KiB |    5 |     3 |
+| roa/.git/...                       |  72 KiB |    7 |     8 |
+| roa/roa/                           | 252 KiB |    9 |    30 |
+| roa/roa/src/                       | 228 KiB |    7 |    27 |
+| roa/roa/README.md                  | 8.0 KiB |    0 |     1 |
+| roa/roa/templates/                 | 8.0 KiB |    1 |     1 |
+| roa/roa/...                        | 4.0 KiB |    0 |     1 |
+| roa/integration/                   | 148 KiB |   13 |    22 |
+| roa/integration/diesel-example/    |  52 KiB |    4 |     9 |
+| roa/integration/multipart-example/ |  36 KiB |    4 |     5 |
+| roa/integration/juniper-example/   |  32 KiB |    2 |     5 |
+| roa/integration/...                |  24 KiB |    2 |     3 |
+| roa/...                            | 476 KiB |   19 |    62 |
++------------------------------------+---------+------+-------+
+```
+
+此命令也支持标准 csv 输出，用于其它软件解析：
+
+```bash
+$ juicefs summary /mnt/jfs/ --csv
+PATH,SIZE,DIRS,FILES
+/,1079132160,100,445
+d/,1073745920,1,1
+d/test1,1073741824,0,1
+pjdfstest/,2969600,39,304
+pjdfstest/tests/,1105920,18,240
+pjdfstest/autom4te.cache/,708608,1,7
+pjdfstest/.git/,442368,17,26
+pjdfstest/configure,180224,0,1
+pjdfstest/config.log,86016,0,1
+pjdfstest/pjdfstest.o,81920,0,1
+pjdfstest/pjdfstest,69632,0,1
+pjdfstest/aclocal.m4,45056,0,1
+pjdfstest/pjdfstest.c,40960,0,1
+pjdfstest/config.status,36864,0,1
+pjdfstest/...,167936,2,24
+roa/,2412544,59,140
+roa/.git/,1511424,17,26
+roa/roa/,258048,9,30
+roa/integration/,151552,13,22
+roa/roa-core/,126976,4,17
+roa/Cargo.lock,86016,0,1
+roa/roa-async-std/,36864,2,6
+roa/.github/,32768,2,6
+roa/examples/,32768,1,7
+roa/roa-diesel/,32768,2,5
+roa/assets/,28672,2,5
+roa/...,110592,6,15
+```
+
+默认情况下 `juicefs summary` 在 `fast` 模式下运行，它的目录用量不一定精准。如果你怀疑其统计结果，可以使用 `--strict` 选项查看精准用量。
 
 ## gc {#gc}
 
