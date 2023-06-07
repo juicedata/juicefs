@@ -1246,7 +1246,7 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}
 	defer m.timeit("GetAttr", time.Now())
 	var err syscall.Errno
-	if inode == RootInode {
+	if inode == RootInode || inode == TrashInode {
 		// doGetAttr could overwrite the `attr` after timeout
 		var a Attr
 		e := utils.WithTimeout(func() error {
@@ -1261,6 +1261,11 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 			attr.Mode = 0777
 			attr.Nlink = 2
 			attr.Length = 4 << 10
+			if inode == TrashInode {
+				attr.Mode = 0555
+			}
+			attr.Parent = RootInode
+			attr.Full = true
 		}
 	} else {
 		err = m.en.doGetAttr(ctx, inode, attr)
