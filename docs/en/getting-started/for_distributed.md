@@ -139,7 +139,7 @@ The above command sets the cache directory in the `/mycache` directory and speci
 In a Linux environment, you can set up automatic mounting when mounting a file system via the `--update-fstab` option, which adds the options required to mount JuiceFS to `/etc/fstab`. For example:
 
 :::note
-This feature requires JuiceFS version 1.1.0 (to be released) and above
+This feature requires JuiceFS version 1.1.0 and above
 :::
 
 ```bash

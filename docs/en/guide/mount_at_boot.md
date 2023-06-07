@@ -8,7 +8,7 @@ After JuiceFS has been successfully mounted, follow this guide to set up auto-mo
 
 ## Linux
 
-Starting with JuiceFS v1.1.0 (to be released), the `--update-fstab` option of the mount command will automatically help you set up mount at boot:
+Starting with JuiceFS v1.1.0, the `--update-fstab` option of the mount command will automatically help you set up mount at boot:
 
 ```bash
 $ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 <META-URL> <MOUNTPOINT>

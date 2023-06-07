@@ -139,7 +139,7 @@ JuiceFS 进程需要具有读写 `--cache-dir` 目录的权限。
 在 Linux 环境中，可以在挂载文件系统时通过 `--update-fstab` 选项设置自动挂载，这个选项会将挂载 JuiceFS 所需的选项添加到 `/etc/fstab` 中。例如：
 
 :::note 注意
-此特性需要使用 1.1.0（待发布）及以上版本的 JuiceFS
+此特性需要使用 1.1.0 及以上版本的 JuiceFS
 :::
 
 ```bash

@@ -8,7 +8,7 @@ slug: /mount_juicefs_at_boot_time
 
 ## Linux
 
-从 JuiceFS v1.1.0（待发布）开始，挂载命令的 `--update-fstab` 选项能自动帮你设置好开机自动挂载：
+从 JuiceFS v1.1.0 开始，挂载命令的 `--update-fstab` 选项能自动帮你设置好开机自动挂载：
 
 ```bash
 $ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 <META-URL> <MOUNTPOINT>
