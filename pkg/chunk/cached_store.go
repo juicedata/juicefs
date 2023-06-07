@@ -163,7 +163,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		used := time.Since(st)
 		logger.Debugf("GET %s RANGE(%d,%d) (%s, %.3fs)", key, boff, len(p), err, used.Seconds())
 		if used > SlowRequest {
-			logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
+			logSlowRequest("GET", key, err, used)
 		}
 		s.store.objectDataBytes.WithLabelValues("GET").Add(float64(n))
 		s.store.objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
@@ -211,7 +211,7 @@ func (s *rSlice) delete(indx int) error {
 	}
 	logger.Debugf("DELETE %v (%v, %.3fs)", key, err, used.Seconds())
 	if used > SlowRequest {
-		logger.Infof("slow request: DELETE %v (%v, %.3fs)", key, err, used.Seconds())
+		logSlowRequest("DELETE", key, err, used)
 	}
 	s.store.objectReqsHistogram.WithLabelValues("DELETE").Observe(used.Seconds())
 	if err != nil {
@@ -349,7 +349,7 @@ func (store *cachedStore) put(key string, p *Page) error {
 		used := time.Since(st)
 		logger.Debugf("PUT %s (%s, %.3fs)", key, err, used.Seconds())
 		if used > SlowRequest {
-			logger.Infof("slow request: PUT %v (%v, %.3fs)", key, err, used.Seconds())
+			logSlowRequest("PUT", key, err, used)
 		}
 		store.objectDataBytes.WithLabelValues("PUT").Add(float64(len(p.Data)))
 		store.objectReqsHistogram.WithLabelValues("PUT").Observe(used.Seconds())
@@ -609,6 +609,17 @@ type cachedStore struct {
 	stageBlockDelay     prometheus.Counter
 }
 
+func logSlowRequest(typeStr string, key string, err error, used time.Duration) {
+	var info string
+	if object.ReqIDCache.Get(key) != "" {
+		info += fmt.Sprintf("RequestID: %s ", object.ReqIDCache.Get(key))
+	}
+	if err != nil {
+		info += err.Error()
+	}
+	logger.Infof("slow request: %s %s (%v, %.3fs)", typeStr, key, info, used.Seconds())
+}
+
 func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bool) (err error) {
 	defer func() {
 		e := recover()
@@ -656,7 +667,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 	used := time.Since(start)
 	logger.Debugf("GET %s (%s, %.3fs)", key, err, used.Seconds())
 	if used > SlowRequest {
-		logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
+		logSlowRequest("GET", key, err, used)
 	}
 	if store.downLimit != nil && compressed {
 		store.downLimit.Wait(int64(n))

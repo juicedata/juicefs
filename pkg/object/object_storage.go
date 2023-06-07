@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -178,4 +179,48 @@ var bufPool = sync.Pool{
 		buf := make([]byte, 32<<10)
 		return &buf
 	},
+}
+
+func init() {
+	ReqIDCache = reqIDCache{cache: make(map[string]reqItem)}
+	go ReqIDCache.Clean()
+}
+
+type reqItem struct {
+	ReqID string
+	time  time.Time
+}
+
+var ReqIDCache reqIDCache
+
+type reqIDCache struct {
+	sync.Mutex
+	cache map[string]reqItem
+}
+
+func (*reqIDCache) Clean() {
+	for range time.Tick(5 * time.Second) {
+		ReqIDCache.Lock()
+		for k, v := range ReqIDCache.cache {
+			if time.Since(v.time) > 2*time.Second {
+				delete(ReqIDCache.cache, k)
+			}
+		}
+		ReqIDCache.Unlock()
+	}
+}
+
+func (*reqIDCache) Put(key, reqID string) {
+	if part := strings.Split(key, "chunks"); len(part) == 2 {
+		ReqIDCache.Lock()
+		ReqIDCache.cache[part[1]] = reqItem{ReqID: reqID, time: time.Now()}
+		ReqIDCache.Unlock()
+	}
+}
+
+func (*reqIDCache) Get(key string) string {
+	if part := strings.Split(key, "chunks"); len(part) == 2 {
+		return ReqIDCache.cache[part[1]].ReqID
+	}
+	return ""
 }
