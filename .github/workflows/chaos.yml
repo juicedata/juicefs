@@ -4,9 +4,9 @@ on:
   push:
     branches:
       - 'release-**'
-  pull_request:
-    branches:
-      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   workflow_dispatch:
     inputs:
       debug:
