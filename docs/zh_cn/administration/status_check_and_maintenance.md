@@ -73,7 +73,6 @@ juicefs status --session 2 redis://xxx.cache.amazonaws.com:6379/1
 - Flocks：被这个会话加锁的文件的 BSD 锁信息
 - Plocks：被这个会话加锁的文件的 POSIX 锁信息
 
-
 通过 `--more, -m` 选型扫描 trash 中的文件和 slice，以及已删除待清理的文件和 slice：
 
 ```shell
@@ -119,6 +118,7 @@ juicefs status -m redis://xxx.cache.amazonaws.com:6379/1
     "PendingDeletedSliceSize": 26245344,
   }
 ```
+
 ## info
 
 `juicefs info` 用于检查指定文件或目录的元数据信息，其中包括该文件对应的每个 block 在对象存储上的对象路径以及作用于该文件的 flock 与 plock。
