@@ -85,7 +85,7 @@ func TestDownload(t *testing.T) {
 			}
 			n, err = pr.Read(res)
 			if err != io.EOF || n != 0 {
-				t.Fatalf("err should be io.EOF or n should equal 0")
+				t.Fatalf("err should be io.EOF or n should equal 0, but got %s %d", err, n)
 			}
 		}},
 
@@ -102,7 +102,7 @@ func TestDownload(t *testing.T) {
 			}
 			n, err = pr.Read(res)
 			if err != io.EOF || n != 0 {
-				t.Fatalf("err should be io.EOF or n should equal 0")
+				t.Fatalf("err should be io.EOF or n should equal 0, but got %s %d", err, n)
 			}
 		}},
 
@@ -120,7 +120,7 @@ func TestDownload(t *testing.T) {
 			}
 			n, err = pr.Read(res)
 			if err != io.EOF || n != 0 {
-				t.Fatalf("err should be io.EOF or n should equal 0")
+				t.Fatalf("err should be io.EOF or n should equal 0, but got %s %d", err, n)
 			}
 		}},
 
@@ -149,7 +149,7 @@ func TestDownload(t *testing.T) {
 			res := make([]byte, 1)
 			n, err := pr.Read(res)
 			if err != io.EOF || n != 0 {
-				t.Fatalf("err should be io.EOF or n should equal 0")
+				t.Fatalf("err should be io.EOF or n should equal 0, but got %s %d", err, n)
 			}
 		}},
 
@@ -159,7 +159,7 @@ func TestDownload(t *testing.T) {
 			pr.key = "notExist"
 			n, err := pr.Read(res)
 			if !os.IsNotExist(err) || n != 0 {
-				t.Fatalf("err should be ErrNotExist or n should equal 0")
+				t.Fatalf("err should be ErrNotExist or n should equal 0, but got %s %d", err, n)
 			}
 		}},
 	}
