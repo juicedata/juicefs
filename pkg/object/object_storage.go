@@ -215,6 +215,9 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 					}
 
 					children[i], _ = store.List(key, "\x00", "/", 1e9) // exclude itself, will be retried
+					if children[i] == nil {
+						children[i] = make([]Object, 0)
+					}
 					ms[c].Lock()
 					ready[c] = true
 					conds[c].Signal()
