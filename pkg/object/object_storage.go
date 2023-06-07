@@ -182,18 +182,16 @@ var bufPool = sync.Pool{
 }
 
 func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-chan Object, error) {
+	entries, err := store.List(prefix, "", "/", 1e9)
+	if err != nil {
+		logger.Errorf("list %s: %s", prefix, err)
+		return nil, err
+	}
+
 	listed := make(chan Object, 10240)
 	var walk func(string, []Object) error
 	walk = func(prefix string, entries []Object) error {
 		var err error
-		if entries == nil {
-			entries, err = store.List(prefix, "", "/", 1e9)
-			if err != nil {
-				logger.Errorf("list %s: %s", prefix, err)
-				return err
-			}
-		}
-
 		var concurrent = 10
 		ms := make([]sync.Mutex, concurrent)
 		conds := make([]*utils.Cond, concurrent)
@@ -215,9 +213,6 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 					}
 
 					children[i], _ = store.List(key, "\x00", "/", 1e9) // exclude itself, will be retried
-					if children[i] == nil {
-						children[i] = make([]Object, 0)
-					}
 					ms[c].Lock()
 					ready[c] = true
 					conds[c].Signal()
@@ -266,7 +261,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 
 	go func() {
 		defer close(listed)
-		err := walk(prefix, nil)
+		err := walk(prefix, entries)
 		if err != nil {
 			listed <- nil
 		}
