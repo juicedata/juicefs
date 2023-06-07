@@ -49,7 +49,7 @@ var (
 	handled                  *utils.Bar
 	pending                  *utils.Bar
 	copied, copiedBytes      *utils.Bar
-	checkedBytes             *utils.Bar
+	checked, checkedBytes    *utils.Bar
 	deleted, skipped, failed *utils.Bar
 	concurrent               chan int
 	limiter                  *ratelimit.Bucket
@@ -197,7 +197,8 @@ func try(n int, f func() error) (err error) {
 
 func deleteObj(storage object.ObjectStorage, key string, dry bool) {
 	if dry {
-		logger.Infof("Will delete %s from %s", key, storage)
+		logger.Debugf("Will delete %s from %s", key, storage)
+		deleted.Increment()
 		return
 	}
 	start := time.Now()
@@ -315,6 +316,7 @@ func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, erro
 	var equal bool
 	err := try(3, func() error { return doCheckSum(src, dst, key, size, &equal) })
 	if err == nil {
+		checked.Increment()
 		checkedBytes.IncrInt64(size)
 		if equal {
 			logger.Debugf("Checked %s OK (and equal) in %s,", key, time.Since(start))
@@ -515,14 +517,15 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			deleteObj(dst, key, config.Dry)
 		case markCopyPerms:
 			if config.Dry {
-				logger.Infof("Will copy permissions for %s", key)
-				break
+				logger.Debugf("Will copy permissions for %s", key)
+			} else {
+				copyPerms(dst, obj)
 			}
-			copyPerms(dst, obj)
 			copied.Increment()
 		case markChecksum:
 			if config.Dry {
-				logger.Infof("Will compare checksum for %s", key)
+				logger.Debugf("Will compare checksum for %s", key)
+				checked.Increment()
 				break
 			}
 			obj = obj.(*withSize).Object
@@ -553,14 +556,15 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			fallthrough
 		default:
 			if config.Dry {
-				logger.Infof("Will copy %s (%d bytes)", obj.Key(), obj.Size())
+				logger.Debugf("Will copy %s (%d bytes)", obj.Key(), obj.Size())
+				copied.Increment()
+				copiedBytes.IncrInt64(obj.Size())
 				break
 			}
 			var err error
 			if config.Links && obj.IsSymlink() {
 				if err = copyLink(src, dst, key); err == nil {
 					copied.Increment()
-					handled.Increment()
 					break
 				}
 				logger.Errorf("copy link failed: %s", err)
@@ -996,13 +1000,20 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "")
 	handled = progress.AddCountBar("Scanned objects", 0)
+	skipped = progress.AddCountSpinner("Skipped objects")
 	pending = progress.AddCountSpinner("Pending objects")
 	copied = progress.AddCountSpinner("Copied objects")
-	copiedBytes = progress.AddByteSpinner("Copied objects")
-	checkedBytes = progress.AddByteSpinner("Checked objects")
-	deleted = progress.AddCountSpinner("Deleted objects")
-	skipped = progress.AddCountSpinner("Skipped objects")
-	failed = progress.AddCountSpinner("Failed objects")
+	copiedBytes = progress.AddByteSpinner("Copied bytes")
+	if config.CheckAll || config.CheckNew {
+		checked = progress.AddCountSpinner("Checked objects")
+		checkedBytes = progress.AddByteSpinner("Checked bytes")
+	}
+	if config.DeleteSrc || config.DeleteDst {
+		deleted = progress.AddCountSpinner("Deleted objects")
+	}
+	if !config.Dry {
+		failed = progress.AddCountSpinner("Failed objects")
+	}
 	go func() {
 		for {
 			pending.SetCurrent(int64(len(tasks)))
@@ -1064,14 +1075,25 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	progress.Done()
 
 	if config.Manager == "" {
-		logger.Infof("Found: %d, copied: %d (%s), checked: %s, deleted: %d, skipped: %d, failed: %d",
-			handled.Current(), copied.Current(), formatSize(copiedBytes.Current()), formatSize(checkedBytes.Current()),
-			deleted.Current(), skipped.Current(), failed.Current())
+		msg := fmt.Sprintf("Found: %d, skipped: %d, copied: %d (%s)",
+			handled.Current(), skipped.Current(), copied.Current(), formatSize(copiedBytes.Current()))
+		if checked != nil {
+			msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
+		}
+		if deleted != nil {
+			msg += fmt.Sprintf(", deleted: %d", deleted.Current())
+		}
+		if failed != nil {
+			msg += fmt.Sprintf(", failed: %d", failed.Current())
+		}
+		logger.Info(msg)
 	} else {
 		sendStats(config.Manager)
 	}
-	if n := failed.Current(); n > 0 {
-		return fmt.Errorf("Failed to handle %d objects", n)
+	if failed != nil {
+		if n := failed.Current(); n > 0 {
+			return fmt.Errorf("Failed to handle %d objects", n)
+		}
 	}
 	return nil
 }

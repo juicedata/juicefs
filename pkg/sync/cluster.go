@@ -41,6 +41,7 @@ import (
 type Stat struct {
 	Copied       int64 // the number of copied files
 	CopiedBytes  int64 // total amount of copied data in bytes
+	Checked      int64 // the number of checked files
 	CheckedBytes int64 // total amount of checked data in bytes
 	Deleted      int64 // the number of deleted files
 	Skipped      int64 // the number of files skipped
@@ -50,10 +51,17 @@ type Stat struct {
 func updateStats(r *Stat) {
 	copied.IncrInt64(r.Copied)
 	copiedBytes.IncrInt64(r.CopiedBytes)
-	checkedBytes.IncrInt64(r.CheckedBytes)
-	deleted.IncrInt64(r.Deleted)
+	if checked != nil {
+		checked.IncrInt64(r.Checked)
+		checkedBytes.IncrInt64(r.CheckedBytes)
+	}
+	if deleted != nil {
+		deleted.IncrInt64(r.Deleted)
+	}
 	skipped.IncrInt64(r.Skipped)
-	failed.IncrInt64(r.Failed)
+	if failed != nil {
+		failed.IncrInt64(r.Failed)
+	}
 	handled.IncrInt64(r.Copied + r.Deleted + r.Skipped + r.Failed)
 }
 
@@ -77,23 +85,37 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 
 func sendStats(addr string) {
 	var r Stat
+	r.Skipped = skipped.Current()
 	r.Copied = copied.Current()
 	r.CopiedBytes = copiedBytes.Current()
-	r.CheckedBytes = checkedBytes.Current()
-	r.Deleted = deleted.Current()
-	r.Skipped = skipped.Current()
-	r.Failed = failed.Current()
+	if checked != nil {
+		r.Checked = checked.Current()
+		r.CheckedBytes = checkedBytes.Current()
+	}
+	if deleted != nil {
+		r.Deleted = deleted.Current()
+	}
+	if failed != nil {
+		r.Failed = failed.Current()
+	}
 	d, _ := json.Marshal(r)
 	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
 		logger.Errorf("update stats: %s %s", string(ans), err)
 	} else {
+		skipped.IncrInt64(-r.Skipped)
 		copied.IncrInt64(-r.Copied)
 		copiedBytes.IncrInt64(-r.CopiedBytes)
-		checkedBytes.IncrInt64(-r.CheckedBytes)
-		deleted.IncrInt64(-r.Deleted)
-		skipped.IncrInt64(-r.Skipped)
-		failed.IncrInt64(-r.Failed)
+		if checked != nil {
+			checked.IncrInt64(-r.Checked)
+			checkedBytes.IncrInt64(-r.CheckedBytes)
+		}
+		if deleted != nil {
+			deleted.IncrInt64(-r.Deleted)
+		}
+		if failed != nil {
+			failed.IncrInt64(-r.Failed)
+		}
 	}
 }
 
