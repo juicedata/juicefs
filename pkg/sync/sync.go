@@ -89,19 +89,9 @@ func ListAll(store object.ObjectStorage, prefix, start, end string) (<-chan obje
 	}
 
 	if ch, err := store.ListAll(prefix, start); err == nil {
-		if end == "" {
-			go func() {
-				for obj := range ch {
-					out <- obj
-				}
-				close(out)
-			}()
-			return out, nil
-		}
-
 		go func() {
 			for obj := range ch {
-				if obj != nil && obj.Key() > end {
+				if obj != nil && end != "" && obj.Key() > end {
 					break
 				}
 				out <- obj

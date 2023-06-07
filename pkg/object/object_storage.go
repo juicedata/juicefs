@@ -236,7 +236,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 			if end != "" && e.Key() >= end {
 				return nil
 			}
-			if e.Key() > start || start == "" && e.Key() == "" {
+			if e.Key() >= start {
 				listed <- e
 			} else if !strings.HasPrefix(start, e.Key()) {
 				continue
