@@ -34,7 +34,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juju/ratelimit"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 )
 
 const chunkSize = 1 << 26 // 64M
@@ -610,7 +609,7 @@ func logRequest(typeStr string, key string, param string, err error, used time.D
 		info += err.Error()
 	}
 	logger.Debugf("%s %s %s(%v, %.3fs)", typeStr, key, param, info, used.Seconds())
-	if used > SlowRequest && logger.GetLevel() < logrus.DebugLevel {
+	if used > SlowRequest {
 		logger.Infof("slow request: %s %s %s(%v, %.3fs)", typeStr, key, param, info, used.Seconds())
 	}
 }
