@@ -603,13 +603,13 @@ type cachedStore struct {
 
 func logRequest(typeStr string, key string, param string, err error, used time.Duration) {
 	var info string
-	if object.ReqIDCache.Get(key) != "" {
-		info += fmt.Sprintf("RequestID: %s ", object.ReqIDCache.Get(key))
+	if id := object.ReqIDCache.Get(key); id != "" {
+		info += fmt.Sprintf("RequestID: %s ", id)
 	}
 	if err != nil {
 		info += err.Error()
 	}
-	logger.Debugf("slow request: %s %s %s(%v, %.3fs)", typeStr, key, param, info, used.Seconds())
+	logger.Debugf("%s %s %s(%v, %.3fs)", typeStr, key, param, info, used.Seconds())
 	if used > SlowRequest && logger.GetLevel() < logrus.DebugLevel {
 		logger.Infof("slow request: %s %s %s(%v, %.3fs)", typeStr, key, param, info, used.Seconds())
 	}
