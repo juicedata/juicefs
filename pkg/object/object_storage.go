@@ -290,10 +290,10 @@ type reqIDCache struct {
 }
 
 func (*reqIDCache) clean() {
-	for range time.Tick(1 * time.Second) {
+	for range time.Tick(time.Second) {
 		ReqIDCache.Lock()
 		for k, v := range ReqIDCache.cache {
-			if time.Since(v.time) > 1*time.Second {
+			if time.Since(v.time) > time.Second {
 				delete(ReqIDCache.cache, k)
 			}
 		}
@@ -307,13 +307,15 @@ func (*reqIDCache) put(key, reqID string) {
 	}
 	if part := strings.Split(key, "chunks"); len(part) == 2 {
 		ReqIDCache.Lock()
+		defer ReqIDCache.Unlock()
 		ReqIDCache.cache[part[1]] = reqItem{reqID: reqID, time: time.Now()}
-		ReqIDCache.Unlock()
 	}
 }
 
 func (*reqIDCache) Get(key string) string {
 	if part := strings.Split(key, "chunks"); len(part) == 2 {
+		ReqIDCache.Lock()
+		defer ReqIDCache.Unlock()
 		return ReqIDCache.cache[part[1]].reqID
 	}
 	return ""
