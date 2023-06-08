@@ -111,7 +111,7 @@ func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey))
 	}
 	if resp != nil {
-		ReqIDCache.Put(key, resp.Header.Get(cosRequestIDKey))
+		ReqIDCache.put(key, resp.Header.Get(cosRequestIDKey))
 	}
 	return resp.Body, nil
 }
@@ -132,7 +132,7 @@ func (c *COS) Put(key string, in io.Reader) error {
 	}
 	resp, err := c.c.Object.Put(ctx, key, in, &options)
 	if resp != nil {
-		ReqIDCache.Put(key, resp.Header.Get(cosRequestIDKey))
+		ReqIDCache.put(key, resp.Header.Get(cosRequestIDKey))
 	}
 	return err
 }
@@ -150,7 +150,7 @@ func (c *COS) Copy(dst, src string) error {
 func (c *COS) Delete(key string) error {
 	resp, err := c.c.Object.Delete(ctx, key)
 	if resp != nil {
-		ReqIDCache.Put(key, resp.Header.Get(cosRequestIDKey))
+		ReqIDCache.put(key, resp.Header.Get(cosRequestIDKey))
 	}
 	return err
 }

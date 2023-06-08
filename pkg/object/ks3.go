@@ -110,7 +110,7 @@ func (s *ks3) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	resp, err := s.s3.GetObject(params)
 	if resp != nil {
-		ReqIDCache.Put(key, aws2.StringValue(resp.Metadata[s3RequestIDKey]))
+		ReqIDCache.put(key, aws2.StringValue(resp.Metadata[s3RequestIDKey]))
 	}
 	if err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func (s *ks3) Put(key string, in io.Reader) error {
 	}
 	resp, err := s.s3.PutObject(params)
 	if resp != nil {
-		ReqIDCache.Put(key, aws2.StringValue(resp.Metadata[s3RequestIDKey]))
+		ReqIDCache.put(key, aws2.StringValue(resp.Metadata[s3RequestIDKey]))
 	}
 	return err
 }
@@ -166,7 +166,7 @@ func (s *ks3) Delete(key string) error {
 	}
 	resp, err := s.s3.DeleteObject(&param)
 	if resp != nil {
-		ReqIDCache.Put(key, aws2.StringValue(resp.Metadata[s3RequestIDKey]))
+		ReqIDCache.put(key, aws2.StringValue(resp.Metadata[s3RequestIDKey]))
 	}
 	if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
 		return nil

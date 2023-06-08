@@ -85,7 +85,7 @@ func (s *ibmcos) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	var reqID string
 	resp, err := s.s3.GetObjectWithContext(c, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	ReqIDCache.Put(key, reqID)
+	ReqIDCache.put(key, reqID)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (s *ibmcos) Put(key string, in io.Reader) error {
 	}
 	var reqID string
 	_, err := s.s3.PutObjectWithContext(c, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	ReqIDCache.Put(key, reqID)
+	ReqIDCache.put(key, reqID)
 	return err
 }
 
@@ -161,7 +161,7 @@ func (s *ibmcos) Delete(key string) error {
 	}
 	var reqID string
 	_, err := s.s3.DeleteObjectWithContext(c, &param, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	ReqIDCache.Put(key, reqID)
+	ReqIDCache.put(key, reqID)
 	return err
 }
 

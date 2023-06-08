@@ -73,7 +73,7 @@ func (t *tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		Range:  rangeStr, // When Range and RangeStart & RangeEnd appear together, range is preferred
 	})
 	if resp != nil {
-		ReqIDCache.Put(key, resp.RequestID)
+		ReqIDCache.put(key, resp.RequestID)
 	}
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func (t *tosClient) Put(key string, in io.Reader) error {
 		Content: in,
 	})
 	if resp != nil {
-		ReqIDCache.Put(key, resp.RequestID)
+		ReqIDCache.put(key, resp.RequestID)
 	}
 	return err
 }
@@ -106,7 +106,7 @@ func (t *tosClient) Delete(key string) error {
 		Key:    key,
 	})
 	if resp != nil {
-		ReqIDCache.Put(key, resp.RequestID)
+		ReqIDCache.put(key, resp.RequestID)
 	}
 	return err
 }

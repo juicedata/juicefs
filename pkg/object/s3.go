@@ -132,7 +132,7 @@ func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	var reqID string
 	resp, err := s.s3.GetObjectWithContext(c, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	ReqIDCache.Put(key, reqID)
+	ReqIDCache.put(key, reqID)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func (s *s3client) Put(key string, in io.Reader) error {
 	}
 	var reqID string
 	_, err := s.s3.PutObjectWithContext(c, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
-	ReqIDCache.Put(key, reqID)
+	ReqIDCache.put(key, reqID)
 	return err
 }
 
@@ -198,7 +198,7 @@ func (s *s3client) Delete(key string) error {
 	if err != nil && strings.Contains(err.Error(), "NoSuchKey") {
 		err = nil
 	}
-	ReqIDCache.Put(key, reqID)
+	ReqIDCache.put(key, reqID)
 	return err
 }
 

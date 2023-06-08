@@ -119,7 +119,7 @@ func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		resp, err = s.c.GetObject(params)
 	}
 	if resp != nil {
-		ReqIDCache.Put(key, resp.RequestId)
+		ReqIDCache.put(key, resp.RequestId)
 	}
 	if err != nil {
 		return nil, err
@@ -174,7 +174,7 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
 	}
 	if resp != nil {
-		ReqIDCache.Put(key, resp.RequestId)
+		ReqIDCache.put(key, resp.RequestId)
 	}
 	return err
 }
@@ -196,7 +196,7 @@ func (s *obsClient) Delete(key string) error {
 	params.Key = key
 	resp, err := s.c.DeleteObject(&params)
 	if resp != nil {
-		ReqIDCache.Put(key, resp.RequestId)
+		ReqIDCache.put(key, resp.RequestId)
 	}
 	return err
 }

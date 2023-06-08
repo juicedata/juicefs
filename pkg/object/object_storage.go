@@ -274,11 +274,11 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 
 func init() {
 	ReqIDCache = reqIDCache{cache: make(map[string]reqItem)}
-	go ReqIDCache.Clean()
+	go ReqIDCache.clean()
 }
 
 type reqItem struct {
-	ReqID string
+	reqID string
 	time  time.Time
 }
 
@@ -289,11 +289,11 @@ type reqIDCache struct {
 	cache map[string]reqItem
 }
 
-func (*reqIDCache) Clean() {
-	for range time.Tick(5 * time.Second) {
+func (*reqIDCache) clean() {
+	for range time.Tick(1 * time.Second) {
 		ReqIDCache.Lock()
 		for k, v := range ReqIDCache.cache {
-			if time.Since(v.time) > 2*time.Second {
+			if time.Since(v.time) > 1*time.Second {
 				delete(ReqIDCache.cache, k)
 			}
 		}
@@ -301,17 +301,20 @@ func (*reqIDCache) Clean() {
 	}
 }
 
-func (*reqIDCache) Put(key, reqID string) {
+func (*reqIDCache) put(key, reqID string) {
+	if reqID == "" {
+		return
+	}
 	if part := strings.Split(key, "chunks"); len(part) == 2 {
 		ReqIDCache.Lock()
-		ReqIDCache.cache[part[1]] = reqItem{ReqID: reqID, time: time.Now()}
+		ReqIDCache.cache[part[1]] = reqItem{reqID: reqID, time: time.Now()}
 		ReqIDCache.Unlock()
 	}
 }
 
 func (*reqIDCache) Get(key string) string {
 	if part := strings.Split(key, "chunks"); len(part) == 2 {
-		return ReqIDCache.cache[part[1]].ReqID
+		return ReqIDCache.cache[part[1]].reqID
 	}
 	return ""
 }

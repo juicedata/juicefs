@@ -84,7 +84,7 @@ func (b *wasb) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if download.RequestID != nil {
-		ReqIDCache.Put(key, aws.StringValue(download.RequestID))
+		ReqIDCache.put(key, aws.StringValue(download.RequestID))
 	}
 	return download.Body, err
 }
@@ -105,7 +105,7 @@ func (b *wasb) Put(key string, data io.Reader) error {
 	}
 	resp, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
 	if resp.RequestID != nil {
-		ReqIDCache.Put(key, aws.StringValue(resp.RequestID))
+		ReqIDCache.put(key, aws.StringValue(resp.RequestID))
 	}
 	return err
 }
@@ -133,7 +133,7 @@ func (b *wasb) Delete(key string) error {
 		}
 	}
 	if resp.RequestID != nil {
-		ReqIDCache.Put(key, aws.StringValue(resp.RequestID))
+		ReqIDCache.put(key, aws.StringValue(resp.RequestID))
 	}
 	return err
 }

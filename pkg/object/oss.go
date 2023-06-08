@@ -130,7 +130,7 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 	}
 	result, err = o.bucket.DoGetObject(&oss.GetObjectRequest{ObjectKey: key}, option)
 	if result != nil {
-		ReqIDCache.Put(key, result.Response.Headers.Get(oss.HTTPHeaderOssRequestID))
+		ReqIDCache.put(key, result.Response.Headers.Get(oss.HTTPHeaderOssRequestID))
 		resp = result.Response
 	}
 	if checksum && err == nil {
@@ -155,7 +155,7 @@ func (o *ossClient) Put(key string, in io.Reader) error {
 	}
 	resp, err := o.bucket.DoPutObject(request, opts)
 	if resp != nil {
-		ReqIDCache.Put(key, resp.Headers.Get(oss.HTTPHeaderOssRequestID))
+		ReqIDCache.put(key, resp.Headers.Get(oss.HTTPHeaderOssRequestID))
 	}
 	if err != nil {
 		return err
