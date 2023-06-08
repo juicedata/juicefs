@@ -116,7 +116,7 @@ func gc(ctx *cli.Context) error {
 	var sliceChan chan meta.Slice // pending delete slices
 
 	if delete || compact {
-		delSpin = progress.AddCountSpinner("Deleted pending")
+		delSpin = progress.AddCountSpinner("Cleaned pending slices")
 		sliceChan = make(chan meta.Slice, 10240)
 		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
 			delSpin.Increment()
@@ -137,8 +137,8 @@ func gc(ctx *cli.Context) error {
 	}
 
 	c := meta.WrapContext(ctx.Context)
-	delayedFileSpin := progress.AddDoubleSpinner("Delfiles")
-	cleanedFileSpin := progress.AddDoubleSpinner("Cleaned delfiles")
+	delayedFileSpin := progress.AddDoubleSpinner("Pending deleted files")
+	cleanedFileSpin := progress.AddDoubleSpinner("Cleaned pending files")
 	edge := time.Now().Add(-time.Duration(format.TrashDays) * 24 * time.Hour)
 	if delete {
 		cleanTrashSpin := progress.AddCountSpinner("Cleaned trash")
@@ -205,8 +205,8 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("list all slices: %s", r)
 	}
 
-	delayedSliceSpin := progress.AddDoubleSpinner("Delslices")
-	cleanedSliceSpin := progress.AddDoubleSpinner("Cleaned delslices")
+	delayedSliceSpin := progress.AddDoubleSpinner("Trash slices")
+	cleanedSliceSpin := progress.AddDoubleSpinner("Cleaned trash slices")
 
 	err = m.ScanDeletedObject(
 		c,
