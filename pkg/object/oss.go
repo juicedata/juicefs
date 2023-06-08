@@ -114,9 +114,7 @@ func (o *ossClient) Head(key string) (Object, error) {
 }
 
 func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err error) {
-	var result *oss.GetObjectResult
-	var option []oss.Option
-	var checksum bool
+	var respHeader http.Header
 	if off > 0 || limit > 0 {
 		var r string
 		if limit > 0 {
@@ -124,18 +122,15 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 		} else {
 			r = fmt.Sprintf("%d-", off)
 		}
-		option = append(option, oss.NormalizedRange(r), oss.RangeBehavior("standard"))
+		resp, err = o.bucket.GetObject(key, oss.NormalizedRange(r), oss.RangeBehavior("standard"), oss.GetResponseHeader(&respHeader))
 	} else {
-		checksum = true
+		resp, err = o.bucket.GetObject(key, oss.GetResponseHeader(&respHeader))
+		if err == nil {
+			resp = verifyChecksum(resp,
+				resp.(*oss.Response).Headers.Get(oss.HTTPHeaderOssMetaPrefix+checksumAlgr))
+		}
 	}
-	result, err = o.bucket.DoGetObject(&oss.GetObjectRequest{ObjectKey: key}, option)
-	if result != nil {
-		ReqIDCache.put(key, result.Response.Headers.Get(oss.HTTPHeaderOssRequestID))
-		resp = result.Response
-	}
-	if checksum && err == nil {
-		resp = verifyChecksum(resp, result.Response.Headers.Get(oss.HTTPHeaderOssMetaPrefix+checksumAlgr))
-	}
+	ReqIDCache.put(key, respHeader.Get(oss.HTTPHeaderOssRequestID))
 	err = o.checkError(err)
 	return
 }
@@ -148,19 +143,10 @@ func (o *ossClient) Put(key string, in io.Reader) error {
 	if o.sc != "" {
 		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.sc)))
 	}
-	opts := oss.AddContentType(option, key)
-	request := &oss.PutObjectRequest{
-		ObjectKey: key,
-		Reader:    in,
-	}
-	resp, err := o.bucket.DoPutObject(request, opts)
-	if resp != nil {
-		ReqIDCache.put(key, resp.Headers.Get(oss.HTTPHeaderOssRequestID))
-	}
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+	var respHeader http.Header
+	option = append(option, oss.GetResponseHeader(&respHeader))
+	err := o.bucket.PutObject(key, in, option...)
+	ReqIDCache.put(key, respHeader.Get(oss.HTTPHeaderOssRequestID))
 	return o.checkError(err)
 }
 
@@ -174,15 +160,10 @@ func (o *ossClient) Copy(dst, src string) error {
 }
 
 func (o *ossClient) Delete(key string) error {
-	if err := oss.CheckObjectName(key); err != nil {
-		return err
-	}
-	resp, err := o.bucket.Do("DELETE", key, map[string]interface{}{}, nil, nil, nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	return o.checkError(oss.CheckRespCode(resp.StatusCode, []int{http.StatusNoContent}))
+	var respHeader http.Header
+	err := o.bucket.DeleteObject(key, oss.GetResponseHeader(&respHeader))
+	ReqIDCache.put(key, respHeader.Get(oss.HTTPHeaderOssRequestID))
+	return o.checkError(err)
 }
 
 func (o *ossClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
