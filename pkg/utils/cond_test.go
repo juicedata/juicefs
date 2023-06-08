@@ -32,7 +32,8 @@ func TestCond(t *testing.T) {
 	go func() {
 		m.Lock()
 		wg.Done()
-		l.Wait()
+		for l.WaitWithTimeout(time.Second) {
+		}
 		l.Signal()
 		m.Unlock()
 		done <- true
@@ -40,7 +41,8 @@ func TestCond(t *testing.T) {
 	wg.Wait()
 	m.Lock()
 	l.Signal()
-	l.Wait()
+	for l.WaitWithTimeout(time.Second) {
+	}
 	m.Unlock()
 	select {
 	case <-done:
