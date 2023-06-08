@@ -181,6 +181,14 @@ var bufPool = sync.Pool{
 	},
 }
 
+type listThread struct {
+	sync.Mutex
+	cond    *utils.Cond
+	ready   bool
+	err     error
+	entries []Object
+}
+
 func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-chan Object, error) {
 	entries, err := store.List(prefix, "", "/", 1e9)
 	if err != nil {
@@ -191,14 +199,12 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 	listed := make(chan Object, 10240)
 	var walk func(string, []Object) error
 	walk = func(prefix string, entries []Object) error {
-		var err error
 		var concurrent = 10
-		mu := make([]sync.Mutex, concurrent)
-		conds := make([]*utils.Cond, concurrent)
-		ready := make([]bool, concurrent)
-		children := make([][]Object, len(entries))
+		var err error
+		threads := make([]listThread, concurrent)
 		for c := 0; c < concurrent; c++ {
-			conds[c] = utils.NewCond(&mu[c])
+			t := &threads[c]
+			t.cond = utils.NewCond(t)
 			go func(c int) {
 				for i := c; i < len(entries); i += concurrent {
 					key := entries[i].Key()
@@ -212,18 +218,18 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 						continue
 					}
 
-					children[i], err = store.List(key, "\x00", "/", 1e9) // exclude itself
-					mu[c].Lock()
-					ready[c] = true
-					conds[c].Signal()
-					for ready[c] {
-						conds[c].WaitWithTimeout(time.Second)
+					t.entries, t.err = store.List(key, "\x00", "/", 1e9) // exclude itself
+					t.Lock()
+					t.ready = true
+					t.cond.Signal()
+					for t.ready {
+						t.cond.WaitWithTimeout(time.Second)
 						if err != nil {
-							mu[c].Unlock()
+							t.Unlock()
 							return
 						}
 					}
-					mu[c].Unlock()
+					t.Unlock()
 				}
 			}(c)
 		}
@@ -242,24 +248,25 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 				continue
 			}
 
-			c := i % concurrent
-			mu[c].Lock()
-			for !ready[c] {
-				conds[c].WaitWithTimeout(time.Millisecond * 10)
-				if err != nil {
-					mu[c].Unlock()
-					return err
-				}
+			t := &threads[i%concurrent]
+			t.Lock()
+			for !t.ready {
+				t.cond.WaitWithTimeout(time.Millisecond * 10)
 			}
-			ready[c] = false
-			conds[c].Signal()
-			mu[c].Unlock()
+			if t.err != nil {
+				err = t.err
+				t.Unlock()
+				return err
+			}
+			t.ready = false
+			t.cond.Signal()
+			children := t.entries
+			t.Unlock()
 
-			err = walk(key, children[i])
+			err = walk(key, children)
 			if err != nil {
 				return err
 			}
-			children[i] = nil
 		}
 		return nil
 	}
