@@ -4,19 +4,31 @@ sidebar_position: 2
 slug: /mount_juicefs_at_boot_time
 ---
 
+After JuiceFS has been successfully mounted, follow this guide to set up auto-mount on boot.
+
 ## Linux
 
-Copy `juicefs` as `/sbin/mount.juicefs`, then edit `/etc/fstab` with following line:
+Starting with JuiceFS v1.1.0, the `--update-fstab` option of the mount command will automatically help you set up mount at boot:
 
-```
-<META-URL>    <MOUNTPOINT>       juicefs     _netdev[,<MOUNT-OPTIONS>]     0  0
+```bash
+$ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 <META-URL> <MOUNTPOINT>
+$ grep <MOUNTPOINT> /etc/fstab
+<META-URL> <MOUNTPOINT> juicefs _netdev,max-uploads=50,writeback,cache-size=204800 0 0
+$ ls -l /sbin/mount.juicefs
+lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/juicefs
 ```
 
-For the format of `<META-URL>`, please refer to the ["How to Set Up Metadata Engine"](how_to_set_up_metadata_engine.md) document, such as `redis://localhost:6379/1`. Then replace `<MOUNTPOINT>` with the path you want JuiceFS to mount, e.g. `/jfs`. If you want to set [mount options](../reference/command_reference.md#mount), separate the options list with commas and replace `[,<MOUNT-OPTIONS>]`. Here is an example:
+If you'd like to control this process by hand, note that:
 
-```
-redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=204800     0  0
-```
+* A symlink needs to be created from `/sbin/mount.juicefs` to the JuiceFS executable, e.g. `ln -s /usr/local/bin/juicefs /sbin/mount.juicefs`.
+* All mount options must also be included in the fstab options to take effect. Remember to remove the prefixing hyphen(s), and add their values with `=`, for example:
+
+  ```bash
+  $ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 -o max_read=99 <META-URL> /jfs
+  # -o stands for FUSE options, and is handled differently
+  $ grep jfs /etc/fstab
+  redis://localhost:6379/1  /jfs juicefs _netdev,max-uploads=50,max_read=99,writeback,cache-size=204800 0 0
+  ```
 
 :::tip
 By default, CentOS 6 will NOT mount network file system after boot, run following command to enable it:

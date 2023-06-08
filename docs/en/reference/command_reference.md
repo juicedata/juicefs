@@ -248,6 +248,9 @@ dir entry cache timeout in seconds (default: 1), read [Kernel Metadata Cache](..
 `--enable-xattr`<br />
 enable extended attributes (xattr) (default: false)
 
+`--update-fstab`<br />
+add / update entry in `/etc/fstab`, will create a symlink from `/sbin/mount.juicefs` to JuiceFS executable if not existing (default: false)
+
 `--bucket value`<br />
 customized endpoint to access object storage
 

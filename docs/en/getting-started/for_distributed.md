@@ -136,21 +136,21 @@ The above command sets the cache directory in the `/mycache` directory and speci
 
 #### Auto-mount on boot
 
-Take a Linux system as an example and assume that the client is located in the `/usr/local/bin` directory. Rename the JuiceFS client to `mount.juicefs` and copy it to the `/sbin` directory.
-
-```shell
-sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
-```
-
-Edit the `/etc/fstab` configuration file and add a new record following the rules of fstab.
-
-```
-redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1    /mnt/myjfs    juicefs    _netdev,max-uploads=50,writeback,cache-size=512000     0  0
-```
+In a Linux environment, you can set up automatic mounting when mounting a file system via the `--update-fstab` option, which adds the options required to mount JuiceFS to `/etc/fstab`. For example:
 
 :::note
-By default, CentOS 6 does not mount the network file system during boot, you need to run the command `sudo chkconfig --add netfs` to enable automatically mounting.
+This feature requires JuiceFS version 1.1.0 and above
 :::
+
+```bash
+$ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1 <MOUNTPOINT>
+$ grep <MOUNTPOINT> /etc/fstab
+redis://tom:mypassword@myjfs-sh-abc.apse1.cache.amazonaws.com:6379/1 <MOUNTPOINT> juicefs _netdev,max-uploads=50,writeback,cache-size=204800 0 0
+$ ls -l /sbin/mount.juicefs
+lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/juicefs
+```
+
+Refer to ["Mount JuiceFS at Boot Time"](../guide/mount_at_boot.md) for more details.
 
 ### 6. Verify the file system
 

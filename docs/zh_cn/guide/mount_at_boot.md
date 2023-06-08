@@ -4,19 +4,31 @@ sidebar_position: 3
 slug: /mount_juicefs_at_boot_time
 ---
 
+在确认挂载成功，可以正常使用以后，可以参考本节内容设置开机自动挂载。
+
 ## Linux
 
-拷贝 `juicefs` 为 `/sbin/mount.juicefs`，然后按照下面的格式添加一行到 `/etc/fstab`：
+从 JuiceFS v1.1.0 开始，挂载命令的 `--update-fstab` 选项能自动帮你设置好开机自动挂载：
 
-```
-<META-URL>    <MOUNTPOINT>       juicefs     _netdev[,<MOUNT-OPTIONS>]     0  0
+```bash
+$ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 <META-URL> <MOUNTPOINT>
+$ grep <MOUNTPOINT> /etc/fstab
+<META-URL> <MOUNTPOINT> juicefs _netdev,max-uploads=50,writeback,cache-size=204800 0 0
+$ ls -l /sbin/mount.juicefs
+lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/juicefs
 ```
 
-`<META-URL>` 的格式请参考[「如何设置元数据引擎」](how_to_set_up_metadata_engine.md)文档，比如 `redis://localhost:6379/1`。然后用你希望 JuiceFS 挂载的路径替换 `<MOUNTPOINT>` ，比如 `/jfs`。如果你想要设置[挂载选项](../reference/command_reference.md#mount)，用逗号分隔选项列表并替换 `[,<MOUNT-OPTIONS>]` 。下面是一个示例：
+如果你有意自行控制，请注意：
 
-```
-redis://localhost:6379/1    /jfs       juicefs     _netdev,max-uploads=50,writeback,cache-size=204800     0  0
-```
+* 需要创建一个从 `/sbin/mount.juicefs` 到 JuiceFS 可执行文件的软链接，比如 `ln -s /usr/local/bin/juicefs /sbin/mount.juicefs`。
+* 挂载命令所包含的各种选项，也需要在 fstab options 列加以声明，注意去掉 `-` 前缀，并将选项取值以 `=` 连接，举例说明：
+
+  ```bash
+  $ sudo juicefs mount --update-fstab --max-uploads=50 --writeback --cache-size 204800 -o max_read=99 <META-URL> /jfs
+  # -o 是 FUSE options，在 fstab 中需特殊对待
+  $ grep jfs /etc/fstab
+  redis://localhost:6379/1  /jfs juicefs _netdev,max-uploads=50,max_read=99,writeback,cache-size=204800 0 0
+  ```
 
 :::tip 提示
 默认情况下，CentOS 6 在启动后不会自动挂载网络文件系统，你可以使用下面的命令开启它：
