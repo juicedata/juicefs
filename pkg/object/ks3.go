@@ -32,6 +32,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	aws2 "github.com/aws/aws-sdk-go/aws"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/ks3sdklib/aws-sdk-go/aws"
 	"github.com/ks3sdklib/aws-sdk-go/aws/awserr"
@@ -108,6 +109,9 @@ func (s *ks3) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		params.Range = &r
 	}
 	resp, err := s.s3.GetObject(params)
+	if resp != nil {
+		ReqIDCache.put(key, aws2.StringValue(resp.Metadata[s3RequestIDKey]))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +139,10 @@ func (s *ks3) Put(key string, in io.Reader) error {
 	if s.sc != "" {
 		params.StorageClass = aws.String(s.sc)
 	}
-	_, err := s.s3.PutObject(params)
+	resp, err := s.s3.PutObject(params)
+	if resp != nil {
+		ReqIDCache.put(key, aws2.StringValue(resp.Metadata[s3RequestIDKey]))
+	}
 	return err
 }
 func (s *ks3) Copy(dst, src string) error {
@@ -157,7 +164,10 @@ func (s *ks3) Delete(key string) error {
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
-	_, err := s.s3.DeleteObject(&param)
+	resp, err := s.s3.DeleteObject(&param)
+	if resp != nil {
+		ReqIDCache.put(key, aws2.StringValue(resp.Metadata[s3RequestIDKey]))
+	}
 	if e, ok := err.(awserr.RequestFailure); ok && e.StatusCode() == http.StatusNotFound {
 		return nil
 	}

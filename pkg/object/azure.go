@@ -34,6 +34,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
+	"github.com/aws/aws-sdk-go/aws"
 )
 
 type wasb struct {
@@ -82,6 +83,7 @@ func (b *wasb) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	ReqIDCache.put(key, aws.StringValue(download.RequestID))
 	return download.Body, err
 }
 
@@ -99,7 +101,8 @@ func (b *wasb) Put(key string, data io.Reader) error {
 	if b.sc != "" {
 		options.AccessTier = str2Tier(b.sc)
 	}
-	_, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
+	resp, err := b.azblobCli.UploadStream(ctx, b.cName, key, data, &options)
+	ReqIDCache.put(key, aws.StringValue(resp.RequestID))
 	return err
 }
 
@@ -119,12 +122,13 @@ func (b *wasb) Copy(dst, src string) error {
 }
 
 func (b *wasb) Delete(key string) error {
-	_, err := b.container.NewBlobClient(key).Delete(ctx, nil)
+	resp, err := b.container.NewBlobClient(key).Delete(ctx, nil)
 	if err != nil {
 		if e, ok := err.(*azcore.ResponseError); ok && e.ErrorCode == string(bloberror.BlobNotFound) {
 			err = nil
 		}
 	}
+	ReqIDCache.put(key, aws.StringValue(resp.RequestID))
 	return err
 }
 

@@ -118,6 +118,9 @@ func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	} else {
 		resp, err = s.c.GetObject(params)
 	}
+	if resp != nil {
+		ReqIDCache.put(key, resp.RequestId)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +173,9 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 	if err == nil && s.checkEtag && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
 	}
+	if resp != nil {
+		ReqIDCache.put(key, resp.RequestId)
+	}
 	return err
 }
 
@@ -188,7 +194,10 @@ func (s *obsClient) Delete(key string) error {
 	params := obs.DeleteObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = key
-	_, err := s.c.DeleteObject(&params)
+	resp, err := s.c.DeleteObject(&params)
+	if resp != nil {
+		ReqIDCache.put(key, resp.RequestId)
+	}
 	return err
 }
 

@@ -30,14 +30,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/IBM/ibm-cos-sdk-go/aws"
 	"github.com/IBM/ibm-cos-sdk-go/aws/awserr"
 	"github.com/IBM/ibm-cos-sdk-go/aws/credentials/ibmiam"
+	"github.com/IBM/ibm-cos-sdk-go/aws/request"
 	"github.com/IBM/ibm-cos-sdk-go/aws/session"
 	"github.com/IBM/ibm-cos-sdk-go/service/s3"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
 )
 
 type ibmcos struct {
@@ -83,7 +83,9 @@ func (s *ibmcos) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		}
 		params.Range = &r
 	}
-	resp, err := s.s3.GetObject(params)
+	var reqID string
+	resp, err := s.s3.GetObjectWithContext(c, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
+	ReqIDCache.put(key, reqID)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +113,9 @@ func (s *ibmcos) Put(key string, in io.Reader) error {
 	if s.sc != "" {
 		params.SetStorageClass(s.sc)
 	}
-	_, err := s.s3.PutObject(params)
+	var reqID string
+	_, err := s.s3.PutObjectWithContext(c, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
+	ReqIDCache.put(key, reqID)
 	return err
 }
 
@@ -155,7 +159,9 @@ func (s *ibmcos) Delete(key string) error {
 		Bucket: &s.bucket,
 		Key:    &key,
 	}
-	_, err := s.s3.DeleteObject(&param)
+	var reqID string
+	_, err := s.s3.DeleteObjectWithContext(c, &param, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
+	ReqIDCache.put(key, reqID)
 	return err
 }
 
