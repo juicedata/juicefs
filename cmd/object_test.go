@@ -26,6 +26,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
@@ -170,7 +171,7 @@ func TestJFS(t *testing.T) {
 		t.Fatalf("initialize  failed: %s", err)
 	}
 
-	jstore := &juiceFS{object.DefaultObjectStorage{}, "test", jfs}
+	jstore := &juiceFS{object.DefaultObjectStorage{}, "test", uint16(utils.GetUmask()), jfs}
 	testFileSystem(t, jstore)
 	testFileSystem(t, object.WithPrefix(jstore, "unittest/"))
 }

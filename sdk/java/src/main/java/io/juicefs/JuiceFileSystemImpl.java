@@ -138,7 +138,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_close(long pid, int fd);
 
-    int jfs_create(long pid, long h, String path, short mode);
+    int jfs_create(long pid, long h, String path, short mode, short umask);
 
     int jfs_truncate(long pid, long h, String path, long length);
 
@@ -146,7 +146,7 @@ public class JuiceFileSystemImpl extends FileSystem {
 
     int jfs_rmr(long pid, long h, String path);
 
-    int jfs_mkdir(long pid, long h, String path, short mode);
+    int jfs_mkdir(long pid, long h, String path, short mode, short umask);
 
     int jfs_rename(long pid, long h, String src, String dst);
 
@@ -1184,9 +1184,8 @@ public class JuiceFileSystemImpl extends FileSystem {
   public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize,
                                    short replication, long blockSize, Progressable progress) throws IOException {
     statistics.incrementWriteOps(1);
-    permission = permission.applyUMask(uMask);
     while (true) {
-      int fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort());
+      int fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort(), uMask.toShort());
       if (fd == ENOENT) {
         Path parent = makeQualified(f).getParent();
         try {
@@ -1220,14 +1219,13 @@ public class JuiceFileSystemImpl extends FileSystem {
   public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, EnumSet<CreateFlag> flag,
                                                int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
     statistics.incrementWriteOps(1);
-    permission = permission.applyUMask(uMask);
-    int fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort());
+    int fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort(), uMask.toShort());
     while (fd == EEXIST) {
       if (!flag.contains(CreateFlag.OVERWRITE) || isDirectory(f)) {
         throw new FileAlreadyExistsException("File already exists: " + f);
       }
       delete(f, false);
-      fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort());
+      fd = lib.jfs_create(Thread.currentThread().getId(), handle, normalizePath(f), permission.toShort(), uMask.toShort());
     }
     if (fd < 0) {
       throw error(fd, makeQualified(f).getParent());
@@ -1517,7 +1515,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     String path = normalizePath(f);
     if ("/".equals(path))
       return true;
-    int r = lib.jfs_mkdir(Thread.currentThread().getId(), handle, path, permission.applyUMask(uMask).toShort());
+    int r = lib.jfs_mkdir(Thread.currentThread().getId(), handle, path, permission.toShort(), uMask.toShort());
     if (r == 0 || r == EEXIST && !isFile(f)) {
       return true;
     } else if (r == ENOENT) {

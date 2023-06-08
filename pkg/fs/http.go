@@ -26,6 +26,7 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"golang.org/x/net/webdav"
 )
@@ -81,12 +82,13 @@ func econv(err error) error {
 }
 
 type webdavFS struct {
-	ctx meta.Context
-	fs  *FileSystem
+	ctx   meta.Context
+	fs    *FileSystem
+	umask uint16
 }
 
 func (hfs *webdavFS) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
-	return econv(hfs.fs.Mkdir(hfs.ctx, name, uint16(perm)))
+	return econv(hfs.fs.Mkdir(hfs.ctx, name, uint16(perm), hfs.umask))
 }
 
 func (hfs *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
@@ -104,7 +106,7 @@ func (hfs *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm o
 	f, err := hfs.fs.Open(hfs.ctx, name, uint32(mode))
 	if err != 0 {
 		if err == syscall.ENOENT && flag&os.O_CREATE != 0 {
-			f, err = hfs.fs.Create(hfs.ctx, name, uint16(perm))
+			f, err = hfs.fs.Create(hfs.ctx, name, uint16(perm), hfs.umask)
 		}
 	} else if flag&os.O_TRUNC != 0 {
 		if errno := hfs.fs.Truncate(hfs.ctx, name, 0); errno != 0 {
@@ -219,7 +221,7 @@ func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func StartHTTPServer(fs *FileSystem, config WebdavConfig) {
 	ctx := meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	hfs := &webdavFS{ctx, fs}
+	hfs := &webdavFS{ctx, fs, uint16(utils.GetUmask())}
 	srv := &webdav.Handler{
 		FileSystem: hfs,
 		LockSystem: webdav.NewMemLS(),
