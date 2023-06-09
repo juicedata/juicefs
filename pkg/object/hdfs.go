@@ -46,7 +46,7 @@ type hdfsclient struct {
 	basePath       string
 	c              *hdfs.Client
 	dfsReplication int
-	umask          uint16
+	umask          os.FileMode
 }
 
 func (h *hdfsclient) String() string {
@@ -126,15 +126,15 @@ const abcException = "org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedExcepti
 func (h *hdfsclient) Put(key string, in io.Reader) error {
 	path := h.path(key)
 	if strings.HasSuffix(path, dirSuffix) {
-		return h.c.MkdirAll(path, os.FileMode(0777^h.umask))
+		return h.c.MkdirAll(path, 0777&^h.umask)
 	}
 	tmp := filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp.%d", filepath.Base(path), rand.Int()))
-	f, err := h.c.CreateFile(tmp, h.dfsReplication, 128<<20, os.FileMode(0666^h.umask))
+	f, err := h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 	defer func() { _ = h.c.Remove(tmp) }()
 	if err != nil {
 		if pe, ok := err.(*os.PathError); ok && pe.Err == os.ErrNotExist {
-			_ = h.c.MkdirAll(filepath.Dir(path), os.FileMode(0777^h.umask))
-			f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, os.FileMode(0666^h.umask))
+			_ = h.c.MkdirAll(filepath.Dir(path), 0777&^h.umask)
+			f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 		}
 		if pe, ok := err.(*os.PathError); ok {
 			if remoteErr, ok := pe.Err.(hdfs.Error); ok && remoteErr.Exception() == abcException {
@@ -142,7 +142,7 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 			}
 			if pe.Err == os.ErrExist {
 				_ = h.c.Remove(tmp)
-				f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, os.FileMode(0666^h.umask))
+				f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 			}
 		}
 		if err != nil {
@@ -320,7 +320,7 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 		basePath:       basePath,
 		c:              c,
 		dfsReplication: replication,
-		umask:          umask,
+		umask:          os.FileMode(umask),
 	}, nil
 }
 

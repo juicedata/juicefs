@@ -1093,7 +1093,7 @@ func jfs_concat(pid int, h uintptr, _dst *C.char, buf uintptr, bufsize int) int 
 	var tmp string
 	if len(srcs) > 1 {
 		tmp = filepath.Join(filepath.Dir(dst), "."+filepath.Base(dst)+".merging")
-		fi, err := w.Create(ctx, tmp, 0644, 0)
+		fi, err := w.Create(ctx, tmp, 0666, 022)
 		if err != 0 {
 			return errno(err)
 		}
