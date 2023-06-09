@@ -149,8 +149,8 @@ Here's an example:
 ```shell
 $ juicefs debug /tmp/mountpoint
 
-$ tree debug
-debug
+$ tree ./debug
+./debug
 ├── tmp-test1-20230609104324
 │   ├── config.txt
 │   ├── juicefs.log

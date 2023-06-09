@@ -139,7 +139,7 @@ juicefs debug <mountpoint>
 3. JuiceFS .config 内部文件内容
 4. JuiceFS .stat 内部文件的内容并且在 5s 后再记录一次
 5. mount 命令行参数
-6. go pprof
+6. Go pprof
 7. JuiceFS 日志（默认最后 5000 行）
 
 默认会在当前目录下创建 debug 目录，并将收集到的信息保存在该目录下。下面是一个示例：
@@ -147,8 +147,8 @@ juicefs debug <mountpoint>
 ```shell
 $ juicefs debug /tmp/mountpoint
 
-$ tree debug
-debug
+$ tree ./debug
+./debug
 ├── tmp-test1-20230609104324
 │   ├── config.txt
 │   ├── juicefs.log
