@@ -124,6 +124,53 @@ You need to add the [`--access-log` option](../reference/command_reference.md#ju
 
 You need to add the `juicefs.access-log` configuration item in the [client configurations](../deployment/hadoop_java_sdk.md#other-configurations) of the JuiceFS Hadoop Java SDK to specify the path of the access log output, and the access log is not output by default.
 
+## Collect Various Information Using the `debug` Subcommand {#debug}
+
+The `juicefs debug` subcommand can help you automatically collect various information about a specified mount point, facilitating troubleshooting and diagnosis.
+
+```shell
+juicefs debug <mountpoint>
+```
+
+This command collects the following information:
+
+1. JuiceFS version
+2. Operating system version and kernel version
+3. Contents of the JuiceFS `.config` internal file
+4. Contents of the `.stat` internal file in JuiceFS and recorded again after 5 seconds
+5. Command-line parameters used for mounting
+6. Go pprof information
+7. JuiceFS logs (defaulting to the last 5000 lines)
+
+By default, a `debug` directory is created in the current directory, and the collected information is saved in that directory.
+
+Here's an example:
+
+```shell
+$ juicefs debug /tmp/mountpoint
+
+$ tree ./debug
+./debug
+├── tmp-test1-20230609104324
+│   ├── config.txt
+│   ├── juicefs.log
+│   ├── pprof
+│   │   ├── juicefs.allocs.pb.gz
+│   │   ├── juicefs.block.pb.gz
+│   │   ├── juicefs.cmdline.txt
+│   │   ├── juicefs.goroutine.pb.gz
+│   │   ├── juicefs.goroutine.stack.txt
+│   │   ├── juicefs.heap.pb.gz
+│   │   ├── juicefs.mutex.pb.gz
+│   │   ├── juicefs.profile.30s.pb.gz
+│   │   ├── juicefs.threadcreate.pb.gz
+│   │   └── juicefs.trace.5s.pb.gz
+│   ├── stats.5s.txt
+│   ├── stats.txt
+│   └── system-info.log
+└── tmp-test1-20230609104324.zip  
+```
+
 ## Real-time performance monitoring {#performance-monitor}
 
 JuiceFS provides the `profile` and `stats` subcommands to visualize real-time performance data, the `profile` command is based on the [file system access log](#access-log), while the `stats` command uses [Real-time statistics](../administration/monitoring.md).

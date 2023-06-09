@@ -124,6 +124,51 @@ kubectl -n kube-system exec juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-53079943
 
 需要在 JuiceFS Hadoop Java SDK 的[客户端配置](../deployment/hadoop_java_sdk.md#其它配置)中新增 `juicefs.access-log` 配置项，指定访问日志输出的路径，默认不输出访问日志。
 
+## 使用 debug 子命令收集各类信息 {#debug}
+
+`juicefs debug` 子命令可以自动搜集指定挂载点的各类信息，方便进行故障诊断。
+
+```shell
+juicefs debug <mountpoint>
+```
+
+该命令会收集以下信息：
+
+1. JuiceFS version
+2. 操作系统版本与内核版本
+3. JuiceFS .config 内部文件内容
+4. JuiceFS .stat 内部文件的内容并且在 5s 后再记录一次
+5. mount 命令行参数
+6. Go pprof
+7. JuiceFS 日志（默认最后 5000 行）
+
+默认会在当前目录下创建 debug 目录，并将收集到的信息保存在该目录下。下面是一个示例：
+
+```shell
+$ juicefs debug /tmp/mountpoint
+
+$ tree ./debug
+./debug
+├── tmp-test1-20230609104324
+│   ├── config.txt
+│   ├── juicefs.log
+│   ├── pprof
+│   │   ├── juicefs.allocs.pb.gz
+│   │   ├── juicefs.block.pb.gz
+│   │   ├── juicefs.cmdline.txt
+│   │   ├── juicefs.goroutine.pb.gz
+│   │   ├── juicefs.goroutine.stack.txt
+│   │   ├── juicefs.heap.pb.gz
+│   │   ├── juicefs.mutex.pb.gz
+│   │   ├── juicefs.profile.30s.pb.gz
+│   │   ├── juicefs.threadcreate.pb.gz
+│   │   └── juicefs.trace.5s.pb.gz
+│   ├── stats.5s.txt
+│   ├── stats.txt
+│   └── system-info.log
+└── tmp-test1-20230609104324.zip  
+```
+
 ## 实时性能监控 {#performance-monitor}
 
 JuiceFS 客户端提供 `profile` 和 `stats` 两个子命令来对性能数据进行可视化呈现。其中，`profile` 命令通过读取[「文件系统请求日志」](#access-log)进行汇总输出，而 `stats` 则依赖[客户端监控数据](../administration/monitoring.md)。
