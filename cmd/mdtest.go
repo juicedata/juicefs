@@ -36,9 +36,10 @@ import (
 )
 
 var ctx = meta.NewContext(1, uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
+var umask = uint16(utils.GetUmask())
 
 func createDir(jfs *fs.FileSystem, root string, d int, width int) error {
-	if err := jfs.Mkdir(ctx, root, 0755); err != 0 {
+	if err := jfs.Mkdir(ctx, root, 0777, umask); err != 0 {
 		return fmt.Errorf("Mkdir %s: %s", root, err)
 	}
 	if d > 0 {
@@ -56,7 +57,7 @@ func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, 
 	m := jfs.Meta()
 	for i := 0; i < files; i++ {
 		fn := filepath.Join(root, fmt.Sprintf("file.mdtest.%d.%d", np, i))
-		f, err := jfs.Create(ctx, fn, 0644)
+		f, err := jfs.Create(ctx, fn, 0666, umask)
 		if err != 0 {
 			return fmt.Errorf("create %s: %s", fn, err)
 		}
@@ -111,11 +112,11 @@ func runTest(jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes 
 	logger.Infof("Create %d files in %d dirs", total, dirs)
 
 	start := time.Now()
-	if err := jfs.Mkdir(ctx, rootDir, 0755); err != 0 {
+	if err := jfs.Mkdir(ctx, rootDir, 0777, umask); err != 0 {
 		logger.Errorf("mkdir %s: %s", rootDir, err)
 	}
 	root := filepath.Join(rootDir, "test-dir.0-0")
-	if err := jfs.Mkdir(ctx, root, 0755); err != 0 {
+	if err := jfs.Mkdir(ctx, root, 0777, umask); err != 0 {
 		logger.Fatalf("Mkdir %s: %s", root, err)
 	}
 	root = filepath.Join(root, "mdtest_tree.0")

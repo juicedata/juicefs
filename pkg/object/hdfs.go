@@ -43,9 +43,10 @@ var supergroup = "supergroup"
 type hdfsclient struct {
 	DefaultObjectStorage
 	addr           string
+	basePath       string
 	c              *hdfs.Client
 	dfsReplication int
-	basePath       string
+	umask          os.FileMode
 }
 
 func (h *hdfsclient) String() string {
@@ -125,15 +126,15 @@ const abcException = "org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedExcepti
 func (h *hdfsclient) Put(key string, in io.Reader) error {
 	path := h.path(key)
 	if strings.HasSuffix(path, dirSuffix) {
-		return h.c.MkdirAll(path, os.FileMode(0755))
+		return h.c.MkdirAll(path, 0777&^h.umask)
 	}
 	tmp := filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp.%d", filepath.Base(path), rand.Int()))
-	f, err := h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0755)
+	f, err := h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 	defer func() { _ = h.c.Remove(tmp) }()
 	if err != nil {
 		if pe, ok := err.(*os.PathError); ok && pe.Err == os.ErrNotExist {
-			_ = h.c.MkdirAll(filepath.Dir(path), 0755)
-			f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0755)
+			_ = h.c.MkdirAll(filepath.Dir(path), 0777&^h.umask)
+			f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 		}
 		if pe, ok := err.(*os.PathError); ok {
 			if remoteErr, ok := pe.Err.(hdfs.Error); ok && remoteErr.Exception() == abcException {
@@ -141,7 +142,7 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 			}
 			if pe.Err == os.ErrExist {
 				_ = h.c.Remove(tmp)
-				f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0755)
+				f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 			}
 		}
 		if err != nil {
@@ -302,13 +303,25 @@ func newHDFS(addr, username, sk, token string) (ObjectStorage, error) {
 	}
 
 	var replication = 3
-	if replication_conf, found := conf["dfs.replication"]; found {
-		if x, err := strconv.Atoi(replication_conf); err == nil {
+	if v, found := conf["dfs.replication"]; found {
+		if x, err := strconv.Atoi(v); err == nil {
 			replication = x
 		}
 	}
+	var umask uint16 = 022
+	if v, found := conf["fs.permissions.umask-mode"]; found {
+		if x, err := strconv.ParseUint(v, 8, 16); err == nil {
+			umask = uint16(x)
+		}
+	}
 
-	return &hdfsclient{addr: strings.Join(rpcAddr, ","), c: c, dfsReplication: replication, basePath: basePath}, nil
+	return &hdfsclient{
+		addr:           strings.Join(rpcAddr, ","),
+		basePath:       basePath,
+		c:              c,
+		dfsReplication: replication,
+		umask:          os.FileMode(umask),
+	}, nil
 }
 
 // addr can be hdfs://nameservice e.g. hdfs://example, hdfs://example/user/juicefs

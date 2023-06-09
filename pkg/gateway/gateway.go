@@ -51,8 +51,7 @@ var logger = utils.GetLogger("juicefs")
 type Config struct {
 	MultiBucket bool
 	KeepEtag    bool
-	Mode        uint16
-	DirMode     uint16
+	Umask       uint16
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
@@ -194,7 +193,7 @@ func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 	if !n.gConf.MultiBucket {
 		return nil
 	}
-	eno := n.fs.Mkdir(mctx, n.path(bucket), n.gConf.DirMode)
+	eno := n.fs.Mkdir(mctx, n.path(bucket), 0777, n.gConf.Umask)
 	return jfsToObjectErr(ctx, eno, bucket)
 }
 
@@ -478,8 +477,8 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		return n.GetObjectInfo(ctx, srcBucket, srcObject, minio.ObjectOptions{})
 	}
 	tmp := n.tpath(dstBucket, "tmp", minio.MustGetUUID())
-	_ = n.mkdirAll(ctx, path.Dir(tmp), os.FileMode(n.gConf.DirMode))
-	f, eno := n.fs.Create(mctx, tmp, n.gConf.Mode)
+	_ = n.mkdirAll(ctx, path.Dir(tmp))
+	f, eno := n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
 	if eno != 0 {
 		logger.Errorf("create %s: %s", tmp, eno)
 		return
@@ -604,19 +603,19 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	}, nil
 }
 
-func (n *jfsObjects) mkdirAll(ctx context.Context, p string, mode os.FileMode) error {
+func (n *jfsObjects) mkdirAll(ctx context.Context, p string) error {
 	if fi, eno := n.fs.Stat(mctx, p); eno == 0 {
 		if !fi.IsDir() {
 			return fmt.Errorf("%s is not directory", p)
 		}
 		return nil
 	}
-	eno := n.fs.Mkdir(mctx, p, uint16(mode))
+	eno := n.fs.Mkdir(mctx, p, 0777, n.gConf.Umask)
 	if eno != 0 && fs.IsNotExist(eno) {
-		if err := n.mkdirAll(ctx, path.Dir(p), os.FileMode(n.gConf.DirMode)); err != nil {
+		if err := n.mkdirAll(ctx, path.Dir(p)); err != nil {
 			return err
 		}
-		eno = n.fs.Mkdir(mctx, p, uint16(mode))
+		eno = n.fs.Mkdir(mctx, p, 0777, n.gConf.Umask)
 	}
 	if eno != 0 && fs.IsExist(eno) {
 		eno = 0
@@ -629,8 +628,8 @@ func (n *jfsObjects) mkdirAll(ctx context.Context, p string, mode os.FileMode) e
 
 func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (err error) {
 	tmpname := n.tpath(bucket, "tmp", minio.MustGetUUID())
-	_ = n.mkdirAll(ctx, path.Dir(tmpname), os.FileMode(n.gConf.DirMode))
-	f, eno := n.fs.Create(mctx, tmpname, n.gConf.Mode)
+	_ = n.mkdirAll(ctx, path.Dir(tmpname))
+	f, eno := n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
 	if eno != 0 {
 		logger.Errorf("create %s: %s", tmpname, eno)
 		err = eno
@@ -667,7 +666,7 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 	}
 	dir := path.Dir(object)
 	if dir != "" {
-		_ = n.mkdirAll(ctx, dir, os.FileMode(n.gConf.DirMode))
+		_ = n.mkdirAll(ctx, dir)
 	}
 	if eno := n.fs.Rename(mctx, tmpname, object, 0); eno != 0 {
 		err = jfsToObjectErr(ctx, eno, bucket, object)
@@ -683,7 +682,7 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 
 	p := n.path(bucket, object)
 	if strings.HasSuffix(object, sep) {
-		if err = n.mkdirAll(ctx, p, os.FileMode(n.gConf.DirMode)); err != nil {
+		if err = n.mkdirAll(ctx, p); err != nil {
 			err = jfsToObjectErr(ctx, err, bucket, object)
 			return
 		}
@@ -728,7 +727,7 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 	}
 	uploadID = minio.MustGetUUID()
 	p := n.upath(bucket, uploadID)
-	err = n.mkdirAll(ctx, p, os.FileMode(n.gConf.DirMode))
+	err = n.mkdirAll(ctx, p)
 	if err == nil {
 		eno := n.fs.SetXattr(mctx, p, uploadKeyName, []byte(object), 0)
 		if eno != 0 {
@@ -882,7 +881,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 
 	tmp := n.ppath(bucket, uploadID, "complete")
 	_ = n.fs.Delete(mctx, tmp)
-	f, eno := n.fs.Create(mctx, tmp, n.gConf.Mode)
+	f, eno := n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 		logger.Errorf("create complete: %s", err)
@@ -906,7 +905,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	name := n.path(bucket, object)
 	dir := path.Dir(name)
 	if dir != "" {
-		if err = n.mkdirAll(ctx, dir, os.FileMode(n.gConf.DirMode)); err != nil {
+		if err = n.mkdirAll(ctx, dir); err != nil {
 			_ = n.fs.Delete(mctx, tmp)
 			err = jfsToObjectErr(ctx, err, bucket, object, uploadID)
 			return

@@ -732,13 +732,13 @@ func jfs_access(pid int, h uintptr, cpath *C.char, flags int) int {
 }
 
 //export jfs_create
-func jfs_create(pid int, h uintptr, cpath *C.char, mode uint16) int {
+func jfs_create(pid int, h uintptr, cpath *C.char, mode uint16, umask uint16) int {
 	w := F(h)
 	if w == nil {
 		return EINVAL
 	}
 	path := C.GoString(cpath)
-	f, err := w.Create(w.withPid(pid), path, mode)
+	f, err := w.Create(w.withPid(pid), path, mode, umask)
 	if err != 0 {
 		return errno(err)
 	}
@@ -750,12 +750,12 @@ func jfs_create(pid int, h uintptr, cpath *C.char, mode uint16) int {
 }
 
 //export jfs_mkdir
-func jfs_mkdir(pid int, h uintptr, cpath *C.char, mode C.mode_t) int {
+func jfs_mkdir(pid int, h uintptr, cpath *C.char, mode uint16, umask uint16) int {
 	w := F(h)
 	if w == nil {
 		return EINVAL
 	}
-	err := errno(w.Mkdir(w.withPid(pid), C.GoString(cpath), uint16(mode)))
+	err := errno(w.Mkdir(w.withPid(pid), C.GoString(cpath), mode, umask))
 	if err == 0 && w.ctx.Uid() == 0 && w.user != w.superuser {
 		// belongs to supergroup
 		_ = setOwner(w, w.withPid(pid), C.GoString(cpath), w.user, "")
@@ -1093,7 +1093,7 @@ func jfs_concat(pid int, h uintptr, _dst *C.char, buf uintptr, bufsize int) int 
 	var tmp string
 	if len(srcs) > 1 {
 		tmp = filepath.Join(filepath.Dir(dst), "."+filepath.Base(dst)+".merging")
-		fi, err := w.Create(ctx, tmp, 0644)
+		fi, err := w.Create(ctx, tmp, 0666, 022)
 		if err != 0 {
 			return errno(err)
 		}

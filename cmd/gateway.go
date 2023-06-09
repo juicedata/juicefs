@@ -170,8 +170,7 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 		&jfsgateway.Config{
 			MultiBucket: c.Bool("multi-buckets"),
 			KeepEtag:    c.Bool("keep-etag"),
-			Mode:        uint16(0666 &^ umask),
-			DirMode:     uint16(0777 &^ umask),
+			Umask:       uint16(umask),
 		},
 	)
 }

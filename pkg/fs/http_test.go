@@ -18,16 +18,18 @@ package fs
 
 import (
 	"context"
-	"github.com/juicedata/juicefs/pkg/meta"
 	"io"
 	"io/fs"
 	"os"
 	"testing"
+
+	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 func TestWebdav(t *testing.T) {
 	jfs := createTestFS(t)
-	webdavFS := &webdavFS{meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())}), jfs}
+	webdavFS := &webdavFS{meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())}), jfs, uint16(utils.GetUmask())}
 	ctx := context.Background()
 	_, err := webdavFS.Stat(ctx, "/")
 	if err != nil {

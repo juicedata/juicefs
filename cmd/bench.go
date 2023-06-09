@@ -337,7 +337,7 @@ func bench(ctx *cli.Context) error {
 
 	/* --- Prepare --- */
 	if _, err := os.Stat(bm.tmpdir); os.IsNotExist(err) {
-		if err = os.MkdirAll(bm.tmpdir, 0755); err != nil {
+		if err = os.MkdirAll(bm.tmpdir, 0777); err != nil {
 			logger.Fatalf("Failed to create %s: %s", bm.tmpdir, err)
 		}
 	}
