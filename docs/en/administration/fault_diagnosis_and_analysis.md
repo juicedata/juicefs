@@ -127,11 +127,13 @@ You need to add the `juicefs.access-log` configuration item in the [client confi
 ## Collect Various Information Using the `debug` Subcommand {#debug}
 
 The `juicefs debug` subcommand can help you automatically collect various information about a specified mount point, facilitating troubleshooting and diagnosis.
+
 ```shell
 $ juicefs debug <mountpoint>
 ```
 
 This command collects the following information:
+
 1. JuiceFS version
 2. Operating system version and kernel version
 3. Contents of the JuiceFS `.config` internal file
@@ -143,6 +145,7 @@ This command collects the following information:
 By default, a `debug` directory is created in the current directory, and the collected information is saved in that directory.
 
 Here's an example:
+
 ```shell
 $ juicefs debug /tmp/mountpoint
 

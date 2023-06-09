@@ -127,11 +127,13 @@ kubectl -n kube-system exec juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-53079943
 ## 使用 debug 子命令收集各类信息 {#debug}
 
 `juicefs debug` 子命令可以自动搜集指定挂载点的各类信息，方便进行故障诊断。
+
 ```shell
 $ juicefs debug <mountpoint>
 ```
 
 该命令会收集以下信息：
+
 1. juicefs version
 2. 操作系统版本与内核版本
 3. juicefs .config 内部文件内容
@@ -141,6 +143,7 @@ $ juicefs debug <mountpoint>
 7. juicefs 日志（默认最后 5000 行）
 
 默认会在当前目录下创建 debug 目录，并将收集到的信息保存在该目录下。下面是一个示例：
+
 ```shell
 $ juicefs debug /tmp/mountpoint
 
