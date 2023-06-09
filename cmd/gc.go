@@ -137,8 +137,8 @@ func gc(ctx *cli.Context) error {
 	}
 
 	c := meta.WrapContext(ctx.Context)
-	delayedFileSpin := progress.AddDoubleSpinner("Pending deleted files")
-	cleanedFileSpin := progress.AddDoubleSpinner("Cleaned pending files")
+	delayedFileSpin := progress.AddDoubleSpinnerTwo("Pending deleted files", "Pending deleted data")
+	cleanedFileSpin := progress.AddDoubleSpinnerTwo("Cleaned pending files", "Cleaned pending data")
 	edge := time.Now().Add(-time.Duration(format.TrashDays) * 24 * time.Hour)
 	if delete {
 		cleanTrashSpin := progress.AddCountSpinner("Cleaned trash")
@@ -170,7 +170,7 @@ func gc(ctx *cli.Context) error {
 
 	if compact {
 		bar := progress.AddCountBar("Compacted chunks", 0)
-		spin := progress.AddDoubleSpinner("Compacted slices")
+		spin := progress.AddDoubleSpinnerTwo("Compacted slices", "Compacted data")
 		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
 			slices := args[0].([]meta.Slice)
 			err := vfs.Compact(chunkConf, store, slices, args[1].(uint64))
@@ -205,8 +205,8 @@ func gc(ctx *cli.Context) error {
 		logger.Fatalf("list all slices: %s", r)
 	}
 
-	delayedSliceSpin := progress.AddDoubleSpinner("Trash slices")
-	cleanedSliceSpin := progress.AddDoubleSpinner("Cleaned trash slices")
+	delayedSliceSpin := progress.AddDoubleSpinnerTwo("Trash slices", "Trash data")
+	cleanedSliceSpin := progress.AddDoubleSpinnerTwo("Cleaned trash slices", "Cleaned trash data")
 
 	err = m.ScanDeletedObject(
 		c,
@@ -258,10 +258,10 @@ func gc(ctx *cli.Context) error {
 	}
 
 	bar := progress.AddCountBar("Scanned objects", total)
-	valid := progress.AddDoubleSpinner("Valid objects")
-	compacted := progress.AddDoubleSpinner("Compacted objects")
-	leaked := progress.AddDoubleSpinner("Leaked objects")
-	skipped := progress.AddDoubleSpinner("Skipped objects")
+	valid := progress.AddDoubleSpinnerTwo("Valid objects", "Valid data")
+	compacted := progress.AddDoubleSpinnerTwo("Compacted objects", "Compacted data")
+	leaked := progress.AddDoubleSpinnerTwo("Leaked objects", "Leaked data")
+	skipped := progress.AddDoubleSpinnerTwo("Skipped objects", "Skipped data")
 	maxMtime := time.Now().Add(time.Hour * -1)
 	strDuration := os.Getenv("JFS_GC_SKIPPEDTIME")
 	if strDuration != "" {
