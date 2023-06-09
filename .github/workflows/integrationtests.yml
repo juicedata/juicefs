@@ -3,6 +3,7 @@ name: "integrationtests"
 on:
   push:
     branches:
+      - 'main'
       - 'release-*'
     paths-ignore:
       - 'docs/**'
@@ -53,7 +54,6 @@ jobs:
       - name: Juicefs Mount
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --no-usage-report &
-
 
       - name: Fslock Test
         run: |

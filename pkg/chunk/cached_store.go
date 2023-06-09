@@ -161,10 +161,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 			_ = in.Close()
 		}
 		used := time.Since(st)
-		logger.Debugf("GET %s RANGE(%d,%d) (%s, %.3fs)", key, boff, len(p), err, used.Seconds())
-		if used > SlowRequest {
-			logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
-		}
+		logRequest("GET", key, fmt.Sprintf("RANGE(%d,%d) ", boff, len(p)), err, used)
 		s.store.objectDataBytes.WithLabelValues("GET").Add(float64(n))
 		s.store.objectReqsHistogram.WithLabelValues("GET").Observe(used.Seconds())
 		s.store.fetcher.fetch(key)
@@ -209,10 +206,7 @@ func (s *rSlice) delete(indx int) error {
 		strings.Contains(err.Error(), "No such file")) {
 		err = nil
 	}
-	logger.Debugf("DELETE %v (%v, %.3fs)", key, err, used.Seconds())
-	if used > SlowRequest {
-		logger.Infof("slow request: DELETE %v (%v, %.3fs)", key, err, used.Seconds())
-	}
+	logRequest("DELETE", key, "", err, used)
 	s.store.objectReqsHistogram.WithLabelValues("DELETE").Observe(used.Seconds())
 	if err != nil {
 		s.store.objectReqErrors.Add(1)
@@ -347,10 +341,7 @@ func (store *cachedStore) put(key string, p *Page) error {
 		st := time.Now()
 		err := store.storage.Put(key, bytes.NewReader(p.Data))
 		used := time.Since(st)
-		logger.Debugf("PUT %s (%s, %.3fs)", key, err, used.Seconds())
-		if used > SlowRequest {
-			logger.Infof("slow request: PUT %v (%v, %.3fs)", key, err, used.Seconds())
-		}
+		logRequest("PUT", key, "", err, used)
 		store.objectDataBytes.WithLabelValues("PUT").Add(float64(len(p.Data)))
 		store.objectReqsHistogram.WithLabelValues("PUT").Observe(used.Seconds())
 		if err != nil {
@@ -609,6 +600,20 @@ type cachedStore struct {
 	stageBlockDelay     prometheus.Counter
 }
 
+func logRequest(typeStr string, key string, param string, err error, used time.Duration) {
+	var info string
+	if id := object.ReqIDCache.Get(key); id != "" {
+		info += fmt.Sprintf("RequestID: %s ", id)
+	}
+	if err != nil {
+		info += err.Error()
+	}
+	logger.Debugf("%s %s %s(%v, %.3fs)", typeStr, key, param, info, used.Seconds())
+	if used > SlowRequest {
+		logger.Infof("slow request: %s %s %s(%v, %.3fs)", typeStr, key, param, info, used.Seconds())
+	}
+}
+
 func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bool) (err error) {
 	defer func() {
 		e := recover()
@@ -654,10 +659,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 		err = nil
 	}
 	used := time.Since(start)
-	logger.Debugf("GET %s (%s, %.3fs)", key, err, used.Seconds())
-	if used > SlowRequest {
-		logger.Infof("slow request: GET %s (%v, %.3fs)", key, err, used.Seconds())
-	}
+	logRequest("GET", key, "", err, used)
 	if store.downLimit != nil && compressed {
 		store.downLimit.Wait(int64(n))
 	}

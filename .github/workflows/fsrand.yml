@@ -1,5 +1,11 @@
 name: "fsrand"
 on:
+  push:
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   schedule:
     - cron:  '0 18 * * *'
   workflow_dispatch:

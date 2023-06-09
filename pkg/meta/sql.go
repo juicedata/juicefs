@@ -43,7 +43,7 @@ import (
 	"xorm.io/xorm/names"
 )
 
-const MaxFieldsCountOfTable = 13 // node table
+const MaxFieldsCountOfTable = 16 // node table
 
 type setting struct {
 	Name  string `xorm:"pk"`
@@ -827,8 +827,8 @@ func (m *dbMeta) flushStats() {
 		inttype = "SIGNED"
 	}
 	for {
-		newSpace := atomic.SwapInt64(&m.newSpace, 0)
-		newInodes := atomic.SwapInt64(&m.newInodes, 0)
+		newSpace := atomic.LoadInt64(&m.newSpace)
+		newInodes := atomic.LoadInt64(&m.newInodes)
 		if newSpace != 0 || newInodes != 0 {
 			err := m.txn(func(s *xorm.Session) error {
 				_, err := s.Exec(fmt.Sprintf("UPDATE jfs_counter SET value=value+ CAST((CASE name WHEN 'usedSpace' THEN %d ELSE %d END) AS %s) WHERE name='usedSpace' OR name='totalInodes' ", newSpace, newInodes, inttype))
@@ -836,7 +836,12 @@ func (m *dbMeta) flushStats() {
 			})
 			if err != nil && !strings.Contains(err.Error(), "attempt to write a readonly database") {
 				logger.Warnf("update stats: %s", err)
-				m.updateStats(newSpace, newInodes)
+			}
+			if err == nil {
+				atomic.AddInt64(&m.newSpace, -newSpace)
+				atomic.AddInt64(&m.usedSpace, newSpace)
+				atomic.AddInt64(&m.newInodes, -newInodes)
+				atomic.AddInt64(&m.usedInodes, newInodes)
 			}
 		}
 		time.Sleep(time.Second)
@@ -1379,11 +1384,16 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			if (n.Flags&FlagAppend) != 0 || (n.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
 			}
+			if trash > 0 && n.Nlink > 1 {
+				if o, e := s.Get(&edge{Parent: trash, Name: []byte(m.trashEntry(parent, e.Inode, string(e.Name))), Inode: e.Inode, Type: e.Type}); e == nil && o {
+					trash = 0
+				}
+			}
 			n.Ctime = now / 1e3
 			n.Ctimensec = int16(now % 1e3)
 			if trash == 0 {
 				n.Nlink--
-				if n.Type == TypeFile && n.Nlink == 0 {
+				if n.Type == TypeFile && n.Nlink == 0 && m.sid > 0 {
 					opened = m.of.IsOpen(e.Inode)
 				}
 			} else if n.Parent > 0 {
@@ -2462,6 +2472,9 @@ func (m *dbMeta) doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error {
 }
 
 func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
+	if m.conf.ReadOnly {
+		return nil, syscall.EROFS
+	}
 	stat, st := m.calcDirStat(ctx, ino)
 	if st != 0 {
 		return nil, st
@@ -2474,10 +2487,10 @@ func (m *dbMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno) {
 		if !exist {
 			return syscall.ENOENT
 		}
-		_, err = s.Insert(&dirStats{ino, stat.length, stat.space, stat.inodes})
+		record := &dirStats{ino, stat.length, stat.space, stat.inodes}
+		_, err = s.Insert(record)
 		if err != nil && isDuplicateEntryErr(err) {
-			// other client synced
-			err = nil
+			_, err = s.Cols("data_length", "used_space", "used_inodes").Update(record, &dirStats{Inode: ino})
 		}
 		return err
 	})
@@ -3832,27 +3845,27 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 		if !ok {
 			return syscall.ENOENT
 		}
-		m.parseAttr(&n, attr)
-		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
-			return eno
-		}
 		n.Inode = ino
 		n.Parent = parent
 		now := time.Now()
 		if cmode&CLONE_MODE_PRESERVE_ATTR == 0 {
-			attr.Uid = ctx.Uid()
-			attr.Gid = ctx.Gid()
-			attr.Mode &= ^cumask
-			attr.Atime = now.Unix()
-			attr.Mtime = now.Unix()
-			attr.Ctime = now.Unix()
-			attr.Atimensec = uint32(now.Nanosecond())
-			attr.Mtimensec = uint32(now.Nanosecond())
-			attr.Ctimensec = uint32(now.Nanosecond())
+			n.Uid = ctx.Uid()
+			n.Gid = ctx.Gid()
+			n.Mode &= ^cumask
+			n.Atime = now.UnixNano() / 1e3
+			n.Mtime = now.UnixNano() / 1e3
+			n.Ctime = now.UnixNano() / 1e3
+			n.Atimensec = int16(now.UnixNano() % 1e3)
+			n.Mtimensec = int16(now.UnixNano() % 1e3)
+			n.Ctimensec = int16(now.UnixNano() % 1e3)
 		}
 		// TODO: preserve hardlink
 		if n.Type == TypeFile && n.Nlink > 1 {
 			n.Nlink = 1
+		}
+		m.parseAttr(&n, attr)
+		if eno := m.Access(ctx, srcIno, MODE_MASK_R, attr); eno != 0 {
+			return eno
 		}
 
 		if top {
@@ -3884,7 +3897,6 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 				}
 			}
 		}
-		m.parseAttr(&n, attr)
 		if top && n.Type == TypeDirectory {
 			err = mustInsert(s, &n, &detachedNode{Inode: ino, Added: time.Now().Unix()})
 		} else {

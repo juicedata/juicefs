@@ -13,13 +13,6 @@
 
 package fuse
 
-// #include <sys/sysmacros.h>
-// #include <sys/types.h>
-// // makedev is a macro, so a wrapper is needed
-// dev_t Makedev(unsigned int maj, unsigned int min) {
-//   return makedev(maj, min);
-// }
-import "C"
 import (
 	"bufio"
 	"fmt"
@@ -29,13 +22,15 @@ import (
 	"syscall"
 
 	"github.com/pkg/errors"
+
+	"golang.org/x/sys/unix"
 )
 
 // ensureFuseDev ensures /dev/fuse exists. If not, it will create one
 func ensureFuseDev() {
 	if _, err := os.Open("/dev/fuse"); os.IsNotExist(err) {
 		// 10, 229 according to https://www.kernel.org/doc/Documentation/admin-guide/devices.txt
-		fuse := C.Makedev(10, 229)
+		fuse := unix.Mkdev(10, 229)
 		if err := syscall.Mknod("/dev/fuse", 0o666|syscall.S_IFCHR, int(fuse)); err != nil {
 			logger.Errorf("mknod /dev/fuse: %v", err)
 		}

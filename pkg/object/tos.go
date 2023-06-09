@@ -72,6 +72,9 @@ func (t *tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		Key:    key,
 		Range:  rangeStr, // When Range and RangeStart & RangeEnd appear together, range is preferred
 	})
+	if resp != nil {
+		ReqIDCache.put(key, resp.RequestID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +86,7 @@ func (t *tosClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 }
 
 func (t *tosClient) Put(key string, in io.Reader) error {
-	_, err := t.client.PutObjectV2(context.Background(), &tos.PutObjectV2Input{
+	resp, err := t.client.PutObjectV2(context.Background(), &tos.PutObjectV2Input{
 		PutObjectBasicInput: tos.PutObjectBasicInput{
 			Bucket:       t.bucket,
 			Key:          key,
@@ -91,14 +94,20 @@ func (t *tosClient) Put(key string, in io.Reader) error {
 		},
 		Content: in,
 	})
+	if resp != nil {
+		ReqIDCache.put(key, resp.RequestID)
+	}
 	return err
 }
 
 func (t *tosClient) Delete(key string) error {
-	_, err := t.client.DeleteObjectV2(context.Background(), &tos.DeleteObjectV2Input{
+	resp, err := t.client.DeleteObjectV2(context.Background(), &tos.DeleteObjectV2Input{
 		Bucket: t.bucket,
 		Key:    key,
 	})
+	if resp != nil {
+		ReqIDCache.put(key, resp.RequestID)
+	}
 	return err
 }
 

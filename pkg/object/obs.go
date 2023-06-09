@@ -88,12 +88,21 @@ func (s *obsClient) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
+	var sc string
+	switch r.StorageClass {
+	case "":
+		sc = string(obs.StorageClassStandard)
+	case obs.StorageClassWarm:
+		sc = string("STANDARD_IA")
+	default:
+		sc = string(r.StorageClass)
+	}
 	return &obj{
 		key,
 		r.ContentLength,
 		r.LastModified,
 		strings.HasSuffix(key, "/"),
-		string(r.StorageClass),
+		sc,
 	}, nil
 }
 
@@ -108,6 +117,9 @@ func (s *obsClient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		resp, err = s.c.GetObject(params, obs.WithHeader(obs.HEADER_RANGE, []string{rangeStr}))
 	} else {
 		resp, err = s.c.GetObject(params)
+	}
+	if resp != nil {
+		ReqIDCache.put(key, resp.RequestId)
 	}
 	if err != nil {
 		return nil, err
@@ -161,6 +173,9 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 	if err == nil && s.checkEtag && strings.Trim(resp.ETag, "\"") != obs.Hex(sum) {
 		err = fmt.Errorf("unexpected ETag: %s != %s", strings.Trim(resp.ETag, "\""), obs.Hex(sum))
 	}
+	if resp != nil {
+		ReqIDCache.put(key, resp.RequestId)
+	}
 	return err
 }
 
@@ -179,7 +194,10 @@ func (s *obsClient) Delete(key string) error {
 	params := obs.DeleteObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = key
-	_, err := s.c.DeleteObject(&params)
+	resp, err := s.c.DeleteObject(&params)
+	if resp != nil {
+		ReqIDCache.put(key, resp.RequestId)
+	}
 	return err
 }
 

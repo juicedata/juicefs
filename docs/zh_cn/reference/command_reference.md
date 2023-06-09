@@ -248,6 +248,9 @@ Consul 注册中心地址 (默认："127.0.0.1:8500")
 `--enable-xattr`<br />
 启用扩展属性 (xattr) 功能 (默认：false)
 
+`--update-fstab`<br />
+新增／更新 `/etc/fstab` 中的条目，如果不存在将会创建一个从 `/sbin/mount.juicefs` 到 JuiceFS 可执行文件的软链接 (默认：false)
+
 `--bucket value`<br />
 为当前挂载点指定访问访对象存储的 endpoint
 

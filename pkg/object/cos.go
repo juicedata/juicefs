@@ -37,6 +37,7 @@ import (
 )
 
 const cosChecksumKey = "x-cos-meta-" + checksumAlgr
+const cosRequestIDKey = "X-Cos-Request-Id"
 
 type COS struct {
 	c        *cos.Client
@@ -109,6 +110,9 @@ func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if off == 0 && limit == -1 {
 		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey))
 	}
+	if resp != nil {
+		ReqIDCache.put(key, resp.Header.Get(cosRequestIDKey))
+	}
 	return resp.Body, nil
 }
 
@@ -126,7 +130,10 @@ func (c *COS) Put(key string, in io.Reader) error {
 		}
 		options.ObjectPutHeaderOptions.XCosStorageClass = c.sc
 	}
-	_, err := c.c.Object.Put(ctx, key, in, &options)
+	resp, err := c.c.Object.Put(ctx, key, in, &options)
+	if resp != nil {
+		ReqIDCache.put(key, resp.Header.Get(cosRequestIDKey))
+	}
 	return err
 }
 
@@ -141,7 +148,10 @@ func (c *COS) Copy(dst, src string) error {
 }
 
 func (c *COS) Delete(key string) error {
-	_, err := c.c.Object.Delete(ctx, key)
+	resp, err := c.c.Object.Delete(ctx, key)
+	if resp != nil {
+		ReqIDCache.put(key, resp.Header.Get(cosRequestIDKey))
+	}
 	return err
 }
 

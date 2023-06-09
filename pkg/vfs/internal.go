@@ -293,36 +293,6 @@ type chunkObj struct {
 	Size, Off, Len uint32
 }
 
-func (r *InfoResponse) Encode() []byte {
-	resp, _ := json.Marshal(r)
-	buffer := utils.NewBuffer(4 + uint32(len(resp)))
-	buffer.Put32(uint32(len(resp)))
-	buffer.Put(resp)
-	return buffer.Bytes()
-}
-
-func (r *InfoResponse) Decode(reader io.Reader) error {
-	sizeBuf := make([]byte, 4)
-	n := 0
-	for n == 0 {
-		i, err := reader.Read(sizeBuf[n:])
-		if err != nil && err != io.EOF {
-			return err
-		}
-		if i == 1 && sizeBuf[0] == byte(syscall.EINVAL&0xff) {
-			return syscall.EINVAL
-		}
-		n += i
-	}
-
-	size := utils.ReadBuffer(sizeBuf).Get32()
-	respBuf := make([]byte, size)
-	if _, err := io.ReadFull(reader, respBuf); err != nil {
-		return err
-	}
-	return json.Unmarshal(respBuf, r)
-}
-
 func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, out io.Writer) {
 	switch cmd {
 	case meta.Rmr:
@@ -450,42 +420,49 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 			close(done)
 		}()
 		writeProgress(&info.Summary.Files, &info.Summary.Size, out, done)
-		_, _ = out.Write([]byte{uint8(r)})
-		time.Sleep(time.Millisecond * 300) // wait for completing progress
 		if r != 0 {
 			info.Failed = true
 			info.Reason = r.Error()
-			_, _ = out.Write(info.Encode())
-			return
-		}
-
-		info.Paths = v.Meta.GetPaths(ctx, inode)
-		if info.Summary.Files == 1 && info.Summary.Dirs == 0 {
-			for indx := uint64(0); indx*meta.ChunkSize < info.Summary.Length; indx++ {
-				var cs []meta.Slice
-				_ = v.Meta.Read(ctx, inode, uint32(indx), &cs)
-				for _, c := range cs {
-					if raw {
-						info.Chunks = append(info.Chunks, &chunkSlice{indx, c})
-					} else {
-						for _, o := range v.caclObjects(c.Id, c.Size, c.Off, c.Len) {
-							info.Objects = append(info.Objects, &chunkObj{indx, o.key, o.size, o.off, o.len})
+		} else {
+			info.Paths = v.Meta.GetPaths(ctx, inode)
+			if info.Summary.Files == 1 && info.Summary.Dirs == 0 {
+				for indx := uint64(0); indx*meta.ChunkSize < info.Summary.Length; indx++ {
+					var cs []meta.Slice
+					_ = v.Meta.Read(ctx, inode, uint32(indx), &cs)
+					for _, c := range cs {
+						if raw {
+							info.Chunks = append(info.Chunks, &chunkSlice{indx, c})
+						} else {
+							for _, o := range v.caclObjects(c.Id, c.Size, c.Off, c.Len) {
+								info.Objects = append(info.Objects, &chunkObj{indx, o.key, o.size, o.off, o.len})
+							}
 						}
 					}
 				}
 			}
-		}
 
-		var err error
-		if info.PLocks, info.FLocks, err = v.Meta.ListLocks(ctx, inode); err != nil {
-			info.Reason = err.Error()
+			var err error
+			if info.PLocks, info.FLocks, err = v.Meta.ListLocks(ctx, inode); err != nil {
+				info.Failed = true
+				info.Reason = err.Error()
+			}
 		}
-		_, _ = out.Write(info.Encode())
+		data, err := json.Marshal(info)
+		if err != nil {
+			logger.Errorf("marshal info response: %v", err)
+			_, _ = out.Write([]byte{byte(syscall.EIO & 0xff)})
+			return
+		}
+		w := utils.NewBuffer(uint32(1 + 4 + len(data)))
+		w.Put8(meta.CDATA)
+		w.Put32(uint32(len(data)))
+		w.Put(data)
+		_, _ = out.Write(w.Bytes())
 	case meta.OpSummary:
 		inode := Ino(r.Get64())
 		tree := meta.TreeSummary{
 			Inode: inode,
-			Path:  ".",
+			Path:  "",
 			Type:  meta.TypeDirectory,
 		}
 

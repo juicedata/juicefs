@@ -114,6 +114,7 @@ func (o *ossClient) Head(key string) (Object, error) {
 }
 
 func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err error) {
+	var respHeader http.Header
 	if off > 0 || limit > 0 {
 		var r string
 		if limit > 0 {
@@ -121,14 +122,15 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 		} else {
 			r = fmt.Sprintf("%d-", off)
 		}
-		resp, err = o.bucket.GetObject(key, oss.NormalizedRange(r), oss.RangeBehavior("standard"))
+		resp, err = o.bucket.GetObject(key, oss.NormalizedRange(r), oss.RangeBehavior("standard"), oss.GetResponseHeader(&respHeader))
 	} else {
-		resp, err = o.bucket.GetObject(key)
+		resp, err = o.bucket.GetObject(key, oss.GetResponseHeader(&respHeader))
 		if err == nil {
 			resp = verifyChecksum(resp,
 				resp.(*oss.Response).Headers.Get(oss.HTTPHeaderOssMetaPrefix+checksumAlgr))
 		}
 	}
+	ReqIDCache.put(key, respHeader.Get(oss.HTTPHeaderOssRequestID))
 	err = o.checkError(err)
 	return
 }
@@ -141,7 +143,11 @@ func (o *ossClient) Put(key string, in io.Reader) error {
 	if o.sc != "" {
 		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.sc)))
 	}
-	return o.checkError(o.bucket.PutObject(key, in, option...))
+	var respHeader http.Header
+	option = append(option, oss.GetResponseHeader(&respHeader))
+	err := o.bucket.PutObject(key, in, option...)
+	ReqIDCache.put(key, respHeader.Get(oss.HTTPHeaderOssRequestID))
+	return o.checkError(err)
 }
 
 func (o *ossClient) Copy(dst, src string) error {
@@ -154,7 +160,10 @@ func (o *ossClient) Copy(dst, src string) error {
 }
 
 func (o *ossClient) Delete(key string) error {
-	return o.checkError(o.bucket.DeleteObject(key))
+	var respHeader http.Header
+	err := o.bucket.DeleteObject(key, oss.GetResponseHeader(&respHeader))
+	ReqIDCache.put(key, respHeader.Get(oss.HTTPHeaderOssRequestID))
+	return o.checkError(err)
 }
 
 func (o *ossClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {

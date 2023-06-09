@@ -470,22 +470,24 @@ func (m *baseMeta) newSessionInfo() []byte {
 	return buf
 }
 
-func (m *baseMeta) NewSession() error {
+func (m *baseMeta) NewSession(record bool) error {
 	go m.refresh()
 	if m.conf.ReadOnly {
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
 		return nil
 	}
 
-	v, err := m.en.incrCounter("nextSession", 1)
-	if err != nil {
-		return fmt.Errorf("get session ID: %s", err)
+	if record {
+		v, err := m.en.incrCounter("nextSession", 1)
+		if err != nil {
+			return fmt.Errorf("get session ID: %s", err)
+		}
+		m.sid = uint64(v)
+		if err = m.en.doNewSession(m.newSessionInfo()); err != nil {
+			return fmt.Errorf("create session: %s", err)
+		}
+		logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 	}
-	m.sid = uint64(v)
-	if err = m.en.doNewSession(m.newSessionInfo()); err != nil {
-		return fmt.Errorf("create session: %s", err)
-	}
-	logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 
 	m.loadQuotas()
 	go m.en.flushStats()
@@ -536,7 +538,7 @@ func (m *baseMeta) refresh() {
 			m.sesMu.Unlock()
 			return
 		}
-		if !m.conf.ReadOnly && m.conf.Heartbeat > 0 {
+		if !m.conf.ReadOnly && m.conf.Heartbeat > 0 && m.sid > 0 {
 			if err := m.en.doRefreshSession(); err != nil {
 				logger.Errorf("Refresh session %d: %s", m.sid, err)
 			}
@@ -632,6 +634,9 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) 
 }
 
 func (m *baseMeta) loadQuotas() {
+	if !m.GetFormat().DirStats {
+		return
+	}
 	quotas, err := m.en.doLoadQuotas(Background)
 	if err == nil {
 		m.quotaMu.Lock()
@@ -1241,17 +1246,26 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}
 	defer m.timeit("GetAttr", time.Now())
 	var err syscall.Errno
-	if inode == RootInode {
+	if inode == RootInode || inode == TrashInode {
+		// doGetAttr could overwrite the `attr` after timeout
+		var a Attr
 		e := utils.WithTimeout(func() error {
-			err = m.en.doGetAttr(ctx, inode, attr)
+			err = m.en.doGetAttr(ctx, inode, &a)
 			return nil
 		}, time.Millisecond*300)
-		if e != nil || err != 0 {
+		if e == nil && err == 0 {
+			*attr = a
+		} else {
 			err = 0
 			attr.Typ = TypeDirectory
 			attr.Mode = 0777
 			attr.Nlink = 2
 			attr.Length = 4 << 10
+			if inode == TrashInode {
+				attr.Mode = 0555
+			}
+			attr.Parent = RootInode
+			attr.Full = true
 		}
 	} else {
 		err = m.en.doGetAttr(ctx, inode, attr)
@@ -1716,7 +1730,11 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		Name:  []byte(".."),
 		Attr:  &Attr{Typ: TypeDirectory},
 	})
-	return m.en.doReaddir(ctx, inode, plus, entries, -1)
+	st := m.en.doReaddir(ctx, inode, plus, entries, -1)
+	if st == syscall.ENOENT && inode == TrashInode {
+		st = 0
+	}
+	return st
 }
 
 func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, flags uint32) syscall.Errno {
@@ -1883,22 +1901,29 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 	var inode = RootInode
 	var parent = RootInode
 	attr.Typ = TypeDirectory
-	ps := strings.FieldsFunc(fpath, func(r rune) bool {
-		return r == '/'
-	})
-	for i, name := range ps {
-		parent = inode
-		if st := m.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
-			logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
+	if fpath == "/" {
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
+			logger.Errorf("GetAttr inode %d: %s", inode, st)
 			return st
 		}
-		if !attr.Full && i < len(ps)-1 {
-			// missing attribute
-			p := "/" + path.Join(ps[:i+1]...)
-			if attr.Typ != TypeDirectory { // TODO: determine file size?
-				logger.Warnf("Attribute of %s (inode %d type %d) is missing and cannot be auto-repaired, please repair it manually or remove it", p, inode, attr.Typ)
-			} else {
-				logger.Warnf("Attribute of %s (inode %d) is missing, please re-run with '--path %s --repair' to fix it", p, inode, p)
+	} else {
+		ps := strings.FieldsFunc(fpath, func(r rune) bool {
+			return r == '/'
+		})
+		for i, name := range ps {
+			parent = inode
+			if st := m.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
+				logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
+				return st
+			}
+			if !attr.Full && i < len(ps)-1 {
+				// missing attribute
+				p := "/" + path.Join(ps[:i+1]...)
+				if attr.Typ != TypeDirectory { // TODO: determine file size?
+					logger.Warnf("Attribute of %s (inode %d type %d) is missing and cannot be auto-repaired, please repair it manually or remove it", p, inode, attr.Typ)
+				} else {
+					logger.Warnf("Attribute of %s (inode %d) is missing, please re-run with '--path %s --repair' to fix it", p, inode, p)
+				}
 			}
 		}
 	}
@@ -1999,6 +2024,19 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					statBroken = true
 				}
 
+				if !repair && statAll {
+					s, st := m.calcDirStat(ctx, inode)
+					if st != 0 {
+						hasError = true
+						logger.Errorf("calc dir stat for inode %d: %v", inode, st)
+						continue
+					}
+					if stat.space != s.space || stat.inodes != s.inodes {
+						logger.Warnf("usage stat of %s should be %v, but got %v", path, s, stat)
+						statBroken = true
+					}
+				}
+
 				if repair {
 					if statBroken || statAll {
 						if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 || st == syscall.ENOENT {
@@ -2009,7 +2047,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 						}
 					}
 				} else if statBroken {
-					logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair' to fix it", path, inode, path)
+					logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair --sync-dir-stat' to fix it", path, inode, path)
 					hasError = true
 				}
 			}

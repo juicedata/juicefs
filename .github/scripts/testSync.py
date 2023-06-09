@@ -6,7 +6,7 @@ import os
 
 JFS_SOURCE_DIR='/Users/chengzhou/Documents/juicefs/pkg/'
 JFS_SOURCE_DIR='jfs_source/pkg/'
-MOUNT_POINT='/tmp/sync-test/'
+MOUNT_POINT='/jfs/'
 JFS_BIN='./juicefs-1.0.0-beta1'
 JFS_BIN='./juicefs-1.0.0-beta2'
 JFS_BIN='./juicefs-1.0.0-beta3'
@@ -14,10 +14,10 @@ JFS_BIN='./juicefs'
 MAX_EXAMPLE=100
 
 def setup():
-    meta_url = 'sqlite3://abc.db'
-    volume_name='sync-test'
-    if os.path.isfile('abc.db'):
-        os.remove('abc.db')
+    meta_url = os.environ.get('META_URL', 'sqlite3://test.db')
+    volume_name='myjfs'
+    if os.path.isfile('test.db'):
+        os.remove('test.db')
     if os.path.exists(MOUNT_POINT):
         os.system('umount %s'%MOUNT_POINT)
     cache_dir = os.path.expanduser('~/.juicefs/local/%s/'%volume_name)

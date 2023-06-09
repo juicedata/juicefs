@@ -73,7 +73,7 @@ func TestBackup(t *testing.T) {
 	time.Sleep(time.Millisecond * 100)
 
 	blob = object.WithPrefix(blob, "meta/")
-	kc, _ := osync.ListAll(blob, "", "")
+	kc, _ := osync.ListAll(blob, "", "", "")
 	var keys []string
 	for obj := range kc {
 		keys = append(keys, obj.Key())

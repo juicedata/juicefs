@@ -170,7 +170,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if format.Name != "test" {
 		t.Fatalf("load got volume name %s, expected %s", format.Name, "test")
 	}
-	if err = m.NewSession(); err != nil {
+	if err = m.NewSession(true); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
 	defer m.CloseSession()
@@ -1343,7 +1343,7 @@ func testCopyFileRange(t *testing.T, m Meta) {
 }
 
 func testCloseSession(t *testing.T, m Meta) {
-	if err := m.NewSession(); err != nil {
+	if err := m.NewSession(true); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
 
@@ -1460,6 +1460,26 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx, 1, "f2", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f2 -> d: %s", st)
 	}
+	if st := m.Link(ctx, inode, 1, "l", attr); st != 0 || attr.Nlink != 2 {
+		t.Fatalf("link d -> l1: %s", st)
+	}
+	if st := m.Unlink(ctx, 1, "l"); st != 0 {
+		t.Fatalf("unlink l: %s", st)
+	}
+	// hardlink goes to the trash
+	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Nlink != 2 {
+		t.Fatalf("getattr d(%d): %s, attr %+v", inode, st, attr)
+	}
+	if st := m.Link(ctx, inode, 1, "l", attr); st != 0 || attr.Nlink != 3 {
+		t.Fatalf("link d -> l1: %s", st)
+	}
+	if st := m.Unlink(ctx, 1, "l"); st != 0 {
+		t.Fatalf("unlink l: %s", st)
+	}
+	// hardlink is deleted directly
+	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Nlink != 2 {
+		t.Fatalf("getattr d(%d): %s, attr %+v", inode, st, attr)
+	}
 	if st := m.Unlink(ctx, 1, "d"); st != 0 {
 		t.Fatalf("unlink d: %s", st)
 	}
@@ -1485,7 +1505,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Readdir(ctx, TrashInode+1, 0, &entries); st != 0 {
 		t.Fatalf("readdir: %s", st)
 	}
-	if len(entries) != 8 {
+	if len(entries) != 9 {
 		t.Fatalf("entries: %d", len(entries))
 	}
 	ctx2 := NewContext(1000, 1, []uint32{1})
@@ -1608,7 +1628,7 @@ func testOpenCache(t *testing.T, m Meta) {
 
 func testReadOnly(t *testing.T, m Meta) {
 	ctx := Background
-	if err := m.NewSession(); err != nil {
+	if err := m.NewSession(true); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
 	defer m.CloseSession()
@@ -2224,7 +2244,9 @@ func testClone(t *testing.T, m Meta) {
 	}
 	cloneDstIno := entries1[idx].Inode
 	cloneDstAttr := entries1[idx].Attr
-
+	if cloneDstAttr.Mode != 0755 {
+		t.Fatalf("mode should be 0755 %o", cloneDstAttr.Mode)
+	}
 	// check dst parent dir nlink
 	var rootAttr Attr
 	if eno := m.GetAttr(Background, cloneDir, &rootAttr); eno != 0 {
@@ -2254,7 +2276,7 @@ func testClone(t *testing.T, m Meta) {
 	var noPreserveAttr = new(Attr)
 	m.Lookup(Background, cloneDir, "no_preserve", &d2, noPreserveAttr, true)
 	var cloneSrcAttr = new(Attr)
-	m.GetAttr(Background, cloneDir, cloneSrcAttr)
+	m.GetAttr(Background, dir1, cloneSrcAttr)
 	if noPreserveAttr.Mtimensec == cloneSrcAttr.Mtimensec {
 		t.Fatalf("clone: should not preserve mtime")
 	}
@@ -2450,7 +2472,7 @@ func checkEntry(t *testing.T, m Meta, srcEntry, dstEntry *Entry, dstParentIno In
 }
 
 func testQuota(t *testing.T, m Meta) {
-	if err := m.NewSession(); err != nil {
+	if err := m.NewSession(true); err != nil {
 		t.Fatalf("New session: %s", err)
 	}
 	defer m.CloseSession()

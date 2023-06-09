@@ -487,20 +487,20 @@ func (m *kvMeta) updateStats(space int64, inodes int64) {
 
 func (m *kvMeta) flushStats() {
 	for {
-		if space := atomic.SwapInt64(&m.newSpace, 0); space != 0 {
+		if space := atomic.LoadInt64(&m.newSpace); space != 0 {
 			if v, err := m.incrCounter(usedSpace, space); err == nil {
+				atomic.AddInt64(&m.newSpace, -space)
 				atomic.StoreInt64(&m.usedSpace, v)
 			} else {
 				logger.Warnf("Update space stats: %s", err)
-				m.updateStats(space, 0)
 			}
 		}
-		if inodes := atomic.SwapInt64(&m.newInodes, 0); inodes != 0 {
+		if inodes := atomic.LoadInt64(&m.newInodes); inodes != 0 {
 			if v, err := m.incrCounter(totalInodes, inodes); err == nil {
+				atomic.AddInt64(&m.newInodes, -inodes)
 				atomic.StoreInt64(&m.usedInodes, v)
 			} else {
 				logger.Warnf("Update inodes stats: %s", err)
-				m.updateStats(0, inodes)
 			}
 		}
 		time.Sleep(time.Second)
@@ -1254,7 +1254,11 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		if _type == TypeDirectory {
 			return syscall.EPERM
 		}
-		rs := tx.gets(m.inodeKey(parent), m.inodeKey(inode))
+		keys := [][]byte{m.inodeKey(parent), m.inodeKey(inode)}
+		if trash > 0 {
+			keys = append(keys, m.entryKey(trash, m.trashEntry(parent, inode, name)))
+		}
+		rs := tx.gets(keys...)
 		if rs[0] == nil {
 			return syscall.ENOENT
 		}
@@ -1278,6 +1282,9 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 			}
 			if (attr.Flags&FlagAppend) != 0 || (attr.Flags&FlagImmutable) != 0 {
 				return syscall.EPERM
+			}
+			if trash > 0 && attr.Nlink > 1 && rs[2] != nil {
+				trash = 0
 			}
 			attr.Ctime = now.Unix()
 			attr.Ctimensec = uint32(now.Nanosecond())
@@ -1566,7 +1573,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				} else {
 					if trash == 0 {
 						tattr.Nlink--
-						if dtyp == TypeFile && tattr.Nlink == 0 {
+						if dtyp == TypeFile && tattr.Nlink == 0 && m.sid > 0 {
 							opened = m.of.IsOpen(dino)
 						}
 						defer func() { m.of.InvalidateChunk(dino, invalidateAttrOnly) }()

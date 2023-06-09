@@ -40,7 +40,6 @@ import (
 	"github.com/juicedata/juicefs/pkg/vfs"
 )
 
-var skipDir syscall.Errno = 100000
 var dirSuffix = "/"
 
 func toError(eno syscall.Errno) error {
@@ -201,59 +200,45 @@ func (j *juiceFS) Head(key string) (object.Object, error) {
 }
 
 func (j *juiceFS) List(prefix, marker, delimiter string, limit int64) ([]object.Object, error) {
-	return nil, utils.ENOTSUP
-}
-
-// walk recursively descends path, calling w.
-func (j *juiceFS) walk(path string, info *fs.FileStat, isSymlink bool, walkFn WalkFunc) syscall.Errno {
-	err := walkFn(path, info, isSymlink, 0)
-	if err != 0 {
-		if info.IsDir() && err == skipDir {
-			return 0
+	if delimiter != "/" {
+		return nil, utils.ENOTSUP
+	}
+	dir := j.path(prefix)
+	var objs []object.Object
+	if !strings.HasSuffix(dir, dirSuffix) {
+		dir = path.Dir(dir)
+		if !strings.HasSuffix(dir, dirSuffix) {
+			dir += dirSuffix
 		}
-		return err
+	} else if marker == "" {
+		obj, err := j.Head(prefix)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		objs = append(objs, obj)
 	}
-
-	if !info.IsDir() {
-		return 0
-	}
-
-	entries, err := j.readDirSorted(path)
+	entries, err := j.readDirSorted(dir)
 	if err != 0 {
-		return walkFn(path, info, isSymlink, err)
+		if err == syscall.ENOENT {
+			return nil, nil
+		}
+		return nil, err
 	}
-
 	for _, e := range entries {
-		p := path + e.name
-		err = j.walk(p, e.fi, e.isSymlink, walkFn)
-		if err != 0 && err != skipDir && err != syscall.ENOENT {
-			return err
+		key := dir[1:] + e.name
+		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
+			continue
+		}
+		f := &jObj{key, e.fi}
+		objs = append(objs, f)
+		if len(objs) == int(limit) {
+			break
 		}
 	}
-	return 0
-}
-
-func (j *juiceFS) walkRoot(root string, walkFn WalkFunc) syscall.Errno {
-	var err syscall.Errno
-	var lstat, info *fs.FileStat
-	lstat, err = j.jfs.Lstat(ctx, root)
-	if err != 0 {
-		err = walkFn(root, nil, false, err)
-	} else {
-		isSymlink := lstat.IsSymlink()
-		info, err = j.jfs.Stat(ctx, root)
-		if err != 0 {
-			// root is a broken link
-			err = walkFn(root, lstat, isSymlink, 0)
-		} else {
-			err = j.walk(root, info, isSymlink, walkFn)
-		}
-	}
-
-	if err == skipDir {
-		return 0
-	}
-	return err
+	return objs, nil
 }
 
 type mEntry struct {
@@ -297,58 +282,6 @@ func (j *juiceFS) readDirSorted(dirname string) ([]*mEntry, syscall.Errno) {
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].name < mEntries[j].name })
 	return mEntries, err
-}
-
-type WalkFunc func(path string, info *fs.FileStat, isSymlink bool, err syscall.Errno) syscall.Errno
-
-func (d *juiceFS) ListAll(prefix, marker string) (<-chan object.Object, error) {
-	listed := make(chan object.Object, 10240)
-	var walkRoot string
-	if strings.HasSuffix(prefix, dirSuffix) {
-		walkRoot = prefix
-	} else {
-		// If the root is not ends with `/`, we'll list the directory root resides.
-		walkRoot = path.Dir(prefix) + dirSuffix
-	}
-	if walkRoot == "./" {
-		walkRoot = ""
-	}
-	go func() {
-		_ = d.walkRoot(dirSuffix+walkRoot, func(path string, info *fs.FileStat, isSymlink bool, err syscall.Errno) syscall.Errno {
-			if len(path) > 0 {
-				path = path[1:]
-			}
-			if err != 0 {
-				if err == syscall.ENOENT {
-					logger.Warnf("skip not exist file or directory: %s", path)
-					return 0
-				}
-				listed <- nil
-				logger.Errorf("list %s: %s", path, err)
-				return 0
-			}
-
-			if !strings.HasPrefix(path, prefix) {
-				if info.IsDir() && path != walkRoot {
-					return skipDir
-				}
-				return 0
-			}
-
-			key := path
-			if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
-				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
-					return skipDir
-				}
-				return 0
-			}
-			f := &jObj{key, info}
-			listed <- f
-			return 0
-		})
-		close(listed)
-	}()
-	return listed, nil
 }
 
 func (j *juiceFS) Chtimes(key string, mtime time.Time) error {
@@ -430,7 +363,7 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 	chunkConf := getDefaultChunkConf(format)
 	store := chunk.NewCachedStore(blob, *chunkConf, nil)
 	registerMetaMsg(metaCli, store, chunkConf)
-	err = metaCli.NewSession()
+	err = metaCli.NewSession(false)
 	if err != nil {
 		return nil, fmt.Errorf("new session: %s", err)
 	}

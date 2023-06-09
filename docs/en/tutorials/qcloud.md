@@ -270,24 +270,6 @@ sudo juicefs umount /mnt/jfs
 
 > **Note**: Forced unmount of the file system in use may result in data corruption or loss, so please be sure to proceed with caution.
 
-## Auto-mount on Boot
+## Auto-mount on boot
 
-If you don't want to manually remount JuiceFS storage on reboot, you can set up automatic mounting of the file system.
-
-First, you need to rename the `juicefs` client to `mount.juicefs` and copy it to the `/sbin/` directory.
-
-```shell
-sudo cp juice/juicefs /sbin/mount.juicefs
-```
-
-Edit the `/etc/fstab` configuration file and add a new record.
-
-```shell
-redis://:<your-redis-password>@192.168.5.5:6379/1    /mnt/jfs       juicefs     _netdev,cache-size=20480     0  0
-```
-
-The mount option `cache-size=20480` means to allocate 20GB local disk space for JuiceFS cache use. Generally speaking, allocating more cache space for JuiceFS will result in better performance.
-
-You can adjust the FUSE mount options in the above configuration as needed, for more information please [check the documentation](../reference/fuse_mount_options.md).
-
-> **Note**: Please replace the Redis address, mount point, and mount options in the above configuration file with your actual information.
+Please refer to ["Mount JuiceFS at Boot Time"](../guide/mount_at_boot.md) for more details.

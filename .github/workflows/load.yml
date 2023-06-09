@@ -1,5 +1,11 @@
 name: "load-test"
 on:
+  push:
+    branches:
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   schedule:
     - cron:  '0 19 * * *'
   workflow_dispatch:

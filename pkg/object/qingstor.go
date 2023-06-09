@@ -88,6 +88,9 @@ func (q *qingstor) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		input.Range = &rangeStr
 	}
 	output, err := q.bucket.GetObject(key, input)
+	if output != nil {
+		ReqIDCache.put(key, aws.StringValue(output.RequestID))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +151,9 @@ func (q *qingstor) Put(key string, in io.Reader) error {
 		input.XQSStorageClass = &q.sc
 	}
 	out, err := q.bucket.PutObject(key, input)
+	if out != nil {
+		ReqIDCache.put(key, aws.StringValue(out.RequestID))
+	}
 	if err != nil {
 		return err
 	}
@@ -176,7 +182,10 @@ func (q *qingstor) Copy(dst, src string) error {
 }
 
 func (q *qingstor) Delete(key string) error {
-	_, err := q.bucket.DeleteObject(key)
+	output, err := q.bucket.DeleteObject(key)
+	if output != nil {
+		ReqIDCache.put(key, aws.StringValue(output.RequestID))
+	}
 	return err
 }
 

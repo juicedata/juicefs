@@ -43,14 +43,6 @@ func (c *Cond) Broadcast() {
 	c.signal = make(chan struct{})
 }
 
-// Wait until Signal() or Broadcast() is called.
-func (c *Cond) Wait() {
-	ch := c.signal
-	c.L.Unlock()
-	<-ch
-	c.L.Lock()
-}
-
 var timerPool = sync.Pool{
 	New: func() interface{} {
 		return time.NewTimer(time.Second)

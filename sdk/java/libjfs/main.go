@@ -274,6 +274,7 @@ type javaConf struct {
 	Bucket            string  `json:"bucket"`
 	StorageClass      string  `json:"storageClass"`
 	ReadOnly          bool    `json:"readOnly"`
+	NoSession         bool    `json:"noSession"`
 	NoBGJob           bool    `json:"noBGJob"`
 	OpenCache         float64 `json:"openCache"`
 	BackupMeta        int64   `json:"backupMeta"`
@@ -436,7 +437,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 		metaConf.MaxDeletes = jConf.MaxDeletes
 		metaConf.SkipDirNlink = jConf.SkipDirNlink
 		metaConf.ReadOnly = jConf.ReadOnly
-		metaConf.NoBGJob = jConf.NoBGJob
+		metaConf.NoBGJob = jConf.NoBGJob || jConf.NoSession
 		metaConf.OpenCache = time.Duration(jConf.OpenCache * 1e9)
 		metaConf.Heartbeat = time.Second * time.Duration(jConf.Heartbeat)
 		m := meta.NewClient(jConf.MetaURL, metaConf)
@@ -533,12 +534,11 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			id := args[1].(uint64)
 			return vfs.Compact(chunkConf, store, slices, id)
 		})
-		err = m.NewSession()
+		err = m.NewSession(!jConf.NoSession)
 		if err != nil {
 			logger.Errorf("new session: %s", err)
 			return nil
 		}
-
 		m.OnReload(func(fmt *meta.Format) {
 			if jConf.UploadLimit > 0 {
 				fmt.UploadLimit = int64(jConf.UploadLimit)
@@ -548,6 +548,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			}
 			store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
 		})
+
 		conf := &vfs.Config{
 			Meta:            metaConf,
 			Format:          *format,
@@ -559,10 +560,10 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			FastResolve:     jConf.FastResolve,
 			BackupMeta:      time.Second * time.Duration(jConf.BackupMeta),
 		}
-		if !jConf.ReadOnly && !jConf.NoBGJob && conf.BackupMeta > 0 {
+		if !jConf.ReadOnly && !jConf.NoSession && !jConf.NoBGJob && conf.BackupMeta > 0 {
 			go vfs.Backup(m, blob, conf.BackupMeta)
 		}
-		if !jConf.NoUsageReport {
+		if !jConf.NoUsageReport && !jConf.NoSession {
 			go usage.ReportUsage(m, "java-sdk "+version.Version())
 		}
 		jfs, err := fs.NewFileSystem(conf, m, store)

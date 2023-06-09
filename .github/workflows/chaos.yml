@@ -4,9 +4,9 @@ on:
   push:
     branches:
       - 'release-**'
-  pull_request:
-    branches:
-      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   workflow_dispatch:
     inputs:
       debug:
@@ -130,16 +130,22 @@ jobs:
 
       - name: Verify 
         run: |
-          if [ "${{github.event_name}}" == "schedule"  ]; then
-            sleep 1200
-          else
-            sleep 600
-          fi
+          for i in {1..1200}; do 
+            if kubectl get pods --all-namespaces | grep dynamic-ce | grep -i "Completed"; then
+              echo "dynamic-ce is completed in $i seconds"
+              break
+            else
+              if [ $((i % 10)) -eq 0 ]; then
+                echo "dynamic-ce is not completed in $i seconds"
+              fi
+              sleep 1
+            fi
+          done
           kubectl get pods --all-namespaces
           apps=("dynamic-ce" "juicefs-csi-node" "juicefs-csi-controller" "juicefs-chart-testing-control-plane-pvc"  "redis" "minio")
           for app in ${apps[@]}; do
             echo app is $app
-            kubectl get pods --all-namespaces | grep $app | grep Running
+            kubectl get pods --all-namespaces | grep $app | grep -i "Running\|Completed"
             if [ $? != 0 ]; then
               echo status of $app is not expected.
               exit 1

@@ -81,8 +81,11 @@ func (d *filestore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
+	return d.toFile(key, fi, false), nil
+}
+
+func (d *filestore) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 	size := fi.Size()
-	var isSymlink bool
 	if fi.IsDir() {
 		size = 0
 	}
@@ -99,7 +102,7 @@ func (d *filestore) Head(key string) (Object, error) {
 		group,
 		fi.Mode(),
 		isSymlink,
-	}, nil
+	}
 }
 
 type SectionReaderCloser struct {
@@ -194,70 +197,6 @@ func (d *filestore) Delete(key string) error {
 	return err
 }
 
-// walk recursively descends path, calling w.
-func walk(path string, info os.FileInfo, isSymlink bool, walkFn WalkFunc) error {
-	err := walkFn(path, info, isSymlink, nil)
-	if err != nil {
-		if info.IsDir() && err == filepath.SkipDir {
-			return nil
-		}
-		return err
-	}
-
-	if !info.IsDir() {
-		return nil
-	}
-
-	entries, err := readDirSorted(path)
-	if err != nil {
-		return walkFn(path, info, isSymlink, err)
-	}
-
-	for _, e := range entries {
-		p := filepath.Join(path, e.Name())
-		if e.IsDir() {
-			p = filepath.ToSlash(p + "/")
-		}
-		in, err := e.Info()
-		if err == nil {
-			err = walk(p, in, e.isSymlink, walkFn)
-		}
-		if err != nil && err != filepath.SkipDir && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
-}
-
-// Walk walks the file tree rooted at root, calling walkFn for each file or
-// directory in the tree, including root. All errors that arise visiting files
-// and directories are filtered by walkFn. The files are walked in lexical
-// order, which makes the output deterministic but means that for very
-// large directories Walk can be inefficient.
-// Walk always follow symbolic links.
-func Walk(root string, walkFn WalkFunc) error {
-	var err error
-	var lstat, info os.FileInfo
-	lstat, err = os.Lstat(root)
-	if err != nil {
-		err = walkFn(root, nil, false, err)
-	} else {
-		isSymlink := lstat.Mode()&os.ModeSymlink != 0
-		info, err = os.Stat(root)
-		if err != nil {
-			// root is a broken link
-			err = walkFn(root, lstat, isSymlink, nil)
-		} else {
-			err = walk(root, info, isSymlink, walkFn)
-		}
-	}
-
-	if err == filepath.SkipDir {
-		return nil
-	}
-	return err
-}
-
 type mEntry struct {
 	os.DirEntry
 	name      string
@@ -318,74 +257,57 @@ func readDirSorted(dirname string) ([]*mEntry, error) {
 }
 
 func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	return nil, notSupported
-}
-
-type WalkFunc func(path string, info fs.FileInfo, isSymlink bool, err error) error
-
-func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
-	listed := make(chan Object, 10240)
-	go func() {
-		var walkRoot string
-		if strings.HasSuffix(d.root, dirSuffix) {
-			walkRoot = d.root
-		} else {
-			// If the root is not ends with `/`, we'll list the directory root resides.
-			walkRoot = path.Dir(d.root)
+	if delimiter != "/" {
+		return nil, notSupported
+	}
+	var dir string = d.root + prefix
+	var objs []Object
+	if !strings.HasSuffix(dir, dirSuffix) {
+		dir = path.Dir(dir)
+		if !strings.HasSuffix(dir, dirSuffix) {
+			dir += dirSuffix
 		}
-
-		_ = Walk(walkRoot, func(path string, info os.FileInfo, isSymlink bool, err error) error {
-			if runtime.GOOS == "windows" {
-				path = strings.Replace(path, "\\", "/", -1)
+	} else if marker == "" {
+		obj, err := d.Head(prefix)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
 			}
-
-			if err != nil {
-				if os.IsNotExist(err) {
-					logger.Warnf("skip not exist file or directory: %s", path)
-					return nil
-				}
-				listed <- nil
-				logger.Errorf("list %s: %s", path, err)
-				return nil
-			}
-
-			if !strings.HasPrefix(path, d.root) {
-				if info.IsDir() && path != walkRoot {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
-			key := path[len(d.root):]
-			if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
-				if info.IsDir() && !strings.HasPrefix(prefix, key) && !strings.HasPrefix(marker, key) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			owner, group := getOwnerGroup(info)
-			f := &file{
-				obj{
-					key,
-					info.Size(),
-					info.ModTime(),
-					info.IsDir(),
-					"",
-				},
-				owner,
-				group,
-				info.Mode(),
-				isSymlink,
-			}
-			if info.IsDir() {
-				f.size = 0
-			}
-			listed <- f
-			return nil
-		})
-		close(listed)
-	}()
-	return listed, nil
+			return nil, err
+		}
+		objs = append(objs, obj)
+	}
+	entries, err := readDirSorted(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	for _, e := range entries {
+		p := filepath.Join(dir, e.Name())
+		if e.IsDir() {
+			p = filepath.ToSlash(p + "/")
+		}
+		if !strings.HasPrefix(p, d.root) {
+			continue
+		}
+		key := p[len(d.root):]
+		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			logger.Warnf("stat %s: %s", p, err)
+			continue
+		}
+		f := d.toFile(key, info, e.isSymlink)
+		objs = append(objs, f)
+		if len(objs) == int(limit) {
+			break
+		}
+	}
+	return objs, nil
 }
 
 func (d *filestore) Chtimes(path string, mtime time.Time) error {

@@ -210,7 +210,7 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(m, store, chunkConf)
 
-	err = m.NewSession()
+	err = m.NewSession(true)
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}

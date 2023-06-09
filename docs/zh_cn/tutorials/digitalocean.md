@@ -266,21 +266,7 @@ sudo juicefs umount ~/mnt
 
 ### 6. 开机自动挂载
 
-如果你不想每次重启系统都要重新手动挂载 JuiceFS，可以设置自动挂载。
-
-首先，需要将  `juicefs` 客户端重命名为 `mount.juicefs` 并复制到 `/sbin/` 目录：
-
-```shell
-sudo cp /usr/local/bin/juicefs /sbin/mount.juicefs
-```
-
-编辑 `/etc/fstab` 配置文件，新增一条记录：
-
-```shell
-rediss://default:bn8l7ui2cun4iaji@private-db-redis-sgp1-03138-do-user-2500071-0.b.db.ondigitalocean.com:25061/1    /home/herald/mnt       juicefs     _netdev,cache-size=20480     0  0
-```
-
-挂载选项中 `cache-size=20480` 代表分配 20GiB 本地磁盘空间作为 JuiceFS 的本地缓存，请根据实际的硬件配置决定分配的缓存大小。你可以根据需要调整上述配置中的 [FUSE 挂载选项](../reference/fuse_mount_options.md)。
+请参考[「启动时自动挂载 JuiceFS」](../guide/mount_at_boot.md)
 
 ### 7. 多主机共享挂载
 
