@@ -4,6 +4,7 @@ sidebar_position: 8
 ---
 
 ## Basic Usage of `clone`
+
 The JuiceFS client provides the `clone` command to quickly clone directories or files within a single JuiceFS file system. The cloning process involves copying only the metadata without copying the data blocks, making it extremely fast.
 
 The command format for `clone` is as follows:
@@ -17,16 +18,16 @@ $ juicefs clone /mnt/jfs/file1 /mnt/jfs/file2
 # Clone a directory
 $ juicefs clone /mnt/jfs/dir1 /mnt/jfs/dir2
 
-# Clone with preserving the uid, gid, and mode of the file
+# Clone with preserving the UID, GID, and mode of the file
 $ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2`,
 ```
 
 - `<SRC PATH>`: The source path, which can be a file or directory.
 - `<DST PATH>`: The destination path, which can be a file or directory.
 
-### Preserve Source's uid, gid, and mode
+### Preserve Source's UID, GID, and mode
 
-The `--preserve, -p` option is provided to preserve the uid, gid, and mode attributes of the source during cloning. By default, the current user's uid and gid are used. The mode is recalculated based on the current user's umask.
+The `--preserve, -p` option is provided to preserve the UID, GID, and mode attributes of the source during cloning. By default, the current user's UID and GID are used. The mode is recalculated based on the current user's umask.
 
 ### Consistency Guarantee of the `clone`
 

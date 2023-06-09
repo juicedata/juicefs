@@ -4,6 +4,7 @@ sidebar_position: 8
 ---
 
 ## clone 基本用法
+
 JuiceFS 客户端提供了 `clone` 命令用以快速在单个 JuiceFS 文件系统内部克隆目录或者文件，其原理是只拷贝元数据但不拷贝数据块，因此拷贝速度非常快。
 
 clone 的命令格式如下：
@@ -17,16 +18,16 @@ $ juicefs clone /mnt/jfs/file1 /mnt/jfs/file2
 # Clone a directory
 $ juicefs clone /mnt/jfs/dir1 /mnt/jfs/dir2
 
-# Clone with preserving the uid, gid, and mode of the file
+# Clone with preserving the UID, GID, and mode of the file
 $ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2`,
 ```
 
 - `<SRC PATH>`：源端的路径，可以是文件或者目录
 - `<DST PATH>`：目标端的路径，可以是文件或者目录
 
-### 保留源端的 uid, gid, mode
+### 保留源端的 UID, GID, mode
 
-clone 提供了 `--preserve, -p` 参数用以克隆时保留源端的 uid, gid, mode 属性。默认行为是使用当前用户的 uid, gid。mode 则使用当前用户的 umask 重新计算获得。
+clone 提供了 `--preserve, -p` 参数用以克隆时保留源端的 UID, GID, mode 属性。默认行为是使用当前用户的 UID, GID。mode 则使用当前用户的 umask 重新计算获得。
 
 ### clone 子命令的一致性保证
 
