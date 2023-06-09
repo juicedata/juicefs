@@ -124,6 +124,39 @@ You need to add the [`--access-log` option](../reference/command_reference.md#ju
 
 You need to add the `juicefs.access-log` configuration item in the [client configurations](../deployment/hadoop_java_sdk.md#other-configurations) of the JuiceFS Hadoop Java SDK to specify the path of the access log output, and the access log is not output by default.
 
+## Collect Various Information Using the `debug` Subcommand {#debug}
+
+The `juicefs debug` subcommand can help you automatically collect various information about a specified mount point, facilitating troubleshooting and diagnosis.
+```shell
+$ juicefs debug <mountpoint>
+```
+
+This command collects the following information:
+1. JuiceFS version
+2. Operating system version and kernel version
+3. Contents of the JuiceFS `.config` internal file
+4. Contents of the `.stat` internal file in JuiceFS and recorded again after 5 seconds
+5. Command-line parameters used for mounting
+6. Go pprof information
+7. JuiceFS logs (defaulting to the last 5000 lines)
+
+By default, a `debug` directory is created in the current directory, and the collected information is saved in that directory.
+
+Here's an example:
+```shell
+$ juicefs debug /tmp/mountpoint
+$ ls debug
+drwxr-xr-x  8 zhijian  wheel   256B Jun  9 10:43 tmp-mountpoint-20230609104324
+-rw-r--r--  1 zhijian  wheel    97K Jun  9 10:43 tmp-mountpoint-20230609104324.zip
+$ ls tmp-test1-20230609104324
+-rw-r--r--   1 zhijian  wheel   1.5K Jun  9 10:43 config.txt
+-rw-r--r--   1 zhijian  wheel   343K Jun  9 10:43 juicefs.log
+drwxr-xr-x  12 zhijian  wheel   384B Jun  9 10:43 pprof
+-rw-r--r--   1 zhijian  wheel   2.6K Jun  9 10:43 stats.5s.txt
+-rw-r--r--   1 zhijian  wheel   2.6K Jun  9 10:43 stats.txt
+-rw-r--r--   1 zhijian  wheel   1.8K Jun  9 10:43 system-info.log  
+```
+
 ## Real-time performance monitoring {#performance-monitor}
 
 JuiceFS provides the `profile` and `stats` subcommands to visualize real-time performance data, the `profile` command is based on the [file system access log](#access-log), while the `stats` command uses [Real-time statistics](../administration/monitoring.md).
