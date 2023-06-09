@@ -587,5 +587,10 @@ func debug(ctx *cli.Context) error {
 	}
 
 	wg.Wait()
+	abs, err := filepath.Abs(currDir)
+	if err != nil {
+		return err
+	}
+	logger.Infof("All files are collected to %s", abs)
 	return geneZipFile(currDir, filepath.Join(outDir, fmt.Sprintf("%s-%s.zip", prefix, timestamp)))
 }
