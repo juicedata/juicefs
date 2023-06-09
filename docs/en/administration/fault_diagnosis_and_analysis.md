@@ -129,7 +129,7 @@ You need to add the `juicefs.access-log` configuration item in the [client confi
 The `juicefs debug` subcommand can help you automatically collect various information about a specified mount point, facilitating troubleshooting and diagnosis.
 
 ```shell
-$ juicefs debug <mountpoint>
+juicefs debug <mountpoint>
 ```
 
 This command collects the following information:
