@@ -41,4 +41,4 @@ The `clone` subcommand provides consistency guarantees as follows:
 
 1. The destination directory is not visible until the `clone` command is completed.
 2. If metadata redundancy occurs due to a failed `clone` command, it can be cleaned up using the `juicefs gc --delete` command.
-3. Both the source and destination of the 
+3. Both the source and destination of the
