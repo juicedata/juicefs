@@ -42,8 +42,6 @@ type redisStore struct {
 	uri string
 }
 
-var c = context.TODO()
-
 func (r *redisStore) String() string {
 	return r.uri + "/"
 }
@@ -53,7 +51,7 @@ func (r *redisStore) Create() error {
 }
 
 func (r *redisStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	data, err := r.rdb.Get(c, key).Bytes()
+	data, err := r.rdb.Get(ctx, key).Bytes()
 	if err != nil {
 		return nil, err
 	}
@@ -72,11 +70,11 @@ func (r *redisStore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	return r.rdb.Set(c, key, data, 0).Err()
+	return r.rdb.Set(ctx, key, data, 0).Err()
 }
 
 func (r *redisStore) Delete(key string) error {
-	return r.rdb.Del(c, key).Err()
+	return r.rdb.Del(ctx, key).Err()
 }
 
 func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
@@ -131,7 +129,7 @@ func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
 
 			p := t.rdb.Pipeline()
 			for _, key := range keyList[start:end] {
-				p.StrLen(c, key)
+				p.StrLen(ctx, key)
 			}
 			cmds, err := p.Exec(ctx)
 			if err != nil {
