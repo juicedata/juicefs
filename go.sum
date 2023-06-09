@@ -625,8 +625,8 @@ github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83 h1:RyHTka3jCnT
 github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83/go.mod h1:1CNUng3PtjQMtRzJO4FMXBQvkGtuYRxxiR9xMa7jMwI=
 github.com/juicedata/go-fuse/v2 v2.1.1-0.20230418090413-880e994b8a4c h1:AVWJgjm5u5iRL/e1yr/zXzplhdlaIGwKcOmGRSOfasQ=
 github.com/juicedata/go-fuse/v2 v2.1.1-0.20230418090413-880e994b8a4c/go.mod h1:oRyA5eK+pvJyv5otpO/DgccS8y/RvYMaO00GgRLGryc=
-github.com/juicedata/go-nfs-client v0.0.0-20211031095452-1aeeb221bf13 h1:/mwt/cUF+mj3+G7qneLsqwAvtAPvKlLbnsPCDn2rW0k=
-github.com/juicedata/go-nfs-client v0.0.0-20211031095452-1aeeb221bf13/go.mod h1:xOMqi3lOrcGe9uZLnSzgaq94Vc3oz6VPCNDLJUnXpKs=
+github.com/juicedata/go-nfs-client v0.0.0-20230609065724-d6c1e68f478c h1:mHLyhF5JfwCZxfOz0y90xWBi5UvHwqOVKIbNWw7iAUo=
+github.com/juicedata/go-nfs-client v0.0.0-20230609065724-d6c1e68f478c/go.mod h1:xOMqi3lOrcGe9uZLnSzgaq94Vc3oz6VPCNDLJUnXpKs=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d h1:kpQMvNZJKGY3PTt7OSoahYc4nM0HY67SvK0YyS0GLwA=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d/go.mod h1:dlxKkLh3qAIPtgr2U/RVzsZJDuXA1ffg+Njikfmhvgw=
 github.com/juicedata/huaweicloud-sdk-go-obs v3.22.12-0.20230228031208-386e87b5c091+incompatible h1:2/ttSmYoX+QMegpNyAJR0Y6aHcVk57F7RJit5xN2T/s=
