@@ -5,7 +5,7 @@ sidebar_position: 8
 
 ## Basic Usage of `clone`
 
-The JuiceFS client provides the `clone` command to quickly clone directories or files within a single JuiceFS file system. The cloning process involves copying only the metadata without copying the data blocks, making it extremely fast.
+The JuiceFS client provides the `clone` command to quickly clone directories or files within a single JuiceFS mount point. The cloning process involves copying only the metadata without copying the data blocks, making it extremely fast.
 
 The command format for `clone` is as follows:
 
@@ -35,10 +35,10 @@ The `clone` subcommand provides consistency guarantees as follows:
 
 - For individual files: The `clone` command ensures atomicity, meaning that the cloned file will always be in a correct and consistent state.
 
-- For directories: The `clone` command does not guarantee atomicity for directories. In other words, if changes occur in the source directory during the cloning process, the destination directory may end up in an inconsistent state.
+- For directories: The `clone` command does not guarantee atomicity for directories. In other words, If the source directory changes during the cloning process, the target directory may be different from the source directory.
 
 ### Other Considerations for `clone`
 
 1. The destination directory is not visible until the `clone` command is completed.
 2. If metadata redundancy occurs due to a failed `clone` command, it can be cleaned up using the `juicefs gc --delete` command.
-3. Both the source and destination of the `clone` command must be located under the same JuiceFS file system mount point.
+3. Both the source and destination of the `clone` command must be located under the same JuiceFS mount point.
