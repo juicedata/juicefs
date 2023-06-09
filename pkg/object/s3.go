@@ -131,7 +131,7 @@ func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		params.Range = &r
 	}
 	var reqID string
-	resp, err := s.s3.GetObjectWithContext(c, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
+	resp, err := s.s3.GetObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
 	ReqIDCache.put(key, reqID)
 	if err != nil {
 		return nil, err
@@ -169,7 +169,7 @@ func (s *s3client) Put(key string, in io.Reader) error {
 		params.SetStorageClass(s.sc)
 	}
 	var reqID string
-	_, err := s.s3.PutObjectWithContext(c, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
+	_, err := s.s3.PutObjectWithContext(ctx, params, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
 	ReqIDCache.put(key, reqID)
 	return err
 }
@@ -194,7 +194,7 @@ func (s *s3client) Delete(key string) error {
 		Key:    &key,
 	}
 	var reqID string
-	_, err := s.s3.DeleteObjectWithContext(c, &param, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
+	_, err := s.s3.DeleteObjectWithContext(ctx, &param, request.WithGetResponseHeader(s3RequestIDKey, &reqID))
 	if err != nil && strings.Contains(err.Error(), "NoSuchKey") {
 		err = nil
 	}
