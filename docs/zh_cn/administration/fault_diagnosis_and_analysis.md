@@ -143,16 +143,27 @@ $ juicefs debug <mountpoint>
 默认会在当前目录下创建 debug 目录，并将收集到的信息保存在该目录下。下面是一个示例：
 ```shell
 $ juicefs debug /tmp/mountpoint
-$ ls debug
-drwxr-xr-x  8 zhijian  wheel   256B Jun  9 10:43 tmp-mountpoint-20230609104324
--rw-r--r--  1 zhijian  wheel    97K Jun  9 10:43 tmp-mountpoint-20230609104324.zip
-$ ls tmp-test1-20230609104324
--rw-r--r--   1 zhijian  wheel   1.5K Jun  9 10:43 config.txt
--rw-r--r--   1 zhijian  wheel   343K Jun  9 10:43 juicefs.log
-drwxr-xr-x  12 zhijian  wheel   384B Jun  9 10:43 pprof
--rw-r--r--   1 zhijian  wheel   2.6K Jun  9 10:43 stats.5s.txt
--rw-r--r--   1 zhijian  wheel   2.6K Jun  9 10:43 stats.txt
--rw-r--r--   1 zhijian  wheel   1.8K Jun  9 10:43 system-info.log  
+
+$ tree debug
+debug
+├── tmp-test1-20230609104324
+│   ├── config.txt
+│   ├── juicefs.log
+│   ├── pprof
+│   │   ├── juicefs.allocs.pb.gz
+│   │   ├── juicefs.block.pb.gz
+│   │   ├── juicefs.cmdline.txt
+│   │   ├── juicefs.goroutine.pb.gz
+│   │   ├── juicefs.goroutine.stack.txt
+│   │   ├── juicefs.heap.pb.gz
+│   │   ├── juicefs.mutex.pb.gz
+│   │   ├── juicefs.profile.30s.pb.gz
+│   │   ├── juicefs.threadcreate.pb.gz
+│   │   └── juicefs.trace.5s.pb.gz
+│   ├── stats.5s.txt
+│   ├── stats.txt
+│   └── system-info.log
+└── tmp-test1-20230609104324.zip  
 ```
 
 ## 实时性能监控 {#performance-monitor}
