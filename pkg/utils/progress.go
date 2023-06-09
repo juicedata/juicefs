@@ -184,6 +184,13 @@ func (p *Progress) AddDoubleSpinner(name string) *DoubleSpinner {
 	}
 }
 
+func (p *Progress) AddDoubleSpinnerTwo(countName, sizeName string) *DoubleSpinner {
+	return &DoubleSpinner{
+		p.AddCountSpinner(countName).Bar,
+		p.AddByteSpinner(sizeName).Bar,
+	}
+}
+
 func (p *Progress) Done() {
 	for _, b := range p.bars {
 		if !b.Completed() {
