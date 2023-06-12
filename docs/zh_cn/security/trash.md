@@ -81,6 +81,6 @@ mv .trash/2022-11-30-10/[parent inode]-[file inode]-[file name] .
 
 JuiceFS 1.1 版本提供了 restore 子命令来快速恢复大量误删的文件，它会把指定的某个小时的回收站中的文件按照被删除前的目录结构组织起来，方便手动按照目录恢复，或者使用 `--put-back` 参数将所有文件和目录恢复到删除前的位置（不会覆盖新创建的文件）。
 
-回收站的清理由 JuiceFS 客户端定期运行后台任务执行（默认每小时清理一次），因此需要至少有 1 个在线的挂载点（不能开启 [`--no-bgjob`](../reference/command_reference.md#mount)）。如果你希望尽快释放对象存储空间，也可以手动强制清理，以 root 身份在 `.trash` 目录执行 `rm` 命令即可。
+回收站的清理由 JuiceFS 客户端定期运行后台任务执行（默认每小时清理一次），因此需要至少有 1 个在线的挂载点（不能开启 [`--no-bgjob`](../reference/command_reference.md#mount)）。如果你希望尽快释放对象存储空间，也可以手动强制清理，以 root 身份执行 `juicefs rmr <mountpoint>/.trash` 即可。
 
 值得一提，覆写产生的文件碎片由于对用户不可见，所以无法轻易强制删除。如果你确实想要主动清理它们，可以临时禁用回收站（设置 [`--trash-days 0`](#configure)），再通过 [`juicefs gc`](../reference/command_reference.md#gc) 命令将这些数据块标为泄漏并删除。操作完成以后，记得重新开启回收站。
