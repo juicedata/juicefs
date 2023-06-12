@@ -94,7 +94,7 @@ Prometheus 在抓取监控指标时会自动附加 `instance` 标签以帮助识
 | `juicefs_blockcache_write_hist_seconds` | 写缓存块的延时分布   | 秒  |
 | `juicefs_staging_blocks`                | 暂存路径中的块数    |    |
 | `juicefs_staging_block_bytes`           | 暂存路径中块的总字节数 | 秒  |
-| `juicefs_staging_block_delay_seconds`   | 分段延迟的总秒数    | 秒  |
+| `juicefs_staging_block_delay_seconds`   | 暂存块延迟的总秒数 | 秒  |
 
 ## 对象存储
 
