@@ -51,8 +51,9 @@ func toError(eno syscall.Errno) error {
 
 type juiceFS struct {
 	object.DefaultObjectStorage
-	name string
-	jfs  *fs.FileSystem
+	name  string
+	umask uint16
+	jfs   *fs.FileSystem
 }
 
 func (j *juiceFS) String() string {
@@ -120,14 +121,14 @@ var bufPool = sync.Pool{
 func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 	p := j.path(key)
 	if strings.HasSuffix(p, "/") {
-		eno := j.jfs.MkdirAll(ctx, p, 0755)
+		eno := j.jfs.MkdirAll(ctx, p, 0777, j.umask)
 		return toError(eno)
 	}
 	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
-	f, eno := j.jfs.Create(ctx, tmp, 0755)
+	f, eno := j.jfs.Create(ctx, tmp, 0666, j.umask)
 	if eno == syscall.ENOENT {
-		_ = j.jfs.MkdirAll(ctx, filepath.Dir(tmp), 0755)
-		f, eno = j.jfs.Create(ctx, tmp, 0755)
+		_ = j.jfs.MkdirAll(ctx, filepath.Dir(tmp), 0777, j.umask)
+		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
 	}
 	if eno != 0 {
 		return toError(eno)
@@ -313,12 +314,12 @@ func (j *juiceFS) Chown(key string, owner, group string) error {
 	return toError(f.Chown(ctx, uint32(uid), uint32(gid)))
 }
 
-func (d *juiceFS) Symlink(oldName, newName string) error {
-	p := d.path(newName)
-	err := d.jfs.Symlink(ctx, oldName, p)
+func (j *juiceFS) Symlink(oldName, newName string) error {
+	p := j.path(newName)
+	err := j.jfs.Symlink(ctx, oldName, p)
 	if err == syscall.ENOENT {
-		_ = d.jfs.MkdirAll(ctx, filepath.Dir(p), 0755)
-		err = d.jfs.Symlink(ctx, oldName, p)
+		_ = j.jfs.MkdirAll(ctx, filepath.Dir(p), 0777, j.umask)
+		err = j.jfs.Symlink(ctx, oldName, p)
 	}
 	return toError(err)
 }
@@ -388,7 +389,7 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 	if err != nil {
 		return nil, fmt.Errorf("Initialize: %s", err)
 	}
-	return &juiceFS{object.DefaultObjectStorage{}, format.Name, jfs}, nil
+	return &juiceFS{object.DefaultObjectStorage{}, format.Name, uint16(utils.GetUmask()), jfs}, nil
 }
 
 func init() {

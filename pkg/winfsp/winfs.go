@@ -132,7 +132,7 @@ func (j *juice) Mkdir(path string, mode uint32) (e int) {
 	}
 	ctx := j.newContext()
 	defer trace(path, mode)(&e)
-	e = errorconv(j.fs.Mkdir(ctx, path, uint16(mode)))
+	e = errorconv(j.fs.Mkdir(ctx, path, uint16(mode), 0))
 	return
 }
 

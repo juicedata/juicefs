@@ -48,7 +48,7 @@ type filestore struct {
 func (d *filestore) Symlink(oldName, newName string) error {
 	p := d.path(newName)
 	if _, err := os.Stat(filepath.Dir(p)); err != nil && os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0755)); err != nil {
+		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0777)); err != nil {
 			return err
 		}
 	} else if err != nil && !os.IsNotExist(err) {
@@ -141,16 +141,16 @@ func (d *filestore) Put(key string, in io.Reader) error {
 	p := d.path(key)
 
 	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(d.root, dirSuffix) {
-		return os.MkdirAll(p, os.FileMode(0755))
+		return os.MkdirAll(p, os.FileMode(0777))
 	}
 
 	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil && os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0755)); err != nil {
+		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0777)); err != nil {
 			return err
 		}
-		f, err = os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		f, err = os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	}
 	if err != nil {
 		return err
@@ -334,13 +334,13 @@ func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
 	}
 	if strings.HasSuffix(root, dirSuffix) {
 		logger.Debugf("Ensure directory %s", root)
-		if err := os.MkdirAll(root, 0755); err != nil {
+		if err := os.MkdirAll(root, 0777); err != nil {
 			return nil, fmt.Errorf("Creating directory %s failed: %q", root, err)
 		}
 	} else {
 		dir := path.Dir(root)
 		logger.Debugf("Ensure directory %s", dir)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0777); err != nil {
 			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)
 		}
 	}

@@ -82,7 +82,7 @@ func doUmount(mp string, force bool) error {
 		}
 	case "windows":
 		if !force {
-			_ = os.Mkdir(filepath.Join(mp, ".UMOUNTIT"), 0755)
+			_ = os.Mkdir(filepath.Join(mp, ".UMOUNTIT"), 0777)
 			return nil
 		} else {
 			cmd = exec.Command("taskkill", "/IM", "juicefs.exe", "/F")

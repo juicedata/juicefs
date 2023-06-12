@@ -417,7 +417,7 @@ func parentDir(p string) string {
 	return path.Dir(strings.TrimRight(p, "/"))
 }
 
-func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16) (err syscall.Errno) {
+func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint16) (err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Mkdir").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Mkdir (%s, %o): %s", p, mode, errstr(err)) }()
@@ -429,16 +429,16 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16) (err syscal
 		return err
 	}
 	var inode Ino
-	err = fs.m.Mkdir(ctx, fi.inode, path.Base(p), mode, 0, 0, &inode, nil)
+	err = fs.m.Mkdir(ctx, fi.inode, path.Base(p), mode, umask, 0, &inode, nil)
 	fs.invalidateEntry(fi.inode, path.Base(p))
 	return
 }
 
-func (fs *FileSystem) MkdirAll(ctx meta.Context, p string, mode uint16) (err syscall.Errno) {
-	err = fs.Mkdir(ctx, p, mode)
+func (fs *FileSystem) MkdirAll(ctx meta.Context, p string, mode uint16, umask uint16) (err syscall.Errno) {
+	err = fs.Mkdir(ctx, p, mode, umask)
 	if err == syscall.ENOENT {
-		_ = fs.MkdirAll(ctx, parentDir(p), mode)
-		err = fs.Mkdir(ctx, p, mode)
+		_ = fs.MkdirAll(ctx, parentDir(p), mode, umask)
+		err = fs.Mkdir(ctx, p, mode, umask)
 	}
 	if err == syscall.EEXIST {
 		err = 0
@@ -752,7 +752,7 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 	return fi, 0
 }
 
-func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16) (f *File, err syscall.Errno) {
+func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint16) (f *File, err syscall.Errno) {
 	defer trace.StartRegion(context.TODO(), "fs.Create").End()
 	l := vfs.NewLogContext(ctx)
 	defer func() { fs.log(l, "Create (%s,%o): %s", p, mode, errstr(err)) }()
@@ -766,7 +766,7 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16) (f *File, 
 	if err != 0 {
 		return
 	}
-	err = fs.m.Create(ctx, fi.inode, path.Base(p), mode&07777, 0, syscall.O_EXCL, &inode, attr)
+	err = fs.m.Create(ctx, fi.inode, path.Base(p), mode&07777, umask, syscall.O_EXCL, &inode, attr)
 	if err == 0 {
 		fi = AttrToFileInfo(inode, attr)
 		fi.name = path.Base(p)

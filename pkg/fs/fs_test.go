@@ -77,7 +77,7 @@ func TestFileSystem(t *testing.T) {
 	if e := fs.Access(ctx, "/", 7); e != 0 {
 		t.Fatalf("access /: %s", e)
 	}
-	f, err := fs.Create(ctx, "/hello", 0644)
+	f, err := fs.Create(ctx, "/hello", 0666, 022)
 	if err != 0 {
 		t.Fatalf("create /hello: %s", err)
 	}
@@ -184,7 +184,7 @@ func TestFileSystem(t *testing.T) {
 		t.Fatalf("open without permission: %s", e)
 	}
 
-	if err := fs.Mkdir(ctx, "/d", 0755); err != 0 {
+	if err := fs.Mkdir(ctx, "/d", 0777, 022); err != 0 {
 		t.Fatalf("mkdir /d: %s", err)
 	}
 	d, e := fs.Open(ctx, "/", 0)
@@ -246,13 +246,13 @@ func TestFileSystem(t *testing.T) {
 	}
 
 	// path with trailing /
-	if err := fs.Mkdir(ctx, "/ddd/", 0777); err != 0 {
+	if err := fs.Mkdir(ctx, "/ddd/", 0777, 000); err != 0 {
 		t.Fatalf("mkdir /ddd/: %s", err)
 	}
-	if _, err := fs.Create(ctx, "/ddd/ddd", 0777); err != 0 {
+	if _, err := fs.Create(ctx, "/ddd/ddd", 0777, 000); err != 0 {
 		t.Fatalf("create /ddd/ddd: %s", err)
 	}
-	if _, err := fs.Create(ctx, "/ddd/fff/", 0777); err != syscall.EINVAL {
+	if _, err := fs.Create(ctx, "/ddd/fff/", 0777, 000); err != syscall.EINVAL {
 		t.Fatalf("create /ddd/fff/: %s", err)
 	}
 	if err := fs.Delete(ctx, "/ddd/"); err != syscall.ENOTEMPTY {
