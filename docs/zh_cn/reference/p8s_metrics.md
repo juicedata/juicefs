@@ -33,7 +33,6 @@ Prometheus 在抓取监控指标时会自动附加 `instance` 标签以帮助识
 | `juicefs_used_inodes`         | 总 inodes 数量   |    |
 | `used_read_buffer_size_bytes` | 当前用于读取的缓冲区的大小 |    |
 
-
 ## 操作系统
 
 ### 指标
