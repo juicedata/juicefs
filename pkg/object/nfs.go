@@ -26,15 +26,19 @@ import (
 	"io/fs"
 	"os"
 	"os/user"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/vmware/go-nfs-client/nfs"
 	"github.com/vmware/go-nfs-client/nfs/rpc"
 )
+
+var _ ObjectStorage = &nfsStore{}
 
 type nfsStore struct {
 	DefaultObjectStorage
@@ -43,6 +47,11 @@ type nfsStore struct {
 	root     string
 
 	target *nfs.Target
+}
+
+type nfsEntry struct {
+	*nfs.EntryPlus
+	name string
 }
 
 func (n *nfsStore) String() string {
@@ -235,8 +244,92 @@ func (n *nfsStore) find(path, marker string, out chan Object) {
 	}
 }
 
+func (n *nfsStore) readDirSorted(dirname string) ([]*nfsEntry, error) {
+	entries, err := n.target.ReadDirPlus(dirname)
+	if err != nil {
+		return nil, errors.Wrapf(err, "readdir %s", dirname)
+	}
+	nfsEntries := make([]*nfsEntry, len(entries))
+
+	for i, e := range entries {
+		if e.IsDir() {
+			nfsEntries[i] = &nfsEntry{e, e.Name() + dirSuffix}
+		} else {
+			nfsEntries[i] = &nfsEntry{e, e.Name()}
+		}
+	}
+	sort.Slice(nfsEntries, func(i, j int) bool { return nfsEntries[i].Name() < nfsEntries[j].Name() })
+	return nfsEntries, err
+}
+
+func (d *nfsStore) toFile(key string, e *nfsEntry) *file {
+	size := e.Size()
+	if e.IsDir() {
+		size = 0
+	}
+	owner, group := getOwnerGroup(e)
+	return &file{
+		obj{
+			key,
+			size,
+			e.ModTime(),
+			e.IsDir(),
+			"",
+		},
+		owner,
+		group,
+		e.Mode(),
+		false,
+	}
+}
+
 func (n *nfsStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	return nil, notSupported
+	if delimiter != "/" {
+		return nil, notSupported
+	}
+	var dir string = n.root + prefix
+	var objs []Object
+	if !strings.HasSuffix(dir, dirSuffix) {
+		dir = path.Dir(dir)
+		if !strings.HasSuffix(dir, dirSuffix) {
+			dir += dirSuffix
+		}
+	} else if marker == "" {
+		obj, err := n.Head(prefix)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		objs = append(objs, obj)
+	}
+	entries, err := n.readDirSorted(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	for _, e := range entries {
+		p := filepath.Join(dir, e.Name())
+		if e.IsDir() {
+			p = filepath.ToSlash(p + "/")
+		}
+		if !strings.HasPrefix(p, n.root) {
+			continue
+		}
+		key := p[len(n.root):]
+		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
+			continue
+		}
+		f := n.toFile(key, e)
+		objs = append(objs, f)
+		if len(objs) == int(limit) {
+			break
+		}
+	}
+	return objs, nil
 }
 
 func (n *nfsStore) ListAll(prefix, marker string) (<-chan Object, error) {
