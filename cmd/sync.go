@@ -304,7 +304,6 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		secretKey, _ = user.Password()
 	}
 	name := strings.ToLower(u.Scheme)
-
 	var endpoint string
 	if name == "file" {
 		endpoint = u.Path
@@ -315,6 +314,8 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		if err != nil {
 			return nil, fmt.Errorf("unescape %s: %s", u.Host, err)
 		}
+	} else if name == "nfs" {
+		endpoint = u.Host + u.Path
 	} else if !conf.NoHTTPS && supportHTTPS(name, u.Host) {
 		endpoint = "https://" + u.Host
 	} else {

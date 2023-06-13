@@ -59,11 +59,16 @@ func (n *nfsStore) String() string {
 }
 
 func (n *nfsStore) path(key string) string {
-	return n.root + key
+	root := strings.Trim(n.root, "/")
+	if strings.HasPrefix(key, root) {
+		return key[len(root):]
+	}
+	return key
 }
 
 func (n *nfsStore) Head(key string) (Object, error) {
-	fi, _, err := n.target.Lookup(n.path(key))
+	p := n.path(key)
+	fi, _, err := n.target.Lookup(p)
 	if err != nil {
 		return nil, err
 	}
@@ -72,13 +77,13 @@ func (n *nfsStore) Head(key string) (Object, error) {
 
 func (n *nfsStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	p := n.path(key)
+	if strings.HasSuffix(p, "/") {
+		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
+	}
+
 	ff, err := n.target.Open(p)
 	if err != nil {
-		return nil, err
-	}
-	if strings.HasSuffix(p, "/") {
-		_ = ff.Close()
-		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
+		return nil, errors.Wrapf(err, "open %s", p)
 	}
 
 	if limit > 0 {
@@ -126,7 +131,7 @@ func (n *nfsStore) Put(key string, in io.Reader) error {
 		_, err = n.target.Create(tmp, 0777)
 	}
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "create %s", tmp)
 	}
 	ff, err := n.target.Open(tmp)
 	if err != nil {
@@ -218,7 +223,7 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 	if delimiter != "/" {
 		return nil, notSupported
 	}
-	var dir string = n.root + prefix
+	dir := n.path(prefix)
 	var objs []Object
 	if !strings.HasSuffix(dir, dirSuffix) {
 		dir = path.Dir(dir)
@@ -247,14 +252,10 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 		if e.IsDir() {
 			p = filepath.ToSlash(p + "/")
 		}
-		if !strings.HasPrefix(p, n.root) {
+		if !strings.HasPrefix(p, prefix) || (marker != "" && p <= marker) {
 			continue
 		}
-		key := p[len(n.root):]
-		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
-			continue
-		}
-		f := n.toFile(key, e)
+		f := n.toFile(p, e)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break
@@ -268,11 +269,7 @@ func (n *nfsStore) ListAll(prefix, marker string) (<-chan Object, error) {
 }
 
 func newNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
-	if strings.Contains(addr, "@") {
-		ps := strings.Split(addr, "@")
-		username = ps[0]
-		addr = ps[1]
-	} else {
+	if username == "" {
 		u, err := user.Current()
 		if err != nil {
 			return nil, fmt.Errorf("current user: %s", err)
