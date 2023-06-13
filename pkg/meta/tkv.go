@@ -2474,7 +2474,7 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	} else {
 		go func() {
 			// wait for the current compaction to finish
-			time.Sleep(time.Millisecond * 10)
+			time.Sleep(time.Minute)
 			m.compactChunk(inode, indx, force)
 		}()
 	}
