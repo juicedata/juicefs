@@ -27,10 +27,10 @@ If the monitoring metrics are reported through [Prometheus Pushgateway](https://
 
 ### Metrics
 
-| Name                  | Description            | Unit |
-| ----                  | -----------            | ---- |
-| `juicefs_used_space`  | Total used space       | byte |
-| `juicefs_used_inodes` | Total number of inodes |      |
+| Name                          | Description                            | Unit |
+|-------------------------------|----------------------------------------|------|
+| `juicefs_used_space`          | Total used space                       | byte |
+| `juicefs_used_inodes`         | Total number of inodes                 |      |
 
 ## Operating system
 
@@ -77,7 +77,7 @@ If the monitoring metrics are reported through [Prometheus Pushgateway](https://
 ### Metrics
 
 | Name                                    | Description                                 | Unit   |
-| ----                                    | -----------                                 | ----   |
+|:----------------------------------------|---------------------------------------------|--------|
 | `juicefs_blockcache_blocks`             | Number of cached blocks                     |        |
 | `juicefs_blockcache_bytes`              | Size of cached blocks                       | byte   |
 | `juicefs_blockcache_hits`               | Count of cached block hits                  |        |
@@ -90,6 +90,9 @@ If the monitoring metrics are reported through [Prometheus Pushgateway](https://
 | `juicefs_blockcache_write_bytes`        | Size of cached block writes                 | byte   |
 | `juicefs_blockcache_read_hist_seconds`  | Latency distributions of read cached block  | second |
 | `juicefs_blockcache_write_hist_seconds` | Latency distributions of write cached block | second |
+| `juicefs_staging_blocks`                | Number of blocks in the staging path        |        |
+| `juicefs_staging_block_bytes`           | Total bytes of blocks in the staging path   | byte   |
+| `juicefs_staging_block_delay_seconds`   | Total seconds of delay for staging blocks   | second |
 
 ## Object storage
 
@@ -112,5 +115,6 @@ If the monitoring metrics are reported through [Prometheus Pushgateway](https://
 ### Metrics
 
 | Name                                   | Description                          | Unit |
-| ----                                   | -----------                          | ---- |
+|----------------------------------------| -----------                          | ---- |
 | `juicefs_compact_size_histogram_bytes` | Size distributions of compacted data | byte |
+| `juicefs_used_read_buffer_size_bytes`  | size of currently used buffer for read |      |
