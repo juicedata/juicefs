@@ -31,7 +31,6 @@ If the monitoring metrics are reported through [Prometheus Pushgateway](https://
 |-------------------------------|----------------------------------------|------|
 | `juicefs_used_space`          | Total used space                       | byte |
 | `juicefs_used_inodes`         | Total number of inodes                 |      |
-| `used_read_buffer_size_bytes` | size of currently used buffer for read |      |
 
 ## Operating system
 
@@ -116,5 +115,6 @@ If the monitoring metrics are reported through [Prometheus Pushgateway](https://
 ### Metrics
 
 | Name                                   | Description                          | Unit |
-| ----                                   | -----------                          | ---- |
+|----------------------------------------| -----------                          | ---- |
 | `juicefs_compact_size_histogram_bytes` | Size distributions of compacted data | byte |
+| `juicefs_used_read_buffer_size_bytes`  | size of currently used buffer for read |      |
