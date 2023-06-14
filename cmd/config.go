@@ -56,11 +56,11 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 			addCategories("DATA STORAGE", []cli.Flag{
 				&cli.Int64Flag{
 					Name:  "upload-limit",
-					Usage: "default bandwidth limit of the volume for upload in Mbps",
+					Usage: "default bandwidth limit of a client for upload in Mbps",
 				},
 				&cli.Int64Flag{
 					Name:  "download-limit",
-					Usage: "default bandwidth limit of the volume for download in Mbps",
+					Usage: "default bandwidth limit of a client for download in Mbps",
 				},
 			}),
 			formatManagementFlags(),
