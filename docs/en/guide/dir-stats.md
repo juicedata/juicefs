@@ -3,9 +3,9 @@ title: Directory Statistics
 sidebar_position: 7
 ---
 
-From JuiceFS v1.1.0, directory statistics is enabled by default when formatting a new volume (existing ones will stay disabled, you'll have to explicitly enable). Directory stats accelerates `quota`, `info` and the `summary` subcommand, but comes with a minor performance cost.
+From JuiceFS v1.1.0, directory statistics is enabled by default when formatting a new volume (existing ones will stay disabled, you'll have to enable it explicitly). Directory stats accelerates `quota`, `info` and the `summary` subcommands, but comes with a minor performance cost.
 
-## Enable directory stats
+## Enable directory stats {#enable-directory-stats}
 
 Run `juicefs config $URL --dir-stats` to enable directory stats, after that, you can run `juicefs config $URL` to verify:
 
@@ -37,10 +37,10 @@ $ juicefs config redis://localhost --dir-stats=false
 ```
 
 :::tip
-The [storage quota](./quota.md) functionality depends on directory stats, that's why setting a quota automatically enables directory stats. To disable directory stats for such volume, you'll need to remove all quotas.
+The [directory quota](./quota.md#directory-quota) functionality depends on directory stats, that's why setting a quota automatically enables directory stats. To disable directory stats for such volume, you'll need to remove all quotas.
 :::
 
-## Check directory stats
+## Check directory stats {#check-directory-stats}
 
 Use `juicefs info $PATH` to check stats for a single directory:
 
@@ -69,7 +69,7 @@ Run `juicefs info -r $PATH` to recursively sum up:
    path: /pjdfstest
 ```
 
-We can also use `juicefs summary $PATH` to list all directory stats:
+You can also use `juicefs summary $PATH` to list all directory stats:
 
 ```shell
 $ ./juicefs summary /mnt/jfs/pjdfstest/
@@ -89,12 +89,12 @@ $ ./juicefs summary /mnt/jfs/pjdfstest/
 ```
 
 :::note
-Directory stats only stores single directory usage, to get a recursive sum, you'll need to use `juicefs info -r`, this could be a costly operation for large directories, if you need to frequently get the total stats for particular directories, consider [setting an empty quota](./quota.md) on such directories, to achieve recursive stats this way.
+Directory stats only stores single directory usage, to get a recursive sum, you'll need to use `juicefs info -r`, this could be a costly operation for large directories, if you need to frequently get the total stats for particular directories, consider [setting an empty quota](./quota.md#limit-capacity-and-inodes-of-directory) on such directories, to achieve recursive stats this way.
 
-Different from Community Edition, [JuiceFS Enterprise Edition](https://juicefs.com/docs/cloud/faq/#directory-stats) already put a recursive sum on directory stats, you can directly view the total usage by running `ls -lh`.
-::
+Different from Community Edition, JuiceFS Enterprise Edition already put a [recursive sum](/docs/cloud/guide/view_storage_usage) on directory stats, you can directly view the total usage by running `ls -lh`.
+:::
 
-## Troubleshooting
+## Troubleshooting {#troubleshooting}
 
 Directory stats is calculated asynchronously, and can potentially produce inaccurate results when clients run into problems, `juicefs info`, `juicefs summary` and `juicefs quota` all provide a `--strict` option to run in strict mode, which bypasses directory stats, as opposed to the default fast mode.
 
@@ -123,7 +123,7 @@ $ juicefs info -r --strict /jfs/d
    size: 1.00 GiB (1073745920 Bytes)
    path: /d
 
-# Check file system
+# Check directory stats for /d
 $ juicefs fsck sqlite3://test.db --path /d --sync-dir-stat
 2023/05/31 17:14:34.700239 juicefs[32667] <INFO>: Meta address: sqlite3://test.db [interface.go:494]
 [xorm] [info]  2023/05/31 17:14:34.700291 PING DATABASE sqlite3

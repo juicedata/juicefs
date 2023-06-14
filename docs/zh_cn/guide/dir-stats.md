@@ -3,9 +3,9 @@ title: 目录用量统计
 sidebar_position: 7
 ---
 
-JuiceFS 在 v1.1.0 开始支持目录用量统计并在文件系统格式化时默认开启，旧版本 volume 迁移到新版本后默认关闭。目录用量统计可以加速 `quota`, `info` 和 `summary` 等子命令，但由于客户端会异步更新统计信息，启用后也会带来少量开销。
+JuiceFS 在 v1.1.0 开始支持目录用量统计并在文件系统格式化时默认开启，旧版本 volume 迁移到新版本后默认关闭（需要[手动开启](#enable-directory-stats)）。目录用量统计可以加速 `quota`、`info` 和 `summary` 等子命令，但由于客户端会异步更新统计信息，启用后也会带来少量开销。
 
-## 启用目录用量统计
+## 启用目录用量统计 {#enable-directory-stats}
 
 运行 `juicefs config $URL --dir-stats` 来启用目录统计，启用以后，使用 `juicefs config $URL` 命令确认生效：
 
@@ -37,10 +37,10 @@ $ juicefs config redis://localhost --dir-stats=false
 ```
 
 :::tip 提示
-[目录配额](./quota.md)功能依赖目录用量统计，为目录设置配额后会自动开启目录用量统计，并且需要删除所有目录配额后才能禁用目录用量统计。
+[目录配额](./quota.md#directory-quota)功能依赖目录用量统计，为目录设置配额后会自动开启目录用量统计，并且需要删除所有目录配额后才能禁用目录用量统计。
 :::
 
-## 查看目录统计
+## 查看目录统计 {#check-directory-stats}
 
 运行 `juicefs info $PATH` 查看单层目录的统计用量：
 
@@ -69,7 +69,7 @@ $ juicefs info /mnt/jfs/pjdfstest/
    path: /pjdfstest
 ```
 
-另外我们可以使用 `juicefs summary $PATH` 命令来查看各层级的目录用量：
+另外你可以使用 `juicefs summary $PATH` 命令来查看各层级的目录用量：
 
 ```shell
 $ ./juicefs summary /mnt/jfs/pjdfstest/
@@ -89,14 +89,14 @@ $ ./juicefs summary /mnt/jfs/pjdfstest/
 ```
 
 :::note 说明
-目录统计只计算每个目录的单层用量，如果要查看递归统计用量，需要使用 `juicefs info -r`，对于大目录，遍历汇总可能带来很大的开销。如需持续查看某些特定目录的总用量，可参考[目录配额](./quota.md)通过设置空配额的方式统计目录总用量。
+目录统计只计算每个目录的单层用量，如果要查看递归统计用量，需要使用 `juicefs info -r`，对于大目录，遍历汇总可能带来很大的开销。如需持续查看某些特定目录的总用量，可参考目录配额通过[设置空配额](./quota.md#limit-capacity-and-inodes-of-directory)的方式统计目录总用量。
 
-与社区版不同，[JuiceFS 企业版](https://juicefs.com/docs/zh/cloud/faq/#directory-stats)的目录大小已经进行了递归统计，可以直接用 `ls -lh` 看到递归统计的目录总大小。
-::
+与社区版不同，JuiceFS 企业版的目录大小已经进行了[递归统计](/docs/zh/cloud/guide/view_storage_usage)，可以直接用 `ls -lh` 看到递归统计的目录总大小。
+:::
 
-## 故障和修复
+## 故障和修复 {#troubleshooting}
 
-由于目录用量是异步统计，当客户端发生异常时可能会丢失部分统计值导致结果不准确。`juicefs info`, `juicefs summary` 和 `juicefs quota` 命令均配有 `--strict` 参数在严苛模式下运行以绕过目录统计（默认模式我们一般称为快速模式，fast mode）。
+由于目录用量是异步统计，当客户端发生异常时可能会丢失部分统计值导致结果不准确。`juicefs info`、`juicefs summary` 和 `juicefs quota` 命令均配有 `--strict` 选项在严苛模式下运行以绕过目录统计（默认模式一般称为快速模式，fast mode）。
 
 如果发现严格模式和快速模式结果不一致，考虑使用 `juicefs fsck` 命令进行诊断和修复：
 
@@ -123,7 +123,7 @@ $ juicefs info -r --strict /jfs/d
    size: 1.00 GiB (1073745920 Bytes)
    path: /d
 
-# 检查
+# 检查目录 /d 的用量统计
 $ juicefs fsck sqlite3://test.db --path /d --sync-dir-stat
 2023/05/31 17:14:34.700239 juicefs[32667] <INFO>: Meta address: sqlite3://test.db [interface.go:494]
 [xorm] [info]  2023/05/31 17:14:34.700291 PING DATABASE sqlite3
