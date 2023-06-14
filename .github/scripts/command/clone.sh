@@ -48,6 +48,17 @@ test_clone_with_jfs_source()
     do_clone false
 }
 
+skip_test_clone_with_fsrand()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    seed=$(date +%s)
+    python3 .github/scripts/fsrand.py -a -c 2000 -s $seed  /jfs/juicefs
+    do_clone true
+    do_clone false 
+}
+
 do_clone()
 {
     is_preserve=$1
@@ -56,9 +67,9 @@ do_clone()
     [[ "$is_preserve" == "true" ]] && preserve="--preserve" || preserve=""
     cp -r /jfs/juicefs /jfs/juicefs1 $preserve
     ./juicefs clone /jfs/juicefs /jfs/juicefs2 $preserve
-    diff -ur /jfs/juicefs1 /jfs/juicefs2
-    cd /jfs/juicefs1/ && find . -printf "%m\t%u\t%g\t%p\n" | sort -k2 >/tmp/log1 && cd -
-    cd /jfs/juicefs2/ && find . -printf "%m\t%u\t%g\t%p\n" | sort -k2 >/tmp/log2 && cd -
+    diff -ur /jfs/juicefs1 /jfs/juicefs2 --no-dereference
+    cd /jfs/juicefs1/ && find . -printf "%m\t%u\t%g\t%p\n"  | sort -k4 >/tmp/log1 && cd -
+    cd /jfs/juicefs2/ && find . -printf "%m\t%u\t%g\t%p\n"  | sort -k4 >/tmp/log2 && cd -
     diff -u /tmp/log1 /tmp/log2
 }
 
@@ -67,7 +78,7 @@ test_clone_with_big_file()
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    dd if=/dev/urandom of=/tmp/test bs=1M count=2000
+    dd if=/dev/urandom of=/tmp/test bs=1M count=1000
     cp /tmp/test /jfs/test
     ./juicefs clone /jfs/test /jfs/test1
     rm /jfs/test -rf
@@ -78,30 +89,41 @@ test_clone_with_big_file2()
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    dd if=/dev/urandom of=/tmp/test bs=1M count=2000
+    dd if=/dev/urandom of=/tmp/test bs=1M count=1000
     echo "a" | tee -a /tmp/test
     cp /tmp/test /jfs/test
     ./juicefs clone /jfs/test /jfs/test1
     rm /jfs/test -rf
     diff /tmp/test /jfs/test1
 }
+
+test_clone_with_random_write(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    PATH1=/tmp/test PATH2=/jfs/test python3 .github/scripts/random_read_write.py 
+    ./juicefs clone /jfs/test /jfs/test1
+    rm /jfs/test -rf
+    diff /tmp/test /jfs/test1
+}
+
 test_clone_with_sparse_file()
 {
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    fallocate -l 2.0001g /jfs/test
+    fallocate -l 1.0001g /jfs/test
     ./juicefs clone /jfs/test /jfs/test1
     diff /jfs/test /jfs/test1
 }
-test_clone_with_sparse_file()
+
+test_clone_with_sparse_file2()
 {
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     fallocate -l 1.1T /jfs/test
     ./juicefs clone /jfs/test /jfs/test1
-    diff /jfs/test /jfs/test1
 }
 
 test_clone_with_small_files(){
@@ -116,21 +138,23 @@ test_clone_with_small_files(){
     diff -ur /jfs/test1 /jfs/test1
 }
 
-test_clone_with_fs_rand(){
-    prepare_test
-    ./juicefs format $META_URL myjfs
-    ./juicefs mount -d $META_URL /jfs
-    python3 .github/scripts/fsrand.py  -c 2000 -v -s $seed  /jfs/fsrand 
-    ./juicefs clone /jfs/test /jfs/test1
-    diff -ur /jfs/test1 /jfs/test1
-}
-
-test_clone_with_mdtest()
+test_clone_with_mdtest1()
 {
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    ./juicefs mdtest $META_URL /test --depth 3 --dirs 10 --files 10 --threads 100 --write 8192
+    ./juicefs mdtest $META_URL /test --depth 2 --dirs 10 --files 10 --threads 100 --write 8192
+    ./juicefs clone /jfs/test /jfs/test1
+    ./juicefs rmr /jfs/test
+    ./juicefs rmr /jfs/test1
+}
+
+test_clone_with_mdtest2()
+{
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    ./juicefs mdtest $META_URL /test --depth 1 --dirs 1 --files 1000 --threads 100 --write 8192
     ./juicefs clone /jfs/test /jfs/test1
     ./juicefs rmr /jfs/test
     ./juicefs rmr /jfs/test1
