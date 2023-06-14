@@ -2167,7 +2167,7 @@ func testClone(t *testing.T, m Meta) {
 	if st := m.NewSlice(Background, &sliceId); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(Background, file1, 0, 0, Slice{sliceId, 200, 0, 200}, time.Now()); st != 0 {
+	if st := m.Write(Background, file1, 0, 0, Slice{sliceId, 67108864, 0, 67108864}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 
@@ -2179,12 +2179,15 @@ func testClone(t *testing.T, m Meta) {
 	if st := m.NewSlice(Background, &sliceId2); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(Background, file2, 0, 0, Slice{sliceId2, 200, 0, 200}, time.Now()); st != 0 {
+	if st := m.Write(Background, file2, 0, 0, Slice{sliceId2, 67108863, 0, 67108863}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	var file3 Ino
 	if eno := m.Mknod(Background, dir3, "file3", TypeFile, 0777, 022, 0, "", &file3, nil); eno != 0 {
 		t.Fatalf("mknod: %s", eno)
+	}
+	if eno := m.Fallocate(Background, file3, 0, 0, 67108864); eno != 0 {
+		t.Fatalf("fallocate: %s", eno)
 	}
 
 	if eno := m.SetXattr(Background, file1, "name", []byte("juicefs"), XattrCreateOrReplace); eno != 0 {
@@ -2262,7 +2265,7 @@ func testClone(t *testing.T, m Meta) {
 	if totalspace-availspace-space != 32768 {
 		time.Sleep(time.Second * 2)
 		m.StatFS(Background, cloneDir, &totalspace, &availspace, &iused, &iavail)
-		if totalspace-availspace-space != 32768 {
+		if totalspace-availspace-space != 268451840 {
 			t.Fatalf("added space: %d", totalspace-availspace-space)
 		}
 	}
