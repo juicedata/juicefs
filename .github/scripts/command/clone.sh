@@ -85,6 +85,17 @@ test_clone_with_big_file2()
     rm /jfs/test -rf
     diff /tmp/test /jfs/test1
 }
+
+test_clone_after_random_write(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    PATH1=/tmp/test PATH2=/jfs/test python3 .github/scripts/random_read_write.py 
+    ./juicefs clone /jfs/test /jfs/test1
+    rm /jfs/test -rf
+    diff /tmp/test /jfs/test1
+}
+
 test_clone_with_sparse_file()
 {
     prepare_test
