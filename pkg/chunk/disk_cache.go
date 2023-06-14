@@ -739,7 +739,8 @@ func newCacheManager(config *Config, reg prometheus.Registerer, uploader func(ke
 		}
 	}
 	if len(dirs) == 0 {
-		logger.Warnf("No cache dir existed")
+		config.CacheSize = 100
+		logger.Warnf("No cache dir existed, use memory cache instead, cache size: %dMB", config.CacheSize)
 		return newMemStore(config, metrics)
 	}
 	sort.Strings(dirs)
