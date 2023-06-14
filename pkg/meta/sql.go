@@ -3943,8 +3943,10 @@ func (m *dbMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 					cs[i].Id = 0
 					cs[i].Inode = ino
 				}
-				if err := mustInsert(s, cs); err != nil {
-					return err
+				if len(cs) != 0 {
+					if err := mustInsert(s, cs); err != nil {
+						return err
+					}
 				}
 				// TODO: batch?
 				for _, c := range cs {
