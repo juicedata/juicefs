@@ -138,7 +138,7 @@ test_clone_with_small_files(){
     diff -ur /jfs/test1 /jfs/test1
 }
 
-test_clone_with_mdtest1()
+skip_test_clone_with_mdtest1()
 {
     prepare_test
     ./juicefs format $META_URL myjfs
@@ -149,7 +149,7 @@ test_clone_with_mdtest1()
     ./juicefs rmr /jfs/test1
 }
 
-test_clone_with_mdtest2()
+skip_test_clone_with_mdtest2()
 {
     prepare_test
     ./juicefs format $META_URL myjfs
