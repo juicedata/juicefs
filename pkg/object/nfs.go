@@ -33,6 +33,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/vmware/go-nfs-client/nfs"
 	"github.com/vmware/go-nfs-client/nfs/rpc"
@@ -262,6 +263,58 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 		}
 	}
 	return objs, nil
+}
+
+func (n *nfsStore) setAttr(path string, attrSet func(attr *nfs.Fattr) nfs.Sattr3) error {
+	p := n.path(path)
+	fi, fh, err := n.target.Lookup(p)
+	if err != nil {
+		return err
+	}
+	fattr := fi.(*nfs.Fattr)
+	_, err = n.target.SetAttr(fh, attrSet(fattr))
+	return err
+}
+
+func (n *nfsStore) Chtimes(path string, mtime time.Time) error {
+	return n.setAttr(path, func(attr *nfs.Fattr) nfs.Sattr3 {
+		return nfs.Sattr3{
+			Mtime: nfs.SetTime{
+				Time: nfs.NFS3Time{
+					Seconds:  uint32(mtime.Second()),
+					Nseconds: uint32(mtime.Nanosecond()),
+				},
+			},
+		}
+	})
+}
+
+func (n *nfsStore) Chmod(path string, mode os.FileMode) error {
+	return n.setAttr(path, func(attr *nfs.Fattr) nfs.Sattr3 {
+		return nfs.Sattr3{
+			Mode: nfs.SetMode{
+				SetIt: true,
+				Mode:  uint32(mode),
+			},
+		}
+	})
+}
+
+func (n *nfsStore) Chown(path string, owner, group string) error {
+	uid := utils.LookupUser(owner)
+	gid := utils.LookupGroup(group)
+	return n.setAttr(path, func(attr *nfs.Fattr) nfs.Sattr3 {
+		return nfs.Sattr3{
+			UID: nfs.SetUID{
+				SetIt: true,
+				UID:   uint32(uid),
+			},
+			GID: nfs.SetUID{
+				SetIt: true,
+				UID:   uint32(gid),
+			},
+		}
+	})
 }
 
 func (n *nfsStore) ListAll(prefix, marker string) (<-chan Object, error) {
