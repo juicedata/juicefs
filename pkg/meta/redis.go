@@ -4253,6 +4253,9 @@ func (m *redisMeta) doCloneEntry(ctx Context, srcIno Ino, parent Ino, name strin
 					}
 
 					for i, sv := range vals {
+						if len(sv) == 0 {
+							continue
+						}
 						ss := readSlices(sv)
 						if ss == nil {
 							return syscall.EIO
