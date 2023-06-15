@@ -33,6 +33,7 @@ const (
 	// sqlAddr = "mysql://root:@tcp(127.0.0.1:4000)/juicefs" // TiDB
 	tkvAddr = "badger://test_db"
 	// tkvAddr = "tikv://127.0.0.1:2379/juicefs"
+	fdbAddr = "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs"
 )
 
 func init() {
@@ -643,5 +644,10 @@ func BenchmarkSQL(b *testing.B) {
 
 func BenchmarkTKV(b *testing.B) {
 	m := NewClient(tkvAddr, nil)
+	benchmarkAll(b, m)
+}
+
+func BenchmarkFdb(b *testing.B) {
+	m := NewClient(fdbAddr, nil)
 	benchmarkAll(b, m)
 }
