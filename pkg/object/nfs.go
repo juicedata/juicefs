@@ -52,7 +52,9 @@ type nfsStore struct {
 
 type nfsEntry struct {
 	*nfs.EntryPlus
-	name string
+	name      string
+	fi        os.FileInfo
+	isSymlink bool
 }
 
 func (n *nfsStore) String() string {
@@ -190,34 +192,25 @@ func (n *nfsStore) readDirSorted(dirname string) ([]*nfsEntry, error) {
 
 	for i, e := range entries {
 		if e.IsDir() {
-			nfsEntries[i] = &nfsEntry{e, e.Name() + dirSuffix}
+			nfsEntries[i] = &nfsEntry{e, e.Name() + dirSuffix, nil, false}
+		} else if e.Attr.Attr.Type == nfs.NF3Lnk {
+			// follow symlink
+			fi, _, err := n.target.Lookup(filepath.Join(dirname, e.Name()))
+			if err != nil {
+				nfsEntries[i] = &nfsEntry{e, e.Name(), nil, true}
+				continue
+			}
+			name := e.Name()
+			if fi.IsDir() {
+				name = e.Name() + dirSuffix
+			}
+			nfsEntries[i] = &nfsEntry{e, name, fi, true}
 		} else {
-			nfsEntries[i] = &nfsEntry{e, e.Name()}
+			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, false}
 		}
 	}
 	sort.Slice(nfsEntries, func(i, j int) bool { return nfsEntries[i].Name() < nfsEntries[j].Name() })
 	return nfsEntries, err
-}
-
-func (d *nfsStore) toFile(key string, e *nfsEntry) *file {
-	size := e.Size()
-	if e.IsDir() {
-		size = 0
-	}
-	owner, group := getOwnerGroup(e)
-	return &file{
-		obj{
-			key,
-			size,
-			e.ModTime(),
-			e.IsDir(),
-			"",
-		},
-		owner,
-		group,
-		e.Mode(),
-		false,
-	}
 }
 
 func (n *nfsStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
@@ -256,7 +249,7 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 		if !strings.HasPrefix(p, prefix) || (marker != "" && p <= marker) {
 			continue
 		}
-		f := n.toFile(p, e)
+		f := toFile(p, e, e.isSymlink)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break
@@ -316,6 +309,18 @@ func (n *nfsStore) Chown(path string, owner, group string) error {
 			},
 		}
 	})
+}
+
+func (n *nfsStore) Symlink(oldName, newName string) error {
+	return n.target.Symlink(n.path(oldName), n.path(newName))
+}
+
+func (n *nfsStore) Readlink(name string) (string, error) {
+	f, err := n.target.Open(n.path(name))
+	if err != nil {
+		return "", errors.Wrapf(err, "open %s", name)
+	}
+	return f.Readlink()
 }
 
 func (n *nfsStore) ListAll(prefix, marker string) (<-chan Object, error) {
