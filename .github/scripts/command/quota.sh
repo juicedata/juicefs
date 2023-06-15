@@ -247,10 +247,4 @@ wait_until()
     echo "wait until $key becomes $value failed after $wait_seconds seconds" && exit 1
 }
 
-function_names=$(sed -nE '/^test_[^ ()]+ *\(\)/ { s/^\s*//; s/ *\(\).*//; p; }' "$0")
-for func in ${function_names}; do
-    echo Start Test: $func
-    "${func}"
-    echo Finish Test: $func succeeded
-done
-
+source .github/scripts/common/run_test.sh && run_test $@
