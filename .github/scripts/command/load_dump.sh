@@ -120,10 +120,4 @@ do_dump_load(){
     diff -ur /jfs/fsrand /jfs2/fsrand --no-dereference
 }
 
-function_names=$(sed -nE '/^test_[^ ()]+ *\(\)/ { s/^\s*//; s/ *\(\).*//; p; }' "$0")
-for func in ${function_names}; do
-    echo Start Test: $func
-    "${func}"
-    echo Finish Test: $func succeeded
-done
-
+source .github/scripts/common/run_test.sh && run_test $@
