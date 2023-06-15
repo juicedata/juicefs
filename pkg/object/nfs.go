@@ -60,7 +60,7 @@ func (n *nfsStore) String() string {
 }
 
 func (n *nfsStore) path(key string) string {
-	root := strings.Trim(n.root, "/")
+	root := strings.TrimLeft(n.root, "/")
 	if strings.HasPrefix(key, root) {
 		return key[len(root):]
 	}
@@ -232,7 +232,7 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 			dir += dirSuffix
 		}
 	} else if marker == "" {
-		obj, err := n.Head(prefix)
+		obj, err := n.Head(dir)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, nil
@@ -249,7 +249,7 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 		return nil, err
 	}
 	for _, e := range entries {
-		p := filepath.Join(dir, e.Name())
+		p := filepath.Join(prefix, e.Name())
 		if e.IsDir() {
 			p = filepath.ToSlash(p + "/")
 		}
