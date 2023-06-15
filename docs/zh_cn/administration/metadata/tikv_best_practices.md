@@ -46,7 +46,7 @@ JuiceFS 客户端会周期性设置 `safe-point`，除此之外我们也可以�
 ```
 
 :::tip 提示
-此命令同时会清理 JuiceFS 产生的「泄漏对象」和「待清理对象」，请参考[状态检查 & 维护](../status_check_and_maintenance.md#gc)以确认你是否应该使用。
+此命令同时会清理 JuiceFS 产生的「泄漏对象」和「待清理对象」，请参考[状态检查 & 维护](../status_check_and_maintenance.md#gc)以确认您是否应该使用。
 :::
 
 ### TiKV 的垃圾回收模式
