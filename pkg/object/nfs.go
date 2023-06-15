@@ -280,8 +280,9 @@ func (n *nfsStore) Chtimes(path string, mtime time.Time) error {
 	return n.setAttr(path, func(attr *nfs.Fattr) nfs.Sattr3 {
 		return nfs.Sattr3{
 			Mtime: nfs.SetTime{
+				SetIt: nfs.SetToClientTime,
 				Time: nfs.NFS3Time{
-					Seconds:  uint32(mtime.Second()),
+					Seconds:  uint32(mtime.Unix()),
 					Nseconds: uint32(mtime.Nanosecond()),
 				},
 			},
