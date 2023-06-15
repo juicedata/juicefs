@@ -25,6 +25,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/sftp"
+	"github.com/vmware/go-nfs-client/nfs"
 )
 
 func getOwnerGroup(info os.FileInfo) (string, string) {
@@ -34,6 +35,9 @@ func getOwnerGroup(info os.FileInfo) (string, string) {
 		owner = utils.UserName(int(st.Uid))
 		group = utils.GroupName(int(st.Gid))
 	case *sftp.FileStat:
+		owner = utils.UserName(int(st.UID))
+		group = utils.GroupName(int(st.GID))
+	case *nfs.Fattr:
 		owner = utils.UserName(int(st.UID))
 		group = utils.GroupName(int(st.GID))
 	}
