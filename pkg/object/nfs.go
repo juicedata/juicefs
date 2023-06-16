@@ -209,7 +209,7 @@ func (n *nfsStore) readDirSorted(dirname string) ([]*nfsEntry, error) {
 			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, false}
 		}
 	}
-	sort.Slice(nfsEntries, func(i, j int) bool { return nfsEntries[i].Name() < nfsEntries[j].Name() })
+	sort.Slice(nfsEntries, func(i, j int) bool { return nfsEntries[i].name < nfsEntries[j].name })
 	return nfsEntries, err
 }
 
