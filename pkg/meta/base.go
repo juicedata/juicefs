@@ -86,6 +86,7 @@ type engine interface {
 	doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
+	doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno
 	doLookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr) syscall.Errno
 	doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno
 	doLink(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno
@@ -1279,6 +1280,20 @@ func (m *baseMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		}
 	}
 	return err
+}
+
+func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
+	defer m.timeit("SetAttr", time.Now())
+	inode = m.checkRoot(inode)
+	defer func() {
+		m.of.InvalidateChunk(inode, invalidateAttrOnly)
+		if set&(SetAttrAtime|SetAttrAtimeNow) != 0 {
+			if f := m.of.find(inode); f != nil {
+				f.attr.Full = false
+			}
+		}
+	}()
+	return m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
 }
 
 func (m *baseMeta) nextInode() (Ino, error) {
