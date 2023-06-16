@@ -1596,7 +1596,9 @@ func (m *baseMeta) touchAtime(ctx Context, inode Ino, attr *Attr) {
 
 	if attr == nil {
 		attr = new(Attr)
-		m.of.Check(inode, attr)
+		if of := m.of.find(inode); of != nil {
+			*attr = of.attr
+		}
 	}
 	now := time.Now()
 	if attr.Full && !m.atimeNeedsUpdate(attr, now) {
