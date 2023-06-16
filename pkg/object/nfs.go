@@ -57,6 +57,20 @@ type nfsEntry struct {
 	isSymlink bool
 }
 
+func (e *nfsEntry) Info() (os.FileInfo, error) {
+	if e.fi != nil {
+		return e.fi, nil
+	}
+	return e.EntryPlus, nil
+}
+
+func (e *nfsEntry) IsDir() bool {
+	if e.fi != nil {
+		return e.fi.IsDir()
+	}
+	return e.EntryPlus.IsDir()
+}
+
 func (n *nfsStore) String() string {
 	return fmt.Sprintf("nfs://%s@%s:%s", n.username, n.host, n.root)
 }

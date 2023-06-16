@@ -189,7 +189,7 @@ type listThread struct {
 	entries []Object
 }
 
-func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-chan Object, error) {
+func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
 	entries, err := store.List(prefix, "", "/", 1e9)
 	if err != nil {
 		logger.Errorf("list %s: %s", prefix, err)
@@ -214,10 +214,9 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 					if key < start && !strings.HasPrefix(start, key) {
 						continue
 					}
-					if !entries[i].IsDir() || key == prefix {
+					if !entries[i].IsDir() || key == prefix || !followLink && entries[i].IsSymlink() {
 						continue
 					}
-
 					t.entries, t.err = store.List(key, "\x00", "/", 1e9) // exclude itself
 					t.Lock()
 					t.ready = true

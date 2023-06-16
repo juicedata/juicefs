@@ -73,9 +73,13 @@ func formatSize(bytes int64) string {
 }
 
 // ListAll on all the keys that starts at marker from object storage.
-func ListAll(store object.ObjectStorage, prefix, start, end string) (<-chan object.Object, error) {
+func ListAll(store object.ObjectStorage, prefix, start, end string, noFollow ...bool) (<-chan object.Object, error) {
 	startTime := time.Now()
 	logger.Debugf("Iterating objects from %s with prefix %s start %q", store, prefix, start)
+	follow := true
+	if len(noFollow) > 0 && noFollow[0] {
+		follow = false
+	}
 
 	out := make(chan object.Object, maxResults*10)
 
@@ -107,7 +111,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string) (<-chan obje
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
 	objs, err := store.List(prefix, marker, "", maxResults)
 	if err == utils.ENOTSUP {
-		return object.ListAllWithDelimiter(store, prefix, start, end)
+		return object.ListAllWithDelimiter(store, prefix, start, end, follow)
 	}
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
