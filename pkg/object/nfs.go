@@ -312,6 +312,14 @@ func (n *nfsStore) Chown(path string, owner, group string) error {
 }
 
 func (n *nfsStore) Symlink(oldName, newName string) error {
+	p := n.path(newName)
+	if _, _, err := n.target.Lookup(filepath.Dir(p)); err != nil && os.IsNotExist(err) {
+		if _, err := n.target.Mkdir(filepath.Dir(p), os.FileMode(0777)); err != nil {
+			return err
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	return n.target.Symlink(n.path(oldName), n.path(newName))
 }
 
