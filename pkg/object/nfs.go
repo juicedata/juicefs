@@ -364,6 +364,9 @@ func newNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
 		username = u.Username
 	}
 	b := strings.Split(addr, ":")
+	if len(b) != 2 {
+		return nil, fmt.Errorf("invalid NFS address %s", addr)
+	}
 	host := b[0]
 	path := b[1]
 	mount, err := nfs.DialMount(host, time.Second*3)
