@@ -57,6 +57,10 @@ type nfsEntry struct {
 	isSymlink bool
 }
 
+func (e *nfsEntry) Name() string {
+	return e.name
+}
+
 func (e *nfsEntry) Info() (os.FileInfo, error) {
 	if e.fi != nil {
 		return e.fi, nil
@@ -223,7 +227,7 @@ func (n *nfsStore) readDirSorted(dirname string) ([]*nfsEntry, error) {
 			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, false}
 		}
 	}
-	sort.Slice(nfsEntries, func(i, j int) bool { return nfsEntries[i].name < nfsEntries[j].name })
+	sort.Slice(nfsEntries, func(i, j int) bool { return nfsEntries[i].Name() < nfsEntries[j].Name() })
 	return nfsEntries, err
 }
 
@@ -257,7 +261,7 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64) ([]Object
 	}
 	for _, e := range entries {
 		p := filepath.Join(prefix, e.Name())
-		if e.IsDir() {
+		if e.IsDir() && !e.isSymlink {
 			p = filepath.ToSlash(p + "/")
 		}
 		if !strings.HasPrefix(p, prefix) || (marker != "" && p <= marker) {
@@ -326,10 +330,12 @@ func (n *nfsStore) Chown(path string, owner, group string) error {
 }
 
 func (n *nfsStore) Symlink(oldName, newName string) error {
+	newName = strings.TrimRight(newName, "/")
 	p := n.path(newName)
-	if _, _, err := n.target.Lookup(filepath.Dir(p)); err != nil && os.IsNotExist(err) {
-		if _, err := n.target.Mkdir(filepath.Dir(p), os.FileMode(0777)); err != nil {
-			return err
+	dir := filepath.Dir(p)
+	if _, _, err := n.target.Lookup(dir); err != nil && os.IsNotExist(err) {
+		if _, err := n.target.Mkdir(dir, os.FileMode(0777)); err != nil && !os.IsExist(err) {
+			return errors.Wrapf(err, "mkdir %s", dir)
 		}
 	} else if err != nil && !os.IsNotExist(err) {
 		return err
