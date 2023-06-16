@@ -217,6 +217,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 					if !entries[i].IsDir() || key == prefix || !followLink && entries[i].IsSymlink() {
 						continue
 					}
+					fmt.Printf("list %s, is dir: %t, followLink: %t, is symlink: %t\n", key, entries[i].IsDir(), followLink, entries[i].IsSymlink())
 					t.entries, t.err = store.List(key, "\x00", "/", 1e9) // exclude itself
 					t.Lock()
 					t.ready = true
@@ -243,7 +244,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 			} else if !strings.HasPrefix(start, key) {
 				continue
 			}
-			if !e.IsDir() || key == prefix {
+			if !entries[i].IsDir() || key == prefix || !followLink && entries[i].IsSymlink() {
 				continue
 			}
 
