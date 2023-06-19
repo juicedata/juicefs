@@ -27,10 +27,10 @@ Prometheus 在抓取监控指标时会自动附加 `instance` 标签以帮助识
 
 ### 指标
 
-| 名称                  | 描述           | 单位 |
-| ----                  | -----------    | ---- |
-| `juicefs_used_space`  | 总使用空间     | 字节 |
-| `juicefs_used_inodes` | 总 inodes 数量 |      |
+| 名称                            | 描述            | 单位 |
+|-------------------------------|---------------|----|
+| `juicefs_used_space`          | 总使用空间         | 字节 |
+| `juicefs_used_inodes`         | 总 inodes 数量   |    |
 
 ## 操作系统
 
@@ -76,20 +76,23 @@ Prometheus 在抓取监控指标时会自动附加 `instance` 标签以帮助识
 
 ### 指标
 
-| 名称                                    | 描述                   | 单位 |
-| ----                                    | -----------            | ---- |
-| `juicefs_blockcache_blocks`             | 缓存块的总个数         |      |
-| `juicefs_blockcache_bytes`              | 缓存块的总大小         | 字节 |
-| `juicefs_blockcache_hits`               | 命中缓存块的总次数     |      |
-| `juicefs_blockcache_miss`               | 没有命中缓存块的总次数 |      |
-| `juicefs_blockcache_writes`             | 写入缓存块的总次数     |      |
-| `juicefs_blockcache_drops`              | 丢弃缓存块的总次数     |      |
-| `juicefs_blockcache_evicts`             | 淘汰缓存块的总次数     |      |
-| `juicefs_blockcache_hit_bytes`          | 命中缓存块的总大小     | 字节 |
+| 名称                                      | 描述          | 单位 |
+|-----------------------------------------|-------------|----|
+| `juicefs_blockcache_blocks`             | 缓存块的总个数     |    |
+| `juicefs_blockcache_bytes`              | 缓存块的总大小     | 字节 |
+| `juicefs_blockcache_hits`               | 命中缓存块的总次数   |    |
+| `juicefs_blockcache_miss`               | 没有命中缓存块的总次数 |    |
+| `juicefs_blockcache_writes`             | 写入缓存块的总次数   |    |
+| `juicefs_blockcache_drops`              | 丢弃缓存块的总次数   |    |
+| `juicefs_blockcache_evicts`             | 淘汰缓存块的总次数   |    |
+| `juicefs_blockcache_hit_bytes`          | 命中缓存块的总大小   | 字节 |
 | `juicefs_blockcache_miss_bytes`         | 没有命中缓存块的总大小 | 字节 |
-| `juicefs_blockcache_write_bytes`        | 写入缓存块的总大小     | 字节 |
-| `juicefs_blockcache_read_hist_seconds`  | 读缓存块的延时分布     | 秒   |
-| `juicefs_blockcache_write_hist_seconds` | 写缓存块的延时分布     | 秒   |
+| `juicefs_blockcache_write_bytes`        | 写入缓存块的总大小   | 字节 |
+| `juicefs_blockcache_read_hist_seconds`  | 读缓存块的延时分布   | 秒  |
+| `juicefs_blockcache_write_hist_seconds` | 写缓存块的延时分布   | 秒  |
+| `juicefs_staging_blocks`                | 暂存路径中的块数    |    |
+| `juicefs_staging_block_bytes`           | 暂存路径中块的总字节数 | 秒  |
+| `juicefs_staging_block_delay_seconds`   | 暂存块延迟的总秒数 | 秒  |
 
 ## 对象存储
 
@@ -111,6 +114,7 @@ Prometheus 在抓取监控指标时会自动附加 `instance` 标签以帮助识
 
 ### 指标
 
-| 名称                                   | 描述               | 单位 |
-| ----                                   | -----------        | ---- |
+| 名称                                     | 描述               | 单位 |
+|----------------------------------------| -----------        | ---- |
 | `juicefs_compact_size_histogram_bytes` | 合并数据的大小分布 | 字节 |
+| `juicefs_used_read_buffer_size_bytes`  | 当前用于读取的缓冲区的大小 |    |

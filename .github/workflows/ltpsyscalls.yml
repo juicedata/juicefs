@@ -79,7 +79,7 @@ jobs:
 
       - name: Install LTP Syscalls
         run: |
-          sudo apt-get install -y libacl1-dev
+          sudo apt-get install -y libaio-dev libacl1-dev
           sudo apt-get install -y attr
           wget -O ltp.tar.gz https://github.com/linux-test-project/ltp/archive/refs/tags/20210927.tar.gz
           mkdir ltp
