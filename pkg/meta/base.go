@@ -37,6 +37,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/syndtr/gocapability/capability"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -1293,6 +1294,23 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			}
 		}
 	}()
+	if set&SetAttrFlag != 0 {
+		if ctx.Uid() != 0 {
+			cap, err := capability.NewPid2(int(ctx.Pid()))
+			if err != nil {
+				return errno(err)
+			}
+			if err = cap.Load(); err != nil {
+				return errno(err)
+			}
+			if attr.Flags&FlagImmutable != 0 && !cap.Get(capability.CAPS, capability.CAP_LINUX_IMMUTABLE) {
+				return syscall.EPERM
+			}
+			if attr.Flags&FlagAppend != 0 && !cap.Get(capability.CAPS, capability.CAP_SYS_RESOURCE) {
+				return syscall.EPERM
+			}
+		}
+	}
 	return m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
 }
 
