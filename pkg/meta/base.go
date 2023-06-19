@@ -1294,18 +1294,16 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			}
 		}
 	}()
-	if set&SetAttrFlag != 0 {
-		if ctx.Uid() != 0 {
-			cap, err := capability.NewPid2(int(ctx.Pid()))
-			if err != nil {
-				return errno(err)
-			}
-			if err = cap.Load(); err != nil {
-				return errno(err)
-			}
-			if attr.Flags&(FlagImmutable|FlagAppend) != 0 && !cap.Get(capability.CAPS, capability.CAP_LINUX_IMMUTABLE) {
-				return syscall.EPERM
-			}
+	if set&SetAttrFlag != 0 && ctx.Uid() != 0 {
+		cap, err := capability.NewPid2(int(ctx.Pid()))
+		if err != nil {
+			return errno(err)
+		}
+		if err = cap.Load(); err != nil {
+			return errno(err)
+		}
+		if attr.Flags&(FlagImmutable|FlagAppend) != 0 && !cap.Get(capability.CAPS, capability.CAP_LINUX_IMMUTABLE) {
+			return syscall.EPERM
 		}
 	}
 	return m.en.doSetAttr(ctx, inode, set, sugidclearmode, attr)
