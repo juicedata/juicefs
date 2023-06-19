@@ -863,10 +863,7 @@ func (m *kvMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	return errno(err)
 }
 
-func (m *kvMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
-	defer m.timeit("SetAttr", time.Now())
-	inode = m.checkRoot(inode)
-	defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
+func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(tx *kvTxn) error {
 		var cur Attr
 		a := tx.get(m.inodeKey(inode))
@@ -2471,12 +2468,6 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 
 	if force {
 		m.compactChunk(inode, indx, force)
-	} else {
-		go func() {
-			// wait for the current compaction to finish
-			time.Sleep(time.Minute)
-			m.compactChunk(inode, indx, force)
-		}()
 	}
 }
 

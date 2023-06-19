@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -146,7 +147,13 @@ func quota(c *cli.Context) error {
 
 	result := make([][]string, 1, len(qs)+1)
 	result[0] = []string{"Path", "Size", "Used", "Use%", "Inodes", "IUsed", "IUse%"}
-	for p, q := range qs {
+	paths := make([]string, 0, len(qs))
+	for p := range qs {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	for _, p := range paths {
+		q := qs[p]
 		if q.UsedSpace < 0 {
 			logger.Warnf("Used space of %s is negative (%d), please run `juicefs quota check` to fix it", p, q.UsedSpace)
 			q.UsedSpace = 0
