@@ -2873,7 +2873,11 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	if m.snap != nil {
 		e := m.snap[inode]
 		entries = e.Entries
-		for n := range e.Entries {
+		for n, de := range e.Entries {
+			if de.Attr == nil {
+				logger.Warnf("Corrupt entry with name %s, missing attribute", n)
+				continue
+			}
 			sortedName = append(sortedName, n)
 		}
 	} else {
