@@ -23,7 +23,7 @@ secfs.test:
 	make -C secfs.test >secfs.test-build-integration.log 2>&1
 
 s3test:
-	pip install awscli --upgrade
+	pip install awscli==1.27.153
 	bash s3gateway_test.sh
 
 webdav:
