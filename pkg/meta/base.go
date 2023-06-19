@@ -1303,10 +1303,7 @@ func (m *baseMeta) SetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			if err = cap.Load(); err != nil {
 				return errno(err)
 			}
-			if attr.Flags&FlagImmutable != 0 && !cap.Get(capability.CAPS, capability.CAP_LINUX_IMMUTABLE) {
-				return syscall.EPERM
-			}
-			if attr.Flags&FlagAppend != 0 && !cap.Get(capability.CAPS, capability.CAP_SYS_RESOURCE) {
+			if attr.Flags&(FlagImmutable|FlagAppend) != 0 && !cap.Get(capability.CAPS, capability.CAP_LINUX_IMMUTABLE) {
 				return syscall.EPERM
 			}
 		}
