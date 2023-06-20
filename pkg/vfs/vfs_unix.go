@@ -28,7 +28,6 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/syndtr/gocapability/capability"
 
 	"golang.org/x/sys/unix"
 )
@@ -340,19 +339,8 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 			err = syscall.EINVAL
 			return
 		}
-		if ctx.Uid() != 0 && iflag&(FS_IMMUTABLE_FL|FS_APPEND_FL) != 0 {
-			cap, err := capability.NewPid2(int(ctx.Pid()))
-			if err != nil {
-				logger.Errorf("get capability of process(%d): %s", ctx.Pid(), err)
-				return syscall.EPERM
-			}
-			if err = cap.Load(); err != nil {
-				logger.Errorf("load capability of process(%d): %s", ctx.Pid(), err)
-				return syscall.EPERM
-			}
-			if !cap.Get(capability.CAPS, capability.CAP_LINUX_IMMUTABLE) {
-				return syscall.EPERM
-			}
+		if ctx.CheckPermission() && ctx.Uid() != 0 && iflag&(FS_IMMUTABLE_FL|FS_APPEND_FL) != 0 {
+			return syscall.EPERM
 		}
 		if (iflag & FS_IMMUTABLE_FL) != 0 {
 			attr.Flags |= meta.FlagImmutable
