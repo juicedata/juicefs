@@ -675,7 +675,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 
 	runCase("create a bucket", func(blob object.ObjectStorage) error {
 		created := true
-		if err := blob.Put(key, bytes.NewReader(nil)); err != nil {
+		if err := blob.Put(key, bytes.NewReader([]byte("1"))); err != nil {
 			created = false
 		}
 		defer blob.Delete(key) //nolint:errcheck
@@ -893,7 +893,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 	runCase("special key", func(blob object.ObjectStorage) error {
 		key := "测试编码文件" + `{"name":"juicefs"}` + string('\u001F')
 		defer blob.Delete(key) //nolint:errcheck
-		if err := blob.Put(key, bytes.NewReader(nil)); err != nil {
+		if err := blob.Put(key, bytes.NewReader([]byte("1"))); err != nil {
 			return fmt.Errorf("put encode file failed: %s", err)
 		} else {
 			if resp, err := blob.List("", "测试编码文件", "", 1); err != nil && err != utils.ENOTSUP {
@@ -931,7 +931,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 
 		// Copy `/` suffixed object
 		defer blob.Delete("slash_test_file/") //nolint:errcheck
-		if err := blob.Put("slash_test_file/", bytes.NewReader([]byte{})); err != nil {
+		if err := blob.Put("slash_test_file/", bytes.NewReader([]byte("1"))); err != nil {
 			return fmt.Errorf("put `/` suffixed object failed: %s", err)
 		}
 		return nil
