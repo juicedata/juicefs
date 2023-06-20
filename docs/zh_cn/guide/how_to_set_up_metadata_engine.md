@@ -111,7 +111,7 @@ juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 JuiceFS 同时支持 Redis 的 TLS 单向加密认证和 mTLS 双向加密认证连接。通过 TLS 或 mTLS 连接到 Redis 时均使用 `rediss://` 协议头，但是在使用 TLS 单向加密认证时，不需要指定客户端证书和私钥。
 
 :::note
-JuiceFS 对 Redis mTLS 功能的支持尚未正式发布，如需使用可以使用 main 分支[手动编译客户端](../getting-started/installation.md#手动编译客户端)。
+对 Redis mTLS 功能的支持需要使用 1.1.0 及以上版本的 JuiceFS
 :::
 
 当通过 mTLS 连接 Redis 时，需要提供客户端证书和私钥，以及签发客户端证书的 CA 证书进行连接。在 JuiceFS 中，可以通过以下方式设置 mTLS 需要的客户端证书：

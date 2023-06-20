@@ -202,7 +202,7 @@ For AWS users in China, you need add `.cn` to the host, i.e. `amazonaws.com.cn`,
 If the S3 bucket has public access (anonymous access is supported), please set `--access-key` to `anonymous`.
 :::
 
-Versions prior to JuiceFS v0.12 only support the virtual hosting type, v0.12 and later versions support both styles. For example,
+In JuiceFS both the two styles are supported to specify the bucket address, for example,
 
 ```bash
 # virtual hosted-style
@@ -723,7 +723,9 @@ juicefs format \
 ## Ceph RADOS
 
 :::note
-The minimum version of Ceph supported by JuiceFS is Luminous (v12.2.*). Please make sure your version of Ceph meets the requirements.
+JuiceFS v1.0 uses go-ceph v0.4.0, which supports Ceph Luminous (v12.2.*) and above.
+JuiceFS v1.1 uses go-ceph v0.18.0, which supports Ceph Octopus (v15.2.*) and above.
+Please make sure that JuiceFS matches your Ceph version, see [go-ceph](https://github.com/ceph/go-ceph#supported-ceph-versions).
 :::
 
 The [Ceph Storage Cluster](https://docs.ceph.com/en/latest/rados) has a messaging layer protocol that enables clients to interact with a Ceph Monitor and a Ceph OSD Daemon. The [`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro) API enables you to interact with the two types of daemons:
