@@ -2873,7 +2873,10 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	if m.snap != nil {
 		e := m.snap[inode]
 		entries = e.Entries
-		for n := range e.Entries {
+		for n, de := range e.Entries {
+			if !de.Attr.full && de.Attr.Inode != TrashInode {
+				logger.Errorf("Corrupt inode: %d, missing attribute", inode)
+			}
 			sortedName = append(sortedName, n)
 		}
 	} else {
@@ -2978,14 +2981,13 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 				ino := m.decodeInode(key[1:9])
 				e := m.snap[ino]
 				if e == nil {
-					e = &DumpedEntry{}
+					e = &DumpedEntry{Attr: &DumpedAttr{Inode: ino}}
 					m.snap[ino] = e
 				}
 				switch key[9] {
 				case 'I':
 					attr := &Attr{Nlink: 1}
 					m.parseAttr(value, attr)
-					e.Attr = &DumpedAttr{}
 					dumpAttr(attr, e.Attr)
 					e.Attr.Inode = ino
 				case 'C':
@@ -3001,11 +3003,13 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 					e.Chunks = append(e.Chunks, &DumpedChunk{indx, slices})
 				case 'D':
 					name := string(key[10:])
-					_, inode := m.parseEntry(value)
+					typ, inode := m.parseEntry(value)
 					child := m.snap[inode]
 					if child == nil {
-						child = &DumpedEntry{}
+						child = &DumpedEntry{Attr: &DumpedAttr{Inode: inode, Type: typeToString(typ)}}
 						m.snap[inode] = child
+					} else if child.Attr.Type == "" {
+						child.Attr.Type = typeToString(typ)
 					}
 					if e.Entries == nil {
 						e.Entries = map[string]*DumpedEntry{}

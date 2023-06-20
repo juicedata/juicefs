@@ -3304,7 +3304,7 @@ func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEnt
 	e := &DumpedEntry{}
 	n, ok := m.snap.node[inode]
 	if !ok && inode != TrashInode {
-		logger.Warnf("The entry of the inode was not found. inode: %d", inode)
+		logger.Errorf("Corrupt inode: %d, missing attribute", inode)
 	}
 
 	attr := &Attr{Typ: typ, Nlink: 1}
