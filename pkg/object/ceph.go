@@ -156,6 +156,9 @@ func (c *ceph) Put(key string, in io.Reader) error {
 				off += uint64(n)
 			} else {
 				if err == io.EOF {
+					if off == 0 {
+						return errors.New("ceph: can't put empty file")
+					}
 					return nil
 				}
 				return err
