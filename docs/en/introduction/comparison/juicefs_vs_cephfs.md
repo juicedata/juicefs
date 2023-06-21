@@ -56,7 +56,6 @@ JuiceFS provides a libjfs library, a FUSE client application, Java SDK, etc. It 
 | Languages                       | C++                   | Go                    |
 | License                         | LGPLv2.1 & LGPLv3     | Apache License 2.0    |
 
-
 #### [1] File Chunking
 
 CephFS splits files by [`object_size`](https://docs.ceph.com/en/latest/cephfs/file-layouts/#reading-layouts-with-getfattr) (default 4MiB). Each chunk corresponds to a RADOS object. JuiceFS, on the other hand, splits files into 64MiB chunks, and each chunk will be further split into one or more logical slice(s) according to the actual situation when writing. Each Slice will then be further split into one or more logical Block(s) when writing to the object store, and each Block corresponds to one object in the object storage. When handling overwrites, CephFS needs to modify the corresponding objects directly, which is a complicated process. Especially, when the redundancy policy is EC or the data compression is enabled, part of the object content needs to be read first, modified in memory, and then written, which costs a great performance overhead. In comparison, JuiceFS handles overwrites by writing the updated data as new objects and modifying the metadata at the same time, which greatly improves the performance

@@ -723,9 +723,9 @@ juicefs format \
 ## Ceph RADOS
 
 :::note
-JuiceFS v1.0 uses go-ceph v0.4.0, which supports Ceph Luminous (v12.2.*) and above.
-JuiceFS v1.1 uses go-ceph v0.18.0, which supports Ceph Octopus (v15.2.*) and above.
-Please make sure that JuiceFS matches your Ceph version, see [go-ceph](https://github.com/ceph/go-ceph#supported-ceph-versions).
+JuiceFS v1.0 uses `go-ceph` v0.4.0, which supports Ceph Luminous (v12.2.*) and above.
+JuiceFS v1.1 uses `go-ceph` v0.18.0, which supports Ceph Octopus (v15.2.*) and above.
+Please make sure that JuiceFS matches your Ceph version, see [`go-ceph`](https://github.com/ceph/go-ceph#supported-ceph-versions).
 :::
 
 The [Ceph Storage Cluster](https://docs.ceph.com/en/latest/rados) has a messaging layer protocol that enables clients to interact with a Ceph Monitor and a Ceph OSD Daemon. The [`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro) API enables you to interact with the two types of daemons:

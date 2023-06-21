@@ -723,9 +723,9 @@ juicefs format \
 ## Ceph RADOS
 
 :::note 注意
-JuiceFS v1.0 使用的 go-ceph 库版本为 v0.4.0，其支持的 Ceph 最低版本为 Luminous（v12.2.*）。
-JuiceFS v1.1 使用的 go-ceph 库版本为 v0.18.0，其支持的 Ceph 最低版本为 Octopus（v15.2.*）。
-在使用前请确认 JuiceFS 与您使用的 Ceph 版本是否匹配，具体可参见 [go-ceph](https://github.com/ceph/go-ceph#supported-ceph-versions)。
+JuiceFS v1.0 使用的 `go-ceph` 库版本为 v0.4.0，其支持的 Ceph 最低版本为 Luminous（v12.2.*）。
+JuiceFS v1.1 使用的 `go-ceph` 库版本为 v0.18.0，其支持的 Ceph 最低版本为 Octopus（v15.2.*）。
+在使用前请确认 JuiceFS 与您使用的 Ceph 版本是否匹配，具体可参见 [`go-ceph`](https://github.com/ceph/go-ceph#supported-ceph-versions)。
 :::
 
 [Ceph 存储集群](https://docs.ceph.com/en/latest/rados) 具有消息传递层协议，该协议使客户端能够与 Ceph Monitor 和 Ceph OSD 守护程序进行交互。[`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro) API 使您可以与这两种类型的守护程序进行交互：

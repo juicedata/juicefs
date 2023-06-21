@@ -5,6 +5,7 @@ slug: /metadata_dump_load
 ---
 
 :::tip
+
 - JuiceFS v1.0.0 starts to support automatic metadata backup.
 - JuiceFS v1.0.4 starts to support importing an encrypted backup.
 :::

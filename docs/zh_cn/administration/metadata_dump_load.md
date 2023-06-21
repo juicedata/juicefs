@@ -5,6 +5,7 @@ slug: /metadata_dump_load
 ---
 
 :::tip 提示
+
 - JuiceFS v1.0.0 开始支持元数据自动备份
 - JuiceFS v1.0.4 开始支持通过 `load` 命令恢复加密的元数据备份
 :::
