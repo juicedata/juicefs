@@ -5,7 +5,7 @@ sidebar_position: 4
 
 Any kind of storage system needs to be checked and maintained regularly once in production, so that potential problems can be found and fixed as early as possible to ensure reliable operation of the file system and the integrity and consistency of the stored data.
 
-JuiceFS provides a series of tools to check and maintain the file system, not only to help understand the basic information of the file system and its operation status, but also to help detect and fix potential problems more easily and effeciently.
+JuiceFS provides a series of tools to check and maintain the file system, not only to help understand the basic information of the file system and its operation status, but also to help detect and fix potential problems more easily and efficiently.
 
 ## status
 
@@ -229,7 +229,7 @@ As you can see from the results, the `juicefs fsck` scan found a file corruption
 
 Although the result indicates that the file in the backend storage is corrupted, it is still necessary to check if the file is accessible at the mount point, because JuiceFS will cache the recently accessed file data locally, and the version of the file before the corruption can be re-uploaded with the cached file data block to avoid losing data, if it is already cached locally. You can look for cached data in the cache directory _(i.e. the path corresponding to the `--cache-dir` option)_ based on the path of the block output from the `juicefs fsck` command, e.g. the path of the missing block in the above example is `0/1/1063_0_2693747`.
 
-If the files can't be somehow recovered, to find a clean filesystem _(where both Object Storage and metadata are in sync, and `juicefs fsck` finds no corruption in the filesystem)_ you can perform a `juicefs dump` of the metadata and then re-import that dump on a newer metadata engine _(or database, if supported by your metadata engine, eg. Redis or MySQL where you can specifiy a database name)_ using `juicefs load` like:
+If the files can't be somehow recovered, to find a clean filesystem you can perform a `juicefs dump` of the metadata and then re-import that dump on a newer metadata engine _(or database, if supported by your metadata engine, eg. Redis or MySQL where you can specifiy a database name)_ using `juicefs load` like:
 
 ```shell
 # Export metadata to meta-dump.json
