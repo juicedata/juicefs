@@ -229,7 +229,7 @@ As you can see from the results, the `juicefs fsck` scan found a file corruption
 
 Although the result indicates that the file in the backend storage is corrupted, it is still necessary to check if the file is accessible at the mount point, because JuiceFS will cache the recently accessed file data locally, and the version of the file before the corruption can be re-uploaded with the cached file data block to avoid losing data, if it is already cached locally. You can look for cached data in the cache directory _(i.e. the path corresponding to the `--cache-dir` option)_ based on the path of the block output from the `juicefs fsck` command, e.g. the path of the missing block in the above example is `0/1/1063_0_2693747`.
 
-If the files can't be somehow recovered, to find a clean filesystem you can perform a dump of the metadata and then re-import that dump on a newer metadata engine _(or database, if supported by your metadata engine, eg. Redis or MySQL where you can specifiy a database name)_:
+If the files can't be somehow recovered, to find a clean filesystem you can perform a dump of the metadata and then re-import that dump on a newer metadata engine:
 
 ```shell
 # Export metadata to meta-dump.json
