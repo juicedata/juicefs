@@ -73,6 +73,7 @@ jobs:
           # sed -i "s?recordcount=1000?recordcount=1000000?" workloads/workloadf
           # sed -i "s?operationcount=1000?operationcount=15000?" workloads/workloadf
           cat workloads/workloadf
+          wget https://raw.githubusercontent.com/adonis0147/YCSB/master/bin/ycsb -O bin/ycsb
           time ./bin/ycsb load mongodb -s -P workloads/workloadf  -threads 10 > outputLoad.txt
           df -lh
 
