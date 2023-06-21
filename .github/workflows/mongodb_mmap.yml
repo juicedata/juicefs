@@ -15,18 +15,18 @@ on:
   schedule:
     - cron:  '30 20 * * *'
   workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
 
 
 jobs:
   mongodb_mmap:
     runs-on: ubuntu-20.04
     steps:
-      # - name: Set up Python
-      #   uses: actions/setup-python@v4
-      #   with:
-      #     python-version: '2.7'
-      #     architecture: 'x64'
-
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -48,11 +48,8 @@ jobs:
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --cache-size 3072 --no-usage-report &
 
-
-
       - name: Set up Mongodb
         run: |
-          df -lh
           cd /jfs/
           git clone https://github.com/sanwan/actionsoftware.git
           cd actionsoftware
@@ -61,31 +58,24 @@ jobs:
           mkdir /jfs/mongodb/
           nohup ./bin/mongod --dbpath /jfs/mongodb &
 
-
-
       - name: Insert Data
         run: |
-          df -lh
           cd /jfs/
           wget -O ycsb.tar.gz -q https://github.com/brianfrankcooper/YCSB/releases/download/0.17.0/ycsb-0.17.0.tar.gz
           tar -zxvf ycsb.tar.gz
           cd ycsb-0.17.0
-          # sed -i "s?recordcount=1000?recordcount=1000000?" workloads/workloadf
-          # sed -i "s?operationcount=1000?operationcount=15000?" workloads/workloadf
+          sed -i "s?recordcount=1000?recordcount=1000000?" workloads/workloadf
+          sed -i "s?operationcount=1000?operationcount=15000?" workloads/workloadf
           cat workloads/workloadf
           wget https://raw.githubusercontent.com/adonis0147/YCSB/master/bin/ycsb -O bin/ycsb
           time ./bin/ycsb load mongodb -s -P workloads/workloadf  -threads 10 > outputLoad.txt
-          df -lh
-
 
       - name: Read Modify and Write
         run: |
-          df -lh
           cd /jfs/ycsb-0.17.0/
           ps -aux | grep mongo
           echo "run read modify write"
           time ./bin/ycsb run mongodb -s -P workloads/workloadf -threads 10 > outputRun.txt
-          df -lh
 
       - name: Log
         if: ${{ always() }}
@@ -102,7 +92,7 @@ jobs:
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
       - name: Setup upterm session
-        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
-        if: failure()
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
