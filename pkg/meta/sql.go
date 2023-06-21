@@ -97,7 +97,7 @@ type chunk struct {
 type sliceRef struct {
 	Id   uint64 `xorm:"pk chunkid"`
 	Size uint32 `xorm:"notnull"`
-	Refs int    `xorm:"notnull"`
+	Refs int    `xorm:"index notnull"`
 }
 
 func (c *sliceRef) TableName() string {
