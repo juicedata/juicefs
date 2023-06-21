@@ -21,7 +21,7 @@ description: 本文将指导你使用基于云的对象存储和数据库，构�
 
 JuiceFS 目前支持的基于网络的数据库有：
 
-- **键值数据库**：Redis、TiKV
+- **键值数据库**：Redis、TiKV、etcd、FoundationDB
 - **关系型数据库**：PostgreSQL、MySQL、MariaDB
 
 不同的数据库性能和稳定性表现也各不相同，比如 Redis 是内存型键值数据库，性能极为出色，但可靠性相对较弱。PostgreSQL 是关系型数据库，相比之下性能没有内存型强悍，但它的可靠性要更强。

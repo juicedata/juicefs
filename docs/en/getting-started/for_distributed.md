@@ -21,7 +21,7 @@ The meaning of "Network Database" here refers to the database that allows multip
 
 JuiceFS currently supports the following network-based databases.
 
-- **Key-Value Database**: Redis, TiKV
+- **Key-Value Database**: Redis, TiKV, etcd, FoundationDB
 - **Relational Database**: PostgreSQL, MySQL, MariaDB
 
 Different databases have different performance and stability. For example, Redis is an in-memory key-value database with an excellent performance but a relatively weak reliability, while PostgreSQL is a relational database which is more reliable but has a less excellent performance than the in-memory database.

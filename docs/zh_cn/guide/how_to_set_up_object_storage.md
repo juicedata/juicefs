@@ -202,7 +202,7 @@ AWS 中国的用户，应使用 `amazonaws.com.cn` 域名。相应的区域代�
 如果 S3 的桶具有公共访问权限（支持匿名访问），请将 `--access-key` 设置为 `anonymous`。
 :::
 
-JuiceFS v0.12 之前的版本仅支持虚拟托管类型，v0.12 以及之后的版本两种风格都支持。例如：
+JuiceFS 中可选择任意一种风格来指定存储桶的地址，例如：
 
 ```bash
 # 虚拟托管类型
@@ -723,7 +723,9 @@ juicefs format \
 ## Ceph RADOS
 
 :::note 注意
-JuiceFS 支持的 Ceph 最低版本是 Luminous（v12.2.*），请确认你的 Ceph 版本是否符合要求。
+JuiceFS v1.0 使用的 `go-ceph` 库版本为 v0.4.0，其支持的 Ceph 最低版本为 Luminous（v12.2.*）。
+JuiceFS v1.1 使用的 `go-ceph` 库版本为 v0.18.0，其支持的 Ceph 最低版本为 Octopus（v15.2.*）。
+在使用前请确认 JuiceFS 与您使用的 Ceph 版本是否匹配，具体可参见 [`go-ceph`](https://github.com/ceph/go-ceph#supported-ceph-versions)。
 :::
 
 [Ceph 存储集群](https://docs.ceph.com/en/latest/rados) 具有消息传递层协议，该协议使客户端能够与 Ceph Monitor 和 Ceph OSD 守护程序进行交互。[`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro) API 使您可以与这两种类型的守护程序进行交互：
