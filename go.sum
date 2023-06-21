@@ -627,6 +627,8 @@ github.com/juicedata/go-fuse/v2 v2.1.1-0.20230418090413-880e994b8a4c h1:AVWJgjm5
 github.com/juicedata/go-fuse/v2 v2.1.1-0.20230418090413-880e994b8a4c/go.mod h1:oRyA5eK+pvJyv5otpO/DgccS8y/RvYMaO00GgRLGryc=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d h1:kpQMvNZJKGY3PTt7OSoahYc4nM0HY67SvK0YyS0GLwA=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d/go.mod h1:dlxKkLh3qAIPtgr2U/RVzsZJDuXA1ffg+Njikfmhvgw=
+github.com/juicedata/gogfapi v0.0.0-20230621032604-95097be84fb9 h1:KaL6JKgcgu0CblgqIaUPlLQz6xuCl4TNf+1pqwyT724=
+github.com/juicedata/gogfapi v0.0.0-20230621032604-95097be84fb9/go.mod h1:Ho5G4KgrgbMKW0buAJdOmYoJcOImkzznJQaLiATrsx4=
 github.com/juicedata/huaweicloud-sdk-go-obs v3.22.12-0.20230228031208-386e87b5c091+incompatible h1:2/ttSmYoX+QMegpNyAJR0Y6aHcVk57F7RJit5xN2T/s=
 github.com/juicedata/huaweicloud-sdk-go-obs v3.22.12-0.20230228031208-386e87b5c091+incompatible/go.mod h1:Ukwa8ffRQLV6QRwpqGioPjn2Wnf7TBDA4DbennDOqHE=
 github.com/juicedata/minio v0.0.0-20221113011458-8866d5c9df8c h1:w+4eiZLSLd6aQcy+7wn++hI1caDAm+rNOG7Me5qO7Sw=
