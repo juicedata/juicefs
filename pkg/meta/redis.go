@@ -3613,7 +3613,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					return err
 				}
 				if inode != TrashInode {
-					logger.Warnf("The entry of the inode was not found. inode: %d", inode)
+					logger.Errorf("Corrupt inode: %d, missing attribute", inode)
 				}
 			}
 

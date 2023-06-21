@@ -1969,6 +1969,14 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 		}
 	}()
 
+	format, err := m.Load(false)
+	if err != nil {
+		return errors.Wrap(err, "load meta format")
+	}
+	if statAll && !format.DirStats {
+		logger.Warn("dir stats is disabled, flag '--sync-dir-stat' will be ignored")
+	}
+
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
@@ -2027,45 +2035,47 @@ func (m *baseMeta) Check(ctx Context, fpath string, repair bool, recursive bool,
 					}
 				}
 
-				stat, st := m.en.doGetDirStat(ctx, inode, false)
-				if st == syscall.ENOENT {
-					continue
-				}
-				if st != 0 {
-					hasError = true
-					logger.Errorf("get dir stat for inode %d: %v", inode, st)
-					continue
-				}
-				if stat == nil || stat.space < 0 || stat.inodes < 0 {
-					logger.Warnf("usage stat of %s is missing or broken", path)
-					statBroken = true
-				}
-
-				if !repair && statAll {
-					s, st := m.calcDirStat(ctx, inode)
-					if st != 0 {
-						hasError = true
-						logger.Errorf("calc dir stat for inode %d: %v", inode, st)
+				if format.DirStats {
+					stat, st := m.en.doGetDirStat(ctx, inode, false)
+					if st == syscall.ENOENT {
 						continue
 					}
-					if stat.space != s.space || stat.inodes != s.inodes {
-						logger.Warnf("usage stat of %s should be %v, but got %v", path, s, stat)
+					if st != 0 {
+						hasError = true
+						logger.Errorf("get dir stat for inode %d: %v", inode, st)
+						continue
+					}
+					if stat == nil || stat.space < 0 || stat.inodes < 0 {
+						logger.Warnf("usage stat of %s is missing or broken", path)
 						statBroken = true
 					}
-				}
 
-				if repair {
-					if statBroken || statAll {
-						if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 || st == syscall.ENOENT {
-							logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
-						} else {
+					if !repair && statAll {
+						s, st := m.calcDirStat(ctx, inode)
+						if st != 0 {
 							hasError = true
-							logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, st)
+							logger.Errorf("calc dir stat for inode %d: %v", inode, st)
+							continue
+						}
+						if stat.space != s.space || stat.inodes != s.inodes {
+							logger.Warnf("usage stat of %s should be %v, but got %v", path, s, stat)
+							statBroken = true
 						}
 					}
-				} else if statBroken {
-					logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair --sync-dir-stat' to fix it", path, inode, path)
-					hasError = true
+
+					if repair {
+						if statBroken || statAll {
+							if _, st := m.en.doSyncDirStat(ctx, inode); st == 0 || st == syscall.ENOENT {
+								logger.Debugf("Stat of path %s (inode %d) is successfully synced", path, inode)
+							} else {
+								hasError = true
+								logger.Errorf("Sync stat of path %s inode %d: %s", path, inode, st)
+							}
+						}
+					} else if statBroken {
+						logger.Warnf("Stat of path %s (inode %d) should be synced, please re-run with '--path %s --repair --sync-dir-stat' to fix it", path, inode, path)
+						hasError = true
+					}
 				}
 			}
 		}()

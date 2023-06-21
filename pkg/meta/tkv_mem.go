@@ -236,17 +236,16 @@ func (c *memKV) txn(f func(*kvTxn) error, retry int) error {
 
 func (c *memKV) scan(prefix []byte, handler func(key []byte, value []byte)) error {
 	c.Lock()
-	defer c.Unlock()
+	snap := c.items.Clone()
+	c.Unlock()
 	begin := string(prefix)
 	end := string(nextKey(prefix))
-	c.items.AscendGreaterOrEqual(&kvItem{key: begin}, func(i btree.Item) bool {
+	snap.AscendGreaterOrEqual(&kvItem{key: begin}, func(i btree.Item) bool {
 		it := i.(*kvItem)
 		if end != "" && it.key >= end {
 			return false
 		}
-		c.Unlock()
 		handler([]byte(it.key), it.value)
-		c.Lock()
 		return true
 	})
 	return nil

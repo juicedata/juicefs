@@ -339,6 +339,9 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 			err = syscall.EINVAL
 			return
 		}
+		if ctx.CheckPermission() && ctx.Uid() != 0 && iflag&(FS_IMMUTABLE_FL|FS_APPEND_FL) != 0 {
+			return syscall.EPERM
+		}
 		if (iflag & FS_IMMUTABLE_FL) != 0 {
 			attr.Flags |= meta.FlagImmutable
 		}

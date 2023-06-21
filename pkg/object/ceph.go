@@ -139,6 +139,9 @@ func (c *ceph) Put(key string, in io.Reader) error {
 		if b, ok := in.(*bytes.Reader); ok {
 			v := reflect.ValueOf(b)
 			data := v.Elem().Field(0).Bytes()
+			if len(data) == 0 {
+				return errors.New("ceph: can't put empty file")
+			}
 			return ctx.WriteFull(key, data)
 		}
 		buf := cephPool.Get().([]byte)
@@ -153,6 +156,9 @@ func (c *ceph) Put(key string, in io.Reader) error {
 				off += uint64(n)
 			} else {
 				if err == io.EOF {
+					if off == 0 {
+						return errors.New("ceph: can't put empty file")
+					}
 					return nil
 				}
 				return err
