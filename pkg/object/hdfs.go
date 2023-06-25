@@ -177,7 +177,7 @@ func (h *hdfsclient) Delete(key string) error {
 }
 
 func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	if delimiter != "" {
+	if delimiter != "/" {
 		return nil, notSupported
 	}
 	dir := h.path(prefix)
