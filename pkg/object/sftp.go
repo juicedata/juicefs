@@ -313,9 +313,6 @@ func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo) [
 		p := path + fi.Name()
 		if strings.HasPrefix(p, f.root) {
 			key := p[len(f.root):]
-			if fi.IsDir() {
-				key = filepath.ToSlash(key + dirSuffix)
-			}
 			obs = append(obs, f.fileInfo(c, key, fi))
 		}
 	}
