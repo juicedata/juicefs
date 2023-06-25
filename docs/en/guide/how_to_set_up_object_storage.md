@@ -55,7 +55,7 @@ juicefs format --storage s3 \
 
 After executing the above command, the JuiceFS client will create 4 buckets named `myjfs-0`, `myjfs-1`, `myjfs-2`, and `myjfs-3`.
 
-## Access Key and Secret Key
+## Access Key and Secret Key {#aksk}
 
 In general, object storages are authenticated with Access Key ID and Access Key Secret. For JuiceFS file system, they are provided by options `--access-key` and `--secret-key` (or AK, SK for short).
 
@@ -72,7 +72,7 @@ juicefs format --storage s3 \
 
 Public clouds typically allow users to create IAM (Identity and Access Management) roles, such as [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) or [Alibaba Cloud RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm), which can be assigned to VM instances. If the cloud server instance already has read and write access to the object storage, there is no need to specify `--access-key` and `--secret-key`.
 
-## Use temporary access credentials
+## Use temporary access credentials {#session-token}
 
 Permanent access credentials generally have two parts, Access Key, Secret Key, while temporary access credentials generally include three parts, Access Key, Secret Key and token, and temporary access credentials have an expiration time, usually between a few minutes and a few hours.
 

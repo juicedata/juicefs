@@ -2,15 +2,13 @@
 title: 命令参考
 sidebar_position: 1
 slug: /command_reference
-description: 本文提供 JuiceFS 包含的所有命令及选项的说明、用法和示例。
+description: JuiceFS 客户端的所有命令及选项的说明、用法和示例。
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## 概览
-
-在终端输入 `juicefs` 并执行，你就会看到所有可用的命令。另外，你可以在每个命令后面添加 `-h/--help` 标记获得该命令的详细帮助信息。
+在终端输入 `juicefs` 并执行，就能看到所有可用的命令。在每个命令后面添加 `-h/--help` 并运行，就能获得该命令的详细帮助信息。
 
 ```shell
 NAME:
@@ -20,15 +18,17 @@ USAGE:
    juicefs [global options] command [command options] [arguments...]
 
 VERSION:
-   1.0.0+2022-08-01.0e7afe2d
+   1.1.0
 
 COMMANDS:
    ADMIN:
      format   Format a volume
      config   Change configuration of a volume
+     quota    Manage directory quotas
      destroy  Destroy an existing volume
      gc       Garbage collector of objects in data storage
      fsck     Check consistency of a volume
+     restore  restore files from trash
      dump     Dump metadata into a JSON file
      load     Load metadata from a previously dumped JSON file
      version  Show version
@@ -37,7 +37,8 @@ COMMANDS:
      stats    Show real time performance statistics of JuiceFS
      profile  Show profiling of operations completed in JuiceFS
      info     Show internal information of a path or inode
-     debug   Show information from multiple dimensions such as the operating environment and system logs
+     debug    Collect and display system static and runtime information
+     summary  Show tree summary of a directory
    SERVICE:
      mount    Mount a volume
      umount   Unmount a volume
@@ -49,6 +50,7 @@ COMMANDS:
      warmup    Build cache for target directories/files
      rmr       Remove directories recursively
      sync      Sync between two storages
+     clone     clone a file or directory without copying the underlying data
 
 GLOBAL OPTIONS:
    --verbose, --debug, -v  enable debug log (default: false)
@@ -63,10 +65,6 @@ GLOBAL OPTIONS:
 COPYRIGHT:
    Apache License 2.0
 ```
-
-:::note 注意
-如果命令选项是布尔（boolean）类型，例如 `--debug` ，无需设置任何值，只要在命令中添加 `--debug` 即代表启用该功能，反之则代表不启用。
-:::
 
 ## 自动补全
 
@@ -115,88 +113,54 @@ sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
 source /etc/bash_completion.d/juicefs
 ```
 
-## 命令列表
-
-### `juicefs format` {#format}
+## `juicefs format` {#format}
 
 创建文件系统，如果 `META-URL` 中已经存在一个文件系统，则不会再次进行格式化。如果文件系统创建后需要调整配置，请使用 [`juicefs config`](#config)。
 
-#### 使用
-
-```
-juicefs format [command options] META-URL NAME
-```
-
-- **META-URL**：用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。
-- **NAME**：文件系统名称
-
-#### 选项
-
-`--block-size value`<br />
-块大小；单位为 KiB (默认：4096)。4M 是一个较好的默认值，不少对象存储（比如 S3）都将 4M 设为内部的块大小，因此将 JuiceFS block size 设为相同大小，往往也能获得更好的性能
-
-`--capacity value`<br />
-容量配额；单位为 GiB (默认：不限制)。如果启用了回收站，那么配额大小也将包含回收站文件
-
-`--inodes value`<br />
-文件数配额 (默认：不限制)
-
-`--compress value`<br />
-压缩算法 (`lz4`, `zstd`, `none`) (默认："none")，开启压缩将不可避免地对性能产生一定影响，请权衡。
-
-`--shards value`<br />
-将数据块根据名字哈希存入 N 个桶中 (默认：0)，当 N 大于 0 时，`bucket` 需要写成 `%d` 的形式，例如 `--bucket "juicefs-%d"`
-
-`--storage value`<br />
-对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)
-
-`--bucket value`<br />
-存储数据的桶路径 (默认：`"$HOME/.juicefs/local"` 或 `"/var/jfs"`)
-
-`--access-key value`<br />
-对象存储的 Access Key (也可通过环境变量 `ACCESS_KEY` 设置)
-
-`--secret-key value`<br />
-对象存储的 Secret Key (也可通过环境变量 `SECRET_KEY` 设置)
-
-`--session-token value`<br />
-对象存储的 session token
-
-`--encrypt-rsa-key value`<br />
-RSA 私钥的路径 (PEM)
-
-`--trash-days value`<br />
-文件被自动清理前在回收站内保留的天数 (默认：1)
-
-`--hash-prefix`<br />
-给每个对象添加 hash 前缀 (默认：false)
-
-`--force`<br />
-强制覆盖当前的格式化配置 (默认：false)
-
-`--no-update`<br />
-不要修改已有的格式化配置 (默认：false)
-
-#### 示例
+### 概览
 
 ```shell
+juicefs format [command options] META-URL NAME
+
 # 创建一个简单的测试卷（数据将存储在本地目录中）
-$ juicefs format sqlite3://myjfs.db myjfs
+juicefs format sqlite3://myjfs.db myjfs
 
 # 使用 Redis 和 S3 创建卷
-$ juicefs format redis://localhost myjfs --storage s3 --bucket https://mybucket.s3.us-east-2.amazonaws.com
+juicefs format redis://localhost myjfs --storage s3 --bucket https://mybucket.s3.us-east-2.amazonaws.com
 
 # 使用带有密码的 MySQL 创建卷
-$ juicefs format mysql://jfs:mypassword@(127.0.0.1:3306)/juicefs myjfs
+juicefs format mysql://jfs:mypassword@(127.0.0.1:3306)/juicefs myjfs
 # 更安全的方法
-$ META_PASSWORD=mypassword juicefs format mysql://jfs:@(127.0.0.1:3306)/juicefs myjfs
+META_PASSWORD=mypassword juicefs format mysql://jfs:@(127.0.0.1:3306)/juicefs myjfs
 
 # 创建一个开启配额设置的卷
-$ juicefs format sqlite3://myjfs.db myjfs --inode 1000000 --capacity 102400
+juicefs format sqlite3://myjfs.db myjfs --inode 1000000 --capacity 102400
 
 # 创建一个关闭了回收站的卷
-$ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
+juicefs format sqlite3://myjfs.db myjfs --trash-days 0
 ```
+
+### 参数
+
+|项 | 说明|
+|-|-|
+|`META-URL`|用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。|
+|`NAME`|文件系统名称。|
+|`--block-size=4096`|块大小，单位为 KiB，默认 4096。4M 是一个较好的默认值，不少对象存储（比如 S3）都将 4M 设为内部的块大小，因此将 JuiceFS block size 设为相同大小，往往也能获得更好的性能。|
+|`--capacity=0`|容量配额，单位为 GiB，默认为 0 代表不限制。如果启用了回收站，那么配额大小也将包含回收站文件。|
+|`--inodes=0`|文件数配额，默认为 0 代表不限制。|
+|`--compress=none`|压缩算法，支持 `lz4`, `zstd`, `none`（默认），启用压缩将不可避免地对性能产生一定影响。|
+|`--shards=0`|将数据块根据名字哈希存入 N 个桶中，默认为 0。当 N 大于 0 时，`bucket` 需要写成 `%d` 的形式，例如 `--bucket "juicefs-%d"`。|
+|`--storage=file`|对象存储类型，例如 `s3`、`gcs`、`oss`、`cos`。默认为 `file`，参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
+|`--bucket=value`|存储数据的桶路径（默认：`$HOME/.juicefs/local` 或 `/var/jfs`）。|
+|`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_metadata_engine.md#aksk)以了解更多。|
+|`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_metadata_engine.md#aksk)以了解更多。|
+|`--session-token=value`|对象存储的临时访问凭证（Session Token），查看[如何设置对象存储](../guide/how_to_set_up_metadata_engine.md#session-token)以了解更多。|
+|`--encrypt-rsa-key=value`|RSA 私钥的路径，查看[数据加密](../security/encrypt.md)以了解更多。|
+|`--trash-days=1`|文件被自动清理前在回收站内保留的天数，默认为 1。|
+|`--hash-prefix`|给每个对象添加 hash 前缀，默认为 false。|
+|`--force`|强制覆盖当前的格式化配置，默认为 false。|
+|`--no-update`|不要修改已有的格式化配置，默认为 false。|
 
 ### `juicefs mount` {#mount}
 
