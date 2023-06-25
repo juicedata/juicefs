@@ -257,7 +257,7 @@ func readDirSorted(dirname string) ([]*mEntry, error) {
 }
 
 func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	if delimiter != "/" {
+	if delimiter != "" {
 		return nil, notSupported
 	}
 	var dir string = d.root + prefix

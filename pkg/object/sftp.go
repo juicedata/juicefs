@@ -151,7 +151,7 @@ func (f *sftpStore) putSftpConnection(pc **conn, err error) {
 }
 
 func (f *sftpStore) String() string {
-	return fmt.Sprintf("%s@%s:%s", f.config.User, f.host, f.root)
+	return fmt.Sprintf("sftp://%s@%s:%s", f.config.User, f.host, f.root)
 }
 
 // always preserve suffix `/` for directory key
@@ -313,6 +313,9 @@ func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo) [
 		p := path + fi.Name()
 		if strings.HasPrefix(p, f.root) {
 			key := p[len(f.root):]
+			if fi.IsDir() {
+				key = filepath.ToSlash(key + dirSuffix)
+			}
 			obs = append(obs, f.fileInfo(c, key, fi))
 		}
 	}
@@ -345,7 +348,7 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo) Object 
 }
 
 func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
-	if delimiter != "/" {
+	if delimiter != "" {
 		return nil, notSupported
 	}
 
