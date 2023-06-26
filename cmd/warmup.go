@@ -103,9 +103,8 @@ END:
 				off += 17
 			} else if off+5 < n && resp[off] == meta.CDATA {
 				size := binary.BigEndian.Uint32(resp[off+1 : off+5])
-				headData := resp[off+5:]
-				data = append(data, headData...)
-				if size > uint32(len(headData)) {
+				data = resp[off+5:]
+				if size > uint32(len(resp[off+5:])) {
 					tailData, err := io.ReadAll(cf)
 					if err != nil {
 						logger.Errorf("Read data error: %v", err)
