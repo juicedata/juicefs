@@ -32,7 +32,7 @@ require (
 	github.com/jackc/pgx/v5 v5.3.1
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
-	github.com/juicedata/gogfapi v0.0.0-20230626022304-7a7ca87b71c4
+	github.com/juicedata/gogfapi v0.0.0-20230626071140-fc28e5537825
 	github.com/juju/ratelimit v1.0.2
 	github.com/ks3sdklib/aws-sdk-go v1.2.2
 	github.com/mattn/go-isatty v0.0.18
