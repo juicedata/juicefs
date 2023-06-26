@@ -2377,7 +2377,7 @@ func testClone(t *testing.T, m Meta) {
 		removedItem = append(removedItem, m.detachedKey(cloneDstIno))
 		m.txn(func(tx *kvTxn) error {
 			for _, key := range removedItem {
-				if buf := tx.get(key.([]byte)); buf != nil {
+				if buf, _ := tx.get(key.([]byte)); buf != nil {
 					t.Fatalf("has keys not removed: %v", removedItem)
 				}
 			}
