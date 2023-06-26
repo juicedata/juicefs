@@ -64,6 +64,10 @@ jobs:
       - name: Build 
         uses: ./.github/actions/build
 
+      - name: Test Info
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/info.sh
+
       - name: Test Quota
         timeout-minutes: 30
         run: |
