@@ -134,8 +134,11 @@ func (c *gluster) Put(key string, in io.Reader) error {
 		_ = f.Close()
 		return err
 	}
-	err = f.Close()
-	if err != nil {
+	if err = f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err = f.Close(); err != nil {
 		return err
 	}
 	err = c.vol.Rename(tmp, p)
