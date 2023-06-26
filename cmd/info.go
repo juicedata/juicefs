@@ -227,7 +227,6 @@ func info(ctx *cli.Context) error {
 			}
 			printResult(results, 0, false)
 		}
-		progress.Done()
 	}
 	return nil
 }
