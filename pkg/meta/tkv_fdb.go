@@ -123,51 +123,61 @@ func (c *fdbClient) shouldRetry(err error) bool {
 
 func (c *fdbClient) gc() {}
 
-func (tx *fdbTxn) get(key []byte) []byte {
-	return tx.Get(fdb.Key(key)).MustGet()
+func (tx *fdbTxn) get(key []byte) ([]byte, error) {
+	return tx.Get(fdb.Key(key)).Get()
 }
 
-func (tx *fdbTxn) gets(keys ...[]byte) [][]byte {
+func (tx *fdbTxn) gets(keys ...[]byte) ([][]byte, error) {
 	ret := make([][]byte, len(keys))
 	for i, key := range keys {
 		val := tx.Get(fdb.Key(key)).MustGet()
 		ret[i] = val
 	}
-	return ret
+	return ret, nil
 }
 
-func (tx *fdbTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+func (tx *fdbTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) error {
 	it := tx.GetRange(fdb.KeyRange{Begin: fdb.Key(begin), End: fdb.Key(end)},
 		fdb.RangeOptions{Mode: fdb.StreamingModeWantAll}).Iterator()
 	for it.Advance() {
-		kv := it.MustGet()
+		kv, err := it.Get()
+		if err != nil {
+			return err
+		}
 		if !handler(kv.Key, kv.Value) {
 			break
 		}
 	}
+	return nil
 }
 
-func (tx *fdbTxn) exist(prefix []byte) bool {
+func (tx *fdbTxn) exist(prefix []byte) (bool, error) {
 	return tx.GetRange(
 		fdb.KeyRange{Begin: fdb.Key(prefix), End: fdb.Key(nextKey(prefix))},
 		fdb.RangeOptions{Mode: fdb.StreamingModeWantAll},
-	).Iterator().Advance()
+	).Iterator().Advance(), nil
 }
 
-func (tx *fdbTxn) set(key, value []byte) {
+func (tx *fdbTxn) set(key, value []byte) error {
 	tx.Set(fdb.Key(key), value)
+	return nil
 }
 
-func (tx *fdbTxn) append(key []byte, value []byte) []byte {
+func (tx *fdbTxn) append(key []byte, value []byte) ([]byte, error) {
 	tx.AppendIfFits(fdb.Key(key), fdb.Key(value))
-	return tx.Get(fdb.Key(key)).MustGet()
+	return tx.Get(fdb.Key(key)).Get()
 }
 
-func (tx *fdbTxn) incrBy(key []byte, value int64) int64 {
+func (tx *fdbTxn) incrBy(key []byte, value int64) (int64, error) {
 	tx.Add(fdb.Key(key), packCounter(value))
-	return parseCounter(tx.Get(fdb.Key(key)).MustGet())
+	xv, xerr := tx.Get(fdb.Key(key)).Get()
+	if xerr != nil {
+		return -1, xerr
+	}
+	return parseCounter(xv), nil
 }
 
-func (tx *fdbTxn) delete(key []byte) {
+func (tx *fdbTxn) delete(key []byte) error {
 	tx.Clear(fdb.Key(key))
+	return nil
 }
