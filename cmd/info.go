@@ -89,8 +89,8 @@ func info(ctx *cli.Context) error {
 	if ctx.Bool("raw") {
 		raw = 1
 	}
-	progress := utils.NewProgress(recursive == 0) // only show progress for recursive info
 	for i := 0; i < ctx.Args().Len(); i++ {
+		progress := utils.NewProgress(recursive == 0) // only show progress for recursive info
 		path := ctx.Args().Get(i)
 		dspin := progress.AddDoubleSpinner(path)
 		var d string
@@ -227,8 +227,8 @@ func info(ctx *cli.Context) error {
 			}
 			printResult(results, 0, false)
 		}
+		progress.Done()
 	}
-	progress.Done()
 	return nil
 }
 
