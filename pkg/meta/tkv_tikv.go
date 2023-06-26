@@ -151,7 +151,10 @@ func (tx *tikvTxn) append(key []byte, value []byte) ([]byte, error) {
 		return nil, err
 	}
 	new := append(old, value...)
-	tx.set(key, new)
+	err = tx.set(key, new)
+	if err != nil {
+		return nil, err
+	}
 	return new, nil
 }
 

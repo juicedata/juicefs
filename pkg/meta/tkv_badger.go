@@ -121,7 +121,10 @@ func (tx *badgerTxn) append(key []byte, value []byte) ([]byte, error) {
 		return nil, err
 	}
 	list := append(old, value...)
-	tx.set(key, list)
+	err = tx.set(key, list)
+	if err != nil {
+		return nil, err
+	}
 	return list, nil
 }
 
