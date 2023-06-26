@@ -34,11 +34,11 @@ func (tx *prefixTxn) origKey(key []byte) []byte {
 	return key[len(tx.prefix):]
 }
 
-func (tx *prefixTxn) get(key []byte) []byte {
+func (tx *prefixTxn) get(key []byte) ([]byte, error) {
 	return tx.kvTxn.get(tx.realKey(key))
 }
 
-func (tx *prefixTxn) gets(keys ...[]byte) [][]byte {
+func (tx *prefixTxn) gets(keys ...[]byte) ([][]byte, error) {
 	realKeys := make([][]byte, len(keys))
 	for i, key := range keys {
 		realKeys[i] = tx.realKey(key)
@@ -60,11 +60,11 @@ func (tx *prefixTxn) set(key, value []byte) {
 	tx.kvTxn.set(tx.realKey(key), value)
 }
 
-func (tx *prefixTxn) append(key []byte, value []byte) []byte {
+func (tx *prefixTxn) append(key []byte, value []byte) ([]byte, error) {
 	return tx.kvTxn.append(tx.realKey(key), value)
 }
 
-func (tx *prefixTxn) incrBy(key []byte, value int64) int64 {
+func (tx *prefixTxn) incrBy(key []byte, value int64) (int64, error) {
 	return tx.kvTxn.incrBy(tx.realKey(key), value)
 }
 

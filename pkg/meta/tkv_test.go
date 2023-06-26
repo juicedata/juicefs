@@ -89,7 +89,7 @@ func testTKV(t *testing.T, c tkvClient) {
 		kt.append(k, v)
 	})
 	var r []byte
-	txn(func(kt *kvTxn) { r = kt.get(k) })
+	txn(func(kt *kvTxn) { r, err = kt.get(k) })
 	if !bytes.Equal(r, []byte("valuevalue")) {
 		t.Fatalf("expect 'valuevalue', but got %v", string(r))
 	}
@@ -98,7 +98,7 @@ func testTKV(t *testing.T, c tkvClient) {
 		kt.set([]byte("v"), k)
 	})
 	var ks [][]byte
-	txn(func(kt *kvTxn) { ks = kt.gets([]byte("k1"), []byte("k2")) })
+	txn(func(kt *kvTxn) { ks, err = kt.gets([]byte("k1"), []byte("k2")) })
 	if ks[0] != nil || string(ks[1]) != "value" {
 		t.Fatalf("gets k1,k2: %+v != %+v", ks, [][]byte{nil, []byte("value")})
 	}
@@ -176,7 +176,7 @@ func testTKV(t *testing.T, c tkvClient) {
 			kt.delete(key)
 		}
 	})
-	txn(func(kt *kvTxn) { r = kt.get(k) })
+	txn(func(kt *kvTxn) { r, err = kt.get(k) })
 	if r != nil {
 		t.Fatalf("expect nil, but got %v", string(r))
 	}
@@ -197,23 +197,23 @@ func testTKV(t *testing.T, c tkvClient) {
 
 	// counters
 	var count int64
-	c.txn(func(tx *kvTxn) error {
-		count = tx.incrBy([]byte("counter"), -1)
-		return nil
+	c.txn(func(tx *kvTxn) (xerr error) {
+		count, xerr = tx.incrBy([]byte("counter"), -1)
+		return xerr
 	}, 0)
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
-	c.txn(func(tx *kvTxn) error {
-		count = tx.incrBy([]byte("counter"), 0)
-		return nil
+	c.txn(func(tx *kvTxn) (xerr error) {
+		count, xerr = tx.incrBy([]byte("counter"), 0)
+		return xerr
 	}, 0)
 	if count != -1 {
 		t.Fatalf("counter should be -1, but got %d", count)
 	}
-	c.txn(func(tx *kvTxn) error {
-		count = tx.incrBy([]byte("counter"), 2)
-		return nil
+	c.txn(func(tx *kvTxn) (xerr error) {
+		count, xerr = tx.incrBy([]byte("counter"), 2)
+		return xerr
 	}, 0)
 	if count != 1 {
 		t.Fatalf("counter should be 1, but got %d", count)
@@ -226,7 +226,7 @@ func testTKV(t *testing.T, c tkvClient) {
 	})
 	var v2 []byte
 	txn(func(kt *kvTxn) {
-		v2 = kt.get(k)
+		v2, err = kt.get(k)
 	})
 	if !bytes.Equal(v2, v) {
 		t.Fatalf("expect %v but got %v", v, v2)

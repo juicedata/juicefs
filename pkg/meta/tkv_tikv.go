@@ -95,27 +95,27 @@ type tikvTxn struct {
 	*tikv.KVTxn
 }
 
-func (tx *tikvTxn) get(key []byte) []byte {
+func (tx *tikvTxn) get(key []byte) ([]byte, error) {
 	value, err := tx.Get(context.TODO(), key)
 	if tikverr.IsErrNotFound(err) {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return value
+	return value, nil
 }
 
-func (tx *tikvTxn) gets(keys ...[]byte) [][]byte {
+func (tx *tikvTxn) gets(keys ...[]byte) ([][]byte, error) {
 	ret, err := tx.BatchGet(context.TODO(), keys)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	values := make([][]byte, len(keys))
 	for i, key := range keys {
 		values[i] = ret[string(key)]
 	}
-	return values
+	return values, nil
 }
 
 func (tx *tikvTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
@@ -146,20 +146,27 @@ func (tx *tikvTxn) set(key, value []byte) {
 	}
 }
 
-func (tx *tikvTxn) append(key []byte, value []byte) []byte {
-	new := append(tx.get(key), value...)
+func (tx *tikvTxn) append(key []byte, value []byte) ([]byte, error) {
+	old, err := tx.get(key)
+	if err != nil {
+		return nil, err
+	}
+	new := append(old, value...)
 	tx.set(key, new)
-	return new
+	return new, nil
 }
 
-func (tx *tikvTxn) incrBy(key []byte, value int64) int64 {
-	buf := tx.get(key)
+func (tx *tikvTxn) incrBy(key []byte, value int64) (int64, error) {
+	buf, err := tx.get(key)
+	if err != nil {
+		return -1, err
+	}
 	new := parseCounter(buf)
 	if value != 0 {
 		new += value
 		tx.set(key, packCounter(new))
 	}
-	return new
+	return new, nil
 }
 
 func (tx *tikvTxn) delete(key []byte) {

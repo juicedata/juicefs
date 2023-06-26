@@ -4043,7 +4043,7 @@ func (m *redisMeta) LoadMeta(r io.Reader) (err error) {
 			return err
 		}
 		if dbsize > 0 {
-			return fmt.Errorf("Database redis://%s is not empty", m.addr)
+			return fmt.Errorf("database redis://%s is not empty", m.addr)
 		}
 	}
 

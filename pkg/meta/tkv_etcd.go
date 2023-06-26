@@ -41,28 +41,28 @@ type etcdTxn struct {
 	buffer   map[string][]byte
 }
 
-func (tx *etcdTxn) get(key []byte) []byte {
+func (tx *etcdTxn) get(key []byte) ([]byte, error) {
 	k := string(key)
 	if v, ok := tx.buffer[k]; ok {
-		return v
+		return v, nil
 	}
 	resp, err := tx.kv.Get(tx.ctx, k, etcd.WithLimit(1))
 	if err != nil {
-		panic(fmt.Errorf("get %v: %s", k, err))
+		return nil, fmt.Errorf("get %v: %s", k, err)
 	}
 	if resp.Count == 0 {
 		tx.observed[k] = 0
-		return nil
+		return nil, nil
 	}
 	if resp.Count > 1 {
-		panic(fmt.Errorf("expect 1 keys but got %d", resp.Count))
+		return nil, fmt.Errorf("expect 1 keys but got %d", resp.Count)
 	}
 	for _, pair := range resp.Kvs {
 		if bytes.Equal(pair.Key, key) {
 			tx.observed[k] = pair.ModRevision
-			return pair.Value
+			return pair.Value, nil
 		} else {
-			panic(fmt.Errorf("expect key %v, but got %v", k, string(pair.Key)))
+			return nil, fmt.Errorf("expect key %v, but got %v", k, string(pair.Key))
 		}
 	}
 	panic("unreachable")
@@ -75,13 +75,17 @@ func min(a, b int) int {
 	return b
 }
 
-func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
+func (tx *etcdTxn) gets(keys ...[]byte) ([][]byte, error) {
 	if len(keys) > 128 {
 		var rs = make([][]byte, 0, len(keys))
 		for i := 0; i < len(keys); i += 128 {
-			rs = append(rs, tx.gets(keys[i:min(i+128, len(keys))]...)...)
+			vx, verr := tx.gets(keys[i:min(i+128, len(keys))]...)
+			if verr != nil {
+				return nil, verr
+			}
+			rs = append(rs, vx...)
 		}
-		return rs
+		return rs, nil
 	}
 	ops := make([]etcd.Op, len(keys))
 	for i, key := range keys {
@@ -89,7 +93,7 @@ func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
 	}
 	r, err := tx.kv.Do(tx.ctx, etcd.OpTxn(nil, ops, nil))
 	if err != nil {
-		panic(fmt.Errorf("batch get with %d keys: %s", len(keys), err))
+		return nil, fmt.Errorf("batch get with %d keys: %s", len(keys), err)
 	}
 	rs := make(map[string][]byte)
 	for _, res := range r.Txn().Responses {
@@ -111,7 +115,7 @@ func (tx *etcdTxn) gets(keys ...[]byte) [][]byte {
 			tx.observed[k] = 0
 		}
 	}
-	return values
+	return values, nil
 }
 
 func (tx *etcdTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
@@ -151,20 +155,27 @@ func (tx *etcdTxn) set(key, value []byte) {
 	}
 }
 
-func (tx *etcdTxn) append(key []byte, value []byte) []byte {
-	new := append(tx.get(key), value...)
+func (tx *etcdTxn) append(key []byte, value []byte) ([]byte, error) {
+	old, err := tx.get(key)
+	if err != nil {
+		return nil, err
+	}
+	new := append(old, value...)
 	tx.set(key, new)
-	return new
+	return new, nil
 }
 
-func (tx *etcdTxn) incrBy(key []byte, value int64) int64 {
-	buf := tx.get(key)
+func (tx *etcdTxn) incrBy(key []byte, value int64) (int64, error) {
+	buf, err := tx.get(key)
+	if err != nil {
+		return -1, err
+	}
 	new := parseCounter(buf)
 	if value != 0 {
 		new += value
 		tx.set(key, packCounter(new))
 	}
-	return new
+	return new, nil
 }
 
 func (tx *etcdTxn) delete(key []byte) {

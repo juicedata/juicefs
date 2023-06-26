@@ -53,29 +53,33 @@ type memTxn struct {
 	buffer   map[string][]byte
 }
 
-func (tx *memTxn) get(key []byte) []byte {
+func (tx *memTxn) get(key []byte) ([]byte, error) {
 	k := string(key)
 	if v, ok := tx.buffer[k]; ok {
-		return v
+		return v, nil
 	}
 	tx.store.Lock()
 	defer tx.store.Unlock()
 	it := tx.store.get(k)
 	if it != nil {
 		tx.observed[k] = it.ver
-		return it.value
+		return it.value, nil
 	} else {
 		tx.observed[k] = 0
-		return nil
+		return nil, nil
 	}
 }
 
-func (tx *memTxn) gets(keys ...[]byte) [][]byte {
+func (tx *memTxn) gets(keys ...[]byte) ([][]byte, error) {
 	values := make([][]byte, len(keys))
+	var err error
 	for i, key := range keys {
-		values[i] = tx.get(key)
+		values[i], err = tx.get(key)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return values
+	return values, nil
 }
 
 func (tx *memTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
@@ -131,20 +135,27 @@ func (tx *memTxn) set(key, value []byte) {
 	tx.buffer[string(key)] = value
 }
 
-func (tx *memTxn) append(key []byte, value []byte) []byte {
-	new := append(tx.get(key), value...)
+func (tx *memTxn) append(key []byte, value []byte) ([]byte, error) {
+	old, err := tx.get(key)
+	if err != nil {
+		return nil, err
+	}
+	new := append(old, value...)
 	tx.set(key, new)
-	return new
+	return new, nil
 }
 
-func (tx *memTxn) incrBy(key []byte, value int64) int64 {
-	buf := tx.get(key)
+func (tx *memTxn) incrBy(key []byte, value int64) (int64, error) {
+	buf, err := tx.get(key)
+	if err != nil {
+		return -1, err
+	}
 	new := parseCounter(buf)
 	if value != 0 {
 		new += value
 		tx.set(key, packCounter(new))
 	}
-	return new
+	return new, nil
 }
 
 func (tx *memTxn) delete(key []byte) {

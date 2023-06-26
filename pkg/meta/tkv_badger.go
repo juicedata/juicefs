@@ -32,27 +32,31 @@ type badgerTxn struct {
 	c *badger.DB
 }
 
-func (tx *badgerTxn) get(key []byte) []byte {
+func (tx *badgerTxn) get(key []byte) ([]byte, error) {
 	item, err := tx.t.Get(key)
 	if err == badger.ErrKeyNotFound {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	value, err := item.ValueCopy(nil)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return value
+	return value, nil
 }
 
-func (tx *badgerTxn) gets(keys ...[]byte) [][]byte {
+func (tx *badgerTxn) gets(keys ...[]byte) ([][]byte, error) {
 	values := make([][]byte, len(keys))
 	for i, key := range keys {
-		values[i] = tx.get(key)
+		var err error
+		values[i], err = tx.get(key)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return values
+	return values, nil
 }
 
 func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
@@ -112,20 +116,27 @@ func (tx *badgerTxn) set(key, value []byte) {
 	}
 }
 
-func (tx *badgerTxn) append(key []byte, value []byte) []byte {
-	list := append(tx.get(key), value...)
+func (tx *badgerTxn) append(key []byte, value []byte) ([]byte, error) {
+	old, err := tx.get(key)
+	if err != nil {
+		return nil, err
+	}
+	list := append(old, value...)
 	tx.set(key, list)
-	return list
+	return list, nil
 }
 
-func (tx *badgerTxn) incrBy(key []byte, value int64) int64 {
-	buf := tx.get(key)
+func (tx *badgerTxn) incrBy(key []byte, value int64) (int64, error) {
+	buf, err := tx.get(key)
+	if err != nil {
+		return -1, err
+	}
 	newCounter := parseCounter(buf)
 	if value != 0 {
 		newCounter += value
 		tx.set(key, packCounter(newCounter))
 	}
-	return newCounter
+	return newCounter, nil
 }
 
 func (tx *badgerTxn) delete(key []byte) {
