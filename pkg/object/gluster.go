@@ -35,7 +35,6 @@ import (
 	"time"
 
 	"github.com/juicedata/gogfapi/gfapi"
-	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 type gluster struct {
@@ -237,7 +236,8 @@ func (d *gluster) List(prefix, marker, delimiter string, limit int64) ([]Object,
 }
 
 func (d *gluster) Chtimes(path string, mtime time.Time) error {
-	return d.vol.Chtimes(path, mtime)
+	// TODO
+	return notSupported
 }
 
 func (d *gluster) Chmod(path string, mode os.FileMode) error {
@@ -245,9 +245,8 @@ func (d *gluster) Chmod(path string, mode os.FileMode) error {
 }
 
 func (d *gluster) Chown(path string, owner, group string) error {
-	uid := utils.LookupUser(owner)
-	gid := utils.LookupGroup(group)
-	return d.vol.Chown(path, uid, gid)
+	// TODO
+	return notSupported
 }
 
 func (d *gluster) Symlink(oldName, newName string) error {
