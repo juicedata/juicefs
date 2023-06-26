@@ -118,32 +118,31 @@ func (tx *tikvTxn) gets(keys ...[]byte) ([][]byte, error) {
 	return values, nil
 }
 
-func (tx *tikvTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+func (tx *tikvTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) error {
 	it, err := tx.Iter(begin, end)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer it.Close()
 	for it.Valid() && handler(it.Key(), it.Value()) {
 		if err = it.Next(); err != nil {
-			panic(err)
+			return err
 		}
 	}
+	return nil
 }
 
-func (tx *tikvTxn) exist(prefix []byte) bool {
+func (tx *tikvTxn) exist(prefix []byte) (bool, error) {
 	it, err := tx.Iter(prefix, nextKey(prefix))
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 	defer it.Close()
-	return it.Valid()
+	return it.Valid(), nil
 }
 
-func (tx *tikvTxn) set(key, value []byte) {
-	if err := tx.Set(key, value); err != nil {
-		panic(err)
-	}
+func (tx *tikvTxn) set(key, value []byte) error {
+	return tx.Set(key, value)
 }
 
 func (tx *tikvTxn) append(key []byte, value []byte) ([]byte, error) {
@@ -169,10 +168,8 @@ func (tx *tikvTxn) incrBy(key []byte, value int64) (int64, error) {
 	return new, nil
 }
 
-func (tx *tikvTxn) delete(key []byte) {
-	if err := tx.Delete(key); err != nil {
-		panic(err)
-	}
+func (tx *tikvTxn) delete(key []byte) error {
+	return tx.Delete(key)
 }
 
 type tikvClient struct {

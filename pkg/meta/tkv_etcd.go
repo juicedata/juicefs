@@ -118,14 +118,14 @@ func (tx *etcdTxn) gets(keys ...[]byte) ([][]byte, error) {
 	return values, nil
 }
 
-func (tx *etcdTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+func (tx *etcdTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) error {
 	opts := []etcd.OpOption{etcd.WithRange(string(end))}
 	if keysOnly {
 		opts = append(opts, etcd.WithKeysOnly())
 	}
 	resp, err := tx.kv.Get(tx.ctx, string(begin), opts...)
 	if err != nil {
-		panic(fmt.Errorf("get range [%v-%v): %s", string(begin), string(end), err))
+		return fmt.Errorf("get range [%v-%v): %s", string(begin), string(end), err)
 	}
 	for _, kv := range resp.Kvs {
 		tx.observed[string(kv.Key)] = kv.ModRevision
@@ -133,26 +133,28 @@ func (tx *etcdTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []by
 			break
 		}
 	}
+	return nil
 }
 
-func (tx *etcdTxn) exist(prefix []byte) bool {
+func (tx *etcdTxn) exist(prefix []byte) (bool, error) {
 	resp, err := tx.kv.Get(tx.ctx, string(prefix), etcd.WithPrefix(), etcd.WithCountOnly())
 	if err != nil {
-		panic(fmt.Errorf("get prefix %v with count only: %s", string(prefix), err))
+		return false, fmt.Errorf("get prefix %v with count only: %s", string(prefix), err)
 	}
-	return resp.Count > 0
+	return resp.Count > 0, nil
 }
 
-func (tx *etcdTxn) set(key, value []byte) {
+func (tx *etcdTxn) set(key, value []byte) error {
 	tx.buffer[string(key)] = value
 	if len(tx.buffer) >= 128 {
 		err := tx.commmit()
 		if err != nil {
-			panic(err)
+			return err
 		}
 		tx.observed = make(map[string]int64)
 		tx.buffer = make(map[string][]byte)
 	}
+	return nil
 }
 
 func (tx *etcdTxn) append(key []byte, value []byte) ([]byte, error) {
@@ -178,8 +180,9 @@ func (tx *etcdTxn) incrBy(key []byte, value int64) (int64, error) {
 	return new, nil
 }
 
-func (tx *etcdTxn) delete(key []byte) {
+func (tx *etcdTxn) delete(key []byte) error {
 	tx.buffer[string(key)] = nil
+	return nil
 }
 
 func (tx *etcdTxn) commmit() error {

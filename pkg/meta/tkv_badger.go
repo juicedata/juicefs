@@ -59,7 +59,7 @@ func (tx *badgerTxn) gets(keys ...[]byte) ([][]byte, error) {
 	return values, nil
 }
 
-func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) error {
 	var prefix bool
 	var options = badger.IteratorOptions{
 		PrefetchValues: !keysOnly,
@@ -83,37 +83,36 @@ func (tx *badgerTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []
 		}
 		value, err := item.ValueCopy(nil)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		if !handler(item.KeyCopy(nil), value) {
 			break
 		}
 	}
+	return nil
 }
 
-func (tx *badgerTxn) exist(prefix []byte) bool {
+func (tx *badgerTxn) exist(prefix []byte) (bool, error) {
 	it := tx.t.NewIterator(badger.IteratorOptions{
 		Prefix:       prefix,
 		PrefetchSize: 1,
 	})
 	defer it.Close()
 	it.Rewind()
-	return it.Valid()
+	return it.Valid(), nil
 }
 
-func (tx *badgerTxn) set(key, value []byte) {
+func (tx *badgerTxn) set(key, value []byte) error {
 	err := tx.t.Set(key, value)
 	if err == badger.ErrTxnTooBig {
 		logger.Warn("Current transaction is too big, commit it")
 		if er := tx.t.Commit(); er != nil {
-			panic(er)
+			return er
 		}
 		tx.t = tx.c.NewTransaction(true)
 		err = tx.t.Set(key, value)
 	}
-	if err != nil {
-		panic(err)
-	}
+	return err
 }
 
 func (tx *badgerTxn) append(key []byte, value []byte) ([]byte, error) {
@@ -139,10 +138,8 @@ func (tx *badgerTxn) incrBy(key []byte, value int64) (int64, error) {
 	return newCounter, nil
 }
 
-func (tx *badgerTxn) delete(key []byte) {
-	if err := tx.t.Delete(key); err != nil {
-		panic(err)
-	}
+func (tx *badgerTxn) delete(key []byte) error {
+	return tx.t.Delete(key)
 }
 
 type badgerClient struct {

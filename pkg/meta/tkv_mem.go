@@ -82,7 +82,7 @@ func (tx *memTxn) gets(keys ...[]byte) ([][]byte, error) {
 	return values, nil
 }
 
-func (tx *memTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
+func (tx *memTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) error {
 	tx.store.Lock()
 	defer tx.store.Unlock()
 	tx.store.items.AscendGreaterOrEqual(&kvItem{key: string(begin)}, func(i btree.Item) bool {
@@ -94,6 +94,7 @@ func (tx *memTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byt
 		tx.observed[it.key] = it.ver
 		return handler(key, it.value)
 	})
+	return nil
 }
 
 func nextKey(key []byte) []byte {
@@ -116,7 +117,7 @@ func nextKey(key []byte) []byte {
 	return next
 }
 
-func (tx *memTxn) exist(prefix []byte) bool {
+func (tx *memTxn) exist(prefix []byte) (bool, error) {
 	var ret bool
 	tx.store.Lock()
 	defer tx.store.Unlock()
@@ -128,11 +129,12 @@ func (tx *memTxn) exist(prefix []byte) bool {
 		}
 		return false
 	})
-	return ret
+	return ret, nil
 }
 
-func (tx *memTxn) set(key, value []byte) {
+func (tx *memTxn) set(key, value []byte) error {
 	tx.buffer[string(key)] = value
+	return nil
 }
 
 func (tx *memTxn) append(key []byte, value []byte) ([]byte, error) {
@@ -158,8 +160,9 @@ func (tx *memTxn) incrBy(key []byte, value int64) (int64, error) {
 	return new, nil
 }
 
-func (tx *memTxn) delete(key []byte) {
+func (tx *memTxn) delete(key []byte) error {
 	tx.buffer[string(key)] = nil
+	return nil
 }
 
 type kvItem struct {

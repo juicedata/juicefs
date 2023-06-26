@@ -77,7 +77,7 @@ func testTKV(t *testing.T, c tkvClient) {
 		t.Fatalf("reset: %s", err)
 	}
 	var hasKey bool
-	txn(func(kt *kvTxn) { hasKey = kt.exist(nil) })
+	txn(func(kt *kvTxn) { hasKey, _ = kt.exist(nil) })
 	if hasKey {
 		t.Fatalf("has key after reset")
 	}
@@ -167,7 +167,7 @@ func testTKV(t *testing.T, c tkvClient) {
 	}
 
 	// exists
-	txn(func(kt *kvTxn) { hasKey = kt.exist([]byte("k")) })
+	txn(func(kt *kvTxn) { hasKey, _ = kt.exist([]byte("k")) })
 	if !hasKey {
 		t.Fatalf("has key k*")
 	}
@@ -190,7 +190,7 @@ func testTKV(t *testing.T, c tkvClient) {
 	if len(keys) != 0 {
 		t.Fatalf("no keys: %+v", keys)
 	}
-	txn(func(kt *kvTxn) { hasKey = kt.exist(nil) })
+	txn(func(kt *kvTxn) { hasKey, _ = kt.exist(nil) })
 	if hasKey {
 		t.Fatalf("has not keys")
 	}

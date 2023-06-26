@@ -43,12 +43,12 @@ type kvtxn interface {
 	get(key []byte) ([]byte, error)
 	gets(keys ...[]byte) ([][]byte, error)
 	// scan stops when handler returns false; begin and end must not be nil
-	scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool)
-	exist(prefix []byte) bool
-	set(key, value []byte)
+	scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) error
+	exist(prefix []byte) (bool, error)
+	set(key, value []byte) error
 	append(key []byte, value []byte) ([]byte, error)
 	incrBy(key []byte, value int64) (int64, error)
-	delete(key []byte)
+	delete(key []byte) error
 }
 
 type tkvClient interface {
@@ -1448,7 +1448,10 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		if (pattr.Flags&FlagAppend) != 0 || (pattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
-		if tx.exist(m.entryKey(inode, "")) {
+		if sign, err := tx.exist(m.entryKey(inode, "")); sign || (err != nil) {
+			if err != nil {
+				return err
+			}
 			return syscall.ENOTEMPTY
 		}
 
@@ -1622,7 +1625,10 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				}
 			} else {
 				if dtyp == TypeDirectory {
-					if tx.exist(m.entryKey(dino, "")) {
+					if sign, err := tx.exist(m.entryKey(dino, "")); sign || (err != nil) {
+						if err != nil {
+							return err
+						}
 						return syscall.ENOTEMPTY
 					}
 					dattr.Nlink--
@@ -3349,8 +3355,9 @@ func (m *kvMeta) loadEntry(e *DumpedEntry, kv chan *pair) {
 func (m *kvMeta) LoadMeta(r io.Reader) error {
 	var exist bool
 	err := m.txn(func(tx *kvTxn) error {
-		exist = tx.exist(m.fmtKey())
-		return nil
+		var xerr error
+		exist, xerr = tx.exist(m.fmtKey())
+		return xerr
 	})
 	if err != nil {
 		return err

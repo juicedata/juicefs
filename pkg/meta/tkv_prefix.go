@@ -46,18 +46,18 @@ func (tx *prefixTxn) gets(keys ...[]byte) ([][]byte, error) {
 	return tx.kvTxn.gets(realKeys...)
 }
 
-func (tx *prefixTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
-	tx.kvTxn.scan(tx.realKey(begin), tx.realKey(end), keysOnly, func(k, v []byte) bool {
+func (tx *prefixTxn) scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) error {
+	return tx.kvTxn.scan(tx.realKey(begin), tx.realKey(end), keysOnly, func(k, v []byte) bool {
 		return handler(tx.origKey(k), v)
 	})
 }
 
-func (tx *prefixTxn) exist(prefix []byte) bool {
+func (tx *prefixTxn) exist(prefix []byte) (bool, error) {
 	return tx.kvTxn.exist(tx.realKey(prefix))
 }
 
-func (tx *prefixTxn) set(key, value []byte) {
-	tx.kvTxn.set(tx.realKey(key), value)
+func (tx *prefixTxn) set(key, value []byte) error {
+	return tx.kvTxn.set(tx.realKey(key), value)
 }
 
 func (tx *prefixTxn) append(key []byte, value []byte) ([]byte, error) {
@@ -68,8 +68,8 @@ func (tx *prefixTxn) incrBy(key []byte, value int64) (int64, error) {
 	return tx.kvTxn.incrBy(tx.realKey(key), value)
 }
 
-func (tx *prefixTxn) delete(key []byte) {
-	tx.kvTxn.delete(tx.realKey(key))
+func (tx *prefixTxn) delete(key []byte) error {
+	return tx.kvTxn.delete(tx.realKey(key))
 }
 
 type prefixClient struct {
