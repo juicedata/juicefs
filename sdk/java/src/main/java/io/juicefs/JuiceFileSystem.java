@@ -15,6 +15,7 @@
  */
 package io.juicefs;
 
+import io.juicefs.utils.BgTaskUtil;
 import io.juicefs.utils.PatchUtil;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
@@ -29,8 +30,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.URI;
 import java.security.PrivilegedExceptionAction;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /****************************************************************
@@ -44,7 +43,6 @@ public class JuiceFileSystem extends FilterFileSystem {
   private static boolean fileChecksumEnabled = false;
   private static boolean distcpPatched = false;
 
-  private ScheduledExecutorService emptier;
   private FileSystem emptierFs;
 
   static {
@@ -74,12 +72,9 @@ public class JuiceFileSystem extends FilterFileSystem {
   }
 
   private void startTrashEmptier(URI uri, final Configuration conf) throws IOException {
-    emptier = Executors.newScheduledThreadPool(1, r -> {
-      Thread t = new Thread(r, "Trash Emptier");
-      t.setDaemon(true);
-      return t;
-    });
-
+    if (BgTaskUtil.isRunning(uri.getScheme(), uri.getAuthority(), "Trash emptier")) {
+      return;
+    }
     try {
       UserGroupInformation superUser = UserGroupInformation.createRemoteUser(getConf(conf, "superuser", "hdfs"));
       emptierFs = superUser.doAs((PrivilegedExceptionAction<FileSystem>) () -> {
@@ -87,7 +82,7 @@ public class JuiceFileSystem extends FilterFileSystem {
         fs.initialize(uri, conf);
         return fs;
       });
-      emptier.schedule(new Trash(emptierFs, conf).getEmptier(), 10, TimeUnit.MINUTES);
+      BgTaskUtil.startTrashEmptier(uri.getScheme(), uri.getAuthority(), "Trash emptier", new Trash(emptierFs, conf).getEmptier(), TimeUnit.MINUTES.toMillis(10));
     } catch (Exception e) {
       throw new IOException("start trash failed!",e);
     }
@@ -153,11 +148,7 @@ public class JuiceFileSystem extends FilterFileSystem {
   }
 
   @Override
-  public void close() throws IOException {
-    if (this.emptier != null) {
-      emptier.shutdownNow();
-      emptierFs.close();
-    }
-    super.close();
+  protected void finalize()  {
+    BgTaskUtil.close();
   }
 }
