@@ -202,6 +202,7 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 | Tree removal       | 96.756       | 65.279         | 23.227   | 19.511     | 27.616    | 17.868   | 10.571       |
 
 ### fio
+
 |                 | Redis-Always | Redis-Everysec | MySQL     | PostgreSQL | TiKV      | etcd      | FoundationDB |
 |-----------------|--------------|----------------|-----------|------------|-----------|-----------|--------------|
 | Write bandwidth | 729 MiB/s    | 737 MiB/s      | 736 MiB/s | 768 MiB/s  | 731 MiB/s | 738 MiB/s | 745 MiB/s    |
