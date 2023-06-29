@@ -165,7 +165,6 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
   | read_1       | 0            | 0 (0.0)        | 0 (0.0)      | 0 (0.0)      | 0 (0.0)    | 0 (0.0)      | 0 (0.0)       |
   | read_10      | 0            | 0 (0.0)        | 0 (0.0)      | 0 (0.0)      | 0 (0.0)    | 0 (0.0)      | 0 (0.0)       |
 
-
 ### JuiceFS Bench
 
 |                  | Redis-Always     | Redis-Everysec   | MySQL           | PostgreSQL      | TiKV            | etcd            | FoundationDB    |
@@ -206,4 +205,3 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 |                 | Redis-Always | Redis-Everysec | MySQL     | PostgreSQL | TiKV      | etcd      | FoundationDB |
 |-----------------|--------------|----------------|-----------|------------|-----------|-----------|--------------|
 | Write bandwidth | 729 MiB/s    | 737 MiB/s      | 736 MiB/s | 768 MiB/s  | 731 MiB/s | 738 MiB/s | 745 MiB/s    |
-
