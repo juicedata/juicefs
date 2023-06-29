@@ -149,6 +149,11 @@ public class JuiceFileSystem extends FilterFileSystem {
 
   @Override
   protected void finalize()  {
+    try {
+      emptierFs.close();
+    } catch (Exception e) {
+      LOG.warn("close trash emptier fs failed", e);
+    }
     BgTaskUtil.close();
   }
 }
