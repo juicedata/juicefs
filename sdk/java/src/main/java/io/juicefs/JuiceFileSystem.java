@@ -82,7 +82,7 @@ public class JuiceFileSystem extends FilterFileSystem {
         fs.initialize(uri, conf);
         return fs;
       });
-      BgTaskUtil.startTrashEmptier(uri.getScheme(), uri.getAuthority(), "Trash emptier", new Trash(emptierFs, conf).getEmptier(), TimeUnit.MINUTES.toMillis(10));
+      BgTaskUtil.startTrashEmptier(uri.getScheme(), uri.getAuthority(), "Trash emptier", emptierFs, new Trash(emptierFs, conf).getEmptier(), TimeUnit.MINUTES.toMillis(10));
     } catch (Exception e) {
       throw new IOException("start trash failed!",e);
     }
@@ -145,15 +145,5 @@ public class JuiceFileSystem extends FilterFileSystem {
       return null;
     patchDistCpChecksum();
     return super.getFileChecksum(f);
-  }
-
-  @Override
-  protected void finalize()  {
-    try {
-      emptierFs.close();
-    } catch (Exception e) {
-      LOG.warn("close trash emptier fs failed", e);
-    }
-    BgTaskUtil.close();
   }
 }

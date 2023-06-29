@@ -15,9 +15,11 @@
  */
 package io.juicefs.utils;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -32,6 +34,7 @@ public class BgTaskUtil {
   });
   // use timer to run trash emptier because it will occupy a thread
   private static final List<Timer> timers = new ArrayList<>();
+  private static final List<FileSystem> fileSystems = new ArrayList<>();
   private static Set<BgTaskKey> runningBgTask = new HashSet<>();
 
   static class BgTaskKey {
@@ -81,7 +84,7 @@ public class BgTaskUtil {
     }
   }
 
-  public static void startTrashEmptier(String scheme, String authority, String type, Runnable emptierTask, long delay) {
+  public static void startTrashEmptier(String scheme, String authority, String type, FileSystem fs, Runnable emptierTask, long delay) {
     synchronized (runningBgTask) {
       if (isRunning(scheme, authority, type)) {
         return;
@@ -103,12 +106,20 @@ public class BgTaskUtil {
       return runningBgTask.contains(new BgTaskKey(scheme, authority, type));
     }
   }
-
-  public static void close() {
+  @Override
+  protected void finalize()  {
     threadPool.shutdownNow();
     for (Timer timer : timers) {
       timer.cancel();
       timer.purge();
     }
+    for (FileSystem fs : fileSystems) {
+      try {
+        fs.close();
+      } catch (IOException e) {
+        LOG.warn("close trash emptier fs failed", e);
+      }
+    }
+    System.out.println("BgTaskUtil finalize");
   }
 }
