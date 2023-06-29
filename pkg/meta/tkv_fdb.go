@@ -52,6 +52,7 @@ func newFdbClient(addr string) (tkvClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open database: %s", err)
 	}
+	// TODO: database options
 	return withPrefix(&fdbClient{db}, append([]byte(u.Query().Get("prefix")), 0xFD)), nil
 }
 
@@ -74,6 +75,7 @@ func (c *fdbClient) scan(prefix []byte, handler func(key, value []byte)) error {
 	var done bool
 	for {
 		if _, err := c.client.ReadTransact(func(t fdb.ReadTransaction) (interface{}, error) {
+			// TODO:  t.Options().SetPriorityBatch()
 			snapshot := t.Snapshot()
 			iter := snapshot.GetRange(
 				fdb.KeyRange{Begin: begin, End: end},
@@ -113,7 +115,6 @@ func (c *fdbClient) reset(prefix []byte) error {
 }
 
 func (c *fdbClient) close() error {
-	// c = &fdbClient{}
 	return nil
 }
 
@@ -128,10 +129,13 @@ func (tx *fdbTxn) get(key []byte) []byte {
 }
 
 func (tx *fdbTxn) gets(keys ...[]byte) [][]byte {
-	ret := make([][]byte, len(keys))
+	fut := make([]fdb.FutureByteSlice, len(keys))
 	for i, key := range keys {
-		val := tx.Get(fdb.Key(key)).MustGet()
-		ret[i] = val
+		fut[i] = tx.Get(fdb.Key(key))
+	}
+	ret := make([][]byte, len(keys))
+	for i, f := range fut {
+		ret[i] = f.MustGet()
 	}
 	return ret
 }
@@ -158,13 +162,13 @@ func (tx *fdbTxn) set(key, value []byte) {
 	tx.Set(fdb.Key(key), value)
 }
 
-func (tx *fdbTxn) append(key []byte, value []byte) []byte {
+func (tx *fdbTxn) append(key []byte, value []byte) {
 	tx.AppendIfFits(fdb.Key(key), fdb.Key(value))
-	return tx.Get(fdb.Key(key)).MustGet()
 }
 
 func (tx *fdbTxn) incrBy(key []byte, value int64) int64 {
 	tx.Add(fdb.Key(key), packCounter(value))
+	// TODO: don't return new value if not needed
 	return parseCounter(tx.Get(fdb.Key(key)).MustGet())
 }
 

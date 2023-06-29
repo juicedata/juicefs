@@ -46,7 +46,7 @@ type kvtxn interface {
 	scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool)
 	exist(prefix []byte) bool
 	set(key, value []byte)
-	append(key []byte, value []byte) []byte
+	append(key []byte, value []byte)
 	incrBy(key []byte, value int64) int64
 	delete(key []byte)
 }
@@ -3232,9 +3232,11 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 		go func() {
 			defer wg.Done()
 			var buffer []*pair
+			var total int
 			for p := range kv {
 				buffer = append(buffer, p)
-				if len(buffer) >= batch {
+				total += len(p.key) + len(p.value)
+				if len(buffer) >= batch || total > 5<<20 {
 					err := m.txn(func(tx *kvTxn) error {
 						for _, p := range buffer {
 							tx.set(p.key, p.value)
@@ -3245,6 +3247,7 @@ func (m *kvMeta) LoadMeta(r io.Reader) error {
 						logger.Fatalf("write %d pairs: %s", len(buffer), err)
 					}
 					buffer = buffer[:0]
+					total = 0
 				}
 			}
 			if len(buffer) > 0 {
