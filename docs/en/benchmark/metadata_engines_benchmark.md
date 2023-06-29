@@ -68,7 +68,7 @@ Amazon S3
 - Configuration:
   - `data-dir`: `/data/etcd`
 
-#### Foundationdb
+#### FoundationDB
 
 - Version：6.3.23
 - Configuration：
@@ -129,7 +129,7 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 - Number in parentheses is the multiple of Redis-Always cost (`always` and `everysec` are candidates for Redis configuration `appendfsync`).
 - Because of enabling metadata cache, the results of `read` are all less than 1us, which are not comparable for now.
 
-|              | Redis-Always | Redis-Everysec | TiKV       | MySQL        | Etcd         | Foundationdb  |
+|              | Redis-Always | Redis-Everysec | TiKV       | MySQL        | etcd         | FoundationDB  |
 |--------------|--------------|----------------|------------|--------------|--------------|---------------|
 | mkdir        | 558          | 468 (0.8)      | 1237 (2.2) | 2042 (3.7)   | 1916 (3.4)   | 1847 (3.3)    |
 | mvdir        | 693          | 621 (0.9)      | 1414 (2.0) | 2693 (3.9)   | 2486 (3.6)   | 2115 (3.1)    |
@@ -158,7 +158,7 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 ### JuiceFS Bench
 
-|                  | Redis-Always     | Redis-Everysec   | TiKV            | MySQL           | Etcd            | Foundationdb    |
+|                  | Redis-Always     | Redis-Everysec   | TiKV            | MySQL           | etcd            | FoundationDB    |
 |------------------|------------------|------------------|-----------------|-----------------|-----------------|-----------------|
 | Write big file   | 730.84 MiB/s     | 731.93 MiB/s     | 730.01 MiB/s    | 729.00 MiB/s    | 746.07 MiB/s    | 744.70 MiB/s    |
 | Read big file    | 923.98 MiB/s     | 892.99 MiB/s     | 918.19 MiB/s    | 905.93 MiB/s    | 939.63 MiB/s    | 948.81 MiB/s    |
@@ -172,7 +172,7 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 - Shows rate (ops/sec). Bigger is better.
 
-|                    | Redis-Always | Redis-Everysec | TiKV      | MySQL    | Etcd     | Foundationdb |
+|                    | Redis-Always | Redis-Everysec | TiKV      | MySQL    | etcd     | FoundationDB |
 |--------------------|--------------|----------------|-----------|----------|----------|--------------|
 | **EMPTY FILES**    |              |                |           |          |          |              |
 | Directory creation | 4901.342     | 9990.029       | 4041.304  | 1252.421 | 1910.768 | 3065.578     |
@@ -194,6 +194,6 @@ fio --name=big-write --directory=/mnt/jfs --rw=write --refill_buffers --bs=4M --
 
 ### fio
 
-|                 | Redis-Always | Redis-Everysec | MySQL     | TiKV      | etcd      | Foundationdb |
+|                 | Redis-Always | Redis-Everysec | MySQL     | TiKV      | etcd      | FoundationDB |
 |-----------------|--------------|----------------|-----------|-----------|-----------|--------------|
 | Write bandwidth | 729 MiB/s    | 737 MiB/s      | 736 MiB/s | 731 MiB/s | 738 MiB/s | 745 MiB/s    |
