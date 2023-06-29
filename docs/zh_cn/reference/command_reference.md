@@ -282,7 +282,7 @@ juicefs umount /mnt/jfs
 
 ## `juicefs gateway`
 
-启动一个 S3 兼容的网关。
+启动一个 S3 兼容的网关，详见[「配置 JuiceFS S3 网关」](../deployment/s3_gateway.md)。
 
 ### 概览
 
@@ -294,47 +294,22 @@ export MINIO_ROOT_PASSWORD=12345678
 juicefs gateway redis://localhost localhost:9000
 ```
 
-- **META-URL**：用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。
-- **ADDRESS**：S3 网关地址和监听的端口，例如：`localhost:9000`
-
 ### 参数
+
+除下方列出的参数，该命令还与 `juicefs mount` 共享参数，因此需要结合 [`mount`](#mount) 参数一起参考。
 
 |项 | 说明|
 |-|-|
+|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
+|`ADDRESS`|S3 网关地址和监听的端口，例如：`localhost:9000`|
 |`--bucket value`|为当前网关指定访问访对象存储的 endpoint|
-|`--get-timeout value`|下载一个对象的超时时间；单位为秒 (默认：60)|
-|`--put-timeout value`|上传一个对象的超时时间；单位为秒 (默认：60)|
-|`--io-retries value`|网络异常时的重试次数 (默认：10)|
-|`--max-uploads value`|上传对象的连接数 (默认：20)|
-|`--max-deletes value`|删除对象的连接数 (默认：10)|
-|`--buffer-size value`|读写缓存的总大小；单位为 MiB (默认：300)|
-|`--upload-limit value`|上传带宽限制，单位为 Mbps (默认：0)|
-|`--download-limit value`|下载带宽限制，单位为 Mbps (默认：0)|
-|`--prefetch value`|并发预读 N 个块 (默认：1)|
-|`--writeback`|后台异步上传对象 (默认：false)|
-|`--cache-dir value`|本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`"$HOME/.juicefs/cache"` 或 `/var/jfsCache`)。阅读[「缓存」](../guide/cache_management.md)了解更多|
-|`--cache-size value`|缓存对象的总大小；单位为 MiB (默认：102400)。阅读[「缓存」](../guide/cache_management.md)了解更多|
-|`--free-space-ratio value`|最小剩余空间比例 (默认：0.1)。阅读[「缓存」](../guide/cache_management.md)了解更多|
-|`--cache-partial-only`|仅缓存随机小块读 (默认：false)。阅读[「缓存」](../guide/cache_management.md)了解更多|
-|`--read-only`|只读模式 (默认：false)|
-|`--open-cache value`|打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)。阅读[「缓存」](../guide/cache_management.md)了解更多|
-|`--subdir value`|将某个子目录挂载为根 (默认："")|
-|`--attr-cache value`|属性缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)|
-|`--entry-cache value`|文件项缓存过期时间；单位为秒 (默认：0)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)|
-|`--dir-entry-cache value`|目录项缓存过期时间；单位为秒 (默认：1)。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)|
 |`--access-log value`|访问日志的路径|
-|`--metrics value`|监控数据导出地址 (默认："127.0.0.1:9567")|
-|`--no-usage-report`|不发送使用量信息 (默认：false)|
 |`--no-banner`|禁用 MinIO 的启动信息 (默认：false)|
 |`--multi-buckets`|使用第一级目录作为存储桶 (默认：false)|
 |`--keep-etag`|保留对象上传时的 ETag (默认：false)|
-|`--storage value`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
-|`--upload-delay value`|数据上传到对象存储的延迟时间，支持秒分时精度，对应格式分别为 ("s", "m", "h")，默认为 0 秒|
 |`--backup-meta value`|自动备份元数据到对象存储的间隔时间；单位秒 (0 表示不备份) (默认：3600)|
 |`--heartbeat value`|发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认：12)。|
-|`--no-bgjob`|禁用后台作业（清理、备份等）（默认值：false）|
 |`--umask value`|新文件和新目录的 umask 的八进制格式 (默认值:“022”)|
-|`--consul value`|Consul 注册中心地址 (默认："127.0.0.1:8500")|
 
 ## `juicefs webdav` {#webdav}
 
@@ -347,7 +322,6 @@ juicefs webdav [command options] META-URL ADDRESS
 
 juicefs webdav redis://localhost localhost:9007
 ```
-
 
 ### 参数
 
@@ -487,11 +461,11 @@ $ juicefs bench /mnt/jfs --big-file-size 0
 
 |项 | 说明|
 |-|-|
-|`--block-size value`|块大小；单位为 MiB (默认：1)|
-|`--big-file-size value`|大文件大小；单位为 MiB (默认：1024)|
-|`--small-file-size value`|小文件大小；单位为 MiB (默认：0.1)|
-|`--small-file-count value`|小文件数量 (默认：100)|
-|`--threads value, -p value`|并发线程数 (默认：1)|
+|`--block-size=1`|块大小；单位为 MiB (默认：1)|
+|`--big-file-size=1024`|大文件大小；单位为 MiB (默认：1024)|
+|`--small-file-size=0.1`|小文件大小；单位为 MiB (默认：0.1)|
+|`--small-file-count=100`|小文件数量 (默认：100)|
+|`--threads=1, -p 1`|并发线程数 (默认：1)|
 
 ## `juicefs objbench` {#objbench}
 
@@ -587,7 +561,7 @@ $ juicefs profile /tmp/jfs.alog --interval 0
 |`--uid value, -u value`|仅跟踪指定 UIDs (用逗号分隔)|
 |`--gid value, -g value`|仅跟踪指定 GIDs (用逗号分隔)|
 |`--pid value, -p value`|仅跟踪指定 PIDs (用逗号分隔)|
-|`--interval value`|显示间隔；在回放模式中将其设置为 0 可以立即得到整体的统计结果；单位为秒 (默认：2)|
+|`--interval=2`|显示间隔；在回放模式中将其设置为 0 可以立即得到整体的统计结果；单位为秒 (默认：2)|
 
 ## `juicefs stats` {#stats}
 
@@ -608,9 +582,9 @@ juicefs stats /mnt/jfs -l 1
 
 |项 | 说明|
 |-|-|
-|`--schema value`|控制输出内容的标题字符串 (u: `usage`, f: `fuse`, m: `meta`, c: `blockcache`, o: `object`, g: `go`) (默认："ufmco")|
-|`--interval value`|更新间隔；单位为秒 (默认：1)|
-|`--verbosity value`|详细级别；通常 0 或 1 已足够 (默认：0)|
+|`--schema=ufmco`|控制输出内容的标题字符串，默认为“ufmco”，含义如下：<br/>u: usage<br/>f: FUSE<br/>m: meta<br/>c: blockcache<br/>o: object<br/>g: go|
+|`--interval=1`|更新间隔；单位为秒 (默认：1)|
+|`--verbosity=0`|详细级别；通常 0 或 1 已足够 (默认：0)|
 
 ## `juicefs status`
 
