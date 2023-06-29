@@ -27,6 +27,12 @@ import java.util.concurrent.TimeUnit;
 
 public class BgTaskUtil {
   private static final Logger LOG = LoggerFactory.getLogger(BgTaskUtil.class);
+
+  private static BgTaskUtil staticFieldForGc = new BgTaskUtil();
+
+  private BgTaskUtil() {
+  }
+
   private static final ScheduledExecutorService threadPool = Executors.newScheduledThreadPool(2, r -> {
     Thread thread = new Thread(r, "Background Task");
     thread.setDaemon(true);
