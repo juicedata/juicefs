@@ -112,10 +112,9 @@ func (tx *badgerTxn) set(key, value []byte) {
 	}
 }
 
-func (tx *badgerTxn) append(key []byte, value []byte) []byte {
+func (tx *badgerTxn) append(key []byte, value []byte) {
 	list := append(tx.get(key), value...)
 	tx.set(key, list)
-	return list
 }
 
 func (tx *badgerTxn) incrBy(key []byte, value int64) int64 {

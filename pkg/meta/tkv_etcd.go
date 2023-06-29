@@ -151,10 +151,9 @@ func (tx *etcdTxn) set(key, value []byte) {
 	}
 }
 
-func (tx *etcdTxn) append(key []byte, value []byte) []byte {
+func (tx *etcdTxn) append(key []byte, value []byte) {
 	new := append(tx.get(key), value...)
 	tx.set(key, new)
-	return new
 }
 
 func (tx *etcdTxn) incrBy(key []byte, value int64) int64 {
