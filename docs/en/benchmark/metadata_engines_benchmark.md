@@ -70,7 +70,7 @@ Amazon S3
 
 #### FoundationDB
 
-- Version：6.3.23
+- Version: 6.3.23
 - Configuration：
   - `data-dir`：`/data/fdb`
 
