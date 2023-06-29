@@ -68,11 +68,13 @@ public class JuiceFileSystem extends FilterFileSystem {
   public void initialize(URI uri, Configuration conf) throws IOException {
     super.initialize(uri, conf);
     fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
-    startTrashEmptier(uri, conf);
+    if (Boolean.parseBoolean(getConf(conf, "enable-trash-emptier", "true"))) {
+      startTrashEmptier(uri, conf);
+    }
   }
 
   private void startTrashEmptier(URI uri, final Configuration conf) throws IOException {
-    if (BgTaskUtil.isRunning(uri.getScheme(), uri.getAuthority(), "Trash emptier")) {
+    if (BgTaskUtil.isRunning(uri.getHost(), "Trash emptier")) {
       return;
     }
     try {
@@ -82,7 +84,7 @@ public class JuiceFileSystem extends FilterFileSystem {
         fs.initialize(uri, conf);
         return fs;
       });
-      BgTaskUtil.startTrashEmptier(uri.getScheme(), uri.getAuthority(), "Trash emptier", emptierFs, new Trash(emptierFs, conf).getEmptier(), TimeUnit.MINUTES.toMillis(10));
+      BgTaskUtil.startTrashEmptier(uri.getHost(), "Trash emptier", emptierFs, new Trash(emptierFs, conf).getEmptier(), TimeUnit.MINUTES.toMillis(10));
     } catch (Exception e) {
       throw new IOException("start trash failed!",e);
     }

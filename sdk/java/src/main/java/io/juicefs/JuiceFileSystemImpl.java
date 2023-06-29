@@ -506,7 +506,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   private void refreshUidAndGrouping(String uidFile, String groupFile) {
-    BgTaskUtil.startScheduleTask(uri.getScheme(), uri.getAuthority(), "Refresh guid", () -> {
+    BgTaskUtil.startScheduleTask(name, "Refresh guid", () -> {
       updateUidAndGrouping(uidFile, groupFile);
     }, 1, 1, TimeUnit.MINUTES);
   }
@@ -705,7 +705,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   private void refreshCache(Configuration conf) {
-    BgTaskUtil.startScheduleTask(uri.getScheme(), uri.getAuthority(), "Node fetcher", ()  -> {
+    BgTaskUtil.startScheduleTask(name, "Node fetcher", ()  -> {
       initCache(conf);
     }, 10, 10, TimeUnit.MINUTES);
   }

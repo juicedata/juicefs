@@ -41,42 +41,11 @@ public class BgTaskUtil {
   // use timer to run trash emptier because it will occupy a thread
   private static final List<Timer> timers = new ArrayList<>();
   private static final List<FileSystem> fileSystems = new ArrayList<>();
-  private static Set<BgTaskKey> runningBgTask = new HashSet<>();
+  private static Set<String> runningBgTask = new HashSet<>();
 
-  static class BgTaskKey {
-    String scheme;
-    String authority;
-    String type;
-
-    public BgTaskKey(String scheme, String authority, String type) {
-      this.scheme = scheme;
-      this.authority = authority;
-      this.type = type;
-    }
-
-    @Override
-    public int hashCode() {
-      return (scheme + authority + type).hashCode();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (obj == this) {
-        return true;
-      }
-      if (obj instanceof BgTaskKey) {
-        BgTaskKey that = (BgTaskKey) obj;
-        return Objects.equals(this.scheme, that.scheme)
-            && Objects.equals(this.authority, that.authority)
-            && Objects.equals(this.type, that.type);
-      }
-      return false;
-    }
-  }
-
-  public static void startScheduleTask(String scheme, String authority, String type, Runnable task, long initialDelay, long period, TimeUnit unit) {
+  public static void startScheduleTask(String name, String type, Runnable task, long initialDelay, long period, TimeUnit unit) {
     synchronized (runningBgTask) {
-      if (isRunning(scheme, authority, type)) {
+      if (isRunning(name, type)) {
         return;
       }
       threadPool.scheduleAtFixedRate(() -> {
@@ -86,13 +55,14 @@ public class BgTaskUtil {
           LOG.error("Background task failed", e);
         }
       }, initialDelay, period, unit);
-      runningBgTask.add(new BgTaskKey(scheme, authority, type));
+      runningBgTask.add(genKey(name, type));
     }
   }
 
-  public static void startTrashEmptier(String scheme, String authority, String type, FileSystem fs, Runnable emptierTask, long delay) {
+
+  public static void startTrashEmptier(String name, String type, FileSystem fs, Runnable emptierTask, long delay) {
     synchronized (runningBgTask) {
-      if (isRunning(scheme, authority, type)) {
+      if (isRunning(name, type)) {
         return;
       }
       Timer timer = new Timer();
@@ -102,18 +72,24 @@ public class BgTaskUtil {
           emptierTask.run();
         }
       }, delay);
-      runningBgTask.add(new BgTaskKey(scheme, authority, type));
+      runningBgTask.add(genKey(name, type));
       timers.add(timer);
+      fileSystems.add(fs);
     }
   }
 
-  public static boolean isRunning(String scheme, String authority, String type) {
+  public static boolean isRunning(String name, String type) {
     synchronized (runningBgTask) {
-      return runningBgTask.contains(new BgTaskKey(scheme, authority, type));
+      return runningBgTask.contains(genKey(name, type));
     }
   }
+
+  private static String genKey(String name, String type) {
+    return name + "|" + type;
+  }
+
   @Override
-  protected void finalize()  {
+  protected void finalize() {
     threadPool.shutdownNow();
     for (Timer timer : timers) {
       timer.cancel();
