@@ -120,6 +120,5 @@ public class BgTaskUtil {
         LOG.warn("close trash emptier fs failed", e);
       }
     }
-    System.out.println("BgTaskUtil finalize");
   }
 }
