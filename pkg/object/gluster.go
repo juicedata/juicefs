@@ -47,10 +47,6 @@ func (c *gluster) String() string {
 	return fmt.Sprintf("gluster://%s/", c.name)
 }
 
-func (c *gluster) Create() error {
-	return notSupported
-}
-
 func (c *gluster) Head(key string) (Object, error) {
 	fi, err := c.vol.Stat(key)
 	if err != nil {
@@ -238,28 +234,8 @@ func (d *gluster) List(prefix, marker, delimiter string, limit int64) ([]Object,
 	return objs, nil
 }
 
-func (d *gluster) Chtimes(path string, mtime time.Time) error {
-	// TODO
-	return notSupported
-}
-
 func (d *gluster) Chmod(path string, mode os.FileMode) error {
 	return d.vol.Chmod(path, mode)
-}
-
-func (d *gluster) Chown(path string, owner, group string) error {
-	// TODO
-	return notSupported
-}
-
-func (d *gluster) Symlink(oldName, newName string) error {
-	// TODO
-	return notSupported
-}
-
-func (d *gluster) Readlink(name string) (string, error) {
-	// TODO
-	return "", notSupported
 }
 
 func newGluster(endpoint, ak, sk, token string) (ObjectStorage, error) {
