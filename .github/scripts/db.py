@@ -1,4 +1,11 @@
 
+import subprocess
+
+try:
+    __import__("MySQLdb")
+except ImportError:
+    subprocess.check_call(["pip", "install", "mysqlclient"])
+
 import os
 from sys import argv
 import MySQLdb
