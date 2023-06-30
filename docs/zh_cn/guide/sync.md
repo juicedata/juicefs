@@ -1,11 +1,10 @@
 ---
-sidebar_label: 数据同步
-position: 5
+title: 数据同步
 ---
 
-# 使用 JuiceFS Sync 跨云迁移和同步数据
+[`juicefs sync`](../reference/command_reference.md#sync) 是强大的数据同步工具，可以在所有支持的存储之间并发同步或迁移数据，包括对象存储、JuiceFS、本地文件系统，你可以在这三者之间以任意方向和搭配进行数据同步。除此之外，还支持同步通过 SSH 访问远程目录、HDFS、WebDAV 等，同时提供增量同步、模式匹配（类似 rsync）、分布式同步等高级功能。
 
-JuiceFS 的 `sync` 子命令是功能完整的数据同步实用工具，可以在所有 [JuiceFS 支持的对象存储](../guide/how_to_set_up_object_storage.md)之间多线程并发同步或迁移数据，既支持在「对象存储」与「JuiceFS」之间迁移数据，也支持在「对象存储」与「对象存储」之间跨云跨区迁移数据。与 rsync 类似，除了对象存储也支持同步本地目录、通过 SSH 访问远程目录、HDFS、WebDAV 等，同时提供全量同步、增量同步、条件模式匹配等高级功能。
+特别地，在两个存储系统之间同步数据，如果其中一方是 JuiceFS，推荐直接使用 `jfs://` 协议头，而不是先挂载 JuiceFS，再访问本地目录。这样便能跳过挂载点，直接读取或写入数据，在大规模场景下，绕过 FUSE 挂载点将能节约资源开销以及提升数据同步性能。
 
 ## 基本用法
 
@@ -15,19 +14,20 @@ JuiceFS 的 `sync` 子命令是功能完整的数据同步实用工具，可以�
 juicefs sync [command options] SRC DST
 ```
 
-即把 `SRC` 同步到 `DST`，既可以同步目录，也可以同步文件。
-
 其中：
 
 - `SRC` 代表数据源地址及路径
 - `DST` 代表目标地址及路径
-- `[command options]` 代表可选的同步选项，详情查看[命令参考](../reference/command_reference.md#juicefs-sync)。
+- `[command options]` 代表可选的同步选项，详情查看[命令参考](../reference/command_reference.md#sync)。
 
-地址格式均为 `[NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]`
+地址格式均为：
 
-:::tip 提示
-MinIO 目前仅支持路径风格，地址格式为 `minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]`
-:::
+```
+[NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]
+
+# 特别地，MinIO 目前仅支持路径风格
+minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]
+```
 
 其中：
 
@@ -84,7 +84,7 @@ juicefs sync ./te ~/mnt/ab
 
 ```shell
 # 挂载 JuiceFS
-sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 # 执行同步
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
@@ -99,7 +99,7 @@ myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1
 
 ```shell
 # 挂载 JuiceFS
-sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 # 执行同步
 juicefs sync /mnt/jfs/images/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/images/
 ```
@@ -114,22 +114,22 @@ juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:H
 
 ## 高级用法
 
-### 增量同步与全量同步
+### 增量同步与全量同步 {#incremental-and-full-synchronization}
 
-sync 命令默认以增量同步方式工作，即先对比源路径与目标路径之间的差异，然后仅同步有差异的部分。可以使用 `--update` 或 `-u` 选项更新文件的 `mtime`。
+`juicefs sync` 默认以增量同步方式工作，对于已存在的文件，仅在文件大小不一样时，才再次同步进行覆盖。在此基础上，还可以指定 [`--update`](../reference/command_reference.md#sync)，在源文件 `mtime` 更新时进行覆盖。如果你的场景对正确性有着极致要求，可以指定 [`--check-new`](../reference/command_reference.md#sync) 或 [`--check-all`](../reference/command_reference.md#sync)，来对两边的文件进行字节流比对，确保数据一致。
 
 如需全量同步，即不论目标路径上是否存在相同的文件都重新同步，可以使用 `--force-update` 或 `-f`。例如，将 [对象存储 A](#required-storages) 的 `movies` 目录全量同步到 [JuiceFS 文件系统](#required-storages)：
 
 ```shell
 # 挂载 JuiceFS
-sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 # 执行全量同步
 juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
 
-### 模式匹配
+## 模式匹配 {#pattern-matching}
 
-`sync` 命令的模式匹配功能跟 rsync 类似，可以通过规则排除或包含某类文件，并通过多个规则的组合实现任意集合的同步，规则如下：
+类似 rsync，你可以用 `--exclude`、`--include` 来过滤需要同步的文件，并通过多个规则的组合实现任意集合的同步，规则如下：
 
 - 以 `/` 结尾的模式会仅匹配目录，否则会匹配文件、链接或设备；
 - 包含 `*`、`?` 或 `[` 字符时会以通配符模式匹配，否则按照常规字符串匹配；
@@ -137,46 +137,26 @@ juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 - `?` 匹配除 `/` 外的任意字符；
 - `[` 匹配一组字符集合，例如 `[a-z]` 或 `[[:alpha:]]`；
 - 在通配符模式中，反斜杠可以用来转义通配符，但在没有通配符的情况下，会按字面意思匹配；
-- 始终以模式作为前缀递归匹配。
+- 在使用包含／排除规则时，位置在前的选项优先级更高。`--include` 应该排在前面，如果先设置 `--exclude '*'` 排除了所有文件，那么后面的 `--include 'xxx'` 包含规则就不会生效。
 
-#### 排除文件／目录
-
-使用 `--exclude` 选项设置要排除的目录或文件。例如，将 [JuiceFS 文件系统](#required-storages) 完整同步到[对象存储 A](#required-storages)，但不同步隐藏的文件和文件夹：
-
-:::note 备注
-在 Linux 系统中所有以 `.` 开始的名称均被视为隐藏文件
-:::
+例如，同步所有文件，但排除隐藏文件（以 `.` 为开头命名均被视为隐藏文件）：
 
 ```shell
-# 挂载 JuiceFS
-sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
-# 完整同步，排除隐藏文件和目录
-juicefs sync --exclude '.*' /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
+# 排除隐藏文件
+juicefs sync --exclude '.*' /tmp/dir/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ```
 
-可以重复该选项匹配更多规则，例如，排除所有隐藏文件、`pic/` 目录 和 `4.png` 文件：
+重复该选项匹配更多规则，例如，排除所有隐藏文件、`pic/` 目录 和 `4.png`：
 
 ```shell
-juicefs sync --exclude '.*' --exclude 'pic/' --exclude '4.png' /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com
+juicefs sync --exclude '.*' --exclude 'pic/' --exclude '4.png' /tmp/dir/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com
 ```
 
-#### 包含文件／目录
-
-使用 `--include` 选项设置要包含（不被排除）的目录或文件，例如，只同步 `pic/` 和 `4.png` 两个文件，其他文件都排除：
+使用 `--include` 选项设置要包含的目录或文件，例如，只同步 `pic/` 和 `4.png` 两个文件，其他文件都排除：
 
 ```shell
-juicefs sync --include 'pic/' --include '4.png' --exclude '*' /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com
+juicefs sync --include 'pic/' --include '4.png' --exclude '*' /tmp/dir/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com
 ```
-
-:::info 注意
-在使用包含／排除规则时，位置在前的选项优先级更高。`--include` 应该排在前面，如果先设置 `--exclude '*'` 排除了所有文件，那么后面的 `--include 'pic/' --include '4.png'` 包含规则就不会生效。
-:::
-
-### 多线程和带宽限制
-
-JuiceFS `sync` 默认启用 10 个线程执行同步任务，可以根据需要设置 `--threads` 选项调大或减少线程数。
-
-另外，如果需要限制同步任务占用的带宽，可以设置 `--bwlimit` 选项，单位 `Mbps`，默认值为 `0` 即不限制。
 
 ### 目录结构与文件权限
 
@@ -191,11 +171,25 @@ JuiceFS `sync` 在**本地目录之间**同步时，支持通过设置 `--links`
 另外需要注意的几个细节
 
 1. 符号链接自身的 `mtime` 不会被拷贝；
-2. `--check-new` 和 `--perms` 选项的行为在遇到符号链接时会被忽略。
+1. `--check-new` 和 `--perms` 选项的行为在遇到符号链接时会被忽略。
 
-### 多机并发同步
+## 并发同步 {#concurrent-sync}
 
-本质上在两个对象存储之间同步数据就是从一端拉取数据再推送到另一端，如下图所示，同步的效率取决于客户端与云之间的带宽。
+`juicefs sync` 默认启用 10 个线程执行同步任务，可以根据需要设置 `--threads` 选项调大或减少线程数。但也要注意，受限于各种因素，一味增加 `--threads` 未必能持续提升同步速度，你还需要考虑：
+
+* `SRC` 和 `DST` 的存储系统是否已经达到了带宽上限，如果其中一个对象存储已经到达带宽限制，同步的瓶颈就在这里，继续增加并发度也不会继续提升同步速度；
+* 单机资源是否吃紧，比如 CPU、网卡拥堵。如果同步受限于单机资源，考虑使用[分布式同步](#distributed-sync)，在下方小节继续介绍；
+* 如果同步的数据以小文件为主，并且 `SRC` 的存储系统的 `list` API 性能极佳，那么 `juicefs sync` 默认的单线程 `list` 可能会成为瓶颈。此时考虑启用[并发 `list`](#concurrent-list) 操作，在下方小节继续介绍。
+
+### 并发 `list` {#concurrent-list}
+
+在 `juicefs sync` 命令的输出中，关注 `Pending objects` 的数量，如果该值持续为 0，说明消费速度大于生产，可以增大 `--list-threads` 来启用并发 `list`，以及用 `--list-depth` 来控制并发 `list` 的目录深度。
+
+比方说，如果你面对的是 JuiceFS 所使用的对象存储服务，那么目录结构为 `/<vol-name>/chunks/xxx/xxx/...`，对于这样的目录结构，使用 `--list-depth=2` 来实现对于 `/<vol-name>/chunks` 的并发列表操作，是比较合适的选择。
+
+### 分布式同步 {#distributed-sync}
+
+在两个对象存储之间同步数据，就是从一端拉取数据再推送到另一端，同步的效率取决于客户端与云之间的带宽：
 
 ![](../images/juicefs-sync-single.png)
 
@@ -205,11 +199,7 @@ JuiceFS `sync` 在**本地目录之间**同步时，支持通过设置 `--links`
 
 Manager 作为主控执行 `sync` 命令，通过 `--worker` 参数定义多个 Worker 主机，JuiceFS 会根据 Worker 的总数量，动态拆分同步的工作量并分发给各个主机同时执行。即把原本在一台主机上处理的同步任务量拆分成多份，分发到多台主机上同时处理，单位时间内能处理的数据量更大，总带宽也成倍增加。
 
-在配置多机并发同步任务时，需要提前配置好 Manager 主机到 Worker 主机的 SSH 免密登陆，确保客户端和任务能够成功分发到 Worker。
-
-:::note 注意
-Manager 会将 JuiceFS 客户端程序分发到 Worker 主机，为了避免客户端的兼容性问题，请确保 Manager 和 Worker 使用相同类型和架构的操作系统。
-:::
+在配置多机并发同步任务时，需要提前配置好 Manager 节点到 Worker 节点的 SSH 免密登录，如果 Worker 节点的 SSH 端口不是默认的 22，请在 Manager 节点的 `~/.ssh/config` 设置其端口号。Manager 会将 JuiceFS 客户端程序分发到 Worker 节点，为避免兼容性问题，Manager 和 Worker 应使用相同类型和架构的操作系统。
 
 例如，将 [对象存储 A](#required-storages) 同步到 [对象存储 B](#required-storages)，采用多主机并行同步：
 
@@ -219,10 +209,6 @@ juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa
 
 当前主机与两个 Worker 主机 `bob@192.168.1.20` 和 `tom@192.168.8.10` 将共同分担两个对象存储之间的数据同步任务。
 
-:::tip 提示
-如果 Worker 主机的 SSH 服务不是默认的 22 号端口，请在 Manager 主机通过 `.ssh/config` 配置文件设置 Worker 主机的 SSH 服务端口号。
-:::
-
 ## 场景应用
 
 ### 数据异地容灾备份
@@ -231,9 +217,9 @@ juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa
 
 ```shell
 # 挂载 JuiceFS
-sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 # 执行同步
-sudo juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
+juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ```
 
 同步以后，在 [对象存储 A](#required-storages) 中可以直接看到所有的文件。
@@ -249,7 +235,3 @@ juicefs sync cos://ABCDEFG:HIJKLMN@ccc-125000.cos.ap-beijing.myqcloud.com oss://
 ```
 
 同步以后，在 [对象存储 B](#required-storages) 中看到的与 [JuiceFS 使用的对象存储](#required-storages) 中的内容和结构完全一样。
-
-:::tip 提示
-请阅读《[技术架构](../introduction/architecture.md)》了解 JuiceFS 如何存储文件。
-:::

@@ -626,7 +626,7 @@ interval (in seconds) to send heartbeat; it's recommended that all clients use t
 juicefs webdav redis://localhost localhost:9007
 ```
 
-### `juicefs sync`
+### `juicefs sync` {#sync}
 
 Sync between two storage.
 

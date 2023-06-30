@@ -1,11 +1,10 @@
 ---
-sidebar_label: Synchronization
-position: 4
+title: Data Synchronization
 ---
 
-# Migrate and Synchronize Data across Clouds with JuiceFS Sync
+[`juicefs sync`](../reference/command_reference.md#sync) is a powerful data migration tool, which can copy data across all supported storages including object storage, JuiceFS itself, and local file systems, you can freely copy data between any of these systems. In addition, it supports remote directories through SSH, HDFS, WebDAV, etc. while providing advanced features such as  incremental synchronization, and pattern matching (like rsync), and distributed syncing.
 
-The subcommand `sync` of JuiceFS is a full-featured data synchronization utility that can synchronize or migrate data concurrently with multiple threads between all [object storages JuiceFS supports](../guide/how_to_set_up_object_storage.md). It can be used to migrate data not only between _object storage_ and _JuiceFS_, but also between _object storages_ in different clouds or regions. In addition, similar to `rsync`, the JuiceFS subcommand `sync` can also be used to synchronize local directories and access remote directories through SSH, HDFS, WebDAV, etc.. It also provides advanced features such as full synchronization, incremental synchronization, and conditional pattern matching.
+For data migrations that involve JuiceFS, it's recommended use the `jfs://` protocol, rather than mount JuiceFS and access its local directory, which bypasses the FUSE mount point and access JuiceFS directly. Under large scale scenarios, bypassing FUSE can save precious resources and increase performance.
 
 ## Basic Usage
 
@@ -23,11 +22,14 @@ Arguments:
 - `DST` is the destination address or path;
 - `[command options]` are synchronization options. See [command reference](../reference/command_reference.md#juicefs-sync) for more details.
 
-Address syntax follows `[NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]`.
+Address format:
 
-:::tip
-MinIO only supports path style, and the address format is `minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]`
-:::
+```
+[NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]
+
+# MinIO only supports path style
+minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]
+```
 
 Explanation:
 
@@ -84,7 +86,7 @@ The following command synchronizes `movies` directory on [Object Storage A](#req
 
 ```shell
 # mount JuiceFS
-sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 # synchronize
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
@@ -99,7 +101,7 @@ The following command synchronizes `images` directory from [JuiceFS File System]
 
 ```shell
 # mount JuiceFS
-sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 # synchronization
 juicefs sync /mnt/jfs/images/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/images/
 ```
@@ -122,7 +124,7 @@ For full synchronization, i.e. synchronizing all the time no matter whether the 
 
 ```shell
 # mount JuiceFS
-sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 # full synchronization
 juicefs sync --force-update s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
@@ -149,7 +151,7 @@ Linux regards a directory or a file with a name starts with `.` as hidden.
 
 ```shell
 # mount JuiceFS
-sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 # full synchronization, excluding hidden directories and files
 juicefs sync --exclude '.*' /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ```
@@ -172,12 +174,6 @@ juicefs sync --include 'pic/' --include '4.png' --exclude '*' /mnt/jfs/ s3://ABC
 The earlier options have higher priorities than the latter ones. Thus, the `--include` options should come before `--exclude`. Otherwise, all the `--include` options such as `--include 'pic/' --include '4.png'` which appear later than `--exclude '*'` will be ignored.
 :::
 
-### Multi-threading and Bandwidth Throttling
-
-The subcommand `sync` enables 10 threads by default. You can customize thread count by `--thread` option.
-
-In addition, you can set option `--bwlimit` in the unit `Mbps` to limit the bandwidth used by the synchronization. The default value is `0`, meaning that bandwidth will not be limited.
-
 ### Directory Structure and File Permissions
 
 The subcommand `sync` only synchronizes file objects and directories containing file objects, and skips empty directories by default. To synchronize empty directories, you can use `--dirs` option.
@@ -193,23 +189,33 @@ Some details need to be noticed
 1. The `mtime` of a symbolic link will not be synchronized;
 2. `--check-new` and `--perms` will be ignored when synchronizing symbolic links.
 
-### Multi-machine Concurrent Synchronization
+## Concurrent data synchronization {#concurrent-sync}
 
-Synchronizing between two object storages is essentially pulling data from one and pushing it to the other. As shown in the figure below, the efficiency of synchronization depends on the bandwidth between the client and the cloud.
+`juicefs sync` by default starts 10 threads to run syncing jobs, you can set the `--threads` option to increase or decrease the number of threads as needed. But also note that due to various factors, blindly increasing `--threads` may not always work, and you should also consider:
+
+* `SRC` and `DST` storage systems may have already reached their bandwidth limits, if this is indeed the bottleneck, further increasing concurrency will not improve the situation;
+* Performing `juicefs sync` on a single host may be limited by host resources, e.g. CPU or network throttle, if this is the case, consider using [distributed synchronization](#distributed-sync) (introduced below);
+* If the synchronized data is mainly small files, and the `list` API of `SRC` storage system has excellent performance, then the default single-threaded `list` of `juicefs sync` may become a bottleneck. You can consider enabling [concurrent `list`](#concurrent-list) (introduced below).
+
+### Concurrent `list` {#concurrent-list}
+
+From the output of `juicefs sync`, pay attention to the `Pending objects` count, if this value stays zero, consumption is faster than production and you should increase `--list-threads` to enable concurrent `list`, and then use `--list-depth` to control `list` depth.
+
+For example, if you're dealing with a object storage bucket used by JuiceFS, directory structure will be `/<vol-name>/chunks/xxx/xxx/...`, using `--list-depth=2` will perform concurrent listing on `/<vol-name>/chunks` which usually renders the best performance.
+
+### Distributed synchronization {#distributed-sync}
+
+Synchronizing between two object storages is essentially pulling data from one and pushing it to the other. The efficiency of the synchronization will depend on the bandwidth between the client and the cloud.
 
 ![](../images/juicefs-sync-single.png)
 
-When synchronizing a huge amount of data, there is often a bottleneck in the synchronization since the client machine runs out of bandwidth. For this case, JuiceFS Sync provides a multi-machine concurrent solution, as shown in the figure below.
+When copying large scale data, node bandwidth can easily bottleneck the synchronization process. For this scenario, `juicefs sync` provides a multi-machine concurrent solution, as shown in the figure below.
 
 ![](../images/juicefs-sync-worker.png)
 
-Manager machine executes `sync` command as the master, and defines multiple Worker machines by setting option `--worker`. JuiceFS will dynamically split the synchronization workload according to the total number of Workers and distribute to Workers for concurrent synchronization. That is, split the synchronization workload which should originally be processed on one machine into multiple parts, and dispatch them to multiple machines for concurrent processing. This increases the amount of data that can be processed per unit time, and the total bandwidth is also multiplied.
+Manager node executes `sync` command as the master, and defines multiple worker nodes by setting option `--worker` (manager node itself also serve as a worker node). JuiceFS will split the workload distribute to Workers for distributed synchronization. This increases the amount of data that can be processed per unit time, and the total bandwidth is also multiplied.
 
-Passwordless SSH login from Manager to Workers should be enabled before configuring multi-machine concurrent synchronization to ensure that the client programs and the synchronization workload can be successfully distributed to Workers.
-
-:::note NOTICE
-Manager distributes JuiceFS client programs to Workers. To avoid compatibility issues, please make sure the Workers use the same operating system of the same architecture as the Manager.
-:::
+When using distributed syncing, you should configure SSH logins so that the manager can access all worker nodes without password, if SSH port isn't the default 22, you'll also have to include that in the manager's `~/.ssh/config`. Manager will distribute the JuiceFS Client to all worker nodes, so they should all use the same architecture to avoid running into compatibility problems.
 
 For example, synchronize data from [Object Storage A](#required-storages) to [Object Storage B](#required-storages) concurrently with multiple machines.
 
@@ -219,10 +225,6 @@ juicefs sync --worker bob@192.168.1.20,tom@192.168.8.10 s3://ABCDEFG:HIJKLMN@aaa
 
 The synchronization workload between the two object storages is shared by the current machine and the two Workers `bob@192.168.1.20` and `tom@192.168.8.10`.
 
-:::tip Tips
-Please set the SSH port in `.ssh/config` on the Manager machine if Workers don't listen on the default SSH port 22.
-:::
-
 ## Application Scenarios
 
 ### Geo-disaster Recovery Backup
@@ -231,9 +233,9 @@ Geo-disaster recovery backup backs up files, and thus the files stored in JuiceF
 
 ```shell
 # mount JuiceFS
-sudo juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
+juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 # synchronization
-sudo juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
+juicefs sync /mnt/jfs/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/
 ```
 
 After sync, you can see all the files in [Object Storage A](#required-storages).
@@ -249,7 +251,3 @@ juicefs sync cos://ABCDEFG:HIJKLMN@ccc-125000.cos.ap-beijing.myqcloud.com oss://
 ```
 
 After sync, the file content and hierarchy in the [Object Storage B](#required-storages) are exactly the same as the [underlying object storage of JuiceFS](#required-storages).
-
-:::tip Tips
-Please read [architecture](../introduction/architecture.md) for more details about how JuiceFS stores files.
-:::

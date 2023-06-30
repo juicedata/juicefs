@@ -626,7 +626,7 @@ Consul 注册中心地址 (默认："127.0.0.1:8500")
 juicefs webdav redis://localhost localhost:9007
 ```
 
-### `juicefs sync`
+### `juicefs sync` {#sync}
 
 在两个存储系统之间同步数据。
 
