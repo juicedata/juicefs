@@ -32,6 +32,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/juicedata/gogfapi/gfapi"
 )
@@ -142,6 +143,9 @@ func (c *gluster) Put(key string, in io.Reader) error {
 
 func (c *gluster) Delete(key string) error {
 	err := c.vol.Unlink(key)
+	if err != nil && strings.Contains(err.Error(), "is a directory") {
+		err = c.vol.Rmdir(key)
+	}
 	if os.IsNotExist(err) {
 		err = nil
 	}
@@ -157,25 +161,31 @@ func (d *gluster) readDirSorted(dirname string) ([]*mEntry, error) {
 	}
 	defer f.Close()
 	entries, err := f.Readdir(0)
-	mEntries := make([]*mEntry, len(entries))
+	if err != nil {
+		return nil, err
+	}
 
-	for i, e := range entries {
+	mEntries := make([]*mEntry, 0, len(entries))
+	for _, e := range entries {
+		name := e.Name()
+		if name == "." || name == ".." {
+			continue
+		}
 		if e.IsDir() {
-			mEntries[i] = &mEntry{nil, e.Name() + dirSuffix, e, false}
+			mEntries = append(mEntries, &mEntry{nil, name + dirSuffix, e, false})
 		} else if !e.Mode().IsRegular() {
 			// follow symlink
-			fi, err := os.Stat(filepath.Join(dirname, e.Name()))
+			fi, err := os.Stat(filepath.Join(dirname, name))
 			if err != nil {
-				mEntries[i] = &mEntry{nil, e.Name(), e, true}
+				mEntries = append(mEntries, &mEntry{nil, name, e, true})
 				continue
 			}
-			name := e.Name()
 			if fi.IsDir() {
-				name = e.Name() + dirSuffix
+				name += dirSuffix
 			}
-			mEntries[i] = &mEntry{nil, name, fi, true}
+			mEntries = append(mEntries, &mEntry{nil, name, fi, true})
 		} else {
-			mEntries[i] = &mEntry{nil, e.Name(), e, false}
+			mEntries = append(mEntries, &mEntry{nil, name, e, false})
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
@@ -203,7 +213,7 @@ func (d *gluster) List(prefix, marker, delimiter string, limit int64) ([]Object,
 		}
 		objs = append(objs, obj)
 	}
-	entries, err := readDirSorted(dir)
+	entries, err := d.readDirSorted(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -233,8 +243,16 @@ func (d *gluster) List(prefix, marker, delimiter string, limit int64) ([]Object,
 	return objs, nil
 }
 
+func (d *gluster) Chtimes(path string, mtime time.Time) error {
+	return notSupported
+}
+
 func (d *gluster) Chmod(path string, mode os.FileMode) error {
 	return d.vol.Chmod(path, mode)
+}
+
+func (d *gluster) Chown(path string, owner, group string) error {
+	return notSupported
 }
 
 func newGluster(endpoint, ak, sk, token string) (ObjectStorage, error) {
