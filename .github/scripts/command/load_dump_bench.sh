@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-python3 -c "import mysqlclient" || pip install mysqlclient
+# python3 -c "import mysqlclient" || pip install mysqlclient
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
