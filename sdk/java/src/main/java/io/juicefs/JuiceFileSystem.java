@@ -68,7 +68,7 @@ public class JuiceFileSystem extends FilterFileSystem {
   public void initialize(URI uri, Configuration conf) throws IOException {
     super.initialize(uri, conf);
     fileChecksumEnabled = Boolean.parseBoolean(getConf(conf, "file.checksum", "false"));
-    if (Boolean.parseBoolean(getConf(conf, "enable-trash-emptier", "true"))) {
+    if (!Boolean.parseBoolean(getConf(conf, "disable-trash-emptier", "false"))) {
       startTrashEmptier(uri, conf);
     }
   }
