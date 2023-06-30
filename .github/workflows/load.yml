@@ -73,22 +73,22 @@ jobs:
       - name: Load and dump with big directory with --subdir
         timeout-minutes: 30
         run: |
-          MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} META=${{matrix.meta}} .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir_subdir
+          sudo MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} META=${{matrix.meta}} .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir_subdir
             
       - name: Load and dump with big directory
         timeout-minutes: 30
         run: |
-          MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} META=${{matrix.meta}} .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir
+          sudo MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} META=${{matrix.meta}} .github/scripts/command/load_dump_bench.sh test_load_dump_with_big_dir
           
       - name: List big directory
         timeout-minutes: 30
         run: | 
-          MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} META=${{matrix.meta}} .github/scripts/command/load_dump_bench.sh test_list_with_big_dir
+          sudo MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} META=${{matrix.meta}} .github/scripts/command/load_dump_bench.sh test_list_with_big_dir
 
       - name: Load and dump with small directory
         timeout-minutes: 30
         run: |
-          MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} META=${{matrix.meta}} .github/scripts/command/load_dump_bench.sh test_load_dump_with_small_dir
+          sudo MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} META=${{matrix.meta}} .github/scripts/command/load_dump_bench.sh test_load_dump_with_small_dir
         
       - name: log
         if: ${{ always() }}
