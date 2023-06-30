@@ -1,8 +1,6 @@
 #!/bin/bash
 
 set -ex
-python3 -c "import minio" || sudo pip install minio 
-python3 -c "import hypothesis" || sudo pip install hypothesis
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3

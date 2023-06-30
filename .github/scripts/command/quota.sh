@@ -1,6 +1,5 @@
 #!/bin/bash
 set -ex
-python3 -c "import minio" || sudo pip install minio 
 
 [[ -z "$META" ]] && META=sqlite3
 source .github/scripts/start_meta_engine.sh

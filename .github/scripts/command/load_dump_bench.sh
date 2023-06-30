@@ -1,7 +1,5 @@
-#!/bin/bash
+#!/bin/bash -e
 
-set -e
-# python3 -c "import mysqlclient" || pip install mysqlclient
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
@@ -13,7 +11,6 @@ test_load_dump_with_small_dir(){
   prepare_test
   create_database $META_URL
   echo meta_url is: $META_URL
-  mount_point=/tmp/juicefs-load-test
   wget -q https://s.juicefs.com/static/bench/2M_emtpy_files.dump.gz
   gzip -dfk  2M_emtpy_files.dump.gz
   load_file=2M_emtpy_files.dump
@@ -30,8 +27,8 @@ test_load_dump_with_small_dir(){
   runtime=$((end-start))
   echo "dump cost $runtime seconds"
   python3 .github/scripts/db.py --name dump_small_dir --result $runtime --version $version --meta $META --storage file
-  ./juicefs mount $META_URL $mount_point -d --no-usage-report
-  inode=$(df -i $mount_point | grep JuiceFS |awk -F" " '{print $3}')
+  ./juicefs mount $META_URL /jfs -d --no-usage-report
+  inode=$(df -i /jfs | grep JuiceFS |awk -F" " '{print $3}')
   if [ "$inode" -ne "2233313" ]; then 
     echo "<FATAL>: inode error: $inode"
     exit 1
@@ -51,7 +48,6 @@ do_load_dump_with_big_dir(){
   prepare_test
   create_database $META_URL
   echo meta_url is: $META_URL
-  mount_point=/tmp/juicefs-load-test
   wget -q https://s.juicefs.com/static/bench/1M_files_in_one_dir.dump.gz
   gzip -dfk  1M_files_in_one_dir.dump.gz
   load_file=1M_files_in_one_dir.dump
@@ -72,9 +68,9 @@ do_load_dump_with_big_dir(){
   runtime=$((end-start))
   echo "dump cost $runtime seconds"
   python3 .github/scripts/db.py --name dump_big_dir --result $runtime --version $version --meta $META --storage file
-  ./juicefs mount $META_URL $mount_point -d --no-usage-report
-  df -i $mount_point
-  inode=$(df -i $mount_point | grep JuiceFS |awk -F" " '{print $3}')
+  ./juicefs mount $META_URL /jfs -d --no-usage-report
+  df -i /jfs
+  inode=$(df -i /jfs | grep JuiceFS |awk -F" " '{print $3}')
   echo "inode: $inode"
   if [ "$inode" -ne "1000003" ]; then 
     echo "<FATAL>: inode error: $inode"
@@ -83,9 +79,8 @@ do_load_dump_with_big_dir(){
 }
 
 test_list_with_big_dir(){
-  mount_point=/tmp/juicefs-load-test
   start=`date +%s`
-  file_count=$(ls -l $mount_point/test/test-dir.0-0/mdtest_tree.0/ | wc -l)
+  file_count=$(ls -l /jfs/test/test-dir.0-0/mdtest_tree.0/ | wc -l)
   echo "file_count: $file_count"
   end=`date +%s`
   runtime=$((end-start))
