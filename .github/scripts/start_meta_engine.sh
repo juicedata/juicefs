@@ -78,18 +78,18 @@ start_meta_engine(){
     meta=$1
     storage=$2
     if [ "$meta" == "mysql" ]; then
-        sudo /etc/init.d/mysql start
+        /etc/init.d/mysql start
     elif [ "$meta" == "redis" ]; then
-        sudo apt-get install -y redis-tools redis-server
+        apt-get install -y redis-tools redis-server
     elif [ "$meta" == "tikv" ]; then
         [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
         cd tcli && make
-        sudo cp bin/tcli /usr/local/bin
+        cp bin/tcli /usr/local/bin
         cd -
         retry install_tikv
 
     elif [ "$meta" == "badger" ]; then
-        sudo go get github.com/dgraph-io/badger/v3
+        go get github.com/dgraph-io/badger/v3
     elif [ "$meta" == "mariadb" ]; then
         docker run -p 127.0.0.1:3306:3306  --name mdb -e MARIADB_ROOT_PASSWORD=root -d mariadb:latest
         sleep 10
@@ -97,7 +97,7 @@ start_meta_engine(){
         retry install_tidb
         mysql -h127.0.0.1 -P4000 -uroot -e "set global tidb_enable_noop_functions=1;"
     elif [ "$meta" == "etcd" ]; then
-        sudo apt install etcd
+        apt install etcd
     elif [ "$meta" == "fdb" ]; then
         docker run --name fdb --rm -d -p 4500:4500 foundationdb/foundationdb:6.3.23
         sleep 5
@@ -138,7 +138,7 @@ start_meta_engine(){
         sleep 10
     elif [ "$meta" != "mysql" ] && [ "$storage" == "mysql" ]; then
         echo "start mysql"
-        sudo /etc/init.d/mysql start
+        /etc/init.d/mysql start
     fi
 }
 

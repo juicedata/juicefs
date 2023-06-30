@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 
 # python3 -c "import mysqlclient" || pip install mysqlclient
 source .github/scripts/common/common.sh
@@ -20,7 +20,6 @@ test_load_dump_with_small_dir(){
   ./juicefs load $META_URL $load_file
   end=`date +%s`
   runtime=$((end-start))
-  sudo chmod +x .github/scripts/db.py
   version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
   python3 .github/scripts/db.py --name load_small_dir --result $runtime --version $version --meta ${{matrix.meta}} --storage file
   echo "load cost $runtime seconds"
@@ -30,8 +29,6 @@ test_load_dump_with_small_dir(){
   runtime=$((end-start))
   echo "dump cost $runtime seconds"
   python3 .github/scripts/db.py --name dump_small_dir --result $runtime --version $version --meta ${{matrix.meta}} --storage file
-  sudo mkdir /var/jfs
-  sudo chmod 777 /var/jfs
   ./juicefs mount $META_URL $mount_point -d --no-usage-report
   inode=$(df -i $mount_point | grep JuiceFS |awk -F" " '{print $3}')
   if [ "$inode" -ne "2233313" ]; then 
@@ -62,7 +59,6 @@ do_load_dump_with_big_dir(){
   end=`date +%s`
   runtime=$((end-start))
   echo "load cost $runtime seconds"
-  sudo chmod +x .github/scripts/db.py
   version=$(./juicefs -V|cut -b 17- | sed 's/:/-/g')
   python3 .github/scripts/db.py --name load_big_dir --result $runtime --version $version --meta ${{matrix.meta}} --storage file
   start=`date +%s`
@@ -75,7 +71,6 @@ do_load_dump_with_big_dir(){
   runtime=$((end-start))
   echo "dump cost $runtime seconds"
   python3 .github/scripts/db.py --name dump_big_dir --result $runtime --version $version --meta ${{matrix.meta}} --storage file
-  sudo chmod 777 /var/jfs
   ./juicefs mount $META_URL $mount_point -d --no-usage-report
   df -i $mount_point
   inode=$(df -i $mount_point | grep JuiceFS |awk -F" " '{print $3}')
