@@ -18,6 +18,7 @@ package io.juicefs;
 import com.kenai.jffi.internal.StubLoader;
 import io.juicefs.exception.QuotaExceededException;
 import io.juicefs.metrics.JuiceFSInstrumentation;
+import io.juicefs.utils.BgTaskUtil;
 import io.juicefs.utils.ConsistentHash;
 import io.juicefs.utils.NodesFetcher;
 import io.juicefs.utils.NodesFetcherBuilder;
@@ -61,9 +62,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
@@ -93,8 +92,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   private ConsistentHash<String> hash = new ConsistentHash<>(1, Collections.singletonList("localhost"));
   private FsPermission uMask;
   private String hflushMethod;
-  private ScheduledExecutorService nodesFetcherThread;
-  private ScheduledExecutorService refreshUidThread;
+
   private Map<String, FileStatus> lastFileStatus = new HashMap<>();
   private static final DirectBufferPool directBufferPool = new DirectBufferPool();
 
@@ -508,12 +506,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   private void refreshUidAndGrouping(String uidFile, String groupFile) {
-    refreshUidThread = Executors.newScheduledThreadPool(1, r -> {
-      Thread thread = new Thread(r, "Uid and group refresher");
-      thread.setDaemon(true);
-      return thread;
-    });
-    refreshUidThread.scheduleAtFixedRate(() -> {
+    BgTaskUtil.startScheduleTask(name, "Refresh guid", () -> {
       updateUidAndGrouping(uidFile, groupFile);
     }, 1, 1, TimeUnit.MINUTES);
   }
@@ -712,12 +705,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   }
 
   private void refreshCache(Configuration conf) {
-    nodesFetcherThread = Executors.newScheduledThreadPool(1, r -> {
-      Thread thread = new Thread(r, "Node fetcher");
-      thread.setDaemon(true);
-      return thread;
-    });
-    nodesFetcherThread.scheduleAtFixedRate(() -> {
+    BgTaskUtil.startScheduleTask(name, "Node fetcher", ()  -> {
       initCache(conf);
     }, 10, 10, TimeUnit.MINUTES);
   }
@@ -1612,13 +1600,7 @@ public class JuiceFileSystemImpl extends FileSystem {
   @Override
   public void close() throws IOException {
     super.close();
-    if (refreshUidThread != null) {
-      refreshUidThread.shutdownNow();
-    }
     lib.jfs_term(Thread.currentThread().getId(), handle);
-    if (nodesFetcherThread != null) {
-      nodesFetcherThread.shutdownNow();
-    }
     if (metricsEnable) {
       JuiceFSInstrumentation.close();
     }
