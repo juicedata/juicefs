@@ -177,10 +177,10 @@ jobs:
               go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
               
               # gluster
-              systemctl start glusterd.service
-              mkdir -p /gluster/gv0
-              hostname jfstest
-              gluster volume create gv0 jfstest:/gluster/gv0 force
+              sudo systemctl start glusterd.service
+              mkdir -p /tmp/gluster/gv0
+              sudo hostname jfstest
+              gluster volume create gv0 jfstest:/tmp/gluster/gv0 force
               gluster volume start gv0
 
               # webdav
