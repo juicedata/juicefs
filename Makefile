@@ -33,6 +33,9 @@ juicefs.ceph: Makefile cmd/*.go pkg/*/*.go
 juicefs.fdb: Makefile cmd/*.go pkg/*/*.go
 	go build -tags fdb -ldflags="$(LDFLAGS)"  -o juicefs.fdb .
 
+juicefs.gluster: Makefile cmd/*.go pkg/*/*.go
+	go build -tags gluster -ldflags="$(LDFLAGS)"  -o juicefs.gluster .
+
 # This is the script for compiling the Linux version on the MacOS platform.
 # Please execute the `brew install FiloSottile/musl-cross/musl-cross` command before using it.
 juicefs.linux:
@@ -75,7 +78,7 @@ test:
 	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword GOMAXPROCS=8 go test -v -count=1 -cover -timeout=8m ./cmd/... -coverprofile=cov2.out -coverpkg=./pkg/...,./cmd/...
 
 test.pkg:
-	go test -v -cover -count=1 -timeout=12m ./pkg/... -coverprofile=cov.out
+	go test -tags gluster -v -cover -count=1 -timeout=12m ./pkg/... -coverprofile=cov.out
 
 test.cmd:
 	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword GOMAXPROCS=8 go test -v -count=1 -cover -timeout=8m ./cmd/... -coverprofile=cov.out -coverpkg=./pkg/...,./cmd/...
