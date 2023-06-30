@@ -230,7 +230,7 @@ jobs:
       #     files: ./cov.out
 
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        if: ${{ failure() }}
         timeout-minutes: 120
         uses: lhotari/action-upterm@v1
 
