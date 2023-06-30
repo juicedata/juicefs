@@ -442,7 +442,6 @@ type Meta interface {
 	// Dump the tree under root, which may be modified by checkRoot
 	DumpMeta(w io.Writer, root Ino, keepSecret bool) error
 	LoadMeta(r io.Reader) error
-
 	// getBase return the base engine.
 	getBase() *baseMeta
 	InitMetrics(registerer prometheus.Registerer)

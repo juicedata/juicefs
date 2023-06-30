@@ -37,7 +37,7 @@ jobs:
       MINIO_TEST_BUCKET: 127.0.0.1:9000/testbucket
       MINIO_ACCESS_KEY: testUser
       MINIO_SECRET_KEY: testUserPassword
-      GLUSTER_VOLUME: `hostname`/gv0
+      GLUSTER_VOLUME: hostname/gv0
       DISPLAY_PROGRESSBAR: false
       HDFS_ADDR: localhost:8020
       SFTP_HOST: localhost:2222:/upload/
