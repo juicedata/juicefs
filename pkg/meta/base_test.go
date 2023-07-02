@@ -1445,6 +1445,13 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Parent != TrashInode+1 {
 		t.Fatalf("getattr d2(%d): %s, attr %+v", inode, st, attr)
 	}
+	var tino Ino
+	if st := m.Mkdir(ctx, inode, "d3", 0777, 022, 0, &tino, attr); st != syscall.EPERM {
+		t.Fatalf("mkdir inside trash should fail")
+	}
+	if st := m.Create(ctx, inode, "d3", 0755, 022, 0, &tino, attr); st != syscall.EPERM {
+		t.Fatalf("create inside trash should fail")
+	}
 	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f1 -> d: %s", st)
 	}

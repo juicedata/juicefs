@@ -1127,6 +1127,9 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if pattr.Parent > TrashInode {
+			return syscall.EPERM
+		}
 		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
 		}
