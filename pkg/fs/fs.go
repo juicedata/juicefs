@@ -430,7 +430,7 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint1
 	}
 	var inode Ino
 	err = fs.m.Mkdir(ctx, fi.inode, path.Base(p), mode, umask, 0, &inode, nil)
-	if err == syscall.EPERM && fi.inode != 1 {
+	if err == syscall.ENOENT && fi.inode != 1 {
 		// parent be moved into trash, try again
 		if fs.conf.DirEntryTimeout > 0 {
 			parent := parentDir(p)
@@ -781,7 +781,7 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint
 		return
 	}
 	err = fs.m.Create(ctx, fi.inode, path.Base(p), mode&07777, umask, syscall.O_EXCL, &inode, attr)
-	if err == syscall.EPERM && fi.inode != 1 {
+	if err == syscall.ENOENT && fi.inode != 1 {
 		// dir be moved into trash, try again
 		if fs.conf.DirEntryTimeout > 0 {
 			parent := parentDir(p)

@@ -871,6 +871,9 @@ func (m *kvMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			return syscall.ENOENT
 		}
 		m.parseAttr(a, &cur)
+		if cur.Parent > TrashInode {
+			return syscall.EPERM
+		}
 		now := time.Now()
 		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now)
 		if st != 0 {
@@ -905,7 +908,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		}
 		t = Attr{}
 		m.parseAttr(a, &t)
-		if t.Typ != TypeFile {
+		if t.Typ != TypeFile || (t.Flags&FlagImmutable) != 0 || t.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		if !skipPermCheck {
@@ -998,10 +1001,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		if t.Typ == TypeFIFO {
 			return syscall.EPIPE
 		}
-		if t.Typ != TypeFile {
-			return syscall.EPERM
-		}
-		if (t.Flags & FlagImmutable) != 0 {
+		if t.Typ != TypeFile || (t.Flags&FlagImmutable) != 0 || t.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		if (t.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {
@@ -1128,7 +1128,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 			return syscall.ENOTDIR
 		}
 		if pattr.Parent > TrashInode {
-			return syscall.EPERM
+			return syscall.ENOENT
 		}
 		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
@@ -1508,6 +1508,9 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if dattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
+		if dattr.Parent > TrashInode {
+			return syscall.ENOENT
+		}
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
 			return st
 		}
@@ -1719,6 +1722,9 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		m.parseAttr(rs[0], &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if pattr.Parent > TrashInode {
+			return syscall.ENOENT
 		}
 		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
@@ -3465,6 +3471,9 @@ func (m *kvMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 		m.parseAttr(a, &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if pattr.Parent > TrashInode {
+			return syscall.ENOENT
 		}
 		if (pattr.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM

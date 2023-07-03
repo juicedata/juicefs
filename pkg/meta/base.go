@@ -1658,7 +1658,7 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr 
 		return
 	}
 
-	if attr.Flags&FlagImmutable != 0 {
+	if attr.Flags&FlagImmutable != 0 || attr.Parent > TrashInode {
 		if flags&(syscall.O_WRONLY|syscall.O_RDWR) != 0 {
 			return syscall.EPERM
 		}
