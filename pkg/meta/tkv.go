@@ -1508,7 +1508,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if dattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
 		}
-		if dattr.Parent > TrashInode {
+		if flags&RenameRestore == 0 && dattr.Parent > TrashInode {
 			return syscall.ENOENT
 		}
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
@@ -1533,7 +1533,7 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		var supdate, dupdate bool
 		now := time.Now()
 		if dbuf != nil {
-			if flags == RenameNoReplace {
+			if flags&RenameNoReplace != 0 {
 				return syscall.EEXIST
 			}
 			dtyp, dino = m.parseEntry(dbuf)

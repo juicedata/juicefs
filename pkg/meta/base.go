@@ -1512,7 +1512,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		return syscall.ENOENT
 	}
 	switch flags {
-	case 0, RenameNoReplace, RenameExchange:
+	case 0, RenameNoReplace, RenameExchange, RenameNoReplace | RenameRestore:
 	case RenameWhiteout, RenameNoReplace | RenameWhiteout:
 		return syscall.ENOTSUP
 	default:

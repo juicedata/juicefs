@@ -1644,7 +1644,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		var spattr, dpattr Attr
 		m.parseAttr(&spn, &spattr)
 		m.parseAttr(&dpn, &dpattr)
-		if dpattr.Parent > TrashInode {
+		if flags&RenameRestore == 0 && dpattr.Parent > TrashInode {
 			return syscall.ENOENT
 		}
 		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &spattr); st != 0 {
@@ -1713,7 +1713,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		now := time.Now().UnixNano()
 		dn = node{Inode: de.Inode}
 		if ok {
-			if flags == RenameNoReplace {
+			if flags&RenameNoReplace != 0 {
 				return syscall.EEXIST
 			}
 			dino = de.Inode
