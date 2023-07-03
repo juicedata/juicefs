@@ -102,7 +102,7 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 				ps := bytes.SplitN(e.Name, []byte("-"), 3)
 				dst, _ := strconv.Atoi(string(ps[0]))
 				if putBack || parents[meta.Ino(dst)] {
-					err = m.Rename(ctx, parent, string(e.Name), meta.Ino(dst), string(ps[2]), meta.RenameNoReplace, nil, nil)
+					err = m.Rename(ctx, parent, string(e.Name), meta.Ino(dst), string(ps[2]), meta.RenameNoReplace|meta.RenameRestore, nil, nil)
 					if err != 0 {
 						logger.Warnf("restore %s: %s", string(e.Name), err)
 						failed.Increment()
