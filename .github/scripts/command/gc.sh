@@ -1,9 +1,7 @@
-#!/bin/bash
-set -e
+#!/bin/bash -e
 
 python3 -c "import xattr" || sudo pip install xattr 
 sudo dpkg -s redis-tools || sudo .github/scripts/apt_install.sh redis-tools
-sudo dpkg -s attr || sudo .github/scripts/apt_install.sh fio
 
 source .github/scripts/common/common.sh
 
@@ -35,14 +33,6 @@ test_gc_trash_files(){
     ./juicefs gc $META_URL 
     ./juicefs gc $META_URL --delete
     ./juicefs status --more $META_URL
-}
-
-prepare_test()
-{
-    umount_jfs /jfs $META_URL
-    ls -l /jfs/.config && exit 1 || true
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm -rf /var/jfs/myjfs || true
 }
 
 source .github/scripts/common/run_test.sh && run_test $@

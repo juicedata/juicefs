@@ -1,10 +1,14 @@
+import subprocess
+try:
+    __import__("hypothesis")
+except ImportError:
+    subprocess.check_call(["pip", "install", "hypothesis"])
 from datetime import datetime
 import json
 import os
 from pickle import FALSE
 import platform
 import shutil
-import subprocess
 import sys
 from termios import TIOCPKT_DOSTOP
 import time

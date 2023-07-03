@@ -1,6 +1,4 @@
-#!/bin/bash
-set -ex
-python3 -c "import minio" || sudo pip install minio 
+#!/bin/bash -e
 
 [[ -z "$META" ]] && META=sqlite3
 source .github/scripts/start_meta_engine.sh
@@ -218,13 +216,6 @@ test_check_and_repair_quota(){
     # ./juicefs quota check $META_URL --path /d --strict && echo "quota check should fail" && exit 1 || true
     ./juicefs quota check $META_URL --path /d --strict --repair
     ./juicefs quota check $META_URL --path /d --strict
-}
-
-prepare_test()
-{
-    umount_jfs /jfs $META_URL
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm -rf /var/jfs/myjfs
 }
 
 wait_until()
