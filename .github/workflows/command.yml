@@ -88,15 +88,15 @@ jobs:
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/load_dump.sh
 
+      - name: Test Info
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/info.sh
+    
       - name: Test Sync
         timeout-minutes: 30
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
 
-      - name: Test Info
-        run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/info.sh
-  
       - name: Log
         if: ${{ always() }}
         run: |
