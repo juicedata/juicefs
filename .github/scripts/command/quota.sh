@@ -1,5 +1,4 @@
-#!/bin/bash
-set -ex
+#!/bin/bash -e
 python3 -c "import minio" || sudo pip install minio 
 
 [[ -z "$META" ]] && META=sqlite3

@@ -1,5 +1,4 @@
-#!/bin/bash
-set -e
+#!/bin/bash -e
 python3 -c "import minio" || sudo pip install minio 
 source .github/scripts/common/common.sh
 
