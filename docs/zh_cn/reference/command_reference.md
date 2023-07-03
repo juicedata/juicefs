@@ -451,7 +451,7 @@ juicefs restore [command options] META HOUR ...
 将恢复的文件移动到原始目录 (默认值：false)
 
 `--threads value`<br />
-线程数(默认：10)
+线程数 (默认：10)
 
 ##### 示例
 
@@ -894,7 +894,7 @@ juicefs mount [command options] META-URL MOUNTPOINT
 缓存逐出策略 (none 或 2-random) (默认值："2-random")
 
 `--cache-scan-interval value`<br />
-扫描缓存目录重建内存索引的间隔(以秒为单位) (默认："3600")
+扫描缓存目录重建内存索引的间隔 (以秒为单位) (默认："3600")
 
 ###### 指标
 
@@ -1012,7 +1012,7 @@ juicefs gateway [command options] META-URL ADDRESS
 * `strictatime`，持续更新 atime
 
 `--skip-dir-nlink value`<br />
-跳过更新目录 nlink 前的重试次数 (仅用于TKV, 0 代表不重试) (默认：20)
+跳过更新目录 nlink 前的重试次数 (仅用于 TKV, 0 代表不重试) (默认：20)
 
 ###### 元数据缓存
 
@@ -1099,7 +1099,7 @@ juicefs gateway [command options] META-URL ADDRESS
 缓存逐出策略 (none 或 2-random) (默认值："2-random")
 
 `--cache-scan-interval value`<br />
-扫描缓存目录重建内存索引的间隔(以秒为单位) (默认："3600")
+扫描缓存目录重建内存索引的间隔 (以秒为单位) (默认："3600")
 
 ###### 指标
 
