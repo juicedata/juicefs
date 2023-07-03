@@ -456,7 +456,7 @@ juicefs restore [command options] META HOUR ...
 ##### 示例
 
 ```shell
-$ juicefs restore redis://localhost/1 2023-05-10-01
+juicefs restore redis://localhost/1 2023-05-10-01
 ```
 
 #### `juicefs dump` {#dump}
@@ -709,6 +709,7 @@ juicefs summary [command options] PATH
 以CSV格式打印摘要 (默认：false)
 
 ##### 示例
+
 ```shell
 $ juicefs summary /mnt/jfs/foo
 
@@ -767,7 +768,7 @@ juicefs mount [command options] META-URL MOUNTPOINT
 启用 ioctl (仅支持 GETFLAGS/SETFLAGS) (默认：false)
 
 `--root-squash value`<br />
-将本地 root 用户 (uid=0) 映射到一个指定用户，如 <uid>:<gid>
+将本地 root 用户 (UID=0) 映射到一个指定用户，如 <UID>:<GID>
 
 `--prefix-internal`<br />
 添加 `.jfs` 前缀到所有内部文件 (默认：false)
@@ -1283,6 +1284,7 @@ juicefs webdav redis://localhost localhost:9007
 ```
 
 ### 工具
+
 #### `juicefs bench` {#bench}
 
 对指定的路径做基准测试，包括对大文件和小文件的读/写/获取属性操作。
@@ -1565,6 +1567,7 @@ juicefs clone [command options] SRC DST
 ```
 
 ##### 选项
+
 `--preserve, -p`<br />
 保留文件的 uid、gid 和 mode (默认值：false)
 
