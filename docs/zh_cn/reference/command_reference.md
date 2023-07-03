@@ -1177,7 +1177,7 @@ HTTPS 密钥文件
 * `strictatime`，持续更新 atime
 
 `--skip-dir-nlink value`<br />
-跳过更新目录 nlink 前的重试次数 (仅用于TKV, 0 代表不重试) (默认：20)
+跳过更新目录 nlink 前的重试次数 (仅用于 TKV, 0 代表不重试) (默认：20)
 
 ###### 元数据缓存
 
