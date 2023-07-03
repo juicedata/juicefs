@@ -905,7 +905,7 @@ $ juicefs gc redis://localhost --compact
 $ juicefs gc redis://localhost --delete
 ```
 
-### `juicefs fsck`
+### `juicefs fsck` {#fsck}
 
 Check consistency of file system.
 
