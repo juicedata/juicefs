@@ -125,7 +125,7 @@ The client reads the latest storage quota settings from the metadata engine ever
 
 ## Directory quota {#directory-quota}
 
-JuiceFS began to support directory-level storage quota since v1.1.0, and you can use the `juicefs quota` subcommand for directory quota management and query.
+JuiceFS began to support directory-level storage quota since v1.1, and you can use the `juicefs quota` subcommand for directory quota management and query.
 
 ### Limit directory capacity {#limit-directory-capacity}
 

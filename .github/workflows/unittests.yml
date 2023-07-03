@@ -37,6 +37,7 @@ jobs:
       MINIO_TEST_BUCKET: 127.0.0.1:9000/testbucket
       MINIO_ACCESS_KEY: testUser
       MINIO_SECRET_KEY: testUserPassword
+      GLUSTER_VOLUME: jfstest/gv0
       DISPLAY_PROGRESSBAR: false
       HDFS_ADDR: localhost:8020
       SFTP_HOST: localhost:2222:/upload/
@@ -59,7 +60,7 @@ jobs:
 
       - name: Install Packages
         run: |
-          sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr
+          sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr glusterfs-server libglusterfs-dev
           sudo mkdir -p /home/travis/.m2/
 
       - if: matrix.test == 'test.meta.non-core'
@@ -172,10 +173,16 @@ jobs:
               
               # minio
               docker run -d -p 9000:9000 -p 9001:9001 -e "MINIO_ROOT_USER=testUser" -e "MINIO_ROOT_PASSWORD=testUserPassword" quay.io/minio/minio:RELEASE.2022-01-25T19-56-04Z server /data --console-address ":9001"
-              
               # mc
               go install github.com/minio/mc@RELEASE.2022-01-07T06-01-38Z && mc config host add local http://127.0.0.1:9000 testUser testUserPassword && mc mb local/testbucket
               
+              # gluster
+              sudo systemctl start glusterd.service
+              mkdir -p /tmp/gluster/gv0
+              sudo hostname jfstest
+              sudo gluster volume create gv0 jfstest:/tmp/gluster/gv0 force
+              sudo gluster volume start gv0
+
               # webdav
               wget -O /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip --no-check-certificate https://downloads.rclone.org/v1.57.0/rclone-v1.57.0-linux-amd64.zip
               unzip /home/travis/.m2/rclone-v1.57.0-linux-amd64.zip -d /home/travis/.m2/

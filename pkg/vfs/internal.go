@@ -171,6 +171,7 @@ func collectMetrics(registry *prometheus.Registry) []byte {
 			continue
 		}
 		for _, m := range mf.Metric {
+			var name = *mf.Name
 			for _, l := range m.Label {
 				if *l.Name != "mp" && *l.Name != "vol_name" {
 					name += "_" + *l.Value

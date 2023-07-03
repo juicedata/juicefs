@@ -39,22 +39,22 @@ JuiceFS provides a libjfs library, a FUSE client application, Java SDK, etc. It 
 
 ### Features
 
-|                                 | CephFS                | JuiceFS            |
-| -----------------------         | ----------            | -------------      |
-| File chunking<sup> [1]</sup>    | ✓                     | ✓                  |
-| Metadata transactions           | ✓                     | ✓                  |
-| Strong consistency              | ✓                     | ✓                  |
-| Kubernetes CSI Driver           | ✓                     | ✓                  |
-| Hadoop-compatible               | ✓                     | ✓                  |
-| Data compression<sup> [2]</sup> | ✓                     | ✓                  |
-| Data encryption<sup> [3]</sup>  | ✓                     | ✓                  |
-| Snapshot                        | ✓                     | ✕                  |
-| Client data caching             | ✕                     | ✓                  |
-| Hadoop data Locality            | ✕                     | ✓                  |
-| S3-compatible                   | ✕                     | ✓                  |
-| Quota                           | Directory level quota | Filesystem (Volume) level quota |
-| Languages                       | C++                   | Go                 |
-| License                         | LGPLv2.1 & LGPLv3     | Apache License 2.0             |
+|                                 | CephFS                | JuiceFS               |
+| ------------------------------- | --------------------- | --------------------- |
+| File chunking<sup> [1]</sup>    | ✓                     | ✓                     |
+| Metadata transactions           | ✓                     | ✓                     |
+| Strong consistency              | ✓                     | ✓                     |
+| Kubernetes CSI Driver           | ✓                     | ✓                     |
+| Hadoop-compatible               | ✓                     | ✓                     |
+| Data compression<sup> [2]</sup> | ✓                     | ✓                     |
+| Data encryption<sup> [3]</sup>  | ✓                     | ✓                     |
+| Snapshot                        | ✓                     | ✕                     |
+| Client data caching             | ✕                     | ✓                     |
+| Hadoop data Locality            | ✕                     | ✓                     |
+| S3-compatible                   | ✕                     | ✓                     |
+| Quota                           | Directory level quota | Directory level quota |
+| Languages                       | C++                   | Go                    |
+| License                         | LGPLv2.1 & LGPLv3     | Apache License 2.0    |
 
 #### [1] File Chunking
 

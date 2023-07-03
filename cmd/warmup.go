@@ -103,11 +103,17 @@ END:
 				off += 17
 			} else if off+5 < n && resp[off] == meta.CDATA {
 				size := binary.BigEndian.Uint32(resp[off+1 : off+5])
-				if off+5+int(size) > n {
-					logger.Errorf("Bad response off %d n %d: %v", off, n, resp)
-					break
+				data = resp[off+5:]
+				if size > uint32(len(resp[off+5:])) {
+					tailData, err := io.ReadAll(cf)
+					if err != nil {
+						logger.Errorf("Read data error: %v", err)
+						break END
+					}
+					data = append(data, tailData...)
+				} else {
+					data = data[:size]
 				}
-				data = append(data, resp[off+5:off+5+int(size)]...)
 				break END
 			} else {
 				logger.Errorf("Bad response off %d n %d: %v", off, n, resp)
@@ -186,15 +192,22 @@ func warmup(ctx *cli.Context) error {
 
 	// find mount point
 	first := paths[0]
-	mp, err := findMountpoint(first)
-	if err != nil {
-		return err
-	}
-	controller, err := openController(mp)
+	controller, err := openController(first)
 	if err != nil {
 		return fmt.Errorf("open control file for %s: %s", first, err)
 	}
 	defer controller.Close()
+
+	mp := first
+	for ; mp != "/"; mp = filepath.Dir(mp) {
+		inode, err := utils.GetFileInode(mp)
+		if err != nil {
+			logger.Fatalf("lookup inode for %s: %s", mp, err)
+		}
+		if inode == uint64(meta.RootInode) {
+			break
+		}
+	}
 
 	threads := ctx.Uint("threads")
 	if threads == 0 {
