@@ -178,7 +178,7 @@ juicefs format [command options] META-URL NAME
 RSA 私钥的路径 (PEM)
 
 `--encrypt-algo value`<br />
-加密算法 (aes256gcm-rsa, chacha20-rsa) (默认: "aes256gcm-rsa")
+加密算法 (aes256gcm-rsa, chacha20-rsa) (默认："aes256gcm-rsa")
 
 `--hash-prefix`<br />
 给每个对象添加 hash 前缀 (默认：false)
@@ -427,7 +427,7 @@ juicefs fsck [command options] META-URL
 递归检查或修复 (默认值：false)
 
 `--sync-dir-stat`<br />
-同步所有目录的状态，即使他们没有损坏 (注意：巨大的文件树可能会花费很长的时间)  (默认： false)
+同步所有目录的状态，即使他们没有损坏 (注意：巨大的文件树可能会花费很长时间) (默认：false)
 
 ##### 示例
 
@@ -697,16 +697,16 @@ juicefs summary [command options] PATH
 ##### 选项
 
 `--depth value, -d value`<br />
-显示树的深度( 0表示只显示根) (默认值：2)
+显示树的深度 (0 表示只显示根) (默认：2)
 
 `--entries value, -e value`<br />
 显示前 N 个 entry (按大小排序)(默认：10)
 
 `--strict`<br />
-显示准确的摘要，包括目录和文件(可能很慢)(默认值：false)
+显示准确的摘要，包括目录和文件 (可能很慢) (默认值：false)
 
 `--csv`<br />
-以CSV格式打印摘要 (默认：false)
+以 CSV 格式打印摘要 (默认：false)
 
 ##### 示例
 
@@ -807,7 +807,7 @@ juicefs mount [command options] META-URL MOUNTPOINT
 * `strictatime`，持续更新 atime
 
 `--skip-dir-nlink value`<br />
-跳过更新目录 nlink 前的重试次数 (仅用于TKV, 0 代表不重试) (默认：20)
+跳过更新目录 nlink 前的重试次数 (仅用于 TKV, 0 代表不重试) (默认：20)
 
 ###### 元数据缓存
 
@@ -824,7 +824,7 @@ juicefs mount [command options] META-URL MOUNTPOINT
 打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--open-cache-limit value`<br />
-允许缓存的最大文件个数 (软限制, 0 代表不限制) (默认：10000)
+允许缓存的最大文件个数 (软限制，0 代表不限制) (默认：10000)
 
 ###### 数据存储
 
@@ -1029,7 +1029,7 @@ juicefs gateway [command options] META-URL ADDRESS
 打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--open-cache-limit value`<br />
-允许缓存的最大文件个数 (软限制, 0 代表不限制) (默认：10000)
+允许缓存的最大文件个数 (软限制，0 代表不限制) (默认：10000)
 
 ###### 数据存储
 
@@ -1194,7 +1194,7 @@ HTTPS 密钥文件
 打开的文件的缓存过期时间（0 代表关闭这个特性）；单位为秒 (默认：0)。阅读[「缓存」](../guide/cache_management.md)了解更多
 
 `--open-cache-limit value`<br />
-允许缓存的最大文件个数 (软限制, 0 代表不限制) (默认：10000)
+允许缓存的最大文件个数 (软限制，0 代表不限制) (默认：10000)
 
 ###### 数据存储
 
@@ -1264,7 +1264,7 @@ HTTPS 密钥文件
 缓存逐出策略 (none 或 2-random) (默认值："2-random")
 
 `--cache-scan-interval value`<br />
-扫描缓存目录重建内存索引的间隔(以秒为单位) (默认："3600")
+扫描缓存目录重建内存索引的间隔 (以秒为单位) (默认：3600)
 
 ###### 指标
 
@@ -1558,7 +1558,7 @@ $ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3
 
 #### `juicefs clone`
 
-该命令可以克隆文件或目录而不复制底层数据，类似于cp命令，但是非常快。
+该命令可以克隆文件或目录但不复制底层数据，类似于 cp 命令，但是非常快。
 
 ##### 使用
 
