@@ -15,7 +15,6 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
-      - '.github/**'
   schedule:
     - cron:  '30 20 * * *'
 
