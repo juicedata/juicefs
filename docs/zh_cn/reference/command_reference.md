@@ -768,7 +768,7 @@ juicefs mount [command options] META-URL MOUNTPOINT
 启用 ioctl (仅支持 GETFLAGS/SETFLAGS) (默认：false)
 
 `--root-squash value`<br />
-将本地 root 用户 (UID=0) 映射到一个指定用户，如 <UID>:<GID>
+将本地 root 用户 (UID=0) 映射到一个指定用户，如 UID:GID
 
 `--prefix-internal`<br />
 添加 `.jfs` 前缀到所有内部文件 (默认：false)
@@ -1569,7 +1569,7 @@ juicefs clone [command options] SRC DST
 ##### 选项
 
 `--preserve, -p`<br />
-保留文件的 uid、gid 和 mode (默认值：false)
+保留文件的 UID、GID 和 mode (默认值：false)
 
 ##### 示例
 
