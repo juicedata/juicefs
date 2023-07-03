@@ -940,7 +940,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			return err
 		}
 		m.parseAttr(a, &t)
-		if t.Typ != TypeFile || (t.Flags&FlagImmutable) != 0 || t.Parent > TrashInode {
+		if t.Typ != TypeFile || t.Flags&(FlagImmutable|FlagAppend) != 0 || t.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		if !skipPermCheck {
@@ -1065,7 +1065,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		if t.Typ == TypeFIFO {
 			return syscall.EPIPE
 		}
-		if t.Typ != TypeFile || (t.Flags&FlagImmutable) != 0 || t.Parent > TrashInode {
+		if t.Typ != TypeFile || (t.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
 		if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {

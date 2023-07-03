@@ -961,7 +961,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if !ok {
 			return syscall.ENOENT
 		}
-		if nodeAttr.Type != TypeFile || (nodeAttr.Flags&FlagImmutable) != 0 || nodeAttr.Parent > TrashInode {
+		if nodeAttr.Type != TypeFile || nodeAttr.Flags&(FlagImmutable|FlagAppend) != 0 || nodeAttr.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		m.parseAttr(&nodeAttr, attr)
@@ -1064,7 +1064,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		if nodeAttr.Type == TypeFIFO {
 			return syscall.EPIPE
 		}
-		if nodeAttr.Type != TypeFile || (nodeAttr.Flags&FlagImmutable) != 0 || nodeAttr.Parent > TrashInode {
+		if nodeAttr.Type != TypeFile || (nodeAttr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
 		if (nodeAttr.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {

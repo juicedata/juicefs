@@ -908,7 +908,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		}
 		t = Attr{}
 		m.parseAttr(a, &t)
-		if t.Typ != TypeFile || (t.Flags&FlagImmutable) != 0 || t.Parent > TrashInode {
+		if t.Typ != TypeFile || t.Flags&(FlagImmutable|t.Flags&FlagAppend) != 0 || t.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		if !skipPermCheck {
@@ -1001,7 +1001,7 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		if t.Typ == TypeFIFO {
 			return syscall.EPIPE
 		}
-		if t.Typ != TypeFile || (t.Flags&FlagImmutable) != 0 || t.Parent > TrashInode {
+		if t.Typ != TypeFile || (t.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
 		if (t.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {

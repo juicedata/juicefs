@@ -1439,7 +1439,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Truncate(ctx, inode, 0, 1<<30, attr, false); st != syscall.EPERM {
 		t.Fatalf("should not truncate a file in trash")
 	}
-	if st := m.Fallocate(ctx, inode, 0, 0, 1<<30); st != syscall.EPERM {
+	if st := m.Open(ctx, inode, uint32(syscall.O_RDWR), attr); st != syscall.EPERM {
 		t.Fatalf("should not fallocate a file in trash")
 	}
 	if st := m.SetAttr(ctx, inode, SetAttrMode, 1, &Attr{Mode: 0}); st != syscall.EPERM {
