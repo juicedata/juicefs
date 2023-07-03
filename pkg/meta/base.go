@@ -809,7 +809,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 
 	switch cmd {
 	case QuotaSet:
-		format, err := m.Load(false)
+		format, err := m.Load(true)
 		if err != nil {
 			return errors.Wrap(err, "load format")
 		}
