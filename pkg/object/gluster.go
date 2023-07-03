@@ -24,13 +24,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"math/rand"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -105,21 +103,19 @@ func (c *gluster) Put(key string, in io.Reader) error {
 	if strings.HasSuffix(key, dirSuffix) {
 		return c.vol.MkdirAll(key, os.FileMode(0777))
 	}
-	p := key
-	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
-	f, err := c.vol.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	f, err := c.vol.OpenFile(key, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil && os.IsNotExist(err) {
-		if err := c.vol.MkdirAll(filepath.Dir(p), os.FileMode(0777)); err != nil {
+		if err := c.vol.MkdirAll(filepath.Dir(key), os.FileMode(0777)); err != nil {
 			return err
 		}
-		f, err = c.vol.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+		f, err = c.vol.OpenFile(key, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	}
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if err != nil {
-			_ = c.vol.Unlink(tmp)
+			_ = c.vol.Unlink(key)
 		}
 	}()
 
@@ -134,10 +130,7 @@ func (c *gluster) Put(key string, in io.Reader) error {
 		_ = f.Close()
 		return err
 	}
-	if err = f.Close(); err != nil {
-		return err
-	}
-	err = c.vol.Rename(tmp, p)
+	err = f.Close()
 	return err
 }
 
