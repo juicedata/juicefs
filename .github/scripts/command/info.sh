@@ -18,12 +18,4 @@ test_info_big_file(){
     ./juicefs info /jfs/bigfile
 }
 
-prepare_test()
-{
-    umount_jfs /jfs $META_URL
-    ls -l /jfs/.config && exit 1 || true
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm -rf /var/jfs/myjfs || true
-}
-
 source .github/scripts/common/run_test.sh && run_test $@

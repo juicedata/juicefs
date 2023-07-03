@@ -46,12 +46,4 @@ test_sync_dir_stat()
     diff info1.log info2.log
 }
 
-prepare_test()
-{
-    umount_jfs /jfs $META_URL
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm -rf /var/jfs/myjfs
-}
-
-
 source .github/scripts/common/run_test.sh && run_test $@

@@ -181,12 +181,5 @@ check_guid_after_clone(){
     fi
 }
 
-prepare_test()
-{
-    umount_jfs /jfs $META_URL
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm -rf /var/jfs/myjfs || true
-}
-
 source .github/scripts/common/run_test.sh && run_test $@
 

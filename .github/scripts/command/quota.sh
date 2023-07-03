@@ -220,13 +220,6 @@ test_check_and_repair_quota(){
     ./juicefs quota check $META_URL --path /d --strict
 }
 
-prepare_test()
-{
-    umount_jfs /jfs $META_URL
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm -rf /var/jfs/myjfs
-}
-
 wait_until()
 {   
     key=$1
