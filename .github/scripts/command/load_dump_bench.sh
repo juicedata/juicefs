@@ -3,9 +3,12 @@
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
+[[ -z "START_META" ]] && START_META=true
 source .github/scripts/start_meta_engine.sh
-start_meta_engine $META
 META_URL=$(get_meta_url $META)
+if [ "$START_META" = true ]; then
+    start_meta_engine $META
+fi
 
 test_load_dump_with_small_dir(){
   prepare_test
