@@ -55,12 +55,10 @@ jobs:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     runs-on: ubuntu-20.04
     steps:
-      - name: Maximize build space
-        uses: easimon/maximize-build-space@master
-        with:
-          root-reserve-mb: 512
-          swap-size-mb: 1024
-          remove-dotnet: 'true'
+      - name: Remove unnecessary files
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
       - name: Checkout
         uses: actions/checkout@v3
