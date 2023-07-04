@@ -681,9 +681,10 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 	return attr.Parent, st
 }
 
-func (m *baseMeta) hasDirQuota(ctx Context, inode Ino) bool {
+// get inode of the first parent (or myself) with quota
+func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
 	if !m.GetFormat().DirStats {
-		return false
+		return 0
 	}
 	var q *Quota
 	var st syscall.Errno
@@ -692,7 +693,7 @@ func (m *baseMeta) hasDirQuota(ctx Context, inode Ino) bool {
 		q = m.dirQuotas[inode]
 		m.quotaMu.RUnlock()
 		if q != nil {
-			return true
+			return inode
 		}
 		if inode <= RootInode {
 			break
@@ -702,7 +703,7 @@ func (m *baseMeta) hasDirQuota(ctx Context, inode Ino) bool {
 			break
 		}
 	}
-	return false
+	return 0
 }
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {
@@ -809,7 +810,7 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 
 	switch cmd {
 	case QuotaSet:
-		format, err := m.Load(false)
+		format, err := m.Load(true)
 		if err != nil {
 			return errors.Wrap(err, "load format")
 		}
@@ -1512,7 +1513,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		return syscall.ENOENT
 	}
 	switch flags {
-	case 0, RenameNoReplace, RenameExchange:
+	case 0, RenameNoReplace, RenameExchange, RenameNoReplace | RenameRestore:
 	case RenameWhiteout, RenameNoReplace | RenameWhiteout:
 		return syscall.ENOTSUP
 	default:
@@ -1528,15 +1529,17 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	parentSrc = m.checkRoot(parentSrc)
 	parentDst = m.checkRoot(parentDst)
-	var quotaSrc bool = !isTrash(parentSrc) && m.hasDirQuota(ctx, parentSrc)
-	var quotaDst bool
+	var quotaSrc, quotaDst Ino
+	if !isTrash(parentSrc) {
+		quotaSrc = m.getQuotaParent(ctx, parentSrc)
+	}
 	if parentSrc == parentDst {
 		quotaDst = quotaSrc
 	} else {
-		quotaDst = m.hasDirQuota(ctx, parentDst)
+		quotaDst = m.getQuotaParent(ctx, parentDst)
 	}
 	var space, inodes int64
-	if parentSrc != parentDst && (quotaSrc || quotaDst) {
+	if quotaSrc != quotaDst {
 		if st := m.Lookup(ctx, parentSrc, nameSrc, inode, attr, false); st != 0 {
 			return st
 		}
@@ -1559,7 +1562,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			space, inodes = align4K(attr.Length), 1
 		}
 		// TODO: dst exists and is replaced or exchanged
-		if quotaDst && m.checkDirQuota(ctx, parentDst, space, inodes) {
+		if quotaDst > 0 && m.checkDirQuota(ctx, parentDst, space, inodes) {
 			return syscall.EDQUOT
 		}
 	}
@@ -1578,11 +1581,13 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if parentSrc != parentDst {
 			m.updateDirStat(ctx, parentSrc, -int64(diffLength), -align4K(diffLength), -1)
 			m.updateDirStat(ctx, parentDst, int64(diffLength), align4K(diffLength), 1)
-			if quotaSrc {
-				m.updateDirQuota(ctx, parentSrc, -space, -inodes)
-			}
-			if quotaDst {
-				m.updateDirQuota(ctx, parentDst, space, inodes)
+			if quotaSrc != quotaDst {
+				if quotaSrc > 0 {
+					m.updateDirQuota(ctx, parentSrc, -space, -inodes)
+				}
+				if quotaDst > 0 {
+					m.updateDirQuota(ctx, parentDst, space, inodes)
+				}
 			}
 		}
 		if *tinode > 0 && flags != RenameExchange {
@@ -1595,7 +1600,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				diffLength = tattr.Length
 			}
 			m.updateDirStat(ctx, parentDst, -int64(diffLength), -align4K(diffLength), -1)
-			if quotaDst {
+			if quotaDst > 0 {
 				m.updateDirQuota(ctx, parentDst, -align4K(diffLength), -1)
 			}
 		}
@@ -1658,7 +1663,7 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (rerr 
 		return
 	}
 
-	if attr.Flags&FlagImmutable != 0 {
+	if attr.Flags&FlagImmutable != 0 || attr.Parent > TrashInode {
 		if flags&(syscall.O_WRONLY|syscall.O_RDWR) != 0 {
 			return syscall.EPERM
 		}

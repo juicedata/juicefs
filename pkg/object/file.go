@@ -231,8 +231,11 @@ func readDirSorted(dirname string) ([]*mEntry, error) {
 	}
 	defer f.Close()
 	entries, err := f.ReadDir(-1)
-	mEntries := make([]*mEntry, len(entries))
+	if err != nil {
+		return nil, err
+	}
 
+	mEntries := make([]*mEntry, len(entries))
 	for i, e := range entries {
 		if e.IsDir() {
 			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}

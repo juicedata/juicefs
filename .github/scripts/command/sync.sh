@@ -1,6 +1,4 @@
-#!/bin/bash
-
-set -ex
+#!/bin/bash -e
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
@@ -153,11 +151,5 @@ test_file_head(){
     diff -ur jfs_source/ /jfs/jfs_source
 }
 
-prepare_test()
-{
-    umount_jfs /jfs $META_URL
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm -rf /var/jfs/myjfs || true
-}
 
 source .github/scripts/common/run_test.sh && run_test $@

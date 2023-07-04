@@ -940,7 +940,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 			return err
 		}
 		m.parseAttr(a, &t)
-		if t.Typ != TypeFile {
+		if t.Typ != TypeFile || t.Flags&(FlagImmutable|FlagAppend) != 0 || t.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		if !skipPermCheck {
@@ -1065,10 +1065,7 @@ func (m *redisMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, si
 		if t.Typ == TypeFIFO {
 			return syscall.EPIPE
 		}
-		if t.Typ != TypeFile {
-			return syscall.EPERM
-		}
-		if (t.Flags & FlagImmutable) != 0 {
+		if t.Typ != TypeFile || (t.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
 		if st := m.Access(ctx, inode, MODE_MASK_W, &t); st != 0 {
@@ -1134,6 +1131,9 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 			return err
 		}
 		m.parseAttr(a, &cur)
+		if cur.Parent > TrashInode {
+			return syscall.EPERM
+		}
 		now := time.Now()
 		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now)
 		if st != 0 {
@@ -1231,6 +1231,9 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		m.parseAttr(a, &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if pattr.Parent > TrashInode {
+			return syscall.ENOENT
 		}
 		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
@@ -1633,7 +1636,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return err
 		}
 		if err == nil {
-			if flags == RenameNoReplace {
+			if flags&RenameNoReplace != 0 {
 				return syscall.EEXIST
 			}
 			dtyp, dino = m.parseEntry(dbuf)
@@ -1670,6 +1673,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		m.parseAttr([]byte(rs[1].(string)), &dattr)
 		if dattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if flags&RenameRestore == 0 && dattr.Parent > TrashInode {
+			return syscall.ENOENT
 		}
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
 			return st
@@ -1880,6 +1886,9 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		m.parseAttr([]byte(rs[0].(string)), &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if pattr.Parent > TrashInode {
+			return syscall.ENOENT
 		}
 		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
@@ -4323,6 +4332,9 @@ func (m *redisMeta) doAttachDirNode(ctx Context, parent Ino, dstIno Ino, name st
 		m.parseAttr(a, &pattr)
 		if pattr.Typ != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if pattr.Parent > TrashInode {
+			return syscall.ENOENT
 		}
 		if (pattr.Flags & FlagImmutable) != 0 {
 			return syscall.EPERM

@@ -1,5 +1,4 @@
-#!/bin/bash
-set -e
+#!/bin/bash -e
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3

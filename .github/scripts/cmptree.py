@@ -28,7 +28,11 @@
 # THEORY  OF LIABILITY,  WHETHER IN  CONTRACT, STRICT  LIABILITY, OR  TORT
 # (INCLUDING NEGLIGENCE  OR OTHERWISE) ARISING IN  ANY WAY OUT OF  THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
+import subprocess
+try:
+    __import__("xattr")
+except ImportError:
+    subprocess.check_call(["pip", "install", "xattr"])
 import filecmp, os
 import xattr
 

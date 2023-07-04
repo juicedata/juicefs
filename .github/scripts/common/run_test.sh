@@ -1,5 +1,4 @@
 #!/bin/bash -e
-
 run_one_test()
 {
     test=$1

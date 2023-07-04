@@ -1,5 +1,4 @@
-#!/bin/bash
-set -e
+#!/bin/bash -e
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
@@ -178,13 +177,6 @@ check_guid_after_clone(){
         echo >&2 "<FATAL>: clone does not same as cp: uid1: $uid1, uid2: $uid2, gid1: $gid1, gid2: $gid2, mode1: $mode1, mode2: $mode2"
         exit 1
     fi
-}
-
-prepare_test()
-{
-    umount_jfs /jfs $META_URL
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm -rf /var/jfs/myjfs || true
 }
 
 source .github/scripts/common/run_test.sh && run_test $@
