@@ -8,7 +8,7 @@ description: JuiceFS 客户端的所有命令及选项的说明、用法和示�
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-在终端输入 `juicefs` 并执行，就能看到所有可用的命令。在每个命令后面添加 `-h/--help` 并运行，就能获得该命令的详细帮助信息。
+在终端输入 `juicefs` 并执行，就能看到所有可用的命令。在每个子命令后面添加 `-h/--help` 并运行，就能获得该命令的详细帮助信息，例如 `juicefs format -h`。
 
 ```
 NAME:
@@ -109,13 +109,13 @@ echo "source path/to/zsh_autocomplete" >> ~/.zshrc
 另外，如果你是在 Linux 系统上使用 bash，也可以直接将脚本拷贝到 `/etc/bash_completion.d` 目录并将其重命名为 `juicefs`：
 
 ```shell
-sudo cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
+cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
 source /etc/bash_completion.d/juicefs
 ```
 
 ## `juicefs format` {#format}
 
-创建文件系统，如果 `META-URL` 中已经存在一个文件系统，则不会再次进行格式化。如果文件系统创建后需要调整配置，请使用 [`juicefs config`](#config)。
+创建并格式化文件系统，如果 `META-URL` 中已经存在一个文件系统，不会再次进行格式化。如果文件系统创建后需要调整配置，请使用 [`juicefs config`](#config)。
 
 ### 概览
 
@@ -126,7 +126,7 @@ juicefs format [command options] META-URL NAME
 juicefs format sqlite3://myjfs.db myjfs
 
 # 使用 Redis 和 S3 创建卷
-juicefs format redis://localhost myjfs --storage s3 --bucket https://mybucket.s3.us-east-2.amazonaws.com
+juicefs format redis://localhost myjfs --storage=s3 --bucket=https://mybucket.s3.us-east-2.amazonaws.com
 
 # 使用带有密码的 MySQL 创建卷
 juicefs format mysql://jfs:mypassword@(127.0.0.1:3306)/juicefs myjfs
@@ -134,10 +134,10 @@ juicefs format mysql://jfs:mypassword@(127.0.0.1:3306)/juicefs myjfs
 META_PASSWORD=mypassword juicefs format mysql://jfs:@(127.0.0.1:3306)/juicefs myjfs
 
 # 创建一个开启配额设置的卷
-juicefs format sqlite3://myjfs.db myjfs --inode 1000000 --capacity 102400
+juicefs format sqlite3://myjfs.db myjfs --inode=1000000 --capacity=102400
 
 # 创建一个关闭了回收站的卷
-juicefs format sqlite3://myjfs.db myjfs --trash-days 0
+juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 ```
 
 ### 参数
@@ -147,17 +147,17 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
 |`META-URL`|用于元数据存储的数据库 URL，详情查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」。|
 |`NAME`|文件系统名称。|
 |`--block-size=4096`|块大小，单位为 KiB，默认 4096。4M 是一个较好的默认值，不少对象存储（比如 S3）都将 4M 设为内部的块大小，因此将 JuiceFS block size 设为相同大小，往往也能获得更好的性能。|
-|`--capacity=0`|容量配额，单位为 GiB，默认为 0 代表不限制。如果启用了回收站，那么配额大小也将包含回收站文件。|
+|`--capacity=0`|容量配额，单位为 GiB，默认为 0 代表不限制。如果启用了[回收站](../security/trash.md)，那么配额大小也将包含回收站文件。|
 |`--inodes=0`|文件数配额，默认为 0 代表不限制。|
 |`--compress=none`|压缩算法，支持 `lz4`, `zstd`, `none`（默认），启用压缩将不可避免地对性能产生一定影响。|
 |`--shards=0`|将数据块根据名字哈希存入 N 个桶中，默认为 0。当 N 大于 0 时，`bucket` 需要包含 `%d` 占位符，例如 `--bucket=juicefs-%d`。|
 |`--storage=file`|对象存储类型，例如 `s3`、`gcs`、`oss`、`cos`。默认为 `file`，参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
-|`--bucket=value`|存储数据的桶路径（默认：`$HOME/.juicefs/local` 或 `/var/jfs`）。|
+|`--bucket=path`|存储数据的桶路径（默认：`$HOME/.juicefs/local` 或 `/var/jfs`）。|
 |`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--session-token=value`|对象存储的临时访问凭证（Session Token），查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#session-token)以了解更多。|
 |`--encrypt-rsa-key=value`|RSA 私钥的路径，查看[数据加密](../security/encrypt.md)以了解更多。|
-|`--trash-days=1`|文件被自动清理前在回收站内保留的天数，默认为 1。|
+|`--trash-days=1`|文件被删除后，默认会进入[回收站](../security/trash.md)，该选项控制已删除文件在回收站内保留的天数，默认为 1，设为 0 以禁用回收站。|
 |`--hash-prefix`|给每个对象添加 hash 前缀，默认为 false。|
 |`--force`|强制覆盖当前的格式化配置，默认为 false。|
 |`--no-update`|不要修改已有的格式化配置，默认为 false。|
@@ -219,18 +219,20 @@ $ juicefs mount redis://localhost /mnt/jfs -d --read-only
 
 ### 元数据缓存相关参数
 
+元数据缓存的介绍和使用，详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)。
+
 |项 | 说明|
 |-|-|
-|`--attr-cache=1`|属性缓存过期时间；单位为秒，默认为 1。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)|
-|`--entry-cache=1`|文件项缓存过期时间；单位为秒，默认为 1。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)|
-|`--dir-entry-cache=1`|目录项缓存过期时间；单位为秒，默认为 1。详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)|
-|`--open-cache=0`|打开的文件的缓存过期时间，单位为秒，默认为 0，代表关闭该特性。阅读[「缓存」](../guide/cache_management.md)了解更多。|
+|`--attr-cache=1`|属性缓存过期时间；单位为秒，默认为 1。|
+|`--entry-cache=1`|文件项缓存过期时间；单位为秒，默认为 1。|
+|`--dir-entry-cache=1`|目录项缓存过期时间；单位为秒，默认为 1。|
+|`--open-cache=0`|打开的文件的缓存过期时间，单位为秒，默认为 0，代表关闭该特性。|
 
 ### 数据存储相关参数 {#mount-data-storage-options}
 
 |项 | 说明|
 |-|-|
-|`--storage=file`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
+|`--storage=file`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
 |`--bucket=value`|为当前挂载点指定访问访对象存储的 Endpoint。|
 |`--get-timeout=60`|下载一个对象的超时时间；单位为秒 (默认：60)|
 |`--put-timeout=60`|上传一个对象的超时时间；单位为秒 (默认：60)|
@@ -252,7 +254,7 @@ $ juicefs mount redis://localhost /mnt/jfs -d --read-only
 |`--free-space-ratio=0.1`|最小剩余空间比例，默认为 0.1。如果启用了[「客户端写缓存」](../guide/cache_management.md#writeback)，则该参数还控制着写缓存占用空间。阅读[「缓存」](../guide/cache_management.md)了解更多。|
 |`--cache-partial-only`|仅缓存随机小块读，默认为 false。阅读[「缓存」](../guide/cache_management.md)了解更多。|
 |`--verify-cache-checksum=full`|缓存数据一致性检查级别，启用 Checksum 校验后，生成缓存文件时会对数据切分做 Checksum 并记录于文件末尾，供读缓存时进行校验。支持以下级别：<br/><ul><li>`none`：禁用一致性检查，如果本地数据被篡改，将会读到错误数据；</li><li>`full`（默认）：读完整数据块时才校验，适合顺序读场景；</li><li>`shrink`：对读范围内的切片数据进行校验，校验范围不包含读边界所在的切片（可以理解为开区间），适合随机读场景；</li><li>`extend`：对读范围内的切片数据进行校验，校验范围同时包含读边界所在的切片（可以理解为闭区间），因此将带来一定程度的读放大，适合对正确性有极致要求的随机读场景。</li></ul>|
-|`--upload-delay=0`|数据上传到对象存储的延迟时间，支持秒分时精度，对应格式分别为 ("s", "m", "h")，默认为 0 秒。如果在等待的时间内数据被应用删除，则无需再上传到对象存储，既提升了性能也节省了成本，如果数据只是临时落盘，之后会迅速删除，考虑用该选项进行优化。|
+|`--upload-delay=0`|启用 `--writeback` 后，可以使用该选项控制数据延迟上传到对象存储，默认为 0 秒，相当于写入后立刻上传。该选项也支持 "s", "m", "h" 这些单位。如果在等待的时间内数据被应用删除，则无需再上传到对象存储。如果数据只是临时落盘，虑用该选项节约资源。|
 
 ### 监控相关参数 {#mount-metrics-options}
 
@@ -302,14 +304,11 @@ juicefs gateway redis://localhost localhost:9000
 |-|-|
 |`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
 |`ADDRESS`|S3 网关地址和监听的端口，例如：`localhost:9000`|
-|`--bucket value`|为当前网关指定访问访对象存储的 endpoint|
 |`--access-log value`|访问日志的路径|
 |`--no-banner`|禁用 MinIO 的启动信息 (默认：false)|
 |`--multi-buckets`|使用第一级目录作为存储桶 (默认：false)|
 |`--keep-etag`|保留对象上传时的 ETag (默认：false)|
-|`--backup-meta value`|自动备份元数据到对象存储的间隔时间；单位秒 (0 表示不备份) (默认：3600)|
-|`--heartbeat value`|发送心跳的间隔 (秒);建议所有客户端使用相同的心跳值 (默认：12)。|
-|`--umask value`|新文件和新目录的 umask 的八进制格式 (默认值:“022”)|
+|`--umask=022`|新文件和新目录的 umask 的八进制格式 (默认值:“022”)|
 
 ## `juicefs webdav` {#webdav}
 
@@ -335,9 +334,9 @@ juicefs webdav redis://localhost localhost:9007
 |`--key-file`|HTTPS 密钥文件|
 |`--gzip`|通过 gzip 压缩提供的文件（默认值：false）|
 |`--disallowList`|禁止列出目录（默认值：false）|
-|`--access-log value`|访问日志的路径|
+|`--access-log=path`|访问日志的路径|
 
-## `juicefs sync`
+## `juicefs sync` {#sync}
 
 在两个存储之间同步数据，阅读[「数据同步」](../guide/sync.md)以了解更多。
 
@@ -350,24 +349,30 @@ juicefs sync [command options] SRC DST
 juicefs sync oss://mybucket.oss-cn-shanghai.aliyuncs.com s3://mybucket.s3.us-east-2.amazonaws.com
 
 # 从 S3 直接同步到 JuiceFS
-juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://VOL_NAME/
+juicefs sync s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://META-URL/
 
 # 源端: a1/b1,a2/b2,aaa/b1   目标端: empty   同步结果: aaa/b1
-juicefs sync --exclude='a?/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://VOL_NAME/
+juicefs sync --exclude='a?/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://META-URL/
 
 # 源端: a1/b1,a2/b2,aaa/b1   目标端: empty   同步结果: a1/b1,aaa/b1
-juicefs sync --include='a1/b1' --exclude='a[1-9]/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://VOL_NAME/
+juicefs sync --include='a1/b1' --exclude='a[1-9]/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://META-URL/
 
 # 源端: a1/b1,a2/b2,aaa/b1,b1,b2  目标端: empty   同步结果: a1/b1,b2
-juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://VOL_NAME/
+juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ jfs://META-URL/
 ```
 
-源路径（`SRC`）和目标路径（`DST`）的格式均为 `[NAME://][ACCESS_KEY:SECRET_KEY[:SESSIONTOKEN]@]BUCKET[.ENDPOINT][/PREFIX]`，其中：
+源路径（`SRC`）和目标路径（`DST`）的格式均为：
 
-- `NAME`：JuiceFS 支持的数据存储类型（如 `s3`、`oss`），请参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)。
-- `ACCESS_KEY` 和 `SECRET_KEY`：访问数据存储所需的密钥信息，请参考[文档](../guide/how_to_set_up_object_storage.md#aksk)。
+```
+[NAME://][ACCESS_KEY:SECRET_KEY[:SESSIONTOKEN]@]BUCKET[.ENDPOINT][/PREFIX]
+```
+
+其中：
+
+- `NAME`：JuiceFS 支持的数据存储类型，比如 `s3`、`oss`，完整列表见[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)。
+- `ACCESS_KEY` 和 `SECRET_KEY`：访问数据存储所需的密钥信息，参考[文档](../guide/how_to_set_up_object_storage.md#aksk)。
 - `TOKEN` 用来访问对象存储的 token，部分对象存储支持使用临时的 token 以获得有限时间的权限
-- `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同，具体请参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)。
+- `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同，详见[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)。
 - `[/PREFIX]`：可选，源路径和目标路径的前缀，可用于限定只同步某些路径中的数据。
 
 ### 参数
@@ -441,11 +446,11 @@ juicefs info -i 100
 
 ## `juicefs bench` {#bench}
 
-对指定的路径做基准测试，包括对大文件和小文件的读/写/获取属性操作。
+对指定的路径做基准测试，包括对大文件和小文件的读/写/获取属性操作。详细介绍参考[文档](../benchmark/performance_evaluation_guide.md#juicefs-bench)。
 
 ### 概览
 
-```
+```shell
 juicefs bench [command options] PATH
 
 # 使用4个线程运行基准测试
@@ -454,8 +459,6 @@ $ juicefs bench /mnt/jfs -p 4
 # 只运行小文件的基准测试
 $ juicefs bench /mnt/jfs --big-file-size 0
 ```
-
-有关 `bench` 子命令的详细介绍，请参考[文档](../benchmark/performance_evaluation_guide.md#juicefs-bench)。
 
 ### 参数
 
@@ -469,7 +472,7 @@ $ juicefs bench /mnt/jfs --big-file-size 0
 
 ## `juicefs objbench` {#objbench}
 
-测试对象存储接口的正确性与基本性能
+测试对象存储接口的正确性与基本性能介绍参考[文档](../benchmark/performance_evaluation_guide.md#juicefs-objbench)。
 
 ### 概览
 
@@ -477,16 +480,14 @@ $ juicefs bench /mnt/jfs --big-file-size 0
 juicefs objbench [command options] BUCKET
 
 # 测试 S3 对象存储的基准性能
-$ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
+$ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
 ```
-
-有关 `objbench` 子命令的详细介绍，请参考[文档](../benchmark/performance_evaluation_guide.md#juicefs-objbench)。
 
 ### 参数
 
 |项 | 说明|
 |-|-|
-|`--storage value`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，请参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
+|`--storage value`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
 |`--access-key value`|对象存储的 Access Key (也可通过环境变量 `ACCESS_KEY` 设置)|
 |`--secret-key value`|对象存储的 Secret Key (也可通过环境变量 `SECRET_KEY` 设置)|
 |`--block-size value`|每个 IO 块的大小（以 KiB 为单位）（默认值：4096）|
@@ -535,7 +536,7 @@ juicefs fsck redis://localhost
 
 ## `juicefs profile` {#profile}
 
-分析[访问日志](../administration/fault_diagnosis_and_analysis.md#access-log)。
+展示基于[文件系统访问日志](../administration/fault_diagnosis_and_analysis.md#access-log)的实时监控数据，阅读[「实时性能监控」](../administration/fault_diagnosis_and_analysis.md#performance-monitor)以了解更多。
 
 ### 概览
 
@@ -543,15 +544,15 @@ juicefs fsck redis://localhost
 juicefs profile [command options] MOUNTPOINT/LOGFILE
 
 # 监控实时操作
-$ juicefs profile /mnt/jfs
+juicefs profile /mnt/jfs
 
 # 重放访问日志
-$ cat /mnt/jfs/.accesslog > /tmp/jfs.alog
+cat /mnt/jfs/.accesslog > /tmp/jfs.alog
 # 一段时间后按 Ctrl-C 停止 “cat” 命令
-$ juicefs profile /tmp/jfs.alog
+juicefs profile /tmp/jfs.alog
 
 # 分析访问日志并立即打印总统计数据
-$ juicefs profile /tmp/jfs.alog --interval 0
+juicefs profile /tmp/jfs.alog --interval 0
 ```
 
 ### 参数
@@ -565,7 +566,7 @@ $ juicefs profile /tmp/jfs.alog --interval 0
 
 ## `juicefs stats` {#stats}
 
-展示实时的性能统计信息。
+展示实时的性能统计信息，阅读[「实时性能监控」](../administration/fault_diagnosis_and_analysis.md#performance-monitor)以了解更多。
 
 ### 概览
 
@@ -655,7 +656,7 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |-|-|
 |`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
 |`FILE`|导出文件路径，如果不指定，则会导出到标准输出。如果文件名以 `.gz` 结尾，将会自动压缩。|
-|`--subdir value`|只导出指定子目录的元数据。|
+|`--subdir=path`|只导出指定子目录的元数据。|
 |`--keep-secret-key`|导出对象存储认证信息，默认为 `false`。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。|
 
 ## `juicefs load` {#load}
@@ -677,8 +678,8 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 |-|-|
 |`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
 |`FILE`|导入文件路径，如果不指定，则会从标准输入导入。如果文件名以 `.gz` 结尾，将会自动解压。|
-|`--encrypt-rsa-key value`|加密所使用的 RSA 私钥文件路径。|
-|`--encrypt-algo value`|加密算法，默认为 `aes256gcm-rsa`。|
+|`--encrypt-rsa-key=path`|加密所使用的 RSA 私钥文件路径。|
+|`--encrypt-algo=aes256gcm-rsa`|加密算法，默认为 `aes256gcm-rsa`。|
 
 ## `juicefs config` {#config}
 
@@ -759,8 +760,8 @@ juicefs debug --out-dir=/var/log --limit=1000 /mnt/jfs
 
 |项 | 说明|
 |-|-|
-|`--out-dir value`|结果输出目录，若目录不存在则自动创建 (默认：./debug/)|
-|`--stats-sec value`|.stats 文件采样秒数 (默认：5)|
-|`--limit value`|收集的日志条目数，从新到旧，若不指定则收集全部条目|
-|`--trace-sec value`|trace 指标采样秒数 (默认：5)|
-|`--profile-sec value`|profile 指标采样秒数 (默认：30)|
+|`--out-dir=./debug/`|结果输出目录，若目录不存在则自动创建，默认为 `./debug/`。|
+|`--stats-sec=5`|.stats 文件采样秒数 (默认：5)|
+|`--limit=value`|收集的日志条目数，从新到旧，若不指定则收集全部条目|
+|`--trace-sec=5`|trace 指标采样秒数 (默认：5)|
+|`--profile-sec=30`|profile 指标采样秒数 (默认：30)|

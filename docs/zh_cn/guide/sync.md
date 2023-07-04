@@ -1,9 +1,7 @@
 ---
-sidebar_label: 数据同步
+title: 数据同步
 position: 5
 ---
-
-# 使用 JuiceFS Sync 跨云迁移和同步数据
 
 JuiceFS 的 `sync` 子命令是功能完整的数据同步实用工具，可以在所有 [JuiceFS 支持的对象存储](../guide/how_to_set_up_object_storage.md)之间多线程并发同步或迁移数据，既支持在「对象存储」与「JuiceFS」之间迁移数据，也支持在「对象存储」与「对象存储」之间跨云跨区迁移数据。与 rsync 类似，除了对象存储也支持同步本地目录、通过 SSH 访问远程目录、HDFS、WebDAV 等，同时提供全量同步、增量同步、条件模式匹配等高级功能。
 

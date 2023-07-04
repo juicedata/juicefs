@@ -1,9 +1,7 @@
 ---
-sidebar_label: Synchronization
+title: Data migration
 position: 4
 ---
-
-# Migrate and Synchronize Data across Clouds with JuiceFS Sync
 
 The subcommand `sync` of JuiceFS is a full-featured data synchronization utility that can synchronize or migrate data concurrently with multiple threads between all [object storages JuiceFS supports](../guide/how_to_set_up_object_storage.md). It can be used to migrate data not only between _object storage_ and _JuiceFS_, but also between _object storages_ in different clouds or regions. In addition, similar to `rsync`, the JuiceFS subcommand `sync` can also be used to synchronize local directories and access remote directories through SSH, HDFS, WebDAV, etc.. It also provides advanced features such as full synchronization, incremental synchronization, and conditional pattern matching.
 
