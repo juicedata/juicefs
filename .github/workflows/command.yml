@@ -55,11 +55,17 @@ jobs:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     runs-on: ubuntu-20.04
     steps:
-      - name: Remove unnecessary files
+      - name: Remove unused software
+        shell: bash
         run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-
+            echo "before remove unused software"
+            sudo df -h
+            sudo rm -rf /usr/share/dotnet
+            sudo rm -rf /usr/local/lib/android
+            sudo rm -rf /opt/ghc
+            echo "after remove unused software"
+            sudo df -h
+            
       - name: Checkout
         uses: actions/checkout@v3
         with:
