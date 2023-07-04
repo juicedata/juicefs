@@ -55,6 +55,13 @@ jobs:
         meta: ${{ fromJson(needs.build-matrix.outputs.meta_matrix) }}
     runs-on: ubuntu-20.04
     steps:
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 512
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -66,6 +73,7 @@ jobs:
       - name: Test Quota
         timeout-minutes: 30
         run: |
+          df -h
           sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
           
       - name: Test Clone
@@ -90,6 +98,7 @@ jobs:
 
       - name: Test Info
         run: |
+          df -h
           sudo META=${{matrix.meta}} .github/scripts/command/info.sh
     
       - name: Test Sync
