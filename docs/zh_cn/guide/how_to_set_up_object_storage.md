@@ -171,6 +171,7 @@ juicefs format \
 | [优刻得 US3](#优刻得-us3)                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                   | `ceph`     |
 | [Ceph RGW](#ceph-rgw)                       | `s3`       |
+| [Gluster](#gluster)                         | `gluster`  |
 | [Swift](#swift)                             | `swift`    |
 | [MinIO](#minio)                             | `minio`    |
 | [WebDAV](#webdav)                           | `webdav`   |
@@ -798,6 +799,46 @@ juicefs format \
     ... \
     myjfs
 ```
+
+## Gluster
+
+[Gluster](https://github.com/gluster/glusterfs) 是一款开源的软件定义分布式存储，单集群能支持 PiB 级别的数据。JuiceFS 通过 `libgfapi` 库与 Gluster 集群交互，使用前需要单独编译，具体步骤如下：
+
+1. 安装 `libgfapi`（6.0 或以上版本）:
+
+<Tabs>
+  <TabItem value="debian" label="Debian 及衍生版本">
+
+```bash
+sudo apt-get install libglusterfs-dev
+```
+
+  </TabItem>
+  <TabItem value="centos" label="RHEL 及衍生版本">
+
+```bash
+sudo yum install glusterfs-api
+```
+
+  </TabItem>
+</Tabs>
+
+2. 编译支持 Gluster 的 JuiceFS
+
+```bash
+make juicefs.gluster
+```
+
+3. 格式化 JuiceFS volume
+
+```bash
+juicefs format \
+    --storage gluster \
+    --bucket host1,host2,host3/gv0 \
+    ... \
+    myjfs
+```
+其中 `--bucket` 选项格式为 `<host[,host...]>/<volume_name>`。注意这里的 `volume_name` 为 Gluster 中的卷名称，与 JuiceFS volume 自身的名字没有直接关系。
 
 ## Swift
 
