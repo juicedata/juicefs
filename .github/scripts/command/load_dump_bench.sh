@@ -100,8 +100,13 @@ prepare_test()
 {
   umount_jfs /jfs $META_URL
   ls -l /jfs/.config && exit 1 || true
-  python3 .github/scripts/flush_meta.py $META_URL
-  rm -rf /var/jfs/myjfs || true
+  ./juicefs status $META_URL && UUID=$(./juicefs status $META_URL | grep UUID | cut -d '"' -f 4) || echo "meta not exist"
+  if [ -n "$UUID" ];then
+    ./juicefs destroy --yes $META_URL $UUID
+  fi
+  # python3 .github/scripts/flush_meta.py $META_URL
+  # rm -rf /var/jfs/myjfs || true
+  # rm -rf /var/jfsCache/myjfs || true
 }
 
 source .github/scripts/common/run_test.sh && run_test $@

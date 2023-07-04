@@ -52,6 +52,7 @@ jobs:
 
     steps:
       - name: Remove unused software
+        if: false
         shell: bash
         run: |
             echo "before remove unused software"
