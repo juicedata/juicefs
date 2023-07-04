@@ -51,6 +51,17 @@ jobs:
     runs-on: ubuntu-20.04
 
     steps:
+      - name: Remove unused software
+        shell: bash
+        run: |
+            echo "before remove unused software"
+            sudo df -h
+            sudo rm -rf /usr/share/dotnet
+            sudo rm -rf /usr/local/lib/android
+            sudo rm -rf /opt/ghc
+            echo "after remove unused software"
+            sudo df -h
+
       - name: Checkout
         uses: actions/checkout@v3
         with:
