@@ -3,7 +3,7 @@
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
-[[ -z "START_META" ]] && START_META=true
+[[ -z "$START_META" ]] && START_META=true
 source .github/scripts/start_meta_engine.sh
 META_URL=$(get_meta_url $META)
 if [ "$START_META" = true ]; then
