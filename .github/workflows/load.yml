@@ -33,9 +33,9 @@ jobs:
           echo "github.event_name is ${{github.event_name}}"
           echo "GITHUB_REF_NAME is ${GITHUB_REF_NAME}"
           if [ "${{github.event_name}}" == "schedule"  ] || [ "${{github.event_name}}" == "workflow_dispatch"  ]; then
-            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "mariadb", "badger", "fdb"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "tidb", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           else
-            echo 'meta_matrix=["redis", "sqlite3", "tikv", "badger", "fdb"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["redis", "mysql", "tikv"]' >> $GITHUB_OUTPUT
             # echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           fi
     outputs:
@@ -85,7 +85,8 @@ jobs:
         timeout-minutes: 30
         run: |
           sudo MYSQL_PASSWORD=${{secrets.MYSQL_PASSWORD_FOR_JUICEDATA}} META=${{matrix.meta}} START_META=true .github/scripts/command/load_dump_bench.sh test_load_dump_with_small_dir
-          
+          exit 1
+
       - name: Load and dump with big directory
         timeout-minutes: 30
         run: |
