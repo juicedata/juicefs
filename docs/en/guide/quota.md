@@ -1,6 +1,6 @@
 ---
 title: Storage Quota
-sidebar_position: 5
+sidebar_position: 4
 ---
 
 JuiceFS supports both total file system quota and subdirectory quota, both of which can be used to limit the available capacity and the number of available inodes. Both file system quota and directory quota are hard limits. When the total file system quota is exhausted, subsequent writes will return `ENOSPC` (No space left) error; and when the directory quota is exhausted, subsequent writes will return `EDQUOT` (Disk quota exceeded) error.

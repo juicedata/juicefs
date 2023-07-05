@@ -1,6 +1,6 @@
 ---
 sidebar_label: 数据同步
-position: 5
+sidebar_position: 7
 ---
 
 # 使用 JuiceFS Sync 跨云迁移和同步数据
