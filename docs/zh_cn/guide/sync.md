@@ -19,7 +19,7 @@ juicefs sync [command options] SRC DST
 
 - `SRC` 代表数据源地址及路径
 - `DST` 代表目标地址及路径
-- `[command options]` 代表可选的同步选项，详情查看[命令参考](../reference/command_reference.md#juicefs-sync)。
+- `[command options]` 代表可选的同步选项，详情查看[命令参考](../reference/command_reference.md#sync)。
 
 地址格式均为 `[NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]`
 

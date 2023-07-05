@@ -140,7 +140,6 @@ juicefs format sqlite3://myjfs.db myjfs --inode=1000000 --capacity=102400
 juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 ```
 
-
 ### Options
 
 |Items|Description|
@@ -194,7 +193,6 @@ juicefs mount redis://localhost /mnt/jfs -d --read-only
 # Disable metadata backup
 juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 ```
-
 
 ### Options
 
@@ -376,7 +374,7 @@ As shown in the examples, the format of both source (`SRC`) and destination (`DS
 In which:
 
 - `NAME`: JuiceFS supported data storage types like `s3`, `oss`, refer to [this document](../guide/how_to_set_up_object_storage.md#supported-object-storage) for a full list.
-- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage, refer to [this document](../guide/how_to_set_up_object_storage.md#access-key-and-secret-key).
+- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage, refer to [this document](../guide/how_to_set_up_object_storage.md#aksk).
 - `TOKEN` token used to access the object storage, as some object storage supports the use of temporary token to obtain permission for a limited time
 - `BUCKET[.ENDPOINT]`: The access address of the data storage service. The format may be different for different storage types, and refer to [the document](../guide/how_to_set_up_object_storage.md#supported-object-storage).
 - `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit synchronization of data only in certain paths.
