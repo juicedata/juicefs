@@ -35,6 +35,10 @@ func getKerberosClient() (*krb.Client, error) {
 	keytabBase64 := os.Getenv("KRB5KEYTAB_BASE64")
 	principal := os.Getenv("KRB5PRINCIPAL")
 
+	if principal == "" && (keytabPath != "" || keytabBase64 != "") {
+		logger.Fatalf("KRB5PRINCIPAL must be set if KRB5KEYTAB or KRB5KEYTAB_BASE64 is set")
+	}
+
 	var kt *keytab.Keytab
 	if keytabBase64 != "" {
 		decodedKeytab, err := base64.StdEncoding.DecodeString(keytabBase64)
@@ -52,7 +56,7 @@ func getKerberosClient() (*krb.Client, error) {
 			return nil, err
 		}
 	}
-	if kt != nil && principal != "" {
+	if kt != nil {
 		// e.g. KRB5PRINCIPAL="primary/instance@realm"
 		sp := strings.Split(principal, "@")
 		if len(sp) != 2 {
