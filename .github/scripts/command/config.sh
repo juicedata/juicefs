@@ -19,6 +19,7 @@ test_config_min_client_version()
     prepare_test
     download_juicefs_client 1.0.0
     ./juicefs format $META_URL myjfs
+    ./juicefs-1.0.0 mount $META_URL /jfs -d && exit 1 || true
     ./juicefs config $META_URL --min-client-version 1.0.1
     ./juicefs-1.0.0 mount $META_URL /jfs -d && exit 1 || true
     ./juicefs config $META_URL --min-client-version 1.0.0
@@ -28,12 +29,13 @@ test_config_min_client_version()
 test_config_max_client_version()
 {
     prepare_test
+    current_version=$(./juicefs version | awk '{print $3}')
     download_juicefs_client 1.0.0
-    ./juicefs format $META_URL myjfs
-    ./juicefs config $META_URL --max-client-version 0.9.0
-    ./juicefs-1.0.0 mount $META_URL /jfs -d && exit 1 || true
-    ./juicefs config $META_URL --min-client-version 1.0.0
-    ./juicefs-1.0.0 mount $META_URL /jfs -d
+    ./juicefs-1.0.0 format $META_URL myjfs
+    ./juicefs-1.0.0 config $META_URL --max-client-version 1.0.1
+    ./juicefs mount $META_URL /jfs -d && exit 1 || true
+    ./juicefs config $META_URL --max-client-version $current_version
+    ./juicefs mount $META_URL /jfs -d
 }
 
 
