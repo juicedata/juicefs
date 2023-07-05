@@ -10,7 +10,7 @@ import TabItem from '@theme/TabItem';
 
 Running `juicefs` by itself and it will print all available commands. In addition, you can add `-h/--help` flag after each command to get more information, e.g., `juicefs format -h`.
 
-```bash
+```
 NAME:
    juicefs - A POSIX file system built on Redis and object storage.
 
@@ -66,7 +66,7 @@ COPYRIGHT:
    Apache License 2.0
 ```
 
-## Auto Completion
+## Auto completion {#auto-completion}
 
 To enable commands completion, simply source the script provided within [`hack/autocomplete`](https://github.com/juicedata/juicefs/tree/main/hack/autocomplete) directory. For example:
 
@@ -152,8 +152,8 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--inodes=0`|Limit the number of inodes, default to 0 which means no limit.|
 |`--compress=none`|compression algorithm, choose from `lz4`, `zstd`, `none` (default). Enabling compression will inevitably affect performance, choose wisely.|
 |`--shards=0`|store the blocks into N buckets by hash of key (default: 0), when N is greater than 0, `bucket` should to be in the form of `%d`, e.g. `--bucket "juicefs-%d"`|
-|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
-|`--bucket=/var/jfs`|A bucket URL to store data (default: `"$HOME/.juicefs/local"` or `"/var/jfs"`)|
+|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `file`, refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
+|`--bucket=/var/jfs`|A bucket URL to store data (default: `$HOME/.juicefs/local` or `/var/jfs`)|
 |`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../guide/how_to_set_up_object_storage.md#aksk) for more.|
 |`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../guide/how_to_set_up_object_storage.md#aksk) for more.|
 |`--session-token=value`|session token for object storage, see [How to Set Up Object Storage](../guide/how_to_set_up_object_storage.md#session-token) for more.|
@@ -200,80 +200,79 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 |Items|Description|
 |-|-|
-|`META-URL`|Database URL for metadata storage, see "[JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md)" for details.|
+|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md) for details.|
 |`MOUNTPOINT`|file system mount point, e.g. `/mnt/jfs`, `Z:`.|
 |`-d, --background`|run in background (default: false)|
 |`--no-syslog`|disable syslog (default: false)|
-|`--log value`|path of log file when running in background (default: `$HOME/.juicefs/juicefs.log` or `/var/log/juicefs.log`)|
+|`--log=path`|path of log file when running in background (default: `$HOME/.juicefs/juicefs.log` or `/var/log/juicefs.log`)|
 |`--update-fstab`|add / update entry in `/etc/fstab`, will create a symlink from `/sbin/mount.juicefs` to JuiceFS executable if not existing (default: false)|
+|`--no-usage-report`|do not send usage report (default: false)|
 
-### FUSE related options
+#### FUSE related options {#mount-fuse-options}
 
 |Items|Description|
 |-|-|
 |`--enable-xattr`|enable extended attributes (xattr) (default: false)|
 |`-o value`|other FUSE options, see [FUSE Mount Options](../reference/fuse_mount_options.md)|
 
-### Metadata related options
+#### Metadata related options {#mount-metadata-options}
 
 |Items|Description|
 |-|-|
-|`--subdir value`|mount a sub-directory as root (default: "")|
-|`--backup-meta value`|interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup) (default: "3600")|
-|`--heartbeat value`|interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value (default: "12")|
+|`--subdir=value`|mount a sub-directory as root (default: "")|
+|`--backup-meta=3600`|interval (in seconds) to automatically backup metadata in the object storage (0 means disable backup) (default: "3600")|
+|`--heartbeat=12`|interval (in seconds) to send heartbeat; it's recommended that all clients use the same heartbeat value (default: "12")|
+|`--read-only`|allow lookup/read operations only (default: false)|
 |`--no-bgjob`|Disable background jobs, default to false, which means clients by default carry out background jobs, including:<br/><ul><li>Clean up expired files in Trash (look for `cleanupDeletedFiles`, `cleanupTrash` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))</li><li>Delete slices that's not referenced (look for `cleanupSlices` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))</li><li>Clean up stale client sessions (look for `CleanStaleSessions` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go))</li></ul>Note that compaction isn't affected by this option, it happens automatically with file reads and writes, client will check if compaction is in need, and run in background (take Redis for example, look for `compactChunk` in [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go)).|
+|`--atime-mode=noatime`|Control atime (last time the file was accessed) behavior, support the following modes:<br/><ul><li>`noatime` (default): set when the file is created or when `SetAttr` is explicitly called. Accessing and modifying the file will not affect atime, tracking atime comes at a performance cost, so this is the default behavior</li><li>`relatime`: update inode access times relative to mtime (last time when the file data was modified) or ctime (last time when file metadata was changed). Only update atime if atime was earlier than the current mtime or ctime, or the file's atime is more than 1 day old</li><li>`strictatime`: always update atime on access</li></ul>|
 
-|`--atime-mode value`|Control atime (last time the file was accessed) behavior, support the following modes:<br/><ul><li>`noatime` (default), set when the file is created or when `SetAttr` is explicitly called. Accessing and modifying the file will not affect atime, tracking atime comes at a performance cost, so this is the default behavior</li><li>`relatime` update inode access times relative to mtime (last time when the file data was modified) or ctime (last time when file metadata was changed). Only update atime if atime was earlier than the current mtime or ctime, or the file's atime is more than 1 day old</li><li>`strictatime`, always update atime on access</li></ul>|
+#### Metadata cache related options {#mount-metadata-cache-options}
 
-### Metadata cache related options
-
-For metadata cache description and usage, refer to [Kernel metadata cache](../guide/cache_management.md#kernel-metadata-cache).
-
-|Items|Description|
-|-|-|
-|`--attr-cache value`|attributes cache timeout in seconds (default: 1), read [Kernel Metadata Cache](../guide/cache_management.md#kernel-metadata-cache)|
-|`--entry-cache value`|file entry cache timeout in seconds (default: 1), read [Kernel Metadata Cache](../guide/cache_management.md#kernel-metadata-cache)|
-|`--dir-entry-cache value`|dir entry cache timeout in seconds (default: 1), read [Kernel Metadata Cache](../guide/cache_management.md#kernel-metadata-cache)|
-|`--open-cache value`|open file cache timeout in seconds (0 means disable this feature) (default: 0)|
-
-### Data storage related options {#mount-data-storage-options}
+For metadata cache description and usage, refer to [Kernel metadata cache](../guide/cache_management.md#kernel-metadata-cache) and [Client memory metadata cache](../guide/cache_management.md#client-memory-metadata-cache).
 
 |Items|Description|
 |-|-|
-|`--storage value`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
-|`--bucket value`|customized endpoint to access object storage|
-|`--get-timeout value`|the max number of seconds to download an object (default: 60)|
-|`--put-timeout value`|the max number of seconds to upload an object (default: 60)|
-|`--io-retries value`|number of retries after network failure (default: 10)|
-|`--max-uploads value`|number of connections to upload (default: 20)|
-|`--max-deletes value`|number of threads to delete objects (default: 10)|
+|`--attr-cache=1`|attributes cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache_management.md#kernel-metadata-cache)|
+|`--entry-cache=1`|file entry cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache_management.md#kernel-metadata-cache)|
+|`--dir-entry-cache=1`|dir entry cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache_management.md#kernel-metadata-cache)|
+|`--open-cache=0`|open file cache timeout in seconds (0 means disable this feature) (default: 0)|
 
-### Data cache related options {#mount-data-cache-options}
+#### Data storage related options {#mount-data-storage-options}
 
 |Items|Description|
 |-|-|
-|`--buffer-size value`|total read/write buffering in MiB (default: 300)|
-|`--upload-limit value`|bandwidth limit for upload in Mbps (default: 0)|
-|`--download-limit value`|bandwidth limit for download in Mbps (default: 0)|
-|`--prefetch value`|prefetch N blocks in parallel (default: 1)|
-|`--writeback`|upload objects in background (default: false), see [Client write data cache](../guide/cache_management.md#writeback)|
-|`--cache-dir value`|directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `"$HOME/.juicefs/cache"` or `"/var/jfsCache"`), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
-|`--cache-size value`|size of cached object for read in MiB (default: 102400), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
-|`--free-space-ratio value`|min free space ratio (default: 0.1), if [Client write data cache](../guide/cache_management.md#writeback) is enabled, this option also controls write cache size, see [Client read data cache](../guide/cache_management.md#client-read-cache)|
+|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
+|`--bucket=value`|customized endpoint to access object storage|
+|`--get-timeout=60`|the max number of seconds to download an object (default: 60)|
+|`--put-timeout=60`|the max number of seconds to upload an object (default: 60)|
+|`--io-retries=10`|number of retries after network failure (default: 10)|
+|`--max-uploads=20`|number of connections to upload (default: 20)|
+|`--max-deletes=10`|number of threads to delete objects (default: 10)|
+|`--upload-limit=0`|bandwidth limit for upload in Mbps (default: 0)|
+|`--download-limit=0`|bandwidth limit for download in Mbps (default: 0)|
+
+#### Data cache related options {#mount-data-cache-options}
+
+|Items|Description|
+|-|-|
+|`--buffer-size=300`|total read/write buffering in MiB (default: 300), see [Read/Write buffer](../guide/cache_management.md#buffer-size)|
+|`--prefetch=1`|prefetch N blocks in parallel (default: 1), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
+|`--cache-dir=value`|directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `$HOME/.juicefs/cache` or `/var/jfsCache`), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
+|`--cache-size=102400`|size of cached object for read in MiB (default: 102400), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
+|`--free-space-ratio=0.1`|min free space ratio (default: 0.1), if [Client write data cache](../guide/cache_management.md#writeback) is enabled, this option also controls write cache size, see [Client read data cache](../guide/cache_management.md#client-read-cache)|
 |`--cache-partial-only`|cache random/small read only (default: false), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
 |`--verify-cache-checksum value`|Checksum level for cache data. After enabled, checksum will be calculated on divided parts of the cache blocks and stored on disks, which are used for verification during reads. The following strategies are supported:<br/><ul><li>`none`: Disable checksum verification, if local cache data is tampered, bad data will be read;</li><li>`full` (default): Perform verification when reading the full block, use this for sequential read scenarios;</li><li>`shrink`: Perform verification on parts that's fully included within the read range, use this for random read scenarios;</li><li>`extend`: Perform verification on parts that fully include the read range, this causes read amplifications and is only used for random read scenarios demanding absolute data integrity.</li></ul>|
-|`--upload-delay value`|When `--writeback` is enabled, you can use this option to add a delay to object storage upload, default to 0, meaning that upload will begin immediately after write. Different units are supported, including "s", "m", "h". If files are deleted during this delay, upload will be skipped entirely, when using JuiceFS for temporary storage, use this option to reduce resource usage.|
+|`--writeback`|upload objects in background (default: false), see [Client write data cache](../guide/cache_management.md#writeback)|
+|`--upload-delay=0`|When `--writeback` is enabled, you can use this option to add a delay to object storage upload, default to 0, meaning that upload will begin immediately after write. Different units are supported, including `s` (second), `m` (minute), `h` (hour). If files are deleted during this delay, upload will be skipped entirely, when using JuiceFS for temporary storage, use this option to reduce resource usage. Refer to [Client write data cache](../guide/cache_management.md#writeback).|
 
-### Metrics related options {#mount-metrics-options}
+#### Metrics related options {#mount-metrics-options}
 
 ||Items|Description|
 |-|-|
-|`--metrics value`|address to export metrics (default: "127.0.0.1:9567")|
-|`--consul value`|Consul address to register (default: "127.0.0.1:8500")|
-|`--no-usage-report`|do not send usage report (default: false)|
-|`--read-only`|allow lookup/read operations only (default: false)|
+|`--metrics=127.0.0.1:9567`|address to export metrics (default: `127.0.0.1:9567`)|
+|`--consul=127.0.0.1:8500`|Consul address to register (default: `127.0.0.1:8500`)|
 
-## `juicefs umount`
+## `juicefs umount` {#umount}
 
 Unmount a volume.
 
@@ -291,7 +290,7 @@ juicefs umount /mnt/jfs
 |-|-|
 |`-f, --force`|force unmount a busy mount point (default: false)|
 
-## `juicefs gateway`
+## `juicefs gateway` {#gateway}
 
 Start an S3-compatible gateway, read [Deploy JuiceFS S3 Gateway](../deployment/s3_gateway.md) for more.
 
@@ -311,13 +310,13 @@ Apart from options listed below, this command shares options with `juicefs mount
 
 |Items|Description|
 |-|-|
-|`META-URL`|Database URL for metadata storage, see ["JuiceFS supported metadata engines"](../guide/how_to_set_up_metadata_engine.md) for details.|
+|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md) for details.|
 |`ADDRESS`|S3 gateway address and listening port, for example: `localhost:9000`|
-|`--access-log value`|path for JuiceFS access log.|
+|`--access-log=path`|path for JuiceFS access log.|
 |`--no-banner`|disable MinIO startup information (default: false)|
 |`--multi-buckets`|use top level of directories as buckets (default: false)|
 |`--keep-etag`|save the ETag for uploaded objects (default: false)|
-|`--umask=022`|umask for new file and directory in octal (default: "022")|
+|`--umask=022`|umask for new file and directory in octal (default: 022)|
 
 ## `juicefs webdav` {#webdav}
 
@@ -398,11 +397,10 @@ In which:
 |`--perms`|Preserve permissions, default to false.|
 |`--dirs`|Sync empty directories as well.|
 |`--dry`|Don't actually copy any file.|
-|`--inplace`|Modify files in place, rather than delete and replace. If destination storage system is a JuiceFS volume with [trash](../security/trash.md) enabled, overwritten files by default will be kept in Trash. Use `--inplace` to modify files in place and prevent Trash usage. Currently only `jfs://` type destination storage is supported.|
 |`--delete-src, --deleteSrc`|Delete objects that already exist in destination. Different from rsync, files won't be deleted at the first run, instead they will be deleted at the next run, after files are successfully copied to the destination.|
 |`--delete-dst, --deleteDst`|Delete extraneous objects from destination.|
-|`--exclude PATTERN`|Exclude keys matching PATTERN.|
-|`--include PATTERN`|Include keys matching PATTERN, need to be used with `--exclude`.|
+|`--exclude=PATTERN`|Exclude keys matching PATTERN.|
+|`--include=PATTERN`|Include keys matching PATTERN, need to be used with `--exclude`.|
 |`--links, -l`|Copy symlinks as symlinks default to false.|
 |`--limit=-1`|Limit the number of objects that will be processed, default to -1 which means unlimited.|
 |`--manager=ADDR`|Manager node address used in distributed syncing, this is an internal option that's used in the executed command on the worker nodes.|
@@ -412,9 +410,9 @@ In which:
 |`--check-all`|Verify the integrity of all files in source and destination, default to false. Comparison is done on byte streams, which comes at a performance cost.|
 |`--check-new`|Verify the integrity of newly copied files, default to false. Comparison is done on byte streams, which comes at a performance cost.|
 
-## `juicefs rmr`
+## `juicefs rmr` {#rmr}
 
-Remove all the files and subdirectories, similar to rm -rf, except this command deals with metadata directly (bypassing POSIX API), thus is much faster.
+Remove all the files and subdirectories, similar to `rm -rf`, except this command deals with metadata directly (bypassing kernel), thus is much faster.
 
 If trash is enabled, deleted files are moved into trash. Read more at [Trash](../security/trash.md).
 
@@ -462,10 +460,10 @@ For a detailed introduction to the `bench` subcommand, refer to the [documentati
 juicefs bench [command options] PATH
 
 # Run benchmarks with 4 threads
-$ juicefs bench /mnt/jfs -p 4
+juicefs bench /mnt/jfs -p 4
 
 # Run benchmarks of only small files
-$ juicefs bench /mnt/jfs --big-file-size 0
+juicefs bench /mnt/jfs --big-file-size 0
 ```
 
 ### Options
@@ -476,7 +474,7 @@ $ juicefs bench /mnt/jfs --big-file-size 0
 |`--big-file-size=1024`|size of big file in MiB (default: 1024)|
 |`--small-file-size=0.1`|size of small file in MiB (default: 0.1)|
 |`--small-file-count=100`|number of small files (default: 100)|
-|`--threads=1, -p value`|number of concurrent threads (default: 1)|
+|`--threads=1, -p 1`|number of concurrent threads (default: 1)|
 
 ## `juicefs objbench` {#objbench}
 
@@ -488,22 +486,22 @@ Run basic benchmarks on the target object storage to test if it works as expecte
 juicefs objbench [command options] BUCKET
 
 # Run benchmarks on S3
-ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3  https://mybucket.s3.us-east-2.amazonaws.com -p 6
+ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3 https://mybucket.s3.us-east-2.amazonaws.com -p 6
 ```
 
 ### Options
 
 |Items|Description|
 |-|-|
-|`--storage value`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
-|`--access-key value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`)|
-|`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`)|
-|`--block-size value`|size of each IO block in KiB (default: 4096)|
-|`--big-object-size value`|size of each big object in MiB (default: 1024)|
-|`--small-object-size value`|size of each small object in KiB (default: 128)|
-|`--small-objects value`|number of small objects (default: 100)|
+|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `file`, refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
+|`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`)|
+|`--secret-key=value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`)|
+|`--block-size=4096`|size of each IO block in KiB (default: 4096)|
+|`--big-object-size=1024`|size of each big object in MiB (default: 1024)|
+|`--small-object-size=128`|size of each small object in KiB (default: 128)|
+|`--small-objects=100`|number of small objects (default: 100)|
 |`--skip-functional-tests`|skip functional tests (default: false)|
-|`--threads value, -p value`|number of concurrent threads (default: 4)|
+|`--threads=4, -p 4`|number of concurrent threads (default: 4)|
 
 ## `juicefs gc` {#gc}
 
@@ -511,7 +509,7 @@ Deal with leaked objects, and garbage fragments produced by file overwrites. See
 
 ### Synopsis
 
-```
+```shell
 juicefs gc [command options] META-URL
 
 # Check only, no writable change
@@ -530,9 +528,9 @@ juicefs gc redis://localhost --delete
 |-|-|
 |`--delete`|delete leaked objects (default: false)|
 |`--compact`|compact all chunks with more than 1 slices (default: false).|
-|`--threads value`|number of threads to delete leaked objects (default: 10)|
+|`--threads=10`|number of threads to delete leaked objects (default: 10)|
 
-## `juicefs fsck`
+## `juicefs fsck` {#fsck}
 
 Check consistency of file system.
 
@@ -569,10 +567,10 @@ juicefs profile /tmp/jfs.alog --interval 0
 
 |Items|Description|
 |-|-|
-|`--uid value, -u value`|only track specified UIDs (separated by comma ,)|
-|`--gid value, -g value`|only track specified GIDs(separated by comma ,)|
-|`--pid value, -p value`|only track specified PIDs(separated by comma ,)|
-|`--interval value`|flush interval in seconds; set it to 0 when replaying a log file to get an immediate result (default: 2)|
+|`--uid=value, -u value`|only track specified UIDs (separated by comma)|
+|`--gid=value, -g value`|only track specified GIDs (separated by comma)|
+|`--pid=value, -p value`|only track specified PIDs (separated by comma)|
+|`--interval=2`|flush interval in seconds; set it to 0 when replaying a log file to get an immediate result (default: 2)|
 
 ## `juicefs stats` {#stats}
 
@@ -593,11 +591,11 @@ juicefs stats /mnt/jfs -l 1
 
 |Items|Description|
 |-|-|
-|`--schema=ufmco`|schema string that controls the output sections (u: `usage`, f: `fuse`, m: `meta`, c: `blockcache`, o: `object`, g: `go`) (default: "ufmco")|
+|`--schema=ufmco`|schema string that controls the output sections (`u`: usage, `f`: FUSE, `m`: metadata, `c`: block cache, `o`: object storage, `g`: Go) (default: `ufmco`)|
 |`--interval=1`|interval in seconds between each update (default: 1)|
-|`--verbosity=0|verbosity level, 0 or 1 is enough for most cases (default: 0)|
+|`--verbosity=0`|verbosity level, 0 or 1 is enough for most cases (default: 0)|
 
-## `juicefs status`
+## `juicefs status` {#status}
 
 Show status of JuiceFS.
 
@@ -613,7 +611,7 @@ juicefs status redis://localhost
 
 |Items|Description|
 |-|-|
-|`--session=0, -s 0|show detailed information (sustained inodes, locks) of the specified session (SID) (default: 0)|
+|`--session=0, -s 0`|show detailed information (sustained inodes, locks) of the specified session (SID) (default: 0)|
 
 ## `juicefs warmup` {#warmup}
 
@@ -664,9 +662,9 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 
 |Items|Description|
 |-|-|
-|`META-URL`|Database URL for metadata storage, see ["Metadata Engines Supported by JuiceFS"](../guide/how_to_set_up_metadata_engine.md) for details.|
+|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md) for details.|
 |`FILE`|Export file path, if not specified, it will be exported to standard output. If the filename ends with `.gz`, it will be automatically compressed.|
-|`--subdir value`|Only export metadata for the specified subdirectory.|
+|`--subdir=path`|Only export metadata for the specified subdirectory.|
 |`--keep-secret-key`|Export object storage authentication information, the default is `false`. Since it is exported in plain text, pay attention to data security when using it. If the export file does not contain object storage authentication information, you need to use [`juicefs config`](#config) to reconfigure object storage authentication information after the subsequent import is completed.|
 
 ## `juicefs load` {#load}
@@ -686,14 +684,14 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 
 |Items|Description|
 |-|-|
-|`META-URL`|Database URL for metadata storage, see ["Metadata Engines Supported by JuiceFS"](../guide/how_to_set_up_metadata_engine.md) for details.|
+|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md) for details.|
 |`FILE`|Import file path, if not specified, it will be imported from standard input. If the filename ends with `.gz`, it will be automatically decompressed.|
 |`--encrypt-rsa-key=path`|The path to the RSA private key file used for encryption.|
 |`--encrypt-alg=aes256gcm-rsa`|Encryption algorithm, the default is `aes256gcm-rsa`.|
 
 ## `juicefs config` {#config}
 
-Change config of a volume. Note that after updating some settings, the client may not take effect immediately, and it needs to wait for a certain period of time. The specific waiting time can be controlled by the [`--heartbeat`](#mount) option.
+Change config of a volume. Note that after updating some settings, the client may not take effect immediately, and it needs to wait for a certain period of time. The specific waiting time can be controlled by the [`--heartbeat`](#mount-metadata-options) option.
 
 ### Synopsis
 
@@ -729,7 +727,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--min-client-version value`|minimum client version allowed to connect|
 |`--max-client-version value`|maximum client version allowed to connect|
 
-## `juicefs destroy`
+## `juicefs destroy` {#destroy}
 
 Destroy an existing volume, will delete relevant data in metadata engine and object storage. See [How to destroy a file system](../administration/destroy.md).
 
@@ -770,8 +768,8 @@ juicefs debug --out-dir=/var/log --limit=1000 /mnt/jfs
 
 |Items|Description|
 |-|-|
-|`--out-dir=./debug`|The output directory of the results, automatically created if the directory does not exist (default: ./debug/)|
-|`--stats-sec value`|The number of seconds to sample .stats file (default: 5)|
-|`--limit value`|The number of log entries collected, from newest to oldest, if not specified, all entries will be collected|
+|`--out-dir=./debug/`|The output directory of the results, automatically created if the directory does not exist (default: `./debug/`)|
+|`--stats-sec=5`|The number of seconds to sample .stats file (default: 5)|
+|`--limit=value`|The number of log entries collected, from newest to oldest, if not specified, all entries will be collected|
 |`--trace-sec=5`|The number of seconds to sample trace metrics (default: 5)|
 |`--profile-sec=30`|The number of seconds to sample profile metrics (default: 30)|

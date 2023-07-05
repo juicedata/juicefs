@@ -28,7 +28,7 @@ As for object storage, JuiceFS clients split files into data blocks (default 4Mi
 
 As a userspace filesystem, JuiceFS metadata cache is both managed as kernel cache (via FUSE API), and maintained in client memory space.
 
-### Metadata Cache in Kernel {#kernel-metadata-cache}
+### Metadata cache in kernel {#kernel-metadata-cache}
 
 JuiceFS Client controls these kinds of metadata as kernel cache: attribute (file name, size, permission, mtime, etc.), entry (inode, name, and type. The word "entry" and "dir-entry" is used in parameter names, to further distinguish between file and directory). Use the following parameters to control TTL through FUSE:
 
@@ -49,7 +49,7 @@ Do note that `entry` cache is gradually built upon file access and may not conta
 
 Real world scenarios scarcely require setting different values for `--entry-cache` and `--dir-entry-cache`, these options exist for theoretical possibilities like when directories seldomly change while files change a lot, in that situation, you can use a higher `--dir-entry-cache` than `--entry-cache`.
 
-### Metadata Cache in Client Memory {#client-memory-metadata-cache}
+### Metadata cache in client memory {#client-memory-metadata-cache}
 
 When JuiceFS Client `open` a file, its file attributes are cached in client memory, this attribute cache includes not only the kernel cached file attributes like size, mtime, but also information specific to JuiceFS like [the relationship between file and chunks and slices](../introduction/architecture.md#how-juicefs-store-files).
 
@@ -61,7 +61,7 @@ With `--open-cache` enabled, JuiceFS no longer operates under close-to-open cons
 
 In comparison, JuiceFS Enterprise Edition provides richer functionalities around memory metadata cache (supports active invalidation). Read [Enterprise Edition documentation](https://juicefs.com/docs/cloud/guide/cache/#client-memory-metadata-cache) for more.
 
-## Data cache
+## Data cache {#data-cache}
 
 To improve performance, JuiceFS also provides various caching mechanisms for data, including page cache in the kernel, local file system cache in client host, and read/write buffer in client process itself. Read requests will try the kernel page cache, the client process buffer, and the local disk cache in turn. If the data requested is not found in any level of the cache, it will be read from the object storage, and also be written into every level of the cache asynchronously to improve the performance of the next access.
 
@@ -75,7 +75,7 @@ If you wish to improve write speed, and have already increased [`--max-uploads`]
 
 The `--buffer-size` also controls the data upload size for each `flush` operation, this means for clients working in a low bandwidth environment, you may need to use a lower `--buffer-size` to avoid `flush` timeouts. Refer to ["Connection problems with object storage"](../administration/troubleshooting.md#io-error-object-storage) for troubleshooting under low internet speed.
 
-### Kernel page cache
+### Kernel page cache {#kernel-data-cache}
 
 Kernel will build page cache for opened files. If this file is not updated (i.e. `mtime` doesn't change) afterwards, it will be read directly from the page cache to achieve the best performance.
 
@@ -83,13 +83,13 @@ JuiceFS Client tracks a list of recently opened files. If file is opened again, 
 
 Repeated reads of the same file in JuiceFS can be extremely fast, with latencies as low as a few microseconds and throughput up to several GiBs per second.
 
-### Kernel writeback-cache mode
+### Kernel writeback-cache mode {#fuse-writeback-cache}
 
 Starting from Linux kernel 3.15, FUSE supports [writeback-cache](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt) mode, the kernel will consolidate high-frequency random small (10-100 bytes) write requests to significantly improve its performance, but this comes with a side effect: sequential writes are also turned into random writes, hence sequential write performance is hindered, so only use it on intensive random write scenarios.
 
 To enable writeback-cache mode, use the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option when you [mount JuiceFS](../reference/command_reference.md#mount). Note that writeback-cache mode is not the same as [Client write data cache](#writeback), the former is a kernel implementation while the latter happens inside the JuiceFS Client, read the corresponding section to learn their intended scenarios.
 
-### Read Cache in Client {#client-read-cache}
+### Read cache in client {#client-read-cache}
 
 The client will perform prefetch and cache automatically to improve sequence read performance according to the read mode in the application. Data will be cached in local file system, which can be any local storage device like HDD, SSD or even memory.
 
