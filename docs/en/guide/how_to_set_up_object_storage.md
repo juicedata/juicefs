@@ -802,9 +802,9 @@ juicefs format \
 
 ## Gluster
 
-[Gluster](https://github.com/gluster/glusterfs) is a software defined distributed storage that can scale to several petabytes. JuiceFS communicates with Gluster via the `libgfapi` library, so it needs to be built separately before used, as follows:
+[Gluster](https://github.com/gluster/glusterfs) is a software defined distributed storage that can scale to several petabytes. JuiceFS communicates with Gluster via the `libgfapi` library, so it needs to be built separately before used.
 
-1. Install `libgfapi` (version 6.0+):
+First, install `libgfapi` (version 6.0+):
 
 <Tabs>
   <TabItem value="debian" label="Debian and derivatives">
@@ -817,19 +817,19 @@ sudo apt-get install libglusterfs-dev
   <TabItem value="centos" label="RHEL and derivatives">
 
 ```bash
-sudo yum install glusterfs-api
+sudo yum install glusterfs-api-devel
 ```
 
   </TabItem>
 </Tabs>
 
-2. Compile JuiceFS supporting Gluster
+Then compile JuiceFS supporting Gluster:
 
 ```bash
 make juicefs.gluster
 ```
 
-3. Format a JuiceFS volume
+Now we can create a JuiceFS volume on Gluster:
 
 ```bash
 juicefs format \
@@ -838,6 +838,7 @@ juicefs format \
     ... \
     myjfs
 ```
+
 The format of `--bucket` option is `<host[,host...]>/<volume_name>`. Please note the `volume_name` here is the name of Gluster volume, and has nothing to do with the name of JuiceFS volume.
 
 ## Swift

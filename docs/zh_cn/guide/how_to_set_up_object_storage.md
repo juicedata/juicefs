@@ -802,9 +802,9 @@ juicefs format \
 
 ## Gluster
 
-[Gluster](https://github.com/gluster/glusterfs) 是一款开源的软件定义分布式存储，单集群能支持 PiB 级别的数据。JuiceFS 通过 `libgfapi` 库与 Gluster 集群交互，使用前需要单独编译，具体步骤如下：
+[Gluster](https://github.com/gluster/glusterfs) 是一款开源的软件定义分布式存储，单集群能支持 PiB 级别的数据。JuiceFS 通过 `libgfapi` 库与 Gluster 集群交互，使用前需要单独编译。
 
-1. 安装 `libgfapi`（6.0 或以上版本）:
+首先安装 `libgfapi`（6.0 或以上版本）：
 
 <Tabs>
   <TabItem value="debian" label="Debian 及衍生版本">
@@ -817,19 +817,19 @@ sudo apt-get install libglusterfs-dev
   <TabItem value="centos" label="RHEL 及衍生版本">
 
 ```bash
-sudo yum install glusterfs-api
+sudo yum install glusterfs-api-devel
 ```
 
   </TabItem>
 </Tabs>
 
-2. 编译支持 Gluster 的 JuiceFS
+然后编译支持 Gluster 的 JuiceFS：
 
 ```bash
 make juicefs.gluster
 ```
 
-3. 格式化 JuiceFS volume
+现在我们可以创建出基于 Gluster 的 JuiceFS volume：
 
 ```bash
 juicefs format \
@@ -838,6 +838,7 @@ juicefs format \
     ... \
     myjfs
 ```
+
 其中 `--bucket` 选项格式为 `<host[,host...]>/<volume_name>`。注意这里的 `volume_name` 为 Gluster 中的卷名称，与 JuiceFS volume 自身的名字没有直接关系。
 
 ## Swift
