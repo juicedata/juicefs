@@ -770,6 +770,9 @@ func (m *baseMeta) flushQuotas() {
 			}
 		}
 		m.quotaMu.RUnlock()
+		if len(quotas) == 0 {
+			continue
+		}
 
 		if err := m.en.doFlushQuotas(Background, quotas); err != nil {
 			logger.Warnf("Flush quotas: %s", err)
