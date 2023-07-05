@@ -19,6 +19,11 @@ from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
 from hypothesis import Phase, assume, strategies as st
 from hypothesis import seed
 from packaging import version
+import subprocess
+try:
+    __import__("minio")
+except ImportError:
+    subprocess.check_call(["pip", "install", "minio"])
 from minio import Minio
 import uuid
 from utils import *
