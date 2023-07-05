@@ -272,4 +272,4 @@ sudo juicefs umount /mnt/jfs
 
 ## Auto-mount on boot
 
-Please refer to ["Mount JuiceFS at Boot Time"](../guide/mount_at_boot.md) for more details.
+Please refer to ["Mount JuiceFS at Boot Time"](../administration/mount_at_boot.md) for more details.
