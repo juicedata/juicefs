@@ -8,7 +8,7 @@ META_URL=$(get_meta_url $META)
 
 download_juicefs_client(){
     version=$1
-    https://github.com/juicedata/juicefs/releases/download/v$version/juicefs-$version-linux-amd64.tar.gz
+    wget -q https://github.com/juicedata/juicefs/releases/download/v$version/juicefs-$version-linux-amd64.tar.gz
     tar -xzf juicefs-$version-linux-amd64.tar.gz -C /tmp/
     sudo cp /tmp/juicefs juicefs-$version
     ./juicefs-$version version
