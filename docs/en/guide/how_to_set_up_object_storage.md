@@ -810,14 +810,14 @@ First, install `libgfapi` (version 6.0+):
   <TabItem value="debian" label="Debian and derivatives">
 
 ```bash
-sudo apt-get install libglusterfs-dev
+sudo apt-get install libglusterfs-dev glusterfs-common
 ```
 
   </TabItem>
   <TabItem value="centos" label="RHEL and derivatives">
 
 ```bash
-sudo yum install glusterfs-api-devel
+sudo yum install glusterfs-api-devel glusterfs-libs
 ```
 
   </TabItem>
