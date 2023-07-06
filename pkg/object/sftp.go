@@ -419,7 +419,7 @@ func (f *sftpStore) ListAll(prefix, marker string) (<-chan Object, error) {
 	return listed, nil
 }
 
-func SshInteractive(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
+func sshInteractive(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
 	if len(questions) == 0 {
 		fmt.Print(user, instruction)
 	} else {
@@ -476,10 +476,7 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 	username = unescape(username)
 	var auth []ssh.AuthMethod
 	if pass != "" {
-		pass = unescape(pass)
-		auth = append(auth, ssh.Password(pass))
-	} else {
-		auth = append(auth, ssh.KeyboardInteractive(SshInteractive))
+		auth = append(auth, ssh.Password(unescape(pass)))
 	}
 
 	var signers []ssh.Signer
@@ -528,6 +525,10 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 	}
 	if len(signers) > 0 {
 		auth = append(auth, ssh.PublicKeys(signers...))
+	}
+
+	if pass == "" {
+		auth = append(auth, ssh.KeyboardInteractive(sshInteractive))
 	}
 
 	config := &ssh.ClientConfig{
