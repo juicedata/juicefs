@@ -303,7 +303,6 @@ $ juicefs config redis://localhost --trash-days 7
 $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version 1.1.0
 ```
 
-
 #### `juicefs quota`{#quota}
 
 Manage directory quotas
@@ -353,10 +352,10 @@ calculate total usage of directory in strict mode (NOTE: may be slow for huge di
 ##### Examples
 
 ```shell
-$ juicefs quota set redis://localhost --path /dir1 --capacity 1 --inodes 100
-$ juicefs quota get redis://localhost --path /dir1
-$ juicefs quota list redis://localhost
-$ juicefs quota delete redis://localhost --path /dir1
+juicefs quota set redis://localhost --path /dir1 --capacity 1 --inodes 100
+juicefs quota get redis://localhost --path /dir1
+juicefs quota list redis://localhost
+juicefs quota delete redis://localhost --path /dir1
 ```
 
 #### `juicefs destroy`
@@ -377,7 +376,7 @@ automatically answer 'yes' to all prompts and run non-interactively (default: fa
 `--force`<br />
 skip sanity check and force destroy the volume (default: false)
 
-#### Examples
+##### Examples
 
 ```bash
 juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
@@ -404,7 +403,7 @@ compact all chunks with more than 1 slices (default: false).
 `--threads value`<br />
 number of threads to delete leaked objects (default: 10)
 
-#### Examples
+##### Examples
 
 ```bash
 # Check only, no writable change
@@ -785,7 +784,7 @@ enable extended attributes (xattr) (default: false)
 enable ioctl (support GETFLAGS/SETFLAGS only) (default: false)
 
 `--root-squash value`<br />
-mapping local root user (UID = 0) to another one specified as <UID>:<GID>
+mapping local root user (UID = 0) to another one specified as UID:GID
 
 `--prefix-internal`<br />
 add '.jfs' prefix to all internal files (default: false)
@@ -1498,7 +1497,6 @@ skip updating files that already exist on destination (default: false)
 
 ###### action
 
-
 `--dirs`<br />
 Sync directories or holders (default: false)
 
@@ -1570,7 +1568,6 @@ $ juicefs sync --include='a1/b1' --exclude='a[1-9]/b*' s3://mybucket.s3.us-east-
 # SRC: a1/b1,a2/b2,aaa/b1,b1,b2  DST: empty   sync result: a1/b1,b2
 $ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
 ```
-
 
 #### `juicefs clone`
 
