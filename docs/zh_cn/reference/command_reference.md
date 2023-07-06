@@ -347,6 +347,15 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 `--strict`<br />
 在严格模式下计算目录的总使用量 (注意：对于大目录可能很慢) (默认：false)
 
+##### 示例
+
+```shell
+$ juicefs quota set redis://localhost --path /dir1 --capacity 1 --inodes 100
+$ juicefs quota get redis://localhost --path /dir1
+$ juicefs quota list redis://localhost
+$ juicefs quota delete redis://localhost --path /dir1
+```
+
 #### `juicefs destroy` {#destroy}
 
 销毁一个已经存在的文件系统，将会清空元数据引擎与对象存储中的相关数据。详见[「如何销毁文件系统」](../administration/destroy.md)。
@@ -516,7 +525,7 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 
 ### 检视
 
-#### `juicefs status`
+#### `juicefs status`{#status}
 
 显示 JuiceFS 的状态。
 
@@ -1507,7 +1516,7 @@ juicefs sync [command options] SRC DST
 `--dry`<br />
 不拷贝文件 (默认：false)
 
-STORAGE
+###### storage
 
 `--threads value, -p value`<br />
 并发线程数 (默认：10)
@@ -1516,9 +1525,8 @@ STORAGE
 列出对象的线程数 (默认：1)
 
 `--list-depth value`<br />
-
-list the top N level of directories in parallel (default: 1)
 顶级目录的前 N 层用于并行 list (默认：1)
+
 `--no-https`<br />
 不要使用 HTTPS (默认：false)
 
