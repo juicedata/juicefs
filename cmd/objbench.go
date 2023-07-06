@@ -926,7 +926,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		// Copy empty objects
 		defer blob.Delete("empty_test_file") //nolint:errcheck
 		if err := blob.Put("empty_test_file", bytes.NewReader([]byte{})); err != nil {
-			return fmt.Errorf("put empty object failed: %s", err)
+			return err
 		}
 
 		// Copy `/` suffixed object
