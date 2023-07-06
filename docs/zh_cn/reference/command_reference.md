@@ -350,10 +350,10 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 ##### 示例
 
 ```shell
-$ juicefs quota set redis://localhost --path /dir1 --capacity 1 --inodes 100
-$ juicefs quota get redis://localhost --path /dir1
-$ juicefs quota list redis://localhost
-$ juicefs quota delete redis://localhost --path /dir1
+juicefs quota set redis://localhost --path /dir1 --capacity 1 --inodes 100
+juicefs quota get redis://localhost --path /dir1
+juicefs quota list redis://localhost
+juicefs quota delete redis://localhost --path /dir1
 ```
 
 #### `juicefs destroy` {#destroy}

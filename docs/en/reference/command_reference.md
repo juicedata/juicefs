@@ -197,7 +197,6 @@ the limit for number of inodes (0 means unlimited) (default: 0)
 `--trash-days value`<br />
 number of days after which removed files will be permanently deleted (default: 1)
 
-
 ##### Examples
 
 ```bash
@@ -239,7 +238,7 @@ automatically answer 'yes' to all prompts and run non-interactively (default: fa
 `--force`<br />
 skip sanity check and force update the configurations (default: false)
 
-######  data storage
+###### data storage
 
 `--storage value`<br />
 Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)
@@ -305,7 +304,7 @@ $ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-versi
 ```
 
 
-#### `juicefs quota` {#quota}
+#### `juicefs quota`{#quota}
 
 Manage directory quotas
 
@@ -502,7 +501,6 @@ Only export metadata for the specified subdirectory.
 
 `--keep-secret-key`<br />
 Export object storage authentication information, the default is `false`. Since it is exported in plain text, pay attention to data security when using it. If the export file does not contain object storage authentication information, you need to use [`juicefs config`](#config) to reconfigure object storage authentication information after the subsequent import is completed.
-
 
 #### `juicefs load` {#load}
 
@@ -787,7 +785,7 @@ enable extended attributes (xattr) (default: false)
 enable ioctl (support GETFLAGS/SETFLAGS only) (default: false)
 
 `--root-squash value`<br />
-mapping local root user (uid = 0) to another one specified as <uid>:<gid>
+mapping local root user (UID = 0) to another one specified as <UID>:<GID>
 
 `--prefix-internal`<br />
 add '.jfs' prefix to all internal files (default: false)
@@ -1156,10 +1154,10 @@ juicefs webdav [command options] META-URL ADDRESS
 ###### general
 
 `--cert-file value`<br />
-certificate file for https
+certificate file for HTTPS
 
 `--key-file value`<br />
-key file for https
+key file for HTTPS
 
 `--gzip`<br />
 compress served files via gzip (default: false)
@@ -1294,8 +1292,7 @@ Consul address to register (default: "127.0.0.1:8500")
 `--no-usage-report`<br />
 do not send usage report (default: false)
 
-
-#### Examples
+##### Examples
 
 ```bash
 juicefs webdav redis://localhost localhost:9007
@@ -1588,7 +1585,7 @@ juicefs clone [command options] SRC DST
 ##### Options
 
 `--preserve, -p`<br />
-preserve the uid, gid, and mode of the file (default: false)
+preserve the UID, GID, and mode of the file (default: false)
 
 ##### Examples
 
@@ -1599,6 +1596,6 @@ $ juicefs clone /mnt/jfs/file1 /mnt/jfs/file2
 # Clone a directory
 $ juicefs clone /mnt/jfs/dir1 /mnt/jfs/dir2
 
-# Clone with preserving the uid, gid, and mode of the file
+# Clone with preserving the UID, GID, and mode of the file
 $ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2
 ```
