@@ -6,6 +6,44 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
 
+start_minio(){
+    if ! docker ps | grep "minio/minio"; then
+        docker run -d -p 9000:9000 --name minio \
+                -e "MINIO_ACCESS_KEY=minioadmin" \
+                -e "MINIO_SECRET_KEY=minioadmin" \
+                -v /tmp/data:/data \
+                -v /tmp/config:/root/.minio \
+                minio/minio server /data
+        sleep 3s
+    fi
+    [ ! -x mc ] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc && chmod +x mc
+    # ./mc alias set myminio http://localhost:9000 minioadmin minioadmin
+    ./mc config host add myminio http://127.0.0.1:9000 minioadmin minioadmin
+    if ./mc ls myminio/jfs; then
+        ./mc rb --force myminio/jfs
+    fi
+    ./mc mb myminio/jfs
+}
+
+test_sync_with_object_storage(){
+    do_sync_with_object_storage
+}
+
+do_sync_with_object_storage(){
+    prepare_test
+    options=$@
+    generate_source_dir
+    start_minio
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    ./juicefs sync jfs_source/ minio://minioadmin:minioadmin@localhost:9000/jfs/ $options
+
+    # if [[ ! "$options" =~ "--dirs" ]]; then
+    #     find jfs_source -type d -empty -delete
+    # fi
+    # find /jfs/jfs_source -type f -name ".*.tmp*" -delete
+    # diff -ur --no-dereference jfs_source/ /jfs/jfs_source/
+}
 
 test_sync_with_mount_point(){
     do_sync_with_mount_point 
