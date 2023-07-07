@@ -21,7 +21,7 @@ Arguments:
 
 - `SRC` is the source data address or path;
 - `DST` is the destination address or path;
-- `[command options]` are synchronization options. See [command reference](../reference/command_reference.md#juicefs-sync) for more details.
+- `[command options]` are synchronization options. See [command reference](../reference/command_reference.md#sync) for more details.
 
 Address syntax follows `[NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]`.
 

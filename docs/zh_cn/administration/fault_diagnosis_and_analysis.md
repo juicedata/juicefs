@@ -118,7 +118,7 @@ kubectl -n kube-system exec juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-53079943
 
 ### S3 网关
 
-需要在启动 S3 网关时新增 [`--access-log` 选项](../reference/command_reference.md#juicefs-gateway)，指定访问日志输出的路径，默认 S3 网关不输出访问日志。
+需要在启动 S3 网关时新增 [`--access-log` 选项](../reference/command_reference.md#gateway)，指定访问日志输出的路径，默认 S3 网关不输出访问日志。
 
 ### Hadoop Java SDK
 
