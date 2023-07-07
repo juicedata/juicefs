@@ -150,7 +150,7 @@ $ ls -l /sbin/mount.juicefs
 lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/juicefs
 ```
 
-Refer to ["Mount JuiceFS at Boot Time"](../guide/mount_at_boot.md) for more details.
+Refer to ["Mount JuiceFS at Boot Time"](../administration/mount_at_boot.md) for more details.
 
 ### 6. Verify the file system
 

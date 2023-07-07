@@ -278,4 +278,4 @@ sudo juicefs umount /mnt/jfs
 
 ## 开机自动挂载
 
-请参考[「启动时自动挂载 JuiceFS」](../guide/mount_at_boot.md)
+请参考[「启动时自动挂载 JuiceFS」](../administration/mount_at_boot.md)
