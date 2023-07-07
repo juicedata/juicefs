@@ -138,7 +138,7 @@ juicefs format [command options] META-URL NAME
 
 ##### Options
 
-###### general
+###### General
 
 `--force`<br />
 overwrite existing format (default: false)
@@ -146,7 +146,7 @@ overwrite existing format (default: false)
 `--no-update`<br />
 don't update existing volume (default: false)
 
-###### data storage
+###### Data Storage
 
 `--storage value`<br />
 Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)
@@ -166,7 +166,7 @@ session token for object storage
 `--storage-class value`<br />
 the default storage class
 
-###### data format
+###### Data Format
 
 `--block-size value`<br />
 size of block in KiB (default: 4096). 4M is usually a better default value because many object storage services use 4M as their internal block size, thus using the same block size in JuiceFS usually yields better performance
@@ -186,7 +186,7 @@ add a hash prefix to name of objects (default: false)
 `--shards value`<br />
 store the blocks into N buckets by hash of key (default: 0), when N is greater than 0, `bucket` should to be in the form of `%d`, e.g. `--bucket "juicefs-%d"`
 
-###### MANAGEMENT
+###### Management
 
 `--capacity value`<br />
 storage space limit in GiB, set to 0 disable limit (default: 0). Capacity will include trash files, if trash is enabled
@@ -230,7 +230,7 @@ juicefs config [command options] META-URL
 
 ##### Options
 
-###### general
+###### General
 
 `--yes, -y`<br />
 automatically answer 'yes' to all prompts and run non-interactively (default: false)
@@ -238,7 +238,7 @@ automatically answer 'yes' to all prompts and run non-interactively (default: fa
 `--force`<br />
 skip sanity check and force update the configurations (default: false)
 
-###### data storage
+###### Data Storage
 
 `--storage value`<br />
 Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)
@@ -264,7 +264,7 @@ bandwidth limit for upload in Mbps (default: 0)
 `--download-limit value`<br />
 bandwidth limit for download in Mbps (default: 0)
 
-###### MANAGEMENT
+###### Management
 
 `--capacity value`<br />
 limit for space in GiB
@@ -315,7 +315,7 @@ juicefs quota command [command options] META-URL
 
 - `META-URL`: Database URL for metadata storage, see "[JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md)" for details.
 
-##### subcommand
+##### Subcommands
 
 `set`<br />
 Set quota to a directory
@@ -358,7 +358,7 @@ juicefs quota list redis://localhost
 juicefs quota delete redis://localhost --path /dir1
 ```
 
-#### `juicefs destroy`
+#### `juicefs destroy`{#destroy}
 
 Destroy an existing volume, will delete relevant data in metadata engine and object storage. See [How to destroy a file system](../administration/destroy.md).
 
@@ -758,7 +758,7 @@ juicefs mount [command options] META-URL MOUNTPOINT
 
 ##### Options
 
-###### general
+###### General
 
 `-d, --background`<br />
 run in background (default: false)
@@ -792,7 +792,7 @@ add '.jfs' prefix to all internal files (default: false)
 `-o value`<br />
 other FUSE options, see [FUSE Mount Options](../reference/fuse_mount_options.md)
 
-###### meta
+###### Meta
 
 `--subdir value`<br />
 mount a sub-directory as root (default: "")
@@ -825,7 +825,7 @@ Control atime (last time the file was accessed) behavior, support the following 
 `--skip-dir-nlink value`<br />
 number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never) (default: 20)
 
-###### meta cache
+###### Meta Cache
 
 `--attr-cache value`<br />
 attributes cache timeout in seconds (default: 1), read [Kernel Metadata Cache](../guide/cache_management.md#kernel-metadata-cache)
@@ -842,7 +842,7 @@ open file cache timeout in seconds (0 means disable this feature) (default: 0)
 `--open-cache-limit value`<br />
 max number of open files to cache (soft limit, 0 means unlimited) (default: 10000)
 
-###### data storage
+###### Data Storage
 
 `--storage value`<br />
 Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)
@@ -874,7 +874,7 @@ bandwidth limit for upload in Mbps (default: 0)
 `--download-limit value`<br />
 bandwidth limit for download in Mbps (default: 0)
 
-###### data cache
+###### Data Cache
 
 `--buffer-size value`<br />
 total read/write buffering in MiB (default: 300)
@@ -912,7 +912,7 @@ cache eviction policy (none or 2-random) (default: "2-random")
 `--cache-scan-interval value`<br />
 interval (in seconds) to scan cache-dir to rebuild in-memory index (default: "3600")
 
-###### metrics
+###### Metrics
 
 `--metrics value`<br />
 address to export metrics (default: "127.0.0.1:9567")
@@ -947,7 +947,7 @@ $ juicefs mount redis://localhost /mnt/jfs -d --read-only
 $ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 ```
 
-#### `juicefs umount`
+#### `juicefs umount`{#umount}
 
 Unmount a volume.
 
@@ -971,7 +971,7 @@ wait for all staging chunks to be flushed (default: false)
 juicefs umount /mnt/jfs
 ```
 
-#### `juicefs gateway`
+#### `juicefs gateway`{#gateway}
 
 Start an S3-compatible gateway.
 
@@ -986,7 +986,7 @@ juicefs gateway [command options] META-URL ADDRESS
 
 ##### Options
 
-###### general
+###### General
 
 `--access-log value`<br />
 path for JuiceFS access log
@@ -1003,7 +1003,7 @@ save the ETag for uploaded objects (default: false)
 `--umask value`<br />
 umask for new file and directory in octal (default: "022")
 
-###### meta
+###### Meta
 
 `--subdir value`<br />
 mount a sub-directory as root (default: "")
@@ -1029,7 +1029,7 @@ Control atime (last time the file was accessed) behavior, support the following 
 `--skip-dir-nlink value`<br />
 number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never) (default: 20)
 
-###### meta cache
+###### Meta Cache
 
 `--attr-cache value`<br />
 attributes cache timeout in seconds (default: 1), read [Kernel Metadata Cache](../guide/cache_management.md#kernel-metadata-cache)
@@ -1046,7 +1046,7 @@ open file cache timeout in seconds (0 means disable this feature) (default: 0)
 `--open-cache-limit value`<br />
 max number of open files to cache (soft limit, 0 means unlimited) (default: 10000)
 
-###### data storage
+###### Data Storage
 
 `--storage value`<br />
 Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)
@@ -1078,7 +1078,7 @@ bandwidth limit for upload in Mbps (default: 0)
 `--download-limit value`<br />
 bandwidth limit for download in Mbps (default: 0)
 
-###### data cache
+###### Data Cache
 
 `--buffer-size value`<br />
 total read/write buffering in MiB (default: 300)
@@ -1116,7 +1116,7 @@ cache eviction policy (none or 2-random) (default: "2-random")
 `--cache-scan-interval value`<br />
 interval (in seconds) to scan cache-dir to rebuild in-memory index (default: "3600")
 
-###### metrics
+###### Metrics
 
 `--metrics value`<br />
 address to export metrics (default: "127.0.0.1:9567")
@@ -1150,7 +1150,7 @@ juicefs webdav [command options] META-URL ADDRESS
 
 ##### Options
 
-###### general
+###### General
 
 `--cert-file value`<br />
 certificate file for HTTPS
@@ -1167,7 +1167,7 @@ disallow list a directory (default: false)
 `--access-log value`<br />
 path for JuiceFS access log
 
-###### meta
+###### Meta
 
 `--subdir value`<br />
 mount a sub-directory as root (default: "")
@@ -1193,7 +1193,7 @@ Control atime (last time the file was accessed) behavior, support the following 
 `--skip-dir-nlink value`<br />
 number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never) (default: 20)
 
-###### meta cache
+###### Meta Cache
 
 `--attr-cache value`<br />
 attributes cache timeout in seconds (default: 1), read [Kernel Metadata Cache](../guide/cache_management.md#kernel-metadata-cache)
@@ -1210,7 +1210,7 @@ open file cache timeout in seconds (0 means disable this feature) (default: 0)
 `--open-cache-limit value`<br />
 max number of open files to cache (soft limit, 0 means unlimited) (default: 10000)
 
-###### data storage
+###### Data Storage
 
 `--storage value`<br />
 Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, please refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)
@@ -1242,7 +1242,7 @@ bandwidth limit for upload in Mbps (default: 0)
 `--download-limit value`<br />
 bandwidth limit for download in Mbps (default: 0)
 
-###### data cache
+###### Data Cache
 
 `--buffer-size value`<br />
 total read/write buffering in MiB (default: 300)
@@ -1280,7 +1280,7 @@ cache eviction policy (none or 2-random) (default: "2-random")
 `--cache-scan-interval value`<br />
 interval (in seconds) to scan cache-dir to rebuild in-memory index (default: "3600")
 
-###### metrics
+###### Metrics
 
 `--metrics value`<br />
 address to export metrics (default: "127.0.0.1:9567")
@@ -1423,7 +1423,7 @@ $ cat /tmp/filelist
 $ juicefs warmup -f /tmp/filelist
 ```
 
-#### `juicefs rmr`
+#### `juicefs rmr`{#rmr}
 
 Remove all the files and subdirectories, similar to rm -rf, except this command deals with metadata directly (bypassing POSIX API), thus is much faster.
 
@@ -1441,7 +1441,7 @@ juicefs rmr PATH ...
 juicefs rmr /mnt/jfs/foo
 ```
 
-#### `juicefs sync`
+#### `juicefs sync`{#sync}
 
 Sync between two storage.
 
@@ -1466,7 +1466,7 @@ For a detailed introduction to the `sync` subcommand, please refer to the [docum
 
 ##### Options
 
-###### selection
+###### Selection
 
 `--start KEY, -s KEY`<br />
 the first KEY to sync
@@ -1495,7 +1495,7 @@ skip creating new files on destination (default: false)
 `--ignore-existing`<br />
 skip updating files that already exist on destination (default: false)
 
-###### action
+###### Action
 
 `--dirs`<br />
 Sync directories or holders (default: false)
@@ -1521,7 +1521,7 @@ verify integrity of newly copied files (default: false)
 `--dry`<br />
 don't copy file (default: false)
 
-###### storage
+###### Storage
 
 `--threads value, -p value`<br />
 number of concurrent threads (default: 10)
@@ -1541,7 +1541,7 @@ the storage class for destination
 `--bwlimit value`<br />
 limit bandwidth in Mbps (0 means unlimited) (default: 0)
 
-###### cluster
+###### Cluster
 
 `--manager value`<br />
 manager address
@@ -1569,7 +1569,7 @@ $ juicefs sync --include='a1/b1' --exclude='a[1-9]/b*' s3://mybucket.s3.us-east-
 $ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
 ```
 
-#### `juicefs clone`
+#### `juicefs clone`{#clone}
 
 clone a file or directory without copying the underlying data
 

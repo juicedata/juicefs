@@ -940,7 +940,7 @@ $ juicefs mount redis://localhost /mnt/jfs -d --read-only
 $ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 ```
 
-#### `juicefs umount`
+#### `juicefs umount`{#umount}
 
 卸载一个文件文件系统。
 
@@ -964,7 +964,7 @@ juicefs umount [command options] MOUNTPOINT
 juicefs umount /mnt/jfs
 ```
 
-#### `juicefs gateway`
+#### `juicefs gateway`{#gateway}
 
 启动一个 S3 兼容的网关。
 
@@ -1418,7 +1418,7 @@ $ cat /tmp/filelist
 $ juicefs warmup -f /tmp/filelist
 ```
 
-#### `juicefs rmr`
+#### `juicefs rmr`{#rmr}
 
 快速删除目录里的所有文件和子目录，效果等同于 `rm -rf`，但该命令直接操纵元数据，不经过 POSIX，所以速度更快。
 
@@ -1436,7 +1436,7 @@ juicefs rmr PATH ...
 juicefs rmr /mnt/jfs/foo
 ```
 
-#### `juicefs sync`
+#### `juicefs sync`{#sync}
 
 在两个存储系统之间同步数据。
 
@@ -1516,7 +1516,7 @@ juicefs sync [command options] SRC DST
 `--dry`<br />
 不拷贝文件 (默认：false)
 
-###### storage
+###### 对象存储
 
 `--threads value, -p value`<br />
 并发线程数 (默认：10)
@@ -1564,7 +1564,7 @@ $ juicefs sync --include='a1/b1' --exclude='a[1-9]/b*' s3://mybucket.s3.us-east-
 $ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
 ```
 
-#### `juicefs clone`
+#### `juicefs clone`{#clone}
 
 该命令可以克隆文件或目录但不复制底层数据，类似于 cp 命令，但是非常快。
 
