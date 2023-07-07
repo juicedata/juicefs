@@ -1536,7 +1536,7 @@ juicefs sync [command options] SRC DST
 `--bwlimit value`<br />
 限制最大带宽；单位为 Mbps (0 表示不限制) (默认：0)
 
-###### 集群
+###### 集群模式
 
 `--manager value`<br />
 管理者地址
