@@ -118,7 +118,7 @@ kubectl -n kube-system exec juicefs-chaos-k8s-002-pvc-d4b8fb4f-2c0b-48e8-a2dc-53
 
 ### S3 Gateway
 
-You need to add the [`--access-log` option](../reference/command_reference.md#juicefs-gateway) when starting the S3 gateway to specify the path to output the access log. By default, the S3 gateway does not output the access log.
+You need to add the [`--access-log` option](../reference/command_reference.md#gateway) when starting the S3 gateway to specify the path to output the access log. By default, the S3 gateway does not output the access log.
 
 ### Hadoop Java SDK
 
