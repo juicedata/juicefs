@@ -1,23 +1,24 @@
-#!/bin/bash
-set -e 
-retry(){
-  local n=0
-  local max=5
-  local delay=5
-
-  while true; do
-    "$@" && break || {
-      if [[ $n -lt $max ]]; then
-        ((n++))
-        echo "Command failed. Attempt $n/$max:"
-        sleep $delay;
-      else
-        echo "The command has failed after $n attempts."
-        return 1
-      fi
-    }
+#!/bin/bash -e 
+retry() {
+  local retries=5
+  local delay=3
+  for i in $(seq 1 $retries); do
+    set +e
+    ( set -e; "$@" )
+    exit=$?
+    set -e
+    if [ $exit == 0 ]; then
+      echo "run $@ succceed"
+      return $exit
+    elif [ $i ==  $retries ]; then
+      echo "Retry failed after $count attempts."
+      exit $exit
+    else
+      echo "Retry in $delay seconds..."
+      sleep $delay
+    fi
   done
-}
+}     
 
 install_tikv(){
   # retry because of: https://github.com/pingcap/tiup/issues/2057
@@ -32,20 +33,19 @@ install_tikv(){
     exit 1
   fi
   
-  $tiup playground --mode tikv-slim 2>&1 > tikv.log &
+  $tiup playground --mode tikv-slim > tikv.log 2>&1  &
   pid=$!
   sleep 60
   echo 'head -1' > /tmp/head.txt
-  lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt
-  ret=$?
-  if [ $ret -eq 0 ]; then
+  lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt || exit=$?
+  if [ $exit -eq 0 ]; then
     echo "TiKV is running."
   else
     echo "TiKV failed to start."
-    kill -9 $pid
+    kill -9 $pid || true
   fi
   rm -rf /tmp/head.txt
-  return $ret
+  exit $exit
 }
 
 install_tidb(){
@@ -60,18 +60,17 @@ install_tidb(){
     exit 1
   fi
   
-  $tiup playground 5.4.0 2>&1 > tidb.log &
+  $tiup playground 5.4.0 > tidb.log 2>&1  &
   pid=$!
   sleep 60
-  lsof -i:4000 && pgrep pd-server && mysql -h127.0.0.1 -P4000 -uroot -e "select version();"
-  ret=$?
-  if [ $ret -eq 0 ]; then
+  lsof -i:4000 && pgrep pd-server && mysql -h127.0.0.1 -P4000 -uroot -e "select version();" || exit=$?
+  if [ $exit -eq 0 ]; then
       echo "TiDB is running."
-    else
+  else
       echo "TiDB failed to start."
-      kill -9 $pid
+      kill -9 $pid || true
   fi
-  return $ret
+  exit $exit
 }
 
 start_meta_engine(){
