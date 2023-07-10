@@ -14,6 +14,8 @@ test_info_big_file(){
     ./juicefs mount -d $META_URL /jfs
     dd if=/dev/urandom of=/jfs/bigfile bs=16M count=1024
     ./juicefs info /jfs/bigfile
+    ./juicefs rmr /jfs/bigfile
+    df -h
 }
 
 source .github/scripts/common/run_test.sh && run_test $@
