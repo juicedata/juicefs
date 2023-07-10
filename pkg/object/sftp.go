@@ -452,10 +452,7 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 	username = unescape(username)
 	var auth []ssh.AuthMethod
 	if pass != "" {
-		pass = unescape(pass)
-		auth = append(auth, ssh.Password(pass))
-	} else {
-		auth = append(auth, ssh.KeyboardInteractive(sshInteractive))
+		auth = append(auth, ssh.Password(unescape(pass)))
 	}
 
 	var signers []ssh.Signer
@@ -504,6 +501,10 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 	}
 	if len(signers) > 0 {
 		auth = append(auth, ssh.PublicKeys(signers...))
+	}
+
+	if pass == "" {
+		auth = append(auth, ssh.KeyboardInteractive(sshInteractive))
 	}
 
 	config := &ssh.ClientConfig{

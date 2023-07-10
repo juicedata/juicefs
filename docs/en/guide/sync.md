@@ -1,5 +1,6 @@
 ---
 title: Data Synchronization
+sidebar_position: 7
 ---
 
 [`juicefs sync`](../reference/command_reference.md#sync) is a powerful data migration tool, which can copy data across all supported storages including object storage, JuiceFS itself, and local file systems, you can freely copy data between any of these systems. In addition, it supports remote directories through SSH, HDFS, WebDAV, etc. while providing advanced features such as  incremental synchronization, and pattern matching (like rsync), and distributed syncing.
@@ -20,7 +21,7 @@ Arguments:
 
 - `SRC` is the source data address or path;
 - `DST` is the destination address or path;
-- `[command options]` are synchronization options. See [command reference](../reference/command_reference.md#juicefs-sync) for more details.
+- `[command options]` are synchronization options. See [command reference](../reference/command_reference.md#sync) for more details.
 
 Address format:
 

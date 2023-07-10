@@ -1436,14 +1436,37 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Parent != TrashInode+1 {
 		t.Fatalf("getattr f(%d): %s, attr %+v", inode, st, attr)
 	}
-	if st := m.Mkdir(ctx, 1, "d2", 0755, 022, 0, &inode, attr); st != 0 {
+	if st := m.Truncate(ctx, inode, 0, 1<<30, attr, false); st != syscall.EPERM {
+		t.Fatalf("should not truncate a file in trash")
+	}
+	if st := m.Open(ctx, inode, uint32(syscall.O_RDWR), attr); st != syscall.EPERM {
+		t.Fatalf("should not fallocate a file in trash")
+	}
+	if st := m.SetAttr(ctx, inode, SetAttrMode, 1, &Attr{Mode: 0}); st != syscall.EPERM {
+		t.Fatalf("should not change mode of a file in trash")
+	}
+	var parent2 Ino
+	if st := m.Mkdir(ctx, 1, "d2", 0755, 022, 0, &parent2, attr); st != 0 {
 		t.Fatalf("mkdir d2: %s", st)
 	}
 	if st := m.Rmdir(ctx, 1, "d2"); st != 0 {
 		t.Fatalf("rmdir d2: %s", st)
 	}
-	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Parent != TrashInode+1 {
-		t.Fatalf("getattr d2(%d): %s, attr %+v", inode, st, attr)
+	if st := m.GetAttr(ctx, parent2, attr); st != 0 || attr.Parent != TrashInode+1 {
+		t.Fatalf("getattr d2(%d): %s, attr %+v", parent2, st, attr)
+	}
+	var tino Ino
+	if st := m.Mkdir(ctx, parent2, "d3", 0777, 022, 0, &tino, attr); st != syscall.ENOENT {
+		t.Fatalf("mkdir inside trash should fail")
+	}
+	if st := m.Create(ctx, parent2, "d3", 0755, 022, 0, &tino, attr); st != syscall.ENOENT {
+		t.Fatalf("create inside trash should fail")
+	}
+	if st := m.Link(ctx, inode, parent2, "ttlink", attr); st != syscall.ENOENT {
+		t.Fatalf("link inside trash should fail")
+	}
+	if st := m.Rename(ctx, 1, "d", parent2, "ttlink", 0, &tino, attr); st != syscall.ENOENT {
+		t.Fatalf("link inside trash should fail")
 	}
 	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f1 -> d: %s", st)

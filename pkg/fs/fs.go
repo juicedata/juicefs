@@ -430,6 +430,20 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint1
 	}
 	var inode Ino
 	err = fs.m.Mkdir(ctx, fi.inode, path.Base(p), mode, umask, 0, &inode, nil)
+	if err == syscall.ENOENT && fi.inode != 1 {
+		// parent be moved into trash, try again
+		if fs.conf.DirEntryTimeout > 0 {
+			parent := parentDir(p)
+			if fi, err := fs.resolve(ctx, parentDir(parent), true); err == 0 {
+				fs.invalidateEntry(fi.inode, path.Base(parent))
+			}
+		}
+		if fi2, e := fs.resolve(ctx, parentDir(p), true); e != 0 {
+			return e
+		} else if fi2.inode != fi.inode {
+			err = fs.m.Mkdir(ctx, fi2.inode, path.Base(p), mode, umask, 0, &inode, nil)
+		}
+	}
 	fs.invalidateEntry(fi.inode, path.Base(p))
 	return
 }
@@ -767,6 +781,20 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint
 		return
 	}
 	err = fs.m.Create(ctx, fi.inode, path.Base(p), mode&07777, umask, syscall.O_EXCL, &inode, attr)
+	if err == syscall.ENOENT && fi.inode != 1 {
+		// dir be moved into trash, try again
+		if fs.conf.DirEntryTimeout > 0 {
+			parent := parentDir(p)
+			if fi, err := fs.resolve(ctx, parentDir(parent), true); err == 0 {
+				fs.invalidateEntry(fi.inode, path.Base(parent))
+			}
+		}
+		if fi2, e := fs.resolve(ctx, parentDir(p), true); e != 0 {
+			return nil, e
+		} else if fi2.inode != fi.inode {
+			err = fs.m.Create(ctx, fi2.inode, path.Base(p), mode&07777, umask, syscall.O_EXCL, &inode, attr)
+		}
+	}
 	if err == 0 {
 		fi = AttrToFileInfo(inode, attr)
 		fi.name = path.Base(p)
