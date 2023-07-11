@@ -10,8 +10,8 @@ retry() {
         if [ $exit == 0 ]; then
             echo "run $@ succceed"
             return $exit
-            elif [ $i ==  $retries ]; then
-            echo "Retry failed after $count attempts."
+        elif [ $i ==  $retries ]; then
+            echo "Retry failed after $i attempts."
             exit $exit
         else
             echo "Retry in $delay seconds..."
@@ -38,6 +38,7 @@ install_tikv(){
     timeout=60
     count=0
     while true; do
+        echo 'head -1' > /tmp/head.txt
         lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt && exit_code=0 || exit_code=$?
         if [ $exit_code -eq 0 ]; then
             echo "TiDB is running."
