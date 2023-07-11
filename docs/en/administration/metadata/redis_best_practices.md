@@ -126,7 +126,7 @@ After generating the AOF or RDB backup file, you can restore the data by copying
 
 If both AOF and RDB persistence are enabled, Redis will use the AOF file first on starting to recover the data because AOF is guaranteed to be the most complete data.
 
-After recovering Redis data, you can continue to use the JuiceFS file system via the new Redis address. It is recommended to run [`juicefs fsck`](../../reference/command_reference.md#juicefs-fsck) command to check the integrity of the file system data.
+After recovering Redis data, you can continue to use the JuiceFS file system via the new Redis address. It is recommended to run [`juicefs fsck`](../../reference/command_reference.md#fsck) command to check the integrity of the file system data.
 
 ## Recommended Managed Redis Service
 

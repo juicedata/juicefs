@@ -126,7 +126,7 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 
 如果 AOF 和 RDB 同时开启，Redis 启动时会优先使用 AOF 文件来恢复数据，因为 AOF 保证是最完整的数据。
 
-在恢复完 Redis 数据以后，可以继续通过新的 Redis 地址使用 JuiceFS 文件系统。建议运行 [`juicefs fsck`](../../reference/command_reference.md#juicefs-fsck) 命令检查文件系统数据的完整性。
+在恢复完 Redis 数据以后，可以继续通过新的 Redis 地址使用 JuiceFS 文件系统。建议运行 [`juicefs fsck`](../../reference/command_reference.md#fsck) 命令检查文件系统数据的完整性。
 
 ## 推荐的 Redis 托管服务
 

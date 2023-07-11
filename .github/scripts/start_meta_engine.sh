@@ -1,77 +1,89 @@
-#!/bin/bash
-set -e 
-retry(){
-  local n=0
-  local max=5
-  local delay=5
-
-  while true; do
-    "$@" && break || {
-      if [[ $n -lt $max ]]; then
-        ((n++))
-        echo "Command failed. Attempt $n/$max:"
-        sleep $delay;
-      else
-        echo "The command has failed after $n attempts."
-        return 1
-      fi
-    }
-  done
+#!/bin/bash -e
+retry() {
+    local retries=5
+    local delay=3
+    for i in $(seq 1 $retries); do
+        set +e
+        ( set -e; "$@" )
+        exit=$?
+        set -e
+        if [ $exit == 0 ]; then
+            echo "run $@ succceed"
+            return $exit
+        elif [ $i ==  $retries ]; then
+            echo "Retry failed after $i attempts."
+            exit $exit
+        else
+            echo "Retry in $delay seconds..."
+            sleep $delay
+        fi
+    done
 }
 
 install_tikv(){
-  # retry because of: https://github.com/pingcap/tiup/issues/2057
-  curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-  user=$(whoami)
-  if [ "$user" == "root" ]; then
-    tiup=/root/.tiup/bin/tiup
-  elif [ "$user" == "runner" ]; then
-    tiup=/home/runner/.tiup/bin/tiup
-  else
-    echo "Unknown user $user"
-    exit 1
-  fi
-  
-  $tiup playground --mode tikv-slim 2>&1 > tikv.log &
-  pid=$!
-  sleep 60
-  echo 'head -1' > /tmp/head.txt
-  lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt
-  ret=$?
-  if [ $ret -eq 0 ]; then
-    echo "TiKV is running."
-  else
-    echo "TiKV failed to start."
-    kill -9 $pid
-  fi
-  rm -rf /tmp/head.txt
-  return $ret
+    # retry because of: https://github.com/pingcap/tiup/issues/2057
+    curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+    user=$(whoami)
+    if [ "$user" == "root" ]; then
+        tiup=/root/.tiup/bin/tiup
+    elif [ "$user" == "runner" ]; then
+        tiup=/home/runner/.tiup/bin/tiup
+    else
+        echo "Unknown user $user"
+        exit 1
+    fi
+    
+    $tiup playground --mode tikv-slim > tikv.log 2>&1  &
+    pid=$!
+    timeout=60
+    count=0
+    while true; do
+        echo 'head -1' > /tmp/head.txt
+        lsof -i:2379 && pgrep pd-server && tcli -pd 127.0.0.1:2379 < /tmp/head.txt && exit_code=0 || exit_code=$?
+        if [ $exit_code -eq 0 ]; then
+            echo "TiDB is running."
+            exit 0
+        fi
+        sleep 1
+        count=$((count+1))
+        if [ $count -eq $timeout ]; then
+            echo "TiDB failed to start within $timeout seconds."
+            kill -9 $pid || true
+            exit 1
+        fi
+    done
 }
 
 install_tidb(){
-  curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
-  user=$(whoami)
-  if [ "$user" == "root" ]; then
-    tiup=/root/.tiup/bin/tiup
-  elif [ "$user" == "runner" ]; then
-    tiup=/home/runner/.tiup/bin/tiup
-  else
-    echo "Unknown user $user"
-    exit 1
-  fi
-  
-  $tiup playground 5.4.0 2>&1 > tidb.log &
-  pid=$!
-  sleep 60
-  lsof -i:4000 && pgrep pd-server && mysql -h127.0.0.1 -P4000 -uroot -e "select version();"
-  ret=$?
-  if [ $ret -eq 0 ]; then
-      echo "TiDB is running."
+    curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+    user=$(whoami)
+    if [ "$user" == "root" ]; then
+        tiup=/root/.tiup/bin/tiup
+    elif [ "$user" == "runner" ]; then
+        tiup=/home/runner/.tiup/bin/tiup
     else
-      echo "TiDB failed to start."
-      kill -9 $pid
-  fi
-  return $ret
+        echo "Unknown user $user"
+        exit 1
+    fi
+    
+    $tiup playground 5.4.0 > tidb.log 2>&1  &
+    pid=$!
+    timeout=60
+    count=0
+    while true; do
+        lsof -i:4000 && pgrep pd-server && mysql -h127.0.0.1 -P4000 -uroot -e "select version();" && exit_code=0 || exit_code=$?
+        if [ $exit_code -eq 0 ]; then
+            echo "TiDB is running."
+            exit 0
+        fi
+        sleep 1
+        count=$((count+1))
+        if [ $count -eq $timeout ]; then
+            echo "TiDB failed to start within $timeout seconds."
+            kill -9 $pid || true
+            exit 1
+        fi
+    done
 }
 
 start_meta_engine(){
@@ -87,7 +99,7 @@ start_meta_engine(){
         sudo cp bin/tcli /usr/local/bin
         cd -
         retry install_tikv
-
+        
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
     elif [ "$meta" == "mariadb" ]; then
@@ -102,13 +114,13 @@ start_meta_engine(){
         docker run --name fdb --rm -d -p 4500:4500 foundationdb/foundationdb:6.3.23
         sleep 5
         docker exec fdb fdbcli --exec "configure new single memory"
-        echo "docker:docker@127.0.0.1:4500" > /home/runner/fdb.cluster 
+        echo "docker:docker@127.0.0.1:4500" > /home/runner/fdb.cluster
         fdbcli -C /home/runner/fdb.cluster --exec "status"
     elif [ "$meta" == "ob" ]; then
         docker rm obstandalone --force || echo "remove obstandalone failed"
         docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
         sleep 60
-        mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;" 
+        mysql -h127.0.0.1 -P2881 -uroot -e "ALTER SYSTEM SET _ob_enable_prepared_statement=TRUE;"
     elif [ "$meta" == "postgres" ]; then
         echo "start postgres"
         docker run --name postgresql \
@@ -119,14 +131,14 @@ start_meta_engine(){
             -d postgres
         sleep 10
     fi
-
+    
     if [ "$storage" == "minio" ]; then
         docker run -d -p 9000:9000 --name minio \
-                    -e "MINIO_ACCESS_KEY=minioadmin" \
-                    -e "MINIO_SECRET_KEY=minioadmin" \
-                    -v /tmp/data:/data \
-                    -v /tmp/config:/root/.minio \
-                    minio/minio server /data
+            -e "MINIO_ACCESS_KEY=minioadmin" \
+            -e "MINIO_SECRET_KEY=minioadmin" \
+            -v /tmp/data:/data \
+            -v /tmp/config:/root/.minio \
+            minio/minio server /data
     elif [ "$meta" != "postgres" ] && [ "$storage" == "postgres" ]; then
         echo "start postgres"
         docker run --name postgresql \
@@ -145,7 +157,7 @@ start_meta_engine(){
 get_meta_url(){
     meta=$1
     if [ "$meta" == "postgres" ]; then
-        meta_url="postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable" 
+        meta_url="postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable"
     elif [ "$meta" == "mysql" ]; then
         meta_url="mysql://root:root@(127.0.0.1)/test"
     elif [ "$meta" == "redis" ]; then
@@ -188,16 +200,16 @@ create_database(){
         echo user=$user, password=$password, host=$host, port=$port, db_name=$db_name
         if [ "$#" -eq 2 ]; then
             echo isolation_level=$2
-            mysql -u$user $password -h $host -P $port -e "set global transaction isolation level $2;" 
-            mysql -u$user $password -h $host -P $port -e "show variables like '%isolation%;'" 
+            mysql -u$user $password -h $host -P $port -e "set global transaction isolation level $2;"
+            mysql -u$user $password -h $host -P $port -e "show variables like '%isolation%;'"
         fi
-        mysql -u$user $password -h $host -P $port -e "drop database if exists $db_name; create database $db_name;" 
-    elif [[ "$meta_url" == postgres* ]]; then
-        export PGPASSWORD="postgres"
-        printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
+        mysql -u$user $password -h $host -P $port -e "drop database if exists $db_name; create database $db_name;"
+        elif [[ "$meta_url" == postgres* ]]; then
+            export PGPASSWORD="postgres"
+            printf "\set AUTOCOMMIT on\ndrop database if exists $db_name; create database $db_name; " |  psql -U postgres -h localhost
         if [ "$#" -eq 2 ]; then
             echo isolation_level=$2
             printf "\set AUTOCOMMIT on\nALTER DATABASE $db_name SET DEFAULT_TRANSACTION_ISOLATION TO '$2';" |  psql -U postgres -h localhost
         fi
-    fi      
+    fi
 }
