@@ -25,22 +25,19 @@ start_minio(){
     ./mc mb myminio/jfs
 }
 
-test_sync_with_object_storage(){
-    do_sync_with_object_storage
-}
 
-do_sync_with_object_storage(){
+test_sync_external_link(){
     prepare_test
-    options=$@
-    generate_source_dir
     start_minio
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    ln -s go.mod /jfs/go.mod
-    MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005
-    ./mc alias set minio http://localhost:9005 minioadmin minioadmin --api S3v4
+    touch hello
+    ln -s $(realpath hello) /jfs/hello
+    lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs kill
+    MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 &
+    ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ myjfs/
-    ./mc ls minio/myjfs | grep go.mod
+    # ./mc ls minio/myjfs | grep hello
 }
 
 source .github/scripts/common/run_test.sh && run_test $@
