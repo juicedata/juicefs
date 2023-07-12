@@ -294,6 +294,17 @@ func (fs *fileSystem) Fallocate(cancel <-chan struct{}, in *fuse.FallocateIn) (c
 	return fuse.Status(err)
 }
 
+func (fs *fileSystem) Lseek(cancel <-chan struct{}, in *fuse.LseekIn, out *fuse.LseekOut) (code fuse.Status) {
+	ctx := fs.newContext(cancel, &in.InHeader)
+	defer releaseContext(ctx)
+	off, err := fs.v.Lseek(ctx, Ino(in.NodeId), in.Fh, int64(in.Offset), in.Whence)
+	if err != 0 {
+		return fuse.Status(err)
+	}
+	out.Offset = off
+	return 0
+}
+
 func (fs *fileSystem) CopyFileRange(cancel <-chan struct{}, in *fuse.CopyFileRangeIn) (written uint32, code fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)

@@ -18,6 +18,7 @@ package vfs
 
 import (
 	"encoding/json"
+	"io"
 	"runtime"
 	"sort"
 	"sync"
@@ -666,6 +667,29 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 		writtenSizeHistogram.Observe(float64(len(buf)))
 		v.reader.Truncate(ino, v.writer.GetLength(ino))
 	}
+	return
+}
+
+func (v *VFS) Lseek(ctx Context, ino Ino, fh uint64, off int64, whence uint32) (offset uint64, err syscall.Errno) {
+	defer func() { logit(ctx, "lseek (%d,%d,%d,%d): %s", ino, off, fh, whence, strerr(err)) }()
+	h := v.findHandle(ino, fh)
+	if h == nil {
+		err = syscall.EBADF
+		return
+	}
+	h.Lock()
+	defer h.Unlock()
+	switch whence {
+	case io.SeekStart:
+		offset = uint64(off)
+	case io.SeekCurrent:
+		offset = uint64(int64(h.off) + off)
+	case io.SeekEnd:
+		offset = uint64(int64(h.reader.GetLength()) + off)
+	default:
+		return h.off, syscall.ENOSYS
+	}
+	h.off = offset
 	return
 }
 

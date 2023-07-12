@@ -67,6 +67,7 @@ func (m sstate) String() string {
 }
 
 type FileReader interface {
+	GetLength() uint64
 	Read(ctx meta.Context, off uint64, buf []byte) (int, syscall.Errno)
 	Close(ctx meta.Context)
 }
@@ -605,6 +606,12 @@ func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, 
 		}
 	}
 	return n, 0
+}
+
+func (f *fileReader) GetLength() uint64 {
+	f.Lock()
+	defer f.Unlock()
+	return f.length
 }
 
 func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, syscall.Errno) {
