@@ -1436,7 +1436,7 @@ juicefs rmr PATH ...
 juicefs rmr /mnt/jfs/foo
 ```
 
-#### `juicefs sync`{#sync}
+#### `juicefs sync` {#sync}
 
 在两个存储系统之间同步数据。
 
