@@ -170,6 +170,11 @@ jobs:
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
 
+      - name: Test Sync with mino
+        timeout-minutes: 30
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/sync_minio.sh 
+
       - name: Log
         if: ${{ always() }}
         run: |
