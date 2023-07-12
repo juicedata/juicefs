@@ -134,6 +134,8 @@ test_sync_broken_link(){
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 &
     ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ myjfs/ || true
+    rm -rf /jfs/hello
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ myjfs/
 }
 
