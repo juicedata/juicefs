@@ -681,6 +681,10 @@ func (fs *FileSystem) lookup(ctx meta.Context, parent Ino, name string, inode *I
 }
 
 func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool) (fi *FileStat, err syscall.Errno) {
+	return fs.doResolve(ctx, p, followLastSymlink, 0)
+}
+
+func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bool, depth int) (fi *FileStat, err syscall.Errno) {
 	var inode Ino
 	var attr = &Attr{}
 
@@ -736,6 +740,9 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 		}
 		fi = AttrToFileInfo(inode, attr)
 		if (!resolved || followLastSymlink) && fi.IsSymlink() {
+			if depth > 100 {
+				return nil, syscall.ELOOP
+			}
 			var buf []byte
 			err = fs.m.ReadLink(ctx, inode, &buf)
 			if err != 0 {
@@ -746,7 +753,7 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 				return &FileStat{name: target}, syscall.ENOTSUP
 			}
 			target = path.Join(strings.Join(ss[:i], "/"), target)
-			fi, err = fs.resolve(ctx, target, followLastSymlink)
+			fi, err = fs.doResolve(ctx, target, followLastSymlink, depth+1)
 			if err != 0 {
 				return
 			}
