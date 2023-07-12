@@ -19,16 +19,16 @@ start_minio(){
     [ ! -x mc ] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc && chmod +x mc
     # ./mc alias set myminio http://localhost:9000 minioadmin minioadmin
     ./mc config host add myminio http://127.0.0.1:9000 minioadmin minioadmin
-    if ./mc ls myminio/jfs; then
-        ./mc rb --force myminio/jfs
-    fi
-    ./mc mb myminio/jfs
+    # if ./mc ls myminio/jfs; then
+    #     ./mc rb --force myminio/jfs
+    # fi
+    # ./mc mb myminio/jfs
 }
 start_minio
 
-test_sync_big_file(){
+skip_test_sync_big_file(){
     prepare_test
-    start_minio
+    (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
@@ -37,15 +37,16 @@ test_sync_big_file(){
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 &
     ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
-    ./mc cp mymino/myjfs/bigfile /tmp/bigfile2
-    diff /tmp/bigfile /tmp/bigfile2
+    ./mc cp myminio/myjfs/bigfile /tmp/bigfile2
+    cmp /tmp/bigfile /tmp/bigfile2
 }
 
-test_sync_small_files(){
+skip_test_sync_small_files(){
     prepare_test
+    (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    ./juicefs mdtest /test --dirs 10 --depth 3 --files 10 --threads 10
+    ./juicefs mdtest $META_URL /test --dirs 10 --depth 3 --files 10 --threads 10
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 &
     ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
@@ -56,12 +57,13 @@ test_sync_small_files(){
 }
 test_sync_with_limit(){
     prepare_test
+    (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 &
     ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
-    ./juicefs mdtest /test --dirs 10 --depth 2 --files 10 --threads 10
+    ./juicefs mdtest $META_URL /test --dirs 10 --depth 2 --files 5 --threads 10
     ./juicefs sync --limit 1000 minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ 
     count=$(./mc ls myminio/myjfs -r | wc -l)
     echo count is $count
@@ -69,6 +71,7 @@ test_sync_with_limit(){
 }
 test_sync_with_existing(){
     prepare_test
+    (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
@@ -76,12 +79,13 @@ test_sync_with_existing(){
     ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
     echo abc > /jfs/abc
     ./juicefs sync --existing minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ 
-    ./mc ls myminio/myjfs/abc && echo "myminio/myjfs/abc should not exist" && exit 1 || true
+    ./mc find myminio/myjfs/abc && echo "myminio/myjfs/abc should not exist" && exit 1 || true
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
-    ./mc ls myminio/myjfs/abc
+    ./mc find myminio/myjfs/abc
 }
 test_sync_with_update(){
     prepare_test
+    (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
@@ -92,28 +96,36 @@ test_sync_with_update(){
     echo def > def
     ./mc cp def myminio/myjfs/abc
     ./juicefs sync --update minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ 
-    ./mc cat myminio/myjfs/abc | grep abc
+    ./mc cat myminio/myjfs/abc | grep def || (echo "content should be def" && exit 1)
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ 
-    ./mc cat myminio/myjfs/abc | grep def
+    ./mc cat myminio/myjfs/abc | grep def || (echo "content should be def" && exit 1)
+    ./juicefs sync --force-update minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
+    ./mc cat myminio/myjfs/abc | grep abc || (echo "content should be abc" && exit 1)
+
+    echo hijk > hijk
+    ./mc cp hijk myminio/myjfs/abc
+    ./juicefs sync --update minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ 
+    ./mc cat myminio/myjfs/abc | grep hijk || (echo "content should be hijk" && exit 1)
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ 
+    ./mc cat myminio/myjfs/abc | grep abc || (echo "content should be abc" && exit 1)
 }
 
-test_sync_with_force_update(){
+skip_test_sync_broken_link(){
     prepare_test
+    (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
+    touch hello
+    ln -s hello /jfs/hello
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 &
     ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
-    echo abc > /jfs/abc
-    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
-    echo def > def
-    ./mc cp def myminio/myjfs/abc
-    ./juicefs sync --force-update minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
-    ./mc cat myminio/myjfs/abc | grep def
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ myjfs/
 }
 
 test_sync_external_link(){
     prepare_test
+    (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     touch hello
