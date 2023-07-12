@@ -124,7 +124,7 @@ test_sync_hard_link(){
     ./mc cat myminio/myjfs/def | grep abcd || (echo "content should be abcd" && exit 1)
 }
 
-skip_test_sync_broken_link(){
+test_sync_broken_link(){
     prepare_test
     (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
