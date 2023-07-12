@@ -1,6 +1,12 @@
-#!/bin/bash
+#!/bin/bash -e
 
-set -e
+prepare_test()
+{
+    umount_jfs /jfs $META_URL
+    python3 .github/scripts/flush_meta.py $META_URL
+    rm -rf /var/jfs/myjfs || true
+    rm -rf /var/jfsCache/myjfs || true
+}
 
 umount_jfs()
 {

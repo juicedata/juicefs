@@ -150,7 +150,7 @@ $ ls -l /sbin/mount.juicefs
 lrwxrwxrwx 1 root root 29 Aug 11 16:43 /sbin/mount.juicefs -> /usr/local/bin/juicefs
 ```
 
-更多请参考[「启动时自动挂载 JuiceFS」](../guide/mount_at_boot.md)。
+更多请参考[「启动时自动挂载 JuiceFS」](../administration/mount_at_boot.md)。
 
 ### 6. 验证文件系统
 

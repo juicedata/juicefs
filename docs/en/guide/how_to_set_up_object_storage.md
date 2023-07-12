@@ -171,6 +171,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [UCloud US3](#ucloud-us3)                                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                                   | `ceph`     |
 | [Ceph RGW](#ceph-rgw)                                       | `s3`       |
+| [Gluster](#gluster)                                         | `gluster`  |
 | [Swift](#swift)                                             | `swift`    |
 | [MinIO](#minio)                                             | `minio`    |
 | [WebDAV](#webdav)                                           | `webdav`   |
@@ -798,6 +799,47 @@ juicefs format \
     ... \
     myjfs
 ```
+
+## Gluster
+
+[Gluster](https://github.com/gluster/glusterfs) is a software defined distributed storage that can scale to several petabytes. JuiceFS communicates with Gluster via the `libgfapi` library, so it needs to be built separately before used.
+
+First, install `libgfapi` (version 6.0+):
+
+<Tabs>
+  <TabItem value="debian" label="Debian and derivatives">
+
+```bash
+sudo apt-get install libglusterfs-dev glusterfs-common
+```
+
+  </TabItem>
+  <TabItem value="centos" label="RHEL and derivatives">
+
+```bash
+sudo yum install glusterfs-api-devel glusterfs-libs
+```
+
+  </TabItem>
+</Tabs>
+
+Then compile JuiceFS supporting Gluster:
+
+```bash
+make juicefs.gluster
+```
+
+Now we can create a JuiceFS volume on Gluster:
+
+```bash
+juicefs format \
+    --storage gluster \
+    --bucket host1,host2,host3/gv0 \
+    ... \
+    myjfs
+```
+
+The format of `--bucket` option is `<host[,host...]>/<volume_name>`. Please note the `volume_name` here is the name of Gluster volume, and has nothing to do with the name of JuiceFS volume.
 
 ## Swift
 

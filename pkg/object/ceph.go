@@ -147,7 +147,7 @@ func (c *ceph) Put(key string, in io.Reader) error {
 			v := reflect.ValueOf(b)
 			data := v.Elem().Field(0).Bytes()
 			if len(data) == 0 {
-				return errors.New("ceph: can't put empty file")
+				return notSupported
 			}
 			// If the data exceeds 90M, ceph will report an error: 'rados: ret=-90, Message too long'
 			if len(data) < 85<<20 {

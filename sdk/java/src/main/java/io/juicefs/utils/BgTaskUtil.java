@@ -65,7 +65,7 @@ public class BgTaskUtil {
       if (isRunning(name, type)) {
         return;
       }
-      Timer timer = new Timer();
+      Timer timer = new Timer(true);
       timer.schedule(new TimerTask() {
         @Override
         public void run() {

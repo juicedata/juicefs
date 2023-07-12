@@ -1,7 +1,4 @@
-#!/bin/bash
-set -e
-
-python3 -c "import minio" || sudo pip install minio 
+#!/bin/bash -e
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
@@ -18,6 +15,7 @@ if ! docker ps | grep -q minio; then
             minio/minio server /data
 fi
 [[ ! -f /usr/local/bin/mc ]] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc && chmod +x /usr/local/bin/mc
+sleep 3s
 mc alias set myminio http://localhost:9000 minioadmin minioadmin
 python3 -c "import xattr" || sudo pip install xattr
 

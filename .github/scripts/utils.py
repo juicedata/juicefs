@@ -1,3 +1,8 @@
+import subprocess
+try:
+    __import__("minio")
+except ImportError:
+    subprocess.check_call(["pip", "install", "minio"])
 from curses import meta
 import json
 import os

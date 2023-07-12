@@ -68,6 +68,9 @@ const (
 	RenameNoReplace = 1 << iota
 	RenameExchange
 	RenameWhiteout
+	_renameReserved1
+	_renameReserved2
+	RenameRestore // internal
 )
 
 const (
