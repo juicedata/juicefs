@@ -107,6 +107,23 @@ test_sync_with_update(){
     ./mc cat myminio/myjfs/abc | grep abc || (echo "content should be abc" && exit 1)
 }
 
+test_sync_hard_link(){
+    prepare_test
+    (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
+    MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 &
+    ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
+    echo abc > /jfs/abc
+    ln /jfs/abc /jfs/def
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ 
+    ./mc cat myminio/myjfs/def | grep abc || (echo "content should be abc" && exit 1)
+    echo abcd > /jfs/abc
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
+    ./mc cat myminio/myjfs/def | grep abcd || (echo "content should be abcd" && exit 1)
+}
+
 skip_test_sync_broken_link(){
     prepare_test
     (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
