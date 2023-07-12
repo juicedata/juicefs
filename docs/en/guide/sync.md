@@ -25,7 +25,7 @@ Arguments:
 
 Address format:
 
-```
+```shell
 [NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]
 
 # MinIO only supports path style

@@ -23,7 +23,7 @@ juicefs sync [command options] SRC DST
 
 地址格式均为：
 
-```
+```shell
 [NAME://][ACCESS_KEY:SECRET_KEY[:TOKEN]@]BUCKET[.ENDPOINT][/PREFIX]
 
 # 特别地，MinIO 目前仅支持路径风格
