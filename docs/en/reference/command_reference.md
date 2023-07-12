@@ -235,7 +235,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--max-client-version value`|maximum client version allowed to connect|
 |`--dir-stats`|enable dir stats, which is necessary for fast summary and dir quota (default: false)|
 
-#### `juicefs quota`{#quota}
+### `juicefs quota`{#quota}
 
 Manage directory quotas
 
@@ -342,7 +342,7 @@ juicefs fsck redis://localhost
 
 Rebuild the tree structure for trash files, and put them back to original directories.
 
-##### Synopsis
+#### Synopsis
 
 ```shell
 juicefs restore [command options] META HOUR ...
@@ -533,11 +533,11 @@ juicefs debug --out-dir=/var/log --limit=1000 /mnt/jfs
 |`--trace-sec=5`|The number of seconds to sample trace metrics (default: 5)|
 |`--profile-sec=30`|The number of seconds to sample profile metrics (default: 30)|
 
-#### `juicefs summary` {#summary}
+### `juicefs summary` {#summary}
 
 It is used to show tree summary of target directory.
 
-##### Synopsis
+#### Synopsis
 
 ```shell
 juicefs summary [command options] PATH
