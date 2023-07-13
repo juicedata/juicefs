@@ -35,7 +35,6 @@ test_sync_big_file(){
     prepare_test
     dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
     cp /tmp/bigfile /jfs/bigfile
-    ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
     ./mc cp myminio/myjfs/bigfile /tmp/bigfile2
     cmp /tmp/bigfile /tmp/bigfile2
