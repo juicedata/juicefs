@@ -109,12 +109,12 @@ test_sync_deep_symlink(){
     cd /jfs
     touch hello
     ln -s hello symlink_1
-    for i in {1..40}; do
+    for i in {1..41}; do
         ln -s symlink_$i symlink_$((i+1))
     done
     cd -
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ && exit 1 || true
-    rm /jfs/symlink_41
+    rm /jfs/symlink_42
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ 
 }
 
