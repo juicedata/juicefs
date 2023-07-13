@@ -740,7 +740,7 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 		}
 		fi = AttrToFileInfo(inode, attr)
 		if (!resolved || followLastSymlink) && fi.IsSymlink() {
-			if depth > 100 {
+			if depth > 40 {
 				return nil, syscall.ELOOP
 			}
 			var buf []byte
