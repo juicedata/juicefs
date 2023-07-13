@@ -87,21 +87,21 @@ test_sync_hard_link(){
     ./mc cat myminio/myjfs/def | grep abcd || (echo "content should be abcd" && exit 1)
 }
 
-skip_test_sync_broken_link(){
+test_sync_external_link(){
+    prepare_test
+    touch hello
+    ln -s $(realpath hello) /jfs/hello
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
+    [ -z $(./mc cat myminio/myjfs/hello) ]
+}
+
+test_sync_broken_link(){
     prepare_test
     touch hello
     ln -s hello /jfs/hello
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ myjfs/ && exit 1 || true
     rm -rf /jfs/hello
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ myjfs/
-}
-
-test_sync_external_link(){
-    prepare_test
-    touch hello
-    ln -s $(realpath hello) /jfs/hello
-    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ myjfs/
-    # ./mc ls minio/myjfs | grep hello
 }
 
 prepare_test(){
