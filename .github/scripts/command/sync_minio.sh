@@ -107,16 +107,20 @@ test_sync_loop_symlink(){
 test_sync_deep_symlink(){
     prepare_test
     cd /jfs
-    touch hello
+    echo hello > hello
     ln -s hello symlink_1
     for i in {1..40}; do
         ln -s symlink_$i symlink_$((i+1))
     done
-    cat /jfs/symlink_41 && echo "cat symlink_41 fail" && exit 1 || true
+    cat symlink_40 | grep hello
+    cat symlink_41 && echo "cat symlink_41 fail" && exit 1 || true
     cd -
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ && echo "sync should fail" && exit 1 || true
-    rm /jfs/symlink_41
+    rm -rf /jfs/symlink_41
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ 
+    for i in {1..40}; do
+        ./mc cat myminio/myjfs/symlink_$i | grep "^hello$"
+    done
 }
 
 prepare_test(){
