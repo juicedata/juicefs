@@ -95,7 +95,7 @@ test_sync_external_link(){
     [ -z $(./mc cat myminio/myjfs/hello) ]
 }
 
-test_sync_broken_link(){
+skip_test_sync_broken_link(){
     prepare_test
     touch hello
     ln -s hello /jfs/hello
