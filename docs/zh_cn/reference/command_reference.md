@@ -113,7 +113,7 @@ cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
 source /etc/bash_completion.d/juicefs
 ```
 
-## 管理
+## 管理 {#admin}
 
 ### `juicefs format` {#format}
 
@@ -151,7 +151,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--force`|强制覆盖当前的格式化配置，默认为 false。|
 |`--no-update`|不要修改已有的格式化配置，默认为 false。|
 
-#### 数据存储参数
+#### 数据存储参数 {#format-data-storage-options}
 
 |项 | 说明|
 |-|-|
@@ -162,7 +162,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--session-token=value`|对象存储的临时访问凭证（Session Token），查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#session-token)以了解更多。|
 |`--storage-class=value`|默认存储类型。|
 
-#### 数据格式参数
+#### 数据格式参数 {#format-data-format-options}
 
 |项 | 说明|
 |-|-|
@@ -173,7 +173,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--hash-prefix`|给每个对象添加 hash 前缀，默认为 false。|
 |`--shards=0`|将数据块根据名字哈希存入 N 个桶中，默认为 0。当 N 大于 0 时，`bucket` 需要包含 `%d` 占位符，例如 `--bucket=juicefs-%d`。|
 
-#### 管理参数
+#### 管理参数 {#format-management-options}
 
 |项 | 说明|
 |-|-|
@@ -210,7 +210,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--yes, -y`|对所有提示自动回答 "yes" 并以非交互方式运行 (默认值：false)|
 |`--force`|跳过合理性检查并强制更新指定配置项 (默认：false)|
 
-#### 数据存储参数
+#### 数据存储参数 {#config-data-storage-options}
 
 |项 | 说明|
 |-|-|
@@ -223,7 +223,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--upload-limit=0`|上传带宽限制，单位为 Mbps (默认：0)|
 |`--download-limit=0`|下载带宽限制，单位为 Mbps (默认：0)|
 
-#### 管理参数
+#### 管理参数 {#config-management-options}
 
 |项 | 说明|
 |-|-|
@@ -404,7 +404,7 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 |`--encrypt-rsa-key=path`|加密所使用的 RSA 私钥文件路径。|
 |`--encrypt-algo=aes256gcm-rsa`|加密算法，默认为 `aes256gcm-rsa`。|
 
-## 检视
+## 检视 {#inspector}
 
 ### `juicefs status` {#status}
 
@@ -563,7 +563,7 @@ juicefs summary --strict /mnt/jfs/foo
 |`--strict`|显示准确的摘要，包括目录和文件 (可能很慢) (默认值：false)|
 |`--csv`|以 CSV 格式打印摘要 (默认：false)|
 
-## 服务
+## 服务 {#service}
 
 ### `juicefs mount` {#mount}
 
@@ -587,8 +587,14 @@ META_PASSWORD=mypassword juicefs mount redis://localhost /mnt/jfs -d
 # 将一个子目录挂载为根目录
 juicefs mount redis://localhost /mnt/jfs --subdir /dir/in/jfs
 
+# 开启写缓存（writeback）模式，可以提升写入性能但同时有数据丢失风险
+juicefs mount redis://localhost /mnt/jfs -d --writeback
+
 # 开启只读模式
 juicefs mount redis://localhost /mnt/jfs -d --read-only
+
+# 关闭元数据自动备份
+juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 ```
 
 #### 参数
@@ -750,7 +756,7 @@ juicefs webdav redis://localhost localhost:9007
 |`--disallowList`|禁止列出目录（默认值：false）|
 |`--access-log=path`|访问日志的路径|
 
-## 工具
+## 工具 {#tool}
 
 ### `juicefs bench` {#bench}
 
@@ -887,7 +893,7 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 - `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同，详见[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)。
 - `[/PREFIX]`：可选，源路径和目标路径的前缀，可用于限定只同步某些路径中的数据。
 
-#### 选择条件相关参数
+#### 选择条件相关参数 {#sync-selection-related-options}
 
 |项 | 说明|
 |-|-|
@@ -900,7 +906,7 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--existing, --ignore-non-existing`|不创建任何新文件，默认为 false。|
 |`--ignore-existing`|不更新任何已经存在的文件，默认为 false。|
 
-#### 行为相关参数
+#### 行为相关参数 {#sync-action-related-options}
 
 |项 | 说明|
 |-|-|
@@ -913,7 +919,7 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--check-new`|校验新拷贝文件的数据完整性，默认为 false。校验方式是基于字节流对比，因此也将带来相应的开销。|
 |`--dry`|仅打印执行计划，不实际拷贝文件。|
 
-#### 对象存储相关参数
+#### 对象存储相关参数 {#sync-storage-related-options}
 
 |项 | 说明|
 |-|-|
@@ -924,14 +930,14 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--storage-class value`|目标端的新建文件的存储类型|
 |`--bwlimit=0`|限制最大带宽，单位 Mbps，默认为 0 表示不限制。|
 
-#### 分布式相关参数
+#### 分布式相关参数 {#sync-cluster-related-options}
 
 |`--manager=ADDR`|分布式同步模式中，Manager 的节点地址，此为内部参数，在 Worker 节点上运行的同步进程中会包含该设置。|
 |`--worker=ADDR,ADDR`|分布式同步模式中，工作节点列表，使用逗号分隔。|
 
 ### `juicefs clone` {#clone}
 
-该命令可以克隆文件或目录但不复制底层数据，类似于 cp 命令，但是非常快。
+该命令可以克隆文件或目录但不复制底层数据，类似于 `cp` 命令，但是非常快。
 
 #### 概览
 
@@ -944,7 +950,7 @@ juicefs clone /mnt/jfs/file1 /mnt/jfs/file2
 # 克隆目录
 juicefs clone /mnt/jfs/dir1 /mnt/jfs/dir2
 
-# 克隆时保留文件的 uid、gid 和 mode
+# 克隆时保留文件的 UID、GID 和 mode
 juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2
 ```
 

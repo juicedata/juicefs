@@ -113,7 +113,7 @@ cp hack/autocomplete/bash_autocomplete /etc/bash_completion.d/juicefs
 source /etc/bash_completion.d/juicefs
 ```
 
-## Admin
+## Admin {#admin}
 
 ### `juicefs format` {#format}
 
@@ -151,7 +151,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--force`|overwrite existing format (default: false)|
 |`--no-update`|don't update existing volume (default: false)|
 
-#### Data storage options
+#### Data storage options {#format-data-storage-options}
 
 |Items|Description|
 |-|-|
@@ -162,7 +162,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--session-token=value`|session token for object storage, see [How to Set Up Object Storage](../guide/how_to_set_up_object_storage.md#session-token) for more.|
 |`--storage-class value`|the default storage class|
 
-#### Data format options
+#### Data format options {#format-data-format-options}
 
 |Items|Description|
 |-|-|
@@ -173,7 +173,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--hash-prefix`|add a hash prefix to name of objects (default: false)|
 |`--shards=0`|store the blocks into N buckets by hash of key (default: 0), when N is greater than 0, `bucket` should to be in the form of `%d`, e.g. `--bucket "juicefs-%d"`|
 
-#### Management options
+#### Management options {#format-management-options}
 
 |Items|Description|
 |-|-|
@@ -210,7 +210,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--yes, -y`|automatically answer 'yes' to all prompts and run non-interactively (default: false)|
 |`--force`|skip sanity check and force update the configurations (default: false)|
 
-#### Data storage options
+#### Data storage options {#config-data-storage-options}
 
 |Items|Description|
 |-|-|
@@ -223,7 +223,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--upload-limit=0`|bandwidth limit for upload in Mbps (default: 0)|
 |`--download-limit=0`|bandwidth limit for download in Mbps (default: 0)|
 
-#### Management options
+#### Management options {#config-management-options}
 
 |Items|Description|
 |-|-|
@@ -350,7 +350,7 @@ juicefs restore [command options] META HOUR ...
 juicefs restore redis://localhost/1 2023-05-10-01
 ```
 
-##### Options
+#### Options
 
 |Items|Description|
 |-|-|
@@ -404,7 +404,7 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 |`--encrypt-rsa-key=path`|The path to the RSA private key file used for encryption.|
 |`--encrypt-alg=aes256gcm-rsa`|Encryption algorithm, the default is `aes256gcm-rsa`.|
 
-## Inspector
+## Inspector {#inspector}
 
 ### `juicefs status` {#status}
 
@@ -564,7 +564,7 @@ juicefs summary --strict /mnt/jfs/foo
 |`--strict`|show accurate summary, including directories and files (may be slow) (default: false)|
 |`--csv`|print summary in csv format (default: false)|
 
-## Service
+## Service {#service}
 
 ### `juicefs mount` {#mount}
 
@@ -755,7 +755,7 @@ Apart from options listed below, this command shares options with `juicefs mount
 |`--disallowList`|disallow list a directory (default: false)|
 |`--access-log=path`|path for JuiceFS access log.|
 
-## Tools
+## Tool {#tool}
 
 ### `juicefs bench` {#bench}
 
@@ -893,7 +893,7 @@ In which:
 - `BUCKET[.ENDPOINT]`: The access address of the data storage service. The format may be different for different storage types, and refer to [the document](../guide/how_to_set_up_object_storage.md#supported-object-storage).
 - `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit synchronization of data only in certain paths.
 
-#### Selection related options
+#### Selection related options {#sync-selection-related-options}
 
 |Items|Description|
 |-|-|
@@ -906,7 +906,7 @@ In which:
 |`--existing, --ignore-non-existing`|Skip creating new files on destination, default to false.|
 |`--ignore-existing`|Skip updating files that already exist on destination, default to false.|
 
-#### Action related options
+#### Action related options {#sync-action-related-options}
 
 |Items|Description|
 |-|-|
@@ -919,7 +919,7 @@ In which:
 |`--check-new`|Verify the integrity of newly copied files, default to false. Comparison is done on byte streams, which comes at a performance cost.|
 |`--dry`|Don't actually copy any file.|
 
-#### Storage related options
+#### Storage related options {#sync-storage-related-options}
 
 |Items|Description|
 |-|-|
@@ -930,9 +930,34 @@ In which:
 |`--storage-class value`|the storage class for destination|
 |`--bwlimit=0`|Limit bandwidth in Mbps default to 0 which means unlimited.|
 
-#### Cluster related options
+#### Cluster related options {#sync-cluster-related-options}
 
 |Items|Description|
 |-|-|
 |`--manager=ADDR`|Manager node address used in distributed syncing, this is an internal option that's used in the executed command on the worker nodes.|
 |`--worker=ADDR,ADDR`|Worker node addresses used in distributed syncing, comma separated.|
+
+### `juicefs clone` {#clone}
+
+This command can clone a file or directory without copying the underlying data, similar to the `cp` command, but very fast.
+
+#### Synopsis
+
+```shell
+juicefs clone [command options] SRC DST
+
+# Clone a file
+juicefs clone /mnt/jfs/file1 /mnt/jfs/file2
+
+# Clone a directory
+juicefs clone /mnt/jfs/dir1 /mnt/jfs/dir2
+
+# Clone with preserving the UID, GID, and mode of the file
+juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2
+```
+
+#### Options
+
+|Items|Description|
+|-|-|
+|`--preserve, -p`|preserve the UID, GID, and mode of the file (default: false)|
