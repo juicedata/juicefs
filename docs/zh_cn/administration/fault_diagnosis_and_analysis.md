@@ -166,7 +166,7 @@ $ tree ./debug
 │   ├── stats.5s.txt
 │   ├── stats.txt
 │   └── system-info.log
-└── tmp-test1-20230609104324.zip  
+└── tmp-test1-20230609104324.zip
 ```
 
 ## 实时性能监控 {#performance-monitor}

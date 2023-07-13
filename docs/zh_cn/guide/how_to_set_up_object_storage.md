@@ -55,7 +55,7 @@ juicefs format --storage s3 \
 
 执行上述命令后，JuiceFS 客户端会创建 4 个 bucket，分别为 `myjfs-0`、`myjfs-1`、`myjfs-2` 和 `myjfs-3`。
 
-## Access Key 和 Secret Key
+## Access Key 和 Secret Key {#aksk}
 
 一般而言，对象存储通过 Access Key ID 和 Access Key Secret 验证用户身份，对应到 JuiceFS 文件系统就是 `--access-key` 和 `--secret-key` 这两个选项（或者简称为 AK、SK）。
 
@@ -72,7 +72,7 @@ juicefs format --storage s3 \
 
 公有云通常允许用户创建 IAM（Identity and Access Management）角色，例如：[AWS IAM 角色](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html) 或 [阿里云 RAM 角色](https://help.aliyun.com/document_detail/93689.html)，可将角色分配给 VM 实例。如果云服务器实例已经拥有读写对象存储的权限，则无需再指定 `--access-key` 和 `--secret-key`。
 
-## 使用临时访问凭证
+## 使用临时访问凭证 {#session-token}
 
 永久访问凭证一般有两个部分：Access Key 和 Secret Key，而临时访问凭证一般包括 3 个部分：Access Key、Secret Key 与 token，并且临时访问凭证具有过期时间，一般在几分钟到几个小时之间。
 

@@ -88,4 +88,4 @@ logrotate -d /etc/logrotate.d/juicefs
 
 ## 命令行自动补全
 
-JuiceFS 为 Bash 和 Zsh 提供了命令行自动补全脚本，方便在命令行中使用 `juicefs` 命令，具体请参考[文档](../reference/command_reference.md#自动补全)。
+JuiceFS 为 Bash 和 Zsh 提供了命令行自动补全脚本，方便在命令行中使用 `juicefs` 命令，具体请参考[文档](../reference/command_reference.md#auto-completion)。
