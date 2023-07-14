@@ -777,10 +777,13 @@ func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 	}
 	defer m.timeit("Resolve", time.Now())
 	parent = m.checkRoot(parent)
-	args := []string{parent.String(), path,
-		strconv.FormatUint(uint64(ctx.Uid()), 10),
-		strconv.FormatUint(uint64(ctx.Gid()), 10)}
-	res, err := m.rdb.EvalSha(ctx, m.shaResolve, args).Result()
+	keys := []string{parent.String(), path,
+		strconv.FormatUint(uint64(ctx.Uid()), 10)}
+	var gids []interface{}
+	for _, gid := range ctx.Gids() {
+		gids = append(gids, strconv.FormatUint(uint64(gid), 10))
+	}
+	res, err := m.rdb.EvalSha(ctx, m.shaResolve, keys, gids...).Result()
 	var returnedIno int64
 	var returnedAttr string
 	st := m.handleLuaResult("resolve", res, err, &returnedIno, &returnedAttr)
