@@ -25,6 +25,10 @@ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2`,
 - `<SRC PATH>`: The source path, which can be a file or directory.
 - `<DST PATH>`: The destination path, which can be a file or directory.
 
+:::tip
+This feature requires JuiceFS v1.1 or later
+:::
+
 ## Preserve source's UID, GID, and mode {#preserve-source-uid-gid-mode}
 
 The `--preserve, -p` option is provided to preserve the UID, GID, and mode attributes of the source during cloning. By default, the current user's UID and GID are used. The mode is recalculated based on the current user's umask.

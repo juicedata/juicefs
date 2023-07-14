@@ -665,3 +665,7 @@ juicefs mount -d \
     "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
     /mnt/jfs
 ```
+
+:::tip
+This feature requires JuiceFS v1.1 or later
+:::

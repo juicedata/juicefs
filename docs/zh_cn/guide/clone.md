@@ -25,6 +25,10 @@ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2`,
 - `<SRC PATH>`：源端的路径，可以是文件或者目录
 - `<DST PATH>`：目标端的路径，可以是文件或者目录
 
+:::tip 版本提示
+该功能需要 JuiceFS v1.1 及以上版本
+:::
+
 ## 保留源端的 UID、GID、mode {#preserve-source-uid-gid-mode}
 
 `clone` 提供了 `--preserve, -p` 参数用以克隆时保留源端的 UID、GID、mode 属性。默认行为是使用当前用户的 UID 和 GID。mode 则使用当前用户的 umask 重新计算获得。

@@ -214,12 +214,12 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 
 |项 | 说明|
 |-|-|
-|`--storage=file`|对象存储类型，例如 `s3`、`gcs`、`oss`、`cos`。默认为 `file`，参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
+|`--storage=file`<VersionAdd>1.1</VersionAdd>|对象存储类型，例如 `s3`、`gcs`、`oss`、`cos`。默认为 `file`，参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
 |`--bucket=path`|存储数据的桶路径（默认：`$HOME/.juicefs/local` 或 `/var/jfs`）。|
 |`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--session-token=value`|对象存储的临时访问凭证（Session Token），查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#session-token)以了解更多。|
-|`--storage-class=value`|默认存储类型。|
+|`--storage-class=value`<VersionAdd>1.1</VersionAdd>|默认存储类型。|
 |`--upload-limit=0`|上传带宽限制，单位为 Mbps (默认：0)|
 |`--download-limit=0`|下载带宽限制，单位为 Mbps (默认：0)|
 
@@ -231,13 +231,17 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 |`--inodes value`|文件数配额|
 |`--trash-days value`|文件被自动清理前在回收站内保留的天数|
 |`--encrypt-secret`|如果密钥之前以原格式存储，则加密密钥 (默认值：false)|
-|`--min-client-version value`|允许连接的最小客户端版本|
-|`--max-client-version value`|允许连接的最大客户端版本|
-|`--dir-stats`|开启目录统计，这是快速汇总和目录配额所必需的 (默认值：false)|
+|`--min-client-version value`<VersionAdd>1.1</VersionAdd>|允许连接的最小客户端版本|
+|`--max-client-version value`<VersionAdd>1.1</VersionAdd>|允许连接的最大客户端版本|
+|`--dir-stats`<VersionAdd>1.1</VersionAdd>|开启目录统计，这是快速汇总和目录配额所必需的 (默认值：false)|
 
 ### `juicefs quota` {#quota}
 
 管理目录配额
+
+:::tip 版本提示
+该功能需要 JuiceFS v1.1 及以上版本
+:::
 
 #### 概览
 
@@ -285,10 +289,10 @@ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 
 #### 参数
 
-|项 | 说明|
-|-|-|
-|`--yes, -y`|对所有提示自动回答 "yes" 并以非交互方式运行 (默认值：false)|
-|`--force`|跳过合理性检查并强制销毁文件系统 (默认：false)|
+| 项                                         | 说明|
+|-------------------------------------------|-|
+| `--yes, -y`<VersionAdd>1.1</VersionAdd> |对所有提示自动回答 "yes" 并以非交互方式运行 (默认值：false)|
+| `--force`                                 |跳过合理性检查并强制销毁文件系统 (默认：false)|
 
 ### `juicefs gc` {#gc}
 
@@ -333,14 +337,18 @@ juicefs fsck redis://localhost
 
 |项 | 说明|
 |-|-|
-|`--path value`|待检查的 JuiceFS 中的绝对路径|
-|`--repair`|发现损坏后尽可能修复 (默认：false)|
-|`--recursive, -r`|递归检查或修复 (默认值：false)|
-|`--sync-dir-stat`|同步所有目录的状态，即使他们没有损坏 (注意：巨大的文件树可能会花费很长时间) (默认：false)|
+|`--path value`<VersionAdd>1.1</VersionAdd>|待检查的 JuiceFS 中的绝对路径|
+|`--repair`<VersionAdd>1.1</VersionAdd>|发现损坏后尽可能修复 (默认：false)|
+|`--recursive, -r`<VersionAdd>1.1</VersionAdd>|递归检查或修复 (默认值：false)|
+|`--sync-dir-stat`<VersionAdd>1.1</VersionAdd>|同步所有目录的状态，即使他们没有损坏 (注意：巨大的文件树可能会花费很长时间) (默认：false)|
 
 ### `juicefs restore` {#restore}
 
 重新构建回收站文件的树结构，并将它们放回原始目录。
+
+:::tip 版本提示
+该功能需要 JuiceFS v1.1 及以上版本
+:::
 
 #### 概览
 
@@ -380,7 +388,7 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 |`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
 |`FILE`|导出文件路径，如果不指定，则会导出到标准输出。如果文件名以 `.gz` 结尾，将会自动压缩。|
 |`--subdir=path`|只导出指定子目录的元数据。|
-|`--keep-secret-key`|导出对象存储认证信息，默认为 `false`。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。|
+|`--keep-secret-key`<VersionAdd>1.1</VersionAdd>|导出对象存储认证信息，默认为 `false`。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。|
 
 ### `juicefs load` {#load}
 
@@ -401,8 +409,8 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 |-|-|
 |`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
 |`FILE`|导入文件路径，如果不指定，则会从标准输入导入。如果文件名以 `.gz` 结尾，将会自动解压。|
-|`--encrypt-rsa-key=path`|加密所使用的 RSA 私钥文件路径。|
-|`--encrypt-algo=aes256gcm-rsa`|加密算法，默认为 `aes256gcm-rsa`。|
+|`--encrypt-rsa-key=path`<VersionAdd>1.1</VersionAdd>|加密所使用的 RSA 私钥文件路径。|
+|`--encrypt-algo=aes256gcm-rsa`<VersionAdd>1.1</VersionAdd>|加密算法，默认为 `aes256gcm-rsa`。|
 
 ## 检视 {#inspector}
 
@@ -423,7 +431,7 @@ juicefs status redis://localhost
 |项 | 说明|
 |-|-|
 |`--session=0, -s 0`|展示指定会话 (SID) 的具体信息 (默认：0)|
-|`--more, -m`|显示更多的统计信息，可能需要很长时间 (默认值：false)|
+|`--more, -m`<VersionAdd>1.1</VersionAdd>|显示更多的统计信息，可能需要很长时间 (默认值：false)|
 
 ### `juicefs stats` {#stats}
 
@@ -501,12 +509,16 @@ juicefs info -i 100
 |-|-|
 |`--inode, -i`|使用 inode 号而不是路径 (当前目录必须在 JuiceFS 挂载点内) (默认：false)|
 |`--recursive, -r`|递归获取所有子目录的概要信息，当指定一个目录结构很复杂的路径时可能会耗时很长） (默认：false)|
-|`--strict`|获取准确的目录概要 (注意：巨大的文件树可能会花费很长的时间) (默认：false)|
+|`--strict`<VersionAdd>1.1</VersionAdd>|获取准确的目录概要 (注意：巨大的文件树可能会花费很长的时间) (默认：false)|
 |`--raw`|显示内部原始信息 (默认：false)|
 
 ### `juicefs debug` {#debug}
 
 从运行环境、系统日志等多个维度收集和展示信息，帮助更好地定位错误
+
+:::tip 版本提示
+该功能需要 JuiceFS v1.1 及以上版本
+:::
 
 #### 概览
 
@@ -536,6 +548,10 @@ juicefs debug --out-dir=/var/log --limit=1000 /mnt/jfs
 ### `juicefs summary` {#summary}
 
 显示目标目录树摘要。
+
+:::tip 版本提示
+该功能需要 JuiceFS v1.1 及以上版本
+:::
 
 #### 概览
 
@@ -607,16 +623,16 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--no-syslog`|禁用系统日志，默认为 false。|
 |`--log=path`|后台运行时日志文件的位置 (默认：`$HOME/.juicefs/juicefs.log` 或 `/var/log/juicefs.log`)|
 |`--force`|强制挂载即使挂载点已经被相同的文件系统挂载 (默认值:false)|
-|`--update-fstab`|新增／更新 `/etc/fstab` 中的条目，如果不存在将会创建一个从 `/sbin/mount.juicefs` 到 JuiceFS 可执行文件的软链接，默认为 false。|
+|`--update-fstab`<VersionAdd>1.1</VersionAdd>|新增／更新 `/etc/fstab` 中的条目，如果不存在将会创建一个从 `/sbin/mount.juicefs` 到 JuiceFS 可执行文件的软链接，默认为 false。|
 
 #### FUSE 相关参数 {#mount-fuse-options}
 
 |项 | 说明|
 |-|-|
 |`--enable-xattr`|启用扩展属性 (xattr) 功能，默认为 false。|
-|`--enable-ioctl`|启用 ioctl (仅支持 GETFLAGS/SETFLAGS) (默认：false)|
-|`--root-squash value`|将本地 root 用户 (UID=0) 映射到一个指定用户，如 UID:GID|
-|`--prefix-internal`|添加 `.jfs` 前缀到所有内部文件 (默认：false)|
+|`--enable-ioctl`<VersionAdd>1.1</VersionAdd>|启用 ioctl (仅支持 GETFLAGS/SETFLAGS) (默认：false)|
+|`--root-squash value`<VersionAdd>1.1</VersionAdd>|将本地 root 用户 (UID=0) 映射到一个指定用户，如 UID:GID|
+|`--prefix-internal`<VersionAdd>1.1</VersionAdd>|添加 `.jfs` 前缀到所有内部文件 (默认：false)|
 |`-o value`|其他 FUSE 选项，详见 [FUSE 挂载选项](../reference/fuse_mount_options.md)|
 
 #### 元数据相关参数 {#mount-metadata-options}
@@ -628,8 +644,8 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--heartbeat=12`|发送心跳的间隔（单位秒），建议所有客户端使用相同的心跳值 (默认：12)|
 |`--read-only`|启用只读模式挂载。|
 |`--no-bgjob`|禁用后台任务，默认为 false，也就是说客户端会默认运行后台任务。后台任务包含：<br/><ul><li>清理回收站中过期的文件（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupDeletedFiles` 和 `cleanupTrash`）</li><li>清理引用计数为 0 的 Slice（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupSlices`）</li><li>清理过期的客户端会话（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `CleanStaleSessions`）</li></ul>特别地，碎片合并（Compaction）不受该选项的影响，而是随着文件读写操作，自动判断是否需要合并，然后异步执行（以 Redis 为例，在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go) 中搜索 `compactChunk`）|
-|`--atime-mode=noatime`|控制如何更新 atime（文件最后被访问的时间）。支持以下模式：<br/><ul><li>`noatime`（默认）：仅在文件创建和主动调用 `SetAttr` 时设置，平时访问与修改文件不影响 atime 值。考虑到更新 atime 需要运行额外的事务，对性能有影响，因此默认关闭。</li><li>`relatime`：仅在 mtime（文件内容修改时间）或 ctime（文件元数据修改时间）比 atime 新，或者 atime 超过 24 小时没有更新时进行更新。</li><li>`strictatime`：持续更新 atime</li></ul>|
-|`--skip-dir-nlink value`|跳过更新目录 nlink 前的重试次数 (仅用于 TKV, 0 代表不重试) (默认：20)|
+|`--atime-mode=noatime`<VersionAdd>1.1</VersionAdd>|控制如何更新 atime（文件最后被访问的时间）。支持以下模式：<br/><ul><li>`noatime`（默认）：仅在文件创建和主动调用 `SetAttr` 时设置，平时访问与修改文件不影响 atime 值。考虑到更新 atime 需要运行额外的事务，对性能有影响，因此默认关闭。</li><li>`relatime`：仅在 mtime（文件内容修改时间）或 ctime（文件元数据修改时间）比 atime 新，或者 atime 超过 24 小时没有更新时进行更新。</li><li>`strictatime`：持续更新 atime</li></ul>|
+|`--skip-dir-nlink value`<VersionAdd>1.1</VersionAdd>|跳过更新目录 nlink 前的重试次数 (仅用于 TKV, 0 代表不重试) (默认：20)|
 
 #### 元数据缓存参数 {#mount-metadata-cache-options}
 
@@ -641,7 +657,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--entry-cache=1`|文件项缓存过期时间；单位为秒，默认为 1。|
 |`--dir-entry-cache=1`|目录项缓存过期时间；单位为秒，默认为 1。|
 |`--open-cache=0`|打开的文件的缓存过期时间，单位为秒，默认为 0，代表关闭该特性。|
-|`--open-cache-limit value`|允许缓存的最大文件个数 (软限制，0 代表不限制) (默认：10000)|
+|`--open-cache-limit value`<VersionAdd>1.1</VersionAdd>|允许缓存的最大文件个数 (软限制，0 代表不限制) (默认：10000)|
 
 #### 数据存储参数 {#mount-data-storage-options}
 
@@ -649,7 +665,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |-|-|
 |`--storage=file`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
 |`--bucket=value`|为当前挂载点指定访问对象存储的 Endpoint。|
-|`--storage-class value`|当前客户端写入数据的存储类型|
+|`--storage-class value`<VersionAdd>1.1</VersionAdd>|当前客户端写入数据的存储类型|
 |`--get-timeout=60`|下载一个对象的超时时间；单位为秒 (默认：60)|
 |`--put-timeout=60`|上传一个对象的超时时间；单位为秒 (默认：60)|
 |`--io-retries=10`|网络异常时的重试次数 (默认：10)|
@@ -667,13 +683,13 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--writeback`|后台异步上传对象，默认为 false。阅读[「客户端写缓存」](../guide/cache_management.md#writeback)了解更多。|
 |`--upload-delay=0`|启用 `--writeback` 后，可以使用该选项控制数据延迟上传到对象存储，默认为 0 秒，相当于写入后立刻上传。该选项也支持 `s`（秒）、`m`（分）、`h`（时）这些单位。如果在等待的时间内数据被应用删除，则无需再上传到对象存储。如果数据只是临时落盘，可以考虑用该选项节约资源。阅读[「客户端写缓存」](../guide/cache_management.md#writeback)了解更多。|
 |`--cache-dir=value`|本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`$HOME/.juicefs/cache` 或 `/var/jfsCache`)。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
-|`--cache-mode value`|缓存块的文件权限 (默认："0600")|
+|`--cache-mode value`<VersionAdd>1.1</VersionAdd>|缓存块的文件权限 (默认："0600")|
 |`--cache-size=102400`|缓存对象的总大小；单位为 MiB (默认：102400)。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
 |`--free-space-ratio=0.1`|最小剩余空间比例，默认为 0.1。如果启用了[「客户端写缓存」](../guide/cache_management.md#writeback)，则该参数还控制着写缓存占用空间。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
 |`--cache-partial-only`|仅缓存随机小块读，默认为 false。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
-|`--verify-cache-checksum=full`|缓存数据一致性检查级别，启用 Checksum 校验后，生成缓存文件时会对数据切分做 Checksum 并记录于文件末尾，供读缓存时进行校验。支持以下级别：<br/><ul><li>`none`：禁用一致性检查，如果本地数据被篡改，将会读到错误数据；</li><li>`full`（默认）：读完整数据块时才校验，适合顺序读场景；</li><li>`shrink`：对读范围内的切片数据进行校验，校验范围不包含读边界所在的切片（可以理解为开区间），适合随机读场景；</li><li>`extend`：对读范围内的切片数据进行校验，校验范围同时包含读边界所在的切片（可以理解为闭区间），因此将带来一定程度的读放大，适合对正确性有极致要求的随机读场景。</li></ul>|
-|`--cache-eviction value`|缓存逐出策略 (none 或 2-random) (默认值："2-random")|
-|`--cache-scan-interval value`|扫描缓存目录重建内存索引的间隔 (以秒为单位) (默认："3600")|
+|`--verify-cache-checksum=full`<VersionAdd>1.1</VersionAdd>|缓存数据一致性检查级别，启用 Checksum 校验后，生成缓存文件时会对数据切分做 Checksum 并记录于文件末尾，供读缓存时进行校验。支持以下级别：<br/><ul><li>`none`：禁用一致性检查，如果本地数据被篡改，将会读到错误数据；</li><li>`full`（默认）：读完整数据块时才校验，适合顺序读场景；</li><li>`shrink`：对读范围内的切片数据进行校验，校验范围不包含读边界所在的切片（可以理解为开区间），适合随机读场景；</li><li>`extend`：对读范围内的切片数据进行校验，校验范围同时包含读边界所在的切片（可以理解为闭区间），因此将带来一定程度的读放大，适合对正确性有极致要求的随机读场景。</li></ul>|
+|`--cache-eviction value`<VersionAdd>1.1</VersionAdd>|缓存逐出策略 (none 或 2-random) (默认值："2-random")|
+|`--cache-scan-interval value`<VersionAdd>1.1</VersionAdd>|扫描缓存目录重建内存索引的间隔 (以秒为单位) (默认："3600")|
 
 #### 监控相关参数 {#mount-metrics-options}
 
@@ -700,7 +716,7 @@ juicefs umount /mnt/jfs
 |项 | 说明|
 |-|-|
 |`-f, --force`|强制卸载一个忙碌的文件系统 (默认：false)|
-|`--flush`|等待所有暂存块被刷新 (默认值：false)|
+|`--flush`<VersionAdd>1.1</VersionAdd>|等待所有暂存块被刷新 (默认值：false)|
 
 ### `juicefs gateway` {#gateway}
 
@@ -750,8 +766,8 @@ juicefs webdav redis://localhost localhost:9007
 |-|-|
 |`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
 |`ADDRESS`|WebDAV 服务监听的地址与端口，例如：`localhost:9007`|
-|`--cert-file`|HTTPS 证书文件|
-|`--key-file`|HTTPS 密钥文件|
+|`--cert-file`<VersionAdd>1.1</VersionAdd>|HTTPS 证书文件|
+|`--key-file`<VersionAdd>1.1</VersionAdd>|HTTPS 密钥文件|
 |`--gzip`|通过 gzip 压缩提供的文件（默认值：false）|
 |`--disallowList`|禁止列出目录（默认值：false）|
 |`--access-log=path`|访问日志的路径|
@@ -903,8 +919,8 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--limit=-1`|限制将要处理的对象的数量，默认为 -1 表示不限制|
 |`--update, -u`|当源文件更新时（`mtime` 更新），覆盖已存在的文件，默认为 false。|
 |`--force-update, -f`|强制覆盖已存在的文件，默认为 false。|
-|`--existing, --ignore-non-existing`|不创建任何新文件，默认为 false。|
-|`--ignore-existing`|不更新任何已经存在的文件，默认为 false。|
+|`--existing, --ignore-non-existing`<VersionAdd>1.1</VersionAdd>|不创建任何新文件，默认为 false。|
+|`--ignore-existing`<VersionAdd>1.1</VersionAdd>|不更新任何已经存在的文件，默认为 false。|
 
 #### 行为相关参数 {#sync-action-related-options}
 
@@ -924,10 +940,10 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |项 | 说明|
 |-|-|
 |`--threads=10, -p 10`|并发线程数，默认为 10。|
-|`--list-threads=1`|并发 `list` 线程数，默认为 1。阅读[并发 `list`](../guide/sync.md#concurrent-list)以了解如何使用。|
-|`--list-depth=1`|并发 `list` 目录深度，默认为 1。阅读[并发 `list`](../guide/sync.md#concurrent-list)以了解如何使用。|
+|`--list-threads=1`<VersionAdd>1.1</VersionAdd>|并发 `list` 线程数，默认为 1。阅读[并发 `list`](../guide/sync.md#concurrent-list)以了解如何使用。|
+|`--list-depth=1`<VersionAdd>1.1</VersionAdd>|并发 `list` 目录深度，默认为 1。阅读[并发 `list`](../guide/sync.md#concurrent-list)以了解如何使用。|
 |`--no-https`|不要使用 HTTPS，默认为 false。|
-|`--storage-class value`|目标端的新建文件的存储类型|
+|`--storage-class value`<VersionAdd>1.1</VersionAdd>|目标端的新建文件的存储类型|
 |`--bwlimit=0`|限制最大带宽，单位 Mbps，默认为 0 表示不限制。|
 
 #### 分布式相关参数 {#sync-cluster-related-options}
@@ -938,6 +954,10 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 ### `juicefs clone` {#clone}
 
 该命令可以克隆文件或目录但不复制底层数据，类似于 `cp` 命令，但是非常快。
+
+:::tip 版本提示
+该功能需要 JuiceFS v1.1 及以上版本
+:::
 
 #### 概览
 
