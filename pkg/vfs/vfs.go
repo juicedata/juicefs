@@ -40,6 +40,9 @@ const (
 	maxName     = meta.MaxName
 	maxSymlink  = 4096
 	maxFileSize = meta.ChunkSize << 31
+
+	SeekData = 3
+	SeekHole = 4
 )
 
 type Port struct {
@@ -670,27 +673,53 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 	return
 }
 
-func (v *VFS) Lseek(ctx Context, ino Ino, fh uint64, off int64, whence uint32) (offset uint64, err syscall.Errno) {
-	defer func() { logit(ctx, "lseek (%d,%d,%d,%d): %s", ino, off, fh, whence, strerr(err)) }()
+func (v *VFS) Lseek(ctx Context, ino Ino, fh uint64, offset int64, whence uint32) (_ uint64, err syscall.Errno) {
+	defer func() { logit(ctx, "lseek (%d,%d,%d,%d): %s", ino, offset, fh, whence, strerr(err)) }()
 	h := v.findHandle(ino, fh)
 	if h == nil {
-		err = syscall.EBADF
-		return
+		return 0, syscall.EBADF
 	}
 	h.Lock()
 	defer h.Unlock()
 	switch whence {
 	case io.SeekStart:
-		offset = uint64(off)
+		h.off = uint64(offset)
 	case io.SeekCurrent:
-		offset = uint64(int64(h.off) + off)
+		h.off = uint64(int64(h.off) + offset)
 	case io.SeekEnd:
-		offset = uint64(int64(h.reader.GetLength()) + off)
+		h.off = uint64(int64(h.reader.GetLength()) + offset)
+	case SeekData:
+		if uint64(offset) >= h.reader.GetLength() {
+			err = syscall.EINVAL
+			return h.off, err
+		}
+		h.reader.VisitRange(ctx, uint64(offset), func(off, size uint64) bool {
+			if off > uint64(offset) {
+				h.off = off
+			} else {
+				h.off = uint64(offset)
+			}
+			return false
+		})
+	case SeekHole:
+		if uint64(offset) >= h.reader.GetLength() {
+			err = syscall.EINVAL
+			return h.off, err
+		}
+		end := uint64(offset)
+		h.reader.VisitRange(ctx, uint64(offset), func(off, size uint64) bool {
+			if off > end {
+				return false
+			}
+			end = off + size
+			return true
+		})
+		h.off = end
 	default:
-		return h.off, syscall.ENOSYS
+		err = syscall.EINVAL
+		return h.off, err
 	}
-	h.off = offset
-	return
+	return h.off, 0
 }
 
 func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh uint64) (err syscall.Errno) {

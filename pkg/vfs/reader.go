@@ -69,6 +69,7 @@ func (m sstate) String() string {
 type FileReader interface {
 	GetLength() uint64
 	Read(ctx meta.Context, off uint64, buf []byte) (int, syscall.Errno)
+	VisitRange(ctx meta.Context, off uint64, visitor func(off uint64, size uint64) bool)
 	Close(ctx meta.Context)
 }
 
@@ -655,6 +656,21 @@ func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, sys
 	}()
 	f.checkReadahead(block)
 	return f.waitForIO(ctx, reqs, buf)
+}
+
+func (f *fileReader) VisitRange(ctx meta.Context, off uint64, visitor func(off uint64, size uint64) bool) {
+	var next *sliceReader
+	_continue := true
+	if f.last == nil || *f.last == nil || (*f.last).block.off > off {
+		f.last = &f.slices
+	}
+	for ; *f.last != nil && _continue; *f.last = next {
+		s := *f.last
+		next = s.next
+		if s.block.end() > off {
+			_continue = visitor(s.block.off, s.block.len)
+		}
+	}
 }
 
 func (f *fileReader) visit(fn func(s *sliceReader)) {
