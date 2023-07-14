@@ -693,27 +693,60 @@ func (v *VFS) Lseek(ctx Context, ino Ino, fh uint64, offset int64, whence uint32
 			err = syscall.EINVAL
 			return h.off, err
 		}
-		h.reader.VisitRange(ctx, uint64(offset), func(off, size uint64) bool {
+		var slices []meta.Slice
+		for idx := offset / meta.ChunkSize; uint64(idx)*meta.ChunkSize < h.reader.GetLength(); idx++ {
+			slices = slices[:0]
+			err = v.Meta.Read(ctx, ino, uint32(idx), &slices)
+			if err != 0 {
+				return h.off, err
+			}
+			if len(slices) == 0 {
+				continue
+			}
+			var slice *meta.Slice
+			for i := range slices {
+				end := uint64(idx)*meta.ChunkSize + uint64(slices[i].Off) + uint64(slices[i].Size)
+				if slices[i].Len == 0 || end <= uint64(offset) {
+					continue
+				}
+				slice = &slices[i]
+			}
+			if slice == nil {
+				continue
+			}
+			off := uint64(idx)*meta.ChunkSize + uint64(slice.Off)
 			if off > uint64(offset) {
 				h.off = off
 			} else {
 				h.off = uint64(offset)
 			}
-			return false
-		})
+			break
+		}
 	case SeekHole:
 		if uint64(offset) >= h.reader.GetLength() {
 			err = syscall.EINVAL
 			return h.off, err
 		}
+		var slices []meta.Slice
 		end := uint64(offset)
-		h.reader.VisitRange(ctx, uint64(offset), func(off, size uint64) bool {
-			if off > end {
-				return false
+	SCAN:
+		for idx := offset / meta.ChunkSize; uint64(idx)*meta.ChunkSize < h.reader.GetLength(); idx++ {
+			slices = slices[:0]
+			err = v.Meta.Read(ctx, ino, uint32(idx), &slices)
+			if err != 0 {
+				return h.off, err
 			}
-			end = off + size
-			return true
-		})
+			for _, slice := range slices {
+				off := uint64(idx)*meta.ChunkSize + uint64(slice.Off)
+				if off+uint64(slice.Size) < uint64(offset) {
+					continue
+				}
+				if off > end {
+					break SCAN
+				}
+				end = off + uint64(slice.Size)
+			}
+		}
 		h.off = end
 	default:
 		err = syscall.EINVAL
