@@ -123,6 +123,7 @@ func testMeta(t *testing.T, m Meta) {
 	testTrash(t, m)
 	testParents(t, m)
 	testRemove(t, m)
+	testResolve(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
 	testListLocks(t, m)
@@ -976,6 +977,45 @@ func testLocks(t *testing.T, m Meta) {
 		if len(ms) != 0 {
 			t.Fatalf("locked inode leaked: %d", len(ms))
 		}
+	}
+}
+
+func testResolve(t *testing.T, m Meta) {
+	var inode, parent Ino
+	var attr, pattr Attr
+	if st := m.Mkdir(NewContext(1, 65534, []uint32{65534}), 1, "d", 0770, 0, 0, &parent, &pattr); st != 0 {
+		t.Fatalf("mkdir d: %s", st)
+	}
+	if pattr.Uid != 65534 || pattr.Gid != 65534 {
+		t.Fatalf("attr %+v", pattr)
+	}
+	if st := m.Create(NewContext(1, 65534, []uint32{65534}), parent, "f", 0644, 0, 0, &inode, &attr); st != 0 {
+		t.Fatalf("create /d/f: %s", st)
+	}
+
+	defer func() {
+		if st := m.Remove(NewContext(0, 65534, []uint32{65534}), parent, "f", nil); st != 0 {
+			t.Fatalf("remove /d/f by owner: %s", st)
+		}
+		if st := m.Rmdir(NewContext(0, 65534, []uint32{65534}), 1, "d"); st != 0 {
+			t.Fatalf("rmdir /d by owner: %s", st)
+		}
+	}()
+
+	if st := m.Resolve(NewContext(0, 65534, []uint32{65534}), 1, "/d/f", &inode, &attr); st != 0 {
+		if st == syscall.ENOTSUP {
+			return
+		}
+		t.Fatalf("resolve /d/f by owner: %s", st)
+	}
+	if st := m.Resolve(NewContext(0, 65533, []uint32{65534}), 1, "/d/f", &inode, &attr); st != 0 {
+		t.Fatalf("resolve /d/f by group: %s", st)
+	}
+	if st := m.Resolve(NewContext(0, 65533, []uint32{65533, 65534}), 1, "/d/f", &inode, &attr); st != 0 {
+		t.Fatalf("resolve /d/f by multi-group: %s", st)
+	}
+	if st := m.Resolve(NewContext(0, 65533, []uint32{65533}), 1, "/d/f", &inode, &attr); st != syscall.EACCES {
+		t.Fatalf("resolve /d/f by non-group: %s", st)
 	}
 }
 
