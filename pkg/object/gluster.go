@@ -65,7 +65,6 @@ func (d *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 			size,
 			fi.ModTime(),
 			fi.IsDir(),
-			"",
 		},
 		owner,
 		group,
