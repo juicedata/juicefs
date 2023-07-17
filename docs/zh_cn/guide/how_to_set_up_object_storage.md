@@ -160,7 +160,7 @@ juicefs format \
 | [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
 | [华为云 OBS](#华为云-obs)                   | `obs`      |
 | [百度云 BOS](#百度-bos)                     | `bos`      |
-| [火山引擎 TOS](#火山引擎-tos)               | `tos`      |
+| [火山引擎 TOS](#volcano-engine-tos)               | `tos`      |
 | [金山云 KS3](#金山云-ks3)                   | `ks3`      |
 | [青云 QingStor](#青云-qingstor)             | `qingstor` |
 | [七牛云 Kodo](#七牛云-kodo)                 | `qiniu`    |
@@ -591,7 +591,7 @@ juicefs format \
     myjfs
 ```
 
-## 火山引擎 TOS <VersionAdd>1.0.3</VersionAdd> {#火山引擎-TOS}
+## 火山引擎 TOS <VersionAdd>1.0.3</VersionAdd> {#volcano-engine-tos}
 
 使用火山引擎 TOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.volcengine.com/docs/6291/65568) 了解如何创建 Access Key 和 Secret Key。
 
