@@ -954,13 +954,9 @@ In which:
 |`--manager=ADDR`|Manager node address used in distributed syncing, this is an internal option that's used in the executed command on the worker nodes.|
 |`--worker=ADDR,ADDR`|Worker node addresses used in distributed syncing, comma separated.|
 
-### `juicefs clone` {#clone}
+### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
 This command can clone a file or directory without copying the underlying data, similar to the `cp` command, but very fast.
-
-:::tip
-This feature requires JuiceFS v1.1 or later
-:::
 
 #### Synopsis
 

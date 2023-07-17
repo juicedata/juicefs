@@ -948,16 +948,14 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 
 #### 分布式相关参数 {#sync-cluster-related-options}
 
+|项 | 说明|
+|-|-|
 |`--manager=ADDR`|分布式同步模式中，Manager 的节点地址，此为内部参数，在 Worker 节点上运行的同步进程中会包含该设置。|
 |`--worker=ADDR,ADDR`|分布式同步模式中，工作节点列表，使用逗号分隔。|
 
-### `juicefs clone` {#clone}
+### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
 该命令可以克隆文件或目录但不复制底层数据，类似于 `cp` 命令，但是非常快。
-
-:::tip 版本提示
-该功能需要 JuiceFS v1.1 及以上版本
-:::
 
 #### 概览
 
