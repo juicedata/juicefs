@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//nolint
+// nolint
 package meta
 
 const scriptLookup = `
@@ -55,7 +55,16 @@ local function lookup(parent, name)
     return struct.unpack(">BI8", buf)
 end
 
-local function can_access(ino, uid, gid)
+local function has_value(tab, val)
+    for index, value in ipairs(tab) do
+        if value == val then
+            return true
+        end
+    end
+    return false
+end
+
+local function can_access(ino, uid, gids)
     if uid == 0 then
         return true
     end
@@ -64,7 +73,7 @@ local function can_access(ino, uid, gid)
     local mode = 0
     if attr.uid == uid then
         mode = math.floor(attr.mode / 64) % 8
-    elseif attr.gid == gid then
+    elseif has_value(gids, tostring(attr.gid)) then
         mode = math.floor(attr.mode / 8) % 8
     else
         mode = attr.mode % 8
@@ -72,7 +81,7 @@ local function can_access(ino, uid, gid)
     return mode % 2 == 1
 end
 
-local function resolve(parent, path, uid, gid)
+local function resolve(parent, path, uid, gids)
     local _maxIno = 4503599627370495
     local _type = 2
     for name in string.gmatch(path, "[^/]+") do
@@ -80,7 +89,7 @@ local function resolve(parent, path, uid, gid)
             error("ENOTSUP")
         elseif _type ~= 2 then
             error("ENOTDIR")
-        elseif parent > 1 and not can_access(parent, uid, gid) then 
+        elseif parent > 1 and not can_access(parent, uid, gids) then 
             error("EACCESS")
         end
         _type, parent = lookup(parent, name)
@@ -91,5 +100,5 @@ local function resolve(parent, path, uid, gid)
     return {parent, redis.call('GET', "i" .. string.format("%.f", parent))}
 end
 
-return resolve(tonumber(KEYS[1]), KEYS[2], tonumber(KEYS[3]), tonumber(KEYS[4]))
+return resolve(tonumber(KEYS[1]), KEYS[2], tonumber(KEYS[3]), ARGV)
 `
