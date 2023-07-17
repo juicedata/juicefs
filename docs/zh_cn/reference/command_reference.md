@@ -397,12 +397,12 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 
 #### 参数
 
-|项 | 说明|
-|-|-|
-|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
-|`FILE`|导入文件路径，如果不指定，则会从标准输入导入。如果文件名以 `.gz` 结尾，将会自动解压。|
-|`--encrypt-rsa-key=path` <VersionAdd>1.1</VersionAdd>|加密所使用的 RSA 私钥文件路径。|
-|`--encrypt-algo=aes256gcm-rsa` <VersionAdd>1.1</VersionAdd>|加密算法，默认为 `aes256gcm-rsa`。|
+| 项                                                          | 说明|
+|------------------------------------------------------------|-|
+| `META-URL`                                                 |用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
+| `FILE`                                                     |导入文件路径，如果不指定，则会从标准输入导入。如果文件名以 `.gz` 结尾，将会自动解压。|
+| `--encrypt-rsa-key=path` <VersionAdd>1.0.4</VersionAdd>    |加密所使用的 RSA 私钥文件路径。|
+| `--encrypt-algo=aes256gcm-rsa` <VersionAdd>1.0.4</VersionAdd> |加密算法，默认为 `aes256gcm-rsa`。|
 
 ## 检视 {#inspector}
 

@@ -405,8 +405,8 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 |-|-|
 |`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md) for details.|
 |`FILE`|Import file path, if not specified, it will be imported from standard input. If the filename ends with `.gz`, it will be automatically decompressed.|
-|`--encrypt-rsa-key=path` <VersionAdd>1.1</VersionAdd> |The path to the RSA private key file used for encryption.|
-|`--encrypt-alg=aes256gcm-rsa` <VersionAdd>1.1</VersionAdd> |Encryption algorithm, the default is `aes256gcm-rsa`.|
+|`--encrypt-rsa-key=path` <VersionAdd>1.0.4</VersionAdd> |The path to the RSA private key file used for encryption.|
+|`--encrypt-alg=aes256gcm-rsa` <VersionAdd>1.0.4</VersionAdd> |Encryption algorithm, the default is `aes256gcm-rsa`.|
 
 ## Inspector {#inspector}
 

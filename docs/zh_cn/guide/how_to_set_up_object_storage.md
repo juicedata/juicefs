@@ -591,7 +591,7 @@ juicefs format \
     myjfs
 ```
 
-## 火山引擎 TOS
+## 火山引擎 TOS <VersionAdd>1.0.3</VersionAdd>
 
 使用火山引擎 TOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.volcengine.com/docs/6291/65568) 了解如何创建 Access Key 和 Secret Key。
 

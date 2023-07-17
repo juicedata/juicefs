@@ -5,7 +5,7 @@ sidebar_position: 7
 
 [`juicefs sync`](../reference/command_reference.md#sync) is a powerful data migration tool, which can copy data across all supported storages including object storage, JuiceFS itself, and local file systems, you can freely copy data between any of these systems. In addition, it supports remote directories through SSH, HDFS, WebDAV, etc. while providing advanced features such as  incremental synchronization, and pattern matching (like rsync), and distributed syncing.
 
-For data migrations that involve JuiceFS, it's recommended use the `jfs://` protocol, rather than mount JuiceFS and access its local directory, which bypasses the FUSE mount point and access JuiceFS directly. Under large scale scenarios, bypassing FUSE can save precious resources and increase performance.
+For data migrations that involve JuiceFS, it's recommended use the `jfs://` protocol <VersionAdd>1.1</VersionAdd>, rather than mount JuiceFS and access its local directory, which bypasses the FUSE mount point and access JuiceFS directly. Under large scale scenarios, bypassing FUSE can save precious resources and increase performance.
 
 ## Basic Usage
 
