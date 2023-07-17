@@ -620,14 +620,13 @@ public class JuiceFileSystemImpl extends FileSystem {
       soTime = entry.getLastModifiedTime().toMillis();
       ins = jfsJar.getInputStream(entry);
     } else {
-      String jarPath = URLDecoder.decode(location.getPath(), Charset.defaultCharset().name());
-      if (Files.isDirectory(Paths.get(jarPath))) { // for debug: sdk/java/target/classes
+      if (Files.isDirectory(Paths.get(location.toURI()))) { // for debug: sdk/java/target/classes
         soTime = con.getLastModified();
         ins = JuiceFileSystemImpl.class.getClassLoader().getResourceAsStream(resource);
       } else {
         JarFile jfsJar;
         try {
-          jfsJar = new JarFile(jarPath);
+          jfsJar = new JarFile(location.toURI().getPath());
         } catch (FileNotFoundException fne) {
           return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
         }
