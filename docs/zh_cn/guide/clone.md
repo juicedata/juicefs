@@ -3,7 +3,7 @@ title: 克隆文件或目录
 sidebar_position: 6
 ---
 
-## `clone` 基本用法 {#basic-usage-of-clone}
+## `clone` 基本用法 <VersionAdd>1.1</VersionAdd> {#basic-usage-of-clone} 
 
 JuiceFS 客户端提供了 `clone` 命令用以快速在同一挂载点下克隆目录或者文件，其原理是只拷贝元数据但不拷贝数据块，因此拷贝速度非常快。
 
@@ -24,10 +24,6 @@ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2`,
 
 - `<SRC PATH>`：源端的路径，可以是文件或者目录
 - `<DST PATH>`：目标端的路径，可以是文件或者目录
-
-:::tip 版本提示
-该功能需要 JuiceFS v1.1 及以上版本
-:::
 
 ## 保留源端的 UID、GID、mode {#preserve-source-uid-gid-mode}
 

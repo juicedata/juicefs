@@ -3,7 +3,7 @@ title: Clone Files or Directories
 sidebar_position: 6
 ---
 
-## Basic usage of `clone` {#basic-usage-of-clone}
+## Basic usage of `clone` <VersionAdd>1.1</VersionAdd> {#basic-usage-of-clone}
 
 The JuiceFS client provides the `clone` command to quickly clone directories or files within a single JuiceFS mount point. The cloning process involves copying only the metadata without copying the data blocks, making it extremely fast.
 
@@ -24,10 +24,6 @@ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2`,
 
 - `<SRC PATH>`: The source path, which can be a file or directory.
 - `<DST PATH>`: The destination path, which can be a file or directory.
-
-:::tip
-This feature requires JuiceFS v1.1 or later
-:::
 
 ## Preserve source's UID, GID, and mode {#preserve-source-uid-gid-mode}
 

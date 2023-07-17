@@ -535,7 +535,7 @@ juicefs mount -d "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs"
 When mounting to the background, the path to the certificate needs to use an absolute path.
 :::
 
-## FoundationDB
+## FoundationDB <VersionAdd>1.1</VersionAdd>
 
 [FoundationDB](https://www.foundationdb.org) is a distributed database that can hold large-scale structured data on multiple clustered servers. The database system focuses on high performance, high scalability, and good fault tolerance.
 
@@ -665,7 +665,3 @@ juicefs mount -d \
     "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
     /mnt/jfs
 ```
-
-:::tip
-This feature requires JuiceFS v1.1 or later
-:::

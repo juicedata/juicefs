@@ -531,7 +531,7 @@ juicefs format \
 juicefs mount -d "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs" /mnt/jfs
 ```
 
-## FoundationDB
+## FoundationDB <VersionAdd>1.1</VersionAdd>
 
 [FoundationDB](https://www.foundationdb.org) 是一个能在多集群服务器上存放大规模结构化数据的分布式数据库。该数据库系统专注于高性能、高可扩展性和不错的容错能力。
 
@@ -661,7 +661,3 @@ juicefs mount -d \
     "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
     /mnt/jfs
 ```
-
-:::tip 版本提示
-该功能需要 JuiceFS v1.1 及以上版本
-:::
