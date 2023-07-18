@@ -119,7 +119,7 @@ func sendStats(addr string) {
 	}
 }
 
-func startManager(tasks <-chan object.Object) (string, error) {
+func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 	http.HandleFunc("/fetch", func(w http.ResponseWriter, req *http.Request) {
 		var objs []object.Object
 		obj, ok := <-tasks
@@ -171,6 +171,9 @@ func startManager(tasks <-chan object.Object) (string, error) {
 		logger.Debugf("receive stats %+v from %s", r, req.RemoteAddr)
 		_, _ = w.Write([]byte("OK"))
 	})
+	if config.Manager != "" && !config.IsWorker {
+		return config.Manager, nil
+	}
 	ips, err := utils.FindLocalIPs()
 	if err != nil {
 		return "", fmt.Errorf("find local ips: %s", err)
@@ -259,9 +262,9 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			args = append(args, rpath)
 			if strings.HasSuffix(path, "juicefs") {
 				args = append(args, os.Args[1:]...)
-				args = append(args, "--manager", address)
+				args = append(args, "--is-worker", "--manager", address)
 			} else {
-				args = append(args, "--manager", address)
+				args = append(args, "--is-worker", "--manager", address)
 				args = append(args, os.Args[1:]...)
 			}
 			if !config.Verbose && !config.Quiet {

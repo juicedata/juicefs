@@ -220,6 +220,11 @@ func clusterFlags() []cli.Flag {
 			Name:  "worker",
 			Usage: "hosts (separated by comma) to launch worker",
 		},
+		&cli.BoolFlag{
+			Name:   "is-worker",
+			Usage:  "start as a worker",
+			Hidden: true,
+		},
 	})
 }
 

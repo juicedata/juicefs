@@ -40,13 +40,13 @@ func (o *obj) StorageClass() string { return "" }
 func TestCluster(t *testing.T) {
 	// manager
 	todo := make(chan object.Object, 100)
-	addr, err := startManager(todo)
+	var conf Config
+	addr, err := startManager(&conf, todo)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// sendStats(addr)
 	// worker
-	var conf Config
 	conf.Manager = addr
 	mytodo := make(chan object.Object, 100)
 	go fetchJobs(mytodo, &conf)
