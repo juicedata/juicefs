@@ -5,8 +5,6 @@ sidebar_position: 7
 
 [`juicefs sync`](../reference/command_reference.md#sync) is a powerful data migration tool, which can copy data across all supported storages including object storage, JuiceFS itself, and local file systems, you can freely copy data between any of these systems. In addition, it supports remote directories through SSH, HDFS, WebDAV, etc. while providing advanced features such as  incremental synchronization, and pattern matching (like rsync), and distributed syncing.
 
-For data migrations that involve JuiceFS, it's recommended use the `jfs://` protocol, rather than mount JuiceFS and access its local directory, which bypasses the FUSE mount point and access JuiceFS directly. Under large scale scenarios, bypassing FUSE can save precious resources and increase performance.
-
 ## Basic Usage
 
 ### Command Syntax
@@ -92,12 +90,6 @@ juicefs mount -d redis://10.10.0.8:6379/1 /mnt/jfs
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ /mnt/jfs/movies/
 ```
 
-For JuiceFS 1.1+, we can sync with JuiceFS without mounting it:
-
-```shell
-myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/
-```
-
 The following command synchronizes `images` directory from [JuiceFS File System](#required-storages) to [Object Storage A](#required-storages).
 
 ```shell
@@ -113,6 +105,14 @@ The following command synchronizes all of the data on [Object Storage A](#requir
 
 ```shell
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
+```
+
+### Sync Without Mount Point <VersionAdd>1.1</VersionAdd>
+
+For data migrations that involve JuiceFS, it's recommended use the `jfs://` protocol, rather than mount JuiceFS and access its local directory, which bypasses the FUSE mount point and access JuiceFS directly. Under large scale scenarios, bypassing FUSE can save precious resources and increase performance.
+
+```shell
+myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com/movies/ jfs://myfs/movies/
 ```
 
 ## Advanced Usage
