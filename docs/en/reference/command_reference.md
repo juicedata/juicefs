@@ -239,10 +239,6 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 
 Manage directory quotas
 
-:::tip
-This feature requires JuiceFS v1.1 or later
-::
-
 #### Synopsis
 
 ```shell
