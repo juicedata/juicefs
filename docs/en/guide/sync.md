@@ -107,7 +107,7 @@ The following command synchronizes all of the data on [Object Storage A](#requir
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
 
-### Without Mount Point Mode <VersionAdd>1.1</VersionAdd>
+### Sync Without Mount Point <VersionAdd>1.1</VersionAdd>
 
 For data migrations that involve JuiceFS, it's recommended use the `jfs://` protocol, rather than mount JuiceFS and access its local directory, which bypasses the FUSE mount point and access JuiceFS directly. Under large scale scenarios, bypassing FUSE can save precious resources and increase performance.
 
