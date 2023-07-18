@@ -104,6 +104,7 @@ juicefs sync /mnt/jfs/images/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.co
 ```shell
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
+
 ### 无挂载点模式 <VersionAdd>1.1</VersionAdd>
 
 在两个存储系统之间同步数据，如果其中一方是 JuiceFS，推荐直接使用 `jfs://` 协议头，而不是先挂载 JuiceFS，再访问本地目录。这样便能跳过挂载点，直接读取或写入数据，在大规模场景下，绕过 FUSE 挂载点将能节约资源开销以及提升数据同步性能。
