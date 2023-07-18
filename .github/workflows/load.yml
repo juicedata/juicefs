@@ -42,6 +42,7 @@ jobs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
 
   load:
+    if: github.repository == 'juicedata/juicefs'
     needs: [build-matrix]
     strategy:
       fail-fast: false
