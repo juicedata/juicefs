@@ -171,32 +171,34 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 		logger.Debugf("receive stats %+v from %s", r, req.RemoteAddr)
 		_, _ = w.Write([]byte("OK"))
 	})
+	var addr string
 	if config.Manager != "" && !config.IsWorker {
-		return config.Manager, nil
-	}
-	ips, err := utils.FindLocalIPs()
-	if err != nil {
-		return "", fmt.Errorf("find local ips: %s", err)
-	}
-	var ip string
-	for _, i := range ips {
-		if i = i.To4(); i != nil {
-			ip = i.String()
-			break
+		addr = config.Manager
+	} else {
+		ips, err := utils.FindLocalIPs()
+		if err != nil {
+			return "", fmt.Errorf("find local ips: %s", err)
 		}
+		var ip string
+		for _, i := range ips {
+			if i = i.To4(); i != nil {
+				ip = i.String()
+				break
+			}
+		}
+		if ip == "" {
+			return "", fmt.Errorf("no local ip found")
+		}
+		addr = ip + ":"
 	}
-	if ip == "" {
-		return "", fmt.Errorf("no local ip found")
-	}
-	l, err := net.Listen("tcp", ip+":")
+
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return "", fmt.Errorf("listen: %s", err)
 	}
 	logger.Infof("Listen at %s", l.Addr())
 	go func() { _ = http.Serve(l, nil) }()
-	ps := strings.Split(l.Addr().String(), ":")
-	port := ps[len(ps)-1]
-	return fmt.Sprintf("%s:%s", ip, port), nil
+	return l.Addr().String(), nil
 }
 
 func findSelfPath() (string, error) {
