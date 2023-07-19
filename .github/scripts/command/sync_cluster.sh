@@ -21,34 +21,50 @@ start_minio(){
     ./mc config host add myminio http://127.0.0.1:9000 minioadmin minioadmin
 }
 start_minio
-
-rm ~/.ssh/id_rsa -rf 
-rm ~/.ssh/id_rsa.pub -rf 
+restore_key(){
+    exit=$?
+    echo restore key on clean up
+    [ -f ~/.ssh/id_rsa.bak ] && mv -f ~/.ssh/id_rsa.bak ~/.ssh/id_rsa
+    [ -f ~/.ssh/id_rsa.pub.bak ] && mv -f ~/.ssh/id_rsa.pub.bak ~/.ssh/id_rsa.pub 
+    exit $exit
+}
+# trap restore_key EXIT
+[ -f ~/.ssh/id_rsa ] && mv -f ~/.ssh/id_rsa ~/.ssh/id_rsa.bak
+[ -f ~/.ssh/id_rsa.pub ] && mv -f ~/.ssh/id_rsa.pub ~/.ssh/id_rsa.pub.bak 
 ssh-keygen -t ed25519 -C "default" -f ~/.ssh/id_rsa -q -N ""
 cp -f ~/.ssh/id_rsa.pub .github/scripts/ssh/id_rsa.pub
+diff ~/.ssh/id_rsa.pub .github/scripts/ssh/id_rsa.pub
 docker build -t juicedata/ssh -f .github/scripts/ssh/Dockerfile .github/scripts/ssh
-
+docker rm worker1 worker2 -f
 docker compose -f .github/scripts/ssh/docker-compose.yml up -d
 
 test_sync_small_files(){
     prepare_test
-    ./juicefs mdtest $META_URL /test --dirs 10 --depth 3 --files 5 --threads 10
-    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ \
+    ./juicefs mdtest $META_URL /test --dirs 10 --depth 1 --files 5 --threads 10
+    ./juicefs sync -v minio://minioadmin:minioadmin@localhost:9005/myjfs/ \
          minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
-        --manager 172.20.0.1:8081 --worker 172.20.0.2,172.20.0.3 --list-threads 10 --list-depth 5
-    ./mc ls myminio/myjfs/test -r |wc -l
-    ./mc ls juicegw/myjfs/test -r |wc -l
+        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 --list-threads 10 --list-depth 5
+    count1=$(./mc ls myminio/myjfs/test -r |wc -l)
+    count2=$(./mc ls juicegw/myjfs/test -r |wc -l)
+    if [ "$count1" != "$count2" ]; then
+        echo "count not equal, $count1, $count2"
+        exit 1
+    fi
 }
 
 test_sync_big_file(){
     prepare_test
     dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
     cp /tmp/bigfile /jfs/bigfile
-    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ \
+    ./juicefs sync -v minio://minioadmin:minioadmin@localhost:9005/myjfs/ \
          minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
-        --manager 172.20.0.1:8081 --worker 172.20.0.2,172.20.0.3
-    ./mc cat myminio/myjfs/bigfile | md5sum
-    cat /tmp/bigfile | md5sum
+        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3
+    md51=$(./mc cat myminio/myjfs/bigfile | md5sum)
+    md52=$(cat /tmp/bigfile | md5sum)
+    if [ "$md51" != "$md52" ]; then
+        echo "md5sum not equal, $md51, $md52"
+        exit 1
+    fi
 }
 
 test_sync_without_mount_point(){
@@ -60,8 +76,8 @@ test_sync_without_mount_point(){
 
     python3 .github/scripts/fsrand.py -c 1000 fsrand -v -a
     ./juicefs format $META_URL myjfs
-    meta_url=$META_URL ./juicefs sync fsrand/ jfs://meta_url/fsrand/ \
-         --manager 172.20.0.1:8081 --worker 172.20.0.2,172.20.0.3
+    meta_url=$META_URL ./juicefs sync -v fsrand/ jfs://meta_url/fsrand/ \
+         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3
     ./juicefs mount -d $META_URL /jfs
     diff -ur --no-dereference  fsrand/ /jfs/fsrand
 }
