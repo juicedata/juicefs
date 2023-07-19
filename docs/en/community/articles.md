@@ -4,7 +4,7 @@ sidebar_position: 2
 slug: /articles
 ---
 
-JuiceFS is widely applicable to various data storage and sharing scenarios. This page compiles its technical articles and real-world case studies. Explore valuable insights and practical examples to deepen your understanding of JuiceFS and related applications. We encourage all community users to contribute and maintain this list. 
+JuiceFS is widely applicable to various data storage and sharing scenarios. This page compiles its technical articles and real-world case studies. Explore valuable insights and practical examples to deepen your understanding of JuiceFS and related applications. We encourage all community users to contribute and maintain this list.
 
 ## Articles sorted in categories
 
