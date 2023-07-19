@@ -168,7 +168,7 @@ jobs:
       - name: Test Sync with multi nodes
         timeout-minutes: 30
         run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
+          sudo META=${{matrix.meta}} .github/scripts/command/sync_cluster.sh 
 
       - name: Test Sync
         timeout-minutes: 30
