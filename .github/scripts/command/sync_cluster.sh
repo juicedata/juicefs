@@ -72,9 +72,9 @@ test_sync_small_files_without_mount_point(){
          --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
          --list-threads 10 --list-depth 5\
          2>&1 | tee sync.log
-    check_sync_log $file_count
     ./juicefs mount -d $META_URL /jfs
     diff test/ /jfs/test
+    grep "<FATAL>" sync.log && exit 1 || true
 }
 
 test_sync_big_file(){
@@ -96,6 +96,7 @@ test_sync_big_file(){
 }
 
 check_sync_log(){
+    grep "<FATAL>" sync.log && exit 1 || true
     file_count=$1
     file_copied=$(tail -1 sync.log  | sed 's/.*copied: \([0-9]*\).*/\1/' )
     if [ "$file_copied" != "$file_count" ]; then
