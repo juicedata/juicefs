@@ -46,6 +46,7 @@ test_sync_small_files(){
     for i in $(seq 1 $file_count); do
         dd if=/dev/urandom of=/jfs/file$i bs=1M count=5 status=none
     done
+    start_gateway
     ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
          minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
@@ -81,6 +82,7 @@ test_sync_big_file(){
     ./juicefs mount -d $META_URL /jfs
     dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
     cp /tmp/bigfile /jfs/bigfile
+    start_gateway
     ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
          minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
@@ -111,7 +113,6 @@ check_sync_log(){
     fi
 }
 
-
 prepare_test(){
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
@@ -119,6 +120,8 @@ prepare_test(){
     rm -rf /var/jfsCache/myjfs
     (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
+}
+start_gateway(){
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL 172.20.0.1:9005 &
     ./mc alias set juicegw http://172.20.0.1:9005 minioadmin minioadmin --api S3v4
