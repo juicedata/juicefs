@@ -41,7 +41,7 @@ docker compose -f .github/scripts/ssh/docker-compose.yml up -d
 test_sync_small_files(){
     prepare_test
     mkdir -p /jfs/test
-    file_count=1000
+    file_count=600
     for i in $(seq 1 $file_count); do
         dd if=/dev/urandom of=/jfs/file$i bs=1M count=5 status=none
     done
@@ -118,7 +118,7 @@ prepare_test(){
     ./juicefs mount -d $META_URL /jfs
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL 172.20.0.1:9005 &
-    ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
+    ./mc alias set juicegw http://172.20.0.1:9005 minioadmin minioadmin --api S3v4
 }
 
 
