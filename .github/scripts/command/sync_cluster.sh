@@ -40,6 +40,7 @@ docker compose -f .github/scripts/ssh/docker-compose.yml up -d
 
 test_sync_small_files(){
     prepare_test
+    ./juicefs mount -d $META_URL /jfs
     mkdir -p /jfs/test
     file_count=600
     for i in $(seq 1 $file_count); do
@@ -47,7 +48,8 @@ test_sync_small_files(){
     done
     ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
          minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
-        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 --list-threads 10 --list-depth 5 \
+        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+        --list-threads 10 --list-depth 5 \
         2>&1 | tee sync.log
     count1=$(./mc ls myminio/myjfs/test -r |wc -l)
     count2=$(./mc ls juicegw/myjfs/test -r | awk '$4=="5MiB"' | wc -l)
@@ -56,6 +58,39 @@ test_sync_small_files(){
         exit 1
     fi
     check_sync_log $file_count
+}
+
+test_sync_small_files_without_mount_point(){
+    prepare_test
+    mkdir -p test
+    file_count=600
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=test/file$i bs=1M count=5 status=none
+    done
+    meta_url=$META_URL ./juicefs sync -v test/ jfs://meta_url/test/ \
+         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+         --list-threads 10 --list-depth 5\
+         2>&1 | tee sync.log
+    check_sync_log $file_count
+    ./juicefs mount -d $META_URL /jfs
+    diff test/ /jfs/test
+}
+
+test_sync_big_file(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
+    cp /tmp/bigfile /jfs/bigfile
+    ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
+         minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
+        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+        2>&1 | tee sync.log
+    md51=$(./mc cat myminio/myjfs/bigfile | md5sum)
+    md52=$(cat /tmp/bigfile | md5sum)
+    if [ "$md51" != "$md52" ]; then
+        echo "md5sum not equal, $md51, $md52"
+        exit 1
+    fi
 }
 
 check_sync_log(){
@@ -76,37 +111,6 @@ check_sync_log(){
     fi
 }
 
-test_sync_big_file(){
-    prepare_test
-    dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
-    cp /tmp/bigfile /jfs/bigfile
-    ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
-         minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
-        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
-        2>&1 | tee sync.log
-    md51=$(./mc cat myminio/myjfs/bigfile | md5sum)
-    md52=$(cat /tmp/bigfile | md5sum)
-    if [ "$md51" != "$md52" ]; then
-        echo "md5sum not equal, $md51, $md52"
-        exit 1
-    fi
-}
-
-test_sync_without_mount_point(){
-    umount_jfs /jfs $META_URL
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm -rf /var/jfs/myjfs
-    rm -rf /var/jfsCache/myjfs
-    (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
-
-    python3 .github/scripts/fsrand.py -c 1000 fsrand -v -a
-    ./juicefs format $META_URL myjfs
-    meta_url=$META_URL ./juicefs sync -v fsrand/ jfs://meta_url/fsrand/ \
-         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
-         2>&1 | tee sync.log
-    ./juicefs mount -d $META_URL /jfs
-    # diff -ur --no-dereference  fsrand/ /jfs/fsrand
-}
 
 prepare_test(){
     umount_jfs /jfs $META_URL
@@ -115,7 +119,6 @@ prepare_test(){
     rm -rf /var/jfsCache/myjfs
     (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
-    ./juicefs mount -d $META_URL /jfs
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL 172.20.0.1:9005 &
     ./mc alias set juicegw http://172.20.0.1:9005 minioadmin minioadmin --api S3v4
