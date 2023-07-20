@@ -16,7 +16,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Big data
 
-- [An Elastic Platform & Simplified Storage Achieved by Migrating to Spark+K8s+JuiceFS](https://juicefs.com/en/blog/user-stories/scalable-computing-unified-data-storage-ops-cloud-spark-k8s-juicefs), 2023-05-10, Fengyu Cao @ Douban 
+- [An Elastic Platform & Simplified Storage Achieved by Migrating to Spark+K8s+JuiceFS](https://juicefs.com/en/blog/user-stories/scalable-computing-unified-data-storage-ops-cloud-spark-k8s-juicefs), 2023-05-10, Fengyu Cao @ Douban
 - [Gaoding Technology Saves 60% Of Storage Cost Used By Elasticsearch](https://juicefs.com/en/blog/user-stories/gaoding-with-juicefs), 2021-10-09, Gaoding SRE Team
 - [Shopee x JuiceFS: ClickHouse Cold and Hot Data Separation Storage Architecture and Practice](https://juicefs.com/en/blog/user-stories/shopee-clickhouse-with-juicefs), 2021-10-09, Teng @ Shopee
 - [How to effectively reduce the load of HDFS cluster for Qutoutiao(NASDAQ:QTT)](https://juicefs.com/blog/en/posts/qutoutiao-big-data-platform-user-case)
@@ -39,7 +39,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 - [How to Store and Share AI Models for Stable Diffusion in the Cloud](https://juicefs.com/en/blog/usage-tips/share-store-model-data-stable-diffusion-cloud), 2023-07-19, Herald Yu
 - [JuiceFS Enterprise Edition: Architecture, Features, and Community Edition Comparison](https://juicefs.com/en/blog/solutions/juicefs-enterprise-edition-features-vs-community-edition), 2023-06-06, Changjian Gao
-- [How to Boost AI Model Training with a Distributed Storage System](https://juicefs.com/en/blog/usage-tips/how-to-use-juicefs-to-speed-up-ai-model-training), 2023-04-25, Changjian Gao 
+- [How to Boost AI Model Training with a Distributed Storage System](https://juicefs.com/en/blog/usage-tips/how-to-use-juicefs-to-speed-up-ai-model-training), 2023-04-25, Changjian Gao
 - [How To Use JuiceFS To Store Data On DigitalOcean](https://www.youtube.com/watch?v=pdFzyflcRGA&t=75s), Youtube video, by Education Ecosystem
 - [Guidance on selecting metadata engine in JuiceFS](https://juicefs.com/en/blog/usage-tips/juicefs-metadata-engine-selection-guide), 2022-10-14, Sandy
 - [The strengths and weaknesses of using Redis as the JuiceFS metadata engine](https://juicefs.com/en/blog/usage-tips/introduce-redis-as-juicefs-metadata-engine), 2022-07-22, Changjian Gao
@@ -49,7 +49,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Others
 
-- [Comparative Analysis of Major Distributed File System Architectures: GFS vs. Tectonic vs. JuiceFS](https://www.infoq.com/articles/dfs-architecture-comparison/), 2023-06-26, Changjian Gao
+- [Comparative Analysis of Major Distributed File System Architectures: GFS vs. Tectonic vs. JuiceFS](https://www.infoq.com/articles/dfs-architecture-comparison), 2023-06-26, Changjian Gao
 
 ## Contribution
 
