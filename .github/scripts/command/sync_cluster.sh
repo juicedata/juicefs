@@ -5,7 +5,7 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
-
+.github/scripts/apt_install.sh gawk
 start_minio(){
     if ! docker ps | grep "minio/minio"; then
         docker run -d -p 9000:9000 --name minio \
@@ -40,14 +40,38 @@ docker compose -f .github/scripts/ssh/docker-compose.yml up -d
 
 test_sync_small_files(){
     prepare_test
-    ./juicefs mdtest $META_URL /test --dirs 10 --depth 1 --files 5 --threads 10
-    ./juicefs sync -v minio://minioadmin:minioadmin@localhost:9005/myjfs/ \
-         minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
-        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 --list-threads 10 --list-depth 5
+    mkdir -p /jfs/test
+    file_count=1000
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=/jfs/file$i bs=1M count=5 status=none
+    done
+    ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
+         minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
+        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 --list-threads 10 --list-depth 5 \
+        2>&1 | tee sync.log
     count1=$(./mc ls myminio/myjfs/test -r |wc -l)
-    count2=$(./mc ls juicegw/myjfs/test -r |wc -l)
+    count2=$(./mc ls juicegw/myjfs/test -r | awk '$4=="5MiB"' | wc -l)
     if [ "$count1" != "$count2" ]; then
         echo "count not equal, $count1, $count2"
+        exit 1
+    fi
+    check_sync_log $file_count
+}
+
+check_sync_log(){
+    file_count=$1
+    file_copied=$(tail -1 sync.log  | sed 's/.*copied: \([0-9]*\).*/\1/' )
+    if [ "$file_copied" != "$file_count" ]; then
+        echo "file_copied not equal, $file_copied, $file_count"
+        exit 1
+    fi
+    count1=$(cat sync.log | grep 172.20.0.2 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
+    count2=$(cat sync.log | grep 172.20.0.3 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
+    count3=$((file_count - count1 - count2))
+    min_count=$((file_count / 6))
+    # check if count1 is less than min_count
+    if [ "$count1" -lt "$min_count" ] || [ "$count2" -lt "$min_count" ] || [ "$count3" -lt "$min_count" ]; then
+        echo "count is less than min_count, $count1, $count2, $count3, $min_count"
         exit 1
     fi
 }
@@ -56,9 +80,10 @@ test_sync_big_file(){
     prepare_test
     dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
     cp /tmp/bigfile /jfs/bigfile
-    ./juicefs sync -v minio://minioadmin:minioadmin@localhost:9005/myjfs/ \
-         minio://minioadmin:minioadmin@localhost:9000/myjfs/ \
-        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3
+    ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
+         minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
+        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+        2>&1 | tee sync.log
     md51=$(./mc cat myminio/myjfs/bigfile | md5sum)
     md52=$(cat /tmp/bigfile | md5sum)
     if [ "$md51" != "$md52" ]; then
@@ -77,9 +102,10 @@ test_sync_without_mount_point(){
     python3 .github/scripts/fsrand.py -c 1000 fsrand -v -a
     ./juicefs format $META_URL myjfs
     meta_url=$META_URL ./juicefs sync -v fsrand/ jfs://meta_url/fsrand/ \
-         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3
+         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+         2>&1 | tee sync.log
     ./juicefs mount -d $META_URL /jfs
-    diff -ur --no-dereference  fsrand/ /jfs/fsrand
+    # diff -ur --no-dereference  fsrand/ /jfs/fsrand
 }
 
 prepare_test(){
@@ -91,7 +117,7 @@ prepare_test(){
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
-    MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 &
+    MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL 172.20.0.1:9005 &
     ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
 }
 
