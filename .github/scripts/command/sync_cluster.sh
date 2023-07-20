@@ -1,11 +1,11 @@
 #!/bin/bash -e
 source .github/scripts/common/common.sh
 
-[[ -z "$META" ]] && META=sqlite3
+[[ -z "$META" ]] && META=redis
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
-.github/scripts/apt_install.sh gawk
+dpkg -s gawk || .github/scripts/apt_install.sh gawk
 start_minio(){
     if ! docker ps | grep "minio/minio"; then
         docker run -d -p 9000:9000 --name minio \
@@ -68,6 +68,8 @@ test_sync_small_files_without_mount_point(){
     for i in $(seq 1 $file_count); do
         dd if=/dev/urandom of=test/file$i bs=1M count=5 status=none
     done
+    # docker exec -e meta_url=redis://172.20.0.1:6379/1  worker1  sh -c 'echo $meta_url'
+    # docker exec -e meta_url=redis://172.20.0.1:6379/1  worker2  sh -c 'echo $meta_url'
     meta_url=$META_URL ./juicefs sync -v test/ jfs://meta_url/test/ \
          --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
          --list-threads 10 --list-depth 5\
