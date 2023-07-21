@@ -34,6 +34,9 @@ runs:
           sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
           make ${{inputs.target}}
           mv juicefs.fdb juicefs
+        elif [ "${{inputs.target}}" == "juicefs.gluster" ]; then
+          sudo apt install -y glusterfs-server
+          make ${{inputs.target}}
         else
           make ${{inputs.target}}
         fi
