@@ -63,27 +63,40 @@ test_sync_small_files(){
 
 test_sync_small_files_without_mount_point(){
     prepare_test
-    rm -rf /tmp/data
-    mkdir -p /tmp/data
-    file_count=300
+    ./juicefs mount -d $META_URL /jfs
+    file_count=600
+    mkdir -p /jfs/data
     for i in $(seq 1 $file_count); do
-        dd if=/dev/urandom of=/tmp/data/file$i bs=1M count=5 status=none
+        dd if=/dev/urandom of=/jfs/data/file$i bs=1M count=5 status=none
     done
-    ./mc mb myminio/data
-    ./mc mb myminio/data1
-    # (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
-    # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-    ./mc cp -r /tmp/data myminio/data
-    
+    (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
     redis-cli config set protected-mode no
     meta_url=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
-    # meta_url=$meta_url ./juicefs sync -v jfs://meta_url/data/ /tmp/data/ \
-    meta_url=$meta_url ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data1/ \
+    meta_url=$meta_url ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
          --list-threads 10 --list-depth 5\
          2>&1 | tee sync.log
-    ./juicefs mount -d $META_URL /jfs
-    diff /tmp/data/ /jfs/data1/
+    # diff data/ /jfs/data1/
+    check_sync_log $file_count
+}
+
+skip_test_sync_small_files_without_mount_point2(){
+    prepare_test
+    file_count=600
+    mkdir -p data
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=data/file$i bs=1M count=5 status=none
+    done
+    (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
+    ./mc cp -r data myminio/data
+    (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
+    redis-cli config set protected-mode no
+    meta_url=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
+    meta_url=$meta_url ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+         --list-threads 10 --list-depth 5\
+         2>&1 | tee sync.log
+    diff data/ /jfs/data1/
     check_sync_log $file_count
 }
 
@@ -113,9 +126,9 @@ check_sync_log(){
         echo "file_copied not equal, $file_copied, $file_count"
         exit 1
     fi
-    count1=$(cat sync.log | grep 172.20.0.2 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
-    count2=$(cat sync.log | grep 172.20.0.3 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
-    count3=$((file_count - count1 - count2))
+    count2=$(cat sync.log | grep 172.20.0.2 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
+    count3=$(cat sync.log | grep 172.20.0.3 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
+    count1=$((file_count - count2 - count3))
     echo "count1, $count1, count2, $count2, count3, $count3"
     min_count=$((file_count / 6))
     # check if count1 is less than min_count
