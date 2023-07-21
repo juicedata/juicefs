@@ -78,7 +78,7 @@ test_sync_small_files_without_mount_point(){
          2>&1 | tee sync.log
     ./juicefs mount -d $META_URL /jfs
     diff data/ /jfs/data/
-    grep "<FATAL>" sync.log && exit 1 || true
+    check_sync_log $file_count
 }
 
 test_sync_big_file(){
