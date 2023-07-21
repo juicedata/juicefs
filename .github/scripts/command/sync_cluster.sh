@@ -69,10 +69,12 @@ test_sync_small_files_without_mount_point(){
     for i in $(seq 1 $file_count); do
         dd if=/dev/urandom of=/tmp/data/file$i bs=1M count=5 status=none
     done
-    (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
+    ./mc mb myminio/data
+    ./mc mb myminio/data1
+    # (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
+    # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
     ./mc cp -r /tmp/data myminio/data
-    (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-
+    
     redis-cli config set protected-mode no
     meta_url=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
     # meta_url=$meta_url ./juicefs sync -v jfs://meta_url/data/ /tmp/data/ \
