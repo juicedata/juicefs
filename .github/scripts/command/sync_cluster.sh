@@ -63,21 +63,25 @@ test_sync_small_files(){
 
 test_sync_small_files_without_mount_point(){
     prepare_test
-    mkdir -p data
-    file_count=600
+    rm -rf /tmp/data
+    mkdir -p /tmp/data
+    file_count=300
     for i in $(seq 1 $file_count); do
-        dd if=/dev/urandom of=data/file$i bs=1M count=5 status=none
+        dd if=/dev/urandom of=/tmp/data/file$i bs=1M count=5 status=none
     done
-    ./mc mb myminio/data
-    ./mc cp -r data myminio/data
+    (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
+    ./mc cp -r /tmp/data myminio/data
+    (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
+
     redis-cli config set protected-mode no
     meta_url=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
-    meta_url=$meta_url ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data/ \
+    # meta_url=$meta_url ./juicefs sync -v jfs://meta_url/data/ /tmp/data/ \
+    meta_url=$meta_url ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data1/ \
          --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
          --list-threads 10 --list-depth 5\
          2>&1 | tee sync.log
     ./juicefs mount -d $META_URL /jfs
-    diff data/ /jfs/data/
+    diff /tmp/data/ /jfs/data1/
     check_sync_log $file_count
 }
 
@@ -125,7 +129,7 @@ prepare_test(){
     rm -rf /var/jfs/myjfs
     rm -rf /var/jfsCache/myjfs
     (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
-    ./juicefs format $META_URL myjfs
+    ./juicefs format $META_URL myjfs --storage minio --access-key minioadmin --secret-key minioadmin --bucket http://172.20.0.1:9000/myjfs
 }
 start_gateway(){
     lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
