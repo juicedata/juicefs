@@ -5,11 +5,11 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
-
+git clone https://github.com/melthaw/glusterfs-docker-compose.git
 
 test_gluster()
 {
-    git clone git@github.com:melthaw/glusterfs-docker-compose.git
+
     cd glusterfs-docker-compose
     docker compose up -d glusterfs1 glusterfs2 glusters3
     echo "Sleep 10 seconds to wait the glusterfs up"
