@@ -63,19 +63,21 @@ test_sync_small_files(){
 
 test_sync_small_files_without_mount_point(){
     prepare_test
-    mkdir -p test
+    mkdir -p data
     file_count=600
     for i in $(seq 1 $file_count); do
-        dd if=/dev/urandom of=test/file$i bs=1M count=5 status=none
+        dd if=/dev/urandom of=data/file$i bs=1M count=5 status=none
     done
-    # docker exec -e meta_url=redis://172.20.0.1:6379/1  worker1  sh -c 'echo $meta_url'
-    # docker exec -e meta_url=redis://172.20.0.1:6379/1  worker2  sh -c 'echo $meta_url'
-    meta_url=$META_URL ./juicefs sync -v test/ jfs://meta_url/test/ \
+    ./mc mb myminio/data
+    ./mc cp -r data myminio/data
+    redis-cli config set protected-mode no
+    meta_url=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
+    meta_url=$meta_url ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data/ \
          --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
          --list-threads 10 --list-depth 5\
          2>&1 | tee sync.log
     ./juicefs mount -d $META_URL /jfs
-    diff test/ /jfs/test
+    diff data/ /jfs/data/
     grep "<FATAL>" sync.log && exit 1 || true
 }
 

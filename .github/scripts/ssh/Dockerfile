@@ -2,6 +2,7 @@ FROM ubuntu:latest
 RUN apt update && apt install  openssh-server sudo -y
 # Create a user “sshuser” and group “sshgroup”
 RUN groupadd sshgroup && useradd -ms /bin/bash -g sshgroup sshuser
+RUN mkdir /var/jfs
 # Create sshuser directory in home
 RUN mkdir -p /home/sshuser/.ssh
 # Copy the ssh public key in the authorized_keys file. The idkey.pub below is a public key file you get from ssh-keygen. They are under ~/.ssh directory by default.
