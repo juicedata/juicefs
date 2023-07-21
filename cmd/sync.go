@@ -317,7 +317,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			return nil, fmt.Errorf("unescape %s: %s", u.Host, err)
 		}
 		if os.Getenv(endpoint) != "" {
-			conf.Env["endpoint"] = os.Getenv(endpoint)
+			conf.Env[endpoint] = os.Getenv(endpoint)
 		}
 	} else if !conf.NoHTTPS && supportHTTPS(name, u.Host) {
 		endpoint = "https://" + u.Host
