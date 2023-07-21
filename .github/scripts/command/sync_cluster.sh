@@ -108,6 +108,7 @@ check_sync_log(){
     count1=$(cat sync.log | grep 172.20.0.2 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
     count2=$(cat sync.log | grep 172.20.0.3 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
     count3=$((file_count - count1 - count2))
+    echo "count1, $count1, count2, $count2, count3, $count3"
     min_count=$((file_count / 6))
     # check if count1 is less than min_count
     if [ "$count1" -lt "$min_count" ] || [ "$count2" -lt "$min_count" ] || [ "$count3" -lt "$min_count" ]; then
