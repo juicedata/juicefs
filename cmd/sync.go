@@ -22,6 +22,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -319,6 +320,9 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		endpoint, err = url.PathUnescape(u.Host)
 		if err != nil {
 			return nil, fmt.Errorf("unescape %s: %s", u.Host, err)
+		}
+		if os.Getenv(endpoint) != "" {
+			conf.Env["endpoint"] = os.Getenv(endpoint)
 		}
 	} else if !conf.NoHTTPS && supportHTTPS(name, u.Host) {
 		endpoint = "https://" + u.Host
