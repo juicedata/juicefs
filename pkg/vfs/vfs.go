@@ -690,7 +690,7 @@ func (v *VFS) Lseek(ctx Context, ino Ino, fh uint64, offset int64, whence uint32
 		h.off = uint64(int64(h.reader.GetLength()) + offset)
 	case SeekData:
 		if uint64(offset) >= h.reader.GetLength() {
-			err = syscall.EINVAL
+			err = syscall.ENXIO
 			return h.off, err
 		}
 		var slices []meta.Slice
@@ -724,7 +724,7 @@ func (v *VFS) Lseek(ctx Context, ino Ino, fh uint64, offset int64, whence uint32
 		}
 	case SeekHole:
 		if uint64(offset) >= h.reader.GetLength() {
-			err = syscall.EINVAL
+			err = syscall.ENXIO
 			return h.off, err
 		}
 		var slices []meta.Slice
