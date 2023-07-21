@@ -5,12 +5,10 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
-git clone https://github.com/melthaw/glusterfs-docker-compose.git
 
 test_gluster()
 {
-
-    cd glusterfs-docker-compose
+    cd .github/scripts/gluster
     docker compose up -d glusterfs1 glusterfs2 glusters3
     echo "Sleep 10 seconds to wait the glusterfs up"
     sleep 10
@@ -20,7 +18,7 @@ test_gluster()
     docker compose exec glusterfs1 setfacl -m u:1000:rwx /data/glusterfs/test
     docker compose exec glusterfs2 setfacl -m u:1000:rwx /data/glusterfs/test
     docker compose exec glusterfs1 cat /var/log/glusterfs/bricks/data-glusterfs-test.log
-    exit 1
+    ./juicefs format $META_URL gfs-test --storage gluster --bucket glusterfs1,glusterfs2/test-volume
 }
 
 

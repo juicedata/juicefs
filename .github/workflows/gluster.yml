@@ -37,7 +37,7 @@ jobs:
 
       - name: Test
         run: |
-          sudo .github/scripts/command/gluster.sh
+          sudo .github/scripts/gluster/gluster.sh
 
       - name: Send Slack Notification
         if: ${{ failure() }}

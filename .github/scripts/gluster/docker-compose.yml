@@ -1,0 +1,65 @@
+version: '3'
+services:
+  #see https://github.com/gluster/gluster-containers
+  glusterfs1:
+    container_name: fss-glusterfs1
+    image: gluster/gluster-centos
+    privileged: true
+    networks:
+      network_glusterfs:
+        ipv4_address: 172.20.0.2
+    volumes:
+      - glusterfs_etc_volume1:/etc/glusterfs
+      - glusterfs_lib_volume1:/var/lib/glusterd
+      - glusterfs_log_volume1:/var/log/glusterfs
+      - gulsterfs_data_volume1:/data/glusterfs
+
+  glusterfs2:
+    container_name: fss-glusterfs2
+    image: gluster/gluster-centos
+    privileged: true
+    networks:
+      network_glusterfs:
+        ipv4_address: 172.20.0.3
+    volumes:
+      - glusterfs_etc_volume2:/etc/glusterfs
+      - glusterfs_lib_volume2:/var/lib/glusterd
+      - glusterfs_log_volume2:/var/log/glusterfs
+      - gulsterfs_data_volume2:/data/glusterfs
+
+  glusters3:
+    container_name: fss-glusters3
+    image: gluster/gluster-s3
+    privileged: true
+    networks:
+      network_glusterfs:
+        ipv4_address: 172.20.0.4
+    ports:
+      - 8080:8080
+    depends_on:
+      - glusterfs1
+      - glusterfs2
+    environment:
+      S3_ACCOUNT: test
+      S3_USER: admin
+      S3_PASSWORD: tests3passwd
+#    volumes:
+#      - gulsterfs_data_volume1:/mnt/gluster-object
+
+networks:
+  network_glusterfs:
+#    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  glusterfs_etc_volume1:
+  glusterfs_lib_volume1:
+  glusterfs_log_volume1:
+  gulsterfs_data_volume1:
+  glusterfs_etc_volume2:
+  glusterfs_lib_volume2:
+  glusterfs_log_volume2:
+  gulsterfs_data_volume2:
