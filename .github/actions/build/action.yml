@@ -35,7 +35,7 @@ runs:
           make ${{inputs.target}}
           mv juicefs.fdb juicefs
         elif [ "${{inputs.target}}" == "juicefs.gluster" ]; then
-          apt install uuid-dev libglusterfs-dev
+          sudo .github/scripts/apt_install.sh uuid-dev libglusterfs-dev
           make ${{inputs.target}}
           mv juicefs.gluster juicefs
         else
