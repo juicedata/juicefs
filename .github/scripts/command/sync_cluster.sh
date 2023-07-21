@@ -38,29 +38,6 @@ docker build -t juicedata/ssh -f .github/scripts/ssh/Dockerfile .github/scripts/
 docker rm worker1 worker2 -f
 docker compose -f .github/scripts/ssh/docker-compose.yml up -d
 
-test_sync_small_files(){
-    prepare_test
-    ./juicefs mount -d $META_URL /jfs
-    mkdir -p /jfs/test
-    file_count=600
-    for i in $(seq 1 $file_count); do
-        dd if=/dev/urandom of=/jfs/file$i bs=1M count=5 status=none
-    done
-    start_gateway
-    ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
-         minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
-        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
-        --list-threads 10 --list-depth 5 \
-        2>&1 | tee sync.log
-    count1=$(./mc ls myminio/myjfs/test -r |wc -l)
-    count2=$(./mc ls juicegw/myjfs/test -r | awk '$4=="5MiB"' | wc -l)
-    if [ "$count1" != "$count2" ]; then
-        echo "count not equal, $count1, $count2"
-        exit 1
-    fi
-    check_sync_log $file_count
-}
-
 test_sync_small_files_without_mount_point(){
     prepare_test
     ./juicefs mount -d $META_URL /jfs
@@ -99,6 +76,30 @@ skip_test_sync_small_files_without_mount_point2(){
     diff data/ /jfs/data1/
     check_sync_log $file_count
 }
+
+test_sync_small_files(){
+    prepare_test
+    ./juicefs mount -d $META_URL /jfs
+    mkdir -p /jfs/test
+    file_count=600
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=/jfs/file$i bs=1M count=5 status=none
+    done
+    start_gateway
+    ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
+         minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
+        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+        --list-threads 10 --list-depth 5 \
+        2>&1 | tee sync.log
+    count1=$(./mc ls myminio/myjfs/test -r |wc -l)
+    count2=$(./mc ls juicegw/myjfs/test -r | awk '$4=="5MiB"' | wc -l)
+    if [ "$count1" != "$count2" ]; then
+        echo "count not equal, $count1, $count2"
+        exit 1
+    fi
+    check_sync_log $file_count
+}
+
 
 test_sync_big_file(){
     prepare_test
