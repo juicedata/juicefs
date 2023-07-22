@@ -38,9 +38,10 @@ docker build -t juicedata/ssh -f .github/scripts/ssh/Dockerfile .github/scripts/
 docker rm worker1 worker2 -f
 docker compose -f .github/scripts/ssh/docker-compose.yml up -d
 sleep 3s
-sudo echo "bind 172.20.0.1 ::1" | sudo tee -a /etc/redis/redis.conf
+echo "bind 172.20.0.1 ::1" | tee -a /etc/redis/redis.conf
 systemctl restart redis
 redis-cli config set protected-mode no
+META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
 test_sync_small_files_without_mount_point(){
     prepare_test
     ./juicefs mount -d $META_URL /jfs
@@ -50,9 +51,8 @@ test_sync_small_files_without_mount_point(){
         dd if=/dev/urandom of=/jfs/data/file$i bs=1M count=5 status=none
     done
     (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-    
-    meta_url=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
-    meta_url=$meta_url ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
+
+    meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
          --list-threads 10 --list-depth 5\
          2>&1 | tee sync.log
