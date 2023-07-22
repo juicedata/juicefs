@@ -4,9 +4,6 @@ source .github/scripts/common/common.sh
 [[ -z "$META" ]] && META=redis
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
-sudo echo "bind 172.20.0.1 ::1" | sudo tee -a /etc/redis/redis.conf
-systemctl restart redis
-redis-cli config set protected-mode no
 META_URL=$(get_meta_url $META)
 dpkg -s gawk || .github/scripts/apt_install.sh gawk
 start_minio(){
@@ -40,7 +37,10 @@ diff ~/.ssh/id_rsa.pub .github/scripts/ssh/id_rsa.pub
 docker build -t juicedata/ssh -f .github/scripts/ssh/Dockerfile .github/scripts/ssh
 docker rm worker1 worker2 -f
 docker compose -f .github/scripts/ssh/docker-compose.yml up -d
-
+sleep 3s
+sudo echo "bind 172.20.0.1 ::1" | sudo tee -a /etc/redis/redis.conf
+systemctl restart redis
+redis-cli config set protected-mode no
 test_sync_small_files_without_mount_point(){
     prepare_test
     ./juicefs mount -d $META_URL /jfs
