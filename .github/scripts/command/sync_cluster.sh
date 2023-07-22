@@ -4,6 +4,9 @@ source .github/scripts/common/common.sh
 [[ -z "$META" ]] && META=redis
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
+sudo echo "bind 172.20.0.1 ::1" | sudo tee -a /etc/redis/redis.conf
+systemctl restart redis
+redis-cli config set protected-mode no
 META_URL=$(get_meta_url $META)
 dpkg -s gawk || .github/scripts/apt_install.sh gawk
 start_minio(){
@@ -47,7 +50,7 @@ test_sync_small_files_without_mount_point(){
         dd if=/dev/urandom of=/jfs/data/file$i bs=1M count=5 status=none
     done
     (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-    redis-cli config set protected-mode no
+    
     meta_url=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
     meta_url=$meta_url ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
