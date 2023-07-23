@@ -26,7 +26,10 @@ def flush_meta(meta_url):
             shutil.rmtree(path)
             print(f'remove badger dir {path} succeed')
     elif meta_url.startswith('redis://'):
-        run_cmd('redis-cli flushall')
+        host= meta_url[8:].split('@')[1].split('/')[0]
+        port = meta_url[8:].split('@')[1].split('/')[1]
+        print(f'flush redis: {host}:{port}')
+        run_cmd('redis-cli -h host -p port flushall')
         print(f'flush redis succeed')
     elif meta_url.startswith('mysql://'):
         create_mysql_db(meta_url)
