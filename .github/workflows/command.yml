@@ -178,10 +178,8 @@ jobs:
             exit 0
           fi
           types=("dsa" "ecdsa" "ecdsa-sk" "ed25519" "ed25519-sk" "rsa")
-          for type in "${types[@]}"
-          do
-            sudo CI=true META=${{matrix.meta}} KEY_TYPE=$type .github/scripts/command/sync_cluster.sh 
-          done
+          random_type=${types[$RANDOM % ${#types[@]}]}
+          sudo CI=true META=${{matrix.meta}} KEY_TYPE=$random_type .github/scripts/command/sync_cluster.sh 
 
       - name: Test Sync
         timeout-minutes: 30

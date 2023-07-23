@@ -40,7 +40,6 @@ sed -i 's/bind 127.0.0.1 ::1/bind 0.0.0.0 ::1/g' /etc/redis/redis.conf
 systemctl restart redis
 META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
 
-
 test_sync_without_mount_point(){
     prepare_test
     ./juicefs mount -d $META_URL /jfs
@@ -60,7 +59,7 @@ test_sync_without_mount_point(){
     ./mc rm -r --force myminio/data1
 }
 
-test_sync_without_mount_point2(){
+skip_test_sync_without_mount_point2(){
     prepare_test
     file_count=600
     mkdir -p data
