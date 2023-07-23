@@ -38,8 +38,8 @@ docker build -t juicedata/ssh -f .github/scripts/ssh/Dockerfile .github/scripts/
 docker rm worker1 worker2 -f
 docker compose -f .github/scripts/ssh/docker-compose.yml up -d
 sleep 3s
-sed -i 's/bind 127.0.0.1 ::1/bind 172.20.0.1 ::1/g' /etc/redis/redis.conf
-echo "bind 172.20.0.1 ::1" | tee -a /etc/redis/redis.conf
+sed -i 's/bind 127.0.0.1 ::1/bind 0.0.0.0 ::1/g' /etc/redis/redis.conf
+# echo "bind 172.20.0.1 ::1" | tee -a /etc/redis/redis.conf
 systemctl restart redis
 # redis-cli config set protected-mode no
 META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
