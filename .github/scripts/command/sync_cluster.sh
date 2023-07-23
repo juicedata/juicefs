@@ -59,7 +59,7 @@ test_sync_small_files_without_mount_point(){
          2>&1 | tee sync.log
     # diff data/ /jfs/data1/
     check_sync_log $file_count
-    ./mc rm -r -f myminio/data1
+    ./mc rm -r --force myminio/data1
 }
 
 skip_test_sync_small_files_without_mount_point2(){
@@ -71,17 +71,16 @@ skip_test_sync_small_files_without_mount_point2(){
     done
     (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
     ./mc cp -r data myminio/data
-    (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-    redis-cli config set protected-mode no
+    # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
     meta_url=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
-    meta_url=$meta_url ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
+    meta_url=$meta_url ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data1 \
          --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
          --list-threads 10 --list-depth 5\
          2>&1 | tee sync.log
     diff data/ /jfs/data1/
     check_sync_log $file_count
-    ./mc rm -r -f myminio/data
-    ./mc rm -r -f myminio/data1
+    ./mc rm -r --force myminio/data
+    rm -rf data
 }
 
 test_sync_small_files(){
