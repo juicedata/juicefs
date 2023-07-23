@@ -59,6 +59,7 @@ test_sync_small_files_without_mount_point(){
          2>&1 | tee sync.log
     # diff data/ /jfs/data1/
     check_sync_log $file_count
+    ./mc rm -r -f myminio/data1
 }
 
 skip_test_sync_small_files_without_mount_point2(){
@@ -79,6 +80,8 @@ skip_test_sync_small_files_without_mount_point2(){
          2>&1 | tee sync.log
     diff data/ /jfs/data1/
     check_sync_log $file_count
+    ./mc rm -r -f myminio/data
+    ./mc rm -r -f myminio/data1
 }
 
 test_sync_small_files(){
