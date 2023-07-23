@@ -39,11 +39,30 @@ docker rm worker1 worker2 -f
 docker compose -f .github/scripts/ssh/docker-compose.yml up -d
 sleep 3s
 sed -i 's/bind 127.0.0.1 ::1/bind 0.0.0.0 ::1/g' /etc/redis/redis.conf
-# echo "bind 172.20.0.1 ::1" | tee -a /etc/redis/redis.conf
 systemctl restart redis
-# redis-cli config set protected-mode no
 META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
-test_sync_small_files_without_mount_point(){
+
+test_sync_without_mount_point2(){
+    prepare_test
+    file_count=600
+    mkdir -p data
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=data/file$i bs=1M count=5 status=none
+    done
+    (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
+    ./mc cp -r data myminio/data
+    # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
+    meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data1 \
+         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+         --list-threads 10 --list-depth 5\
+         2>&1 | tee sync.log
+    diff data/ /jfs/data1/
+    check_sync_log $file_count
+    ./mc rm -r --force myminio/data
+    rm -rf data
+}
+
+test_sync_without_mount_point(){
     prepare_test
     ./juicefs mount -d $META_URL /jfs
     file_count=600
@@ -60,27 +79,6 @@ test_sync_small_files_without_mount_point(){
     # diff data/ /jfs/data1/
     check_sync_log $file_count
     ./mc rm -r --force myminio/data1
-}
-
-skip_test_sync_small_files_without_mount_point2(){
-    prepare_test
-    file_count=600
-    mkdir -p data
-    for i in $(seq 1 $file_count); do
-        dd if=/dev/urandom of=data/file$i bs=1M count=5 status=none
-    done
-    (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
-    ./mc cp -r data myminio/data
-    # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-    meta_url=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
-    meta_url=$meta_url ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data1 \
-         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
-         --list-threads 10 --list-depth 5\
-         2>&1 | tee sync.log
-    diff data/ /jfs/data1/
-    check_sync_log $file_count
-    ./mc rm -r --force myminio/data
-    rm -rf data
 }
 
 test_sync_small_files(){
