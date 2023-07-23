@@ -26,8 +26,8 @@ def flush_meta(meta_url):
             shutil.rmtree(path)
             print(f'remove badger dir {path} succeed')
     elif meta_url.startswith('redis://'):
-        host= meta_url[8:].split('@')[1].split('/')[0]
-        port = meta_url[8:].split('@')[1].split('/')[1]
+        host = meta_url[8:].split('/')[0].split(':')[0]
+        port = meta_url[8:].split('/')[0].split(':')[1]
         print(f'flush redis: {host}:{port}')
         run_cmd('redis-cli -h host -p port flushall')
         print(f'flush redis succeed')
