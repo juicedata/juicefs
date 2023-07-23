@@ -1,7 +1,8 @@
 #!/bin/bash -e
 source .github/scripts/common/common.sh
-
+[[ -z "$CI" ]] && CI=false
 [[ -z "$META" ]] && META=redis
+[[ -z "$KEY_TYPE" ]] && KEY_TYPE=rsa
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
@@ -21,19 +22,16 @@ start_minio(){
     ./mc config host add myminio http://127.0.0.1:9000 minioadmin minioadmin
 }
 start_minio
-restore_key(){
-    exit=$?
-    echo restore key on clean up
-    [ -f ~/.ssh/id_rsa.bak ] && mv -f ~/.ssh/id_rsa.bak ~/.ssh/id_rsa
-    [ -f ~/.ssh/id_rsa.pub.bak ] && mv -f ~/.ssh/id_rsa.pub.bak ~/.ssh/id_rsa.pub 
-    exit $exit
+generate_key(){
+    if [ "$CI" != "true" ] && [ -f ~/.ssh/id_rsa ]; then
+        echo "ssh key already exists, don't overwrite it in non ci environment"
+    else
+        ssh-keygen -t $KEY_TYPE -C "default" -f ~/.ssh/id_rsa -q -N ""
+    fi
+    cp -f ~/.ssh/id_rsa.pub .github/scripts/ssh/id_rsa.pub
 }
-# trap restore_key EXIT
-[ -f ~/.ssh/id_rsa ] && mv -f ~/.ssh/id_rsa ~/.ssh/id_rsa.bak
-[ -f ~/.ssh/id_rsa.pub ] && mv -f ~/.ssh/id_rsa.pub ~/.ssh/id_rsa.pub.bak 
-ssh-keygen -t ed25519 -C "default" -f ~/.ssh/id_rsa -q -N ""
-cp -f ~/.ssh/id_rsa.pub .github/scripts/ssh/id_rsa.pub
-diff ~/.ssh/id_rsa.pub .github/scripts/ssh/id_rsa.pub
+generate_key
+
 docker build -t juicedata/ssh -f .github/scripts/ssh/Dockerfile .github/scripts/ssh
 docker rm worker1 worker2 -f
 docker compose -f .github/scripts/ssh/docker-compose.yml up -d
@@ -42,25 +40,6 @@ sed -i 's/bind 127.0.0.1 ::1/bind 0.0.0.0 ::1/g' /etc/redis/redis.conf
 systemctl restart redis
 META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
 
-test_sync_without_mount_point2(){
-    prepare_test
-    file_count=600
-    mkdir -p data
-    for i in $(seq 1 $file_count); do
-        dd if=/dev/urandom of=data/file$i bs=1M count=5 status=none
-    done
-    (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
-    ./mc cp -r data myminio/data
-    # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-    meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data1 \
-         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
-         --list-threads 10 --list-depth 5\
-         2>&1 | tee sync.log
-    diff data/ /jfs/data1/
-    check_sync_log $file_count
-    ./mc rm -r --force myminio/data
-    rm -rf data
-}
 
 test_sync_without_mount_point(){
     prepare_test
@@ -80,6 +59,27 @@ test_sync_without_mount_point(){
     check_sync_log $file_count
     ./mc rm -r --force myminio/data1
 }
+
+test_sync_without_mount_point2(){
+    prepare_test
+    file_count=600
+    mkdir -p data
+    for i in $(seq 1 $file_count); do
+        dd if=/dev/urandom of=data/file$i bs=1M count=5 status=none
+    done
+    (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
+    ./mc cp -r data myminio/data
+    # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
+    meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data1/ \
+         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+         --list-threads 10 --list-depth 5\
+         2>&1 | tee sync.log
+    diff data/ /jfs/data1/
+    check_sync_log $file_count
+    ./mc rm -r --force myminio/data
+    rm -rf data
+}
+
 
 test_sync_small_files(){
     prepare_test
