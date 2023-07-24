@@ -19,7 +19,7 @@ JuiceFS has a rich set of API interfaces. For AWS, JuiceFS can typically be used
 A JuiceFS file system consists of two parts:
 
 1. **Object Storage**: Used for data storage.
-2. **Metadata Engine**: Used for metadata storage database.
+2. **Metadata Engine**: A database used for storing metadata.
 
 Depending on specific requirements, you can choose to use fully managed databases and S3 object storage on AWS, or deploy them on EC2 and EKS by yourself.
 
