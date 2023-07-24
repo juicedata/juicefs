@@ -980,7 +980,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	var bufferSize = 10240
-	if config.IsWorker {
+	if config.Manager != "" {
 		bufferSize = 100
 	}
 	tasks := make(chan object.Object, bufferSize)
@@ -991,7 +991,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		limiter = ratelimit.NewBucketWithRate(bps, int64(bps)*3)
 	}
 
-	progress := utils.NewProgress(config.Verbose || config.Quiet || config.IsWorker)
+	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "")
 	handled = progress.AddCountBar("Scanned objects", 0)
 	skipped = progress.AddCountSpinner("Skipped objects")
 	pending = progress.AddCountSpinner("Pending objects")
@@ -1032,7 +1032,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		config.rules = rules
 	}
 
-	if !config.IsWorker {
+	if config.Manager == "" {
 		if len(config.Workers) > 0 {
 			addr, err := startManager(config, tasks)
 			if err != nil {
@@ -1067,7 +1067,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	pending.SetCurrent(0)
 	progress.Done()
 
-	if !config.IsWorker {
+	if config.Manager == "" {
 		msg := fmt.Sprintf("Found: %d, skipped: %d, copied: %d (%s)",
 			handled.Current(), skipped.Current(), copied.Current(), formatSize(copiedBytes.Current()))
 		if checked != nil {

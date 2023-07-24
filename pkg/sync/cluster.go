@@ -172,8 +172,8 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 		_, _ = w.Write([]byte("OK"))
 	})
 	var addr string
-	if config.Manager != "" && !config.IsWorker {
-		addr = config.Manager
+	if config.ManagerAddr != "" {
+		addr = config.ManagerAddr
 	} else {
 		ips, err := utils.FindLocalIPs()
 		if err != nil {
@@ -189,7 +189,10 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 		if ip == "" {
 			return "", fmt.Errorf("no local ip found")
 		}
-		addr = ip + ":"
+	}
+
+	if !strings.Contains(addr, ":") {
+		addr += ":"
 	}
 
 	l, err := net.Listen("tcp", addr)
@@ -264,9 +267,9 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			args = append(args, rpath)
 			if strings.HasSuffix(path, "juicefs") {
 				args = append(args, os.Args[1:]...)
-				args = append(args, "--is-worker", "--manager", address)
+				args = append(args, "--manager", address)
 			} else {
-				args = append(args, "--is-worker", "--manager", address)
+				args = append(args, "--manager", address)
 				args = append(args, os.Args[1:]...)
 			}
 			if !config.Verbose && !config.Quiet {
