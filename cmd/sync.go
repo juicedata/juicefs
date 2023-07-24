@@ -19,9 +19,9 @@ package cmd
 import (
 	"fmt"
 	"net"
-	"net/http"
 	_ "net/http/pprof"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -315,6 +315,9 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		if err != nil {
 			return nil, fmt.Errorf("unescape %s: %s", u.Host, err)
 		}
+		if os.Getenv(endpoint) != "" {
+			conf.Env[endpoint] = os.Getenv(endpoint)
+		}
 	} else if !conf.NoHTTPS && supportHTTPS(name, u.Host) {
 		endpoint = "https://" + u.Host
 	} else {
@@ -379,7 +382,6 @@ func doSync(c *cli.Context) error {
 		logger.Warnf("The include option needs to be used with the exclude option, otherwise the result of the current sync may not match your expectations")
 	}
 	config := sync.NewConfigFromCli(c)
-	go func() { _ = http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", config.HTTPPort), nil) }()
 
 	// Windows support `\` and `/` as its separator, Unix only use `/`
 	srcURL := c.Args().Get(0)

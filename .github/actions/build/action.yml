@@ -64,8 +64,7 @@ runs:
         if ${{ inputs.useBeta }}; then
           echo "upload beta version"
           curl --upload-file ${{inputs.target}} https://juicefs-pub.oss-cn-hangzhou.aliyuncs.com/
+          echo "upload beta version succeed"
         fi
-        mv ${{inputs.target}} juicefs
+        [ "${{inputs.target}}" != "juicefs" ] &&  mv ${{inputs.target}} juicefs
         echo "build ${{inputs.target}} succeed"
-
-
