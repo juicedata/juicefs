@@ -118,10 +118,10 @@ mkdir "$i_test_dir"
   exec_should_failed "mv -f $i_test_dir/ifile $a_test_dir/tmpfile"
   exec_should_failed "ln ifile $i_test_dir/linkfile"
 
-#  touch "$i_test_dir"/fallocatefile
-#  exec_should_success 'sudo chattr "+i" $i_test_dir/fallocatefile'
-#  exec_should_success '[[ "$(lsattr $i_test_dir/fallocatefile | awk -F " " "{print \$1}")" =~ "i" ]]'
-#  exec_should_failed 'fallocate -l 1k -n $i_test_dir/fallocatefile'
+  touch "$i_test_dir"/fallocatefile
+  exec_should_success 'sudo chattr "+i" $i_test_dir/fallocatefile'
+  exec_should_success '[[ "$(lsattr $i_test_dir/fallocatefile | awk -F " " "{print \$1}")" =~ "i" ]]'
+  exec_should_failed 'fallocate -l 1k -n $i_test_dir/fallocatefile'
 }
 
 {
