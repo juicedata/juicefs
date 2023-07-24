@@ -8,7 +8,7 @@ Amazon Web Services (AWS) is a leading global cloud computing platform that offe
 
 ## Where can JuiceFS be used?
 
-JuiceFS has a rich set of API interfaces, and it can be used in any environment that supports running the JuiceFS client. For AWS, JuiceFS can typically be used in the following products:
+JuiceFS has a rich set of API interfaces. For AWS, JuiceFS can typically be used in the following products:
 
 - **Amazon EC2** - Mounted using the FUSE interface
 - **Amazon EKS** - Utilizing the JuiceFS CSI Driver
@@ -19,7 +19,7 @@ JuiceFS has a rich set of API interfaces, and it can be used in any environment 
 A JuiceFS file system consists of two parts:
 
 1. **Object Storage**: Used for data storage.
-2. **Database**: Used for metadata storage.
+2. **Metadata Engine**: Used for metadata storage database.
 
 Depending on specific requirements, you can choose to use fully managed databases and S3 object storage on AWS, or deploy them on EC2 and EKS by yourself.
 

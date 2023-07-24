@@ -8,7 +8,7 @@ slug: /clouds/aws
 
 ## 可以在哪里使用 JuiceFS
 
-JuiceFS 具有丰富的 API 接口，**任何支持运行 JuiceFS 客户端的环境**都可以使用 JuiceFS 文件系统，对 AWS 而言，通常可以在以下产品中使用：
+JuiceFS 具有丰富的 API 接口，对 AWS 而言，通常可以在以下产品中使用：
 
 - **Amazon EC2** - 通过 FUSE 接口挂载使用
 - **Amazon EKS** - 通过 JuiceFS CSI Driver 使用
@@ -19,9 +19,9 @@ JuiceFS 具有丰富的 API 接口，**任何支持运行 JuiceFS 客户端的�
 一个 JuiceFS 文件系统由两部分组成：
 
 1. **对象存储**：用于数据存储
-2. **数据库**：用于元数据存储
+2. **元数据引擎**：用于元数据存储的数据库
 
-您可以根据具体需求，选择在 AWS 上使用全托管的数据库和 S3 对象存储，或者在 EC2、EKS 上自行部署。
+可以根据具体需求，选择在 AWS 上使用全托管的数据库和 S3 对象存储，或者在 EC2、EKS 上自行部署。
 
 > 本文着重介绍使用 AWS 全托管的服务创建 JuiceFS 文件系统的方法，对于自托管的情况，请查阅《[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)》和《[JuiceFS 支持的对象存储](../guide/how_to_set_up_object_storage.md)》以及相应程序文档。
 
@@ -29,7 +29,7 @@ JuiceFS 具有丰富的 API 接口，**任何支持运行 JuiceFS 客户端的�
 
 S3 是 AWS 提供的对象存储服务，可以根据需要在相应地区创建 bucket，也可以通过 IAM 角色授权让 JuiceFS 客户端自动创建 bucket。
 
-另外，你还可以使用任何 [JuiceFS 支持的对象存储](../guide/how_to_set_up_object_storage.md)，只要确保所选择的对象存储可以通过互联网被 AWS 的服务正常访问即可。
+另外，还可以使用任何 [JuiceFS 支持的对象存储](../guide/how_to_set_up_object_storage.md)，只要确保所选择的对象存储可以通过互联网被 AWS 的服务正常访问即可。
 
 Amazon S3 提供以下几种存储类型（仅供参考，请以 AWS 官方数据为准）：
 
@@ -41,7 +41,7 @@ Amazon S3 提供以下几种存储类型（仅供参考，请以 AWS 官方数�
 
 在存储类型方面，应该优先选择标准类型的 S3，其他的存储类型虽然有更低的单位存储价格，但会涉及最低存储时长要求和检索（取回）费用。
 
-另外，访问对象存储服务需要通过 `access key` 和 `secret key` 验证用户身份，你可以参照文档[《使用用户策略控制对存储桶的访问》](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/walkthrough1.html)进行创建。当通过 EC2 云服务器访问 S3 时，还可以为 EC2 分配 [IAM 角色](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html)，实现在 EC2 上免密钥调用 S3 API。
+另外，访问对象存储服务需要通过 `access key` 和 `secret key` 验证用户身份，可以参照文档[《使用用户策略控制对存储桶的访问》](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/walkthrough1.html)进行创建。当通过 EC2 云服务器访问 S3 时，还可以为 EC2 分配 [IAM 角色](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html)，实现在 EC2 上免密钥调用 S3 API。
 
 ### 数据库
 
@@ -50,7 +50,7 @@ AWS 提供了多种基于网络的全托管数据库，可以用于构建 JuiceF
 - **Amazon MemoryDB for Redis**：持久的 Redis 内存数据库服务，可提供超快的性能。
 - **Amazon RDS**：全托管的 MariaDB、MySQL、PostgresSQL 等数据库。
 
-另外，你还可以使用第三方提供的全托管数据库，只要确保数据库能够通过互联网被 AWS 正常访问即可。在环境支持的情况下，你还可以使用单机版的 SQLite 或 BadgerDB 数据库。
+另外，还可以使用第三方提供的全托管数据库，只要确保数据库能够通过互联网被 AWS 正常访问即可。在环境支持的情况下，还可以使用单机版的 SQLite 或 BadgerDB 数据库。
 
 ## 在 EC2 上使用 JuiceFS
 
@@ -74,9 +74,9 @@ curl -sSL https://d.juicefs.com/install | sh -
 
 #### 准备数据库
 
-这里以 MemoryDB for Redis 为例，为了让 EC2 能够访问 Redis 集群，你需要将它们创建在相同的 VPC，或者为 Redis 集群的安全组添加规则允许 EC2 实例访问。
+这里以 MemoryDB for Redis 为例，为了让 EC2 能够访问 Redis 集群，需要将它们创建在相同的 VPC，或者为 Redis 集群的安全组添加规则允许 EC2 实例访问。
 
-> **提示**：如果你创建的是 Redis 7.0 版本集群，需要安装 JuiceFS v1.1 及以上版本客户端。
+> **提示**：如果创建的是 Redis 7.0 版本集群，需要安装 JuiceFS v1.1 及以上版本客户端。
 
 #### 格式化文件系统
 
