@@ -177,7 +177,8 @@ jobs:
             echo "skip sync with multi nodes when meta is not redis"
             exit 0
           fi
-          types=("dsa" "ecdsa" "ecdsa-sk" "ed25519" "ed25519-sk" "rsa")
+          # not supported algo: "dsa" "ecdsa-sk" "ed25519-sk"
+          types=("ecdsa"  "ed25519"  "rsa")
           random_type=${types[$RANDOM % ${#types[@]}]}
           sudo CI=true META=${{matrix.meta}} KEY_TYPE=$random_type .github/scripts/command/sync_cluster.sh 
 

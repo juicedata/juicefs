@@ -22,29 +22,28 @@ start_minio(){
     ./mc config host add myminio http://127.0.0.1:9000 minioadmin minioadmin
 }
 start_minio
+add_user(){
+    if getent group juicedata ; then groupdel -f juicedata; echo delete juicedata group; fi
+    if getent passwd juicedata ; then rm -rf /home/juicedata && userdel -f juicedata; echo delete juicedata user; fi
+    groupadd juicedata && useradd -ms /bin/bash -g juicedata juicedata -u 1024
+}
+add_user
 start_worker(){
     if [ "$CI" != "true" ] && [ -f ~/.ssh/id_rsa ]; then
         echo "ssh key already exists, don't overwrite it in non ci environment"
     else
         echo "generating ssh key with type $KEY_TYPE"
-        yes | ssh-keygen -t $KEY_TYPE -C "default" -f ~/.ssh/id_rsa -q -N ""
+        yes |sudo -u juicedata ssh-keygen -t $KEY_TYPE -C "default" -f /home/juicedata/.ssh/id_rsa -q -N ""
     fi
-    cp -f ~/.ssh/id_rsa.pub .github/scripts/ssh/id_rsa.pub
+    cp -f /home/juicedata/.ssh/id_rsa.pub .github/scripts/ssh/id_rsa.pub
     docker build -t juicedata/ssh -f .github/scripts/ssh/Dockerfile .github/scripts/ssh
     docker rm worker1 worker2 -f
     docker compose -f .github/scripts/ssh/docker-compose.yml up -d
     sleep 3s
-    ssh -o BatchMode=yes juicedata@172.20.0.2 exit
-    ssh -o BatchMode=yes juicedata@172.20.0.3 exit
+    sudo -u juicedata ssh -o BatchMode=yes -o StrictHostKeyChecking=no juicedata@172.20.0.2 exit
+    sudo -u juicedata ssh -o BatchMode=yes -o StrictHostKeyChecking=no juicedata@172.20.0.3 exit
 }
 start_worker
-
-add_user(){
-    if getent group juicedata ; then groupdel -f juicedata; echo delete juicedata group; fi
-    if getent passwd juicedata ; then userdel -f juicedata; echo delete juicedata user; fi
-    groupadd juicedata && useradd -ms /bin/bash -g juicedata juicedata -u 1024
-}
-add_user
 
 sed -i 's/bind 127.0.0.1 ::1/bind 0.0.0.0 ::1/g' /etc/redis/redis.conf
 systemctl restart redis
@@ -53,26 +52,27 @@ META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
 test_sync_without_mount_point(){
     prepare_test
     ./juicefs mount -d $META_URL /jfs
-    file_count=100
+    file_count=600
     mkdir -p /jfs/data
     for i in $(seq 1 $file_count); do
         dd if=/dev/urandom of=/jfs/data/file$i bs=1M count=5 status=none
     done
     (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-
-    meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
+    
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
          --manager-address 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-         --list-threads 10 --list-depth 5\
+         --list-threads 10 --list-depth 5 \
          2>&1 | tee sync.log
     # diff data/ /jfs/data1/
     check_sync_log $file_count
     ./mc rm -r --force myminio/data1
 }
 
-skip_test_sync_without_mount_point2(){
+test_sync_without_mount_point2(){
     prepare_test
-    file_count=100
-    mkdir -p data
+    file_count=600
+    rm -rf data/
+    mkdir -p data/
     for i in $(seq 1 $file_count); do
         dd if=/dev/urandom of=data/file$i bs=1M count=5 status=none
     done
@@ -80,12 +80,13 @@ skip_test_sync_without_mount_point2(){
     ./mc cp -r data myminio/data
     
     # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data/ \
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/ \
          --manager-address 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5\
          2>&1 | tee sync.log
-    diff data/ /jfs/data/
     check_sync_log $file_count
+    ./juicefs mount -d $META_URL /jfs
+    diff data/ /jfs/data/
     ./mc rm -r --force myminio/data
     rm -rf data
 }
@@ -100,7 +101,7 @@ test_sync_small_files(){
         dd if=/dev/urandom of=/jfs/file$i bs=1M count=5 status=none
     done
     start_gateway
-    ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
+    sudo -u juicedata ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
          minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
         --manager-address 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
@@ -121,7 +122,7 @@ test_sync_big_file(){
     dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
     cp /tmp/bigfile /jfs/bigfile
     start_gateway
-    ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
+    sudo -u juicedata ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
          minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
         --manager-address 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         2>&1 | tee sync.log
