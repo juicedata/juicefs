@@ -213,17 +213,17 @@ func syncStorageFlags() []cli.Flag {
 func clusterFlags() []cli.Flag {
 	return addCategories("CLUSTER", []cli.Flag{
 		&cli.StringFlag{
-			Name:  "manager",
-			Usage: "manager address",
+			Name:   "manager",
+			Usage:  "the manager address used only by the worker node",
+			Hidden: true,
 		},
 		&cli.StringSliceFlag{
 			Name:  "worker",
 			Usage: "hosts (separated by comma) to launch worker",
 		},
-		&cli.BoolFlag{
-			Name:   "is-worker",
-			Usage:  "start as a worker",
-			Hidden: true,
+		&cli.StringFlag{
+			Name:  "manager-address",
+			Usage: "manager address",
 		},
 	})
 }
