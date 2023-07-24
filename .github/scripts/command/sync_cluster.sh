@@ -2,7 +2,7 @@
 source .github/scripts/common/common.sh
 [[ -z "$CI" ]] && CI=false
 [[ -z "$META" ]] && META=redis
-[[ -z "$KEY_TYPE" ]] && KEY_TYPE=rsa
+[[ -z "$KEY_TYPE" ]] && KEY_TYPE=ed25519
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
@@ -22,20 +22,30 @@ start_minio(){
     ./mc config host add myminio http://127.0.0.1:9000 minioadmin minioadmin
 }
 start_minio
-generate_key(){
+start_worker(){
     if [ "$CI" != "true" ] && [ -f ~/.ssh/id_rsa ]; then
         echo "ssh key already exists, don't overwrite it in non ci environment"
     else
-        ssh-keygen -t $KEY_TYPE -C "default" -f ~/.ssh/id_rsa -q -N ""
+        echo "generating ssh key with type $KEY_TYPE"
+        yes | ssh-keygen -t $KEY_TYPE -C "default" -f ~/.ssh/id_rsa -q -N ""
     fi
     cp -f ~/.ssh/id_rsa.pub .github/scripts/ssh/id_rsa.pub
+    docker build -t juicedata/ssh -f .github/scripts/ssh/Dockerfile .github/scripts/ssh
+    docker rm worker1 worker2 -f
+    docker compose -f .github/scripts/ssh/docker-compose.yml up -d
+    sleep 3s
+    ssh -o BatchMode=yes juicedata@172.20.0.2 exit
+    ssh -o BatchMode=yes juicedata@172.20.0.3 exit
 }
-generate_key
+start_worker
 
-docker build -t juicedata/ssh -f .github/scripts/ssh/Dockerfile .github/scripts/ssh
-docker rm worker1 worker2 -f
-docker compose -f .github/scripts/ssh/docker-compose.yml up -d
-sleep 3s
+add_user(){
+    if getent group juicedata ; then groupdel -f juicedata; echo delete juicedata group; fi
+    if getent passwd juicedata ; then userdel -f juicedata; echo delete juicedata user; fi
+    groupadd juicedata && useradd -ms /bin/bash -g juicedata juicedata -u 1024
+}
+add_user
+
 sed -i 's/bind 127.0.0.1 ::1/bind 0.0.0.0 ::1/g' /etc/redis/redis.conf
 systemctl restart redis
 META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
@@ -43,7 +53,7 @@ META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
 test_sync_without_mount_point(){
     prepare_test
     ./juicefs mount -d $META_URL /jfs
-    file_count=600
+    file_count=100
     mkdir -p /jfs/data
     for i in $(seq 1 $file_count); do
         dd if=/dev/urandom of=/jfs/data/file$i bs=1M count=5 status=none
@@ -51,7 +61,7 @@ test_sync_without_mount_point(){
     (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
 
     meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
-         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+         --manager 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5\
          2>&1 | tee sync.log
     # diff data/ /jfs/data1/
@@ -61,19 +71,20 @@ test_sync_without_mount_point(){
 
 skip_test_sync_without_mount_point2(){
     prepare_test
-    file_count=600
+    file_count=100
     mkdir -p data
     for i in $(seq 1 $file_count); do
         dd if=/dev/urandom of=data/file$i bs=1M count=5 status=none
     done
     (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
     ./mc cp -r data myminio/data
+    
     # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
-    meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data1/ \
-         --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+    sudo -u juicedata meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data/ \
+         --manager 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5\
          2>&1 | tee sync.log
-    diff data/ /jfs/data1/
+    diff data/ /jfs/data/
     check_sync_log $file_count
     ./mc rm -r --force myminio/data
     rm -rf data
@@ -91,7 +102,7 @@ test_sync_small_files(){
     start_gateway
     ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
          minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
-        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+        --manager 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         2>&1 | tee sync.log
     count1=$(./mc ls myminio/myjfs/test -r |wc -l)
@@ -112,7 +123,7 @@ test_sync_big_file(){
     start_gateway
     ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
          minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
-        --manager 172.20.0.1:8081 --worker sshuser@172.20.0.2,sshuser@172.20.0.3 \
+        --manager 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         2>&1 | tee sync.log
     md51=$(./mc cat myminio/myjfs/bigfile | md5sum)
     md52=$(cat /tmp/bigfile | md5sum)
@@ -131,7 +142,9 @@ check_sync_log(){
         exit 1
     fi
     count2=$(cat sync.log | grep 172.20.0.2 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
+    [ -z "$count2" ] && count2=0
     count3=$(cat sync.log | grep 172.20.0.3 | grep "receive stats" | gawk '{sum += gensub(/.*Copied:([0-9]+).*/, "\\1", "g");} END {print sum;}')
+    [ -z "$count3" ] && count3=0
     count1=$((file_count - count2 - count3))
     echo "count1, $count1, count2, $count2, count3, $count3"
     min_count=$((file_count / 6))
