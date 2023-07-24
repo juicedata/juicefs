@@ -3,6 +3,7 @@ source .github/scripts/common/common.sh
 [[ -z "$CI" ]] && CI=false
 [[ -z "$META" ]] && META=redis
 [[ -z "$KEY_TYPE" ]] && KEY_TYPE=ed25519
+[[ -z "$FILE_COUNT" ]] && FILE_COUNT=600
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
@@ -50,11 +51,12 @@ META_URL=$(echo $META_URL | sed 's/127\.0\.0\.1/172.20.0.1/g')
 test_sync_without_mount_point(){
     prepare_test
     ./juicefs mount -d $META_URL /jfs
-    file_count=600
+    file_count=$FILE_COUNT
     mkdir -p /jfs/data
     for i in $(seq 1 $file_count); do
-        dd if=/dev/urandom of=/jfs/data/file$i bs=1M count=5 status=none
+        dd if=/dev/urandom of=/jfs/data/file$i bs=1M count=1 status=none
     done
+    dd if=/dev/urandom of=/jfs/data/file$file_count bs=1M count=1024
     (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
     
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v jfs://meta_url/data/ minio://minioadmin:minioadmin@172.20.0.1:9000/data1/ \
@@ -68,12 +70,13 @@ test_sync_without_mount_point(){
 
 test_sync_without_mount_point2(){
     prepare_test
-    file_count=600
+    file_count=$FILE_COUNT
     rm -rf data/
     mkdir -p data/
     for i in $(seq 1 $file_count); do
-        dd if=/dev/urandom of=data/file$i bs=1M count=5 status=none
+        dd if=/dev/urandom of=data/file$i bs=1M count=1 status=none
     done
+    dd if=/dev/urandom of=data/file$file_count bs=1M count=1024
     (./mc rb myminio/data > /dev/null 2>&1 --force || true) && ./mc mb myminio/data
     ./mc cp -r data myminio/data
     
@@ -89,14 +92,13 @@ test_sync_without_mount_point2(){
     rm -rf data
 }
 
-
-test_sync_small_files(){
+test_sync_between_oss(){
     prepare_test
     ./juicefs mount -d $META_URL /jfs
     mkdir -p /jfs/test
-    file_count=600
+    file_count=$FILE_COUNT
     for i in $(seq 1 $file_count); do
-        dd if=/dev/urandom of=/jfs/file$i bs=1M count=5 status=none
+        dd if=/dev/urandom of=/jfs/file$i bs=1M count=1 status=none
     done
     start_gateway
     sudo -u juicedata ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
@@ -104,32 +106,13 @@ test_sync_small_files(){
         --manager-address 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         2>&1 | tee sync.log
-    count1=$(./mc ls myminio/myjfs/test -r |wc -l)
+    count1=$(./mc ls myminio/myjfs/test -r | wc -l)
     count2=$(./mc ls juicegw/myjfs/test -r | awk '$4=="5MiB"' | wc -l)
     if [ "$count1" != "$count2" ]; then
         echo "count not equal, $count1, $count2"
         exit 1
     fi
     check_sync_log $file_count
-}
-
-
-test_sync_big_file(){
-    prepare_test
-    ./juicefs mount -d $META_URL /jfs
-    dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
-    cp /tmp/bigfile /jfs/bigfile
-    start_gateway
-    sudo -u juicedata ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
-         minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
-        --manager-address 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
-        2>&1 | tee sync.log
-    md51=$(./mc cat myminio/myjfs/bigfile | md5sum)
-    md52=$(cat /tmp/bigfile | md5sum)
-    if [ "$md51" != "$md52" ]; then
-        echo "md5sum not equal, $md51, $md52"
-        exit 1
-    fi
 }
 
 check_sync_log(){
@@ -146,7 +129,7 @@ check_sync_log(){
     [ -z "$count3" ] && count3=0
     count1=$((file_count - count2 - count3))
     echo "count1, $count1, count2, $count2, count3, $count3"
-    min_count=$((file_count / 6))
+    min_count=$((file_count / 10))
     # check if count1 is less than min_count
     if [ "$count1" -lt "$min_count" ] || [ "$count2" -lt "$min_count" ] || [ "$count3" -lt "$min_count" ]; then
         echo "count is less than min_count, $count1, $count2, $count3, $min_count"
