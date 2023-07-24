@@ -22,18 +22,16 @@ start_minio(){
     ./mc config host add myminio http://127.0.0.1:9000 minioadmin minioadmin
 }
 start_minio
-add_user(){
+start_worker(){
     if getent group juicedata ; then groupdel -f juicedata; echo delete juicedata group; fi
     if getent passwd juicedata ; then rm -rf /home/juicedata && userdel -f juicedata; echo delete juicedata user; fi
     groupadd juicedata && useradd -ms /bin/bash -g juicedata juicedata -u 1024
-}
-add_user
-start_worker(){
     if [ "$CI" != "true" ] && [ -f ~/.ssh/id_rsa ]; then
         echo "ssh key already exists, don't overwrite it in non ci environment"
     else
         echo "generating ssh key with type $KEY_TYPE"
         yes |sudo -u juicedata ssh-keygen -t $KEY_TYPE -C "default" -f /home/juicedata/.ssh/id_rsa -q -N ""
+        chmod 600 /home/juicedata/.ssh/id_rsa
     fi
     cp -f /home/juicedata/.ssh/id_rsa.pub .github/scripts/ssh/id_rsa.pub
     docker build -t juicedata/ssh -f .github/scripts/ssh/Dockerfile .github/scripts/ssh
