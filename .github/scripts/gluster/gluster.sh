@@ -12,11 +12,11 @@ systemctl start glusterd.service
 mkdir -p /data/brick/gv0
 ip=$(ifconfig eth0 | grep 'inet ' |  awk '{ print $2 }')
 echo ip is $ip
-gluster volume create gv0 $ip:/data/brick/gv0
+gluster volume create gv0 $ip:/data/brick/gv0 force
 gluster volume start gv0
 gluster volume info
 
-./juicefs format $META_URL glusterfs-test --storage gluster --bucket $ip/gv0
+./juicefs format $META_URL glusterfs-test --storage gluster --bucket $ip/gv0 
 ./juicefs mount $META_URL /jfs -d
 echo abc > /jfs/abc
 cat /jfs/abc | grep abc
