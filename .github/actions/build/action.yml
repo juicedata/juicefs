@@ -53,7 +53,7 @@ runs:
             date2=$(date +%Y-%m-%d)
             if [ "$date1" == "$date2" ]; then
               echo beta version is up to date, $version, use it to skip build
-              return 0
+              exit 0
             else
               rm -f juicefs
             fi
