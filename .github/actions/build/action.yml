@@ -45,11 +45,11 @@ runs:
       run: |
         if ${{ inputs.useBeta }}; then
           echo "try use beta version of juicefs"
-          if wget https://juicefs-pub.oss-cn-hangzhou.aliyuncs.com/${{inputs.target}}; then
+          if wget -q https://juicefs-pub.oss-cn-hangzhou.aliyuncs.com/${{inputs.target}}; then
             mv ${{inputs.target}} juicefs
             sudo chmod +x juicefs
             version=$(./juicefs version)
-            date1=$( | grep -oP '\d{4}-\d{2}-\d{2}')
+            date1=$( echo $version | grep -oP '\d{4}-\d{2}-\d{2}')
             date2=$(date +%Y-%m-%d)
             if [ "$date1" == "$date2" ]; then
               echo beta version is up to date, $version, use it to skip build
