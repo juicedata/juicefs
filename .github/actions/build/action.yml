@@ -30,6 +30,15 @@ runs:
         go version
         sudo go version
 
+    - name: Install tools
+      shell: bash
+        if [ "${{inputs.target}}" == "juicefs.fdb" ]; then
+          wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+          sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+        elif [ "${{inputs.target}}" == "juicefs.gluster" ]; then
+          sudo .github/scripts/apt_install.sh uuid-dev libglusterfs-dev
+        fi
+
     - name: Build linux target
       shell: bash
       run: |
@@ -50,24 +59,12 @@ runs:
           fi
         fi
         echo "start to build ${{inputs.target}}"
-        if [ "${{inputs.target}}" == "juicefs.fdb" ]; then
-          wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-          sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
-          make ${{inputs.target}}
-          cp juicefs.fdb juicefs
-        elif [ "${{inputs.target}}" == "juicefs.gluster" ]; then
-          sudo .github/scripts/apt_install.sh uuid-dev libglusterfs-dev
-          make ${{inputs.target}}
-          cp juicefs.gluster juicefs
-        else
-          make ${{inputs.target}}
-        fi
-        echo "build ${{inputs.target}} succeed"
+        make ${{inputs.target}}
         if ${{ inputs.useBeta }}; then
           echo "upload beta version"
           curl --upload-file ${{inputs.target}} https://juicefs-pub.oss-cn-hangzhou.aliyuncs.com/
-          rm -f ${{inputs.target}}
         fi
+        mv ${{inputs.target}} juicefs
+        echo "build ${{inputs.target}} succeed"
 
-        
 
