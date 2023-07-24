@@ -34,6 +34,7 @@ jobs:
         uses: ./.github/actions/build
         with: 
           target: "juicefs.gluster"
+          useBeta: true
 
       - name: Test
         run: |

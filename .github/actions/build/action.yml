@@ -5,6 +5,11 @@ inputs:
     description: 'build target: juicefs, juicefs.fdb etc'
     required: true
     default: 'juicefs'
+  useBeta:
+    description: 'use beta version of juicefs to skip build'
+    required: true
+    type: boolean
+    default: false
 runs:
   using: "composite"
   steps:
@@ -28,18 +33,41 @@ runs:
     - name: Build linux target
       shell: bash
       run: |
+        if ${{ inputs.useBeta }}; then
+          echo "try use beta version of juicefs"
+          if wget https://juicefs-pub.oss-cn-hangzhou.aliyuncs.com/${{inputs.target}}; then
+            mv ${{inputs.target}} juicefs
+            sudo chmod +x juicefs
+            version=$(./juicefs version)
+            date1=$( | grep -oP '\d{4}-\d{2}-\d{2}')
+            date2=$(date +%Y-%m-%d)
+            if [ "$date1" == "$date2" ]
+              echo beta version is up to date, $version, use it to skip build
+              return 0
+            else
+              rm -f juicefs
+            fi
+          fi
+        fi
         echo "start to build ${{inputs.target}}"
         if [ "${{inputs.target}}" == "juicefs.fdb" ]; then
           wget -q https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
           sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
           make ${{inputs.target}}
-          mv juicefs.fdb juicefs
+          cp juicefs.fdb juicefs
         elif [ "${{inputs.target}}" == "juicefs.gluster" ]; then
           sudo .github/scripts/apt_install.sh uuid-dev libglusterfs-dev
           make ${{inputs.target}}
-          mv juicefs.gluster juicefs
+          cp juicefs.gluster juicefs
         else
           make ${{inputs.target}}
         fi
         echo "build ${{inputs.target}} succeed"
+        if ${{ inputs.useBeta }}; then
+          echo "upload beta version"
+          curl --upload-file ${{inputs.target}} https://juicefs-pub.oss-cn-hangzhou.aliyuncs.com/
+          rm -f ${{inputs.target}}
+        fi
+
+        
 
