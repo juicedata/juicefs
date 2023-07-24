@@ -81,7 +81,7 @@ skip_test_sync_without_mount_point2(){
     
     # (./mc rb myminio/data1 > /dev/null 2>&1 --force || true) && ./mc mb myminio/data1
     sudo -u juicedata meta_url=$META_URL ./juicefs sync -v  minio://minioadmin:minioadmin@172.20.0.1:9000/data/ jfs://meta_url/data/ \
-         --manager 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+         --manager-address 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
          --list-threads 10 --list-depth 5\
          2>&1 | tee sync.log
     diff data/ /jfs/data/
@@ -102,7 +102,7 @@ test_sync_small_files(){
     start_gateway
     ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
          minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
-        --manager 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+        --manager-address 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         --list-threads 10 --list-depth 5 \
         2>&1 | tee sync.log
     count1=$(./mc ls myminio/myjfs/test -r |wc -l)
@@ -123,7 +123,7 @@ test_sync_big_file(){
     start_gateway
     ./juicefs sync -v minio://minioadmin:minioadmin@172.20.0.1:9005/myjfs/ \
          minio://minioadmin:minioadmin@172.20.0.1:9000/myjfs/ \
-        --manager 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
+        --manager-address 172.20.0.1:8081 --worker juicedata@172.20.0.2,juicedata@172.20.0.3 \
         2>&1 | tee sync.log
     md51=$(./mc cat myminio/myjfs/bigfile | md5sum)
     md52=$(cat /tmp/bigfile | md5sum)
