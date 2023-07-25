@@ -138,6 +138,9 @@ start_meta_engine(){
             -v /tmp/data:/data \
             -v /tmp/config:/root/.minio \
             minio/minio server /data
+    elif [ "$storage" == "gluster" ]; then
+        dpkg -s glusterfs-server || .github/scripts/apt_install.sh glusterfs-server
+        systemctl start glusterd.service
     elif [ "$meta" != "postgres" ] && [ "$storage" == "postgres" ]; then
         echo "start postgres"
         docker run --name postgresql \
