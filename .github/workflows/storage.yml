@@ -52,7 +52,7 @@ jobs:
 
       - name: Test
         run: |
-          sudo .github/scripts/storage.sh
+          sudo STORAGE=${{matrix.storage}} .github/scripts/storage.sh
 
       - name: Send Slack Notification
         if: ${{ failure() }}
