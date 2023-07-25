@@ -1,6 +1,6 @@
 ---
 title: 缓存
-sidebar_position: 4
+sidebar_position: 3
 slug: /cache_management
 ---
 
@@ -61,7 +61,7 @@ JuiceFS 客户端在 `open` 操作即打开一个文件时，其文件属性会�
 
 作为对比，JuiceFS 商业版提供更丰富的客户端内存的元数据缓存功能，并且支持主动失效，阅读[商业版文档](https://juicefs.com/docs/zh/cloud/guide/cache/#client-memory-metadata-cache)以了解。
 
-## 数据缓存
+## 数据缓存 {#data-cache}
 
 JuiceFS 对数据也提供多种缓存机制来提高性能，包括内核中的页缓存和客户端所在机器的本地缓存，以及客户端自身的内存读写缓冲区。读请求会依次尝试内核分页缓存、JuiceFS 进程的预读缓冲区、本地磁盘缓存，当缓存中没找到对应数据时才会从对象存储读取，并且会异步写入各级缓存保证下一次访问的性能。
 

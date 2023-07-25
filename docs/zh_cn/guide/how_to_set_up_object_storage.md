@@ -55,7 +55,7 @@ juicefs format --storage s3 \
 
 执行上述命令后，JuiceFS 客户端会创建 4 个 bucket，分别为 `myjfs-0`、`myjfs-1`、`myjfs-2` 和 `myjfs-3`。
 
-## Access Key 和 Secret Key
+## Access Key 和 Secret Key {#aksk}
 
 一般而言，对象存储通过 Access Key ID 和 Access Key Secret 验证用户身份，对应到 JuiceFS 文件系统就是 `--access-key` 和 `--secret-key` 这两个选项（或者简称为 AK、SK）。
 
@@ -72,7 +72,7 @@ juicefs format --storage s3 \
 
 公有云通常允许用户创建 IAM（Identity and Access Management）角色，例如：[AWS IAM 角色](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html) 或 [阿里云 RAM 角色](https://help.aliyun.com/document_detail/93689.html)，可将角色分配给 VM 实例。如果云服务器实例已经拥有读写对象存储的权限，则无需再指定 `--access-key` 和 `--secret-key`。
 
-## 使用临时访问凭证
+## 使用临时访问凭证 {#session-token}
 
 永久访问凭证一般有两个部分：Access Key 和 Secret Key，而临时访问凭证一般包括 3 个部分：Access Key、Secret Key 与 token，并且临时访问凭证具有过期时间，一般在几分钟到几个小时之间。
 
@@ -160,7 +160,7 @@ juicefs format \
 | [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
 | [华为云 OBS](#华为云-obs)                   | `obs`      |
 | [百度云 BOS](#百度-bos)                     | `bos`      |
-| [火山引擎 TOS](#火山引擎-tos)               | `tos`      |
+| [火山引擎 TOS](#volcano-engine-tos)               | `tos`      |
 | [金山云 KS3](#金山云-ks3)                   | `ks3`      |
 | [青云 QingStor](#青云-qingstor)             | `qingstor` |
 | [七牛云 Kodo](#七牛云-kodo)                 | `qiniu`    |
@@ -171,6 +171,7 @@ juicefs format \
 | [优刻得 US3](#优刻得-us3)                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                   | `ceph`     |
 | [Ceph RGW](#ceph-rgw)                       | `s3`       |
+| [Gluster](#gluster)                         | `gluster`  |
 | [Swift](#swift)                             | `swift`    |
 | [MinIO](#minio)                             | `minio`    |
 | [WebDAV](#webdav)                           | `webdav`   |
@@ -590,7 +591,7 @@ juicefs format \
     myjfs
 ```
 
-## 火山引擎 TOS
+## 火山引擎 TOS <VersionAdd>1.0.3</VersionAdd> {#volcano-engine-tos}
 
 使用火山引擎 TOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.volcengine.com/docs/6291/65568) 了解如何创建 Access Key 和 Secret Key。
 
@@ -798,6 +799,47 @@ juicefs format \
     ... \
     myjfs
 ```
+
+## Gluster
+
+[Gluster](https://github.com/gluster/glusterfs) 是一款开源的软件定义分布式存储，单集群能支持 PiB 级别的数据。JuiceFS 通过 `libgfapi` 库与 Gluster 集群交互，使用前需要单独编译。
+
+首先安装 `libgfapi`（6.0 或以上版本）：
+
+<Tabs>
+  <TabItem value="debian" label="Debian 及衍生版本">
+
+```bash
+sudo apt-get install libglusterfs-dev glusterfs-common
+```
+
+  </TabItem>
+  <TabItem value="centos" label="RHEL 及衍生版本">
+
+```bash
+sudo yum install glusterfs-api-devel glusterfs-libs
+```
+
+  </TabItem>
+</Tabs>
+
+然后编译支持 Gluster 的 JuiceFS：
+
+```bash
+make juicefs.gluster
+```
+
+现在我们可以创建出基于 Gluster 的 JuiceFS volume：
+
+```bash
+juicefs format \
+    --storage gluster \
+    --bucket host1,host2,host3/gv0 \
+    ... \
+    myjfs
+```
+
+其中 `--bucket` 选项格式为 `<host[,host...]>/<volume_name>`。注意这里的 `volume_name` 为 Gluster 中的卷名称，与 JuiceFS volume 自身的名字没有直接关系。
 
 ## Swift
 

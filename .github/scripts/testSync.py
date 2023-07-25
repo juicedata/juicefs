@@ -1,6 +1,15 @@
 import subprocess
+try:
+    __import__("hypothesis")
+except ImportError:
+    subprocess.check_call(["pip", "install", "hypothesis"])
 import random
 import shutil
+try:
+    __import__("hypothesis")
+except ImportError:
+    subprocess.check_call(["pip", "install", "hypothesis"])
+
 from hypothesis import given, strategies as st, settings, example
 import os
 

@@ -55,7 +55,7 @@ juicefs format --storage s3 \
 
 After executing the above command, the JuiceFS client will create 4 buckets named `myjfs-0`, `myjfs-1`, `myjfs-2`, and `myjfs-3`.
 
-## Access Key and Secret Key
+## Access Key and Secret Key {#aksk}
 
 In general, object storages are authenticated with Access Key ID and Access Key Secret. For JuiceFS file system, they are provided by options `--access-key` and `--secret-key` (or AK, SK for short).
 
@@ -72,7 +72,7 @@ juicefs format --storage s3 \
 
 Public clouds typically allow users to create IAM (Identity and Access Management) roles, such as [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) or [Alibaba Cloud RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm), which can be assigned to VM instances. If the cloud server instance already has read and write access to the object storage, there is no need to specify `--access-key` and `--secret-key`.
 
-## Use temporary access credentials
+## Use temporary access credentials {#session-token}
 
 Permanent access credentials generally have two parts, Access Key, Secret Key, while temporary access credentials generally include three parts, Access Key, Secret Key and token, and temporary access credentials have an expiration time, usually between a few minutes and a few hours.
 
@@ -171,6 +171,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [UCloud US3](#ucloud-us3)                                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                                   | `ceph`     |
 | [Ceph RGW](#ceph-rgw)                                       | `s3`       |
+| [Gluster](#gluster)                                         | `gluster`  |
 | [Swift](#swift)                                             | `swift`    |
 | [MinIO](#minio)                                             | `minio`    |
 | [WebDAV](#webdav)                                           | `webdav`   |
@@ -590,7 +591,7 @@ juicefs format \
     myjfs
 ```
 
-## Volcano Engine TOS
+## Volcano Engine TOS <VersionAdd>1.0.3</VersionAdd> {#volcano-engine-tos}
 
 Please follow [this document](https://www.volcengine.com/docs/6291/65568) to learn how to get access key and secret key.
 
@@ -798,6 +799,47 @@ juicefs format \
     ... \
     myjfs
 ```
+
+## Gluster
+
+[Gluster](https://github.com/gluster/glusterfs) is a software defined distributed storage that can scale to several petabytes. JuiceFS communicates with Gluster via the `libgfapi` library, so it needs to be built separately before used.
+
+First, install `libgfapi` (version 6.0+):
+
+<Tabs>
+  <TabItem value="debian" label="Debian and derivatives">
+
+```bash
+sudo apt-get install libglusterfs-dev glusterfs-common
+```
+
+  </TabItem>
+  <TabItem value="centos" label="RHEL and derivatives">
+
+```bash
+sudo yum install glusterfs-api-devel glusterfs-libs
+```
+
+  </TabItem>
+</Tabs>
+
+Then compile JuiceFS supporting Gluster:
+
+```bash
+make juicefs.gluster
+```
+
+Now we can create a JuiceFS volume on Gluster:
+
+```bash
+juicefs format \
+    --storage gluster \
+    --bucket host1,host2,host3/gv0 \
+    ... \
+    myjfs
+```
+
+The format of `--bucket` option is `<host[,host...]>/<volume_name>`. Please note the `volume_name` here is the name of Gluster volume, and has nothing to do with the name of JuiceFS volume.
 
 ## Swift
 
