@@ -8,6 +8,7 @@ start_meta_engine $META $STORAGE
 META_URL=$(get_meta_url $META)
 
 test_write_file(){
+    exit 1
     prepare_test
     ./juicefs mount $META_URL /jfs -d
     echo abc > /jfs/abc
