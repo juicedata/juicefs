@@ -28,9 +28,9 @@ JuiceFS 采用多引擎设计，目前已支持 Redis、TiKV、MySQL/MariaDB、P
 
 ## JuiceFS 如何存储文件 {#how-juicefs-store-files}
 
-与传统文件系统只能使用本地磁盘存储数据和对应的元数据的模式不同，JuiceFS 会将数据格式化以后存储在对象存储，同时会将文件的元数据存储在元数据引擎。在 JuiceFS 中，Chunk、Slice、Block 是三个重要的概念：
+与传统文件系统只能使用本地磁盘存储数据和对应的元数据的模式不同，JuiceFS 会将数据格式化以后存储在对象存储，同时会将文件的元数据存储在元数据引擎。在这个过程中，Chunk、Slice、Block 是三个重要的概念：
 
-文件首先被逻辑切分为一或多个 64M 的「Chunk」，方便根据 offset 来定位，让 JuiceFS 面对大文件也有优秀的性能。只要文件总长度没有变化，不论经历多少修改写入，文件的 Chunk 切分都是固定的。
+文件首先被逻辑切分为一或多个 64M 的「Chunk」，方便根据 offset 来定位，这让 JuiceFS 面对大文件也有优秀的性能。只要文件总长度没有变化，不论经历多少修改写入，文件的 Chunk 切分都是固定的。
 
 ![](../images/file-and-chunks.svg)
 
