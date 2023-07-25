@@ -31,8 +31,9 @@ prepare_test(){
             --access-key minioadmin --secret-key minioadmin
     elif [[ "$STORAGE" == "gluster" ]]; then
         if gluster volume info gv0 > /dev/null 2>&1; then
-            gluster volume stop gv0
-            gluster volume delete gv0
+            gluster volume stop gv0 <<< y
+            sleep 3s
+            gluster volume delete gv0 <<< y
             echo "Volume gv0 is deleted"
         fi
         rm -rf /data/brick/gv0 && mkdir -p /data/brick/gv0
