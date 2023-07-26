@@ -348,6 +348,9 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		if (iflag & FS_APPEND_FL) != 0 {
 			attr.Flags |= meta.FlagAppend
 		}
+		if iflag &= ^uint64(FS_IMMUTABLE_FL | FS_APPEND_FL); iflag != 0 {
+			return syscall.ENOTSUP
+		}
 		return v.Meta.SetAttr(ctx, ino, meta.SetAttrFlag, 0, attr)
 	} else {
 		if err = v.Meta.GetAttr(ctx, ino, attr); err != 0 {
