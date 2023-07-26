@@ -1034,7 +1034,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if config.Manager == "" {
 		if len(config.Workers) > 0 {
-			addr, err := startManager(tasks)
+			addr, err := startManager(config, tasks)
 			if err != nil {
 				return err
 			}
