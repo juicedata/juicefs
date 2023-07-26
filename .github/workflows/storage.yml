@@ -48,7 +48,7 @@ jobs:
         uses: ./.github/actions/build
         with: 
           target: "$TARGET"
-          useBeta: true
+          # useBeta: true
 
       - name: Test
         run: |
