@@ -28,7 +28,6 @@ type Config struct {
 	Start          string
 	End            string
 	Threads        int
-	HTTPPort       int
 	Update         bool
 	ForceUpdate    bool
 	Perms          bool
