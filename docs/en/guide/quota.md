@@ -127,6 +127,10 @@ The client reads the latest storage quota settings from the metadata engine ever
 
 JuiceFS began to support directory-level storage quota since v1.1, and you can use the `juicefs quota` subcommand for directory quota management and query.
 
+:::tip
+The usage statistic relies on the mount process, please do not use this feature until all writable mount processes are upgraded to v1.1.0.
+:::
+
 ### Limit directory capacity {#limit-directory-capacity}
 
 You can use `juicefs quota set $METAURL --path $DIR --capacity $N` to set the directory capacity limit in GiB. For example, to set a capacity quota of 1GiB for the directory `/test`:
