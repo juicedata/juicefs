@@ -21,6 +21,8 @@ retry() {
 }
 
 install_tikv(){
+    [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
+    make -C tcli && sudo cp tcli/bin/tcli /usr/local/bin
     # retry because of: https://github.com/pingcap/tiup/issues/2057
     curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
     user=$(whoami)
@@ -94,10 +96,6 @@ start_meta_engine(){
     elif [ "$meta" == "redis" ]; then
         sudo .github/scripts/apt_install.sh  redis-tools redis-server
     elif [ "$meta" == "tikv" ]; then
-        [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
-        cd tcli && make
-        sudo cp bin/tcli /usr/local/bin
-        cd -
         retry install_tikv
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3

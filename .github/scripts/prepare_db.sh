@@ -1,4 +1,5 @@
 #!/bin/bash -e 
+source .github/scripts/start_meta_engine.sh
 [ -z "$TEST" ] && echo "TEST is not set" && exit 1
 
 check_port(){
@@ -9,15 +10,15 @@ check_port(){
     done
 }
 
-install_tikv(){
-    wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
-    bash /home/travis/.m2/install.sh
-    source /home/runner/.bash_profile
-    tiup -v
-    nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
-    sleep 30
-    check_port 2379
-}
+# install_tikv(){
+#     wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
+#     bash /home/travis/.m2/install.sh
+#     source /home/runner/.bash_profile
+#     tiup -v
+#     nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
+#     sleep 30
+#     check_port 2379
+# }
 
 install_mysql(){
     sudo service mysql start
@@ -99,7 +100,7 @@ install_webdav(){
 prepare_db(){
     case "$TEST" in
     "test.meta.core")
-        install_tikv
+        retry install_tikv
         install_mysql
     ;;
     "test.meta.non-core")
@@ -116,7 +117,7 @@ prepare_db(){
         ;;
     "test.pkg")
         install_mysql
-        install_tikv
+        retry install_tikv
         install_minio
         install_gluster
         install_webdav
