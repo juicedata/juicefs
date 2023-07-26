@@ -17,7 +17,7 @@ on:
       - 'docs/**'
       - '**.md'
       - '.github/**'
-      - '!.github/workflow/unittests.yml'
+      - '!.github/workflows/unittests.yml'
   workflow_dispatch:
     inputs:
       debug:
