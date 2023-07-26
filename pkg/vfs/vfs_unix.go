@@ -323,13 +323,11 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 	defer func() { logit(ctx, "ioctl (%d,0x%X,0x%X,%v,%v): %s", ino, cmd, arg, bufIn, bufOut, strerr(err)) }()
 	switch cmd {
 	default:
-		err = syscall.ENOTTY
-		return
+		return syscall.ENOTTY
 	case FS_IOC_SETFLAGS, FS_IOC_GETFLAGS, FS_IOC_SETFLAGS_32, FS_IOC_GETFLAGS_32, FS_IOC_FSGETXATTR:
 	}
 	if IsSpecialNode(ino) {
-		err = syscall.EPERM
-		return
+		return syscall.EPERM
 	}
 	var attr = &Attr{}
 	if cmd>>30 == 1 { // set
@@ -339,8 +337,7 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		} else if len(bufIn) == 4 {
 			iflag = uint64(utils.NativeEndian.Uint32(bufIn))
 		} else {
-			err = syscall.EINVAL
-			return
+			return syscall.EINVAL
 		}
 		if ctx.CheckPermission() && ctx.Uid() != 0 && iflag&(FS_IMMUTABLE_FL|FS_APPEND_FL) != 0 {
 			return syscall.EPERM
@@ -351,10 +348,9 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 		if (iflag & FS_APPEND_FL) != 0 {
 			attr.Flags |= meta.FlagAppend
 		}
-		err = v.Meta.SetAttr(ctx, ino, meta.SetAttrFlag, 0, attr)
+		return v.Meta.SetAttr(ctx, ino, meta.SetAttrFlag, 0, attr)
 	} else {
-		err = v.Meta.GetAttr(ctx, ino, attr)
-		if err != 0 {
+		if err = v.Meta.GetAttr(ctx, ino, attr); err != 0 {
 			return
 		}
 		var iflag uint64
@@ -370,8 +366,7 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 			} else if len(bufOut) == 4 {
 				utils.NativeEndian.PutUint32(bufOut, uint32(iflag))
 			} else {
-				err = syscall.EINVAL
-				return
+				return syscall.EINVAL
 			}
 		} else { // 'X', FS_IOC_FSGETXATTR
 			if (attr.Flags & meta.FlagImmutable) != 0 {
@@ -386,10 +381,9 @@ func (v *VFS) Ioctl(ctx Context, ino Ino, cmd uint32, arg uint64, bufIn, bufOut 
 					bufOut[4+i] = 0
 				}
 			} else {
-				err = syscall.EINVAL
-				return
+				return syscall.EINVAL
 			}
 		}
+		return
 	}
-	return
 }
