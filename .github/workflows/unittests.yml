@@ -17,6 +17,7 @@ on:
       - 'docs/**'
       - '**.md'
       - '.github/**'
+      - '!.github/workflow/unittests.yml'
   workflow_dispatch:
     inputs:
       debug:
@@ -83,7 +84,7 @@ jobs:
         run: |
           test=${{matrix.test}}
           make $test
-          
+
       # - name: Code Coverage
       #   uses: codecov/codecov-action@v3
       #   with:
