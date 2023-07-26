@@ -4,9 +4,11 @@ source .github/scripts/start_meta_engine.sh
 
 # check port is ready until 60s, sleep 1s for each query 
 check_port(){
+    port=$1
     echo "check for port:" $port
     for i in {1..30}; do
-        sudo lsof -i :$port && echo "port is available: $port" && return 0 || sleep 1
+        sudo lsof -i :$port && echo "port is available: $port after $i sec" && return 0 \
+        || (echo "port is not available after $i" && sleep 1)
     done
     echo "service not ready on: $port" && exit 1
 }
