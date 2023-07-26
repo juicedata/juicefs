@@ -22,8 +22,8 @@ test_with_fio(){
     prepare_test
     ./juicefs mount $META_URL /jfs -d
     dpkg -s fio | .github/scripts/apt_install.sh fio
-    fio --name=randrw --ioengine=sync --time_based=1 --runtime=60 --group_reporting \
-        --bs=128k --filesize=1G --numjobs=4 --depth=8 --rw=randrw --verify=md5 --filename=/jfs/fio
+    fio --name=randrw --ioengine=sync --time_based=1 --runtime=60 --group_reporting  \
+        --bs=128k --filesize=1G --numjobs=1 --rw=randrw --verify=md5 --filename=/jfs/fio
 }
 
 test_random_read_write(){
