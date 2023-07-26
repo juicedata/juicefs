@@ -55,6 +55,7 @@ runs:
               echo beta version is up to date, $version, use it to skip build
               exit 0
             else
+              echo beta version is out of date, $version, remove it and build
               rm -f juicefs
             fi
           fi

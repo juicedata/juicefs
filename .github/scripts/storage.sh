@@ -7,19 +7,37 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META $STORAGE
 META_URL=$(get_meta_url $META)
 
-test_write_file(){
-    exit 1
+test_with_big_file(){
     prepare_test
     ./juicefs mount $META_URL /jfs -d
-    echo abc > /jfs/abc
-    cat /jfs/abc | grep abc
+    dd if=/dev/urandom of=/tmp/bigfile bs=1M count=1024
+    cp /tmp/bigfile /jfs/bigfile
+    umount_jfs /jfs $META_URL
+    rm -rf /var/jfsCache/myjfs
+    ./juicefs mount $META_URL /jfs -d
+    compare_md5sum /tmp/bigfile /jfs/bigfile
 }
 
-test_write_file2(){
+test_with_fio(){
     prepare_test
     ./juicefs mount $META_URL /jfs -d
-    echo def > /jfs/def
-    cat /jfs/def | grep def
+    dpkg -s fio | .github/scripts/apt_install.sh fio
+    fio --name=randrw --ioengine=sync --time_based=1 --runtime=60 --group_reporting \
+        --bs=128k --filesize=1G --numjobs=4 --depth=8 --rw=randrw --verify=md5 --filename=/jfs/fio
+}
+
+test_random_read_write(){
+    prepare_test
+    ./juicefs mount $META_URL /jfs -d
+    PATH1=/tmp/test PATH2=/jfs/random_read_write python3 .github/scripts/random_read_write.py 
+}
+
+test_with_fsx(){
+    prepare_test
+    ./juicefs mount $META_URL /jfs -d
+    [ ! -d secfs.test ] && git clone https://github.com/billziss-gh/secfs.test.git
+    make -C secfs.test >secfs.test-build-integration.log 2>&1
+	secfs.test/tools/bin/fsx -d 60 -p 10000 -F 100000 /jfs/fsx
 }
 
 prepare_test(){
