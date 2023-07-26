@@ -6,7 +6,7 @@ on:
       - 'release-**'
       - 'main'
     paths:
-      - '**/gluster.go'
+      - 'pkg/object/*.go'
       - '**/storage.yml'
       - '**/storage.sh'
   pull_request:
@@ -14,7 +14,7 @@ on:
       - 'release-**'
       - 'main'
     paths:
-      - '**/gluster.go'
+      - 'pkg/object/*.go'
       - '**/storage.yml'
       - '**/storage.sh'
   schedule:
