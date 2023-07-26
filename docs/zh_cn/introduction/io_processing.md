@@ -58,4 +58,5 @@ JuiceFS 支持顺序读和随机读（包括基于 mmap 的随机读），在处
 
 但是对于大文件随机读场景，预读的用途可能不大，反而容易因为读放大和本地缓存的频繁写入与驱逐使得系统资源的实际利用率降低，此时可以考虑用 `--prefetch=0` 禁用预读。考虑到此类场景下，一般的缓存策略很难有足够高的收益，可考虑尽可能提升缓存的整体容量，达到能几乎完全缓存所需数据的效果；或者直接禁用缓存（`--cache-size=0`），并尽可能提高对象存储的读取性能。
 
-小文件的读取则比较简单，通常就是在一次请求里读取完整个文件。由于小文件写入时会直接被缓存起来，因此类似 `juicefs bench` 这种写入后不久就读取的访问模式，基本都会在本地缓存目录命中，性能非常可观。
+小文件的读取则比较简单，通常就是在一次请求里读取完整个文件。由于小文件写入时会直接被缓存起来，因此，之后的写性能非常可观。
+Reading small files (smaller than the block size) is much easier because the entire file can be read in a single request. Since small files are cached locally during the write process, future reads are fast.
