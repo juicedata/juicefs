@@ -9,7 +9,6 @@ From JuiceFS v1.1.0, directory statistics is enabled by default when formatting 
 The usage statistic relies on the mount process, please do not enable this feature until all writable mount processes are upgraded to v1.1.0.
 :::
 
-
 ## Enable directory stats {#enable-directory-stats}
 
 Run `juicefs config $URL --dir-stats` to enable directory stats, after that, you can run `juicefs config $URL` to verify:
