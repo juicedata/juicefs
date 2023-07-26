@@ -44,7 +44,7 @@ File writing generates slices, and invoking `flush` persistd these slices. `flus
 
 After writing a file to JuiceFS, you cannot find the original file directly in the object storage. Instead, the storage bucket contains a `chunks` folder and a series of numbered directories and files. These numerically named object storage files are the blocks split and stored by JuiceFS. The mapping between these blocks, chunks, slices, and other metadata information (such as file names and sizes) is stored in the metadata engine. This decoupled design makes JuiceFS a high-performance file system.
 
-![How JuiceFS storesfiles](../images/how-juicefs-stores-files.svg)
+![How JuiceFS stores files](../images/how-juicefs-stores-files.svg)
 
 Regarding logical data structures, if a file is not generated through continuous sequential writes but through multiple append writes, each append write triggers a `flush` to initiate the upload, resulting in multiple slices. If the data size for each append write is less than 4 MB, the data blocks eventually stored in the object storage are smaller than 4 MB blocks.
 
