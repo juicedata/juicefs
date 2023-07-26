@@ -222,8 +222,8 @@ func clusterFlags() []cli.Flag {
 			Usage: "hosts (separated by comma) to launch worker",
 		},
 		&cli.StringFlag{
-			Name:  "manager-address",
-			Usage: "manager address",
+			Name:  "manager-addr",
+			Usage: "the IP address to communicate with workers",
 		},
 	})
 }
