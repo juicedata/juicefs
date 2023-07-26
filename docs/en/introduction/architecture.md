@@ -30,7 +30,7 @@ JuiceFS supports a variety of common databases as the metadata engine, like Redi
 
 Traditional file systems use local disks to store both file data and metadata. However, JuiceFS formats data first and then stores it in the object storage, with the corresponding metadata being stored in the metadata engine.
 
-In JuiceFS, each file is composed of one or more *chunks*. Each chunk havs a maximum size of 64 MB. Regardless of the file's size, all reads and writes are located based on their offsets (the position in the file where the read or write operation occurs) to the corresponding chunk. This design enables JuiceFS to achieve excellent performance even with large files. As long as the total length of the file remains unchanged, the chunk division of the file remains fixed, regardless of how many modifications or writes the file undergoes.
+In JuiceFS, each file is composed of one or more *chunks*. Each chunk has a maximum size of 64 MB. Regardless of the file's size, all reads and writes are located based on their offsets (the position in the file where the read or write operation occurs) to the corresponding chunk. This design enables JuiceFS to achieve excellent performance even with large files. As long as the total length of the file remains unchanged, the chunk division of the file remains fixed, regardless of how many modifications or writes the file undergoes.
 
 ![File and chunks](../images/file-and-chunks.svg)
 
