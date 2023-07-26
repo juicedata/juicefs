@@ -165,15 +165,27 @@ jobs:
       - name: Build 
         uses: ./.github/actions/build
 
-      - name: Test Sync
-        timeout-minutes: 30
-        run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
-
       - name: Test Sync with mino
         timeout-minutes: 30
         run: |
           sudo META=${{matrix.meta}} .github/scripts/command/sync_minio.sh 
+
+      - name: Test Sync with multi nodes
+        timeout-minutes: 30
+        run: |
+          if [ "${{matrix.meta}}" != "redis" ]; then
+            echo "skip sync with multi nodes when meta is not redis"
+            exit 0
+          fi
+          # not supported algo: "dsa" "ecdsa-sk" "ed25519-sk"
+          types=("ecdsa"  "ed25519"  "rsa")
+          random_type=${types[$RANDOM % ${#types[@]}]}
+          sudo CI=true META=${{matrix.meta}} KEY_TYPE=$random_type .github/scripts/command/sync_cluster.sh 
+
+      - name: Test Sync
+        timeout-minutes: 30
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
 
       - name: Log
         if: ${{ always() }}
