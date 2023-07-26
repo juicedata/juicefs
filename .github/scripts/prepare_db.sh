@@ -1,6 +1,14 @@
 #!/bin/bash -e 
 [ -z "$TEST" ] && echo "TEST is not set" && exit 1
 
+check_port(){
+    for port in "$@"; do
+        echo "lsof port:" $port
+        sudo lsof -i :$port && continue || sleep 5
+        sudo lsof -i :$port || ( echo "service not ready, port:$port" && exit 1 )
+    done
+}
+
 install_tikv(){
     wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
     bash /home/travis/.m2/install.sh
@@ -8,18 +16,14 @@ install_tikv(){
     tiup -v
     nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
     sleep 30
-    echo "lsof port:" 2379
-    sudo lsof -i :2379 && continue || sleep 5
-    sudo lsof -i :2379 || ( echo "service not ready, port:$i" && exit 1 )
+    check_port 2379
 }
 
 install_mysql(){
     sudo service mysql start
     sudo mysql -uroot -proot -e "use mysql;alter user 'root'@'localhost' identified with mysql_native_password by '';"
     sudo mysql -e "create database dev;"
-    echo "lsof port:" 3306
-    sudo lsof -i :3306 && continue || sleep 5
-    sudo lsof -i :3306 || ( echo "service not ready, port:$i" && exit 1 )
+    check_port 3306
 }
 
 install_postgres(){
