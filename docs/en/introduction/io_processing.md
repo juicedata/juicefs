@@ -58,4 +58,4 @@ JuiceFS supports sequential reads and random reads (including mmap-based random 
 
 Although prefetching works well for sequential reads, it might not be so effective for random reads on large files. It can cause read amplification and frequent cache eviction. Consider disabling prefetching using `--prefetch=0`. It is always hard to design cache strategy for random read scenarios. Two possible solutions are increasing the cache size to store all data locally or completely disabling the cache (`--cache-size=0`) and relying on a high-performance object storage service.
 
-Reading small files (smaller than the block size) is much easier. The entire file can be read in a single request. Since small files are cached locally during the write process, future reads are very fast due to the local caching. This approach provides impressive performance, as demonstrated by `juicefs bench`.
+Reading small files (smaller than the block size) is much easier because the entire file can be read in a single request. Since small files are cached locally during the write process, future reads are fast.
