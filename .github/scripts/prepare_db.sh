@@ -2,23 +2,14 @@
 source .github/scripts/start_meta_engine.sh
 [ -z "$TEST" ] && echo "TEST is not set" && exit 1
 
+# check port is ready until 60s, sleep 1s for each query 
 check_port(){
-    for port in "$@"; do
-        echo "lsof port:" $port
-        sudo lsof -i :$port && continue || sleep 5
-        sudo lsof -i :$port || ( echo "service not ready, port:$port" && exit 1 )
+    echo "check for port:" $port
+    for i in {1..30}; do
+        sudo lsof -i :$port && echo "port is available: $port" && return 0 || sleep 1
     done
+    echo "service not ready on: $port" && exit 1
 }
-
-# install_tikv(){
-#     wget -O /home/travis/.m2/install.sh https://tiup-mirrors.pingcap.com/install.sh
-#     bash /home/travis/.m2/install.sh
-#     source /home/runner/.bash_profile
-#     tiup -v
-#     nohup tiup playground --mode tikv-slim >> output.log 2>&1 &
-#     sleep 30
-#     check_port 2379
-# }
 
 install_mysql(){
     sudo service mysql start
@@ -52,7 +43,8 @@ install_etcd(){
         --listen-peer-urls http://0.0.0.0:2380 \
         --initial-advertise-peer-urls http://0.0.0.0:2380 \
         --initial-cluster node1=http://0.0.0.0:2380
-    check_port 3379 3380
+    check_port 3379
+    check_port 3380
 }
 
 install_keydb(){
@@ -61,7 +53,8 @@ install_keydb(){
     sudo .github/scripts/apt_install.sh keydb
     keydb-server --storage-provider  flash /tmp/ --port 6378 --bind 127.0.0.1 --daemonize yes
     keydb-server --port 6377 --bind 127.0.0.1 --daemonize yes
-    check_port 6377 6378
+    check_port 6377 
+    check_port 6378
 }
 
 install_minio(){
