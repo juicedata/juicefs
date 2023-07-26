@@ -22,7 +22,7 @@ test_with_fio(){
     prepare_test
     ./juicefs mount $META_URL /jfs -d
     dpkg -s fio || .github/scripts/apt_install.sh fio
-    fio --name=randrw --ioengine=sync --time_based=1 --runtime=60 --group_reporting  \
+    fio --name=randrw --ioengine=sync --time_based=1 --runtime=180 --group_reporting  \
         --bs=128k --filesize=1G --numjobs=1 --rw=randrw --verify=md5 --filename=/jfs/fio
 }
 
@@ -38,7 +38,7 @@ test_with_fsx(){
     dpkg -s libacl1-dev || sudo .github/scripts/apt_install.sh  libacl1-dev
     [ ! -d secfs.test ] && git clone https://github.com/billziss-gh/secfs.test.git
     make -C secfs.test >secfs.test-build-integration.log 2>&1
-	secfs.test/tools/bin/fsx -d 60 -p 10000 -F 100000 /jfs/fsx
+	secfs.test/tools/bin/fsx -d 180 -p 10000 -F 100000 /jfs/fsx
 }
 
 prepare_test(){
