@@ -29,6 +29,13 @@ generate_source_dir(){
 
 generate_source_dir
 
+generate_fsrand(){
+    seed=$(date +%s)
+    python3 .github/scripts/fsrand.py -a -c 2000 -s $seed  fsrand
+}
+
+generate_fsrand
+
 test_sync_with_mount_point(){
     do_sync_with_mount_point 
     do_sync_with_mount_point --list-threads 10 --list-depth 5
@@ -78,6 +85,26 @@ test_sync_with_deep_link(){
     ./juicefs mount -d $META_URL /jfs
     ./juicefs sync jfs_source/ /jfs/jfs_source/ $options > err.log 2>&1 || true
     grep "Failed to handle 2 objects" err.log
+}
+
+skip_test_sync_fsrand_with_mount_point(){
+    do_test_sync_fsrand_with_mount_point 
+    do_test_sync_fsrand_with_mount_point --list-threads 10 --list-depth 5
+    do_test_sync_fsrand_with_mount_point --dirs --update --perms --check-all 
+    do_test_sync_fsrand_with_mount_point --dirs --update --perms --check-all --list-threads 10 --list-depth 5
+}
+
+do_test_sync_fsrand_with_mount_point(){
+    prepare_test
+    options=$@
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    ./juicefs sync fsrand/ /jfs/fsrand/ $options --links
+
+    if [[ ! "$options" =~ "--dirs" ]]; then
+        find jfs_source -type d -empty -delete
+    fi
+    diff -ur --no-dereference fsrand/ /jfs/fsrand/
 }
 
 test_sync_randomly(){
