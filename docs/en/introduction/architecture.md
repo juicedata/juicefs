@@ -59,7 +59,7 @@ However complex the arrangement of slices may be, when reading a file, the most 
 
 ![Complicate pattern](../images/complicate-pattern.svg)
 
-Due to the potential overlapping of slices, JuiceFS [marks the valid data offset range for each slice]((../development/internals.md#sliceref)) in the reference relationship between chunks and slices. This approach informs the file system of the valid data in each slice.
+Due to the potential overlapping of slices, JuiceFS [marks the valid data offset range for each slice](../development/internals.md#sliceref) in the reference relationship between chunks and slices. This approach informs the file system of the valid data in each slice.
 
 However, it is not difficult to imagine that looking up the "most recently written slice within the current read range" during file reading, especially with a large number of overlapping slices as shown in the figure, can significantly impact read performance. This leads to what we call "file fragmentation." File fragmentation not only affects read performance but also increases space usage at various levels (object storage, metadata). Hence, whenever a write occurs, the client evaluates the file's fragmentation and runs the fragmentation compaction asynchronously, merging all slices within the same chunk into one.
 
