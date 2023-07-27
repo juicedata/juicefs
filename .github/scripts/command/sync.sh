@@ -66,11 +66,21 @@ generate_source_dir(){
     rm -f jfs_source/looplink
     ln -s looplink jfs_source/looplink
     rm -f jfs_source/pkg/symlink_to_cmd
-    ln -s ../cmd jfs_source/pkg/symlink_to_cmd
+    # ln -s ../cmd jfs_source/pkg/symlink_to_cmd
     ln -s deeplink jfs_source/symlink_1
     for i in {1..40}; do
         ln -s symlink_$i jfs_source/symlink_$((i+1))
     done
+}
+
+test_sync_with_deep_link(){
+    prepare_test
+    options="--dirs --update --perms --check-all --list-threads 10 --list-depth 5"
+    generate_source_dir
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    ./juicefs sync jfs_source/ /jfs/jfs_source/ $options > err.log 2>&1 || true
+    grep "Failed to handle 2 objects" err.log
 }
 
 test_sync_randomly(){
