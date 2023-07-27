@@ -51,7 +51,6 @@ do_sync_with_mount_point(){
     diff -ur --no-dereference jfs_source/ /jfs/jfs_source/
 }
 
-
 generate_source_dir(){
     [[ ! -d jfs_source ]] && git clone https://github.com/juicedata/juicefs.git jfs_source
     [[ -d jfs_source/empty_dir ]] && rm jfs_source/empty_dir -rf
@@ -64,6 +63,14 @@ generate_source_dir(){
     id -u juicefs  && sudo userdel juicefs
     sudo useradd -u 1101 juicefs
     sudo -u juicefs touch jfs_source/file2
+    rm -f jfs_source/looplink
+    ln -s looplink jfs_source/looplink
+    rm -f jfs_source/pkg/symlink_to_cmd
+    ln -s ../cmd jfs_source/pkg/symlink_to_cmd
+    ln -s deeplink jfs_source/symlink_1
+    for i in {1..40}; do
+        ln -s symlink_$i jfs_source/symlink_$((i+1))
+    done
 }
 
 test_sync_randomly(){
