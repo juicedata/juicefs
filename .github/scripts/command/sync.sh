@@ -5,6 +5,27 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
+
+generate_source_dir(){
+    rm -rf jfs_source
+    git clone https://github.com/juicedata/juicefs.git jfs_source
+    chmod 777 jfs_source
+    mkdir jfs_source/empty_dir
+    dd if=/dev/urandom of=jfs_source/file bs=5M count=1
+    chmod 777 jfs_source/file
+    ln -sf file jfs_source/symlink_to_file
+    ln -f jfs_source/file jfs_source/hard_link_to_file
+    id -u juicefs  && sudo userdel juicefs
+    sudo useradd -u 1101 juicefs
+    sudo -u juicefs touch jfs_source/file2
+    ln -s looplink jfs_source/looplink
+    # ln -s ../cmd jfs_source/pkg/symlink_to_cmd
+    ln -s deeplink jfs_source/symlink_1
+    for i in {1..40}; do
+        ln -s symlink_$i jfs_source/symlink_$((i+1))
+    done
+}
+
 generate_source_dir
 
 test_sync_with_mount_point(){
@@ -47,26 +68,6 @@ do_sync_with_mount_point(){
     fi
     find /jfs/jfs_source -type f -name ".*.tmp*" -delete
     diff -ur --no-dereference jfs_source/ /jfs/jfs_source/
-}
-
-generate_source_dir(){
-    rm -rf jfs_source
-    git clone https://github.com/juicedata/juicefs.git jfs_source
-    chmod 777 jfs_source
-    mkdir jfs_source/empty_dir
-    dd if=/dev/urandom of=jfs_source/file bs=5M count=1
-    chmod 777 jfs_source/file
-    ln -sf file jfs_source/symlink_to_file
-    ln -f jfs_source/file jfs_source/hard_link_to_file
-    id -u juicefs  && sudo userdel juicefs
-    sudo useradd -u 1101 juicefs
-    sudo -u juicefs touch jfs_source/file2
-    ln -s looplink jfs_source/looplink
-    # ln -s ../cmd jfs_source/pkg/symlink_to_cmd
-    ln -s deeplink jfs_source/symlink_1
-    for i in {1..40}; do
-        ln -s symlink_$i jfs_source/symlink_$((i+1))
-    done
 }
 
 test_sync_with_deep_link(){
