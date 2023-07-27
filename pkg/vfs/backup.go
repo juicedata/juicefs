@@ -96,7 +96,7 @@ func backup(m meta.Meta, blob object.ObjectStorage, now time.Time) error {
 
 func cleanupBackups(blob object.ObjectStorage, now time.Time) {
 	blob = object.WithPrefix(blob, "meta/")
-	ch, err := osync.ListAll(blob, "", "", "")
+	ch, err := osync.ListAll(blob, "", "", "", true)
 	if err != nil {
 		logger.Warnf("listAll prefix meta/: %s", err)
 		return

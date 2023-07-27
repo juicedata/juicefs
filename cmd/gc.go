@@ -232,7 +232,7 @@ func gc(ctx *cli.Context) error {
 
 	// Scan all objects to find leaked ones
 	blob = object.WithPrefix(blob, "chunks/")
-	objs, err := osync.ListAll(blob, "", "", "")
+	objs, err := osync.ListAll(blob, "", "", "", true)
 	if err != nil {
 		logger.Fatalf("list all blocks: %s", err)
 	}

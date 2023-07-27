@@ -107,7 +107,7 @@ func fsck(ctx *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 	blob = object.WithPrefix(blob, "chunks/")
-	objs, err := osync.ListAll(blob, "", "", "")
+	objs, err := osync.ListAll(blob, "", "", "", true)
 	if err != nil {
 		logger.Fatalf("list all blocks: %s", err)
 	}
