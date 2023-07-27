@@ -167,6 +167,11 @@ jobs:
         # with:
         #   useBeta: true
 
+      - name: Test Sync
+        timeout-minutes: 30
+        run: |
+          sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
+
       - name: Test Sync with mino
         timeout-minutes: 30
         run: |
@@ -183,11 +188,6 @@ jobs:
           types=("ecdsa"  "ed25519"  "rsa")
           random_type=${types[$RANDOM % ${#types[@]}]}
           sudo CI=true META=${{matrix.meta}} KEY_TYPE=$random_type .github/scripts/command/sync_cluster.sh 
-
-      - name: Test Sync
-        timeout-minutes: 30
-        run: |
-          sudo META=${{matrix.meta}} .github/scripts/command/sync.sh 
 
       - name: Log
         if: ${{ always() }}
