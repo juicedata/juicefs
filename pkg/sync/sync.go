@@ -666,10 +666,19 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 			logger.Errorf("Listing failed, stop syncing, waiting for pending ones")
 			return
 		}
-		if !config.Dirs && obj.IsDir() && !config.Links && !obj.IsSymlink() {
-			logger.Debug("Ignore directory ", obj.Key())
-			continue
+
+		if obj.IsDir() {
+			if obj.IsSymlink() && !config.Links && !config.Dirs {
+				logger.Debug("Ignore directory ", obj.Key())
+				continue
+			}
+
+			if !obj.IsSymlink() && !config.Dirs {
+				logger.Debug("Ignore directory ", obj.Key())
+				continue
+			}
 		}
+
 		if config.Limit >= 0 {
 			if config.Limit == 0 {
 				return
