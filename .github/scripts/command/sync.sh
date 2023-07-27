@@ -5,7 +5,7 @@ source .github/scripts/common/common.sh
 source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
-
+generate_source_dir
 
 test_sync_with_mount_point(){
     do_sync_with_mount_point 
@@ -24,7 +24,6 @@ test_sync_without_mount_point(){
 do_sync_without_mount_point(){
     prepare_test
     options=$@
-    generate_source_dir
     ./juicefs format $META_URL myjfs
     meta_url=$META_URL ./juicefs sync jfs_source/ jfs://meta_url/jfs_source/ $options --links
 
@@ -39,7 +38,6 @@ do_sync_without_mount_point(){
 do_sync_with_mount_point(){
     prepare_test
     options=$@
-    generate_source_dir
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     ./juicefs sync jfs_source/ /jfs/jfs_source/ $options --links
@@ -52,8 +50,8 @@ do_sync_with_mount_point(){
 }
 
 generate_source_dir(){
-    [[ ! -d jfs_source ]] && git clone https://github.com/juicedata/juicefs.git jfs_source
-    [[ -d jfs_source/empty_dir ]] && rm jfs_source/empty_dir -rf
+    rm -rf jfs_source
+    git clone https://github.com/juicedata/juicefs.git jfs_source
     chmod 777 jfs_source
     mkdir jfs_source/empty_dir
     dd if=/dev/urandom of=jfs_source/file bs=5M count=1
@@ -63,9 +61,7 @@ generate_source_dir(){
     id -u juicefs  && sudo userdel juicefs
     sudo useradd -u 1101 juicefs
     sudo -u juicefs touch jfs_source/file2
-    rm -f jfs_source/looplink
     ln -s looplink jfs_source/looplink
-    rm -f jfs_source/pkg/symlink_to_cmd
     # ln -s ../cmd jfs_source/pkg/symlink_to_cmd
     ln -s deeplink jfs_source/symlink_1
     for i in {1..40}; do
@@ -76,7 +72,6 @@ generate_source_dir(){
 test_sync_with_deep_link(){
     prepare_test
     options="--dirs --update --perms --check-all --list-threads 10 --list-depth 5"
-    generate_source_dir
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     ./juicefs sync jfs_source/ /jfs/jfs_source/ $options > err.log 2>&1 || true
