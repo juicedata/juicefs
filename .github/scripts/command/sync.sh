@@ -19,7 +19,7 @@ generate_source_dir(){
     sudo useradd -u 1101 juicefs
     sudo -u juicefs touch jfs_source/file2
     ln -s looplink jfs_source/looplink
-    # ln -s ../cmd jfs_source/pkg/symlink_to_cmd
+    ln -s ../cmd jfs_source/pkg/symlink_to_cmd
     touch jfs_source/deeplink
     ln -s deeplink jfs_source/symlink_1
     for i in {1..40}; do
