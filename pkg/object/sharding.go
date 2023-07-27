@@ -100,7 +100,7 @@ func ListAll(store ObjectStorage, prefix, marker string) (<-chan Object, error) 
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
 	objs, err := store.List(prefix, marker, "", maxResults)
 	if err == notSupported {
-		return ListAllWithDelimiter(store, prefix, marker, "")
+		return ListAllWithDelimiter(store, prefix, marker, "", true)
 	}
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())

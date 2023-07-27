@@ -47,6 +47,9 @@ type filestore struct {
 
 func (d *filestore) Symlink(oldName, newName string) error {
 	p := d.path(newName)
+	if strings.HasSuffix(p, dirSuffix) {
+		p = strings.TrimRight(p, dirSuffix)
+	}
 	if _, err := os.Stat(filepath.Dir(p)); err != nil && os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0777)); err != nil {
 			return err
@@ -58,6 +61,9 @@ func (d *filestore) Symlink(oldName, newName string) error {
 }
 
 func (d *filestore) Readlink(name string) (string, error) {
+	if strings.HasSuffix(name, dirSuffix) {
+		name = strings.TrimRight(name, dirSuffix)
+	}
 	return os.Readlink(d.path(name))
 }
 

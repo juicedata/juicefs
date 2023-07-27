@@ -73,7 +73,7 @@ func formatSize(bytes int64) string {
 }
 
 // ListAll on all the keys that starts at marker from object storage.
-func ListAll(store object.ObjectStorage, prefix, start, end string) (<-chan object.Object, error) {
+func ListAll(store object.ObjectStorage, prefix, start, end string, followLink bool) (<-chan object.Object, error) {
 	startTime := time.Now()
 	logger.Debugf("Iterating objects from %s with prefix %s start %q", store, prefix, start)
 
@@ -107,7 +107,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string) (<-chan obje
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
 	objs, err := store.List(prefix, marker, "", maxResults)
 	if err == utils.ENOTSUP {
-		return object.ListAllWithDelimiter(store, prefix, start, end)
+		return object.ListAllWithDelimiter(store, prefix, start, end, followLink)
 	}
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
@@ -641,12 +641,12 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 	start, end := config.Start, config.End
 	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
 
-	srckeys, err := ListAll(src, prefix, start, end)
+	srckeys, err := ListAll(src, prefix, start, end, !config.Links)
 	if err != nil {
 		return fmt.Errorf("list %s: %s", src, err)
 	}
 
-	dstkeys, err := ListAll(dst, prefix, start, end)
+	dstkeys, err := ListAll(dst, prefix, start, end, !config.Links)
 	if err != nil {
 		return fmt.Errorf("list %s: %s", dst, err)
 	}
@@ -666,7 +666,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 			logger.Errorf("Listing failed, stop syncing, waiting for pending ones")
 			return
 		}
-		if !config.Dirs && obj.IsDir() {
+		if !config.Dirs && obj.IsDir() && !config.Links && !obj.IsSymlink() {
 			logger.Debug("Ignore directory ", obj.Key())
 			continue
 		}
