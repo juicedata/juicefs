@@ -179,6 +179,16 @@ func dataCacheFlags() []cli.Flag {
 			Usage: "delayed duration (in seconds) for uploading objects",
 		},
 		&cli.StringFlag{
+			Name:  "upload-delay-begin",
+			Value: "",
+			Usage: "delayed duration (from clock) for uploading objects",
+		},
+		&cli.StringFlag{
+			Name:  "upload-delay-end",
+			Value: "",
+			Usage: "delayed duration (to clock) for uploading objects",
+		},
+		&cli.StringFlag{
 			Name:  "cache-dir",
 			Value: defaultCacheDir,
 			Usage: "directory paths of local cache, use colon to separate multiple paths",
