@@ -857,7 +857,7 @@ func matchKey(rules []rule, key string) bool {
 	return true
 }
 
-func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.Object) (chan object.Object, error) {
+func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.Object, followLink bool) (chan object.Object, error) {
 	var total []object.Object
 	var marker string
 	for {
@@ -879,7 +879,9 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 		defer close(srckeys)
 		for _, o := range total {
 			if o.IsDir() && o.Key() > prefix {
-				if cp != nil {
+				if o.IsSymlink() && !followLink {
+					srckeys <- o
+				} else if cp != nil {
 					cp <- o
 				}
 			} else {
@@ -945,7 +947,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		}
 	}()
 
-	srckeys, err := listCommonPrefix(src, prefix, commonPrefix)
+	srckeys, err := listCommonPrefix(src, prefix, commonPrefix, !config.Links)
 	if err == utils.ENOTSUP {
 		return startSingleProducer(tasks, src, dst, prefix, config)
 	} else if err != nil {
@@ -955,7 +957,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	if config.DeleteDst {
 		dcp = commonPrefix // search common prefix in dst
 	}
-	dstkeys, err := listCommonPrefix(dst, prefix, dcp)
+	dstkeys, err := listCommonPrefix(dst, prefix, dcp, !config.Links)
 	if err == utils.ENOTSUP {
 		return startSingleProducer(tasks, src, dst, prefix, config)
 	} else if err != nil {
