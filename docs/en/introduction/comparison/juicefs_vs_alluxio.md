@@ -30,7 +30,7 @@ The following table compares the main features of Alluxio and JuiceFS.
 
 ## Storage format
 
-In JuiceFS, a single file is [stored](../architecture.md#how-juicefs-store-files) in three levels: chunk, slice, and block. The file is split into multiple blocks and is compressed and encrypted (optional) before it is stored in object storage.
+JuiceFS has its own storage format, where files are divided into blocks, and they can be optionally encrypted and compressed before being uploaded to the object storage. For more details, see [How JuiceFS stores files](../architecture.md#how-juicefs-store-files).
 
 In contrast, Alluxio stores files as _objects_ into UFS and does not split them into blocks like JuiceFS does.
 
