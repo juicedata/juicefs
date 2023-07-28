@@ -591,6 +591,9 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 }
 
 func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) error {
+	if strings.HasSuffix(key, "/") {
+		key = strings.TrimRight(key, "/")
+	}
 	if p, err := src.(object.SupportSymlink).Readlink(key); err != nil {
 		return err
 	} else {
