@@ -8,7 +8,7 @@ META_URL=$(get_meta_url $META)
 
 generate_source_dir(){
     rm -rf jfs_source
-    git clone https://github.com/juicedata/juicefs.git jfs_source
+    git clone https://github.com/juicedata/juicefs.git jfs_source --depth 1
     chmod 777 jfs_source
     mkdir jfs_source/empty_dir
     dd if=/dev/urandom of=jfs_source/file bs=5M count=1
@@ -18,13 +18,7 @@ generate_source_dir(){
     id -u juicefs  && sudo userdel juicefs
     sudo useradd -u 1101 juicefs
     sudo -u juicefs touch jfs_source/file2
-    ln -s looplink jfs_source/looplink
     ln -s ../cmd jfs_source/pkg/symlink_to_cmd
-    touch jfs_source/deeplink
-    ln -s deeplink jfs_source/symlink_1
-    for i in {1..40}; do
-        ln -s symlink_$i jfs_source/symlink_$((i+1))
-    done
 }
 
 generate_source_dir
@@ -33,8 +27,6 @@ generate_fsrand(){
     seed=$(date +%s)
     python3 .github/scripts/fsrand.py -a -c 2000 -s $seed  fsrand
 }
-
-generate_fsrand
 
 test_sync_with_mount_point(){
     do_sync_with_mount_point 
@@ -78,16 +70,33 @@ do_sync_with_mount_point(){
     diff -ur --no-dereference jfs_source/ /jfs/jfs_source/
 }
 
+test_sync_with_loop_link(){
+    prepare_test
+    options="--dirs --update --perms --check-all --list-threads 10 --list-depth 5"
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    ln -s looplink jfs_source/looplink
+    ./juicefs sync jfs_source/ /jfs/jfs_source/ $options > err.log 2>&1 || true
+    grep "Failed to handle 1 objects" err.log
+    rm -rf jfs_source/looplink
+}
+
 test_sync_with_deep_link(){
     prepare_test
     options="--dirs --update --perms --check-all --list-threads 10 --list-depth 5"
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
+    touch jfs_source/symlink_0
+    for i in {1..41}; do
+        ln -s symlink_$i jfs_source/symlink_$((i+1))
+    done
     ./juicefs sync jfs_source/ /jfs/jfs_source/ $options > err.log 2>&1 || true
-    grep "Failed to handle 2 objects" err.log
+    grep "Failed to handle 1 objects" err.log
+    rm -rf jfs_source/symlink_*
 }
 
 skip_test_sync_fsrand_with_mount_point(){
+    generate_fsrand
     do_test_sync_fsrand_with_mount_point 
     do_test_sync_fsrand_with_mount_point --list-threads 10 --list-depth 5
     do_test_sync_fsrand_with_mount_point --dirs --update --perms --check-all 
