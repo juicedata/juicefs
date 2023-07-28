@@ -933,10 +933,10 @@ In which:
 
 #### Cluster related options {#sync-cluster-related-options}
 
-|Items|Description|
-|-|-|
-|`--manager-addr=ADDR`|Listening address of the Manager node in distributed synchronization mode in the format: <ip>:[port], or a random port if no port is written. If no port is written, it listens on a random local ipv4 address and a random port.|
-|`--worker=ADDR,ADDR`|Worker node addresses used in distributed syncing, comma separated.|
+|Items| Description                                                                                                                                                                                                                       |
+|-|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|`--manager-addr=ADDR`| Listening address of the Manager node in distributed synchronization mode in the format: <IP>:[port], or a random port if no port is written. If no port is written, it listens on a random local ipv4 address and a random port. |
+|`--worker=ADDR,ADDR`| Worker node addresses used in distributed syncing, comma separated.                                                                                                                                                               |
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
