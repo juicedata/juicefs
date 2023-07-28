@@ -86,11 +86,11 @@ test_sync_with_deep_link(){
     options="--dirs --update --perms --check-all --list-threads 10 --list-depth 5"
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    touch jfs_source/symlink_0
+    touch jfs_source/symlink_1
     for i in {1..41}; do
         ln -s symlink_$i jfs_source/symlink_$((i+1))
     done
-    ./juicefs sync jfs_source/ /jfs/jfs_source/ $options > err.log 2>&1 || true
+    ./juicefs sync jfs_source/ /jfs/jfs_source/ $options  2>&1 | tee err.log || true
     grep "Failed to handle 1 objects" err.log
     rm -rf jfs_source/symlink_*
 }
