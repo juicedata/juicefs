@@ -278,7 +278,7 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 				continue
 			}
 			name := string(e.Name)
-			if fi2.IsDir() && followLink {
+			if fi2.IsDir() {
 				name += dirSuffix
 			}
 			mEntries[i] = &mEntry{fi2, name, true}

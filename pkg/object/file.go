@@ -252,7 +252,7 @@ func readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 				continue
 			}
 			name := e.Name()
-			if fi.IsDir() && followLink {
+			if fi.IsDir() {
 				name = e.Name() + dirSuffix
 			}
 			mEntries[i] = &mEntry{e, name, fi, true}
