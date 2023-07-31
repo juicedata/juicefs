@@ -169,9 +169,9 @@ func (d *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 		} else if !e.Mode().IsRegular() {
 			var fi os.FileInfo
 			if followLink {
-				fi, err = os.Stat(filepath.Join(dirname, e.Name()))
+				fi, err = d.vol.Stat(filepath.Join(dirname, e.Name()))
 			} else {
-				fi, err = os.Lstat(filepath.Join(dirname, e.Name()))
+				fi, err = d.vol.Lstat(filepath.Join(dirname, e.Name()))
 			}
 			if err != nil {
 				mEntries = append(mEntries, &mEntry{nil, name, e, true})
