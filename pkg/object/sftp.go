@@ -326,6 +326,7 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followL
 	if isSymlink && c != nil && followLink {
 		if fi2, err := c.Stat(f.root + key); err == nil {
 			fi = fi2
+			isSymlink = false
 		}
 		isSymlink = false
 	}
