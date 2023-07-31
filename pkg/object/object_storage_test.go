@@ -277,7 +277,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put("a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
-	if obs, err := s.List("", "", "/", 10); err != nil {
+	if obs, err := s.List("", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
@@ -303,7 +303,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, err := s.List("a", "", "/", 10); err != nil {
+	if obs, err := s.List("a", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		}
@@ -319,7 +319,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, err := s.List("a/", "", "/", 10); err != nil {
+	if obs, err := s.List("a/", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
