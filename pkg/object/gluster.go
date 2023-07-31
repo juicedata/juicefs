@@ -175,7 +175,7 @@ func (d *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 			if fi.IsDir() {
 				name += dirSuffix
 			}
-			mEntries = append(mEntries, &mEntry{nil, name, fi, true})
+			mEntries = append(mEntries, &mEntry{nil, name, fi, false})
 		} else {
 			mEntries = append(mEntries, &mEntry{nil, name, e, !e.Mode().IsRegular()})
 		}
