@@ -44,7 +44,7 @@ SeaweedFS 与 JuiceFS 皆是高性能分布式文件存储系统，本章列举�
 
 ## 文件存储
 
-* SeaweedFS 内部包含了一个文件存储服务（设计思路与 Facebook 的 [Haystack](https://engineering.fb.com/2009/04/30/core-data/needle-in-a-haystack-efficient-storage-of-billions-of-photos/) 相近），在小文件的读写上性能表现优异。同时支持纠删码、合并存储等功能。
+* SeaweedFS 内部包含了一个文件存储服务（设计思路与 Facebook 的 [Haystack](https://engineering.fb.com/2009/04/30/core-data/needle-in-a-haystack-efficient-storage-of-billions-of-photos) 相近），在小文件的读写上性能表现优异。同时支持纠删码、合并存储等功能。
 * JuiceFS 则依赖外部的对象存储服务，其性能与相关的扩展特性都与所选用的对象存储服务相关。
 
 ## 原子性操作
