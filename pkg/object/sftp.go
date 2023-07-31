@@ -344,7 +344,7 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo) Object 
 	return ff
 }
 
-func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (f *sftpStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
 		return nil, notSupported
 	}

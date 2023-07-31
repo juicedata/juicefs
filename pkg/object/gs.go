@@ -51,7 +51,7 @@ func (g *gs) String() string {
 
 func (g *gs) Create() error {
 	// check if the bucket is already exists
-	if objs, err := g.List("", "", "", 1); err == nil && len(objs) > 0 {
+	if objs, err := g.List("", "", "", 1, true); err == nil && len(objs) > 0 {
 		return nil
 	}
 
@@ -141,7 +141,7 @@ func (g *gs) Delete(key string) error {
 	return nil
 }
 
-func (g *gs) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (g *gs) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if marker != "" && g.pageToken == "" {
 		// last page
 		return nil, nil

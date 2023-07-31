@@ -97,7 +97,7 @@ func (s *scsClient) Delete(key string) error {
 	return s.b.Delete(key)
 }
 
-func (s *scsClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (s *scsClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if marker != "" {
 		if s.marker == "" {
 			// last page

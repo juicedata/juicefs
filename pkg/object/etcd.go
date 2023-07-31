@@ -111,7 +111,7 @@ func genNextKey(key string) string {
 	return string(next)
 }
 
-func (c *etcdClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (c *etcdClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "" {
 		return nil, notSupported
 	}

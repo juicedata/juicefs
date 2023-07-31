@@ -200,7 +200,7 @@ func (j *juiceFS) Head(key string) (object.Object, error) {
 	return &jObj{key, fi}, nil
 }
 
-func (j *juiceFS) List(prefix, marker, delimiter string, limit int64) ([]object.Object, error) {
+func (j *juiceFS) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]object.Object, error) {
 	if delimiter != "/" {
 		return nil, utils.ENOTSUP
 	}

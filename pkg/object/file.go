@@ -224,7 +224,7 @@ func (m *mEntry) IsDir() bool {
 
 // readDirSorted reads the directory named by dirname and returns
 // a sorted list of directory entries.
-func readDirSorted(dirname string) ([]*mEntry, error) {
+func readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 	f, err := os.Open(dirname)
 	if err != nil {
 		return nil, err
@@ -240,14 +240,19 @@ func readDirSorted(dirname string) ([]*mEntry, error) {
 		if e.IsDir() {
 			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}
 		} else if !e.Type().IsRegular() {
-			// follow symlink
-			fi, err := os.Stat(filepath.Join(dirname, e.Name()))
+			var fi os.FileInfo
+			var err error
+			if followLink {
+				fi, err = os.Stat(filepath.Join(dirname, e.Name()))
+			} else {
+				fi, err = os.Lstat(filepath.Join(dirname, e.Name()))
+			}
 			if err != nil {
 				mEntries[i] = &mEntry{e, e.Name(), nil, true}
 				continue
 			}
 			name := e.Name()
-			if fi.IsDir() {
+			if fi.IsDir() && followLink {
 				name = e.Name() + dirSuffix
 			}
 			mEntries[i] = &mEntry{e, name, fi, true}
@@ -259,7 +264,7 @@ func readDirSorted(dirname string) ([]*mEntry, error) {
 	return mEntries, err
 }
 
-func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
 		return nil, notSupported
 	}
@@ -280,7 +285,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 		}
 		objs = append(objs, obj)
 	}
-	entries, err := readDirSorted(dir)
+	entries, err := readDirSorted(dir, followLink)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil

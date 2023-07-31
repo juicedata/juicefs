@@ -149,11 +149,11 @@ func (s DefaultObjectStorage) ListUploads(marker string) ([]*PendingPart, string
 	return nil, "", nil
 }
 
-func (s DefaultObjectStorage) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (s DefaultObjectStorage) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	return nil, notSupported
 }
 
-func (s DefaultObjectStorage) ListAll(prefix, marker string) (<-chan Object, error) {
+func (s DefaultObjectStorage) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 
@@ -189,8 +189,8 @@ type listThread struct {
 	entries []Object
 }
 
-func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-chan Object, error) {
-	entries, err := store.List(prefix, "", "/", 1e9)
+func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, followLink bool) (<-chan Object, error) {
+	entries, err := store.List(prefix, "", "/", 1e9, followLink)
 	if err != nil {
 		logger.Errorf("list %s: %s", prefix, err)
 		return nil, err
@@ -218,7 +218,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string) (<-cha
 						continue
 					}
 
-					t.entries, t.err = store.List(key, "\x00", "/", 1e9) // exclude itself
+					t.entries, t.err = store.List(key, "\x00", "/", 1e9, followLink) // exclude itself
 					t.Lock()
 					t.ready = true
 					t.cond.Signal()

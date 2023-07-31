@@ -165,7 +165,7 @@ func (s *ibmcos) Delete(key string) error {
 	return err
 }
 
-func (s *ibmcos) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (s *ibmcos) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	param := s3.ListObjectsInput{
 		Bucket:       &s.bucket,
 		Prefix:       &prefix,
@@ -203,7 +203,7 @@ func (s *ibmcos) List(prefix, marker, delimiter string, limit int64) ([]Object, 
 	return objs, nil
 }
 
-func (s *ibmcos) ListAll(prefix, marker string) (<-chan Object, error) {
+func (s *ibmcos) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

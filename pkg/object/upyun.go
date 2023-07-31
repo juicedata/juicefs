@@ -98,7 +98,7 @@ func (u *up) Copy(dst, src string) error {
 	})
 }
 
-func (u *up) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (u *up) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "" {
 		return nil, notSupported
 	}
