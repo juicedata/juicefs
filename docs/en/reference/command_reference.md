@@ -935,7 +935,7 @@ In which:
 
 |Items| Description                                                                                                                                                                                                                       |
 |-|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|`--manager-addr=ADDR`| Listening address of the Manager node in distributed synchronization mode in the format: `<IP>:[port]`, or a random port if no port is written. If no port is written, it listens on a random local ipv4 address and a random port. |
+|`--manager-addr=ADDR`| The listening address of the Manager node in distributed synchronization mode in the format: `<IP>:[port]`. If not specified, it listens on a random port. If this option is omitted, it listens on a random local IPv4 address and a random port. |
 |`--worker=ADDR,ADDR`| Worker node addresses used in distributed syncing, comma separated.                                                                                                                                                               |
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
