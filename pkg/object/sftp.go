@@ -170,7 +170,7 @@ func (f *sftpStore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return f.fileInfo(nil, key, info), nil
+	return f.fileInfo(nil, key, info, true), nil
 }
 
 func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -307,24 +307,31 @@ func (f *sftpStore) Delete(key string) error {
 	return err
 }
 
-func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo) []Object {
+func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo, followLink bool) []Object {
 	var obs = make([]Object, 0, len(fis))
 	for _, fi := range fis {
 		p := path + fi.Name()
 		if strings.HasPrefix(p, f.root) {
 			key := p[len(f.root):]
-			obs = append(obs, f.fileInfo(c, key, fi))
+			obs = append(obs, f.fileInfo(c, key, fi, followLink))
 		}
 	}
 	sort.Slice(obs, func(i, j int) bool { return obs[i].Key() < obs[j].Key() })
 	return obs
 }
 
-func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo) Object {
+func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followLink bool) Object {
 	owner, group := getOwnerGroup(fi)
 	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
 	if isSymlink && c != nil {
-		if fi2, err := c.Lstat(f.root + key); err == nil {
+		var fi2 os.FileInfo
+		var err error
+		if followLink {
+			fi2, err = c.Stat(f.root + key)
+		} else {
+			fi2, err = c.Lstat(f.root + key)
+		}
+		if err == nil {
 			fi = fi2
 		}
 	}
@@ -380,7 +387,7 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64, followLi
 		return nil, err
 	}
 
-	entries := f.sortByName(c.sftpClient, dir, infos)
+	entries := f.sortByName(c.sftpClient, dir, infos, followLink)
 	for _, o := range entries {
 		key := o.Key()
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
