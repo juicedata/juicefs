@@ -249,7 +249,7 @@ func readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 			if fi.IsDir() {
 				name = e.Name() + dirSuffix
 			}
-			mEntries[i] = &mEntry{e, name, fi, true}
+			mEntries[i] = &mEntry{e, name, fi, false}
 		} else {
 			mEntries[i] = &mEntry{e, e.Name(), nil, !e.Type().IsRegular()}
 		}
