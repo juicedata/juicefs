@@ -932,10 +932,10 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 
 #### 分布式相关参数 {#sync-cluster-related-options}
 
-|项 | 说明|
-|-|-|
-|`--manager=ADDR`|分布式同步模式中，Manager 的节点地址，此为内部参数，在 Worker 节点上运行的同步进程中会包含该设置。|
-|`--worker=ADDR,ADDR`|分布式同步模式中，工作节点列表，使用逗号分隔。|
+|项 | 说明                                                                                  |
+|-|-------------------------------------------------------------------------------------|
+|`--manager-addr=ADDR`| 分布式同步模式中，Manager 节点的监听地址，格式：`<IP>:[port]`，如果不写端口，则监听随机端口。如果没有该参数，则监听本机随机的 IPv4 地址与随机端口 |
+|`--worker=ADDR,ADDR`| 分布式同步模式中，工作节点列表，使用逗号分隔。                                                             |
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
