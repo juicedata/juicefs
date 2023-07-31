@@ -92,7 +92,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 	// cleanup
 	defer func() {
 		// delete reversely, directory only can be deleted when it's empty
-		objs, err := listAll(s, "", "", 100)
+		objs, err := listAll(s, "", "", 100, true)
 		if err != nil {
 			t.Fatalf("listall failed: %s", err)
 		}
@@ -107,7 +107,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 			}
 		}
 	}()
-	objs, err := listAll(s, "x/", "", 100)
+	objs, err := listAll(s, "x/", "", 100, true)
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
 	}
@@ -116,7 +116,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
 
-	objs, err = listAll(s, "x", "", 100)
+	objs, err = listAll(s, "x", "", 100, true)
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
 	}
@@ -125,7 +125,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		t.Fatalf("testKeysEqual fail: %s", err)
 	}
 
-	objs, err = listAll(s, "xy", "", 100)
+	objs, err = listAll(s, "xy", "", 100, true)
 	if err != nil {
 		t.Fatalf("list failed: %s", err)
 	}
@@ -159,7 +159,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		}
 		_ = ss.Symlink("xyz/notExist/", "b")
 
-		objs, err = listAll(s, "", "", 100)
+		objs, err = listAll(s, "", "", 100, true)
 		if err != nil {
 			t.Fatalf("listall failed: %s", err)
 		}
@@ -172,6 +172,13 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		}
 		if objs[9].Size() != 10 {
 			t.Fatalf("size of target(file) should be 10")
+		}
+
+		// test don't follow symlink
+		objs, err = listAll(s, "", "", 100, false)
+		expectedKeys = []string{"", "a", "a-", "a0", "b", "b-", "b0", "bb/", "bb/b1", "x/", "x/x.txt", "xy.txt", "xyz/", "xyz/ol1/", "xyz/ol1/p.txt", "xyz/xyz.txt"}
+		if err = testKeysEqual(objs, expectedKeys); err != nil {
+			t.Fatalf("testKeysEqual fail: %s", err)
 		}
 	}
 }

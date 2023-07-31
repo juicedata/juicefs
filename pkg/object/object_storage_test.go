@@ -58,8 +58,8 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 	return string(data), nil
 }
 
-func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, error) {
-	ch, err := ListAll(s, prefix, marker, true)
+func listAll(s ObjectStorage, prefix, marker string, limit int64, followLink bool) ([]Object, error) {
+	ch, err := ListAll(s, prefix, marker, followLink)
 	if err == nil {
 		objs := make([]Object, 0)
 		for obj := range ch {
@@ -181,7 +181,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	}
 	switch s.(*withPrefix).os.(type) {
 	case FileSystem:
-		objs, err2 := listAll(s, "", "", 2)
+		objs, err2 := listAll(s, "", "", 2, true)
 		if err2 == nil {
 			if len(objs) != 2 {
 				t.Fatalf("List should return 2 keys, but got %d", len(objs))
@@ -206,14 +206,14 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("list failed: %s", err2.Error())
 		}
 
-		objs, err2 = listAll(s, "", "test2", 1)
+		objs, err2 = listAll(s, "", "test2", 1, true)
 		if err2 != nil {
 			t.Fatalf("list3 failed: %s", err2.Error())
 		} else if len(objs) != 0 {
 			t.Fatalf("list3 should not return anything, but got %d", len(objs))
 		}
 	default:
-		objs, err2 := listAll(s, "", "", 1)
+		objs, err2 := listAll(s, "", "", 1, true)
 		if err2 == nil {
 			if len(objs) != 1 {
 				t.Fatalf("List should return 1 keys, but got %d", len(objs))
@@ -232,7 +232,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			t.Fatalf("list failed: %s", err2.Error())
 		}
 
-		objs, err2 = listAll(s, "", "test2", 1)
+		objs, err2 = listAll(s, "", "test2", 1, true)
 		if err2 != nil {
 			t.Fatalf("list3 failed: %s", err2.Error())
 		} else if len(objs) != 0 {
@@ -361,7 +361,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 			_ = s.Delete(fmt.Sprintf("hashKey%d", i))
 		}
 	}()
-	objs, err := listAll(s, "hashKey", "", int64(keyTotal))
+	objs, err := listAll(s, "hashKey", "", int64(keyTotal), true)
 	if err != nil {
 		t.Fatalf("list4 failed: %s", err.Error())
 	} else {
