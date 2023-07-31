@@ -324,7 +324,7 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo) Object 
 	owner, group := getOwnerGroup(fi)
 	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
 	if isSymlink && c != nil {
-		if fi2, err := c.Stat(f.root + key); err == nil {
+		if fi2, err := c.Lstat(f.root + key); err == nil {
 			fi = fi2
 		}
 	}
