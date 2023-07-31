@@ -265,14 +265,8 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 		fi := fs.AttrToFileInfo(e.Inode, e.Attr)
 		if fi.IsDir() {
 			mEntries[i] = &mEntry{fi, string(e.Name) + dirSuffix, false}
-		} else if fi.IsSymlink() {
-			var fi2 *fs.FileStat
-			var err syscall.Errno
-			if followLink {
-				fi2, err = j.jfs.Stat(ctx, filepath.Join(dirname, string(e.Name)))
-			} else {
-				fi2, err = j.jfs.Lstat(ctx, filepath.Join(dirname, string(e.Name)))
-			}
+		} else if fi.IsSymlink() && followLink {
+			fi2, err := j.jfs.Stat(ctx, filepath.Join(dirname, string(e.Name)))
 			if err != 0 {
 				mEntries[i] = &mEntry{fi, string(e.Name), true}
 				continue
@@ -283,7 +277,7 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 			}
 			mEntries[i] = &mEntry{fi2, name, true}
 		} else {
-			mEntries[i] = &mEntry{fi, string(e.Name), false}
+			mEntries[i] = &mEntry{fi, string(e.Name), fi.IsSymlink()}
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].name < mEntries[j].name })
