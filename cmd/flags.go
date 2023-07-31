@@ -180,13 +180,13 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "upload-delay-begin",
-			Value: "",
-			Usage: "delayed duration (from clock) for uploading objects",
+			Value: "null",
+			Usage: "delayed duration until this time to start uploading",
 		},
 		&cli.StringFlag{
 			Name:  "upload-delay-end",
-			Value: "",
-			Usage: "delayed duration (to clock) for uploading objects",
+			Value: "null",
+			Usage: "delayed duration until this time to end uploading",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",
