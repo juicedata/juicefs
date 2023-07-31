@@ -88,7 +88,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 		}
 	}
 
-	if ch, err := store.ListAll(prefix, start); err == nil {
+	if ch, err := store.ListAll(prefix, start, followLink); err == nil {
 		go func() {
 			for obj := range ch {
 				if obj != nil && end != "" && obj.Key() > end {
@@ -105,7 +105,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 
 	marker := start
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	objs, err := store.List(prefix, marker, "", maxResults)
+	objs, err := store.List(prefix, marker, "", maxResults, followLink)
 	if err == utils.ENOTSUP {
 		return object.ListAllWithDelimiter(store, prefix, start, end, followLink)
 	}
@@ -143,13 +143,13 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, followLink b
 			marker = lastkey
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
-			objs, err = store.List(prefix, marker, "", maxResults)
+			objs, err = store.List(prefix, marker, "", maxResults, followLink)
 			count := 0
 			for err != nil && count < 3 {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
-				objs, err = store.List(prefix, marker, "", maxResults)
+				objs, err = store.List(prefix, marker, "", maxResults, followLink)
 				count++
 			}
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
@@ -864,7 +864,7 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 	var total []object.Object
 	var marker string
 	for {
-		objs, err := store.List(prefix, marker, "/", maxResults)
+		objs, err := store.List(prefix, marker, "/", maxResults, followLink)
 		if err != nil {
 			return nil, err
 		}

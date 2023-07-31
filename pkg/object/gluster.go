@@ -147,7 +147,7 @@ func (c *gluster) Delete(key string) error {
 
 // readDirSorted reads the directory named by dirname and returns
 // a sorted list of directory entries.
-func (d *gluster) readDirSorted(dirname string) ([]*mEntry, error) {
+func (d *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 	f, err := d.vol.Open(dirname)
 	if err != nil {
 		return nil, err
@@ -167,13 +167,17 @@ func (d *gluster) readDirSorted(dirname string) ([]*mEntry, error) {
 		if e.IsDir() {
 			mEntries = append(mEntries, &mEntry{nil, name + dirSuffix, e, false})
 		} else if !e.Mode().IsRegular() {
-			// follow symlink
-			fi, err := os.Stat(filepath.Join(dirname, name))
+			var fi os.FileInfo
+			if followLink {
+				fi, err = os.Stat(filepath.Join(dirname, e.Name()))
+			} else {
+				fi, err = os.Lstat(filepath.Join(dirname, e.Name()))
+			}
 			if err != nil {
 				mEntries = append(mEntries, &mEntry{nil, name, e, true})
 				continue
 			}
-			if fi.IsDir() {
+			if fi.IsDir() && followLink {
 				name += dirSuffix
 			}
 			mEntries = append(mEntries, &mEntry{nil, name, fi, true})
@@ -185,7 +189,7 @@ func (d *gluster) readDirSorted(dirname string) ([]*mEntry, error) {
 	return mEntries, err
 }
 
-func (d *gluster) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (d *gluster) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
 		return nil, notSupported
 	}
@@ -206,7 +210,7 @@ func (d *gluster) List(prefix, marker, delimiter string, limit int64) ([]Object,
 		}
 		objs = append(objs, obj)
 	}
-	entries, err := d.readDirSorted(dir)
+	entries, err := d.readDirSorted(dir, followLink)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil

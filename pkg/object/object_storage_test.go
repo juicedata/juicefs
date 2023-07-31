@@ -59,7 +59,7 @@ func get(s ObjectStorage, k string, off, limit int64) (string, error) {
 }
 
 func listAll(s ObjectStorage, prefix, marker string, limit int64) ([]Object, error) {
-	ch, err := ListAll(s, prefix, marker)
+	ch, err := ListAll(s, prefix, marker, true)
 	if err == nil {
 		objs := make([]Object, 0)
 		for obj := range ch {
@@ -130,7 +130,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put(key, bytes.NewReader(nil)); err != nil {
 		t.Logf("PUT testEncodeFile failed: %s", err.Error())
 	} else {
-		if resp, err := s.List("", "测试编码文件", "", 1); err != nil && err != notSupported {
+		if resp, err := s.List("", "测试编码文件", "", 1, true); err != nil && err != notSupported {
 			t.Logf("List testEncodeFile Failed: %s", err)
 		} else if len(resp) == 1 && resp[0].Key() != key {
 			t.Logf("List testEncodeFile Failed: expect key %s, but got %s", key, resp[0].Key())
@@ -277,7 +277,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if err := s.Put("a1", bytes.NewReader(br)); err != nil {
 		t.Fatalf("PUT failed: %s", err.Error())
 	}
-	if obs, err := s.List("", "", "/", 10); err != nil {
+	if obs, err := s.List("", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {
@@ -303,7 +303,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, err := s.List("a", "", "/", 10); err != nil {
+	if obs, err := s.List("a", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		}
@@ -319,7 +319,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}
 
-	if obs, err := s.List("a/", "", "/", 10); err != nil {
+	if obs, err := s.List("a/", "", "/", 10, true); err != nil {
 		if !errors.Is(err, notSupported) {
 			t.Fatalf("list with delimiter: %s", err)
 		} else {

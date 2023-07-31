@@ -176,7 +176,7 @@ func (h *hdfsclient) Delete(key string) error {
 	return err
 }
 
-func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
 		return nil, notSupported
 	}

@@ -122,7 +122,7 @@ func (c *b2client) Delete(key string) error {
 	return err
 }
 
-func (c *b2client) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (c *b2client) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
