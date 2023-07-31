@@ -166,13 +166,8 @@ func (d *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 		}
 		if e.IsDir() {
 			mEntries = append(mEntries, &mEntry{nil, name + dirSuffix, e, false})
-		} else if !e.Mode().IsRegular() {
-			var fi os.FileInfo
-			if followLink {
-				fi, err = d.vol.Stat(filepath.Join(dirname, e.Name()))
-			} else {
-				fi, err = d.vol.Lstat(filepath.Join(dirname, e.Name()))
-			}
+		} else if !e.Mode().IsRegular() && followLink {
+			fi, err := d.vol.Stat(filepath.Join(dirname, name))
 			if err != nil {
 				mEntries = append(mEntries, &mEntry{nil, name, e, true})
 				continue
@@ -182,7 +177,7 @@ func (d *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 			}
 			mEntries = append(mEntries, &mEntry{nil, name, fi, true})
 		} else {
-			mEntries = append(mEntries, &mEntry{nil, name, e, false})
+			mEntries = append(mEntries, &mEntry{nil, name, e, !e.Mode().IsRegular()})
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })

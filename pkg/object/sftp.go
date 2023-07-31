@@ -323,15 +323,8 @@ func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo, f
 func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followLink bool) Object {
 	owner, group := getOwnerGroup(fi)
 	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
-	if isSymlink && c != nil {
-		var fi2 os.FileInfo
-		var err error
-		if followLink {
-			fi2, err = c.Stat(f.root + key)
-		} else {
-			fi2, err = c.Lstat(f.root + key)
-		}
-		if err == nil {
+	if isSymlink && c != nil && followLink {
+		if fi2, err := c.Stat(f.root + key); err == nil {
 			fi = fi2
 		}
 	}
