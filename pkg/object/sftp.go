@@ -328,7 +328,6 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followL
 			fi = fi2
 			isSymlink = false
 		}
-		isSymlink = false
 	}
 	ff := &file{
 		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
