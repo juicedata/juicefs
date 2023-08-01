@@ -591,6 +591,9 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 }
 
 func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) error {
+	if strings.HasSuffix(key, "/") {
+		key = strings.TrimRight(key, "/")
+	}
 	if p, err := src.(object.SupportSymlink).Readlink(key); err != nil {
 		return err
 	} else {
@@ -666,10 +669,19 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 			logger.Errorf("Listing failed, stop syncing, waiting for pending ones")
 			return
 		}
-		if !config.Dirs && obj.IsDir() {
-			logger.Debug("Ignore directory ", obj.Key())
-			continue
+
+		if obj.IsDir() {
+			if obj.IsSymlink() && !config.Links && !config.Dirs {
+				logger.Debug("Ignore directory ", obj.Key())
+				continue
+			}
+
+			if !obj.IsSymlink() && !config.Dirs {
+				logger.Debug("Ignore directory ", obj.Key())
+				continue
+			}
 		}
+
 		if config.Limit >= 0 {
 			if config.Limit == 0 {
 				return
@@ -870,7 +882,9 @@ func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.
 		defer close(srckeys)
 		for _, o := range total {
 			if o.IsDir() && o.Key() > prefix {
-				if cp != nil {
+				if o.IsSymlink() && !followLink {
+					srckeys <- o
+				} else if cp != nil {
 					cp <- o
 				}
 			} else {
