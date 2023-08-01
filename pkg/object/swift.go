@@ -78,7 +78,7 @@ func (s *swiftOSS) Delete(key string) error {
 	return err
 }
 
-func (s *swiftOSS) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (s *swiftOSS) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if limit > 10000 {
 		limit = 10000
 	}

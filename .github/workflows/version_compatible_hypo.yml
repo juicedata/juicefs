@@ -5,11 +5,13 @@ on:
     branches: 
       - main
     paths:
+      - '**/testVersionCompatible.py'
       - '**/version_compatible_hypo.yml'
   pull_request:
     branches: 
       - main
     paths:
+      - '**/testVersionCompatible.py'
       - '**/version_compatible_hypo.yml'
   schedule:
     - cron:  '0 19 * * *'

@@ -261,7 +261,7 @@ func (s *RestfulStorage) Delete(key string) error {
 	return nil
 }
 
-func (s *RestfulStorage) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (s *RestfulStorage) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	return nil, notSupported
 }
 

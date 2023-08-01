@@ -474,7 +474,7 @@ func format(c *cli.Context) error {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
 		if create {
-			if objs, err := osync.ListAll(blob, "", "", ""); err == nil {
+			if objs, err := osync.ListAll(blob, "", "", "", true); err == nil {
 				for o := range objs {
 					if o == nil {
 						logger.Warnf("List storage %s failed", blob)

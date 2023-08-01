@@ -145,7 +145,7 @@ func (q *qiniu) Delete(key string) error {
 	return err
 }
 
-func (q *qiniu) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (q *qiniu) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
