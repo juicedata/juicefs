@@ -175,7 +175,7 @@ func (w webDAVFile) Name() string {
 	return w.name
 }
 
-func (w *webdav) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (w *webdav) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
 		return nil, notSupported
 	}

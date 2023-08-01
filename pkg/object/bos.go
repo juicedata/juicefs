@@ -138,7 +138,7 @@ func (q *bosclient) Delete(key string) error {
 	return err
 }
 
-func (q *bosclient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (q *bosclient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}

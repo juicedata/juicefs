@@ -128,7 +128,7 @@ func (s *sqlStore) Delete(key string) error {
 	return err
 }
 
-func (s *sqlStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (s *sqlStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if marker == "" {
 		marker = prefix
 	}

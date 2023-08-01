@@ -125,22 +125,22 @@ func (p *withPrefix) Delete(key string) error {
 	return p.os.Delete(p.prefix + key)
 }
 
-func (p *withPrefix) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (p *withPrefix) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if marker != "" {
 		marker = p.prefix + marker
 	}
-	objs, err := p.os.List(p.prefix+prefix, marker, delimiter, limit)
+	objs, err := p.os.List(p.prefix+prefix, marker, delimiter, limit, followLink)
 	for i, o := range objs {
 		objs[i] = p.updateKey(o)
 	}
 	return objs, err
 }
 
-func (p *withPrefix) ListAll(prefix, marker string) (<-chan Object, error) {
+func (p *withPrefix) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	if marker != "" {
 		marker = p.prefix + marker
 	}
-	r, err := p.os.ListAll(p.prefix+prefix, marker)
+	r, err := p.os.ListAll(p.prefix+prefix, marker, followLink)
 	if err != nil {
 		return r, err
 	}
