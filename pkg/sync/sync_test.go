@@ -44,7 +44,7 @@ func TestIterator(t *testing.T) {
 	m.Put("aa", bytes.NewReader([]byte("a")))
 	m.Put("c", bytes.NewReader([]byte("a")))
 
-	ch, _ := ListAll(m, "", "a", "b")
+	ch, _ := ListAll(m, "", "a", "b", true)
 	keys := collectAll(ch)
 	if len(keys) != 3 {
 		t.Fatalf("length should be 3, but got %d", len(keys))
@@ -56,7 +56,7 @@ func TestIterator(t *testing.T) {
 	// Single object
 	s, _ := object.CreateStorage("mem", "", "", "", "")
 	s.Put("a", bytes.NewReader([]byte("a")))
-	ch, _ = ListAll(s, "", "", "")
+	ch, _ = ListAll(s, "", "", "", true)
 	keys = collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{"a"}) {
 		t.Fatalf("result wrong: %s", keys)
@@ -75,7 +75,7 @@ func TestIeratorSingleEmptyKey(t *testing.T) {
 
 	// Simulate command line prefix in SRC or DST
 	s = object.WithPrefix(s, "abc")
-	ch, _ := ListAll(s, "", "", "")
+	ch, _ := ListAll(s, "", "", "", true)
 	keys := collectAll(ch)
 	if !reflect.DeepEqual(keys, []string{""}) {
 		t.Fatalf("result wrong: %s", keys)
@@ -148,8 +148,8 @@ func TestSync(t *testing.T) {
 		t.Fatalf("should copy 1 keys, but got %d", c)
 	}
 	// Now a: {"a1", "a2", "abc", "ba", "c1", "c2"}, b: {"a1", "a2", "ba"}
-	aRes, _ := ListAll(a, "", "", "")
-	bRes, _ := ListAll(b, "", "", "")
+	aRes, _ := ListAll(a, "", "", "", true)
+	bRes, _ := ListAll(b, "", "", "", true)
 
 	var aObjs, bObjs []object.Object
 	for obj := range aRes {
@@ -249,7 +249,7 @@ func TestSyncIncludeAndExclude(t *testing.T) {
 			t.Fatalf("sync: %s", err)
 		}
 
-		bRes, _ := ListAll(b, "", "", "")
+		bRes, _ := ListAll(b, "", "", "", true)
 		var bKeys []string
 		for obj := range bRes {
 			bKeys = append(bKeys, obj.Key())
@@ -481,7 +481,7 @@ func TestLimits(t *testing.T) {
 			t.Fatalf("sync: %s", err)
 		}
 
-		all, err := ListAll(tcase.dst, "", "", "")
+		all, err := ListAll(tcase.dst, "", "", "", true)
 		if err != nil {
 			t.Fatalf("list all b: %s", err)
 		}

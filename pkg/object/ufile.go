@@ -199,7 +199,7 @@ type uFileListObjectsOutput struct {
 	DataSet []*DataItem `json:"DataSet,omitempty"`
 }
 
-func (u *ufile) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (u *ufile) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "" {
 		// TODO: or US3?
 		return nil, notSupported
