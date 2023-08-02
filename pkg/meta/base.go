@@ -334,7 +334,7 @@ func (m *baseMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall
 }
 
 func (m *baseMeta) updateDirStat(ctx Context, ino Ino, length, space, inodes int64) {
-	if !m.fmt.DirStats {
+	if !m.getFormat().DirStats {
 		return
 	}
 	m.dirStatsLock.Lock()
@@ -351,7 +351,7 @@ func (m *baseMeta) updateParentStat(ctx Context, inode, parent Ino, length, spac
 		return
 	}
 	m.en.updateStats(space, 0)
-	if !m.fmt.DirStats {
+	if !m.getFormat().DirStats {
 		return
 	}
 	if parent > 0 {
@@ -379,7 +379,7 @@ func (m *baseMeta) flushDirStat() {
 }
 
 func (m *baseMeta) doFlushDirStat() {
-	if !m.fmt.DirStats {
+	if !m.getFormat().DirStats {
 		return
 	}
 	m.dirStatsLock.Lock()
@@ -428,8 +428,8 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	if err != nil {
 		return nil, err
 	}
-	var format Format
-	if err = json.Unmarshal(body, &format); err != nil {
+	var format = new(Format)
+	if err = json.Unmarshal(body, format); err != nil {
 		return nil, fmt.Errorf("json: %s", err)
 	}
 	if checkVersion {
@@ -438,9 +438,9 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 		}
 	}
 	m.Lock()
-	m.fmt = &format
+	m.fmt = format
 	m.Unlock()
-	return &format, nil
+	return format, nil
 }
 
 func (m *baseMeta) newSessionInfo() []byte {
@@ -638,7 +638,7 @@ func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) 
 }
 
 func (m *baseMeta) loadQuotas() {
-	if !m.fmt.DirStats {
+	if !m.getFormat().DirStats {
 		return
 	}
 	quotas, err := m.en.doLoadQuotas(Background)
@@ -686,7 +686,7 @@ func (m *baseMeta) getDirParent(ctx Context, inode Ino) (Ino, syscall.Errno) {
 
 // get inode of the first parent (or myself) with quota
 func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
-	if !m.fmt.DirStats {
+	if !m.getFormat().DirStats {
 		return 0
 	}
 	var q *Quota
@@ -710,7 +710,7 @@ func (m *baseMeta) getQuotaParent(ctx Context, inode Ino) Ino {
 }
 
 func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bool {
-	if !m.fmt.DirStats {
+	if !m.getFormat().DirStats {
 		return false
 	}
 	var q *Quota
@@ -734,7 +734,7 @@ func (m *baseMeta) checkDirQuota(ctx Context, inode Ino, space, inodes int64) bo
 }
 
 func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
-	if !m.fmt.DirStats {
+	if !m.getFormat().DirStats {
 		return
 	}
 	var q *Quota
@@ -761,7 +761,7 @@ func (m *baseMeta) flushQuotas() {
 	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
-		if !m.fmt.DirStats {
+		if !m.getFormat().DirStats {
 			continue
 		}
 		m.quotaMu.RLock()
