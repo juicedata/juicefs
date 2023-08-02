@@ -3175,7 +3175,7 @@ func (m *redisMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool,
 		}
 		return nil
 	})
-	if err != nil || m.fmt.TrashDays == 0 {
+	if err != nil || m.getFormat().TrashDays == 0 {
 		return errno(err)
 	}
 
@@ -3902,7 +3902,7 @@ func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error)
 	}
 
 	dm := &DumpedMeta{
-		Setting: *m.fmt,
+		Setting: *m.getFormat(),
 		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],

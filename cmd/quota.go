@@ -122,6 +122,10 @@ func quota(c *cli.Context) error {
 	removePassword(c.Args().Get(0))
 
 	m := meta.NewClient(c.Args().Get(0), nil)
+	_, err := m.Load(true)
+	if err != nil {
+		logger.Fatalf("Load setting: %s", err)
+	}
 	qs := make(map[string]*meta.Quota)
 	var strict, repair bool
 	if cmd == meta.QuotaSet {
