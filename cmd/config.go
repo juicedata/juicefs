@@ -219,6 +219,14 @@ func config(ctx *cli.Context) error {
 				format.TrashDays = new
 				trash = true
 			}
+		case "cached-stay-days":
+			if new := ctx.Int(flag); new != format.CachedStayDays {
+				if new < 1 {
+					return fmt.Errorf("Invalid Cached stay days: %d", new)
+				}
+				msg.WriteString(fmt.Sprintf("%10s: %d -> %d\n", flag, format.CachedStayDays, new))
+				format.CachedStayDays = new
+			}
 		case "dir-stats":
 			if new := ctx.Bool(flag); new != format.DirStats {
 				msg.WriteString(fmt.Sprintf("%10s: %t -> %t\n", flag, format.DirStats, new))

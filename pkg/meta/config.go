@@ -87,6 +87,7 @@ type Format struct {
 	UploadLimit      int64  `json:",omitempty"` // Mbps
 	DownloadLimit    int64  `json:",omitempty"` // Mbps
 	TrashDays        int
+	CachedStayDays   int
 	MetaVersion      int    `json:",omitempty"`
 	MinClientVersion string `json:",omitempty"`
 	MaxClientVersion string `json:",omitempty"`

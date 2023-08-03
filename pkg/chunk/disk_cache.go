@@ -74,14 +74,15 @@ type cacheStore struct {
 	pages        map[string]*Page
 	m            *cacheManagerMetrics
 
-	used      int64
-	keys      map[cacheKey]cacheItem
-	scanned   bool
-	stageFull bool
-	rawFull   bool
-	eviction  string
-	checksum  string // checksum level
-	uploader  func(key, path string, force bool) bool
+	used           int64
+	keys           map[cacheKey]cacheItem
+	scanned        bool
+	stageFull      bool
+	rawFull        bool
+	eviction       string
+	checksum       string // checksum level
+	uploader       func(key, path string, force bool) bool
+	cachedstaydays int
 }
 
 func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
@@ -498,6 +499,82 @@ func (cache *cacheStore) cleanup() {
 		_ = os.Remove(cache.cachePath(cache.getPathFromKey(k)))
 	}
 	cache.Lock()
+}
+
+func (cache *cacheStore) cleanup2() {
+	logger.Warnf("selfcoding-excute the cleanup function")
+	//goal := cache.capacity * 95 / 100
+	//num := len(cache.keys) * 99 / 100
+	// make sure we have enough free space after cleanup
+	//br, fr := cache.curFreeRatio()
+	//if br < cache.freeRatio {
+	//	total, _, _, _ := getDiskUsage(cache.dir)
+	//	toFree := int64(float32(total) * (cache.freeRatio - br))
+	//	if toFree > cache.used {
+	//		goal = 0
+	//	} else if cache.used-toFree < goal {
+	//		goal = cache.used - toFree
+	//	}
+	//}
+	//if fr < cache.freeRatio {
+	//	_, _, files, _ := getDiskUsage(cache.dir)
+	//	toFree := int(float32(files) * (cache.freeRatio - fr))
+	//	if toFree > len(cache.keys) {
+	//		num = 0
+	//	} else {
+	//		num = len(cache.keys) - toFree
+	//	}
+	//}
+
+	var todel []cacheKey
+	var freed int64
+	//var cnt int
+	//var lastK cacheKey
+	//var lastValue cacheItem
+	var now = uint32(time.Now().Unix())
+	// for each two random keys, then compare the access time, evict the older one
+	for k, value := range cache.keys {
+		if value.size < 0 {
+			continue // staging
+		}
+		if cache.cachedstaydays >= 1 {
+			logger.Warnf("selfcoding-excute clean up judge")
+			cachedAlreadyTime := now - value.atime
+			cachedExpectTime := uint32(cache.cachedstaydays * 24 * 3600)
+			//访问的时间小于设置的时间
+			if cachedAlreadyTime < cachedExpectTime {
+				logger.Warnf("selfcoding-excute time %d is small than %d: ", cachedAlreadyTime, cachedExpectTime)
+				continue
+			} else {
+				logger.Warnf("selfcoding-excute time %d is big than %d: ", cachedAlreadyTime, cachedExpectTime)
+				//cnt++
+				//if cnt > 1 {
+				logger.Warnf("selfcoding-excute clean up cnt > 1")
+				logger.Warnf("selfcoding-excute clean up key: %s", k)
+				delete(cache.keys, k)
+				//freed += int64(lastValue.size + 4096)
+				//cache.used -= int64(lastValue.size + 4096)
+				todel = append(todel, k)
+				logger.Debugf("remove %s from cache, age: %d", k, now-value.atime)
+				cache.m.cacheEvicts.Add(1)
+				//cnt = 0
+				//if len(cache.keys) < num && cache.used < goal && cache.cachedstaydays == 1024 {
+				//	break
+				//}
+				//}
+			}
+		}
+		if len(todel) > 0 {
+			logger.Debugf("cleanup cache (%s): %d blocks (%d MB), freed %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, len(todel), freed>>20)
+			logger.Debugf("selfcoding-excute ------ cleanup cache (%s): %d blocks (%d MB), freed %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, len(todel), freed>>20)
+		}
+		cache.Unlock()
+		for _, k := range todel {
+			_ = os.Remove(cache.cachePath(cache.getPathFromKey(k)))
+		}
+		cache.Lock()
+	}
+
 }
 
 func (cache *cacheStore) uploadStaging() {
