@@ -514,6 +514,7 @@ type Config struct {
 	CacheSize         int64
 	CacheChecksum     string
 	CacheEviction     string
+	CachedStayDays    int
 	CacheScanInterval time.Duration
 	FreeSpace         float32
 	AutoCreate        bool
