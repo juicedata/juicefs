@@ -507,7 +507,6 @@ func (cache *cacheStore) cleanup() {
 }
 
 func (cache *cacheStore) cleanupTimeout() {
-	logger.Warnf("selfcoding-excute the cleanupTimeout function")
 	var todel []cacheKey
 	var freed int64
 	var now = uint32(time.Now().Unix())
@@ -516,9 +515,8 @@ func (cache *cacheStore) cleanupTimeout() {
 			continue // staging
 		}
 		if cache.cachedstaydays >= 1 {
-			logger.Warnf("selfcoding-excute clean up judge")
 			cachedAlreadyTime := now - value.atime
-			cachedExpectTime := uint32(cache.cachedstaydays * 1 * 360)
+			cachedExpectTime := uint32(cache.cachedstaydays * 24 * 3600)
 			//access time is smaller than cachedExpectTime
 			if cachedAlreadyTime < cachedExpectTime {
 				continue
