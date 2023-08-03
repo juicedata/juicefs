@@ -810,14 +810,14 @@ juicefs format \
   <TabItem value="debian" label="Debian 及衍生版本">
 
 ```bash
-sudo apt-get install libglusterfs-dev glusterfs-common
+sudo apt-get install uuid-dev libglusterfs-dev glusterfs-common
 ```
 
   </TabItem>
   <TabItem value="centos" label="RHEL 及衍生版本">
 
 ```bash
-sudo yum install glusterfs-api-devel glusterfs-libs
+sudo yum install glusterfs glusterfs-api-devel glusterfs-libs
 ```
 
   </TabItem>

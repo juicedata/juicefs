@@ -1581,7 +1581,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx2, TrashInode+1, "d", 1, "f", 0, &inode, attr); st != syscall.EPERM {
 		t.Fatalf("rename d -> f: %s", st)
 	}
-	m.getBase().doCleanupTrash(true)
+	m.getBase().doCleanupTrash(format.TrashDays, true)
 	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
 	}

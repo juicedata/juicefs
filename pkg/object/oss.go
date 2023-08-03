@@ -166,7 +166,7 @@ func (o *ossClient) Delete(key string) error {
 	return o.checkError(err)
 }
 
-func (o *ossClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (o *ossClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -190,7 +190,7 @@ func (o *ossClient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	return objs, nil
 }
 
-func (o *ossClient) ListAll(prefix, marker string) (<-chan Object, error) {
+func (o *ossClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

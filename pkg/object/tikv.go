@@ -89,7 +89,7 @@ func (t *tikv) Delete(key string) error {
 	return t.c.Delete(context.TODO(), []byte(key))
 }
 
-func (t *tikv) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (t *tikv) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "" {
 		return nil, notSupported
 	}

@@ -203,7 +203,7 @@ func (c *ceph) Head(key string) (Object, error) {
 	return o, err
 }
 
-func (c *ceph) ListAll(prefix, marker string) (<-chan Object, error) {
+func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	var objs = make(chan Object, 1000)
 	err := c.do(func(ctx *rados.IOContext) error {
 		iter, err := ctx.Iter()

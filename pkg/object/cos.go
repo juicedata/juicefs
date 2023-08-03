@@ -155,7 +155,7 @@ func (c *COS) Delete(key string) error {
 	return err
 }
 
-func (c *COS) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (c *COS) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	param := cos.BucketGetOptions{
 		Prefix:       prefix,
 		Marker:       marker,
@@ -197,7 +197,7 @@ func (c *COS) List(prefix, marker, delimiter string, limit int64) ([]Object, err
 	return objs, nil
 }
 
-func (c *COS) ListAll(prefix, marker string) (<-chan Object, error) {
+func (c *COS) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 
