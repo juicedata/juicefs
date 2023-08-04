@@ -483,8 +483,7 @@ func (cache *cacheStore) cleanup() {
 		}
 		if cache.cachedstaydays >= 1 && cache.cachedstaydays != 1024 {
 			cachedAlreadyTime = now - value.atime
-			//cachedExpectTime = uint32(cache.cachedstaydays * 24 * 3600)
-			cachedExpectTime = uint32(cache.cachedstaydays * 1 * 360)
+			cachedExpectTime = uint32(cache.cachedstaydays * 24 * 3600)
 			//access time from now is biger than cachedExpectTime
 			if cachedAlreadyTime > cachedExpectTime {
 				lastK = k
