@@ -23,13 +23,44 @@ import (
 	"fmt"
 	"log/syslog"
 	"os"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 	logrus_syslog "github.com/sirupsen/logrus/hooks/syslog"
 )
 
+type logLine struct {
+	level logrus.Level
+	msg   string
+}
+
 type SyslogHook struct {
 	*logrus_syslog.SyslogHook
+	buffer chan logLine
+}
+
+func (hook *SyslogHook) flush() {
+	for l := range hook.buffer {
+		line := l.msg
+		var err error
+		switch l.level {
+		case logrus.PanicLevel:
+			err = hook.Writer.Crit(line)
+		case logrus.FatalLevel:
+			err = hook.Writer.Crit(line)
+		case logrus.ErrorLevel:
+			err = hook.Writer.Err(line)
+		case logrus.WarnLevel:
+			err = hook.Writer.Warning(line)
+		case logrus.InfoLevel:
+			err = hook.Writer.Info(line)
+		case logrus.DebugLevel:
+			err = hook.Writer.Debug(line)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "write to syslog: %v, level: %s, line: %s", err, l.level, line)
+		}
+	}
 }
 
 func (hook *SyslogHook) Fire(entry *logrus.Entry) error {
@@ -39,38 +70,31 @@ func (hook *SyslogHook) Fire(entry *logrus.Entry) error {
 		return err
 	}
 
-	// drop the timestamp
-	line = line[27:]
-
-	switch entry.Level {
-	case logrus.PanicLevel:
-		return hook.Writer.Crit(line)
-	case logrus.FatalLevel:
-		return hook.Writer.Crit(line)
-	case logrus.ErrorLevel:
-		return hook.Writer.Err(line)
-	case logrus.WarnLevel:
-		return hook.Writer.Warning(line)
-	case logrus.InfoLevel:
-		return hook.Writer.Info(line)
-	case logrus.DebugLevel:
-		return hook.Writer.Debug(line)
-	default:
+	select {
+	case hook.buffer <- logLine{entry.Level, line[27:]}: // drop the timestamp
 		return nil
+	default:
+		fmt.Fprintf(os.Stderr, "buffer of syslog is full, drop: %s", line)
+		return fmt.Errorf("buffer is full")
 	}
 }
 
+var once sync.Once
+
 func InitLoggers(logToSyslog bool) {
 	if logToSyslog {
-		hook, err := logrus_syslog.NewSyslogHook("", "", syslog.LOG_DEBUG|syslog.LOG_USER, "")
-		if err != nil {
-			// println("Unable to connect to local syslog daemon")
-			return
-		}
-		syslogHook = &SyslogHook{hook}
+		once.Do(func() {
+			hook, err := logrus_syslog.NewSyslogHook("", "", syslog.LOG_DEBUG|syslog.LOG_USER, "")
+			if err != nil {
+				// println("Unable to connect to local syslog daemon")
+				return
+			}
+			syslogHook = &SyslogHook{hook, make(chan logLine, 1024)}
+			go syslogHook.(*SyslogHook).flush()
 
-		for _, l := range loggers {
-			l.AddHook(syslogHook)
-		}
+			for _, l := range loggers {
+				l.AddHook(syslogHook)
+			}
+		})
 	}
 }
