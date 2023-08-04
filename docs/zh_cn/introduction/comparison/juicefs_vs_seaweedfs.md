@@ -49,6 +49,7 @@ SeaweedFS 会为所有的元数据操作生成变更日志，此日志可被进�
 如前文所述，SeaweedFS 的数据存储由 Volume Server + Master Server 实现，支持小数据块的「合并存储」、「纠删码」等特性。而 JuiceFS 的数据存储则是依托于对象存储服务服务，相关的特性也都由用户选择的对象存储提供。
 
 ## 文件拆分
+
 在存储数据时，SeaweedFS 与 JuiceFS 都会将文件拆分成若干个小块再持久化到底层的数据系统中。SeaweedFS 将文件拆分成 8MB 的块，对于超大文件（超过 8GB），它会将 Chunk 索引也保存到底层的数据系统中。而 JuiceFS 则是先拆成 64MB 的 Chunk，再拆成 4MB 的 Object，通过内部一个 Slice 的概念对随机写、顺序读、重复写等性能进行了优化。（详情见[读取清求处理流程](https://juicefs.com/docs/zh/community/internals/io_processing)）
 
 ## 分层存储
@@ -106,6 +107,7 @@ JuiceFS 尚未原生支持集群之间的数据同步功能，需要依赖元数
 SeaweedFS 可以作为云上对象存储的缓存来使用，支持通过命令手动预热数据。对于缓存数据的修改，会异步同步到对象存储中。JuiceFS 需要将文件分块存储到对象存储中，不支持为对象存储中已有的数据提供缓存加速。
 
 ## 回收站
+
 JuiceFS 默认开启 [回收站](https://juicefs.com/docs/zh/community/security/trash/) 功能，会自动将用户删除的文件移动到 JuiceFS 根目录下的 .trash 目录内，保留指定时间后才将数据真正清理。 SeaweedFS 暂不支持此功能。
 
 ## 运维工具
