@@ -160,7 +160,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--session-token=value`|对象存储的临时访问凭证（Session Token），查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#session-token)以了解更多。|
-|`--storage-class=value`|默认存储类型。|
+|`--storage-class=value` <VersionAdd>1.1</VersionAdd>|默认存储类型。|
 
 #### 数据格式参数 {#format-data-format-options}
 
