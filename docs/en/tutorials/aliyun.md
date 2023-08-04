@@ -1,6 +1,6 @@
 ---
 title: Use JuiceFS on Alibaba Cloud
-sidebar_position: 6
+sidebar_position: 7
 slug: /clouds/aliyun
 ---
 

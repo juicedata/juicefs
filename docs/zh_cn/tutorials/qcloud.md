@@ -1,6 +1,6 @@
 ---
 title: 在腾讯云使用 JuiceFS
-sidebar_position: 5
+sidebar_position: 8
 slug: /clouds/qcloud
 ---
 
