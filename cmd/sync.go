@@ -272,10 +272,14 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			if err != nil {
 				logger.Fatalf("invalid path: %s", err.Error())
 			}
+			fileInfo, err := os.Stat(absPath)
+			if err != nil {
+				logger.Fatalf("invalid path: %s", err.Error())
+			}
 			if !strings.HasPrefix(absPath, "/") { // Windows path
 				absPath = "/" + strings.Replace(absPath, "\\", "/", -1)
 			}
-			if strings.HasSuffix(uri, "/") || uri == "." {
+			if fileInfo.IsDir() {
 				absPath += "/"
 			}
 
