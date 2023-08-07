@@ -3,9 +3,9 @@ title: 创建 Samba 共享
 sidebar_position: 8
 ---
 
-Samba 是一个开源的软件套件，它实现了SMB/CIFS（Server Message Block/Common Internet File System）协议，该协议是 Windows 系统中常用的文件共享协议。通过 Samba，可以在 Linux/Unix 服务器上创建共享目录，允许 Windows 计算机通过网络访问和使用这些共享资源。
+Samba 是一个开源的软件套件，它实现了 SMB/CIFS（Server Message Block/Common Internet File System）协议，该协议是 Windows 系统中常用的文件共享协议。通过 Samba，可以在 Linux/Unix 服务器上创建共享目录，允许 Windows 计算机通过网络访问和使用这些共享资源。
 
-在安装了 Samba 的 Linux 系统上通过编辑 smb.conf 配置文件即可将本地目录创建成为共享文件夹，Windows 和 macOS 系统使用文件管理器就可以直接访问读写。
+在安装了 Samba 的 Linux 系统上通过编辑 SMB.conf 配置文件即可将本地目录创建成为共享文件夹，Windows 和 macOS 系统使用文件管理器就可以直接访问读写。
 
 当需要将 JuiceFS 文件系统中的目录通过 Samba 共享时，只需使用 `juicefs mount` 命令挂载，然后使用 JuiceFS 挂载点或子目录创建 Samba 共享即可。
 
