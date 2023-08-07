@@ -47,7 +47,7 @@ JuiceFS Hadoop Java SDK 默认使用 JDK 8 编译，如果需要在高版本的 
 
 ### 安装预编译客户端
 
-请参考[「安装」](../getting-started/installation.md#安装预编译客户端)文档了解如何下载预编译的 JuiceFS Hadoop Java SDK。
+请参考[「安装」](../getting-started/installation.md#install-the-pre-compiled-client)文档了解如何下载预编译的 JuiceFS Hadoop Java SDK。
 
 ### 手动编译客户端
 
