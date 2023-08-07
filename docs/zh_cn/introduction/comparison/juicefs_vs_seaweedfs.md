@@ -7,8 +7,6 @@ slug: /comparison/juicefs_vs_seaweedfs
 
 SeaweedFS 于 2015 年 4 月发布，而 JuiceFS 于 2021 年 1 月发布，都使用 Go 语言编写，并采用了对商用更友好的 Apache License 2.0。
 
-
-
 |                  | SeaweedFS          | JuiceFS               |
 | :--------------- | :----------------- | :-------------------- |
 | 元数据           | 多引擎             | 多引擎                |
@@ -64,7 +62,7 @@ JuiceFS 的架构在[「技术架构」](../architecture.md)有更详细的介�
 
 ### 元数据
 
-SeaweedFS 与 JuiceFS 都支持通过外部数据库以存储文件系统的元数据信息。SeaweedFS 支持多达 [24](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Stores) 种数据库。 JuiceFS 对数据库事务能力要求更高（下方会详细介绍），当前支持了 3 类共 10 种事务型数据库。
+SeaweedFS 与 JuiceFS 都支持通过外部数据库以存储文件系统的元数据信息。SeaweedFS 支持多达 [24](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Stores) 种数据库。JuiceFS 对数据库事务能力要求更高（下方会详细介绍），当前支持了 3 类共 10 种事务型数据库。
 
 ### 原子性操作
 
@@ -77,7 +75,7 @@ SeaweedFS 会为所有的元数据操作生成变更日志（changelog），日�
 
 SeaweedFS 支持在多个集群之间进行文件系统数据复制，存在两种异步数据复制模式：「Active-Active」与「Active-Passive」，Active-Active 模式中，两个集群都能够参与文件写入并双向同步，Active-Passive 模式则是主从关系，Passive 一方只读。2 种模式都是通过传递 changelog 再应用的机制实现了不同集群数据间的一致性，对于每一条 changelog，其中会有一个签名信息以保证同一个修改不会被循环多次。在集群节点数量超过 2 个节点的 Active-Active 模式下，SeaweedFS 的一些操作（如重命名目录）会受到一些限制。
 
-JuiceFS 社区版没有实现变更日志，但可以自行使用元数据引擎和对象存储自身的数据复制能力实现文件系统镜像功能，比方说 [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) 或 [Redis](https://redis.io/docs/management/replication/) 仅支持数据复制，配合上 [S3 的复制对象功能](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/replication.html)，就能脱离 JuiceFS 实现类似 SeaweedFS 的 Active-Passive 模式。
+JuiceFS 社区版没有实现变更日志，但可以自行使用元数据引擎和对象存储自身的数据复制能力实现文件系统镜像功能，比方说 [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) 或 [Redis](https://redis.io/docs/management/replication) 仅支持数据复制，配合上 [S3 的复制对象功能](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/replication.html)，就能脱离 JuiceFS 实现类似 SeaweedFS 的 Active-Passive 模式。
 
 顺带一提，JuiceFS 企业版的元数据引擎也是基于变更日志实现，支持[数据复制](https://juicefs.com/docs/zh/cloud/guide/replication)、[镜像文件](https://juicefs.com/docs/zh/cloud/guide/mirror)系统，可以点击对应文档链接以了解更多。
 
@@ -95,7 +93,7 @@ SeaweedFS 与 JuiceFS 都会将文件拆分成若干个小块再持久化到底�
 
 ### 数据压缩
 
-JuiceFS 支持使用 LZ4 或者 ZStandard 来为所有写入的数据进行压缩，而 SeaweedFS 则是根据写入文件的扩展名、文件类型等信息来选择是否进行压缩。
+JuiceFS 支持使用 LZ4 或者 Zstandard 来为所有写入的数据进行压缩，而 SeaweedFS 则是根据写入文件的扩展名、文件类型等信息来选择是否进行压缩。
 
 ### 加密
 
