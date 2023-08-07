@@ -275,7 +275,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			if !strings.HasPrefix(absPath, "/") { // Windows path
 				absPath = "/" + strings.Replace(absPath, "\\", "/", -1)
 			}
-			if strings.HasSuffix(uri, "/") {
+			if strings.HasSuffix(uri, "/") || uri == "." {
 				absPath += "/"
 			}
 
