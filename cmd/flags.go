@@ -19,8 +19,10 @@ package cmd
 import (
 	"os"
 	"path"
+	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -178,6 +180,7 @@ func dataCacheFlags() []cli.Flag {
 			Value: "0",
 			Usage: "delayed duration (in seconds) for uploading objects",
 		},
+
 		&cli.StringFlag{
 			Name:  "cache-dir",
 			Value: defaultCacheDir,
@@ -216,6 +219,11 @@ func dataCacheFlags() []cli.Flag {
 			Name:  "cache-scan-interval",
 			Value: "3600",
 			Usage: "interval (in seconds) to scan cache-dir to rebuild in-memory index",
+		},
+		&cli.StringFlag{
+			Name:  "cache-expire",
+			Value: "1024d",
+			Usage: "if the time since the last access exceeds this time, cached files will be deleted",
 		},
 	})
 }
@@ -323,10 +331,56 @@ func expandFlags(compoundFlags ...[]cli.Flag) []cli.Flag {
 	return flags
 }
 
+func parseDuration(input string) (time.Duration, error) {
+	re := regexp.MustCompile(`(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?`)
+	matches := re.FindStringSubmatch(input)
+	if len(matches) == 5 {
+		var days, hours, minutes, seconds int
+		var err error
+		if matches[1] != "" {
+			days, err = strconv.Atoi(matches[1])
+			if err != nil {
+				return 0, err
+			}
+		}
+		if matches[2] != "" {
+			hours, err = strconv.Atoi(matches[2])
+			if err != nil {
+				return 0, err
+			}
+		}
+		if matches[3] != "" {
+			minutes, err = strconv.Atoi(matches[3])
+			if err != nil {
+				return 0, err
+			}
+		}
+		if matches[4] != "" {
+			seconds, err = strconv.Atoi(matches[4])
+			if err != nil {
+				return 0, err
+			}
+		}
+		durationDays := time.Duration(days*24*int(time.Hour) + hours*int(time.Hour) + minutes*int(time.Minute) + seconds*int(time.Second))
+		return durationDays, nil
+	} else {
+		logger.Warnf("Invalid input format of cache expire ")
+		return 0, nil
+	}
+}
+
 func duration(s string) time.Duration {
+	//param is *d
+	if strings.Contains(s, "d") {
+		if newDuration, err := parseDuration(s); err == nil {
+			return newDuration
+		}
+	}
+
 	if v, err := strconv.ParseInt(s, 10, 64); err == nil {
 		return time.Second * time.Duration(v)
 	}
+
 	if v, err := time.ParseDuration(s); err == nil {
 		return v
 	}

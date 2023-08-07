@@ -514,8 +514,8 @@ type Config struct {
 	CacheSize         int64
 	CacheChecksum     string
 	CacheEviction     string
-	CachedStayDays    int
 	CacheScanInterval time.Duration
+	CacheExpire       time.Duration
 	FreeSpace         float32
 	AutoCreate        bool
 	Compress          string
@@ -547,6 +547,10 @@ func (c *Config) SelfCheck(uuid string) {
 	if !c.Writeback && c.UploadDelay > 0 {
 		logger.Warnf("delayed upload is disabled in non-writeback mode")
 		c.UploadDelay = 0
+	}
+	if c.CacheExpire <= 0 {
+		logger.Warnf("cache expire is disabled , invalid parameter settings")
+		c.CacheExpire = 88473600
 	}
 	if c.MaxUpload <= 0 {
 		logger.Warnf("max-uploads should be greater than 0, set it to 1")

@@ -70,19 +70,19 @@ type cacheStore struct {
 	freeRatio    float32
 	hashPrefix   bool
 	scanInterval time.Duration
+	cacheExpire  time.Duration
 	pending      chan pendingFile
 	pages        map[string]*Page
 	m            *cacheManagerMetrics
 
-	used           int64
-	keys           map[cacheKey]cacheItem
-	scanned        bool
-	stageFull      bool
-	rawFull        bool
-	eviction       string
-	checksum       string // checksum level
-	uploader       func(key, path string, force bool) bool
-	cachedstaydays int
+	used      int64
+	keys      map[cacheKey]cacheItem
+	scanned   bool
+	stageFull bool
+	rawFull   bool
+	eviction  string
+	checksum  string // checksum level
+	uploader  func(key, path string, force bool) bool
 }
 
 func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingPages int, config *Config, uploader func(key, path string, force bool) bool) *cacheStore {
@@ -93,20 +93,20 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 		config.FreeSpace = 0.1 // 10%
 	}
 	c := &cacheStore{
-		m:              m,
-		dir:            dir,
-		mode:           config.CacheMode,
-		capacity:       cacheSize,
-		freeRatio:      config.FreeSpace,
-		eviction:       config.CacheEviction,
-		checksum:       config.CacheChecksum,
-		hashPrefix:     config.HashPrefix,
-		scanInterval:   config.CacheScanInterval,
-		keys:           make(map[cacheKey]cacheItem),
-		pending:        make(chan pendingFile, pendingPages),
-		pages:          make(map[string]*Page),
-		uploader:       uploader,
-		cachedstaydays: config.CachedStayDays,
+		m:            m,
+		dir:          dir,
+		mode:         config.CacheMode,
+		capacity:     cacheSize,
+		freeRatio:    config.FreeSpace,
+		eviction:     config.CacheEviction,
+		checksum:     config.CacheChecksum,
+		hashPrefix:   config.HashPrefix,
+		scanInterval: config.CacheScanInterval,
+		cacheExpire:  config.CacheExpire,
+		keys:         make(map[cacheKey]cacheItem),
+		pending:      make(chan pendingFile, pendingPages),
+		pages:        make(map[string]*Page),
+		uploader:     uploader,
 	}
 	c.createDir(c.dir)
 	br, fr := c.curFreeRatio()
@@ -136,7 +136,7 @@ func (cache *cacheStore) checkFreeSpace() {
 		br, fr := cache.curFreeRatio()
 		cache.stageFull = br < cache.freeRatio/2 || fr < cache.freeRatio/2
 		cache.rawFull = br < cache.freeRatio || fr < cache.freeRatio
-		if cache.rawFull && cache.eviction != "none" || cache.cachedstaydays >= 1 && cache.cachedstaydays != 1024 {
+		if cache.rawFull && cache.eviction != "none" || cache.cacheExpire.Seconds() >= 1 && cache.cacheExpire.Seconds() != 884736000 {
 			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
 			cache.Lock()
 			cache.cleanup()
@@ -406,7 +406,7 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 		cache.used += int64(size + 4096)
 	}
 
-	if cache.used > cache.capacity && cache.eviction != "none" || cache.cachedstaydays >= 1 && cache.cachedstaydays != 1024 {
+	if cache.used > cache.capacity && cache.eviction != "none" || cache.cacheExpire.Seconds() >= 1 && cache.cacheExpire.Seconds() != 884736000 {
 		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20)
 		cache.cleanup()
 	}
@@ -469,7 +469,6 @@ func (cache *cacheStore) cleanup() {
 	var lastK cacheKey
 	var lastValue cacheItem
 	var now = uint32(time.Now().Unix())
-	var cachedAlreadyTime, cachedExpectTime uint32
 	// for each two random keys, then compare the access time, evict the older one
 	for k, value := range cache.keys {
 		if value.size < 0 {
@@ -481,17 +480,15 @@ func (cache *cacheStore) cleanup() {
 				lastValue = value
 			}
 		}
-		if cache.cachedstaydays >= 1 && cache.cachedstaydays != 1024 {
-			cachedAlreadyTime = now - value.atime
-			cachedExpectTime = uint32(cache.cachedstaydays * 24 * 3600)
+		if cache.cacheExpire.Seconds() >= 1 && cache.cacheExpire.Seconds() != 884736000 {
 			//access time from now is biger than cachedExpectTime
-			if cachedAlreadyTime > cachedExpectTime {
+			if now-value.atime > uint32(cache.cacheExpire.Seconds()) {
 				lastK = k
 				lastValue = value
 			}
 		}
 		cnt++
-		if cnt > 1 {
+		if cnt > 1 && cache.rawFull || cnt >= 1 && cache.cacheExpire.Seconds() >= 1 && cache.cacheExpire.Seconds() != 884736000 {
 			delete(cache.keys, lastK)
 			freed += int64(lastValue.size + 4096)
 			cache.used -= int64(lastValue.size + 4096)

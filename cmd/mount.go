@@ -388,10 +388,9 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		cm = 0600
 	}
 	chunkConf := &chunk.Config{
-		BlockSize:      format.BlockSize * 1024,
-		Compress:       format.Compression,
-		HashPrefix:     format.HashPrefix,
-		CachedStayDays: format.CachedStayDays,
+		BlockSize:  format.BlockSize * 1024,
+		Compress:   format.Compression,
+		HashPrefix: format.HashPrefix,
 
 		GetTimeout:    time.Second * time.Duration(c.Int("get-timeout")),
 		PutTimeout:    time.Second * time.Duration(c.Int("put-timeout")),
@@ -412,6 +411,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheChecksum:     c.String("verify-cache-checksum"),
 		CacheEviction:     c.String("cache-eviction"),
 		CacheScanInterval: duration(c.String("cache-scan-interval")),
+		CacheExpire:       duration(c.String("cache-expire")),
 		AutoCreate:        true,
 	}
 	if chunkConf.UploadLimit == 0 {
