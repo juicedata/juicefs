@@ -5,7 +5,7 @@ slug: /comparison/juicefs_vs_seaweedfs
 
 [SeaweedFS](https://github.com/seaweedfs/seaweedfs) 与 [JuiceFS](https://github.com/juicedata/juicefs) 皆是开源的高性能分布式文件存储系统，但二者存在诸多设计区别与功能差异，本章将会详述他们的区别和各自适用场景，帮助你的团队进行技术选型。
 
-SeaweedFS 于 2015 年 4 月发布，而 JuiceFS 于 2021 年 1 月发布，都使用 Go 语言编写，并采用了对商用更友好的 Apache License 2.0。
+SeaweedFS 于 2015 年 4 月发布，而 JuiceFS 于 2021 年 1 月发布，都使用 Go 语言编写，并采用了对商用更友好的 Apache License 2.0。你可以通过下表速查两者的关键特性对比，然后在本文中选取感兴趣的话题详细阅读。
 
 | | SeaweedFS | JuiceFS |
 | :--- | :--- | :--- |
@@ -28,7 +28,7 @@ SeaweedFS 于 2015 年 4 月发布，而 JuiceFS 于 2021 年 1 月发布，都�
 | 集群数据复制 | 双向异步、多模式 | 仅企业版支持 |
 | 云上数据缓存 | 支持（手动同步） | 仅企业版支持 |
 | 回收站 | 不支持 | 支持 |
-| 运维工具 | 提供 | 提供 |
+| 运维与监控 | 支持 | 支持 |
 | 发布时间 | 2015.4 | 2021.1 |
 | 主要维护者 | 个人（Chris Lu） | 公司（Juicedata Inc） |
 | 语言 | Go | Go |
