@@ -3,9 +3,12 @@ title: Creating Samba Shares
 sidebar_position: 8
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 Samba is an open-source software suite that implements the SMB/CIFS (Server Message Block/Common Internet File System) protocol, which is a commonly used file-sharing protocol in Windows systems. With Samba, you can create shared directories on Linux/Unix servers, allowing Windows computers to access and use these shared resources over the network.
 
-To create a shared folder on a Linux system with Samba installed, you can edit the `smb.conf` configuration file. Once configured, Windows and macOS systems can access and read/write the shared folder using their file managers.
+To create a shared folder on a Linux system with Samba installed, you can edit the `smb.conf` configuration file. Once configured, Windows and macOS systems can access and read/write the shared folder using their file managers, Linux needs to install the Samba client for access.
 
 When you need to share directories from the JuiceFS file system through Samba, you can simply use the `juicefs mount` command to mount the file system. Then, you can create Samba shares with the JuiceFS mount point or subdirectories.
 
@@ -15,17 +18,22 @@ When you need to share directories from the JuiceFS file system through Samba, y
 
 ## Installing Samba
 
-Most Linux distributions provide Samba through their package managers. For example, on Debian/Ubuntu, you can install it using the following command:
+Most Linux distributions provide Samba through their package managers.
+
+<Tabs>
+<TabItem value="debian" label="Debian and derivatives">
 
 ```shell
 sudo apt install samba
 ```
-
-On Red Hat and its derivatives, you can install it with:
+</TabItem>
+    <TabItem value="redhat" label="RHEL and derivatives">
 
 ```shell
 sudo dnf install samba
 ```
+</TabItem>
+</Tabs>
 
 If you need to configure AD/DC (Active Directory / Domain Controller), additional software packages need to be installed. For more details, refer to the [Samba Official Installation Guide](https://wiki.samba.org/index.php/Distribution-specific_Package_Installation).
 

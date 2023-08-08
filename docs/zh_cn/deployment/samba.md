@@ -2,10 +2,12 @@
 title: 创建 Samba 共享
 sidebar_position: 8
 ---
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
 Samba 是一个开源的软件套件，它实现了 SMB/CIFS（Server Message Block/Common Internet File System）协议，该协议是 Windows 系统中常用的文件共享协议。通过 Samba，可以在 Linux/Unix 服务器上创建共享目录，允许 Windows 计算机通过网络访问和使用这些共享资源。
 
-在安装了 Samba 的 Linux 系统上通过编辑 SMB.conf 配置文件即可将本地目录创建成为共享文件夹，Windows 和 macOS 系统使用文件管理器就可以直接访问读写。
+在安装了 Samba 的 Linux 系统上通过编辑 `smb.conf` 配置文件即可将本地目录创建成为共享文件夹，Windows 和 macOS 系统使用文件管理器就可以直接访问读写，Linux 需要安装 Samba 客户端访问。
 
 当需要将 JuiceFS 文件系统中的目录通过 Samba 共享时，只需使用 `juicefs mount` 命令挂载，然后使用 JuiceFS 挂载点或子目录创建 Samba 共享即可。
 
@@ -15,17 +17,22 @@ Samba 是一个开源的软件套件，它实现了 SMB/CIFS（Server Message Bl
 
 ## 安装 Samba
 
-主流 Linux 发行版的包管理器都会提供 Samba，比如 Debian/Ubuntu 可以这样安装：
+主流 Linux 发行版的包管理器都会提供 Samba：
+
+<Tabs>
+<TabItem value="debian" label="Debian 及衍生版本">
 
 ```shell
 sudo apt install samba
 ```
-
-Red Hat 及衍生版可以这样安装：
+</TabItem>
+    <TabItem value="redhat" label="RHEL 及衍生版本">
 
 ```shell
 sudo dnf install samba
 ```
+</TabItem>
+</Tabs>
 
 如果需要配置 AD/DC，还需要安装其他的软件包，详情参考 [Samba 官方安装指南](https://wiki.samba.org/index.php/Distribution-specific_Package_Installation)。
 
