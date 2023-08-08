@@ -25,12 +25,14 @@ Samba 是一个开源的软件套件，它实现了 SMB/CIFS（Server Message Bl
 ```shell
 sudo apt install samba
 ```
+
 </TabItem>
     <TabItem value="redhat" label="RHEL 及衍生版本">
 
 ```shell
 sudo dnf install samba
 ```
+
 </TabItem>
 </Tabs>
 

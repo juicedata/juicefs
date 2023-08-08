@@ -26,12 +26,14 @@ Most Linux distributions provide Samba through their package managers.
 ```shell
 sudo apt install samba
 ```
+
 </TabItem>
     <TabItem value="redhat" label="RHEL and derivatives">
 
 ```shell
 sudo dnf install samba
 ```
+
 </TabItem>
 </Tabs>
 
