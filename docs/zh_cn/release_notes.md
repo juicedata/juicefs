@@ -19,7 +19,7 @@ JuiceFS 的客户端只有一个二进制文件，一般情况下升级时只需
 ### JuiceFS v1.1
 
 :::tip 提示
-若您正在使用的版本小于 v1.0，请先[升级到 v1.0 版本](#juicefs-v1.0)。
+若您正在使用的版本小于 v1.0，请先[升级到 v1.0 版本](#juicefs-v10)。
 :::
 
 JuiceFS 在 v1.1（具体而言，是 v1.1.0-beta2）版本中新增了[**目录用量统计**](https://juicefs.com/docs/zh/community/guide/dir-stats)和[**目录配额**](https://juicefs.com/docs/zh/community/guide/quota#directory-quota)两个功能，且目录配额依赖于用量统计。这两项功能在旧版本客户端中没有，当它们被开启的情况下使用旧客户端写入会导致统计数值出现较大偏差。在升级到 v1.1 时，若您不打算启用这两项新功能，可以直接使用新版本客户端替换升级，无需额外操作。若您打算使用，则建议您在升级前了解以下内容。

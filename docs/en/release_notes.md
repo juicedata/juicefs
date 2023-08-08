@@ -19,7 +19,7 @@ JuiceFS client has only one binary file, so usually you only need to replace the
 ### JuiceFS v1.1
 
 :::tip
-If you are using JuiceFS version prior to v1.0, please [upgrade to v1.0](#juicefs-v1.0) first.
+If you are using JuiceFS version prior to v1.0, please [upgrade to v1.0](#juicefs-v10) first.
 :::
 
 In v1.1 (specifically, v1.1.0-beta2) JuiceFS added [**Directory Statistics**](https://juicefs.com/docs/community/guide/dir-stats) and [**Directory Quota**](https://juicefs.com/docs/community/guide/quota#directory-quota). These two features were not available in older versions of the client, and writing with the old client when they were turned on would result in large deviations in the statistics. When upgrading to v1.1, if you do not intend to enable these two new features, you can simply replace the client without additional action. If you do, it is recommended that you read the following content before upgrading.
