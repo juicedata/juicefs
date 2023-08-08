@@ -375,7 +375,8 @@ func (m *baseMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recursive bool, strict bool, concurrent chan struct{}, updateProgress func(count uint64, bytes uint64)) syscall.Errno {
 	var entries []*Entry
 	var err syscall.Errno
-	if strict || !m.GetFormat().DirStats {
+	format := m.getFormat()
+	if strict || !format.DirStats {
 		err = m.en.doReaddir(ctx, inode, 1, &entries, -1)
 	} else {
 		var st *dirStat
@@ -410,7 +411,7 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 		} else {
 			atomic.AddUint64(&summary.Files, 1)
 		}
-		if strict || !m.fmt.DirStats {
+		if strict || !format.DirStats {
 			atomic.AddUint64(&summary.Size, uint64(align4K(e.Attr.Length)))
 			if e.Attr.Typ == TypeFile {
 				atomic.AddUint64(&summary.Length, e.Attr.Length)

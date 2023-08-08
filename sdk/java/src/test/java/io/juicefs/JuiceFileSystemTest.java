@@ -917,6 +917,7 @@ public class JuiceFileSystemTest extends TestCase {
     FileSystem tomFs = createNewFs(conf, "tom", new String[]{"randgroup"});
     tomFs.listStatus(testDir);
 
+    superFs.delete(testDir.getParent(), true);
     tomFs.close();
     superFs.close();
   }

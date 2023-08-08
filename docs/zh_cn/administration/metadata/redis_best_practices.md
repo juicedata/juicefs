@@ -4,8 +4,6 @@ sidebar_position: 1
 slug: /redis_best_practices
 ---
 
-import Badge from '@site/src/components/Badge';
-
 # Redis 最佳实践
 
 为保证元数据服务稳定，我们建议使用云平台提供的 Redis 托管服务，详情查看[「推荐的 Redis 托管服务」](#推荐的-redis-托管服务)。
@@ -133,10 +131,6 @@ Redis 对数据备份非常友好，因为您可以在数据库运行时复制 R
 ### Amazon MemoryDB for Redis
 
 [Amazon MemoryDB for Redis](https://aws.amazon.com/memorydb) 是一种持久的内存数据库服务，可提供超快的性能。MemoryDB 与 Redis 兼容，使用 MemoryDB，你的所有数据都存储在内存中，这使你能够实现微秒级读取和数毫秒的写入延迟和高吞吐。MemoryDB 还使用多可用区事务日志跨多个可用区持久存储数据，以实现快速故障切换、数据库恢复和节点重启。
-
-### Amazon ElastiCache for Redis
-
-[Amazon ElastiCache for Redis](https://aws.amazon.com/elasticache/redis) 是为云构建的完全托管的、与 Redis 兼容的内存数据存储。它提供[自动故障切换](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html)、[自动备份](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/backups-automatic.html)等功能以确保可用性和持久性。
 
 ### Google Cloud Memorystore for Redis
 

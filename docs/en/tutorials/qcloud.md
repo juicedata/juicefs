@@ -1,6 +1,6 @@
 ---
 title: Use JuiceFS on Tencent Cloud
-sidebar_position: 7
+sidebar_position: 8
 slug: /clouds/qcloud
 ---
 

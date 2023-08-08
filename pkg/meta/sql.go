@@ -2904,7 +2904,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	if err != nil {
 		return errno(err)
 	}
-	if m.fmt.TrashDays == 0 {
+	if m.getFormat().TrashDays == 0 {
 		return 0
 	}
 
@@ -3573,7 +3573,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		}
 
 		dm := DumpedMeta{
-			Setting:   *m.fmt,
+			Setting:   *m.getFormat(),
 			Counters:  counters,
 			Sustained: sessions,
 			DelFiles:  dels,

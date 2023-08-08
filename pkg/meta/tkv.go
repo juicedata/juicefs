@@ -2524,7 +2524,7 @@ func (m *kvMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 			}
 		}
 	}
-	if m.fmt.TrashDays == 0 {
+	if m.getFormat().TrashDays == 0 {
 		return 0
 	}
 
@@ -3113,7 +3113,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	}
 
 	dm := DumpedMeta{
-		Setting: *m.fmt,
+		Setting: *m.getFormat(),
 		Counters: &DumpedCounters{
 			UsedSpace:   cs[0],
 			UsedInodes:  cs[1],
