@@ -23,7 +23,7 @@ NFS（Network File System）是一种网络文件共享协议，允许不同计�
 sudo apt install nfs-kernel-server
 ```
 
-### 客户端安装
+### 2. 客户端安装
 
 所有需要访问 NFS 的 Linux 主机都需要安装客户端。
 
