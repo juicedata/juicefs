@@ -11,7 +11,7 @@ NFS（Network File System）是一种网络文件共享协议，允许不同计�
 `juicefs mount` 以 FUSE 接口的形式挂载为本地的用户态文件系统，与本地文件系统在形态和用法上无异，因此可以直接被用于创建 NFS 共享。
 :::
 
-## 安装 NFS
+## 第 1 步：安装 NFS
 
 配置 NFS 共享需要分别在服务端和客户端安装相应的软件包，以 Ubuntu/Debian 系统为例：
 
