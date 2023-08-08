@@ -10,7 +10,7 @@ JuiceFS 有良好的跨平台能力，支持在几乎所有主流架构的各类
 
 JuiceFS 客户端只有一个二进制文件，你可以下载预编译的版本直接解压使用，也可以用源代码手动编译。
 
-## 一键安装
+## 一键安装 {#one-click-installation}
 
 一键安装脚本适用于 Linux 和 macOS 系统，会根据你的硬件架构自动下载安装最新版 JuiceFS 客户端。
 
@@ -18,18 +18,18 @@ JuiceFS 客户端只有一个二进制文件，你可以下载预编译的版本
 curl -sSL https://d.juicefs.com/install | sh -
 ```
 
-## 安装预编译客户端
+## 安装预编译客户端 {#install-the-pre-compiled-client}
 
 你可以在 [GitHub](https://github.com/juicedata/juicefs/releases) 找到最新版客户端下载地址，每个版本的下载列表中都提供了面向不同 CPU 架构和操作系统的预编译版本，请注意识别选择，例如：
 
-| 文件名                               | 说明                                                                     |
-|--------------------------------------|--------------------------------------------------------------------------|
-| `juicefs-x.x.x-darwin-amd64.tar.gz`  | 面向 Intel 芯片的 macOS 系统                                             |
-| `juicefs-x.x.x-darwin-arm64.tar.gz`  | 面向 M1 系列芯片的 macOS 系统                                            |
-| `juicefs-x.x.x-linux-amd64.tar.gz`   | 面向 x86 架构 Linux 发行版                                               |
-| `juicefs-x.x.x-linux-arm64.tar.gz`   | 面向 ARM 架构的 Linux 发行版                                             |
-| `juicefs-x.x.x-windows-amd64.tar.gz` | 面向 x86 架构的 Windows 系统                                             |
-| `juicefs-hadoop-x.x.x-amd64.jar`     | 面向 x86 架构的 Hadoop Java SDK（同时支持 Linux、macOS 及 Windows 系统） |
+| 文件名                               | 说明                                                                            |
+|--------------------------------------|---------------------------------------------------------------------------------|
+| `juicefs-x.y.z-darwin-amd64.tar.gz`  | 面向 Intel 芯片的 macOS 系统                                                    |
+| `juicefs-x.y.z-darwin-arm64.tar.gz`  | 面向 M1 系列芯片的 macOS 系统                                                   |
+| `juicefs-x.y.z-linux-amd64.tar.gz`   | 面向 x86 架构 Linux 发行版                                                      |
+| `juicefs-x.y.z-linux-arm64.tar.gz`   | 面向 ARM 架构的 Linux 发行版                                                    |
+| `juicefs-x.y.z-windows-amd64.tar.gz` | 面向 x86 架构的 Windows 系统                                                    |
+| `juicefs-hadoop-x.y.z.jar`           | 面向 x86 和 ARM 架构的 Hadoop Java SDK（同时支持 Linux、macOS 及 Windows 系统） |
 
 ### Linux 发行版
 
@@ -176,9 +176,9 @@ RUN set -x && \
 CMD [ "juicefs" ]
 ```
 
-## 手动编译客户端
+## 手动编译客户端 {#manually-compiling}
 
-如果预编译的客户端中没有适用于你的版本，比如 FreeBSD 或 M1 芯片的 macOS，这时可以采用手动编译的方式编译适合你的 JuiceFS 客户端。
+如果预编译的客户端中没有适用于你的版本（比如 FreeBSD），这时可以采用手动编译的方式编译适合你的 JuiceFS 客户端。
 
 另外，手动编译客户端可以让你优先体验到 JuiceFS 开发中的各种新功能，但这需要你具备一定的软件编译相关的基础知识。
 
@@ -313,7 +313,7 @@ make juicefs.exe
    make juicefs.linux
    ```
 
-## 卸载客户端
+## 卸载客户端 {#uninstall}
 
 JuiceFS 客户端只有一个二进制文件，只需找到程序所在位置删除即可。例如，参照本文档 Linux 系统安装的客户端，执行以下命令卸载客户端：
 

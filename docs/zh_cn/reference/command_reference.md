@@ -160,7 +160,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--session-token=value`|对象存储的临时访问凭证（Session Token），查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#session-token)以了解更多。|
-|`--storage-class=value`|默认存储类型。|
+|`--storage-class=value` <VersionAdd>1.1</VersionAdd>|默认存储类型。|
 
 #### 数据格式参数 {#format-data-format-options}
 
@@ -932,10 +932,10 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 
 #### 分布式相关参数 {#sync-cluster-related-options}
 
-|项 | 说明|
-|-|-|
-|`--manager=ADDR`|分布式同步模式中，Manager 的节点地址，此为内部参数，在 Worker 节点上运行的同步进程中会包含该设置。|
-|`--worker=ADDR,ADDR`|分布式同步模式中，工作节点列表，使用逗号分隔。|
+|项 | 说明                                                                                  |
+|-|-------------------------------------------------------------------------------------|
+|`--manager-addr=ADDR`| 分布式同步模式中，Manager 节点的监听地址，格式：`<IP>:[port]`，如果不写端口，则监听随机端口。如果没有该参数，则监听本机随机的 IPv4 地址与随机端口 |
+|`--worker=ADDR,ADDR`| 分布式同步模式中，工作节点列表，使用逗号分隔。                                                             |
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 

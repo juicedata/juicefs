@@ -1,5 +1,6 @@
 ---
 title: Use JuiceFS on WSL
+sidebar_position: 9
 ---
 
 WSL is called Windows Subsystem for Linux, which means Windows subsystem for Linux. It allows you to run most GNU/Linux native commands, tools, and programs in a Windows environment without the additional hardware overhead of using a virtual machine or dual system.

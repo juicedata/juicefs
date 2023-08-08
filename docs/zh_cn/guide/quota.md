@@ -127,6 +127,10 @@ juicefs config $METAURL --inodes 100000
 
 JuiceFS v1.1 开始支持目录级别的存储配额，可以使用 `juicefs quota` 子命令进行目录配额管理和查询。
 
+:::tip 提示
+由于用量统计需要挂载客户端支持，请确保除所有可写入客户端已升级到 v1.1.0 以上版本再使用此特性。
+:::
+
 ### 限制目录容量 {#limit-directory-capacity}
 
 可以使用 `juicefs quota set $METAURL --path $DIR --capacity $N` 设置目录容量限额，单位 GiB。例如给目录`/test`设置 1GiB 的容量配额：

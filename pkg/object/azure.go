@@ -132,7 +132,7 @@ func (b *wasb) Delete(key string) error {
 	return err
 }
 
-func (b *wasb) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "" {
 		return nil, notSupported
 	}

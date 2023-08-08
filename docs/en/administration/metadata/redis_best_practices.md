@@ -4,8 +4,6 @@ sidebar_position: 1
 slug: /redis_best_practices
 ---
 
-import Badge from '@site/src/components/Badge';
-
 # Redis Best Practices
 
 To ensure metadata service performance, we recommend use Redis service managed by public cloud provider, see [Recommended Managed Redis Service](#recommended-managed-redis-service).
@@ -133,10 +131,6 @@ After recovering Redis data, you can continue to use the JuiceFS file system via
 ### Amazon MemoryDB for Redis
 
 [Amazon MemoryDB for Redis](https://aws.amazon.com/memorydb) is a durable, in-memory database service that delivers ultra-fast performance. MemoryDB is compatible with Redis, with MemoryDB, all of your data is stored in memory, which enables you to achieve microsecond read and single-digit millisecond write latency and high throughput. MemoryDB also stores data durably across multiple Availability Zones (AZs) using a Multi-AZ transactional log to enable fast failover, database recovery, and node restarts.
-
-### Amazon ElastiCache for Redis
-
-[Amazon ElastiCache for Redis](https://aws.amazon.com/elasticache/redis) is a fully managed, Redis-compatible in-memory data store built for the cloud. It provides [automatic failover](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/AutoFailover.html) and [automatic backup](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/backups-automatic.html) features to ensure availability and durability.
 
 ### Google Cloud Memorystore for Redis
 

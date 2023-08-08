@@ -1,6 +1,6 @@
 ---
 title: 在 Colab 上通过 Google CloudSQL 和 GCS 使用 JuiceFS
-sidebar_position: 4
+sidebar_position: 5
 slug: /juicefs_on_colab
 ---
 

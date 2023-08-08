@@ -88,8 +88,8 @@ func (s *sharded) SetStorageClass(sc string) {
 const maxResults = 10000
 
 // ListAll on all the keys that starts at marker from object storage.
-func ListAll(store ObjectStorage, prefix, marker string) (<-chan Object, error) {
-	if ch, err := store.ListAll(prefix, marker); err == nil {
+func ListAll(store ObjectStorage, prefix, marker string, followLink bool) (<-chan Object, error) {
+	if ch, err := store.ListAll(prefix, marker, followLink); err == nil {
 		return ch, nil
 	} else if !errors.Is(err, notSupported) {
 		return nil, err
@@ -98,9 +98,9 @@ func ListAll(store ObjectStorage, prefix, marker string) (<-chan Object, error) 
 	startTime := time.Now()
 	out := make(chan Object, maxResults)
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	objs, err := store.List(prefix, marker, "", maxResults)
+	objs, err := store.List(prefix, marker, "", maxResults, followLink)
 	if err == notSupported {
-		return ListAllWithDelimiter(store, prefix, marker, "")
+		return ListAllWithDelimiter(store, prefix, marker, "", followLink)
 	}
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
@@ -134,12 +134,12 @@ func ListAll(store ObjectStorage, prefix, marker string) (<-chan Object, error) 
 			marker = lastkey
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
-			objs, err = store.List(prefix, marker, "", maxResults)
+			objs, err = store.List(prefix, marker, "", maxResults, followLink)
 			for err != nil {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
-				objs, err = store.List(prefix, marker, "", maxResults)
+				objs, err = store.List(prefix, marker, "", maxResults, followLink)
 			}
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
 		}
@@ -166,10 +166,10 @@ func (s *nextObjects) Pop() interface{} {
 	return o
 }
 
-func (s *sharded) ListAll(prefix, marker string) (<-chan Object, error) {
+func (s *sharded) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	heads := &nextObjects{make([]nextKey, 0)}
 	for i := range s.stores {
-		ch, err := ListAll(s.stores[i], prefix, marker)
+		ch, err := ListAll(s.stores[i], prefix, marker, followLink)
 		if err != nil {
 			return nil, fmt.Errorf("list %s: %s", s.stores[i], err)
 		}

@@ -10,8 +10,8 @@ sidebar_position: 9
 
 JuiceFS 客户端只有一个二进制程序，升级新版只需用新版程序替换旧版程序即可。
 
-- **使用预编译客户端**：可以参照[「安装」](../getting-started/installation.md#安装预编译客户端)文档中相应系统的安装方法，下载最新的客户端，覆盖旧版客户端即可。
-- **手动编译客户端**：可以拉取最新的源代码重新编译，覆盖旧版客户端即可，具体请参考[「安装」](../getting-started/installation.md#手动编译客户端)文档。
+- **使用预编译客户端**：可以参照[「安装」](../getting-started/installation.md#install-the-pre-compiled-client)文档中相应系统的安装方法，下载最新的客户端，覆盖旧版客户端即可。
+- **手动编译客户端**：可以拉取最新的源代码重新编译，覆盖旧版客户端即可，具体请参考[「安装」](../getting-started/installation.md#manually-compiling)文档。
 
 :::caution 注意
 对于已经使用旧版 JuiceFS 客户端挂载好的文件系统，需要先[卸载文件系统](../getting-started/for_distributed.md#7-卸载文件系统)，然后用新版 JuiceFS 客户端重新挂载。

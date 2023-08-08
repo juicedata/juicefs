@@ -665,7 +665,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--buffer-size=300`|total read/write buffering in MiB (default: 300), see [Read/Write buffer](../guide/cache_management.md#buffer-size)|
 |`--prefetch=1`|prefetch N blocks in parallel (default: 1), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
 |`--writeback`|upload objects in background (default: false), see [Client write data cache](../guide/cache_management.md#writeback)|
-|`--upload-delay=0` <VersionAdd>1.1</VersionAdd> |When `--writeback` is enabled, you can use this option to add a delay to object storage upload, default to 0, meaning that upload will begin immediately after write. Different units are supported, including `s` (second), `m` (minute), `h` (hour). If files are deleted during this delay, upload will be skipped entirely, when using JuiceFS for temporary storage, use this option to reduce resource usage. Refer to [Client write data cache](../guide/cache_management.md#writeback).|
+|`--upload-delay=0`|When `--writeback` is enabled, you can use this option to add a delay to object storage upload, default to 0, meaning that upload will begin immediately after write. Different units are supported, including `s` (second), `m` (minute), `h` (hour). If files are deleted during this delay, upload will be skipped entirely, when using JuiceFS for temporary storage, use this option to reduce resource usage. Refer to [Client write data cache](../guide/cache_management.md#writeback).|
 |`--cache-dir=value`|directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `$HOME/.juicefs/cache` or `/var/jfsCache`), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
 |`--cache-mode value` <VersionAdd>1.1</VersionAdd> |file permissions for cached blocks (default: "0600")|
 |`--cache-size=102400`|size of cached object for read in MiB (default: 102400), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
@@ -933,10 +933,10 @@ In which:
 
 #### Cluster related options {#sync-cluster-related-options}
 
-|Items|Description|
-|-|-|
-|`--manager=ADDR`|Manager node address used in distributed syncing, this is an internal option that's used in the executed command on the worker nodes.|
-|`--worker=ADDR,ADDR`|Worker node addresses used in distributed syncing, comma separated.|
+|Items| Description                                                                                                                                                                                                                       |
+|-|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|`--manager-addr=ADDR`| The listening address of the Manager node in distributed synchronization mode in the format: `<IP>:[port]`. If not specified, it listens on a random port. If this option is omitted, it listens on a random local IPv4 address and a random port. |
+|`--worker=ADDR,ADDR`| Worker node addresses used in distributed syncing, comma separated.                                                                                                                                                               |
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 

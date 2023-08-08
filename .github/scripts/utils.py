@@ -3,7 +3,6 @@ try:
     __import__("minio")
 except ImportError:
     subprocess.check_call(["pip", "install", "minio"])
-from curses import meta
 import json
 import os
 from posixpath import expanduser
@@ -26,7 +25,15 @@ def flush_meta(meta_url):
             shutil.rmtree(path)
             print(f'remove badger dir {path} succeed')
     elif meta_url.startswith('redis://'):
-        run_cmd('redis-cli flushall')
+        host_port= meta_url[8:].split('/')[0]
+        if ':' in host_port:
+            host = host_port.split(':')[0]
+            port = host_port.split(':')[1]
+        else:
+            host = host_port
+            port = 6379
+        print(f'flush redis: {host}:{port}')
+        run_cmd(f'redis-cli -h {host} -p {port} flushall')
         print(f'flush redis succeed')
     elif meta_url.startswith('mysql://'):
         create_mysql_db(meta_url)

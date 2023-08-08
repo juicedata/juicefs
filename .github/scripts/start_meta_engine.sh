@@ -21,6 +21,8 @@ retry() {
 }
 
 install_tikv(){
+    [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
+    make -C tcli && sudo cp tcli/bin/tcli /usr/local/bin
     # retry because of: https://github.com/pingcap/tiup/issues/2057
     curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
     user=$(whoami)
@@ -94,10 +96,6 @@ start_meta_engine(){
     elif [ "$meta" == "redis" ]; then
         sudo .github/scripts/apt_install.sh  redis-tools redis-server
     elif [ "$meta" == "tikv" ]; then
-        [[ ! -d tcli ]] && git clone https://github.com/c4pt0r/tcli
-        cd tcli && make
-        sudo cp bin/tcli /usr/local/bin
-        cd -
         retry install_tikv
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
@@ -132,12 +130,20 @@ start_meta_engine(){
     fi
     
     if [ "$storage" == "minio" ]; then
-        docker run -d -p 9000:9000 --name minio \
-            -e "MINIO_ACCESS_KEY=minioadmin" \
-            -e "MINIO_SECRET_KEY=minioadmin" \
-            -v /tmp/data:/data \
-            -v /tmp/config:/root/.minio \
-            minio/minio server /data
+        if ! docker ps | grep "minio/minio"; then
+            docker run -d -p 9000:9000 --name minio \
+                -e "MINIO_ACCESS_KEY=minioadmin" \
+                -e "MINIO_SECRET_KEY=minioadmin" \
+                -v /tmp/data:/data \
+                -v /tmp/config:/root/.minio \
+                minio/minio server /data
+            sleep 3s
+        fi
+        [ ! -x mc ] && wget -q https://dl.minio.io/client/mc/release/linux-amd64/mc && chmod +x mc
+        ./mc config host add myminio http://127.0.0.1:9000 minioadmin minioadmin
+    elif [ "$storage" == "gluster" ]; then
+        dpkg -s glusterfs-server || .github/scripts/apt_install.sh glusterfs-server
+        systemctl start glusterd.service
     elif [ "$meta" != "postgres" ] && [ "$storage" == "postgres" ]; then
         echo "start postgres"
         docker run --name postgresql \

@@ -1,0 +1,23 @@
+version: '2'
+services:
+  worker1:
+    image: juicedata/ssh
+    container_name: worker1
+    restart: unless-stopped
+    networks:
+      static-network:
+        ipv4_address: 172.20.0.2
+    
+  worker2:
+    image: juicedata/ssh
+    container_name: worker2
+    restart: unless-stopped
+    networks:
+      static-network:
+        ipv4_address: 172.20.0.3
+  
+networks:
+  static-network:
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

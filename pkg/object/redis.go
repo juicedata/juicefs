@@ -77,7 +77,7 @@ func (r *redisStore) Delete(key string) error {
 	return r.rdb.Del(ctx, key).Err()
 }
 
-func (t *redisStore) ListAll(prefix, marker string) (<-chan Object, error) {
+func (t *redisStore) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	var scanCli []redis.UniversalClient
 	var m sync.Mutex
 	if c, ok := t.rdb.(*redis.ClusterClient); ok {
