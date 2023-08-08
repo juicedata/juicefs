@@ -31,7 +31,7 @@ sudo apt install nfs-kernel-server
 sudo apt install nfs-common
 ```
 
-## 创建共享
+## 第 2 步：创建共享
 
 这里假设 JuiceFS 在服务端系统的挂载点是 `/mnt/myjfs`，比如要将其中的 `media` 子目录设置为 NFS 共享，可以在服务端系统的 `/etc/exports` 文件中添加如下配置：
 
