@@ -304,7 +304,7 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
 :::tip 提示
 该分支依赖较新版本的 JuiceFS，具体的 JuiceFS 版本请查看 [`go.mod`](https://github.com/juicedata/minio/blob/gateway/go.mod) 文件。
 
-与[手动编译 JuiceFS 客户端](../getting-started/installation.md#手动编译客户端)类似，你需要提前安装一些依赖才能正常编译 S3 网关。
+与[手动编译 JuiceFS 客户端](../getting-started/installation.md#install-the-pre-compiled-client)类似，你需要提前安装一些依赖才能正常编译 S3 网关。
 :::
 
 ```shell

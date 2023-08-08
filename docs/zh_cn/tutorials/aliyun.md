@@ -1,6 +1,6 @@
 ---
 title: 在阿里云使用 JuiceFS
-sidebar_position: 4
+sidebar_position: 7
 slug: /clouds/aliyun
 ---
 
