@@ -11,11 +11,11 @@ When you need to share directories from the JuiceFS file system through NFS, you
 `juicefs mount` mounts the file system as a local user-space file system through the FUSE interface, making it identical to the local file system in terms of appearance and usage. Hence, it can be directly used to create NFS shares.
 :::
 
-## Installing NFS
+## Setp 1. Installing NFS
 
 To configure NFS shares, you need to install the relevant software packages on both the server and client sides. Let's take Ubuntu/Debian systems as an example:
 
-### Server-Side Installation
+### 1. Server-Side Installation
 
 This refers to the host where the NFS shares will be created (and where the JuiceFS file system is also mounted).
 
@@ -23,7 +23,7 @@ This refers to the host where the NFS shares will be created (and where the Juic
 sudo apt install nfs-kernel-server
 ```
 
-### Client-Side Installation
+### 2. Client-Side Installation
 
 All Linux hosts that need to access NFS shares should install the client software.
 
@@ -31,7 +31,7 @@ All Linux hosts that need to access NFS shares should install the client softwar
 sudo apt install nfs-common
 ```
 
-## Creating Shares
+## Setp 2. Creating Shares
 
 Assuming the JuiceFS is mounted on the server system at the path `/mnt/myjfs`, if you want to set the `media` subdirectory as an NFS share, you can add the following configuration to the `/etc/exports` file on the server system:
 
