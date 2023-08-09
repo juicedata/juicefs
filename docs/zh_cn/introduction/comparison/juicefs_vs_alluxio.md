@@ -43,15 +43,25 @@ JuiceFS 是一个分布式文件系统，实现了自己的存储格式，文件
 
 ## Hadoop 兼容
 
-JuiceFS [完整兼容 HDFS](../../deployment/hadoop_java_sdk.md)。不仅兼容 Hadoop 2.x 和 Hadoop 3.x，还兼容 Hadoop 生态系统中的各种组件。
+二者均兼容 HDFS，包括 Hadoop 2.x 和 Hadoop 3.x，以及 Hadoop 生态系统中的各种组件。详见：
+
+* [JuiceFS Hadoop SDK](../../deployment/hadoop_java_sdk.md)
+* [Alluxio集成HDFS作为底层存储](https://docs.alluxio.io/os/user/stable/en/ufs/HDFS.html)
 
 ## Kubernetes CSI Driver
 
-JuiceFS 提供了 [Kubernetes CSI Driver](https://github.com/juicedata/juicefs-csi-driver) 来帮助在 Kubernetes 中便捷使用 JuiceFS。Alluxio 也提供了 [Kubernetes CSI Driver](https://github.com/Alluxio/alluxio-csi)，但是这个项目维护得不够活跃，也没有得到 Alluxio 的官方支持。
+二者均提供 Kubernetes CSI 驱动，但项目质量有区别，详见：
+
+* [JuiceFS CSI Driver](https://juicefs.com/docs/zh/csi/introduction/) 由 Juicedata 持续维护
+* [Alluxio CSI Driver](https://github.com/Alluxio/alluxio-csi) 项目维护力度不大，也没有得到 Alluxio 的官方支持
 
 ## 完全兼容 POSIX
 
-JuiceFS [完全兼容 POSIX](../../reference/posix_compatibility.md)。来自[京东](https://www.slideshare.net/Alluxio/using-alluxio-posix-fuse-api-in-jdcom)的一个 pjdfstest 显示 Alluxio 没有通过 POSIX 兼容性测试，例如 Alluxio 不支持符号链接、truncate、fallocate、append、xattr、mkfifo、mknod 和 utimes。除了 pjdfstest 涵盖的东西外，JuiceFS 还提供了关闭再打开（close-to-open）一致性、原子元数据操作、mmap、fallocate 打洞、xattr、BSD 锁（flock）和 POSIX 记录锁（fcntl）。
+JuiceFS[完全兼容 POSIX](../../reference/posix_compatibility.md)，完整通过用于检验 POSIX 兼容性的 [pjdfstest](https://github.com/pjd/pjdfstest)，并以 99% 以上的成功率通过用于检验 Linux 软件可靠性的 [Linux Test Project](https://github.com/linux-test-project/ltp)，无缝对接已有应用。
+
+除了 pjdfstest 的兼容性测试外，JuiceFS 支持 mmap、fallocate 文件打洞、xattr、BSD 锁（flock）和 POSIX 记录锁（fcntl）。
+
+Alluxio 没有通过 POSIX 兼容性测试。[京东](https://www.slideshare.net/Alluxio/using-alluxio-posix-fuse-api-in-jdcom)的 pjdfstest 测试表明 Alluxio 不支持符号链接、truncate、fallocate、append、xattr、mkfifo、mknod 和 utimes。
 
 ## 原子元数据操作
 
