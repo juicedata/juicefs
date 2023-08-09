@@ -18,10 +18,10 @@ Alluxio 和 JuiceFS 虽然都能提供文件系统服务，但架构以及使用
 | WebDAV 协议 | 不支持 | 支持 |
 | Kubernetes CSI Driver | 支持 | 支持 |
 | Hadoop 数据本地性 | 支持 | 支持 |
-| 完全兼容 POSIX |不支持| 支持 |
-| 一致性 |不一定|强一致性|
-| 数据压缩 |不支持| 支持 |
-| 数据加密 |不支持| 支持 |
+| 完全兼容 POSIX |不支持 | 支持 |
+| 一致性 |不一定 | 强一致性|
+| 数据压缩 |不支持 | 支持 |
+| 数据加密 |不支持 | 支持 |
 | 服务端运维 | 复杂 | 推荐直接使用云服务商托管服务，实现零运维 |
 | 开发语言 | Java | Go |
 | 开源协议 | Apache License 2.0 | Apache License 2.0 |
@@ -45,15 +45,15 @@ Alluxio 和 JuiceFS 都支持多级缓存，设计上各有特色，但都能够
 
 * [Alluxio 缓存](https://docs.alluxio.io/os/user/stable/en/core-services/Caching.html)
 * [JuiceFS 缓存](../../guide/cache_management.md)
-* JuiceFS 企业版在社区版的基础上，支持更为强大的[分布式缓存](https://juicefs.com/docs/zh/cloud/guide/distributed-cache/)
+* JuiceFS 企业版在社区版的基础上，支持更为强大的[分布式缓存](https://juicefs.com/docs/zh/cloud/guide/distributed-cache)
 
 ### 一致性
 
 JuiceFS 是一个强一致性的分布式文件系统，他的原子性依赖底层元数据引擎的事务支持（比如 [Redis 事务](https://redis.io/topics/transactions)），因此大部分元数据操作都具有原子性，例如重命名文件、删除文件、重命名目录。
 
-Alluxio 自身并不是一个存储系统，但你依然可以通过 Alluxio 进行写入，但原子性肯定就无法支持了，因为Alluxio 依赖 UFS 来实现元数据操作，比如重命名文件操作会变成复制和删除操作。
+Alluxio 自身并不是一个存储系统，但你依然可以通过 Alluxio 进行写入，但原子性肯定就无法支持了，因为 Alluxio 依赖 UFS 来实现元数据操作，比如重命名文件操作会变成复制和删除操作。
 
-继续讨论一致性之前，必须先简单了解 Alluxio 的写入是如何实现的。上一小节已经介绍过，Alluxio 存储层和 UFS 是分离的——你可以写存储层，也可以写 UFS，具体文件写入要如何在两个层之间协调，通过以下几种[写入策略](https://www.alluxio.io/blog/4-different-ways-to-write-to-alluxio/)来控制：
+继续讨论一致性之前，必须先简单了解 Alluxio 的写入是如何实现的。上一小节已经介绍过，Alluxio 存储层和 UFS 是分离的——你可以写存储层，也可以写 UFS，具体文件写入要如何在两个层之间协调，通过以下几种[写入策略](https://www.alluxio.io/blog/4-different-ways-to-write-to-alluxio)来控制：
 
 * `MUST_CACHE`：写入 Alluxio worker 内存，性能最好，但 worker 异常会导致数据丢失。适合用来写入临时数据。
 * `THROUGH`：直接写入 UFS，性能取决于底层存储。适合用来写入需要持久化，但最近不需要用到的数据。
@@ -93,7 +93,7 @@ Alluxio 没有通过 POSIX 兼容性测试。[京东](https://www.slideshare.net
 二者均兼容 HDFS，包括 Hadoop 2.x 和 Hadoop 3.x，以及 Hadoop 生态系统中的各种组件。详见：
 
 * [JuiceFS Hadoop SDK](../../deployment/hadoop_java_sdk.md)
-* [Alluxio集成HDFS作为底层存储](https://docs.alluxio.io/os/user/stable/en/ufs/HDFS.html)
+* [Alluxio 集成 HDFS 作为底层存储](https://docs.alluxio.io/os/user/stable/en/ufs/HDFS.html)
 
 ### S3
 
@@ -105,7 +105,7 @@ Alluxio 也支持大部分 S3 API，详见[文档](https://docs.alluxio.io/os/us
 
 二者均提供 Kubernetes CSI 驱动，但项目质量有区别：
 
-* [JuiceFS CSI Driver](https://juicefs.com/docs/zh/csi/introduction/) 由 Juicedata 持续维护
+* [JuiceFS CSI Driver](https://juicefs.com/docs/zh/csi/introduction) 由 Juicedata 持续维护
 * [Alluxio CSI Driver](https://github.com/Alluxio/alluxio-csi) 项目维护力度不大，也没有得到 Alluxio 的官方支持
 
 ## 云上部署和运维
