@@ -1,6 +1,6 @@
 ---
 title: How to Set Up Object Storage
-sidebar_position: 2
+sidebar_position: 3
 slug: /how_to_setup_object_storage
 description: This article introduces the object storages supported by JuiceFS and how to configure and use it.
 ---

@@ -1,6 +1,6 @@
 ---
 title: Deploy JuiceFS S3 Gateway
-sidebar_position: 6
+sidebar_position: 4
 slug: /s3_gateway
 ---
 
@@ -173,11 +173,11 @@ kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
 Here we have:
 
 - `name`: name of the JuiceFS file system.
-- `metaurl`: URL of the metadata engine (e.g. Redis). Read [this document](../guide/how_to_set_up_metadata_engine.md) for more information.
-- `storage`: Object storage type, such as `s3`, `gs`, `oss`. Read [this document](../guide/how_to_set_up_object_storage.md) to find all supported object storages.
-- `bucket`: Bucket URL. Read [this document](../guide/how_to_set_up_object_storage.md) to learn how to set up different object storage.
-- `access-key`: Access key of object storage. Read [this document](../guide/how_to_set_up_object_storage.md) for more information.
-- `secret-key`: Secret key of object storage. Read [this document](../guide/how_to_set_up_object_storage.md) for more information.
+- `metaurl`: URL of the metadata engine (e.g. Redis). Read [this document](../reference/how_to_set_up_metadata_engine.md) for more information.
+- `storage`: Object storage type, such as `s3`, `gs`, `oss`. Read [this document](../reference/how_to_set_up_object_storage.md) to find all supported object storages.
+- `bucket`: Bucket URL. Read [this document](../reference/how_to_set_up_object_storage.md) to learn how to set up different object storage.
+- `access-key`: Access key of object storage. Read [this document](../reference/how_to_set_up_object_storage.md) for more information.
+- `secret-key`: Secret key of object storage. Read [this document](../reference/how_to_set_up_object_storage.md) for more information.
 
 Then download the S3 gateway [deployment YAML](https://github.com/juicedata/juicefs/blob/main/deploy/juicefs-s3-gateway.yaml) and create the `Deployment` and `Service` resources with `kubectl`. The following points require special attention:
 

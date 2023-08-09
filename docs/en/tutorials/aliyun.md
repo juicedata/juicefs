@@ -170,7 +170,7 @@ $ juicefs format \
 
 **Option description:**
 
-- `--storage`: Specify the type of object storage, [click here to view](../guide/how_to_set_up_object_storage.md) object storage services supported by JuiceFS.
+- `--storage`: Specify the type of object storage, [click here to view](../reference/how_to_set_up_object_storage.md) object storage services supported by JuiceFS.
 - `--bucket`: Bucket domain name of the object storage. When using OSS, just fill in the bucket name, no need to fill in the full domain name, JuiceFS will automatically identify and fill in the full address.
 - `--access-key` and `--secret-key`: the secret key pair to access the object storage API, [click here](https://www.alibabacloud.com/help/doc-detail/125558.htm) to get the way.
 

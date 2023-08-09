@@ -1,6 +1,6 @@
 ---
 title: JuiceFS Metrics
-sidebar_position: 2
+sidebar_position: 4
 slug: /p8s_metrics
 ---
 

@@ -24,12 +24,12 @@ A JuiceFS file system consists of two parts:
 Depending on specific requirements, you can choose to use fully managed databases and S3 object storage on AWS, or deploy them on EC2 and EKS by yourself.
 
 :::tip
-This article focuses on the method of creating a JuiceFS file system using AWS fully managed services. For self-hosted scenarios, please refer to the ["JuiceFS Supported Metadata Engines"](../guide/how_to_set_up_metadata_engine.md) and ["JuiceFS Supported Object Storage"](../guide/how_to_set_up_object_storage.md) guides, as well as the corresponding program documentation.
+This article focuses on the method of creating a JuiceFS file system using AWS fully managed services. For self-hosted scenarios, please refer to the ["JuiceFS Supported Metadata Engines"](../reference/how_to_set_up_metadata_engine.md) and ["JuiceFS Supported Object Storage"](../reference/how_to_set_up_object_storage.md) guides, as well as the corresponding program documentation.
 :::
 
 ### Object storage {#object-storage}
 
-S3 is the object storage service provided by AWS. You can create a bucket in the corresponding region as needed, or authorize the JuiceFS client to automatically create a bucket through [IAM roles](../guide/how_to_set_up_object_storage.md#aksk).
+S3 is the object storage service provided by AWS. You can create a bucket in the corresponding region as needed, or authorize the JuiceFS client to automatically create a bucket through [IAM roles](../reference/how_to_set_up_object_storage.md#aksk).
 
 Amazon S3 provides various [storage classes](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html), for example:
 
@@ -37,7 +37,7 @@ Amazon S3 provides various [storage classes](https://docs.aws.amazon.com/AmazonS
 - **S3 Standard-IA**: Infrequent Access (IA) storage, suitable for data that is accessed less frequently but needs to be stored for the long term, offering real-time access with retrieval costs.
 - **S3 Glacier**: Archive storage, suitable for data that is rarely accessed and requires retrieval (thawing) before access.
 
-You can set the storage class when creating or mounting the JuiceFS file system, please refer to [documentation](../guide/how_to_set_up_object_storage.md#storage-class) for details. It is recommended to choose the standard storage class first. Although other storage classes may have lower unit storage prices, they often come with minimum storage duration requirements and retrieval costs.
+You can set the storage class when creating or mounting the JuiceFS file system, please refer to [documentation](../reference/how_to_set_up_object_storage.md#storage-class) for details. It is recommended to choose the standard storage class first. Although other storage classes may have lower unit storage prices, they often come with minimum storage duration requirements and retrieval costs.
 
 Furthermore, accessing object storage services requires authentication using Access Key (a.k.a. access key ID) and Secret Key (a.k.a. secret access key). You can refer to the document ["Managing access keys for IAM users"](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) for creating the necessary policies. When accessing S3 from an EC2 cloud server, you can also assign an [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) to the EC2 instance to enable the S3 API to be called without using access keys.
 

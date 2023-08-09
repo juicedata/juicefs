@@ -146,7 +146,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 
 |Items|Description|
 |-|-|
-|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md) for details.|
+|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
 |`NAME`|Name of the file system|
 |`--force`|overwrite existing format (default: false)|
 |`--no-update`|don't update existing volume (default: false)|
@@ -155,11 +155,11 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 
 |Items|Description|
 |-|-|
-|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `file`, refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
+|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `file`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
 |`--bucket=/var/jfs`|A bucket URL to store data (default: `$HOME/.juicefs/local` or `/var/jfs`)|
-|`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../guide/how_to_set_up_object_storage.md#aksk) for more.|
-|`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../guide/how_to_set_up_object_storage.md#aksk) for more.|
-|`--session-token=value`|session token for object storage, see [How to Set Up Object Storage](../guide/how_to_set_up_object_storage.md#session-token) for more.|
+|`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
+|`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
+|`--session-token=value`|session token for object storage, see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#session-token) for more.|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd> |the default storage class|
 
 #### Data format options {#format-data-format-options}
@@ -214,11 +214,11 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 
 |Items|Description|
 |-|-|
-|`--storage=file` <VersionAdd>1.1</VersionAdd> |Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
+|`--storage=file` <VersionAdd>1.1</VersionAdd> |Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
 |`--bucket=/var/jfs`|A bucket URL to store data (default: `$HOME/.juicefs/local` or `/var/jfs`)|
-|`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../guide/how_to_set_up_object_storage.md#aksk) for more.|
-|`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../guide/how_to_set_up_object_storage.md#aksk) for more.|
-|`--session-token=value`|session token for object storage, see [How to Set Up Object Storage](../guide/how_to_set_up_object_storage.md#session-token) for more.|
+|`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
+|`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
+|`--session-token=value`|session token for object storage, see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#session-token) for more.|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd> |the default storage class|
 |`--upload-limit=0`|bandwidth limit for upload in Mbps (default: 0)|
 |`--download-limit=0`|bandwidth limit for download in Mbps (default: 0)|
@@ -264,7 +264,7 @@ juicefs quota check redis://localhost
 
 |Items|Description|
 |-|-|
-|`META-URL`|Database URL for metadata storage, see "[JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md)" for details.|
+|`META-URL`|Database URL for metadata storage, see "[JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md)" for details.|
 |`--path value`|full path of the directory within the volume|
 |`--capacity value`|hard quota of the directory limiting its usage of space in GiB (default: 0)|
 |`--inodes value`|hard quota of the directory limiting its number of inodes (default: 0)|
@@ -377,7 +377,7 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 
 |Items|Description|
 |-|-|
-|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md) for details.|
+|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
 |`FILE`|Export file path, if not specified, it will be exported to standard output. If the filename ends with `.gz`, it will be automatically compressed.|
 |`--subdir=path`|Only export metadata for the specified subdirectory.|
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd> |Export object storage authentication information, the default is `false`. Since it is exported in plain text, pay attention to data security when using it. If the export file does not contain object storage authentication information, you need to use [`juicefs config`](#config) to reconfigure object storage authentication information after the subsequent import is completed.|
@@ -399,7 +399,7 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 
 |Items|Description|
 |-|-|
-|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md) for details.|
+|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
 |`FILE`|Import file path, if not specified, it will be imported from standard input. If the filename ends with `.gz`, it will be automatically decompressed.|
 |`--encrypt-rsa-key=path` <VersionAdd>1.0.4</VersionAdd> |The path to the RSA private key file used for encryption.|
 |`--encrypt-alg=aes256gcm-rsa` <VersionAdd>1.0.4</VersionAdd> |Encryption algorithm, the default is `aes256gcm-rsa`.|
@@ -602,7 +602,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 |Items|Description|
 |-|-|
-|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md) for details.|
+|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
 |`MOUNTPOINT`|file system mount point, e.g. `/mnt/jfs`, `Z:`.|
 |`-d, --background`|run in background (default: false)|
 |`--no-syslog`|disable syslog (default: false)|
@@ -647,7 +647,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 
 |Items|Description|
 |-|-|
-|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
+|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd> |the storage class for data written by current client|
 |`--bucket=value`|customized endpoint to access object storage|
 |`--get-timeout=60`|the max number of seconds to download an object (default: 60)|
@@ -722,7 +722,7 @@ Apart from options listed below, this command shares options with `juicefs mount
 
 |Items|Description|
 |-|-|
-|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md) for details.|
+|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
 |`ADDRESS`|S3 gateway address and listening port, for example: `localhost:9000`|
 |`--access-log=path`|path for JuiceFS access log.|
 |`--no-banner`|disable MinIO startup information (default: false)|
@@ -748,7 +748,7 @@ Apart from options listed below, this command shares options with `juicefs mount
 
 |Items|Description|
 |-|-|
-|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../guide/how_to_set_up_metadata_engine.md) for details.|
+|`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
 |`ADDRESS`|WebDAV address and listening port, for example: `localhost:9007`.|
 |`--cert-file` <VersionAdd>1.1</VersionAdd> |certificate file for HTTPS|
 |`--key-file` <VersionAdd>1.1</VersionAdd> |key file for HTTPS|
@@ -802,9 +802,9 @@ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3 http
 
 |Items|Description|
 |-|-|
-|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `file`, refer to [documentation](../guide/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
-|`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../guide/how_to_set_up_object_storage.md#aksk) for more.|
-|`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../guide/how_to_set_up_object_storage.md#aksk) for more.|
+|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `file`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
+|`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
+|`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
 |`--block-size=4096`|size of each IO block in KiB (default: 4096)|
 |`--big-object-size=1024`|size of each big object in MiB (default: 1024)|
 |`--small-object-size=128`|size of each small object in KiB (default: 128)|
@@ -888,10 +888,10 @@ As shown in the examples, the format of both source (`SRC`) and destination (`DS
 
 In which:
 
-- `NAME`: JuiceFS supported data storage types like `s3`, `oss`, refer to [this document](../guide/how_to_set_up_object_storage.md#supported-object-storage) for a full list.
-- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage, refer to [this document](../guide/how_to_set_up_object_storage.md#aksk).
+- `NAME`: JuiceFS supported data storage types like `s3`, `oss`, refer to [this document](../reference/how_to_set_up_object_storage.md#supported-object-storage) for a full list.
+- `ACCESS_KEY` and `SECRET_KEY`: The credential required to access the data storage, refer to [this document](../reference/how_to_set_up_object_storage.md#aksk).
 - `TOKEN` token used to access the object storage, as some object storage supports the use of temporary token to obtain permission for a limited time
-- `BUCKET[.ENDPOINT]`: The access address of the data storage service. The format may be different for different storage types, and refer to [the document](../guide/how_to_set_up_object_storage.md#supported-object-storage).
+- `BUCKET[.ENDPOINT]`: The access address of the data storage service. The format may be different for different storage types, and refer to [the document](../reference/how_to_set_up_object_storage.md#supported-object-storage).
 - `[/PREFIX]`: Optional, a prefix for the source and destination paths that can be used to limit synchronization of data only in certain paths.
 
 #### Selection related options {#sync-selection-related-options}

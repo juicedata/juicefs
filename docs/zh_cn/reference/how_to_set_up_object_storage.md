@@ -1,6 +1,6 @@
 ---
 title: 如何设置对象存储
-sidebar_position: 2
+sidebar_position: 3
 slug: /how_to_setup_object_storage
 description: JuiceFS 以对象存储作为数据存储，本文介绍 JuiceFS 支持的对象存储以及相应的配置和使用方法。
 ---
