@@ -29,12 +29,12 @@ CephFS is a complete and independent system used mainly for private cloud deploy
 
 JuiceFS provides a libjfs library, a FUSE client application, Java SDK, etc. It supports various metadata engines and object storages, and can be deployed in public, private or hybrid cloud environments.
 
-- Metadata: See [supported databases](../../guide/how_to_set_up_metadata_engine.md) for details, including:
+- Metadata: See [supported databases](../../reference/how_to_set_up_metadata_engine.md) for details, including:
   - Redis and various variants of the Redis-compatible protocol (transaction supports are required)
   - SQL family: MySQL, PostgreSQL, SQLite, etc.
   - Distributed K/V storage: TiKV (Apple FoundationDB will be supported in the future)
   - Self-developed engine: a JuiceFS fully managed service used on the public cloud.
-- Data: supports for over 30 kinds of [object storages](../../guide/how_to_set_up_object_storage.md) on the public cloud and can also be used with MinIO, Ceph RADOS, Ceph RGW, etc.
+- Data: supports for over 30 kinds of [object storages](../../reference/how_to_set_up_object_storage.md) on the public cloud and can also be used with MinIO, Ceph RADOS, Ceph RGW, etc.
 - Clients: supports Unix user state mounting, Windows mounting, Java SDK with full HDFS semantic compatibility, [Python SDK](https://github.com/megvii-research/juicefs-python) and a built-in S3 gateway.
 
 ### Features

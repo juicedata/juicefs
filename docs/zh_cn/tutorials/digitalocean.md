@@ -155,7 +155,7 @@ $ juicefs format \
 
 **参数说明：**
 
-- `--storage`：指定数据存储引擎，这里使用的是 `space`，点此查看所有[支持的存储](../guide/how_to_set_up_object_storage.md)。
+- `--storage`：指定数据存储引擎，这里使用的是 `space`，点此查看所有[支持的存储](../reference/how_to_set_up_object_storage.md)。
 - `--bucket`：指定存储桶访问地址。
 - `--access-key` 和 `--secret-key`：指定访问对象存储 API 的秘钥。
 - DigitalOcean 托管的 Redis 需要使用 TLS/SSL 加密访问，因此需要使用 `rediss://` 协议头，链接最后添加的 `/1` 代表使用 Redis 的 1 号数据库。

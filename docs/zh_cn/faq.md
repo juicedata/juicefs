@@ -41,7 +41,7 @@ slug: /faq
 
 ### 为什么不支持某个对象存储？
 
-已经支持了绝大部分对象存储，参考这个[列表](guide/how_to_set_up_object_storage.md#supported-object-storage)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
+已经支持了绝大部分对象存储，参考这个[列表](reference/how_to_set_up_object_storage.md#supported-object-storage)。如果它跟 S3 兼容的话，也可以当成 S3 来使用。否则，请创建一个 issue 来增加支持。
 
 ### 为什么我在挂载点删除了文件，但是对象存储占用空间没有变化或者变化很小？
 
@@ -54,7 +54,7 @@ slug: /faq
 * [JuiceFS 随机写](#random-write)会产生文件碎片，因此对象存储的占用空间大部分情况下是大于等于实际大小的，尤其是短时间内进行大量的覆盖写产生许多文件碎片后，这些碎片仍旧占用着对象存储的空间。不过也不必担心，因为在每次读／写文件的时候都会检查，并在后台任务进行该文件相关碎片的整理工作。你可以通过 [`juicefs gc —-compact -—delete`](./reference/command_reference.md#gc) 命令手动触发合并与回收。
 * 如果开启了[「回收站」](./security/trash.md)功能，删除的数据、被合并的碎片文件不会立刻清理，而是保留指定时间后，才进行清理删除（在 JuiceFS 客户端的后台任务中进行）。
 * 如果 JuiceFS 文件系统开启了压缩功能（也就是 [`format`](./reference/command_reference.md#format) 命令的 `--compress` 参数，默认不开启），那么对象存储上存储的对象有可能比实际文件大小更小（取决于不同类型文件的压缩比）。
-* 根据所使用对象存储的[存储类型](guide/how_to_set_up_object_storage.md#storage-class)不同，云服务商可能会针对某些存储类型设置最小计量单位。例如阿里云 OSS 低频访问存储的[最小计量单位](https://help.aliyun.com/document_detail/173534.html)是 64KB，如果单个文件小于 64KB 也会按照 64KB 计算。
+* 根据所使用对象存储的[存储类型](reference/how_to_set_up_object_storage.md#storage-class)不同，云服务商可能会针对某些存储类型设置最小计量单位。例如阿里云 OSS 低频访问存储的[最小计量单位](https://help.aliyun.com/document_detail/173534.html)是 64KB，如果单个文件小于 64KB 也会按照 64KB 计算。
 * 对于自建对象存储，例如 MinIO，实际占用大小也受到[存储级别](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md)设置的影响。
 
 ### JuiceFS 支持使用对象存储中的某个目录作为 `--bucket` 选项的值吗？

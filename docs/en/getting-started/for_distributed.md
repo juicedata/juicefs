@@ -47,7 +47,7 @@ Install the JuiceFS client on all computers that need to mount the file system, 
 
 ### 2. Preparing Object Storage
 
-Here is a pseudo sample with Amazon S3 as an example. You can also switch to other object storage (refer to [JuiceFS Supported Storage](../guide/how_to_set_up_object_storage.md#supported-object-storage) for details).
+Here is a pseudo sample with Amazon S3 as an example. You can also switch to other object storage (refer to [JuiceFS Supported Storage](../reference/how_to_set_up_object_storage.md#supported-object-storage) for details).
 
 - **Bucket Endpoint**: `https://myjfs.s3.us-west-1.amazonaws.com`
 - **Access Key ID**: `ABCDEFGHIJKLMNopqXYZ`
@@ -55,7 +55,7 @@ Here is a pseudo sample with Amazon S3 as an example. You can also switch to oth
 
 ### 3. Preparing Database
 
-Here is a pseudo sample with Amazon ElastiCache for Redis as an example. You can also switch to other types of databases (refer to [JuiceFS Supported Databases](../guide/how_to_set_up_metadata_engine.md) for details).
+Here is a pseudo sample with Amazon ElastiCache for Redis as an example. You can also switch to other types of databases (refer to [JuiceFS Supported Databases](../reference/how_to_set_up_metadata_engine.md) for details).
 
 - **Database Address**: `myjfs-sh-abc.apse1.cache.amazonaws.com:6379`
 - **Database Username**: `tom`

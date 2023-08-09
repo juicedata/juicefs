@@ -10,7 +10,7 @@ slug: /metadata_dump_load
 - JuiceFS v1.0.4 starts to support importing an encrypted backup.
 :::
 
-JuiceFS supports [multiple metadata engines](../guide/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine.
+JuiceFS supports [multiple metadata engines](../reference/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine.
 
 ## Metadata backup {#backup}
 

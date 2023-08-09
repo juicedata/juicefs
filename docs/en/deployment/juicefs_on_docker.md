@@ -1,6 +1,6 @@
 ---
 title: Use JuiceFS on Docker
-sidebar_position: 3
+sidebar_position: 6
 slug: /juicefs_on_docker
 description: Different ways to use JuiceFS in Docker, including bind mount and Docker volume plugin, and mount inside container.
 ---
@@ -64,7 +64,7 @@ docker volume create -d juicedata/juicefs \
   jfsvolume
 ```
 
-If you need to pass extra environment variables to the mount process (e.g. [Google Cloud](../guide/how_to_set_up_object_storage.md#google-cloud)), append them as `-o env=FOO=bar,SPAM=egg`.
+If you need to pass extra environment variables to the mount process (e.g. [Google Cloud](../reference/how_to_set_up_object_storage.md#google-cloud)), append them as `-o env=FOO=bar,SPAM=egg`.
 
 ### Usage and management {#usage-and-management}
 

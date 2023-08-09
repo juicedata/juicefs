@@ -1,6 +1,6 @@
 ---
 title: 在 Docker 中使用 JuiceFS
-sidebar_position: 3
+sidebar_position: 6
 slug: /juicefs_on_docker
 description: 在 Docker 中以不同方式使用 JuiceFS，包括卷映射、卷插件，以及容器中挂载。
 ---
@@ -64,7 +64,7 @@ docker volume create -d juicedata/juicefs \
   jfsvolume
 ```
 
-如果需要在挂载文件系统时传入额外的环境变量（比如 [Google 云](../guide/how_to_set_up_object_storage.md#google-cloud)），可以对上方命令追加类似 `-o env=FOO=bar,SPAM=egg` 的参数。
+如果需要在挂载文件系统时传入额外的环境变量（比如 [Google 云](../reference/how_to_set_up_object_storage.md#google-cloud)），可以对上方命令追加类似 `-o env=FOO=bar,SPAM=egg` 的参数。
 
 ### 使用和管理 {#usage-and-management}
 

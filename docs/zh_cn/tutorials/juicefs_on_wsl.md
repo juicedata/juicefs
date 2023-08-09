@@ -86,7 +86,7 @@ JuiceFS 是数据与元数据分离的分布式文件系统，通常用对象存
 
 #### 对象存储
 
-查看「[JuiceFS 支持的数据存储](../guide/how_to_set_up_object_storage.md)」
+查看「[JuiceFS 支持的数据存储](../reference/how_to_set_up_object_storage.md)」
 
 - **Bucket Endpoint**：`https://myjfs.oss-cn-shanghai.aliyuncs.com`
 - **Access Key ID**：`ABCDEFGHIJKLMNopqXYZ`
@@ -94,7 +94,7 @@ JuiceFS 是数据与元数据分离的分布式文件系统，通常用对象存
 
 #### 数据库
 
-查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」
+查看「[JuiceFS 支持的元数据引擎](../reference/how_to_set_up_metadata_engine.md)」
 
 - **数据库地址**：`myjfs-sh-abc.redis.rds.aliyuncs.com:6379`
 - **数据库密码**：`mypassword`

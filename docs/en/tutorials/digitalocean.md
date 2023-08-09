@@ -155,7 +155,7 @@ $ juicefs format \
 
 **Parameter Description:**
 
-- `--storage`: Specify the data storage engine, here is `space`, click here to view all [supported storage](../guide/how_to_set_up_object_storage.md).
+- `--storage`: Specify the data storage engine, here is `space`, click here to view all [supported storage](../reference/how_to_set_up_object_storage.md).
 - `--bucket`: Specify the bucket access address.
 - `--access-key` and `--secret-key`: Specify the secret key for accessing the object storage API.
 - The Redis managed by DigitalOcean needs to be accessed with TLS/SSL encryption, so it needs to use the `rediss://` protocol header. The `/1` added at the end of the link represents the use of Redis's No. 1 database.
