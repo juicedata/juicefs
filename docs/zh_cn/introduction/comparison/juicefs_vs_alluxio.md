@@ -53,14 +53,14 @@ JuiceFS 是一个强一致性的分布式文件系统，他的原子性依赖底
 
 Alluxio 自身并不是一个存储系统，但你依然可以通过 Alluxio 进行写入，但原子性肯定就无法支持了，因为Alluxio 依赖 UFS 来实现元数据操作，比如重命名文件操作会变成复制和删除操作。
 
-继续讨论一致性之前，必须先简单了解 Alluxio 的写入是如何实现的。上一小节已经介绍过，Alluxio 存储层和 UFS 是分离的——你可以写存储层，也可以写 UFS，具体文件写入要如何在两个层之间协调，通过以下几种写入策略来控制：
+继续讨论一致性之前，必须先简单了解 Alluxio 的写入是如何实现的。上一小节已经介绍过，Alluxio 存储层和 UFS 是分离的——你可以写存储层，也可以写 UFS，具体文件写入要如何在两个层之间协调，通过以下几种[写入策略](https://www.alluxio.io/blog/4-different-ways-to-write-to-alluxio/)来控制：
 
 * `MUST_CACHE`：写入 Alluxio worker 内存，性能最好，但 worker 异常会导致数据丢失。适合用来写入临时数据。
 * `THROUGH`：直接写入 UFS，性能取决于底层存储。适合用来写入需要持久化，但最近不需要用到的数据。
 * `CACHE_THROUGH`：同时写入 Alluxio worker 内存，和底层 UFS。
 * `ASYNC_THROUGH`：先写入 Alluxio worker 内存，再异步提交给 UFS。
 
-可想而知，任何在 Alluxio 中进行的数据写入，都面临着写入性能和一致性之间的取舍。为了达到最理想的性能，用户需要仔细研究写入场景，并为其分配合适的写入策略。显而易见的是，使用 `MUST_CACHE` 或 `ASYNC_THROUGH` 策略，是一定没有一致性保证的，如果写入操作过程中发生故障，其状态是不可预测的。
+可想而知，任何在 Alluxio 中进行的数据写入，都面临着写入性能和一致性之间的取舍。为了达到最理想的性能，用户需要仔细研究写入场景，并为其分配合适的写入策略。显而易见的是，使用 `MUST_CACHE` 或 `ASYNC_THROUGH` 策略一定没有一致性保证，如果写入操作过程中发生故障，其状态是不可预测的。
 
 以上是两个系统在写入一致性方面的对比，至于读数据，Alluxio 会按需从 UFS 加载元数据，并且它在启动时没有关于 UFS 的信息。默认情况下，Alluxio 期望对 UFS 的所有修改都通过 Alluxio 进行。如果直接对 UFS 进行更改，则需要手动或定期在 Alluxio 和 UFS 之间同步元数据，这也容易成为成为不一致的来源。
 
@@ -70,7 +70,7 @@ JuiceFS 则不存在这方面的问题，这是因为 JuiceFS 以元数据服务
 
 JuiceFS 支持使用 [LZ4](https://lz4.github.io/lz4) 或 [Zstandard](https://facebook.github.io/zstd) 来压缩数据。
 
-Alluxio 本质上并不是一个存储系统，虽然你也可以通过 Alluxio 进行数据写入（支持各种不同的[写缓存策略](https://www.alluxio.io/blog/4-different-ways-to-write-to-alluxio/)），但底层存储是各种外部的 UFS，因此不支持压缩。
+Alluxio 本质上并不是一个存储系统，虽然你也可以通过 Alluxio 进行数据写入，但[并不支持压缩](https://alluxio.atlassian.net/browse/ALLUXIO-31)。
 
 ### 数据加密
 
