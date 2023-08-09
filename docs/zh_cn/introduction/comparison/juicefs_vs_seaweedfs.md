@@ -145,13 +145,6 @@ JuiceFS 实现了 [S3 网关](https://juicefs.com/docs/zh/community/s3_gateway)�
 
 SeaweedFS 当前[支持部分 S3 API](https://github.com/seaweedfs/seaweedfs/wiki/Amazon-S3-API)，覆盖了常用的读写查删等请求，对一些特定的请求（如 Read）还做了功能上的扩展。
 
-### WebDAV
-
-二者均支持 WebDAV 协议，详见：
-
-* [SeaweedFS Wiki](https://github.com/seaweedfs/seaweedfs/wiki/WebDAV)
-* [JuiceFS 文档](../../deployment/webdav.md)
-
 ### HDFS
 
 JuiceFS [完整兼容 HDFS API](../../deployment/hadoop_java_sdk.md)。包括 Hadoop 2.x 和 Hadoop 3.x，以及 Hadoop 生态系统中的各种组件。SeaweedFS 则是提供了对 HDFS API 的[基础兼容](https://github.com/seaweedfs/seaweedfs/wiki/Hadoop-Compatible-File-System)，一些更加高级的操作如如 truncate、concat、checksum 和扩展属性等则尚未支持。
@@ -162,6 +155,13 @@ JuiceFS [完整兼容 HDFS API](../../deployment/hadoop_java_sdk.md)。包括 Ha
 
 * [SeaweedFS CSI 驱动](https://github.com/seaweedfs/seaweedfs-csi-driver)
 * [JuiceFS CSI 驱动](https://github.com/juicedata/juicefs-csi-driver)
+
+### WebDAV
+
+二者均支持 WebDAV 协议，详见：
+
+* [SeaweedFS Wiki](https://github.com/seaweedfs/seaweedfs/wiki/WebDAV)
+* [JuiceFS 文档](../../deployment/webdav.md)
 
 ## 其他高级功能
 
