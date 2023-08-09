@@ -4,38 +4,42 @@ slug: /comparison/juicefs_vs_alluxio
 
 # JuiceFS 对比 Alluxio
 
-[Alluxio](https://www.alluxio.io)（/əˈlʌksio/）是大数据和机器学习生态系统中的数据访问层。最初作为研究项目「Tachyon」，它是在加州大学伯克利分校的 [AMPLab](https://en.wikipedia.org/wiki/AMPLab) 作为创建者 2013 年的博士论文创建的。Alluxio 于 2014 年开源。
+[Alluxio](https://www.alluxio.io)（/əˈlʌksio/）是大数据和机器学习生态系统中的数据访问层。最初作为研究项目「Tachyon」，它是在加州大学伯克利分校的 [AMPLab](https://en.wikipedia.org/wiki/AMPLab) 在 2013 年的博士论文创建的。
 
-下表显示了 Alluxio 和 JuiceFS 之间的主要功能差异。
+Alluxio 和 JuiceFS 虽然都能提供文件系统服务，但架构以及使用场景存在很大差异：Alluxio 的主要作用是为各个数据存储系统提供统一接入平台（你的数据仍存储在外部系统），为应用提供高速缓存层。而 JuiceFS 则是一个分布式高性能文件系统，你可以将其作为大数据存储平台，也可以用他来替换当前的存储系统，为你的业务增效降本。
 
-| 特性                  | Alluxio            | JuiceFS            |
-| --------------------- | -------            | -------            |
-| 存储格式              | Object             | Block              |
-| 缓存粒度              | 64MiB              | 4MiB               |
-| 多级缓存              | ✓                  | ✓                  |
-| Hadoop 兼容           | ✓                  | ✓                  |
-| S3 兼容               | ✓                  | ✓                  |
-| Kubernetes CSI Driver | ✓                  | ✓                  |
-| Hadoop 数据本地性     | ✓                  | ✓                  |
-| 完全兼容 POSIX        | ✕                  | ✓                  |
-| 原子元数据操作        | ✕                  | ✓                  |
-| 一致性                | ✕                  | ✓                  |
-| 数据压缩              | ✕                  | ✓                  |
-| 数据加密              | ✕                  | ✓                  |
-| 零运维                | ✕                  | ✓                  |
-| 开发语言              | Java               | Go                 |
-| 开源协议              | Apache License 2.0 | Apache License 2.0 |
-| 开源时间              | 2014               | 2021.1             |
+本章详细介绍二者的功能区别，帮助你的团队进行技术选型。你可以通过下表速查两者的关键特性对比，然后在本文中选取感兴趣的话题详细阅读。
 
-## 存储格式
+| 特性 | Alluxio | JuiceFS |
+| --- | --- | --- |
+| 存储格式 | Object | Block |
+| 缓存粒度 | 64MiB | 64MB 逻辑块 + 4MB 物理存储块 |
+| 多级缓存 | ✓ | ✓ |
+| Hadoop 兼容 | ✓ | ✓ |
+| S3 兼容 | ✓ | ✓ |
+| Kubernetes CSI Driver | ✓ | ✓ |
+| Hadoop 数据本地性 | ✓ | ✓ |
+| 完全兼容 POSIX | ✕ | ✓ |
+| 原子元数据操作 | ✕ | ✓ |
+| 一致性 | ✕ | ✓ |
+| 数据压缩 | ✕ | ✓ |
+| 数据加密 | ✕ | ✓ |
+| 服务端运维 | 复杂 | 推荐直接使用云服务商托管服务，实现零运维 |
+| 开发语言 | Java | Go |
+| 开源协议 | Apache License 2.0 | Apache License 2.0 |
+| 开源时间 | 2014 | 2021.1 |
 
-JuiceFS 中一个文件的[存储格式](../architecture.md#how-juicefs-store-files)包含三个层级：chunk、slice 和 block。一个文件将被分割成多个块，并被压缩和加密（可选）存储到对象存储中。
+## 存储格式与缓存
 
-Alluxio 将文件作为「对象」存储到 UFS。文件不会像 JuiceFS 那样被拆分成 block。
+Alluxio 自身不是一个存储系统，而是一个文件系统的聚合层，来为不同的存储系统（比如 HDFS，NFS）提供统一接入和缓存服务。这也是为什么我们无法将存储和缓存拆开来讨论与对比，因为 Alluxio 自己的存储层，作用实际上就是提供缓存服务（更多关于架构信息请阅读其[官方文档](https://docs.alluxio.io/os/user/stable/en/core-services/Caching.html?q=64MB#alluxio-storage-overview)）。
 
-## 缓存粒度
+在 Alluxio 的架构中，背后的存储系统称作「UFS」（Under File Storage），可想而知，这些存储系统都是外部系统，不受 Alluxio 管辖，他们各自的存储格式与 Alluxio 无关。
 
-JuiceFS 的[默认块大小](../architecture.md#how-juicefs-store-files)为 4MiB，相比 Alluxio 的 64MiB，粒度更小。较小的块大小更适合随机读取（例如 Parquet 和 ORC）工作负载，即缓存管理将更有效率。
+UFS 层让 Alluxio 能够聚合不同的文件系统，但 Alluxio 的重要作用是为这些存储系统提供缓存服务，因此 Alluxio 也有自己的数据存储，称作 Alluxio storage，会被部署成 Alluxio workers，用来提供缓存服务。
+
+在 Alluxio 存储层，默认使用 64MB 作为缓存块大小，在新版实验功能中也引入了[可调节缓存块大小的设计](https://docs.alluxio.io/os/user/stable/en/core-services/Caching.html?q=64MB#experimental-paging-worker-storage)，来调节缓存粒度，优化性能。
+
+JuiceFS 是一个分布式文件系统，实现了自己的存储格式，文件会被视作一个个最大 64MB 的逻辑数据块（Chunk），再拆成 4MB 的 Block 上传至对象存储，作为最基本的物理存储单位，Block 也是本地缓存的粒度，相比 Alluxio 的 64MB 缓存块，JuiceFS 的粒度更小，更适合随机读取（例如 Parquet 和 ORC）工作负载，缓存管理也更有效率。JuiceFS 的存储设计，在[架构文档](../architecture.md#how-juicefs-store-files)中有更详细的介绍。
 
 ## Hadoop 兼容
 
