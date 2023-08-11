@@ -106,7 +106,7 @@ Both modes achieve consistency between different cluster data by transmitting an
 
 The JuiceFS Community Edition does not implement a change log, but it can use its inherent data replication capabilities from the metadata engine and object storage to achieve file system mirroring. For example, both [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) and [Redis](https://redis.io/docs/management/replication) only support data replication. When combined with [S3's object replication feature](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html), either of them can enable a setup similar to SeaweedFS' Active-Passive mode without relying on JuiceFS.
 
-It's worth noting that the JuiceFS Enterprise Edition implements the metadata engine based on change logs. It supports [data replication](https://juicefs.com/docs/cloud/guide/replication/) and [mirror file system](https://juicefs.com/docs/cloud/guide/mirror/).
+It's worth noting that the JuiceFS Enterprise Edition implements the metadata engine based on change logs. It supports [data replication](https://juicefs.com/docs/cloud/guide/replication) and [mirror file system](https://juicefs.com/docs/cloud/guide/mirror).
 
 ## Storage comparison
 
