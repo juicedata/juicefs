@@ -6,7 +6,7 @@ description: 本文对比 JuiceFS 和 SeaweedFS 的架构、存储机制、客�
 
 [SeaweedFS](https://github.com/seaweedfs/seaweedfs) 与 [JuiceFS](https://github.com/juicedata/juicefs) 皆是开源的高性能分布式文件存储系统，但二者存在诸多设计区别与功能差异，本章将会详述他们的区别和各自适用场景，帮助你的团队进行技术选型。
 
-SeaweedFS 和 JuiceFS 都采用了对商用更友好的 Apache License 2.0，但 JuiceFS 分为[社区版](https://juicefs.com/docs/zh/community/introduction)和[企业版](https://juicefs.com/zh-cn/blog/solutions/juicefs-enterprise-edition-features-vs-community-edition)（可部署在本地或[云端](https://juicefs.com/docs/zh/cloud/)），企业版使用自研的闭源元数据引擎，客户端代码则与社区版相同。你可以通过下表速查两者的关键特性对比，然后在本文中选取感兴趣的话题详细阅读。
+SeaweedFS 和 JuiceFS 都采用了对商用更友好的 Apache License 2.0，但 JuiceFS 分为[社区版](https://juicefs.com/docs/zh/community/introduction)和[企业版](https://juicefs.com/zh-cn/blog/solutions/juicefs-enterprise-edition-features-vs-community-edition)（可部署在本地或[云端](https://juicefs.com/docs/zh/cloud)），企业版使用自研的闭源元数据引擎，客户端代码则与社区版相同。你可以通过下表速查两者的关键特性对比，然后在本文中选取感兴趣的话题详细阅读。
 
 ## JuiceFS 和 SeaweedFS 对比一览
 
