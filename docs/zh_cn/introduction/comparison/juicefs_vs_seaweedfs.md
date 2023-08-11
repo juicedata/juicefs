@@ -98,8 +98,8 @@ SeaweedFS 会为所有的元数据操作生成变更日志（change log），日
 
 SeaweedFS 支持在多个集群之间进行文件系统数据复制，存在两种异步数据复制模式：
 
--「Active-Active」：此模式中，两个集群都能够参与文件写入并双向同步。如果集群节点数量超过 2，SeaweedFS 的一些操作（如重命名目录）会受到一些限制。
--「Active-Passive」：此模式是主从关系，Passive 一方只读。
+- 「Active-Active」：此模式中，两个集群都能够参与文件写入并双向同步。如果集群节点数量超过 2，SeaweedFS 的一些操作（如重命名目录）会受到一些限制。
+- 「Active-Passive」：此模式是主从关系，Passive 一方只读。
 
 这两种模式都是通过传递 change log 再应用的机制实现了不同集群数据间的一致性，对于每一条 change log，其中会有一个签名信息以保证同一个修改不会被循环多次。
 
@@ -130,8 +130,8 @@ JuiceFS 支持使用 LZ4 或者 Zstandard 来为所有写入的数据进行压�
 
 二者均支持加密，包括传输中加密及静态加密：
 
-* SeaweedFS 支持传输中加密与静态加密。在开启了数据加密后，所有写入 Volume Server 的数据都会使用随机的密钥进行加密，而这些对应的随机密钥信息则由维护文件元数据的 Filer 进行管理，详见 [Wiki](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Data-Encryption)
-* JuiceFS 的加密功能详见[文档](../../security/encrypt.md)
+* SeaweedFS 支持传输中加密与静态加密。在开启了数据加密后，所有写入 Volume Server 的数据都会使用随机的密钥进行加密，而这些对应的随机密钥信息则由维护文件元数据的 Filer 进行管理，详见 [Wiki](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Data-Encryption)。
+* JuiceFS 的加密功能详见[文档](../../security/encrypt.md)。
 
 ## 客户端协议对比
 
