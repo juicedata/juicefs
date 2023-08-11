@@ -1,13 +1,16 @@
 ---
 title: JuiceFS 对比 SeaweedFS
 slug: /comparison/juicefs_vs_seaweedfs
+description: 本文对比 JuiceFS 和 SeaweedFS 的架构、存储机制、客户端协议及其他高级功能。
 ---
 
 [SeaweedFS](https://github.com/seaweedfs/seaweedfs) 与 [JuiceFS](https://github.com/juicedata/juicefs) 皆是开源的高性能分布式文件存储系统，但二者存在诸多设计区别与功能差异，本章将会详述他们的区别和各自适用场景，帮助你的团队进行技术选型。
 
-SeaweedFS 和 JuiceFS 都采用了对商用更友好的 Apache License 2.0，但 JuiceFS 分为[社区版](https://juicefs.com/docs/zh/community/introduction)和[企业版](https://juicefs.com/docs/zh/cloud/)，企业版使用自研的闭源元数据引擎，客户端代码则与社区版相同。你可以通过下表速查两者的关键特性对比，然后在本文中选取感兴趣的话题详细阅读。
+SeaweedFS 和 JuiceFS 都采用了对商用更友好的 Apache License 2.0，但 JuiceFS 分为[社区版](https://juicefs.com/docs/zh/community/introduction)和[企业版](https://juicefs.com/zh-cn/blog/solutions/juicefs-enterprise-edition-features-vs-community-edition)（可部署在本地或[云端](https://juicefs.com/docs/zh/cloud/)），企业版使用自研的闭源元数据引擎，客户端代码则与社区版相同。你可以通过下表速查两者的关键特性对比，然后在本文中选取感兴趣的话题详细阅读。
 
-| | SeaweedFS | JuiceFS |
+## JuiceFS 和 SeaweedFS 对比一览
+
+| 对比项 | SeaweedFS | JuiceFS |
 | :--- | :--- | :--- |
 | 元数据引擎 | 支持多种数据库 | 社区版支持多种数据库、企业版使用自研高性能元数据引擎 |
 | 元数据操作原子性 | 未保证 | 社区版通过数据库事务保证、企业版元数据引擎自身保证操作原子性 |
@@ -36,23 +39,40 @@ SeaweedFS 和 JuiceFS 都采用了对商用更友好的 Apache License 2.0，但
 
 ## SeaweedFS 技术架构
 
-系统由 3 部分组成，底层存储文件的 **Volume Server**，用于管理集群的 **Master Server**，以及一个向上提供更多特性的 **Filer** 可选组件。
+系统由 3 部分组成：
+
+- **Volume Server**，用于底层存储文件
+- **Master Server**，用于管理集群
+- **Filer**，一个向上提供更多特性的可选组件
 
 ![SeaweedFS 系统架构](../../images/seaweedfs_arch_intro.png)
 
-Volume Server 与 Master Server 一并构成文件存储服务。Volume Server 专注于数据的写入与读取，Master Server 负责管理集群与 Volumes。
+Volume Server 与 Master Server 一并构成文件存储服务：
+
+- Volume Server 专注于数据的写入与读取
+- Master Server 负责管理集群与 Volumes
 
 在读写数据时，SeaweedFS 的实现与 Haystack 相似，用户创建的文件系统（Volume）实际上是一个大磁盘文件，也就是下图的 Superblock。在此 Volume 中，用户写入的所有文件都会被合并到该大磁盘文件中，借用 Haystack 的术语，每一个文件都是“一根针”，needle。
 
-在开始写入数据之前，客户端需要向 Master Server 发起写入申请，随后 SeaweedFS 会根据当前的数据量返回一个 File ID，这个 ID 由 Volume ID 与该 Volume 中可供写入位置的偏移量计算而来。在写入的过程中，一并被写入的还有基础的元数据信息（文件长度与 Chunk 等信息）；当写入完成之后，调用者需要在一个外部系统（例如 MySQL）中对该文件与返回的 File ID 进行关联保存。在读取数据时，由于 File ID 已经包含了计算文件位置（偏移）的所有信息，因此可以高效地将文件的内容读取出来。
-
 ![SeaweedFS Superblock](../../images/seaweedfs_superblock.png)
+
+SeaweedFS 中数据写入和读取流程:
+
+1. 在开始写入数据之前，客户端向 Master Server 发起写入申请。
+2. SeaweedFS 根据当前的数据量返回一个 File ID，这个 ID 由 Volume ID 与该 Volume 中可供写入位置的偏移量计算而来。在写入的过程中，一并被写入的还有基础的元数据信息（文件长度与 Chunk 等信息）。
+3. 当写入完成之后，调用者需要在一个外部系统（例如 MySQL）中对该文件与返回的 File ID 进行关联保存。
+4. 在读取数据时，由于 File ID 已经包含了计算文件位置（偏移）的所有信息，因此可以高效地将文件的内容读取出来。
 
 在上述的底层存储服务之上，SeaweedFS 提供了一个名为 Filer 的组件，他对接 Volume Server 与 Master Server，对外提供丰富的功能与特性，如 POSIX 支持、WebDAV、S3 API。与 JuiceFS 相同，Filer 也需要对接一个外部数据库以保存元数据信息。
 
 ## JuiceFS 技术架构
 
-JuiceFS 采用元数据与数据分离存储的架构，文件数据本身会被切分保存在对象存储（如 S3）当中，而元数据则是会被保存在元数据引擎中，元数据引擎是一个由用户自行选择数据库，如 Redis、MySQL。客户端连接元数据引擎获取元数据服务，然后将实际数据写入对象存储，实现强一致性分布式文件系统。
+JuiceFS 采用元数据与数据分离存储的架构：
+
+- 文件数据本身会被切分保存在对象存储（如 S3）当中
+- 元数据被保存在元数据引擎中，元数据引擎是一个由用户自行选择数据库，如 Redis、MySQL。
+
+客户端连接元数据引擎获取元数据服务，然后将实际数据写入对象存储，实现强一致性分布式文件系统。
 
 ![JuiceFS Arch](../../images/juicefs-arch-new.png)
 
@@ -62,7 +82,10 @@ JuiceFS 的架构在[「技术架构」](../architecture.md)有更详细的介�
 
 ### 元数据
 
-SeaweedFS 与 JuiceFS 都支持通过外部数据库以存储文件系统的元数据信息。SeaweedFS 支持多达 [24](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Stores) 种数据库。JuiceFS 对数据库事务能力要求更高（下方会详细介绍），当前支持了 3 类共 10 种事务型数据库。
+SeaweedFS 与 JuiceFS 都支持通过外部数据库以存储文件系统的元数据信息：
+
+- SeaweedFS 支持多达 [24](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Stores) 种数据库。
+- JuiceFS 对数据库事务能力要求更高（下方会详细介绍），当前支持了 3 类共 10 种事务型数据库。
 
 ### 原子性操作
 
@@ -71,9 +94,14 @@ SeaweedFS 与 JuiceFS 都支持通过外部数据库以存储文件系统的元�
 
 ### 变更日志以及相关功能
 
-SeaweedFS 会为所有的元数据操作生成变更日志（changelog），日志可以被传输、重放，保证数据安全的同时，还能用来实现文件系统数据复制、操作审计等功能。
+SeaweedFS 会为所有的元数据操作生成变更日志（change log），日志可以被传输、重放，保证数据安全的同时，还能用来实现文件系统数据复制、操作审计等功能。
 
-SeaweedFS 支持在多个集群之间进行文件系统数据复制，存在两种异步数据复制模式：「Active-Active」与「Active-Passive」，Active-Active 模式中，两个集群都能够参与文件写入并双向同步，Active-Passive 模式则是主从关系，Passive 一方只读。2 种模式都是通过传递 changelog 再应用的机制实现了不同集群数据间的一致性，对于每一条 changelog，其中会有一个签名信息以保证同一个修改不会被循环多次。在集群节点数量超过 2 个节点的 Active-Active 模式下，SeaweedFS 的一些操作（如重命名目录）会受到一些限制。
+SeaweedFS 支持在多个集群之间进行文件系统数据复制，存在两种异步数据复制模式：
+
+-「Active-Active」：此模式中，两个集群都能够参与文件写入并双向同步。如果集群节点数量超过 2，SeaweedFS 的一些操作（如重命名目录）会受到一些限制。
+-「Active-Passive」：此模式是主从关系，Passive 一方只读。
+
+这两种模式都是通过传递 change log 再应用的机制实现了不同集群数据间的一致性，对于每一条 change log，其中会有一个签名信息以保证同一个修改不会被循环多次。
 
 JuiceFS 社区版没有实现变更日志，但可以自行使用元数据引擎和对象存储自身的数据复制能力实现文件系统镜像功能，比方说 [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) 或 [Redis](https://redis.io/docs/management/replication) 仅支持数据复制，配合上 [S3 的复制对象功能](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/replication.html)，就能脱离 JuiceFS 实现类似 SeaweedFS 的 Active-Passive 模式。
 
@@ -85,7 +113,10 @@ JuiceFS 社区版没有实现变更日志，但可以自行使用元数据引擎
 
 ### 文件拆分
 
-SeaweedFS 与 JuiceFS 都会将文件拆分成若干个小块再持久化到底层的数据系统中。SeaweedFS 将文件拆分成 8MB 的块，对于超大文件（超过 8GB），它会将 Chunk 索引也保存到底层的数据系统中。而 JuiceFS 内部会使用 64MB 的逻辑数据块（Chunk），再拆成 4MB 的 Block 上传至对象存储，这点在[架构文档](../architecture.md#how-juicefs-store-files)中有更详细的介绍。
+SeaweedFS 与 JuiceFS 都会将文件拆分成若干个小块再持久化到底层的数据系统中：
+
+- SeaweedFS 将文件拆分成 8 MB 的块，对于超大文件（超过 8 GB），它会将 Chunk 索引也保存到底层的数据系统中。
+- JuiceFS 内部会使用 64 MB 的逻辑数据块（Chunk），再拆成 4 MB 的 Block 上传至对象存储，这点在[架构文档](../architecture.md#how-juicefs-store-files)中有更详细的介绍。
 
 ### 分层存储
 
@@ -153,4 +184,4 @@ JuiceFS 支持并默认开启[回收站](../../security/trash.md)功能，删除
 二者均提供完善的运维和排查调优方案：
 
 * JuiceFS 可以通过 [`juicefs stats`](../../administration/fault_diagnosis_and_analysis.md#stats)，[`juicefs profile`](../../administration/fault_diagnosis_and_analysis.md#profile) 来实时观测文件系统性能。也可以通过 [`metrics API`](../../administration/monitoring.md#collect-metrics) 将监控数据接入到 Prometheus，用 Grafana 进行可视化和监控告警。
-* SeaweedFS 可以通过 [weed shell](https://github.com/seaweedfs/seaweedfs/wiki/weed-shell) 来交互式执行运维工作，例如查看当前集群状态、列举文件列表。SeaweedFS 同时支持 [push 和 pull 方式](https://github.com/seaweedfs/seaweedfs/wiki/System-Metrics) 对接 Prometheus。
+* SeaweedFS 可以通过 [`weed shell``](https://github.com/seaweedfs/seaweedfs/wiki/weed-shell) 来交互式执行运维工作，例如查看当前集群状态、列举文件列表。SeaweedFS 同时支持 [push 和 pull 方式](https://github.com/seaweedfs/seaweedfs/wiki/System-Metrics) 对接 Prometheus。
