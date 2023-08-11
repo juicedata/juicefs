@@ -160,7 +160,7 @@ Both support the WebDAV protocol. For details, see:
 
 ### HDFS
 
-JuiceFS is [fully compatible with the HDFS API](../../deployment/hadoop_java_sdk.md), including Hadoop 2.x, Hadoop 3.x, and various components within the Hadoop ecosystem. 
+JuiceFS is [fully compatible with the HDFS API](../../deployment/hadoop_java_sdk.md), including Hadoop 2.x, Hadoop 3.x, and various components within the Hadoop ecosystem.
 
 SeaweedFS offers [basic HDFS compatibility](https://github.com/seaweedfs/seaweedfs/wiki/Hadoop-Compatible-File-System). It lacks support for advanced operations like truncate, concat, checksum, and set attributes.
 
