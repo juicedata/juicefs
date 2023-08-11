@@ -147,7 +147,7 @@ JuiceFS is [fully POSIX-compatible](../../reference/posix_compatibility.md), whi
 
 ### S3
 
-JuiceFS implements an [S3 gateway](https://juicefs.com/docs/community/s3_gateway/), enabling direct access to the file system through the S3 API. It supports tools like s3cmd, AWS CLI, and MinIO Client (mc) for file system management.
+JuiceFS implements an [S3 gateway](https://juicefs.com/docs/community/s3_gateway), enabling direct access to the file system through the S3 API. It supports tools like s3cmd, AWS CLI, and MinIO Client (mc) for file system management.
 
 SeaweedFS currently [supports a subset of the S3 API](https://github.com/seaweedfs/seaweedfs/wiki/Amazon-S3-API), covering common read, write, list, and delete requests, with some extensions for specific requests like reads.
 
