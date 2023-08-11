@@ -56,7 +56,7 @@ Volume Server 与 Master Server 一并构成文件存储服务：
 
 ![SeaweedFS Superblock](../../images/seaweedfs_superblock.png)
 
-SeaweedFS 中数据写入和读取流程:
+SeaweedFS 中数据写入和读取流程：
 
 1. 在开始写入数据之前，客户端向 Master Server 发起写入申请。
 2. SeaweedFS 根据当前的数据量返回一个 File ID，这个 ID 由 Volume ID 与该 Volume 中可供写入位置的偏移量计算而来。在写入的过程中，一并被写入的还有基础的元数据信息（文件长度与 Chunk 等信息）。
