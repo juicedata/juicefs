@@ -196,4 +196,3 @@ Both offer comprehensive maintenance and troubleshooting solutions:
 
 - JuiceFS provides [`juicefs stats`](../../administration/fault_diagnosis_and_analysis.md#stats) and [`juicefs profile`](../../administration/fault_diagnosis_and_analysis.md#profile) to let users view real-time performance metrics. It offers a [`metrics`](../../administration/monitoring.md#collect-metrics) API to integrate monitoring data into Prometheus for visualization and monitoring alerts in Grafana.
 - SeaweedFS uses [`weed shell`](https://github.com/seaweedfs/seaweedfs/wiki/weed-shell) to interactively execute maintenance tasks, such as checking the current cluster status and listing file directories. It also supports [push and pull](https://github.com/seaweedfs/seaweedfs/wiki/System-Metrics) approaches to integrate with Prometheus.
-
