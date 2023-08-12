@@ -340,7 +340,7 @@ juicefs fsck redis://localhost
 
 ### `juicefs restore` <VersionAdd>1.1</VersionAdd> {#restore}
 
-重新构建回收站文件的树结构，并将它们放回原始目录。
+重新构建回收站文件的树结构，并将它们放回原始目录。如果需要恢复文件存在命名冲突，程序会直接跳过，不会覆盖新创建的文件（注意日志中会有提示）。
 
 #### 概览
 
@@ -354,8 +354,8 @@ juicefs restore redis://localhost/1 2023-05-10-01
 
 |项 | 说明|
 |-|-|
-|`--put-back value`|将恢复的文件移动到原始目录 (默认值：false)|
-|`--threads value`|线程数 (默认：10)|
+|`--put-back`|将恢复的文件移动到原始目录，面对命名冲突时会直接跳过，不会覆盖已有文件。|
+|`--threads=10`|线程数，默认 10，如果恢复速度慢，增加并发以提速。|
 
 ### `juicefs dump` {#dump}
 
