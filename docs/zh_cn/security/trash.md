@@ -1,18 +1,53 @@
 ---
 sidebar_position: 2
 ---
+
 # 回收站
 
 :::note 注意
 此特性需要使用 1.0.0 及以上版本的 JuiceFS
 :::
 
-对存储系统来说，数据的安全性至关重要。因此 JuiceFS 默认开启回收站功能，会自动将用户删除的文件移动到 JuiceFS 根目录下的 `.trash` 目录内，保留指定时间后才将数据真正清理。
+JuiceFS 默认开启回收站功能，你删除的文件会被保存在文件系统根目录下的 `.trash` 目录内，保留指定时间后才将数据真正清理。先阅读下方两小节学习如何恢复和彻底删除文件，然后继续阅读了解回收站的设计。
+
+### 从回收站恢复文件 {#recover}
+
+删除的文件会被保存在格式为 `.trash/YYYY-MM-DD/[parent inode]-[file inode]-[file name]` 的目录，想要恢复的话，只需将其 `mv` 出来即可：
+
+```shells
+mv .trash/2022-11-30-10/[parent inode]-[file inode]-[file name] .
+```
+
+考虑到回收站内的文件，已经丢失了原目录结构信息，仅在文件名保留 inode 信息，如果你确实忘记了被误删的文件名，可以使用 [`juicefs info`](../reference/command_reference.md#info) 命令先找出父目录的 inode，然后顺藤摸瓜地定位到误删文件。
+
+假设挂载点为 `/jfs`，你误删了 `/jfs/data/config.json`，但无法直接通过 `config.json` 文件名来操作恢复文件（因为你忘了），可以用下方流程反查父目录 inode，然后在回收站中定位文件：
+
+```shell
+# 用 info 命令确定父目录 inode
+juicefs info /jfs/data
+
+# 在上方的输出中，关注 inode 字段，假设 /jfs/data 这个目录的 inode 为 3
+# 使用 find 命令，就能找出该目录下所有被删除的文件
+find /jfs/.trash -name '3-*'
+
+mv /jfs/.trash/2022-11-30-10/3-* /jfs
+```
+
+只有 root 用户具有回收站目录的写权限，在 root 用户下，可以用 `mv` 的命令将文件移出回收站来恢复删掉的文件，或者用 `rm` 将文件从回收站彻底删除。普通用户则没有回收站的写权限，无法方便地使用 `mv`、`rm` 等命令，如果要从回收站恢复文件，只能读取（有访问权限的）文件，再写入到新文件。
+
+JuiceFS 1.1 版本提供了 restore 子命令来快速恢复大量误删的文件，它会把指定的某个小时的回收站中的文件按照被删除前的目录结构组织起来，方便手动按照目录恢复，或者使用 `--put-back` 参数将所有文件和目录恢复到删除前的位置（不会覆盖新创建的文件）。
+
+### 从回收站彻底删除文件 {#purge}
+
+回收站的清理由 JuiceFS 客户端定期运行后台任务执行（默认每小时清理一次），因此需要至少有 1 个在线的挂载点（不能开启 [`--no-bgjob`](../reference/command_reference.md#mount)）。如果你希望尽快释放对象存储空间，也可以手动强制清理，以 root 身份执行 `juicefs rmr <mountpoint>/.trash` 即可。
+
+值得一提，覆写产生的文件碎片由于对用户不可见，所以无法轻易删除。如果你确实想要主动清理它们，可以临时禁用回收站（设置 [`--trash-days 0`](#configure)），再通过 [`juicefs gc`](../reference/command_reference.md#gc) 命令将这些数据块标为泄漏并删除。操作完成以后，记得重新开启回收站。
+
 
 可想而知，在回收站开启情况下，如果应用需要经常删除文件或者频繁覆盖写文件，会导致对象存储使用量远大于文件系统用量。这是因为回收站里包含了以下文件：
 
 1. 被删除的文件，可以在 `.trash` 目录中直接查看和操作
-2. 频繁覆盖写时会产生垃圾数据块（详见 [FAQ](../faq.md#random-write)），同样被保留在回收站中，但用户无法直接查看和操作，且默认不支持强制删除，详见[「恢复／清理」](#recover-purge)
+1. 频繁覆盖写时会产生垃圾数据块（详见 [FAQ](../faq.md#random-write)），同样被保留在回收站中，但用户无法直接查看和操作，如果想要清理他们，详见[「恢复／清理」](#recover-purge)
 
 ## 配置 {#configure}
 
@@ -24,13 +59,13 @@ sidebar_position: 2
 
 如果是已完成初始化的文件系统，可以继续通过 `config` 命令更新回收站保留时间，例如：
 
-```bash
+```shell
 juicefs config META-URL --trash-days 7
 ```
 
 然后通过 `status` 命令验证配置更新成功：
 
-```bash
+```shell
 $ juicefs status META-URL
 
 {
@@ -52,9 +87,6 @@ cd /jfs
 # 注意，`.trash` 目录下的一级子目录（如 `2022-11-30-10`，其主要功能是归纳管理，目录本身不占空间）无法被手动删除
 juicefs rmr .trash/
 
-# 从回收站恢复文件
-# 注意，原目录结构信息已丢失，仅在文件名保留 inode 信息，继续阅读下方说明
-mv .trash/2022-11-30-10/[parent inode]-[file inode]-[file name] .
 ```
 
 挂载子目录时，将无法进入回收站目录。
@@ -74,13 +106,3 @@ mv .trash/2022-11-30-10/[parent inode]-[file inode]-[file name] .
 回收站内不允许用户自行创建新的文件，并且只有 root 用户才能删除或移动其中的文件。
 
 当 JuiceFS 客户端由非 root 用户启动时，需要在 mount 时指定 `-o allow_root` 参数，否则将无法正常清空回收站。
-
-### 恢复／清理 {#recover-purge}
-
-只有 root 用户具有回收站目录的写权限，在 root 用户下，可以用 `mv` 的命令将文件移出回收站来恢复删掉的文件，或者用 `rm` 将文件从回收站彻底删除。普通用户则没有回收站的写权限，无法方便地使用 `mv`、`rm` 等命令，如果要从回收站恢复文件，只能读取（有访问权限的）文件，再写入到新文件。
-
-JuiceFS 1.1 版本提供了 restore 子命令来快速恢复大量误删的文件，它会把指定的某个小时的回收站中的文件按照被删除前的目录结构组织起来，方便手动按照目录恢复，或者使用 `--put-back` 参数将所有文件和目录恢复到删除前的位置（不会覆盖新创建的文件）。
-
-回收站的清理由 JuiceFS 客户端定期运行后台任务执行（默认每小时清理一次），因此需要至少有 1 个在线的挂载点（不能开启 [`--no-bgjob`](../reference/command_reference.md#mount)）。如果你希望尽快释放对象存储空间，也可以手动强制清理，以 root 身份执行 `juicefs rmr <mountpoint>/.trash` 即可。
-
-值得一提，覆写产生的文件碎片由于对用户不可见，所以无法轻易强制删除。如果你确实想要主动清理它们，可以临时禁用回收站（设置 [`--trash-days 0`](#configure)），再通过 [`juicefs gc`](../reference/command_reference.md#gc) 命令将这些数据块标为泄漏并删除。操作完成以后，记得重新开启回收站。

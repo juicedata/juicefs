@@ -171,7 +171,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--encrypt-rsa-key=value`|RSA 私钥的路径，查看[数据加密](../security/encrypt.md)以了解更多。|
 |`--encrypt-algo=aes256gcm-rsa`|加密算法 (aes256gcm-rsa, chacha20-rsa) (默认："aes256gcm-rsa")|
 |`--hash-prefix`|给每个对象添加 hash 前缀，默认为 false。|
-|`--shards=0`|将数据块根据名字哈希存入 N 个桶中，默认为 0。当 N 大于 0 时，`bucket` 需要包含 `%d` 占位符，例如 `--bucket=juicefs-%d`。|
+|`--shards=0`|如果对象存储服务在桶级别设置了限速（或者你使用自建的对象存储服务，单个桶的性能有限），可以将数据块根据名字哈希分散存入 N 个桶中。该值默认为 0，也就是所有数据存入单个桶。当 N 大于 0 时，`bucket` 需要包含 `%d` 占位符，例如 `--bucket=juicefs-%d`。`--shards` 设置无法动态修改，需要提前规划好用量。|
 
 #### 管理参数 {#format-management-options}
 
@@ -616,7 +616,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--enable-xattr`|启用扩展属性 (xattr) 功能，默认为 false。|
 |`--enable-ioctl` <VersionAdd>1.1</VersionAdd>|启用 ioctl (仅支持 GETFLAGS/SETFLAGS) (默认：false)|
 |`--root-squash value` <VersionAdd>1.1</VersionAdd>|将本地 root 用户 (UID=0) 映射到一个指定用户，如 UID:GID|
-|`--prefix-internal` <VersionAdd>1.1</VersionAdd>|添加 `.jfs` 前缀到所有内部文件 (默认：false)|
+|`--prefix-internal` <VersionAdd>1.1</VersionAdd>|挂载 JuiceFS 后，挂载点下默认创建 `.stats`, `.accesslog` 等虚拟文件。如果这些内部文件和你的应用发生冲突，可以启用该选项，添加 `.jfs` 前缀到所有内部文件。|
 |`-o value`|其他 FUSE 选项，详见 [FUSE 挂载选项](../reference/fuse_mount_options.md)|
 
 #### 元数据相关参数 {#mount-metadata-options}
@@ -627,7 +627,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--backup-meta=3600`|自动备份元数据到对象存储的间隔时间；单位秒，默认 3600，设为 0 表示不备份。|
 |`--heartbeat=12`|发送心跳的间隔（单位秒），建议所有客户端使用相同的心跳值 (默认：12)|
 |`--read-only`|启用只读模式挂载。|
-|`--no-bgjob`|禁用后台任务，默认为 false，也就是说客户端会默认运行后台任务。后台任务包含：<br/><ul><li>清理回收站中过期的文件（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupDeletedFiles` 和 `cleanupTrash`）</li><li>清理引用计数为 0 的 Slice（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupSlices`）</li><li>清理过期的客户端会话（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `CleanStaleSessions`）</li></ul>特别地，碎片合并（Compaction）不受该选项的影响，而是随着文件读写操作，自动判断是否需要合并，然后异步执行（以 Redis 为例，在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go) 中搜索 `compactChunk`）|
+|`--no-bgjob`|禁用后台任务，默认为 false，也就是说客户端会默认运行后台任务。后台任务包含：<br/><ul><li>清理回收站中过期的文件（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupDeletedFiles` 和 `cleanupTrash`）</li><li>清理引用计数为 0 的 Slice（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupSlices`）</li><li>清理过期的客户端会话（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `CleanStaleSessions`）</li></ul>特别地，与[企业版](https://juicefs.com/docs/zh/cloud/guide/background-job/)不同，社区版碎片合并（Compaction）不受该选项的影响，而是随着文件读写操作，自动判断是否需要合并，然后异步执行（以 Redis 为例，在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go) 中搜索 `compactChunk`）|
 |`--atime-mode=noatime` <VersionAdd>1.1</VersionAdd>|控制如何更新 atime（文件最后被访问的时间）。支持以下模式：<br/><ul><li>`noatime`（默认）：仅在文件创建和主动调用 `SetAttr` 时设置，平时访问与修改文件不影响 atime 值。考虑到更新 atime 需要运行额外的事务，对性能有影响，因此默认关闭。</li><li>`relatime`：仅在 mtime（文件内容修改时间）或 ctime（文件元数据修改时间）比 atime 新，或者 atime 超过 24 小时没有更新时进行更新。</li><li>`strictatime`：持续更新 atime</li></ul>|
 |`--skip-dir-nlink value` <VersionAdd>1.1</VersionAdd>|跳过更新目录 nlink 前的重试次数 (仅用于 TKV, 0 代表不重试) (默认：20)|
 
@@ -641,7 +641,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--entry-cache=1`|文件项缓存过期时间；单位为秒，默认为 1。|
 |`--dir-entry-cache=1`|目录项缓存过期时间；单位为秒，默认为 1。|
 |`--open-cache=0`|打开的文件的缓存过期时间，单位为秒，默认为 0，代表关闭该特性。|
-|`--open-cache-limit value` <VersionAdd>1.1</VersionAdd>|允许缓存的最大文件个数 (软限制，0 代表不限制) (默认：10000)|
+|`--open-cache-limit=value` <VersionAdd>1.1</VersionAdd>|允许缓存的最大文件个数 (软限制，0 代表不限制) (默认：10000)|
 
 #### 数据存储参数 {#mount-data-storage-options}
 
@@ -927,15 +927,15 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 |`--list-threads=1` <VersionAdd>1.1</VersionAdd>|并发 `list` 线程数，默认为 1。阅读[并发 `list`](../guide/sync.md#concurrent-list)以了解如何使用。|
 |`--list-depth=1` <VersionAdd>1.1</VersionAdd>|并发 `list` 目录深度，默认为 1。阅读[并发 `list`](../guide/sync.md#concurrent-list)以了解如何使用。|
 |`--no-https`|不要使用 HTTPS，默认为 false。|
-|`--storage-class value` <VersionAdd>1.1</VersionAdd>|目标端的新建文件的存储类型|
+|`--storage-class value` <VersionAdd>1.1</VersionAdd>|目标端的新建文件的存储类型。|
 |`--bwlimit=0`|限制最大带宽，单位 Mbps，默认为 0 表示不限制。|
 
 #### 分布式相关参数 {#sync-cluster-related-options}
 
-|项 | 说明                                                                                  |
-|-|-------------------------------------------------------------------------------------|
-|`--manager-addr=ADDR`| 分布式同步模式中，Manager 节点的监听地址，格式：`<IP>:[port]`，如果不写端口，则监听随机端口。如果没有该参数，则监听本机随机的 IPv4 地址与随机端口 |
-|`--worker=ADDR,ADDR`| 分布式同步模式中，工作节点列表，使用逗号分隔。                                                             |
+|项 | 说明 |
+|-|-|
+|`--manager-addr=ADDR`| 分布式同步模式中，Manager 节点的监听地址，格式：`<IP>:[port]`，如果不写端口，则监听随机端口。如果没有该参数，则监听本机随机的 IPv4 地址与随机端口。|
+|`--worker=ADDR,ADDR`| 分布式同步模式中，工作节点列表，使用逗号分隔。|
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
