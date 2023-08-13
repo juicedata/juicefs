@@ -889,6 +889,8 @@ github.com/pyroscope-io/client v0.7.0 h1:LWuuqPQ1oa6x7BnmUOuo/aGwdX85QGhWZUBYWWW
 github.com/pyroscope-io/client v0.7.0/go.mod h1:4h21iOU4pUOq0prKyDlvYRL+SCKsBc5wKiEtV+rJGqU=
 github.com/pyroscope-io/godeltaprof v0.1.0 h1:UBqtjt0yZi4jTxqZmLAs34XG6ycS3vUTlhEUSq4NHLE=
 github.com/pyroscope-io/godeltaprof v0.1.0/go.mod h1:psMITXp90+8pFenXkKIpNhrfmI9saQnPbba27VIaiQE=
+github.com/pyroscope-io/godeltaprof v0.1.2 h1:MdlEmYELd5w+lvIzmZvXGNMVzW2Qc9jDMuJaPOR75g4=
+github.com/pyroscope-io/godeltaprof v0.1.2/go.mod h1:psMITXp90+8pFenXkKIpNhrfmI9saQnPbba27VIaiQE=
 github.com/qingstor/qingstor-sdk-go/v4 v4.4.0 h1:tbItWtGB1TDfYzqK8dtm6tV+xWU5iYMwL37C6AL5dDs=
 github.com/qingstor/qingstor-sdk-go/v4 v4.4.0/go.mod h1:mDVFtA7+bXQ5xoELTWkoFy1Ad13wtp8jtlnl/RU+zzM=
 github.com/qiniu/dyn v1.3.0/go.mod h1:E8oERcm8TtwJiZvkQPbcAh0RL8jO1G0VXJMW3FAWdkk=

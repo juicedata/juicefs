@@ -198,7 +198,7 @@ require (
 	github.com/pingcap/kvproto v0.0.0-20221129023506-621ec37aac7a // indirect
 	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
-	github.com/pyroscope-io/godeltaprof v0.1.0 // indirect
+	github.com/pyroscope-io/godeltaprof v0.1.2 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rjeczalik/notify v0.9.2 // indirect
