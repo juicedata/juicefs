@@ -171,7 +171,6 @@ SeaweedFS 客户端[具备简单客户端缓存能力](https://github.com/seawee
 
 JuiceFS 客户端支持[元数据以及数据缓存](../../guide/cache_management.md)，提供更丰富的定制空间，允许用户根据自己的应用场景进行调优。
 
-
 ### 对象存储网关
 
 SeaweedFS 可以作为[对象存储的网关（Gateway）](https://github.com/seaweedfs/seaweedfs/wiki/Gateway-to-Remote-Object-Storage)来使用，可以将对象存储中指定的数据预热到本地，在本地发生的数据修改也会异步同步到对象存储中。
