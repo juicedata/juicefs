@@ -292,7 +292,9 @@ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 
 ### `juicefs gc` {#gc}
 
-Deal with leaked objects, and garbage fragments produced by file overwrites. See [Status Check & Maintenance](../administration/status_check_and_maintenance.md#gc).
+If for some reason, a object storage block escape JuiceFS management completely, i.e. the metadata is gone, but the block still persists in the object storage, and cannot be released, this is called an "object leak". If this happens without any special file system manipulation, it could well indicate a bug within JuiceFS, file a [GitHub Issue](https://github.com/juicedata/juicefs/issues/new/choose) to let us know.
+
+Meanwhile, you can run this command to deal with leaked objects. It also deletes stale slices produced by file overwrites. See [Status Check & Maintenance](../administration/status_check_and_maintenance.md#gc).
 
 #### Synopsis
 

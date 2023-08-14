@@ -49,10 +49,11 @@ The first reason is that you may have enabled the trash feature. In order to ens
 
 The second reason is that JuiceFS deletes the data in the object storage asynchronously, so the space change of the object storage will be slower. If you need to immediately clean up the data in the object store that needs to be deleted, you can try running the [`juicefs gc`](reference/command_reference.md#gc) command.
 
-### Why is file system data size different from object storage usage?
+### Why is file system data size different from object storage usage? {#size-inconsistency}
 
 * ["Random write in JuiceFS"](#random-write) produces data fragments, causing higher storage usage for object storage, especially after a large number of overwrites in a short period of time, many fragments will be generated. These fragments continue to occupy space in object storage until they are compacted and released. You shouldn't worry about this because JuiceFS checks for file compaction with every read/write, and cleans up in the client background job. Alternatively, you can manually trigger merges and garbage collection with [`juicefs gc --compact --delete`](./reference/command_reference.md#gc).
-* If [trash](./security/trash.md) is enabled, deleted files as well as data fragments that has already been compacted will be kept for a specified period of time, and then be garbage collected (all carried out in client background job).
+* If [Trash](./security/trash.md) is enabled, deleted files will be kept for a specified period of time, and then be garbage collected (all carried out in client background job).
+* After data fragments are compacted, stale slices will be kept inside Trash as well (not visible to user), following the same expiration settings. To delete this type of data, read [Trash and stale slices](./security/trash.md#gc).
 * If compression is enabled (the `--compress` parameter in the [`format`](./reference/command_reference.md#format) command, disabled by default), object storage usage may be smaller than the actual file size (depending on the compression ratio of different types of files).
 * Different [storage class](reference/how_to_set_up_object_storage.md#storage-class) of the object storage may calculate storage usage differently. The cloud service provider may set the minimum billable size for some storage classes. For example, the [minimum billable size](https://www.alibabacloud.com/help/en/object-storage-service/latest/storage-fees) for Alibaba Cloud OSS IA storage is 64KB. If a file is smaller than 64KB, it will be calculated as 64KB.
 * For self-hosted object storage services, for example MinIO, actual data usage is affected by [storage class settings](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md).

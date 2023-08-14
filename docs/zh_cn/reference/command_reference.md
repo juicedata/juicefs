@@ -292,7 +292,9 @@ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 
 ### `juicefs gc` {#gc}
 
-用来处理「对象泄漏」，以及因为覆盖写而产生的碎片数据的命令。详见[「状态检查 & 维护」](../administration/status_check_and_maintenance.md#gc)。
+如果对象因为某种原因，完全脱离了 JuiceFS 的管理，也就是对象存储上依然还存在，但在 JuiceFS 元数据已经不复存在，无法被回收释放，这种现象称作「对象泄漏」。如果你并没有进行任何特殊操作，那么对象泄露通常昭示着 bug，建议提交 [GitHub Issue](https://github.com/juicedata/juicefs/issues/new/choose)。
+
+与此同时，你可以用该命令清理泄漏对象。顺带一提，该命令还能够清理失效的文件碎片。详见[「状态检查 & 维护」](../administration/status_check_and_maintenance.md#gc)。
 
 #### 概览
 
