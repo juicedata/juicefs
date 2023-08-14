@@ -85,7 +85,7 @@ JuiceFS 的架构在[「技术架构」](../architecture.md)有更详细的介�
 SeaweedFS 与 JuiceFS 都支持通过外部数据库以存储文件系统的元数据信息：
 
 - SeaweedFS 支持多达 [24](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Stores) 种数据库。
-- JuiceFS 对数据库事务能力要求更高（下方会详细介绍），当前支持了 [3 类共 10 种事务型数据库](../../guide/how_to_set_up_metadata_engine.md)。
+- JuiceFS 对数据库事务能力要求更高（下方会详细介绍），当前支持了 [3 类共 10 种事务型数据库](../../reference/how_to_set_up_metadata_engine.md)。
 
 ### 原子性操作
 

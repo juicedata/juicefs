@@ -85,7 +85,7 @@ For details about JuiceFS' architecture, see the [Architecture](../architecture.
 Both SeaweedFS and JuiceFS support storing file system metadata in external databases:
 
 - SeaweedFS supports up to [24 databases](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Stores).
-- JuiceFS has a high requirement for database transaction capabilities and currently supports [10 transactional databases across 3 categories](../../guide/how_to_set_up_metadata_engine.md).
+- JuiceFS has a high requirement for database transaction capabilities and currently supports [10 transactional databases across 3 categories](../../reference/how_to_set_up_metadata_engine.md).
 
 ### Atomic operations
 
