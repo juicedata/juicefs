@@ -171,7 +171,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--encrypt-rsa-key=value`|A path to RSA private key (PEM)|
 |`--encrypt-algo=aes256gcm-rsa`|encrypt algorithm (aes256gcm-rsa, chacha20-rsa) (default: "aes256gcm-rsa")|
 |`--hash-prefix`|add a hash prefix to name of objects (default: false)|
-|`--shards=0`|store the blocks into N buckets by hash of key (default: 0), when N is greater than 0, `bucket` should to be in the form of `%d`, e.g. `--bucket "juicefs-%d"`|
+|`--shards=0`|If your object storage limit speed in a bucket level (or you're using a self-hosted object storage with limited performance), you can store the blocks into N buckets by hash of key (default: 0), when N is greater than 0, `bucket` should to be in the form of `%d`, e.g. `--bucket "juicefs-%d"`. `--shards` cannot be changed afterwards and must be planned carefully ahead.|
 
 #### Management options {#format-management-options}
 
