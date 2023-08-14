@@ -78,13 +78,14 @@ $ tree .trash/2023-08-14-05
 └── 16-18-config.json
 ```
 
-正因如此，JuiceFS v1.1 提供了 [`restore`](../reference/command_reference.md#restore) 子命令来快速恢复大量误删的文件，以上方目录结构为例，恢复操作需要两个步骤：
+正因如此，JuiceFS v1.1 提供了 [`restore`](../reference/command_reference.md#restore) 子命令来快速恢复大量误删的文件，以上方目录结构为例，恢复操作如下：
 
 ```shell
 # 先运行 restore 命令，在回收站内重建目录结构
 $ juicefs restore $META_URL 2023-08-14-05
 
-# 确认目录结构已经重建
+# 预览恢复完毕的目录结构，确定需要恢复的范畴
+# 既可以直接用下方命令完整恢复整个目录，也可以单独用 mv 命令恢复某一部分
 $ tree .trash/2023-08-14-05
 .trash/2023-08-14-05
 └── 1-12-data

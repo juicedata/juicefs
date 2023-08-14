@@ -79,13 +79,14 @@ $ tree .trash/2023-08-14-05
 └── 16-18-config.json
 ```
 
-To resolve such inconvenience, JuiceFS v1.1 provides the [`restore`](../reference/command_reference.md#restore) subcommand to quickly restore deleted files, while preserving its original directory structure. This procedure requires two steps:
+To resolve such inconvenience, JuiceFS v1.1 provides the [`restore`](../reference/command_reference.md#restore) subcommand to quickly restore deleted files, while preserving its original directory structure. Run this procedure as follows:
 
 ```shell
 # Run the restore command to reconstruct directory structure within the Trash
 $ juicefs restore $META_URL 2023-08-14-05
 
-# Verify directory structure has been rebuilt
+# Preview the rebuilt directory structure, and determine the recovery scope
+# You can either recover the entire directory using the below --put-back command, or just a subdir using mv
 $ tree .trash/2023-08-14-05
 .trash/2023-08-14-05
 └── 1-12-data
