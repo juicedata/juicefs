@@ -41,6 +41,10 @@ jobs:
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
   build:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['1.18', '1.19', '1.20', '1.21']
     runs-on: ubuntu-20.04
     steps:
     - name: Check out code
@@ -49,7 +53,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 'oldstable'
+        go-version: ${{ matrix.version }}
         cache: true
       id: go
       
