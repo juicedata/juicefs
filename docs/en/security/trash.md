@@ -4,10 +4,13 @@ sidebar_position: 2
 # Trash
 
 :::note
-This feature requires JuiceFS v1.0.0 or higher
+This feature requires at least JuiceFS v1.0.0, for previous versions, you need to upgrade all JuiceFS clients, and then enable trash using the `config` subcommand, introduced in below sections.
 :::
 
-Data security is crucial for storage system, therefore JuiceFS enables the trash feature by default: files deleted by user will be kept in a hidden directory named `.trash` under JuiceFS root, and wait for expiration.
+JuiceFS enables the trash feature by default, files deleted will be moved in a hidden directory named `.trash` under the file system root, and kept for specified period of time before expiration. Until actual expiration, file system usage (check using `df -h`) will not change, this is also true with the corresponding object storage data.
+
+When using `juicefs format` command to initialize JuiceFS volume, users are allowed to specify `--trash-days <val>` to set the number of days which files are kept in the `.trash` directory. Within this period, user-removed files are not actually purged, so the file system usage shown in the output of `df` command will not decrease, and the blocks in the object storage will still exist.
+
 
 With trash enabled, if application frequently delete or overwrite files, expect larger usage in object storage than the actual file system, because trash directory contain the following type of files:
 
@@ -15,8 +18,6 @@ With trash enabled, if application frequently delete or overwrite files, expect 
 2. Data blocks created during file overwrites (see [FAQ](../faq.md#random-write)) are kept in trash as well, but users won't be able to see these files, thus cannot be force deleted by default, see [Recovery/Purge](#recover-purge)
 
 ## Configure {#configure}
-
-When using `juicefs format` command to initialize JuiceFS volume, users are allowed to specify `--trash-days <val>` to set the number of days which files are kept in the `.trash` directory. Within this period, user-removed files are not actually purged, so the file system usage shown in the output of `df` command will not decrease, and the blocks in the object storage will still exist.
 
 - the value of `trash-days` defaults to 1, which means files in trash will be automatically purged after ONE day.
 - use `--trash-days 0` to disable this feature; the trash will be emptied in a short time, and all files removed afterwards will be purged immediately.
