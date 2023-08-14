@@ -14,11 +14,11 @@ This document compares the key attributes of JuiceFS and SeaweedFS in a table an
 | :--- | :--- | :--- |
 | Metadata engine | Supports multiple databases | The Community Edition supports various databases; the Enterprise Edition uses an in-house, high-performance metadata engine. |
 | Metadata operation atomicity | Not guaranteed | The Community Edition ensures atomicity through database transactions; the Enterprise Edition ensures atomicity within the metadata engine. |
-| Change log | Supported | Exclusive to the Enterprise Edition |
+| Changelog | Supported | Exclusive to the Enterprise Edition |
 | Data storage | Self-contained | Relies on object storage |
 | Erasure coding | Supported | Relies on object storage |
 | Data consolidation | Supported | Relies on object storage |
-| File splitting | 8 MB | 64 MB logical blocks + 4 MB physical storage blocks |
+| File splitting | 8MB | 64MB logical blocks + 4MB physical storage blocks |
 | Tiered storage | Supported | Relies on object storage |
 | Data compression | Supported (based on file extensions) | Supported (configured globally) |
 | Storage encryption | Supported | Supported |
@@ -28,7 +28,7 @@ This document compares the key attributes of JuiceFS and SeaweedFS in a table an
 | HDFS compatibility | Basic | Full |
 | CSI Driver | Supported | Supported |
 | Client cache | Unsupported | Supported |
-| Cluster data replication | Bidirectional asynchronous, multiple modes | Exclusive to the Enterprise Edition |
+| Cluster data replication | Unidirectional and bidirectional replication is supported | Exclusive to the Enterprise Edition, only unidirectional replication is supported |
 | Cloud data cache | Supported (manual synchronization) | Exclusive to the Enterprise Edition |
 | Trash | Unsupported | Supported |
 | Operations and monitoring | Supported | Supported |
@@ -85,7 +85,7 @@ For details about JuiceFS' architecture, see the [Architecture](../architecture.
 Both SeaweedFS and JuiceFS support storing file system metadata in external databases:
 
 - SeaweedFS supports up to [24 databases](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Stores).
-- JuiceFS has a high requirement for database transaction capabilities and currently supports 10 transactional databases across 3 categories.
+- JuiceFS has a high requirement for database transaction capabilities and currently supports [10 transactional databases across 3 categories](../../guide/how_to_set_up_metadata_engine.md).
 
 ### Atomic operations
 
@@ -93,20 +93,20 @@ JuiceFS ensures strict atomicity for every operation, which requires strong tran
 
 SeaweedFS provides weaker atomicity guarantees for operations. It only uses transactions of some databases (SQL, ArangoDB, and TiKV) during rename operations, with a lower requirement for database transaction capabilities. Additionally, during the rename operation, SeaweedFS does not lock the original directory or file during the metadata copying process. This may result in data loss under high loads.
 
-### Change logs and related features
+### Changelog and related features
 
-SeaweedFS generates change logs for all metadata operations. The change logs can be transmitted and replayed. This ensures data safety and enables features like file system data replication and operation auditing.
+SeaweedFS generates changelog for all metadata operations. The changelog can be transmitted and replayed. This ensures data safety and enables features like file system data replication and operation auditing.
 
 SeaweedFS supports file system data replication between multiple clusters. It offers two asynchronous data replication modes:
 
 - Active-Active. In this mode, both clusters participate in read and write operations and they synchronize data bidirectionally. When there are more than two nodes in the cluster, certain operations such as renaming directories are subject to certain restrictions.
 - Active-Passive. In this mode, a primary-secondary relationship is established, and the passive side is read-only.
 
-Both modes achieve consistency between different cluster data by transmitting and applying change logs. Each change log has a signature to ensure that the same message is applied only once.
+Both modes achieve consistency between different cluster data by transmitting and applying changelog. Each changelog has a signature to ensure that the same message is applied only once.
 
-The JuiceFS Community Edition does not implement a change log, but it can use its inherent data replication capabilities from the metadata engine and object storage to achieve file system mirroring. For example, both [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) and [Redis](https://redis.io/docs/management/replication) only support data replication. When combined with [S3's object replication feature](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html), either of them can enable a setup similar to SeaweedFS' Active-Passive mode without relying on JuiceFS.
+The JuiceFS Community Edition does not implement a changelog, but it can use its inherent data replication capabilities from the metadata engine and object storage to achieve file system mirroring. For example, both [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) and [Redis](https://redis.io/docs/management/replication) only support data replication. When combined with [S3's object replication feature](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html), either of them can enable a setup similar to SeaweedFS' Active-Passive mode without relying on JuiceFS.
 
-It's worth noting that the JuiceFS Enterprise Edition implements the metadata engine based on change logs. It supports [data replication](https://juicefs.com/docs/cloud/guide/replication) and [mirror file system](https://juicefs.com/docs/cloud/guide/mirror).
+It's worth noting that the JuiceFS Enterprise Edition implements the metadata engine based on changelog. It supports [data replication](https://juicefs.com/docs/cloud/guide/replication) and [mirror file system](https://juicefs.com/docs/cloud/guide/mirror).
 
 ## Storage comparison
 
@@ -118,8 +118,8 @@ JuiceFS' data storage relies on object storage services, and relevant features a
 
 Both SeaweedFS and JuiceFS split files into smaller chunks before persisting them in the underlying data system:
 
-- SeaweedFS splits files into 8 MB blocks. For extremely large files (over 8 GB), it also stores the chunk index in the underlying data system.
-- JuiceFS uses 64 MB logical data blocks (chunks), which are further divided into 4 MB blocks to be uploaded to object storage. For details, see [How JuiceFS stores files](../architecture.md#how-juicefs-store-files).
+- SeaweedFS splits files into 8MB blocks. For extremely large files (over 8GB), it also stores the chunk index in the underlying data system.
+- JuiceFS uses 64MB logical data blocks (chunks), which are further divided into 4MB blocks to be uploaded to object storage. For details, see [How JuiceFS stores files](../architecture.md#how-juicefs-store-files).
 
 ### Tiered storage
 
@@ -175,15 +175,15 @@ Both support a CSI Driver. For details, see:
 
 ### Client cache
 
+SeaweedFS client is equipped with [basic cache capabilities](https://github.com/seaweedfs/seaweedfs/wiki/FUSE-Mount), but its documentation weren't located at the time of writing, you can search for `cache` in the [source code](https://github.com/seaweedfs/seaweedfs/blob/master/weed/command/mount.go).
+
 JuiceFS' client supports [metadata and data caching](../../guide/cache_management.md), allowing users to optimize based on their application's needs.
 
-However, SeaweedFS lacks client-side caching capabilities.
+### Object storage gateway
 
-### Object storage data cache
+SeaweedFS can be used as an [object storage gateway](https://github.com/seaweedfs/seaweedfs/wiki/Gateway-to-Remote-Object-Storage), you can manually warm up specified data to local cache directory, while local modification is asynchronously uploaded to object storage.
 
-SeaweedFS can be used as a caching layer for object storage, supporting manual data warm-up via commands. Data can be locally modified and asynchronously synced to object storage.
-
-JuiceFS stores files in split form. Due to its architecture, it does not support serving as a cache for object storage. However, the JuiceFS Enterprise Edition has a separate feature to provide caching services for existing data in object storage. This is similar to SeaweedFS' functionality.
+JuiceFS stores files in split form. Due to its architecture, it does not support serving as a cache for object storage. However, the JuiceFS Enterprise Edition has a standalone feature to provide caching services for existing data in object storage, which is similar to SeaweedFS' object storage gateway.
 
 ### Trash
 

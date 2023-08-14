@@ -28,7 +28,7 @@ SeaweedFS 和 JuiceFS 都采用了对商用更友好的 Apache License 2.0，但
 | HDFS 兼容性 | 基本 | 完整 |
 | CSI 驱动 | 支持 | 支持 |
 | 客户端缓存 | 不支持 | 支持 |
-| 集群数据复制 | 双向异步、多模式 | 仅企业版支持 |
+| 集群数据复制 | 支持单向、双向复制模式 | 仅企业版支持单向复制 |
 | 云上数据缓存 | 支持（手动同步） | 仅企业版支持 |
 | 回收站 | 不支持 | 支持 |
 | 运维与监控 | 支持 | 支持 |
@@ -85,7 +85,7 @@ JuiceFS 的架构在[「技术架构」](../architecture.md)有更详细的介�
 SeaweedFS 与 JuiceFS 都支持通过外部数据库以存储文件系统的元数据信息：
 
 - SeaweedFS 支持多达 [24](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Stores) 种数据库。
-- JuiceFS 对数据库事务能力要求更高（下方会详细介绍），当前支持了 3 类共 10 种事务型数据库。
+- JuiceFS 对数据库事务能力要求更高（下方会详细介绍），当前支持了 [3 类共 10 种事务型数据库](../../guide/how_to_set_up_metadata_engine.md)。
 
 ### 原子性操作
 
@@ -94,14 +94,14 @@ SeaweedFS 与 JuiceFS 都支持通过外部数据库以存储文件系统的元�
 
 ### 变更日志以及相关功能
 
-SeaweedFS 会为所有的元数据操作生成变更日志（change log），日志可以被传输、重放，保证数据安全的同时，还能用来实现文件系统数据复制、操作审计等功能。
+SeaweedFS 会为所有的元数据操作生成变更日志（changelog），日志可以被传输、重放，保证数据安全的同时，还能用来实现文件系统数据复制、操作审计等功能。
 
 SeaweedFS 支持在多个集群之间进行文件系统数据复制，存在两种异步数据复制模式：
 
 - 「Active-Active」：此模式中，两个集群都能够参与文件写入并双向同步。如果集群节点数量超过 2，SeaweedFS 的一些操作（如重命名目录）会受到一些限制。
 - 「Active-Passive」：此模式是主从关系，Passive 一方只读。
 
-这两种模式都是通过传递 change log 再应用的机制实现了不同集群数据间的一致性，对于每一条 change log，其中会有一个签名信息以保证同一个修改不会被循环多次。
+这两种模式都是通过传递 changelog 再应用的机制实现了不同集群数据间的一致性，对于每一条 changelog，其中会有一个签名信息以保证同一个修改不会被循环多次。
 
 JuiceFS 社区版没有实现变更日志，但可以自行使用元数据引擎和对象存储自身的数据复制能力实现文件系统镜像功能，比方说 [MySQL](https://dev.mysql.com/doc/refman/8.0/en/replication.html) 或 [Redis](https://redis.io/docs/management/replication) 仅支持数据复制，配合上 [S3 的复制对象功能](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/replication.html)，就能脱离 JuiceFS 实现类似 SeaweedFS 的 Active-Passive 模式。
 
@@ -115,8 +115,8 @@ JuiceFS 社区版没有实现变更日志，但可以自行使用元数据引擎
 
 SeaweedFS 与 JuiceFS 都会将文件拆分成若干个小块再持久化到底层的数据系统中：
 
-- SeaweedFS 将文件拆分成 8 MB 的块，对于超大文件（超过 8 GB），它会将 Chunk 索引也保存到底层的数据系统中。
-- JuiceFS 内部会使用 64 MB 的逻辑数据块（Chunk），再拆成 4 MB 的 Block 上传至对象存储，这点在[架构文档](../architecture.md#how-juicefs-store-files)中有更详细的介绍。
+- SeaweedFS 将文件拆分成 8MB 的块，对于超大文件（超过 8GB），它会将 Chunk 索引也保存到底层的数据系统中。
+- JuiceFS 内部会使用 64MB 的逻辑数据块（Chunk），再拆成 4MB 的 Block 上传至对象存储，这点在[架构文档](../architecture.md#how-juicefs-store-files)中有更详细的介绍。
 
 ### 分层存储
 
@@ -143,7 +143,7 @@ JuiceFS [完全兼容 POSIX](../../reference/posix_compatibility.md)，而 Seawe
 
 JuiceFS 实现了 [S3 网关](https://juicefs.com/docs/zh/community/s3_gateway)，因此如果有需要，可以通过 S3 API 直接访问文件系统，也能使用 s3cmd、AWS CLI、MinIO Client（mc）等工具直接管理文件系统。
 
-SeaweedFS 当前[支持部分 S3 API](https://github.com/seaweedfs/seaweedfs/wiki/Amazon-S3-API)，覆盖了常用的读写查删等请求，对一些特定的请求（如 Read）还做了功能上的扩展。。
+SeaweedFS 当前[支持部分 S3 API](https://github.com/seaweedfs/seaweedfs/wiki/Amazon-S3-API)，覆盖了常用的读写查删等请求，对一些特定的请求（如 Read）还做了功能上的扩展。
 
 ### WebDAV
 
@@ -167,11 +167,14 @@ JuiceFS [完整兼容 HDFS API](../../deployment/hadoop_java_sdk.md)。包括 Ha
 
 ### 客户端缓存
 
-JuiceFS 客户端支持[元数据以及数据缓存](../../guide/cache_management.md)，允许用户根据自己的应用场景进行调优，而 SeaweedFS 不具备客户端缓存能力。
+SeaweedFS 客户端[具备简单客户端缓存能力](https://github.com/seaweedfs/seaweedfs/wiki/FUSE-Mount)，由于在写作期间未能找到具体文档，可以直接在其[源码](https://github.com/seaweedfs/seaweedfs/blob/master/weed/command/mount.go)中搜索 `cache` 相关字样。
 
-### 对象存储数据缓存
+JuiceFS 客户端支持[元数据以及数据缓存](../../guide/cache_management.md)，提供更丰富的定制空间，允许用户根据自己的应用场景进行调优。
 
-SeaweedFS 可以作为对象存储的缓存层来使用，支持通过命令手动预热数据。数据也支持本地修改，会异步同步到对象存储中。
+
+### 对象存储网关
+
+SeaweedFS 可以作为[对象存储的网关（Gateway）](https://github.com/seaweedfs/seaweedfs/wiki/Gateway-to-Remote-Object-Storage)来使用，可以将对象存储中指定的数据预热到本地，在本地发生的数据修改也会异步同步到对象存储中。
 
 由于 JuiceFS 使用对象存储的方式是将文件进行切分存储，因架构所限，不支持作为对象存储的缓存服务。但是在 JuiceFS 企业版，我们开发了单独的功能，为对象存储中已有的数据提供缓存服务，功能类似 SeaweedFS。
 
@@ -184,4 +187,4 @@ JuiceFS 支持并默认开启[回收站](../../security/trash.md)功能，删除
 二者均提供完善的运维和排查调优方案：
 
 * JuiceFS 可以通过 [`juicefs stats`](../../administration/fault_diagnosis_and_analysis.md#stats)，[`juicefs profile`](../../administration/fault_diagnosis_and_analysis.md#profile) 来实时观测文件系统性能。也可以通过 [`metrics API`](../../administration/monitoring.md#collect-metrics) 将监控数据接入到 Prometheus，用 Grafana 进行可视化和监控告警。
-* SeaweedFS 可以通过 [`weed shell``](https://github.com/seaweedfs/seaweedfs/wiki/weed-shell) 来交互式执行运维工作，例如查看当前集群状态、列举文件列表。SeaweedFS 同时支持 [push 和 pull 方式](https://github.com/seaweedfs/seaweedfs/wiki/System-Metrics) 对接 Prometheus。
+* SeaweedFS 可以通过 [`weed shell`](https://github.com/seaweedfs/seaweedfs/wiki/weed-shell) 来交互式执行运维工作，例如查看当前集群状态、列举文件列表。SeaweedFS 同时支持 [push 和 pull 方式](https://github.com/seaweedfs/seaweedfs/wiki/System-Metrics) 对接 Prometheus。
