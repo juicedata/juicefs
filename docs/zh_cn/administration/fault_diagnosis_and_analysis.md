@@ -177,7 +177,7 @@ JuiceFS 客户端提供 `profile` 和 `stats` 两个子命令来对性能数据�
 
 [`juicefs profile`](../reference/command_reference.md#profile) 会对[「文件系统访问日志」](#access-log)进行汇总，运行 `juicefs profile MOUNTPOINT` 命令，便能看到根据最新访问日志获取的各个文件系统操作的实时统计信息：
 
-![](../images/juicefs-profiling.gif)
+![JuiceFS-profiling](../images/juicefs-profiling.gif)
 
 除了对挂载点进行实时分析，该命令还提供回放模式，可以对预先收集的日志进行回放分析：
 
@@ -201,7 +201,7 @@ juicefs profile /tmp/juicefs.accesslog --uid 12345
 
 [`juicefs stats`](../reference/command_reference.md#stats) 命令通过读取 JuiceFS 客户端的监控数据，以类似 Linux `dstat` 工具的形式实时打印各个指标的每秒变化情况：
 
-![](../images/juicefs_stats_watcher.png)
+![juicefs_stats_watcher](../images/juicefs_stats_watcher.png)
 
 各个板块指标介绍：
 

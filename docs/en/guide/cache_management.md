@@ -65,7 +65,7 @@ In comparison, JuiceFS Enterprise Edition provides richer functionalities around
 
 To improve performance, JuiceFS also provides various caching mechanisms for data, including page cache in the kernel, local file system cache in client host, and read/write buffer in client process itself. Read requests will try the kernel page cache, the client process buffer, and the local disk cache in turn. If the data requested is not found in any level of the cache, it will be read from the object storage, and also be written into every level of the cache asynchronously to improve the performance of the next access.
 
-![](../images/juicefs-cache.png)
+![JuiceFS-cache](../images/juicefs-cache.png)
 
 ### Read/Write buffer {#buffer-size}
 

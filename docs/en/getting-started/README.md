@@ -61,7 +61,7 @@ An output similar to the following will return if the file system creation is co
 
 As you can see from the output, the file system uses SQLite as the metadata storage engine. The database file is located in the current directory with the file name `myjfs.db`, which creates a table to store all the metadata of the file system `myjfs`.
 
-![](../images/sqlite-info.png)
+![SQLite-info](../images/sqlite-info.png)
 
 Since no storage-related options are specified in this example, the local disk is used as the storage medium by default. According to the output, the file system storage path is `file:///Users/herald/.juicefs/local/myjfs/`.
 
@@ -97,7 +97,7 @@ The following command mounts the `myjfs` file system to the `~/jfs` folder:
 juicefs mount sqlite3://myjfs.db ~/jfs
 ```
 
-![](../images/sqlite-mount-local.png)
+![SQLite-mount-local](../images/sqlite-mount-local.png)
 
 The client mounts the file system in the foreground by default. As you can see in the above image, the program keeps running in the current terminal. To unmount the file system, press <kbd>Ctrl</kbd> + <kbd>C</kbd> or close the terminal window.
 

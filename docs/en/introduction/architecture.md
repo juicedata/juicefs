@@ -7,7 +7,7 @@ description: This article introduces the technical architecture of JuiceFS and i
 
 The JuiceFS file system consists of three parts:
 
-![](../images/juicefs-arch.svg)
+![JuiceFS-arch](../images/juicefs-arch.svg)
 
 **JuiceFS Client**: The JuiceFS client handles all file I/O operations, including background tasks like data compaction and trash file expiration. It communicates with both the object storage and metadata engine. The client supports multiple access methods:
 

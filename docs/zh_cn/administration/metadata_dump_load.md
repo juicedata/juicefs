@@ -42,7 +42,7 @@ juicefs dump redis://192.168.1.6:6379/1 meta-dump.json
 
 备份的文件存储在对象存储的 `meta` 目录中，它是一个独立于数据存储的目录，在挂载点中不可见，也不会与数据存储之间产生影响，用对象存储的文件浏览器即可查看和管理。
 
-![](../images/meta-auto-backup-list.png)
+![meta-auto-backup-list](../images/meta-auto-backup-list.png)
 
 默认情况下，JuiceFS 客户端每小时备份一次元数据，自动备份的频率可以在挂载文件系统时通过 `--backup-meta` 选项进行调整，例如，要设置为每 8 个小时执行一次自动备份：
 
