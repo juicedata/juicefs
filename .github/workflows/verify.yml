@@ -32,7 +32,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.51.0
+          version: v1.49.0
           args: --timeout 10m
           skip-pkg-cache: true  # don't cache or restore ~/go/pkg.
           skip-build-cache: true # don't cache or restore ~/.cache/go-build
