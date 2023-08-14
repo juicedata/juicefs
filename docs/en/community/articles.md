@@ -2,6 +2,7 @@
 title: JuiceFS Article Collection
 sidebar_position: 2
 slug: /articles
+description: Explore JuiceFS' collection of technical articles and real-world case studies in AI, machine learning, deep learning, big data, data sharing, backup, and recovery scenarios.
 ---
 
 JuiceFS is widely applicable to various data storage and sharing scenarios. This page compiles its technical articles and real-world case studies. Explore valuable insights and practical examples to deepen your understanding of JuiceFS and related applications. We encourage all community users to contribute and maintain this list.
@@ -16,6 +17,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Big data
 
+- [Migrating Hadoop to the Cloud: 2x Storage Capacity & Fewer Ops Costs](https://juicefs.com/en/blog/user-stories/migrating-hadoop-to-cloud-2x-storage-capacity-fewer-ops-costs), 2023-08-09, Chang Liu & Yangliang Li @ Yimian
 - [An Elastic Platform & Simplified Storage Achieved by Migrating to Spark+K8s+JuiceFS](https://juicefs.com/en/blog/user-stories/scalable-computing-unified-data-storage-ops-cloud-spark-k8s-juicefs), 2023-05-10, Fengyu Cao @ Douban
 - [Gaoding Technology Saves 60% Of Storage Cost Used By Elasticsearch](https://juicefs.com/en/blog/user-stories/gaoding-with-juicefs), 2021-10-09, Gaoding SRE Team
 - [Shopee x JuiceFS: ClickHouse Cold and Hot Data Separation Storage Architecture and Practice](https://juicefs.com/en/blog/user-stories/shopee-clickhouse-with-juicefs), 2021-10-09, Teng @ Shopee
