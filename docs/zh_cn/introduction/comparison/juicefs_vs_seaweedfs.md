@@ -6,7 +6,7 @@ description: 本文对比 JuiceFS 和 SeaweedFS 的架构、存储机制、客�
 
 [SeaweedFS](https://github.com/seaweedfs/seaweedfs) 与 [JuiceFS](https://github.com/juicedata/juicefs) 皆是开源的高性能分布式文件存储系统，但二者存在诸多设计区别与功能差异，本章将会详述他们的区别和各自适用场景，帮助你的团队进行技术选型。
 
-SeaweedFS 和 JuiceFS 都采用了对商用更友好的 Apache License 2.0，但 JuiceFS 分为[社区版](https://juicefs.com/docs/zh/community/introduction)和[企业版](https://juicefs.com/zh-cn/blog/solutions/juicefs-enterprise-edition-features-vs-community-edition)，企业版提供多种交付形式，例如私有部署和[云服务](https://juicefs.com/docs/zh/cloud)。JuiceFS 企业版使用自研的闭源元数据引擎，其客户端则与社区版大量共享代码。你可以通过下表速查两者的关键特性对比，然后在本文中选取感兴趣的话题详细阅读。
+SeaweedFS 和 JuiceFS 都采用了对商用更友好的 Apache License 2.0，但 JuiceFS 分为[社区版](https://juicefs.com/docs/zh/community/introduction)和[企业版](https://juicefs.com/zh-cn/blog/solutions/juicefs-enterprise-edition-features-vs-community-edition)，企业版提供多种交付形式，例如私有部署和[云服务](https://juicefs.com/docs/zh/cloud)。JuiceFS 企业版使用自研的闭源元数据引擎，其客户端则与[社区版](https://github.com/juicedata/juicefs)大量共享代码。你可以通过下表速查两者的关键特性对比，然后在本文中选取感兴趣的话题详细阅读。
 
 ## JuiceFS 和 SeaweedFS 对比一览
 
@@ -175,7 +175,7 @@ JuiceFS 客户端支持[元数据以及数据缓存](../../guide/cache_managemen
 
 SeaweedFS 可以作为[对象存储的网关（Gateway）](https://github.com/seaweedfs/seaweedfs/wiki/Gateway-to-Remote-Object-Storage)来使用，可以将对象存储中指定的数据预热到本地，在本地发生的数据修改也会异步同步到对象存储中。
 
-由于 JuiceFS 使用对象存储的方式是将文件进行切分存储，因架构所限，不支持作为对象存储的缓存服务。但是在 JuiceFS 企业版，我们开发了单独的功能，为对象存储中已有的数据提供缓存服务，功能类似 SeaweedFS。
+由于 JuiceFS 使用对象存储的方式是将文件进行切分存储，因架构所限，不支持直接作为对象存储的网关或者缓存层。但是在 JuiceFS 企业版，我们开发了单独的功能，为对象存储中已有的数据提供缓存服务，功能类似 SeaweedFS。
 
 ### 回收站
 

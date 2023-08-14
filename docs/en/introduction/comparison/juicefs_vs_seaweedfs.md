@@ -183,7 +183,7 @@ JuiceFS' client supports [metadata and data caching](../../guide/cache_managemen
 
 SeaweedFS can be used as an [object storage gateway](https://github.com/seaweedfs/seaweedfs/wiki/Gateway-to-Remote-Object-Storage), you can manually warm up specified data to local cache directory, while local modification is asynchronously uploaded to object storage.
 
-JuiceFS stores files in split form. Due to its architecture, it does not support serving as a cache for object storage. However, the JuiceFS Enterprise Edition has a standalone feature to provide caching services for existing data in object storage, which is similar to SeaweedFS' object storage gateway.
+JuiceFS stores files in split form. Due to its architecture, it does not support serving as a cache for object storage or a cache layer. However, the JuiceFS Enterprise Edition has a standalone feature to provide caching services for existing data in object storage, which is similar to SeaweedFS' object storage gateway.
 
 ### Trash
 
