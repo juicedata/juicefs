@@ -153,4 +153,3 @@ Several caveats on Trash privileges:
 * When JuiceFS Client is started by a non-root user, add the `-o allow_root` option or trash cannot be emptied normally.
 * The `.trash` directory can only be accessed from the file system root, thus not available for sub-directory mount points.
 * User cannot create new files inside the trash directory, and only root are allowed to move or delete files in trash.
-
