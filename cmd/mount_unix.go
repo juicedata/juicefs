@@ -131,21 +131,6 @@ func fuseFlags() []cli.Flag {
 }
 
 func mount_flags() []cli.Flag {
-	var defaultLogDir = "/var/log"
-	switch runtime.GOOS {
-	case "linux":
-		if os.Getuid() == 0 {
-			break
-		}
-		fallthrough
-	case "darwin":
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			logger.Fatalf("%v", err)
-			return nil
-		}
-		defaultLogDir = path.Join(homeDir, ".juicefs")
-	}
 	selfFlags := []cli.Flag{
 		&cli.BoolFlag{
 			Name:    "d",
@@ -158,7 +143,7 @@ func mount_flags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "log",
-			Value: path.Join(defaultLogDir, "juicefs.log"),
+			Value: path.Join(getDefaultLogDir(), "juicefs.log"),
 			Usage: "path of log file when running in background",
 		},
 		&cli.BoolFlag{

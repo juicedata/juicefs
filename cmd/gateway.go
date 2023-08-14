@@ -23,10 +23,12 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"path"
 	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/juicedata/godaemon"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -43,8 +45,18 @@ import (
 func cmdGateway() *cli.Command {
 	selfFlags := []cli.Flag{
 		&cli.StringFlag{
+			Name:  "log",
+			Usage: "path for gateway log",
+			Value: path.Join(getDefaultLogDir(), "juicefs-gateway.log"),
+		},
+		&cli.StringFlag{
 			Name:  "access-log",
 			Usage: "path for JuiceFS access log",
+		},
+		&cli.BoolFlag{
+			Name:    "d",
+			Aliases: []string{"background"},
+			Usage:   "run in background",
 		},
 		&cli.BoolFlag{
 			Name:  "no-banner",
@@ -175,10 +187,44 @@ func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, er
 	)
 }
 
+func makeDaemonForSvc(c *cli.Context, m meta.Meta) error {
+	var attrs godaemon.DaemonAttr
+	logfile := c.String("log")
+	attrs.OnExit = func(stage int) error {
+		return nil
+	}
+
+	// the current dir will be changed to root in daemon,
+	// so the mount point has to be an absolute path.
+	if godaemon.Stage() == 0 {
+		var err error
+		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		logger.Infof("open log file %s: %s", logfile, err)
+		if err != nil {
+			logger.Errorf("open log file %s: %s", logfile, err)
+		}
+	}
+	if godaemon.Stage() <= 1 {
+		err := m.Shutdown()
+		if err != nil {
+			logger.Errorf("shutdown: %s", err)
+		}
+	}
+	_, _, err := godaemon.MakeDaemon(&attrs)
+	return err
+}
+
 func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.FileSystem) {
 	removePassword(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
+
+	if c.Bool("background") {
+		if err := makeDaemonForSvc(c, metaCli); err != nil {
+			logger.Fatalf("make daemon: %s", err)
+		}
+	}
+
 	format, err := metaCli.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)

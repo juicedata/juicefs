@@ -22,6 +22,7 @@ package cmd
 
 import (
 	"os"
+	"path"
 
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/urfave/cli/v2"
@@ -46,8 +47,18 @@ func cmdWebDav() *cli.Command {
 			Usage: "disallow list a directory",
 		},
 		&cli.StringFlag{
+			Name:  "log",
+			Usage: "path for WebDAV log",
+			Value: path.Join(getDefaultLogDir(), "juicefs-webdav.log"), //nolint:typecheck
+		},
+		&cli.StringFlag{
 			Name:  "access-log",
 			Usage: "path for JuiceFS access log",
+		},
+		&cli.BoolFlag{
+			Name:    "d",
+			Aliases: []string{"background"},
+			Usage:   "run in background",
 		},
 	}
 
