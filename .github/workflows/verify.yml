@@ -9,6 +9,7 @@ on:
       - 'docs/**'
       - '**.md'
       - '.github/**'
+      - '!.github/workflows/verify.yml'
   pull_request:
     branches:
       - 'main'
@@ -17,6 +18,7 @@ on:
       - 'docs/**'
       - '**.md'
       - '.github/**'
+      - '!.github/workflows/verify.yml'
   workflow_dispatch:
 
 jobs:
@@ -25,12 +27,19 @@ jobs:
     steps:
       - uses: actions/setup-go@v3
         with:
-          go-version: 'oldstable'
+          go-version: '1.18'
+
       - uses: actions/checkout@v3
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.49.0
+          version: v1.51.0
+            
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        # if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
   build:
     runs-on: ubuntu-20.04
     steps:
@@ -76,3 +85,9 @@ jobs:
         sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
         make juicefs.fdb
         ./juicefs.fdb version
+
+    - name: Setup upterm session
+      if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+      # if: failure()
+      timeout-minutes: 60
+      uses: lhotari/action-upterm@v1
