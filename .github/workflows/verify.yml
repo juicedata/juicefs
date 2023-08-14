@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - 'release-**'
+    paths:
+      - '.github/workflows/verify.yml'
     paths-ignore:
       - 'docs/**'
       - '**.md'
@@ -13,6 +15,8 @@ on:
     branches:
       - 'main'
       - 'release-**'
+    paths:
+      - '.github/workflows/verify.yml'
     paths-ignore:
       - 'docs/**'
       - '**.md'
