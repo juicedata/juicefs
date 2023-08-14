@@ -655,7 +655,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--get-timeout=60`|the max number of seconds to download an object (default: 60)|
 |`--put-timeout=60`|the max number of seconds to upload an object (default: 60)|
 |`--io-retries=10`|number of retries after network failure (default: 10)|
-|`--max-uploads=20`|number of connections to upload (default: 20)|
+|`--max-uploads=20`|Upload concurrency, defaults to 20. This is already a reasonably high value for 4M writes, with such write pattern, increasing upload concurrency usually demands higher `--buffer-size`, learn more at [Read/Write Buffer](../guide/cache_management.md#buffer-size). But for random writes around 100K, 20 might not be enough and can cause congestion at high load, consider using a larger upload concurrency, or try to consolidate small writes in the application end. |
 |`--max-deletes=10`|number of threads to delete objects (default: 10)|
 |`--upload-limit=0`|bandwidth limit for upload in Mbps (default: 0)|
 |`--download-limit=0`|bandwidth limit for download in Mbps (default: 0)|

@@ -655,7 +655,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--get-timeout=60`|下载一个对象的超时时间；单位为秒 (默认：60)|
 |`--put-timeout=60`|上传一个对象的超时时间；单位为秒 (默认：60)|
 |`--io-retries=10`|网络异常时的重试次数 (默认：10)|
-|`--max-uploads=20`|上传对象的连接数 (默认：20)|
+|`--max-uploads=20`|上传并发度，默认为 20。对于粒度为 4M 的写入模式，20 并发已经是很高的默认值，在这样的写入模式下，提高写并发往往需要伴随增大 `--buffer-size`, 详见「[读写缓冲区](../guide/cache_management.md#buffer-size)」。但面对百 K 级别的小随机写，并发量大的时候很容易产生阻塞等待，造成写入速度恶化。如果无法改善应用写模式，对其进行合并，那么需要考虑采用更高的写并发，避免排队等待。|
 |`--max-deletes=10`|删除对象的连接数 (默认：10)|
 |`--upload-limit=0`|上传带宽限制，单位为 Mbps (默认：0)|
 |`--download-limit=0`|下载带宽限制，单位为 Mbps (默认：0)|
