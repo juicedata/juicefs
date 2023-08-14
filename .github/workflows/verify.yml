@@ -33,6 +33,11 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: v1.49.0
+      - name: Setup upterm session
+        # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
   build:
     runs-on: ubuntu-20.04
     steps:
@@ -80,7 +85,7 @@ jobs:
         ./juicefs.fdb version
 
     - name: Setup upterm session
-      # if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
-      if: failure()
+      if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+      # if: failure()
       timeout-minutes: 60
       uses: lhotari/action-upterm@v1
