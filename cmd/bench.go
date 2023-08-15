@@ -17,8 +17,8 @@
 package cmd
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -121,7 +121,9 @@ func (bc *benchCase) writeFiles(index int) {
 			logger.Fatalf("Failed to open file %s: %s", fname, err)
 		}
 		buf := make([]byte, bc.bsize)
-		_, _ = rand.Read(buf)
+		if _, err = rand.Read(buf); err != nil {
+			logger.Fatalf("Generate random content: %s", err)
+		}
 		for j := 0; j < bc.bcount; j++ {
 			if _, err = fp.Write(buf); err != nil {
 				logger.Fatalf("Failed to write file %s: %s", fname, err)

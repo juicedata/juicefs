@@ -38,7 +38,6 @@ var resolver = dnscache.New(time.Minute)
 var httpClient *http.Client
 
 func init() {
-	rand.Seed(time.Now().Unix())
 	httpClient = &http.Client{
 		Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
@@ -61,7 +60,7 @@ func init() {
 				}
 				var conn net.Conn
 				n := len(ips)
-				first := rand.Intn(n)
+				first := rand.New(rand.NewSource(time.Now().Unix())).Intn(n)
 				dialer := &net.Dialer{Timeout: time.Second * 10}
 				for i := 0; i < n; i++ {
 					ip := ips[(first+i)%n]

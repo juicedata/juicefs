@@ -18,11 +18,11 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"os"
 	"os/user"
 	"path/filepath"

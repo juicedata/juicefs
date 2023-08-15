@@ -18,8 +18,8 @@ package sync
 
 import (
 	"bytes"
+	"crypto/rand"
 	"io"
-	"math/rand"
 	"os"
 	"testing"
 

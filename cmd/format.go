@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	crand "crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -274,8 +275,9 @@ var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012345
 
 func randSeq(n int) string {
 	b := make([]rune, n)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+		b[i] = letters[r.Intn(len(letters))]
 	}
 	return string(b)
 }
@@ -319,14 +321,14 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 }
 
 func test(store object.ObjectStorage) error {
-	rand.Seed(time.Now().UnixNano())
 	key := "testing/" + randSeq(10)
 	data := make([]byte, 100)
-	_, _ = rand.Read(data)
-	nRetry := 3
 	var err error
-	for i := 0; i < nRetry; i++ {
-		err = doTesting(store, key, data)
+	for i := 0; i < 3; i++ {
+		_, err = crand.Read(data)
+		if err == nil {
+			err = doTesting(store, key, data)
+		}
 		if err == nil {
 			break
 		}
