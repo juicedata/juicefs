@@ -24,7 +24,7 @@ juicefs config META-URL --trash-days=7
 juicefs config META-URL --trash-days=0
 ```
 
-### Recover files {#recover}
+## Recover files {#recover}
 
 When files are deleted, they will be moved to a directory that takes up the format of `.trash/YYYY-MM-DD-HH/[parent inode]-[file inode]-[file name]`, where `YYYY-MM-DD-HH` is the UTC time of the deletion. You can locate the deleted files and recover them if you remember when they are deleted.
 
@@ -101,13 +101,13 @@ $ tree .trash/2023-08-14-05
 juicefs restore $META_URL 2023-08-14-05 --put-back
 ```
 
-### Permanently delete files {#purge}
+## Permanently delete files {#purge}
 
 The Trash directory behaves the same as normal directories, in the sense that recovering files is to simply run `mv` commands, hence to permanently delete files, run `rm` with root. But notice that **even if Trash files reach their expiration, they are not necessarily immediately deleted from Trash**, because expired files are deleted within the client background jobs, which by default runs every hour.
 
 In order for expiration to work properly, at least one mount point is required, and it must be able to run background jobs (not using [`--no-bgjob`](../reference/command_reference.md#mount)). When files are permanently deleted from Trash, metadata as well as object storage data are deleted synchronously, on top of that, scans for expiration are executed every hour, that's why when expiring or deleting a large amount of files, object storage deletion may not be as rapid as expected. If you would like to speed up this process, you can create multiple mount points to overcome the speed limit of a single client, and then under their `.trash` directories, manually run `juicefs rmr` to purge files in batches.
 
-### Trash and slices {#gc}
+## Trash and slices {#gc}
 
 Apart from user deleted files, there's another type of data which also resides in Trash, which isn't directly visible from the `.trash` directory, they are stale slices created by file edits and overwrites. Read more in [How JuiceFS stores files](../introduction/architecture.md#how-juicefs-store-files). To sum up, if applications constantly delete or overwrite files, object storage usage will exceed file system usage.
 
@@ -145,7 +145,7 @@ juicefs gc --delete
 # Do not forget to re-enable Trash upon completion
 ```
 
-### Access privileges {#permission}
+## Access privileges {#permission}
 
 All users are allowed to browse the trash directory and see the full list of removed files. However, only root has write privilege to the `.trash` directory. Since JuiceFS keeps the original permission modes even for the trashed files, normal users can read files that they have permission to.
 
