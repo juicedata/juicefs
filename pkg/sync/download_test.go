@@ -166,7 +166,7 @@ func TestDownload(t *testing.T) {
 
 	for _, c := range tcases {
 		content := make([]byte, c.config.fsize)
-		rand.Read(content)
+		_, _ = rand.Read(content)
 		_ = a.Put(key, bytes.NewReader(content))
 		c.tfunc(t, newParallelDownloader(a, key, c.config.fsize, c.blockSize, make(chan int, c.concurrent)), content)
 	}

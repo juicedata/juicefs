@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	crand "crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -323,12 +322,11 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 func test(store object.ObjectStorage) error {
 	key := "testing/" + randSeq(10)
 	data := make([]byte, 100)
+	randRead(data)
+	nRetry := 3
 	var err error
-	for i := 0; i < 3; i++ {
-		_, err = crand.Read(data)
-		if err == nil {
-			err = doTesting(store, key, data)
-		}
+	for i := 0; i < nRetry; i++ {
+		err = doTesting(store, key, data)
 		if err == nil {
 			break
 		}

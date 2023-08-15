@@ -113,6 +113,12 @@ type benchmark struct {
 	tmpdir     string
 }
 
+func randRead(buf []byte) {
+	if _, err := rand.Read(buf); err != nil {
+		logger.Fatalf("Generate random content: %s", err)
+	}
+}
+
 func (bc *benchCase) writeFiles(index int) {
 	for i := 0; i < bc.fcount; i++ {
 		fname := fmt.Sprintf("%s/%s.%d.%d", bc.bm.tmpdir, bc.name, index, i)
@@ -121,9 +127,7 @@ func (bc *benchCase) writeFiles(index int) {
 			logger.Fatalf("Failed to open file %s: %s", fname, err)
 		}
 		buf := make([]byte, bc.bsize)
-		if _, err = rand.Read(buf); err != nil {
-			logger.Fatalf("Generate random content: %s", err)
-		}
+		randRead(buf)
 		for j := 0; j < bc.bcount; j++ {
 			if _, err = fp.Write(buf); err != nil {
 				logger.Fatalf("Failed to write file %s: %s", fname, err)

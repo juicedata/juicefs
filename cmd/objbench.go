@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -343,8 +342,8 @@ func objbench(ctx *cli.Context) error {
 		seed:        make([]byte, bSize),
 		smallSeed:   make([]byte, smallBSize),
 	}
-	rand.Read(bm.seed)
-	rand.Read(bm.smallSeed)
+	randRead(bm.seed)
+	randRead(bm.smallSeed)
 
 	for _, api := range apis {
 		pResult = append(pResult, bm.run(api))
@@ -909,7 +908,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		fsize := 256 << 20
 		buffL := 4 << 20
 		buff := make([]byte, buffL)
-		rand.Read(buff)
+		randRead(buff)
 		count := int(math.Floor(float64(fsize) / float64(buffL)))
 		content := make([]byte, fsize)
 		for i := 0; i < count; i++ {
@@ -951,7 +950,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			}
 			total := 3
 			seed := make([]byte, upload.MinPartSize)
-			rand.Read(seed)
+			randRead(seed)
 			parts := make([]*object.Part, total)
 			content := make([][]byte, total)
 			for i := 0; i < total; i++ {
