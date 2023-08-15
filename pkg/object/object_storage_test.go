@@ -1025,6 +1025,17 @@ func TestTOS(t *testing.T) { //skip mutate
 	testStorage(t, tos)
 }
 
+func TestDragonfly(t *testing.T) { //skip mutate
+	if os.Getenv("DRAGONFLY_BUCKET") == "" {
+		t.SkipNow()
+	}
+	dragonfly, err := newDragonfly("", "", "", "")
+	if err != nil {
+		t.Fatalf("create: %s", err)
+	}
+	testStorage(t, dragonfly)
+}
+
 func TestMain(m *testing.M) {
 	if envFile := os.Getenv("JUICEFS_ENV_FILE_FOR_TEST"); envFile != "" {
 		// schema: S3 AWS_ENDPOINT=xxxxx
