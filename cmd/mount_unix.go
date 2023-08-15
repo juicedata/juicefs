@@ -100,6 +100,33 @@ func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
 	return err
 }
 
+func makeDaemonForSvc(c *cli.Context, m meta.Meta) error {
+	var attrs godaemon.DaemonAttr
+	logfile := c.String("log")
+	attrs.OnExit = func(stage int) error {
+		return nil
+	}
+
+	// the current dir will be changed to root in daemon,
+	// so the mount point has to be an absolute path.
+	if godaemon.Stage() == 0 {
+		var err error
+		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		logger.Infof("open log file %s: %s", logfile, err)
+		if err != nil {
+			logger.Errorf("open log file %s: %s", logfile, err)
+		}
+	}
+	if godaemon.Stage() <= 1 {
+		err := m.Shutdown()
+		if err != nil {
+			logger.Errorf("shutdown: %s", err)
+		}
+	}
+	_, _, err := godaemon.MakeDaemon(&attrs)
+	return err
+}
+
 func fuseFlags() []cli.Flag {
 	return addCategories("FUSE", []cli.Flag{
 		&cli.BoolFlag{
