@@ -15,7 +15,13 @@ The JuiceFS client has only one binary file, you can download the pre-compiled v
 The one-click installation script is available for Linux and macOS systems and will automatically download and install the latest version of the JuiceFS client based on your hardware architecture.
 
 ```shell
+# default installation path is /usr/local/bin
 curl -sSL https://d.juicefs.com/install | sh -
+```
+
+```shell
+# install to /tmp directory
+curl -sSL https://d.juicefs.com/install | sh -s /tmp
 ```
 
 ## Install the pre-compiled client {#install-the-pre-compiled-client}
