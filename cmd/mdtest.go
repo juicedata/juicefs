@@ -126,7 +126,6 @@ func runTest(jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes 
 	t1 := time.Since(start)
 	logger.Infof("Created %d dirs in %s (%d dirs/s)", dirs, t1, int(float64(dirs)/t1.Seconds()))
 
-	rand.Seed(time.Now().Unix())
 	var g sync.WaitGroup
 	for i := 0; i < np; i++ {
 		g.Add(1)
