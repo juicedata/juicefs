@@ -94,21 +94,11 @@ JuiceFS 不将原始文件存入对象存储，而是将其按照某个大小（
 
 请查看[「客户端写缓存」](guide/cache_management.md#writeback)了解更多信息。
 
-### JuiceFS 目前支持分布式缓存吗？
+### JuiceFS 支持分布式缓存吗？
 
-到 JuiceFS 1.0 为止，还不支持该功能。
+企业版支持，详见[「分布式缓存」](https://juicefs.com/docs/zh/cloud/guide/distributed-cache)。
 
 ## 访问相关问题
-
-### 数据更新什么时候会对其它客户端可见？
-
-所有的元数据更新都是立即对其它客户端可见。JuiceFS 保证关闭再打开（close-to-open）一致性，请查看[「一致性」](guide/cache_management.md#consistency)了解更多信息。
-
-通过 `write()` 新写入的数据会缓存在内核和客户端中，可以被当前机器的其它进程看到，其它机器暂时看不到。
-
-调用 `fsync()`、`fdatasync()` 或者 `close()` 来强制将数据上传到对象存储并更新元数据，或者数秒钟自动刷新后，其它客户端才能看到更新，这也是绝大多数分布式文件系统采取的策略。
-
-请查看[「客户端写缓存」](guide/cache_management.md#writeback)了解更多信息。
 
 ### 为什么同一个用户在主机 X 上有权限访问 JuiceFS 的文件，在主机 Y 上访问该文件却没有权限？
 

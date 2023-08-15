@@ -94,9 +94,9 @@ You could mount JuiceFS with [`--writeback` option](reference/command_reference.
 
 See ["Write Cache in Client"](guide/cache_management.md#writeback) for more information.
 
-### Does JuiceFS currently support distributed caching?
+### Does JuiceFS support distributed cache?
 
-As of the release of JuiceFS 1.0, this feature is not supported.
+[Distributed cache](https://juicefs.com/docs/cloud/guide/distributed-cache) is supported in our enterprise edition.
 
 ## Mount Related Questions
 
@@ -107,16 +107,6 @@ Yes, JuiceFS could be mounted using `juicefs` without root. The default director
 See ["Read Cache in Client"](guide/cache_management.md#client-read-cache) for more information.
 
 ## Access Related Questions
-
-### When my update will be visible to other clients?
-
-All the metadata updates are immediately visible to all others. JuiceFS guarantees close-to-open consistency, see ["Consistency"](guide/cache_management.md#consistency) for more information.
-
-The new data written by `write()` will be buffered in kernel or client, visible to other processes on the same machine, not visible to other machines.
-
-Either call `fsync()`, `fdatasync()` or `close()` to force upload the data to the object storage and update the metadata, or after several seconds of automatic refresh, other clients can visit the updates. It is also the strategy adopted by the vast majority of distributed file systems.
-
-See ["Write Cache in Client"](guide/cache_management.md#writeback) for more information.
 
 ### What other ways JuiceFS supports access to data besides mount?
 
