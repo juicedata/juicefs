@@ -208,11 +208,11 @@ For example, if you're dealing with a object storage bucket used by JuiceFS, dir
 
 Synchronizing between two object storages is essentially pulling data from one and pushing it to the other. The efficiency of the synchronization will depend on the bandwidth between the client and the cloud.
 
-![](../images/juicefs-sync-single.png)
+![JuiceFS-sync-single](../images/juicefs-sync-single.png)
 
 When copying large scale data, node bandwidth can easily bottleneck the synchronization process. For this scenario, `juicefs sync` provides a multi-machine concurrent solution, as shown in the figure below.
 
-![](../images/juicefs-sync-worker.png)
+![JuiceFS-sync-worker](../images/juicefs-sync-worker.png)
 
 Manager node executes `sync` command as the master, and defines multiple worker nodes by setting option `--worker` (manager node itself also serve as a worker node). JuiceFS will split the workload distribute to Workers for distributed synchronization. This increases the amount of data that can be processed per unit time, and the total bandwidth is also multiplied.
 

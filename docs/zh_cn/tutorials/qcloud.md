@@ -10,7 +10,7 @@ slug: /clouds/qcloud
 
 这样的设计可以有效缩减对象存储在请求数量上的费用，同时也能让我们显著感受到 JuiceFS 带来的性能提升。
 
-![](../images/juicefs-qcloud.png)
+![JuiceFS-qcloud](../images/juicefs-qcloud.png)
 
 ## 准备
 
@@ -67,7 +67,7 @@ JuiceFS 会将数据对应的元数据全部存储在独立的数据库中，目
 
 注意，数据库的连接地址取决于你创建的 VPC 网络设置，创建 Redis 实例时会自动在你定义的网段中获取地址。
 
-![](../images/qcloud-redis-network.png)
+![qcloud-Redis-network](../images/qcloud-redis-network.png)
 
 ### 三、对象存储 COS
 

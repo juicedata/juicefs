@@ -8,7 +8,7 @@ JuiceFS 从 v0.11 开始引入了 S3 网关，这是一个通过 [MinIO S3 网�
 
 因为 JuiceFS 会将文件分块存储到底层的对象存储中，不能直接使用底层对象存储的接口和界面来直接访问文件，S3 网关提供了类似底层对象存储的访问能力，架构图如下：
 
-![](../images/juicefs-s3-gateway-arch.png)
+![JuiceFS-S3-gateway-arch](../images/juicefs-s3-gateway-arch.png)
 
 ## 先决条件
 
@@ -39,7 +39,7 @@ juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
 
 在这个例子中，我们假设 JuiceFS 文件系统使用的是本地的 Redis 数据库。当 S3 网关启用时，在**当前主机**上可以使用 `http://localhost:9000` 这个地址访问到 S3 网关的管理界面。
 
-![](../images/s3-gateway-file-manager.jpg)
+![S3-gateway-file-manager](../images/s3-gateway-file-manager.jpg)
 
 如果你希望通过局域网或互联网上的其他主机访问 S3 网关，则需要调整监听地址，例如：
 
@@ -334,4 +334,4 @@ export MINIO_ROOT_PASSWORD=12345678
 
 这里显式指定了 S3 网关控制台的端口号为 59001，如果不指定则会随机选择一个端口。根据命令行提示，在浏览器中打开 [http://127.0.0.1:59001](http://127.0.0.1:59001) 地址便可以访问控制台，如下图所示：
 
-![](../images/s3-gateway-console.png)
+![S3-gateway-console](../images/s3-gateway-console.png)

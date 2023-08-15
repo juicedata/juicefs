@@ -65,7 +65,7 @@ JuiceFS 客户端在 `open` 操作即打开一个文件时，其文件属性会�
 
 JuiceFS 对数据也提供多种缓存机制来提高性能，包括内核中的页缓存和客户端所在机器的本地缓存，以及客户端自身的内存读写缓冲区。读请求会依次尝试内核分页缓存、JuiceFS 进程的预读缓冲区、本地磁盘缓存，当缓存中没找到对应数据时才会从对象存储读取，并且会异步写入各级缓存保证下一次访问的性能。
 
-![](../images/juicefs-cache.png)
+![JuiceFS-cache](../images/juicefs-cache.png)
 
 ### 读写缓冲区 {#buffer-size}
 

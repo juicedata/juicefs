@@ -61,7 +61,7 @@ juicefs format sqlite3://myjfs.db myjfs
 
 从返回的信息中可以看到，该文件系统使用 SQLite 作为元数据存储引擎，数据库文件位于当前目录，文件名为 `myjfs.db`，保存了 `myjfs` 文件系统的所有信息。它构建了完善的表结构，将用作所有数据的元信息的存储。
 
-![](../images/sqlite-info.png)
+![SQLite-info](../images/sqlite-info.png)
 
 由于没有指定任何存储相关的选项，客户端默认使用本地磁盘作为存储介质，根据返回的信息， `myjfs` 的存储路径为 `file:///Users/herald/.juicefs/local/myjfs/`，即当前用户家目录下的 `.juicefs/local/myjfs/`。
 
@@ -97,7 +97,7 @@ Windows 系统的挂载点（`MOUNTPOINT`）应该使用尚未占用的盘符，
 juicefs mount sqlite3://myjfs.db ~/jfs
 ```
 
-![](../images/sqlite-mount-local.png)
+![SQLite-mount-local](../images/sqlite-mount-local.png)
 
 默认情况下，客户端会在前台挂载文件系统。就像你在上图中看到的那样，程序会一直运行在当前终端进程中，使用 <kbd>Ctrl</kbd> + <kbd>C</kbd> 组合键或关闭终端窗口，文件系统会被卸载。
 
