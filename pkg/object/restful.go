@@ -60,7 +60,7 @@ func init() {
 				}
 				var conn net.Conn
 				n := len(ips)
-				first := rand.New(rand.NewSource(time.Now().Unix())).Intn(n)
+				first := rand.Intn(n)
 				dialer := &net.Dialer{Timeout: time.Second * 10}
 				for i := 0; i < n; i++ {
 					ip := ips[(first+i)%n]
