@@ -2,7 +2,7 @@ export GO111MODULE=on
 LDFLAGS = -s -w
 
 REVISION := $(shell git rev-parse --short HEAD 2>/dev/null)
-REVISIONDATE := $(shell git log -1 --pretty=format:'%ad' --date short 2>/dev/null)
+REVISIONDATE := $(shell git log -1 --pretty=format:'%cd' --date short 2>/dev/null)
 PKG := github.com/juicedata/juicefs/pkg/version
 LDFLAGS = -s -w
 LDFLAGS += -X $(PKG).revision=$(REVISION) \
