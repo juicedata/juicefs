@@ -28,3 +28,4 @@ cmd/cmd
 .hypothesis
 __pycache__
 /node_modules
+/vendor
