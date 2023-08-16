@@ -10,7 +10,7 @@ slug: /metadata_dump_load
 - JuiceFS v1.0.4 starts to support importing an encrypted backup.
 :::
 
-JuiceFS supports [multiple metadata engines](../guide/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine.
+JuiceFS supports [multiple metadata engines](../reference/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine.
 
 ## Metadata backup {#backup}
 
@@ -42,7 +42,7 @@ Starting with JuiceFS v1.0.0, the client automatically backs up metadata and cop
 
 The backup files are stored in the `meta` directory of the object storage. It is a separate directory from the data store and not visible in the mount point and does not interact with the data store, and the directory can be viewed and managed using the file browser of the object storage.
 
-![](../images/meta-auto-backup-list.png)
+![meta-auto-backup-list](../images/meta-auto-backup-list.png)
 
 By default, the JuiceFS client backs up metadata once an hour. The frequency of automatic backups can be adjusted by the `--backup-meta` option when mounting the filesystem, for example, to set the auto-backup to be performed every 8 hours.
 

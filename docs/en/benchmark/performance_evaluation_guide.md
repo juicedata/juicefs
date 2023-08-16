@@ -140,7 +140,7 @@ juicefs stats /mnt/jfs --verbosity 1
 
 The results are shown below, which would be easier to understand when combing with the `bench` performance test flows described above.
 
-![](../images/bench-guide-stats.png)
+![bench-guide-stats](../images/bench-guide-stats.png)
 
 Learn the meaning of indicators in [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats).
 

@@ -15,7 +15,13 @@ JuiceFS 客户端只有一个二进制文件，你可以下载预编译的版本
 一键安装脚本适用于 Linux 和 macOS 系统，会根据你的硬件架构自动下载安装最新版 JuiceFS 客户端。
 
 ```shell
+# 默认安装到 /usr/local/bin
 curl -sSL https://d.juicefs.com/install | sh -
+```
+
+```shell
+# 安装到 /tmp 目录下
+curl -sSL https://d.juicefs.com/install | sh -s /tmp
 ```
 
 ## 安装预编译客户端 {#install-the-pre-compiled-client}

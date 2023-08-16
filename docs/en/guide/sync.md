@@ -32,7 +32,7 @@ minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]
 
 Explanation:
 
-- `NAME` is the storage type like `s3` or `oss`. See [available storage services](../guide/how_to_set_up_object_storage.md#supported-object-storage) for more details;
+- `NAME` is the storage type like `s3` or `oss`. See [available storage services](../reference/how_to_set_up_object_storage.md#supported-object-storage) for more details;
 - `ACCESS_KEY` and `SECRET_KEY` are the credentials for accessing object storage APIs; If special characters are included, it needs to be escaped and replaced manually. For example, `/` needs to be replaced with its escape character `%2F`.
 - `TOKEN` token used to access the object storage, as some object storage supports the use of temporary token to obtain permission for a limited time
 - `BUCKET[.ENDPOINT]` is the address of the object storage;
@@ -208,11 +208,11 @@ For example, if you're dealing with a object storage bucket used by JuiceFS, dir
 
 Synchronizing between two object storages is essentially pulling data from one and pushing it to the other. The efficiency of the synchronization will depend on the bandwidth between the client and the cloud.
 
-![](../images/juicefs-sync-single.png)
+![JuiceFS-sync-single](../images/juicefs-sync-single.png)
 
 When copying large scale data, node bandwidth can easily bottleneck the synchronization process. For this scenario, `juicefs sync` provides a multi-machine concurrent solution, as shown in the figure below.
 
-![](../images/juicefs-sync-worker.png)
+![JuiceFS-sync-worker](../images/juicefs-sync-worker.png)
 
 Manager node executes `sync` command as the master, and defines multiple worker nodes by setting option `--worker` (manager node itself also serve as a worker node). JuiceFS will split the workload distribute to Workers for distributed synchronization. This increases the amount of data that can be processed per unit time, and the total bandwidth is also multiplied.
 

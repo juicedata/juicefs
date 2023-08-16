@@ -443,7 +443,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if upload, err := s.CreateMultipartUpload(k); err == nil {
 		total := 3
 		seed := make([]byte, upload.MinPartSize)
-		rand.Read(seed)
+		_, _ = rand.Read(seed)
 		parts := make([]*Part, total)
 		content := make([][]byte, total)
 		for i := 0; i < total; i++ {

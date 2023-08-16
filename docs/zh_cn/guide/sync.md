@@ -30,7 +30,7 @@ minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]
 
 其中：
 
-- `NAME` 是存储类型，比如 `s3`、`oss`。详情查看[所有支持的存储服务](../guide/how_to_set_up_object_storage.md#supported-object-storage)
+- `NAME` 是存储类型，比如 `s3`、`oss`。详情查看[所有支持的存储服务](../reference/how_to_set_up_object_storage.md#supported-object-storage)
 - `ACCESS_KEY` 和 `SECRET_KEY` 是对象存储的 API 访问密钥，如果包含了特殊字符，则需要手动转义并替换，比如 `/` 需要被替换为其转义符 `%2F`
 - `TOKEN` 用来访问对象存储的 token，部分对象存储支持使用临时的 token 以获得有限时间的权限
 - `BUCKET[.ENDPOINT]` 是对象存储的访问地址
@@ -192,11 +192,11 @@ JuiceFS `sync` 在**本地目录之间**同步时，支持通过设置 `--links`
 
 在两个对象存储之间同步数据，就是从一端拉取数据再推送到另一端，同步的效率取决于客户端与云之间的带宽：
 
-![](../images/juicefs-sync-single.png)
+![JuiceFS-sync-single](../images/juicefs-sync-single.png)
 
 在同步大量数据时，单机带宽往往会被占满出现瓶颈，针对这种情况，JuiceFS Sync 提供多机并发同步支持，如下图。
 
-![](../images/juicefs-sync-worker.png)
+![JuiceFS-sync-worker](../images/juicefs-sync-worker.png)
 
 Manager 作为主控执行 `sync` 命令，通过 `--worker` 参数定义多个 Worker 主机，JuiceFS 会根据 Worker 的总数量，动态拆分同步的工作量并分发给各个主机同时执行。即把原本在一台主机上处理的同步任务量拆分成多份，分发到多台主机上同时处理，单位时间内能处理的数据量更大，总带宽也成倍增加。
 

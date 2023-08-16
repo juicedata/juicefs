@@ -11,11 +11,11 @@ JuiceFS splits large files at multiple levels to improve I/O performance. See [h
 
 Sequential writes are optimized, requiring only one continuously growing slice and one final flush. This maximizes object storage write performance. A simple [JuiceFS benchmark](../benchmark/performance_evaluation_guide.md) below shows sequentially writing a 1 GiB file with a 1 MiB I/O size at its first stage. The following figure shows the data flow in each component of the system.
 
-![](../images/internals-write.png)
+![internals-write](../images/internals-write.png)
 
 Use [`juicefs stats`](../reference/command_reference.md#stats) to obtain real-time performance monitoring metrics.
 
-![](../images/internals-stats.png)
+![internals-stats](../images/internals-stats.png)
 
 The first highlighted section in the above figure shows:
 
@@ -54,7 +54,7 @@ Learn more in [Client Write Cache](../guide/cache_management.md#writeback).
 
 JuiceFS supports sequential reads and random reads (including mmap-based random reads). During read requests, the object corresponding to the block is completely read through the `GetObject` API of the object storage, or only a certain range of data in the object may be read (e.g., the read range is limited by the `Range` parameter of [S3 API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html)). Meanwhile, prefetching is performed (controlled by the [`--prefetch`](../reference/command_reference.md#mount) option) to download the complete data block into the local cache directory, as shown in the `blockcache` write speed in the second stage of the above metrics figure. This is very good for sequential reads as all cached data is utilized, maximizing the object storage access efficiency. The dataflow is illustrated in the figure below:
 
-![](../images/internals-read.png)
+![internals-read](../images/internals-read.png)
 
 Although prefetching works well for sequential reads, it might not be so effective for random reads on large files. It can cause read amplification and frequent cache eviction. Consider disabling prefetching using `--prefetch=0`. It is always hard to design cache strategy for random read scenarios. Two possible solutions are increasing the cache size to store all data locally or completely disabling the cache (`--cache-size=0`) and relying on a high-performance object storage service.
 

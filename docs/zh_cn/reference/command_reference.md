@@ -146,7 +146,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 
 |项 | 说明|
 |-|-|
-|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
+|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
 |`NAME`|文件系统名称。|
 |`--force`|强制覆盖当前的格式化配置，默认为 false。|
 |`--no-update`|不要修改已有的格式化配置，默认为 false。|
@@ -155,11 +155,11 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 
 |项 | 说明|
 |-|-|
-|`--storage=file`|对象存储类型，例如 `s3`、`gcs`、`oss`、`cos`。默认为 `file`，参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
+|`--storage=file`|对象存储类型，例如 `s3`、`gcs`、`oss`、`cos`。默认为 `file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
 |`--bucket=path`|存储数据的桶路径（默认：`$HOME/.juicefs/local` 或 `/var/jfs`）。|
-|`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
-|`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
-|`--session-token=value`|对象存储的临时访问凭证（Session Token），查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#session-token)以了解更多。|
+|`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
+|`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
+|`--session-token=value`|对象存储的临时访问凭证（Session Token），查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#session-token)以了解更多。|
 |`--storage-class=value` <VersionAdd>1.1</VersionAdd>|默认存储类型。|
 
 #### 数据格式参数 {#format-data-format-options}
@@ -214,11 +214,11 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 
 |项 | 说明|
 |-|-|
-|`--storage=file` <VersionAdd>1.1</VersionAdd>|对象存储类型，例如 `s3`、`gcs`、`oss`、`cos`。默认为 `file`，参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
+|`--storage=file` <VersionAdd>1.1</VersionAdd>|对象存储类型，例如 `s3`、`gcs`、`oss`、`cos`。默认为 `file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
 |`--bucket=path`|存储数据的桶路径（默认：`$HOME/.juicefs/local` 或 `/var/jfs`）。|
-|`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
-|`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
-|`--session-token=value`|对象存储的临时访问凭证（Session Token），查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#session-token)以了解更多。|
+|`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
+|`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
+|`--session-token=value`|对象存储的临时访问凭证（Session Token），查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#session-token)以了解更多。|
 |`--storage-class=value` <VersionAdd>1.1</VersionAdd>|默认存储类型。|
 |`--upload-limit=0`|上传带宽限制，单位为 Mbps (默认：0)|
 |`--download-limit=0`|下载带宽限制，单位为 Mbps (默认：0)|
@@ -264,7 +264,7 @@ juicefs quota check redis://localhost
 
 |项 | 说明|
 |-|-|
-|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
+|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
 |`--path value`|卷中目录的全路径|
 |`--capacity value`|目录空间硬限制，单位 GiB (默认：0)|
 |`--inodes value`|用于硬限制目录 inode 数 (默认：0)|
@@ -377,7 +377,7 @@ juicefs dump redis://localhost sub-meta-dump.json --subdir /dir/in/jfs
 
 |项 | 说明|
 |-|-|
-|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
+|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
 |`FILE`|导出文件路径，如果不指定，则会导出到标准输出。如果文件名以 `.gz` 结尾，将会自动压缩。|
 |`--subdir=path`|只导出指定子目录的元数据。|
 |`--keep-secret-key` <VersionAdd>1.1</VersionAdd>|导出对象存储认证信息，默认为 `false`。由于是明文导出，使用时注意数据安全。如果导出文件不包含对象存储认证信息，后续的导入完成后，需要用 [`juicefs config`](#config) 重新配置对象存储认证信息。|
@@ -399,7 +399,7 @@ juicefs load redis://127.0.0.1:6379/1 meta-dump.json
 
 | 项                                                          | 说明|
 |------------------------------------------------------------|-|
-| `META-URL`                                                 |用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
+| `META-URL`                                                 |用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
 | `FILE`                                                     |导入文件路径，如果不指定，则会从标准输入导入。如果文件名以 `.gz` 结尾，将会自动解压。|
 | `--encrypt-rsa-key=path` <VersionAdd>1.0.4</VersionAdd>    |加密所使用的 RSA 私钥文件路径。|
 | `--encrypt-algo=aes256gcm-rsa` <VersionAdd>1.0.4</VersionAdd> |加密算法，默认为 `aes256gcm-rsa`。|
@@ -601,7 +601,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 |项 | 说明|
 |-|-|
-|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
+|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
 |`MOUNTPOINT`|文件系统挂载点，例如：`/mnt/jfs`、`Z:`。|
 |`-d, --background`|后台运行，默认为 false。|
 |`--no-syslog`|禁用系统日志，默认为 false。|
@@ -647,7 +647,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 |项 | 说明|
 |-|-|
-|`--storage=file`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
+|`--storage=file`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
 |`--bucket=value`|为当前挂载点指定访问对象存储的 Endpoint。|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd>|当前客户端写入数据的存储类型|
 |`--get-timeout=60`|下载一个对象的超时时间；单位为秒 (默认：60)|
@@ -722,7 +722,7 @@ juicefs gateway redis://localhost localhost:9000
 
 |项 | 说明|
 |-|-|
-|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
+|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
 |`ADDRESS`|S3 网关地址和监听的端口，例如：`localhost:9000`|
 |`--access-log=path`|访问日志的路径|
 |`--no-banner`|禁用 MinIO 的启动信息 (默认：false)|
@@ -748,7 +748,7 @@ juicefs webdav redis://localhost localhost:9007
 
 |项 | 说明|
 |-|-|
-|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)。|
+|`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
 |`ADDRESS`|WebDAV 服务监听的地址与端口，例如：`localhost:9007`|
 |`--cert-file` <VersionAdd>1.1</VersionAdd>|HTTPS 证书文件|
 |`--key-file` <VersionAdd>1.1</VersionAdd>|HTTPS 密钥文件|
@@ -801,9 +801,9 @@ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3 http
 
 |项 | 说明|
 |-|-|
-|`--storage=file`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`file`，参考[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
-|`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
-|`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../guide/how_to_set_up_object_storage.md#aksk)以了解更多。|
+|`--storage=file`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
+|`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
+|`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--block-size=4096`|每个 IO 块的大小（以 KiB 为单位）（默认值：4096）|
 |`--big-object-size=1024`|大文件的大小（以 MiB 为单位）（默认值：1024）|
 |`--small-object-size=128`|每个小文件的大小（以 KiB 为单位）（默认值：128）|
@@ -887,10 +887,10 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 
 其中：
 
-- `NAME`：JuiceFS 支持的数据存储类型，比如 `s3`、`oss`，完整列表见[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)。
-- `ACCESS_KEY` 和 `SECRET_KEY`：访问数据存储所需的密钥信息，参考[文档](../guide/how_to_set_up_object_storage.md#aksk)。
+- `NAME`：JuiceFS 支持的数据存储类型，比如 `s3`、`oss`，完整列表见[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)。
+- `ACCESS_KEY` 和 `SECRET_KEY`：访问数据存储所需的密钥信息，参考[文档](../reference/how_to_set_up_object_storage.md#aksk)。
 - `TOKEN` 用来访问对象存储的 token，部分对象存储支持使用临时的 token 以获得有限时间的权限
-- `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同，详见[文档](../guide/how_to_set_up_object_storage.md#supported-object-storage)。
+- `BUCKET[.ENDPOINT]`：数据存储服务的访问地址，不同存储类型格式可能不同，详见[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)。
 - `[/PREFIX]`：可选，源路径和目标路径的前缀，可用于限定只同步某些路径中的数据。
 
 #### 选择条件相关参数 {#sync-selection-related-options}

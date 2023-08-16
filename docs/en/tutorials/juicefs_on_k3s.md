@@ -6,7 +6,7 @@ slug: /juicefs_on_k3s
 
 [K3s](https://k3s.io) is a functionally optimized lightweight Kubernetes distribution that is fully compatible with Kubernetes.In other words, almost all operations performed on Kubernetes can also be executed on K3s. K3s packages the entire container orchestration system into a binary program with a size of less than 100MB, significantly reducing the environment dependencies and installation steps required to deploy Kubernetes production clusters. Compared to Kubernetes, K3s has lower performance requirements for the operating system.
 
-In this article, we will build a K3s cluster with two nodes, install and configure [JuiceFS CSI Driver](https://github.com/juicedata/juicefs-csi-driver) for the cluster, and lastly create an Nginx Pod for verification.
+In this article, we will build a K3s cluster with two nodes, install and configure [JuiceFS CSI Driver](https://github.com/juicedata/juicefs-csi-driver) for the cluster, and lastly create an NGINX Pod for verification.
 
 ## Deploy a K3s cluster
 
@@ -124,9 +124,9 @@ juicefs-sc             csi.juicefs.com         Retain          Immediate        
 
 > **Note**: A storage class is associated with a JuiceFS file system. You can create as many storage classes as you need, but be aware of the storage class name in the configuration file as the same name can cause conflicts.
 
-## Use JuiceFS to persist Nginx data
+## Use JuiceFS to persist NGINX data
 
-Next, deploy an Nginx Pod using a persistent storage declared by the JuiceFS storage class.
+Next, deploy an NGINX Pod using a persistent storage declared by the JuiceFS storage class.
 
 ### Deployment
 
@@ -206,7 +206,7 @@ sudo kubectl apply -f service.yaml
 
 ### Ingress
 
-K3s is pre-installed with traefik-ingress by default. Create an ingress for Nginx through the following configuration. For example: `ingress.yaml`
+K3s is pre-installed with traefik-ingress by default. Create an ingress for NGINX through the following configuration. For example: `ingress.yaml`
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -236,9 +236,9 @@ sudo kubectl apply -f ingress.yaml
 
 ### Visit
 
-After the deployment is completed, use the host on the same LAN to access any cluster node, and then you will see the Nginx welcome page.
+After the deployment is completed, use the host on the same LAN to access any cluster node, and then you will see the NGINX welcome page.
 
-![](../images/k3s-nginx-welcome.png)
+![K3s-NGINX-welcome](../images/k3s-nginx-welcome.png)
 
 Next, check whether the container has successfully mounted JuiceFS, and execute the following command to check the Pod status:
 

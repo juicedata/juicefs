@@ -41,7 +41,7 @@ Yes, There is also a [best practice document](administration/metadata/redis_best
 
 ### Why doesn't JuiceFS support XXX object storage?
 
-JuiceFS already supported many object storage, please check [the list](guide/how_to_set_up_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
+JuiceFS already supported many object storage, please check [the list](reference/how_to_set_up_object_storage.md#supported-object-storage) first. If this object storage is compatible with S3, you could treat it as S3. Otherwise, try reporting issue.
 
 ### Why do I delete files at the mount point, but there is no change or very little change in object storage footprint?
 
@@ -54,7 +54,7 @@ The second reason is that JuiceFS deletes the data in the object storage asynchr
 * ["Random write in JuiceFS"](#random-write) produces data fragments, causing higher storage usage for object storage, especially after a large number of overwrites in a short period of time, many fragments will be generated. These fragments continue to occupy space in object storage until they are compacted and released. You shouldn't worry about this because JuiceFS checks for file compaction with every read/write, and cleans up in the client background job. Alternatively, you can manually trigger merges and garbage collection with [`juicefs gc --compact --delete`](./reference/command_reference.md#gc).
 * If [trash](./security/trash.md) is enabled, deleted files as well as data fragments that has already been compacted will be kept for a specified period of time, and then be garbage collected (all carried out in client background job).
 * If compression is enabled (the `--compress` parameter in the [`format`](./reference/command_reference.md#format) command, disabled by default), object storage usage may be smaller than the actual file size (depending on the compression ratio of different types of files).
-* Different [storage class](guide/how_to_set_up_object_storage.md#storage-class) of the object storage may calculate storage usage differently. The cloud service provider may set the minimum billable size for some storage classes. For example, the [minimum billable size](https://www.alibabacloud.com/help/en/object-storage-service/latest/storage-fees) for Alibaba Cloud OSS IA storage is 64KB. If a file is smaller than 64KB, it will be calculated as 64KB.
+* Different [storage class](reference/how_to_set_up_object_storage.md#storage-class) of the object storage may calculate storage usage differently. The cloud service provider may set the minimum billable size for some storage classes. For example, the [minimum billable size](https://www.alibabacloud.com/help/en/object-storage-service/latest/storage-fees) for Alibaba Cloud OSS IA storage is 64KB. If a file is smaller than 64KB, it will be calculated as 64KB.
 * For self-hosted object storage services, for example MinIO, actual data usage is affected by [storage class settings](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md).
 
 ### Does JuiceFS support using a directory in object storage as the value of the `--bucket` option?

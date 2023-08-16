@@ -1,6 +1,6 @@
 ---
 title: 在 Hadoop 生态使用 JuiceFS
-sidebar_position: 5
+sidebar_position: 3
 slug: /hadoop_java_sdk
 ---
 

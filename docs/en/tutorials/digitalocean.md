@@ -44,7 +44,7 @@ Don't worry about the choice of database, the JuiceFS client provides a metadata
 
 For this article, we use DigitalOcean's Redis 6 database hosting service, choose `Singapore`, and select the same VPC private network as the existing Droplet. It takes about 5 minutes to create the Redis, and we follow the setup wizard to initialize the database.
 
-![](../images/digitalocean-redis-guide.png)
+![DigitalOcean-Redis-guide](../images/digitalocean-redis-guide.png)
 
 By default, the Redis allows all inbound connections. For security reasons, you should select the Droplet that have access to the Redis in the security setting section of the setup wizard in the `Add trusted sources`, that is, only allow the selected host to access the Redis.
 
@@ -54,7 +54,7 @@ In the setting of the eviction policy, it is recommended to select `noeviction`,
 
 The access address of the Redis can be found in the `Connection Details` of the console. If all computing resources are in DigitalOcean, it is recommended to use the VPC private network for connection first, which can maximize security.
 
-![](../images/digitalocean-redis-url.png)
+![DigitalOcean-Redis-url](../images/digitalocean-redis-url.png)
 
 ## Installation and Use
 
@@ -155,7 +155,7 @@ $ juicefs format \
 
 **Parameter Description:**
 
-- `--storage`: Specify the data storage engine, here is `space`, click here to view all [supported storage](../guide/how_to_set_up_object_storage.md).
+- `--storage`: Specify the data storage engine, here is `space`, click here to view all [supported storage](../reference/how_to_set_up_object_storage.md).
 - `--bucket`: Specify the bucket access address.
 - `--access-key` and `--secret-key`: Specify the secret key for accessing the object storage API.
 - The Redis managed by DigitalOcean needs to be accessed with TLS/SSL encryption, so it needs to use the `rediss://` protocol header. The `/1` added at the end of the link represents the use of Redis's No. 1 database.

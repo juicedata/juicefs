@@ -11,11 +11,11 @@ JuiceFS 对大文件会做多级拆分（[JuiceFS 如何存储文件](../introdu
 
 显然，在应用顺序写情况下，只需要一个不停增长的 Slice，最后仅 `flush` 一次即可；此时能最大化发挥出对象存储的写入性能。以一次简单的 [JuiceFS 基准测试](../benchmark/performance_evaluation_guide.md)为例，使用 1 MiB IO 顺序写 1 GiB 文件，在不考虑压缩和加密的前提下，数据在各个组件中的形式如下图所示：
 
-![](../images/internals-write.png)
+![internals-write](../images/internals-write.png)
 
 用 [`juicefs stats`](../reference/command_reference.md#stats) 命令记录的指标图，可以直观地看到实时性能数据：
 
-![](../images/internals-stats.png)
+![internals-stats](../images/internals-stats.png)
 
 图中第 1 阶段：
 
@@ -54,7 +54,7 @@ JuiceFS 支持随机写，包括通过 mmap 等进行的随机写。
 
 JuiceFS 支持顺序读和随机读（包括基于 mmap 的随机读），在处理读请求时会通过对象存储的 `GetObject` 接口完整读取 Block 对应的对象，也有可能仅仅读取对象中一定范围的数据（比如通过 [S3 API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html) 的 `Range` 参数限定读取范围）。与此同时异步地进行预读（通过 [`--prefetch`](../reference/command_reference.md#mount) 参数控制预读并发度），预读会将整个对象存储块下载到本地缓存目录，以备后用（如指标图中的第 2 阶段，blockcache 有很高的写入带宽）。显然，在顺序读时，这些提前获取的数据都会被后续的请求访问到，缓存命中率非常高，因此也能充分发挥出对象存储的读取性能。数据流如下图所示：
 
-![](../images/internals-read.png)
+![internals-read](../images/internals-read.png)
 
 但是对于大文件随机读场景，预读的用途可能不大，反而容易因为读放大和本地缓存的频繁写入与驱逐使得系统资源的实际利用率降低，此时可以考虑用 `--prefetch=0` 禁用预读。考虑到此类场景下，一般的缓存策略很难有足够高的收益，可考虑尽可能提升缓存的整体容量，达到能几乎完全缓存所需数据的效果；或者直接禁用缓存（`--cache-size=0`），并尽可能提高对象存储的读取性能。
 

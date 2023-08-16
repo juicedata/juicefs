@@ -967,7 +967,7 @@ func (m *redisMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64,
 		if left > right {
 			right, left = left, right
 		}
-		if (right-left)/ChunkSize >= 100 {
+		if (right-left)/ChunkSize >= 10000 {
 			// super large
 			var cursor uint64
 			var keys []string

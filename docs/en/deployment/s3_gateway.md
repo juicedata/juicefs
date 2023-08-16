@@ -1,6 +1,6 @@
 ---
 title: Deploy JuiceFS S3 Gateway
-sidebar_position: 6
+sidebar_position: 4
 slug: /s3_gateway
 ---
 
@@ -8,7 +8,7 @@ JuiceFS has introduced S3 gateway since v0.11. The feature is implemented based 
 
 Since JuiceFS stores files in chunks, the files cannot be accessed directly through the interfaces of the underlying object storage. The S3 gateway accesses the underlying object storage in a similar way, shown in the following architecture diagram.
 
-![](../images/juicefs-s3-gateway-arch.png)
+![JuiceFS-S3-gateway-arch](../images/juicefs-s3-gateway-arch.png)
 
 ## Prerequisites
 
@@ -39,7 +39,7 @@ juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
 
 In this example, we assume that the JuiceFS file system is using a local Redis database. When the S3 gateway is enabled, the administrative interface of the S3 gateway can be accessed from the **current host** using the address `http://localhost:9000`.
 
-![](../images/s3-gateway-file-manager.jpg)
+![S3-gateway-file-manager](../images/s3-gateway-file-manager.jpg)
 
 If you want to access the S3 gateway from other hosts on the LAN or over the Internet, you need to change the listening address, e.g.
 
@@ -173,11 +173,11 @@ kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
 Here we have:
 
 - `name`: name of the JuiceFS file system.
-- `metaurl`: URL of the metadata engine (e.g. Redis). Read [this document](../guide/how_to_set_up_metadata_engine.md) for more information.
-- `storage`: Object storage type, such as `s3`, `gs`, `oss`. Read [this document](../guide/how_to_set_up_object_storage.md) to find all supported object storages.
-- `bucket`: Bucket URL. Read [this document](../guide/how_to_set_up_object_storage.md) to learn how to set up different object storage.
-- `access-key`: Access key of object storage. Read [this document](../guide/how_to_set_up_object_storage.md) for more information.
-- `secret-key`: Secret key of object storage. Read [this document](../guide/how_to_set_up_object_storage.md) for more information.
+- `metaurl`: URL of the metadata engine (e.g. Redis). Read [this document](../reference/how_to_set_up_metadata_engine.md) for more information.
+- `storage`: Object storage type, such as `s3`, `gs`, `oss`. Read [this document](../reference/how_to_set_up_object_storage.md) to find all supported object storages.
+- `bucket`: Bucket URL. Read [this document](../reference/how_to_set_up_object_storage.md) to learn how to set up different object storage.
+- `access-key`: Access key of object storage. Read [this document](../reference/how_to_set_up_object_storage.md) for more information.
+- `secret-key`: Secret key of object storage. Read [this document](../reference/how_to_set_up_object_storage.md) for more information.
 
 Then download the S3 gateway [deployment YAML](https://github.com/juicedata/juicefs/blob/main/deploy/juicefs-s3-gateway.yaml) and create the `Deployment` and `Service` resources with `kubectl`. The following points require special attention:
 
@@ -333,4 +333,4 @@ export MINIO_ROOT_PASSWORD=12345678
 
 The port number of the S3 gateway console is explicitly specified here as 59001. If not specified, a port will be randomly assigned. According to the command line prompt, open the address [http://127.0.0.1:59001](http://127.0.0.1:59001) in the browser to access the console, as shown in the following snapshot:
 
-![](../images/s3-gateway-console.png)
+![S3-gateway-console](../images/s3-gateway-console.png)

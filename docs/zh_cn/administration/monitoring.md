@@ -10,7 +10,7 @@ JuiceFS 客户端通过监控 API 对外暴露 [Prometheus](https://prometheus.i
 
 在宿主机挂载 JuiceFS 后，默认可以通过 `http://localhost:9567/metrics` 地址获得客户端输出的实时指标数据。其他不同类型的 JuiceFS 客户端（CSI 驱动、S3 网关、Hadoop SDK）收集指标数据的方式略有区别，详见[「收集监控指标」](#collect-metrics)。
 
-![](../images/prometheus-client-data.jpg)
+![Prometheus-client-data](../images/prometheus-client-data.jpg)
 
 这里以收集挂载点的监控指标为例，在 [`prometheus.yml`](https://prometheus.io/docs/prometheus/latest/configuration/configuration) 中添加抓取配置（`scrape_configs`），指向 JuiceFS 客户端的监控 API 地址：
 
@@ -54,7 +54,7 @@ scrape_configs:
 - **Name**：为了便于识别，可以填写文件系统的名称。
 - **URL**：Prometheus 的数据接口，默认为 `http://localhost:9090`。
 
-![](../images/grafana-data-source.jpg)
+![Grafana-data-source](../images/grafana-data-source.jpg)
 
 JuiceFS 提供一些 Grafana 的仪表盘模板，将模板导入以后就可以展示收集上来的监控指标。目前提供的仪表盘模板有：
 
@@ -65,7 +65,7 @@ JuiceFS 提供一些 Grafana 的仪表盘模板，将模板导入以后就可以
 
 Grafana 仪表盘如下图：
 
-![](../images/grafana_dashboard.png)
+![grafana_dashboard](../images/grafana_dashboard.png)
 
 ## 收集监控指标 {#collect-metrics}
 

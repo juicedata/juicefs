@@ -8,6 +8,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## AI
 
+- [构建易于运维的 AI 训练平台：存储选型与最佳实践](https://juicefs.com/zh-cn/blog/user-stories/easy-operate-ai-training-platform-storage-selection)，2023-08-04，孙冀川@思谋科技
 - [之江实验室：如何基于 JuiceFS 为超异构算力集群构建存储层](https://juicefs.com/zh-cn/blog/user-stories/high-performance-scale-out-heterogeneous-computing-power-cluster-storage)，2023-06-09，洪晨@之江实验室
 - [加速 AI 训练，如何在云上实现灵活的弹性吞吐](https://juicefs.com/zh-cn/blog/solutions/accelerate-ai-training-flexible-elastic-throughput-cloud)，2023-05-06，苏锐
 - [如何借助分布式存储 JuiceFS 加速 AI 模型训练](https://juicefs.com/zh-cn/blog/usage-tips/how-to-use-juicefs-to-speed-up-ai-model-training)，2023-04-25，高昌健
@@ -23,6 +24,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 大数据
 
+- [网易互娱出海之旅：大数据平台上云架构设计与实践](https://juicefs.com/zh-cn/blog/user-stories/hadoop-compatible-storage-big-data-cloud-platform-s3)，2023-08-09，柯维鸿@网易互娱
 - [Protobuf 在知乎大数据场景的应用，利用 JuiceFS 动态注入 JAR 包](https://zhuanlan.zhihu.com/p/586120009)，2022-11-23，胡梦宇@知乎
 - [金山云：基于 JuiceFS 的 Elasticsearch 温冷热数据管理实践](https://juicefs.com/zh-cn/blog/user-stories/juicefs-elasticsearch-cold-heat-data-management)，2022-11-17，侯学峰@金山云
 - [JuiceFS 替代 HDFS，苦 HDFS 小文件久矣](https://zhuanlan.zhihu.com/p/569586606)，2022-10-08，久耶供应链 大数据总监
@@ -73,10 +75,11 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [利用 JuiceFS 把 MySQL 备份验证性能提升 10 倍](https://juicefs.com/blog/cn/posts/optimize-xtrabackup-prepare-by-oplog)
 - [跨云数据搬迁利器：Juicesync](https://juicefs.com/blog/cn/posts/juicesync)
 - [下厨房基于 JuiceFS 的 MySQL 备份实践](https://juicefs.com/blog/cn/posts/xiachufang-mysql-backup-practice-on-juicefs)
-- [如何用 JuiceFS 归档备份 Nginx 日志](https://juicefs.com/blog/cn/posts/backup-nginx-logs-on-juicefs)
+- [如何用 JuiceFS 归档备份 NGINX 日志](https://juicefs.com/blog/cn/posts/backup-nginx-logs-on-juicefs)
 
 ## 教程、使用指南、评测及其他
 
+- [如何基于 JuiceFS 配置 Samba 和 NFS 共享？](https://juicefs.com/zh-cn/blog/usage-tips/configure-samba-and-nfs-shares-based-juicefs)，2023-08-04，于鸿儒
 - [云上使用 Stable Diffusion，模型数据如何共享和存储？](https://juicefs.com/zh-cn/blog/usage-tips/share-store-model-data-stable-diffusion-cloud)，2023-06-16，于鸿儒
 - [从架构到特性：JuiceFS 企业版首次全面解析](https://juicefs.com/zh-cn/blog/solutions/juicefs-enterprise-edition-features-vs-community-edition)，2023-06-06，高昌健
 - [浅析三款大规模分布式文件系统架构设计](https://juicefs.com/zh-cn/blog/engineering/large-scale-distributed-filesystem-comparison)，2023-03-08，高昌健
