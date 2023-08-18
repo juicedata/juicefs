@@ -940,7 +940,13 @@ In which:
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
-This command can clone a file or directory without copying the underlying data, similar to the `cp` command, but very fast.
+This command makes a clone of your data by creating a mere metadata copy, without creating any new data in the object storage, thus cloning is very fast regardless of target file / directory size. Under JuiceFS, this command is a better alternative to `cp`, moreover, for Linux clients using kernels with [`copy_file_range`](https://man7.org/linux/man-pages/man2/copy_file_range.2.html) support, then the `cp` command achieves the same result as `juicefs clone`.
+
+![clone](../images/juicefs-clone.svg)
+
+The clone result is a metadata copy, all the files are still referencing the same object storage blocks, that's why a clone behaves the same in every way as its originals. When either of them go through actual file data modification, the affected data blocks will be copied on write, and become new blocks after write, while the unchanged part of the files remains the same, still referencing the original blocks.
+
+**Clones takes up both file system storage space and metadata engine storage space**, pay special attention when making clones on large size directories.
 
 #### Synopsis
 
