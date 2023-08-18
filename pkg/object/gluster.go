@@ -221,11 +221,7 @@ func (d *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
-		info, err := e.Info()
-		if err != nil {
-			logger.Warnf("stat %s: %s", p, err)
-			continue
-		}
+		info := e.Info()
 		f := d.toFile(key, info, e.isSymlink)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
