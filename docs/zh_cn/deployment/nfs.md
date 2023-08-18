@@ -51,6 +51,7 @@ NFS 共享配置的语法为：
 ```
 "/mnt/myjfs/media" 192.168.1.0/24(rw,async,no_subtree_check,no_root_squash,fsid=1)
 ```
+
 ### 共享选项说明
 
 **其中涉及的共享选项：**
