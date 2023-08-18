@@ -115,7 +115,7 @@ When creating users for Samba, it is required that the user already exists in th
         sudo smbpasswd -a abc
         ```
 
-### View created samba users
+### View created Samba users
 
 `pdbedit` is a built-in tool in Samba used to manage the Samba user database. You can use this tool to list all the created Samba users:
 
