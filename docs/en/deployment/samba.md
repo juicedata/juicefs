@@ -1,14 +1,15 @@
 ---
-title: Creating Samba Shares
+title: Create Samba Shares
 sidebar_position: 8
+description: Learn how to share directories in the JuiceFS file system through Samba.
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Samba is an open-source software suite that implements the SMB/CIFS (Server Message Block/Common Internet File System) protocol, which is a commonly used file-sharing protocol in Windows systems. With Samba, you can create shared directories on Linux/Unix servers, allowing Windows computers to access and use these shared resources over the network.
+Samba is an open-source software suite that implements the SMB/CIFS (Server Message Block / Common Internet File System) protocol, which is a commonly used file-sharing protocol in Windows systems. With Samba, you can create shared directories on Linux/Unix servers, allowing Windows computers to access and use these shared resources over the network.
 
-To create a shared folder on a Linux system with Samba installed, you can edit the `smb.conf` configuration file. Once configured, Windows and macOS systems can access and read/write the shared folder using their file managers, Linux needs to install the Samba client for access.
+To create a shared folder on a Linux system with Samba installed, you can edit the `smb.conf` configuration file. Once configured, Windows and macOS systems can access and read/write the shared folder using their file managers. Linux needs to install the Samba client for access.
 
 When you need to share directories from the JuiceFS file system through Samba, you can simply use the `juicefs mount` command to mount the file system. Then, you can create Samba shares with the JuiceFS mount point or subdirectories.
 
@@ -16,7 +17,7 @@ When you need to share directories from the JuiceFS file system through Samba, y
 `juicefs mount` mounts the file system as a local user-space file system through the FUSE interface, making it identical to the local file system in terms of appearance and usage. Hence, it can be directly used to create Samba shares.
 :::
 
-## Installing Samba
+## Step 1: Install Samba
 
 Most Linux distributions provide Samba through their package managers.
 
@@ -39,7 +40,7 @@ sudo dnf install samba
 
 If you need to configure AD/DC (Active Directory / Domain Controller), additional software packages need to be installed. For more details, refer to the [Samba Official Installation Guide](https://wiki.samba.org/index.php/Distribution-specific_Package_Installation).
 
-## Enabling JuiceFS Extended Attribute (xattr) Support
+## Step 2: Enable JuiceFS extended attribute (xattr) support
 
 According to the [Samba official documentation](https://wiki.samba.org/index.php/File_System_Support#File_systems_without_xattr_support), it is recommended to use file systems that support extended attributes (xattr). To enable extended attribute support for JuiceFS during the mount process, use the `--enable-xattr` option. For example:
 
@@ -54,11 +55,11 @@ For cases where you configure automatic mounting through `/etc/fstab`, you can a
 redis://127.0.0.1:6379/0 /mnt/myjfs juicefs _netdev,max-uploads=50,writeback,cache-size=1024000,enable-xattr 0 0
 ```
 
-### Knowledge Extension: Why does Samba require file system support for extended attributes?
+### Knowledge extension: why Samba requires file system support for extended attributes
 
-Samba is software designed for Linux/Unix systems, serving file sharing to Windows systems. In Windows systems, many files and directories have additional metadata (e.g., file authors, keywords, icon positions) that is typically stored outside the POSIX file system and requires xattr format for storage in Windows. To ensure that these files can be correctly stored in Linux systems, Samba recommends using file systems that support extended attributes when creating shares.
+Samba is software designed for Linux/Unix systems, serving file sharing to Windows systems. In Windows systems, many files and directories have additional metadata, for example, file authors, keywords, and icon positions. This information is typically stored outside the POSIX file system and requires xattr format for storage in Windows. To ensure that these files can be correctly stored in Linux systems, Samba recommends using file systems that support extended attributes when creating shares.
 
-## Creating Samba Share
+## Step 3: Create a Samba share
 
 Assuming the JuiceFS mount point is `/mnt/myjfs`, if you want to create a Samba share for the `media` directory within it, you can configure it as follows:
 
@@ -70,7 +71,7 @@ Assuming the JuiceFS mount point is `/mnt/myjfs`, if you want to create a Samba 
     browseable = yes
 ```
 
-## Sharing for macOS
+## Share for macOS
 
 Apple macOS systems support direct access to Samba shares. Similar to Windows, macOS also has additional metadata (e.g., icon positions, Spotlight search) that needs to be saved using xattr. Samba version 4.9 and above have the support for macOS extended attributes enabled by default.
 
@@ -84,40 +85,42 @@ If your Samba version is lower than 4.9, you need to add the `ea support = yes` 
     ea support = yes
 ```
 
-## User Management in Samba
+## User management in Samba
 
 Samba has its own user database, independent of the operating system users. However, since Samba shares directories from the system, appropriate user permissions are required to read and write files.
 
-### Creating Samba Users
+### Create Samba users
 
 When creating users for Samba, it is required that the user already exists in the system, as Samba will automatically map the Samba user to the same-named system user with corresponding permissions.
 
-For example, if your system account is "herald," you can create a Samba account for it as follows:
+- If the user already exists in the system, assuming the system account is "herald," you can create a Samba account for it as follows:
 
-```shell
-sudo smbpasswd -a herald
-```
+    ```shell
+    sudo smbpasswd -a herald
+    ```
 
-Follow the on-screen prompts to set the password. The Samba account can have a different password than the system user.
+    Follow the on-screen prompts to set the password. The Samba account can have a different password than the system user.
 
-If you need to create a new user, you should first create the system user. For instance, to create a user named "abc," you can do:
+- If you need to create a new user, taking the example of creating a user named "abc":
 
-```shell
-sudo adduser abc
-```
+    1. Create a system user:
 
-Then, create a Samba user with the same name:
+        ```shell
+        sudo adduser abc
+        ```
 
-```shell
-sudo smbpasswd -a abc
-```
+    2. Create a corresponding Samba user with the same name:
 
-### Viewing Created Samba Users
+        ```shell
+        sudo smbpasswd -a abc
+        ```
 
-`pdbedit` is a built-in tool in Samba used to manage the Samba user database. You can use this tool to list all the created Samba users.
+### View created samba users
+
+`pdbedit` is a built-in tool in Samba used to manage the Samba user database. You can use this tool to list all the created Samba users:
 
 ```shell
 sudo pdbedit -L
 ```
 
-It will display a list of all created Samba users, including their usernames, Security Identifiers (SIDs), group membership, and other related information.
+It will display a list of all created Samba users, including their usernames, security identifiers (SIDs), group membership, and other related information.
