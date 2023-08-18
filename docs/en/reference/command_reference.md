@@ -171,7 +171,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--encrypt-rsa-key=value`|A path to RSA private key (PEM)|
 |`--encrypt-algo=aes256gcm-rsa`|encrypt algorithm (aes256gcm-rsa, chacha20-rsa) (default: "aes256gcm-rsa")|
 |`--hash-prefix`|add a hash prefix to name of objects (default: false)|
-|`--shards=0`|store the blocks into N buckets by hash of key (default: 0), when N is greater than 0, `bucket` should to be in the form of `%d`, e.g. `--bucket "juicefs-%d"`|
+|`--shards=0`|If your object storage limit speed in a bucket level (or you're using a self-hosted object storage with limited performance), you can store the blocks into N buckets by hash of key (default: 0), when N is greater than 0, `bucket` should to be in the form of `%d`, e.g. `--bucket "juicefs-%d"`. `--shards` cannot be changed afterwards and must be planned carefully ahead.|
 
 #### Management options {#format-management-options}
 
@@ -292,7 +292,9 @@ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 
 ### `juicefs gc` {#gc}
 
-Deal with leaked objects, and garbage fragments produced by file overwrites. See [Status Check & Maintenance](../administration/status_check_and_maintenance.md#gc).
+If for some reason, a object storage block escape JuiceFS management completely, i.e. the metadata is gone, but the block still persists in the object storage, and cannot be released, this is called an "object leak". If this happens without any special file system manipulation, it could well indicate a bug within JuiceFS, file a [GitHub Issue](https://github.com/juicedata/juicefs/issues/new/choose) to let us know.
+
+Meanwhile, you can run this command to deal with leaked objects. It also deletes stale slices produced by file overwrites. See [Status Check & Maintenance](../administration/status_check_and_maintenance.md#gc).
 
 #### Synopsis
 
@@ -653,7 +655,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--get-timeout=60`|the max number of seconds to download an object (default: 60)|
 |`--put-timeout=60`|the max number of seconds to upload an object (default: 60)|
 |`--io-retries=10`|number of retries after network failure (default: 10)|
-|`--max-uploads=20`|number of connections to upload (default: 20)|
+|`--max-uploads=20`|Upload concurrency, defaults to 20. This is already a reasonably high value for 4M writes, with such write pattern, increasing upload concurrency usually demands higher `--buffer-size`, learn more at [Read/Write Buffer](../guide/cache_management.md#buffer-size). But for random writes around 100K, 20 might not be enough and can cause congestion at high load, consider using a larger upload concurrency, or try to consolidate small writes in the application end. |
 |`--max-deletes=10`|number of threads to delete objects (default: 10)|
 |`--upload-limit=0`|bandwidth limit for upload in Mbps (default: 0)|
 |`--download-limit=0`|bandwidth limit for download in Mbps (default: 0)|

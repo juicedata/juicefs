@@ -43,7 +43,17 @@ JuiceFS Client controls these kinds of metadata as kernel cache: attribute (file
 --dir-entry-cache=1
 ```
 
-Caching these metadata in kernel for 1 second really speeds up `lookup` and `getattr` calls. **For a single mount point, kernel cache is automatically invalidated upon modification. But when different mount points access and modify the same file, active kernel cache invalidation is only effective on the client initiating the modifications, other clients can only wait for expiration.**
+Caching these metadata in kernel for 1 second really speeds up `lookup` and `getattr` calls.
+
+:::tip Consistency caveats for the mount point initiating changes
+When files are modified, the mount point initiating these changes will enjoy a higher level of consistency:
+
+* For the mount point initiating changes, kernel cache is automatically invalidated upon modification. But when different mount points access and modify the same file, active kernel cache invalidation is only effective on the client initiating the modifications, other clients can only wait for expiration.
+* When a `write` call completes, the mount point itself will immediately see the resulting file length change (e.g. use `ls -al` to verify that file size is growing)——but this doesn't mean the changes have been committed, before `flush` finishes, these modifications will not be reflected onto the object storage, and other mount points cannot see the latest writes. Using methods like `fsync, fdatasync, close` will all result in `flush` calls that will persist the file changes and make them visible to other clients.
+* As an extreme case of the previous situation, if you `write` successfully and have observed file size change in the current mount point, but the eventual `flush` fails for some reason, for example file system usage exceeds global quota, then the previously growing file size will suddenly be reduced, for example, dropped from 10M to 0, this often leads to misunderstanding that JuiceFS just emptied your files, while the reality is that the files haven't been successfully written from the beginning, the file size change that's only available to the current mount point is simply a preview of things, not an actual committed state.
+* The mount point initiating changes have access to file change events, and can use tools like [`fswatch`](https://emcrisostomo.github.io/fswatch/) or [`Watchdog`](https://python-watchdog.readthedocs.io/en/stable). But the scope is obviously limited to the files changed within the mount point itself, i.e. files modified by A cannot be monitored by mount point B.
+* Due to the fact that FUSE doesn't yet support inotify API, if you'd like to monitor file change events using libraries like [Watchdog](https://python-watchdog.readthedocs.io/en/stable), you can only achieve this via polling (e.g. [`PollingObserver`](https://python-watchdog.readthedocs.io/en/stable/_modules/watchdog/observers/polling.html#PollingObserver)).
+:::
 
 Do note that `entry` cache is gradually built upon file access and may not contain a complete file list under directory, so `readdir` calls or `ls` command cannot utilize this cache, that's why `entry` cache only improves `lookup` performance. The meaning of `direntry` here is different from [kernel directory entry](https://www.kernel.org/doc/html/latest/filesystems/ext4/directory.html), `direntry` does not tell you the files under a directory, but rather, it's the same concept as `entry`, just distinguished based on whether it's a directory.
 

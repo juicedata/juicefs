@@ -49,11 +49,12 @@ slug: /faq
 
 第二个原因是 JuiceFS 是异步删除对象存储中的数据，所以对象存储的空间变化会慢一点。如果你需要立即清理对象存储中需要被删除的数据，可以尝试运行 [`juicefs gc`](reference/command_reference.md#gc) 命令。
 
-### 为什么文件系统数据量与对象存储占用空间存在差异？
+### 为什么文件系统数据量与对象存储占用空间存在差异？ {#size-inconsistency}
 
 * [JuiceFS 随机写](#random-write)会产生文件碎片，因此对象存储的占用空间大部分情况下是大于等于实际大小的，尤其是短时间内进行大量的覆盖写产生许多文件碎片后，这些碎片仍旧占用着对象存储的空间。不过也不必担心，因为在每次读／写文件的时候都会检查，并在后台任务进行该文件相关碎片的整理工作。你可以通过 [`juicefs gc —-compact -—delete`](./reference/command_reference.md#gc) 命令手动触发合并与回收。
-* 如果开启了[「回收站」](./security/trash.md)功能，删除的数据、被合并的碎片文件不会立刻清理，而是保留指定时间后，才进行清理删除（在 JuiceFS 客户端的后台任务中进行）。
-* 如果 JuiceFS 文件系统开启了压缩功能（也就是 [`format`](./reference/command_reference.md#format) 命令的 `--compress` 参数，默认不开启），那么对象存储上存储的对象有可能比实际文件大小更小（取决于不同类型文件的压缩比）。
+* 如果开启了[「回收站」](./security/trash.md)功能，被删除的文件不会立刻清理，而是在回收站内保留指定时间后，才进行清理删除。
+* 碎片被合并以后，失效的旧碎片也会在回收站中进行保留（但对用户不可见），过期时间也遵循回收站的设置。如果想要清理这些碎片，阅读[回收站和文件碎片](./security/trash.md#gc)。
+* 如果文件系统开启了压缩功能（也就是 [`format`](./reference/command_reference.md#format) 命令的 `--compress` 参数，默认不开启），那么对象存储上存储的对象有可能比实际文件大小更小（取决于不同类型文件的压缩比）。
 * 根据所使用对象存储的[存储类型](reference/how_to_set_up_object_storage.md#storage-class)不同，云服务商可能会针对某些存储类型设置最小计量单位。例如阿里云 OSS 低频访问存储的[最小计量单位](https://help.aliyun.com/document_detail/173534.html)是 64KB，如果单个文件小于 64KB 也会按照 64KB 计算。
 * 对于自建对象存储，例如 MinIO，实际占用大小也受到[存储级别](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md)设置的影响。
 
@@ -93,21 +94,11 @@ JuiceFS 不将原始文件存入对象存储，而是将其按照某个大小（
 
 请查看[「客户端写缓存」](guide/cache_management.md#writeback)了解更多信息。
 
-### JuiceFS 目前支持分布式缓存吗？
+### JuiceFS 支持分布式缓存吗？
 
-到 JuiceFS 1.0 为止，还不支持该功能。
+企业版支持，详见[「分布式缓存」](https://juicefs.com/docs/zh/cloud/guide/distributed-cache)。
 
 ## 访问相关问题
-
-### 数据更新什么时候会对其它客户端可见？
-
-所有的元数据更新都是立即对其它客户端可见。JuiceFS 保证关闭再打开（close-to-open）一致性，请查看[「一致性」](guide/cache_management.md#consistency)了解更多信息。
-
-通过 `write()` 新写入的数据会缓存在内核和客户端中，可以被当前机器的其它进程看到，其它机器暂时看不到。
-
-调用 `fsync()`、`fdatasync()` 或者 `close()` 来强制将数据上传到对象存储并更新元数据，或者数秒钟自动刷新后，其它客户端才能看到更新，这也是绝大多数分布式文件系统采取的策略。
-
-请查看[「客户端写缓存」](guide/cache_management.md#writeback)了解更多信息。
 
 ### 为什么同一个用户在主机 X 上有权限访问 JuiceFS 的文件，在主机 Y 上访问该文件却没有权限？
 
