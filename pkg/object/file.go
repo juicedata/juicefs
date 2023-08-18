@@ -198,7 +198,7 @@ func (d *filestore) Delete(key string) error {
 }
 
 type mEntry struct {
-	os.DirEntry
+	os.FileInfo
 	name      string
 	fi        os.FileInfo
 	isSymlink bool
@@ -208,18 +208,18 @@ func (m *mEntry) Name() string {
 	return m.name
 }
 
-func (m *mEntry) Info() (os.FileInfo, error) {
+func (m *mEntry) Info() os.FileInfo {
 	if m.fi != nil {
-		return m.fi, nil
+		return m.fi
 	}
-	return m.DirEntry.Info()
+	return m.FileInfo
 }
 
 func (m *mEntry) IsDir() bool {
 	if m.fi != nil {
 		return m.fi.IsDir()
 	}
-	return m.DirEntry.IsDir()
+	return m.FileInfo.IsDir()
 }
 
 // readDirSorted reads the directory named by dirname and returns
@@ -230,7 +230,7 @@ func readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 		return nil, err
 	}
 	defer f.Close()
-	entries, err := f.ReadDir(-1)
+	entries, err := f.Readdir(-1)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +239,7 @@ func readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 	for i, e := range entries {
 		if e.IsDir() {
 			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}
-		} else if !e.Type().IsRegular() && followLink {
+		} else if !e.Mode().IsRegular() && followLink {
 			fi, err := os.Stat(filepath.Join(dirname, e.Name()))
 			if err != nil {
 				mEntries[i] = &mEntry{e, e.Name(), nil, true}
@@ -251,7 +251,7 @@ func readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 			}
 			mEntries[i] = &mEntry{e, name, fi, false}
 		} else {
-			mEntries[i] = &mEntry{e, e.Name(), nil, !e.Type().IsRegular()}
+			mEntries[i] = &mEntry{e, e.Name(), nil, !e.Mode().IsRegular()}
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
@@ -298,11 +298,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
-		info, err := e.Info()
-		if err != nil {
-			logger.Warnf("stat %s: %s", p, err)
-			continue
-		}
+		info := e.Info()
 		f := d.toFile(key, info, e.isSymlink)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
