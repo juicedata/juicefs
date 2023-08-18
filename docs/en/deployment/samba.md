@@ -103,7 +103,7 @@ When creating users for Samba, it is required that the user already exists in th
 
 - If you need to create a new user, taking the example of creating a user named "abc":
 
-    1. Create a system user:
+    1. Create a user:
 
         ```shell
         sudo adduser abc
