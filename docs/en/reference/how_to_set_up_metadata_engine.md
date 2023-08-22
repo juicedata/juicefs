@@ -537,7 +537,36 @@ When mounting to the background, the path to the certificate needs to use an abs
 
 ## FoundationDB <VersionAdd>1.1</VersionAdd>
 
-[FoundationDB](https://www.foundationdb.org) is a distributed database that can hold large-scale structured data on multiple clustered servers. The database system focuses on high performance, high scalability, and good fault tolerance.
+[FoundationDB](https://www.foundationdb.org) is a distributed database that can hold large-scale structured data on multiple clustered servers. The database system focuses on high performance, high scalability, and good fault tolerance. Using FoundationDB as the metadata engine requires its client library, so by default it is not enabled in the JuiceFS released binaries. If you need to use it, please compile it yourself.
+
+### Compile JuiceFS
+
+First, you need to install the FoundationDB client library (refer to the [official documentation](https://apple.github.io/foundationdb/api-general.html#installing-client-binaries) for more details):
+
+<Tabs>
+  <TabItem value="debian" label="Debian and derivatives">
+
+```shell
+curl -O https://github.com/apple/foundationdb/releases/download/6.3.25/foundationdb-clients_6.3.25-1_amd64.deb
+sudo dpkg -i foundationdb-clients_6.3.25-1_amd64.deb
+```
+
+  </TabItem>
+  <TabItem value="centos" label="RHEL and derivatives">
+
+```shell
+curl -O https://github.com/apple/foundationdb/releases/download/6.3.25/foundationdb-clients-6.3.25-1.el7.x86_64.rpm
+sudo rpm -Uvh foundationdb-clients-6.3.25-1.el7.x86_64.rpm
+```
+
+  </TabItem>
+</Tabs>
+
+Then, compile JuiceFS supporting FoundationDB:
+
+```shell
+make juicefs.fdb
+```
 
 ### Create a file system
 
@@ -550,7 +579,7 @@ fdb://[config file address]?prefix=<prefix>
 The `<cluster_file_path>` is the FoundationDB configuration file path, which is used to connect to the FoundationDB server. The `<prefix>` is a user-defined string, which can be used to distinguish multiple file systems or applications when they share the same FoundationDB cluster. For example:
 
 ```shell
-juicefs format \
+juicefs.fdb format \
     --storage s3 \
     ... \
     "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
@@ -661,7 +690,7 @@ export FDB_TLS_VERIFY_PEERS=Check.Valid=0
 ### Mount a file system
 
 ```shell
-juicefs mount -d \
+juicefs.fdb mount -d \
     "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
     /mnt/jfs
 ```
