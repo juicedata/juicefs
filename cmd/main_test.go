@@ -84,6 +84,11 @@ func TestHandleSysMountArgs(t *testing.T) {
 			false,
 		},
 		{
+			[]string{"/mount.juicefs", "memkv://", "/jfs", "-o", "verbose"},
+			"juicefs mount -d --verbose memkv:// /jfs",
+			false,
+		},
+		{
 			[]string{"/mount.juicefs", "memkv://", "/jfs", "-o", "debug"},
 			"juicefs mount -d --debug -o debug memkv:// /jfs",
 			false,
