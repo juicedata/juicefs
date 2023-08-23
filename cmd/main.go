@@ -143,14 +143,17 @@ func handleSysMountArgs(args []string) []string {
 				fields := strings.SplitN(opt, "=", 2)
 				if flagName, ok := optionToCmdFlag[fields[0]]; ok {
 					newArgs = append(newArgs, fmt.Sprintf("--%s=%s", flagName, fields[1]))
-				} else if isBool, ok := cmdFlagsLookup[fields[0]]; ok && !isBool {
+				} else if _, ok := cmdFlagsLookup[fields[0]]; ok {
 					newArgs = append(newArgs, fmt.Sprintf("--%s=%s", fields[0], fields[1]))
 				} else {
 					fuseOptions = append(fuseOptions, opt)
 				}
 			} else if flagName, ok := optionToCmdFlag[opt]; ok {
 				newArgs = append(newArgs, fmt.Sprintf("--%s", flagName))
-			} else if isBool, ok := cmdFlagsLookup[opt]; ok && isBool {
+			} else if isBool, ok := cmdFlagsLookup[opt]; ok {
+				if !isBool {
+					logger.Fatalf("option %s requires a value", opt)
+				}
 				newArgs = append(newArgs, fmt.Sprintf("--%s", opt))
 				if opt == "debug" {
 					fuseOptions = append(fuseOptions, opt)
