@@ -29,8 +29,8 @@ import (
 func globalFlags() []cli.Flag {
 	return []cli.Flag{
 		&cli.BoolFlag{
-			Name:    "debug",
-			Aliases: []string{"verbose", "v"},
+			Name:    "verbose",
+			Aliases: []string{"debug", "v"},
 			Usage:   "enable debug log",
 		},
 		&cli.BoolFlag{

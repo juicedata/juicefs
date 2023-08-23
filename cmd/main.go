@@ -121,8 +121,10 @@ func handleSysMountArgs(args []string) ([]string, error) {
 	fuseOptions := make([]string, 0, 20)
 	cmdFlagsLookup := make(map[string]bool, 20)
 	for _, f := range append(cmdMount().Flags, globalFlags()...) {
-		if names := f.Names(); len(names) > 0 && len(names[0]) > 1 {
-			_, cmdFlagsLookup[names[0]] = f.(*cli.BoolFlag)
+		for _, name := range f.Names() {
+			if len(name) > 1 {
+				_, cmdFlagsLookup[name] = f.(*cli.BoolFlag)
+			}
 		}
 	}
 
