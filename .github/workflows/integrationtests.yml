@@ -36,7 +36,6 @@ jobs:
         run: |
           make juicefs
 
-
       - name: Run Redis
         run: |
           sudo docker run -d --name redis -v redis-data:/data  \
