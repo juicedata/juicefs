@@ -18,7 +18,7 @@ on:
 
 jobs:
   pg-list:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     services:
       postgres:
         image: postgres
@@ -72,7 +72,7 @@ jobs:
 
 
   mysql-list:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - name: Checkout
@@ -115,7 +115,7 @@ jobs:
 
 
   redis-list:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     services:
       redis:
         # Docker Hub image
@@ -170,7 +170,7 @@ jobs:
 
 
   sqlite3-list:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - name: Checkout

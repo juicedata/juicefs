@@ -16,7 +16,7 @@ on:
   
 jobs:
   gc-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     services:
       redis:
         # Docker Hub image

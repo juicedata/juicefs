@@ -18,7 +18,7 @@ on:
 
 jobs:
   upload-big-file-with-redis:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     services:
       redis:
         # Docker Hub image
@@ -45,7 +45,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-small-files-with-redis:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     services:
       redis:
         # Docker Hub image
@@ -72,7 +72,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-small-files-with-mysql-read-uncommitted:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - run: sudo /etc/init.d/mysql start
@@ -88,7 +88,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-small-files-with-mysql-read-committed:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - run: sudo /etc/init.d/mysql start
@@ -104,7 +104,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-small-files-with-mysql-repeatable-read:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - run: sudo /etc/init.d/mysql start
@@ -120,7 +120,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-small-files-with-mysql-serializable:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - run: sudo /etc/init.d/mysql start
@@ -136,7 +136,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-big-files-with-mysql-read-uncommitted:
-    runs-on: ubuntu-latest          
+    runs-on: ubuntu-20.04          
     steps:
       - uses: actions/checkout@v3
       - run: sudo /etc/init.d/mysql start
@@ -152,7 +152,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-big-files-with-mysql-read-committed:
-    runs-on: ubuntu-latest          
+    runs-on: ubuntu-20.04          
     steps:
       - uses: actions/checkout@v3
       - run: sudo /etc/init.d/mysql start
@@ -168,7 +168,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-big-files-with-mysql-repeatable-read:
-    runs-on: ubuntu-latest          
+    runs-on: ubuntu-20.04          
     steps:
       - uses: actions/checkout@v3
       - run: sudo /etc/init.d/mysql start
@@ -184,7 +184,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-big-files-with-mysql-serializable:
-    runs-on: ubuntu-latest          
+    runs-on: ubuntu-20.04          
     steps:
       - uses: actions/checkout@v3
       - run: sudo /etc/init.d/mysql start
@@ -200,7 +200,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-big-files-with-mariadb-read-committed:
-    runs-on: ubuntu-latest          
+    runs-on: ubuntu-20.04          
     steps:
       - uses: actions/checkout@v3
       - name: install 
@@ -218,7 +218,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-big-files-with-badgerdb:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - run: sudo go get github.com/dgraph-io/badger/v3
@@ -233,7 +233,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-small-files-with-badgerdb:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - run: sudo go get github.com/dgraph-io/badger/v3
@@ -249,7 +249,7 @@ jobs:
 
 
   upload-small-files-with-sqlite:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - run: sudo /etc/init.d/mysql start
@@ -264,7 +264,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-big-files-with-sqlite:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - run: sudo /etc/init.d/mysql start
@@ -279,7 +279,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-small-files-with-pg:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     services:
       postgres:
         image: postgres
@@ -307,7 +307,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-big-files-with-pg-read-committed:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     services:
       postgres:
         image: postgres
@@ -337,7 +337,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-big-files-with-pg-repeatable-read:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     services:
       postgres:
         image: postgres
@@ -367,7 +367,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-big-files-with-pg-serializable:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     services:
       postgres:
         image: postgres
@@ -397,7 +397,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-big-files-with-tidb-read-committed:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - name: Install TiDB
@@ -418,7 +418,7 @@ jobs:
         if: ${{ failure() }}
         uses: lhotari/action-upterm@v1   
   upload-big-files-with-tidb-repeatable-read:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - name: Install TiDB
@@ -440,7 +440,7 @@ jobs:
         uses: lhotari/action-upterm@v1   
 
   upload-small-files-with-etcd:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - run: sudo apt install etcd
@@ -455,7 +455,7 @@ jobs:
         uses: lhotari/action-upterm@v1    
 
   upload-big-files-with-etcd:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - run: sudo apt install etcd
@@ -524,7 +524,7 @@ jobs:
   #         isolation_level: "serializable"    
 
   upload-small-files-with-tikv:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - name: Install TiKV
@@ -546,7 +546,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   upload-big-files-with-tikv:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - name: Install TiKV
@@ -568,7 +568,7 @@ jobs:
         uses: lhotari/action-upterm@v1
 
   sync-to-gateway-with-multithread:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
         uses: actions/checkout@v2
