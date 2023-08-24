@@ -116,6 +116,7 @@ runs:
                           ./mc admin user add minio juicedata juicedata
                           ./mc admin policy attach minio consoleAdmin --user juicedata  
                           sudo ./$jfs_bin format --trash-days 0 --storage minio --bucket  ${{ inputs.bucket }} --access-key juicedata --secret-key juicedata  ${{ inputs.meta_url }} juicefs-version-compatible
+                          sudo ./$jfs_bin config ${{ inputs.meta_url }} --min-client-version 1.0.0
                           echo "format finished" 
                           ;;
                       "mount") 
