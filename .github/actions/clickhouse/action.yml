@@ -14,9 +14,6 @@ runs:
       with:
         go-version: '1.18.x'
 
-    - name: Set up Docker
-      uses: docker-practice/actions-setup-docker@master
-
     - name: Build linux target
       shell: bash
       run: make juicefs
