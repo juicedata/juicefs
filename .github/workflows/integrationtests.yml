@@ -27,9 +27,6 @@ jobs:
         with:
           go-version: '1.18.x'
 
-      - name: Set up Docker
-        uses: docker-practice/actions-setup-docker@master
-
       - name: Checkout
         uses: actions/checkout@v2
         with:
