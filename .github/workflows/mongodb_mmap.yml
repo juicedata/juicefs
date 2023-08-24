@@ -24,13 +24,9 @@ jobs:
           go-version: '1.18.x'
 
       - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '2.7'
-          architecture: 'x64'
-
-      - name: Set up Docker
-        uses: docker-practice/actions-setup-docker@master
+        run: |
+          sudo rm /usr/bin/python
+          sudo ln -s python2 /usr/bin/python
 
       - name: Checkout
         uses: actions/checkout@v2
@@ -40,7 +36,6 @@ jobs:
       - name: Build linux target
         run: |
           make juicefs
-
 
       - name: Run Redis
         run: |
@@ -54,8 +49,6 @@ jobs:
       - name: Juicefs Mount
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --cache-size 3072 --no-usage-report &
-
-
 
       - name: Set up Mongodb
         run: |
