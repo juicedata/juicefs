@@ -32,7 +32,6 @@ jobs:
         run: |
           make juicefs
 
-
       - name: Run Redis
         run: |
           sudo docker run -d --name redis -v redis-data:/data  \
@@ -46,11 +45,11 @@ jobs:
         run: |
           sudo ./juicefs mount -d redis://127.0.0.1:6379/1 /jfs/ --enable-xattr --cache-size 3072 --no-usage-report &
 
-
-
       - name: Set up Mongodb
         run: |
           df -lh
+          sudo rm /usr/bin/python
+          sudo ln -s python2 /usr/bin/python
           cd /jfs/
           git clone https://github.com/sanwan/actionsoftware.git
           cd actionsoftware
@@ -58,8 +57,6 @@ jobs:
           cd mongodb-linux-x86_64-3.0.0
           mkdir /jfs/mongodb/
           nohup ./bin/mongod --dbpath /jfs/mongodb &
-
-
 
       - name: Insert Data
         run: |
