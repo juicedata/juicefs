@@ -7,14 +7,6 @@ on:
     - 'release-**'
     paths:
     - '**.go'
-  pull_request:
-    branches:
-    - 'main'
-    - 'release-**'
-    paths:
-    - '**.yml'
-    - '**.go'
-    - 'Makefile'
   workflow_dispatch:
 
 jobs:

@@ -7,12 +7,6 @@ on:
       # - main
     paths-ignore:
       - docs/**
-  pull_request:
-    branches:
-      - release-**
-      - main
-    paths-ignore:
-      - docs/**
   workflow_dispatch:
     inputs:
       debug:
