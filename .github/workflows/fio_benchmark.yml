@@ -8,7 +8,7 @@ on:
 jobs:
   big-file-sequential-read:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -23,7 +23,7 @@ jobs:
 
   big-file-sequential-write:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -38,7 +38,7 @@ jobs:
 
   big-file-multi-read-1:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -53,7 +53,7 @@ jobs:
 
   big-file-multi-read-4:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -68,7 +68,7 @@ jobs:
 
   big-file-multi-read-16:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -83,7 +83,7 @@ jobs:
 
   big-file-multi-write-1:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -98,7 +98,7 @@ jobs:
 
   big-file-multi-write-4:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -113,7 +113,7 @@ jobs:
 
   big-file-multi-write-16:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -128,7 +128,7 @@ jobs:
 
   big-file-rand-read-4k:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -146,7 +146,7 @@ jobs:
         
   big-file-rand-read-256k:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -164,7 +164,7 @@ jobs:
 
   big-file-random-write-16k:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -179,7 +179,7 @@ jobs:
 
   big-file-random-write-256k:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -194,7 +194,7 @@ jobs:
 
   small-file-seq-read-4k:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -212,7 +212,7 @@ jobs:
 
   small-file-seq-read-256k:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -230,7 +230,7 @@ jobs:
         
   small-file-seq-write-4k:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -245,7 +245,7 @@ jobs:
 
   small-file-seq-write-256k:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -260,7 +260,7 @@ jobs:
 
   small-file-multi-read-1:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -275,7 +275,7 @@ jobs:
 
   small-file-multi-read-4:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -290,7 +290,7 @@ jobs:
 
   small-file-multi-read-16:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -305,7 +305,7 @@ jobs:
 
   small-file-multi-write-1:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -320,7 +320,7 @@ jobs:
 
   small-file-multi-write-4:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -335,7 +335,7 @@ jobs:
 
   small-file-multi-write-16:
     if: github.repository == 'juicedata/juicefs'
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
