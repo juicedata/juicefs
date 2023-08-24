@@ -73,7 +73,7 @@ runs:
     - name: vdbench-big 
       shell: bash
       run: | 
-        ./juicefs format ${{inputs.meta_url}} vdbench-big
+        ./juicefs format ${{inputs.meta_url}} vdbench-big --trash-days 0
         ./juicefs mount -d ${{inputs.meta_url}} ${{ inputs.mount_point }}
         vdbench/vdbench -f ./.github/workflows/resources/vdbench_big_file.conf
 
@@ -97,7 +97,7 @@ runs:
     - name: vdbench-small
       shell: bash
       run: |
-        ./juicefs format ${{inputs.meta_url}} vdbench-small
+        ./juicefs format ${{inputs.meta_url}} vdbench-small --trash-days 0
         ./juicefs mount -d ${{inputs.meta_url}} ${{ inputs.mount_point }}        
         vdbench/vdbench -f ./.github/workflows/resources/vdbench_small_file.conf
 
