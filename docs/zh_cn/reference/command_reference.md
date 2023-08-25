@@ -292,7 +292,7 @@ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 
 ### `juicefs gc` {#gc}
 
-如果对象因为某种原因，完全脱离了 JuiceFS 的管理，也就是对象存储上依然还存在，但在 JuiceFS 元数据已经不复存在，无法被回收释放，这种现象称作「对象泄漏」。如果你并没有进行任何特殊操作，那么对象泄露通常昭示着 bug，建议提交 [GitHub Issue](https://github.com/juicedata/juicefs/issues/new/choose)。
+如果对象存储块因为某种原因，完全脱离了 JuiceFS 的管理，也就是对象存储上依然还存在，但在 JuiceFS 元数据已经不复存在，无法被回收释放，这种现象称作「对象泄漏」。如果你并没有进行任何特殊操作，那么对象泄露通常昭示着 bug，建议提交 [GitHub Issue](https://github.com/juicedata/juicefs/issues/new/choose)。
 
 与此同时，你可以用该命令清理泄漏对象。顺带一提，该命令还能够清理失效的文件碎片。详见[「状态检查 & 维护」](../administration/status_check_and_maintenance.md#gc)。
 
@@ -315,9 +315,9 @@ juicefs gc redis://localhost --delete
 
 |项 | 说明|
 |-|-|
-|`--delete`|删除泄漏的对象 (默认：false)|
-|`--compact`|整理所有文件的碎片 (默认：false).|
-|`--threads=10`|用于删除泄漏对象的线程数 (默认：10)|
+|`--delete`|删除泄漏的对象，以及因不完整的 `clone` 命令而产生泄漏的元数据。|
+|`--compact`|对所有文件执行碎片合并。|
+|`--threads=10`|并发线程数，默认为 10。|
 
 ### `juicefs fsck` {#fsck}
 
@@ -941,13 +941,7 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
-对指定数据进行克隆，创建克隆时不会实际拷贝对象存储数据，而是仅拷贝元数据，因此不论对多大的文件或目录进行克隆，都非常快。因此对于 JuiceFS，这个命令是 `cp` 更好的替代，甚至对于 Linux 客户端来说，如果所使用的内核支持 [`copy_file_range`](https://man7.org/linux/man-pages/man2/copy_file_range.2.html)，那么调用 `cp` 时，实际发生的也是同样的元数据拷贝，调用将会格外迅速。
-
-![clone](../images/juicefs-clone.svg)
-
-克隆结果是纯粹的元数据拷贝，实际引用的对象存储块和源文件相同，因此在各方面都和源文件一样，可以正常读写。有任何一方文件数据被实际修改时，对应的数据块变更会以写入时复制（Copy-on-Write）的方式，写入到新的数据块，而其他未经修改的文件区域，由于对象存储数据块仍然相同，所以引用关系依然保持不变。
-
-需要注意的是，**克隆产生的元数据，也同样占用文件系统存储空间，以及元数据引擎的存储空间**，因此对庞大的目录进行克隆操作时请格外谨慎。
+快速在同一挂载点下克隆目录或者文件，只拷贝元数据但不拷贝数据块，因此拷贝速度非常快。更多介绍详见[「克隆文件或目录」](../guide/clone.md)。
 
 #### 概览
 
@@ -968,4 +962,4 @@ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2
 
 |项 | 说明|
 |-|-|
-|`--preserve, -p`|保留文件的 UID、GID 和 mode (默认值：false)|
+|`--preserve, -p`|克隆时默认使用当前用户的 UID 和 GID，而 mode 则使用当前用户的 umask 重新计算获得。如果启用该选项，则保留文件的 UID、GID 和 mode。|
