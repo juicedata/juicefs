@@ -1,0 +1,123 @@
+name: "unittests"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-*'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    #The branches below must be a subset of the branches above
+    branches:
+      - 'main'
+      - 'release-*'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/**'
+      - '!.github/workflows/unittests.yml'
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  unittests:
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [ 'test.meta.core','test.meta.non-core','test.pkg','test.cmd', 'test.fdb' ]
+    timeout-minutes: 60
+    runs-on: ubuntu-20.04
+    env:
+      MINIO_TEST_BUCKET: 127.0.0.1:9000/testbucket
+      MINIO_ACCESS_KEY: testUser
+      MINIO_SECRET_KEY: testUserPassword
+      GLUSTER_VOLUME: jfstest/gv0
+      DISPLAY_PROGRESSBAR: false
+      HDFS_ADDR: localhost:8020
+      SFTP_HOST: localhost:2222:/upload/
+      SFTP_USER: root
+      SFTP_PASS: password
+      WEBDAV_TEST_BUCKET: 127.0.0.1:9007
+      TIKV_ADDR: 127.0.0.1
+      REDIS_ADDR: redis://127.0.0.1:6379/13
+      ETCD_ADDR: 127.0.0.1:3379
+      MYSQL_ADDR: (127.0.0.1:3306)/dev
+      MYSQL_USER: root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          
+      - name: Build
+        uses: ./.github/actions/build
+        with: 
+          useBeta: true
+
+      - name: Install Packages
+        run: |
+          sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr glusterfs-server libglusterfs-dev
+          sudo mkdir -p /home/travis/.m2/
+
+      - if: matrix.test == 'test.meta.non-core'
+        name: Install redis-cluster
+        uses: vishnudxb/redis-cluster@1.0.5
+        with:
+            master1-port: 7000
+            master2-port: 7001
+            master3-port: 7002
+            slave1-port: 7003
+            slave2-port: 7004
+            slave3-port: 7005
+
+      - name: Prepare Database
+        run: |
+          TEST=${{matrix.test}} ./.github/scripts/prepare_db.sh
+
+      - name: Unit Test
+        timeout-minutes: 30
+        run: |
+          test=${{matrix.test}}
+          make $test
+
+      # - name: Code Coverage
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     files: ./cov.out
+
+      - name: Setup upterm session
+        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        timeout-minutes: 120
+        uses: lhotari/action-upterm@v1
+
+
+  success-all-test:
+    runs-on: ubuntu-latest
+    needs: [unittests]
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: actions/checkout@v3
+
+      - name: Check Failure
+        if: env.WORKFLOW_CONCLUSION == 'failure'
+        run: exit 1
+
+      - name: Send Slack Notification
+        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        uses: juicedata/slack-notify-action@main
+        with:
+          channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
+          slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
+
+      - name: Success
+        if: ${{ success() }}
+        run: echo "All Done"
+
