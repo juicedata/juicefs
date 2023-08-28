@@ -270,6 +270,7 @@ func newGluster(endpoint, ak, sk, token string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("no volume provided")
 	}
 	name := ps[1]
+	// multiple clinets for possible performance improvement
 	var size int
 	if ssize := os.Getenv("JFS_NUM_GLUSTER_CLIENTS"); ssize != "" {
 		size, _ = strconv.Atoi(ssize)
@@ -280,6 +281,24 @@ func newGluster(endpoint, ak, sk, token string) (ObjectStorage, error) {
 	if size < 1 {
 		size = 1
 	}
+	// logging
+	level := gfapi.LogInfo
+	if slevel := os.Getenv("JFS_GLUSTER_LOG_LEVEL"); slevel != "" {
+		switch strings.ToUpper(slevel) {
+		case "ERROR":
+			level = gfapi.LogError
+		case "WARN", "WARNING":
+			level = gfapi.LogWarning
+		case "INFO":
+			level = gfapi.LogInfo
+		case "DEBUG":
+			level = gfapi.LogDebug
+		case "TRACE":
+			level = gfapi.LogTrace
+		}
+	}
+	hosts := strings.Split(uri.Host, ",")
+	pid := os.Getpid()
 	ostore := gluster{
 		name: name,
 		vols: make([]*gfapi.Volume, size),
@@ -287,9 +306,13 @@ func newGluster(endpoint, ak, sk, token string) (ObjectStorage, error) {
 	for i := range ostore.vols {
 		v := &gfapi.Volume{}
 		// TODO: support port in host
-		err = v.Init(name, strings.Split(uri.Host, ",")...)
+		err = v.Init(name, hosts...)
 		if err != nil {
 			return nil, fmt.Errorf("init %s: %s", name, err)
+		}
+		err = v.SetLogging(fmt.Sprintf("/var/log/glusterfs/%s-%s-%d-%d.log", hosts[0], name, pid, i), level)
+		if err != nil {
+			return nil, fmt.Errorf("set logging %s: %s", name, err)
 		}
 		err = v.Mount()
 		if err != nil {
