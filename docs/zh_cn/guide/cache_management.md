@@ -18,7 +18,7 @@ JuiceFS 提供包括元数据缓存、数据读写缓存等多种缓存机制。
 
 分布式系统，往往需要在缓存和一致性之间进行取舍。JuiceFS 由于其元数据分离架构，需要从元数据、文件数据（对象存储）、文件数据本地缓存三方面来思考一致性问题：
 
-对于[元数据缓存](#metadata-cache)，JuiceFS 默认的挂载设置满足「关闭再打开（close-to-open）」一致性，也就是说一个客户端修改并关闭文件之后，其他客户端重新打开这个文件都会看到最新的修改。与此同时，默认的挂载参数设置了 1 秒的内核元数据缓存，满足了一般场景的需要。但如果你的应用需要更激进的缓存设置以提升性能，可以阅读下方章节，对元数据缓存进行针对性的调优。
+对于[元数据缓存](#metadata-cache)，JuiceFS 默认的挂载设置满足「关闭再打开（close-to-open）」一致性，也就是说一个客户端修改并关闭文件之后，其他客户端重新打开这个文件都会看到最新的修改。与此同时，默认的挂载参数设置了 1 秒的内核元数据缓存，满足了一般场景的需要。但如果你的应用需要更激进的缓存设置以提升性能，可以阅读下方章节，对元数据缓存进行针对性的调优。特别地，发起修改的客户端（挂载点）能享受到更强的一致性，阅读[一致性例外](#consistency-exceptions)详细了解。
 
 对于对象存储，JuiceFS 将文件分成一个个数据块（默认 4MiB），赋予唯一 ID 并上传至对象存储服务。文件的任何修改操作都将生成新的数据块，原有块保持不变，所以不用担心数据缓存的一致性问题，因为一旦文件被修改过了，JuiceFS 会从对象存储读取新的数据块。而老的失效数据块，也会随着[回收站](../security/trash.md)或碎片合并机制被删除，避免对象存储泄露。
 
@@ -32,28 +32,18 @@ JuiceFS 提供包括元数据缓存、数据读写缓存等多种缓存机制。
 
 JuiceFS 客户端可以控制这些内核元数据缓存：文件属性（attribute，包含文件名、大小、权限、修改时间等信息）、文件项（entry 和 direntry，用来区分文件和目录类型的文件），在挂载时，可以使用下方参数，通过 FUSE 控制这些元数据的缓存时间：
 
-```
+```shell
 # 文件属性缓存时间（秒），默认为 1，提升 getattr 性能
---attr-cache value
+--attr-cache=1
 
 # 文件类型的缓存时间（秒），默认为 1，提升文件 lookup 性能
---entry-cache value
+--entry-cache=1
 
 # 目录类型文件的缓存时间（秒），默认为 1，提升目录的 lookup 性能
---dir-entry-cache value
+--dir-entry-cache=1
 ```
 
 让以上元数据默认在内核中缓存 1 秒，能显著提高 `lookup` 和 `getattr` 的性能。
-
-:::tip 发起修改的挂载点的一致性注意事项
-当文件发生变动时，发起修改的挂载点能够享受到更强的一致性，具体而言：
-
-* 发起修改的挂载点，自身的内核元数据缓存能够主动失效。但对于多个挂载点访问、修改同一文件的情况，只有发起修改的客户端能享受到内核元数据缓存主动失效，其他客户端就只能等待缓存自然过期。
-* 调用 `write` 成功后，挂载点自身立刻就能看到文件长度的变化（比如用 `ls -al` 查看文件大小，可能会注意到文件不断变大）——但这并不意味着修改已经成功提交，在 `flush` 成功前，是不会将这些改动同步到对象存储的，其他挂载点也看不到文件的变动。调用 `fsync, fdatasync, close` 都能触发 `flush`，让修改得以持久化、对其他客户端可见。
-* 作为上一点的极端情况，如果调用 `write` 写入，并在当前挂载点观察到文件长度不断增长，但最后的 `flush` 因为某种原因失败了，比方说到达了文件系统配额上限，文件会长度会立刻发生回退，比如从 10M 变为 0。这是一个容易引人误会的情况——并不是 JuiceFS 清空了你的数据，而是写入自始至终就没有成功，只是由于发起修改的挂载点能够提前预览文件长度的变化，让人误以为写入已经成功提交。
-* 发起修改的挂载点，能够监听对应的文件变动（比如使用 [`fswatch`](https://emcrisostomo.github.io/fswatch/) 或者 [`Watchdog`](https://python-watchdog.readthedocs.io/en/stable)）。但范畴也仅限于该挂载点发起修改的文件，也就是说 A 修改的文件，无法在 B 挂载点进行监听。
-* 目前而言，由于 FUSE 尚不支持 inotify API，所以如果你希望监听 JuiceFS 特定目录下的文件变化，请使用轮询的方式（比如 [`PollingObserver`](https://python-watchdog.readthedocs.io/en/stable/_modules/watchdog/observers/polling.html#PollingObserver)）。
-:::
 
 需要注意，`entry` 缓存是随着文件访问逐渐建立起来的，不是一个完整列表，因此不能被 `readdir` 调用或者 `ls` 命令使用，而只对 `lookup` 调用有加速效果。这里的 `dir-entry` 含义也不等同于[「目录项」](https://www.kernel.org/doc/html/latest/filesystems/ext4/directory.html)的概念，他并不用来描述「一个目录下包含哪些文件」，而是和 `entry` 一样，都是文件，只不过对文件是否目录类型做了区分。
 
@@ -71,19 +61,75 @@ JuiceFS 客户端在 `open` 操作即打开一个文件时，其文件属性会�
 
 作为对比，JuiceFS 商业版提供更丰富的客户端内存的元数据缓存功能，并且支持主动失效，阅读[商业版文档](https://juicefs.com/docs/zh/cloud/guide/cache/#client-memory-metadata-cache)以了解。
 
+### 一致性例外 {#consistency-exceptions}
+
+当文件发生变动时，发起修改的挂载点能够享受到更强的一致性，具体而言：
+
+* 发起修改的挂载点，自身的内核元数据缓存能够主动失效。但对于多个挂载点访问、修改同一文件的情况，只有发起修改的客户端能享受到内核元数据缓存主动失效，其他客户端就只能等待缓存自然过期。
+* 调用 `write` 成功后，挂载点自身立刻就能看到文件长度的变化（比如用 `ls -al` 查看文件大小，可能会注意到文件不断变大）——但这并不意味着修改已经成功提交，在 `flush` 成功前，是不会将这些改动同步到对象存储的，其他挂载点也看不到文件的变动。调用 `fsync, fdatasync, close` 都能触发 `flush`，让修改得以持久化、对其他客户端可见。
+* 作为上一点的极端情况，如果调用 `write` 写入，并在当前挂载点观察到文件长度不断增长，但最后的 `flush` 因为某种原因失败了，比方说到达了文件系统配额上限，文件会长度会立刻发生回退，比如从 10M 变为 0。这是一个容易引人误会的情况——并不是 JuiceFS 清空了你的数据，而是写入自始至终就没有成功，只是由于发起修改的挂载点能够提前预览文件长度的变化，让人误以为写入已经成功提交。
+* 发起修改的挂载点，能够监听对应的文件变动（比如使用 [`fswatch`](https://emcrisostomo.github.io/fswatch/) 或者 [`Watchdog`](https://python-watchdog.readthedocs.io/en/stable)）。但范畴也仅限于该挂载点发起修改的文件，也就是说 A 修改的文件，无法在 B 挂载点进行监听。
+* 目前而言，由于 FUSE 尚不支持 inotify API，所以如果你希望监听 JuiceFS 特定目录下的文件变化，请使用轮询的方式（比如 [`PollingObserver`](https://python-watchdog.readthedocs.io/en/stable/_modules/watchdog/observers/polling.html#PollingObserver)）。
+
+## 读写缓冲区 {#buffer-size}
+
+读写缓冲区是分配给 JuiceFS 客户端进程的一块内存，通过 [`--buffer-size`](../reference/command_reference.md#mount) 控制着大小，默认 300（单位 MiB）。读和写产生的数据，都会途经这个缓冲区。所以缓冲区的作用非常重要，在大规模场景下遇到性能不足时，提升缓冲区大小也是常见的优化方式。
+
+### 预读和预取 {#readahead-prefetch}
+
+:::tip
+为了准确描述 JuiceFS 客户端的工作机制，文档中会用「预读」和「预取」来特指客户端的两种不同提前下载数据、优化读性能的行为。
+:::
+
+顺序读文件时，JuiceFS 客户端会进行预读（readahead），也就是提前将文件后续的内容下载下来。事实上同样的行为也早已存在于[内核](https://www.halolinux.us/kernel-architecture/page-cache-readahead.html)：读取文件时，内核也会根据具体的读行为和预读窗口算法，来提前将文件读取到内核页缓存。考虑到 JuiceFS 是个网络文件系统，内核的预读窗口对他来说太小，无法有效提升顺序读的性能，因此在内核的预读之上，JuiceFS 客户端也会发起自己的预读，根据更激进的算法来“猜测”应用接下来要读取的数据范围，然后提前将对象存储对应的数据块下载下来。
+
+![readahead](../images/buffer-readahead.svg)
+
+由于 readahead 只能优化顺序读场景，因此在 JuiceFS 客户端还存在着另一种相似的机制，称作预取（prefetch）：随机读取文件某个块（Block）的一小段，客户端会异步将整个对象存储块下载下来。
+
+![prefetch](../images/buffer-prefetch.svg)
+
+预取的设计是基于「假如文件的某一小段被应用读取，那么文件附近的区域也很可能会被读取」的假设，对于不同的应用场景，这样的假设未必成立——如果应用对大文件进行偏移极大的、稀疏的随机读，那么不难想象，prefetch 会带来明显的读放大。因此如果你已经对应用场景的读取模式有深入了解，确认并不需要 prefetch，可以通过 [`--prefetch=0`](../reference/command_reference.md#mount-data-cache-options) 禁用该行为。
+
+预读和预取分别优化了顺序读、随机读性能，也会带来一定程度的读放大，阅读[「读放大」](../administration/troubleshooting.md#read-amplification)了解更多信息。
+
+### 写入 {#buffer-write}
+
+调用 `write` 成功，并不代表数据被持久化，持久化是 `flush` 的工作。这一点不论对于本地文件系统，还是 JuiceFS 文件系统，都是一样的。在 JuiceFS 中，`write` 会将数据写入缓冲区，写入完毕以后，你甚至会注意到，当前挂载点已经看到文件长度有所变化，不要误会，这并不代表写入已经持久化（这点也在[一致性例外](#consistency-exceptions)话题上有更详细介绍）。总而言之，在 `flush` 来临之前，改动只存在于客户端缓冲区。应用可以显式调用 `flush`，但就算不这样做，当写入超过一个 Chunk 边界，或者在缓冲区停留超过一定时间，都会触发自动 `flush`。
+
+结合上方已经介绍过的预读，缓冲区的总体作用可以一张图表示：
+
+![read write buffer](../images/buffer-read-write.svg)
+
+缓冲区是读写共用的，显然「写」具有更高的优先级，这隐含着「写会影响读」的可能性。举例说明，如果对象存储的上传速度不足以支撑写入负载，会发生缓冲区拥堵：
+
+![buffer congestion](../images/buffer-congestion.svg)
+
+如上图所示，写入负载过大，在缓冲区中积攒了太多待写入的 Slice，侵占了缓冲区用于预读的空间，因此读文件会变慢。不仅如此，由于对象存储上传速度不足，写也可能会因为 `flush` 超时而最终失败。
+
+### 观测和调优 {#buffer-observation}
+
+上方小节介绍了缓冲区对读、写都有关键作用，因此在面对高并发读写场景的时候，对 `--buffer-size` 进行相应的扩容，能有效提升性能。但一味地扩大缓冲区大小，也可能产生其他的问题，比如 `--buffer-size` 过大，但对象存储上传速度不足，导致上方小节中介绍的缓冲区拥堵的情况。因此，缓冲区的大小需要结合其他性能参数一起科学地设置。
+
+在调整缓冲区大小前，我们推荐使用 [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) 来观察当前的缓冲区用量大小，这个命令能直观反映出当前的读写性能问题。
+
+如果你希望增加写入速度，通过调整 [`--max-uploads`](../reference/command_reference.md#mount-data-storage-options) 增大了上传并发度，但并没有观察到上行带宽用量有明显增加，那么此时可能就需要相应地调大 `--buffer-size`，让并发线程更容易申请到内存来工作。这个排查原理反之亦然：如果增大 `--buffer-size` 却没有观察到上行带宽占用提升，也可以考虑增大 `--max-uploads` 来提升上传并发度。
+
+可想而知，`--buffer-size` 也控制着每次 `flush` 操作的上传数据量大小，因此如果客户端处在一个低带宽的网络环境下，可能反而需要降低 `--buffer-size` 来避免 `flush` 超时。关于低带宽场景排查请详见「[与对象存储通信不畅](../administration/troubleshooting.md#io-error-object-storage)」。
+
+如果希望增加顺序读速度，可以增加 `--buffer-size`，来放大预读窗口，窗口内尚未下载到本地的数据块，会并发地异步下载。同时注意，单个文件的预读不会把整个缓冲区用完，限制为 1/4 到 1/2。因此如果在优化单个大文件的顺序读时发现 `juicefs stats` 中 `buf` 用量已经接近一半，说明该文件的预读额度已满，此时虽然缓冲区还有空闲，但也需要继续增加 `--buffer-size` 才能进一步提升单个大文件的预读性能。
+
+挂载参数 [`--buffer-size`](../reference/command_reference.md#mount-data-storage-options) 控制着 JuiceFS 的读写缓冲区大小，默认 300（单位 MiB）。读写缓冲区的大小决定了读取文件以及预读（readahead）的内存数据量，同时也控制着写缓存（pending page）的大小。因此在面对高并发读写场景的时候，我们推荐对 `--buffer-size` 进行相应的扩容，能有效提升性能。
+
+如果你希望增加写入速度，通过调整 [`--max-uploads`](../reference/command_reference.md#mount) 增大了上传并发度，但并没有观察到上行带宽用量有明显增加，那么此时可能就需要相应地调大 `--buffer-size`，让并发线程更容易申请到内存来工作。这个排查原理反之亦然：如果增大 `--buffer-size` 却没有观察到上行带宽占用提升，也可以考虑增大 `--max-uploads` 来提升上传并发度。
+
+可想而知，`--buffer-size` 也控制着每次 `flush` 操作的上传数据量大小，因此如果客户端处在一个低带宽的网络环境下，可能反而需要降低 `--buffer-size` 来避免 `flush` 超时。关于低带宽场景排查请详见[「与对象存储通信不畅」](../administration/troubleshooting.md#io-error-object-storage)。
+
 ## 数据缓存 {#data-cache}
 
 JuiceFS 对数据也提供多种缓存机制来提高性能，包括内核中的页缓存和客户端所在机器的本地缓存，以及客户端自身的内存读写缓冲区。读请求会依次尝试内核分页缓存、JuiceFS 进程的预读缓冲区、本地磁盘缓存，当缓存中没找到对应数据时才会从对象存储读取，并且会异步写入各级缓存保证下一次访问的性能。
 
 ![JuiceFS-cache](../images/juicefs-cache.png)
-
-### 读写缓冲区 {#buffer-size}
-
-挂载参数 [`--buffer-size`](../reference/command_reference.md#mount) 控制着 JuiceFS 的读写缓冲区大小，默认 300（单位 MiB）。读写缓冲区的大小决定了读取文件以及预读（readahead）的内存数据量，同时也控制着写缓存（pending page）的大小。因此在面对高并发读写场景的时候，我们推荐对 `--buffer-size` 进行相应的扩容，能有效提升性能。
-
-如果你希望增加写入速度，通过调整 [`--max-uploads`](../reference/command_reference.md#mount) 增大了上传并发度，但并没有观察到上行带宽用量有明显增加，那么此时可能就需要相应地调大 `--buffer-size`，让并发线程更容易申请到内存来工作。这个排查原理反之亦然：如果增大 `--buffer-size` 却没有观察到上行带宽占用提升，也可以考虑增大 `--max-uploads` 来提升上传并发度。
-
-可想而知，`--buffer-size` 也控制着每次 `flush` 操作的上传数据量大小，因此如果客户端处在一个低带宽的网络环境下，可能反而需要降低 `--buffer-size` 来避免 `flush` 超时。关于低带宽场景排查请详见[「与对象存储通信不畅」](../administration/troubleshooting.md#io-error-object-storage)。
 
 ### 内核页缓存 {#kernel-data-cache}
 
