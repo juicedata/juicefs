@@ -312,7 +312,7 @@ func newGluster(endpoint, ak, sk, token string) (ObjectStorage, error) {
 		}
 		err = v.SetLogging(fmt.Sprintf("/var/log/glusterfs/%s-%s-%d-%d.log", hosts[0], name, pid, i), level)
 		if err != nil {
-			return nil, fmt.Errorf("set logging %s: %s", name, err)
+			logger.Warnf("Set gluster logging for vol %s: %s", name, err)
 		}
 		err = v.Mount()
 		if err != nil {
