@@ -16,8 +16,6 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
-      - '.github/**'
-      - '!.github/workflows/unittests.yml'
   workflow_dispatch:
     inputs:
       debug:
