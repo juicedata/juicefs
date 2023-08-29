@@ -119,7 +119,6 @@ The `--buffer-size` also controls the data upload size for each `flush` operatio
 
 If you wish to improve sequential read speed, use a larger `--buffer-size` to expand the readahead window, all data blocks within the window will be concurrently fetched from object storage. Also keep in mind that, reading a single large file will never consume the full buffer, the space reserved for readahead is between 1/4 to 1/2 of the total buffer size. So if you noticed that `juicefs stats` indicates `buf` is already half full, while performing sequential read on a single large file, then it's time to increase `--buffer-size` to set a larger readahead window.
 
-
 ## Data cache {#data-cache}
 
 To improve performance, JuiceFS also provides various caching mechanisms for data, including page cache in the kernel, local file system cache in client host, and read/write buffer in client process itself. Read requests will try the kernel page cache, the client process buffer, and the local disk cache in turn. If the data requested is not found in any level of the cache, it will be read from the object storage, and also be written into every level of the cache asynchronously to improve the performance of the next access.
