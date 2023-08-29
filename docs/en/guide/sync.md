@@ -117,6 +117,18 @@ myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1
 
 ## Advanced Usage
 
+## Observation {#observation}
+
+Simply put, when using `sync` to transfer big files, progress bar might move slowly or get stuck. If this happens, you can observe the progress using other methods.
+
+`sync` assumes it's mainly used to copy a large amount of files, its progress bar is designed for this scenario: progress only updates when a file has been transferred. In a large file scenario, every file is transferred slowly, hence the slow or even static progress bar. This is worse for destinations without multipart upload support (e.g. `file`, `sftp`, `jfs`, `gluster` schemes), where every file is transferred single-threaded.
+
+If progress bar is not moving, use below methods to observe and troubleshoot:
+
+* If either end is a JuiceFS mount point, you can use [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) to quickly check current IO status.
+* If destination is a local disk, look for temporary files that end with `.tmp.xxx`, these are the temp files created by `sync`, they will be renamed upon transfer complete. Look for size changes in temp files to verify the current IO status.
+* If both end are object storage services, use tools like `nethogs` to check network IO.
+
 ### Incremental and Full Synchronization
 
 The subcommand `sync` works incrementally by default, which compares the differences between the source and target paths, and then synchronizes only the differences. You can add option `--update` or `-u` to keep updated the `mtime` of the synchronized directories and files.
