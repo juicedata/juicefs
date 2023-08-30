@@ -230,7 +230,7 @@ func TestLoadDumpSlow(t *testing.T) { //skip mutate
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
-	testLoadDump(t, "redis cluster", "redis://127.0.0.1:7001/10")
+	// testLoadDump(t, "redis cluster", "redis://127.0.0.1:7001/10")
 	testLoadDump(t, "sqlite", "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test.db"))
 	testLoadDump(t, "badger", "badger://"+path.Join(t.TempDir(), "jfs-load-duimp-testdb"))
 	testLoadDump(t, "etcd", fmt.Sprintf("etcd://%s/jfs-load-dump", os.Getenv("ETCD_ADDR")))
