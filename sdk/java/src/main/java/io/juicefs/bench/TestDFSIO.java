@@ -312,7 +312,7 @@ public class TestDFSIO extends Main.Command {
             "Number files per thread: " + filesPerThread,
             "            Total files: " + threadsPerMap * filesPerThread,
             " Total MBytes processed: " + df.format(TestDFSIO.toMB(sizeProcessed.get())),
-            "Total Throughput mb/sec: " + df.format(TestDFSIO.toMB(sizeProcessed.get()) / TestDFSIO.msToSecs(end - start)),
+            "Total Throughput MB/sec: " + df.format(TestDFSIO.toMB(sizeProcessed.get()) / TestDFSIO.msToSecs(end - start)),
             "     Test exec time sec: " + df.format(TestDFSIO.msToSecs(end - start)),
             ""};
 
