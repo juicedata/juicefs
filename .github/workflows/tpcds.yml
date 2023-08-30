@@ -1,6 +1,16 @@
 name: tpcds
 
 on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - '**/tpcds.yml'
+  pull_request:
+    branches:
+      - 'main'
+    paths:
+      - '**/tpcds.yml'
   schedule:
     - cron:  '30 20 * * *'
   workflow_dispatch:
