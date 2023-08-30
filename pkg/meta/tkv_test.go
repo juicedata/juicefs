@@ -19,6 +19,7 @@ package meta
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"testing"
 )
@@ -52,7 +53,8 @@ func TestEtcdClient(t *testing.T) {
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
-	m, err := newKVMeta("etcd", "localhost:2379", &Config{MaxDeletes: 2})
+	// m, err := newKVMeta("etcd", "localhost:2379", &Config{MaxDeletes: 2})
+	m, err := newKVMeta("etcd", os.Getenv("ETCD_ADDR"), &Config{MaxDeletes: 2})
 	if err != nil {
 		t.Fatalf("create meta: %s", err)
 	}
@@ -202,7 +204,8 @@ func TestEtcd(t *testing.T) {
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
-	c, err := newEtcdClient("localhost:2379/jfs")
+	// c, err := newEtcdClient("localhost:2379/jfs")
+	c, err := newEtcdClient(fmt.Sprintf("%s/jfs", os.Getenv("ETCD_ADDR")))
 	if err != nil {
 		t.Fatal(err)
 	}
