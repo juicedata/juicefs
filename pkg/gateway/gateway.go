@@ -17,6 +17,7 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -29,6 +30,11 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/madmin"
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/pkg/s3utils"
@@ -52,20 +58,21 @@ type Config struct {
 	MultiBucket bool
 	KeepEtag    bool
 	Umask       uint16
+	ObjTag      bool
 }
 
 func NewJFSGateway(jfs *fs.FileSystem, conf *vfs.Config, gConf *Config) (minio.ObjectLayer, error) {
 	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
-	jfsObj := &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), gConf: gConf}
+	jfsObj := &jfsObjects{fs: jfs, conf: conf, listPool: minio.NewTreeWalkPool(time.Minute * 30), gConf: gConf, nsMutex: minio.NewNSLock(false)}
 	go jfsObj.cleanup()
 	return jfsObj, nil
 }
 
 type jfsObjects struct {
-	minio.GatewayUnsupported
 	conf     *vfs.Config
 	fs       *fs.FileSystem
 	listPool *minio.TreeWalkPool
+	nsMutex  *minio.NsLockMap
 	gConf    *Config
 }
 
@@ -88,8 +95,7 @@ func (n *jfsObjects) Shutdown(ctx context.Context) error {
 
 func (n *jfsObjects) StorageInfo(ctx context.Context) (info minio.StorageInfo, errors []error) {
 	sinfo := minio.StorageInfo{}
-	sinfo.Backend.Type = minio.BackendGateway
-	sinfo.Backend.GatewayOnline = true
+	sinfo.Backend.Type = minio.BackendFS
 	return sinfo, nil
 }
 
@@ -147,6 +153,9 @@ func jfsToObjectErr(ctx context.Context, err error, params ...string) error {
 
 // isValidBucketName verifies whether a bucket name is valid.
 func (n *jfsObjects) isValidBucketName(bucket string) error {
+	if strings.HasPrefix(bucket, minio.MinioMetaBucket) {
+		return nil
+	}
 	if s3utils.CheckValidBucketNameStrict(bucket) != nil {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}
@@ -1007,4 +1016,188 @@ func (n *jfsObjects) cleanup() {
 			}
 		}
 	}
+}
+
+func (n *jfsObjects) NewNSLock(bucket string, objects ...string) minio.RWLocker {
+	return n.nsMutex.NewNSLock(nil, bucket, objects...)
+}
+
+func (n *jfsObjects) BackendInfo() minio.BackendInfo {
+	return minio.BackendInfo{Type: minio.BackendFS}
+}
+
+func (n *jfsObjects) LocalStorageInfo(ctx context.Context) (minio.StorageInfo, []error) {
+	return n.StorageInfo(ctx)
+}
+
+func (n *jfsObjects) ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (loi minio.ListObjectVersionsInfo, err error) {
+	return loi, minio.NotImplemented{}
+}
+
+func (n *jfsObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object string) (oi minio.ObjectInfo, e error) {
+	return n.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+}
+
+func (n *jfsObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- minio.ObjectInfo, opts minio.ObjectOptions) error {
+	return minio.FsWalk(ctx, n, bucket, prefix, n.listDirFactory(), n.isLeaf, n.isLeafDir, results, n.getObjectInfoNoFSLock, n.getObjectInfoNoFSLock)
+}
+
+func (n *jfsObjects) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
+	meta, err := minio.LoadBucketMetadata(ctx, n, bucket)
+	if err != nil {
+		return err
+	}
+
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+	configData, err := json.Marshal(policy)
+	if err != nil {
+		return err
+	}
+	meta.PolicyConfigJSON = configData
+
+	return meta.Save(ctx, n)
+}
+
+func (n *jfsObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
+	meta, err := minio.LoadBucketMetadata(ctx, n, bucket)
+	if err != nil {
+		return nil, minio.BucketPolicyNotFound{Bucket: bucket}
+	}
+	if meta.PolicyConfig == nil {
+		return nil, minio.BucketPolicyNotFound{Bucket: bucket}
+	}
+	return meta.PolicyConfig, nil
+}
+
+func (n *jfsObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
+	meta, err := minio.LoadBucketMetadata(ctx, n, bucket)
+	if err != nil {
+		return err
+	}
+	meta.PolicyConfigJSON = nil
+	return meta.Save(ctx, n)
+}
+
+func (n *jfsObjects) SetDriveCounts() []int {
+	return nil
+}
+
+func (n *jfsObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, minio.NotImplemented{}
+}
+
+func (n *jfsObjects) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, minio.NotImplemented{}
+}
+
+func (n *jfsObjects) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (res madmin.HealResultItem, err error) {
+	return res, minio.NotImplemented{}
+}
+
+func (n *jfsObjects) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn minio.HealObjectFn) error {
+	return minio.NotImplemented{}
+}
+
+func (n *jfsObjects) GetMetrics(ctx context.Context) (*minio.BackendMetrics, error) {
+	return &minio.BackendMetrics{}, minio.NotImplemented{}
+}
+
+func (n *jfsObjects) Health(ctx context.Context, opts minio.HealthOptions) minio.HealthResult {
+	if _, errno := n.fs.Stat(mctx, minio.MinioMetaBucket); errno != 0 {
+		return minio.HealthResult{}
+	}
+	return minio.HealthResult{
+		Healthy: true,
+	}
+}
+
+func (n *jfsObjects) ReadHealth(ctx context.Context) bool {
+	_, errno := n.fs.Stat(mctx, minio.MinioMetaBucket)
+	return errno == 0
+}
+
+func (n *jfsObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
+	if !n.gConf.ObjTag {
+		return minio.ObjectInfo{}, minio.NotImplemented{}
+	}
+
+	if opts.VersionID != "" && opts.VersionID != minio.NullVersionID {
+		return minio.ObjectInfo{}, minio.VersionNotFound{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+		}
+	}
+
+	if _, err := n.DeleteObjectTags(ctx, bucket, object, opts); err != nil {
+		return minio.ObjectInfo{}, err
+	}
+	//tags: key1=value1&key2=value2&key3=value3
+	for _, kv := range strings.Split(tags, "&") {
+		splits := strings.Split(kv, "=")
+		if eno := n.fs.SetXattr(mctx, n.path(bucket, object), splits[0], []byte(splits[1]), 0); eno != 0 {
+			return minio.ObjectInfo{}, eno
+		}
+	}
+	return n.GetObjectInfo(ctx, bucket, object, opts)
+}
+
+func (n *jfsObjects) GetObjectTags(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (*tags.Tags, error) {
+	if !n.gConf.ObjTag {
+		return nil, minio.NotImplemented{}
+	}
+	if opts.VersionID != "" && opts.VersionID != minio.NullVersionID {
+		return nil, minio.VersionNotFound{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+		}
+	}
+	oi, err := n.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return tags.ParseObjectTags(oi.UserTags)
+}
+
+func (n *jfsObjects) DeleteObjectTags(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
+	if !n.gConf.ObjTag {
+		return minio.ObjectInfo{}, minio.NotImplemented{}
+	}
+	names, errno := n.fs.ListXattr(mctx, n.path(bucket, object))
+	if errno != 0 {
+		return minio.ObjectInfo{}, errno
+	}
+	if names == nil {
+		return minio.ObjectInfo{}, nil
+	}
+
+	split := bytes.Split(bytes.TrimSuffix(names, []byte{0}), []byte{0})
+	for _, key := range split {
+		if errno := n.fs.RemoveXattr(mctx, n.path(bucket, object), string(key)); errno != 0 {
+			if n.gConf.KeepEtag && string(key) == s3Etag && errno == syscall.ENOENT {
+				continue
+			}
+			return minio.ObjectInfo{}, errno
+		}
+	}
+
+	return n.GetObjectInfo(ctx, bucket, object, opts)
+}
+
+func (n *jfsObjects) CrawlAndGetDataUsage(ctx context.Context, bf *minio.BloomFilter, updates chan<- minio.DataUsageInfo) error {
+	return nil
+}
+
+func (n *jfsObjects) IsNotificationSupported() bool {
+	return true
+}
+
+func (n *jfsObjects) IsListenSupported() bool {
+	return true
+}
+
+func (n *jfsObjects) IsTaggingSupported() bool {
+	return true
 }

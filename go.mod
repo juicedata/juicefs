@@ -78,6 +78,8 @@ require (
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
 	xorm.io/xorm v1.0.7
+	github.com/json-iterator/go v1.1.12
+	github.com/minio/minio-go/v7 v7.0.10
 )
 
 require (
@@ -160,7 +162,6 @@ require (
 	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
 	github.com/klauspost/compress v1.13.4 // indirect
 	github.com/klauspost/cpuid v1.3.1 // indirect
@@ -175,7 +176,6 @@ require (
 	github.com/miekg/dns v1.1.41 // indirect
 	github.com/minio/highwayhash v1.0.1 // indirect
 	github.com/minio/md5-simd v1.1.1 // indirect
-	github.com/minio/minio-go/v7 v7.0.10 // indirect
 	github.com/minio/selfupdate v0.3.1 // indirect
 	github.com/minio/sha256-simd v0.1.1 // indirect
 	github.com/minio/simdjson-go v0.2.1 // indirect
@@ -243,7 +243,7 @@ require (
 	xorm.io/builder v0.3.7 // indirect
 )
 
-replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20221113011458-8866d5c9df8c
+replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20230831013456-72c1005a404c
 
 replace github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8 => github.com/juicedata/go-fuse/v2 v2.1.1-0.20230726081302-124dbfa991d7
 
