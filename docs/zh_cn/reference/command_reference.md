@@ -635,7 +635,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 #### 元数据缓存参数 {#mount-metadata-cache-options}
 
-元数据缓存的介绍和使用，详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)及[「客户端内存元数据缓存」](../guide/cache_management.md#client-memory-metadata-cache)。
+元数据缓存的介绍和使用，详见[「内核元数据缓存」](../guide/cache.md#kernel-metadata-cache)及[「客户端内存元数据缓存」](../guide/cache.md#client-memory-metadata-cache)。
 
 |项 | 说明|
 |-|-|
@@ -655,7 +655,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--get-timeout=60`|下载一个对象的超时时间；单位为秒 (默认：60)|
 |`--put-timeout=60`|上传一个对象的超时时间；单位为秒 (默认：60)|
 |`--io-retries=10`|网络异常时的重试次数 (默认：10)|
-|`--max-uploads=20`|上传并发度，默认为 20。对于粒度为 4M 的写入模式，20 并发已经是很高的默认值，在这样的写入模式下，提高写并发往往需要伴随增大 `--buffer-size`, 详见「[读写缓冲区](../guide/cache_management.md#buffer-size)」。但面对百 K 级别的小随机写，并发量大的时候很容易产生阻塞等待，造成写入速度恶化。如果无法改善应用写模式，对其进行合并，那么需要考虑采用更高的写并发，避免排队等待。|
+|`--max-uploads=20`|上传并发度，默认为 20。对于粒度为 4M 的写入模式，20 并发已经是很高的默认值，在这样的写入模式下，提高写并发往往需要伴随增大 `--buffer-size`, 详见「[读写缓冲区](../guide/cache.md#buffer-size)」。但面对百 K 级别的小随机写，并发量大的时候很容易产生阻塞等待，造成写入速度恶化。如果无法改善应用写模式，对其进行合并，那么需要考虑采用更高的写并发，避免排队等待。|
 |`--max-deletes=10`|删除对象的连接数 (默认：10)|
 |`--upload-limit=0`|上传带宽限制，单位为 Mbps (默认：0)|
 |`--download-limit=0`|下载带宽限制，单位为 Mbps (默认：0)|
@@ -664,15 +664,15 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 |项 | 说明|
 |-|-|
-|`--buffer-size=300`|读写缓冲区的总大小；单位为 MiB (默认：300)。阅读[「读写缓冲区」](../guide/cache_management.md#buffer-size)了解更多。|
-|`--prefetch=1`|并发预读 N 个块 (默认：1)。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
-|`--writeback`|后台异步上传对象，默认为 false。阅读[「客户端写缓存」](../guide/cache_management.md#writeback)了解更多。|
-|`--upload-delay=0`|启用 `--writeback` 后，可以使用该选项控制数据延迟上传到对象存储，默认为 0 秒，相当于写入后立刻上传。该选项也支持 `s`（秒）、`m`（分）、`h`（时）这些单位。如果在等待的时间内数据被应用删除，则无需再上传到对象存储。如果数据只是临时落盘，可以考虑用该选项节约资源。阅读[「客户端写缓存」](../guide/cache_management.md#writeback)了解更多。|
-|`--cache-dir=value`|本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`$HOME/.juicefs/cache` 或 `/var/jfsCache`)。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
+|`--buffer-size=300`|读写缓冲区的总大小；单位为 MiB (默认：300)。阅读[「读写缓冲区」](../guide/cache.md#buffer-size)了解更多。|
+|`--prefetch=1`|并发预读 N 个块 (默认：1)。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
+|`--writeback`|后台异步上传对象，默认为 false。阅读[「客户端写缓存」](../guide/cache.md#writeback)了解更多。|
+|`--upload-delay=0`|启用 `--writeback` 后，可以使用该选项控制数据延迟上传到对象存储，默认为 0 秒，相当于写入后立刻上传。该选项也支持 `s`（秒）、`m`（分）、`h`（时）这些单位。如果在等待的时间内数据被应用删除，则无需再上传到对象存储。如果数据只是临时落盘，可以考虑用该选项节约资源。阅读[「客户端写缓存」](../guide/cache.md#writeback)了解更多。|
+|`--cache-dir=value`|本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`$HOME/.juicefs/cache` 或 `/var/jfsCache`)。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
 |`--cache-mode value` <VersionAdd>1.1</VersionAdd>|缓存块的文件权限 (默认："0600")|
-|`--cache-size=102400`|缓存对象的总大小；单位为 MiB (默认：102400)。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
-|`--free-space-ratio=0.1`|最小剩余空间比例，默认为 0.1。如果启用了[「客户端写缓存」](../guide/cache_management.md#writeback)，则该参数还控制着写缓存占用空间。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
-|`--cache-partial-only`|仅缓存随机小块读，默认为 false。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
+|`--cache-size=102400`|缓存对象的总大小；单位为 MiB (默认：102400)。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
+|`--free-space-ratio=0.1`|最小剩余空间比例，默认为 0.1。如果启用了[「客户端写缓存」](../guide/cache.md#writeback)，则该参数还控制着写缓存占用空间。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
+|`--cache-partial-only`|仅缓存随机小块读，默认为 false。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
 |`--verify-cache-checksum=full` <VersionAdd>1.1</VersionAdd>|缓存数据一致性检查级别，启用 Checksum 校验后，生成缓存文件时会对数据切分做 Checksum 并记录于文件末尾，供读缓存时进行校验。支持以下级别：<br/><ul><li>`none`：禁用一致性检查，如果本地数据被篡改，将会读到错误数据；</li><li>`full`（默认）：读完整数据块时才校验，适合顺序读场景；</li><li>`shrink`：对读范围内的切片数据进行校验，校验范围不包含读边界所在的切片（可以理解为开区间），适合随机读场景；</li><li>`extend`：对读范围内的切片数据进行校验，校验范围同时包含读边界所在的切片（可以理解为闭区间），因此将带来一定程度的读放大，适合对正确性有极致要求的随机读场景。</li></ul>|
 |`--cache-eviction value` <VersionAdd>1.1</VersionAdd>|缓存逐出策略 (none 或 2-random) (默认值："2-random")|
 |`--cache-scan-interval value` <VersionAdd>1.1</VersionAdd>|扫描缓存目录重建内存索引的间隔 (以秒为单位) (默认："3600")|

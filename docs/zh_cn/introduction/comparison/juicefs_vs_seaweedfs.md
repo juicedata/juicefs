@@ -169,7 +169,7 @@ JuiceFS [完整兼容 HDFS API](../../deployment/hadoop_java_sdk.md)。包括 Ha
 
 SeaweedFS 客户端[具备简单客户端缓存能力](https://github.com/seaweedfs/seaweedfs/wiki/FUSE-Mount)，由于在写作期间未能找到具体文档，可以直接在其[源码](https://github.com/seaweedfs/seaweedfs/blob/master/weed/command/mount.go)中搜索 `cache` 相关字样。
 
-JuiceFS 客户端支持[元数据以及数据缓存](../../guide/cache_management.md)，提供更丰富的定制空间，允许用户根据自己的应用场景进行调优。
+JuiceFS 客户端支持[元数据以及数据缓存](../../guide/cache.md)，提供更丰富的定制空间，允许用户根据自己的应用场景进行调优。
 
 ### 对象存储网关
 
