@@ -31,6 +31,7 @@ require (
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
 	github.com/jackc/pgx/v5 v5.3.1
 	github.com/jcmturner/gokrb5/v8 v8.4.4
+	github.com/json-iterator/go v1.1.12
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
 	github.com/juicedata/gogfapi v0.0.0-20230626071140-fc28e5537825
 	github.com/juju/ratelimit v1.0.2
@@ -40,6 +41,7 @@ require (
 	github.com/minio/cli v1.24.2
 	github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c
 	github.com/minio/minio-go v6.0.14+incompatible
+	github.com/minio/minio-go/v7 v7.0.10
 	github.com/ncw/swift/v2 v2.0.1
 	github.com/pingcap/log v1.1.1-0.20221015072633-39906604fb81
 	github.com/pkg/errors v0.9.1
@@ -78,8 +80,6 @@ require (
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
 	xorm.io/xorm v1.0.7
-	github.com/json-iterator/go v1.1.12
-	github.com/minio/minio-go/v7 v7.0.10
 )
 
 require (
@@ -243,7 +243,7 @@ require (
 	xorm.io/builder v0.3.7 // indirect
 )
 
-replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20230831013456-72c1005a404c
+replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20230831053657-a13b26544d79
 
 replace github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8 => github.com/juicedata/go-fuse/v2 v2.1.1-0.20230726081302-124dbfa991d7
 
