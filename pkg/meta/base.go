@@ -242,14 +242,16 @@ func (m *baseMeta) Load(checkVersion bool) (*Format, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = json.Unmarshal(body, &m.fmt); err != nil {
+	var format = new(Format)
+	if err = json.Unmarshal(body, format); err != nil {
 		return nil, fmt.Errorf("json: %s", err)
 	}
 	if checkVersion {
-		if err = m.fmt.CheckVersion(); err != nil {
+		if err = format.CheckVersion(); err != nil {
 			return nil, fmt.Errorf("check version: %s", err)
 		}
 	}
+	m.fmt = *format
 	return &m.fmt, nil
 }
 
