@@ -30,6 +30,8 @@ juicefs.lite: Makefile cmd/*.go pkg/*/*.go
 juicefs.ceph: Makefile cmd/*.go pkg/*/*.go
 	go build -tags ceph -ldflags="$(LDFLAGS)"  -o juicefs.ceph .
 
+juicefs.all: Makefile cmd/*.go pkg/*/*.go
+	go build -tags ceph -ldflags="$(LDFLAGS)"  -o juicefs.all .
 
 # This is the script for compiling the Linux version on the MacOS platform.
 # Please execute the `brew install FiloSottile/musl-cross/musl-cross` command before using it.
