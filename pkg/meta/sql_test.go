@@ -18,6 +18,7 @@
 package meta
 
 import (
+	"os"
 	"path"
 	"testing"
 )
@@ -39,6 +40,9 @@ func TestMySQLClient(t *testing.T) {
 }
 
 func TestPostgreSQLClient(t *testing.T) {
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
 	m, err := newSQLMeta("postgres", "localhost:5432/test?sslmode=disable", &Config{MaxDeletes: 2})
 	if err != nil || m.Name() != "postgres" {
 		t.Fatalf("create meta: %s", err)

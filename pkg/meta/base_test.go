@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -43,6 +44,9 @@ func TestRedisClient(t *testing.T) {
 }
 
 func TestRedisCluster(t *testing.T) {
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
 	var conf = Config{MaxDeletes: 2}
 	m, err := newRedisMeta("redis", "127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003/2", &conf)
 	if err != nil {

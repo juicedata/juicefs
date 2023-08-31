@@ -18,6 +18,7 @@ package meta
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -219,15 +220,21 @@ func testLoadDump(t *testing.T, name, addr string) {
 	})
 }
 
-func TestLoadDump(t *testing.T) {
+func TestLoadDump(t *testing.T) { //skip mutate
 	testLoadDump(t, "redis", "redis://127.0.0.1/10")
-	testLoadDump(t, "redis cluster", "redis://127.0.0.1:7001/10")
-	testLoadDump(t, "sqlite", "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test.db"))
 	testLoadDump(t, "mysql", "mysql://root:@/dev")
-	testLoadDump(t, "postgres", "postgres://localhost:5432/test?sslmode=disable")
-	testLoadDump(t, "badger", "badger://"+path.Join(t.TempDir(), "jfs-load-duimp-testdb"))
-	testLoadDump(t, "etcd", "etcd://127.0.0.1:2379/jfs-load-dump")
 	testLoadDump(t, "tikv", "tikv://127.0.0.1:2379/jfs-load-dump")
+}
+
+func TestLoadDumpSlow(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
+	// testLoadDump(t, "redis cluster", "redis://127.0.0.1:7001/10")
+	testLoadDump(t, "sqlite", "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-test.db"))
+	testLoadDump(t, "badger", "badger://"+path.Join(t.TempDir(), "jfs-load-duimp-testdb"))
+	testLoadDump(t, "etcd", fmt.Sprintf("etcd://%s/jfs-load-dump", os.Getenv("ETCD_ADDR")))
+	testLoadDump(t, "postgres", "postgres://localhost:5432/test?sslmode=disable")
 }
 
 func TestLoadDump_MemKV(t *testing.T) {
