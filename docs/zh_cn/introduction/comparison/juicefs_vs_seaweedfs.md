@@ -131,7 +131,7 @@ JuiceFS 支持使用 LZ4 或者 Zstandard 来为所有写入的数据进行压�
 二者均支持加密，包括传输中加密及静态加密：
 
 * SeaweedFS 支持传输中加密与静态加密。在开启了数据加密后，所有写入 Volume Server 的数据都会使用随机的密钥进行加密，而这些对应的随机密钥信息则由维护文件元数据的 Filer 进行管理，详见 [Wiki](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Data-Encryption)。
-* JuiceFS 的加密功能详见[文档](../../security/encrypt.md)。
+* JuiceFS 的加密功能详见[文档](../../security/encryption.md)。
 
 ## 客户端协议对比
 
@@ -169,7 +169,7 @@ JuiceFS [完整兼容 HDFS API](../../deployment/hadoop_java_sdk.md)。包括 Ha
 
 SeaweedFS 客户端[具备简单客户端缓存能力](https://github.com/seaweedfs/seaweedfs/wiki/FUSE-Mount)，由于在写作期间未能找到具体文档，可以直接在其[源码](https://github.com/seaweedfs/seaweedfs/blob/master/weed/command/mount.go)中搜索 `cache` 相关字样。
 
-JuiceFS 客户端支持[元数据以及数据缓存](../../guide/cache_management.md)，提供更丰富的定制空间，允许用户根据自己的应用场景进行调优。
+JuiceFS 客户端支持[元数据以及数据缓存](../../guide/cache.md)，提供更丰富的定制空间，允许用户根据自己的应用场景进行调优。
 
 ### 对象存储网关
 
