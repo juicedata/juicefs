@@ -60,7 +60,7 @@ type Format struct {
 	Inodes           uint64 `json:",omitempty"`
 	EncryptKey       string `json:",omitempty"`
 	KeyEncrypted     bool   `json:",omitempty"`
-	TrashDays        int    `json:",omitempty"`
+	TrashDays        int
 	MetaVersion      int    `json:",omitempty"`
 	MinClientVersion string `json:",omitempty"`
 	MaxClientVersion string `json:",omitempty"`
