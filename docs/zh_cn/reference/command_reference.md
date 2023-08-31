@@ -168,7 +168,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |-|-|
 |`--block-size=4096`|块大小，单位为 KiB，默认 4096。4M 是一个较好的默认值，不少对象存储（比如 S3）都将 4M 设为内部的块大小，因此将 JuiceFS block size 设为相同大小，往往也能获得更好的性能。|
 |`--compress=none`|压缩算法，支持 `lz4`、`zstd`、`none`（默认），启用压缩将不可避免地对性能产生一定影响。|
-|`--encrypt-rsa-key=value`|RSA 私钥的路径，查看[数据加密](../security/encrypt.md)以了解更多。|
+|`--encrypt-rsa-key=value`|RSA 私钥的路径，查看[数据加密](../security/encryption.md)以了解更多。|
 |`--encrypt-algo=aes256gcm-rsa`|加密算法 (aes256gcm-rsa, chacha20-rsa) (默认："aes256gcm-rsa")|
 |`--hash-prefix`|给每个对象添加 hash 前缀，默认为 false。|
 |`--shards=0`|如果对象存储服务在桶级别设置了限速（或者你使用自建的对象存储服务，单个桶的性能有限），可以将数据块根据名字哈希分散存入 N 个桶中。该值默认为 0，也就是所有数据存入单个桶。当 N 大于 0 时，`bucket` 需要包含 `%d` 占位符，例如 `--bucket=juicefs-%d`。`--shards` 设置无法动态修改，需要提前规划好用量。|

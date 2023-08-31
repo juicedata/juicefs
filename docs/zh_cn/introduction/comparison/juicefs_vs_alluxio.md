@@ -82,7 +82,7 @@ Alluxio 本质上并不是一个存储系统，虽然你也可以通过 Alluxio 
 
 Alluxio 仅在[企业版](https://docs.alluxio.io/ee/user/stable/en/security/Security.html#encryption)支持数据加密。
 
-JuiceFS 支持[传输中加密以及静态加密](../../security/encrypt.md)。
+JuiceFS 支持[传输中加密以及静态加密](../../security/encryption.md)。
 
 ## 客户端协议对比 {#client-protocol-comparison}
 
