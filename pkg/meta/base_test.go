@@ -2325,10 +2325,10 @@ func testClone(t *testing.T, m Meta) {
 		t.Fatalf("mtime of rootDir is not updated")
 	}
 	m.StatFS(Background, cloneDir, &totalspace, &availspace, &iused, &iavail)
-	if totalspace-availspace-space != 32768 {
+	if totalspace-availspace-space != 268451840 {
 		time.Sleep(time.Second * 2)
 		m.StatFS(Background, cloneDir, &totalspace, &availspace, &iused, &iavail)
-		if totalspace-availspace-space != 32768 {
+		if totalspace-availspace-space != 268451840 {
 			t.Fatalf("added space: %d", totalspace-availspace-space)
 		}
 	}
