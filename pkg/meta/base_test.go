@@ -2328,7 +2328,7 @@ func testClone(t *testing.T, m Meta) {
 	if totalspace-availspace-space != 32768 {
 		time.Sleep(time.Second * 2)
 		m.StatFS(Background, cloneDir, &totalspace, &availspace, &iused, &iavail)
-		if totalspace-availspace-space != 268451840 {
+		if totalspace-availspace-space != 32768 {
 			t.Fatalf("added space: %d", totalspace-availspace-space)
 		}
 	}
