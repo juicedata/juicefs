@@ -100,7 +100,7 @@ $ ls -l /usr/bin/fusermount
 * 降低读写缓冲区大小，比如 [`--buffer-size=64`](../reference/command_reference.md#mount) 或者更小。当带宽充裕时，增大读写缓冲区能提升并发性能。但在低带宽场景下使用过大的读写缓冲区，`flush` 的上传时间会很长，因此容易超时。
 * 默认 GET／PUT 请求超时时间为 60 秒，因此增大 `--get-timeout` 以及 `--put-timeout`，可以改善读写超时的情况。
 
-此外，低带宽环境下需要慎用[「客户端写缓存」](../guide/cache_management.md#writeback)特性。先简单介绍一下 JuiceFS 的后台任务设计：每个 JuiceFS 客户端默认都启用后台任务，后台任务中会执行碎片合并（compaction）、异步删除等工作，而如果节点网络状况太差，则会降低系统整体性能。更糟的是如果该节点还启用了客户端写缓存，则容易出现碎片合并后上传缓慢，导致其他节点无法读取该文件的危险情况：
+此外，低带宽环境下需要慎用[「客户端写缓存」](../guide/cache.md#writeback)特性。先简单介绍一下 JuiceFS 的后台任务设计：每个 JuiceFS 客户端默认都启用后台任务，后台任务中会执行碎片合并（compaction）、异步删除等工作，而如果节点网络状况太差，则会降低系统整体性能。更糟的是如果该节点还启用了客户端写缓存，则容易出现碎片合并后上传缓慢，导致其他节点无法读取该文件的危险情况：
 
 ```text
 # 由于 writeback，碎片合并后的结果迟迟上传不成功，导致其他节点读取文件报错
@@ -115,7 +115,7 @@ $ ls -l /usr/bin/fusermount
 
 在 JuiceFS 中，一个典型的读放大现象是：对象存储的下行流量，远大于实际读文件的速度。比方说 JuiceFS 客户端的读吞吐为 200MiB/s，但是在 S3 观察到了 2GiB/s 的下行流量。
 
-JuiceFS 中内置了[预读](../guide/cache_management.md#client-read-cache)（prefetch）机制：随机读 block 的某一段，会触发整个 block 下载，这个默认开启的读优化策略，在某些场景下会带来读放大。了解这个设计以后，我们就可以开始排查了。
+JuiceFS 中内置了[预读](../guide/cache.md#client-read-cache)（prefetch）机制：随机读 block 的某一段，会触发整个 block 下载，这个默认开启的读优化策略，在某些场景下会带来读放大。了解这个设计以后，我们就可以开始排查了。
 
 结合先前问题排查方法一章中介绍的[访问日志](./fault_diagnosis_and_analysis.md#access-log)知识，我们可以采集一些访问日志来分析程序的读模式，然后针对性地调整配置。下面是一个实际生产环境案例的排查过程：
 
@@ -157,7 +157,7 @@ grep "read (148153116," access.log
 
 如果 JuiceFS 客户端内存占用过高，考虑按照以下方向进行排查调优，但也请注意，内存优化势必不是免费的，每一项设置调整都将带来相应的开销，请在调整前做好充分的测试与验证。
 
-* 读写缓冲区（也就是 `--buffer-size`）的大小，直接与 JuiceFS 客户端内存占用相关，因此可以通过降低读写缓冲区大小来减少内存占用，但请注意降低以后可能同时也会对读写性能造成影响。更多详见[「读写缓冲区」](../guide/cache_management.md#buffer-size)。
+* 读写缓冲区（也就是 `--buffer-size`）的大小，直接与 JuiceFS 客户端内存占用相关，因此可以通过降低读写缓冲区大小来减少内存占用，但请注意降低以后可能同时也会对读写性能造成影响。更多详见[「读写缓冲区」](../guide/cache.md#buffer-size)。
 * JuiceFS 挂载客户端是一个 Go 程序，因此也可以通过降低 `GOGC`（默认 100）来令 Go 在运行时执行更为激进的垃圾回收（将带来更多 CPU 消耗，甚至直接影响性能）。详见[「Go Runtime」](https://pkg.go.dev/runtime#hdr-Environment_Variables)。
 * 如果你使用自建的 Ceph RADOS 作为 JuiceFS 的数据存储，可以考虑将 glibc 替换为 [TCMalloc](https://google.github.io/tcmalloc)，后者有着更高效的内存管理实现，能在该场景下有效降低堆外内存占用。
 

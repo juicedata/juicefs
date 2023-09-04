@@ -84,7 +84,7 @@ JuiceFS 使用 [Hadoop Java SDK](https://juicefs.com/docs/zh/community/hadoop_ja
 
 - [Redis 最佳实践](https://juicefs.com/docs/zh/community/redis_best_practices)
 - [如何设置对象存储](https://juicefs.com/docs/zh/community/how_to_setup_object_storage)
-- [缓存管理](https://juicefs.com/docs/zh/community/cache_management)
+- [缓存](https://juicefs.com/docs/zh/community/cache)
 - [故障诊断和分析](https://juicefs.com/docs/zh/community/fault_diagnosis_and_analysis)
 - [FUSE 挂载选项](https://juicefs.com/docs/zh/community/fuse_mount_options)
 - [在 Windows 中使用 JuiceFS](https://juicefs.com/docs/zh/community/installation#windows-系统)

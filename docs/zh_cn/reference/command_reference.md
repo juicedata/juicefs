@@ -168,7 +168,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |-|-|
 |`--block-size=4096`|块大小，单位为 KiB，默认 4096。4M 是一个较好的默认值，不少对象存储（比如 S3）都将 4M 设为内部的块大小，因此将 JuiceFS block size 设为相同大小，往往也能获得更好的性能。|
 |`--compress=none`|压缩算法，支持 `lz4`、`zstd`、`none`（默认），启用压缩将不可避免地对性能产生一定影响。|
-|`--encrypt-rsa-key=value`|RSA 私钥的路径，查看[数据加密](../security/encrypt.md)以了解更多。|
+|`--encrypt-rsa-key=value`|RSA 私钥的路径，查看[数据加密](../security/encryption.md)以了解更多。|
 |`--encrypt-algo=aes256gcm-rsa`|加密算法 (aes256gcm-rsa, chacha20-rsa) (默认："aes256gcm-rsa")|
 |`--hash-prefix`|给每个对象添加 hash 前缀，默认为 false。|
 |`--shards=0`|如果对象存储服务在桶级别设置了限速（或者你使用自建的对象存储服务，单个桶的性能有限），可以将数据块根据名字哈希分散存入 N 个桶中。该值默认为 0，也就是所有数据存入单个桶。当 N 大于 0 时，`bucket` 需要包含 `%d` 占位符，例如 `--bucket=juicefs-%d`。`--shards` 设置无法动态修改，需要提前规划好用量。|
@@ -292,7 +292,7 @@ juicefs destroy redis://localhost e94d66a8-2339-4abd-b8d8-6812df737892
 
 ### `juicefs gc` {#gc}
 
-如果对象因为某种原因，完全脱离了 JuiceFS 的管理，也就是对象存储上依然还存在，但在 JuiceFS 元数据已经不复存在，无法被回收释放，这种现象称作「对象泄漏」。如果你并没有进行任何特殊操作，那么对象泄露通常昭示着 bug，建议提交 [GitHub Issue](https://github.com/juicedata/juicefs/issues/new/choose)。
+如果对象存储块因为某种原因，完全脱离了 JuiceFS 的管理，也就是对象存储上依然还存在，但在 JuiceFS 元数据已经不复存在，无法被回收释放，这种现象称作「对象泄漏」。如果你并没有进行任何特殊操作，那么对象泄露通常昭示着 bug，建议提交 [GitHub Issue](https://github.com/juicedata/juicefs/issues/new/choose)。
 
 与此同时，你可以用该命令清理泄漏对象。顺带一提，该命令还能够清理失效的文件碎片。详见[「状态检查 & 维护」](../administration/status_check_and_maintenance.md#gc)。
 
@@ -315,9 +315,9 @@ juicefs gc redis://localhost --delete
 
 |项 | 说明|
 |-|-|
-|`--delete`|删除泄漏的对象 (默认：false)|
-|`--compact`|整理所有文件的碎片 (默认：false).|
-|`--threads=10`|用于删除泄漏对象的线程数 (默认：10)|
+|`--delete`|删除泄漏的对象，以及因不完整的 `clone` 命令而产生泄漏的元数据。|
+|`--compact`|对所有文件执行碎片合并。|
+|`--threads=10`|并发线程数，默认为 10。|
 
 ### `juicefs fsck` {#fsck}
 
@@ -635,7 +635,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 #### 元数据缓存参数 {#mount-metadata-cache-options}
 
-元数据缓存的介绍和使用，详见[「内核元数据缓存」](../guide/cache_management.md#kernel-metadata-cache)及[「客户端内存元数据缓存」](../guide/cache_management.md#client-memory-metadata-cache)。
+元数据缓存的介绍和使用，详见[「内核元数据缓存」](../guide/cache.md#kernel-metadata-cache)及[「客户端内存元数据缓存」](../guide/cache.md#client-memory-metadata-cache)。
 
 |项 | 说明|
 |-|-|
@@ -655,7 +655,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--get-timeout=60`|下载一个对象的超时时间；单位为秒 (默认：60)|
 |`--put-timeout=60`|上传一个对象的超时时间；单位为秒 (默认：60)|
 |`--io-retries=10`|网络异常时的重试次数 (默认：10)|
-|`--max-uploads=20`|上传并发度，默认为 20。对于粒度为 4M 的写入模式，20 并发已经是很高的默认值，在这样的写入模式下，提高写并发往往需要伴随增大 `--buffer-size`, 详见「[读写缓冲区](../guide/cache_management.md#buffer-size)」。但面对百 K 级别的小随机写，并发量大的时候很容易产生阻塞等待，造成写入速度恶化。如果无法改善应用写模式，对其进行合并，那么需要考虑采用更高的写并发，避免排队等待。|
+|`--max-uploads=20`|上传并发度，默认为 20。对于粒度为 4M 的写入模式，20 并发已经是很高的默认值，在这样的写入模式下，提高写并发往往需要伴随增大 `--buffer-size`, 详见「[读写缓冲区](../guide/cache.md#buffer-size)」。但面对百 K 级别的小随机写，并发量大的时候很容易产生阻塞等待，造成写入速度恶化。如果无法改善应用写模式，对其进行合并，那么需要考虑采用更高的写并发，避免排队等待。|
 |`--max-deletes=10`|删除对象的连接数 (默认：10)|
 |`--upload-limit=0`|上传带宽限制，单位为 Mbps (默认：0)|
 |`--download-limit=0`|下载带宽限制，单位为 Mbps (默认：0)|
@@ -664,15 +664,15 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 |项 | 说明|
 |-|-|
-|`--buffer-size=300`|读写缓冲区的总大小；单位为 MiB (默认：300)。阅读[「读写缓冲区」](../guide/cache_management.md#buffer-size)了解更多。|
-|`--prefetch=1`|并发预读 N 个块 (默认：1)。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
-|`--writeback`|后台异步上传对象，默认为 false。阅读[「客户端写缓存」](../guide/cache_management.md#writeback)了解更多。|
-|`--upload-delay=0`|启用 `--writeback` 后，可以使用该选项控制数据延迟上传到对象存储，默认为 0 秒，相当于写入后立刻上传。该选项也支持 `s`（秒）、`m`（分）、`h`（时）这些单位。如果在等待的时间内数据被应用删除，则无需再上传到对象存储。如果数据只是临时落盘，可以考虑用该选项节约资源。阅读[「客户端写缓存」](../guide/cache_management.md#writeback)了解更多。|
-|`--cache-dir=value`|本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`$HOME/.juicefs/cache` 或 `/var/jfsCache`)。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
+|`--buffer-size=300`|读写缓冲区的总大小；单位为 MiB (默认：300)。阅读[「读写缓冲区」](../guide/cache.md#buffer-size)了解更多。|
+|`--prefetch=1`|并发预读 N 个块 (默认：1)。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
+|`--writeback`|后台异步上传对象，默认为 false。阅读[「客户端写缓存」](../guide/cache.md#writeback)了解更多。|
+|`--upload-delay=0`|启用 `--writeback` 后，可以使用该选项控制数据延迟上传到对象存储，默认为 0 秒，相当于写入后立刻上传。该选项也支持 `s`（秒）、`m`（分）、`h`（时）这些单位。如果在等待的时间内数据被应用删除，则无需再上传到对象存储。如果数据只是临时落盘，可以考虑用该选项节约资源。阅读[「客户端写缓存」](../guide/cache.md#writeback)了解更多。|
+|`--cache-dir=value`|本地缓存目录路径；使用 `:`（Linux、macOS）或 `;`（Windows）隔离多个路径 (默认：`$HOME/.juicefs/cache` 或 `/var/jfsCache`)。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
 |`--cache-mode value` <VersionAdd>1.1</VersionAdd>|缓存块的文件权限 (默认："0600")|
-|`--cache-size=102400`|缓存对象的总大小；单位为 MiB (默认：102400)。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
-|`--free-space-ratio=0.1`|最小剩余空间比例，默认为 0.1。如果启用了[「客户端写缓存」](../guide/cache_management.md#writeback)，则该参数还控制着写缓存占用空间。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
-|`--cache-partial-only`|仅缓存随机小块读，默认为 false。阅读[「客户端读缓存」](../guide/cache_management.md#client-read-cache)了解更多。|
+|`--cache-size=102400`|缓存对象的总大小；单位为 MiB (默认：102400)。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
+|`--free-space-ratio=0.1`|最小剩余空间比例，默认为 0.1。如果启用了[「客户端写缓存」](../guide/cache.md#writeback)，则该参数还控制着写缓存占用空间。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
+|`--cache-partial-only`|仅缓存随机小块读，默认为 false。阅读[「客户端读缓存」](../guide/cache.md#client-read-cache)了解更多。|
 |`--verify-cache-checksum=full` <VersionAdd>1.1</VersionAdd>|缓存数据一致性检查级别，启用 Checksum 校验后，生成缓存文件时会对数据切分做 Checksum 并记录于文件末尾，供读缓存时进行校验。支持以下级别：<br/><ul><li>`none`：禁用一致性检查，如果本地数据被篡改，将会读到错误数据；</li><li>`full`（默认）：读完整数据块时才校验，适合顺序读场景；</li><li>`shrink`：对读范围内的切片数据进行校验，校验范围不包含读边界所在的切片（可以理解为开区间），适合随机读场景；</li><li>`extend`：对读范围内的切片数据进行校验，校验范围同时包含读边界所在的切片（可以理解为闭区间），因此将带来一定程度的读放大，适合对正确性有极致要求的随机读场景。</li></ul>|
 |`--cache-eviction value` <VersionAdd>1.1</VersionAdd>|缓存逐出策略 (none 或 2-random) (默认值："2-random")|
 |`--cache-scan-interval value` <VersionAdd>1.1</VersionAdd>|扫描缓存目录重建内存索引的间隔 (以秒为单位) (默认："3600")|
@@ -941,13 +941,7 @@ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3:/
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
-对指定数据进行克隆，创建克隆时不会实际拷贝对象存储数据，而是仅拷贝元数据，因此不论对多大的文件或目录进行克隆，都非常快。因此对于 JuiceFS，这个命令是 `cp` 更好的替代，甚至对于 Linux 客户端来说，如果所使用的内核支持 [`copy_file_range`](https://man7.org/linux/man-pages/man2/copy_file_range.2.html)，那么调用 `cp` 时，实际发生的也是同样的元数据拷贝，调用将会格外迅速。
-
-![clone](../images/juicefs-clone.svg)
-
-克隆结果是纯粹的元数据拷贝，实际引用的对象存储块和源文件相同，因此在各方面都和源文件一样，可以正常读写。有任何一方文件数据被实际修改时，对应的数据块变更会以写入时复制（Copy-on-Write）的方式，写入到新的数据块，而其他未经修改的文件区域，由于对象存储数据块仍然相同，所以引用关系依然保持不变。
-
-需要注意的是，**克隆产生的元数据，也同样占用文件系统存储空间，以及元数据引擎的存储空间**，因此对庞大的目录进行克隆操作时请格外谨慎。
+快速在同一挂载点下克隆目录或者文件，只拷贝元数据但不拷贝数据块，因此拷贝速度非常快。更多介绍详见[「克隆文件或目录」](../guide/clone.md)。
 
 #### 概览
 
@@ -968,4 +962,4 @@ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2
 
 |项 | 说明|
 |-|-|
-|`--preserve, -p`|保留文件的 UID、GID 和 mode (默认值：false)|
+|`--preserve, -p`|克隆时默认使用当前用户的 UID 和 GID，而 mode 则使用当前用户的 umask 重新计算获得。如果启用该选项，则保留文件的 UID、GID 和 mode。|

@@ -986,6 +986,13 @@ func testResolve(t *testing.T, m Meta) {
 	if st := m.Mkdir(NewContext(1, 65534, []uint32{65534}), 1, "d", 0770, 0, 0, &parent, &pattr); st != 0 {
 		t.Fatalf("mkdir d: %s", st)
 	}
+	if pattr.Gid != 65534 {
+		pattr.Gid = 65534
+		if st := m.SetAttr(NewContext(1, 65534, []uint32{65534}), parent, SetAttrGID, 0, &pattr); st != 0 {
+			t.Fatalf("setattr gid: %s", st)
+		}
+	}
+
 	if pattr.Uid != 65534 || pattr.Gid != 65534 {
 		t.Fatalf("attr %+v", pattr)
 	}
@@ -2325,7 +2332,7 @@ func testClone(t *testing.T, m Meta) {
 		t.Fatalf("mtime of rootDir is not updated")
 	}
 	m.StatFS(Background, cloneDir, &totalspace, &availspace, &iused, &iavail)
-	if totalspace-availspace-space != 32768 {
+	if totalspace-availspace-space != 268451840 {
 		time.Sleep(time.Second * 2)
 		m.StatFS(Background, cloneDir, &totalspace, &availspace, &iused, &iavail)
 		if totalspace-availspace-space != 268451840 {

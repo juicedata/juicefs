@@ -115,7 +115,7 @@ juicefs config --secret-key xxxxx mysql://user:password@(192.168.1.6:3306)/juice
 
 ### Encrypted file system {#encrypted-file-system}
 
-For [encrypted file system](../security/encrypt.md), all data is encrypted before uploading to the object storage, including automatic metadata backups. This is different from the `dump` command, which only output metadata in plain text.
+For [encrypted file system](../security/encryption.md), all data is encrypted before uploading to the object storage, including automatic metadata backups. This is different from the `dump` command, which only output metadata in plain text.
 
 For an encrypted file system, it is necessary to additionally set the `JFS_RSA_PASSPHRASE` environment variable and specify the RSA private key and encryption algorithm when restoring the automatically backed-up metadata:
 

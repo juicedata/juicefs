@@ -635,13 +635,13 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 #### Metadata cache related options {#mount-metadata-cache-options}
 
-For metadata cache description and usage, refer to [Kernel metadata cache](../guide/cache_management.md#kernel-metadata-cache) and [Client memory metadata cache](../guide/cache_management.md#client-memory-metadata-cache).
+For metadata cache description and usage, refer to [Kernel metadata cache](../guide/cache.md#kernel-metadata-cache) and [Client memory metadata cache](../guide/cache.md#client-memory-metadata-cache).
 
 |Items|Description|
 |-|-|
-|`--attr-cache=1`|attributes cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache_management.md#kernel-metadata-cache)|
-|`--entry-cache=1`|file entry cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache_management.md#kernel-metadata-cache)|
-|`--dir-entry-cache=1`|dir entry cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache_management.md#kernel-metadata-cache)|
+|`--attr-cache=1`|attributes cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache.md#kernel-metadata-cache)|
+|`--entry-cache=1`|file entry cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache.md#kernel-metadata-cache)|
+|`--dir-entry-cache=1`|dir entry cache timeout in seconds (default: 1), read [Kernel metadata cache](../guide/cache.md#kernel-metadata-cache)|
 |`--open-cache=0`|open file cache timeout in seconds (0 means disable this feature) (default: 0)|
 |`--open-cache-limit value` <VersionAdd>1.1</VersionAdd> |max number of open files to cache (soft limit, 0 means unlimited) (default: 10000)|
 
@@ -655,7 +655,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 |`--get-timeout=60`|the max number of seconds to download an object (default: 60)|
 |`--put-timeout=60`|the max number of seconds to upload an object (default: 60)|
 |`--io-retries=10`|number of retries after network failure (default: 10)|
-|`--max-uploads=20`|Upload concurrency, defaults to 20. This is already a reasonably high value for 4M writes, with such write pattern, increasing upload concurrency usually demands higher `--buffer-size`, learn more at [Read/Write Buffer](../guide/cache_management.md#buffer-size). But for random writes around 100K, 20 might not be enough and can cause congestion at high load, consider using a larger upload concurrency, or try to consolidate small writes in the application end. |
+|`--max-uploads=20`|Upload concurrency, defaults to 20. This is already a reasonably high value for 4M writes, with such write pattern, increasing upload concurrency usually demands higher `--buffer-size`, learn more at [Read/Write Buffer](../guide/cache.md#buffer-size). But for random writes around 100K, 20 might not be enough and can cause congestion at high load, consider using a larger upload concurrency, or try to consolidate small writes in the application end. |
 |`--max-deletes=10`|number of threads to delete objects (default: 10)|
 |`--upload-limit=0`|bandwidth limit for upload in Mbps (default: 0)|
 |`--download-limit=0`|bandwidth limit for download in Mbps (default: 0)|
@@ -664,15 +664,15 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 
 |Items|Description|
 |-|-|
-|`--buffer-size=300`|total read/write buffering in MiB (default: 300), see [Read/Write buffer](../guide/cache_management.md#buffer-size)|
-|`--prefetch=1`|prefetch N blocks in parallel (default: 1), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
-|`--writeback`|upload objects in background (default: false), see [Client write data cache](../guide/cache_management.md#writeback)|
-|`--upload-delay=0`|When `--writeback` is enabled, you can use this option to add a delay to object storage upload, default to 0, meaning that upload will begin immediately after write. Different units are supported, including `s` (second), `m` (minute), `h` (hour). If files are deleted during this delay, upload will be skipped entirely, when using JuiceFS for temporary storage, use this option to reduce resource usage. Refer to [Client write data cache](../guide/cache_management.md#writeback).|
-|`--cache-dir=value`|directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `$HOME/.juicefs/cache` or `/var/jfsCache`), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
+|`--buffer-size=300`|total read/write buffering in MiB (default: 300), see [Read/Write buffer](../guide/cache.md#buffer-size)|
+|`--prefetch=1`|prefetch N blocks in parallel (default: 1), see [Client read data cache](../guide/cache.md#client-read-cache)|
+|`--writeback`|upload objects in background (default: false), see [Client write data cache](../guide/cache.md#writeback)|
+|`--upload-delay=0`|When `--writeback` is enabled, you can use this option to add a delay to object storage upload, default to 0, meaning that upload will begin immediately after write. Different units are supported, including `s` (second), `m` (minute), `h` (hour). If files are deleted during this delay, upload will be skipped entirely, when using JuiceFS for temporary storage, use this option to reduce resource usage. Refer to [Client write data cache](../guide/cache.md#writeback).|
+|`--cache-dir=value`|directory paths of local cache, use `:` (Linux, macOS) or `;` (Windows) to separate multiple paths (default: `$HOME/.juicefs/cache` or `/var/jfsCache`), see [Client read data cache](../guide/cache.md#client-read-cache)|
 |`--cache-mode value` <VersionAdd>1.1</VersionAdd> |file permissions for cached blocks (default: "0600")|
-|`--cache-size=102400`|size of cached object for read in MiB (default: 102400), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
-|`--free-space-ratio=0.1`|min free space ratio (default: 0.1), if [Client write data cache](../guide/cache_management.md#writeback) is enabled, this option also controls write cache size, see [Client read data cache](../guide/cache_management.md#client-read-cache)|
-|`--cache-partial-only`|cache random/small read only (default: false), see [Client read data cache](../guide/cache_management.md#client-read-cache)|
+|`--cache-size=102400`|size of cached object for read in MiB (default: 102400), see [Client read data cache](../guide/cache.md#client-read-cache)|
+|`--free-space-ratio=0.1`|min free space ratio (default: 0.1), if [Client write data cache](../guide/cache.md#writeback) is enabled, this option also controls write cache size, see [Client read data cache](../guide/cache.md#client-read-cache)|
+|`--cache-partial-only`|cache random/small read only (default: false), see [Client read data cache](../guide/cache.md#client-read-cache)|
 |`--verify-cache-checksum value` <VersionAdd>1.1</VersionAdd> |Checksum level for cache data. After enabled, checksum will be calculated on divided parts of the cache blocks and stored on disks, which are used for verification during reads. The following strategies are supported:<br/><ul><li>`none`: Disable checksum verification, if local cache data is tampered, bad data will be read;</li><li>`full` (default): Perform verification when reading the full block, use this for sequential read scenarios;</li><li>`shrink`: Perform verification on parts that's fully included within the read range, use this for random read scenarios;</li><li>`extend`: Perform verification on parts that fully include the read range, this causes read amplifications and is only used for random read scenarios demanding absolute data integrity.</li></ul>|
 |`--cache-eviction value` <VersionAdd>1.1</VersionAdd> |cache eviction policy (none or 2-random) (default: "2-random")|
 |`--cache-scan-interval value` <VersionAdd>1.1</VersionAdd> |interval (in seconds) to scan cache-dir to rebuild in-memory index (default: "3600")|
@@ -942,13 +942,7 @@ In which:
 
 ### `juicefs clone` <VersionAdd>1.1</VersionAdd> {#clone}
 
-This command makes a clone of your data by creating a mere metadata copy, without creating any new data in the object storage, thus cloning is very fast regardless of target file / directory size. Under JuiceFS, this command is a better alternative to `cp`, moreover, for Linux clients using kernels with [`copy_file_range`](https://man7.org/linux/man-pages/man2/copy_file_range.2.html) support, then the `cp` command achieves the same result as `juicefs clone`.
-
-![clone](../images/juicefs-clone.svg)
-
-The clone result is a metadata copy, all the files are still referencing the same object storage blocks, that's why a clone behaves the same in every way as its originals. When either of them go through actual file data modification, the affected data blocks will be copied on write, and become new blocks after write, while the unchanged part of the files remains the same, still referencing the original blocks.
-
-**Clones takes up both file system storage space and metadata engine storage space**, pay special attention when making clones on large size directories.
+Quickly clone directories or files within a single JuiceFS mount point. The cloning process involves copying only the metadata without copying the data blocks, making it extremely fast. Read [Clone Files or Directories](../guide/clone.md) for more.
 
 #### Synopsis
 
@@ -961,7 +955,7 @@ juicefs clone /mnt/jfs/file1 /mnt/jfs/file2
 # Clone a directory
 juicefs clone /mnt/jfs/dir1 /mnt/jfs/dir2
 
-# Clone with preserving the UID, GID, and mode of the file
+# Preserve the UID, GID, and mode of the file
 juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2
 ```
 
@@ -969,4 +963,4 @@ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2
 
 |Items|Description|
 |-|-|
-|`--preserve, -p`|preserve the UID, GID, and mode of the file (default: false)|
+|`--preserve, -p`|By default, the executor's UID and GID are used for the clone result, and the mode is recalculated based on the user's umask. Use this option to preserve the UID, GID, and mode of the file.|
