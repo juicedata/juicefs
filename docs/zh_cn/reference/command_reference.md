@@ -170,7 +170,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 |`--compress=none`|压缩算法，支持 `lz4`、`zstd`、`none`（默认），启用压缩将不可避免地对性能产生一定影响。这两种压缩算法中，`lz4` 提供更好的性能，但压缩比要逊于 `zstd`，他们的具体性能差别具体需要读者自行搜索了解。|
 |`--encrypt-rsa-key=value`|RSA 私钥的路径，查看[数据加密](../security/encryption.md)以了解更多。|
 |`--encrypt-algo=aes256gcm-rsa`|加密算法 (aes256gcm-rsa, chacha20-rsa) (默认："aes256gcm-rsa")|
-|`--hash-prefix`|对于不少对象存储服务，如果对象存储命名路径的键值（key）是连续的，那么坐落在对象存储上的物理数据也将是连续的。在高并发顺序读场景下，这样会带来数据访问热点，让对象存储服务的部分区域访问压力过大。启用 `--hash-prefix` 将会给每个对象路径命名添加 hash 前缀（用 slice ID 对 256 取模，详见[内部实现](../development/internals.md#object-storage-naming-format)），相当于“打散”对象存储键值，避免在对象存储服务层面创造请求热点。<br/><br/>显而易见，由于影响着对象存储块的命名规则，该选项必须在创建文件系统之初就指定好、不能动态修改。|
+|`--hash-prefix`|对于部分对象存储服务，如果对象存储命名路径的键值（key）是连续的，那么坐落在对象存储上的物理数据也将是连续的。在大规模顺序读场景下，这样会带来数据访问热点，让对象存储服务的部分区域访问压力过大。<br/><br/>启用 `--hash-prefix` 将会给每个对象路径命名添加 hash 前缀（用 slice ID 对 256 取模，详见[内部实现](../development/internals.md#object-storage-naming-format)），相当于“打散”对象存储键值，避免在对象存储服务层面创造请求热点。显而易见，由于影响着对象存储块的命名规则，该选项**必须在创建文件系统之初就指定好、不能动态修改。**<br/><br/>目前而言，[AWS S3](https://aws.amazon.com/about-aws/whats-new/2018/07/amazon-s3-announces-increased-request-rate-performance) 已经做了优化，不再需要应用侧的随机对象前缀。而对于其他对象对象存储服务（比如 [COS 就在文档里推荐随机化前缀](https://cloud.tencent.com/document/product/436/13653#.E6.B7.BB.E5.8A.A0.E5.8D.81.E5.85.AD.E8.BF.9B.E5.88.B6.E5.93.88.E5.B8.8C.E5.89.8D.E7.BC.80)），因此，对于这些对象存储，如果文件系统规模庞大，建议启用该选项以提升性能。|
 |`--shards=0`|如果对象存储服务在桶级别设置了限速（或者你使用自建的对象存储服务，单个桶的性能有限），可以将数据块根据名字哈希分散存入 N 个桶中。该值默认为 0，也就是所有数据存入单个桶。当 N 大于 0 时，`bucket` 需要包含 `%d` 占位符，例如 `--bucket=juicefs-%d`。`--shards` 设置无法动态修改，需要提前规划好用量。|
 
 #### 管理参数 {#format-management-options}
