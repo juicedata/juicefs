@@ -136,7 +136,7 @@ juicefs format mysql://jfs:mypassword@(127.0.0.1:3306)/juicefs myjfs
 META_PASSWORD=mypassword juicefs format mysql://jfs:@(127.0.0.1:3306)/juicefs myjfs
 
 # Create a volume with quota enabled
-juicefs format sqlite3://myjfs.db myjfs --inode=1000000 --capacity=102400
+juicefs format sqlite3://myjfs.db myjfs --inodes=1000000 --capacity=102400
 
 # Create a volume with trash disabled
 juicefs format sqlite3://myjfs.db myjfs --trash-days=0
@@ -194,7 +194,7 @@ juicefs config [command options] META-URL
 juicefs config redis://localhost
 
 # Change volume "quota"
-juicefs config redis://localhost --inode 10000000 --capacity 1048576
+juicefs config redis://localhost --inodes 10000000 --capacity 1048576
 
 # Change maximum days before files in trash are deleted
 juicefs config redis://localhost --trash-days 7

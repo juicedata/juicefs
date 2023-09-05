@@ -96,7 +96,7 @@ $ juicefs config $METAURL --inodes 100
     inodes: 0 -> 100
 ```
 
-### Combine `--capacity` and `--inode` {#limit-total-capacity-and-inodes}
+### Combine `--capacity` and `--inodes` {#limit-total-capacity-and-inodes}
 
 You can combine `--capacity` and `--inodes` to set the capacity quota of a file system with more flexibility. For example, to create a file system that the total capacity limits to 100 TiB with only 100000 files to be stored:
 
