@@ -465,6 +465,7 @@ func (m *baseMeta) newSessionInfo() []byte {
 		HostName:   host,
 		IPAddrs:    addrs,
 		MountPoint: m.conf.MountPoint,
+		MountTime:  time.Now(),
 		ProcessID:  os.Getpid(),
 	})
 	if err != nil {

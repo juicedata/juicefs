@@ -251,6 +251,7 @@ type SessionInfo struct {
 	HostName   string
 	IPAddrs    []string `json:",omitempty"`
 	MountPoint string
+	MountTime  time.Time
 	ProcessID  int
 }
 
