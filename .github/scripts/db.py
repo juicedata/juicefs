@@ -29,6 +29,9 @@ import argparse
 def add_perf_record(name, result, product_version,  meta, storage, extra):
     result = float(result)
     passowrd = os.environ['MYSQL_PASSWORD']
+    if not passowrd:
+        print('<WARNING>: MYSQL_PASSWORD is empty')
+        return 
     github_ref_name = os.environ.get('GITHUB_REF_NAME')
     print(f'github_ref_name is: {github_ref_name}')
     github_run_id = os.environ.get('GITHUB_RUN_ID')
