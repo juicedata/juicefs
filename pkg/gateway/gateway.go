@@ -309,7 +309,7 @@ func (n *jfsObjects) listDirFactory() minio.ListDirFunc {
 		}
 		root := n.path(bucket, prefixDir) == "/"
 		for _, fi := range fis {
-			if root && len(fi.Name()) == len(metaBucket) && fi.Name() == metaBucket {
+			if root && (fi.Name() == metaBucket || fi.Name() == minio.MinioMetaBucket) {
 				continue
 			}
 			if fi.IsDir() {
