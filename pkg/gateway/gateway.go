@@ -77,7 +77,7 @@ type jfsObjects struct {
 }
 
 func (n *jfsObjects) IsCompressionSupported() bool {
-	return n.conf.Chunk.Compress != "" && n.conf.Chunk.Compress != "none"
+	return false
 }
 
 func (n *jfsObjects) IsEncryptionSupported() bool {
