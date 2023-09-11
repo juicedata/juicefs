@@ -827,7 +827,7 @@ Slice{pos: 40M, id:  0, size: 24M, off:   0, len: 24M} // can be omitted
 
 ### Data objects
 
-#### Object naming
+#### Object naming {#object-storage-naming-format}
 
 Block is the basic unit for JuiceFS to manage data. Its size is 4 MiB by default, and can be changed only when formatting a file system, within the interval [64 KiB, 16 MiB]. Each Block is an object in the object storage after upload, and is named in the format `${fsname}/chunks/${hash}/${basename}`, where
 
