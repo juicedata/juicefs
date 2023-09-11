@@ -142,7 +142,7 @@ JuiceFS 客户端会跟踪所有最近被打开的文件，要重复打开相同
 
 从 Linux 内核 3.15 开始，FUSE 支持[内核回写（writeback-cache）](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt)模式，内核会把高频随机小 IO（例如 10-100 字节）的写请求合并起来，显著提升随机写入的性能。但其副作用是会将顺序写变为随机写，严重降低顺序写的性能。开启前请考虑使用场景是否匹配。
 
-在挂载命令通过 [`-o writeback_cache`](../reference/fuse_mount_options.md) 选项来开启内核回写模式。注意，内核回写与[「客户端写缓存」](#writeback)并不一样，前者是内核中的实现，后者则发生在 JuiceFS 客户端，二者适用场景也不一样，详读对应章节以了解。
+在挂载命令通过 [`-o writeback_cache`](../reference/fuse_mount_options.md) 选项来开启内核回写模式。注意，内核回写与[「客户端写缓存」](#client-write-cache)并不一样，前者是内核中的实现，后者则发生在 JuiceFS 客户端，二者适用场景也不一样，详读对应章节以了解。
 
 ### 客户端读缓存 {#client-read-cache}
 
@@ -178,7 +178,7 @@ JuiceFS 客户端会把从对象存储下载的数据，以及新上传的小于
 
   读一般有两种模式，连续读和随机读。对于连续读，一般需要较高的吞吐。对于随机读，一般需要较低的时延。当本地磁盘的吞吐反而比不上对象存储时，可以考虑启用 `--cache-partial-only`，这样一来，连续读虽然会将一整个对象块读取下来，但并不会被缓存。而随机读（例如读 Parquet 或者 ORC 文件的 footer）所读取的字节数比较小，不会读取整个对象块，此类读取就会被缓存。充分地利用了本地磁盘低时延和网络高吞吐的优势。
 
-### 客户端写缓存 {#writeback}
+### 客户端写缓存 {#client-write-cache}
 
 开启客户端写缓存能提升特定场景下的大量小文件写入性能，请详读本节了解。
 

@@ -102,7 +102,7 @@ The first issue with slow connection is upload / download timeouts (demonstrated
 * Reduce buffer size, e.g. [`--buffer-size=64`](../reference/command_reference.md#mount) or even lower. In a large bandwidth condition, increasing buffer size improves parallel performance. But in a low speed environment, this only makes `flush` operations slow and prone to timeouts.
 * Default timeout for GET / PUT requests are 60 seconds, increasing `--get-timeout` and `--put-timeout` may help with read / write timeouts.
 
-In addition, the ["Client Write Cache"](../guide/cache.md#writeback) feature needs to be used with caution in low bandwidth environment. Let's briefly go over the JuiceFS Client background job design: every JuiceFS Client runs background jobs by default, one of which is data compaction, and if the client has poor internet speed, it'll drag down performance for the whole system. A worse case is when client write cache is also enabled, compaction results are uploaded too slowly, forcing other clients into a read hang when accessing the affected files:
+In addition, the ["Client Write Cache"](../guide/cache.md#client-write-cache) feature needs to be used with caution in low bandwidth environment. Let's briefly go over the JuiceFS Client background job design: every JuiceFS Client runs background jobs by default, one of which is data compaction, and if the client has poor internet speed, it'll drag down performance for the whole system. A worse case is when client write cache is also enabled, compaction results are uploaded too slowly, forcing other clients into a read hang when accessing the affected files:
 
 ```text
 # While compaction results are slowly being uploaded in low speed clients, read from other clients will hang and eventually fail
