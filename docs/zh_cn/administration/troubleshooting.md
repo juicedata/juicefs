@@ -79,7 +79,9 @@ $ ls -l /usr/bin/fusermount
 -rwsr-xr-x 1 root root 32096 Oct 30  2018 /usr/bin/fusermount
 ```
 
-## 与对象存储通信不畅（网速慢） {#io-error-object-storage}
+## 读写慢与读写失败 {#read-write-error}
+
+### 与对象存储通信不畅（网速慢） {#io-error-object-storage}
 
 如果无法访问对象存储，或者仅仅是网速太慢，JuiceFS 客户端也会发生读写错误。你也可以在日志中找到相应的报错。
 
@@ -110,6 +112,23 @@ $ ls -l /usr/bin/fusermount
 ```
 
 为了避免此类问题，我们推荐在低带宽节点上禁用后台任务，也就是为挂载命令添加 [`--no-bgjob`](../reference/command_reference.md#mount) 参数。
+
+### 警告日志：找不到对象存储块 {#warning-log-block-not-found-in-object-storage}
+
+规模化使用 JuiceFS 时，往往会在客户端日志中看到类似以下警告：
+
+```
+<WARNING>: fail to read sliceId 1771585458 (off:4194304, size:4194304, clen: 37746372): get chunks/0/0/1_0_4194304: oss: service returned error: StatusCode=404, ErrorCode=NoSuchKey, ErrorMessage="The specified key does not exist.", RequestId=62E8FB058C0B5C3134CB80B6
+```
+
+出现这一类警告时，如果并未伴随着访问异常（比如日志中出现 `input/output error`），其实不必特意关注，客户端会自行重试，往往不影响文件访问。
+
+这行警告日志的含义是：访问 slice 出错了，因为对应的某个对象存储块不存在，对象存储返回了 `NoSuchKey` 错误。出现此类异常的可能原因有下：
+
+* JuiceFS 客户端会异步运行碎片合并（Compaction），碎片合并完成后，文件与对象存储数据块（Block）的关系随之改变，但此时可能其他客户端正在读取该文件，因此随即报错。
+* 某些客户端开启了[「写缓存」](../guide/cache.md#client-write-cache)，文件已经写入，提交到了元数据服务，但对应的对象存储 Block 却并未上传完成（比如[网速慢](#io-error-object-storage)），导致其他客户端在读取该文件时，对象存储返回数据不存在。
+
+再次强调，如果并未出现应用端访问异常，则可安全忽略此类警告。
 
 ## 读放大 {#read-amplification}
 
