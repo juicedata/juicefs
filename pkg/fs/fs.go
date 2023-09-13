@@ -741,6 +741,7 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 		fi = AttrToFileInfo(inode, attr)
 		if (!resolved || followLastSymlink) && fi.IsSymlink() {
 			if _, ok := visited[inode]; ok {
+				logger.Errorf("find a loop symlink: %d", inode)
 				return nil, syscall.ELOOP
 			} else {
 				visited[inode] = struct{}{}
