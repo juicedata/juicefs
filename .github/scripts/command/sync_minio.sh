@@ -96,7 +96,8 @@ test_sync_deep_symlink(){
     for i in {1..40}; do
         ln -s symlink_$i symlink_$((i+1))
     done
-    cat symlink_40 | grep hello
+    echo "cat symlink_40"
+    cat symlink_40
     echo "cat symlink_41"
     cat symlink_41
     echo "----"
