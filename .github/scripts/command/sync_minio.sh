@@ -93,13 +93,11 @@ test_sync_deep_symlink(){
     cd /jfs
     echo hello > hello
     ln -s hello symlink_1
-    for i in {1..100}; do
+    for i in {1..40}; do
         ln -s symlink_$i symlink_$((i+1))
     done
-    for i in {1..100}; do
-        echo "symlink_$i"
-        cat symlink_$i
-    done
+    cat symlink_39 | grep hello
+    cat symlink_40 && echo "cat symlink_40 fail" && exit 1 || true
     cd -
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ && echo "sync should fail" && exit 1 || true
     rm -rf /jfs/symlink_41
