@@ -99,7 +99,6 @@ test_sync_deep_symlink(){
     echo "cat symlink_40"
     cat symlink_40
     echo "cat symlink_41"
-    cat symlink_41
     echo "----"
     cat symlink_41 && echo "cat symlink_41 fail" && exit 1 || true
     cd -
