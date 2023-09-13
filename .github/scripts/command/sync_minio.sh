@@ -100,6 +100,8 @@ test_sync_deep_symlink(){
     cat symlink_41 && echo "cat symlink_41 fail" && exit 1 || true
     cd -
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ && echo "sync should fail" && exit 1 || true
+    rm -rf /jfs/symlink_41
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ 
     for i in {1..40}; do
         ./mc cat myminio/myjfs/symlink_$i | grep "^hello$"
     done
