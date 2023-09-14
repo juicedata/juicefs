@@ -18,7 +18,7 @@ If you wish to control mount points using Docker, so that different application 
 
 ## Docker volume plugin {#volume-plugin}
 
-Every Docker plugin itself is a Docker image, and JuiceFS Docker volume plugin is packed with [JuiceFS Community Edition](../introduction/README.md) as well as [JuiceFS Enterprise Edition](https://juicefs.com/docs/cloud) clients, after installation, you'll be able to run this plugin, and create JuiceFS Volume inside Docker.
+Every Docker plugin itself is a Docker image, and [JuiceFS Docker volume plugin image](https://hub.docker.com/r/juicedata/juicefs) is packed with [JuiceFS Community Edition](../introduction/README.md) as well as [JuiceFS Cloud Service](https://juicefs.com/docs/cloud) clients, after installation, you'll be able to run this plugin, and create JuiceFS Volume inside Docker.
 
 Install the plugin with the following command, grant permissions when asked:
 
@@ -143,6 +143,35 @@ If JuiceFS Docker volume plugin is not working properly, it's recommend to [upgr
 
   `juicefs` is called to perform the actual mount inside the plugin container, if any error occurs, it will be shown in the Docker daemon logs, same when there's error with the volume plugin itself.
 
-## Mount JuiceFS in a Container {#mount-juicefs-in-docker}
+## Using JuiceFS in a Docker Container {#mount-juicefs-in-docker}
 
-Mounting JuiceFS in a Docker container usually serves two purposes, one is to provide storage for the applications in the container, and the other is to map the mount point inside container to the host. To do so, you can use the officially maintained images or build your own image for customization. See [Customize Container Image](https://juicefs.com/docs/csi/guide/custom-image).
+Mounting JuiceFS in a Docker container usually serves two purposes, one is to provide storage for the applications in the container, and the other is to map the mount point inside container to the host. 
+
+The official maintained image of JuiceFS, [juicedata/mount](https://hub.docker.com/r/juicedata/mount), includes both the JuiceFS community edition and the cloud service client. Their paths are as follows:
+
+- **Commnity Edition**: `/usr/local/bin/juicefs`
+- **Cloud Service**：`/usr/bin/juicefs`
+
+For example, to create a JuiceFS volume using the community edition client:
+
+```sh
+docker run --rm \
+	juicedata/mount /usr/local/bin/juicefs format \
+	--storage s3 \
+	--bucket https://xxx.xxx.xxx \
+	--access-key=ACCESSKEY \
+	--secret-key=SECRETKEY \
+	...
+	redis://127.0.0.1/1 myjfs
+```
+
+Mount this volume:
+
+```sh
+docker run --name myjfs -d \
+	juicedata/mount /usr/local/bin/juicefs mount \
+	...
+	redis://127.0.0.1/1 myjfs /mnt
+```
+
+In addition, you can also write your own Dockerfile to package the JuiceFS client into the image, refer to [Customize Container Image](https://juicefs.com/docs/csi/guide/custom-image).
