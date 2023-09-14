@@ -23,9 +23,17 @@ juicefs clone /mnt/jfs/dir1 /mnt/jfs/dir2
 
 ## Consistency {#consistency}
 
-The `clone` subcommand provides consistency guarantees as follows:
+In terms of transaction consistency, cloning behaves as follows:
 
+- Before `clone` command finishes, destination file is not visible.
 - For file: The `clone` command ensures atomicity, meaning that the cloned file will always be in a correct and consistent state.
 - For directory: The `clone` command does not guarantee atomicity for directories. In other words, if the source directory changes during the cloning process, the target directory may be different from the source directory.
 
-However, the destination directory is not visible until the `clone` command is completed, if the command didn't manage to finish properly, there could be metadata leak and you should clean up using the [`juicefs gc --delete`](../reference/command_reference.md#gc) command.
+Considering the atomicity of cloning a single file, when multiple process tries to clone into a same target, only one will eventually succeed. To be specific, during the concurrent cloning, there'll be N unfinished file trees (with different tree root inode) where N is the number of concurrently running `clone` commands. When any of the clone process reaches the ending step, it'll check for the existence of the target edge, and either create the edge or fails if it already exists. Therefore, there can be only one successful clone when there're conflicts.
+
+It's also mentioned above that a clone command could fail, and failures can cause metadata leak, you can clean up using the [`juicefs gc --delete`](../reference/command_reference.md#gc) command.
+
+To discuss the anatomy of a metadata leak, first understand that if a clone runs into errors, the program will try to perform cleanup, which could also run into abnormity, depending on the cleanup result, the possibilities are:
+
+1. Cloning itself fails, but cleanup succeeds, in this case, the unfinished metadata tree is cleaned up before becoming a leak, there'll be no side effects.
+1. Cloning fails, along with the subsequent cleanup, this leaks the unfinished metadata tree and can cause object storage leak as well. Meaning that if its corresponding files are deleted, the object storage blocks will not be released (since it's still being referenced in the unfinished clone results). The leak will persist until it's cleaned by `juicefs gc --delete`. If a clone process is aborted halfway, this is probably the case because it never reaches the cleanup stage.
