@@ -146,7 +146,7 @@ docker-compose down --volumes
 
 在 Docker 容器中挂载 JuiceFS 通常有两种作用，一种是为容器中的应用提供存储，另一种是把容器中挂载的 JuiceFS 存储映射给主机读写使用。
 
-JuiceFS 官方维护的镜像 [juicedata/mount](https://hub.docker.com/r/juicedata/mount) 中同时包含 JuiceFS 社区版和云服务客户端，它们的路径如下：
+JuiceFS 官方维护的镜像 [Juicedata/mount](https://hub.docker.com/r/juicedata/mount) 中同时包含 JuiceFS 社区版和云服务客户端，它们的路径如下：
 
 - **社区版客户端**：`/usr/local/bin/juicefs`
 - **云服务客户端**：`/usr/bin/juicefs`
@@ -155,22 +155,22 @@ JuiceFS 官方维护的镜像 [juicedata/mount](https://hub.docker.com/r/juiceda
 
 ```sh
 docker run --rm \
-	juicedata/mount /usr/local/bin/juicefs format \
-	--storage s3 \
-	--bucket https://xxx.xxx.xxx \
-	--access-key=ACCESSKEY \
-	--secret-key=SECRETKEY \
-	...
-	redis://127.0.0.1/1 myjfs
+    juicedata/mount /usr/local/bin/juicefs format \
+    --storage s3 \
+    --bucket https://xxx.xxx.xxx \
+    --access-key=ACCESSKEY \
+    --secret-key=SECRETKEY \
+    ...
+    redis://127.0.0.1/1 myjfs
 ```
 
 挂载这个卷：
 
 ```sh
 docker run --name myjfs -d \
-	juicedata/mount /usr/local/bin/juicefs mount \
-	...
-	redis://127.0.0.1/1 myjfs /mnt
+    juicedata/mount /usr/local/bin/juicefs mount \
+    ...
+    redis://127.0.0.1/1 myjfs /mnt
 ```
 
 另外，也可以自己编写 Dockerfile 将 JuiceFS 客户端打包进镜像中，详见[「定制容器镜像」](https://juicefs.com/docs/zh/csi/guide/custom-image)。

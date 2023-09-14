@@ -145,9 +145,9 @@ If JuiceFS Docker volume plugin is not working properly, it's recommend to [upgr
 
 ## Using JuiceFS in a Docker Container {#mount-juicefs-in-docker}
 
-Mounting JuiceFS in a Docker container usually serves two purposes, one is to provide storage for the applications in the container, and the other is to map the mount point inside container to the host. 
+Mounting JuiceFS in a Docker container usually serves two purposes, one is to provide storage for the applications in the container, and the other is to map the mount point inside container to the host.
 
-The official maintained image of JuiceFS, [juicedata/mount](https://hub.docker.com/r/juicedata/mount), includes both the JuiceFS community edition and the cloud service client. Their paths are as follows:
+The official maintained image of JuiceFS, [Juicedata/mount](https://hub.docker.com/r/juicedata/mount), includes both the JuiceFS community edition and the cloud service client. Their paths are as follows:
 
 - **Commnity Edition**: `/usr/local/bin/juicefs`
 - **Cloud Service**：`/usr/bin/juicefs`
@@ -156,22 +156,22 @@ For example, to create a JuiceFS volume using the community edition client:
 
 ```sh
 docker run --rm \
-	juicedata/mount /usr/local/bin/juicefs format \
-	--storage s3 \
-	--bucket https://xxx.xxx.xxx \
-	--access-key=ACCESSKEY \
-	--secret-key=SECRETKEY \
-	...
-	redis://127.0.0.1/1 myjfs
+    juicedata/mount /usr/local/bin/juicefs format \
+    --storage s3 \
+    --bucket https://xxx.xxx.xxx \
+    --access-key=ACCESSKEY \
+    --secret-key=SECRETKEY \
+    ...
+    redis://127.0.0.1/1 myjfs
 ```
 
 Mount this volume:
 
 ```sh
 docker run --name myjfs -d \
-	juicedata/mount /usr/local/bin/juicefs mount \
-	...
-	redis://127.0.0.1/1 myjfs /mnt
+    juicedata/mount /usr/local/bin/juicefs mount \
+    ...
+    redis://127.0.0.1/1 myjfs /mnt
 ```
 
 In addition, you can also write your own Dockerfile to package the JuiceFS client into the image, refer to [Customize Container Image](https://juicefs.com/docs/csi/guide/custom-image).
