@@ -147,16 +147,18 @@ If JuiceFS Docker volume plugin is not working properly, it's recommend to [upgr
 
 Mounting JuiceFS in a Docker container usually serves two purposes, one is to provide storage for the applications in the container, and the other is to map the mount point inside container to the host.
 
-The official maintained image of JuiceFS, [Juicedata/mount](https://hub.docker.com/r/juicedata/mount), includes both the JuiceFS community edition and the cloud service client. Their paths are as follows:
+The official maintained image of JuiceFS, [juicedata/mount](https://hub.docker.com/r/juicedata/mount), you can specify the desired version by using tags:
 
-- **Commnity Edition**: `/usr/local/bin/juicefs`
-- **Cloud Service**：`/usr/bin/juicefs`
+- The tag for **the Community Edition is "ce"**, for example: latest, ce-v1.1.0, ce-nightly.
+- The tag for **the Cloud Service is "ee"**, for example: ee-v4.9.21, ee-nightly.
 
-For example, to create a JuiceFS volume using the community edition client:
+The `latest` tag only contains the latest version of the Community Edition. The `nightly` tag points to the latest development version. For more details, please check the [tags page](https://hub.docker.com/r/juicedata/mount/tags) on Docker Hub.
+
+For example, to create a JuiceFS volume using the community edition:
 
 ```sh
 docker run --rm \
-    juicedata/mount /usr/local/bin/juicefs format \
+    juicedata/mount:ce-v1.1.0 juicefs format \
     --storage s3 \
     --bucket https://xxx.xxx.xxx \
     --access-key=ACCESSKEY \
@@ -169,7 +171,7 @@ Mount this volume:
 
 ```sh
 docker run --name myjfs -d \
-    juicedata/mount /usr/local/bin/juicefs mount \
+    juicedata/mount:ce-v1.1.0 juicefs mount \
     ...
     redis://127.0.0.1/1 myjfs /mnt
 ```
