@@ -146,7 +146,7 @@ docker-compose down --volumes
 
 在 Docker 容器中挂载 JuiceFS 通常有两种作用，一种是为容器中的应用提供存储，另一种是把容器中挂载的 JuiceFS 存储映射给主机读写使用。
 
-JuiceFS 官方维护的镜像 [juicedata/mount](https://hub.docker.com/r/juicedata/mount) ，可以通过 tag 指定所需要的版本：
+JuiceFS 官方维护的镜像 [Juicedata/mount](https://hub.docker.com/r/juicedata/mount) ，可以通过 tag 指定所需要的版本：
 
 - **社区版 tag 为 ce**，例如：latest、ce-v1.1.0、ce-nightly
 - **云服务 tag 为 ee**，例如：ee-v4.9.21、ee-nightly

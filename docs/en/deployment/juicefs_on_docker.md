@@ -147,7 +147,7 @@ If JuiceFS Docker volume plugin is not working properly, it's recommend to [upgr
 
 Mounting JuiceFS in a Docker container usually serves two purposes, one is to provide storage for the applications in the container, and the other is to map the mount point inside container to the host.
 
-The official maintained image of JuiceFS, [juicedata/mount](https://hub.docker.com/r/juicedata/mount), you can specify the desired version by using tags:
+The official maintained image of JuiceFS, [Juicedata/mount](https://hub.docker.com/r/juicedata/mount), you can specify the desired version by using tags:
 
 - The tag for **the Community Edition is "ce"**, for example: latest, ce-v1.1.0, ce-nightly.
 - The tag for **the Cloud Service is "ee"**, for example: ee-v4.9.21, ee-nightly.
