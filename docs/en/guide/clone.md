@@ -30,7 +30,6 @@ In terms of transaction consistency, cloning behaves as follows:
 - For directory: The `clone` command does not guarantee atomicity for directories. In other words, if the source directory changes during the cloning process, the target directory may be different from the source directory.
 - Only one `clone` can be successfully created from the same location at the same time. The failed clone will clean up the temporarily created directory tree.
 
-
 It's also mentioned above that a clone command could fail, and failures can cause metadata leak, you can clean up using the [`juicefs gc --delete`](../reference/command_reference.md#gc) command.
 
 To discuss the anatomy of a metadata leak, first understand that if a clone runs into errors, the `mount` progress will try to perform cleanup, which could also run into abnormity, depending on the cleanup result, the possibilities are:
