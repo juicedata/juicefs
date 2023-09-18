@@ -98,9 +98,8 @@ test_sync_deep_symlink(){
     done
     echo "cat symlink_40"
     cat symlink_40
-    echo "cat symlink_41"
     echo "----"
-    cat symlink_41 && echo "cat symlink_41 fail" && exit 1 || true
+    cat symlink_40 && echo "cat symlink_40 fail" && exit 1 || true
     cd -
     ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ && echo "sync should fail" && exit 1 || true
     rm -rf /jfs/symlink_41
