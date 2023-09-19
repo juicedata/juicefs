@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -16,12 +15,14 @@ import (
 	"d7y.io/dragonfly/v2/client/dfstore"
 )
 
+// defaultDragonflyEndpoint is the default endpoint to connect to a local dragonfly.
+var defaultDragonflyEndpoint = fmt.Sprintf("http://127.0.0.1:%d", config.DefaultObjectStorageStartPort)
+
 type dragonfly struct {
 	DefaultObjectStorage
-	client *dfstore.Dfstore
-	*config.DfstoreConfig
-	bucket   string
-	endpoint string
+	config *config.DfstoreConfig
+	client dfstore.Dfstore
+	bucket string
 }
 
 func (d *dragonfly) String() string {
@@ -32,18 +33,18 @@ func (d *dragonfly) Create() error {
 	if _, err := d.List("", "", "", 1, false); err == nil {
 		return nil
 	}
-	err := (*d.client).CreateBucketWithContext(ctx, &dfstore.CreateBucketInput{
+
+	if err := d.client.CreateBucketWithContext(ctx, &dfstore.CreateBucketInput{
 		BucketName: d.bucket,
-	})
-	if err != nil && isExists(err) {
-		err = nil
+	}); err != nil && !isExists(err) {
+		return err
 	}
 
-	return err
+	return nil
 }
 
 func (d *dragonfly) Head(key string) (Object, error) {
-	meta, err := (*d.client).GetObjectMetadataWithContext(ctx, &dfstore.GetObjectMetadataInput{
+	meta, err := d.client.GetObjectMetadataWithContext(ctx, &dfstore.GetObjectMetadataInput{
 		BucketName: d.bucket,
 		ObjectKey:  key,
 	})
@@ -51,6 +52,7 @@ func (d *dragonfly) Head(key string) (Object, error) {
 		if strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 			err = os.ErrNotExist
 		}
+
 		return nil, err
 	}
 
@@ -64,50 +66,41 @@ func (d *dragonfly) Head(key string) (Object, error) {
 }
 
 func (d *dragonfly) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	reader, err := (*d.client).GetObjectWithContext(ctx, &dfstore.GetObjectInput{
+	return d.client.GetObjectWithContext(ctx, &dfstore.GetObjectInput{
 		BucketName: d.bucket,
 		ObjectKey:  key,
 		Range:      getRange(off, limit),
 	})
-
-	return reader, err
 }
 
 func (d *dragonfly) Put(key string, data io.Reader) error {
-	err := (*d.client).PutObjectWithContext(ctx, &dfstore.PutObjectInput{
+	return d.client.PutObjectWithContext(ctx, &dfstore.PutObjectInput{
 		BucketName:  d.bucket,
 		ObjectKey:   key,
 		Reader:      data,
-		Mode:        d.Mode,
-		MaxReplicas: d.MaxReplicas,
-		Filter:      d.Filter,
+		Mode:        d.config.Mode,
+		MaxReplicas: d.config.MaxReplicas,
+		Filter:      d.config.Filter,
 	})
-	return err
 }
 
 func (d *dragonfly) Copy(dst, src string) error {
-	err := (*d.client).CopyObjectWithContext(ctx, &dfstore.CopyObjectInput{
+	return d.client.CopyObjectWithContext(ctx, &dfstore.CopyObjectInput{
 		BucketName:           d.bucket,
 		SourceObjectKey:      src,
 		DestinationObjectKey: dst,
 	})
-	return err
 }
 
 func (d *dragonfly) Delete(key string) error {
-	err := (*d.client).DeleteObjectWithContext(ctx, &dfstore.DeleteObjectInput{
+	return d.client.DeleteObjectWithContext(ctx, &dfstore.DeleteObjectInput{
 		BucketName: d.bucket,
 		ObjectKey:  key,
 	})
-	return err
 }
 
 func (d *dragonfly) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
-	if limit > 1000 {
-		limit = 1000
-	}
-
-	resp, err := (*d.client).GetObjectMetadatasWithContext(ctx, &dfstore.GetObjectMetadatasInput{
+	resp, err := d.client.GetObjectMetadatasWithContext(ctx, &dfstore.GetObjectMetadatasInput{
 		BucketName: d.bucket,
 		Prefix:     prefix,
 		Marker:     marker,
@@ -118,8 +111,7 @@ func (d *dragonfly) List(prefix, marker, delimiter string, limit int64, followLi
 		return nil, err
 	}
 
-	n := len(resp.Metadatas)
-	objs := make([]Object, 0, n)
+	objs := make([]Object, 0, len(resp.Metadatas))
 	for _, meta := range resp.Metadatas {
 		objs = append(objs, &obj{
 			meta.Key,
@@ -170,50 +162,57 @@ func (d *dragonfly) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return nil, "", notSupported
 }
 
-func newDragonfly(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
-	bucket := os.Getenv("DRAGONFLY_BUCKET")
-	if bucket == "" {
+func newDragonfly(_endpoint, _accessKey, _secretKey, _token string) (ObjectStorage, error) {
+	// Get endpoint from environment variable.
+	endpoint, exists := os.LookupEnv("DRAGONFLY_ENDPOINT")
+	if !exists {
+		endpoint = defaultDragonflyEndpoint
+		logger.Infof("DRAGONFLY_ENDPOINT is not defined, using default endpoint %s", endpoint)
+	}
+
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("http://%s", endpoint)
+	}
+
+	// Initialize dfstore client.
+	client := dfstore.New(endpoint)
+
+	// Get bucket from environment variable.
+	bucket, exists := os.LookupEnv("DRAGONFLY_BUCKET")
+	if !exists {
 		return nil, fmt.Errorf("environment variable DRAGONFLY_BUCKET is required")
 	}
 
-	dragonflyEndpoint := os.Getenv("DRAGONFLY_ENDPOINT")
-	if dragonflyEndpoint == "" {
-		defaultURL := url.URL{
-			Scheme: "http",
-			Host:   fmt.Sprintf("%s:%d", "127.0.0.1", config.DefaultObjectStorageStartPort),
-		}
-		dragonflyEndpoint = defaultURL.String()
-	}
-	if !strings.Contains(dragonflyEndpoint, "://") {
-		dragonflyEndpoint = fmt.Sprintf("http://%s", dragonflyEndpoint)
-	}
-	client := dfstore.New(dragonflyEndpoint)
-
+	// Initialize dfstore config.
 	cfg := &config.DfstoreConfig{
 		Mode: objectstorage.WriteBack,
 	}
-	if modeVal := os.Getenv("DRAGONFLY_MODE"); modeVal != "" {
-		mode, err := strconv.Atoi(modeVal)
+	if value, exists := os.LookupEnv("DRAGONFLY_MODE"); exists {
+		mode, err := strconv.Atoi(value)
 		if err != nil {
-			return nil, fmt.Errorf("unexpected dragonfly mode: %s", modeVal)
+			return nil, fmt.Errorf("unexpected dragonfly mode: %s", value)
 		}
+
 		cfg.Mode = mode
 	}
 
-	if maxReplicasVal := os.Getenv("DRAGONFLY_MAX_REPLICAS"); maxReplicasVal != "" {
-		maxReplicas, err := strconv.Atoi(maxReplicasVal)
+	if value, exists := os.LookupEnv("DRAGONFLY_MAX_REPLICAS"); exists {
+		maxReplicas, err := strconv.Atoi(value)
 		if err != nil {
-			return nil, fmt.Errorf("unexpected dragonfly max replicas: %s", maxReplicasVal)
+			return nil, fmt.Errorf("unexpected dragonfly max replicas: %s", value)
 		}
+
 		cfg.MaxReplicas = maxReplicas
 	}
-	cfg.Filter = os.Getenv("DRAGONFLY_FILTER")
+
+	if value, exists := os.LookupEnv("DRAGONFLY_FILTER"); exists {
+		cfg.Filter = value
+	}
 
 	return &dragonfly{
-		client:        &client,
-		DfstoreConfig: cfg,
-		bucket:        bucket,
-		endpoint:      dragonflyEndpoint,
+		config: cfg,
+		client: client,
+		bucket: bucket,
 	}, nil
 }
 
