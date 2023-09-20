@@ -27,6 +27,7 @@ import (
 	"syscall"
 
 	"github.com/erikdubbelboer/gspt"
+	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/pyroscope-io/client/pyroscope"
@@ -197,6 +198,9 @@ func reorderOptions(app *cli.App, args []string) []string {
 			newArgs = append(newArgs, option)
 			if hasValue {
 				i++
+				if i >= len(args) {
+					logger.Fatalf("option %s requires value", option)
+				}
 				newArgs = append(newArgs, args[i])
 			}
 		} else {
@@ -281,6 +285,14 @@ func setup(c *cli.Context, n int) {
 	// set the correct value when it runs inside container
 	if undo, err := maxprocs.Set(maxprocs.Logger(logger.Debugf)); err != nil {
 		undo()
+	}
+
+	logID := c.String("log-id")
+	if logID != "" {
+		if logID == "random" {
+			logID = uuid.New().String()
+		}
+		utils.SetLogID("[" + logID + "] ")
 	}
 
 	if !c.Bool("no-agent") {

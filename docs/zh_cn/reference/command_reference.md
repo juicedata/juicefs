@@ -56,6 +56,7 @@ GLOBAL OPTIONS:
    --verbose, --debug, -v  enable debug log (default: false)
    --quiet, -q             show warning and errors only (default: false)
    --trace                 enable trace log (default: false)
+   --log-id value          append the given log id in log, use "random" to use random uuid
    --no-agent              disable pprof (:6060) agent (default: false)
    --pyroscope value       pyroscope address
    --no-color              disable colors (default: false)
