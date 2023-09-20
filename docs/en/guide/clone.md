@@ -23,9 +23,11 @@ juicefs clone /mnt/jfs/dir1 /mnt/jfs/dir2
 
 ## Consistency {#consistency}
 
-The `clone` subcommand provides consistency guarantees as follows:
+In terms of transaction consistency, cloning behaves as follows:
 
+- Before `clone` command finishes, destination file is not visible.
 - For file: The `clone` command ensures atomicity, meaning that the cloned file will always be in a correct and consistent state.
 - For directory: The `clone` command does not guarantee atomicity for directories. In other words, if the source directory changes during the cloning process, the target directory may be different from the source directory.
+- Only one `clone` can be successfully created from the same location at the same time. The failed clone will clean up the temporarily created directory tree.
 
-However, the destination directory is not visible until the `clone` command is completed, if the command didn't manage to finish properly, there could be metadata leak and you should clean up using the [`juicefs gc --delete`](../reference/command_reference.md#gc) command.
+The clone is done by the mount process, it will be interrupted if `clone` command is terminated. If the clone fails or is interrupted, `mount` process will cleanup any created inodes. If the mount process fails to do that, there could be some leaking the metadata engine and object storage, because the dangling tree still hold the references to underlying data blocks. They could be cleaned up by the [`juicefs gc --delete`](../reference/command_reference.md#gc) command.
