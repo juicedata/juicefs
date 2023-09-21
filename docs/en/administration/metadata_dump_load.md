@@ -6,12 +6,11 @@ slug: /metadata_dump_load
 
 :::tip
 
-- JuiceFS v0.15.2 started to support manual backup, recovery and migrate metadata across different metadata engines.
 - JuiceFS v1.0.0 starts to support automatic metadata backup.
 - JuiceFS v1.0.4 starts to support importing an encrypted backup.
 :::
 
-JuiceFS supports [multiple metadata engines](../guide/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine.
+JuiceFS supports [multiple metadata engines](../reference/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine.
 
 ## Metadata backup {#backup}
 
@@ -43,7 +42,7 @@ Starting with JuiceFS v1.0.0, the client automatically backs up metadata and cop
 
 The backup files are stored in the `meta` directory of the object storage. It is a separate directory from the data store and not visible in the mount point and does not interact with the data store, and the directory can be viewed and managed using the file browser of the object storage.
 
-![](../images/meta-auto-backup-list.png)
+![meta-auto-backup-list](../images/meta-auto-backup-list.png)
 
 By default, the JuiceFS client backs up metadata once an hour. The frequency of automatic backups can be adjusted by the `--backup-meta` option when mounting the filesystem, for example, to set the auto-backup to be performed every 8 hours.
 
@@ -116,7 +115,7 @@ juicefs config --secret-key xxxxx mysql://user:password@(192.168.1.6:3306)/juice
 
 ### Encrypted file system {#encrypted-file-system}
 
-For [encrypted file system](../security/encrypt.md), all data is encrypted before uploading to the object storage, including automatic metadata backups. This is different from the `dump` command, which only output metadata in plain text.
+For [encrypted file system](../security/encryption.md), all data is encrypted before uploading to the object storage, including automatic metadata backups. This is different from the `dump` command, which only output metadata in plain text.
 
 For an encrypted file system, it is necessary to additionally set the `JFS_RSA_PASSPHRASE` environment variable and specify the RSA private key and encryption algorithm when restoring the automatically backed-up metadata:
 

@@ -231,7 +231,7 @@ func (n *nfsStore) readDirSorted(dirname string) ([]*nfsEntry, error) {
 	return nfsEntries, err
 }
 
-func (n *nfsStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
 		return nil, notSupported
 	}
@@ -351,7 +351,7 @@ func (n *nfsStore) Readlink(name string) (string, error) {
 	return f.Readlink()
 }
 
-func (n *nfsStore) ListAll(prefix, marker string) (<-chan Object, error) {
+func (n *nfsStore) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

@@ -4,9 +4,9 @@ sidebar_position: 1
 slug: /juicefs_on_k3s
 ---
 
-[K3s](https://k3s.io) 是一个经过功能优化的 Kubernetes 发行版，它与 Kubernetes 完全兼容，即几乎所有在 Kubernetes 的操作都可以在 K3s 上执行。K3s 将整个容器编排系统打包进了一个容量不足 100MB 的二进制程序，减少了部署 Kubernetes 生产集群的环境依赖，大大降低了安装难度。相比之下，K3s 对操作系统的性能要求更低，树莓派等 ARM 设备都可以用来组建集群。
+[K3s](https://k3s.io) 是一个经过功能优化的 Kubernetes 发行版，它与 Kubernetes 完全兼容，即几乎所有在 Kubernetes 的操作都可以在 K3s 上执行。K3s 将整个容器编排系统打包进了一个容量不足 100MB 的二进制程序，减少了部署 Kubernetes 生产集群的环境依赖，大大降低了安装难度，对系统硬件的性能要求也更低。
 
-在本文中，我们会建立一个包含两个节点的 K3s 集群，为集群安装并配置使用 [JuiceFS CSI Driver](https://github.com/juicedata/juicefs-csi-driver)，最后会创建一个 Nginx 容器进行验证。
+在本文中，我们会建立一个包含两个节点的 K3s 集群，为集群安装并配置使用 [JuiceFS CSI Driver](https://github.com/juicedata/juicefs-csi-driver)，最后会创建一个 NGINX 容器进行验证。
 
 ## 部署 K3s 集群
 
@@ -15,7 +15,7 @@ K3s 对硬件的**最低要求**很低：
 - **内存**：512MB+（建议 1GB+）
 - **CPU**：1 核
 
-在部署生产集群时，通常可以将树莓派 4B（4 核 CPU，8G 内存）作为一个节点的硬件配置起点，详情查看[硬件需求](https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#hardware)。
+在部署生产集群时，通常可以将 4 核 CPU 和 8G 内存作为一个节点的硬件配置起点，详情查看[硬件需求](https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#hardware)。
 
 ### K3s server 节点
 
@@ -133,9 +133,9 @@ juicefs-sc             csi.juicefs.com         Retain          Immediate        
 
 > **注意**：一个存储类与一个 JuiceFS 文件系统相关联，你可以根据需要创建任意数量的存储类。但需要注意修改配置文件中的存储类名称，避免同名冲突。
 
-## 使用 JuiceFS 持久化 Nginx 数据
+## 使用 JuiceFS 持久化 NGINX 数据
 
-接下来部署一个 Nginx Pod，使用 JuiceFS 存储类声明的持久化存储。
+接下来部署一个 NGINX Pod，使用 JuiceFS 存储类声明的持久化存储。
 
 ### Deployment
 
@@ -215,7 +215,7 @@ sudo kubectl apply -f service.yaml
 
 ### Ingress
 
-K3s 默认预置了 traefik-ingress，通过以下配置为 Nginx 创建一个 ingress。例如：`ingress.yaml`
+K3s 默认预置了 traefik-ingress，通过以下配置为 NGINX 创建一个 ingress。例如：`ingress.yaml`
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -245,9 +245,9 @@ sudo kubectl apply -f ingress.yaml
 
 ### 访问
 
-部署完成以后，使用相同局域网的主机访问任何一个集群节点，即可看到 Nginx 的欢迎页面。
+部署完成以后，使用相同局域网的主机访问任何一个集群节点，即可看到 NGINX 的欢迎页面。
 
-![](../images/k3s-nginx-welcome.png)
+![K3s-NGINX-welcome](../images/k3s-nginx-welcome.png)
 
 接下来查看一下容器是否成功挂载了 JuiceFS，执行命令查看 Pod 状态：
 

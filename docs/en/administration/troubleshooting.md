@@ -100,7 +100,7 @@ The first issue with slow connection is upload / download timeouts (demonstrated
 * Reduce buffer size, e.g. [`--buffer-size=64`](../reference/command_reference.md#mount) or even lower. In a large bandwidth condition, increasing buffer size improves parallel performance. But in a low speed environment, this only makes `flush` operations slow and prone to timeouts.
 * Default timeout for GET / PUT requests are 60 seconds, increasing `--get-timeout` and `--put-timeout` may help with read / write timeouts.
 
-In addition, the ["Client Write Cache"](../guide/cache_management.md#writeback) feature needs to be used with caution in low bandwidth environment. Let's briefly go over the JuiceFS Client background job design: every JuiceFS Client runs background jobs by default, one of which is data compaction, and if the client has poor internet speed, it'll drag down performance for the whole system. A worse case is when client write cache is also enabled, compaction results are uploaded too slowly, forcing other clients into a read hang when accessing the affected files:
+In addition, the ["Client Write Cache"](../guide/cache.md#writeback) feature needs to be used with caution in low bandwidth environment. Let's briefly go over the JuiceFS Client background job design: every JuiceFS Client runs background jobs by default, one of which is data compaction, and if the client has poor internet speed, it'll drag down performance for the whole system. A worse case is when client write cache is also enabled, compaction results are uploaded too slowly, forcing other clients into a read hang when accessing the affected files:
 
 ```text
 # While compaction results are slowly being uploaded in low speed clients, read from other clients will hang and eventually fail
@@ -115,7 +115,7 @@ To avoid this type of issue, we recommend disabling background jobs on low-bandw
 
 In JuiceFS, a typical read amplification manifests as object storage traffic being much larger than JuiceFS Client read speed. For example, JuiceFS Client is reading at 200MiB/s, while S3 traffic grows up to 2GiB/s.
 
-JuiceFS is equipped with the [prefetch mechanism](../guide/cache_management.md#client-read-cache): when reading a block at arbitrary position, the whole block is asynchronously scheduled for download. This is a read optimization enabled by default, but in some cases, this brings read amplification. Once we know this, we can start the diagnose.
+JuiceFS is equipped with the [prefetch mechanism](../guide/cache.md#client-read-cache): when reading a block at arbitrary position, the whole block is asynchronously scheduled for download. This is a read optimization enabled by default, but in some cases, this brings read amplification. Once we know this, we can start the diagnose.
 
 We'll collect JuiceFS access log (see [Access log](./fault_diagnosis_and_analysis.md#access-log)) to determine the file system access patterns of our application, and adjust JuiceFS configuration accordingly. Below is a diagnose process in an actual production environment:
 
@@ -157,7 +157,7 @@ Studying the access log, it's easy to conclude that our application performs fre
 
 If JuiceFS Client takes up too much memory, you may choose to optimize memory usage using below methods, but note that memory optimization is not free, and each setting adjustment will bring corresponding overhead, please do sufficient testing and verification before adjustment.
 
-* Read/Write buffer size (`--buffer-size`) directly correlate to JuiceFS Client memory usage, using a lower `--buffer-size` will effectively decrease memory usage, but please note that the reduction may also affect the read and write performance. Read more at [Read/Write Buffer](../guide/cache_management.md#buffer-size).
+* Read/Write buffer size (`--buffer-size`) directly correlate to JuiceFS Client memory usage, using a lower `--buffer-size` will effectively decrease memory usage, but please note that the reduction may also affect the read and write performance. Read more at [Read/Write Buffer](../guide/cache.md#buffer-size).
 * JuiceFS mount client is an Go program, which means you can decrease `GOGC` (default to 100, in percentage) to adopt a more active garbage collection. This inevitably increase CPU usage and may even directly hinder performance. Read more at [Go Runtime](https://pkg.go.dev/runtime#hdr-Environment_Variables).
 * If you use self-hosted Ceph RADOS as the data storage of JuiceFS, consider replacing glibc with [TCMalloc](https://google.github.io/tcmalloc), the latter comes with more efficient memory management and may decrease off-heap memory footprint in this scenario.
 

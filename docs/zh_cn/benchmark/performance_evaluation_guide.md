@@ -140,7 +140,7 @@ juicefs stats /mnt/jfs --verbosity 1
 
 结果如下，可以将其与上述基准测试流程对照来看，更易理解：
 
-![](../images/bench-guide-stats.png)
+![bench-guide-stats](../images/bench-guide-stats.png)
 
 其中各项指标具体含义参考 [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats)。
 
@@ -160,7 +160,7 @@ juicefs profile juicefs.accesslog --interval 0
 
 其中 `--interval` 参数设置访问日志的采样间隔，设为 0 时用于快速重放一个指定的日志文件，生成统计信息，如下图所示：
 
-![](../images/bench-guide-profile.png)
+![bench-guide-profile](../images/bench-guide-profile.png)
 
 从之前基准测试流程描述可知，本次测试过程一共创建了 `(1 + 100) * 4 = 404` 个文件，每个文件都经历了「创建 → 写入 → 关闭 → 打开 → 读取 → 关闭 → 删除」的过程，因此一共有：
 

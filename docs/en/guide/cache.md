@@ -1,7 +1,6 @@
 ---
 title: Cache
 sidebar_position: 3
-slug: /cache_management
 ---
 
 For a file system driven by a combination of object storage and database, cache is an important medium for interacting efficiently between the local client and the remote service. Read and write data can be loaded into the cache in advance or asynchronously, and then the client uploads to or prefetches from the remote service in the background. The use of caching technology can significantly reduce the latency of storage operations and increase data throughput compared to interacting with remote services directly.
@@ -18,7 +17,7 @@ Meanwhile, cache improve performance only when application needs to repeatedly r
 
 Distributed systems often need to make tradeoffs between cache and consistency. Due to the decoupled architecture of JuiceFS, think consistency problems in terms of metadata, file data (in object storage), and file data local cache.
 
-For [metadata](#metadata-cache), the default configuration offers a "close-to-open" consistency guarantee, i.e. after a client modified and closed a file, other clients will see the latest state when they open this file again. Also, default mount option uses 1s of kernel metadata cache which provides decent performance for the usual cases. If your scenario demands higher level of cache performance, learn how to tune cache settings in below sections.
+For [metadata](#metadata-cache), the default configuration offers a "close-to-open" consistency guarantee, i.e. after a client modified and closed a file, other clients will see the latest state when they open this file again. Also, default mount option uses 1s of kernel metadata cache which provides decent performance for the usual cases. If your scenario demands higher level of cache performance, learn how to tune cache settings in below sections. In particular, the client (mount point) initiating file modifications will enjoy a stronger consistency, read [consistency exceptions](#consistency-exceptions) for more.
 
 As for object storage, JuiceFS clients split files into data blocks (default 4MiB), each is assigned an unique ID and uploaded to object storage. Subsequent modifications on the file are carried out on new data blocks, and the original blocks remain unchanged. This guarantees consistency of the object storage data, because once the file is modified, clients will then read from the new data blocks, while the stale ones which will be deleted through [Trash](../security/trash.md) or compaction.
 
@@ -28,7 +27,7 @@ As for object storage, JuiceFS clients split files into data blocks (default 4Mi
 
 As a userspace filesystem, JuiceFS metadata cache is both managed as kernel cache (via FUSE API), and maintained in client memory space.
 
-### Metadata Cache in Kernel {#kernel-metadata-cache}
+### Metadata cache in kernel {#kernel-metadata-cache}
 
 JuiceFS Client controls these kinds of metadata as kernel cache: attribute (file name, size, permission, mtime, etc.), entry (inode, name, and type. The word "entry" and "dir-entry" is used in parameter names, to further distinguish between file and directory). Use the following parameters to control TTL through FUSE:
 
@@ -43,13 +42,13 @@ JuiceFS Client controls these kinds of metadata as kernel cache: attribute (file
 --dir-entry-cache=1
 ```
 
-Caching these metadata in kernel for 1 second really speeds up `lookup` and `getattr` calls. **For a single mount point, kernel cache is automatically invalidated upon modification. But when different mount points access and modify the same file, active kernel cache invalidation is only effective on the client initiating the modifications, other clients can only wait for expiration.**
+Caching these metadata in kernel for 1 second really speeds up `lookup` and `getattr` calls.
 
 Do note that `entry` cache is gradually built upon file access and may not contain a complete file list under directory, so `readdir` calls or `ls` command cannot utilize this cache, that's why `entry` cache only improves `lookup` performance. The meaning of `direntry` here is different from [kernel directory entry](https://www.kernel.org/doc/html/latest/filesystems/ext4/directory.html), `direntry` does not tell you the files under a directory, but rather, it's the same concept as `entry`, just distinguished based on whether it's a directory.
 
 Real world scenarios scarcely require setting different values for `--entry-cache` and `--dir-entry-cache`, these options exist for theoretical possibilities like when directories seldomly change while files change a lot, in that situation, you can use a higher `--dir-entry-cache` than `--entry-cache`.
 
-### Metadata Cache in Client Memory {#client-memory-metadata-cache}
+### Metadata cache in client memory {#client-memory-metadata-cache}
 
 When JuiceFS Client `open` a file, its file attributes are cached in client memory, this attribute cache includes not only the kernel cached file attributes like size, mtime, but also information specific to JuiceFS like [the relationship between file and chunks and slices](../introduction/architecture.md#how-juicefs-store-files).
 
@@ -61,11 +60,69 @@ With `--open-cache` enabled, JuiceFS no longer operates under close-to-open cons
 
 In comparison, JuiceFS Enterprise Edition provides richer functionalities around memory metadata cache (supports active invalidation). Read [Enterprise Edition documentation](https://juicefs.com/docs/cloud/guide/cache/#client-memory-metadata-cache) for more.
 
-## Data cache
+### Consistency exceptions {#consistency-exceptions}
+
+The metadata cache in discussed above really only pertain to multi-client situations, which can be deemed as a "minimum consistency guarantee". But for the client initiating file changes, it's not hard to imagine that due to changes happening "locally", the client initiating changes will enjoy a higher level of consistency:
+
+* For the mount point initiating changes, kernel cache is automatically invalidated upon modification. But when different mount points access and modify the same file, active kernel cache invalidation is only effective on the client initiating the modifications, other clients can only wait for expiration.
+* When a `write` call completes, the mount point itself will immediately see the resulting file length change (e.g. use `ls -al` to verify that file size is growing)——but this doesn't mean the changes have been committed, before `flush` finishes, these modifications will not be reflected onto the object storage, and other mount points cannot see the latest writes. Using methods like `fsync, fdatasync, close` will all result in `flush` calls that will persist the file changes and make them visible to other clients.
+* As an extreme case of the previous situation, if you `write` successfully and have observed file size change in the current mount point, but the eventual `flush` fails for some reason, for example file system usage exceeds global quota, then the previously growing file size will suddenly be reduced, for example, dropped from 10M to 0, this often leads to misunderstanding that JuiceFS just emptied your files, while the reality is that the files haven't been successfully written from the beginning, the file size change that's only available to the current mount point is simply a preview of things, not an actual committed state.
+* The mount point initiating changes have access to file change events, and can use tools like [`fswatch`](https://emcrisostomo.github.io/fswatch/) or [`Watchdog`](https://python-watchdog.readthedocs.io/en/stable). But the scope is obviously limited to the files changed within the mount point itself, i.e. files modified by A cannot be monitored by mount point B.
+* Due to the fact that FUSE doesn't yet support inotify API, if you'd like to monitor file change events using libraries like [Watchdog](https://python-watchdog.readthedocs.io/en/stable), you can only achieve this via polling (e.g. [`PollingObserver`](https://python-watchdog.readthedocs.io/en/stable/_modules/watchdog/observers/polling.html#PollingObserver)).
+
+## Read/Write Buffer {#buffer-size}
+
+The Read/Write buffer is a memory space allocated to the JuiceFS Client, size controlled by [`--buffer-size`](../reference/command_reference.md#mount) which defaults to 300 (in MiB). Read/Write data all pass through this buffer, making it crucial for all I/O operations, that's why under large scale scenarios, increase buffer size is often used as a first step of optimization.
+
+### Readahead and Prefetch {#readahead-prefetch}
+
+:::tip
+To accurately describe the internal mechanism of JuiceFS Client, we use the term "readahead" and "prefetch" to refer to the two different behaviors that both download data ahead of time to increase read performance.
+:::
+
+When a file is sequentially read, JuiceFS Client performs what's called "readahead", which involves downloading data ahead of the current read offset. In fact, the similar behavior is already being built into the [Linux Kernel](https://www.halolinux.us/kernel-architecture/page-cache-readahead.html): when reading files, kernel dynamically settles on a readahead window based on the actual read behavior, and load file into the page cache. With JuiceFS being a network file system, the classic kernel readahead mechanism is simply not enough to bring the desired performance increase, that's why JuiceFS performs its own readahead on top of kernel readahead, using algorithm to "guess" the size of the readahead window (more aggressive than kernel's), and then download the object storage data in advance.
+
+![readahead](../images/buffer-readahead.svg)
+
+Apparently readahead is only good for sequential reads, that's why there's another similar mechanism called "prefetch": when a block is randomly read by a small offset range, the whole block is scheduled for download asynchronously.
+
+![prefetch](../images/buffer-prefetch.svg)
+
+This mechanism assumes that if a file is randomly read at a given range, then its adjacent content is also more likely to get read momentarily. This isn't necessarily true for various different types of applications, for example, if an application decides to read read a huge file in a very sparse fashion, i.e. read offsets are far from each other. In such case, prefetch isn't really useful and can cause serious read amplification, so if you are already familiar with the file system access pattern of your application, and concluded that prefetch isn't really needed, you can disable by using [`--prefetch=0`](../reference/command_reference.md#mount-data-cache-options).
+
+Readahead and prefetch effectively increase sequential read and random read performance, but it also comes with read amplification, read ["Read amplification"](../administration/troubleshooting.md#read-amplification) for more information.
+
+### Write {#buffer-write}
+
+A successful `write` does not mean data is persisted: that's actually `flush`'s job. This is true for both local file systems, and JuiceFS file systems. In JuiceFS, `write` only commits changes to the buffer, from the writing mount point's POV, you may notice that file size is changing, but do not mistake this for persistence (this behavior is also covered in detail in [consistency exceptions](#consistency-exceptions)). To sum up, before `flush` actually finishes, changes are only kept inside the client buffer. Applications may explicitly invoke `flush`, but even without this, `flush` is automatically triggered when a pending slice's size exceed its chunk border, or have waited in the buffer for a certain amount of time.
+
+Together with the previously introduced readahead mechanism, buffer function can be described in below diagram:
+
+![read write buffer](../images/buffer-read-write.svg)
+
+Buffer is shared by both read & write, obviously write is treated with higher priority, this implies the possibility of write getting in the way of read. For instance, if object storage bandwidth isn't enough to support write load, there'll be congestion:
+
+![buffer congestion](../images/buffer-congestion.svg)
+
+As illustrated above, a high write load puts too much pending slices inside the buffer, leaving little buffer space for readahead, file read will hence slow down. Due to a low upload speed, write may also fail due to `flush` timeouts.
+
+### Observation and Optimization
+
+Buffer is crucial to both read & write, as is already introduced in above sections, making `--buffer-size` the first optimization target when faced with large scale scenarios. But simply increasing buffer size is not enough and might cause other problems (like buffer congestion, illustrated in the above section). The size of the buffer should be smartly decided along with other performance options.
+
+Before making any adjustments, we recommend running a [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) command to check the current buffer usage, and read below content to guide your tuning.
+
+If you wish to improve write speed, and have already increased [`--max-uploads`](../reference/command_reference.md#mount-data-cache-options) for more upload concurrency, with no noticeable increase in upload traffic, consider also increasing `--buffer-size` so that concurrent threads may easier allocate memory for data uploads. This also works in the opposite direction: if tuning up `--buffer-size` didn't bring out an increase in upload traffic, you should probably increase `--max-uploads` as well.
+
+The `--buffer-size` also controls the data upload size for each `flush` operation, this means for clients working in a low bandwidth environment, you may need to use a lower `--buffer-size` to avoid `flush` timeouts. Refer to ["Connection problems with object storage"](../administration/troubleshooting.md#io-error-object-storage) for troubleshooting under low internet speed.
+
+If you wish to improve sequential read speed, use a larger `--buffer-size` to expand the readahead window, all data blocks within the window will be concurrently fetched from object storage. Also keep in mind that, reading a single large file will never consume the full buffer, the space reserved for readahead is between 1/4 to 1/2 of the total buffer size. So if you noticed that `juicefs stats` indicates `buf` is already half full, while performing sequential read on a single large file, then it's time to increase `--buffer-size` to set a larger readahead window.
+
+## Data cache {#data-cache}
 
 To improve performance, JuiceFS also provides various caching mechanisms for data, including page cache in the kernel, local file system cache in client host, and read/write buffer in client process itself. Read requests will try the kernel page cache, the client process buffer, and the local disk cache in turn. If the data requested is not found in any level of the cache, it will be read from the object storage, and also be written into every level of the cache asynchronously to improve the performance of the next access.
 
-![](../images/juicefs-cache.png)
+![JuiceFS-cache](../images/juicefs-cache.png)
 
 ### Read/Write buffer {#buffer-size}
 
@@ -75,7 +132,7 @@ If you wish to improve write speed, and have already increased [`--max-uploads`]
 
 The `--buffer-size` also controls the data upload size for each `flush` operation, this means for clients working in a low bandwidth environment, you may need to use a lower `--buffer-size` to avoid `flush` timeouts. Refer to ["Connection problems with object storage"](../administration/troubleshooting.md#io-error-object-storage) for troubleshooting under low internet speed.
 
-### Kernel page cache
+### Kernel page cache {#kernel-data-cache}
 
 Kernel will build page cache for opened files. If this file is not updated (i.e. `mtime` doesn't change) afterwards, it will be read directly from the page cache to achieve the best performance.
 
@@ -83,13 +140,13 @@ JuiceFS Client tracks a list of recently opened files. If file is opened again, 
 
 Repeated reads of the same file in JuiceFS can be extremely fast, with latencies as low as a few microseconds and throughput up to several GiBs per second.
 
-### Kernel writeback-cache mode
+### Kernel writeback-cache mode {#fuse-writeback-cache}
 
 Starting from Linux kernel 3.15, FUSE supports [writeback-cache](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt) mode, the kernel will consolidate high-frequency random small (10-100 bytes) write requests to significantly improve its performance, but this comes with a side effect: sequential writes are also turned into random writes, hence sequential write performance is hindered, so only use it on intensive random write scenarios.
 
 To enable writeback-cache mode, use the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option when you [mount JuiceFS](../reference/command_reference.md#mount). Note that writeback-cache mode is not the same as [Client write data cache](#writeback), the former is a kernel implementation while the latter happens inside the JuiceFS Client, read the corresponding section to learn their intended scenarios.
 
-### Read Cache in Client {#client-read-cache}
+### Read cache in client {#client-read-cache}
 
 The client will perform prefetch and cache automatically to improve sequence read performance according to the read mode in the application. Data will be cached in local file system, which can be any local storage device like HDD, SSD or even memory.
 

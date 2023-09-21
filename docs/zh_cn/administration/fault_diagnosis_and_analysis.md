@@ -118,7 +118,7 @@ kubectl -n kube-system exec juicefs-1.2.3.4-pvc-d4b8fb4f-2c0b-48e8-a2dc-53079943
 
 ### S3 网关
 
-需要在启动 S3 网关时新增 [`--access-log` 选项](../reference/command_reference.md#juicefs-gateway)，指定访问日志输出的路径，默认 S3 网关不输出访问日志。
+需要在启动 S3 网关时新增 [`--access-log` 选项](../reference/command_reference.md#gateway)，指定访问日志输出的路径，默认 S3 网关不输出访问日志。
 
 ### Hadoop Java SDK
 
@@ -166,7 +166,7 @@ $ tree ./debug
 │   ├── stats.5s.txt
 │   ├── stats.txt
 │   └── system-info.log
-└── tmp-test1-20230609104324.zip  
+└── tmp-test1-20230609104324.zip
 ```
 
 ## 实时性能监控 {#performance-monitor}
@@ -177,7 +177,7 @@ JuiceFS 客户端提供 `profile` 和 `stats` 两个子命令来对性能数据�
 
 [`juicefs profile`](../reference/command_reference.md#profile) 会对[「文件系统访问日志」](#access-log)进行汇总，运行 `juicefs profile MOUNTPOINT` 命令，便能看到根据最新访问日志获取的各个文件系统操作的实时统计信息：
 
-![](../images/juicefs-profiling.gif)
+![JuiceFS-profiling](../images/juicefs-profiling.gif)
 
 除了对挂载点进行实时分析，该命令还提供回放模式，可以对预先收集的日志进行回放分析：
 
@@ -201,7 +201,7 @@ juicefs profile /tmp/juicefs.accesslog --uid 12345
 
 [`juicefs stats`](../reference/command_reference.md#stats) 命令通过读取 JuiceFS 客户端的监控数据，以类似 Linux `dstat` 工具的形式实时打印各个指标的每秒变化情况：
 
-![](../images/juicefs_stats_watcher.png)
+![juicefs_stats_watcher](../images/juicefs_stats_watcher.png)
 
 各个板块指标介绍：
 
@@ -209,7 +209,7 @@ juicefs profile /tmp/juicefs.accesslog --uid 12345
 
 - `cpu`：进程的 CPU 使用率。
 - `mem`：进程的物理内存使用量。
-- `buf`：进程已使用的[读写缓冲区](../guide/cache_management.md#buffer-size)大小，如果该数值逼近甚至超过客户端所设置的 [`--buffer-size`](../reference/command_reference.md#mount)，说明读写缓冲区空间不足，需要视情况扩大，或者降低应用读写负载。
+- `buf`：进程已使用的[读写缓冲区](../guide/cache.md#buffer-size)大小，如果该数值逼近甚至超过客户端所设置的 [`--buffer-size`](../reference/command_reference.md#mount)，说明读写缓冲区空间不足，需要视情况扩大，或者降低应用读写负载。
 - `cache`：内部指标，无需关注。
 
 #### `fuse`

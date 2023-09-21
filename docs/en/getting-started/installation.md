@@ -10,26 +10,32 @@ JuiceFS has good cross-platform capability and supports running on all kinds of 
 
 The JuiceFS client has only one binary file, you can download the pre-compiled version to unzip it and use it directly, or you can compile it manually with the source code.
 
-## One-Click Installation
+## One-click installation {#one-click-installation}
 
 The one-click installation script is available for Linux and macOS systems and will automatically download and install the latest version of the JuiceFS client based on your hardware architecture.
 
 ```shell
+# default installation path is /usr/local/bin
 curl -sSL https://d.juicefs.com/install | sh -
 ```
 
-## Install the pre-compiled client
+```shell
+# install to /tmp directory
+curl -sSL https://d.juicefs.com/install | sh -s /tmp
+```
+
+## Install the pre-compiled client {#install-the-pre-compiled-client}
 
 You can download the latest version of the client at [GitHub](https://github.com/juicedata/juicefs/releases). Pre-compiled versions for different CPU architectures and operating systems are available in the download list of each client version. Please find the version suit your application the best, e.g.,
 
-| File Name                            | Description                                                                          |
-|--------------------------------------|--------------------------------------------------------------------------------------|
-| `juicefs-x.x.x-darwin-amd64.tar.gz`  | For macOS systems with Intel chips                                                   |
-| `juicefs-x.x.x-darwin-arm64.tar.gz`  | For macOS systems with M1 series chips                                               |
-| `juicefs-x.x.x-linux-amd64.tar.gz`   | For Linux distributions on x86 architecture                                          |
-| `juicefs-x.x.x-linux-arm64.tar.gz`   | For Linux distributions on ARM architecture                                          |
-| `juicefs-x.x.x-windows-amd64.tar.gz` | For Windows on x86 architecture                                                      |
-| `juicefs-hadoop-x.x.x-amd64.jar`     | Hadoop Java SDK on x86 architecture (supports both Linux, macOS and Windows systems) |
+| File Name                            | Description                                                                                  |
+|--------------------------------------|----------------------------------------------------------------------------------------------|
+| `juicefs-x.y.z-darwin-amd64.tar.gz`  | For macOS systems with Intel chips                                                           |
+| `juicefs-x.y.z-darwin-arm64.tar.gz`  | For macOS systems with M1 series chips                                                       |
+| `juicefs-x.y.z-linux-amd64.tar.gz`   | For Linux distributions on x86 architecture                                                  |
+| `juicefs-x.y.z-linux-arm64.tar.gz`   | For Linux distributions on ARM architecture                                                  |
+| `juicefs-x.y.z-windows-amd64.tar.gz` | For Windows on x86 architecture                                                              |
+| `juicefs-hadoop-x.y.z.jar`           | Hadoop Java SDK on x86 and ARM architecture (supports both Linux, macOS and Windows systems) |
 
 ### Linux
 
@@ -176,9 +182,9 @@ RUN set -x && \
 CMD [ "juicefs" ]
 ```
 
-## Manually compiling
+## Manually compiling {#manually-compiling}
 
-If there is no pre-compiled client versions that are suitable for your operating system, such as FreeBSD or macOS on the M1 chip, then you can manually compile the JuiceFS client.
+If there is no pre-compiled client versions that are suitable for your operating system, such as FreeBSD, then you can manually compile the JuiceFS client.
 
 One of the advantages of manually compiling client is that you have priority access to various new features in JuiceFS development, but it requires some basic knowledge of software compilation.
 
@@ -313,7 +319,7 @@ The compiled client is a binary file named `juicefs.exe`, located in the current
    make juicefs.linux
    ```
 
-## Uninstall
+## Uninstall {#uninstall}
 
 The JuiceFS client has only one binary file, so it can be easily deleted once you find the location of the program. For example, to uninstall the client that is installed on the Linux system as described above, you only need to execute the following command:
 

@@ -53,7 +53,7 @@ func (s *speedy) String() string {
 	return fmt.Sprintf("speedy://%s/", uri.Host)
 }
 
-func (s *speedy) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (s *speedy) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "" {
 		return nil, notSupported
 	}

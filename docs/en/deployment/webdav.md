@@ -1,6 +1,6 @@
 ---
 title: Deploy WebDAV Server
-sidebar_position: 7
+sidebar_position: 5
 ---
 
 WebDAV is an extension of the HTTP protocol, a sharing protocol that facilitates collaborative editing and management of documents on a network between multiple users. WebDAV client support is built into many tools involved in file editing and synchronization, macOS Finder, and the file managers of some Linux distributions.

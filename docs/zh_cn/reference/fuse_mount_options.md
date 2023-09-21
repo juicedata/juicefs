@@ -1,6 +1,6 @@
 ---
 title: FUSE 挂载选项
-sidebar_position: 6
+sidebar_position: 5
 slug: /fuse_mount_options
 ---
 

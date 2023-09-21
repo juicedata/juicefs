@@ -107,7 +107,7 @@ func fsck(ctx *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 	blob = object.WithPrefix(blob, "chunks/")
-	objs, err := osync.ListAll(blob, "", "", "")
+	objs, err := osync.ListAll(blob, "", "", "", true)
 	if err != nil {
 		logger.Fatalf("list all blocks: %s", err)
 	}
@@ -147,13 +147,29 @@ func fsck(ctx *cli.Context) error {
 		logger.Fatalf("list all slices: %s", r)
 	}
 	sliceCSpin.Done()
+	delfilesSpin := progress.AddCountSpinner("Deleted files")
+	delfiles := make(map[meta.Ino]bool)
+	err = m.ScanDeletedObject(c, nil, nil, nil, func(ino meta.Ino, size uint64, ts int64) (clean bool, err error) {
+		delfilesSpin.Increment()
+		delfiles[ino] = true
+		return false, nil
+	})
+	if err != nil {
+		logger.Warnf("scan deleted objects: %s", err)
+	}
+	delfilesSpin.Done()
 
 	// Scan all slices to find lost blocks
+	skippedSlices := progress.AddCountSpinner("Skipped slices")
 	sliceCBar := progress.AddCountBar("Scanned slices", sliceCSpin.Current())
 	sliceBSpin := progress.AddByteSpinner("Scanned slices")
 	lostDSpin := progress.AddDoubleSpinner("Lost blocks")
 	brokens := make(map[meta.Ino]string)
 	for inode, ss := range slices {
+		if delfiles[inode] {
+			skippedSlices.IncrBy(len(ss))
+			continue
+		}
 		for _, s := range ss {
 			n := (s.Size - 1) / uint32(chunkConf.BlockSize)
 			for i := uint32(0); i <= n; i++ {

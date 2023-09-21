@@ -1,6 +1,6 @@
 ---
 title: 存储配额
-sidebar_position: 6
+sidebar_position: 4
 ---
 
 JuiceFS 同时支持文件系统总配额和子目录配额，均可用于限制可用容量和可用 inode 数量。文件系统配额和目录配额均是硬限制，当文件系统总配额用尽时，后续写入会返回 `ENOSPC`（No space left）错误；而当目录配额用尽时，后续写入会返回 `EDQUOT`（Disk quota exceeded）错误。
@@ -11,7 +11,7 @@ JuiceFS 同时支持文件系统总配额和子目录配额，均可用于限制
 
 ## 文件系统配额 {#file-system-quota}
 
-JuiceFS v0.14.2 开始支持文件系统级别的存储配额。以 Linux 环境为例，使用系统自带的 `df` 命令可以看到，一个 JuiceFS 类型的文件系统默认的容量标识为 `1.0P` ：
+JuiceFS v1.0 支持文件系统级别的存储配额。以 Linux 环境为例，使用系统自带的 `df` 命令可以看到，一个 JuiceFS 类型的文件系统默认的容量标识为 `1.0P` ：
 
 ```shell
 $ df -Th | grep juicefs
@@ -125,7 +125,11 @@ juicefs config $METAURL --inodes 100000
 
 ## 目录配额 {#directory-quota}
 
-JuiceFS v1.1.0 开始支持目录级别的存储配额，可以使用 `juicefs quota` 子命令进行目录配额管理和查询。
+JuiceFS v1.1 开始支持目录级别的存储配额，可以使用 `juicefs quota` 子命令进行目录配额管理和查询。
+
+:::tip 提示
+由于用量统计需要挂载客户端支持，请确保除所有可写入客户端已升级到 v1.1.0 以上版本再使用此特性。
+:::
 
 ### 限制目录容量 {#limit-directory-capacity}
 

@@ -1,6 +1,6 @@
 ---
 title: 配置 WebDAV 服务
-sidebar_position: 7
+sidebar_position: 5
 ---
 
 WebDAV 是 HTTP 协议的扩展，是一种便于多用户间协同编辑和管理网络上的文档的共享协议。很多涉及文件编辑和同步的工具、macOS Finder 以及一些 Linux 发行版的文件管理器都内置了 WebDAV 客户端支持。

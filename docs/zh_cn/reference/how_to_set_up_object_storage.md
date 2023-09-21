@@ -1,6 +1,6 @@
 ---
 title: 如何设置对象存储
-sidebar_position: 2
+sidebar_position: 3
 slug: /how_to_setup_object_storage
 description: JuiceFS 以对象存储作为数据存储，本文介绍 JuiceFS 支持的对象存储以及相应的配置和使用方法。
 ---
@@ -10,7 +10,7 @@ import TabItem from '@theme/TabItem';
 
 通过阅读 [JuiceFS 的技术架构](../introduction/architecture.md)可以了解到，JuiceFS 是一个数据与元数据分离的分布式文件系统，以对象存储作为主要的数据存储，以 Redis、PostgreSQL、MySQL 等数据库作为元数据存储。
 
-## 存储选项
+## 存储选项 {#storage-options}
 
 在创建 JuiceFS 文件系统时，设置数据存储一般涉及以下几个选项：
 
@@ -29,13 +29,13 @@ juicefs format --storage s3 \
     myjfs
 ```
 
-## 其他选项
+## 其他选项 {#other-options}
 
 在执行 `juicefs format` 或 `juicefs mount` 命令时，可以在 `--bucket` 选项中以 URL 参数的形式设置一些特别的选项，比如 `https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` 中的 `tls-insecure-skip-verify=true` 即为跳过 HTTPS 请求的证书验证环节。
 
-## 配置数据分片（Sharding）
+## 配置数据分片（Sharding） {#enable-data-sharding}
 
-创建文件系统时，可以通过 [--shards](../reference/command_reference.md#format) 选项定义多个 Bucket 作为文件系统的底层存储。这样一来，系统会根据文件名哈希值将文件分散到多个 Bucket 中。数据分片技术可以将大规模数据并发写的负载分散到多个 Bucket 中，从而提高写入性能。
+创建文件系统时，可以通过 [`--shards`](../reference/command_reference.md#format-data-format-options) 选项定义多个 Bucket 作为文件系统的底层存储。这样一来，系统会根据文件名哈希值将文件分散到多个 Bucket 中。数据分片技术可以将大规模数据并发写的负载分散到多个 Bucket 中，从而提高写入性能。
 
 启用数据分片功能需要注意以下事项：
 
@@ -55,7 +55,7 @@ juicefs format --storage s3 \
 
 执行上述命令后，JuiceFS 客户端会创建 4 个 bucket，分别为 `myjfs-0`、`myjfs-1`、`myjfs-2` 和 `myjfs-3`。
 
-## Access Key 和 Secret Key
+## Access Key 和 Secret Key {#aksk}
 
 一般而言，对象存储通过 Access Key ID 和 Access Key Secret 验证用户身份，对应到 JuiceFS 文件系统就是 `--access-key` 和 `--secret-key` 这两个选项（或者简称为 AK、SK）。
 
@@ -72,15 +72,15 @@ juicefs format --storage s3 \
 
 公有云通常允许用户创建 IAM（Identity and Access Management）角色，例如：[AWS IAM 角色](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html) 或 [阿里云 RAM 角色](https://help.aliyun.com/document_detail/93689.html)，可将角色分配给 VM 实例。如果云服务器实例已经拥有读写对象存储的权限，则无需再指定 `--access-key` 和 `--secret-key`。
 
-## 使用临时访问凭证
+## 使用临时访问凭证 {#session-token}
 
 永久访问凭证一般有两个部分：Access Key 和 Secret Key，而临时访问凭证一般包括 3 个部分：Access Key、Secret Key 与 token，并且临时访问凭证具有过期时间，一般在几分钟到几个小时之间。
 
-### 如何获取临时凭证
+### 如何获取临时凭证 {#how-to-get-temporary-credentials}
 
-不同云厂商的获取方式不同，一般是需要已具有相应权限用户的 Access Key、Secret Key 以及代表临时访问凭证的权限边界的 ARN 作为参数请求访问云服务厂商的 STS 服务器来获取临时访问凭证。这个过程一般可以由云厂商提供的 SDK 简化操作。比如 Amazon S3 获取临时凭证方式可以参考这个[链接](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html)，阿里云 OSS 获取临时凭证方式可以参考这个[链接](https://help.aliyun.com/document_detail/100624.html)。
+不同云厂商的获取方式不同，一般是需要已具有相应权限用户的 Access Key、Secret Key 以及代表临时访问凭证的权限边界的 ARN 作为参数请求访问云服务厂商的 STS 服务器来获取临时访问凭证。这个过程一般可以由云厂商提供的 SDK 简化操作。比如 Amazon S3 获取临时凭证方式可以参考这个[链接](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_credentials_temp_request.html)，阿里云 OSS 获取临时凭证方式可以参考这个[链接](https://help.aliyun.com/document_detail/100624.html)。
 
-### 如何使用临时访问凭证设置对象存储
+### 如何使用临时访问凭证设置对象存储 {#how-to-set-up-object-storage-with-temporary-access-credentials}
 
 使用临时凭证的方式与使用永久凭证差异不大，在格式化文件系统时，将临时凭证的 Access Key、Secret Key、token 分别通过 `--access-key`、`--secret-key`、`--session-token` 设置值即可。例如：
 
@@ -102,7 +102,7 @@ juicefs format \
 
 新挂载的客户端会直接使用新的凭证，已经在运行的所有客户端也会在一分钟内更新自己的凭证。整个更新过程不会影响正在运行的业务。由于临时凭证过期时间较短，所以以上步骤需要**长期循环执行**才能保证 JuiceFS 服务可以正常访问到对象存储。
 
-## 内网和外网 Endpoint
+## 内网和外网 Endpoint {#internal-and-public-endpoint}
 
 通常情况下，对象存储服务提供统一的 URL 进行访问，但云平台会同时提供内网和外网通信线路，比如满足条件的同平台云服务会自动解析通过内网线路访问对象存储，这样不但时延更低，而且内网通信产生的流量是免费的。
 
@@ -115,15 +115,19 @@ JuiceFS 对这种区分内网外地址的对象存储服务也做了灵活的支
 
 使用内网 Endpoint 创建文件系统可以确保性能更好、延时更低，对于无法通过内网访问的客户端，可以在挂载文件系统时通过 `--bucket` 指定外网 Endpoint 进行挂载访问。
 
-## 存储类型 {#storage-class}
+## 存储类 <VersionAdd>1.1</VersionAdd> {#storage-class}
 
-对象存储通常支持多种存储类型，如标准存储、低频访问存储、归档存储。当创建对象存储 bucket 时你可以根据实际需求选择合适的存储类型，或者通过生命周期管理自动转换现有对象的存储类型。对于那些支持实时访问数据的存储类型（如标准存储、低频访问存储），可以作为 JuiceFS 底层的数据存储，而那些需要提前解冻才能访问的存储类型（如归档存储）则不行。
+对象存储通常支持多种存储类，如标准存储、低频访问存储、归档存储。不同的存储类会有不同的价格及服务可用性，你可以在创建 JuiceFS 文件系统时通过 [`--storage-class`](../reference/command_reference.md#format-data-storage-options) 选项设置默认的存储类，或者在挂载 JuiceFS 文件系统时通过 [`--storage-class`](../reference/command_reference.md#mount-data-storage-options) 选项设置一个新的存储类。请查阅你所使用的对象存储的用户手册了解应该如何设置 `--storage-class` 选项的值（如 [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html#AmazonS3-PutObject-request-header-StorageClass)）。
 
 :::note 注意
-当使用某些存储类型（如低频访问）时，会有最小计费单位，读取数据也可能会产生额外的费用，请查阅你所使用的对象存储的用户手册了解详细信息。
+当使用某些存储类（如归档、深度归档）时，数据无法立即访问，需要提前恢复数据并等待一段时间之后才能访问。
 :::
 
-## 使用代理
+:::note 注意
+当使用某些存储类（如低频访问）时，会有最小计费单位，读取数据也可能会产生额外的费用，请查阅你所使用的对象存储的用户手册了解详细信息。
+:::
+
+## 使用代理 {#using-proxy}
 
 如果客户端所在的网络环境受防火墙策略或其他因素影响需要通过代理访问外部的对象存储服务，使用的操作系统不同，相应的代理设置方法也不同，请参考相应的用户手册进行设置。
 
@@ -142,8 +146,8 @@ juicefs format \
 
 如果你希望使用的存储类型不在列表中，欢迎提交需求 [issue](https://github.com/juicedata/juicefs/issues)。
 
-| Name                                        | Value      |
-|---------------------------------------------|------------|
+| 名称                                        | 值         |
+|:-------------------------------------------:|:----------:|
 | [Amazon S3](#amazon-s3)                     | `s3`       |
 | [Google 云存储](#google-cloud)              | `gs`       |
 | [Azure Blob 存储](#azure-blob-存储)         | `wasb`     |
@@ -160,7 +164,7 @@ juicefs format \
 | [腾讯云 COS](#腾讯云-cos)                   | `cos`      |
 | [华为云 OBS](#华为云-obs)                   | `obs`      |
 | [百度云 BOS](#百度-bos)                     | `bos`      |
-| [火山引擎 TOS](#火山引擎-tos)               | `tos`      |
+| [火山引擎 TOS](#volcano-engine-tos)         | `tos`      |
 | [金山云 KS3](#金山云-ks3)                   | `ks3`      |
 | [青云 QingStor](#青云-qingstor)             | `qingstor` |
 | [七牛云 Kodo](#七牛云-kodo)                 | `qiniu`    |
@@ -171,6 +175,7 @@ juicefs format \
 | [优刻得 US3](#优刻得-us3)                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                   | `ceph`     |
 | [Ceph RGW](#ceph-rgw)                       | `s3`       |
+| [Gluster](#gluster)                         | `gluster`  |
 | [Swift](#swift)                             | `swift`    |
 | [MinIO](#minio)                             | `minio`    |
 | [WebDAV](#webdav)                           | `webdav`   |
@@ -185,9 +190,9 @@ juicefs format \
 | [本地磁盘](#本地磁盘)                       | `file`     |
 | [SFTP/SSH](#sftp)                           | `sftp`     |
 
-## Amazon S3
+### Amazon S3
 
-S3 支持[两种风格的 endpoint URI](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/VirtualHosting.html)：`虚拟托管类型` 和 `路径类型`。
+S3 支持[两种风格的 endpoint URI](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/VirtualHosting.html)：「虚拟托管类型」和「路径类型」。区别如下：
 
 - 虚拟托管类型：`https://<bucket>.s3.<region>.amazonaws.com`
 - 路径类型：`https://s3.<region>.amazonaws.com/<bucket>`
@@ -202,10 +207,12 @@ AWS 中国的用户，应使用 `amazonaws.com.cn` 域名。相应的区域代�
 如果 S3 的桶具有公共访问权限（支持匿名访问），请将 `--access-key` 设置为 `anonymous`。
 :::
 
-JuiceFS v0.12 之前的版本仅支持虚拟托管类型，v0.12 以及之后的版本两种风格都支持。例如：
+JuiceFS 中可选择任意一种风格来指定存储桶的地址，例如：
+
+<Tabs groupId="amazon-s3-endpoint">
+  <TabItem value="virtual-hosted-style" label="虚拟托管类型">
 
 ```bash
-# 虚拟托管类型
 juicefs format \
     --storage s3 \
     --bucket https://<bucket>.s3.<region>.amazonaws.com \
@@ -213,8 +220,10 @@ juicefs format \
     myjfs
 ```
 
+  </TabItem>
+  <TabItem value="path-style" label="路径类型">
+
 ```bash
-# 路径类型
 juicefs format \
     --storage s3 \
     --bucket https://s3.<region>.amazonaws.com/<bucket> \
@@ -222,10 +231,15 @@ juicefs format \
     myjfs
 ```
 
+  </TabItem>
+</Tabs>
+
 你也可以将 `--storage` 设置为 `s3` 用来连接 S3 兼容的对象存储，比如：
 
+<Tabs groupId="amazon-s3-endpoint">
+  <TabItem value="virtual-hosted-style" label="虚拟托管类型">
+
 ```bash
-# 虚拟托管类型
 juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<endpoint> \
@@ -233,8 +247,10 @@ juicefs format \
     myjfs
 ```
 
+  </TabItem>
+  <TabItem value="path-style" label="路径类型">
+
 ```bash
-# 路径类型
 juicefs format \
     --storage s3 \
     --bucket https://<endpoint>/<bucket> \
@@ -242,11 +258,14 @@ juicefs format \
     myjfs
 ```
 
+  </TabItem>
+</Tabs>
+
 :::tip 提示
 所有 S3 兼容的对象存储服务其 `--bucket` 选项的格式为 `https://<bucket>.<endpoint>` 或者 `https://<endpoint>/<bucket>`，默认的 `region` 为 `us-east-1`，当需要不同的 `region` 的时候，可以通过环境变量 `AWS_REGION` 或者 `AWS_DEFAULT_REGION` 手动设置。
 :::
 
-## Google 云存储 {#google-cloud}
+### Google 云存储 {#google-cloud}
 
 Google 云采用 [IAM](https://cloud.google.com/iam/docs/overview) 管理资源的访问权限，通过对[服务账号](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-gcloud)授权，可以对云服务器、对象存储的访问权限进行精细化的控制。
 
@@ -274,7 +293,7 @@ juicefs format \
 
 可以看到，命令中无需包含身份验证信息，客户端会通过前面环境变量设置的 JSON 密钥文件完成对象存储的访问鉴权。同时，由于 bucket 名称是 [全局唯一](https://cloud.google.com/storage/docs/naming-buckets#considerations) 的，创建文件系统时，`--bucket` 选项中只需指定 bucket 名称即可。
 
-## Azure Blob 存储
+### Azure Blob 存储
 
 使用 Azure Blob 存储作为 JuiceFS 的数据存储，请先 [查看文档](https://docs.microsoft.com/zh-cn/azure/storage/common/storage-account-keys-manage) 了解如何查看存储帐户的名称和密钥，它们分别对应 `--access-key` 和 `--secret-key` 选项的值。
 
@@ -306,13 +325,13 @@ juicefs format \
 对于 Azure 中国用户，`EndpointSuffix` 的值为 `core.chinacloudapi.cn`。
 :::
 
-## Backblaze B2
+### Backblaze B2
 
 使用 Backblaze B2 作为 JuiceFS 的数据存储，需要先创建 [application key](https://www.backblaze.com/b2/docs/application_keys.html)，**Application Key ID** 和 **Application Key** 分别对应 Access Key 和 Secret Key。
 
 Backblaze B2 支持两种访问接口：B2 原生 API 和 S3 兼容 API。
 
-### B2 原生 API
+#### B2 原生 API
 
 存储类型应设置为 `b2`，`--bucket` 只需设置 bucket 名称。例如：
 
@@ -326,7 +345,7 @@ juicefs format \
     myjfs
 ```
 
-### S3 兼容 API
+#### S3 兼容 API
 
 存储类型应设置为 `s3`，`--bucket` 应指定完整的 bucket 地址。例如：
 
@@ -340,7 +359,7 @@ juicefs format \
     myjfs
 ```
 
-## IBM 云对象存储
+### IBM 云对象存储
 
 使用 IBM 云对象存储创建 JuiceFS 文件系统，你首先需要创建 [API key](https://cloud.ibm.com/docs/account?topic=account-manapikey) 和 [instance ID](https://cloud.ibm.com/docs/key-protect?topic=key-protect-retrieve-instance-ID)。**API key** 和 **instance ID** 分别对应 Access Key 和 Secret Key。
 
@@ -356,7 +375,7 @@ juicefs format \
     myjfs
 ```
 
-## Oracle 云对象存储
+### Oracle 云对象存储
 
 Oracle 云对象存储支持 S3 兼容的形式进行访问，详细请参考[官方文档](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/s3compatibleapi.htm)。
 
@@ -372,7 +391,7 @@ juicefs format \
     myjfs
 ```
 
-## Scaleway
+### Scaleway
 
 使用 Scaleway 对象存储作为 JuiceFS 数据存储，请先 [查看文档](https://www.scaleway.com/en/docs/generate-api-keys) 了解如何创建 Access Key 和 Secret Key。
 
@@ -386,7 +405,7 @@ juicefs format \
     myjfs
 ```
 
-## DigitalOcean Spaces
+### DigitalOcean Spaces
 
 使用 DigitalOcean Spaces 作为 JuiceFS 数据存储，请先 [查看文档](https://www.digitalocean.com/community/tutorials/how-to-create-a-digitalocean-space-and-api-key) 了解如何创建 Access Key 和 Secret Key。
 
@@ -400,7 +419,7 @@ juicefs format \
     myjfs
 ```
 
-## Wasabi
+### Wasabi
 
 使用 Wasabi 作为 JuiceFS 数据存储，请先 [查看文档](https://wasabi-support.zendesk.com/hc/en-us/articles/360019677192-Creating-a-Root-Access-Key-and-Secret-Key) 了解如何创建 Access Key 和 Secret Key。
 
@@ -418,7 +437,7 @@ juicefs format \
 Tokyo (ap-northeast-1) 区域的用户，查看 [这篇文档](https://wasabi-support.zendesk.com/hc/en-us/articles/360039372392-How-do-I-access-the-Wasabi-Tokyo-ap-northeast-1-storage-region-) 了解 endpoint URI 的设置方法。
 :::
 
-## Storj DCS
+### Storj DCS
 
 使用 Storj DCS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.storj.io/api-reference/s3-compatible-gateway) 了解如何创建 Access Key 和 Secret Key。
 
@@ -438,7 +457,7 @@ juicefs format \
 因为 Storj DCS 的 [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API 并非完全 S3 兼容（返回结果没有实现排序功能），所以 JuiceFS 的部分功能无法使用，比如 `juicefs gc`，`juicefs fsck`，`juicefs sync`，`juicefs destroy`。另外，使用 `juicefs mount` 时需要关闭[元数据自动备份](../administration/metadata_dump_load.md#backup-automatically)功能，即加上 `--backup-meta 0`。
 :::
 
-## Vultr 对象存储
+### Vultr 对象存储
 
 Vultr 的对象存储兼容 S3 API，存储类型使用 `s3`，`--bucket` 格式为 `https://<bucket>.<region>.vultrobjects.com/`。例如：
 
@@ -454,7 +473,7 @@ juicefs format \
 
 访问对象存储的 API 密钥可以在 [管理控制台](https://my.vultr.com/objectstorage) 中找到。
 
-## Cloudflare R2 {#r2}
+### Cloudflare R2 {#r2}
 
 R2 是 Cloudflare 的对象存储服务，提供 S3 兼容的 API，因此用法与 Amazon S3 基本一致。请参照[文档](https://developers.cloudflare.com/r2/data-access/s3-api/tokens)了解如何创建 Access Key 和 Secret Key。
 
@@ -484,7 +503,7 @@ juicefs format \
 因为 Cloudflare R2 的 `ListObjects` API 并非完全 S3 兼容（返回结果没有实现排序功能），所以 JuiceFS 的部分功能无法使用，比如 `juicefs gc`、`juicefs fsck`、`juicefs sync`、`juicefs destroy`。另外，使用 `juicefs mount` 时需要关闭[元数据自动备份](../administration/metadata_dump_load.md#backup-automatically)功能，即加上 `--backup-meta 0`。
 :::
 
-## 阿里云 OSS
+### 阿里云 OSS
 
 使用阿里云 OSS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://help.aliyun.com/document_detail/38738.html) 了解如何创建 Access Key 和 Secret Key。如果你已经创建了 [RAM 角色](https://help.aliyun.com/document_detail/93689.html) 并指派给了云服务器实例，则在创建文件系统时可以忽略 `--access-key` 和 `--secret-key` 选项。
 
@@ -515,7 +534,7 @@ juicefs format \
     myjfs
 ```
 
-## 腾讯云 COS
+### 腾讯云 COS
 
 使用腾讯云 COS 作为 JuiceFS 数据存储，Bucket 名称格式为 `<bucket>-<APPID>`，即需要在 bucket 名称后面指定 `APPID`，[点此查看](https://cloud.tencent.com/document/product/436/13312) 如何获取  `APPID` 。
 
@@ -540,7 +559,7 @@ juicefs format \
     myjfs
 ```
 
-## 华为云 OBS
+### 华为云 OBS
 
 使用华为云 OBS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://support.huaweicloud.com/usermanual-ca/zh-cn_topic_0046606340.html) 了解如何创建 Access Key 和 Secret Key。
 
@@ -565,7 +584,7 @@ juicefs format \
     myjfs
 ```
 
-## 百度 BOS
+### 百度 BOS
 
 使用百度云 BOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://cloud.baidu.com/doc/Reference/s/9jwvz2egb) 了解如何创建 Access Key 和 Secret Key。
 
@@ -590,7 +609,7 @@ juicefs format \
     myjfs
 ```
 
-## 火山引擎 TOS
+### 火山引擎 TOS <VersionAdd>1.0.3</VersionAdd> {#volcano-engine-tos}
 
 使用火山引擎 TOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.volcengine.com/docs/6291/65568) 了解如何创建 Access Key 和 Secret Key。
 
@@ -604,7 +623,7 @@ juicefs format \
     myjfs
 ```
 
-## 金山云 KS3
+### 金山云 KS3
 
 使用金山云 KS3 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.ksyun.com/documents/1386) 了解如何创建 Access Key 和 Secret Key。
 
@@ -618,7 +637,7 @@ juicefs format \
     myjfs
 ```
 
-## 青云 QingStor
+### 青云 QingStor
 
 使用青云 QingStor 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docsv3.qingcloud.com/storage/object-storage/api/practices/signature/#%E8%8E%B7%E5%8F%96-access-key) 了解如何创建 Access Key 和 Secret Key。
 
@@ -636,7 +655,7 @@ juicefs format \
 所有 QingStor 兼容的对象存储服务其 `--bucket` 选项的格式为 `http://<bucket>.<endpoint>`。
 :::
 
-## 七牛云 Kodo
+### 七牛云 Kodo
 
 使用七牛云 Kodo 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://developer.qiniu.com/af/kb/1479/how-to-access-or-locate-the-access-key-and-secret-key) 了解如何创建 Access Key 和 Secret Key。
 
@@ -650,7 +669,7 @@ juicefs format \
     myjfs
 ```
 
-## 新浪云 SCS
+### 新浪云 SCS
 
 使用新浪云 SCS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) 了解如何创建 Access Key 和 Secret Key。
 
@@ -664,7 +683,7 @@ juicefs format \
     myjfs
 ```
 
-## 天翼云 OOS
+### 天翼云 OOS
 
 使用天翼云 OOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://www.ctyun.cn/help2/10000101/10473683) 了解如何创建 Access Key 和 Secret Key。
 
@@ -678,7 +697,7 @@ juicefs format \
     myjfs
 ```
 
-## 移动云 EOS
+### 移动云 EOS
 
 使用移动云 EOS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://ecloud.10086.cn/op-help-center/doc/article/24501) 了解如何创建 Access Key 和 Secret Key。
 
@@ -692,7 +711,7 @@ juicefs format \
     myjfs
 ```
 
-## 京东云 OSS
+### 京东云 OSS
 
 使用京东云 OSS 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.jdcloud.com/cn/account-management/accesskey-management) 了解如何创建 Access Key 和 Secret Key。
 
@@ -706,7 +725,7 @@ juicefs format \
     myjfs
 ```
 
-## 优刻得 US3
+### 优刻得 US3
 
 使用优刻得 US3 作为 JuiceFS 数据存储，请先参照 [这篇文档](https://docs.ucloud.cn/uai-censor/access/key) 了解如何创建 Access Key 和 Secret Key。
 
@@ -720,10 +739,12 @@ juicefs format \
     myjfs
 ```
 
-## Ceph RADOS
+### Ceph RADOS
 
 :::note 注意
-JuiceFS 支持的 Ceph 最低版本是 Luminous（v12.2.*），请确认你的 Ceph 版本是否符合要求。
+JuiceFS v1.0 使用的 `go-ceph` 库版本为 v0.4.0，其支持的 Ceph 最低版本为 Luminous（v12.2.*）。
+JuiceFS v1.1 使用的 `go-ceph` 库版本为 v0.18.0，其支持的 Ceph 最低版本为 Octopus（v15.2.*）。
+在使用前请确认 JuiceFS 与您使用的 Ceph 版本是否匹配，具体可参见 [`go-ceph`](https://github.com/ceph/go-ceph#supported-ceph-versions)。
 :::
 
 [Ceph 存储集群](https://docs.ceph.com/en/latest/rados) 具有消息传递层协议，该协议使客户端能够与 Ceph Monitor 和 Ceph OSD 守护程序进行交互。[`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro) API 使您可以与这两种类型的守护程序进行交互：
@@ -783,7 +804,7 @@ juicefs.ceph format \
     myjfs
 ```
 
-## Ceph RGW
+### Ceph RGW
 
 [Ceph Object Gateway](https://ceph.io/ceph-storage/object-storage) 是在 `librados` 之上构建的对象存储接口，旨在为应用程序提供访问 Ceph 存储集群的 RESTful 网关。Ceph 对象网关支持 S3 兼容的接口，因此我们可以将 `--storage` 设置为 `s3`。
 
@@ -797,7 +818,48 @@ juicefs format \
     myjfs
 ```
 
-## Swift
+### Gluster
+
+[Gluster](https://github.com/gluster/glusterfs) 是一款开源的软件定义分布式存储，单集群能支持 PiB 级别的数据。JuiceFS 通过 `libgfapi` 库与 Gluster 集群交互，使用前需要单独编译。
+
+首先安装 `libgfapi`（6.0 或以上版本）：
+
+<Tabs>
+  <TabItem value="debian" label="Debian 及衍生版本">
+
+```bash
+sudo apt-get install uuid-dev libglusterfs-dev glusterfs-common
+```
+
+  </TabItem>
+  <TabItem value="centos" label="RHEL 及衍生版本">
+
+```bash
+sudo yum install glusterfs glusterfs-api-devel glusterfs-libs
+```
+
+  </TabItem>
+</Tabs>
+
+然后编译支持 Gluster 的 JuiceFS：
+
+```bash
+make juicefs.gluster
+```
+
+现在我们可以创建出基于 Gluster 的 JuiceFS volume：
+
+```bash
+juicefs format \
+    --storage gluster \
+    --bucket host1,host2,host3/gv0 \
+    ... \
+    myjfs
+```
+
+其中 `--bucket` 选项格式为 `<host[,host...]>/<volume_name>`。注意这里的 `volume_name` 为 Gluster 中的卷名称，与 JuiceFS volume 自身的名字没有直接关系。
+
+### Swift
 
 [OpenStack Swift](https://github.com/openstack/swift) 是一种分布式对象存储系统，旨在从一台计算机扩展到数千台服务器。Swift 已针对多租户和高并发进行了优化。Swift 广泛适用于备份、Web 和移动内容的理想选择，可以无限量存储任何非结构化数据。
 
@@ -817,7 +879,7 @@ juicefs format \
     myjfs
 ```
 
-## MinIO
+### MinIO
 
 [MinIO](https://min.io) 是开源的轻量级对象存储，兼容 Amazon S3 API。
 
@@ -860,7 +922,7 @@ juicefs format \
 1. 面对多节点 MinIO 集群，考虑在 Endpoint 中使用 DNS 域名，解析到各个 MinIO 节点，作为简易负载均衡，比如 `http://minio.example.com:9000/myjfs`
 :::
 
-## WebDAV
+### WebDAV
 
 [WebDAV](https://en.wikipedia.org/wiki/WebDAV) 是 HTTP 的扩展协议，有利于用户间协同编辑和管理存储在万维网服务器的文档。JuiceFS 0.15+ 支持使用 WebDAV 协议的存储系统作为后端数据存储。
 
@@ -876,7 +938,7 @@ juicefs format \
     myjfs
 ```
 
-## HDFS
+### HDFS
 
 Hadoop 的文件系统 [HDFS](https://hadoop.apache.org) 也可以作为对象存储供 JuiceFS 使用。
 
@@ -906,7 +968,7 @@ bucket 参数支持格式如下：
 
 对于启用 Kerberos 的 HDFS，可以通过 `KRB5KEYTAB` 和 `KRB5PRINCIPAL` 环境变量来指定 keytab 和 principal。
 
-## Apache Ozone
+### Apache Ozone
 
 Apache Ozone 是 Hadoop 的分布式对象存储系统，提供了 S3 兼容的 API。所以可以通过 S3 兼容的模式作为对象存储供 JuiceFS 使用。例如：
 
@@ -920,11 +982,11 @@ juicefs format \
     myjfs
 ```
 
-## Redis
+### Redis
 
 Redis 既可以作为 JuiceFS 的元数据存储，也可以作为数据存储，但当使用 Redis 作为数据存储时，建议不要存储大规模数据。
 
-### 单机模式
+#### 单机模式
 
 `--bucket` 选项格式为 `redis://<host>:<port>/<db>`。`--access-key` 选项的值是用户名，`--secret-key` 选项的值是密码。例如：
 
@@ -938,7 +1000,7 @@ juicefs format \
     myjfs
 ```
 
-### Redis Sentinel
+#### Redis Sentinel
 
 Redis Sentinel 模式下，`--bucket` 选项格式为 `redis[s]://MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`。Sentinel 的密码则需要通过 `SENTINEL_PASSWORD_FOR_OBJ` 环境变量来声明。例如：
 
@@ -953,7 +1015,7 @@ juicefs format \
     myjfs
 ```
 
-### Redis 集群
+#### Redis 集群
 
 Redis 集群模式下，`--bucket` 选项格式为 `redis[s]://ADDR:PORT,[ADDR:PORT],[ADDR:PORT]`。例如：
 
@@ -967,7 +1029,7 @@ juicefs format \
     myjfs
 ```
 
-## TiKV
+### TiKV
 
 [TiKV](https://tikv.org) 是一个高度可扩展、低延迟且易于使用的键值数据库。它提供原始和符合 ACID 的事务键值 API。
 
@@ -991,7 +1053,7 @@ juicefs format \
 不要使用同一个 TiKV 集群来存储元数据和数据，因为 JuiceFS 是使用不同的协议来存储元数据（支持事务的 TxnKV) 和数据 (不支持事务的 RawKV)，TxnKV 的对象名会被编码后存储，即使添加了不同的前缀也可能导致它们的名字冲突。另外，建议启用 [Titan](https://tikv.org/docs/latest/deploy/configure/titan) 来提升存储数据的集群的性能。
 :::
 
-### 设置 TLS
+#### 设置 TLS
 
 如果需要开启 TLS，可以通过在 Bucket URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
 
@@ -1012,7 +1074,7 @@ juicefs format \
     myjfs
 ```
 
-## etcd
+### etcd
 
 [etcd](https://etcd.io) 是一个高可用高可靠的小规模键值数据库，既可以用作 JuiceFS 的元数据存储，也可以用于 JuiceFS 的数据存储。
 
@@ -1031,7 +1093,7 @@ juicefs format \
     myjfs
 ```
 
-### 设置 TLS
+#### 设置 TLS
 
 如果需要开启 TLS，可以通过在 Bucket URL 后以添加 query 参数的形式设置 TLS 的配置项，目前支持的配置项：
 
@@ -1057,7 +1119,7 @@ juicefs format \
 证书的路径需要使用绝对路径，并且确保所有需要挂载的机器上能用该路径访问到它们。
 :::
 
-## SQLite
+### SQLite
 
 [SQLite](https://sqlite.org) 是全球广泛使用的小巧、快速、单文件、可靠、全功能的单文件 SQL 数据库引擎。
 
@@ -1075,7 +1137,7 @@ juicefs format \
 由于 SQLite 是一款嵌入式数据库，只有数据库所在的主机可以访问它，不能用于多机共享场景。如果格式化时使用的是相对路径，会导致挂载时出问题，请使用绝对路径。
 :::
 
-## MySQL
+### MySQL
 
 [MySQL](https://www.mysql.com) 是受欢迎的开源关系型数据库之一，常被作为 Web 应用程序的首选数据库，既可以作为 JuiceFS 的元数据引擎也可以用来存储文件数据。跟 MySQL 兼容的 [MariaDB](https://mariadb.org)、[TiDB](https://github.com/pingcap/tidb) 等都可以用来作为数据存储。
 
@@ -1097,7 +1159,7 @@ juicefs format \
 不要漏掉 `--bucket` 参数里的括号 `()`。
 :::
 
-## PostgreSQL
+### PostgreSQL
 
 [PostgreSQL](https://www.postgresql.org) 是功能强大的开源关系型数据库，有完善的生态和丰富的应用场景，既可以作为 JuiceFS 的元数据引擎也可以作为数据存储。其他跟 PostgreSQL 协议兼容的数据库（比如 [CockroachDB](https://github.com/cockroachdb/cockroach) 等) 也可以用来作为数据存储。
 
@@ -1115,11 +1177,11 @@ juicefs format \
 
 创建文件系统后，JuiceFS 会在该数据库中创建名为 `jfs_blob` 的表用来存储数据。
 
-### 故障排除
+#### 故障排除
 
 JuiceFS 客户端默认采用 SSL 加密连接 PostgreSQL，如果连接时报错 `pq: SSL is not enabled on the server` 说明数据库没有启用 SSL。可以根据业务场景为 PostgreSQL 启用 SSL 加密，也可以在 bucket URL 中添加参数 `sslmode=disable` 禁用加密验证。
 
-## 本地磁盘
+### 本地磁盘
 
 在创建 JuiceFS 文件系统时，如果没有指定任何存储类型，会默认使用本地磁盘作为数据存储，root 用户默认存储路径为 `/var/jfs`，普通用户默认存储路径为 `~/.juicefs/local`。
 
@@ -1131,7 +1193,7 @@ juicefs format redis://localhost:6379/1 myjfs
 
 本地存储通常仅用于了解和体验 JuiceFS 的基本功能，创建的 JuiceFS 存储无法被网络内的其他客户端挂载，只能单机使用。
 
-## SFTP/SSH {#sftp}
+### SFTP/SSH {#sftp}
 
 SFTP 全称 Secure File Transfer Protocol 即安全文件传输协议，它并不是文件存储。准确来说，JuiceFS 是通过 SFTP/SSH 这种文件传输协议对远程主机上的磁盘进行连接和读写，从而让任何启用了 SSH 服务的操作系统都可以作为 JuiceFS 的数据存储来使用。
 
@@ -1147,7 +1209,7 @@ juicefs format  \
     redis://localhost:6379/1 myjfs
 ```
 
-### 注意事项
+#### 注意事项
 
 - `--bucket` 用来设置服务器的地址及存储路径，格式为 `<IP/Domain>:[port]:<Path>`。注意，地址中不要包含协议头，目录名应该以 `/` 结尾，端口号为可选项默认为 `22`，例如 `192.168.1.11:22:myjfs/`。
 - `--access-key` 用来设置远程服务器的用户名

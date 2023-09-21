@@ -58,6 +58,7 @@ trap cleanup INT EXIT
 
 {
   touch "$a_test_dir"/afile
+  exec_should_failed 'sudo chattr "+u" $a_test_dir/afile'
   exec_should_success 'sudo chattr "+a" $a_test_dir/afile'
   exec_should_success '[[ "$(lsattr $a_test_dir/afile | awk -F " " "{print \$1}")" =~ "a" ]]'
   exec_should_failed "echo aa > $a_test_dir/afile"
@@ -65,15 +66,15 @@ trap cleanup INT EXIT
   touch "$a_test_dir/tmpfile"
   exec_should_failed "mv -f $a_test_dir/tmpfile $a_test_dir/afile"
   exec_should_failed "mv -f $a_test_dir/afile $a_test_dir/tmpfile"
-  exec_should_failed "ln afile $a_test_dir/linkfile"
+  exec_should_failed "ln $a_test_dir/afile $a_test_dir/linkfile"
   echo "12345" >> "$a_test_dir"/afile
   exec_should_success '[ "$(cat "$a_test_dir"/afile)" == "12345" ]'
 
-# FIXME: sudo chattr "+a" $a_test_dir/fallocatefile random failed
-#  touch "$a_test_dir"/fallocatefile
-#  exec_should_success 'sudo chattr "+a" $a_test_dir/fallocatefile'
-#  exec_should_success '[[ "$(lsattr $a_test_dir/fallocatefile | awk -F " " "{print \$1}")" =~ "a" ]]'
-#  exec_should_failed 'fallocate -l 1k -n $a_test_dir/fallocatefile'
+  # FIXME: sudo chattr "+a" $a_test_dir/fallocatefile random failed
+  touch "$a_test_dir"/fallocatefile
+  exec_should_success 'sudo chattr "+a" $a_test_dir/fallocatefile'
+  exec_should_success '[[ "$(lsattr $a_test_dir/fallocatefile | awk -F " " "{print \$1}")" =~ "a" ]]'
+  exec_should_failed 'fallocate -l 1k -n $a_test_dir/fallocatefile'
 }
 
 
@@ -116,12 +117,12 @@ mkdir "$i_test_dir"
   touch "$i_test_dir/tmpfile"
   exec_should_failed "mv -f $i_test_dir/tmpfile $i_test_dir/ifile"
   exec_should_failed "mv -f $i_test_dir/ifile $a_test_dir/tmpfile"
-  exec_should_failed "ln ifile $i_test_dir/linkfile"
+  exec_should_failed "ln $i_test_dir/ifile $i_test_dir/linkfile"
 
-#  touch "$i_test_dir"/fallocatefile
-#  exec_should_success 'sudo chattr "+i" $i_test_dir/fallocatefile'
-#  exec_should_success '[[ "$(lsattr $i_test_dir/fallocatefile | awk -F " " "{print \$1}")" =~ "i" ]]'
-#  exec_should_failed 'fallocate -l 1k -n $i_test_dir/fallocatefile'
+  touch "$i_test_dir"/fallocatefile
+  exec_should_success 'sudo chattr "+i" $i_test_dir/fallocatefile'
+  exec_should_success '[[ "$(lsattr $i_test_dir/fallocatefile | awk -F " " "{print \$1}")" =~ "i" ]]'
+  exec_should_failed 'fallocate -l 1k -n $i_test_dir/fallocatefile'
 }
 
 {

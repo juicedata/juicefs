@@ -430,6 +430,20 @@ func (fs *FileSystem) Mkdir(ctx meta.Context, p string, mode uint16, umask uint1
 	}
 	var inode Ino
 	err = fs.m.Mkdir(ctx, fi.inode, path.Base(p), mode, umask, 0, &inode, nil)
+	if err == syscall.ENOENT && fi.inode != 1 {
+		// parent be moved into trash, try again
+		if fs.conf.DirEntryTimeout > 0 {
+			parent := parentDir(p)
+			if fi, err := fs.resolve(ctx, parentDir(parent), true); err == 0 {
+				fs.invalidateEntry(fi.inode, path.Base(parent))
+			}
+		}
+		if fi2, e := fs.resolve(ctx, parentDir(p), true); e != 0 {
+			return e
+		} else if fi2.inode != fi.inode {
+			err = fs.m.Mkdir(ctx, fi2.inode, path.Base(p), mode, umask, 0, &inode, nil)
+		}
+	}
 	fs.invalidateEntry(fi.inode, path.Base(p))
 	return
 }
@@ -667,6 +681,10 @@ func (fs *FileSystem) lookup(ctx meta.Context, parent Ino, name string, inode *I
 }
 
 func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool) (fi *FileStat, err syscall.Errno) {
+	return fs.doResolve(ctx, p, followLastSymlink, make(map[Ino]struct{}))
+}
+
+func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bool, visited map[Ino]struct{}) (fi *FileStat, err syscall.Errno) {
 	var inode Ino
 	var attr = &Attr{}
 
@@ -722,6 +740,12 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 		}
 		fi = AttrToFileInfo(inode, attr)
 		if (!resolved || followLastSymlink) && fi.IsSymlink() {
+			if _, ok := visited[inode]; ok {
+				logger.Errorf("find a loop symlink: %d", inode)
+				return nil, syscall.ELOOP
+			} else {
+				visited[inode] = struct{}{}
+			}
 			var buf []byte
 			err = fs.m.ReadLink(ctx, inode, &buf)
 			if err != 0 {
@@ -732,7 +756,7 @@ func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool
 				return &FileStat{name: target}, syscall.ENOTSUP
 			}
 			target = path.Join(strings.Join(ss[:i], "/"), target)
-			fi, err = fs.resolve(ctx, target, followLastSymlink)
+			fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
 			if err != 0 {
 				return
 			}
@@ -767,6 +791,20 @@ func (fs *FileSystem) Create(ctx meta.Context, p string, mode uint16, umask uint
 		return
 	}
 	err = fs.m.Create(ctx, fi.inode, path.Base(p), mode&07777, umask, syscall.O_EXCL, &inode, attr)
+	if err == syscall.ENOENT && fi.inode != 1 {
+		// dir be moved into trash, try again
+		if fs.conf.DirEntryTimeout > 0 {
+			parent := parentDir(p)
+			if fi, err := fs.resolve(ctx, parentDir(parent), true); err == 0 {
+				fs.invalidateEntry(fi.inode, path.Base(parent))
+			}
+		}
+		if fi2, e := fs.resolve(ctx, parentDir(p), true); e != 0 {
+			return nil, e
+		} else if fi2.inode != fi.inode {
+			err = fs.m.Create(ctx, fi2.inode, path.Base(p), mode&07777, umask, syscall.O_EXCL, &inode, attr)
+		}
+	}
 	if err == 0 {
 		fi = AttrToFileInfo(inode, attr)
 		fi.name = path.Base(p)

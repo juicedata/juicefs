@@ -189,7 +189,7 @@ func (q *qingstor) Delete(key string) error {
 	return err
 }
 
-func (q *qingstor) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (q *qingstor) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if limit > 1000 {
 		limit = 1000
 	}
@@ -227,7 +227,7 @@ func (q *qingstor) List(prefix, marker, delimiter string, limit int64) ([]Object
 	return objs, nil
 }
 
-func (q *qingstor) ListAll(prefix, marker string) (<-chan Object, error) {
+func (q *qingstor) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

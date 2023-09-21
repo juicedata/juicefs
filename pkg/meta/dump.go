@@ -69,6 +69,7 @@ type DumpedAttr struct {
 	Nlink     uint32 `json:"nlink"`
 	Length    uint64 `json:"length"`
 	Rdev      uint32 `json:"rdev,omitempty"`
+	full      bool
 }
 
 type DumpedSlice struct {
@@ -301,6 +302,7 @@ func dumpAttr(a *Attr, d *DumpedAttr) {
 	} else {
 		d.Length = 0
 	}
+	d.full = a.Full
 }
 
 func loadAttr(d *DumpedAttr) *Attr {

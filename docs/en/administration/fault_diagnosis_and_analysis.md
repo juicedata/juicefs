@@ -118,7 +118,7 @@ kubectl -n kube-system exec juicefs-chaos-k8s-002-pvc-d4b8fb4f-2c0b-48e8-a2dc-53
 
 ### S3 Gateway
 
-You need to add the [`--access-log` option](../reference/command_reference.md#juicefs-gateway) when starting the S3 gateway to specify the path to output the access log. By default, the S3 gateway does not output the access log.
+You need to add the [`--access-log` option](../reference/command_reference.md#gateway) when starting the S3 gateway to specify the path to output the access log. By default, the S3 gateway does not output the access log.
 
 ### Hadoop Java SDK
 
@@ -168,7 +168,7 @@ $ tree ./debug
 │   ├── stats.5s.txt
 │   ├── stats.txt
 │   └── system-info.log
-└── tmp-test1-20230609104324.zip  
+└── tmp-test1-20230609104324.zip
 ```
 
 ## Real-time performance monitoring {#performance-monitor}
@@ -179,7 +179,7 @@ JuiceFS provides the `profile` and `stats` subcommands to visualize real-time pe
 
 [`juicefs profile`](../reference/command_reference.md#profile) will collect data from [file system access log](#access-log), run the `juicefs profile MOUNTPOINT` command, you can see the real-time statistics of each file system operation based on the latest access log:
 
-![](../images/juicefs-profiling.gif)
+![JuiceFS-profiling](../images/juicefs-profiling.gif)
 
 Apart from real-time mode, this command also provides a play-back mode, which performs the same visualization on existing access log files:
 
@@ -203,7 +203,7 @@ juicefs profile /tmp/juicefs.accesslog --uid 12345
 
 The [`juicefs stats`](../reference/command_reference.md#stats) command reads JuiceFS Client internal metrics data, and output performance data in a format similar to `dstat`:
 
-![](../images/juicefs_stats_watcher.png)
+![juicefs_stats_watcher](../images/juicefs_stats_watcher.png)
 
 Metrics description:
 
@@ -211,7 +211,7 @@ Metrics description:
 
 - `cpu`: CPU usage of the process.
 - `mem`: Physical memory used by the process.
-- `buf`: Current [buffer size](../guide/cache_management.md#buffer-size), if this value is constantly close to (or even exceeds) the configured [`--buffer-size`](../reference/command_reference.md#mount), you should increase buffer size or decrease application workload.
+- `buf`: Current [buffer size](../guide/cache.md#buffer-size), if this value is constantly close to (or even exceeds) the configured [`--buffer-size`](../reference/command_reference.md#mount), you should increase buffer size or decrease application workload.
 - `cache`: Internal metric, ignore this.
 
 #### `fuse`

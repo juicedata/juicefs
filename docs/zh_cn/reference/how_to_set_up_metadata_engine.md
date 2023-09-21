@@ -1,6 +1,6 @@
 ---
 title: 如何设置元数据引擎
-sidebar_position: 1
+sidebar_position: 2
 slug: /databases_for_metadata
 description: JuiceFS 支持 Redis、TiKV、PostgreSQL、MySQL 等多种数据库作为元数据引擎，本文分别介绍相应的设置和使用方法。
 ---
@@ -111,7 +111,7 @@ juicefs mount -d "redis://192.168.1.6:6379/1" /mnt/jfs
 JuiceFS 同时支持 Redis 的 TLS 单向加密认证和 mTLS 双向加密认证连接。通过 TLS 或 mTLS 连接到 Redis 时均使用 `rediss://` 协议头，但是在使用 TLS 单向加密认证时，不需要指定客户端证书和私钥。
 
 :::note
-JuiceFS 对 Redis mTLS 功能的支持尚未正式发布，如需使用可以使用 main 分支[手动编译客户端](../getting-started/installation.md#手动编译客户端)。
+对 Redis mTLS 功能的支持需要使用 1.1.0 及以上版本的 JuiceFS
 :::
 
 当通过 mTLS 连接 Redis 时，需要提供客户端证书和私钥，以及签发客户端证书的 CA 证书进行连接。在 JuiceFS 中，可以通过以下方式设置 mTLS 需要的客户端证书：
@@ -531,9 +531,38 @@ juicefs format \
 juicefs mount -d "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs" /mnt/jfs
 ```
 
-## FoundationDB
+## FoundationDB <VersionAdd>1.1</VersionAdd>
 
-[FoundationDB](https://www.foundationdb.org) 是一个能在多集群服务器上存放大规模结构化数据的分布式数据库。该数据库系统专注于高性能、高可扩展性和不错的容错能力。
+[FoundationDB](https://www.foundationdb.org) 是一个能在多集群服务器上存放大规模结构化数据的分布式数据库。该数据库系统专注于高性能、高可扩展性，且具有不错的容错能力。由于对接 FoundationDB 需要先安装其客户端库，因此 JuiceFS 的发布版本默认不支持，使用前需要自行编译。
+
+### 编译 JuiceFS
+
+首先安装 FoundationDB 客户端（参考[官方文档](https://apple.github.io/foundationdb/api-general.html#installing-client-binaries)）：
+
+<Tabs>
+  <TabItem value="debian" label="Debian 及衍生版本">
+
+```shell
+curl -O https://github.com/apple/foundationdb/releases/download/6.3.25/foundationdb-clients_6.3.25-1_amd64.deb
+sudo dpkg -i foundationdb-clients_6.3.25-1_amd64.deb
+```
+
+  </TabItem>
+  <TabItem value="centos" label="RHEL 及衍生版本">
+
+```shell
+curl -O https://github.com/apple/foundationdb/releases/download/6.3.25/foundationdb-clients-6.3.25-1.el7.x86_64.rpm
+sudo rpm -Uvh foundationdb-clients-6.3.25-1.el7.x86_64.rpm
+```
+
+  </TabItem>
+</Tabs>
+
+然后编译支持 FoundationDB 的 JuiceFS：
+
+```shell
+make juicefs.fdb
+```
 
 ### 创建文件系统
 
@@ -546,7 +575,7 @@ fdb://<cluster_file_path>?prefix=<prefix>
 其中 `<cluster_file_path>` 为 FoundationDB 的配置文件路径，用来连接 FoundationDB 服务端。`<prefix>` 是一个用户自定义的字符串，当多个文件系统或者应用共用一个 FoundationDB 集群时，设置前缀可以避免混淆和冲突。示例如下：
 
 ```shell
-juicefs format \
+juicefs.fdb format \
     --storage s3 \
     ... \
     "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
@@ -657,7 +686,7 @@ export FDB_TLS_VERIFY_PEERS=Check.Valid=0
 ### 挂载文件系统
 
 ```shell
-juicefs mount -d \
+juicefs.fdb mount -d \
     "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
     /mnt/jfs
 ```

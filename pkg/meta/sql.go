@@ -97,7 +97,7 @@ type chunk struct {
 type sliceRef struct {
 	Id   uint64 `xorm:"pk chunkid"`
 	Size uint32 `xorm:"notnull"`
-	Refs int    `xorm:"notnull"`
+	Refs int    `xorm:"index notnull"`
 }
 
 func (c *sliceRef) TableName() string {
@@ -897,6 +897,9 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		}
 		var curAttr Attr
 		m.parseAttr(&cur, &curAttr)
+		if curAttr.Parent > TrashInode {
+			return syscall.EPERM
+		}
 		now := time.Now()
 		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &curAttr, attr, now)
 		if st != 0 {
@@ -958,7 +961,7 @@ func (m *dbMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 		if !ok {
 			return syscall.ENOENT
 		}
-		if nodeAttr.Type != TypeFile {
+		if nodeAttr.Type != TypeFile || nodeAttr.Flags&(FlagImmutable|FlagAppend) != 0 || nodeAttr.Parent > TrashInode {
 			return syscall.EPERM
 		}
 		m.parseAttr(&nodeAttr, attr)
@@ -1061,10 +1064,7 @@ func (m *dbMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		if nodeAttr.Type == TypeFIFO {
 			return syscall.EPIPE
 		}
-		if nodeAttr.Type != TypeFile {
-			return syscall.EPERM
-		}
-		if (nodeAttr.Flags & FlagImmutable) != 0 {
+		if nodeAttr.Type != TypeFile || (nodeAttr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
 		}
 		if (nodeAttr.Flags&FlagAppend) != 0 && (mode&^fallocKeepSize) != 0 {
@@ -1217,6 +1217,9 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 		var pattr Attr
 		m.parseAttr(&pn, &pattr)
+		if pattr.Parent > TrashInode {
+			return syscall.ENOENT
+		}
 		if st := m.Access(ctx, parent, MODE_MASK_W, &pattr); st != 0 {
 			return st
 		}
@@ -1641,6 +1644,9 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		var spattr, dpattr Attr
 		m.parseAttr(&spn, &spattr)
 		m.parseAttr(&dpn, &dpattr)
+		if flags&RenameRestore == 0 && dpattr.Parent > TrashInode {
+			return syscall.ENOENT
+		}
 		if st := m.Access(ctx, parentSrc, MODE_MASK_W|MODE_MASK_X, &spattr); st != 0 {
 			return st
 		}
@@ -1707,7 +1713,7 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		now := time.Now().UnixNano()
 		dn = node{Inode: de.Inode}
 		if ok {
-			if flags == RenameNoReplace {
+			if flags&RenameNoReplace != 0 {
 				return syscall.EEXIST
 			}
 			dino = de.Inode
@@ -1919,6 +1925,9 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 		}
 		if pn.Type != TypeDirectory {
 			return syscall.ENOTDIR
+		}
+		if pn.Parent > TrashInode {
+			return syscall.ENOENT
 		}
 		var pattr Attr
 		m.parseAttr(&pn, &pattr)
@@ -2895,7 +2904,7 @@ func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, sh
 	if err != nil {
 		return errno(err)
 	}
-	if m.fmt.TrashDays == 0 {
+	if m.getFormat().TrashDays == 0 {
 		return 0
 	}
 
@@ -3304,7 +3313,7 @@ func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEnt
 	e := &DumpedEntry{}
 	n, ok := m.snap.node[inode]
 	if !ok && inode != TrashInode {
-		logger.Warnf("The entry of the inode was not found. inode: %d", inode)
+		logger.Errorf("Corrupt inode: %d, missing attribute", inode)
 	}
 
 	attr := &Attr{Typ: typ, Nlink: 1}
@@ -3564,7 +3573,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		}
 
 		dm := DumpedMeta{
-			Setting:   *m.fmt,
+			Setting:   *m.getFormat(),
 			Counters:  counters,
 			Sustained: sessions,
 			DelFiles:  dels,
@@ -4015,6 +4024,15 @@ func (m *dbMeta) doAttachDirNode(ctx Context, parent Ino, inode Ino, name string
 		}
 		if !ok {
 			return syscall.ENOENT
+		}
+		if n.Type != TypeDirectory {
+			return syscall.ENOTDIR
+		}
+		if n.Parent > TrashInode {
+			return syscall.ENOENT
+		}
+		if (n.Flags & FlagImmutable) != 0 {
+			return syscall.EPERM
 		}
 		n.Nlink++
 		now := time.Now().UnixNano()

@@ -151,7 +151,7 @@ func (f *sftpStore) putSftpConnection(pc **conn, err error) {
 }
 
 func (f *sftpStore) String() string {
-	return fmt.Sprintf("%s@%s:%s", f.config.User, f.host, f.root)
+	return fmt.Sprintf("sftp://%s@%s:%s", f.config.User, f.host, f.root)
 }
 
 // always preserve suffix `/` for directory key
@@ -170,7 +170,7 @@ func (f *sftpStore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return f.fileInfo(nil, key, info), nil
+	return f.fileInfo(nil, key, info, true), nil
 }
 
 func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -307,25 +307,26 @@ func (f *sftpStore) Delete(key string) error {
 	return err
 }
 
-func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo) []Object {
+func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo, followLink bool) []Object {
 	var obs = make([]Object, 0, len(fis))
 	for _, fi := range fis {
 		p := path + fi.Name()
 		if strings.HasPrefix(p, f.root) {
 			key := p[len(f.root):]
-			obs = append(obs, f.fileInfo(c, key, fi))
+			obs = append(obs, f.fileInfo(c, key, fi, followLink))
 		}
 	}
 	sort.Slice(obs, func(i, j int) bool { return obs[i].Key() < obs[j].Key() })
 	return obs
 }
 
-func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo) Object {
+func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followLink bool) Object {
 	owner, group := getOwnerGroup(fi)
 	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
-	if isSymlink && c != nil {
+	if isSymlink && c != nil && followLink {
 		if fi2, err := c.Stat(f.root + key); err == nil {
 			fi = fi2
+			isSymlink = false
 		}
 	}
 	ff := &file{
@@ -344,7 +345,7 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo) Object 
 	return ff
 }
 
-func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (f *sftpStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
 		return nil, notSupported
 	}
@@ -380,7 +381,7 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64) ([]Objec
 		return nil, err
 	}
 
-	entries := f.sortByName(c.sftpClient, dir, infos)
+	entries := f.sortByName(c.sftpClient, dir, infos, followLink)
 	for _, o := range entries {
 		key := o.Key()
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
@@ -452,10 +453,7 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 	username = unescape(username)
 	var auth []ssh.AuthMethod
 	if pass != "" {
-		pass = unescape(pass)
-		auth = append(auth, ssh.Password(pass))
-	} else {
-		auth = append(auth, ssh.KeyboardInteractive(sshInteractive))
+		auth = append(auth, ssh.Password(unescape(pass)))
 	}
 
 	var signers []ssh.Signer
@@ -504,6 +502,10 @@ func newSftp(endpoint, username, pass, token string) (ObjectStorage, error) {
 	}
 	if len(signers) > 0 {
 		auth = append(auth, ssh.PublicKeys(signers...))
+	}
+
+	if pass == "" {
+		auth = append(auth, ssh.KeyboardInteractive(sshInteractive))
 	}
 
 	config := &ssh.ClientConfig{

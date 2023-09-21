@@ -123,6 +123,7 @@ func testMeta(t *testing.T, m Meta) {
 	testTrash(t, m)
 	testParents(t, m)
 	testRemove(t, m)
+	testResolve(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
 	testListLocks(t, m)
@@ -979,6 +980,52 @@ func testLocks(t *testing.T, m Meta) {
 	}
 }
 
+func testResolve(t *testing.T, m Meta) {
+	var inode, parent Ino
+	var attr, pattr Attr
+	if st := m.Mkdir(NewContext(1, 65534, []uint32{65534}), 1, "d", 0770, 0, 0, &parent, &pattr); st != 0 {
+		t.Fatalf("mkdir d: %s", st)
+	}
+	if pattr.Gid != 65534 {
+		pattr.Gid = 65534
+		if st := m.SetAttr(NewContext(1, 65534, []uint32{65534}), parent, SetAttrGID, 0, &pattr); st != 0 {
+			t.Fatalf("setattr gid: %s", st)
+		}
+	}
+
+	if pattr.Uid != 65534 || pattr.Gid != 65534 {
+		t.Fatalf("attr %+v", pattr)
+	}
+	if st := m.Create(NewContext(1, 65534, []uint32{65534}), parent, "f", 0644, 0, 0, &inode, &attr); st != 0 {
+		t.Fatalf("create /d/f: %s", st)
+	}
+
+	defer func() {
+		if st := m.Remove(NewContext(0, 65534, []uint32{65534}), parent, "f", nil); st != 0 {
+			t.Fatalf("remove /d/f by owner: %s", st)
+		}
+		if st := m.Rmdir(NewContext(0, 65534, []uint32{65534}), 1, "d"); st != 0 {
+			t.Fatalf("rmdir /d by owner: %s", st)
+		}
+	}()
+
+	if st := m.Resolve(NewContext(0, 65534, []uint32{65534}), 1, "/d/f", &inode, &attr); st != 0 {
+		if st == syscall.ENOTSUP {
+			return
+		}
+		t.Fatalf("resolve /d/f by owner: %s", st)
+	}
+	if st := m.Resolve(NewContext(0, 65533, []uint32{65534}), 1, "/d/f", &inode, &attr); st != 0 {
+		t.Fatalf("resolve /d/f by group: %s", st)
+	}
+	if st := m.Resolve(NewContext(0, 65533, []uint32{65533, 65534}), 1, "/d/f", &inode, &attr); st != 0 {
+		t.Fatalf("resolve /d/f by multi-group: %s", st)
+	}
+	if st := m.Resolve(NewContext(0, 65533, []uint32{65533}), 1, "/d/f", &inode, &attr); st != syscall.EACCES {
+		t.Fatalf("resolve /d/f by non-group: %s", st)
+	}
+}
+
 func testRemove(t *testing.T, m Meta) {
 	ctx := Background
 	var inode, parent Ino
@@ -1436,14 +1483,37 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Parent != TrashInode+1 {
 		t.Fatalf("getattr f(%d): %s, attr %+v", inode, st, attr)
 	}
-	if st := m.Mkdir(ctx, 1, "d2", 0755, 022, 0, &inode, attr); st != 0 {
+	if st := m.Truncate(ctx, inode, 0, 1<<30, attr, false); st != syscall.EPERM {
+		t.Fatalf("should not truncate a file in trash")
+	}
+	if st := m.Open(ctx, inode, uint32(syscall.O_RDWR), attr); st != syscall.EPERM {
+		t.Fatalf("should not fallocate a file in trash")
+	}
+	if st := m.SetAttr(ctx, inode, SetAttrMode, 1, &Attr{Mode: 0}); st != syscall.EPERM {
+		t.Fatalf("should not change mode of a file in trash")
+	}
+	var parent2 Ino
+	if st := m.Mkdir(ctx, 1, "d2", 0755, 022, 0, &parent2, attr); st != 0 {
 		t.Fatalf("mkdir d2: %s", st)
 	}
 	if st := m.Rmdir(ctx, 1, "d2"); st != 0 {
 		t.Fatalf("rmdir d2: %s", st)
 	}
-	if st := m.GetAttr(ctx, inode, attr); st != 0 || attr.Parent != TrashInode+1 {
-		t.Fatalf("getattr d2(%d): %s, attr %+v", inode, st, attr)
+	if st := m.GetAttr(ctx, parent2, attr); st != 0 || attr.Parent != TrashInode+1 {
+		t.Fatalf("getattr d2(%d): %s, attr %+v", parent2, st, attr)
+	}
+	var tino Ino
+	if st := m.Mkdir(ctx, parent2, "d3", 0777, 022, 0, &tino, attr); st != syscall.ENOENT {
+		t.Fatalf("mkdir inside trash should fail")
+	}
+	if st := m.Create(ctx, parent2, "d3", 0755, 022, 0, &tino, attr); st != syscall.ENOENT {
+		t.Fatalf("create inside trash should fail")
+	}
+	if st := m.Link(ctx, inode, parent2, "ttlink", attr); st != syscall.ENOENT {
+		t.Fatalf("link inside trash should fail")
+	}
+	if st := m.Rename(ctx, 1, "d", parent2, "ttlink", 0, &tino, attr); st != syscall.ENOENT {
+		t.Fatalf("link inside trash should fail")
 	}
 	if st := m.Rename(ctx, 1, "f1", 1, "d", 0, &inode, attr); st != 0 {
 		t.Fatalf("rename f1 -> d: %s", st)
@@ -1518,7 +1588,7 @@ func testTrash(t *testing.T, m Meta) {
 	if st := m.Rename(ctx2, TrashInode+1, "d", 1, "f", 0, &inode, attr); st != syscall.EPERM {
 		t.Fatalf("rename d -> f: %s", st)
 	}
-	m.getBase().doCleanupTrash(true)
+	m.getBase().doCleanupTrash(format.TrashDays, true)
 	if st := m.GetAttr(ctx2, TrashInode+1, attr); st != syscall.ENOENT {
 		t.Fatalf("getattr: %s", st)
 	}
@@ -2262,7 +2332,7 @@ func testClone(t *testing.T, m Meta) {
 		t.Fatalf("mtime of rootDir is not updated")
 	}
 	m.StatFS(Background, cloneDir, &totalspace, &availspace, &iused, &iavail)
-	if totalspace-availspace-space != 32768 {
+	if totalspace-availspace-space != 268451840 {
 		time.Sleep(time.Second * 2)
 		m.StatFS(Background, cloneDir, &totalspace, &availspace, &iused, &iavail)
 		if totalspace-availspace-space != 268451840 {

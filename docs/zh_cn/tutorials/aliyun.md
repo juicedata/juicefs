@@ -1,6 +1,6 @@
 ---
 title: 在阿里云使用 JuiceFS
-sidebar_position: 4
+sidebar_position: 7
 slug: /clouds/aliyun
 ---
 
@@ -10,7 +10,7 @@ slug: /clouds/aliyun
 
 这样的设计可以有效缩减对象存储在请求数量上的费用，同时也能让我们显著感受到 JuiceFS 带来的性能提升。
 
-![](../images/juicefs-aliyun.png)
+![JuiceFS-aliyun](../images/juicefs-aliyun.png)
 
 ## 准备
 
@@ -168,7 +168,7 @@ $ juicefs format \
 
 **选项说明：**
 
-- `--storage`：指定对象存储类型，[点此查看](../guide/how_to_set_up_object_storage.md#supported-object-storage) JuiceFS 支持的对象存储。
+- `--storage`：指定对象存储类型，[点此查看](../reference/how_to_set_up_object_storage.md#supported-object-storage) JuiceFS 支持的对象存储。
 - `--bucket`：对象存储的 Bucket 域名。当使用阿里云 OSS 时，只需填写 bucket 名称即可，无需填写完整的域名，JuiceFS 会自动识别并补全地址。
 - `--access-key` 和 `--secret-key`：访问对象存储 API 的秘钥对，[点此查看](https://help.aliyun.com/document_detail/38738.html)获取方式。
 
@@ -278,4 +278,4 @@ sudo juicefs umount /mnt/jfs
 
 ## 开机自动挂载
 
-请参考[「启动时自动挂载 JuiceFS」](../guide/mount_at_boot.md)
+请参考[「启动时自动挂载 JuiceFS」](../administration/mount_at_boot.md)

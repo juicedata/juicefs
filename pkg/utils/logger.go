@@ -34,6 +34,7 @@ type logHandle struct {
 	logrus.Logger
 
 	name     string
+	logid    string
 	lvl      *logrus.Level
 	colorful bool
 }
@@ -60,7 +61,8 @@ func (l *logHandle) Format(e *logrus.Entry) ([]byte, error) {
 	}
 	const timeFormat = "2006/01/02 15:04:05.000000"
 	timestamp := e.Time.Format(timeFormat)
-	str := fmt.Sprintf("%v %s[%d] <%v>: %v [%s:%d]",
+	str := fmt.Sprintf("%s%v %s[%d] <%v>: %v [%s:%d]",
+		l.logid,
 		timestamp,
 		l.name,
 		os.Getpid(),
@@ -141,5 +143,13 @@ func SetOutput(w io.Writer) {
 	defer mu.Unlock()
 	for _, logger := range loggers {
 		logger.SetOutput(w)
+	}
+}
+
+func SetLogID(id string) {
+	mu.Lock()
+	defer mu.Unlock()
+	for _, logger := range loggers {
+		logger.logid = id
 	}
 }

@@ -71,7 +71,10 @@ func (m *mapping) lookupUser(name string) uint32 {
 		return id
 	}
 	if !m.local {
-		return m.genGuid(name)
+		id := m.genGuid(name)
+		m.usernames[name] = id
+		m.userIDs[id] = name
+		return id
 	}
 	if name == "root" { // root in hdfs sdk is a normal user
 		id = m.genGuid(name)

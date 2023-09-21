@@ -42,14 +42,17 @@ $ juicefs rmr /mnt/jfs/foo`,
 	}
 }
 
-func openController(path string) (*os.File, error) {
-	mp, err := findMountpoint(path)
+func openController(dpath string) (*os.File, error) {
+	st, err := os.Stat(dpath)
 	if err != nil {
 		return nil, err
 	}
-	fp, err := os.OpenFile(filepath.Join(mp, ".jfs.control"), os.O_RDWR, 0)
+	if !st.IsDir() {
+		dpath = filepath.Dir(dpath)
+	}
+	fp, err := os.OpenFile(filepath.Join(dpath, ".jfs.control"), os.O_RDWR, 0)
 	if os.IsNotExist(err) {
-		fp, err = os.OpenFile(filepath.Join(mp, ".control"), os.O_RDWR, 0)
+		fp, err = os.OpenFile(filepath.Join(dpath, ".control"), os.O_RDWR, 0)
 	}
 	return fp, err
 }

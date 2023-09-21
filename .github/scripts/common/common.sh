@@ -1,6 +1,12 @@
-#!/bin/bash
+#!/bin/bash -e
 
-set -e
+prepare_test()
+{
+    umount_jfs /jfs $META_URL
+    python3 .github/scripts/flush_meta.py $META_URL
+    rm -rf /var/jfs/myjfs || true
+    rm -rf /var/jfsCache/myjfs || true
+}
 
 umount_jfs()
 {
@@ -39,4 +45,16 @@ wait_mount_process_killed()
         fi
         echo "wait mount process to be killed..." && sleep 1s
     done
+}
+
+compare_md5sum(){
+    file1=$1
+    file2=$2
+    md51=$(md5sum $file1 | awk '{print $1}')
+    md52=$(md5sum $file2 | awk '{print $1}')
+    # echo md51 is $md51, md52 is $md52
+    if [ "$md51" != "$md52" ] ; then
+        echo "md5 are different: md51 is $md51, md52 is $md52"
+        exit 1
+    fi
 }

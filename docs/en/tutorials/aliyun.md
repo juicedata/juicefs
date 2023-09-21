@@ -1,6 +1,6 @@
 ---
 title: Use JuiceFS on Alibaba Cloud
-sidebar_position: 6
+sidebar_position: 7
 slug: /clouds/aliyun
 ---
 
@@ -10,7 +10,7 @@ The metadata is stored completely independently, and the retrieval and processin
 
 This design can effectively reduce the cost of the object storage in terms of the number of requests, but also allows us to significantly experience the performance improvement brought by JuiceFS.
 
-![](../images/juicefs-arch-new.png)
+![JuiceFS-arch-new](../images/juicefs-arch-new.png)
 
 ## Preparation
 
@@ -170,7 +170,7 @@ $ juicefs format \
 
 **Option description:**
 
-- `--storage`: Specify the type of object storage, [click here to view](../guide/how_to_set_up_object_storage.md) object storage services supported by JuiceFS.
+- `--storage`: Specify the type of object storage, [click here to view](../reference/how_to_set_up_object_storage.md) object storage services supported by JuiceFS.
 - `--bucket`: Bucket domain name of the object storage. When using OSS, just fill in the bucket name, no need to fill in the full domain name, JuiceFS will automatically identify and fill in the full address.
 - `--access-key` and `--secret-key`: the secret key pair to access the object storage API, [click here](https://www.alibabacloud.com/help/doc-detail/125558.htm) to get the way.
 
@@ -280,4 +280,4 @@ sudo juicefs umount /mnt/jfs
 
 ## Auto-mount on boot
 
-Please refer to ["Mount JuiceFS at Boot Time"](../guide/mount_at_boot.md) for more details.
+Please refer to ["Mount JuiceFS at Boot Time"](../administration/mount_at_boot.md) for more details.

@@ -1,8 +1,4 @@
-#!/bin/bash
-
-set -ex
-python3 -c "import minio" || sudo pip install minio 
-python3 -c "import hypothesis" || sudo pip install hypothesis
+#!/bin/bash -e
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
@@ -10,6 +6,27 @@ source .github/scripts/start_meta_engine.sh
 start_meta_engine $META
 META_URL=$(get_meta_url $META)
 
+generate_source_dir(){
+    rm -rf jfs_source
+    git clone https://github.com/juicedata/juicefs.git jfs_source --depth 1
+    chmod 777 jfs_source
+    mkdir jfs_source/empty_dir
+    dd if=/dev/urandom of=jfs_source/file bs=5M count=1
+    chmod 777 jfs_source/file
+    ln -sf file jfs_source/symlink_to_file
+    ln -f jfs_source/file jfs_source/hard_link_to_file
+    id -u juicefs  && sudo userdel juicefs
+    sudo useradd -u 1101 juicefs
+    sudo -u juicefs touch jfs_source/file2
+    ln -s ../cmd jfs_source/pkg/symlink_to_cmd
+}
+
+generate_source_dir
+
+generate_fsrand(){
+    seed=$(date +%s)
+    python3 .github/scripts/fsrand.py -a -c 2000 -s $seed  fsrand
+}
 
 test_sync_with_mount_point(){
     do_sync_with_mount_point 
@@ -28,7 +45,6 @@ test_sync_without_mount_point(){
 do_sync_without_mount_point(){
     prepare_test
     options=$@
-    generate_source_dir
     ./juicefs format $META_URL myjfs
     meta_url=$META_URL ./juicefs sync jfs_source/ jfs://meta_url/jfs_source/ $options --links
 
@@ -43,7 +59,6 @@ do_sync_without_mount_point(){
 do_sync_with_mount_point(){
     prepare_test
     options=$@
-    generate_source_dir
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     ./juicefs sync jfs_source/ /jfs/jfs_source/ $options --links
@@ -55,19 +70,50 @@ do_sync_with_mount_point(){
     diff -ur --no-dereference jfs_source/ /jfs/jfs_source/
 }
 
+test_sync_with_loop_link(){
+    prepare_test
+    options="--dirs --update --perms --check-all --list-threads 10 --list-depth 5"
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    ln -s looplink jfs_source/looplink
+    ./juicefs sync jfs_source/ /jfs/jfs_source/ $options > err.log 2>&1 || true
+    grep "Failed to handle 1 objects" err.log
+    rm -rf jfs_source/looplink
+}
 
-generate_source_dir(){
-    [[ ! -d jfs_source ]] && git clone https://github.com/juicedata/juicefs.git jfs_source
-    [[ -d jfs_source/empty_dir ]] && rm jfs_source/empty_dir -rf
-    chmod 777 jfs_source
-    mkdir jfs_source/empty_dir
-    dd if=/dev/urandom of=jfs_source/file bs=5M count=1
-    chmod 777 jfs_source/file
-    ln -sf file jfs_source/symlink_to_file
-    ln -f jfs_source/file jfs_source/hard_link_to_file
-    id -u juicefs  && sudo userdel juicefs
-    sudo useradd -u 1101 juicefs
-    sudo -u juicefs touch jfs_source/file2
+test_sync_with_deep_link(){
+    prepare_test
+    options="--dirs --update --perms --check-all --list-threads 10 --list-depth 5"
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    touch jfs_source/symlink_1
+    for i in {1..41}; do
+        ln -s symlink_$i jfs_source/symlink_$((i+1))
+    done
+    ./juicefs sync jfs_source/ /jfs/jfs_source/ $options  2>&1 | tee err.log || true
+    grep "Failed to handle 1 objects" err.log
+    rm -rf jfs_source/symlink_*
+}
+
+skip_test_sync_fsrand_with_mount_point(){
+    generate_fsrand
+    do_test_sync_fsrand_with_mount_point 
+    do_test_sync_fsrand_with_mount_point --list-threads 10 --list-depth 5
+    do_test_sync_fsrand_with_mount_point --dirs --update --perms --check-all 
+    do_test_sync_fsrand_with_mount_point --dirs --update --perms --check-all --list-threads 10 --list-depth 5
+}
+
+do_test_sync_fsrand_with_mount_point(){
+    prepare_test
+    options=$@
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs
+    ./juicefs sync fsrand/ /jfs/fsrand/ $options --links
+
+    if [[ ! "$options" =~ "--dirs" ]]; then
+        find jfs_source -type d -empty -delete
+    fi
+    diff -ur --no-dereference fsrand/ /jfs/fsrand/
 }
 
 test_sync_randomly(){
@@ -155,11 +201,5 @@ test_file_head(){
     diff -ur jfs_source/ /jfs/jfs_source
 }
 
-prepare_test()
-{
-    umount_jfs /jfs $META_URL
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm -rf /var/jfs/myjfs || true
-}
 
 source .github/scripts/common/run_test.sh && run_test $@

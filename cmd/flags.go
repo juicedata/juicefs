@@ -47,6 +47,10 @@ func globalFlags() []cli.Flag {
 			Usage:  "set log level (trace, debug, info, warn, error, fatal, panic)",
 			Hidden: true,
 		},
+		&cli.StringFlag{
+			Name:  "log-id",
+			Usage: "append the given log id in log, use \"random\" to use random uuid",
+		},
 		&cli.BoolFlag{
 			Name:  "no-agent",
 			Usage: "disable pprof (:6060) agent",

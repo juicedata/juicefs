@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -343,8 +342,8 @@ func objbench(ctx *cli.Context) error {
 		seed:        make([]byte, bSize),
 		smallSeed:   make([]byte, smallBSize),
 	}
-	rand.Read(bm.seed)
-	rand.Read(bm.smallSeed)
+	randRead(bm.seed)
+	randRead(bm.smallSeed)
 
 	for _, api := range apis {
 		pResult = append(pResult, bm.run(api))
@@ -569,7 +568,7 @@ func (bm *benchMarkObj) head(key string, startKey int) error {
 }
 
 func (bm *benchMarkObj) list(key string, startKey int) error {
-	result, err := osync.ListAll(bm.blob, "", "", "")
+	result, err := osync.ListAll(bm.blob, "", "", "", true)
 	for range result {
 	}
 	return err
@@ -588,7 +587,7 @@ func (bm *benchMarkObj) chtimes(key string, startKey int) error {
 }
 
 func listAll(s object.ObjectStorage, prefix, marker string, limit int64) ([]object.Object, error) {
-	ch, err := object.ListAll(s, prefix, marker)
+	ch, err := object.ListAll(s, prefix, marker, true)
 	if err == nil {
 		objs := make([]object.Object, 0)
 		for obj := range ch {
@@ -675,7 +674,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 
 	runCase("create a bucket", func(blob object.ObjectStorage) error {
 		created := true
-		if err := blob.Put(key, bytes.NewReader(nil)); err != nil {
+		if err := blob.Put(key, bytes.NewReader([]byte("1"))); err != nil {
 			created = false
 		}
 		defer blob.Delete(key) //nolint:errcheck
@@ -893,10 +892,10 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 	runCase("special key", func(blob object.ObjectStorage) error {
 		key := "测试编码文件" + `{"name":"juicefs"}` + string('\u001F')
 		defer blob.Delete(key) //nolint:errcheck
-		if err := blob.Put(key, bytes.NewReader(nil)); err != nil {
+		if err := blob.Put(key, bytes.NewReader([]byte("1"))); err != nil {
 			return fmt.Errorf("put encode file failed: %s", err)
 		} else {
-			if resp, err := blob.List("", "测试编码文件", "", 1); err != nil && err != utils.ENOTSUP {
+			if resp, err := blob.List("", "测试编码文件", "", 1, true); err != nil && err != utils.ENOTSUP {
 				return fmt.Errorf("list encode file failed %s", err)
 			} else if len(resp) == 1 && resp[0].Key() != key {
 				return fmt.Errorf("list encode file failed: expect key %s, but got %s", key, resp[0].Key())
@@ -909,14 +908,14 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		fsize := 256 << 20
 		buffL := 4 << 20
 		buff := make([]byte, buffL)
-		rand.Read(buff)
+		randRead(buff)
 		count := int(math.Floor(float64(fsize) / float64(buffL)))
 		content := make([]byte, fsize)
 		for i := 0; i < count; i++ {
 			copy(content[i*buffL:(i+1)*buffL], buff)
 		}
 		if err := blob.Put(key, bytes.NewReader(content)); err != nil {
-			return fmt.Errorf("put big object failed: %s", err)
+			return err
 		}
 		defer blob.Delete(key) //nolint:errcheck
 		return nil
@@ -926,12 +925,12 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		// Copy empty objects
 		defer blob.Delete("empty_test_file") //nolint:errcheck
 		if err := blob.Put("empty_test_file", bytes.NewReader([]byte{})); err != nil {
-			return fmt.Errorf("put empty object failed: %s", err)
+			return err
 		}
 
 		// Copy `/` suffixed object
 		defer blob.Delete("slash_test_file/") //nolint:errcheck
-		if err := blob.Put("slash_test_file/", bytes.NewReader([]byte{})); err != nil {
+		if err := blob.Put("slash_test_file/", bytes.NewReader([]byte("1"))); err != nil {
 			return fmt.Errorf("put `/` suffixed object failed: %s", err)
 		}
 		return nil
@@ -951,7 +950,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			}
 			total := 3
 			seed := make([]byte, upload.MinPartSize)
-			rand.Read(seed)
+			randRead(seed)
 			parts := make([]*object.Part, total)
 			content := make([][]byte, total)
 			for i := 0; i < total; i++ {

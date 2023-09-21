@@ -1,13 +1,13 @@
 ---
 title: 在 Colab 上通过 Google CloudSQL 和 GCS 使用 JuiceFS
-sidebar_position: 4
+sidebar_position: 5
 slug: /juicefs_on_colab
 ---
 
 [Colaboratory](https://colab.research.google.com), 或者简称“Colab”, 是 Google Research 的产品，它允许任何人通过浏览器编写和执行 Python 代码，特别适合机器学习、数据分析和教育。
 Colab 支持从 Google Drive 将文件上传到 Colab 实例或从 Colab 实例下载文件。然而在某些情况下，Google Drive 可能不太方便与 Colab 一起使用，在这种情况下，JuiceFS 是一个很有用的工具，因为他允许在 Colab 实例之间，或在 Colab 实例与本地或本地机器之间轻松的同步文件。[这里是一个使用了 JuiceFS 的 Colab 笔记本示例](https://colab.research.google.com/drive/1wA8vRwqiihXkI6ViDU8Ud868UeYtmCo5)
 
-说明下在 Colab 环境中使用 JuiceFS 的必要步骤。我们使用 Google CloudSQL 作为 JuiceFS 的元数据引擎，使用 Google Cloud Storage (GCS) 作为 JuiceFS 的对象存储。其他类型的元数据引擎与对象存储可以参考 [如何设置元数据引擎](../guide/how_to_set_up_metadata_engine.md) 和 [如何设置对象存储](../guide/how_to_set_up_object_storage.md)。
+说明下在 Colab 环境中使用 JuiceFS 的必要步骤。我们使用 Google CloudSQL 作为 JuiceFS 的元数据引擎，使用 Google Cloud Storage (GCS) 作为 JuiceFS 的对象存储。其他类型的元数据引擎与对象存储可以参考 [如何设置元数据引擎](../reference/how_to_set_up_metadata_engine.md) 和 [如何设置对象存储](../reference/how_to_set_up_object_storage.md)。
 
 下面将要提到的很多步骤你可以也参考 [快速上手指南](../getting-started/for_distributed.md)。
 

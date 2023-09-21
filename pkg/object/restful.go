@@ -38,7 +38,6 @@ var resolver = dnscache.New(time.Minute)
 var httpClient *http.Client
 
 func init() {
-	rand.Seed(time.Now().Unix())
 	httpClient = &http.Client{
 		Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
@@ -261,7 +260,7 @@ func (s *RestfulStorage) Delete(key string) error {
 	return nil
 }
 
-func (s *RestfulStorage) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (s *RestfulStorage) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	return nil, notSupported
 }
 

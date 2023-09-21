@@ -71,7 +71,7 @@ $ juicefs format mysql://jfs:mypassword@(127.0.0.1:3306)/juicefs myjfs
 $ META_PASSWORD=mypassword juicefs format mysql://jfs:@(127.0.0.1:3306)/juicefs myjfs
 
 # Create a volume with "quota" enabled
-$ juicefs format sqlite3://myjfs.db myjfs --inode 1000000 --capacity 102400
+$ juicefs format sqlite3://myjfs.db myjfs --inodes 1000000 --capacity 102400
 
 # Create a volume with "trash" disabled
 $ juicefs format sqlite3://myjfs.db myjfs --trash-days 0
@@ -274,8 +274,9 @@ var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012345
 
 func randSeq(n int) string {
 	b := make([]rune, n)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+		b[i] = letters[r.Intn(len(letters))]
 	}
 	return string(b)
 }
@@ -319,10 +320,9 @@ func doTesting(store object.ObjectStorage, key string, data []byte) error {
 }
 
 func test(store object.ObjectStorage) error {
-	rand.Seed(time.Now().UnixNano())
 	key := "testing/" + randSeq(10)
 	data := make([]byte, 100)
-	_, _ = rand.Read(data)
+	randRead(data)
 	nRetry := 3
 	var err error
 	for i := 0; i < nRetry; i++ {
@@ -416,25 +416,26 @@ func format(c *cli.Context) error {
 	} else if strings.HasPrefix(err.Error(), "database is not formatted") {
 		create = true
 		format = &meta.Format{
-			Name:         name,
-			UUID:         uuid.New().String(),
-			Storage:      c.String("storage"),
-			StorageClass: c.String("storage-class"),
-			Bucket:       c.String("bucket"),
-			AccessKey:    c.String("access-key"),
-			SecretKey:    c.String("secret-key"),
-			SessionToken: c.String("session-token"),
-			EncryptKey:   loadEncrypt(c.String("encrypt-rsa-key")),
-			EncryptAlgo:  c.String("encrypt-algo"),
-			Shards:       c.Int("shards"),
-			HashPrefix:   c.Bool("hash-prefix"),
-			Capacity:     c.Uint64("capacity") << 30,
-			Inodes:       c.Uint64("inodes"),
-			BlockSize:    fixObjectSize(c.Int("block-size")),
-			Compression:  c.String("compress"),
-			TrashDays:    c.Int("trash-days"),
-			DirStats:     true,
-			MetaVersion:  meta.MaxVersion,
+			Name:             name,
+			UUID:             uuid.New().String(),
+			Storage:          c.String("storage"),
+			StorageClass:     c.String("storage-class"),
+			Bucket:           c.String("bucket"),
+			AccessKey:        c.String("access-key"),
+			SecretKey:        c.String("secret-key"),
+			SessionToken:     c.String("session-token"),
+			EncryptKey:       loadEncrypt(c.String("encrypt-rsa-key")),
+			EncryptAlgo:      c.String("encrypt-algo"),
+			Shards:           c.Int("shards"),
+			HashPrefix:       c.Bool("hash-prefix"),
+			Capacity:         c.Uint64("capacity") << 30,
+			Inodes:           c.Uint64("inodes"),
+			BlockSize:        fixObjectSize(c.Int("block-size")),
+			Compression:      c.String("compress"),
+			TrashDays:        c.Int("trash-days"),
+			DirStats:         true,
+			MetaVersion:      meta.MaxVersion,
+			MinClientVersion: "1.1.0-A",
 		}
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
@@ -473,7 +474,7 @@ func format(c *cli.Context) error {
 			logger.Fatalf("Storage %s is not configured correctly: %s", blob, err)
 		}
 		if create {
-			if objs, err := osync.ListAll(blob, "", "", ""); err == nil {
+			if objs, err := osync.ListAll(blob, "", "", "", true); err == nil {
 				for o := range objs {
 					if o == nil {
 						logger.Warnf("List storage %s failed", blob)

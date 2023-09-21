@@ -35,7 +35,7 @@ Click in the workspace to enter the application management, select "App Reposito
 - Repository name: `juicefs-csi-driver`
 - Index URL: `https://juicedata.github.io/charts/`
 
-![](../images/kubesphere_app_shop_en.png)
+![kubesphere_app_shop_en](../images/kubesphere_app_shop_en.png)
 
 #### Method two: Application Template
 
@@ -43,17 +43,17 @@ Download the chart compressed package from the JuiceFS CSI Driver warehouse: <ht
 
 In the "Workspace", click to enter the "App Management", select "App Templates", click "create", upload the chart compression package:
 
-![](../images/kubesphere_app_template_en.png)
+![kubesphere_app_template_en](../images/kubesphere_app_template_en.png)
 
 ### Install
 
 Select "Project" where you want to deploy in the "Workspace" (the project in KubeSphere is the namespace in K8s), select "Apps", click the "create" button, select "From App Store", and then Select `juicefs`:
 
-![](../images/kubesphere_shop_juicefs_en.png)
+![kubesphere_shop_juicefs_en](../images/kubesphere_shop_juicefs_en.png)
 
 If KubeSphere version is lower than v3.2.0, select button "From App Template" according to the application template configured in the previous step:
 
-![](../images/kubesphere_install_csi_en.png)
+![kubesphere_install_csi_en](../images/kubesphere_install_csi_en.png)
 
 It's the same after entering the configuration modification page, modify the following two places:
 
@@ -64,17 +64,17 @@ It's the same after entering the configuration modification page, modify the fol
 
 You can also quickly create databases (such as Redis) and object storage (such as MinIO) by KubeSphere's app store. For example, build on the KubeSphere platform Redis: Select "Apps" in the current project, click the "create" button, select "From App Store", select "Redis", and then quickly deploy. The access URL of Redis can be the service name of the deployed application, as follows:
 
-![](../images/kubesphere_redis_en.png)
+![kubesphere_redis_en](../images/kubesphere_redis_en.png)
 
 Deploying MinIO on the KubeSphere platform is a similar process, but you can modify the accessKey and secretKey of MinIO before deploying MinIO, and you need to remember the configured values. As shown below:
 
-![](../images/kubesphere_create_minio_en.png)
+![kubesphere_create_minio_en](../images/kubesphere_create_minio_en.png)
 
 > Attention: If there are permissions error when deploying MinIO, you can set the `securityContext.enables` in the configuration to false.
 
 MinIO's access URL can be the service name of the deployed application, as follows:
 
-![](../images/kubesphere_minio_en.png)
+![kubesphere_minio_en](../images/kubesphere_minio_en.png)
 
 After both Redis and MinIO are set up, you can fill in the `backend` value of JuiceFS CSI Driver.
 
@@ -83,7 +83,7 @@ After both Redis and MinIO are set up, you can fill in the `backend` value of Ju
 3. `bucket` is the available bucket of MinIO just created (JuiceFS will automatically create it, no need to create it manually), the access address of MinIO can be the service name corresponding to the MinIO application, such as `http://minio-qkp9my:9000/minio/test`
 4. `accessKey` and `secretKey` are the accessKey and secretKey of MinIO just created
 
-![](../images/kubesphere_update_csi_en.png)
+![kubesphere_update_csi_en](../images/kubesphere_update_csi_en.png)
 
 After the configuration is modified, click "Install".
 
@@ -95,17 +95,17 @@ The JuiceFS CSI Driver installed above has created a `StorageClass`, for example
 
 Then you need to create a PVC. In "Project", select "Storage Management", then select "Storage Volume", click the " Create" button to create a PVC, and select `juicefs-sc` for the "StorageClass", as follows:
 
-![](../images/kubesphere_pvc_en.png)
+![kubesphere_pvc_en](../images/kubesphere_pvc_en.png)
 
 After the PVC is created, in the "Apps" of "Project", select "Workloads", click "Create" button to deploy the workload, and fill in your favorite name on the "Basic Information" page; the "Container Image" page can fill in the mirror image `centos`; Start command `sh,-c,while true; do echo $(date -u) >> /data/out.txt; sleep 5; done`; "Mount Volume" select "Existing Volume", and then select PVC created in one step, fill in the path in the container with `/data` as follows:
 
-![](../images/kubesphere_deployment_en.png)
+![kubesphere_deployment_en](../images/kubesphere_deployment_en.png)
 
-![](../images/kubesphere_workload_en.png)
+![kubesphere_workload_en](../images/kubesphere_workload_en.png)
 
 After the deployment completed, you can see the running pod:
 
-![](../images/kubesphere_pod_en.png)
+![kubesphere_pod_en](../images/kubesphere_pod_en.png)
 
 ### Create StorageClass
 
@@ -113,15 +113,15 @@ If you did not create a `StorageClass` when installing JuiceFS CSI Driver, or yo
 
 After preparing the metadata service and object storage service, create a new `Secret`. On the "Platform Management" page, select "Configuration", select "Secret", and click the "Create" button to create a new one:
 
-![](../images/kubesphere_secret_en.png)
+![kubesphere_secret_en](../images/kubesphere_secret_en.png)
 
 Fill in the metadata service and object storage information in "Data Settings", as follows:
 
-![](../images/kubesphere_update_secret_en.png)
+![kubesphere_update_secret_en](../images/kubesphere_update_secret_en.png)
 
 After creating `Secret`, create `StorageClass`, select "Storage" on the "Platform Management" page, select "Storage Classes", click the "Create" button to create a new one, and select "Custom" for "Storage Class":
 
-![](../images/kubesphere_sc_create_en.png)
+![kubesphere_sc_create_en](../images/kubesphere_sc_create_en.png)
 
 The setting page information is as follows, where "Storage System" fills in `csi.juicefs.com`, and 4 more parameters are set:
 
@@ -130,6 +130,6 @@ The setting page information is as follows, where "Storage System" fills in `csi
 - `csi.storage.k8s.io/node-publish-secret-name`: secret name
 - `csi.storage.k8s.io/node-publish-secret-namespace`: project of secret
 
-![](../images/kubesphere_sc_update_en.png)
+![kubesphere_sc_update_en](../images/kubesphere_sc_update_en.png)
 
 After clicking the "Create" button, the `StorageClass` is created.

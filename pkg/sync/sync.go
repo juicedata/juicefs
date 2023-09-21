@@ -73,14 +73,9 @@ func formatSize(bytes int64) string {
 }
 
 // ListAll on all the keys that starts at marker from object storage.
-func ListAll(store object.ObjectStorage, prefix, start, end string, noFollow ...bool) (<-chan object.Object, error) {
+func ListAll(store object.ObjectStorage, prefix, start, end string, followLink bool) (<-chan object.Object, error) {
 	startTime := time.Now()
 	logger.Debugf("Iterating objects from %s with prefix %s start %q", store, prefix, start)
-	follow := true
-	if len(noFollow) > 0 && noFollow[0] {
-		follow = false
-	}
-
 	out := make(chan object.Object, maxResults*10)
 
 	// As the result of object storage's List method doesn't include the marker key,
@@ -92,7 +87,7 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, noFollow ...
 		}
 	}
 
-	if ch, err := store.ListAll(prefix, start); err == nil {
+	if ch, err := store.ListAll(prefix, start, followLink); err == nil {
 		go func() {
 			for obj := range ch {
 				if obj != nil && end != "" && obj.Key() > end {
@@ -109,9 +104,9 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, noFollow ...
 
 	marker := start
 	logger.Debugf("Listing objects from %s marker %q", store, marker)
-	objs, err := store.List(prefix, marker, "", maxResults)
+	objs, err := store.List(prefix, marker, "", maxResults, followLink)
 	if err == utils.ENOTSUP {
-		return object.ListAllWithDelimiter(store, prefix, start, end, follow)
+		return object.ListAllWithDelimiter(store, prefix, start, end, followLink)
 	}
 	if err != nil {
 		logger.Errorf("Can't list %s: %s", store, err.Error())
@@ -147,13 +142,13 @@ func ListAll(store object.ObjectStorage, prefix, start, end string, noFollow ...
 			marker = lastkey
 			startTime = time.Now()
 			logger.Debugf("Continue listing objects from %s marker %q", store, marker)
-			objs, err = store.List(prefix, marker, "", maxResults)
+			objs, err = store.List(prefix, marker, "", maxResults, followLink)
 			count := 0
 			for err != nil && count < 3 {
 				logger.Warnf("Fail to list: %s, retry again", err.Error())
 				// slow down
 				time.Sleep(time.Millisecond * 100)
-				objs, err = store.List(prefix, marker, "", maxResults)
+				objs, err = store.List(prefix, marker, "", maxResults, followLink)
 				count++
 			}
 			logger.Debugf("Found %d object from %s in %s", len(objs), store, time.Since(startTime))
@@ -326,8 +321,8 @@ func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, erro
 	return equal, err
 }
 
-var streamRead = map[string]struct{}{"file": {}, "hdfs": {}, "sftp": {}}
-var streamWrite = map[string]struct{}{"file": {}, "hdfs": {}, "sftp": {}, "gs": {}, "wasb": {}, "ceph": {}, "swift": {}, "webdav": {}, "upyun": {}, "jfs": {}}
+var fastStreamRead = map[string]struct{}{"file": {}, "hdfs": {}, "jfs": {}, "gluster": {}}
+var streamWrite = map[string]struct{}{"file": {}, "hdfs": {}, "sftp": {}, "gs": {}, "wasb": {}, "ceph": {}, "swift": {}, "webdav": {}, "upyun": {}, "jfs": {}, "gluster": {}}
 var readInMem = map[string]struct{}{"mem": {}, "etcd": {}, "redis": {}, "tikv": {}, "mysql": {}, "postgres": {}, "sqlite3": {}}
 
 func inMap(obj object.ObjectStorage, m map[string]struct{}) bool {
@@ -336,7 +331,7 @@ func inMap(obj object.ObjectStorage, m map[string]struct{}) bool {
 }
 
 func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
-	if size > maxBlock && !inMap(dst, readInMem) && !inMap(src, streamRead) {
+	if size > maxBlock && !inMap(dst, readInMem) && !inMap(src, fastStreamRead) {
 		var err error
 		var in io.Reader
 		downer := newParallelDownloader(src, key, size, 10<<20, concurrent)
@@ -641,12 +636,12 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 	start, end := config.Start, config.End
 	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
 
-	srckeys, err := ListAll(src, prefix, start, end, config.Links)
+	srckeys, err := ListAll(src, prefix, start, end, !config.Links)
 	if err != nil {
 		return fmt.Errorf("list %s: %s", src, err)
 	}
 
-	dstkeys, err := ListAll(dst, prefix, start, end, config.Links)
+	dstkeys, err := ListAll(dst, prefix, start, end, !config.Links)
 	if err != nil {
 		return fmt.Errorf("list %s: %s", dst, err)
 	}
@@ -848,11 +843,11 @@ func matchKey(rules []rule, key string) bool {
 	return true
 }
 
-func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.Object) (chan object.Object, error) {
+func listCommonPrefix(store object.ObjectStorage, prefix string, cp chan object.Object, followLink bool) (chan object.Object, error) {
 	var total []object.Object
 	var marker string
 	for {
-		objs, err := store.List(prefix, marker, "/", maxResults)
+		objs, err := store.List(prefix, marker, "/", maxResults, followLink)
 		if err != nil {
 			return nil, err
 		}
@@ -936,7 +931,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 		}
 	}()
 
-	srckeys, err := listCommonPrefix(src, prefix, commonPrefix)
+	srckeys, err := listCommonPrefix(src, prefix, commonPrefix, !config.Links)
 	if err == utils.ENOTSUP {
 		return startSingleProducer(tasks, src, dst, prefix, config)
 	} else if err != nil {
@@ -946,7 +941,7 @@ func startProducer(tasks chan<- object.Object, src, dst object.ObjectStorage, pr
 	if config.DeleteDst {
 		dcp = commonPrefix // search common prefix in dst
 	}
-	dstkeys, err := listCommonPrefix(dst, prefix, dcp)
+	dstkeys, err := listCommonPrefix(dst, prefix, dcp, !config.Links)
 	if err == utils.ENOTSUP {
 		return startSingleProducer(tasks, src, dst, prefix, config)
 	} else if err != nil {
@@ -1034,7 +1029,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	if config.Manager == "" {
 		if len(config.Workers) > 0 {
-			addr, err := startManager(tasks)
+			addr, err := startManager(config, tasks)
 			if err != nil {
 				return err
 			}

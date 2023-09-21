@@ -1,6 +1,4 @@
-#!/bin/bash
-set -ex
-python3 -c "import minio" || sudo pip install minio 
+#!/bin/bash -e
 source .github/scripts/common/common.sh
 
 [[ -z "$META" ]] && META=sqlite3
@@ -45,13 +43,5 @@ test_sync_dir_stat()
     ./juicefs info -r /jfs/d --strict | tee info2.log
     diff info1.log info2.log
 }
-
-prepare_test()
-{
-    umount_jfs /jfs $META_URL
-    python3 .github/scripts/flush_meta.py $META_URL
-    rm -rf /var/jfs/myjfs
-}
-
 
 source .github/scripts/common/run_test.sh && run_test $@

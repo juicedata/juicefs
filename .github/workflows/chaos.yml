@@ -39,7 +39,7 @@ jobs:
 
       - name: Build 
         run: | 
-          sudo apt-get update && sudo apt-get install -y musl-tools upx-ucl
+          sudo .github/scripts/apt_install.sh musl-tools upx-ucl
           export STATIC=1
           make juicefs
 

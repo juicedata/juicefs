@@ -1,6 +1,6 @@
 ---
 title: How to Set Up Object Storage
-sidebar_position: 2
+sidebar_position: 3
 slug: /how_to_setup_object_storage
 description: This article introduces the object storages supported by JuiceFS and how to configure and use it.
 ---
@@ -10,7 +10,7 @@ import TabItem from '@theme/TabItem';
 
 As you can learn from [JuiceFS Technical Architecture](../introduction/architecture.md), JuiceFS is a distributed file system with data and metadata stored separately. JuiceFS uses object storage as the main data storage and uses databases such as Redis, PostgreSQL and MySQL as metadata storage.
 
-## Storage options
+## Storage options {#storage-options}
 
 When creating a JuiceFS file system, there are following options to set up the storage:
 
@@ -29,13 +29,13 @@ juicefs format --storage s3 \
     myjfs
 ```
 
-## Other options
+## Other options {#other-options}
 
 When executing the `juicefs format` or `juicefs mount` command, you can set some special options in the form of URL parameters in the `--bucket` option, such as `tls-insecure-skip-verify=true` in `https://myjuicefs.s3.us-east-2.amazonaws.com?tls-insecure-skip-verify=true` is to skip the certificate verification of HTTPS requests.
 
-## Enable data sharding
+## Enable data sharding {#enable-data-sharding}
 
-When creating a file system, multiple buckets can be defined as the underlying storage of the file system through the [--shards](../reference/command_reference.md#format) option. In this way, the system will distribute the files to multiple buckets based on the hashed value of the file name. Data sharding technology can distribute the load of concurrent writing of large-scale data to multiple buckets, thereby improving the writing performance.
+When creating a file system, multiple buckets can be defined as the underlying storage of the file system through the [`--shards`](../reference/command_reference.md#format-data-format-options) option. In this way, the system will distribute the files to multiple buckets based on the hashed value of the file name. Data sharding technology can distribute the load of concurrent writing of large-scale data to multiple buckets, thereby improving the writing performance.
 
 The following are points to note when using the data sharding function:
 
@@ -55,7 +55,7 @@ juicefs format --storage s3 \
 
 After executing the above command, the JuiceFS client will create 4 buckets named `myjfs-0`, `myjfs-1`, `myjfs-2`, and `myjfs-3`.
 
-## Access Key and Secret Key
+## Access Key and Secret Key {#aksk}
 
 In general, object storages are authenticated with Access Key ID and Access Key Secret. For JuiceFS file system, they are provided by options `--access-key` and `--secret-key` (or AK, SK for short).
 
@@ -72,15 +72,15 @@ juicefs format --storage s3 \
 
 Public clouds typically allow users to create IAM (Identity and Access Management) roles, such as [AWS IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) or [Alibaba Cloud RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm), which can be assigned to VM instances. If the cloud server instance already has read and write access to the object storage, there is no need to specify `--access-key` and `--secret-key`.
 
-## Use temporary access credentials
+## Use temporary access credentials {#session-token}
 
 Permanent access credentials generally have two parts, Access Key, Secret Key, while temporary access credentials generally include three parts, Access Key, Secret Key and token, and temporary access credentials have an expiration time, usually between a few minutes and a few hours.
 
-### How to get temporary credentials
+### How to get temporary credentials {#how-to-get-temporary-credentials}
 
 Different cloud vendors have different acquisition methods. Generally, the Access Key, Secret Key and ARN representing the permission boundary of the temporary access credential are required as parameters to request access to the STS server of the cloud service vendor to obtain the temporary access credential. This process can generally be simplified by the SDK provided by the cloud vendor. For example, Amazon S3 can refer to this [link](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html) to obtain temporary credentials, and Alibaba Cloud OSS can refer to this [link](https://www.alibabacloud.com/help/en/object-storage-service/latest/use-a-temporary-credential-provided-by-sts-to-access-oss).
 
-### How to set up object storage with temporary access credentials
+### How to set up object storage with temporary access credentials {#how-to-set-up-object-storage-with-temporary-access-credentials}
 
 The way of using temporary credentials is not much different from using permanent credentials. When formatting the file system, pass the Access Key, Secret Key, and token of the temporary credentials through `--access-key`, `--secret-key`, `--session-token` can set the value. E.g:
 
@@ -102,7 +102,7 @@ Since temporary credentials expire quickly, the key is how to update the tempora
 
 Newly mounted clients will use the new credentials directly, and all clients already running will also update their credentials within a minute. The entire update process will not affect the running business. Due to the short expiration time of the temporary credentials, the above steps need to **be executed in a long-term loop** to ensure that the JuiceFS service can access the object storage normally.
 
-## Internal and Public Endpoint
+## Internal and public endpoint {#internal-and-public-endpoint}
 
 Typically, object storage services provide a unified URL for access, but the cloud platform usually provides both internal and external endpoints. For example, the platform cloud services that meet the criteria will automatically resolve requests to the internal endpoint of the object storage. This offers you a lower latency, and internal network traffic is free.
 
@@ -115,15 +115,19 @@ JuiceFS also provides flexible support for this object storage service that dist
 
 Creating a file system using an internal Endpoint ensures better performance and lower latency, and for clients that cannot be accessed through an internal address, you can specify a public Endpoint to mount with the option `--bucket`.
 
-## Storage Class {#storage-class}
+## Storage class <VersionAdd>1.1</VersionAdd> {#storage-class}
 
-Object storage usually supports multiple storage classes, such as standard storage, infrequent access storage, and archive storage. When creating an object storage bucket you can choose an appropriate storage class according to your actual needs, or automatically convert the storage class of existing objects through lifecycle management. Storage classes that support real-time access to data (e.g. standard storage and infrequent access storage) can be used as the underlying JuiceFS data store, while those that require thawing for access in advance (e.g. archive storage) cannot.
+Object storage usually supports multiple storage classes, such as standard storage, infrequent access storage, and archive storage. Different storage classes will have different prices and availability, you can set the default storage class with the [`--storage-class`](../reference/command_reference.md#format-data-storage-options) option when creating the JuiceFS file system, or set a new storage class with the [`--storage-class`](../reference/command_reference.md#mount-data-storage-options) option when mounting the JuiceFS file system. Please refer to the user manual of the object storage you are using to see how to set the value of the `--storage-class` option (such as [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html#AmazonS3-PutObject-request-header-StorageClass)).
+
+:::note
+When using certain storage classes (such as archive and deep archive), the data cannot be accessed immediately, and the data needs to be restored in advance and accessed after a period of time.
+:::
 
 :::note
 When using certain storage classes (such as infrequent access), there are minimum bill units, and additional charges may be incurred for reading data. Please refer to the user manual of the object storage you are using for details.
 :::
 
-## Using Proxy
+## Using proxy {#using-proxy}
 
 If the network environment where the client is located is affected by firewall policies or other factors that require access to external object storage services through a proxy, the corresponding proxy settings are different for different operating systems. Please refer to the corresponding user manual for settings.
 
@@ -138,12 +142,12 @@ juicefs format \
     myjfs
 ```
 
-## Supported Object Storage {#supported-object-storage}
+## Supported object storage {#supported-object-storage}
 
 If you wish to use a storage system that is not listed, feel free to submit a requirement [issue](https://github.com/juicedata/juicefs/issues).
 
 | Name                                                        | Value      |
-|-------------------------------------------------------------|------------|
+|:-----------------------------------------------------------:|:----------:|
 | [Amazon S3](#amazon-s3)                                     | `s3`       |
 | [Google Cloud Storage](#google-cloud)                       | `gs`       |
 | [Azure Blob Storage](#azure-blob-storage)                   | `wasb`     |
@@ -171,6 +175,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [UCloud US3](#ucloud-us3)                                   | `ufile`    |
 | [Ceph RADOS](#ceph-rados)                                   | `ceph`     |
 | [Ceph RGW](#ceph-rgw)                                       | `s3`       |
+| [Gluster](#gluster)                                         | `gluster`  |
 | [Swift](#swift)                                             | `swift`    |
 | [MinIO](#minio)                                             | `minio`    |
 | [WebDAV](#webdav)                                           | `webdav`   |
@@ -185,7 +190,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Local disk](#local-disk)                                   | `file`     |
 | [SFTP/SSH](#sftp)                                           | `sftp`     |
 
-## Amazon S3
+### Amazon S3
 
 S3 supports [two styles of endpoint URI](https://docs.aws.amazon.com/AmazonS3/latest/dev/VirtualHosting.html): virtual hosted-style and path-style. The difference is:
 
@@ -202,10 +207,12 @@ For AWS users in China, you need add `.cn` to the host, i.e. `amazonaws.com.cn`,
 If the S3 bucket has public access (anonymous access is supported), please set `--access-key` to `anonymous`.
 :::
 
-Versions prior to JuiceFS v0.12 only support the virtual hosting type, v0.12 and later versions support both styles. For example,
+In JuiceFS both the two styles are supported to specify the bucket address, for example:
+
+<Tabs groupId="amazon-s3-endpoint">
+  <TabItem value="virtual-hosted-style" label="Virtual-hosted-style">
 
 ```bash
-# virtual hosted-style
 juicefs format \
     --storage s3 \
     --bucket https://<bucket>.s3.<region>.amazonaws.com \
@@ -213,8 +220,10 @@ juicefs format \
     myjfs
 ```
 
+  </TabItem>
+  <TabItem value="path-style" label="Path-style">
+
 ```bash
-# path-style
 juicefs format \
     --storage s3 \
     --bucket https://s3.<region>.amazonaws.com/<bucket> \
@@ -222,10 +231,15 @@ juicefs format \
     myjfs
 ```
 
-You can also set `--storage` to `s3` to connect to S3-compatible object storage, e.g.
+  </TabItem>
+</Tabs>
+
+You can also set `--storage` to `s3` to connect to S3-compatible object storage, e.g.:
+
+<Tabs groupId="amazon-s3-endpoint">
+  <TabItem value="virtual-hosted-style" label="Virtual-hosted-style">
 
 ```bash
-# virtual hosted-style
 juicefs format \
     --storage s3 \
     --bucket https://<bucket>.<endpoint> \
@@ -233,8 +247,10 @@ juicefs format \
     myjfs
 ```
 
+  </TabItem>
+  <TabItem value="path-style" label="Path-style">
+
 ```bash
-# path-style
 juicefs format \
     --storage s3 \
     --bucket https://<endpoint>/<bucket> \
@@ -242,11 +258,14 @@ juicefs format \
     myjfs
 ```
 
+  </TabItem>
+</Tabs>
+
 :::tip
 The format of the option `--bucket` for all S3 compatible object storage services is `https://<bucket>.<endpoint>` or `https://<endpoint>/<bucket>`. The default `region` is `us-east-1`. When a different `region` is required, it can be set manually via the environment variable `AWS_REGION` or `AWS_DEFAULT_REGION`.
 :::
 
-## Google Cloud Storage {#google-cloud}
+### Google Cloud Storage {#google-cloud}
 
 Google Cloud uses [IAM](https://cloud.google.com/iam/docs/overview) to manage permissions for accessing resources. Through authorizing [service accounts](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-gcloud), you can have a fine-grained control of the access rights of cloud servers and object storage.
 
@@ -274,7 +293,7 @@ juicefs format \
 
 As you can see, there is no need to include authentication information in the command, and the client will authenticate the access to the object storage through the JSON key file set in the previous environment variable. Also, since the bucket name is [globally unique](https://cloud.google.com/storage/docs/naming-buckets#considerations), when creating a file system, you only need to specify the bucket name in the option `--bucket`.
 
-## Azure Blob Storage
+### Azure Blob Storage
 
 To use Azure Blob Storage as data storage of JuiceFS, please [check the documentation](https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage) to learn how to view the storage account name and access key, which correspond to the values ​​of the `--access-key` and `--secret-key` options, respectively.
 
@@ -306,13 +325,13 @@ juicefs format \
 For Azure users in China, the value of `EndpointSuffix` is `core.chinacloudapi.cn`.
 :::
 
-## Backblaze B2
+### Backblaze B2
 
 To use Backblaze B2 as a data storage for JuiceFS, you need to create [application key](https://www.backblaze.com/b2/docs/application_keys.html) first. **Application Key ID** and **Application Key** corresponds to Access Key and Secret Key, respectively.
 
 Backblaze B2 supports two access interfaces: the B2 native API and the S3-compatible API.
 
-### B2 native API
+#### B2 native API
 
 The storage type should be set to `b2`, and only the bucket name needs to be set in the option `--bucket`. For example:
 
@@ -326,7 +345,7 @@ juicefs format \
     myjfs
 ```
 
-### S3-compatible API
+#### S3-compatible API
 
 The storage type should be set to `s3`, and the full bucket address in the option `bucket` needs to be specified. For example:
 
@@ -340,7 +359,7 @@ juicefs format \
     myjfs
 ```
 
-## IBM Cloud Object Storage
+### IBM Cloud Object Storage
 
 When creating JuiceFS file system using IBM Cloud Object Storage, you first need to create an [API key](https://cloud.ibm.com/docs/account?topic=account-manapikey) and an [instance ID](https://cloud.ibm.com/docs/key-protect?topic=key-protect-retrieve-instance-ID). The "API key" and "instance ID" are the equivalent of access key and secret key, respectively.
 
@@ -356,7 +375,7 @@ juicefs format \
     myjfs
 ```
 
-## Oracle Cloud Object Storage
+### Oracle Cloud Object Storage
 
 Oracle Cloud Object Storage supports S3 compatible access. Please refer to [official documentation](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/s3compatibleapi.htm) for more information.
 
@@ -372,7 +391,7 @@ juicefs format \
     myjfs
 ```
 
-## Scaleway Object Storage
+### Scaleway Object Storage
 
 Please follow [this document](https://www.scaleway.com/en/docs/generate-api-keys) to learn how to get access key and secret key.
 
@@ -386,7 +405,7 @@ juicefs format \
     myjfs
 ```
 
-## DigitalOcean Spaces
+### DigitalOcean Spaces
 
 Please follow [this document](https://www.digitalocean.com/community/tutorials/how-to-create-a-digitalocean-space-and-api-key) to learn how to get access key and secret key.
 
@@ -400,7 +419,7 @@ juicefs format \
     myjfs
 ```
 
-## Wasabi
+### Wasabi
 
 Please follow [this document](https://wasabi-support.zendesk.com/hc/en-us/articles/360019677192-Creating-a-Root-Access-Key-and-Secret-Key) to learn how to get access key and secret key.
 
@@ -418,7 +437,7 @@ juicefs format \
 For users in Tokyo (ap-northeast-1) region, please refer to [this document](https://wasabi-support.zendesk.com/hc/en-us/articles/360039372392-How-do-I-access-the-Wasabi-Tokyo-ap-northeast-1-storage-region-) to learn how to get appropriate endpoint URI.***
 :::
 
-## Storj DCS
+### Storj DCS
 
 Please refer to [this document](https://docs.storj.io/api-reference/s3-compatible-gateway) to learn how to create access key and secret key.
 
@@ -438,7 +457,7 @@ juicefs format \
 Storj DCS [ListObjects](https://github.com/storj/gateway-st/blob/main/docs/s3-compatibility.md#listobjects) API is not fully S3 compatible (result list is not sorted), so some features of JuiceFS do not work. For example, `juicefs gc`, `juicefs fsck`, `juicefs sync`, `juicefs destroy`. And when using `juicefs mount`, you need to disable [automatic-backup](../administration/metadata_dump_load.md#backup-automatically) function by adding `--backup-meta 0`.
 :::
 
-## Vultr Object Storage
+### Vultr Object Storage
 
 Vultr Object Storage is an S3-compatible storage, using `s3` for `--storage` option. The format of the option `--bucket` is `https://<bucket>.<region>.vultrobjects.com/`. For example:
 
@@ -454,7 +473,7 @@ juicefs format \
 
 Please find the access and secret keys for object storage [in the customer portal](https://my.vultr.com/objectstorage).
 
-## Cloudflare R2 {#r2}
+### Cloudflare R2 {#r2}
 
 R2 is Cloudflare's object storage service and provides an S3-compatible API, so usage is the same as Amazon S3. Please refer to [Documentation](https://developers.cloudflare.com/r2/data-access/s3-api/tokens) to learn how to create Access Key and Secret Key.
 
@@ -484,7 +503,7 @@ juicefs format \
 Cloudflare R2 `ListObjects` API is not fully S3 compatible (result list is not sorted), so some features of JuiceFS do not work. For example, `juicefs gc`, `juicefs fsck`, `juicefs sync`, `juicefs destroy`. And when using `juicefs mount`, you need to disable [automatic-backup](../administration/metadata_dump_load.md#backup-automatically) function by adding `--backup-meta 0`.
 :::
 
-## Alibaba Cloud OSS
+### Alibaba Cloud OSS
 
 Please follow [this document](https://www.alibabacloud.com/help/doc-detail/125558.htm) to learn how to get access key and secret key. If you have already created [RAM role](https://www.alibabacloud.com/help/doc-detail/110376.htm) and assigned it to a VM instance, you could omit the options `--access-key` and `--secret-key`.
 
@@ -515,7 +534,7 @@ juicefs format \
     myjfs
 ```
 
-## Tencent Cloud COS
+### Tencent Cloud COS
 
 The naming rule of bucket in Tencent Cloud is `<bucket>-<APPID>`, so you must append `APPID` to the bucket name. Please follow [this document](https://intl.cloud.tencent.com/document/product/436/13312) to learn how to get `APPID`.
 
@@ -540,7 +559,7 @@ juicefs format \
     myjfs
 ```
 
-## Huawei Cloud OBS
+### Huawei Cloud OBS
 
 Please follow [this document](https://support.huaweicloud.com/usermanual-ca/zh-cn_topic_0046606340.html) to learn how to get access key and secret key.
 
@@ -565,7 +584,7 @@ juicefs format \
     myjfs
 ```
 
-## Baidu Object Storage
+### Baidu Object Storage
 
 Please follow [this document](https://cloud.baidu.com/doc/Reference/s/9jwvz2egb) to learn how to get access key and secret key.
 
@@ -590,7 +609,7 @@ juicefs format \
     myjfs
 ```
 
-## Volcano Engine TOS
+### Volcano Engine TOS <VersionAdd>1.0.3</VersionAdd> {#volcano-engine-tos}
 
 Please follow [this document](https://www.volcengine.com/docs/6291/65568) to learn how to get access key and secret key.
 
@@ -604,7 +623,7 @@ juicefs format \
     myjfs
 ```
 
-## Kingsoft Cloud KS3
+### Kingsoft Cloud KS3
 
 Please follow [this document](https://docs.ksyun.com/documents/1386) to learn how to get access key and secret key.
 
@@ -618,7 +637,7 @@ juicefs format \
     myjfs
 ```
 
-## QingStor
+### QingStor
 
 Please follow [this document](https://docsv3.qingcloud.com/storage/object-storage/api/practices/signature/#%E8%8E%B7%E5%8F%96-access-key) to learn how to get access key and secret key.
 
@@ -636,7 +655,7 @@ juicefs format \
 The format of `--bucket` option for all QingStor compatible object storage services is `http://<bucket>.<endpoint>`.
 :::
 
-## Qiniu
+### Qiniu
 
 Please follow [this document](https://developer.qiniu.com/af/kb/1479/how-to-access-or-locate-the-access-key-and-secret-key) to learn how to get access key and secret key.
 
@@ -650,7 +669,7 @@ juicefs format \
     myjfs
 ```
 
-## Sina Cloud Storage
+### Sina Cloud Storage
 
 Please follow [this document](https://scs.sinacloud.com/doc/scs/guide/quick_start#accesskey) to learn how to get access key and secret key.
 
@@ -664,7 +683,7 @@ juicefs format \
     myjfs
 ```
 
-## CTYun OOS
+### CTYun OOS
 
 Please follow [this document](https://www.ctyun.cn/help2/10000101/10473683) to learn how to get access key and secret key.
 
@@ -678,7 +697,7 @@ juicefs format \
     myjfs
 ```
 
-## ECloud Object Storage
+### ECloud Object Storage
 
 Please follow [this document](https://ecloud.10086.cn/op-help-center/doc/article/24501) to learn how to get access key and secret key.
 
@@ -692,7 +711,7 @@ juicefs format \
     myjfs
 ```
 
-## JD Cloud OSS
+### JD Cloud OSS
 
 Please follow [this document](https://docs.jdcloud.com/cn/account-management/accesskey-management)  to learn how to get access key and secret key.
 
@@ -706,7 +725,7 @@ juicefs format \
     myjfs
 ```
 
-## UCloud US3
+### UCloud US3
 
 Please follow [this document](https://docs.ucloud.cn/uai-censor/access/key) to learn how to get access key and secret key.
 
@@ -720,10 +739,12 @@ juicefs format \
     myjfs
 ```
 
-## Ceph RADOS
+### Ceph RADOS
 
 :::note
-The minimum version of Ceph supported by JuiceFS is Luminous (v12.2.*). Please make sure your version of Ceph meets the requirements.
+JuiceFS v1.0 uses `go-ceph` v0.4.0, which supports Ceph Luminous (v12.2.*) and above.
+JuiceFS v1.1 uses `go-ceph` v0.18.0, which supports Ceph Octopus (v15.2.*) and above.
+Please make sure that JuiceFS matches your Ceph version, see [`go-ceph`](https://github.com/ceph/go-ceph#supported-ceph-versions).
 :::
 
 The [Ceph Storage Cluster](https://docs.ceph.com/en/latest/rados) has a messaging layer protocol that enables clients to interact with a Ceph Monitor and a Ceph OSD Daemon. The [`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro) API enables you to interact with the two types of daemons:
@@ -783,7 +804,7 @@ juicefs.ceph format \
     myjfs
 ```
 
-## Ceph RGW
+### Ceph RGW
 
 [Ceph Object Gateway](https://ceph.io/ceph-storage/object-storage) is an object storage interface built on top of `librados` to provide applications with a RESTful gateway to Ceph Storage Clusters. Ceph Object Gateway supports S3-compatible interface, so we could set `--storage` to `s3` directly.
 
@@ -797,7 +818,48 @@ juicefs format \
     myjfs
 ```
 
-## Swift
+### Gluster
+
+[Gluster](https://github.com/gluster/glusterfs) is a software defined distributed storage that can scale to several petabytes. JuiceFS communicates with Gluster via the `libgfapi` library, so it needs to be built separately before used.
+
+First, install `libgfapi` (version 6.0+):
+
+<Tabs>
+  <TabItem value="debian" label="Debian and derivatives">
+
+```bash
+sudo apt-get install uuid-dev libglusterfs-dev glusterfs-common
+```
+
+  </TabItem>
+  <TabItem value="centos" label="RHEL and derivatives">
+
+```bash
+sudo yum install glusterfs glusterfs-api-devel glusterfs-libs
+```
+
+  </TabItem>
+</Tabs>
+
+Then compile JuiceFS supporting Gluster:
+
+```bash
+make juicefs.gluster
+```
+
+Now we can create a JuiceFS volume on Gluster:
+
+```bash
+juicefs format \
+    --storage gluster \
+    --bucket host1,host2,host3/gv0 \
+    ... \
+    myjfs
+```
+
+The format of `--bucket` option is `<host[,host...]>/<volume_name>`. Please note the `volume_name` here is the name of Gluster volume, and has nothing to do with the name of JuiceFS volume.
+
+### Swift
 
 [OpenStack Swift](https://github.com/openstack/swift) is a distributed object storage system designed to scale from a single machine to thousands of servers. Swift is optimized for multi-tenancy and high concurrency. Swift is ideal for backups, web and mobile content, and any other unstructured data that can grow without bound.
 
@@ -817,7 +879,7 @@ juicefs format \
     myjfs
 ```
 
-## MinIO
+### MinIO
 
 [MinIO](https://min.io) is an open source lightweight object storage, compatible with Amazon S3 API.
 
@@ -860,7 +922,7 @@ juicefs format \
 1. When using Multi-Node MinIO deployment, consider setting using a DNS address in the service endpoint, resolving to all MinIO Node IPs, as a simple load-balancer, e.g. `http://minio.example.com:9000/myjfs`
 :::
 
-## WebDAV
+### WebDAV
 
 [WebDAV](https://en.wikipedia.org/wiki/WebDAV) is an extension of the Hypertext Transfer Protocol (HTTP)
 that facilitates collaborative editing and management of documents stored on the WWW server among users.
@@ -878,7 +940,7 @@ juicefs format \
     myjfs
 ```
 
-## HDFS
+### HDFS
 
 [HDFS](https://hadoop.apache.org) is the file system for Hadoop, which can be used as the object storage for JuiceFS.
 
@@ -908,7 +970,7 @@ for HA cluster:
 
 For HDFS which enable Kerberos, `KRB5KEYTAB` and `KRB5PRINCIPAL` environment var can be used to set keytab and principal.
 
-## Apache Ozone
+### Apache Ozone
 
 Apache Ozone is a scalable, redundant, and distributed object storage for Hadoop. It supports S3-compatible interface, so we could set `--storage` to `s3` directly.
 
@@ -922,11 +984,11 @@ juicefs format \
     myjfs
 ```
 
-## Redis
+### Redis
 
 [Redis](https://redis.io) can be used as both metadata storage for JuiceFS and as data storage, but when using Redis as a data storage, it is recommended not to store large-scale data.
 
-### Standalone
+#### Standalone
 
 The `--bucket` option format is `redis://<host>:<port>/<db>`. The value of `--access-key` option is username. The value of `--secret-key` option is password. For example:
 
@@ -940,7 +1002,7 @@ juicefs format \
     myjfs
 ```
 
-### Redis Sentinel
+#### Redis Sentinel
 
 In Redis Sentinel mode, the format of the `--bucket` option is `redis[s]://MASTER_NAME,SENTINEL_ADDR[,SENTINEL_ADDR]:SENTINEL_PORT[/DB]`. Sentinel's password needs to be declared through the `SENTINEL_PASSWORD_FOR_OBJ` environment variable. For example:
 
@@ -955,7 +1017,7 @@ juicefs format \
     myjfs
 ```
 
-### Redis Cluster
+#### Redis Cluster
 
 In Redis Cluster mode, the format of `--bucket` option is `redis[s]://ADDR:PORT,[ADDR:PORT],[ADDR:PORT]`. For example:
 
@@ -969,7 +1031,7 @@ juicefs format \
     myjfs
 ```
 
-## TiKV
+### TiKV
 
 [TiKV](https://tikv.org) is a highly scalable, low latency, and easy to use key-value database. It provides both raw and ACID-compliant transactional key-value API.
 
@@ -993,7 +1055,7 @@ juicefs format \
 Don't use the same TiKV cluster for both metadata and data, because JuiceFS uses non-transactional protocol (RawKV) for objects and transactional protocol (TnxKV) for metadata. The TxnKV protocol has special encoding for keys, so they may overlap with keys even they has different prefixes. BTW, it's recommmended to enable [Titan](https://tikv.org/docs/latest/deploy/configure/titan) in TiKV for data cluster.
 :::
 
-### Set up TLS
+#### Set up TLS
 
 If you need to enable TLS, you can set the TLS configuration item by adding the query parameter after the bucket URL. Currently supported configuration items:
 
@@ -1014,7 +1076,7 @@ juicefs format \
     myjfs
 ```
 
-## etcd
+### etcd
 
 [etcd](https://etcd.io) is a small-scale key-value database with high availability and reliability, which can be used as both the metadata storage of JuiceFS and the data storage of JuiceFS.
 
@@ -1033,7 +1095,7 @@ juicefs format \
     myjfs
 ```
 
-### Set up TLS
+#### Set up TLS
 
 If you need to enable TLS, you can set the TLS configuration item by adding the query parameter after the bucket URL. Currently supported configuration items:
 
@@ -1059,7 +1121,7 @@ juicefs format \
 The path to the certificate needs to be an absolute path, and make sure that all machines that need to mount can use this path to access them.
 :::
 
-## SQLite
+### SQLite
 
 [SQLite](https://sqlite.org) is a small, fast, single-file, reliable, full-featured single-file SQL database engine widely used around the world.
 
@@ -1077,7 +1139,7 @@ juicefs format \
 Since SQLite is an embedded database, only the host where the database is located can access it, and cannot be used in multi-machine sharing scenarios. If a relative path is used when formatting, it will cause problems when mounting, please use an absolute path.
 :::
 
-## MySQL
+### MySQL
 
 [MySQL](https://www.mysql.com) is one of the popular open source relational databases, often used as the database of choice for web applications, both as a metadata engine for JuiceFS and for storing files data. MySQL-compatible [MariaDB](https://mariadb.org), [TiDB](https://github.com/pingcap/tidb), etc. can be used as data storage.
 
@@ -1099,7 +1161,7 @@ After the file system is created, JuiceFS creates a table named `jfs_blob` in th
 Don't miss the parentheses `()` in the `--bucket` parameter.
 :::
 
-## PostgreSQL
+### PostgreSQL
 
 [PostgreSQL](https://www.postgresql.org) is a powerful open source relational database with a complete ecology and rich application scenarios. It can be used as both the metadata engine of JuiceFS and the data storage. Other databases compatible with the PostgreSQL protocol (such as [CockroachDB](https://github.com/cockroachdb/cockroach), etc.) can also be used as data storage.
 
@@ -1117,11 +1179,11 @@ juicefs format \
 
 After the file system is created, JuiceFS creates a table named `jfs_blob` in the database to store the data.
 
-### Troubleshooting
+#### Troubleshooting
 
 The JuiceFS client uses SSL encryption to connect to PostgreSQL by default. If the connection error `pq: SSL is not enabled on the server` indicates that the database does not have SSL enabled. You can enable SSL encryption for PostgreSQL according to your business scenario, or you can add the parameter `sslmode=disable` to the bucket URL to disable encryption verification.
 
-## Local disk
+### Local disk
 
 When creating JuiceFS storage, if no storage type is specified, the local disk will be used to store data by default. The default storage path for root user is `/var/jfs`, and `~/.juicefs/local` is for ordinary users.
 
@@ -1133,7 +1195,7 @@ juicefs format redis://localhost:6379/1 test
 
 Local storage is usually only used to help users understand how JuiceFS works and to give users an experience on the basic features of JuiceFS. The created JuiceFS storage cannot be mounted by other clients within the network and can only be used on a single machine.
 
-## SFTP/SSH {#sftp}
+### SFTP/SSH {#sftp}
 
 SFTP - Secure File Transfer Protocol, It is not a type of storage. To be precise, JuiceFS reads and writes to disks on remote hosts via SFTP/SSH, thus allowing any SSH-enabled operating system to be used as a data storage for JuiceFS.
 
@@ -1149,7 +1211,7 @@ juicefs format  \
     redis://localhost:6379/1 myjfs
 ```
 
-### Notes
+#### Notes
 
 - `--bucket` is used to set the server address and storage path in the format `<IP/Domain>:[port]:<Path>`. Note that the address should not contain a protocol header, the directory name should end with `/`, and the port number is optionally defaulted to `22`, e.g. `192.168.1.11:22:myjfs/`.
 - `--access-key` set the username of the remote server

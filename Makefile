@@ -3,7 +3,7 @@ export GO111MODULE=on
 all: juicefs
 
 REVISION := $(shell git rev-parse --short HEAD 2>/dev/null)
-REVISIONDATE := $(shell git log -1 --pretty=format:'%ad' --date short 2>/dev/null)
+REVISIONDATE := $(shell git log -1 --pretty=format:'%cd' --date short 2>/dev/null)
 PKG := github.com/juicedata/juicefs/pkg/version
 LDFLAGS = -s -w
 ifneq ($(strip $(REVISION)),) # Use git clone
@@ -32,6 +32,12 @@ juicefs.ceph: Makefile cmd/*.go pkg/*/*.go
 
 juicefs.fdb: Makefile cmd/*.go pkg/*/*.go
 	go build -tags fdb -ldflags="$(LDFLAGS)"  -o juicefs.fdb .
+
+juicefs.gluster: Makefile cmd/*.go pkg/*/*.go
+	go build -tags gluster -ldflags="$(LDFLAGS)"  -o juicefs.gluster .
+
+juicefs.all: Makefile cmd/*.go pkg/*/*.go
+	go build -tags ceph,fdb,gluster -ldflags="$(LDFLAGS)"  -o juicefs.all .
 
 # This is the script for compiling the Linux version on the MacOS platform.
 # Please execute the `brew install FiloSottile/musl-cross/musl-cross` command before using it.
@@ -77,9 +83,10 @@ test.meta.non-core:
 	go test -v -cover -run='TestRedisCluster|TestPostgreSQLClient|TestLoadDumpSlow|TestEtcdClient|TestKeyDB' -count=1  -failfast -timeout=12m ./pkg/meta/... -coverprofile=cov.out
 
 test.pkg:
-	go test -v -cover -count=1  -failfast -timeout=12m $$(go list ./pkg/... | grep -v /meta) -coverprofile=cov.out
+	go test -tags gluster -v -cover -count=1  -failfast -timeout=12m $$(go list ./pkg/... | grep -v /meta) -coverprofile=cov.out
 
 test.cmd:
 	sudo JFS_GC_SKIPPEDTIME=1 MINIO_ACCESS_KEY=testUser MINIO_SECRET_KEY=testUserPassword GOMAXPROCS=8 go test -v -count=1 -failfast -cover -timeout=8m ./cmd/... -coverprofile=cov.out -coverpkg=./pkg/...,./cmd/...
+
 test.fdb:
 	go test -v -cover -count=1  -failfast -timeout=4m ./pkg/meta/ -tags fdb -run=TestFdb -coverprofile=cov.out

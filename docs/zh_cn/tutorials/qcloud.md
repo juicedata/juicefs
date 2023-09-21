@@ -1,6 +1,6 @@
 ---
 title: 在腾讯云使用 JuiceFS
-sidebar_position: 5
+sidebar_position: 8
 slug: /clouds/qcloud
 ---
 
@@ -10,7 +10,7 @@ slug: /clouds/qcloud
 
 这样的设计可以有效缩减对象存储在请求数量上的费用，同时也能让我们显著感受到 JuiceFS 带来的性能提升。
 
-![](../images/juicefs-qcloud.png)
+![JuiceFS-qcloud](../images/juicefs-qcloud.png)
 
 ## 准备
 
@@ -67,7 +67,7 @@ JuiceFS 会将数据对应的元数据全部存储在独立的数据库中，目
 
 注意，数据库的连接地址取决于你创建的 VPC 网络设置，创建 Redis 实例时会自动在你定义的网段中获取地址。
 
-![](../images/qcloud-redis-network.png)
+![qcloud-Redis-network](../images/qcloud-redis-network.png)
 
 ### 三、对象存储 COS
 
@@ -174,7 +174,7 @@ $ juicefs format \
 
 **选项说明：**
 
-- `--storage`：指定对象存储类型，[点此查看](../guide/how_to_set_up_object_storage.md#supported-object-storage) JuiceFS 支持的对象存储。
+- `--storage`：指定对象存储类型，[点此查看](../reference/how_to_set_up_object_storage.md#supported-object-storage) JuiceFS 支持的对象存储。
 - `--bucket`：对象存储的 Bucket 访问域名，可以在 COS 的管理控制台找到。
   ![cos-bucket-url](../images/cos-bucket-url.png)
 - `--access-key` 和 `--secret-key`：访问对象存储 API 的秘钥对，[点此查看](https://cloud.tencent.com/document/product/598/37140)获取方式。
@@ -283,4 +283,4 @@ sudo juicefs umount /mnt/jfs
 
 ## 开机自动挂载
 
-请参考[「启动时自动挂载 JuiceFS」](../guide/mount_at_boot.md)
+请参考[「启动时自动挂载 JuiceFS」](../administration/mount_at_boot.md)

@@ -8,12 +8,10 @@ package object
 
 import (
 	"encoding/base64"
-	"encoding/binary"
 	"fmt"
 	"github.com/jcmturner/gokrb5/v8/keytab"
 	"os"
 	"os/user"
-	"path/filepath"
 	"strings"
 
 	krb "github.com/jcmturner/gokrb5/v8/client"
@@ -35,30 +33,26 @@ func getKerberosClient() (*krb.Client, error) {
 	// Try to authenticate with keytab file first.
 	keytabPath := os.Getenv("KRB5KEYTAB")
 	keytabBase64 := os.Getenv("KRB5KEYTAB_BASE64")
+	principal := os.Getenv("KRB5PRINCIPAL")
+
+	var kt *keytab.Keytab
 	if keytabBase64 != "" {
 		decodedKeytab, err := base64.StdEncoding.DecodeString(keytabBase64)
 		if err != nil {
 			return nil, fmt.Errorf("error decoding Base64 encoded data %s", err)
 		}
-		decodedKeytabPath := filepath.Join(os.TempDir(), "decodedKeytab")
-		decodedKeytabFile, err := os.Create(decodedKeytabPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create %s", decodedKeytabPath)
-		}
-		defer decodedKeytabFile.Close()
-		// keytab file format uses network byte order
-		err = binary.Write(decodedKeytabFile, binary.BigEndian, decodedKeytab)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write %s", decodedKeytabPath)
-		}
-		keytabPath = decodedKeytabPath
-	}
-	principal := os.Getenv("KRB5PRINCIPAL")
-	if keytabPath != "" && principal != "" {
-		kt, err := keytab.Load(keytabPath)
+		kt = new(keytab.Keytab)
+		err = kt.Unmarshal(decodedKeytab)
 		if err != nil {
 			return nil, err
 		}
+	} else if keytabPath != "" {
+		kt, err = keytab.Load(keytabPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if kt != nil {
 		// e.g. KRB5PRINCIPAL="primary/instance@realm"
 		sp := strings.Split(principal, "@")
 		if len(sp) != 2 {

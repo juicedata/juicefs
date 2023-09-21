@@ -1,6 +1,6 @@
 ---
 title: Storage Quota
-sidebar_position: 5
+sidebar_position: 4
 ---
 
 JuiceFS supports both total file system quota and subdirectory quota, both of which can be used to limit the available capacity and the number of available inodes. Both file system quota and directory quota are hard limits. When the total file system quota is exhausted, subsequent writes will return `ENOSPC` (No space left) error; and when the directory quota is exhausted, subsequent writes will return `EDQUOT` (Disk quota exceeded) error.
@@ -96,7 +96,7 @@ $ juicefs config $METAURL --inodes 100
     inodes: 0 -> 100
 ```
 
-### Combine `--capacity` and `--inode` {#limit-total-capacity-and-inodes}
+### Combine `--capacity` and `--inodes` {#limit-total-capacity-and-inodes}
 
 You can combine `--capacity` and `--inodes` to set the capacity quota of a file system with more flexibility. For example, to create a file system that the total capacity limits to 100 TiB with only 100000 files to be stored:
 
@@ -125,7 +125,11 @@ The client reads the latest storage quota settings from the metadata engine ever
 
 ## Directory quota {#directory-quota}
 
-JuiceFS began to support directory-level storage quota since v1.1.0, and you can use the `juicefs quota` subcommand for directory quota management and query.
+JuiceFS began to support directory-level storage quota since v1.1, and you can use the `juicefs quota` subcommand for directory quota management and query.
+
+:::tip
+The usage statistic relies on the mount process, please do not use this feature until all writable mount processes are upgraded to v1.1.0.
+:::
 
 ### Limit directory capacity {#limit-directory-capacity}
 

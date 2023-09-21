@@ -1,6 +1,6 @@
 ---
 title: 在 DigitalOcean 使用 JuiceFS
-sidebar_position: 7
+sidebar_position: 6
 slug: /clouds/digitalocean
 ---
 
@@ -44,7 +44,7 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 本文我们使用 DigitalOcean 的 Redis 6 数据库托管服务，区域选择 `新加坡`，选择与已存在的 Droplet 相同的 VPC 私有网络。创建 Redis 大概需要 5 分钟左右的时间，我们跟随设置向导对数据库进行初始化设置。
 
-![](../images/digitalocean-redis-guide.png)
+![DigitalOcean-Redis-guide](../images/digitalocean-redis-guide.png)
 
 默认情况下 Redis 允许所有入站连接，出于安全考虑，应该在设置向导的安全设置环节，在 `Add trusted sources` 中选中有权访问 Redis 的 Droplet，即仅允许选中的主机访问 Redis。
 
@@ -54,7 +54,7 @@ JuiceFS 使用对象存储来存储所有的数据，在 DigitalOcean 上使用 
 
 Redis 的访问地址可以从控制台的 `Connection Details` 中找到，如果所有计算资源都在 DigitalOcean，则建议优先使用 VPC 私有网络进行连接，这样能最大程度的提升安全性。
 
-![](../images/digitalocean-redis-url.png)
+![DigitalOcean-Redis-url](../images/digitalocean-redis-url.png)
 
 ## 安装和使用
 
@@ -155,7 +155,7 @@ $ juicefs format \
 
 **参数说明：**
 
-- `--storage`：指定数据存储引擎，这里使用的是 `space`，点此查看所有[支持的存储](../guide/how_to_set_up_object_storage.md)。
+- `--storage`：指定数据存储引擎，这里使用的是 `space`，点此查看所有[支持的存储](../reference/how_to_set_up_object_storage.md)。
 - `--bucket`：指定存储桶访问地址。
 - `--access-key` 和 `--secret-key`：指定访问对象存储 API 的秘钥。
 - DigitalOcean 托管的 Redis 需要使用 TLS/SSL 加密访问，因此需要使用 `rediss://` 协议头，链接最后添加的 `/1` 代表使用 Redis 的 1 号数据库。
@@ -266,7 +266,7 @@ sudo juicefs umount ~/mnt
 
 ### 6. 开机自动挂载
 
-请参考[「启动时自动挂载 JuiceFS」](../guide/mount_at_boot.md)
+请参考[「启动时自动挂载 JuiceFS」](../administration/mount_at_boot.md)
 
 ### 7. 多主机共享挂载
 

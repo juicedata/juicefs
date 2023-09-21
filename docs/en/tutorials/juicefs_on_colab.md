@@ -1,6 +1,6 @@
 ---
 title: Use JuiceFS on Colab with Google CloudSQL and GCS
-sidebar_position: 4
+sidebar_position: 5
 slug: /juicefs_on_colab
 ---
 
@@ -18,8 +18,8 @@ We illustrate the needed steps for using JuiceFS in Colab environment. We use Go
 engine, and Google Cloud Storage (GCS) as the JuiceFS object storage.
 
 For other types of metadata engines or object storages, please refer
-to [the metadata engine reference doc](../guide/how_to_set_up_metadata_engine.md)
-and [the object storage reference doc](../guide/how_to_set_up_object_storage.md).
+to [the metadata engine reference doc](../reference/how_to_set_up_metadata_engine.md)
+and [the object storage reference doc](../reference/how_to_set_up_object_storage.md).
 
 Many of the steps mentioned here will be quite similar with
 the [getting started doc](../getting-started/for_distributed.md)

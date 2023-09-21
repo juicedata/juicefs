@@ -7,7 +7,7 @@ pagination_next: getting-started/for_distributed
 
 # 单机模式快速上手指南
 
-JuiceFS 文件系统由[「对象存储」](../guide/how_to_set_up_object_storage.md)和[「数据库」](../guide/how_to_set_up_metadata_engine.md)共同驱动。除了对象存储，还支持使用本地磁盘、WebDAV 和 HDFS 等作为底层存储。因此，可以使用本地磁盘和 SQLite 数据库快速创建一个单机文件系统用以了解和体验 JuiceFS。
+JuiceFS 文件系统由[「对象存储」](../reference/how_to_set_up_object_storage.md)和[「数据库」](../reference/how_to_set_up_metadata_engine.md)共同驱动。除了对象存储，还支持使用本地磁盘、WebDAV 和 HDFS 等作为底层存储。因此，可以使用本地磁盘和 SQLite 数据库快速创建一个单机文件系统用以了解和体验 JuiceFS。
 
 ## 安装客户端
 
@@ -38,7 +38,7 @@ juicefs format [command options] META-URL NAME
 3. **NAME**：是文件系统的名称。
 
 :::tip 提示
-JuiceFS 支持丰富的存储介质和元数据存储引擎，查看 [JuiceFS 支持的存储介质](../guide/how_to_set_up_object_storage.md) 和 [JuiceFS 支持的元数据存储引擎](../guide/how_to_set_up_metadata_engine.md)。
+JuiceFS 支持丰富的存储介质和元数据存储引擎，查看 [JuiceFS 支持的存储介质](../reference/how_to_set_up_object_storage.md) 和 [JuiceFS 支持的元数据存储引擎](../reference/how_to_set_up_metadata_engine.md)。
 :::
 
 ### 上手实践
@@ -61,7 +61,7 @@ juicefs format sqlite3://myjfs.db myjfs
 
 从返回的信息中可以看到，该文件系统使用 SQLite 作为元数据存储引擎，数据库文件位于当前目录，文件名为 `myjfs.db`，保存了 `myjfs` 文件系统的所有信息。它构建了完善的表结构，将用作所有数据的元信息的存储。
 
-![](../images/sqlite-info.png)
+![SQLite-info](../images/sqlite-info.png)
 
 由于没有指定任何存储相关的选项，客户端默认使用本地磁盘作为存储介质，根据返回的信息， `myjfs` 的存储路径为 `file:///Users/herald/.juicefs/local/myjfs/`，即当前用户家目录下的 `.juicefs/local/myjfs/`。
 
@@ -97,7 +97,7 @@ Windows 系统的挂载点（`MOUNTPOINT`）应该使用尚未占用的盘符，
 juicefs mount sqlite3://myjfs.db ~/jfs
 ```
 
-![](../images/sqlite-mount-local.png)
+![SQLite-mount-local](../images/sqlite-mount-local.png)
 
 默认情况下，客户端会在前台挂载文件系统。就像你在上图中看到的那样，程序会一直运行在当前终端进程中，使用 <kbd>Ctrl</kbd> + <kbd>C</kbd> 组合键或关闭终端窗口，文件系统会被卸载。
 
@@ -123,7 +123,7 @@ juicefs umount ~/jfs
 
 对象存储是一种基于 HTTP 协议的，提供简单访问 API 的网络存储服务。它的结构扁平，易于扩展，价格相对低廉，非常适合存储海量的非结构化数据。几乎所有主流的云计算平台都有提供对象存储服务，如亚马逊 S3、阿里云 OSS、Backblaze B2 等。
 
-JuiceFS 支持几乎所有的对象存储服务，查看「[JuiceFS 支持的存储介质](../guide/how_to_set_up_object_storage.md)」。
+JuiceFS 支持几乎所有的对象存储服务，查看「[JuiceFS 支持的存储介质](../reference/how_to_set_up_object_storage.md)」。
 
 一般来说，创建对象存储通常只需要 2 个环节：
 

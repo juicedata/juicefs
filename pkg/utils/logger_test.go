@@ -34,6 +34,7 @@ func TestLogger(t *testing.T) {
 	SetOutFile("") // invalid
 	SetOutFile(f.Name())
 	InitLoggers(true)
+	SetLogID("testid")
 
 	SetLogLevel(logrus.TraceLevel)
 	SetLogLevel(logrus.DebugLevel)
@@ -53,5 +54,7 @@ func TestLogger(t *testing.T) {
 		t.Fatalf("info/debug should not be logged: %s", s)
 	} else if !strings.Contains(s, "warn level") || !strings.Contains(s, "error level") {
 		t.Fatalf("warn/error should be logged: %s", s)
+	} else if !strings.Contains(s, "testid") {
+		t.Fatalf("logid \"testid\" should be logged: %s", s)
 	}
 }

@@ -28,7 +28,6 @@ type Config struct {
 	Start          string
 	End            string
 	Threads        int
-	HTTPPort       int
 	Update         bool
 	ForceUpdate    bool
 	Perms          bool
@@ -44,6 +43,7 @@ type Config struct {
 	Limit          int64
 	Manager        string
 	Workers        []string
+	ManagerAddr    string
 	ListThreads    int
 	ListDepth      int
 	BWLimit        int
@@ -149,6 +149,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Links:          c.Bool("links"),
 		Limit:          c.Int64("limit"),
 		Workers:        c.StringSlice("worker"),
+		ManagerAddr:    c.String("manager-addr"),
 		Manager:        c.String("manager"),
 		BWLimit:        c.Int("bwlimit"),
 		NoHTTPS:        c.Bool("no-https"),

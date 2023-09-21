@@ -421,8 +421,8 @@ func (fs *fileSystem) StatFs(cancel <-chan struct{}, in *fuse.InHeader, out *fus
 func (fs *fileSystem) Ioctl(cancel <-chan struct{}, in *fuse.IoctlIn, out *fuse.IoctlOut, bufIn, bufOut []byte) (status fuse.Status) {
 	ctx := fs.newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	out.Result = int32(fs.v.Ioctl(ctx, Ino(in.NodeId), in.Cmd, in.Arg, bufIn, bufOut))
-	return 0
+	err := fs.v.Ioctl(ctx, Ino(in.NodeId), in.Cmd, in.Arg, bufIn, bufOut)
+	return fuse.Status(err)
 }
 
 // Serve starts a server to serve requests from FUSE.

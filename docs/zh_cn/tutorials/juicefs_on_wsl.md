@@ -1,5 +1,6 @@
 ---
 title: 在 WSL 中使用 JuiceFS
+sidebar_position: 9
 ---
 
 WSL 全称 Windows Subsystem for Linux，即适用于 Linux 的 Windows 子系统。它可以让你在 Windows 系统环境下运行大多数 GNU/Linux 原生命令、工具和程序，且不必像用虚拟机或双系统那样产生额外的硬件开销。
@@ -10,7 +11,7 @@ WSL 全称 Windows Subsystem for Linux，即适用于 Linux 的 Windows 子系�
 
 查看当前系统的版本，可以通过组合键 <kbd>Win</kbd> + <kbd>R</kbd> 唤出运行程序，输入并运行 `winver`。
 
-![](../images/wsl/winver.png)
+![WSL/winver](../images/wsl/winver.png)
 
 确认 Windows 版本以后，以管理员身份打开 PowerShell 或 Windows 命令提示符，运行安装命令：
 
@@ -34,11 +35,11 @@ wsl --install -d ubuntu
 
 WSL 安装完成以后，即可在开始菜单找到新安装的 Linux 发行版。
 
-![](../images/wsl/startmenu.png)
+![WSL/startmenu](../images/wsl/startmenu.png)
 
 点击 Ubuntu 子系统的快捷方式，WSL 会打开 Linux 子系统的终端。初次运行会要求设置管理 Linux 子系统的用户和密码，根据提示设置即可。
 
-![](../images/wsl/init.png)
+![WSL/init](../images/wsl/init.png)
 
 这里设置的用户名和密码有以下几点需要注意：
 
@@ -85,7 +86,7 @@ JuiceFS 是数据与元数据分离的分布式文件系统，通常用对象存
 
 #### 对象存储
 
-查看「[JuiceFS 支持的数据存储](../guide/how_to_set_up_object_storage.md)」
+查看「[JuiceFS 支持的数据存储](../reference/how_to_set_up_object_storage.md)」
 
 - **Bucket Endpoint**：`https://myjfs.oss-cn-shanghai.aliyuncs.com`
 - **Access Key ID**：`ABCDEFGHIJKLMNopqXYZ`
@@ -93,7 +94,7 @@ JuiceFS 是数据与元数据分离的分布式文件系统，通常用对象存
 
 #### 数据库
 
-查看「[JuiceFS 支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)」
+查看「[JuiceFS 支持的元数据引擎](../reference/how_to_set_up_metadata_engine.md)」
 
 - **数据库地址**：`myjfs-sh-abc.redis.rds.aliyuncs.com:6379`
 - **数据库密码**：`mypassword`
@@ -136,7 +137,7 @@ sudo juicefs mount -d redis://myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1 $HOME/m
 
 如果需要从 Windows 系统访问 Linux 子系统中挂载的 JuiceFS 文件系统，在资源管理器左侧列表中找到 Linux 子系统，然后找到并打开挂载点路径即可。
 
-![](../images/wsl/access-jfs-from-win.png)
+![WSL/access-jfs-from-win](../images/wsl/access-jfs-from-win.png)
 
 有关 JuiceFS 使用方面的更多内容请查阅官方文档。
 
@@ -144,13 +145,13 @@ sudo juicefs mount -d redis://myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1 $HOME/m
 
 WSL 打通了 Windows 与 Linux 子系统，允许二者相互访问彼此系统中存储的文件。
 
-![](../images/wsl/windows-to-linux.png)
+![WSL/Windows-to-Linux](../images/wsl/windows-to-linux.png)
 
 但需要注意，从 Windows 访问 Linux 子系统或从 Linux 子系统访问 Windows 势必会因系统之间的转换而产生一定的性能开销。因此，推荐的做法是根据程序所在的系统来决定文件存储的位置，对于 Linux 子系统中的程序，它要处理的文件也应该存储在 Linux 子系统中性能才更理想。
 
 在 Linux 子系统中，WSL 将 Windows 的各个盘符挂载到了 `/mnt`，比如 C: 盘在 Linux 子系统中的挂载点是 `/mnt/c`。
 
-![](../images/wsl/mount-point.png)
+![WSL/mount-point](../images/wsl/mount-point.png)
 
 为了保证性能最优，在 WSL 中使用 JuiceFS 时，不论存储还是缓存路径都应设置在 Linux 子系统中。换言之，应该避免把存储或缓存设置在 `/mnt/c` 类似的 Windows 分区挂载点上。
 
@@ -162,4 +163,4 @@ WSL 打通了 Windows 与 Linux 子系统，允许二者相互访问彼此系统
 
 受此问题影响，通过 Windows 资源管理器向 Linux 子系统中挂载的 JuiceFS 文件系统存入文件时也会出现同样的问题。但在 Linux 子系统内部读写 JuiceFS 文件系统不受该 bug 的干扰。
 
-![](../images/wsl/zone-identifier.png)
+![WSL/zone-identifier](../images/wsl/zone-identifier.png)

@@ -6,10 +6,6 @@ slug: /comparison/juicefs_vs_s3ql
 
 与 JuiceFS 类似，S3QL 也是一款由对象存储和数据库组合驱动的开源网络文件系统，所有存入的数据会被分块后存储到亚马逊 S3、Backblaze B2、OpenStack Swift 等主流的对象存储中，相应的元数据会存储在数据库中。
 
-:::note 注意
-S3QL 已于 2022 年 11 月 9 日停止维护，详见 [S3QL 仓库](https://github.com/s3ql/s3ql)。
-:::
-
 ## 共同点
 
 - 都是通过 FUSE 模块实现对标准 POSIX 文件系统接口的支持，从而可以将海量的云端存储挂载到本地，像本地存储一样使用。
@@ -26,7 +22,7 @@ S3QL 已于 2022 年 11 月 9 日停止维护，详见 [S3QL 仓库](https://git
 
 |                       | **S3QL**           | **JuiceFS**                |
 | :-------------------- | :----------------- | :------------------------- |
-| 项目状态              | 停止维护              | 活跃开发                    |
+| 项目状态              | 活跃维护              | 活跃开发                    |
 | 元数据引擎            | SQLite             | Redis、MySQL、SQLite、TiKV |
 | 存储引擎              | 对象存储、本地磁盘 | 对象存储、WebDAV、本地磁盘 |
 | 操作系统              | Unix-like          | Linux、macOS、Windows      |
@@ -66,7 +62,7 @@ S3QL 采用 Python 开发，在安装时需要依赖 `python-devel` 3.7 及以�
 
 S3QL 会在系统中安装 12 个二进制程序，每个程序都提供一个独立的功能，如下图。
 
-![](../../images/s3ql-bin.jpg)
+![S3QL-bin](../../images/s3ql-bin.jpg)
 
 #### JuiceFS
 

@@ -1,6 +1,6 @@
 ---
 title: Mount JuiceFS at Boot Time
-sidebar_position: 2
+sidebar_position: 3
 slug: /mount_juicefs_at_boot_time
 ---
 

@@ -907,7 +907,7 @@ You can configure the compression algorithm (supporting `lz4` and `zstd`) with t
 
 #### Data encryption
 
-The RSA private key can be configured to enable [static data encryption](../security/encrypt.md) when formatting a file system with the `--encrypt-rsa-key <value>` parameter, which allows all data blocks of this file system to be encrypted before uploading to the object storage. The object name is still the same as default, while its content becomes a header plus the result of the data encryption algorithm. The header contains a random seed and the symmetric key used for decryption, and the symmetric key itself is encrypted with the RSA private key. Therefore, it is not allowed to modify the RSA private key in the [file system formatting Information](#setting), otherwise reading existing data will fail.
+The RSA private key can be configured to enable [static data encryption](../security/encryption.md) when formatting a file system with the `--encrypt-rsa-key <value>` parameter, which allows all data blocks of this file system to be encrypted before uploading to the object storage. The object name is still the same as default, while its content becomes a header plus the result of the data encryption algorithm. The header contains a random seed and the symmetric key used for decryption, and the symmetric key itself is encrypted with the RSA private key. Therefore, it is not allowed to modify the RSA private key in the [file system formatting Information](#setting), otherwise reading existing data will fail.
 
 :::note
 If both compression and encryption are enabled, the original data will be compressed and then encrypted before uploading to the object storage.

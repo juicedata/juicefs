@@ -70,7 +70,7 @@ type jfsObjects struct {
 }
 
 func (n *jfsObjects) IsCompressionSupported() bool {
-	return n.conf.Chunk.Compress != "" && n.conf.Chunk.Compress != "none"
+	return false
 }
 
 func (n *jfsObjects) IsEncryptionSupported() bool {
@@ -347,6 +347,20 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 				IsDir:   fi.IsDir(),
 				AccTime: fi.ModTime(),
 			}
+		}
+
+		// replace links to external file systems with empty files
+		if eno == syscall.ENOTSUP {
+			now := time.Now()
+			obj = minio.ObjectInfo{
+				Bucket:  bucket,
+				Name:    object,
+				ModTime: now,
+				Size:    0,
+				IsDir:   false,
+				AccTime: now,
+			}
+			eno = 0
 		}
 		return obj, jfsToObjectErr(ctx, eno, bucket, object)
 	}

@@ -201,7 +201,7 @@ func (s *obsClient) Delete(key string) error {
 	return err
 }
 
-func (s *obsClient) List(prefix, marker, delimiter string, limit int64) ([]Object, error) {
+func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	input := &obs.ListObjectsInput{
 		Bucket: s.bucket,
 		Marker: marker,
@@ -237,7 +237,7 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64) ([]Objec
 	return objs, nil
 }
 
-func (s *obsClient) ListAll(prefix, marker string) (<-chan Object, error) {
+func (s *obsClient) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	return nil, notSupported
 }
 

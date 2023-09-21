@@ -894,4 +894,31 @@ public class JuiceFileSystemTest extends TestCase {
     assertEquals("inner_sym_link", status.getPath().getName());
     assertEquals(14, status.getLen());
   }
+
+  public void testUserWithMultiGroups() throws Exception {
+    Path users = new Path("/etc/users");
+    Path groups = new Path("/etc/groups_multi");
+
+    writeFile(fs, users, "tom:2001\n");
+    writeFile(fs, groups, "groupa:3001:tom\ngroupb:3002:tom");
+
+    Configuration conf = new Configuration(cfg);
+    conf.set("juicefs.users", users.toUri().getPath());
+    conf.set("juicefs.groups", groups.toUri().getPath());
+
+    FileSystem superFs = createNewFs(conf, "hdfs", new String[]{"hadoop"});
+    Path testDir = new Path("/test_multi_group/d1");
+    superFs.mkdirs(testDir);
+    superFs.setOwner(testDir.getParent(), "hdfs", "groupb");
+    superFs.setOwner(testDir, "hdfs", "groupb");
+    superFs.setPermission(testDir.getParent(), FsPermission.createImmutable((short) 0770));
+    superFs.setPermission(testDir, FsPermission.createImmutable((short) 0770));
+
+    FileSystem tomFs = createNewFs(conf, "tom", new String[]{"randgroup"});
+    tomFs.listStatus(testDir);
+
+    superFs.delete(testDir.getParent(), true);
+    tomFs.close();
+    superFs.close();
+  }
 }

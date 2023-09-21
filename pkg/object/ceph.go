@@ -98,6 +98,9 @@ type cephReader struct {
 }
 
 func (r *cephReader) Read(buf []byte) (n int, err error) {
+	if r.limit == 0 {
+		return 0, io.EOF
+	}
 	if r.limit > 0 && int64(len(buf)) > r.limit {
 		buf = buf[:r.limit]
 	}
@@ -121,6 +124,9 @@ func (r *cephReader) Close() error {
 }
 
 func (c *ceph) Get(key string, off, limit int64) (io.ReadCloser, error) {
+	if _, err := c.Head(key); err != nil {
+		return nil, err
+	}
 	ctx, err := c.newContext()
 	if err != nil {
 		return nil, err
@@ -135,11 +141,18 @@ var cephPool = sync.Pool{
 }
 
 func (c *ceph) Put(key string, in io.Reader) error {
+	// ceph default osd_max_object_size = 128M
 	return c.do(func(ctx *rados.IOContext) error {
 		if b, ok := in.(*bytes.Reader); ok {
 			v := reflect.ValueOf(b)
 			data := v.Elem().Field(0).Bytes()
-			return ctx.WriteFull(key, data)
+			if len(data) == 0 {
+				return notSupported
+			}
+			// If the data exceeds 90M, ceph will report an error: 'rados: ret=-90, Message too long'
+			if len(data) < 85<<20 {
+				return ctx.WriteFull(key, data)
+			}
 		}
 		buf := cephPool.Get().([]byte)
 		defer cephPool.Put(buf)
@@ -153,6 +166,9 @@ func (c *ceph) Put(key string, in io.Reader) error {
 				off += uint64(n)
 			} else {
 				if err == io.EOF {
+					if off == 0 {
+						return errors.New("ceph: can't put empty file")
+					}
 					return nil
 				}
 				return err
@@ -187,7 +203,7 @@ func (c *ceph) Head(key string) (Object, error) {
 	return o, err
 }
 
-func (c *ceph) ListAll(prefix, marker string) (<-chan Object, error) {
+func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	var objs = make(chan Object, 1000)
 	err := c.do(func(ctx *rados.IOContext) error {
 		iter, err := ctx.Iter()
