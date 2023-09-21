@@ -183,7 +183,7 @@ func (n *nfsStore) Delete(key string) error {
 }
 
 func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
-	owner, group := getOwnerGroup(fi)
+	owner, group := n.getOwnerGroup(fi)
 	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
 	ff := &file{
 		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
@@ -355,6 +355,16 @@ func (n *nfsStore) ListAll(prefix, marker string, followLink bool) (<-chan Objec
 	return nil, notSupported
 }
 
+func (n *nfsStore) getOwnerGroup(info os.FileInfo) (string, string) {
+	var owner, group string
+	switch st := info.Sys().(type) {
+	case *nfs.Fattr:
+		owner = utils.UserName(int(st.UID))
+		group = utils.GroupName(int(st.GID))
+	}
+	return owner, group
+}
+
 func newNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
 	if username == "" {
 		u, err := user.Current()
@@ -379,7 +389,6 @@ func newNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
 		return nil, fmt.Errorf("unable to mount %s: %v", addr, err)
 	}
 	return &nfsStore{DefaultObjectStorage{}, username, host, path, target}, nil
-
 }
 
 func init() {
