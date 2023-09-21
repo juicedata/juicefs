@@ -201,7 +201,7 @@ func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	return ff
 }
 
-func (n *nfsStore) readDirSorted(dirname string) ([]*nfsEntry, error) {
+func (n *nfsStore) readDirSorted(dirname string, followLink bool) ([]*nfsEntry, error) {
 	entries, err := n.target.ReadDirPlus(dirname)
 	if err != nil {
 		return nil, errors.Wrapf(err, "readdir %s", dirname)
@@ -211,7 +211,7 @@ func (n *nfsStore) readDirSorted(dirname string) ([]*nfsEntry, error) {
 	for i, e := range entries {
 		if e.IsDir() {
 			nfsEntries[i] = &nfsEntry{e, e.Name() + dirSuffix, nil, false}
-		} else if e.Attr.Attr.Type == nfs.NF3Lnk {
+		} else if e.Attr.Attr.Type == nfs.NF3Lnk && followLink {
 			// follow symlink
 			fi, _, err := n.target.Lookup(filepath.Join(dirname, e.Name()))
 			if err != nil {
@@ -252,7 +252,7 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 		}
 		objs = append(objs, obj)
 	}
-	entries, err := n.readDirSorted(dir)
+	entries, err := n.readDirSorted(dir, followLink)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
