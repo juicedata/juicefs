@@ -480,6 +480,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		logger.Errorf("copy %s to %s: %s", src, tmp, err)
 		return
 	}
+	_ = n.mkdirAll(ctx, path.Dir(dst), os.FileMode(n.gConf.DirMode))
 	eno = n.fs.Rename(mctx, tmp, dst, 0)
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, srcBucket, srcObject)
