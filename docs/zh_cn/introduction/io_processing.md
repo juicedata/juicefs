@@ -48,7 +48,7 @@ JuiceFS 支持随机写，包括通过 mmap 等进行的随机写。
 
 如果对数据一致性和可靠性没有极致要求，可以在挂载时添加 `--writeback` 以进一步提写性能。客户端缓存开启后，Slice flush 仅需写到本地缓存目录即可返回，数据由后台线程异步上传到对象存储。换个角度理解，此时本地目录就是对象存储的缓存层。
 
-更详细的介绍请见[「客户端写缓存」](../guide/cache.md#writeback)。
+更详细的介绍请见[「客户端写缓存」](../guide/cache.md#client-write-cache)。
 
 ## 读取流程 {#workflow-of-read}
 

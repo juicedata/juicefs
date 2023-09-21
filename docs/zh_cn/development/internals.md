@@ -830,7 +830,7 @@ Slice{pos: 40M, id:  0, size: 24M, off:   0, len: 24M} // 实际这一段也会�
 
 ### 数据对象
 
-#### 对象命名
+#### 对象命名 {#object-storage-naming-format}
 
 Block 是 JuiceFS 管理数据的基本单元，其大小默认为 4 MiB，且可在文件系统格式化时配置，允许调整的区间范围为 [64 KiB, 16 MiB]。每个 Block 上传后即为对象存储中的一个对象，其命名格式为 `${fsname}/chunks/${hash}/${basename}`，其中：
 

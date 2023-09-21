@@ -144,7 +144,7 @@ Repeated reads of the same file in JuiceFS can be extremely fast, with latencies
 
 Starting from Linux kernel 3.15, FUSE supports [writeback-cache](https://www.kernel.org/doc/Documentation/filesystems/fuse-io.txt) mode, the kernel will consolidate high-frequency random small (10-100 bytes) write requests to significantly improve its performance, but this comes with a side effect: sequential writes are also turned into random writes, hence sequential write performance is hindered, so only use it on intensive random write scenarios.
 
-To enable writeback-cache mode, use the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option when you [mount JuiceFS](../reference/command_reference.md#mount). Note that writeback-cache mode is not the same as [Client write data cache](#writeback), the former is a kernel implementation while the latter happens inside the JuiceFS Client, read the corresponding section to learn their intended scenarios.
+To enable writeback-cache mode, use the [`-o writeback_cache`](../reference/fuse_mount_options.md#writeback_cache) option when you [mount JuiceFS](../reference/command_reference.md#mount). Note that writeback-cache mode is not the same as [Client write data cache](#client-write-cache), the former is a kernel implementation while the latter happens inside the JuiceFS Client, read the corresponding section to learn their intended scenarios.
 
 ### Read cache in client {#client-read-cache}
 
@@ -180,7 +180,7 @@ Below are some important options for cache configuration (see [`juicefs mount`](
 
   There are two main read patterns, sequential read and random read. Sequential read usually demands higher throughput while random reads needs lower latency. When local disk throughput is lower than object storage, consider enable `--cache-partial-only` so that sequential reads do not cache the whole block, but rather, only small reads (like footer of Parquet / ORC file) are cached. This allows JuiceFS to take advantage of low latency provided by local disk, and high throughput provided by object storage, at the same time.
 
-### Client write data cache {#writeback}
+### Client write data cache {#client-write-cache}
 
 Enabling client write cache can improve performance when writing large amount of small files. Read this section to learn about client write cache.
 

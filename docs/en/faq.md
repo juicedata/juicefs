@@ -92,7 +92,7 @@ Read [JuiceFS Internals](development/internals.md) and [Data Processing Flow](in
 
 You could mount JuiceFS with [`--writeback` option](reference/command_reference.md#mount), which will write the small files into local disks first, then upload them to object storage in background, this could speedup coping many small files into JuiceFS.
 
-See ["Write Cache in Client"](guide/cache.md#writeback) for more information.
+See ["Write Cache in Client"](guide/cache.md#client-write-cache) for more information.
 
 ### Does JuiceFS support distributed cache?
 

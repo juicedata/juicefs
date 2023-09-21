@@ -79,7 +79,9 @@ $ ls -l /usr/bin/fusermount
 -rwsr-xr-x 1 root root 32096 Oct 30  2018 /usr/bin/fusermount
 ```
 
-## Connection problems with object storage (slow internet speed) {#io-error-object-storage}
+## Read write slow & read write error {#read-write-error}
+
+### Connection problems with object storage (slow internet speed) {#io-error-object-storage}
 
 If JuiceFS Client cannot connect to object storage, or the bandwidth is simply not enough, JuiceFS will complain in logs:
 
@@ -100,7 +102,7 @@ The first issue with slow connection is upload / download timeouts (demonstrated
 * Reduce buffer size, e.g. [`--buffer-size=64`](../reference/command_reference.md#mount) or even lower. In a large bandwidth condition, increasing buffer size improves parallel performance. But in a low speed environment, this only makes `flush` operations slow and prone to timeouts.
 * Default timeout for GET / PUT requests are 60 seconds, increasing `--get-timeout` and `--put-timeout` may help with read / write timeouts.
 
-In addition, the ["Client Write Cache"](../guide/cache.md#writeback) feature needs to be used with caution in low bandwidth environment. Let's briefly go over the JuiceFS Client background job design: every JuiceFS Client runs background jobs by default, one of which is data compaction, and if the client has poor internet speed, it'll drag down performance for the whole system. A worse case is when client write cache is also enabled, compaction results are uploaded too slowly, forcing other clients into a read hang when accessing the affected files:
+In addition, the ["Client Write Cache"](../guide/cache.md#client-write-cache) feature needs to be used with caution in low bandwidth environment. Let's briefly go over the JuiceFS Client background job design: every JuiceFS Client runs background jobs by default, one of which is data compaction, and if the client has poor internet speed, it'll drag down performance for the whole system. A worse case is when client write cache is also enabled, compaction results are uploaded too slowly, forcing other clients into a read hang when accessing the affected files:
 
 ```text
 # While compaction results are slowly being uploaded in low speed clients, read from other clients will hang and eventually fail
@@ -110,6 +112,23 @@ In addition, the ["Client Write Cache"](../guide/cache.md#writeback) feature nee
 ```
 
 To avoid this type of issue, we recommend disabling background jobs on low-bandwidth clients, i.e. adding [`--no-bgjob`](../reference/command_reference.md#mount) option to the mount command.
+
+### WARNING log: block not found in object storage {#warning-log-block-not-found-in-object-storage}
+
+When using JuiceFS at scale, there will be some warnings in client logs:
+
+```
+<WARNING>: fail to read sliceId 1771585458 (off:4194304, size:4194304, clen: 37746372): get chunks/0/0/1_0_4194304: oss: service returned error: StatusCode=404, ErrorCode=NoSuchKey, ErrorMessage="The specified key does not exist.", RequestId=62E8FB058C0B5C3134CB80B6
+```
+
+When this type of warning occurs, but not accompanied by I/O errors (indicated by `input/output error` in client logs), you can safely ignore them and continue normal use, client will retry automatically and resolves this issue.
+
+This warning means that JuiceFS Client cannot read a particular slice, because a block does not exist, and object storage has to return a `NoSuchKey` error. Usually this is caused by:
+
+* Clients carry out compaction asynchronously, which upon completion, will change the relationship between file and its corresponding blocks, causing problems for other clients that's already reading this file, hence the warning.
+* Some clients enabled ["Client Write Cache"](../guide/cache.md#client-write-cache), they write a file, commit to the Metadata Service, but the corresponding blocks are still pending to upload (caused by for example, [slow internet speed](#io-error-object-storage)). Meanwhile, other clients that are already accessing this file will meet this warning.
+
+Again, if no errors occur, just safely ignore this warning.
 
 ## Read amplification
 

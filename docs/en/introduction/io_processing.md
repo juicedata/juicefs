@@ -48,7 +48,7 @@ Client write cache is also referred to as "Writeback mode" throughout the docs.
 
 For scenarios that does not deem consistency and data security as top priorities, enabling client write cache is also an option to further improve performance. When client write cache is enabled, flush operations return immediately after writing data to the local cache directory. Then, local data is uploaded asynchronously to the object storage. In other words, the local cache directory is a cache layer for the object storage.
 
-Learn more in [Client Write Cache](../guide/cache.md#writeback).
+Learn more in [Client Write Cache](../guide/cache.md#client-write-cache).
 
 ## Data reading process {#workflow-of-read}
 
