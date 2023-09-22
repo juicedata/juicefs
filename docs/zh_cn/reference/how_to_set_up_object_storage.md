@@ -1,7 +1,6 @@
 ---
 title: 如何设置对象存储
 sidebar_position: 3
-slug: /how_to_setup_object_storage
 description: JuiceFS 以对象存储作为数据存储，本文介绍 JuiceFS 支持的对象存储以及相应的配置和使用方法。
 ---
 
@@ -741,10 +740,10 @@ juicefs format \
 
 ### Ceph RADOS
 
-:::note 注意
+:::note
 JuiceFS v1.0 使用的 `go-ceph` 库版本为 v0.4.0，其支持的 Ceph 最低版本为 Luminous（v12.2.*）。
 JuiceFS v1.1 使用的 `go-ceph` 库版本为 v0.18.0，其支持的 Ceph 最低版本为 Octopus（v15.2.*）。
-在使用前请确认 JuiceFS 与您使用的 Ceph 版本是否匹配，具体可参见 [`go-ceph`](https://github.com/ceph/go-ceph#supported-ceph-versions)。
+使用前请确认 JuiceFS 与使用的 Ceph 和 `librados` 版本是否匹配，详见 [`go-ceph`](https://github.com/ceph/go-ceph#supported-ceph-versions)、[`librados`](https://docs.ceph.com/en/quincy/rados/api/librados-intro/)。
 :::
 
 [Ceph 存储集群](https://docs.ceph.com/en/latest/rados) 具有消息传递层协议，该协议使客户端能够与 Ceph Monitor 和 Ceph OSD 守护程序进行交互。[`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro) API 使您可以与这两种类型的守护程序进行交互：
@@ -754,11 +753,7 @@ JuiceFS v1.1 使用的 `go-ceph` 库版本为 v0.18.0，其支持的 Ceph 最低
 
 JuiceFS 支持使用基于 `librados` 的本地 Ceph API。您需要分别安装 `librados` 库并重新编译 `juicefs` 二进制文件。
 
-首先安装 `librados`：
-
-:::note 注意
-建议使用匹配你的 Ceph 版本的 `librados`，例如 Ceph 版本是 Octopus（v15.2.\*），那么 `librados` 也建议使用 v15.2.\* 版本。某些 Linux 发行版（如 CentOS 7）自带的 `librados` 版本可能较低，如果编译 JuiceFS 失败可以尝试下载更高版本的安装包。
-:::
+首先安装 `librados`，建议使用匹配你的 Ceph 版本的 `librados`，例如 Ceph 版本是 Octopus（v15.2.x），那么 `librados` 也建议使用 v15.2.x 版本。
 
 <Tabs>
   <TabItem value="debian" label="Debian 及衍生版本">
@@ -783,7 +778,11 @@ sudo yum install librados2-devel
 make juicefs.ceph
 ```
 
-[存储池](https://docs.ceph.com/zh_CN/latest/rados/operations/pools) 是用于存储对象的逻辑分区，您可能需要首先创建一个存储池。 `--access-key` 选项的值是 Ceph 集群名称，默认集群名称是 `ceph`。`--secret-key` 选项的值是 [Ceph 客户端用户名](https://docs.ceph.com/en/latest/rados/operations/user-management)，默认用户名是 `client.admin`。
+在使用 Ceph 时，原本 JuiceFS 客户端的对象存储参数的含义不太相同：
+
+* `--bucket` 是 Ceph 存储池，格式为 `ceph://<pool-name>`，[存储池](https://docs.ceph.com/zh_CN/latest/rados/operations/pools)是用于存储对象的逻辑分区，使用前需要先创建好
+* `--access-key` 选项的值是 Ceph 集群名称，默认集群名称是 `ceph`。
+* `--secret-key` 选项的值是 [Ceph 客户端用户名](https://docs.ceph.com/en/latest/rados/operations/user-management)，默认用户名是 `client.admin`。
 
 为了连接到 Ceph Monitor，`librados` 将通过搜索默认位置读取 Ceph 的配置文件，并使用找到的第一个。这些位置是：
 
@@ -792,7 +791,7 @@ make juicefs.ceph
 - `~/.ceph/config`
 - 在当前工作目录中的 `ceph.conf`
 
-例如：
+创建一个文件系统：
 
 ```bash
 juicefs.ceph format \

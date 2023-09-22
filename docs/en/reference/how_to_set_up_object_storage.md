@@ -1,7 +1,6 @@
 ---
 title: How to Set Up Object Storage
 sidebar_position: 3
-slug: /how_to_setup_object_storage
 description: This article introduces the object storages supported by JuiceFS and how to configure and use it.
 ---
 
@@ -742,9 +741,9 @@ juicefs format \
 ### Ceph RADOS
 
 :::note
-JuiceFS v1.0 uses `go-ceph` v0.4.0, which supports Ceph Luminous (v12.2.*) and above.
-JuiceFS v1.1 uses `go-ceph` v0.18.0, which supports Ceph Octopus (v15.2.*) and above.
-Please make sure that JuiceFS matches your Ceph version, see [`go-ceph`](https://github.com/ceph/go-ceph#supported-ceph-versions).
+JuiceFS v1.0 uses `go-ceph` v0.4.0, which supports Ceph Luminous (v12.2.x) and above.
+JuiceFS v1.1 uses `go-ceph` v0.18.0, which supports Ceph Octopus (v15.2.x) and above.
+Make sure that JuiceFS matches your Ceph and `librados` version, see [`go-ceph`](https://github.com/ceph/go-ceph#supported-ceph-versions).
 :::
 
 The [Ceph Storage Cluster](https://docs.ceph.com/en/latest/rados) has a messaging layer protocol that enables clients to interact with a Ceph Monitor and a Ceph OSD Daemon. The [`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro) API enables you to interact with the two types of daemons:
@@ -754,11 +753,7 @@ The [Ceph Storage Cluster](https://docs.ceph.com/en/latest/rados) has a messagin
 
 JuiceFS supports the use of native Ceph APIs based on `librados`. You need to install `librados` library and build `juicefs` binary separately.
 
-First, install `librados`:
-
-:::note
-It is recommended to use `librados` that matches your Ceph version. For example, if Ceph version is Octopus (v15.2.\*), then it is recommended to use `librados` v15.2.\*. Some Linux distributions (e.g. CentOS 7) may come with a lower version of `librados`, so if you fail to compile JuiceFS, try to download a higher version of the package.
-:::
+First, install a `librados` that matches the version of your Ceph installation, For example, if Ceph version is Octopus (v15.2.x), then it is recommended to use `librados` v15.2.x.
 
 <Tabs>
   <TabItem value="debian" label="Debian and derivatives">
@@ -783,16 +778,22 @@ Then compile JuiceFS for Ceph (make sure you have Go 1.18+ and GCC 5.4+ installe
 make juicefs.ceph
 ```
 
-The `--bucket` option format is `ceph://<pool-name>`. A [pool](https://docs.ceph.com/en/latest/rados/operations/pools) is logical partition for storing objects. You may need first creating a pool. The value of `--access-key` option is Ceph cluster name, the default cluster name is `ceph`. The value of `--secret-key` option is [Ceph client user name](https://docs.ceph.com/en/latest/rados/operations/user-management), the default user name is `client.admin`.
+When using with Ceph, the JuiceFS Client object storage related options are interpreted differently:
 
-For connecting to Ceph Monitor, `librados` reads Ceph configuration file by searching default locations and the first found will be used. The locations are:
+* `--bucket` stands for the Ceph storage pool, the format is `ceph://<pool-name>`. A [pool](https://docs.ceph.com/en/latest/rados/operations/pools) is a logical partition for storing objects. Create a pool before use.
+* `--access-key` stands for the Ceph cluster name, the default value is `ceph`.
+* `--secret-key` option is [Ceph client user name](https://docs.ceph.com/en/latest/rados/operations/user-management), the default user name is `client.admin`.
+
+In order to reach Ceph Monitor, `librados` reads Ceph configuration file by searching default locations and the first found will be used. The locations are:
 
 - `CEPH_CONF` environment variable
 - `/etc/ceph/ceph.conf`
 - `~/.ceph/config`
 - `ceph.conf` in the current working directory
 
-The example command is:
+Since these additional Ceph configuration files are needed during the mount, CSI Driver users need to [upload them to Kubernetes, and map to the mount pod](https://juicefs.com/docs/csi/guide/pv/#mount-pod-extra-files).
+
+To format a volume, run:
 
 ```bash
 juicefs.ceph format \
