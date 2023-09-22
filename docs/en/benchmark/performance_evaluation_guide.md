@@ -40,7 +40,9 @@ The [`juicefs bench`](../reference/command_reference.md#bench) command can help 
 juicefs bench /mnt/jfs -p 4
 ```
 
-The test results will show each performance indicator in green, yellow or red. If you see red indicators in your results, please check the relevant configuration first. Feel free to post any problems you encountered in detail on [GitHub Discussions](https://github.com/juicedata/juicefs/discussions).
+The test results are presented in a table format, where `ITEM` represents the tested item, `VALUE` represents the processing capacity per second (throughput, number of files, number of operations, etc.), and `COST` represents the time required for each file or operation.
+
+The results will be displayed in green, yellow, or red to differentiate performance. If there are red indicators in your results, please check the relevant configurations first. Feel free to post any problems you encountered in detail on [GitHub Discussions](https://github.com/juicedata/juicefs/discussions).
 
 ![bench](../images/bench-guide-bench.png)
 
@@ -90,6 +92,8 @@ juicefs objbench \
 The test results are shown in the figure below:
 
 ![JuiceFS Bench](../images/objbench.png)
+
+Among them, the result `not support` indicates that the tested object storage does not support this feature.
 
 #### Test flow
 
