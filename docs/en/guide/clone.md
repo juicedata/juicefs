@@ -7,7 +7,7 @@ This command makes a 1:1 clone of your data by creating a mere metadata copy, wi
 
 ![clone](../images/juicefs-clone.svg)
 
-The `clone` result is a metadata copy only, where all the files are still referencing the same underlying object storage blocks, that's why a `clone` behaves the same in every way as its originals. When either of them go through actual file data modification, the affected data blocks will be copied on write, and become new blocks after write, while the unchanged part of the files remains the same, still referencing the original blocks.
+The clone result is a metadata copy only, where all the files are still referencing the same underlying object storage blocks, that's why a clone behaves the same in every way as its originals. When either of them go through actual file data modification, the affected data blocks will be copied on write, and become new blocks after write, while the unchanged part of the files remains the same, still referencing the original blocks.
 
 Please note that system tools like disk-free or disk-usage (`df`, `du`) will report the space used by the cloned data, but the underlying object storage space will not grow as blocks remains the same. On the same way, as metadata is actually replicated, the clone will take the same metadata engine storage space as the original.
 
