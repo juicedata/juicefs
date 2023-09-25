@@ -265,12 +265,12 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			}
 
 			args = append(args, rpath)
-			if strings.HasSuffix(path, "juicefs") {
-				args = append(args, os.Args[1:]...)
+			if strings.HasSuffix(path, "juicesync") {
 				args = append(args, "--manager", address)
+				args = append(args, os.Args[1:]...)
 			} else {
-				args = append(args, "--manager", address)
 				args = append(args, os.Args[1:]...)
+				args = append(args, "--manager", address)
 			}
 			if !config.Verbose && !config.Quiet {
 				args = append(args, "-q")
