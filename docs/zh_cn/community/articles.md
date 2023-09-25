@@ -52,7 +52,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 云原生 & Kubernetes
 
-- [小米云原生文件存储平台化实践：支撑 AI 训练、大模型、容器平台多项业务](https://juicefs.com/zh-cn/blog/user-stories/cloud-native-file-storage-platform-as-ai-training-large-models-container-platforms)，2023-09-22，孙佳朋@小米 
+- [小米云原生文件存储平台化实践：支撑 AI 训练、大模型、容器平台多项业务](https://juicefs.com/zh-cn/blog/user-stories/cloud-native-file-storage-platform-as-ai-training-large-models-container-platforms)，2023-09-22，孙佳朋@小米
 - [从本地到云端：豆瓣如何使用 JuiceFS 实现统一的数据存储](https://juicefs.com/zh-cn/blog/user-stories/scalable-computing-unified-data-storage-ops-cloud-spark-k8s-juicefs)，2023-05-10，曹丰宇@豆瓣
 - [云上大数据存储：探究 JuiceFS 与 HDFS 的异同](https://juicefs.com/zh-cn/blog/engineering/similarities-and-differences-between-hdfs-and-juicefs-structures)，2023-04-04，汤友棚
 - [Sidecar-详解 JuiceFS CSI Driver 新模式](https://juicefs.com/zh-cn/blog/usage-tips/explain-in-detail-juicefs-csi-driver-sidecar)，2023-02-22，朱唯唯
