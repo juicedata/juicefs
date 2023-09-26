@@ -119,7 +119,7 @@ func WithTimeout(f func() error, timeout time.Duration) error {
 }
 
 func RemovePassword(uri string) string {
-	p := strings.Index(uri, "@")
+	p := strings.LastIndex(uri, "@")
 	if p < 0 {
 		return uri
 	}
