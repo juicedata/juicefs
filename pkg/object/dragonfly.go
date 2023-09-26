@@ -56,7 +56,7 @@ const (
 )
 
 // defaultDragonflyEndpoint is the default endpoint to connect to a local dragonfly.
-var defaultDragonflyEndpoint = fmt.Sprintf("http://127.0.0.1:%d", 650004)
+var defaultDragonflyEndpoint = fmt.Sprintf("http://127.0.0.1:%d", 65004)
 
 type ObjectMetadatas struct {
 	// CommonPrefixes are similar prefixes in object storage.
@@ -498,7 +498,7 @@ func newDragonfly(_endpoint, _accessKey, _secretKey, _token string) (ObjectStora
 
 	// Initialize dfstore config.
 	var (
-		mode        int
+		mode        int = 1
 		maxReplicas int
 		filter      string
 		err         error
