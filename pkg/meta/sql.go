@@ -215,6 +215,22 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 			}
 		}
 	}
+
+	// escaping is not necessary for mysql password https://github.com/go-sql-driver/mysql#password
+	if driver == "mysql" {
+		colonIndex := strings.Index(addr, ":")
+		atIndex := strings.LastIndex(addr, "@")
+		pwd := addr[colonIndex+1 : atIndex]
+		parse, err := url.Parse("mysql://root:" + pwd + "@127.0.0.1")
+		if err != nil {
+			return nil, fmt.Errorf("parse url %s failed: %s", addr, err)
+		}
+		originPwd, ok := parse.User.Password()
+		if ok {
+			addr = fmt.Sprintf("%s:%s%s", addr[:colonIndex], originPwd, addr[atIndex:])
+		}
+	}
+
 	engine, err := xorm.NewEngine(driver, addr)
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
