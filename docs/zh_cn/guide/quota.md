@@ -200,6 +200,10 @@ $ juicefs quota set $METAURL --path /test --capacity 0 --inodes 0
 +-------+-----------+---------+------+-----------+-------+-------+
 ```
 
+### 配额嵌套 {#nested-quota}
+
+JuiceFS 允许自由地设置各级目录配额，实际使用的时候会递归地向上查询，确保当前目录用量满足每一级目录的配额设置。也就是说，就算父目录设置了一个较小的配额，也不影响子目录可以设置更大配额。
+
 ### 子目录挂载 {#subdirectory-mount}
 
 JuiceFS 支持使用 [`--subdir`](../reference/command_reference.md#mount) 挂载任意子目录。如果挂载的子目录设置了目录配额，则可以使用系统自带的 `df` 命令查看目录配额和当前使用量。比如文件系统配额为 1PiB 和 10M 个 inode，而 `/test` 目录的配额为 1GiB 和 400 个 inode。使用根目录挂载时 `df` 命令的输出为：

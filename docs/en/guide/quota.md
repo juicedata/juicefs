@@ -200,6 +200,10 @@ $ juicefs quota set $METAURL --path /test --capacity 0 --inodes 0
 +-------+-----------+---------+------+-----------+-------+-------+
 ```
 
+### Nested quota {#nested-quota}
+
+JuiceFS allows nested quota to be set on multiple levels of directories, client performs recursive lookup to ensure quota settings take effect on every level of directory. This means even if the parent directory is allocated a smaller quota, you can still set a larger quota on the child directory.
+
 ### Subdirectory mount {#subdirectory-mount}
 
 JuiceFS supports mounting arbitrary subdirectories using [`--subdir`](../reference/command_reference.md#mount). If the directory quota is set for the mounted subdirectory, you can use the `df` command that comes with the system to view the directory quota and current usage. For example, the file system quota is 1PiB and 10M inodes, while the quota for the `/test` directory is 1GiB and 400 inodes. The output of the `df` command when mounted using the root directory is:
