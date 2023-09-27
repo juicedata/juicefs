@@ -265,6 +265,7 @@ mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 :::note 注意
 密码中的特殊字符不需要进行 url 编码
 :::
+
 例如：
 
 ```shell
