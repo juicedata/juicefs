@@ -63,39 +63,56 @@ func TestRecoveryMysqlPwd(t *testing.T) { //skip mutate
 		addr   string
 		expect string
 	}{
+		// no password
+		{"root@(localhost:3306)/db1",
+			"root@(localhost:3306)/db1",
+		},
+		// no password
+		{"root:@(localhost:3306)/db1",
+			"root:@(localhost:3306)/db1",
+		},
+
+		{"root::@@(localhost:3306)/db1",
+			"root::@@(localhost:3306)/db1",
+		},
+
+		{"root:@:@(localhost:3306)/db1",
+			"root:@:@(localhost:3306)/db1",
+		},
+
 		// no special char
-		{"root:password@localhost:3306/db1",
-			"root:password@localhost:3306/db1",
+		{"root:password@(localhost:3306)/db1",
+			"root:password@(localhost:3306)/db1",
 		},
 
 		// set from env @
-		{"root:pass%40word@localhost:3306/db1",
-			"root:pass@word@localhost:3306/db1",
+		{"root:pass%40word@(localhost:3306)/db1",
+			"root:pass@word@(localhost:3306)/db1",
 		},
 
 		// direct pass special char @
-		{"root:pass@word@localhost:3306/db1",
-			"root:pass@word@localhost:3306/db1",
+		{"root:pass@word@(localhost:3306)/db1",
+			"root:pass@word@(localhost:3306)/db1",
 		},
 
 		// set from env |
-		{"root:pass%7Cword@localhost:3306/db1",
-			"root:pass|word@localhost:3306/db1",
+		{"root:pass%7Cword@(localhost:3306)/db1",
+			"root:pass|word@(localhost:3306)/db1",
 		},
 
 		// direct pass special char |
-		{"root:pass|word@localhost:3306/db1",
-			"root:pass|word@localhost:3306/db1",
+		{"root:pass|word@(localhost:3306)/db1",
+			"root:pass|word@(localhost:3306)/db1",
 		},
 
 		// set from env :
-		{"root:pass%3Aword@localhost:3306/db1",
-			"root:pass:word@localhost:3306/db1",
+		{"root:pass%3Aword@(localhost:3306)/db1",
+			"root:pass:word@(localhost:3306)/db1",
 		},
 
 		// direct pass special char :
-		{"root:pass:word@localhost:3306/db1",
-			"root:pass:word@localhost:3306/db1",
+		{"root:pass:word@(localhost:3306)/db1",
+			"root:pass:word@(localhost:3306)/db1",
 		},
 	}
 	for _, tc := range testCase {

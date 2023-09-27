@@ -201,10 +201,12 @@ type dbSnap struct {
 func recoveryMysqlPwd(addr string) string {
 	colonIndex := strings.Index(addr, ":")
 	atIndex := strings.LastIndex(addr, "@")
-	pwd := addr[colonIndex+1 : atIndex]
-	if parse, err := url.Parse("mysql://root:" + pwd + "@127.0.0.1"); err == nil {
-		if originPwd, ok := parse.User.Password(); ok {
-			addr = fmt.Sprintf("%s:%s%s", addr[:colonIndex], originPwd, addr[atIndex:])
+	if colonIndex != -1 && colonIndex < atIndex {
+		pwd := addr[colonIndex+1 : atIndex]
+		if parse, err := url.Parse("mysql://root:" + pwd + "@127.0.0.1"); err == nil {
+			if originPwd, ok := parse.User.Password(); ok {
+				addr = fmt.Sprintf("%s:%s%s", addr[:colonIndex], originPwd, addr[atIndex:])
+			}
 		}
 	}
 	return addr
