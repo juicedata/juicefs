@@ -70,16 +70,6 @@ $ juicefs format mysql://jfs:mypassword@(127.0.0.1:3306)/juicefs myjfs
 # A safer alternative
 $ META_PASSWORD=mypassword juicefs format mysql://jfs:@(127.0.0.1:3306)/juicefs myjfs
 
-# MySQL password containing special characters
-$ juicefs format 'mysql://jfs:123@45@(127.0.0.1:3306)/juicefs' myjfs
-# or
-$ META_PASSWORD=123@45 juicefs format mysql://jfs:@(127.0.0.1:3306)/juicefs myjfs
-
-# PostgreSQL password containing special characters
-$ juicefs format 'postgres://jfs:123@45@127.0.0.1:5432/juicefs' myjfs
-# or
-$ META_PASSWORD=123@45 juicefs format 'postgres://jfs:@127.0.0.1:5432/juicefs' myjfs
-
 # Create a volume with "quota" enabled
 $ juicefs format sqlite3://myjfs.db myjfs --inodes 1000000 --capacity 102400
 
