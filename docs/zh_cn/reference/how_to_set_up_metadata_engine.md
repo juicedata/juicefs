@@ -202,6 +202,10 @@ juicefs format \
 3. `search_path` 连接参数原生可以设置为多个 schema，但是目前 JuiceFS 仅支持设置一个。`postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` 将被认为不合法
 :::
 
+:::note 说明
+密码中的特殊字符需要进行 url 编码，例如 `|` 需要编码为`%7C`。
+:::
+
 ### 挂载文件系统
 
 ```shell
@@ -258,6 +262,9 @@ mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 不要漏掉 URL 两边的 `()` 括号
 :::
 
+:::note 注意
+密码中的特殊字符不需要进行 url 编码
+:::
 例如：
 
 ```shell

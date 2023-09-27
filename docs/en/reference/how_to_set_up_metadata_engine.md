@@ -202,6 +202,10 @@ juicefs format \
 3. The `search_path` connection parameter can be set to multiple schemas natively, but currently JuiceFS only supports setting one. `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` will be considered illegal.
 :::
 
+:::note
+Special characters in the password need to be replaced by url encoding. For example, `|` needs to be replaced with `%7C`.
+:::
+
 ### Mount a file system
 
 ```shell
@@ -256,6 +260,10 @@ mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 
 :::note
 Don't leave out the `()` brackets on either side of the URL.
+:::
+
+:::note
+Special characters in passwords do not require url encoding
 :::
 
 For example:
