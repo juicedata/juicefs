@@ -198,6 +198,20 @@ type dbSnap struct {
 	chunk   map[string]*chunk
 }
 
+func recoveryMysqlPwd(addr string) string {
+	colonIndex := strings.Index(addr, ":")
+	atIndex := strings.LastIndex(addr, "@")
+	if colonIndex != -1 && colonIndex < atIndex {
+		pwd := addr[colonIndex+1 : atIndex]
+		if parse, err := url.Parse("mysql://root:" + pwd + "@127.0.0.1"); err == nil {
+			if originPwd, ok := parse.User.Password(); ok {
+				addr = fmt.Sprintf("%s:%s%s", addr[:colonIndex], originPwd, addr[atIndex:])
+			}
+		}
+	}
+	return addr
+}
+
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
 	if driver == "postgres" {
@@ -215,6 +229,12 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 			}
 		}
 	}
+
+	// escaping is not necessary for mysql password https://github.com/go-sql-driver/mysql#password
+	if driver == "mysql" {
+		addr = recoveryMysqlPwd(addr)
+	}
+
 	engine, err := xorm.NewEngine(driver, addr)
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
