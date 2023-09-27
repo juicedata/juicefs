@@ -57,3 +57,50 @@ func TestPostgreSQLClientWithSearchPath(t *testing.T) { //skip mutate
 		t.Fatalf("TestPostgreSQLClientWithSearchPath error: %s", err)
 	}
 }
+
+func TestRecoveryMysqlPwd(t *testing.T) { //skip mutate
+	testCase := []struct {
+		addr   string
+		expect string
+	}{
+		// no special char
+		{"root:password@localhost:3306/db1",
+			"root:password@localhost:3306/db1",
+		},
+
+		// set from env @
+		{"root:pass%40word@localhost:3306/db1",
+			"root:pass@word@localhost:3306/db1",
+		},
+
+		// direct pass special char @
+		{"root:pass@word@localhost:3306/db1",
+			"root:pass@word@localhost:3306/db1",
+		},
+
+		// set from env |
+		{"root:pass%7Cword@localhost:3306/db1",
+			"root:pass|word@localhost:3306/db1",
+		},
+
+		// direct pass special char |
+		{"root:pass|word@localhost:3306/db1",
+			"root:pass|word@localhost:3306/db1",
+		},
+
+		// set from env :
+		{"root:pass%3Aword@localhost:3306/db1",
+			"root:pass:word@localhost:3306/db1",
+		},
+
+		// direct pass special char :
+		{"root:pass:word@localhost:3306/db1",
+			"root:pass:word@localhost:3306/db1",
+		},
+	}
+	for _, tc := range testCase {
+		if got := recoveryMysqlPwd(tc.addr); got != tc.expect {
+			t.Fatalf("recoveryMysqlPwd error: expect %s but got %s", tc.expect, got)
+		}
+	}
+}
