@@ -55,9 +55,6 @@ const (
 	CopyOperation = "copy"
 )
 
-// defaultDragonflyEndpoint is the default endpoint to connect to a local dragonfly.
-var defaultDragonflyEndpoint = fmt.Sprintf("http://127.0.0.1:%d", 65004)
-
 type ObjectMetadatas struct {
 	// CommonPrefixes are similar prefixes in object storage.
 	CommonPrefixes []string `json:"CommonPrefixes"`
@@ -479,45 +476,48 @@ func (d *dragonfly) List(prefix, marker, delimiter string, limit int64, followLi
 
 // newDragonfly creates a new dragonfly object storage.
 func newDragonfly(_endpoint, _accessKey, _secretKey, _token string) (ObjectStorage, error) {
-	// Get endpoint from environment variable.
-	endpoint, exists := os.LookupEnv("DRAGONFLY_ENDPOINT")
-	if !exists {
-		endpoint = defaultDragonflyEndpoint
-		logger.Infof("DRAGONFLY_ENDPOINT is not defined, using default endpoint %s", endpoint)
+	if !strings.Contains(_endpoint, "://") {
+		_endpoint = fmt.Sprintf("http://%s", _endpoint)
+	}
+	// Parse the endpoint.
+	uri, err := url.Parse(_endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		mode        int = 1
+		maxReplicas int
+		filter      string
+	)
+
+	endpoint := uri.Scheme + "://" + uri.Host
+	bucket := uri.Path
+
+	if bucket == "" {
+		return nil, fmt.Errorf("bucket name required")
 	}
 
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
 
-	// Get bucket from environment variable.
-	bucket, exists := os.LookupEnv("DRAGONFLY_BUCKET")
-	if !exists {
-		return nil, fmt.Errorf("environment variable DRAGONFLY_BUCKET is required")
-	}
-
 	// Initialize dfstore config.
-	var (
-		mode        int = 1
-		maxReplicas int
-		filter      string
-		err         error
-	)
-	if value, exists := os.LookupEnv("DRAGONFLY_MODE"); exists {
+	if value := uri.Query().Get("mode"); value != "" {
 		mode, err = strconv.Atoi(value)
 		if err != nil || (mode != WriteBack && mode != AsyncWriteBack) {
 			return nil, fmt.Errorf("unexpected dragonfly mode: %s", value)
 		}
 	}
 
-	if value, exists := os.LookupEnv("DRAGONFLY_MAX_REPLICAS"); exists {
+	if value := uri.Query().Get("maxReplicas"); value != "" {
 		maxReplicas, err = strconv.Atoi(value)
 		if err != nil || maxReplicas > MaxReplicasLimit || maxReplicas < 0 {
 			return nil, fmt.Errorf("unexpected dragonfly max replicas: %s", value)
 		}
 	}
 
-	if value, exists := os.LookupEnv("DRAGONFLY_FILTER"); exists {
+	if value := uri.Query().Get("filter"); value != "" {
 		filter = value
 	}
 

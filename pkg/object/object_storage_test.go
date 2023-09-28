@@ -1026,10 +1026,10 @@ func TestTOS(t *testing.T) { //skip mutate
 }
 
 func TestDragonfly(t *testing.T) { //skip mutate
-	if os.Getenv("DRAGONFLY_BUCKET") == "" {
+	if os.Getenv("DRAGONFLY_ENDPOINT") == "" {
 		t.SkipNow()
 	}
-	dragonfly, err := newDragonfly("", "", "", "")
+	dragonfly, err := newDragonfly(os.Getenv("DRAGONFLY_ENDPOINT"), "", "", "")
 	if err != nil {
 		t.Fatalf("create: %s", err)
 	}
