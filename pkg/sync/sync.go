@@ -554,13 +554,15 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				break
 			}
 			var err error
+			var dataCopied bool
 			if config.Links && obj.IsSymlink() {
 				err = copyLink(src, dst, key)
 			} else {
+				dataCopied = true
 				err = copyData(src, dst, key, obj.Size())
 			}
 
-			if err == nil && (config.CheckAll || config.CheckNew) {
+			if err == nil && (config.CheckAll || config.CheckNew) && dataCopied {
 				var equal bool
 				if equal, err = checkSum(src, dst, key, obj.Size()); err == nil && !equal {
 					err = fmt.Errorf("checksums of copied object %s don't match", key)
