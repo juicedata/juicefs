@@ -75,6 +75,7 @@ func (b *wasb) Head(key string) (Object, error) {
 		*properties.LastModified,
 		strings.HasSuffix(key, "/"),
 		*properties.AccessTier,
+		"",
 	}, nil
 }
 
@@ -171,6 +172,7 @@ func (b *wasb) List(prefix, marker, delimiter string, limit int64, followLink bo
 			*mtime,
 			strings.HasSuffix(*blob.Name, "/"),
 			string(*blob.Properties.AccessTier),
+			"",
 		}
 	}
 	return objs, nil

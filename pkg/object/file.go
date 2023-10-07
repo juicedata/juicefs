@@ -81,10 +81,10 @@ func (d *filestore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return toFile(key, fi, false), nil
+	return toFile(key, fi, false, ""), nil
 }
 
-func toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
+func toFile(key string, fi fs.FileInfo, isSymlink bool, linkPath string) *file {
 	size := fi.Size()
 	if fi.IsDir() {
 		size = 0
@@ -97,6 +97,7 @@ func toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 			fi.ModTime(),
 			fi.IsDir(),
 			"",
+			linkPath,
 		},
 		owner,
 		group,
@@ -202,6 +203,7 @@ type mEntry struct {
 	name      string
 	fi        os.FileInfo
 	isSymlink bool
+	linkPath  string
 }
 
 func (m *mEntry) Name() string {
@@ -237,21 +239,25 @@ func readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 
 	mEntries := make([]*mEntry, len(entries))
 	for i, e := range entries {
+		var linkPath string
+		if !e.Mode().IsRegular() {
+			linkPath, _ = os.Readlink(filepath.Join(dirname, e.Name()))
+		}
 		if e.IsDir() {
-			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}
+			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false, ""}
 		} else if !e.Mode().IsRegular() && followLink {
 			fi, err := os.Stat(filepath.Join(dirname, e.Name()))
 			if err != nil {
-				mEntries[i] = &mEntry{e, e.Name(), nil, true}
+				mEntries[i] = &mEntry{e, e.Name(), nil, true, linkPath}
 				continue
 			}
 			name := e.Name()
 			if fi.IsDir() {
 				name = e.Name() + dirSuffix
 			}
-			mEntries[i] = &mEntry{e, name, fi, false}
+			mEntries[i] = &mEntry{e, name, fi, false, linkPath}
 		} else {
-			mEntries[i] = &mEntry{e, e.Name(), nil, !e.Mode().IsRegular()}
+			mEntries[i] = &mEntry{e, e.Name(), nil, !e.Mode().IsRegular(), linkPath}
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })
@@ -299,7 +305,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 			continue
 		}
 		info := e.Info()
-		f := toFile(key, info, e.isSymlink)
+		f := toFile(key, info, e.isSymlink, e.linkPath)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break

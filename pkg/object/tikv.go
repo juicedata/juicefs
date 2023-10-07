@@ -82,6 +82,7 @@ func (t *tikv) Head(key string) (Object, error) {
 		time.Now(),
 		strings.HasSuffix(key, "/"),
 		"",
+		"",
 	}, err
 }
 
@@ -108,7 +109,7 @@ func (t *tikv) List(prefix, marker, delimiter string, limit int64, followLink bo
 	mtime := time.Now()
 	for i, k := range keys {
 		// FIXME: mtime
-		objs[i] = &obj{string(k), int64(len(vs[i])), mtime, strings.HasSuffix(string(k), "/"), ""}
+		objs[i] = &obj{string(k), int64(len(vs[i])), mtime, strings.HasSuffix(string(k), "/"), "", ""}
 	}
 	return objs, nil
 }

@@ -94,7 +94,7 @@ func (c *COS) Head(key string) (Object, error) {
 		// This header is returned only if the object is not STANDARD storage class.
 		sc = "STANDARD"
 	}
-	return &obj{key, size, mtime, strings.HasSuffix(key, "/"), sc}, nil
+	return &obj{key, size, mtime, strings.HasSuffix(key, "/"), sc, ""}, nil
 }
 
 func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -182,7 +182,7 @@ func (c *COS) List(prefix, marker, delimiter string, limit int64, followLink boo
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed to decode key %s", o.Key)
 		}
-		objs[i] = &obj{key, int64(o.Size), t, strings.HasSuffix(key, "/"), o.StorageClass}
+		objs[i] = &obj{key, int64(o.Size), t, strings.HasSuffix(key, "/"), o.StorageClass, ""}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -190,7 +190,7 @@ func (c *COS) List(prefix, marker, delimiter string, limit int64, followLink boo
 			if err != nil {
 				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", p)
 			}
-			objs = append(objs, &obj{key, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{key, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

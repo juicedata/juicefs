@@ -304,10 +304,17 @@ func doCheckSum(src, dst object.ObjectStorage, key string, size int64, equal *bo
 	return err
 }
 
-func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, error) {
+func checkSum(src, dst object.ObjectStorage, key string, size int64, config *Config, obj object.Object, dstLinkPath string) (bool, error) {
 	start := time.Now()
 	var equal bool
-	err := try(3, func() error { return doCheckSum(src, dst, key, size, &equal) })
+	err := try(3, func() error {
+		if obj.IsSymlink() && config.Links && dstLinkPath != "" {
+			equal = obj.LinkPath() == dstLinkPath
+			return nil
+		} else {
+			return doCheckSum(src, dst, key, size, &equal)
+		}
+	})
 	if err == nil {
 		checked.Increment()
 		checkedBytes.IncrInt64(size)
@@ -521,8 +528,9 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				checked.Increment()
 				break
 			}
-			obj = obj.(*withSize).Object
-			if equal, err := checkSum(src, dst, key, obj.Size()); err != nil {
+			withSizeObj := obj.(*withSize)
+			obj = withSizeObj.Object
+			if equal, err := checkSum(src, dst, key, obj.Size(), config, obj, withSizeObj.dstLinkPath); err != nil {
 				failed.Increment()
 				break
 			} else if equal {
@@ -567,7 +575,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
 				var equal bool
-				if equal, err = checkSum(src, dst, key, obj.Size()); err == nil && !equal {
+				if equal, err = checkSum(src, dst, key, obj.Size(), config, obj, ""); err == nil && !equal {
 					err = fmt.Errorf("checksums of copied object %s don't match", key)
 				}
 			}
@@ -605,7 +613,8 @@ func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) er
 
 type withSize struct {
 	object.Object
-	nsize int64
+	nsize       int64
+	dstLinkPath string
 }
 
 func (o *withSize) Size() int64 {
@@ -632,7 +641,7 @@ func deleteFromDst(tasks chan<- object.Object, dstobj object.Object, config *Con
 		}
 		config.Limit--
 	}
-	tasks <- &withSize{dstobj, markDeleteDst}
+	tasks <- &withSize{dstobj, markDeleteDst, ""}
 	handled.IncrTotal(1)
 	return false
 }
@@ -727,9 +736,9 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 				skipped.Increment()
 				handled.Increment()
 			} else if config.CheckAll { // two objects are likely the same
-				tasks <- &withSize{obj, markChecksum}
+				tasks <- &withSize{obj, markChecksum, dstobj.LinkPath()}
 			} else if config.DeleteSrc {
-				tasks <- &withSize{obj, markDeleteSrc}
+				tasks <- &withSize{obj, markDeleteSrc, ""}
 			} else if config.Perms && needCopyPerms(obj, dstobj) {
 				tasks <- &withFSize{obj.(object.File), markCopyPerms}
 			} else {

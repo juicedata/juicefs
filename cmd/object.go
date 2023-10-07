@@ -170,8 +170,9 @@ func (j *juiceFS) Delete(key string) error {
 }
 
 type jObj struct {
-	key string
-	fi  *fs.FileStat
+	key      string
+	fi       *fs.FileStat
+	linkPath string
 }
 
 func (o *jObj) Key() string { return o.key }
@@ -188,6 +189,7 @@ func (o *jObj) Owner() string        { return utils.UserName(o.fi.Uid()) }
 func (o *jObj) Group() string        { return utils.GroupName(o.fi.Gid()) }
 func (o *jObj) Mode() os.FileMode    { return o.fi.Mode() }
 func (o *jObj) StorageClass() string { return "" }
+func (o *jObj) LinkPath() string     { return o.linkPath }
 
 func (j *juiceFS) Head(key string) (object.Object, error) {
 	fi, eno := j.jfs.Stat(ctx, j.path(key))
@@ -197,7 +199,7 @@ func (j *juiceFS) Head(key string) (object.Object, error) {
 	if eno != 0 {
 		return nil, eno
 	}
-	return &jObj{key, fi}, nil
+	return &jObj{key, fi, ""}, nil
 }
 
 func (j *juiceFS) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]object.Object, error) {
@@ -233,7 +235,7 @@ func (j *juiceFS) List(prefix, marker, delimiter string, limit int64, followLink
 		if !strings.HasPrefix(key, prefix) || (marker != "" && key <= marker) {
 			continue
 		}
-		f := &jObj{key, e.fi}
+		f := &jObj{key, e.fi, e.linkPath}
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break
@@ -246,6 +248,7 @@ type mEntry struct {
 	fi        *fs.FileStat
 	name      string
 	isSymlink bool
+	linkPath  string
 }
 
 // readDirSorted reads the directory named by dirname and returns
@@ -263,21 +266,25 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 	mEntries := make([]*mEntry, len(entries))
 	for i, e := range entries {
 		fi := fs.AttrToFileInfo(e.Inode, e.Attr)
+		var linkPath []byte
+		if fi.IsSymlink() {
+			linkPath, _ = j.jfs.Readlink(ctx, filepath.Join(dirname, string(e.Name)))
+		}
 		if fi.IsDir() {
-			mEntries[i] = &mEntry{fi, string(e.Name) + dirSuffix, false}
+			mEntries[i] = &mEntry{fi, string(e.Name) + dirSuffix, false, ""}
 		} else if fi.IsSymlink() && followLink {
 			fi2, err := j.jfs.Stat(ctx, filepath.Join(dirname, string(e.Name)))
 			if err != 0 {
-				mEntries[i] = &mEntry{fi, string(e.Name), true}
+				mEntries[i] = &mEntry{fi, string(e.Name), true, string(linkPath)}
 				continue
 			}
 			name := string(e.Name)
 			if fi2.IsDir() {
 				name += dirSuffix
 			}
-			mEntries[i] = &mEntry{fi2, name, false}
+			mEntries[i] = &mEntry{fi2, name, false, string(linkPath)}
 		} else {
-			mEntries[i] = &mEntry{fi, string(e.Name), fi.IsSymlink()}
+			mEntries[i] = &mEntry{fi, string(e.Name), fi.IsSymlink(), string(linkPath)}
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].name < mEntries[j].name })

@@ -102,6 +102,7 @@ func (q *qiniu) Head(key string) (Object, error) {
 		mtime,
 		strings.HasSuffix(key, "/"),
 		"",
+		"",
 	}, nil
 }
 
@@ -172,11 +173,11 @@ func (q *qiniu) List(prefix, marker, delimiter string, limit int64, followLink b
 	for i := 0; i < n; i++ {
 		entry := entries[i]
 		mtime := entry.PutTime / 10000000
-		objs[i] = &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/"), ""}
+		objs[i] = &obj{entry.Key, entry.Fsize, time.Unix(mtime, 0), strings.HasSuffix(entry.Key, "/"), "", ""}
 	}
 	if delimiter != "" {
 		for _, p := range prefixes {
-			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true, ""})
+			objs = append(objs, &obj{p, 0, time.Unix(0, 0), true, "", ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

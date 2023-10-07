@@ -75,6 +75,7 @@ func (h *hdfsclient) toFile(key string, info os.FileInfo) *file {
 			info.ModTime(),
 			info.IsDir(),
 			"",
+			"",
 		},
 		hinfo.Owner(),
 		hinfo.OwnerGroup(),
