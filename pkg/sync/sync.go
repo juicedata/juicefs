@@ -304,11 +304,11 @@ func doCheckSum(src, dst object.ObjectStorage, key string, size int64, equal *bo
 	return err
 }
 
-func checkSum(src, dst object.ObjectStorage, key string, size int64, config *Config, obj object.Object, dstLinkPath string) (bool, error) {
+func checkSum(src, dst object.ObjectStorage, key string, size int64, checkLink bool, obj object.Object, dstLinkPath string) (bool, error) {
 	start := time.Now()
 	var equal bool
 	err := try(3, func() error {
-		if obj.IsSymlink() && config.Links && dstLinkPath != "" {
+		if obj.IsSymlink() && checkLink && dstLinkPath != "" {
 			equal = obj.LinkPath() == dstLinkPath
 			return nil
 		} else {
@@ -530,7 +530,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 			withSizeObj := obj.(*withSize)
 			obj = withSizeObj.Object
-			if equal, err := checkSum(src, dst, key, obj.Size(), config, obj, withSizeObj.dstLinkPath); err != nil {
+			if equal, err := checkSum(src, dst, key, obj.Size(), config.Links, obj, withSizeObj.dstLinkPath); err != nil {
 				failed.Increment()
 				break
 			} else if equal {
@@ -575,7 +575,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
 				var equal bool
-				if equal, err = checkSum(src, dst, key, obj.Size(), config, obj, ""); err == nil && !equal {
+				if equal, err = checkSum(src, dst, key, obj.Size(), config.Links, obj, ""); err == nil && !equal {
 					err = fmt.Errorf("checksums of copied object %s don't match", key)
 				}
 			}
