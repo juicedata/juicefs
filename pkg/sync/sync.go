@@ -224,7 +224,7 @@ func copyPerms(dst object.ObjectStorage, obj object.Object) {
 }
 
 func doCheckSum(src, dst object.ObjectStorage, key string, obj object.Object, config *Config, equal *bool) error {
-	if obj.IsSymlink() && config.Links && config.CheckAll {
+	if obj.IsSymlink() && config.Links && (config.CheckAll || config.CheckNew) {
 		var srcLink, dstLink string
 		var err error
 		if s, ok := src.(object.SupportSymlink); ok {

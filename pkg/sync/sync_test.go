@@ -434,7 +434,7 @@ func TestSingleLink(t *testing.T) {
 	}
 }
 
-func TestSyncCheckLink(t *testing.T) {
+func TestSyncCheckAllLink(t *testing.T) {
 	defer func() {
 		_ = os.RemoveAll("/tmp/a")
 		_ = os.RemoveAll("/tmp/b")
@@ -456,6 +456,44 @@ func TestSyncCheckLink(t *testing.T) {
 		Quiet:    true,
 		Limit:    -1,
 		CheckAll: true,
+	}); err != nil {
+		t.Fatalf("sync: %s", err)
+	}
+
+	l1, err := bs.Readlink("l1")
+	if err != nil || l1 != "/tmp/a/a1" {
+		t.Fatalf("readlink: %s content: %s", err, l1)
+	}
+	content, err := b.Get("l1", 0, -1)
+	if err != nil {
+		t.Fatalf("get content failed: %s", err)
+	}
+	if c, err := io.ReadAll(content); err != nil || string(c) != "test" {
+		t.Fatalf("read content failed: err %s content %s", err, string(c))
+	}
+}
+
+func TestSyncCheckNewLink(t *testing.T) {
+	defer func() {
+		_ = os.RemoveAll("/tmp/a")
+		_ = os.RemoveAll("/tmp/b")
+	}()
+
+	a, _ := object.CreateStorage("file", "/tmp/a/", "", "", "")
+	a.Put("a1", bytes.NewReader([]byte("test")))
+	as := a.(object.SupportSymlink)
+	as.Symlink("/tmp/a/a1", "l1")
+
+	b, _ := object.CreateStorage("file", "/tmp/b/", "", "", "")
+	bs := b.(object.SupportSymlink)
+
+	if err := Sync(a, b, &Config{
+		Threads:  50,
+		Perms:    true,
+		Links:    true,
+		Quiet:    true,
+		Limit:    -1,
+		CheckNew: true,
 	}); err != nil {
 		t.Fatalf("sync: %s", err)
 	}
