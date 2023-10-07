@@ -81,10 +81,10 @@ func (d *filestore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return d.toFile(key, fi, false), nil
+	return toFile(key, fi, false), nil
 }
 
-func (d *filestore) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
+func toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 	size := fi.Size()
 	if fi.IsDir() {
 		size = 0
@@ -299,7 +299,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 			continue
 		}
 		info := e.Info()
-		f := d.toFile(key, info, e.isSymlink)
+		f := toFile(key, info, e.isSymlink)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break

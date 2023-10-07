@@ -323,6 +323,8 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		if os.Getenv(endpoint) != "" {
 			conf.Env[endpoint] = os.Getenv(endpoint)
 		}
+	} else if name == "nfs" {
+		endpoint = u.Host + u.Path
 	} else if !conf.NoHTTPS && supportHTTPS(name, u.Host) {
 		endpoint = "https://" + u.Host
 	} else {
