@@ -103,7 +103,6 @@ func (s *obsClient) Head(key string) (Object, error) {
 		r.LastModified,
 		strings.HasSuffix(key, "/"),
 		sc,
-		"",
 	}, nil
 }
 
@@ -223,7 +222,7 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLi
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed to decode key %s", o.Key)
 		}
-		objs[i] = &obj{key, o.Size, o.LastModified, strings.HasSuffix(key, "/"), string(o.StorageClass), ""}
+		objs[i] = &obj{key, o.Size, o.LastModified, strings.HasSuffix(key, "/"), string(o.StorageClass)}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
@@ -231,7 +230,7 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLi
 			if err != nil {
 				return nil, errors.WithMessagef(err, "failed to decode commonPrefixes %s", p)
 			}
-			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, "", ""})
+			objs = append(objs, &obj{prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

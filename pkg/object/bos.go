@@ -85,7 +85,6 @@ func (q *bosclient) Head(key string) (Object, error) {
 		mtime,
 		strings.HasSuffix(key, "/"),
 		r.StorageClass,
-		"",
 	}, nil
 }
 
@@ -153,11 +152,11 @@ func (q *bosclient) List(prefix, marker, delimiter string, limit int64, followLi
 	for i := 0; i < n; i++ {
 		k := out.Contents[i]
 		mod, _ := time.Parse("2006-01-02T15:04:05Z", k.LastModified)
-		objs[i] = &obj{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/"), k.StorageClass, ""}
+		objs[i] = &obj{k.Key, int64(k.Size), mod, strings.HasSuffix(k.Key, "/"), k.StorageClass}
 	}
 	if delimiter != "" {
 		for _, p := range out.CommonPrefixes {
-			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true, "", ""})
+			objs = append(objs, &obj{p.Prefix, 0, time.Unix(0, 0), true, ""})
 		}
 		sort.Slice(objs, func(i, j int) bool { return objs[i].Key() < objs[j].Key() })
 	}

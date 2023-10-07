@@ -77,7 +77,6 @@ func (d *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 			fi.ModTime(),
 			fi.IsDir(),
 			"",
-			"",
 		},
 		owner,
 		group,
@@ -180,19 +179,19 @@ func (d *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 			continue
 		}
 		if e.IsDir() {
-			mEntries = append(mEntries, &mEntry{nil, name + dirSuffix, e, false, ""})
+			mEntries = append(mEntries, &mEntry{nil, name + dirSuffix, e, false})
 		} else if !e.Mode().IsRegular() && followLink {
 			fi, err := v.Stat(filepath.Join(dirname, name))
 			if err != nil {
-				mEntries = append(mEntries, &mEntry{nil, name, e, true, ""})
+				mEntries = append(mEntries, &mEntry{nil, name, e, true})
 				continue
 			}
 			if fi.IsDir() {
 				name += dirSuffix
 			}
-			mEntries = append(mEntries, &mEntry{nil, name, fi, false, ""})
+			mEntries = append(mEntries, &mEntry{nil, name, fi, false})
 		} else {
-			mEntries = append(mEntries, &mEntry{nil, name, e, !e.Mode().IsRegular(), ""})
+			mEntries = append(mEntries, &mEntry{nil, name, e, !e.Mode().IsRegular()})
 		}
 	}
 	sort.Slice(mEntries, func(i, j int) bool { return mEntries[i].Name() < mEntries[j].Name() })

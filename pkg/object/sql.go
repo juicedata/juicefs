@@ -120,7 +120,6 @@ func (s *sqlStore) Head(key string) (Object, error) {
 		b.Modified,
 		strings.HasSuffix(key, "/"),
 		"",
-		"",
 	}, nil
 }
 

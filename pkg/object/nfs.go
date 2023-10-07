@@ -55,7 +55,6 @@ type nfsEntry struct {
 	name      string
 	fi        os.FileInfo
 	isSymlink bool
-	linkPath  string
 }
 
 func (e *nfsEntry) Name() string {
@@ -187,7 +186,7 @@ func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	owner, group := n.getOwnerGroup(fi)
 	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
 	ff := &file{
-		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), "", ""},
+		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
 		owner,
 		group,
 		fi.Mode(),
@@ -210,26 +209,22 @@ func (n *nfsStore) readDirSorted(dirname string, followLink bool) ([]*nfsEntry, 
 	nfsEntries := make([]*nfsEntry, len(entries))
 
 	for i, e := range entries {
-		var linkPath string
-		if !e.Mode().IsRegular() {
-			linkPath, _ = os.Readlink(filepath.Join(dirname, e.Name()))
-		}
 		if e.IsDir() {
-			nfsEntries[i] = &nfsEntry{e, e.Name() + dirSuffix, nil, false, ""}
+			nfsEntries[i] = &nfsEntry{e, e.Name() + dirSuffix, nil, false}
 		} else if e.Attr.Attr.Type == nfs.NF3Lnk && followLink {
 			// follow symlink
 			fi, _, err := n.target.Lookup(filepath.Join(dirname, e.Name()))
 			if err != nil {
-				nfsEntries[i] = &nfsEntry{e, e.Name(), nil, true, linkPath}
+				nfsEntries[i] = &nfsEntry{e, e.Name(), nil, true}
 				continue
 			}
 			name := e.Name()
 			if fi.IsDir() {
 				name = e.Name() + dirSuffix
 			}
-			nfsEntries[i] = &nfsEntry{e, name, fi, true, linkPath}
+			nfsEntries[i] = &nfsEntry{e, name, fi, true}
 		} else {
-			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, false, linkPath}
+			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, false}
 		}
 	}
 	sort.Slice(nfsEntries, func(i, j int) bool { return nfsEntries[i].Name() < nfsEntries[j].Name() })
@@ -272,7 +267,7 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 		if !strings.HasPrefix(p, prefix) || (marker != "" && p <= marker) {
 			continue
 		}
-		f := toFile(p, e, e.isSymlink, e.linkPath)
+		f := toFile(p, e, e.isSymlink)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break

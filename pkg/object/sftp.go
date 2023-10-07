@@ -170,7 +170,7 @@ func (f *sftpStore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return f.fileInfo(nil, key, info, true, ""), nil
+	return f.fileInfo(nil, key, info, true), nil
 }
 
 func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
@@ -312,19 +312,15 @@ func (f *sftpStore) sortByName(c *sftp.Client, path string, fis []os.FileInfo, f
 	for _, fi := range fis {
 		p := path + fi.Name()
 		if strings.HasPrefix(p, f.root) {
-			var linkPath string
-			if !fi.Mode().IsRegular() {
-				linkPath, _ = c.ReadLink(p)
-			}
 			key := p[len(f.root):]
-			obs = append(obs, f.fileInfo(c, key, fi, followLink, linkPath))
+			obs = append(obs, f.fileInfo(c, key, fi, followLink))
 		}
 	}
 	sort.Slice(obs, func(i, j int) bool { return obs[i].Key() < obs[j].Key() })
 	return obs
 }
 
-func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followLink bool, linkPath string) Object {
+func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followLink bool) Object {
 	owner, group := getOwnerGroup(fi)
 	isSymlink := !fi.Mode().IsDir() && !fi.Mode().IsRegular()
 	if isSymlink && c != nil && followLink {
@@ -334,7 +330,7 @@ func (f *sftpStore) fileInfo(c *sftp.Client, key string, fi os.FileInfo, followL
 		}
 	}
 	ff := &file{
-		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), "", linkPath},
+		obj{key, fi.Size(), fi.ModTime(), fi.IsDir(), ""},
 		owner,
 		group,
 		fi.Mode(),

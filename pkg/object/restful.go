@@ -179,7 +179,6 @@ func (s *RestfulStorage) Head(key string) (Object, error) {
 		mtime,
 		strings.HasSuffix(key, "/"),
 		"",
-		"",
 	}, nil
 }
 

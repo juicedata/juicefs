@@ -79,7 +79,6 @@ func (c *b2client) Head(key string) (Object, error) {
 		time.Unix(f.UploadTimestamp/1000, 0),
 		strings.HasSuffix(f.Name, "/"),
 		"",
-		"",
 	}, nil
 }
 
@@ -145,7 +144,6 @@ func (c *b2client) List(prefix, marker, delimiter string, limit int64, followLin
 			f.ContentLength,
 			time.Unix(f.UploadTimestamp/1000, 0),
 			strings.HasSuffix(f.Name, "/"),
-			"",
 			"",
 		}
 	}

@@ -194,7 +194,7 @@ func (c *ceph) Head(key string) (Object, error) {
 		if err != nil {
 			return err
 		}
-		o = &obj{key, int64(stat.Size), stat.ModTime, strings.HasSuffix(key, "/"), "", ""}
+		o = &obj{key, int64(stat.Size), stat.ModTime, strings.HasSuffix(key, "/"), ""}
 		return nil
 	})
 	if err == rados.ErrNotFound {
@@ -238,7 +238,7 @@ func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, e
 					logger.Errorf("Stat key %s: %s", key, err)
 					return
 				}
-				objs <- &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), "", ""}
+				objs <- &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), ""}
 			}
 		}()
 		return nil

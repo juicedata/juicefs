@@ -60,7 +60,6 @@ func (w *webdav) Head(key string) (Object, error) {
 		info.ModTime(),
 		info.IsDir(),
 		"",
-		"",
 	}, nil
 }
 
@@ -219,7 +218,6 @@ func (w *webdav) List(prefix, marker, delimiter string, limit int64, followLink 
 			info.Size(),
 			info.ModTime(),
 			info.IsDir(),
-			"",
 			"",
 		})
 		if len(objs) == int(limit) {
