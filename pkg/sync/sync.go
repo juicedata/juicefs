@@ -76,6 +76,7 @@ func formatSize(bytes int64) string {
 func ListAll(store object.ObjectStorage, prefix, start, end string, followLink bool) (<-chan object.Object, error) {
 	startTime := time.Now()
 	logger.Debugf("Iterating objects from %s with prefix %s start %q", store, prefix, start)
+
 	out := make(chan object.Object, maxResults*10)
 
 	// As the result of object storage's List method doesn't include the marker key,
@@ -206,7 +207,7 @@ func deleteObj(storage object.ObjectStorage, key string, dry bool) {
 func needCopyPerms(o1, o2 object.Object) bool {
 	f1 := o1.(object.File)
 	f2 := o2.(object.File)
-	return f2.Mode()&^os.ModeType != f1.Mode()&^os.ModeType || f2.Owner() != f1.Owner() || f2.Group() != f1.Group()
+	return f2.Mode() != f1.Mode() || f2.Owner() != f1.Owner() || f2.Group() != f1.Group()
 }
 
 func copyPerms(dst object.ObjectStorage, obj object.Object) {
@@ -554,15 +555,17 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				break
 			}
 			var err error
-			var dataCopied bool
 			if config.Links && obj.IsSymlink() {
-				err = copyLink(src, dst, key)
+				if err = copyLink(src, dst, key); err == nil {
+					copied.Increment()
+					break
+				}
+				logger.Errorf("copy link failed: %s", err)
 			} else {
-				dataCopied = true
 				err = copyData(src, dst, key, obj.Size())
 			}
 
-			if err == nil && (config.CheckAll || config.CheckNew) && dataCopied {
+			if err == nil && (config.CheckAll || config.CheckNew) {
 				var equal bool
 				if equal, err = checkSum(src, dst, key, obj.Size()); err == nil && !equal {
 					err = fmt.Errorf("checksums of copied object %s don't match", key)

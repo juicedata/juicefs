@@ -309,6 +309,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		secretKey, _ = user.Password()
 	}
 	name := strings.ToLower(u.Scheme)
+
 	var endpoint string
 	if name == "file" {
 		endpoint = u.Path

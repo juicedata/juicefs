@@ -214,7 +214,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 					if key < start && !strings.HasPrefix(start, key) {
 						continue
 					}
-					if !entries[i].IsDir() || key == prefix || !followLink && entries[i].IsSymlink() {
+					if !entries[i].IsDir() || key == prefix {
 						continue
 					}
 
@@ -244,7 +244,7 @@ func ListAllWithDelimiter(store ObjectStorage, prefix, start, end string, follow
 			} else if !strings.HasPrefix(start, key) {
 				continue
 			}
-			if !entries[i].IsDir() || key == prefix || !followLink && entries[i].IsSymlink() {
+			if !e.IsDir() || key == prefix {
 				continue
 			}
 
