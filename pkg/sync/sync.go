@@ -228,18 +228,16 @@ func doCheckSum(src, dst object.ObjectStorage, key string, obj object.Object, co
 		var srcLink, dstLink string
 		var err error
 		if s, ok := src.(object.SupportSymlink); ok {
-			srcLink, err = s.Readlink(key)
-			if err != nil {
+			if srcLink, err = s.Readlink(key); err != nil {
 				return err
 			}
 		}
 		if s, ok := dst.(object.SupportSymlink); ok {
-			dstLink, err = s.Readlink(key)
-			if err != nil {
+			if dstLink, err = s.Readlink(key); err != nil {
 				return err
 			}
 		}
-		*equal = srcLink == dstLink && srcLink != ""
+		*equal = srcLink == dstLink && srcLink != "" && dstLink != ""
 		return nil
 	}
 	abort := make(chan struct{})
