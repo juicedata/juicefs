@@ -257,8 +257,10 @@ mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 </Tabs>
 
 :::note 注意
+
 1. 不要漏掉 URL 两边的 `()` 括号
 2. 密码中的特殊字符不需要进行 url 编码
+
 :::
 
 例如：

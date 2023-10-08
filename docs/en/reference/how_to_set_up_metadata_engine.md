@@ -257,8 +257,10 @@ mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 </Tabs>
 
 :::note
+
 1. Don't leave out the `()` brackets on either side of the URL.
 2. Special characters in passwords do not require url encoding
+
 :::
 
 For example:
