@@ -37,6 +37,7 @@ type handle struct {
 	// for file
 	locks      uint8
 	flockOwner uint64 // kernel 3.1- does not pass lock_owner in release()
+	ofdOwner   uint64 // OFD lock
 	reader     FileReader
 	writer     FileWriter
 	ops        []Context
