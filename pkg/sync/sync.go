@@ -223,7 +223,23 @@ func copyPerms(dst object.ObjectStorage, obj object.Object) {
 	logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner(), fi.Group(), fi.Mode(), key, time.Since(start))
 }
 
-func doCheckSum(src, dst object.ObjectStorage, key string, size int64, equal *bool) error {
+func doCheckSum(src, dst object.ObjectStorage, key string, obj object.Object, config *Config, equal *bool) error {
+	if obj.IsSymlink() && config.Links && (config.CheckAll || config.CheckNew) {
+		var srcLink, dstLink string
+		var err error
+		if s, ok := src.(object.SupportSymlink); ok {
+			if srcLink, err = s.Readlink(key); err != nil {
+				return err
+			}
+		}
+		if s, ok := dst.(object.SupportSymlink); ok {
+			if dstLink, err = s.Readlink(key); err != nil {
+				return err
+			}
+		}
+		*equal = srcLink == dstLink && srcLink != "" && dstLink != ""
+		return nil
+	}
 	abort := make(chan struct{})
 	checkPart := func(offset, length int64) error {
 		if limiter != nil {
@@ -273,16 +289,16 @@ func doCheckSum(src, dst object.ObjectStorage, key string, size int64, equal *bo
 	}
 
 	var err error
-	if size < maxBlock {
-		err = checkPart(0, size)
+	if obj.Size() < maxBlock {
+		err = checkPart(0, obj.Size())
 	} else {
-		n := int((size-1)/defaultPartSize) + 1
+		n := int((obj.Size()-1)/defaultPartSize) + 1
 		errs := make(chan error, n)
 		for i := 0; i < n; i++ {
 			go func(num int) {
 				sz := int64(defaultPartSize)
 				if num == n-1 {
-					sz = size - int64(num)*defaultPartSize
+					sz = obj.Size() - int64(num)*defaultPartSize
 				}
 				errs <- checkPart(int64(num)*defaultPartSize, sz)
 			}(i)
@@ -304,13 +320,13 @@ func doCheckSum(src, dst object.ObjectStorage, key string, size int64, equal *bo
 	return err
 }
 
-func checkSum(src, dst object.ObjectStorage, key string, size int64) (bool, error) {
+func checkSum(src, dst object.ObjectStorage, key string, obj object.Object, config *Config) (bool, error) {
 	start := time.Now()
 	var equal bool
-	err := try(3, func() error { return doCheckSum(src, dst, key, size, &equal) })
+	err := try(3, func() error { return doCheckSum(src, dst, key, obj, config, &equal) })
 	if err == nil {
 		checked.Increment()
-		checkedBytes.IncrInt64(size)
+		checkedBytes.IncrInt64(obj.Size())
 		if equal {
 			logger.Debugf("Checked %s OK (and equal) in %s,", key, time.Since(start))
 		} else {
@@ -522,7 +538,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				break
 			}
 			obj = obj.(*withSize).Object
-			if equal, err := checkSum(src, dst, key, obj.Size()); err != nil {
+			if equal, err := checkSum(src, dst, key, obj, config); err != nil {
 				failed.Increment()
 				break
 			} else if equal {
@@ -556,18 +572,16 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			}
 			var err error
 			if config.Links && obj.IsSymlink() {
-				if err = copyLink(src, dst, key); err == nil {
-					copied.Increment()
-					break
+				if err = copyLink(src, dst, key); err != nil {
+					logger.Errorf("copy link failed: %s", err)
 				}
-				logger.Errorf("copy link failed: %s", err)
 			} else {
 				err = copyData(src, dst, key, obj.Size())
 			}
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
 				var equal bool
-				if equal, err = checkSum(src, dst, key, obj.Size()); err == nil && !equal {
+				if equal, err = checkSum(src, dst, key, obj, config); err == nil && !equal {
 					err = fmt.Errorf("checksums of copied object %s don't match", key)
 				}
 			}
