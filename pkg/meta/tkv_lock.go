@@ -229,22 +229,25 @@ func (m *kvMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLock
 
 	var flocks []FLockItem
 	var plocks []PLockItem
-	err := m.txn(func(tx *kvTxn) error {
-		fv := tx.get(fKey)
-		fs := unmarshalFlock(fv)
-		for k, t := range fs {
-			flocks = append(flocks, FLockItem{ownerKey{k.sid, k.owner}, string(t)})
-		}
+	fv, err := m.get(fKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	fs := unmarshalFlock(fv)
+	for k, t := range fs {
+		flocks = append(flocks, FLockItem{ownerKey{k.sid, k.owner}, string(t)})
+	}
 
-		pv := tx.get(pKey)
-		owners := unmarshalPlock(pv)
-		for k, records := range owners {
-			ls := loadLocks(records)
-			for _, l := range ls {
-				plocks = append(plocks, PLockItem{ownerKey{k.sid, k.owner}, l})
-			}
+	pv, err := m.get(pKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	owners := unmarshalPlock(pv)
+	for k, records := range owners {
+		ls := loadLocks(records)
+		for _, l := range ls {
+			plocks = append(plocks, PLockItem{ownerKey{k.sid, k.owner}, l})
 		}
-		return nil
-	})
-	return plocks, flocks, err
+	}
+	return plocks, flocks, nil
 }

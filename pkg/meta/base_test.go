@@ -1717,6 +1717,10 @@ func testReadOnly(t *testing.T, m Meta) {
 	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != syscall.EROFS {
 		t.Fatalf("open f: %s", st)
 	}
+
+	if plocks, flocks, err := m.ListLocks(ctx, 1); err != nil || len(plocks) != 0 || len(flocks) != 0 {
+		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
+	}
 }
 
 func testConcurrentDir(t *testing.T, m Meta) {
