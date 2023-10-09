@@ -180,7 +180,7 @@ func (d *filestore) Put(key string, in io.Reader) error {
 	return err
 }
 
-func (d *filestore) Copy(dst, src string) error {
+func (d *filestore) Copy(dst, src, srcBucket string) error {
 	r, err := d.Get(src, 0, -1)
 	if err != nil {
 		return err

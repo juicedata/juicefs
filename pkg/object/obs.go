@@ -49,6 +49,13 @@ type obsClient struct {
 	c         *obs.ObsClient
 }
 
+func (s *obsClient) BucketInfo() Bucket {
+	return Bucket{
+		Name:   s.bucket,
+		Region: s.region,
+	}
+}
+
 func (s *obsClient) String() string {
 	return fmt.Sprintf("obs://%s/", s.bucket)
 }
@@ -179,11 +186,11 @@ func (s *obsClient) Put(key string, in io.Reader) error {
 	return err
 }
 
-func (s *obsClient) Copy(dst, src string) error {
+func (s *obsClient) Copy(dst, src, srcBucket string) error {
 	params := &obs.CopyObjectInput{}
 	params.Bucket = s.bucket
 	params.Key = dst
-	params.CopySourceBucket = s.bucket
+	params.CopySourceBucket = srcBucket
 	params.CopySourceKey = src
 	params.StorageClass = obs.StorageClassType(s.sc)
 	_, err := s.c.CopyObject(params)
@@ -273,7 +280,7 @@ func (s *obsClient) UploadPart(key string, uploadID string, num int, body []byte
 	return &Part{Num: num, ETag: resp.ETag}, err
 }
 
-func (s *obsClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (s *obsClient) UploadPartCopy(key, uploadID string, num int, srcBucket, srcKey string, off, size int64) (*Part, error) {
 	resp, err := s.c.CopyPart(&obs.CopyPartInput{
 		Bucket:               s.bucket,
 		Key:                  key,

@@ -38,8 +38,8 @@ func (j *jss) String() string {
 	return fmt.Sprintf("jss://%s/", j.s3client.bucket)
 }
 
-func (j *jss) Copy(dst, src string) error {
-	src = "/" + j.s3client.bucket + "/" + src
+func (j *jss) Copy(dst, src, srcBucket string) error {
+	src = "/" + srcBucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:     &j.s3client.bucket,
 		Key:        &dst,

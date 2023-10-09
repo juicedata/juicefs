@@ -38,7 +38,15 @@ import (
 type tosClient struct {
 	bucket string
 	sc     string
+	region string
 	client *tos.ClientV2
+}
+
+func (t *tosClient) BucketInfo() Bucket {
+	return Bucket{
+		Name:   t.bucket,
+		Region: t.region,
+	}
 }
 
 func (t *tosClient) String() string {
@@ -200,13 +208,13 @@ func (t *tosClient) UploadPart(key string, uploadID string, num int, body []byte
 	return &Part{Num: num, ETag: resp.ETag}, nil
 }
 
-func (t *tosClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (t *tosClient) UploadPartCopy(key, uploadID string, num int, srcBucket, srcKey string, off, size int64) (*Part, error) {
 	resp, err := t.client.UploadPartCopyV2(context.Background(), &tos.UploadPartCopyV2Input{
 		Bucket:          t.bucket,
 		Key:             key,
 		UploadID:        uploadID,
 		PartNumber:      num,
-		SrcBucket:       t.bucket,
+		SrcBucket:       srcBucket,
 		SrcKey:          srcKey,
 		CopySourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1),
 	},
@@ -256,9 +264,9 @@ func (t *tosClient) ListUploads(marker string) ([]*PendingPart, string, error) {
 	return parts, nextMarker, nil
 }
 
-func (t *tosClient) Copy(dst, src string) error {
+func (t *tosClient) Copy(dst, src, srcBucket string) error {
 	_, err := t.client.CopyObject(context.Background(), &tos.CopyObjectInput{
-		SrcBucket:    t.bucket,
+		SrcBucket:    srcBucket,
 		Bucket:       t.bucket,
 		SrcKey:       src,
 		Key:          dst,
@@ -282,15 +290,16 @@ func newTOS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	hostParts := strings.SplitN(uri.Host, ".", 3)
 	credentials := tos.NewStaticCredentials(accessKey, secretKey)
 	credentials.WithSecurityToken(token)
+	region := strings.TrimSuffix(hostParts[1], "tos-")
 	cli, err := tos.NewClientV2(
 		hostParts[1]+"."+hostParts[2],
-		tos.WithRegion(strings.TrimSuffix(hostParts[1], "tos-")),
+		tos.WithRegion(region),
 		tos.WithCredentials(credentials),
 		tos.WithEnableVerifySSL(httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify))
 	if err != nil {
 		return nil, err
 	}
-	return &tosClient{bucket: hostParts[0], client: cli}, nil
+	return &tosClient{bucket: hostParts[0], client: cli, region: region}, nil
 }
 
 func init() {

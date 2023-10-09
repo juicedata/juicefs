@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -35,14 +36,15 @@ import (
 
 // The max number of key per listing request
 const (
-	maxResults      = 1000
-	defaultPartSize = 5 << 20
-	bufferSize      = 32 << 10
-	maxBlock        = defaultPartSize * 2
-	markDeleteSrc   = -1
-	markDeleteDst   = -2
-	markCopyPerms   = -3
-	markChecksum    = -4
+	maxResults                 = 1000
+	defaultPartSize            = 5 << 20
+	defaultServiceCopyPartSize = 100 << 20
+	bufferSize                 = 32 << 10
+	maxBlock                   = defaultPartSize * 2
+	markDeleteSrc              = -1
+	markDeleteDst              = -2
+	markCopyPerms              = -3
+	markChecksum               = -4
 )
 
 var (
@@ -414,7 +416,7 @@ SINGLE:
 	return err
 }
 
-func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
+func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, serviceCopy bool, upload *object.MultipartUpload) error {
 	partSize := int64(upload.MinPartSize)
 	if partSize == 0 {
 		partSize = defaultPartSize
@@ -447,8 +449,13 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 				}()
 			}
 
-			data := make([]byte, sz)
 			if err := try(3, func() error {
+				var err error
+				if serviceCopy {
+					parts[num], err = dst.UploadPartCopy(key, upload.UploadID, num+1, src.BucketInfo().Name, key, int64(num)*partSize, sz)
+					return err
+				}
+				data := make([]byte, sz)
 				in, err := src.Get(key, int64(num)*partSize, sz)
 				if err != nil {
 					return err
@@ -488,15 +495,45 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 	return nil
 }
 
-func copyData(src, dst object.ObjectStorage, key string, size int64) error {
+func doCopyFromService(src, dst object.ObjectStorage, key string, size int64) error {
+	var err error
+	// If the size is less than one part, copy whole object
+	if size < int64(defaultServiceCopyPartSize) {
+		if err := dst.Copy(key, key, src.BucketInfo().Name); err != nil {
+			return err
+		}
+		copiedBytes.IncrInt64(size)
+		return nil
+	} else {
+		var upload *object.MultipartUpload
+		if upload, err = dst.CreateMultipartUpload(key); err != nil {
+			return err
+		}
+		upload.MinPartSize = defaultServiceCopyPartSize
+		if err = doCopyMultiple(src, dst, key, size, true, upload); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyData(src, dst object.ObjectStorage, key string, size int64, serviceCopy bool) error {
 	start := time.Now()
 	var err error
+	if serviceCopy {
+		if err = doCopyFromService(src, dst, key, size); err == nil {
+			logger.Debugf("Copied data of %s (%d bytes) in %s", key, size, time.Since(start))
+			return nil
+		}
+		serviceCopy = false
+		logger.Warnf("Failed to use service copy data of %s, fallback to normal copy, err: %+v", key, err)
+	}
 	if size < maxBlock {
 		err = try(3, func() error { return doCopySingle(src, dst, key, size) })
 	} else {
 		var upload *object.MultipartUpload
 		if upload, err = dst.CreateMultipartUpload(key); err == nil {
-			err = doCopyMultiple(src, dst, key, size, upload)
+			err = doCopyMultiple(src, dst, key, size, serviceCopy, upload)
 		} else if err == utils.ENOTSUP {
 			err = try(3, func() error { return doCopySingle(src, dst, key, size) })
 		} else { // other error retry
@@ -504,7 +541,7 @@ func copyData(src, dst object.ObjectStorage, key string, size int64) error {
 				upload, err = dst.CreateMultipartUpload(key)
 				return err
 			}); err == nil {
-				err = doCopyMultiple(src, dst, key, size, upload)
+				err = doCopyMultiple(src, dst, key, size, serviceCopy, upload)
 			}
 		}
 	}
@@ -576,7 +613,11 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 					logger.Errorf("copy link failed: %s", err)
 				}
 			} else {
-				err = copyData(src, dst, key, obj.Size())
+				serviceCopy := false
+				if !config.DisableServiceCopy {
+					serviceCopy = checkUseServiceCopy(src, dst)
+				}
+				err = copyData(src, dst, key, obj.Size(), serviceCopy)
 			}
 
 			if err == nil && (config.CheckAll || config.CheckNew) {
@@ -602,6 +643,13 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 		}
 		handled.Increment()
 	}
+}
+
+func checkUseServiceCopy(src, dst object.ObjectStorage) bool {
+	return reflect.TypeOf(src) == reflect.TypeOf(dst) &&
+		src.BucketInfo().Region == dst.BucketInfo().Region &&
+		src.Limits().IsSupportUploadPartCopy &&
+		dst.Limits().IsSupportUploadPartCopy
 }
 
 func copyLink(src object.ObjectStorage, dst object.ObjectStorage, key string) error {

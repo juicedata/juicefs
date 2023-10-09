@@ -100,7 +100,7 @@ func (c *b2client) Put(key string, data io.Reader) error {
 	return err
 }
 
-func (c *b2client) Copy(dst, src string) error {
+func (c *b2client) Copy(dst, src, srcBucket string) error {
 	f, err := c.getFileInfo(src)
 	if err != nil {
 		return err

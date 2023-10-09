@@ -235,7 +235,7 @@ func (u *RestfulStorage) Put(key string, body io.Reader) error {
 	return nil
 }
 
-func (s *RestfulStorage) Copy(dst, src string) error {
+func (s *RestfulStorage) Copy(dst, src, srcBucket string) error {
 	in, err := s.Get(src, 0, -1)
 	if err != nil {
 		return err

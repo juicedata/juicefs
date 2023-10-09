@@ -114,7 +114,7 @@ func (m *memStore) Put(key string, in io.Reader) error {
 	return nil
 }
 
-func (m *memStore) Copy(dst, src string) error {
+func (m *memStore) Copy(dst, src, srcBucket string) error {
 	d, err := m.Get(src, 0, -1)
 	if err != nil {
 		return err

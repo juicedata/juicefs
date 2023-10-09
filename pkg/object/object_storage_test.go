@@ -402,7 +402,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 
 	dstKey := "test-copy"
 	defer s.Delete(dstKey)
-	err = s.Copy(fmt.Sprintf("%s%s", prefix, dstKey), fmt.Sprintf("%stest", prefix))
+	err = s.Copy(fmt.Sprintf("%s%s", prefix, dstKey), fmt.Sprintf("%stest", prefix), s.BucketInfo().Name)
 	if err != nil && err != notSupported {
 		t.Fatalf("copy failed: %s", err.Error())
 	}
@@ -513,7 +513,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		copyParts := make([]*Part, total)
 		var startIdx = 0
 		for i, c := range content {
-			copyParts[i], err = s.UploadPartCopy(dstKey, copyUpload.UploadID, i+1, k, int64(startIdx), int64(len(c)))
+			copyParts[i], err = s.UploadPartCopy(dstKey, copyUpload.UploadID, i+1, s.BucketInfo().Name, k, int64(startIdx), int64(len(c)))
 			if err != nil {
 				t.Fatalf("failed to upload part copy: %v", err)
 			}

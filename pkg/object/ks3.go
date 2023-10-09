@@ -46,6 +46,13 @@ type ks3 struct {
 	sc     string
 }
 
+func (s *ks3) BucketInfo() Bucket {
+	return Bucket{
+		Name:   s.bucket,
+		Region: s.s3.Config.Region,
+	}
+}
+
 func (s *ks3) String() string {
 	return fmt.Sprintf("ks3://%s/", s.bucket)
 }
@@ -145,8 +152,8 @@ func (s *ks3) Put(key string, in io.Reader) error {
 	}
 	return err
 }
-func (s *ks3) Copy(dst, src string) error {
-	src = s.bucket + "/" + src
+func (s *ks3) Copy(dst, src, srcBucket string) error {
+	src = srcBucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
 		Key:        &dst,
@@ -247,10 +254,10 @@ func (s *ks3) UploadPart(key string, uploadID string, num int, body []byte) (*Pa
 	return &Part{Num: num, ETag: *resp.ETag}, nil
 }
 
-func (s *ks3) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (s *ks3) UploadPartCopy(key, uploadID string, num int, srcBucket, srcKey string, off, size int64) (*Part, error) {
 	resp, err := s.s3.UploadPartCopy(&s3.UploadPartCopyInput{
 		Bucket:          aws.String(s.bucket),
-		CopySource:      aws.String(s.bucket + "/" + srcKey),
+		CopySource:      aws.String(srcBucket + "/" + srcKey),
 		CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
 		Key:             aws.String(key),
 		PartNumber:      aws.Long(int64(num)),

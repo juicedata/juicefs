@@ -62,6 +62,13 @@ type s3client struct {
 	ses    *session.Session
 }
 
+func (s *s3client) BucketInfo() Bucket {
+	return Bucket{
+		Name:   s.bucket,
+		Region: *s.s3.Config.Region,
+	}
+}
+
 func (s *s3client) String() string {
 	return fmt.Sprintf("s3://%s/", s.bucket)
 }
@@ -174,8 +181,8 @@ func (s *s3client) Put(key string, in io.Reader) error {
 	return err
 }
 
-func (s *s3client) Copy(dst, src string) error {
-	src = s.bucket + "/" + src
+func (s *s3client) Copy(dst, src, srcBucket string) error {
+	src = srcBucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
 		Key:        &dst,
@@ -284,10 +291,10 @@ func (s *s3client) UploadPart(key string, uploadID string, num int, body []byte)
 	return &Part{Num: num, ETag: *resp.ETag}, nil
 }
 
-func (s *s3client) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (s *s3client) UploadPartCopy(key, uploadID string, num int, srcBucket, srcKey string, off, size int64) (*Part, error) {
 	resp, err := s.s3.UploadPartCopy(&s3.UploadPartCopyInput{
 		Bucket:          aws.String(s.bucket),
-		CopySource:      aws.String(s.bucket + "/" + srcKey),
+		CopySource:      aws.String(srcBucket + "/" + srcKey),
 		CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
 		Key:             aws.String(key),
 		PartNumber:      aws.Int64(int64(num)),

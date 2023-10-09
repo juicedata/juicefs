@@ -47,6 +47,13 @@ func (q *bosclient) String() string {
 	return fmt.Sprintf("bos://%s/", q.bucket)
 }
 
+func (q *bosclient) BucketInfo() Bucket {
+	return Bucket{
+		Name:   q.bucket,
+		Region: q.c.Config.Region,
+	}
+}
+
 func (q *bosclient) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
@@ -121,12 +128,12 @@ func (q *bosclient) Put(key string, in io.Reader) error {
 	return err
 }
 
-func (q *bosclient) Copy(dst, src string) error {
+func (q *bosclient) Copy(dst, src, srcBucket string) error {
 	var args *api.CopyObjectArgs
 	if q.sc != "" {
 		args = &api.CopyObjectArgs{ObjectMeta: api.ObjectMeta{StorageClass: q.sc}}
 	}
-	_, err := q.c.CopyObject(q.bucket, dst, q.bucket, src, args)
+	_, err := q.c.CopyObject(q.bucket, dst, srcBucket, src, args)
 	return err
 }
 
@@ -184,8 +191,8 @@ func (q *bosclient) UploadPart(key string, uploadID string, num int, data []byte
 	return &Part{Num: num, Size: len(data), ETag: etag}, nil
 }
 
-func (q *bosclient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	result, err := q.c.UploadPartCopy(q.bucket, key, q.bucket, srcKey, uploadID, num,
+func (q *bosclient) UploadPartCopy(key, uploadID string, num int, srcBucket, srcKey string, off, size int64) (*Part, error) {
+	result, err := q.c.UploadPartCopy(q.bucket, key, srcBucket, srcKey, uploadID, num,
 		&api.UploadPartCopyArgs{SourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1)})
 
 	if err != nil {

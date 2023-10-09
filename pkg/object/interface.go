@@ -71,6 +71,11 @@ type Limits struct {
 	MaxPartCount             int
 }
 
+type Bucket struct {
+	Name   string
+	Region string
+}
+
 // ObjectStorage is the interface for object storage.
 // all of these API should be idempotent.
 type ObjectStorage interface {
@@ -85,9 +90,11 @@ type ObjectStorage interface {
 	// Put data read from a reader to an object specified by key.
 	Put(key string, in io.Reader) error
 	// Copy an object from src to dst.
-	Copy(dst, src string) error
+	Copy(dst, src, srcBucket string) error
 	// Delete a object.
 	Delete(key string) error
+	// BucketInfo gets the bucket information.
+	BucketInfo() Bucket
 
 	// Head returns some information about the object or an error if not found.
 	Head(key string) (Object, error)
@@ -101,7 +108,7 @@ type ObjectStorage interface {
 	// UploadPart upload a part of an object.
 	UploadPart(key string, uploadID string, num int, body []byte) (*Part, error)
 	// UploadPartCopy Uploads a part by copying data from an existing object as data source.
-	UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error)
+	UploadPartCopy(key, uploadID string, num int, srcBucket, srcKey string, off, size int64) (*Part, error)
 	// AbortUpload abort a multipart upload.
 	AbortUpload(key string, uploadID string)
 	// CompleteUpload finish an multipart upload.

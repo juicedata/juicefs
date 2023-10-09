@@ -42,6 +42,14 @@ type ossClient struct {
 	client *oss.Client
 	bucket *oss.Bucket
 	sc     string
+	region string
+}
+
+func (o *ossClient) BucketInfo() Bucket {
+	return Bucket{
+		Name:   o.bucket.BucketName,
+		Region: o.region,
+	}
 }
 
 func (o *ossClient) String() string {
@@ -150,12 +158,17 @@ func (o *ossClient) Put(key string, in io.Reader) error {
 	return o.checkError(err)
 }
 
-func (o *ossClient) Copy(dst, src string) error {
+func (o *ossClient) Copy(dst, src, srcBucket string) error {
 	var option []oss.Option
 	if o.sc != "" {
 		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.sc)))
 	}
-	_, err := o.bucket.CopyObject(src, dst, option...)
+	var err error
+	if srcBucket != o.bucket.BucketName {
+		_, err = o.bucket.CopyObjectFrom(srcBucket, src, dst, option...)
+	} else {
+		_, err = o.bucket.CopyObject(src, dst, option...)
+	}
 	return o.checkError(err)
 }
 
@@ -218,9 +231,9 @@ func (o *ossClient) UploadPart(key string, uploadID string, num int, data []byte
 	return &Part{Num: num, ETag: r.ETag}, nil
 }
 
-func (o *ossClient) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (o *ossClient) UploadPartCopy(key, uploadID string, num int, srcBucket, srcKey string, off, size int64) (*Part, error) {
 	initMultipartResult := oss.InitiateMultipartUploadResult{Bucket: o.bucket.BucketName, Key: key, UploadID: uploadID}
-	partCopy, err := o.bucket.UploadPartCopy(initMultipartResult, o.bucket.BucketName, srcKey, off, size, num)
+	partCopy, err := o.bucket.UploadPartCopy(initMultipartResult, srcBucket, srcKey, off, size, num)
 	if o.checkError(err) != nil {
 		return nil, err
 	}
@@ -446,8 +459,11 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create bucket %s: %s", bucketName, err)
 	}
-
-	o := &ossClient{client: client, bucket: bucket}
+	bucketInfo, err := client.GetBucketInfo(bucketName)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot get bucket info %s:%s", bucketName, err)
+	}
+	o := &ossClient{client: client, bucket: bucket, region: bucketInfo.BucketInfo.Location}
 	if token != "" && refresh {
 		go func() {
 			for {

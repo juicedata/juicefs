@@ -46,6 +46,13 @@ type ibmcos struct {
 	sc     string
 }
 
+func (s *ibmcos) BucketInfo() Bucket {
+	return Bucket{
+		Name:   s.bucket,
+		Region: *s.s3.Config.Region,
+	}
+}
+
 func (s *ibmcos) String() string {
 	return fmt.Sprintf("ibmcos://%s/", s.bucket)
 }
@@ -119,8 +126,8 @@ func (s *ibmcos) Put(key string, in io.Reader) error {
 	return err
 }
 
-func (s *ibmcos) Copy(dst, src string) error {
-	src = s.bucket + "/" + src
+func (s *ibmcos) Copy(dst, src, srcBucket string) error {
+	src = srcBucket + "/" + src
 	params := &s3.CopyObjectInput{
 		Bucket:     &s.bucket,
 		Key:        &dst,
@@ -238,7 +245,7 @@ func (s *ibmcos) UploadPart(key string, uploadID string, num int, body []byte) (
 	return &Part{Num: num, ETag: *resp.ETag}, nil
 }
 
-func (s *ibmcos) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (s *ibmcos) UploadPartCopy(key string, uploadID string, num int, srcBucket, srcKey string, off, size int64) (*Part, error) {
 	return nil, notSupported
 }
 

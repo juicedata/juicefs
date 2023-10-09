@@ -43,6 +43,13 @@ type qingstor struct {
 	sc     string
 }
 
+func (q *qingstor) BucketInfo() Bucket {
+	return Bucket{
+		Name:   *q.bucket.Properties.BucketName,
+		Region: *q.bucket.Properties.Zone,
+	}
+}
+
 func (q *qingstor) String() string {
 	return fmt.Sprintf("qingstor://%s/", *q.bucket.Properties.BucketName)
 }
@@ -163,8 +170,8 @@ func (q *qingstor) Put(key string, in io.Reader) error {
 	return nil
 }
 
-func (q *qingstor) Copy(dst, src string) error {
-	source := fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, src)
+func (q *qingstor) Copy(dst, src, srcBucket string) error {
+	source := fmt.Sprintf("/%s/%s", srcBucket, src)
 	input := &qs.PutObjectInput{
 		XQSCopySource: &source,
 	}
@@ -256,11 +263,11 @@ func (q *qingstor) UploadPart(key string, uploadID string, num int, data []byte)
 	return &Part{Num: num, Size: len(data), ETag: strings.Trim(*r.ETag, "\"")}, nil
 }
 
-func (q *qingstor) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+func (q *qingstor) UploadPartCopy(key, uploadID string, num int, srcBucket, srcKey string, off, size int64) (*Part, error) {
 	input := &qs.UploadMultipartInput{
 		UploadID:      &uploadID,
 		PartNumber:    &num,
-		XQSCopySource: aws.String(fmt.Sprintf("/%s/%s", *q.bucket.Properties.BucketName, srcKey)),
+		XQSCopySource: aws.String(fmt.Sprintf("/%s/%s", srcBucket, srcKey)),
 		XQSCopyRange:  aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
 	}
 	r, err := q.bucket.UploadMultipart(key, input)

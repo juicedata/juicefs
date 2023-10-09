@@ -174,6 +174,10 @@ func syncActionFlags() []cli.Flag {
 			Name:  "dry",
 			Usage: "don't copy file",
 		},
+		&cli.BoolFlag{
+			Name:  "disable-service-copy",
+			Usage: "don't use uploadPartCopy or CopyObject api to copy file",
+		},
 	})
 }
 

@@ -155,7 +155,7 @@ func copyObj(store ObjectStorage, dst, src string) error {
 	return store.Put(dst, bytes.NewReader(d))
 }
 
-func (u *ufile) Copy(dst, src string) error {
+func (u *ufile) Copy(dst, src, srcBucket string) error {
 	resp, err := u.request("HEAD", src, nil, nil)
 	if err != nil {
 		return copyObj(u, dst, src)

@@ -91,7 +91,7 @@ func (u *up) Delete(key string) error {
 	})
 }
 
-func (u *up) Copy(dst, src string) error {
+func (u *up) Copy(dst, src, srcBucket string) error {
 	return u.c.Copy(&upyun.CopyObjectConfig{
 		SrcPath:  "/" + src,
 		DestPath: "/" + dst,

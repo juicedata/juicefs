@@ -123,8 +123,8 @@ func (g *gs) Put(key string, data io.Reader) error {
 	return writer.Close()
 }
 
-func (g *gs) Copy(dst, src string) error {
-	srcObj := g.client.Bucket(g.bucket).Object(src)
+func (g *gs) Copy(dst, src, srcBucket string) error {
+	srcObj := g.client.Bucket(srcBucket).Object(src)
 	dstObj := g.client.Bucket(g.bucket).Object(dst)
 	copier := dstObj.CopierFrom(srcObj)
 	if g.sc != "" {

@@ -162,7 +162,7 @@ func (w *webdav) Delete(key string) error {
 	return w.c.Remove(key)
 }
 
-func (w *webdav) Copy(dst, src string) error {
+func (w *webdav) Copy(dst, src, srcBucket string) error {
 	return w.c.Copy(src, dst, true)
 }
 

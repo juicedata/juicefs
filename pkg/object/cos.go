@@ -45,6 +45,14 @@ type COS struct {
 	sc       string
 }
 
+func (c *COS) BucketInfo() Bucket {
+	hostParts := strings.SplitN(c.endpoint, ".", 2)
+	return Bucket{
+		Name:   hostParts[0],
+		Region: hostParts[1],
+	}
+}
+
 func (c *COS) String() string {
 	return fmt.Sprintf("cos://%s/", strings.Split(c.endpoint, ".")[0])
 }
@@ -137,12 +145,12 @@ func (c *COS) Put(key string, in io.Reader) error {
 	return err
 }
 
-func (c *COS) Copy(dst, src string) error {
+func (c *COS) Copy(dst, src, srcBucket string) error {
 	var opt cos.ObjectCopyOptions
 	if c.sc != "" {
 		opt.ObjectCopyHeaderOptions = &cos.ObjectCopyHeaderOptions{XCosStorageClass: c.sc}
 	}
-	source := fmt.Sprintf("%s/%s", c.endpoint, src)
+	source := fmt.Sprintf("%s/%s", strings.ReplaceAll(c.endpoint, c.BucketInfo().Name, srcBucket), src)
 	_, _, err := c.c.Object.Copy(ctx, dst, source, &opt)
 	return err
 }
@@ -221,8 +229,9 @@ func (c *COS) UploadPart(key string, uploadID string, num int, body []byte) (*Pa
 	return &Part{Num: num, ETag: resp.Header.Get("Etag")}, nil
 }
 
-func (c *COS) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	result, _, err := c.c.Object.CopyPart(ctx, key, uploadID, num, c.endpoint+"/"+srcKey, &cos.ObjectCopyPartOptions{
+func (c *COS) UploadPartCopy(key, uploadID string, num int, srcBucket, srcKey string, off, size int64) (*Part, error) {
+	srcEndpoint := strings.Replace(c.endpoint, c.BucketInfo().Name, srcBucket, 1)
+	result, _, err := c.c.Object.CopyPart(ctx, key, uploadID, num, srcEndpoint+"/"+srcKey, &cos.ObjectCopyPartOptions{
 		XCosCopySourceRange: fmt.Sprintf("bytes=%d-%d", off, off+size-1),
 	})
 	if err != nil {

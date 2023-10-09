@@ -28,6 +28,10 @@ type withPrefix struct {
 	prefix string
 }
 
+func (s *withPrefix) BucketInfo() Bucket {
+	return s.os.BucketInfo()
+}
+
 // WithPrefix return an object storage that add a prefix to keys.
 func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
 	return &withPrefix{os, prefix}
@@ -117,8 +121,8 @@ func (p *withPrefix) Put(key string, in io.Reader) error {
 	return p.os.Put(p.prefix+key, in)
 }
 
-func (p *withPrefix) Copy(dst, src string) error {
-	return p.os.Copy(dst, src)
+func (p *withPrefix) Copy(dst, src, srcBucket string) error {
+	return p.os.Copy(p.prefix+dst, p.prefix+src, srcBucket)
 }
 
 func (p *withPrefix) Delete(key string) error {
@@ -186,8 +190,8 @@ func (p *withPrefix) UploadPart(key string, uploadID string, num int, body []byt
 	return p.os.UploadPart(p.prefix+key, uploadID, num, body)
 }
 
-func (s *withPrefix) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	return s.os.UploadPartCopy(s.prefix+key, uploadID, num, s.prefix+srcKey, off, size)
+func (s *withPrefix) UploadPartCopy(key, uploadID string, num int, srcBucket, srcKey string, off, size int64) (*Part, error) {
+	return s.os.UploadPartCopy(s.prefix+key, uploadID, num, srcBucket, s.prefix+srcKey, off, size)
 }
 
 func (p *withPrefix) AbortUpload(key string, uploadID string) {
