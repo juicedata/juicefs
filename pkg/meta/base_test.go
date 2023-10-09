@@ -126,6 +126,7 @@ func testMeta(t *testing.T, m Meta) {
 	testResolve(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
+	testListLocks(t, m)
 	testConcurrentWrite(t, m)
 	testCompaction(t, m, false)
 	time.Sleep(time.Second)
@@ -146,7 +147,6 @@ func testMeta(t *testing.T, m Meta) {
 	testDirStat(t, m)
 	testClone(t, m)
 	base.conf.ReadOnly = true
-	testListLocks(t, m)
 	testReadOnly(t, m)
 }
 
@@ -1716,6 +1716,10 @@ func testReadOnly(t *testing.T, m Meta) {
 	}
 	if st := m.Open(ctx, inode, syscall.O_RDWR, attr); st != syscall.EROFS {
 		t.Fatalf("open f: %s", st)
+	}
+
+	if plocks, flocks, err := m.ListLocks(ctx, 1); err != nil || len(plocks) != 0 || len(flocks) != 0 {
+		t.Fatalf("list locks: %v %v %v", plocks, flocks, err)
 	}
 }
 
