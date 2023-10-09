@@ -126,7 +126,6 @@ func testMeta(t *testing.T, m Meta) {
 	testResolve(t, m)
 	testStickyBit(t, m)
 	testLocks(t, m)
-	testListLocks(t, m)
 	testConcurrentWrite(t, m)
 	testCompaction(t, m, false)
 	time.Sleep(time.Second)
@@ -147,6 +146,7 @@ func testMeta(t *testing.T, m Meta) {
 	testDirStat(t, m)
 	testClone(t, m)
 	base.conf.ReadOnly = true
+	testListLocks(t, m)
 	testReadOnly(t, m)
 }
 
