@@ -499,7 +499,10 @@ func newS3(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) 
 	}
 	if ep != "" {
 		awsConfig.Endpoint = aws.String(ep)
-		awsConfig.S3ForcePathStyle = aws.Bool(true)
+		// when `JFS_S3_VHOST_STYLE` specified, use virtual-host-style requests
+		if (os.Getenv("JFS_S3_VHOST_STYLE") == "") {
+			awsConfig.S3ForcePathStyle = aws.Bool(true)
+		}
 	}
 
 	ses, err := session.NewSession(awsConfig)
