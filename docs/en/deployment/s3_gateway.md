@@ -4,19 +4,18 @@ sidebar_position: 4
 slug: /s3_gateway
 ---
 
-JuiceFS has introduced S3 gateway since v0.11. The feature is implemented based on the [MinIO S3 Gateway](https://docs.min.io/docs/minio-gateway-for-s3.html). It provides an S3-compatible RESTful API for files on JuiceFS, enabling the management of files stored on JuiceFS with tools such as s3cmd, AWS CLI, and MinIO Client (mc) in cases where mounting is not convenient. In addition, S3 gateway also provides a web-based file manager that allows users to manage files in web browsers.
+JuiceFS [splits and upload files to the underlying object storage](../introduction/architecture.md#how-juicefs-store-files), applications often use the exposed POSIX API. But if you ever need to use S3-compatible API to access JuiceFS files, S3 Gateway comes in handy, its architecture:
 
-Since JuiceFS stores files in chunks, the files cannot be accessed directly through the interfaces of the underlying object storage. The S3 gateway accesses the underlying object storage in a similar way, shown in the following architecture diagram.
+![JuiceFS S3 Gateway architecture](../images/juicefs-s3-gateway-arch.png)
 
-![JuiceFS-S3-gateway-arch](../images/juicefs-s3-gateway-arch.png)
+The feature is implemented based on the [MinIO S3 Gateway](https://docs.min.io/docs/minio-gateway-for-s3.html). It exposes a S3-compatible RESTful API for files on JuiceFS, which is often used in the following scenarios:
 
-## Prerequisites
+* Expose S3 API for JuiceFS file system, so that applications may access JuiceFS via S3 SDK
+* Use tools like s3cmd, AWS CLI and MinIO Client to access and modify files stored in JuiceFS
+* When transferring data across regions, use S3 Gateway as an unified data export endpoint, this eliminates metadata latency and improve performance. See [Sync across regions using S3 Gateway](../guide/sync.md#sync-across-region)
+* S3 gateway also provides a file manager that allows users to manage JuiceFS file system directly in web browsers
 
-The S3 gateway is a feature built on top of the JuiceFS file system. If you do not have a JuiceFS file system, please refer to the [quick start guide](../getting-started/README.md) to create one first.
-
-JuiceFS S3 gateway is a feature introduced since v0.11. Please make sure you have the latest version of JuiceFS.
-
-## Quickstart
+## Quick Start
 
 The S3 gateway can be enabled on the current host using the `gateway` subcommand of JuiceFS. Before enabling the feature, you need to set the environment variables `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`. These are the Access Key and Secret Key for authenticating when accessing the S3 API, and can be simply considered as the username and password of the S3 gateway. For example.
 

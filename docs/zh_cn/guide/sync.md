@@ -248,3 +248,15 @@ juicefs sync cos://ABCDEFG:HIJKLMN@ccc-125000.cos.ap-beijing.myqcloud.com oss://
 ```
 
 同步以后，在 [对象存储 B](#required-storages) 中看到的与 [JuiceFS 使用的对象存储](#required-storages) 中的内容和结构完全一样。
+
+### 使用 S3 网关进行跨区域数据同步 {#sync-across-region}
+
+面临跨区域传输大量小文件的场景，如果选择使用 JuiceFS 客户端直接挂载文件系统、传输数据，那么客户端将不可避免需要通过公网（或者带宽资源宝贵的专线）访问对端元数据，这时元数据服务延迟极有可能成为数据传输的瓶颈：
+
+![sync via public metadata service](../images/sync-public-metadata.svg)
+
+在这种情况下，S3 网关有妙用：在源区域部署好网关，由于网关本身通过内网访问元数据服务，相当于“消化”了元数据服务的网络开销，能够提升小文件的数据传输性能：
+
+![sync via gateway](../images/sync-via-gateway.svg)
+
+阅读[「S3 网关」](../deployment/s3_gateway.md)学习如何使用和部署 S3 网关。
