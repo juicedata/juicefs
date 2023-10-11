@@ -12,8 +12,8 @@ The feature is implemented based on the [MinIO S3 Gateway](https://docs.min.io/d
 
 * Expose S3 API for JuiceFS file system, so that applications may access JuiceFS via S3 SDK
 * Use tools like s3cmd, AWS CLI and MinIO Client to access and modify files stored in JuiceFS
-* When transferring data across regions, use S3 Gateway as an unified data export endpoint, this eliminates metadata latency and improve performance. See [Sync across regions using S3 Gateway](../guide/sync.md#sync-across-region)
 * S3 gateway also provides a file manager that allows users to manage JuiceFS file system directly in web browsers
+* When transferring data across regions, use S3 Gateway as an unified data export endpoint, this eliminates metadata latency and improve performance. See [Sync across regions using S3 Gateway](../guide/sync.md#sync-across-region)
 
 ## Quick Start
 
