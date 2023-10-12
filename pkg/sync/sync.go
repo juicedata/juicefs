@@ -416,7 +416,7 @@ SINGLE:
 	return err
 }
 
-func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, serviceCopy bool, upload *object.MultipartUpload) error {
+func doCopyMultiple(src, dst object.ObjectStorage, key string, srcKey string, size int64, serviceCopy bool, upload *object.MultipartUpload) error {
 	partSize := int64(upload.MinPartSize)
 	if partSize == 0 {
 		partSize = defaultPartSize
@@ -452,11 +452,12 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, servi
 			if err := try(3, func() error {
 				var err error
 				if serviceCopy {
-					parts[num], err = dst.UploadPartCopy(key, upload.UploadID, num+1, src.BucketInfo().Name, key, int64(num)*partSize, sz)
+					srcFullKey := object.GetObjectFullKey(src, key)
+					parts[num], err = dst.UploadPartCopy(key, upload.UploadID, num+1, src.BucketInfo().Name, srcFullKey, int64(num)*partSize, sz)
 					return err
 				}
 				data := make([]byte, sz)
-				in, err := src.Get(key, int64(num)*partSize, sz)
+				in, err := src.Get(srcKey, int64(num)*partSize, sz)
 				if err != nil {
 					return err
 				}
@@ -497,9 +498,10 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, servi
 
 func doCopyFromService(src, dst object.ObjectStorage, key string, size int64) error {
 	var err error
-	// If the size is less than one part, copy whole object
-	if size < int64(defaultServiceCopyPartSize) {
-		if err := dst.Copy(key, key, src.BucketInfo().Name); err != nil {
+	srcFullKey := object.GetObjectFullKey(src, key)
+	// If the size is less than one part or copy within same bucket, copy whole object
+	if size < int64(defaultServiceCopyPartSize) || src.BucketInfo().Name == dst.BucketInfo().Name {
+		if err := dst.Copy(key, srcFullKey, src.BucketInfo().Name); err != nil {
 			return err
 		}
 		copiedBytes.IncrInt64(size)
@@ -510,7 +512,7 @@ func doCopyFromService(src, dst object.ObjectStorage, key string, size int64) er
 			return err
 		}
 		upload.MinPartSize = defaultServiceCopyPartSize
-		if err = doCopyMultiple(src, dst, key, size, true, upload); err != nil {
+		if err = doCopyMultiple(src, dst, key, srcFullKey, size, true, upload); err != nil {
 			return err
 		}
 	}
@@ -525,15 +527,15 @@ func copyData(src, dst object.ObjectStorage, key string, size int64, serviceCopy
 			logger.Debugf("Copied data of %s (%d bytes) in %s", key, size, time.Since(start))
 			return nil
 		}
-		serviceCopy = false
-		logger.Warnf("Failed to use service copy data of %s, fallback to normal copy, err: %+v", key, err)
+		logger.Errorf("Failed to use service copy data of %s, try again with --disable-service-copy, err: %+v", key, err)
+		return err
 	}
 	if size < maxBlock {
 		err = try(3, func() error { return doCopySingle(src, dst, key, size) })
 	} else {
 		var upload *object.MultipartUpload
 		if upload, err = dst.CreateMultipartUpload(key); err == nil {
-			err = doCopyMultiple(src, dst, key, size, serviceCopy, upload)
+			err = doCopyMultiple(src, dst, key, key, size, serviceCopy, upload)
 		} else if err == utils.ENOTSUP {
 			err = try(3, func() error { return doCopySingle(src, dst, key, size) })
 		} else { // other error retry
@@ -541,7 +543,7 @@ func copyData(src, dst object.ObjectStorage, key string, size int64, serviceCopy
 				upload, err = dst.CreateMultipartUpload(key)
 				return err
 			}); err == nil {
-				err = doCopyMultiple(src, dst, key, size, serviceCopy, upload)
+				err = doCopyMultiple(src, dst, key, key, size, serviceCopy, upload)
 			}
 		}
 	}

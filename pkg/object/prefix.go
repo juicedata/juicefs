@@ -122,7 +122,7 @@ func (p *withPrefix) Put(key string, in io.Reader) error {
 }
 
 func (p *withPrefix) Copy(dst, src, srcBucket string) error {
-	return p.os.Copy(p.prefix+dst, p.prefix+src, srcBucket)
+	return p.os.Copy(p.prefix+dst, src, srcBucket)
 }
 
 func (p *withPrefix) Delete(key string) error {
@@ -191,7 +191,7 @@ func (p *withPrefix) UploadPart(key string, uploadID string, num int, body []byt
 }
 
 func (s *withPrefix) UploadPartCopy(key, uploadID string, num int, srcBucket, srcKey string, off, size int64) (*Part, error) {
-	return s.os.UploadPartCopy(s.prefix+key, uploadID, num, srcBucket, s.prefix+srcKey, off, size)
+	return s.os.UploadPartCopy(s.prefix+key, uploadID, num, srcBucket, srcKey, off, size)
 }
 
 func (p *withPrefix) AbortUpload(key string, uploadID string) {
@@ -208,6 +208,13 @@ func (p *withPrefix) ListUploads(marker string) ([]*PendingPart, string, error) 
 		part.Key = part.Key[len(p.prefix):]
 	}
 	return parts, nextMarker, err
+}
+
+func GetObjectFullKey(os ObjectStorage, key string) string {
+	if o, ok := os.(*withPrefix); ok {
+		return o.prefix + key
+	}
+	return key
 }
 
 var _ ObjectStorage = &withPrefix{}
