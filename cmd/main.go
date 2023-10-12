@@ -109,7 +109,7 @@ func handleSysMountArgs(args []string) []string {
 		"entrycacheto":    "entry-cache",
 		"direntrycacheto": "dir-entry-cache",
 	}
-	newArgs := []string{"juicefs", "mount", "-d"}
+	newArgs := []string{"juicefs", "mount"}
 	if len(args) < 3 {
 		return nil
 	}
@@ -118,7 +118,7 @@ func handleSysMountArgs(args []string) []string {
 	fuseOptions := make([]string, 0, 20)
 	cmdFlagsLookup := make(map[string]bool, 20)
 	for _, f := range append(cmdMount().Flags, globalFlags()...) {
-		if names := f.Names(); len(names) > 0 && len(names[0]) > 1 {
+		if names := f.Names(); len(names) > 0 && len(names[0]) >= 1 {
 			_, cmdFlagsLookup[names[0]] = f.(*cli.BoolFlag)
 		}
 	}
