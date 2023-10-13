@@ -66,17 +66,17 @@ jobs:
           sudo ./runltp -d /tmp/jfs -f fs,fs_bind,fs_perms_simple,fsx,io,smoketest,fcntl-locktests -C result.log.failed -T result.log.tconf -l result.log  
 
       - name: tconf Log
-        if: ${{ always() }}
+        if: always()
         run: |
           cat /opt/ltp/output/result.log.tconf
 
       - name: check ltpsyscall failed log
-        if: ${{ always() }}
+        if: always()
         run: |
           cat /opt/ltp/output/result.log.failed
 
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: failure()
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
