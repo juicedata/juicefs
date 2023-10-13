@@ -609,6 +609,7 @@ func (m *baseMeta) CloseSession() error {
 		return nil
 	}
 	m.doFlushDirStat()
+	m.doFlushQuotas()
 	m.sesMu.Lock()
 	m.umounting = true
 	m.sesMu.Unlock()
@@ -758,45 +759,45 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 }
 
 func (m *baseMeta) flushQuotas() {
-	quotas := make(map[Ino]*Quota)
-	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
-		if !m.getFormat().DirStats {
-			continue
+		m.doFlushQuotas()
+	}
+}
+
+func (m *baseMeta) doFlushQuotas() {
+	if !m.getFormat().DirStats {
+		return
+	}
+	stageMap := make(map[Ino]*Quota)
+	m.quotaMu.RLock()
+	for ino, q := range m.dirQuotas {
+		newSpace := atomic.LoadInt64(&q.newSpace)
+		newInodes := atomic.LoadInt64(&q.newInodes)
+		if newSpace != 0 || newInodes != 0 {
+			stageMap[ino] = &Quota{newSpace: newSpace, newInodes: newInodes}
 		}
+	}
+	m.quotaMu.RUnlock()
+	if len(stageMap) == 0 {
+		return
+	}
+
+	if err := m.en.doFlushQuotas(Background, stageMap); err != nil {
+		logger.Warnf("Flush quotas: %s", err)
+	} else {
 		m.quotaMu.RLock()
-		for ino, q := range m.dirQuotas {
-			newSpace = atomic.LoadInt64(&q.newSpace)
-			newInodes = atomic.LoadInt64(&q.newInodes)
-			if newSpace != 0 || newInodes != 0 {
-				quotas[ino] = &Quota{newSpace: newSpace, newInodes: newInodes}
+		for ino, snap := range stageMap {
+			q := m.dirQuotas[ino]
+			if q == nil {
+				continue
 			}
+			atomic.AddInt64(&q.newSpace, -snap.newSpace)
+			atomic.AddInt64(&q.UsedSpace, snap.newSpace)
+			atomic.AddInt64(&q.newInodes, -snap.newInodes)
+			atomic.AddInt64(&q.UsedInodes, snap.newInodes)
 		}
 		m.quotaMu.RUnlock()
-		if len(quotas) == 0 {
-			continue
-		}
-
-		if err := m.en.doFlushQuotas(Background, quotas); err != nil {
-			logger.Warnf("Flush quotas: %s", err)
-		} else {
-			m.quotaMu.RLock()
-			for ino, snap := range quotas {
-				q := m.dirQuotas[ino]
-				if q == nil {
-					continue
-				}
-				atomic.AddInt64(&q.newSpace, -snap.newSpace)
-				atomic.AddInt64(&q.UsedSpace, snap.newSpace)
-				atomic.AddInt64(&q.newInodes, -snap.newInodes)
-				atomic.AddInt64(&q.UsedInodes, snap.newInodes)
-			}
-			m.quotaMu.RUnlock()
-		}
-		for ino := range quotas {
-			delete(quotas, ino)
-		}
 	}
 }
 
