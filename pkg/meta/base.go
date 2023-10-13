@@ -609,7 +609,7 @@ func (m *baseMeta) CloseSession() error {
 		return nil
 	}
 	m.doFlushDirStat()
-	m.doFlushQuotas(nil)
+	m.doFlushQuotas()
 	m.sesMu.Lock()
 	m.umounting = true
 	m.sesMu.Unlock()
@@ -759,24 +759,17 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 }
 
 func (m *baseMeta) flushQuotas() {
-	quotas := make(map[Ino]*Quota)
 	for {
 		time.Sleep(time.Second * 3)
-		m.doFlushQuotas(quotas)
+		m.doFlushQuotas()
 	}
 }
 
-func (m *baseMeta) doFlushQuotas(stageMap map[Ino]*Quota) {
+func (m *baseMeta) doFlushQuotas() {
 	if !m.getFormat().DirStats {
 		return
 	}
-	if stageMap == nil {
-		stageMap = make(map[Ino]*Quota)
-	} else {
-		for ino := range stageMap {
-			delete(stageMap, ino)
-		}
-	}
+	stageMap := make(map[Ino]*Quota)
 	m.quotaMu.RLock()
 	for ino, q := range m.dirQuotas {
 		newSpace := atomic.LoadInt64(&q.newSpace)
