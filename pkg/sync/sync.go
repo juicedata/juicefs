@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"runtime"
@@ -207,7 +208,7 @@ func deleteObj(storage object.ObjectStorage, key string, dry bool) {
 func needCopyPerms(o1, o2 object.Object) bool {
 	f1 := o1.(object.File)
 	f2 := o2.(object.File)
-	return f2.Mode() != f1.Mode() || f2.Owner() != f1.Owner() || f2.Group() != f1.Group()
+	return f2.Mode()&fs.ModePerm != f1.Mode()&fs.ModePerm || f2.Owner() != f1.Owner() || f2.Group() != f1.Group()
 }
 
 func copyPerms(dst object.ObjectStorage, obj object.Object) {
