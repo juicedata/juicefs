@@ -82,8 +82,8 @@ GlusterFS 通过整合多个服务端节点的 Bricks（一般构建在本地文
 
 * GlusterFS：
 
-    * 仅支持传输层压缩，文件由客户端执行压缩，传输到服务端后再由 Brick 负责解压缩。
-    * 不直接实现存储层压缩，而是依赖于 Brick 使用的底层文件系统，如 [ZFS](https://docs.gluster.org/en/latest/Administrator-Guide/Gluster-On-ZFS)。
+  * 仅支持传输层压缩，文件由客户端执行压缩，传输到服务端后再由 Brick 负责解压缩。
+  * 不直接实现存储层压缩，而是依赖于 Brick 使用的底层文件系统，如 [ZFS](https://docs.gluster.org/en/latest/Administrator-Guide/Gluster-On-ZFS)。
 
 * JuiceFS：同时支持传输层压缩和存储层压缩，数据的压缩和解压缩都在客户端执行。
 
@@ -91,8 +91,8 @@ GlusterFS 通过整合多个服务端节点的 Bricks（一般构建在本地文
 
 * GlusterFS：
 
-    * 仅支持[传输层加密](https://docs.gluster.org/en/latest/Administrator-Guide/SSL)，依赖于 SSL/TLS。
-    * 曾支持过[存储层加密](https://github.com/gluster/glusterfs-specs/blob/master/done/GlusterFS%203.5/Disk%20Encryption.md)，但现已不再支持。
+  * 仅支持[传输层加密](https://docs.gluster.org/en/latest/Administrator-Guide/SSL)，依赖于 SSL/TLS。
+  * 曾支持过[存储层加密](https://github.com/gluster/glusterfs-specs/blob/master/done/GlusterFS%203.5/Disk%20Encryption.md)，但现已不再支持。
 
 * JuiceFS：同时支持[传输层加密和存储层加密](https://juicefs.com/docs/zh/community/security/encrypt)，数据的加密和解密都在客户端进行。
 
