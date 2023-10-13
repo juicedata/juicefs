@@ -115,12 +115,12 @@ GlusterFS 通过整合多个服务端节点的 Bricks（一般构建在本地文
 
 ### **S3 协议**
 
-* GlusterFS：通过 [gluster-swift](https://github.com/gluster/gluster-swift) 项目支持，但其最近更新停留在 2017年11月。
+* GlusterFS：通过 [gluster-swift](https://github.com/gluster/gluster-swift) 项目支持，但其最近更新停留在 2017 年 11 月。
 * JuiceFS：通过[结合 MinIO S3 网关](https://juicefs.com/docs/zh/community/s3_gateway)支持。
 
 ### **HDFS 兼容性**
 
-* GlusterFS：通过 [`glusterfs-hadoop`](https://github.com/gluster/glusterfs-hadoop) 项目支持，但其最近更新停留在 2015 年 5月。
+* GlusterFS：通过 [`glusterfs-hadoop`](https://github.com/gluster/glusterfs-hadoop) 项目支持，但其最近更新停留在 2015 年 5 月。
 * JuiceFS：完整[兼容 HDFS API](https://juicefs.com/docs/zh/community/hadoop_java_sdk)。
 
 ### **CSI 驱动**
