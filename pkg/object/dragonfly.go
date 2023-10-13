@@ -232,6 +232,10 @@ func (d *dragonfly) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 
 	query := u.Query()
+	if d.Filter != "" {
+		query.Add("filter", d.Filter)
+	}
+
 	u.RawQuery = query.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -518,7 +522,7 @@ func newDragonfly(_endpoint, _accessKey, _secretKey, _token string) (ObjectStora
 	}
 
 	if value := uri.Query().Get("filter"); value != "" {
-		filter = value
+		filter = strings.ReplaceAll(value, ",", "&")
 	}
 
 	return &dragonfly{
