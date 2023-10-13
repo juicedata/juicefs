@@ -61,7 +61,9 @@ func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
 	if err := m.NewSession(false); err != nil {
 		logger.Warningf("running without sessions because fail to new session: %s", err)
 	} else {
-		defer m.CloseSession()
+		defer func() {
+			_ = m.CloseSession()
+		}()
 	}
 	logger.Infof("restore files in %s ...", hour)
 	ctx := meta.Background
