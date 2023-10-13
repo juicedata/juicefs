@@ -90,7 +90,7 @@ jobs:
 
       - name: MountJuiceFSTest
         run: |
-          sudo /tmp/mount.juicefs redis://127.0.0.1:6379/1 /tmp/mount-jfs
+          sudo /tmp/mount.juicefs redis://127.0.0.1:6379/1 /tmp/mount-jfs -o d
           [ `stat --format "%i" /tmp/mount-jfs` -eq 1 ]
 
 
