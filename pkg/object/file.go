@@ -81,15 +81,15 @@ func (d *filestore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return toFile(key, fi, false), nil
+	return toFile(key, fi, false, getOwnerGroup), nil
 }
 
-func toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
+func toFile(key string, fi fs.FileInfo, isSymlink bool, ownerGetter func(fs.FileInfo) (string, string)) *file {
 	size := fi.Size()
 	if fi.IsDir() {
 		size = 0
 	}
-	owner, group := getOwnerGroup(fi)
+	owner, group := ownerGetter(fi)
 	return &file{
 		obj{
 			key,
@@ -299,7 +299,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 			continue
 		}
 		info := e.Info()
-		f := toFile(key, info, e.isSymlink)
+		f := toFile(key, info, e.isSymlink, getOwnerGroup)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break

@@ -267,7 +267,7 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 		if !strings.HasPrefix(p, prefix) || (marker != "" && p <= marker) {
 			continue
 		}
-		f := toFile(p, e, e.isSymlink)
+		f := toFile(p, e, e.isSymlink, n.getOwnerGroup)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break
