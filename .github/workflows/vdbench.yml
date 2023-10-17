@@ -99,14 +99,14 @@ jobs:
           path: output
 
       - name: log
-        if: ${{ always() }}
+        if: always()
         shell: bash
         run: | 
           tail -300 ~/.juicefs/juicefs.log
           grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
           
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: failure()
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
