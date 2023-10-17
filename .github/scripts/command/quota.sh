@@ -62,6 +62,25 @@ test_total_inodes(){
     echo a | tee /jfs/test2001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
 }
 
+test_nested_dir(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
+    
+    mkdir -p /jfs/d1/d2/d3
+    ./juicefs quota set $META_URL --path /d1 --inodes 1001
+    ./juicefs quota set $META_URL --path /d1/d2/d3 --inodes 1000
+    for i in {1..1000}; do
+        echo $i | tee /jfs/d1/d2/d3/test$i > /dev/null
+    done
+    sleep $VOLUME_QUOTA_FLUSH_INTERVAL
+    echo a | tee /jfs/d1/d2/d3/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
+    grep "Disk quota exceeded" error.log
+    echo a | tee /jfs/d1/d2/test1001 
+    echo a | tee /jfs/d1/d2/test1002 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
+    grep "Disk quota exceeded" error.log
+}
+
 test_remove_and_restore(){
     prepare_test
     ./juicefs format $META_URL myjfs
