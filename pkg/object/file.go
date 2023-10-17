@@ -39,6 +39,7 @@ const (
 )
 
 var TryCFR bool // try copy_file_range
+var PutInplace bool
 
 type filestore struct {
 	DefaultObjectStorage
@@ -144,7 +145,12 @@ func (d *filestore) Put(key string, in io.Reader) error {
 		return os.MkdirAll(p, os.FileMode(0777))
 	}
 
-	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
+	var tmp string
+	if PutInplace {
+		tmp = p
+	} else {
+		tmp = filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
+	}
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil && os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0777)); err != nil {
@@ -155,11 +161,13 @@ func (d *filestore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err != nil {
-			_ = os.Remove(tmp)
-		}
-	}()
+	if !PutInplace {
+		defer func() {
+			if err != nil {
+				_ = os.Remove(tmp)
+			}
+		}()
+	}
 
 	if TryCFR {
 		_, err = io.Copy(f, in)
@@ -176,7 +184,9 @@ func (d *filestore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	err = os.Rename(tmp, p)
+	if !PutInplace {
+		err = os.Rename(tmp, p)
+	}
 	return err
 }
 

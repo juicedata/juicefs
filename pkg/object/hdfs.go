@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -121,29 +122,29 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return f, nil
 }
 
-const abcException = "org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException"
-
 func (h *hdfsclient) Put(key string, in io.Reader) error {
 	path := h.path(key)
 	if strings.HasSuffix(path, dirSuffix) {
 		return h.c.MkdirAll(path, 0777&^h.umask)
 	}
-	tmp := filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp.%d", filepath.Base(path), rand.Int()))
+	var tmp string
+	if PutInplace {
+		tmp = path
+	} else {
+		tmp = filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp.%d", filepath.Base(path), rand.Int()))
+	}
 	f, err := h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
-	defer func() { _ = h.c.Remove(tmp) }()
+	if !PutInplace {
+		defer func() { _ = h.c.Remove(tmp) }()
+	}
 	if err != nil {
 		if pe, ok := err.(*os.PathError); ok && pe.Err == os.ErrNotExist {
 			_ = h.c.MkdirAll(filepath.Dir(path), 0777&^h.umask)
 			f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 		}
-		if pe, ok := err.(*os.PathError); ok {
-			if remoteErr, ok := pe.Err.(hdfs.Error); ok && remoteErr.Exception() == abcException {
-				pe.Err = os.ErrExist
-			}
-			if pe.Err == os.ErrExist {
-				_ = h.c.Remove(tmp)
-				f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
-			}
+		if pe, ok := err.(*os.PathError); ok && errors.Is(pe.Err, os.ErrExist) {
+			_ = h.c.Remove(tmp)
+			f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 		}
 		if err != nil {
 			return err
@@ -160,7 +161,10 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 	if err != nil && !IsErrReplicating(err) {
 		return err
 	}
-	return h.c.Rename(tmp, path)
+	if !PutInplace {
+		err = h.c.Rename(tmp, path)
+	}
+	return err
 }
 
 func IsErrReplicating(err error) bool {

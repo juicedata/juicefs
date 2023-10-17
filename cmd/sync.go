@@ -153,6 +153,10 @@ func syncActionFlags() []cli.Flag {
 			Usage:   "copy symlinks as symlinks",
 		},
 		&cli.BoolFlag{
+			Name:  "inplace",
+			Usage: "put directly to destination file instead of atomic download to temp/rename",
+		},
+		&cli.BoolFlag{
 			Name:    "delete-src",
 			Aliases: []string{"deleteSrc"},
 			Usage:   "delete objects from source those already exist in destination",

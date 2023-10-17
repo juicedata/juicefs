@@ -145,10 +145,19 @@ func (n *nfsStore) Put(key string, in io.Reader) error {
 	if strings.HasSuffix(p, dirSuffix) {
 		return n.mkdirAll(p, 0777)
 	}
-	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp")
+	var tmp string
+	if PutInplace {
+		tmp = p
+	} else {
+		tmp = filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp")
+	}
 	_, err := n.target.Create(tmp, 0777)
 	if os.IsNotExist(err) {
 		_ = n.mkdirAll(filepath.Dir(p), 0777)
+		_, err = n.target.Create(tmp, 0777)
+	}
+	if os.IsExist(err) {
+		_ = n.target.Remove(tmp)
 		_, err = n.target.Create(tmp, 0777)
 	}
 	if err != nil {
@@ -158,7 +167,10 @@ func (n *nfsStore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = n.target.Remove(tmp) }()
+
+	if !PutInplace {
+		defer func() { _ = n.target.Remove(tmp) }()
+	}
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
 	_, err = io.CopyBuffer(ff, in, *buf)
@@ -170,8 +182,11 @@ func (n *nfsStore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	// _ = n.target.Remove(p)
-	return n.target.Rename(tmp, p)
+	if !PutInplace {
+		// overwrite dst
+		err = n.target.Rename(tmp, p)
+	}
+	return err
 }
 
 func (n *nfsStore) Delete(key string) error {

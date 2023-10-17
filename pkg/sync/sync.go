@@ -993,6 +993,10 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}
 	}
 
+	if config.Inplace {
+		object.PutInplace = true
+	}
+
 	var bufferSize = 10240
 	if config.Manager != "" {
 		bufferSize = 100

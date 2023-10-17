@@ -40,6 +40,7 @@ type Config struct {
 	Existing       bool
 	IgnoreExisting bool
 	Links          bool
+	Inplace        bool
 	Limit          int64
 	Manager        string
 	Workers        []string
@@ -147,6 +148,7 @@ func NewConfigFromCli(c *cli.Context) *Config {
 		Existing:       c.Bool("existing"),
 		IgnoreExisting: c.Bool("ignore-existing"),
 		Links:          c.Bool("links"),
+		Inplace:        c.Bool("inplace"),
 		Limit:          c.Int64("limit"),
 		Workers:        c.StringSlice("worker"),
 		ManagerAddr:    c.String("manager-addr"),

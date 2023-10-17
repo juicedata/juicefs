@@ -124,7 +124,12 @@ func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 		eno := j.jfs.MkdirAll(ctx, p, 0777, j.umask)
 		return toError(eno)
 	}
-	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
+	var tmp string
+	if object.PutInplace {
+		tmp = p
+	} else {
+		tmp = filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
+	}
 	f, eno := j.jfs.Create(ctx, tmp, 0666, j.umask)
 	if eno == syscall.ENOENT {
 		_ = j.jfs.MkdirAll(ctx, filepath.Dir(tmp), 0777, j.umask)
@@ -133,13 +138,15 @@ func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 	if eno != 0 {
 		return toError(eno)
 	}
-	defer func() {
-		if err != nil {
-			if e := j.jfs.Delete(ctx, tmp); e != 0 {
-				logger.Warnf("Failed to delete %s: %s", tmp, e)
+	if !object.PutInplace {
+		defer func() {
+			if err != nil {
+				if e := j.jfs.Delete(ctx, tmp); e != 0 {
+					logger.Warnf("Failed to delete %s: %s", tmp, e)
+				}
 			}
-		}
-	}()
+		}()
+	}
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
 	_, err = io.CopyBuffer(&jFile{f, 0}, in, *buf)
@@ -150,9 +157,10 @@ func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 	if eno != 0 {
 		return toError(eno)
 	}
-	eno = j.jfs.Rename(ctx, tmp, p, 0)
-	if eno != 0 {
-		return toError(eno)
+	if !object.PutInplace {
+		if eno = j.jfs.Rename(ctx, tmp, p, 0); eno != 0 {
+			return toError(eno)
+		}
 	}
 	return nil
 }
