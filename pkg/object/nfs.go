@@ -151,6 +151,10 @@ func (n *nfsStore) Put(key string, in io.Reader) error {
 		_ = n.mkdirAll(filepath.Dir(p), 0777)
 		_, err = n.target.Create(tmp, 0777)
 	}
+	if os.IsExist(err) {
+		_ = n.target.Remove(tmp)
+		_, err = n.target.Create(tmp, 0777)
+	}
 	if err != nil {
 		return errors.Wrapf(err, "create %s", tmp)
 	}
