@@ -62,6 +62,36 @@ test_total_inodes(){
     echo a | tee /jfs/test2001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
 }
 
+test_remove_and_restore(){
+    prepare_test
+    ./juicefs format $META_URL myjfs
+    ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
+    mkdir -p /jfs/d
+    ./juicefs quota set $META_URL --path /d --capacity 1
+    sleep $((HEARTBEAT_INTERVAL+1))
+    dd if=/dev/zero of=/jfs/d/test1 bs=1G count=1
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    ./juicefs quota get $META_URL --path /d 2>&1 | tee quota.log
+    used=$(cat quota.log | grep "/d" | awk -F'|' '{print $5}'  | tr -d '[:space:]')
+    [[ $used != "100%" ]] && echo "used should be 100%" && exit 1 || true
+    echo a | tee -a /jfs/d/test1 2>error.log && echo "write should fail on out of space" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
+
+    rm /jfs/d/test1 -rf
+    sleep $DIR_QUOTA_FLUSH_INTERVAL
+    ./juicefs quota get $META_URL --path /d 2>&1 | tee quota.log
+    used=$(cat quota.log | grep "/d" | awk -F'|' '{print $5}'  | tr -d '[:space:]')
+    [[ $used != "0%" ]] && echo "used should be 0%" && exit 1 || true
+
+    trash_dir=$(ls /jfs/.trash)
+    ./juicefs restore $META_URL $trash_dir --put-back
+    ./juicefs quota get $META_URL --path /d 2>&1 | tee quota.log
+    used=$(cat quota.log | grep "/d" | awk -F'|' '{print $5}'  | tr -d '[:space:]')
+    [[ $used != "100%" ]] && echo "used should be 100%" && exit 1 || true
+    echo a | tee -a /jfs/d/test1 2>error.log && echo "write should fail on out of space" && exit 1 || true
+    grep -i "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
+}
+
 test_dir_capacity(){
     prepare_test
     ./juicefs format $META_URL myjfs
