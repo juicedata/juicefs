@@ -66,23 +66,25 @@ test_nested_dir(){
     prepare_test
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
-    
-    mkdir -p /jfs/d1/d2/d3/d4/d5/d6/d7/d8/d9
-    ./juicefs quota set $META_URL --path /d1 --inodes 1008
+    file_count=1000
+    mkdir -p /jfs/d1/{d1,d2,d3,d4,d5,d6}/{d1,d2,d3,d4,d5,d6}/{d1,d2,d3,d4,d5,d6}
+    dir_count=$(find /jfs/d1 -type d | wc -l)
+    echo "dir_count: $dir_count"
+    ./juicefs quota set $META_URL --path /d1 --inodes $((file_count+dir_count-1))
     sleep $HEARTBEAT_INTERVAL
-    for i in {1..1000}; do
+    for i in $(seq 1 $file_count); do
         subdir=$(find /jfs/d1/ -type d | shuf -n 1)
-        echo $i | tee $subdir/test$i > /dev/null
+        echo "touch $subdir/test$i" && touch $subdir/test$i
     done
     sleep $VOLUME_QUOTA_FLUSH_INTERVAL
     subdir=$(find /jfs/d1/ -type d | shuf -n 1)
-    echo a | tee $subdir/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
+    touch $subdir/test 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
     grep -i "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
 
-    ./juicefs quota set $META_URL --path /d1 --inodes 1009
+    ./juicefs quota set $META_URL --path /d1 --inodes $((file_count+dir_count))
     sleep $HEARTBEAT_INTERVAL
     subdir=$(find /jfs/d1/ -type d | shuf -n 1)
-    echo a | tee $subdir/test1001
+    touch $subdir/test
 }
 
 test_remove_and_restore(){
