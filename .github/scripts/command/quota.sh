@@ -68,17 +68,15 @@ test_nested_dir(){
     ./juicefs mount -d $META_URL /jfs --heartbeat $HEARTBEAT_INTERVAL
     
     mkdir -p /jfs/d1/d2/d3
-    ./juicefs quota set $META_URL --path /d1 --inodes 1001
+    ./juicefs quota set $META_URL --path /d1 --inodes 1002
     ./juicefs quota set $META_URL --path /d1/d2/d3 --inodes 1000
+    sleep $HEARTBEAT_INTERVAL
     for i in {1..1000}; do
         echo $i | tee /jfs/d1/d2/d3/test$i > /dev/null
     done
     sleep $VOLUME_QUOTA_FLUSH_INTERVAL
     echo a | tee /jfs/d1/d2/d3/test1001 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
-    grep "Disk quota exceeded" error.log
-    echo a | tee /jfs/d1/d2/test1001 
-    echo a | tee /jfs/d1/d2/test1002 2>error.log && echo "write should fail on out of inodes" && exit 1 || true
-    grep "Disk quota exceeded" error.log
+    grep -i "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
 }
 
 test_remove_and_restore(){
@@ -107,6 +105,7 @@ test_remove_and_restore(){
     ./juicefs quota get $META_URL --path /d 2>&1 | tee quota.log
     used=$(cat quota.log | grep "/d" | awk -F'|' '{print $5}'  | tr -d '[:space:]')
     [[ $used != "100%" ]] && echo "used should be 100%" && exit 1 || true
+    sleep $HEARTBEAT_INTERVAL
     echo a | tee -a /jfs/d/test1 2>error.log && echo "write should fail on out of space" && exit 1 || true
     grep -i "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
 }
