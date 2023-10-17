@@ -125,9 +125,10 @@ juicefs format --storage s3 \
 
 In the code mentioned above, we use the `rediss://` protocol header to enable mTLS functionality, and then use the following options to specify the path of the client certificate:
 
-- `tls-cert-file`: The path of the client certificate.
-- `tls-key-file`: The path of the private key.
-- `tls-ca-cert-file`: The path of the CA certificate. It is optional. If it is not specified, the system CA certificate will be used.
+- `tls-cert-file=<path>`: The path of the client certificate.
+- `tls-key-file=<path>`: The path of the private key.
+- `tls-ca-cert-file=<path>`: The path of the CA certificate. It is optional. If it is not specified, the system CA certificate will be used.
+- `insecure-skip-verify=true` It can skip verifying the server certificate.
 
 When specifying options in a URL, start with the `?` symbol and use the `&` symbol to separate multiple options, for example: `?tls-cert-file=client.crt&tls-key-file=client.key`.
 
