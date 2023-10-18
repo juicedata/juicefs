@@ -125,9 +125,10 @@ juicefs format --storage s3 \
 
 上面的示例代码使用 `rediss://` 协议头来开启 mTLS 功能，然后使用以下选项来指定客户端证书的路径：
 
-- `tls-cert-file` 指定客户端证书的路径
-- `tls-key-file` 指定客户端密钥的路径
-- `tls-ca-cert-file` 指定签发客户端证书的 CA 证书路径，它是可选的，如果不指定，客户端会使用系统默认的 CA 证书进行验证。
+- `tls-cert-file=<path>` 指定客户端证书的路径
+- `tls-key-file=<path>` 指定客户端密钥的路径
+- `tls-ca-cert-file=<path>` 指定签发客户端证书的 CA 证书路径，它是可选的，如果不指定，客户端会使用系统默认的 CA 证书进行验证。
+- `insecure-skip-verify=true` 可以用来跳过对服务端证书的验证
 
 在 URL 指定选项时，以 `?` 符号开头，使用 `&` 符号来分隔多个选项，例如：`?tls-cert-file=client.crt&tls-key-file=client.key`。
 
