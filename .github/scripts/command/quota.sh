@@ -102,7 +102,7 @@ test_remove_and_restore(){
     echo a | tee -a /jfs/d/test1 2>error.log && echo "write should fail on out of space" && exit 1 || true
     grep -i "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
 
-    rm /jfs/d/test1 -rf
+    echo "remove test1" && rm /jfs/d/test1 -rf
     sleep $DIR_QUOTA_FLUSH_INTERVAL
     ./juicefs quota get $META_URL --path /d 2>&1 | tee quota.log
     used=$(cat quota.log | grep "/d" | awk -F'|' '{print $5}'  | tr -d '[:space:]')
@@ -116,6 +116,12 @@ test_remove_and_restore(){
     sleep $HEARTBEAT_INTERVAL
     echo a | tee -a /jfs/d/test1 2>error.log && echo "write should fail on out of space" && exit 1 || true
     grep -i "Disk quota exceeded" error.log || (echo "grep failed" && exit 1)
+
+    echo "remove test1" && rm /jfs/d/test1 -rf
+    dd if=/dev/zero of=/jfs/d/test2 bs=1M count=1
+    trash_dir=$(ls /jfs/.trash)
+    ./juicefs restore $META_URL $trash_dir --put-back 2>&1 | tee restore.log
+    grep "disk quota exceeded" restore.log || (echo "check restore log failed" && exit 1)
 }
 
 test_dir_capacity(){
