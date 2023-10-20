@@ -135,6 +135,12 @@ func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 		_ = j.jfs.MkdirAll(ctx, filepath.Dir(tmp), 0777, j.umask)
 		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
 	}
+
+	if eno == syscall.EEXIST {
+		_ = j.jfs.Delete(ctx, filepath.Dir(tmp))
+		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
+	}
+
 	if eno != 0 {
 		return toError(eno)
 	}
