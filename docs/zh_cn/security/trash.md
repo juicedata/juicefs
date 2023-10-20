@@ -23,6 +23,8 @@ juicefs config META-URL --trash-days=7
 juicefs config META-URL --trash-days=0
 ```
 
+另外，回收站自动清理依赖 JuiceFS 客户端的后台任务，为了保证后台任务能够正常执行，需要至少 1 个在线的挂载点，并且在挂载文件系统时不可以使用 [`--no-bgjob`](../reference/command_reference.md#mount) 参数。
+
 ## 恢复文件 {#recover}
 
 文件被删除时，会根据删除时间，被保存在格式为 `.trash/YYYY-MM-DD-HH/[parent inode]-[file inode]-[file name]` 的目录，其中 `YYYY-MM-DD-HH` 就是删除操作的 UTC 时间。因此只需要确定文件的删除时间，就能在对应的目录中找到他们，来进行恢复操作。
@@ -104,7 +106,7 @@ juicefs restore $META_URL 2023-08-14-05 --put-back
 
 当回收站中的文件到了过期时间，会被自动清理。需要注意的是，文件清理由 JuiceFS 客户端的后台任务（background job，也称 bgjob）执行，默认每小时清理一次，因此面对大量文件过期时，对象存储的清理速度未必和你期望的一样快，可能需要一些时间才能看到存储容量变化。
 
-如果你希望在过期时间到来之前彻底删除文件，可以用 [`juicefs rmr`](../reference/command_reference.md#rmr) 或系统自带的 `rm` 命令来删除回收站目录 `.trash` 中的文件，这样就能立刻释放存储空间。
+如果你希望在过期时间到来之前彻底删除文件，需要使用 root 用户身份，用 [`juicefs rmr`](../reference/command_reference.md#rmr) 或系统自带的 `rm` 命令来删除回收站目录 `.trash` 中的文件，这样就能立刻释放存储空间。
 
 例如，彻底删除回收站中某个目录：
 
@@ -112,7 +114,7 @@ juicefs restore $META_URL 2023-08-14-05 --put-back
 juicefs rmr .trash/2022-11-30-10/
 ```
 
-另外，回收站自动清理依赖 JuiceFS 客户端的后台任务，为了保证后台任务能够正常执行，需要至少 1 个在线的挂载点，并且在挂载文件系统时不可以使用 [`--no-bgjob`](../reference/command_reference.md#mount) 参数。如果希望更快速删除过期文件，可以挂载多个挂载点来突破单个客户端的删除速度上限。
+如果希望更快速删除过期文件，可以挂载多个挂载点来突破单个客户端的删除速度上限。
 
 ## 回收站和文件碎片 {#gc}
 

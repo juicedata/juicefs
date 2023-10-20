@@ -24,6 +24,8 @@ juicefs config META-URL --trash-days=7
 juicefs config META-URL --trash-days=0
 ```
 
+In addition, the automatic cleaning of the trash relies on the background job of the JuiceFS client. To ensure that the background job can be executed properly, at least one online mount point is required, and the [`--no-bgjob`](../reference/command_reference.md#mount) parameter should not be used when mounting the file system. 
+
 ## Recover files {#recover}
 
 When files are deleted, they will be moved to a directory that takes up the format of `.trash/YYYY-MM-DD-HH/[parent inode]-[file inode]-[file name]`, where `YYYY-MM-DD-HH` is the UTC time of the deletion. You can locate the deleted files and recover them if you remember when they are deleted.
@@ -105,7 +107,7 @@ juicefs restore $META_URL 2023-08-14-05 --put-back
 
 When files in the trash directory reach their expiration time, they will be automatically cleaned up. It is important to note that the file cleaning is performed by the background job of the JuiceFS client, which is scheduled to run every hour by default. Therefore, when there are a large number of expired files, the cleaning speed of the object storage may not be as fast as expected, and it may take some time to see the change in storage capacity.
 
-If you want to permanently delete files before their expiration time, you can use [`juicefs rmr`](../reference/command_reference.md#rmr) or the system's built-in `rm` command to delete the files in the `.trash` directory, so that storage space can be immediately released.
+If you want to permanently delete files before their expiration time, you need to have `root` privileges and use [`juicefs rmr`](../reference/command_reference.md#rmr) or the system's built-in `rm` command to delete the files in the `.trash` directory, so that storage space can be immediately released.
 
 For example, to permanently delete a directory in the trash:
 
@@ -113,7 +115,7 @@ For example, to permanently delete a directory in the trash:
 juicefs rmr .trash/2022-11-30-10/
 ```
 
-In addition, the automatic cleaning of the trash relies on the background job of the JuiceFS client. To ensure that the background job can be executed properly, at least one online mount point is required, and the [`--no-bgjob`](../reference/command_reference.md#mount) parameter should not be used when mounting the file system. If you want to delete expired files more quickly, you can mount multiple mount points to exceed the deletion speed limit of a single client.
+If you want to delete expired files more quickly, you can mount multiple mount points to exceed the deletion speed limit of a single client.
 
 ## Trash and slices {#gc}
 
