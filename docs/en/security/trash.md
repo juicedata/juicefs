@@ -24,7 +24,7 @@ juicefs config META-URL --trash-days=7
 juicefs config META-URL --trash-days=0
 ```
 
-In addition, the automatic cleaning of the trash relies on the background job of the JuiceFS client. To ensure that the background job can be executed properly, at least one online mount point is required, and the [`--no-bgjob`](../reference/command_reference.md#mount) parameter should not be used when mounting the file system. 
+In addition, the automatic cleaning of the trash relies on the background job of the JuiceFS client. To ensure that the background job can be executed properly, at least one online mount point is required, and the [`--no-bgjob`](../reference/command_reference.md#mount) parameter should not be used when mounting the file system.
 
 ## Recover files {#recover}
 
