@@ -103,14 +103,14 @@ jobs:
           sudo META=${{matrix.meta}} .github/scripts/command/info.sh
 
       - name: Log
-        if: ${{ always() }}
+        if: always()
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
@@ -137,14 +137,14 @@ jobs:
           sudo META=${{matrix.meta}} .github/scripts/command/quota.sh 
 
       - name: Log
-        if: ${{ always() }}
+        if: always()
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
@@ -190,14 +190,14 @@ jobs:
           sudo CI=true META=${{matrix.meta}} KEY_TYPE=$random_type .github/scripts/command/sync_cluster.sh 
 
       - name: Log
-        if: ${{ always() }}
+        if: always()
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug }}
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
@@ -216,12 +216,12 @@ jobs:
         run: exit 1
 
       - name: Send Slack Notification
-        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        if: failure() && github.event_name != 'workflow_dispatch'
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Success
-        if: ${{ success() }}
+        if: success()
         run: echo "All Done"

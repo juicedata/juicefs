@@ -96,7 +96,7 @@ jobs:
           fi
 
       - name: Log
-        if: ${{ always() }}
+        if: always()
         run: |
           df -lh
           echo "juicefs log"

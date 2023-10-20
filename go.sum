@@ -622,10 +622,10 @@ github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83 h1:RyHTka3jCnTaUqfRYjlwcQlr53aasmkvHEbYLXthqr8=
 github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83/go.mod h1:1CNUng3PtjQMtRzJO4FMXBQvkGtuYRxxiR9xMa7jMwI=
-github.com/juicedata/go-nfs-client v0.0.0-20230619072909-36eec939432b h1:tZixumON7boPNeTPBkaD5ObOUJ8DaES4VL17XMrY0BU=
-github.com/juicedata/go-nfs-client v0.0.0-20230619072909-36eec939432b/go.mod h1:xOMqi3lOrcGe9uZLnSzgaq94Vc3oz6VPCNDLJUnXpKs=
 github.com/juicedata/go-fuse/v2 v2.1.1-0.20230726081302-124dbfa991d7 h1:4evzoVz1/AZfk9tqxWdzVYTMl2dC7VjEJHfaSFDrKS8=
 github.com/juicedata/go-fuse/v2 v2.1.1-0.20230726081302-124dbfa991d7/go.mod h1:B1nGE/6RBFyBRC1RRnf23UpwCdyJ31eukw34oAKukAc=
+github.com/juicedata/go-nfs-client v0.0.0-20231018052507-dbca444fa7e8 h1:mVVipCbohnzKZPiHGzFncLKEJZpypqjpGr4End2PP48=
+github.com/juicedata/go-nfs-client v0.0.0-20231018052507-dbca444fa7e8/go.mod h1:xOMqi3lOrcGe9uZLnSzgaq94Vc3oz6VPCNDLJUnXpKs=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d h1:kpQMvNZJKGY3PTt7OSoahYc4nM0HY67SvK0YyS0GLwA=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d/go.mod h1:dlxKkLh3qAIPtgr2U/RVzsZJDuXA1ffg+Njikfmhvgw=
 github.com/juicedata/gogfapi v0.0.0-20230626071140-fc28e5537825 h1:7KrwI4HPqvNLKVcfkfDMLQQmT0GrnCs8T9EX+XCdZnM=
@@ -889,8 +889,6 @@ github.com/prometheus/procfs v0.9.0 h1:wzCHvIvM5SxWqYvwgVL7yJY8Lz3PKn49KQtpgMYJf
 github.com/prometheus/procfs v0.9.0/go.mod h1:+pB4zwohETzFnmlpe6yd2lSc+0/46IYZRB/chUwxUZY=
 github.com/pyroscope-io/client v0.7.0 h1:LWuuqPQ1oa6x7BnmUOuo/aGwdX85QGhWZUBYWWW3zdk=
 github.com/pyroscope-io/client v0.7.0/go.mod h1:4h21iOU4pUOq0prKyDlvYRL+SCKsBc5wKiEtV+rJGqU=
-github.com/pyroscope-io/godeltaprof v0.1.0 h1:UBqtjt0yZi4jTxqZmLAs34XG6ycS3vUTlhEUSq4NHLE=
-github.com/pyroscope-io/godeltaprof v0.1.0/go.mod h1:psMITXp90+8pFenXkKIpNhrfmI9saQnPbba27VIaiQE=
 github.com/pyroscope-io/godeltaprof v0.1.2 h1:MdlEmYELd5w+lvIzmZvXGNMVzW2Qc9jDMuJaPOR75g4=
 github.com/pyroscope-io/godeltaprof v0.1.2/go.mod h1:psMITXp90+8pFenXkKIpNhrfmI9saQnPbba27VIaiQE=
 github.com/qingstor/qingstor-sdk-go/v4 v4.4.0 h1:tbItWtGB1TDfYzqK8dtm6tV+xWU5iYMwL37C6AL5dDs=

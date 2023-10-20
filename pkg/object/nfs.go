@@ -275,7 +275,7 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 		return nil, err
 	}
 	for _, e := range entries {
-		p := filepath.Join(prefix, e.Name())
+		p := filepath.Join(dir, e.Name())
 		if e.IsDir() && !e.isSymlink {
 			p = filepath.ToSlash(p + "/")
 		}
