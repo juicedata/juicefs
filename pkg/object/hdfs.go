@@ -21,6 +21,7 @@ package object
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -126,15 +127,22 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 	if strings.HasSuffix(path, dirSuffix) {
 		return h.c.MkdirAll(path, 0777&^h.umask)
 	}
-	tmp := filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp.%d", filepath.Base(path), rand.Int()))
+	var tmp string
+	if PutInplace {
+		tmp = path
+	} else {
+		tmp = filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp.%d", filepath.Base(path), rand.Int()))
+	}
 	f, err := h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
-	defer func() { _ = h.c.Remove(tmp) }()
+	if !PutInplace {
+		defer func() { _ = h.c.Remove(tmp) }()
+	}
 	if err != nil {
 		if pe, ok := err.(*os.PathError); ok && pe.Err == os.ErrNotExist {
 			_ = h.c.MkdirAll(filepath.Dir(path), 0777&^h.umask)
 			f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 		}
-		if pe, ok := err.(*os.PathError); ok && pe.Err == os.ErrExist {
+		if pe, ok := err.(*os.PathError); ok && errors.Is(pe.Err, os.ErrExist) {
 			_ = h.c.Remove(tmp)
 			f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 		}
@@ -153,7 +161,10 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 	if err != nil && !IsErrReplicating(err) {
 		return err
 	}
-	return h.c.Rename(tmp, path)
+	if !PutInplace {
+		err = h.c.Rename(tmp, path)
+	}
+	return err
 }
 
 func IsErrReplicating(err error) bool {
