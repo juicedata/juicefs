@@ -471,7 +471,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			}
 			m.InitMetrics(registerer)
 			vfs.InitMetrics(registerer)
-			go metric.UpdateMetrics(m, registerer)
+			go metric.UpdateMetrics(registerer)
 		}
 
 		blob, err := cmd.NewReloadableStorage(format, m, func(f *meta.Format) {
