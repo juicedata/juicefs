@@ -31,6 +31,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/metric"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/sync"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/urfave/cli/v2"
@@ -433,16 +434,18 @@ func doSync(c *cli.Context) error {
 	}
 
 	if config.Manager == "" && !config.Dry {
+		src := utils.RemovePassword(srcURL)
+		dst := utils.RemovePassword(dstURL)
 		registry := prometheus.NewRegistry()
 		config.Registerer = prometheus.WrapRegistererWithPrefix("juicefs_sync_",
-			prometheus.WrapRegistererWith(prometheus.Labels{"cmd": "sync", "src": srcURL, "dst": dstURL, "pid": strconv.Itoa(os.Getpid())}, registry))
+			prometheus.WrapRegistererWith(prometheus.Labels{"cmd": "sync", "src": src, "dst": dst, "pid": strconv.Itoa(os.Getpid())}, registry))
 		config.Registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 		config.Registerer.MustRegister(collectors.NewGoCollector())
 		metricsAddr := exposeMetrics(c, config.Registerer, registry)
 		if c.IsSet("consul") {
 			metadata := make(map[string]string)
-			metadata["src"] = srcURL
-			metadata["dst"] = dstURL
+			metadata["src"] = src
+			metadata["dst"] = dst
 			metadata["pid"] = strconv.Itoa(os.Getpid())
 			metric.RegisterToConsul(c.String("consul"), metricsAddr, metadata)
 		}
