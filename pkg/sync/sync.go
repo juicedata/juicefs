@@ -1112,7 +1112,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 }
 
 func initSyncMetrics(config *Config) {
-	if config.Manager == "" && !config.Dry {
+	if config.Registerer != nil {
 		config.Registerer.MustRegister(
 			prometheus.NewCounterFunc(prometheus.CounterOpts{
 				Name: "scanned",
