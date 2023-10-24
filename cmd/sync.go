@@ -434,18 +434,25 @@ func doSync(c *cli.Context) error {
 	}
 
 	if config.Manager == "" && !config.Dry {
-		src := utils.RemovePassword(srcURL)
-		dst := utils.RemovePassword(dstURL)
+		var srcPath, dstPath string
+		if strings.HasPrefix(src.String(), "file://") {
+			srcPath = src.String()
+		}
+		if strings.HasPrefix(dst.String(), "file://") {
+			dstPath = dst.String()
+		}
+		srcPath = utils.RemovePassword(srcPath)
+		dstPath = utils.RemovePassword(dstPath)
 		registry := prometheus.NewRegistry()
 		config.Registerer = prometheus.WrapRegistererWithPrefix("juicefs_sync_",
-			prometheus.WrapRegistererWith(prometheus.Labels{"cmd": "sync", "src": src, "dst": dst, "pid": strconv.Itoa(os.Getpid())}, registry))
+			prometheus.WrapRegistererWith(prometheus.Labels{"cmd": "sync", "src": srcPath, "dst": dstPath, "pid": strconv.Itoa(os.Getpid())}, registry))
 		config.Registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 		config.Registerer.MustRegister(collectors.NewGoCollector())
 		metricsAddr := exposeMetrics(c, config.Registerer, registry)
 		if c.IsSet("consul") {
 			metadata := make(map[string]string)
-			metadata["src"] = src
-			metadata["dst"] = dst
+			metadata["src"] = srcPath
+			metadata["dst"] = dstPath
 			metadata["pid"] = strconv.Itoa(os.Getpid())
 			metric.RegisterToConsul(c.String("consul"), metricsAddr, metadata)
 		}
