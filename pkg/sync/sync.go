@@ -1116,11 +1116,13 @@ func initSyncMetrics(config *Config) {
 		config.Registerer.MustRegister(
 			prometheus.NewCounterFunc(prometheus.CounterOpts{
 				Name: "scanned",
+				Help: "Scanned objects",
 			}, func() float64 {
 				return float64(handled.Total())
 			}),
 			prometheus.NewCounterFunc(prometheus.CounterOpts{
 				Name: "handled",
+				Help: "Handled objects",
 			}, func() float64 {
 				return float64(handled.Current())
 			}),
