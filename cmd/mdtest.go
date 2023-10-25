@@ -25,13 +25,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/mattn/go-isatty"
-
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/metric"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
 
@@ -221,9 +221,13 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
 	conf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
 
-	metricsAddr := exposeMetrics(c, m, registerer, registry)
+	metricsAddr := exposeMetrics(c, registerer, registry)
+	m.InitMetrics(registerer)
+	vfs.InitMetrics(registerer)
 	if c.IsSet("consul") {
-		metric.RegisterToConsul(c.String("consul"), metricsAddr, conf.Meta.MountPoint)
+		metadata := make(map[string]string)
+		metadata["mountPoint"] = conf.Meta.MountPoint
+		metric.RegisterToConsul(c.String("consul"), metricsAddr, metadata)
 	}
 	jfs, err := fs.NewFileSystem(conf, m, store)
 	if err != nil {

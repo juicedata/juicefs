@@ -25,10 +25,15 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
+	"github.com/juicedata/juicefs/pkg/metric"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/sync"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/urfave/cli/v2"
 )
 
@@ -78,14 +83,18 @@ Supported storage systems: https://juicefs.com/docs/community/how_to_setup_objec
 			syncActionFlags(),
 			syncStorageFlags(),
 			clusterFlags(),
-			[]cli.Flag{
-				&cli.IntFlag{
-					Name:   "http-port",
-					Value:  6070,
-					Hidden: true,
-					Usage:  "HTTP `PORT` to listen to",
+			addCategories("METRICS", []cli.Flag{
+				&cli.StringFlag{
+					Name:  "metrics",
+					Value: "127.0.0.1:9567",
+					Usage: "address to export metrics",
 				},
-			},
+				&cli.StringFlag{
+					Name:  "consul",
+					Value: "127.0.0.1:8500",
+					Usage: "consul address to register",
+				},
+			}),
 		),
 	}
 }
@@ -421,6 +430,31 @@ func doSync(c *cli.Context) error {
 	if config.StorageClass != "" {
 		if os, ok := dst.(object.SupportStorageClass); ok {
 			os.SetStorageClass(config.StorageClass)
+		}
+	}
+
+	if config.Manager == "" && !config.Dry {
+		var srcPath, dstPath string
+		if strings.HasPrefix(src.String(), "file://") {
+			srcPath = src.String()
+		}
+		if strings.HasPrefix(dst.String(), "file://") {
+			dstPath = dst.String()
+		}
+		srcPath = utils.RemovePassword(srcPath)
+		dstPath = utils.RemovePassword(dstPath)
+		registry := prometheus.NewRegistry()
+		config.Registerer = prometheus.WrapRegistererWithPrefix("juicefs_sync_",
+			prometheus.WrapRegistererWith(prometheus.Labels{"cmd": "sync", "pid": strconv.Itoa(os.Getpid())}, registry))
+		config.Registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+		config.Registerer.MustRegister(collectors.NewGoCollector())
+		metricsAddr := exposeMetrics(c, config.Registerer, registry)
+		if c.IsSet("consul") {
+			metadata := make(map[string]string)
+			metadata["src"] = srcPath
+			metadata["dst"] = dstPath
+			metadata["pid"] = strconv.Itoa(os.Getpid())
+			metric.RegisterToConsul(c.String("consul"), metricsAddr, metadata)
 		}
 	}
 	return sync.Sync(src, dst, config)

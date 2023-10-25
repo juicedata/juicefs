@@ -20,6 +20,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -57,6 +58,7 @@ type Config struct {
 
 	rules          []rule
 	concurrentList chan int
+	Registerer     prometheus.Registerer
 }
 
 func envList() []string {

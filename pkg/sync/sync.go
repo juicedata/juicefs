@@ -31,6 +31,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juju/ratelimit"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // The max number of key per listing request
@@ -1032,6 +1033,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}
 	}()
 
+	initSyncMetrics(config)
 	for i := 0; i < config.Threads; i++ {
 		wg.Add(1)
 		go func() {
@@ -1107,4 +1109,78 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		}
 	}
 	return nil
+}
+
+func initSyncMetrics(config *Config) {
+	if config.Registerer != nil {
+		config.Registerer.MustRegister(
+			prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "scanned",
+				Help: "Scanned objects",
+			}, func() float64 {
+				return float64(handled.Total())
+			}),
+			prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "handled",
+				Help: "Handled objects",
+			}, func() float64 {
+				return float64(handled.Current())
+			}),
+			prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+				Name: "pending",
+				Help: "Pending objects",
+			}, func() float64 {
+				return float64(pending.Current())
+			}),
+			prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "copied",
+				Help: "Copied objects",
+			}, func() float64 {
+				return float64(copied.Current())
+			}),
+			prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "copied_bytes",
+				Help: "Copied bytes",
+			}, func() float64 {
+				return float64(copiedBytes.Current())
+			}),
+			prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "skipped",
+				Help: "Skipped objects",
+			}, func() float64 {
+				return float64(skipped.Current())
+			}),
+		)
+		if failed != nil {
+			config.Registerer.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "failed",
+				Help: "Failed objects",
+			}, func() float64 {
+				return float64(failed.Current())
+			}))
+		}
+		if deleted != nil {
+			config.Registerer.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "deleted",
+				Help: "Deleted objects",
+			}, func() float64 {
+				return float64(deleted.Current())
+			}))
+		}
+		if checked != nil && checkedBytes != nil {
+			config.Registerer.MustRegister(
+				prometheus.NewCounterFunc(prometheus.CounterOpts{
+					Name: "checked",
+					Help: "Checked objects",
+				}, func() float64 {
+					return float64(checked.Current())
+				}),
+				prometheus.NewCounterFunc(prometheus.CounterOpts{
+					Name: "checked_bytes",
+					Help: "Checked bytes",
+				}, func() float64 {
+					return float64(checkedBytes.Current())
+				}))
+		}
+	}
 }
