@@ -445,7 +445,7 @@ func doSync(c *cli.Context) error {
 		dstPath = utils.RemovePassword(dstPath)
 		registry := prometheus.NewRegistry()
 		config.Registerer = prometheus.WrapRegistererWithPrefix("juicefs_sync_",
-			prometheus.WrapRegistererWith(prometheus.Labels{"cmd": "sync", "src": srcPath, "dst": dstPath, "pid": strconv.Itoa(os.Getpid())}, registry))
+			prometheus.WrapRegistererWith(prometheus.Labels{"cmd": "sync", "pid": strconv.Itoa(os.Getpid())}, registry))
 		config.Registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 		config.Registerer.MustRegister(collectors.NewGoCollector())
 		metricsAddr := exposeMetrics(c, config.Registerer, registry)
