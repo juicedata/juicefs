@@ -110,8 +110,10 @@ func RegisterToConsul(consulAddr, metricsAddr string, metadata map[string]string
 		id = fmt.Sprintf("%s:%s", localIp, mp)
 		name = "juicefs"
 	} else {
-		// for sync metrics, id format: 127.0.0.1:src->dst;pid=6666
-		id = fmt.Sprintf("%s:%s->%s;pid=%s", localIp, metadata["src"], metadata["dst"], metadata["pid"])
+		// for sync metrics, id format: 127.0.0.1;src->dst;pid=6666
+		id = fmt.Sprintf("%s;%s->%s;pid=%s", localIp, metadata["src"], metadata["dst"], metadata["pid"])
+		delete(metadata, "src")
+		delete(metadata, "dst")
 		name = "juicefs-sync"
 	}
 
