@@ -2023,7 +2023,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		attr.Ctimensec = uint32(now.Nanosecond())
 
 		vals := make(map[string][]byte)
-		tx.scan(m.chunkKey(fin, uint32(offIn/ChunkSize)), m.chunkKey(fin, uint32(offIn+size/ChunkSize)+1),
+		tx.scan(m.chunkKey(fin, uint32(offIn/ChunkSize)), m.chunkKey(fin, uint32((offIn+size)/ChunkSize+1)),
 			false, func(k, v []byte) bool {
 				vals[string(k)] = v
 				return true
