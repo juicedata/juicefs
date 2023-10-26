@@ -204,6 +204,10 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followL
 		entries, err = file.Readdir(0)
 	}
 	if err != nil {
+		if os.IsPermission(err) {
+			logger.Warnf("skip %s: %s", dir, err)
+			return nil, nil
+		}
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
