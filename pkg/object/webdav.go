@@ -240,6 +240,10 @@ func (w *webdav) ListAll(prefix, marker string) (<-chan Object, error) {
 		defer close(listed)
 		_ = w.Walk(root, func(path string, info fs.FileInfo, err error) error {
 			if err != nil {
+				if gowebdav.IsErrCode(err, http.StatusForbidden) {
+					logger.Warnf("skip %s: %s", path, err)
+					return nil
+				}
 				if gowebdav.IsErrNotFound(err) {
 					logger.Warnf("skip not exist file or directory: %s", path)
 					return nil
