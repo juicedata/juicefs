@@ -64,7 +64,7 @@ func TestHDFS2(t *testing.T) { //skip mutate
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.Skip()
 	}
-	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "", "")
+	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "root", "", "")
 	testFileSystem(t, dfs)
 }
 
