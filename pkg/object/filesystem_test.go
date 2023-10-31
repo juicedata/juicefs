@@ -63,7 +63,7 @@ func TestHDFS2(t *testing.T) {
 	if os.Getenv("HDFS_ADDR") == "" {
 		t.Skip()
 	}
-	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "", "", "")
+	dfs, _ := newHDFS(os.Getenv("HDFS_ADDR"), "testUser1", "", "")
 	testFileSystem(t, dfs)
 }
 
