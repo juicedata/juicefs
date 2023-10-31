@@ -127,21 +127,22 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 
 	if ss, ok := s.(FileSystem); ok {
 		for _, mode := range []uint32{0022, 0122, 0422} {
+			t.Logf("test mode %o", os.FileMode(mode))
 			err := ss.Chmod("x/", os.FileMode(mode))
 			if err != nil {
-				t.Fatalf("chmod %d failed: %s", mode, err)
+				t.Fatalf("chmod %ofailed: %s", mode, err)
 			}
 			objs, err = listAll(s, "x", "", 100, true)
 			if err != nil {
-				t.Fatalf("list failed: %s mode %d", err, mode)
+				t.Fatalf("list failed: %s mode %o", err, mode)
 			}
 			expectedKeys = []string{"x/", "xy.txt", "xyz/", "xyz/xyz.txt"}
 			if err = testKeysEqual(objs, expectedKeys); err != nil {
-				t.Fatalf("testKeysEqual fail: %s mode %d", err, mode)
+				t.Fatalf("testKeysEqual fail: %s mode %o", err, mode)
 			}
 			err = ss.Chmod("x/", os.FileMode(0777))
 			if err != nil {
-				t.Fatalf("chmod %d failed: %s", mode, err)
+				t.Fatalf("chmod %o failed: %s", mode, err)
 			}
 		}
 	}
