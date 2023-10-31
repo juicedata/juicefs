@@ -235,7 +235,7 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 			if err != nil {
 				if os.IsPermission(err) {
 					logger.Warnf("skip %s: %s", path, err)
-					return filepath.SkipDir
+					return nil
 				}
 				if err == io.EOF {
 					err = nil // ignore
