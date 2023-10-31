@@ -132,6 +132,21 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 			if err != nil {
 				t.Fatalf("chmod %ofailed: %s", mode, err)
 			}
+			if mode == 0422 {
+				g := ss.(*gluster)
+				v := g.vol()
+				f, err := v.Open("x/")
+				if err != nil {
+					t.Errorf("0422 open error %s", err)
+				}
+				entries, err := f.Readdir(0)
+				if err != nil {
+					t.Errorf("0422 Readdir error %s", err)
+				}
+				for _, entry := range entries {
+					t.Logf("%s-%d", entry.Name(), entry.Size())
+				}
+			}
 			objs, err = listAll(s, "x", "", 100, true)
 			if err != nil {
 				t.Fatalf("list failed: %s mode %o", err, mode)
