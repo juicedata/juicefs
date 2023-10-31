@@ -125,21 +125,24 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 	}
 
 	if ss, ok := s.(FileSystem); ok {
-		err := ss.Chmod("x/", os.FileMode(0022))
-		if err != nil {
-			t.Fatalf("chmod failed: %s", err)
-		}
-		objs, err = listAll(s, "x", "", 100)
-		if err != nil {
-			t.Fatalf("list failed: %s", err)
-		}
-		expectedKeys = []string{"x/", "xy.txt", "xyz/", "xyz/xyz.txt"}
-		if err = testKeysEqual(objs, expectedKeys); err != nil {
-			t.Fatalf("testKeysEqual fail: %s", err)
-		}
-		err = ss.Chmod("x/", os.FileMode(0777))
-		if err != nil {
-			t.Fatalf("chmod failed: %s", err)
+		for _, mode := range []uint32{0022, 0122, 0422} {
+			t.Logf("test mode %o", os.FileMode(mode))
+			err := ss.Chmod("x/", os.FileMode(mode))
+			if err != nil {
+				t.Fatalf("chmod %ofailed: %s", mode, err)
+			}
+			objs, err = listAll(s, "x", "", 100)
+			if err != nil {
+				t.Fatalf("list failed: %s mode %o", err, mode)
+			}
+			expectedKeys = []string{"x/", "xy.txt", "xyz/", "xyz/xyz.txt"}
+			if err = testKeysEqual(objs, expectedKeys); err != nil {
+				t.Fatalf("testKeysEqual fail: %s mode %o", err, mode)
+			}
+			err = ss.Chmod("x/", os.FileMode(0777))
+			if err != nil {
+				t.Fatalf("chmod %o failed: %s", mode, err)
+			}
 		}
 	}
 
