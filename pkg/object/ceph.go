@@ -63,7 +63,11 @@ func (c *ceph) newContext() (*rados.IOContext, error) {
 	case ctx := <-c.free:
 		return ctx, nil
 	default:
-		return c.conn.OpenIOContext(c.name)
+		ctx, err := c.conn.OpenIOContext(c.name)
+		if err == nil {
+			_ = ctx.SetPoolFullTry()
+		}
+		return ctx, err
 	}
 }
 
