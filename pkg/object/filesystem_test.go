@@ -78,7 +78,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 	}
 	// initialize directory tree
 	for _, key := range keys {
-		if err := s.Put(key, bytes.NewReader([]byte{})); err != nil {
+		if err := s.Put(key, bytes.NewReader([]byte{'a', 'b'})); err != nil {
 			t.Fatalf("PUT object `%s` failed: %q", key, err)
 		}
 	}
