@@ -220,6 +220,10 @@ func walk(path string, info os.FileInfo, isSymlink bool, walkFn WalkFunc) error 
 		if err == nil {
 			err = walk(p, in, e.isSymlink, walkFn)
 		}
+		if os.IsPermission(err) {
+			logger.Warnf("skip %s: %s", path, err)
+			continue
+		}
 		if err != nil && err != filepath.SkipDir && !os.IsNotExist(err) {
 			return err
 		}
