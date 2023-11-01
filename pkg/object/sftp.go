@@ -375,6 +375,10 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64, followLi
 	}
 	infos, err := c.sftpClient.ReadDir(dir)
 	if err != nil {
+		if os.IsPermission(err) {
+			logger.Warnf("skip %s: %s", dir, err)
+			return nil, nil
+		}
 		if os.IsNotExist(err) {
 			return nil, nil
 		}

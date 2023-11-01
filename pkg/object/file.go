@@ -281,6 +281,10 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 	}
 	entries, err := readDirSorted(dir, followLink)
 	if err != nil {
+		if os.IsPermission(err) {
+			logger.Warnf("skip %s: %s", dir, err)
+			return nil, nil
+		}
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
