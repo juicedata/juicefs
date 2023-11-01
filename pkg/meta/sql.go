@@ -2057,7 +2057,7 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 		return nil
 	})
 	if err != nil {
-		logger.Warnf("Delete flock/plock with sid %d: %d", sid, err)
+		logger.Warnf("Delete flock/plock with sid %d: %s", sid, err)
 		fail = true
 	}
 
