@@ -1585,6 +1585,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		}
 		if _, err := s.Delete(&dirStats{Inode: e.Inode}); err != nil {
 			logger.Warnf("remove dir usage of ino(%d): %s", e.Inode, err)
+			return err
 		}
 		if _, err = s.Delete(&dirQuota{Inode: e.Inode}); err != nil {
 			return err
