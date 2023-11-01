@@ -41,8 +41,8 @@ jobs:
       GLUSTER_VOLUME: jfstest/gv0
       DISPLAY_PROGRESSBAR: false
       HDFS_ADDR: localhost:8020
-      SFTP_HOST: localhost:2222:/upload/
-      SFTP_USER: root
+      SFTP_HOST: localhost:2222:/home/testUser1/upload/
+      SFTP_USER: testUser1
       SFTP_PASS: password
       WEBDAV_TEST_BUCKET: 127.0.0.1:9007
       TIKV_ADDR: 127.0.0.1

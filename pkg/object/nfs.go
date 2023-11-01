@@ -269,6 +269,10 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 	}
 	entries, err := n.readDirSorted(dir, followLink)
 	if err != nil {
+		if os.IsPermission(err) {
+			logger.Warnf("skip %s: %s", dir, err)
+			return nil, nil
+		}
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
