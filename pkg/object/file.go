@@ -222,7 +222,7 @@ func walk(path string, info os.FileInfo, isSymlink bool, walkFn WalkFunc) error 
 		}
 		if os.IsPermission(err) {
 			logger.Warnf("skip %s: %s", path, err)
-			continue
+			break
 		}
 		if err != nil && err != filepath.SkipDir && !os.IsNotExist(err) {
 			return err
