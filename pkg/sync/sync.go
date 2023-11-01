@@ -177,6 +177,13 @@ var bufPool = sync.Pool{
 	},
 }
 
+var (
+	// for multiple upload mem limit
+	totalMem int64
+	mutex    sync.Mutex
+	cond     = sync.NewCond(&mutex)
+)
+
 func try(n int, f func() error) (err error) {
 	for i := 0; i < n; i++ {
 		err = f()
@@ -429,15 +436,31 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 	abort := make(chan struct{})
 	parts := make([]*object.Part, n)
 	errs := make(chan error, n)
+	pool := sync.Pool{New: func() any {
+		buff := make([]byte, partSize)
+		return &buff
+	}}
+
 	for i := 0; i < n; i++ {
 		go func(num int) {
 			sz := partSize
 			if num == n-1 {
 				sz = size - int64(num)*partSize
 			}
-			if limiter != nil {
-				limiter.Wait(sz)
+
+			mutex.Lock()
+			for totalMem < 0 {
+				cond.Wait()
 			}
+			totalMem -= partSize
+			mutex.Unlock()
+			defer func() {
+				mutex.Lock()
+				totalMem += partSize
+				mutex.Unlock()
+				cond.Signal()
+			}()
+
 			select {
 			case <-abort:
 				errs <- fmt.Errorf("aborted")
@@ -448,18 +471,22 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 				}()
 			}
 
-			data := make([]byte, sz)
+			if limiter != nil {
+				limiter.Wait(sz)
+			}
+			data := pool.Get().(*[]byte)
+			defer pool.Put(data)
 			if err := try(3, func() error {
 				in, err := src.Get(key, int64(num)*partSize, sz)
 				if err != nil {
 					return err
 				}
 				defer in.Close()
-				if _, err = io.ReadFull(in, data); err != nil {
+				if _, err = io.ReadFull(in, *data); err != nil {
 					return err
 				}
 				// PartNumber starts from 1
-				parts[num], err = dst.UploadPart(key, upload.UploadID, num+1, data)
+				parts[num], err = dst.UploadPart(key, upload.UploadID, num+1, *data)
 				return err
 			}); err == nil {
 				errs <- nil
@@ -1002,6 +1029,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.Manager != "" {
 		bufferSize = 100
 	}
+	totalMem = int64(config.Threads * 32 << 20)
 	tasks := make(chan object.Object, bufferSize)
 	wg := sync.WaitGroup{}
 	concurrent = make(chan int, config.Threads)
