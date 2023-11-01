@@ -220,6 +220,10 @@ func walk(path string, info os.FileInfo, isSymlink bool, walkFn WalkFunc) error 
 		if err == nil {
 			err = walk(p, in, e.isSymlink, walkFn)
 		}
+		if os.IsPermission(err) {
+			logger.Warnf("skip %s: %s", path, err)
+			break
+		}
 		if err != nil && err != filepath.SkipDir && !os.IsNotExist(err) {
 			return err
 		}
@@ -338,6 +342,10 @@ func (d *filestore) ListAll(prefix, marker string) (<-chan Object, error) {
 			}
 
 			if err != nil {
+				if os.IsPermission(err) {
+					logger.Warnf("skip %s: %s", path, err)
+					return nil
+				}
 				if os.IsNotExist(err) {
 					logger.Warnf("skip not exist file or directory: %s", path)
 					return nil

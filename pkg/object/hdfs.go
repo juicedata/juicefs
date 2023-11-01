@@ -233,6 +233,10 @@ func (h *hdfsclient) ListAll(prefix, marker string) (<-chan Object, error) {
 	go func() {
 		_ = h.walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
+				if os.IsPermission(err) {
+					logger.Warnf("skip %s: %s", path, err)
+					return nil
+				}
 				if err == io.EOF {
 					err = nil // ignore
 				} else {
