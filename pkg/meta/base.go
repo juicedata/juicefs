@@ -613,8 +613,12 @@ func (m *baseMeta) CloseSession() error {
 	m.sesMu.Lock()
 	m.umounting = true
 	m.sesMu.Unlock()
-	logger.Infof("close session %d: %s", m.sid, m.en.doCleanStaleSession(m.sid))
-	return nil
+	var err error
+	if m.sid > 0 {
+		err = m.en.doCleanStaleSession(m.sid)
+	}
+	logger.Infof("close session %d: %s", m.sid, err)
+	return err
 }
 
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {
