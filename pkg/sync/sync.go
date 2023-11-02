@@ -432,7 +432,7 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 		partSize = ((partSize-1)>>20 + 1) << 20 // align to MB
 	}
 	n := int((size-1)/partSize) + 1
-	logger.Debugf("Copying data of %s as %d parts (size: %d): %s", key, n, partSize, upload.UploadID)
+	logger.Infof("Copying data of %s as %d parts (size: %d): %s", key, n, partSize, upload.UploadID)
 	abort := make(chan struct{})
 	parts := make([]*object.Part, n)
 	errs := make(chan error, n)
@@ -489,6 +489,7 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 					return err
 				}
 				// PartNumber starts from 1
+				logger.Infof("Uploading part %d of %s size %d", num+1, key, len(*data))
 				parts[num], err = dst.UploadPart(key, upload.UploadID, num+1, *data)
 				return err
 			}); err == nil {
