@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juju/ratelimit"
@@ -179,7 +180,7 @@ var bufPool = sync.Pool{
 
 var (
 	// for multiple upload mem limit
-	totalMem int64
+	availMem int64
 	mutex    sync.Mutex
 	cond     = sync.NewCond(&mutex)
 )
@@ -436,10 +437,6 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 	abort := make(chan struct{})
 	parts := make([]*object.Part, n)
 	errs := make(chan error, n)
-	pool := sync.Pool{New: func() any {
-		buff := make([]byte, partSize)
-		return &buff
-	}}
 
 	for i := 0; i < n; i++ {
 		go func(num int) {
@@ -449,14 +446,14 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 			}
 
 			mutex.Lock()
-			for totalMem < 0 {
+			for availMem < 0 {
 				cond.Wait()
 			}
-			totalMem -= partSize
+			availMem -= partSize
 			mutex.Unlock()
 			defer func() {
 				mutex.Lock()
-				totalMem += partSize
+				availMem += partSize
 				mutex.Unlock()
 				cond.Signal()
 			}()
@@ -474,23 +471,21 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 			if limiter != nil {
 				limiter.Wait(sz)
 			}
-			data := pool.Get().(*[]byte)
-			defer pool.Put(data)
-			if num == n-1 {
-				*data = (*data)[:sz]
-			}
+			p := chunk.NewOffPage(int(sz))
+			defer p.Release()
+			data := p.Data
 			if err := try(3, func() error {
 				in, err := src.Get(key, int64(num)*partSize, sz)
 				if err != nil {
 					return err
 				}
 				defer in.Close()
-				if _, err = io.ReadFull(in, *data); err != nil {
+				if _, err = io.ReadFull(in, data); err != nil {
 					return err
 				}
 				// PartNumber starts from 1
-				logger.Infof("Uploading part %d of %s size %d", num+1, key, len(*data))
-				parts[num], err = dst.UploadPart(key, upload.UploadID, num+1, *data)
+				logger.Infof("Uploading part %d of %s size %d", num+1, key, len(data))
+				parts[num], err = dst.UploadPart(key, upload.UploadID, num+1, data)
 				return err
 			}); err == nil {
 				errs <- nil
@@ -1033,7 +1028,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.Manager != "" {
 		bufferSize = 100
 	}
-	totalMem = int64(config.Threads * 32 << 20)
+	availMem = int64(config.Threads * 32 << 20)
 	tasks := make(chan object.Object, bufferSize)
 	wg := sync.WaitGroup{}
 	concurrent = make(chan int, config.Threads)
