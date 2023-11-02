@@ -476,6 +476,9 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 			}
 			data := pool.Get().(*[]byte)
 			defer pool.Put(data)
+			if num == n-1 {
+				*data = (*data)[:sz]
+			}
 			if err := try(3, func() error {
 				in, err := src.Get(key, int64(num)*partSize, sz)
 				if err != nil {
