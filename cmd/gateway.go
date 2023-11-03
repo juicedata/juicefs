@@ -53,8 +53,8 @@ func cmdGateway() *cli.Command {
 			Usage: "path for JuiceFS access log",
 		},
 		&cli.BoolFlag{
-			Name:    "d",
-			Aliases: []string{"background"},
+			Name:    "background",
+			Aliases: []string{"d"},
 			Usage:   "run in background",
 		},
 		&cli.BoolFlag{
