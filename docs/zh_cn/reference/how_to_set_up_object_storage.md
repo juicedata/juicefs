@@ -1243,5 +1243,5 @@ $ juicefs format  \
 ```
 
 :::note 注意
-NFSv3 不支持账户密码验证，请确保 format 和 mount 进程的 uid/gid 有对远程数据目录的读写权限。
+NFSv3 不支持账户密码验证，请确保 format 和 mount 进程的 UID/GID 有对远程数据目录的读写权限。
 :::
