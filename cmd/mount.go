@@ -26,6 +26,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -531,6 +532,24 @@ func insideContainer() bool {
 		logger.Warnf("scan /proc/1/mountinfo: %s", err)
 	}
 	return false
+}
+
+func getDefaultLogDir() string {
+	var defaultLogDir = "/var/log"
+	switch runtime.GOOS {
+	case "linux":
+		if os.Getuid() == 0 {
+			break
+		}
+		fallthrough
+	case "darwin":
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			logger.Fatalf("%v", err)
+		}
+		defaultLogDir = path.Join(homeDir, ".juicefs")
+	}
+	return defaultLogDir
 }
 
 func updateFstab(c *cli.Context) error {

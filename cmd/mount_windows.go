@@ -50,6 +50,11 @@ func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
 	return nil
 }
 
+func makeDaemonForSvc(c *cli.Context, m meta.Meta) error {
+	logger.Warnf("Cannot run in background in Windows.")
+	return nil
+}
+
 func mount_main(v *vfs.VFS, c *cli.Context) {
 	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"))
 }

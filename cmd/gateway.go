@@ -23,6 +23,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"path"
 	"strconv"
 	"syscall"
 	"time"
@@ -43,8 +44,18 @@ import (
 func cmdGateway() *cli.Command {
 	selfFlags := []cli.Flag{
 		&cli.StringFlag{
+			Name:  "log",
+			Usage: "path for gateway log",
+			Value: path.Join(getDefaultLogDir(), "juicefs-gateway.log"),
+		},
+		&cli.StringFlag{
 			Name:  "access-log",
 			Usage: "path for JuiceFS access log",
+		},
+		&cli.BoolFlag{
+			Name:    "background",
+			Aliases: []string{"d"},
+			Usage:   "run in background",
 		},
 		&cli.BoolFlag{
 			Name:  "no-banner",
@@ -179,6 +190,13 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	removePassword(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
+
+	if c.Bool("background") {
+		if err := makeDaemonForSvc(c, metaCli); err != nil {
+			logger.Fatalf("make daemon: %s", err)
+		}
+	}
+
 	format, err := metaCli.Load(true)
 	if err != nil {
 		logger.Fatalf("load setting: %s", err)
