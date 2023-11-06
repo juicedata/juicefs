@@ -188,6 +188,7 @@ juicefs format \
 | [PostgreSQL](#postgresql)                   | `postgres` |
 | [本地磁盘](#本地磁盘)                       | `file`     |
 | [SFTP/SSH](#sftp)                           | `sftp`     |
+| [NFS](#nfs)                                 | `nfs`      |
 
 ### Amazon S3
 
@@ -1213,3 +1214,34 @@ juicefs format  \
 - `--bucket` 用来设置服务器的地址及存储路径，格式为 `<IP/Domain>:[port]:<Path>`。注意，地址中不要包含协议头，目录名应该以 `/` 结尾，端口号为可选项默认为 `22`，例如 `192.168.1.11:22:myjfs/`。
 - `--access-key` 用来设置远程服务器的用户名
 - `--secret-key` 用来设置远程服务器的密码
+
+### NFS {#nfs}
+
+网络文件系统 (Network File System) 简称 NFS, 其客户端主机可以访问服务器端文件，并且其过程与访问本地存储时一样。它基于开放网络运算远程过程调用（ONC RPC）系统：一个开放、标准的RFC系统，任何人或组织都可以依据标准实现它。
+
+在 JuiceFS 稳定版本中（<=v1.1.x），只能通过本地挂载的方式使用 NFS 作为对象存储。例如，先把远程 NFS 服务器 `192.168.1.11` 上的 `/srv/data` 目录挂载到本地的 `/mnt/data` 目录，然后再使用 `file` 
+
+```shell
+$ mount -t nfs 192.168.1.11:/srv/data /mnt/data
+$ juicefs format  \
+    --storage file \
+    --bucket /mnt/data \
+    ...
+    redis://localhost:6379/1 myjfs
+```
+
+#### 直连模式
+
+在 JuiceFS 的待发布版本（v1.2.x）中，我们支持了 NFSv3 协议直连作为对象存储。例如，同样使用远程 NFS 服务器 `192.168.1.11` 上的 `/srv/data` 作为数据存储目录：
+
+```shell
+$ juicefs format  \
+    --storage nfs \
+    --bucket 192.168.1.11:/srv/data \
+    ...
+    redis://localhost:6379/1 myjfs
+```
+
+:::note 注意
+NFSv3 不支持账户密码验证，请确保 format 和 mount 进程的 uid/gid 有对远程数据目录的读写权限。
+:::
