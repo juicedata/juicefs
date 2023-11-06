@@ -301,7 +301,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 		return nil, err
 	}
 	for _, e := range entries {
-		p := filepath.Join(dir, e.Name())
+		p := path.Join(dir, e.Name())
 		if e.IsDir() {
 			p = filepath.ToSlash(p + "/")
 		}
