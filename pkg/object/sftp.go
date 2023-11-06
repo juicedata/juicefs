@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"os/user"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -221,10 +222,7 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	if PutInplace {
 		tmp = p
 	} else {
-		tmp = filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp")
-		if runtime.GOOS == "windows" {
-			tmp = strings.Replace(tmp, "\\", "/", -1)
-		}
+		tmp = path.Join(path.Dir(p), "."+path.Base(p)+".tmp")
 	}
 	ff, err := c.sftpClient.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 	if err != nil {

@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/user"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -116,12 +115,12 @@ func (n *nfsStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return ff, err
 }
 
-func (n *nfsStore) mkdirAll(path string, perm fs.FileMode) error {
-	path = strings.TrimSuffix(path, "/")
-	fi, _, err := n.target.Lookup(path)
+func (n *nfsStore) mkdirAll(p string, perm fs.FileMode) error {
+	p = strings.TrimSuffix(p, "/")
+	fi, _, err := n.target.Lookup(p)
 	if err == nil {
 		if fi.IsDir() {
-			logger.Tracef("nfs mkdir: path %s already exists", path)
+			logger.Tracef("nfs mkdir: path %s already exists", p)
 			return nil
 		} else {
 			return syscall.ENOTDIR
@@ -130,13 +129,13 @@ func (n *nfsStore) mkdirAll(path string, perm fs.FileMode) error {
 		return err
 	}
 
-	dir, _ := filepath.Split(path)
+	dir, _ := path.Split(p)
 	if dir != "." {
 		if err = n.mkdirAll(dir, perm); err != nil {
 			return err
 		}
 	}
-	_, err = n.target.Mkdir(path, perm)
+	_, err = n.target.Mkdir(p, perm)
 	return err
 }
 
@@ -149,11 +148,11 @@ func (n *nfsStore) Put(key string, in io.Reader) error {
 	if PutInplace {
 		tmp = p
 	} else {
-		tmp = filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp")
+		tmp = path.Join(path.Dir(p), "."+path.Base(p)+".tmp")
 	}
 	_, err := n.target.Create(tmp, 0777)
 	if os.IsNotExist(err) {
-		_ = n.mkdirAll(filepath.Dir(p), 0777)
+		_ = n.mkdirAll(path.Dir(p), 0777)
 		_, err = n.target.Create(tmp, 0777)
 	}
 	if os.IsExist(err) {
@@ -228,7 +227,7 @@ func (n *nfsStore) readDirSorted(dirname string, followLink bool) ([]*nfsEntry, 
 			nfsEntries[i] = &nfsEntry{e, e.Name() + dirSuffix, nil, false}
 		} else if e.Attr.Attr.Type == nfs.NF3Lnk && followLink {
 			// follow symlink
-			fi, _, err := n.target.Lookup(filepath.Join(dirname, e.Name()))
+			fi, _, err := n.target.Lookup(path.Join(dirname, e.Name()))
 			if err != nil {
 				nfsEntries[i] = &nfsEntry{e, e.Name(), nil, true}
 				continue
@@ -279,9 +278,9 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 		return nil, err
 	}
 	for _, e := range entries {
-		p := filepath.Join(dir, e.Name())
+		p := path.Join(dir, e.Name())
 		if e.IsDir() && !e.isSymlink {
-			p = filepath.ToSlash(p + "/")
+			p = p + "/"
 		}
 		if !strings.HasPrefix(p, prefix) || (marker != "" && p <= marker) {
 			continue
@@ -351,7 +350,7 @@ func (n *nfsStore) Chown(path string, owner, group string) error {
 func (n *nfsStore) Symlink(oldName, newName string) error {
 	newName = strings.TrimRight(newName, "/")
 	p := n.path(newName)
-	dir := filepath.Dir(p)
+	dir := path.Dir(p)
 	if _, _, err := n.target.Lookup(dir); err != nil && os.IsNotExist(err) {
 		if _, err := n.target.Mkdir(dir, os.FileMode(0777)); err != nil && !os.IsExist(err) {
 			return errors.Wrapf(err, "mkdir %s", dir)

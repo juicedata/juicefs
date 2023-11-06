@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"reflect"
 	"runtime"
 	"sort"
@@ -1907,21 +1906,21 @@ func (m *baseMeta) countDirNlink(ctx Context, inode Ino) (uint32, syscall.Errno)
 	return dirCounter, 0
 }
 
-type metaWalkFunc func(ctx Context, inode Ino, path string, attr *Attr)
+type metaWalkFunc func(ctx Context, inode Ino, p string, attr *Attr)
 
-func (m *baseMeta) walk(ctx Context, inode Ino, path string, attr *Attr, walkFn metaWalkFunc) syscall.Errno {
-	walkFn(ctx, inode, path, attr)
+func (m *baseMeta) walk(ctx Context, inode Ino, p string, attr *Attr, walkFn metaWalkFunc) syscall.Errno {
+	walkFn(ctx, inode, p, attr)
 	var entries []*Entry
 	st := m.en.doReaddir(ctx, inode, 1, &entries, -1)
 	if st != 0 && st != syscall.ENOENT {
-		logger.Errorf("list %s: %s", path, st)
+		logger.Errorf("list %s: %s", p, st)
 		return st
 	}
 	for _, entry := range entries {
 		if !entry.Attr.Full {
 			entry.Attr.Parent = inode
 		}
-		if st := m.walk(ctx, entry.Inode, filepath.Join(path, string(entry.Name)), entry.Attr, walkFn); st != 0 {
+		if st := m.walk(ctx, entry.Inode, path.Join(p, string(entry.Name)), entry.Attr, walkFn); st != 0 {
 			return st
 		}
 	}

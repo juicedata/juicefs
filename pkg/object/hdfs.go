@@ -28,7 +28,7 @@ import (
 	"math/rand"
 	"os"
 	"os/user"
-	"path/filepath"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -123,15 +123,15 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 }
 
 func (h *hdfsclient) Put(key string, in io.Reader) error {
-	path := h.path(key)
-	if strings.HasSuffix(path, dirSuffix) {
-		return h.c.MkdirAll(path, 0777&^h.umask)
+	p := h.path(key)
+	if strings.HasSuffix(p, dirSuffix) {
+		return h.c.MkdirAll(p, 0777&^h.umask)
 	}
 	var tmp string
 	if PutInplace {
-		tmp = path
+		tmp = p
 	} else {
-		tmp = filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp.%d", filepath.Base(path), rand.Int()))
+		tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", path.Base(p), rand.Int()))
 	}
 	f, err := h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 	if !PutInplace {
@@ -139,7 +139,7 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 	}
 	if err != nil {
 		if pe, ok := err.(*os.PathError); ok && pe.Err == os.ErrNotExist {
-			_ = h.c.MkdirAll(filepath.Dir(path), 0777&^h.umask)
+			_ = h.c.MkdirAll(path.Dir(p), 0777&^h.umask)
 			f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 		}
 		if pe, ok := err.(*os.PathError); ok && errors.Is(pe.Err, os.ErrExist) {
@@ -162,7 +162,7 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 		return err
 	}
 	if !PutInplace {
-		err = h.c.Rename(tmp, path)
+		err = h.c.Rename(tmp, p)
 	}
 	return err
 }
@@ -187,7 +187,7 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followL
 	dir := h.path(prefix)
 	var objs []Object
 	if !strings.HasSuffix(dir, dirSuffix) {
-		dir = filepath.Dir(dir)
+		dir = path.Dir(dir)
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
 		}

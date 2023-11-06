@@ -72,7 +72,7 @@ func clone(ctx *cli.Context) error {
 		return fmt.Errorf("lookup inode for %s: %s", srcPath, err)
 	}
 	dst := ctx.Args().Get(1)
-	if strings.HasSuffix(dst, "/") {
+	if strings.HasSuffix(dst, string(filepath.Separator)) {
 		dst = filepath.Join(dst, filepath.Base(srcPath))
 	}
 	if _, err := os.Stat(dst); err == nil {
