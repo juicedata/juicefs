@@ -81,10 +81,8 @@ func (n *nfsStore) String() string {
 
 func (n *nfsStore) path(key string) string {
 	root := strings.TrimLeft(n.root, "/")
-	if strings.HasPrefix(key, root) {
-		return key[len(root):]
-	}
-	return key
+	key = strings.TrimPrefix(key, root)
+	return "./" + key
 }
 
 func (n *nfsStore) Head(key string) (Object, error) {
@@ -142,10 +140,6 @@ func (n *nfsStore) mkdirAll(path string, perm fs.FileMode) error {
 
 func (n *nfsStore) Put(key string, in io.Reader) error {
 	p := n.path(key)
-	if key != "" && p == "" {
-		// root path
-		return nil
-	}
 	if strings.HasSuffix(p, dirSuffix) {
 		return n.mkdirAll(p, 0777)
 	}
