@@ -141,6 +141,10 @@ func fuseFlags() []cli.Flag {
 			Name:  "root-squash",
 			Usage: "mapping local root user (uid = 0) to another one specified as <uid>:<gid>",
 		},
+		&cli.StringFlag{
+			Name:  "all-squash",
+			Usage: "mapping all local users to another one specified as <uid>:<gid>",
+		},
 		&cli.BoolFlag{
 			Name:  "prefix-internal",
 			Usage: "add '.jfs' prefix to all internal files",
@@ -243,8 +247,16 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
 	conf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
 	conf.NonDefaultPermission = c.Bool("non-default-permission")
-	rootSquash := c.String("root-squash")
-	if rootSquash != "" {
+	squash := c.String("root-squash")
+	rootOnly := squash != ""
+	if allSquash := c.String("all-squash"); allSquash != "" {
+		if rootOnly {
+			rootOnly = false
+			logger.Warnf("'root-squash' is ignored since 'all-squash' is specified")
+		}
+		squash = allSquash
+	}
+	if squash != "" {
 		var uid, gid uint32 = 65534, 65534
 		if u, err := user.Lookup("nobody"); err == nil {
 			nobody, err := strconv.ParseUint(u.Uid, 10, 32)
@@ -261,7 +273,7 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 			gid = uint32(nogroup)
 		}
 
-		ss := strings.SplitN(strings.TrimSpace(rootSquash), ":", 2)
+		ss := strings.SplitN(strings.TrimSpace(squash), ":", 2)
 		if ss[0] != "" {
 			u, err := strconv.ParseUint(ss[0], 10, 32)
 			if err != nil {
@@ -276,7 +288,10 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 			}
 			gid = uint32(g)
 		}
-		conf.RootSquash = &vfs.RootSquash{Uid: uid, Gid: gid}
+		if !rootOnly && (uid == 0 || gid == 0) {
+			logger.Fatalf("cannot squash uid/gid to 0")
+		}
+		conf.UserSquash = &vfs.UserSquash{Uid: uid, Gid: gid, RootOnly: rootOnly}
 	}
 	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Meta.MountPoint)
 	err := fuse.Serve(v, c.String("o"), c.Bool("enable-xattr"), c.Bool("enable-ioctl"))
