@@ -73,7 +73,7 @@ func (d *filestore) path(key string) string {
 	if strings.HasSuffix(d.root, dirSuffix) {
 		return filepath.Join(d.root, key)
 	}
-	return d.root + key
+	return filepath.Clean(d.root + key)
 }
 
 func (d *filestore) Head(key string) (Object, error) {
@@ -232,10 +232,10 @@ func (m *mEntry) IsDir() bool {
 	return m.FileInfo.IsDir()
 }
 
-// readDirSorted reads the directory named by dirname and returns
+// readDirSorted reads the directory named by dir and returns
 // a sorted list of directory entries.
-func readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
-	f, err := os.Open(dirname)
+func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
+	f, err := os.Open(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +250,7 @@ func readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 		if e.IsDir() {
 			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}
 		} else if !e.Mode().IsRegular() && followLink {
-			fi, err := os.Stat(filepath.Join(dirname, e.Name()))
+			fi, err := os.Stat(filepath.Join(dir, e.Name()))
 			if err != nil {
 				mEntries[i] = &mEntry{e, e.Name(), nil, true}
 				continue
@@ -301,9 +301,9 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 		return nil, err
 	}
 	for _, e := range entries {
-		p := filepath.Join(dir, e.Name())
+		p := path.Join(dir, e.Name())
 		if e.IsDir() {
-			p = filepath.ToSlash(p + "/")
+			p = p + "/"
 		}
 		if !strings.HasPrefix(p, d.root) {
 			continue
@@ -322,18 +322,18 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 	return objs, nil
 }
 
-func (d *filestore) Chtimes(path string, mtime time.Time) error {
-	p := d.path(path)
+func (d *filestore) Chtimes(key string, mtime time.Time) error {
+	p := d.path(key)
 	return os.Chtimes(p, mtime, mtime)
 }
 
-func (d *filestore) Chmod(path string, mode os.FileMode) error {
-	p := d.path(path)
+func (d *filestore) Chmod(key string, mode os.FileMode) error {
+	p := d.path(key)
 	return os.Chmod(p, mode)
 }
 
-func (d *filestore) Chown(path string, owner, group string) error {
-	p := d.path(path)
+func (d *filestore) Chown(key string, owner, group string) error {
+	p := d.path(key)
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
 	return os.Chown(p, uid, gid)
@@ -341,8 +341,8 @@ func (d *filestore) Chown(path string, owner, group string) error {
 
 func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
 	// For Windows, the path looks like /C:/a/b/c/
-	if runtime.GOOS == "windows" && strings.HasPrefix(root, "/") {
-		root = root[1:]
+	if runtime.GOOS == "windows" {
+		root = strings.TrimPrefix(root, "/")
 	}
 	if strings.HasSuffix(root, dirSuffix) {
 		logger.Debugf("Ensure directory %s", root)
@@ -350,7 +350,7 @@ func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
 			return nil, fmt.Errorf("Creating directory %s failed: %q", root, err)
 		}
 	} else {
-		dir := path.Dir(root)
+		dir := filepath.Dir(root)
 		logger.Debugf("Ensure directory %s", dir)
 		if err := os.MkdirAll(dir, 0777); err != nil {
 			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)
