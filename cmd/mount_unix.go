@@ -255,6 +255,7 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 			logger.Warnf("'root-squash' is ignored since 'all-squash' is specified")
 		}
 		squash = allSquash
+		conf.NonDefaultPermission = true // disable kernel permission check
 	}
 	if squash != "" {
 		var uid, gid uint32 = 65534, 65534
