@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	_ "net/http/pprof"
 	"os"
-	"path/filepath"
+	"path"
 	"sync"
 	"time"
 
@@ -44,7 +44,7 @@ func createDir(jfs *fs.FileSystem, root string, d int, width int) error {
 	}
 	if d > 0 {
 		for i := 0; i < width; i++ {
-			dn := filepath.Join(root, fmt.Sprintf("mdtest_tree.%d", i))
+			dn := path.Join(root, fmt.Sprintf("mdtest_tree.%d", i))
 			if err := createDir(jfs, dn, d-1, width); err != nil {
 				return err
 			}
@@ -56,7 +56,7 @@ func createDir(jfs *fs.FileSystem, root string, d int, width int) error {
 func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, width, files, bytes int) error {
 	m := jfs.Meta()
 	for i := 0; i < files; i++ {
-		fn := filepath.Join(root, fmt.Sprintf("file.mdtest.%d.%d", np, i))
+		fn := path.Join(root, fmt.Sprintf("file.mdtest.%d.%d", np, i))
 		f, err := jfs.Create(ctx, fn, 0666, umask)
 		if err != 0 {
 			return fmt.Errorf("create %s: %s", fn, err)
@@ -88,7 +88,7 @@ func createFile(jfs *fs.FileSystem, bar *utils.Bar, np int, root string, d int, 
 			dirs[i], dirs[j] = dirs[j], dirs[i]
 		})
 		for i := range dirs {
-			dn := filepath.Join(root, fmt.Sprintf("mdtest_tree.%d", dirs[i]))
+			dn := path.Join(root, fmt.Sprintf("mdtest_tree.%d", dirs[i]))
 			if err := createFile(jfs, bar, np, dn, d-1, width, files, bytes); err != nil {
 				return err
 			}
@@ -115,11 +115,11 @@ func runTest(jfs *fs.FileSystem, rootDir string, np, width, depth, files, bytes 
 	if err := jfs.Mkdir(ctx, rootDir, 0777, umask); err != 0 {
 		logger.Errorf("mkdir %s: %s", rootDir, err)
 	}
-	root := filepath.Join(rootDir, "test-dir.0-0")
+	root := path.Join(rootDir, "test-dir.0-0")
 	if err := jfs.Mkdir(ctx, root, 0777, umask); err != 0 {
 		logger.Fatalf("Mkdir %s: %s", root, err)
 	}
-	root = filepath.Join(root, "mdtest_tree.0")
+	root = path.Join(root, "mdtest_tree.0")
 	if err := createDir(jfs, root, depth, width); err != nil {
 		logger.Fatalf("initialize: %s", err)
 	}
