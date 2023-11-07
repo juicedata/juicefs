@@ -142,6 +142,10 @@ func (n *nfsStore) mkdirAll(path string, perm fs.FileMode) error {
 
 func (n *nfsStore) Put(key string, in io.Reader) error {
 	p := n.path(key)
+	if key != "" && p == "" {
+		// root path
+		return nil
+	}
 	if strings.HasSuffix(p, dirSuffix) {
 		return n.mkdirAll(p, 0777)
 	}
