@@ -76,7 +76,7 @@ func (e *nfsEntry) IsDir() bool {
 }
 
 func (n *nfsStore) String() string {
-	return fmt.Sprintf("nfs://%s@%s:%s", n.username, n.host, n.root)
+	return fmt.Sprintf("nfs://%s@%s:/", n.username, n.host)
 }
 
 func (n *nfsStore) path(key string) string {
