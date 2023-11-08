@@ -1,13 +1,7 @@
+github_checks: false
 coverage:
   status:
-    project:
-      default:
-        informational: true
-    patch:
-      default:
-        informational: true
-  require_ci_to_pass: false
+    project: false
+    patch: false
   notify:
     wait_for_ci: true
-  github_checks:
-    annotations: false
