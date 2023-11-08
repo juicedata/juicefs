@@ -29,7 +29,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -320,11 +319,6 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 		}
 	}
 	return objs, nil
-}
-
-func (d *filestore) Chtimes(key string, mtime time.Time) error {
-	p := d.path(key)
-	return os.Chtimes(p, mtime, mtime)
 }
 
 func (d *filestore) Chmod(key string, mode os.FileMode) error {
