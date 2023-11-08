@@ -1,27 +1,17 @@
 ---
 title: JuiceFS Metrics
 sidebar_position: 4
-slug: /p8s_metrics
 ---
 
-:::tip
-Please see the ["Monitoring and Data Visualization"](../administration/monitoring.md) documentation to learn how to collect and display JuiceFS monitoring metrics.
-:::
+If you haven't yet set up monitoring for JuiceFS, read [monitoring and data visualization"](../administration/monitoring.md) to learn how.
 
 ## Global labels
 
 | Name       | Description      |
 | ----       | -----------      |
 | `vol_name` | Volume name      |
-| `mp`       | Mount point path |
-
-:::info
-When Prometheus scrapes a target, it attaches `instance` label automatically to the scraped time series which serve to identify the scraped target, and its format is `<host>:<port>`. Refer to [official document](https://prometheus.io/docs/concepts/jobs_instances) for more information.
-:::
-
-:::info
-If the monitoring metrics are reported through [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) (for example, [JuiceFS Hadoop Java SDK](../administration/monitoring.md#hadoop)), the value of the `mp` label is `sdk-<PID>`, and the value of the `instance` label is the host name.
-:::
+| `instance` | Client host name in format `<host>:<port>`. Refer to [official document](https://prometheus.io/docs/concepts/jobs_instances) for more information |
+| `mp`       | Mount point path, if metrics are reported through [Prometheus Pushgateway](https://github.com/prometheus/pushgateway), for example, [JuiceFS Hadoop Java SDK](../administration/monitoring.md#hadoop), `mp` will be `sdk-<PID>` |
 
 ## File system
 

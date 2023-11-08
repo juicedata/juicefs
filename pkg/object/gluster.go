@@ -221,6 +221,10 @@ func (d *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 	}
 	entries, err := d.readDirSorted(dir, followLink)
 	if err != nil {
+		if os.IsPermission(err) {
+			logger.Warnf("skip %s: %s", dir, err)
+			return nil, nil
+		}
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
@@ -297,6 +301,7 @@ func newGluster(endpoint, ak, sk, token string) (ObjectStorage, error) {
 			level = gfapi.LogTrace
 		}
 	}
+	logPath := os.Getenv("JFS_GLUSTER_LOG_PATH")
 	hosts := strings.Split(uri.Host, ",")
 	pid := os.Getpid()
 	ostore := gluster{
@@ -310,7 +315,11 @@ func newGluster(endpoint, ak, sk, token string) (ObjectStorage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("init %s: %s", name, err)
 		}
-		err = v.SetLogging(fmt.Sprintf("/var/log/glusterfs/%s-%s-%d-%d.log", hosts[0], name, pid, i), level)
+		if logPath == "" {
+			err = v.SetLogging(fmt.Sprintf("/var/log/glusterfs/%s-%s-%d-%d.log", hosts[0], name, pid, i), level)
+		} else {
+			err = v.SetLogging(logPath, level)
+		}
 		if err != nil {
 			logger.Warnf("Set gluster logging for vol %s: %s", name, err)
 		}

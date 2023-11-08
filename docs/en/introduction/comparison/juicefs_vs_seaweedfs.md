@@ -137,7 +137,7 @@ SeaweedFS determines whether to compress data based on factors such as the file 
 Both support encryption, including encryption during transmission and at rest:
 
 - SeaweedFS supports encryption both in transit and at rest. When data encryption is enabled, all data written to the volume server is encrypted using random keys. The corresponding key information is managed by the filer that maintains the file metadata. For details, see the  [Wiki](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Data-Encryption).
-- For details about JuiceFS' encryption feature, see [Data Encryption](../../security/encrypt.md).
+- For details about JuiceFS' encryption feature, see [Data Encryption](../../security/encryption.md).
 
 ## Client protocol comparison
 
@@ -177,7 +177,7 @@ Both support a CSI Driver. For details, see:
 
 SeaweedFS client is equipped with [basic cache capabilities](https://github.com/seaweedfs/seaweedfs/wiki/FUSE-Mount), but its documentation weren't located at the time of writing, you can search for `cache` in the [source code](https://github.com/seaweedfs/seaweedfs/blob/master/weed/command/mount.go).
 
-JuiceFS' client supports [metadata and data caching](../../guide/cache_management.md), allowing users to optimize based on their application's needs.
+JuiceFS' client supports [metadata and data caching](../../guide/cache.md), allowing users to optimize based on their application's needs.
 
 ### Object storage gateway
 

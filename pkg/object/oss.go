@@ -410,13 +410,23 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		token = os.Getenv("SECURITY_TOKEN")
 
 		if accessKey == "" {
-			if cred, err := fetchStsToken(); err != nil {
-				return nil, fmt.Errorf("No credential provided for OSS")
-			} else {
-				accessKey = cred.AccessKeyId
-				secretKey = cred.AccessKeySecret
-				token = cred.SecurityToken
-				refresh = true
+			var err error
+			var cred *stsCred
+			maxRetry := 4
+			for i := 0; i < maxRetry; i++ {
+				time.Sleep(time.Second * time.Duration(i))
+				if cred, err = fetchStsToken(); err != nil {
+					logger.Warnf("Fetch STS Token try %d: %s", i+1, err)
+				} else {
+					accessKey = cred.AccessKeyId
+					secretKey = cred.AccessKeySecret
+					token = cred.SecurityToken
+					refresh = true
+					break
+				}
+			}
+			if err != nil {
+				return nil, fmt.Errorf("No credential provided for OSS: %s", err)
 			}
 		}
 	}

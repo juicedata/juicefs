@@ -10,7 +10,7 @@ slug: /metadata_dump_load
 - JuiceFS v1.0.4 starts to support importing an encrypted backup.
 :::
 
-JuiceFS supports [multiple metadata engines](../reference/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine.
+JuiceFS supports [multiple metadata engines](../reference/how_to_set_up_metadata_engine.md), and each engine stores and manages data in a different format internally. JuiceFS provides the [`dump`](../reference/command_reference.md#dump) command to export metadata in a uniform JSON format, also there's the [`load`](../reference/command_reference.md#load) command to restore or migrate backups to any metadata storage engine. This dump / load process can also be used to migrate a community edition file system to enterprise edition (read [enterprise docs](https://juicefs.com/docs/cloud/metadata_dump_load) for more), and vice versa.
 
 ## Metadata backup {#backup}
 
@@ -115,7 +115,7 @@ juicefs config --secret-key xxxxx mysql://user:password@(192.168.1.6:3306)/juice
 
 ### Encrypted file system {#encrypted-file-system}
 
-For [encrypted file system](../security/encrypt.md), all data is encrypted before uploading to the object storage, including automatic metadata backups. This is different from the `dump` command, which only output metadata in plain text.
+For [encrypted file system](../security/encryption.md), all data is encrypted before uploading to the object storage, including automatic metadata backups. This is different from the `dump` command, which only output metadata in plain text.
 
 For an encrypted file system, it is necessary to additionally set the `JFS_RSA_PASSPHRASE` environment variable and specify the RSA private key and encryption algorithm when restoring the automatically backed-up metadata:
 

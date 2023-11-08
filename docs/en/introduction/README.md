@@ -20,7 +20,7 @@ JuiceFS provides rich APIs for various forms of data management, analysis, archi
 - **Distributed**: Each file system can be mounted on thousands of servers at the same time with high-performance concurrent reads and writes and shared data.
 - **Strong Consistency**: Any changes committed to files are immediately visible on all servers.
 - **Outstanding Performance**: JuiceFS achieves millisecond-level latency and nearly unlimited throughput depending on the object storage scale (see [performance test results](../benchmark/benchmark.md)).
-- **Data Security**: JuiceFS supports encryption in transit and encryption at rest (view [Details](../security/encrypt.md)).
+- **Data Security**: JuiceFS supports encryption in transit and encryption at rest (view [Details](../security/encryption.md)).
 - **File Lock**: JuiceFS supports BSD lock (flock) and POSIX lock (fcntl).
 - **Data Compression**: JuiceFS supports the [LZ4](https://lz4.github.io/lz4) and [Zstandard](https://facebook.github.io/zstd) compression algorithms to save storage space.
 

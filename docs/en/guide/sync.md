@@ -264,3 +264,15 @@ juicefs sync cos://ABCDEFG:HIJKLMN@ccc-125000.cos.ap-beijing.myqcloud.com oss://
 ```
 
 After sync, the file content and hierarchy in the [Object Storage B](#required-storages) are exactly the same as the [underlying object storage of JuiceFS](#required-storages).
+
+### Sync across regions using S3 Gateway {#sync-across-region}
+
+When transferring a large amount of small files across different regions via FUSE mount points, clients will inevitably talk to the metadata service in the opposite region via public internet (or dedicated network connection with limited bandwidth). In such cases, metadata latency can become the bottleneck of the data transfer:
+
+![sync via public metadata service](../images/sync-public-metadata.svg)
+
+S3 Gateway comes to rescue in these circumstances: deploy a gateway in the source region, and since this gateway accesses metadata via private network, metadata latency is eliminated to a minimum, bringing the best performance for small file intensive scenarios.
+
+![sync via gateway](../images/sync-via-gateway.svg)
+
+Read [S3 Gateway](../deployment/s3_gateway.md) to learn its deployment and use.

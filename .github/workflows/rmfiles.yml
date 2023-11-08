@@ -104,11 +104,16 @@ jobs:
           ls -l $mp/test && exit 1 || true
 
       - name: log
-        if: ${{ always() }}
+        if: always()
         shell: bash
         run: | 
           tail -300 ~/.juicefs/juicefs.log
           grep "<FATAL>:" ~/.juicefs/juicefs.log && exit 1 || true
+          
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
 
   success-all-test:
     runs-on: ubuntu-latest
@@ -123,12 +128,12 @@ jobs:
         run: exit 1
 
       - name: Send Slack Notification
-        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        if: failure() && github.event_name != 'workflow_dispatch'
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Success
-        if: ${{ success() }}
+        if: success()
         run: echo "All Done"

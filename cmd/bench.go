@@ -121,7 +121,7 @@ func randRead(buf []byte) {
 
 func (bc *benchCase) writeFiles(index int) {
 	for i := 0; i < bc.fcount; i++ {
-		fname := fmt.Sprintf("%s/%s.%d.%d", bc.bm.tmpdir, bc.name, index, i)
+		fname := filepath.Join(bc.bm.tmpdir, fmt.Sprintf("%s.%d.%d", bc.name, index, i))
 		fp, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			logger.Fatalf("Failed to open file %s: %s", fname, err)
@@ -140,7 +140,7 @@ func (bc *benchCase) writeFiles(index int) {
 
 func (bc *benchCase) readFiles(index int) {
 	for i := 0; i < bc.fcount; i++ {
-		fname := fmt.Sprintf("%s/%s.%d.%d", bc.bm.tmpdir, bc.name, index, i)
+		fname := filepath.Join(bc.bm.tmpdir, fmt.Sprintf("%s.%d.%d", bc.name, index, i))
 		fp, err := os.Open(fname)
 		if err != nil {
 			logger.Fatalf("Failed to open file %s: %s", fname, err)
@@ -158,7 +158,7 @@ func (bc *benchCase) readFiles(index int) {
 
 func (bc *benchCase) statFiles(index int) {
 	for i := 0; i < bc.fcount; i++ {
-		fname := fmt.Sprintf("%s/%s.%d.%d", bc.bm.tmpdir, bc.name, index, i)
+		fname := filepath.Join(bc.bm.tmpdir, fmt.Sprintf("%s.%d.%d", bc.name, index, i))
 		if _, err := os.Stat(fname); err != nil {
 			logger.Fatalf("Failed to stat file %s: %s", fname, err)
 		}

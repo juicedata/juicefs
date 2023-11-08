@@ -18,7 +18,7 @@ docker run -d --name nginx \
 
 ## 卷插件 {#volume-plugin}
 
-在 Docker 中，插件也是一个容器镜像，JuiceFS 卷插件镜像中内置了 [JuiceFS 社区版](../introduction/README.md)以及 [JuiceFS 企业版](https://juicefs.com/docs/zh/cloud)客户端，安装以后，便能够运行卷插件，在 Docker 中创建 JuiceFS Volume。
+在 Docker 中，插件也是一个容器镜像，[JuiceFS 卷插件镜像](https://hub.docker.com/r/juicedata/juicefs)中内置了 [JuiceFS 社区版](../introduction/README.md)以及 [JuiceFS 云服务](https://juicefs.com/docs/zh/cloud)客户端，安装以后，便能够运行卷插件，在 Docker 中创建 JuiceFS Volume。
 
 通过下面的命令安装插件，按照提示为 FUSE 提供必要的权限：
 
@@ -142,6 +142,34 @@ docker-compose down --volumes
 
   如果 plugin 调用 `juicefs` 发生错误，或者 plugin 自身报错，均会在日志里有所体现。
 
-## 在 Docker 容器中挂载 JuiceFS {#mount-juicefs-in-docker}
+## 在 Docker 容器中使用 JuiceFS {#mount-juicefs-in-docker}
 
-在 Docker 容器中挂载 JuiceFS 通常有两种作用，一种是为容器中的应用提供存储，另一种是把容器中挂载的 JuiceFS 存储映射给主机读写使用。为此，可以使用 JuiceFS 官方维护的镜像，也可以自己编写 Dockerfile 将 JuiceFS 客户端打包进镜像中。详见[「定制容器镜像」](https://juicefs.com/docs/zh/csi/guide/custom-image)。
+在 Docker 容器中挂载 JuiceFS 通常有两种作用，一种是为容器中的应用提供存储，另一种是把容器中挂载的 JuiceFS 存储映射给主机读写使用。
+
+JuiceFS 官方维护的镜像 [`juicedata/mount`](https://hub.docker.com/r/juicedata/mount) ，可以通过 tag 指定所需要的版本。**社区版 tag 为 ce**，例如：latest、ce-v1.1.0、ce-nightly。
+
+`latest` 标签仅包含最新的社区版，`nightly` 标签指向最新的开发版本，详情查看 [Docker hub 的 tags 页面](https://hub.docker.com/r/juicedata/mount/tags)。
+
+例如，使用社区版客户端创建一个 JuiceFS 卷：
+
+```sh
+docker run --rm \
+    juicedata/mount:ce-v1.1.0 juicefs format \
+    --storage s3 \
+    --bucket https://xxx.xxx.xxx \
+    --access-key=ACCESSKEY \
+    --secret-key=SECRETKEY \
+    ...
+    redis://127.0.0.1/1 myjfs
+```
+
+挂载这个卷：
+
+```sh
+docker run --name myjfs -d \
+    juicedata/mount:ce-v1.1.0 juicefs mount \
+    ...
+    redis://127.0.0.1/1 myjfs /mnt
+```
+
+另外，也可以自己编写 Dockerfile 将 JuiceFS 客户端打包进镜像中，详见[「定制容器镜像」](https://juicefs.com/docs/zh/csi/guide/custom-image)。

@@ -95,13 +95,13 @@ jobs:
 
 
       - name: log
-        if: ${{ always() }}
+        if: always()
         run: |
           tail -300 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: failure()
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
@@ -109,6 +109,6 @@ jobs:
 
 
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1

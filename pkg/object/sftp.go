@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"os/user"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -216,16 +217,20 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	if err := c.sftpClient.MkdirAll(filepath.Dir(p)); err != nil {
 		return err
 	}
-	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp")
-	if runtime.GOOS == "windows" {
-		tmp = strings.Replace(tmp, "\\", "/", -1)
-	}
 
+	var tmp string
+	if PutInplace {
+		tmp = p
+	} else {
+		tmp = path.Join(path.Dir(p), "."+path.Base(p)+".tmp")
+	}
 	ff, err := c.sftpClient.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = c.sftpClient.Remove(tmp) }()
+	if !PutInplace {
+		defer func() { _ = c.sftpClient.Remove(tmp) }()
+	}
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
 	_, err = io.CopyBuffer(ff, in, *buf)
@@ -237,8 +242,11 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	_ = c.sftpClient.Remove(p)
-	return c.sftpClient.Rename(tmp, p)
+	if !PutInplace {
+		_ = c.sftpClient.Remove(p)
+		return c.sftpClient.Rename(tmp, p)
+	}
+	return nil
 }
 
 func (f *sftpStore) Chtimes(key string, mtime time.Time) error {
@@ -375,6 +383,10 @@ func (f *sftpStore) List(prefix, marker, delimiter string, limit int64, followLi
 	}
 	infos, err := c.sftpClient.ReadDir(dir)
 	if err != nil {
+		if os.IsPermission(err) {
+			logger.Warnf("skip %s: %s", dir, err)
+			return nil, nil
+		}
 		if os.IsNotExist(err) {
 			return nil, nil
 		}

@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"reflect"
 	"runtime"
 	"sort"
@@ -465,6 +464,7 @@ func (m *baseMeta) newSessionInfo() []byte {
 		HostName:   host,
 		IPAddrs:    addrs,
 		MountPoint: m.conf.MountPoint,
+		MountTime:  time.Now(),
 		ProcessID:  os.Getpid(),
 	})
 	if err != nil {
@@ -608,11 +608,16 @@ func (m *baseMeta) CloseSession() error {
 		return nil
 	}
 	m.doFlushDirStat()
+	m.doFlushQuotas()
 	m.sesMu.Lock()
 	m.umounting = true
 	m.sesMu.Unlock()
-	logger.Infof("close session %d: %s", m.sid, m.en.doCleanStaleSession(m.sid))
-	return nil
+	var err error
+	if m.sid > 0 {
+		err = m.en.doCleanStaleSession(m.sid)
+	}
+	logger.Infof("close session %d: %s", m.sid, err)
+	return err
 }
 
 func (m *baseMeta) checkQuota(ctx Context, space, inodes int64, parents ...Ino) syscall.Errno {
@@ -757,45 +762,45 @@ func (m *baseMeta) updateDirQuota(ctx Context, inode Ino, space, inodes int64) {
 }
 
 func (m *baseMeta) flushQuotas() {
-	quotas := make(map[Ino]*Quota)
-	var newSpace, newInodes int64
 	for {
 		time.Sleep(time.Second * 3)
-		if !m.getFormat().DirStats {
-			continue
+		m.doFlushQuotas()
+	}
+}
+
+func (m *baseMeta) doFlushQuotas() {
+	if !m.getFormat().DirStats {
+		return
+	}
+	stageMap := make(map[Ino]*Quota)
+	m.quotaMu.RLock()
+	for ino, q := range m.dirQuotas {
+		newSpace := atomic.LoadInt64(&q.newSpace)
+		newInodes := atomic.LoadInt64(&q.newInodes)
+		if newSpace != 0 || newInodes != 0 {
+			stageMap[ino] = &Quota{newSpace: newSpace, newInodes: newInodes}
 		}
+	}
+	m.quotaMu.RUnlock()
+	if len(stageMap) == 0 {
+		return
+	}
+
+	if err := m.en.doFlushQuotas(Background, stageMap); err != nil {
+		logger.Warnf("Flush quotas: %s", err)
+	} else {
 		m.quotaMu.RLock()
-		for ino, q := range m.dirQuotas {
-			newSpace = atomic.LoadInt64(&q.newSpace)
-			newInodes = atomic.LoadInt64(&q.newInodes)
-			if newSpace != 0 || newInodes != 0 {
-				quotas[ino] = &Quota{newSpace: newSpace, newInodes: newInodes}
+		for ino, snap := range stageMap {
+			q := m.dirQuotas[ino]
+			if q == nil {
+				continue
 			}
+			atomic.AddInt64(&q.newSpace, -snap.newSpace)
+			atomic.AddInt64(&q.UsedSpace, snap.newSpace)
+			atomic.AddInt64(&q.newInodes, -snap.newInodes)
+			atomic.AddInt64(&q.UsedInodes, snap.newInodes)
 		}
 		m.quotaMu.RUnlock()
-		if len(quotas) == 0 {
-			continue
-		}
-
-		if err := m.en.doFlushQuotas(Background, quotas); err != nil {
-			logger.Warnf("Flush quotas: %s", err)
-		} else {
-			m.quotaMu.RLock()
-			for ino, snap := range quotas {
-				q := m.dirQuotas[ino]
-				if q == nil {
-					continue
-				}
-				atomic.AddInt64(&q.newSpace, -snap.newSpace)
-				atomic.AddInt64(&q.UsedSpace, snap.newSpace)
-				atomic.AddInt64(&q.newInodes, -snap.newInodes)
-				atomic.AddInt64(&q.UsedInodes, snap.newInodes)
-			}
-			m.quotaMu.RUnlock()
-		}
-		for ino := range quotas {
-			delete(quotas, ino)
-		}
 	}
 }
 
@@ -1901,21 +1906,21 @@ func (m *baseMeta) countDirNlink(ctx Context, inode Ino) (uint32, syscall.Errno)
 	return dirCounter, 0
 }
 
-type metaWalkFunc func(ctx Context, inode Ino, path string, attr *Attr)
+type metaWalkFunc func(ctx Context, inode Ino, p string, attr *Attr)
 
-func (m *baseMeta) walk(ctx Context, inode Ino, path string, attr *Attr, walkFn metaWalkFunc) syscall.Errno {
-	walkFn(ctx, inode, path, attr)
+func (m *baseMeta) walk(ctx Context, inode Ino, p string, attr *Attr, walkFn metaWalkFunc) syscall.Errno {
+	walkFn(ctx, inode, p, attr)
 	var entries []*Entry
 	st := m.en.doReaddir(ctx, inode, 1, &entries, -1)
 	if st != 0 && st != syscall.ENOENT {
-		logger.Errorf("list %s: %s", path, st)
+		logger.Errorf("list %s: %s", p, st)
 		return st
 	}
 	for _, entry := range entries {
 		if !entry.Attr.Full {
 			entry.Attr.Parent = inode
 		}
-		if st := m.walk(ctx, entry.Inode, filepath.Join(path, string(entry.Name)), entry.Attr, walkFn); st != 0 {
+		if st := m.walk(ctx, entry.Inode, path.Join(p, string(entry.Name)), entry.Attr, walkFn); st != 0 {
 			return st
 		}
 	}

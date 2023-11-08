@@ -24,6 +24,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 大数据
 
+- [多点 DMALL：大数据存算分离下的存储架构探索与实践](https://juicefs.com/zh-cn/blog/user-stories/separation-of-storage--computing-building-cloud-native-big-data-platform), 2023-08-16，李铭@多点
 - [网易互娱出海之旅：大数据平台上云架构设计与实践](https://juicefs.com/zh-cn/blog/user-stories/hadoop-compatible-storage-big-data-cloud-platform-s3)，2023-08-09，柯维鸿@网易互娱
 - [Protobuf 在知乎大数据场景的应用，利用 JuiceFS 动态注入 JAR 包](https://zhuanlan.zhihu.com/p/586120009)，2022-11-23，胡梦宇@知乎
 - [金山云：基于 JuiceFS 的 Elasticsearch 温冷热数据管理实践](https://juicefs.com/zh-cn/blog/user-stories/juicefs-elasticsearch-cold-heat-data-management)，2022-11-17，侯学峰@金山云
@@ -51,6 +52,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 云原生 & Kubernetes
 
+- [小米云原生文件存储平台化实践：支撑 AI 训练、大模型、容器平台多项业务](https://juicefs.com/zh-cn/blog/user-stories/cloud-native-file-storage-platform-as-ai-training-large-models-container-platforms)，2023-09-22，孙佳朋@小米
 - [从本地到云端：豆瓣如何使用 JuiceFS 实现统一的数据存储](https://juicefs.com/zh-cn/blog/user-stories/scalable-computing-unified-data-storage-ops-cloud-spark-k8s-juicefs)，2023-05-10，曹丰宇@豆瓣
 - [云上大数据存储：探究 JuiceFS 与 HDFS 的异同](https://juicefs.com/zh-cn/blog/engineering/similarities-and-differences-between-hdfs-and-juicefs-structures)，2023-04-04，汤友棚
 - [Sidecar-详解 JuiceFS CSI Driver 新模式](https://juicefs.com/zh-cn/blog/usage-tips/explain-in-detail-juicefs-csi-driver-sidecar)，2023-02-22，朱唯唯
@@ -79,6 +81,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 教程、使用指南、评测及其他
 
+- [浅析 GlusterFS 与 JuiceFS 的架构异同](https://juicefs.com/zh-cn/blog/engineering/similarities-and-differences-between-glusterfs-and-juicefs-structures)，2023-08-23，Sandy
 - [如何基于 JuiceFS 配置 Samba 和 NFS 共享？](https://juicefs.com/zh-cn/blog/usage-tips/configure-samba-and-nfs-shares-based-juicefs)，2023-08-04，于鸿儒
 - [云上使用 Stable Diffusion，模型数据如何共享和存储？](https://juicefs.com/zh-cn/blog/usage-tips/share-store-model-data-stable-diffusion-cloud)，2023-06-16，于鸿儒
 - [从架构到特性：JuiceFS 企业版首次全面解析](https://juicefs.com/zh-cn/blog/solutions/juicefs-enterprise-edition-features-vs-community-edition)，2023-06-06，高昌健

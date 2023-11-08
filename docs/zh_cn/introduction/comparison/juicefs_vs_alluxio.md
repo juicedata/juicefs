@@ -50,7 +50,7 @@ JuiceFS 是一个分布式文件系统，实现了自己的存储格式，文件
 Alluxio 和 JuiceFS 都支持多级缓存，设计上各有特色，但都能够支持用硬盘、SSD、内存来灵活配置大容量或者高性能缓存，详见：
 
 * [Alluxio 缓存](https://docs.alluxio.io/os/user/stable/cn/core-services/Caching.html)
-* [JuiceFS 缓存](../../guide/cache_management.md)
+* [JuiceFS 缓存](../../guide/cache.md)
 * JuiceFS 企业版在社区版的基础上，支持更为强大的[分布式缓存](/docs/zh/cloud/guide/distributed-cache)
 
 ### 一致性 {#consistency}
@@ -82,7 +82,7 @@ Alluxio 本质上并不是一个存储系统，虽然你也可以通过 Alluxio 
 
 Alluxio 仅在[企业版](https://docs.alluxio.io/ee/user/stable/en/security/Security.html#encryption)支持数据加密。
 
-JuiceFS 支持[传输中加密以及静态加密](../../security/encrypt.md)。
+JuiceFS 支持[传输中加密以及静态加密](../../security/encryption.md)。
 
 ## 客户端协议对比 {#client-protocol-comparison}
 

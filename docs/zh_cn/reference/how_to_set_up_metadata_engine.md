@@ -125,9 +125,10 @@ juicefs format --storage s3 \
 
 上面的示例代码使用 `rediss://` 协议头来开启 mTLS 功能，然后使用以下选项来指定客户端证书的路径：
 
-- `tls-cert-file` 指定客户端证书的路径
-- `tls-key-file` 指定客户端密钥的路径
-- `tls-ca-cert-file` 指定签发客户端证书的 CA 证书路径，它是可选的，如果不指定，客户端会使用系统默认的 CA 证书进行验证。
+- `tls-cert-file=<path>` 指定客户端证书的路径
+- `tls-key-file=<path>` 指定客户端密钥的路径
+- `tls-ca-cert-file=<path>` 指定签发客户端证书的 CA 证书路径，它是可选的，如果不指定，客户端会使用系统默认的 CA 证书进行验证。
+- `insecure-skip-verify=true` 可以用来跳过对服务端证书的验证
 
 在 URL 指定选项时，以 `?` 符号开头，使用 `&` 符号来分隔多个选项，例如：`?tls-cert-file=client.crt&tls-key-file=client.key`。
 
@@ -200,6 +201,8 @@ juicefs format \
 1. JuiceFS 默认使用的 public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) ，如果要使用非 `public schema`，需要在连接字符串中指定 `search_path` 参数，例如 `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
 2. 如果 `public schema` 并非是 PostgreSQL 服务端配置的 `search_path` 中第一个命中的，则必须在连接字符串中明确设置 `search_path` 参数
 3. `search_path` 连接参数原生可以设置为多个 schema，但是目前 JuiceFS 仅支持设置一个。`postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` 将被认为不合法
+4. 密码中的特殊字符需要进行 url 编码，例如 `|` 需要编码为`%7C`。
+
 :::
 
 ### 挂载文件系统
@@ -255,7 +258,10 @@ mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 </Tabs>
 
 :::note 注意
-不要漏掉 URL 两边的 `()` 括号
+
+1. 不要漏掉 URL 两边的 `()` 括号
+2. 密码中的特殊字符不需要进行 url 编码
+
 :::
 
 例如：

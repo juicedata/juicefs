@@ -23,7 +23,6 @@ import (
 	"math/rand"
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -124,22 +123,35 @@ func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 		eno := j.jfs.MkdirAll(ctx, p, 0777, j.umask)
 		return toError(eno)
 	}
-	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
+	var tmp string
+	if object.PutInplace {
+		tmp = p
+	} else {
+		tmp = path.Join(path.Dir(p), "."+path.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
+	}
 	f, eno := j.jfs.Create(ctx, tmp, 0666, j.umask)
 	if eno == syscall.ENOENT {
-		_ = j.jfs.MkdirAll(ctx, filepath.Dir(tmp), 0777, j.umask)
+		_ = j.jfs.MkdirAll(ctx, path.Dir(tmp), 0777, j.umask)
 		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
 	}
+
+	if eno == syscall.EEXIST {
+		_ = j.jfs.Delete(ctx, path.Dir(tmp))
+		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
+	}
+
 	if eno != 0 {
 		return toError(eno)
 	}
-	defer func() {
-		if err != nil {
-			if e := j.jfs.Delete(ctx, tmp); e != 0 {
-				logger.Warnf("Failed to delete %s: %s", tmp, e)
+	if !object.PutInplace {
+		defer func() {
+			if err != nil {
+				if e := j.jfs.Delete(ctx, tmp); e != 0 {
+					logger.Warnf("Failed to delete %s: %s", tmp, e)
+				}
 			}
-		}
-	}()
+		}()
+	}
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
 	_, err = io.CopyBuffer(&jFile{f, 0}, in, *buf)
@@ -150,9 +162,10 @@ func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 	if eno != 0 {
 		return toError(eno)
 	}
-	eno = j.jfs.Rename(ctx, tmp, p, 0)
-	if eno != 0 {
-		return toError(eno)
+	if !object.PutInplace {
+		if eno = j.jfs.Rename(ctx, tmp, p, 0); eno != 0 {
+			return toError(eno)
+		}
 	}
 	return nil
 }
@@ -266,7 +279,7 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 		if fi.IsDir() {
 			mEntries[i] = &mEntry{fi, string(e.Name) + dirSuffix, false}
 		} else if fi.IsSymlink() && followLink {
-			fi2, err := j.jfs.Stat(ctx, filepath.Join(dirname, string(e.Name)))
+			fi2, err := j.jfs.Stat(ctx, path.Join(dirname, string(e.Name)))
 			if err != 0 {
 				mEntries[i] = &mEntry{fi, string(e.Name), true}
 				continue
@@ -317,7 +330,7 @@ func (j *juiceFS) Symlink(oldName, newName string) error {
 	p := j.path(newName)
 	err := j.jfs.Symlink(ctx, oldName, p)
 	if err == syscall.ENOENT {
-		_ = j.jfs.MkdirAll(ctx, filepath.Dir(p), 0777, j.umask)
+		_ = j.jfs.MkdirAll(ctx, path.Dir(p), 0777, j.umask)
 		err = j.jfs.Symlink(ctx, oldName, p)
 	}
 	return toError(err)

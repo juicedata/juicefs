@@ -34,7 +34,7 @@ S3FS does not limit the cache capacity by default, which may cause the cache to 
 
 JuiceFS uses a completely different caching approach than S3FS. First, JuiceFS guarantees data consistency. Secondly, JuiceFS defines a default disk cache usage limit of 100GiB, which can be freely adjusted by users as needed, and by default ensures that no more space is used when disk free space falls below 10%. When the cache usage limit reaches the upper limit, JuiceFS will automatically do cleanup using an LRU-like algorithm to ensure that cache is always available for subsequent read and write operations.
 
-For more on JuiceFS caching, see [documentation](../../guide/cache_management.md).
+For more on JuiceFS caching, see [documentation](../../guide/cache.md).
 
 ## Features
 

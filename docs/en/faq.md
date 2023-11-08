@@ -92,7 +92,7 @@ Read [JuiceFS Internals](development/internals.md) and [Data Processing Flow](in
 
 You could mount JuiceFS with [`--writeback` option](reference/command_reference.md#mount), which will write the small files into local disks first, then upload them to object storage in background, this could speedup coping many small files into JuiceFS.
 
-See ["Write Cache in Client"](guide/cache_management.md#writeback) for more information.
+See ["Write Cache in Client"](guide/cache.md#client-write-cache) for more information.
 
 ### Does JuiceFS support distributed cache?
 
@@ -104,7 +104,7 @@ See ["Write Cache in Client"](guide/cache_management.md#writeback) for more info
 
 Yes, JuiceFS could be mounted using `juicefs` without root. The default directory for caching is `$HOME/.juicefs/cache` (macOS) or `/var/jfsCache` (Linux), you should change that to a directory which you have write permission.
 
-See ["Read Cache in Client"](guide/cache_management.md#client-read-cache) for more information.
+See ["Read Cache in Client"](guide/cache.md#client-read-cache) for more information.
 
 ## Access Related Questions
 

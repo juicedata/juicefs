@@ -26,6 +26,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -103,17 +104,14 @@ func installHandler(mp string) {
 	}()
 }
 
-func exposeMetrics(c *cli.Context, m meta.Meta, registerer prometheus.Registerer, registry *prometheus.Registry) string {
+func exposeMetrics(c *cli.Context, registerer prometheus.Registerer, registry *prometheus.Registry) string {
 	var ip, port string
 	//default set
 	ip, port, err := net.SplitHostPort(c.String("metrics"))
 	if err != nil {
 		logger.Fatalf("metrics format error: %v", err)
 	}
-
-	m.InitMetrics(registerer)
-	vfs.InitMetrics(registerer)
-	go metric.UpdateMetrics(m, registerer)
+	go metric.UpdateMetrics(registerer)
 	http.Handle("/metrics", promhttp.HandlerFor(
 		registry,
 		promhttp.HandlerOpts{
@@ -424,10 +422,14 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 }
 
 func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Config, m meta.Meta, blob object.ObjectStorage, registerer prometheus.Registerer, registry *prometheus.Registry) {
-	metricsAddr := exposeMetrics(c, m, registerer, registry)
+	metricsAddr := exposeMetrics(c, registerer, registry)
+	m.InitMetrics(registerer)
+	vfs.InitMetrics(registerer)
 	vfsConf.Port.PrometheusAgent = metricsAddr
 	if c.IsSet("consul") {
-		metric.RegisterToConsul(c.String("consul"), metricsAddr, vfsConf.Meta.MountPoint)
+		metadata := make(map[string]string)
+		metadata["mountPoint"] = vfsConf.Meta.MountPoint
+		metric.RegisterToConsul(c.String("consul"), metricsAddr, metadata)
 		vfsConf.Port.ConsulAddr = c.String("consul")
 	}
 	if !metaConf.ReadOnly && !metaConf.NoBGJob && vfsConf.BackupMeta > 0 {
@@ -530,6 +532,24 @@ func insideContainer() bool {
 		logger.Warnf("scan /proc/1/mountinfo: %s", err)
 	}
 	return false
+}
+
+func getDefaultLogDir() string {
+	var defaultLogDir = "/var/log"
+	switch runtime.GOOS {
+	case "linux":
+		if os.Getuid() == 0 {
+			break
+		}
+		fallthrough
+	case "darwin":
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			logger.Fatalf("%v", err)
+		}
+		defaultLogDir = path.Join(homeDir, ".juicefs")
+	}
+	return defaultLogDir
 }
 
 func updateFstab(c *cli.Context) error {

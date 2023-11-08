@@ -35,7 +35,7 @@ import random
 @hypothesis.settings(max_examples=100, stateful_step_count=30, deadline=None, phases=[Phase.explicit, Phase.reuse, Phase.generate, Phase.target, Phase.shrink ])
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
-    MAX_CLIENT_VERSIONS = ['1.1.0', '1.2.0', '2.0.0']
+    MAX_CLIENT_VERSIONS = ['1.2.0', '2.0.0']
     JFS_BINS = ['./'+os.environ.get('OLD_JFS_BIN'), './'+os.environ.get('NEW_JFS_BIN')]
     meta_dict = {'redis':'redis://localhost/1', 'mysql':'mysql://root:root@(127.0.0.1)/test', 'postgres':'postgres://postgres:postgres@127.0.0.1:5432/test?sslmode=disable', \
         'tikv':'tikv://127.0.0.1:2379', 'badger':'badger://badger-data', 'mariadb': 'mysql://root:root@(127.0.0.1)/test', \

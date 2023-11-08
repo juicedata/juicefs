@@ -73,8 +73,9 @@ func Test_exposeMetrics(t *testing.T) {
 			defer isSetPatches.Reset()
 			ResetHttp()
 			registerer, registry := wrapRegister("test", "test")
-			metricsAddr := exposeMetrics(appCtx, client, registerer, registry)
-
+			metricsAddr := exposeMetrics(appCtx, registerer, registry)
+			client.InitMetrics(registerer)
+			vfs.InitMetrics(registerer)
 			u := url.URL{Scheme: "http", Host: metricsAddr, Path: "/metrics"}
 			resp, err := http.Get(u.String())
 			So(err, ShouldBeNil)

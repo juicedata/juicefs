@@ -153,41 +153,15 @@ func getCmdMount(mp string) (uid, pid, cmd string, err error) {
 	return uid, pid, cmd, nil
 }
 
-func getDefaultLogDir(requireRootPrivileges bool) (string, error) {
-	var defaultLogDir = "/var/log"
-	switch runtime.GOOS {
-	case "linux":
-		if os.Getuid() == 0 {
-			break
-		}
-		fallthrough
-	case "darwin":
-		if requireRootPrivileges {
-			defaultLogDir = "/var/root/.juicefs"
-			break
-		}
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get home directory")
-		}
-		defaultLogDir = filepath.Join(homeDir, ".juicefs")
-	}
-	return defaultLogDir, nil
-}
-
 var logArg = regexp.MustCompile(`--log(\s*=?\s*)(\S+)`)
 
-func getLogPath(cmd string, requireRootPrivileges bool) (string, error) {
+func getLogPath(cmd string) (string, error) {
 	var logPath string
 	tmp := logArg.FindStringSubmatch(cmd)
 	if len(tmp) == 3 {
 		logPath = tmp[2]
 	} else {
-		defaultLogDir, err := getDefaultLogDir(requireRootPrivileges)
-		if err != nil {
-			return "", err
-		}
-		logPath = filepath.Join(defaultLogDir, "juicefs.log")
+		logPath = filepath.Join(getDefaultLogDir(), "juicefs.log")
 	}
 
 	return logPath, nil
@@ -463,7 +437,7 @@ func collectLog(ctx *cli.Context, cmd string, requireRootPrivileges bool, currDi
 		logger.Warnf("The juicefs mount by foreground, the log will not be collected")
 		return nil
 	}
-	logPath, err := getLogPath(cmd, requireRootPrivileges)
+	logPath, err := getLogPath(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to get log path: %v", err)
 	}

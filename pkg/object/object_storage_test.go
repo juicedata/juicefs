@@ -309,7 +309,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	} else {
 		if len(obs) != 2 {
-			t.Fatalf("list with delimiter should return three results but got %d", len(obs))
+			t.Fatalf("list with delimiter should return two results but got %d", len(obs))
 		}
 		keys := []string{"a/", "a1"}
 		for i, o := range obs {
@@ -749,6 +749,17 @@ func TestOBS(t *testing.T) { //skip mutate
 	}
 	b, _ := newOBS(os.Getenv("HWCLOUD_ENDPOINT"),
 		os.Getenv("HWCLOUD_ACCESS_KEY"), os.Getenv("HWCLOUD_SECRET_KEY"), "")
+	testStorage(t, b)
+}
+
+func TestNFS(t *testing.T) { //skip mutate
+	if os.Getenv("NFS_ADDR") == "" {
+		t.SkipNow()
+	}
+	b, err := newNFSStore(os.Getenv("NFS_ADDR"), os.Getenv("NFS_ACCESS_KEY"), os.Getenv("NFS_SECRET_KEY"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	testStorage(t, b)
 }
 

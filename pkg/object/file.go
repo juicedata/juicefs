@@ -39,6 +39,7 @@ const (
 )
 
 var TryCFR bool // try copy_file_range
+var PutInplace bool
 
 type filestore struct {
 	DefaultObjectStorage
@@ -72,7 +73,7 @@ func (d *filestore) path(key string) string {
 	if strings.HasSuffix(d.root, dirSuffix) {
 		return filepath.Join(d.root, key)
 	}
-	return d.root + key
+	return filepath.Clean(d.root + key)
 }
 
 func (d *filestore) Head(key string) (Object, error) {
@@ -81,15 +82,15 @@ func (d *filestore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return d.toFile(key, fi, false), nil
+	return toFile(key, fi, false, getOwnerGroup), nil
 }
 
-func (d *filestore) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
+func toFile(key string, fi fs.FileInfo, isSymlink bool, ownerGetter func(fs.FileInfo) (string, string)) *file {
 	size := fi.Size()
 	if fi.IsDir() {
 		size = 0
 	}
-	owner, group := getOwnerGroup(fi)
+	owner, group := ownerGetter(fi)
 	return &file{
 		obj{
 			key,
@@ -144,7 +145,12 @@ func (d *filestore) Put(key string, in io.Reader) error {
 		return os.MkdirAll(p, os.FileMode(0777))
 	}
 
-	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
+	var tmp string
+	if PutInplace {
+		tmp = p
+	} else {
+		tmp = filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
+	}
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil && os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(p), os.FileMode(0777)); err != nil {
@@ -155,11 +161,13 @@ func (d *filestore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err != nil {
-			_ = os.Remove(tmp)
-		}
-	}()
+	if !PutInplace {
+		defer func() {
+			if err != nil {
+				_ = os.Remove(tmp)
+			}
+		}()
+	}
 
 	if TryCFR {
 		_, err = io.Copy(f, in)
@@ -176,7 +184,9 @@ func (d *filestore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	err = os.Rename(tmp, p)
+	if !PutInplace {
+		err = os.Rename(tmp, p)
+	}
 	return err
 }
 
@@ -222,10 +232,10 @@ func (m *mEntry) IsDir() bool {
 	return m.FileInfo.IsDir()
 }
 
-// readDirSorted reads the directory named by dirname and returns
+// readDirSorted reads the directory named by dir and returns
 // a sorted list of directory entries.
-func readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
-	f, err := os.Open(dirname)
+func readDirSorted(dir string, followLink bool) ([]*mEntry, error) {
+	f, err := os.Open(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +250,7 @@ func readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
 		if e.IsDir() {
 			mEntries[i] = &mEntry{e, e.Name() + dirSuffix, nil, false}
 		} else if !e.Mode().IsRegular() && followLink {
-			fi, err := os.Stat(filepath.Join(dirname, e.Name()))
+			fi, err := os.Stat(filepath.Join(dir, e.Name()))
 			if err != nil {
 				mEntries[i] = &mEntry{e, e.Name(), nil, true}
 				continue
@@ -281,15 +291,19 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 	}
 	entries, err := readDirSorted(dir, followLink)
 	if err != nil {
+		if os.IsPermission(err) {
+			logger.Warnf("skip %s: %s", dir, err)
+			return nil, nil
+		}
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
 	for _, e := range entries {
-		p := filepath.Join(dir, e.Name())
+		p := path.Join(dir, e.Name())
 		if e.IsDir() {
-			p = filepath.ToSlash(p + "/")
+			p = p + "/"
 		}
 		if !strings.HasPrefix(p, d.root) {
 			continue
@@ -299,7 +313,7 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 			continue
 		}
 		info := e.Info()
-		f := d.toFile(key, info, e.isSymlink)
+		f := toFile(key, info, e.isSymlink, getOwnerGroup)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break
@@ -308,18 +322,18 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 	return objs, nil
 }
 
-func (d *filestore) Chtimes(path string, mtime time.Time) error {
-	p := d.path(path)
+func (d *filestore) Chtimes(key string, mtime time.Time) error {
+	p := d.path(key)
 	return os.Chtimes(p, mtime, mtime)
 }
 
-func (d *filestore) Chmod(path string, mode os.FileMode) error {
-	p := d.path(path)
+func (d *filestore) Chmod(key string, mode os.FileMode) error {
+	p := d.path(key)
 	return os.Chmod(p, mode)
 }
 
-func (d *filestore) Chown(path string, owner, group string) error {
-	p := d.path(path)
+func (d *filestore) Chown(key string, owner, group string) error {
+	p := d.path(key)
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
 	return os.Chown(p, uid, gid)
@@ -327,8 +341,8 @@ func (d *filestore) Chown(path string, owner, group string) error {
 
 func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
 	// For Windows, the path looks like /C:/a/b/c/
-	if runtime.GOOS == "windows" && strings.HasPrefix(root, "/") {
-		root = root[1:]
+	if runtime.GOOS == "windows" {
+		root = strings.TrimPrefix(root, "/")
 	}
 	if strings.HasSuffix(root, dirSuffix) {
 		logger.Debugf("Ensure directory %s", root)
@@ -336,7 +350,7 @@ func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
 			return nil, fmt.Errorf("Creating directory %s failed: %q", root, err)
 		}
 	} else {
-		dir := path.Dir(root)
+		dir := filepath.Dir(root)
 		logger.Debugf("Ensure directory %s", dir)
 		if err := os.MkdirAll(dir, 0777); err != nil {
 			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)

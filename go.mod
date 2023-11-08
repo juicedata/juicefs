@@ -63,19 +63,20 @@ require (
 	github.com/urfave/cli/v2 v2.19.3
 	github.com/vbauerster/mpb/v7 v7.0.3
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8
+	github.com/vmware/go-nfs-client v0.0.0-20190605212624-d43b92724c1b
 	github.com/volcengine/ve-tos-golang-sdk/v2 v2.5.3
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a
 	go.etcd.io/etcd v3.3.27+incompatible
 	go.etcd.io/etcd/client/v3 v3.5.9
 	go.uber.org/automaxprocs v1.5.2
 	go.uber.org/zap v1.20.0
-	golang.org/x/crypto v0.11.0
-	golang.org/x/net v0.10.0
+	golang.org/x/crypto v0.14.0
+	golang.org/x/net v0.17.0
 	golang.org/x/oauth2 v0.7.0
-	golang.org/x/sync v0.2.0
-	golang.org/x/sys v0.10.0
-	golang.org/x/term v0.10.0
-	golang.org/x/text v0.11.0
+	golang.org/x/sync v0.1.0
+	golang.org/x/sys v0.13.0
+	golang.org/x/term v0.13.0
+	golang.org/x/text v0.13.0
 	google.golang.org/api v0.94.0
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
@@ -199,6 +200,7 @@ require (
 	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7 // indirect
 	github.com/prometheus/procfs v0.11.0 // indirect
 	github.com/pyroscope-io/godeltaprof v0.1.2 // indirect
+	github.com/rasky/go-xdr v0.0.0-20170124162913-1a41d1a06c93 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rjeczalik/notify v0.9.2 // indirect
@@ -249,7 +251,7 @@ replace github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8 => git
 
 replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/golang-jwt/jwt v3.2.1+incompatible
 
-replace github.com/vbauerster/mpb/v7 v7.0.3 => github.com/juicedata/mpb/v7 v7.0.4-0.20220719014258-68df1356cfba
+replace github.com/vbauerster/mpb/v7 v7.0.3 => github.com/juicedata/mpb/v7 v7.0.4-0.20231024073412-2b8d31be510b
 
 replace google.golang.org/grpc v1.43.0 => google.golang.org/grpc v1.29.0
 
@@ -258,3 +260,5 @@ replace xorm.io/xorm v1.0.7 => gitea.com/davies/xorm v1.0.8-0.20220528043536-552
 replace github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible => github.com/juicedata/huaweicloud-sdk-go-obs v3.22.12-0.20230228031208-386e87b5c091+incompatible
 
 replace github.com/urfave/cli/v2 v2.19.3 => github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83
+
+replace github.com/vmware/go-nfs-client v0.0.0-20190605212624-d43b92724c1b => github.com/juicedata/go-nfs-client v0.0.0-20231018052507-dbca444fa7e8

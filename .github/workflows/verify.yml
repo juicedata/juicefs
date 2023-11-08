@@ -91,7 +91,7 @@ jobs:
         ./juicefs.fdb version
 
     - name: Setup upterm session
-      if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+      if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
       # if: failure()
       timeout-minutes: 60
       uses: lhotari/action-upterm@v1
