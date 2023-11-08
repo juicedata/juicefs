@@ -681,12 +681,12 @@ func startSingleProducer(tasks chan<- object.Object, src, dst object.ObjectStora
 	start, end := config.Start, config.End
 	logger.Debugf("maxResults: %d, defaultPartSize: %d, maxBlock: %d", maxResults, defaultPartSize, maxBlock)
 
-	srckeys, err := ListAll(src, prefix, start, end, config.Links)
+	srckeys, err := ListAll(src, prefix, start, end, !config.Links)
 	if err != nil {
 		return fmt.Errorf("list %s: %s", src, err)
 	}
 
-	dstkeys, err := ListAll(dst, prefix, start, end, config.Links)
+	dstkeys, err := ListAll(dst, prefix, start, end, !config.Links)
 	if err != nil {
 		return fmt.Errorf("list %s: %s", dst, err)
 	}

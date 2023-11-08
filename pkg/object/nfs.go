@@ -236,9 +236,9 @@ func (n *nfsStore) readDirSorted(dirname string, followLink bool) ([]*nfsEntry, 
 			if fi.IsDir() {
 				name = e.Name() + dirSuffix
 			}
-			nfsEntries[i] = &nfsEntry{e, name, fi, true}
+			nfsEntries[i] = &nfsEntry{e, name, fi, false}
 		} else {
-			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, false}
+			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, e.Attr.Attr.Type == nfs.NF3Lnk}
 		}
 	}
 	sort.Slice(nfsEntries, func(i, j int) bool { return nfsEntries[i].Name() < nfsEntries[j].Name() })
