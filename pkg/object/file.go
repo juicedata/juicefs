@@ -329,6 +329,14 @@ func (d *filestore) Chtimes(key string, mtime time.Time) error {
 
 func (d *filestore) Chmod(key string, mode os.FileMode) error {
 	p := d.path(key)
+	st, err := os.Lstat(p)
+	if err != nil {
+		return err
+	}
+	if st.Mode()&os.ModeSymlink != 0 {
+		// skip chmod for symlink
+		return nil
+	}
 	return os.Chmod(p, mode)
 }
 
@@ -336,7 +344,7 @@ func (d *filestore) Chown(key string, owner, group string) error {
 	p := d.path(key)
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
-	return os.Chown(p, uid, gid)
+	return os.Lchown(p, uid, gid)
 }
 
 func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
