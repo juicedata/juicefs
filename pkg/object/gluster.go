@@ -44,27 +44,27 @@ type gluster struct {
 	vols []*gfapi.Volume
 }
 
-func (c *gluster) String() string {
-	return fmt.Sprintf("gluster://%s/", c.name)
+func (g *gluster) String() string {
+	return fmt.Sprintf("gluster://%s/", g.name)
 }
 
-func (d *gluster) vol() *gfapi.Volume {
-	if len(d.vols) == 1 {
-		return d.vols[0]
+func (g *gluster) vol() *gfapi.Volume {
+	if len(g.vols) == 1 {
+		return g.vols[0]
 	}
-	n := atomic.AddUint64(&d.indx, 1)
-	return d.vols[n%uint64(len(d.vols))]
+	n := atomic.AddUint64(&g.indx, 1)
+	return g.vols[n%uint64(len(g.vols))]
 }
 
-func (c *gluster) Head(key string) (Object, error) {
-	fi, err := c.vol().Stat(key)
+func (g *gluster) Head(key string) (Object, error) {
+	fi, err := g.vol().Stat(key)
 	if err != nil {
 		return nil, err
 	}
-	return c.toFile(key, fi, false), nil
+	return g.toFile(key, fi, false), nil
 }
 
-func (d *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
+func (g *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 	size := fi.Size()
 	if fi.IsDir() {
 		size = 0
@@ -85,8 +85,8 @@ func (d *gluster) toFile(key string, fi fs.FileInfo, isSymlink bool) *file {
 	}
 }
 
-func (c *gluster) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	f, err := c.vol().Open(key)
+func (g *gluster) Get(key string, off, limit int64) (io.ReadCloser, error) {
+	f, err := g.vol().Open(key)
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +110,8 @@ func (c *gluster) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return f, nil
 }
 
-func (c *gluster) Put(key string, in io.Reader) error {
-	v := c.vol()
+func (g *gluster) Put(key string, in io.Reader) error {
+	v := g.vol()
 	if strings.HasSuffix(key, dirSuffix) {
 		return v.MkdirAll(key, os.FileMode(0777))
 	}
@@ -146,8 +146,8 @@ func (c *gluster) Put(key string, in io.Reader) error {
 	return err
 }
 
-func (c *gluster) Delete(key string) error {
-	v := c.vol()
+func (g *gluster) Delete(key string) error {
+	v := g.vol()
 	err := v.Unlink(key)
 	if err != nil && strings.Contains(err.Error(), "is a directory") {
 		err = v.Rmdir(key)
@@ -160,8 +160,8 @@ func (c *gluster) Delete(key string) error {
 
 // readDirSorted reads the directory named by dirname and returns
 // a sorted list of directory entries.
-func (d *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
-	v := d.vol()
+func (g *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, error) {
+	v := g.vol()
 	f, err := v.Open(dirname)
 	if err != nil {
 		return nil, err
@@ -198,7 +198,7 @@ func (d *gluster) readDirSorted(dirname string, followLink bool) ([]*mEntry, err
 	return mEntries, err
 }
 
-func (d *gluster) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (g *gluster) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
 		return nil, notSupported
 	}
@@ -210,7 +210,7 @@ func (d *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 			dir += dirSuffix
 		}
 	} else if marker == "" {
-		obj, err := d.Head(prefix)
+		obj, err := g.Head(prefix)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, nil
@@ -219,7 +219,7 @@ func (d *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 		}
 		objs = append(objs, obj)
 	}
-	entries, err := d.readDirSorted(dir, followLink)
+	entries, err := g.readDirSorted(dir, followLink)
 	if err != nil {
 		if os.IsPermission(err) {
 			logger.Warnf("skip %s: %s", dir, err)
@@ -240,7 +240,7 @@ func (d *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 			continue
 		}
 		info := e.Info()
-		f := d.toFile(key, info, e.isSymlink)
+		f := g.toFile(key, info, e.isSymlink)
 		objs = append(objs, f)
 		if len(objs) == int(limit) {
 			break
@@ -249,15 +249,15 @@ func (d *gluster) List(prefix, marker, delimiter string, limit int64, followLink
 	return objs, nil
 }
 
-func (d *gluster) Chtimes(path string, mtime time.Time) error {
+func (g *gluster) Chtimes(path string, mtime time.Time) error {
 	return notSupported
 }
 
-func (d *gluster) Chmod(path string, mode os.FileMode) error {
-	return d.vol().Chmod(path, mode)
+func (g *gluster) Chmod(path string, mode os.FileMode) error {
+	return g.vol().Chmod(path, mode)
 }
 
-func (d *gluster) Chown(path string, owner, group string) error {
+func (g *gluster) Chown(path string, owner, group string) error {
 	return notSupported
 }
 
