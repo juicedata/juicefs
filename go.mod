@@ -29,7 +29,7 @@ require (
 	github.com/hashicorp/go-hclog v1.5.0
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
-	github.com/jackc/pgx/v5 v5.4.3
+	github.com/jackc/pgx/v5 v5.3.1
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/json-iterator/go v1.1.12
 	github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d
@@ -53,7 +53,7 @@ require (
 	github.com/pyroscope-io/client v0.7.0
 	github.com/qingstor/qingstor-sdk-go/v4 v4.4.0
 	github.com/qiniu/go-sdk/v7 v7.15.0
-	github.com/redis/go-redis/v9 v9.1.0
+	github.com/redis/go-redis/v9 v9.0.2
 	github.com/sirupsen/logrus v1.9.0
 	github.com/smartystreets/goconvey v1.7.2
 	github.com/studio-b12/gowebdav v0.0.0-20230203202212-3282f94193f2
@@ -245,7 +245,7 @@ require (
 	xorm.io/builder v0.3.7 // indirect
 )
 
-replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20230918033721-71882ca3029a
+replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/juicedata/minio v0.0.0-20231108044657-17145c5ac833
 
 replace github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8 => github.com/juicedata/go-fuse/v2 v2.1.1-0.20230726081302-124dbfa991d7
 
