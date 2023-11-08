@@ -373,14 +373,18 @@ func (n *nfsStore) ListAll(prefix, marker string, followLink bool) (<-chan Objec
 	return nil, notSupported
 }
 
+func (n *nfsStore) findOwnerGroup(attr *nfs.Fattr) (string, string) {
+	return utils.UserName(int(attr.UID)), utils.GroupName(int(attr.GID))
+}
+
 func (n *nfsStore) getOwnerGroup(info os.FileInfo) (string, string) {
-	var owner, group string
-	switch st := info.Sys().(type) {
-	case *nfs.Fattr:
-		owner = utils.UserName(int(st.UID))
-		group = utils.GroupName(int(st.GID))
+	if st, match := info.(*nfs.Fattr); match {
+		return n.findOwnerGroup(st)
 	}
-	return owner, group
+	if st, match := info.Sys().(*nfs.Fattr); match {
+		return n.findOwnerGroup(st)
+	}
+	return "", ""
 }
 
 func newNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
