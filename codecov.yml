@@ -1,7 +1,10 @@
-github_checks: false
 coverage:
   status:
-    project: false
-    patch: false
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
   notify:
     wait_for_ci: true
