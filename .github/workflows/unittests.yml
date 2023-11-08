@@ -87,10 +87,10 @@ jobs:
           test=${{matrix.test}}
           make $test
 
-      # - name: Code Coverage
-      #   uses: codecov/codecov-action@v3
-      #   with:
-      #     files: ./cov.out
+      - name: Code Coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./cov.out
 
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
