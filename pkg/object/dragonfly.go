@@ -46,6 +46,9 @@ const (
 	// Upper limit of maxGetObjectMetadatas.
 	MaxGetObjectMetadatasLimit = 1000
 
+	// DefaultMaxReplicas is the default value of maxReplicas.
+	DefaultMaxReplicas = 0
+
 	// Upper limit of maxReplicas.
 	MaxReplicasLimit = 100
 )
@@ -56,11 +59,17 @@ const (
 )
 
 const (
+	// FilterOSS is the filter of oss url for generating task id.
 	FilterOSS = "Expires&Signature"
-	FilterS3  = "X-Amz-Algorithm&X-Amz-Credential&X-Amz-Date&X-Amz-Expires&X-Amz-SignedHeaders&X-Amz-Signature"
+
+	// FilterS3 is the filter of s3 url for generating task id.
+	FilterS3 = "X-Amz-Algorithm&X-Amz-Credential&X-Amz-Date&X-Amz-Expires&X-Amz-SignedHeaders&X-Amz-Signature"
+
+	// FilterOBS is the filter of obs url for generating task id.
 	FilterOBS = "X-Amz-Algorithm&X-Amz-Credential&X-Amz-Date&X-Obs-Date&X-Amz-Expires&X-Amz-SignedHeaders&X-Amz-Signature"
 )
 
+// ObjectMetadatas is the object metadata list.
 type ObjectMetadatas struct {
 	// CommonPrefixes are similar prefixes in object storage.
 	CommonPrefixes []string `json:"CommonPrefixes"`
@@ -69,6 +78,7 @@ type ObjectMetadatas struct {
 	Metadatas []*ObjectMetadata `json:"Metadatas"`
 }
 
+// ObjectMetadata is the object metadata.
 type ObjectMetadata struct {
 	// Key is object key.
 	Key string
@@ -101,6 +111,7 @@ type ObjectMetadata struct {
 	StorageClass string
 }
 
+// ObjectStorageMetadata is the object storage metadata.
 type ObjectStorageMetadata struct {
 	// Name is object storage name of type, it can be s3, oss or obs.
 	Name string
@@ -112,6 +123,7 @@ type ObjectStorageMetadata struct {
 	Endpoint string
 }
 
+// dragonfly is the dragonfly object storage.
 type dragonfly struct {
 	// DefaultObjectStorage is the default object storage.
 	DefaultObjectStorage
@@ -150,20 +162,15 @@ func (d *dragonfly) Create() error {
 		return nil
 	}
 
-	// get create bucket request.
 	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return err
 	}
 
 	u.Path = path.Join("buckets", d.bucket)
-
 	query := u.Query()
-
 	u.RawQuery = query.Encode()
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), nil)
-
 	if err != nil && !isExists(err) {
 		return err
 	}
@@ -190,7 +197,6 @@ func (d *dragonfly) Head(key string) (Object, error) {
 	}
 
 	u.Path = path.Join("buckets", d.bucket, "objects", key)
-
 	if strings.HasSuffix(key, "/") {
 		u.Path += "/"
 	}
@@ -236,14 +242,12 @@ func (d *dragonfly) Head(key string) (Object, error) {
 
 // Get returns the object if it exists.
 func (d *dragonfly) Get(key string, off, limit int64) (io.ReadCloser, error) {
-	// get get object request.
 	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return nil, err
 	}
 
 	u.Path = path.Join("buckets", d.bucket, "objects", key)
-
 	if strings.HasSuffix(key, "/") {
 		u.Path += "/"
 	}
@@ -254,14 +258,12 @@ func (d *dragonfly) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 
 	u.RawQuery = query.Encode()
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set(headers.Range, getRange(off, limit))
-
 	resp, err := d.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -276,7 +278,6 @@ func (d *dragonfly) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 // Put creates or replaces the object.
 func (d *dragonfly) Put(key string, data io.Reader) error {
-	// get put object request.
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -316,7 +317,6 @@ func (d *dragonfly) Put(key string, data io.Reader) error {
 	}
 
 	u.Path = path.Join("buckets", d.bucket, "objects", key)
-
 	if strings.HasSuffix(key, "/") {
 		u.Path += "/"
 	}
@@ -343,7 +343,6 @@ func (d *dragonfly) Put(key string, data io.Reader) error {
 
 // Copy copies the object if it exists.
 func (d *dragonfly) Copy(dst, src string) error {
-	// get copy object request.
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -361,11 +360,8 @@ func (d *dragonfly) Copy(dst, src string) error {
 	}
 
 	u.Path = path.Join("buckets", d.bucket, "objects", dst)
-
 	query := u.Query()
-
 	u.RawQuery = query.Encode()
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u.String(), body)
 	if err != nil {
 		return err
@@ -397,7 +393,6 @@ func (d *dragonfly) Delete(key string) error {
 	}
 
 	u.Path = path.Join("buckets", d.bucket, "objects", key)
-
 	if strings.HasSuffix(key, "/") {
 		u.Path += "/"
 	}
@@ -433,7 +428,6 @@ func (d *dragonfly) List(prefix, marker, delimiter string, limit int64, followLi
 	}
 
 	u.Path = path.Join("buckets", d.bucket, "metadatas")
-
 	query := u.Query()
 	if prefix != "" {
 		query.Set("prefix", prefix)
@@ -452,7 +446,6 @@ func (d *dragonfly) List(prefix, marker, delimiter string, limit int64, followLi
 	}
 
 	u.RawQuery = query.Encode()
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
@@ -500,21 +493,15 @@ func newDragonfly(endpoint, accessKey, secretKey, token string) (ObjectStorage, 
 	if !strings.Contains(endpoint, "://") {
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
+
 	// Parse the endpoint.
 	uri, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	var (
-		mode        int = 1
-		maxReplicas int
-		filter      string
-	)
-
 	endpoint = uri.Scheme + "://" + uri.Host
 	bucket := uri.Path
-
 	if bucket == "" {
 		return nil, fmt.Errorf("bucket name required")
 	}
@@ -523,7 +510,7 @@ func newDragonfly(endpoint, accessKey, secretKey, token string) (ObjectStorage, 
 		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
 
-	// Initialize dfstore config.
+	mode := WriteBack
 	if value := uri.Query().Get("mode"); value != "" {
 		mode, err = strconv.Atoi(value)
 		if err != nil || (mode != WriteBack && mode != AsyncWriteBack) {
@@ -531,6 +518,7 @@ func newDragonfly(endpoint, accessKey, secretKey, token string) (ObjectStorage, 
 		}
 	}
 
+	maxReplicas := DefaultMaxReplicas
 	if value := uri.Query().Get("maxReplicas"); value != "" {
 		maxReplicas, err = strconv.Atoi(value)
 		if err != nil || maxReplicas > MaxReplicasLimit || maxReplicas < 0 {
@@ -538,17 +526,21 @@ func newDragonfly(endpoint, accessKey, secretKey, token string) (ObjectStorage, 
 		}
 	}
 
-	objectStorageMetadata, err := getObjectStorageMetadata(endpoint)
+	metadata, err := getObjectStorageMetadata(endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	if objectStorageMetadata.Name == "s3" {
+	var filter string
+	switch metadata.Name {
+	case "s3":
 		filter = FilterS3
-	} else if objectStorageMetadata.Name == "oss" {
+	case "oss":
 		filter = FilterOSS
-	} else {
+	case "obs":
 		filter = FilterOBS
+	default:
+		return nil, fmt.Errorf("unexpected dragonfly object storage name: %s", metadata.Name)
 	}
 
 	return &dragonfly{
@@ -561,6 +553,7 @@ func newDragonfly(endpoint, accessKey, secretKey, token string) (ObjectStorage, 
 	}, nil
 }
 
+// getObjectStorageMetadata returns the object storage metadata.
 func getObjectStorageMetadata(endpoint string) (*ObjectStorageMetadata, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil {
@@ -568,7 +561,6 @@ func getObjectStorageMetadata(endpoint string) (*ObjectStorageMetadata, error) {
 	}
 
 	u.Path = path.Join("metadata")
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
