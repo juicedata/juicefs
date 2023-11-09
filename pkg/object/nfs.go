@@ -79,9 +79,8 @@ func (n *nfsStore) String() string {
 }
 
 func (n *nfsStore) path(key string) string {
-	root := strings.TrimLeft(n.root, "/")
-	if strings.HasPrefix(key, root) {
-		return key[len(root):]
+	if key == "" {
+		return "./"
 	}
 	return key
 }
@@ -236,9 +235,9 @@ func (n *nfsStore) readDirSorted(dirname string, followLink bool) ([]*nfsEntry, 
 			if fi.IsDir() {
 				name = e.Name() + dirSuffix
 			}
-			nfsEntries[i] = &nfsEntry{e, name, fi, true}
+			nfsEntries[i] = &nfsEntry{e, name, fi, false}
 		} else {
-			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, false}
+			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, e.Attr.Attr.Type == nfs.NF3Lnk}
 		}
 	}
 	sort.Slice(nfsEntries, func(i, j int) bool { return nfsEntries[i].Name() < nfsEntries[j].Name() })
@@ -373,14 +372,18 @@ func (n *nfsStore) ListAll(prefix, marker string, followLink bool) (<-chan Objec
 	return nil, notSupported
 }
 
+func (n *nfsStore) findOwnerGroup(attr *nfs.Fattr) (string, string) {
+	return utils.UserName(int(attr.UID)), utils.GroupName(int(attr.GID))
+}
+
 func (n *nfsStore) getOwnerGroup(info os.FileInfo) (string, string) {
-	var owner, group string
-	switch st := info.Sys().(type) {
-	case *nfs.Fattr:
-		owner = utils.UserName(int(st.UID))
-		group = utils.GroupName(int(st.GID))
+	if st, match := info.(*nfs.Fattr); match {
+		return n.findOwnerGroup(st)
 	}
-	return owner, group
+	if st, match := info.Sys().(*nfs.Fattr); match {
+		return n.findOwnerGroup(st)
+	}
+	return "", ""
 }
 
 func newNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
