@@ -323,14 +323,6 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 
 func (d *filestore) Chmod(key string, mode os.FileMode) error {
 	p := d.path(key)
-	st, err := os.Lstat(p)
-	if err != nil {
-		return err
-	}
-	if st.Mode()&os.ModeSymlink != 0 {
-		// skip chmod for symlink
-		return nil
-	}
 	return os.Chmod(p, mode)
 }
 

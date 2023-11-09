@@ -219,12 +219,14 @@ func needCopyPerms(o1, o2 object.Object) bool {
 	return f2.Mode() != f1.Mode() || f2.Owner() != f1.Owner() || f2.Group() != f1.Group()
 }
 
-func copyPerms(dst object.ObjectStorage, obj object.Object) {
+func copyPerms(dst object.ObjectStorage, obj object.Object, config *Config) {
 	start := time.Now()
 	key := obj.Key()
 	fi := obj.(object.File)
-	if err := dst.(object.FileSystem).Chmod(key, fi.Mode()); err != nil {
-		logger.Warnf("Chmod %s to %o: %s", key, fi.Mode(), err)
+	if !fi.IsSymlink() || !config.Links {
+		if err := dst.(object.FileSystem).Chmod(key, fi.Mode()); err != nil {
+			logger.Warnf("Chmod %s to %o: %s", key, fi.Mode(), err)
+		}
 	}
 	if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
 		logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)
@@ -554,7 +556,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 			if config.Dry {
 				logger.Debugf("Will copy permissions for %s", key)
 			} else {
-				copyPerms(dst, obj)
+				copyPerms(dst, obj, config)
 			}
 			copied.Increment()
 		case markChecksum:
@@ -573,7 +575,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 				} else if config.Perms {
 					if o, e := dst.Head(key); e == nil {
 						if needCopyPerms(obj, o) {
-							copyPerms(dst, obj)
+							copyPerms(dst, obj, config)
 							copied.Increment()
 						} else {
 							skipped.Increment()
@@ -618,7 +620,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 					}
 				}
 				if config.Perms {
-					copyPerms(dst, obj)
+					copyPerms(dst, obj, config)
 				}
 				copied.Increment()
 			} else {
