@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -55,6 +55,12 @@ const (
 	CopyOperation = "copy"
 )
 
+const (
+	FilterOSS = "Expires&Signature"
+	FilterS3  = "X-Amz-Algorithm&X-Amz-Credential&X-Amz-Date&X-Amz-Expires&X-Amz-SignedHeaders&X-Amz-Signature"
+	FilterOBS = "X-Amz-Algorithm&X-Amz-Credential&X-Amz-Date&X-Obs-Date&X-Amz-Expires&X-Amz-SignedHeaders&X-Amz-Signature"
+)
+
 type ObjectMetadatas struct {
 	// CommonPrefixes are similar prefixes in object storage.
 	CommonPrefixes []string `json:"CommonPrefixes"`
@@ -95,25 +101,36 @@ type ObjectMetadata struct {
 	StorageClass string
 }
 
+type ObjectStorageMetadata struct {
+	// Name is object storage name of type, it can be s3, oss or obs.
+	Name string
+
+	// Region is storage region.
+	Region string
+
+	// Endpoint is datacenter endpoint.
+	Endpoint string
+}
+
 type dragonfly struct {
 	// DefaultObjectStorage is the default object storage.
 	DefaultObjectStorage
 
 	// Address of the object storage service.
-	Endpoint string
+	endpoint string
 
 	// Filter is used to generate a unique Task ID by
 	// filtering unnecessary query params in the URL,
 	// it is separated by & character.
-	Filter string
+	filter string
 
 	// Mode is the mode in which the backend is written,
 	// including WriteBack and AsyncWriteBack.
-	Mode int
+	mode int
 
 	// MaxReplicas is the maximum number of
 	// replicas of an object cache in seed peers.
-	MaxReplicas int
+	maxReplicas int
 
 	// ObjectStorage bucket name.
 	bucket string
@@ -134,12 +151,12 @@ func (d *dragonfly) Create() error {
 	}
 
 	// get create bucket request.
-	u, err := url.Parse(d.Endpoint)
+	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return err
 	}
 
-	u.Path = filepath.Join("buckets", d.bucket)
+	u.Path = path.Join("buckets", d.bucket)
 
 	query := u.Query()
 
@@ -167,12 +184,12 @@ func (d *dragonfly) Create() error {
 // Head returns the object metadata if it exists.
 func (d *dragonfly) Head(key string) (Object, error) {
 	// get get object metadata request.
-	u, err := url.Parse(d.Endpoint)
+	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	u.Path = filepath.Join("buckets", d.bucket, "objects", key)
+	u.Path = path.Join("buckets", d.bucket, "objects", key)
 
 	if strings.HasSuffix(key, "/") {
 		u.Path += "/"
@@ -220,20 +237,20 @@ func (d *dragonfly) Head(key string) (Object, error) {
 // Get returns the object if it exists.
 func (d *dragonfly) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	// get get object request.
-	u, err := url.Parse(d.Endpoint)
+	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	u.Path = filepath.Join("buckets", d.bucket, "objects", key)
+	u.Path = path.Join("buckets", d.bucket, "objects", key)
 
 	if strings.HasSuffix(key, "/") {
 		u.Path += "/"
 	}
 
 	query := u.Query()
-	if d.Filter != "" {
-		query.Add("filter", d.Filter)
+	if d.filter != "" {
+		query.Add("filter", d.filter)
 	}
 
 	u.RawQuery = query.Encode()
@@ -264,23 +281,23 @@ func (d *dragonfly) Put(key string, data io.Reader) error {
 	writer := multipart.NewWriter(body)
 
 	// AsyncWriteBack mode is used by default.
-	if err := writer.WriteField("mode", fmt.Sprint(d.Mode)); err != nil {
+	if err := writer.WriteField("mode", fmt.Sprint(d.mode)); err != nil {
 		return err
 	}
 
-	if d.Filter != "" {
-		if err := writer.WriteField("filter", d.Filter); err != nil {
+	if d.filter != "" {
+		if err := writer.WriteField("filter", d.filter); err != nil {
 			return err
 		}
 	}
 
-	if d.MaxReplicas > 0 {
-		if err := writer.WriteField("maxReplicas", fmt.Sprint(d.MaxReplicas)); err != nil {
+	if d.maxReplicas > 0 {
+		if err := writer.WriteField("maxReplicas", fmt.Sprint(d.maxReplicas)); err != nil {
 			return err
 		}
 	}
 
-	part, err := writer.CreateFormFile("file", filepath.Base(key))
+	part, err := writer.CreateFormFile("file", path.Base(key))
 	if err != nil {
 		return err
 	}
@@ -293,12 +310,12 @@ func (d *dragonfly) Put(key string, data io.Reader) error {
 		return err
 	}
 
-	u, err := url.Parse(d.Endpoint)
+	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return err
 	}
 
-	u.Path = filepath.Join("buckets", d.bucket, "objects", key)
+	u.Path = path.Join("buckets", d.bucket, "objects", key)
 
 	if strings.HasSuffix(key, "/") {
 		u.Path += "/"
@@ -338,12 +355,12 @@ func (d *dragonfly) Copy(dst, src string) error {
 		return err
 	}
 
-	u, err := url.Parse(d.Endpoint)
+	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return err
 	}
 
-	u.Path = filepath.Join("buckets", d.bucket, "objects", dst)
+	u.Path = path.Join("buckets", d.bucket, "objects", dst)
 
 	query := u.Query()
 
@@ -374,12 +391,12 @@ func (d *dragonfly) Copy(dst, src string) error {
 // Delete deletes the object if it exists.
 func (d *dragonfly) Delete(key string) error {
 	// get delete object request.
-	u, err := url.Parse(d.Endpoint)
+	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return err
 	}
 
-	u.Path = filepath.Join("buckets", d.bucket, "objects", key)
+	u.Path = path.Join("buckets", d.bucket, "objects", key)
 
 	if strings.HasSuffix(key, "/") {
 		u.Path += "/"
@@ -410,12 +427,12 @@ func (d *dragonfly) List(prefix, marker, delimiter string, limit int64, followLi
 		limit = MaxGetObjectMetadatasLimit
 	}
 
-	u, err := url.Parse(d.Endpoint)
+	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	u.Path = filepath.Join("buckets", d.bucket, "metadatas")
+	u.Path = path.Join("buckets", d.bucket, "metadatas")
 
 	query := u.Query()
 	if prefix != "" {
@@ -479,12 +496,12 @@ func (d *dragonfly) List(prefix, marker, delimiter string, limit int64, followLi
 }
 
 // newDragonfly creates a new dragonfly object storage.
-func newDragonfly(_endpoint, _accessKey, _secretKey, _token string) (ObjectStorage, error) {
-	if !strings.Contains(_endpoint, "://") {
-		_endpoint = fmt.Sprintf("http://%s", _endpoint)
+func newDragonfly(endpoint, accessKey, secretKey, token string) (ObjectStorage, error) {
+	if !strings.Contains(endpoint, "://") {
+		endpoint = fmt.Sprintf("http://%s", endpoint)
 	}
 	// Parse the endpoint.
-	uri, err := url.Parse(_endpoint)
+	uri, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -495,7 +512,7 @@ func newDragonfly(_endpoint, _accessKey, _secretKey, _token string) (ObjectStora
 		filter      string
 	)
 
-	endpoint := uri.Scheme + "://" + uri.Host
+	endpoint = uri.Scheme + "://" + uri.Host
 	bucket := uri.Path
 
 	if bucket == "" {
@@ -521,18 +538,59 @@ func newDragonfly(_endpoint, _accessKey, _secretKey, _token string) (ObjectStora
 		}
 	}
 
-	if value := uri.Query().Get("filter"); value != "" {
-		filter = strings.ReplaceAll(value, ",", "&")
+	objectStorageMetadata, err := getObjectStorageMetadata(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	if objectStorageMetadata.Name == "s3" {
+		filter = FilterS3
+	} else if objectStorageMetadata.Name == "oss" {
+		filter = FilterOSS
+	} else {
+		filter = FilterOBS
 	}
 
 	return &dragonfly{
-		Endpoint:    endpoint,
-		Filter:      filter,
-		Mode:        mode,
-		MaxReplicas: maxReplicas,
+		endpoint:    endpoint,
+		filter:      filter,
+		mode:        mode,
+		maxReplicas: maxReplicas,
 		bucket:      bucket,
 		client:      httpClient,
 	}, nil
+}
+
+func getObjectStorageMetadata(endpoint string) (*ObjectStorageMetadata, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, nil
+	}
+
+	u.Path = path.Join("metadata")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get object storage Metadata.
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("bad response status %s", resp.Status)
+	}
+
+	var objectStorageMetadata ObjectStorageMetadata
+	if err := json.NewDecoder(resp.Body).Decode(&objectStorageMetadata); err != nil {
+		return nil, err
+	}
+
+	return &objectStorageMetadata, nil
 }
 
 // init registers the dragonfly object storage.
