@@ -531,7 +531,7 @@ func newDragonfly(_endpoint, _accessKey, _secretKey, _token string) (ObjectStora
 		Mode:        mode,
 		MaxReplicas: maxReplicas,
 		bucket:      bucket,
-		client:      http.DefaultClient,
+		client:      httpClient,
 	}, nil
 }
 
