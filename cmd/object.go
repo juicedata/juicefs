@@ -298,7 +298,7 @@ func (j *juiceFS) readDirSorted(dirname string, followLink bool) ([]*mEntry, sys
 }
 
 func (j *juiceFS) Chtimes(key string, mtime time.Time) error {
-	f, err := j.jfs.Open(ctx, j.path(key), 0)
+	f, err := j.jfs.Lopen(ctx, j.path(key), 0)
 	if err != 0 {
 		return err
 	}
@@ -318,7 +318,7 @@ func (j *juiceFS) Chmod(key string, mode os.FileMode) error {
 func (j *juiceFS) Chown(key string, owner, group string) error {
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
-	f, err := j.jfs.Open(ctx, j.path(key), 0)
+	f, err := j.jfs.Lopen(ctx, j.path(key), 0)
 	if err != 0 {
 		return err
 	}
