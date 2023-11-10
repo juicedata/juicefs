@@ -830,22 +830,18 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 				return err
 			}
 		}
-		quota := quotas[dpath]
-		q := &Quota{
-			MaxSpace:  quota.MaxSpace,
-			MaxInodes: quota.MaxInodes,
-		}
-		if q.MaxSpace < 0 {
-			q.MaxSpace = 0
-		}
-		if q.MaxInodes < 0 {
-			q.MaxInodes = 0
-		}
-		old, err := m.en.doGetOrSetQuota(ctx, inode, q)
+		old, err := m.en.doGetOrSetQuota(ctx, inode, new(Quota))
 		if err != nil {
 			return err
 		}
+		quota := quotas[dpath]
 		if old == nil {
+			if quota.MaxSpace < 0 {
+				quota.MaxSpace = 0
+			}
+			if quota.MaxInodes < 0 {
+				quota.MaxInodes = 0
+			}
 			wrapErr := func(e error) error {
 				return errors.Wrapf(e, "set quota usage for file(%s), please repair it later", dpath)
 			}
