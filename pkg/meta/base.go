@@ -831,14 +831,17 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 			}
 		}
 		quota := quotas[dpath]
-		if quota.MaxSpace < 0 {
-			quota.MaxSpace = 0
+		q := &Quota{
+			MaxSpace:  quota.MaxSpace,
+			MaxInodes: quota.MaxInodes,
 		}
-		if quota.MaxInodes < 0 {
-			quota.MaxInodes = 0
+		if q.MaxSpace < 0 {
+			q.MaxSpace = 0
 		}
-
-		old, err := m.en.doGetOrSetQuota(ctx, inode, quota)
+		if q.MaxInodes < 0 {
+			q.MaxInodes = 0
+		}
+		old, err := m.en.doGetOrSetQuota(ctx, inode, q)
 		if err != nil {
 			return err
 		}
@@ -852,10 +855,10 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 			// set current usage
 			return m.en.doSetQuota(ctx, inode, quota, true)
 		} else {
-			if quota.MaxSpace == 0 {
+			if quota.MaxSpace < 0 {
 				quota.MaxSpace = old.MaxSpace
 			}
-			if quota.MaxInodes == 0 {
+			if quota.MaxInodes < 0 {
 				quota.MaxInodes = old.MaxInodes
 			}
 			if quota.MaxSpace == old.MaxSpace && quota.MaxInodes == old.MaxInodes {
