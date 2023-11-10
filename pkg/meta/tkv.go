@@ -2752,10 +2752,11 @@ func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, setLimit, setU
 	var last *Quota
 	err := m.txn(func(tx *kvTxn) error {
 		buf := tx.get(m.dirQuotaKey(inode))
-		if len(buf) != 32 {
+		if len(buf) == 32 {
+			last = m.parseQuota(buf)
+		} else if len(buf) != 0 {
 			return fmt.Errorf("invalid quota value: %v", buf)
 		}
-		last := m.parseQuota(buf)
 		if setLimit {
 			m.standardlizeQuotaLimit(quota, last)
 		}
