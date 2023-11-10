@@ -3201,48 +3201,38 @@ func (m *dbMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	})
 }
 
-func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, setUsage bool) error {
-	return m.txn(func(s *xorm.Session) error {
+func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, setLimit, setUsage bool) (*Quota, error) {
+	var last *Quota
+	err := m.txn(func(s *xorm.Session) error {
 		q := dirQuota{Inode: inode}
-		ok, e := s.ForUpdate().Get(&q)
+		exist, e := s.ForUpdate().Get(&q)
 		if e != nil {
 			return e
 		}
-		q.MaxSpace, q.MaxInodes = quota.MaxSpace, quota.MaxInodes
-		if ok {
-			if setUsage {
-				q.UsedSpace, q.UsedInodes = quota.UsedSpace, quota.UsedInodes
-				_, e = s.Cols("max_space", "max_inodes", "used_space", "used_inodes").Update(&q, &dirQuota{Inode: inode})
-			} else {
-				quota.UsedSpace, quota.UsedInodes = q.UsedSpace, q.UsedInodes
-				_, e = s.Cols("max_space", "max_inodes").Update(&q, &dirQuota{Inode: inode})
+		if exist {
+			last = &Quota{
+				MaxSpace:  q.MaxSpace,
+				MaxInodes: q.MaxInodes,
 			}
-		} else if setUsage {
+		}
+		updateColumns := make([]string, 0, 4)
+		if setLimit {
+			m.standardlizeQuotaLimit(quota, last)
+			q.MaxSpace, q.MaxInodes = quota.MaxSpace, quota.MaxInodes
+			updateColumns = append(updateColumns, "max_space", "max_inodes")
+		}
+		if setUsage {
 			q.UsedSpace, q.UsedInodes = quota.UsedSpace, quota.UsedInodes
+			updateColumns = append(updateColumns, "used_space", "used_inodes")
+		}
+		if exist {
+			_, e = s.Cols(updateColumns...).Update(&q, &dirQuota{Inode: inode})
+		} else {
 			e = mustInsert(s, &q)
 		}
 		return e
 	})
-}
-
-func (m *dbMeta) doGetOrSetQuota(ctx Context, inode Ino, quota *Quota) (*Quota, error) {
-	var oldQuota *Quota
-	err := m.txn(func(s *xorm.Session) error {
-		q := dirQuota{Inode: inode}
-		ok, e := s.ForUpdate().Get(&q)
-		if e != nil {
-			return e
-		}
-		if ok {
-			oldQuota = &Quota{
-				MaxSpace:  q.MaxSpace,
-				MaxInodes: q.MaxInodes,
-			}
-			return nil
-		}
-		return mustInsert(s, &q)
-	})
-	return oldQuota, err
+	return last, err
 }
 
 func (m *dbMeta) doDelQuota(ctx Context, inode Ino) error {

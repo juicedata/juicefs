@@ -3467,39 +3467,34 @@ func (m *redisMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	return &quota, nil
 }
 
-func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, setUsage bool) error {
-	return m.txn(ctx, func(tx *redis.Tx) error {
-		field := inode.String()
-		if setUsage {
-			_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(quota.MaxSpace, quota.MaxInodes))
-				pipe.HSet(ctx, m.dirQuotaUsedSpaceKey(), field, quota.UsedSpace)
-				pipe.HSet(ctx, m.dirQuotaUsedInodesKey(), field, quota.UsedInodes)
-				return nil
-			})
-			return err
-		} else {
-			return tx.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(quota.MaxSpace, quota.MaxInodes)).Err()
-		}
-	}, m.dirQuotaKey())
-}
-
-func (m *redisMeta) doGetOrSetQuota(ctx Context, inode Ino, quota *Quota) (*Quota, error) {
-	var oldQuota *Quota
+func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, setLimit, setUsage bool) (*Quota, error) {
+	var last *Quota
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		field := inode.String()
 		buf, err := tx.HGet(ctx, m.dirQuotaKey(), field).Bytes()
 		if err == nil {
-			oldQuota = new(Quota)
-			oldQuota.MaxSpace, oldQuota.MaxInodes = m.parseQuota(buf)
-			return nil
-		}
-		if err != redis.Nil {
+			last = new(Quota)
+			last.MaxSpace, last.MaxInodes = m.parseQuota(buf)
+		} else if err == redis.Nil {
+			last = nil
+			err = nil
+		} else {
 			return err
 		}
-		return tx.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(quota.MaxSpace, quota.MaxInodes)).Err()
+		if setLimit {
+			m.standardlizeQuotaLimit(quota, last)
+			err = tx.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(quota.MaxSpace, quota.MaxInodes)).Err()
+		}
+		if err == nil && setUsage {
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.HSet(ctx, m.dirQuotaUsedSpaceKey(), field, quota.UsedSpace)
+				pipe.HSet(ctx, m.dirQuotaUsedInodesKey(), field, quota.UsedInodes)
+				return nil
+			})
+		}
+		return err
 	}, m.dirQuotaKey())
-	return oldQuota, err
+	return last, err
 }
 
 func (m *redisMeta) doDelQuota(ctx Context, inode Ino) error {
