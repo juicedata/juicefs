@@ -2748,9 +2748,9 @@ func (m *kvMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	return m.parseQuota(buf), nil
 }
 
-func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error {
+func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, setUsage bool) error {
 	return m.txn(func(tx *kvTxn) error {
-		if create {
+		if setUsage {
 			tx.set(m.dirQuotaKey(inode), m.packQuota(quota))
 		} else {
 			buf := tx.get(m.dirQuotaKey(inode))
@@ -2764,6 +2764,24 @@ func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) e
 		return nil
 	})
 }
+
+func (m *kvMeta) doGetOrSetQuota(ctx Context, inode Ino, quota *Quota) (*Quota, error) {
+	var q *Quota
+	err := m.txn(func(tx *kvTxn) error {
+		buf := tx.get(m.dirQuotaKey(inode))
+		if len(buf) == 32 {
+			q = m.parseQuota(buf)
+			return nil
+		}
+		tx.set(m.dirQuotaKey(inode), m.packQuota(&Quota{
+			MaxSpace:  quota.MaxSpace,
+			MaxInodes: quota.MaxInodes,
+		}))
+		return nil
+	})
+	return q, err
+}
+
 func (m *kvMeta) doDelQuota(ctx Context, inode Ino) error {
 	return m.deleteKeys(m.dirQuotaKey(inode))
 }

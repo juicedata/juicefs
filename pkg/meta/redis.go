@@ -3467,10 +3467,10 @@ func (m *redisMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	return &quota, nil
 }
 
-func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error {
+func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, setUsage bool) error {
 	return m.txn(ctx, func(tx *redis.Tx) error {
 		field := inode.String()
-		if create {
+		if setUsage {
 			_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(quota.MaxSpace, quota.MaxInodes))
 				pipe.HSet(ctx, m.dirQuotaUsedSpaceKey(), field, quota.UsedSpace)
@@ -3482,6 +3482,24 @@ func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, create bool
 			return tx.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(quota.MaxSpace, quota.MaxInodes)).Err()
 		}
 	}, m.dirQuotaKey())
+}
+
+func (m *redisMeta) doGetOrSetQuota(ctx Context, inode Ino, quota *Quota) (*Quota, error) {
+	var oldQuota *Quota
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		field := inode.String()
+		buf, err := tx.HGet(ctx, m.dirQuotaKey(), field).Bytes()
+		if err == nil {
+			oldQuota = new(Quota)
+			oldQuota.MaxSpace, oldQuota.MaxInodes = m.parseQuota(buf)
+			return nil
+		}
+		if err != redis.Nil {
+			return err
+		}
+		return tx.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(quota.MaxSpace, quota.MaxInodes)).Err()
+	}, m.dirQuotaKey())
+	return oldQuota, err
 }
 
 func (m *redisMeta) doDelQuota(ctx Context, inode Ino) error {

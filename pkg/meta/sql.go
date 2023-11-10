@@ -3201,7 +3201,7 @@ func (m *dbMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	})
 }
 
-func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error {
+func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, setUsage bool) error {
 	return m.txn(func(s *xorm.Session) error {
 		q := dirQuota{Inode: inode}
 		ok, e := s.ForUpdate().Get(&q)
@@ -3210,19 +3210,39 @@ func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) e
 		}
 		q.MaxSpace, q.MaxInodes = quota.MaxSpace, quota.MaxInodes
 		if ok {
-			if create {
+			if setUsage {
 				q.UsedSpace, q.UsedInodes = quota.UsedSpace, quota.UsedInodes
 				_, e = s.Cols("max_space", "max_inodes", "used_space", "used_inodes").Update(&q, &dirQuota{Inode: inode})
 			} else {
 				quota.UsedSpace, quota.UsedInodes = q.UsedSpace, q.UsedInodes
 				_, e = s.Cols("max_space", "max_inodes").Update(&q, &dirQuota{Inode: inode})
 			}
-		} else if create {
+		} else if setUsage {
 			q.UsedSpace, q.UsedInodes = quota.UsedSpace, quota.UsedInodes
 			e = mustInsert(s, &q)
 		}
 		return e
 	})
+}
+
+func (m *dbMeta) doGetOrSetQuota(ctx Context, inode Ino, quota *Quota) (*Quota, error) {
+	var oldQuota *Quota
+	err := m.txn(func(s *xorm.Session) error {
+		q := dirQuota{Inode: inode}
+		ok, e := s.ForUpdate().Get(&q)
+		if e != nil {
+			return e
+		}
+		if ok {
+			oldQuota = &Quota{
+				MaxSpace:  q.MaxSpace,
+				MaxInodes: q.MaxInodes,
+			}
+			return nil
+		}
+		return mustInsert(s, &q)
+	})
+	return oldQuota, err
 }
 
 func (m *dbMeta) doDelQuota(ctx Context, inode Ino) error {

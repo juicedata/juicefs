@@ -79,10 +79,12 @@ type engine interface {
 	doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno
 
 	doGetQuota(ctx Context, inode Ino) (*Quota, error)
-	doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error
+	doSetQuota(ctx Context, inode Ino, quota *Quota, setUsage bool) error
 	doDelQuota(ctx Context, inode Ino) error
 	doLoadQuotas(ctx Context) (map[Ino]*Quota, error)
 	doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error
+	// get or create quota (only limitation), return nil if created
+	doGetOrSetQuota(ctx Context, inode Ino, quota *Quota) (*Quota, error)
 
 	doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno
 	doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode uint8, attr *Attr) syscall.Errno
@@ -828,34 +830,35 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 				return err
 			}
 		}
-		q, err := m.en.doGetQuota(ctx, inode)
+		quota := quotas[dpath]
+		if quota.MaxSpace < 0 {
+			quota.MaxSpace = 0
+		}
+		if quota.MaxInodes < 0 {
+			quota.MaxInodes = 0
+		}
+
+		old, err := m.en.doGetOrSetQuota(ctx, inode, quota)
 		if err != nil {
 			return err
 		}
-		quota := quotas[dpath]
-		if q == nil {
+		if old == nil {
 			var sum Summary
 			if st := m.GetSummary(ctx, inode, &sum, true, strict); st != 0 {
 				return st
 			}
 			quota.UsedSpace = int64(sum.Size) - align4K(0)
 			quota.UsedInodes = int64(sum.Dirs+sum.Files) - 1
-			if quota.MaxSpace < 0 {
-				quota.MaxSpace = 0
-			}
-			if quota.MaxInodes < 0 {
-				quota.MaxInodes = 0
-			}
+			// set current usage
 			return m.en.doSetQuota(ctx, inode, quota, true)
 		} else {
-			quota.UsedSpace, quota.UsedInodes = q.UsedSpace, q.UsedInodes
-			if quota.MaxSpace < 0 {
-				quota.MaxSpace = q.MaxSpace
+			if quota.MaxSpace == 0 {
+				quota.MaxSpace = old.MaxSpace
 			}
-			if quota.MaxInodes < 0 {
-				quota.MaxInodes = q.MaxInodes
+			if quota.MaxInodes == 0 {
+				quota.MaxInodes = old.MaxInodes
 			}
-			if quota.MaxSpace == q.MaxSpace && quota.MaxInodes == q.MaxInodes {
+			if quota.MaxSpace == old.MaxSpace && quota.MaxInodes == old.MaxInodes {
 				return nil // nothing to update
 			}
 			return m.en.doSetQuota(ctx, inode, quota, false)
