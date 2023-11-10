@@ -68,6 +68,17 @@ func TestHDFS2(t *testing.T) { //skip mutate
 	testFileSystem(t, dfs)
 }
 
+func TestNFS2(t *testing.T) { //skip mutate
+	if os.Getenv("NFS_ADDR") == "" {
+		t.SkipNow()
+	}
+	b, err := newNFSStore(os.Getenv("NFS_ADDR"), os.Getenv("NFS_ACCESS_KEY"), os.Getenv("NFS_SECRET_KEY"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testFileSystem(t, b)
+}
+
 func testFileSystem(t *testing.T, s ObjectStorage) {
 	keys := []string{
 		"x/",
@@ -139,9 +150,9 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 			}
 			expectedKeys = []string{"x/", "xy.txt", "xyz/", "xyz/xyz.txt"}
 			if mode == 0422 {
-				if _, ok := ss.(*gluster); ok {
-					expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
-				}
+				// if _, ok := ss.(*gluster); ok {
+				// 	expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
+				// }
 			}
 			if err = testKeysEqual(objs, expectedKeys); err != nil {
 				t.Fatalf("testKeysEqual fail: %s mode %o", err, mode)
