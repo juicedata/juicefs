@@ -3471,17 +3471,16 @@ func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, setLimit, s
 	var last *Quota
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		field := inode.String()
-		buf, err := tx.HGet(ctx, m.dirQuotaKey(), field).Bytes()
-		if err == nil {
+		buf, e := tx.HGet(ctx, m.dirQuotaKey(), field).Bytes()
+		if e == nil {
 			last = new(Quota)
 			last.MaxSpace, last.MaxInodes = m.parseQuota(buf)
-		} else if err == redis.Nil {
+		} else if e == redis.Nil {
 			last = nil
-			err = nil
 		} else {
-			return err
+			return e
 		}
-		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, e = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			if setLimit {
 				m.standardlizeQuotaLimit(quota, last)
 				pipe.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(quota.MaxSpace, quota.MaxInodes))
@@ -3492,7 +3491,7 @@ func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, setLimit, s
 			}
 			return nil
 		})
-		return err
+		return e
 	}, m.inodeKey(inode))
 	return last, err
 }
