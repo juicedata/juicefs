@@ -846,26 +846,32 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 			return err
 		}
 		if old == nil {
+			wrapErr := func(e error) error {
+				return errors.Wrapf(e, "set quota usage for file(%s), please repair it later", dpath)
+			}
 			var sum Summary
 			if st := m.GetSummary(ctx, inode, &sum, true, strict); st != 0 {
-				return st
+				return wrapErr(st)
 			}
 			quota.UsedSpace = int64(sum.Size) - align4K(0)
 			quota.UsedInodes = int64(sum.Dirs+sum.Files) - 1
 			// set current usage
-			return m.en.doSetQuota(ctx, inode, quota, true)
-		} else {
-			if quota.MaxSpace < 0 {
-				quota.MaxSpace = old.MaxSpace
+			err := m.en.doSetQuota(ctx, inode, quota, true)
+			if err != nil {
+				return wrapErr(err)
 			}
-			if quota.MaxInodes < 0 {
-				quota.MaxInodes = old.MaxInodes
-			}
-			if quota.MaxSpace == old.MaxSpace && quota.MaxInodes == old.MaxInodes {
-				return nil // nothing to update
-			}
-			return m.en.doSetQuota(ctx, inode, quota, false)
+			return nil
 		}
+		if quota.MaxSpace < 0 {
+			quota.MaxSpace = old.MaxSpace
+		}
+		if quota.MaxInodes < 0 {
+			quota.MaxInodes = old.MaxInodes
+		}
+		if quota.MaxSpace == old.MaxSpace && quota.MaxInodes == old.MaxInodes {
+			return nil // nothing to update
+		}
+		return m.en.doSetQuota(ctx, inode, quota, false)
 	case QuotaGet:
 		q, err := m.en.doGetQuota(ctx, inode)
 		if err != nil {
