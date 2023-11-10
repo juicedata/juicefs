@@ -628,8 +628,8 @@ github.com/juicedata/gogfapi v0.0.0-20230626071140-fc28e5537825 h1:7KrwI4HPqvNLK
 github.com/juicedata/gogfapi v0.0.0-20230626071140-fc28e5537825/go.mod h1:Ho5G4KgrgbMKW0buAJdOmYoJcOImkzznJQaLiATrsx4=
 github.com/juicedata/huaweicloud-sdk-go-obs v3.22.12-0.20230228031208-386e87b5c091+incompatible h1:2/ttSmYoX+QMegpNyAJR0Y6aHcVk57F7RJit5xN2T/s=
 github.com/juicedata/huaweicloud-sdk-go-obs v3.22.12-0.20230228031208-386e87b5c091+incompatible/go.mod h1:Ukwa8ffRQLV6QRwpqGioPjn2Wnf7TBDA4DbennDOqHE=
-github.com/juicedata/minio v0.0.0-20231108044657-17145c5ac833 h1:K5lQjLbddRT7eHHIXyWqFgDa4SApgx+WI3ogL9MdoI0=
-github.com/juicedata/minio v0.0.0-20231108044657-17145c5ac833/go.mod h1:t6ViWaq6wIWfWv+ZZZ3wtvxhi5wcDjXaHteAvcFr4RY=
+github.com/juicedata/minio v0.0.0-20231110015213-d50a2ca73e43 h1:3Fl1L9PauB3xYo4Gp9xjPoP73P5hYR2a3v+e50BUX4M=
+github.com/juicedata/minio v0.0.0-20231110015213-d50a2ca73e43/go.mod h1:t6ViWaq6wIWfWv+ZZZ3wtvxhi5wcDjXaHteAvcFr4RY=
 github.com/juicedata/mpb/v7 v7.0.4-0.20231024073412-2b8d31be510b h1:0/6suPNZnrOlRlBaU/Bnitu8HiKkkLSzQhHbwQ9AysM=
 github.com/juicedata/mpb/v7 v7.0.4-0.20231024073412-2b8d31be510b/go.mod h1:NXGsfPGx6G2JssqvEcULtDqUrxuuYs4llpv8W6ZUpzk=
 github.com/juju/ratelimit v1.0.2 h1:sRxmtRiajbvrcLQT7S+JbqU0ntsb9W2yhSdNN8tWfaI=
