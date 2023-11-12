@@ -79,8 +79,8 @@ type engine interface {
 	doCleanupDetachedNode(ctx Context, detachedNode Ino) syscall.Errno
 
 	doGetQuota(ctx Context, inode Ino) (*Quota, error)
-	// set quota, return last one (without usage) if existed
-	doSetQuota(ctx Context, inode Ino, quota *Quota, setLimit, setUsage bool) (*Quota, error)
+	// set quota, return true if there is no quota exists before
+	doSetQuota(ctx Context, inode Ino, quota *Quota) (created bool, err error)
 	doDelQuota(ctx Context, inode Ino) error
 	doLoadQuotas(ctx Context) (map[Ino]*Quota, error)
 	doFlushQuotas(ctx Context, quotas map[Ino]*Quota) error
@@ -830,11 +830,16 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 			}
 		}
 		quota := quotas[dpath]
-		last, err := m.en.doSetQuota(ctx, inode, quota, true, false)
+		created, err := m.en.doSetQuota(ctx, inode, &Quota{
+			MaxSpace:   quota.MaxSpace,
+			MaxInodes:  quota.MaxInodes,
+			UsedSpace:  -1,
+			UsedInodes: -1,
+		})
 		if err != nil {
 			return err
 		}
-		if last == nil {
+		if created {
 			wrapErr := func(e error) error {
 				return errors.Wrapf(e, "set quota usage for file(%s), please repair it later", dpath)
 			}
@@ -842,9 +847,12 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 			if st := m.GetSummary(ctx, inode, &sum, true, strict); st != 0 {
 				return wrapErr(st)
 			}
-			quota.UsedSpace = int64(sum.Size) - align4K(0)
-			quota.UsedInodes = int64(sum.Dirs+sum.Files) - 1
-			_, err := m.en.doSetQuota(ctx, inode, quota, false, true)
+			_, err := m.en.doSetQuota(ctx, inode, &Quota{
+				UsedSpace:  int64(sum.Size) - align4K(0),
+				UsedInodes: int64(sum.Dirs+sum.Files) - 1,
+				MaxSpace:   -1,
+				MaxInodes:  -1,
+			})
 			if err != nil {
 				return wrapErr(err)
 			}
@@ -904,7 +912,12 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 			q.UsedSpace = usedSpace
 			quotas[dpath] = q
 			logger.Info("repairing...")
-			_, err = m.en.doSetQuota(ctx, inode, q, false, true)
+			_, err = m.en.doSetQuota(ctx, inode, &Quota{
+				MaxInodes:  -1,
+				MaxSpace:   -1,
+				UsedInodes: q.UsedInodes,
+				UsedSpace:  q.UsedSpace,
+			})
 			return err
 		}
 		return fmt.Errorf("quota of %s is inconsistent, please repair it with --repair flag", dpath)
@@ -914,9 +927,13 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 	return nil
 }
 
-func (m *baseMeta) standardlizeQuotaLimit(quota *Quota, origin *Quota) {
+func (m *baseMeta) standardlizeQuotaLimit(quota *Quota, origin *Quota) (needUpdate bool) {
+	needUpdate = true
 	if origin == nil {
 		origin = new(Quota)
+	}
+	if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
+		needUpdate = false
 	}
 	if quota.MaxSpace < 0 {
 		quota.MaxSpace = origin.MaxSpace
@@ -924,6 +941,7 @@ func (m *baseMeta) standardlizeQuotaLimit(quota *Quota, origin *Quota) {
 	if quota.MaxInodes < 0 {
 		quota.MaxInodes = origin.MaxInodes
 	}
+	return
 }
 
 func (m *baseMeta) cleanupDeletedFiles() {

@@ -3467,7 +3467,7 @@ func (m *redisMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	return &quota, nil
 }
 
-func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, setLimit, setUsage bool) (*Quota, error) {
+func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
 	var last *Quota
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		field := inode.String()
@@ -3481,19 +3481,23 @@ func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, setLimit, s
 			return e
 		}
 		_, e = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			if setLimit {
-				m.standardlizeQuotaLimit(quota, last)
+			if m.standardlizeQuotaLimit(quota, last) {
 				pipe.HSet(ctx, m.dirQuotaKey(), field, m.packQuota(quota.MaxSpace, quota.MaxInodes))
+			} else if last == nil {
+				// limit is deleted
+				return nil
 			}
-			if setUsage {
+			if quota.UsedSpace >= 0 {
 				pipe.HSet(ctx, m.dirQuotaUsedSpaceKey(), field, quota.UsedSpace)
+			}
+			if quota.UsedInodes >= 0 {
 				pipe.HSet(ctx, m.dirQuotaUsedInodesKey(), field, quota.UsedInodes)
 			}
 			return nil
 		})
 		return e
 	}, m.inodeKey(inode))
-	return last, err
+	return last == nil, err
 }
 
 func (m *redisMeta) doDelQuota(ctx Context, inode Ino) error {
