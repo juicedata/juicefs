@@ -202,12 +202,16 @@ func (n *nfsStore) Delete(key string) error {
 	}
 	fi, _, err := n.target.Lookup(path)
 	if err != nil {
+		if nfs.IsNotDirError(err) {
+			return nil
+		}
 		return err
 	}
+	p := strings.TrimSuffix(path, "/")
 	if fi.IsDir() {
-		err = n.target.RmDir(strings.TrimSuffix(path, "/"))
+		err = n.target.RmDir(p)
 	} else {
-		err = n.target.Remove(path)
+		err = n.target.Remove(p)
 	}
 	if err != nil && os.IsNotExist(err) {
 		err = nil
