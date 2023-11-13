@@ -91,6 +91,17 @@ func (n *nfsStore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
+	if key == "bb/b1" {
+		logger.Infof("bb/b1: %#v", fi)
+	}
+	if attr, ok := fi.Sys().(*nfs.Fattr); ok && attr.Type == nfs.NF3Lnk {
+		src, err := n.Readlink(p)
+		if err != nil {
+			return nil, err
+		}
+		logger.Infof("symlink %s -> %s", p, src)
+		return n.Head(src)
+	}
 	return n.fileInfo(key, fi), nil
 }
 
@@ -188,7 +199,19 @@ func (n *nfsStore) Put(key string, in io.Reader) error {
 }
 
 func (n *nfsStore) Delete(key string) error {
-	err := n.target.Remove(strings.TrimRight(n.path(key), dirSuffix))
+	path := n.path(key)
+	if key == "./" {
+		return nil
+	}
+	fi, _, err := n.target.Lookup(path)
+	if err != nil {
+		return err
+	}
+	if fi.IsDir() {
+		err = n.target.RmDir(strings.TrimSuffix(path, "/"))
+	} else {
+		err = n.target.Remove(path)
+	}
 	if err != nil && os.IsNotExist(err) {
 		err = nil
 	}
@@ -220,7 +243,6 @@ func (n *nfsStore) readDirSorted(dirname string, followLink bool) ([]*nfsEntry, 
 		return nil, errors.Wrapf(err, "readdir %s", dirname)
 	}
 	nfsEntries := make([]*nfsEntry, len(entries))
-
 	for i, e := range entries {
 		if e.IsDir() {
 			nfsEntries[i] = &nfsEntry{e, e.Name() + dirSuffix, nil, false}
