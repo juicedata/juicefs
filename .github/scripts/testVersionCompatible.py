@@ -448,7 +448,7 @@ class JuicefsMachine(RuleBasedStateMachine):
         print(f'uuid is: {uuid}')
         assert len(uuid) != 0
         options = [juicefs, 'destroy', JuicefsMachine.META_URL, uuid]
-        options.append('--force')
+        options.append('--yes')
         run_jfs_cmd(options)
         self.formatted = False
         self.mounted = False
