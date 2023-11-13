@@ -3201,28 +3201,46 @@ func (m *dbMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	})
 }
 
-func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error {
-	return m.txn(func(s *xorm.Session) error {
-		q := dirQuota{Inode: inode}
-		ok, e := s.ForUpdate().Get(&q)
+func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
+	var created bool
+	err := m.txn(func(s *xorm.Session) error {
+		origin := dirQuota{Inode: inode}
+		exist, e := s.ForUpdate().Get(&origin)
 		if e != nil {
 			return e
 		}
-		q.MaxSpace, q.MaxInodes = quota.MaxSpace, quota.MaxInodes
-		if ok {
-			if create {
-				q.UsedSpace, q.UsedInodes = quota.UsedSpace, quota.UsedInodes
-				_, e = s.Cols("max_space", "max_inodes", "used_space", "used_inodes").Update(&q, &dirQuota{Inode: inode})
-			} else {
-				quota.UsedSpace, quota.UsedInodes = q.UsedSpace, q.UsedInodes
-				_, e = s.Cols("max_space", "max_inodes").Update(&q, &dirQuota{Inode: inode})
-			}
-		} else if create {
-			q.UsedSpace, q.UsedInodes = quota.UsedSpace, quota.UsedInodes
-			e = mustInsert(s, &q)
+		if exist {
+			created = false
+		} else if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
+			return errors.Errorf("limitation not set or deleted")
+		} else {
+			created = true
+		}
+		updateColumns := make([]string, 0, 4)
+		if quota.MaxSpace >= 0 {
+			origin.MaxSpace = quota.MaxSpace
+			updateColumns = append(updateColumns, "max_space")
+		}
+		if quota.MaxInodes >= 0 {
+			origin.MaxInodes = quota.MaxInodes
+			updateColumns = append(updateColumns, "max_inodes")
+		}
+		if quota.UsedSpace >= 0 {
+			origin.UsedSpace = quota.UsedSpace
+			updateColumns = append(updateColumns, "used_space")
+		}
+		if quota.UsedInodes >= 0 {
+			origin.UsedInodes = quota.UsedInodes
+			updateColumns = append(updateColumns, "used_inodes")
+		}
+		if exist {
+			_, e = s.Cols(updateColumns...).Update(&origin, &dirQuota{Inode: inode})
+		} else {
+			e = mustInsert(s, &origin)
 		}
 		return e
 	})
+	return created, err
 }
 
 func (m *dbMeta) doDelQuota(ctx Context, inode Ino) error {
