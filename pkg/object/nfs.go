@@ -91,15 +91,11 @@ func (n *nfsStore) Head(key string) (Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	if key == "bb/b1" {
-		logger.Infof("bb/b1: %#v", fi)
-	}
 	if attr, ok := fi.(*nfs.Fattr); ok && attr.Type == nfs.NF3Lnk {
 		src, err := n.Readlink(p)
 		if err != nil {
 			return nil, err
 		}
-		logger.Infof("symlink %s -> %s", p, src)
 		dir, _ := path.Split(p)
 		return n.Head(path.Join(dir, src))
 	}
@@ -201,9 +197,6 @@ func (n *nfsStore) Put(key string, in io.Reader) error {
 
 func (n *nfsStore) Delete(key string) error {
 	path := n.path(key)
-	if key == "./" {
-		return nil
-	}
 	fi, _, err := n.target.Lookup(path)
 	if err != nil {
 		return err
@@ -286,7 +279,9 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 			}
 			return nil, err
 		}
-		objs = append(objs, obj)
+		if obj.Key() != "./" {
+			objs = append(objs, obj)
+		}
 	}
 	entries, err := n.readDirSorted(dir, followLink)
 	if err != nil {
