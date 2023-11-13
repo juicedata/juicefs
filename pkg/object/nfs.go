@@ -60,6 +60,13 @@ func (e *nfsEntry) Name() string {
 	return e.name
 }
 
+func (e *nfsEntry) Size() int64 {
+	if e.fi != nil {
+		return e.fi.Size()
+	}
+	return e.EntryPlus.Size()
+}
+
 func (e *nfsEntry) Info() (os.FileInfo, error) {
 	if e.fi != nil {
 		return e.fi, nil
@@ -260,9 +267,10 @@ func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, erro
 				logger.Errorf("readlink %s: %s", e.Name(), err)
 				continue
 			}
-			fi, _, err := n.target.Lookup(path.Join(dirname, src))
+			srcPath := path.Clean(path.Join(dirname, src))
+			fi, _, err := n.target.Lookup(srcPath)
 			if err != nil {
-				logger.Warnf("follow link `%s`: lookup `%s`: %s", path.Join(dirname, e.Name()), src, err)
+				logger.Warnf("follow link `%s`: lookup `%s`: %s", path.Join(dirname, e.Name()), srcPath, err)
 				continue
 			}
 			name := e.Name()
