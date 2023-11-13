@@ -94,13 +94,14 @@ func (n *nfsStore) Head(key string) (Object, error) {
 	if key == "bb/b1" {
 		logger.Infof("bb/b1: %#v", fi)
 	}
-	if attr, ok := fi.Sys().(*nfs.Fattr); ok && attr.Type == nfs.NF3Lnk {
+	if attr, ok := fi.(*nfs.Fattr); ok && attr.Type == nfs.NF3Lnk {
 		src, err := n.Readlink(p)
 		if err != nil {
 			return nil, err
 		}
 		logger.Infof("symlink %s -> %s", p, src)
-		return n.Head(src)
+		dir, _ := path.Split(p)
+		return n.Head(path.Join(dir, src))
 	}
 	return n.fileInfo(key, fi), nil
 }
