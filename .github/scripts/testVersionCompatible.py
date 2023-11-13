@@ -16,7 +16,7 @@ import unittest
 from xmlrpc.client import boolean
 import hypothesis
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine
-from hypothesis import Phase, assume, strategies as st
+from hypothesis import Phase, Verbosity, assume, strategies as st
 from hypothesis import seed
 from packaging import version
 import subprocess
@@ -32,7 +32,13 @@ from cmptree import *
 import random
 
 @seed(random.randint(10000, 1000000))
-@hypothesis.settings(max_examples=100, stateful_step_count=30, deadline=None, phases=[Phase.explicit, Phase.reuse, Phase.generate, Phase.target, Phase.shrink ])
+@hypothesis.settings(
+    verbosity=Verbosity.debug, 
+    max_examples=100, 
+    stateful_step_count=30, 
+    deadline=None, 
+    report_multiple_bugs=False, 
+    phases=[Phase.explicit, Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
 class JuicefsMachine(RuleBasedStateMachine):
     MIN_CLIENT_VERSIONS = ['0.0.1', '0.0.17','1.0.0-beta1', '1.0.0-rc1']
     MAX_CLIENT_VERSIONS = ['1.2.0', '2.0.0']

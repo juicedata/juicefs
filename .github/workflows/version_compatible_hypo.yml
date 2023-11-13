@@ -114,7 +114,14 @@ jobs:
           echo old_version is $old_version
           mv ${{matrix.old_juicefs_version}}/juicefs juicefs-$old_version
           export OLD_JFS_BIN="juicefs-$old_version"
-          timeout 3600 python3 .github/scripts/testVersionCompatible.py || code=$?; if [[ $code -ne 124 && $code -ne 0 ]]; then echo test failed; exit $code; fi
+          timeout 3600 python3 .github/scripts/testVersionCompatible.py 2>&1 | tee result.log || code=$?; if [[ $code -ne 124 && $code -ne 0 ]]; then echo test failed; exit $code; fi
+      
+      - name: Display result log
+        if: always()
+        run: | 
+          if [ -f "result.log" ]; then
+            tail -n 500 result.log
+          fi
 
       - name: Upload command log
         if: always()
