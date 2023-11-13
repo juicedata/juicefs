@@ -927,23 +927,6 @@ func (m *baseMeta) HandleQuota(ctx Context, cmd uint8, dpath string, quotas map[
 	return nil
 }
 
-func (m *baseMeta) standardlizeQuotaLimit(quota *Quota, origin *Quota) (needUpdate bool) {
-	needUpdate = true
-	if origin == nil {
-		origin = new(Quota)
-	}
-	if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
-		needUpdate = false
-	}
-	if quota.MaxSpace < 0 {
-		quota.MaxSpace = origin.MaxSpace
-	}
-	if quota.MaxInodes < 0 {
-		quota.MaxInodes = origin.MaxInodes
-	}
-	return
-}
-
 func (m *baseMeta) cleanupDeletedFiles() {
 	for {
 		utils.SleepWithJitter(time.Minute)
