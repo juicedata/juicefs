@@ -3202,45 +3202,46 @@ func (m *dbMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 }
 
 func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
-	var last *Quota
+	var created bool
 	err := m.txn(func(s *xorm.Session) error {
-		last = nil
-		q := *quota
-		dq := dirQuota{Inode: inode}
-		exist, e := s.ForUpdate().Get(&dq)
+		created = true
+		origin := dirQuota{Inode: inode}
+		exist, e := s.ForUpdate().Get(&origin)
 		if e != nil {
 			return e
 		}
 		if exist {
-			last = &Quota{
-				MaxSpace:  dq.MaxSpace,
-				MaxInodes: dq.MaxInodes,
-			}
-		}
-		updateColumns := make([]string, 0, 4)
-		if m.standardlizeQuotaLimit(&q, last) {
-			dq.MaxSpace, dq.MaxInodes = q.MaxSpace, q.MaxInodes
-			updateColumns = append(updateColumns, "max_space", "max_inodes")
-		} else if last == nil {
-			// limit is deleted
+			created = false
+		} else if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
+			// limit is deleted, skip
+			created = false
 			return nil
 		}
-		if q.UsedSpace >= 0 {
-			dq.UsedSpace = q.UsedSpace
+		updateColumns := make([]string, 0, 4)
+		if quota.MaxSpace >= 0 {
+			origin.MaxSpace = quota.MaxSpace
+			updateColumns = append(updateColumns, "max_space")
+		}
+		if quota.MaxInodes >= 0 {
+			origin.MaxInodes = quota.MaxInodes
+			updateColumns = append(updateColumns, "max_inodes")
+		}
+		if quota.UsedSpace >= 0 {
+			origin.UsedSpace = quota.UsedSpace
 			updateColumns = append(updateColumns, "used_space")
 		}
-		if q.UsedInodes >= 0 {
-			dq.UsedInodes = q.UsedInodes
+		if quota.UsedInodes >= 0 {
+			origin.UsedInodes = quota.UsedInodes
 			updateColumns = append(updateColumns, "used_inodes")
 		}
 		if exist {
-			_, e = s.Cols(updateColumns...).Update(&dq, &dirQuota{Inode: inode})
+			_, e = s.Cols(updateColumns...).Update(&origin, &dirQuota{Inode: inode})
 		} else {
-			e = mustInsert(s, &dq)
+			e = mustInsert(s, &origin)
 		}
 		return e
 	})
-	return last == nil, err
+	return created, err
 }
 
 func (m *dbMeta) doDelQuota(ctx Context, inode Ino) error {

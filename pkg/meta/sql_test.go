@@ -25,7 +25,7 @@ import (
 )
 
 func TestSQLiteClient(t *testing.T) {
-	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test.db"), testConfig())
+	m, err := newSQLMeta("sqlite3", path.Join(t.TempDir(), "jfs-unit-test-1.db"), testConfig())
 	if err != nil || m.Name() != "sqlite3" {
 		t.Fatalf("create meta: %s", err)
 	}
