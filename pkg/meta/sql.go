@@ -3204,7 +3204,6 @@ func (m *dbMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
 	var created bool
 	err := m.txn(func(s *xorm.Session) error {
-		created = true
 		origin := dirQuota{Inode: inode}
 		exist, e := s.ForUpdate().Get(&origin)
 		if e != nil {
@@ -3213,9 +3212,9 @@ func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) 
 		if exist {
 			created = false
 		} else if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
-			// limit is deleted, skip
-			created = false
-			return nil
+			return errors.Errorf("limitation not set or deleted")
+		} else {
+			created = true
 		}
 		updateColumns := make([]string, 0, 4)
 		if quota.MaxSpace >= 0 {

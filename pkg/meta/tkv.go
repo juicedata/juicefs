@@ -2752,7 +2752,6 @@ func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) 
 	var created bool
 	err := m.txn(func(tx *kvTxn) error {
 		var origin *Quota
-		created = true
 		buf := tx.get(m.dirQuotaKey(inode))
 		if len(buf) == 32 {
 			origin = m.parseQuota(buf)
@@ -2760,12 +2759,11 @@ func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) 
 		} else if len(buf) != 0 {
 			return fmt.Errorf("invalid quota value: %v", buf)
 		} else {
+			created = true
 			origin = new(Quota)
 		}
 		if created && quota.MaxSpace < 0 && quota.MaxInodes < 0 {
-			// limit is deleted, skip
-			created = false
-			return nil
+			return errors.Errorf("limitation not set or deleted")
 		}
 		if quota.MaxSpace >= 0 {
 			origin.MaxSpace = quota.MaxSpace

@@ -3471,19 +3471,18 @@ func (m *redisMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, erro
 	var created bool
 	err := m.txn(ctx, func(tx *redis.Tx) error {
 		origin := new(Quota)
-		created = true
 		field := inode.String()
 		buf, e := tx.HGet(ctx, m.dirQuotaKey(), field).Bytes()
 		if e == nil {
 			created = false
 			origin.MaxSpace, origin.MaxInodes = m.parseQuota(buf)
-		} else if e != redis.Nil {
+		} else if e == redis.Nil {
+			created = true
+		} else {
 			return e
 		}
 		if created && quota.MaxSpace < 0 && quota.MaxInodes < 0 {
-			// limit is deleted, skip
-			created = false
-			return nil
+			return errors.Errorf("limitation not set or deleted")
 		}
 		if quota.MaxSpace >= 0 {
 			origin.MaxSpace = quota.MaxSpace
