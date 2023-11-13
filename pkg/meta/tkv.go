@@ -2749,36 +2749,40 @@ func (m *kvMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 }
 
 func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
-	var last *Quota
+	var created bool
 	err := m.txn(func(tx *kvTxn) error {
+		var origin *Quota
+		created = true
 		buf := tx.get(m.dirQuotaKey(inode))
 		if len(buf) == 32 {
-			last = m.parseQuota(buf)
+			origin = m.parseQuota(buf)
+			created = false
 		} else if len(buf) != 0 {
 			return fmt.Errorf("invalid quota value: %v", buf)
+		} else {
+			origin = new(Quota)
 		}
-		if m.standardlizeQuotaLimit(quota, last) && last == nil {
-			// limit is deleted
+		if created && quota.MaxSpace < 0 && quota.MaxInodes < 0 {
+			// limit is deleted, skip
+			created = false
 			return nil
 		}
-		if quota.UsedSpace < 0 {
-			if last != nil {
-				quota.UsedSpace = last.UsedSpace
-			} else {
-				quota.UsedSpace = 0
-			}
+		if quota.MaxSpace >= 0 {
+			origin.MaxSpace = quota.MaxSpace
 		}
-		if quota.UsedInodes < 0 {
-			if last != nil {
-				quota.UsedInodes = last.UsedInodes
-			} else {
-				quota.UsedInodes = 0
-			}
+		if quota.MaxInodes >= 0 {
+			origin.MaxInodes = quota.MaxInodes
 		}
-		tx.set(m.dirQuotaKey(inode), m.packQuota(quota))
+		if quota.UsedSpace >= 0 {
+			origin.UsedSpace = quota.UsedSpace
+		}
+		if quota.UsedInodes >= 0 {
+			origin.UsedInodes = quota.UsedInodes
+		}
+		tx.set(m.dirQuotaKey(inode), m.packQuota(origin))
 		return nil
 	})
-	return last == nil, err
+	return created, err
 }
 
 func (m *kvMeta) doDelQuota(ctx Context, inode Ino) error {
