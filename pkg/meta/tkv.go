@@ -2759,11 +2759,11 @@ func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) 
 		} else if len(buf) != 0 {
 			return fmt.Errorf("invalid quota value: %v", buf)
 		} else {
+			if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
+				return errors.New("limitation not set or deleted")
+			}
 			created = true
 			origin = new(Quota)
-		}
-		if created && quota.MaxSpace < 0 && quota.MaxInodes < 0 {
-			return errors.Errorf("limitation not set or deleted")
 		}
 		if quota.MaxSpace >= 0 {
 			origin.MaxSpace = quota.MaxSpace
