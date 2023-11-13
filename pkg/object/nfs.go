@@ -197,6 +197,9 @@ func (n *nfsStore) Put(key string, in io.Reader) error {
 
 func (n *nfsStore) Delete(key string) error {
 	path := n.path(key)
+	if path == "./" {
+		return nil
+	}
 	fi, _, err := n.target.Lookup(path)
 	if err != nil {
 		return err
@@ -231,7 +234,12 @@ func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	return ff
 }
 
-func (n *nfsStore) readDirSorted(dirname string, followLink bool) ([]*nfsEntry, error) {
+func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, error) {
+	o, err := n.Head(strings.TrimSuffix(dir, "/"))
+	if err != nil {
+		return nil, err
+	}
+	dirname := o.Key()
 	entries, err := n.target.ReadDirPlus(dirname)
 	if err != nil {
 		return nil, errors.Wrapf(err, "readdir %s", dirname)
@@ -242,9 +250,15 @@ func (n *nfsStore) readDirSorted(dirname string, followLink bool) ([]*nfsEntry, 
 			nfsEntries[i] = &nfsEntry{e, e.Name() + dirSuffix, nil, false}
 		} else if e.Attr.Attr.Type == nfs.NF3Lnk && followLink {
 			// follow symlink
-			fi, _, err := n.target.Lookup(path.Join(dirname, e.Name()))
+			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, true}
+			src, err := n.Readlink(path.Join(dirname, e.Name()))
 			if err != nil {
-				nfsEntries[i] = &nfsEntry{e, e.Name(), nil, true}
+				logger.Errorf("readlink %s: %s", e.Name(), err)
+				continue
+			}
+			fi, _, err := n.target.Lookup(path.Join(dirname, src))
+			if err != nil {
+				logger.Warnf("follow link `%s`: lookup `%s`: %s", path.Join(dirname, e.Name()), src, err)
 				continue
 			}
 			name := e.Name()
@@ -258,6 +272,10 @@ func (n *nfsStore) readDirSorted(dirname string, followLink bool) ([]*nfsEntry, 
 	}
 	sort.Slice(nfsEntries, func(i, j int) bool { return nfsEntries[i].Name() < nfsEntries[j].Name() })
 	return nfsEntries, err
+}
+
+func IsPermissionDenied(err error) bool {
+	return errors.Is(err, nfs.NFS3Error(nfs.NFS3ErrAcces))
 }
 
 func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
@@ -279,13 +297,11 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 			}
 			return nil, err
 		}
-		if obj.Key() != "./" {
-			objs = append(objs, obj)
-		}
+		objs = append(objs, obj)
 	}
 	entries, err := n.readDirSorted(dir, followLink)
 	if err != nil {
-		if os.IsPermission(err) {
+		if os.IsPermission(err) || errors.Is(err, nfs.NFS3Error(nfs.NFS3ErrAcces)) {
 			logger.Warnf("skip %s: %s", dir, err)
 			return nil, nil
 		}
