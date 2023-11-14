@@ -69,13 +69,13 @@ jobs:
       - if: matrix.test == 'test.pkg'
         name: Set up nfs-server
         run: |
-          mkdir -p /srv/nfs
-          chown nobody:nogroup /srv/nfs
-          chmod 777 /srv/nfs
-          cat >> /etc/exports <<EOF
+          sudo mkdir -p /srv/nfs
+          sudo chown nobody:nogroup /srv/nfs
+          sudo chmod 777 /srv/nfs
+          sudo cat >> /etc/exports <<EOF
             /srv/nfs 127.0.0.1(rw,sync)
           EOF
-          systemctl start nfs-kernel-server.service
+          sudo systemctl start nfs-kernel-server.service
         
       - if: matrix.test == 'test.meta.non-core'
         name: Install redis-cluster
