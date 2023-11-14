@@ -57,16 +57,16 @@ st_time=st.integers(min_value=0, max_value=int(time.time()))
 st_offset=st.integers(min_value=0, max_value=MAX_FILE_SIZE)
 
 ROOT_DIR1=os.environ.get('ROOT_DIR1', '/tmp/fsrand').rstrip('/')
-ROOT_DIR2=os.environ.get('ROOT_DIR2', '/tmp/jfs/fsrand').rstrip('/')
+ROOT_DIR2=os.environ.get('ROOT_DIR2', '/myjfs/fsrand').rstrip('/')
 
 def clean_dir(dir):
     subprocess.check_call(f'rm -rf {dir}'.split())
     # TODO: uncomment
-    time.sleep(0.03)
+    # time.sleep(0.03)
     assert not os.path.exists(dir), f'{dir} should not exist'
     subprocess.check_call(f'mkdir -p {dir}'.split())
     # TODO: uncomment
-    time.sleep(0.03)
+    # time.sleep(0.03)
     assert os.path.isdir(dir), f'{dir} should be dir'
 
 clean_dir(ROOT_DIR1)
@@ -79,25 +79,24 @@ subprocess.check_call('useradd juicedata2'.split())
 USERNAMES=['root', 'juicedata1', 'juicedata2']
 
 def get_stat(path):
-    # TODO: add st_nlink and st_mode etc.
     if os.path.isfile(path):
         stat = os.stat(path)
         print(f'{path} is file: {stat}')
-        return stat.st_gid, stat.st_uid,  stat.st_size, # oct(stat.st_mode), stat.st_nlink
+        return stat.st_gid, stat.st_uid,  stat.st_size, oct(stat.st_mode), stat.st_nlink
     elif os.path.isdir(path):
         stat = os.stat(path)
         print(f'{path} is dir: {stat}')
-        return stat.st_gid, stat.st_uid, # oct(stat.st_mode)
+        return stat.st_gid, stat.st_uid, oct(stat.st_mode), stat.st_nlink
     elif os.path.islink(path) and os.path.exists(path): # good link
         stat = os.stat(path)
         lstat = os.lstat(path)
         print(f'{path} is good link: {stat}\n{lstat}')
-        return stat.st_gid, stat.st_uid,  stat.st_size,   \
+        return stat.st_gid, stat.st_uid,  stat.st_size, oct(stat.st_mode), stat.st_nlink, \
             lstat.st_gid, lstat.st_uid, oct(lstat.st_mode), 
     elif os.path.islink(path) and not os.path.exists(path): # broken link
         lstat = os.lstat(path)
         print(f'{path} is broken link: {lstat}')
-        return lstat.st_gid, lstat.st_uid, oct(lstat.st_mode), # lstat.st_nlink
+        return lstat.st_gid, lstat.st_uid, oct(lstat.st_mode), lstat.st_nlink
     else:
         return ()
 
@@ -179,11 +178,6 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     def equal(self, result1, result2):
         if not COMPARE:
-            return True
-        # TODO: uncomment this after bugfix
-        if isinstance(result1, str) and result1.find('Resource temporarily unavailable') != -1:
-            return True
-        if isinstance(result2, str) and result2.find('Resource temporarily unavailable') != -1:
             return True
         if isinstance(result1, tuple):
             return result1 == result2
@@ -421,10 +415,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         loggers[f'{root_dir}'].info(f'do_unlink {abspath} succeed')
         return () 
 
-    # TODO: add rename directory 
     @rule( target=Files, entry = Files, parent = Folders, new_entry_name = st_entry_name )
-    @precondition(lambda self: 'rename' not in EXCLUDE_RULES)
-    def rename(self, entry, parent, new_entry_name):
+    @precondition(lambda self: 'rename_file' not in EXCLUDE_RULES)
+    def rename_file(self, entry, parent, new_entry_name):
         result1 = self.do_rename(ROOT_DIR1, entry, parent, new_entry_name)
         result2 = self.do_rename(ROOT_DIR2, entry, parent, new_entry_name)
         assert self.equal(result1, result2), f'\nresult1 is {result1}\nresult2 is {result2}'
@@ -432,6 +425,17 @@ class JuicefsMachine(RuleBasedStateMachine):
             return os.path.join(parent, new_entry_name)
         else:
             return INVALID_FILE
+        
+    @rule( target=Folders, entry = Folders, parent = Folders, new_entry_name = st_entry_name )
+    @precondition(lambda self: 'rename_dir' not in EXCLUDE_RULES)
+    def rename_dir(self, entry, parent, new_entry_name):
+        result1 = self.do_rename(ROOT_DIR1, entry, parent, new_entry_name)
+        result2 = self.do_rename(ROOT_DIR2, entry, parent, new_entry_name)
+        assert self.equal(result1, result2), f'\nresult1 is {result1}\nresult2 is {result2}'
+        if isinstance(result1, tuple):
+            return os.path.join(parent, new_entry_name)
+        else:
+            return INVALID_DIR
 
     def do_rename(self, root_dir, entry, parent, new_entry_name):
         abspath = os.path.join(root_dir, entry)
@@ -578,8 +582,7 @@ class JuicefsMachine(RuleBasedStateMachine):
             self.stats.failure('do_hardlink')
             loggers[f'{root_dir}'].info(f"do_hardlink {dest_abs_path} {link_abs_path} failed: {str(e)}")
             return str(e)
-        # TODO: fix me
-        time.sleep(0.005)
+        # time.sleep(0.005)
         assert os.path.lexists(link_abs_path), f'do_hardlink {link_abs_path} should exist'
         self.stats.success('do_hardlink')
         loggers[f'{root_dir}'].info(f'do_hardlink {dest_abs_path} {link_abs_path} succeed')
