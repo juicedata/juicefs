@@ -446,7 +446,6 @@ func newNFSStore(addr, username, pass, token string) (ObjectStorage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to dial MOUNT service %s: %v", addr, err)
 	}
-	logger.Printf("%s(%d, %d)", username, uint32(os.Getuid()), uint32(os.Getgid()))
 	auth := rpc.NewAuthUnix(username, uint32(os.Getuid()), uint32(os.Getgid()))
 	target, err := mount.Mount(path, auth.Auth())
 	if err != nil {
