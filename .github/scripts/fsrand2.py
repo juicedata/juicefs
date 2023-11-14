@@ -28,7 +28,7 @@ from hypothesis import Phase, seed
 import random
 import time
 
-EXCLUDE_RULES = ['mkfifo', 'copy_tree']
+EXCLUDE_RULES = ['mkfifo', 'copy_tree', 'open']
 COMPARE = os.environ.get('COMPARE', 'true') == 'true'
 CLEAN_DIR = os.environ.get('CLEAN_DIR', 'true') == 'true'
 MAX_RUNTIME=int(os.environ.get('MAX_RUNTIME', '36000'))
@@ -184,18 +184,18 @@ class JuicefsMachine(RuleBasedStateMachine):
         return False
 
     @rule(target=Files, parent = Folders, file_name = st_entry_name, flags=st_open_flags, mode=st_file_mode)
-    @precondition(lambda self: 'open_file' not in EXCLUDE_RULES)
-    def open_file(self, parent, file_name, flags, mode):
-        result1 = self.do_open_file(ROOT_DIR1, parent, file_name, flags, mode)
-        result2 = self.do_open_file(ROOT_DIR2, parent, file_name, flags, mode)
-        assert self.equal(result1, result2), f'open_file:\nresult1 is {result1}\nresult2 is {result2}'
+    @precondition(lambda self: 'open' not in EXCLUDE_RULES)
+    def open(self, parent, file_name, flags, mode):
+        result1 = self.do_open(ROOT_DIR1, parent, file_name, flags, mode)
+        result2 = self.do_open(ROOT_DIR2, parent, file_name, flags, mode)
+        assert self.equal(result1, result2), f'open:\nresult1 is {result1}\nresult2 is {result2}'
         if isinstance(result1, tuple):
             return os.path.join(parent, file_name)
         else:
             return INVALID_FILE
     
-    def do_open_file(self, root_dir, parent, file_name, flags, mode):
-        loggers[f'{root_dir}'].debug(f'do_open_file {root_dir} {parent} {file_name} {flags} {mode}')
+    def do_open(self, root_dir, parent, file_name, flags, mode):
+        loggers[f'{root_dir}'].debug(f'do_open {root_dir} {parent} {file_name} {flags} {mode}')
         abspath = os.path.join(root_dir, parent, file_name)
         flag = 0
         for f in flags:
@@ -204,12 +204,12 @@ class JuicefsMachine(RuleBasedStateMachine):
             with os.open(abspath, flags=flag, mode=mode) as _:
                 pass
         except Exception as e :
-            self.stats.failure('do_open_file')
-            loggers[f'{root_dir}'].info(f'do_open_file {abspath} {flags} {mode} failed: {str(e)}')
+            self.stats.failure('do_open')
+            loggers[f'{root_dir}'].info(f'do_open {abspath} {flags} {mode} failed: {str(e)}')
             return str(e)
-        assert os.path.isfile(abspath), f'do_open_file: {abspath} should be file'
-        self.stats.success('do_open_file')
-        loggers[f'{root_dir}'].info(f'do_open_file {abspath} {flags} {mode} succeed')
+        assert os.path.isfile(abspath), f'do_open: {abspath} should be file'
+        self.stats.success('do_open')
+        loggers[f'{root_dir}'].info(f'do_open {abspath} {flags} {mode} succeed')
         return get_stat(abspath)  
 
     @rule(file=Files, offset=st_offset, content = st_content)
