@@ -22,13 +22,13 @@ try:
     __import__("hypothesis")
 except ImportError:
     subprocess.check_call(["pip", "install", "hypothesis"])
-from hypothesis import assume, strategies as st, settings, Verbosity
+from hypothesis import strategies as st, settings, Verbosity
 from hypothesis.stateful import rule, precondition, RuleBasedStateMachine, Bundle, initialize
 from hypothesis import Phase, seed
 import random
 import time
 
-EXCLUDE_RULES = ['mkfifo', 'copy_tree', 'set_xattr']
+EXCLUDE_RULES = ['mkfifo', 'copy_tree']
 COMPARE = os.environ.get('COMPARE', 'true') == 'true'
 CLEAN_DIR = os.environ.get('CLEAN_DIR', 'true') == 'true'
 MAX_RUNTIME=int(os.environ.get('MAX_RUNTIME', '36000'))
@@ -397,7 +397,6 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     def do_unlink(self, root_dir, file):
         abspath = os.path.join(root_dir, file)
-        # assume(os.path.isfile(abspath))
         try:
             os.unlink(abspath)
         except Exception as e:
@@ -510,7 +509,6 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule( target = Folders, parent = Folders, subdir = st_entry_name )
     @precondition(lambda self: 'mkdir' not in EXCLUDE_RULES)
     def mkdir(self, parent, subdir):
-        # assume(not os.path.exists(os.path.join(ROOT_DIR1, parent, subdir)))
         result1 = self.do_mkdir(ROOT_DIR1, parent, subdir)
         result2 = self.do_mkdir(ROOT_DIR2, parent, subdir)
         assert self.equal(result1, result2), f'mkdir:\nresult1 is {result1}\nresult2 is {result2}'
@@ -556,7 +554,6 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(target = Files, dest_file = Files, parent = Folders, link_file_name = st_entry_name)
     @precondition(lambda self: 'hardlink' not in EXCLUDE_RULES)
     def hardlink(self, dest_file, parent, link_file_name):
-        # assume(not os.path.exists(os.path.join(ROOT_DIR1, parent_dir, link_file_name)))
         result1 = self.do_hardlink(ROOT_DIR1, dest_file, parent, link_file_name)
         result2 = self.do_hardlink(ROOT_DIR2, dest_file, parent, link_file_name)
         assert self.equal(result1, result2), f'hardlink:\nresult1 is {result1}\nresult2 is {result2}'
@@ -585,7 +582,6 @@ class JuicefsMachine(RuleBasedStateMachine):
     @rule(target = Files , dest_file = Files, parent = Folders, link_file_name = st_entry_name )
     @precondition(lambda self: 'symlink' not in EXCLUDE_RULES)
     def symlink(self, dest_file, parent, link_file_name):
-        # assume(not os.path.exists(os.path.join(ROOT_DIR1, parent_dir, link_file_name)))
         result1 = self.do_symlink(ROOT_DIR1, dest_file, parent, link_file_name)
         result2 = self.do_symlink(ROOT_DIR2, dest_file, parent, link_file_name)
         assert self.equal(result1, result2), f'symlink:\nresult1 is {result1}\nresult2 is {result2}'
@@ -677,15 +673,8 @@ class JuicefsMachine(RuleBasedStateMachine):
 
     def do_chmod(self, root_dir, entry, mode, owner):
         abspath = os.path.join(root_dir, entry)
-        # assume(os.path.isfile(abspath))
         try:
-            # TODO: uncomment after euid issue fixed
-            # info = pwd.getpwnam(owner)
-            # uid = info.pw_uid
-            # old_euid = os.geteuid()
-            # os.seteuid(uid)
             os.chmod(abspath, mode)
-            # os.seteuid(old_euid)
         except Exception as e:
             self.stats.failure('do_chmod')
             loggers[f'{root_dir}'].info(f"do_chmod {abspath} {mode} {owner} failed: {str(e)}")
