@@ -282,8 +282,11 @@ class JuicefsMachine(RuleBasedStateMachine):
         try:
             fd = os.open(abspath, os.O_RDONLY)
             size = os.stat(abspath).st_size
-            pos = pos % size
-            os.lseek(fd, pos, os.SEEK_SET)
+            if size == 0:
+                offset = 0
+            else:
+                offset = offset % size
+            os.lseek(fd, offset, os.SEEK_SET)
             result = os.read(fd, length)
             md5sum = hashlib.md5(result).hexdigest()
             os.close(fd)
