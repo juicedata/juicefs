@@ -50,6 +50,7 @@ jobs:
       ETCD_ADDR: 127.0.0.1:3379
       MYSQL_ADDR: (127.0.0.1:3306)/dev
       MYSQL_USER: root
+      NFS_ADDR: 127.0.0.1:/srv/nfs/
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -63,7 +64,7 @@ jobs:
 
       - name: Install Packages
         run: |
-          sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr glusterfs-server libglusterfs-dev
+          sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr glusterfs-server libglusterfs-dev nfs-kernel-server
           sudo mkdir -p /home/travis/.m2/
 
       - if: matrix.test == 'test.meta.non-core'
