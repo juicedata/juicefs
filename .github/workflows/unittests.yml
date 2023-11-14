@@ -72,10 +72,9 @@ jobs:
           sudo mkdir -p /srv/nfs
           sudo chown nobody:nogroup /srv/nfs
           sudo chmod 777 /srv/nfs
-          sudo cat >> /etc/exports <<EOF
-            /srv/nfs 127.0.0.1(rw,sync)
-          EOF
+          echo "/srv/nfs 127.0.0.1(rw,sync)" | sudo tee -a /etc/exports
           sudo systemctl start nfs-kernel-server.service
+          sudo exportfs -arv
         
       - if: matrix.test == 'test.meta.non-core'
         name: Install redis-cluster
