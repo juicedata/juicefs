@@ -66,7 +66,17 @@ jobs:
         run: |
           sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr glusterfs-server libglusterfs-dev nfs-kernel-server
           sudo mkdir -p /home/travis/.m2/
-
+      - if: matrix.test == 'test.pkg'
+        name: Set up nfs-server
+        run: |
+          mkdir -p /srv/nfs
+          chown nobody:nogroup /srv/nfs
+          chmod 777 /srv/nfs
+          cat >> /etc/exports <<EOF
+            /srv/nfs 127.0.0.1(rw,sync)
+          EOF
+          systemctl start nfs-kernel-server.service
+        
       - if: matrix.test == 'test.meta.non-core'
         name: Install redis-cluster
         uses: vishnudxb/redis-cluster@1.0.5
