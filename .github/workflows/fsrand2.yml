@@ -102,8 +102,9 @@ jobs:
             step_count=100
           fi
           echo sudo -E DERANDOMIZE=${derandomize} MAX_EXAMPLE=${max_example} STEP_COUNT=${step_count} python3 .github/scripts/fsrand2.py 2>&1 | tee fsrand.log
+          set -o pipefail
           sudo -E DERANDOMIZE=${derandomize} MAX_EXAMPLE=${max_example} STEP_COUNT=${step_count} python3 .github/scripts/fsrand2.py 2>&1 | tee fsrand.log
-
+          set +o pipefail
       - name: check fsrand.log
         if: always()
         shell: bash
