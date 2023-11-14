@@ -209,7 +209,7 @@ func (n *nfsStore) Delete(key string) error {
 	}
 	fi, _, err := n.target.Lookup(path)
 	if err != nil {
-		if nfs.IsNotDirError(err) {
+		if nfs.IsNotDirError(err) || os.IsNotExist(err) {
 			return nil
 		}
 		return err
