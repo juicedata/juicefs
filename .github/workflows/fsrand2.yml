@@ -76,9 +76,9 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs mount -d $meta_url /tmp/jfs --no-usage-report --enable-xattr
+          ./juicefs mount -d $meta_url /tmp/myjfs --no-usage-report --enable-xattr
           sleep 5
-          if [ ! -f /tmp/jfs/.accesslog ]; then
+          if [ ! -f /tmp/myjfs/.accesslog ]; then
             echo "<FATAL>: mount failed"
             exit 1
           fi

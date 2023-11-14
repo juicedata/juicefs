@@ -57,7 +57,7 @@ st_time=st.integers(min_value=0, max_value=int(time.time()))
 st_offset=st.integers(min_value=0, max_value=MAX_FILE_SIZE)
 
 ROOT_DIR1=os.environ.get('ROOT_DIR1', '/tmp/fsrand').rstrip('/')
-ROOT_DIR2=os.environ.get('ROOT_DIR2', '/myjfs/fsrand').rstrip('/')
+ROOT_DIR2=os.environ.get('ROOT_DIR2', '/tmp/myjfs/fsrand').rstrip('/')
 
 def clean_dir(dir):
     subprocess.check_call(f'rm -rf {dir}'.split())
