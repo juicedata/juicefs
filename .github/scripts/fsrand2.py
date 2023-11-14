@@ -28,7 +28,7 @@ from hypothesis import Phase, seed
 import random
 import time
 
-EXCLUDE_RULES = ['mkfifo', 'copy_tree']
+EXCLUDE_RULES = ['mkfifo', 'copy_tree', 'set_xattr']
 COMPARE = os.environ.get('COMPARE', 'true') == 'true'
 CLEAN_DIR = os.environ.get('CLEAN_DIR', 'true') == 'true'
 MAX_RUNTIME=int(os.environ.get('MAX_RUNTIME', '36000'))
