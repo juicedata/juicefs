@@ -152,11 +152,11 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 			if _, ok := ss.(*nfsStore); ok {
 				expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
 			}
-			// if mode == 0422 {
-			// if _, ok := ss.(*gluster); ok {
-			// 	expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
-			// }
-			// }
+			if mode == 0422 {
+				if _, ok := ss.(*gluster); ok {
+					expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
+				}
+			}
 			if err = testKeysEqual(objs, expectedKeys); err != nil {
 				t.Fatalf("testKeysEqual fail: %s mode %o", err, mode)
 			}
