@@ -28,7 +28,7 @@ from hypothesis import Phase, seed
 import random
 import time
 
-EXCLUDE_RULES = ['mkfifo', 'copy_tree', 'set_xattr']
+EXCLUDE_RULES = ['mkfifo', 'copy_tree']
 COMPARE = os.environ.get('COMPARE', 'true') == 'true'
 CLEAN_DIR = os.environ.get('CLEAN_DIR', 'true') == 'true'
 MAX_RUNTIME=int(os.environ.get('MAX_RUNTIME', '36000'))
@@ -201,7 +201,8 @@ class JuicefsMachine(RuleBasedStateMachine):
         for f in flags:
             flag |= f
         try:
-            os.open(abspath, flags=flag, mode=mode)
+            with os.open(abspath, flags=flag, mode=mode) as _:
+                pass
         except Exception as e :
             self.stats.failure('do_open_file')
             loggers[f'{root_dir}'].info(f'do_open_file {abspath} {flags} {mode} failed: {str(e)}')
