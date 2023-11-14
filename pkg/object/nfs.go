@@ -286,10 +286,6 @@ func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, erro
 	return nfsEntries, err
 }
 
-func IsPermissionDenied(err error) bool {
-	return errors.Is(err, nfs.NFS3Error(nfs.NFS3ErrAcces))
-}
-
 func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if delimiter != "/" {
 		return nil, notSupported
