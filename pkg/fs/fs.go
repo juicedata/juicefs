@@ -346,7 +346,16 @@ func (fs *FileSystem) StatFS(ctx meta.Context) (totalspace uint64, availspace ui
 	return
 }
 
-func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File, err syscall.Errno) {
+// open file without following symlink
+func (fs *FileSystem) Lopen(ctx meta.Context, path string, flags uint32) (f *File, err syscall.Errno) {
+	return fs.open(ctx, path, flags, false)
+}
+
+func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (*File, syscall.Errno) {
+	return fs.open(ctx, path, flags, true)
+}
+
+func (fs *FileSystem) open(ctx meta.Context, path string, flags uint32, followLink bool) (f *File, err syscall.Errno) {
 	_, task := trace.NewTask(context.TODO(), "Open")
 	defer task.End()
 	l := vfs.NewLogContext(ctx)
@@ -356,7 +365,7 @@ func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File
 		defer func() { fs.log(l, "Lookup (%s): %s", path, errstr(err)) }()
 	}
 	var fi *FileStat
-	fi, err = fs.resolve(ctx, path, true)
+	fi, err = fs.resolve(ctx, path, followLink)
 	if err != 0 {
 		return
 	}

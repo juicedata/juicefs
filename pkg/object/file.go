@@ -29,7 +29,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -322,11 +321,6 @@ func (d *filestore) List(prefix, marker, delimiter string, limit int64, followLi
 	return objs, nil
 }
 
-func (d *filestore) Chtimes(key string, mtime time.Time) error {
-	p := d.path(key)
-	return os.Chtimes(p, mtime, mtime)
-}
-
 func (d *filestore) Chmod(key string, mode os.FileMode) error {
 	p := d.path(key)
 	return os.Chmod(p, mode)
@@ -336,7 +330,7 @@ func (d *filestore) Chown(key string, owner, group string) error {
 	p := d.path(key)
 	uid := utils.LookupUser(owner)
 	gid := utils.LookupGroup(group)
-	return os.Chown(p, uid, gid)
+	return os.Lchown(p, uid, gid)
 }
 
 func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {

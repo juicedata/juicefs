@@ -22,9 +22,11 @@ package object
 import (
 	"os"
 	"syscall"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/sftp"
+	"golang.org/x/sys/unix"
 )
 
 func getOwnerGroup(info os.FileInfo) (string, string) {
@@ -38,4 +40,24 @@ func getOwnerGroup(info os.FileInfo) (string, string) {
 		group = utils.GroupName(int(st.GID))
 	}
 	return owner, group
+}
+
+func (d *filestore) Chtimes(key string, mtime time.Time) error {
+	p := d.path(key)
+	return lchtimes(p, mtime, mtime)
+}
+
+func lchtimes(name string, atime time.Time, mtime time.Time) error {
+	var utimes [2]unix.Timeval
+	set := func(i int, t time.Time) {
+		if !t.IsZero() {
+			utimes[i] = unix.NsecToTimeval(t.UnixNano())
+		}
+	}
+	set(0, atime)
+	set(1, mtime)
+	if e := unix.Lutimes(name, utimes[0:]); e != nil {
+		return &os.PathError{Op: "lchtimes", Path: name, Err: e}
+	}
+	return nil
 }
