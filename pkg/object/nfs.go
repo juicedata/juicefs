@@ -290,9 +290,9 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 	if delimiter != "/" {
 		return nil, notSupported
 	}
-	dir := n.path(prefix)
+	dir := prefix
 	var objs []Object
-	if !strings.HasSuffix(dir, dirSuffix) {
+	if dir != "" && !strings.HasSuffix(dir, dirSuffix) {
 		dir = path.Dir(dir)
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix

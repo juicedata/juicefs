@@ -206,9 +206,6 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 			t.Fatalf("listall failed: %s", err)
 		}
 		expectedKeys = []string{"", "a-", "a/", "a/p.txt", "a0", "b", "b-", "b0", "bb/", "bb/b1", "x/", "x/x.txt", "xy.txt", "xyz/", "xyz/ol1/", "xyz/ol1/p.txt", "xyz/xyz.txt"}
-		if _, ok := ss.(*nfsStore); ok {
-			expectedKeys[0] = "./"
-		}
 		if err = testKeysEqual(objs, expectedKeys); err != nil {
 			t.Fatalf("testKeysEqual fail: %s", err)
 		}
@@ -223,9 +220,6 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 		if _, ok := s.(*hdfsclient); !ok {
 			objs, err = listAll(s, "", "", 100, false)
 			expectedKeys = []string{"", "a", "a-", "a0", "b", "b-", "b0", "bb/", "bb/b1", "x/", "x/x.txt", "xy.txt", "xyz/", "xyz/ol1/", "xyz/ol1/p.txt", "xyz/xyz.txt"}
-			if _, ok := ss.(*nfsStore); ok {
-				expectedKeys[0] = "./"
-			}
 			if err = testKeysEqual(objs, expectedKeys); err != nil {
 				t.Fatalf("testKeysEqual fail: %s", err)
 			}
