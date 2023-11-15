@@ -192,4 +192,4 @@ deadline 调度算法主要针对 I/O 请求的延时，每个 I/O 请求都被�
 
 ### 多机并发读写同一个目录，如何避免持续的事务重启现象？
 
-JuiceFS v1.1 版本开始提供 `--skip-dir-nlink value` 挂载选项，用以指定跳过目录的 nlink 检查之前的重试次数，默认为 20 次。可以适当调小该值，或者设置为 0 禁止重试，以避免持续的事务重启现象，详情参考[元数据相关的挂载选项](https://juicefs.com/docs/zh/community/command_reference#mount-metadata-options)。
+当多客户端在同一个目录下频繁创建/删除子目录时，可能会出现持续的事务重启现象。JuiceFS v1.1 版本开始提供 `--skip-dir-nlink value` 挂载选项，用以指定跳过目录的 nlink 检查之前的重试次数，默认为 20 次。可以适当调小该值，或者设置为 0 禁止重试，从而避免持续的事务重启现象，详情参考[元数据相关的挂载选项](https://juicefs.com/docs/zh/community/command_reference#mount-metadata-options)。
