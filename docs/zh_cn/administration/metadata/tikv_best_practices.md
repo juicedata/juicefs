@@ -187,3 +187,9 @@ CFQ 尝试提供由发起 I/O 进程决定的公平的 I/O 调度，该算法为
 ##### deadline
 
 deadline 调度算法主要针对 I/O 请求的延时，每个 I/O 请求都被附加一个最后执行期限。读请求和写请求被分成了两个队列，默认优先处理读 IO，除非写快到 deadline 时才调度。当系统中存在的 I/O 请求进程数量比较少时，与 CFQ 算法相比，deadline 算法可以提供较高的 I/O 吞吐率。
+
+## 常见问题
+
+### 多机并发读写同一个目录，如何避免持续的事务重启现象？
+
+当多客户端在同一个目录下频繁创建/删除子目录时，可能会出现持续的事务重启现象。JuiceFS v1.1 版本开始提供 `--skip-dir-nlink value` 挂载选项，用以指定跳过目录的 nlink 检查之前的重试次数，默认为 20 次。可以适当调小该值，或者设置为 0 禁止重试，从而避免持续的事务重启现象，详情参考[元数据相关的挂载选项](https://juicefs.com/docs/zh/community/command_reference#mount-metadata-options)。
