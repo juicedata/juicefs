@@ -60,6 +60,13 @@ func (e *nfsEntry) Name() string {
 	return e.name
 }
 
+func (e *nfsEntry) Size() int64 {
+	if e.fi != nil {
+		return e.fi.Size()
+	}
+	return e.EntryPlus.Size()
+}
+
 func (e *nfsEntry) Info() (os.FileInfo, error) {
 	if e.fi != nil {
 		return e.fi, nil
@@ -90,6 +97,14 @@ func (n *nfsStore) Head(key string) (Object, error) {
 	fi, _, err := n.target.Lookup(p)
 	if err != nil {
 		return nil, err
+	}
+	if attr, ok := fi.(*nfs.Fattr); ok && attr.Type == nfs.NF3Lnk {
+		src, err := n.Readlink(p)
+		if err != nil {
+			return nil, err
+		}
+		dir, _ := path.Split(p)
+		return n.Head(path.Join(dir, src))
 	}
 	return n.fileInfo(key, fi), nil
 }
@@ -188,7 +203,23 @@ func (n *nfsStore) Put(key string, in io.Reader) error {
 }
 
 func (n *nfsStore) Delete(key string) error {
-	err := n.target.Remove(strings.TrimRight(n.path(key), dirSuffix))
+	path := n.path(key)
+	if path == "./" {
+		return nil
+	}
+	fi, _, err := n.target.Lookup(path)
+	if err != nil {
+		if nfs.IsNotDirError(err) || os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	p := strings.TrimSuffix(path, "/")
+	if fi.IsDir() {
+		err = n.target.RmDir(p)
+	} else {
+		err = n.target.Remove(p)
+	}
 	if err != nil && os.IsNotExist(err) {
 		err = nil
 	}
@@ -214,21 +245,32 @@ func (n *nfsStore) fileInfo(key string, fi os.FileInfo) Object {
 	return ff
 }
 
-func (n *nfsStore) readDirSorted(dirname string, followLink bool) ([]*nfsEntry, error) {
+func (n *nfsStore) readDirSorted(dir string, followLink bool) ([]*nfsEntry, error) {
+	o, err := n.Head(strings.TrimSuffix(dir, "/"))
+	if err != nil {
+		return nil, err
+	}
+	dirname := o.Key()
 	entries, err := n.target.ReadDirPlus(dirname)
 	if err != nil {
 		return nil, errors.Wrapf(err, "readdir %s", dirname)
 	}
 	nfsEntries := make([]*nfsEntry, len(entries))
-
 	for i, e := range entries {
 		if e.IsDir() {
 			nfsEntries[i] = &nfsEntry{e, e.Name() + dirSuffix, nil, false}
 		} else if e.Attr.Attr.Type == nfs.NF3Lnk && followLink {
 			// follow symlink
-			fi, _, err := n.target.Lookup(path.Join(dirname, e.Name()))
+			nfsEntries[i] = &nfsEntry{e, e.Name(), nil, true}
+			src, err := n.Readlink(path.Join(dirname, e.Name()))
 			if err != nil {
-				nfsEntries[i] = &nfsEntry{e, e.Name(), nil, true}
+				logger.Errorf("readlink %s: %s", e.Name(), err)
+				continue
+			}
+			srcPath := path.Clean(path.Join(dirname, src))
+			fi, _, err := n.target.Lookup(srcPath)
+			if err != nil {
+				logger.Warnf("follow link `%s`: lookup `%s`: %s", path.Join(dirname, e.Name()), srcPath, err)
 				continue
 			}
 			name := e.Name()
@@ -248,9 +290,9 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 	if delimiter != "/" {
 		return nil, notSupported
 	}
-	dir := n.path(prefix)
+	dir := prefix
 	var objs []Object
-	if !strings.HasSuffix(dir, dirSuffix) {
+	if dir != "" && !strings.HasSuffix(dir, dirSuffix) {
 		dir = path.Dir(dir)
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
@@ -267,7 +309,7 @@ func (n *nfsStore) List(prefix, marker, delimiter string, limit int64, followLin
 	}
 	entries, err := n.readDirSorted(dir, followLink)
 	if err != nil {
-		if os.IsPermission(err) {
+		if os.IsPermission(err) || errors.Is(err, nfs.NFS3Error(nfs.NFS3ErrAcces)) {
 			logger.Warnf("skip %s: %s", dir, err)
 			return nil, nil
 		}
