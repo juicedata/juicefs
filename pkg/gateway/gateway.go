@@ -553,9 +553,12 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		}
 	}
 
-	if n.gConf.ObjTag && srcInfo.UserTags != "" {
-		if eno := n.setFileXattr(dst, srcInfo.UserTags); eno != 0 {
-			logger.Errorf("put object tags error, path: %s, tags: %s, error: %s", dst, srcInfo.UserTags, eno)
+	var tagStr string
+	if n.gConf.ObjTag && srcInfo.UserDefined != nil {
+		if tagStr = srcInfo.UserDefined[xhttp.AmzObjectTagging]; tagStr != "" {
+			if eno := n.setFileXattr(dst, tagStr); eno != 0 {
+				logger.Errorf("put object tags error, path: %s, tags: %s, error: %s", dst, tagStr, eno)
+			}
 		}
 	}
 
@@ -567,7 +570,7 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		Size:        fi.Size(),
 		IsDir:       fi.IsDir(),
 		AccTime:     fi.ModTime(),
-		UserTags:    srcInfo.UserTags,
+		UserTags:    tagStr,
 		UserDefined: minio.CleanMetadata(srcInfo.UserDefined),
 	}, nil
 }
