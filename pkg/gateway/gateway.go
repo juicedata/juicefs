@@ -650,11 +650,11 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 					continue
 				}
 				value, errno := n.fs.GetXattr(mctx, n.path(bucket, object), string(key))
-				if errno != 0 && errno != syscall.ENOATTR {
-					return minio.ObjectInfo{}, errno
-				}
-				if errno == syscall.ENOATTR {
+				if errno == meta.ENOATTR {
 					continue
+				}
+				if errno != 0 {
+					return minio.ObjectInfo{}, errno
 				}
 				tagString += fmt.Sprintf("%s=%s", key, value)
 				if idx != len(split)-1 {
