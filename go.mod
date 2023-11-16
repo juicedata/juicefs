@@ -78,6 +78,7 @@ require (
 	google.golang.org/api v0.94.0
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216
+	pgregory.net/rapid v0.5.3
 	xorm.io/xorm v1.0.7
 )
 
