@@ -222,22 +222,23 @@ class JuicefsMachine(RuleBasedStateMachine):
     def do_write(self, root_dir, file, offset, content):
         loggers[f'{root_dir}'].debug(f'do_write {root_dir} {file} {offset}')
         abspath = os.path.join(root_dir, file)
+        fd = -1
         try:
-            file_fd = os.open(abspath, os.O_RDWR)
+            fd = os.open(abspath, os.O_RDWR)
             file_size = os.stat(abspath).st_size
             if file_size == 0:
                 offset = 0
             else:
                 offset = offset % file_size
-            os.lseek(file_fd, offset, os.SEEK_SET)
-            os.write(file_fd, content)
+            os.lseek(fd, offset, os.SEEK_SET)
+            os.write(fd, content)
         except Exception as e :
             self.stats.failure('do_write')
             loggers[f'{root_dir}'].info(f'do_write {abspath} {offset} failed: {str(e)}')
             return str(e)
         finally:
-            if file_fd > 0:
-                os.close(file_fd)
+            if fd > 0:
+                os.close(fd)
         self.stats.success('do_write')
         loggers[f'{root_dir}'].info(f'do_write {abspath} {offset} succeed')
         return get_stat(abspath)
@@ -255,6 +256,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def do_fallocate(self, root_dir, file, offset, length, mode):
         loggers[f'{root_dir}'].debug(f'do_fallocate {root_dir} {file} {offset} {length} {mode}')
         abspath = os.path.join(root_dir, file)
+        fd = -1
         try:
             fd = os.open(abspath, os.O_RDWR)
             file_size = os.stat(abspath).st_size
@@ -284,6 +286,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     def do_read(self, root_dir, file, pos, length):
         loggers[f'{root_dir}'].debug(f'do_read {root_dir} {file} {pos} {length}')
         abspath = os.path.join(root_dir, file)
+        fd = -1
         try:
             fd = os.open(abspath, os.O_RDONLY)
             size = os.stat(abspath).st_size
@@ -315,10 +318,10 @@ class JuicefsMachine(RuleBasedStateMachine):
     def do_truncate(self, root_dir, file, size):
         loggers[f'{root_dir}'].debug(f'do_truncate {root_dir} {file} {size}')
         abspath = os.path.join(root_dir, file)
+        fd = -1
         try:
             fd = os.open(abspath, os.O_WRONLY | os.O_TRUNC)
             os.ftruncate(fd, size)
-            os.close(fd)
         except Exception as e :
             self.stats.failure('do_truncate')
             loggers[f'{root_dir}'].info(f'do_truncate {abspath} {size} failed: {str(e)}')
