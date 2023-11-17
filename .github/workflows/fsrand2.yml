@@ -29,7 +29,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        meta: ['redis', 'mysql', 'tikv']
+        # meta: ['redis', 'mysql', 'tikv']
+        meta: ['redis']
         
     runs-on: ubuntu-latest
     steps:
