@@ -17,9 +17,7 @@
 package gateway
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -556,8 +554,8 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	var tagStr string
 	if n.gConf.ObjTag && srcInfo.UserDefined != nil {
 		if tagStr = srcInfo.UserDefined[xhttp.AmzObjectTagging]; tagStr != "" {
-			if eno := n.setFileXattr(dst, tagStr); eno != 0 {
-				logger.Errorf("put object tags error, path: %s, tags: %s, error: %s", dst, tagStr, eno)
+			if eno := n.fs.SetXattr(mctx, dst, s3Tags, []byte(tagStr), 0); eno != 0 {
+				logger.Errorf("set object tags error, path: %s,value: %s error %s", dst, tagStr, eno)
 			}
 		}
 	}
@@ -639,31 +637,11 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		contentType = "application/octet-stream"
 	}
 	// key1=value1&key2=value2
-	var tagString string
+	var tagStr []byte
 	if n.gConf.ObjTag {
-		names, errno := n.fs.ListXattr(mctx, n.path(bucket, object))
-		if errno != 0 {
+		var errno syscall.Errno
+		if tagStr, errno = n.fs.GetXattr(mctx, n.path(bucket, object), s3Tags); errno != 0 && errno != meta.ENOATTR {
 			return minio.ObjectInfo{}, errno
-		}
-		if names != nil {
-			split := bytes.Split(bytes.TrimSuffix(names, []byte{0}), []byte{0})
-			for idx, key := range split {
-				// skip etag key
-				if string(key) == s3Etag {
-					continue
-				}
-				value, errno := n.fs.GetXattr(mctx, n.path(bucket, object), string(key))
-				if errno == meta.ENOATTR {
-					continue
-				}
-				if errno != 0 {
-					return minio.ObjectInfo{}, errno
-				}
-				tagString += fmt.Sprintf("%s=%s", key, value)
-				if idx != len(split)-1 {
-					tagString += "&"
-				}
-			}
 		}
 	}
 	return minio.ObjectInfo{
@@ -675,7 +653,8 @@ func (n *jfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		AccTime:     fi.ModTime(),
 		ETag:        string(etag),
 		ContentType: contentType,
-		UserTags:    tagString,
+		UserTags:    string(tagStr),
+		UserDefined: minio.CleanMetadata(opts.UserDefined),
 	}, nil
 }
 
@@ -793,11 +772,12 @@ func (n *jfsObjects) PutObject(ctx context.Context, bucket string, object string
 			logger.Errorf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", p, s3Etag, etag, 0)
 		}
 	}
+	// tags: key1=value1&key2=value2&key3=value3
 	var tagStr string
 	if n.gConf.ObjTag && opts.UserDefined != nil {
 		if tagStr = opts.UserDefined[xhttp.AmzObjectTagging]; tagStr != "" {
-			if eno := n.setFileXattr(p, tagStr); eno != 0 {
-				logger.Errorf("put object tags error, path: %s, tags: %s, error: %s", p, tagStr, eno)
+			if eno := n.fs.SetXattr(mctx, p, s3Tags, []byte(tagStr), 0); eno != 0 {
+				logger.Errorf("set object tags error, path: %s,value: %s error: %s", p, tagStr, eno)
 			}
 		}
 	}
@@ -828,10 +808,10 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 			logger.Warnf("set object %s on upload %s: %s", object, uploadID, eno)
 		}
 		if n.gConf.ObjTag && opts.UserDefined != nil {
-			if content, err := json.Marshal(opts.UserDefined); err != nil {
-				logger.Errorf("marshal %s user defined error: %s", p, err)
-			} else if eno := n.fs.SetXattr(mctx, p, userDefined, content, 0); eno != 0 {
-				logger.Errorf("set %s xattr userDefined error: %s", p, eno)
+			if tagStr := opts.UserDefined[xhttp.AmzObjectTagging]; tagStr != "" {
+				if eno := n.fs.SetXattr(mctx, p, s3Tags, []byte(tagStr), 0); eno != 0 {
+					logger.Errorf("set object tags error, path: %s,value: %s errors: %s", p, tagStr, eno)
+				}
 			}
 		}
 	}
@@ -840,7 +820,9 @@ func (n *jfsObjects) NewMultipartUpload(ctx context.Context, bucket string, obje
 
 const uploadKeyName = "s3-object"
 const s3Etag = "s3-etag"
-const userDefined = "userDefined"
+
+// less than 64k ref: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#tag-restrictions
+const s3Tags = "s3-tags"
 
 func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi minio.ListMultipartsInfo, err error) {
 	if err = n.checkBucket(ctx, bucket); err != nil {
@@ -1029,20 +1011,6 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 		return
 	}
 
-	var objMeta map[string]string
-	if n.gConf.ObjTag {
-		metaContent, err := n.fs.GetXattr(mctx, n.upath(bucket, uploadID), userDefined)
-		if err != syscall.Errno(0) {
-			logger.Errorf("get object tags error, path: %s, error: %s", n.upath(bucket, uploadID), err)
-		}
-		if err := json.Unmarshal(metaContent, &objMeta); err != nil {
-			logger.Errorf("unmarshal %s user defined error: %s", n.upath(bucket, uploadID), err)
-		}
-	}
-
-	// remove parts
-	_ = n.fs.Rmr(mctx, n.upath(bucket, uploadID))
-
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := minio.ComputeCompleteMultipartMD5(parts)
 	if n.gConf.KeepEtag {
@@ -1051,23 +1019,28 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", name, s3Etag, s3MD5, 0)
 		}
 	}
-	tagStr := objMeta[xhttp.AmzObjectTagging]
-	if n.gConf.ObjTag && tagStr != "" {
-		if eno := n.setFileXattr(name, tagStr); eno != 0 {
-			logger.Errorf("put object tags error, path: %s, tags: %s, error: %s", name, tagStr, eno)
+
+	var tagStr []byte
+	if n.gConf.ObjTag {
+		var eno syscall.Errno
+		if tagStr, eno = n.fs.GetXattr(mctx, n.upath(bucket, uploadID), s3Tags); eno != 0 {
+			logger.Errorf("get object tags error, path: %s, error: %s", n.upath(bucket, uploadID), eno)
+		} else if eno = n.fs.SetXattr(mctx, name, s3Tags, tagStr, 0); eno != 0 {
+			logger.Errorf("set object tags error, path: %s, tags: %s, error: %s", name, string(tagStr), eno)
 		}
 	}
+
+	// remove parts
+	_ = n.fs.Rmr(mctx, n.upath(bucket, uploadID))
 	return minio.ObjectInfo{
-		Bucket:      bucket,
-		Name:        object,
-		ETag:        s3MD5,
-		ModTime:     fi.ModTime(),
-		Size:        fi.Size(),
-		IsDir:       fi.IsDir(),
-		AccTime:     fi.ModTime(),
-		UserTags:    objMeta[xhttp.AmzObjectTagging],
-		UserDefined: minio.CleanMetadata(objMeta),
-		//parts:       parts, todo: return parts
+		Bucket:   bucket,
+		Name:     object,
+		ETag:     s3MD5,
+		ModTime:  fi.ModTime(),
+		Size:     fi.Size(),
+		IsDir:    fi.IsDir(),
+		AccTime:  fi.ModTime(),
+		UserTags: string(tagStr),
 	}, nil
 }
 
@@ -1215,36 +1188,11 @@ func (n *jfsObjects) ReadHealth(ctx context.Context) bool {
 	return errno == 0
 }
 
-// tags: key1=value1&key2=value2&key3=value3
-func (n *jfsObjects) setFileXattr(path string, tags string) syscall.Errno {
-	for _, kv := range strings.Split(tags, "&") {
-		pair := strings.Split(kv, "=")
-		if pair[0] == s3Etag {
-			logger.Errorf("%s is internally reserved key", s3Etag)
-			continue
-		}
-		if eno := n.fs.SetXattr(mctx, path, pair[0], []byte(pair[1]), 0); eno != 0 {
-			return eno
-		}
-	}
-	return 0
-}
-
 func (n *jfsObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	if !n.gConf.ObjTag {
 		return minio.ObjectInfo{}, minio.NotImplemented{}
 	}
-
-	// fail first if the tag string contains s3Etag
-	if strings.Contains(tags, fmt.Sprintf("%s=", s3Etag)) {
-		return minio.ObjectInfo{}, fmt.Errorf("%s is internally reserved key", s3Etag)
-	}
-
-	if _, err := n.DeleteObjectTags(ctx, bucket, object, opts); err != nil {
-		return minio.ObjectInfo{}, err
-	}
-
-	if eno := n.setFileXattr(n.path(bucket, object), tags); eno != 0 {
+	if eno := n.fs.SetXattr(mctx, n.path(bucket, object), s3Tags, []byte(tags), 0); eno != 0 {
 		return minio.ObjectInfo{}, eno
 	}
 	return n.GetObjectInfo(ctx, bucket, object, opts)
@@ -1266,24 +1214,9 @@ func (n *jfsObjects) DeleteObjectTags(ctx context.Context, bucket, object string
 	if !n.gConf.ObjTag {
 		return minio.ObjectInfo{}, minio.NotImplemented{}
 	}
-	names, errno := n.fs.ListXattr(mctx, n.path(bucket, object))
-	if errno != 0 {
+	if errno := n.fs.RemoveXattr(mctx, n.path(bucket, object), string(s3Tags)); errno != 0 && errno != meta.ENOATTR {
 		return minio.ObjectInfo{}, errno
 	}
-	if names == nil {
-		return minio.ObjectInfo{}, nil
-	}
-
-	split := bytes.Split(bytes.TrimSuffix(names, []byte{0}), []byte{0})
-	for _, key := range split {
-		if string(key) == s3Etag {
-			continue
-		}
-		if errno := n.fs.RemoveXattr(mctx, n.path(bucket, object), string(key)); errno != 0 {
-			return minio.ObjectInfo{}, errno
-		}
-	}
-
 	return n.GetObjectInfo(ctx, bucket, object, opts)
 }
 
