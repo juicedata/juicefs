@@ -7,7 +7,11 @@ import subprocess
 import logging
 import json
 import stat
-import sys
+try: 
+    __import__('psutil')
+except ImportError:
+    subprocess.check_call(["pip", "install", "psutil"])
+import psutil
 try: 
     __import__('fallocate')
 except ImportError:
@@ -165,6 +169,10 @@ class JuicefsMachine(RuleBasedStateMachine):
     def __init__(self):
         super(JuicefsMachine, self).__init__()
         print(f'__init__')
+        pid = psutil.Process().pid
+        open_files = psutil.Process(pid).open_files()
+        open_files = [file.path for file in open_files]
+        print(','.join(open_files))
         duration = time.time() - self.start
         if duration > MAX_RUNTIME:
             raise Exception(f'run out of time: {duration}')
