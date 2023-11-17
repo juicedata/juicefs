@@ -74,7 +74,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 数据备份、迁移与恢复
 
-- [基于JuiceFS 的低成本 Elasticsearch 云上备份存储](https://juicefs.com/zh-cn/blog/user-stories/low-cost-elasticsearch-cloud-backup-storage-juicefs)，2023-11-15，uuwang（正能量云）@杭州火石创造
+- [基于 JuiceFS 的低成本 Elasticsearch 云上备份存储](https://juicefs.com/zh-cn/blog/user-stories/low-cost-elasticsearch-cloud-backup-storage-juicefs)，2023-11-15，uuwang（正能量云）@杭州火石创造
 - [突破存储数据量限制，JuiceFS 在携程海量冷数据场景下的实践](https://juicefs.com/zh-cn/blog/user-stories/xiecheng-case)，2022-08-29，妙成 & 小峰
 - [40+ 倍提升，详解 JuiceFS 元数据备份恢复性能优化方法](https://juicefs.com/zh-cn/blog/engineering/juicefs-load-and-dump-optimization)，2022-07-13，执剑
 - [利用 JuiceFS 把 MySQL 备份验证性能提升 10 倍](https://juicefs.com/blog/cn/posts/optimize-xtrabackup-prepare-by-oplog)
