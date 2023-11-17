@@ -231,11 +231,13 @@ class JuicefsMachine(RuleBasedStateMachine):
                 offset = offset % file_size
             os.lseek(file_fd, offset, os.SEEK_SET)
             os.write(file_fd, content)
-            os.close(file_fd)
         except Exception as e :
             self.stats.failure('do_write')
             loggers[f'{root_dir}'].info(f'do_write {abspath} {offset} failed: {str(e)}')
             return str(e)
+        finally:
+            if file_fd > 0:
+                os.close(file_fd)
         self.stats.success('do_write')
         loggers[f'{root_dir}'].info(f'do_write {abspath} {offset} succeed')
         return get_stat(abspath)
@@ -261,11 +263,13 @@ class JuicefsMachine(RuleBasedStateMachine):
             else:
                 offset = offset % file_size
             fallocate.fallocate(fd, offset, length, mode)
-            os.close(fd)
         except Exception as e :
             self.stats.failure('do_fallocate')
             loggers[f'{root_dir}'].info(f'do_fallocate {abspath} {offset} {length} {mode} failed: {str(e)}')
             return str(e)
+        finally:
+            if fd > 0:
+                os.close(fd)
         self.stats.success('do_fallocate')
         loggers[f'{root_dir}'].info(f'do_fallocate {abspath} {offset} {length} {mode} succeed')
         return get_stat(abspath)
@@ -290,11 +294,13 @@ class JuicefsMachine(RuleBasedStateMachine):
             os.lseek(fd, offset, os.SEEK_SET)
             result = os.read(fd, length)
             md5sum = hashlib.md5(result).hexdigest()
-            os.close(fd)
         except Exception as e :
             self.stats.failure('do_read')
             loggers[f'{root_dir}'].info(f'do_read {abspath} {pos} {length} failed: {str(e)}')
             return str(e)
+        finally:
+            if fd > 0:
+                os.close(fd)
         self.stats.success('do_read')
         loggers[f'{root_dir}'].info(f'do_read {abspath} {pos} {length} succeed')
         return (md5sum, )
@@ -317,6 +323,9 @@ class JuicefsMachine(RuleBasedStateMachine):
             self.stats.failure('do_truncate')
             loggers[f'{root_dir}'].info(f'do_truncate {abspath} {size} failed: {str(e)}')
             return str(e)
+        finally:
+            if fd > 0:
+                os.close(fd)
         self.stats.success('do_truncate')
         loggers[f'{root_dir}'].info(f'do_truncate {abspath} {size} succeed')
         return get_stat(abspath)
