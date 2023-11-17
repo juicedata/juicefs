@@ -29,8 +29,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # meta: ['redis', 'mysql', 'tikv']
-        meta: ['redis']
+        meta: ['redis', 'mysql', 'tikv']
+        # meta: ['redis']
         
     runs-on: ubuntu-latest
     steps:
@@ -71,7 +71,7 @@ jobs:
         run: |
           source .github/scripts/start_meta_engine.sh
           meta_url=$(get_meta_url ${{matrix.meta}})
-          ./juicefs format $meta_url --trash-days 0 pics
+          ./juicefs format $meta_url --trash-days 0 myjfs
 
       - name: Juicefs Mount
         run: |
@@ -95,11 +95,11 @@ jobs:
           if [ "${{ github.event_name }}" == "schedule" ]; then
             echo "set derandomize to false when triggered by schedule"
             derandomize=false
-            max_example=10000
+            max_example=5000
             step_count=200
           else
             derandomize=true
-            max_example=500
+            max_example=1000
             step_count=100
           fi
           echo sudo -E DERANDOMIZE=${derandomize} MAX_EXAMPLE=${max_example} STEP_COUNT=${step_count} python3 .github/scripts/fsrand2.py 2>&1 | tee fsrand.log
