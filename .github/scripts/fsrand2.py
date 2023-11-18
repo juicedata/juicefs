@@ -764,7 +764,9 @@ class JuicefsMachine(RuleBasedStateMachine):
         return get_stat(abspath)
      
 def compare_content(dir1, dir2):
-    os.system('find /tmp/fsrand  -type l ! -exec test -e {} \; -print > broken_symlink.log ')
+    if not os.path.exists(dir1) and not os.path.exists(dir2):
+        return True
+    os.system('find %s  -type l ! -exec test -e {} \; -print > broken_symlink.log '%dir1)
     exclude_files = []
     with open('broken_symlink.log', 'r') as f:
         lines = f.readlines()
