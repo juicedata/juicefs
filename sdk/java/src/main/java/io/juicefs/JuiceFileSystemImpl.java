@@ -472,7 +472,7 @@ public class JuiceFileSystemImpl extends FileSystem {
               (name != null && name.equals(uri.getAuthority()))) {
         fs = this;
       } else {
-        fs = path.getFileSystem(getConf());
+        fs = FileSystem.newInstance(path.toUri(), getConf());
       }
 
       FileStatus lastStatus = lastFileStatus.get(file);
@@ -484,6 +484,9 @@ public class JuiceFileSystemImpl extends FileSystem {
       FSDataInputStream in = fs.open(path);
       String res = new BufferedReader(new InputStreamReader(in)).lines().collect(Collectors.joining("\n"));
       in.close();
+      if (this != fs) {
+        fs.close();
+      }
       lastFileStatus.put(file, status);
       return res;
     } catch (IOException e) {
