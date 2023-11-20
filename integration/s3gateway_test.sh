@@ -1864,6 +1864,29 @@ function test_object_tagging(){
       fi
     fi
 
+    # overwrite object tagging
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /datafile-1-kB --tagging 'TagSet=[{Key=key1,Value=value1},{Key=key2,Value=value2}]'"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # check object tagging
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api get-object-tagging  --bucket ${bucket_name} --key /datafile-1-kB"
+      out=$($function 2>&1)
+      rv=$?
+    fi
+    if [ $rv -eq 0 ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
+      if [ "$tagSet" != '[{"Key":"'\''TagSet","Value":"[{Key=key1,Value=value1},{Key=key2,Value=value2}]'\''"}]' ]; then
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+      fi
+    fi
+
     # delete object tagging
     if [ $rv -eq 0 ]; then
       function="${AWS} s3api delete-object-tagging  --bucket ${bucket_name} --key /datafile-1-kB"
@@ -1877,14 +1900,6 @@ function test_object_tagging(){
         echo aaaa
             log_failure "$(get_duration "$start_time")" "${function}" "${out}"
       fi
-    fi
-
-    # delete object
-    if [ $rv -eq 0 ]; then
-        function="${AWS} s3api delete-object --bucket ${bucket_name} --key /datafile-1-kB"
-        test_function=${function}
-        out=$($function 2>&1)
-        rv=$?
     fi
 
     # create multipart upload with object tagging
@@ -1936,7 +1951,6 @@ function test_object_tagging(){
             out="complete-multipart-upload failed"
         fi
     fi
-
     # check object tagging
     if [ $rv -eq 0 ]; then
           function="${AWS} s3api get-object-tagging  --bucket ${bucket_name} --key /datafile-1-kB"
