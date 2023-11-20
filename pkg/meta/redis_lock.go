@@ -54,6 +54,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 			if err != nil {
 				return err
 			}
+			delete(owners, lkey)
 			if ltype == F_RDLCK {
 				for _, v := range owners {
 					if v == "W" {
@@ -66,7 +67,6 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 				})
 				return err
 			}
-			delete(owners, lkey)
 			if len(owners) > 0 {
 				return syscall.EAGAIN
 			}

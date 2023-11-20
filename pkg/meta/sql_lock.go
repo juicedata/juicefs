@@ -59,29 +59,29 @@ func (m *dbMeta) Flock(ctx Context, inode Ino, owner_ uint64, ltype uint32, bloc
 				locks[key{l.Sid, l.Owner}] = l
 			}
 
+			me := key{m.sid, owner}
+			flk, ok := locks[me]
+			delete(locks, me)
+			var typec byte = 'W'
 			if ltype == F_RDLCK {
 				for _, l := range locks {
 					if l.Ltype == 'W' {
 						return syscall.EAGAIN
 					}
 				}
-				return mustInsert(s, flock{Inode: inode, Owner: owner, Ltype: 'R', Sid: m.sid})
-			}
-			me := key{m.sid, owner}
-			flk, ok := locks[me]
-			delete(locks, me)
-			if len(locks) > 0 {
+				typec = 'R'
+			} else if len(locks) > 0 {
 				return syscall.EAGAIN
 			}
 			var n int64
 			if ok {
-				if flk.Ltype != 'W' {
-					n, err = s.Cols("Ltype").Update(&flock{Ltype: 'W'}, &flock{Inode: inode, Owner: owner, Sid: m.sid})
+				if flk.Ltype != typec {
+					n, err = s.Cols("Ltype").Update(&flock{Ltype: typec}, &flock{Inode: inode, Owner: owner, Sid: m.sid})
 				} else {
 					n = 1
 				}
 			} else {
-				n, err = s.InsertOne(&flock{Inode: inode, Owner: owner, Ltype: 'W', Sid: m.sid})
+				n, err = s.InsertOne(&flock{Inode: inode, Owner: owner, Ltype: typec, Sid: m.sid})
 			}
 			if err == nil && n == 0 {
 				err = fmt.Errorf("insert/update failed")
