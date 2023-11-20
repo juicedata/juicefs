@@ -62,8 +62,8 @@ func (m *kvMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block
 			case F_UNLCK:
 				delete(ls, lkey)
 			case F_RDLCK:
-				for _, l := range ls {
-					if l == 'W' {
+				for o, l := range ls {
+					if l == 'W' && o != lkey {
 						return syscall.EAGAIN
 					}
 				}
