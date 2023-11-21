@@ -54,6 +54,7 @@ public class BgTaskUtil {
       }
       threadPool.scheduleAtFixedRate(() -> {
         try {
+          LOG.debug("Background task started for {} {}", name, type);
           task.run();
         } catch (Exception e) {
           LOG.warn("Background task failed for {} {}", name, type, e);
