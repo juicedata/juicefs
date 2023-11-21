@@ -455,7 +455,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     return str == null || str.trim().isEmpty();
   }
 
-  private String readFile(String file) {
+  private String readFile(String file) throws IOException {
     Path path = new Path(file);
     URI uri = path.toUri();
     FileSystem fs;
@@ -472,7 +472,7 @@ public class JuiceFileSystemImpl extends FileSystem {
               (name != null && name.equals(uri.getAuthority()))) {
         fs = this;
       } else {
-        fs = FileSystem.newInstance(path.toUri(), getConf());
+        fs = path.getFileSystem(getConf());
       }
 
       FileStatus lastStatus = lastFileStatus.get(file);
@@ -484,18 +484,15 @@ public class JuiceFileSystemImpl extends FileSystem {
       FSDataInputStream in = fs.open(path);
       String res = new BufferedReader(new InputStreamReader(in)).lines().collect(Collectors.joining("\n"));
       in.close();
-      if (this != fs) {
-        fs.close();
-      }
       lastFileStatus.put(file, status);
       return res;
     } catch (IOException e) {
       LOG.warn(String.format("read %s failed", file), e);
-      return null;
+      throw e;
     }
   }
 
-  private void updateUidAndGrouping(String uidFile, String groupFile) {
+  private void updateUidAndGrouping(String uidFile, String groupFile) throws IOException {
     String uidstr = null;
     if (uidFile != null && !"".equals(uidFile.trim())) {
       uidstr = readFile(uidFile);

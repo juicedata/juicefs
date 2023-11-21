@@ -43,7 +43,11 @@ public class BgTaskUtil {
   private static final List<FileSystem> fileSystems = new ArrayList<>();
   private static final Set<String> runningBgTask = new HashSet<>();
 
-  public static void startScheduleTask(String name, String type, Runnable task, long initialDelay, long period, TimeUnit unit) {
+  public interface Task {
+    void run() throws Exception;
+  }
+
+  public static void startScheduleTask(String name, String type, Task task, long initialDelay, long period, TimeUnit unit) {
     synchronized (runningBgTask) {
       if (isRunning(name, type)) {
         return;
@@ -56,7 +60,7 @@ public class BgTaskUtil {
           synchronized (runningBgTask) {
             runningBgTask.remove(genKey(name, type));
           }
-          throw e;
+          throw new RuntimeException(e);
         }
       }, initialDelay, period, unit);
       runningBgTask.add(genKey(name, type));
