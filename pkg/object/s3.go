@@ -104,11 +104,9 @@ func (s *s3client) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
-	var sc string
+	var sc = "STANDARD"
 	if r.StorageClass != nil {
 		sc = *r.StorageClass
-	} else {
-		sc = "STANDARD"
 	}
 	return &obj{
 		key,
@@ -228,13 +226,17 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64, followLin
 		if !strings.HasPrefix(oKey, prefix) || oKey < marker {
 			return nil, fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, marker)
 		}
-		objs[i] = &obj{
+		ob := &obj{
 			oKey,
 			*o.Size,
 			*o.LastModified,
 			strings.HasSuffix(oKey, "/"),
-			*o.StorageClass,
+			"STANDARD",
 		}
+		if o.StorageClass != nil {
+			ob.sc = *o.StorageClass
+		}
+		objs[i] = ob
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
