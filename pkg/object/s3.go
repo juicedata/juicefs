@@ -226,17 +226,17 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64, followLin
 		if !strings.HasPrefix(oKey, prefix) || oKey < marker {
 			return nil, fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, marker)
 		}
-		ob := &obj{
+		var sc = "STANDARD"
+		if o.StorageClass != nil {
+			sc = *o.StorageClass
+		}
+		objs[i] = &obj{
 			oKey,
 			*o.Size,
 			*o.LastModified,
 			strings.HasSuffix(oKey, "/"),
-			"STANDARD",
+			sc,
 		}
-		if o.StorageClass != nil {
-			ob.sc = *o.StorageClass
-		}
-		objs[i] = ob
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
