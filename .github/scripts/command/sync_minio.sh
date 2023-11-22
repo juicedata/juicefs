@@ -113,7 +113,7 @@ prepare_test(){
     (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
+    lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9 || true
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 &
     ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
 }
