@@ -40,10 +40,9 @@ import (
 )
 
 const (
-	inodeBatch    = 1 << 10
-	sliceIdBatch  = 4 << 10
-	minUpdateTime = time.Millisecond * 10
-	nlocks        = 1024
+	inodeBatch   = 1 << 10
+	sliceIdBatch = 4 << 10
+	nlocks       = 1024
 )
 
 type engine interface {

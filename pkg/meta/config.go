@@ -46,6 +46,7 @@ type Config struct {
 	Subdir             string
 	AtimeMode          string
 	DirStatFlushPeriod time.Duration
+	MinUpdateTime      time.Duration
 }
 
 func DefaultConf() *Config {
