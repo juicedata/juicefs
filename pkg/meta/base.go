@@ -34,8 +34,8 @@ import (
 )
 
 const (
-	inodeBatch    = 100
-	sliceIdBatch  = 1000
+	inodeBatch    = 1 << 10
+	sliceIdBatch  = 4 << 10
 	minUpdateTime = time.Millisecond * 10
 	nlocks        = 1024
 )
