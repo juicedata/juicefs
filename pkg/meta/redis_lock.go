@@ -55,6 +55,9 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 			if err != nil {
 				return err
 			}
+			// remove same owner from locks results if requesting READ or WRITE lock (UNLOCK branch already handled)
+			// same owner should be able to convert an EXCLUSIVE lock to a SHARED lock by requesting the SHARED lock
+			delete(owners, lkey)
 			if ltype == F_RDLCK {
 				for _, v := range owners {
 					if v == "W" {
@@ -67,7 +70,6 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 				})
 				return err
 			}
-			delete(owners, lkey)
 			if len(owners) > 0 {
 				return syscall.EAGAIN
 			}
