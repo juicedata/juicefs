@@ -1,11 +1,19 @@
 ---
-title: 安装
+title: 入门概览
 sidebar_position: 1
 slug: /installation
 pagination_prev: introduction/comparison/juicefs_vs_s3ql
-description: 本文介绍 JuiceFS 在 Linux、macOS 和 Windows 上的安装方法，包括一键安装、编译安装和容器化安装。
+description: 针对新人的各板块信息归宗
 ---
 
+在安装 JuiceFS 之前，不妨先浏览以下实用信息：
+- **案例**：了解更多实践案例，请访问 [用户案例](https://juicefs.com/zh-cn/blog/user-stories)。
+- **视频**：我们在 [Bilibili频道](https://space.bilibili.com/1206844881) 提供了丰富的视频教程。
+- **问题解答**：遇到疑问？先看看 [FAQ 页面](https://juicefs.com/docs/zh/community/faq)。
+- **加入社群**：欢迎加入我们的 [微信用户组](https://juicefs.com/zh-cn/wechat-user-group)，共同探讨。
+- **Office Hours**：每两周一次的线上活动，周三下午4点至5点，Juicedata工程师将为你实时答疑解惑。
+
+## 安装 {#one-click-installation}
 JuiceFS 有良好的跨平台能力，支持在几乎所有主流架构的各类操作系统上运行，包括且不限于 Linux、macOS、Windows 等。
 
 JuiceFS 客户端只有一个二进制文件，你可以下载预编译的版本直接解压使用，也可以用源代码手动编译。
