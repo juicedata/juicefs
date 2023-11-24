@@ -20,6 +20,7 @@ import (
 	"flag"
 	"os"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
@@ -148,7 +149,8 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 	if fsnodes_namecheck(name) != 0 {
 		return syscall.EINVAL
 	}
-	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+
+	if !p.access(m.ctx, MODE_MASK_W) {
 		return syscall.EACCES
 	}
 	if p.children[name] != nil {
@@ -163,16 +165,42 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 		parents: []*tNode{p},
 		xattrs:  make(map[string][]byte),
 	}
-	m.nodes[inode] = n
-	p.children[name] = n
-	// p.mtime = m.ctx.ts
-	// p.ctime = m.ctx.ts
+
+	if runtime.GOOS == "darwin" {
+		n.gid = p.gid
+	} else if runtime.GOOS == "linux" && p.mode&02000 != 0 {
+		n.gid = p.gid
+		if _type == TypeDirectory {
+			p.mode |= 02000
+		} else if n.mode&02010 == 02010 && m.ctx.Uid() != 0 {
+			var found bool
+			for _, gid := range m.ctx.Gids() {
+				if gid == p.gid {
+					found = true
+				}
+			}
+			if !found {
+				n.mode &= ^uint16(02000)
+			}
+		}
+	}
+
 	switch _type {
 	case TypeDirectory:
 		n.children = make(map[string]*tNode)
+		n.length = 4 << 10
 	case TypeFile:
 		n.chunks = make(map[uint32][]tSlice)
+	case TypeSymlink:
+		n.length = uint64(len(name))
+	default:
+		n.length = 0
 	}
+
+	// p.mtime = m.ctx.ts
+	// p.ctime = m.ctx.ts
+	m.nodes[inode] = n
+	p.children[name] = n
 	return 0
 }
 
@@ -252,7 +280,7 @@ func (m *fsMachine) symlink(parent Ino, name string, inode Ino, target string) s
 	if fsnodes_namecheck(name) != 0 {
 		return syscall.EINVAL
 	}
-	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+	if !p.access(m.ctx, MODE_MASK_W) {
 		return syscall.EACCES
 	}
 	if p.children[name] != nil {
@@ -271,6 +299,28 @@ func (m *fsMachine) symlink(parent Ino, name string, inode Ino, target string) s
 		target:  target,
 		xattrs:  make(map[string][]byte),
 	}
+
+	_type := TypeSymlink
+	if runtime.GOOS == "darwin" {
+		n.gid = p.gid
+	} else if runtime.GOOS == "linux" && p.mode&02000 != 0 {
+		n.gid = p.gid
+		if _type == TypeDirectory {
+			p.mode |= 02000
+		} else if n.mode&02010 == 02010 && m.ctx.Uid() != 0 {
+			var found bool
+			for _, gid := range m.ctx.Gids() {
+				if gid == p.gid {
+					found = true
+				}
+			}
+			if !found {
+				n.mode &= ^uint16(02000)
+			}
+		}
+	}
+
+	n.length = uint64(len(target))
 	// p.mtime = m.ctx.ts
 	// p.ctime = m.ctx.ts
 	m.nodes[inode] = n
@@ -310,19 +360,16 @@ func (m *fsMachine) unlink(parent Ino, name string, dir bool) syscall.Errno {
 	if p == nil {
 		return syscall.ENOENT
 	}
-	if p.children == nil {
-		return syscall.ENOTDIR
+	if _, ok := p.children[name]; !ok {
+		return syscall.ENOENT
 	}
 	if fsnodes_namecheck(name) != 0 {
 		return syscall.EINVAL
 	}
-	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
-		return syscall.EACCES
-	}
+	//if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+	//	return syscall.EACCES
+	//}
 	c := p.children[name]
-	if c == nil {
-		return syscall.ENOENT
-	}
 	if !p.stickyAccess(c, m.ctx.Uid()) {
 		return syscall.EPERM
 	}
@@ -355,17 +402,25 @@ func (m *fsMachine) unlink(parent Ino, name string, dir bool) syscall.Errno {
 	return 0
 }
 
-func (m *fsMachine) lookup(parent Ino, name string) (Ino, syscall.Errno) {
+func (m *fsMachine) lookup(parent Ino, name string, checkPerm bool) (Ino, syscall.Errno) {
 	p := m.nodes[parent]
+	if checkPerm {
+		if !p.access(m.ctx, MODE_MASK_X) {
+			return 0, syscall.EACCES
+		}
+	}
+	if _, ok := p.children[name]; !ok {
+		return 0, syscall.ENOENT
+	}
 	if p == nil {
 		return 0, syscall.ENOENT
 	}
 	if fsnodes_namecheck(name) != 0 {
 		return 0, syscall.EINVAL
 	}
-	if p.children == nil {
-		return 0, syscall.ENOTDIR
-	}
+	//if p.children == nil {
+	//	return 0, syscall.ENOENT
+	//}
 	if !p.access(m.ctx, MODE_MASK_X) {
 		return 0, syscall.EACCES
 	}
@@ -377,6 +432,14 @@ func (m *fsMachine) lookup(parent Ino, name string) (Ino, syscall.Errno) {
 }
 
 func (m *fsMachine) getattr(inode Ino) (*tNode, syscall.Errno) {
+	n := m.nodes[inode]
+	if n == nil {
+		return nil, syscall.ENOENT
+	}
+	return n, 0
+}
+
+func (m *fsMachine) doMknod(inode Ino) (*tNode, syscall.Errno) {
 	n := m.nodes[inode]
 	if n == nil {
 		return nil, syscall.ENOENT
@@ -434,9 +497,9 @@ func (m *fsMachine) fallocate(inode Ino, mode uint8, offset uint64, size uint64)
 	if n._type != TypeFile {
 		return syscall.EPERM
 	}
-	if !n.access(m.ctx, MODE_MASK_W) {
-		return syscall.EACCES
-	}
+	//if !n.access(m.ctx, MODE_MASK_W) {
+	//	return syscall.EACCES
+	//}
 	if offset+size > n.length {
 		n.length = offset + size
 	}
@@ -446,15 +509,18 @@ func (m *fsMachine) fallocate(inode Ino, mode uint8, offset uint64, size uint64)
 }
 
 func (m *fsMachine) copy_file_range(srcinode Ino, srcoff uint64, dstinode Ino, dstoff uint64, size uint64, flags uint64) syscall.Errno {
-	if srcinode == dstinode && (size == 0 || srcoff <= dstoff && dstoff < srcoff+size || dstoff < srcoff && srcoff < dstoff+size) {
-		return syscall.EINVAL // overlap
-	}
+	//if srcinode == dstinode && (size == 0 || srcoff <= dstoff && dstoff < srcoff+size || dstoff < srcoff && srcoff < dstoff+size) {
+	//	return syscall.EINVAL // overlap
+	//}
 	src := m.nodes[srcinode]
 	if src == nil {
 		return syscall.ENOENT
 	}
 	if src._type != TypeFile {
 		return syscall.EINVAL
+	}
+	if srcoff >= src.length {
+		return 0
 	}
 	dst := m.nodes[dstinode]
 	if dst == nil {
@@ -463,12 +529,12 @@ func (m *fsMachine) copy_file_range(srcinode Ino, srcoff uint64, dstinode Ino, d
 	if dst._type != TypeFile {
 		return syscall.EINVAL
 	}
-	if !src.access(m.ctx, MODE_MASK_R) {
-		return syscall.EACCES
-	}
-	if !dst.access(m.ctx, MODE_MASK_W) {
-		return syscall.EACCES
-	}
+	//if !src.access(m.ctx, MODE_MASK_R) {
+	//	return syscall.EACCES
+	//}
+	//if !dst.access(m.ctx, MODE_MASK_W) {
+	//	return syscall.EACCES
+	//}
 	updateChunk := func(off uint64, s tSlice) {
 		for s.len > 0 {
 			indx := uint32(off / ChunkSize)
@@ -529,25 +595,40 @@ func (m *fsMachine) rmr(parent Ino, name string, removed *uint64) syscall.Errno 
 	if p == nil {
 		return syscall.ENOENT
 	}
+	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+		return syscall.EACCES
+	}
 	if p.children == nil {
-		return syscall.ENOTDIR
+		return syscall.ENOENT
 	}
 	if fsnodes_namecheck(name) != 0 {
 		return syscall.EINVAL
 	}
+
 	c := p.children[name]
 	if c == nil {
 		return syscall.ENOENT
 	}
-	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
-		return syscall.EACCES
-	}
+
 	if !p.stickyAccess(c, m.ctx.Uid()) {
 		return syscall.EPERM
 	}
 	for n := range c.children {
-		_ = m.rmr(c.inode, n, removed)
+		if eno := m.rmr(c.inode, n, removed); eno != 0 {
+			return eno
+		}
 	}
+
+	if c._type != TypeDirectory {
+		if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+			return syscall.EACCES
+		}
+	} else {
+		if !c.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+			return syscall.EACCES
+		}
+	}
+
 	st := m.unlink(parent, name, c.children != nil)
 	if st == 0 && removed != nil {
 		(*removed)++
@@ -601,9 +682,9 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	if !dst.access(m.ctx, MODE_MASK_X|MODE_MASK_W) {
 		return syscall.EACCES
 	}
-	if srcnode.children != nil && m.isancestor(srcnode, dst) {
-		return syscall.EINVAL
-	}
+	//if srcnode.children != nil && m.isancestor(srcnode, dst) {
+	//	return syscall.EINVAL
+	//}
 	if src != dst && srcnode._type == TypeDirectory && !srcnode.access(m.ctx, MODE_MASK_W) {
 		return syscall.EACCES
 	}
@@ -650,9 +731,6 @@ func (m *fsMachine) readdir(inode Ino) ([]string, syscall.Errno) {
 	if n == nil {
 		return nil, syscall.ENOENT
 	}
-	if n.children == nil {
-		return nil, syscall.ENOTDIR
-	}
 	if !n.access(m.ctx, MODE_MASK_R) {
 		return nil, syscall.EACCES
 	}
@@ -678,9 +756,6 @@ func (m *fsMachine) write(inode Ino, indx uint32, pos uint32, chunkid uint64, cl
 	pos = pos % ChunkSize // fix invalid pos
 	if chunkid == 0 || cleng == 0 || len == 0 || pos+len > ChunkSize || off+len > cleng {
 		return syscall.EINVAL
-	}
-	if !n.access(m.ctx, MODE_MASK_W) {
-		return syscall.EACCES
 	}
 	n.chunks[indx] = append(n.chunks[indx], tSlice{pos, chunkid, cleng, off, len})
 	if uint64(indx)*ChunkSize+uint64(pos+len) > n.length {
@@ -775,9 +850,6 @@ func (m *fsMachine) setxattr(inode Ino, name string, value []byte, mode uint8) s
 	// if !xattr.check(name) {
 	// 	return syscall.EINVAL
 	// }
-	if !n.access(m.ctx, MODE_MASK_W) {
-		return syscall.EACCES
-	}
 	switch mode {
 	case XattrCreate:
 		if n.xattrs[name] != nil {
@@ -806,9 +878,6 @@ func (m *fsMachine) removexattr(inode Ino, name string) syscall.Errno {
 	// if !xattr.check(name) {
 	// 	return syscall.EINVAL
 	// }
-	if !n.access(m.ctx, MODE_MASK_W) {
-		return syscall.EACCES
-	}
 	if n.xattrs[name] == nil {
 		return syscall.ENOATTR
 	}
@@ -825,9 +894,6 @@ func (m *fsMachine) getxattr(inode Ino, name string) ([]byte, syscall.Errno) {
 	// if !xattr.check(name) {
 	// 	return nil, syscall.EINVAL
 	// }
-	if !n.access(m.ctx, MODE_MASK_R) {
-		return nil, syscall.EACCES
-	}
 	if v, ok := n.xattrs[name]; ok {
 		return v, 0
 	}
@@ -838,9 +904,6 @@ func (m *fsMachine) listxattr(inode Ino) ([]byte, syscall.Errno) {
 	n := m.nodes[inode]
 	if n == nil {
 		return nil, syscall.ENOENT
-	}
-	if !n.access(m.ctx, MODE_MASK_R) {
-		return nil, syscall.EACCES
 	}
 	var names []string
 	for name := range n.xattrs {
@@ -861,6 +924,8 @@ func (m *fsMachine) Mkdir(t *rapid.T) {
 	var inode Ino
 	var attr Attr
 	st := m.meta.Mkdir(m.ctx, parent, name, mode, 0, 0, &inode, &attr)
+	var attr2 Attr
+	m.meta.GetAttr(m.ctx, inode, &attr2)
 	st2 := m.create(TypeDirectory, parent, name, mode, 0, inode)
 	if st != st2 {
 		t.Fatalf("expect %s but got %s", st2, st)
@@ -945,7 +1010,7 @@ func (m *fsMachine) Lookup(t *rapid.T) {
 	var inode Ino
 	var attr Attr
 	st := m.meta.Lookup(m.ctx, parent, name, &inode, &attr, true)
-	inode2, st2 := m.lookup(parent, name)
+	inode2, st2 := m.lookup(parent, name, true)
 	if st != st2 {
 		t.Fatalf("expect %s but got %s", st2, st)
 	}
@@ -958,6 +1023,7 @@ func (m *fsMachine) Getattr(t *rapid.T) {
 	inode := m.pickNode(t)
 	var attr Attr
 	st := m.meta.GetAttr(m.ctx, inode, &attr)
+	t.Logf("attr %#v", attr)
 	var n *tNode
 	if st == 0 {
 		n = new(tNode)
@@ -1064,7 +1130,8 @@ func (m *fsMachine) CopyFileRange(t *rapid.T) {
 	dstinode := m.pickNode(t)
 	dstoff := rapid.Uint64Max(m.nodes[dstinode].length).Draw(t, "dstoff")
 	size := rapid.Uint64Max(m.nodes[srcinode].length).Draw(t, "size")
-	st := m.meta.CopyFileRange(m.ctx, srcinode, srcoff, dstinode, dstoff, size, 0, nil)
+	var copied uint64
+	st := m.meta.CopyFileRange(m.ctx, srcinode, srcoff, dstinode, dstoff, size, 0, &copied)
 	st2 := m.copy_file_range(srcinode, srcoff, dstinode, dstoff, size, 0)
 	if st != st2 {
 		t.Fatalf("expect %s but got %s", st2, st)
@@ -1214,8 +1281,8 @@ func (m *fsMachine) Check(t *rapid.T) {
 
 func TestFSOps(t *testing.T) {
 	flag.Set("timeout", "10s")
-	flag.Set("rapid.steps", "2")
-	flag.Set("rapid.checks", "10000")
+	flag.Set("rapid.steps", "3")
+	flag.Set("rapid.checks", "100000")
 	flag.Set("rapid.seed", "1")
 	rapid.Check(t, rapid.Run[*fsMachine]())
 }
