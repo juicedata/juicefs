@@ -293,6 +293,10 @@ func (v *VFS) Flock(ctx Context, ino Ino, fh uint64, owner uint64, typ uint32, b
 		err = syscall.EBADF
 		return
 	}
+
+	// for debugging purposes, let's add a log request here that will confirm for us the owner of our blocking request
+	logit(ctx, "flock_request (%d,%d,%016X,%s,%t): N/A", ino, fh, owner, name, block)
+
 	h.addOp(ctx)
 	defer h.removeOp(ctx)
 	err = v.Meta.Flock(ctx, ino, owner, typ, block)
