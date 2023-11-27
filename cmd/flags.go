@@ -98,7 +98,7 @@ func storageFlags() []cli.Flag {
 	return addCategories("DATA STORAGE", []cli.Flag{
 		&cli.StringFlag{
 			Name:  "storage",
-			Usage: "customized storage type (e.g. s3, gcs, oss, cos) to access object store",
+			Usage: "customized storage type (e.g. s3, gs, oss, cos) to access object store",
 		},
 		&cli.StringFlag{
 			Name:  "bucket",

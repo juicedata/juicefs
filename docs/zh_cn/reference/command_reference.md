@@ -156,7 +156,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 
 |项 | 说明|
 |-|-|
-|`--storage=file`|对象存储类型，例如 `s3`、`gcs`、`oss`、`cos`。默认为 `file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
+|`--storage=file`|对象存储类型，例如 `s3`、`gs`、`oss`、`cos`。默认为 `file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
 |`--bucket=path`|存储数据的桶路径（默认：`$HOME/.juicefs/local` 或 `/var/jfs`）。|
 |`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
@@ -215,7 +215,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 
 |项 | 说明|
 |-|-|
-|`--storage=file` <VersionAdd>1.1</VersionAdd>|对象存储类型，例如 `s3`、`gcs`、`oss`、`cos`。默认为 `file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
+|`--storage=file` <VersionAdd>1.1</VersionAdd>|对象存储类型，例如 `s3`、`gs`、`oss`、`cos`。默认为 `file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
 |`--bucket=path`|存储数据的桶路径（默认：`$HOME/.juicefs/local` 或 `/var/jfs`）。|
 |`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
@@ -650,7 +650,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 |项 | 说明|
 |-|-|
-|`--storage=file`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
+|`--storage=file`|对象存储类型 (例如 `s3`、`gs`、`oss`、`cos`) (默认：`"file"`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
 |`--bucket=value`|为当前挂载点指定访问对象存储的 Endpoint。|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd>|当前客户端写入数据的存储类型|
 |`--get-timeout=60`|下载一个对象的超时时间；单位为秒 (默认：60)|
@@ -804,7 +804,7 @@ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3 http
 
 |项 | 说明|
 |-|-|
-|`--storage=file`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
+|`--storage=file`|对象存储类型 (例如 `s3`、`gs`、`oss`、`cos`) (默认：`file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
 |`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--block-size=4096`|每个 IO 块的大小（以 KiB 为单位）（默认值：4096）|
