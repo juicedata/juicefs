@@ -65,7 +65,7 @@ spec:
           labelSelectors:
             app: minio-server
         volumePath: /data
-        delay: '1s'
+        delay: '50ms'
     # minio 内存压力
     - name: minio-memory
       templateType: StressChaos
