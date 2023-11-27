@@ -9,7 +9,7 @@ This document offers a comprehensive comparison between JuiceFS and CephFS. You 
 
 ## Similarities
 
-Both are highly reliable, high-performance, elastic distributed file systems with good POSIX compatibility, suitable for various scenarios.
+Both are highly reliable, high-performance, resilient distributed file systems with good POSIX compatibility, suitable for various scenarios.
 
 ## Differences
 
