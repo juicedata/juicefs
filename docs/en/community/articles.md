@@ -19,7 +19,7 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Big data
 
-- [From Hadoop to Cloud: Why and How to Decouple Storage and Compute in Big Data Platforms](https://juicefs.com/en/blog/solutions/hadoop-cloud-decouple-storage-compute-big-data), 2023-11-01 
+- [From Hadoop to Cloud: Why and How to Decouple Storage and Compute in Big Data Platforms](https://juicefs.com/en/blog/solutions/hadoop-cloud-decouple-storage-compute-big-data), 2023-11-01
 - [Costs Cut & Ops Efficiency Boosted: Switching to a Big Data Storage-Compute Decoupled Architecture](https://juicefs.com/en/blog/user-stories/storage-compute-decoupled-architecture-cloud-native-big-data), 2023-09-28, Ming Li @ DMALL
 - [50%+ Cut in Both Storage & Compute Costs: Designing NetEase Games' Cloud Big Data Platform](https://juicefs.com/en/blog/user-stories/cut-storage-compute-costs-cloud-big-data-platform), 2023-09-14, Weihong Ke @ NetEase Games
 - [Migrating Hadoop to the Cloud: 2x Storage Capacity & Fewer Ops Costs](https://juicefs.com/en/blog/user-stories/migrating-hadoop-to-cloud-2x-storage-capacity-fewer-ops-costs), 2023-08-09, Chang Liu & Yangliang Li @ Yimian
