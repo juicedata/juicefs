@@ -863,6 +863,12 @@ func testLocks(t *testing.T, m Meta) {
 	if st := m.Flock(ctx, inode, o1, syscall.F_RDLCK, false); st != 0 {
 		t.Fatalf("flock rlock: %s", st)
 	}
+	if st := m.Flock(ctx, inode, 2, syscall.F_RDLCK, false); st != 0 {
+		t.Fatalf("flock rlock: %s", st)
+	}
+	if st := m.Flock(ctx, inode, 2, syscall.F_UNLCK, false); st != 0 {
+		t.Fatalf("flock unlock: %s", st)
+	}
 	if st := m.Flock(ctx, inode, o1, syscall.F_WRLCK, false); st != 0 {
 		t.Fatalf("flock wlock: %s", st)
 	}
