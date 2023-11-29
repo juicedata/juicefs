@@ -259,9 +259,9 @@ func metaFlags() []cli.Flag {
 			Usage: "number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never)",
 		},
 		&cli.StringFlag{
-			Name:  "min-update-time",
+			Name:  "skip-dir-mtime",
 			Value: "100ms",
-			Usage: "minimun duration between mtime updates of a directory",
+			Usage: "skip updating attribute of a directory if the mtime difference is smaller than this value",
 		},
 	})
 }
