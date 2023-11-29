@@ -23,7 +23,6 @@ import (
 	"io"
 	"reflect"
 	"strconv"
-	"sync/atomic"
 )
 
 const checksumAlgr = "Crc32c"
@@ -63,12 +62,8 @@ type checksumReader struct {
 func (c *checksumReader) Read(buf []byte) (n int, err error) {
 	n, err = c.ReadCloser.Read(buf)
 	c.checksum = crc32.Update(c.checksum, crc32c, buf[:n])
-	var currentValue int64
-	if err == nil {
-		atomic.AddInt64(&c.remainingLength, -int64(n))
-		currentValue = atomic.LoadInt64(&c.remainingLength)
-	}
-	if (err == io.EOF || currentValue <= 0) && c.checksum != c.expected {
+	c.remainingLength -= int64(n)
+	if (err == io.EOF || c.remainingLength <= 0) && c.checksum != c.expected {
 		return 0, fmt.Errorf("verify checksum failed: %d != %d", c.checksum, c.expected)
 	}
 	return

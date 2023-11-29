@@ -23,7 +23,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 )
 
@@ -60,43 +59,15 @@ func TestChecksumRead(t *testing.T) {
 	// verify success case
 	err = nil
 	reader1 := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, int64(len(content)))
-	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			body := make([]byte, 50)
-			for i := 0; i < 100; i++ {
-				_, err = reader1.Read(body)
-				if err == io.EOF {
-					err = nil
-				}
-			}
-		}()
-	}
-	wg.Wait()
-	if err != nil {
-		t.Fatalf("verify checksum shuold success %s", err)
+	n, err = reader1.Read(make([]byte, 102400))
+	if n != 10240 || (err != nil && err != io.EOF) {
+		t.Fatalf("verify checksum shuold success")
 	}
 
 	// verify failed case
 	content[0] = 'a'
 	reader2 := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, int64(len(content)))
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			body := make([]byte, 50)
-			for i := 0; i < 100; i++ {
-				_, err = reader2.Read(body)
-				if err == io.EOF {
-					err = nil
-				}
-			}
-		}()
-	}
-	wg.Wait()
-
+	n, err = reader2.Read(make([]byte, 102400))
 	if err == nil || !strings.HasPrefix(err.Error(), "verify checksum failed") {
 		t.Fatalf("verify checksum should failed")
 	}
