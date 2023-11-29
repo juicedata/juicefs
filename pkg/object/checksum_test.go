@@ -71,4 +71,11 @@ func TestChecksumRead(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), "verify checksum failed") {
 		t.Fatalf("verify checksum should failed")
 	}
+
+	// verify read length less than content length case
+	reader3 := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, int64(len(content)))
+	n, err = reader3.Read(make([]byte, 10))
+	if err != nil || n != 10 {
+		t.Fatalf("error should be nil and read length should be 10")
+	}
 }
