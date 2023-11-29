@@ -369,6 +369,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.Heartbeat = duration(c.String("heartbeat"))
 	conf.MountPoint = mp
 	conf.Subdir = c.String("subdir")
+	conf.SkipDirMtime = duration(c.String("skip-dir-mtime"))
 
 	atimeMode := c.String("atime-mode")
 	if atimeMode != meta.RelAtime && atimeMode != meta.StrictAtime && atimeMode != meta.NoAtime {

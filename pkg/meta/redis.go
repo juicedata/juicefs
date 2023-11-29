@@ -1282,7 +1282,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				pattr.Nlink++
 				updateParent = true
 			}
-			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
 				pattr.Mtime = now.Unix()
 				pattr.Mtimensec = uint32(now.Nanosecond())
 				pattr.Ctime = now.Unix()
@@ -1393,7 +1393,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		}
 		var updateParent bool
 		now := time.Now()
-		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1765,14 +1765,14 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				iattr.Parent = parentDst
 			}
 		}
-		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime {
+		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= m.conf.SkipDirMtime {
 			sattr.Mtime = now.Unix()
 			sattr.Mtimensec = uint32(now.Nanosecond())
 			sattr.Ctime = now.Unix()
 			sattr.Ctimensec = uint32(now.Nanosecond())
 			supdate = true
 		}
-		if dupdate || now.Sub(time.Unix(dattr.Mtime, int64(dattr.Mtimensec))) >= minUpdateTime {
+		if dupdate || now.Sub(time.Unix(dattr.Mtime, int64(dattr.Mtimensec))) >= m.conf.SkipDirMtime {
 			dattr.Mtime = now.Unix()
 			dattr.Mtimensec = uint32(now.Nanosecond())
 			dattr.Ctime = now.Unix()
@@ -1901,7 +1901,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		}
 		var updateParent bool
 		now := time.Now()
-		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()

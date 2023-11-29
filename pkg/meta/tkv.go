@@ -1173,7 +1173,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 					logger.Warnf("Skip updating nlink of directory %d to reduce conflict", parent)
 				}
 			}
-			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 				pattr.Mtime = now.Unix()
 				pattr.Mtimensec = uint32(now.Nanosecond())
 				pattr.Ctime = now.Unix()
@@ -1303,7 +1303,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 
 		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 		var updateParent bool
-		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1426,7 +1426,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		} else {
 			logger.Warnf("Skip updating nlink of directory %d to reduce conflict", parent)
 		}
-		if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+		if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1611,14 +1611,14 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				iattr.Parent = parentDst
 			}
 		}
-		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			sattr.Mtime = now.Unix()
 			sattr.Mtimensec = uint32(now.Nanosecond())
 			sattr.Ctime = now.Unix()
 			sattr.Ctimensec = uint32(now.Nanosecond())
 			supdate = true
 		}
-		if dupdate || now.Sub(time.Unix(dattr.Mtime, int64(dattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+		if dupdate || now.Sub(time.Unix(dattr.Mtime, int64(dattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			dattr.Mtime = now.Unix()
 			dattr.Mtimensec = uint32(now.Nanosecond())
 			dattr.Ctime = now.Unix()
@@ -1746,7 +1746,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 		var updateParent bool
 		now := time.Now()
-		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()

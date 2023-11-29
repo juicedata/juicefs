@@ -1285,7 +1285,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				pn.Nlink++
 				updateParent = true
 			}
-			if updateParent || time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= minUpdateTime {
+			if updateParent || time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= m.conf.SkipDirMtime {
 				pn.Mtime = now / 1e3
 				pn.Ctime = now / 1e3
 				updateParent = true
@@ -1426,7 +1426,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		defer func() { m.of.InvalidateChunk(e.Inode, invalidateAttrOnly) }()
 
 		var updateParent bool
-		if !isTrash(parent) && time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= minUpdateTime {
+		if !isTrash(parent) && time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= m.conf.SkipDirMtime {
 			pn.Mtime = now / 1e3
 			pn.Ctime = now / 1e3
 			pn.Mtimensec = int16(now % 1e3)
@@ -1810,14 +1810,14 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				sn.Parent = parentDst
 			}
 		}
-		if supdate || time.Duration(now-spn.Mtime*1e3-int64(spn.Mtimensec)) >= minUpdateTime {
+		if supdate || time.Duration(now-spn.Mtime*1e3-int64(spn.Mtimensec)) >= m.conf.SkipDirMtime {
 			spn.Mtime = now / 1e3
 			spn.Ctime = now / 1e3
 			spn.Mtimensec = int16(now % 1e3)
 			spn.Ctimensec = int16(now % 1e3)
 			supdate = true
 		}
-		if dupdate || time.Duration(now-dpn.Mtime*1e3-int64(dpn.Mtimensec)) >= minUpdateTime {
+		if dupdate || time.Duration(now-dpn.Mtime*1e3-int64(dpn.Mtimensec)) >= m.conf.SkipDirMtime {
 			dpn.Mtime = now / 1e3
 			dpn.Ctime = now / 1e3
 			dpn.Mtimensec = int16(now % 1e3)
@@ -1984,7 +1984,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 		var updateParent bool
 		now := time.Now().UnixNano()
-		if time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= minUpdateTime {
+		if time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= m.conf.SkipDirMtime {
 			pn.Mtime = now / 1e3
 			pn.Ctime = now / 1e3
 			updateParent = true
