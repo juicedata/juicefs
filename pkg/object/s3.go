@@ -137,7 +137,7 @@ func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if off == 0 && limit == -1 {
 		cs := resp.Metadata[checksumAlgr]
 		if cs != nil {
-			resp.Body = verifyChecksum(resp.Body, *cs)
+			resp.Body = verifyChecksum(resp.Body, *cs, *resp.ContentLength)
 		}
 	}
 	return resp.Body, nil
