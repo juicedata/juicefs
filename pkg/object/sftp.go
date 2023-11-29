@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/url"
 	"os"
@@ -203,7 +204,7 @@ func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return ff, err
 }
 
-func (f *sftpStore) Put(key string, in io.Reader) error {
+func (f *sftpStore) Put(key string, in io.Reader) (err error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return err
@@ -222,14 +223,20 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	if PutInplace {
 		tmp = p
 	} else {
-		tmp = path.Join(path.Dir(p), "."+path.Base(p)+".tmp")
+		name := path.Base(p)
+		if len(name) > 200 {
+			name = name[:200]
+		}
+		tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
+		defer func() {
+			if err != nil {
+				_ = c.sftpClient.Remove(tmp)
+			}
+		}()
 	}
 	ff, err := c.sftpClient.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 	if err != nil {
 		return err
-	}
-	if !PutInplace {
-		defer func() { _ = c.sftpClient.Remove(tmp) }()
 	}
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
