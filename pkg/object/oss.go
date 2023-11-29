@@ -126,7 +126,10 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 	} else {
 		resp, err = o.bucket.GetObject(key, oss.GetResponseHeader(&respHeader))
 		if err == nil {
-			length, _ := strconv.ParseInt(resp.(*oss.Response).Headers.Get(oss.HTTPHeaderContentLength), 10, 64)
+			length, err := strconv.ParseInt(resp.(*oss.Response).Headers.Get(oss.HTTPHeaderContentLength), 10, 64)
+			if err != nil {
+				return nil, err
+			}
 			resp = verifyChecksum(resp,
 				resp.(*oss.Response).Headers.Get(oss.HTTPHeaderOssMetaPrefix+checksumAlgr),
 				length)
