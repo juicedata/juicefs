@@ -67,7 +67,8 @@ func (c *checksumReader) Read(buf []byte) (n int, err error) {
 	if err == nil {
 		atomic.AddInt64(&c.remainingLength, -int64(n))
 		currentValue = atomic.LoadInt64(&c.remainingLength)
-	} else if (err == io.EOF || currentValue <= 0) && c.checksum != c.expected {
+	}
+	if (err == io.EOF || currentValue <= 0) && c.checksum != c.expected {
 		return 0, fmt.Errorf("verify checksum failed: %d != %d", c.checksum, c.expected)
 	}
 	return
