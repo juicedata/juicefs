@@ -239,67 +239,67 @@ func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, e
 	ready := make([]bool, concurrent)
 	results := make([]Object, concurrent)
 	errs := make([]error, concurrent)
-	for c := 0; c < concurrent; c++ {
-		conds[c] = sync.NewCond(&ms[c])
-		if c < len(keys) {
-			go func(c int) {
+	for j := 0; j < concurrent; j++ {
+		conds[j] = sync.NewCond(&ms[j])
+		if j < len(keys) {
+			go func(j int) {
 				ctx, err := c.newContext()
 				if err != nil {
 					logger.Errorf("new context: %s", err)
-					errs[c] = err
+					errs[j] = err
 					return
 				}
 				defer ctx.Destroy()
-				for i := c; i < len(keys); i += concurrent {
+				for i := j; i < len(keys); i += concurrent {
 					key := keys[i]
 					st, err := ctx.Stat(key)
 					if err != nil {
 						if errors.Is(err, rados.ErrNotFound) {
 							logger.Debugf("Skip non-existent key: %s", key)
-							results[c] = nil
+							results[j] = nil
 						} else {
 							logger.Errorf("Stat key %s: %s", key, err)
-							errs[c] = err
+							errs[j] = err
 						}
 					} else {
-						results[c] = &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), ""}
+						results[j] = &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), ""}
 					}
 
-					ms[c].Lock()
-					ready[c] = true
-					conds[c].Signal()
-					if errs[c] != nil {
-						ms[c].Unlock()
+					ms[j].Lock()
+					ready[j] = true
+					conds[j].Signal()
+					if errs[j] != nil {
+						ms[j].Unlock()
 						break
 					}
-					for ready[c] {
-						conds[c].Wait()
+					for ready[j] {
+						conds[j].Wait()
 					}
-					ms[c].Unlock()
+					ms[j].Unlock()
 				}
-			}(c)
+			}(j)
 		}
 	}
 	go func() {
 		defer close(objs)
 		for i := range keys {
-			c := i % concurrent
-			ms[c].Lock()
-			for !ready[c] {
-				conds[c].Wait()
+			j := i % concurrent
+			ms[j].Lock()
+			for !ready[j] {
+				conds[j].Wait()
 			}
-			if errs[c] != nil {
+			if errs[j] != nil {
 				objs <- nil
-				ms[c].Unlock()
+				ms[j].Unlock()
 				// some goroutines will be leaked, but it's ok
 				// since we won't call ListAll() many times in a process
 				break
-			} else if results[c] != nil {
-				objs <- results[c]
+			} else if results[j] != nil {
+				objs <- results[j]
 			}
-			ready[c] = false
-			conds[c].Signal()
-			ms[c].Unlock()
+			ready[j] = false
+			conds[j].Signal()
+			ms[j].Unlock()
 		}
 	}()
 	return objs, nil
