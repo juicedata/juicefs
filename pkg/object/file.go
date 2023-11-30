@@ -137,7 +137,7 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return f, nil
 }
 
-func (d *filestore) Put(key string, in io.Reader) error {
+func (d *filestore) Put(key string, in io.Reader) (err error) {
 	p := d.path(key)
 
 	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(d.root, dirSuffix) {
@@ -148,7 +148,16 @@ func (d *filestore) Put(key string, in io.Reader) error {
 	if PutInplace {
 		tmp = p
 	} else {
-		tmp = filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
+		name := filepath.Base(p)
+		if len(name) > 200 {
+			name = name[:200]
+		}
+		tmp = filepath.Join(filepath.Dir(p), "."+name+".tmp"+strconv.Itoa(rand.Int()))
+		defer func() {
+			if err != nil {
+				_ = os.Remove(tmp)
+			}
+		}()
 	}
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil && os.IsNotExist(err) {
@@ -159,13 +168,6 @@ func (d *filestore) Put(key string, in io.Reader) error {
 	}
 	if err != nil {
 		return err
-	}
-	if !PutInplace {
-		defer func() {
-			if err != nil {
-				_ = os.Remove(tmp)
-			}
-		}()
 	}
 
 	if TryCFR {

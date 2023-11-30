@@ -227,4 +227,10 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 			}
 		}
 	}
+
+	// put a file with very long name
+	longName := strings.Repeat("a", 255)
+	if err := s.Put("dir/"+longName, bytes.NewReader([]byte{0})); err != nil {
+		t.Fatalf("PUT a file with long name `%s` failed: %q", longName, err)
+	}
 }

@@ -24,7 +24,6 @@ import (
 	"os"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -127,7 +126,18 @@ func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 	if object.PutInplace {
 		tmp = p
 	} else {
-		tmp = path.Join(path.Dir(p), "."+path.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
+		name := path.Base(p)
+		if len(name) > 200 {
+			name = name[:200]
+		}
+		tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
+		defer func() {
+			if err != nil {
+				if e := j.jfs.Delete(ctx, tmp); e != 0 {
+					logger.Warnf("Failed to delete %s: %s", tmp, e)
+				}
+			}
+		}()
 	}
 	f, eno := j.jfs.Create(ctx, tmp, 0666, j.umask)
 	if eno == syscall.ENOENT {
@@ -142,15 +152,6 @@ func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 
 	if eno != 0 {
 		return toError(eno)
-	}
-	if !object.PutInplace {
-		defer func() {
-			if err != nil {
-				if e := j.jfs.Delete(ctx, tmp); e != 0 {
-					logger.Warnf("Failed to delete %s: %s", tmp, e)
-				}
-			}
-		}()
 	}
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)

@@ -122,7 +122,7 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return f, nil
 }
 
-func (h *hdfsclient) Put(key string, in io.Reader) error {
+func (h *hdfsclient) Put(key string, in io.Reader) (err error) {
 	p := h.path(key)
 	if strings.HasSuffix(p, dirSuffix) {
 		return h.c.MkdirAll(p, 0777&^h.umask)
@@ -131,12 +131,18 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 	if PutInplace {
 		tmp = p
 	} else {
-		tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", path.Base(p), rand.Int()))
+		name := path.Base(p)
+		if len(name) > 200 {
+			name = name[:200]
+		}
+		tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
+		defer func() {
+			if err != nil {
+				_ = h.c.Remove(tmp)
+			}
+		}()
 	}
 	f, err := h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
-	if !PutInplace {
-		defer func() { _ = h.c.Remove(tmp) }()
-	}
 	if err != nil {
 		if pe, ok := err.(*os.PathError); ok && pe.Err == os.ErrNotExist {
 			_ = h.c.MkdirAll(path.Dir(p), 0777&^h.umask)
