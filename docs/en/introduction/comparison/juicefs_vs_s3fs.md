@@ -19,7 +19,7 @@ JuiceFS is a distributed file system with a unique approach to data management a
 
 S3FS does not do special optimization for files. It acts as an access channel between local and object storage, allowing the same content to be seen on the local mount point and the object storage browser. This makes it easy to use cloud storage locally. On the other hand, with this simple architecture, retrieving, reading, and writing files with S3FS require direct interaction with the object store, and network latency can impact strongly on performance and user experience.
 
-JuiceFS: Uses a unique architecture that separates data and metadata. Files are split into data blocks before being uploaded to object storage, and metadata is stored in a separate database. This architecture allows faster retrieval and metadata modification, reducing the impact of network latency.
+JuiceFS uses a architecture that separates data and metadata. Files are split into data blocks according to specific rules before being uploaded to object storage, and the corresponding metadata is stored in a separate database. The advantage of this is that retrieval of files and modification of metadata such as file names can directly interact with the database with a faster response, bypassing the network latency impact of interacting with the object store.
 
 In addition, when processing large files, although S3FS can solve the problem of transferring large files by uploading them in chunks, the nature of object storage dictates that appending files requires rewriting the entire object. For large files of tens or hundreds of gigabytes or even terabytes, repeated uploads waste a lot of time and bandwidth resources.
 
