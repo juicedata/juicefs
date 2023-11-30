@@ -18,8 +18,11 @@ package object
 
 import (
 	"bytes"
+	"crypto/rand"
 	"hash/crc32"
+	"io"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -36,5 +39,55 @@ func TestChecksum(t *testing.T) {
 	if actual != strconv.Itoa(int(expected)) {
 		t.Errorf("expect %d but got %s", expected, actual)
 		t.FailNow()
+	}
+}
+
+func TestChecksumRead(t *testing.T) {
+	length := 10240
+	content := make([]byte, length)
+	if _, err := rand.Read(content); err != nil {
+		t.Fatalf("Generate random content: %s", err)
+	}
+	actual := generateChecksum(bytes.NewReader(content))
+
+	// content length equal buff length case
+	lens := []int64{-1, int64(length)}
+	for _, contentLength := range lens {
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
+		n, err := reader.Read(make([]byte, length))
+		if n != length || (err != nil && err != io.EOF) {
+			t.Fatalf("verify checksum shuold success")
+		}
+	}
+
+	// verify success case
+	for _, contentLength := range lens {
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
+		n, err := reader.Read(make([]byte, length+100))
+		if n != length || (err != nil && err != io.EOF) {
+			t.Fatalf("verify checksum shuold success")
+		}
+	}
+
+	// verify failed case
+	for _, contentLength := range lens {
+		content[0] = 'a'
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
+		n, err := reader.Read(make([]byte, length))
+		if contentLength == -1 && (err != nil && err != io.EOF || n != length) {
+			t.Fatalf("dont verify checksum when content length is -1")
+		}
+		if contentLength != -1 && (err == nil || err == io.EOF || !strings.HasPrefix(err.Error(), "verify checksum failed")) {
+			t.Fatalf("verify checksum should failed")
+		}
+	}
+
+	// verify read length less than content length case
+	for _, contentLength := range lens {
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
+		n, err := reader.Read(make([]byte, length-100))
+		if err != nil || n != length-100 {
+			t.Fatalf("error should be nil and read length should be %d", length-100)
+		}
 	}
 }
