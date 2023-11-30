@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"net/url"
 	"os"
@@ -202,7 +203,7 @@ func (f *sftpStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return ff, err
 }
 
-func (f *sftpStore) Put(key string, in io.Reader) error {
+func (f *sftpStore) Put(key string, in io.Reader) (err error) {
 	c, err := f.getSftpConnection()
 	if err != nil {
 		return err
@@ -216,7 +217,16 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	if err := c.sftpClient.MkdirAll(filepath.Dir(p)); err != nil {
 		return err
 	}
-	tmp := filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp")
+	name := filepath.Base(p)
+	if len(name) > 200 {
+		name = name[:200]
+	}
+	tmp := filepath.Join(filepath.Dir(p), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
+	defer func() {
+		if err != nil {
+			_ = c.sftpClient.Remove(tmp)
+		}
+	}()
 	if runtime.GOOS == "windows" {
 		tmp = strings.Replace(tmp, "\\", "/", -1)
 	}
@@ -225,7 +235,6 @@ func (f *sftpStore) Put(key string, in io.Reader) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = c.sftpClient.Remove(tmp) }()
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
 	_, err = io.CopyBuffer(ff, in, *buf)

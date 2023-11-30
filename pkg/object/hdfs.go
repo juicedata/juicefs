@@ -114,14 +114,22 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 const abcException = "org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException"
 
-func (h *hdfsclient) Put(key string, in io.Reader) error {
+func (h *hdfsclient) Put(key string, in io.Reader) (err error) {
 	path := h.path(key)
 	if strings.HasSuffix(path, dirSuffix) {
 		return h.c.MkdirAll(path, os.FileMode(0755))
 	}
-	tmp := filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp.%d", filepath.Base(path), rand.Int()))
+	name := filepath.Base(path)
+	if len(name) > 200 {
+		name = name[:200]
+	}
+	tmp := filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
+	defer func() {
+		if err != nil {
+			_ = h.c.Remove(tmp)
+		}
+	}()
 	f, err := h.c.CreateFile(tmp, 3, 128<<20, 0755)
-	defer func() { _ = h.c.Remove(tmp) }()
 	if err != nil {
 		if pe, ok := err.(*os.PathError); ok && pe.Err == os.ErrNotExist {
 			_ = h.c.MkdirAll(filepath.Dir(path), 0755)
