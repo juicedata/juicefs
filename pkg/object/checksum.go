@@ -63,7 +63,7 @@ func (c *checksumReader) Read(buf []byte) (n int, err error) {
 	n, err = c.ReadCloser.Read(buf)
 	c.checksum = crc32.Update(c.checksum, crc32c, buf[:n])
 	c.remainingLength -= int64(n)
-	if (err == io.EOF || c.remainingLength <= 0) && c.checksum != c.expected {
+	if (err == io.EOF || c.remainingLength == 0) && c.checksum != c.expected {
 		return 0, fmt.Errorf("verify checksum failed: %d != %d", c.checksum, c.expected)
 	}
 	return

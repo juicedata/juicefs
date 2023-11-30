@@ -43,39 +43,51 @@ func TestChecksum(t *testing.T) {
 }
 
 func TestChecksumRead(t *testing.T) {
-	content := make([]byte, 10240)
+	length := 10240
+	content := make([]byte, length)
 	if _, err := rand.Read(content); err != nil {
 		t.Fatalf("Generate random content: %s", err)
 	}
 	actual := generateChecksum(bytes.NewReader(content))
 
 	// content length equal buff length case
-	reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, int64(len(content)))
-	n, err := reader.Read(make([]byte, 10240))
-	if n != 10240 || (err != nil && err != io.EOF) {
-		t.Fatalf("verify checksum shuold success")
+	lens := []int64{-1, int64(length)}
+	for _, contentLength := range lens {
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
+		n, err := reader.Read(make([]byte, length))
+		if n != length || (err != nil && err != io.EOF) {
+			t.Fatalf("verify checksum shuold success")
+		}
 	}
 
 	// verify success case
-	err = nil
-	reader1 := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, int64(len(content)))
-	n, err = reader1.Read(make([]byte, 102400))
-	if n != 10240 || (err != nil && err != io.EOF) {
-		t.Fatalf("verify checksum shuold success")
+	for _, contentLength := range lens {
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
+		n, err := reader.Read(make([]byte, length+100))
+		if n != length || (err != nil && err != io.EOF) {
+			t.Fatalf("verify checksum shuold success")
+		}
 	}
 
 	// verify failed case
-	content[0] = 'a'
-	reader2 := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, int64(len(content)))
-	n, err = reader2.Read(make([]byte, 102400))
-	if err == nil || !strings.HasPrefix(err.Error(), "verify checksum failed") {
-		t.Fatalf("verify checksum should failed")
+	for _, contentLength := range lens {
+		content[0] = 'a'
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
+		n, err := reader.Read(make([]byte, length))
+		if contentLength == -1 && (err != nil && err != io.EOF || n != length) {
+			t.Fatalf("dont verify checksum when content length is -1")
+		}
+		if contentLength != -1 && (err == nil || err == io.EOF || !strings.HasPrefix(err.Error(), "verify checksum failed")) {
+			t.Fatalf("verify checksum should failed")
+		}
 	}
 
 	// verify read length less than content length case
-	reader3 := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, int64(len(content)))
-	n, err = reader3.Read(make([]byte, 10))
-	if err != nil || n != 10 {
-		t.Fatalf("error should be nil and read length should be 10")
+	for _, contentLength := range lens {
+		reader := verifyChecksum(io.NopCloser(bytes.NewReader(content)), actual, contentLength)
+		n, err := reader.Read(make([]byte, length-100))
+		if err != nil || n != length-100 {
+			t.Fatalf("error should be nil and read length should be %d", length-100)
+		}
 	}
 }
