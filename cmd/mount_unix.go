@@ -40,8 +40,17 @@ import (
 )
 
 func checkMountpoint(name, mp, logPath string, background bool) {
-	for i := 0; i < 20; i++ {
-		time.Sleep(time.Millisecond * 500)
+	mountTimeOut := 10 // default 10 seconds
+	interval := 500    // check every 500 Millisecond
+	if tStr, ok := os.LookupEnv("JFS_MOUNT_TIMEOUT"); ok {
+		if t, err := strconv.ParseInt(tStr, 10, 64); err == nil {
+			mountTimeOut = int(t)
+		} else {
+			logger.Errorf("invalid env JFS_MOUNT_TIMEOUT: %s %s", tStr, err)
+		}
+	}
+	for i := 0; i < mountTimeOut*1000/interval; i++ {
+		time.Sleep(time.Duration(interval) * time.Millisecond)
 		st, err := os.Stat(mp)
 		if err == nil {
 			if sys, ok := st.Sys().(*syscall.Stat_t); ok && sys.Ino == uint64(meta.RootInode) {
@@ -54,9 +63,9 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 	}
 	_, _ = os.Stdout.WriteString("\n")
 	if background {
-		logger.Fatalf("The mount point is not ready in 10 seconds, please check the log (%s) or re-mount in foreground", logPath)
+		logger.Fatalf("The mount point is not ready in %d seconds, please check the log (%s) or re-mount in foreground", mountTimeOut, logPath)
 	} else {
-		logger.Fatalf("The mount point is not ready in 10 seconds, exit it")
+		logger.Fatalf("The mount point is not ready in %d seconds, exit it", mountTimeOut)
 	}
 }
 
