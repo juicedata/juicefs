@@ -23,46 +23,46 @@ import (
 	"time"
 )
 
-type withPrefix struct {
-	os     ObjectStorage
+type WithPrefixObj struct {
+	Os     ObjectStorage
 	prefix string
 }
 
 // WithPrefix return an object storage that add a prefix to keys.
 func WithPrefix(os ObjectStorage, prefix string) ObjectStorage {
-	return &withPrefix{os, prefix}
+	return &WithPrefixObj{os, prefix}
 }
 
-func (s *withPrefix) SetStorageClass(sc string) {
-	if o, ok := s.os.(SupportStorageClass); ok {
+func (s *WithPrefixObj) SetStorageClass(sc string) {
+	if o, ok := s.Os.(SupportStorageClass); ok {
 		o.SetStorageClass(sc)
 	}
 }
 
-func (s *withPrefix) Symlink(oldName, newName string) error {
-	if w, ok := s.os.(SupportSymlink); ok {
+func (s *WithPrefixObj) Symlink(oldName, newName string) error {
+	if w, ok := s.Os.(SupportSymlink); ok {
 		return w.Symlink(oldName, s.prefix+newName)
 	}
 	return notSupported
 }
 
-func (s *withPrefix) Readlink(name string) (string, error) {
-	if w, ok := s.os.(SupportSymlink); ok {
+func (s *WithPrefixObj) Readlink(name string) (string, error) {
+	if w, ok := s.Os.(SupportSymlink); ok {
 		return w.Readlink(s.prefix + name)
 	}
 	return "", notSupported
 }
 
-func (p *withPrefix) String() string {
-	return fmt.Sprintf("%s%s", p.os, p.prefix)
+func (p *WithPrefixObj) String() string {
+	return fmt.Sprintf("%s%s", p.Os, p.prefix)
 }
 
-func (p *withPrefix) Limits() Limits {
-	return p.os.Limits()
+func (p *WithPrefixObj) Limits() Limits {
+	return p.Os.Limits()
 }
 
-func (p *withPrefix) Create() error {
-	return p.os.Create()
+func (p *WithPrefixObj) Create() error {
+	return p.Os.Create()
 }
 
 type withFile struct {
@@ -79,7 +79,7 @@ type withObj struct {
 
 func (o *withObj) Key() string { return o.key }
 
-func (p *withPrefix) updateKey(o Object) Object {
+func (p *WithPrefixObj) updateKey(o Object) Object {
 	key := o.Key()
 	if len(key) < len(p.prefix) {
 		return o
@@ -98,49 +98,49 @@ func (p *withPrefix) updateKey(o Object) Object {
 	return o
 }
 
-func (p *withPrefix) Head(key string) (Object, error) {
-	o, err := p.os.Head(p.prefix + key)
+func (p *WithPrefixObj) Head(key string) (Object, error) {
+	o, err := p.Os.Head(p.prefix + key)
 	if err != nil {
 		return nil, err
 	}
 	return p.updateKey(o), nil
 }
 
-func (p *withPrefix) Get(key string, off, limit int64) (io.ReadCloser, error) {
+func (p *WithPrefixObj) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	if off > 0 && limit < 0 {
 		return nil, fmt.Errorf("invalid range: %d-%d", off, limit)
 	}
-	return p.os.Get(p.prefix+key, off, limit)
+	return p.Os.Get(p.prefix+key, off, limit)
 }
 
-func (p *withPrefix) Put(key string, in io.Reader) error {
-	return p.os.Put(p.prefix+key, in)
+func (p *WithPrefixObj) Put(key string, in io.Reader) error {
+	return p.Os.Put(p.prefix+key, in)
 }
 
-func (p *withPrefix) Copy(dst, src string) error {
-	return p.os.Copy(dst, src)
+func (p *WithPrefixObj) Copy(dst, src string) error {
+	return p.Os.Copy(dst, src)
 }
 
-func (p *withPrefix) Delete(key string) error {
-	return p.os.Delete(p.prefix + key)
+func (p *WithPrefixObj) Delete(key string) error {
+	return p.Os.Delete(p.prefix + key)
 }
 
-func (p *withPrefix) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+func (p *WithPrefixObj) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
 	if marker != "" {
 		marker = p.prefix + marker
 	}
-	objs, err := p.os.List(p.prefix+prefix, marker, delimiter, limit, followLink)
+	objs, err := p.Os.List(p.prefix+prefix, marker, delimiter, limit, followLink)
 	for i, o := range objs {
 		objs[i] = p.updateKey(o)
 	}
 	return objs, err
 }
 
-func (p *withPrefix) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
+func (p *WithPrefixObj) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
 	if marker != "" {
 		marker = p.prefix + marker
 	}
-	r, err := p.os.ListAll(p.prefix+prefix, marker, followLink)
+	r, err := p.Os.ListAll(p.prefix+prefix, marker, followLink)
 	if err != nil {
 		return r, err
 	}
@@ -157,53 +157,53 @@ func (p *withPrefix) ListAll(prefix, marker string, followLink bool) (<-chan Obj
 	return r2, nil
 }
 
-func (p *withPrefix) Chmod(path string, mode os.FileMode) error {
-	if fs, ok := p.os.(FileSystem); ok {
+func (p *WithPrefixObj) Chmod(path string, mode os.FileMode) error {
+	if fs, ok := p.Os.(FileSystem); ok {
 		return fs.Chmod(p.prefix+path, mode)
 	}
 	return notSupported
 }
 
-func (p *withPrefix) Chown(path string, owner, group string) error {
-	if fs, ok := p.os.(FileSystem); ok {
+func (p *WithPrefixObj) Chown(path string, owner, group string) error {
+	if fs, ok := p.Os.(FileSystem); ok {
 		return fs.Chown(p.prefix+path, owner, group)
 	}
 	return notSupported
 }
 
-func (p *withPrefix) Chtimes(key string, mtime time.Time) error {
-	if fs, ok := p.os.(FileSystem); ok {
+func (p *WithPrefixObj) Chtimes(key string, mtime time.Time) error {
+	if fs, ok := p.Os.(FileSystem); ok {
 		return fs.Chtimes(p.prefix+key, mtime)
 	}
 	return notSupported
 }
 
-func (p *withPrefix) CreateMultipartUpload(key string) (*MultipartUpload, error) {
-	return p.os.CreateMultipartUpload(p.prefix + key)
+func (p *WithPrefixObj) CreateMultipartUpload(key string) (*MultipartUpload, error) {
+	return p.Os.CreateMultipartUpload(p.prefix + key)
 }
 
-func (p *withPrefix) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
-	return p.os.UploadPart(p.prefix+key, uploadID, num, body)
+func (p *WithPrefixObj) UploadPart(key string, uploadID string, num int, body []byte) (*Part, error) {
+	return p.Os.UploadPart(p.prefix+key, uploadID, num, body)
 }
 
-func (s *withPrefix) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
-	return s.os.UploadPartCopy(s.prefix+key, uploadID, num, s.prefix+srcKey, off, size)
+func (s *WithPrefixObj) UploadPartCopy(key string, uploadID string, num int, srcKey string, off, size int64) (*Part, error) {
+	return s.Os.UploadPartCopy(s.prefix+key, uploadID, num, s.prefix+srcKey, off, size)
 }
 
-func (p *withPrefix) AbortUpload(key string, uploadID string) {
-	p.os.AbortUpload(p.prefix+key, uploadID)
+func (p *WithPrefixObj) AbortUpload(key string, uploadID string) {
+	p.Os.AbortUpload(p.prefix+key, uploadID)
 }
 
-func (p *withPrefix) CompleteUpload(key string, uploadID string, parts []*Part) error {
-	return p.os.CompleteUpload(p.prefix+key, uploadID, parts)
+func (p *WithPrefixObj) CompleteUpload(key string, uploadID string, parts []*Part) error {
+	return p.Os.CompleteUpload(p.prefix+key, uploadID, parts)
 }
 
-func (p *withPrefix) ListUploads(marker string) ([]*PendingPart, string, error) {
-	parts, nextMarker, err := p.os.ListUploads(marker)
+func (p *WithPrefixObj) ListUploads(marker string) ([]*PendingPart, string, error) {
+	parts, nextMarker, err := p.Os.ListUploads(marker)
 	for _, part := range parts {
 		part.Key = part.Key[len(p.prefix):]
 	}
 	return parts, nextMarker, err
 }
 
-var _ ObjectStorage = &withPrefix{}
+var _ ObjectStorage = &WithPrefixObj{}
