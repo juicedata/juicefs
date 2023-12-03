@@ -121,7 +121,7 @@ func (n *nfsStore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, errors.Wrapf(err, "open %s", p)
 	}
 
-	if limit >= 0 {
+	if limit > 0 {
 		return &SectionReaderCloser{
 			SectionReader: io.NewSectionReader(ff, off, limit),
 			Closer:        ff,

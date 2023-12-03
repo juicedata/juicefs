@@ -101,7 +101,7 @@ func (g *gluster) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewBuffer([]byte{})), nil
 	}
 
-	if limit >= 0 {
+	if limit > 0 {
 		return &SectionReaderCloser{
 			SectionReader: io.NewSectionReader(f, off, limit),
 			Closer:        f,

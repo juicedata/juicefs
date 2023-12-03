@@ -404,13 +404,18 @@ SINGLE:
 	}()
 	var in io.ReadCloser
 	var err error
-	if in, err = src.Get(key, 0, size); err != nil {
-		if _, e := src.Head(key); os.IsNotExist(e) {
-			logger.Debugf("Head src %s: %s", key, err)
-			copied.IncrInt64(-1)
-			err = nil
+	if size == 0 {
+		in = io.NopCloser(bytes.NewReader(nil))
+	} else {
+		in, err = src.Get(key, 0, size)
+		if err != nil {
+			if _, e := src.Head(key); os.IsNotExist(e) {
+				logger.Debugf("Head src %s: %s", key, err)
+				copied.IncrInt64(-1)
+				err = nil
+			}
+			return err
 		}
-		return err
 	}
 	defer in.Close()
 
