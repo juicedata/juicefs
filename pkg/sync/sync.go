@@ -405,6 +405,14 @@ SINGLE:
 	var in io.ReadCloser
 	var err error
 	if size == 0 {
+		if object.IsFileSystem(src) {
+			// for check permissions
+			r, err := src.Get(key, 0, -1)
+			if err != nil {
+				return err
+			}
+			_ = r.Close()
+		}
 		in = io.NopCloser(bytes.NewReader(nil))
 	} else {
 		in, err = src.Get(key, 0, size)
