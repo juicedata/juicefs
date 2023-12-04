@@ -406,7 +406,8 @@ SINGLE:
 	var err error
 	if size == 0 {
 		if object.IsFileSystem(src) {
-			r, err := src.Get(key, 0, 0)
+			// for check permissions
+			r, err := src.Get(key, 0, -1)
 			if err != nil {
 				return err
 			}
