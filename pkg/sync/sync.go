@@ -405,16 +405,12 @@ SINGLE:
 	var in io.ReadCloser
 	var err error
 	if size == 0 {
-		var obj = src
-		if o, ok := src.(*object.WithPrefixObj); ok {
-			obj = o.Os
-		}
-		if _, ok := obj.(object.FileSystem); ok {
-			if r, err := src.Get(key, 0, 0); err != nil {
+		if object.IsFileSystem(src) {
+			r, err := src.Get(key, 0, 0)
+			if err != nil {
 				return err
-			} else {
-				_ = r.Close()
 			}
+			_ = r.Close()
 		}
 		in = io.NopCloser(bytes.NewReader(nil))
 	} else {
