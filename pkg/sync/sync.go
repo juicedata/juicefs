@@ -410,8 +410,10 @@ SINGLE:
 			obj = o.Os
 		}
 		if _, ok := obj.(object.FileSystem); ok {
-			if _, err = src.Get(key, 0, 0); err != nil {
+			if r, err := src.Get(key, 0, 0); err != nil {
 				return err
+			} else {
+				_ = r.Close()
 			}
 		}
 		in = io.NopCloser(bytes.NewReader(nil))
