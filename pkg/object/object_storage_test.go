@@ -698,15 +698,6 @@ func TestJSS(t *testing.T) { //skip mutate
 	testStorage(t, jss)
 }
 
-func TestSpeedy(t *testing.T) { //skip mutate
-	if os.Getenv("SPEEDY_ACCESS_KEY") == "" {
-		t.SkipNow()
-	}
-	cos, _ := newSpeedy(os.Getenv("SPEEDY_ENDPOINT"),
-		os.Getenv("SPEEDY_ACCESS_KEY"), os.Getenv("SPEEDY_SECRET_KEY"), "")
-	testStorage(t, cos)
-}
-
 func TestB2(t *testing.T) { //skip mutate
 	if os.Getenv("B2_ACCOUNT_ID") == "" {
 		t.SkipNow()
