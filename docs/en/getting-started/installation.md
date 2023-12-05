@@ -86,6 +86,24 @@ sudo apt-get update
 sudo apt-get install juicefs
 ```
 
+#### Fedora Copr
+
+JuiceFS also provides a [Copr](https://copr.fedorainfracloud.org/coprs/juicedata/juicefs) repository, which allows for easy installation of the latest version of the client on Red Hat and its derivatives. The supported systems currently include:
+
+- **Amazonlinux 2023**
+- **CentOS 8, 9**
+- **Fedora 37, 38, 39, rawhide**
+- **RHEL 7, 8, 9**
+
+Taking Fedora 38 as an example, execute the following commands to install the client:
+
+```shell
+# Enable the Copr repository
+sudo dnf copr enable -y juicedata/juicefs
+# Install the client
+sudo dnf install juicefs
+```
+
 ### Windows
 
 There are two ways to use JuiceFS on Windows systems.
