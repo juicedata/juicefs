@@ -29,6 +29,7 @@ on:
 
 jobs:
   pjdfstest:
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +49,9 @@ jobs:
       - name: Set Variable
         id: vars
         run: echo "target=juicefs" >> $GITHUB_OUTPUT
+
       - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
         with: 
           target: ${{steps.vars.outputs.target}}

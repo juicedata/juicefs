@@ -26,6 +26,7 @@ on:
 
 jobs:
   gateway:
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -82,6 +83,7 @@ jobs:
           fi
 
       - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
         with: 
           target: ${{steps.vars.outputs.target}}
