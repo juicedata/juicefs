@@ -19,6 +19,7 @@ on:
 
 jobs:
   aitests:
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -31,7 +32,8 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Build 
+      - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
 
       - name: Run Redis

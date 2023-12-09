@@ -19,6 +19,7 @@ on:
 
 jobs:
   chaos-test:
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -37,7 +38,8 @@ jobs:
           go-version: 'oldstable'
           cache: true
 
-      - name: Build 
+      - name: Build
+        timeout-minutes: 10
         run: | 
           sudo .github/scripts/apt_install.sh musl-tools upx-ucl
           export STATIC=1

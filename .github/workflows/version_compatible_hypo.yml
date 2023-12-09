@@ -25,6 +25,7 @@ on:
 
 jobs:
   vc-hypo:
+    timeout-minutes: 120
     continue-on-error: false
     strategy:
       fail-fast: false
@@ -58,6 +59,7 @@ jobs:
           fi
 
       - name: Build new version
+        timeout-minutes: 10
         uses: ./.github/actions/build
         with: 
           target: ${{steps.vars.outputs.target}}
@@ -69,6 +71,7 @@ jobs:
           path: ${{matrix.old_juicefs_version}}
 
       - name: Make old build
+        timeout-minutes: 10
         run: | 
           cd ${{matrix.old_juicefs_version}}
           if [ "${{matrix.meta}}" == "fdb" ]; then
