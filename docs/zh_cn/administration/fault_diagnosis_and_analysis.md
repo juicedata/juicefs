@@ -209,7 +209,7 @@ juicefs profile /tmp/juicefs.accesslog --uid 12345
 
 - `cpu`：进程的 CPU 使用率。
 - `mem`：进程的物理内存使用量。
-- `buf`：进程已使用的[读写缓冲区](../guide/cache_management.md#buffer-size)大小，如果该数值逼近甚至超过客户端所设置的 [`--buffer-size`](../reference/command_reference.md#mount)，说明读写缓冲区空间不足，需要视情况扩大，或者降低应用读写负载。
+- `buf`：进程已使用的[读写缓冲区](../guide/cache.md#buffer-size)大小，如果该数值逼近甚至超过客户端所设置的 [`--buffer-size`](../reference/command_reference.md#mount)，说明读写缓冲区空间不足，需要视情况扩大，或者降低应用读写负载。
 - `cache`：内部指标，无需关注。
 
 #### `fuse`

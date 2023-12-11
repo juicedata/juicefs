@@ -126,8 +126,14 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 	} else {
 		resp, err = o.bucket.GetObject(key, oss.GetResponseHeader(&respHeader))
 		if err == nil {
+			length, err := strconv.ParseInt(resp.(*oss.Response).Headers.Get(oss.HTTPHeaderContentLength), 10, 64)
+			if err != nil {
+				length = -1
+				logger.Warnf("failed to parse content-length %s: %s", resp.(*oss.Response).Headers.Get(oss.HTTPHeaderContentLength), err)
+			}
 			resp = verifyChecksum(resp,
-				resp.(*oss.Response).Headers.Get(oss.HTTPHeaderOssMetaPrefix+checksumAlgr))
+				resp.(*oss.Response).Headers.Get(oss.HTTPHeaderOssMetaPrefix+checksumAlgr),
+				length)
 		}
 	}
 	ReqIDCache.put(key, respHeader.Get(oss.HTTPHeaderOssRequestID))
@@ -410,13 +416,23 @@ func newOSS(endpoint, accessKey, secretKey, token string) (ObjectStorage, error)
 		token = os.Getenv("SECURITY_TOKEN")
 
 		if accessKey == "" {
-			if cred, err := fetchStsToken(); err != nil {
-				return nil, fmt.Errorf("No credential provided for OSS")
-			} else {
-				accessKey = cred.AccessKeyId
-				secretKey = cred.AccessKeySecret
-				token = cred.SecurityToken
-				refresh = true
+			var err error
+			var cred *stsCred
+			maxRetry := 4
+			for i := 0; i < maxRetry; i++ {
+				time.Sleep(time.Second * time.Duration(i))
+				if cred, err = fetchStsToken(); err != nil {
+					logger.Warnf("Fetch STS Token try %d: %s", i+1, err)
+				} else {
+					accessKey = cred.AccessKeyId
+					secretKey = cred.AccessKeySecret
+					token = cred.SecurityToken
+					refresh = true
+					break
+				}
+			}
+			if err != nil {
+				return nil, fmt.Errorf("No credential provided for OSS: %s", err)
 			}
 		}
 	}

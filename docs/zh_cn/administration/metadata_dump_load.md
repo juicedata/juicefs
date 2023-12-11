@@ -10,7 +10,7 @@ slug: /metadata_dump_load
 - JuiceFS v1.0.4 开始支持通过 `load` 命令恢复加密的元数据备份
 :::
 
-JuiceFS 支持[多种元数据引擎](../reference/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 [`dump`](../reference/command_reference.md#dump) 命令允许将所有元数据以统一格式写入到 JSON 文件进行备份。同时，JuiceFS 也提供了 [`load`](../reference/command_reference.md#load) 命令，允许将备份恢复或迁移到任意元数据存储引擎。
+JuiceFS 支持[多种元数据引擎](../reference/how_to_set_up_metadata_engine.md)，且各引擎内部的数据管理格式各有不同。为了便于管理，JuiceFS 提供了 [`dump`](../reference/command_reference.md#dump) 命令允许将所有元数据以统一格式写入到 JSON 文件进行备份。同时，JuiceFS 也提供了 [`load`](../reference/command_reference.md#load) 命令，允许将备份恢复或迁移到任意元数据存储引擎。这个导出导入流程也可以用来将 JuiceFS 社区版文件系统迁移到企业版（参考[企业版文档](https://juicefs.com/docs/zh/cloud/metadata_dump_load)），反之亦然。
 
 ## 元数据备份 {#backup}
 
@@ -115,7 +115,7 @@ juicefs config --secret-key xxxxx mysql://user:password@(192.168.1.6:3306)/juice
 
 ### 加密文件系统 {#encrypted-file-system}
 
-对于[加密的文件系统](../security/encrypt.md)，所有文件都会在本地加密后才上传到后端对象存储，包括元数据自动备份文件，也会加密后才上传至对象存储。这与 `dump` 命令不同，`dump` 导出的元数据永远是明文的。
+对于[加密的文件系统](../security/encryption.md)，所有文件都会在本地加密后才上传到后端对象存储，包括元数据自动备份文件，也会加密后才上传至对象存储。这与 `dump` 命令不同，`dump` 导出的元数据永远是明文的。
 
 对于加密文件系统，在恢复自动备份的元数据时需要额外设置 `JFS_RSA_PASSPHRASE` 环境变量，以及指定 RSA 私钥和加密算法：
 

@@ -38,7 +38,7 @@ Chunks exist to optimize lookup and positioning, while the actual file writing i
 
 For example, if a file is generated through a continuous sequential write, each chunk contains only one slice. The figure above illustrates this scenario: a 160 MB file is sequentially written, resulting in three chunks, each containing only one slice.
 
-File writing generates slices, and invoking `flush` persists these slices. `flush` can be explicitly called by the user, and even if not invoked, the JuiceFS client automatically performs `flush` at the appropriate time to prevent buffer overflow (refer to [buffer-size](../guide/cache_management.md#buffer-size)). When persisting to the object storage, slices are further split into individual *blocks* (default maximum size of 4 MB) to enable multi-threaded concurrent writes, thereby enhancing write performance. The previously mentioned chunks and slices are logical data structures, while blocks represent the final physical storage form and serve as the smallest storage unit for the object storage and disk cache.
+File writing generates slices, and invoking `flush` persists these slices. `flush` can be explicitly called by the user, and even if not invoked, the JuiceFS client automatically performs `flush` at the appropriate time to prevent buffer overflow (refer to [buffer-size](../guide/cache.md#buffer-size)). When persisting to the object storage, slices are further split into individual *blocks* (default maximum size of 4 MB) to enable multi-threaded concurrent writes, thereby enhancing write performance. The previously mentioned chunks and slices are logical data structures, while blocks represent the final physical storage form and serve as the smallest storage unit for the object storage and disk cache.
 
 ![Split slices to blocks](../images/slice-to-block.svg)
 
@@ -68,5 +68,5 @@ However, it is not difficult to imagine that looking up the "most recently writt
 Additional technical aspects of JuiceFS storage design:
 
 * Irrespective of the file size, JuiceFS avoids storage merging to prevent read amplification and ensure optimal performance.
-* JuiceFS provides strong consistency guarantees while allowing tuning options with caching mechanisms tailored to specific use cases. For example, by configuring more aggressive metadata caching, a certain level of consistency can be traded for enhanced performance. For more details, see [Metadata cache](../guide/cache_management.md#metadata-cache).
+* JuiceFS provides strong consistency guarantees while allowing tuning options with caching mechanisms tailored to specific use cases. For example, by configuring more aggressive metadata caching, a certain level of consistency can be traded for enhanced performance. For more details, see [Metadata cache](../guide/cache.md#metadata-cache).
 * JuiceFS supports the ["Trash"](../security/trash.md) functionality and enables it by default. After a file is deleted, it is retained for a certain period before being permanently cleared. This helps you avoid data loss caused by accidental deletion.

@@ -19,6 +19,7 @@ on:
 
 jobs:
   aitests:
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -31,7 +32,8 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Build 
+      - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
 
       - name: Run Redis
@@ -126,13 +128,13 @@ jobs:
           df -lh
 
       - name: log
-        if: ${{ always() }}
+        if: always()
         run: | 
           tail -300 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: failure()
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"

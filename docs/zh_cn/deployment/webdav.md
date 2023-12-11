@@ -5,7 +5,7 @@ sidebar_position: 5
 
 WebDAV 是 HTTP 协议的扩展，是一种便于多用户间协同编辑和管理网络上的文档的共享协议。很多涉及文件编辑和同步的工具、macOS Finder 以及一些 Linux 发行版的文件管理器都内置了 WebDAV 客户端支持。
 
-JuiceFS 支持将文件系统设置为 WebDAV 共享，可以非常方便地把任意对象存储配置成为 WebDAV 共享来使用。
+JuiceFS 支持通过 WebDAV 协议挂载访问，对于 macOS 以及其他没有原生 FUSE 支持的操作系统，通过 WebDAV 协议访问 JuiceFS 文件系统是非常方便的。
 
 ## 前置条件
 
@@ -19,7 +19,7 @@ JuiceFS 支持将文件系统设置为 WebDAV 共享，可以非常方便地把�
 juicefs webdav META-URL LISTENING-ADDRESS:PORT
 ```
 
-例如，将一个 JuiceFS 文件系统设置为 WebDAV 共享：
+例如，为一个 JuiceFS 文件系统启用 WebDAV 协议访问：
 
 ```shell
 sudo juicefs webdav sqlite3://myjfs.db 192.168.1.8:80
@@ -82,7 +82,10 @@ JuiceFS 支持配置通过 HTTPS 协议保护的 WebDAV 服务，通过 `--cert-
 创建 WebDAV 服务时需要使用 `client.key` 和 `client.crt`，例如：
 
 ```shell
-sudo juicefs webdav --cert-file ./client.crt --key-file ./client.key sqlite3://myjfs.db 192.168.1.8:443
+sudo juicefs webdav \
+   --cert-file ./client.crt \
+   --key-file ./client.key \
+   sqlite3://myjfs.db 192.168.1.8:443
 ```
 
 启用了 HTTPS 支持，监听的端口号可以改为 HTTPS 的标准端口号 `443`，然后改用 `https://` 协议头，访问时无需指定端口号，例如：`https://192.168.1.8`。

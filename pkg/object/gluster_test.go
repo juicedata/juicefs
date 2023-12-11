@@ -30,4 +30,13 @@ func TestGluster(t *testing.T) {
 	}
 	b, _ := newGluster(os.Getenv("GLUSTER_VOLUME"), "", "", "")
 	testStorage(t, b)
+
+}
+
+func TestGluster2(t *testing.T) {
+	if os.Getenv("GLUSTER_VOLUME") == "" {
+		t.SkipNow()
+	}
+	b, _ := newGluster(os.Getenv("GLUSTER_VOLUME"), "", "", "")
+	testFileSystem(t, b)
 }

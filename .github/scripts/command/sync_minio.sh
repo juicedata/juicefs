@@ -99,9 +99,7 @@ test_sync_deep_symlink(){
     cat symlink_40 | grep hello
     cat symlink_41 && echo "cat symlink_41 fail" && exit 1 || true
     cd -
-    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ && echo "sync should fail" && exit 1 || true
-    rm -rf /jfs/symlink_41
-    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/ 
+    ./juicefs sync minio://minioadmin:minioadmin@localhost:9005/myjfs/ minio://minioadmin:minioadmin@localhost:9000/myjfs/
     for i in {1..40}; do
         ./mc cat myminio/myjfs/symlink_$i | grep "^hello$"
     done
@@ -115,7 +113,7 @@ prepare_test(){
     (./mc rb myminio/myjfs > /dev/null 2>&1 --force || true) && ./mc mb myminio/myjfs
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
-    lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9
+    lsof -i :9005 | awk 'NR!=1 {print $2}' | xargs -r kill -9 || true
     MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin ./juicefs gateway $META_URL localhost:9005 &
     ./mc alias set juicegw http://localhost:9005 minioadmin minioadmin --api S3v4
 }

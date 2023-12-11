@@ -86,6 +86,24 @@ sudo apt-get update
 sudo apt-get install juicefs
 ```
 
+#### Fedora Copr
+
+JuiceFS 也提供 [Copr](https://copr.fedorainfracloud.org/coprs/juicedata/juicefs) 仓库，可以方便地在 Red Hat 及其衍生系统上安装最新版的客户端，目前支持的系统有：
+
+- **Amazonlinux 2023**
+- **CentOS 8, 9**
+- **Fedora 37, 38, 39, rawhide**
+- **RHEL 7, 8, 9**
+
+以 Fedora 38 系统为例，执行以下命令安装客户端：
+
+```shell
+# 启用 Copr 仓库
+sudo dnf copr enable -y juicedata/juicefs
+# 安装客户端
+sudo dnf install juicefs
+```
+
 ### Windows 系统
 
 在 Windows 系统安装 JuiceFS 有以下几种方法：

@@ -27,6 +27,7 @@ on:
 jobs:
   analyze:
     name: Analyze
+    timeout-minutes: 30
     runs-on: ubuntu-20.04
     permissions:
       actions: read
@@ -88,7 +89,7 @@ jobs:
       uses: github/codeql-action/analyze@v2
 
     - name: Send Slack Notification
-      if: ${{ failure() }}
+      if: failure()
       uses: juicedata/slack-notify-action@main
       with:
         channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"

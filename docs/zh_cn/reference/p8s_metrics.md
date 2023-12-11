@@ -1,27 +1,17 @@
 ---
 title: JuiceFS 监控指标
 sidebar_position: 4
-slug: /p8s_metrics
 ---
 
-:::tip 提示
-请查看[「监控」](../administration/monitoring.md)文档了解如何收集及展示 JuiceFS 监控指标
-:::
+如果你尚未搭建监控系统、收集 JuiceFS 客户端指标，阅读[「监控」](../administration/monitoring.md)文档了解如何收集这些指标以及可视化。
 
 ## 全局标签
 
 | 名称       | 描述        |
 | ----       | ----------- |
 | `vol_name` | Volume 名称 |
-| `mp`       | 挂载点路径  |
-
-:::info 说明
-Prometheus 在抓取监控指标时会自动附加 `instance` 标签以帮助识别不同的抓取目标，格式为 `<host>:<port>`。详见[官方文档](https://prometheus.io/docs/concepts/jobs_instances)。
-:::
-
-:::info 说明
-如果是通过 [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 的方式上报监控指标（例如 [JuiceFS Hadoop Java SDK](../administration/monitoring.md#hadoop)），`mp` 标签的值为 `sdk-<PID>`，`instance` 标签的值为主机名。
-:::
+| `instance` | 客户端主机名，格式为 `<host>:<port>`。详见[官方文档](https://prometheus.io/docs/concepts/jobs_instances) |
+| `mp`       | 挂载点路径，如果是通过 [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) 上报，例如 [JuiceFS Hadoop Java SDK](../administration/monitoring.md#hadoop)，那么 `mp` 标签的值为 `sdk-<PID>` |
 
 ## 文件系统
 

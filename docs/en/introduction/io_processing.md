@@ -28,7 +28,7 @@ Generally, when JuiceFS writes a small file, the file is uploaded to the object 
 - The size of data written to the object storage during PUT operations is 128 KiB, calculated by `object.put / object.put_c`.
 - The number of metadata transactions is approximately twice the number of PUT operations, since each file requires one create and one write.
 
-When JuiceFS uploads objects smaller than the block size, it simultaneously writes them into the [local cache](../guide/cache_management.md) to improve future performance. As shown in the third stage of the figure above, the write bandwidth of the `blockcache` is the same as that of the object storage. Since small files are cached, reading these files is extremely fast, as demonstrated in the fourth stage.
+When JuiceFS uploads objects smaller than the block size, it simultaneously writes them into the [local cache](../guide/cache.md) to improve future performance. As shown in the third stage of the figure above, the write bandwidth of the `blockcache` is the same as that of the object storage. Since small files are cached, reading these files is extremely fast, as demonstrated in the fourth stage.
 
 Write operations are immediately committed to the client buffer, resulting in very low write latency (typically just a few microseconds). The actual upload to the object storage is automatically triggered internally when certain conditions are met, such as when the size or number of slices exceeds their limit, or data stays in the buffer for too long. Explicit calls, such as closing a file or invoking `fsync`, can also trigger uploading.
 
@@ -48,7 +48,7 @@ Client write cache is also referred to as "Writeback mode" throughout the docs.
 
 For scenarios that does not deem consistency and data security as top priorities, enabling client write cache is also an option to further improve performance. When client write cache is enabled, flush operations return immediately after writing data to the local cache directory. Then, local data is uploaded asynchronously to the object storage. In other words, the local cache directory is a cache layer for the object storage.
 
-Learn more in [Client Write Cache](../guide/cache_management.md#writeback).
+Learn more in [Client Write Cache](../guide/cache.md#client-write-cache).
 
 ## Data reading process {#workflow-of-read}
 

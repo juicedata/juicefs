@@ -5,7 +5,7 @@ sidebar_position: 5
 
 WebDAV is an extension of the HTTP protocol, a sharing protocol that facilitates collaborative editing and management of documents on a network between multiple users. WebDAV client support is built into many tools involved in file editing and synchronization, macOS Finder, and the file managers of some Linux distributions.
 
-JuiceFS supports setting the file system as a WebDAV server, making it very easy to configure any object storage as a WebDAV server for use.
+JuiceFS supports accessing through the WebDAV protocol, which is very convenient for macOS and other operating systems that do not have native FUSE support.
 
 ## Pre-requisites
 
@@ -19,7 +19,7 @@ For security insensitive environments such as standalone or intranet, anonymous 
 juicefs webdav META-URL LISTENING-ADDRESS:PORT
 ```
 
-For example, to set up a JuiceFS file system as a WebDAV server:
+For example, enable the WebDAV access protocol for a JuiceFS file system:
 
 ```shell
 sudo juicefs webdav sqlite3://myjfs.db 192.168.1.8:80
@@ -82,7 +82,10 @@ The above command will produce the following files in the current directory:
 To create a WebDAV server you need to use `client.key` and `client.crt`, e.g.
 
 ```shell
-sudo juicefs webdav --cert-file ./client.crt --key-file ./client.key sqlite3://myjfs.db 192.168.1.8:443
+sudo juicefs webdav \
+   --cert-file ./client.crt \
+   --key-file ./client.key \
+   sqlite3://myjfs.db 192.168.1.8:443
 ```
 
 With HTTPS support enabled, the listening port number can be changed to the standard HTTPS port number `443`, and then the `https://` protocol is used instead, so that the port number does not need to be specified when accessing, for example: `https://192.168.1.8`.

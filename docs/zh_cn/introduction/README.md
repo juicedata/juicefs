@@ -24,7 +24,7 @@ JuiceFS 提供了丰富的 API，适用于各种形式数据的管理、分析�
 5. **分布式设计**：同一文件系统可在上千台服务器同时挂载，高性能并发读写，共享数据；
 6. **强一致性**：确认的文件修改会在所有服务器上立即可见，保证强一致性；
 7. **强悍性能**：毫秒级延迟，近乎无限的吞吐量（取决于对象存储规模），查看[性能测试结果](../benchmark/benchmark.md)；
-8. **数据安全**：支持传输中加密（encryption in transit）和静态加密（encryption at rest），[查看详情](../security/encrypt.md)；
+8. **数据安全**：支持传输中加密（encryption in transit）和静态加密（encryption at rest），[查看详情](../security/encryption.md)；
 9. **文件锁**：支持 BSD 锁（flock）和 POSIX 锁（fcntl）；
 10. **数据压缩**：支持 [LZ4](https://lz4.github.io/lz4) 和 [Zstandard](https://facebook.github.io/zstd) 压缩算法，节省存储空间。
 

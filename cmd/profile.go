@@ -245,15 +245,19 @@ func (p *profiler) fastCounter() {
 	p.printTime <- last
 }
 
+func colorize1(msg string, color int) string {
+	return fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, color, msg, RESET_SEQ)
+}
+
 func printLines(lines []string, colorful bool) {
 	if colorful {
-		fmt.Print("\033[2J\033[1;1H") // clear screen
-		fmt.Printf("\033[92m%s\n\033[0m", lines[0])
-		fmt.Printf("\033[97m%s\n\033[0m", lines[1])
-		fmt.Printf("\033[94m%s\n\033[0m", lines[2])
+		fmt.Print(CLEAR_SCREEM)
+		fmt.Println(colorize1(lines[0], GREEN))
+		fmt.Println(colorize1(lines[1], YELLOW))
+		fmt.Println(colorize1(lines[2], BLUE))
 		if len(lines) > 3 {
 			for _, l := range lines[3:] {
-				fmt.Printf("\033[93m%s\n\033[0m", l)
+				fmt.Println(colorize1(l, BLACK))
 			}
 		}
 	} else {

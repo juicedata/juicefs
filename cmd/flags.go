@@ -49,6 +49,10 @@ func globalFlags() []cli.Flag {
 			Usage:  "set log level (trace, debug, info, warn, error, fatal, panic)",
 			Hidden: true,
 		},
+		&cli.StringFlag{
+			Name:  "log-id",
+			Usage: "append the given log id in log, use \"random\" to use random uuid",
+		},
 		&cli.BoolFlag{
 			Name:  "no-agent",
 			Usage: "disable pprof (:6060) agent",
@@ -96,7 +100,7 @@ func storageFlags() []cli.Flag {
 	return addCategories("DATA STORAGE", []cli.Flag{
 		&cli.StringFlag{
 			Name:  "storage",
-			Usage: "customized storage type (e.g. s3, gcs, oss, cos) to access object store",
+			Usage: "customized storage type (e.g. s3, gs, oss, cos) to access object store",
 		},
 		&cli.StringFlag{
 			Name:  "bucket",
@@ -255,6 +259,11 @@ func metaFlags() []cli.Flag {
 			Name:  "skip-dir-nlink",
 			Value: 20,
 			Usage: "number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never)",
+		},
+		&cli.StringFlag{
+			Name:  "skip-dir-mtime",
+			Value: "100ms",
+			Usage: "skip updating attribute of a directory if the mtime difference is smaller than this value",
 		},
 	})
 }

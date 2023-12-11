@@ -83,7 +83,7 @@ If you wanna use JuiceFS in Hadoop, check [Hadoop Java SDK](https://juicefs.com/
 
 - [Redis Best Practices](https://juicefs.com/docs/community/redis_best_practices)
 - [How to Setup Object Storage](https://juicefs.com/docs/community/how_to_setup_object_storage)
-- [Cache Management](https://juicefs.com/docs/community/cache_management)
+- [Cache](https://juicefs.com/docs/community/cache)
 - [Fault Diagnosis and Analysis](https://juicefs.com/docs/community/fault_diagnosis_and_analysis)
 - [FUSE Mount Options](https://juicefs.com/docs/community/fuse_mount_options)
 - [Using JuiceFS on Windows](https://juicefs.com/docs/community/installation#windows)

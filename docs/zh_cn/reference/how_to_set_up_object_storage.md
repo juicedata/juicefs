@@ -1,7 +1,6 @@
 ---
 title: 如何设置对象存储
 sidebar_position: 3
-slug: /how_to_setup_object_storage
 description: JuiceFS 以对象存储作为数据存储，本文介绍 JuiceFS 支持的对象存储以及相应的配置和使用方法。
 ---
 
@@ -189,6 +188,7 @@ juicefs format \
 | [PostgreSQL](#postgresql)                   | `postgres` |
 | [本地磁盘](#本地磁盘)                       | `file`     |
 | [SFTP/SSH](#sftp)                           | `sftp`     |
+| [NFS](#nfs)                                 | `nfs`      |
 
 ### Amazon S3
 
@@ -741,10 +741,10 @@ juicefs format \
 
 ### Ceph RADOS
 
-:::note 注意
+:::note
 JuiceFS v1.0 使用的 `go-ceph` 库版本为 v0.4.0，其支持的 Ceph 最低版本为 Luminous（v12.2.*）。
 JuiceFS v1.1 使用的 `go-ceph` 库版本为 v0.18.0，其支持的 Ceph 最低版本为 Octopus（v15.2.*）。
-在使用前请确认 JuiceFS 与您使用的 Ceph 版本是否匹配，具体可参见 [`go-ceph`](https://github.com/ceph/go-ceph#supported-ceph-versions)。
+使用前请确认 JuiceFS 与使用的 Ceph 和 `librados` 版本是否匹配，详见 [`go-ceph`](https://github.com/ceph/go-ceph#supported-ceph-versions)、[`librados`](https://docs.ceph.com/en/quincy/rados/api/librados-intro/)。
 :::
 
 [Ceph 存储集群](https://docs.ceph.com/en/latest/rados) 具有消息传递层协议，该协议使客户端能够与 Ceph Monitor 和 Ceph OSD 守护程序进行交互。[`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro) API 使您可以与这两种类型的守护程序进行交互：
@@ -754,11 +754,7 @@ JuiceFS v1.1 使用的 `go-ceph` 库版本为 v0.18.0，其支持的 Ceph 最低
 
 JuiceFS 支持使用基于 `librados` 的本地 Ceph API。您需要分别安装 `librados` 库并重新编译 `juicefs` 二进制文件。
 
-首先安装 `librados`：
-
-:::note 注意
-建议使用匹配你的 Ceph 版本的 `librados`，例如 Ceph 版本是 Octopus（v15.2.\*），那么 `librados` 也建议使用 v15.2.\* 版本。某些 Linux 发行版（如 CentOS 7）自带的 `librados` 版本可能较低，如果编译 JuiceFS 失败可以尝试下载更高版本的安装包。
-:::
+首先安装 `librados`，建议使用匹配你的 Ceph 版本的 `librados`，例如 Ceph 版本是 Octopus（v15.2.x），那么 `librados` 也建议使用 v15.2.x 版本。
 
 <Tabs>
   <TabItem value="debian" label="Debian 及衍生版本">
@@ -783,7 +779,11 @@ sudo yum install librados2-devel
 make juicefs.ceph
 ```
 
-[存储池](https://docs.ceph.com/zh_CN/latest/rados/operations/pools) 是用于存储对象的逻辑分区，您可能需要首先创建一个存储池。 `--access-key` 选项的值是 Ceph 集群名称，默认集群名称是 `ceph`。`--secret-key` 选项的值是 [Ceph 客户端用户名](https://docs.ceph.com/en/latest/rados/operations/user-management)，默认用户名是 `client.admin`。
+在使用 Ceph 时，原本 JuiceFS 客户端的对象存储参数的含义不太相同：
+
+* `--bucket` 是 Ceph 存储池，格式为 `ceph://<pool-name>`，[存储池](https://docs.ceph.com/zh_CN/latest/rados/operations/pools)是用于存储对象的逻辑分区，使用前需要先创建好
+* `--access-key` 选项的值是 Ceph 集群名称，默认集群名称是 `ceph`。
+* `--secret-key` 选项的值是 [Ceph 客户端用户名](https://docs.ceph.com/en/latest/rados/operations/user-management)，默认用户名是 `client.admin`。
 
 为了连接到 Ceph Monitor，`librados` 将通过搜索默认位置读取 Ceph 的配置文件，并使用找到的第一个。这些位置是：
 
@@ -792,7 +792,7 @@ make juicefs.ceph
 - `~/.ceph/config`
 - 在当前工作目录中的 `ceph.conf`
 
-例如：
+创建一个文件系统：
 
 ```bash
 juicefs.ceph format \
@@ -1214,3 +1214,34 @@ juicefs format  \
 - `--bucket` 用来设置服务器的地址及存储路径，格式为 `<IP/Domain>:[port]:<Path>`。注意，地址中不要包含协议头，目录名应该以 `/` 结尾，端口号为可选项默认为 `22`，例如 `192.168.1.11:22:myjfs/`。
 - `--access-key` 用来设置远程服务器的用户名
 - `--secret-key` 用来设置远程服务器的密码
+
+### NFS {#nfs}
+
+网络文件系统 (Network File System) 简称 NFS，其客户端主机可以访问服务器端文件，并且其过程与访问本地存储时一样。它基于开放网络运算远程过程调用（ONC RPC）系统：一个开放、标准的 RFC 系统，任何人或组织都可以依据标准实现它。
+
+在 JuiceFS 稳定版本中（<=v1.1.x），只能通过本地挂载的方式使用 NFS 作为对象存储。例如，先把远程 NFS 服务器 `192.168.1.11` 上的 `/srv/data` 目录挂载到本地的 `/mnt/data` 目录，然后再使用 `file` 模式访问。
+
+```shell
+$ mount -t nfs 192.168.1.11:/srv/data /mnt/data
+$ juicefs format  \
+    --storage file \
+    --bucket /mnt/data \
+    ...
+    redis://localhost:6379/1 myjfs
+```
+
+#### 直连模式
+
+在 JuiceFS 的待发布版本（v1.2.x）中，我们支持了 NFSv3 协议直连作为对象存储。例如，同样使用远程 NFS 服务器 `192.168.1.11` 上的 `/srv/data` 作为数据存储目录：
+
+```shell
+$ juicefs format  \
+    --storage nfs \
+    --bucket 192.168.1.11:/srv/data \
+    ...
+    redis://localhost:6379/1 myjfs
+```
+
+:::note 注意
+NFSv3 不支持账户密码验证，请确保 format 和 mount 进程的 UID/GID 有对远程数据目录的读写权限。
+:::
