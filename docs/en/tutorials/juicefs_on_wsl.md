@@ -11,7 +11,7 @@ Using WSL requires Windows 10 2004 or higher or Windows 11.
 
 To check the current system version, you can call up the Run program by pressing <kbd>Win</kbd> + <kbd>R</kbd>. Type and run `winver`.
 
-![](../images/wsl/winver-en.png)
+![WSL/winver-en](../images/wsl/winver-en.png)
 
 After confirming the Windows version, open PowerShell or Windows Command Prompt as an administrator and run the installation command.
 
@@ -35,11 +35,11 @@ wsl --install -d ubuntu
 
 Once the WSL installation is complete, you can find the newly installed Linux distribution in the Start menu.
 
-![](../images/wsl/startmenu-en.png)
+![WSL/startmenu-en](../images/wsl/startmenu-en.png)
 
 By clicking on the Ubuntu subsystem shortcut, WSL will open the terminal of the Linux subsystem. The first time you run it, you will be asked to set the user and password for managing the Linux subsystem, just follow the prompts.
 
-![](../images/wsl/init.png)
+![WSL/init](../images/wsl/init.png)
 
 There are several points to note about the username and password set here:
 
@@ -86,7 +86,7 @@ JuiceFS is a distributed file system with data and metadata separated, usually u
 
 #### Object Storage
 
-View "[JuiceFS Supported Object Storage](../guide/how_to_set_up_object_storage.md)"
+View "[JuiceFS Supported Object Storage](../reference/how_to_set_up_object_storage.md)"
 
 - **Bucket Endpoint**: `https://myjfs.oss-cn-shanghai.aliyuncs.com`
 - **Access Key ID**: `ABCDEFGHIJKLMNopqXYZ`
@@ -94,7 +94,7 @@ View "[JuiceFS Supported Object Storage](../guide/how_to_set_up_object_storage.m
 
 #### Database
 
-View "[JuiceFS Supported Metadata Engines](../guide/how_to_set_up_metadata_engine.md)"
+View "[JuiceFS Supported Metadata Engines](../reference/how_to_set_up_metadata_engine.md)"
 
 - **Database URL**: `myjfs-sh-abc.redis.rds.aliyuncs.com:6379`
 - **Database Password**: `mypassword`
@@ -137,7 +137,7 @@ sudo juicefs mount -d redis://myjfs-sh-abc.redis.rds.aliyuncs.com:6379/1 $HOME/m
 
 If you need to access the JuiceFS file system mounted on a Linux subsystem from a Windows system, find the Linux subsystem in the list on the left side of Explorer, then find and open the mount point path.
 
-![](../images/wsl/access-jfs-from-win-en.png)
+![WSL/access-jfs-from-win-en](../images/wsl/access-jfs-from-win-en.png)
 
 For more information on the use of JuiceFS, please refer to the official documentation.
 
@@ -145,13 +145,13 @@ For more information on the use of JuiceFS, please refer to the official documen
 
 WSL bridges the Windows and Linux subsystems, allowing them to access each other's files stored on each other's systems.
 
-![](../images/wsl/windows-to-linux-en.png)
+![WSL/Windows-to-Linux-en](../images/wsl/windows-to-linux-en.png)
 
 Note, however, that accessing the Linux subsystem from Windows or accessing Windows from the Linux subsystem is bound to incur some performance overhead due to switching between systems. Therefore, the recommended practice is to decide where to store the files depending on the system where the program is located, and for programs in the Linux subsystem, the files it will be processing should also be stored in the Linux subsystem for better performance.
 
 In the Linux subsystem, WSL mounts each Windows drive to `/mnt`, for example, the mount point for the C: drive in the Linux subsystem is `/mnt/c`.
 
-![](../images/wsl/mount-point.png)
+![WSL/mount-point](../images/wsl/mount-point.png)
 
 To ensure optimal performance, when using JuiceFS in WSL, both the storage and cache paths should be set in the Linux subsystem. In other words, you should avoid setting the storage or cache on a Windows partition mount point like `/mnt/c`.
 
@@ -163,4 +163,4 @@ When copying files to a Linux subsystem via Windows Explorer, WSL automatically 
 
 This issue also affects the same problem when saving files to a mounted JuiceFS file system in the Linux subsystem via Windows Explorer. However, reading and writing JuiceFS file systems inside the Linux subsystem is not affected by this bug.
 
-![](../images/wsl/zone-identifier-en.png)
+![WSL/zone-identifier-en](../images/wsl/zone-identifier-en.png)

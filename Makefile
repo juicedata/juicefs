@@ -3,7 +3,7 @@ export GO111MODULE=on
 all: juicefs
 
 REVISION := $(shell git rev-parse --short HEAD 2>/dev/null)
-REVISIONDATE := $(shell git log -1 --pretty=format:'%ad' --date short 2>/dev/null)
+REVISIONDATE := $(shell git log -1 --pretty=format:'%cd' --date short 2>/dev/null)
 PKG := github.com/juicedata/juicefs/pkg/version
 LDFLAGS = -s -w
 ifneq ($(strip $(REVISION)),) # Use git clone
@@ -24,7 +24,7 @@ juicefs: Makefile cmd/*.go pkg/*/*.go go.*
 	go build -ldflags="$(LDFLAGS)"  -o juicefs .
 
 juicefs.lite: Makefile cmd/*.go pkg/*/*.go
-	go build -tags nogateway,nowebdav,nocos,nobos,nohdfs,noibmcos,noobs,nooss,noqingstor,noscs,nosftp,noswift,noupyun,noazure,nogs,noufile,nob2,nosqlite,nomysql,nopg,notikv,nobadger,noetcd \
+	go build -tags nogateway,nowebdav,nocos,nobos,nohdfs,noibmcos,noobs,nooss,noqingstor,noscs,nosftp,noswift,noupyun,noazure,nogs,noufile,nob2,nonfs,nosqlite,nomysql,nopg,notikv,nobadger,noetcd \
 		-ldflags="$(LDFLAGS)" -o juicefs.lite .
 
 juicefs.ceph: Makefile cmd/*.go pkg/*/*.go

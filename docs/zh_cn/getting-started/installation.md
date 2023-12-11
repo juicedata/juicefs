@@ -15,7 +15,13 @@ JuiceFS 客户端只有一个二进制文件，你可以下载预编译的版本
 一键安装脚本适用于 Linux 和 macOS 系统，会根据你的硬件架构自动下载安装最新版 JuiceFS 客户端。
 
 ```shell
+# 默认安装到 /usr/local/bin
 curl -sSL https://d.juicefs.com/install | sh -
+```
+
+```shell
+# 安装到 /tmp 目录下
+curl -sSL https://d.juicefs.com/install | sh -s /tmp
 ```
 
 ## 安装预编译客户端 {#install-the-pre-compiled-client}
@@ -78,6 +84,24 @@ JuiceFS 也提供 [PPA](https://launchpad.net/~juicefs) 仓库，可以方便地
 sudo add-apt-repository ppa:juicefs/ppa
 sudo apt-get update
 sudo apt-get install juicefs
+```
+
+#### Fedora Copr
+
+JuiceFS 也提供 [Copr](https://copr.fedorainfracloud.org/coprs/juicedata/juicefs) 仓库，可以方便地在 Red Hat 及其衍生系统上安装最新版的客户端，目前支持的系统有：
+
+- **Amazonlinux 2023**
+- **CentOS 8, 9**
+- **Fedora 37, 38, 39, rawhide**
+- **RHEL 7, 8, 9**
+
+以 Fedora 38 系统为例，执行以下命令安装客户端：
+
+```shell
+# 启用 Copr 仓库
+sudo dnf copr enable -y juicedata/juicefs
+# 安装客户端
+sudo dnf install juicefs
 ```
 
 ### Windows 系统

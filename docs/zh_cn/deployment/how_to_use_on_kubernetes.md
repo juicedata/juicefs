@@ -1,6 +1,6 @@
 ---
 title: Kubernetes 使用 JuiceFS
-sidebar_position: 4
+sidebar_position: 2
 slug: /how_to_use_on_kubernetes
 ---
 

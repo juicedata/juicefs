@@ -29,6 +29,7 @@ on:
 
 jobs:
   pjdfstest:
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +49,9 @@ jobs:
       - name: Set Variable
         id: vars
         run: echo "target=juicefs" >> $GITHUB_OUTPUT
+
       - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
         with: 
           target: ${{steps.vars.outputs.target}}
@@ -92,7 +95,7 @@ jobs:
           sudo prove -rv tests/
 
       - name: log
-        if: ${{ always() }}
+        if: always()
         shell: bash
         run: | 
           if [ -f ~/.juicefs/juicefs.log ]; then
@@ -105,14 +108,14 @@ jobs:
           fi
 
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: failure()
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"  
 
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
@@ -129,12 +132,12 @@ jobs:
         run: exit 1
 
       - name: Send Slack Notification
-        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        if: failure() && github.event_name != 'workflow_dispatch'
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Success
-        if: ${{ success() }}
+        if: success()
         run: echo "All Done"

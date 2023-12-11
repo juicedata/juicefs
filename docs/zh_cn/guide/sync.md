@@ -30,7 +30,7 @@ minio://[ACCESS_KEY:SECRET_KEY[:TOKEN]@]ENDPOINT/BUCKET[/PREFIX]
 
 其中：
 
-- `NAME` 是存储类型，比如 `s3`、`oss`。详情查看[所有支持的存储服务](../guide/how_to_set_up_object_storage.md#supported-object-storage)
+- `NAME` 是存储类型，比如 `s3`、`oss`。详情查看[所有支持的存储服务](../reference/how_to_set_up_object_storage.md#supported-object-storage)
 - `ACCESS_KEY` 和 `SECRET_KEY` 是对象存储的 API 访问密钥，如果包含了特殊字符，则需要手动转义并替换，比如 `/` 需要被替换为其转义符 `%2F`
 - `TOKEN` 用来访问对象存储的 token，部分对象存储支持使用临时的 token 以获得有限时间的权限
 - `BUCKET[.ENDPOINT]` 是对象存储的访问地址
@@ -115,6 +115,18 @@ myfs=redis://10.10.0.8:6379/1 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1
 
 ## 高级用法
 
+### 观测 {#observation}
+
+简单来说，用 `sync` 命令拷贝大文件时，进度条可能会迟迟不更新，如果担心命令未能正常工作，可以用其他手段对传输情况进行观测。
+
+`sync` 假定了使用场景是拷贝大量文件，因此进度的计算也是针对多个文件设计的：每一个文件完成了拷贝后，进度会更新一次。因此如果面对的都是大文件，单个文件的拷贝速度太慢，进度条就会变化缓慢，或者呈现卡死的状态。如果目的地端协议不支持 multipart upload（比如 `file`、`sftp`、`jfs`、`gluster` 协议头），单个文件会单线程进行复制，无法对大文件进行并发上传。可想而知，大文件 + 不支持 multipart upload，将会更容易出现进度条卡死的情况。
+
+如果你观察到进度不再变化，参考下列手段进行观测和排查：
+
+* 如果数据同步的两方有任何一个是 JuiceFS 宿主机挂载点，可以用 [`juicefs stats`](../administration/fault_diagnosis_and_analysis.md#stats) 快速查看文件系统是否正在写入（或读出）。
+* 如果数据同步的目的地是宿主机本地盘，可以直接观察目录下是否存在名称中带 `.tmp.xxx` 后缀的临时文件，`sync` 过程中会将传输结果写入临时文件，待传输完成后进行重命名，才完成最终的写入。观察临时文件大小是否变化，就能确定当前的写入状况。
+* 如果传输目的地均为对象存储，可以通过类似 `nethogs` 的命令，查看出入网流量，来判断传输进展。
+
 ### 增量同步与全量同步 {#incremental-and-full-synchronization}
 
 `juicefs sync` 默认以增量同步方式工作，对于已存在的文件，仅在文件大小不一样时，才再次同步进行覆盖。在此基础上，还可以指定 [`--update`](../reference/command_reference.md#sync)，在源文件 `mtime` 更新时进行覆盖。如果你的场景对正确性有着极致要求，可以指定 [`--check-new`](../reference/command_reference.md#sync) 或 [`--check-all`](../reference/command_reference.md#sync)，来对两边的文件进行字节流比对，确保数据一致。
@@ -192,11 +204,11 @@ JuiceFS `sync` 在**本地目录之间**同步时，支持通过设置 `--links`
 
 在两个对象存储之间同步数据，就是从一端拉取数据再推送到另一端，同步的效率取决于客户端与云之间的带宽：
 
-![](../images/juicefs-sync-single.png)
+![JuiceFS-sync-single](../images/juicefs-sync-single.png)
 
 在同步大量数据时，单机带宽往往会被占满出现瓶颈，针对这种情况，JuiceFS Sync 提供多机并发同步支持，如下图。
 
-![](../images/juicefs-sync-worker.png)
+![JuiceFS-sync-worker](../images/juicefs-sync-worker.png)
 
 Manager 作为主控执行 `sync` 命令，通过 `--worker` 参数定义多个 Worker 主机，JuiceFS 会根据 Worker 的总数量，动态拆分同步的工作量并分发给各个主机同时执行。即把原本在一台主机上处理的同步任务量拆分成多份，分发到多台主机上同时处理，单位时间内能处理的数据量更大，总带宽也成倍增加。
 
@@ -236,3 +248,15 @@ juicefs sync cos://ABCDEFG:HIJKLMN@ccc-125000.cos.ap-beijing.myqcloud.com oss://
 ```
 
 同步以后，在 [对象存储 B](#required-storages) 中看到的与 [JuiceFS 使用的对象存储](#required-storages) 中的内容和结构完全一样。
+
+### 使用 S3 网关进行跨区域数据同步 {#sync-across-region}
+
+通过 POSIX 方式访问 JuiceFS 时，会有频繁的元数据访问，跨区域访问元数据的延迟比较高会影响访问性能。如果需要跨区域传输大量小文件，这时元数据服务延迟高对性能影响更严重。
+
+![sync via public metadata service](../images/sync-public-metadata.svg)
+
+在这种情况下，可以通过跨区访问部署在源区域的 S3 网关来提升性能，它可以大幅减少跨区域访问的请求数。
+
+![sync via gateway](../images/sync-via-gateway.svg)
+
+阅读[「S3 网关」](../deployment/s3_gateway.md)学习如何使用和部署 S3 网关。

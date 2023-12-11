@@ -207,3 +207,11 @@ func (p *withPrefix) ListUploads(marker string) ([]*PendingPart, string, error) 
 }
 
 var _ ObjectStorage = &withPrefix{}
+
+func IsFileSystem(object ObjectStorage) bool {
+	if o, ok := object.(*withPrefix); ok {
+		object = o.os
+	}
+	_, ok := object.(FileSystem)
+	return ok
+}

@@ -346,7 +346,16 @@ func (fs *FileSystem) StatFS(ctx meta.Context) (totalspace uint64, availspace ui
 	return
 }
 
-func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File, err syscall.Errno) {
+// open file without following symlink
+func (fs *FileSystem) Lopen(ctx meta.Context, path string, flags uint32) (f *File, err syscall.Errno) {
+	return fs.open(ctx, path, flags, false)
+}
+
+func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (*File, syscall.Errno) {
+	return fs.open(ctx, path, flags, true)
+}
+
+func (fs *FileSystem) open(ctx meta.Context, path string, flags uint32, followLink bool) (f *File, err syscall.Errno) {
 	_, task := trace.NewTask(context.TODO(), "Open")
 	defer task.End()
 	l := vfs.NewLogContext(ctx)
@@ -356,7 +365,7 @@ func (fs *FileSystem) Open(ctx meta.Context, path string, flags uint32) (f *File
 		defer func() { fs.log(l, "Lookup (%s): %s", path, errstr(err)) }()
 	}
 	var fi *FileStat
-	fi, err = fs.resolve(ctx, path, true)
+	fi, err = fs.resolve(ctx, path, followLink)
 	if err != 0 {
 		return
 	}
@@ -681,10 +690,10 @@ func (fs *FileSystem) lookup(ctx meta.Context, parent Ino, name string, inode *I
 }
 
 func (fs *FileSystem) resolve(ctx meta.Context, p string, followLastSymlink bool) (fi *FileStat, err syscall.Errno) {
-	return fs.doResolve(ctx, p, followLastSymlink, 0)
+	return fs.doResolve(ctx, p, followLastSymlink, make(map[Ino]struct{}))
 }
 
-func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bool, depth int) (fi *FileStat, err syscall.Errno) {
+func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bool, visited map[Ino]struct{}) (fi *FileStat, err syscall.Errno) {
 	var inode Ino
 	var attr = &Attr{}
 
@@ -740,8 +749,11 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 		}
 		fi = AttrToFileInfo(inode, attr)
 		if (!resolved || followLastSymlink) && fi.IsSymlink() {
-			if depth > 39 {
+			if _, ok := visited[inode]; ok {
+				logger.Errorf("find a loop symlink: %d", inode)
 				return nil, syscall.ELOOP
+			} else {
+				visited[inode] = struct{}{}
 			}
 			var buf []byte
 			err = fs.m.ReadLink(ctx, inode, &buf)
@@ -753,7 +765,7 @@ func (fs *FileSystem) doResolve(ctx meta.Context, p string, followLastSymlink bo
 				return &FileStat{name: target}, syscall.ENOTSUP
 			}
 			target = path.Join(strings.Join(ss[:i], "/"), target)
-			fi, err = fs.doResolve(ctx, target, followLastSymlink, depth+1)
+			fi, err = fs.doResolve(ctx, target, followLastSymlink, visited)
 			if err != 0 {
 				return
 			}

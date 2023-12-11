@@ -1,6 +1,6 @@
 ---
 title: Use JuiceFS on Hadoop Ecosystem
-sidebar_position: 5
+sidebar_position: 3
 slug: /hadoop_java_sdk
 ---
 

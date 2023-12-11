@@ -1173,7 +1173,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 					logger.Warnf("Skip updating nlink of directory %d to reduce conflict", parent)
 				}
 			}
-			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 				pattr.Mtime = now.Unix()
 				pattr.Mtimensec = uint32(now.Nanosecond())
 				pattr.Ctime = now.Unix()
@@ -1303,7 +1303,7 @@ func (m *kvMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 
 		defer func() { m.of.InvalidateChunk(inode, invalidateAttrOnly) }()
 		var updateParent bool
-		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1426,7 +1426,7 @@ func (m *kvMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		} else {
 			logger.Warnf("Skip updating nlink of directory %d to reduce conflict", parent)
 		}
-		if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+		if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1611,14 +1611,14 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				iattr.Parent = parentDst
 			}
 		}
-		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			sattr.Mtime = now.Unix()
 			sattr.Mtimensec = uint32(now.Nanosecond())
 			sattr.Ctime = now.Unix()
 			sattr.Ctimensec = uint32(now.Nanosecond())
 			supdate = true
 		}
-		if dupdate || now.Sub(time.Unix(dattr.Mtime, int64(dattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+		if dupdate || now.Sub(time.Unix(dattr.Mtime, int64(dattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			dattr.Mtime = now.Unix()
 			dattr.Mtimensec = uint32(now.Nanosecond())
 			dattr.Ctime = now.Unix()
@@ -1746,7 +1746,7 @@ func (m *kvMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 		var updateParent bool
 		now := time.Now()
-		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime*time.Duration(tx.retry+1) {
+		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime*time.Duration(tx.retry+1) {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -2023,7 +2023,7 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		attr.Ctimensec = uint32(now.Nanosecond())
 
 		vals := make(map[string][]byte)
-		tx.scan(m.chunkKey(fin, uint32(offIn/ChunkSize)), m.chunkKey(fin, uint32(offIn+size/ChunkSize)+1),
+		tx.scan(m.chunkKey(fin, uint32(offIn/ChunkSize)), m.chunkKey(fin, uint32((offIn+size)/ChunkSize)+1),
 			false, func(k, v []byte) bool {
 				vals[string(k)] = v
 				return true
@@ -2748,22 +2748,41 @@ func (m *kvMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	return m.parseQuota(buf), nil
 }
 
-func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error {
-	return m.txn(func(tx *kvTxn) error {
-		if create {
-			tx.set(m.dirQuotaKey(inode), m.packQuota(quota))
+func (m *kvMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
+	var created bool
+	err := m.txn(func(tx *kvTxn) error {
+		var origin *Quota
+		buf := tx.get(m.dirQuotaKey(inode))
+		if len(buf) == 32 {
+			origin = m.parseQuota(buf)
+			created = false
+		} else if len(buf) != 0 {
+			return fmt.Errorf("invalid quota value: %v", buf)
 		} else {
-			buf := tx.get(m.dirQuotaKey(inode))
-			if len(buf) != 32 {
-				return fmt.Errorf("invalid quota value: %v", buf)
+			if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
+				return errors.New("limitation not set or deleted")
 			}
-			q := m.parseQuota(buf)
-			quota.UsedSpace, quota.UsedInodes = q.UsedSpace, q.UsedInodes
-			tx.set(m.dirQuotaKey(inode), m.packQuota(quota))
+			created = true
+			origin = new(Quota)
 		}
+		if quota.MaxSpace >= 0 {
+			origin.MaxSpace = quota.MaxSpace
+		}
+		if quota.MaxInodes >= 0 {
+			origin.MaxInodes = quota.MaxInodes
+		}
+		if quota.UsedSpace >= 0 {
+			origin.UsedSpace = quota.UsedSpace
+		}
+		if quota.UsedInodes >= 0 {
+			origin.UsedInodes = quota.UsedInodes
+		}
+		tx.set(m.dirQuotaKey(inode), m.packQuota(origin))
 		return nil
 	})
+	return created, err
 }
+
 func (m *kvMeta) doDelQuota(ctx Context, inode Ino) error {
 	return m.deleteKeys(m.dirQuotaKey(inode))
 }

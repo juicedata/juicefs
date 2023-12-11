@@ -1,20 +1,19 @@
 ---
 title: 配置 JuiceFS S3 网关
-sidebar_position: 6
+sidebar_position: 4
 slug: /s3_gateway
 ---
 
-JuiceFS 从 v0.11 开始引入了 S3 网关，这是一个通过 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)实现的功能。它为 JuiceFS 中的文件提供跟 S3 兼容的 RESTful API，在不方便挂载的情况下能够用 s3cmd、AWS CLI、MinIO Client（mc）等工具管理 JuiceFS 上存储的文件。另外，S3 网关还提供了一个基于网页的文件管理器，用户使用浏览器就能对 JuiceFS 上的文件进行常规的增删管理。
+JuiceFS 会将文件[分块存储到底层的对象存储中](../introduction/architecture.md#how-juicefs-store-files)，暴露给用户的往往是 POSIX 接口，而如果你需要同时用 S3 兼容接口访问 JuiceFS 中的文件，就可以用到 S3 网关。其架构图如下：
 
-因为 JuiceFS 会将文件分块存储到底层的对象存储中，不能直接使用底层对象存储的接口和界面来直接访问文件，S3 网关提供了类似底层对象存储的访问能力，架构图如下：
+![JuiceFS S3 Gateway architecture](../images/juicefs-s3-gateway-arch.png)
 
-![](../images/juicefs-s3-gateway-arch.png)
+JuiceFS S3 网关是通过 [MinIO S3 网关](https://docs.min.io/docs/minio-gateway-for-s3.html)实现的功能，常见的使用场景有：
 
-## 先决条件
-
-S3 网关是建立在 JuiceFS 文件系统之上的功能，如果你还没有 JuiceFS 文件系统，请先参考 [快速上手指南](../getting-started/README.md) 创建一个。
-
-JuiceFS S3 网关是 v0.11 中引入的功能，请确保您拥有最新版本的 JuiceFS。
+* 为 JuiceFS 文件系统暴露 S3 接口，应用可以通过 S3 SDK 访问 JuiceFS 上存储的文件
+* 使用 s3cmd、AWS CLI、MinIO 客户端来方便地访问和操作 JuiceFS 上存储的文件
+* S3 网关还提供一个基于网页的文件管理器，使用浏览器就能对 JuiceFS 文件系统进行常规的增删管理
+* 在跨集群复制数据的场景下，作为集群的统一数据出口，避免跨区访问元数据以提升数据传输性能，详见[「使用 S3 网关进行跨区域数据同步」](../guide/sync.md#sync-across-region)
 
 ## 快速开始
 
@@ -39,7 +38,7 @@ juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
 
 在这个例子中，我们假设 JuiceFS 文件系统使用的是本地的 Redis 数据库。当 S3 网关启用时，在**当前主机**上可以使用 `http://localhost:9000` 这个地址访问到 S3 网关的管理界面。
 
-![](../images/s3-gateway-file-manager.jpg)
+![S3-gateway-file-manager](../images/s3-gateway-file-manager.jpg)
 
 如果你希望通过局域网或互联网上的其他主机访问 S3 网关，则需要调整监听地址，例如：
 
@@ -173,11 +172,11 @@ kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
 其中：
 
 - `name`：JuiceFS 文件系统名称
-- `metaurl`：元数据服务的访问 URL（比如 Redis）。更多信息参考[这篇文档](../guide/how_to_set_up_metadata_engine.md)。
-- `storage`：对象存储类型，比如 `s3`、`gs`、`oss`。更多信息参考[这篇文档](../guide/how_to_set_up_object_storage.md)。
-- `bucket`：Bucket URL。更多信息参考[这篇文档](../guide/how_to_set_up_object_storage.md)。
-- `access-key`：对象存储的 access key。更多信息参考[这篇文档](../guide/how_to_set_up_object_storage.md)。
-- `secret-key`：对象存储的 secret key。更多信息参考[这篇文档](../guide/how_to_set_up_object_storage.md)。
+- `metaurl`：元数据服务的访问 URL（比如 Redis）。更多信息参考[这篇文档](../reference/how_to_set_up_metadata_engine.md)。
+- `storage`：对象存储类型，比如 `s3`、`gs`、`oss`。更多信息参考[这篇文档](../reference/how_to_set_up_object_storage.md)。
+- `bucket`：Bucket URL。更多信息参考[这篇文档](../reference/how_to_set_up_object_storage.md)。
+- `access-key`：对象存储的 access key。更多信息参考[这篇文档](../reference/how_to_set_up_object_storage.md)。
+- `secret-key`：对象存储的 secret key。更多信息参考[这篇文档](../reference/how_to_set_up_object_storage.md)。
 
 然后下载 S3 网关[部署 YAML](https://github.com/juicedata/juicefs/blob/main/deploy/juicefs-s3-gateway.yaml) 并通过 `kubectl` 创建 `Deployment` 和 `Service` 资源。以下几点需要特别注意：
 
@@ -334,4 +333,4 @@ export MINIO_ROOT_PASSWORD=12345678
 
 这里显式指定了 S3 网关控制台的端口号为 59001，如果不指定则会随机选择一个端口。根据命令行提示，在浏览器中打开 [http://127.0.0.1:59001](http://127.0.0.1:59001) 地址便可以访问控制台，如下图所示：
 
-![](../images/s3-gateway-console.png)
+![S3-gateway-console](../images/s3-gateway-console.png)
