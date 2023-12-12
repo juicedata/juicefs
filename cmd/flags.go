@@ -175,22 +175,16 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:  "writeback",
-			Usage: "upload objects in background",
+			Usage: "upload blocks in background",
 		},
 		&cli.StringFlag{
 			Name:  "upload-delay",
 			Value: "0",
-			Usage: "delayed duration (in seconds) for uploading objects",
+			Usage: "delayed duration (in seconds) for uploading blocks",
 		},
 		&cli.StringFlag{
-			Name:  "upload-delay-begin",
-			Value: "null",
-			Usage: "delayed duration until this time to start uploading",
-		},
-		&cli.StringFlag{
-			Name:  "upload-delay-end",
-			Value: "null",
-			Usage: "delayed duration until this time to end uploading",
+			Name:  "upload-hours",
+			Usage: "(start,end) hour of a day between which the delayed blocks can be uploaded",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",
