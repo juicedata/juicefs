@@ -3072,14 +3072,16 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast bool) (err err
 		if err = m.dumpEntry(root, tree); err != nil {
 			return err
 		}
-		trash = &DumpedEntry{
-			Attr: &DumpedAttr{
-				Inode: TrashInode,
-				Type:  "directory",
-			},
-		}
-		if err = m.dumpEntry(TrashInode, trash); err != nil {
-			return err
+		if root == 1 {
+			trash = &DumpedEntry{
+				Attr: &DumpedAttr{
+					Inode: TrashInode,
+					Type:  "directory",
+				},
+			}
+			if err = m.dumpEntry(TrashInode, trash); err != nil {
+				return err
+			}
 		}
 	}
 

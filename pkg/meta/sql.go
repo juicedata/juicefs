@@ -3552,8 +3552,10 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast bool) (err err
 			if tree, err = m.dumpEntry(s, root, TypeDirectory); err != nil {
 				return err
 			}
-			if trash, err = m.dumpEntry(s, TrashInode, TypeDirectory); err != nil {
-				return err
+			if root == 1 {
+				if trash, err = m.dumpEntry(s, TrashInode, TypeDirectory); err != nil {
+					return err
+				}
 			}
 		}
 		if tree == nil {
