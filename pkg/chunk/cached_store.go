@@ -744,6 +744,26 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit)
 	}
 	store.initMetrics()
+	if store.conf.CacheDir != "memory" && store.conf.Writeback {
+		if d := store.conf.UploadDelay; d > 0 {
+			logger.Infof("delay uploading by %s", d)
+		}
+		store.startHour, store.endHour, _ = config.parseHours()
+		if store.startHour != store.endHour {
+			logger.Infof("background upload at %d:00 ~ %d:00", store.startHour, store.endHour)
+		}
+		for i := 0; i < store.conf.MaxUpload; i++ {
+			go store.uploader()
+		}
+		go func() {
+			for {
+				time.Sleep(time.Minute)
+				if store.canUpload() {
+					store.scanDelayedStaging()
+				}
+			}
+		}()
+	}
 	store.bcache = newCacheManager(&config, reg, func(key, fpath string, force bool) bool {
 		if fi, err := os.Stat(fpath); err == nil {
 			return store.addDelayedStaging(key, fpath, fi.ModTime(), force)
@@ -765,27 +785,6 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		_ = store.load(key, p, true, true)
 	})
 
-	if store.conf.CacheDir != "memory" && store.conf.Writeback {
-		store.startHour, store.endHour, _ = config.parseHours()
-		for i := 0; i < store.conf.MaxUpload; i++ {
-			go store.uploader()
-		}
-		interval := time.Minute
-		if d := store.conf.UploadDelay; d > 0 {
-			logger.Infof("delay uploading by %s", d)
-			if d < time.Minute {
-				interval = d
-			}
-		}
-		go func() {
-			for {
-				time.Sleep(interval)
-				if store.canUpload() {
-					store.scanDelayedStaging()
-				}
-			}
-		}()
-	}
 	store.regMetrics(reg)
 	return store
 }
