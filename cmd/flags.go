@@ -21,6 +21,7 @@ import (
 	"path"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -333,11 +334,24 @@ func expandFlags(compoundFlags ...[]cli.Flag) []cli.Flag {
 }
 
 func duration(s string) time.Duration {
-	if v, err := strconv.ParseInt(s, 10, 64); err == nil {
+	v, err := strconv.Atoi(s)
+	if err == nil {
 		return time.Second * time.Duration(v)
 	}
-	if v, err := time.ParseDuration(s); err == nil {
-		return v
+
+	err = nil
+	var d time.Duration
+	p := strings.Index(s, "d")
+	if p >= 0 {
+		v, err = strconv.Atoi(s[:p])
 	}
-	return 0
+	if err == nil {
+		d, err = time.ParseDuration(s[p+1:])
+	}
+
+	if err != nil {
+		logger.Warnf("Invalid duration value: %s, setting it to 0", s)
+		return 0
+	}
+	return d + time.Hour*time.Duration(v*24)
 }
