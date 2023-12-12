@@ -745,24 +745,10 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 	}
 	store.initMetrics()
 	if store.conf.CacheDir != "memory" && store.conf.Writeback {
-		if d := store.conf.UploadDelay; d > 0 {
-			logger.Infof("delay uploading by %s", d)
-		}
 		store.startHour, store.endHour, _ = config.parseHours()
 		if store.startHour != store.endHour {
 			logger.Infof("background upload at %d:00 ~ %d:00", store.startHour, store.endHour)
 		}
-		for i := 0; i < store.conf.MaxUpload; i++ {
-			go store.uploader()
-		}
-		go func() {
-			for {
-				time.Sleep(time.Minute)
-				if store.canUpload() {
-					store.scanDelayedStaging()
-				}
-			}
-		}()
 	}
 	store.bcache = newCacheManager(&config, reg, func(key, fpath string, force bool) bool {
 		if fi, err := os.Stat(fpath); err == nil {
@@ -785,6 +771,26 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		_ = store.load(key, p, true, true)
 	})
 
+	if store.conf.CacheDir != "memory" && store.conf.Writeback {
+		for i := 0; i < store.conf.MaxUpload; i++ {
+			go store.uploader()
+		}
+		interval := time.Minute
+		if d := store.conf.UploadDelay; d > 0 {
+			if d < time.Minute {
+				interval = d
+				logger.Warnf("delay uploading by %s (this value is too small, and is not recommended)", d)
+			} else {
+				logger.Infof("delay uploading by %s", d)
+			}
+		}
+		go func() {
+			for {
+				time.Sleep(interval)
+				store.scanDelayedStaging()
+			}
+		}()
+	}
 	store.regMetrics(reg)
 	return store
 }
@@ -953,6 +959,9 @@ func (store *cachedStore) removePending(key string) {
 }
 
 func (store *cachedStore) scanDelayedStaging() {
+	if !store.canUpload() {
+		return
+	}
 	cutoff := time.Now().Add(-store.conf.UploadDelay)
 	store.pendingMutex.Lock()
 	defer store.pendingMutex.Unlock()
