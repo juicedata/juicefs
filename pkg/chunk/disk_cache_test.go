@@ -17,8 +17,8 @@
 package chunk
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"

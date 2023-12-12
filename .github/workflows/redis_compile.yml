@@ -18,6 +18,7 @@ on:
 
 jobs:
   rediscompile:
+    timeout-minutes: 30
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -26,6 +27,7 @@ jobs:
           fetch-depth: 1
 
       - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
 
       - name: Setup minio
@@ -64,14 +66,14 @@ jobs:
 
 
       - name: Log
-        if: ${{ always() }}
+        if: always()
         run: |
           echo "juicefs log"
           sudo tail -n 1000 /var/log/juicefs.log
           grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
 
       - name: Send Slack Notification
-        if: ${{ failure() }}
+        if: failure()
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"

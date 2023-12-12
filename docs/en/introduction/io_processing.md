@@ -11,11 +11,11 @@ JuiceFS splits large files at multiple levels to improve I/O performance. See [h
 
 Sequential writes are optimized, requiring only one continuously growing slice and one final flush. This maximizes object storage write performance. A simple [JuiceFS benchmark](../benchmark/performance_evaluation_guide.md) below shows sequentially writing a 1 GiB file with a 1 MiB I/O size at its first stage. The following figure shows the data flow in each component of the system.
 
-![](../images/internals-write.png)
+![internals-write](../images/internals-write.png)
 
 Use [`juicefs stats`](../reference/command_reference.md#stats) to obtain real-time performance monitoring metrics.
 
-![](../images/internals-stats.png)
+![internals-stats](../images/internals-stats.png)
 
 The first highlighted section in the above figure shows:
 
@@ -28,7 +28,7 @@ Generally, when JuiceFS writes a small file, the file is uploaded to the object 
 - The size of data written to the object storage during PUT operations is 128 KiB, calculated by `object.put / object.put_c`.
 - The number of metadata transactions is approximately twice the number of PUT operations, since each file requires one create and one write.
 
-When JuiceFS uploads objects smaller than the block size, it simultaneously writes them into the [local cache](../guide/cache_management.md) to improve future performance. As shown in the third stage of the figure above, the write bandwidth of the `blockcache` is the same as that of the object storage. Since small files are cached, reading these files is extremely fast, as demonstrated in the fourth stage.
+When JuiceFS uploads objects smaller than the block size, it simultaneously writes them into the [local cache](../guide/cache.md) to improve future performance. As shown in the third stage of the figure above, the write bandwidth of the `blockcache` is the same as that of the object storage. Since small files are cached, reading these files is extremely fast, as demonstrated in the fourth stage.
 
 Write operations are immediately committed to the client buffer, resulting in very low write latency (typically just a few microseconds). The actual upload to the object storage is automatically triggered internally when certain conditions are met, such as when the size or number of slices exceeds their limit, or data stays in the buffer for too long. Explicit calls, such as closing a file or invoking `fsync`, can also trigger uploading.
 
@@ -48,13 +48,13 @@ Client write cache is also referred to as "Writeback mode" throughout the docs.
 
 For scenarios that does not deem consistency and data security as top priorities, enabling client write cache is also an option to further improve performance. When client write cache is enabled, flush operations return immediately after writing data to the local cache directory. Then, local data is uploaded asynchronously to the object storage. In other words, the local cache directory is a cache layer for the object storage.
 
-Learn more in [Client Write Cache](../guide/cache_management.md#writeback).
+Learn more in [Client Write Cache](../guide/cache.md#client-write-cache).
 
 ## Data reading process {#workflow-of-read}
 
 JuiceFS supports sequential reads and random reads (including mmap-based random reads). During read requests, the object corresponding to the block is completely read through the `GetObject` API of the object storage, or only a certain range of data in the object may be read (e.g., the read range is limited by the `Range` parameter of [S3 API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html)). Meanwhile, prefetching is performed (controlled by the [`--prefetch`](../reference/command_reference.md#mount) option) to download the complete data block into the local cache directory, as shown in the `blockcache` write speed in the second stage of the above metrics figure. This is very good for sequential reads as all cached data is utilized, maximizing the object storage access efficiency. The dataflow is illustrated in the figure below:
 
-![](../images/internals-read.png)
+![internals-read](../images/internals-read.png)
 
 Although prefetching works well for sequential reads, it might not be so effective for random reads on large files. It can cause read amplification and frequent cache eviction. Consider disabling prefetching using `--prefetch=0`. It is always hard to design cache strategy for random read scenarios. Two possible solutions are increasing the cache size to store all data locally or completely disabling the cache (`--cache-size=0`) and relying on a high-performance object storage service.
 

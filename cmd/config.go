@@ -44,7 +44,7 @@ Examples:
 $ juicefs config redis://localhost
 
 # Change volume "quota"
-$ juicefs config redis://localhost --inode 10000000 --capacity 1048576
+$ juicefs config redis://localhost --inodes 10000000 --capacity 1048576
 
 # Change maximum days before files in trash are deleted
 $ juicefs config redis://localhost --trash-days 7

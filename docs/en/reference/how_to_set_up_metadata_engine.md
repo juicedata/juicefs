@@ -1,6 +1,6 @@
 ---
 title: How to Set Up Metadata Engine
-sidebar_position: 1
+sidebar_position: 2
 slug: /databases_for_metadata
 description: JuiceFS supports Redis, TiKV, PostgreSQL, MySQL and other databases as metadata engines, and this article describes how to set up and use them.
 ---
@@ -125,9 +125,10 @@ juicefs format --storage s3 \
 
 In the code mentioned above, we use the `rediss://` protocol header to enable mTLS functionality, and then use the following options to specify the path of the client certificate:
 
-- `tls-cert-file`: The path of the client certificate.
-- `tls-key-file`: The path of the private key.
-- `tls-ca-cert-file`: The path of the CA certificate. It is optional. If it is not specified, the system CA certificate will be used.
+- `tls-cert-file=<path>`: The path of the client certificate.
+- `tls-key-file=<path>`: The path of the private key.
+- `tls-ca-cert-file=<path>`: The path of the CA certificate. It is optional. If it is not specified, the system CA certificate will be used.
+- `insecure-skip-verify=true` It can skip verifying the server certificate.
 
 When specifying options in a URL, start with the `?` symbol and use the `&` symbol to separate multiple options, for example: `?tls-cert-file=client.crt&tls-key-file=client.key`.
 
@@ -200,6 +201,8 @@ juicefs format \
 1. JuiceFS uses public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) by default, if you want to use a `non-public schema`,  you need to specify `search_path` in the connection string parameter. e.g `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
 2. If the `public schema` is not the first hit in the `search_path` configured on the PostgreSQL server, the `search_path` parameter must be explicitly set in the connection string.
 3. The `search_path` connection parameter can be set to multiple schemas natively, but currently JuiceFS only supports setting one. `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` will be considered illegal.
+4. Special characters in the password need to be replaced by url encoding. For example, `|` needs to be replaced with `%7C`.
+
 :::
 
 ### Mount a file system
@@ -255,7 +258,10 @@ mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 </Tabs>
 
 :::note
-Don't leave out the `()` brackets on either side of the URL.
+
+1. Don't leave out the `()` brackets on either side of the URL.
+2. Special characters in passwords do not require url encoding
+
 :::
 
 For example:
@@ -537,7 +543,36 @@ When mounting to the background, the path to the certificate needs to use an abs
 
 ## FoundationDB <VersionAdd>1.1</VersionAdd>
 
-[FoundationDB](https://www.foundationdb.org) is a distributed database that can hold large-scale structured data on multiple clustered servers. The database system focuses on high performance, high scalability, and good fault tolerance.
+[FoundationDB](https://www.foundationdb.org) is a distributed database that can hold large-scale structured data on multiple clustered servers. The database system focuses on high performance, high scalability, and good fault tolerance. Using FoundationDB as the metadata engine requires its client library, so by default it is not enabled in the JuiceFS released binaries. If you need to use it, please compile it yourself.
+
+### Compile JuiceFS
+
+First, you need to install the FoundationDB client library (refer to the [official documentation](https://apple.github.io/foundationdb/api-general.html#installing-client-binaries) for more details):
+
+<Tabs>
+  <TabItem value="debian" label="Debian and derivatives">
+
+```shell
+curl -O https://github.com/apple/foundationdb/releases/download/6.3.25/foundationdb-clients_6.3.25-1_amd64.deb
+sudo dpkg -i foundationdb-clients_6.3.25-1_amd64.deb
+```
+
+  </TabItem>
+  <TabItem value="centos" label="RHEL and derivatives">
+
+```shell
+curl -O https://github.com/apple/foundationdb/releases/download/6.3.25/foundationdb-clients-6.3.25-1.el7.x86_64.rpm
+sudo rpm -Uvh foundationdb-clients-6.3.25-1.el7.x86_64.rpm
+```
+
+  </TabItem>
+</Tabs>
+
+Then, compile JuiceFS supporting FoundationDB:
+
+```shell
+make juicefs.fdb
+```
 
 ### Create a file system
 
@@ -550,7 +585,7 @@ fdb://[config file address]?prefix=<prefix>
 The `<cluster_file_path>` is the FoundationDB configuration file path, which is used to connect to the FoundationDB server. The `<prefix>` is a user-defined string, which can be used to distinguish multiple file systems or applications when they share the same FoundationDB cluster. For example:
 
 ```shell
-juicefs format \
+juicefs.fdb format \
     --storage s3 \
     ... \
     "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
@@ -661,7 +696,7 @@ export FDB_TLS_VERIFY_PEERS=Check.Valid=0
 ### Mount a file system
 
 ```shell
-juicefs mount -d \
+juicefs.fdb mount -d \
     "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
     /mnt/jfs
 ```

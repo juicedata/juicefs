@@ -24,12 +24,12 @@ JuiceFS 具有丰富的 API 接口，对 AWS 而言，通常可以在以下产�
 可以根据具体需求，选择在 AWS 上使用全托管的数据库和 S3 对象存储，或者在 EC2、EKS 上自行部署。
 
 :::tip
-本文着重介绍使用 AWS 全托管的服务创建 JuiceFS 文件系统的方法，对于自托管的情况，请查阅[「JuiceFS 支持的元数据引擎」](../guide/how_to_set_up_metadata_engine.md)和[「JuiceFS 支持的对象存储」](../guide/how_to_set_up_object_storage.md)以及相应程序文档。
+本文着重介绍使用 AWS 全托管的服务创建 JuiceFS 文件系统的方法，对于自托管的情况，请查阅[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)和[「JuiceFS 支持的对象存储」](../reference/how_to_set_up_object_storage.md)以及相应程序文档。
 :::
 
 ### 对象存储 {#object-storage}
 
-S3 是 AWS 提供的对象存储服务，可以根据需要在相应地区创建 bucket，也可以通过 [IAM 角色授权](../guide/how_to_set_up_object_storage.md#aksk)让 JuiceFS 客户端自动创建 bucket。
+S3 是 AWS 提供的对象存储服务，可以根据需要在相应地区创建 bucket，也可以通过 [IAM 角色授权](../reference/how_to_set_up_object_storage.md#aksk)让 JuiceFS 客户端自动创建 bucket。
 
 Amazon S3 提供多种[存储类](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/userguide/storage-class-intro.html)，例如：
 
@@ -37,7 +37,7 @@ Amazon S3 提供多种[存储类](https://docs.aws.amazon.com/zh_cn/AmazonS3/lat
 - **S3 Standard-IA**：低频存储，适用于长期需要但访问频率不太高的数据，实时访问，有取回费用。
 - **S3 Glacier**：归档存储，适用于长期存档几乎不访问的数据，访问前需解冻。
 
-你可以在创建或者挂载 JuiceFS 文件系统时设置存储类，具体请参考[文档](../guide/how_to_set_up_object_storage.md#storage-class)。建议优先选择标准的存储类，其他的存储类虽然有更低的单位存储价格，但会涉及最低存储时长要求和检索（取回）费用。
+你可以在创建或者挂载 JuiceFS 文件系统时设置存储类，具体请参考[文档](../reference/how_to_set_up_object_storage.md#storage-class)。建议优先选择标准的存储类，其他的存储类虽然有更低的单位存储价格，但会涉及最低存储时长要求和检索（取回）费用。
 
 另外，访问对象存储服务需要通过 Access Key（也叫 access key ID）和 Secret Key（也叫 secret access key）验证用户身份，可以参照文档[「管理 IAM 用户的访问密钥」](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_credentials_access-keys.html)进行创建。当通过 EC2 云服务器访问 S3 时，还可以为 EC2 分配 [IAM 角色](https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/id_roles.html)，实现在 EC2 上免密钥调用 S3 API。
 

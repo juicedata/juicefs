@@ -522,14 +522,18 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 				}
 			}
 			locks := f.locks
-			owner := f.flockOwner
+			fowner := f.flockOwner
+			powner := f.ofdOwner
 			f.Unlock()
 			if f.writer != nil {
 				_ = f.writer.Flush(ctx)
 				v.invalidateLength(ino)
 			}
 			if locks&1 != 0 {
-				_ = v.Meta.Flock(ctx, ino, owner, F_UNLCK, false)
+				_ = v.Meta.Flock(ctx, ino, fowner, F_UNLCK, false)
+			}
+			if locks&2 != 0 && powner != 0 {
+				_ = v.Meta.Setlk(ctx, ino, powner, false, F_UNLCK, 0, 0x7FFFFFFFFFFFFFFF, 0)
 			}
 		}
 		_ = v.Meta.Close(ctx, ino)
@@ -808,6 +812,9 @@ func (v *VFS) Flush(ctx Context, ino Ino, fh uint64, lockOwner uint64) (err sysc
 
 	h.Lock()
 	locks := h.locks
+	if lockOwner == h.ofdOwner {
+		h.ofdOwner = 0
+	}
 	h.Unlock()
 	if locks&2 != 0 {
 		_ = v.Meta.Setlk(ctx, ino, lockOwner, false, F_UNLCK, 0, 0x7FFFFFFFFFFFFFFF, 0)

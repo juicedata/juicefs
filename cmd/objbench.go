@@ -22,10 +22,10 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -60,7 +60,7 @@ Details: https://juicefs.com/docs/community/performance_evaluation_guide#juicefs
 			&cli.StringFlag{
 				Name:  "storage",
 				Value: "file",
-				Usage: "object storage type (e.g. s3, gcs, oss, cos)",
+				Usage: "object storage type (e.g. s3, gs, oss, cos)",
 			},
 			&cli.StringFlag{
 				Name:  "access-key",
@@ -168,17 +168,18 @@ func objbench(ctx *cli.Context) error {
 		pass = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, GREEN, pass, RESET_SEQ)
 		failed = fmt.Sprintf("%s%dm%s%s", COLOR_SEQ, RED, failed, RESET_SEQ)
 	}
-	nobody, err := user.Lookup("nobody")
-	if err != nil {
-		logger.Fatalf("lookup nobody user failed: %v", err)
-	} else {
-		group, err := user.LookupGroupId(nobody.Gid)
+	if runtime.GOOS != "windows" {
+		nobody, err := user.Lookup("nobody")
 		if err != nil {
-			logger.Fatalf("lookup nobody's group failed: %v", err)
+			logger.Fatalf("lookup nobody user failed: %v", err)
+		} else {
+			group, err := user.LookupGroupId(nobody.Gid)
+			if err != nil {
+				logger.Fatalf("lookup nobody's group failed: %v", err)
+			}
+			groupName = group.Name
 		}
-		groupName = group.Name
 	}
-
 	if ctx.Bool("skip-functional-tests") {
 		if err := blob.Create(); err != nil {
 			return fmt.Errorf("can't create bucket: %s", err)
@@ -343,8 +344,8 @@ func objbench(ctx *cli.Context) error {
 		seed:        make([]byte, bSize),
 		smallSeed:   make([]byte, smallBSize),
 	}
-	rand.Read(bm.seed)
-	rand.Read(bm.smallSeed)
+	randRead(bm.seed)
+	randRead(bm.smallSeed)
 
 	for _, api := range apis {
 		pResult = append(pResult, bm.run(api))
@@ -651,6 +652,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		if err != nil {
 			return "", err
 		}
+		defer r.Close()
 		data, err := io.ReadAll(r)
 		if err != nil {
 			return "", err
@@ -909,7 +911,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 		fsize := 256 << 20
 		buffL := 4 << 20
 		buff := make([]byte, buffL)
-		rand.Read(buff)
+		randRead(buff)
 		count := int(math.Floor(float64(fsize) / float64(buffL)))
 		content := make([]byte, fsize)
 		for i := 0; i < count; i++ {
@@ -951,7 +953,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 			}
 			total := 3
 			seed := make([]byte, upload.MinPartSize)
-			rand.Read(seed)
+			randRead(seed)
 			parts := make([]*object.Part, total)
 			content := make([][]byte, total)
 			for i := 0; i < total; i++ {

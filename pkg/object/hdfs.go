@@ -21,13 +21,14 @@ package object
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"math/rand"
 	"os"
 	"os/user"
-	"path/filepath"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -121,29 +122,35 @@ func (h *hdfsclient) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return f, nil
 }
 
-const abcException = "org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException"
-
-func (h *hdfsclient) Put(key string, in io.Reader) error {
-	path := h.path(key)
-	if strings.HasSuffix(path, dirSuffix) {
-		return h.c.MkdirAll(path, 0777&^h.umask)
+func (h *hdfsclient) Put(key string, in io.Reader) (err error) {
+	p := h.path(key)
+	if strings.HasSuffix(p, dirSuffix) {
+		return h.c.MkdirAll(p, 0777&^h.umask)
 	}
-	tmp := filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp.%d", filepath.Base(path), rand.Int()))
+	var tmp string
+	if PutInplace {
+		tmp = p
+	} else {
+		name := path.Base(p)
+		if len(name) > 200 {
+			name = name[:200]
+		}
+		tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
+		defer func() {
+			if err != nil {
+				_ = h.c.Remove(tmp)
+			}
+		}()
+	}
 	f, err := h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
-	defer func() { _ = h.c.Remove(tmp) }()
 	if err != nil {
 		if pe, ok := err.(*os.PathError); ok && pe.Err == os.ErrNotExist {
-			_ = h.c.MkdirAll(filepath.Dir(path), 0777&^h.umask)
+			_ = h.c.MkdirAll(path.Dir(p), 0777&^h.umask)
 			f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 		}
-		if pe, ok := err.(*os.PathError); ok {
-			if remoteErr, ok := pe.Err.(hdfs.Error); ok && remoteErr.Exception() == abcException {
-				pe.Err = os.ErrExist
-			}
-			if pe.Err == os.ErrExist {
-				_ = h.c.Remove(tmp)
-				f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
-			}
+		if pe, ok := err.(*os.PathError); ok && errors.Is(pe.Err, os.ErrExist) {
+			_ = h.c.Remove(tmp)
+			f, err = h.c.CreateFile(tmp, h.dfsReplication, 128<<20, 0666&^h.umask)
 		}
 		if err != nil {
 			return err
@@ -160,7 +167,10 @@ func (h *hdfsclient) Put(key string, in io.Reader) error {
 	if err != nil && !IsErrReplicating(err) {
 		return err
 	}
-	return h.c.Rename(tmp, path)
+	if !PutInplace {
+		err = h.c.Rename(tmp, p)
+	}
+	return err
 }
 
 func IsErrReplicating(err error) bool {
@@ -183,7 +193,7 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followL
 	dir := h.path(prefix)
 	var objs []Object
 	if !strings.HasSuffix(dir, dirSuffix) {
-		dir = filepath.Dir(dir)
+		dir = path.Dir(dir)
 		if !strings.HasSuffix(dir, dirSuffix) {
 			dir += dirSuffix
 		}
@@ -204,6 +214,10 @@ func (h *hdfsclient) List(prefix, marker, delimiter string, limit int64, followL
 		entries, err = file.Readdir(0)
 	}
 	if err != nil {
+		if os.IsPermission(err) {
+			logger.Warnf("skip %s: %s", dir, err)
+			return nil, nil
+		}
 		if os.IsNotExist(err) {
 			return nil, nil
 		}

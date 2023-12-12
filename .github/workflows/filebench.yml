@@ -27,6 +27,7 @@ jobs:
           fetch-depth: 1
       
       - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
 
       - name: Run Redis
@@ -96,7 +97,7 @@ jobs:
           fi
 
       - name: Log
-        if: ${{ always() }}
+        if: always()
         run: |
           df -lh
           echo "juicefs log"

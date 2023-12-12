@@ -25,6 +25,7 @@ on:
 
 jobs:
   vc-hypo:
+    timeout-minutes: 120
     continue-on-error: false
     strategy:
       fail-fast: false
@@ -58,6 +59,7 @@ jobs:
           fi
 
       - name: Build new version
+        timeout-minutes: 10
         uses: ./.github/actions/build
         with: 
           target: ${{steps.vars.outputs.target}}
@@ -69,6 +71,7 @@ jobs:
           path: ${{matrix.old_juicefs_version}}
 
       - name: Make old build
+        timeout-minutes: 10
         run: | 
           cd ${{matrix.old_juicefs_version}}
           if [ "${{matrix.meta}}" == "fdb" ]; then
@@ -114,17 +117,24 @@ jobs:
           echo old_version is $old_version
           mv ${{matrix.old_juicefs_version}}/juicefs juicefs-$old_version
           export OLD_JFS_BIN="juicefs-$old_version"
-          timeout 3600 python3 .github/scripts/testVersionCompatible.py || code=$?; if [[ $code -ne 124 && $code -ne 0 ]]; then echo test failed; exit $code; fi
+          timeout 3600 python3 .github/scripts/testVersionCompatible.py 2>&1 | tee result.log || code=$?; if [[ $code -ne 124 && $code -ne 0 ]]; then echo test failed; exit $code; fi
+      
+      - name: Display result log
+        if: always()
+        run: | 
+          if [ -f "result.log" ]; then
+            tail -n 500 result.log
+          fi
 
       - name: Upload command log
-        if: ${{ always() }}
+        if: always()
         uses: actions/upload-artifact@v3
         with:
           name: ${{matrix.meta}}-${{matrix.old_juicefs_version}}.command.log
           path: ~/command.log
 
       - name: Display log
-        if: ${{ always() }}
+        if: always()
         shell: bash
         run: | 
           if [ -f "/home/runner/.juicefs/juicefs.log" ]; then
@@ -133,7 +143,7 @@ jobs:
           fi
 
       - name: Display command
-        if: ${{ always() }}
+        if: always()
         shell: bash
         run: | 
           if [ -f "$HOME/command.log" ]; then
@@ -141,7 +151,7 @@ jobs:
           fi
 
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
 
@@ -159,12 +169,12 @@ jobs:
         run: exit 1
 
       - name: Send Slack Notification
-        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        if: failure() && github.event_name != 'workflow_dispatch'
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Success
-        if: ${{ success() }}
+        if: success()
         run: echo "All Done"

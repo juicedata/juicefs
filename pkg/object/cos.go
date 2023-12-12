@@ -108,7 +108,12 @@ func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if off == 0 && limit == -1 {
-		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey))
+		length, err := strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
+		if err != nil {
+			length = -1
+			logger.Warnf("failed to parse content-length %s: %s", resp.Header.Get("Content-Length"), err)
+		}
+		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey), length)
 	}
 	if resp != nil {
 		ReqIDCache.put(key, resp.Header.Get(cosRequestIDKey))

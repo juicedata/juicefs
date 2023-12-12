@@ -29,6 +29,9 @@ import argparse
 def add_perf_record(name, result, product_version,  meta, storage, extra):
     result = float(result)
     passowrd = os.environ['MYSQL_PASSWORD']
+    if not passowrd:
+        print('<WARNING>: MYSQL_PASSWORD is empty')
+        return 
     github_ref_name = os.environ.get('GITHUB_REF_NAME')
     print(f'github_ref_name is: {github_ref_name}')
     github_run_id = os.environ.get('GITHUB_RUN_ID')
@@ -49,8 +52,8 @@ def add_perf_record(name, result, product_version,  meta, storage, extra):
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
-    args.add_argument("-n", "--name", required=True, help="the name of performace test")
-    args.add_argument("-r", "--result", required=True, help="the result value of performace test")
+    args.add_argument("-n", "--name", required=True, help="the name of performance test")
+    args.add_argument("-r", "--result", required=True, help="the result value of performance test")
     args.add_argument("-v", "--version", required=True, help="the version of juicefs")
     args.add_argument("-m", "--meta", required=True, help="meta for juicefs")
     args.add_argument("-s", "--storage", required=True, help="storage for juicefs")

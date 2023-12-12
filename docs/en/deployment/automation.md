@@ -1,6 +1,6 @@
 ---
 title: Automated Deployment
-sidebar_position: 2
+sidebar_position: 7
 ---
 
 Automated deployment is recommended when JuiceFS Client is to be installed on a large number of hosts.

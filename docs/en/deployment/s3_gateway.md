@@ -1,22 +1,21 @@
 ---
 title: Deploy JuiceFS S3 Gateway
-sidebar_position: 6
+sidebar_position: 4
 slug: /s3_gateway
 ---
 
-JuiceFS has introduced S3 gateway since v0.11. The feature is implemented based on the [MinIO S3 Gateway](https://docs.min.io/docs/minio-gateway-for-s3.html). It provides an S3-compatible RESTful API for files on JuiceFS, enabling the management of files stored on JuiceFS with tools such as s3cmd, AWS CLI, and MinIO Client (mc) in cases where mounting is not convenient. In addition, S3 gateway also provides a web-based file manager that allows users to manage files in web browsers.
+JuiceFS [splits and upload files to the underlying object storage](../introduction/architecture.md#how-juicefs-store-files), applications often use the exposed POSIX API. But if you ever need to use S3-compatible API to access JuiceFS files, S3 Gateway comes in handy, its architecture:
 
-Since JuiceFS stores files in chunks, the files cannot be accessed directly through the interfaces of the underlying object storage. The S3 gateway accesses the underlying object storage in a similar way, shown in the following architecture diagram.
+![JuiceFS S3 Gateway architecture](../images/juicefs-s3-gateway-arch.png)
 
-![](../images/juicefs-s3-gateway-arch.png)
+The feature is implemented based on the [MinIO S3 Gateway](https://docs.min.io/docs/minio-gateway-for-s3.html). It exposes a S3-compatible RESTful API for files on JuiceFS, which is often used in the following scenarios:
 
-## Prerequisites
+* Expose S3 API for JuiceFS file system, so that applications may access JuiceFS via S3 SDK
+* Use tools like s3cmd, AWS CLI and MinIO Client to access and modify files stored in JuiceFS
+* S3 gateway also provides a file manager that allows users to manage JuiceFS file system directly in web browsers
+* When transferring data across regions, use S3 Gateway as an unified data export endpoint, this eliminates metadata latency and improve performance. See [Sync across regions using S3 Gateway](../guide/sync.md#sync-across-region)
 
-The S3 gateway is a feature built on top of the JuiceFS file system. If you do not have a JuiceFS file system, please refer to the [quick start guide](../getting-started/README.md) to create one first.
-
-JuiceFS S3 gateway is a feature introduced since v0.11. Please make sure you have the latest version of JuiceFS.
-
-## Quickstart
+## Quick Start
 
 The S3 gateway can be enabled on the current host using the `gateway` subcommand of JuiceFS. Before enabling the feature, you need to set the environment variables `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`. These are the Access Key and Secret Key for authenticating when accessing the S3 API, and can be simply considered as the username and password of the S3 gateway. For example.
 
@@ -39,7 +38,7 @@ juicefs gateway --cache-size 20480 redis://localhost:6379 localhost:9000
 
 In this example, we assume that the JuiceFS file system is using a local Redis database. When the S3 gateway is enabled, the administrative interface of the S3 gateway can be accessed from the **current host** using the address `http://localhost:9000`.
 
-![](../images/s3-gateway-file-manager.jpg)
+![S3-gateway-file-manager](../images/s3-gateway-file-manager.jpg)
 
 If you want to access the S3 gateway from other hosts on the LAN or over the Internet, you need to change the listening address, e.g.
 
@@ -173,11 +172,11 @@ kubectl -n ${NAMESPACE} create secret generic juicefs-secret \
 Here we have:
 
 - `name`: name of the JuiceFS file system.
-- `metaurl`: URL of the metadata engine (e.g. Redis). Read [this document](../guide/how_to_set_up_metadata_engine.md) for more information.
-- `storage`: Object storage type, such as `s3`, `gs`, `oss`. Read [this document](../guide/how_to_set_up_object_storage.md) to find all supported object storages.
-- `bucket`: Bucket URL. Read [this document](../guide/how_to_set_up_object_storage.md) to learn how to set up different object storage.
-- `access-key`: Access key of object storage. Read [this document](../guide/how_to_set_up_object_storage.md) for more information.
-- `secret-key`: Secret key of object storage. Read [this document](../guide/how_to_set_up_object_storage.md) for more information.
+- `metaurl`: URL of the metadata engine (e.g. Redis). Read [this document](../reference/how_to_set_up_metadata_engine.md) for more information.
+- `storage`: Object storage type, such as `s3`, `gs`, `oss`. Read [this document](../reference/how_to_set_up_object_storage.md) to find all supported object storages.
+- `bucket`: Bucket URL. Read [this document](../reference/how_to_set_up_object_storage.md) to learn how to set up different object storage.
+- `access-key`: Access key of object storage. Read [this document](../reference/how_to_set_up_object_storage.md) for more information.
+- `secret-key`: Secret key of object storage. Read [this document](../reference/how_to_set_up_object_storage.md) for more information.
 
 Then download the S3 gateway [deployment YAML](https://github.com/juicedata/juicefs/blob/main/deploy/juicefs-s3-gateway.yaml) and create the `Deployment` and `Service` resources with `kubectl`. The following points require special attention:
 
@@ -333,4 +332,4 @@ export MINIO_ROOT_PASSWORD=12345678
 
 The port number of the S3 gateway console is explicitly specified here as 59001. If not specified, a port will be randomly assigned. According to the command line prompt, open the address [http://127.0.0.1:59001](http://127.0.0.1:59001) in the browser to access the console, as shown in the following snapshot:
 
-![](../images/s3-gateway-console.png)
+![S3-gateway-console](../images/s3-gateway-console.png)

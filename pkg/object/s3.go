@@ -104,11 +104,9 @@ func (s *s3client) Head(key string) (Object, error) {
 		}
 		return nil, err
 	}
-	var sc string
+	var sc = "STANDARD"
 	if r.StorageClass != nil {
 		sc = *r.StorageClass
-	} else {
-		sc = "STANDARD"
 	}
 	return &obj{
 		key,
@@ -138,8 +136,12 @@ func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	}
 	if off == 0 && limit == -1 {
 		cs := resp.Metadata[checksumAlgr]
+		var length int64 = -1
+		if resp.ContentLength != nil {
+			length = *resp.ContentLength
+		}
 		if cs != nil {
-			resp.Body = verifyChecksum(resp.Body, *cs)
+			resp.Body = verifyChecksum(resp.Body, *cs, length)
 		}
 	}
 	return resp.Body, nil
@@ -228,12 +230,16 @@ func (s *s3client) List(prefix, marker, delimiter string, limit int64, followLin
 		if !strings.HasPrefix(oKey, prefix) || oKey < marker {
 			return nil, fmt.Errorf("found invalid key %s from List, prefix: %s, marker: %s", oKey, prefix, marker)
 		}
+		var sc = "STANDARD"
+		if o.StorageClass != nil {
+			sc = *o.StorageClass
+		}
 		objs[i] = &obj{
 			oKey,
 			*o.Size,
 			*o.LastModified,
 			strings.HasSuffix(oKey, "/"),
-			*o.StorageClass,
+			sc,
 		}
 	}
 	if delimiter != "" {

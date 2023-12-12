@@ -309,7 +309,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	} else {
 		if len(obs) != 2 {
-			t.Fatalf("list with delimiter should return three results but got %d", len(obs))
+			t.Fatalf("list with delimiter should return two results but got %d", len(obs))
 		}
 		keys := []string{"a/", "a1"}
 		for i, o := range obs {
@@ -443,7 +443,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 	if upload, err := s.CreateMultipartUpload(k); err == nil {
 		total := 3
 		seed := make([]byte, upload.MinPartSize)
-		rand.Read(seed)
+		_, _ = rand.Read(seed)
 		parts := make([]*Part, total)
 		content := make([][]byte, total)
 		for i := 0; i < total; i++ {
@@ -752,6 +752,17 @@ func TestOBS(t *testing.T) { //skip mutate
 	testStorage(t, b)
 }
 
+func TestNFS(t *testing.T) { //skip mutate
+	if os.Getenv("NFS_ADDR") == "" {
+		t.SkipNow()
+	}
+	b, err := newNFSStore(os.Getenv("NFS_ADDR"), os.Getenv("NFS_ACCESS_KEY"), os.Getenv("NFS_SECRET_KEY"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testStorage(t, b)
+}
+
 func TestHDFS(t *testing.T) { //skip mutate
 	conf := make(hadoopconf.HadoopConf)
 	conf["dfs.namenode.rpc-address.ns.namenode1"] = "hadoop01:8020"
@@ -1012,6 +1023,17 @@ func TestTOS(t *testing.T) { //skip mutate
 		t.Fatalf("create: %s", err)
 	}
 	testStorage(t, tos)
+}
+
+func TestDragonfly(t *testing.T) { //skip mutate
+	if os.Getenv("DRAGONFLY_ENDPOINT") == "" {
+		t.SkipNow()
+	}
+	dragonfly, err := newDragonfly(os.Getenv("DRAGONFLY_ENDPOINT"), "", "", "")
+	if err != nil {
+		t.Fatalf("create: %s", err)
+	}
+	testStorage(t, dragonfly)
 }
 
 func TestMain(m *testing.M) {

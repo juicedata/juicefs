@@ -28,7 +28,7 @@ juicefs format --storage s3 \
 
 ### 通过 TLS/SSL 加密连接到数据库
 
-对于所有[支持的元数据引擎](../guide/how_to_set_up_metadata_engine.md)，只要数据库本身支持并配置了 TLS/SSL 等加密链接，JuiceFS 即可通过其加密通道进行连接。例如，配置了 TLS 加密的 Redis 数据库可以使用 `rediss://` 协议头进行链接：
+对于所有[支持的元数据引擎](../reference/how_to_set_up_metadata_engine.md)，只要数据库本身支持并配置了 TLS/SSL 等加密链接，JuiceFS 即可通过其加密通道进行连接。例如，配置了 TLS 加密的 Redis 数据库可以使用 `rediss://` 协议头进行链接：
 
 ```shell {3}
 juicefs format --storage s3 \

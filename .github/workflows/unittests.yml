@@ -41,8 +41,8 @@ jobs:
       GLUSTER_VOLUME: jfstest/gv0
       DISPLAY_PROGRESSBAR: false
       HDFS_ADDR: localhost:8020
-      SFTP_HOST: localhost:2222:/upload/
-      SFTP_USER: root
+      SFTP_HOST: localhost:2222:/home/testUser1/upload/
+      SFTP_USER: testUser1
       SFTP_PASS: password
       WEBDAV_TEST_BUCKET: 127.0.0.1:9007
       TIKV_ADDR: 127.0.0.1
@@ -50,6 +50,7 @@ jobs:
       ETCD_ADDR: 127.0.0.1:3379
       MYSQL_ADDR: (127.0.0.1:3306)/dev
       MYSQL_USER: root
+      NFS_ADDR: 127.0.0.1:/srv/nfs/
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -57,15 +58,25 @@ jobs:
           fetch-depth: 1
           
       - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
         with: 
           useBeta: true
 
       - name: Install Packages
         run: |
-          sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr glusterfs-server libglusterfs-dev
+          sudo .github/scripts/apt_install.sh g++-multilib redis-server libacl1-dev attr glusterfs-server libglusterfs-dev nfs-kernel-server
           sudo mkdir -p /home/travis/.m2/
-
+      - if: matrix.test == 'test.pkg'
+        name: Set up nfs-server
+        run: |
+          sudo mkdir -p /srv/nfs
+          sudo chown nobody:nogroup /srv/nfs
+          sudo chmod 777 /srv/nfs
+          echo "/srv/nfs 127.0.0.1(rw,sync,insecure)" | sudo tee -a /etc/exports
+          sudo systemctl start nfs-kernel-server.service
+          sudo exportfs -arv
+        
       - if: matrix.test == 'test.meta.non-core'
         name: Install redis-cluster
         uses: vishnudxb/redis-cluster@1.0.5
@@ -87,13 +98,13 @@ jobs:
           test=${{matrix.test}}
           make $test
 
-      # - name: Code Coverage
-      #   uses: codecov/codecov-action@v3
-      #   with:
-      #     files: ./cov.out
+      - name: Code Coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./cov.out
 
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         timeout-minutes: 120
         uses: lhotari/action-upterm@v1
 
@@ -111,13 +122,13 @@ jobs:
         run: exit 1
 
       - name: Send Slack Notification
-        if: ${{ failure() && github.event_name != 'workflow_dispatch' }}
+        if: failure() && github.event_name != 'workflow_dispatch' 
         uses: juicedata/slack-notify-action@main
         with:
           channel-id: "${{ secrets.SLACK_CHANNEL_ID_FOR_PR_CHECK_NOTIFY }}"
           slack_bot_token: "${{ secrets.SLACK_BOT_TOKEN }}"
 
       - name: Success
-        if: ${{ success() }}
+        if: success()
         run: echo "All Done"
 

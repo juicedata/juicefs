@@ -83,6 +83,7 @@ const (
 	COLOR_SEQ      = "\033[1;" // %dm
 	COLOR_DARK_SEQ = "\033[0;" // %dm
 	UNDERLINE_SEQ  = "\033[4m"
+	CLEAR_SCREEM   = "\033[2J\033[1;1H"
 	// BOLD_SEQ       = "\033[1m"
 )
 

@@ -44,7 +44,9 @@ func getStdout(args []string) ([]byte, error) {
 
 func TestConfig(t *testing.T) {
 	_ = resetTestMeta()
-	if err := Main([]string{"", "format", testMeta, "--bucket", "/tmp/testBucket", testVolume}); err != nil {
+	bucketPath := "/tmp/testBucket"
+	_ = os.RemoveAll(bucketPath)
+	if err := Main([]string{"", "format", testMeta, "--bucket", bucketPath, testVolume}); err != nil {
 		t.Fatalf("format: %s", err)
 	}
 

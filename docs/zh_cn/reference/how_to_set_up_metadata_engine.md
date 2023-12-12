@@ -1,6 +1,6 @@
 ---
 title: 如何设置元数据引擎
-sidebar_position: 1
+sidebar_position: 2
 slug: /databases_for_metadata
 description: JuiceFS 支持 Redis、TiKV、PostgreSQL、MySQL 等多种数据库作为元数据引擎，本文分别介绍相应的设置和使用方法。
 ---
@@ -125,9 +125,10 @@ juicefs format --storage s3 \
 
 上面的示例代码使用 `rediss://` 协议头来开启 mTLS 功能，然后使用以下选项来指定客户端证书的路径：
 
-- `tls-cert-file` 指定客户端证书的路径
-- `tls-key-file` 指定客户端密钥的路径
-- `tls-ca-cert-file` 指定签发客户端证书的 CA 证书路径，它是可选的，如果不指定，客户端会使用系统默认的 CA 证书进行验证。
+- `tls-cert-file=<path>` 指定客户端证书的路径
+- `tls-key-file=<path>` 指定客户端密钥的路径
+- `tls-ca-cert-file=<path>` 指定签发客户端证书的 CA 证书路径，它是可选的，如果不指定，客户端会使用系统默认的 CA 证书进行验证。
+- `insecure-skip-verify=true` 可以用来跳过对服务端证书的验证
 
 在 URL 指定选项时，以 `?` 符号开头，使用 `&` 符号来分隔多个选项，例如：`?tls-cert-file=client.crt&tls-key-file=client.key`。
 
@@ -200,6 +201,8 @@ juicefs format \
 1. JuiceFS 默认使用的 public [schema](https://www.postgresql.org/docs/current/ddl-schemas.html) ，如果要使用非 `public schema`，需要在连接字符串中指定 `search_path` 参数，例如 `postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1`
 2. 如果 `public schema` 并非是 PostgreSQL 服务端配置的 `search_path` 中第一个命中的，则必须在连接字符串中明确设置 `search_path` 参数
 3. `search_path` 连接参数原生可以设置为多个 schema，但是目前 JuiceFS 仅支持设置一个。`postgres://user:mypassword@192.168.1.6:5432/juicefs?search_path=pguser1,public` 将被认为不合法
+4. 密码中的特殊字符需要进行 url 编码，例如 `|` 需要编码为`%7C`。
+
 :::
 
 ### 挂载文件系统
@@ -255,7 +258,10 @@ mysql://<username>[:<password>]@unix(<socket-file-path>)/<database-name>
 </Tabs>
 
 :::note 注意
-不要漏掉 URL 两边的 `()` 括号
+
+1. 不要漏掉 URL 两边的 `()` 括号
+2. 密码中的特殊字符不需要进行 url 编码
+
 :::
 
 例如：
@@ -288,6 +294,22 @@ juicefs format \
     "mysql://user:mypassword@(192.168.1.6:3306)/juicefs?tls=true" \
     pics
 ```
+
+要启用 JuiceFS 到 MySQL 服务器建立连接的超时控制，请传递 `timeout=5s` 参数（时间可自定义）：
+
+```shell
+juicefs format \
+    --storage s3 \
+    ... \
+    "mysql://user:mypassword@(192.168.1.6:3306)/juicefs?timeout=5s" \
+    pics
+```
+
+:::note 注意
+
+设置建立连接超时，在 JuiceFS 和 MySQL 间出现网络故障场景时，能明确控制对 JuiceFS 文件系统进行读写的阻塞时间，从而可控的对网络故障进行响应。
+
+:::
 
 ### 挂载文件系统
 
@@ -533,7 +555,36 @@ juicefs mount -d "etcd://192.168.1.6:2379,192.168.1.7:2379,192.168.1.8:2379/jfs"
 
 ## FoundationDB <VersionAdd>1.1</VersionAdd>
 
-[FoundationDB](https://www.foundationdb.org) 是一个能在多集群服务器上存放大规模结构化数据的分布式数据库。该数据库系统专注于高性能、高可扩展性和不错的容错能力。
+[FoundationDB](https://www.foundationdb.org) 是一个能在多集群服务器上存放大规模结构化数据的分布式数据库。该数据库系统专注于高性能、高可扩展性，且具有不错的容错能力。由于对接 FoundationDB 需要先安装其客户端库，因此 JuiceFS 的发布版本默认不支持，使用前需要自行编译。
+
+### 编译 JuiceFS
+
+首先安装 FoundationDB 客户端（参考[官方文档](https://apple.github.io/foundationdb/api-general.html#installing-client-binaries)）：
+
+<Tabs>
+  <TabItem value="debian" label="Debian 及衍生版本">
+
+```shell
+curl -O https://github.com/apple/foundationdb/releases/download/6.3.25/foundationdb-clients_6.3.25-1_amd64.deb
+sudo dpkg -i foundationdb-clients_6.3.25-1_amd64.deb
+```
+
+  </TabItem>
+  <TabItem value="centos" label="RHEL 及衍生版本">
+
+```shell
+curl -O https://github.com/apple/foundationdb/releases/download/6.3.25/foundationdb-clients-6.3.25-1.el7.x86_64.rpm
+sudo rpm -Uvh foundationdb-clients-6.3.25-1.el7.x86_64.rpm
+```
+
+  </TabItem>
+</Tabs>
+
+然后编译支持 FoundationDB 的 JuiceFS：
+
+```shell
+make juicefs.fdb
+```
 
 ### 创建文件系统
 
@@ -546,7 +597,7 @@ fdb://<cluster_file_path>?prefix=<prefix>
 其中 `<cluster_file_path>` 为 FoundationDB 的配置文件路径，用来连接 FoundationDB 服务端。`<prefix>` 是一个用户自定义的字符串，当多个文件系统或者应用共用一个 FoundationDB 集群时，设置前缀可以避免混淆和冲突。示例如下：
 
 ```shell
-juicefs format \
+juicefs.fdb format \
     --storage s3 \
     ... \
     "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
@@ -657,7 +708,7 @@ export FDB_TLS_VERIFY_PEERS=Check.Valid=0
 ### 挂载文件系统
 
 ```shell
-juicefs mount -d \
+juicefs.fdb mount -d \
     "fdb:///etc/foundationdb/fdb.cluster?prefix=jfs" \
     /mnt/jfs
 ```

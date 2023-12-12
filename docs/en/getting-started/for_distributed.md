@@ -47,7 +47,7 @@ Install the JuiceFS client on all computers that need to mount the file system, 
 
 ### 2. Preparing Object Storage
 
-Here is a pseudo sample with Amazon S3 as an example. You can also switch to other object storage (refer to [JuiceFS Supported Storage](../guide/how_to_set_up_object_storage.md#supported-object-storage) for details).
+Here is a pseudo sample with Amazon S3 as an example. You can also switch to other object storage (refer to [JuiceFS Supported Storage](../reference/how_to_set_up_object_storage.md#supported-object-storage) for details).
 
 - **Bucket Endpoint**: `https://myjfs.s3.us-west-1.amazonaws.com`
 - **Access Key ID**: `ABCDEFGHIJKLMNopqXYZ`
@@ -55,7 +55,7 @@ Here is a pseudo sample with Amazon S3 as an example. You can also switch to oth
 
 ### 3. Preparing Database
 
-Here is a pseudo sample with Amazon ElastiCache for Redis as an example. You can also switch to other types of databases (refer to [JuiceFS Supported Databases](../guide/how_to_set_up_metadata_engine.md) for details).
+Here is a pseudo sample with Amazon ElastiCache for Redis as an example. You can also switch to other types of databases (refer to [JuiceFS Supported Databases](../reference/how_to_set_up_metadata_engine.md) for details).
 
 - **Database Address**: `myjfs-sh-abc.apse1.cache.amazonaws.com:6379`
 - **Database Username**: `tom`
@@ -113,7 +113,7 @@ JuiceFS guarantees a "close-to-open" consistency, which means that when two or m
 
 #### Increase cache size to improve performance
 
-Since object storage is a network-based storage service, it will inevitably encounter access latency. To solve this problem, JuiceFS provides and enables caching mechanism by default, i.e. allocating a part of local storage as a buffer layer between data and object storage, and caching data asynchronously to local storage when reading files. Please refer to ["Cache"](../guide/cache_management.md) for more details.
+Since object storage is a network-based storage service, it will inevitably encounter access latency. To solve this problem, JuiceFS provides and enables caching mechanism by default, i.e. allocating a part of local storage as a buffer layer between data and object storage, and caching data asynchronously to local storage when reading files. Please refer to ["Cache"](../guide/cache.md) for more details.
 
 JuiceFS will set 100GiB cache in `$HOME/.juicefs/cache` or `/var/jfsCache` directory by default. Setting a larger cache space on a faster SSD can effectively improve read and write performance of JuiceFS even more .
 

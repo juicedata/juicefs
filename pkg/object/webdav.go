@@ -192,7 +192,11 @@ func (w *webdav) List(prefix, marker, delimiter string, limit int64, followLink 
 
 	infos, err := w.c.ReadDir(root)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if gowebdav.IsErrCode(err, http.StatusForbidden) {
+			logger.Warnf("skip %s: %s", root, err)
+			return nil, nil
+		}
+		if gowebdav.IsErrNotFound(err) {
 			return nil, nil
 		}
 		return nil, err

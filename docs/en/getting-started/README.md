@@ -7,7 +7,7 @@ pagination_next: getting-started/for_distributed
 
 # Quick Start Guide for Standalone Mode
 
-The JuiceFS file system is driven by both ["Object Storage"](../guide/how_to_set_up_object_storage.md) and ["Database"](../guide/how_to_set_up_metadata_engine.md). In addition to object storage, it also supports to use local disk, WebDAV and HDFS, etc., as underlying storage. Therefore, you can create a standalone file system using local disks and SQLite database to get a quick overview of how JuiceFS works.
+The JuiceFS file system is driven by both ["Object Storage"](../reference/how_to_set_up_object_storage.md) and ["Database"](../reference/how_to_set_up_metadata_engine.md). In addition to object storage, it also supports to use local disk, WebDAV and HDFS, etc., as underlying storage. Therefore, you can create a standalone file system using local disks and SQLite database to get a quick overview of how JuiceFS works.
 
 ## Install Client
 
@@ -38,7 +38,7 @@ As you can see, 3 types of information are required to format a file system.
 3. **NAME**: the name of the file system.
 
 :::tip
-JuiceFS supports a wide range of storage media and metadata storage engines. See [JuiceFS supported storage media](../guide/how_to_set_up_object_storage.md) and [JuiceFS supported metadata storage engines](../guide/how_to_set_up_metadata_engine.md).
+JuiceFS supports a wide range of storage media and metadata storage engines. See [JuiceFS supported storage media](../reference/how_to_set_up_object_storage.md) and [JuiceFS supported metadata storage engines](../reference/how_to_set_up_metadata_engine.md).
 :::
 
 ### Hands-on Practice
@@ -61,7 +61,7 @@ An output similar to the following will return if the file system creation is co
 
 As you can see from the output, the file system uses SQLite as the metadata storage engine. The database file is located in the current directory with the file name `myjfs.db`, which creates a table to store all the metadata of the file system `myjfs`.
 
-![](../images/sqlite-info.png)
+![SQLite-info](../images/sqlite-info.png)
 
 Since no storage-related options are specified in this example, the local disk is used as the storage medium by default. According to the output, the file system storage path is `file:///Users/herald/.juicefs/local/myjfs/`.
 
@@ -97,7 +97,7 @@ The following command mounts the `myjfs` file system to the `~/jfs` folder:
 juicefs mount sqlite3://myjfs.db ~/jfs
 ```
 
-![](../images/sqlite-mount-local.png)
+![SQLite-mount-local](../images/sqlite-mount-local.png)
 
 The client mounts the file system in the foreground by default. As you can see in the above image, the program keeps running in the current terminal. To unmount the file system, press <kbd>Ctrl</kbd> + <kbd>C</kbd> or close the terminal window.
 
@@ -123,7 +123,7 @@ The above exercise only helps you to have a quick experience with JuiceFS locall
 
 Object Storage is a web storage service based on the HTTP protocol that offers simple APIs for access. It has a flat structure, and is easy to scale and relatively inexpensive, particularly suitable for storing large amounts of unstructured data. Almost all mainstream cloud computing platforms provide object storage services, such as Amazon S3, Alibaba Cloud OSS, and Backblaze B2.
 
-JuiceFS supports almost all object storage services, see [JuiceFS supported storage medias](../guide/how_to_set_up_object_storage.md).
+JuiceFS supports almost all object storage services, see [JuiceFS supported storage medias](../reference/how_to_set_up_object_storage.md).
 
 In general, only 2 steps are required to create an object storage:
 

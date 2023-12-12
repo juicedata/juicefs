@@ -19,8 +19,8 @@ set -e
 sudo apt-get update
 sudo apt-get install openjdk-8-jdk -y
 
-HADOOP_VERSION="2.10.1"
-wget -q https://dlcdn.apache.org/hadoop/common/hadoop-2.10.1/hadoop-2.10.1.tar.gz
+HADOOP_VERSION="2.10.2"
+wget -q https://dlcdn.apache.org/hadoop/common/hadoop-2.10.2/hadoop-2.10.2.tar.gz
 mkdir ~/app
 tar -zxf hadoop-${HADOOP_VERSION}.tar.gz -C ~/app
 
@@ -90,5 +90,6 @@ echo "hello world" > /tmp/testfile
 cd ~/app/hadoop-${HADOOP_VERSION}/bin
 ./hdfs dfs -put /tmp/testfile /
 ./hdfs dfs -rm /testfile
+./hdfs dfs -chmod 777 /
 
 echo "hdfs started successfully"

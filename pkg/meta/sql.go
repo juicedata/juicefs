@@ -198,6 +198,20 @@ type dbSnap struct {
 	chunk   map[string]*chunk
 }
 
+func recoveryMysqlPwd(addr string) string {
+	colonIndex := strings.Index(addr, ":")
+	atIndex := strings.LastIndex(addr, "@")
+	if colonIndex != -1 && colonIndex < atIndex {
+		pwd := addr[colonIndex+1 : atIndex]
+		if parse, err := url.Parse("mysql://root:" + pwd + "@127.0.0.1"); err == nil {
+			if originPwd, ok := parse.User.Password(); ok {
+				addr = fmt.Sprintf("%s:%s%s", addr[:colonIndex], originPwd, addr[atIndex:])
+			}
+		}
+	}
+	return addr
+}
+
 func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 	var searchPath string
 	if driver == "postgres" {
@@ -215,6 +229,12 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 			}
 		}
 	}
+
+	// escaping is not necessary for mysql password https://github.com/go-sql-driver/mysql#password
+	if driver == "mysql" {
+		addr = recoveryMysqlPwd(addr)
+	}
+
 	engine, err := xorm.NewEngine(driver, addr)
 	if err != nil {
 		return nil, fmt.Errorf("unable to use data source %s: %s", driver, err)
@@ -1265,7 +1285,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				pn.Nlink++
 				updateParent = true
 			}
-			if updateParent || time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= minUpdateTime {
+			if updateParent || time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= m.conf.SkipDirMtime {
 				pn.Mtime = now / 1e3
 				pn.Ctime = now / 1e3
 				updateParent = true
@@ -1406,7 +1426,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		defer func() { m.of.InvalidateChunk(e.Inode, invalidateAttrOnly) }()
 
 		var updateParent bool
-		if !isTrash(parent) && time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= minUpdateTime {
+		if !isTrash(parent) && time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= m.conf.SkipDirMtime {
 			pn.Mtime = now / 1e3
 			pn.Ctime = now / 1e3
 			pn.Mtimensec = int16(now % 1e3)
@@ -1565,6 +1585,7 @@ func (m *dbMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, skip
 		}
 		if _, err := s.Delete(&dirStats{Inode: e.Inode}); err != nil {
 			logger.Warnf("remove dir usage of ino(%d): %s", e.Inode, err)
+			return err
 		}
 		if _, err = s.Delete(&dirQuota{Inode: e.Inode}); err != nil {
 			return err
@@ -1789,14 +1810,14 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				sn.Parent = parentDst
 			}
 		}
-		if supdate || time.Duration(now-spn.Mtime*1e3-int64(spn.Mtimensec)) >= minUpdateTime {
+		if supdate || time.Duration(now-spn.Mtime*1e3-int64(spn.Mtimensec)) >= m.conf.SkipDirMtime {
 			spn.Mtime = now / 1e3
 			spn.Ctime = now / 1e3
 			spn.Mtimensec = int16(now % 1e3)
 			spn.Ctimensec = int16(now % 1e3)
 			supdate = true
 		}
-		if dupdate || time.Duration(now-dpn.Mtime*1e3-int64(dpn.Mtimensec)) >= minUpdateTime {
+		if dupdate || time.Duration(now-dpn.Mtime*1e3-int64(dpn.Mtimensec)) >= m.conf.SkipDirMtime {
 			dpn.Mtime = now / 1e3
 			dpn.Ctime = now / 1e3
 			dpn.Mtimensec = int16(now % 1e3)
@@ -1963,7 +1984,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 		var updateParent bool
 		now := time.Now().UnixNano()
-		if time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= minUpdateTime {
+		if time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= m.conf.SkipDirMtime {
 			pn.Mtime = now / 1e3
 			pn.Ctime = now / 1e3
 			updateParent = true
@@ -2037,7 +2058,7 @@ func (m *dbMeta) doCleanStaleSession(sid uint64) error {
 		return nil
 	})
 	if err != nil {
-		logger.Warnf("Delete flock/plock with sid %d: %d", sid, err)
+		logger.Warnf("Delete flock/plock with sid %d: %s", sid, err)
 		fail = true
 	}
 
@@ -3180,28 +3201,46 @@ func (m *dbMeta) doGetQuota(ctx Context, inode Ino) (*Quota, error) {
 	})
 }
 
-func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota, create bool) error {
-	return m.txn(func(s *xorm.Session) error {
-		q := dirQuota{Inode: inode}
-		ok, e := s.ForUpdate().Get(&q)
+func (m *dbMeta) doSetQuota(ctx Context, inode Ino, quota *Quota) (bool, error) {
+	var created bool
+	err := m.txn(func(s *xorm.Session) error {
+		origin := dirQuota{Inode: inode}
+		exist, e := s.ForUpdate().Get(&origin)
 		if e != nil {
 			return e
 		}
-		q.MaxSpace, q.MaxInodes = quota.MaxSpace, quota.MaxInodes
-		if ok {
-			if create {
-				q.UsedSpace, q.UsedInodes = quota.UsedSpace, quota.UsedInodes
-				_, e = s.Cols("max_space", "max_inodes", "used_space", "used_inodes").Update(&q, &dirQuota{Inode: inode})
-			} else {
-				quota.UsedSpace, quota.UsedInodes = q.UsedSpace, q.UsedInodes
-				_, e = s.Cols("max_space", "max_inodes").Update(&q, &dirQuota{Inode: inode})
-			}
-		} else if create {
-			q.UsedSpace, q.UsedInodes = quota.UsedSpace, quota.UsedInodes
-			e = mustInsert(s, &q)
+		if exist {
+			created = false
+		} else if quota.MaxSpace < 0 && quota.MaxInodes < 0 {
+			return errors.Errorf("limitation not set or deleted")
+		} else {
+			created = true
+		}
+		updateColumns := make([]string, 0, 4)
+		if quota.MaxSpace >= 0 {
+			origin.MaxSpace = quota.MaxSpace
+			updateColumns = append(updateColumns, "max_space")
+		}
+		if quota.MaxInodes >= 0 {
+			origin.MaxInodes = quota.MaxInodes
+			updateColumns = append(updateColumns, "max_inodes")
+		}
+		if quota.UsedSpace >= 0 {
+			origin.UsedSpace = quota.UsedSpace
+			updateColumns = append(updateColumns, "used_space")
+		}
+		if quota.UsedInodes >= 0 {
+			origin.UsedInodes = quota.UsedInodes
+			updateColumns = append(updateColumns, "used_inodes")
+		}
+		if exist {
+			_, e = s.Cols(updateColumns...).Update(&origin, &dirQuota{Inode: inode})
+		} else {
+			e = mustInsert(s, &origin)
 		}
 		return e
 	})
+	return created, err
 }
 
 func (m *dbMeta) doDelQuota(ctx Context, inode Ino) error {
