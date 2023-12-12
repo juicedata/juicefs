@@ -175,10 +175,10 @@ func (cache *cacheStore) cleanupExpire() {
 				cache.m.cacheEvicts.Add(1)
 			}
 		}
-		cache.Unlock()
 		if len(todel) > 0 {
 			logger.Debugf("cleanup expired cache (%s): %d blocks (%d MB), expired %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, len(todel), freed>>20)
 		}
+		cache.Unlock()
 		for _, k := range todel {
 			_ = os.Remove(cache.cachePath(cache.getPathFromKey(k)))
 		}
