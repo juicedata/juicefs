@@ -191,11 +191,6 @@ func formatManagementFlags() []cli.Flag {
 			Value: 1,
 			Usage: "number of days after which removed files will be permanently deleted",
 		},
-		&cli.IntFlag{
-			Name:  "cached-stay-days",
-			Value: 1024,
-			Usage: "number of days after which cached files will be permanently deleted",
-		},
 	})
 }
 
@@ -369,9 +364,6 @@ func format(c *cli.Context) error {
 	if v := c.Int("trash-days"); v < 0 {
 		logger.Fatalf("Invalid trash days: %d", v)
 	}
-	if v := c.Int("cached-stay-days"); v < 1 {
-		logger.Fatalf("Invalid cached stay days: %d", v)
-	}
 	if v := c.Int("shards"); v > 256 {
 		logger.Fatalf("too many shards: %d", v)
 	}
@@ -407,8 +399,6 @@ func format(c *cli.Context) error {
 				format.SessionToken = c.String(flag)
 			case "trash-days":
 				format.TrashDays = c.Int(flag)
-			case "cached-stay-days":
-				format.CachedStayDays = c.Int(flag)
 			case "block-size":
 				format.BlockSize = fixObjectSize(c.Int(flag))
 			case "compress":
@@ -443,7 +433,6 @@ func format(c *cli.Context) error {
 			BlockSize:        fixObjectSize(c.Int("block-size")),
 			Compression:      c.String("compress"),
 			TrashDays:        c.Int("trash-days"),
-			CachedStayDays:   c.Int("cached-stay-days"),
 			DirStats:         true,
 			MetaVersion:      meta.MaxVersion,
 			MinClientVersion: "1.1.0-A",

@@ -116,6 +116,9 @@ func newCacheStore(m *cacheManagerMetrics, dir string, cacheSize int64, pendingP
 	logger.Infof("Disk cache (%s): capacity (%d MB), free ratio (%d%%), max pending pages (%d)", c.dir, c.capacity>>20, int(c.freeRatio*100), pendingPages)
 	go c.flush()
 	go c.checkFreeSpace()
+	if c.cacheExpire > 0 {
+		go c.cleanupExpire()
+	}
 	go c.refreshCacheKeys()
 	go c.scanStaging()
 	return c
@@ -136,10 +139,10 @@ func (cache *cacheStore) checkFreeSpace() {
 		br, fr := cache.curFreeRatio()
 		cache.stageFull = br < cache.freeRatio/2 || fr < cache.freeRatio/2
 		cache.rawFull = br < cache.freeRatio || fr < cache.freeRatio
-		if cache.rawFull && cache.eviction != "none" || cache.cacheExpire.Seconds() >= 1 && cache.cacheExpire.Seconds() != 884736000 {
+		if cache.rawFull && cache.eviction != "none" {
 			logger.Tracef("Cleanup cache when check free space (%s): free ratio (%d%%), space usage (%d%%), inodes usage (%d%%)", cache.dir, int(cache.freeRatio*100), int(br*100), int(fr*100))
 			cache.Lock()
-			cache.cleanup()
+			cache.cleanupFull()
 			cache.Unlock()
 			br, fr = cache.curFreeRatio()
 			cache.rawFull = br < cache.freeRatio || fr < cache.freeRatio
@@ -148,6 +151,39 @@ func (cache *cacheStore) checkFreeSpace() {
 			cache.uploadStaging()
 		}
 		time.Sleep(time.Second)
+	}
+}
+
+func (cache *cacheStore) cleanupExpire() {
+	var todel []cacheKey
+	for {
+		var freed int64
+		var cnt, deleted int
+		var cutoff = uint32(time.Now().Unix()) - uint32(cache.cacheExpire/time.Second)
+		cache.Lock()
+		for k, v := range cache.keys {
+			cnt++
+			if cnt > 1e3 {
+				break
+			}
+			if v.atime < cutoff {
+				deleted++
+				delete(cache.keys, k)
+				freed += int64(v.size + 4096)
+				cache.used -= int64(v.size + 4096)
+				todel = append(todel, k)
+				cache.m.cacheEvicts.Add(1)
+			}
+		}
+		cache.Unlock()
+		if len(todel) > 0 {
+			logger.Debugf("cleanup expired cache (%s): %d blocks (%d MB), expired %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20, len(todel), freed>>20)
+		}
+		for _, k := range todel {
+			_ = os.Remove(cache.cachePath(cache.getPathFromKey(k)))
+		}
+		todel = todel[:0]
+		time.Sleep(time.Minute * time.Duration(1-deleted/(cnt+1)))
 	}
 }
 
@@ -406,9 +442,9 @@ func (cache *cacheStore) add(key string, size int32, atime uint32) {
 		cache.used += int64(size + 4096)
 	}
 
-	if cache.used > cache.capacity && cache.eviction != "none" || cache.cacheExpire.Seconds() >= 1 && cache.cacheExpire.Seconds() != 884736000 {
+	if cache.used > cache.capacity && cache.eviction != "none" {
 		logger.Debugf("Cleanup cache when add new data (%s): %d blocks (%d MB)", cache.dir, len(cache.keys), cache.used>>20)
-		cache.cleanup()
+		cache.cleanupFull()
 	}
 }
 
@@ -439,7 +475,7 @@ func (cache *cacheStore) uploaded(key string, size int) {
 }
 
 // locked
-func (cache *cacheStore) cleanup() {
+func (cache *cacheStore) cleanupFull() {
 	goal := cache.capacity * 95 / 100
 	num := len(cache.keys) * 99 / 100
 	// make sure we have enough free space after cleanup
@@ -469,26 +505,22 @@ func (cache *cacheStore) cleanup() {
 	var lastK cacheKey
 	var lastValue cacheItem
 	var now = uint32(time.Now().Unix())
+	var cutoff = now - uint32(cache.cacheExpire/time.Second)
 	// for each two random keys, then compare the access time, evict the older one
 	for k, value := range cache.keys {
 		if value.size < 0 {
 			continue // staging
 		}
-		if cache.rawFull && cache.eviction != "none" {
-			if cnt == 0 || lastValue.atime > value.atime {
-				lastK = k
-				lastValue = value
-			}
-		}
-		if cache.cacheExpire.Seconds() >= 1 && cache.cacheExpire.Seconds() != 884736000 {
-			//access time from now is biger than cachedExpectTime
-			if now-value.atime > uint32(cache.cacheExpire.Seconds()) {
-				lastK = k
-				lastValue = value
-			}
+		if cache.cacheExpire > 0 && value.atime < cutoff {
+			lastK = k
+			lastValue = value
+			cnt++
+		} else if cnt == 0 || lastValue.atime > value.atime {
+			lastK = k
+			lastValue = value
 		}
 		cnt++
-		if cnt > 1 && cache.rawFull || cnt >= 1 && cache.cacheExpire.Seconds() >= 1 && cache.cacheExpire.Seconds() != 884736000 {
+		if cnt > 1 {
 			delete(cache.keys, lastK)
 			freed += int64(lastValue.size + 4096)
 			cache.used -= int64(lastValue.size + 4096)
@@ -496,7 +528,7 @@ func (cache *cacheStore) cleanup() {
 			logger.Debugf("remove %s from cache, age: %d", lastK, now-lastValue.atime)
 			cache.m.cacheEvicts.Add(1)
 			cnt = 0
-			if len(cache.keys) < num && cache.used < goal && cache.rawFull && cache.eviction != "none" {
+			if len(cache.keys) < num && cache.used < goal {
 				break
 			}
 		}

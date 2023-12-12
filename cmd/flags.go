@@ -225,8 +225,7 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "cache-expire",
-			Value: "1024d",
-			Usage: "if the time since the last access exceeds this time, cached files will be deleted",
+			Usage: "duration before cached blocks being automatically evicted (0 means never)",
 		},
 	})
 }

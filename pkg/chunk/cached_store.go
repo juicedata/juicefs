@@ -548,10 +548,6 @@ func (c *Config) SelfCheck(uuid string) {
 		logger.Warnf("delayed upload is disabled in non-writeback mode")
 		c.UploadDelay = 0
 	}
-	if c.CacheExpire <= 0 {
-		logger.Warnf("cache expire is disabled , invalid parameter settings")
-		c.CacheExpire = 88473600
-	}
 	if c.MaxUpload <= 0 {
 		logger.Warnf("max-uploads should be greater than 0, set it to 1")
 		c.MaxUpload = 1
