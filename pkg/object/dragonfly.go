@@ -1,3 +1,6 @@
+//go:build !nodragonfly
+// +build !nodragonfly
+
 /*
  * JuiceFS, Copyright 2023 Juicedata, Inc.
  *
