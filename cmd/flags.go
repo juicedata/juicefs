@@ -183,7 +183,6 @@ func dataCacheFlags() []cli.Flag {
 			Value: "0",
 			Usage: "delayed duration (in seconds) for uploading objects",
 		},
-
 		&cli.StringFlag{
 			Name:  "cache-dir",
 			Value: defaultCacheDir,
