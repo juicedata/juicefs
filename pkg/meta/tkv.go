@@ -2956,7 +2956,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	return nil
 }
 
-func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
+func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			debug.PrintStack()
@@ -2986,7 +2986,7 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
 
-	if root == 1 { // make snap
+	if root == 1 && fast { // make snap
 		m.snap = make(map[Ino]*DumpedEntry)
 		defer func() {
 			m.snap = nil
@@ -3071,6 +3071,17 @@ func (m *kvMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		}
 		if err = m.dumpEntry(root, tree); err != nil {
 			return err
+		}
+		if root == 1 {
+			trash = &DumpedEntry{
+				Attr: &DumpedAttr{
+					Inode: TrashInode,
+					Type:  "directory",
+				},
+			}
+			if err = m.dumpEntry(TrashInode, trash); err != nil {
+				return err
+			}
 		}
 	}
 
