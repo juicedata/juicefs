@@ -25,7 +25,7 @@ test_dump_load_with_iflag(){
     ./juicefs mount -d $META_URL /jfs --enable-ioctl
     echo "hello" > /jfs/hello.txt
     chattr +i /jfs/hello.txt
-    ./juicefs dump $META_URL dump.json
+    ./juicefs dump $META_URL dump.json --fast
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json
@@ -40,7 +40,7 @@ test_dump_with_keep_secret()
 {
     prepare_test
     ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
-    ./juicefs dump --keep-secret-key $META_URL dump.json
+    ./juicefs dump --keep-secret-key $META_URL dump.json --fast
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json
     ./juicefs mount -d $META_URL /jfs
@@ -52,7 +52,7 @@ test_dump_without_keep_secret()
 {
     prepare_test
     ./juicefs format $META_URL myjfs --storage minio --bucket http://localhost:9000/test --access-key minioadmin --secret-key minioadmin
-    ./juicefs dump $META_URL dump.json
+    ./juicefs dump $META_URL dump.json --fast
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json
     ./juicefs mount -d $META_URL /jfs && echo "mount should fail" && exit 1 || true
@@ -110,7 +110,7 @@ do_dump_load(){
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     python3 .github/scripts/fsrand.py -c 1000 /jfs/fsrand -v -a
-    ./juicefs dump  $META_URL $dump_file
+    ./juicefs dump  $META_URL $dump_file --fast
 
     ./juicefs load  sqlite3://test2.db $dump_file   
     ./juicefs mount -d sqlite3://test2.db /jfs2
