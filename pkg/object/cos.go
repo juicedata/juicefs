@@ -243,7 +243,7 @@ func (c *COS) AbortUpload(key string, uploadID string) {
 func (c *COS) CompleteUpload(key string, uploadID string, parts []*Part) error {
 	var cosParts []cos.Object
 	for i := range parts {
-		cosParts = append(cosParts, cos.Object{Key: key, ETag: parts[i].ETag, PartNumber: parts[i].Num})
+		cosParts = append(cosParts, cos.Object{ETag: parts[i].ETag, PartNumber: parts[i].Num})
 	}
 	_, _, err := c.c.Object.CompleteMultipartUpload(ctx, key, uploadID, &cos.CompleteMultipartUploadOptions{Parts: cosParts})
 	return err
