@@ -3524,7 +3524,7 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 	return nil
 }
 
-func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
+func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if e, ok := p.(error); ok {
@@ -3539,7 +3539,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
 	return m.roTxn(func(s *xorm.Session) error {
-		if root == RootInode {
+		if root == RootInode && fast {
 			defer func() { m.snap = nil }()
 			bar := progress.AddCountBar("Snapshot keys", 0)
 			if err = m.makeSnap(s, bar); err != nil {
@@ -3551,6 +3551,11 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		} else {
 			if tree, err = m.dumpEntry(s, root, TypeDirectory); err != nil {
 				return err
+			}
+			if root == 1 {
+				if trash, err = m.dumpEntry(s, TrashInode, TypeDirectory); err != nil {
+					return err
+				}
 			}
 		}
 		if tree == nil {

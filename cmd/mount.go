@@ -401,6 +401,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		UploadLimit:   c.Int64("upload-limit") * 1e6 / 8,
 		DownloadLimit: c.Int64("download-limit") * 1e6 / 8,
 		UploadDelay:   duration(c.String("upload-delay")),
+		UploadHours:   c.String("upload-hours"),
 
 		CacheDir:          c.String("cache-dir"),
 		CacheSize:         int64(c.Int("cache-size")),

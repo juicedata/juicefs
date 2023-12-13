@@ -18,10 +18,7 @@ package object
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha1"
 	"crypto/tls"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"math/rand"
@@ -107,24 +104,6 @@ func (s *RestfulStorage) String() string {
 }
 
 var HEADER_NAMES = []string{"Content-MD5", "Content-Type", "Date"}
-
-// RequestURL is fully url of api request
-func sign(req *http.Request, accessKey, secretKey, signName string) {
-	if accessKey == "" {
-		return
-	}
-	toSign := req.Method + "\n"
-	for _, n := range HEADER_NAMES {
-		toSign += req.Header.Get(n) + "\n"
-	}
-	bucket := strings.Split(req.URL.Host, ".")[0]
-	toSign += "/" + bucket + req.URL.Path
-	h := hmac.New(sha1.New, []byte(secretKey))
-	_, _ = h.Write([]byte(toSign))
-	sig := base64.StdEncoding.EncodeToString(h.Sum(nil))
-	token := signName + " " + accessKey + ":" + sig
-	req.Header.Add("Authorization", token)
-}
 
 func (s *RestfulStorage) request(method, key string, body io.Reader, headers map[string]string) (*http.Response, error) {
 	uri := s.endpoint + "/" + key
