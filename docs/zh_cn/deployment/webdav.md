@@ -9,7 +9,7 @@ JuiceFS 支持通过 WebDAV 协议挂载访问，对于 macOS 以及其他没有
 
 ## 前置条件
 
-在配置 WebDAV 服务之前，你需要预先[创建一个 JuiceFS 文件系统](../getting-started/README.md#juicefs-format)。
+在配置 WebDAV 服务之前，你需要预先[创建一个 JuiceFS 文件系统](../getting-started/standalone.md#juicefs-format)。
 
 ## 匿名 WebDAV
 

@@ -9,7 +9,7 @@ JuiceFS supports accessing through the WebDAV protocol, which is very convenient
 
 ## Pre-requisites
 
-Before you can configure a WebDAV server, you need to [create a JuiceFS file system](../getting-started/README.md#juicefs-format).
+Before you can configure a WebDAV server, you need to [create a JuiceFS file system](../getting-started/standalone.md#juicefs-format).
 
 ## Anonymous WebDAV
 

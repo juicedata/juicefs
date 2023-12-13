@@ -243,7 +243,7 @@ There are some differences between the various versions of Ingress. For more usa
 
 1. Prepare a YAML file
 
-   Create a configuration file, for example: `values.yaml`. Copy and fill in the following configuration information. Among them, the `secret` part is the information related to the JuiceFS file system, and you can refer to [JuiceFS Quick Start Guide](../getting-started/README.md) for more information.
+   Create a configuration file, for example: `values.yaml`. Copy and fill in the following configuration information. Among them, the `secret` part is the information related to the JuiceFS file system, and you can refer to [JuiceFS Quick Start Guide](../getting-started/standalone.md) for more information.
 
    ```yaml title="values.yaml"
    secret:
