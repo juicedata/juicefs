@@ -25,7 +25,7 @@ test_load_dump_with_small_dir(){
   python3 .github/scripts/db.py --name load_small_dir --result $runtime --version $version --meta $META --storage file
   echo "load cost $runtime seconds"
   start=`date +%s`
-  ./juicefs dump $META_URL dump.json
+  ./juicefs dump $META_URL dump.json --fast
   end=`date +%s`
   runtime=$((end-start))
   echo "dump cost $runtime seconds"
@@ -63,9 +63,9 @@ do_load_dump_with_big_dir(){
   python3 .github/scripts/db.py --name load_big_dir --result $runtime --version $version --meta $META --storage file
   start=`date +%s`
   if [ "$with_subdir" = true ] ; then
-    ./juicefs dump $META_URL dump.json --subdir test
+    ./juicefs dump $META_URL dump.json --subdir test --fast
   else
-    ./juicefs dump $META_URL dump.json
+    ./juicefs dump $META_URL dump.json --fast
   fi
   end=`date +%s`
   runtime=$((end-start))
