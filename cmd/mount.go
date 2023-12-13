@@ -411,6 +411,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheChecksum:     c.String("verify-cache-checksum"),
 		CacheEviction:     c.String("cache-eviction"),
 		CacheScanInterval: duration(c.String("cache-scan-interval")),
+		CacheExpire:       duration(c.String("cache-expire")),
 		AutoCreate:        true,
 	}
 	if chunkConf.UploadLimit == 0 {

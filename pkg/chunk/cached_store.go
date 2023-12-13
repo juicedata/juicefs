@@ -515,6 +515,7 @@ type Config struct {
 	CacheChecksum     string
 	CacheEviction     string
 	CacheScanInterval time.Duration
+	CacheExpire       time.Duration
 	FreeSpace         float32
 	AutoCreate        bool
 	Compress          string
@@ -577,6 +578,10 @@ func (c *Config) SelfCheck(uuid string) {
 	} else if c.CacheEviction != "2-random" && c.CacheEviction != "none" {
 		logger.Warnf("cache-eviction should be one of [2-random, none]")
 		c.CacheEviction = "2-random"
+	}
+	if c.CacheExpire > 0 && c.CacheExpire < time.Second {
+		logger.Warnf("cache-expire it too short, setting it to 1 second")
+		c.CacheExpire = time.Second
 	}
 }
 
