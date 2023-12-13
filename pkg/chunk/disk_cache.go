@@ -156,6 +156,10 @@ func (cache *cacheStore) checkFreeSpace() {
 
 func (cache *cacheStore) cleanupExpire() {
 	var todel []cacheKey
+	var interval = time.Minute
+	if cache.cacheExpire < time.Minute {
+		interval = cache.cacheExpire
+	}
 	for {
 		var freed int64
 		var cnt, deleted int
@@ -183,7 +187,7 @@ func (cache *cacheStore) cleanupExpire() {
 			_ = os.Remove(cache.cachePath(cache.getPathFromKey(k)))
 		}
 		todel = todel[:0]
-		time.Sleep(time.Minute * time.Duration(1-deleted/(cnt+1)))
+		time.Sleep(interval * time.Duration((cnt+1-deleted)/(cnt+1)))
 	}
 }
 

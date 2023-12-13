@@ -573,6 +573,10 @@ func (c *Config) SelfCheck(uuid string) {
 		logger.Warnf("cache-eviction should be one of [2-random, none]")
 		c.CacheEviction = "2-random"
 	}
+	if c.CacheExpire > 0 && c.CacheExpire < time.Second {
+		logger.Warnf("cache-expire it too short, setting it to 1 second")
+		c.CacheExpire = time.Second
+	}
 }
 
 type cachedStore struct {
