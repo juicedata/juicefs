@@ -94,7 +94,7 @@ Noticing again, this step above is only need to be done once at any machine you 
 
 ### Step 2 - Mount JuiceFS file system on Colab
 
-After you have finished with Step 1 above, then it means you already have a JuiceFS filesystem (called `myvolume` in
+After you have finished with Step 1 above, then it means you already have a JuiceFS file system (called `myvolume` in
 this case) is defined and ready to be used.
 
 So here we open a Colab page and run those command to mount our file system into a folder called `mnt`.
