@@ -2346,7 +2346,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			vals = append(vals, val)
 		}
 
-		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			coff := offIn / ChunkSize * ChunkSize
 			for _, sv := range vals {
 				// Add a zero chunk for hole
@@ -2464,7 +2464,7 @@ func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno
 		if n <= 0 {
 			return syscall.ENOENT
 		}
-		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, m.dirDataLengthKey(), field, stat.length)
 			pipe.HSet(ctx, m.dirUsedSpaceKey(), field, stat.space)
 			pipe.HSet(ctx, m.dirUsedInodesKey(), field, stat.inodes)
@@ -2635,7 +2635,7 @@ func (m *redisMeta) cleanupZeroRef(key string) {
 		if v != 0 {
 			return syscall.EINVAL
 		}
-		_, err = tx.Pipelined(ctx, func(p redis.Pipeliner) error {
+		_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
 			p.HDel(ctx, m.sliceRefs(), key)
 			return nil
 		})
@@ -2834,7 +2834,7 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 				if len(ss) == 0 {
 					return fmt.Errorf("invalid value for delSlices %s: %v", key, buf)
 				}
-				_, e = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+				_, e = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					for _, s := range ss {
 						rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.Id, s.Size), -1))
 					}
@@ -2945,7 +2945,7 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 		}
 
-		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.LTrim(ctx, key, int64(len(vals)), -1)
 			pipe.LPush(ctx, key, marshalSlice(pos, id, size, 0, size))
 			for i := skipped; i > 0; i-- {
@@ -3236,7 +3236,7 @@ func (m *redisMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 				return err
 			}
 			if clean {
-				_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					for _, s := range ss {
 						rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.Id, s.Size), -1))
 					}
