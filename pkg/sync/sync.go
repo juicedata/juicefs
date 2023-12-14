@@ -426,11 +426,17 @@ SINGLE:
 		}
 	}
 	defer in.Close()
+	return dst.Put(key, &withProgress{in})
+}
 
-	if err = dst.Put(key, in); err == nil {
-		copiedBytes.IncrInt64(size)
-	}
-	return err
+type withProgress struct {
+	r io.Reader
+}
+
+func (w *withProgress) Read(b []byte) (int, error) {
+	n, err := w.r.Read(b)
+	copiedBytes.IncrInt64(int64(n))
+	return n, err
 }
 
 func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
