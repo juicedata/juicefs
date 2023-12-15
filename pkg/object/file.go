@@ -18,7 +18,6 @@ package object
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"io/fs"
 	"math/rand"
@@ -339,18 +338,6 @@ func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
 	// For Windows, the path looks like /C:/a/b/c/
 	if runtime.GOOS == "windows" {
 		root = strings.TrimPrefix(root, "/")
-	}
-	if strings.HasSuffix(root, dirSuffix) {
-		logger.Debugf("Ensure directory %s", root)
-		if err := os.MkdirAll(root, 0777); err != nil {
-			return nil, fmt.Errorf("Creating directory %s failed: %q", root, err)
-		}
-	} else {
-		dir := filepath.Dir(root)
-		logger.Debugf("Ensure directory %s", dir)
-		if err := os.MkdirAll(dir, 0777); err != nil {
-			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)
-		}
 	}
 	return &filestore{root: root}, nil
 }
