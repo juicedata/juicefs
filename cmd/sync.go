@@ -278,7 +278,7 @@ func extractToken(uri string) (string, string) {
 	return uri, ""
 }
 
-func createSyncStorage(uri string, conf *sync.Config, isSrcUrl bool) (object.ObjectStorage, error) {
+func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, error) {
 	if !strings.Contains(uri, "://") {
 		if isFilePath(uri) {
 			absPath, err := filepath.Abs(uri)
@@ -349,22 +349,7 @@ func createSyncStorage(uri string, conf *sync.Config, isSrcUrl bool) (object.Obj
 		// bucket name is part of path
 		endpoint += u.Path
 	}
-	if isSrcUrl && name == "file" {
-		// For Windows, the path looks like /C:/a/b/c/
-		root := endpoint
-		if runtime.GOOS == "windows" {
-			root = strings.TrimPrefix(root, "/")
-		}
-		var dir string
-		if strings.HasSuffix(root, dirSuffix) {
-			dir = root
-		} else {
-			dir = filepath.Dir(root)
-		}
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			return nil, fmt.Errorf("src path %s not exist", root)
-		}
-	}
+
 	store, err := object.CreateStorage(name, endpoint, accessKey, secretKey, token)
 	if err != nil {
 		return nil, fmt.Errorf("create %s %s: %s", name, endpoint, err)
@@ -434,11 +419,11 @@ func doSync(c *cli.Context) error {
 	if strings.HasSuffix(srcURL, "/") != strings.HasSuffix(dstURL, "/") {
 		logger.Fatalf("SRC and DST should both end with path separator or not!")
 	}
-	src, err := createSyncStorage(srcURL, config, true)
+	src, err := createSyncStorage(srcURL, config)
 	if err != nil {
 		return err
 	}
-	dst, err := createSyncStorage(dstURL, config, false)
+	dst, err := createSyncStorage(dstURL, config)
 	if err != nil {
 		return err
 	}
