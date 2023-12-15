@@ -403,6 +403,9 @@ func doSync(c *cli.Context) error {
 	}
 	config := sync.NewConfigFromCli(c)
 
+	if config.Manager != "" {
+		logger.Debugf("worker process start")
+	}
 	// Windows support `\` and `/` as its separator, Unix only use `/`
 	srcURL := c.Args().Get(0)
 	dstURL := c.Args().Get(1)
