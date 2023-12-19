@@ -41,3 +41,10 @@ JuiceFS 为海量数据存储设计，可以作为很多分布式文件系统和
 ## 数据隐私
 
 JuiceFS 是开源软件，你可以在 [GitHub](https://github.com/juicedata/juicefs) 找到完整的源代码。在使用 JuiceFS 存储数据时，数据会按照一定的规则被拆分成数据块并保存在你自己定义的对象存储或其它存储介质中，数据所对应的元数据则存储在你自己定义的数据库中。
+
+## 新人必读
+
+* **案例**：想了解更多相似场景的实践案例，请访问[用户案例](https://juicefs.com/zh-cn/blog/user-stories)。
+* **视频**：我们在 [Bilibili 频道](https://space.bilibili.com/1206844881)提供了丰富的视频教程。
+* **加入社群**：欢迎加入我们的[微信用户组](https://juicefs.com/zh-cn/wechat-user-group)（中文）或者 [Slack](https://go.juicefs.com/slack)（英文），与 JuiceFS 用户共同探讨。
+* **Office Hours**：每两周一次的线上活动，Juicedata 工程师将为你实时答疑解惑。请加入微信用户组获取最新活动信息。
