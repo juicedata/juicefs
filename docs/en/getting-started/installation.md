@@ -1,7 +1,6 @@
 ---
 title: Installation
-sidebar_position: 1
-slug: /installation
+sidebar_position: 2
 pagination_prev: introduction/comparison/juicefs_vs_s3ql
 description: This article describes how to install JuiceFS on Linux, macOS and Windows, including one-click installation, compiled and containerized.
 ---

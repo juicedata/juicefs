@@ -1,7 +1,6 @@
 ---
 title: 安装
-sidebar_position: 1
-slug: /installation
+sidebar_position: 2
 pagination_prev: introduction/comparison/juicefs_vs_s3ql
 description: 本文介绍 JuiceFS 在 Linux、macOS 和 Windows 上的安装方法，包括一键安装、编译安装和容器化安装。
 ---

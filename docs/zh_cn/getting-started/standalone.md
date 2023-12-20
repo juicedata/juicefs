@@ -1,11 +1,9 @@
 ---
-sidebar_label: 快速上手（单机模式）
 sidebar_position: 2
-slug: /quick_start_guide
 pagination_next: getting-started/for_distributed
 ---
 
-# 单机模式快速上手指南
+# 单机模式
 
 JuiceFS 文件系统由[「对象存储」](../reference/how_to_set_up_object_storage.md)和[「数据库」](../reference/how_to_set_up_metadata_engine.md)共同驱动。除了对象存储，还支持使用本地磁盘、WebDAV 和 HDFS 等作为底层存储。因此，可以使用本地磁盘和 SQLite 数据库快速创建一个单机文件系统用以了解和体验 JuiceFS。
 

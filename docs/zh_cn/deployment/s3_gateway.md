@@ -243,7 +243,7 @@ Ingress 的各个版本之间差异较大，更多使用方式请参考 [Ingress
 
 1. 准备配置文件
 
-   创建一个配置文件，例如：`values.yaml`，复制并完善下列配置信息。其中，`secret` 部分是 JuiceFS 文件系统相关的信息，你可以参照 [JuiceFS 快速上手指南](../getting-started/README.md) 了解相关内容。
+   创建一个配置文件，例如：`values.yaml`，复制并完善下列配置信息。其中，`secret` 部分是 JuiceFS 文件系统相关的信息，你可以参照 [JuiceFS 快速上手指南](../getting-started/standalone.md) 了解相关内容。
 
    ```yaml title="values.yaml"
    secret:
