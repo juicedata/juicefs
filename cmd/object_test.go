@@ -129,8 +129,11 @@ func testFileSystem(t *testing.T, s object.ObjectStorage) {
 		if target, err := ss.Readlink("a"); err != nil || target != "./xyz/ol1/" {
 			t.Fatalf("readlink a %s %s", target, err)
 		}
-		if err = ss.Symlink("./xyz/notExist/", "b"); err != nil {
+		if err = ss.Symlink("/xyz/notExist/", "b"); err != nil {
 			t.Fatalf("symlink b %s", err)
+		}
+		if target, err := ss.Readlink("b"); err != nil || target != "/xyz/notExist/" {
+			t.Fatalf("readlink b %s %s", target, err)
 		}
 		objs, err = listAll(s, "", "", 100)
 		if err != nil {
