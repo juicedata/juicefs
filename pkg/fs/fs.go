@@ -23,7 +23,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"path/filepath"
 	"runtime/trace"
 	"strconv"
 	"strings"
@@ -532,12 +531,7 @@ func (fs *FileSystem) Symlink(ctx meta.Context, target string, link string) (err
 	if err != 0 {
 		return
 	}
-	rel, e := filepath.Rel(parentDir(link), target)
-	if e != nil {
-		// external link
-		rel = target
-	}
-	err = fs.m.Symlink(ctx, fi.inode, path.Base(link), rel, nil, nil)
+	err = fs.m.Symlink(ctx, fi.inode, path.Base(link), target, nil, nil)
 	fs.invalidateEntry(fi.inode, path.Base(link))
 	return
 }

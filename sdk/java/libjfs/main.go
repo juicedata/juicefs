@@ -858,15 +858,6 @@ func jfs_removeXattr(pid int, h uintptr, path *C.char, name *C.char) int {
 	return errno(w.RemoveXattr(w.withPid(pid), C.GoString(path), C.GoString(name)))
 }
 
-//export jfs_symlink
-func jfs_symlink(pid int, h uintptr, target *C.char, link *C.char) int {
-	w := F(h)
-	if w == nil {
-		return EINVAL
-	}
-	return errno(w.Symlink(w.withPid(pid), C.GoString(target), C.GoString(link)))
-}
-
 //export jfs_readlink
 func jfs_readlink(pid int, h uintptr, link *C.char, buf uintptr, bufsize int) int {
 	w := F(h)
