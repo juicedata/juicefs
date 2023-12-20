@@ -139,7 +139,7 @@ func (j *juiceFS) Put(key string, in io.Reader) (err error) {
 			}
 		}()
 	}
-	f, eno := j.jfs.Create(ctx, tmp, 0666, j.umask)
+	f, eno := j.jfs.Open(ctx, tmp, 0666)
 	if eno == syscall.ENOENT {
 		_ = j.jfs.MkdirAll(ctx, path.Dir(tmp), 0777, j.umask)
 		f, eno = j.jfs.Create(ctx, tmp, 0666, j.umask)
