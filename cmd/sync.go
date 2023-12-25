@@ -279,6 +279,9 @@ func extractToken(uri string) (string, string) {
 }
 
 func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, error) {
+	if strings.HasPrefix(uri, "sftp://") {
+		uri = strings.TrimLeft(uri, "sftp://")
+	}
 	if !strings.Contains(uri, "://") {
 		if isFilePath(uri) {
 			absPath, err := filepath.Abs(uri)
