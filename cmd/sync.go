@@ -279,6 +279,7 @@ func extractToken(uri string) (string, string) {
 }
 
 func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, error) {
+	// nolint:staticcheck
 	uri = strings.TrimLeft(uri, "sftp://")
 	if !strings.Contains(uri, "://") {
 		if isFilePath(uri) {
