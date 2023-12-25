@@ -295,7 +295,19 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 			// Windows: file:///C:/a/b/c, Unix: file:///a/b/c
 			uri = "file://" + absPath
 		} else { // sftp
-			uri = "sftp://" + uri
+			var user string
+			if strings.Contains(uri, "@") {
+				parts := strings.Split(uri, "@")
+				user = parts[0]
+				uri = parts[1]
+			}
+			var pass string
+			if strings.Contains(user, ":") {
+				parts := strings.Split(user, ":")
+				user = parts[0]
+				pass = parts[1]
+			}
+			return object.CreateStorage("sftp", uri, user, pass, "")
 		}
 	}
 	uri, token := extractToken(uri)
@@ -326,10 +338,6 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		}
 	} else if name == "nfs" {
 		endpoint = u.Host + u.Path
-	} else if name == "sftp" {
-		if strings.Contains(uri, "@") {
-			endpoint = strings.Split(uri, "@")[1]
-		}
 	} else if !conf.NoHTTPS && supportHTTPS(name, u.Host) {
 		endpoint = "https://" + u.Host
 	} else {
@@ -361,7 +369,7 @@ func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, err
 		}
 	}
 	switch name {
-	case "file", "nfs", "sftp":
+	case "file", "nfs":
 	case "minio":
 		if strings.Count(u.Path, "/") > 1 {
 			// skip bucket name
