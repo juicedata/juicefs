@@ -846,10 +846,11 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 	commPrefixSet := make(map[string]struct{})
 	for _, e := range entries {
 		uploadID := string(e.Name)
+		// todo: parallel
 		object_, _ := n.fs.GetXattr(mctx, n.upath(bucket, uploadID), uploadKeyName)
 		object := string(object_)
 		if strings.HasPrefix(object, prefix) {
-			if keyMarker != "" && object+uploadID > keyMarker+uploadIDMarker || keyMarker == "" && object > keyMarker {
+			if keyMarker != "" && object+uploadID > keyMarker+uploadIDMarker || keyMarker == "" {
 				lmi.Uploads = append(lmi.Uploads, minio.MultipartInfo{
 					Object:    object,
 					UploadID:  uploadID,
@@ -863,24 +864,34 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 		return lmi.Uploads[i].Object+lmi.Uploads[i].UploadID < lmi.Uploads[j].Object+lmi.Uploads[j].UploadID
 	})
 
-	if len(lmi.Uploads) > maxUploads {
-		lmi.IsTruncated = true
-		lmi.Uploads = lmi.Uploads[:maxUploads]
-	}
-
 	if delimiter != "" {
-		for i := len(lmi.Uploads) - 1; i >= 0; i-- {
-			index := strings.Index(strings.TrimLeft(lmi.Uploads[i].Object, prefix), delimiter)
-			if index != -1 {
-				commPrefixSet[lmi.Uploads[i].Object[:index+1]] = struct{}{}
-				lmi.Uploads = append(lmi.Uploads[:i], lmi.Uploads[i+1:]...)
-				continue
+		var tmp []minio.MultipartInfo
+		for _, info := range lmi.Uploads {
+			if maxUploads == 0 {
+				lmi.IsTruncated = true
+				break
+			}
+			index := strings.Index(strings.TrimLeft(info.Object, prefix), delimiter)
+			if index == -1 {
+				tmp = append(tmp, info)
+				maxUploads--
+			} else {
+				commPrefix := info.Object[:index+1]
+				if _, ok := commPrefixSet[commPrefix]; ok {
+					continue
+				}
+				commPrefixSet[commPrefix] = struct{}{}
+				maxUploads--
 			}
 		}
+		lmi.Uploads = tmp
 		for prefix := range commPrefixSet {
 			lmi.CommonPrefixes = append(lmi.CommonPrefixes, prefix)
 		}
 		sort.Strings(lmi.CommonPrefixes)
+	} else if len(lmi.Uploads) > maxUploads {
+		lmi.IsTruncated = true
+		lmi.Uploads = lmi.Uploads[:maxUploads]
 	}
 
 	if len(lmi.Uploads) != 0 {
