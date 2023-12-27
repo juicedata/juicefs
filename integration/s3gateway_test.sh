@@ -813,8 +813,7 @@ function test_multipart_upload() {
          rv=1
          out="list-multipart-upload failed"
         fi
-      fi
-   fi
+    fi
 
     if [ $rv -eq 0 ]; then
         function="delete_bucket"
