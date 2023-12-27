@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -860,8 +859,8 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 		}
 	}
 
-	slices.SortFunc(lmi.Uploads, func(a, b minio.MultipartInfo) int {
-		return strings.Compare(a.Object+a.UploadID, b.Object+b.UploadID)
+	sort.Slice(lmi.Uploads, func(i, j int) bool {
+		return lmi.Uploads[i].Object+lmi.Uploads[i].UploadID < lmi.Uploads[j].Object+lmi.Uploads[j].UploadID
 	})
 
 	if len(lmi.Uploads) > maxUploads {
@@ -881,7 +880,7 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 		for prefix := range commPrefixSet {
 			lmi.CommonPrefixes = append(lmi.CommonPrefixes, prefix)
 		}
-		slices.Sort(lmi.CommonPrefixes)
+		sort.Strings(lmi.CommonPrefixes)
 	}
 
 	if len(lmi.Uploads) != 0 {
