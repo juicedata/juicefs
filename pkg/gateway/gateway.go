@@ -847,7 +847,11 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 	for _, e := range entries {
 		uploadID := string(e.Name)
 		// todo: parallel
-		object_, _ := n.fs.GetXattr(mctx, n.upath(bucket, uploadID), uploadKeyName)
+		object_, eno := n.fs.GetXattr(mctx, n.upath(bucket, uploadID), uploadKeyName)
+		if eno != 0 {
+			logger.Warnf("get object xattr error %s: %s, ignore this item", n.upath(bucket, uploadID), eno)
+			continue
+		}
 		object := string(object_)
 		if strings.HasPrefix(object, prefix) {
 			if keyMarker != "" && object+uploadID > keyMarker+uploadIDMarker || keyMarker == "" {
