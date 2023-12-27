@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -842,12 +843,14 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 	lmi.KeyMarker = keyMarker
 	lmi.UploadIDMarker = uploadIDMarker
 	lmi.MaxUploads = maxUploads
+	lmi.Delimiter = delimiter
+	commPrefixSet := make(map[string]struct{})
 	for _, e := range entries {
 		uploadID := string(e.Name)
-		if uploadID > uploadIDMarker {
-			object_, _ := n.fs.GetXattr(mctx, n.upath(bucket, uploadID), uploadKeyName)
-			object := string(object_)
-			if strings.HasPrefix(object, prefix) && object > keyMarker {
+		object_, _ := n.fs.GetXattr(mctx, n.upath(bucket, uploadID), uploadKeyName)
+		object := string(object_)
+		if strings.HasPrefix(object, prefix) {
+			if keyMarker != "" && object+uploadID > keyMarker+uploadIDMarker || keyMarker == "" && object > keyMarker {
 				lmi.Uploads = append(lmi.Uploads, minio.MultipartInfo{
 					Object:    object,
 					UploadID:  uploadID,
@@ -856,11 +859,34 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 			}
 		}
 	}
+
+	slices.SortFunc(lmi.Uploads, func(a, b minio.MultipartInfo) int {
+		return strings.Compare(a.Object+a.UploadID, b.Object+b.UploadID)
+	})
+
 	if len(lmi.Uploads) > maxUploads {
 		lmi.IsTruncated = true
 		lmi.Uploads = lmi.Uploads[:maxUploads]
-		lmi.NextKeyMarker = keyMarker
-		lmi.NextUploadIDMarker = lmi.Uploads[maxUploads-1].UploadID
+	}
+
+	if delimiter != "" {
+		for i := len(lmi.Uploads) - 1; i >= 0; i-- {
+			index := strings.Index(strings.TrimLeft(lmi.Uploads[i].Object, prefix), delimiter)
+			if index != -1 {
+				commPrefixSet[lmi.Uploads[i].Object[:index+1]] = struct{}{}
+				lmi.Uploads = append(lmi.Uploads[:i], lmi.Uploads[i+1:]...)
+				continue
+			}
+		}
+		for prefix := range commPrefixSet {
+			lmi.CommonPrefixes = append(lmi.CommonPrefixes, prefix)
+		}
+		slices.Sort(lmi.CommonPrefixes)
+	}
+
+	if len(lmi.Uploads) != 0 {
+		lmi.NextKeyMarker = lmi.Uploads[len(lmi.Uploads)-1].Object
+		lmi.NextUploadIDMarker = lmi.Uploads[len(lmi.Uploads)-1].UploadID
 	}
 	return lmi, jfsToObjectErr(ctx, err, bucket)
 }
