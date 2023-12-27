@@ -803,6 +803,18 @@ function test_multipart_upload() {
         fi
      fi
 
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api list-multipart-uploads --bucket ${bucket_name} --prefix documents/"
+      test_function=${function}
+      out=$($function)
+      rv=$?
+      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
+        if [ $keys != "documents/report1.pdfdocuments/report2.pdf" ]; then
+         rv=1
+         out="list-multipart-upload failed"
+        fi
+      fi
+   fi
 
     if [ $rv -eq 0 ]; then
         function="delete_bucket"
