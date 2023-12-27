@@ -865,7 +865,11 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 	}
 
 	sort.Slice(lmi.Uploads, func(i, j int) bool {
-		return lmi.Uploads[i].Object+lmi.Uploads[i].UploadID < lmi.Uploads[j].Object+lmi.Uploads[j].UploadID
+		if lmi.Uploads[i].Object == lmi.Uploads[j].Object {
+			return lmi.Uploads[i].UploadID < lmi.Uploads[j].UploadID
+		} else {
+			return lmi.Uploads[i].Object < lmi.Uploads[j].Object
+		}
 	})
 
 	if delimiter != "" {
