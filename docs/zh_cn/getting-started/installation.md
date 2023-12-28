@@ -103,6 +103,17 @@ sudo dnf copr enable -y juicedata/juicefs
 sudo dnf install juicefs
 ```
 
+#### Snapcraft
+
+我们也在 [Canonical Snapcraft](https://snapcraft.io) 平台打包并发布了 [Snap 版本的 JuiceFS 客户端](https://github.com/juicedata/juicefs-snapcraft)，对于 Ubuntu 16.04 及以上版本和其他支持 Snap 的操作系统，可以直接使用以下命令安装：
+
+```shell
+sudo snap install juicefs
+# 由于 Snap 是一个封闭的沙箱环境，它会影响客户端的 FUSE 挂载，执行以下命令可以解除限制。
+# 如果只需使用 WebDAV 和 Gateway 则不必执行以下命令。
+sudo ln -s -f /snap/juicefs/current/juicefs /snap/bin/juicefs
+```
+
 ### Windows 系统
 
 在 Windows 系统安装 JuiceFS 有以下几种方法：
