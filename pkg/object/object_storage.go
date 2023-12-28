@@ -48,6 +48,11 @@ type SupportStorageClass interface {
 	SetStorageClass(sc string)
 }
 
+type SupportSignedURL interface {
+	// SignedURL returns a signed url for the object.
+	SignedURL(key string, expire time.Duration) (string, error)
+}
+
 type File interface {
 	Object
 	Owner() string

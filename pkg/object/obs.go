@@ -335,6 +335,19 @@ func (s *obsClient) SetStorageClass(sc string) {
 	s.sc = sc
 }
 
+func (s *obsClient) SignedURL(key string, expire time.Duration) (string, error) {
+	params := &obs.CreateSignedUrlInput{}
+	params.Method = http.MethodGet
+	params.Bucket = s.bucket
+	params.Key = key
+	params.Expires = int(expire.Seconds())
+	resp, err := s.c.CreateSignedUrl(params)
+	if err != nil {
+		return "", err
+	}
+	return resp.SignedUrl, nil
+}
+
 func autoOBSEndpoint(bucketName, accessKey, secretKey, token string) (string, error) {
 	region := obsDefaultRegion
 	if r := os.Getenv("HWCLOUD_DEFAULT_REGION"); r != "" {

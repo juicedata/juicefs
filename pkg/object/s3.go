@@ -356,6 +356,15 @@ func (s *s3client) SetStorageClass(sc string) {
 	s.sc = sc
 }
 
+func (s *s3client) SignedURL(key string, expire time.Duration) (string, error) {
+	input := &s3.GetObjectInput{
+		Bucket: &s.bucket,
+		Key:    &key,
+	}
+	req, _ := s.s3.GetObjectRequest(input)
+	return req.Presign(expire)
+}
+
 func autoS3Region(bucketName, accessKey, secretKey string) (string, error) {
 	awsConfig := &aws.Config{
 		HTTPClient: httpClient,
