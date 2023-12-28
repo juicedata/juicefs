@@ -88,6 +88,7 @@ func (m *mapping) lookupUser(name string) uint32 {
 			id = m.genGuid(name)
 		}
 	}
+	logger.Debugf("update user to %s:%d by lookup user", name, id)
 	m.usernames[name] = id
 	m.userIDs[id] = name
 	return id
@@ -114,6 +115,7 @@ func (m *mapping) lookupGroup(name string) uint32 {
 			id = uint32(id_)
 		}
 	}
+	logger.Debugf("update group to %s:%d by lookup group", name, id)
 	m.groups[name] = id
 	m.groupIDs[id] = name
 	return 0
@@ -136,6 +138,7 @@ func (m *mapping) lookupUserID(id uint32) string {
 	if len(name) > 49 {
 		name = name[:49]
 	}
+	logger.Debugf("update user to %s:%d by lookup user id", name, id)
 	m.usernames[name] = id
 	m.userIDs[id] = name
 	return name
@@ -158,6 +161,7 @@ func (m *mapping) lookupGroupID(id uint32) string {
 	if len(name) > 49 {
 		name = name[:49]
 	}
+	logger.Debugf("update group to %s:%d by lookup group id", name, id)
 	m.groups[name] = id
 	m.groupIDs[id] = name
 	return name
