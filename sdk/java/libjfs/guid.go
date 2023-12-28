@@ -89,8 +89,7 @@ func (m *mapping) lookupUser(name string) uint32 {
 		}
 	}
 	logger.Debugf("update user to %s:%d by lookup user", name, id)
-	m.usernames[name] = id
-	m.userIDs[id] = name
+	m.updateUser(name, id)
 	return id
 }
 
@@ -116,8 +115,7 @@ func (m *mapping) lookupGroup(name string) uint32 {
 		}
 	}
 	logger.Debugf("update group to %s:%d by lookup group", name, id)
-	m.groups[name] = id
-	m.groupIDs[id] = name
+	m.updateGroup(name, id)
 	return 0
 }
 
@@ -139,8 +137,7 @@ func (m *mapping) lookupUserID(id uint32) string {
 		name = name[:49]
 	}
 	logger.Debugf("update user to %s:%d by lookup user id", name, id)
-	m.usernames[name] = id
-	m.userIDs[id] = name
+	m.updateUser(name, id)
 	return name
 }
 
@@ -162,8 +159,7 @@ func (m *mapping) lookupGroupID(id uint32) string {
 		name = name[:49]
 	}
 	logger.Debugf("update group to %s:%d by lookup group id", name, id)
-	m.groups[name] = id
-	m.groupIDs[id] = name
+	m.updateGroup(name, id)
 	return name
 }
 
@@ -172,25 +168,33 @@ func (m *mapping) update(uids []pwent, gids []pwent, local bool) {
 	defer m.Unlock()
 	m.local = local
 	for _, u := range uids {
-		oldId := m.usernames[u.name]
-		oldName := m.userIDs[u.id]
-		delete(m.userIDs, oldId)
-		delete(m.usernames, oldName)
-		m.usernames[u.name] = u.id
-		m.userIDs[u.id] = u.name
+		m.updateUser(u.name, u.id)
 	}
 	for _, g := range gids {
-		oldId := m.groups[g.name]
-		oldName := m.groupIDs[g.id]
-		delete(m.groupIDs, oldId)
-		delete(m.groups, oldName)
-		m.groups[g.name] = g.id
-		m.groupIDs[g.id] = g.name
+		m.updateGroup(g.name, g.id)
 	}
 	logger.Debugf("users:\n%s\n", map2str(m.usernames))
 	logger.Debugf("userids:\n%s\n", map2str(m.userIDs))
 	logger.Debugf("groups:\n%s\n", map2str(m.groups))
 	logger.Debugf("gorupids:\n%s\n", map2str(m.groupIDs))
+}
+
+func (m *mapping) updateUser(name string, id uint32) {
+	oldId := m.usernames[name]
+	oldName := m.userIDs[id]
+	delete(m.userIDs, oldId)
+	delete(m.usernames, oldName)
+	m.usernames[name] = id
+	m.userIDs[id] = name
+}
+
+func (m *mapping) updateGroup(name string, id uint32) {
+	oldId := m.groups[name]
+	oldName := m.groupIDs[id]
+	delete(m.groupIDs, oldId)
+	delete(m.groups, oldName)
+	m.groups[name] = id
+	m.groupIDs[id] = name
 }
 
 func map2str(m any) string {
