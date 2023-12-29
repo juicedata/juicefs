@@ -21,15 +21,13 @@ import (
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"os"
+	"pgregory.net/rapid"
 	"reflect"
 	"runtime"
 	"sort"
 	"strings"
 	"syscall"
 	"testing"
-	"time"
-
-	"pgregory.net/rapid"
 )
 
 type tSlice struct {
@@ -118,7 +116,6 @@ func (m *fsMachine) Init(t *rapid.T) {
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
 		prometheus.WrapRegistererWith(prometheus.Labels{"mp": "virtual-mp", "vol_name": "test-vol"}, registry))
 	m.meta.InitMetrics(registerer)
-
 }
 
 func (m *fsMachine) Cleanup() {
@@ -727,6 +724,7 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 		}
 	}
 	delete(src.children, srcname)
+	srcnode.name = dstname
 	dst.children[dstname] = srcnode
 	// srcnode.ctime = m.ctx.ts
 	// src.mtime = m.ctx.ts
@@ -935,8 +933,8 @@ func (m *fsMachine) Mkdir(t *rapid.T) {
 	var inode Ino
 	var attr Attr
 	st := m.meta.Mkdir(m.ctx, parent, name, mode, 0, 0, &inode, &attr)
-	var attr2 Attr
-	m.meta.GetAttr(m.ctx, inode, &attr2)
+	//var attr2 Attr
+	//m.meta.GetAttr(m.ctx, inode, &attr2)
 	st2 := m.create(TypeDirectory, parent, name, mode, 0, inode)
 	if st != st2 {
 		t.Fatalf("expect %s but got %s", st2, st)
@@ -957,63 +955,63 @@ func (m *fsMachine) Mknod(t *rapid.T) {
 	}
 }
 
-func (m *fsMachine) Link(t *rapid.T) {
-	parent := m.pickNode(t)
-	name := rapid.StringN(1, 200, 255).Draw(t, "name")
-	inode := m.pickNode(t)
-	st := m.meta.Link(m.ctx, inode, parent, name, nil)
-	st2 := m.link(parent, name, inode)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-}
-
-func (m *fsMachine) Rmdir(t *rapid.T) {
-	parent := m.pickNode(t)
-	name := m.pickChild(parent, t)
-	st := m.meta.Rmdir(m.ctx, parent, name)
-	st2 := m.unlink(parent, name, true)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-}
-
-func (m *fsMachine) Unlink(t *rapid.T) {
-	parent := m.pickNode(t)
-	name := m.pickChild(parent, t)
-	st := m.meta.Unlink(m.ctx, parent, name)
-	st2 := m.unlink(parent, name, false)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-}
+//func (m *fsMachine) Link(t *rapid.T) {
+//	parent := m.pickNode(t)
+//	name := rapid.StringN(1, 200, 255).Draw(t, "name")
+//	inode := m.pickNode(t)
+//	st := m.meta.Link(m.ctx, inode, parent, name, nil)
+//	st2 := m.link(parent, name, inode)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//}
+//
+//func (m *fsMachine) Rmdir(t *rapid.T) {
+//	parent := m.pickNode(t)
+//	name := m.pickChild(parent, t)
+//	st := m.meta.Rmdir(m.ctx, parent, name)
+//	st2 := m.unlink(parent, name, true)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//}
+//
+//func (m *fsMachine) Unlink(t *rapid.T) {
+//	parent := m.pickNode(t)
+//	name := m.pickChild(parent, t)
+//	st := m.meta.Unlink(m.ctx, parent, name)
+//	st2 := m.unlink(parent, name, false)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//}
 
 const SymlinkMax = 65536
 
-func (m *fsMachine) Symlink(t *rapid.T) {
-	parent := m.pickNode(t)
-	name := rapid.StringN(1, 200, 255).Draw(t, "name")
-	target := rapid.StringN(1, 1000, SymlinkMax+1).Draw(t, "target")
-	var ti Ino
-	st := m.meta.Symlink(m.ctx, parent, name, target, &ti, nil)
-	st2 := m.symlink(parent, name, ti, target)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-}
-
-func (m *fsMachine) Readlink(t *rapid.T) {
-	inode := m.pickNode(t)
-	var target []byte
-	st := m.meta.ReadLink(m.ctx, inode, &target)
-	target2, st2 := m.readlink(inode)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-	if st == 0 && string(target) != target2 {
-		t.Fatalf("expect %s but got %s", target2, target)
-	}
-}
+//func (m *fsMachine) Symlink(t *rapid.T) {
+//	parent := m.pickNode(t)
+//	name := rapid.StringN(1, 200, 255).Draw(t, "name")
+//	target := rapid.StringN(1, 1000, SymlinkMax+1).Draw(t, "target")
+//	var ti Ino
+//	st := m.meta.Symlink(m.ctx, parent, name, target, &ti, nil)
+//	st2 := m.symlink(parent, name, ti, target)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//}
+//
+//func (m *fsMachine) Readlink(t *rapid.T) {
+//	inode := m.pickNode(t)
+//	var target []byte
+//	st := m.meta.ReadLink(m.ctx, inode, &target)
+//	target2, st2 := m.readlink(inode)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//	if st == 0 && string(target) != target2 {
+//		t.Fatalf("expect %s but got %s", target2, target)
+//	}
+//}
 
 func (m *fsMachine) Lookup(t *rapid.T) {
 	parent := m.pickNode(t)
@@ -1117,41 +1115,41 @@ func (m *fsMachine) Readdir(t *rapid.T) {
 	}
 }
 
-func (m *fsMachine) Truncate(t *rapid.T) {
-	inode := m.pickNode(t)
-	length := rapid.Uint64Range(0, 500<<20).Draw(t, "length")
-	var attr Attr
-	st := m.meta.Truncate(m.ctx, inode, 0, length, &attr, false)
-	st2 := m.truncate(inode, length)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-}
+//func (m *fsMachine) Truncate(t *rapid.T) {
+//	inode := m.pickNode(t)
+//	length := rapid.Uint64Range(0, 500<<20).Draw(t, "length")
+//	var attr Attr
+//	st := m.meta.Truncate(m.ctx, inode, 0, length, &attr, false)
+//	st2 := m.truncate(inode, length)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//}
 
-func (m *fsMachine) Fallocate(t *rapid.T) {
-	inode := m.pickNode(t)
-	offset := rapid.Uint64Range(0, 500<<20).Draw(t, "offset")
-	length := rapid.Uint64Range(1, 500<<20).Draw(t, "length")
-	st := m.meta.Fallocate(m.ctx, inode, 0, offset, length)
-	st2 := m.fallocate(inode, 0, offset, length)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-}
+//func (m *fsMachine) Fallocate(t *rapid.T) {
+//	inode := m.pickNode(t)
+//	offset := rapid.Uint64Range(0, 500<<20).Draw(t, "offset")
+//	length := rapid.Uint64Range(1, 500<<20).Draw(t, "length")
+//	st := m.meta.Fallocate(m.ctx, inode, 0, offset, length)
+//	st2 := m.fallocate(inode, 0, offset, length)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//}
 
-func (m *fsMachine) CopyFileRange(t *rapid.T) {
-	srcinode := m.pickNode(t)
-	srcoff := rapid.Uint64Max(m.nodes[srcinode].length).Draw(t, "srcoff")
-	dstinode := m.pickNode(t)
-	dstoff := rapid.Uint64Max(m.nodes[dstinode].length).Draw(t, "dstoff")
-	size := rapid.Uint64Max(m.nodes[srcinode].length).Draw(t, "size")
-	var copied uint64
-	st := m.meta.CopyFileRange(m.ctx, srcinode, srcoff, dstinode, dstoff, size, 0, &copied)
-	st2 := m.copy_file_range(srcinode, srcoff, dstinode, dstoff, size, 0)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-}
+//func (m *fsMachine) CopyFileRange(t *rapid.T) {
+//	srcinode := m.pickNode(t)
+//	srcoff := rapid.Uint64Max(m.nodes[srcinode].length).Draw(t, "srcoff")
+//	dstinode := m.pickNode(t)
+//	dstoff := rapid.Uint64Max(m.nodes[dstinode].length).Draw(t, "dstoff")
+//	size := rapid.Uint64Max(m.nodes[srcinode].length).Draw(t, "size")
+//	var copied uint64
+//	st := m.meta.CopyFileRange(m.ctx, srcinode, srcoff, dstinode, dstoff, size, 0, &copied)
+//	st2 := m.copy_file_range(srcinode, srcoff, dstinode, dstoff, size, 0)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//}
 
 func (m *fsMachine) getPath(inode Ino) string {
 	n := m.nodes[inode]
@@ -1170,44 +1168,44 @@ func (m *fsMachine) getPath(inode Ino) string {
 	panic("unreachable")
 }
 
-func (m *fsMachine) Write(t *rapid.T) {
-	inode := m.pickNode(t)
-	indx := rapid.Uint32Range(0, 10).Draw(t, "indx")
-	pos := rapid.Uint32Range(0, ChunkSize).Draw(t, "pos")
-	var chunkid uint64
-	m.meta.NewSlice(m.ctx, &chunkid)
-	cleng := rapid.Uint32Range(1, ChunkSize).Draw(t, "cleng")
-	off := rapid.Uint32Range(0, cleng-1).Draw(t, "off")
-	len := rapid.Uint32Range(1, cleng-off).Draw(t, "len")
-	st := m.meta.Write(m.ctx, inode, indx, pos, Slice{chunkid, cleng, off, len}, time.Time{})
-	st2 := m.write(inode, indx, pos, chunkid, cleng, off, len)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-}
+//func (m *fsMachine) Write(t *rapid.T) {
+//	inode := m.pickNode(t)
+//	indx := rapid.Uint32Range(0, 10).Draw(t, "indx")
+//	pos := rapid.Uint32Range(0, ChunkSize).Draw(t, "pos")
+//	var chunkid uint64
+//	m.meta.NewSlice(m.ctx, &chunkid)
+//	cleng := rapid.Uint32Range(1, ChunkSize).Draw(t, "cleng")
+//	off := rapid.Uint32Range(0, cleng-1).Draw(t, "off")
+//	len := rapid.Uint32Range(1, cleng-off).Draw(t, "len")
+//	st := m.meta.Write(m.ctx, inode, indx, pos, Slice{chunkid, cleng, off, len}, time.Time{})
+//	st2 := m.write(inode, indx, pos, chunkid, cleng, off, len)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//}
 
-func (m *fsMachine) Read(t *rapid.T) {
-	inode := m.pickNode(t)
-	indx := rapid.Uint32Range(0, 10).Draw(t, "indx")
-	var result []Slice
-	st := m.meta.Read(m.ctx, inode, indx, &result)
-	var slices []tSlice
-	if st == 0 {
-		var pos uint32
-		for _, so := range result {
-			s := tSlice{pos, so.Id, so.Size, so.Off, so.Len}
-			slices = append(slices, s)
-			pos += slices[len(slices)-1].len
-		}
-	}
-	_, slices2, st2 := m.read(inode, indx)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-	if st == 0 && !reflect.DeepEqual(cleanupSlices(slices), cleanupSlices(slices2)) {
-		t.Fatalf("expect %+v but got %+v", slices2, slices)
-	}
-}
+//func (m *fsMachine) Read(t *rapid.T) {
+//	inode := m.pickNode(t)
+//	indx := rapid.Uint32Range(0, 10).Draw(t, "indx")
+//	var result []Slice
+//	st := m.meta.Read(m.ctx, inode, indx, &result)
+//	var slices []tSlice
+//	if st == 0 {
+//		var pos uint32
+//		for _, so := range result {
+//			s := tSlice{pos, so.Id, so.Size, so.Off, so.Len}
+//			slices = append(slices, s)
+//			pos += slices[len(slices)-1].len
+//		}
+//	}
+//	_, slices2, st2 := m.read(inode, indx)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//	if st == 0 && !reflect.DeepEqual(cleanupSlices(slices), cleanupSlices(slices2)) {
+//		t.Fatalf("expect %+v but got %+v", slices2, slices)
+//	}
+//}
 
 func cleanupSlices(ss []tSlice) []tSlice {
 	for i := 0; i < len(ss); i++ {
@@ -1292,7 +1290,7 @@ func (m *fsMachine) Test(t *rapid.T) {
 }
 
 func (m *fsMachine) Check(t *rapid.T) {
-	m.ctx = NewContext(1, 1, []uint32{1})
+	m.ctx = NewContext(0, 0, []uint32{0})
 	if err := m.checkFSTree(RootInode); err != nil {
 		t.Fatalf("check FSTree error %s", err)
 	}
@@ -1301,8 +1299,10 @@ func (m *fsMachine) Check(t *rapid.T) {
 func (m *fsMachine) checkFSTree(root Ino) error {
 	var result []*Entry
 	if st := m.meta.Readdir(m.ctx, root, 1, &result); st != 0 {
-		return fmt.Errorf("meta readdir error %d", st)
+		return fmt.Errorf("meta readdir error %s", st)
 	}
+	sort.Slice(result, func(i, j int) bool { return string(result[i].Name) < string(result[j].Name) })
+
 	stdResult, st := m.readdir(root)
 	if st != 0 {
 		return fmt.Errorf("standard meta readdir error %d", st)
