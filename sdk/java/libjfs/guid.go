@@ -173,8 +173,8 @@ func (m *mapping) update(uids []pwent, gids []pwent, local bool) {
 		m.updateGroup(g.name, g.id)
 	}
 	logger.Debugf("users:\n%+v", m.usernames)
-	logger.Debugf("userids:\n%v", m.userIDs)
-	logger.Debugf("groups:\n%v", m.groups)
+	logger.Debugf("userids:\n%+v", m.userIDs)
+	logger.Debugf("groups:\n%+v", m.groups)
 	logger.Debugf("gorupids:\n%+v", m.groupIDs)
 }
 
