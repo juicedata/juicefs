@@ -571,6 +571,11 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 			}
 		}
 		logger.Debugf("Update groups of %s to %s", w.user, strings.Join(groups, ","))
+		var buffer bytes.Buffer
+		for _, g := range gids {
+			buffer.WriteString(fmt.Sprintf("\t%v:%v\n", g.name, g.id))
+		}
+		logger.Debugf("Update gids mapping\n %s", buffer.String())
 	}
 	w.m.update(uids, gids, false)
 
