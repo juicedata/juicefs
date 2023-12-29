@@ -19,7 +19,6 @@ package main
 import (
 	"crypto/md5"
 	"encoding/binary"
-	"encoding/json"
 	"os/user"
 	"strconv"
 	"sync"
@@ -173,10 +172,10 @@ func (m *mapping) update(uids []pwent, gids []pwent, local bool) {
 	for _, g := range gids {
 		m.updateGroup(g.name, g.id)
 	}
-	logger.Debugf("users:\n%s\n", map2str(m.usernames))
-	logger.Debugf("userids:\n%s\n", map2str(m.userIDs))
-	logger.Debugf("groups:\n%s\n", map2str(m.groups))
-	logger.Debugf("gorupids:\n%s\n", map2str(m.groupIDs))
+	logger.Debugf("users:\n%+v", m.usernames)
+	logger.Debugf("userids:\n%v", m.userIDs)
+	logger.Debugf("groups:\n%v", m.groups)
+	logger.Debugf("gorupids:\n%+v", m.groupIDs)
 }
 
 func (m *mapping) updateUser(name string, id uint32) {
@@ -195,9 +194,4 @@ func (m *mapping) updateGroup(name string, id uint32) {
 	delete(m.groups, oldName)
 	m.groups[name] = id
 	m.groupIDs[id] = name
-}
-
-func map2str(m any) string {
-	b, _ := json.MarshalIndent(m, "", "  ")
-	return string(b)
 }
