@@ -18,6 +18,8 @@ package meta
 
 import (
 	"flag"
+	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
 	"os"
 	"reflect"
 	"runtime"
@@ -39,6 +41,7 @@ type tSlice struct {
 }
 
 type tNode struct {
+	name  string
 	inode Ino
 	_type uint8
 	mode  uint16
@@ -111,6 +114,11 @@ func (m *fsMachine) Init(t *rapid.T) {
 	if err := m.meta.Init(testFormat(), true); err != nil {
 		t.Fatalf("initialize failed: %s", err)
 	}
+	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
+	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
+		prometheus.WrapRegistererWith(prometheus.Labels{"mp": "virtual-mp", "vol_name": "test-vol"}, registry))
+	m.meta.InitMetrics(registerer)
+
 }
 
 func (m *fsMachine) Cleanup() {
@@ -157,6 +165,7 @@ func (m *fsMachine) create(_type uint8, parent Ino, name string, mode, umask uin
 		return syscall.EEXIST
 	}
 	n := &tNode{
+		name:    name,
 		_type:   _type,
 		mode:    mode &^ umask,
 		inode:   inode,
@@ -287,6 +296,7 @@ func (m *fsMachine) symlink(parent Ino, name string, inode Ino, target string) s
 		return syscall.EEXIST
 	}
 	n := &tNode{
+		name:  name,
 		_type: TypeSymlink,
 		inode: inode,
 		mode:  0777,
@@ -726,7 +736,7 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	return 0
 }
 
-func (m *fsMachine) readdir(inode Ino) ([]string, syscall.Errno) {
+func (m *fsMachine) readdir(inode Ino) ([]*tNode, syscall.Errno) {
 	n := m.nodes[inode]
 	if n == nil {
 		return nil, syscall.ENOENT
@@ -734,12 +744,13 @@ func (m *fsMachine) readdir(inode Ino) ([]string, syscall.Errno) {
 	if !n.access(m.ctx, MODE_MASK_R) {
 		return nil, syscall.EACCES
 	}
-	var names = []string{".", ".."}
-	for name := range n.children {
-		names = append(names, name)
+	var result []*tNode
+	result = append(result, &tNode{name: ".", _type: TypeDirectory}, &tNode{name: "..", _type: TypeDirectory})
+	for _, node := range n.children {
+		result = append(result, node)
 	}
-	sort.Slice(names, func(i, j int) bool { return names[i] < names[j] })
-	return names, 0
+	sort.Slice(result, func(i, j int) bool { return result[i].name < result[j].name })
+	return result, 0
 }
 
 func (m *fsMachine) write(inode Ino, indx uint32, pos uint32, chunkid uint64, cleng uint32, off, len uint32) syscall.Errno {
@@ -1093,9 +1104,13 @@ func (m *fsMachine) Readdir(t *rapid.T) {
 		}
 		sort.Strings(names)
 	}
-	names2, st2 := m.readdir(inode)
+	stdRes, st2 := m.readdir(inode)
 	if st != st2 {
 		t.Fatalf("expect %s but got %s", st2, st)
+	}
+	var names2 []string
+	for _, node := range stdRes {
+		names2 = append(names2, node.name)
 	}
 	if st == 0 && !reflect.DeepEqual(names, names2) {
 		t.Fatalf("expect %+v but got %+v", names2, names)
@@ -1277,6 +1292,115 @@ func (m *fsMachine) Test(t *rapid.T) {
 }
 
 func (m *fsMachine) Check(t *rapid.T) {
+	m.ctx = NewContext(1, 1, []uint32{1})
+	if err := m.checkFSTree(RootInode); err != nil {
+		t.Fatalf("check FSTree error %s", err)
+	}
+}
+
+func (m *fsMachine) checkFSTree(root Ino) error {
+	var result []*Entry
+	if st := m.meta.Readdir(m.ctx, root, 1, &result); st != 0 {
+		return fmt.Errorf("meta readdir error %d", st)
+	}
+	stdResult, st := m.readdir(root)
+	if st != 0 {
+		return fmt.Errorf("standard meta readdir error %d", st)
+	}
+	if len(result) != len(stdResult) {
+		return fmt.Errorf("the results of reading the directory should have equal lengths. standard meta: %#v test meta: %#v", stdResult, result)
+	}
+	for i := 0; i < len(result); i++ {
+		stdNode := stdResult[i]
+		entry := result[i]
+		if stdNode._type != entry.Attr.Typ {
+			return fmt.Errorf("type should equal standard meta: %d, test meta %d", stdNode._type, entry.Attr.Typ)
+		}
+		if stdNode.name != string(entry.Name) {
+			return fmt.Errorf("name should equal. ino %d standard meta: %s, test meta %s", stdNode.inode, stdNode.name, string(entry.Name))
+		}
+		if stdNode.name == "." || stdNode.name == ".." {
+			continue
+		}
+		switch entry.Attr.Typ {
+		case TypeDirectory:
+			if err := m.checkFSTree(entry.Inode); err != nil {
+				return err
+			}
+		default:
+			if stdNode.inode != entry.Inode {
+				return fmt.Errorf("inode should equal. standard meta: %d, test meta %d", stdNode.inode, entry.Inode)
+			}
+			if stdNode.gid != entry.Attr.Gid {
+				return fmt.Errorf("gid should equal. ino %d standard meta: %d, test meta %d", stdNode.inode, stdNode.gid, entry.Attr.Gid)
+			}
+			if stdNode.uid != entry.Attr.Uid {
+				return fmt.Errorf("uid should equal. ino %d standard meta: %d, test meta %d", stdNode.inode, stdNode.uid, entry.Attr.Uid)
+			}
+			if stdNode.length != entry.Attr.Length {
+				return fmt.Errorf("length should equal. ino %d standard meta: %d, test meta %d", stdNode.inode, stdNode.length, entry.Attr.Length)
+			}
+			if stdNode.iflags != entry.Attr.Flags {
+				return fmt.Errorf("flags should equal. ino %d standard meta: %d, test meta %d", stdNode.inode, stdNode.iflags, entry.Attr.Flags)
+			}
+			if stdNode.mode != entry.Attr.Mode {
+				return fmt.Errorf("mode should equal. ino %d standard meta: %d, test meta %d", stdNode.inode, stdNode.mode, entry.Attr.Mode)
+			}
+			// fixme: hardlink
+			if stdNode.parents[0].inode != entry.Attr.Parent {
+				return fmt.Errorf("parent should equal. ino %d standard meta: %d, test meta %d", stdNode.inode, stdNode.parents[0].inode, entry.Attr.Parent)
+			}
+
+			// check chunks
+			for indx := range stdNode.chunks {
+				var rs []Slice
+				st := m.meta.Read(m.ctx, stdNode.inode, indx, &rs)
+				var slices []tSlice
+				if st == 0 {
+					var pos uint32
+					for _, so := range rs {
+						s := tSlice{pos, so.Id, so.Size, so.Off, so.Len}
+						slices = append(slices, s)
+						pos += slices[len(slices)-1].len
+					}
+				}
+				_, slices2, st2 := m.read(stdNode.inode, indx)
+				if st != st2 {
+					return fmt.Errorf("read eno should equal. standard meta ino %d ,indx %d std meta eno %d test meta eno %d", stdNode.inode, indx, st2, st)
+				}
+				if st == 0 && !reflect.DeepEqual(cleanupSlices(slices), cleanupSlices(slices2)) {
+					return fmt.Errorf("slice should equal.standard meta %+v test meta %+v", slices2, slices)
+				}
+			}
+
+			// check symlink
+			var target []byte
+			st := m.meta.ReadLink(m.ctx, stdNode.inode, &target)
+			target2, st2 := m.readlink(stdNode.inode)
+			if st != st2 {
+				return fmt.Errorf("readlink eno should equal. standard meta ino %d stadndard meta %d test meta %d", stdNode.inode, st2, st)
+			}
+			if st == 0 && string(target) != target2 {
+				return fmt.Errorf("symlink should equal. standard meta ino %d stadndard meta %s test meta %s", stdNode.inode, target2, string(target))
+			}
+
+			// check xattr
+			var attrs []byte
+			st = m.meta.ListXattr(m.ctx, stdNode.inode, &attrs)
+			attrs2, st2 := m.listxattr(stdNode.inode)
+			if st != st2 {
+				return fmt.Errorf("listxattr eno should equal. standard meta ino %d stadndard meta %d test meta %d", stdNode.inode, st2, st)
+			}
+			as := strings.Split(string(attrs), "\x00")
+			sort.Strings(as)
+			as2 := strings.Split(string(attrs2), "\x00")
+			sort.Strings(as2)
+			if st == 0 && !reflect.DeepEqual(as, as2) {
+				return fmt.Errorf("listxattr should equal. standard meta ino %d stadndard meta %s test meta %s", stdNode.inode, as2, as)
+			}
+		}
+	}
+	return nil
 }
 
 func TestFSOps(t *testing.T) {
