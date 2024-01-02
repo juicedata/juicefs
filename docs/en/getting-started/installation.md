@@ -103,6 +103,19 @@ sudo dnf copr enable -y juicedata/juicefs
 sudo dnf install juicefs
 ```
 
+#### Snapcraft
+
+We have also packaged and released the [Snap version of the JuiceFS client](https://github.com/juicedata/juicefs-snapcraft) on the [Canonical Snapcraft](https://snapcraft.io) platform for Ubuntu 16.04 and above and other Snap-enabled operating systems can be installed directly using the following command:
+
+```shell
+sudo snap install juicefs
+# Since Snap is a closed sandbox environment, it may affect 
+# the client's FUSE mount. You can remove the restriction by
+# executing the following command. If you only need to use 
+# WebDAV and Gateway, there is no need to execute.
+sudo ln -s -f /snap/juicefs/current/juicefs /snap/bin/juicefs
+```
+
 ### Windows
 
 There are two ways to use JuiceFS on Windows systems.
