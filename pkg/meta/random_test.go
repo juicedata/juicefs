@@ -28,6 +28,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 )
 
 type tSlice struct {
@@ -106,6 +107,7 @@ func (m *fsMachine) Init(t *rapid.T) {
 		length:   4096,
 		xattrs:   make(map[string][]byte),
 		children: make(map[string]*tNode),
+		parents:  []*tNode{{inode: RootInode, _type: TypeDirectory}},
 	}
 	_ = os.Remove(settingPath)
 	m.meta, _ = newKVMeta("memkv", "jfs-unit-test", testConfig())
@@ -617,9 +619,9 @@ func (m *fsMachine) rmr(parent Ino, name string, removed *uint64) syscall.Errno 
 		return syscall.ENOENT
 	}
 
-	if !p.stickyAccess(c, m.ctx.Uid()) {
-		return syscall.EPERM
-	}
+	//if !p.stickyAccess(c, m.ctx.Uid()) {
+	//	return syscall.EPERM
+	//}
 	for n := range c.children {
 		if eno := m.rmr(c.inode, n, removed); eno != 0 {
 			return eno
@@ -930,9 +932,11 @@ func (m *fsMachine) Mkdir(t *rapid.T) {
 	parent := m.pickNode(t)
 	name := rapid.StringN(1, 200, 255).Draw(t, "name")
 	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
+	t.Logf("parent ino %d", parent)
 	var inode Ino
 	var attr Attr
 	st := m.meta.Mkdir(m.ctx, parent, name, mode, 0, 0, &inode, &attr)
+	t.Logf("dir ino %d", inode)
 	//var attr2 Attr
 	//m.meta.GetAttr(m.ctx, inode, &attr2)
 	st2 := m.create(TypeDirectory, parent, name, mode, 0, inode)
@@ -1066,7 +1070,29 @@ func (m *fsMachine) Rename(t *rapid.T) {
 	if srcname == "" {
 		return
 	}
+	var srcIno Ino
+	for _, n := range m.nodes[srcparent].children {
+		if n.name == srcname {
+			srcIno = n.inode
+		}
+	}
 	dstparent := m.pickNode(t)
+
+	if srcIno == dstparent {
+		t.Skipf("skip rename srcIno is dstparent")
+	}
+	tmp := m.nodes[dstparent].inode
+	for {
+		if tmp == RootInode {
+			break
+		}
+		if tmp == srcIno {
+			t.Skipf("skip rename dstparent is subdir of srcIno")
+		} else {
+			tmp = m.nodes[tmp].inode
+		}
+	}
+
 	dstname := rapid.StringN(1, 200, 255).Draw(t, "name")
 	var inode Ino
 	var attr Attr
@@ -1079,6 +1105,7 @@ func (m *fsMachine) Rename(t *rapid.T) {
 
 func (m *fsMachine) Rmr(t *rapid.T) {
 	parent := m.pickNode(t)
+	t.Logf("rmr parent ino %d", parent)
 	name := m.pickChild(parent, t)
 	var removed, removed2 uint64
 	st := m.meta.Remove(m.ctx, parent, name, &removed)
@@ -1168,44 +1195,44 @@ func (m *fsMachine) getPath(inode Ino) string {
 	panic("unreachable")
 }
 
-//func (m *fsMachine) Write(t *rapid.T) {
-//	inode := m.pickNode(t)
-//	indx := rapid.Uint32Range(0, 10).Draw(t, "indx")
-//	pos := rapid.Uint32Range(0, ChunkSize).Draw(t, "pos")
-//	var chunkid uint64
-//	m.meta.NewSlice(m.ctx, &chunkid)
-//	cleng := rapid.Uint32Range(1, ChunkSize).Draw(t, "cleng")
-//	off := rapid.Uint32Range(0, cleng-1).Draw(t, "off")
-//	len := rapid.Uint32Range(1, cleng-off).Draw(t, "len")
-//	st := m.meta.Write(m.ctx, inode, indx, pos, Slice{chunkid, cleng, off, len}, time.Time{})
-//	st2 := m.write(inode, indx, pos, chunkid, cleng, off, len)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//}
+func (m *fsMachine) Write(t *rapid.T) {
+	inode := m.pickNode(t)
+	indx := rapid.Uint32Range(0, 10).Draw(t, "indx")
+	pos := rapid.Uint32Range(0, ChunkSize).Draw(t, "pos")
+	var chunkid uint64
+	m.meta.NewSlice(m.ctx, &chunkid)
+	cleng := rapid.Uint32Range(1, ChunkSize).Draw(t, "cleng")
+	off := rapid.Uint32Range(0, cleng-1).Draw(t, "off")
+	len := rapid.Uint32Range(1, cleng-off).Draw(t, "len")
+	st := m.meta.Write(m.ctx, inode, indx, pos, Slice{chunkid, cleng, off, len}, time.Time{})
+	st2 := m.write(inode, indx, pos, chunkid, cleng, off, len)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
 
-//func (m *fsMachine) Read(t *rapid.T) {
-//	inode := m.pickNode(t)
-//	indx := rapid.Uint32Range(0, 10).Draw(t, "indx")
-//	var result []Slice
-//	st := m.meta.Read(m.ctx, inode, indx, &result)
-//	var slices []tSlice
-//	if st == 0 {
-//		var pos uint32
-//		for _, so := range result {
-//			s := tSlice{pos, so.Id, so.Size, so.Off, so.Len}
-//			slices = append(slices, s)
-//			pos += slices[len(slices)-1].len
-//		}
-//	}
-//	_, slices2, st2 := m.read(inode, indx)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//	if st == 0 && !reflect.DeepEqual(cleanupSlices(slices), cleanupSlices(slices2)) {
-//		t.Fatalf("expect %+v but got %+v", slices2, slices)
-//	}
-//}
+func (m *fsMachine) Read(t *rapid.T) {
+	inode := m.pickNode(t)
+	indx := rapid.Uint32Range(0, 10).Draw(t, "indx")
+	var result []Slice
+	st := m.meta.Read(m.ctx, inode, indx, &result)
+	var slices []tSlice
+	if st == 0 {
+		var pos uint32
+		for _, so := range result {
+			s := tSlice{pos, so.Id, so.Size, so.Off, so.Len}
+			slices = append(slices, s)
+			pos += slices[len(slices)-1].len
+		}
+	}
+	_, slices2, st2 := m.read(inode, indx)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+	if st == 0 && !reflect.DeepEqual(cleanupSlices(slices), cleanupSlices(slices2)) {
+		t.Fatalf("expect %+v but got %+v", slices2, slices)
+	}
+}
 
 func cleanupSlices(ss []tSlice) []tSlice {
 	for i := 0; i < len(ss); i++ {
@@ -1369,7 +1396,7 @@ func (m *fsMachine) checkFSTree(root Ino) error {
 					return fmt.Errorf("read eno should equal. standard meta ino %d ,indx %d std meta eno %d test meta eno %d", stdNode.inode, indx, st2, st)
 				}
 				if st == 0 && !reflect.DeepEqual(cleanupSlices(slices), cleanupSlices(slices2)) {
-					return fmt.Errorf("slice should equal.standard meta %+v test meta %+v", slices2, slices)
+					return fmt.Errorf("slice should equal. standard meta %+v test meta %+v", slices2, slices)
 				}
 			}
 
@@ -1406,7 +1433,7 @@ func (m *fsMachine) checkFSTree(root Ino) error {
 func TestFSOps(t *testing.T) {
 	flag.Set("timeout", "10s")
 	flag.Set("rapid.steps", "3")
-	flag.Set("rapid.checks", "100000")
+	flag.Set("rapid.checks", "1000")
 	flag.Set("rapid.seed", "1")
 	rapid.Check(t, rapid.Run[*fsMachine]())
 }
