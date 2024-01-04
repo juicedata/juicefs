@@ -116,7 +116,7 @@ JuiceFS 客户端在 `open` 操作即打开一个文件时，其文件属性会�
 
 挂载参数 [`--buffer-size`](../reference/command_reference.md#mount-data-storage-options) 控制着 JuiceFS 的读写缓冲区大小，默认 300（单位 MiB）。读写缓冲区的大小决定了读取文件以及预读（readahead）的内存数据量，同时也控制着写缓存（pending page）的大小。因此在面对高并发读写场景的时候，我们推荐对 `--buffer-size` 进行相应的扩容，能有效提升性能。
 
-如果你希望增加写入速度，通过调整 [`--max-uploads`](../reference/command_reference.md#mount) 增大了上传并发度，但并没有观察到上行带宽用量有明显增加，那么此时可能就需要相应地调大 `--buffer-size`，让并发线程更容易申请到内存来工作。这个排查原理反之亦然：如果增大 `--buffer-size` 却没有观察到上行带宽占用提升，也可以考虑增大 `--max-uploads` 来提升上传并发度。
+如果你希望增加写入速度，通过调整 [`--max-uploads`](../reference/command_reference.md#mount-data-storage-options) 增大了上传并发度，但并没有观察到上行带宽用量有明显增加，那么此时可能就需要相应地调大 `--buffer-size`，让并发线程更容易申请到内存来工作。这个排查原理反之亦然：如果增大 `--buffer-size` 却没有观察到上行带宽占用提升，也可以考虑增大 `--max-uploads` 来提升上传并发度。
 
 可想而知，`--buffer-size` 也控制着每次 `flush` 操作的上传数据量大小，因此如果客户端处在一个低带宽的网络环境下，可能反而需要降低 `--buffer-size` 来避免 `flush` 超时。关于低带宽场景排查请详见[「与对象存储通信不畅」](../administration/troubleshooting.md#io-error-object-storage)。
 
