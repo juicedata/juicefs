@@ -114,6 +114,37 @@ sudo snap install juicefs
 sudo ln -s -f /snap/juicefs/current/juicefs /snap/bin/juicefs
 ```
 
+#### AUR
+
+JuiceFS 也提供 [AUR](https://aur.archlinux.org/packages/juicefs) 仓库，可以方便地在 Arch Linux 及其衍生系统上安装最新版的客户端。
+
+对于使用 yay 包管理器的系统，执行以下命令安装客户端：
+
+```shell
+yay -S juicefs
+```
+
+:::info 说明
+AUR 上存在多个 JuiceFS 客户端的打包，以下是 JuiceFS 官方维护的版本：
+
+- [`aur/juicefs`](https://aur.archlinux.org/packages/juicefs) - 是稳定编译版，安装时会拉取最新的稳定版源码并编译安装；
+- [`aur/juicefs-bin`](https://aur.archlinux.org/packages/juicefs-bin) - 是稳定预编译版，安装时会直接下载最新的稳定版预编译程序并安装；
+- [`aur/juicefs-git`](https://aur.archlinux.org/packages/juicefs-git) - 是开发版，安装时会拉取最新的开发版源码并编译安装；
+:::
+
+另外，你也可以使用 makepkg 手动编译安装，以 Arch Linux 系统为例：
+
+```shell
+# 安装依赖
+sudo pacman -S base-devel git go
+# 克隆要打包的 AUR 仓库
+git clone https://aur.archlinux.org/juicefs.git
+# 进入仓库目录
+cd juicefs
+# 编译安装
+makepkg -si
+```
+
 ### Windows 系统
 
 在 Windows 系统安装 JuiceFS 有以下几种方法：

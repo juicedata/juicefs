@@ -116,6 +116,37 @@ sudo snap install juicefs
 sudo ln -s -f /snap/juicefs/current/juicefs /snap/bin/juicefs
 ```
 
+#### AUR
+
+JuiceFS also provides a [AUR](https://aur.archlinux.org/packages/juicefs) repository, which makes it convenient to install the latest version of the client on Arch Linux and its derivatives.
+
+For systems using the yay package manager, execute the following command to install the client:
+
+```shell
+yay -S juicefs
+```
+
+:::info
+There are multiple JuiceFS client packages available on AUR. The following are versions officially maintained by JuiceFS:
+
+- [`aur/juicefs`](https://aur.archlinux.org/packages/juicefs) - Stable compiled version that fetches the latest stable source code and compiles it during installation.
+- [`aur/juicefs-bin`](https://aur.archlinux.org/packages/juicefs-bin) - Stable pre-compiled version that directly downloads and installs the latest stable pre-compiled program.
+- [`aur/juicefs-git`](https://aur.archlinux.org/packages/juicefs-git) - Development version that fetches the latest development source code and compiles it during installation.
+:::
+
+Additionally, you can manually compile and install using makepkg, as shown for an Arch Linux system:
+
+```shell
+# Install dependencies
+sudo pacman -S base-devel git go
+# Clone the AUR repository to be packaged
+git clone https://aur.archlinux.org/juicefs.git
+# Navigate to the repository directory
+cd juicefs
+# Compile and install
+makepkg -si
+```
+
 ### Windows
 
 There are two ways to use JuiceFS on Windows systems.
