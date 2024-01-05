@@ -309,6 +309,7 @@ type javaConf struct {
 	PushGateway       string  `json:"pushGateway"`
 	PushInterval      int     `json:"pushInterval"`
 	PushAuth          string  `json:"pushAuth"`
+	PushLabels        string  `json:"pushLabels"`
 	PushGraphite      string  `json:"pushGraphite"`
 }
 
@@ -453,6 +454,12 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 				commonLabels["instance"] = h
 			} else {
 				logger.Warnf("cannot get hostname: %s", err)
+			}
+			if jConf.PushLabels != "" {
+				for _, kv := range strings.Split(jConf.PushLabels, ",") {
+					var splited = strings.Split(kv, ":")
+					commonLabels[splited[0]] = splited[1]
+				}
 			}
 			registry := prometheus.NewRegistry()
 			registerer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)

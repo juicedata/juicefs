@@ -204,6 +204,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.push-auth`       |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                                       |
 | `juicefs.push-graphite`   |               | [Graphite](https://graphiteapp.org) address, format is `<host>:<port>`.                                                                                                     |
 | `juicefs.push-interval`   | 10            | Metric push interval (in seconds)                                                                                                                                           |
+| `juicefs.push-labels`     |               | Metric labels, format is `<key1>:<value1>,<key2>:<value2>`.                                    |
 | `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                                |
 | `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.                         |
 | `juicefs.no-bgjob`        | `false`       | Disable background jobs (clean-up, backup, etc.)                                                                                                                            |
