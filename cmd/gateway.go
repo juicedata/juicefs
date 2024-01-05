@@ -194,7 +194,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	if st := metaCli.Chroot(meta.Background, metaConf.Subdir); st != 0 {
 		logger.Fatalf("Chroot to %s: %s", metaConf.Subdir, st)
 	}
-	registerer, registry := wrapRegister(mp, format.Name)
+	registerer, registry := wrapRegister(c, mp, format.Name)
 
 	blob, err := NewReloadableStorage(format, metaCli, updateFormat(c))
 	if err != nil {

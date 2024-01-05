@@ -458,6 +458,13 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			if jConf.PushLabels != "" {
 				for _, kv := range strings.Split(jConf.PushLabels, ",") {
 					var splited = strings.Split(kv, ":")
+					if len(splited) != 2 {
+						logger.Errorf("invalid label format: %s", kv)
+						return nil
+					}
+					if utils.StringContains([]string{"mp", "vol_name", "instance"}, splited[0]) {
+						logger.Warnf("overriding reserved label: %s", splited[0])
+					}
 					commonLabels[splited[0]] = splited[1]
 				}
 			}
