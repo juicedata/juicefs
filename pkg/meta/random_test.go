@@ -891,7 +891,7 @@ func (m *fsMachine) removexattr(inode Ino, name string) syscall.Errno {
 	// 	return syscall.EINVAL
 	// }
 	if n.xattrs[name] == nil {
-		return syscall.ENOATTR
+		return ENOATTR
 	}
 	// n.ctime = m.ctx.ts
 	delete(n.xattrs, name)
