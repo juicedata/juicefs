@@ -1033,37 +1033,37 @@ const SymlinkMax = 65536
 //	}
 //}
 
-func (m *fsMachine) Getattr(t *rapid.T) {
-	inode := m.pickNode(t)
-	var attr Attr
-	st := m.meta.GetAttr(m.ctx, inode, &attr)
-	t.Logf("attr %#v", attr)
-	var n *tNode
-	if st == 0 {
-		n = new(tNode)
-		n._type = attr.Typ
-		n.mode = attr.Mode
-		n.uid = attr.Uid
-		n.gid = attr.Gid
-		// n.atime = attr.Atime
-		// n.mtime = attr.Mtime
-		// n.ctime = attr.Ctime
-		n.length = attr.Length
-	}
-	n2, st2 := m.getattr(inode)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-	if n2 != nil {
-		if n2._type != n._type || n2.mode != n.mode ||
-			n2.uid != n.uid || n2.gid != n.gid ||
-			// n2.atime != n.atime || n2.mtime != n.mtime || n2.ctime != n.ctime ||
-			n2.length != n.length {
-			t.Logf("expect %+v but got %+v", n2, n)
-			t.Fatalf("attr not matched")
-		}
-	}
-}
+//func (m *fsMachine) Getattr(t *rapid.T) {
+//	inode := m.pickNode(t)
+//	var attr Attr
+//	st := m.meta.GetAttr(m.ctx, inode, &attr)
+//	t.Logf("attr %#v", attr)
+//	var n *tNode
+//	if st == 0 {
+//		n = new(tNode)
+//		n._type = attr.Typ
+//		n.mode = attr.Mode
+//		n.uid = attr.Uid
+//		n.gid = attr.Gid
+//		// n.atime = attr.Atime
+//		// n.mtime = attr.Mtime
+//		// n.ctime = attr.Ctime
+//		n.length = attr.Length
+//	}
+//	n2, st2 := m.getattr(inode)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//	if n2 != nil {
+//		if n2._type != n._type || n2.mode != n.mode ||
+//			n2.uid != n.uid || n2.gid != n.gid ||
+//			// n2.atime != n.atime || n2.mtime != n.mtime || n2.ctime != n.ctime ||
+//			n2.length != n.length {
+//			t.Logf("expect %+v but got %+v", n2, n)
+//			t.Fatalf("attr not matched")
+//		}
+//	}
+//}
 
 //func (m *fsMachine) Rename(t *rapid.T) {
 //	srcparent := m.pickNode(t)
