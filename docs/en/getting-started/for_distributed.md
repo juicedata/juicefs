@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 3
 description: This article will guide you through building a distributed, shared-access JuiceFS file system using cloud-based object storage and database.
 ---
 
