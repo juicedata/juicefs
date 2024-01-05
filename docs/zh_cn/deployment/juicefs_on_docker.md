@@ -121,15 +121,15 @@ docker-compose down --volumes
   ```shell
   # 确认 docker plugins runtime 目录，根据实际情况可能与下方示范不同
   # ls 打印出来的目录就是容器目录，名称为容器 ID
-  ls /run/docker/plugins/runtime-root/plugins.moby
+  ls /run/docker/plugins/runtime-runc/plugins.moby
 
   # 打印 plugin 容器信息
   # 如果打印出的容器列表为空，说明 plugin 容器创建失败
   # 阅读下方查看 plugin 启动日志继续排查
-  runc --root /run/docker/plugins/runtime-root/plugins.moby list
+  runc --root /run/docker/plugins/runtime-runc/plugins.moby list
 
   # 进入容器，打印日志
-  runc --root /run/docker/plugins/runtime-root/plugins.moby exec 452d2c0cf3fd45e73a93a2f2b00d03ed28dd2bc0c58669cca9d4039e8866f99f cat /var/log/juicefs.log
+  runc --root /run/docker/plugins/runtime-runc/plugins.moby exec 452d2c0cf3fd45e73a93a2f2b00d03ed28dd2bc0c58669cca9d4039e8866f99f cat /var/log/juicefs.log
   ```
 
   如果发现容器不存在（`ls` 发现目录为空），或者在最后打印日志的阶段发现 `juicefs.log` 不存在，那么多半是挂载本身就失败了，继续查看 plugin 自身的日志寻找原因。

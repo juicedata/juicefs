@@ -122,15 +122,15 @@ If JuiceFS Docker volume plugin is not working properly, it's recommend to [upgr
   ```shell
   # locate the docker plugins runtime directory, your environment may differ from below example
   # container directories will be printed, directory name is container ID
-  ls /run/docker/plugins/runtime-root/plugins.moby
+  ls /run/docker/plugins/runtime-runc/plugins.moby
 
   # print plugin container info
   # if container list is empty, that means plugin container didn't start properly
   # read the next step to continue debugging
-  runc --root /run/docker/plugins/runtime-root/plugins.moby list
+  runc --root /run/docker/runtime-runc/plugins.moby list.moby list
 
   # collect log inside plugin container
-  runc --root /run/docker/plugins/runtime-root/plugins.moby exec 452d2c0cf3fd45e73a93a2f2b00d03ed28dd2bc0c58669cca9d4039e8866f99f cat /var/log/juicefs.log
+  runc --root /run/docker/plugins/runtime-runc/plugins.moby exec 452d2c0cf3fd45e73a93a2f2b00d03ed28dd2bc0c58669cca9d4039e8866f99f cat /var/log/juicefs.log
   ```
 
   If it is found that the container doesn't exist (`ls` found that the directory is empty), or that `juicefs.log` doesn't exist, this usually indicates a bad mount, check plugin logs to further debug.
