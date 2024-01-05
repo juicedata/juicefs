@@ -954,9 +954,6 @@ func (m *fsMachine) Mknod(t *rapid.T) {
 	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
 	var inode Ino
 	var attr Attr
-	if name == "୴.ÿ" {
-		fmt.Printf("111")
-	}
 	st := m.meta.Mknod(m.ctx, parent, name, _type, mode, 0, 0, "", &inode, &attr)
 	st2 := m.create(_type, parent, name, mode, 0, inode)
 	if st != st2 {
