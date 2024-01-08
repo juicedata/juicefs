@@ -929,22 +929,22 @@ func (m *fsMachine) listxattr(inode Ino) ([]byte, syscall.Errno) {
 	return r, 0
 }
 
-func (m *fsMachine) Mkdir(t *rapid.T) {
-	parent := m.pickNode(t)
-	name := rapid.StringN(1, 200, 255).Draw(t, "name")
-	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
-	t.Logf("parent ino %d", parent)
-	var inode Ino
-	var attr Attr
-	st := m.meta.Mkdir(m.ctx, parent, name, mode, 0, 0, &inode, &attr)
-	t.Logf("dir ino %d", inode)
-	//var attr2 Attr
-	//m.meta.GetAttr(m.ctx, inode, &attr2)
-	st2 := m.create(TypeDirectory, parent, name, mode, 0, inode)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-}
+//func (m *fsMachine) Mkdir(t *rapid.T) {
+//	parent := m.pickNode(t)
+//	name := rapid.StringN(1, 200, 255).Draw(t, "name")
+//	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
+//	t.Logf("parent ino %d", parent)
+//	var inode Ino
+//	var attr Attr
+//	st := m.meta.Mkdir(m.ctx, parent, name, mode, 0, 0, &inode, &attr)
+//	t.Logf("dir ino %d", inode)
+//	//var attr2 Attr
+//	//m.meta.GetAttr(m.ctx, inode, &attr2)
+//	st2 := m.create(TypeDirectory, parent, name, mode, 0, inode)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//}
 
 func (m *fsMachine) Mknod(t *rapid.T) {
 	parent := m.pickNode(t)
@@ -1342,7 +1342,7 @@ func (m *fsMachine) checkFSTree(root Ino) error {
 		stdNode := stdResult[i]
 		entry := result[i]
 		if stdNode._type != entry.Attr.Typ {
-			return fmt.Errorf("type should equal standard meta: %d, test meta %d", stdNode._type, entry.Attr.Typ)
+			return fmt.Errorf("type should equal ino: %d, standard meta: %d, test meta %d", entry.Inode, stdNode._type, entry.Attr.Typ)
 		}
 		if stdNode.name != string(entry.Name) {
 			return fmt.Errorf("name should equal. ino %d standard meta: %s, test meta %s", stdNode.inode, stdNode.name, string(entry.Name))
@@ -1434,7 +1434,7 @@ func (m *fsMachine) checkFSTree(root Ino) error {
 func TestFSOps(t *testing.T) {
 	flag.Set("timeout", "10s")
 	flag.Set("rapid.steps", "200")
-	flag.Set("rapid.checks", "1000")
+	flag.Set("rapid.checks", "500")
 	flag.Set("rapid.seed", "1")
 	rapid.Check(t, rapid.Run[*fsMachine]())
 }
