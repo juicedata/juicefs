@@ -879,7 +879,7 @@ func (n *jfsObjects) ListMultipartUploads(ctx context.Context, bucket string, pr
 				lmi.IsTruncated = true
 				break
 			}
-			index := strings.Index(strings.TrimLeft(info.Object, prefix), delimiter)
+			index := strings.Index(strings.TrimPrefix(info.Object, prefix), delimiter)
 			if index == -1 {
 				tmp = append(tmp, info)
 				maxUploads--
