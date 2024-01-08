@@ -1957,7 +1957,8 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		val = append(rs[1], val...)
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
 		tx.set(m.chunkKey(inode, indx), val)
-		needCompact = (len(val)/sliceBytes)%100 == 99
+		ns := len(val) / sliceBytes // number of slices
+		needCompact = ns%100 == 99 || ns > 350
 		return nil
 	}, inode)
 	if err == nil {
