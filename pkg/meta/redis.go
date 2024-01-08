@@ -2028,7 +2028,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			return nil
 		})
 		if err == nil {
-			needCompact = rpush.Val()%100 == 99
+			needCompact = rpush.Val()%100 == 99 || rpush.Val() > 350
 		}
 		return err
 	}, m.inodeKey(inode))

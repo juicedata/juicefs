@@ -2048,7 +2048,8 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		}
 		_, err = s.Cols("length", "mtime", "ctime").Update(&n, &node{Inode: inode})
 		if err == nil {
-			needCompact = (len(ck.Slices)/sliceBytes)%100 == 99
+			ns := len(ck.Slices) / sliceBytes // number of slices
+			needCompact = ns%100 == 99 || ns > 350
 		}
 		return err
 	}, inode)
