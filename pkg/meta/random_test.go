@@ -28,6 +28,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 )
 
 type tSlice struct {
@@ -1007,19 +1008,19 @@ const SymlinkMax = 65536
 //		t.Fatalf("expect %s but got %s", st2, st)
 //	}
 //}
-//
-//func (m *fsMachine) Readlink(t *rapid.T) {
-//	inode := m.pickNode(t)
-//	var target []byte
-//	st := m.meta.ReadLink(m.ctx, inode, &target)
-//	target2, st2 := m.readlink(inode)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//	if st == 0 && string(target) != target2 {
-//		t.Fatalf("expect %s but got %s", target2, target)
-//	}
-//}
+
+func (m *fsMachine) Readlink(t *rapid.T) {
+	inode := m.pickNode(t)
+	var target []byte
+	st := m.meta.ReadLink(m.ctx, inode, &target)
+	target2, st2 := m.readlink(inode)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+	if st == 0 && string(target) != target2 {
+		t.Fatalf("expect %s but got %s", target2, target)
+	}
+}
 
 func (m *fsMachine) Lookup(t *rapid.T) {
 	parent := m.pickNode(t)
@@ -1199,44 +1200,44 @@ func (m *fsMachine) getPath(inode Ino) string {
 	panic("unreachable")
 }
 
-//func (m *fsMachine) Write(t *rapid.T) {
-//	inode := m.pickNode(t)
-//	indx := rapid.Uint32Range(0, 10).Draw(t, "indx")
-//	pos := rapid.Uint32Range(0, ChunkSize).Draw(t, "pos")
-//	var chunkid uint64
-//	m.meta.NewSlice(m.ctx, &chunkid)
-//	cleng := rapid.Uint32Range(1, ChunkSize).Draw(t, "cleng")
-//	off := rapid.Uint32Range(0, cleng-1).Draw(t, "off")
-//	len := rapid.Uint32Range(1, cleng-off).Draw(t, "len")
-//	st := m.meta.Write(m.ctx, inode, indx, pos, Slice{chunkid, cleng, off, len}, time.Time{})
-//	st2 := m.write(inode, indx, pos, chunkid, cleng, off, len)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//}
+func (m *fsMachine) Write(t *rapid.T) {
+	inode := m.pickNode(t)
+	indx := rapid.Uint32Range(0, 10).Draw(t, "indx")
+	pos := rapid.Uint32Range(0, ChunkSize).Draw(t, "pos")
+	var chunkid uint64
+	m.meta.NewSlice(m.ctx, &chunkid)
+	cleng := rapid.Uint32Range(1, ChunkSize).Draw(t, "cleng")
+	off := rapid.Uint32Range(0, cleng-1).Draw(t, "off")
+	len := rapid.Uint32Range(1, cleng-off).Draw(t, "len")
+	st := m.meta.Write(m.ctx, inode, indx, pos, Slice{chunkid, cleng, off, len}, time.Time{})
+	st2 := m.write(inode, indx, pos, chunkid, cleng, off, len)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
 
-//func (m *fsMachine) Read(t *rapid.T) {
-//	inode := m.pickNode(t)
-//	indx := rapid.Uint32Range(0, 10).Draw(t, "indx")
-//	var result []Slice
-//	st := m.meta.Read(m.ctx, inode, indx, &result)
-//	var slices []tSlice
-//	if st == 0 {
-//		var pos uint32
-//		for _, so := range result {
-//			s := tSlice{pos, so.Id, so.Size, so.Off, so.Len}
-//			slices = append(slices, s)
-//			pos += slices[len(slices)-1].len
-//		}
-//	}
-//	_, slices2, st2 := m.read(inode, indx)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//	if st == 0 && !reflect.DeepEqual(cleanupSlices(slices), cleanupSlices(slices2)) {
-//		t.Fatalf("expect %+v but got %+v", slices2, slices)
-//	}
-//}
+func (m *fsMachine) Read(t *rapid.T) {
+	inode := m.pickNode(t)
+	indx := rapid.Uint32Range(0, 10).Draw(t, "indx")
+	var result []Slice
+	st := m.meta.Read(m.ctx, inode, indx, &result)
+	var slices []tSlice
+	if st == 0 {
+		var pos uint32
+		for _, so := range result {
+			s := tSlice{pos, so.Id, so.Size, so.Off, so.Len}
+			slices = append(slices, s)
+			pos += slices[len(slices)-1].len
+		}
+	}
+	_, slices2, st2 := m.read(inode, indx)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+	if st == 0 && !reflect.DeepEqual(cleanupSlices(slices), cleanupSlices(slices2)) {
+		t.Fatalf("expect %+v but got %+v", slices2, slices)
+	}
+}
 
 func cleanupSlices(ss []tSlice) []tSlice {
 	for i := 0; i < len(ss); i++ {
@@ -1434,7 +1435,7 @@ func (m *fsMachine) checkFSTree(root Ino) error {
 func TestFSOps(t *testing.T) {
 	flag.Set("timeout", "10s")
 	flag.Set("rapid.steps", "200")
-	flag.Set("rapid.checks", "1000")
+	flag.Set("rapid.checks", "5000")
 	flag.Set("rapid.seed", "1")
 	rapid.Check(t, rapid.Run[*fsMachine]())
 }
