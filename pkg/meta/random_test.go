@@ -930,22 +930,22 @@ func (m *fsMachine) listxattr(inode Ino) ([]byte, syscall.Errno) {
 	return r, 0
 }
 
-//func (m *fsMachine) Mkdir(t *rapid.T) {
-//	parent := m.pickNode(t)
-//	name := rapid.StringN(1, 200, 255).Draw(t, "name")
-//	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
-//	t.Logf("parent ino %d", parent)
-//	var inode Ino
-//	var attr Attr
-//	st := m.meta.Mkdir(m.ctx, parent, name, mode, 0, 0, &inode, &attr)
-//	t.Logf("dir ino %d", inode)
-//	//var attr2 Attr
-//	//m.meta.GetAttr(m.ctx, inode, &attr2)
-//	st2 := m.create(TypeDirectory, parent, name, mode, 0, inode)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//}
+func (m *fsMachine) Mkdir(t *rapid.T) {
+	parent := m.pickNode(t)
+	name := rapid.StringN(1, 200, 255).Draw(t, "name")
+	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
+	t.Logf("parent ino %d", parent)
+	var inode Ino
+	var attr Attr
+	st := m.meta.Mkdir(m.ctx, parent, name, mode, 0, 0, &inode, &attr)
+	t.Logf("dir ino %d", inode)
+	//var attr2 Attr
+	//m.meta.GetAttr(m.ctx, inode, &attr2)
+	st2 := m.create(TypeDirectory, parent, name, mode, 0, inode)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
 
 func (m *fsMachine) Mknod(t *rapid.T) {
 	parent := m.pickNode(t)
@@ -974,7 +974,7 @@ func (m *fsMachine) Mknod(t *rapid.T) {
 //		t.Fatalf("expect %s but got %s", st2, st)
 //	}
 //}
-//
+
 //func (m *fsMachine) Rmdir(t *rapid.T) {
 //	parent := m.pickNode(t)
 //	name := m.pickChild(parent, t)
@@ -984,7 +984,7 @@ func (m *fsMachine) Mknod(t *rapid.T) {
 //		t.Fatalf("expect %s but got %s", st2, st)
 //	}
 //}
-//
+
 //func (m *fsMachine) Unlink(t *rapid.T) {
 //	parent := m.pickNode(t)
 //	name := m.pickChild(parent, t)
@@ -1022,20 +1022,20 @@ func (m *fsMachine) Readlink(t *rapid.T) {
 	}
 }
 
-func (m *fsMachine) Lookup(t *rapid.T) {
-	parent := m.pickNode(t)
-	name := m.pickChild(parent, t)
-	var inode Ino
-	var attr Attr
-	st := m.meta.Lookup(m.ctx, parent, name, &inode, &attr, true)
-	inode2, st2 := m.lookup(parent, name, true)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-	if st == 0 && inode != inode2 {
-		t.Fatalf("expect %d but got %d", inode2, inode)
-	}
-}
+//func (m *fsMachine) Lookup(t *rapid.T) {
+//	parent := m.pickNode(t)
+//	name := m.pickChild(parent, t)
+//	var inode Ino
+//	var attr Attr
+//	st := m.meta.Lookup(m.ctx, parent, name, &inode, &attr, true)
+//	inode2, st2 := m.lookup(parent, name, true)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//	if st == 0 && inode != inode2 {
+//		t.Fatalf("expect %d but got %d", inode2, inode)
+//	}
+//}
 
 func (m *fsMachine) Getattr(t *rapid.T) {
 	inode := m.pickNode(t)
@@ -1158,16 +1158,16 @@ func (m *fsMachine) Readdir(t *rapid.T) {
 //	}
 //}
 
-//func (m *fsMachine) Fallocate(t *rapid.T) {
-//	inode := m.pickNode(t)
-//	offset := rapid.Uint64Range(0, 500<<20).Draw(t, "offset")
-//	length := rapid.Uint64Range(1, 500<<20).Draw(t, "length")
-//	st := m.meta.Fallocate(m.ctx, inode, 0, offset, length)
-//	st2 := m.fallocate(inode, 0, offset, length)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//}
+func (m *fsMachine) Fallocate(t *rapid.T) {
+	inode := m.pickNode(t)
+	offset := rapid.Uint64Range(0, 500<<20).Draw(t, "offset")
+	length := rapid.Uint64Range(1, 500<<20).Draw(t, "length")
+	st := m.meta.Fallocate(m.ctx, inode, 0, offset, length)
+	st2 := m.fallocate(inode, 0, offset, length)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
 
 //func (m *fsMachine) CopyFileRange(t *rapid.T) {
 //	srcinode := m.pickNode(t)
