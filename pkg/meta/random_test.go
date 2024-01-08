@@ -1021,52 +1021,52 @@ const SymlinkMax = 65536
 //	}
 //}
 
-//func (m *fsMachine) Lookup(t *rapid.T) {
-//	parent := m.pickNode(t)
-//	name := m.pickChild(parent, t)
-//	var inode Ino
-//	var attr Attr
-//	st := m.meta.Lookup(m.ctx, parent, name, &inode, &attr, true)
-//	inode2, st2 := m.lookup(parent, name, true)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//	if st == 0 && inode != inode2 {
-//		t.Fatalf("expect %d but got %d", inode2, inode)
-//	}
-//}
+func (m *fsMachine) Lookup(t *rapid.T) {
+	parent := m.pickNode(t)
+	name := m.pickChild(parent, t)
+	var inode Ino
+	var attr Attr
+	st := m.meta.Lookup(m.ctx, parent, name, &inode, &attr, true)
+	inode2, st2 := m.lookup(parent, name, true)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+	if st == 0 && inode != inode2 {
+		t.Fatalf("expect %d but got %d", inode2, inode)
+	}
+}
 
-//func (m *fsMachine) Getattr(t *rapid.T) {
-//	inode := m.pickNode(t)
-//	var attr Attr
-//	st := m.meta.GetAttr(m.ctx, inode, &attr)
-//	t.Logf("attr %#v", attr)
-//	var n *tNode
-//	if st == 0 {
-//		n = new(tNode)
-//		n._type = attr.Typ
-//		n.mode = attr.Mode
-//		n.uid = attr.Uid
-//		n.gid = attr.Gid
-//		// n.atime = attr.Atime
-//		// n.mtime = attr.Mtime
-//		// n.ctime = attr.Ctime
-//		n.length = attr.Length
-//	}
-//	n2, st2 := m.getattr(inode)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//	if n2 != nil {
-//		if n2._type != n._type || n2.mode != n.mode ||
-//			n2.uid != n.uid || n2.gid != n.gid ||
-//			// n2.atime != n.atime || n2.mtime != n.mtime || n2.ctime != n.ctime ||
-//			n2.length != n.length {
-//			t.Logf("expect %+v but got %+v", n2, n)
-//			t.Fatalf("attr not matched")
-//		}
-//	}
-//}
+func (m *fsMachine) Getattr(t *rapid.T) {
+	inode := m.pickNode(t)
+	var attr Attr
+	st := m.meta.GetAttr(m.ctx, inode, &attr)
+	t.Logf("attr %#v", attr)
+	var n *tNode
+	if st == 0 {
+		n = new(tNode)
+		n._type = attr.Typ
+		n.mode = attr.Mode
+		n.uid = attr.Uid
+		n.gid = attr.Gid
+		// n.atime = attr.Atime
+		// n.mtime = attr.Mtime
+		// n.ctime = attr.Ctime
+		n.length = attr.Length
+	}
+	n2, st2 := m.getattr(inode)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+	if n2 != nil {
+		if n2._type != n._type || n2.mode != n.mode ||
+			n2.uid != n.uid || n2.gid != n.gid ||
+			// n2.atime != n.atime || n2.mtime != n.mtime || n2.ctime != n.ctime ||
+			n2.length != n.length {
+			t.Logf("expect %+v but got %+v", n2, n)
+			t.Fatalf("attr not matched")
+		}
+	}
+}
 
 //func (m *fsMachine) Rename(t *rapid.T) {
 //	srcparent := m.pickNode(t)
@@ -1260,62 +1260,62 @@ func cleanupSlices(ss []tSlice) []tSlice {
 	return ss
 }
 
-//func (m *fsMachine) Setxattr(t *rapid.T) {
-//	inode := m.pickNode(t)
-//	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
-//	value := rapid.SliceOfN(rapid.Byte(), 0, XATTR_SIZE_MAX+1).Draw(t, "value")
-//	mode := rapid.Uint8Range(0, XATTR_REMOVE).Draw(t, "mode")
-//	st := m.meta.SetXattr(m.ctx, inode, name, value, uint32(mode))
-//	st2 := m.setxattr(inode, name, value, mode)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//}
-//
-//func (m *fsMachine) RemoveXattr(t *rapid.T) {
-//	inode := m.pickNode(t)
-//	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
-//	st := m.meta.RemoveXattr(m.ctx, inode, name)
-//	st2 := m.removexattr(inode, name)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//}
+func (m *fsMachine) Setxattr(t *rapid.T) {
+	inode := m.pickNode(t)
+	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
+	value := rapid.SliceOfN(rapid.Byte(), 0, XATTR_SIZE_MAX+1).Draw(t, "value")
+	mode := rapid.Uint8Range(0, XATTR_REMOVE).Draw(t, "mode")
+	st := m.meta.SetXattr(m.ctx, inode, name, value, uint32(mode))
+	st2 := m.setxattr(inode, name, value, mode)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
+
+func (m *fsMachine) RemoveXattr(t *rapid.T) {
+	inode := m.pickNode(t)
+	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
+	st := m.meta.RemoveXattr(m.ctx, inode, name)
+	st2 := m.removexattr(inode, name)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
 
 const XATTR_REMOVE = 5
 const XATTR_NAME_MAX = 255
 const XATTR_SIZE_MAX = 65536
 
-//func (m *fsMachine) Getxattr(t *rapid.T) {
-//	inode := m.pickNode(t)
-//	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
-//	var value []byte
-//	st := m.meta.GetXattr(m.ctx, inode, name, &value)
-//	value2, st2 := m.getxattr(inode, name)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//	if st == 0 && string(value) != string(value2) {
-//		t.Fatalf("expect %s but got %s", string(value2), string(value))
-//	}
-//}
-//
-//func (m *fsMachine) Listxattr(t *rapid.T) {
-//	inode := m.pickNode(t)
-//	var attrs []byte
-//	st := m.meta.ListXattr(m.ctx, inode, &attrs)
-//	attrs2, st2 := m.listxattr(inode)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//	as := strings.Split(string(attrs), "\x00")
-//	sort.Strings(as)
-//	as2 := strings.Split(string(attrs2), "\x00")
-//	sort.Strings(as2)
-//	if st == 0 && !reflect.DeepEqual(as, as2) {
-//		t.Fatalf("expect %s but got %s", string(attrs2), string(attrs))
-//	}
-//}
+func (m *fsMachine) Getxattr(t *rapid.T) {
+	inode := m.pickNode(t)
+	name := rapid.StringN(1, 200, XATTR_NAME_MAX+1).Draw(t, "name")
+	var value []byte
+	st := m.meta.GetXattr(m.ctx, inode, name, &value)
+	value2, st2 := m.getxattr(inode, name)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+	if st == 0 && string(value) != string(value2) {
+		t.Fatalf("expect %s but got %s", string(value2), string(value))
+	}
+}
+
+func (m *fsMachine) Listxattr(t *rapid.T) {
+	inode := m.pickNode(t)
+	var attrs []byte
+	st := m.meta.ListXattr(m.ctx, inode, &attrs)
+	attrs2, st2 := m.listxattr(inode)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+	as := strings.Split(string(attrs), "\x00")
+	sort.Strings(as)
+	as2 := strings.Split(string(attrs2), "\x00")
+	sort.Strings(as2)
+	if st == 0 && !reflect.DeepEqual(as, as2) {
+		t.Fatalf("expect %s but got %s", string(attrs2), string(attrs))
+	}
+}
 
 func (m *fsMachine) Check(t *rapid.T) {
 	m.ctx = NewContext(0, 0, []uint32{0})
