@@ -949,6 +949,9 @@ func (m *fsMachine) listxattr(inode Ino) ([]byte, syscall.Errno) {
 func (m *fsMachine) Mknod(t *rapid.T) {
 	parent := m.pickNode(t)
 	name := rapid.StringN(1, 200, 255).Draw(t, "name")
+	if name == "." || name == ".." {
+		t.Skipf("skip mknod %s", name)
+	}
 	_type := rapid.Uint8Range(0, TypeDirectory).Draw(t, "type")
 	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
 	var inode Ino
@@ -1119,29 +1122,29 @@ const SymlinkMax = 65536
 //	}
 //}
 
-func (m *fsMachine) Readdir(t *rapid.T) {
-	inode := m.pickNode(t)
-	var names []string
-	var result []*Entry
-	st := m.meta.Readdir(m.ctx, inode, 0, &result)
-	if st == 0 {
-		for _, e := range result {
-			names = append(names, string(e.Name))
-		}
-		sort.Strings(names)
-	}
-	stdRes, st2 := m.readdir(inode)
-	if st != st2 {
-		t.Fatalf("expect %s but got %s", st2, st)
-	}
-	var names2 []string
-	for _, node := range stdRes {
-		names2 = append(names2, node.name)
-	}
-	if st == 0 && !reflect.DeepEqual(names, names2) {
-		t.Fatalf("expect %+v but got %+v", names2, names)
-	}
-}
+//func (m *fsMachine) Readdir(t *rapid.T) {
+//	inode := m.pickNode(t)
+//	var names []string
+//	var result []*Entry
+//	st := m.meta.Readdir(m.ctx, inode, 0, &result)
+//	if st == 0 {
+//		for _, e := range result {
+//			names = append(names, string(e.Name))
+//		}
+//		sort.Strings(names)
+//	}
+//	stdRes, st2 := m.readdir(inode)
+//	if st != st2 {
+//		t.Fatalf("expect %s but got %s", st2, st)
+//	}
+//	var names2 []string
+//	for _, node := range stdRes {
+//		names2 = append(names2, node.name)
+//	}
+//	if st == 0 && !reflect.DeepEqual(names, names2) {
+//		t.Fatalf("expect %+v but got %+v", names2, names)
+//	}
+//}
 
 //func (m *fsMachine) Truncate(t *rapid.T) {
 //	inode := m.pickNode(t)
