@@ -102,7 +102,7 @@ func (m *fsMachine) Init(t *rapid.T) {
 	m.nodes[1] = &tNode{
 		_type:    TypeDirectory,
 		mode:     0777,
-		inode:    1,
+		inode:    RootInode,
 		length:   4096,
 		xattrs:   make(map[string][]byte),
 		children: make(map[string]*tNode),
@@ -1314,9 +1314,6 @@ const XATTR_SIZE_MAX = 65536
 //	}
 //}
 
-func (m *fsMachine) Test(t *rapid.T) {
-}
-
 func (m *fsMachine) Check(t *rapid.T) {
 	m.ctx = NewContext(0, 0, []uint32{0})
 	if err := m.checkFSTree(RootInode); err != nil {
@@ -1434,7 +1431,7 @@ func (m *fsMachine) checkFSTree(root Ino) error {
 func TestFSOps(t *testing.T) {
 	flag.Set("timeout", "10s")
 	flag.Set("rapid.steps", "200")
-	flag.Set("rapid.checks", "500")
+	flag.Set("rapid.checks", "1000")
 	flag.Set("rapid.seed", "1")
 	rapid.Check(t, rapid.Run[*fsMachine]())
 }

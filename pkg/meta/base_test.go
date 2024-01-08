@@ -445,7 +445,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if !bytes.Equal(target1, target2) || !bytes.Equal(target1, []byte("/f")) {
 		t.Fatalf("readlink got %s %s, expected %s", target1, target2, "/f")
 	}
-	if st := m.ReadLink(ctx, parent, &target1); st != syscall.ENOENT {
+	if st := m.ReadLink(ctx, parent, &target1); st != syscall.EINVAL {
 		t.Fatalf("readlink d: %s", st)
 	}
 	if st := m.Lookup(ctx, 1, "f", &inode, attr, true); st != 0 {
