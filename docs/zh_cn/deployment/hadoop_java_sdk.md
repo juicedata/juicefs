@@ -204,7 +204,7 @@ make win
 | `juicefs.push-auth`       |              | [Prometheus 基本认证](https://prometheus.io/docs/guides/basic-auth)信息，格式为 `<username>:<password>`。              |
 | `juicefs.push-graphite`   |              | [Graphite](https://graphiteapp.org) 地址，格式为 `<host>:<port>`。                                                 |
 | `juicefs.push-interval`   | 10           | 指标推送的时间间隔，单位为秒。                                                                                             |
-| `juicefs.push-labels`     |              | 指标额外标签，格式为 `<key1>:<value1>,<key2>:<value2>`。                                                                |
+| `juicefs.push-labels`     |              | 指标额外标签，格式为 `key1:value1,key2:value2`。                                                                |
 | `juicefs.fast-resolve`    | `true`       | 是否开启快速元数据查找（通过 Redis Lua 脚本实现）                                                                              |
 | `juicefs.no-usage-report` | `false`      | 是否上报数据。仅上版本号等使用量数据，不包含任何用户信息。                                                                               |
 | `juicefs.block.size`      | `134217728`  | 单位为字节，同 HDFS 的 `dfs.blocksize`，默认 128 MB                                                                    |
