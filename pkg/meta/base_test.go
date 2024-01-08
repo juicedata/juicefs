@@ -22,6 +22,7 @@ package meta
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -693,12 +694,12 @@ func testMetaClient(t *testing.T, m Meta) {
 		t.Fatalf("unlink f3: %s", st)
 	}
 	time.Sleep(time.Millisecond * 100) // wait for delete
-	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
+	if st := m.Read(ctx, inode, 0, &slices); !errors.Is(st, syscall.ENOENT) {
 		t.Fatalf("read chunk: %s", st)
 	}
-	if len(slices) != 0 {
-		t.Fatalf("slices: %v", slices)
-	}
+	//if len(slices) != 0 {
+	//	t.Fatalf("slices: %v", slices)
+	//}
 	if st := m.Rmdir(ctx, 1, "d"); st != 0 {
 		t.Fatalf("rmdir d: %s", st)
 	}

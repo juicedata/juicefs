@@ -2210,6 +2210,17 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (
 	if err != nil {
 		return errno(err)
 	}
+	if len(vals) == 0 {
+		var attr Attr
+		eno := m.doGetAttr(ctx, inode, &attr)
+		if eno != 0 {
+			return eno
+		}
+		if attr.Typ != TypeFile {
+			return syscall.EPERM
+		}
+		return 0
+	}
 	ss := readSlices(vals)
 	if ss == nil {
 		return syscall.EIO

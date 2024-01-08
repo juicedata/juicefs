@@ -1122,29 +1122,29 @@ const SymlinkMax = 65536
 //	}
 //}
 
-//func (m *fsMachine) Readdir(t *rapid.T) {
-//	inode := m.pickNode(t)
-//	var names []string
-//	var result []*Entry
-//	st := m.meta.Readdir(m.ctx, inode, 0, &result)
-//	if st == 0 {
-//		for _, e := range result {
-//			names = append(names, string(e.Name))
-//		}
-//		sort.Strings(names)
-//	}
-//	stdRes, st2 := m.readdir(inode)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//	var names2 []string
-//	for _, node := range stdRes {
-//		names2 = append(names2, node.name)
-//	}
-//	if st == 0 && !reflect.DeepEqual(names, names2) {
-//		t.Fatalf("expect %+v but got %+v", names2, names)
-//	}
-//}
+func (m *fsMachine) Readdir(t *rapid.T) {
+	inode := m.pickNode(t)
+	var names []string
+	var result []*Entry
+	st := m.meta.Readdir(m.ctx, inode, 0, &result)
+	if st == 0 {
+		for _, e := range result {
+			names = append(names, string(e.Name))
+		}
+		sort.Strings(names)
+	}
+	stdRes, st2 := m.readdir(inode)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+	var names2 []string
+	for _, node := range stdRes {
+		names2 = append(names2, node.name)
+	}
+	if st == 0 && !reflect.DeepEqual(names, names2) {
+		t.Fatalf("expect %+v but got %+v", names2, names)
+	}
+}
 
 //func (m *fsMachine) Truncate(t *rapid.T) {
 //	inode := m.pickNode(t)
