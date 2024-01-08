@@ -934,6 +934,9 @@ func (m *fsMachine) Mkdir(t *rapid.T) {
 	parent := m.pickNode(t)
 	name := rapid.StringN(1, 200, 255).Draw(t, "name")
 	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
+	if name == "." || name == ".." {
+		t.Skipf("skip mkdir %s", name)
+	}
 	t.Logf("parent ino %d", parent)
 	var inode Ino
 	var attr Attr
@@ -997,17 +1000,23 @@ func (m *fsMachine) Mknod(t *rapid.T) {
 
 const SymlinkMax = 65536
 
-//func (m *fsMachine) Symlink(t *rapid.T) {
-//	parent := m.pickNode(t)
-//	name := rapid.StringN(1, 200, 255).Draw(t, "name")
-//	target := rapid.StringN(1, 1000, SymlinkMax+1).Draw(t, "target")
-//	var ti Ino
-//	st := m.meta.Symlink(m.ctx, parent, name, target, &ti, nil)
-//	st2 := m.symlink(parent, name, ti, target)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//}
+func (m *fsMachine) Symlink(t *rapid.T) {
+	parent := m.pickNode(t)
+	name := rapid.StringN(1, 200, 255).Draw(t, "name")
+	target := rapid.StringN(1, 1000, SymlinkMax+1).Draw(t, "target")
+	if name == "." || name == ".." {
+		t.Skipf("skip symlink %s", name)
+	}
+	if target == "." || target == ".." {
+		t.Skipf("skip symlink %s", target)
+	}
+	var ti Ino
+	st := m.meta.Symlink(m.ctx, parent, name, target, &ti, nil)
+	st2 := m.symlink(parent, name, ti, target)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
 
 func (m *fsMachine) Readlink(t *rapid.T) {
 	inode := m.pickNode(t)
@@ -1022,20 +1031,20 @@ func (m *fsMachine) Readlink(t *rapid.T) {
 	}
 }
 
-//func (m *fsMachine) Lookup(t *rapid.T) {
-//	parent := m.pickNode(t)
-//	name := m.pickChild(parent, t)
-//	var inode Ino
-//	var attr Attr
-//	st := m.meta.Lookup(m.ctx, parent, name, &inode, &attr, true)
-//	inode2, st2 := m.lookup(parent, name, true)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//	if st == 0 && inode != inode2 {
-//		t.Fatalf("expect %d but got %d", inode2, inode)
-//	}
-//}
+func (m *fsMachine) Lookup(t *rapid.T) {
+	parent := m.pickNode(t)
+	name := m.pickChild(parent, t)
+	var inode Ino
+	var attr Attr
+	st := m.meta.Lookup(m.ctx, parent, name, &inode, &attr, true)
+	inode2, st2 := m.lookup(parent, name, true)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+	if st == 0 && inode != inode2 {
+		t.Fatalf("expect %d but got %d", inode2, inode)
+	}
+}
 
 func (m *fsMachine) Getattr(t *rapid.T) {
 	inode := m.pickNode(t)
