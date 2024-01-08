@@ -2763,7 +2763,7 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	skipped := skipSome(ss)
 	ss = ss[skipped:]
 	pos, size, slices := compactChunk(ss)
-	if len(ss) < 2 || size == 0 {
+	if len(ss) < 2 {
 		return
 	}
 
@@ -2773,12 +2773,14 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return
 	}
 	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(ss), size)
-	err = m.newMsg(CompactChunk, slices, id)
-	if err != nil {
-		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
-			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
+	if len(slices) > 0 {
+		err = m.newMsg(CompactChunk, slices, id)
+		if err != nil {
+			if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
+				logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(ss), err)
+			}
+			return
 		}
-		return
 	}
 	var buf []byte
 	trash := m.toTrash(0)

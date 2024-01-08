@@ -237,7 +237,9 @@ func (v *VFS) caclObjects(id uint64, size, offset, length uint32) []*obj {
 	if id == 0 {
 		return []*obj{{"", size, offset, length}}
 	}
-	if length == 0 || offset+length > size {
+	if length == 0 {
+		return nil
+	} else if offset+length > size {
 		logger.Warnf("Corrupt slice id %d size %d offset %d length %d", id, size, offset, length)
 		return nil
 	}
