@@ -1161,9 +1161,6 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {
 	if noatime {
 		target, err = m.rdb.Get(ctx, m.symKey(inode)).Bytes()
-		if errors.Is(err, redis.Nil) {
-			err = nil
-		}
 		return
 	}
 
@@ -1622,11 +1619,6 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return err
 		}
 		typ, ino := m.parseEntry(buf)
-
-		// todo: check dst parent is subdir of parent
-		if ino == parentDst {
-			return syscall.EPERM
-		}
 		if parentSrc == parentDst && nameSrc == nameDst {
 			if inode != nil {
 				*inode = ino
@@ -2214,17 +2206,6 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (
 	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, -1).Result()
 	if err != nil {
 		return errno(err)
-	}
-	if len(vals) == 0 {
-		var attr Attr
-		eno := m.doGetAttr(ctx, inode, &attr)
-		if eno != 0 {
-			return eno
-		}
-		if attr.Typ != TypeFile {
-			return syscall.EPERM
-		}
-		return 0
 	}
 	ss := readSlices(vals)
 	if ss == nil {

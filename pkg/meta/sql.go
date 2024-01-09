@@ -1690,11 +1690,6 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if !ok {
 			return syscall.ENOENT
 		}
-
-		// todo: check dst parent is subdir of parent
-		if se.Inode == parentDst {
-			return syscall.EPERM
-		}
 		if parentSrc == parentDst && string(se.Name) == nameDst {
 			if inode != nil {
 				*inode = se.Inode
@@ -2209,17 +2204,6 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	})
 	if err != nil {
 		return errno(err)
-	}
-	if c.Slices == nil {
-		var attr Attr
-		eno := m.doGetAttr(ctx, inode, &attr)
-		if eno != 0 {
-			return eno
-		}
-		if attr.Typ != TypeFile {
-			return syscall.EPERM
-		}
-		return 0
 	}
 	ss := readSliceBuf(c.Slices)
 	if ss == nil {

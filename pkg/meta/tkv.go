@@ -1492,10 +1492,6 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			return nil
 		}
-		// todo: check dst parent is subdir of parent
-		if ino == parentDst {
-			return syscall.EPERM
-		}
 		rs := tx.gets(m.inodeKey(parentSrc), m.inodeKey(parentDst), m.inodeKey(ino))
 		if rs[0] == nil || rs[1] == nil || rs[2] == nil {
 			return syscall.ENOENT
@@ -1898,17 +1894,6 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	val, err := m.get(m.chunkKey(inode, indx))
 	if err != nil {
 		return errno(err)
-	}
-	if val == nil {
-		var attr Attr
-		eno := m.doGetAttr(ctx, inode, &attr)
-		if eno != 0 {
-			return eno
-		}
-		if attr.Typ != TypeFile {
-			return syscall.EPERM
-		}
-		return 0
 	}
 	ss := readSliceBuf(val)
 	if ss == nil {
