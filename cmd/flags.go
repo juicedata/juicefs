@@ -292,6 +292,10 @@ func shareInfoFlags() []cli.Flag {
 			Usage: "address to export metrics",
 		},
 		&cli.StringFlag{
+			Name:  "custom-labels",
+			Usage: "custom labels for metrics",
+		},
+		&cli.StringFlag{
 			Name:  "consul",
 			Value: "127.0.0.1:8500",
 			Usage: "consul address to register",

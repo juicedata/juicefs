@@ -397,6 +397,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("pushGateway", getConf(conf, "push-gateway", ""));
     obj.put("pushInterval", Integer.valueOf(getConf(conf, "push-interval", "10")));
     obj.put("pushAuth", getConf(conf, "push-auth", ""));
+    obj.put("pushLabels", getConf(conf, "push-labels", ""));
     obj.put("pushGraphite", getConf(conf, "push-graphite", ""));
     obj.put("fastResolve", Boolean.valueOf(getConf(conf, "fast-resolve", "true")));
     obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
