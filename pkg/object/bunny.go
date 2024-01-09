@@ -92,11 +92,11 @@ func (b bunnyClient) ListAll(prefix string, marker string, followLink bool) (<-c
 func bunnyObjectsToJuiceObjects(objects []*bunnystorage.Object, out chan<- Object)	{
 	for o := range objects	{
 		f := objects[o]
-		lastChanged, _ := strconv.Atoi(f.LastChanged)
+		lastChanged, _ := time.Parse("2006-01-02T15:04:05", f.LastChanged)
 		out <- &obj{
 			f.ObjectName,
 			int64(f.Length),
-			time.Unix(int64(lastChanged), 0),
+			lastChanged,
 			f.IsDirectory,
 			"",
 		}
