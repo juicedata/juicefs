@@ -1699,6 +1699,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			return nil
 		}
+		// TODO: check parentDst is a subdir of source node
+		if se.Inode == parentDst || se.Inode == dpattr.Parent {
+			return syscall.EPERM
+		}
 		var sn = node{Inode: se.Inode}
 		ok, err = s.Get(&sn)
 		if err != nil {
