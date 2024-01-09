@@ -157,7 +157,9 @@ func buildSlice(ss []*slice) []Slice {
 func compactChunk(ss []*slice) (uint32, uint32, []Slice) {
 	var chunk = buildSlice(ss)
 	var pos uint32
-	if len(chunk) > 0 && chunk[0].Id == 0 {
+	if len(chunk) == 1 && chunk[0].Id == 0 {
+		chunk[0].Len = 1
+	} else if len(chunk) > 1 && chunk[0].Id == 0 {
 		pos = chunk[0].Len
 		chunk = chunk[1:]
 	}
