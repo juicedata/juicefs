@@ -101,6 +101,7 @@ const (
 )
 
 const MaxName = 255
+const MaxSymlink = 4096
 const RootInode Ino = 1
 const TrashInode Ino = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
 var TrashName = ".trash"

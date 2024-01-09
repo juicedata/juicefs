@@ -1164,13 +1164,16 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 		if !ok {
 			return syscall.ENOENT
 		}
+		if nodeAttr.Type != TypeSymlink {
+			return syscall.EINVAL
+		}
 		l := symlink{Inode: inode}
 		ok, e = s.Get(&l)
 		if e != nil {
 			return e
 		}
 		if !ok {
-			return syscall.ENOENT
+			return syscall.EIO
 		}
 		m.parseAttr(&nodeAttr, attr)
 		target = l.Target
@@ -2204,6 +2207,17 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	})
 	if err != nil {
 		return errno(err)
+	}
+	if len(c.Slices) == 0 {
+		var attr Attr
+		eno := m.doGetAttr(ctx, inode, &attr)
+		if eno != 0 {
+			return eno
+		}
+		if attr.Typ != TypeFile {
+			return syscall.EPERM
+		}
+		return 0
 	}
 	ss := readSliceBuf(c.Slices)
 	if ss == nil {

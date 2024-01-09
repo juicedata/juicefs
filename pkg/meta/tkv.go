@@ -1062,10 +1062,16 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 	now := time.Now()
 	err = m.txn(func(tx *kvTxn) error {
 		rs := tx.gets(m.inodeKey(inode), m.symKey(inode))
-		if rs[0] == nil || rs[1] == nil {
+		if rs[0] == nil {
 			return syscall.ENOENT
 		}
 		m.parseAttr(rs[0], attr)
+		if attr.Typ != TypeSymlink {
+			return syscall.EINVAL
+		}
+		if rs[1] == nil {
+			return syscall.EIO
+		}
 		target = rs[1]
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
@@ -1894,6 +1900,17 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	val, err := m.get(m.chunkKey(inode, indx))
 	if err != nil {
 		return errno(err)
+	}
+	if len(val) == 0 {
+		var attr Attr
+		eno := m.doGetAttr(ctx, inode, &attr)
+		if eno != 0 {
+			return eno
+		}
+		if attr.Typ != TypeFile {
+			return syscall.EPERM
+		}
+		return 0
 	}
 	ss := readSliceBuf(val)
 	if ss == nil {
