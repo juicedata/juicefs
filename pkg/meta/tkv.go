@@ -2378,10 +2378,14 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if err != nil {
 		return
 	}
-
-	if len(buf) > sliceBytes*100 {
-		buf = buf[:sliceBytes*100]
+	max := 1000
+	if m.Name() == "etcd" {
+		max = 100
 	}
+	if len(buf) > sliceBytes*max {
+		buf = buf[:sliceBytes*max]
+	}
+
 	ss := readSliceBuf(buf)
 	if ss == nil {
 		logger.Errorf("Corrupt value for inode %d chunk indx %d", inode, indx)

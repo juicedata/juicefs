@@ -2754,6 +2754,9 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if err != nil {
 		return
 	}
+	if len(c.Slices) > sliceBytes*1000 {
+		c.Slices = c.Slices[:sliceBytes*1000]
+	}
 
 	ss := readSliceBuf(c.Slices)
 	if ss == nil {
