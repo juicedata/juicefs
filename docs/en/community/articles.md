@@ -11,12 +11,16 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### AI, machine learning, and deep learning
 
+- [A Leading Self-Driving Company Chose JuiceFS over Amazon S3 and Alluxio in the Multi-Cloud Architecture](https://juicefs.com/en/blog/user-stories/data-storage-multi-cloud-autonomous-driving-juicefs), 2023-11-09
+- [Building a Cloud-Native File Storage Platform to Host 5B+ Files in AI Training & More](https://juicefs.com/en/blog/user-stories/cloud-native-file-storage-platform-ai-training), 2023-10-12, Jiapeng Sun @ Xiaomi
 - [Choosing JuiceFS over s3fs and Alluxio for Our Ultra-Heterogeneous Computing Cluster](https://juicefs.com/en/blog/user-stories/high-performance-scale-out-heterogeneous-computing-power-cluster-storage), 2023-06-09, Chen Hong @ Zhejiang Lab
 - [Achieving Elastic Throughput in the Cloud with a Distributed File System to Boost AI Training](https://juicefs.com/en/blog/solutions/accelerate-ai-training-flexible-elastic-throughput-cloud), 2023-05-06, Sui Su
 - [Improving Read Performance by ~30% in AI Speech and Text Processing by a Distributed Storage System](https://juicefs.com/en/blog/user-stories/unisounds-hpc-platform-accelerates-ai-model-training-and-development-with-juicefs), 2022-09-06, Dongdong Lv @ Unisound
 
 ### Big data
 
+- [From Hadoop to Cloud: Why and How to Decouple Storage and Compute in Big Data Platforms](https://juicefs.com/en/blog/solutions/hadoop-cloud-decouple-storage-compute-big-data), 2023-11-01
+- [Costs Cut & Ops Efficiency Boosted: Switching to a Big Data Storage-Compute Decoupled Architecture](https://juicefs.com/en/blog/user-stories/storage-compute-decoupled-architecture-cloud-native-big-data), 2023-09-28, Ming Li @ DMALL
 - [50%+ Cut in Both Storage & Compute Costs: Designing NetEase Games' Cloud Big Data Platform](https://juicefs.com/en/blog/user-stories/cut-storage-compute-costs-cloud-big-data-platform), 2023-09-14, Weihong Ke @ NetEase Games
 - [Migrating Hadoop to the Cloud: 2x Storage Capacity & Fewer Ops Costs](https://juicefs.com/en/blog/user-stories/migrating-hadoop-to-cloud-2x-storage-capacity-fewer-ops-costs), 2023-08-09, Chang Liu & Yangliang Li @ Yimian
 - [An Elastic Platform & Simplified Storage Achieved by Migrating to Spark+K8s+JuiceFS](https://juicefs.com/en/blog/user-stories/scalable-computing-unified-data-storage-ops-cloud-spark-k8s-juicefs), 2023-05-10, Fengyu Cao @ Douban
@@ -40,6 +44,8 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Tutorial, guide, and best practice
 
+- [A Deep Dive into the Design of Directory Quotas in JuiceFS](https://juicefs.com/en/blog/engineering/design-juicefs-directory-quotas), 2023-10-26, Sandy
+- [What's New in JuiceFS Enterprise Edition 5.0](https://juicefs.com/en/blog/release-notes/juicefs-enterprise-edition-v5), 2023-11-20
 - [Configuring Samba and NFS on JuiceFS to Unlock Unlimited Cloud Storage](https://juicefs.com/en/blog/usage-tips/scalable-cloud-storage-samba-nfs-shares-juicefs), 2023-08-29, Herald Yu
 - [How to Store and Share AI Models for Stable Diffusion in the Cloud](https://juicefs.com/en/blog/usage-tips/share-store-model-data-stable-diffusion-cloud), 2023-07-19, Herald Yu
 - [JuiceFS Enterprise Edition: Architecture, Features, and Community Edition Comparison](https://juicefs.com/en/blog/solutions/juicefs-enterprise-edition-features-vs-community-edition), 2023-06-06, Changjian Gao
@@ -53,9 +59,10 @@ JuiceFS is widely applicable to various data storage and sharing scenarios. This
 
 ### Others
 
-- [GlusterFS vs. JuiceFS](https://juicefs.com/en/blog/engineering/glusterfs-vs-juicefs-distributed-storage), 2023-09-21, Sandy
+- [Is POSIX Really Unsuitable for Object Stores? A Data-Backed Answer](https://juicefs.com/en/blog/community/posix-object-store-suitable-file-system), 2023-11-16, Herald Yu
+- [Comparative Analysis of Major Distributed File System Architectures: GFS vs. Tectonic vs. JuiceFS](https://juicefs.com/en/blog/engineering/compare-distributed-file-system-architectures-gfs-tectonic-juicefs), 2023-10-20, Changjian Gao
 - [JuiceFS vs. SeaweedFS](https://juicefs.com/docs/community/comparison/juicefs_vs_seaweedfs), 2023-09-31, Yifu Liu
-- [Comparative Analysis of Major Distributed File System Architectures: GFS vs. Tectonic vs. JuiceFS](https://www.infoq.com/articles/dfs-architecture-comparison), 2023-06-26, Changjian Gao
+- [GlusterFS vs. JuiceFS](https://juicefs.com/en/blog/engineering/glusterfs-vs-juicefs-distributed-storage), 2023-09-21, Sandy
 
 ## Contribution
 

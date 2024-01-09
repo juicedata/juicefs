@@ -105,6 +105,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
 
   mutate-test:
+    timeout-minutes: 120
     if: "!github.event.pull_request.draft"
     name: ${{matrix.test_file}}
     needs: build-matrix
@@ -126,6 +127,7 @@ jobs:
           job_name: ${{matrix.test_file}}
 
       - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
 
       - name: Remove problem matcher for go

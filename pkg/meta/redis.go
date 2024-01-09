@@ -1161,6 +1161,9 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {
 	if noatime {
 		target, err = m.rdb.Get(ctx, m.symKey(inode)).Bytes()
+		if err == redis.Nil {
+			err = nil
+		}
 		return
 	}
 
@@ -1171,10 +1174,16 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 		if e != nil {
 			return e
 		}
-		if rs[0] == nil || rs[1] == nil {
-			return redis.Nil
+		if rs[0] == nil {
+			return syscall.ENOENT
 		}
 		m.parseAttr([]byte(rs[0].(string)), attr)
+		if attr.Typ != TypeSymlink {
+			return syscall.EINVAL
+		}
+		if rs[1] == nil {
+			return syscall.EIO
+		}
 		target = []byte(rs[1].(string))
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
@@ -1282,7 +1291,7 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				pattr.Nlink++
 				updateParent = true
 			}
-			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+			if updateParent || now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
 				pattr.Mtime = now.Unix()
 				pattr.Mtimensec = uint32(now.Nanosecond())
 				pattr.Ctime = now.Unix()
@@ -1393,7 +1402,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 		}
 		var updateParent bool
 		now := time.Now()
-		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+		if !isTrash(parent) && now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -1683,6 +1692,10 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
 			return st
 		}
+		// TODO: check parentDst is a subdir of source node
+		if ino == parentDst || ino == dattr.Parent {
+			return syscall.EPERM
+		}
 		m.parseAttr([]byte(rs[2].(string)), &iattr)
 		if (sattr.Flags&FlagAppend) != 0 || (sattr.Flags&FlagImmutable) != 0 || (dattr.Flags&FlagImmutable) != 0 || (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
@@ -1765,14 +1778,14 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				iattr.Parent = parentDst
 			}
 		}
-		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= minUpdateTime {
+		if supdate || now.Sub(time.Unix(sattr.Mtime, int64(sattr.Mtimensec))) >= m.conf.SkipDirMtime {
 			sattr.Mtime = now.Unix()
 			sattr.Mtimensec = uint32(now.Nanosecond())
 			sattr.Ctime = now.Unix()
 			sattr.Ctimensec = uint32(now.Nanosecond())
 			supdate = true
 		}
-		if dupdate || now.Sub(time.Unix(dattr.Mtime, int64(dattr.Mtimensec))) >= minUpdateTime {
+		if dupdate || now.Sub(time.Unix(dattr.Mtime, int64(dattr.Mtimensec))) >= m.conf.SkipDirMtime {
 			dattr.Mtime = now.Unix()
 			dattr.Mtimensec = uint32(now.Nanosecond())
 			dattr.Ctime = now.Unix()
@@ -1901,7 +1914,7 @@ func (m *redisMeta) doLink(ctx Context, inode, parent Ino, name string, attr *At
 		}
 		var updateParent bool
 		now := time.Now()
-		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= minUpdateTime {
+		if now.Sub(time.Unix(pattr.Mtime, int64(pattr.Mtimensec))) >= m.conf.SkipDirMtime {
 			pattr.Mtime = now.Unix()
 			pattr.Mtimensec = uint32(now.Nanosecond())
 			pattr.Ctime = now.Unix()
@@ -2207,6 +2220,17 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (
 	if err != nil {
 		return errno(err)
 	}
+	if len(vals) == 0 {
+		var attr Attr
+		eno := m.doGetAttr(ctx, inode, &attr)
+		if eno != 0 {
+			return eno
+		}
+		if attr.Typ != TypeFile {
+			return syscall.EPERM
+		}
+		return 0
+	}
 	ss := readSlices(vals)
 	if ss == nil {
 		return syscall.EIO
@@ -2268,7 +2292,7 @@ func (m *redisMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice
 			return nil
 		})
 		if err == nil {
-			needCompact = rpush.Val()%100 == 99
+			needCompact = rpush.Val()%100 == 99 || rpush.Val() > 350
 		}
 		return err
 	}, m.inodeKey(inode))
@@ -2346,7 +2370,7 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 			vals = append(vals, val)
 		}
 
-		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			coff := offIn / ChunkSize * ChunkSize
 			for _, sv := range vals {
 				// Add a zero chunk for hole
@@ -2464,7 +2488,7 @@ func (m *redisMeta) doSyncDirStat(ctx Context, ino Ino) (*dirStat, syscall.Errno
 		if n <= 0 {
 			return syscall.ENOENT
 		}
-		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.HSet(ctx, m.dirDataLengthKey(), field, stat.length)
 			pipe.HSet(ctx, m.dirUsedSpaceKey(), field, stat.space)
 			pipe.HSet(ctx, m.dirUsedInodesKey(), field, stat.inodes)
@@ -2635,7 +2659,7 @@ func (m *redisMeta) cleanupZeroRef(key string) {
 		if v != 0 {
 			return syscall.EINVAL
 		}
-		_, err = tx.Pipelined(ctx, func(p redis.Pipeliner) error {
+		_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
 			p.HDel(ctx, m.sliceRefs(), key)
 			return nil
 		})
@@ -2834,7 +2858,7 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 				if len(ss) == 0 {
 					return fmt.Errorf("invalid value for delSlices %s: %v", key, buf)
 				}
-				_, e = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+				_, e = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					for _, s := range ss {
 						rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.Id, s.Size), -1))
 					}
@@ -2945,7 +2969,7 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 			}
 		}
 
-		_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.LTrim(ctx, key, int64(len(vals)), -1)
 			pipe.LPush(ctx, key, marshalSlice(pos, id, size, 0, size))
 			for i := skipped; i > 0; i-- {
@@ -3236,7 +3260,7 @@ func (m *redisMeta) scanTrashSlices(ctx Context, scan trashSliceScan) error {
 				return err
 			}
 			if clean {
-				_, err = tx.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					for _, s := range ss {
 						rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.Id, s.Size), -1))
 					}
@@ -3845,7 +3869,7 @@ func (m *redisMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, dept
 	return nil
 }
 
-func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
+func (m *redisMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if e, ok := p.(error); ok {

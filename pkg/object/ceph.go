@@ -208,46 +208,101 @@ func (c *ceph) Head(key string) (Object, error) {
 }
 
 func (c *ceph) ListAll(prefix, marker string, followLink bool) (<-chan Object, error) {
-	var objs = make(chan Object, 1000)
-	err := c.do(func(ctx *rados.IOContext) error {
-		iter, err := ctx.Iter()
-		if err != nil {
-			close(objs)
-			return err
-		}
-		defer iter.Close()
+	ctx, err := c.newContext()
+	if err != nil {
+		return nil, err
+	}
+	iter, err := ctx.Iter()
+	if err != nil {
+		ctx.Destroy()
+		return nil, err
+	}
+	defer iter.Close()
 
-		// FIXME: this will be really slow for many objects
-		keys := make([]string, 0, 1000)
-		for iter.Next() {
-			key := iter.Value()
-			if key <= marker || !strings.HasPrefix(key, prefix) {
-				continue
-			}
-			keys = append(keys, key)
+	// FIXME: this will be really slow for many objects
+	keys := make([]string, 0, 1000)
+	for iter.Next() {
+		key := iter.Value()
+		if key <= marker || !strings.HasPrefix(key, prefix) {
+			continue
 		}
-		// the keys are not ordered, sort them first
-		sort.Strings(keys)
-		// TODO: parallel
-		go func() {
-			defer close(objs)
-			for _, key := range keys {
-				st, err := ctx.Stat(key)
+		keys = append(keys, key)
+	}
+	// the keys are not ordered, sort them first
+	sort.Strings(keys)
+	c.release(ctx)
+
+	var objs = make(chan Object, 1000)
+	var concurrent = 20
+	ms := make([]sync.Mutex, concurrent)
+	conds := make([]*sync.Cond, concurrent)
+	ready := make([]bool, concurrent)
+	results := make([]Object, concurrent)
+	errs := make([]error, concurrent)
+	for j := 0; j < concurrent; j++ {
+		conds[j] = sync.NewCond(&ms[j])
+		if j < len(keys) {
+			go func(j int) {
+				ctx, err := c.newContext()
 				if err != nil {
-					if errors.Is(err, rados.ErrNotFound) {
-						logger.Warnf("Skip non-existent key: %s", key)
-						continue
-					}
-					objs <- nil
-					logger.Errorf("Stat key %s: %s", key, err)
+					logger.Errorf("new context: %s", err)
+					errs[j] = err
 					return
 				}
-				objs <- &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), ""}
+				defer ctx.Destroy()
+				for i := j; i < len(keys); i += concurrent {
+					key := keys[i]
+					st, err := ctx.Stat(key)
+					if err != nil {
+						if errors.Is(err, rados.ErrNotFound) {
+							logger.Debugf("Skip non-existent key: %s", key)
+							results[j] = nil
+						} else {
+							logger.Errorf("Stat key %s: %s", key, err)
+							errs[j] = err
+						}
+					} else {
+						results[j] = &obj{key, int64(st.Size), st.ModTime, strings.HasSuffix(key, "/"), ""}
+					}
+
+					ms[j].Lock()
+					ready[j] = true
+					conds[j].Signal()
+					if errs[j] != nil {
+						ms[j].Unlock()
+						break
+					}
+					for ready[j] {
+						conds[j].Wait()
+					}
+					ms[j].Unlock()
+				}
+			}(j)
+		}
+	}
+	go func() {
+		defer close(objs)
+		for i := range keys {
+			j := i % concurrent
+			ms[j].Lock()
+			for !ready[j] {
+				conds[j].Wait()
 			}
-		}()
-		return nil
-	})
-	return objs, err
+			if errs[j] != nil {
+				objs <- nil
+				ms[j].Unlock()
+				// some goroutines will be leaked, but it's ok
+				// since we won't call ListAll() many times in a process
+				break
+			} else if results[j] != nil {
+				objs <- results[j]
+			}
+			ready[j] = false
+			conds[j].Signal()
+			ms[j].Unlock()
+		}
+	}()
+	return objs, nil
 }
 
 func newCeph(endpoint, cluster, user, token string) (ObjectStorage, error) {

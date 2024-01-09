@@ -58,6 +58,7 @@ jobs:
           fetch-depth: 1
           
       - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
         with: 
           useBeta: true

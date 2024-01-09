@@ -424,7 +424,7 @@ func (s *wSlice) upload(indx int) {
 				logger.Warnf("write %s to disk: %s, upload it directly", stagingPath, err)
 			} else {
 				s.errors <- nil
-				if s.store.conf.UploadDelay == 0 {
+				if s.store.conf.UploadDelay == 0 && s.store.canUpload() {
 					select {
 					case s.store.currentUpload <- true:
 						defer func() { <-s.store.currentUpload }()
@@ -441,7 +441,7 @@ func (s *wSlice) upload(indx int) {
 					}
 				}
 				block.Release()
-				s.store.addDelayedStaging(key, stagingPath, time.Now(), s.store.conf.UploadDelay == 0)
+				s.store.addDelayedStaging(key, stagingPath, time.Now(), false)
 				return
 			}
 		}
@@ -515,6 +515,7 @@ type Config struct {
 	CacheChecksum     string
 	CacheEviction     string
 	CacheScanInterval time.Duration
+	CacheExpire       time.Duration
 	FreeSpace         float32
 	AutoCreate        bool
 	Compress          string
@@ -524,6 +525,7 @@ type Config struct {
 	DownloadLimit     int64 // bytes per second
 	Writeback         bool
 	UploadDelay       time.Duration
+	UploadHours       string
 	HashPrefix        bool
 	BlockSize         int
 	GetTimeout        time.Duration
@@ -543,9 +545,14 @@ func (c *Config) SelfCheck(uuid string) {
 		}
 		c.CacheDir = "memory"
 	}
-	if !c.Writeback && c.UploadDelay > 0 {
+	if !c.Writeback && (c.UploadDelay > 0 || c.UploadHours != "") {
 		logger.Warnf("delayed upload is disabled in non-writeback mode")
 		c.UploadDelay = 0
+		c.UploadHours = ""
+	}
+	if _, _, err := c.parseHours(); err != nil {
+		logger.Warnf("invalid value (%s) for upload-hours: %s", c.UploadHours, err)
+		c.UploadHours = ""
 	}
 	if c.MaxUpload <= 0 {
 		logger.Warnf("max-uploads should be greater than 0, set it to 1")
@@ -572,6 +579,31 @@ func (c *Config) SelfCheck(uuid string) {
 		logger.Warnf("cache-eviction should be one of [2-random, none]")
 		c.CacheEviction = "2-random"
 	}
+	if c.CacheExpire > 0 && c.CacheExpire < time.Second {
+		logger.Warnf("cache-expire it too short, setting it to 1 second")
+		c.CacheExpire = time.Second
+	}
+}
+
+func (c *Config) parseHours() (start, end int, err error) {
+	if c.UploadHours == "" {
+		return
+	}
+	ps := strings.Split(c.UploadHours, ",")
+	if len(ps) != 2 {
+		err = errors.New("unexpected number of fields")
+		return
+	}
+	if start, err = strconv.Atoi(ps[0]); err != nil {
+		return
+	}
+	if end, err = strconv.Atoi(ps[1]); err != nil {
+		return
+	}
+	if start < 0 || start > 23 || end < 0 || end > 23 {
+		err = errors.New("invalid hour number")
+	}
+	return
 }
 
 type cachedStore struct {
@@ -584,6 +616,8 @@ type cachedStore struct {
 	pendingCh     chan *pendingItem
 	pendingKeys   map[string]*pendingItem
 	pendingMutex  sync.Mutex
+	startHour     int
+	endHour       int
 	compressor    compress.Compressor
 	seekable      bool
 	upLimit       *ratelimit.Bucket
@@ -715,6 +749,12 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		store.downLimit = ratelimit.NewBucketWithRate(float64(config.DownloadLimit)*0.85, config.DownloadLimit)
 	}
 	store.initMetrics()
+	if store.conf.CacheDir != "memory" && store.conf.Writeback {
+		store.startHour, store.endHour, _ = config.parseHours()
+		if store.startHour != store.endHour {
+			logger.Infof("background upload at %d:00 ~ %d:00", store.startHour, store.endHour)
+		}
+	}
 	store.bcache = newCacheManager(&config, reg, func(key, fpath string, force bool) bool {
 		if fi, err := os.Stat(fpath); err == nil {
 			return store.addDelayedStaging(key, fpath, fi.ModTime(), force)
@@ -742,9 +782,11 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 		}
 		interval := time.Minute
 		if d := store.conf.UploadDelay; d > 0 {
-			logger.Infof("delay uploading by %s", d)
 			if d < time.Minute {
 				interval = d
+				logger.Warnf("delay uploading by %s (this value is too small, and is not recommended)", d)
+			} else {
+				logger.Infof("delay uploading by %s", d)
 			}
 		}
 		go func() {
@@ -848,6 +890,9 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 		<-store.currentUpload
 	}()
 
+	if !store.canUpload() {
+		return
+	}
 	store.pendingMutex.Lock()
 	item, ok := store.pendingKeys[key]
 	store.pendingMutex.Unlock()
@@ -901,7 +946,7 @@ func (store *cachedStore) addDelayedStaging(key, stagingPath string, added time.
 		logger.Debugf("Key %s is ignored since it's already being uploaded", key)
 		return true
 	}
-	if force || time.Since(added) > store.conf.UploadDelay {
+	if force || store.canUpload() && time.Since(added) > store.conf.UploadDelay {
 		select {
 		case store.pendingCh <- item:
 			item.uploading = true
@@ -919,6 +964,9 @@ func (store *cachedStore) removePending(key string) {
 }
 
 func (store *cachedStore) scanDelayedStaging() {
+	if !store.canUpload() {
+		return
+	}
 	cutoff := time.Now().Add(-store.conf.UploadDelay)
 	store.pendingMutex.Lock()
 	defer store.pendingMutex.Unlock()
@@ -936,6 +984,15 @@ func (store *cachedStore) uploader() {
 	for it := range store.pendingCh {
 		store.uploadStagingFile(it.key, it.fpath)
 	}
+}
+
+func (store *cachedStore) canUpload() bool {
+	if store.startHour == store.endHour {
+		return true
+	}
+	h := time.Now().Hour()
+	return store.startHour < store.endHour && h >= store.startHour && h < store.endHour ||
+		store.startHour > store.endHour && (h >= store.startHour || h < store.endHour)
 }
 
 func (store *cachedStore) NewReader(id uint64, length int) Reader {

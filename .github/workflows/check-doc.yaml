@@ -41,7 +41,7 @@ jobs:
       - name: Lint Markdown files (autocorrect)
         uses: huacnlee/autocorrect-action@main
         with:
-          args: --lint ./docs/
+          args: --lint --no-diff-bg-color ./docs/
       - name: Check broken link (including broken anchor)
         run: |
           npm run check-broken-link

@@ -55,7 +55,7 @@ test_total_inodes(){
     sleep $((HEARTBEAT_INTERVAL+1))
     set +x
     for i in {1001..2000}; do
-        echo $i | tee /jfs/test$i > /dev/null || (echo "df -i /jfs" && exit 1)
+        echo $i | tee /jfs/test$i > /dev/null || (df -i /jfs && ls /jfs/ -l | wc-l  && exit 1)
     done
     set -x
     sleep $VOLUME_QUOTA_FLUSH_INTERVAL
@@ -224,7 +224,7 @@ test_dump_load(){
     mkdir -p /jfs/d
     ./juicefs quota set $META_URL --path /d --inodes 1000 --capacity 1
     sleep $((HEARTBEAT_INTERVAL+1))
-    ./juicefs dump --log-level error $META_URL > dump.json 
+    ./juicefs dump --log-level error $META_URL --fast > dump.json
     umount_jfs /jfs $META_URL
     python3 .github/scripts/flush_meta.py $META_URL
     ./juicefs load $META_URL dump.json

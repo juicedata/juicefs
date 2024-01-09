@@ -23,7 +23,7 @@ JuiceFS uses local "User/UID" and "Group/GID" mappings by default, and when used
 
 You should first create at least one JuiceFS file system to provide storage for components related to the Hadoop ecosystem through the JuiceFS Java SDK. When deploying the Java SDK, specify the metadata engine address of the created file system in the configuration file.
 
-To create a file system, please refer to [JuiceFS Quick Start Guide](../getting-started/README.md).
+To create a file system, please refer to [our quick start](../getting-started/standalone.md).
 
 :::note
 If you want to use JuiceFS in a distributed environment, when creating a file system, please plan the object storage and database to be used reasonably to ensure that they can be accessed by each node in the cluster.
@@ -204,6 +204,7 @@ Please refer to the following table to set the relevant parameters of the JuiceF
 | `juicefs.push-auth`       |               | [Prometheus basic auth](https://prometheus.io/docs/guides/basic-auth) information, format is `<username>:<password>`.                                                       |
 | `juicefs.push-graphite`   |               | [Graphite](https://graphiteapp.org) address, format is `<host>:<port>`.                                                                                                     |
 | `juicefs.push-interval`   | 10            | Metric push interval (in seconds)                                                                                                                                           |
+| `juicefs.push-labels`     |               | Metric labels, format is `key1:value1,key2:value2`.                                    |
 | `juicefs.fast-resolve`    | `true`        | Whether enable faster metadata lookup using Redis Lua script                                                                                                                |
 | `juicefs.no-usage-report` | `false`       | Whether disable usage reporting. JuiceFS only collects anonymous usage data (e.g. version number), no user or any sensitive data will be collected.                         |
 | `juicefs.no-bgjob`        | `false`       | Disable background jobs (clean-up, backup, etc.)                                                                                                                            |

@@ -279,6 +279,8 @@ func extractToken(uri string) (string, string) {
 }
 
 func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, error) {
+	// nolint:staticcheck
+	uri = strings.TrimPrefix(uri, "sftp://")
 	if !strings.Contains(uri, "://") {
 		if isFilePath(uri) {
 			absPath, err := filepath.Abs(uri)
@@ -403,6 +405,9 @@ func doSync(c *cli.Context) error {
 	}
 	config := sync.NewConfigFromCli(c)
 
+	if config.Manager != "" {
+		logger.Debugf("worker process start")
+	}
 	// Windows support `\` and `/` as its separator, Unix only use `/`
 	srcURL := c.Args().Get(0)
 	dstURL := c.Args().Get(1)

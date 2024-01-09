@@ -18,6 +18,7 @@ on:
 
 jobs:
   rediscompile:
+    timeout-minutes: 30
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -26,6 +27,7 @@ jobs:
           fetch-depth: 1
 
       - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
 
       - name: Setup minio

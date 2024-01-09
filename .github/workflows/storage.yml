@@ -23,6 +23,7 @@ on:
 
 jobs:
   storage:
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -56,6 +57,7 @@ jobs:
           fi
 
       - name: Build
+        timeout-minutes: 10
         uses: ./.github/actions/build
         with: 
           target: "$TARGET"

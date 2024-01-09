@@ -40,10 +40,9 @@ import (
 )
 
 const (
-	inodeBatch    = 100
-	sliceIdBatch  = 1000
-	minUpdateTime = time.Millisecond * 10
-	nlocks        = 1024
+	inodeBatch   = 1 << 10
+	sliceIdBatch = 4 << 10
+	nlocks       = 1024
 )
 
 type engine interface {
@@ -1331,6 +1330,9 @@ func (m *baseMeta) nextInode() (Ino, error) {
 }
 
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
+	if _type < TypeFile || _type > TypeSocket {
+		return syscall.EINVAL
+	}
 	if isTrash(parent) {
 		return syscall.EPERM
 	}
@@ -1384,6 +1386,14 @@ func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cuma
 }
 
 func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
+	if len(path) == 0 || len(path) > MaxSymlink {
+		return syscall.EINVAL
+	}
+	for _, c := range path {
+		if c == 0 {
+			return syscall.EINVAL
+		}
+	}
 	// mode of symlink is ignored in POSIX
 	return m.Mknod(ctx, parent, name, TypeSymlink, 0777, 0, 0, path, inode, attr)
 }
@@ -1409,6 +1419,9 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	parent = m.checkRoot(parent)
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
 		return st
+	}
+	if attr.Typ == TypeDirectory {
+		return syscall.EPERM
 	}
 	if m.checkDirQuota(ctx, parent, align4K(attr.Length), 1) {
 		return syscall.EDQUOT
@@ -1445,7 +1458,14 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 		return errno(err)
 	}
 	if len(target) == 0 {
-		return syscall.ENOENT
+		var attr Attr
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+			return st
+		}
+		if attr.Typ != TypeSymlink {
+			return syscall.EINVAL
+		}
+		return syscall.EIO
 	}
 	*path = target
 	if noatime {
@@ -1777,6 +1797,11 @@ func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, f
 		return syscall.EROFS
 	}
 	if name == "" {
+		return syscall.EINVAL
+	}
+	switch flags {
+	case 0, XattrCreate, XattrReplace:
+	default:
 		return syscall.EINVAL
 	}
 

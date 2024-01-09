@@ -217,6 +217,7 @@ func TestFillCache(t *testing.T) {
 	mem, _ := object.CreateStorage("mem", "", "", "", "")
 	conf := defaultConf
 	conf.CacheSize = 10
+	conf.FreeSpace = 0.01
 	_ = os.RemoveAll(conf.CacheDir)
 	store := NewCachedStore(mem, conf, nil)
 	if err := forgetSlice(store, 10, 1024); err != nil {

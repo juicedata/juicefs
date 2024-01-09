@@ -309,6 +309,7 @@ type javaConf struct {
 	PushGateway       string  `json:"pushGateway"`
 	PushInterval      int     `json:"pushInterval"`
 	PushAuth          string  `json:"pushAuth"`
+	PushLabels        string  `json:"pushLabels"`
 	PushGraphite      string  `json:"pushGraphite"`
 }
 
@@ -453,6 +454,19 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 				commonLabels["instance"] = h
 			} else {
 				logger.Warnf("cannot get hostname: %s", err)
+			}
+			if jConf.PushLabels != "" {
+				for _, kv := range strings.Split(jConf.PushLabels, ",") {
+					var splited = strings.Split(kv, ":")
+					if len(splited) != 2 {
+						logger.Errorf("invalid label format: %s", kv)
+						return nil
+					}
+					if utils.StringContains([]string{"mp", "vol_name", "instance"}, splited[0]) {
+						logger.Warnf("overriding reserved label: %s", splited[0])
+					}
+					commonLabels[splited[0]] = splited[1]
+				}
 			}
 			registry := prometheus.NewRegistry()
 			registerer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
@@ -627,6 +641,11 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 			}
 		}
 		logger.Debugf("Update groups of %s to %s", w.user, strings.Join(groups, ","))
+		var buffer bytes.Buffer
+		for _, g := range gids {
+			buffer.WriteString(fmt.Sprintf("\t%v:%v\n", g.name, g.id))
+		}
+		logger.Debugf("Update gids mapping\n %s", buffer.String())
 	}
 	w.m.update(uids, gids, false)
 
@@ -856,15 +875,6 @@ func jfs_removeXattr(pid int, h uintptr, path *C.char, name *C.char) int {
 		return EINVAL
 	}
 	return errno(w.RemoveXattr(w.withPid(pid), C.GoString(path), C.GoString(name)))
-}
-
-//export jfs_symlink
-func jfs_symlink(pid int, h uintptr, target *C.char, link *C.char) int {
-	w := F(h)
-	if w == nil {
-		return EINVAL
-	}
-	return errno(w.Symlink(w.withPid(pid), C.GoString(target), C.GoString(link)))
 }
 
 //export jfs_readlink

@@ -23,7 +23,7 @@ JuiceFS 默认使用本地的「用户／UID」及「用户组／GID」映射，
 
 通过 JuiceFS Java 客户端为 Hadoop 生态提供存储，需要提前创建 JuiceFS 文件系统。部署 Java 客户端时，在配置文件中指定已创建文件系统的元数据引擎地址。
 
-创建文件系统可以参考 [JuiceFS 快速上手指南](../getting-started/README.md)。
+创建文件系统可以参考 [JuiceFS 快速上手指南](../getting-started/installation.md)。
 
 :::note 注意
 如果要在分布式环境中使用 JuiceFS，创建文件系统时，请合理规划要使用的对象存储和数据库，确保它们可以被每个集群节点正常访问。
@@ -204,6 +204,7 @@ make win
 | `juicefs.push-auth`       |              | [Prometheus 基本认证](https://prometheus.io/docs/guides/basic-auth)信息，格式为 `<username>:<password>`。              |
 | `juicefs.push-graphite`   |              | [Graphite](https://graphiteapp.org) 地址，格式为 `<host>:<port>`。                                                 |
 | `juicefs.push-interval`   | 10           | 指标推送的时间间隔，单位为秒。                                                                                             |
+| `juicefs.push-labels`     |              | 指标额外标签，格式为 `key1:value1,key2:value2`。                                                                |
 | `juicefs.fast-resolve`    | `true`       | 是否开启快速元数据查找（通过 Redis Lua 脚本实现）                                                                              |
 | `juicefs.no-usage-report` | `false`      | 是否上报数据。仅上版本号等使用量数据，不包含任何用户信息。                                                                               |
 | `juicefs.block.size`      | `134217728`  | 单位为字节，同 HDFS 的 `dfs.blocksize`，默认 128 MB                                                                    |

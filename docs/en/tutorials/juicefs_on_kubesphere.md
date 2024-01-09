@@ -59,8 +59,7 @@ It's the same after entering the configuration modification page, modify the fol
 
 - namespace: Change to the corresponding project name
 - storageClass.backend:
-  The `backend` part is used to define the backend database and object storage of the file system. You can refer
-  to ["JuiceFS Quick Start Guide"](../getting-started/README.md) for related content.
+  The `backend` part is used to define the backend database and object storage of the file system. Refer to ["Create a File System"](../getting-started/standalone.md#juicefs-format) for related content.
 
 You can also quickly create databases (such as Redis) and object storage (such as MinIO) by KubeSphere's app store. For example, build on the KubeSphere platform Redis: Select "Apps" in the current project, click the "create" button, select "From App Store", select "Redis", and then quickly deploy. The access URL of Redis can be the service name of the deployed application, as follows:
 

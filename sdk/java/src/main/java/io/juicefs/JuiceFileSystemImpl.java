@@ -397,6 +397,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     obj.put("pushGateway", getConf(conf, "push-gateway", ""));
     obj.put("pushInterval", Integer.valueOf(getConf(conf, "push-interval", "10")));
     obj.put("pushAuth", getConf(conf, "push-auth", ""));
+    obj.put("pushLabels", getConf(conf, "push-labels", ""));
     obj.put("pushGraphite", getConf(conf, "push-graphite", ""));
     obj.put("fastResolve", Boolean.valueOf(getConf(conf, "fast-resolve", "true")));
     obj.put("noUsageReport", Boolean.valueOf(getConf(conf, "no-usage-report", "false")));
@@ -455,7 +456,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     return str == null || str.trim().isEmpty();
   }
 
-  private String readFile(String file) {
+  private String readFile(String file) throws IOException {
     Path path = new Path(file);
     URI uri = path.toUri();
     FileSystem fs;
@@ -488,11 +489,11 @@ public class JuiceFileSystemImpl extends FileSystem {
       return res;
     } catch (IOException e) {
       LOG.warn(String.format("read %s failed", file), e);
-      return null;
+      throw e;
     }
   }
 
-  private void updateUidAndGrouping(String uidFile, String groupFile) {
+  private void updateUidAndGrouping(String uidFile, String groupFile) throws IOException {
     String uidstr = null;
     if (uidFile != null && !"".equals(uidFile.trim())) {
       uidstr = readFile(uidFile);

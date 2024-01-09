@@ -159,10 +159,29 @@ func exposeMetrics(c *cli.Context, registerer prometheus.Registerer, registry *p
 	return metricsAddr
 }
 
-func wrapRegister(mp, name string) (prometheus.Registerer, *prometheus.Registry) {
+func wrapRegister(c *cli.Context, mp, name string) (prometheus.Registerer, *prometheus.Registry) {
+	commonLabels := prometheus.Labels{"mp": mp, "vol_name": name}
+	if h, err := os.Hostname(); err == nil {
+		commonLabels["instance"] = h
+	} else {
+		logger.Warnf("cannot get hostname: %s", err)
+	}
+	if c.IsSet("custom-labels") {
+		for _, kv := range strings.Split(c.String("custom-labels"), ",") {
+			splited := strings.Split(kv, ":")
+			if len(splited) != 2 {
+				logger.Fatalf("invalid label format: %s", kv)
+			}
+			if utils.StringContains([]string{"mp", "vol_name", "instance"}, splited[0]) {
+				logger.Warnf("overriding reserved label: %s", splited[0])
+			}
+			commonLabels[splited[0]] = splited[1]
+		}
+	}
 	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
 	registerer := prometheus.WrapRegistererWithPrefix("juicefs_",
-		prometheus.WrapRegistererWith(prometheus.Labels{"mp": mp, "vol_name": name}, registry))
+		prometheus.WrapRegistererWith(commonLabels, registry))
+
 	registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	registerer.MustRegister(collectors.NewGoCollector())
 	return registerer, registry
@@ -369,6 +388,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.Heartbeat = duration(c.String("heartbeat"))
 	conf.MountPoint = mp
 	conf.Subdir = c.String("subdir")
+	conf.SkipDirMtime = duration(c.String("skip-dir-mtime"))
 
 	atimeMode := c.String("atime-mode")
 	if atimeMode != meta.RelAtime && atimeMode != meta.StrictAtime && atimeMode != meta.NoAtime {
@@ -400,6 +420,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		UploadLimit:   c.Int64("upload-limit") * 1e6 / 8,
 		DownloadLimit: c.Int64("download-limit") * 1e6 / 8,
 		UploadDelay:   duration(c.String("upload-delay")),
+		UploadHours:   c.String("upload-hours"),
 
 		CacheDir:          c.String("cache-dir"),
 		CacheSize:         int64(c.Int("cache-size")),
@@ -409,6 +430,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheChecksum:     c.String("verify-cache-checksum"),
 		CacheEviction:     c.String("cache-eviction"),
 		CacheScanInterval: duration(c.String("cache-scan-interval")),
+		CacheExpire:       duration(c.String("cache-expire")),
 		AutoCreate:        true,
 	}
 	if chunkConf.UploadLimit == 0 {
@@ -616,7 +638,7 @@ func mount(c *cli.Context) error {
 	}
 
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
-	registerer, registry := wrapRegister(mp, format.Name)
+	registerer, registry := wrapRegister(c, mp, format.Name)
 
 	blob, err := NewReloadableStorage(format, metaCli, updateFormat(c))
 	if err != nil {

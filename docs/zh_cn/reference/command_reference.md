@@ -156,7 +156,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 
 |项 | 说明|
 |-|-|
-|`--storage=file`|对象存储类型，例如 `s3`、`gcs`、`oss`、`cos`。默认为 `file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
+|`--storage=file`|对象存储类型，例如 `s3`、`gs`、`oss`、`cos`。默认为 `file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
 |`--bucket=path`|存储数据的桶路径（默认：`$HOME/.juicefs/local` 或 `/var/jfs`）。|
 |`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
@@ -215,7 +215,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 
 |项 | 说明|
 |-|-|
-|`--storage=file` <VersionAdd>1.1</VersionAdd>|对象存储类型，例如 `s3`、`gcs`、`oss`、`cos`。默认为 `file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
+|`--storage=file` <VersionAdd>1.1</VersionAdd>|对象存储类型，例如 `s3`、`gs`、`oss`、`cos`。默认为 `file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型。|
 |`--bucket=path`|存储数据的桶路径（默认：`$HOME/.juicefs/local` 或 `/var/jfs`）。|
 |`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
@@ -632,7 +632,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |`--read-only`|启用只读模式挂载。|
 |`--no-bgjob`|禁用后台任务，默认为 false，也就是说客户端会默认运行后台任务。后台任务包含：<br/><ul><li>清理回收站中过期的文件（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupDeletedFiles` 和 `cleanupTrash`）</li><li>清理引用计数为 0 的 Slice（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `cleanupSlices`）</li><li>清理过期的客户端会话（在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/base.go) 中搜索 `CleanStaleSessions`）</li></ul>特别地，与[企业版](https://juicefs.com/docs/zh/cloud/guide/background-job)不同，社区版碎片合并（Compaction）不受该选项的影响，而是随着文件读写操作，自动判断是否需要合并，然后异步执行（以 Redis 为例，在 [`pkg/meta/base.go`](https://github.com/juicedata/juicefs/blob/main/pkg/meta/redis.go) 中搜索 `compactChunk`）|
 |`--atime-mode=noatime` <VersionAdd>1.1</VersionAdd>|控制如何更新 atime（文件最后被访问的时间）。支持以下模式：<br/><ul><li>`noatime`（默认）：仅在文件创建和主动调用 `SetAttr` 时设置，平时访问与修改文件不影响 atime 值。考虑到更新 atime 需要运行额外的事务，对性能有影响，因此默认关闭。</li><li>`relatime`：仅在 mtime（文件内容修改时间）或 ctime（文件元数据修改时间）比 atime 新，或者 atime 超过 24 小时没有更新时进行更新。</li><li>`strictatime`：持续更新 atime</li></ul>|
-|`--skip-dir-nlink value` <VersionAdd>1.1</VersionAdd>|跳过更新目录 nlink 前的重试次数 (仅用于 TKV, 0 代表不重试) (默认：20)|
+|`--skip-dir-nlink value` <VersionAdd>1.1</VersionAdd>|跳过更新目录 nlink 前的重试次数 (仅用于 TKV, 0 代表永不跳过) (默认：20)|
 
 #### 元数据缓存参数 {#mount-metadata-cache-options}
 
@@ -650,7 +650,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 
 |项 | 说明|
 |-|-|
-|`--storage=file`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`"file"`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
+|`--storage=file`|对象存储类型 (例如 `s3`、`gs`、`oss`、`cos`) (默认：`"file"`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
 |`--bucket=value`|为当前挂载点指定访问对象存储的 Endpoint。|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd>|当前客户端写入数据的存储类型|
 |`--get-timeout=60`|下载一个对象的超时时间；单位为秒 (默认：60)|
@@ -683,6 +683,7 @@ juicefs mount redis://localhost /mnt/jfs --backup-meta 0
 |项 | 说明|
 |-|-|
 |`--metrics=127.0.0.1:9567`|监控数据导出地址，默认为 `127.0.0.1:9567`。|
+|`--custom-labels`|监控指标自定义标签，格式为 `key1:value1,key2:value2` (默认："")|
 |`--consul=127.0.0.1:8500`|Consul 注册中心地址，默认为 `127.0.0.1:8500`。|
 |`--no-usage-report`|不发送使用量信息 (默认：false)|
 
@@ -804,7 +805,7 @@ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3 http
 
 |项 | 说明|
 |-|-|
-|`--storage=file`|对象存储类型 (例如 `s3`、`gcs`、`oss`、`cos`) (默认：`file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
+|`--storage=file`|对象存储类型 (例如 `s3`、`gs`、`oss`、`cos`) (默认：`file`，参考[文档](../reference/how_to_set_up_object_storage.md#supported-object-storage)查看所有支持的对象存储类型)|
 |`--access-key=value`|对象存储的 Access Key，也可通过环境变量 `ACCESS_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--secret-key=value`|对象存储的 Secret Key，也可通过环境变量 `SECRET_KEY` 设置。查看[如何设置对象存储](../reference/how_to_set_up_object_storage.md#aksk)以了解更多。|
 |`--block-size=4096`|每个 IO 块的大小（以 KiB 为单位）（默认值：4096）|

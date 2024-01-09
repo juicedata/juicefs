@@ -394,7 +394,7 @@ func (j *juice) Truncate(path string, size int64, fh uint64) (e int) {
 		e = -fuse.EBADF
 		return
 	}
-	e = -int(j.vfs.Truncate(ctx, ino, size, 1, nil))
+	e = -int(j.vfs.Truncate(ctx, ino, size, 0, nil))
 	return
 }
 

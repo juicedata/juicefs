@@ -21,6 +21,7 @@ import (
 	"path"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -98,7 +99,7 @@ func storageFlags() []cli.Flag {
 	return addCategories("DATA STORAGE", []cli.Flag{
 		&cli.StringFlag{
 			Name:  "storage",
-			Usage: "customized storage type (e.g. s3, gcs, oss, cos) to access object store",
+			Usage: "customized storage type (e.g. s3, gs, oss, cos) to access object store",
 		},
 		&cli.StringFlag{
 			Name:  "bucket",
@@ -175,12 +176,16 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:  "writeback",
-			Usage: "upload objects in background",
+			Usage: "upload blocks in background",
 		},
 		&cli.StringFlag{
 			Name:  "upload-delay",
 			Value: "0",
-			Usage: "delayed duration (in seconds) for uploading objects",
+			Usage: "delayed duration (in seconds) for uploading blocks",
+		},
+		&cli.StringFlag{
+			Name:  "upload-hours",
+			Usage: "(start,end) hour of a day between which the delayed blocks can be uploaded",
 		},
 		&cli.StringFlag{
 			Name:  "cache-dir",
@@ -221,6 +226,10 @@ func dataCacheFlags() []cli.Flag {
 			Value: "3600",
 			Usage: "interval (in seconds) to scan cache-dir to rebuild in-memory index",
 		},
+		&cli.StringFlag{
+			Name:  "cache-expire",
+			Usage: "cached blocks not accessed for longer than this option will be automatically evicted (0 means never)",
+		},
 	})
 }
 
@@ -258,6 +267,11 @@ func metaFlags() []cli.Flag {
 			Value: 20,
 			Usage: "number of retries after which the update of directory nlink will be skipped (used for tkv only, 0 means never)",
 		},
+		&cli.StringFlag{
+			Name:  "skip-dir-mtime",
+			Value: "100ms",
+			Usage: "skip updating attribute of a directory if the mtime difference is smaller than this value",
+		},
 	})
 }
 
@@ -276,6 +290,10 @@ func shareInfoFlags() []cli.Flag {
 			Name:  "metrics",
 			Value: "127.0.0.1:9567",
 			Usage: "address to export metrics",
+		},
+		&cli.StringFlag{
+			Name:  "custom-labels",
+			Usage: "custom labels for metrics",
 		},
 		&cli.StringFlag{
 			Name:  "consul",
@@ -328,11 +346,24 @@ func expandFlags(compoundFlags ...[]cli.Flag) []cli.Flag {
 }
 
 func duration(s string) time.Duration {
-	if v, err := strconv.ParseInt(s, 10, 64); err == nil {
+	v, err := strconv.Atoi(s)
+	if err == nil {
 		return time.Second * time.Duration(v)
 	}
-	if v, err := time.ParseDuration(s); err == nil {
-		return v
+
+	err = nil
+	var d time.Duration
+	p := strings.Index(s, "d")
+	if p >= 0 {
+		v, err = strconv.Atoi(s[:p])
 	}
-	return 0
+	if err == nil {
+		d, err = time.ParseDuration(s[p+1:])
+	}
+
+	if err != nil {
+		logger.Warnf("Invalid duration value: %s, setting it to 0", s)
+		return 0
+	}
+	return d + time.Hour*time.Duration(v*24)
 }

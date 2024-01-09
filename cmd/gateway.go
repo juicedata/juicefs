@@ -38,7 +38,6 @@ import (
 
 	mcli "github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/pkg/auth"
 )
 
 func cmdGateway() *cli.Command {
@@ -73,6 +72,10 @@ func cmdGateway() *cli.Command {
 			Name:  "umask",
 			Value: "022",
 			Usage: "umask for new files and directories in octal",
+		},
+		&cli.BoolFlag{
+			Name:  "object-tag",
+			Usage: "enable object tagging api",
 		},
 	}
 
@@ -114,10 +117,30 @@ func gateway(c *cli.Context) error {
 		logger.Fatalf("MINIO_ROOT_PASSWORD should be specified as an environment variable with at least 8 characters")
 	}
 
-	address := c.Args().Get(1)
-	gw = &GateWay{c}
+	metaAddr := c.Args().Get(0)
+	listenAddr := c.Args().Get(1)
+	conf, jfs := initForSvc(c, "s3gateway", metaAddr)
 
-	args := []string{"gateway", "--address", address, "--anonymous"}
+	umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
+	if err != nil {
+		logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
+	}
+
+	jfsGateway, err = jfsgateway.NewJFSGateway(
+		jfs,
+		conf,
+		&jfsgateway.Config{
+			MultiBucket: c.Bool("multi-buckets"),
+			KeepEtag:    c.Bool("keep-etag"),
+			Umask:       uint16(umask),
+			ObjTag:      c.Bool("object-tag"),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	args := []string{"server", "--address", listenAddr, "--anonymous"}
 	if c.Bool("no-banner") {
 		args = append(args, "--quiet")
 	}
@@ -146,44 +169,11 @@ func gateway(c *cli.Context) error {
 	return app.Run(args)
 }
 
-var gw *GateWay
+var jfsGateway minio.ObjectLayer
 
 func gateway2(ctx *mcli.Context) error {
-	minio.StartGateway(ctx, gw)
+	minio.ServerMainForJFS(ctx, jfsGateway)
 	return nil
-}
-
-type GateWay struct {
-	ctx *cli.Context
-}
-
-func (g *GateWay) Name() string {
-	return "JuiceFS"
-}
-
-func (g *GateWay) Production() bool {
-	return true
-}
-
-func (g *GateWay) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
-	c := g.ctx
-	addr := c.Args().Get(0)
-	conf, jfs := initForSvc(c, "s3gateway", addr)
-
-	umask, err := strconv.ParseUint(c.String("umask"), 8, 16)
-	if err != nil {
-		logger.Fatalf("invalid umask %s: %s", c.String("umask"), err)
-	}
-
-	return jfsgateway.NewJFSGateway(
-		jfs,
-		conf,
-		&jfsgateway.Config{
-			MultiBucket: c.Bool("multi-buckets"),
-			KeepEtag:    c.Bool("keep-etag"),
-			Umask:       uint16(umask),
-		},
-	)
 }
 
 func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.FileSystem) {
@@ -204,7 +194,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	if st := metaCli.Chroot(meta.Background, metaConf.Subdir); st != 0 {
 		logger.Fatalf("Chroot to %s: %s", metaConf.Subdir, st)
 	}
-	registerer, registry := wrapRegister(mp, format.Name)
+	registerer, registry := wrapRegister(c, mp, format.Name)
 
 	blob, err := NewReloadableStorage(format, metaCli, updateFormat(c))
 	if err != nil {

@@ -20,6 +20,7 @@ on:
     - cron:  '0 0 * * *'
 jobs:
   misc-test:
+    timeout-minutes: 60
     runs-on: ubuntu-20.04
     services:
       redis:
@@ -50,6 +51,7 @@ jobs:
                     minio/minio server /data     
 
       - name: Build 
+        timeout-minutes: 10
         uses: ./.github/actions/build
 
       - name: Install tool

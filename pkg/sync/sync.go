@@ -405,6 +405,14 @@ SINGLE:
 	var in io.ReadCloser
 	var err error
 	if size == 0 {
+		if object.IsFileSystem(src) {
+			// for check permissions
+			r, err := src.Get(key, 0, -1)
+			if err != nil {
+				return err
+			}
+			_ = r.Close()
+		}
 		in = io.NopCloser(bytes.NewReader(nil))
 	} else {
 		in, err = src.Get(key, 0, size)
@@ -418,11 +426,17 @@ SINGLE:
 		}
 	}
 	defer in.Close()
+	return dst.Put(key, &withProgress{in})
+}
 
-	if err = dst.Put(key, in); err == nil {
-		copiedBytes.IncrInt64(size)
-	}
-	return err
+type withProgress struct {
+	r io.Reader
+}
+
+func (w *withProgress) Read(b []byte) (int, error) {
+	n, err := w.r.Read(b)
+	copiedBytes.IncrInt64(int64(n))
+	return n, err
 }
 
 func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, upload *object.MultipartUpload) error {
@@ -1130,6 +1144,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		logger.Info(msg)
 	} else {
 		sendStats(config.Manager)
+		logger.Debugf("This worker process has already completed its task")
 	}
 	if failed != nil {
 		if n := failed.Current(); n > 0 {

@@ -698,15 +698,6 @@ func TestJSS(t *testing.T) { //skip mutate
 	testStorage(t, jss)
 }
 
-func TestSpeedy(t *testing.T) { //skip mutate
-	if os.Getenv("SPEEDY_ACCESS_KEY") == "" {
-		t.SkipNow()
-	}
-	cos, _ := newSpeedy(os.Getenv("SPEEDY_ENDPOINT"),
-		os.Getenv("SPEEDY_ACCESS_KEY"), os.Getenv("SPEEDY_SECRET_KEY"), "")
-	testStorage(t, cos)
-}
-
 func TestB2(t *testing.T) { //skip mutate
 	if os.Getenv("B2_ACCOUNT_ID") == "" {
 		t.SkipNow()
@@ -1023,6 +1014,17 @@ func TestTOS(t *testing.T) { //skip mutate
 		t.Fatalf("create: %s", err)
 	}
 	testStorage(t, tos)
+}
+
+func TestDragonfly(t *testing.T) { //skip mutate
+	if os.Getenv("DRAGONFLY_ENDPOINT") == "" {
+		t.SkipNow()
+	}
+	dragonfly, err := newDragonfly(os.Getenv("DRAGONFLY_ENDPOINT"), "", "", "")
+	if err != nil {
+		t.Fatalf("create: %s", err)
+	}
+	testStorage(t, dragonfly)
 }
 
 func TestMain(m *testing.M) {

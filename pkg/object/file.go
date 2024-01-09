@@ -18,7 +18,6 @@ package object
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"io/fs"
 	"math/rand"
@@ -137,7 +136,7 @@ func (d *filestore) Get(key string, off, limit int64) (io.ReadCloser, error) {
 	return f, nil
 }
 
-func (d *filestore) Put(key string, in io.Reader) error {
+func (d *filestore) Put(key string, in io.Reader) (err error) {
 	p := d.path(key)
 
 	if strings.HasSuffix(key, dirSuffix) || key == "" && strings.HasSuffix(d.root, dirSuffix) {
@@ -148,7 +147,16 @@ func (d *filestore) Put(key string, in io.Reader) error {
 	if PutInplace {
 		tmp = p
 	} else {
-		tmp = filepath.Join(filepath.Dir(p), "."+filepath.Base(p)+".tmp"+strconv.Itoa(rand.Int()))
+		name := filepath.Base(p)
+		if len(name) > 200 {
+			name = name[:200]
+		}
+		tmp = filepath.Join(filepath.Dir(p), "."+name+".tmp"+strconv.Itoa(rand.Int()))
+		defer func() {
+			if err != nil {
+				_ = os.Remove(tmp)
+			}
+		}()
 	}
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil && os.IsNotExist(err) {
@@ -159,13 +167,6 @@ func (d *filestore) Put(key string, in io.Reader) error {
 	}
 	if err != nil {
 		return err
-	}
-	if !PutInplace {
-		defer func() {
-			if err != nil {
-				_ = os.Remove(tmp)
-			}
-		}()
 	}
 
 	if TryCFR {
@@ -337,18 +338,6 @@ func newDisk(root, accesskey, secretkey, token string) (ObjectStorage, error) {
 	// For Windows, the path looks like /C:/a/b/c/
 	if runtime.GOOS == "windows" {
 		root = strings.TrimPrefix(root, "/")
-	}
-	if strings.HasSuffix(root, dirSuffix) {
-		logger.Debugf("Ensure directory %s", root)
-		if err := os.MkdirAll(root, 0777); err != nil {
-			return nil, fmt.Errorf("Creating directory %s failed: %q", root, err)
-		}
-	} else {
-		dir := filepath.Dir(root)
-		logger.Debugf("Ensure directory %s", dir)
-		if err := os.MkdirAll(dir, 0777); err != nil {
-			return nil, fmt.Errorf("Creating directory %s failed: %q", dir, err)
-		}
 	}
 	return &filestore{root: root}, nil
 }

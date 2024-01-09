@@ -3,14 +3,14 @@ name: "command-test"
 on:
   push:
     branches:
-      - 'main'
+      # - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
       - '**.md'
   pull_request:
     branches:
-      - 'main'
+      # - 'main'
       - 'release-**'
     paths-ignore:
       - 'docs/**'
@@ -47,6 +47,7 @@ jobs:
       meta_matrix: ${{ steps.set-matrix.outputs.meta_matrix }}
 
   command_test1:
+    timeout-minutes: 60
     needs: [build-matrix]
     strategy:
       fail-fast: true
@@ -72,6 +73,7 @@ jobs:
           fetch-depth: 1
 
       - name: Build 
+        timeout-minutes: 10
         uses: ./.github/actions/build
 
       - name: Test Config

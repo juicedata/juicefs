@@ -156,7 +156,7 @@ juicefs format sqlite3://myjfs.db myjfs --trash-days=0
 
 |Items|Description|
 |-|-|
-|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `file`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
+|`--storage=file`|Object storage type (e.g. `s3`, `gs`, `oss`, `cos`) (default: `file`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
 |`--bucket=/var/jfs`|A bucket URL to store data (default: `$HOME/.juicefs/local` or `/var/jfs`)|
 |`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
 |`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
@@ -215,7 +215,7 @@ juicefs config redis://localhost --min-client-version 1.0.0 --max-client-version
 
 |Items|Description|
 |-|-|
-|`--storage=file` <VersionAdd>1.1</VersionAdd> |Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
+|`--storage=file` <VersionAdd>1.1</VersionAdd> |Object storage type (e.g. `s3`, `gs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
 |`--bucket=/var/jfs`|A bucket URL to store data (default: `$HOME/.juicefs/local` or `/var/jfs`)|
 |`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
 |`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
@@ -650,7 +650,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 
 |Items|Description|
 |-|-|
-|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
+|`--storage=file`|Object storage type (e.g. `s3`, `gs`, `oss`, `cos`) (default: `"file"`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types).|
 |`--storage-class value` <VersionAdd>1.1</VersionAdd> |the storage class for data written by current client|
 |`--bucket=value`|customized endpoint to access object storage|
 |`--get-timeout=60`|the max number of seconds to download an object (default: 60)|
@@ -683,6 +683,7 @@ For metadata cache description and usage, refer to [Kernel metadata cache](../gu
 ||Items|Description|
 |-|-|
 |`--metrics=127.0.0.1:9567`|address to export metrics (default: `127.0.0.1:9567`)|
+|`--custom-labels`|custom labels for metrics, format: `key1:value1,key2:value2` (default: "")|
 |`--consul=127.0.0.1:8500`|Consul address to register (default: `127.0.0.1:8500`)|
 |`--no-usage-report`|do not send usage report (default: false)|
 
@@ -805,7 +806,7 @@ ACCESS_KEY=myAccessKey SECRET_KEY=mySecretKey juicefs objbench --storage=s3 http
 
 |Items|Description|
 |-|-|
-|`--storage=file`|Object storage type (e.g. `s3`, `gcs`, `oss`, `cos`) (default: `file`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
+|`--storage=file`|Object storage type (e.g. `s3`, `gs`, `oss`, `cos`) (default: `file`, refer to [documentation](../reference/how_to_set_up_object_storage.md#supported-object-storage) for all supported object storage types)|
 |`--access-key=value`|Access Key for object storage (can also be set via the environment variable `ACCESS_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
 |`--secret-key value`|Secret Key for object storage (can also be set via the environment variable `SECRET_KEY`), see [How to Set Up Object Storage](../reference/how_to_set_up_object_storage.md#aksk) for more.|
 |`--block-size=4096`|size of each IO block in KiB (default: 4096)|

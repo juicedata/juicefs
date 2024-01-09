@@ -732,6 +732,89 @@ function test_multipart_upload() {
         fi
     fi
 
+
+    for key in "afile" "bfile" "bfile" "documents/report1.pdf" "documents/report2.pdf" "ebook" "photos/2021/a2.png" "photos/2021/a3.png" "photos/2022/a4.png"
+    do
+      if [ $rv -eq 0 ]; then
+        # create multipart
+        function="${AWS} s3api create-multipart-upload --bucket ${bucket_name} --key ${key}"
+        test_function=${function}
+        out=$($function)
+        rv=$?
+        upload_id=$(echo "$out" | jq -r .UploadId)
+      fi
+    done
+
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api list-multipart-uploads --bucket ${bucket_name}"
+      test_function=${function}
+      out=$($function)
+      rv=$?
+      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
+      if [ $keys != "afilebfilebfiledocuments/report1.pdfdocuments/report2.pdfebookphotos/2021/a2.pngphotos/2021/a3.pngphotos/2022/a4.png" ]; then
+       rv=1
+       out="list-multipart-uploads failed"
+      fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api list-multipart-uploads --bucket ${bucket_name} --key-marker bfile"
+      test_function=${function}
+      out=$($function)
+      rv=$?
+      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
+      if [ $keys != "bfilebfiledocuments/report1.pdfdocuments/report2.pdfebookphotos/2021/a2.pngphotos/2021/a3.pngphotos/2022/a4.png" ]; then
+       rv=1
+       out="list-multipart-upload failed"
+      fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api list-multipart-uploads --bucket ${bucket_name} --key-marker bfile --delimiter /"
+      test_function=${function}
+      out=$($function)
+      rv=$?
+      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
+      if [ $keys != "afilebfilebfileebook" ]; then
+       rv=1
+       out="list-multipart-uploads failed"
+      fi
+      keys=$(echo "$out" | jq 'foreach .CommonPrefixes[] as $CommonPrefix (null; . + $CommonPrefix.Prefix)')
+      if [ $keys != "documents/photos/" ]; then
+       rv=1
+       out="list-multipart-uploads failed"
+      fi
+    fi
+
+     if [ $rv -eq 0 ]; then
+        function="${AWS} s3api list-multipart-uploads --bucket ${bucket_name} --delimiter /  --max-upload 5"
+        test_function=${function}
+        out=$($function)
+        rv=$?
+        keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
+        if [ $keys != "afilebfilebfileebook" ]; then
+         rv=1
+         out="list-multipart-uploads failed"
+        fi
+        keys=$(echo "$out" | jq -r '.CommonPrefixes[0].Prefix')
+        if [ $keys != "documents/" ]; then
+         rv=1
+         out="list-multipart-uploads failed"
+        fi
+     fi
+
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api list-multipart-uploads --bucket ${bucket_name} --prefix documents/"
+      test_function=${function}
+      out=$($function)
+      rv=$?
+      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
+        if [ $keys != "documents/report1.pdfdocuments/report2.pdf" ]; then
+         rv=1
+         out="list-multipart-upload failed"
+        fi
+    fi
+
     if [ $rv -eq 0 ]; then
         function="delete_bucket"
         out=$(delete_bucket "$bucket_name")
@@ -1834,7 +1917,207 @@ function test_get_object_error(){
     return $rv
 }
 
+function test_object_tagging(){
+    # log start time
+    start_time=$(get_time)
+    function="make_bucket"
+    bucket_name=$(make_bucket)
+    rv=$?
 
+    # put object with object tagging
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /datafile-1-kB --tagging 'TagSet=[{Key=k1,Value=v1},{Key=k2,Value=v2}]'"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # check object tagging
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api get-object-tagging  --bucket ${bucket_name} --key /datafile-1-kB"
+      out=$($function 2>&1)
+      rv=$?
+    fi
+    if [ $rv -eq 0 ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
+      if [ "$tagSet" != '[{"Key":"'\''TagSet","Value":"[{Key=k1,Value=v1},{Key=k2,Value=v2}]'\''"}]' ]; then
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+      fi
+    fi
+
+    # overwrite object tagging
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /datafile-1-kB --tagging 'TagSet=[{Key=key1,Value=value1},{Key=key2,Value=value2}]'"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # check object tagging
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api get-object-tagging  --bucket ${bucket_name} --key /datafile-1-kB"
+      out=$($function 2>&1)
+      rv=$?
+    fi
+    if [ $rv -eq 0 ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
+      if [ "$tagSet" != '[{"Key":"'\''TagSet","Value":"[{Key=key1,Value=value1},{Key=key2,Value=value2}]'\''"}]' ]; then
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+      fi
+    fi
+
+    # delete object tagging
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api delete-object-tagging  --bucket ${bucket_name} --key /datafile-1-kB"
+      out=$($function 2>&1)
+      rv=$?
+    fi
+    # check object tagging
+    if [ $rv -eq 0 ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
+      if [ "$tagSet" != '' ]; then
+        echo aaaa
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+      fi
+    fi
+
+    # create multipart upload with object tagging
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api create-multipart-upload  --bucket ${bucket_name} --key /datafile-1-kB --tagging 'TagSet=[{Key=k1,Value=v1},{Key=k2,Value=v2}]'"
+      out=$($function)
+      rv=$?
+      upload_id=$(echo "$out" | jq -r .UploadId)
+    fi
+    # upload part
+    if [ $rv -eq 0 ]; then
+        # Capture etag for part-number 1
+        function="${AWS} s3api upload-part --bucket ${bucket_name} --key /datafile-1-kB --body ${MINT_DATA_DIR}/datafile-5243880-b --upload-id ${upload_id} --part-number 1"
+        out=$($function)
+        rv=$?
+        etag1=$(echo "$out" | jq -r .ETag)
+    fi
+
+    if [ $rv -eq 0 ]; then
+        # Capture etag for part-number 2
+        function="${AWS} s3api upload-part --bucket ${bucket_name} --key /datafile-1-kB --body ${MINT_DATA_DIR}/datafile-5243880-b --upload-id ${upload_id} --part-number 2"
+        out=$($function)
+        rv=$?
+        etag2=$(echo "$out" | jq -r .ETag)
+        # Create a multipart struct file for completing multipart transaction
+        echo "{
+            \"Parts\": [
+                {
+                    \"ETag\": ${etag1},
+                    \"PartNumber\": 1
+                },
+                {
+                    \"ETag\": ${etag2},
+                    \"PartNumber\": 2
+                }
+            ]
+        }" > /tmp/multipart
+    fi
+
+    # complete multipart upload
+    if [ $rv -eq 0 ]; then
+        # Use saved etags to complete the multipart transaction
+        function="${AWS} s3api complete-multipart-upload --multipart-upload file:///tmp/multipart --bucket ${bucket_name} --key /datafile-1-kB --upload-id ${upload_id}"
+        out=$($function)
+        rv=$?
+        finalETag=$(echo "$out" | jq -r .ETag | sed -e 's/^"//' -e 's/"$//')
+        if [ "${finalETag}" == "" ]; then
+            rv=1
+            out="complete-multipart-upload failed"
+        fi
+    fi
+    # check object tagging
+    if [ $rv -eq 0 ]; then
+          function="${AWS} s3api get-object-tagging  --bucket ${bucket_name} --key /datafile-1-kB"
+          out=$($function 2>&1)
+          rv=$?
+    fi
+    if [ $rv -eq 0 ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
+      if [ "$tagSet" != '[{"Key":"'\''TagSet","Value":"[{Key=k1,Value=v1},{Key=k2,Value=v2}]'\''"}]' ]; then
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+      fi
+    fi
+
+    #  overwrite object
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /datafile-1-kB"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # copy object with tagging-directive COPY
+     if [ $rv -eq 0 ]; then
+         function="${AWS} s3api copy-object --bucket ${bucket_name} --key datafile-1-kB-copy --copy-source ${bucket_name}/datafile-1-kB"
+         out=$($function)
+         rv=$?
+         hash2=$(echo "$out" | jq -r .CopyObjectResult.ETag | sed -e 's/^"//' -e 's/"$//')
+         if [ $rv -eq 0 ] && [ "$HASH_1_KB" != "$hash2" ]; then
+             # Verification failed
+             rv=1
+             out="Hash mismatch expected $HASH_1_KB, got $hash2"
+         fi
+     fi
+
+    # check object tagging
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api get-object-tagging  --bucket ${bucket_name} --key /datafile-1-kB-copy"
+      out=$($function 2>&1)
+      rv=$?
+    fi
+    if [ $rv -eq 0 ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
+      if [ "$tagSet" != '[{"Key":"'\''TagSet","Value":"[{Key=k1,Value=v1},{Key=k2,Value=v2}]'\''"}]' ]; then
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+      fi
+    fi
+
+
+    # copy object with tagging-directive REPLACE
+    if [ $rv -eq 0 ]; then
+       function="${AWS} s3api copy-object --bucket ${bucket_name} --key datafile-1-kB-copy --copy-source ${bucket_name}/datafile-1-kB --tagging "key=value"  --tagging-directive REPLACE"
+       out=$($function)
+       rv=$?
+       hash2=$(echo "$out" | jq -r .CopyObjectResult.ETag | sed -e 's/^"//' -e 's/"$//')
+       if [ $rv -eq 0 ] && [ "$HASH_1_KB" != "$hash2" ]; then
+           # Verification failed
+           rv=1
+           out="Hash mismatch expected $HASH_1_KB, got $hash2"
+       fi
+   fi
+
+    # check object tagging
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api get-object-tagging  --bucket ${bucket_name} --key datafile-1-kB-copy"
+      out=$($function 2>&1)
+      rv=$?
+    fi
+    if [ $rv -eq 0 ]; then
+      tagSet=$(echo "$out" | jq -r .TagSet | jq -c)
+      if [ "$tagSet" != '[{"Key":"key","Value":"value"}]' ]; then
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+      fi
+    fi
+
+    # delete bucket
+    if [ $rv -eq 0 ]; then
+        function="delete_bucket"
+        out=$(delete_bucket "$bucket_name")
+        rv=$?
+    fi
+    return $rv
+}
 # main handler for all the tests.
 main() {
     # Success tests
@@ -1866,6 +2149,7 @@ main() {
     # test_worm_bucket && \
     # test_legal_hold
     test_get_object_error
+    test_object_tagging
     return $?
 }
 

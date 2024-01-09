@@ -5,7 +5,7 @@ sidebar_position: 7
 
 Automated deployment is recommended when JuiceFS Client is to be installed on a large number of hosts.
 
-Below examples only demonstrate the mount process, you should [Create a file system](../getting-started/README.md#juicefs-format) before getting started.
+Below examples only demonstrate the mount process, you should [Create a file system](../getting-started/standalone.md#juicefs-format) before getting started.
 
 ## Ansible
 

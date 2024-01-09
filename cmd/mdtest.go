@@ -198,7 +198,7 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 	if st := m.Chroot(meta.Background, metaConf.Subdir); st != 0 {
 		logger.Fatalf("Chroot to %s: %s", metaConf.Subdir, st)
 	}
-	registerer, registry := wrapRegister(mp, format.Name)
+	registerer, registry := wrapRegister(c, mp, format.Name)
 
 	blob, err := NewReloadableStorage(format, m, updateFormat(c))
 	if err != nil {

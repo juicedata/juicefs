@@ -37,3 +37,8 @@ JuiceFS is designed for massive data storage and can be used as an alternative t
 ## Data privacy
 
 JuiceFS is an open-source software available on [GitHub](https://github.com/juicedata/juicefs). When using JuiceFS to store data, the data is split into chunks according to specific rules and stored in custom object storage or other storage media, and the corresponding metadata is stored in a custom database.
+
+## More info
+
+* **Use case**: For more use cases of similar scenarios, please visit [User Stories](https://juicefs.com/en/blog/user-stories).
+* **Join the community**: Welcome to join [Slack](https://go.juicefs.com/slack) to discuss with JuiceFS users.

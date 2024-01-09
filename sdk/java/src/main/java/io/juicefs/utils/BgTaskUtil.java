@@ -41,18 +41,27 @@ public class BgTaskUtil {
   // use timer to run trash emptier because it will occupy a thread
   private static final List<Timer> timers = new ArrayList<>();
   private static final List<FileSystem> fileSystems = new ArrayList<>();
-  private static Set<String> runningBgTask = new HashSet<>();
+  private static final Set<String> runningBgTask = new HashSet<>();
 
-  public static void startScheduleTask(String name, String type, Runnable task, long initialDelay, long period, TimeUnit unit) {
+  public interface Task {
+    void run() throws Exception;
+  }
+
+  public static void startScheduleTask(String name, String type, Task task, long initialDelay, long period, TimeUnit unit) {
     synchronized (runningBgTask) {
       if (isRunning(name, type)) {
         return;
       }
       threadPool.scheduleAtFixedRate(() -> {
         try {
+          LOG.debug("Background task started for {} {}", name, type);
           task.run();
         } catch (Exception e) {
-          LOG.error("Background task failed", e);
+          LOG.warn("Background task failed for {} {}", name, type, e);
+          synchronized (runningBgTask) {
+            runningBgTask.remove(genKey(name, type));
+          }
+          throw new RuntimeException(e);
         }
       }, initialDelay, period, unit);
       runningBgTask.add(genKey(name, type));
@@ -65,7 +74,7 @@ public class BgTaskUtil {
       if (isRunning(name, type)) {
         return;
       }
-      Timer timer = new Timer(true);
+      Timer timer = new Timer("trash emptier", true);
       timer.schedule(new TimerTask() {
         @Override
         public void run() {

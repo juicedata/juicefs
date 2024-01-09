@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math/rand"
 	"os"
 	"os/user"
 	"path"
@@ -153,7 +154,7 @@ func (n *nfsStore) mkdirAll(p string, perm fs.FileMode) error {
 	return err
 }
 
-func (n *nfsStore) Put(key string, in io.Reader) error {
+func (n *nfsStore) Put(key string, in io.Reader) (err error) {
 	p := n.path(key)
 	if strings.HasSuffix(p, dirSuffix) {
 		return n.mkdirAll(p, 0777)
@@ -162,9 +163,18 @@ func (n *nfsStore) Put(key string, in io.Reader) error {
 	if PutInplace {
 		tmp = p
 	} else {
-		tmp = path.Join(path.Dir(p), "."+path.Base(p)+".tmp")
+		name := path.Base(p)
+		if len(name) > 200 {
+			name = name[:200]
+		}
+		tmp = path.Join(path.Dir(p), fmt.Sprintf(".%s.tmp.%d", name, rand.Int()))
+		defer func() {
+			if err != nil {
+				_ = n.target.Remove(tmp)
+			}
+		}()
 	}
-	_, err := n.target.Create(tmp, 0777)
+	_, err = n.target.Create(tmp, 0777)
 	if os.IsNotExist(err) {
 		_ = n.mkdirAll(path.Dir(p), 0777)
 		_, err = n.target.Create(tmp, 0777)
@@ -181,9 +191,6 @@ func (n *nfsStore) Put(key string, in io.Reader) error {
 		return err
 	}
 
-	if !PutInplace {
-		defer func() { _ = n.target.Remove(tmp) }()
-	}
 	buf := bufPool.Get().(*[]byte)
 	defer bufPool.Put(buf)
 	_, err = io.CopyBuffer(ff, in, *buf)

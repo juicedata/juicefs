@@ -115,7 +115,7 @@ func formatStorageFlags() []cli.Flag {
 		&cli.StringFlag{
 			Name:  "storage",
 			Value: "file",
-			Usage: "object storage type (e.g. s3, gcs, oss, cos)",
+			Usage: "object storage type (e.g. s3, gs, oss, cos)",
 		},
 		&cli.StringFlag{
 			Name:  "bucket",

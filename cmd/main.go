@@ -87,7 +87,11 @@ func Main(args []string) error {
 	}
 
 	if calledViaMount(args) {
-		args = handleSysMountArgs(args)
+		var err error
+		args, err = handleSysMountArgs(args)
+		if err != nil {
+			return err
+		}
 		if len(args) < 1 {
 			args = []string{"mount", "--help"}
 		}
@@ -103,7 +107,7 @@ func calledViaMount(args []string) bool {
 	return strings.HasSuffix(args[0], "/mount.juicefs")
 }
 
-func handleSysMountArgs(args []string) []string {
+func handleSysMountArgs(args []string) ([]string, error) {
 	optionToCmdFlag := map[string]string{
 		"attrcacheto":     "attr-cache",
 		"entrycacheto":    "entry-cache",
@@ -111,15 +115,17 @@ func handleSysMountArgs(args []string) []string {
 	}
 	newArgs := []string{"juicefs", "mount", "-d"}
 	if len(args) < 3 {
-		return nil
+		return nil, nil
 	}
 	mountOptions := args[3:]
 	sysOptions := []string{"_netdev", "rw", "defaults", "remount"}
 	fuseOptions := make([]string, 0, 20)
 	cmdFlagsLookup := make(map[string]bool, 20)
 	for _, f := range append(cmdMount().Flags, globalFlags()...) {
-		if names := f.Names(); len(names) > 0 && len(names[0]) > 1 {
-			_, cmdFlagsLookup[names[0]] = f.(*cli.BoolFlag)
+		for _, name := range f.Names() {
+			if len(name) > 1 {
+				_, cmdFlagsLookup[name] = f.(*cli.BoolFlag)
+			}
 		}
 	}
 
@@ -144,14 +150,17 @@ func handleSysMountArgs(args []string) []string {
 				fields := strings.SplitN(opt, "=", 2)
 				if flagName, ok := optionToCmdFlag[fields[0]]; ok {
 					newArgs = append(newArgs, fmt.Sprintf("--%s=%s", flagName, fields[1]))
-				} else if isBool, ok := cmdFlagsLookup[fields[0]]; ok && !isBool {
+				} else if _, ok := cmdFlagsLookup[fields[0]]; ok {
 					newArgs = append(newArgs, fmt.Sprintf("--%s=%s", fields[0], fields[1]))
 				} else {
 					fuseOptions = append(fuseOptions, opt)
 				}
 			} else if flagName, ok := optionToCmdFlag[opt]; ok {
 				newArgs = append(newArgs, fmt.Sprintf("--%s", flagName))
-			} else if isBool, ok := cmdFlagsLookup[opt]; ok && isBool {
+			} else if isBool, ok := cmdFlagsLookup[opt]; ok {
+				if !isBool {
+					return nil, fmt.Errorf("option %s requires a value", opt)
+				}
 				newArgs = append(newArgs, fmt.Sprintf("--%s", opt))
 				if opt == "debug" {
 					fuseOptions = append(fuseOptions, opt)
@@ -168,7 +177,7 @@ func handleSysMountArgs(args []string) []string {
 	}
 	newArgs = append(newArgs, args[1], args[2])
 	logger.Debug("Parsed mount args: ", strings.Join(newArgs, " "))
-	return newArgs
+	return newArgs, nil
 }
 
 func isFlag(flags []cli.Flag, option string) (bool, bool) {

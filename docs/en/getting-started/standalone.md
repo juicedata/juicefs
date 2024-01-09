@@ -1,11 +1,9 @@
 ---
-sidebar_label: Quick Start (Standalone Mode)
 sidebar_position: 2
-slug: /quick_start_guide
 pagination_next: getting-started/for_distributed
 ---
 
-# Quick Start Guide for Standalone Mode
+# Standalone Mode
 
 The JuiceFS file system is driven by both ["Object Storage"](../reference/how_to_set_up_object_storage.md) and ["Database"](../reference/how_to_set_up_metadata_engine.md). In addition to object storage, it also supports to use local disk, WebDAV and HDFS, etc., as underlying storage. Therefore, you can create a standalone file system using local disks and SQLite database to get a quick overview of how JuiceFS works.
 
@@ -21,7 +19,7 @@ Other operating systems and installation methods, please refer to ["Installation
 
 A help message will return after executing `juicefs` in terminal once the JuiceFS client is successfully installed regardless of operating system.
 
-## Creating a File System {#juicefs-format}
+## Create a File System {#juicefs-format}
 
 ### Basic Concept
 

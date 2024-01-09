@@ -1164,13 +1164,16 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 		if !ok {
 			return syscall.ENOENT
 		}
+		if nodeAttr.Type != TypeSymlink {
+			return syscall.EINVAL
+		}
 		l := symlink{Inode: inode}
 		ok, e = s.Get(&l)
 		if e != nil {
 			return e
 		}
 		if !ok {
-			return syscall.ENOENT
+			return syscall.EIO
 		}
 		m.parseAttr(&nodeAttr, attr)
 		target = l.Target
@@ -1285,7 +1288,7 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				pn.Nlink++
 				updateParent = true
 			}
-			if updateParent || time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= minUpdateTime {
+			if updateParent || time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= m.conf.SkipDirMtime {
 				pn.Mtime = now / 1e3
 				pn.Ctime = now / 1e3
 				updateParent = true
@@ -1426,7 +1429,7 @@ func (m *dbMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, skip
 		defer func() { m.of.InvalidateChunk(e.Inode, invalidateAttrOnly) }()
 
 		var updateParent bool
-		if !isTrash(parent) && time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= minUpdateTime {
+		if !isTrash(parent) && time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= m.conf.SkipDirMtime {
 			pn.Mtime = now / 1e3
 			pn.Ctime = now / 1e3
 			pn.Mtimensec = int16(now % 1e3)
@@ -1696,6 +1699,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			return nil
 		}
+		// TODO: check parentDst is a subdir of source node
+		if se.Inode == parentDst || se.Inode == dpattr.Parent {
+			return syscall.EPERM
+		}
 		var sn = node{Inode: se.Inode}
 		ok, err = s.Get(&sn)
 		if err != nil {
@@ -1810,14 +1817,14 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 				sn.Parent = parentDst
 			}
 		}
-		if supdate || time.Duration(now-spn.Mtime*1e3-int64(spn.Mtimensec)) >= minUpdateTime {
+		if supdate || time.Duration(now-spn.Mtime*1e3-int64(spn.Mtimensec)) >= m.conf.SkipDirMtime {
 			spn.Mtime = now / 1e3
 			spn.Ctime = now / 1e3
 			spn.Mtimensec = int16(now % 1e3)
 			spn.Ctimensec = int16(now % 1e3)
 			supdate = true
 		}
-		if dupdate || time.Duration(now-dpn.Mtime*1e3-int64(dpn.Mtimensec)) >= minUpdateTime {
+		if dupdate || time.Duration(now-dpn.Mtime*1e3-int64(dpn.Mtimensec)) >= m.conf.SkipDirMtime {
 			dpn.Mtime = now / 1e3
 			dpn.Ctime = now / 1e3
 			dpn.Mtimensec = int16(now % 1e3)
@@ -1984,7 +1991,7 @@ func (m *dbMeta) doLink(ctx Context, inode, parent Ino, name string, attr *Attr)
 
 		var updateParent bool
 		now := time.Now().UnixNano()
-		if time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= minUpdateTime {
+		if time.Duration(now-pn.Mtime*1e3-int64(pn.Mtimensec)) >= m.conf.SkipDirMtime {
 			pn.Mtime = now / 1e3
 			pn.Ctime = now / 1e3
 			updateParent = true
@@ -2205,6 +2212,17 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	if err != nil {
 		return errno(err)
 	}
+	if len(c.Slices) == 0 {
+		var attr Attr
+		eno := m.doGetAttr(ctx, inode, &attr)
+		if eno != 0 {
+			return eno
+		}
+		if attr.Typ != TypeFile {
+			return syscall.EPERM
+		}
+		return 0
+	}
 	ss := readSliceBuf(c.Slices)
 	if ss == nil {
 		return syscall.EIO
@@ -2276,7 +2294,8 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		}
 		_, err = s.Cols("length", "mtime", "ctime", "mtimensec", "ctimensec").Update(&nodeAttr, &node{Inode: inode})
 		if err == nil {
-			needCompact = (len(ck.Slices)/sliceBytes)%100 == 99
+			ns := len(ck.Slices) / sliceBytes // number of slices
+			needCompact = ns%100 == 99 || ns > 350
 		}
 		return err
 	}, inode)
@@ -3524,7 +3543,7 @@ func (m *dbMeta) makeSnap(ses *xorm.Session, bar *utils.Bar) error {
 	return nil
 }
 
-func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
+func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret, fast bool) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if e, ok := p.(error); ok {
@@ -3539,7 +3558,7 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 	var tree, trash *DumpedEntry
 	root = m.checkRoot(root)
 	return m.roTxn(func(s *xorm.Session) error {
-		if root == RootInode {
+		if root == RootInode && fast {
 			defer func() { m.snap = nil }()
 			bar := progress.AddCountBar("Snapshot keys", 0)
 			if err = m.makeSnap(s, bar); err != nil {
@@ -3551,6 +3570,11 @@ func (m *dbMeta) DumpMeta(w io.Writer, root Ino, keepSecret bool) (err error) {
 		} else {
 			if tree, err = m.dumpEntry(s, root, TypeDirectory); err != nil {
 				return err
+			}
+			if root == 1 {
+				if trash, err = m.dumpEntry(s, TrashInode, TypeDirectory); err != nil {
+					return err
+				}
 			}
 		}
 		if tree == nil {

@@ -295,6 +295,22 @@ juicefs format \
     pics
 ```
 
+要启用 JuiceFS 到 MySQL 服务器建立连接的超时控制，请传递 `timeout=5s` 参数（时间可自定义）：
+
+```shell
+juicefs format \
+    --storage s3 \
+    ... \
+    "mysql://user:mypassword@(192.168.1.6:3306)/juicefs?timeout=5s" \
+    pics
+```
+
+:::note 注意
+
+设置建立连接超时，在 JuiceFS 和 MySQL 间出现网络故障场景时，能明确控制对 JuiceFS 文件系统进行读写的阻塞时间，从而可控的对网络故障进行响应。
+
+:::
+
 ### 挂载文件系统
 
 ```shell

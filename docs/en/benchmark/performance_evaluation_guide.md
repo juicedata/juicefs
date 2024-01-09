@@ -34,7 +34,7 @@ JuiceFS v1.0+ has Trash enabled by default, which means the benchmark tools will
 
 ### `juicefs bench`
 
-The [`juicefs bench`](../reference/command_reference.md#bench) command can help you do a quick performance test on a standalone machine. With the test results, it is easy to evaluate if your environment configuration and JuiceFS performance are normal. Assuming you have mounted JuiceFS to `/mnt/jfs` on your server, execute the following command for this test (the `-p` option is recommended to set to the number of CPU cores on the server). If you need help with initializing or mounting JuiceFS, please refer to the [Quick Start Guide](../getting-started/README.md))
+The [`juicefs bench`](../reference/command_reference.md#bench) command can help you do a quick performance test on a standalone machine. With the test results, it is easy to evaluate if your environment configuration and JuiceFS performance are normal. Assuming you have mounted JuiceFS to `/mnt/jfs` on your server, execute the following command for this test (the `-p` option is recommended to set to the number of CPU cores on the server). If you need help with initializing or mounting JuiceFS, please refer to [Create a File System](../getting-started/standalone.md#juicefs-format).
 
 ```bash
 juicefs bench /mnt/jfs -p 4
