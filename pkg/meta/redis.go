@@ -1622,6 +1622,11 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			return err
 		}
 		typ, ino := m.parseEntry(buf)
+
+		// todo: check dst parent is subdir of parent
+		if ino == parentDst {
+			return syscall.EPERM
+		}
 		if parentSrc == parentDst && nameSrc == nameDst {
 			if inode != nil {
 				*inode = ino
