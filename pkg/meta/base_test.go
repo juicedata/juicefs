@@ -543,7 +543,7 @@ func testMetaClient(t *testing.T, m Meta) {
 	if st := m.SetXattr(ctx, inode, "a", []byte("v4"), XattrReplace); st != 0 {
 		t.Fatalf("setxattr: %s", st)
 	}
-	if st := m.SetXattr(ctx, inode, "a", []byte("v5"), 5); st != syscall.EINVAL { // unknown flag is ignored
+	if st := m.SetXattr(ctx, inode, "a", []byte("v5"), 5); st != syscall.EINVAL {
 		t.Fatalf("setxattr: %s", st)
 	}
 
