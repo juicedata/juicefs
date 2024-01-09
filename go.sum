@@ -64,6 +64,16 @@ contrib.go.opencensus.io/exporter/ocagent v0.4.12/go.mod h1:450APlNTSR6FrvC3CTRq
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
 git.apache.org/thrift.git v0.13.0 h1:/3bz5WZ+sqYArk7MBBBbDufMxKKOA56/6JO6psDpUDY=
 git.apache.org/thrift.git v0.13.0/go.mod h1:fPE2ZNJGynbRyZ4dJvy6G277gSllfV2HJqblrnkyeyg=
+git.sr.ht/~jamesponddotco/bunnystorage-go v0.3.0 h1:AwBxhQITDhJaJnEzbvgqwyMiscG8fo4PRFJvzz/ZnQg=
+git.sr.ht/~jamesponddotco/bunnystorage-go v0.3.0/go.mod h1:x5kqzC+x93KaVYwBThSuNVFdHmErySaeUd2AwYNMo/0=
+git.sr.ht/~jamesponddotco/httpx-go v0.0.0-20230427215504-7c26a7f028e7 h1:uY+pFjSyrV1q54kai43xcu+HnHGw3AfG14TpYEIuURY=
+git.sr.ht/~jamesponddotco/httpx-go v0.0.0-20230427215504-7c26a7f028e7/go.mod h1:5b9IHkokuXKVcAG5bmf0ej26NVMpV1usjIwrwOyR2SE=
+git.sr.ht/~jamesponddotco/pagecache-go v0.0.0-20230411150210-54b704d32088 h1:LKK7NuFKNBduMQkhg/Q4vSOtDGc8BIKh8gwmsStrIME=
+git.sr.ht/~jamesponddotco/pagecache-go v0.0.0-20230411150210-54b704d32088/go.mod h1:/EPCk+d5n5/uv92yVu9qJ8HhhNMqibbgGeFIUzP3k14=
+git.sr.ht/~jamesponddotco/recache-go v1.0.1 h1:O9S7SdGyMh4mD+Vom0WOkY45EhJJHDRBlvVpzcL16sM=
+git.sr.ht/~jamesponddotco/recache-go v1.0.1/go.mod h1:oF6LkAuwZYQqHe8+G/4hP9ZSNyDjAk6J8qhuy44wXw0=
+git.sr.ht/~jamesponddotco/xstd-go v0.0.0-20230709232003-22489c0e7382 h1:3LjkxT6zVDvIlaOc5riiRAnAKVgpTWHxWgmzpzOuR8A=
+git.sr.ht/~jamesponddotco/xstd-go v0.0.0-20230709232003-22489c0e7382/go.mod h1:0tqdK5/MZYSPxAiwtG4LlVfdQ+iaFoksU/FTIGQ/v/Y=
 gitea.com/davies/xorm v1.0.8-0.20220528043536-552d84d1b34a h1:awR9qREIs6qSnKr/cmSewVwDo74/kQ32x0CDEXUtiB8=
 gitea.com/davies/xorm v1.0.8-0.20220528043536-552d84d1b34a/go.mod h1:uF9EtbhODq5kNWxMbnBEj8hRRZnlcNSz2t2N7HW/+A4=
 gitea.com/xorm/sqlfiddle v0.0.0-20180821085327-62ce714f951a h1:lSA0F4e9A2NcQSqGqTOXqu2aRi/XEQxDCBwM8yJtE6s=
@@ -1023,6 +1033,7 @@ github.com/upyun/go-sdk/v3 v3.0.4 h1:2DCJa/Yi7/3ZybT9UCPATSzvU3wpPPxhXinNlb1Hi8Q
 github.com/upyun/go-sdk/v3 v3.0.4/go.mod h1:P/SnuuwhrIgAVRd/ZpzDWqCsBAf/oHg7UggbAxyZa0E=
 github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijbERA=
 github.com/urfave/cli v1.22.1/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
+github.com/urfave/cli/v2 v2.25.7/go.mod h1:8qnjx1vcq5s2/wpsqoZFndg2CE5tNFyrTvS6SinrnYQ=
 github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a h1:0R4NLDRDZX6JcmhJgXi5E4b8Wg84ihbmUKp/GvSPEzc=
 github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a/go.mod h1:v3UYOV9WzVtRmSR+PDvWpU/qWl4Wa5LApYYX4ZtKbio=
 github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8 h1:EVObHAr8DqpoJCVv6KYTle8FEImKhtkfcZetNqxDoJQ=
