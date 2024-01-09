@@ -1161,6 +1161,9 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, target []byte, err error) {
 	if noatime {
 		target, err = m.rdb.Get(ctx, m.symKey(inode)).Bytes()
+		if err == redis.Nil {
+			err = nil
+		}
 		return
 	}
 
@@ -1171,10 +1174,16 @@ func (m *redisMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int6
 		if e != nil {
 			return e
 		}
-		if rs[0] == nil || rs[1] == nil {
-			return redis.Nil
+		if rs[0] == nil {
+			return syscall.ENOENT
 		}
 		m.parseAttr([]byte(rs[0].(string)), attr)
+		if attr.Typ != TypeSymlink {
+			return syscall.EINVAL
+		}
+		if rs[1] == nil {
+			return syscall.EIO
+		}
 		target = []byte(rs[1].(string))
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
@@ -1682,6 +1691,10 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 		}
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
 			return st
+		}
+		// TODO: check parentDst is a subdir of source node
+		if ino == parentDst || ino == dattr.Parent {
+			return syscall.EPERM
 		}
 		m.parseAttr([]byte(rs[2].(string)), &iattr)
 		if (sattr.Flags&FlagAppend) != 0 || (sattr.Flags&FlagImmutable) != 0 || (dattr.Flags&FlagImmutable) != 0 || (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
@@ -2206,6 +2219,17 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (
 	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, -1).Result()
 	if err != nil {
 		return errno(err)
+	}
+	if len(vals) == 0 {
+		var attr Attr
+		eno := m.doGetAttr(ctx, inode, &attr)
+		if eno != 0 {
+			return eno
+		}
+		if attr.Typ != TypeFile {
+			return syscall.EPERM
+		}
+		return 0
 	}
 	ss := readSlices(vals)
 	if ss == nil {
