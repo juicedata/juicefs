@@ -2888,7 +2888,7 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	m.Unlock()
 
 	var ctx = Background
-	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, 1000).Result()
+	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, int64(maxCompactSlices)).Result()
 	if err != nil {
 		return
 	}

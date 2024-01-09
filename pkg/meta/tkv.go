@@ -2378,12 +2378,8 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if err != nil {
 		return
 	}
-	max := 1000
-	if m.Name() == "etcd" {
-		max = 100
-	}
-	if len(buf) > sliceBytes*max {
-		buf = buf[:sliceBytes*max]
+	if len(buf) > sliceBytes*maxCompactSlices {
+		buf = buf[:sliceBytes*maxCompactSlices]
 	}
 
 	ss := readSliceBuf(buf)
