@@ -226,6 +226,7 @@ func reorderOptions(app *cli.App, args []string) []string {
 	for _, c := range app.Commands {
 		if c.Name == cmdName {
 			cmd = c
+			break
 		}
 	}
 	if cmd == nil {
