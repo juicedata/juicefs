@@ -249,9 +249,9 @@ func (m *dbMeta) Setlk(ctx Context, inode Ino, owner_ uint64, block bool, ltype 
 	return err
 }
 
-func (r *dbMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
+func (m *dbMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
 	var fs []flock
-	if err := r.db.Find(&fs, &flock{Inode: inode}); err != nil {
+	if err := m.db.Find(&fs, &flock{Inode: inode}); err != nil {
 		return nil, nil, err
 	}
 
@@ -261,7 +261,7 @@ func (r *dbMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLock
 	}
 
 	var ps []plock
-	if err := r.db.Find(&ps, &plock{Inode: inode}); err != nil {
+	if err := m.db.Find(&ps, &plock{Inode: inode}); err != nil {
 		return nil, nil, err
 	}
 

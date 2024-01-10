@@ -36,6 +36,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/assert"
 	"xorm.io/xorm"
 )
 
@@ -148,6 +149,8 @@ func testMeta(t *testing.T, m Meta) {
 	testClone(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
+	testGetInodes(t, m)
+	testScanChunks(t, m)
 }
 
 func testMetaClient(t *testing.T, m Meta) {
@@ -2106,6 +2109,243 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 			t.Fatalf("d4Inode  attr: %+v", *dirAttr)
 		}
 	}
+}
+
+func testGetInodes(t *testing.T, m Meta) {
+	mainDir := "testGetInodes"
+	var mainInode Ino
+	if st := m.Mkdir(Background, RootInode, mainDir, 0640, 022, 0, &mainInode, nil); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	defer m.Rmdir(Background, RootInode, mainDir)
+
+	type dir struct {
+		name    string
+		inode   Ino
+		fileCnt int
+		files   []Ino
+		subDirs []*dir
+	}
+
+	testDir := &dir{
+		name: "d",
+		subDirs: []*dir{
+			{
+				name:    "d1",
+				fileCnt: 1,
+				subDirs: []*dir{
+					{
+						name:    "d11",
+						fileCnt: 1,
+					},
+					{
+						name:    "d12",
+						fileCnt: 2,
+					},
+				},
+			},
+			{
+				name:    "d2",
+				fileCnt: 2,
+			},
+			{
+				name:    "d3",
+				fileCnt: 3,
+			},
+		},
+	}
+
+	var buildDir func(d *dir, pIno Ino) Ino
+	buildDir = func(d *dir, pIno Ino) Ino {
+		// self inode
+		if st := m.Mkdir(Background, pIno, d.name, 0640, 022, 0, &d.inode, nil); st != 0 {
+			t.Fatalf("mkdir: %s", st)
+		}
+
+		// file inode
+		for i := 0; i < d.fileCnt; i++ {
+			var fileInode Ino
+			if st := m.Create(Background, d.inode, fmt.Sprintf("f%d.txt", i), 0640, 022, 0, &fileInode, nil); st != 0 {
+				t.Fatalf("create: %s", st)
+			}
+			d.files = append(d.files, fileInode)
+		}
+
+		// dir inode
+		for i, subDir := range d.subDirs {
+			d.subDirs[i].inode = buildDir(subDir, d.inode)
+		}
+
+		return d.inode
+	}
+	buildDir(testDir, mainInode)
+
+	var getInodes func(d *dir, depth int) []Ino
+	getInodes = func(d *dir, depth int) []Ino {
+		if depth == 0 {
+			return nil
+		}
+		var inodes []Ino
+		inodes = append(inodes, d.files...)
+		for _, subDir := range d.subDirs {
+			inodes = append(inodes, getInodes(subDir, depth-1)...)
+		}
+		return inodes
+	}
+
+	type result struct {
+		inodes []Ino
+		err    syscall.Errno
+	}
+	type testCase struct {
+		name  string
+		inode Ino
+		depth int
+		want  result
+	}
+	cases := []testCase{
+		{
+			name:  "case1",
+			inode: testDir.inode,
+			depth: 0,
+			want: result{
+				inodes: getInodes(testDir, 0),
+				err:    0,
+			},
+		},
+		{
+			name:  "case2",
+			inode: testDir.inode,
+			depth: 1,
+			want: result{
+				inodes: getInodes(testDir, 1),
+			},
+		},
+		{
+			name:  "case3",
+			inode: testDir.inode,
+			depth: 10,
+			want: result{
+				inodes: getInodes(testDir, 10),
+			},
+		},
+		{
+			name:  "case4",
+			inode: testDir.subDirs[0].inode,
+			depth: 10,
+			want: result{
+				inodes: getInodes(testDir.subDirs[0], 10),
+			},
+		},
+	}
+
+	var isEqual func([]Ino, []Ino) bool
+	isEqual = func(inodes1, inodes2 []Ino) bool {
+		if len(inodes1) != len(inodes2) {
+			return false
+		}
+		inoMap := make(map[Ino]bool)
+		for _, inode := range inodes1 {
+			inoMap[inode] = true
+		}
+		for _, inode := range inodes2 {
+			if _, ok := inoMap[inode]; !ok {
+				return false
+			}
+		}
+		return true
+	}
+
+	for _, c := range cases {
+		inodes, err := m.getBase().GetFileInodes(Background, c.inode, c.depth)
+		assert.Equal(t, true, isEqual(c.want.inodes, inodes), "case: %v", c.name)
+		assert.Equal(t, c.want.err, err, "case: %v", c.name)
+	}
+}
+
+type testSlice struct {
+	Slice
+	chunkIndex  uint32
+	chunkOffset uint32
+}
+
+func testScanChunks(t *testing.T, m Meta) {
+	mainDir := "testScanChunks"
+	var mainInode Ino
+	if st := m.Mkdir(Background, RootInode, mainDir, 0640, 022, 0, &mainInode, nil); st != 0 {
+		t.Fatalf("mkdir: %s", st)
+	}
+	defer m.Rmdir(Background, RootInode, mainDir)
+
+	cases := [][]testSlice{
+		{
+			{
+				Slice:       Slice{Id: 1, Size: 10, Off: 0, Len: 10},
+				chunkIndex:  0,
+				chunkOffset: 0,
+			},
+		},
+		{
+			{
+				Slice:       Slice{Id: 2, Size: 10, Off: 0, Len: 10},
+				chunkIndex:  0,
+				chunkOffset: 0,
+			},
+			{
+				Slice:       Slice{Id: 3, Size: 10, Off: 0, Len: 10},
+				chunkIndex:  0,
+				chunkOffset: 10,
+			},
+			{
+				Slice:       Slice{Id: 4, Size: 20, Off: 0, Len: 20},
+				chunkIndex:  0,
+				chunkOffset: 20,
+			},
+		},
+	}
+	wants := []map[uint32]int{
+		{0: 1},
+		{0: 3},
+	}
+
+	for i, c := range cases {
+		doTestScanChunks(t, m, i, mainInode, c, wants[i])
+	}
+}
+
+func doTestScanChunks(t *testing.T, m Meta, testCnt int, dirInode Ino, ss []testSlice, wantChunk map[uint32]int) {
+	// create file
+	var fileInode Ino
+	if st := m.Create(Background, dirInode, fmt.Sprintf("%d.txt", testCnt), 0640, 022, 0, &fileInode, nil); st != 0 {
+		t.Fatalf("create: %s", st)
+	}
+	time.Sleep(500 * time.Millisecond)
+
+	for _, s := range ss {
+		if st := m.Write(Background, fileInode, s.chunkIndex, s.chunkOffset, s.Slice, time.Now()); st != 0 {
+			t.Fatalf("write end: %s", st)
+		}
+	}
+
+	var wg sync.WaitGroup
+	chunkChan := make(chan cchunk)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for c := range chunkChan {
+			if wantChunk[c.indx] != c.slices {
+				t.Errorf("slice cnt [inode %v, chunk index %v] not right, expect %d, actual %d", fileInode, c.indx, wantChunk[c.indx], c.slices)
+				return
+			}
+		}
+	}()
+
+	err := m.getBase().en.scanChunks(Background, fileInode, chunkChan)
+	assert.Nil(t, err)
+
+	close(chunkChan)
+	wg.Wait()
 }
 
 func testDirStat(t *testing.T, m Meta) {

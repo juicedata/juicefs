@@ -613,12 +613,12 @@ func (m *redisMeta) detachedNodes() string {
 	return m.prefix + "detachedNodes"
 }
 
-func (r *redisMeta) delSlices() string {
-	return r.prefix + "delSlices"
+func (m *redisMeta) delSlices() string {
+	return m.prefix + "delSlices"
 }
 
-func (r *redisMeta) allSessions() string {
-	return r.prefix + "allSessions"
+func (m *redisMeta) allSessions() string {
+	return m.prefix + "allSessions"
 }
 
 func (m *redisMeta) sessionInfos() string {
@@ -2823,14 +2823,14 @@ func (m *redisMeta) doDeleteFileData_(inode Ino, length uint64, tracking string)
 	_ = m.rdb.ZRem(ctx, m.delfiles(), tracking)
 }
 
-func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
+func (m *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 	ctx := Background
 	start := time.Now()
 	stop := fmt.Errorf("reach limit")
 	var count int
 	var ss []Slice
 	var rs []*redis.IntCmd
-	err := r.hscan(ctx, r.delSlices(), func(keys []string) error {
+	err := m.hscan(ctx, m.delSlices(), func(keys []string) error {
 		for i := 0; i < len(keys); i += 2 {
 			key := keys[i]
 			ps := strings.Split(key, "_")
@@ -2845,34 +2845,34 @@ func (r *redisMeta) doCleanupDelayedSlices(edge int64) (int, error) {
 				continue
 			}
 
-			if err := r.txn(ctx, func(tx *redis.Tx) error {
+			if err := m.txn(ctx, func(tx *redis.Tx) error {
 				ss, rs = ss[:0], rs[:0]
-				val, e := tx.HGet(ctx, r.delSlices(), key).Result()
+				val, e := tx.HGet(ctx, m.delSlices(), key).Result()
 				if e == redis.Nil {
 					return nil
 				} else if e != nil {
 					return e
 				}
 				buf := []byte(val)
-				r.decodeDelayedSlices(buf, &ss)
+				m.decodeDelayedSlices(buf, &ss)
 				if len(ss) == 0 {
 					return fmt.Errorf("invalid value for delSlices %s: %v", key, buf)
 				}
 				_, e = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 					for _, s := range ss {
-						rs = append(rs, pipe.HIncrBy(ctx, r.sliceRefs(), r.sliceKey(s.Id, s.Size), -1))
+						rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.Id, s.Size), -1))
 					}
-					pipe.HDel(ctx, r.delSlices(), key)
+					pipe.HDel(ctx, m.delSlices(), key)
 					return nil
 				})
 				return e
-			}, r.delSlices()); err != nil {
+			}, m.delSlices()); err != nil {
 				logger.Warnf("Cleanup delSlices %s: %s", key, err)
 				continue
 			}
 			for i, s := range ss {
 				if rs[i].Err() == nil && rs[i].Val() < 0 {
-					r.deleteSlice(s.Id, s.Size)
+					m.deleteSlice(s.Id, s.Size)
 					count++
 				}
 			}
@@ -3047,6 +3047,36 @@ func (m *redisMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar)
 				if err == nil && n == 2 {
 					bar.IncrTotal(1)
 					ch <- cchunk{Ino(inode), indx, int(cnt)}
+				}
+			}
+		}
+		return nil
+	})
+}
+
+func (m *redisMeta) scanChunks(ctx Context, inode Ino, ch chan<- cchunk) error {
+	p := m.rdb.Pipeline()
+	return m.scan(ctx, fmt.Sprintf("c%d_*", inode), func(keys []string) error {
+		for _, key := range keys {
+			_ = p.LLen(ctx, key)
+		}
+		cmds, err := p.Exec(ctx)
+		if err != nil {
+			for _, c := range cmds {
+				if c.Err() != nil {
+					logger.Warnf("Scan chunks with command %s: %s", c.String(), c.Err())
+				}
+			}
+			return err
+		}
+		keyFormat := m.prefix + "c" + inode.String() + "_%d"
+		for i, cmd := range cmds {
+			cnt := cmd.(*redis.IntCmd).Val()
+			if cnt > 1 {
+				var index uint32
+				n, err := fmt.Sscanf(keys[i], keyFormat, &index)
+				if err == nil && n == 1 {
+					ch <- cchunk{inode, index, int(cnt)}
 				}
 			}
 		}

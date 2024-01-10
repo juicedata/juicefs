@@ -2286,13 +2286,13 @@ func (m *kvMeta) deleteChunk(inode Ino, indx uint32) error {
 	return nil
 }
 
-func (r *kvMeta) cleanupZeroRef(id uint64, size uint32) {
-	_ = r.txn(func(tx *kvTxn) error {
-		v := tx.incrBy(r.sliceKey(id, size), 0)
+func (m *kvMeta) cleanupZeroRef(id uint64, size uint32) {
+	_ = m.txn(func(tx *kvTxn) error {
+		v := tx.incrBy(m.sliceKey(id, size), 0)
 		if v != 0 {
 			return syscall.EINVAL
 		}
-		tx.delete(r.sliceKey(id, size))
+		tx.delete(m.sliceKey(id, size))
 		return nil
 	})
 }
@@ -2508,6 +2508,19 @@ func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 	return m.client.scan(m.fmtKey("A"), func(k, v []byte) {
 		if len(k) == klen && k[1+8] == 'C' && len(v) > sliceBytes {
 			bar.IncrTotal(1)
+			ch <- cchunk{
+				inode:  m.decodeInode(k[1:9]),
+				indx:   binary.BigEndian.Uint32(k[10:]),
+				slices: len(v) / sliceBytes,
+			}
+		}
+	})
+}
+
+func (m *kvMeta) scanChunks(ctx Context, inode Ino, ch chan<- cchunk) error {
+	klen := 1 + 8 + 1 + 4
+	return m.client.scan(m.fmtKey("A", inode), func(k, v []byte) {
+		if len(k) == klen && k[1+8] == 'C' && len(v) > sliceBytes {
 			ch <- cchunk{
 				inode:  m.decodeInode(k[1:9]),
 				indx:   binary.BigEndian.Uint32(k[10:]),

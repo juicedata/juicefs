@@ -42,11 +42,11 @@ func cmdSummary() *cli.Command {
 		ArgsUsage: "PATH",
 		Description: `
  It is used to show tree summary of target directory.
- 
+
  Examples:
  # Show with path
  $ juicefs summary /mnt/jfs/foo
- 
+
  # Show max depth of 5
  $ juicefs summary --depth 5 /mnt/jfs/foo
 
@@ -67,7 +67,7 @@ func cmdSummary() *cli.Command {
 				Name:    "entries",
 				Aliases: []string{"e"},
 				Value:   10,
-				Usage:   "show top N entries (sort by size)",
+				Usage:   "show top N entries per dir (sort by size)",
 			},
 			&cli.BoolFlag{
 				Name:  "strict",
@@ -186,7 +186,7 @@ func renderTree(results *[][]string, tree *meta.TreeSummary, csv bool) {
 	if csv {
 		size = strconv.FormatUint(tree.Size, 10)
 	} else {
-		size = humanize.IBytes(uint64(tree.Size))
+		size = humanize.IBytes(tree.Size)
 	}
 
 	path := tree.Path

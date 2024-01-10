@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"path"
@@ -452,6 +453,70 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 	default:
 	}
 	return err
+}
+
+// GetFileInodes get all file inodes recursively
+func (m *baseMeta) GetFileInodes(ctx Context, root Ino, maxDepth int) ([]Ino, syscall.Errno) {
+	var attr Attr
+	if st := m.GetAttr(ctx, root, &attr); st != 0 {
+		return nil, st
+	}
+
+	if attr.Typ != TypeDirectory {
+		return []Ino{root}, 0
+	}
+
+	var inodes []Ino
+	inodeMu := sync.Mutex{}
+	concurrent := make(chan struct{}, 50)
+
+	newCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+
+	var dfs func(inode Ino, depth int)
+	dfs = func(inode Ino, depth int) {
+		if depth <= 0 {
+			return
+		}
+
+		var entries []*Entry
+		if err := m.en.doReaddir(ctx, inode, 1, &entries, -1); err != 0 {
+			logger.Errorf("doReaddir inode %d error: %v", inode, err)
+			cancel(err)
+			return
+		}
+
+		var wg sync.WaitGroup
+		for _, e := range entries {
+			currInode := e.Inode
+			if e.Attr.Typ != TypeDirectory {
+				inodeMu.Lock()
+				inodes = append(inodes, currInode)
+				inodeMu.Unlock()
+				continue
+			}
+
+			select {
+			case <-newCtx.Done():
+				return
+			case concurrent <- struct{}{}:
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					dfs(currInode, depth-1)
+					<-concurrent
+				}()
+			}
+		}
+
+		wg.Wait()
+	}
+
+	dfs(root, maxDepth)
+	if newCtx.Err() != nil {
+		return nil, errno(newCtx.Err())
+	}
+	return inodes, 0
 }
 
 func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool,

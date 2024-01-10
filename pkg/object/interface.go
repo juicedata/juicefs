@@ -74,7 +74,7 @@ type Limits struct {
 // ObjectStorage is the interface for object storage.
 // all of these API should be idempotent.
 type ObjectStorage interface {
-	// Description of the object storage.
+	// String Description of the object storage.
 	String() string
 	// Limits of the object storage.
 	Limits() Limits

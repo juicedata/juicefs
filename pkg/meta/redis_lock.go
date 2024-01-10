@@ -29,11 +29,11 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
-	ikey := r.flockKey(inode)
-	lkey := r.ownerKey(owner)
+func (m *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
+	ikey := m.flockKey(inode)
+	lkey := m.ownerKey(owner)
 	if ltype == F_UNLCK {
-		return errno(r.txn(ctx, func(tx *redis.Tx) error {
+		return errno(m.txn(ctx, func(tx *redis.Tx) error {
 			lkeys, err := tx.HKeys(ctx, ikey).Result()
 			if err != nil {
 				return err
@@ -41,7 +41,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.HDel(ctx, ikey, lkey)
 				if len(lkeys) == 1 && lkeys[0] == lkey {
-					pipe.SRem(ctx, r.lockedKey(r.sid), ikey)
+					pipe.SRem(ctx, m.lockedKey(m.sid), ikey)
 				}
 				return nil
 			})
@@ -50,7 +50,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 	}
 	var err error
 	for {
-		err = r.txn(ctx, func(tx *redis.Tx) error {
+		err = m.txn(ctx, func(tx *redis.Tx) error {
 			owners, err := tx.HGetAll(ctx, ikey).Result()
 			if err != nil {
 				return err
@@ -73,7 +73,7 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.HSet(ctx, ikey, lkey, "W")
-				pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
+				pipe.SAdd(ctx, m.lockedKey(m.sid), ikey)
 				return nil
 			})
 			return err
@@ -94,15 +94,15 @@ func (r *redisMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, bl
 	return errno(err)
 }
 
-func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
+func (m *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, start, end *uint64, pid *uint32) syscall.Errno {
 	if *ltype == F_UNLCK {
 		*start = 0
 		*end = 0
 		*pid = 0
 		return 0
 	}
-	lkey := r.ownerKey(owner)
-	owners, err := r.rdb.HGetAll(ctx, r.plockKey(inode)).Result()
+	lkey := m.ownerKey(owner)
+	owners, err := m.rdb.HGetAll(ctx, m.plockKey(inode)).Result()
 	if err != nil {
 		return errno(err)
 	}
@@ -116,7 +116,7 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 				*start = l.Start
 				*end = l.End
 				sid, _ := strconv.Atoi(strings.Split(k, "_")[0])
-				if uint64(sid) == r.sid {
+				if uint64(sid) == m.sid {
 					*pid = l.Pid
 				} else {
 					*pid = 0
@@ -132,13 +132,13 @@ func (r *redisMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, s
 	return 0
 }
 
-func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
-	ikey := r.plockKey(inode)
-	lkey := r.ownerKey(owner)
+func (m *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
+	ikey := m.plockKey(inode)
+	lkey := m.ownerKey(owner)
 	var err error
 	lock := plockRecord{ltype, pid, start, end}
 	for {
-		err = r.txn(ctx, func(tx *redis.Tx) error {
+		err = m.txn(ctx, func(tx *redis.Tx) error {
 			if ltype == F_UNLCK {
 				d, err := tx.HGet(ctx, ikey, lkey).Result()
 				if err != nil && err != redis.Nil {
@@ -160,7 +160,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 					if len(ls) == 0 {
 						pipe.HDel(ctx, ikey, lkey)
 						if len(lkeys) == 1 && lkeys[0] == lkey {
-							pipe.SRem(ctx, r.lockedKey(r.sid), ikey)
+							pipe.SRem(ctx, m.lockedKey(m.sid), ikey)
 						}
 					} else {
 						pipe.HSet(ctx, ikey, lkey, dumpLocks(ls))
@@ -187,7 +187,7 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 			ls = updateLocks(ls, lock)
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.HSet(ctx, ikey, lkey, dumpLocks(ls))
-				pipe.SAdd(ctx, r.lockedKey(r.sid), ikey)
+				pipe.SAdd(ctx, m.lockedKey(m.sid), ikey)
 				return nil
 			})
 			return err
@@ -208,11 +208,11 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 	return errno(err)
 }
 
-func (r *redisMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
-	fKey := r.flockKey(inode)
-	pKey := r.plockKey(inode)
+func (m *redisMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
+	fKey := m.flockKey(inode)
+	pKey := m.plockKey(inode)
 
-	rawFLocks, err := r.rdb.HGetAll(ctx, fKey).Result()
+	rawFLocks, err := m.rdb.HGetAll(ctx, fKey).Result()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -225,7 +225,7 @@ func (r *redisMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FL
 		flocks = append(flocks, FLockItem{*owner, v})
 	}
 
-	rawPLocks, err := r.rdb.HGetAll(ctx, pKey).Result()
+	rawPLocks, err := m.rdb.HGetAll(ctx, pKey).Result()
 	if err != nil {
 		return nil, nil, err
 	}
