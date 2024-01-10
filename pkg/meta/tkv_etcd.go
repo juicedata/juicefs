@@ -331,6 +331,7 @@ func newEtcdClient(addr string) (tkvClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	maxCompactSlices = 100
 	var prefix string = u.Path + "\xFD"
 	return withPrefix(&etcdClient{c, etcd.NewKV(c)}, []byte(prefix)), nil
 }

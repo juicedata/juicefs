@@ -2888,7 +2888,7 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	m.Unlock()
 
 	var ctx = Background
-	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, 1000).Result()
+	vals, err := m.rdb.LRange(ctx, m.chunkKey(inode, indx), 0, int64(maxCompactSlices)).Result()
 	if err != nil {
 		return
 	}
@@ -2899,10 +2899,17 @@ func (m *redisMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return
 	}
 	skipped := skipSome(ss)
+	var last *slice
+	if skipped > 0 {
+		last = ss[skipped-1]
+	}
 	ss = ss[skipped:]
 	pos, size, slices := compactChunk(ss)
 	if len(ss) < 2 || size == 0 {
 		return
+	}
+	if last != nil && last.pos+last.len > pos {
+		panic(fmt.Sprintf("invalid compaction: last skipped slice %+v, pos %d", last, pos))
 	}
 
 	var id uint64
