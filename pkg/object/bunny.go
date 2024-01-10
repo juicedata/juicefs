@@ -53,7 +53,7 @@ func (b bunnyClient) Limits() Limits {
 
 // Get the data for the given object specified by key.
 func (b bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, error) {
-	dir, file :=  filepath.Split(key)
+	dir, file :=  splitKey(key)
 	body, response, err := b.client.Download(context.Background(), dir, file)
 	if response.Status == http.StatusNotFound	{
 		return nil, os.ErrNotExist
@@ -63,14 +63,14 @@ func (b bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, err
 
 // Put data read from a reader to an object specified by key.
 func (b bunnyClient) Put(key string, in io.Reader) error {
-	dir, file :=  filepath.Split(key)
+	dir, file :=  splitKey(key)
 	_, err := b.client.Upload(context.Background(), dir, file, "", in )
 	return err
 }
 
 // Delete a object.
 func (b bunnyClient) Delete(key string) error {
-	dir, file :=  filepath.Split(key)
+	dir, file :=  splitKey(key)
 	_, err := b.client.Delete(context.Background(), dir, file)
 	return err
 }
@@ -87,6 +87,15 @@ func (b bunnyClient) ListAll(prefix string, marker string, followLink bool) (<-c
 	go bunnyObjectsToJuiceObjects(objects, c)
 
 	return c, nil
+}
+
+// Helper function that is needed because Bunnystorage API Client
+// requires seperate directory and file inputs but does not
+// sanitize it's input properly before assembling the request URL
+func splitKey(key string) (dir string, file string)	{
+	dir, file =  filepath.Split(key)
+	dir, _ = strings.CutSuffix(dir, "/")
+	return dir, file
 }
 
 func bunnyObjectsToJuiceObjects(objects []*bunnystorage.Object, out chan<- Object)	{
