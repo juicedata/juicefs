@@ -2281,24 +2281,24 @@ func testScanChunks(t *testing.T, m Meta) {
 	cases := [][]testSlice{
 		{
 			{
-				Slice:       Slice{Id: 1, Size: 10, Off: 0, Len: 10},
+				Slice:       Slice{Size: 10, Off: 0, Len: 10},
 				chunkIndex:  0,
 				chunkOffset: 0,
 			},
 		},
 		{
 			{
-				Slice:       Slice{Id: 2, Size: 10, Off: 0, Len: 10},
+				Slice:       Slice{Size: 10, Off: 0, Len: 10},
 				chunkIndex:  0,
 				chunkOffset: 0,
 			},
 			{
-				Slice:       Slice{Id: 3, Size: 10, Off: 0, Len: 10},
+				Slice:       Slice{Size: 10, Off: 0, Len: 10},
 				chunkIndex:  0,
 				chunkOffset: 10,
 			},
 			{
-				Slice:       Slice{Id: 4, Size: 20, Off: 0, Len: 20},
+				Slice:       Slice{Size: 20, Off: 0, Len: 20},
 				chunkIndex:  0,
 				chunkOffset: 20,
 			},
@@ -2323,8 +2323,15 @@ func doTestScanChunks(t *testing.T, m Meta, testCnt int, dirInode Ino, ss []test
 	time.Sleep(500 * time.Millisecond)
 
 	for _, s := range ss {
+		var sliceId uint64
+		if st := m.NewSlice(Background, &sliceId); st != 0 {
+			t.Fatalf("new slice: %s", st)
+		}
+
+		s.Slice.Id = sliceId
+
 		if st := m.Write(Background, fileInode, s.chunkIndex, s.chunkOffset, s.Slice, time.Now()); st != 0 {
-			t.Fatalf("write end: %s", st)
+			t.Fatalf("write: %s", st)
 		}
 	}
 
