@@ -2400,20 +2400,27 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if err != nil {
 		return
 	}
-
-	if len(buf) > sliceBytes*100 {
-		buf = buf[:sliceBytes*100]
+	if len(buf) > sliceBytes*maxCompactSlices {
+		buf = buf[:sliceBytes*maxCompactSlices]
 	}
+
 	ss := readSliceBuf(buf)
 	if ss == nil {
 		logger.Errorf("Corrupt value for inode %d chunk indx %d", inode, indx)
 		return
 	}
 	skipped := skipSome(ss)
+	var last *slice
+	if skipped > 0 {
+		last = ss[skipped-1]
+	}
 	ss = ss[skipped:]
 	pos, size, slices := compactChunk(ss)
 	if len(ss) < 2 || size == 0 {
 		return
+	}
+	if last != nil && last.pos+last.len > pos {
+		panic(fmt.Sprintf("invalid compaction: last skipped slice %+v, pos %d", last, pos))
 	}
 
 	var id uint64
@@ -2925,7 +2932,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 		entries = e.Entries
 		for n, de := range e.Entries {
 			if !de.Attr.full && de.Attr.Inode != TrashInode {
-				logger.Errorf("Corrupt inode: %d, missing attribute", inode)
+				logger.Warnf("Corrupt inode: %d, missing attribute", inode)
 			}
 			sortedName = append(sortedName, n)
 		}

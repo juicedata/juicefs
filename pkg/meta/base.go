@@ -45,6 +45,8 @@ const (
 	nlocks       = 1024
 )
 
+var maxCompactSlices = 1000
+
 type engine interface {
 	// Get the value of counter name.
 	getCounter(name string) (int64, error)

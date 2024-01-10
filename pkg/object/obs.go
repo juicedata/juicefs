@@ -217,12 +217,9 @@ func (s *obsClient) List(prefix, marker, delimiter string, limit int64, followLi
 	n := len(resp.Contents)
 	objs := make([]Object, n)
 	for i := 0; i < n; i++ {
+		// Obs SDK listObjects method already decodes the object key.
 		o := resp.Contents[i]
-		key, err := obs.UrlDecode(o.Key)
-		if err != nil {
-			return nil, errors.WithMessagef(err, "failed to decode key %s", o.Key)
-		}
-		objs[i] = &obj{key, o.Size, o.LastModified, strings.HasSuffix(key, "/"), string(o.StorageClass)}
+		objs[i] = &obj{o.Key, o.Size, o.LastModified, strings.HasSuffix(o.Key, "/"), string(o.StorageClass)}
 	}
 	if delimiter != "" {
 		for _, p := range resp.CommonPrefixes {
