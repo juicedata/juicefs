@@ -32,10 +32,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-
-type bunnyClient struct	{
+type bunnyClient struct {
 	DefaultObjectStorage
-	client *bunnystorage.Client
+	client   *bunnystorage.Client
 	endpoint string
 }
 
@@ -48,15 +47,15 @@ func (b bunnyClient) String() string {
 func (b bunnyClient) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: false,
-		IsSupportUploadPartCopy: false,
+		IsSupportUploadPartCopy:  false,
 	}
 }
 
 // Get the data for the given object specified by key.
 func (b bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, error) {
-	dir, file :=  splitKey(key)
+	dir, file := splitKey(key)
 	body, response, err := b.client.Download(context.Background(), dir, file)
-	if response.Status == http.StatusNotFound	{
+	if response.Status == http.StatusNotFound {
 		return nil, os.ErrNotExist
 	}
 	return io.NopCloser(io.NewSectionReader(bytes.NewReader(body), off, limit)), err
@@ -64,13 +63,13 @@ func (b bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, err
 
 // Put data read from a reader to an object specified by key.
 func (b bunnyClient) Put(key string, in io.Reader) error {
-	dir, file :=  splitKey(key)
+	dir, file := splitKey(key)
 
-	resp, err := b.client.Upload(context.Background(), dir, file, "", in )
-	if err != nil	{
+	resp, err := b.client.Upload(context.Background(), dir, file, "", in)
+	if err != nil {
 		return err
 	}
-	if resp.Status != http.StatusCreated	{
+	if resp.Status != http.StatusCreated {
 		return os.ErrInvalid
 	}
 	return err
@@ -78,12 +77,12 @@ func (b bunnyClient) Put(key string, in io.Reader) error {
 
 // Delete a object.
 func (b bunnyClient) Delete(key string) error {
-	dir, file :=  splitKey(key)
+	dir, file := splitKey(key)
 	resp, err := b.client.Delete(context.Background(), dir, file)
-	if err != nil	{
+	if err != nil {
 		return err
 	}
-	if resp.Status == http.StatusBadRequest	{
+	if resp.Status == http.StatusBadRequest {
 		return errors.Errorf("Unable to delete key %v", resp.Header)
 	}
 	return nil
@@ -92,8 +91,8 @@ func (b bunnyClient) Delete(key string) error {
 // ListAll returns all the objects as an channel.
 func (b bunnyClient) ListAll(prefix string, marker string, followLink bool) (<-chan Object, error) {
 	objects, _, err := b.client.List(context.Background(), prefix)
-	if err != nil	{
-		return nil , err
+	if err != nil {
+		return nil, err
 	}
 
 	c := make(chan Object)
@@ -106,14 +105,14 @@ func (b bunnyClient) ListAll(prefix string, marker string, followLink bool) (<-c
 // Helper function that is needed because Bunnystorage API Client
 // requires seperate directory and file inputs but does not
 // sanitize it's input properly before assembling the request URL
-func splitKey(key string) (dir string, file string)	{
-	dir, file =  filepath.Split(key)
+func splitKey(key string) (dir string, file string) {
+	dir, file = filepath.Split(key)
 	dir, _ = strings.CutSuffix(dir, "/")
 	return dir, file
 }
 
-func bunnyObjectsToJuiceObjects(objects []*bunnystorage.Object, out chan<- Object)	{
-	for o := range objects	{
+func bunnyObjectsToJuiceObjects(objects []*bunnystorage.Object, out chan<- Object) {
+	for o := range objects {
 		f := objects[o]
 		lastChanged, _ := time.Parse("2006-01-02T15:04:05", f.LastChanged)
 		out <- &obj{
@@ -127,7 +126,7 @@ func bunnyObjectsToJuiceObjects(objects []*bunnystorage.Object, out chan<- Objec
 	close(out)
 }
 
-func newBunny(endpoint, accessKey, password, token string)	(ObjectStorage, error)	{
+func newBunny(endpoint, accessKey, password, token string) (ObjectStorage, error) {
 
 	split_endpoint := strings.SplitN(endpoint, ".", 2) // TODO: Validate Endpoint and Logging
 
@@ -136,25 +135,25 @@ func newBunny(endpoint, accessKey, password, token string)	(ObjectStorage, error
 
 	cfg := &bunnystorage.Config{
 		Application: &bunnystorage.Application{
-			Name: "JuiceFS",
+			Name:    "JuiceFS",
 			Version: version.Version(),
 			Contact: "team@juicedata.io",
 		},
 		StorageZone: zone_name,
-		Debug: false, // TODO: Expose Debug Flag
-		Key: password,
-		Endpoint: bunny_endpoint,
-		Logger: &logger.Logger,
+		Debug:       false, // TODO: Expose Debug Flag
+		Key:         password,
+		Endpoint:    bunny_endpoint,
+		Logger:      &logger.Logger,
 	}
 
 	client, err := bunnystorage.NewClient(cfg)
 
-	if err != nil	{
+	if err != nil {
 		return nil, fmt.Errorf("Unable to create Bunny client: %v", err)
 	}
 	return bunnyClient{client: client, endpoint: endpoint}, nil
 }
 
-func init()	{
+func init() {
 	Register("bunny", newBunny)
 }
