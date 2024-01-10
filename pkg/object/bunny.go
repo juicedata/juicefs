@@ -29,6 +29,7 @@ import (
 
 	"git.sr.ht/~jamesponddotco/bunnystorage-go"
 	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/pkg/errors"
 )
 
 
@@ -64,14 +65,25 @@ func (b bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, err
 // Put data read from a reader to an object specified by key.
 func (b bunnyClient) Put(key string, in io.Reader) error {
 	dir, file :=  splitKey(key)
-	_, err := b.client.Upload(context.Background(), dir, file, "", in )
+
+	resp, err := b.client.Upload(context.Background(), dir, file, "", in )
+	if err != nil	{
+		return err
+	}
+	if resp.Status != http.StatusCreated	{
+		return os.ErrInvalid
+	}
 	return err
 }
 
 // Delete a object.
 func (b bunnyClient) Delete(key string) error {
 	dir, file :=  splitKey(key)
-	_, err := b.client.Delete(context.Background(), dir, file)
+	resp, err := b.client.Delete(context.Background(), dir, file)
+
+	if resp.Status == http.StatusBadRequest	{
+		return errors.Errorf("Unable to delete key %v", resp.Header)
+	}
 	return err
 }
 
