@@ -80,11 +80,13 @@ func (b bunnyClient) Put(key string, in io.Reader) error {
 func (b bunnyClient) Delete(key string) error {
 	dir, file :=  splitKey(key)
 	resp, err := b.client.Delete(context.Background(), dir, file)
-
+	if err != nil	{
+		return err
+	}
 	if resp.Status == http.StatusBadRequest	{
 		return errors.Errorf("Unable to delete key %v", resp.Header)
 	}
-	return err
+	return nil
 }
 
 // ListAll returns all the objects as an channel.
