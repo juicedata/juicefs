@@ -21,8 +21,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
+	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -53,12 +54,11 @@ func (b bunnyClient) Limits() Limits {
 // Get the data for the given object specified by key.
 func (b bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, error) {
 	dir, file :=  filepath.Split(key)
-	r, _, err := b.client.Download(context.Background(), dir, file)
-	if limit != -1	{
-		return io.NopCloser(bytes.NewReader(r[off:limit-1])), err
-	} else	{
-		return io.NopCloser(bytes.NewReader(r[off:])), err
+	body, response, err := b.client.Download(context.Background(), dir, file)
+	if response.Status == http.StatusNotFound	{
+		return nil, os.ErrNotExist
 	}
+	return io.NopCloser(io.NewSectionReader(bytes.NewReader(body), off, limit)), err
 }
 
 // Put data read from a reader to an object specified by key.
@@ -106,7 +106,7 @@ func bunnyObjectsToJuiceObjects(objects []*bunnystorage.Object, out chan<- Objec
 
 func newBunny(endpoint, accessKey, password, token string)	(ObjectStorage, error)	{
 
-	split_endpoint := strings.SplitN(endpoint, ".", 2)
+	split_endpoint := strings.SplitN(endpoint, ".", 2) // TODO: Validate Endpoint and Logging
 
 	zone_name := split_endpoint[0]
 	bunny_endpoint := bunnystorage.Parse(split_endpoint[1])
@@ -118,7 +118,7 @@ func newBunny(endpoint, accessKey, password, token string)	(ObjectStorage, error
 			Contact: "team@juicedata.io",
 		},
 		StorageZone: zone_name,
-		Debug: false,
+		Debug: false, // TODO: Expose Debug Flag
 		Key: password,
 		Endpoint: bunny_endpoint,
 		Logger: &logger.Logger,
