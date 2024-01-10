@@ -2925,7 +2925,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 		entries = e.Entries
 		for n, de := range e.Entries {
 			if !de.Attr.full && de.Attr.Inode != TrashInode {
-				logger.Errorf("Corrupt inode: %d, missing attribute", inode)
+				logger.Warnf("Corrupt inode: %d, missing attribute", inode)
 			}
 			sortedName = append(sortedName, n)
 		}
