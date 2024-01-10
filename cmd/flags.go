@@ -228,6 +228,7 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "cache-expire",
+			Value: "0",
 			Usage: "cached blocks not accessed for longer than this option will be automatically evicted (0 means never)",
 		},
 	})
