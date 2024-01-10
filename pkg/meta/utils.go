@@ -454,6 +454,77 @@ func (m *baseMeta) getDirSummary(ctx Context, inode Ino, summary *Summary, recur
 	return err
 }
 
+// GetFileInodes get all file inodes recursively
+func (m *baseMeta) GetFileInodes(ctx Context, root Ino, maxDepth int) ([]Ino, syscall.Errno) {
+	var attr Attr
+	if st := m.GetAttr(ctx, root, &attr); st != 0 {
+		return nil, st
+	}
+
+	if attr.Typ != TypeDirectory {
+		return []Ino{root}, 0
+	}
+
+	var inodes []Ino
+	inodeMu := sync.Mutex{}
+	concurrent := make(chan struct{}, 50)
+	errChan := make(chan syscall.Errno, 1)
+	var wg sync.WaitGroup
+
+	var dfs func(inode Ino, depth int)
+	dfs = func(inode Ino, depth int) {
+		if depth <= 0 {
+			return
+		}
+
+		var entries []*Entry
+		if err := m.en.doReaddir(ctx, inode, 1, &entries, -1); err != 0 {
+			logger.Errorf("doReaddir inode %d error: %v", inode, err)
+			select {
+			case errChan <- err:
+				ctx.Cancel()
+			default:
+			}
+			return
+		}
+
+		for _, e := range entries {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			currInode := e.Inode
+			if e.Attr.Typ != TypeDirectory {
+				inodeMu.Lock()
+				inodes = append(inodes, currInode)
+				inodeMu.Unlock()
+				continue
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case concurrent <- struct{}{}:
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					dfs(currInode, depth-1)
+					<-concurrent
+				}()
+			}
+		}
+	}
+
+	dfs(root, maxDepth)
+	wg.Wait()
+	if ctx.Err() != nil {
+		return nil, <-errChan
+	}
+	return inodes, 0
+}
+
 func (m *baseMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool,
 	updateProgress func(count uint64, bytes uint64)) syscall.Errno {
 	var attr Attr

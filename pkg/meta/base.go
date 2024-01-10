@@ -64,6 +64,7 @@ type engine interface {
 	doInit(format *Format, force bool) error
 
 	scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error
+	scanChunks(ctx Context, inode Ino, ch chan<- cchunk) error
 	compactChunk(inode Ino, indx uint32, force bool)
 	doDeleteSustainedInode(sid uint64, inode Ino) error
 	doFindDeletedFiles(ts int64, limit int) (map[Ino]uint64, error) // limit < 0 means all
@@ -395,24 +396,24 @@ func (m *baseMeta) doFlushDirStat() {
 	}
 }
 
-func (r *baseMeta) txLock(idx uint) {
-	r.txlocks[idx%nlocks].Lock()
+func (m *baseMeta) txLock(idx uint) {
+	m.txlocks[idx%nlocks].Lock()
 }
 
-func (r *baseMeta) txUnlock(idx uint) {
-	r.txlocks[idx%nlocks].Unlock()
+func (m *baseMeta) txUnlock(idx uint) {
+	m.txlocks[idx%nlocks].Unlock()
 }
 
-func (r *baseMeta) OnMsg(mtype uint32, cb MsgCallback) {
-	r.msgCallbacks.Lock()
-	defer r.msgCallbacks.Unlock()
-	r.msgCallbacks.callbacks[mtype] = cb
+func (m *baseMeta) OnMsg(mtype uint32, cb MsgCallback) {
+	m.msgCallbacks.Lock()
+	defer m.msgCallbacks.Unlock()
+	m.msgCallbacks.callbacks[mtype] = cb
 }
 
-func (r *baseMeta) newMsg(mid uint32, args ...interface{}) error {
-	r.msgCallbacks.Lock()
-	cb, ok := r.msgCallbacks.callbacks[mid]
-	r.msgCallbacks.Unlock()
+func (m *baseMeta) newMsg(mid uint32, args ...interface{}) error {
+	m.msgCallbacks.Lock()
+	cb, ok := m.msgCallbacks.callbacks[mid]
+	m.msgCallbacks.Unlock()
 	if ok {
 		return cb(args...)
 	}
@@ -1225,7 +1226,7 @@ func clearSUGID(ctx Context, cur *Attr, set *Attr) {
 	}
 }
 
-func (r *baseMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
+func (m *baseMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return syscall.ENOTSUP
 }
 
@@ -2197,12 +2198,12 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 	for i := 0; i < threads; i++ {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for c := range ch {
 				logger.Debugf("Compacting chunk %d:%d (%d slices)", c.inode, c.indx, c.slices)
 				m.en.compactChunk(c.inode, c.indx, true)
 				bar.Increment()
 			}
-			wg.Done()
 		}()
 	}
 
@@ -2214,6 +2215,44 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 		return errno(err)
 	}
 	return 0
+}
+
+func (m *baseMeta) Compact(ctx Context, inode Ino, maxDepth int, compactConcurrency int, preFunc, postFunc func()) syscall.Errno {
+	inodes, err := m.GetFileInodes(ctx, inode, maxDepth)
+	if err != 0 {
+		return err
+	}
+
+	// compact
+	var wg sync.WaitGroup
+	ch := make(chan cchunk, 10000)
+	for i := 0; i < compactConcurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for c := range ch {
+				logger.Debugf("Compacting chunk %d:%d (%d slices)", c.inode, c.indx, c.slices)
+				preFunc()
+				m.en.compactChunk(c.inode, c.indx, true)
+				postFunc()
+			}
+		}()
+	}
+
+	// scan
+	var scanErr error
+	for _, ino := range inodes {
+		logger.Debugf("scan chunks [inode %v]", ino)
+		scanErr = m.en.scanChunks(ctx, ino, ch)
+		if scanErr != nil {
+			logger.Warnf("scan inode %d chunks error: %v", ino, scanErr)
+			break
+		}
+	}
+
+	close(ch)
+	wg.Wait()
+	return errno(scanErr)
 }
 
 func (m *baseMeta) fileDeleted(opened, force bool, inode Ino, length uint64) {

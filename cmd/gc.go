@@ -104,10 +104,10 @@ func gc(ctx *cli.Context) error {
 	// Scan all chunks first and do compaction if necessary
 	progress := utils.NewProgress(false)
 	// Delete pending slices while listing all slices
-	delete := ctx.Bool("delete")
+	deleteOp := ctx.Bool("delete")
 	threads := ctx.Int("threads")
-	compact := ctx.Bool("compact")
-	if (delete || compact) && threads <= 0 {
+	compactOp := ctx.Bool("compact")
+	if (deleteOp || compactOp) && threads <= 0 {
 		logger.Fatal("threads should be greater than 0 to delete or compact objects")
 	}
 
@@ -115,7 +115,7 @@ func gc(ctx *cli.Context) error {
 	var delSpin *utils.Bar
 	var sliceChan chan meta.Slice // pending delete slices
 
-	if delete || compact {
+	if deleteOp || compactOp {
 		delSpin = progress.AddCountSpinner("Cleaned pending slices")
 		sliceChan = make(chan meta.Slice, 10240)
 		m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
@@ -140,7 +140,7 @@ func gc(ctx *cli.Context) error {
 	delayedFileSpin := progress.AddDoubleSpinnerTwo("Pending deleted files", "Pending deleted data")
 	cleanedFileSpin := progress.AddDoubleSpinnerTwo("Cleaned pending files", "Cleaned pending data")
 	edge := time.Now().Add(-time.Duration(format.TrashDays) * 24 * time.Hour)
-	if delete {
+	if deleteOp {
 		cleanTrashSpin := progress.AddCountSpinner("Cleaned trash")
 		m.CleanupTrashBefore(c, edge, cleanTrashSpin.IncrBy)
 		cleanTrashSpin.Done()
@@ -155,7 +155,7 @@ func gc(ctx *cli.Context) error {
 		nil, nil, nil,
 		func(_ meta.Ino, size uint64, ts int64) (bool, error) {
 			delayedFileSpin.IncrInt64(int64(size))
-			if delete {
+			if deleteOp {
 				cleanedFileSpin.IncrInt64(int64(size))
 				return true, nil
 			}
@@ -168,7 +168,7 @@ func gc(ctx *cli.Context) error {
 	delayedFileSpin.Done()
 	cleanedFileSpin.Done()
 
-	if compact {
+	if compactOp {
 		bar := progress.AddCountBar("Compacted chunks", 0)
 		spin := progress.AddDoubleSpinnerTwo("Compacted slices", "Compacted data")
 		m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
@@ -200,7 +200,7 @@ func gc(ctx *cli.Context) error {
 
 	// List all slices in metadata engine
 	slices := make(map[meta.Ino][]meta.Slice)
-	r := m.ListSlices(c, slices, delete, sliceCSpin.Increment)
+	r := m.ListSlices(c, slices, deleteOp, sliceCSpin.Increment)
 	if r != 0 {
 		logger.Fatalf("list all slices: %s", r)
 	}
@@ -213,11 +213,11 @@ func gc(ctx *cli.Context) error {
 		func(ss []meta.Slice, ts int64) (bool, error) {
 			for _, s := range ss {
 				delayedSliceSpin.IncrInt64(int64(s.Size))
-				if delete && ts < edge.Unix() {
+				if deleteOp && ts < edge.Unix() {
 					cleanedSliceSpin.IncrInt64(int64(s.Size))
 				}
 			}
-			if delete && ts < edge.Unix() {
+			if deleteOp && ts < edge.Unix() {
 				return true, nil
 			}
 			return false, nil
@@ -289,7 +289,7 @@ func gc(ctx *cli.Context) error {
 	foundLeaked := func(obj object.Object) {
 		bar.IncrTotal(1)
 		leaked.IncrInt64(obj.Size())
-		if delete {
+		if deleteOp {
 			leakedObj <- obj.Key()
 		}
 	}
@@ -361,7 +361,7 @@ func gc(ctx *cli.Context) error {
 	}
 	close(leakedObj)
 	wg.Wait()
-	if delete || compact {
+	if deleteOp || compactOp {
 		delSpin.Done()
 		if progress.Quiet {
 			logger.Infof("Deleted %d pending slices", delSpin.Current())
@@ -378,7 +378,7 @@ func gc(ctx *cli.Context) error {
 	fc, fb := cleanedFileSpin.Current()
 	logger.Infof("scanned %d objects, %d valid, %d compacted (%d bytes), %d leaked (%d bytes), %d delslices (%d bytes), %d delfiles (%d bytes), %d skipped (%d bytes)",
 		bar.Current(), vc, cc, cb, lc, lb, dsc, dsb, fc, fb, sc, sb)
-	if lc > 0 && !delete {
+	if lc > 0 && !deleteOp {
 		logger.Infof("Please add `--delete` to clean leaked objects")
 	}
 	return nil

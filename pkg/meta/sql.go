@@ -2914,6 +2914,22 @@ func (m *dbMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) er
 	})
 }
 
+func (m *dbMeta) scanChunks(ctx Context, inode Ino, ch chan<- cchunk) error {
+	return m.roTxn(func(s *xorm.Session) error {
+		var cs []chunk
+		err := s.Table(&chunk{}).Where("inode = ?", inode).Find(&cs)
+		if err != nil {
+			return err
+		}
+		for _, c := range cs {
+			if len(c.Slices) > sliceBytes {
+				ch <- cchunk{c.Inode, c.Indx, len(c.Slices) / sliceBytes}
+			}
+		}
+		return nil
+	})
+}
+
 func (m *dbMeta) ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno {
 	if delete {
 		m.doCleanupSlices()

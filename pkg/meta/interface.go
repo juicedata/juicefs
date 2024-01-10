@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -102,8 +103,24 @@ const (
 
 const MaxName = 255
 const MaxSymlink = 4096
+
+type Ino uint64
+
 const RootInode Ino = 1
 const TrashInode Ino = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
+
+func (i Ino) String() string {
+	return strconv.FormatUint(uint64(i), 10)
+}
+
+func (i Ino) IsValid() bool {
+	return i >= RootInode
+}
+
+func (i Ino) IsTrash() bool {
+	return i >= TrashInode
+}
+
 var TrashName = ".trash"
 
 func isTrash(ino Ino) bool {
@@ -220,7 +237,7 @@ type Entry struct {
 }
 
 // Slice is a slice of a chunk.
-// Multiple slices could be combined together as a chunk.
+// Multiple slices could be combined as a chunk.
 type Slice struct {
 	Id   uint64
 	Size uint32
@@ -414,8 +431,11 @@ type Meta interface {
 	// Setlk sets a file range lock on given file.
 	Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno
 
-	// Compact all the chunks by merge small slices together
+	// CompactAll Compact all the chunks by merge small slices together
 	CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno
+	// Compact specified path
+	Compact(ctx Context, inode Ino, maxDepth int, compactConcurrency int, preFunc, postFunc func()) syscall.Errno
+
 	// ListSlices returns all slices used by all files.
 	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
 	// Remove all files and directories recursively.
