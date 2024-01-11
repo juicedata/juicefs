@@ -603,6 +603,7 @@ func listAll(s object.ObjectStorage, prefix, marker string, limit int64) ([]obje
 }
 
 var syncTests = map[string]bool{
+	"special key":         true,
 	"put a big object":    true,
 	"put an empty object": true,
 	"multipart upload":    true,
