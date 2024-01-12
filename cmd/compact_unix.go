@@ -38,7 +38,7 @@ func cmdCompact() *cli.Command {
 		Action:    compact,
 		Category:  "TOOL",
 		Usage:     "Trigger compaction of chunks",
-		ArgsUsage: "Path...",
+		ArgsUsage: "PATH...",
 		Description: `
  Examples:
  # compact with path
@@ -46,8 +46,8 @@ func cmdCompact() *cli.Command {
  `,
 		Flags: []cli.Flag{
 			&cli.UintFlag{
-				Name:    "concurrency",
-				Aliases: []string{"co"},
+				Name:    "threads",
+				Aliases: []string{"p"},
 				Value:   10,
 				Usage:   "compact concurrency",
 			},
@@ -58,12 +58,12 @@ func cmdCompact() *cli.Command {
 func compact(ctx *cli.Context) error {
 	setup(ctx, 1)
 
-	coCnt := ctx.Int("concurrency")
+	coCnt := ctx.Int("threads")
 	if coCnt <= 0 {
-		logger.Warn("concurrency should be > 0")
+		logger.Warn("threads should be > 0")
 		coCnt = 1
 	} else if coCnt >= math.MaxUint16 {
-		logger.Warn("concurrency should be < MaxUint16")
+		logger.Warn("threads should be < MaxUint16")
 		coCnt = math.MaxUint16
 	}
 
@@ -112,7 +112,7 @@ func doCompact(inode meta.Ino, path string, coCnt uint16) error {
 	}
 
 	progress := utils.NewProgress(false)
-	bar := progress.AddCountBar(fmt.Sprintf("Compacted chunks : %s", path), 0)
+	bar := progress.AddCountBar("Compacted chunks", 0)
 	data, errno := readProgress(f, func(totalChunks, currChunks uint64) {
 		bar.SetTotal(int64(totalChunks))
 		bar.SetCurrent(int64(currChunks))
