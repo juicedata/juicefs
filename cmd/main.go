@@ -83,6 +83,7 @@ func Main(args []string) error {
 			cmdDebug(),
 			cmdClone(),
 			cmdSummary(),
+			cmdCompact(),
 		},
 	}
 

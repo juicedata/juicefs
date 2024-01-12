@@ -2218,6 +2218,66 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 	return 0
 }
 
+func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno {
+	var attr Attr
+	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+		logger.Errorf("get attr error [inode %v]: %v", inode, st)
+		return st
+	}
+
+	var wg sync.WaitGroup
+	// compact: consumer
+	chunkChan := make(chan cchunk, 10000)
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for c := range chunkChan {
+				m.en.compactChunk(c.inode, c.indx, true)
+				postFunc()
+			}
+		}()
+	}
+
+	type fileNode struct {
+		ino Ino
+		len uint64
+	}
+	fileChan := make(chan *fileNode, 10000)
+
+	// dispatch: producer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for file := range fileChan {
+			// calc in local
+			chunkCnt := uint32((file.len + ChunkSize - 1) / ChunkSize)
+			for i := uint32(0); i < chunkCnt; i++ {
+				preFunc()
+				chunkChan <- cchunk{inode: file.ino, indx: i}
+			}
+		}
+		close(chunkChan)
+	}()
+
+	// walk: main
+	st := m.walk(ctx, inode, "", &attr, func(ctx Context, fIno Ino, path string, fAttr *Attr) {
+		if fAttr.Typ != TypeFile {
+			return
+		}
+		fileChan <- &fileNode{ino: fIno, len: fAttr.Length}
+	})
+
+	// finish
+	close(fileChan)
+	wg.Wait()
+
+	if st != 0 {
+		logger.Errorf("walk error [inode %v]: %v", inode, st)
+	}
+	return st
+}
+
 func (m *baseMeta) fileDeleted(opened, force bool, inode Ino, length uint64) {
 	if opened {
 		m.Lock()

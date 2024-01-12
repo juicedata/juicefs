@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -52,6 +53,8 @@ const (
 	Clone = 1006
 	// OpSummary is a message to get tree summary of directories.
 	OpSummary = 1007
+	// CompactPath is a message to trigger compact
+	CompactPath = 1008
 )
 
 const (
@@ -102,8 +105,24 @@ const (
 
 const MaxName = 255
 const MaxSymlink = 4096
+
+type Ino uint64
+
 const RootInode Ino = 1
 const TrashInode Ino = 0x7FFFFFFF10000000 // larger than vfs.minInternalNode
+
+func (i Ino) String() string {
+	return strconv.FormatUint(uint64(i), 10)
+}
+
+func (i Ino) IsValid() bool {
+	return i >= RootInode
+}
+
+func (i Ino) IsTrash() bool {
+	return i >= TrashInode
+}
+
 var TrashName = ".trash"
 
 func isTrash(ino Ino) bool {
@@ -416,6 +435,9 @@ type Meta interface {
 
 	// Compact all the chunks by merge small slices together
 	CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.Errno
+	// Compact chunks for specified path
+	Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno
+
 	// ListSlices returns all slices used by all files.
 	ListSlices(ctx Context, slices map[Ino][]Slice, delete bool, showProgress func()) syscall.Errno
 	// Remove all files and directories recursively.
