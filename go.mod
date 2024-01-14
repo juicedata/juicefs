@@ -25,6 +25,7 @@ require (
 	github.com/gofrs/flock v0.8.1
 	github.com/google/btree v1.1.2
 	github.com/google/uuid v1.3.0
+	github.com/grafana/pyroscope-go v1.0.4
 	github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8
 	github.com/hashicorp/consul/api v1.15.2
 	github.com/hashicorp/go-hclog v1.5.0
@@ -50,7 +51,6 @@ require (
 	github.com/prometheus/client_golang v1.15.1
 	github.com/prometheus/client_model v0.4.0
 	github.com/prometheus/common v0.43.0
-	github.com/pyroscope-io/client v0.7.0
 	github.com/qingstor/qingstor-sdk-go/v4 v4.4.0
 	github.com/qiniu/go-sdk/v7 v7.15.0
 	github.com/redis/go-redis/v9 v9.0.2
@@ -143,6 +143,7 @@ require (
 	github.com/gopherjs/gopherjs v0.0.0-20181017120253-0766667cb4d1 // indirect
 	github.com/gorilla/handlers v1.5.1 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
+	github.com/grafana/pyroscope-go/godeltaprof v0.1.6 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.1 // indirect
@@ -166,7 +167,7 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
-	github.com/klauspost/compress v1.16.7 // indirect
+	github.com/klauspost/compress v1.17.3 // indirect
 	github.com/klauspost/cpuid v1.3.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.3 // indirect
 	github.com/klauspost/pgzip v1.2.5 // indirect
@@ -204,7 +205,6 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7 // indirect
 	github.com/prometheus/procfs v0.11.0 // indirect
-	github.com/pyroscope-io/godeltaprof v0.1.2 // indirect
 	github.com/rasky/go-xdr v0.0.0-20170124162913-1a41d1a06c93 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
