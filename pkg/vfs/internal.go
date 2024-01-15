@@ -283,10 +283,6 @@ type SummaryReponse struct {
 	Tree  meta.TreeSummary
 }
 
-type CompactPathResponse struct {
-	Errno syscall.Errno
-}
-
 type chunkSlice struct {
 	ChunkIndex uint64
 	meta.Slice
@@ -513,9 +509,9 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 
 		done := make(chan struct{})
 		var totalChunks, currChunks uint64
-		var r syscall.Errno
+		var eno syscall.Errno
 		go func() {
-			r = v.Meta.Compact(ctx, inode, int(coCnt), func() {
+			eno = v.Meta.Compact(ctx, inode, int(coCnt), func() {
 				atomic.AddUint64(&totalChunks, 1)
 			}, func() {
 				atomic.AddUint64(&currChunks, 1)
@@ -524,18 +520,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		}()
 
 		writeProgress(&totalChunks, &currChunks, out, done)
-
-		data, err := json.Marshal(&CompactPathResponse{r})
-		if err != nil {
-			logger.Errorf("marshal CompactPathResponse error: %v", err)
-			_, _ = out.Write([]byte{byte(syscall.EIO & 0xff)})
-			return
-		}
-		w := utils.NewBuffer(uint32(1 + 4 + len(data)))
-		w.Put8(meta.CDATA)
-		w.Put32(uint32(len(data)))
-		w.Put(data)
-		_, _ = out.Write(w.Bytes())
+		_, _ = out.Write([]byte{uint8(eno)})
 
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")

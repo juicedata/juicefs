@@ -20,7 +20,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"path/filepath"
@@ -28,7 +27,6 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
 
@@ -113,28 +111,19 @@ func doCompact(inode meta.Ino, path string, coCnt uint16) error {
 
 	progress := utils.NewProgress(false)
 	bar := progress.AddCountBar("Compacted chunks", 0)
-	data, errno := readProgress(f, func(totalChunks, currChunks uint64) {
+	_, errno := readProgress(f, func(totalChunks, currChunks uint64) {
 		bar.SetTotal(int64(totalChunks))
 		bar.SetCurrent(int64(currChunks))
 	})
+
+	bar.Done()
+	progress.Done()
 
 	if errno == syscall.EINVAL {
 		logger.Fatalf("compact is not supported, please upgrade and mount again")
 	}
 	if errno != 0 {
 		return fmt.Errorf("compact [%d:%s] error: %s", inode, path, errno)
-	}
-
-	bar.Done()
-	progress.Done()
-
-	var resp vfs.CompactPathResponse
-	err = json.Unmarshal(data, &resp)
-	if err == nil && resp.Errno != 0 {
-		err = fmt.Errorf("meta compact [%d:%s] error: %s", inode, path, resp.Errno)
-	}
-	if err != nil {
-		logger.Fatal(err)
 	}
 
 	logger.Infof("compact [%d:%s] success.", inode, path)
