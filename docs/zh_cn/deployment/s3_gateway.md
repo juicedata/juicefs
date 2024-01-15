@@ -149,6 +149,16 @@ $ mc ls juicefs/jfs
 [2021-10-20 11:59:10 CST]  11MiB work-4997565.svg
 ```
 
+### 使用虚拟路径格式
+
+默认情况下，Gateway 支持格式为 http://mydomain.com/bucket/object 的路径类型请求。
+`MINIO_DOMAIN` 环境变量被用来启用虚拟主机类型请求。 如果请求的`Host`头信息匹配 `(.+).mydomain.com`，则匹配的模式 `$1` 被用作 bucket， 并且路径被用作object.
+示例:
+
+```shell
+export MINIO_DOMAIN=mydomain.com
+```
+
 ## 在 Kubernetes 中部署 S3 网关 {#deploy-in-kubernetes}
 
 ### 通过 kubectl 部署
