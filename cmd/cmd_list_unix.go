@@ -1,5 +1,5 @@
-//go:build windows
-// +build windows
+//go:build !windows
+// +build !windows
 
 /*
  * JuiceFS, Copyright 2024 Juicedata, Inc.
@@ -23,16 +23,35 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func cmdCompact() *cli.Command {
-	return &cli.Command{
-		Name:     "compact",
-		Action:   compact,
-		Category: "TOOL",
-		Usage:    "Trigger compaction of chunks, not supported for Windows",
+func GetCmds() []*cli.Command {
+	return []*cli.Command{
+		cmdFormat(),
+		cmdConfig(),
+		cmdQuota(),
+		cmdDestroy(),
+		cmdGC(),
+		cmdFsck(),
+		cmdRestore(),
+		cmdDump(),
+		cmdLoad(),
+		cmdVersion(),
+		cmdStatus(),
+		cmdStats(),
+		cmdProfile(),
+		cmdInfo(),
+		cmdMount(),
+		cmdUmount(),
+		cmdGateway(),
+		cmdWebDav(),
+		cmdBench(),
+		cmdObjbench(),
+		cmdMdtest(),
+		cmdWarmup(),
+		cmdRmr(),
+		cmdSync(),
+		cmdDebug(),
+		cmdClone(),
+		cmdSummary(),
+		cmdCompact(),
 	}
-}
-
-func compact(ctx *cli.Context) error {
-	logger.Warnf("not supported for Windows.")
-	return nil
 }

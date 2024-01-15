@@ -21,7 +21,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -58,10 +57,6 @@ $ juicefs clone -p /mnt/jfs/file1 /mnt/jfs/file2`,
 
 func clone(ctx *cli.Context) error {
 	setup(ctx, 2)
-	if runtime.GOOS == "windows" {
-		logger.Infof("Windows is not supported")
-		return nil
-	}
 	srcPath := ctx.Args().Get(0)
 	srcAbsPath, err := filepath.Abs(srcPath)
 	if err != nil {

@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -42,11 +41,11 @@ func cmdSummary() *cli.Command {
 		ArgsUsage: "PATH",
 		Description: `
  It is used to show tree summary of target directory.
- 
+
  Examples:
  # Show with path
  $ juicefs summary /mnt/jfs/foo
- 
+
  # Show max depth of 5
  $ juicefs summary --depth 5 /mnt/jfs/foo
 
@@ -83,10 +82,6 @@ func cmdSummary() *cli.Command {
 
 func summary(ctx *cli.Context) error {
 	setup(ctx, 1)
-	if runtime.GOOS == "windows" {
-		logger.Infof("Windows is not supported")
-		return nil
-	}
 	var strict uint8
 	if ctx.Bool("strict") {
 		strict = 1

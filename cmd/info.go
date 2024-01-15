@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -75,10 +74,6 @@ $ juicefs info -i 100`,
 
 func info(ctx *cli.Context) error {
 	setup(ctx, 1)
-	if runtime.GOOS == "windows" {
-		logger.Infof("Windows is not supported")
-		return nil
-	}
 	var recursive, strict, raw uint8
 	if ctx.Bool("recursive") {
 		recursive = 1

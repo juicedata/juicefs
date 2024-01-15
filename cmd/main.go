@@ -26,6 +26,8 @@ import (
 	"sync"
 	"syscall"
 
+	"go.uber.org/automaxprocs/maxprocs"
+
 	"github.com/erikdubbelboer/gspt"
 	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -33,7 +35,6 @@ import (
 	"github.com/pyroscope-io/client/pyroscope"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"go.uber.org/automaxprocs/maxprocs"
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -55,36 +56,7 @@ func Main(args []string) error {
 		HideHelpCommand:      true,
 		EnableBashCompletion: true,
 		Flags:                globalFlags(),
-		Commands: []*cli.Command{
-			cmdFormat(),
-			cmdConfig(),
-			cmdQuota(),
-			cmdDestroy(),
-			cmdGC(),
-			cmdFsck(),
-			cmdRestore(),
-			cmdDump(),
-			cmdLoad(),
-			cmdVersion(),
-			cmdStatus(),
-			cmdStats(),
-			cmdProfile(),
-			cmdInfo(),
-			cmdMount(),
-			cmdUmount(),
-			cmdGateway(),
-			cmdWebDav(),
-			cmdBench(),
-			cmdObjbench(),
-			cmdMdtest(),
-			cmdWarmup(),
-			cmdRmr(),
-			cmdSync(),
-			cmdDebug(),
-			cmdClone(),
-			cmdSummary(),
-			cmdCompact(),
-		},
+		Commands:             GetCmds(),
 	}
 
 	if calledViaMount(args) {
