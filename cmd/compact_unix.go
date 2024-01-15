@@ -137,6 +137,6 @@ func doCompact(inode meta.Ino, path string, coCnt uint16) error {
 		logger.Fatal(err)
 	}
 
-	logger.Infof("compact [%d:%s] succ", inode, path)
+	logger.Infof("compact [%d:%s] success.", inode, path)
 	return nil
 }

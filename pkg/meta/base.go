@@ -2226,7 +2226,7 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 	}
 
 	var wg sync.WaitGroup
-	// compact: consumer
+	// compact
 	chunkChan := make(chan cchunk, 10000)
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)
@@ -2239,37 +2239,21 @@ func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 		}()
 	}
 
-	type fileNode struct {
-		ino Ino
-		len uint64
-	}
-	fileChan := make(chan *fileNode, 10000)
-
-	// dispatch: producer
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for file := range fileChan {
-			// calc in local
-			chunkCnt := uint32((file.len + ChunkSize - 1) / ChunkSize)
-			for i := uint32(0); i < chunkCnt; i++ {
-				preFunc()
-				chunkChan <- cchunk{inode: file.ino, indx: i}
-			}
-		}
-		close(chunkChan)
-	}()
-
-	// walk: main
+	// scan
 	st := m.walk(ctx, inode, "", &attr, func(ctx Context, fIno Ino, path string, fAttr *Attr) {
 		if fAttr.Typ != TypeFile {
 			return
 		}
-		fileChan <- &fileNode{ino: fIno, len: fAttr.Length}
+		// calc chunk index in local
+		chunkCnt := uint32((fAttr.Length + ChunkSize - 1) / ChunkSize)
+		for i := uint32(0); i < chunkCnt; i++ {
+			preFunc()
+			chunkChan <- cchunk{inode: fIno, indx: i}
+		}
 	})
 
 	// finish
-	close(fileChan)
+	close(chunkChan)
 	wg.Wait()
 
 	if st != 0 {

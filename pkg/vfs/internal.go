@@ -509,11 +509,7 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		_, _ = out.Write(w.Bytes())
 	case meta.CompactPath:
 		inode := Ino(r.Get64())
-
-		var coCnt uint16 = 1
-		if r.HasMore() {
-			coCnt = r.Get16()
-		}
+		coCnt := r.Get16()
 
 		done := make(chan struct{})
 		var totalChunks, currChunks uint64
