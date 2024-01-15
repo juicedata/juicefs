@@ -5,26 +5,37 @@ ltmain.sh
 *.rej
 .deps
 .dirstamp
-.vscode
-.idea
 fstests/secfs.test
 fstests/flock
 !fstests/Makefile
 jfs
+*.rdb
+.release-env
+*.so
+libjfs.h
+docs/node_modules
+cmd/cmd
+.hypothesis
+/node_modules
+
+# os
+.DS_Store
+
+# ide
+.vscode
+.idea
+
+# lang
+__pycache__
+
+# temp
+pkg/meta/badger
+*.dump
+*.out
+
+# gen
 /juicefs
 /juicefs.ceph
 /juicefs.exe
 /juicefs.lite
 dist/
-*.rdb
-.release-env
-*.so
-libjfs.h
-.DS_Store
-docs/node_modules
-cmd/cmd
-*.dump
-*.out
-.hypothesis
-__pycache__
-/node_modules
