@@ -1280,15 +1280,11 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	if c, ok := m.(compactor); ok {
 		c.compactChunk(inode, 0, true)
 	}
-	var slices2 []Slice
-	if st := m.Read(ctx, inode, 0, &slices2); st != 0 {
+	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
 		t.Fatalf("read 0: %s", st)
 	}
-	if len(slices) == 2 && len(slices2) == 2 {
-		slices2[1].Id = slices[1].Id
-	}
-	if !reflect.DeepEqual(slices, slices2) {
-		t.Fatalf("slices not equal:\n%+v\n%+v", slices, slices2)
+	if len(slices) != 1 || slices[0].Len != 3<<20 {
+		t.Fatalf("inode %d should be compacted, but have %d slices, size %d", inode, len(slices), slices[0].Len)
 	}
 }
 
