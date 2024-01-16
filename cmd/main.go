@@ -327,13 +327,16 @@ func setup(c *cli.Context, n int) {
 		tags["pid"] = strconv.Itoa(os.Getpid())
 		tags["version"] = version.Version()
 
+		types := []pyroscope.ProfileType{pyroscope.ProfileCPU, pyroscope.ProfileInuseObjects, pyroscope.ProfileAllocObjects,
+			pyroscope.ProfileInuseSpace, pyroscope.ProfileAllocSpace, pyroscope.ProfileGoroutines, pyroscope.ProfileMutexCount,
+			pyroscope.ProfileMutexDuration, pyroscope.ProfileBlockCount, pyroscope.ProfileBlockDuration}
 		if _, err := pyroscope.Start(pyroscope.Config{
 			ApplicationName: appName,
 			ServerAddress:   c.String("pyroscope"),
 			Logger:          logger,
 			Tags:            tags,
 			AuthToken:       os.Getenv("PYROSCOPE_AUTH_TOKEN"),
-			ProfileTypes:    pyroscope.DefaultProfileTypes,
+			ProfileTypes:    types,
 		}); err != nil {
 			logger.Errorf("start pyroscope agent: %v", err)
 		}
