@@ -444,6 +444,10 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 	if partSize == 0 {
 		partSize = defaultPartSize
 	}
+	limits := dst.Limits()
+	if size > int64(limits.MaxPartSize)*int64(limits.MaxPartCount) {
+		return fmt.Errorf("object size %d is too large to copy", size)
+	}
 	if size > partSize*int64(upload.MaxCount) {
 		partSize = size / int64(upload.MaxCount)
 		partSize = ((partSize-1)>>20 + 1) << 20 // align to MB
