@@ -1239,6 +1239,57 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	if deletes < 200 {
 		t.Fatalf("deleted slices %d is less than 200", deletes)
 	}
+
+	// truncate to 0
+	if st := m.Truncate(ctx, inode, 0, 0, attr, false); st != 0 {
+		t.Fatalf("truncate file: %s", st)
+	}
+	if c, ok := m.(compactor); ok {
+		c.compactChunk(inode, 0, true)
+	}
+	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
+		t.Fatalf("read 0: %s", st)
+	}
+	if len(slices) != 1 || slices[0].Len != 1 {
+		t.Fatalf("inode %d should be compacted, but have %d slices, size %d", inode, len(slices), slices[0].Len)
+	}
+
+	if st := m.Truncate(ctx, inode, 0, 64<<10, attr, false); st != 0 {
+		t.Fatalf("truncate file: %s", st)
+	}
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 0, uint32(1<<20), Slice{Id: sliceId, Size: 2 << 20, Len: 2 << 20}, time.Now())
+	if c, ok := m.(compactor); ok {
+		c.compactChunk(inode, 0, true)
+	}
+	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
+		t.Fatalf("read 0: %s", st)
+	}
+	if len(slices) != 2 || slices[0].Id != 0 || slices[1].Len != 2<<20 {
+		t.Fatalf("inode %d should be compacted, but have %d slices, id %d size %d",
+			inode, len(slices), slices[0].Id, slices[1].Len)
+	}
+
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 0, uint32(512<<10), Slice{Id: sliceId, Size: 2 << 20, Len: 64 << 10}, time.Now())
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: sliceId, Size: 1 << 20, Len: 64 << 10}, time.Now())
+	m.NewSlice(ctx, &sliceId)
+	_ = m.Write(ctx, inode, 0, uint32(128<<10), Slice{Id: sliceId, Size: 2 << 20, Len: 128 << 10}, time.Now())
+	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: 0, Size: 1 << 20, Len: 1 << 20}, time.Now())
+	if c, ok := m.(compactor); ok {
+		c.compactChunk(inode, 0, true)
+	}
+	var slices2 []Slice
+	if st := m.Read(ctx, inode, 0, &slices2); st != 0 {
+		t.Fatalf("read 0: %s", st)
+	}
+	if len(slices) == 2 && len(slices2) == 2 {
+		slices2[1].Id = slices[1].Id
+	}
+	if !reflect.DeepEqual(slices, slices2) {
+		t.Fatalf("slices not equal:\n%+v\n%+v", slices, slices2)
+	}
 }
 
 func testConcurrentWrite(t *testing.T, m Meta) {
