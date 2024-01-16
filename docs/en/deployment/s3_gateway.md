@@ -147,6 +147,18 @@ $ mc ls juicefs/jfs
 [2021-10-20 11:59:06 CST] 1.3MiB man-1459246.ai
 [2021-10-20 11:59:08 CST]  19KiB sign-up-accent-left.07ab168.svg
 [2021-10-20 11:59:10 CST]  11MiB work-4997565.svg
+
+```
+
+### Use the virtual-host-style format
+
+By default, gateway supports path-style requests that are of the format <http://mydomain.com/bucket/object>. `MINIO_DOMAIN` environment variable is used to enable virtual-host-style requests. If the request `Host` header matches with `(.+).mydomain.com` then the matched pattern `$1` is used as bucket and the path is used as object.
+Example:
+
+```shell
+
+export MINIO_DOMAIN=mydomain.com
+
 ```
 
 ## Deploy JuiceFS S3 Gateway in Kubernetes {#deploy-in-kubernetes}
