@@ -2036,17 +2036,17 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return
 	}
 	skipped := skipSome(ss)
-	var last *slice
+	var first, last *slice
 	if skipped > 0 {
-		last = ss[skipped-1]
+		first, last = ss[0], ss[skipped-1]
 	}
 	ss = ss[skipped:]
 	pos, size, slices := compactChunk(ss)
 	if len(ss) < 2 || size == 0 {
 		return
 	}
-	if last != nil && last.pos+last.len > pos {
-		panic(fmt.Sprintf("invalid compaction: last skipped slice %+v, pos %d", last, pos))
+	if first != nil && last != nil && pos+size > first.pos && last.pos+last.len > pos {
+		panic(fmt.Sprintf("invalid compaction: skipped slices [%+v, %+v], pos %d, size %d", *first, *last, pos, size))
 	}
 
 	var id uint64
