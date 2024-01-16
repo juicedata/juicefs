@@ -28,9 +28,10 @@ import (
 
 	"github.com/erikdubbelboer/gspt"
 	"github.com/google/uuid"
+	"github.com/grafana/pyroscope-go"
+	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
-	"github.com/pyroscope-io/client/pyroscope"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/automaxprocs/maxprocs"
