@@ -726,9 +726,11 @@ Apart from options listed below, this command shares options with `juicefs mount
 
 |Items|Description|
 |-|-|
+| `--log value`<VersionAdd>1.2</VersionAdd>      | path for gateway log                                                                                   |
 |`META-URL`|Database URL for metadata storage, see [JuiceFS supported metadata engines](../reference/how_to_set_up_metadata_engine.md) for details.|
 |`ADDRESS`|S3 gateway address and listening port, for example: `localhost:9000`|
 |`--access-log=path`|path for JuiceFS access log.|
+| `--background, -d`<VersionAdd>1.2</VersionAdd> | run in background (default: false)                                                               |
 |`--no-banner`|disable MinIO startup information (default: false)|
 |`--multi-buckets`|use top level of directories as buckets (default: false)|
 |`--keep-etag`|save the ETag for uploaded objects (default: false)|
@@ -758,7 +760,9 @@ Apart from options listed below, this command shares options with `juicefs mount
 |`--key-file` <VersionAdd>1.1</VersionAdd> |key file for HTTPS|
 |`--gzip`|compress served files via gzip (default: false)|
 |`--disallowList`|disallow list a directory (default: false)|
+| `--log value`<VersionAdd>1.2</VersionAdd>      | path for WebDAV log|
 |`--access-log=path`|path for JuiceFS access log.|
+| `--background, -d`<VersionAdd>1.2</VersionAdd> | run in background (default: false)|
 
 ## Tool {#tool}
 

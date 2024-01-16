@@ -726,7 +726,9 @@ juicefs gateway redis://localhost localhost:9000
 
 |项 | 说明|
 |-|-|
+| `--log value`<VersionAdd>1.2</VersionAdd>      | 网关日志路径                                                                                   |
 |`META-URL`|用于元数据存储的数据库 URL，详情查看[「JuiceFS 支持的元数据引擎」](../reference/how_to_set_up_metadata_engine.md)。|
+| `--background, -d`<VersionAdd>1.2</VersionAdd> | 后台运行 (默认：false)                                                                    |
 |`ADDRESS`|S3 网关地址和监听的端口，例如：`localhost:9000`|
 |`--access-log=path`|访问日志的路径|
 |`--no-banner`|禁用 MinIO 的启动信息 (默认：false)|
@@ -758,7 +760,9 @@ juicefs webdav redis://localhost localhost:9007
 |`--key-file` <VersionAdd>1.1</VersionAdd>|HTTPS 密钥文件|
 |`--gzip`|通过 gzip 压缩提供的文件（默认值：false）|
 |`--disallowList`|禁止列出目录（默认值：false）|
+| `--log value`<VersionAdd>1.2</VersionAdd>      | WebDAV 日志路径                                                                              |
 |`--access-log=path`|访问日志的路径|
+| `--background, -d`<VersionAdd>1.2</VersionAdd> | 后台运行 (默认：false)                                                                          |
 
 ## 工具 {#tool}
 
