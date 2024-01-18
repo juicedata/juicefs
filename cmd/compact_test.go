@@ -23,7 +23,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -71,7 +70,6 @@ func initForCompactTest(mountDir string, dirs map[string]testDir) {
 }
 
 func TestCompact(t *testing.T) {
-	logger.Level = logrus.DebugLevel
 	var bucket string
 	mountTemp(t, &bucket, []string{"--trash-days=0"}, nil)
 	defer umountTemp(t)
@@ -107,7 +105,10 @@ func TestCompact(t *testing.T) {
 	chunkCnt := getFileCount(dataDir)
 	assert.Equal(t, sumChunks, chunkCnt)
 
-	for _, d := range dirs {
+	orderedDirs := []string{"d1/d11", "d1", "d2"}
+	for _, path := range orderedDirs {
+		d := dirs[path]
+
 		err := Main([]string{"", "compact", filepath.Join(testMountPoint, d.path)})
 		assert.Nil(t, err)
 
