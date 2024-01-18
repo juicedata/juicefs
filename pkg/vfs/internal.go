@@ -503,6 +503,25 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		w.Put32(uint32(len(data)))
 		w.Put(data)
 		_, _ = out.Write(w.Bytes())
+	case meta.CompactPath:
+		inode := Ino(r.Get64())
+		coCnt := r.Get16()
+
+		done := make(chan struct{})
+		var totalChunks, currChunks uint64
+		var eno syscall.Errno
+		go func() {
+			eno = v.Meta.Compact(ctx, inode, int(coCnt), func() {
+				atomic.AddUint64(&totalChunks, 1)
+			}, func() {
+				atomic.AddUint64(&currChunks, 1)
+			})
+			close(done)
+		}()
+
+		writeProgress(&totalChunks, &currChunks, out, done)
+		_, _ = out.Write([]byte{uint8(eno)})
+
 	case meta.FillCache:
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()

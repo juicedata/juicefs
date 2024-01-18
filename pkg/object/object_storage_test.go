@@ -126,7 +126,7 @@ func testStorage(t *testing.T, s ObjectStorage) {
 		}
 	}()
 
-	key := "测试编码文件" + `{"name":"zhijian"}` + string('\u001F')
+	key := "测试编码文件" + `{"name":"juicefs"}` + string('\u001F') + "%uFF081%uFF09.jpg"
 	if err := s.Put(key, bytes.NewReader(nil)); err != nil {
 		t.Logf("PUT testEncodeFile failed: %s", err.Error())
 	} else {

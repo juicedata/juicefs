@@ -18,14 +18,7 @@ package meta
 
 import (
 	"context"
-	"strconv"
 )
-
-type Ino uint64
-
-func (i Ino) String() string {
-	return strconv.FormatUint(uint64(i), 10)
-}
 
 type CtxKey string
 

@@ -254,7 +254,7 @@ CMD [ "juicefs" ]
 
 编译面向 Linux、macOS、BSD 等类 Unix 系统的客户端需要满足以下依赖：
 
-- [Go](https://golang.org) 1.18+
+- [Go](https://golang.org) 1.20+
 - GCC 5.4+
 
 1. 克隆源码
@@ -294,7 +294,7 @@ CMD [ "juicefs" ]
 在 Windows 系统编译 JuiceFS 客户端需要安装以下依赖：
 
 - [WinFsp](https://github.com/winfsp/winfsp)
-- [Go](https://golang.org) 1.18+
+- [Go](https://golang.org) 1.20+
 - GCC 5.4+
 
 其中，WinFsp 和 Go 直接下载安装即可。GCC 需要使用第三方提供的版本，可以使用 [MinGW-w64](https://www.mingw-w64.org) 或 [Cygwin](https://www.cygwin.com)，这里以 MinGW-w64 为例介绍。

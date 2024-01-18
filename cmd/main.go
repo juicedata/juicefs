@@ -28,9 +28,10 @@ import (
 
 	"github.com/erikdubbelboer/gspt"
 	"github.com/google/uuid"
+	"github.com/grafana/pyroscope-go"
+	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
-	"github.com/pyroscope-io/client/pyroscope"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/automaxprocs/maxprocs"
@@ -83,6 +84,7 @@ func Main(args []string) error {
 			cmdDebug(),
 			cmdClone(),
 			cmdSummary(),
+			cmdCompact(),
 		},
 	}
 
@@ -326,13 +328,16 @@ func setup(c *cli.Context, n int) {
 		tags["pid"] = strconv.Itoa(os.Getpid())
 		tags["version"] = version.Version()
 
+		types := []pyroscope.ProfileType{pyroscope.ProfileCPU, pyroscope.ProfileInuseObjects, pyroscope.ProfileAllocObjects,
+			pyroscope.ProfileInuseSpace, pyroscope.ProfileAllocSpace, pyroscope.ProfileGoroutines, pyroscope.ProfileMutexCount,
+			pyroscope.ProfileMutexDuration, pyroscope.ProfileBlockCount, pyroscope.ProfileBlockDuration}
 		if _, err := pyroscope.Start(pyroscope.Config{
 			ApplicationName: appName,
 			ServerAddress:   c.String("pyroscope"),
 			Logger:          logger,
 			Tags:            tags,
 			AuthToken:       os.Getenv("PYROSCOPE_AUTH_TOKEN"),
-			ProfileTypes:    pyroscope.DefaultProfileTypes,
+			ProfileTypes:    types,
 		}); err != nil {
 			logger.Errorf("start pyroscope agent: %v", err)
 		}

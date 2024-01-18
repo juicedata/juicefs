@@ -256,7 +256,7 @@ For users in China, in order to speed up the acquisition of Go modules, it is re
 
 Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the following dependencies:
 
-- [Go](https://golang.org) 1.18+
+- [Go](https://golang.org) 1.20+
 - GCC 5.4+
 
 1. Clone source code
@@ -296,7 +296,7 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 To compile the JuiceFS client on Windows system, the following dependencies need to be installed:
 
 - [WinFsp](https://github.com/winfsp/winfsp)
-- [Go](https://golang.org) 1.18+
+- [Go](https://golang.org) 1.20+
 - GCC 5.4+
 
 Among them, WinFsp and Go can be downloaded and installed directly. GCC needs to use a version provided by a third party, which can use [MinGW-w64](https://www.mingw-w64.org) or [Cygwin](https://www.cygwin.com). Here we take MinGW-w64 as an example.
