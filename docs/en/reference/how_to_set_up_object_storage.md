@@ -515,7 +515,7 @@ Create a Storage Zone and use the Zone Name with the Hostname of the Location se
 juicefs format \
     --storage bunny \
     --secret-key "write-password" \
-    --bucket "juicefs.uk.storage.bunnycdn.com" \ # <Zonename>.<Hostname>
+    --bucket "https://uk.storage.bunnycdn.com/myzone" \ # https://<Endpoint>/<Zonename>
     myjfs
 ```
 
