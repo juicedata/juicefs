@@ -58,13 +58,17 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 	logger.Infof("start to %s %d paths with %d workers", action, len(paths), concurrent)
 
 	start := time.Now()
-	todo := make(chan _file, 2*concurrent)
+	todo := make(chan _file, 10*concurrent)
 	wg := sync.WaitGroup{}
 	for i := 0; i < concurrent; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for f := range todo {
+				if ctx.Canceled() {
+					return
+				}
+
 				if f.ino == 0 {
 					continue
 				}
@@ -126,7 +130,7 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 		if attr.Typ == meta.TypeDirectory {
 			v.walkDir(ctx, inode, todo)
 		} else if attr.Typ == meta.TypeFile {
-			todo <- _file{inode, attr.Length}
+			_ = sendFile(ctx, todo, _file{inode, attr.Length})
 		}
 		if ctx.Canceled() {
 			break
@@ -139,6 +143,15 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 		logger.Infof("%s cancelled", action)
 	}
 	logger.Infof("%s %d paths in %s", action, len(paths), time.Since(start))
+}
+
+func sendFile(ctx meta.Context, todo chan _file, f _file) error {
+	select {
+	case todo <- f:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (v *VFS) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscall.Errno {
@@ -221,7 +234,7 @@ func (v *VFS) walkDir(ctx meta.Context, inode Ino, todo chan _file) {
 				if f.Attr.Typ == meta.TypeDirectory {
 					pending = append(pending, f.Inode)
 				} else if f.Attr.Typ != meta.TypeSymlink {
-					todo <- _file{f.Inode, f.Attr.Length}
+					_ = sendFile(ctx, todo, _file{f.Inode, f.Attr.Length})
 				}
 				if ctx.Canceled() {
 					return
