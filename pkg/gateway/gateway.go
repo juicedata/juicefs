@@ -196,11 +196,13 @@ func (n *jfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 }
 
 func (n *jfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, options minio.BucketOptions) error {
-	if err := n.isValidBucketName(bucket); err != nil {
-		return err
-	}
-	if !n.gConf.MultiBucket {
-		return nil
+	if bucket != minio.MinioMetaBucket {
+		if err := n.isValidBucketName(bucket); err != nil {
+			return err
+		}
+		if !n.gConf.MultiBucket {
+			return nil
+		}
 	}
 	eno := n.fs.Mkdir(mctx, n.path(bucket), 0777, n.gConf.Umask)
 	return jfsToObjectErr(ctx, eno, bucket)
