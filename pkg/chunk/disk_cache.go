@@ -355,7 +355,12 @@ func (cache *cacheStore) getPathFromKey(k cacheKey) string {
 
 func (cache *cacheStore) remove(key string) {
 	cache.Lock()
-	delete(cache.pages, key)
+
+	if p, ok := cache.pages[key]; ok {
+		p.Release()
+		delete(cache.pages, key)
+	}
+
 	path := cache.cachePath(key)
 	k := cache.getCacheKey(key)
 	if it, ok := cache.keys[k]; ok {
