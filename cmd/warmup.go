@@ -19,6 +19,7 @@ package cmd
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -28,8 +29,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/urfave/cli/v2"
 )
 
@@ -70,6 +73,14 @@ $ juicefs warmup -f /tmp/filelist`,
 				Name:    "background",
 				Aliases: []string{"b"},
 				Usage:   "run in background",
+			},
+			&cli.BoolFlag{
+				Name:  "evict",
+				Usage: "evict cached blocks",
+			},
+			&cli.BoolFlag{
+				Name:  "check",
+				Usage: "check whether the data blocks are cached or not",
 			},
 		},
 	}
@@ -128,7 +139,7 @@ END:
 }
 
 // send fill-cache command to controller file
-func sendCommand(cf *os.File, batch []string, threads uint, background bool, dspin *utils.DoubleSpinner) {
+func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads uint, background bool, dspin *utils.DoubleSpinner) vfs.CacheResponse {
 	paths := strings.Join(batch, "\n")
 	var back uint8
 	if background {
@@ -144,19 +155,39 @@ func sendCommand(cf *os.File, batch []string, threads uint, background bool, dsp
 	if _, err := cf.Write(wb.Bytes()); err != nil {
 		logger.Fatalf("Write message: %s", err)
 	}
+
+	var resp vfs.CacheResponse
 	if background {
-		logger.Infof("Warm-up cache for %d paths in background", len(batch))
-		return
+		logger.Infof("%s for %d paths in background", action, len(batch))
+		return resp
 	}
-	if _, errno := readProgress(cf, func(count, bytes uint64) {
-		dspin.SetCurrent(int64(count), int64(bytes))
-	}); errno != 0 {
-		logger.Fatalf("Warm up failed: %s", errno)
+
+	lastCnt, lastBytes := dspin.Current()
+	data, errno := readProgress(cf, func(fileCount, totalBytes uint64) {
+		dspin.SetCurrent(lastCnt+int64(fileCount), lastBytes+int64(totalBytes))
+	})
+
+	if errno != 0 {
+		logger.Fatalf("%s failed: %s", action, errno)
 	}
+
+	err := json.Unmarshal(data, &resp)
+	if err != nil {
+		logger.Fatalf("unmarshal error: %s", err)
+	}
+
+	return resp
 }
 
 func warmup(ctx *cli.Context) error {
 	setup(ctx, 0)
+
+	evict := ctx.Bool("evict")
+	check := ctx.Bool("check")
+	if evict && check {
+		logger.Fatalf("--check and --evict can't be used together")
+	}
+
 	var paths []string
 	for _, p := range ctx.Args().Slice() {
 		if abs, err := filepath.Abs(p); err == nil {
@@ -186,7 +217,7 @@ func warmup(ctx *cli.Context) error {
 		}
 	}
 	if len(paths) == 0 {
-		logger.Infof("Nothing to warm up")
+		logger.Infof("no path")
 		return nil
 	}
 
@@ -214,11 +245,20 @@ func warmup(ctx *cli.Context) error {
 		logger.Warnf("threads should be larger than 0, reset it to 1")
 		threads = 1
 	}
+
+	action := vfs.WarmupCache
+	if evict {
+		action = vfs.EvictCache
+	} else if check {
+		action = vfs.CheckCache
+	}
+
 	background := ctx.Bool("background")
 	start := len(mp)
 	batch := make([]string, 0, batchMax)
 	progress := utils.NewProgress(background)
-	dspin := progress.AddDoubleSpinner("Warming up")
+	dspin := progress.AddDoubleSpinner(string(action))
+	total := &vfs.CacheResponse{}
 	for _, path := range paths {
 		if mp == "/" {
 			inode, err := utils.GetFileInode(path)
@@ -234,18 +274,30 @@ func warmup(ctx *cli.Context) error {
 			continue
 		}
 		if len(batch) >= batchMax {
-			sendCommand(controller, batch, threads, background, dspin)
+			resp := sendCommand(controller, action, batch, threads, background, dspin)
+			total.Add(resp)
 			batch = batch[0:]
 		}
 	}
 	if len(batch) > 0 {
-		sendCommand(controller, batch, threads, background, dspin)
+		resp := sendCommand(controller, action, batch, threads, background, dspin)
+		total.Add(resp)
 	}
 	progress.Done()
+
 	if !background {
 		count, bytes := dspin.Current()
-		logger.Infof("Successfully warmed up %d files (%d bytes)", count, bytes)
+		switch action {
+		case vfs.WarmupCache:
+			logger.Infof("%s: %d files (%d bytes)", action, count, humanize.IBytes(uint64(bytes)))
+		case vfs.EvictCache:
+			logger.Infof("%s: %d files (%s bytes)", action, count, humanize.IBytes(uint64(bytes)))
+		case vfs.CheckCache:
+			logger.Infof("%s: %d files (%s of %s (%2.1f%%)) cached", action, count,
+				humanize.IBytes(uint64(bytes)-total.MissBytes),
+				humanize.IBytes(uint64(bytes)),
+				float64(uint64(bytes)-total.MissBytes)*100/float64(bytes))
+		}
 	}
-
 	return nil
 }

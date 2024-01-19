@@ -1033,6 +1033,30 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 	return err
 }
 
+func (store *cachedStore) EvictCache(id uint64, length uint32) error {
+	r := sliceForRead(id, int(length), store)
+	keys := r.keys()
+	for _, k := range keys {
+		store.bcache.remove(k)
+	}
+	return nil
+}
+
+func (store *cachedStore) CheckCache(id uint64, length uint32) (uint64, error) {
+	r := sliceForRead(id, int(length), store)
+	keys := r.keys()
+	missBytes := uint64(0)
+	for i, k := range keys {
+		tmpReader, err := store.bcache.load(k)
+		if err == nil {
+			_ = tmpReader.Close()
+			continue
+		}
+		missBytes += uint64(r.blockSize(i))
+	}
+	return missBytes, nil
+}
+
 func (store *cachedStore) UsedMemory() int64 {
 	return store.bcache.usedMemory()
 }
