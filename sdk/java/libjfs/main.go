@@ -287,6 +287,7 @@ type javaConf struct {
 	CacheChecksum     string  `json:"cacheChecksum"`
 	CacheEviction     string  `json:"cacheEviction"`
 	CacheScanInterval int     `json:"cacheScanInterval"`
+	CacheExpire       int64   `json:"cacheExpire"`
 	Writeback         bool    `json:"writeback"`
 	MemorySize        int     `json:"memorySize"`
 	Prefetch          int     `json:"prefetch"`
@@ -518,6 +519,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			CacheChecksum:     jConf.CacheChecksum,
 			CacheEviction:     jConf.CacheEviction,
 			CacheScanInterval: time.Second * time.Duration(jConf.CacheScanInterval),
+			CacheExpire:       time.Second * time.Duration(jConf.CacheExpire),
 			MaxUpload:         jConf.MaxUploads,
 			MaxRetries:        jConf.IORetries,
 			UploadLimit:       int64(jConf.UploadLimit) * 1e6 / 8,
