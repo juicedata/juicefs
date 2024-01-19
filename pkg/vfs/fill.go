@@ -58,7 +58,7 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 	logger.Infof("start to %s %d paths with %d workers", action, len(paths), concurrent)
 
 	start := time.Now()
-	todo := make(chan _file, 10240)
+	todo := make(chan _file, 2*concurrent)
 	wg := sync.WaitGroup{}
 	for i := 0; i < concurrent; i++ {
 		wg.Add(1)

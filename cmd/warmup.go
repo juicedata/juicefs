@@ -289,7 +289,7 @@ func warmup(ctx *cli.Context) error {
 		count, bytes := dspin.Current()
 		switch action {
 		case vfs.WarmupCache:
-			logger.Infof("%s: %d files (%d bytes)", action, count, humanize.IBytes(uint64(bytes)))
+			logger.Infof("%s: %d files (%s bytes)", action, count, humanize.IBytes(uint64(bytes)))
 		case vfs.EvictCache:
 			logger.Infof("%s: %d files (%s bytes)", action, count, humanize.IBytes(uint64(bytes)))
 		case vfs.CheckCache:
