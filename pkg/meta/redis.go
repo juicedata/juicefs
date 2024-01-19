@@ -2206,6 +2206,10 @@ func (m *redisMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (
 			m.touchAtime(ctx, inode, nil)
 		}
 	}()
+
+	if slices != nil {
+		*slices = nil
+	}
 	f := m.of.find(inode)
 	if f != nil {
 		f.RLock()
