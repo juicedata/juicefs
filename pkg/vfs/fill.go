@@ -141,64 +141,6 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 	logger.Infof("%s %d paths in %s", action, len(paths), time.Since(start))
 }
 
-func (v *VFS) fillCache(ctx meta.Context, paths []string, concurrent int, count, bytes *uint64) {
-	logger.Infof("start to warmup %d paths with %d workers", len(paths), concurrent)
-	start := time.Now()
-	todo := make(chan _file, 10240)
-	wg := sync.WaitGroup{}
-	for i := 0; i < concurrent; i++ {
-		wg.Add(1)
-		go func() {
-			for {
-				f := <-todo
-				if f.ino == 0 {
-					break
-				}
-				if err := v.fillInode(ctx, f.ino, f.size, bytes); err != nil {
-					logger.Errorf("Inode %d could be corrupted: %s", f.ino, err)
-				}
-				if v.Conf.Meta.OpenCache > 0 {
-					if err := v.Meta.Open(ctx, f.ino, syscall.O_RDONLY, &meta.Attr{}); err != 0 {
-						logger.Errorf("Inode %d could be opened: %s", f.ino, err)
-					}
-					_ = v.Meta.Close(ctx, f.ino)
-				}
-				if count != nil {
-					atomic.AddUint64(count, 1)
-				}
-				if ctx.Canceled() {
-					break
-				}
-			}
-			wg.Done()
-		}()
-	}
-
-	var inode Ino
-	var attr = &Attr{}
-	for _, p := range paths {
-		if st := v.resolve(ctx, p, &inode, attr); st != 0 {
-			logger.Warnf("Failed to resolve path %s: %s", p, st)
-			continue
-		}
-		logger.Debugf("Warming up path %s", p)
-		if attr.Typ == meta.TypeDirectory {
-			v.walkDir(ctx, inode, todo)
-		} else if attr.Typ == meta.TypeFile {
-			todo <- _file{inode, attr.Length}
-		}
-		if ctx.Canceled() {
-			break
-		}
-	}
-	close(todo)
-	wg.Wait()
-	if ctx.Canceled() {
-		logger.Infof("warmup cancelled")
-	}
-	logger.Infof("Warmup %d paths in %s", len(paths), time.Since(start))
-}
-
 func (v *VFS) resolve(ctx meta.Context, p string, inode *Ino, attr *Attr) syscall.Errno {
 	var inodePrefix = "inode:"
 	if strings.HasPrefix(p, inodePrefix) {
@@ -372,25 +314,4 @@ func newSliceIterator(ctx meta.Context, mClient meta.Meta, ino Ino, size uint64)
 		nextChunkIndex: 0,
 		chunkCnt:       uint32((size + meta.ChunkSize - 1) / meta.ChunkSize),
 	}
-}
-
-func (v *VFS) fillInode(ctx meta.Context, inode Ino, size uint64, bytes *uint64) error {
-	var slices []meta.Slice
-	for indx := uint64(0); indx*meta.ChunkSize < size; indx++ {
-		if st := v.Meta.Read(ctx, inode, uint32(indx), &slices); st != 0 {
-			return fmt.Errorf("Failed to get slices of inode %d index %d: %d", inode, indx, st)
-		}
-		for _, s := range slices {
-			if bytes != nil {
-				atomic.AddUint64(bytes, uint64(s.Size))
-			}
-			if err := v.Store.FillCache(s.Id, s.Size); err != nil {
-				return fmt.Errorf("Failed to cache inode %d slice %d: %s", inode, s.Id, err)
-			}
-			if ctx.Canceled() {
-				return syscall.EINTR
-			}
-		}
-	}
-	return nil
 }
