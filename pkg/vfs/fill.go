@@ -187,6 +187,7 @@ func (v *VFS) walkDir(ctx meta.Context, inode Ino, todo chan _file) {
 func (v *VFS) fillInode(ctx meta.Context, inode Ino, size uint64, bytes *uint64) error {
 	var slices []meta.Slice
 	for indx := uint64(0); indx*meta.ChunkSize < size; indx++ {
+		slices = nil
 		if st := v.Meta.Read(ctx, inode, uint32(indx), &slices); st != 0 {
 			return fmt.Errorf("Failed to get slices of inode %d index %d: %d", inode, indx, st)
 		}
