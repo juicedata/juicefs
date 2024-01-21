@@ -38,7 +38,7 @@ require (
 	github.com/juicedata/gogfapi v0.0.0-20230626071140-fc28e5537825
 	github.com/juju/ratelimit v1.0.2
 	github.com/ks3sdklib/aws-sdk-go v1.2.2
-	github.com/l0wl3vel/bunny-storage-go-sdk v0.0.3
+	github.com/l0wl3vel/bunny-storage-go-sdk v0.0.4
 	github.com/mattn/go-isatty v0.0.18
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/minio/cli v1.24.2
@@ -172,7 +172,7 @@ require (
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
 	github.com/klauspost/compress v1.17.3 // indirect
 	github.com/klauspost/cpuid v1.3.1 // indirect
-	github.com/klauspost/cpuid/v2 v2.0.3 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.3 // indirect
 	github.com/klauspost/pgzip v1.2.5 // indirect
 	github.com/klauspost/readahead v1.3.1 // indirect
 	github.com/klauspost/reedsolomon v1.9.11 // indirect
@@ -185,7 +185,7 @@ require (
 	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/minio/md5-simd v1.1.1 // indirect
 	github.com/minio/selfupdate v0.3.1 // indirect
-	github.com/minio/sha256-simd v0.1.1 // indirect
+	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/minio/simdjson-go v0.2.1 // indirect
 	github.com/minio/sio v0.2.1 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
