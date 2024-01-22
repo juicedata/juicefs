@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/stretchr/testify/assert"
 )
 
 func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
@@ -246,6 +247,29 @@ func TestFillCache(t *testing.T) {
 	if cnt, used := bcache.stats(); cnt != 2 || used != expect {
 		t.Fatalf("cache cnt %d used %d, expect cnt 2 used %d", cnt, used, expect)
 	}
+
+	// check
+	missBytes, err := store.CheckCache(10, 1024)
+	assert.Nil(t, err)
+	assert.Equal(t, uint64(0), missBytes)
+
+	missBytes, err = store.CheckCache(11, uint32(bsize))
+	assert.Nil(t, err)
+	assert.Equal(t, uint64(0), missBytes)
+
+	// evict slice 11
+	err = store.EvictCache(11, uint32(bsize))
+	assert.Nil(t, err)
+
+	// stat
+	if cnt, used := bcache.stats(); cnt != 1 || used != 1024+4096 { // only chunk 10 cached
+		t.Fatalf("cache cnt %d used %d, expect cnt 1 used 5120", cnt, used)
+	}
+
+	// check again
+	missBytes, err = store.CheckCache(11, uint32(bsize))
+	assert.Nil(t, err)
+	assert.Equal(t, uint64(bsize), missBytes)
 }
 
 func BenchmarkCachedRead(b *testing.B) {
