@@ -145,13 +145,17 @@ func sendCommand(cf *os.File, action vfs.CacheAction, batch []string, threads ui
 	if background {
 		back = 1
 	}
-	wb := utils.NewBuffer(8 + 4 + 3 + uint32(len(paths)))
+	headerLen, bodyLen := uint32(8), uint32(4+len(paths)+2+1+1)
+	wb := utils.NewBuffer(headerLen + bodyLen)
 	wb.Put32(meta.FillCache)
-	wb.Put32(4 + 3 + uint32(len(paths)))
+	wb.Put32(bodyLen)
+
 	wb.Put32(uint32(len(paths)))
 	wb.Put([]byte(paths))
 	wb.Put16(uint16(threads))
 	wb.Put8(back)
+	wb.Put8(uint8(action))
+
 	if _, err := cf.Write(wb.Bytes()); err != nil {
 		logger.Fatalf("Write message: %s", err)
 	}
