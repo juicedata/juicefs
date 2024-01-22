@@ -261,7 +261,7 @@ func warmup(ctx *cli.Context) error {
 	start := len(mp)
 	batch := make([]string, 0, batchMax)
 	progress := utils.NewProgress(background)
-	dspin := progress.AddDoubleSpinner(string(action))
+	dspin := progress.AddDoubleSpinner(action.String())
 	total := &vfs.CacheResponse{}
 	for _, path := range paths {
 		if mp == "/" {

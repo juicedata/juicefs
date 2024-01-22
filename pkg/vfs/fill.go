@@ -70,7 +70,8 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 				}
 
 				if f.ino == 0 {
-					continue
+					ctx.Cancel()
+					return
 				}
 
 				iter := newSliceIterator(ctx, v.Meta, f.ino, f.size)
@@ -107,7 +108,7 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 				// log and skip error
 				err := iter.Iterate(handler)
 				if err != nil {
-					logger.Error(fmt.Errorf("%s error: %w", action, err))
+					logger.Errorf("%s error : %s", action, err)
 				}
 
 				if resp != nil {
@@ -297,13 +298,13 @@ func (iter *sliceIterator) next() meta.Slice {
 }
 
 func (iter *sliceIterator) Iterate(handler sliceHandler) error {
+	if handler == nil {
+		return fmt.Errorf("handler not set")
+	}
 	for iter.hasNext() {
 		s := iter.next()
 		iter.stat.count++
 		iter.stat.bytes += uint64(s.Size)
-		if handler == nil {
-			return fmt.Errorf("handler not set")
-		}
 		if err := handler(s); err != nil {
 			return fmt.Errorf("inode %d slice %d : %w", iter.ino, s.Id, err)
 		}
