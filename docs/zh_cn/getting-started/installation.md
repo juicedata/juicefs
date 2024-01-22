@@ -1,7 +1,6 @@
 ---
 title: 安装
-sidebar_position: 2
-pagination_prev: introduction/comparison/juicefs_vs_s3ql
+sidebar_position: 1
 description: 本文介绍 JuiceFS 在 Linux、macOS 和 Windows 上的安装方法，包括一键安装、编译安装和容器化安装。
 ---
 
@@ -36,7 +35,7 @@ curl -sSL https://d.juicefs.com/install | sh -s /tmp
 | `juicefs-x.y.z-windows-amd64.tar.gz` | 面向 x86 架构的 Windows 系统                                                    |
 | `juicefs-hadoop-x.y.z.jar`           | 面向 x86 和 ARM 架构的 Hadoop Java SDK（同时支持 Linux、macOS 及 Windows 系统） |
 
-### Linux 发行版
+### Linux 发行版 {#linux}
 
 以 x86 架构的 Linux 系统为例，下载文件名包含 `linux-amd64` 的压缩包，在终端依次执行以下命令。
 
@@ -103,7 +102,49 @@ sudo dnf copr enable -y juicedata/juicefs
 sudo dnf install juicefs
 ```
 
-### Windows 系统
+#### Snapcraft
+
+我们也在 [Canonical Snapcraft](https://snapcraft.io) 平台打包并发布了 [Snap 版本的 JuiceFS 客户端](https://github.com/juicedata/juicefs-snapcraft)，对于 Ubuntu 16.04 及以上版本和其他支持 Snap 的操作系统，可以直接使用以下命令安装：
+
+```shell
+sudo snap install juicefs
+# 由于 Snap 是一个封闭的沙箱环境，它会影响客户端的 FUSE 挂载，执行以下命令可以解除限制。
+# 如果只需使用 WebDAV 和 Gateway 则不必执行以下命令。
+sudo ln -s -f /snap/juicefs/current/juicefs /snap/bin/juicefs
+```
+
+#### AUR (Arch User Repository) {#aur}
+
+JuiceFS 也提供 [AUR](https://aur.archlinux.org/packages/juicefs) 仓库，可以方便地在 Arch Linux 及其衍生系统上安装最新版的客户端。
+
+对于使用 Yay 包管理器的系统，执行以下命令安装客户端：
+
+```shell
+yay -S juicefs
+```
+
+:::info 说明
+AUR 上存在多个 JuiceFS 客户端的打包，以下是 JuiceFS 官方维护的版本：
+
+- [`aur/juicefs`](https://aur.archlinux.org/packages/juicefs)：是稳定编译版，安装时会拉取最新的稳定版源码并编译安装；
+- [`aur/juicefs-bin`](https://aur.archlinux.org/packages/juicefs-bin)：是稳定预编译版，安装时会直接下载最新的稳定版预编译程序并安装；
+- [`aur/juicefs-git`](https://aur.archlinux.org/packages/juicefs-git)：是开发版，安装时会拉取最新的开发版源码并编译安装；
+:::
+
+另外，你也可以使用 `makepkg` 手动编译安装，以 Arch Linux 系统为例：
+
+```shell
+# 安装依赖
+sudo pacman -S base-devel git go
+# 克隆要打包的 AUR 仓库
+git clone https://aur.archlinux.org/juicefs.git
+# 进入仓库目录
+cd juicefs
+# 编译安装
+makepkg -si
+```
+
+### Windows 系统 {#windows}
 
 在 Windows 系统安装 JuiceFS 有以下几种方法：
 
@@ -145,7 +186,7 @@ scoop install juicefs
 
 详情查看「[在 WSL 中使用 JuiceFS](../tutorials/juicefs_on_wsl.md)」
 
-### macOS 系统
+### macOS 系统 {#macos}
 
 由于 macOS 默认不支持 FUSE 接口，需要先安装 [macFUSE](https://osxfuse.github.io) 实现对 FUSE 的支持。
 
@@ -171,7 +212,7 @@ brew install juicefs
 sudo install juicefs /usr/local/bin
 ```
 
-### Docker 容器
+### Docker 容器 {#docker}
 
 对于要在 Docker 容器中使用 JuiceFS 的情况，这里提供一份构建 JuiceFS 客户端镜像的 `Dockerfile`，可以以此为基础单独构建 JuiceFS 客户端镜像或与其他应用打包在一起使用。
 
@@ -213,7 +254,7 @@ CMD [ "juicefs" ]
 
 编译面向 Linux、macOS、BSD 等类 Unix 系统的客户端需要满足以下依赖：
 
-- [Go](https://golang.org) 1.18+
+- [Go](https://golang.org) 1.20+
 - GCC 5.4+
 
 1. 克隆源码
@@ -253,7 +294,7 @@ CMD [ "juicefs" ]
 在 Windows 系统编译 JuiceFS 客户端需要安装以下依赖：
 
 - [WinFsp](https://github.com/winfsp/winfsp)
-- [Go](https://golang.org) 1.18+
+- [Go](https://golang.org) 1.20+
 - GCC 5.4+
 
 其中，WinFsp 和 Go 直接下载安装即可。GCC 需要使用第三方提供的版本，可以使用 [MinGW-w64](https://www.mingw-w64.org) 或 [Cygwin](https://www.cygwin.com)，这里以 MinGW-w64 为例介绍。

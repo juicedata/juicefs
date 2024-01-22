@@ -773,7 +773,7 @@ sudo yum install librados2-devel
   </TabItem>
 </Tabs>
 
-然后为 Ceph 编译 JuiceFS（要求 Go 1.18+ 和 GCC 5.4+）：
+然后为 Ceph 编译 JuiceFS（要求 Go 1.20+ 和 GCC 5.4+）：
 
 ```bash
 make juicefs.ceph
@@ -1211,7 +1211,7 @@ juicefs format  \
 
 #### 注意事项
 
-- `--bucket` 用来设置服务器的地址及存储路径，格式为 `<IP/Domain>:[port]:<Path>`。注意，地址中不要包含协议头，目录名应该以 `/` 结尾，端口号为可选项默认为 `22`，例如 `192.168.1.11:22:myjfs/`。
+- `--bucket` 用来设置服务器的地址及存储路径，格式为 `[sftp://]<IP/Domain>:[port]:<Path>`。注意，目录名应该以 `/` 结尾，端口号为可选项默认为 `22`，例如 `192.168.1.11:22:myjfs/`。
 - `--access-key` 用来设置远程服务器的用户名
 - `--secret-key` 用来设置远程服务器的密码
 

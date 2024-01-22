@@ -35,12 +35,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"xorm.io/xorm"
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
+
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 const MaxFieldsCountOfTable = 16 // node table
@@ -1164,13 +1165,16 @@ func (m *dbMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 		if !ok {
 			return syscall.ENOENT
 		}
+		if nodeAttr.Type != TypeSymlink {
+			return syscall.EINVAL
+		}
 		l := symlink{Inode: inode}
 		ok, e = s.Get(&l)
 		if e != nil {
 			return e
 		}
 		if !ok {
-			return syscall.ENOENT
+			return syscall.EIO
 		}
 		m.parseAttr(&nodeAttr, attr)
 		target = l.Target
@@ -1696,6 +1700,10 @@ func (m *dbMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			}
 			return nil
 		}
+		// TODO: check parentDst is a subdir of source node
+		if se.Inode == parentDst || se.Inode == dpattr.Parent {
+			return syscall.EPERM
+		}
 		var sn = node{Inode: se.Inode}
 		ok, err = s.Get(&sn)
 		if err != nil {
@@ -2187,6 +2195,10 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 			m.touchAtime(ctx, inode, nil)
 		}
 	}()
+
+	if slices != nil {
+		*slices = nil
+	}
 	f := m.of.find(inode)
 	if f != nil {
 		f.RLock()
@@ -2204,6 +2216,17 @@ func (m *dbMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	})
 	if err != nil {
 		return errno(err)
+	}
+	if len(c.Slices) == 0 {
+		var attr Attr
+		eno := m.doGetAttr(ctx, inode, &attr)
+		if eno != 0 {
+			return eno
+		}
+		if attr.Typ != TypeFile {
+			return syscall.EPERM
+		}
+		return 0
 	}
 	ss := readSliceBuf(c.Slices)
 	if ss == nil {
@@ -2276,7 +2299,8 @@ func (m *dbMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		}
 		_, err = s.Cols("length", "mtime", "ctime", "mtimensec", "ctimensec").Update(&nodeAttr, &node{Inode: inode})
 		if err == nil {
-			needCompact = (len(ck.Slices)/sliceBytes)%100 == 99
+			ns := len(ck.Slices) / sliceBytes // number of slices
+			needCompact = ns%100 == 99 || ns > 350
 		}
 		return err
 	}, inode)
@@ -2754,6 +2778,9 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if err != nil {
 		return
 	}
+	if len(c.Slices) > sliceBytes*maxCompactSlices {
+		c.Slices = c.Slices[:sliceBytes*maxCompactSlices]
+	}
 
 	ss := readSliceBuf(c.Slices)
 	if ss == nil {
@@ -2761,10 +2788,17 @@ func (m *dbMeta) compactChunk(inode Ino, indx uint32, force bool) {
 		return
 	}
 	skipped := skipSome(ss)
+	var first, last *slice
+	if skipped > 0 {
+		first, last = ss[0], ss[skipped-1]
+	}
 	ss = ss[skipped:]
 	pos, size, slices := compactChunk(ss)
 	if len(ss) < 2 || size == 0 {
 		return
+	}
+	if first != nil && last != nil && pos+size > first.pos && last.pos+last.len > pos {
+		panic(fmt.Sprintf("invalid compaction: skipped slices [%+v, %+v], pos %d, size %d", *first, *last, pos, size))
 	}
 
 	var id uint64
@@ -3352,7 +3386,7 @@ func (m *dbMeta) dumpEntryFast(s *xorm.Session, inode Ino, typ uint8) *DumpedEnt
 	e := &DumpedEntry{}
 	n, ok := m.snap.node[inode]
 	if !ok && inode != TrashInode {
-		logger.Errorf("Corrupt inode: %d, missing attribute", inode)
+		logger.Warnf("Corrupt inode: %d, missing attribute", inode)
 	}
 
 	attr := &Attr{Typ: typ, Nlink: 1}

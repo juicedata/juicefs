@@ -732,6 +732,89 @@ function test_multipart_upload() {
         fi
     fi
 
+
+    for key in "afile" "bfile" "bfile" "documents/report1.pdf" "documents/report2.pdf" "ebook" "photos/2021/a2.png" "photos/2021/a3.png" "photos/2022/a4.png"
+    do
+      if [ $rv -eq 0 ]; then
+        # create multipart
+        function="${AWS} s3api create-multipart-upload --bucket ${bucket_name} --key ${key}"
+        test_function=${function}
+        out=$($function)
+        rv=$?
+        upload_id=$(echo "$out" | jq -r .UploadId)
+      fi
+    done
+
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api list-multipart-uploads --bucket ${bucket_name}"
+      test_function=${function}
+      out=$($function)
+      rv=$?
+      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
+      if [ $keys != "afilebfilebfiledocuments/report1.pdfdocuments/report2.pdfebookphotos/2021/a2.pngphotos/2021/a3.pngphotos/2022/a4.png" ]; then
+       rv=1
+       out="list-multipart-uploads failed"
+      fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api list-multipart-uploads --bucket ${bucket_name} --key-marker bfile"
+      test_function=${function}
+      out=$($function)
+      rv=$?
+      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
+      if [ $keys != "bfilebfiledocuments/report1.pdfdocuments/report2.pdfebookphotos/2021/a2.pngphotos/2021/a3.pngphotos/2022/a4.png" ]; then
+       rv=1
+       out="list-multipart-upload failed"
+      fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api list-multipart-uploads --bucket ${bucket_name} --key-marker bfile --delimiter /"
+      test_function=${function}
+      out=$($function)
+      rv=$?
+      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
+      if [ $keys != "afilebfilebfileebook" ]; then
+       rv=1
+       out="list-multipart-uploads failed"
+      fi
+      keys=$(echo "$out" | jq 'foreach .CommonPrefixes[] as $CommonPrefix (null; . + $CommonPrefix.Prefix)')
+      if [ $keys != "documents/photos/" ]; then
+       rv=1
+       out="list-multipart-uploads failed"
+      fi
+    fi
+
+     if [ $rv -eq 0 ]; then
+        function="${AWS} s3api list-multipart-uploads --bucket ${bucket_name} --delimiter /  --max-upload 5"
+        test_function=${function}
+        out=$($function)
+        rv=$?
+        keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
+        if [ $keys != "afilebfilebfileebook" ]; then
+         rv=1
+         out="list-multipart-uploads failed"
+        fi
+        keys=$(echo "$out" | jq -r '.CommonPrefixes[0].Prefix')
+        if [ $keys != "documents/" ]; then
+         rv=1
+         out="list-multipart-uploads failed"
+        fi
+     fi
+
+    if [ $rv -eq 0 ]; then
+      function="${AWS} s3api list-multipart-uploads --bucket ${bucket_name} --prefix documents/"
+      test_function=${function}
+      out=$($function)
+      rv=$?
+      keys=$(echo "$out" | jq 'foreach .Uploads[] as $upload (null; . + $upload.Key)')
+        if [ $keys != "documents/report1.pdfdocuments/report2.pdf" ]; then
+         rv=1
+         out="list-multipart-upload failed"
+        fi
+    fi
+
     if [ $rv -eq 0 ]; then
         function="delete_bucket"
         out=$(delete_bucket "$bucket_name")

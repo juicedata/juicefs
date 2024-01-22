@@ -1062,10 +1062,16 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 	now := time.Now()
 	err = m.txn(func(tx *kvTxn) error {
 		rs := tx.gets(m.inodeKey(inode), m.symKey(inode))
-		if rs[0] == nil || rs[1] == nil {
+		if rs[0] == nil {
 			return syscall.ENOENT
 		}
 		m.parseAttr(rs[0], attr)
+		if attr.Typ != TypeSymlink {
+			return syscall.EINVAL
+		}
+		if rs[1] == nil {
+			return syscall.EIO
+		}
 		target = rs[1]
 		if !m.atimeNeedsUpdate(attr, now) {
 			return nil
@@ -1514,6 +1520,10 @@ func (m *kvMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		if st := m.Access(ctx, parentDst, MODE_MASK_W|MODE_MASK_X, &dattr); st != 0 {
 			return st
 		}
+		// TODO: check parentDst is a subdir of source node
+		if ino == parentDst || ino == dattr.Parent {
+			return syscall.EPERM
+		}
 		m.parseAttr(rs[2], &iattr)
 		if (sattr.Flags&FlagAppend) != 0 || (sattr.Flags&FlagImmutable) != 0 || (dattr.Flags&FlagImmutable) != 0 || (iattr.Flags&FlagAppend) != 0 || (iattr.Flags&FlagImmutable) != 0 {
 			return syscall.EPERM
@@ -1881,6 +1891,10 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 			m.touchAtime(ctx, inode, nil)
 		}
 	}()
+
+	if slices != nil {
+		*slices = nil
+	}
 	f := m.of.find(inode)
 	if f != nil {
 		f.RLock()
@@ -1894,6 +1908,17 @@ func (m *kvMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) (rer
 	val, err := m.get(m.chunkKey(inode, indx))
 	if err != nil {
 		return errno(err)
+	}
+	if len(val) == 0 {
+		var attr Attr
+		eno := m.doGetAttr(ctx, inode, &attr)
+		if eno != 0 {
+			return eno
+		}
+		if attr.Typ != TypeFile {
+			return syscall.EPERM
+		}
+		return 0
 	}
 	ss := readSliceBuf(val)
 	if ss == nil {
@@ -1957,7 +1982,8 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 		val = append(rs[1], val...)
 		tx.set(m.inodeKey(inode), m.marshal(&attr))
 		tx.set(m.chunkKey(inode, indx), val)
-		needCompact = (len(val)/sliceBytes)%100 == 99
+		ns := len(val) / sliceBytes // number of slices
+		needCompact = ns%100 == 99 || ns > 350
 		return nil
 	}, inode)
 	if err == nil {
@@ -2378,20 +2404,27 @@ func (m *kvMeta) compactChunk(inode Ino, indx uint32, force bool) {
 	if err != nil {
 		return
 	}
-
-	if len(buf) > sliceBytes*100 {
-		buf = buf[:sliceBytes*100]
+	if len(buf) > sliceBytes*maxCompactSlices {
+		buf = buf[:sliceBytes*maxCompactSlices]
 	}
+
 	ss := readSliceBuf(buf)
 	if ss == nil {
 		logger.Errorf("Corrupt value for inode %d chunk indx %d", inode, indx)
 		return
 	}
 	skipped := skipSome(ss)
+	var first, last *slice
+	if skipped > 0 {
+		first, last = ss[0], ss[skipped-1]
+	}
 	ss = ss[skipped:]
 	pos, size, slices := compactChunk(ss)
 	if len(ss) < 2 || size == 0 {
 		return
+	}
+	if first != nil && last != nil && pos+size > first.pos && last.pos+last.len > pos {
+		panic(fmt.Sprintf("invalid compaction: skipped slices [%+v, %+v], pos %d, size %d", *first, *last, pos, size))
 	}
 
 	var id uint64
@@ -2903,7 +2936,7 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 		entries = e.Entries
 		for n, de := range e.Entries {
 			if !de.Attr.full && de.Attr.Inode != TrashInode {
-				logger.Errorf("Corrupt inode: %d, missing attribute", inode)
+				logger.Warnf("Corrupt inode: %d, missing attribute", inode)
 			}
 			sortedName = append(sortedName, n)
 		}

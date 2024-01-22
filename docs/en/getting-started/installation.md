@@ -1,7 +1,6 @@
 ---
 title: Installation
-sidebar_position: 2
-pagination_prev: introduction/comparison/juicefs_vs_s3ql
+sidebar_position: 1
 description: This article describes how to install JuiceFS on Linux, macOS and Windows, including one-click installation, compiled and containerized.
 ---
 
@@ -36,7 +35,7 @@ You can download the latest version of the client at [GitHub](https://github.com
 | `juicefs-x.y.z-windows-amd64.tar.gz` | For Windows on x86 architecture                                                              |
 | `juicefs-hadoop-x.y.z.jar`           | Hadoop Java SDK on x86 and ARM architecture (supports both Linux, macOS and Windows systems) |
 
-### Linux
+### Linux {#linux}
 
 For Linux systems with x86 architecture, download the file with the file name `linux-amd64` and execute the following command in the terminal.
 
@@ -103,7 +102,51 @@ sudo dnf copr enable -y juicedata/juicefs
 sudo dnf install juicefs
 ```
 
-### Windows
+#### Snapcraft
+
+We have also packaged and released the [Snap version of the JuiceFS client](https://github.com/juicedata/juicefs-snapcraft) on the [Canonical Snapcraft](https://snapcraft.io) platform for Ubuntu 16.04 and above and other Snap-enabled operating systems can be installed directly using the following command:
+
+```shell
+sudo snap install juicefs
+# Since Snap is a closed sandbox environment, it may affect
+# the client's FUSE mount. You can remove the restriction by
+# executing the following command. If you only need to use
+# WebDAV and Gateway, there is no need to execute.
+sudo ln -s -f /snap/juicefs/current/juicefs /snap/bin/juicefs
+```
+
+#### AUR (Arch User Repository) {#aur}
+
+JuiceFS also provides a [AUR](https://aur.archlinux.org/packages/juicefs) repository, which makes it convenient to install the latest version of the client on Arch Linux and its derivatives.
+
+For systems using the Yay package manager, execute the following command to install the client:
+
+```shell
+yay -S juicefs
+```
+
+:::info
+There are multiple JuiceFS client packages available on AUR. The following are versions officially maintained by JuiceFS:
+
+- [`aur/juicefs`](https://aur.archlinux.org/packages/juicefs): Stable compiled version that fetches the latest stable source code and compiles it during installation.
+- [`aur/juicefs-bin`](https://aur.archlinux.org/packages/juicefs-bin): Stable pre-compiled version that directly downloads and installs the latest stable pre-compiled program.
+- [`aur/juicefs-git`](https://aur.archlinux.org/packages/juicefs-git): Development version that fetches the latest development source code and compiles it during installation.
+:::
+
+Additionally, you can manually compile and install using `makepkg`, as shown for an Arch Linux system:
+
+```shell
+# Install dependencies
+sudo pacman -S base-devel git go
+# Clone the AUR repository to be packaged
+git clone https://aur.archlinux.org/juicefs.git
+# Navigate to the repository directory
+cd juicefs
+# Compile and install
+makepkg -si
+```
+
+### Windows {#windows}
 
 There are two ways to use JuiceFS on Windows systems.
 
@@ -145,7 +188,7 @@ scoop install juicefs
 
 For details, see "[Using JuiceFS on WSL](../tutorials/juicefs_on_wsl.md)"
 
-### macOS
+### macOS {#macos}
 
 Since macOS does not support the FUSE interface by default, you need to install [macFUSE](https://osxfuse.github.io) first to implement the support for FUSE.
 
@@ -171,7 +214,7 @@ You can also download the binary with the filename of `darwin-amd64`, unzip it a
 sudo install juicefs /usr/local/bin
 ```
 
-### Docker
+### Docker {#docker}
 
 In cases one wants to use JuiceFS in a Docker container, a `Dockerfile` for building a JuiceFS client image is provided below, which can be used as a base to build a JuiceFS client image alone or packaged together with other applications.
 
@@ -213,7 +256,7 @@ For users in China, in order to speed up the acquisition of Go modules, it is re
 
 Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the following dependencies:
 
-- [Go](https://golang.org) 1.18+
+- [Go](https://golang.org) 1.20+
 - GCC 5.4+
 
 1. Clone source code
@@ -253,7 +296,7 @@ Compiling clients for Linux, macOS, BSD and other Unix-like systems requires the
 To compile the JuiceFS client on Windows system, the following dependencies need to be installed:
 
 - [WinFsp](https://github.com/winfsp/winfsp)
-- [Go](https://golang.org) 1.18+
+- [Go](https://golang.org) 1.20+
 - GCC 5.4+
 
 Among them, WinFsp and Go can be downloaded and installed directly. GCC needs to use a version provided by a third party, which can use [MinGW-w64](https://www.mingw-w64.org) or [Cygwin](https://www.cygwin.com). Here we take MinGW-w64 as an example.

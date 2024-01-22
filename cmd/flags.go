@@ -228,6 +228,7 @@ func dataCacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "cache-expire",
+			Value: "0",
 			Usage: "cached blocks not accessed for longer than this option will be automatically evicted (0 means never)",
 		},
 	})
@@ -290,6 +291,10 @@ func shareInfoFlags() []cli.Flag {
 			Name:  "metrics",
 			Value: "127.0.0.1:9567",
 			Usage: "address to export metrics",
+		},
+		&cli.StringFlag{
+			Name:  "custom-labels",
+			Usage: "custom labels for metrics",
 		},
 		&cli.StringFlag{
 			Name:  "consul",

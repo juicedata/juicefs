@@ -62,17 +62,24 @@ func Test_exposeMetrics(t *testing.T) {
 					return "127.0.0.1:9567"
 				case "consul":
 					return "127.0.0.1:8500"
+				case "custom-labels":
+					return "key1:value1"
 				default:
 					return ""
 				}
 			})
-			isSetPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "IsSet", func(_ *cli.Context, _ string) bool {
-				return false
+			isSetPatches := gomonkey.ApplyMethod(reflect.TypeOf(appCtx), "IsSet", func(_ *cli.Context, arg string) bool {
+				switch arg {
+				case "custom-labels":
+					return true
+				default:
+					return false
+				}
 			})
 			defer stringPatches.Reset()
 			defer isSetPatches.Reset()
 			ResetHttp()
-			registerer, registry := wrapRegister("test", "test")
+			registerer, registry := wrapRegister(appCtx, "test", "test")
 			metricsAddr := exposeMetrics(appCtx, registerer, registry)
 			client.InitMetrics(registerer)
 			vfs.InitMetrics(registerer)
@@ -82,6 +89,7 @@ func Test_exposeMetrics(t *testing.T) {
 			all, err := io.ReadAll(resp.Body)
 			So(err, ShouldBeNil)
 			So(string(all), ShouldNotBeBlank)
+			So(string(all), ShouldContainSubstring, `key1="value1"`)
 		})
 	})
 }

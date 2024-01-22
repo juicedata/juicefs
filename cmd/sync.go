@@ -72,7 +72,7 @@ $ juicefs sync --exclude='a?/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/
 # SRC: a1/b1,a2/b2,aaa/b1   DST: empty   sync result: a1/b1,aaa/b1
 $ juicefs sync --include='a1/b1' --exclude='a[1-9]/b*' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
 
-# SRC: a1/b1,a2/b2,aaa/b1,b1,b2  DST: empty   sync result: a1/b1,b2
+# SRC: a1/b1,a2/b2,aaa/b1,b1,b2  DST: empty   sync result: b2
 $ juicefs sync --include='a1/b1' --exclude='a*' --include='b2' --exclude='b?' s3://mybucket.s3.us-east-2.amazonaws.com/ /mnt/jfs/
 
 Details: https://juicefs.com/docs/community/administration/sync
@@ -280,7 +280,7 @@ func extractToken(uri string) (string, string) {
 
 func createSyncStorage(uri string, conf *sync.Config) (object.ObjectStorage, error) {
 	// nolint:staticcheck
-	uri = strings.TrimLeft(uri, "sftp://")
+	uri = strings.TrimPrefix(uri, "sftp://")
 	if !strings.Contains(uri, "://") {
 		if isFilePath(uri) {
 			absPath, err := filepath.Abs(uri)

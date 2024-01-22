@@ -287,6 +287,7 @@ type javaConf struct {
 	CacheChecksum     string  `json:"cacheChecksum"`
 	CacheEviction     string  `json:"cacheEviction"`
 	CacheScanInterval int     `json:"cacheScanInterval"`
+	CacheExpire       int64   `json:"cacheExpire"`
 	Writeback         bool    `json:"writeback"`
 	MemorySize        int     `json:"memorySize"`
 	Prefetch          int     `json:"prefetch"`
@@ -309,6 +310,7 @@ type javaConf struct {
 	PushGateway       string  `json:"pushGateway"`
 	PushInterval      int     `json:"pushInterval"`
 	PushAuth          string  `json:"pushAuth"`
+	PushLabels        string  `json:"pushLabels"`
 	PushGraphite      string  `json:"pushGraphite"`
 }
 
@@ -454,6 +456,19 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			} else {
 				logger.Warnf("cannot get hostname: %s", err)
 			}
+			if jConf.PushLabels != "" {
+				for _, kv := range strings.Split(jConf.PushLabels, ",") {
+					var splited = strings.Split(kv, ":")
+					if len(splited) != 2 {
+						logger.Errorf("invalid label format: %s", kv)
+						return nil
+					}
+					if utils.StringContains([]string{"mp", "vol_name", "instance"}, splited[0]) {
+						logger.Warnf("overriding reserved label: %s", splited[0])
+					}
+					commonLabels[splited[0]] = splited[1]
+				}
+			}
 			registry := prometheus.NewRegistry()
 			registerer = prometheus.WrapRegistererWithPrefix("juicefs_", registry)
 			registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
@@ -504,6 +519,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			CacheChecksum:     jConf.CacheChecksum,
 			CacheEviction:     jConf.CacheEviction,
 			CacheScanInterval: time.Second * time.Duration(jConf.CacheScanInterval),
+			CacheExpire:       time.Second * time.Duration(jConf.CacheExpire),
 			MaxUpload:         jConf.MaxUploads,
 			MaxRetries:        jConf.IORetries,
 			UploadLimit:       int64(jConf.UploadLimit) * 1e6 / 8,
@@ -627,6 +643,11 @@ func jfs_update_uid_grouping(h uintptr, uidstr *C.char, grouping *C.char) {
 			}
 		}
 		logger.Debugf("Update groups of %s to %s", w.user, strings.Join(groups, ","))
+		var buffer bytes.Buffer
+		for _, g := range gids {
+			buffer.WriteString(fmt.Sprintf("\t%v:%v\n", g.name, g.id))
+		}
+		logger.Debugf("Update gids mapping\n %s", buffer.String())
 	}
 	w.m.update(uids, gids, false)
 

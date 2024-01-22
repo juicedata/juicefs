@@ -45,6 +45,8 @@ const (
 	nlocks       = 1024
 )
 
+var maxCompactSlices = 1000
+
 type engine interface {
 	// Get the value of counter name.
 	getCounter(name string) (int64, error)
@@ -1330,6 +1332,9 @@ func (m *baseMeta) nextInode() (Ino, error) {
 }
 
 func (m *baseMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, rdev uint32, path string, inode *Ino, attr *Attr) syscall.Errno {
+	if _type < TypeFile || _type > TypeSocket {
+		return syscall.EINVAL
+	}
 	if isTrash(parent) {
 		return syscall.EPERM
 	}
@@ -1383,6 +1388,14 @@ func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cuma
 }
 
 func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
+	if len(path) == 0 || len(path) > MaxSymlink {
+		return syscall.EINVAL
+	}
+	for _, c := range path {
+		if c == 0 {
+			return syscall.EINVAL
+		}
+	}
 	// mode of symlink is ignored in POSIX
 	return m.Mknod(ctx, parent, name, TypeSymlink, 0777, 0, 0, path, inode, attr)
 }
@@ -1408,6 +1421,9 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 	parent = m.checkRoot(parent)
 	if st := m.GetAttr(ctx, inode, attr); st != 0 {
 		return st
+	}
+	if attr.Typ == TypeDirectory {
+		return syscall.EPERM
 	}
 	if m.checkDirQuota(ctx, parent, align4K(attr.Length), 1) {
 		return syscall.EDQUOT
@@ -1444,7 +1460,14 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 		return errno(err)
 	}
 	if len(target) == 0 {
-		return syscall.ENOENT
+		var attr Attr
+		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+			return st
+		}
+		if attr.Typ != TypeSymlink {
+			return syscall.EINVAL
+		}
+		return syscall.EIO
 	}
 	*path = target
 	if noatime {
@@ -1776,6 +1799,11 @@ func (m *baseMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, f
 		return syscall.EROFS
 	}
 	if name == "" {
+		return syscall.EINVAL
+	}
+	switch flags {
+	case 0, XattrCreate, XattrReplace:
+	default:
 		return syscall.EINVAL
 	}
 
@@ -2188,6 +2216,50 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 		return errno(err)
 	}
 	return 0
+}
+
+func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno {
+	var attr Attr
+	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+		logger.Errorf("get attr error [inode %v]: %v", inode, st)
+		return st
+	}
+
+	var wg sync.WaitGroup
+	// compact
+	chunkChan := make(chan cchunk, 10000)
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for c := range chunkChan {
+				m.en.compactChunk(c.inode, c.indx, true)
+				postFunc()
+			}
+		}()
+	}
+
+	// scan
+	st := m.walk(ctx, inode, "", &attr, func(ctx Context, fIno Ino, path string, fAttr *Attr) {
+		if fAttr.Typ != TypeFile {
+			return
+		}
+		// calc chunk index in local
+		chunkCnt := uint32((fAttr.Length + ChunkSize - 1) / ChunkSize)
+		for i := uint32(0); i < chunkCnt; i++ {
+			preFunc()
+			chunkChan <- cchunk{inode: fIno, indx: i}
+		}
+	})
+
+	// finish
+	close(chunkChan)
+	wg.Wait()
+
+	if st != 0 {
+		logger.Errorf("walk error [inode %v]: %v", inode, st)
+	}
+	return st
 }
 
 func (m *baseMeta) fileDeleted(opened, force bool, inode Ino, length uint64) {

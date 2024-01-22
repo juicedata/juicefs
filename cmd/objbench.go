@@ -603,6 +603,7 @@ func listAll(s object.ObjectStorage, prefix, marker string, limit int64) ([]obje
 }
 
 var syncTests = map[string]bool{
+	"special key":         true,
 	"put a big object":    true,
 	"put an empty object": true,
 	"multipart upload":    true,
@@ -893,7 +894,7 @@ func functionalTesting(blob object.ObjectStorage, result *[][]string, colorful b
 	})
 
 	runCase("special key", func(blob object.ObjectStorage) error {
-		key := "测试编码文件" + `{"name":"juicefs"}` + string('\u001F')
+		key := "测试编码文件" + `{"name":"juicefs"}` + string('\u001F') + "%uFF081%uFF09.jpg"
 		defer blob.Delete(key) //nolint:errcheck
 		if err := blob.Put(key, bytes.NewReader([]byte("1"))); err != nil {
 			return fmt.Errorf("put encode file failed: %s", err)
