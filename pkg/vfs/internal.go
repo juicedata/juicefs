@@ -283,6 +283,20 @@ type SummaryReponse struct {
 	Tree  meta.TreeSummary
 }
 
+type CacheResponse struct {
+	FileCount  uint64
+	SliceCount uint64
+	TotalBytes uint64
+	MissBytes  uint64 // for check op
+}
+
+func (resp *CacheResponse) Add(other CacheResponse) {
+	resp.FileCount += other.FileCount
+	resp.TotalBytes += other.TotalBytes
+	resp.SliceCount += other.SliceCount
+	resp.MissBytes += other.MissBytes
+}
+
 type chunkSlice struct {
 	ChunkIndex uint64
 	meta.Slice
@@ -526,18 +540,35 @@ func (v *VFS) handleInternalMsg(ctx meta.Context, cmd uint32, r *utils.Buffer, o
 		paths := strings.Split(string(r.Get(int(r.Get32()))), "\n")
 		concurrent := r.Get16()
 		background := r.Get8()
+
+		action := WarmupCache
+		if r.HasMore() {
+			action = CacheAction(r.Get8())
+		}
+
+		var stat CacheResponse
 		if background == 0 {
-			var count, bytes uint64
 			done := make(chan struct{})
 			go func() {
-				v.fillCache(ctx, paths, int(concurrent), &count, &bytes)
+				v.cache(ctx, action, paths, int(concurrent), &stat)
 				close(done)
 			}()
-			writeProgress(&count, &bytes, out, done)
+			writeProgress(&stat.FileCount, &stat.TotalBytes, out, done)
 		} else {
-			go v.fillCache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), paths, int(concurrent), nil, nil)
+			go v.cache(meta.NewContext(ctx.Pid(), ctx.Uid(), ctx.Gids()), action, paths, int(concurrent), nil)
 		}
-		_, _ = out.Write([]byte{0})
+
+		data, err := json.Marshal(stat)
+		if err != nil {
+			logger.Errorf("marshal response error: %v", err)
+			_, _ = out.Write([]byte{byte(syscall.EIO & 0xff)})
+			return
+		}
+		w := utils.NewBuffer(uint32(1 + 4 + len(data)))
+		w.Put8(meta.CDATA)
+		w.Put32(uint32(len(data)))
+		w.Put(data)
+		_, _ = out.Write(w.Bytes())
 	default:
 		logger.Warnf("unknown message type: %d", cmd)
 		_, _ = out.Write([]byte{byte(syscall.EINVAL & 0xff)})

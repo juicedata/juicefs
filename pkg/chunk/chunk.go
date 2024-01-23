@@ -39,6 +39,8 @@ type ChunkStore interface {
 	NewWriter(id uint64) Writer
 	Remove(id uint64, length int) error
 	FillCache(id uint64, length uint32) error
+	EvictCache(id uint64, length uint32) error
+	CheckCache(id uint64, length uint32) (uint64, error)
 	UsedMemory() int64
 	UpdateLimit(upload, download int64)
 }
