@@ -85,17 +85,25 @@ func (b *bunnyClient) ListAll(prefix string, marker string, followLink bool) (<-
 func bunnyObjectsToJuiceObjects(objects []bunnystorage.Object, out chan<- Object) {
 	for o := range objects {
 		f := objects[o]
-		lastChanged, _ := time.Parse("2006-01-02T15:04:05", f.LastChanged)
-		out <- &obj{
-			f.ObjectName,
-			int64(f.Length),
-			lastChanged,
-			f.IsDirectory,
-			"",
-		}
+		out <- parseObjectMetadata(f)
 	}
 	close(out)
 }
+
+// Parse Bunnystorage API Object to JuiceFS Object
+func parseObjectMetadata(object bunnystorage.Object) Object	{
+	lastChanged, _ := time.Parse("2006-01-02T15:04:05", object.LastChanged)
+/* 	out, _ := json.Marshal(object)
+	logger.Printf("Parsed Object: %v", string(out)) */
+	return &obj{
+		object.ObjectName,
+		int64(object.Length),
+		lastChanged,
+		object.IsDirectory,
+		"",
+	}
+}
+
 
 func newBunny(endpoint, accessKey, password, token string) (ObjectStorage, error) {
 
