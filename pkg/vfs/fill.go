@@ -70,8 +70,8 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 				}
 
 				if f.ino == 0 {
-					ctx.Cancel()
-					return
+					logger.Warnf("%s got inode 0", action)
+					continue
 				}
 
 				iter := newSliceIterator(ctx, v.Meta, f.ino, f.size)
@@ -256,7 +256,6 @@ type sliceIterator struct {
 	ctx      meta.Context
 	mClient  meta.Meta
 	ino      Ino
-	size     uint64
 	chunkCnt uint32
 	stat     sliceIterStat
 
@@ -321,7 +320,6 @@ func newSliceIterator(ctx meta.Context, mClient meta.Meta, ino Ino, size uint64)
 		ctx:     ctx,
 		mClient: mClient,
 		ino:     ino,
-		size:    size,
 		stat:    sliceIterStat{},
 
 		nextSliceIndex: 0,
