@@ -32,12 +32,12 @@ type bunnyClient struct {
 }
 
 // Description of the object storage.
-func (b bunnyClient) String() string {
+func (b *bunnyClient) String() string {
 	return b.endpoint
 }
 
 // Limits of the object storage.
-func (b bunnyClient) Limits() Limits {
+func (b *bunnyClient) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: false,
 		IsSupportUploadPartCopy:  false,
@@ -45,7 +45,7 @@ func (b bunnyClient) Limits() Limits {
 }
 
 // Get the data for the given object specified by key.
-func (b bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, error) {
+func (b *bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, error) {
 	body, err := b.client.Download(key)
 	if err != nil {
 		return nil, err
@@ -54,7 +54,7 @@ func (b bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, err
 }
 
 // Put data read from a reader to an object specified by key.
-func (b bunnyClient) Put(key string, in io.Reader) error {
+func (b *bunnyClient) Put(key string, in io.Reader) error {
 	content, readErr := io.ReadAll(in)
 	if readErr != nil {
 		return readErr
@@ -64,12 +64,12 @@ func (b bunnyClient) Put(key string, in io.Reader) error {
 }
 
 // Delete a object.
-func (b bunnyClient) Delete(key string) error {
+func (b *bunnyClient) Delete(key string) error {
 	return b.client.Delete(key, false)
 }
 
 // ListAll returns all the objects as an channel.
-func (b bunnyClient) ListAll(prefix string, marker string, followLink bool) (<-chan Object, error) {
+func (b *bunnyClient) ListAll(prefix string, marker string, followLink bool) (<-chan Object, error) {
 	objects, err := b.client.List(prefix)
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func newBunny(endpoint, accessKey, password, token string) (ObjectStorage, error
 
 	client := bunnystorage.NewClient(*endpoint_url, password)
 
-	return bunnyClient{client: &client, endpoint: endpoint}, nil
+	return &bunnyClient{client: &client, endpoint: endpoint}, nil
 }
 
 func init() {
