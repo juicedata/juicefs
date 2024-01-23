@@ -656,6 +656,8 @@ github.com/klauspost/cpuid/v2 v2.0.2/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa02
 github.com/klauspost/cpuid/v2 v2.0.3/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=
 github.com/klauspost/cpuid/v2 v2.2.3 h1:sxCkb+qR91z4vsqw4vGGZlDgPz3G7gjaLyK3V8y70BU=
 github.com/klauspost/cpuid/v2 v2.2.3/go.mod h1:RVVoqg1df56z8g3pUjL/3lE5UfnlrJX8tyFgg4nqhuY=
+github.com/klauspost/cpuid/v2 v2.2.6 h1:ndNyv040zDGIDh8thGkXYjnFtiN02M1PVVF+JE/48xc=
+github.com/klauspost/cpuid/v2 v2.2.6/go.mod h1:Lcz8mBdAVJIBVzewtcLocK12l3Y+JytZYpaMropDUws=
 github.com/klauspost/pgzip v1.2.5 h1:qnWYvvKqedOF2ulHpMG72XQol4ILEJ8k2wwRl/Km8oE=
 github.com/klauspost/pgzip v1.2.5/go.mod h1:Ch1tH69qFZu15pkjo5kYi6mth2Zzwzt50oCQKQE9RUs=
 github.com/klauspost/readahead v1.3.1 h1:QqXNYvm+VvqYcbrRT4LojUciM0XrznFRIDrbHiJtu/0=
@@ -684,6 +686,10 @@ github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348/go.mod h1:B69LE
 github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0SNc=
 github.com/l0wl3vel/bunny-storage-go-sdk v0.0.4 h1:uyDaYY6yQ7OWV/A439r7taIg4OlZW4Qq0kfYN/urMUs=
 github.com/l0wl3vel/bunny-storage-go-sdk v0.0.4/go.mod h1:gecEfS4DsHJX7Wr+X6dj5QuJh8vhyj2zyvhMgEdbfAk=
+github.com/l0wl3vel/bunny-storage-go-sdk v0.0.5 h1:JT1x1n3/eUPQvwas1G9dFb16eEYKERKPsRVkJKg9bH4=
+github.com/l0wl3vel/bunny-storage-go-sdk v0.0.5/go.mod h1:gecEfS4DsHJX7Wr+X6dj5QuJh8vhyj2zyvhMgEdbfAk=
+github.com/l0wl3vel/bunny-storage-go-sdk v0.0.6 h1:LUy7DxG556qFWGM2yL6DZvfQr/BNP9NIA6walkt0dkg=
+github.com/l0wl3vel/bunny-storage-go-sdk v0.0.6/go.mod h1:gecEfS4DsHJX7Wr+X6dj5QuJh8vhyj2zyvhMgEdbfAk=
 github.com/labbsr0x/bindman-dns-webhook v1.0.2/go.mod h1:p6b+VCXIR8NYKpDr8/dg1HKfQoRHCdcsROXKvmoehKA=
 github.com/labbsr0x/goh v1.0.1/go.mod h1:8K2UhVoaWXcCU7Lxoa2omWnC8gyW8px7/lmO61c027w=
 github.com/leodido/go-urn v1.2.1/go.mod h1:zt4jvISO2HfUBqxjfIshjdMTYS56ZS/qv49ictyFfxY=
