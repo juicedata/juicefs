@@ -104,6 +104,15 @@ func parseObjectMetadata(object bunnystorage.Object) Object	{
 	}
 }
 
+func (b *bunnyClient) Head(key string) (Object, error)	{
+	logger.Debug(key)
+	object, err := b.client.Describe(key)
+	logger.Debug(object)
+	if err != nil	{
+		return nil, err
+	}
+	return parseObjectMetadata(object), nil
+}
 
 func newBunny(endpoint, accessKey, password, token string) (ObjectStorage, error) {
 
