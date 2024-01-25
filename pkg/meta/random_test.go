@@ -628,19 +628,13 @@ func (m *fsMachine) rmr(parent Ino, name string, removed *uint64) syscall.Errno 
 		}
 	}
 
-	if c._type != TypeDirectory {
-		if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
-			return syscall.EACCES
-		}
-	} else {
-		if !c.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
-			return syscall.EACCES
-		}
+	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+		return syscall.EACCES
 	}
 
 	st := m.unlink(parent, name, c.children != nil)
 	if st == 0 && removed != nil {
-		(*removed)++
+		*removed++
 	}
 	return 0
 }
@@ -658,6 +652,10 @@ func (m *fsMachine) isancestor(a, b *tNode) bool {
 }
 
 func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname string, flag uint8) syscall.Errno {
+	if dstparent == srcparent && dstname == srcname {
+		return 0
+	}
+
 	src := m.nodes[srcparent]
 	if src == nil {
 		return syscall.ENOENT
@@ -695,7 +693,7 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 		return syscall.EACCES
 	}
 
-	// 目录拥有者不能rename其他用户子目录
+	// owner of a directory cannot rename subdirectories owned by other users.
 	uid := m.ctx.Uid()
 	if src != dst && src.mode&0o1000 != 0 && uid != 0 &&
 		uid != srcnode.uid && (uid != src.uid || srcnode._type == TypeDirectory) {
@@ -703,9 +701,6 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	}
 
 	if c := dst.children[dstname]; c != nil {
-		if dst == src && dstname == srcname {
-			return 0
-		}
 		if c == srcnode {
 			return syscall.EPERM
 		}
@@ -714,7 +709,7 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 		}
 		if dst != src || dstname != srcname {
 			if !dst.stickyAccess(c, m.ctx.Uid()) {
-				return syscall.EPERM
+				return syscall.EACCES
 			}
 			if st := m.rmr(dst.inode, dstname, nil); st != 0 {
 				return st
@@ -934,7 +929,7 @@ func (m *fsMachine) listxattr(inode Ino) ([]byte, syscall.Errno) {
 
 func (m *fsMachine) Mkdir(t *rapid.T) {
 	parent := m.pickNode(t)
-	name := rapid.StringN(3, 200, 255).Draw(t, "name")
+	name := rapid.StringN(1, 200, 255).Draw(t, "name")
 	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
 	if name == "." || name == ".." {
 		t.Skipf("skip mkdir %s", name)
@@ -1081,6 +1076,11 @@ func (m *fsMachine) Getattr(t *rapid.T) {
 }
 
 func (m *fsMachine) Rename(t *rapid.T) {
+	dstName := rapid.StringN(1, 200, 255).Draw(t, "name")
+	if dstName == "." || dstName == ".." {
+		t.Skipf("skip name . and ..")
+	}
+
 	srcParent := m.pickNode(t)
 	srcName := m.pickChild(srcParent, t)
 	if srcName == "" {
@@ -1108,8 +1108,6 @@ func (m *fsMachine) Rename(t *rapid.T) {
 			tmp = m.nodes[tmp].parents[0].inode
 		}
 	}
-
-	dstName := rapid.StringN(3, 200, 255).Draw(t, "name")
 
 	var inode Ino
 	var attr Attr
