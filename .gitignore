@@ -30,6 +30,7 @@ __pycache__
 
 # temp
 pkg/meta/badger
+pkg/meta/testdata
 *.dump
 *.out
 
