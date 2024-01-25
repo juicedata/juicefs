@@ -19,9 +19,7 @@ package meta
 import (
 	"flag"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
 	"os"
-	"pgregory.net/rapid"
 	"reflect"
 	"runtime"
 	"sort"
@@ -29,6 +27,10 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"pgregory.net/rapid"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type tSlice struct {
@@ -375,9 +377,7 @@ func (m *fsMachine) unlink(parent Ino, name string, dir bool) syscall.Errno {
 	if fsnodes_namecheck(name) != 0 {
 		return syscall.EINVAL
 	}
-	//if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
-	//	return syscall.EACCES
-	//}
+
 	c := p.children[name]
 	if !p.stickyAccess(c, m.ctx.Uid()) {
 		return syscall.EPERM
@@ -619,9 +619,9 @@ func (m *fsMachine) rmr(parent Ino, name string, removed *uint64) syscall.Errno 
 		return syscall.ENOENT
 	}
 
-	//if !p.stickyAccess(c, m.ctx.Uid()) {
-	//	return syscall.EPERM
-	//}
+	if !p.stickyAccess(c, m.ctx.Uid()) {
+		return syscall.EPERM
+	}
 	for n := range c.children {
 		if eno := m.rmr(c.inode, n, removed); eno != 0 {
 			return eno
@@ -671,13 +671,7 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	if !src.access(m.ctx, MODE_MASK_X|MODE_MASK_W) {
 		return syscall.EACCES
 	}
-	srcnode := src.children[srcname]
-	if srcnode == nil {
-		return syscall.ENOENT
-	}
-	if !src.stickyAccess(srcnode, m.ctx.Uid()) {
-		return syscall.EPERM
-	}
+
 	dst := m.nodes[dstparent]
 	if dst == nil {
 		return syscall.ENOENT
@@ -691,12 +685,23 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 	if !dst.access(m.ctx, MODE_MASK_X|MODE_MASK_W) {
 		return syscall.EACCES
 	}
-	//if srcnode.children != nil && m.isancestor(srcnode, dst) {
-	//	return syscall.EINVAL
-	//}
-	if src != dst && srcnode._type == TypeDirectory && !srcnode.access(m.ctx, MODE_MASK_W) {
+
+	srcnode := src.children[srcname]
+	if srcnode == nil {
+		return syscall.ENOENT
+	}
+
+	if !src.stickyAccess(srcnode, m.ctx.Uid()) {
 		return syscall.EACCES
 	}
+
+	// 目录拥有者不能rename其他用户子目录
+	uid := m.ctx.Uid()
+	if src != dst && src.mode&0o1000 != 0 && uid != 0 &&
+		uid != srcnode.uid && (uid != src.uid || srcnode._type == TypeDirectory) {
+		return syscall.EACCES
+	}
+
 	if c := dst.children[dstname]; c != nil {
 		if dst == src && dstname == srcname {
 			return 0
@@ -708,14 +713,11 @@ func (m *fsMachine) rename(srcparent Ino, srcname string, dstparent Ino, dstname
 			return syscall.ENOTEMPTY
 		}
 		if dst != src || dstname != srcname {
-			// if c._type == TypeDirectory && !c.access(m.ctx, MODE_MASK_W) {
-			// 	return syscall.EACCES
-			// }
 			if !dst.stickyAccess(c, m.ctx.Uid()) {
 				return syscall.EPERM
 			}
 			if st := m.rmr(dst.inode, dstname, nil); st != 0 {
-				return syscall.ENOTEMPTY
+				return st
 			}
 		}
 	}
@@ -1078,44 +1080,45 @@ func (m *fsMachine) Getattr(t *rapid.T) {
 	}
 }
 
-//func (m *fsMachine) Rename(t *rapid.T) {
-//	srcparent := m.pickNode(t)
-//	srcname := m.pickChild(srcparent, t)
-//	if srcname == "" {
-//		return
-//	}
-//	var srcIno Ino
-//	for _, n := range m.nodes[srcparent].children {
-//		if n.name == srcname {
-//			srcIno = n.inode
-//		}
-//	}
-//	dstparent := m.pickNode(t)
-//
-//	if srcIno == dstparent {
-//		t.Skipf("skip rename srcIno is dstparent")
-//	}
-//	tmp := m.nodes[dstparent].inode
-//	for {
-//		if tmp == RootInode {
-//			break
-//		}
-//		if tmp == srcIno {
-//			t.Skipf("skip rename dstparent is subdir of srcIno")
-//		} else {
-//			tmp = m.nodes[tmp].inode
-//		}
-//	}
-//
-//	dstname := rapid.StringN(1, 200, 255).Draw(t, "name")
-//	var inode Ino
-//	var attr Attr
-//	st := m.meta.Rename(m.ctx, srcparent, srcname, dstparent, dstname, 0, &inode, &attr)
-//	st2 := m.rename(srcparent, srcname, dstparent, dstname, 0)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//}
+func (m *fsMachine) Rename(t *rapid.T) {
+	srcParent := m.pickNode(t)
+	srcName := m.pickChild(srcParent, t)
+	if srcName == "" {
+		return
+	}
+	var srcIno Ino
+	for _, n := range m.nodes[srcParent].children {
+		if n.name == srcName {
+			srcIno = n.inode
+		}
+	}
+	dstParent := m.pickNode(t)
+
+	if srcIno == dstParent {
+		t.Skipf("skip rename srcIno is dstParent")
+	}
+	tmp := m.nodes[dstParent].inode
+	for {
+		if tmp == RootInode {
+			break
+		}
+		if tmp == srcIno {
+			t.Skipf("skip rename dstParent is subdir of srcIno")
+		} else {
+			tmp = m.nodes[tmp].parents[0].inode
+		}
+	}
+
+	dstName := rapid.StringN(1, 200, 255).Draw(t, "name")
+
+	var inode Ino
+	var attr Attr
+	st := m.rename(srcParent, srcName, dstParent, dstName, 0)
+	st2 := m.meta.Rename(m.ctx, srcParent, srcName, dstParent, dstName, 0, &inode, &attr)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st, st2)
+	}
+}
 
 //func (m *fsMachine) Rmr(t *rapid.T) {
 //	parent := m.pickNode(t)
