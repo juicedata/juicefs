@@ -934,7 +934,7 @@ func (m *fsMachine) listxattr(inode Ino) ([]byte, syscall.Errno) {
 
 func (m *fsMachine) Mkdir(t *rapid.T) {
 	parent := m.pickNode(t)
-	name := rapid.StringN(1, 200, 255).Draw(t, "name")
+	name := rapid.StringN(3, 200, 255).Draw(t, "name")
 	mode := rapid.Uint16Range(0, 01777).Draw(t, "mode")
 	if name == "." || name == ".." {
 		t.Skipf("skip mkdir %s", name)
@@ -1109,7 +1109,7 @@ func (m *fsMachine) Rename(t *rapid.T) {
 		}
 	}
 
-	dstName := rapid.StringN(1, 200, 255).Draw(t, "name")
+	dstName := rapid.StringN(3, 200, 255).Draw(t, "name")
 
 	var inode Ino
 	var attr Attr
@@ -1448,6 +1448,7 @@ func TestFSOps(t *testing.T) {
 	flag.Set("timeout", "10s")
 	flag.Set("rapid.steps", "200")
 	flag.Set("rapid.checks", "5000")
+	//flag.Set("rapid.seed", time.Now().String())
 	flag.Set("rapid.seed", "1")
 	rapid.Check(t, rapid.Run[*fsMachine]())
 }
