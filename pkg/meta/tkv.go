@@ -140,19 +140,19 @@ func (m *kvMeta) keyLen(args ...interface{}) int {
 func (m *kvMeta) fmtKey(args ...interface{}) []byte {
 	b := utils.NewBuffer(uint32(m.keyLen(args...)))
 	for _, a := range args {
-		switch a := a.(type) {
+		switch val := a.(type) {
 		case byte:
-			b.Put8(a)
+			b.Put8(val)
 		case uint32:
-			b.Put32(a)
+			b.Put32(val)
 		case uint64:
-			b.Put64(a)
+			b.Put64(val)
 		case Ino:
-			m.encodeInode(a, b.Get(8))
+			m.encodeInode(val, b.Get(8))
 		case string:
-			b.Put([]byte(a))
+			b.Put([]byte(val))
 		default:
-			panic(fmt.Sprintf("invalid type %T, value %v", a, a))
+			panic(fmt.Sprintf("invalid type %T, value %v", a, val))
 		}
 	}
 	return b.Bytes()
