@@ -19,6 +19,7 @@ package object
 import (
 	"bytes"
 	"io"
+	"math"
 	"net/url"
 	"time"
 
@@ -46,11 +47,14 @@ func (b *bunnyClient) Limits() Limits {
 
 // Get the data for the given object specified by key.
 func (b *bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, error) {
-	body, err := b.client.Download(key)
+	if limit == -1 {
+		limit = math.MaxInt64
+	}
+	body, err := b.client.DownloadPartial(key, off, limit+off-1)
 	if err != nil {
 		return nil, err
 	}
-	return io.NopCloser(io.NewSectionReader(bytes.NewReader(body), off, limit)), err
+	return io.NopCloser(bytes.NewReader(body)), nil
 }
 
 // Put data read from a reader to an object specified by key.
