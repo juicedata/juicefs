@@ -88,7 +88,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 教程、使用指南、评测及其他
 
-- [详解新功能 JuiceFS CSI Dashboard： 简化云上环境的问题排查流程](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-csi-dashboard)，2023-12-29，李晨曦
+- [详解新功能 JuiceFS CSI Dashboard：简化云上环境的问题排查流程](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-csi-dashboard)，2023-12-29，李晨曦
 - [Kubernetes 数据持久化：从零开始使用 JuiceFS CSI Driver](https://juicefs.com/zh-cn/blog/usage-tips/kubernetes-juicefs-csi-driver)，2023-12-11，于鸿儒
 - [JuiceFS 用户必备的 6 个技巧](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-user-skills)，2023-11-22，于鸿儒
 - [手把手教你搭建 Ceph 集群、对接 JuiceFS 文件系统](https://juicefs.com/zh-cn/blog/usage-tips/ceph-juicefs)，2023-11-20
