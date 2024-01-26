@@ -105,6 +105,24 @@ juicefs sync /mnt/jfs/images/ s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.co
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
 
+### 本地及服务器之间同步
+
+对于本地计算机上的目录之间拷贝文件，直接指定数据源与目标端的路径即可，比如将 `/media/` 目录同步到 `/backup/` 目录：
+
+```shell
+juicefs sync /media/ /backup/
+```
+
+如果需要在服务器之间同步，可以通过 SFTP/SSH 协议访问目标服务器，例如，将本地的 `/media/` 目录同步到另一台服务器的 `/backup/` 目录：
+
+```shell
+juicefs sync /media/ username@192.168.1.100:/backup/
+# 指定密码（可选）
+juicefs sync /media/ "username:password"@192.168.1.100:/backup/
+```
+
+当使用 SFTP/SSH 协议时，如果没有指定密码，执行 sync 任务时会提示输入密码。如果希望显式指定用户名和密码，则需要用半角引号把用户名和密码括起来，用户名和密码之间用半角冒号分隔。
+
 ### 无挂载点同步 <VersionAdd>1.1</VersionAdd>
 
 在两个存储系统之间同步数据，如果其中一方是 JuiceFS，推荐直接使用 `jfs://` 协议头，而不是先挂载 JuiceFS，再访问本地目录。这样便能跳过挂载点，直接读取或写入数据，在大规模场景下，绕过 FUSE 挂载点将能节约资源开销以及提升数据同步性能。
