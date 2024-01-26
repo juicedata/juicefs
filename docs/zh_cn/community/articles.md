@@ -91,7 +91,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 - [详解新功能 JuiceFS CSI Dashboard： 简化云上环境的问题排查流程](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-csi-dashboard)，2023-12-29，李晨曦
 - [Kubernetes 数据持久化：从零开始使用 JuiceFS CSI Driver](https://juicefs.com/zh-cn/blog/usage-tips/kubernetes-juicefs-csi-driver)，2023-12-11，于鸿儒
 - [JuiceFS 用户必备的 6 个技巧](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-user-skills)，2023-11-22，于鸿儒
-- [手把手教你搭建 Ceph 集群、对接 JuiceFS 文件系统](https://juicefs.com/zh-cn/blog/usage-tips/ceph-juicefs)，2023-11-20 
+- [手把手教你搭建 Ceph 集群、对接 JuiceFS 文件系统](https://juicefs.com/zh-cn/blog/usage-tips/ceph-juicefs)，2023-11-20
 - [JuiceFS 企业版 5.0 新特性速览](https://juicefs.com/zh-cn/blog/release-notes/juicefs-enterprise-edition-v5)，2023-11-17
 - [POSIX 真的不适合对象存储吗](https://juicefs.com/zh-cn/blog/engineering/posix-object-store-suitable-file-system)，2023-10-24，于鸿儒
 - [JuiceFS 目录配额功能设计详解](https://juicefs.com/zh-cn/blog/engineering/design-juicefs-directory-quotas)，2023-10-09，Sandy
