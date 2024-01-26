@@ -8,6 +8,8 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## AI
 
+- [韩国国民搜索 NAVER：为 AI 平台引入存储方案 JuiceFS](https://juicefs.com/zh-cn/blog/user-stories/naver-storage-solution-juicefs-ai-platforms)，2023-12-28，Nam Kyung-wan@NAVER
+- [机器人行业数据闭环实践：从对象存储到 JuiceFS](https://juicefs.com/zh-cn/blog/user-stories/data-object-storag--to-juicefs)，2023-12-13，宋巨超@刻行
 - [JuiceFS 在自动驾驶行业多云架构中的实践](https://juicefs.com/zh-cn/blog/user-stories/data-storage-multi-cloud-autonomous-driving-juicefs)，2023-10-27
 - [构建易于运维的 AI 训练平台：存储选型与最佳实践](https://juicefs.com/zh-cn/blog/user-stories/easy-operate-ai-training-platform-storage-selection)，2023-08-04，孙冀川@思谋科技
 - [之江实验室：如何基于 JuiceFS 为超异构算力集群构建存储层](https://juicefs.com/zh-cn/blog/user-stories/high-performance-scale-out-heterogeneous-computing-power-cluster-storage)，2023-06-09，洪晨@之江实验室
@@ -26,6 +28,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 大数据
 
+- [基于 JuiceFS 的大数据平台上云：存储成本省 85%，性能媲美 HDFS](https://juicefs.com/zh-cn/blog/user-stories/hdfs-to-object-storage-juicefs)，2024-01-10，JuiceFS 资深用户
 - [多点 DMALL：大数据存算分离下的存储架构探索与实践](https://juicefs.com/zh-cn/blog/user-stories/separation-of-storage--computing-building-cloud-native-big-data-platform), 2023-08-16，李铭@多点
 - [网易互娱出海之旅：大数据平台上云架构设计与实践](https://juicefs.com/zh-cn/blog/user-stories/hadoop-compatible-storage-big-data-cloud-platform-s3)，2023-08-09，柯维鸿@网易互娱
 - [Protobuf 在知乎大数据场景的应用，利用 JuiceFS 动态注入 JAR 包](https://zhuanlan.zhihu.com/p/586120009)，2022-11-23，胡梦宇@知乎
@@ -69,6 +72,7 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 数据共享
 
+- [云上使用 Stable Diffusion，模型数据如何共享和存储？](https://juicefs.com/zh-cn/blog/usage-tips/share-store-model-data-stable-diffusion-cloud)，2023-06-16，于鸿儒
 - [基于 JuiceFS 搭建 Milvus 分布式集群](https://juicefs.com/blog/cn/posts/build-milvus-distributed-cluster-based-on-juicefs)
 - [如何解决 NAS 单点故障还顺便省了 90% 的成本？](https://juicefs.com/blog/cn/posts/modao-replace-nas-with-juicefs)
 
@@ -84,12 +88,15 @@ JuiceFS 广泛适用于各种数据存储和共享场景，本页汇总来自世
 
 ## 教程、使用指南、评测及其他
 
+- [详解新功能 JuiceFS CSI Dashboard： 简化云上环境的问题排查流程](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-csi-dashboard)，2023-12-29，李晨曦
+- [Kubernetes 数据持久化：从零开始使用 JuiceFS CSI Driver](https://juicefs.com/zh-cn/blog/usage-tips/kubernetes-juicefs-csi-driver)，2023-12-11，于鸿儒
+- [JuiceFS 用户必备的 6 个技巧](https://juicefs.com/zh-cn/blog/usage-tips/juicefs-user-skills)，2023-11-22，于鸿儒
+- [手把手教你搭建 Ceph 集群、对接 JuiceFS 文件系统](https://juicefs.com/zh-cn/blog/usage-tips/ceph-juicefs)，2023-11-20 
 - [JuiceFS 企业版 5.0 新特性速览](https://juicefs.com/zh-cn/blog/release-notes/juicefs-enterprise-edition-v5)，2023-11-17
 - [POSIX 真的不适合对象存储吗](https://juicefs.com/zh-cn/blog/engineering/posix-object-store-suitable-file-system)，2023-10-24，于鸿儒
 - [JuiceFS 目录配额功能设计详解](https://juicefs.com/zh-cn/blog/engineering/design-juicefs-directory-quotas)，2023-10-09，Sandy
 - [浅析 GlusterFS 与 JuiceFS 的架构异同](https://juicefs.com/zh-cn/blog/engineering/similarities-and-differences-between-glusterfs-and-juicefs-structures)，2023-08-23，Sandy
 - [如何基于 JuiceFS 配置 Samba 和 NFS 共享？](https://juicefs.com/zh-cn/blog/usage-tips/configure-samba-and-nfs-shares-based-juicefs)，2023-08-04，于鸿儒
-- [云上使用 Stable Diffusion，模型数据如何共享和存储？](https://juicefs.com/zh-cn/blog/usage-tips/share-store-model-data-stable-diffusion-cloud)，2023-06-16，于鸿儒
 - [从架构到特性：JuiceFS 企业版首次全面解析](https://juicefs.com/zh-cn/blog/solutions/juicefs-enterprise-edition-features-vs-community-edition)，2023-06-06，高昌健
 - [浅析三款大规模分布式文件系统架构设计](https://juicefs.com/zh-cn/blog/engineering/large-scale-distributed-filesystem-comparison)，2023-03-08，高昌健
 - [浅析 SeaweedFS 与 JuiceFS 架构异同](https://juicefs.com/zh-cn/blog/engineering/similarities-and-differences-between-seaweedfs-and-juicefs-structures)，2023-02-10，陈杰
