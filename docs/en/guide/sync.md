@@ -107,6 +107,24 @@ The following command synchronizes all of the data on [Object Storage A](#requir
 juicefs sync s3://ABCDEFG:HIJKLMN@aaa.s3.us-west-1.amazonaws.com oss://ABCDEFG:HIJKLMN@bbb.oss-cn-hangzhou.aliyuncs.com
 ```
 
+### Synchronize between Local and Remote Servers
+
+To copy files between directories on a local computer, simply specify the source and destination paths. For example, to synchronize the `/media/` directory with the `/backup/` directory:
+
+```shell
+juicefs sync /media/ /backup/
+```
+
+If you need to synchronize between servers, you can access the target server using the SFTP/SSH protocol. For example, to synchronize the local `/media/` directory with the `/backup/` directory on another server:
+
+```shell
+juicefs sync /media/ username@192.168.1.100:/backup/
+# Specify password (optional)
+juicefs sync /media/ "username:password"@192.168.1.100:/backup/
+```
+
+When using the SFTP/SSH protocol, if no password is specified, the sync task will prompt for the password. If you want to explicitly specify the username and password, you need to enclose them in double quotation marks, with a colon separating the username and password.
+
 ### Sync Without Mount Point <VersionAdd>1.1</VersionAdd>
 
 For data migrations that involve JuiceFS, it's recommended use the `jfs://` protocol, rather than mount JuiceFS and access its local directory, which bypasses the FUSE mount point and access JuiceFS directly. Under large scale scenarios, bypassing FUSE can save precious resources and increase performance.

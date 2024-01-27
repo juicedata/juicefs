@@ -837,11 +837,13 @@ func TestInternalFile(t *testing.T) {
 	}
 	off += uint64(len(buf))
 	resp = make([]byte, 1024*10)
-	if n, e = readControl(resp, &off); e != 0 || n != 1 {
-		t.Fatalf("read result: %s %d", e, n)
-	} else if resp[0] != 0 {
-		t.Fatalf("fill result: %s", string(buf[:n]))
+
+	data, _ = json.Marshal(CacheResponse{})
+	expectSize := 1 + 4 + len(data)
+	if n, e = readControl(resp, &off); e != 0 || n != expectSize {
+		t.Fatalf("read result: %s %d %d", e, n, expectSize)
 	}
+
 	off += uint64(n)
 
 	// invalid msg

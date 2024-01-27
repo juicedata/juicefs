@@ -20,6 +20,8 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -138,6 +140,12 @@ func gateway(c *cli.Context) error {
 	)
 	if err != nil {
 		return err
+	}
+
+	if _, err := jfsGateway.GetBucketInfo(context.Background(), minio.MinioMetaBucket); errors.As(err, &minio.BucketNotFound{}) {
+		if err := jfsGateway.MakeBucketWithLocation(context.Background(), minio.MinioMetaBucket, minio.BucketOptions{}); err != nil {
+			logger.Fatalf("init MinioMetaBucket error %s: %s", minio.MinioMetaBucket, err)
+		}
 	}
 
 	args := []string{"server", "--address", listenAddr, "--anonymous"}
