@@ -17,7 +17,6 @@
 package object
 
 import (
-	"bytes"
 	"io"
 	"math"
 	"net/url"
@@ -50,11 +49,11 @@ func (b *bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, er
 	if limit == -1 {
 		limit = math.MaxInt64
 	}
-	body, err := b.client.DownloadPartial(key, off, limit+off-1)
+	body, err := b.client.DownloadPartialWithReaderCloser(key, off, limit+off-1)
 	if err != nil {
 		return nil, err
 	}
-	return io.NopCloser(bytes.NewReader(body)), nil
+	return body, nil
 }
 
 // Put data read from a reader to an object specified by key.
@@ -63,8 +62,7 @@ func (b *bunnyClient) Put(key string, in io.Reader) error {
 	if readErr != nil {
 		return readErr
 	}
-	err := b.client.Upload(key, content, true)
-	return err
+	return b.client.Upload(key, content, true)
 }
 
 // Delete a object.
@@ -95,10 +93,8 @@ func bunnyObjectsToJuiceObjects(objects []bunnystorage.Object, out chan<- Object
 }
 
 // Parse Bunnystorage API Object to JuiceFS Object
-func parseObjectMetadata(object bunnystorage.Object) Object	{
+func parseObjectMetadata(object bunnystorage.Object) Object {
 	lastChanged, _ := time.Parse("2006-01-02T15:04:05", object.LastChanged)
-/* 	out, _ := json.Marshal(object)
-	logger.Printf("Parsed Object: %v", string(out)) */
 	return &obj{
 		object.ObjectName,
 		int64(object.Length),
@@ -108,18 +104,17 @@ func parseObjectMetadata(object bunnystorage.Object) Object	{
 	}
 }
 
-func (b *bunnyClient) Head(key string) (Object, error)	{
+func (b *bunnyClient) Head(key string) (Object, error) {
 	logger.Debug(key)
 	object, err := b.client.Describe(key)
 	logger.Debug(object)
-	if err != nil	{
+	if err != nil {
 		return nil, err
 	}
 	return parseObjectMetadata(object), nil
 }
 
 func newBunny(endpoint, accessKey, password, token string) (ObjectStorage, error) {
-
 	endpoint_url, err := url.Parse(endpoint)
 
 	if err != nil {

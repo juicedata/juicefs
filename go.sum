@@ -690,6 +690,8 @@ github.com/l0wl3vel/bunny-storage-go-sdk v0.0.5 h1:JT1x1n3/eUPQvwas1G9dFb16eEYKE
 github.com/l0wl3vel/bunny-storage-go-sdk v0.0.5/go.mod h1:gecEfS4DsHJX7Wr+X6dj5QuJh8vhyj2zyvhMgEdbfAk=
 github.com/l0wl3vel/bunny-storage-go-sdk v0.0.6 h1:LUy7DxG556qFWGM2yL6DZvfQr/BNP9NIA6walkt0dkg=
 github.com/l0wl3vel/bunny-storage-go-sdk v0.0.6/go.mod h1:gecEfS4DsHJX7Wr+X6dj5QuJh8vhyj2zyvhMgEdbfAk=
+github.com/l0wl3vel/bunny-storage-go-sdk v0.0.9 h1:pDH6sQ+KJO19M0g2hP5942FKb4fZ+zgs+3f1rUH+ULg=
+github.com/l0wl3vel/bunny-storage-go-sdk v0.0.9/go.mod h1:gecEfS4DsHJX7Wr+X6dj5QuJh8vhyj2zyvhMgEdbfAk=
 github.com/labbsr0x/bindman-dns-webhook v1.0.2/go.mod h1:p6b+VCXIR8NYKpDr8/dg1HKfQoRHCdcsROXKvmoehKA=
 github.com/labbsr0x/goh v1.0.1/go.mod h1:8K2UhVoaWXcCU7Lxoa2omWnC8gyW8px7/lmO61c027w=
 github.com/leodido/go-urn v1.2.1/go.mod h1:zt4jvISO2HfUBqxjfIshjdMTYS56ZS/qv49ictyFfxY=
