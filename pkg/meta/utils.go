@@ -320,6 +320,7 @@ func (m *baseMeta) emptyEntry(ctx Context, parent Ino, name string, inode Ino, s
 	if st == 0 && !isTrash(inode) {
 		st = m.Rmdir(ctx, parent, name, skipCheckTrash)
 		if st == syscall.ENOTEMPTY {
+			// redo when concurrent conflict may happen
 			st = m.emptyEntry(ctx, parent, name, inode, skipCheckTrash, count, concurrent)
 		} else if count != nil {
 			atomic.AddUint64(count, 1)
