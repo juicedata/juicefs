@@ -81,6 +81,10 @@ func (d *dragonfly) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 	// Parse the signed url.
 	signedURL, err := ss.SignedURL(key, DefaultSignedURLExpire)
+	if err != nil {
+		return nil, err
+	}
+
 	url, err := url.Parse(signedURL)
 	if err != nil {
 		return nil, err
