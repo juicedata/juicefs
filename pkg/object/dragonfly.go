@@ -20,11 +20,13 @@
 package object
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mohae/deepcopy"
@@ -111,6 +113,12 @@ func (d *dragonfly) Get(key string, off, limit int64) (io.ReadCloser, error) {
 
 	resp, err := d.httpClient.Do(req)
 	if err != nil {
+		// If Proxy is down, the error is "connection refused" and
+		// try to access the backend storage directly.
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			return d.ObjectStorage.Get(key, off, limit)
+		}
+
 		return nil, err
 	}
 
