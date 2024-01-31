@@ -284,15 +284,19 @@ func setup(c *cli.Context, n int) {
 	}
 }
 
-func removePassword(uri string) {
+func removePassword(uris ...string) {
 	args := make([]string, len(os.Args))
 	copy(args, os.Args)
-	uri2 := utils.RemovePassword(uri)
-	if uri2 != uri {
-		for i, a := range os.Args {
-			if a == uri {
-				args[i] = uri2
-				break
+	var idx int
+	for _, uri := range uris {
+		uri2 := utils.RemovePassword(uri)
+		if uri2 != uri {
+			for i := idx; i < len(os.Args); i++ {
+				if os.Args[i] == uri {
+					args[i] = uri2
+					idx = i + 1
+					break
+				}
 			}
 		}
 	}
