@@ -48,6 +48,61 @@ type Port struct {
 	PyroscopeAddr   string `json:",omitempty"`
 }
 
+// FuseOptions contains options for fuse mount, keep the same structure with `fuse.MountOptions`
+type FuseOptions struct {
+	AllowOther               bool
+	Options                  []string
+	MaxBackground            int
+	MaxWrite                 int
+	MaxReadAhead             int
+	IgnoreSecurityLabels     bool // ignoring labels should be provided as a fusermount mount option.
+	RememberInodes           bool
+	FsName                   string
+	Name                     string
+	SingleThreaded           bool
+	DisableXAttrs            bool
+	Debug                    bool
+	DontUmask                bool
+	EnableLocks              bool
+	EnableAcl                bool
+	ExplicitDataCacheControl bool
+	Writeback                bool
+	NoAllocForRead           bool
+	DirectMount              bool
+	DirectMountFlags         uintptr
+	OtherCaps                uint32
+}
+
+func (o FuseOptions) StripOptions() FuseOptions {
+	options := o.Options
+	o.Options = make([]string, 0, len(o.Options))
+	for _, opt := range options {
+		if opt == "nonempty" {
+			continue
+		}
+		o.Options = append(o.Options, opt)
+	}
+
+	sort.Strings(o.Options)
+
+	// ignore these options because they won't be send to kernel
+	o.IgnoreSecurityLabels,
+		o.RememberInodes,
+		o.SingleThreaded,
+		o.DisableXAttrs,
+		o.Debug,
+		o.NoAllocForRead = false, false, false, false, false, false
+
+	// ignore there options because they cannot be configured by users
+	o.Name = ""
+	o.MaxBackground = 0
+	o.MaxWrite = 0
+	o.MaxReadAhead = 0
+	o.DirectMount = false
+	o.DontUmask = false
+	return o
+}
+
 type Config struct {
 	Meta                 *meta.Config
 	Format               meta.Format
@@ -64,6 +119,16 @@ type Config struct {
 	HideInternal         bool
 	RootSquash           *RootSquash `json:",omitempty"`
 	NonDefaultPermission bool        `json:",omitempty"`
+
+	Pid        int
+	DebugAgent string
+	CommPath   string `json:",omitempty"`
+	StatePath  string `json:",omitempty"`
+
+	// vfs options
+	NoBSDLock   bool         `json:",omitempty"`
+	NoPOSIXLock bool         `json:",omitempty"`
+	FuseOpts    *FuseOptions `json:",omitempty"`
 }
 
 type RootSquash struct {
@@ -964,9 +1029,10 @@ type VFS struct {
 	reader          DataReader
 	writer          DataWriter
 
-	handles map[Ino][]*handle
-	hanleM  sync.Mutex
-	nextfh  uint64
+	handles   map[Ino][]*handle
+	handleIno map[uint64]Ino
+	hanleM    sync.Mutex
+	nextfh    uint64
 
 	modM       sync.Mutex
 	modifiedAt map[Ino]time.Time
@@ -1044,6 +1110,17 @@ func (v *VFS) cleanupModified() {
 		v.modM.Unlock()
 		time.Sleep(time.Millisecond * time.Duration(1000*(cnt+1-deleted*2)/(cnt+1)))
 	}
+}
+
+func (v *VFS) FlushAll(path string) error {
+	err := v.writer.FlushAll()
+	if err != nil {
+		return err
+	}
+	if path == "" {
+		return nil
+	}
+	return v.dumpAllHandles(path)
 }
 
 func initVFSMetrics(v *VFS, writer DataWriter, reader DataReader, registerer prometheus.Registerer) {

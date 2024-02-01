@@ -35,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/object"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -85,7 +86,7 @@ $ juicefs mount redis://localhost /mnt/jfs --backup-meta 0`,
 	}
 }
 
-func installHandler(mp string) {
+func installHandler(mp string, v *vfs.VFS) {
 	// Go will catch all the signals
 	signal.Ignore(syscall.SIGPIPE)
 	signalChan := make(chan os.Signal, 10)
@@ -94,9 +95,23 @@ func installHandler(mp string) {
 		for {
 			sig := <-signalChan
 			logger.Infof("Received signal %s, exiting...", sig.String())
+			if sig == syscall.SIGHUP {
+				path := fmt.Sprintf("/tmp/state%d.json", os.Getppid())
+				if err := v.FlushAll(path); err == nil {
+					fuse.Shutdown()
+					err = v.FlushAll(path)
+					if err != nil {
+						logger.Fatalf("flush buffered data failed: %s", err)
+					}
+					os.Exit(1)
+				} else {
+					logger.Warnf("flush buffered data failed: %s, don't restart", err)
+					continue
+				}
+			}
 			go func() { _ = doUmount(mp, true) }()
 			go func() {
-				time.Sleep(time.Second * 3)
+				time.Sleep(time.Second * 30)
 				logger.Warnf("Umount not finished after 3 seconds, force exit")
 				os.Exit(1)
 			}()
@@ -692,11 +707,14 @@ func mount(c *cli.Context) error {
 		updateFormat(c)(fmt)
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
 	})
-	installHandler(mp)
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
+	installHandler(mp, v)
 	v.UpdateFormat = updateFormat(c)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	mount_main(v, c)
+	if err := v.FlushAll(""); err != nil {
+		logger.Errorf("flush all delayed data: %s", err)
+	}
 	err = metaCli.CloseSession()
 	logger.Infof("The juicefs mount process exit successfully, mountpoint: %s", metaConf.MountPoint)
 	return err

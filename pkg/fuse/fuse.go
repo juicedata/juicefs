@@ -489,6 +489,16 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		}
 	}
 
+	fsserv = fssrv
 	fssrv.Serve()
 	return nil
+}
+
+var fsserv *fuse.Server
+
+func Shutdown() bool {
+	if fsserv != nil {
+		return fsserv.Shutdown()
+	}
+	return false
 }
