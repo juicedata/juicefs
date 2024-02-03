@@ -1,4 +1,7 @@
 #!/bin/bash -e 
+
+set -x
+
 source .github/scripts/start_meta_engine.sh
 [ -z "$TEST" ] && echo "TEST is not set" && exit 1
 

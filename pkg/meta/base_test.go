@@ -937,7 +937,7 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	}
 
 	// truncate to 0
-	if st := m.Truncate(ctx, inode, 0, 0, attr, false); st != 0 {
+	if st := m.Truncate(ctx, inode, 0, 0, attr); st != 0 {
 		t.Fatalf("truncate file: %s", st)
 	}
 	if c, ok := m.(compactor); ok {
@@ -950,11 +950,11 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 		t.Fatalf("inode %d should be compacted, but have %d slices, size %d", inode, len(slices), slices[0].Len)
 	}
 
-	if st := m.Truncate(ctx, inode, 0, 64<<10, attr, false); st != 0 {
+	if st := m.Truncate(ctx, inode, 0, 64<<10, attr); st != 0 {
 		t.Fatalf("truncate file: %s", st)
 	}
 	m.NewSlice(ctx, &sliceId)
-	_ = m.Write(ctx, inode, 0, uint32(1<<20), Slice{Id: sliceId, Size: 2 << 20, Len: 2 << 20}, time.Now())
+	_ = m.Write(ctx, inode, 0, uint32(1<<20), Slice{Id: sliceId, Size: 2 << 20, Len: 2 << 20})
 	if c, ok := m.(compactor); ok {
 		c.compactChunk(inode, 0, true)
 	}
@@ -967,12 +967,12 @@ func testCompaction(t *testing.T, m Meta, trash bool) {
 	}
 
 	m.NewSlice(ctx, &sliceId)
-	_ = m.Write(ctx, inode, 0, uint32(512<<10), Slice{Id: sliceId, Size: 2 << 20, Len: 64 << 10}, time.Now())
+	_ = m.Write(ctx, inode, 0, uint32(512<<10), Slice{Id: sliceId, Size: 2 << 20, Len: 64 << 10})
 	m.NewSlice(ctx, &sliceId)
-	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: sliceId, Size: 1 << 20, Len: 64 << 10}, time.Now())
+	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: sliceId, Size: 1 << 20, Len: 64 << 10})
 	m.NewSlice(ctx, &sliceId)
-	_ = m.Write(ctx, inode, 0, uint32(128<<10), Slice{Id: sliceId, Size: 2 << 20, Len: 128 << 10}, time.Now())
-	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: 0, Size: 1 << 20, Len: 1 << 20}, time.Now())
+	_ = m.Write(ctx, inode, 0, uint32(128<<10), Slice{Id: sliceId, Size: 2 << 20, Len: 128 << 10})
+	_ = m.Write(ctx, inode, 0, uint32(0), Slice{Id: 0, Size: 1 << 20, Len: 1 << 20})
 	if c, ok := m.(compactor); ok {
 		c.compactChunk(inode, 0, true)
 	}
