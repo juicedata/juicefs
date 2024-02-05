@@ -366,7 +366,7 @@ func (m *fsMachine) pickChild(parent Ino, t *rapid.T) string {
 	return rapid.SampledFrom(names).Draw(t, "child")
 }
 
-func (m *fsMachine) unlink(parent Ino, name string, dir bool) syscall.Errno {
+func (m *fsMachine) unlink(parent Ino, name string) syscall.Errno {
 	p := m.nodes[parent]
 	if p == nil {
 		return syscall.ENOENT
@@ -379,21 +379,66 @@ func (m *fsMachine) unlink(parent Ino, name string, dir bool) syscall.Errno {
 	}
 
 	c := p.children[name]
-	if !p.stickyAccess(c, m.ctx.Uid()) {
+
+	if c._type == TypeDirectory {
 		return syscall.EPERM
 	}
-	if dir {
-		if c._type != TypeDirectory {
-			return syscall.ENOTDIR
-		}
-		if len(c.children) != 0 {
-			return syscall.ENOTEMPTY
-		}
-	} else {
-		if c.children != nil {
-			return syscall.EPERM
+
+	if !p.stickyAccess(c, m.ctx.Uid()) {
+		return syscall.EACCES
+	}
+
+	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+		return syscall.EACCES
+	}
+
+	delete(p.children, name)
+	for i, tp := range c.parents {
+		if tp == p {
+			c.parents = append(c.parents[:i], c.parents[i+1:]...)
+			break
 		}
 	}
+	if len(c.parents) == 0 {
+		delete(m.nodes, c.inode)
+	} else {
+		// c.ctime = m.ctx.ts
+	}
+	// p.mtime = m.ctx.ts
+	// p.ctime = m.ctx.ts
+	return 0
+}
+
+func (m *fsMachine) rmdir(parent Ino, name string) syscall.Errno {
+	p := m.nodes[parent]
+	if p == nil {
+		return syscall.ENOENT
+	}
+	if _, ok := p.children[name]; !ok {
+		return syscall.ENOENT
+	}
+	if fsnodes_namecheck(name) != 0 {
+		return syscall.EINVAL
+	}
+
+	c := p.children[name]
+
+	if c._type != TypeDirectory {
+		return syscall.ENOTDIR
+	}
+
+	if !p.access(m.ctx, MODE_MASK_W|MODE_MASK_X) {
+		return syscall.EACCES
+	}
+
+	if len(c.children) != 0 {
+		return syscall.ENOTEMPTY
+	}
+
+	if !p.stickyAccess(c, m.ctx.Uid()) {
+		return syscall.EACCES
+	}
+
 	delete(p.children, name)
 	for i, tp := range c.parents {
 		if tp == p {
@@ -599,6 +644,7 @@ func (m *fsMachine) copy_file_range(srcinode Ino, srcoff uint64, dstinode Ino, d
 	return 0
 }
 
+// rmr Hint: Unlike the Rmr with the meta interface.
 func (m *fsMachine) rmr(parent Ino, name string, removed *uint64) syscall.Errno {
 	p := m.nodes[parent]
 	if p == nil {
@@ -632,7 +678,12 @@ func (m *fsMachine) rmr(parent Ino, name string, removed *uint64) syscall.Errno 
 		return syscall.EACCES
 	}
 
-	st := m.unlink(parent, name, c.children != nil)
+	var st syscall.Errno
+	if c._type == TypeDirectory {
+		st = m.rmdir(parent, name)
+	} else {
+		st = m.unlink(parent, name)
+	}
 	if st == 0 && removed != nil {
 		*removed++
 	}
@@ -975,25 +1026,25 @@ func (m *fsMachine) Mknod(t *rapid.T) {
 //	}
 //}
 
-//func (m *fsMachine) Rmdir(t *rapid.T) {
-//	parent := m.pickNode(t)
-//	name := m.pickChild(parent, t)
-//	st := m.meta.Rmdir(m.ctx, parent, name)
-//	st2 := m.unlink(parent, name, true)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//}
+func (m *fsMachine) Rmdir(t *rapid.T) {
+	parent := m.pickNode(t)
+	name := m.pickChild(parent, t)
+	st := m.meta.Rmdir(m.ctx, parent, name)
+	st2 := m.rmdir(parent, name)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
 
-//func (m *fsMachine) Unlink(t *rapid.T) {
-//	parent := m.pickNode(t)
-//	name := m.pickChild(parent, t)
-//	st := m.meta.Unlink(m.ctx, parent, name)
-//	st2 := m.unlink(parent, name, false)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//}
+func (m *fsMachine) Unlink(t *rapid.T) {
+	parent := m.pickNode(t)
+	name := m.pickChild(parent, t)
+	st := m.meta.Unlink(m.ctx, parent, name)
+	st2 := m.unlink(parent, name)
+	if st != st2 {
+		t.Fatalf("expect %s but got %s", st2, st)
+	}
+}
 
 const SymlinkMax = 65536
 
@@ -1118,21 +1169,24 @@ func (m *fsMachine) Rename(t *rapid.T) {
 	}
 }
 
-//func (m *fsMachine) Rmr(t *rapid.T) {
-//	parent := m.pickNode(t)
-//	t.Logf("rmr parent ino %d", parent)
-//	name := m.pickChild(parent, t)
-//	var removed, removed2 uint64
-//	st := m.meta.Remove(m.ctx, parent, name, &removed)
-//	st2 := m.rmr(parent, name, &removed2)
-//	if st != st2 {
-//		t.Fatalf("expect %s but got %s", st2, st)
-//	}
-//	if removed != removed2 {
-//		t.Fatalf("expect removed %d but got %d", removed2, removed)
-//	}
-//}
+/*
+Due to concurrency issues, the execution result of rmr is unpredictable.
 
+	func (m *fsMachine) Rmr(t *rapid.T) {
+		parent := m.pickNode(t)
+		t.Logf("rmr parent ino %d", parent)
+		name := m.pickChild(parent, t)
+		var removed, removed2 uint64
+		st := m.meta.Remove(m.ctx, parent, name, &removed)
+		st2 := m.rmr(parent, name, &removed2)
+		if st != st2 {
+			t.Fatalf("expect %s but got %s", st2, st)
+		}
+		if removed != removed2 {
+			t.Fatalf("expect removed %d but got %d", removed2, removed)
+		}
+	}
+*/
 func (m *fsMachine) Readdir(t *rapid.T) {
 	inode := m.pickNode(t)
 	var names []string
