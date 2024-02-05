@@ -28,6 +28,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -135,11 +136,11 @@ func (s *s3client) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if off == 0 && limit == -1 {
-		cs := resp.Metadata[checksumAlgr]
 		var length int64 = -1
-		if resp.ContentLength != nil {
-			length = *resp.ContentLength
+		if l := resp.Metadata[checkLength]; l != nil {
+			length, _ = strconv.ParseInt(*l, 10, 64)
 		}
+		cs := resp.Metadata[checksumAlgr]
 		if cs != nil {
 			resp.Body = verifyChecksum(resp.Body, *cs, length)
 		}
@@ -158,14 +159,14 @@ func (s *s3client) Put(key string, in io.Reader) error {
 		}
 		body = bytes.NewReader(data)
 	}
-	checksum := generateChecksum(body)
+	length, checksum := generateChecksum(body)
 	mimeType := utils.GuessMimeType(key)
 	params := &s3.PutObjectInput{
 		Bucket:      &s.bucket,
 		Key:         &key,
 		Body:        body,
 		ContentType: &mimeType,
-		Metadata:    map[string]*string{checksumAlgr: &checksum},
+		Metadata:    map[string]*string{checksumAlgr: &checksum, checkLength: &length},
 	}
 	if s.sc != "" {
 		params.SetStorageClass(s.sc)

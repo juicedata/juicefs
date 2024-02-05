@@ -29,15 +29,15 @@ import (
 func TestChecksum(t *testing.T) {
 	b := []byte("hello")
 	expected := crc32.Update(0, crc32c, b)
-	actual := generateChecksum(bytes.NewReader(b))
-	if actual != strconv.Itoa(int(expected)) {
-		t.Errorf("expect %d but got %s", expected, actual)
+	l, actual := generateChecksum(bytes.NewReader(b))
+	if actual != strconv.Itoa(int(expected)) || l != strconv.Itoa(len(b)) {
+		t.Errorf("expect length=%d crc32c=%d but got length=%s crc32c=%s", len(b), expected, l, actual)
 		t.FailNow()
 	}
 
-	actual = generateChecksum(bytes.NewReader(b))
-	if actual != strconv.Itoa(int(expected)) {
-		t.Errorf("expect %d but got %s", expected, actual)
+	l, actual = generateChecksum(bytes.NewReader(b))
+	if actual != strconv.Itoa(int(expected)) || l != strconv.Itoa(len(b)) {
+		t.Errorf("expect length=%d crc32c=%d but got length=%s crc32c=%s", len(b), expected, l, actual)
 		t.FailNow()
 	}
 }
@@ -48,7 +48,7 @@ func TestChecksumRead(t *testing.T) {
 	if _, err := rand.Read(content); err != nil {
 		t.Fatalf("Generate random content: %s", err)
 	}
-	actual := generateChecksum(bytes.NewReader(content))
+	_, actual := generateChecksum(bytes.NewReader(content))
 
 	// content length equal buff length case
 	lens := []int64{-1, int64(length)}

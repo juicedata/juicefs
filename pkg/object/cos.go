@@ -37,6 +37,7 @@ import (
 )
 
 const cosChecksumKey = "x-cos-meta-" + checksumAlgr
+const cosCheckLengthKey = "x-cos-meta-" + checkLength
 const cosRequestIDKey = "X-Cos-Request-Id"
 
 type COS struct {
@@ -108,10 +109,10 @@ func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if off == 0 && limit == -1 {
-		length, err := strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
+		length, err := strconv.ParseInt(resp.Header.Get(cosCheckLengthKey), 10, 64)
 		if err != nil {
 			length = -1
-			logger.Warnf("failed to parse content-length %s: %s", resp.Header.Get("Content-Length"), err)
+			logger.Warnf("failed to parse content-length %s: %s", resp.Header.Get(cosCheckLengthKey), err)
 		}
 		resp.Body = verifyChecksum(resp.Body, resp.Header.Get(cosChecksumKey), length)
 	}
@@ -124,8 +125,10 @@ func (c *COS) Get(key string, off, limit int64) (io.ReadCloser, error) {
 func (c *COS) Put(key string, in io.Reader) error {
 	var options cos.ObjectPutOptions
 	if ins, ok := in.(io.ReadSeeker); ok {
+		length, checksum := generateChecksum(ins)
 		header := http.Header(map[string][]string{
-			cosChecksumKey: {generateChecksum(ins)},
+			cosChecksumKey:    {checksum},
+			cosCheckLengthKey: {length},
 		})
 		options.ObjectPutHeaderOptions = &cos.ObjectPutHeaderOptions{XCosMetaXXX: &header}
 	}

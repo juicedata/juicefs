@@ -26,30 +26,33 @@ import (
 )
 
 const checksumAlgr = "Crc32c"
+const checkLength = "Length"
 
 var crc32c = crc32.MakeTable(crc32.Castagnoli)
 
-func generateChecksum(in io.ReadSeeker) string {
+func generateChecksum(in io.ReadSeeker) (contentLength string, checksum string) {
 	if b, ok := in.(*bytes.Reader); ok {
 		v := reflect.ValueOf(b)
 		data := v.Elem().Field(0).Bytes()
-		return strconv.Itoa(int(crc32.Update(0, crc32c, data)))
+		return strconv.FormatInt(int64(len(data)), 10), strconv.Itoa(int(crc32.Update(0, crc32c, data)))
 	}
 	var hash uint32
 	crcBuffer := bufPool.Get().(*[]byte)
 	defer bufPool.Put(crcBuffer)
 	defer func() { _, _ = in.Seek(0, io.SeekStart) }()
+	var length int64
 	for {
 		n, err := in.Read(*crcBuffer)
 		hash = crc32.Update(hash, crc32c, (*crcBuffer)[:n])
+		length += int64(n)
 		if err != nil {
 			if err != io.EOF {
-				return ""
+				return "-1", ""
 			}
 			break
 		}
 	}
-	return strconv.Itoa(int(hash))
+	return strconv.FormatInt(length, 10), strconv.Itoa(int(hash))
 }
 
 type checksumReader struct {
@@ -63,7 +66,7 @@ func (c *checksumReader) Read(buf []byte) (n int, err error) {
 	n, err = c.ReadCloser.Read(buf)
 	c.checksum = crc32.Update(c.checksum, crc32c, buf[:n])
 	c.remainingLength -= int64(n)
-	if (err == io.EOF || c.remainingLength == 0) && c.checksum != c.expected {
+	if (err == io.EOF || c.remainingLength <= 0) && c.checksum != c.expected {
 		return 0, fmt.Errorf("verify checksum failed: %d != %d", c.checksum, c.expected)
 	}
 	return

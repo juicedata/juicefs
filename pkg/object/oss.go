@@ -126,7 +126,7 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 	} else {
 		resp, err = o.bucket.GetObject(key, oss.GetResponseHeader(&respHeader))
 		if err == nil {
-			length, err := strconv.ParseInt(resp.(*oss.Response).Headers.Get(oss.HTTPHeaderContentLength), 10, 64)
+			length, err := strconv.ParseInt(resp.(*oss.Response).Headers.Get(oss.HTTPHeaderOssMetaPrefix+checkLength), 10, 64)
 			if err != nil {
 				length = -1
 				logger.Warnf("failed to parse content-length %s: %s", resp.(*oss.Response).Headers.Get(oss.HTTPHeaderContentLength), err)
@@ -144,7 +144,9 @@ func (o *ossClient) Get(key string, off, limit int64) (resp io.ReadCloser, err e
 func (o *ossClient) Put(key string, in io.Reader) error {
 	var option []oss.Option
 	if ins, ok := in.(io.ReadSeeker); ok {
-		option = append(option, oss.Meta(checksumAlgr, generateChecksum(ins)))
+		length, checkSum := generateChecksum(ins)
+		option = append(option, oss.Meta(checksumAlgr, checkSum))
+		option = append(option, oss.Meta(checkLength, length))
 	}
 	if o.sc != "" {
 		option = append(option, oss.ObjectStorageClass(oss.StorageClassType(o.sc)))
