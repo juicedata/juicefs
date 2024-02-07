@@ -20,6 +20,9 @@ import (
 	"io"
 	"math"
 	"net/url"
+	"os"
+	"path"
+	"strings"
 	"time"
 
 	bunnystorage "github.com/l0wl3vel/bunny-storage-go-sdk"
@@ -72,24 +75,60 @@ func (b *bunnyClient) Delete(key string) error {
 
 // ListAll returns all the objects as an channel.
 func (b *bunnyClient) ListAll(prefix string, marker string, followLink bool) (<-chan Object, error) {
-	objects, err := b.client.List(prefix)
-	if err != nil {
-		return nil, err
-	}
 
-	c := make(chan Object)
+	out := make(chan Object)
+	go func() {
+		defer close(out)
+		b.walkObjects(prefix, marker, out)
+	}()
 
-	go bunnyObjectsToJuiceObjects(objects, c)
-
-	return c, nil
+	return out, nil
 }
 
-func bunnyObjectsToJuiceObjects(objects []bunnystorage.Object, out chan<- Object) {
-	for o := range objects {
-		f := objects[o]
-		out <- parseObjectMetadata(f)
+func (b *bunnyClient) walkObjects(prefix string, marker string, out chan<- Object) {
+	objects, err := b.client.List(prefix)
+	if err != nil {
+		return
 	}
-	close(out)
+
+	objectsToProcess := objects
+
+	// If no objects are returned list the parent directory and continue
+	if len(objectsToProcess) == 0 {
+		objectsToProcess, err = b.client.List(path.Dir(prefix))
+		if err != nil {
+			return
+		}
+	}
+
+	markerEncountered := marker == ""
+
+	for i := 0; i < len(objectsToProcess); i++ {
+		o := objectsToProcess[i]
+		normalizedPath := normalizedObjectNameWithinZone(o)
+		if strings.HasPrefix(normalizedPath, path.Join(prefix)) {
+			if normalizedPath == marker {
+				markerEncountered = true
+			}
+			if markerEncountered {
+				if o.IsDirectory {
+					objects, err := b.client.List(normalizedPath)
+					if err != nil {
+						return
+					}
+					objectsToProcess = append(objectsToProcess, objects...)
+				} else {
+					out <- parseObjectMetadata(o)
+				}
+			}
+		}
+	}
+}
+
+// The Object Path returned by the Bunny API contains the Storage Zone Name, which this function removes
+func normalizedObjectNameWithinZone(o bunnystorage.Object) string {
+	normalizedPath := path.Join(o.Path, o.ObjectName)
+	return strings.TrimPrefix(normalizedPath, "/"+o.StorageZoneName+"/")
 }
 
 // Parse Bunnystorage API Object to JuiceFS Object
@@ -109,6 +148,9 @@ func (b *bunnyClient) Head(key string) (Object, error) {
 	object, err := b.client.Describe(key)
 	logger.Debug(object)
 	if err != nil {
+		if err.Error() == "404 Not Found"	{
+			return nil, os.ErrNotExist
+		}
 		return nil, err
 	}
 	return parseObjectMetadata(object), nil
