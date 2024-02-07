@@ -20,7 +20,7 @@ slug: /adopters
 | [上汽集团](https://www.saicmotor.com/chinese)     | Production | AI                     | [上汽云 x JuiceFS：iGear 用了这个小魔法，模型训练速度提升 300%](https://juicefs.com/zh-cn/blog/performance-boost-3x-on-igear-platform)                                                                  |
 | [国家超级计算济南中心](https://www.nsccjn.cn)     | Production | DevOps                 |                                                                                                                                                                                                         |
 | [云知声](https://www.unisound.com)                | Production | AI                     | [AI 场景存储优化：云知声超算平台基于 JuiceFS 的存储实践](https://juicefs.com/zh-cn/blog/juicefs-support-ai-storage-at-unisound)                                                                         |
-| [网易游戏](https://game.163.com)                  | Production | 大数据，共享文件存储   |                                                                                                                                                                                                         |
+| [网易游戏](https://game.163.com)                  | Production | 大数据，共享文件存储   | [网易互娱出海之旅：大数据平台上云架构设计与实践](https://juicefs.com/zh-cn/blog/user-stories/hadoop-compatible-storage-big-data-cloud-platform-s3)       |
 | [一面数据](https://www.yimian.com.cn)             | Production | 大数据                 | [一面数据：Hadoop 迁移云上架构设计与实践](https://juicefs.com/zh-cn/blog/yimiancase)                                                                                                                    |
 | [携程旅行](https://www.ctrip.com)                 | Production | 大数据，共享文件存储   | [突破存储数据量限制，JuiceFS 在携程海量冷数据场景下的实践](https://juicefs.com/zh-cn/blog/xiecheng-case)                                                                                                |
 | [vivo](https://www.vivo.com)                      | Production | AI，共享文件存储       | [vivo AI 计算平台的轩辕文件存储实践](https://www.infoq.cn/article/3oFSOWfYGsX5h7xzsIe6)                                                                                                                 |
@@ -40,7 +40,7 @@ slug: /adopters
 | [火山引擎](https://www.volcengine.com)            | Production | 共享文件存储，特效渲染 | [JuiceFS 在火山引擎边缘计算的应用实践](https://juicefs.com/zh-cn/blog/user-stories/how-juicefs-accelerates-edge-rendering-performance-in-volcengine)                                                    |
 | [云从科技](https://www.cloudwalk.com)             | Production | AI                     |                                                                                                                                                                                                         |
 | [建信金融科技](https://www.ccbft.com)             | Production | AI，共享文件存储       |                                                                                                                                                                                                         |
-| [思谋 SmartMore](https://cn.smartmore.com)        | Production | AI                     |                                                                                                                                                                                                         |
+| [思谋 SmartMore](https://cn.smartmore.com)        | Production | AI                     | [思谋科技：构建易于运维的 AI 训练平台](https://juicefs.com/zh-cn/blog/user-stories/easy-operate-ai-training-platform-storage-selection)      |
 | [汇丰银行 HSBC](https://www.hsbc.com.cn)          | Production | 共享文件存储           |                                                                                                                                                                                                         |
 | [中国电信](http://www.chinatelecom.com.cn)        | Production | 大数据                 | [存算分离实践：JuiceFS 在中国电信日均 PB 级数据场景的应用](https://juicefs.com/zh-cn/blog/user-stories/applicatio-of-juicefs-in-china-telecoms-daily-average-pb-data-scenario)                          |
 | [多点 DMALL](https://www.dmall.com)               | Production | 大数据，共享文件存储   | [多点 DMALL：大数据存算分离下的存储架构探索与实践](https://juicefs.com/zh-cn/blog/user-stories/separation-of-storage--computing-building-cloud-native-big-data-platform)                                |
@@ -67,6 +67,12 @@ slug: /adopters
 | [五菱汽车](https://wuling.com)                        | Production | 大数据           |                                                                                                                                                                                                         |
 | [MemVerge](https://memverge.com)                        | Production | HPC，共享文件存储           |                                                                                                                                                                                                         |
 | [BentoML](https://bentoml.com)                        | Production | AI           |                                                                                                                                                                                                         |
-| [刻行 coSence](https://www.coscene.io)                        | Production | AI           |                                                                                                                                                                                                         |
+| [刻行 coSence](https://www.coscene.io)                        | Production | AI           | [机器人行业数据闭环实践：从对象存储到 JuiceFS](https://juicefs.com/zh-cn/blog/user-stories/data-object-storag--to-juicefs)      |
+| [摩登天空](https://www.modernsky.com/home/)                        | Production | 共享文件存储           |       |
+| [酷狗音乐](https://www.kugou.com/)                        | Production | 共享文件存储           |       |
+| [京东](https://jd.com/)                        | Production | 大数据           |       |
+| [米哈游](https://www.mihoyo.com/)                        | Production | 共享文件存储           |       |
+| [百胜中国](https://www.yumchina.com/)                        | Production | 共享文件存储           |       |
+
 
 欢迎你在使用 JuiceFS 后，向大家分享你的使用经验，可以直接向这个列表提交 Pull Request，或者联系我们 [`hello@juicedata.io`](mailto:hello@juicedata.io)。
