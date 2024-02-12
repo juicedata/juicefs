@@ -442,7 +442,7 @@ For users in Tokyo (ap-northeast-1) region, please refer to [this document](http
 Prerequisites
 
 - A Telnyx account (https://telnyx.com/sign-up)
-- API key (https://portal.telnyx.com/#/app/api-keys) – this will be used as `access-key` and `secret-key`
+- API key (https://portal.telnyx.com/#/app/api-keys) – this will be used as both `access-key` and `secret-key`
 
 Set up JuiceFS:
 
