@@ -33,10 +33,10 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.51.0
+          version: v1.54
             
       - name: Setup upterm session
-        if: ${{ failure() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
         # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
