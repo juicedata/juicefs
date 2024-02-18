@@ -68,11 +68,10 @@ slug: /adopters
 | [MemVerge](https://memverge.com)                        | Production | HPC，共享文件存储           |                                                                                                                                                                                                         |
 | [BentoML](https://bentoml.com)                        | Production | AI           |                                                                                                                                                                                                         |
 | [刻行 coSence](https://www.coscene.io)                        | Production | AI           | [机器人行业数据闭环实践：从对象存储到 JuiceFS](https://juicefs.com/zh-cn/blog/user-stories/data-object-storag--to-juicefs)      |
-| [摩登天空](https://www.modernsky.com/home/)                        | Production | 共享文件存储           |       |
-| [酷狗音乐](https://www.kugou.com/)                        | Production | 共享文件存储           |       |
-| [京东](https://jd.com/)                        | Production | 大数据           |       |
-| [米哈游](https://www.mihoyo.com/)                        | Production | 共享文件存储           |       |
-| [百胜中国](https://www.yumchina.com/)                        | Production | 共享文件存储           |       |
-
+| [摩登天空](https://www.modernsky.com/home)                        | Production | 共享文件存储           |       |
+| [酷狗音乐](https://www.kugou.com)                        | Production | 共享文件存储           |       |
+| [京东](https://jd.com)                        | Production | 大数据           |       |
+| [米哈游](https://www.mihoyo.com)                        | Production | 共享文件存储           |       |
+| [百胜中国](https://www.yumchina.com)                        | Production | 共享文件存储           |       |
 
 欢迎你在使用 JuiceFS 后，向大家分享你的使用经验，可以直接向这个列表提交 Pull Request，或者联系我们 [`hello@juicedata.io`](mailto:hello@juicedata.io)。
