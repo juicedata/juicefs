@@ -35,6 +35,9 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.security.PrivilegedExceptionAction;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -920,5 +923,25 @@ public class JuiceFileSystemTest extends TestCase {
     superFs.delete(testDir.getParent(), true);
     tomFs.close();
     superFs.close();
+  }
+
+  public void testConcurrentCreate() throws Exception {
+    int threads = 100;
+    ExecutorService pool = Executors.newFixedThreadPool(threads);
+    for (int i = 0; i < threads; i++) {
+      pool.submit(() -> {
+        JuiceFileSystem jfs = new JuiceFileSystem();
+        try {
+          jfs.initialize(URI.create("jfs://dev/"), cfg);
+          jfs.listStatus(new Path("/"));
+          jfs.close();
+        } catch (IOException e) {
+          fail("concurrent create failed");
+          System.exit(1);
+        }
+      });
+    }
+    pool.shutdown();
+    pool.awaitTermination(1, TimeUnit.MINUTES);
   }
 }
