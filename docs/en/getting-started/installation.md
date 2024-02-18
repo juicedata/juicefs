@@ -115,6 +115,12 @@ sudo snap install juicefs
 sudo ln -s -f /snap/juicefs/current/juicefs /snap/bin/juicefs
 ```
 
+When there is a new version, execute the following command to update the client:
+
+```shell
+sudo snap refresh juicefs
+```
+
 #### AUR (Arch User Repository) {#aur}
 
 JuiceFS also provides a [AUR](https://aur.archlinux.org/packages/juicefs) repository, which makes it convenient to install the latest version of the client on Arch Linux and its derivatives.
