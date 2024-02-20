@@ -156,7 +156,7 @@ If you wish to use a storage system that is not listed, feel free to submit a re
 | [Scaleway Object Storage](#scaleway-object-storage)         | `scw`      |
 | [DigitalOcean Spaces](#digitalocean-spaces)                 | `space`    |
 | [Wasabi](#wasabi)                                           | `wasabi`   |
-| [Telnyx Cloud Storage](#telnyx)                             | `telnyx`   |
+| [Telnyx Cloud Storage](#telnyx)                             | `s3`       |
 | [Storj DCS](#storj-dcs)                                     | `s3`       |
 | [Vultr Object Storage](#vultr-object-storage)               | `s3`       |
 | [Cloudflare R2](#r2)                                        | `s3`       |
