@@ -371,7 +371,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 			// download the object into disk
 			if f, err = os.CreateTemp("", "rep"); err != nil {
 				logger.Warnf("create temp file: %s", err)
-				goto SINGLE
+				return doCopySingle0(src, dst, key, size)
 			}
 			_ = os.Remove(f.Name()) // will be deleted after Close()
 			defer f.Close()
@@ -394,7 +394,10 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 		}
 		return err
 	}
-SINGLE:
+	return doCopySingle0(src, dst, key, size)
+}
+
+func doCopySingle0(src, dst object.ObjectStorage, key string, size int64) error {
 	if limiter != nil {
 		limiter.Wait(size)
 	}
