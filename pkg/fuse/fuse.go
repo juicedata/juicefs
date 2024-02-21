@@ -445,7 +445,7 @@ func NewOptionBuilder(conf *vfs.Config) *OptionBuilder {
 	opt.DirectMount = true
 	opt.AllowOther = os.Getuid() == 0
 	opt.EnableAcl = conf.Format.EnableACL // from format
-	return &OptionBuilder{opt: opt}
+	return &OptionBuilder{opt: opt, conf: conf}
 }
 
 func (b *OptionBuilder) WithOtherOptions(options string) *OptionBuilder {
