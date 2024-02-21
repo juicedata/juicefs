@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,6 +30,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/oliverisaac/shellescape"
@@ -75,6 +77,7 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 		return nil, err
 	}
 	var resp *http.Response
+	http.DefaultClient.Timeout = 2 * time.Second
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -101,6 +104,10 @@ func sendStats(addr string) {
 	d, _ := json.Marshal(r)
 	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			logger.Errorf("the management process has been stopped, so the worker process now exits")
+			os.Exit(1)
+		}
 		logger.Errorf("update stats: %s %s", string(ans), err)
 	} else {
 		skipped.IncrInt64(-r.Skipped)
@@ -277,6 +284,7 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			}
 			logger.Debugf("launch worker command args: [ssh, %s]", strings.Join(shellescape.EscapeArgs(argsBk), ", "))
 			cmd = exec.Command("ssh", shellescape.EscapeArgs(args)...)
+			cmd.Stdin = os.Stdin
 			stderr, err := cmd.StderrPipe()
 			if err != nil {
 				logger.Errorf("redirect stderr: %s", err)
