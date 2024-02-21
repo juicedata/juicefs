@@ -469,7 +469,7 @@ func (b *OptionBuilder) Validate() error {
 	}
 
 	if b.opt.EnableAcl && b.opt.DisableXAttrs {
-		return errors.New("cannot mount with enable-acl and without xattrs")
+		logger.Infof("The \"enable-acl\" flag wiil enable the xattrs feature.")
 	}
 	return nil
 }
@@ -480,10 +480,12 @@ func (b *OptionBuilder) Build() (fuse.MountOptions, error) {
 	}
 
 	opt := &b.opt
+	opt.DisableXAttrs = !opt.EnableAcl && opt.DisableXAttrs
+	opt.IgnoreSecurityLabels = !opt.EnableAcl && opt.IgnoreSecurityLabels
+
 	if !b.conf.NonDefaultPermission {
 		opt.Options = append(opt.Options, "default_permissions")
 	}
-	opt.IgnoreSecurityLabels = !opt.EnableAcl
 	if b.options != "" {
 		for _, n := range strings.Split(b.options, ",") {
 			if n == "allow_other" || n == "allow_root" {
