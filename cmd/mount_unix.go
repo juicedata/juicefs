@@ -288,8 +288,17 @@ func mount_main(v *vfs.VFS, c *cli.Context) {
 		conf.RootSquash = &vfs.RootSquash{Uid: uid, Gid: gid}
 	}
 	logger.Infof("Mounting volume %s at %s ...", conf.Format.Name, conf.Meta.MountPoint)
-	err := fuse.Serve(v, c.String("o"), c.Bool("enable-xattr"), c.Bool("enable-ioctl"))
+
+	builder := fuse.NewOptionBuilder(v.Conf).
+		WithIOCtl(c.Bool("enable-ioctl")).
+		WithXAttrs(c.Bool("enable-xattr")).
+		WithOtherOptions(c.String("o"))
+	opt, err := builder.Build()
 	if err != nil {
+		logger.Fatalf("option error: %s", err)
+	}
+
+	if err = fuse.Serve(v, opt); err != nil {
 		logger.Fatalf("fuse: %s", err)
 	}
 }

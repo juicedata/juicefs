@@ -27,28 +27,32 @@ var (
 	revision     = "$Format:%h$" // value is assigned in Makefile
 	revisionDate = "$Format:%as$"
 	ver          = Semver{
-		major:      1,
-		minor:      2,
-		patch:      0,
-		preRelease: "dev",
-		build:      fmt.Sprintf("%s.%s", revisionDate, revision),
+		Major:      1,
+		Minor:      2,
+		Patch:      0,
+		PreRelease: "dev",
+		Build:      fmt.Sprintf("%s.%s", revisionDate, revision),
 	}
 )
 
 type Semver struct {
-	major, minor, patch uint64
-	preRelease, build   string
+	Major, Minor, Patch uint64
+	PreRelease, Build   string
 }
 
 func Version() string {
-	pr := ver.preRelease
+	pr := ver.PreRelease
 	if pr != "" {
 		pr = "-" + pr
 	}
-	if strings.Contains(ver.build, "Format") {
-		ver.build = "unknown"
+	if strings.Contains(ver.Build, "Format") {
+		ver.Build = "unknown"
 	}
-	return fmt.Sprintf("%d.%d.%d%s+%s", ver.major, ver.minor, ver.patch, pr, ver.build)
+	return fmt.Sprintf("%d.%d.%d%s+%s", ver.Major, ver.Minor, ver.Patch, pr, ver.Build)
+}
+
+func SetVersion(semver Semver) {
+	ver = semver
 }
 
 func Compare(vs string) (int, error) {
@@ -57,15 +61,15 @@ func Compare(vs string) (int, error) {
 		return 1, fmt.Errorf("invalid version string: %s", vs)
 	}
 	var less bool
-	if ver.major != v.major {
-		less = ver.major < v.major
-	} else if ver.minor != v.minor {
-		less = ver.minor < v.minor
-	} else if ver.patch != v.patch {
-		less = ver.patch < v.patch
-	} else if ver.preRelease != v.preRelease {
-		less = ver.preRelease < v.preRelease
-		if ver.preRelease == "" || v.preRelease == "" {
+	if ver.Major != v.Major {
+		less = ver.Major < v.Major
+	} else if ver.Minor != v.Minor {
+		less = ver.Minor < v.Minor
+	} else if ver.Patch != v.Patch {
+		less = ver.Patch < v.Patch
+	} else if ver.PreRelease != v.PreRelease {
+		less = ver.PreRelease < v.PreRelease
+		if ver.PreRelease == "" || v.PreRelease == "" {
 			less = !less
 		}
 	} else {
@@ -84,7 +88,7 @@ func Parse(vs string) *Semver {
 	}
 	var v Semver
 	if p := strings.Index(vs, "-"); p > 0 {
-		v.preRelease = vs[p+1:]
+		v.PreRelease = vs[p+1:]
 		vs = vs[:p]
 	}
 
@@ -93,16 +97,16 @@ func Parse(vs string) *Semver {
 		return nil
 	}
 	var err error
-	if v.major, err = strconv.ParseUint(ps[0], 10, 64); err != nil {
+	if v.Major, err = strconv.ParseUint(ps[0], 10, 64); err != nil {
 		return nil
 	}
 	if len(ps) > 1 {
-		if v.minor, err = strconv.ParseUint(ps[1], 10, 64); err != nil {
+		if v.Minor, err = strconv.ParseUint(ps[1], 10, 64); err != nil {
 			return nil
 		}
 	}
 	if len(ps) > 2 {
-		if v.patch, err = strconv.ParseUint(ps[2], 10, 64); err != nil {
+		if v.Patch, err = strconv.ParseUint(ps[2], 10, 64); err != nil {
 			return nil
 		}
 	}

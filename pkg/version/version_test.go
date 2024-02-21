@@ -20,10 +20,10 @@ import "testing"
 
 func TestVersion(t *testing.T) {
 	ver = Semver{
-		major: 1,
-		minor: 0,
-		patch: 0,
-		build: "2022-02-22.f4692af9",
+		Major: 1,
+		Minor: 0,
+		Patch: 0,
+		Build: "2022-02-22.f4692af9",
 	}
 	if v := Version(); v != "1.0.0+2022-02-22.f4692af9" {
 		t.Fatalf("Version %s != expected 1.0.0+2022-02-22.f4692af9", v)
@@ -52,7 +52,7 @@ func TestVersion(t *testing.T) {
 		}
 	}
 
-	ver.preRelease = "beta"
+	ver.PreRelease = "beta"
 	if v := Version(); v != "1.0.0-beta+2022-02-22.f4692af9" {
 		t.Fatalf("Version %s != expected 1.0.0-beta+2022-02-22.f4692af9", v)
 	}

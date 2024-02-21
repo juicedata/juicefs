@@ -17,6 +17,7 @@
 package fuse
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -425,8 +426,88 @@ func (fs *fileSystem) Ioctl(cancel <-chan struct{}, in *fuse.IoctlIn, out *fuse.
 	return fuse.Status(err)
 }
 
+type OptionBuilder struct {
+	opt     fuse.MountOptions
+	conf    *vfs.Config
+	options string
+}
+
+func NewOptionBuilder(conf *vfs.Config) *OptionBuilder {
+	opt := fuse.MountOptions{}
+	opt.FsName = "JuiceFS:" + conf.Format.Name
+	opt.Name = "juicefs"
+	opt.SingleThreaded = false
+	opt.MaxBackground = 50
+	opt.EnableLocks = true
+	opt.IgnoreSecurityLabels = true
+	opt.MaxWrite = 1 << 20
+	opt.MaxReadAhead = 1 << 20
+	opt.DirectMount = true
+	opt.AllowOther = os.Getuid() == 0
+	opt.EnableAcl = conf.Format.EnableACL // from format
+	return &OptionBuilder{opt: opt}
+}
+
+func (b *OptionBuilder) WithOtherOptions(options string) *OptionBuilder {
+	b.options = options
+	return b
+}
+
+func (b *OptionBuilder) WithXAttrs(xattrs bool) *OptionBuilder {
+	b.opt.DisableXAttrs = !xattrs
+	return b
+}
+
+func (b *OptionBuilder) WithIOCtl(ioctl bool) *OptionBuilder {
+	b.opt.EnableIoctl = ioctl
+	return b
+}
+
+func (b *OptionBuilder) Validate() error {
+	if b.opt.EnableAcl && b.conf.NonDefaultPermission {
+		return errors.New("cannot mount with enable-acl and without default_permissions")
+	}
+
+	if b.opt.EnableAcl && b.opt.DisableXAttrs {
+		return errors.New("cannot mount with enable-acl and without xattrs")
+	}
+	return nil
+}
+
+func (b *OptionBuilder) Build() (fuse.MountOptions, error) {
+	if err := b.Validate(); err != nil {
+		return fuse.MountOptions{}, err
+	}
+
+	opt := &b.opt
+	if !b.conf.NonDefaultPermission {
+		opt.Options = append(opt.Options, "default_permissions")
+	}
+	opt.IgnoreSecurityLabels = !opt.EnableAcl
+	if b.options != "" {
+		for _, n := range strings.Split(b.options, ",") {
+			if n == "allow_other" || n == "allow_root" {
+				opt.AllowOther = true
+			} else if n == "nonempty" || n == "ro" {
+			} else if n == "debug" {
+				opt.Debug = true
+			} else if n == "writeback_cache" || n == "writeback" {
+				opt.EnableWriteback = true
+			} else if strings.TrimSpace(n) != "" {
+				opt.Options = append(opt.Options, strings.TrimSpace(n))
+			}
+		}
+	}
+	if runtime.GOOS == "darwin" {
+		opt.Options = append(opt.Options, "fssubtype=juicefs")
+		opt.Options = append(opt.Options, "volname="+b.conf.Format.Name)
+		opt.Options = append(opt.Options, "daemon_timeout=60", "iosize=65536", "novncache")
+	}
+	return b.opt, nil
+}
+
 // Serve starts a server to serve requests from FUSE.
-func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
+func Serve(v *vfs.VFS, opt fuse.MountOptions) error {
 	if err := syscall.Setpriority(syscall.PRIO_PROCESS, os.Getpid(), -19); err != nil {
 		logger.Warnf("setpriority: %s", err)
 	}
@@ -438,40 +519,6 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 
 	conf := v.Conf
 	imp := newFileSystem(conf, v)
-
-	var opt fuse.MountOptions
-	opt.FsName = "JuiceFS:" + conf.Format.Name
-	opt.Name = "juicefs"
-	opt.SingleThreaded = false
-	opt.MaxBackground = 50
-	opt.EnableLocks = true
-	opt.DisableXAttrs = !xattrs
-	opt.EnableIoctl = ioctl
-	opt.IgnoreSecurityLabels = true
-	opt.MaxWrite = 1 << 20
-	opt.MaxReadAhead = 1 << 20
-	opt.DirectMount = true
-	opt.AllowOther = os.Getuid() == 0
-	for _, n := range strings.Split(options, ",") {
-		if n == "allow_other" || n == "allow_root" {
-			opt.AllowOther = true
-		} else if n == "nonempty" || n == "ro" {
-		} else if n == "debug" {
-			opt.Debug = true
-		} else if n == "writeback_cache" || n == "writeback" {
-			opt.EnableWriteback = true
-		} else if strings.TrimSpace(n) != "" {
-			opt.Options = append(opt.Options, strings.TrimSpace(n))
-		}
-	}
-	if !conf.NonDefaultPermission {
-		opt.Options = append(opt.Options, "default_permissions")
-	}
-	if runtime.GOOS == "darwin" {
-		opt.Options = append(opt.Options, "fssubtype=juicefs")
-		opt.Options = append(opt.Options, "volname="+conf.Format.Name)
-		opt.Options = append(opt.Options, "daemon_timeout=60", "iosize=65536", "novncache")
-	}
 	fssrv, err := fuse.NewServer(imp, conf.Meta.MountPoint, &opt)
 	if err != nil {
 		if execErr, ok := err.(*exec.Error); ok {
