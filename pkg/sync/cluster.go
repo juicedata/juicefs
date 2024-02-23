@@ -77,7 +77,6 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 		return nil, err
 	}
 	var resp *http.Response
-	http.DefaultClient.Timeout = 2 * time.Second
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err

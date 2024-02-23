@@ -1134,11 +1134,12 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	wg.Wait()
 	pending.SetCurrent(0)
+	total := handled.Total()
 	progress.Done()
 
 	if config.Manager == "" {
 		msg := fmt.Sprintf("Found: %d, skipped: %d, copied: %d (%s)",
-			handled.Current(), skipped.Current(), copied.Current(), formatSize(copiedBytes.Current()))
+			total, skipped.Current(), copied.Current(), formatSize(copiedBytes.Current()))
 		if checked != nil {
 			msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
 		}
@@ -1154,8 +1155,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		logger.Debugf("This worker process has already completed its task")
 	}
 	if failed != nil {
-		if n := failed.Current(); n > 0 {
-			return fmt.Errorf("Failed to handle %d objects", n)
+		if n := failed.Current(); n > 0 || total > handled.Current() {
+			return fmt.Errorf("Failed to handle %d objects", n+total-handled.Current())
 		}
 	}
 	return nil
