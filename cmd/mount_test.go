@@ -283,11 +283,10 @@ func tryMountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraM
 }
 
 func TestMountVersionMatch(t *testing.T) {
-	version.SetVersion(version.Semver{
-		Major: 1,
-		Minor: 2,
-		Patch: 0,
-	})
+	oriVersion := version.Version()
+	version.SetVersion("1.2.0")
+	defer version.SetVersion(oriVersion)
+
 	err := tryMountTemp(t, nil, nil, nil)
 	assert.Contains(t, err.Error(), "check version")
 }

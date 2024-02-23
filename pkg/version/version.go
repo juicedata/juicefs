@@ -51,8 +51,8 @@ func Version() string {
 	return fmt.Sprintf("%d.%d.%d%s+%s", ver.Major, ver.Minor, ver.Patch, pr, ver.Build)
 }
 
-func SetVersion(semver Semver) {
-	ver = semver
+func SetVersion(v string) {
+	ver = *Parse(v)
 }
 
 func Compare(vs string) (int, error) {
