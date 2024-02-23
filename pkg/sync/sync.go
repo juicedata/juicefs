@@ -867,8 +867,13 @@ func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
 }
 
 func suffixForPattern(path, pattern string) string {
-	if strings.HasPrefix(pattern, "/") ||
-		strings.HasSuffix(pattern, "/") && !strings.HasSuffix(path, "/") {
+	if strings.HasPrefix(pattern, "/") {
+		if !strings.HasPrefix(path, "/") {
+			path = "/" + path
+		}
+		return path
+	}
+	if strings.HasSuffix(pattern, "/") && !strings.HasSuffix(path, "/") {
 		return path
 	}
 	n := strings.Count(strings.Trim(pattern, "/"), "/")
@@ -891,8 +896,27 @@ func matchKey(rules []rule, key string) bool {
 		prefix := strings.Join(parts[:i+1], "/")
 		for _, rule := range rules {
 			var s string
-			if i < len(parts)-1 && strings.HasSuffix(rule.pattern, "/") {
+			if i < len(parts)-1 && (strings.HasSuffix(rule.pattern, "/") || strings.HasSuffix(rule.pattern, "/***")) {
 				s = "/"
+			}
+			if strings.HasSuffix(rule.pattern, "/***") {
+				dir := rule.pattern[:len(rule.pattern)-3]
+				var matched bool
+				if strings.HasPrefix(dir, "/") {
+					if !strings.HasPrefix(prefix, "/") {
+						dir = dir[1:]
+					}
+					matched = strings.HasPrefix(prefix+s, dir)
+				} else {
+					matched = strings.Contains("/"+prefix+s, "/"+dir)
+				}
+				if matched {
+					if rule.include {
+						break
+					}
+					return false
+				}
+				continue
 			}
 			suffix := suffixForPattern(prefix+s, rule.pattern)
 			ok, err := path.Match(rule.pattern, suffix)

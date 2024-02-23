@@ -271,11 +271,11 @@ func TestParseRules(t *testing.T) {
 		},
 		{
 			args:      []string{"--exclude", "a", "--include", "b"},
-			wantRules: []rule{{pattern: "a", include: false}, {pattern: "b", include: true}},
+			wantRules: []rule{{pattern: "a"}, {pattern: "b", include: true}},
 		},
 		{
 			args:      []string{"--include", "a", "--test", "t", "--exclude", "b"},
-			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: false}},
+			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b"}},
 		},
 		{
 			args:      []string{"--include", "a", "--test", "t", "--exclude"},
@@ -283,19 +283,19 @@ func TestParseRules(t *testing.T) {
 		},
 		{
 			args:      []string{"--include", "a", "--exclude", "b", "--include", "c", "--exclude", "d"},
-			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: false}, {pattern: "c", include: true}, {pattern: "d", include: false}},
+			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b"}, {pattern: "c", include: true}, {pattern: "d"}},
 		},
 		{
 			args:      []string{"--include", "a", "--include", "b", "--test", "--exclude", "c", "--exclude", "d"},
-			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
+			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c"}, {pattern: "d"}},
 		},
 		{
 			args:      []string{"--include=a", "--include=b", "--exclude=c", "--exclude=d", "--test=aaa"},
-			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}, {pattern: "d", include: false}},
+			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c"}, {pattern: "d"}},
 		},
 		{
 			args:      []string{"-include=a", "--test", "t", "--include=b", "--exclude=c", "-exclude="},
-			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c", include: false}},
+			wantRules: []rule{{pattern: "a", include: true}, {pattern: "b", include: true}, {pattern: "c"}},
 		},
 	}
 	for _, tt := range tests {
@@ -615,6 +615,7 @@ func TestSuffixForPath(t *testing.T) {
 		}
 	}
 }
+
 func TestMatchObjects(t *testing.T) {
 	type tcase struct {
 		rules []rule
@@ -622,26 +623,39 @@ func TestMatchObjects(t *testing.T) {
 		want  bool
 	}
 	tests := []tcase{
-		{rules: []rule{{pattern: "a*", include: false}}, key: "a1", want: false},
-		{rules: []rule{{pattern: "a*/b*", include: false}}, key: "a1/b1", want: false},
-		{rules: []rule{{pattern: "/a*", include: false}}, key: "/a1", want: false},
-		{rules: []rule{{pattern: "/a", include: false}}, key: "/a1", want: true},
-		{rules: []rule{{pattern: "/a/b/c", include: false}}, key: "/a1", want: true},
-		{rules: []rule{{pattern: "a*/b?", include: false}}, key: "a1/b1/c2/d1", want: false},
-		{rules: []rule{{pattern: "a*/b?/", include: false}}, key: "a1/", want: true},
-		{rules: []rule{{pattern: "a*/b?/c.txt", include: false}}, key: "a1/b1", want: true},
-		{rules: []rule{{pattern: "a*/b?/", include: false}}, key: "a1/b1/", want: false},
-		{rules: []rule{{pattern: "a*/b?/", include: false}}, key: "a1/b1/c.txt", want: false},
-		{rules: []rule{{pattern: "a*/", include: false}}, key: "a1/b1", want: false},
-		{rules: []rule{{pattern: "a*/b*/", include: false}}, key: "a1/b1/c1/d.txt/", want: false},
-		{rules: []rule{{pattern: "/a*/b*", include: false}}, key: "/a1/b1/c1/d.txt/", want: false},
-		{rules: []rule{{pattern: "a*/b*/c", include: false}}, key: "a1/b1/c1/d.txt/", want: true},
-		{rules: []rule{{pattern: "a", include: false}}, key: "a/b/c/d/", want: false},
-		{rules: []rule{{pattern: "a.go", include: true}, {pattern: "pkg", include: false}}, key: "a/pkg/c/a.go", want: false},
-		{rules: []rule{{pattern: "a", include: false}, {pattern: "pkg", include: true}}, key: "a/pkg/c/a.go", want: false},
-		{rules: []rule{{pattern: "a.go", include: true}, {pattern: "pkg", include: false}}, key: "", want: true},
-		{rules: []rule{{pattern: "a", include: true}, {pattern: "b/", include: false}, {pattern: "c", include: true}}, key: "a/b/c", want: false},
-		{rules: []rule{{pattern: "a/", include: true}, {pattern: "a", include: false}}, key: "a/b", want: true},
+		{rules: []rule{{pattern: "a*"}}, key: "a1"},
+		{rules: []rule{{pattern: "a*/b*"}}, key: "a1/b1"},
+		{rules: []rule{{pattern: "/a*"}}, key: "/a1"},
+		{rules: []rule{{pattern: "/a"}}, key: "/a1", want: true},
+		{rules: []rule{{pattern: "/a/b/c"}}, key: "/a1", want: true},
+		{rules: []rule{{pattern: "a*/b?"}}, key: "a1/b1/c2/d1"},
+		{rules: []rule{{pattern: "a*/b?/"}}, key: "a1/", want: true},
+		{rules: []rule{{pattern: "a*/b?/c.txt"}}, key: "a1/b1", want: true},
+		{rules: []rule{{pattern: "a*/b?/"}}, key: "a1/b1/"},
+		{rules: []rule{{pattern: "a*/b?/"}}, key: "a1/b1/c.txt"},
+		{rules: []rule{{pattern: "a*/"}}, key: "a1/b1"},
+		{rules: []rule{{pattern: "a*/b*/"}}, key: "a1/b1/c1/d.txt/"},
+		{rules: []rule{{pattern: "/a*/b*"}}, key: "/a1/b1/c1/d.txt/"},
+		{rules: []rule{{pattern: "a*/b*/c"}}, key: "a1/b1/c1/d.txt/", want: true},
+		{rules: []rule{{pattern: "a"}}, key: "a/b/c/d/"},
+		{rules: []rule{{pattern: "a.go", include: true}, {pattern: "pkg"}}, key: "a/pkg/c/a.go"},
+		{rules: []rule{{pattern: "a"}, {pattern: "pkg", include: true}}, key: "a/pkg/c/a.go"},
+		{rules: []rule{{pattern: "a.go", include: true}, {pattern: "pkg"}}, key: "", want: true},
+		{rules: []rule{{pattern: "a", include: true}, {pattern: "b/"}, {pattern: "c", include: true}}, key: "a/b/c"},
+		{rules: []rule{{pattern: "a/", include: true}, {pattern: "a"}}, key: "a/b", want: true},
+		{rules: []rule{{pattern: "/***"}}, key: "a"},
+		{rules: []rule{{pattern: "/***"}}, key: "a/b"},
+		{rules: []rule{{pattern: "/a/***"}}, key: "a/"},
+		{rules: []rule{{pattern: "/a/***"}}, key: "a/b"},
+		{rules: []rule{{pattern: "/a/***"}}, key: "a/b/c"},
+		{rules: []rule{{pattern: "/a/***"}}, key: "b/a/", want: true},
+		{rules: []rule{{pattern: "a/***"}}, key: "a/"},
+		{rules: []rule{{pattern: "a/***"}}, key: "a/b"},
+		{rules: []rule{{pattern: "a/***"}}, key: "a/b/c"},
+		{rules: []rule{{pattern: "a/***"}}, key: "d/a/b/c"},
+		{rules: []rule{{pattern: "a/***"}}, key: "a", want: true},
+		{rules: []rule{{pattern: "a/***"}}, key: "ba", want: true},
+		{rules: []rule{{pattern: "a/***"}}, key: "ba/", want: true},
 	}
 	for _, c := range tests {
 		if got := matchKey(c.rules, c.key); got != c.want {
