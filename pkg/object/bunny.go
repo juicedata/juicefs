@@ -17,6 +17,7 @@
 package object
 
 import (
+	"bytes"
 	"io"
 	"math"
 	"net/url"
@@ -52,11 +53,11 @@ func (b *bunnyClient) Get(key string, off int64, limit int64) (io.ReadCloser, er
 	if limit == -1 {
 		limit = math.MaxInt64
 	}
-	body, err := b.client.DownloadPartialWithReaderCloser(key, off, limit+off-1)
+	body, err := b.client.DownloadPartial(key, off, limit+off-1)
 	if err != nil {
 		return nil, err
 	}
-	return body, nil
+	return io.NopCloser(bytes.NewReader(body)), nil
 }
 
 // Put data read from a reader to an object specified by key.
@@ -69,8 +70,25 @@ func (b *bunnyClient) Put(key string, in io.Reader) error {
 }
 
 // Delete a object.
+// Requires a conditional retry, since deleting a directory or file called foo/bar requires two different calls to the Bunny API, which JuiceFS does not do
+// Deleting a directory requires a trailing slash in the key to delete, which JuiceFS does not add to the path, leading to test case failures.
+// We implement a conditional retry here to try deleting the directory if the delete for a key of the passed name fails.
+// Deleting keys that do not exist are expected to not throw an error
 func (b *bunnyClient) Delete(key string) error {
-	return b.client.Delete(key, false)
+	if err := b.client.Delete(key, false); err != nil {
+		if err.Error() == "Not Found" {
+			// Retry delete the directory with the same name
+			if errDirectoryDelete := b.client.Delete(key, true); err != nil {
+				if err.Error() == "Not Found" {
+					return nil
+				} else {
+					return errDirectoryDelete
+				}
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 // ListAll returns all the objects as an channel.
@@ -127,8 +145,8 @@ func (b *bunnyClient) walkObjects(prefix string, marker string, out chan<- Objec
 // The Object Path returned by the Bunny API contains the Storage Zone Name, which this function removes
 func normalizedObjectNameWithinZone(o bunnystorage.Object) string {
 	normalizedPath := path.Join(o.Path, o.ObjectName)
-	if o.IsDirectory	{
-		normalizedPath = normalizedPath+"/" // Append a trailing slash to allow deletion of directories
+	if o.IsDirectory {
+		normalizedPath = normalizedPath + "/" // Append a trailing slash to allow deletion of directories
 	}
 	return strings.TrimPrefix(normalizedPath, "/"+o.StorageZoneName+"/")
 }
@@ -150,7 +168,7 @@ func (b *bunnyClient) Head(key string) (Object, error) {
 	object, err := b.client.Describe(key)
 	logger.Debug(object)
 	if err != nil {
-		if err.Error() == "404 Not Found"	{
+		if err.Error() == "Not Found" {
 			return nil, os.ErrNotExist
 		}
 		return nil, err
