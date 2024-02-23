@@ -242,6 +242,11 @@ func config(ctx *cli.Context) error {
 				format.MaxClientVersion = new
 				clientVer = true
 			}
+		case "enable-acl":
+			// cannot disable
+			if ctx.Bool(flag) {
+				format.EnableACL = true
+			}
 		}
 	}
 	if msg.Len() == 0 {
