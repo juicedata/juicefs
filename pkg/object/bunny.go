@@ -117,9 +117,8 @@ func (b *bunnyClient) walkObjects(prefix string, marker string, out chan<- Objec
 						return
 					}
 					objectsToProcess = append(objectsToProcess, objects...)
-				} else {
-					out <- parseObjectMetadata(o)
 				}
+				out <- parseObjectMetadata(o)
 			}
 		}
 	}
@@ -128,6 +127,9 @@ func (b *bunnyClient) walkObjects(prefix string, marker string, out chan<- Objec
 // The Object Path returned by the Bunny API contains the Storage Zone Name, which this function removes
 func normalizedObjectNameWithinZone(o bunnystorage.Object) string {
 	normalizedPath := path.Join(o.Path, o.ObjectName)
+	if o.IsDirectory	{
+		normalizedPath = normalizedPath+"/" // Append a trailing slash to allow deletion of directories
+	}
 	return strings.TrimPrefix(normalizedPath, "/"+o.StorageZoneName+"/")
 }
 
@@ -135,7 +137,7 @@ func normalizedObjectNameWithinZone(o bunnystorage.Object) string {
 func parseObjectMetadata(object bunnystorage.Object) Object {
 	lastChanged, _ := time.Parse("2006-01-02T15:04:05", object.LastChanged)
 	return &obj{
-		object.ObjectName,
+		normalizedObjectNameWithinZone(object),
 		int64(object.Length),
 		lastChanged,
 		object.IsDirectory,
