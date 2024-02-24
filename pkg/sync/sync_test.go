@@ -597,14 +597,14 @@ func TestSuffixForPath(t *testing.T) {
 	}
 	tests := []tcase{
 		{pattern: "a*", key: "a1", want: "a1"},
-		{pattern: "/a*", key: "a1", want: "a1"},
+		{pattern: "/a*", key: "a1", want: "/a1"},
 		{pattern: "a*/", key: "a1", want: "a1"},
 		{pattern: "a*/b*", key: "a1", want: "a1"},
 		{pattern: "a*", key: "a1/b1", want: "b1"},
-		{pattern: "/a*", key: "a1/b1", want: "a1/b1"},
+		{pattern: "/a*", key: "a1/b1", want: "/a1/b1"},
 		{pattern: "/a*", key: "/a1/b1", want: "/a1/b1"},
 		{pattern: "/a*/b*/c*", key: "/a1/b1", want: "/a1/b1"},
-		{pattern: "/a", key: "a1/b1/c1/d1", want: "a1/b1/c1/d1"},
+		{pattern: "/a", key: "a1/b1/c1/d1", want: "/a1/b1/c1/d1"},
 		{pattern: "a*/", key: "a1/b1", want: "a1/b1"},
 		{pattern: "a*/b*", key: "a1/b1", want: "a1/b1"},
 		{pattern: "a*/b*", key: "a1/b1/c1/d1", want: "c1/d1"},
