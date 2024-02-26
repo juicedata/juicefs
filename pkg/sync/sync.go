@@ -1149,6 +1149,9 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		if failed != nil {
 			msg += fmt.Sprintf(", failed: %d", failed.Current())
 		}
+		if total-handled.Current() > 0 {
+			msg += fmt.Sprintf(", lost: %d", total-handled.Current())
+		}
 		logger.Info(msg)
 	} else {
 		sendStats(config.Manager)
@@ -1156,7 +1159,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 	if failed != nil {
 		if n := failed.Current(); n > 0 || total > handled.Current() {
-			return fmt.Errorf("Failed to handle %d objects", n+total-handled.Current())
+			return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
 		}
 	}
 	return nil
