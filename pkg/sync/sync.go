@@ -1134,7 +1134,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	wg.Wait()
 	pending.SetCurrent(0)
-	total := handled.Total()
+	total := handled.GetTotal()
 	progress.Done()
 
 	if config.Manager == "" {
