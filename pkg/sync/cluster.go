@@ -141,7 +141,6 @@ func startManager(config *Config, tasks <-chan object.Object) (string, error) {
 				if obj == nil {
 					break LOOP
 				}
-				handled.IncrTotal(1)
 				objs = append(objs, obj)
 				if len(objs) > 100 {
 					break LOOP
