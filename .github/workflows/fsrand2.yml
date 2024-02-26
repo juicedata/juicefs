@@ -99,8 +99,7 @@ jobs:
           else
             PROFILE='pull_request'
           fi
-          sudo -E PROFILE=${PROFILE} python3 .github/scripts/hypo/fsrand2.py 2>&1 | tee fsrand.log
-          exit ${PIPESTATUS[0]}
+          sudo -E PROFILE=${PROFILE} python3 .github/scripts/hypo/fsrand2.py
 
       - name: check fsrand.log
         if: always()
