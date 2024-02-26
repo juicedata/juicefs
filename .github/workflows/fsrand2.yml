@@ -89,7 +89,7 @@ jobs:
       - name: Run Examples
         timeout-minutes: 10
         run: |
-          sudo -E python3 .github/scripts/fsrand2_test.py
+          sudo -E python3 .github/scripts/hypo/fsrand2_test.py
           
       - name: Test
         timeout-minutes: 120
@@ -101,7 +101,7 @@ jobs:
           fi
           sudo -E PROFILE=${PROFILE} python3 .github/scripts/hypo/fsrand2.py 2>&1 | tee fsrand.log
           exit ${PIPESTATUS[0]}
-          
+
       - name: check fsrand.log
         if: always()
         shell: bash
