@@ -589,33 +589,6 @@ func testKeysEqual(objsCh <-chan object.Object, expectedKeys []string) error {
 	return nil
 }
 
-func TestSuffixForPath(t *testing.T) {
-	type tcase struct {
-		pattern string
-		key     string
-		want    string
-	}
-	tests := []tcase{
-		{pattern: "a*", key: "a1", want: "a1"},
-		{pattern: "/a*", key: "a1", want: "/a1"},
-		{pattern: "a*/", key: "a1", want: "a1"},
-		{pattern: "a*/b*", key: "a1", want: "a1"},
-		{pattern: "a*", key: "a1/b1", want: "b1"},
-		{pattern: "/a*", key: "a1/b1", want: "/a1/b1"},
-		{pattern: "/a*", key: "/a1/b1", want: "/a1/b1"},
-		{pattern: "/a*/b*/c*", key: "/a1/b1", want: "/a1/b1"},
-		{pattern: "/a", key: "a1/b1/c1/d1", want: "/a1/b1/c1/d1"},
-		{pattern: "a*/", key: "a1/b1", want: "a1/b1"},
-		{pattern: "a*/b*", key: "a1/b1", want: "a1/b1"},
-		{pattern: "a*/b*", key: "a1/b1/c1/d1", want: "c1/d1"},
-	}
-	for _, tt := range tests {
-		if got := suffixForPattern(tt.key, tt.pattern); !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("suffixForPattern(%s, %s) = %v, want %v", tt.key, tt.pattern, got, tt.want)
-		}
-	}
-}
-
 func TestMatchObjects(t *testing.T) {
 	type tcase struct {
 		rules []rule
@@ -656,6 +629,21 @@ func TestMatchObjects(t *testing.T) {
 		{rules: []rule{{pattern: "a/***"}}, key: "a", want: true},
 		{rules: []rule{{pattern: "a/***"}}, key: "ba", want: true},
 		{rules: []rule{{pattern: "a/***"}}, key: "ba/", want: true},
+		{rules: []rule{{pattern: "*/a/***"}}, key: "/a/"},
+		{rules: []rule{{pattern: "*/a/***"}}, key: "b/a/"},
+		{rules: []rule{{pattern: "*/a/***"}}, key: "b/a/c"},
+		{rules: []rule{{pattern: "/*/a/***"}}, key: "/b/a/"},
+		{rules: []rule{{pattern: "/*/a/***"}}, key: "/b/a/c"},
+		{rules: []rule{{pattern: "/*/a/***"}}, key: "c/b/a/", want: true},
+		{rules: []rule{{pattern: "a/**/b"}}, key: "a/c/b"},
+		{rules: []rule{{pattern: "a/**/b"}}, key: "a/c/d/b"},
+		{rules: []rule{{pattern: "a/**/b"}}, key: "a/c/d/e/b"},
+		{rules: []rule{{pattern: "/**/b"}}, key: "a/c/b"},
+		{rules: []rule{{pattern: "/**/b"}}, key: "a/c/d/b/"},
+		{rules: []rule{{pattern: "a**/b"}}, key: "a/c/d/b/"},
+		{rules: []rule{{pattern: "a**/b"}}, key: "a/c/d/ab/", want: true},
+		{rules: []rule{{pattern: "a**b"}}, key: "a/c/d/b/"},
+		{rules: []rule{{pattern: "a**b"}}, key: "b/c/d/b/", want: true},
 	}
 	for _, c := range tests {
 		if got := matchKey(c.rules, c.key); got != c.want {

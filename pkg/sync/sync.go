@@ -823,6 +823,13 @@ type rule struct {
 	include bool
 }
 
+func parseRule(name, p string) rule {
+	if runtime.GOOS == "windows" {
+		p = strings.Replace(p, "\\", "/", -1)
+	}
+	return rule{pattern: p, include: name == "-include"}
+}
+
 func parseIncludeRules(args []string) (rules []rule) {
 	l := len(args)
 	for i, a := range args {
@@ -834,14 +841,14 @@ func parseIncludeRules(args []string) (rules []rule) {
 				logger.Warnf("ignore invalid pattern: %s %s", a, args[i+1])
 				continue
 			}
-			rules = append(rules, rule{pattern: args[i+1], include: a == "-include"})
+			rules = append(rules, parseRule(a, args[i+1]))
 		} else if strings.HasPrefix(a, "-include=") || strings.HasPrefix(a, "-exclude=") {
 			if s := strings.Split(a, "="); len(s) == 2 && s[1] != "" {
 				if _, err := path.Match(s[1], "xxxx"); err != nil {
 					logger.Warnf("ignore invalid pattern: %s", a)
 					continue
 				}
-				rules = append(rules, rule{pattern: s[1], include: strings.HasPrefix(a, "-include=")})
+				rules = append(rules, parseRule(a, s[1]))
 			}
 		}
 	}
@@ -866,24 +873,60 @@ func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
 	return r
 }
 
-func suffixForPattern(path, pattern string) string {
-	if strings.HasPrefix(pattern, "/") {
-		if !strings.HasPrefix(path, "/") {
-			path = "/" + path
+func matchPrefix(p, s []string) bool {
+	if len(p) == 0 {
+		return len(s) == 0
+	}
+	first := p[0]
+	n := len(s)
+	switch {
+	case first == "***":
+		return len(s) > 0
+	case strings.Contains(first, "**"):
+		for i := 1; i <= n; i++ {
+			if ok, _ := path.Match(first, strings.Join(s[:i], "*")); ok && matchPrefix(p[1:], s[i:]) {
+				return true
+			}
 		}
-		return path
+		return false
+	default:
+		if len(s) == 0 {
+			return false
+		}
+		ok, _ := path.Match(first, s[0])
+		return ok && matchPrefix(p[1:], s[1:])
 	}
-	if strings.HasSuffix(pattern, "/") && !strings.HasSuffix(path, "/") {
-		return path
+}
+
+func matchSuffix(p, s []string) bool {
+	if len(p) == 0 {
+		return true
 	}
-	n := strings.Count(strings.Trim(pattern, "/"), "/")
-	m := strings.Count(strings.Trim(path, "/"), "/")
-	if n >= m {
-		return path
+	if len(s) == 0 {
+		return false
 	}
-	parts := strings.Split(path, "/")
-	n = len(strings.Split(pattern, "/"))
-	return strings.Join(parts[len(parts)-n:], "/")
+	last := p[len(p)-1]
+	prefix := p[:len(p)-1]
+	n := len(s)
+	switch {
+	case last == "***":
+		for i := 0; i < n; i++ {
+			if matchSuffix(prefix, s[:i]) {
+				return true
+			}
+		}
+		return false
+	case strings.Contains(last, "**"):
+		for i := 0; i < n; i++ {
+			if ok, _ := path.Match(last, strings.Join(s[i:], "*")); ok && matchSuffix(p[1:], s[:i]) {
+				return true
+			}
+		}
+		return false
+	default:
+		ok, _ := path.Match(last, s[n-1])
+		return ok && matchSuffix(prefix, s[:n-1])
+	}
 }
 
 // Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
@@ -893,35 +936,20 @@ func matchKey(rules []rule, key string) bool {
 		if parts[i] == "" {
 			continue
 		}
-		prefix := strings.Join(parts[:i+1], "/")
+		ps := parts[:i+1]
 		for _, rule := range rules {
-			var s string
-			if i < len(parts)-1 && (strings.HasSuffix(rule.pattern, "/") || strings.HasSuffix(rule.pattern, "/***")) {
-				s = "/"
+			pattern := strings.Split(rule.pattern, "/")
+			if i < len(parts)-1 && (pattern[len(pattern)-1] == "" || pattern[len(pattern)-1] == "***") && ps[len(ps)-1] != "" {
+				ps = append(append([]string{}, ps...), "")
 			}
-			if strings.HasSuffix(rule.pattern, "/***") {
-				dir := rule.pattern[:len(rule.pattern)-3]
-				var matched bool
-				if strings.HasPrefix(dir, "/") {
-					if !strings.HasPrefix(prefix, "/") {
-						dir = dir[1:]
-					}
-					matched = strings.HasPrefix(prefix+s, dir)
-				} else {
-					matched = strings.Contains("/"+prefix+s, "/"+dir)
+			var ok bool
+			if pattern[0] == "" {
+				if parts[0] != "" {
+					pattern = pattern[1:]
 				}
-				if matched {
-					if rule.include {
-						break
-					}
-					return false
-				}
-				continue
-			}
-			suffix := suffixForPattern(prefix+s, rule.pattern)
-			ok, err := path.Match(rule.pattern, suffix)
-			if err != nil {
-				logger.Fatalf("match %s with %s: %v", rule.pattern, suffix, err)
+				ok = matchPrefix(pattern, ps)
+			} else {
+				ok = matchSuffix(pattern, ps)
 			}
 			if ok {
 				if rule.include {
@@ -1116,13 +1144,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	if len(config.Exclude) > 0 {
-		rules := parseIncludeRules(os.Args)
-		if runtime.GOOS == "windows" && (strings.HasPrefix(src.String(), "file:") || strings.HasPrefix(dst.String(), "file:")) {
-			for _, r := range rules {
-				r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
-			}
-		}
-		config.rules = rules
+		config.rules = parseIncludeRules(os.Args)
 	}
 
 	if config.Manager == "" {
