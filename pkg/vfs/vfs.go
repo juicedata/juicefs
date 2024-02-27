@@ -704,6 +704,11 @@ func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh 
 	defer h.removeOp(ctx)
 
 	err = v.Meta.Fallocate(ctx, ino, mode, uint64(off), uint64(length))
+	if err == 0 {
+		v.writer.Expand(ino, uint64(off), uint64(length))
+		v.reader.Invalidate(ino, uint64(off), uint64(length))
+		v.invalidateLength(ino)
+	}
 	return
 }
 
@@ -771,6 +776,7 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 	}
 	err = v.Meta.CopyFileRange(ctx, nodeIn, offIn, nodeOut, offOut, size, flags, &copied)
 	if err == 0 {
+		v.writer.Expand(nodeOut, offOut, size)
 		v.reader.Invalidate(nodeOut, offOut, size)
 		v.invalidateLength(nodeOut)
 	}

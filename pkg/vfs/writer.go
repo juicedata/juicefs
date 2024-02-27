@@ -38,6 +38,7 @@ type FileWriter interface {
 	Close(ctx meta.Context) syscall.Errno
 	GetLength() uint64
 	Truncate(length uint64)
+	Expand(off, size uint64)
 }
 
 type DataWriter interface {
@@ -45,6 +46,7 @@ type DataWriter interface {
 	Flush(ctx meta.Context, inode Ino) syscall.Errno
 	GetLength(inode Ino) uint64
 	Truncate(inode Ino, length uint64)
+	Expand(inode Ino, off, size uint64)
 	UpdateMtime(inode Ino, mtime time.Time)
 }
 
@@ -419,6 +421,14 @@ func (f *fileWriter) Truncate(length uint64) {
 	f.length = length
 }
 
+func (f *fileWriter) Expand(off, size uint64) {
+	f.Lock()
+	defer f.Unlock()
+	if off+size > f.length {
+		f.length = off + size
+	}
+}
+
 type dataWriter struct {
 	sync.Mutex
 	m          meta.Meta
@@ -530,6 +540,13 @@ func (w *dataWriter) Truncate(inode Ino, len uint64) {
 	f := w.find(inode)
 	if f != nil {
 		f.Truncate(len)
+	}
+}
+
+func (w *dataWriter) Expand(inode Ino, off, size uint64) {
+	f := w.find(inode)
+	if f != nil {
+		f.Expand(off, size)
 	}
 }
 
