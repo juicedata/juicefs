@@ -201,45 +201,45 @@ func checkMountpoint(name, mp, logPath string, background bool) {
 	}
 }
 
-func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
-	var attrs godaemon.DaemonAttr
-	logfile := c.String("log")
-	attrs.OnExit = func(stage int) error {
-		if stage != 0 {
-			return nil
-		}
-		checkMountpoint(name, mp, logfile, true)
-		return nil
-	}
-
-	// the current dir will be changed to root in daemon,
-	// so the mount point has to be an absolute path.
-	if godaemon.Stage() == 0 {
-		for i, a := range os.Args {
-			if a == mp {
-				amp, err := filepath.Abs(mp)
-				if err == nil {
-					os.Args[i] = amp
-				} else {
-					logger.Warnf("abs of %s: %s", mp, err)
-				}
-			}
-		}
-		var err error
-		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			logger.Errorf("open log file %s: %s", logfile, err)
-		}
-	}
-	if godaemon.Stage() <= 1 {
-		err := m.Shutdown()
-		if err != nil {
-			logger.Errorf("shutdown: %s", err)
-		}
-	}
-	_, _, err := godaemon.MakeDaemon(&attrs)
-	return err
-}
+//func makeDaemon(c *cli.Context, name, mp string, m meta.Meta) error {
+//	var attrs godaemon.DaemonAttr
+//	logfile := c.String("log")
+//	attrs.OnExit = func(stage int) error {
+//		if stage != 0 {
+//			return nil
+//		}
+//		checkMountpoint(name, mp, logfile, true)
+//		return nil
+//	}
+//
+//	// the current dir will be changed to root in daemon,
+//	// so the mount point has to be an absolute path.
+//	if godaemon.Stage() == 0 {
+//		for i, a := range os.Args {
+//			if a == mp {
+//				amp, err := filepath.Abs(mp)
+//				if err == nil {
+//					os.Args[i] = amp
+//				} else {
+//					logger.Warnf("abs of %s: %s", mp, err)
+//				}
+//			}
+//		}
+//		var err error
+//		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+//		if err != nil {
+//			logger.Errorf("open log file %s: %s", logfile, err)
+//		}
+//	}
+//	if godaemon.Stage() <= 1 {
+//		err := m.Shutdown()
+//		if err != nil {
+//			logger.Errorf("shutdown: %s", err)
+//		}
+//	}
+//	_, _, err := godaemon.MakeDaemon(&attrs)
+//	return err
+//}
 
 func makeDaemonForSvc(c *cli.Context, m meta.Meta) error {
 	var attrs godaemon.DaemonAttr
@@ -387,6 +387,7 @@ func getFuserMountVersion() string {
 
 func genFuseOpt(c *cli.Context, name string) string {
 	fuseOpt := c.String("o")
+	// todo: remove ?
 	prefix := os.Getenv("FSTAB_NAME_PREFIX")
 	if prefix == "" {
 		prefix = "JuiceFS:"
@@ -410,6 +411,7 @@ func genFuseOpt(c *cli.Context, name string) string {
 
 func genFuseOptExt(c *cli.Context, name string) (fuseOpt string, mt int, noxattr, noacl bool) {
 	enableXattr := c.Bool("enable-xattr")
+	// todo: wait for the implementation of acl
 	if c.Bool("enable-acl") {
 		enableXattr = true
 	}
@@ -471,7 +473,7 @@ func canShutdownGracefully(mp string, volName string, newConf *vfs.Config) bool 
 		return false
 	}
 	if conf.Format.Name != volName {
-		logger.Infof("different volume %s != %s, mount on top of it", &conf.Format.Name, volName)
+		logger.Infof("different volume %s != %s, mount on top of it", conf.Format.Name, volName)
 		return false
 	}
 	if conf.FuseOpts != nil && !reflect.DeepEqual(conf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions()) {
@@ -536,13 +538,13 @@ func fixConfDir(c *cli.Context) {
 	}
 }
 
-func makeDaemon(c *cli.Context, name string, conf *vfs.Config) error {
+func makeDaemon(c *cli.Context, conf *vfs.Config) error {
 	var attrs godaemon.DaemonAttr
 	logfile := c.String("log")
-	mp := conf.Mountpoint
+	mp := conf.Meta.MountPoint
 	attrs.OnExit = func(stage int) error {
 		if stage == 0 {
-			checkMountpoint(name, mp, logfile, true)
+			checkMountpoint(conf.Format.Name, mp, logfile, true)
 		}
 		return nil
 	}

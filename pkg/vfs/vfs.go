@@ -18,6 +18,8 @@ package vfs
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"runtime"
 	"sort"
 	"sync"
@@ -55,6 +57,7 @@ type FuseOptions struct {
 	MaxBackground            int
 	MaxWrite                 int
 	MaxReadAhead             int
+	MaxPages                 int
 	IgnoreSecurityLabels     bool // ignoring labels should be provided as a fusermount mount option.
 	RememberInodes           bool
 	FsName                   string
@@ -62,15 +65,16 @@ type FuseOptions struct {
 	SingleThreaded           bool
 	DisableXAttrs            bool
 	Debug                    bool
-	DontUmask                bool
 	EnableLocks              bool
-	EnableAcl                bool
 	ExplicitDataCacheControl bool
-	Writeback                bool
-	NoAllocForRead           bool
 	DirectMount              bool
 	DirectMountFlags         uintptr
+	EnableAcl                bool
+	EnableWriteback          bool
+	EnableIoctl              bool
+	DontUmask                bool
 	OtherCaps                uint32
+	NoAllocForRead           bool
 }
 
 func (o FuseOptions) StripOptions() FuseOptions {
@@ -1072,6 +1076,22 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 			n.name = ".jfs" + n.name
 		}
 		meta.TrashName = ".jfs" + meta.TrashName
+	}
+
+	statePath := os.Getenv("_FUSE_STATE_PATH")
+	if statePath == "" {
+		statePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
+	} else {
+		// there is a bug in the supervsior, _FUSE_STATE_PATH could be stale
+		fi, _ := os.Stat(statePath)
+		if fi != nil && time.Since(fi.ModTime()) > time.Minute {
+			logger.Infof("Reset stale path %s (modified at %s)", statePath, fi.ModTime())
+			statePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
+		}
+	}
+
+	if err := v.loadAllHandles(statePath); err != nil && !os.IsNotExist(err) {
+		logger.Errorf("load state from %s: %s", statePath, err)
 	}
 
 	go v.cleanupModified()

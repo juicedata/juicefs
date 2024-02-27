@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"bufio"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -109,6 +109,13 @@ func installHandler(mp string, v *vfs.VFS) {
 					continue
 				}
 			}
+			go func() {
+				time.Sleep(time.Second * 30)
+				if err := v.FlushAll(""); err != nil {
+					logger.Errorf("flush all: %s", err)
+				}
+				logger.Fatalf("exit after received %s", sig)
+			}()
 			go func() { _ = doUmount(mp, true) }()
 			go func() {
 				time.Sleep(time.Second * 30)
@@ -222,7 +229,7 @@ func updateFormat(c *cli.Context) func(*meta.Format) {
 	}
 }
 
-func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
+func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config) {
 	if runtime.GOOS != "windows" {
 		if cd := c.String("cache-dir"); cd != "memory" {
 			ds := utils.SplitDir(cd)
@@ -253,7 +260,7 @@ func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config, m meta.Meta) {
 	_ = expandPathForEmbedded(addr)
 	// The default log to syslog is only in daemon mode.
 	utils.InitLoggers(!c.Bool("no-syslog"))
-	err := makeDaemon(c, vfsConf.Format.Name, vfsConf.Meta.MountPoint, m)
+	err := makeDaemon(c, vfsConf)
 	if err != nil {
 		logger.Fatalf("Failed to make daemon: %s", err)
 	}
@@ -291,6 +298,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		BackupMeta:     duration(c.String("backup-meta")),
 		Port:           &vfs.Port{DebugAgent: debugAgent, PyroscopeAddr: c.String("pyroscope")},
 		PrefixInternal: c.Bool("prefix-internal"),
+		Pid:            os.Getpid(),
 	}
 	skip_check := os.Getenv("SKIP_BACKUP_META_CHECK") == "true"
 	if !skip_check && cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
@@ -341,54 +349,56 @@ func readConfig(mp string) ([]byte, error) {
 	return contents, err
 }
 
-func prepareMp(newCfg *vfs.Config, mp string) (ignore bool) {
-	fi, err := os.Stat(mp)
-	if err != nil {
-		if strings.Contains(mp, ":") {
-			// Windows path, users should inspect mount point by themselves
-			return
-		}
-		if err := os.MkdirAll(mp, 0777); err != nil {
-			if os.IsExist(err) {
-				// a broken mount point, umount it and continue to mount
+func prepareMp(mp string) {
+	var fi os.FileInfo
+	err := utils.WithTimeout(func() error {
+		var err error
+		fi, err = os.Stat(mp)
+		return err
+	}, time.Second*3)
+	if !strings.Contains(mp, ":") && err != nil {
+		err2 := utils.WithTimeout(func() error {
+			return os.MkdirAll(mp, 0777)
+		}, time.Second*3)
+		if err2 != nil {
+			if os.IsExist(err2) || strings.Contains(err2.Error(), "timeout after 3s") {
+				// a broken mount point, umount it
+				logger.Infof("mountpoint %s is broken: %s, umount it", mp, err)
 				_ = doUmount(mp, true)
-				return
+			} else {
+				logger.Fatalf("create %s: %s", mp, err2)
 			}
-			logger.Fatalf("create %s: %s", mp, err)
 		}
-		return
-	}
-	if fi.Size() == 0 {
-		// a broken mount point, umount it and continue to mount
-		_ = doUmount(mp, true)
-		return
-	}
-
-	ino, _ := utils.GetFileInode(mp)
-	if ino != uint64(meta.RootInode) {
-		// not a mount point, just mount it
-		return
+	} else if err == nil {
+		ino, _ := utils.GetFileInode(mp)
+		if ino <= uint64(meta.RootInode) && fi.Size() == 0 {
+			// a broken mount point, umount it
+			logger.Infof("mountpoint %s is broken (ino=%d, size=%d), umount it", mp, ino, fi.Size())
+			_ = doUmount(mp, true)
+		}
 	}
 
-	contents, err := readConfig(mp)
-	if err != nil {
-		// failed to read juicefs config, continue to mount
+	if os.Getuid() == 0 {
 		return
 	}
-
-	originConfig := vfs.Config{}
-	if err = json.Unmarshal(contents, &originConfig); err != nil {
-		// not a valid juicefs config, continue to mount
-		return
+	switch runtime.GOOS {
+	case "darwin":
+		if fi, err := os.Stat(mp); err == nil {
+			if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+				if st.Uid != uint32(os.Getuid()) {
+					logger.Fatalf("current user should own %s", mp)
+				}
+			}
+		}
+	case "linux":
+		f, err := os.CreateTemp(mp, ".test")
+		if err != nil && (os.IsPermission(err) || errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EROFS)) {
+			logger.Fatalf("Do not have write permission on %s", mp)
+		} else if f != nil {
+			_ = f.Close()
+			_ = os.Remove(f.Name())
+		}
 	}
-
-	if !configEqual(newCfg, &originConfig) {
-		// not the same juicefs, continue to mount
-		return
-	}
-
-	logger.Warnf("%s is already mounted by the same juicefs, ignored", mp)
-	return true
 }
 
 func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
@@ -641,6 +651,39 @@ func mount(c *cli.Context) error {
 	addr := c.Args().Get(0)
 	mp := c.Args().Get(1)
 
+	supervisor := os.Getenv("JFS_SUPERVISOR")
+	inFirstProcess := supervisor == "test" || supervisor == "" && os.Getenv("__DAEMON_STAGE") == ""
+	if inFirstProcess {
+		var err error
+		err = utils.WithTimeout(func() error {
+			mp, err = filepath.Abs(mp)
+			return err
+		}, time.Second*3)
+		if err != nil {
+			logger.Fatalf("abs %s: %s", mp, err)
+		}
+		if mp == "/" {
+			logger.Fatalf("should not mount on the root directory")
+		}
+		prepareMp(mp)
+		if c.Bool("update-fstab") && !calledViaMount(os.Args) && !insideContainer() {
+			if os.Getuid() != 0 {
+				logger.Warnf("--update-fstab should be used with root")
+			} else {
+				var e1, e2 error
+				if e1 = tryToInstallMountExec(); e1 != nil {
+					logger.Warnf("failed to create /sbin/mount.juicefs: %s", e1)
+				}
+				if e2 = updateFstab(c); e2 != nil {
+					logger.Warnf("failed to update fstab: %s", e2)
+				}
+				if e1 == nil && e2 == nil {
+					logger.Infof("Successfully updated fstab, now you can mount with `mount %s`", mp)
+				}
+			}
+		}
+	}
+
 	metaConf := getMetaConf(c, mp, c.Bool("read-only") || utils.StringContains(strings.Split(c.String("o"), ","), "ro"))
 	metaConf.CaseInsensi = strings.HasSuffix(mp, ":") && runtime.GOOS == "windows"
 	metaCli := meta.NewClient(addr, metaConf)
@@ -651,7 +694,6 @@ func mount(c *cli.Context) error {
 	if st := metaCli.Chroot(meta.Background, metaConf.Subdir); st != 0 {
 		return st
 	}
-
 	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
 	registerer, registry := wrapRegister(c, mp, format.Name)
 
@@ -661,40 +703,38 @@ func mount(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 
-	if c.Bool("update-fstab") && !calledViaMount(os.Args) && !insideContainer() {
-		if os.Getuid() != 0 {
-			logger.Warnf("--update-fstab should be used with root")
-		} else {
-			var e1, e2 error
-			if e1 = tryToInstallMountExec(); e1 != nil {
-				logger.Warnf("failed to create /sbin/mount.juicefs: %s", e1)
-			}
-			if e2 = updateFstab(c); e2 != nil {
-				logger.Warnf("failed to update fstab: %s", e2)
-			}
-			if e1 == nil && e2 == nil {
-				logger.Infof("Successfully updated fstab, now you can mount with `mount %s`", mp)
-			}
-		}
-	}
-
 	chunkConf := getChunkConf(c, format)
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
 
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
-	ignore := prepareMp(vfsConf, mp)
-	if !c.Bool("force") && ignore {
-		return nil
+	if runtime.GOOS != "windows" {
+		rawOpts, mt, noxattr, noacl := genFuseOptExt(c, format.Name)
+		options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl))
+		vfsConf.FuseOpts = &options
 	}
 
-	if c.Bool("background") && os.Getenv("JFS_FOREGROUND") == "" {
-		daemonRun(c, addr, vfsConf, metaCli)
-	} else {
-		if c.IsSet("log") {
-			logger.Warnf("--log flag is ignored in foreground mode, the log output will be Stderr")
+	if os.Getenv("JFS_SUPERVISOR") == "" {
+		var foreground bool
+		if runtime.GOOS == "windows" || !c.Bool("background") || os.Getenv("JFS_FOREGROUND") != "" {
+			foreground = true
+		} else if c.Bool("background") || os.Getenv("__DAEMON_STAGE") != "" {
+			foreground = false
+		} else {
+			foreground = os.Getppid() == 1 && !insideContainer()
 		}
-		go checkMountpoint(vfsConf.Format.Name, mp, c.String("log"), false)
+		if foreground {
+			go checkMountpoint(format.Name, mp, c.String("log"), false)
+		} else {
+			daemonRun(c, addr, vfsConf)
+		}
+		os.Setenv("JFS_SUPERVISOR", strconv.Itoa(os.Getppid()))
+		return launchMount(mp, vfsConf)
+	}
+	logger.Infof("JuiceFS version %s", version.Version())
+	if commPath := os.Getenv("_FUSE_FD_COMM"); commPath != "" {
+		vfsConf.CommPath = commPath
+		vfsConf.StatePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 	}
 
 	removePassword(addr)
