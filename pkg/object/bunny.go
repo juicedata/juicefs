@@ -18,6 +18,7 @@ package object
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"math"
 	"net/url"
@@ -37,7 +38,7 @@ type bunnyClient struct {
 
 // Description of the object storage.
 func (b *bunnyClient) String() string {
-	return b.endpoint
+	return fmt.Sprintf("bunny://%v", b.endpoint)
 }
 
 // Limits of the object storage.
