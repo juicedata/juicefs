@@ -165,9 +165,7 @@ func parseObjectMetadata(object bunnystorage.Object) Object {
 }
 
 func (b *bunnyClient) Head(key string) (Object, error) {
-	logger.Debug(key)
 	object, err := b.client.Describe(key)
-	logger.Debug(object)
 	if err != nil {
 		if err.Error() == "Not Found" {
 			return nil, os.ErrNotExist
