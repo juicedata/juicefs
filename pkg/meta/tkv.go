@@ -965,7 +965,7 @@ func (m *kvMeta) Truncate(ctx Context, inode Ino, flags uint8, length uint64, at
 	return errno(err)
 }
 
-func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64) syscall.Errno {
+func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, flength *uint64) syscall.Errno {
 	if mode&fallocCollapesRange != 0 && mode != fallocCollapesRange {
 		return syscall.EINVAL
 	}
@@ -1019,6 +1019,9 @@ func (m *kvMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size 
 		newSpace = align4K(length) - align4K(t.Length)
 		if err := m.checkQuota(ctx, newSpace, 0, m.getParents(tx, inode, t.Parent)...); err != 0 {
 			return err
+		}
+		if flength != nil {
+			*flength = length
 		}
 		t.Length = length
 		now := time.Now()
@@ -1995,7 +1998,7 @@ func (m *kvMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice Sl
 	return errno(err)
 }
 
-func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno {
+func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
 	defer m.timeit("CopyFileRange", time.Now())
 	var newLength, newSpace int64
 	f := m.of.find(fout)
@@ -2017,7 +2020,9 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			return syscall.EINVAL
 		}
 		if offIn >= sattr.Length {
-			*copied = 0
+			if copied != nil {
+				*copied = 0
+			}
 			return nil
 		}
 		size := size
@@ -2047,6 +2052,9 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 		attr.Mtimensec = uint32(now.Nanosecond())
 		attr.Ctime = now.Unix()
 		attr.Ctimensec = uint32(now.Nanosecond())
+		if outLength != nil {
+			*outLength = attr.Length
+		}
 
 		vals := make(map[string][]byte)
 		tx.scan(m.chunkKey(fin, uint32(offIn/ChunkSize)), m.chunkKey(fin, uint32((offIn+size)/ChunkSize)+1),
@@ -2109,7 +2117,9 @@ func (m *kvMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, off
 			}
 		}
 		tx.set(m.inodeKey(fout), m.marshal(&attr))
-		*copied = size
+		if copied != nil {
+			*copied = size
+		}
 		return nil
 	}, fout)
 	if err == nil {

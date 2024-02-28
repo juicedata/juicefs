@@ -490,7 +490,7 @@ func (v *VFS) Truncate(ctx Context, ino Ino, size int64, fh uint64, attr *Attr) 
 	if err == 0 {
 		v.writer.Truncate(ino, uint64(size))
 		v.reader.Truncate(ino, uint64(size))
-		v.invalidateLength(ino)
+		v.invalidateAttr(ino)
 	}
 	return err
 }
@@ -527,7 +527,7 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 			f.Unlock()
 			if f.writer != nil {
 				_ = f.writer.Flush(ctx)
-				v.invalidateLength(ino)
+				v.invalidateAttr(ino)
 			}
 			if locks&1 != 0 {
 				_ = v.Meta.Flock(ctx, ino, fowner, F_UNLCK, false)
@@ -668,14 +668,15 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 
 	if err == 0 {
 		writtenSizeHistogram.Observe(float64(len(buf)))
-		v.reader.Truncate(ino, v.writer.GetLength(ino))
+		v.reader.Invalidate(ino, off, size)
+		v.invalidateAttr(ino)
 	}
 	return
 }
 
-func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh uint64) (err syscall.Errno) {
-	defer func() { logit(ctx, "fallocate (%d,%d,%d,%d): %s", ino, mode, off, length, strerr(err)) }()
-	if off < 0 || length <= 0 {
+func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, size int64, fh uint64) (err syscall.Errno) {
+	defer func() { logit(ctx, "fallocate (%d,%d,%d,%d): %s", ino, mode, off, size, strerr(err)) }()
+	if off < 0 || size <= 0 {
 		err = syscall.EINVAL
 		return
 	}
@@ -688,7 +689,7 @@ func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh 
 		err = syscall.EBADF
 		return
 	}
-	if off >= maxFileSize || off+length >= maxFileSize {
+	if off >= maxFileSize || off+size >= maxFileSize {
 		err = syscall.EFBIG
 		return
 	}
@@ -703,11 +704,21 @@ func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, length int64, fh 
 	defer h.Wunlock()
 	defer h.removeOp(ctx)
 
-	err = v.Meta.Fallocate(ctx, ino, mode, uint64(off), uint64(length))
+	err = v.writer.Flush(ctx, ino)
+	if err != 0 {
+		return
+	}
+	var length uint64
+	err = v.Meta.Fallocate(ctx, ino, mode, uint64(off), uint64(size), &length)
 	if err == 0 {
-		v.writer.Expand(ino, uint64(off), uint64(length))
-		v.reader.Invalidate(ino, uint64(off), uint64(length))
-		v.invalidateLength(ino)
+		v.writer.Truncate(ino, length)
+		if off+size > int64(length) {
+			size = int64(length) - off
+		}
+		if size > 0 {
+			v.reader.Invalidate(ino, uint64(off), uint64(size))
+		}
+		v.invalidateAttr(ino)
 	}
 	return
 }
@@ -774,11 +785,12 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 	if err != 0 {
 		return
 	}
-	err = v.Meta.CopyFileRange(ctx, nodeIn, offIn, nodeOut, offOut, size, flags, &copied)
+	var length uint64
+	err = v.Meta.CopyFileRange(ctx, nodeIn, offIn, nodeOut, offOut, size, flags, &copied, &length)
 	if err == 0 {
-		v.writer.Expand(nodeOut, offOut, size)
+		v.writer.Truncate(nodeOut, length)
 		v.reader.Invalidate(nodeOut, offOut, size)
-		v.invalidateLength(nodeOut)
+		v.invalidateAttr(nodeOut)
 	}
 	return
 }
@@ -1019,7 +1031,7 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	return v
 }
 
-func (v *VFS) invalidateLength(ino Ino) {
+func (v *VFS) invalidateAttr(ino Ino) {
 	v.modM.Lock()
 	v.modifiedAt[ino] = time.Now()
 	v.modM.Unlock()
