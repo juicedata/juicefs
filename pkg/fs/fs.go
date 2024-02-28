@@ -575,7 +575,7 @@ func (fs *FileSystem) CopyFileRange(ctx meta.Context, src string, soff uint64, d
 	if err != 0 {
 		return
 	}
-	err = fs.m.CopyFileRange(ctx, sfi.inode, soff, dfi.inode, doff, size, 0, &written)
+	err = fs.m.CopyFileRange(ctx, sfi.inode, soff, dfi.inode, doff, size, 0, &written, nil)
 	return
 }
 

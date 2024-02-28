@@ -476,25 +476,25 @@ func testMetaClient(t *testing.T, m Meta) {
 	if len(slices) != 2 || slices[0].Id != 0 || slices[0].Size != 100 || slices[1].Id != sliceId || slices[1].Size != 100 {
 		t.Fatalf("slices: %v", slices)
 	}
-	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocKeepSize, 100, 50); st != 0 {
+	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocKeepSize, 100, 50, nil); st != 0 {
 		t.Fatalf("fallocate: %s", st)
 	}
-	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocCollapesRange, 100, 50); st != syscall.EINVAL {
+	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocCollapesRange, 100, 50, nil); st != syscall.EINVAL {
 		t.Fatalf("fallocate: %s", st)
 	}
-	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocInsertRange, 100, 50); st != syscall.EINVAL {
+	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocInsertRange, 100, 50, nil); st != syscall.EINVAL {
 		t.Fatalf("fallocate: %s", st)
 	}
-	if st := m.Fallocate(ctx, inode, fallocCollapesRange, 100, 50); st != syscall.ENOTSUP {
+	if st := m.Fallocate(ctx, inode, fallocCollapesRange, 100, 50, nil); st != syscall.ENOTSUP {
 		t.Fatalf("fallocate: %s", st)
 	}
-	if st := m.Fallocate(ctx, inode, fallocPunchHole, 100, 50); st != syscall.EINVAL {
+	if st := m.Fallocate(ctx, inode, fallocPunchHole, 100, 50, nil); st != syscall.EINVAL {
 		t.Fatalf("fallocate: %s", st)
 	}
-	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocKeepSize, 0, 0); st != syscall.EINVAL {
+	if st := m.Fallocate(ctx, inode, fallocPunchHole|fallocKeepSize, 0, 0, nil); st != syscall.EINVAL {
 		t.Fatalf("fallocate: %s", st)
 	}
-	if st := m.Fallocate(ctx, parent, fallocPunchHole|fallocKeepSize, 100, 50); st != syscall.EPERM {
+	if st := m.Fallocate(ctx, parent, fallocPunchHole|fallocKeepSize, 100, 50, nil); st != syscall.EPERM {
 		t.Fatalf("fallocate dir: %s", st)
 	}
 	if st := m.Read(ctx, inode, 0, &slices); st != 0 {
@@ -1413,7 +1413,7 @@ func testCopyFileRange(t *testing.T, m Meta) {
 	m.Write(ctx, iin, 3, 0, Slice{12, 63 << 20, 10 << 20, 30 << 20}, time.Now())
 	m.Write(ctx, iout, 2, 10<<20, Slice{13, 50 << 20, 10 << 20, 30 << 20}, time.Now())
 	var copied uint64
-	if st := m.CopyFileRange(ctx, iin, 150, iout, 30<<20, 200<<20, 0, &copied); st != 0 {
+	if st := m.CopyFileRange(ctx, iin, 150, iout, 30<<20, 200<<20, 0, &copied, nil); st != 0 {
 		t.Fatalf("copy file range: %s", st)
 	}
 	var expected uint64 = 200 << 20
@@ -1964,17 +1964,17 @@ func testAttrFlags(t *testing.T, m Meta) {
 	if st := m.SetAttr(ctx, fallocFile, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
-	if st := m.Fallocate(ctx, fallocFile, fallocKeepSize, 0, 1024); st != 0 {
+	if st := m.Fallocate(ctx, fallocFile, fallocKeepSize, 0, 1024, nil); st != 0 {
 		t.Fatalf("fallocate f: %s", st)
 	}
-	if st := m.Fallocate(ctx, fallocFile, fallocKeepSize|fallocZeroRange, 0, 1024); st != syscall.EPERM {
+	if st := m.Fallocate(ctx, fallocFile, fallocKeepSize|fallocZeroRange, 0, 1024, nil); st != syscall.EPERM {
 		t.Fatalf("fallocate f: %s", st)
 	}
 	attr.Flags = FlagImmutable
 	if st := m.SetAttr(ctx, fallocFile, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
-	if st := m.Fallocate(ctx, fallocFile, fallocKeepSize, 0, 1024); st != syscall.EPERM {
+	if st := m.Fallocate(ctx, fallocFile, fallocKeepSize, 0, 1024, nil); st != syscall.EPERM {
 		t.Fatalf("fallocate f: %s", st)
 	}
 
@@ -1985,21 +1985,21 @@ func testAttrFlags(t *testing.T, m Meta) {
 	if st := m.Create(ctx, 1, "copydstfile", 0644, 022, 0, &copydstFile, nil); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
-	if st := m.Fallocate(ctx, copysrcFile, 0, 0, 1024); st != 0 {
+	if st := m.Fallocate(ctx, copysrcFile, 0, 0, 1024, nil); st != 0 {
 		t.Fatalf("fallocate f: %s", st)
 	}
 	attr.Flags = FlagAppend
 	if st := m.SetAttr(ctx, copydstFile, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
-	if st := m.CopyFileRange(ctx, copysrcFile, 0, copydstFile, 0, 1024, 0, nil); st != syscall.EPERM {
+	if st := m.CopyFileRange(ctx, copysrcFile, 0, copydstFile, 0, 1024, 0, nil, nil); st != syscall.EPERM {
 		t.Fatalf("copy_file_range f: %s", st)
 	}
 	attr.Flags = FlagImmutable
 	if st := m.SetAttr(ctx, copydstFile, SetAttrFlag, 0, attr); st != 0 {
 		t.Fatalf("setattr f: %s", st)
 	}
-	if st := m.CopyFileRange(ctx, copysrcFile, 0, copydstFile, 0, 1024, 0, nil); st != syscall.EPERM {
+	if st := m.CopyFileRange(ctx, copysrcFile, 0, copydstFile, 0, 1024, 0, nil, nil); st != syscall.EPERM {
 		t.Fatalf("copy_file_range f: %s", st)
 	}
 }
@@ -2182,7 +2182,7 @@ func testDirStat(t *testing.T, m Meta) {
 	checkResult(0, align4K(0), 1)
 
 	// test dir with file and fallocate
-	if st := m.Fallocate(Background, fileInode, 0, 0, 4097); st != 0 {
+	if st := m.Fallocate(Background, fileInode, 0, 0, 4097, nil); st != 0 {
 		t.Fatalf("fallocate: %s", st)
 	}
 	time.Sleep(500 * time.Millisecond)
@@ -2313,7 +2313,7 @@ func testClone(t *testing.T, m Meta) {
 	if eno := m.Mknod(Background, dir3, "file3", TypeFile, 0777, 022, 0, "", &file3, nil); eno != 0 {
 		t.Fatalf("mknod: %s", eno)
 	}
-	if eno := m.Fallocate(Background, file3, 0, 0, 67108864); eno != 0 {
+	if eno := m.Fallocate(Background, file3, 0, 0, 67108864, nil); eno != 0 {
 		t.Fatalf("fallocate: %s", eno)
 	}
 
