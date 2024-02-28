@@ -712,11 +712,12 @@ func (v *VFS) Fallocate(ctx Context, ino Ino, mode uint8, off, size int64, fh ui
 	err = v.Meta.Fallocate(ctx, ino, mode, uint64(off), uint64(size), &length)
 	if err == 0 {
 		v.writer.Truncate(ino, length)
+		s := size
 		if off+size > int64(length) {
-			size = int64(length) - off
+			s = int64(length) - off
 		}
-		if size > 0 {
-			v.reader.Invalidate(ino, uint64(off), uint64(size))
+		if s > 0 {
+			v.reader.Invalidate(ino, uint64(off), uint64(s))
 		}
 		v.invalidateAttr(ino)
 	}
