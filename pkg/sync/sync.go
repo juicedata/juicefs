@@ -848,7 +848,7 @@ func parseIncludeRules(args []string) (rules []rule) {
 					logger.Warnf("ignore invalid pattern: %s", a)
 					continue
 				}
-				rules = append(rules, parseRule(a, s[1]))
+				rules = append(rules, parseRule(s[0], s[1]))
 			}
 		}
 	}

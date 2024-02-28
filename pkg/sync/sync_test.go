@@ -651,3 +651,24 @@ func TestMatchObjects(t *testing.T) {
 		}
 	}
 }
+
+func TestParseFilterRule(t *testing.T) {
+	type tcase struct {
+		args  []string
+		rules []rule
+	}
+	cases := []tcase{
+		{[]string{"--include", "a"}, []rule{{pattern: "a", include: true}}},
+		{[]string{"--exclude", "a", "--include", "b"}, []rule{{pattern: "a"}, {pattern: "b", include: true}}},
+		{[]string{"--include", "a", "--test", "t", "--exclude", "b"}, []rule{{pattern: "a", include: true}, {pattern: "b"}}},
+		{[]string{"--include=a", "--test", "t", "--exclude"}, []rule{{pattern: "a", include: true}}},
+		{[]string{"--include", "a", "--test", "t", "--exclude"}, []rule{{pattern: "a", include: true}}},
+		{[]string{"-include=", "a", "--test", "t", "--exclude=*"}, []rule{{pattern: "*"}}},
+	}
+
+	for _, c := range cases {
+		if got := parseIncludeRules(c.args); !reflect.DeepEqual(got, c.rules) {
+			t.Errorf("parseIncludeRules(%+v) = %v, want %v", c.args, got, c.rules)
+		}
+	}
+}
