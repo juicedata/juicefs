@@ -874,14 +874,14 @@ func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
 }
 
 func matchPrefix(p, s []string) bool {
-	if len(p) == 0 {
-		return len(s) == 0
+	if len(p) == 0 || len(s) == 0 {
+		return len(p) == len(s)
 	}
 	first := p[0]
 	n := len(s)
 	switch {
 	case first == "***":
-		return len(s) > 0
+		return true
 	case strings.Contains(first, "**"):
 		for i := 1; i <= n; i++ {
 			if ok, _ := path.Match(first, strings.Join(s[:i], "*")); ok && matchPrefix(p[1:], s[i:]) {
@@ -890,9 +890,6 @@ func matchPrefix(p, s []string) bool {
 		}
 		return false
 	default:
-		if len(s) == 0 {
-			return false
-		}
 		ok, _ := path.Match(first, s[0])
 		return ok && matchPrefix(p[1:], s[1:])
 	}
@@ -902,10 +899,10 @@ func matchSuffix(p, s []string) bool {
 	if len(p) == 0 {
 		return true
 	}
-	if len(s) == 0 {
-		return false
-	}
 	last := p[len(p)-1]
+	if len(s) == 0 {
+		return last == "***"
+	}
 	prefix := p[:len(p)-1]
 	n := len(s)
 	switch {
@@ -918,7 +915,7 @@ func matchSuffix(p, s []string) bool {
 		return false
 	case strings.Contains(last, "**"):
 		for i := 0; i < n; i++ {
-			if ok, _ := path.Match(last, strings.Join(s[i:], "*")); ok && matchSuffix(p[1:], s[:i]) {
+			if ok, _ := path.Match(last, strings.Join(s[i:], "*")); ok && matchSuffix(prefix, s[:i]) {
 				return true
 			}
 		}
@@ -936,20 +933,20 @@ func matchKey(rules []rule, key string) bool {
 		if parts[i] == "" {
 			continue
 		}
-		ps := parts[:i+1]
 		for _, rule := range rules {
-			pattern := strings.Split(rule.pattern, "/")
-			if i < len(parts)-1 && (pattern[len(pattern)-1] == "" || pattern[len(pattern)-1] == "***") && ps[len(ps)-1] != "" {
-				ps = append(append([]string{}, ps...), "")
+			ps := parts[:i+1]
+			p := strings.Split(rule.pattern, "/")
+			if i < len(parts)-1 && (p[len(p)-1] == "" || p[len(p)-1] == "***") {
+				ps = append(append([]string{}, ps...), "") // don't overwrite parts
 			}
 			var ok bool
-			if pattern[0] == "" {
-				if parts[0] != "" {
-					pattern = pattern[1:]
+			if p[0] == "" {
+				if ps[0] != "" {
+					p = p[1:]
 				}
-				ok = matchPrefix(pattern, ps)
+				ok = matchPrefix(p, ps)
 			} else {
-				ok = matchSuffix(pattern, ps)
+				ok = matchSuffix(p, ps)
 			}
 			if ok {
 				if rule.include {
