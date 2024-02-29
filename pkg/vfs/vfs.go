@@ -782,6 +782,10 @@ func (v *VFS) CopyFileRange(ctx Context, nodeIn Ino, fhIn, offIn uint64, nodeOut
 		defer hi.removeOp(ctx)
 	}
 
+	err = v.writer.Flush(ctx, nodeIn)
+	if err != 0 {
+		return
+	}
 	err = v.writer.Flush(ctx, nodeOut)
 	if err != 0 {
 		return
