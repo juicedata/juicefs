@@ -92,55 +92,38 @@ func (b *bunnyClient) Delete(key string) error {
 	return nil
 }
 
-// ListAll returns all the objects as an channel.
-func (b *bunnyClient) ListAll(prefix string, marker string, followLink bool) (<-chan Object, error) {
-
-	out := make(chan Object)
-	go func() {
-		defer close(out)
-		b.walkObjects(prefix, marker, out)
-	}()
-
-	return out, nil
-}
-
-func (b *bunnyClient) walkObjects(prefix string, marker string, out chan<- Object) {
-	objects, err := b.client.List(prefix)
-	if err != nil {
-		return
+func (b *bunnyClient) List(prefix, marker, delimiter string, limit int64, followLink bool) ([]Object, error) {
+	if delimiter != "/" {
+		return nil, notSupported
 	}
 
-	objectsToProcess := objects
+	//listInParentDirectory := !strings.HasSuffix(prefix, "/")
 
-	// If no objects are returned list the parent directory and continue
-	if len(objectsToProcess) == 0 {
-		objectsToProcess, err = b.client.List(path.Dir(prefix))
-		if err != nil {
-			return
-		}
+	listedObjects, err := b.client.List(path.Dir(prefix))
+	if err != nil {
+		logger.Errorf("Unable to list objects in path %v", prefix)
+		return nil, err
 	}
 
 	markerEncountered := marker == ""
+	output := make([]Object, 0)
 
-	for i := 0; i < len(objectsToProcess); i++ {
-		o := objectsToProcess[i]
+	logger.Warnf("List: %v %v", prefix, marker)
+	for i := 0; i < len(listedObjects); i++ {
+		o := listedObjects[i]
 		normalizedPath := normalizedObjectNameWithinZone(o)
-		if strings.HasPrefix(normalizedPath, path.Join(prefix)) {
+		if strings.HasPrefix(normalizedPath, prefix) {
 			if normalizedPath == marker {
 				markerEncountered = true
 			}
 			if markerEncountered {
-				if o.IsDirectory {
-					objects, err := b.client.List(normalizedPath)
-					if err != nil {
-						return
-					}
-					objectsToProcess = append(objectsToProcess, objects...)
-				}
-				out <- parseObjectMetadata(o)
+				logger.Warn(normalizedPath)
+				output = append(output, parseObjectMetadata(o))
 			}
 		}
 	}
+
+	return output, nil
 }
 
 // The Object Path returned by the Bunny API contains the Storage Zone Name, which this function removes
