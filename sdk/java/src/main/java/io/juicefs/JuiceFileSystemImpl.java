@@ -57,12 +57,11 @@ import java.lang.reflect.Method;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
@@ -84,7 +83,8 @@ public class JuiceFileSystemImpl extends FileSystem {
   private int minBufferSize;
   private int cacheReplica;
   private boolean fileChecksumEnabled;
-  private Libjfs lib;
+  private Libjfs lib = loadLibrary();
+
   private long handle;
   private UserGroupInformation ugi;
   private String homeDirPrefix = "/user";
@@ -347,7 +347,6 @@ public class JuiceFileSystemImpl extends FileSystem {
     String supergroup = getConf(conf, "supergroup", conf.get("dfs.permissions.superusergroup", "supergroup"));
     String mountpoint = getConf(conf, "mountpoint", "");
 
-    lib = loadLibrary();
     synchronized (JuiceFileSystemImpl.class) {
       if (callBack == null) {
         callBack = new LogCallBackImpl(lib);
@@ -570,7 +569,7 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
   }
 
-  public static Libjfs loadLibrary() throws IOException {
+  public static Libjfs loadLibrary() {
     initStubLoader();
 
     LibraryLoader<Libjfs> libjfsLibraryLoader = LibraryLoader.create(Libjfs.class);
@@ -609,69 +608,73 @@ public class JuiceFileSystemImpl extends FileSystem {
     }
     URLConnection con;
     try {
-      con = location.openConnection();
-    } catch (FileNotFoundException e) {
-      // jar may changed
-      return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
-    }
-    if (location.getProtocol().equals("jar") && (con instanceof JarURLConnection)) {
-      LOG.debug("juicefs-hadoop.jar is a nested jar");
-      JarURLConnection connection = (JarURLConnection) con;
-      JarFile jfsJar = connection.getJarFile();
-      ZipEntry entry = jfsJar.getJarEntry(resource);
-      soTime = entry.getLastModifiedTime().toMillis();
-      ins = jfsJar.getInputStream(entry);
-    } else {
-      URI locationUri;
       try {
-        locationUri = location.toURI();
-      } catch (URISyntaxException e) {
+        con = location.openConnection();
+      } catch (FileNotFoundException e) {
+        // jar may changed
         return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
       }
-      if (Files.isDirectory(Paths.get(locationUri))) { // for debug: sdk/java/target/classes
-        soTime = con.getLastModified();
-        ins = JuiceFileSystemImpl.class.getClassLoader().getResourceAsStream(resource);
-      } else {
-        JarFile jfsJar;
-        try {
-          jfsJar = new JarFile(locationUri.getPath());
-        } catch (FileNotFoundException fne) {
-          return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
-        }
+      if (location.getProtocol().equals("jar") && (con instanceof JarURLConnection)) {
+        LOG.debug("juicefs-hadoop.jar is a nested jar");
+        JarURLConnection connection = (JarURLConnection) con;
+        JarFile jfsJar = connection.getJarFile();
         ZipEntry entry = jfsJar.getJarEntry(resource);
         soTime = entry.getLastModifiedTime().toMillis();
         ins = jfsJar.getInputStream(entry);
-      }
-    }
-
-    synchronized (JuiceFileSystemImpl.class) {
-      if (!libFile.exists() || libFile.lastModified() < soTime) {
-        // try the name for current user
-        libFile = new File(dir, System.getProperty("user.name") + "-" + name);
-        if (!libFile.exists() || libFile.lastModified() < soTime) {
-          InputStream reader = new GZIPInputStream(ins);
-          File tmp = File.createTempFile(name, null, dir);
-          FileOutputStream writer = new FileOutputStream(tmp);
-          byte[] buffer = new byte[128 << 10];
-          int bytesRead = 0;
-          while ((bytesRead = reader.read(buffer)) != -1) {
-            writer.write(buffer, 0, bytesRead);
-          }
-          writer.close();
-          reader.close();
-          tmp.setLastModified(soTime);
-          tmp.setReadable(true, false);
+      } else {
+        URI locationUri;
+        try {
+          locationUri = location.toURI();
+        } catch (URISyntaxException e) {
+          return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
+        }
+        if (Files.isDirectory(Paths.get(locationUri))) { // for debug: sdk/java/target/classes
+          soTime = con.getLastModified();
+          ins = JuiceFileSystemImpl.class.getClassLoader().getResourceAsStream(resource);
+        } else {
+          JarFile jfsJar;
           try {
-            File org = new File(dir, name);
-            Files.move(tmp.toPath(), org.toPath(), StandardCopyOption.ATOMIC_MOVE);
-            libFile = org;
-          } catch (Exception ade) {
-            Files.move(tmp.toPath(), libFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
+            jfsJar = new JarFile(locationUri.getPath());
+          } catch (FileNotFoundException fne) {
+            return loadExistLib(libjfsLibraryLoader, dir, name, libFile);
+          }
+          ZipEntry entry = jfsJar.getJarEntry(resource);
+          soTime = entry.getLastModifiedTime().toMillis();
+          ins = jfsJar.getInputStream(entry);
+        }
+      }
+
+      synchronized (JuiceFileSystemImpl.class) {
+        if (!libFile.exists() || libFile.lastModified() < soTime) {
+          // try the name for current user
+          libFile = new File(dir, System.getProperty("user.name") + "-" + name);
+          if (!libFile.exists() || libFile.lastModified() < soTime) {
+            InputStream reader = new GZIPInputStream(ins);
+            File tmp = File.createTempFile(name, null, dir);
+            FileOutputStream writer = new FileOutputStream(tmp);
+            byte[] buffer = new byte[128 << 10];
+            int bytesRead = 0;
+            while ((bytesRead = reader.read(buffer)) != -1) {
+              writer.write(buffer, 0, bytesRead);
+            }
+            writer.close();
+            reader.close();
+            tmp.setLastModified(soTime);
+            tmp.setReadable(true, false);
+            try {
+              File org = new File(dir, name);
+              Files.move(tmp.toPath(), org.toPath(), StandardCopyOption.ATOMIC_MOVE);
+              libFile = org;
+            } catch (Exception ade) {
+              Files.move(tmp.toPath(), libFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
+            }
           }
         }
       }
+      ins.close();
+    } catch (Exception e) {
+      throw new RuntimeException("Init libjfs failed", e);
     }
-    ins.close();
     return libjfsLibraryLoader.load(libFile.getAbsolutePath());
   }
 

@@ -113,6 +113,12 @@ sudo snap install juicefs
 sudo ln -s -f /snap/juicefs/current/juicefs /snap/bin/juicefs
 ```
 
+当有新版本时，执行以下命令更新客户端：
+
+```shell
+sudo snap refresh juicefs
+```
+
 #### AUR (Arch User Repository) {#aur}
 
 JuiceFS 也提供 [AUR](https://aur.archlinux.org/packages/juicefs) 仓库，可以方便地在 Arch Linux 及其衍生系统上安装最新版的客户端。
