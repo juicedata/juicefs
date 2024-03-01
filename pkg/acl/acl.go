@@ -63,7 +63,7 @@ func (es *Entries) String() string {
 }
 
 func (es *Entries) Encode() []byte {
-	w := utils.NewBuffer(uint32(es.Len() * 6))
+	w := utils.NewBuffer(4 + uint32(es.Len()*6))
 	for _, e := range *es {
 		w.Put32(e.Id)
 		w.Put16(e.Perm)
@@ -96,20 +96,47 @@ func (r *Rule) String() string {
 }
 
 func (r *Rule) Encode() []byte {
-	w := utils.NewBuffer(uint32(8 + (len(r.NamedUsers)+len(r.NamedGroups))*6))
+	w := utils.NewBuffer(uint32(16 + (len(r.NamedUsers)+len(r.NamedGroups))*6))
 	w.Put16(r.Owner)
 	w.Put16(r.Group)
 	w.Put16(r.Mask)
 	w.Put16(r.Other)
+	w.Put32(uint32(len(r.NamedUsers)))
 	for _, entry := range r.NamedUsers {
 		w.Put32(entry.Id)
 		w.Put16(entry.Perm)
 	}
+	w.Put32(uint32(len(r.NamedGroups)))
 	for _, entry := range r.NamedGroups {
 		w.Put32(entry.Id)
 		w.Put16(entry.Perm)
 	}
 	return w.Bytes()
+}
+
+func (r *Rule) Decode(buf []byte) {
+	rb := utils.ReadBuffer(buf)
+	r.Owner = rb.Get16()
+	r.Group = rb.Get16()
+	r.Mask = rb.Get16()
+	r.Other = rb.Get16()
+	uCnt := rb.Get32()
+	if uCnt != 0 {
+		r.NamedUsers = make([]Entry, uCnt)
+		for i := 0; i < int(uCnt); i++ {
+			r.NamedUsers[i].Id = rb.Get32()
+			r.NamedUsers[i].Perm = rb.Get16()
+		}
+	}
+
+	gCnt := rb.Get32()
+	if gCnt != 0 {
+		r.NamedGroups = make([]Entry, gCnt)
+		for i := 0; i < int(gCnt); i++ {
+			r.NamedGroups[i].Id = rb.Get32()
+			r.NamedGroups[i].Perm = rb.Get16()
+		}
+	}
 }
 
 func EmptyRule() *Rule {

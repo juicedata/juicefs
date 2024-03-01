@@ -107,6 +107,12 @@ func (c *cache) Put(id uint32, r *Rule) {
 		c.maxId = id
 	}
 	c.id2Rule[id] = r
+
+	// empty slot
+	if r == nil {
+		return
+	}
+
 	cksum := r.Checksum()
 	if _, ok := c.cksum2Id[cksum]; ok {
 		c.cksum2Id[cksum] = append(c.cksum2Id[cksum], id)
@@ -118,6 +124,10 @@ func (c *cache) Put(id uint32, r *Rule) {
 func (c *cache) GetId(r *Rule) uint32 {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
+
+	if r == nil {
+		return None
+	}
 
 	if ids, ok := c.cksum2Id[r.Checksum()]; ok {
 		for _, id := range ids {
