@@ -449,7 +449,7 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 		partSize = defaultPartSize
 	}
 	limits := dst.Limits()
-	if size > int64(limits.MaxPartSize)*int64(limits.MaxPartCount) {
+	if size > limits.MaxPartSize*int64(limits.MaxPartCount) {
 		return fmt.Errorf("object size %d is too large to copy", size)
 	}
 	if size > partSize*int64(upload.MaxCount) {
@@ -1100,12 +1100,12 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.Manager != "" {
 		bufferSize = 100
 	}
-	availMem = int64(config.Threads * 32 << 20)
+	availMem = int64(config.Threads) * (32 << 20)
 	tasks := make(chan object.Object, bufferSize)
 	wg := sync.WaitGroup{}
 	concurrent = make(chan int, config.Threads)
 	if config.BWLimit > 0 {
-		bps := float64(config.BWLimit*(1<<20)/8) * 0.85 // 15% overhead
+		bps := float64(int64(config.BWLimit)*(1<<20)/8) * 0.85 // 15% overhead
 		limiter = ratelimit.NewBucketWithRate(bps, int64(bps)*3)
 	}
 

@@ -67,7 +67,7 @@ type Limits struct {
 	IsSupportMultipartUpload bool
 	IsSupportUploadPartCopy  bool
 	MinPartSize              int
-	MaxPartSize              int
+	MaxPartSize              int64
 	MaxPartCount             int
 }
 
