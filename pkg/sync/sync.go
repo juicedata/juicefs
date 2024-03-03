@@ -48,13 +48,14 @@ const (
 )
 
 var (
-	handled                  *utils.Bar
-	pending                  *utils.Bar
-	copied, copiedBytes      *utils.Bar
-	checked, checkedBytes    *utils.Bar
-	deleted, skipped, failed *utils.Bar
-	concurrent               chan int
-	limiter                  *ratelimit.Bucket
+	handled               *utils.Bar
+	pending               *utils.Bar
+	copied, copiedBytes   *utils.Bar
+	checked, checkedBytes *utils.Bar
+	skipped, skippedBytes *utils.Bar
+	deleted, failed       *utils.Bar
+	concurrent            chan int
+	limiter               *ratelimit.Bucket
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -601,6 +602,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 							copied.Increment()
 						} else {
 							skipped.Increment()
+							skippedBytes.IncrInt64(obj.Size())
 						}
 					} else {
 						logger.Warnf("Failed to head object %s: %s", key, e)
@@ -608,6 +610,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 					}
 				} else {
 					skipped.Increment()
+					skippedBytes.IncrInt64(obj.Size())
 				}
 				break
 			}
@@ -772,6 +775,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 		if dstobj == nil || obj.Key() < dstobj.Key() {
 			if config.Existing {
 				skipped.Increment()
+				skippedBytes.IncrInt64(obj.Size())
 				handled.Increment()
 				continue
 			}
@@ -779,6 +783,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 		} else { // obj.key == dstobj.key
 			if config.IgnoreExisting {
 				skipped.Increment()
+				skippedBytes.IncrInt64(obj.Size())
 				handled.Increment()
 				dstobj = nil
 				continue
@@ -789,6 +794,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 				tasks <- obj
 			} else if config.Update && obj.Mtime().Unix() < dstobj.Mtime().Unix() {
 				skipped.Increment()
+				skippedBytes.IncrInt64(obj.Size())
 				handled.Increment()
 			} else if config.CheckAll { // two objects are likely the same
 				tasks <- &withSize{obj, markChecksum}
@@ -798,6 +804,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 				tasks <- &withFSize{obj.(object.File), markCopyPerms}
 			} else {
 				skipped.Increment()
+				skippedBytes.IncrInt64(obj.Size())
 				handled.Increment()
 			}
 			dstobj = nil
@@ -1112,6 +1119,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "")
 	handled = progress.AddCountBar("Scanned objects", 0)
 	skipped = progress.AddCountSpinner("Skipped objects")
+	skippedBytes = progress.AddByteSpinner("Skipped bytes")
 	pending = progress.AddCountSpinner("Pending objects")
 	copied = progress.AddCountSpinner("Copied objects")
 	copiedBytes = progress.AddByteSpinner("Copied bytes")
@@ -1182,8 +1190,8 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	progress.Done()
 
 	if config.Manager == "" {
-		msg := fmt.Sprintf("Found: %d, skipped: %d, copied: %d (%s)",
-			total, skipped.Current(), copied.Current(), formatSize(copiedBytes.Current()))
+		msg := fmt.Sprintf("Found: %d, skipped: %d (%s), copied: %d (%s)",
+			total, skipped.Current(), formatSize(skippedBytes.Current()), copied.Current(), formatSize(copiedBytes.Current()))
 		if checked != nil {
 			msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
 		}
@@ -1247,6 +1255,12 @@ func initSyncMetrics(config *Config) {
 				Help: "Skipped objects",
 			}, func() float64 {
 				return float64(skipped.Current())
+			}),
+			prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "skipped_bytes",
+				Help: "Skipped bytes",
+			}, func() float64 {
+				return float64(skippedBytes.Current())
 			}),
 		)
 		if failed != nil {

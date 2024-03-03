@@ -47,6 +47,7 @@ type Stat struct {
 	CheckedBytes int64 // total amount of checked data in bytes
 	Deleted      int64 // the number of deleted files
 	Skipped      int64 // the number of files skipped
+	SkippedBytes int64 // total amount of skipped data in bytes
 	Failed       int64 // the number of files that fail to copy
 }
 
@@ -61,6 +62,7 @@ func updateStats(r *Stat) {
 		deleted.IncrInt64(r.Deleted)
 	}
 	skipped.IncrInt64(r.Skipped)
+	skippedBytes.IncrInt64(r.SkippedBytes)
 	if failed != nil {
 		failed.IncrInt64(r.Failed)
 	}
@@ -88,6 +90,7 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 func sendStats(addr string) {
 	var r Stat
 	r.Skipped = skipped.Current()
+	r.SkippedBytes = skippedBytes.Current()
 	r.Copied = copied.Current()
 	r.CopiedBytes = copiedBytes.Current()
 	if checked != nil {
@@ -110,6 +113,7 @@ func sendStats(addr string) {
 		logger.Errorf("update stats: %s %s", string(ans), err)
 	} else {
 		skipped.IncrInt64(-r.Skipped)
+		skippedBytes.IncrInt64(-r.SkippedBytes)
 		copied.IncrInt64(-r.Copied)
 		copiedBytes.IncrInt64(-r.CopiedBytes)
 		if checked != nil {
