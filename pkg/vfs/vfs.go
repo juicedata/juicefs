@@ -125,6 +125,7 @@ type Config struct {
 	NonDefaultPermission bool        `json:",omitempty"`
 
 	Pid        int
+	Sid        uint64
 	DebugAgent string
 	CommPath   string `json:",omitempty"`
 	StatePath  string `json:",omitempty"`

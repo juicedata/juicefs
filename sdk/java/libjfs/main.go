@@ -550,7 +550,8 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			id := args[1].(uint64)
 			return vfs.Compact(chunkConf, store, slices, id)
 		})
-		err = m.NewSession(!jConf.NoSession)
+		var sid uint64
+		sid, err = m.NewSession(!jConf.NoSession)
 		if err != nil {
 			logger.Errorf("new session: %s", err)
 			return nil
@@ -575,6 +576,7 @@ func jfs_init(cname, jsonConf, user, group, superuser, supergroup *C.char) uintp
 			AccessLog:       jConf.AccessLog,
 			FastResolve:     jConf.FastResolve,
 			BackupMeta:      time.Second * time.Duration(jConf.BackupMeta),
+			Sid:             sid,
 		}
 		if !jConf.ReadOnly && !jConf.NoSession && !jConf.NoBGJob && conf.BackupMeta > 0 {
 			go vfs.Backup(m, blob, conf.BackupMeta)

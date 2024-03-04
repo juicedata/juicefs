@@ -189,6 +189,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 	return &baseMeta{
 		addr:         utils.RemovePassword(addr),
 		conf:         conf,
+		sid:          conf.Sid,
 		root:         RootInode,
 		of:           newOpenFiles(conf.OpenCache, conf.OpenCacheLimit),
 		removedFiles: make(map[Ino]bool),
@@ -475,21 +476,24 @@ func (m *baseMeta) newSessionInfo() []byte {
 	return buf
 }
 
-func (m *baseMeta) NewSession(record bool) error {
+func (m *baseMeta) NewSession(record bool) (uint64, error) {
 	go m.refresh()
 	if m.conf.ReadOnly {
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
-		return nil
+		return 0, nil
 	}
 
 	if record {
-		v, err := m.en.incrCounter("nextSession", 1)
-		if err != nil {
-			return fmt.Errorf("get session ID: %s", err)
+		// use the original sid if it's not 0
+		if m.sid == 0 {
+			v, err := m.en.incrCounter("nextSession", 1)
+			if err != nil {
+				return 0, fmt.Errorf("get session ID: %s", err)
+			}
+			m.sid = uint64(v)
 		}
-		m.sid = uint64(v)
-		if err = m.en.doNewSession(m.newSessionInfo()); err != nil {
-			return fmt.Errorf("create session: %s", err)
+		if err := m.en.doNewSession(m.newSessionInfo()); err != nil {
+			return 0, fmt.Errorf("create session: %s", err)
 		}
 		logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
 	}
@@ -514,7 +518,7 @@ func (m *baseMeta) NewSession(record bool) error {
 		go m.cleanupSlices()
 		go m.cleanupTrash()
 	}
-	return nil
+	return m.sid, nil
 }
 
 func (m *baseMeta) expireTime() int64 {

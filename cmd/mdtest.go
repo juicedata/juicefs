@@ -209,8 +209,8 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 	chunkConf := getChunkConf(c, format)
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(m, store, chunkConf)
-
-	err = m.NewSession(true)
+	var sid uint64
+	sid, err = m.NewSession(true)
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}
@@ -220,7 +220,7 @@ func initForMdtest(c *cli.Context, mp string, metaUrl string) *fs.FileSystem {
 	conf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
 	conf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
 	conf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
-
+	conf.Sid = sid
 	metricsAddr := exposeMetrics(c, registerer, registry)
 	m.InitMetrics(registerer)
 	vfs.InitMetrics(registerer)

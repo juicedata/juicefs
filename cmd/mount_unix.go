@@ -238,6 +238,14 @@ func fuseFlags() []cli.Flag {
 			Name:  "enable-ioctl",
 			Usage: "enable ioctl (support GETFLAGS/SETFLAGS only)",
 		},
+		&cli.BoolFlag{
+			Name:  "no-bsd-lock",
+			Usage: "disable BSD lock",
+		},
+		&cli.BoolFlag{
+			Name:  "no-posix-lock",
+			Usage: "disable POSIX lock",
+		},
 		&cli.StringFlag{
 			Name:  "root-squash",
 			Usage: "mapping local root user (uid = 0) to another one specified as <uid>:<gid>",
@@ -447,6 +455,11 @@ func canShutdownGracefully(mp string, volName string, newConf *vfs.Config) bool 
 	if conf.NoPOSIXLock && !newConf.NoPOSIXLock {
 		logger.Infof("POSIX lock is enabled, mount on top of it")
 		return false
+	}
+	// pass the session id to the new process
+	if conf.Sid != 0 {
+		logger.Infof("pass the old session id %d to the new process", conf.Sid)
+		os.Setenv("_JFS_META_SID", strconv.FormatUint(conf.Sid, 10))
 	}
 	return true
 }

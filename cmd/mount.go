@@ -299,6 +299,8 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		Port:           &vfs.Port{DebugAgent: debugAgent, PyroscopeAddr: c.String("pyroscope")},
 		PrefixInternal: c.Bool("prefix-internal"),
 		Pid:            os.Getpid(),
+		NoBSDLock:      c.Bool("no-bsd-lock"),
+		NoPOSIXLock:    c.Bool("no-posix-lock"),
 	}
 	skip_check := os.Getenv("SKIP_BACKUP_META_CHECK") == "true"
 	if !skip_check && cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
@@ -414,6 +416,7 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 	conf.MountPoint = mp
 	conf.Subdir = c.String("subdir")
 	conf.SkipDirMtime = duration(c.String("skip-dir-mtime"))
+	conf.Sid, _ = strconv.ParseUint(os.Getenv("_JFS_META_SID"), 10, 64)
 
 	atimeMode := c.String("atime-mode")
 	if atimeMode != meta.RelAtime && atimeMode != meta.StrictAtime && atimeMode != meta.NoAtime {
@@ -740,7 +743,7 @@ func mount(c *cli.Context) error {
 	registerMetaMsg(metaCli, store, chunkConf)
 
 	removePassword(addr)
-	err = metaCli.NewSession(true)
+	vfsConf.Sid, err = metaCli.NewSession(true)
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}
