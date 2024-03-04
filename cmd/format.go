@@ -440,9 +440,13 @@ func format(c *cli.Context) error {
 			TrashDays:        c.Int("trash-days"),
 			DirStats:         true,
 			MetaVersion:      meta.MaxVersion,
-			MinClientVersion: "1.2.0-A",
+			MinClientVersion: "1.1.0-A",
 			EnableACL:        c.Bool("enable-acl"),
 		}
+		if format.EnableACL {
+			format.MinClientVersion = "1.2.0-A"
+		}
+
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
 			_ = os.Unsetenv("ACCESS_KEY")

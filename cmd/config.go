@@ -246,6 +246,7 @@ func config(ctx *cli.Context) error {
 			// cannot disable
 			if ctx.Bool(flag) {
 				format.EnableACL = true
+				format.MinClientVersion = "1.2.0-A"
 			}
 		}
 	}
