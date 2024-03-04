@@ -299,6 +299,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		Port:           &vfs.Port{DebugAgent: debugAgent, PyroscopeAddr: c.String("pyroscope")},
 		PrefixInternal: c.Bool("prefix-internal"),
 		Pid:            os.Getpid(),
+		PPid:           os.Getppid(),
 		NoBSDLock:      c.Bool("no-bsd-lock"),
 		NoPOSIXLock:    c.Bool("no-posix-lock"),
 	}
