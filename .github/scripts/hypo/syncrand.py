@@ -23,15 +23,18 @@ import time
 st_entry_name = st.text(alphabet='abc', min_size=1, max_size=3)
 st_patterns = st.text(alphabet='abc?/*', min_size=1, max_size=5).\
     filter(lambda s: s.find('***') == -1 or s.endswith('/***'))
-
-st_patterns2 = st.lists(st.sampled_from(['a','?','/','*', '/***']), min_size=1, max_size=10)\
+st_patterns = st.lists(st.sampled_from(['a','?','/','*', '/***']), min_size=1, max_size=10)\
     .map(''.join).filter(lambda s: s.find('***') == -1 or (s.count('/***')==1 and s.endswith('a/***')))
+st_patterns = st.lists(st.sampled_from(['a','?','/','*']), min_size=1, max_size=10)\
+    .map(''.join).filter(lambda s: s.find('***') == -1 )
+
 st_option = st.fixed_dictionaries({
     "option": st.just("--include") | st.just("--exclude"),
-    "pattern": st_patterns2
+    "pattern": st_patterns
 })
 st_options = st.lists(st_option, min_size=1, max_size=10).\
     filter(lambda self: any(item["pattern"].endswith('/***') for item in self))
+st_options = st.lists(st_option, min_size=1, max_size=10)
 
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 @seed(SEED)
