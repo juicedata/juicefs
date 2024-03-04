@@ -149,9 +149,9 @@ func testMeta(t *testing.T, m Meta) {
 	testCheckAndRepair(t, m)
 	testDirStat(t, m)
 	testClone(t, m)
+	testACL(t, m)
 	base.conf.ReadOnly = true
 	testReadOnly(t, m)
-	testACL(t, m)
 }
 
 func testACL(t *testing.T, m Meta) {

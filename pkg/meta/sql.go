@@ -507,7 +507,7 @@ func (m *dbMeta) doLoad() (data []byte, err error) {
 
 func (m *dbMeta) doNewSession(sinfo []byte) error {
 	// add new table
-	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(detachedNode), new(dirQuota))
+	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(detachedNode), new(dirQuota), new(acl))
 	if err != nil {
 		return fmt.Errorf("update table session2, delslices, dirstats, detachedNode, dirQuota: %s", err)
 	}
@@ -3937,6 +3937,9 @@ func (m *dbMeta) LoadMeta(r io.Reader) error {
 	}
 	if err := m.syncTable(new(detachedNode)); err != nil {
 		return fmt.Errorf("create table detachedNode: %s", err)
+	}
+	if err := m.syncTable(new(acl)); err != nil {
+		return fmt.Errorf("create table acl: %s", err)
 	}
 	var batch int
 	switch m.Name() {
