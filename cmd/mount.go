@@ -757,7 +757,7 @@ func mount(c *cli.Context) error {
 	installHandler(mp, v)
 	v.UpdateFormat = updateFormat(c)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
-	mount_main(v, c)
+	mountMain(v, c)
 	if err := v.FlushAll(""); err != nil {
 		logger.Errorf("flush all delayed data: %s", err)
 	}

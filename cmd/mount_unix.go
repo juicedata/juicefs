@@ -47,7 +47,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func show_thread_stack(agentAddr string) {
+func showThreadStack(agentAddr string) {
 	if agentAddr == "" {
 		return
 	}
@@ -155,12 +155,12 @@ func watchdog(ctx context.Context, mp string) {
 	for ctx.Err() == nil {
 		now := time.Now().Unix()
 		if atomic.LoadInt64(&lastActive)+30 < now {
-			show_thread_stack(agentAddr)
+			showThreadStack(agentAddr)
 			time.Sleep(time.Second * 30)
 			// double check
 			if atomic.LoadInt64(&lastActive)+60 < time.Now().Unix() && ctx.Err() == nil {
 				logger.Infof("mount point %s is not active for %s", mp, time.Since(time.Unix(atomic.LoadInt64(&lastActive), 0)))
-				show_thread_stack(agentAddr)
+				showThreadStack(agentAddr)
 				killMountProcess(pid, dev, &lastActive)
 				atomic.StoreInt64(&lastActive, time.Now().Unix())
 				pid = 0
@@ -639,7 +639,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 	}
 }
 
-func mount_main(v *vfs.VFS, c *cli.Context) {
+func mountMain(v *vfs.VFS, c *cli.Context) {
 	if os.Getuid() == 0 {
 		disableUpdatedb()
 	}
