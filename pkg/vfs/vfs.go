@@ -1059,6 +1059,7 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 		reader:     reader,
 		writer:     writer,
 		handles:    make(map[Ino][]*handle),
+		handleIno:  make(map[uint64]Ino),
 		modifiedAt: make(map[meta.Ino]time.Time),
 		nextfh:     1,
 		registry:   registry,
