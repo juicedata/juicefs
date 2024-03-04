@@ -95,17 +95,17 @@ func putFd(via *net.UnixConn, msg []byte, fds ...int) error {
 	return syscall.Sendmsg(socket, msg, rights, nil, 0)
 }
 
-var fuse_fd int = 0
-var fuse_setting = []byte("FUSE")
+var fuseFd int = 0
+var fuseSetting = []byte("FUSE")
 var serverAddress string = fmt.Sprintf("/tmp/fuse_fd_comm.%d", os.Getpid())
 
 func handleFDRequest(conn *net.UnixConn) {
 	defer conn.Close()
 	var fds = []int{0}
-	if fuse_fd > 0 {
-		fds = append(fds, fuse_fd)
+	if fuseFd > 0 {
+		fds = append(fds, fuseFd)
 	}
-	err := putFd(conn, fuse_setting, fds...)
+	err := putFd(conn, fuseSetting, fds...)
 	if err != nil {
 		logger.Errorf("send fuse fds: %s", err)
 		return
@@ -118,13 +118,13 @@ func handleFDRequest(conn *net.UnixConn) {
 	}
 	if string(msg) == "CLOSE" {
 		_ = syscall.Close(fds[0])
-		if fuse_fd > 0 {
-			_ = syscall.Close(fuse_fd)
+		if fuseFd > 0 {
+			_ = syscall.Close(fuseFd)
 		}
-		fuse_fd = -1
-	} else if fuse_fd <= 0 && len(fds) == 1 {
-		fuse_fd = fds[0]
-		fuse_setting = msg
+		fuseFd = -1
+	} else if fuseFd <= 0 && len(fds) == 1 {
+		fuseFd = fds[0]
+		fuseSetting = msg
 	} else {
 		logger.Debugf("msg: %s fds: %+v", string(msg), fds)
 	}
@@ -151,7 +151,7 @@ func serveFuseFD(path string) {
 	}()
 }
 
-func get_fuse_fd(path string) (int, []byte) {
+func getFuseFd(path string) (int, []byte) {
 	if !utils.Exists(path) {
 		return 0, nil
 	}
@@ -177,7 +177,7 @@ func get_fuse_fd(path string) (int, []byte) {
 	return 0, nil
 }
 
-func send_fuse_fd(path string, msg string, fd int) error {
+func sendFuseFd(path string, msg string, fd int) error {
 	conn, err := net.Dial("unix", path)
 	if err != nil {
 		return err

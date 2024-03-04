@@ -67,7 +67,7 @@ func devMinor(dev uint64) uint32 {
 	return uint32(minor)
 }
 
-func kill_mount_process(pid int, dev uint64, lastActive *int64) {
+func killMountProcess(pid int, dev uint64, lastActive *int64) {
 	if pid > 0 {
 		logger.Infof("watchdog: kill %d", pid)
 		err := syscall.Kill(pid, syscall.SIGABRT)
@@ -87,9 +87,9 @@ func kill_mount_process(pid int, dev uint64, lastActive *int64) {
 			stack, err := os.ReadFile(fmt.Sprintf("/proc/%d/task/%s/stack", pid, tid))
 			if err == nil && bytes.Contains(stack, []byte("fuse_simple_request")) {
 				logger.Errorf("find deadlock in mount process, abort it: %s", string(stack))
-				if fuse_fd > 0 {
-					_ = syscall.Close(fuse_fd)
-					fuse_fd = 0
+				if fuseFd > 0 {
+					_ = syscall.Close(fuseFd)
+					fuseFd = 0
 				}
 				f, err := os.OpenFile(fmt.Sprintf("/sys/fs/fuse/connections/%d/abort", devMinor(dev)), os.O_WRONLY, 0777)
 				if err != nil {
@@ -161,7 +161,7 @@ func watchdog(ctx context.Context, mp string) {
 			if atomic.LoadInt64(&lastActive)+60 < time.Now().Unix() && ctx.Err() == nil {
 				logger.Infof("mount point %s is not active for %s", mp, time.Since(time.Unix(atomic.LoadInt64(&lastActive), 0)))
 				show_thread_stack(agentAddr)
-				kill_mount_process(pid, dev, &lastActive)
+				killMountProcess(pid, dev, &lastActive)
 				atomic.StoreInt64(&lastActive, time.Now().Unix())
 				pid = 0
 				dev = 0
@@ -392,8 +392,8 @@ func shutdownGraceful(mp string) {
 		logger.Warnf("load config from %s: %s", mp, err)
 		return
 	}
-	fuse_fd, fuse_setting = get_fuse_fd(conf.CommPath)
-	if fuse_fd == 0 {
+	fuseFd, fuseSetting = getFuseFd(conf.CommPath)
+	if fuseFd == 0 {
 		logger.Warnf("recv FUSE fd from existing client")
 		return
 	}
@@ -405,11 +405,11 @@ func shutdownGraceful(mp string) {
 		time.Sleep(time.Millisecond * 100)
 	}
 	logger.Infof("mount point %s is busy, stop upgrade, mount on top of it", mp)
-	err = send_fuse_fd(conf.CommPath, string(fuse_setting), fuse_fd)
+	err = sendFuseFd(conf.CommPath, string(fuseSetting), fuseFd)
 	if err != nil {
 		logger.Warnf("send FUSE fd: %s", err)
 	}
-	fuse_fd = 0
+	fuseFd = 0
 }
 
 func canShutdownGracefully(mp string, volName string, newConf *vfs.Config) bool {
@@ -603,7 +603,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 		// For volcengine VKE serverless container, no umount before mount when
 		// `JFS_NO_UMOUNT` environment provided
 		noUmount := os.Getenv("JFS_NO_UMOUNT")
-		if fuse_fd == 0 && (c > 0 || noUmount == "0") {
+		if fuseFd == 0 && (c > 0 || noUmount == "0") {
 			_ = doUmount(mp, true)
 		}
 		if runtime.GOOS == "linux" {
@@ -631,7 +631,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 		if err == nil {
 			return nil
 		}
-		if fuse_fd < 0 {
+		if fuseFd < 0 {
 			logger.Info("transfer FUSE session to others")
 			return nil
 		}
