@@ -117,7 +117,8 @@ do_test_sync_fsrand_with_mount_point(){
 }
 
 test_sync_randomly(){
-    MAX_EXAMPLE=1000 STEP_COUNT=200 python3 .github/scripts/hypo/syncrand.py
+    python3 .github/scripts/hypo/syncrand_test.py
+    LOG_LEVEL=WARNING MAX_EXAMPLE=1000 STEP_COUNT=200 python3 .github/scripts/hypo/syncrand.py
 }
 
 test_sync_include_exclude_option(){

@@ -1,0 +1,84 @@
+name: "sync"
+
+on:
+  push:
+    branches:
+      # - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    branches:
+      # - 'main'
+      - 'release-**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  schedule:
+    - cron:  '30 20 * * *'
+
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Build 
+        uses: ./.github/actions/build
+        # with:
+        #   useBeta: true
+
+      - name: Test sync include/exclude option
+        timeout-minutes: 30
+        run: |
+          python3 .github/scripts/hypo/syncrand_test.py
+          LOG_LEVEL=WARNING MAX_EXAMPLE=1000 STEP_COUNT=100 python3 .github/scripts/hypo/syncrand.py
+          
+      - name: Test Sync
+        timeout-minutes: 30
+        run: |
+          sudo META=redis .github/scripts/command/sync.sh 
+
+      - name: Test Sync with fsrand
+        timeout-minutes: 30
+        run: |
+          sudo META=redis .github/scripts/command/sync_fsrand.sh 
+
+      - name: Test Sync with mino
+        timeout-minutes: 30
+        run: |
+          sudo META=redis .github/scripts/command/sync_minio.sh 
+
+      - name: Test Sync with multi workers
+        timeout-minutes: 30
+        run: |
+          # not supported algo: "dsa" "ecdsa-sk" "ed25519-sk"
+          types=("ecdsa"  "ed25519"  "rsa")
+          random_type=${types[$RANDOM % ${#types[@]}]}
+          sudo CI=true META=redis KEY_TYPE=$random_type .github/scripts/command/sync_cluster.sh
+
+      - name: Log
+        if: always()
+        run: |
+          echo "juicefs log"
+          sudo tail -n 1000 /var/log/juicefs.log
+          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
+          
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
+      
