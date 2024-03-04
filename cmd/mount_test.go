@@ -288,5 +288,9 @@ func TestMountVersionMatch(t *testing.T) {
 	defer version.SetVersion(oriVersion)
 
 	err := tryMountTemp(t, nil, nil, nil)
+	assert.Nil(t, err)
+	umountTemp(t)
+
+	err = tryMountTemp(t, nil, []string{"--enable-acl=true"}, nil)
 	assert.Contains(t, err.Error(), "check version")
 }
