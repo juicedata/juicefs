@@ -691,22 +691,8 @@ func mount(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if st := metaCli.Chroot(meta.Background, metaConf.Subdir); st != 0 {
-		return st
-	}
-	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
-	registerer, registry := wrapRegister(c, mp, format.Name)
-
-	blob, err := NewReloadableStorage(format, metaCli, updateFormat(c))
-	if err != nil {
-		return fmt.Errorf("object storage: %s", err)
-	}
-	logger.Infof("Data use %s", blob)
 
 	chunkConf := getChunkConf(c, format)
-	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
-	registerMetaMsg(metaCli, store, chunkConf)
-
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
 	if runtime.GOOS != "windows" {
 		rawOpts, mt, noxattr, noacl := genFuseOptExt(c, format.Name)
@@ -732,10 +718,26 @@ func mount(c *cli.Context) error {
 		return launchMount(mp, vfsConf)
 	}
 	logger.Infof("JuiceFS version %s", version.Version())
+
 	if commPath := os.Getenv("_FUSE_FD_COMM"); commPath != "" {
 		vfsConf.CommPath = commPath
 		vfsConf.StatePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
 	}
+
+	if st := metaCli.Chroot(meta.Background, metaConf.Subdir); st != 0 {
+		return st
+	}
+	// Wrap the default registry, all prometheus.MustRegister() calls should be afterwards
+	registerer, registry := wrapRegister(c, mp, format.Name)
+
+	blob, err := NewReloadableStorage(format, metaCli, updateFormat(c))
+	if err != nil {
+		return fmt.Errorf("object storage: %s", err)
+	}
+	logger.Infof("Data use %s", blob)
+
+	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
+	registerMetaMsg(metaCli, store, chunkConf)
 
 	removePassword(addr)
 	err = metaCli.NewSession(true)
