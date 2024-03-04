@@ -456,7 +456,7 @@ func canShutdownGracefully(mp string, volName string, newConf *vfs.Config) bool 
 		logger.Infof("POSIX lock is enabled, mount on top of it")
 		return false
 	}
-	// pass the session id to the new process
+	// pass the session id to the new process, sid=0 means old process is read-only mode
 	if conf.Sid != 0 {
 		logger.Infof("pass the old session id %d to the new process", conf.Sid)
 		os.Setenv("_JFS_META_SID", strconv.FormatUint(conf.Sid, 10))

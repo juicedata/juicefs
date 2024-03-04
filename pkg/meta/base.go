@@ -485,17 +485,19 @@ func (m *baseMeta) NewSession(record bool) (uint64, error) {
 
 	if record {
 		// use the original sid if it's not 0
+		action := "Update"
 		if m.sid == 0 {
 			v, err := m.en.incrCounter("nextSession", 1)
 			if err != nil {
 				return 0, fmt.Errorf("get session ID: %s", err)
 			}
 			m.sid = uint64(v)
+			action = "Create"
 		}
 		if err := m.en.doNewSession(m.newSessionInfo()); err != nil {
 			return 0, fmt.Errorf("create session: %s", err)
 		}
-		logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
+		logger.Infof("%s session %d OK with version: %s", action, m.sid, version.Version())
 	}
 
 	m.loadQuotas()
