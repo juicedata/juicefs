@@ -3762,7 +3762,7 @@ func (m *kvMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule)
 }
 
 func (m *kvMeta) insertACL(tx *kvTxn, rule *aclAPI.Rule) (uint32, error) {
-	var aclId uint32 = aclAPI.None
+	var aclId uint32
 	if aclId = m.aclCache.GetId(rule); aclId == aclAPI.None {
 		newId, err := m.incrCounter(ACLCounterName, 1)
 		if err != nil {

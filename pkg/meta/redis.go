@@ -4663,7 +4663,7 @@ func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32, rule *aclAPI.Ru
 }
 
 func (m *redisMeta) insertACL(ctx Context, tx *redis.Tx, rule *aclAPI.Rule) (uint32, error) {
-	var aclId uint32 = aclAPI.None
+	var aclId uint32
 	if aclId = m.aclCache.GetId(rule); aclId == aclAPI.None {
 		// TODO failures may result in some id wastage.
 		newId, err := m.incrCounter(ACLCounterName, 1)
