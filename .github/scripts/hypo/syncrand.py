@@ -21,24 +21,27 @@ import random
 import time
 
 st_entry_name = st.text(alphabet='abc', min_size=1, max_size=3)
-st_patterns = st.text(alphabet='abc?/*', min_size=1, max_size=5).filter(lambda s: s.find('***') == -1 or s.endswith('/***'))
+st_patterns = st.text(alphabet='abc?/*', min_size=1, max_size=5).\
+    filter(lambda s: s.find('***') == -1 or s.endswith('/***'))
+
+st_patterns2 = st.lists(st.sampled_from(['a','?','/','*', '/***']), min_size=1, max_size=10)\
+    .map(''.join).filter(lambda s: s.find('***') == -1 or (s.count('/***')==1 and s.endswith('a/***')))
 st_option = st.fixed_dictionaries({
     "option": st.just("--include") | st.just("--exclude"),
-    "pattern": st_patterns
+    "pattern": st_patterns2
 })
-st_options = st.lists(st_option, min_size=1, max_size=10).filter(lambda self: any(item["pattern"].count('***') ==1 and item["pattern"].endswith('/***') for item in self))
+st_options = st.lists(st_option, min_size=1, max_size=10).\
+    filter(lambda self: any(item["pattern"].endswith('/***') for item in self))
 
 SEED=int(os.environ.get('SEED', random.randint(0, 1000000000)))
 @seed(SEED)
 class SyncMachine(RuleBasedStateMachine):
     Files = Bundle('files')
     Folders = Bundle('folders')
-    Entries = Files | Folders
-    start = time.time()
-    ROOT_DIR1 = '/tmp/src_sync'
-    ROOT_DIR2 = '/tmp/src_sync2'
-    DEST_RSYNC = '/tmp/dst_rsync'
-    DEST_JUICESYNC = '/tmp/dst_juicesync'
+    ROOT_DIR1 = '/tmp/sync_src'
+    ROOT_DIR2 = '/tmp/sync_src2'
+    DEST_RSYNC = '/tmp/rsync'
+    DEST_JUICESYNC = '/tmp/juicesync'
     log_level = os.environ.get('LOG_LEVEL', 'INFO')
     logger = common.setup_logger(f'./syncrand.log', 'syncrand_logger', log_level)
     fsop = FsOperation(logger)
@@ -49,25 +52,13 @@ class SyncMachine(RuleBasedStateMachine):
             os.makedirs(self.ROOT_DIR1)
         if not os.path.exists(self.ROOT_DIR2):
             os.makedirs(self.ROOT_DIR2)
-        if os.environ.get('PROFILE', 'dev') != 'generate':
-            common.clean_dir(self.ROOT_DIR1)
-            common.clean_dir(self.ROOT_DIR2)
+        common.clean_dir(self.ROOT_DIR1)
+        common.clean_dir(self.ROOT_DIR2)
         return ''
     
-    def create_users(self, users):
-        for user in users:
-            if user != 'root':
-                common.create_user(user)
-
     def __init__(self):
         super(SyncMachine, self).__init__()
-        print(f'__init__')
-        MAX_RUNTIME=int(os.environ.get('MAX_RUNTIME', '36000'))
-        duration = time.time() - self.start
-        print(f'duration is {duration}')
-        if duration > MAX_RUNTIME:
-            raise Exception(f'run out of time: {duration}')
-
+        
     def equal(self, result1, result2):
         if type(result1) != type(result2):
             return False
@@ -125,25 +116,23 @@ class SyncMachine(RuleBasedStateMachine):
         subprocess.check_call(f'rsync -r -vvv {self.ROOT_DIR1}/ {self.DEST_RSYNC}/ {options}'.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.logger.info(f'./juicefs sync --dirs -v {self.ROOT_DIR1}/ {self.DEST_JUICESYNC}/ {options}')
         subprocess.check_call(f'./juicefs sync --dirs -v {self.ROOT_DIR1}/ {self.DEST_JUICESYNC}/ {options}'.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.check_call(['diff', '-r', self.DEST_RSYNC, self.DEST_JUICESYNC])
-        self.fsop.stats.success('sync')
+        try:
+            subprocess.check_call(['diff', '-r', self.DEST_RSYNC, self.DEST_JUICESYNC])
+        except subprocess.CalledProcessError as e:
+            print(f'\033[31m{e}\033[0m')
+            raise e
+        self.fsop.stats.success('do_sync')
 
     def teardown(self):
         pass
 
 if __name__ == '__main__':
-    MAX_EXAMPLE=int(os.environ.get('MAX_EXAMPLE', '100'))
+    MAX_EXAMPLE=int(os.environ.get('MAX_EXAMPLE', '1000'))
     STEP_COUNT=int(os.environ.get('STEP_COUNT', '50'))
     settings.register_profile("dev", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
         phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
-    settings.register_profile("generate", max_examples=MAX_EXAMPLE, verbosity=Verbosity.debug, 
-        print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
-        report_multiple_bugs=False, \
-        phases=[Phase.generate, Phase.target])
-
-    # profile = os.environ.get('PROFILE', 'generate')
     profile = os.environ.get('PROFILE', 'dev')
     settings.load_profile(profile)
     juicefs_machine = SyncMachine.TestCase()
