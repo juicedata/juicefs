@@ -39,6 +39,7 @@ import (
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
 
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -65,22 +66,68 @@ type edge struct {
 }
 
 type node struct {
-	Inode     Ino    `xorm:"pk"`
-	Type      uint8  `xorm:"notnull"`
-	Flags     uint8  `xorm:"notnull"`
-	Mode      uint16 `xorm:"notnull"`
-	Uid       uint32 `xorm:"notnull"`
-	Gid       uint32 `xorm:"notnull"`
-	Atime     int64  `xorm:"notnull"`
-	Mtime     int64  `xorm:"notnull"`
-	Ctime     int64  `xorm:"notnull"`
-	Atimensec int16  `xorm:"notnull default 0"`
-	Mtimensec int16  `xorm:"notnull default 0"`
-	Ctimensec int16  `xorm:"notnull default 0"`
-	Nlink     uint32 `xorm:"notnull"`
-	Length    uint64 `xorm:"notnull"`
-	Rdev      uint32
-	Parent    Ino
+	Inode        Ino    `xorm:"pk"`
+	Type         uint8  `xorm:"notnull"`
+	Flags        uint8  `xorm:"notnull"`
+	Mode         uint16 `xorm:"notnull"`
+	Uid          uint32 `xorm:"notnull"`
+	Gid          uint32 `xorm:"notnull"`
+	Atime        int64  `xorm:"notnull"`
+	Mtime        int64  `xorm:"notnull"`
+	Ctime        int64  `xorm:"notnull"`
+	Atimensec    int16  `xorm:"notnull default 0"`
+	Mtimensec    int16  `xorm:"notnull default 0"`
+	Ctimensec    int16  `xorm:"notnull default 0"`
+	Nlink        uint32 `xorm:"notnull"`
+	Length       uint64 `xorm:"notnull"`
+	Rdev         uint32
+	Parent       Ino
+	AccessACLId  uint32 `xorm:"'access_acl_id'"`
+	DefaultACLId uint32 `xorm:"'default_acl_id'"`
+}
+
+func getACLIdColName(aclType uint8) string {
+	switch aclType {
+	case aclAPI.TypeAccess:
+		return "access_acl_id"
+	case aclAPI.TypeDefault:
+		return "default_acl_id"
+	}
+	return ""
+}
+
+type acl struct {
+	Id          uint32 `xorm:"pk autoincr"`
+	Owner       uint16
+	Group       uint16
+	Mask        uint16
+	Other       uint16
+	NamedUsers  []byte
+	NamedGroups []byte
+}
+
+func newSQLAcl(r *aclAPI.Rule) *acl {
+	a := &acl{
+		Owner: r.Owner,
+		Group: r.Group,
+		Mask:  r.Mask,
+		Other: r.Other,
+	}
+	a.NamedUsers = r.NamedUsers.Encode()
+	a.NamedGroups = r.NamedGroups.Encode()
+	return a
+}
+
+func (a *acl) ToRule(r *aclAPI.Rule) {
+	if r == nil {
+		*r = aclAPI.Rule{}
+	}
+	r.Owner = a.Owner
+	r.Group = a.Group
+	r.Other = a.Other
+	r.Mask = a.Mask
+	r.NamedUsers.Decode(a.NamedUsers)
+	r.NamedGroups.Decode(a.NamedGroups)
 }
 
 type namedNode struct {
@@ -190,6 +237,8 @@ type dbMeta struct {
 
 	noReadOnlyTxn bool
 }
+
+var _ Meta = &dbMeta{}
 
 type dbSnap struct {
 	node    map[Ino]*node
@@ -326,6 +375,9 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 	if err := m.syncTable(new(detachedNode)); err != nil {
 		return fmt.Errorf("create table detachedNode: %s", err)
 	}
+	if err := m.syncTable(new(acl)); err != nil {
+		return fmt.Errorf("create table acl: %s", err)
+	}
 
 	var s = setting{Name: "format"}
 	var ok bool
@@ -410,7 +462,21 @@ func (m *dbMeta) doInit(format *Format, force bool) error {
 			{"totalInodes", 0},
 			{"nextCleanupSlices", 0},
 		}
-		return mustInsert(s, n, &cs)
+		if err = mustInsert(s, n, &cs); err != nil {
+			return err
+		}
+
+		// cache all acls
+		var acls []acl
+		if err = s.Find(&acls); err != nil {
+			return err
+		}
+		for _, val := range acls {
+			tmpRule := &aclAPI.Rule{}
+			val.ToRule(tmpRule)
+			m.aclCache.Put(val.Id, tmpRule)
+		}
+		return nil
 	})
 }
 
@@ -814,6 +880,8 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Rdev = n.Rdev
 	attr.Parent = n.Parent
 	attr.Full = true
+	attr.AccessACLId = n.AccessACLId
+	attr.DefaultACLId = n.DefaultACLId
 }
 
 func (m *dbMeta) parseNode(attr *Attr, n *node) {
@@ -835,6 +903,8 @@ func (m *dbMeta) parseNode(attr *Attr, n *node) {
 	n.Length = attr.Length
 	n.Rdev = attr.Rdev
 	n.Parent = attr.Parent
+	n.AccessACLId = attr.AccessACLId
+	n.DefaultACLId = attr.DefaultACLId
 }
 
 func (m *dbMeta) updateStats(space int64, inodes int64) {
@@ -897,12 +967,21 @@ func (m *dbMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	return errno(m.roTxn(func(s *xorm.Session) error {
 		var n = node{Inode: inode}
 		ok, err := s.Get(&n)
-		if ok {
-			m.parseAttr(&n, attr)
-		} else if err == nil {
-			err = syscall.ENOENT
+		if err != nil {
+			return err
+		} else if !ok {
+			return syscall.ENOENT
 		}
-		return err
+		m.parseAttr(&n, attr)
+
+		if attr != nil && attr.AccessACLId != aclAPI.None {
+			rule := &aclAPI.Rule{}
+			if err = m.getACL(s, attr.AccessACLId, rule); err != nil {
+				return err
+			}
+			attr.Mode = (rule.GetMode() & 0777) | (attr.Mode & 07000)
+		}
+		return nil
 	}))
 }
 
@@ -922,18 +1001,39 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 			return syscall.EPERM
 		}
 		now := time.Now()
-		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &curAttr, attr, now)
+
+		// get acl
+		var rule *aclAPI.Rule
+		if curAttr.AccessACLId != aclAPI.None {
+			rule = &aclAPI.Rule{}
+			if err = m.getACL(s, curAttr.AccessACLId, rule); err != nil {
+				return err
+			}
+		}
+
+		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &curAttr, attr, now, rule)
 		if st != 0 {
 			return st
 		}
 		if dirtyAttr == nil {
 			return nil
 		}
+
+		// set acl
+		if rule != nil {
+			aclId, err := m.insertACL(s, rule)
+			if err != nil {
+				return err
+			}
+			setAttrACLId(dirtyAttr, aclAPI.TypeAccess, aclId)
+		}
+
 		var dirtyNode node
 		m.parseNode(dirtyAttr, &dirtyNode)
 		dirtyNode.Ctime = now.UnixNano() / 1e3
 		dirtyNode.Ctimensec = int16(now.Nanosecond() % 1000)
-		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime", "atimensec", "mtimensec", "ctimensec").
+		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime",
+			"atimensec", "mtimensec", "ctimensec", "access_acl_id", "default_acl_id").
 			Update(&dirtyNode, &node{Inode: inode})
 		if err == nil {
 			m.parseAttr(&dirtyNode, attr)
@@ -1210,7 +1310,6 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 	var n node
 	n.Inode = ino
 	n.Type = _type
-	n.Mode = mode & ^cumask
 	n.Uid = ctx.Uid()
 	n.Gid = ctx.Gid()
 	if _type == TypeDirectory {
@@ -1283,6 +1382,35 @@ func (m *dbMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 				}
 			}
 			return syscall.EEXIST
+		}
+
+		mode &= 07777
+		if pattr.DefaultACLId != aclAPI.None && _type != TypeSymlink {
+			// inherit default acl
+			if _type == TypeDirectory {
+				n.DefaultACLId = pattr.DefaultACLId
+			}
+
+			// set access acl by parent's default acl
+			rule := &aclAPI.Rule{}
+			if err = m.getACL(s, pattr.DefaultACLId, rule); err != nil {
+				return err
+			}
+
+			if rule.IsMinimal() {
+				// simple acl as default
+				n.Mode = (mode & 0xFE00) | rule.GetMode()
+			} else {
+				cRule := rule.ChildAccessACL(mode)
+				id, err := m.insertACL(s, cRule)
+				if err != nil {
+					return err
+				}
+				n.AccessACLId = id
+				n.Mode = (mode & 0xFE00) | cRule.GetMode()
+			}
+		} else {
+			n.Mode = mode & ^cumask
 		}
 
 		var updateParent bool
@@ -4167,4 +4295,154 @@ func (m *dbMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Time)
 		return err
 	}, inode)
 	return updated, err
+}
+
+func (m *dbMeta) insertACL(s *xorm.Session, rule *aclAPI.Rule) (uint32, error) {
+	var aclId uint32 = aclAPI.None
+	if aclId = m.aclCache.GetId(rule); aclId == aclAPI.None {
+		// TODO conflicts from multiple clients are rare and result in only minor duplicates, thus not addressed for now.
+		val := newSQLAcl(rule)
+		if _, err := s.Insert(val); err != nil {
+			return aclAPI.None, err
+		}
+		aclId = val.Id
+		m.aclCache.Put(aclId, rule)
+
+		// try load miss
+		missIds := m.aclCache.GetMissIds(val.Id)
+		if len(missIds) > 0 {
+			var acls []acl
+			if err := s.In("id", missIds).Find(&acls); err != nil {
+				return aclId, err
+			}
+
+			for _, data := range acls {
+				tmpRule := &aclAPI.Rule{}
+				data.ToRule(tmpRule)
+				m.aclCache.Put(data.Id, tmpRule)
+			}
+		}
+	}
+	return aclId, nil
+}
+
+func (m *dbMeta) getACL(s *xorm.Session, id uint32, rule *aclAPI.Rule) error {
+	if cRule := m.aclCache.Get(id); cRule != nil {
+		*rule = *cRule
+		return nil
+	}
+
+	var aclVal = &acl{Id: id}
+	if ok, err := s.Get(aclVal); err != nil {
+		return err
+	} else if !ok {
+		return ENOATTR
+	}
+
+	aclVal.ToRule(rule)
+	m.aclCache.Put(id, rule)
+	return nil
+}
+
+func (m *dbMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	if aclType != aclAPI.TypeAccess && aclType != aclAPI.TypeDefault {
+		return syscall.EINVAL
+	}
+
+	if !ino.IsNormal() {
+		return syscall.EPERM
+	}
+
+	now := time.Now() // TODO from context
+	defer func() {
+		m.timeit("SetFacl", now)
+		m.of.InvalidateChunk(ino, invalidateAttrOnly)
+	}()
+
+	return errno(m.txn(func(s *xorm.Session) error {
+		attr := &Attr{}
+		n := &node{Inode: ino}
+		if ok, err := s.ForUpdate().Get(n); err != nil {
+			return err
+		} else if !ok {
+			return syscall.ENOENT
+		}
+		m.parseAttr(n, attr)
+
+		if ctx.Uid() != 0 && ctx.Uid() != attr.Uid {
+			return syscall.EPERM
+		}
+
+		oriMode := attr.Mode
+		if rule.IsEmpty() {
+			// remove acl
+			setAttrACLId(attr, aclType, aclAPI.None)
+		} else if rule.IsMinimal() && aclType == aclAPI.TypeAccess {
+			// remove acl
+			setAttrACLId(attr, aclType, aclAPI.None)
+			// set mode
+			attr.Mode &= 07000
+			attr.Mode |= ((rule.Owner & 7) << 6) | ((rule.Group & 7) << 3) | (rule.Other & 7)
+		} else {
+			// set acl
+			rule.InheritPerms(attr.Mode)
+			aclId, err := m.insertACL(s, rule)
+			if err != nil {
+				return err
+			}
+			setAttrACLId(attr, aclType, aclId)
+
+			// set mode
+			if aclType == aclAPI.TypeAccess {
+				attr.Mode &= 07000
+				attr.Mode |= ((rule.Owner & 7) << 6) | ((rule.Mask & 7) << 3) | (rule.Other & 7)
+			}
+		}
+
+		// update attr
+		var dirtyNode node
+		m.parseNode(attr, &dirtyNode)
+		dirtyNode.Ctime = now.UnixNano() / 1e3
+		dirtyNode.Ctimensec = int16(now.Nanosecond() % 1000)
+
+		updateCols := []string{"ctime", "ctimensec", getACLIdColName(aclType)}
+		if oriMode != attr.Mode {
+			updateCols = append(updateCols, "mode")
+		}
+
+		_, err := s.Cols(updateCols...).Update(&dirtyNode, &node{Inode: ino})
+		return err
+	}, ino))
+}
+
+func (m *dbMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	var err error
+	if err = m.getFaclFromCache(ctx, ino, aclType, rule); err == nil {
+		return 0
+	}
+
+	if !errors.Is(err, errACLNotInCache) {
+		return errno(err)
+	}
+
+	defer m.timeit("GetFacl", time.Now())
+
+	return errno(m.roTxn(func(s *xorm.Session) error {
+		attr := &Attr{}
+		n := &node{Inode: ino}
+		if ok, err := s.ForUpdate().Get(n); err != nil {
+			return err
+		} else if !ok {
+			return syscall.ENOENT
+		}
+		m.parseAttr(n, attr)
+		m.of.Update(ino, attr)
+
+		aclId := getAttrACLId(attr, aclType)
+		if aclId == aclAPI.None {
+			return ENOATTR
+		}
+
+		return m.getACL(s, aclId, rule)
+	}))
 }

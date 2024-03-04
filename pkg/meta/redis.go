@@ -44,9 +44,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/pkg/errors"
-
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -318,7 +318,37 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 
 	// root inode
 	attr.Mode = 0777
-	return m.rdb.Set(ctx, m.inodeKey(1), m.marshal(attr), 0).Err()
+	if err = m.rdb.Set(ctx, m.inodeKey(1), m.marshal(attr), 0).Err(); err != nil {
+		return err
+	}
+
+	// cache all acls
+	maxId, err := m.getCounter(ACLCounterName)
+	if err != nil {
+		return err
+	}
+
+	if maxId > 0 {
+		missKeys := make([]string, maxId)
+		for i := 0; i < int(maxId); i++ {
+			missKeys[i] = m.aclKey(uint32(i) + 1)
+		}
+
+		acls, err := m.rdb.MGet(ctx, missKeys...).Result()
+		if err != nil {
+			return err
+		}
+		for i, val := range acls {
+			var tmpRule *aclAPI.Rule
+			if val != nil {
+				tmpRule = &aclAPI.Rule{}
+				tmpRule.Decode(val.([]byte))
+			}
+			// may have empty slot
+			m.aclCache.Put(uint32(i)+1, tmpRule)
+		}
+	}
+	return nil
 }
 
 func (m *redisMeta) Reset() error {
@@ -605,6 +635,10 @@ func (m *redisMeta) totalInodesKey() string {
 	return m.prefix + totalInodes
 }
 
+func (m *redisMeta) aclKey(id uint32) string {
+	return fmt.Sprintf("%sacl%d", m.prefix, id)
+}
+
 func (m *redisMeta) delfiles() string {
 	return m.prefix + "delfiles"
 }
@@ -799,11 +833,22 @@ func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 }
 
 func (m *redisMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	a, err := m.rdb.Get(ctx, m.inodeKey(inode)).Bytes()
-	if err == nil {
-		m.parseAttr(a, attr)
-	}
-	return errno(err)
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		val, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
+		if err != nil {
+			return err
+		}
+		m.parseAttr(val, attr)
+
+		if attr != nil && attr.AccessACLId != aclAPI.None {
+			rule := &aclAPI.Rule{}
+			if err := m.getACL(ctx, tx, attr.AccessACLId, rule); err != nil {
+				return err
+			}
+			attr.Mode = (rule.GetMode() & 0777) | (attr.Mode & 07000)
+		}
+		return nil
+	}, m.inodeKey(inode)))
 }
 
 type timeoutError interface {
@@ -1141,13 +1186,33 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 			return syscall.EPERM
 		}
 		now := time.Now()
-		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now)
+
+		// get acl
+		var rule *aclAPI.Rule
+		if cur.AccessACLId != aclAPI.None {
+			rule = &aclAPI.Rule{}
+			if err := m.getACL(ctx, tx, cur.AccessACLId, rule); err != nil {
+				return err
+			}
+		}
+
+		dirtyAttr, st := m.mergeAttr(ctx, inode, set, &cur, attr, now, rule)
 		if st != 0 {
 			return st
 		}
 		if dirtyAttr == nil {
 			return nil
 		}
+
+		// set acl
+		if rule != nil {
+			aclId, err := m.insertACL(ctx, tx, rule)
+			if err != nil {
+				return err
+			}
+			setAttrACLId(dirtyAttr, aclAPI.TypeAccess, aclId)
+		}
+
 		dirtyAttr.Ctime = now.Unix()
 		dirtyAttr.Ctimensec = uint32(now.Nanosecond())
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
@@ -1216,7 +1281,6 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 		attr = &Attr{}
 	}
 	attr.Typ = _type
-	attr.Mode = mode & ^cumask
 	attr.Uid = ctx.Uid()
 	attr.Gid = ctx.Gid()
 	if _type == TypeDirectory {
@@ -1285,6 +1349,35 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				}
 			}
 			return syscall.EEXIST
+		}
+
+		mode &= 07777
+		if pattr.DefaultACLId != aclAPI.None && _type != TypeSymlink {
+			// inherit default acl
+			if _type == TypeDirectory {
+				attr.DefaultACLId = pattr.DefaultACLId
+			}
+
+			// set access acl by parent's default acl
+			rule := &aclAPI.Rule{}
+			if err = m.getACL(ctx, tx, pattr.DefaultACLId, rule); err != nil {
+				return err
+			}
+
+			if rule.IsMinimal() {
+				// simple acl as default
+				attr.Mode = (mode & 0xFE00) | rule.GetMode()
+			} else {
+				cRule := rule.ChildAccessACL(mode)
+				id, err := m.insertACL(ctx, tx, cRule)
+				if err != nil {
+					return err
+				}
+				attr.AccessACLId = id
+				attr.Mode = (mode & 0xFE00) | cRule.GetMode()
+			}
+		} else {
+			attr.Mode = mode & ^cumask
 		}
 
 		var updateParent bool
@@ -4447,4 +4540,165 @@ func (m *redisMeta) doTouchAtime(ctx Context, inode Ino, attr *Attr, now time.Ti
 		return err
 	}, m.inodeKey(inode))
 	return updated, err
+}
+
+func (m *redisMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	if aclType != aclAPI.TypeAccess && aclType != aclAPI.TypeDefault {
+		return syscall.EINVAL
+	}
+
+	if !ino.IsNormal() {
+		return syscall.EPERM
+	}
+
+	now := time.Now() // TODO from context
+	defer func() {
+		m.timeit("SetFacl", now)
+		m.of.InvalidateChunk(ino, invalidateAttrOnly)
+	}()
+
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		val, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
+		if err != nil {
+			return err
+		}
+		attr := &Attr{}
+		m.parseAttr(val, attr)
+
+		if ctx.Uid() != 0 && ctx.Uid() != attr.Uid {
+			return syscall.EPERM
+		}
+
+		if rule.IsEmpty() {
+			// remove acl
+			setAttrACLId(attr, aclType, aclAPI.None)
+		} else if rule.IsMinimal() && aclType == aclAPI.TypeAccess {
+			// remove acl
+			setAttrACLId(attr, aclType, aclAPI.None)
+			// set mode
+			attr.Mode &= 07000
+			attr.Mode |= ((rule.Owner & 7) << 6) | ((rule.Group & 7) << 3) | (rule.Other & 7)
+		} else {
+			// set acl
+			rule.InheritPerms(attr.Mode)
+			aclId, err := m.insertACL(ctx, tx, rule)
+			if err != nil {
+				return err
+			}
+			setAttrACLId(attr, aclType, aclId)
+
+			// set mode
+			if aclType == aclAPI.TypeAccess {
+				attr.Mode &= 07000
+				attr.Mode |= ((rule.Owner & 7) << 6) | ((rule.Mask & 7) << 3) | (rule.Other & 7)
+			}
+		}
+
+		// update attr
+		attr.Ctime = now.Unix()
+		attr.Ctimensec = uint32(now.Nanosecond())
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
+			return nil
+		})
+		return err
+	}, m.inodeKey(ino)))
+}
+
+func (m *redisMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
+	var err error
+	if err = m.getFaclFromCache(ctx, ino, aclType, rule); err == nil {
+		return 0
+	}
+
+	if !errors.Is(err, errACLNotInCache) {
+		return errno(err)
+	}
+
+	defer m.timeit("GetFacl", time.Now())
+
+	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+		val, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
+		if err != nil {
+			return err
+		}
+		attr := &Attr{}
+		m.parseAttr(val, attr)
+		m.of.Update(ino, attr)
+
+		aclId := getAttrACLId(attr, aclType)
+		if aclId == aclAPI.None {
+			return ENOATTR
+		}
+
+		return m.getACL(ctx, tx, aclId, rule)
+	}, m.inodeKey(ino)))
+}
+
+func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32, rule *aclAPI.Rule) error {
+	if cRule := m.aclCache.Get(id); cRule != nil {
+		*rule = *cRule
+		return nil
+	}
+
+	cmds, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.Get(ctx, m.aclKey(id))
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	val, err := cmds[0].(*redis.StringCmd).Bytes()
+	if err != nil {
+		return err
+	}
+	if val == nil {
+		return ENOATTR
+	}
+
+	rule.Decode(val)
+	m.aclCache.Put(id, rule)
+	return nil
+}
+
+func (m *redisMeta) insertACL(ctx Context, tx *redis.Tx, rule *aclAPI.Rule) (uint32, error) {
+	var aclId uint32 = aclAPI.None
+	if aclId = m.aclCache.GetId(rule); aclId == aclAPI.None {
+		// TODO failures may result in some id wastage.
+		newId, err := m.incrCounter(ACLCounterName, 1)
+		if err != nil {
+			return aclAPI.None, err
+		}
+		aclId = uint32(newId)
+
+		if err = tx.Set(ctx, m.aclKey(aclId), rule.Encode(), 0).Err(); err != nil {
+			return aclAPI.None, err
+		}
+		m.aclCache.Put(aclId, rule)
+
+		// try load miss
+		missIds := m.aclCache.GetMissIds(aclId)
+		if len(missIds) > 0 {
+			missKeys := make([]string, len(missIds))
+			for i, id := range missIds {
+				missKeys[i] = m.aclKey(id)
+			}
+
+			acls, err := tx.MGet(ctx, missKeys...).Result()
+			if err != nil {
+				return aclId, nil
+			}
+			for i, data := range acls {
+				var tmpRule *aclAPI.Rule
+				if data != nil {
+					tmpRule = &aclAPI.Rule{}
+					tmpRule.Decode(data.([]byte))
+				}
+				// may have empty slot
+				m.aclCache.Put(missIds[i], tmpRule)
+			}
+		}
+	}
+	return aclId, nil
 }

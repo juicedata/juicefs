@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/pkg/errors"
@@ -162,6 +163,7 @@ type baseMeta struct {
 	reloadCb     []func(*Format)
 	umounting    bool
 	sesMu        sync.Mutex
+	aclCache     aclAPI.Cache
 
 	dirStatsLock sync.Mutex
 	dirStats     map[Ino]dirStat
@@ -202,6 +204,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 		msgCallbacks: &msgCallbacks{
 			callbacks: make(map[uint32]MsgCallback),
 		},
+		aclCache: aclAPI.NewCache(),
 
 		usedSpaceG: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "used_space",
@@ -1160,15 +1163,19 @@ func (m *baseMeta) parseAttr(buf []byte, attr *Attr) {
 	attr.Nlink = rb.Get32()
 	attr.Length = rb.Get64()
 	attr.Rdev = rb.Get32()
-	if rb.Left() >= 8 {
+	if rb.Left() >= 16 {
 		attr.Parent = Ino(rb.Get64())
 	}
 	attr.Full = true
+	if rb.Left() >= 8 {
+		attr.AccessACLId = rb.Get32()
+		attr.DefaultACLId = rb.Get32()
+	}
 	logger.Tracef("attr: %+v -> %+v", buf, attr)
 }
 
 func (m *baseMeta) marshal(attr *Attr) []byte {
-	w := utils.NewBuffer(36 + 24 + 4 + 8)
+	w := utils.NewBuffer(36 + 24 + 4 + 8 + 8)
 	w.Put8(attr.Flags)
 	w.Put16((uint16(attr.Typ) << 12) | (attr.Mode & 0xfff))
 	w.Put32(attr.Uid)
@@ -1183,6 +1190,8 @@ func (m *baseMeta) marshal(attr *Attr) []byte {
 	w.Put64(attr.Length)
 	w.Put32(attr.Rdev)
 	w.Put64(uint64(attr.Parent))
+	w.Put32(attr.AccessACLId)
+	w.Put32(attr.DefaultACLId)
 	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
 	return w.Bytes()
 }
@@ -2696,7 +2705,7 @@ LOOP:
 	return eno
 }
 
-func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr, now time.Time) (*Attr, syscall.Errno) {
+func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr, now time.Time, rule *aclAPI.Rule) (*Attr, syscall.Errno) {
 	dirtyAttr := *cur
 	if (set&(SetAttrUID|SetAttrGID)) != 0 && (set&SetAttrMode) != 0 {
 		attr.Mode |= (cur.Mode & 06000)
@@ -2731,7 +2740,12 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 				attr.Mode &= 05777
 			}
 		}
-		if attr.Mode != cur.Mode {
+
+		if rule != nil {
+			rule.SetMode(attr.Mode)
+			dirtyAttr.Mode = attr.Mode&07000 | rule.GetMode()
+			changed = true
+		} else if attr.Mode != cur.Mode {
 			if ctx.Uid() != 0 && ctx.Uid() != cur.Uid &&
 				(cur.Mode&01777 != attr.Mode&01777 || attr.Mode&02000 > cur.Mode&02000 || attr.Mode&04000 > cur.Mode&04000) {
 				return nil, syscall.EPERM
@@ -2793,6 +2807,46 @@ func (m *baseMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) s
 	if st := m.en.doGetAttr(ctx, inode, &cur); st != 0 {
 		return st
 	}
-	_, st := m.mergeAttr(ctx, inode, set, &cur, &attr, time.Now())
+	_, st := m.mergeAttr(ctx, inode, set, &cur, &attr, time.Now(), nil)
 	return st
+}
+
+const ACLCounterName = "acl"
+
+var errACLNotInCache = errors.New("acl not in cache")
+
+func (m *baseMeta) getFaclFromCache(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) error {
+	ino = m.checkRoot(ino)
+	cAttr := &Attr{}
+	if m.conf.OpenCache > 0 && m.of.Check(ino, cAttr) {
+		aclId := getAttrACLId(cAttr, aclType)
+		if aclId == aclAPI.None {
+			return ENOATTR
+		}
+
+		if cRule := m.aclCache.Get(aclId); cRule != nil {
+			*rule = *cRule
+			return nil
+		}
+	}
+	return errACLNotInCache
+}
+
+func setAttrACLId(attr *Attr, aclType uint8, id uint32) {
+	switch aclType {
+	case aclAPI.TypeAccess:
+		attr.AccessACLId = id
+	case aclAPI.TypeDefault:
+		attr.DefaultACLId = id
+	}
+}
+
+func getAttrACLId(attr *Attr, aclType uint8) uint32 {
+	switch aclType {
+	case aclAPI.TypeAccess:
+		return attr.AccessACLId
+	case aclAPI.TypeDefault:
+		return attr.DefaultACLId
+	}
+	return aclAPI.None
 }
