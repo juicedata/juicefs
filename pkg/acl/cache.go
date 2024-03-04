@@ -17,6 +17,7 @@
 package acl
 
 import (
+	"sort"
 	"sync"
 )
 
@@ -51,6 +52,7 @@ type cache struct {
 	cksum2Id map[uint32][]uint32
 }
 
+// GetMissIds return all miss ids from 1 to max(maxId, c.maxId)
 func (c *cache) GetMissIds(maxId uint32) []uint32 {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -106,12 +108,16 @@ func (c *cache) Put(id uint32, r *Rule) {
 	if id > c.maxId {
 		c.maxId = id
 	}
+
 	c.id2Rule[id] = r
 
 	// empty slot
 	if r == nil {
 		return
 	}
+
+	sort.Sort(&c.id2Rule[id].NamedUsers)
+	sort.Sort(&c.id2Rule[id].NamedGroups)
 
 	cksum := r.Checksum()
 	if _, ok := c.cksum2Id[cksum]; ok {

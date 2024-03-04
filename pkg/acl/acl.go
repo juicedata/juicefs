@@ -19,8 +19,6 @@ package acl
 import (
 	"fmt"
 	"hash/crc32"
-	"sort"
-	"strings"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -42,8 +40,6 @@ func (es *Entries) IsEqual(other *Entries) bool {
 	if es.Len() != other.Len() {
 		return false
 	}
-	sort.Sort(es)
-	sort.Sort(other)
 	for i := 0; i < es.Len(); i++ {
 		if (*es)[i].Id != (*other)[i].Id || (*es)[i].Perm != (*other)[i].Perm {
 			return false
@@ -52,18 +48,8 @@ func (es *Entries) IsEqual(other *Entries) bool {
 	return true
 }
 
-func (es *Entries) String() string {
-	var builder strings.Builder
-	builder.WriteString("{")
-	for _, e := range *es {
-		builder.WriteString(fmt.Sprintf("{id: %d, perm: %o}, ", e.Id, e.Perm))
-	}
-	builder.WriteString("}")
-	return builder.String()
-}
-
 func (es *Entries) Encode() []byte {
-	w := utils.NewBuffer(4 + uint32(es.Len()*6))
+	w := utils.NewBuffer(uint32(es.Len() * 6))
 	for _, e := range *es {
 		w.Put32(e.Id)
 		w.Put16(e.Perm)
@@ -81,6 +67,7 @@ func (es *Entries) Decode(data []byte) {
 	}
 }
 
+// Rule acl rule
 type Rule struct {
 	Owner       uint16
 	Group       uint16
@@ -91,8 +78,8 @@ type Rule struct {
 }
 
 func (r *Rule) String() string {
-	return fmt.Sprintf("owner %o, group %o, mask %o, other %o, named users: %s, named group %s",
-		r.Owner, r.Group, r.Mask, r.Other, r.NamedUsers.String(), r.NamedGroups.String())
+	return fmt.Sprintf("owner %o, group %o, mask %o, other %o, named users: %+v, named group %+v",
+		r.Owner, r.Group, r.Mask, r.Other, r.NamedUsers, r.NamedGroups)
 }
 
 func (r *Rule) Encode() []byte {
@@ -121,21 +108,17 @@ func (r *Rule) Decode(buf []byte) {
 	r.Mask = rb.Get16()
 	r.Other = rb.Get16()
 	uCnt := rb.Get32()
-	if uCnt != 0 {
-		r.NamedUsers = make([]Entry, uCnt)
-		for i := 0; i < int(uCnt); i++ {
-			r.NamedUsers[i].Id = rb.Get32()
-			r.NamedUsers[i].Perm = rb.Get16()
-		}
+	r.NamedUsers = make([]Entry, uCnt)
+	for i := 0; i < int(uCnt); i++ {
+		r.NamedUsers[i].Id = rb.Get32()
+		r.NamedUsers[i].Perm = rb.Get16()
 	}
 
 	gCnt := rb.Get32()
-	if gCnt != 0 {
-		r.NamedGroups = make([]Entry, gCnt)
-		for i := 0; i < int(gCnt); i++ {
-			r.NamedGroups[i].Id = rb.Get32()
-			r.NamedGroups[i].Perm = rb.Get16()
-		}
+	r.NamedGroups = make([]Entry, gCnt)
+	for i := 0; i < int(gCnt); i++ {
+		r.NamedGroups[i].Id = rb.Get32()
+		r.NamedGroups[i].Perm = rb.Get16()
 	}
 }
 
@@ -153,6 +136,7 @@ func (r *Rule) IsEmpty() bool {
 		r.Owner&r.Group&r.Other&r.Mask == 0xFFFF
 }
 
+// IsMinimal just like normal permission
 func (r *Rule) IsMinimal() bool {
 	return len(r.NamedGroups)+len(r.NamedUsers) == 0 && r.Mask == 0xFFFF
 }
@@ -166,6 +150,7 @@ func (r *Rule) IsEqual(other *Rule) bool {
 		r.NamedGroups.IsEqual(&other.NamedGroups)
 }
 
+// InheritPerms from normal permission
 func (r *Rule) InheritPerms(mode uint16) {
 	if r.Owner == 0xFFFF {
 		r.Owner = (mode >> 6) & 7
@@ -200,16 +185,12 @@ func (r *Rule) GetMode() uint16 {
 	return ((r.Owner & 7) << 6) | ((r.Mask & 7) << 3) | (r.Other & 7)
 }
 
+// ChildAccessACL return the child node access acl with this default acl
 func (r *Rule) ChildAccessACL(mode uint16) *Rule {
 	cRule := &Rule{}
-	cRule.Owner = (mode >> 6) & 7
-	cRule.Owner &= r.Owner
-
-	cRule.Mask = (mode >> 3) & 7
-	cRule.Mask &= r.Mask
-
-	cRule.Other = mode & 7
-	cRule.Other &= r.Other
+	cRule.Owner = (mode >> 6) & 7 & r.Owner
+	cRule.Mask = (mode >> 3) & 7 & r.Mask
+	cRule.Other = mode & 7 & r.Other
 
 	cRule.Group = r.Group
 	cRule.NamedUsers = r.NamedUsers

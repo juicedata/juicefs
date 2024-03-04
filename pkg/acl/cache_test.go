@@ -30,22 +30,22 @@ func TestCache(t *testing.T) {
 		Other: 4,
 		NamedUsers: Entries{
 			{
-				Id:   1,
-				Perm: 1,
-			},
-			{
 				Id:   2,
 				Perm: 2,
+			},
+			{
+				Id:   1,
+				Perm: 1,
 			},
 		},
 		NamedGroups: Entries{
 			{
-				Id:   3,
-				Perm: 3,
-			},
-			{
 				Id:   4,
 				Perm: 4,
+			},
+			{
+				Id:   3,
+				Perm: 3,
 			},
 		},
 	}
@@ -56,6 +56,7 @@ func TestCache(t *testing.T) {
 	assert.True(t, rule.IsEqual(c.Get(1)))
 	assert.True(t, rule.IsEqual(c.Get(2)))
 	assert.Equal(t, uint32(1), c.GetId(rule))
+	assert.Equal(t, uint32(1), c.Get(1).NamedUsers[0].Id) // sorted
 
 	rule2 := &Rule{}
 	*rule2 = *rule
@@ -67,4 +68,8 @@ func TestCache(t *testing.T) {
 	c.Put(8, rule2)
 	assert.Equal(t, []uint32{4, 5, 6, 7, 9, 10}, c.GetMissIds(10))
 	assert.Equal(t, []uint32{4, 5, 6, 7}, c.GetMissIds(6))
+
+	assert.NotPanics(t, func() {
+		c.Put(10, nil)
+	})
 }
