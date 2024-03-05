@@ -47,8 +47,8 @@ jobs:
       - name: Test sync include/exclude option
         timeout-minutes: 30
         run: |
-          python3 .github/scripts/hypo/syncrand_test.py
-          LOG_LEVEL=WARNING MAX_EXAMPLE=1000 STEP_COUNT=100 python3 .github/scripts/hypo/syncrand.py
+          sudo python3 .github/scripts/hypo/syncrand_test.py
+          LOG_LEVEL=WARNING MAX_EXAMPLE=1000 STEP_COUNT=100 sudo python3 .github/scripts/hypo/syncrand.py
           
       - name: Test Sync
         timeout-minutes: 30
