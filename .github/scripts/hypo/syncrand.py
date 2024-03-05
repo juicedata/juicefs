@@ -1,13 +1,7 @@
 import os
-import pwd
 import subprocess
 import json
 import common
-try: 
-    __import__('xattr')
-except ImportError:
-    subprocess.check_call(["pip", "install", "xattr"])
-import xattr
 try:
     __import__("hypothesis")
 except ImportError:
@@ -18,7 +12,6 @@ from hypothesis import Phase, seed
 from strategy import *
 from fs_op import FsOperation
 import random
-import time
 
 st_entry_name = st.text(alphabet='abc', min_size=1, max_size=3)
 st_patterns = st.text(alphabet='abc?/*', min_size=1, max_size=5).\
