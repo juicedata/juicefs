@@ -18,26 +18,21 @@ package cmd
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/signal"
 	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/fuse"
 	"github.com/juicedata/juicefs/pkg/object"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -82,43 +77,8 @@ $ juicefs mount redis://localhost /mnt/jfs -d --read-only
 
 # Disable metadata backup
 $ juicefs mount redis://localhost /mnt/jfs --backup-meta 0`,
-		Flags: expandFlags(mount_flags(), clientFlags(1.0), shareInfoFlags()),
+		Flags: expandFlags(mountFlags(), clientFlags(1.0), shareInfoFlags()),
 	}
-}
-
-func installHandler(mp string, v *vfs.VFS) {
-	// Go will catch all the signals
-	signal.Ignore(syscall.SIGPIPE)
-	signalChan := make(chan os.Signal, 10)
-	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-	go func() {
-		for {
-			sig := <-signalChan
-			logger.Infof("Received signal %s, exiting...", sig.String())
-			if sig == syscall.SIGHUP {
-				path := fmt.Sprintf("/tmp/state%d.json", os.Getppid())
-				if err := v.FlushAll(path); err == nil {
-					fuse.Shutdown()
-					err = v.FlushAll(path)
-					if err != nil {
-						logger.Fatalf("flush buffered data failed: %s", err)
-					}
-					os.Exit(1)
-				} else {
-					logger.Warnf("flush buffered data failed: %s, don't restart", err)
-					continue
-				}
-			}
-			go func() {
-				time.Sleep(time.Second * 30)
-				if err := v.FlushAll(""); err != nil {
-					logger.Errorf("flush all: %s", err)
-				}
-				logger.Fatalf("exit after received %s,but umount not finished after 30 seconds, force exit", sig)
-			}()
-			go func() { _ = doUmount(mp, true) }()
-		}
-	}()
 }
 
 func exposeMetrics(c *cli.Context, registerer prometheus.Registerer, registry *prometheus.Registry) string {
@@ -320,58 +280,6 @@ func readConfig(mp string) ([]byte, error) {
 		contents, err = os.ReadFile(filepath.Join(mp, ".config"))
 	}
 	return contents, err
-}
-
-func prepareMp(mp string) {
-	var fi os.FileInfo
-	err := utils.WithTimeout(func() error {
-		var err error
-		fi, err = os.Stat(mp)
-		return err
-	}, time.Second*3)
-	if !strings.Contains(mp, ":") && err != nil {
-		err2 := utils.WithTimeout(func() error {
-			return os.MkdirAll(mp, 0777)
-		}, time.Second*3)
-		if err2 != nil {
-			if os.IsExist(err2) || strings.Contains(err2.Error(), "timeout after 3s") {
-				// a broken mount point, umount it
-				logger.Infof("mountpoint %s is broken: %s, umount it", mp, err)
-				_ = doUmount(mp, true)
-			} else {
-				logger.Fatalf("create %s: %s", mp, err2)
-			}
-		}
-	} else if err == nil {
-		ino, _ := utils.GetFileInode(mp)
-		if ino <= uint64(meta.RootInode) && fi.Size() == 0 {
-			// a broken mount point, umount it
-			logger.Infof("mountpoint %s is broken (ino=%d, size=%d), umount it", mp, ino, fi.Size())
-			_ = doUmount(mp, true)
-		}
-	}
-
-	if os.Getuid() == 0 {
-		return
-	}
-	switch runtime.GOOS {
-	case "darwin":
-		if fi, err := os.Stat(mp); err == nil {
-			if st, ok := fi.Sys().(*syscall.Stat_t); ok {
-				if st.Uid != uint32(os.Getuid()) {
-					logger.Fatalf("current user should own %s", mp)
-				}
-			}
-		}
-	case "linux":
-		f, err := os.CreateTemp(mp, ".test")
-		if err != nil && (os.IsPermission(err) || errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EROFS)) {
-			logger.Fatalf("Do not have write permission on %s", mp)
-		} else if f != nil {
-			_ = f.Close()
-			_ = os.Remove(f.Name())
-		}
-	}
 }
 
 func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
@@ -669,11 +577,7 @@ func mount(c *cli.Context) error {
 
 	chunkConf := getChunkConf(c, format)
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
-	if runtime.GOOS != "windows" {
-		rawOpts, mt, noxattr, noacl := genFuseOptExt(c, format.Name)
-		options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl))
-		vfsConf.FuseOpts = &options
-	}
+	setFuseOption(c, format, vfsConf)
 
 	if os.Getenv("JFS_SUPERVISOR") == "" {
 		// close the database connection that is not in the final stage

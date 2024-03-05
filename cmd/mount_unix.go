@@ -23,11 +23,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"os/user"
 	"path"
 	"path/filepath"
@@ -266,7 +268,7 @@ func fuseFlags() []cli.Flag {
 	})
 }
 
-func mount_flags() []cli.Flag {
+func mountFlags() []cli.Flag {
 	selfFlags := []cli.Flag{
 		&cli.BoolFlag{
 			Name:    "d",
@@ -353,6 +355,12 @@ func getFuserMountVersion() string {
 	return version
 }
 
+func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {
+	rawOpts, mt, noxattr, noacl := genFuseOptExt(c, format.Name)
+	options := vfs.FuseOptions(fuse.GenFuseOpt(vfsConf, rawOpts, mt, noxattr, noacl))
+	vfsConf.FuseOpts = &options
+}
+
 func genFuseOpt(c *cli.Context, name string) string {
 	fuseOpt := c.String("o")
 	// todo: remove ?
@@ -375,6 +383,58 @@ func genFuseOpt(c *cli.Context, name string) string {
 	}
 	fuseOpt = strings.TrimLeft(fuseOpt, ",")
 	return fuseOpt
+}
+
+func prepareMp(mp string) {
+	var fi os.FileInfo
+	err := utils.WithTimeout(func() error {
+		var err error
+		fi, err = os.Stat(mp)
+		return err
+	}, time.Second*3)
+	if !strings.Contains(mp, ":") && err != nil {
+		err2 := utils.WithTimeout(func() error {
+			return os.MkdirAll(mp, 0777)
+		}, time.Second*3)
+		if err2 != nil {
+			if os.IsExist(err2) || strings.Contains(err2.Error(), "timeout after 3s") {
+				// a broken mount point, umount it
+				logger.Infof("mountpoint %s is broken: %s, umount it", mp, err)
+				_ = doUmount(mp, true)
+			} else {
+				logger.Fatalf("create %s: %s", mp, err2)
+			}
+		}
+	} else if err == nil {
+		ino, _ := utils.GetFileInode(mp)
+		if ino <= uint64(meta.RootInode) && fi.Size() == 0 {
+			// a broken mount point, umount it
+			logger.Infof("mountpoint %s is broken (ino=%d, size=%d), umount it", mp, ino, fi.Size())
+			_ = doUmount(mp, true)
+		}
+	}
+
+	if os.Getuid() == 0 {
+		return
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		if fi, err := os.Stat(mp); err == nil {
+			if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+				if st.Uid != uint32(os.Getuid()) {
+					logger.Fatalf("current user should own %s", mp)
+				}
+			}
+		}
+	case "linux":
+		f, err := os.CreateTemp(mp, ".test")
+		if err != nil && (os.IsPermission(err) || errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EROFS)) {
+			logger.Fatalf("Do not have write permission on %s", mp)
+		} else if f != nil {
+			_ = f.Close()
+			_ = os.Remove(f.Name())
+		}
+	}
 }
 
 func genFuseOptExt(c *cli.Context, name string) (fuseOpt string, mt int, noxattr, noacl bool) {
@@ -580,6 +640,40 @@ func adjustOOMKiller(score int) {
 	}
 }
 
+func installHandler(mp string, v *vfs.VFS) {
+	// Go will catch all the signals
+	signal.Ignore(syscall.SIGPIPE)
+	signalChan := make(chan os.Signal, 10)
+	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	go func() {
+		for {
+			sig := <-signalChan
+			logger.Infof("Received signal %s, exiting...", sig.String())
+			if sig == syscall.SIGHUP {
+				path := fmt.Sprintf("/tmp/state%d.json", os.Getppid())
+				if err := v.FlushAll(path); err == nil {
+					fuse.Shutdown()
+					err = v.FlushAll(path)
+					if err != nil {
+						logger.Fatalf("flush buffered data failed: %s", err)
+					}
+					os.Exit(1)
+				} else {
+					logger.Warnf("flush buffered data failed: %s, don't restart", err)
+					continue
+				}
+			}
+			go func() {
+				time.Sleep(time.Second * 30)
+				if err := v.FlushAll(""); err != nil {
+					logger.Errorf("flush all: %s", err)
+				}
+				logger.Fatalf("exit after received %s,but umount not finished after 30 seconds, force exit", sig)
+			}()
+			go func() { _ = doUmount(mp, true) }()
+		}
+	}()
+}
 func launchMount(mp string, conf *vfs.Config) error {
 	increaseRlimit()
 	if runtime.GOOS == "linux" {
