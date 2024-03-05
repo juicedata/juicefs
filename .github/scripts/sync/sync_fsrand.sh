@@ -99,10 +99,11 @@ test_update(){
     sudo -u $USER PROFILE=generate EXCLUDE_RULES=$EXCLUDE_RULES MAX_EXAMPLE=$MAX_EXAMPLE SEED=$SEED ROOT_DIR1=$SOURCE_DIR1 ROOT_DIR2=$SOURCE_DIR2 python3 .github/scripts/hypo/fsrand2.py || true
     # chmod 777 $SOURCE_DIR1
     # chmod 777 $SOURCE_DIR2
+    do_copy $sync_option
     for i in {1..5}; do
         sync_option+=" --update --delete-dst"
-        sudo -u $USER GOCOVERDIR=$GOCOVERDIR meta_url=$META_URL ./juicefs sync $SOURCE_DIR1 jfs://meta_url/fsrand1/ $sync_option 2>&1| tee sync.log || true
         echo sudo -u $USER GOCOVERDIR=$GOCOVERDIR meta_url=$META_URL ./juicefs sync $SOURCE_DIR1 jfs://meta_url/fsrand1/ $sync_option
+        sudo -u $USER GOCOVERDIR=$GOCOVERDIR meta_url=$META_URL ./juicefs sync $SOURCE_DIR1 jfs://meta_url/fsrand1/ $sync_option 2>&1| tee sync.log || true
         if grep -q "Failed to delete" sync.log; then
             echo "failed to delete, retry sync"
         else
@@ -110,7 +111,6 @@ test_update(){
             break
         fi
     done
-    do_copy $sync_option
     check_diff $DEST_DIR1 $DEST_DIR2
 }
 

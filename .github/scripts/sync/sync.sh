@@ -76,8 +76,8 @@ test_sync_with_loop_link(){
     ./juicefs format $META_URL myjfs
     ./juicefs mount -d $META_URL /jfs
     ln -s looplink jfs_source/looplink
-    ./juicefs sync jfs_source/ /jfs/jfs_source/ $options > err.log 2>&1 || true
-    grep "Failed to handle 1 objects" err.log
+    ./juicefs sync jfs_source/ /jfs/jfs_source/ $options  2>&1 | tee err.log || true
+    grep -i "failed to handle 1 objects" err.log || (echo "grep failed" && exit 1)
     rm -rf jfs_source/looplink
 }
 
@@ -91,7 +91,7 @@ test_sync_with_deep_link(){
         ln -s symlink_$i jfs_source/symlink_$((i+1))
     done
     ./juicefs sync jfs_source/ /jfs/jfs_source/ $options  2>&1 | tee err.log || true
-    grep "Failed to handle 1 objects" err.log
+    grep -i "failed to handle 1 objects" err.log || (echo "grep failed" && exit 1)
     rm -rf jfs_source/symlink_*
 }
 
@@ -114,12 +114,6 @@ do_test_sync_fsrand_with_mount_point(){
         find jfs_source -type d -empty -delete
     fi
     diff -ur --no-dereference fsrand/ /jfs/fsrand/
-}
-
-test_sync_randomly(){
-    prepare_test
-    [[ ! -d jfs_source ]] && git clone https://github.com/juicedata/juicefs.git jfs_source
-    META_URL=$META_URL python3 .github/scripts/testSync.py
 }
 
 test_sync_include_exclude_option(){

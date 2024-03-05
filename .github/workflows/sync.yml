@@ -1,0 +1,80 @@
+name: "sync"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths-ignore:
+      - '**/sync.yml'
+      - '**/syncrand_test.py'
+      - '**/syncrand.py'
+      - '.github/scripts/sync/*.sh'
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-**'
+    paths:
+      - '**/sync.yml'
+      - '**/syncrand_test.py'
+      - '**/syncrand.py'
+      - '.github/scripts/sync/*.sh'
+  schedule:
+    - cron:  '30 20 * * *'
+
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run the build with tmate debugging enabled"
+        required: false
+        default: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Build 
+        uses: ./.github/actions/build
+        # with:
+        #   useBeta: true
+
+      - name: Test Sync
+        timeout-minutes: 30
+        run: |
+          sudo META=redis .github/scripts/sync/sync.sh 
+
+      - name: Test Sync with fsrand
+        timeout-minutes: 30
+        run: |
+          sudo META=redis .github/scripts/sync/sync_fsrand.sh 
+
+      - name: Test Sync with mino
+        timeout-minutes: 30
+        run: |
+          sudo META=redis .github/scripts/sync/sync_minio.sh 
+
+      - name: Test Sync with multi workers
+        timeout-minutes: 30
+        run: |
+          # not supported algo: "dsa" "ecdsa-sk" "ed25519-sk"
+          types=("ecdsa"  "ed25519"  "rsa")
+          random_type=${types[$RANDOM % ${#types[@]}]}
+          sudo CI=true META=redis KEY_TYPE=$random_type .github/scripts/sync/sync_cluster.sh
+
+      - name: Test sync include/exclude option
+        timeout-minutes: 30
+        run: |
+          # sudo python3 .github/scripts/hypo/syncrand_test.py
+          sudo LOG_LEVEL=WARNING PROFILE=ci python3 .github/scripts/hypo/syncrand.py
+          
+      - name: Setup upterm session
+        if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
+        # if: failure()
+        timeout-minutes: 60
+        uses: lhotari/action-upterm@v1
