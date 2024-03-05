@@ -3,18 +3,22 @@ name: "sync"
 on:
   push:
     branches:
-      # - 'main'
+      - 'main'
       - 'release-**'
     paths-ignore:
-      - 'docs/**'
-      - '**.md'
+      - '**/sync.yml'
+      - '**/syncrand_test.py'
+      - '**/syncrand.py'
+      - '.github/scripts/sync/*.sh'
   pull_request:
     branches:
-      # - 'main'
+      - 'main'
       - 'release-**'
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**/sync.yml'
+      - '**/syncrand_test.py'
+      - '**/syncrand.py'
+      - '.github/scripts/sync/*.sh'
   schedule:
     - cron:  '30 20 * * *'
 
@@ -49,17 +53,17 @@ jobs:
       - name: Test Sync
         timeout-minutes: 30
         run: |
-          sudo META=redis .github/scripts/command/sync.sh 
+          sudo META=redis .github/scripts/sync/sync.sh 
 
       - name: Test Sync with fsrand
         timeout-minutes: 30
         run: |
-          sudo META=redis .github/scripts/command/sync_fsrand.sh 
+          sudo META=redis .github/scripts/sync/sync_fsrand.sh 
 
       - name: Test Sync with mino
         timeout-minutes: 30
         run: |
-          sudo META=redis .github/scripts/command/sync_minio.sh 
+          sudo META=redis .github/scripts/sync/sync_minio.sh 
 
       - name: Test Sync with multi workers
         timeout-minutes: 30
@@ -67,7 +71,7 @@ jobs:
           # not supported algo: "dsa" "ecdsa-sk" "ed25519-sk"
           types=("ecdsa"  "ed25519"  "rsa")
           random_type=${types[$RANDOM % ${#types[@]}]}
-          sudo CI=true META=redis KEY_TYPE=$random_type .github/scripts/command/sync_cluster.sh
+          sudo CI=true META=redis KEY_TYPE=$random_type .github/scripts/sync/sync_cluster.sh
 
       - name: Log
         if: always()

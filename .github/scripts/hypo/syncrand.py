@@ -27,6 +27,8 @@ st_patterns = st.lists(st.sampled_from(['a','?','/','*', '/***']), min_size=1, m
     .map(''.join).filter(lambda s: s.find('***') == -1 or (s.count('/***')==1 and s.endswith('a/***')))
 st_patterns = st.lists(st.sampled_from(['a','?','/','*']), min_size=1, max_size=10)\
     .map(''.join).filter(lambda s: s.find('***') == -1 )
+st_patterns = st.lists(st.sampled_from(['a','?','/','*']), min_size=1, max_size=10)\
+    .map(''.join).filter(lambda s: s.find('**') == -1 )
 
 st_option = st.fixed_dictionaries({
     "option": st.just("--include") | st.just("--exclude"),
