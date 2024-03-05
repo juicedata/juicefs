@@ -314,31 +314,6 @@ func registerMetaMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Confi
 	})
 }
 
-func configEqual(a, b *vfs.Config) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-
-	ac, bc := *a, *b
-	ac.Meta, ac.Chunk, ac.Port, ac.Format.SecretKey, ac.AttrTimeout, ac.DirEntryTimeout, ac.EntryTimeout = nil, nil, nil, "", 0, 0, 0
-	bc.Meta, bc.Chunk, bc.Port, bc.Format.SecretKey, bc.AttrTimeout, bc.DirEntryTimeout, bc.EntryTimeout = nil, nil, nil, "", 0, 0, 0
-	eq := ac == bc
-
-	if a.Meta == nil || b.Meta == nil {
-		eq = eq && a.Meta == b.Meta
-	} else {
-		eq = eq && *a.Meta == *b.Meta
-	}
-
-	if a.Chunk == nil || b.Chunk == nil {
-		eq = eq && a.Chunk == b.Chunk
-	} else {
-		eq = eq && *a.Chunk == *b.Chunk
-	}
-
-	return eq
-}
-
 func readConfig(mp string) ([]byte, error) {
 	contents, err := os.ReadFile(filepath.Join(mp, ".jfs.config"))
 	if os.IsNotExist(err) {
@@ -650,6 +625,7 @@ func mount(c *cli.Context) error {
 	addr := c.Args().Get(0)
 	mp := c.Args().Get(1)
 
+	// __DAEMON_STAGE env is set by the godaemon.MakeDaemon function
 	supervisor := os.Getenv("JFS_SUPERVISOR")
 	inFirstProcess := supervisor == "test" || supervisor == "" && os.Getenv("__DAEMON_STAGE") == ""
 	if inFirstProcess {

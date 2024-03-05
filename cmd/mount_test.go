@@ -201,35 +201,3 @@ func TestUmount(t *testing.T) {
 		t.Fatalf("umount failed: inode of %s is 1", testMountPoint)
 	}
 }
-
-func Test_configEqual(t *testing.T) {
-	cases := []struct {
-		a, b  *vfs.Config
-		equal bool
-	}{
-		{
-			a: nil, b: nil, equal: true,
-		},
-		{
-			a: &vfs.Config{}, b: nil, equal: false,
-		},
-		{
-			a: nil, b: &vfs.Config{}, equal: false,
-		},
-		{
-			a: &vfs.Config{}, b: &vfs.Config{}, equal: true,
-		},
-		{
-			a: &vfs.Config{Format: meta.Format{SecretKey: "1"}}, b: &vfs.Config{Format: meta.Format{SecretKey: "2"}}, equal: true,
-		},
-		{
-			a: &vfs.Config{Port: &vfs.Port{}}, b: &vfs.Config{}, equal: true,
-		},
-	}
-
-	for _, c := range cases {
-		if configEqual(c.a, c.b) != c.equal {
-			t.Errorf("configEqual(%v, %v) should be %v", c.a, c.b, c.equal)
-		}
-	}
-}
