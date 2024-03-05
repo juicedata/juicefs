@@ -122,6 +122,7 @@ func mountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraMoun
 	// must do reset, otherwise will panic
 	ResetHttp()
 
+	os.Setenv("JFS_SUPERVISOR", "test")
 	mountArgs := []string{"", "mount", "--enable-xattr", testMeta, testMountPoint, "--attr-cache", "0", "--entry-cache", "0", "--dir-entry-cache", "0", "--no-usage-report"}
 	if extraMountOpts != nil {
 		mountArgs = append(mountArgs, extraMountOpts...)
