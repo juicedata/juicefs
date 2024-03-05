@@ -412,7 +412,7 @@ func shutdownGraceful(mp string) {
 	fuseFd = 0
 }
 
-func canShutdownGracefully(mp string, volName string, newConf *vfs.Config) bool {
+func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 	if runtime.GOOS != "linux" {
 		return false
 	}
@@ -429,37 +429,37 @@ func canShutdownGracefully(mp string, volName string, newConf *vfs.Config) bool 
 	} else if ino != 1 {
 		return false
 	}
-	_, conf, err := loadConfig(mp)
+	_, oldConf, err := loadConfig(mp)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			logger.Warnf("load config: %s", err)
 		}
 		return false
 	}
-	if conf.Pid == 0 || conf.CommPath == "" {
+	if oldConf.Pid == 0 || oldConf.CommPath == "" {
 		logger.Infof("mount point %s is not ready for upgrade, mount on top of it", mp)
 		return false
 	}
-	if conf.Format.Name != volName {
-		logger.Infof("different volume %s != %s, mount on top of it", conf.Format.Name, volName)
+	if oldConf.Format.Name != newConf.Format.Name {
+		logger.Infof("different volume %s != %s, mount on top of it", oldConf.Format.Name, newConf.Format.Name)
 		return false
 	}
-	if conf.FuseOpts != nil && !reflect.DeepEqual(conf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions()) {
-		logger.Infof("different options, mount on top of it: %v != %v", conf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions())
+	if oldConf.FuseOpts != nil && !reflect.DeepEqual(oldConf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions()) {
+		logger.Infof("different options, mount on top of it: %v != %v", oldConf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions())
 		return false
 	}
-	if conf.NoBSDLock && !newConf.NoBSDLock {
+	if oldConf.NoBSDLock && !newConf.NoBSDLock {
 		logger.Infof("BSD lock is enabled, mount on top of it")
 		return false
 	}
-	if conf.NoPOSIXLock && !newConf.NoPOSIXLock {
+	if oldConf.NoPOSIXLock && !newConf.NoPOSIXLock {
 		logger.Infof("POSIX lock is enabled, mount on top of it")
 		return false
 	}
 	// pass the session id to the new process, sid=0 means old process is read-only mode
-	if conf.Sid != 0 {
-		logger.Infof("pass the old session id %d to the new process", conf.Sid)
-		os.Setenv("_JFS_META_SID", strconv.FormatUint(conf.Sid, 10))
+	if oldConf.Sid != 0 {
+		logger.Infof("pass the old session id %d to the new process", oldConf.Sid)
+		os.Setenv("_JFS_META_SID", strconv.FormatUint(oldConf.Sid, 10))
 	}
 	return true
 }
@@ -584,7 +584,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 	increaseRlimit()
 	if runtime.GOOS == "linux" {
 		adjustOOMKiller(-1000)
-		if canShutdownGracefully(mp, conf.Format.Name, conf) {
+		if canShutdownGracefully(mp, conf) {
 			shutdownGraceful(mp)
 		}
 		os.Setenv("_FUSE_FD_COMM", serverAddress)
