@@ -676,6 +676,10 @@ func mount(c *cli.Context) error {
 	}
 
 	if os.Getenv("JFS_SUPERVISOR") == "" {
+		// close the database connection that is not in the final stage
+		if err = metaCli.Shutdown(); err != nil {
+			logger.Errorf("[pid=%d] meta shutdown: %s", os.Getpid(), err)
+		}
 		var foreground bool
 		if runtime.GOOS == "windows" || !c.Bool("background") || os.Getenv("JFS_FOREGROUND") != "" {
 			foreground = true
