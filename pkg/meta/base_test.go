@@ -1446,6 +1446,8 @@ func testCopyFileRange(t *testing.T, m Meta) {
 }
 
 func testCloseSession(t *testing.T, m Meta) {
+	// reset session
+	m.getBase().sid = 0
 	if _, err := m.NewSession(true); err != nil {
 		t.Fatalf("new session: %s", err)
 	}
