@@ -77,7 +77,7 @@ test_sync_with_loop_link(){
     ./juicefs mount -d $META_URL /jfs
     ln -s looplink jfs_source/looplink
     ./juicefs sync jfs_source/ /jfs/jfs_source/ $options  2>&1 | tee err.log || true
-    grep -i "Failed to handle 1 objects" err.log
+    grep -i "failed to handle 1 objects" err.log || (echo "grep failed" && exit 1)
     rm -rf jfs_source/looplink
 }
 

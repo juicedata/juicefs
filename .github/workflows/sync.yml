@@ -44,12 +44,6 @@ jobs:
         # with:
         #   useBeta: true
 
-      - name: Test sync include/exclude option
-        timeout-minutes: 30
-        run: |
-          # sudo python3 .github/scripts/hypo/syncrand_test.py
-          sudo LOG_LEVEL=WARNING PROFILE=ci python3 .github/scripts/hypo/syncrand.py
-          
       - name: Test Sync
         timeout-minutes: 30
         run: |
@@ -73,6 +67,12 @@ jobs:
           random_type=${types[$RANDOM % ${#types[@]}]}
           sudo CI=true META=redis KEY_TYPE=$random_type .github/scripts/sync/sync_cluster.sh
 
+      - name: Test sync include/exclude option
+        timeout-minutes: 30
+        run: |
+          # sudo python3 .github/scripts/hypo/syncrand_test.py
+          sudo LOG_LEVEL=WARNING PROFILE=ci python3 .github/scripts/hypo/syncrand.py
+            
       - name: Log
         if: always()
         run: |
