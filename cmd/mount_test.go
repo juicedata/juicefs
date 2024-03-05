@@ -19,6 +19,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/url"
@@ -201,4 +203,63 @@ func TestUmount(t *testing.T) {
 	if inode == 1 {
 		t.Fatalf("umount failed: inode of %s is 1", testMountPoint)
 	}
+}
+
+func tryMountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraMountOpts []string) error {
+	_ = resetTestMeta()
+	testDir := t.TempDir()
+	if bucket != nil {
+		*bucket = testDir
+	}
+	formatArgs := []string{"", "format", "--bucket", testDir, testMeta, testVolume}
+	if extraFormatOpts != nil {
+		formatArgs = append(formatArgs, extraFormatOpts...)
+	}
+	if err := Main(formatArgs); err != nil {
+		return fmt.Errorf("format failed: %w", err)
+	}
+
+	// must do reset, otherwise will panic
+	ResetHttp()
+
+	mountArgs := []string{"", "mount", "--enable-xattr", testMeta, testMountPoint, "--attr-cache", "0", "--entry-cache", "0", "--dir-entry-cache", "0", "--no-usage-report"}
+	if extraMountOpts != nil {
+		mountArgs = append(mountArgs, extraMountOpts...)
+	}
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- Main(mountArgs)
+	}()
+
+	select {
+	case err := <-errChan:
+		if err != nil {
+			return fmt.Errorf("mount failed: %w", err)
+		}
+	case <-time.After(3 * time.Second):
+	}
+
+	inode, err := utils.GetFileInode(testMountPoint)
+	if err != nil {
+		return fmt.Errorf("get file inode failed: %w", err)
+	}
+	if inode != 1 {
+		return fmt.Errorf("mount failed: inode of %s is not 1", testMountPoint)
+	}
+	t.Logf("mount %s success", testMountPoint)
+	return nil
+}
+
+func TestMountVersionMatch(t *testing.T) {
+	oriVersion := version.Version()
+	version.SetVersion("1.1.0")
+	defer version.SetVersion(oriVersion)
+
+	err := tryMountTemp(t, nil, nil, nil)
+	assert.Nil(t, err)
+	umountTemp(t)
+
+	err = tryMountTemp(t, nil, []string{"--enable-acl=true"}, nil)
+	assert.Contains(t, err.Error(), "check version")
 }
