@@ -91,7 +91,7 @@ test_sync_with_deep_link(){
         ln -s symlink_$i jfs_source/symlink_$((i+1))
     done
     ./juicefs sync jfs_source/ /jfs/jfs_source/ $options  2>&1 | tee err.log || true
-    grep "Failed to handle 1 objects" err.log
+    grep -i "failed to handle 1 objects" err.log || (echo "grep failed" && exit 1)
     rm -rf jfs_source/symlink_*
 }
 
