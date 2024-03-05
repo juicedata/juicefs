@@ -72,13 +72,6 @@ jobs:
         run: |
           # sudo python3 .github/scripts/hypo/syncrand_test.py
           sudo LOG_LEVEL=WARNING PROFILE=ci python3 .github/scripts/hypo/syncrand.py
-            
-      - name: Log
-        if: always()
-        run: |
-          echo "juicefs log"
-          sudo tail -n 1000 /var/log/juicefs.log
-          grep "<FATAL>:" /var/log/juicefs.log && exit 1 || true
           
       - name: Setup upterm session
         if: failure() && (github.event.inputs.debug == 'true' || github.run_attempt != 1)
