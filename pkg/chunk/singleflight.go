@@ -19,10 +19,10 @@ package chunk
 import "sync"
 
 type request struct {
-	wg  sync.WaitGroup
-	val *Page
-	ref int
-	err error
+	wg   sync.WaitGroup
+	val  *Page
+	dups int
+	err  error
 }
 
 type Controller struct {
@@ -36,35 +36,27 @@ func (con *Controller) Execute(key string, fn func() (*Page, error)) (*Page, err
 		con.rs = make(map[string]*request)
 	}
 	if c, ok := con.rs[key]; ok {
-		c.ref++
+		c.dups++
 		con.Unlock()
 		c.wg.Wait()
-		c.val.Acquire()
-		con.Lock()
-		c.ref--
-		if c.ref == 0 {
-			c.val.Release()
-		}
-		con.Unlock()
 		return c.val, c.err
 	}
 	c := new(request)
 	c.wg.Add(1)
-	c.ref++
 	con.rs[key] = c
 	con.Unlock()
 
 	c.val, c.err = fn()
-	c.val.Acquire()
-	c.wg.Done()
 
 	con.Lock()
-	c.ref--
-	if c.ref == 0 {
-		c.val.Release()
+	for i := 0; i < c.dups; i++ {
+		// Acquire for the pending Execute
+		c.val.Acquire()
 	}
 	delete(con.rs, key)
 	con.Unlock()
+
+	c.wg.Done()
 
 	return c.val, c.err
 }

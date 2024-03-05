@@ -48,13 +48,14 @@ const (
 )
 
 var (
-	handled                  *utils.Bar
-	pending                  *utils.Bar
-	copied, copiedBytes      *utils.Bar
-	checked, checkedBytes    *utils.Bar
-	deleted, skipped, failed *utils.Bar
-	concurrent               chan int
-	limiter                  *ratelimit.Bucket
+	handled               *utils.Bar
+	pending               *utils.Bar
+	copied, copiedBytes   *utils.Bar
+	checked, checkedBytes *utils.Bar
+	skipped, skippedBytes *utils.Bar
+	deleted, failed       *utils.Bar
+	concurrent            chan int
+	limiter               *ratelimit.Bucket
 )
 
 var logger = utils.GetLogger("juicefs")
@@ -223,13 +224,14 @@ func copyPerms(dst object.ObjectStorage, obj object.Object, config *Config) {
 	start := time.Now()
 	key := obj.Key()
 	fi := obj.(object.File)
+	// chmod needs to be executed after chown, because chown will change setuid setgid to be invalid.
+	if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
+		logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)
+	}
 	if !fi.IsSymlink() || !config.Links {
 		if err := dst.(object.FileSystem).Chmod(key, fi.Mode()); err != nil {
 			logger.Warnf("Chmod %s to %o: %s", key, fi.Mode(), err)
 		}
-	}
-	if err := dst.(object.FileSystem).Chown(key, fi.Owner(), fi.Group()); err != nil {
-		logger.Warnf("Chown %s to (%s,%s): %s", key, fi.Owner(), fi.Group(), err)
 	}
 	logger.Debugf("Copied permissions (%s:%s:%s) for %s in %s", fi.Owner(), fi.Group(), fi.Mode(), key, time.Since(start))
 }
@@ -371,7 +373,7 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 			// download the object into disk
 			if f, err = os.CreateTemp("", "rep"); err != nil {
 				logger.Warnf("create temp file: %s", err)
-				goto SINGLE
+				return doCopySingle0(src, dst, key, size)
 			}
 			_ = os.Remove(f.Name()) // will be deleted after Close()
 			defer f.Close()
@@ -394,7 +396,10 @@ func doCopySingle(src, dst object.ObjectStorage, key string, size int64) error {
 		}
 		return err
 	}
-SINGLE:
+	return doCopySingle0(src, dst, key, size)
+}
+
+func doCopySingle0(src, dst object.ObjectStorage, key string, size int64) error {
 	if limiter != nil {
 		limiter.Wait(size)
 	}
@@ -445,7 +450,7 @@ func doCopyMultiple(src, dst object.ObjectStorage, key string, size int64, uploa
 		partSize = defaultPartSize
 	}
 	limits := dst.Limits()
-	if size > int64(limits.MaxPartSize)*int64(limits.MaxPartCount) {
+	if size > limits.MaxPartSize*int64(limits.MaxPartCount) {
 		return fmt.Errorf("object size %d is too large to copy", size)
 	}
 	if size > partSize*int64(upload.MaxCount) {
@@ -597,6 +602,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 							copied.Increment()
 						} else {
 							skipped.Increment()
+							skippedBytes.IncrInt64(obj.Size())
 						}
 					} else {
 						logger.Warnf("Failed to head object %s: %s", key, e)
@@ -604,6 +610,7 @@ func worker(tasks <-chan object.Object, src, dst object.ObjectStorage, config *C
 					}
 				} else {
 					skipped.Increment()
+					skippedBytes.IncrInt64(obj.Size())
 				}
 				break
 			}
@@ -768,6 +775,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 		if dstobj == nil || obj.Key() < dstobj.Key() {
 			if config.Existing {
 				skipped.Increment()
+				skippedBytes.IncrInt64(obj.Size())
 				handled.Increment()
 				continue
 			}
@@ -775,6 +783,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 		} else { // obj.key == dstobj.key
 			if config.IgnoreExisting {
 				skipped.Increment()
+				skippedBytes.IncrInt64(obj.Size())
 				handled.Increment()
 				dstobj = nil
 				continue
@@ -785,6 +794,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 				tasks <- obj
 			} else if config.Update && obj.Mtime().Unix() < dstobj.Mtime().Unix() {
 				skipped.Increment()
+				skippedBytes.IncrInt64(obj.Size())
 				handled.Increment()
 			} else if config.CheckAll { // two objects are likely the same
 				tasks <- &withSize{obj, markChecksum}
@@ -794,6 +804,7 @@ func produce(tasks chan<- object.Object, src, dst object.ObjectStorage, srckeys,
 				tasks <- &withFSize{obj.(object.File), markCopyPerms}
 			} else {
 				skipped.Increment()
+				skippedBytes.IncrInt64(obj.Size())
 				handled.Increment()
 			}
 			dstobj = nil
@@ -820,6 +831,13 @@ type rule struct {
 	include bool
 }
 
+func parseRule(name, p string) rule {
+	if runtime.GOOS == "windows" {
+		p = strings.Replace(p, "\\", "/", -1)
+	}
+	return rule{pattern: p, include: name == "-include"}
+}
+
 func parseIncludeRules(args []string) (rules []rule) {
 	l := len(args)
 	for i, a := range args {
@@ -831,14 +849,14 @@ func parseIncludeRules(args []string) (rules []rule) {
 				logger.Warnf("ignore invalid pattern: %s %s", a, args[i+1])
 				continue
 			}
-			rules = append(rules, rule{pattern: args[i+1], include: a == "-include"})
+			rules = append(rules, parseRule(a, args[i+1]))
 		} else if strings.HasPrefix(a, "-include=") || strings.HasPrefix(a, "-exclude=") {
 			if s := strings.Split(a, "="); len(s) == 2 && s[1] != "" {
 				if _, err := path.Match(s[1], "xxxx"); err != nil {
 					logger.Warnf("ignore invalid pattern: %s", a)
 					continue
 				}
-				rules = append(rules, rule{pattern: s[1], include: strings.HasPrefix(a, "-include=")})
+				rules = append(rules, parseRule(s[0], s[1]))
 			}
 		}
 	}
@@ -863,19 +881,57 @@ func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
 	return r
 }
 
-func suffixForPattern(path, pattern string) string {
-	if strings.HasPrefix(pattern, "/") ||
-		strings.HasSuffix(pattern, "/") && !strings.HasSuffix(path, "/") {
-		return path
+func matchPrefix(p, s []string) bool {
+	if len(p) == 0 || len(s) == 0 {
+		return len(p) == len(s)
 	}
-	n := strings.Count(strings.Trim(pattern, "/"), "/")
-	m := strings.Count(strings.Trim(path, "/"), "/")
-	if n >= m {
-		return path
+	first := p[0]
+	n := len(s)
+	switch {
+	case first == "***":
+		return true
+	case strings.Contains(first, "**"):
+		for i := 1; i <= n; i++ {
+			if ok, _ := path.Match(first, strings.Join(s[:i], "*")); ok && matchPrefix(p[1:], s[i:]) {
+				return true
+			}
+		}
+		return false
+	default:
+		ok, _ := path.Match(first, s[0])
+		return ok && matchPrefix(p[1:], s[1:])
 	}
-	parts := strings.Split(path, "/")
-	n = len(strings.Split(pattern, "/"))
-	return strings.Join(parts[len(parts)-n:], "/")
+}
+
+func matchSuffix(p, s []string) bool {
+	if len(p) == 0 {
+		return true
+	}
+	last := p[len(p)-1]
+	if len(s) == 0 {
+		return last == "***"
+	}
+	prefix := p[:len(p)-1]
+	n := len(s)
+	switch {
+	case last == "***":
+		for i := 0; i < n; i++ {
+			if matchSuffix(prefix, s[:i]) {
+				return true
+			}
+		}
+		return false
+	case strings.Contains(last, "**"):
+		for i := 0; i < n; i++ {
+			if ok, _ := path.Match(last, strings.Join(s[i:], "*")); ok && matchSuffix(prefix, s[:i]) {
+				return true
+			}
+		}
+		return false
+	default:
+		ok, _ := path.Match(last, s[n-1])
+		return ok && matchSuffix(prefix, s[:n-1])
+	}
 }
 
 // Consistent with rsync behavior, the matching order is adjusted according to the order of the "include" and "exclude" options
@@ -885,16 +941,20 @@ func matchKey(rules []rule, key string) bool {
 		if parts[i] == "" {
 			continue
 		}
-		prefix := strings.Join(parts[:i+1], "/")
 		for _, rule := range rules {
-			var s string
-			if i < len(parts)-1 && strings.HasSuffix(rule.pattern, "/") {
-				s = "/"
+			ps := parts[:i+1]
+			p := strings.Split(rule.pattern, "/")
+			if i < len(parts)-1 && (p[len(p)-1] == "" || p[len(p)-1] == "***") {
+				ps = append(append([]string{}, ps...), "") // don't overwrite parts
 			}
-			suffix := suffixForPattern(prefix+s, rule.pattern)
-			ok, err := path.Match(rule.pattern, suffix)
-			if err != nil {
-				logger.Fatalf("match %s with %s: %v", rule.pattern, suffix, err)
+			var ok bool
+			if p[0] == "" {
+				if ps[0] != "" {
+					p = p[1:]
+				}
+				ok = matchPrefix(p, ps)
+			} else {
+				ok = matchSuffix(p, ps)
 			}
 			if ok {
 				if rule.include {
@@ -1047,18 +1107,19 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.Manager != "" {
 		bufferSize = 100
 	}
-	availMem = int64(config.Threads * 32 << 20)
+	availMem = int64(config.Threads) * (32 << 20)
 	tasks := make(chan object.Object, bufferSize)
 	wg := sync.WaitGroup{}
 	concurrent = make(chan int, config.Threads)
 	if config.BWLimit > 0 {
-		bps := float64(config.BWLimit*(1<<20)/8) * 0.85 // 15% overhead
+		bps := float64(int64(config.BWLimit)*(1<<20)/8) * 0.85 // 15% overhead
 		limiter = ratelimit.NewBucketWithRate(bps, int64(bps)*3)
 	}
 
 	progress := utils.NewProgress(config.Verbose || config.Quiet || config.Manager != "")
 	handled = progress.AddCountBar("Scanned objects", 0)
 	skipped = progress.AddCountSpinner("Skipped objects")
+	skippedBytes = progress.AddByteSpinner("Skipped bytes")
 	pending = progress.AddCountSpinner("Pending objects")
 	copied = progress.AddCountSpinner("Copied objects")
 	copiedBytes = progress.AddByteSpinner("Copied bytes")
@@ -1089,13 +1150,7 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	}
 
 	if len(config.Exclude) > 0 {
-		rules := parseIncludeRules(os.Args)
-		if runtime.GOOS == "windows" && (strings.HasPrefix(src.String(), "file:") || strings.HasPrefix(dst.String(), "file:")) {
-			for _, r := range rules {
-				r.pattern = strings.Replace(r.pattern, "\\", "/", -1)
-			}
-		}
-		config.rules = rules
+		config.rules = parseIncludeRules(os.Args)
 	}
 
 	if config.Manager == "" {
@@ -1131,11 +1186,12 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 
 	wg.Wait()
 	pending.SetCurrent(0)
+	total := handled.GetTotal()
 	progress.Done()
 
 	if config.Manager == "" {
-		msg := fmt.Sprintf("Found: %d, skipped: %d, copied: %d (%s)",
-			handled.Current(), skipped.Current(), copied.Current(), formatSize(copiedBytes.Current()))
+		msg := fmt.Sprintf("Found: %d, skipped: %d (%s), copied: %d (%s)",
+			total, skipped.Current(), formatSize(skippedBytes.Current()), copied.Current(), formatSize(copiedBytes.Current()))
 		if checked != nil {
 			msg += fmt.Sprintf(", checked: %d (%s)", checked.Current(), formatSize(checkedBytes.Current()))
 		}
@@ -1145,14 +1201,17 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 		if failed != nil {
 			msg += fmt.Sprintf(", failed: %d", failed.Current())
 		}
+		if total-handled.Current() > 0 {
+			msg += fmt.Sprintf(", lost: %d", total-handled.Current())
+		}
 		logger.Info(msg)
 	} else {
 		sendStats(config.Manager)
 		logger.Debugf("This worker process has already completed its task")
 	}
 	if failed != nil {
-		if n := failed.Current(); n > 0 {
-			return fmt.Errorf("Failed to handle %d objects", n)
+		if n := failed.Current(); n > 0 || total > handled.Current() {
+			return fmt.Errorf("failed to handle %d objects", n+total-handled.Current())
 		}
 	}
 	return nil
@@ -1196,6 +1255,12 @@ func initSyncMetrics(config *Config) {
 				Help: "Skipped objects",
 			}, func() float64 {
 				return float64(skipped.Current())
+			}),
+			prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "skipped_bytes",
+				Help: "Skipped bytes",
+			}, func() float64 {
+				return float64(skippedBytes.Current())
 			}),
 		)
 		if failed != nil {

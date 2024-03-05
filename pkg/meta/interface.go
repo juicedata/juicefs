@@ -375,7 +375,7 @@ type Meta interface {
 	// Truncate changes the length for given file.
 	Truncate(ctx Context, inode Ino, flags uint8, attrlength uint64, attr *Attr, skipPermCheck bool) syscall.Errno
 	// Fallocate preallocate given space for given file.
-	Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64) syscall.Errno
+	Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, length *uint64) syscall.Errno
 	// ReadLink returns the target of a symlink.
 	ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno
 	// Symlink creates a symlink in a directory with given name.
@@ -412,7 +412,7 @@ type Meta interface {
 	// InvalidateChunkCache invalidate chunk cache
 	InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno
 	// CopyFileRange copies part of a file to another one.
-	CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied *uint64) syscall.Errno
+	CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno
 	// GetParents returns a map of node parents (> 1 parents if hardlinked)
 	GetParents(ctx Context, inode Ino) map[Ino]int
 	// GetDirStat returns the space and inodes usage of a directory.

@@ -176,15 +176,13 @@ func (u *ufile) Copy(dst, src string) error {
 	uri := fmt.Sprintf("uploadhit?Hash=%s&FileName=%s&FileSize=%s", hash, dst, lens[0])
 	resp, err = u.request("POST", uri, nil, nil)
 	if err != nil {
-		goto fallback
+		return copyObj(u, dst, src)
 	}
 	defer cleanup(resp)
 	if resp.StatusCode != 200 {
-		goto fallback
+		return copyObj(u, dst, src)
 	}
 	return nil
-fallback:
-	return copyObj(u, dst, src)
 }
 
 type DataItem struct {

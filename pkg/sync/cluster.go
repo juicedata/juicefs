@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,6 +30,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/oliverisaac/shellescape"
@@ -45,6 +47,7 @@ type Stat struct {
 	CheckedBytes int64 // total amount of checked data in bytes
 	Deleted      int64 // the number of deleted files
 	Skipped      int64 // the number of files skipped
+	SkippedBytes int64 // total amount of skipped data in bytes
 	Failed       int64 // the number of files that fail to copy
 }
 
@@ -59,6 +62,7 @@ func updateStats(r *Stat) {
 		deleted.IncrInt64(r.Deleted)
 	}
 	skipped.IncrInt64(r.Skipped)
+	skippedBytes.IncrInt64(r.SkippedBytes)
 	if failed != nil {
 		failed.IncrInt64(r.Failed)
 	}
@@ -86,6 +90,7 @@ func httpRequest(url string, body []byte) (ans []byte, err error) {
 func sendStats(addr string) {
 	var r Stat
 	r.Skipped = skipped.Current()
+	r.SkippedBytes = skippedBytes.Current()
 	r.Copied = copied.Current()
 	r.CopiedBytes = copiedBytes.Current()
 	if checked != nil {
@@ -101,9 +106,14 @@ func sendStats(addr string) {
 	d, _ := json.Marshal(r)
 	ans, err := httpRequest(fmt.Sprintf("http://%s/stats", addr), d)
 	if err != nil || string(ans) != "OK" {
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			logger.Errorf("the management process has been stopped, so the worker process now exits")
+			os.Exit(1)
+		}
 		logger.Errorf("update stats: %s %s", string(ans), err)
 	} else {
 		skipped.IncrInt64(-r.Skipped)
+		skippedBytes.IncrInt64(-r.SkippedBytes)
 		copied.IncrInt64(-r.Copied)
 		copiedBytes.IncrInt64(-r.CopiedBytes)
 		if checked != nil {
@@ -277,6 +287,7 @@ func launchWorker(address string, config *Config, wg *sync.WaitGroup) {
 			}
 			logger.Debugf("launch worker command args: [ssh, %s]", strings.Join(shellescape.EscapeArgs(argsBk), ", "))
 			cmd = exec.Command("ssh", shellescape.EscapeArgs(args)...)
+			cmd.Stdin = os.Stdin
 			stderr, err := cmd.StderrPipe()
 			if err != nil {
 				logger.Errorf("redirect stderr: %s", err)

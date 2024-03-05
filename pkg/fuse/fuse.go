@@ -17,6 +17,7 @@
 package fuse
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -446,13 +447,24 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 	opt.SingleThreaded = false
 	opt.MaxBackground = 50
 	opt.EnableLocks = true
+	opt.EnableAcl = conf.Format.EnableACL
 	opt.DisableXAttrs = !xattrs
 	opt.EnableIoctl = ioctl
-	opt.IgnoreSecurityLabels = true
 	opt.MaxWrite = 1 << 20
 	opt.MaxReadAhead = 1 << 20
 	opt.DirectMount = true
 	opt.AllowOther = os.Getuid() == 0
+
+	if opt.EnableAcl && conf.NonDefaultPermission {
+		return errors.New("cannot mount without default_permissions when format with enable-acl")
+	}
+
+	if opt.EnableAcl && opt.DisableXAttrs {
+		logger.Infof("The format \"enable-acl\" flag wiil enable the xattrs feature.")
+		opt.DisableXAttrs = false
+	}
+	opt.IgnoreSecurityLabels = !opt.EnableAcl
+
 	for _, n := range strings.Split(options, ",") {
 		if n == "allow_other" || n == "allow_root" {
 			opt.AllowOther = true

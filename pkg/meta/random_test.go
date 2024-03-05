@@ -1226,7 +1226,7 @@ func (m *fsMachine) Fallocate(t *rapid.T) {
 	inode := m.pickNode(t)
 	offset := rapid.Uint64Range(0, 500<<20).Draw(t, "offset")
 	length := rapid.Uint64Range(1, 500<<20).Draw(t, "length")
-	st := m.meta.Fallocate(m.ctx, inode, 0, offset, length)
+	st := m.meta.Fallocate(m.ctx, inode, 0, offset, length, nil)
 	st2 := m.fallocate(inode, 0, offset, length)
 	if st != st2 {
 		t.Fatalf("expect %s but got %s", st2, st)

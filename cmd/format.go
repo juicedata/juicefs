@@ -191,6 +191,11 @@ func formatManagementFlags() []cli.Flag {
 			Value: 1,
 			Usage: "number of days after which removed files will be permanently deleted",
 		},
+		&cli.BoolFlag{
+			Name:  "enable-acl",
+			Value: false,
+			Usage: "enable POSIX ACL (this flag is irreversible once enabled)",
+		},
 	})
 }
 
@@ -436,7 +441,12 @@ func format(c *cli.Context) error {
 			DirStats:         true,
 			MetaVersion:      meta.MaxVersion,
 			MinClientVersion: "1.1.0-A",
+			EnableACL:        c.Bool("enable-acl"),
 		}
+		if format.EnableACL {
+			format.MinClientVersion = "1.2.0-A"
+		}
+
 		if format.AccessKey == "" && os.Getenv("ACCESS_KEY") != "" {
 			format.AccessKey = os.Getenv("ACCESS_KEY")
 			_ = os.Unsetenv("ACCESS_KEY")

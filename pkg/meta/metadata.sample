@@ -10,7 +10,8 @@
     "EncryptKey": "AQSttslKOSE/hQT/gmaMniCsdPF8JdPRfoYK6zFkdUOnifYwBA==",
     "KeyEncrypted": true,
     "TrashDays": 1,
-    "MetaVersion": 1
+    "MetaVersion": 1,
+    "EnableACL": false
   },
   "Counters": {
     "usedSpace": 115392512,

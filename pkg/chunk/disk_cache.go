@@ -170,6 +170,9 @@ func (cache *cacheStore) cleanupExpire() {
 			if cnt > 1e3 {
 				break
 			}
+			if v.size < 0 {
+				continue // staging
+			}
 			if v.atime < cutoff {
 				deleted++
 				delete(cache.keys, k)

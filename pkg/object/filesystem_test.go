@@ -155,7 +155,7 @@ func testFileSystem(t *testing.T, s ObjectStorage) {
 				expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
 			}
 			if mode == 0422 {
-				if _, ok := ss.(*gluster); ok {
+				if strings.HasPrefix(s.String(), "gluster://") {
 					expectedKeys = []string{"x/", "x/x.txt", "xy.txt", "xyz/", "xyz/xyz.txt"}
 				}
 			}
