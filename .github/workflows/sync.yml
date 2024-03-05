@@ -48,7 +48,7 @@ jobs:
         timeout-minutes: 30
         run: |
           # sudo python3 .github/scripts/hypo/syncrand_test.py
-          sudo LOG_LEVEL=WARNING MAX_EXAMPLE=1000 STEP_COUNT=100 python3 .github/scripts/hypo/syncrand.py
+          sudo LOG_LEVEL=WARNING PROFILE=ci python3 .github/scripts/hypo/syncrand.py
           
       - name: Test Sync
         timeout-minutes: 30
@@ -85,4 +85,3 @@ jobs:
         # if: failure()
         timeout-minutes: 60
         uses: lhotari/action-upterm@v1
-      

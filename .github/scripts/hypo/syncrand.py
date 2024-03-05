@@ -131,6 +131,10 @@ if __name__ == '__main__':
         print_blob=True, stateful_step_count=STEP_COUNT, deadline=None, \
         report_multiple_bugs=False, 
         phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
+    settings.register_profile("ci", max_examples=MAX_EXAMPLE, verbosity=Verbosity.normal, 
+        print_blob=False, stateful_step_count=STEP_COUNT, deadline=None, \
+        report_multiple_bugs=False, 
+        phases=[Phase.reuse, Phase.generate, Phase.target, Phase.shrink, Phase.explain])
     profile = os.environ.get('PROFILE', 'dev')
     settings.load_profile(profile)
     juicefs_machine = SyncMachine.TestCase()
