@@ -373,12 +373,13 @@ func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *
 	entries, readAt, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, true)
 	ctx.start = readAt
 	var de fuse.DirEntry
-	for _, e := range entries {
+	for i, e := range entries {
 		de.Ino = uint64(e.Inode)
 		de.Name = string(e.Name)
 		de.Mode = e.Attr.SMode()
 		eo := out.AddDirLookupEntry(de)
 		if eo == nil {
+			fs.v.UpdateReaddirOffset(ctx, Ino(in.NodeId), in.Fh, int(in.Offset)+i)
 			break
 		}
 		if e.Attr.Full {
