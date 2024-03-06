@@ -470,6 +470,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 	if limiter != nil {
 		limiter.Wait(size)
 	}
+	start := time.Now()
 	sz := size
 	p := chunk.NewOffPage(int(size))
 	defer p.Release()
@@ -492,7 +493,7 @@ func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64,
 		logger.Warnf("Failed to copy data of %s part %d: %s", key, num, err)
 		return nil, fmt.Errorf("part %d: %s", num, err)
 	}
-	logger.Debugf("Copied data of %s part %d", key, num)
+	logger.Debugf("Copied data of %s part %d in %s", key, num, time.Since(start))
 	copiedBytes.IncrInt64(sz)
 	return part, nil
 }
