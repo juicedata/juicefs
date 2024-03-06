@@ -70,11 +70,15 @@ test_update_fuse_option(){
     ./juicefs mount -d $META_URL /tmp/jfs_xattr --enable-xattr
     setfattr -n user.test -v "juicedata" /tmp/jfs_xattr
     getfattr -n user.test /tmp/jfs_xattr | grep juicedata
+    sleep 1s
     ./juicefs mount -d $META_URL /tmp/jfs_xattr
     getfattr -n user.test /tmp/jfs_xattr && exit 1 || true
+    sleep 1s
     ./juicefs mount -d $META_URL /tmp/jfs_xattr --enable-xattr
     setfattr -n user.test -v "juicedata" /tmp/jfs_xattr
     getfattr -n user.test /tmp/jfs_xattr | grep juicedata
+    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    [[ $count -ne 4 ]] && echo "mount process count should be 4" && exit 1
 }
 
 test_update_fuse_option2(){
