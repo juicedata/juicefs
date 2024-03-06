@@ -41,7 +41,6 @@ func (s *oos) String() string {
 func (s *oos) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
-		IsSupportUploadPartCopy:  false,
 	}
 }
 

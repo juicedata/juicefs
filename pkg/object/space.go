@@ -41,7 +41,6 @@ func (s *space) String() string {
 func (s *space) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
-		IsSupportUploadPartCopy:  false,
 	}
 }
 
