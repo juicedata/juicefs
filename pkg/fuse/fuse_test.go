@@ -99,8 +99,8 @@ func mount(url, mp string) {
 		Format: *format,
 		Chunk:  &chunkConf,
 	}
-	var sid uint64
-	sid, err = m.NewSession(true)
+
+	err = m.NewSession(true)
 	if err != nil {
 		log.Fatalf("new session: %s", err)
 	}
@@ -109,7 +109,6 @@ func mount(url, mp string) {
 	conf.EntryTimeout = time.Second
 	conf.DirEntryTimeout = time.Second
 	conf.HideInternal = true
-	conf.Sid = sid
 	v := vfs.NewVFS(conf, m, store, nil, nil)
 	err = Serve(v, "", true, true)
 	if err != nil {
