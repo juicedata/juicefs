@@ -59,7 +59,7 @@ type engine interface {
 
 	doLoad() ([]byte, error)
 
-	doNewSession(sinfo []byte) error
+	doNewSession(sinfo []byte, update bool) error
 	doRefreshSession() error
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
@@ -495,7 +495,7 @@ func (m *baseMeta) NewSession(record bool) error {
 			m.conf.Sid = m.sid
 			action = "Create"
 		}
-		if err := m.en.doNewSession(m.newSessionInfo()); err != nil {
+		if err := m.en.doNewSession(m.newSessionInfo(), true); err != nil {
 			return fmt.Errorf("create session: %s", err)
 		}
 		logger.Infof("%s session %d OK with version: %s", action, m.sid, version.Version())
