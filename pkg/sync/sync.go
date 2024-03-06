@@ -517,6 +517,12 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 		if i == n-1 {
 			sz = size - int64(i)*partSize
 		}
+		select {
+		case <-abort:
+			dst.AbortUpload(tmpkey, up.UploadID)
+			return nil, fmt.Errorf("aborted")
+		default:
+		}
 		parts[i], err = doUploadPart(src, dst, key, off+int64(i)*partSize, sz, tmpkey, up.UploadID, i)
 		if err != nil {
 			dst.AbortUpload(tmpkey, up.UploadID)
@@ -531,7 +537,7 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 	}
 	var part *object.Part
 	err = try(3, func() error {
-		part, err = dst.UploadPartCopy(key, upload.UploadID, num, tmpkey, 0, size)
+		part, err = dst.UploadPartCopy(key, upload.UploadID, num+1, tmpkey, 0, size)
 		return err
 	})
 	_ = dst.Delete(tmpkey)
