@@ -323,18 +323,18 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 	}
 
 	// cache all acls
-	maxId, err := m.getCounter(ACLCounterName)
+	maxId, err := m.getCounter(aclCounter)
 	if err != nil {
 		return err
 	}
 
 	if maxId > 0 {
-		missKeys := make([]string, maxId)
+		allKeys := make([]string, maxId)
 		for i := 0; i < int(maxId); i++ {
-			missKeys[i] = m.aclKey(uint32(i) + 1)
+			allKeys[i] = m.aclKey(uint32(i) + 1)
 		}
 
-		acls, err := m.rdb.MGet(ctx, missKeys...).Result()
+		acls, err := m.rdb.MGet(ctx, allKeys...).Result()
 		if err != nil {
 			return err
 		}
@@ -342,7 +342,7 @@ func (m *redisMeta) doInit(format *Format, force bool) error {
 			var tmpRule *aclAPI.Rule
 			if val != nil {
 				tmpRule = &aclAPI.Rule{}
-				tmpRule.Decode(val.([]byte))
+				tmpRule.Decode(([]byte)(val.(string)))
 			}
 			// may have empty slot
 			m.aclCache.Put(uint32(i)+1, tmpRule)
@@ -663,6 +663,10 @@ func (m *redisMeta) sliceRefs() string {
 	return m.prefix + "sliceRef"
 }
 
+func (m *redisMeta) counterName(name string) string {
+	return m.prefix + name
+}
+
 func (m *redisMeta) packQuota(space, inodes int64) []byte {
 	wb := utils.NewBuffer(16)
 	wb.Put64(uint64(space))
@@ -841,8 +845,8 @@ func (m *redisMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno 
 		m.parseAttr(val, attr)
 
 		if attr != nil && attr.AccessACLId != aclAPI.None {
-			rule := &aclAPI.Rule{}
-			if err := m.getACL(ctx, tx, attr.AccessACLId, rule); err != nil {
+			rule, err := m.getACL(ctx, tx, attr.AccessACLId)
+			if err != nil {
 				return err
 			}
 			attr.Mode = (rule.GetMode() & 0777) | (attr.Mode & 07000)
@@ -1190,8 +1194,8 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 		// get acl
 		var rule *aclAPI.Rule
 		if cur.AccessACLId != aclAPI.None {
-			rule = &aclAPI.Rule{}
-			if err := m.getACL(ctx, tx, cur.AccessACLId, rule); err != nil {
+			rule, err = m.getACL(ctx, tx, cur.AccessACLId)
+			if err != nil {
 				return err
 			}
 		}
@@ -1211,6 +1215,10 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 				return err
 			}
 			setAttrACLId(dirtyAttr, aclAPI.TypeAccess, aclId)
+
+			if err = m.tryLoadMissACLs(ctx, tx); err != nil {
+				logger.Warnf("SetAttr: load miss acls error: %s", err)
+			}
 		}
 
 		dirtyAttr.Ctime = now.Unix()
@@ -1359,8 +1367,8 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			}
 
 			// set access acl by parent's default acl
-			rule := &aclAPI.Rule{}
-			if err = m.getACL(ctx, tx, pattr.DefaultACLId, rule); err != nil {
+			rule, err := m.getACL(ctx, tx, pattr.DefaultACLId)
+			if err != nil {
 				return err
 			}
 
@@ -1373,6 +1381,10 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				if err != nil {
 					return err
 				}
+				if err = m.tryLoadMissACLs(ctx, tx); err != nil {
+					logger.Warnf("Mknode: load miss acls error: %s", err)
+				}
+
 				attr.AccessACLId = id
 				attr.Mode = (mode & 0xFE00) | cRule.GetMode()
 			}
@@ -4587,6 +4599,10 @@ func (m *redisMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Ru
 			}
 			setAttrACLId(attr, aclType, aclId)
 
+			if err = m.tryLoadMissACLs(ctx, tx); err != nil {
+				logger.Warnf("SetFacl: load miss acls error: %s", err)
+			}
+
 			// set mode
 			if aclType == aclAPI.TypeAccess {
 				attr.Mode &= 07000
@@ -4631,14 +4647,18 @@ func (m *redisMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Ru
 			return ENOATTR
 		}
 
-		return m.getACL(ctx, tx, aclId, rule)
+		a, err := m.getACL(ctx, tx, aclId)
+		if err != nil {
+			return err
+		}
+		*rule = *a
+		return nil
 	}, m.inodeKey(ino)))
 }
 
-func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32, rule *aclAPI.Rule) error {
+func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32) (*aclAPI.Rule, error) {
 	if cRule := m.aclCache.Get(id); cRule != nil {
-		*rule = *cRule
-		return nil
+		return cRule, nil
 	}
 
 	cmds, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
@@ -4646,27 +4666,28 @@ func (m *redisMeta) getACL(ctx Context, tx *redis.Tx, id uint32, rule *aclAPI.Ru
 		return nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	val, err := cmds[0].(*redis.StringCmd).Bytes()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if val == nil {
-		return ENOATTR
+		return nil, ENOATTR
 	}
 
+	rule := &aclAPI.Rule{}
 	rule.Decode(val)
 	m.aclCache.Put(id, rule)
-	return nil
+	return rule, nil
 }
 
 func (m *redisMeta) insertACL(ctx Context, tx *redis.Tx, rule *aclAPI.Rule) (uint32, error) {
 	var aclId uint32
 	if aclId = m.aclCache.GetId(rule); aclId == aclAPI.None {
 		// TODO failures may result in some id wastage.
-		newId, err := m.incrCounter(ACLCounterName, 1)
+		newId, err := m.incrCounter(aclCounter, 1)
 		if err != nil {
 			return aclAPI.None, err
 		}
@@ -4676,29 +4697,32 @@ func (m *redisMeta) insertACL(ctx Context, tx *redis.Tx, rule *aclAPI.Rule) (uin
 			return aclAPI.None, err
 		}
 		m.aclCache.Put(aclId, rule)
-
-		// try load miss
-		missIds := m.aclCache.GetMissIds(aclId)
-		if len(missIds) > 0 {
-			missKeys := make([]string, len(missIds))
-			for i, id := range missIds {
-				missKeys[i] = m.aclKey(id)
-			}
-
-			acls, err := tx.MGet(ctx, missKeys...).Result()
-			if err != nil {
-				return aclId, nil
-			}
-			for i, data := range acls {
-				var tmpRule *aclAPI.Rule
-				if data != nil {
-					tmpRule = &aclAPI.Rule{}
-					tmpRule.Decode(data.([]byte))
-				}
-				// may have empty slot
-				m.aclCache.Put(missIds[i], tmpRule)
-			}
-		}
 	}
 	return aclId, nil
+}
+
+func (m *redisMeta) tryLoadMissACLs(ctx Context, tx *redis.Tx) error {
+	// try load miss
+	missIds := m.aclCache.GetMissIds()
+	if len(missIds) > 0 {
+		missKeys := make([]string, len(missIds))
+		for i, id := range missIds {
+			missKeys[i] = m.aclKey(id)
+		}
+
+		acls, err := tx.MGet(ctx, missKeys...).Result()
+		if err != nil {
+			return err
+		}
+		for i, data := range acls {
+			var rule *aclAPI.Rule
+			if data != nil {
+				rule = &aclAPI.Rule{}
+				rule.Decode(data.([]byte))
+			}
+			// may have empty slot
+			m.aclCache.Put(missIds[i], rule)
+		}
+	}
+	return nil
 }

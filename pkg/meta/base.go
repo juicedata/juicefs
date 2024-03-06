@@ -1163,7 +1163,7 @@ func (m *baseMeta) parseAttr(buf []byte, attr *Attr) {
 	attr.Nlink = rb.Get32()
 	attr.Length = rb.Get64()
 	attr.Rdev = rb.Get32()
-	if rb.Left() >= 16 {
+	if rb.Left() >= 8 {
 		attr.Parent = Ino(rb.Get64())
 	}
 	attr.Full = true
@@ -1175,7 +1175,11 @@ func (m *baseMeta) parseAttr(buf []byte, attr *Attr) {
 }
 
 func (m *baseMeta) marshal(attr *Attr) []byte {
-	w := utils.NewBuffer(36 + 24 + 4 + 8 + 8)
+	size := uint32(36 + 24 + 4 + 8)
+	if attr.AccessACLId+attr.DefaultACLId > 0 {
+		size += 8
+	}
+	w := utils.NewBuffer(size)
 	w.Put8(attr.Flags)
 	w.Put16((uint16(attr.Typ) << 12) | (attr.Mode & 0xfff))
 	w.Put32(attr.Uid)
@@ -1190,8 +1194,10 @@ func (m *baseMeta) marshal(attr *Attr) []byte {
 	w.Put64(attr.Length)
 	w.Put32(attr.Rdev)
 	w.Put64(uint64(attr.Parent))
-	w.Put32(attr.AccessACLId)
-	w.Put32(attr.DefaultACLId)
+	if attr.AccessACLId+attr.DefaultACLId > 0 {
+		w.Put32(attr.AccessACLId)
+		w.Put32(attr.DefaultACLId)
+	}
 	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
 	return w.Bytes()
 }
@@ -2811,7 +2817,7 @@ func (m *baseMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) s
 	return st
 }
 
-const ACLCounterName = "acl"
+const aclCounter = "acl"
 
 var errACLNotInCache = errors.New("acl not in cache")
 
