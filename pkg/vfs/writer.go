@@ -46,6 +46,7 @@ type DataWriter interface {
 	GetLength(inode Ino) uint64
 	Truncate(inode Ino, length uint64)
 	UpdateMtime(inode Ino, mtime time.Time)
+	FlushAll() error
 }
 
 type sliceWriter struct {
@@ -538,4 +539,23 @@ func (w *dataWriter) UpdateMtime(inode Ino, mtime time.Time) {
 	if f != nil {
 		f.updateMtime(mtime)
 	}
+}
+
+func (w *dataWriter) FlushAll() error {
+	var err error
+	w.Lock()
+	for inode, ind := range w.files {
+		ind.refs++
+		w.Unlock()
+		eno := ind.Flush(meta.Background)
+		w.free(ind)
+		if eno != 0 {
+			logger.Errorf("flush %s: %s", inode, eno)
+			return eno
+		}
+		logger.Debugf("Flush %d", inode)
+		w.Lock()
+	}
+	w.Unlock()
+	return err
 }

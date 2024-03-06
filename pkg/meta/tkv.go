@@ -507,7 +507,7 @@ func (m *kvMeta) flushStats() {
 	}
 }
 
-func (m *kvMeta) doNewSession(sinfo []byte) error {
+func (m *kvMeta) doNewSession(sinfo []byte, update bool) error {
 	if err := m.setValue(m.sessionKey(m.sid), m.packInt64(m.expireTime())); err != nil {
 		return fmt.Errorf("set session ID %d: %s", m.sid, err)
 	}

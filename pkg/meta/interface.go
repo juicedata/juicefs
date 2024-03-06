@@ -337,7 +337,7 @@ type Meta interface {
 	Reset() error
 	// Load loads the existing setting of a formatted volume from meta service.
 	Load(checkVersion bool) (*Format, error)
-	// NewSession creates a new client session.
+	// NewSession creates or update client session.
 	NewSession(record bool) error
 	// CloseSession does cleanup and close the session.
 	CloseSession() error

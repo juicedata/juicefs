@@ -47,6 +47,7 @@ type Config struct {
 	AtimeMode          string
 	DirStatFlushPeriod time.Duration
 	SkipDirMtime       time.Duration
+	Sid                uint64
 }
 
 func DefaultConf() *Config {

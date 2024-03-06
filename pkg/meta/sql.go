@@ -439,7 +439,7 @@ func (m *dbMeta) doLoad() (data []byte, err error) {
 	return
 }
 
-func (m *dbMeta) doNewSession(sinfo []byte) error {
+func (m *dbMeta) doNewSession(sinfo []byte, update bool) error {
 	// add new table
 	err := m.syncTable(new(session2), new(delslices), new(dirStats), new(detachedNode), new(dirQuota))
 	if err != nil {
@@ -459,21 +459,30 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 	}
 
 	for {
-		if err = m.txn(func(s *xorm.Session) error {
-			return mustInsert(s, &session2{m.sid, m.expireTime(), sinfo})
-		}); err == nil {
-			break
-		}
-		if isDuplicateEntryErr(err) {
-			logger.Warnf("session id %d is already used", m.sid)
-			if v, e := m.incrCounter("nextSession", 1); e == nil {
-				m.sid = uint64(v)
-				continue
-			} else {
-				return fmt.Errorf("get session ID: %s", e)
-			}
+		beans := session2{Sid: m.sid, Expire: m.expireTime(), Info: sinfo}
+		if update {
+			return m.txn(func(s *xorm.Session) error {
+				_, err = s.Cols("expire", "info").Update(&beans, &session2{Sid: beans.Sid})
+				return err
+			})
 		} else {
-			return fmt.Errorf("insert new session %d: %s", m.sid, err)
+			if err = m.txn(func(s *xorm.Session) error {
+				return mustInsert(s, &beans)
+			}); err == nil {
+				break
+			}
+
+			if isDuplicateEntryErr(err) {
+				logger.Warnf("session id %d is already used", m.sid)
+				if v, e := m.incrCounter("nextSession", 1); e == nil {
+					m.sid = uint64(v)
+					continue
+				} else {
+					return fmt.Errorf("get session ID: %s", e)
+				}
+			} else {
+				return fmt.Errorf("insert new session %d: %s", m.sid, err)
+			}
 		}
 	}
 	return nil

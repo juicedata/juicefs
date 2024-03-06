@@ -19,6 +19,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/url"
@@ -32,11 +34,9 @@ import (
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
-	"github.com/juicedata/juicefs/pkg/version"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/redis/go-redis/v9"
 	. "github.com/smartystreets/goconvey/convey"
-	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli/v2"
 )
 
@@ -124,6 +124,7 @@ func mountTemp(t *testing.T, bucket *string, extraFormatOpts []string, extraMoun
 	// must do reset, otherwise will panic
 	ResetHttp()
 
+	os.Setenv("JFS_SUPERVISOR", "test")
 	mountArgs := []string{"", "mount", "--enable-xattr", testMeta, testMountPoint, "--attr-cache", "0", "--entry-cache", "0", "--dir-entry-cache", "0", "--no-usage-report"}
 	if extraMountOpts != nil {
 		mountArgs = append(mountArgs, extraMountOpts...)
@@ -201,38 +202,6 @@ func TestUmount(t *testing.T) {
 	}
 	if inode == 1 {
 		t.Fatalf("umount failed: inode of %s is 1", testMountPoint)
-	}
-}
-
-func Test_configEqual(t *testing.T) {
-	cases := []struct {
-		a, b  *vfs.Config
-		equal bool
-	}{
-		{
-			a: nil, b: nil, equal: true,
-		},
-		{
-			a: &vfs.Config{}, b: nil, equal: false,
-		},
-		{
-			a: nil, b: &vfs.Config{}, equal: false,
-		},
-		{
-			a: &vfs.Config{}, b: &vfs.Config{}, equal: true,
-		},
-		{
-			a: &vfs.Config{Format: meta.Format{SecretKey: "1"}}, b: &vfs.Config{Format: meta.Format{SecretKey: "2"}}, equal: true,
-		},
-		{
-			a: &vfs.Config{Port: &vfs.Port{}}, b: &vfs.Config{}, equal: true,
-		},
-	}
-
-	for _, c := range cases {
-		if configEqual(c.a, c.b) != c.equal {
-			t.Errorf("configEqual(%v, %v) should be %v", c.a, c.b, c.equal)
-		}
 	}
 }
 
