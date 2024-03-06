@@ -172,6 +172,7 @@ func (v *VFS) Mknod(ctx Context, parent Ino, name string, mode uint16, cumask ui
 	err = v.Meta.Mknod(ctx, parent, name, _type, mode&07777, cumask, rdev, "", &inode, attr)
 	if err == 0 {
 		entry = &meta.Entry{Inode: inode, Attr: attr}
+		v.invalidateDirHandle(parent, name, inode, attr)
 	}
 	return
 }
@@ -187,6 +188,9 @@ func (v *VFS) Unlink(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		return
 	}
 	err = v.Meta.Unlink(ctx, parent, name)
+	if err == 0 {
+		v.invalidateDirHandle(parent, name, 0, nil)
+	}
 	return
 }
 
@@ -208,6 +212,7 @@ func (v *VFS) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask ui
 	err = v.Meta.Mkdir(ctx, parent, name, mode, cumask, 0, &inode, attr)
 	if err == 0 {
 		entry = &meta.Entry{Inode: inode, Attr: attr}
+		v.invalidateDirHandle(parent, name, inode, attr)
 	}
 	return
 }
@@ -219,6 +224,9 @@ func (v *VFS) Rmdir(ctx Context, parent Ino, name string) (err syscall.Errno) {
 		return
 	}
 	err = v.Meta.Rmdir(ctx, parent, name)
+	if err == 0 {
+		v.invalidateDirHandle(parent, name, 0, nil)
+	}
 	return
 }
 
@@ -240,6 +248,7 @@ func (v *VFS) Symlink(ctx Context, path string, parent Ino, name string) (entry 
 	err = v.Meta.Symlink(ctx, parent, name, path, &inode, attr)
 	if err == 0 {
 		entry = &meta.Entry{Inode: inode, Attr: attr}
+		v.invalidateDirHandle(parent, name, inode, attr)
 	}
 	return
 }
@@ -267,7 +276,14 @@ func (v *VFS) Rename(ctx Context, parent Ino, name string, newparent Ino, newnam
 		return
 	}
 
-	err = v.Meta.Rename(ctx, parent, name, newparent, newname, flags, nil, nil)
+	var inode Ino
+	var attr = &Attr{}
+	err = v.Meta.Rename(ctx, parent, name, newparent, newname, flags, &inode, attr)
+	if err == 0 {
+		v.invalidateDirHandle(parent, name, 0, nil)
+		v.invalidateDirHandle(newparent, newname, 0, nil)
+		v.invalidateDirHandle(newparent, newname, inode, attr)
+	}
 	return
 }
 
@@ -292,6 +308,7 @@ func (v *VFS) Link(ctx Context, ino Ino, newparent Ino, newname string) (entry *
 	err = v.Meta.Link(ctx, ino, newparent, newname, attr)
 	if err == 0 {
 		entry = &meta.Entry{Inode: ino, Attr: attr}
+		v.invalidateDirHandle(newparent, newname, ino, attr)
 	}
 	return
 }
@@ -357,12 +374,29 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 				})
 			}
 		}
+		index := make(map[string]int)
+		for i, e := range inodes {
+			index[string(e.Name)] = i
+		}
+		h.index = index
 	}
 	if off < len(h.children) {
 		entries = h.children[off:]
+		// we don't know how much of them will be sent, assume all of them
+		h.readOff = len(h.children) - 1
 	}
 	readAt = h.readAt
 	return
+}
+
+func (v *VFS) UpdateReaddirOffset(ctx Context, ino Ino, fh uint64, off int) {
+	h := v.findHandle(ino, fh)
+	if h == nil {
+		return
+	}
+	h.Lock()
+	defer h.Unlock()
+	h.readOff = off
 }
 
 func (v *VFS) Releasedir(ctx Context, ino Ino, fh uint64) int {
@@ -398,6 +432,7 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 		v.UpdateLength(inode, attr)
 		fh = v.newFileHandle(inode, attr.Length, flags)
 		entry = &meta.Entry{Inode: inode, Attr: attr}
+		v.invalidateDirHandle(parent, name, inode, attr)
 	}
 	return
 }
