@@ -449,12 +449,13 @@ func shutdownGraceful(mp string) {
 	}
 	fuseFd, fuseSetting = getFuseFd(conf.CommPath)
 	if fuseFd == 0 {
-		logger.Warnf("recv FUSE fd from existing client")
+		logger.Warnf("fail to recv FUSE fd from %s", conf.CommPath)
 		return
 	}
 	for i := 0; i < 600; i++ {
 		if err := syscall.Kill(conf.Pid, syscall.SIGHUP); err != nil {
 			os.Setenv("_FUSE_STATE_PATH", conf.StatePath)
+			os.Setenv("_JFS_META_SID", strconv.Itoa(int(conf.Meta.Sid)))
 			return
 		}
 		time.Sleep(time.Millisecond * 100)
@@ -505,11 +506,7 @@ func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 	}
 	if oldConf.FuseOpts.DisableXAttrs && !newConf.FuseOpts.DisableXAttrs {
 		logger.Infof("Xattr is enabled, mount on top of it")
-	}
-	// pass the session id to the new process, sid=0 means old process is read-only mode
-	if oldConf.Meta.Sid != 0 {
-		logger.Infof("pass the old session id %d to the new process", oldConf.Meta.Sid)
-		os.Setenv("_JFS_META_SID", strconv.FormatUint(oldConf.Meta.Sid, 10))
+		return false
 	}
 	return true
 }
