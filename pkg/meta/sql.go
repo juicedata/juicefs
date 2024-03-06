@@ -459,18 +459,19 @@ func (m *dbMeta) doNewSession(sinfo []byte) error {
 	}
 
 	for {
+		beans := session2{Sid: m.sid, Expire: m.expireTime(), Info: sinfo}
 		if err = m.txn(func(s *xorm.Session) error {
-			return mustInsert(s, &session2{m.sid, m.expireTime(), sinfo})
+			return mustInsert(s, &beans)
 		}); err == nil {
 			break
 		}
+
 		if isDuplicateEntryErr(err) {
-			logger.Warnf("session id %d is already used", m.sid)
-			if v, e := m.incrCounter("nextSession", 1); e == nil {
-				m.sid = uint64(v)
-				continue
-			} else {
-				return fmt.Errorf("get session ID: %s", e)
+			if err = m.txn(func(s *xorm.Session) error {
+				_, err = s.Cols("expire", "info").Update(&beans, &session2{Sid: beans.Sid})
+				return err
+			}); err == nil {
+				break
 			}
 		} else {
 			return fmt.Errorf("insert new session %d: %s", m.sid, err)
