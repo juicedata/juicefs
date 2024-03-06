@@ -1,0 +1,257 @@
+#!/bin/bash -e
+source .github/scripts/common/common.sh
+
+[[ -z "$META" ]] && META=sqlite3
+source .github/scripts/start_meta_engine.sh
+start_meta_engine $META
+META_URL=$(get_meta_url $META)
+
+dpkg -s fio >/dev/null 2>&1 || .github/scripts/apt_install.sh fio
+lsof -t -i:8081 | xargs -r sudo kill -9
+python3 -m http.server 8081 &
+server_pid=$!
+trap "kill -9 $server_pid" EXIT
+.github/scripts/apt_install.sh attr
+if [[ ! -x ./juicefs.1.0 ]]; then 
+    wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.7/juicefs-1.0.7-linux-amd64.tar.gz
+    tar -xzvf juicefs-1.0.7-linux-amd64.tar.gz --transform='s|^juicefs$|juicefs-1.0|' juicefs
+    chmod +x juicefs-1.0
+    ./juicefs-1.0 version
+fi
+[[ ! -f my-priv-key.pem ]] && openssl genrsa -out my-priv-key.pem -aes256  -passout pass:12345678 2048
+
+test_kill_mount_process()
+{
+    prepare_test
+    ./juicefs mount $META_URL /tmp/jfs -d
+    wait_process_started 1
+    force_kill_child_process
+    sleep 3
+    wait_process_started 2
+    kill_parent_process
+    sleep 2
+    stat /tmp/jfs
+    ./juicefs umount /tmp/jfs
+    wait_process_killed 3
+    ./juicefs mount $META_URL /tmp/jfs
+    kill_child_process
+    wait_process_killed 4
+    ./juicefs mount $META_URL /tmp/jfs
+    ./juicefs umount /tmp/jfs
+    wait_process_killed 5
+}
+
+test_update_non_fuse_option(){
+    prepare_test
+    cmd/mount/mount mount --no-update --conf-dir=conf  test-volume /tmp/jfs --cache-dir=/tmp/cache1 --cache-size=800
+    mydd if=/dev/zero of=/tmp/jfs/test bs=1M count=1000
+    cat /tmp/jfs/test > /dev/null
+    check_cache_size  /tmp/cache1 800
+    cmd/mount/mount mount --no-update --conf-dir=conf  test-volume /tmp/jfs --cache-dir=/tmp/cache1 --cache-size=400
+    sleep 2
+    check_cache_size  /tmp/cache1 400
+    cmd/mount/mount umount /tmp/jfs
+}
+
+check_cache_size(){
+    cache_dir=$1
+    cache_size_limit=$2
+    cache_size=$(get_disk_usage $cache_dir)
+    if (( $(echo "$cache_size > $cache_size_limit * 1.1 " |bc -l) )) || (( $(echo "$cache_size < $cache_size_limit * 0.9 " |bc -l) )); then
+        echo "cache size is not in the range of $cache_size_limit M"
+        exit 1
+    fi
+}
+
+test_update_fuse_option(){
+    prepare_test
+    mkdir -p /tmp/jfs_xattr && chmod 777 /tmp/jfs_xattr
+    cmd/mount/mount mount --no-update --conf-dir=conf  test-volume /tmp/jfs_xattr --enable-xattr
+    setfattr -n user.test -v "juicedata" /tmp/jfs_xattr
+    getfattr -n user.test /tmp/jfs_xattr | grep juicedata
+    cmd/mount/mount mount --no-update --conf-dir=conf  test-volume /tmp/jfs_xattr
+    getfattr -n user.test /tmp/jfs_xattr && exit 1 || true
+    cmd/mount/mount umount /tmp/jfs_xattr
+    cmd/mount/mount umount /tmp/jfs_xattr
+}
+
+test_update_fuse_option2(){
+    prepare_test
+    mkdir -p /tmp/jfs_xattr && chmod 777 /tmp/jfs_xattr
+    cmd/mount/mount mount --no-update --conf-dir=conf  test-volume /tmp/jfs_xattr
+    getfattr -n user.test /tmp/jfs_xattr && exit 1 || true
+    cmd/mount/mount mount --no-update --conf-dir=conf  test-volume /tmp/jfs_xattr --enable-xattr
+    setfattr -n user.test -v "juicedata" /tmp/jfs_xattr
+    getfattr -n user.test /tmp/jfs_xattr | grep juicedata
+    cmd/mount/mount umount /tmp/jfs_xattr
+    cmd/mount/mount umount /tmp/jfs_xattr
+}
+
+test_restart_from_4_9(){
+    prepare_test
+    cmd/mount/mount.4.9 mount --no-update --conf-dir=conf test-volume /tmp/jfs 
+    echo hello > /tmp/jfs/test
+    cmd/mount/mount mount --no-update --conf-dir=conf  test-volume /tmp/jfs
+    wait_process_started
+    version=$(cmd/mount/mount version | awk '{print $3,$4,$5}')
+    grep Version /tmp/jfs/.jfsconfig | grep "$version"
+    grep "hello" /tmp/jfs/test 
+    cmd/mount/mount umount /tmp/jfs
+    wait_process_killed
+}
+
+
+do_upgrade_restart_from_python(){
+    prepare_test
+    old_version=$1
+    echo old_version is $old_version
+    wget -q https://s.juicefs.com/static/juicefs-$old_version.py -O juicefs-$old_version.py && chmod +x juicefs-$old_version.py
+    mkdir -p /root/.juicefs
+    cp -f cmd/mount/mount.$old_version /root/.juicefs/jfsmount
+    
+    if [[ $old_version == "4.8" || $old_version == "4.9" ]]; then
+        ./juicefs-$old_version.py mount test-volume /tmp/jfs \
+            --no-update --conf-dir=conf -o debug
+    else
+        JFS_RSA_PASSPHRASE=12345678 ./juicefs-$old_version.py mount test-volume /tmp/jfs \
+            --no-update --conf-dir=conf  --rsa-key my-priv-key.pem -o debug
+    fi
+
+    fio -name=fio -filename=/tmp/jfs/testfile -direct=1 -iodepth 64 -ioengine=libaio -rw=randwrite -bs=4k -size=500M -numjobs=16 -runtime=30 -group_reporting &
+    fio_pid=$!
+    sleep 5s
+
+    ps -ef | grep juicefs-$old_version.py
+    old_python_pid=$(ps -ef | grep juicefs-$old_version.py | grep -v grep | awk '{print $2}')
+    ps -ef | awk -v var=$old_python_pid '$3 == var'
+    old_mount_pid=$(ps -ef | awk -v var=$old_python_pid '$3 == var' | awk '{print $2}')
+    version=$(/root/.juicefs/jfsmount -V | awk '{print $3,$4,$5}')
+    echo old_python_pid is $old_python_pid, old_mount_pid is $old_mount_pid, version is $version
+
+    grep Version /tmp/jfs/.jfsconfig | grep "$version"
+    echo hello > /tmp/jfs/test
+    # cp -f cmd/mount/mount /root/.juicefs/jfsmount
+    cp -f ./juicefs.py juicefs-$old_version.py
+    echo "sleep 1s to wait fuse ready" && sleep 5
+    abspath=$(pwd)
+    mount_url=http://localhost:8081/cmd/mount/mount
+    # mount_url=https://juicefs-com-static.oss-cn-shanghai.aliyuncs.com/jfs_release/main/mount
+    JFS_FORCE_UPGRADE=true MOUNT_URL=$mount_url ./juicefs-$old_version.py version --upgrade --restart
+    ps -ef | grep mount
+    wget -q $mount_url -O mount.main && chmod +x mount.main
+    version=$(./mount.main version | awk '{print $3}')
+    echo version is $version
+    grep Version /tmp/jfs/.jfsconfig 
+    grep Version /tmp/jfs/.jfsconfig | grep "$version" || (echo "version not match" && exit 1)
+    count=$(ps -ef | awk -v var=$old_python_pid '$2 == var ' | wc -l)
+    [ $count != 0 ] && echo "old juicefs.py process is not killed" && exit 1 || true
+    count=$(ps -ef | awk -v var=$old_mount_pid '$2 == var ' | wc -l)
+    [ $count != 0 ] && echo "old mount process is not killed" && exit 1 || true
+    rm -rf /var/jfsCache/test-volume/raw || true
+    cat /tmp/jfs/test | grep hello
+    # umount /tmp/jfs and check the mount process exited
+    kill -9 $fio_pid || true
+    umount_jfs /tmp/jfs 
+    ps -ef | grep juicefs-$old_version.py
+    old_python_pid=$(ps -ef | grep juicefs-$old_version.py | grep -v grep | awk '{print $2}')
+    ps -ef | awk -v var=$old_python_pid '$3 == var'
+    old_mount_pid=$(ps -ef | awk -v var=$old_python_pid '$3 == var' | awk '{print $2}')
+    count=$(ps -ef | awk -v var=$old_python_pid '$2 == var ' | wc -l)
+    [ $count != 0 ] && echo "old juicefs.py process is not killed" && exit 1 || true
+    count=$(ps -ef | awk -v var=$old_mount_pid '$2 == var ' | wc -l)
+    [ $count != 0 ] && echo "old mount process is not killed" && exit 1 || true
+}
+
+prepare_test(){
+    umount_jfs /tmp/jfs
+}
+
+kill_child_process()
+{
+    child_pid=$(ps -ef | grep "juicefs" | grep "mount" | grep -v grep | awk '$3 != 1 {print $2}')
+    kill $child_pid
+}
+
+force_kill_child_process()
+{
+    child_pid=$(ps -ef | grep "juicefs" | grep "mount" | grep -v grep | awk '$3 != 1 {print $2}')
+    kill -9 $child_pid
+}
+
+
+kill_parent_process()
+{
+    parent_pid=$(ps -ef | grep "cmd/mount/mount mount" | grep -v grep | awk '$3 == 1 {print $2}')
+    kill $parent_pid
+}
+
+wait_process_killed()
+{   
+    echo "wait_process_killed $1"
+    wait_seconds=15
+    for i in $(seq 1 $wait_seconds); do
+        count=$(ps -ef | grep "cmd/mount/mount mount" | grep -v grep | wc -l)
+        echo i is $i, count is $count
+        if [ $count -eq 0 ]; then
+            echo "mount process is killed"
+            break
+        fi
+        if [ $i -eq $wait_seconds ]; then
+            ps -ef | grep "cmd/mount/mount | grep -v grep "
+            echo "mount process is not killed after $wait_seconds"
+            exit 1
+        fi
+        echo "wait process to kill" && sleep 1
+    done
+}
+
+wait_process_started()
+{   
+    echo "wait_process_to_start $1"
+    wait_seconds=15
+    for i in $(seq 1 $wait_seconds); do
+        if check_process_is_alive ; then
+            echo "mount process is started"
+            break
+        fi
+        if [ $i -eq $wait_seconds ]; then
+            ps -ef | grep "juicefs" | grep "mount" | grep -v grep 
+            echo "mount process is not started after $wait_seconds"
+            exit 1
+        fi
+        echo "wait process to start" && sleep 1
+    done
+}
+
+check_process_is_alive()
+{   
+    echo >&2 "check_process_is_alive $1"
+    count=$(ps -ef | grep "juicefs" | grep "mount" | grep -v grep | wc -l)
+    if [ $count -ne 2 ]; then
+        ps -ef | grep "juicefs" | grep -v grep "
+        echo >&2 "mount process is not equal 2"
+        return 1
+    fi
+    child_count=$(ps -ef | grep "juicefs" | grep  "mount" | grep -v grep | awk '$3 != 1 {print $2}' | wc -l)
+    if [[ $child_count -ne 1 ]]; then
+        ps -ef | grep "juicefs" | grep -v "grep"
+        echo >&2 "mount child process is not equal 1"
+        return 1
+    fi
+    parent_count=$(ps -ef | grep "juicefs" | grep "mount" | grep -v grep | awk '$3 == 1 {print $2}' | wc -l)
+    if [ $parent_count -ne 1 ]; then
+        ps -ef | grep "juicefs" | grep -v "grep"
+        echo >&2 "mount parent process is not equal 1"
+        return 1
+    fi
+    ppid1=$(ps -ef | grep "juicefs" | grep "mount" | grep -v grep | awk '$3 == 1 {print $2}')
+    ppid2=$(ps -ef | grep "juicefs" | grep "mount" | grep -v grep | awk '$3 != 1 {print $3}')
+    if [ $ppid1 -ne $ppid2 ]; then
+        ps -ef | grep "juicefs" | grep "mount" | grep -v grep"
+        echo >&2 "mount parent process is not equal child process's ppid"
+        return 1
+    fi
+}
+
+
+source .github/scripts/common/run_test.sh && run_test $@
