@@ -179,13 +179,6 @@ var bufPool = sync.Pool{
 	},
 }
 
-var (
-	// for multiple upload mem limit
-	availMem int64
-	mutex    sync.Mutex
-	cond     = sync.NewCond(&mutex)
-)
-
 func try(n int, f func() error) (err error) {
 	for i := 0; i < n; i++ {
 		err = f()
@@ -444,29 +437,7 @@ func (w *withProgress) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64, key, uploadID string, num int, abort chan struct{}) (*object.Part, error) {
-	mutex.Lock()
-	for availMem < 0 {
-		cond.Wait()
-	}
-	availMem -= size
-	mutex.Unlock()
-	defer func() {
-		mutex.Lock()
-		availMem += size
-		mutex.Unlock()
-		cond.Broadcast()
-	}()
-
-	select {
-	case <-abort:
-		return nil, fmt.Errorf("aborted")
-	case concurrent <- 1:
-		defer func() {
-			<-concurrent
-		}()
-	}
-
+func doUploadPart(src, dst object.ObjectStorage, srckey string, off, size int64, key, uploadID string, num int) (*object.Part, error) {
 	if limiter != nil {
 		limiter.Wait(size)
 	}
@@ -511,9 +482,18 @@ func choosePartSize(upload *object.MultipartUpload, size int64) int64 {
 }
 
 func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upload *object.MultipartUpload, num int, abort chan struct{}) (*object.Part, error) {
+	select {
+	case <-abort:
+		return nil, fmt.Errorf("aborted")
+	case concurrent <- 1:
+		defer func() {
+			<-concurrent
+		}()
+	}
+
 	limits := dst.Limits()
 	if size <= 32<<20 || !limits.IsSupportUploadPartCopy {
-		return doUploadPart(src, dst, key, off, size, key, upload.UploadID, num, abort)
+		return doUploadPart(src, dst, key, off, size, key, upload.UploadID, num)
 	}
 
 	tmpkey := fmt.Sprintf("%s.part%d", key, num)
@@ -529,27 +509,21 @@ func doCopyRange(src, dst object.ObjectStorage, key string, off, size int64, upl
 
 	partSize := choosePartSize(up, size)
 	n := int((size-1)/partSize) + 1
-	logger.Debugf("Copying data of %s (range: %d-%d) as %d parts (size: %d): %s", key, off, size, n, partSize, up.UploadID)
+	logger.Debugf("Copying data of %s (range: %d,%d) as %d parts (size: %d): %s", key, off, size, n, partSize, up.UploadID)
 	parts := make([]*object.Part, n)
-	errs := make(chan error, n)
 
 	for i := 0; i < n; i++ {
-		go func(num int) {
-			sz := partSize
-			if num == n-1 {
-				sz = size - int64(num)*partSize
-			}
-			parts[num], err = doUploadPart(src, dst, key, off+int64(num)*partSize, sz, tmpkey, up.UploadID, num, abort)
-			errs <- err
-		}(i)
-	}
-
-	for i := 0; i < n; i++ {
-		if err = <-errs; err != nil {
+		sz := partSize
+		if i == n-1 {
+			sz = size - int64(i)*partSize
+		}
+		parts[i], err = doUploadPart(src, dst, key, off+int64(i)*partSize, sz, tmpkey, up.UploadID, i)
+		if err != nil {
 			dst.AbortUpload(tmpkey, up.UploadID)
 			return nil, fmt.Errorf("range(%d,%d): %s", off, size, err)
 		}
 	}
+
 	err = try(3, func() error { return dst.CompleteUpload(tmpkey, up.UploadID, parts) })
 	if err != nil {
 		dst.AbortUpload(tmpkey, up.UploadID)
@@ -1194,7 +1168,6 @@ func Sync(src, dst object.ObjectStorage, config *Config) error {
 	if config.Manager != "" {
 		bufferSize = 100
 	}
-	availMem = int64(config.Threads) * (32 << 20)
 	tasks := make(chan object.Object, bufferSize)
 	wg := sync.WaitGroup{}
 	concurrent = make(chan int, config.Threads)
