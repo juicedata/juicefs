@@ -860,3 +860,73 @@ func TestInternalFile(t *testing.T) {
 		t.Fatalf("result: %s", string(resp[:n]))
 	}
 }
+
+func TestReaddirCache(t *testing.T) {
+	v, _ := createTestVFS()
+	ctx := NewLogContext(meta.Background)
+	entry, st := v.Mkdir(ctx, 1, "testdir", 0777, 022)
+	if st != 0 {
+		t.Fatalf("mkdir testdir: %s", st)
+	}
+	parent := entry.Inode
+	for i := 0; i < 100; i++ {
+		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
+	}
+	fh, _ := v.Opendir(ctx, parent, 0)
+	_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", 100), 0777, 022)
+	defer v.Releasedir(ctx, parent, fh)
+	var off = 20
+	var files = make(map[string]bool)
+	// read first 20
+	entries, _, _ := v.Readdir(ctx, parent, 20, 0, fh, true)
+	for _, e := range entries[:off] {
+		files[string(e.Name)] = true
+	}
+	v.UpdateReaddirOffset(ctx, parent, fh, off)
+	for i := 0; i < 100; i += 10 {
+		name := fmt.Sprintf("d%d", i)
+		_ = v.Rmdir(ctx, parent, name)
+		delete(files, name)
+	}
+	for i := 100; i < 110; i++ {
+		_, _ = v.Mkdir(ctx, parent, fmt.Sprintf("d%d", i), 0777, 022)
+		_ = v.Rename(ctx, parent, fmt.Sprintf("d%d", i), parent, fmt.Sprintf("d%d", i+10), 0)
+		delete(files, fmt.Sprintf("d%d", i))
+	}
+	for {
+		entries, _, _ := v.Readdir(ctx, parent, 20, off, fh, true)
+		if len(entries) == 0 {
+			break
+		}
+		if len(entries) > 20 {
+			entries = entries[:20]
+		}
+		for _, e := range entries {
+			if e.Inode > 0 {
+				files[string(e.Name)] = true
+			} else {
+				t.Logf("invalid entry %s", e.Name)
+			}
+		}
+		off += len(entries)
+		v.UpdateReaddirOffset(ctx, parent, fh, off)
+	}
+	for i := 0; i < 100; i += 10 {
+		name := fmt.Sprintf("d%d", i)
+		if _, ok := files[name]; ok {
+			t.Fatalf("dir %s should be deleted", name)
+		}
+	}
+	for i := 100; i < 110; i++ {
+		name := fmt.Sprintf("d%d", i)
+		if _, ok := files[name]; ok {
+			t.Fatalf("dir %s should be deleted", name)
+		}
+	}
+	for i := 110; i < 120; i++ {
+		name := fmt.Sprintf("d%d", i)
+		if _, ok := files[name]; !ok {
+			t.Fatalf("dir %s should be added", name)
+		}
+	}
+}

@@ -33,6 +33,8 @@ type handle struct {
 	// for dir
 	children []*meta.Entry
 	readAt   time.Time
+	readOff  int
+	index    map[string]int
 
 	// for file
 	locks      uint8
@@ -232,5 +234,37 @@ func (v *VFS) releaseFileHandle(ino Ino, fh uint64) {
 		}
 		h.Unlock()
 		h.Close()
+	}
+}
+
+func (v *VFS) invalidateDirHandle(parent Ino, name string, inode Ino, attr *Attr) {
+	v.hanleM.Lock()
+	hs := v.handles[parent]
+	v.hanleM.Unlock()
+	for _, h := range hs {
+		h.Lock()
+		if h.children != nil && h.index != nil {
+			if inode > 0 {
+				h.children = append(h.children, &meta.Entry{
+					Inode: inode,
+					Name:  []byte(name),
+					Attr:  attr,
+				})
+				h.index[name] = len(h.children) - 1
+			} else {
+				i, ok := h.index[name]
+				if ok {
+					delete(h.index, name)
+					h.children[i].Inode = 0 // invalid
+					if i >= h.readOff {
+						// not read yet, remove it
+						h.children[i] = h.children[len(h.children)-1]
+						h.index[string(h.children[i].Name)] = i
+						h.children = h.children[:len(h.children)-1]
+					}
+				}
+			}
+		}
+		h.Unlock()
 	}
 }
