@@ -663,10 +663,6 @@ func (m *redisMeta) sliceRefs() string {
 	return m.prefix + "sliceRef"
 }
 
-func (m *redisMeta) counterName(name string) string {
-	return m.prefix + name
-}
-
 func (m *redisMeta) packQuota(space, inodes int64) []byte {
 	wb := utils.NewBuffer(16)
 	wb.Put64(uint64(space))
