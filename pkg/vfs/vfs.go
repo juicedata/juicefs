@@ -93,9 +93,8 @@ func (o FuseOptions) StripOptions() FuseOptions {
 	o.IgnoreSecurityLabels,
 		o.RememberInodes,
 		o.SingleThreaded,
-		o.DisableXAttrs,
 		o.Debug,
-		o.NoAllocForRead = false, false, false, false, false, false
+		o.NoAllocForRead = false, false, false, false, false
 
 	// ignore there options because they cannot be configured by users
 	o.Name = ""
@@ -126,15 +125,10 @@ type Config struct {
 
 	Pid        int
 	PPid       int
-	Sid        uint64
 	DebugAgent string
-	CommPath   string `json:",omitempty"`
-	StatePath  string `json:",omitempty"`
-
-	// vfs options
-	NoBSDLock   bool         `json:",omitempty"`
-	NoPOSIXLock bool         `json:",omitempty"`
-	FuseOpts    *FuseOptions `json:",omitempty"`
+	CommPath   string       `json:",omitempty"`
+	StatePath  string       `json:",omitempty"`
+	FuseOpts   *FuseOptions `json:",omitempty"`
 }
 
 type RootSquash struct {
@@ -1107,13 +1101,6 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	statePath := os.Getenv("_FUSE_STATE_PATH")
 	if statePath == "" {
 		statePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
-	} else {
-		// there is a bug in the supervsior, _FUSE_STATE_PATH could be stale
-		fi, _ := os.Stat(statePath)
-		if fi != nil && time.Since(fi.ModTime()) > time.Minute {
-			logger.Infof("Reset stale path %s (modified at %s)", statePath, fi.ModTime())
-			statePath = fmt.Sprintf("/tmp/state%d.json", os.Getppid())
-		}
 	}
 
 	if err := v.loadAllHandles(statePath); err != nil && !os.IsNotExist(err) {

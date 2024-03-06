@@ -58,7 +58,7 @@ func restore(ctx *cli.Context) error {
 }
 
 func doRestore(m meta.Meta, hour string, putBack bool, threads int) {
-	if _, err := m.NewSession(false); err != nil {
+	if err := m.NewSession(false); err != nil {
 		logger.Warningf("running without sessions because fail to new session: %s", err)
 	} else {
 		defer func() {

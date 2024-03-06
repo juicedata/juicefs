@@ -213,8 +213,7 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	chunkConf := getChunkConf(c, format)
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)
 	registerMetaMsg(metaCli, store, chunkConf)
-	var sid uint64
-	sid, err = metaCli.NewSession(true)
+	err = metaCli.NewSession(true)
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}
@@ -240,7 +239,6 @@ func initForSvc(c *cli.Context, mp string, metaUrl string) (*vfs.Config, *fs.Fil
 	vfsConf.AttrTimeout = time.Millisecond * time.Duration(c.Float64("attr-cache")*1000)
 	vfsConf.EntryTimeout = time.Millisecond * time.Duration(c.Float64("entry-cache")*1000)
 	vfsConf.DirEntryTimeout = time.Millisecond * time.Duration(c.Float64("dir-entry-cache")*1000)
-	vfsConf.Sid = sid
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
 	jfs, err := fs.NewFileSystem(vfsConf, metaCli, store)
 	if err != nil {

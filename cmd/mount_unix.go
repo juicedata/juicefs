@@ -240,14 +240,6 @@ func fuseFlags() []cli.Flag {
 			Name:  "enable-ioctl",
 			Usage: "enable ioctl (support GETFLAGS/SETFLAGS only)",
 		},
-		&cli.BoolFlag{
-			Name:  "no-bsd-lock",
-			Usage: "disable BSD lock",
-		},
-		&cli.BoolFlag{
-			Name:  "no-posix-lock",
-			Usage: "disable POSIX lock",
-		},
 		&cli.StringFlag{
 			Name:  "root-squash",
 			Usage: "mapping local root user (uid = 0) to another one specified as <uid>:<gid>",
@@ -508,18 +500,13 @@ func canShutdownGracefully(mp string, newConf *vfs.Config) bool {
 		logger.Infof("different options, mount on top of it: %v != %v", oldConf.FuseOpts.StripOptions(), newConf.FuseOpts.StripOptions())
 		return false
 	}
-	if oldConf.NoBSDLock && !newConf.NoBSDLock {
-		logger.Infof("BSD lock is enabled, mount on top of it")
-		return false
-	}
-	if oldConf.NoPOSIXLock && !newConf.NoPOSIXLock {
-		logger.Infof("POSIX lock is enabled, mount on top of it")
-		return false
+	if oldConf.FuseOpts.DisableXAttrs && !newConf.FuseOpts.DisableXAttrs {
+		logger.Infof("Xattr is enabled, mount on top of it")
 	}
 	// pass the session id to the new process, sid=0 means old process is read-only mode
-	if oldConf.Sid != 0 {
-		logger.Infof("pass the old session id %d to the new process", oldConf.Sid)
-		os.Setenv("_JFS_META_SID", strconv.FormatUint(oldConf.Sid, 10))
+	if oldConf.Meta.Sid != 0 {
+		logger.Infof("pass the old session id %d to the new process", oldConf.Meta.Sid)
+		os.Setenv("_JFS_META_SID", strconv.FormatUint(oldConf.Meta.Sid, 10))
 	}
 	return true
 }
@@ -558,19 +545,6 @@ func fixCacheDirs(c *cli.Context) {
 	}
 }
 
-func fixConfDir(c *cli.Context) {
-	confDir := c.String("conf-dir")
-	if confDir == "" || strings.HasPrefix(confDir, "/") {
-		return
-	}
-	absConfDir := absPath(confDir)
-	for i, a := range os.Args {
-		if i > 0 && os.Args[i-1] == "--conf-dir" && a == confDir || a == "--conf-dir="+confDir {
-			os.Args[i] = a[:len(a)-len(confDir)] + absConfDir
-		}
-	}
-}
-
 func makeDaemon(c *cli.Context, conf *vfs.Config) error {
 	var attrs godaemon.DaemonAttr
 	logfile := c.String("log")
@@ -597,7 +571,6 @@ func makeDaemon(c *cli.Context, conf *vfs.Config) error {
 			}
 		}
 		fixCacheDirs(c)
-		fixConfDir(c)
 
 		_ = os.MkdirAll(filepath.Dir(logfile), 0755)
 		attrs.Stdout, err = os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)

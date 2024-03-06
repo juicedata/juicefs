@@ -338,7 +338,7 @@ type Meta interface {
 	// Load loads the existing setting of a formatted volume from meta service.
 	Load(checkVersion bool) (*Format, error)
 	// NewSession creates or update client session.
-	NewSession(record bool) (uint64, error)
+	NewSession(record bool) error
 	// CloseSession does cleanup and close the session.
 	CloseSession() error
 	// GetSession retrieves information of session with sid

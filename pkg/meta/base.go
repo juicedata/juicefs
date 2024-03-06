@@ -476,11 +476,11 @@ func (m *baseMeta) newSessionInfo() []byte {
 	return buf
 }
 
-func (m *baseMeta) NewSession(record bool) (uint64, error) {
+func (m *baseMeta) NewSession(record bool) error {
 	go m.refresh()
 	if m.conf.ReadOnly {
 		logger.Infof("Create read-only session OK with version: %s", version.Version())
-		return 0, nil
+		return nil
 	}
 
 	if record {
@@ -489,13 +489,14 @@ func (m *baseMeta) NewSession(record bool) (uint64, error) {
 		if m.sid == 0 {
 			v, err := m.en.incrCounter("nextSession", 1)
 			if err != nil {
-				return 0, fmt.Errorf("get session ID: %s", err)
+				return fmt.Errorf("get session ID: %s", err)
 			}
 			m.sid = uint64(v)
+			m.conf.Sid = m.sid
 			action = "Create"
 		}
 		if err := m.en.doNewSession(m.newSessionInfo()); err != nil {
-			return 0, fmt.Errorf("create session: %s", err)
+			return fmt.Errorf("create session: %s", err)
 		}
 		logger.Infof("%s session %d OK with version: %s", action, m.sid, version.Version())
 	}
@@ -520,7 +521,7 @@ func (m *baseMeta) NewSession(record bool) (uint64, error) {
 		go m.cleanupSlices()
 		go m.cleanupTrash()
 	}
-	return m.sid, nil
+	return nil
 }
 
 func (m *baseMeta) expireTime() int64 {

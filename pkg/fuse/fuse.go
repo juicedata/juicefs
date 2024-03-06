@@ -530,8 +530,6 @@ func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool) f
 		} else if n == "debug" {
 			opt.Debug = true
 			log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-		} else if strings.HasPrefix(n, "mfs") {
-			logger.Debugf("Ignore %s", n)
 		} else if strings.TrimSpace(n) != "" {
 			opt.Options = append(opt.Options, strings.TrimSpace(n))
 		}

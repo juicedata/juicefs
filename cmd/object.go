@@ -393,8 +393,7 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 	chunkConf := getDefaultChunkConf(format)
 	store := chunk.NewCachedStore(blob, *chunkConf, nil)
 	registerMetaMsg(metaCli, store, chunkConf)
-	var sid uint64
-	sid, err = metaCli.NewSession(false)
+	err = metaCli.NewSession(false)
 	if err != nil {
 		return nil, fmt.Errorf("new session: %s", err)
 	}
@@ -409,7 +408,6 @@ func newJFS(endpoint, accessKey, secretKey, token string) (object.ObjectStorage,
 		Chunk:           chunkConf,
 		AttrTimeout:     time.Second,
 		DirEntryTimeout: time.Second,
-		Sid:             sid,
 	}
 
 	vfsConf.Format.RemoveSecret()

@@ -250,7 +250,6 @@ type saveHandle struct {
 	FlockOwner uint64
 	Off        uint64
 	Data       string
-	Pending    string
 }
 
 func (v *VFS) dumpAllHandles(path string) (err error) {
@@ -285,7 +284,6 @@ func (v *VFS) dumpAllHandles(path string) (err error) {
 				FlockOwner: h.flockOwner,
 				Off:        h.off,
 				Data:       hex.EncodeToString(h.data),
-				Pending:    hex.EncodeToString(h.pending),
 			}
 			toSave[h.fh] = s
 		}
@@ -328,10 +326,6 @@ func (v *VFS) loadAllHandles(path string) error {
 		if err != nil {
 			logger.Warnf("decode data for inode %d: %s", s.Inode, err)
 		}
-		pending, err := hex.DecodeString(s.Pending)
-		if err != nil {
-			logger.Warnf("decode pending for inode %d: %s", s.Inode, err)
-		}
 		h := &handle{
 			inode:      Ino(s.Inode),
 			fh:         fh,
@@ -340,7 +334,6 @@ func (v *VFS) loadAllHandles(path string) error {
 			flockOwner: s.FlockOwner,
 			off:        s.Off,
 			data:       data,
-			pending:    pending,
 		}
 		h.cond = utils.NewCond(h)
 		switch s.Flags & O_ACCMODE {

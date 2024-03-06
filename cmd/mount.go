@@ -255,8 +255,6 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 		PrefixInternal: c.Bool("prefix-internal"),
 		Pid:            os.Getpid(),
 		PPid:           os.Getppid(),
-		NoBSDLock:      c.Bool("no-bsd-lock"),
-		NoPOSIXLock:    c.Bool("no-posix-lock"),
 	}
 	skip_check := os.Getenv("SKIP_BACKUP_META_CHECK") == "true"
 	if !skip_check && cfg.BackupMeta > 0 && cfg.BackupMeta < time.Minute*5 {
@@ -623,7 +621,7 @@ func mount(c *cli.Context) error {
 	registerMetaMsg(metaCli, store, chunkConf)
 
 	removePassword(addr)
-	vfsConf.Sid, err = metaCli.NewSession(true)
+	err = metaCli.NewSession(true)
 	if err != nil {
 		logger.Fatalf("new session: %s", err)
 	}
