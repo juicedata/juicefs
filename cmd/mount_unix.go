@@ -108,7 +108,7 @@ func killMountProcess(pid int, dev uint64, lastActive *int64) {
 
 func loadConfig(path string) (string, *vfs.Config, error) {
 	for d := path; d != "/"; d = filepath.Dir(d) {
-		data, err := os.ReadFile(filepath.Join(d, ".config"))
+		data, err := readConfig(d)
 		if err == nil {
 			var conf vfs.Config
 			err = json.Unmarshal(data, &conf)
@@ -130,7 +130,10 @@ func watchdog(ctx context.Context, mp string) {
 		time.Sleep(time.Millisecond * 100) // wait for child process
 		atomic.StoreInt64(&lastActive, time.Now().Unix())
 		for ctx.Err() == nil {
-			const confName = ".config"
+			var confName = ".config"
+			if !vfs.IsSpecialName(confName) {
+				confName = ".jfs" + confName
+			}
 			var confStat syscall.Stat_t
 			err := syscall.Stat(filepath.Join(mp, confName), &confStat)
 			ino, _ := vfs.GetInternalNodeByName(confName)
