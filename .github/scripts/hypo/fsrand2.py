@@ -47,7 +47,7 @@ class JuicefsMachine(RuleBasedStateMachine):
     group_created = False
     INCLUDE_RULES = []
     EXCLUDE_RULES = ['rebalance_dir', 'rebalance_file', 'merge_dir', 'split_dir', \
-                        'clone_cp_file', 'clone_cp_dir', 'set_acl']
+                        'clone_cp_file', 'clone_cp_dir']
     @initialize(target=Folders)
     def init_folders(self):
         if not os.path.exists(self.ROOT_DIR1[0]):
@@ -453,7 +453,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           )
     @precondition(lambda self: 'get_acl' not in self.EXCLUDE_RULES)
     def get_acl(self, entry, rootdir1=DEFALUT_ROOT_DIR1, rootdir2=DEFALUT_ROOT_DIR2):
-        assume(common.support_acl(rootdir1) and common.support_acl(rootdir2))
+        # assume(common.support_acl(rootdir1) and common.support_acl(rootdir2))
         result1 = self.fsop.do_get_acl(rootdir1, entry)
         result2 = self.fsop.do_get_acl(rootdir2, entry)
         assert self.equal(result1, result2, rootdir1, rootdir2), f'\033[31mget_acl:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -467,7 +467,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           )
     @precondition(lambda self: 'remove_acl' not in self.EXCLUDE_RULES )
     def remove_acl(self, entry, option, rootdir1=DEFALUT_ROOT_DIR1, rootdir2=DEFALUT_ROOT_DIR2, user='root'):
-        assume(common.support_acl(rootdir1) and common.support_acl(rootdir2))
+        # assume(common.support_acl(rootdir1) and common.support_acl(rootdir2))
         result1 = self.fsop.do_remove_acl(rootdir1, entry, option, user)
         result2 = self.fsop.do_remove_acl(rootdir2, entry, option, user)
         assert self.equal(result1, result2, rootdir1, rootdir2), f'\033[31mremove_acl:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
@@ -494,7 +494,7 @@ class JuicefsMachine(RuleBasedStateMachine):
           )
     @precondition(lambda self: 'set_acl' not in self.EXCLUDE_RULES)
     def set_acl(self, sudo_user, entry, user, user_perm, group, group_perm, other_perm, set_mask, mask, default, recursive, recalc_mask, not_recalc_mask, logical, physical, rootdir1=DEFALUT_ROOT_DIR1, rootdir2=DEFALUT_ROOT_DIR2):
-        assume(common.support_acl(rootdir1) and common.support_acl(rootdir2))
+        # assume(common.support_acl(rootdir1) and common.support_acl(rootdir2))
         result1 = self.fsop.do_set_acl(rootdir1, sudo_user, entry, user, user_perm, group, group_perm, other_perm, set_mask, mask, default, recursive, recalc_mask, not_recalc_mask, logical, physical)
         result2 = self.fsop.do_set_acl(rootdir2, sudo_user, entry, user, user_perm, group, group_perm, other_perm, set_mask, mask, default, recursive, recalc_mask, not_recalc_mask, logical, physical)
         assert self.equal(result1, result2, rootdir1, rootdir2), f'\033[31mset_acl:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
