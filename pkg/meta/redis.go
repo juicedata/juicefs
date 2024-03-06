@@ -338,7 +338,7 @@ func (m *redisMeta) doLoad() ([]byte, error) {
 	return body, err
 }
 
-func (m *redisMeta) doNewSession(sinfo []byte) error {
+func (m *redisMeta) doNewSession(sinfo []byte, update bool) error {
 	err := m.rdb.ZAdd(Background, m.allSessions(), redis.Z{
 		Score:  float64(m.expireTime()),
 		Member: strconv.FormatUint(m.sid, 10)}).Err()

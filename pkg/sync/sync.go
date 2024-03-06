@@ -881,6 +881,27 @@ func filter(keys <-chan object.Object, rules []rule) <-chan object.Object {
 	return r
 }
 
+func matchTwoStar(p string, s []string) bool {
+	if len(s) == 0 {
+		return p == "*"
+	}
+	idx := strings.Index(p, "**")
+	if idx == -1 {
+		ok, _ := path.Match(p, strings.Join(s, "/"))
+		return ok
+	}
+	ok, _ := path.Match(p[:idx+1], s[0])
+	if !ok {
+		return false
+	}
+	for i := 1; i <= len(s); i++ {
+		if matchTwoStar(p[idx+1:], s[i:]) {
+			return true
+		}
+	}
+	return false
+}
+
 func matchPrefix(p, s []string) bool {
 	if len(p) == 0 || len(s) == 0 {
 		return len(p) == len(s)
@@ -892,7 +913,7 @@ func matchPrefix(p, s []string) bool {
 		return true
 	case strings.Contains(first, "**"):
 		for i := 1; i <= n; i++ {
-			if ok, _ := path.Match(first, strings.Join(s[:i], "*")); ok && matchPrefix(p[1:], s[i:]) {
+			if matchTwoStar(first, s[:i]) && matchPrefix(p[1:], s[i:]) {
 				return true
 			}
 		}
@@ -923,7 +944,7 @@ func matchSuffix(p, s []string) bool {
 		return false
 	case strings.Contains(last, "**"):
 		for i := 0; i < n; i++ {
-			if ok, _ := path.Match(last, strings.Join(s[i:], "*")); ok && matchSuffix(prefix, s[:i]) {
+			if matchTwoStar(last, s[i:]) && matchSuffix(prefix, s[:i]) {
 				return true
 			}
 		}

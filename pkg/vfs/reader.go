@@ -68,6 +68,7 @@ func (m sstate) String() string {
 
 type FileReader interface {
 	Read(ctx meta.Context, off uint64, buf []byte) (int, syscall.Errno)
+	GetLength() uint64
 	Close(ctx meta.Context)
 }
 
@@ -296,6 +297,12 @@ type fileReader struct {
 	refs uint16
 	next *fileReader
 	r    *dataReader
+}
+
+func (f *fileReader) GetLength() uint64 {
+	f.Lock()
+	defer f.Unlock()
+	return f.length
 }
 
 // protected by f

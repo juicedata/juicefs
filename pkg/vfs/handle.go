@@ -17,6 +17,10 @@
 package vfs
 
 import (
+	"encoding/hex"
+	"encoding/json"
+	"io"
+	"os"
 	"sync"
 	"syscall"
 	"time"
@@ -35,6 +39,7 @@ type handle struct {
 	readAt   time.Time
 
 	// for file
+	flags      uint32
 	locks      uint8
 	flockOwner uint64 // kernel 3.1- does not pass lock_owner in release()
 	ofdOwner   uint64 // OFD lock
@@ -211,6 +216,7 @@ func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32) uint64 {
 	h := v.newHandle(inode)
 	h.Lock()
 	defer h.Unlock()
+	h.flags = flags
 	switch flags & O_ACCMODE {
 	case syscall.O_RDONLY:
 		h.reader = v.reader.Open(inode, length)
@@ -234,4 +240,117 @@ func (v *VFS) releaseFileHandle(ino Ino, fh uint64) {
 		h.Unlock()
 		h.Close()
 	}
+}
+
+type saveHandle struct {
+	Inode      uint64
+	Length     uint64
+	Flags      uint32
+	UseLocks   uint8
+	FlockOwner uint64
+	Off        uint64
+	Data       string
+}
+
+func (v *VFS) dumpAllHandles(path string) (err error) {
+	v.hanleM.Lock()
+	defer v.hanleM.Unlock()
+
+	var toSave = make(map[uint64]saveHandle)
+	for ino, hs := range v.handles {
+		if ino == logInode {
+			continue // will be recovered
+		}
+		if ino == controlInode {
+			// the job is lost, can't be recovered
+			continue
+		}
+		for _, h := range hs {
+			var length uint64
+			if h.writer != nil {
+				length = h.writer.GetLength()
+				err := h.writer.Flush(meta.Background)
+				if err != 0 {
+					logger.Errorf("flush writer of %d: %s", ino, err)
+				}
+			} else if h.reader != nil {
+				length = h.reader.GetLength()
+			}
+			s := saveHandle{
+				Inode:      uint64(h.inode),
+				Length:     length,
+				Flags:      h.flags,
+				UseLocks:   h.locks,
+				FlockOwner: h.flockOwner,
+				Off:        h.off,
+				Data:       hex.EncodeToString(h.data),
+			}
+			toSave[h.fh] = s
+		}
+	}
+	d, err := json.Marshal(toSave)
+	if err != nil {
+		return err
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(d)
+	if err != nil {
+		return err
+	}
+	return
+}
+
+func (v *VFS) loadAllHandles(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	d, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+	var toRestore map[uint64]saveHandle
+	err = json.Unmarshal(d, &toRestore)
+	if err != nil {
+		return err
+	}
+	v.hanleM.Lock()
+	defer v.hanleM.Unlock()
+	for fh, s := range toRestore {
+		data, err := hex.DecodeString(s.Data)
+		if err != nil {
+			logger.Warnf("decode data for inode %d: %s", s.Inode, err)
+		}
+		h := &handle{
+			inode:      Ino(s.Inode),
+			fh:         fh,
+			flags:      s.Flags,
+			locks:      s.UseLocks,
+			flockOwner: s.FlockOwner,
+			off:        s.Off,
+			data:       data,
+		}
+		h.cond = utils.NewCond(h)
+		switch s.Flags & O_ACCMODE {
+		case syscall.O_RDONLY:
+			h.reader = v.reader.Open(h.inode, s.Length)
+		case syscall.O_WRONLY: // FUSE writeback_cache mode need reader even for WRONLY
+			fallthrough
+		case syscall.O_RDWR:
+			h.reader = v.reader.Open(h.inode, s.Length)
+			h.writer = v.writer.Open(h.inode, s.Length)
+		}
+		v.handles[h.inode] = append(v.handles[h.inode], h)
+		v.handleIno[fh] = h.inode
+	}
+	if len(v.handleIno) > 0 {
+		logger.Infof("load %d handles from %s", len(v.handleIno), path)
+	}
+	// _ = os.Remove(path)
+	return nil
 }

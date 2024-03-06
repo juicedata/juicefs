@@ -19,6 +19,7 @@ package fuse
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -501,6 +502,51 @@ func Serve(v *vfs.VFS, options string, xattrs, ioctl bool) error {
 		}
 	}
 
+	fsserv = fssrv
 	fssrv.Serve()
 	return nil
+}
+
+func GenFuseOpt(conf *vfs.Config, options string, mt int, noxattr, noacl bool) fuse.MountOptions {
+	var opt fuse.MountOptions
+	opt.FsName = "JuiceFS:" + conf.Format.Name
+	opt.Name = "juicefs"
+	opt.SingleThreaded = mt == 0
+	opt.MaxBackground = 200
+	opt.EnableLocks = true
+	opt.DisableXAttrs = noxattr
+	opt.EnableAcl = !noacl
+	opt.IgnoreSecurityLabels = noacl
+	opt.MaxWrite = 1 << 20
+	opt.MaxReadAhead = 1 << 20
+	opt.DirectMount = true
+	opt.DontUmask = true
+	for _, n := range strings.Split(options, ",") {
+		// TODO allow_root
+		if n == "allow_other" {
+			opt.AllowOther = true
+		} else if strings.HasPrefix(n, "fsname=") {
+			opt.FsName = n[len("fsname="):]
+		} else if n == "debug" {
+			opt.Debug = true
+			log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+		} else if strings.TrimSpace(n) != "" {
+			opt.Options = append(opt.Options, strings.TrimSpace(n))
+		}
+	}
+	opt.Options = append(opt.Options, "default_permissions")
+	if runtime.GOOS == "darwin" {
+		opt.Options = append(opt.Options, "fssubtype=juicefs", "volname="+conf.Format.Name)
+		opt.Options = append(opt.Options, "daemon_timeout=60", "iosize=65536", "novncache")
+	}
+	return opt
+}
+
+var fsserv *fuse.Server
+
+func Shutdown() bool {
+	if fsserv != nil {
+		return fsserv.Shutdown()
+	}
+	return false
 }

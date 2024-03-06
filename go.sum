@@ -622,8 +622,8 @@ github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83 h1:RyHTka3jCnTaUqfRYjlwcQlr53aasmkvHEbYLXthqr8=
 github.com/juicedata/cli/v2 v2.19.4-0.20230605075551-9c9c5c0dce83/go.mod h1:1CNUng3PtjQMtRzJO4FMXBQvkGtuYRxxiR9xMa7jMwI=
-github.com/juicedata/go-fuse/v2 v2.1.1-0.20230726081302-124dbfa991d7 h1:4evzoVz1/AZfk9tqxWdzVYTMl2dC7VjEJHfaSFDrKS8=
-github.com/juicedata/go-fuse/v2 v2.1.1-0.20230726081302-124dbfa991d7/go.mod h1:B1nGE/6RBFyBRC1RRnf23UpwCdyJ31eukw34oAKukAc=
+github.com/juicedata/go-fuse/v2 v2.1.1-0.20240202080323-002ef792942e h1:Oj9V2Losi2fVgVjQ4my0zDbw4F+Ry3VOnfTRCiWwy7Q=
+github.com/juicedata/go-fuse/v2 v2.1.1-0.20240202080323-002ef792942e/go.mod h1:B1nGE/6RBFyBRC1RRnf23UpwCdyJ31eukw34oAKukAc=
 github.com/juicedata/go-nfs-client v0.0.0-20231018052507-dbca444fa7e8 h1:mVVipCbohnzKZPiHGzFncLKEJZpypqjpGr4End2PP48=
 github.com/juicedata/go-nfs-client v0.0.0-20231018052507-dbca444fa7e8/go.mod h1:xOMqi3lOrcGe9uZLnSzgaq94Vc3oz6VPCNDLJUnXpKs=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d h1:kpQMvNZJKGY3PTt7OSoahYc4nM0HY67SvK0YyS0GLwA=

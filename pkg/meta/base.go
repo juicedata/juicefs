@@ -59,7 +59,7 @@ type engine interface {
 
 	doLoad() ([]byte, error)
 
-	doNewSession(sinfo []byte) error
+	doNewSession(sinfo []byte, update bool) error
 	doRefreshSession() error
 	doFindStaleSessions(limit int) ([]uint64, error) // limit < 0 means all
 	doCleanStaleSession(sid uint64) error
@@ -189,6 +189,7 @@ func newBaseMeta(addr string, conf *Config) *baseMeta {
 	return &baseMeta{
 		addr:         utils.RemovePassword(addr),
 		conf:         conf,
+		sid:          conf.Sid,
 		root:         RootInode,
 		of:           newOpenFiles(conf.OpenCache, conf.OpenCacheLimit),
 		removedFiles: make(map[Ino]bool),
@@ -483,15 +484,21 @@ func (m *baseMeta) NewSession(record bool) error {
 	}
 
 	if record {
-		v, err := m.en.incrCounter("nextSession", 1)
-		if err != nil {
-			return fmt.Errorf("get session ID: %s", err)
+		// use the original sid if it's not 0
+		action := "Update"
+		if m.sid == 0 {
+			v, err := m.en.incrCounter("nextSession", 1)
+			if err != nil {
+				return fmt.Errorf("get session ID: %s", err)
+			}
+			m.sid = uint64(v)
+			m.conf.Sid = m.sid
+			action = "Create"
 		}
-		m.sid = uint64(v)
-		if err = m.en.doNewSession(m.newSessionInfo()); err != nil {
+		if err := m.en.doNewSession(m.newSessionInfo(), action == "Update"); err != nil {
 			return fmt.Errorf("create session: %s", err)
 		}
-		logger.Infof("Create session %d OK with version: %s", m.sid, version.Version())
+		logger.Infof("%s session %d OK with version: %s", action, m.sid, version.Version())
 	}
 
 	m.loadQuotas()
