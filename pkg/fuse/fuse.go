@@ -356,11 +356,12 @@ func (fs *fileSystem) ReadDir(cancel <-chan struct{}, in *fuse.ReadIn, out *fuse
 	defer releaseContext(ctx)
 	entries, _, err := fs.v.Readdir(ctx, Ino(in.NodeId), in.Size, int(in.Offset), in.Fh, false)
 	var de fuse.DirEntry
-	for _, e := range entries {
+	for i, e := range entries {
 		de.Ino = uint64(e.Inode)
 		de.Name = string(e.Name)
 		de.Mode = e.Attr.SMode()
 		if !out.AddDirEntry(de) {
+			fs.v.UpdateReaddirOffset(ctx, Ino(in.NodeId), in.Fh, int(in.Offset)+i)
 			break
 		}
 	}
