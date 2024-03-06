@@ -495,7 +495,7 @@ func (m *baseMeta) NewSession(record bool) error {
 			m.conf.Sid = m.sid
 			action = "Create"
 		}
-		if err := m.en.doNewSession(m.newSessionInfo(), true); err != nil {
+		if err := m.en.doNewSession(m.newSessionInfo(), action == "Update"); err != nil {
 			return fmt.Errorf("create session: %s", err)
 		}
 		logger.Infof("%s session %d OK with version: %s", action, m.sid, version.Version())
