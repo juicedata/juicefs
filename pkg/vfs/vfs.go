@@ -93,8 +93,9 @@ func (o FuseOptions) StripOptions() FuseOptions {
 	o.IgnoreSecurityLabels,
 		o.RememberInodes,
 		o.SingleThreaded,
+		o.DisableXAttrs,
 		o.Debug,
-		o.NoAllocForRead = false, false, false, false, false
+		o.NoAllocForRead = false, false, false, false, false, false
 
 	// ignore there options because they cannot be configured by users
 	o.Name = ""
