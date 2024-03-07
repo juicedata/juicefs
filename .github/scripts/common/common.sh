@@ -17,11 +17,15 @@ umount_jfs()
     echo "umount_jfs $mp $meta_url"
     [[ ! -f $mp/.config ]] && echo "$mp/.config not found, $mp is not juicefs mount point" && return
     ls -l $mp/.config
-    pid=$(./juicefs status --log-level error $meta_url 2>/dev/null |tee status.log| jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID')
-    [[ -z "$pid" ]] && echo "pid is empty" && return
-    echo "umount  $mp, pid $pid"
-    umount -l $mp
-    wait_mount_process_killed $pid 20
+    pids=$(./juicefs status --log-level error $meta_url 2>/dev/null |tee status.log| jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID')
+    [[ -z "$pids" ]] && echo "pid is empty" && return
+    echo "umount is $mp, pids is $pids"
+    for pid in $pids; do
+        umount -l $mp
+    done
+    for pid in $pids; do
+        wait_mount_process_killed $pid 20
+    done    
 }
 
 wait_mount_process_killed()

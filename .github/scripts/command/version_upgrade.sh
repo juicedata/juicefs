@@ -78,7 +78,7 @@ test_update_fuse_option(){
     setfattr -n user.test -v "juicedata" /tmp/jfs_xattr
     getfattr -n user.test /tmp/jfs_xattr | grep juicedata
     count=$(ps -ef | grep juicefs | grep mount | wc -l)
-    [[ $count -ne 4 ]] && echo "mount process count should be 4" && exit 1
+    [[ $count -ne 4 ]] && echo "mount process count should be 4" && exit 1 || true
 }
 
 test_update_fuse_option2(){
