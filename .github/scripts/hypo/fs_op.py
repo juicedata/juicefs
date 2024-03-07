@@ -41,11 +41,11 @@ class Statistics:
 class FsOperation:
     JFS_CONTROL_FILES=['.accesslog', '.config', '.stats']
     stats = Statistics()
-    def __init__(self, logger: logging.Logger):
-        self.logger = logger
+    def __init__(self, loggers: Dict[str, logging.Logger]):
+        self.loggers = loggers
 
     def run_cmd(self, command:str, root_dir:str) -> str:
-        self.logger.info(f'run_cmd: {command}')
+        self.loggers[root_dir].info(f'run_cmd: {command}')
         if '|' in command or '>' in command or '&' in command:
             ret=os.system(command)
             if ret == 0:
@@ -73,11 +73,11 @@ class FsOperation:
         if err.find('setfacl') != -1 and err.find('\n') != -1:
             err = '\n'.join(sorted(err.split('\n')))
         self.stats.failure(action)
-        self.logger.info(f'{action} {path} {kwargs} failed: {err}')
+        self.loggers[root_dir].info(f'{action} {path} {kwargs} failed: {err}')
         return Exception(err)
 
     def do_open(self, root_dir, file, flags, mask, mode, user):
-        self.logger.debug(f'do_open {root_dir} {file} {flags} {mode} {user}')
+        self.loggers[root_dir].debug(f'do_open {root_dir} {file} {flags} {mode} {user}')
         abspath = os.path.join(root_dir, file)
         flag = 0
         fd = -1
@@ -96,11 +96,11 @@ class FsOperation:
             if fd > 0:
                 os.close(fd)
         self.stats.success('do_open')
-        self.logger.info(f'do_open {abspath} {flags} {mode} succeed')
+        self.loggers[root_dir].info(f'do_open {abspath} {flags} {mode} succeed')
         return get_stat(abspath)  
     
     def do_write(self, root_dir, file, offset, content, flags, whence, user):
-        self.logger.debug(f'do_write {root_dir} {file} {offset}')
+        self.loggers[root_dir].debug(f'do_write {root_dir} {file} {offset}')
         abspath = os.path.join(root_dir, file)
         fd = -1
         flag = 0
@@ -124,12 +124,12 @@ class FsOperation:
             os.seteuid(0)
             os.setegid(0)
         self.stats.success('do_write')
-        self.logger.info(f'do_write {abspath} {offset} succeed')
+        self.loggers[root_dir].info(f'do_write {abspath} {offset} succeed')
         return get_stat(abspath)
     
 
     def do_fallocate(self, root_dir, file, offset, length, mode, user):
-        self.logger.debug(f'do_fallocate {root_dir} {file} {offset} {length} {mode}')
+        self.loggers[root_dir].debug(f'do_fallocate {root_dir} {file} {offset} {length} {mode}')
         abspath = os.path.join(root_dir, file)
         fd = -1
         try:
@@ -149,12 +149,12 @@ class FsOperation:
             os.seteuid(0)
             os.setegid(0)
         self.stats.success('do_fallocate')
-        self.logger.info(f'do_fallocate {abspath} {offset} {length} {mode} succeed')
+        self.loggers[root_dir].info(f'do_fallocate {abspath} {offset} {length} {mode} succeed')
         return get_stat(abspath)
     
 
     def do_read(self, root_dir, file, offset, length, user):
-        self.logger.debug(f'do_read {root_dir} {file} {offset} {length}')
+        self.loggers[root_dir].debug(f'do_read {root_dir} {file} {offset} {length}')
         abspath = os.path.join(root_dir, file)
         fd = -1
         try:
@@ -176,11 +176,11 @@ class FsOperation:
             os.seteuid(0)
             os.setegid(0)
         self.stats.success('do_read')
-        self.logger.info(f'do_read {abspath} {offset} {length} succeed')
+        self.loggers[root_dir].info(f'do_read {abspath} {offset} {length} succeed')
         return (md5sum, )
 
     def do_truncate(self, root_dir, file, size, user):
-        self.logger.debug(f'do_truncate {root_dir} {file} {size}')
+        self.loggers[root_dir].debug(f'do_truncate {root_dir} {file} {size}')
         abspath = os.path.join(root_dir, file)
         fd = -1
         try:
@@ -195,7 +195,7 @@ class FsOperation:
             os.seteuid(0)
             os.setegid(0)
         self.stats.success('do_truncate')
-        self.logger.info(f'do_truncate {abspath} {size} succeed')
+        self.loggers[root_dir].info(f'do_truncate {abspath} {size} succeed')
         return get_stat(abspath)
 
     def do_create_file(self, root_dir, parent, file_name, mode, content, user, umask):
@@ -214,7 +214,7 @@ class FsOperation:
             os.umask(old_umask)
         assert os.path.isfile(abspath), f'do_create_file: {abspath} with mode {mode} should be file'
         self.stats.success('do_create_file')
-        self.logger.info(f'do_create_file {abspath} with mode {mode} succeed')
+        self.loggers[root_dir].info(f'do_create_file {abspath} with mode {mode} succeed')
         return get_stat(abspath)
     
     def do_mkfifo(self, root_dir, parent, file_name, mode, user, umask):
@@ -232,7 +232,7 @@ class FsOperation:
         assert os.path.exists(abspath), f'do_mkfifo: {abspath} should exist'
         assert stat.S_ISFIFO(os.stat(abspath).st_mode), f'do_mkfifo: {abspath} should be fifo'
         self.stats.success('do_mkfifo')
-        self.logger.info(f'do_mkfifo {abspath} succeed')
+        self.loggers[root_dir].info(f'do_mkfifo {abspath} succeed')
         return get_stat(abspath)
     
     def do_listdir(self, root_dir, dir, user):
@@ -247,7 +247,7 @@ class FsOperation:
             os.seteuid(0)
             os.setegid(0)
         self.stats.success('do_listdir')
-        self.logger.info(f'do_listdir {abspath} succeed')
+        self.loggers[root_dir].info(f'do_listdir {abspath} succeed')
         return tuple(li)
 
     def do_unlink(self, root_dir, file, user):
@@ -262,7 +262,7 @@ class FsOperation:
             os.setegid(0)
         assert not os.path.exists(abspath), f'do_unlink: {abspath} should not exist'
         self.stats.success('do_unlink')
-        self.logger.info(f'do_unlink {abspath} succeed')
+        self.loggers[root_dir].info(f'do_unlink {abspath} succeed')
         return () 
 
     def do_rename(self, root_dir, entry, parent, new_entry_name, user, umask):
@@ -283,7 +283,7 @@ class FsOperation:
         #     assert not os.path.exists(abspath), f'do_rename: {abspath} should not exist'
         assert os.path.lexists(new_abspath), f'do_rename: {new_abspath} should exist'
         self.stats.success('do_rename')
-        self.logger.info(f'do_rename {abspath} {new_abspath} succeed')
+        self.loggers[root_dir].info(f'do_rename {abspath} {new_abspath} succeed')
         return get_stat(new_abspath)
 
     def do_copy_file(self, root_dir, entry, parent, new_entry_name, follow_symlinks, user, umask):
@@ -302,7 +302,7 @@ class FsOperation:
             os.umask(old_umask)
         assert os.path.lexists(new_abspath), f'do_copy_file: {new_abspath} should exist'
         self.stats.success('do_copy_file')
-        self.logger.info(f'do_copy_file {abspath} {new_abspath} succeed')
+        self.loggers[root_dir].info(f'do_copy_file {abspath} {new_abspath} succeed')
         return get_stat(new_abspath)
 
     def do_clone_entry(self, root_dir:str, entry, parent, new_entry_name, preserve, user='root', umask=0o022, mount='cmd/mount/mount'):
@@ -327,7 +327,7 @@ class FsOperation:
             os.umask(old_umask)
         assert os.path.lexists(new_abspath), f'do_clone_entry: {new_abspath} should exist'
         self.stats.success('do_clone_entry')
-        self.logger.info(f'do_clone_entry {abspath} {new_abspath} succeed')
+        self.loggers[root_dir].info(f'do_clone_entry {abspath} {new_abspath} succeed')
         return get_stat(new_abspath)
     
     def do_copy_tree(self, root_dir, entry, parent, new_entry_name, symlinks, ignore_dangling_symlinks, dir_exist_ok, user, umask):
@@ -349,7 +349,7 @@ class FsOperation:
             os.umask(old_mask)
         assert os.path.lexists(new_abspath), f'do_copy_tree: {new_abspath} should exist'
         self.stats.success('do_copy_tree')
-        self.logger.info(f'do_copy_tree {abspath} {new_abspath} succeed')
+        self.loggers[root_dir].info(f'do_copy_tree {abspath} {new_abspath} succeed')
         return get_stat(new_abspath)
 
     def do_mkdir(self, root_dir, parent, subdir, mode, user, umask):
@@ -367,7 +367,7 @@ class FsOperation:
             os.umask(old_mask)
         assert os.path.isdir(abspath), f'do_mkdir: {abspath} should be dir'
         self.stats.success('do_mkdir')
-        self.logger.info(f'do_mkdir {abspath} with mode {oct(mode)} succeed')
+        self.loggers[root_dir].info(f'do_mkdir {abspath} with mode {oct(mode)} succeed')
         return get_stat(abspath)
     
     def do_rmdir(self, root_dir, dir, user ):
@@ -382,7 +382,7 @@ class FsOperation:
             os.setegid(0)
         assert not os.path.exists(abspath), f'do_rmdir: {abspath} should not exist'
         self.stats.success('do_rmdir')
-        self.logger.info(f'do_rmdir {abspath} succeed')
+        self.loggers[root_dir].info(f'do_rmdir {abspath} succeed')
         return ()
 
     def do_hardlink(self, root_dir, dest_file, parent, link_file_name, user, umask):
@@ -403,7 +403,7 @@ class FsOperation:
         # time.sleep(0.005)
         assert os.path.lexists(link_abs_path), f'do_hardlink: {link_abs_path} should exist'
         self.stats.success('do_hardlink')
-        self.logger.info(f'do_hardlink {dest_abs_path} {link_abs_path} succeed')
+        self.loggers[root_dir].info(f'do_hardlink {dest_abs_path} {link_abs_path} succeed')
         return get_stat(link_abs_path)
 
     def do_symlink(self, root_dir, dest_file, parent, link_file_name, user, umask):
@@ -423,7 +423,7 @@ class FsOperation:
             os.umask(old_mask)
         assert os.path.islink(link_abs_path), f'do_symlink: {link_abs_path} should be link'
         self.stats.success('do_symlink')
-        self.logger.info(f'do_symlink {dest_abs_path} {link_abs_path} succeed')
+        self.loggers[root_dir].info(f'do_symlink {dest_abs_path} {link_abs_path} succeed')
         return get_stat(link_abs_path)
     
     def do_set_xattr(self, root_dir, file, name, value, flag, user):
@@ -438,10 +438,30 @@ class FsOperation:
             os.seteuid(0)
             os.setegid(0)
         self.stats.success('do_set_xattr')
-        self.logger.info(f"do_set_xattr {abspath} user.{name} {value} {flag} succeed")
+        self.loggers[root_dir].info(f"do_set_xattr {abspath} user.{name} {value} {flag} succeed")
         v = xattr.getxattr(abspath, 'user.'+name)
         return (v,)
-    
+
+    def do_list_xattr(self, root_dir, file, user):
+        abspath = os.path.join(root_dir, file)
+        xattr_list = []
+        try:
+            self.seteuid(user)
+            xattrs = xattr.listxattr(abspath)
+            xattr_list = []
+            for attr in xattrs:
+                value = xattr.getxattr(abspath, attr)
+                xattr_list.append((attr, value))
+            xattr_list.sort()  # Sort the list based on xattr names
+        except Exception as e:
+            return self.handleException(e, root_dir, 'do_list_xattr', abspath, user=user)
+        finally:
+            os.seteuid(0)
+            os.setegid(0)
+        self.stats.success('do_list_xattr')
+        self.loggers[f'{root_dir}'].info(f"do_list_xattr {abspath} succeed")
+        return xattr_list
+
     def do_remove_xattr(self, root_dir, file, user):
         abspath = os.path.join(root_dir, file)
         try:
@@ -459,19 +479,19 @@ class FsOperation:
             os.seteuid(0)
             os.setegid(0)
         self.stats.success('do_remove_xattr')
-        self.logger.info(f"do_remove_xattr {abspath} {name} succeed")
+        self.loggers[f'{root_dir}'].info(f"do_remove_xattr {abspath} {name} succeed")
         assert name not in xattr.listxattr(abspath), f'do_remove_xattr: {name} should not in xattr list'
         return tuple(sorted(xattr.listxattr(abspath)))
     
-    def do_change_groups(self, user, group, groups):
+    def do_change_groups(self, root_dir, user, group, groups):
         try:
             subprocess.run(['usermod', '-g', group, '-G', ",".join(groups), user], check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
             self.stats.failure('do_change_groups')
-            self.logger.info(f"do_change_groups {user} {group} {groups} failed: {e.output.decode()}")
+            self.loggers[root_dir].info(f"do_change_groups {user} {group} {groups} failed: {e.output.decode()}")
             return
         self.stats.success('do_change_groups')
-        self.logger.info(f"do_change_groups {user} {group} {groups} succeed")
+        self.loggers[root_dir].info(f"do_change_groups {user} {group} {groups} succeed")
 
     def do_chmod(self, root_dir, entry, mode, user):
         abspath = os.path.join(root_dir, entry)
@@ -485,19 +505,17 @@ class FsOperation:
             os.seteuid(0)
             os.setegid(0)
         self.stats.success('do_chmod')
-        self.logger.info(f"do_chmod {abspath} {oct(mode)} {user} succeed")
+        self.loggers[root_dir].info(f"do_chmod {abspath} {oct(mode)} {user} succeed")
         return get_stat(abspath)
 
     def do_get_acl(self, root_dir: str, entry: str):
         abspath = os.path.join(root_dir, entry)
-        print(f'ls {abspath}')
-        os.system(f'ls {abspath}')
         try:
             acl = get_acl(abspath)
         except Exception as e:
             return self.handleException(e, root_dir, 'do_get_acl', abspath)
         self.stats.success('do_get_acl')
-        self.logger.info(f"do_get_acl {abspath} succeed")
+        self.loggers[f'{root_dir}'].info(f"do_get_acl {abspath} succeed")
         return acl
 
     def do_remove_acl(self, root_dir: str, entry: str, option: str, user: str):
@@ -507,7 +525,7 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             return self.handleException(e, root_dir, 'do_remove_acl', abspath, option=option,user=user)
         self.stats.success('do_remove_acl')
-        self.logger.info(f"do_remove_acl {abspath} with {option} succeed")
+        self.loggers[root_dir].info(f"do_remove_acl {abspath} with {option} succeed")
         return get_acl(abspath)
     
     def do_set_acl(self, root_dir, sudo_user, entry, user, user_perm, group, group_perm, other_perm, set_mask, mask, default, recursive, recalc_mask, not_recalc_mask, logical, physical):
@@ -531,7 +549,7 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             return self.handleException(e, root_dir, 'do_set_acl', abspath, user_perm=user_perm, group_perm=group_perm, other_perm=other_perm)
         self.stats.success('do_set_acl')
-        self.logger.info(f"do_set_acl {abspath} with {text} succeed")
+        self.loggers[f'{root_dir}'].info(f"do_set_acl {abspath} with {text} succeed")
         return (acl,)
 
     def do_utime(self, root_dir, entry, access_time, modify_time, follow_symlinks, user):
@@ -547,7 +565,7 @@ class FsOperation:
             os.seteuid(0)
             os.setegid(0)
         self.stats.success('do_utime')
-        self.logger.info(f"do_utime {abspath} {access_time} {modify_time} succeed")
+        self.loggers[root_dir].info(f"do_utime {abspath} {access_time} {modify_time} succeed")
         return get_stat(abspath)
 
     def do_chown(self, root_dir, entry, owner, user):
@@ -565,7 +583,7 @@ class FsOperation:
             os.seteuid(0)
             os.setegid(0)
         self.stats.success('do_chown')
-        self.logger.info(f"do_chown {abspath} {owner} succeed")
+        self.loggers[root_dir].info(f"do_chown {abspath} {owner} succeed")
         return get_stat(abspath)
 
     def do_split_dir(self, root_dir, dir, vdirs):
@@ -577,10 +595,10 @@ class FsOperation:
             subprocess.check_call(['touch', abspath])
         except Exception as e:
             self.stats.failure('do_split_dir')
-            self.logger.info(f"do_split_dir {abspath} {vdirs} failed: {str(e)}")
+            self.loggers[root_dir].info(f"do_split_dir {abspath} {vdirs} failed: {str(e)}")
             return
         self.stats.success('do_split_dir')
-        self.logger.info(f"do_split_dir {abspath} {vdirs} succeed")
+        self.loggers[root_dir].info(f"do_split_dir {abspath} {vdirs} succeed")
 
     def do_merge_dir(self, root_dir, dir):
         relpath = os.path.join(dir, f'.jfs_split#1')
@@ -591,15 +609,12 @@ class FsOperation:
             subprocess.check_call(['touch', abspath])
         except Exception as e:
             self.stats.failure('do_merge_dir')
-            self.logger.info(f"do_merge_dir {abspath} failed: {str(e)}")
+            self.loggers[f'{root_dir}'].info(f"do_merge_dir {abspath} failed: {str(e)}")
             return
         self.stats.success('do_merge_dir')
-        self.logger.info(f"do_merge_dir {abspath} succeed")
+        self.loggers[f'{root_dir}'].info(f"do_merge_dir {abspath} succeed")
 
     def do_rebalance(self, root_dir, entry, zone, is_vdir):
-        if not is_jfs(root_dir):
-            print(f'{root_dir} is not in jfs, skip rebalance')
-            return
         if zone == '':
             print(f'{root_dir} is not multizoned, skip rebalance')
             return
@@ -614,10 +629,10 @@ class FsOperation:
             os.rename(abspath, dest)
         except Exception as e:
             self.stats.failure('do_rebalance')
-            self.logger.info(f"do_rebalance {abspath} {dest} failed: {str(e)}")
+            self.loggers[root_dir].info(f"do_rebalance {abspath} {dest} failed: {str(e)}")
             return
         self.stats.success('do_rebalance')
-        self.logger.info(f"do_rebalance {abspath} {dest} succeed")
+        self.loggers[root_dir].info(f"do_rebalance {abspath} {dest} succeed")
 
     def do_mount(self, context:Context, mount, allow_other=True, enable_xattr=True, enable_acl=True, read_only=False, user='root'):
         command = f'sudo -u {user} {mount} mount {context.volume} {context.mp} --conf-dir={context.conf_dir} --no-update'
@@ -695,7 +710,7 @@ class FsOperation:
             return self.handleException(e, context.root_dir, 'do_info', abs_path)
         result = self.parse_info(result)
         self.stats.success('do_info')
-        self.logger.info(f'do_info {abs_path} succeed')
+        self.loggers[context.root_dir].info(f'do_info {abs_path} succeed')
         return result 
     
     def do_rmr(self, context:Context, entry, mount, user='root'):
@@ -708,7 +723,7 @@ class FsOperation:
             return self.handleException(e, context.root_dir, 'do_rmr', abspath)
         assert not os.path.exists(abspath), f'do_rmr: {abspath} should not exist'
         self.stats.success('do_rmr')
-        self.logger.info(f'do_rmr {abspath} succeed')
+        self.loggers[context.root_dir].info(f'do_rmr {abspath} succeed')
         return True
     
     def do_status(self, context:Context, mount, user='root'):
@@ -721,7 +736,7 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_status', '')
         self.stats.success('do_status')
-        self.logger.info(f'do_status succeed')
+        self.loggers[context.root_dir].info(f'do_status succeed')
         return result['rootname'], result['password'], result['uuid'], result['storage'], \
             result['token'], result['accesskey'], result['secretkey'], \
             result['blockSize'], result['partitions'], result['compress']
@@ -733,7 +748,7 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_dump', abspath)
         self.stats.success('do_dump')
-        self.logger.info(f'do_dump {abspath} succeed')
+        self.loggers[context.root_dir].info(f'do_dump {abspath} succeed')
         return result
 
     def do_warmup(self, context:Context, entry, mount, user='root'):
@@ -743,7 +758,7 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_warmup', abspath)
         self.stats.success('do_warmup')
-        self.logger.info(f'do_warmup {abspath} succeed')
+        self.loggers[context.root_dir].info(f'do_warmup {abspath} succeed')
         return True
 
     def do_import(self, context:Context, mount, src_uri, dest_path, mode, user='root'):
@@ -753,7 +768,7 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_import', abspath, src_uri=src_uri)
         self.stats.success('do_import')
-        self.logger.info(f'do_import {src_uri} succeed')
+        self.loggers[context.root_dir].info(f'do_import {src_uri} succeed')
         # src_uri is stared with /, so we need to remove the first /
         return self.do_info(context=context, mount=mount, entry=os.path.join(dest_path, src_uri[1:]))
     
@@ -766,7 +781,7 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_gc', '')
         self.stats.success('do_gc')
-        self.logger.info(f'do_gc succeed')
+        self.loggers[context.root_dir].info(f'do_gc succeed')
         return True
     
     def do_fsck(self, context:Context, mount, repair, user='root'):
@@ -778,7 +793,7 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_fsck', '')
         self.stats.success('do_fsck')
-        self.logger.info(f'do_fsck succeed')
+        self.loggers[context.root_dir].info(f'do_fsck succeed')
         return True
     
     def do_quota_set(self, context:Context, mount, path, capacity, inodes, user='root'):
@@ -795,7 +810,7 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_quota_set', abspath)
         self.stats.success('do_quota_set')
-        self.logger.info(f'do_quota_set {abspath} succeed')
+        self.loggers[context.root_dir].info(f'do_quota_set {abspath} succeed')
         return self.do_quota_get(context=context, mount=mount, path=path, user=user)
     
     def do_quota_delete(self, context:Context, mount, path, user='root'):
@@ -807,7 +822,7 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_quota_delete', abspath)
         self.stats.success('do_quota_delete')
-        self.logger.info(f'do_quota_delete {abspath} succeed')
+        self.loggers[context.root_dir].info(f'do_quota_delete {abspath} succeed')
         return True
     
     def do_quota_get(self, context:Context, mount, path, user='root'):
@@ -819,7 +834,7 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_quota_get', abspath)
         self.stats.success('do_quota_get')
-        self.logger.info(f'do_quota_get {abspath} succeed')
+        self.loggers[context.root_dir].info(f'do_quota_get {abspath} succeed')
         return result
     
     def do_quota_list(self, context:Context, mount, user='root'):
@@ -829,7 +844,7 @@ class FsOperation:
         except subprocess.CalledProcessError as e:
             return self.handleException(e, context.root_dir, 'do_quota_list', '')
         self.stats.success('do_quota_list')
-        self.logger.info(f'do_quota_list succeed')
+        self.loggers[context.root_dir].info(f'do_quota_list succeed')
         return result
     
     def do_trash_list(self, context:Context, user='root'):
@@ -844,7 +859,7 @@ class FsOperation:
             os.seteuid(0)
             os.setegid(0)
         self.stats.success('do_trash_list')
-        self.logger.info(f'do_trash_list succeed')
+        self.loggers[context.root_dir].info(f'do_trash_list succeed')
         return tuple(li)
     
     def do_trash_restore(self, context:Context, index, user='root'):
@@ -861,6 +876,6 @@ class FsOperation:
         restored_path = os.path.join(context.mp, '/'.join(trash_file.split('|')[1:]))
         restored_path = os.path.relpath(restored_path, context.root_dir)
         self.stats.success('do_trash_restore')
-        self.logger.info(f'do_trash_restore succeed')
+        self.loggers[context.root_dir].info(f'do_trash_restore succeed')
         return restored_path
     
