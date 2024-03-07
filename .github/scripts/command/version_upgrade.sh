@@ -13,11 +13,11 @@ python3 -m http.server 8081 &
 server_pid=$!
 trap "kill -9 $server_pid" EXIT
 .github/scripts/apt_install.sh attr
-if [[ ! -x "./juicefs.1.0" ]]; then 
-    wget -q https://github.com/juicedata/juicefs/releases/download/v1.0.7/juicefs-1.0.7-linux-amd64.tar.gz
-    tar -xzvf juicefs-1.0.7-linux-amd64.tar.gz --transform='s|^juicefs$|juicefs-1.0|' juicefs
-    chmod +x juicefs-1.0
-    ./juicefs-1.0 version
+if [[ ! -x "./juicefs.1.1" ]]; then 
+    wget -q https://github.com/juicedata/juicefs/releases/download/v1.1.0/juicefs-1.1.0-linux-amd64.tar.gz
+    tar -xzvf juicefs-1.1.0-linux-amd64.tar.gz --transform='s|^juicefs$|juicefs-1.1|' juicefs
+    chmod +x juicefs-1.1
+    ./juicefs-1.1 version
 fi
 [[ ! -f my-priv-key.pem ]] && openssl genrsa -out my-priv-key.pem -aes256  -passout pass:12345678 2048
 
@@ -54,15 +54,6 @@ test_update_non_fuse_option(){
     ./juicefs umount /tmp/jfs
 }
 
-check_cache_size(){
-    cache_dir=$1
-    cache_size_limit=$2
-    cache_size=$(du -shBM  $cache_dir | awk '{print $1}' | tr -d 'M')
-    if (( $(echo "$cache_size > $cache_size_limit * 1.1 " |bc -l) )) || (( $(echo "$cache_size < $cache_size_limit * 0.9 " |bc -l) )); then
-        echo "cache size $cache_size is not in the range of $cache_size_limit M"
-        exit 1
-    fi
-}
 
 test_update_fuse_option(){
     umount_jfs /tmp/jfs_xattr $META_URL
@@ -79,31 +70,43 @@ test_update_fuse_option(){
     getfattr -n user.test /tmp/jfs_xattr | grep juicedata
     count=$(ps -ef | grep juicefs | grep mount | wc -l)
     [[ $count -ne 4 ]] && echo "mount process count should be 4" && exit 1 || true
+    umount /tmp/jfs_xattr
+    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    [[ $count -ne 2 ]] && echo "mount process count should be 2" && exit 1 || true
+    umount /tmp/jfs_xattr
+    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    [[ $count -ne 0 ]] && echo "mount process count should be 0" && exit 1 || true
 }
 
-test_update_fuse_option2(){
+test_restart_from_1_dot_1(){
     prepare_test
-    mkdir -p /tmp/jfs_xattr && chmod 777 /tmp/jfs_xattr
-    cmd/mount/mount mount --no-update --conf-dir=conf  test-volume /tmp/jfs_xattr
-    getfattr -n user.test /tmp/jfs_xattr && exit 1 || true
-    cmd/mount/mount mount --no-update --conf-dir=conf  test-volume /tmp/jfs_xattr --enable-xattr
-    setfattr -n user.test -v "juicedata" /tmp/jfs_xattr
-    getfattr -n user.test /tmp/jfs_xattr | grep juicedata
-    cmd/mount/mount umount /tmp/jfs_xattr
-    cmd/mount/mount umount /tmp/jfs_xattr
-}
-
-test_restart_from_4_9(){
-    prepare_test
-    cmd/mount/mount.4.9 mount --no-update --conf-dir=conf test-volume /tmp/jfs 
-    echo hello > /tmp/jfs/test
-    cmd/mount/mount mount --no-update --conf-dir=conf  test-volume /tmp/jfs
+    ./juicefs-1.1 mount  -d $META_URL /tmp/jfs 
+    echo hello |tee /tmp/jfs/test
+    ./juicefs mount -d $META_URL /tmp/jfs
     wait_process_started
-    version=$(cmd/mount/mount version | awk '{print $3,$4,$5}')
+    version=$(./juicefs version | awk '{print $3,$4,$5}')
     grep Version /tmp/jfs/.jfsconfig | grep "$version"
     grep "hello" /tmp/jfs/test 
-    cmd/mount/mount umount /tmp/jfs
+    ./juicefs umount /tmp/jfs
     wait_process_killed
+}
+
+test_restart_from_1_dot_1(){
+    prepare_test
+    ./juicefs-1.1 mount  -d $META_URL /tmp/jfs 
+    echo hello |tee /tmp/jfs/test
+    ./juicefs mount -d $META_URL /tmp/jfs
+    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    [[ $count -ne 3 ]] && echo "mount process count should be 3" && exit 1 || true
+    version=$(./juicefs version | awk '{print $3,$4,$5}')
+    grep Version /tmp/jfs/.config | grep $version
+    echo world | tee /tmp/jfs/test 
+    ./juicefs umount /tmp/jfs
+    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    [[ $count -ne 1 ]] && echo "mount process count should be 1" && exit 1 || true
+    ./juicefs umount /tmp/jfs
+    count=$(ps -ef | grep juicefs | grep mount | wc -l)
+    [[ $count -ne 0 ]] && echo "mount process count should be 0" && exit 1 || true
 }
 
 

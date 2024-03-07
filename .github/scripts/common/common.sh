@@ -15,7 +15,7 @@ umount_jfs()
     [[ -z "$mp" ]] && echo "mount point is empty" && exit 1
     [[ -z "$meta_url" ]] && echo "meta url is empty" && exit 1
     echo "umount_jfs $mp $meta_url"
-    [[ ! -f $mp/.config ]] && echo "$mp/.config not found, $mp is not juicefs mount point" && return
+    [[ ! -f $mp/.config ]] && return
     ls -l $mp/.config
     pids=$(./juicefs status --log-level error $meta_url 2>/dev/null |tee status.log| jq --arg mp "$mp" '.Sessions[] | select(.MountPoint == $mp) | .ProcessID')
     [[ -z "$pids" ]] && echo "pid is empty" && return
