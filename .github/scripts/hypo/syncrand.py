@@ -37,8 +37,8 @@ class SyncMachine(RuleBasedStateMachine):
     DEST_RSYNC = '/tmp/rsync'
     DEST_JUICESYNC = '/tmp/juicesync'
     log_level = os.environ.get('LOG_LEVEL', 'INFO')
-    logger = common.setup_logger(f'./syncrand.log', 'syncrand_logger', log_level)
-    fsop = FsOperation(logger)
+    logger = common.setup_logger(f'./syncrand1.log', 'syncrand_logger', log_level)
+    fsop = FsOperation({ROOT_DIR1: logger, ROOT_DIR2: logger})
     
     @initialize(target=Folders)
     def init_folders(self):
