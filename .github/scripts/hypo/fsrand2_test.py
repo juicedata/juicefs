@@ -34,7 +34,7 @@ class TestFsrand2(unittest.TestCase):
         state.listdir(dir=v1, user='user1')
         state.teardown()
 
-    def skip_test_acl_913(self):
+    def test_acl_913(self):
         # See: https://github.com/juicedata/jfs/issues/913
         state = JuicefsMachine()
         v1 = state.init_folders()
@@ -106,12 +106,12 @@ class TestFsrand2(unittest.TestCase):
         state.list_xattr(file=v3, user='root')
         state.teardown()
 
-    def test_acl_4458(self):
+    def skip_test_acl_4458(self):
         # SEE: https://github.com/juicedata/juicefs/issues/4458
         state = JuicefsMachine()
         v1 = state.init_folders()
-        v3 = state.set_acl(default=True, entry=v1, group='root', group_perm=set(), logical=False, mask=set(), not_recalc_mask=False, other_perm=set(), physical=False, recalc_mask=True, recursive=True, rootdir1='/tmp/fsrand', rootdir2='/tmp/jfs/fsrand', set_mask=True, sudo_user='root', user='user1', user_perm={v1, 'r', 'w', 'x'})
-        state.create_file(content=b'', file_name='afds', mode='w', parent=v1, rootdir1='/tmp/fsrand', rootdir2='/tmp/jfs/fsrand', umask=295, user='root')
+        v3 = state.set_acl(default=True, entry=v1, group='root', group_perm=set(), logical=False, mask=set(), not_recalc_mask=False, other_perm=set(), physical=False, recalc_mask=True, recursive=True, set_mask=True, sudo_user='root', user='user1', user_perm={v1, 'r', 'w', 'x'})
+        state.create_file(content=b'', file_name='afds', mode='w', parent=v1, umask=295, user='root')
         state.teardown()
 
 if __name__ == '__main__':

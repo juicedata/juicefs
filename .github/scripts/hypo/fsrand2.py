@@ -392,7 +392,6 @@ class JuicefsMachine(RuleBasedStateMachine):
           user = st.sampled_from(SUDO_USERS))
     @precondition(lambda self: 'chmod' not in self.EXCLUDE_RULES)
     def chmod(self, entry, mode, user='root'):
-        assume(mode & 0o070 != 0)
         result1 = self.fsop.do_chmod(self.ROOT_DIR1, entry, mode, user)
         result2 = self.fsop.do_chmod(self.ROOT_DIR2, entry, mode, user)
         assert self.equal(result1, result2), f'\033[31mchmod:\nresult1 is {result1}\nresult2 is {result2}\033[0m'
