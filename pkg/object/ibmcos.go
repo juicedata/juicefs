@@ -68,7 +68,6 @@ func (s *ibmcos) Create() error {
 func (s *ibmcos) Limits() Limits {
 	return Limits{
 		IsSupportMultipartUpload: true,
-		IsSupportUploadPartCopy:  false,
 	}
 }
 
