@@ -569,6 +569,10 @@ func (m *redisMeta) plockKey(inode Ino) string {
 	return m.prefix + "lockp" + inode.String()
 }
 
+func (m *redisMeta) conflictKey() string {
+	return m.prefix + "conflict"
+}
+
 func (m *redisMeta) setting() string {
 	return m.prefix + "setting"
 }

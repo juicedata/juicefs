@@ -175,13 +175,27 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 			}
 			ls := loadLocks([]byte(owners[lkey]))
 			delete(owners, lkey)
-			for _, d := range owners {
+			var conflictOwner string
+			for owner, d := range owners {
 				ls := loadLocks([]byte(d))
 				for _, l := range ls {
 					// find conflicted locks
 					if (ltype == F_WRLCK || l.Type == F_WRLCK) && end >= l.Start && start <= l.End {
-						return syscall.EAGAIN
+						conflictOwner = owner
+						err = syscall.EAGAIN
 					}
+				}
+			}
+			if block && err == syscall.EAGAIN {
+				tx.HSet(ctx, r.conflictKey(), lkey, conflictOwner)
+				deadlock, err := r.detectDeadlock(ctx, tx, lkey, conflictOwner)
+				if err != nil {
+					return err
+				}
+				if deadlock {
+					return syscall.EDEADLK
+				} else {
+					return syscall.EAGAIN
 				}
 			}
 			ls = updateLocks(ls, lock)
@@ -206,6 +220,23 @@ func (r *redisMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltyp
 		}
 	}
 	return errno(err)
+}
+
+func (r *redisMeta) detectDeadlock(ctx context.Context, tx *redis.Tx, waiter string, blocker string) (bool, error) {
+	for i := 0; i < 10; i++ {
+		owner, err := tx.HGet(ctx, r.conflictKey(), blocker).Result()
+		if err != nil && err != redis.Nil {
+			return false, err
+		}
+		if err == redis.Nil {
+			break
+		}
+		blocker = owner
+		if waiter == blocker {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (r *redisMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
