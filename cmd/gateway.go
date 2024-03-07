@@ -79,6 +79,10 @@ func cmdGateway() *cli.Command {
 			Name:  "object-tag",
 			Usage: "enable object tagging api",
 		},
+		&cli.StringFlag{
+			Name:  "domain",
+			Usage: "set virtual-host-style requests domain",
+		},
 	}
 
 	return &cli.Command{
@@ -117,6 +121,9 @@ func gateway(c *cli.Context) error {
 	}
 	if len(sk) < 8 {
 		logger.Fatalf("MINIO_ROOT_PASSWORD should be specified as an environment variable with at least 8 characters")
+	}
+	if c.IsSet("domain") {
+		os.Setenv("MINIO_DOMAIN", c.String("domain"))
 	}
 
 	metaAddr := c.Args().Get(0)
