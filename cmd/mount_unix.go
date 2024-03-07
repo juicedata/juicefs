@@ -647,7 +647,7 @@ func installHandler(mp string, v *vfs.VFS) {
 		}
 	}()
 }
-func launchMount(mp string, conf *vfs.Config) error {
+func launchMount(mp string, conf *vfs.Config, osArgs []string) error {
 	increaseRlimit()
 	if runtime.GOOS == "linux" {
 		adjustOOMKiller(-1000)
@@ -679,7 +679,7 @@ func launchMount(mp string, conf *vfs.Config) error {
 			}
 		}
 
-		cmd := exec.Command(path, os.Args[1:]...)
+		cmd := exec.Command(path, osArgs[1:]...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
