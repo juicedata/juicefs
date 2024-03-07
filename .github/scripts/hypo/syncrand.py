@@ -17,7 +17,7 @@ st_entry_name = st.text(alphabet='abc', min_size=1, max_size=3)
 st_patterns = st.text(alphabet='abc?/*', min_size=1, max_size=5).\
     filter(lambda s: s.find('***') == -1 or s.endswith('/***'))
 st_patterns = st.lists(st.sampled_from(['a','?','/','*']), min_size=1, max_size=10)\
-    .map(''.join).filter(lambda s: s.find('***') == -1 or (s.count('/***')==1 and s.endswith('a/***')))
+    .map(''.join).filter(lambda s: s.find('**/***') == -1 )
 
 st_option = st.fixed_dictionaries({
     "option": st.just("--include") | st.just("--exclude"),
@@ -37,7 +37,7 @@ class SyncMachine(RuleBasedStateMachine):
     DEST_RSYNC = '/tmp/rsync'
     DEST_JUICESYNC = '/tmp/juicesync'
     log_level = os.environ.get('LOG_LEVEL', 'INFO')
-    logger = common.setup_logger(f'./syncrand1.log', 'syncrand_logger', log_level)
+    logger = common.setup_logger(f'./syncrand.log', 'syncrand_logger', log_level)
     fsop = FsOperation({ROOT_DIR1: logger, ROOT_DIR2: logger})
     
     @initialize(target=Folders)
