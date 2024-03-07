@@ -101,15 +101,18 @@ jobs:
           fi
           sudo -E PROFILE=${PROFILE} python3 .github/scripts/hypo/fsrand2.py
 
-      - name: check fsrand.log
+      - name: check log1
         if: always()
-        shell: bash
         run: | 
-          tail -500 fsrand.log
-          
+          tail -500 log1
+
+      - name: check log2
+        if: always()
+        run: | 
+          tail -500 log2
+
       - name: check juicefs.log
         if: always()
-        shell: bash
         run: | 
           if [ -f ~/.juicefs/juicefs.log ]; then
             tail -300 ~/.juicefs/juicefs.log
