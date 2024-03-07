@@ -940,7 +940,7 @@ func matchTwoStar(p string, s []string) bool {
 	if !ok {
 		return false
 	}
-	for i := 1; i <= len(s); i++ {
+	for i := 0; i <= len(s); i++ {
 		if matchTwoStar(p[idx+1:], s[i:]) {
 			return true
 		}
