@@ -3714,6 +3714,7 @@ func (m *kvMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule)
 			return syscall.EPERM
 		}
 
+		oriACL, oriMode := getAttrACLId(attr, aclType), attr.Mode
 		if rule.IsEmpty() {
 			// remove acl
 			setAttrACLId(attr, aclType, aclAPI.None)
@@ -3744,9 +3745,11 @@ func (m *kvMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule)
 		}
 
 		// update attr
-		attr.Ctime = now.Unix()
-		attr.Ctimensec = uint32(now.Nanosecond())
-		tx.set(m.inodeKey(ino), m.marshal(attr))
+		if oriACL != getAttrACLId(attr, aclType) || oriMode != attr.Mode {
+			attr.Ctime = now.Unix()
+			attr.Ctimensec = uint32(now.Nanosecond())
+			tx.set(m.inodeKey(ino), m.marshal(attr))
+		}
 		return nil
 	}, ino))
 }

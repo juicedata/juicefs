@@ -839,7 +839,7 @@ func (m *redisMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, at
 }
 
 func (m *redisMeta) doGetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
-	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+	return errno(m.rdb.Watch(ctx, func(tx *redis.Tx) error {
 		val, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
 		if err != nil {
 			return err
@@ -4584,6 +4584,7 @@ func (m *redisMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Ru
 			return syscall.EPERM
 		}
 
+		oriACL, oriMode := getAttrACLId(attr, aclType), attr.Mode
 		if rule.IsEmpty() {
 			// remove acl
 			setAttrACLId(attr, aclType, aclAPI.None)
@@ -4614,13 +4615,16 @@ func (m *redisMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Ru
 		}
 
 		// update attr
-		attr.Ctime = now.Unix()
-		attr.Ctimensec = uint32(now.Nanosecond())
-		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
-			return nil
-		})
-		return err
+		if oriACL != getAttrACLId(attr, aclType) || oriMode != attr.Mode {
+			attr.Ctime = now.Unix()
+			attr.Ctimensec = uint32(now.Nanosecond())
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, m.inodeKey(ino), m.marshal(attr), 0)
+				return nil
+			})
+			return err
+		}
+		return nil
 	}, m.inodeKey(ino)))
 }
 
@@ -4636,7 +4640,7 @@ func (m *redisMeta) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Ru
 
 	defer m.timeit("GetFacl", time.Now())
 
-	return errno(m.txn(ctx, func(tx *redis.Tx) error {
+	return errno(m.rdb.Watch(ctx, func(tx *redis.Tx) error {
 		val, err := tx.Get(ctx, m.inodeKey(ino)).Bytes()
 		if err != nil {
 			return err

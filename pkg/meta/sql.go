@@ -4381,7 +4381,7 @@ func (m *dbMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule)
 			return syscall.EPERM
 		}
 
-		oriMode := attr.Mode
+		oriACL, oriMode := getAttrACLId(attr, aclType), attr.Mode
 		if rule.IsEmpty() {
 			// remove acl
 			setAttrACLId(attr, aclType, aclAPI.None)
@@ -4412,18 +4412,25 @@ func (m *dbMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule)
 		}
 
 		// update attr
-		var dirtyNode node
-		m.parseNode(attr, &dirtyNode)
-		dirtyNode.Ctime = now.UnixNano() / 1e3
-		dirtyNode.Ctimensec = int16(now.Nanosecond() % 1000)
-
-		updateCols := []string{"ctime", "ctimensec", getACLIdColName(aclType)}
+		var updateCols []string
+		if oriACL != getAttrACLId(attr, aclType) {
+			updateCols = append(updateCols, getACLIdColName(aclType))
+		}
 		if oriMode != attr.Mode {
 			updateCols = append(updateCols, "mode")
 		}
+		if len(updateCols) > 0 {
+			updateCols = append(updateCols, "ctime", "ctimensec")
 
-		_, err := s.Cols(updateCols...).Update(&dirtyNode, &node{Inode: ino})
-		return err
+			var dirtyNode node
+			m.parseNode(attr, &dirtyNode)
+			dirtyNode.Ctime = now.UnixNano() / 1e3
+			dirtyNode.Ctimensec = int16(now.Nanosecond() % 1000)
+			_, err := s.Cols(updateCols...).Update(&dirtyNode, &node{Inode: ino})
+			return err
+		}
+
+		return nil
 	}, ino))
 }
 
