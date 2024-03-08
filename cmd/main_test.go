@@ -70,32 +70,32 @@ func TestHandleSysMountArgs(t *testing.T) {
 	}{
 		{
 			[]string{"/mount.juicefs", "memkv://", "/jfs", "-o", "no-usage-report"},
-			"juicefs mount -d --no-usage-report memkv:// /jfs",
+			"/mount.juicefs mount -d --no-usage-report memkv:// /jfs",
 			false,
 		},
 		{
 			[]string{"/mount.juicefs", "memkv://", "/jfs", "-o", "no-usage-report=true"},
-			"juicefs mount -d --no-usage-report=true memkv:// /jfs",
+			"/mount.juicefs mount -d --no-usage-report=true memkv:// /jfs",
 			false,
 		},
 		{
 			[]string{"/mount.juicefs", "memkv://", "/jfs", "-o", "cache-size=204800"},
-			"juicefs mount -d --cache-size=204800 memkv:// /jfs",
+			"/mount.juicefs mount -d --cache-size=204800 memkv:// /jfs",
 			false,
 		},
 		{
 			[]string{"/mount.juicefs", "memkv://", "/jfs", "-o", "verbose"},
-			"juicefs mount -d --verbose memkv:// /jfs",
+			"/mount.juicefs mount -d --verbose memkv:// /jfs",
 			false,
 		},
 		{
 			[]string{"/mount.juicefs", "memkv://", "/jfs", "-o", "debug"},
-			"juicefs mount -d --debug -o debug memkv:// /jfs",
+			"/mount.juicefs mount -d --debug -o debug memkv:// /jfs",
 			false,
 		},
 		{
 			[]string{"/mount.juicefs", "memkv://", "/jfs", "-o", "cache-size=204800,no-usage-report=false,free-space-ratio=0.5,cache-dir=/data/juicfs,metrics=0.0.0.0:9567"},
-			"juicefs mount -d --cache-size=204800 --no-usage-report=false --free-space-ratio=0.5 --cache-dir=/data/juicfs --metrics=0.0.0.0:9567 memkv:// /jfs",
+			"/mount.juicefs mount -d --cache-size=204800 --no-usage-report=false --free-space-ratio=0.5 --cache-dir=/data/juicfs --metrics=0.0.0.0:9567 memkv:// /jfs",
 			false,
 		},
 		{
