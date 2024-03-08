@@ -949,15 +949,15 @@ func (v *VFS) GetXattr(ctx Context, ino Ino, name string, size uint32) (value []
 		}
 
 		rule := &acl.Rule{}
-		if errno := v.Meta.GetFacl(ctx, ino, aclType, rule); errno != 0 {
-			return nil, errno
+		if err = v.Meta.GetFacl(ctx, ino, aclType, rule); err != 0 {
+			return nil, err
 		}
-		value, err = encodeACL(rule)
+		value = encodeACL(rule)
 	} else {
 		err = v.Meta.GetXattr(ctx, ino, name, &value)
-		if size > 0 && len(value) > int(size) {
-			err = syscall.ERANGE
-		}
+	}
+	if size > 0 && len(value) > int(size) {
+		err = syscall.ERANGE
 	}
 	return
 }
@@ -1170,16 +1170,16 @@ func InitMetrics(registerer prometheus.Registerer) {
 //	  10 - mask
 //	  20 - other
 
-func encodeACL(n *acl.Rule) ([]byte, syscall.Errno) {
+func encodeACL(n *acl.Rule) []byte {
 	length := 4 + 24 + uint32(len(n.NamedUsers)+len(n.NamedGroups))*8
 	if n.Mask != 0xFFFF {
 		length += 8
 	}
 	buff := make([]byte, length)
 	w := utils.NewNativeBuffer(buff)
-	w.Put8(2)  // version
-	w.Put8(0)  // flag
-	w.Put16(0) // filler
+	w.Put8(acl.Version) // version
+	w.Put8(0)           // flag
+	w.Put16(0)          // filler
 	wRule := func(tag, perm uint16, id uint32) {
 		w.Put16(tag)
 		w.Put16(perm)
@@ -1197,7 +1197,7 @@ func encodeACL(n *acl.Rule) ([]byte, syscall.Errno) {
 		wRule(0x10, n.Mask, 0xFFFFFFFF)
 	}
 	wRule(0x20, n.Other, 0xFFFFFFFF)
-	return buff, 0
+	return buff
 }
 
 func decodeACL(buff []byte) (*acl.Rule, syscall.Errno) {

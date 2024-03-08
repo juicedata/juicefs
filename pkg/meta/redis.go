@@ -1212,15 +1212,15 @@ func (m *redisMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode
 
 		// set acl
 		if rule != nil {
+			if err = m.tryLoadMissACLs(ctx, tx); err != nil {
+				logger.Warnf("SetAttr: load miss acls error: %s", err)
+			}
+
 			aclId, err := m.insertACL(ctx, tx, rule)
 			if err != nil {
 				return err
 			}
 			setAttrACLId(dirtyAttr, aclAPI.TypeAccess, aclId)
-
-			if err = m.tryLoadMissACLs(ctx, tx); err != nil {
-				logger.Warnf("SetAttr: load miss acls error: %s", err)
-			}
 		}
 
 		dirtyAttr.Ctime = now.Unix()
@@ -1378,13 +1378,14 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 				// simple acl as default
 				attr.Mode = (mode & 0xFE00) | rule.GetMode()
 			} else {
+				if err = m.tryLoadMissACLs(ctx, tx); err != nil {
+					logger.Warnf("Mknode: load miss acls error: %s", err)
+				}
+
 				cRule := rule.ChildAccessACL(mode)
 				id, err := m.insertACL(ctx, tx, cRule)
 				if err != nil {
 					return err
-				}
-				if err = m.tryLoadMissACLs(ctx, tx); err != nil {
-					logger.Warnf("Mknode: load miss acls error: %s", err)
 				}
 
 				attr.AccessACLId = id
@@ -4593,6 +4594,10 @@ func (m *redisMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Ru
 			attr.Mode &= 07000
 			attr.Mode |= ((rule.Owner & 7) << 6) | ((rule.Group & 7) << 3) | (rule.Other & 7)
 		} else {
+			if err = m.tryLoadMissACLs(ctx, tx); err != nil {
+				logger.Warnf("SetFacl: load miss acls error: %s", err)
+			}
+
 			// set acl
 			rule.InheritPerms(attr.Mode)
 			aclId, err := m.insertACL(ctx, tx, rule)
@@ -4600,10 +4605,6 @@ func (m *redisMeta) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Ru
 				return err
 			}
 			setAttrACLId(attr, aclType, aclId)
-
-			if err = m.tryLoadMissACLs(ctx, tx); err != nil {
-				logger.Warnf("SetFacl: load miss acls error: %s", err)
-			}
 
 			// set mode
 			if aclType == aclAPI.TypeAccess {
